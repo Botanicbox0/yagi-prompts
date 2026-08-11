@@ -417,6 +417,28 @@ export function PublishPanel({
           });
   const prepared = manifest.total > 0 && manifest.pending === 0;
 
+  /**
+   * §3.5 — the M5 checkbox, one per publish form (a checkbox outside a form posts nothing, and the
+   * editor is deliberately JS-free). The KIND is not offered: `lib/admin/operations.ts` derives it
+   * from `published_revision_id`, so the hint below just states which email this publish would send.
+   */
+  const notifyHint = editor.playbook.publishedRevisionId === null
+    ? dict.notifyHintNew
+    : dict.notifyHintUpdate;
+
+  const NotifyCheckbox = ({ id }: { id: string }) => (
+    <label
+      htmlFor={id}
+      className="mt-3 flex items-start gap-2 font-mono text-[0.72rem] leading-relaxed"
+    >
+      <input id={id} type="checkbox" name="notify" value="on" className="mt-0.5" />
+      <span>
+        <span className="block">{dict.notifySend}</span>
+        <span className="block opacity-50">{notifyHint}</span>
+      </span>
+    </label>
+  );
+
   return (
     <Panel title={dict.publishHeading}>
       <p className="font-mono text-code opacity-60">{manifestLine}</p>
@@ -440,6 +462,7 @@ export function PublishPanel({
             <button type="submit" className={BUTTON_PRIMARY}>
               {dict.publishRun}
             </button>
+            <NotifyCheckbox id="notify-full" />
           </OpForm>
           <p className="mt-2 font-mono text-[0.72rem] opacity-50">{dict.publishRunHint}</p>
         </div>
@@ -453,13 +476,13 @@ export function PublishPanel({
               <button type="submit" className={BUTTON}>
                 {dict.publishCommit}
               </button>
+              <NotifyCheckbox id="notify-commit" />
             </OpForm>
             <p className="mt-2 font-mono text-[0.72rem] opacity-50">{dict.publishCommitHint}</p>
           </div>
         )}
       </div>
 
-      {/* §3.5: no notification control exists before M5, and the panel says why. */}
       <p className="mt-5 border-t border-hairline pt-3 font-mono text-[0.72rem] opacity-50">
         {dict.notificationsNote}
       </p>

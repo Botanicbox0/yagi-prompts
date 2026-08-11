@@ -280,27 +280,88 @@ describe('admin CMS cache + gate contract (§3.4 / §3.8)', () => {
   });
 });
 
-describe('notification surface still does not exist (§3.5)', () => {
-  /**
-   * §3.5: "toggles on /account (M5+) … zero notification UI before that". §3.7 lists notification
-   * toggles as an account element, so this is the one page where the temptation lives. Asserting on
-   * the COLUMN names and on the absence of a checkbox rather than on the word "notification",
-   * which legitimately appears in the comment explaining why they are not here.
-   */
-  it('keeps every notification control out of /account', () => {
-    const account = read('app', '(app)', 'account', 'page.tsx');
-    for (const forbidden of ['notif_new_playbook', 'notif_updates', 'type="checkbox"']) {
-      expect(account, forbidden).not.toContain(forbidden);
-    }
-    expect(read('lib', 'flags.ts')).toContain('export const NOTIFICATIONS_ENABLED = false');
+/**
+ * M5 turns the notification surface ON. These are the same assertions inverted — the M4 versions
+ * pinned "none of this exists yet", and flipping them is the point of the milestone. What has NOT
+ * changed is the shape of the switch: `p_notify_kind` still reaches the RPC through exactly one
+ * expression, so "notifications are off" stays a one-line, greppable property.
+ */
+describe('notification surface (§3.5, M5)', () => {
+  it('flips the server flag that gates every notification path', () => {
+    expect(read('lib', 'flags.ts')).toContain('export const NOTIFICATIONS_ENABLED = true');
   });
-});
 
-describe('notification surface does not exist before M5 (§3.5)', () => {
-  it('forces p_notify_kind to NULL through the server flag', () => {
-    expect(read('lib', 'flags.ts')).toContain('export const NOTIFICATIONS_ENABLED = false');
+  it('still routes p_notify_kind through the one flagged expression', () => {
     expect(read('lib', 'publish', 'pipeline.ts')).toContain(
       'NOTIFICATIONS_ENABLED ? (args.notifyKind ?? null) : null',
     );
+  });
+
+  it('puts the two toggles on /account behind a server action', () => {
+    const account = read('app', '(app)', 'account', 'page.tsx');
+    expect(account).toContain('type="checkbox"');
+    expect(account).toContain('saveNotificationPreferences');
+    // The columns are named in `lib/notify/preferences.ts`, never inline in a page.
+    for (const column of ['notif_new_playbook', 'notif_updates']) {
+      expect(account, column).not.toContain(column);
+    }
+
+    const action = read('app', '(app)', 'account', 'actions.ts');
+    expect(action).toContain("'use server'");
+    expect(action).toContain('getViewer');
+    // Identity from the session, never from the form.
+    expect(action).not.toContain("form.get('userId')");
+    expect(action.match(/export async function/g)).toHaveLength(1);
+  });
+
+  it('gives the admin publish form a notify checkbox but never a kind picker', () => {
+    const panel = read('components', 'admin', 'editor-panels.tsx');
+    expect(panel).toContain('name="notify"');
+    // The kind is derived in `lib/admin/operations.ts` from `published_revision_id`.
+    expect(panel).not.toContain('new_playbook');
+    expect(panel).not.toContain('playbook_update');
+    expect(read('lib', 'admin', 'operations.ts')).toContain('notifyKindFor(');
+  });
+
+  it('keeps the unsubscribe endpoint out of every cache and every index', () => {
+    const route = read('app', 'api', 'notify', 'unsubscribe', 'route.ts');
+    expect(route).toContain("export const dynamic = 'force-dynamic'");
+    expect(route).toContain("'Cache-Control': 'private, no-store'");
+    expect(route).toContain("'X-Robots-Tag': 'noindex, nofollow'");
+    expect(route).toContain('verifyUnsubscribeToken');
+    // GET only: a mail client follows links, not forms.
+    expect(route).toContain('export async function GET');
+    expect(route).not.toContain('export async function POST');
+  });
+});
+
+/**
+ * M5 SEO. The sitemap reads the SAME tagged projection the marketing pages read, so a publish
+ * invalidates all three together; robots and the sitemap must agree on what is public.
+ */
+describe('sitemap + robots (§8 M5)', () => {
+  it('builds the sitemap from the cached catalog with the catalog TTL floor', () => {
+    const sitemap = read('app', 'sitemap.ts');
+    expect(sitemap).toContain("from '@/lib/content/public-catalog'");
+    // Next parses segment config statically, so this one is a literal — kept in step here.
+    expect(sitemap).toContain(`export const revalidate = ${CATALOG_TTL_SECONDS}`);
+  });
+
+  it('disallows exactly the noindex surfaces the route table lists', () => {
+    const seo = read('lib', 'seo', 'sitemap.ts');
+    for (const path of ['/admin', '/library', '/account', '/billing', '/api']) {
+      expect(seo, path).toContain(`'${path}'`);
+    }
+  });
+
+  /**
+   * Regression from the M5 sweep: both crawler endpoints live at the ROOT and are therefore
+   * unprefixed public URLs — precisely what middleware 308-redirects into a locale. Without the
+   * exclusion, `/sitemap.xml` answered 308 → `/en/sitemap.xml` → 404, and the site had no sitemap.
+   */
+  it('exempts the crawler endpoints from the locale redirect', () => {
+    const matcher = read('middleware.ts');
+    expect(matcher).toContain('sitemap\\\\.xml');
+    expect(matcher).toContain('robots\\\\.txt');
   });
 });

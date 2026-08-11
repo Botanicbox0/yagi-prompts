@@ -96,7 +96,12 @@ export const config = {
      *   _next/static, _next/image, favicon, /fonts, /.storage (local storage driver in dev)
      *   /api/*   — route handlers set their own no-store headers and are not locale-prefixed
      *   /auth/*  — the OAuth callback must not be redirected mid-exchange
+     *   sitemap.xml, robots.txt (M5) — crawler endpoints live at the ROOT by specification. They
+     *     are unprefixed public URLs, which is exactly what the 308 below rewrites, so without
+     *     this exclusion `/sitemap.xml` answers 308 → `/en/sitemap.xml` → 404 and the site has no
+     *     sitemap at all. (Found by the M5 sweep, not by a unit test — which is why the sweep runs
+     *     against a real server.)
      */
-    '/((?!_next/static|_next/image|favicon.ico|fonts/|\\.storage/|api/|auth/|.*\\.(?:svg|png|jpg|jpeg|gif|webp|mp4|webm|woff2?)$).*)',
+    '/((?!_next/static|_next/image|favicon.ico|sitemap\\.xml|robots\\.txt|fonts/|\\.storage/|api/|auth/|.*\\.(?:svg|png|jpg|jpeg|gif|webp|mp4|webm|woff2?)$).*)',
   ],
 };

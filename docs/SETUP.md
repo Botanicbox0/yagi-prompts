@@ -134,14 +134,60 @@ disabled** — that is the design, and worth verifying by disabling the endpoint
 
 **Stop-gate (§11)**: confirm $9/**month** and the refund wording before M3 merges.
 
-## 7. Resend — blocks M5
+## 7. Resend — the M5 manual gate
 
-API key into `RESEND_API_KEY`, verify the sending domain, then the cron worker per §3.5.
+M5 ships the whole notification pipeline against an injected boundary
+(`lib/notify/mailer.ts`), so everything except *mail actually leaving the building* is verified
+offline: job enqueue, expansion, claim/lease/recovery, backoff, idempotency keys, unsubscribe
+tokens, and both bilingual templates. What follows is the part that needs an account.
+
+1. Resend → add the sending domain → publish the DKIM/SPF records → wait for **Verified**.
+2. `.env`: `RESEND_API_KEY` and `NOTIFY_FROM_EMAIL` (e.g. `PLAYBOOK <playbook@your-domain>`).
+   **Both are required together** — with either missing, `getMailer()` is null, the worker claims
+   nothing and reports `mailer NOT CONFIGURED`. Nothing is marked sent that was not sent.
+3. `NOTIFY_TOKEN_SECRET` — any long random string. It signs the unsubscribe links, which live in
+   people's inboxes for months; if it is unset the process generates a random one at boot and every
+   link stops working on the next restart.
+4. Schedule the worker every minute (Vercel Cron, or a Supabase Edge Function calling
+   `runNotifyPass` from `lib/notify/worker.ts` — it is exported for exactly that):
+   `npm run notify:worker`. Nothing breaks without it; deliveries simply stay `pending`.
+5. Manual gate (§8 M5): from `/admin`, publish a revision with **Email subscribers** ticked, run the
+   worker, and read both emails in a real inbox — one EN, one KO. Check the change note appears on
+   the update, click the unsubscribe link, and confirm `/account` shows the switch off.
 
 ## 8. Deploy
 
 Vercel project → import the repo → set every variable from `.env.example` (service role and
-Stripe/Resend keys as **server-side only**). Naming and domain are a §11 stop-gate before M5.
+Stripe/Resend keys and both token secrets as **server-side only**). Naming and domain are a §11
+stop-gate.
+
+---
+
+## Go-live checklist (§11 stop-gates, in order)
+
+Everything above is a description; this is the running order. Each line has a check you can actually
+perform — a step is not done because you did it, it is done because the check passed.
+
+| # | Step | Blocks | Verify |
+|---|---|---|---|
+| 1 | **Name + domain** decided (§11 open item) | everything below | the domain resolves and you own the DNS |
+| 2 | **Supabase project** created (§1 above) | 3–6, 10 | `select 1` over `DATABASE_URL` |
+| 3 | **Migrations applied in filename order**, core then `*_glue_*`, via Supabase MCP `apply_migration` | 4–6 | the three queries in §1.5: RPC owner = `publisher`, `prosecdef = true`, `rolbypassrls = true`, RLS forced on every table |
+| 4 | **Service role key** into `SUPABASE_SERVICE_ROLE_KEY` (server-side only) | 5–6 | `/library` renders for a signed-in user instead of the empty catalog |
+| 5 | **Google OAuth client** + Supabase redirect URLs (§2) | login | `/auth/signin?next=/library&locale=ko` lands on `/library` with the KO cookie |
+| 6 | **Storage buckets + driver** (§5): `STORAGE_DRIVER=supabase`, only `public-content` public, **no** policies on `storage.objects` | media | a hero renders on `/en`; `/api/media/{a pro block}` answers 401 anonymously |
+| 7 | **Stripe live keys** — secret, price, webhook endpoint + signing secret (§6) | payment | `isBillingConfigured()` true; the CTA is a checkout form, not the "not connected" panel |
+| 8 | **Real test-mode checkout E2E** (§6 deferred gate) | payment | lock → pay `4242…` → same playbook unlocked → `/account` reads Active; then cancel in Stripe and confirm the blocks re-lock |
+| 9 | **Resend domain + key + sender** (§7) | notifications | `npm run notify:worker` prints `mailer live (…)`; a test publish delivers one EN and one KO email |
+| 10 | **Token secrets**: `MEDIA_TOKEN_SECRET` and `NOTIFY_TOKEN_SECRET` | media, unsubscribe | no `[media]` / `[notify]` "per-process random secret" warning in the deploy logs |
+| 11 | **`NEXT_PUBLIC_APP_URL`** set to the real origin | sitemap, emails | `/robots.txt` and `/sitemap.xml` carry absolute URLs on the real domain, not `localhost` |
+| 12 | **Deploy to Vercel** with every variable from `.env.example` | — | `/en` and `/ko` render; `npm run sweep:anon` with `SWEEP_BASE_URL=https://…` passes |
+| 13 | **Submit the sitemap** — Google Search Console, property on the real domain | indexing | `/sitemap.xml` fetched OK; the two showcase URLs appear, `/library` does not |
+| 14 | **Launch content** (§9, `content/MANIFEST.md`) | launch, not engineering | six playbooks published; fixtures no longer visible in production |
+
+Two things that are already true and do **not** need a step: the deletion runbook
+(`docs/RUNBOOK-deletion.md`) and the notification worker code. Both are ready; only the credentials
+above are missing.
 
 ---
 
@@ -156,6 +202,7 @@ npm run dev
 npm run fonts      # re-vendor WOFF2 + licences after a font package bump
 npm run seed       # fixture playbooks through the real prepare → copy → publish RPCs
 npm run stripe:retry -- --dry   # count pending stripe_events (needs DATABASE_URL)
+npm run notify:worker -- --dry  # count pending notification deliveries (needs a durable DB, below)
 
 # the M2 authz sweep — needs a server already running against the local snapshot
 npm run db:local; npm run build; npm start      # in one shell
@@ -280,12 +327,13 @@ The landing and pricing pages read the catalog projection through `lib/content/p
 which resolves a `SqlRunner` in this order (`lib/db/connect.ts`):
 
 1. `DATABASE_URL` → `pg` pool. The production path.
-2. `.pglite/catalog.tar.gz` → an in-memory PGlite loaded from a dump. The dev path while §11's
+2. `PLAYBOOK_LOCAL_DB_DIR` → a DURABLE PGlite data directory (M5, opt-in — see below).
+3. `.pglite/catalog.tar.gz` → an in-memory PGlite loaded from a dump. The dev path while §11's
    Supabase stop-gate is open.
-3. neither → the empty catalog, and both pages render their designed empty states. CI builds
-   exactly this way.
+4. none of the above → the empty catalog, and both pages render their designed empty states. CI
+   builds exactly this way.
 
-`npm run db:local` builds (2): a fresh PGlite, the real `*_core_*` migrations, and the real
+`npm run db:local` builds (3): a fresh PGlite, the real `*_core_*` migrations, and the real
 prepare → copy → publish seed, dumped to `.pglite/catalog.tar.gz` (gitignored). A dump rather than
 a live data directory so Next's parallel static-generation workers can each open their own
 read-only copy without fighting over a file lock.
@@ -293,3 +341,51 @@ read-only copy without fighting over a file lock.
 Re-run it whenever the migrations or `scripts/fixtures.ts` change. Fixture media lands under
 `.storage/` via the local storage driver; nothing serves it over HTTP, so the cards render their
 generated covers — see `docs/CONTENT-SLOTS.md`.
+
+### A DURABLE local database (M5)
+
+That snapshot is loaded **into memory**, so every write dies with the process. Fine for reading a
+catalog; useless for a queue, because the notification worker is a second process that has to see
+what `/admin` enqueued in the first. So `db:local` also builds option (2) — a real PGlite data
+directory:
+
+```powershell
+npm run db:local -- --dir .pglite/dev     # same migrations, same seed, on disk this time
+$env:PLAYBOOK_LOCAL_DB_DIR = ".pglite/dev"
+```
+
+`lib/db/connect.ts` prefers it over the snapshot when the variable is set, and falls back if the
+directory cannot be opened. **One process at a time** — PGlite takes an exclusive lock on a data
+directory, so stop `next dev` before running the worker against the same folder.
+
+## Running the notification worker offline (M5)
+
+The full §3.5 loop, with no Resend account and no Supabase project:
+
+```powershell
+npm run db:local -- --dir .pglite/dev             # 1. durable database + fixtures
+
+$env:PLAYBOOK_LOCAL_DB_DIR = ".pglite/dev"
+npm run dev:admin                                 # 2. author + publish WITH the notify checkbox
+#    /admin → open a draft → Publish, ticking "Email subscribers about this publication"
+#    then stop the server (PGlite holds the directory)
+
+$env:PLAYBOOK_FAKE_MAILER = "1"                   # 3. the deterministic mailer (dev only)
+npm run notify:worker
+npm run notify:worker                             # 4. again: 0 expanded, 0 claimed, 0 sent
+```
+
+Three things worth knowing before you read the output:
+
+- **`PLAYBOOK_FAKE_MAILER=1` is dead code in a production build**, exactly like
+  `PLAYBOOK_FAKE_BILLING` — `next build` inlines `NODE_ENV === 'production'` and the branch is
+  removed. A real `RESEND_API_KEY` + `NOTIFY_FROM_EMAIL` always wins over it.
+- **No mailer at all changes nothing.** The worker prints `mailer NOT CONFIGURED`, claims nothing
+  and exits 1. It will never mark a delivery `sent` that no provider accepted.
+- **Nobody is subscribed by default.** `profiles.notif_*` default to `false` (§6), so the fixture
+  users receive nothing until you turn the switches on — either in `/account` as `dev:pro`, or:
+
+```sql
+update profiles set notif_new_playbook = true, notif_updates = true
+ where email = 'pro@playbook.test';
+```

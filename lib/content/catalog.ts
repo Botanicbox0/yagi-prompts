@@ -41,7 +41,19 @@ export interface CatalogCard {
   estTimeMin: number | null;
   estCostUsd: number | null;
   isShowcase: boolean;
+  /** When the CURRENT published revision went live. */
   publishedAt: string | null;
+  /**
+   * The playbook's debut — the oldest `published_at` across all its revisions. §3.5's NEW badge is
+   * a fact about the playbook, not about its newest rewrite (`lib/content/badges.ts`).
+   */
+  firstPublishedAt: string | null;
+  /**
+   * `publishedAt` when the current revision carries a change note, else null — §3.5's UPDATED
+   * badge. A change note is what §6 requires to republish, so it marks a rewrite rather than a
+   * first publication that happened to be edited.
+   */
+  updatedAt: string | null;
   hero: CatalogHero | null;
   stepCount: number;
   blockCount: number;
@@ -99,6 +111,8 @@ interface CardRow {
   est_cost_usd: string | number | null;
   is_showcase: boolean;
   published_at: Date | string | null;
+  first_published_at: Date | string | null;
+  has_change_note: boolean;
   hero_asset: AssetRef | null;
   step_count: number;
 }
@@ -117,6 +131,10 @@ const CARDS_SQL = `
          p.slug, p.category,
          r.difficulty, r.title, r.summary, r.tools, r.models,
          r.est_time_min, r.est_cost_usd, r.is_showcase, r.published_at, r.hero_asset,
+         (r.change_note is not null) as has_change_note,
+         -- The playbook's debut, across every revision it has ever had (§3.5 NEW badge).
+         (select min(pr.published_at) from playbook_revisions pr
+           where pr.playbook_id = p.id and pr.published_at is not null) as first_published_at,
          (select count(*)::int from steps s where s.revision_id = r.id) as step_count
     from playbooks p
     join playbook_revisions r on r.id = p.published_revision_id
@@ -181,6 +199,7 @@ export async function loadCatalogRows(sql: SqlRunner): Promise<CatalogRow[]> {
 
   return cardRows.map((row) => {
     const counts = perRevision.get(row.revision_id) ?? { blocks: 0, pro: 0, prompts: 0 };
+    const publishedAt = toIso(row.published_at);
     return {
       playbookId: row.playbook_id,
       revisionId: row.revision_id,
@@ -194,7 +213,9 @@ export async function loadCatalogRows(sql: SqlRunner): Promise<CatalogRow[]> {
       estTimeMin: row.est_time_min,
       estCostUsd: toNumber(row.est_cost_usd),
       isShowcase: row.is_showcase,
-      publishedAt: toIso(row.published_at),
+      publishedAt,
+      firstPublishedAt: toIso(row.first_published_at) ?? publishedAt,
+      updatedAt: row.has_change_note ? publishedAt : null,
       hero: toHero(row.hero_asset),
       stepCount: row.step_count,
       blockCount: counts.blocks,

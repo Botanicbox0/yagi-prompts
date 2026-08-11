@@ -383,6 +383,23 @@ export async function blockParents(
     : null;
 }
 
+/**
+ * "Has this playbook ever been live?" — the one input to §3.5's notify-kind derivation.
+ *
+ * Read BEFORE `publish_revision` runs: the RPC swaps `published_revision_id` in the same
+ * transaction, after which every publication would look like a republication.
+ */
+export async function hasPublishedRevision(
+  sql: SqlRunner,
+  playbookId: string,
+): Promise<boolean> {
+  const { rows } = await sql.query<{ published_revision_id: string | null }>(
+    'select published_revision_id from playbooks where id = $1',
+    [playbookId],
+  );
+  return rows[0]?.published_revision_id != null;
+}
+
 export async function playbookIdOfRevision(
   sql: SqlRunner,
   revisionId: string,

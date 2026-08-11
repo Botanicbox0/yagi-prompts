@@ -16,12 +16,18 @@ import {
   preparePublish,
   publishRevision,
 } from '@/lib/publish/pipeline';
+import { notifyKindFor } from '@/lib/notify/kinds';
 import { fail, ok, type AdminContext, type AdminOutcome } from './context';
 import { stageUpload } from './assets';
 import { ensureDraftRevision } from './clone';
 import * as f from './form';
 import { moveRow, nextOrder, normalizeOrder } from './order';
-import { blockParents, playbookIdOfRevision, revisionIdOfStep } from './repo';
+import {
+  blockParents,
+  hasPublishedRevision,
+  playbookIdOfRevision,
+  revisionIdOfStep,
+} from './repo';
 
 /**
  * PLAN §3.8 — every admin mutation, as one registry.
@@ -624,6 +630,13 @@ const Publish = z.object({
    *            edit-after-prepare guard is reachable, which is why the mismatch message exists.
    */
   mode: z.enum(['full', 'commit']),
+  /**
+   * §3.5 — the M5 checkbox. It says WHETHER to notify, never which kind: `new_playbook` vs
+   * `playbook_update` is a fact about the playbook (has it been published before?), derived below
+   * from `published_revision_id`. A form that could assert the kind could announce a rewrite of
+   * something that never shipped, or a "new playbook" for its fourth revision.
+   */
+  notify: z.boolean(),
 });
 
 const prepare: AdminOperation<{ revisionId: string }> = {
@@ -643,17 +656,26 @@ const publish: AdminOperation<z.infer<typeof Publish>> = {
       playbookId: f.str(form, 'playbookId'),
       revisionId: f.str(form, 'revisionId'),
       mode: f.str(form, 'mode') || 'full',
+      notify: f.bool(form, 'notify'),
     }),
   async run(ctx, input) {
     if (input.mode === 'full') {
       await preparePublish(ctx.sql, input.revisionId);
       await copyPublishManifest(ctx.sql, ctx.storage, input.revisionId);
     }
-    // `notifyKind` is not even passed: `lib/publish/pipeline.ts` forces NULL while
-    // NOTIFICATIONS_ENABLED is false (§3.5), and M4 ships no control that could set it.
+
+    // Read the pointer BEFORE the RPC swaps it — afterwards every publication looks like a
+    // republication. `notifyKindFor` is the whole rule: a playbook with no live revision can only
+    // be new, one with a live revision can only be an update (and the RPC already refuses to
+    // republish without a bilingual change note, so an update email always has something to say).
+    const notifyKind = input.notify
+      ? notifyKindFor(await hasPublishedRevision(ctx.sql, input.playbookId))
+      : null;
+
     await publishRevision(ctx.sql, {
       playbookId: input.playbookId,
       revisionId: input.revisionId,
+      notifyKind,
     });
     ctx.revalidate?.();
 
@@ -663,8 +685,9 @@ const publish: AdminOperation<z.infer<typeof Publish>> = {
       [input.revisionId],
     );
     const row = rows[0];
+    const what = row ? `${row.slug} · rev ${row.rev_no}` : input.revisionId;
     return ok('published', {
-      detail: row ? `${row.slug} · rev ${row.rev_no}` : input.revisionId,
+      detail: notifyKind === null ? what : `${what} · notify ${notifyKind}`,
     });
   },
 };

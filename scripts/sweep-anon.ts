@@ -364,6 +364,114 @@ async function sweepConversionCta(): Promise<void> {
   expectPresent('sign-in returns to this playbook', page.body, encodeURIComponent(`/en/p/${SHOWCASE}`));
 }
 
+/**
+ * M5 — the SEO surface, as a crawler actually receives it.
+ *
+ * The unit tests pin what `lib/seo/*` builds; only a real server can show what survives Next's
+ * metadata rendering, and the property that matters is a disclosure one: the sitemap must list the
+ * showcase playbook and must NOT list the gated library's slugs or any `noindex` path.
+ */
+async function sweepSeo(): Promise<void> {
+  console.log('\n/sitemap.xml + /robots.txt — the public surface (M5)');
+
+  const sitemap = await get('/sitemap.xml');
+  expectEqual('sitemap renders 200', sitemap.status, 200);
+  if (!sitemap.contentType?.includes('xml')) {
+    fail('sitemap content type', `expected xml, got ${sitemap.contentType}`);
+  } else ok('…as xml');
+
+  expectPresent('lists the showcase playbook (en)', sitemap.body, `/en/p/${SHOWCASE}`);
+  expectPresent('lists the showcase playbook (ko)', sitemap.body, `/ko/p/${SHOWCASE}`);
+  expectPresent('lists the landing page', sitemap.body, '<loc>http');
+  expectPresent('carries hreflang alternates', sitemap.body, 'hreflang="ko"');
+  expectPresent('…including x-default', sitemap.body, 'hreflang="x-default"');
+  expectPresent('lists both locales of the landing page', sitemap.body, `${BASE}/ko<`);
+  expectAbsent('never lists the login-walled playbook', sitemap.body, NON_SHOWCASE);
+  expectAbsent('never lists the archived playbook', sitemap.body, ARCHIVED);
+  for (const path of ['/library', '/admin', '/account', '/billing', '/api/']) {
+    expectAbsent(`never lists ${path}`, sitemap.body, path);
+  }
+  if (/<loc>(?!https?:\/\/)/.test(sitemap.body)) {
+    fail('sitemap urls are absolute', 'a <loc> is not an absolute URL');
+  } else ok('every <loc> is absolute');
+
+  const robots = await get('/robots.txt');
+  expectEqual('robots renders 200', robots.status, 200);
+  for (const path of ['/admin', '/library', '/account', '/billing', '/api']) {
+    expectPresent(`disallows ${path}`, robots.body, `Disallow: ${path}`);
+  }
+  expectPresent('allows the public surface', robots.body, 'Allow: /');
+  expectPresent('points at the sitemap', robots.body, 'Sitemap: http');
+}
+
+/** M5 — canonical / hreflang / og:image, on the HTML a crawler is served. */
+async function sweepDetailMetadata(): Promise<void> {
+  console.log('\nshowcase detail <head> — canonical, hreflang, OG (M5)');
+
+  const page = await get(`/en/p/${SHOWCASE}`);
+  expectPresent('self-canonical', page.body, `rel="canonical" href="${BASE}/en/p/${SHOWCASE}"`);
+  // Next emits the attribute as `hrefLang` verbatim in the HTML (React prop spelling), which the
+  // HTML parser lower-cases; assert what is actually on the wire.
+  expectPresent('hreflang en', page.body, `hrefLang="en" href="${BASE}/en/p/${SHOWCASE}"`);
+  expectPresent('hreflang ko', page.body, `hrefLang="ko" href="${BASE}/ko/p/${SHOWCASE}"`);
+  expectPresent('hreflang x-default', page.body, 'hrefLang="x-default"');
+  expectPresent('og:type article', page.body, 'property="og:type" content="article"');
+  expectPresent('og:locale en_US', page.body, 'content="en_US"');
+  expectAbsent('showcase pages are NOT deindexed', page.body, 'name="robots" content="noindex');
+
+  const ko = await get(`/ko/p/${SHOWCASE}`);
+  expectPresent('ko page self-canonicals to ko', ko.body, `rel="canonical" href="${BASE}/ko/p/${SHOWCASE}"`);
+  expectPresent('…and declares ko_KR', ko.body, 'content="ko_KR"');
+
+  // §3.1: heroes are the only public marketing bytes. With no CDN configured (§11) there is no
+  // public URL to emit, and emitting a gateway path — which 401s for a crawler — would be worse.
+  const hasOgImage = page.body.includes('property="og:image"');
+  if (hasOgImage) {
+    if (page.body.includes('/api/media/')) {
+      fail('og:image source', 'og:image points at the entitlement gateway, which 401s for crawlers');
+    } else ok('og:image is a public-bucket URL');
+  } else {
+    ok('no og:image, because no public CDN is configured (§11)');
+  }
+}
+
+/** M5 — the unsubscribe endpoint, which is reachable with NO session by design (§3.5). */
+async function sweepUnsubscribe(): Promise<void> {
+  console.log('\n/api/notify/unsubscribe — signed-token only, no session (M5)');
+
+  const cases: Array<[string, string]> = [
+    ['no token at all', '/api/notify/unsubscribe'],
+    ['empty token', '/api/notify/unsubscribe?t='],
+    ['garbage token', '/api/notify/unsubscribe?t=not-a-token'],
+    ['token-shaped garbage', '/api/notify/unsubscribe?t=aaaa.bbbb'],
+    // A real payload with a made-up signature: the shape is right, the HMAC is not.
+    [
+      'forged signature',
+      `/api/notify/unsubscribe?t=${Buffer.from(
+        JSON.stringify({ u: 'f0000000-0000-4000-8000-000000000002', t: 'notif_updates' }),
+      ).toString('base64url')}.${'a'.repeat(43)}`,
+    ],
+  ];
+
+  for (const [label, path] of cases) {
+    const response = await get(path);
+    expectEqual(`${label} → 400`, response.status, 400);
+    // Not the M3 `'at '` probe: this page's own copy contains "That link…", and a substring match
+    // on `at ` reads that as a stack frame. Check for the things a stack frame actually contains.
+    for (const trace of ['node_modules', 'webpack-internal', '.next/server', '\n    at ']) {
+      expectAbsent(`${label} leaks no stack trace (${trace.trim()})`, response.body, trace);
+    }
+  }
+
+  const probe = await get('/api/notify/unsubscribe?t=nope');
+  expectEqual('refusals are never cached', probe.cacheControl, 'private, no-store');
+  if (probe.contentType?.includes('text/html')) ok('…and answer with a readable page');
+  else fail('unsubscribe content type', `expected text/html, got ${probe.contentType}`);
+  expectPresent('the refusal page is noindex', probe.body, 'noindex');
+  // The point of the endpoint: it must not bounce an unauthenticated reader to sign-in.
+  expectAbsent('never redirects to sign-in', probe.body, '/auth/signin');
+}
+
 async function main(): Promise<void> {
   console.log(`PLAYBOOK anon sweep → ${BASE}`);
 
@@ -383,6 +491,9 @@ async function main(): Promise<void> {
   await sweepGateway(assets);
   await sweepConversionCta();
   await sweepMoney();
+  await sweepSeo();
+  await sweepDetailMetadata();
+  await sweepUnsubscribe();
 
   console.log(
     `\n${failures === 0 ? 'SWEEP PASSED' : 'SWEEP FAILED'} — ${checks - failures}/${checks} checks passed`,
