@@ -16,6 +16,10 @@ import {
 } from '@/components/playbook/detail';
 import { StepChips, StepIndex } from '@/components/playbook/step-index';
 import { playbookLabels } from '@/components/playbook/labels';
+import { LockBeacon } from '@/components/analytics/beacon';
+import { upgradeIntent } from '@/lib/billing/links';
+import { isBillingConfigured } from '@/lib/billing/stripe-gateway';
+import { trackAsync } from '@/lib/events/server';
 
 /**
  * `/[locale]/p/[slug]` — the playbook detail page (PLAN §3.3, laid out per §4).
@@ -103,6 +107,24 @@ export default async function PlaybookDetailPage({ params }: RouteParams) {
   const { playbook, neighbours, preview } = result;
   const labels = playbookLabels(dict);
   const ads = adLabels(dict);
+
+  // §3.4 funnel. Fire-and-forget: an analytics insert may never sit on this page's critical path,
+  // and may never be able to fail it (lib/events/server.ts swallows everything).
+  trackAsync({
+    type: 'view_playbook',
+    userId: result.viewer.userId,
+    playbookId: playbook.playbook_id,
+    meta: { slug: playbook.slug, locale, surface: 'detail' },
+  });
+
+  // Where "unlock" goes, decided once, from the tier the gate already resolved (§3.4):
+  //   anon → sign in and come back here · signed-in free → straight to Stripe · unconfigured → pricing.
+  const upgrade = upgradeIntent({
+    tier: playbook.tier,
+    slug: playbook.slug,
+    locale,
+    billingConfigured: isBillingConfigured(),
+  });
   const categoryLabel = (dict.category as Record<string, string>)[playbook.category] ?? playbook.category;
   const difficultyLabel =
     (dict.difficulty as Record<string, string>)[playbook.difficulty] ?? playbook.difficulty;
@@ -143,6 +165,7 @@ export default async function PlaybookDetailPage({ params }: RouteParams) {
               locale={locale}
               labels={labels}
               tier={playbook.tier}
+              upgrade={upgrade}
             />
 
             {/* §3.6: below the rail tier this is the page's single ad slot ("after step 2" is the
@@ -152,7 +175,15 @@ export default async function PlaybookDetailPage({ params }: RouteParams) {
               <AdBanner labels={ads} />
             </div>
 
-            <ProCta lockedCount={playbook.lockedCount} locale={locale} labels={labels} />
+            <ProCta
+              lockedCount={playbook.lockedCount}
+              locale={locale}
+              labels={labels}
+              upgrade={upgrade}
+            />
+
+            {/* §3.4 `hit_lock` — once per page, and only when the server really rendered a lock. */}
+            {playbook.lockedCount > 0 && <LockBeacon slug={playbook.slug} />}
 
             <NeighbourNav neighbours={neighbours} locale={locale} labels={labels} />
 

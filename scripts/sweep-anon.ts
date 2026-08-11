@@ -79,8 +79,8 @@ interface Fetched {
   bytes: Uint8Array;
 }
 
-async function get(path: string): Promise<Fetched> {
-  const response = await fetch(`${BASE}${path}`, { redirect: 'manual' });
+async function request(path: string, init?: RequestInit): Promise<Fetched> {
+  const response = await fetch(`${BASE}${path}`, { redirect: 'manual', ...init });
   const bytes = new Uint8Array(await response.arrayBuffer());
   return {
     status: response.status,
@@ -90,6 +90,26 @@ async function get(path: string): Promise<Fetched> {
     body: new TextDecoder().decode(bytes),
     bytes,
   };
+}
+
+async function get(path: string): Promise<Fetched> {
+  return request(path);
+}
+
+async function postForm(path: string, fields: Record<string, string>): Promise<Fetched> {
+  return request(path, {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams(fields).toString(),
+  });
+}
+
+async function postJson(path: string, body: unknown): Promise<Fetched> {
+  return request(path, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -269,6 +289,81 @@ async function sweepGateway(assets: AssetBlockRow[]): Promise<void> {
   );
 }
 
+/**
+ * M3 — the money and analytics surface, for an anonymous visitor against a PRODUCTION build.
+ *
+ * Two properties this is the only place to check:
+ *   · the conversion path never hands an anonymous reader a dead POST — every money route answers
+ *     with the sign-in wall, and the locked-block CTA renders as a sign-in link, not a checkout
+ *     form (`data-upgrade` is emitted by components/billing/upgrade-cta.tsx for exactly this);
+ *   · with no Stripe configured (§11) the routes degrade to a designed 503 rather than a stack
+ *     trace — and, because this is `next start`, NODE_ENV is 'production', so the dev identity and
+ *     the fake gateway are both provably dead here.
+ */
+async function sweepMoney(): Promise<void> {
+  console.log('\n/api/billing + /api/events — anon, production build (M3)');
+
+  const checkout = await postForm('/api/billing/checkout', {
+    locale: 'en',
+    slug: SHOWCASE,
+  });
+  expectEqual('checkout POST bounces anon with 303', checkout.status, 303);
+  if (checkout.location?.includes('/auth/signin')) {
+    ok('…to sign-in with a return-to', checkout.location);
+    if (checkout.location.includes(encodeURIComponent(`/en/p/${SHOWCASE}`)))
+      ok('…carrying the origin playbook');
+    else fail('checkout return-to', `origin missing from ${checkout.location}`);
+  } else fail('checkout redirect target', `expected /auth/signin, got ${checkout.location}`);
+  expectEqual('checkout is never cached', checkout.cacheControl, 'private, no-store');
+
+  const portal = await postForm('/api/billing/portal', {});
+  expectEqual('portal POST bounces anon with 303', portal.status, 303);
+  if (portal.location?.includes('/auth/signin')) ok('…to sign-in');
+  else fail('portal redirect target', `expected /auth/signin, got ${portal.location}`);
+
+  // No STRIPE_* on this machine ⇒ the honest 503, never a crash. (The signature path itself is
+  // verified for real against the SDK in tests/billing/webhook-signature.test.ts.)
+  const webhook = await postJson('/api/stripe/webhook', { id: 'evt_probe' });
+  expectOneOf('webhook answers without crashing', webhook.status, [400, 503]);
+  expectEqual('webhook is never cached', webhook.cacheControl, 'private, no-store');
+  expectAbsent('webhook leaks no stack trace', webhook.body, 'at ');
+  expectEqual('GET on the webhook is 405', (await get('/api/stripe/webhook')).status, 405);
+
+  // §3.4 funnel beacon: the two client-observable types only.
+  const beacon = await postJson('/api/events', {
+    type: 'hit_lock',
+    slug: SHOWCASE,
+    surface: 'detail',
+  });
+  expectEqual('hit_lock beacon accepted', beacon.status, 204);
+  expectEqual(
+    'a server-only event type is rejected',
+    (await postJson('/api/events', { type: 'view_playbook' })).status,
+    400,
+  );
+  expectEqual(
+    'an invented event type is rejected',
+    (await postJson('/api/events', { type: 'pageview' })).status,
+    400,
+  );
+  expectEqual('a non-json body is rejected', (await postJson('/api/events', 'nope')).status, 400);
+
+  const upgrade = await get('/billing/upgrade');
+  expectOneOf('/billing/upgrade redirects anon', upgrade.status, [302, 307, 308]);
+  const account = await get('/account');
+  expectOneOf('/account redirects anon', account.status, [302, 307, 308]);
+}
+
+/** The CTA an anonymous reader is actually shown on a locked page (§3.4 Journey A). */
+async function sweepConversionCta(): Promise<void> {
+  console.log('\nlocked-page CTA — anonymous');
+  const page = await get(`/en/p/${SHOWCASE}`);
+  expectPresent('locked blocks offer sign-in', page.body, 'data-upgrade="signin"');
+  // A form POST an anonymous reader cannot complete would be a dead end mid-funnel.
+  expectAbsent('…and never a checkout form', page.body, 'data-upgrade="checkout"');
+  expectPresent('sign-in returns to this playbook', page.body, encodeURIComponent(`/en/p/${SHOWCASE}`));
+}
+
 async function main(): Promise<void> {
   console.log(`PLAYBOOK anon sweep → ${BASE}`);
 
@@ -286,6 +381,8 @@ async function main(): Promise<void> {
   await sweepRedirects();
   await sweepNotFound();
   await sweepGateway(assets);
+  await sweepConversionCta();
+  await sweepMoney();
 
   console.log(
     `\n${failures === 0 ? 'SWEEP PASSED' : 'SWEEP FAILED'} — ${checks - failures}/${checks} checks passed`,

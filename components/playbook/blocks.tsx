@@ -1,8 +1,10 @@
 import type { ReactNode } from 'react';
 import type { ShapedAssetRef, ShapedBlock, ShapedBlockContent } from '@/lib/content/shape';
 import type { BlockKind } from '@/lib/content/schemas';
+import type { UpgradeIntent } from '@/lib/billing/links';
 import { interpolate, localize } from '@/lib/i18n/format';
 import { TextSwap } from '@/components/ui/text-swap';
+import { UpgradeCta } from '@/components/billing/upgrade-cta';
 import { CopyButton } from './copy-button';
 import { Markdown } from './markdown';
 import type { PlaybookLabels } from './labels';
@@ -78,12 +80,20 @@ export function LockedBlock({
   block,
   locale,
   labels,
+  upgrade,
 }: {
   block: Extract<ShapedBlock, { locked: true }>;
   locale: string;
   labels: PlaybookLabels;
+  /**
+   * M3: where "unlock" goes, resolved once on the server from the viewer's tier (§3.4).
+   * Absent ⇒ the M2 behaviour, a link to the pricing page — which is still the right answer for
+   * any surface that has no viewer (admin preview, component tests).
+   */
+  upgrade?: UpgradeIntent;
 }) {
   const kindLabel = labels.kinds[block.kind];
+  const ctaClass = 'text-accent font-label text-eyebrow uppercase';
   return (
     <BlockShell kind={block.kind} id={block.id} locked label={kindLabel} action={<LockGlyph />}>
       <div className="lock-panel" data-lock-panel>
@@ -93,9 +103,13 @@ export function LockedBlock({
           </p>
           <p className="mt-2 text-[0.9375rem] opacity-70">{labels.lockedBody}</p>
         </div>
-        <a href={`/${locale}/pricing`} className="text-accent font-label text-eyebrow uppercase">
-          <TextSwap>{labels.lockedCta} →</TextSwap>
-        </a>
+        {upgrade === undefined ? (
+          <a href={`/${locale}/pricing`} className={ctaClass}>
+            <TextSwap>{labels.lockedCta} →</TextSwap>
+          </a>
+        ) : (
+          <UpgradeCta intent={upgrade} label={labels.lockedCta} className={ctaClass} />
+        )}
       </div>
     </BlockShell>
   );
@@ -222,6 +236,7 @@ export function BlockView({
   locale,
   labels,
   canCopy = false,
+  upgrade,
 }: {
   block: ShapedBlock;
   locale: string;
@@ -232,8 +247,19 @@ export function BlockView({
    * than a gate — which is exactly why it is a presentation prop and not a second authorization.
    */
   canCopy?: boolean;
+  /** M3: the resolved unlock destination (§3.4). See `LockedBlock`. */
+  upgrade?: UpgradeIntent;
 }) {
-  if (block.locked) return <LockedBlock block={block} locale={locale} labels={labels} />;
+  if (block.locked) {
+    return (
+      <LockedBlock
+        block={block}
+        locale={locale}
+        labels={labels}
+        {...(upgrade === undefined ? {} : { upgrade })}
+      />
+    );
+  }
 
   const label = labels.kinds[block.kind];
   const content = block.content;

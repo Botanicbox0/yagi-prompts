@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { updateSession, withCookies } from '@/lib/supabase/middleware';
+import { devIdentityUserId } from '@/lib/auth/dev-identity';
 import {
   LOCALE_COOKIE,
   LOCALE_COOKIE_MAX_AGE,
@@ -47,7 +48,11 @@ export async function middleware(request: NextRequest) {
     response.headers.set('Cache-Control', NO_STORE);
     response.headers.set('X-Robots-Tag', 'noindex, nofollow');
 
-    if (!user) {
+    // The edge gate is on SESSION PRESENCE only (`is_admin`/tier are resolved server-side). The dev
+    // identity has to be honoured here too, or `/account` and `/billing/*` would bounce during a
+    // local render-verify even though every component below would resolve the right viewer. Same
+    // fences as everywhere else: dead code under NODE_ENV=production, explicit env otherwise.
+    if (!user && devIdentityUserId() === null) {
       const target = request.nextUrl.clone();
       target.pathname = localizedPath(locale, '/');
       target.search = '';

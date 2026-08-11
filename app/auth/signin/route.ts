@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { createAuthServerClient } from '@/lib/supabase/auth-client';
+import { createAuthServerClient, getSessionUser } from '@/lib/supabase/auth-client';
 import { DEFAULT_LOCALE, isLocale, localizedPath } from '@/lib/i18n/config';
 
 /**
@@ -18,6 +18,12 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const next = requested.startsWith('/') && !requested.startsWith('//') ? requested : '/library';
   const rawLocale = url.searchParams.get('locale');
   const locale = isLocale(rawLocale) ? rawLocale : DEFAULT_LOCALE;
+
+  // Already signed in ⇒ this is a return-to, not a login. M3 makes `/auth/signin?next=…` the CTA
+  // for every STATIC surface (the marketing tree may not read the session, §3.1 cache mode), so it
+  // has to be a no-op for a reader who already has one rather than a redundant OAuth round trip.
+  const existing = await getSessionUser();
+  if (existing) return NextResponse.redirect(new URL(next, url.origin), { status: 303 });
 
   const callback = new URL('/auth/callback', url.origin);
   callback.searchParams.set('next', next);

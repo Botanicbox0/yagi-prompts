@@ -1,4 +1,6 @@
 import { TextSwap } from '@/components/ui/text-swap';
+import { upgradeHrefFromStatic } from '@/lib/billing/links';
+import type { Locale } from '@/lib/i18n/config';
 
 /**
  * PLAN §2 / §3.4 — Free vs Pro.
@@ -7,7 +9,13 @@ import { TextSwap } from '@/components/ui/text-swap';
  *   Pro   $9/month: every prompt/param, copy buttons, workflow files, notifications
  *
  * Shared by the landing's pricing summary and the pricing page so the two can never disagree
- * about what a plan is. The CTA is a plain sign-in link on both: checkout is M3.
+ * about what a plan is.
+ *
+ * The CTA cannot branch on the viewer here: both hosts are STATIC by contract (§3.1) and reading a
+ * session would silently downgrade them to SSR — the exact regression tests/routes/cache-contract
+ * guards. So it links through `/auth/signin?next=/billing/upgrade`, which is a no-op redirect for a
+ * reader who already has a session and the login wall for one who does not. The tier-aware,
+ * one-click path lives where the tier is already known: the playbook detail page.
  */
 
 export interface PlanCopy {
@@ -28,12 +36,12 @@ export function PlanCards({
   freeFeatures,
   proFeatures,
 }: {
-  locale: string;
+  locale: Locale;
   copy: PlanCopy;
   freeFeatures: string[];
   proFeatures: string[];
 }) {
-  const signInHref = `/auth/signin?next=%2Flibrary&locale=${locale}`;
+  const signInHref = upgradeHrefFromStatic(locale);
 
   return (
     <div className="grid gap-px border border-hairline bg-hairline lg:grid-cols-2">

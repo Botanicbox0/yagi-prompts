@@ -10,7 +10,10 @@ import { decideEligibility } from '@/lib/content/eligibility';
 import { shapePlaybook, type ShapedPlaybookResult } from '@/lib/content/playbook-access';
 import type { SqlRunner } from '@/lib/db/sql-runner';
 import { TIER_ORDER, type Tier } from '@/lib/content/visibility';
+import { resolveViewer, sqlIdentitySource } from '@/lib/auth/identity';
+import { devIdentityUserId } from '@/lib/auth/dev-identity';
 import { seed, seedEdgeFixtures, type EdgeSeedResult } from '@/scripts/seed';
+import { FIXTURE_USERS } from '@/scripts/fixtures';
 import { freshDb, runner } from '../helpers/pglite';
 
 /**
@@ -270,6 +273,145 @@ describe('admin preview plumbing (§3.8 preview-as, §7)', () => {
     if (showcaseAsAnon.status !== 'ok') return;
     expect(showcaseAsAnon.playbook.tier).toBe('anon');
     expect(showcaseAsAnon.playbook.lockedCount).toBeGreaterThan(0);
+  });
+});
+
+/**
+ * M3 — the same façade, but with the viewer RESOLVED from the database instead of fabricated.
+ *
+ * M2's matrix injects `{ tier }` because no session could be minted (§11). That is still true, but
+ * M3 moved the half that turns a *user id* into a *tier* into `lib/auth/identity.ts`, and that half
+ * is exactly where the entitlement wiring lives. So these cases drive the real derivation against
+ * the seeded `subscriptions` rows and hand the result to the real façade: if the entitlement rule
+ * or the seed ever disagree, a shaped page changes here.
+ */
+describe('viewer resolution ⇒ shaped page (§3.4 wiring)', () => {
+  let db: PGlite;
+  let sql: SqlRunner;
+  let storageRoot: string;
+
+  beforeAll(async () => {
+    db = await freshDb();
+    storageRoot = await mkdtemp(join(tmpdir(), 'playbook-viewer-'));
+    sql = runner(db);
+    await seed({ sql, storage: createLocalStorageDriver(storageRoot), createAuthUsers: true });
+  });
+
+  afterAll(async () => {
+    await db.close();
+    await rm(storageRoot, { recursive: true, force: true });
+  });
+
+  const viewerFromDb = async (userId: string): Promise<Viewer> =>
+    resolveViewer({ id: userId }, await sqlIdentitySource(sql).load(userId));
+
+  it('derives pro from the seeded subscriptions row, not from profiles.plan', async () => {
+    const viewer = await viewerFromDb(FIXTURE_USERS.pro.id);
+    expect(viewer.tier).toBe('pro');
+    expect(viewer.email).toBe(FIXTURE_USERS.pro.email);
+
+    const result = await shapePlaybook({ sql, viewer }, 'talking-character-clip');
+    expect(result.status).toBe('ok');
+    if (result.status !== 'ok') return;
+    const blocks = result.playbook.steps.flatMap((step) => step.blocks);
+    // 24 blocks across 4 visibilities; pro sees everything except `hidden`.
+    expect(blocks.filter((b) => !b.locked)).toHaveLength(18);
+  });
+
+  it('derives free with no subscription row, and admin from is_admin', async () => {
+    expect((await viewerFromDb(FIXTURE_USERS.free.id)).tier).toBe('free');
+    // The admin fixture carries `plan='free'` and no subscription — admin still outranks both.
+    expect((await viewerFromDb(FIXTURE_USERS.admin.id)).tier).toBe('admin');
+  });
+
+  it('locks pro blocks the moment the subscription stops being entitled', async () => {
+    const before = await shapePlaybook(
+      { sql, viewer: await viewerFromDb(FIXTURE_USERS.pro.id) },
+      'talking-character-clip',
+    );
+    expect(before.status === 'ok' && before.playbook.lockedCount).toBe(6);
+
+    await sql.query(`update subscriptions set status = 'canceled' where user_id = $1`, [
+      FIXTURE_USERS.pro.id,
+    ]);
+
+    const after = await shapePlaybook(
+      { sql, viewer: await viewerFromDb(FIXTURE_USERS.pro.id) },
+      'talking-character-clip',
+    );
+    expect(after.status).toBe('ok');
+    if (after.status !== 'ok') return;
+    expect(after.playbook.tier).toBe('free');
+    expect(after.playbook.lockedCount).toBe(12);
+
+    await sql.query(`update subscriptions set status = 'past_due' where user_id = $1`, [
+      FIXTURE_USERS.pro.id,
+    ]);
+    // Stripe owns the retry window: `past_due` is still entitled (§3.4).
+    expect((await viewerFromDb(FIXTURE_USERS.pro.id)).tier).toBe('pro');
+  });
+
+  it('resolves anon for an unknown user id', async () => {
+    const viewer = await viewerFromDb('00000000-0000-4000-8000-000000000404');
+    // No profile ⇒ no admin flag, no entitlement. The tier floor for a *signed-in* id is `free`;
+    // the absence of a session is what produces `anon`, and that is `getViewer`'s half.
+    expect(viewer.tier).toBe('free');
+    expect(viewer.email).toBeNull();
+  });
+});
+
+/**
+ * The dev identity is the local render-verify seam (`npm run dev:pro`). Its whole safety argument
+ * is that it cannot exist in a production build — so that is what is pinned here.
+ */
+describe('dev identity fences (lib/auth/dev-identity.ts)', () => {
+  const id = FIXTURE_USERS.pro.id;
+
+  it('is dead in a production build, whatever the env says', () => {
+    expect(devIdentityUserId({ NODE_ENV: 'production', PLAYBOOK_DEV_IDENTITY: id })).toBeNull();
+  });
+
+  it('requires an explicit, well-formed id in development', () => {
+    expect(devIdentityUserId({ NODE_ENV: 'development' })).toBeNull();
+    expect(devIdentityUserId({ NODE_ENV: 'development', PLAYBOOK_DEV_IDENTITY: '' })).toBeNull();
+    expect(devIdentityUserId({ NODE_ENV: 'development', PLAYBOOK_DEV_IDENTITY: 'pro' })).toBeNull();
+    expect(devIdentityUserId({ NODE_ENV: 'development', PLAYBOOK_DEV_IDENTITY: id })).toBe(id);
+  });
+
+  /**
+   * Exactly two consumers on the RUNTIME surface, and both are gates rather than grants: the edge
+   * session check and the viewer resolution. A third would be a new way for an env var to reach a
+   * decision, which is the thing the fences exist to prevent. `scripts/` is out of scope on purpose
+   * — a launcher that sets the variable is not a code path that trusts it.
+   */
+  it('is consulted by exactly two places on the runtime surface', async () => {
+    const { readFileSync, readdirSync, statSync } = await import('node:fs');
+    const { join: joinPath } = await import('node:path');
+    const { fileURLToPath } = await import('node:url');
+    const root = fileURLToPath(new URL('../..', import.meta.url));
+
+    const hits: string[] = [];
+    const check = (full: string) => {
+      if (readFileSync(full, 'utf8').includes('devIdentityUserId')) {
+        hits.push(full.slice(root.length).replace(/\\/g, '/'));
+      }
+    };
+    const walk = (dir: string) => {
+      for (const entry of readdirSync(dir)) {
+        if (entry === 'node_modules' || entry === '.next' || entry.startsWith('.')) continue;
+        const full = joinPath(dir, entry);
+        if (statSync(full).isDirectory()) walk(full);
+        else if (/\.tsx?$/.test(entry)) check(full);
+      }
+    };
+    for (const dir of ['app', 'lib', 'components']) walk(joinPath(root, dir));
+    check(joinPath(root, 'middleware.ts'));
+
+    expect(hits.sort()).toEqual([
+      'lib/auth/dev-identity.ts',
+      'lib/auth/viewer.ts',
+      'middleware.ts',
+    ]);
   });
 });
 
