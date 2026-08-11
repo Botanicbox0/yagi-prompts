@@ -96,6 +96,7 @@
   --surface: var(--color-white);
   --on-surface: var(--color-black);
   --hairline: var(--color-line-light);
+  --accent: var(--color-blue);
 }
 
 html:lang(ko) {
@@ -105,10 +106,22 @@ html:lang(ko) {
     system-ui, sans-serif;
 }
 
+[data-theme='light'] {
+  --surface: var(--color-white);
+  --on-surface: var(--color-black);
+  --hairline: var(--color-line-light);
+  --accent: var(--color-blue);
+}
+
 [data-theme='dark'] {
   --surface: var(--color-black);
   --on-surface: var(--color-white);
   --hairline: var(--color-line-dark);
+  /* §5.1 gives one accent, #0000EE. On pure black it measures 2.23:1 — unreadable, and it fails
+     WCAG AA on every link, eyebrow and lock glyph the design puts on an inverted section. This is
+     the SAME accent tone-mapped for the other ink: same hue, lifted to 5.03:1 on #000. The
+     hyperlink blue survives on white, where it is the reference; nothing else enters the palette. */
+  --accent: #4c6fff;
 }
 
 /* ===========================================================================
@@ -129,12 +142,6 @@ html:lang(ko) {
     -webkit-font-smoothing: antialiased;
   }
 
-  /* KO display runs ~0.85× the EN size at the same slot (§5.2). */
-  html:lang(ko) .text-display {
-    font-size: clamp(3.4rem, 10.2vw, 9.5625rem);
-    letter-spacing: -0.01em;
-  }
-
   a {
     color: inherit;
     text-decoration: none;
@@ -151,6 +158,290 @@ html:lang(ko) {
   }
 }
 
+/* ===========================================================================
+   M1 — the eight moves of §5.3, and the §4 layout band they live in.
+   Nothing here is decorative-by-accident: every rule below maps to a numbered
+   item in the interaction inventory or to the layout math.
+   =========================================================================== */
+
+/* ---------------------------------------------------------------------------
+   Theme-reactive utilities.
+
+   Tailwind v4 RESOLVES `@theme` variables that reference other custom properties:
+   `--color-surface: var(--surface)` is emitted on :root already flattened to the
+   light value, so the generated `bg-surface` / `text-on-surface` / `border-hairline`
+   utilities bake in white/black/12%-black and never invert — the nav would render
+   black-on-black over the dark hero, and every hairline on a dark section would
+   disappear. Re-point the four utilities at the LIVE variables, which resolve per
+   element against `[data-theme]` (§4).
+
+   These live in `@layer utilities` on purpose: Tailwind's own utilities layer wins
+   over `components`, so an override has to be in the same layer and later in source
+   order. `tests/design/tokens.test.ts` pins that this block exists.
+   --------------------------------------------------------------------------- */
+@layer utilities {
+  .bg-surface {
+    background-color: var(--surface);
+  }
+
+  .text-on-surface {
+    color: var(--on-surface);
+  }
+
+  .border-hairline {
+    border-color: var(--hairline);
+  }
+
+  .bg-hairline {
+    background-color: var(--hairline);
+  }
+
+  /* The one accent, resolved against the ink it sits on. `text-blue` stays exactly #0000EE for
+     anything that is always on white; `text-accent` is what section-inverting chrome uses. */
+  .text-accent {
+    color: var(--accent);
+  }
+
+  .bg-accent {
+    background-color: var(--accent);
+  }
+
+  .border-accent {
+    border-color: var(--accent);
+  }
+
+  /* §5.2 — "KO display ~0.85× EN", tracking −1~−2%.
+     This MUST live in `utilities`, after Tailwind's own: as a `base`-layer rule it loses to the
+     `text-display` / `text-title` utilities and Korean renders at the full English size, where
+     Hangul ink at 0.9 leading collides line-to-line. Latin at 0.9 has room because its ink box is
+     shorter than the em; Hangul fills it, so the KO slot also buys back a little leading. */
+  html:lang(ko) .text-display {
+    font-size: clamp(3.4rem, 10.2vw, 9.5625rem);
+    line-height: 0.95;
+    letter-spacing: -0.015em;
+  }
+
+  html:lang(ko) .text-title {
+    font-size: clamp(2.125rem, 5.1vw, 4.25rem);
+    line-height: 1;
+    letter-spacing: -0.012em;
+  }
+}
+
+@layer components {
+  /* --- §4 layout band ----------------------------------------------------
+     Below 1440 the content column is 1000px wide inside the page gutters.
+     At the ≥1440 rail tier the band becomes 1000 | 40 | 300 = 1340 (§4, verified
+     sum) and keeps its content in the LEFT 1000 — the right 340 band belongs to
+     the ad rail and must stay free of interactive/text-critical content (§3.6). */
+  .band {
+    width: 100%;
+    max-width: calc(var(--container-content) + 2 * var(--spacing-gutter));
+    margin-inline: auto;
+    padding-inline: var(--spacing-gutter);
+  }
+
+  /* Full-bleed strips (hero, marquee, wipe) still need page gutters. */
+  .bleed {
+    width: 100%;
+    padding-inline: var(--spacing-gutter);
+  }
+
+  @media (min-width: 90rem) {
+    .band {
+      max-width: calc(
+        var(--container-content) + var(--spacing-rail-gap) + var(--container-rail)
+      );
+      padding-inline: 0;
+      padding-right: calc(var(--spacing-rail-gap) + var(--container-rail));
+    }
+  }
+
+  /* A section paints its own inversion; the nav observer reads the same attribute. */
+  .section {
+    position: relative;
+    background-color: var(--surface);
+    color: var(--on-surface);
+  }
+
+  .hairline {
+    border-color: var(--hairline);
+  }
+
+  /* --- §5.3-3 text-swap hover -------------------------------------------
+     Every primary CTA and nav link renders its label twice; the stack slides.
+     Driven from the enclosing <a>/<button> so keyboard focus gets it too. */
+  .text-swap {
+    position: relative;
+    display: inline-block;
+    overflow: hidden;
+    padding-block: 0.1em;
+    margin-block: -0.1em;
+    vertical-align: bottom;
+  }
+
+  .text-swap__a,
+  .text-swap__b {
+    display: block;
+    transition: transform var(--duration-hover) var(--ease-out-quint);
+  }
+
+  .text-swap__b {
+    position: absolute;
+    top: 0.1em;
+    left: 0;
+    right: 0;
+    transform: translate3d(0, 110%, 0);
+  }
+
+  :is(a, button, summary):hover .text-swap__a,
+  :is(a, button, summary):focus-visible .text-swap__a {
+    transform: translate3d(0, -110%, 0);
+  }
+
+  :is(a, button, summary):hover .text-swap__b,
+  :is(a, button, summary):focus-visible .text-swap__b {
+    transform: translate3d(0, 0, 0);
+  }
+
+  /* --- §5.3-4 giant type reveal -----------------------------------------
+     There is deliberately NO hidden state in CSS. The masked start frame is set
+     by GSAP itself (a `fromTo`, applied inside the layout effect, before paint),
+     so display copy that never meets a working GSAP — no JS, reduced motion, a
+     failed chunk — is simply visible. A stylesheet must never be able to hide a
+     headline permanently. */
+  [data-reveal-line] {
+    display: block;
+  }
+
+  /* --- §5.3-5 marquee -----------------------------------------------------
+     No edge mask: §5.1 is a no-gradient design system (tests/design/tokens.test.ts
+     pins that), and a hard edge is the more honest read anyway — the strip runs
+     full-bleed off both sides. */
+  .marquee {
+    overflow: hidden;
+  }
+
+  .marquee__track {
+    display: flex;
+    width: max-content;
+    will-change: transform;
+    animation: playbook-marquee 40s linear infinite;
+  }
+
+  .marquee:hover .marquee__track,
+  .marquee:focus-within .marquee__track {
+    animation-play-state: paused;
+  }
+
+  @keyframes playbook-marquee {
+    from {
+      transform: translate3d(0, 0, 0);
+    }
+    to {
+      transform: translate3d(-50%, 0, 0);
+    }
+  }
+
+  /* --- §5.3-6 card hover: media zooms, the type never does ---------------- */
+  .card {
+    transition: transform var(--duration-hover) var(--ease-out-quint);
+  }
+
+  .card:hover,
+  .card:focus-within {
+    transform: translate3d(0, -2px, 0);
+  }
+
+  .card__media {
+    overflow: hidden;
+  }
+
+  .card__media > * {
+    transition: transform var(--duration-hover) var(--ease-out-quint);
+  }
+
+  .card:hover .card__media > *,
+  .card:focus-within .card__media > * {
+    transform: scale(1.03);
+  }
+
+  /* --- §5.3-2 circular wipe ----------------------------------------------
+     `off` (the server render, and any browser without JS) is a plain black
+     block — the honest end state of a white→black inversion. `fade` is the
+     <1024 / reduced-motion path. `circle` is the ≥1024 scrubbed transition. */
+  .wipe {
+    position: relative;
+    overflow: hidden;
+    background-color: var(--color-white);
+  }
+
+  .wipe__ink {
+    position: absolute;
+    inset: 0;
+    background-color: var(--color-black);
+  }
+
+  .wipe[data-anim='fade'] .wipe__ink {
+    opacity: 0;
+    transition: opacity 700ms var(--ease-out-quint);
+  }
+
+  .wipe[data-anim='fade'][data-shown='true'] .wipe__ink {
+    opacity: 1;
+  }
+
+  .wipe[data-anim='circle'] .wipe__ink {
+    inset: auto;
+    top: 50%;
+    left: 50%;
+    width: var(--wipe-d, 120vmax);
+    height: var(--wipe-d, 120vmax);
+    margin-top: calc(var(--wipe-d, 120vmax) / -2);
+    margin-left: calc(var(--wipe-d, 120vmax) / -2);
+    border-radius: 50%;
+    transform: scale(0);
+    will-change: transform;
+  }
+
+  /* --- §5.3-7 ad rail ----------------------------------------------------
+     The fixed variant is positioned by JS off the Lenis scroll value; this
+     rule only owns the geometry, which is the §4 band math:
+     the 1340 band is centred, so its right-hand 300 column starts at
+     50% + (1000 − 300)/2 + 40/2 = 50% + 370. */
+  .ad-rail-fixed {
+    position: fixed;
+    top: 0;
+    left: calc(
+      50% + (var(--container-content) - var(--container-rail)) / 2 + var(--spacing-rail-gap) / 2
+    );
+    width: var(--container-rail);
+    z-index: 30;
+    will-change: transform;
+  }
+
+  .ad-rail-sticky {
+    position: sticky;
+    top: 6.5rem;
+    width: var(--container-rail);
+  }
+
+  /* --- §5.3-1 sticky scenes ----------------------------------------------
+     Full-viewport only where the pin exists (§4: no pins below 1024). Below that
+     the three panels are simply three blocks in normal flow — forcing 100svh
+     there would be three screens of empty space, not a scene. */
+  .panel {
+    display: flex;
+    align-items: center;
+  }
+
+  @media (min-width: 64rem) {
+    .panel {
+      min-height: 100vh;
+    }
+  }
+}
+
 /* Reduced motion is a hard kill switch, not a softening (§5.3/§5.4).
    The Lenis + ScrollTrigger shell refuses to initialise as well. */
 @media (prefers-reduced-motion: reduce) {
@@ -161,5 +452,12 @@ html:lang(ko) {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+
+  /* The blanket rule above would snap the marquee to its end frame, which reads as
+     a broken layout rather than a stopped ticker. Stop it where it starts. */
+  .marquee__track {
+    animation: none !important;
+    transform: none !important;
   }
 }

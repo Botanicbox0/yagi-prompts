@@ -12,6 +12,9 @@ dist/
 # local storage driver root (lib/storage/local-driver.ts)
 .storage/
 
+# local development database snapshot (scripts/db-local.ts → lib/db/connect.ts)
+.pglite/
+
 # tooling
 *.tsbuildinfo
 next-env.d.ts

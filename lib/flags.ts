@@ -8,3 +8,10 @@ export const NOTIFICATIONS_ENABLED = false;
 
 /** PLAN §3.6 — the ad rail is a single house placeholder until a real advertiser exists. */
 export const AD_SLOTS_DB_BACKED = false;
+
+/**
+ * PLAN §4 — `/[locale]/p/[slug]` is M2's route. Until it exists, every catalog card funnels
+ * through the login wall rather than linking into a 404. Flip this in M2 to restore the §3.1
+ * split (showcase → public detail page; everything else → login wall).
+ */
+export const PLAYBOOK_DETAIL_ROUTE_READY = false;

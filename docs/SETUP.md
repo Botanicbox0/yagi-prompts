@@ -108,7 +108,28 @@ Stripe/Resend keys as **server-side only**). Naming and domain are a §11 stop-g
 npm install
 npm run check      # typecheck + vitest — the same thing CI runs
 npm test           # vitest only
+npm run db:local   # local catalog snapshot (see below) — do this before `npm run dev`
 npm run dev
 npm run fonts      # re-vendor WOFF2 + licences after a font package bump
 npm run seed       # fixture playbooks through the real prepare → copy → publish RPCs
 ```
+
+## Local catalog data (no Supabase project required)
+
+The landing and pricing pages read the catalog projection through `lib/content/public-catalog.ts`,
+which resolves a `SqlRunner` in this order (`lib/db/connect.ts`):
+
+1. `DATABASE_URL` → `pg` pool. The production path.
+2. `.pglite/catalog.tar.gz` → an in-memory PGlite loaded from a dump. The dev path while §11's
+   Supabase stop-gate is open.
+3. neither → the empty catalog, and both pages render their designed empty states. CI builds
+   exactly this way.
+
+`npm run db:local` builds (2): a fresh PGlite, the real `*_core_*` migrations, and the real
+prepare → copy → publish seed, dumped to `.pglite/catalog.tar.gz` (gitignored). A dump rather than
+a live data directory so Next's parallel static-generation workers can each open their own
+read-only copy without fighting over a file lock.
+
+Re-run it whenever the migrations or `scripts/fixtures.ts` change. Fixture media lands under
+`.storage/` via the local storage driver; nothing serves it over HTTP, so the cards render their
+generated covers — see `docs/CONTENT-SLOTS.md`.

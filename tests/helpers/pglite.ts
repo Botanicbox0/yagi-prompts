@@ -1,24 +1,8 @@
 import { PGlite } from '@electric-sql/pglite';
-import { readdirSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import type { SqlRunner } from '@/lib/db/sql-runner';
+import { applyCoreMigrations } from '@/lib/db/migrations';
 
-export const MIGRATIONS_DIR = fileURLToPath(new URL('../../supabase/migrations', import.meta.url));
-
-/** Migrations that run anywhere Postgres runs — the ones PGlite acceptance applies. */
-export function coreMigrationFiles(): string[] {
-  return readdirSync(MIGRATIONS_DIR)
-    .filter((f) => f.endsWith('.sql') && f.includes('_core_'))
-    .sort();
-}
-
-/** Migrations that bind to Supabase-managed schemas/roles (auth, storage, anon/service_role). */
-export function glueMigrationFiles(): string[] {
-  return readdirSync(MIGRATIONS_DIR)
-    .filter((f) => f.endsWith('.sql') && f.includes('_glue_'))
-    .sort();
-}
+export { MIGRATIONS_DIR, coreMigrationFiles, glueMigrationFiles } from '@/lib/db/migrations';
 
 /**
  * A fresh in-memory Postgres with the core migrations applied.
@@ -32,14 +16,7 @@ export async function freshDb(): Promise<PGlite> {
     create schema if not exists auth;
     create table if not exists auth.users (id uuid primary key);
   `);
-  for (const file of coreMigrationFiles()) {
-    const sql = readFileSync(join(MIGRATIONS_DIR, file), 'utf8');
-    try {
-      await db.exec(sql);
-    } catch (err) {
-      throw new Error(`migration ${file} failed: ${(err as Error).message}`);
-    }
-  }
+  await applyCoreMigrations(db);
   return db;
 }
 

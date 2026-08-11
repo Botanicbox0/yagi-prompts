@@ -1,10 +1,21 @@
 import type { Dictionary } from './en';
 
-/** PLAN §3.9 — manual bilingual authoring in v1; the type keeps the two dictionaries in step. */
+/**
+ * PLAN §3.9 — manual bilingual authoring in v1; the type keeps the two dictionaries in step.
+ *
+ * §5.2 KO display rules: Pretendard 900, ~0.85× the EN size, tracking −1~−2%, lines broken by
+ * hand. Display copy below is written SHORT and DECLARATIVE so the manual breaks hold at every
+ * breakpoint — it is not a translation of the English lines, it is the Korean version of them.
+ */
 export const ko: Dictionary = {
   meta: {
     siteName: 'PLAYBOOK',
     tagline: 'AI 스튜디오의 작업실을 그대로 공개합니다.',
+    landingDescription:
+      '저희가 실제로 돌리는 AI 미디어 파이프라인을 공개합니다. 모델 하나, 프롬프트 하나, 단계 하나까지. 한국어와 영어로 쓰고, 모델이 바뀌면 다시 씁니다.',
+    pricingTitle: '요금제',
+    pricingDescription:
+      '구조는 무료입니다. 프롬프트와 파라미터, 워크플로 파일은 프로 — 월 $9입니다.',
   },
   nav: {
     library: '라이브러리',
@@ -16,6 +27,8 @@ export const ko: Dictionary = {
     localeKo: 'KO',
     menu: '메뉴',
     close: '닫기',
+    primary: '주요 메뉴',
+    skipToContent: '본문으로 건너뛰기',
   },
   auth: {
     signIn: '로그인',
@@ -35,15 +48,137 @@ export const ko: Dictionary = {
     lockedParams: '파라미터 — 프로로 열기',
     lockedWorkflow: '워크플로 파일 — 프로로 열기',
   },
+  hero: {
+    eyebrow: '열려 있는 작업실',
+    line1: '이건 실제로',
+    line2: '이렇게',
+    line3: '만든다.',
+    lede: '여기 있는 플레이북은 전부 저희가 실제로 돌리는 파이프라인입니다. 프롬프트, 파라미터, 순서, 그리고 자주 깨지는 지점까지.',
+    secondaryCta: '프로로 열리는 것 보기',
+    scroll: '스크롤',
+    reelLabel: '작업 릴',
+    reelKicker: '프롬프트 · 파라미터 · 워크플로',
+    reelCaption: '릴 슬롯 — 렌더가 올라오기 전까지의 임시 구성',
+  },
+  premise: {
+    eyebrow: '01 / 전제',
+    line1: '튜토리얼은',
+    line2: '금방 낡는다.',
+    line3: '파이프라인은 아니다.',
+    body1:
+      '"AI 영상 만드는 법" 콘텐츠 대부분은 여덟 달 전 설정 화면 캡처입니다. 플레이북은 다릅니다. 실제로 돌아가는 파이프라인이고, 모델이 바뀌어 깨지는 순간 다시 씁니다.',
+    body2: '강의를 파는 게 아닙니다. 저희가 일하는 작업대를 여는 겁니다.',
+    statPlaybooksLabel: '공개된 플레이북',
+    statPromptsLabel: '카탈로그의 프롬프트',
+    statStepsLabel: '기록된 단계',
+    statUpdatedLabel: '모델이 바뀌면 다시 씁니다',
+    statUpdatedValue: '항상',
+  },
+  howItReads: {
+    eyebrow: '02 / 읽는 법',
+    title: '세 가지, 이 순서로.',
+    stepsIndex: '01',
+    stepsTitle: '단계',
+    stepsBody:
+      '플레이북은 순서가 있는 타임라인입니다. 각 단계는 실제로 내려야 하는 결정 하나이고, 내려야 하는 순서대로 놓여 있습니다. 예상 시간과 비용도 함께 붙습니다.',
+    blocksIndex: '02',
+    blocksTitle: '블록',
+    blocksBody:
+      '각 단계는 타입이 정해진 블록으로 만들어집니다. 프롬프트, 파라미터, 에셋, 노트, 링크, 워크플로 파일. 표로 써야 할 것을 글로 풀어놓지 않습니다.',
+    unlockIndex: '03',
+    unlockTitle: '해제',
+    unlockBody:
+      '구조는 무료입니다. 프롬프트와 파라미터 표, 워크플로 파일은 프로입니다. 레시피는 값이 시작되는 지점에서 정확히 멈춥니다.',
+  },
+  marquee: {
+    label: '카탈로그에 등장하는 툴과 모델',
+  },
+  featured: {
+    eyebrow: '03 / 최신',
+    line1: '작업대에서',
+    line2: '막 나온 것.',
+    badge: '최신',
+    lede: '최신순입니다. 하나 열어서 끝까지 읽어보세요. 구조는 무료입니다.',
+    emptyTitle: '첫 플레이북들을 다듬고 있습니다.',
+    emptyBody: '올라오는 날 바로 보시려면 로그인해 두세요.',
+    open: '열기',
+    stepsLabel: '단계',
+    proBlocksLabel: '프로 블록',
+    showcaseLabel: '누구나 열람',
+    loginWallLabel: '로그인 후 열람',
+  },
+  category: {
+    image: '이미지',
+    video: '영상',
+    character: '캐릭터',
+    voice: '보이스',
+    music: '뮤직',
+    pipeline: '파이프라인',
+  },
+  difficulty: {
+    beginner: '입문',
+    intermediate: '중급',
+    advanced: '고급',
+  },
+  pricing: {
+    eyebrow: '04 / 요금제',
+    line1: '구조는 무료.',
+    line2: '레시피는 월 $9.',
+    lede: '요금제 하나, 가격 하나. 언제든 해지할 수 있습니다.',
+    countsLine: '지금 플레이북 {playbooks}개에 프롬프트 {prompts}개가 들어 있습니다.',
+    countsEmpty: '첫 플레이북이 공개되면 카탈로그가 열립니다.',
+    perMonth: '/월',
+    freePrice: '$0',
+    proPrice: '$9',
+    freeTagline: '모든 플레이북의 구조를 끝까지 읽습니다.',
+    proTagline: '프롬프트도, 파라미터도, 파일도 전부.',
+    compare: '요금제 비교하기',
+    cancelNote: 'Stripe로 월 단위 결제됩니다. 내 계정에서 언제든 해지할 수 있습니다.',
+    featureHeading: '무엇이 열리나요',
+    columnFeature: '항목',
+    included: '포함',
+    notIncluded: '미포함',
+    featureStructure: '공개된 모든 플레이북의 구조와 단계',
+    featureAssets: '무료 에셋과 노트, 링크',
+    featureBilingual: '한국어와 영어 전체 제공',
+    featurePrompts: '저희가 쓰는 그대로의 모든 프롬프트',
+    featureParams: '모든 파라미터 표',
+    featureCopy: '프롬프트·파라미터 원클릭 복사',
+    featureWorkflow: '워크플로 파일 — ComfyUI 그래프, LUT, 프리셋',
+    featureNotifications: '새 플레이북과 개정 알림',
+    proBlocksLocked: '개의 프로 블록이 잠겨 있습니다',
+  },
+  faq: {
+    eyebrow: '05 / 질문',
+    title: '먼저 답해 둡니다.',
+    q1: '읽으려면 계정이 꼭 필요한가요?',
+    a1: '아닙니다. 랜딩과 요금제, 쇼케이스 플레이북은 열려 있습니다. 전체 라이브러리만 Google 로그인 한 번 뒤에 있습니다. 관리되는 콘텐츠가 거기 모여 있기 때문입니다.',
+    q2: '프로는 정확히 무엇을 열어주나요?',
+    a2: '라이브러리 전체의 모든 프롬프트, 모든 파라미터 표, 모든 워크플로 파일입니다. 복사 버튼이 켜지고, 무언가 다시 쓰이면 메일로 알려드립니다.',
+    q3: '플레이북이 낡지는 않나요?',
+    a3: '모델은 몇 주마다 바뀝니다. 그래서 파이프라인이 깨지면 다시 쓰고 변경 노트를 남깁니다. 초안이 아니라 유지보수를 사시는 겁니다.',
+    q4: '여기서 생성도 돌릴 수 있나요?',
+    a4: '아니요. PLAYBOOK은 대신 생성해 주지 않습니다. 무엇을 어디서 어떤 값으로 돌려야 하는지를 알려줍니다.',
+    q5: '전부 한국어로도 있나요?',
+    a5: '제목과 요약, 단계와 노트는 한국어와 영어로 모두 씁니다. 프롬프트는 번역하지 않습니다. 모델 입력값이라 번역하면 결과가 달라집니다.',
+    q6: '저희 것도 만들어 주시나요?',
+    a6: '가끔요. 스튜디오는 1년에 소수의 프로덕션 프로젝트만 받습니다. 필요한 파이프라인을 적어서 메일 주세요.',
+  },
   footer: {
     hireCta: '스튜디오와 함께 작업하기',
+    hireLede: '무엇을 만들고 계신지, 어느 지점이 막히는지 적어 주세요.',
     advertise: '광고 문의',
     rights: 'YAGI Workshop',
     privacy: '개인정보',
     terms: '이용약관',
+    builtIn: '서울',
+    navHeading: '사이트',
+    contactHeading: '문의',
   },
   ad: {
     placeholder: 'YOUR AD HERE',
     contact: 'advertise@yagiworkshop.xyz',
+    label: '광고',
+    pitch: '실제로 AI 미디어를 만드는 사람들에게 닿습니다.',
   },
 };

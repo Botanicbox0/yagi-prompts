@@ -3,6 +3,11 @@ import type { NextConfig } from 'next';
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
+  /**
+   * Both SqlRunner drivers (lib/db/connect.ts) are native/WASM-backed and must be `require`d at
+   * runtime rather than bundled: `pg` loads optional native bindings, PGlite ships a .wasm sidecar.
+   */
+  serverExternalPackages: ['pg', '@electric-sql/pglite'],
   async headers() {
     return [
       {
