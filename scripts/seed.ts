@@ -1,12 +1,16 @@
 import { createHash, randomUUID } from 'node:crypto';
+import { deflateSync } from 'node:zlib';
 import type { SqlRunner } from '@/lib/db/sql-runner';
 import type { StorageDriver } from '@/lib/storage';
-import { parseBlock, type AssetRef } from '@/lib/content/schemas';
+import { parseBlock, type AssetRef, type Localized } from '@/lib/content/schemas';
 import { runPublishPipeline, type CopyReport } from '@/lib/publish/pipeline';
 import {
+  EDGE_FIXTURE_PLAYBOOKS,
   FIXTURE_PLAYBOOKS,
   FIXTURE_USERS,
+  sentinelToken,
   type AssetSpec,
+  type EdgePlaybookSpec,
   type PlaybookSpec,
 } from './fixtures';
 
@@ -43,11 +47,91 @@ export interface SeedResult {
   playbooks: SeededPlaybook[];
 }
 
-/** Deterministic, clearly-labelled placeholder bytes (§9: fixture media is labelled as such). */
-function placeholderBytes(label: string): Uint8Array {
-  return new TextEncoder().encode(
-    `PLAYBOOK FIXTURE PLACEHOLDER :: ${label} :: not real production media\n`,
+const PLACEHOLDER_NOTE = (label: string) =>
+  `PLAYBOOK FIXTURE PLACEHOLDER :: ${label} :: not real production media`;
+
+// --- a real, tiny PNG -------------------------------------------------------
+// §9 wants placeholder media that is CLEARLY placeholder; M2 also needs it to be real media, so
+// the detail page, the library grid and the streaming half of the media gateway can be verified
+// end to end (a text file with a .png extension proves nothing about `Content-Type` handling).
+// Hand-rolled rather than a dependency: a solid greyscale field with a grid, plus a `tEXt` chunk
+// carrying the same "not real production media" label the bytes used to carry as their entirety.
+
+const CRC_TABLE = (() => {
+  const table = new Uint32Array(256);
+  for (let n = 0; n < 256; n += 1) {
+    let c = n;
+    for (let k = 0; k < 8; k += 1) c = (c & 1) === 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    table[n] = c >>> 0;
+  }
+  return table;
+})();
+
+function crc32(bytes: Buffer): number {
+  let c = 0xffffffff;
+  for (const byte of bytes) c = CRC_TABLE[(c ^ byte) & 0xff]! ^ (c >>> 8);
+  return (c ^ 0xffffffff) >>> 0;
+}
+
+function pngChunk(type: string, data: Buffer): Buffer {
+  const length = Buffer.alloc(4);
+  length.writeUInt32BE(data.length);
+  const body = Buffer.concat([Buffer.from(type, 'latin1'), data]);
+  const crc = Buffer.alloc(4);
+  crc.writeUInt32BE(crc32(body));
+  return Buffer.concat([length, body, crc]);
+}
+
+function placeholderPng(label: string, width = 640, height = 360): Uint8Array {
+  // Cap the raster: the declared w/h can be 1600×900, and a fixture does not need those pixels.
+  const scale = Math.min(1, 800 / Math.max(width, height));
+  const w = Math.max(8, Math.round(width * scale));
+  const h = Math.max(8, Math.round(height * scale));
+
+  const seed = createHash('sha256').update(label).digest()[0] ?? 0;
+  const base = 0x38 + (seed % 0x60); // mid greys only — fixtures must not invent palette colours
+  const line = Math.min(255, base + 0x18);
+
+  const stride = 1 + w * 3;
+  const raw = Buffer.alloc(h * stride);
+  for (let y = 0; y < h; y += 1) {
+    const rowStart = y * stride;
+    raw[rowStart] = 0; // filter: none
+    const horizontal = y % 48 === 0;
+    for (let x = 0; x < w; x += 1) {
+      const tone = horizontal || x % 48 === 0 ? line : base;
+      const p = rowStart + 1 + x * 3;
+      raw[p] = tone;
+      raw[p + 1] = tone;
+      raw[p + 2] = tone;
+    }
+  }
+
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(w, 0);
+  ihdr.writeUInt32BE(h, 4);
+  ihdr[8] = 8; // bit depth
+  ihdr[9] = 2; // colour type: truecolour
+  const text = Buffer.concat([
+    Buffer.from('Comment\0', 'latin1'),
+    Buffer.from(PLACEHOLDER_NOTE(label), 'latin1'),
+  ]);
+
+  return new Uint8Array(
+    Buffer.concat([
+      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+      pngChunk('IHDR', ihdr),
+      pngChunk('tEXt', text),
+      pngChunk('IDAT', deflateSync(raw, { level: 9 })),
+      pngChunk('IEND', Buffer.alloc(0)),
+    ]),
   );
+}
+
+/** Deterministic, clearly-labelled placeholder bytes (§9: fixture media is labelled as such). */
+function placeholderBytes(spec: AssetSpec): Uint8Array {
+  if (spec.mime === 'image/png') return placeholderPng(spec.label, spec.w, spec.h);
+  return new TextEncoder().encode(`${PLACEHOLDER_NOTE(spec.label)}\n`);
 }
 
 function sha256Hex(bytes: Uint8Array): string {
@@ -93,31 +177,30 @@ async function seedUsers(opts: SeedOptions): Promise<Record<'free' | 'pro' | 'ad
   };
 }
 
-async function seedPlaybook(opts: SeedOptions, spec: PlaybookSpec): Promise<SeededPlaybook> {
-  const { sql, storage } = opts;
-  const log = opts.log ?? (() => {});
+interface DraftArgs {
+  revisionId: string;
+  revNo: number;
+  changeNote?: Localized;
+}
 
-  const existing = await sql.query<{ id: string; published_revision_id: string | null }>(
-    'select id, published_revision_id from playbooks where slug = $1',
-    [spec.slug],
-  );
-  if (existing.rows.length > 0) {
-    log(`· ${spec.slug} already present — skipping (published content is immutable)`);
-    return {
-      id: existing.rows[0]!.id,
-      slug: spec.slug,
-      revisionId: existing.rows[0]!.published_revision_id ?? '',
-      copy: { copied: 0, alreadyPresent: 0, skipped: 0 },
-      skipped: true,
-    };
-  }
+/**
+ * Materialise one DRAFT revision of a spec: the playbook row (once), the revision, its steps and
+ * blocks, and the staged bytes every AssetRef points at. Publication is always a separate step, so
+ * every fixture — core or edge — reaches its state through the real RPCs.
+ */
+async function insertDraftRevision(
+  opts: SeedOptions,
+  spec: PlaybookSpec,
+  args: DraftArgs,
+): Promise<void> {
+  const { sql, storage } = opts;
 
   // Assets are uploaded to private staging as they are materialised, so the manifest built by
   // prepare_publish always has real bytes behind it.
   const uploads: Array<{ key: string; bytes: Uint8Array; mime: string }> = [];
   const mkAsset = (asset: AssetSpec): AssetRef => {
-    const bytes = placeholderBytes(asset.label);
-    const key = `content/rev/${spec.revisionId}/${randomUUID()}.${asset.ext}`;
+    const bytes = placeholderBytes(asset);
+    const key = `content/rev/${args.revisionId}/${randomUUID()}.${asset.ext}`;
     uploads.push({ key, bytes, mime: asset.mime });
     const ref: AssetRef = { staging_key: key, sha256: sha256Hex(bytes), mime: asset.mime };
     if (asset.w !== undefined) ref.w = asset.w;
@@ -129,18 +212,20 @@ async function seedPlaybook(opts: SeedOptions, spec: PlaybookSpec): Promise<Seed
   const heroRef = mkAsset(spec.hero);
 
   await sql.query(
-    `insert into playbooks (id, slug, status, category, sort) values ($1, $2, 'draft', $3, $4)`,
+    `insert into playbooks (id, slug, status, category, sort) values ($1, $2, 'draft', $3, $4)
+     on conflict (id) do nothing`,
     [spec.id, spec.slug, spec.category, spec.sort],
   );
 
   await sql.query(
     `insert into playbook_revisions
        (id, playbook_id, rev_no, state, is_showcase, title, summary, difficulty,
-        tools, models, est_time_min, est_cost_usd, hero_asset)
-     values ($1, $2, 1, 'draft', $3, $4::jsonb, $5::jsonb, $6, $7, $8, $9, $10, $11::jsonb)`,
+        tools, models, est_time_min, est_cost_usd, hero_asset, change_note)
+     values ($1, $2, $3, 'draft', $4, $5::jsonb, $6::jsonb, $7, $8, $9, $10, $11, $12::jsonb, $13::jsonb)`,
     [
-      spec.revisionId,
+      args.revisionId,
       spec.id,
+      args.revNo,
       spec.isShowcase,
       JSON.stringify(spec.title),
       JSON.stringify(spec.summary),
@@ -150,6 +235,7 @@ async function seedPlaybook(opts: SeedOptions, spec: PlaybookSpec): Promise<Seed
       spec.estTimeMin,
       spec.estCostUsd,
       JSON.stringify(heroRef),
+      args.changeNote === undefined ? null : JSON.stringify(args.changeNote),
     ],
   );
 
@@ -160,7 +246,7 @@ async function seedPlaybook(opts: SeedOptions, spec: PlaybookSpec): Promise<Seed
        values ($1, $2, $3, $4::jsonb, $5::jsonb)`,
       [
         stepId,
-        spec.revisionId,
+        args.revisionId,
         stepIndex + 1,
         JSON.stringify(step.title),
         step.body === null ? null : JSON.stringify(step.body),
@@ -168,7 +254,10 @@ async function seedPlaybook(opts: SeedOptions, spec: PlaybookSpec): Promise<Seed
     );
 
     for (const [blockIndex, block] of step.blocks.entries()) {
-      const content = block.build(mkAsset);
+      const content = block.build(
+        mkAsset,
+        sentinelToken(spec.slug, stepIndex + 1, blockIndex + 1),
+      );
       // The zod schemas are the single source (§6.1) — fixtures go through them, not around them.
       parseBlock(block.kind, content);
       await sql.query(
@@ -189,6 +278,28 @@ async function seedPlaybook(opts: SeedOptions, spec: PlaybookSpec): Promise<Seed
   for (const upload of uploads) {
     await storage.putStaging(upload.key, upload.bytes, upload.mime);
   }
+}
+
+async function seedPlaybook(opts: SeedOptions, spec: PlaybookSpec): Promise<SeededPlaybook> {
+  const { sql, storage } = opts;
+  const log = opts.log ?? (() => {});
+
+  const existing = await sql.query<{ id: string; published_revision_id: string | null }>(
+    'select id, published_revision_id from playbooks where slug = $1',
+    [spec.slug],
+  );
+  if (existing.rows.length > 0) {
+    log(`· ${spec.slug} already present — skipping (published content is immutable)`);
+    return {
+      id: existing.rows[0]!.id,
+      slug: spec.slug,
+      revisionId: existing.rows[0]!.published_revision_id ?? '',
+      copy: { copied: 0, alreadyPresent: 0, skipped: 0 },
+      skipped: true,
+    };
+  }
+
+  await insertDraftRevision(opts, spec, { revisionId: spec.revisionId, revNo: 1 });
 
   const copy = await runPublishPipeline(sql, storage, {
     playbookId: spec.id,
@@ -209,4 +320,86 @@ export async function seed(opts: SeedOptions): Promise<SeedResult> {
     playbooks.push(await seedPlaybook(opts, spec));
   }
   return { users, playbooks };
+}
+
+// ---------------------------------------------------------------------------
+// edge fixtures (M2) — draft / archived / superseded, all through the real RPCs
+// ---------------------------------------------------------------------------
+
+export interface EdgeSeedResult {
+  slug: string;
+  playbookId: string;
+  mode: EdgePlaybookSpec['mode'];
+  /** Revisions in creation order; for `republished` that is [superseded, published]. */
+  revisionIds: string[];
+  skipped: boolean;
+}
+
+async function seedEdgePlaybook(
+  opts: SeedOptions,
+  spec: EdgePlaybookSpec,
+): Promise<EdgeSeedResult> {
+  const { sql, storage } = opts;
+  const log = opts.log ?? (() => {});
+
+  const existing = await sql.query<{ id: string }>('select id from playbooks where slug = $1', [
+    spec.slug,
+  ]);
+  if (existing.rows.length > 0) {
+    log(`· ${spec.slug} already present — skipping`);
+    return {
+      slug: spec.slug,
+      playbookId: existing.rows[0]!.id,
+      mode: spec.mode,
+      revisionIds: [],
+      skipped: true,
+    };
+  }
+
+  await insertDraftRevision(opts, spec, { revisionId: spec.revisionId, revNo: 1 });
+  const revisionIds = [spec.revisionId];
+
+  if (spec.mode === 'draft') {
+    log(`· ${spec.slug} left as a DRAFT (never published)`);
+    return { slug: spec.slug, playbookId: spec.id, mode: spec.mode, revisionIds, skipped: false };
+  }
+
+  await runPublishPipeline(sql, storage, { playbookId: spec.id, revisionId: spec.revisionId });
+
+  if (spec.mode === 'archived') {
+    // `published_revision_id` survives archiving by design (§6) — only `status` moves, and it is a
+    // plain column, not one of the publisher-gated fields.
+    await sql.query(`update playbooks set status = 'archived' where id = $1`, [spec.id]);
+    log(`· ${spec.slug} published then ARCHIVED`);
+    return { slug: spec.slug, playbookId: spec.id, mode: spec.mode, revisionIds, skipped: false };
+  }
+
+  // republished: rev 2 supersedes rev 1. The change note is mandatory here — publish_revision
+  // rejects a republish without a bilingual one (§3.8), which is the point of exercising it.
+  const secondRevisionId = spec.secondRevisionId ?? randomUUID();
+  await insertDraftRevision(opts, spec, {
+    revisionId: secondRevisionId,
+    revNo: 2,
+    ...(spec.changeNote ? { changeNote: spec.changeNote } : {}),
+  });
+  await runPublishPipeline(sql, storage, { playbookId: spec.id, revisionId: secondRevisionId });
+  revisionIds.push(secondRevisionId);
+  log(`· ${spec.slug} republished — rev 1 superseded, rev 2 live`);
+
+  return { slug: spec.slug, playbookId: spec.id, mode: spec.mode, revisionIds, skipped: false };
+}
+
+/**
+ * The states the M2 read path has to REFUSE (see `EDGE_FIXTURE_PLAYBOOKS`).
+ *
+ * Applied separately from `seed()` on purpose: M0/M1's acceptance suites assert the exact shape of
+ * the published catalog, and their subject must not drift because a later milestone needed a draft
+ * to 404 on. `npm run db:local` applies both, so the dev snapshot and the anon sweep see everything.
+ */
+export async function seedEdgeFixtures(opts: SeedOptions): Promise<EdgeSeedResult[]> {
+  const results: EdgeSeedResult[] = [];
+  for (const spec of EDGE_FIXTURE_PLAYBOOKS) {
+    results.push(await seedEdgePlaybook(opts, spec));
+  }
+  return results;
 }

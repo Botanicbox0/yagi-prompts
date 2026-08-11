@@ -1,5 +1,6 @@
 import type { AssetRef, BlockKind, Localized } from './schemas';
 import { safeParseBlock } from './schemas';
+import { heroRef, mediaGatewayPath } from './media-ref';
 import { canView, type Tier, type Visibility } from './visibility';
 
 /**
@@ -131,14 +132,21 @@ export interface ShapedRevision {
 }
 
 export interface ShapeOptions {
-  /** Resolve a `public-content` object key to a servable URL. Pure by default. */
-  publicUrl?: (key: string) => string;
-  /** Resolve a block id to the entitlement-checked media gateway path (§3.3). */
-  mediaUrl?: (blockId: string) => string;
+  /**
+   * Resolve a `public-content` object key to a servable URL. Pure by default.
+   *
+   * `null` is a meaningful answer, not a failure: on a machine with no CDN configured (§11) there
+   * is no public URL to emit, and the asset falls back to the entitlement-checked gateway. That
+   * keeps the rule "gated bytes are never served by URL" intact in both directions — the fallback
+   * is strictly narrower than the public URL it replaces.
+   */
+  publicUrl?: (key: string) => string | null;
+  /** Resolve a media ref (block id, or `{revisionId}:hero`) to the gateway path (§3.3). */
+  mediaUrl?: (ref: string) => string;
 }
 
 const defaultPublicUrl = (key: string) => `/storage/v1/object/public/public-content/${key}`;
-const defaultMediaUrl = (blockId: string) => `/api/media/${blockId}`;
+const defaultMediaUrl = (ref: string) => mediaGatewayPath(ref);
 
 // ---------------------------------------------------------------------------
 // shaper
@@ -146,13 +154,14 @@ const defaultMediaUrl = (blockId: string) => `/api/media/${blockId}`;
 
 function shapeAsset(
   ref: AssetRef,
-  blockId: string,
+  mediaRef: string,
   opts: Required<ShapeOptions>,
 ): ShapedAssetRef {
   const isPublicObject = ref.bucket === 'public-content' && Boolean(ref.published_key);
-  const shaped: ShapedAssetRef = isPublicObject
-    ? { source: 'public', src: opts.publicUrl(ref.published_key as string), mime: ref.mime }
-    : { source: 'gateway', src: opts.mediaUrl(blockId), mime: ref.mime };
+  const publicSrc = isPublicObject ? opts.publicUrl(ref.published_key as string) : null;
+  const shaped: ShapedAssetRef = publicSrc
+    ? { source: 'public', src: publicSrc, mime: ref.mime }
+    : { source: 'gateway', src: opts.mediaUrl(mediaRef), mime: ref.mime };
   if (ref.w !== undefined) shaped.w = ref.w;
   if (ref.h !== undefined) shaped.h = ref.h;
   if (ref.duration_s !== undefined) shaped.duration_s = ref.duration_s;
@@ -250,7 +259,7 @@ export function shapeRevision(
   const hero =
     revision.hero_asset === null
       ? null
-      : shapeAsset(revision.hero_asset, `${revision.id}:hero`, opts);
+      : shapeAsset(revision.hero_asset, heroRef(revision.id), opts);
 
   return {
     id: revision.id,

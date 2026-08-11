@@ -13,12 +13,13 @@ describe('catalog card links (§3.1)', () => {
     expect(isPublicCardLink(gated)).toBe(false);
   });
 
-  it('keeps every card off /p/[slug] until M2 ships that route', () => {
-    // The landing must never link into a 404. Flipping the flag in M2 restores the §3.1 split;
-    // this assertion is what will fail then, as a reminder to update it deliberately.
-    expect(PLAYBOOK_DETAIL_ROUTE_READY).toBe(false);
-    expect(playbookHref('en', showcase)).toBe('/library');
-    expect(isPublicCardLink(showcase)).toBe(false);
+  it('sends showcase cards straight to the public detail page now that M2 ships it', () => {
+    // M2 flipped `PLAYBOOK_DETAIL_ROUTE_READY`; §3.1's split is live again — showcase playbooks are
+    // the public SEO surface and go direct, everything else keeps funnelling through the wall.
+    expect(PLAYBOOK_DETAIL_ROUTE_READY).toBe(true);
+    expect(playbookHref('en', showcase)).toBe('/en/p/character-sheet-generation');
+    expect(playbookHref('ko', showcase)).toBe('/ko/p/character-sheet-generation');
+    expect(isPublicCardLink(showcase)).toBe(true);
   });
 });
 

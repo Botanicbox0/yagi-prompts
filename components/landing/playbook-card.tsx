@@ -59,6 +59,8 @@ export function PlaybookCard({
   categoryLabel,
   difficultyLabel,
   labels,
+  href,
+  heroSrc,
 }: {
   card: CatalogCard;
   index: number;
@@ -66,13 +68,21 @@ export function PlaybookCard({
   categoryLabel: string;
   difficultyLabel: string;
   labels: CardLabels;
+  /**
+   * Where the card points. Defaults to the §3.1 marketing split (showcase → detail, everything
+   * else → login wall). `/library` overrides it: past the wall every published playbook opens,
+   * because the funnel is a marketing rule, not an authorization one.
+   */
+  href?: string;
+  /** Overrides the public CDN hero — the library can address media through the gateway (§3.3). */
+  heroSrc?: string | null;
 }) {
-  const heroUrl = card.hero ? publicContentUrl(card.hero.key) : null;
+  const heroUrl = heroSrc !== undefined ? heroSrc : card.hero ? publicContentUrl(card.hero.key) : null;
   const title = locale === 'ko' ? card.title.ko : card.title.en;
   const summary = locale === 'ko' ? card.summary.ko : card.summary.en;
 
   return (
-    <a href={playbookHref(locale, card)} className="card group block border border-hairline">
+    <a href={href ?? playbookHref(locale, card)} className="card group block border border-hairline">
       <div className="card__media border-b border-hairline">
         {heroUrl && card.hero?.mime.startsWith('image/') ? (
           // eslint-disable-next-line @next/next/no-img-element -- public CDN object, no loader needed

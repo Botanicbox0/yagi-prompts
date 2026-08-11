@@ -5,7 +5,7 @@ import { applyCoreMigrations } from '@/lib/db/migrations';
 import type { SqlRunner } from '@/lib/db/sql-runner';
 import { DEFAULT_LOCAL_SNAPSHOT } from '@/lib/db/connect-shared';
 import { createLocalStorageDriver } from '@/lib/storage/local-driver';
-import { seed } from './seed';
+import { seed, seedEdgeFixtures } from './seed';
 
 /**
  * `npm run db:local` — build the local development database snapshot.
@@ -41,12 +41,11 @@ async function main(): Promise<void> {
   };
 
   const storage = createLocalStorageDriver();
-  const result = await seed({
-    sql,
-    storage,
-    createAuthUsers: true,
-    log: (message) => console.log(message),
-  });
+  const options = { sql, storage, createAuthUsers: true, log: (m: string) => console.log(m) };
+  const result = await seed(options);
+  // M2: the dev snapshot also carries the states the read path must refuse (draft / archived /
+  // superseded), so `npm run sweep:anon` can assert them against a real server.
+  const edges = await seedEdgeFixtures(options);
 
   const dump = await db.dumpDataDir('gzip');
   await mkdir(dirname(target), { recursive: true });
@@ -54,7 +53,8 @@ async function main(): Promise<void> {
   await db.close();
 
   console.log(
-    `local snapshot written: ${target} (${result.playbooks.length} playbooks, 3 entitlement fixtures)`,
+    `local snapshot written: ${target} (${result.playbooks.length} core playbooks, ` +
+      `${edges.length} edge fixtures, 3 entitlement fixtures)`,
   );
 }
 

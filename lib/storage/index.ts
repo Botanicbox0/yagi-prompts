@@ -31,6 +31,15 @@ export interface CopyRequest {
 
 export interface StorageDriver {
   readonly name: string;
+  /**
+   * Does `signedUrl()` return a URL an outside host will honour on its own?
+   *
+   * Supabase: yes — the gateway redirects there and the object never touches the app server.
+   * Local: no — `.storage/` is a directory, not a service, so the gateway streams the bytes itself
+   * after verifying its own ≤60s token (lib/media/token.ts). The authorization chain, the expiry
+   * window and the `no-store` posture are identical either way; only the last hop differs.
+   */
+  readonly servesSignedUrls: boolean;
   /** Upload staging bytes (admin uploads in M4; fixtures in the seed script). */
   putStaging(key: string, bytes: Uint8Array, contentType: string): Promise<void>;
   exists(bucket: Bucket, key: string): Promise<boolean>;

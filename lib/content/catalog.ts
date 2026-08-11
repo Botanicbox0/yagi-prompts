@@ -67,6 +67,19 @@ export interface PublicCatalog {
   totals: CatalogTotals;
 }
 
+/**
+ * The same row with its identifiers still attached.
+ *
+ * §7 keeps two projections: this one feeds the AUTHENTICATED library grid (`lib/content/library.ts`
+ * — dynamic, no-store), which needs the revision id to address hero media through the entitlement
+ * gateway. `getPublicCatalog()` strips both ids before caching, so the public projection stays
+ * exactly the "showcase-safe card fields" §7 specifies.
+ */
+export interface CatalogRow extends CatalogCard {
+  playbookId: string;
+  revisionId: string;
+}
+
 export const EMPTY_CATALOG: PublicCatalog = {
   cards: [],
   totals: { playbooks: 0, steps: 0, blocks: 0, proBlocks: 0, prompts: 0, tools: [], models: [] },
@@ -74,6 +87,7 @@ export const EMPTY_CATALOG: PublicCatalog = {
 
 interface CardRow {
   revision_id: string;
+  playbook_id: string;
   slug: string;
   category: string;
   difficulty: string;
@@ -99,6 +113,7 @@ interface CountRow {
 /** Newest first (§3.1 "the latest published playbooks, newest first"), ties broken deterministically. */
 const CARDS_SQL = `
   select r.id                as revision_id,
+         p.id                as playbook_id,
          p.slug, p.category,
          r.difficulty, r.title, r.summary, r.tools, r.models,
          r.est_time_min, r.est_cost_usd, r.is_showcase, r.published_at, r.hero_asset,
@@ -148,7 +163,8 @@ function uniqueSorted(values: Iterable<string>): string[] {
   return [...new Set(values)].sort((a, b) => a.localeCompare(b));
 }
 
-export async function loadPublicCatalog(sql: SqlRunner): Promise<PublicCatalog> {
+/** Every published playbook's card row, ids included. One query pair, two projections. */
+export async function loadCatalogRows(sql: SqlRunner): Promise<CatalogRow[]> {
   const [{ rows: cardRows }, { rows: countRows }] = await Promise.all([
     sql.query<CardRow>(CARDS_SQL),
     sql.query<CountRow>(COUNTS_SQL),
@@ -163,9 +179,11 @@ export async function loadPublicCatalog(sql: SqlRunner): Promise<PublicCatalog> 
     perRevision.set(row.revision_id, bucket);
   }
 
-  const cards: CatalogCard[] = cardRows.map((row) => {
+  return cardRows.map((row) => {
     const counts = perRevision.get(row.revision_id) ?? { blocks: 0, pro: 0, prompts: 0 };
     return {
+      playbookId: row.playbook_id,
+      revisionId: row.revision_id,
       slug: row.slug,
       category: row.category,
       difficulty: row.difficulty,
@@ -184,6 +202,13 @@ export async function loadPublicCatalog(sql: SqlRunner): Promise<PublicCatalog> 
       promptCount: counts.prompts,
     };
   });
+}
+
+export async function loadPublicCatalog(sql: SqlRunner): Promise<PublicCatalog> {
+  const rows = await loadCatalogRows(sql);
+  // Strip the identifiers: the public projection is cached and served to anonymous visitors, and
+  // §7 scopes it to "showcase-safe card fields only".
+  const cards: CatalogCard[] = rows.map(({ playbookId: _p, revisionId: _r, ...card }) => card);
 
   return {
     cards,

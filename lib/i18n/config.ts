@@ -28,6 +28,18 @@ export function isAppPath(pathname: string): boolean {
   return APP_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
 }
 
+/**
+ * `/p/[slug]` is the one locale-prefixed PUBLIC route that is shaped per viewer (§3.3).
+ *
+ * It is therefore indexable (showcase revisions are the SEO surface, §3.9) but must never be
+ * cached: §3.4 puts every viewer-shaped surface on `private, no-store`, and a shared cache holding
+ * one reader's unlocked render is the exact leak the cache contract exists to prevent.
+ * Takes the path with the locale prefix already stripped (`splitLocale().rest`).
+ */
+export function isPlaybookDetailPath(rest: string): boolean {
+  return rest === '/p' || rest.startsWith('/p/');
+}
+
 /** Splits `/ko/pricing` into `{ locale: 'ko', rest: '/pricing' }`; `null` locale when unprefixed. */
 export function splitLocale(pathname: string): { locale: Locale | null; rest: string } {
   const [, maybeLocale = '', ...restParts] = pathname.split('/');
