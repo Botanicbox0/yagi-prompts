@@ -107,8 +107,8 @@ A bilingual (ko/en) content site that publishes **AI media production workflows 
 - Implementation: `<AdRail slot="..." />` reading a static config module (DB-backed `ad_slots` deferred until a real advertiser exists).
 
 ### 3.7 Accounts & auth
-- **Users**: Google OAuth only (Supabase Auth). First login creates `profiles` (locale from active UI locale). OAuth `state` carries `{origin, locale}` so the return trip lands on the originating page in the right language (§3.9).
-- **Admins**: same Google auth + `profiles.is_admin` (seeded manually; `@yagiworkshop.xyz` allowlist pattern). Middleware hard-gates `/admin/*` and `/library` at the edge. `is_admin`/`plan` are not self-updatable (deny-all RLS + server actions).
+- **Users**: Google OAuth only (Supabase Auth). First login creates `profiles` (locale from active UI locale). OAuth round-trips carry `{origin, locale}` as `redirectTo` query params (M0 ratification: Supabase owns the `state` param opaquely), so the return trip lands on the originating page in the right language (§3.9).
+- **Admins**: same Google auth + `profiles.is_admin` (seeded manually; `@yagiworkshop.xyz` allowlist pattern). Gate split (M0 ratification, forced by deny-all RLS): middleware gates *session presence* for `/admin/*` + `/library` at the edge; the `(admin)` root layout verifies `is_admin` with the service role and returns **404** (not 403) to non-admins. `is_admin`/`plan` are not self-updatable (deny-all RLS + server actions).
 - `/account`: plan status, Stripe portal link, notification toggles (M5+), locale preference, sign out.
 - **Account deletion (v1 = honest request flow)**: "Request deletion" opens a prefilled request. Runbook ships with M5: cancel Stripe subscription → delete auth user + profile (cascade) → anonymize `events.user_id` → confirm within 7 days. Self-serve deletion post-launch.
 
@@ -362,6 +362,7 @@ create table events (
 type Localized = { en: string; ko: string };          // publish gate enforces both where the field is present
 type AssetRef  = {
   staging_key: string;            // content/rev/{revision_id}/{uuid}.{ext} (private)
+  sha256: string;                 // recorded at upload — required (M0 ratification: prepare cannot build the manifest without it)
   published_key?: string;         // stamped at publish: {sha256}.{ext} in the serving bucket (§ asset lifecycle)
   bucket?: 'public-content' | 'content-published' | 'artifacts-published';
   mime: string; w?: number; h?: number; duration_s?: number;
@@ -506,3 +507,7 @@ Cadence after launch: 2 new playbooks/month minimum + revision passes when model
 | R3c | Final stamp: verify the four v1.4 fixes | **READY** (R3-2/R3-5/NEW-1/NEW-2 all CLOSED) | Execution note carried to Opus: manifest-currentness validation must compare the complete canonical asset set — refs, hashes, source keys, AND routing — not a subset. |
 
 **Final status: cross-validation complete. This document is the execution contract for Opus (M0→M5, §8), subject to the stop-gates in §11.**
+
+### Execution log
+
+- **2026-08-12 · M0 Foundation merged** (`3ebc20a` → main `e3f51bb`). Director independently re-ran typecheck + 103/103 vitest + build (route/cache split matches §4 exactly). Notable ratified interpretations beyond the doc edits above: Next pinned to 15.5.23 (not 16 — plan contract), TypeScript 5.9.3; per-route-group root layouts (no shared root — keeps landing/pricing static while `<html lang>` stays per-locale); `profile.locale` consulted at the auth callback (writes the cookie) rather than at the edge; unconditional DELETE guard means playbooks with published history cannot be hard-deleted from app code (archive instead — accepted for v1); `@theme static` so unused-by-M0 tokens survive Tailwind v4 tree-shaking. Flagged: **Satoshi WOFF2 not shipped** (Fontshare requires an interactive license-accept download — 4-step manual recipe in `public/fonts/README.md`; body stack already lists Satoshi first, drop-in). DB acceptance runs on PGlite (core migrations) + `*_glue_*` migrations (RLS force/revokes, `publisher` BYPASSRLS, buckets) documented for cloud apply via MCP — see `docs/SETUP.md` for the manual cloud checklist.
