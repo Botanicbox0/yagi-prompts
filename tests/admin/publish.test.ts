@@ -107,18 +107,20 @@ describe('publish through the UI-path server action (§3.8 / §6)', () => {
   });
 
   /**
-   * §3.5 — "Until M5, the publish RPC is called with `p_notify_kind = NULL` (enforced by a server
-   * flag) and no checkbox exists in admin." The flag lives in lib/publish/pipeline.ts; what M4 adds
-   * is that no admin operation even has a field that could carry a kind.
+   * §3.5. M4 pinned "no control that could enqueue a job"; **M5 adds the control**, and the
+   * property worth pinning flips with it: publishing WITHOUT ticking the box must still enqueue
+   * nothing, and no admin form may name a kind — the operation derives it (see
+   * `tests/notify/publish-notify.test.ts` for the derivation itself).
    */
-  it('never enqueues a notification job, and has no control that could', async () => {
+  it('enqueues nothing unless the checkbox was ticked, and offers no kind picker', async () => {
     const draft = await draftWithAssets('ui-no-notify');
     expectOk(
       await harness.run('revision.publish', {
         playbookId: draft.playbookId,
         revisionId: draft.revisionId,
         mode: 'full',
-        // Even if a hostile form posts one, the operation has no such field.
+        // A hostile form naming a kind directly: the operation has no such field, and `notify` —
+        // the only field it does have — was not posted.
         notifyKind: 'new_playbook',
         p_notify_kind: 'new_playbook',
       }),
@@ -129,18 +131,21 @@ describe('publish through the UI-path server action (§3.8 / §6)', () => {
     expect(rows[0]?.n).toBe(0);
 
     const operations = readFileSync(join(ROOT, 'lib', 'admin', 'operations.ts'), 'utf8');
-    // No field, no argument, no schema entry — only the comment explaining the absence.
-    expect(operations).not.toMatch(/notifyKind\s*[:=]/);
+    // The kind is never read from the form, and the RPC argument is never spelled here.
+    expect(operations).not.toMatch(/f\.str\(form, 'notifyKind'\)/);
     expect(operations).not.toContain('p_notify_kind');
-    // Asserting on FIELD NAMES rather than the word "notification", which legitimately appears in
-    // the publish panel's line explaining that nothing is sent — same idiom as the /account test.
-    for (const file of ['chrome.tsx', 'editor-panels.tsx', 'block-forms.tsx', 'step-editor.tsx']) {
+
+    // The editor's ONLY notification control is the boolean, and it lives in the publish panel.
+    for (const file of ['chrome.tsx', 'block-forms.tsx', 'step-editor.tsx']) {
       const source = readFileSync(join(ROOT, 'components', 'admin', file), 'utf8');
       expect(source, file).not.toMatch(/name="notif/);
-      expect(source, file).not.toContain('notif_new_playbook');
-      expect(source, file).not.toContain('notif_updates');
       expect(source, file).not.toContain('notifyKind');
     }
+    const panel = readFileSync(join(ROOT, 'components', 'admin', 'editor-panels.tsx'), 'utf8');
+    expect(panel).toContain('name="notify"');
+    expect(panel).not.toContain('notifyKind');
+    expect(panel).not.toContain('notif_new_playbook');
+    expect(panel).not.toContain('notif_updates');
   });
 
   it('requires a bilingual change note to republish, and says so in the form', async () => {

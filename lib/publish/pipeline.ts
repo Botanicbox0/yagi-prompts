@@ -14,7 +14,8 @@ import { NOTIFICATIONS_ENABLED } from '@/lib/flags';
  * carrying `copied_at` are skipped, and an object already at the target key counts as success.
  */
 
-export type NotifyKind = 'new_playbook' | 'playbook_update';
+export type { NotifyKind } from '@/lib/notify/kinds';
+import type { NotifyKind } from '@/lib/notify/kinds';
 
 export interface ManifestRow {
   ref: string;
@@ -81,7 +82,14 @@ export interface PublishArgs {
   notifyKind?: NotifyKind | null;
 }
 
-/** Phase C. The notify kind is forced NULL until M5 (§3.5). */
+/**
+ * Phase C.
+ *
+ * The notify kind passes through only while `NOTIFICATIONS_ENABLED` is on (§3.5). The flag stays in
+ * this one line rather than at the call sites: it is the single point where a notification job can
+ * be created, so "notifications are off" is enforceable by reading one expression, and the RPC
+ * itself re-validates the value against its own CHECK.
+ */
 export async function publishRevision(sql: SqlRunner, args: PublishArgs): Promise<void> {
   const notify = NOTIFICATIONS_ENABLED ? (args.notifyKind ?? null) : null;
   await sql.query('select publish_revision($1, $2, $3)', [

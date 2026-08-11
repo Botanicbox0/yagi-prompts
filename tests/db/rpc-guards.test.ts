@@ -289,15 +289,45 @@ describe('publish RPC guards (PLAN §6 phases A/C)', () => {
     });
   });
 
-  it('records a notification job only when a kind is passed (M5 gate keeps it NULL)', async () => {
-    const draft = await createDraft(db, storage, { slug: 'notify' });
-    await preparePublish(sql(), draft.revisionId);
-    // lib/publish forces NULL while NOTIFICATIONS_ENABLED is false…
+  /**
+   * §6 Phase C.4. M4 pinned "the flag forces NULL"; M5 flipped the flag, so what this pins now is
+   * the RPC's own contract: a kind enqueues exactly one job, no kind enqueues none, and an invented
+   * kind is refused by the CHECK rather than stored.
+   */
+  it('records a notification job only when a kind is passed', async () => {
+    const withKind = await createDraft(db, storage, { slug: 'notify-yes' });
+    await preparePublish(sql(), withKind.revisionId);
     await publishRevision(sql(), {
-      playbookId: draft.playbookId,
-      revisionId: draft.revisionId,
+      playbookId: withKind.playbookId,
+      revisionId: withKind.revisionId,
       notifyKind: 'new_playbook',
     });
+
+    const without = await createDraft(db, storage, { slug: 'notify-no' });
+    await preparePublish(sql(), without.revisionId);
+    await publishRevision(sql(), {
+      playbookId: without.playbookId,
+      revisionId: without.revisionId,
+    });
+
+    const { rows } = await db.query<{ revision_id: string; kind: string }>(
+      'select revision_id, kind from notification_jobs',
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toEqual({ revision_id: withKind.revisionId, kind: 'new_playbook' });
+  });
+
+  it('refuses a notification kind it does not know', async () => {
+    const draft = await createDraft(db, storage, { slug: 'notify-bogus' });
+    await preparePublish(sql(), draft.revisionId);
+    const message = await expectReject(() =>
+      db.query('select publish_revision($1, $2, $3)', [
+        draft.playbookId,
+        draft.revisionId,
+        'sms_blast',
+      ]),
+    );
+    expect(message).toMatch(/unknown notification kind/i);
     const { rows } = await db.query<{ n: number }>(
       'select count(*)::int as n from notification_jobs',
     );

@@ -1,6 +1,6 @@
 import 'server-only';
 import type { SqlRunner } from './sql-runner';
-import { DEFAULT_LOCAL_SNAPSHOT } from './connect-shared';
+import { DEFAULT_LOCAL_SNAPSHOT, LOCAL_DB_DIR_ENV } from './connect-shared';
 
 /**
  * The server-side `SqlRunner` factory (PLAN §7).
@@ -9,11 +9,15 @@ import { DEFAULT_LOCAL_SNAPSHOT } from './connect-shared';
  * vitest (PGlite) and in production (`pg` against Supabase Postgres). This is where the app picks
  * one, in strict order:
  *
- *   1. `DATABASE_URL`      → `pg` pool. The production path.
- *   2. local snapshot      → in-memory PGlite loaded from `.pglite/catalog.tar.gz`
- *                            (`npm run db:local`). The dev/preview path while §11's Supabase
- *                            project stop-gate is open.
- *   3. neither             → `null`.
+ *   1. `DATABASE_URL`          → `pg` pool. The production path.
+ *   2. `PLAYBOOK_LOCAL_DB_DIR` → a DURABLE PGlite data directory (M5). Opt-in, dev only, single
+ *                                process. It exists because the notification worker runs in its
+ *                                own process and must see what `/admin` enqueued in another —
+ *                                which an in-memory snapshot can never provide.
+ *   3. local snapshot          → in-memory PGlite loaded from `.pglite/catalog.tar.gz`
+ *                                (`npm run db:local`). The dev/preview path while §11's Supabase
+ *                                project stop-gate is open. Writes die with the process.
+ *   4. none of the above       → `null`.
  *
  * `null` is a first-class answer, not a failure: the public catalog degrades to its empty state so
  * `npm run build` stays green on a machine with no database at all (CI does exactly that). What it
@@ -60,6 +64,30 @@ async function connectPostgres(connectionString: string): Promise<SqlRunner | nu
   }
 }
 
+/**
+ * A real PGlite data directory: writes land on disk and are still there for the next process.
+ *
+ * `null` when the directory is absent or already held by another process, which is the honest
+ * answer — the caller then falls through to the read-only snapshot rather than half-working.
+ */
+async function connectLocalDirectory(dir: string): Promise<SqlRunner | null> {
+  try {
+    const { resolve } = await import('node:path');
+    const { PGlite } = await import('@electric-sql/pglite');
+    const db = new PGlite({ dataDir: resolve(dir) });
+    await db.waitReady;
+    return {
+      async query<T = Record<string, unknown>>(text: string, params: unknown[] = []) {
+        const result = await db.query<T>(text, params as never[]);
+        return { rows: result.rows as T[] };
+      },
+    };
+  } catch (err) {
+    console.warn(`[db] ${LOCAL_DB_DIR_ENV}=${dir} could not be opened: ${String(err)}`);
+    return null;
+  }
+}
+
 async function connectLocalSnapshot(): Promise<SqlRunner | null> {
   const path = localSnapshotPath();
   try {
@@ -86,6 +114,13 @@ async function connectLocalSnapshot(): Promise<SqlRunner | null> {
 async function connect(): Promise<SqlRunner | null> {
   const url = process.env.DATABASE_URL;
   if (url) return connectPostgres(url);
+
+  const dir = process.env[LOCAL_DB_DIR_ENV];
+  if (dir) {
+    const durable = await connectLocalDirectory(dir);
+    if (durable !== null) return durable;
+  }
+
   return connectLocalSnapshot();
 }
 

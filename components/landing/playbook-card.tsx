@@ -1,5 +1,6 @@
 import type { CatalogCard } from '@/lib/content/catalog';
 import { publicContentUrl } from '@/lib/content/asset-url';
+import { badgeFor, type PlaybookBadge } from '@/lib/content/badges';
 import { playbookHref } from '@/lib/content/links';
 import { TextSwap } from '@/components/ui/text-swap';
 
@@ -46,6 +47,31 @@ export interface CardLabels {
   open: string;
   showcase: string;
   loginWall: string;
+  /** §3.5 NEW/UPDATED chips. Resolved from `lib/content/badges.ts`, bilingual like everything else. */
+  badgeNew: string;
+  badgeUpdated: string;
+}
+
+/**
+ * §5.2's 11px label chip, in the two-inks language: an outlined box on the accent for NEW, a plain
+ * hairline box for UPDATED. It sits on the media, which is why it declares nothing about the
+ * surrounding theme — the cover below is always white, and a real hero is dark enough for either.
+ */
+function BadgeChip({ badge, labels }: { badge: PlaybookBadge; labels: CardLabels }) {
+  const isNew = badge === 'new';
+  return (
+    <span
+      data-badge={badge}
+      className={[
+        'absolute top-3 left-3 z-10 px-2 py-1 font-label text-[0.6875rem] leading-none uppercase tracking-[0.12em]',
+        isNew
+          ? 'bg-accent text-white'
+          : 'border border-black/25 bg-white text-black',
+      ].join(' ')}
+    >
+      {isNew ? labels.badgeNew : labels.badgeUpdated}
+    </span>
+  );
 }
 
 /**
@@ -61,6 +87,7 @@ export function PlaybookCard({
   labels,
   href,
   heroSrc,
+  now,
 }: {
   card: CatalogCard;
   index: number;
@@ -76,14 +103,22 @@ export function PlaybookCard({
   href?: string;
   /** Overrides the public CDN hero — the library can address media through the gateway (§3.3). */
   heroSrc?: string | null;
+  /** Injectable clock, so the badge truth table is testable without waiting fourteen days. */
+  now?: Date | number;
 }) {
   const heroUrl = heroSrc !== undefined ? heroSrc : card.hero ? publicContentUrl(card.hero.key) : null;
   const title = locale === 'ko' ? card.title.ko : card.title.en;
   const summary = locale === 'ko' ? card.summary.ko : card.summary.en;
+  const badge = badgeFor({
+    firstPublishedAt: card.firstPublishedAt,
+    updatedAt: card.updatedAt,
+    ...(now === undefined ? {} : { now }),
+  });
 
   return (
     <a href={href ?? playbookHref(locale, card)} className="card group block border border-hairline">
-      <div className="card__media border-b border-hairline">
+      <div className="card__media relative border-b border-hairline">
+        {badge !== null && <BadgeChip badge={badge} labels={labels} />}
         {heroUrl && card.hero?.mime.startsWith('image/') ? (
           // eslint-disable-next-line @next/next/no-img-element -- public CDN object, no loader needed
           <img

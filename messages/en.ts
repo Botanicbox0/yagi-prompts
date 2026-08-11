@@ -99,6 +99,14 @@ export const en = {
     showcaseLabel: 'Open to everyone',
     loginWallLabel: 'Sign in to read',
   },
+  /**
+   * §3.5 in-app badges. Date logic is `lib/content/badges.ts`; these are the 11px label chips
+   * (§5.2) it resolves to. Everyone sees them — they are the marketing for the toggle.
+   */
+  badge: {
+    new: 'NEW',
+    updated: 'UPDATED',
+  },
   category: {
     image: 'Image',
     video: 'Video',
@@ -262,6 +270,17 @@ export const en = {
     upgradeBody: 'Pro opens every prompt, parameter table and workflow file across the library.',
     upgradeCta: 'Go Pro — $9/month',
     languageHeading: 'Language',
+    // §3.5 — the two toggles. Pro only; free users get the pitch line instead of a dead control.
+    notifHeading: 'Notifications',
+    notifLede: 'Email only. Two switches, no digest, no marketing.',
+    notifNewLabel: 'New playbook',
+    notifNewHint: 'One email when a playbook is published for the first time.',
+    notifUpdatesLabel: 'Playbook updates',
+    notifUpdatesHint: 'One email when a published playbook is rewritten, with the change note.',
+    notifSave: 'Save notifications',
+    notifSaved: 'Notification preferences saved.',
+    notifProOnly:
+      'Notifications are part of Pro — the point of a maintained playbook is knowing when it changed.',
     signOut: 'Sign out',
     deletionHeading: 'Delete this account',
     deletionBody:
@@ -292,6 +311,35 @@ export const en = {
     backToPlaybook: 'Back to the playbook',
     backToLibrary: 'Back to the library',
     backToAccount: 'Go to your account',
+  },
+  /**
+   * §3.5 notification emails. Bilingual by `profiles.locale`, and deliberately short: an email
+   * carries the title, the summary and (for a rewrite) the change note — never gated content.
+   */
+  email: {
+    newSubject: 'New playbook — {title}',
+    updateSubject: 'Rewritten — {title}',
+    newPreheader: 'A new pipeline just went up on the production floor.',
+    updatePreheader: 'A playbook you can read was rewritten.',
+    newEyebrow: 'New playbook',
+    updateEyebrow: 'Playbook updated',
+    changeNoteHeading: 'What changed',
+    cta: 'Read the playbook',
+    signOff: 'PLAYBOOK — the open production floor of an AI studio.',
+    unsubscribe: 'Unsubscribe from these emails',
+    manage: 'Manage notifications',
+  },
+  /** The tiny page `/api/notify/unsubscribe` renders. No login, so it must explain itself. */
+  unsubscribe: {
+    title: 'Unsubscribed.',
+    doneNew: 'You will not get "new playbook" emails any more.',
+    doneUpdates: 'You will not get "playbook updated" emails any more.',
+    reversible: 'You can switch it back on from your account at any time.',
+    manage: 'Account settings',
+    home: 'Back to PLAYBOOK',
+    invalidTitle: 'That link is not valid.',
+    invalidBody:
+      'It may have been cut in half by a mail client, or it belongs to an older sending key. Open your account settings and change the switch there instead.',
   },
   /**
    * PLAN §3.8 admin CMS. Bilingual like everything else (§3.9) even though only staff read it —
@@ -446,7 +494,13 @@ export const en = {
     manifestReady: 'Manifest: {total} asset(s), all copied.',
     manifestPending: 'Manifest: {pending} of {total} asset(s) still to copy.',
     manifestEmpty: 'Manifest: nothing prepared yet.',
-    notificationsNote: 'Notification delivery ships in M5; publishing sends nothing today.',
+    notifySend: 'Email subscribers about this publication',
+    notifyHintNew:
+      'First publication — opted-in Pro readers get one "new playbook" email.',
+    notifyHintUpdate:
+      'Republication — opted-in Pro readers get one "updated" email carrying the change note.',
+    notificationsNote:
+      'Publishing only enqueues the job. The notification worker expands, claims and sends it — nothing goes out inline with this button.',
 
     policyHeading: 'Default policy',
     policyLede: 'The visibility a block inherits when its own override is left on inherit.',

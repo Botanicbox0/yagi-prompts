@@ -160,6 +160,8 @@ export function Featured({
     open: dict.featured.open,
     showcase: dict.featured.showcaseLabel,
     loginWall: dict.featured.loginWallLabel,
+    badgeNew: dict.badge.new,
+    badgeUpdated: dict.badge.updated,
   };
 
   const categoryLabel = (key: string) =>

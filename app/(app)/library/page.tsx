@@ -54,6 +54,8 @@ export default async function LibraryPage({
     open: dict.library.open,
     showcase: dict.featured.showcaseLabel,
     loginWall: dict.featured.loginWallLabel,
+    badgeNew: dict.badge.new,
+    badgeUpdated: dict.badge.updated,
     emptyTitle: dict.library.emptyTitle,
     emptyBody: dict.library.emptyBody,
     catalogEmptyTitle: dict.library.catalogEmptyTitle,

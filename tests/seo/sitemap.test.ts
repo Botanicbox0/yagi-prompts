@@ -1,0 +1,143 @@
+import { describe, expect, it } from 'vitest';
+import type { CatalogCard } from '@/lib/content/catalog';
+import { buildRobots, buildSitemap, DISALLOWED_PATHS } from '@/lib/seo/sitemap';
+import { siteUrl, absoluteUrl } from '@/lib/seo/site-url';
+
+/**
+ * PLAN §8 M5 — "sitemap + locale alternates … showcase playbook detail pages only".
+ *
+ * The showcase filter is a disclosure rule, not an SEO nicety: a non-showcase playbook's page is
+ * behind the login wall and emits `noindex` (§3.3/§3.9), so listing it would both contradict the
+ * page and publish the slug inventory of the gated library.
+ */
+
+const ORIGIN = 'https://playbook.example';
+
+function card(overrides: Partial<CatalogCard>): CatalogCard {
+  return {
+    slug: 'a-playbook',
+    category: 'image',
+    difficulty: 'intermediate',
+    title: { en: 'A', ko: '가' },
+    summary: { en: 'S', ko: '요' },
+    tools: [],
+    models: [],
+    estTimeMin: null,
+    estCostUsd: null,
+    isShowcase: true,
+    publishedAt: '2026-08-01T00:00:00.000Z',
+    firstPublishedAt: '2026-08-01T00:00:00.000Z',
+    updatedAt: null,
+    hero: null,
+    stepCount: 1,
+    blockCount: 1,
+    proBlockCount: 0,
+    promptCount: 0,
+    ...overrides,
+  };
+}
+
+const CARDS: CatalogCard[] = [
+  card({ slug: 'character-sheet-generation', isShowcase: true }),
+  card({ slug: 'talking-character-clip', isShowcase: false }),
+  card({ slug: 'voice-identity-setup', isShowcase: true, publishedAt: null }),
+];
+
+describe('sitemap (§8 M5)', () => {
+  const entries = buildSitemap({ origin: ORIGIN, cards: CARDS });
+  const urls = entries.map((entry) => entry.url);
+
+  it('lists landing and pricing in both locales', () => {
+    expect(urls).toContain(`${ORIGIN}/en`);
+    expect(urls).toContain(`${ORIGIN}/ko`);
+    expect(urls).toContain(`${ORIGIN}/en/pricing`);
+    expect(urls).toContain(`${ORIGIN}/ko/pricing`);
+  });
+
+  it('lists showcase playbook details only', () => {
+    expect(urls).toContain(`${ORIGIN}/en/p/character-sheet-generation`);
+    expect(urls).toContain(`${ORIGIN}/ko/p/character-sheet-generation`);
+    expect(urls).toContain(`${ORIGIN}/en/p/voice-identity-setup`);
+    // Published, publicly card-advertised, but behind the login wall — never in the sitemap.
+    expect(urls.some((url) => url.includes('talking-character-clip'))).toBe(false);
+  });
+
+  it('never lists a noindex surface', () => {
+    for (const path of DISALLOWED_PATHS) {
+      expect(urls.some((url) => url.includes(path)), path).toBe(false);
+    }
+  });
+
+  it('is absolute everywhere, URLs and alternates alike', () => {
+    for (const entry of entries) {
+      expect(entry.url.startsWith(`${ORIGIN}/`), entry.url).toBe(true);
+      const languages = entry.alternates?.languages ?? {};
+      for (const [tag, href] of Object.entries(languages)) {
+        expect(String(href).startsWith(`${ORIGIN}/`), `${entry.url} ${tag}`).toBe(true);
+      }
+    }
+  });
+
+  it('carries reciprocal en/ko/x-default alternates on every entry', () => {
+    for (const entry of entries) {
+      const languages = entry.alternates?.languages as Record<string, string>;
+      expect(Object.keys(languages).sort()).toEqual(['en', 'ko', 'x-default']);
+      expect(languages['x-default']).toBe(languages.en);
+      // The entry's own URL is one of its alternates — that is what reciprocity means.
+      expect([languages.en, languages.ko]).toContain(entry.url);
+    }
+  });
+
+  it('dates each playbook from its own publication when it has one', () => {
+    const detail = entries.find((entry) => entry.url.endsWith('/en/p/character-sheet-generation'));
+    expect(new Date(detail!.lastModified as Date).toISOString()).toBe('2026-08-01T00:00:00.000Z');
+  });
+
+  it('degrades to an empty catalog without producing a broken sitemap', () => {
+    const empty = buildSitemap({ origin: ORIGIN, cards: [] });
+    expect(empty).toHaveLength(4);
+    expect(empty.every((entry) => entry.url.startsWith(ORIGIN))).toBe(true);
+  });
+});
+
+describe('robots (§8 M5)', () => {
+  const robots = buildRobots(ORIGIN);
+
+  it('allows the public surface and disallows the gated one', () => {
+    const rule = Array.isArray(robots.rules) ? robots.rules[0]! : robots.rules;
+    expect(rule.userAgent).toBe('*');
+    expect(rule.allow).toBe('/');
+    expect(rule.disallow).toEqual(['/admin', '/library', '/account', '/billing', '/api']);
+  });
+
+  it('points at the sitemap', () => {
+    expect(robots.sitemap).toBe(`${ORIGIN}/sitemap.xml`);
+  });
+});
+
+describe('site origin', () => {
+  /** A bare object, not a copy of the real environment: these tests must not read the machine's. */
+  const env = (values: Record<string, string>) => values as NodeJS.ProcessEnv;
+
+  it('prefers NEXT_PUBLIC_APP_URL, accepts APP_URL, and strips trailing slashes', () => {
+    expect(siteUrl(env({ NEXT_PUBLIC_APP_URL: 'https://a.test/' }))).toBe('https://a.test');
+    expect(siteUrl(env({ APP_URL: 'https://b.test' }))).toBe('https://b.test');
+    expect(
+      siteUrl(env({ NEXT_PUBLIC_APP_URL: 'https://a.test', APP_URL: 'https://b.test' })),
+    ).toBe('https://a.test');
+  });
+
+  it('ignores the .env.example placeholder rather than emitting it into a sitemap', () => {
+    expect(siteUrl(env({ NEXT_PUBLIC_APP_URL: 'https://YOUR-PROJECT.example' }))).toBe(
+      'http://localhost:3000',
+    );
+    expect(siteUrl(env({}))).toBe('http://localhost:3000');
+  });
+
+  it('joins paths without doubling the slash', () => {
+    const configured = env({ NEXT_PUBLIC_APP_URL: 'https://a.test' });
+    expect(absoluteUrl('/en/pricing', configured)).toBe('https://a.test/en/pricing');
+    expect(absoluteUrl('en/pricing', configured)).toBe('https://a.test/en/pricing');
+    expect(absoluteUrl('https://cdn.test/x.png', configured)).toBe('https://cdn.test/x.png');
+  });
+});

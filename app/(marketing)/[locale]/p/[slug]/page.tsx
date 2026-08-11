@@ -4,7 +4,10 @@ import { notFound, redirect } from 'next/navigation';
 import { getShapedPlaybook, type ShapedPlaybookResult } from '@/lib/content/facade';
 import { DEFAULT_LOCALE, isLocale, type Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/dictionaries';
-import { localize } from '@/lib/i18n/format';
+import {
+  playbookMetadata,
+  unresolvedPlaybookMetadata,
+} from '@/lib/seo/playbook-metadata';
 import { MarketingFooter, MarketingNav, adLabels } from '@/components/marketing/chrome';
 import { AdRail, DETAIL_RAIL_LEFT } from '@/components/ad/ad-rail';
 import { AdBanner, AdCard } from '@/components/ad/ad-card';
@@ -56,40 +59,20 @@ export async function generateMetadata({ params }: RouteParams): Promise<Metadat
   const dict = getDictionary(locale);
   const result = await resolve(slug);
 
-  if (result.status !== 'ok') {
-    return { title: dict.meta.siteName, robots: { index: false, follow: false } };
-  }
+  // The page decides WHEN; `lib/seo/playbook-metadata.ts` decides WHAT — and is unit-tested there
+  // (M5), which is the only way the canonical/hreflang/og:image rules get asserted at all.
+  if (result.status !== 'ok') return unresolvedPlaybookMetadata(dict.meta.siteName);
 
   const { playbook } = result;
-  const title = localize(playbook.title, locale);
-  const description = localize(playbook.summary, locale);
-  // OG images must be fetchable by a crawler with no session, so only a PUBLIC-bucket hero
-  // qualifies (§3.1 makes heroes public marketing surface). A gateway path would 401 for them.
-  const ogImage = playbook.hero?.source === 'public' ? playbook.hero.src : null;
-
-  // Only a showcase revision is public SEO surface (§3.3 / §3.9). Everything else is behind the
-  // login wall and must not be indexed, whoever happens to be reading it right now.
-  if (!playbook.is_showcase) {
-    return { title, description, robots: { index: false, follow: false } };
-  }
-
-  const path = (l: Locale) => `/${l}/p/${playbook.slug}`;
-  return {
-    title,
-    description,
-    alternates: {
-      canonical: path(locale),
-      languages: { en: path('en'), ko: path('ko'), 'x-default': path('en') },
-    },
-    openGraph: {
-      type: 'article',
-      locale: locale === 'ko' ? 'ko_KR' : 'en_US',
-      url: path(locale),
-      title,
-      description,
-      ...(ogImage ? { images: [{ url: ogImage }] } : {}),
-    },
-  };
+  return playbookMetadata({
+    slug: playbook.slug,
+    locale,
+    title: playbook.title,
+    summary: playbook.summary,
+    is_showcase: playbook.is_showcase,
+    hero: playbook.hero,
+    siteName: dict.meta.siteName,
+  });
 }
 
 export default async function PlaybookDetailPage({ params }: RouteParams) {
