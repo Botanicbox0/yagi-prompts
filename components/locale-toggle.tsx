@@ -32,7 +32,7 @@ export function LocaleToggle({
               <button
                 type="submit"
                 aria-current={isCurrent ? 'true' : undefined}
-                className={isCurrent ? 'text-blue' : 'opacity-60 hover:opacity-100'}
+                className={isCurrent ? 'text-accent' : 'opacity-60 hover:opacity-100'}
               >
                 {locale === 'en' ? dict.nav.localeEn : dict.nav.localeKo}
               </button>

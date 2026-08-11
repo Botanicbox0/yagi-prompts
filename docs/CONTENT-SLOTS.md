@@ -1,0 +1,100 @@
+# Content slots — what engineering wires and content-ops fills
+
+PLAN §9 splits the work: engineering ships the surfaces, **real content is content-ops and is not
+an engineering gate**. Everything below is a seam that is already wired and rendering a designed
+placeholder. Filling one is a config or CMS change, never a code change.
+
+---
+
+## 1. Hero reel — `HERO_REEL`
+
+**Where** `lib/content/slots.ts` → consumed by `components/landing/hero-media.tsx`.
+
+**Now** `src` is `null`, so `<HeroMedia>` renders `components/landing/reel-poster.tsx`: an in-code,
+localised, typography-led composition in the two-inks-plus-blue language. No video is generated or
+downloaded at build time.
+
+**Swap**
+
+1. Render the reel offline with HyperFrames (§5.4 — "videos are assets, not runtime dependencies").
+   Target ~12s, silent, loopable, 16:10, H.264 MP4 (add a WebM sibling if you want one).
+2. Upload it somewhere the site can serve (Supabase `public-content`, or `public/media/` for a
+   small file).
+3. Set the environment variables and redeploy:
+
+   ```
+   NEXT_PUBLIC_HERO_REEL_SRC=https://…/hero-reel.mp4
+   NEXT_PUBLIC_HERO_REEL_TYPE=video/mp4
+   NEXT_PUBLIC_HERO_REEL_POSTER=https://…/hero-reel-poster.jpg
+   ```
+
+`<video>` is already wired `autoplay muted loop playsinline preload="metadata"`, and the §5.3-8
+scale/parallax scrub applies to whichever of the two is rendered.
+
+**Poster is not optional in spirit.** If you ship `SRC` without `POSTER`, the first frame is blank
+until the video decodes, which costs LCP on the landing page.
+
+---
+
+## 2. Playbook hero images — the catalog cards
+
+**Where** `lib/content/asset-url.ts` → `components/landing/playbook-card.tsx`.
+
+Heroes are always published to the **public** `public-content` bucket (§6 asset lifecycle), so a
+card image needs no entitlement check. `publicContentUrl()` builds the URL from
+`NEXT_PUBLIC_SUPABASE_URL`; with no Supabase project configured (§11 open item) it returns `null`
+and the card renders `CardCover` — a deterministic generated composition, not a grey box.
+
+**Swap** create the Supabase project, set `NEXT_PUBLIC_SUPABASE_URL`, upload heroes through
+`/admin` (M4). Nothing else changes: `CardCover` stays as the permanent fallback for playbooks
+without a hero.
+
+---
+
+## 3. Ad slot — the house placeholder
+
+**Where** `components/ad/ad-card.tsx` (`AdCard` for the ≥1440 rail, `AdBanner` below it).
+
+v1 renders one house placeholder everywhere, per §3.6. `AD_SLOTS_DB_BACKED` in `lib/flags.ts` is
+the seam for a DB-backed `ad_slots` table, deferred until a real advertiser exists.
+
+**Swap** flip the flag, add the table, and give `<AdRail>`/`<AdBanner>` a `slot` prop. The
+geometry, the lagged follow and the "one ad per viewport" rule do not change.
+
+---
+
+## 4. Featured card destinations
+
+**Where** `lib/content/links.ts`, gated by `PLAYBOOK_DETAIL_ROUTE_READY` in `lib/flags.ts`.
+
+`/[locale]/p/[slug]` is M2's route. Until it exists **every** card links to `/library`, which
+middleware bounces to the sign-in CTA — the §3.1 funnel, minus the public detail page.
+
+**Swap** in M2: flip `PLAYBOOK_DETAIL_ROUTE_READY` to `true`. Showcase cards then go to the public
+detail page and everything else keeps funnelling through the login wall, exactly as §3.1 describes.
+`tests/content/links.test.ts` asserts the current state and will fail on the flip, so the change is
+deliberate rather than incidental.
+
+---
+
+## 5. Fixture content
+
+`scripts/fixtures.ts` holds two playbooks whose media is literally the bytes
+`PLAYBOOK FIXTURE PLACEHOLDER :: … :: not real production media`. They exist to exercise every
+block kind × visibility through the real publish RPCs, not to be read. Real content lands through
+`/admin` with the `content/MANIFEST.md` template that ships in M5 (§9).
+
+---
+
+## Local data
+
+The landing and pricing pages read the catalog through `lib/content/public-catalog.ts`. With no
+`DATABASE_URL`, that comes from a local snapshot:
+
+```powershell
+npm run db:local   # migrations + fixture publish → .pglite/catalog.tar.gz (gitignored)
+npm run dev
+```
+
+Without the snapshot the catalog is empty and both pages render their designed empty states — which
+is exactly what CI builds.
