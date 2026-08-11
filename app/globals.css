@@ -1,0 +1,165 @@
+@import 'tailwindcss';
+
+/* ===========================================================================
+   PLAYBOOK design tokens — PLAN §5.1 / §5.2 / §4, as a Tailwind v4 CSS-first theme.
+   Two inks + one accent. Media supplies every other colour.
+   No gradients, no glassmorphism, no coloured shadows (YAGI anti-slop rules).
+   =========================================================================== */
+
+/* `static` disables Tailwind's unused-variable tree-shaking: this block is the design system's
+   single source of truth (§5.1/§5.2), so every token must exist in the stylesheet whether or not
+   an M0 placeholder happens to use its utility yet. */
+@theme static {
+  /* --- §5.1 palette ------------------------------------------------------ */
+  --color-black: #000000;
+  --color-white: #ffffff;
+  --color-blue: #0000ee;
+  --color-line-light: rgba(0, 0, 0, 0.12);
+  --color-line-dark: rgba(255, 255, 255, 0.16);
+
+  /* Section-state driven surfaces (§4: IntersectionObserver flips data-theme). */
+  --color-surface: var(--surface);
+  --color-on-surface: var(--on-surface);
+  --color-hairline: var(--hairline);
+
+  /* --- §5.2 typography --------------------------------------------------- */
+  /* The :lang() switch lives below; these indirect through it so a KO subtree
+     never resolves to a latin-only face. */
+  --font-display: var(--stack-display);
+  --font-label: var(--stack-label);
+  --font-sans: var(--stack-body);
+  --font-mono: var(--stack-mono);
+
+  --text-display: clamp(4rem, 12vw, 11.25rem); /* 64px → 180px */
+  --text-display--line-height: 0.9;
+  --text-display--letter-spacing: -0.02em;
+  --text-display--font-weight: 900;
+
+  --text-title: clamp(2.5rem, 6vw, 5rem);
+  --text-title--line-height: 0.95;
+  --text-title--letter-spacing: -0.015em;
+
+  --text-eyebrow: 0.75rem;
+  --text-eyebrow--line-height: 1.2;
+  --text-eyebrow--letter-spacing: 0.12em;
+
+  --text-label: 0.875rem;
+  --text-label--line-height: 1.3;
+  --text-label--letter-spacing: 0.12em;
+
+  --text-body: 1rem;
+  --text-body--line-height: 1.6;
+
+  --text-code: 0.875rem;
+  --text-code--line-height: 1.55;
+
+  /* --- §4 layout math ---------------------------------------------------- */
+  --spacing-gutter: clamp(1.5rem, 3vw, 4rem);
+  --spacing-rail-gap: 2.5rem; /* the 40px column between content and rail */
+
+  --container-shell: 90rem; /* 1440 */
+  --container-content: 62.5rem; /* 1000 — landing/library content column */
+  --container-detail: 45rem; /* 720  — playbook detail body */
+  --container-stepindex: 13.75rem; /* 220  — sticky step index */
+  --container-rail: 18.75rem; /* 300  — ad rail */
+
+  /* Breakpoints beyond Tailwind's defaults. `rail` is the ≥1440 tier that turns
+     the right-hand ad rail on (§3.6); `wide` is the 1180 two-column card cut. */
+  --breakpoint-wide: 73.75rem;
+  --breakpoint-rail: 90rem;
+
+  /* --- §5.3 motion budget ------------------------------------------------ */
+  --ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out-quint: cubic-bezier(0.83, 0, 0.17, 1);
+  --duration-hover: 300ms;
+  --duration-reveal: 400ms;
+  --duration-wipe: 900ms;
+}
+
+/* Section inversion is a data attribute, never mix-blend-mode (§4). */
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+
+/* ===========================================================================
+   §5.2 language stacks.
+   KO display NEVER falls back to Big Shoulders / Anton SC — no Hangul coverage.
+   =========================================================================== */
+
+:root {
+  --stack-display: var(--font-big-shoulders), 'Arial Narrow', 'Helvetica Neue', Arial, sans-serif;
+  --stack-label: var(--font-anton-sc), 'Arial Narrow', Impact, sans-serif;
+  /* Satoshi is licensed via Fontshare and is NOT in the repo yet
+     (public/fonts/README.md). Until it is, EN body resolves down this stack. */
+  --stack-body: 'Satoshi', 'Pretendard Variable', ui-sans-serif, system-ui, -apple-system,
+    'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --stack-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  --surface: var(--color-white);
+  --on-surface: var(--color-black);
+  --hairline: var(--color-line-light);
+}
+
+html:lang(ko) {
+  --stack-display: 'Pretendard Variable', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+  --stack-label: 'Pretendard Variable', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+  --stack-body: 'Pretendard Variable', 'Apple SD Gothic Neo', 'Malgun Gothic', ui-sans-serif,
+    system-ui, sans-serif;
+}
+
+[data-theme='dark'] {
+  --surface: var(--color-black);
+  --on-surface: var(--color-white);
+  --hairline: var(--color-line-dark);
+}
+
+/* ===========================================================================
+   base
+   =========================================================================== */
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: var(--surface);
+    color: var(--on-surface);
+    font-family: var(--stack-body);
+    font-size: var(--text-body);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* KO display runs ~0.85× the EN size at the same slot (§5.2). */
+  html:lang(ko) .text-display {
+    font-size: clamp(3.4rem, 10.2vw, 9.5625rem);
+    letter-spacing: -0.01em;
+  }
+
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  ::selection {
+    background: var(--color-blue);
+    color: var(--color-white);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-blue);
+    outline-offset: 2px;
+  }
+}
+
+/* Reduced motion is a hard kill switch, not a softening (§5.3/§5.4).
+   The Lenis + ScrollTrigger shell refuses to initialise as well. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

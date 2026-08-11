@@ -1,0 +1,90 @@
+import { NextResponse, type NextRequest } from 'next/server';
+import { updateSession, withCookies } from '@/lib/supabase/middleware';
+import {
+  LOCALE_COOKIE,
+  LOCALE_COOKIE_MAX_AGE,
+  LOCALE_HEADER,
+  isAppPath,
+  localizedPath,
+  resolveLocale,
+  splitLocale,
+} from '@/lib/i18n/config';
+
+/**
+ * Edge middleware does three jobs, in this order (PLAN §7):
+ *   1. resolve the locale and publish it to the render as `x-playbook-locale`
+ *   2. refresh the Supabase session (@supabase/ssr contract, lib/supabase/middleware.ts)
+ *   3. hard-gate the app surface on the presence of a session; 308-redirect unprefixed PUBLIC urls
+ *
+ * Two deliberate omissions, both logged for the Director:
+ *   · `profile.locale` is not consulted HERE. RLS is deny-all, so the edge would need a
+ *     service-role round trip on every request. The same `resolveLocale()` chain runs server-side
+ *     with the profile in hand (lib/i18n/server.ts), and the OAuth callback writes the cookie from
+ *     the profile at sign-in, so the edge always has the right answer by the second request.
+ *   · `is_admin` is not checked here either — see app/(admin)/layout.tsx / requireAdmin().
+ */
+
+const NO_STORE = 'private, no-store';
+
+export async function middleware(request: NextRequest) {
+  const { pathname, search } = request.nextUrl;
+  const { locale: urlLocale, rest } = splitLocale(pathname);
+  const cookieLocale = request.cookies.get(LOCALE_COOKIE)?.value ?? null;
+  const locale = resolveLocale({
+    urlLocale,
+    cookieLocale,
+    acceptLanguage: request.headers.get('accept-language'),
+  });
+
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set(LOCALE_HEADER, locale);
+
+  const { response, user } = await updateSession(request, requestHeaders);
+
+  // --- app surface: session required, never cached, never indexed ---------
+  if (isAppPath(pathname)) {
+    response.headers.set('Cache-Control', NO_STORE);
+    response.headers.set('X-Robots-Tag', 'noindex, nofollow');
+
+    if (!user) {
+      const target = request.nextUrl.clone();
+      target.pathname = localizedPath(locale, '/');
+      target.search = '';
+      target.searchParams.set('signin', '1');
+      target.searchParams.set('next', `${pathname}${search}`);
+      return withCookies(NextResponse.redirect(target), response);
+    }
+    return response;
+  }
+
+  // --- public surface: locale-prefixed, 308 on the unprefixed form --------
+  if (urlLocale === null) {
+    const target = request.nextUrl.clone();
+    target.pathname = localizedPath(locale, rest);
+    // 308: permanent + method-preserving, so the canonical URL is unambiguous for crawlers.
+    return withCookies(NextResponse.redirect(target, 308), response);
+  }
+
+  // A visited prefix is an explicit choice — remember it so the chain short-circuits next time.
+  if (cookieLocale !== urlLocale) {
+    response.cookies.set(LOCALE_COOKIE, urlLocale, {
+      path: '/',
+      maxAge: LOCALE_COOKIE_MAX_AGE,
+      sameSite: 'lax',
+    });
+  }
+
+  return response;
+}
+
+export const config = {
+  matcher: [
+    /*
+     * Everything except:
+     *   _next/static, _next/image, favicon, /fonts, /.storage (local storage driver in dev)
+     *   /api/*   — route handlers set their own no-store headers and are not locale-prefixed
+     *   /auth/*  — the OAuth callback must not be redirected mid-exchange
+     */
+    '/((?!_next/static|_next/image|favicon.ico|fonts/|\\.storage/|api/|auth/|.*\\.(?:svg|png|jpg|jpeg|gif|webp|mp4|webm|woff2?)$).*)',
+  ],
+};
