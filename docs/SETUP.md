@@ -63,6 +63,27 @@ npm run seed          # reads DATABASE_URL; SEED_CREATE_AUTH_USERS is off by def
 
 `anon` is the absence of a user — there is nothing to create for it.
 
+### Deferred: session-tier HTTP sweeps (M2)
+
+`npm run sweep:anon` covers the **anonymous** tier completely against a real `next start`. The
+free / pro / admin tiers are **not** swept over HTTP yet, and deliberately so: with no Supabase
+project there is no way to mint a real session, and faking one would mean shipping a backdoor into
+the very gate the sweep exists to verify. Those tiers are covered instead by the façade eligibility
+matrix on PGlite (`tests/content/facade.test.ts`) and the gateway chain tests
+(`tests/media/gateway.test.ts`), both of which inject a resolved viewer.
+
+**TODO once step 1 and step 2 above are done** (tracked here, not in code):
+
+1. Sign in as each fixture user and capture their session cookies.
+2. Extend `scripts/sweep-anon.ts` with a `--tier` mode that replays those cookies, and assert:
+   - **free**: `pro`/`hidden` sentinels absent, `public`/`free` present, `/library` renders 200;
+   - **pro**: `hidden` sentinels absent, everything else present, workflow downloads 200 with
+     `Content-Disposition: attachment`;
+   - **Pro → free → anon on the same slug** in sequence, with no stale unlocked bytes on the later
+     requests (PLAN §3.4 cache-contract acceptance).
+3. Add the media gateway's 403 case for a signed-in free user on a `pro` block (the anon sweep only
+   reaches the 401 case).
+
 ## 4. Promote an admin
 
 `is_admin` is never derived from the email domain at runtime (§3.7 — "seeded manually"). Run:
@@ -112,7 +133,18 @@ npm run db:local   # local catalog snapshot (see below) — do this before `npm 
 npm run dev
 npm run fonts      # re-vendor WOFF2 + licences after a font package bump
 npm run seed       # fixture playbooks through the real prepare → copy → publish RPCs
+
+# the M2 authz sweep — needs a server already running against the local snapshot
+npm run db:local; npm run build; npm start      # in one shell
+npm run sweep:anon                              # in another (SWEEP_BASE_URL to point elsewhere)
 ```
+
+### Media token secret
+
+The media gateway signs its own ≤60s capability tokens (`lib/media/token.ts`). It uses
+`MEDIA_TOKEN_SECRET` if set, falls back to `SUPABASE_SERVICE_ROLE_KEY`, and otherwise generates a
+per-process random secret with a warning — fine for dev, but **set `MEDIA_TOKEN_SECRET` before
+deploying** so tokens survive a restart and are not derived from an unrelated key.
 
 ## Local catalog data (no Supabase project required)
 

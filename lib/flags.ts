@@ -10,8 +10,7 @@ export const NOTIFICATIONS_ENABLED = false;
 export const AD_SLOTS_DB_BACKED = false;
 
 /**
- * PLAN §4 — `/[locale]/p/[slug]` is M2's route. Until it exists, every catalog card funnels
- * through the login wall rather than linking into a 404. Flip this in M2 to restore the §3.1
- * split (showcase → public detail page; everything else → login wall).
+ * PLAN §4 — `/[locale]/p/[slug]`. M2 shipped it, so the §3.1 split is live again: showcase cards
+ * link to the public detail page, everything else funnels through the login wall.
  */
-export const PLAYBOOK_DETAIL_ROUTE_READY = false;
+export const PLAYBOOK_DETAIL_ROUTE_READY = true;

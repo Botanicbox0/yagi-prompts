@@ -97,6 +97,8 @@ describe('route cache modes (§3.4 / §4)', () => {
     for (const file of [
       ['app', '(app)', 'layout.tsx'],
       ['app', '(app)', 'library', 'page.tsx'],
+      // M2: the one locale-prefixed PUBLIC route that is shaped per viewer (§3.3).
+      ['app', '(marketing)', '[locale]', 'p', '[slug]', 'page.tsx'],
       ['app', '(app)', 'account', 'page.tsx'],
       ['app', '(app)', 'billing', 'success', 'page.tsx'],
       ['app', '(app)', 'billing', 'cancelled', 'page.tsx'],
@@ -107,6 +109,21 @@ describe('route cache modes (§3.4 / §4)', () => {
     ]) {
       expect(read(...file), file.join('/')).toContain("export const dynamic = 'force-dynamic'");
     }
+  });
+
+  /**
+   * §3.3 + §3.9 ask for two independent properties on `/[locale]/p/[slug]`: it must be INDEXABLE
+   * (showcase revisions are the public SEO surface) and it must never be STORED (it is shaped per
+   * viewer). Middleware is where the second one is enforced, and it must not pick up the app
+   * surface's `noindex` on the way.
+   */
+  it('stamps no-store on the public detail route without deindexing it', () => {
+    const middleware = read('middleware.ts');
+    expect(middleware).toContain('isPlaybookDetailPath(rest)');
+    const detailBranch = middleware.slice(middleware.indexOf('isPlaybookDetailPath(rest)'));
+    const branchBody = detailBranch.slice(0, detailBranch.indexOf('\n  }'));
+    expect(branchBody).toContain("'Cache-Control', NO_STORE");
+    expect(branchBody).not.toContain('X-Robots-Tag');
   });
 
   it('marks the app and admin surfaces noindex', () => {
@@ -122,17 +139,38 @@ describe('route cache modes (§3.4 / §4)', () => {
   });
 });
 
-describe('stub route handlers (§4)', () => {
-  it('/api/media/[blockId] answers 501 with no-store until M2', async () => {
-    const { GET } = await import('@/app/api/media/[blockId]/route');
-    const response = await GET(new Request('http://localhost/api/media/abc'), {
-      params: Promise.resolve({ blockId: 'abc' }),
-    });
-    expect(response.status).toBe(501);
-    expect(response.headers.get('Cache-Control')).toBe('private, no-store');
-    await expect(response.json()).resolves.toMatchObject({ milestone: 'M2' });
+/**
+ * M2 replaced the media stub with the real gateway, which pulls in the service-role client and is
+ * therefore `server-only` — it cannot be imported into a vitest process at all, by construction.
+ * Its BEHAVIOUR is covered where it actually lives: `tests/media/*` drives the authorization chain
+ * and the token scheme directly, and `npm run sweep:anon` drives the HTTP surface against a real
+ * `next start`. What stays here is the cache contract itself, which is a source-level property.
+ */
+describe('media gateway cache + refusal contract (§3.3 / §3.4)', () => {
+  const route = read('app', 'api', 'media', '[blockId]', 'route.ts');
+
+  it('never lets a media response enter a cache, refusals included', () => {
+    expect(route).toContain("'Cache-Control': 'private, no-store'");
+    expect(route).toContain("'X-Robots-Tag': 'noindex, nofollow'");
+    // every exit goes through the two helpers that carry HEADERS
+    expect(route).not.toMatch(/new NextResponse\((?!null,|new Uint8Array)/);
   });
 
+  it('speaks the full §3.3 refusal vocabulary', () => {
+    for (const marker of ["refuse(404, 'not_found')", "refuse(401,", "refuse(403,"]) {
+      expect(route, marker).toContain(marker);
+    }
+    expect(route).toContain('authorizeMedia');
+    expect(route).toContain('verifyMediaToken');
+  });
+
+  it('forces workflow files to download rather than redirecting them (§3.3)', () => {
+    expect(route).toContain("object.kind === 'workflow_file'");
+    expect(route).toContain('Content-Disposition');
+  });
+});
+
+describe('stub route handlers (§4)', () => {
   it('/api/stripe/webhook answers 501 with no-store until M3', async () => {
     const { POST } = await import('@/app/api/stripe/webhook/route');
     const response = await POST();

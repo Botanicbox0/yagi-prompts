@@ -5,6 +5,7 @@ import {
   LOCALE_COOKIE_MAX_AGE,
   LOCALE_HEADER,
   isAppPath,
+  isPlaybookDetailPath,
   localizedPath,
   resolveLocale,
   splitLocale,
@@ -63,6 +64,12 @@ export async function middleware(request: NextRequest) {
     target.pathname = localizedPath(locale, rest);
     // 308: permanent + method-preserving, so the canonical URL is unambiguous for crawlers.
     return withCookies(NextResponse.redirect(target, 308), response);
+  }
+
+  // §3.4: the one public route that is shaped per viewer never enters a cache. Indexable, but
+  // never stored — the two are independent properties and §3.3/§3.9 asks for both.
+  if (isPlaybookDetailPath(rest)) {
+    response.headers.set('Cache-Control', NO_STORE);
   }
 
   // A visited prefix is an explicit choice — remember it so the chain short-circuits next time.

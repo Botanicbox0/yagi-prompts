@@ -32,7 +32,25 @@ import {
 
 type Mode = 'hidden' | 'follow' | 'sticky';
 
-export function AdRail({ anchorId, children }: { anchorId: string; children: ReactNode }) {
+/**
+ * The rail's horizontal position is BAND MATH, and the two bands differ (§4):
+ *   landing / library  [1000 | 40 | 300] = 1340 → the CSS default in `.ad-rail-fixed`
+ *   playbook detail    [220 | 40 | 720 | 40 | 300] = 1320 → this override
+ * Passed in rather than sniffed, so the number in the component is the number in the plan.
+ */
+export const DETAIL_RAIL_LEFT =
+  'calc(50% + (var(--container-stepindex) + var(--spacing-rail-gap) + var(--container-detail) + var(--spacing-rail-gap) - var(--container-rail)) / 2)';
+
+export function AdRail({
+  anchorId,
+  left,
+  children,
+}: {
+  anchorId: string;
+  /** CSS `left` for the rail column. Defaults to the landing/library 1340 band. */
+  left?: string;
+  children: ReactNode;
+}) {
   const [mode, setMode] = useState<Mode>('hidden');
   const railRef = useRef<HTMLDivElement>(null);
   const { lenis } = useScroll();
@@ -121,7 +139,9 @@ export function AdRail({ anchorId, children }: { anchorId: string; children: Rea
            root-level portal; the sticky one has to ask. */
         className="pointer-events-none absolute top-0 z-30 hidden h-full rail:block"
         style={{
-          left: 'calc(50% + (var(--container-content) - var(--container-rail)) / 2 + var(--spacing-rail-gap) / 2)',
+          left:
+            left ??
+            'calc(50% + (var(--container-content) - var(--container-rail)) / 2 + var(--spacing-rail-gap) / 2)',
           width: 'var(--container-rail)',
         }}
       >
@@ -131,7 +151,12 @@ export function AdRail({ anchorId, children }: { anchorId: string; children: Rea
   }
 
   return createPortal(
-    <div ref={railRef} data-theme={theme} className="ad-rail-fixed invisible">
+    <div
+      ref={railRef}
+      data-theme={theme}
+      className="ad-rail-fixed invisible"
+      {...(left ? { style: { left } } : {})}
+    >
       {children}
     </div>,
     document.body,

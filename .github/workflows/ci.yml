@@ -31,3 +31,49 @@ jobs:
       # The migrations/RPC/trigger suites run on PGlite — no Docker, no Supabase project needed.
       - name: Build
         run: npm run build
+
+  # PLAN §8 M2 — "Playwright authz sweep: zero gated bytes or storage keys for anon".
+  # Implemented as a fetch-level sweep against a real `next start` (scripts/sweep-anon.ts): no
+  # browser is needed to prove an absence in the HTML, and the assertion is stronger without one —
+  # it reads the bytes on the wire rather than the DOM after hydration.
+  sweep:
+    name: anon authz sweep
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Install (exact pins, lockfile authoritative)
+        run: npm ci
+
+      # The snapshot the server reads: real migrations + the real prepare → copy → publish flow,
+      # including the draft / archived / superseded fixtures the sweep asserts refusals against.
+      - name: Build the local catalog snapshot
+        run: npm run db:local
+
+      - name: Build
+        run: npm run build
+
+      # No wait-on / start-server-and-test: a curl loop needs no dependency the repo does not pin.
+      - name: Start the server
+        run: |
+          npm start &
+          echo $! > .server.pid
+          for i in $(seq 1 60); do
+            if curl -sf -o /dev/null http://localhost:3000/en; then
+              echo "server up after ${i}s"; exit 0
+            fi
+            sleep 1
+          done
+          echo "server did not come up"; exit 1
+
+      - name: Sweep (anonymous tier)
+        run: npm run sweep:anon
+
+      - name: Stop the server
+        if: always()
+        run: kill "$(cat .server.pid)" || true

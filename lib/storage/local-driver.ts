@@ -46,6 +46,8 @@ export function createLocalStorageDriver(rootDir?: string): StorageDriver {
 
   return {
     name: 'local',
+    // `.storage/` is a directory on disk; nothing serves it over HTTP. The gateway streams instead.
+    servesSignedUrls: false,
 
     async putStaging(key, bytes, _contentType) {
       const path = objectPath(root, STAGING_BUCKET, key);

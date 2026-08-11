@@ -18,6 +18,25 @@ function requireEnv(name: string): string {
   return value;
 }
 
+/** The `.env.example` placeholder host — a copied-but-unfilled env must not look configured. */
+const PLACEHOLDER_HOST = 'YOUR-PROJECT';
+
+/**
+ * Is there a real Supabase project to authenticate against? (PLAN §11 open item.)
+ *
+ * The answer is load-bearing for the gate, not a convenience: with no project there is no possible
+ * session, so the only correct viewer is `anon`. Everything downstream fails CLOSED on `false` —
+ * a missing env can never widen access, only narrow it.
+ */
+export function isAuthConfigured(
+  url = process.env.NEXT_PUBLIC_SUPABASE_URL,
+  anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+): boolean {
+  return Boolean(
+    url && anonKey && url.startsWith('http') && !url.includes(PLACEHOLDER_HOST),
+  );
+}
+
 export function supabaseUrl(): string {
   return requireEnv('NEXT_PUBLIC_SUPABASE_URL');
 }
@@ -56,11 +75,24 @@ export async function createAuthServerClient() {
   });
 }
 
-/** The server-verified identity. Returns null for anon — "anon is the absence of a user". */
+/**
+ * The server-verified identity. Returns null for anon — "anon is the absence of a user".
+ *
+ * Two ways to get `null`, both meaning the same thing to every caller:
+ *   · no session cookie / an invalid one;
+ *   · no Supabase project configured at all (§11) — see `isAuthConfigured`.
+ * The auth server is the only authority; a transport failure resolves anon rather than throwing,
+ * because a 500 on the detail route would be a worse answer than the locked render.
+ */
 export async function getSessionUser() {
-  const supabase = await createAuthServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  return user;
+  if (!isAuthConfigured()) return null;
+  try {
+    const supabase = await createAuthServerClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    return user;
+  } catch {
+    return null;
+  }
 }

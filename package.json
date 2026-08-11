@@ -16,7 +16,8 @@
     "check": "npm run typecheck && npm run test",
     "fonts": "node scripts/copy-fonts.mjs",
     "seed": "tsx scripts/seed-cli.ts",
-    "db:local": "tsx scripts/db-local.ts"
+    "db:local": "tsx scripts/db-local.ts",
+    "sweep:anon": "tsx scripts/sweep-anon.ts"
   },
   "dependencies": {
     "@supabase/ssr": "0.12.4",

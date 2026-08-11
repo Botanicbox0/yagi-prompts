@@ -142,6 +142,93 @@ async function assemble(sql: SqlRunner, revision: RevisionRow): Promise<Revision
   };
 }
 
+// ---------------------------------------------------------------------------
+// eligibility facts (the cheap query the façade decides on, before loading anything)
+// ---------------------------------------------------------------------------
+
+export interface PlaybookGate {
+  playbookId: string;
+  slug: string;
+  status: 'draft' | 'published' | 'archived';
+  /** NULL until the first publish; the composite FK guarantees it belongs to this playbook. */
+  publishedRevisionId: string | null;
+  /** `is_showcase` of the CURRENT published revision — revisioned, never live-flipped (§6). */
+  isShowcase: boolean;
+}
+
+interface GateRow {
+  id: string;
+  slug: string;
+  status: 'draft' | 'published' | 'archived';
+  published_revision_id: string | null;
+  is_showcase: boolean | null;
+}
+
+/**
+ * The facts §3.3 authorizes on, in one round trip and without touching content.
+ *
+ * The join is deliberately narrowed to `state = 'published'`: a pointer at anything else is not a
+ * publication, so `publishedRevisionId` comes back NULL and every non-admin tier reads 404.
+ */
+export async function loadPlaybookGate(
+  sql: SqlRunner,
+  slug: string,
+): Promise<PlaybookGate | null> {
+  const { rows } = await sql.query<GateRow>(
+    `select p.id, p.slug, p.status, r.id as published_revision_id, r.is_showcase
+       from playbooks p
+       left join playbook_revisions r
+         on r.id = p.published_revision_id and r.state = 'published'
+      where p.slug = $1`,
+    [slug],
+  );
+  const row = rows[0];
+  if (!row) return null;
+  return {
+    playbookId: row.id,
+    slug: row.slug,
+    status: row.status,
+    publishedRevisionId: row.published_revision_id,
+    isShowcase: row.is_showcase === true,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// neighbours (§3.3 "bottom of page: next/prev playbook")
+// ---------------------------------------------------------------------------
+
+export interface NeighbourCard {
+  slug: string;
+  title: Localized;
+  isShowcase: boolean;
+}
+
+export interface Neighbours {
+  /** The playbook published just AFTER this one — the card above it in the newest-first list. */
+  prev: NeighbourCard | null;
+  /** The playbook published just BEFORE this one — the card below it. */
+  next: NeighbourCard | null;
+}
+
+/**
+ * Ordered exactly like the catalog projection (`published_at desc, sort desc, slug asc`) so the
+ * detail page's prev/next agrees with the order the reader saw on the landing and in the library.
+ */
+export async function loadNeighbours(sql: SqlRunner, slug: string): Promise<Neighbours> {
+  const { rows } = await sql.query<{ slug: string; title: Localized; is_showcase: boolean }>(
+    `select p.slug, r.title, r.is_showcase
+       from playbooks p
+       join playbook_revisions r on r.id = p.published_revision_id
+      where p.status = 'published' and r.state = 'published'
+      order by r.published_at desc nulls last, p.sort desc, p.slug asc`,
+  );
+  const index = rows.findIndex((row) => row.slug === slug);
+  if (index === -1) return { prev: null, next: null };
+  const toCard = (row: (typeof rows)[number] | undefined): NeighbourCard | null =>
+    row ? { slug: row.slug, title: row.title, isShowcase: row.is_showcase } : null;
+  return { prev: toCard(rows[index - 1]), next: toCard(rows[index + 1]) };
+}
+
 /** The CURRENT published revision of a playbook — the only thing the public read path serves. */
 export async function loadPublishedRevisionBySlug(
   sql: SqlRunner,
