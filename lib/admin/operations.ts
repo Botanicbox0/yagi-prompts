@@ -18,15 +18,10 @@ import {
 } from '@/lib/publish/pipeline';
 import { fail, ok, type AdminContext, type AdminOutcome } from './context';
 import { stageUpload } from './assets';
-import { cloneRevision, ensureDraftRevision } from './clone';
+import { ensureDraftRevision } from './clone';
 import * as f from './form';
 import { moveRow, nextOrder, normalizeOrder } from './order';
-import {
-  blockParents,
-  findDraftRevisionId,
-  playbookIdOfRevision,
-  revisionIdOfStep,
-} from './repo';
+import { blockParents, playbookIdOfRevision, revisionIdOfStep } from './repo';
 
 /**
  * PLAN §3.8 — every admin mutation, as one registry.
@@ -619,20 +614,6 @@ const savePolicy: AdminOperation<z.infer<typeof Policy>> = {
   },
 };
 
-const CloneRevision = z.object({ revisionId: Uuid });
-
-const cloneIntoDraft: AdminOperation<z.infer<typeof CloneRevision>> = {
-  parse: (form) => parsed(CloneRevision, { revisionId: f.str(form, 'revisionId') }),
-  async run(ctx, input) {
-    const playbookId = await playbookIdOfRevision(ctx.sql, input.revisionId);
-    if (playbookId === null) return fail('notFound', NOT_FOUND_DETAIL);
-    const existing = await findDraftRevisionId(ctx.sql, playbookId);
-    if (existing !== null) return ok('draftOpened', { detail: 'existing' });
-    const result = await cloneRevision(ctx, input.revisionId);
-    return ok('draftOpened', { detail: `rev ${result.revNo}` });
-  },
-};
-
 const Publish = z.object({
   playbookId: Uuid,
   revisionId: Uuid,
@@ -697,7 +678,6 @@ export const ADMIN_OPERATIONS = {
   'playbook.create': createPlaybook,
   'playbook.archive': archivePlaybook,
   'revision.openDraft': openDraft,
-  'revision.clone': cloneIntoDraft,
   'revision.discardDraft': discardDraft,
   'revision.metadata': saveMetadata,
   'revision.hero': saveHero,
