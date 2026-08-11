@@ -171,6 +171,12 @@ Get-NetTCPConnection -LocalPort 3000 -State Listen |
   ForEach-Object { Stop-Process -Id $_.OwningProcess -Force }
 ```
 
+**Git Bash + curl gotcha (M4)**: MSYS rewrites any argument that looks like a POSIX path, so
+`curl -F "_back=/admin/policy"` arrives at the server as `C:/Program Files/Git/admin/policy`. Probing
+a form POST from Git Bash therefore needs `export MSYS_NO_PATHCONV=1` first, or the request is not
+the request you wrote. (Discovered while verifying M4's server action; the app was fine, the probe
+was not.)
+
 ## Render-verifying a SIGNED-IN view (M3)
 
 There is no Supabase project (§11), so no session can be minted — which until M3 meant every locally
@@ -210,6 +216,56 @@ The full M3 loop, walkable in a browser with `npm run dev:free`:
 Switching to `npm run dev:pro` shows the same account page for a fixture whose subscription was
 seeded rather than purchased — there "Manage billing" reports `?portal=unavailable`, because that
 row has no Stripe customer behind it and inventing a portal would be a lie.
+
+## Render-verifying the admin CMS (M4)
+
+`npm run dev:admin` maps the dev identity to the admin fixture profile (`is_admin = true`), so the
+whole `/admin` surface is walkable locally. The editor is deliberately **JS-free** — every control
+is a plain form posting to one guarded server action — so everything below works with scripts off.
+
+```powershell
+npm run db:local     # once — the snapshot carries a DRAFT fixture (insta-toon-pipeline)
+npm run dev:admin    # then open http://localhost:3000/admin
+```
+
+**Director click-path** (the §8 M4 `[manual]` gate, author → publish without SQL):
+
+1. `/admin` — the table lists all five fixtures. Check the columns: status, category, **Showcase**
+   (live / next publish / off — `is_showcase` is revisioned, so it is two facts), **Draft revision**
+   (only `insta-toon-pipeline` shows "rev 1 in progress"), updated. Press **Refresh caches**; the
+   banner reads "Catalog caches refreshed" and pressing it again does the same thing.
+2. **New playbook** — slug `test-drive`, category *Pipeline*, EN/KO titles → **Create**. You land in
+   the editor for a fresh rev-1 draft.
+3. **Metadata** — fill summary EN/KO, difficulty, tools/models (comma separated), est. time/cost,
+   tick **Showcase revision** (read the disclosure note under it) → **Save**.
+4. **Hero** — upload any PNG. It renders back immediately, through `/api/admin/media/{rev}:hero`,
+   with its server-computed sha256 printed beside it.
+5. **Steps** — add two steps, rename them, use **↑ / ↓** to swap and swap back. Then in each step
+   use the kind picker: add one block of every kind (prompt, params, asset, note, link,
+   workflow_file). The asset and workflow forms take a file; the note form renders an EN/KO
+   markdown preview through the real in-repo renderer.
+6. **Effective visibility** — the table shows `block | kind | default | override | effective`. Set
+   an override in the table, press **Apply overrides**, watch the effective column move. Then go to
+   `/admin/policy`, change `note` to `pro`, come back: blocks that INHERIT move, blocks with an
+   override do not.
+7. **Preview as** → *Visitor* / *Free* / *Pro*. Same components as the public detail page; the lock
+   panels appear and disappear per tier and the media resolves (draft bytes come from the admin
+   endpoint, never the public gateway).
+8. **Publish** → the banner reads "Published, and the catalog cache was refreshed". Open
+   `/en/p/test-drive` — it renders. Open `/library` — it is in the grid. Right-click an asset →
+   the bytes come from `/api/media/{blockId}`.
+9. **Republish** — press **Edit published playbook**: a rev-2 draft appears, cloned (new step and
+   block ids, new staging keys, same hashes). Press **Publish** without touching the change note:
+   the form says *"Republishing needs a change note in both languages."* Fill it in and publish.
+10. **Archive** — back on `/admin`, archive `test-drive`; `/en/p/test-drive` now 404s. Restore it and
+    it comes back.
+
+Two things worth checking because they are security properties, not features:
+
+- with the dev server running as `dev:admin`, `/api/media/{a draft block id}` still answers **404**
+  (M2 ratification: the public gateway refuses draft/superseded media *for admins too*);
+- with a plain `npm start` (no dev identity), `/admin*` 307s to sign-in and
+  `/api/admin/media/*` answers **401**, both `private, no-store` + `noindex`.
 
 ### Media token secret
 
