@@ -109,6 +109,11 @@ describe('route cache modes (§3.4 / §4)', () => {
       ['app', 'api', 'events', 'route.ts'],
       ['app', '(admin)', 'layout.tsx'],
       ['app', '(admin)', 'admin', 'page.tsx'],
+      // M4: the rest of the CMS surface.
+      ['app', '(admin)', 'admin', 'p', '[id]', 'page.tsx'],
+      ['app', '(admin)', 'admin', 'p', '[id]', 'preview', 'page.tsx'],
+      ['app', '(admin)', 'admin', 'policy', 'page.tsx'],
+      ['app', 'api', 'admin', 'media', '[ref]', 'route.ts'],
       ['app', 'api', 'media', '[blockId]', 'route.ts'],
       ['app', 'api', 'stripe', 'webhook', 'route.ts'],
     ]) {
@@ -233,6 +238,45 @@ describe('the money CTAs never create a session on GET (§3.4)', () => {
     const cta = read('components', 'billing', 'upgrade-cta.tsx');
     expect(cta).toContain('method="post"');
     expect(cta).toContain('type="submit"');
+  });
+});
+
+/**
+ * M4. The admin CMS is `noindex` through the `(admin)` layout and `private, no-store` through
+ * middleware (`/admin` is in APP_PREFIXES). Its own API route is NOT middleware-covered — the
+ * matcher excludes `/api/*` — so it carries the same headers itself, exactly like `/api/media`.
+ */
+describe('admin CMS cache + gate contract (§3.4 / §3.8)', () => {
+  it('keeps the admin media endpoint out of every cache, refusals included', () => {
+    const route = read('app', 'api', 'admin', 'media', '[ref]', 'route.ts');
+    expect(route).toContain("'Cache-Control': 'private, no-store'");
+    expect(route).toContain("'X-Robots-Tag': 'noindex, nofollow'");
+    expect(route).toContain('authorizeAdminMedia');
+    expect(route).toContain('verifyMediaToken');
+    // Staging bytes only, and never a bucket the public gateway serves from.
+    expect(route).toContain('STAGING_BUCKET');
+    expect(route).toContain("refuse(401, 'sign_in_required')");
+    expect(route).toContain("refuse(403, 'admin_only')");
+  });
+
+  it('routes every admin mutation through one guarded server action', () => {
+    const action = read('app', '(admin)', 'admin', 'actions.ts');
+    expect(action).toContain("'use server'");
+    expect(action).toContain('requireAdmin');
+    expect(action).toContain('dispatchAdmin');
+    // The only exported action; a second one would be a second place to forget the guard.
+    expect(action.match(/export async function/g)).toHaveLength(1);
+  });
+
+  it('never lets the admin editor read the session outside the guard', () => {
+    for (const file of sourcesUnder('components', 'admin')) {
+      const source = readFileSync(file, 'utf8');
+      for (const needle of ['getViewer', 'createDataClient', 'auth-client']) {
+        expect(source.includes(needle), `${relative(ROOT, file)} must not use ${needle}`).toBe(
+          false,
+        );
+      }
+    }
   });
 });
 

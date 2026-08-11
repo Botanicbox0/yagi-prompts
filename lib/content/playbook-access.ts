@@ -1,5 +1,6 @@
 import type { Viewer } from '@/lib/auth/viewer';
 import type { SqlRunner } from '@/lib/db/sql-runner';
+import { adminMediaPath } from '@/lib/media/admin-authorize';
 import { publicContentUrl } from './asset-url';
 import { decideEligibility } from './eligibility';
 import {
@@ -69,6 +70,24 @@ export const PLAYBOOK_NOT_FOUND = { status: 'not_found' } as const;
 /** Public-bucket objects are served by URL when a CDN exists, else through the gateway (§11). */
 const SHAPE_URLS = { publicUrl: (key: string) => publicContentUrl(key) };
 
+/**
+ * M4 admin preview (§3.8 "preview-as") resolves media through the ADMIN endpoint instead.
+ *
+ * Two reasons, and they are both about honesty rather than convenience:
+ *   · a draft's assets exist only as private staging objects — the public gateway refuses them by
+ *     design (M2 ratification: draft/superseded media refuse for admins too), so a preview wired to
+ *     `/api/media` would render nothing but broken frames;
+ *   · forcing `publicUrl` to null means even a PUBLISHED revision previewed by an admin is read
+ *     back from staging, so "preview" always shows the bytes this revision actually carries.
+ *
+ * Reachable only after `viewer.isAdmin` has been verified below — the same gate that lets a caller
+ * pin a revision id at all.
+ */
+const PREVIEW_URLS = {
+  publicUrl: () => null,
+  mediaUrl: (ref: string) => adminMediaPath(ref),
+};
+
 export async function shapePlaybook(
   deps: ShapedPlaybookDeps,
   slug: string,
@@ -104,7 +123,7 @@ export async function shapePlaybook(
 
   return {
     status: 'ok',
-    playbook: shapeRevision(revision, tier, SHAPE_URLS),
+    playbook: shapeRevision(revision, tier, wantsPreview ? PREVIEW_URLS : SHAPE_URLS),
     viewer,
     gate,
     neighbours: await loadNeighbours(sql, slug),
