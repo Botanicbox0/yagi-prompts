@@ -1,36 +1,37 @@
 import 'server-only';
 import { createDataClient } from '@/lib/supabase/data-client';
-import { getSessionUser } from '@/lib/supabase/auth-client';
-import type { Tier } from '@/lib/content/visibility';
+import { getSessionUser, isAuthConfigured } from '@/lib/supabase/auth-client';
+import { getSqlRunner } from '@/lib/db/connect';
+import { ENTITLED_STATUSES, isEntitled } from '@/lib/billing/entitlement';
 import type { Locale } from '@/lib/i18n/config';
+import { devIdentityUserId } from './dev-identity';
+import {
+  ANON_VIEWER,
+  resolveViewer,
+  sqlIdentitySource,
+  type Identity,
+  type IdentitySource,
+  type Viewer,
+} from './identity';
 
 /**
- * PLAN §3.4 — the single entitlement definition.
+ * PLAN §3.4 — viewer resolution, from a server-verified session only.
  *
- *   Pro  iff subscriptions.status IN ('active','past_due')   ← Stripe owns the retry window
- *   `profiles.plan` is a DISPLAY MIRROR and is never consulted for gating.
+ *   Pro iff `subscriptions.status IN ('active','past_due')` — the ONE definition, imported from
+ *   `lib/billing/entitlement.ts` and shared with the reconciler and `/account`.
+ *   `profiles.plan` is a display mirror and is never consulted for gating.
  *
- * Resolution happens on the server, from a server-verified session, with the service-role client
- * (RLS is deny-all). Nothing here ever accepts a client-supplied plan or admin flag.
+ * Two readers, one rule (`resolveViewer`, in lib/auth/identity.ts):
+ *   · Supabase service-role client when a project is configured — the production path;
+ *   · the `SqlRunner` otherwise, which is how the local snapshot (`npm run db:local`) can resolve a
+ *     dev identity for render-verify. Same query semantics, same derivation.
+ *
+ * Nothing here ever accepts a client-supplied plan or admin flag.
  */
 
-export const ENTITLED_STATUSES = ['active', 'past_due'] as const;
-
-export interface Viewer {
-  tier: Tier;
-  userId: string | null;
-  email: string | null;
-  isAdmin: boolean;
-  locale: Locale | null;
-}
-
-export const ANON_VIEWER: Viewer = {
-  tier: 'anon',
-  userId: null,
-  email: null,
-  isAdmin: false,
-  locale: null,
-};
+export type { Viewer, Identity, IdentitySource } from './identity';
+export { ANON_VIEWER, resolveViewer, sqlIdentitySource } from './identity';
+export { ENTITLED_STATUSES, isEntitled };
 
 interface ProfileRow {
   is_admin: boolean;
@@ -42,31 +43,53 @@ interface SubscriptionRow {
   status: string;
 }
 
-export function isEntitled(status: string | null | undefined): boolean {
-  return status !== null && status !== undefined && (ENTITLED_STATUSES as readonly string[]).includes(status);
+/** The production reader: service role, RLS-deny-all-safe, two point lookups in parallel. */
+function supabaseIdentitySource(): IdentitySource {
+  return {
+    async load(userId) {
+      const db = createDataClient();
+      const [{ data: profile }, { data: subscription }] = await Promise.all([
+        db.from('profiles').select('is_admin, locale, email').eq('id', userId).maybeSingle<ProfileRow>(),
+        db
+          .from('subscriptions')
+          .select('status')
+          .eq('user_id', userId)
+          .maybeSingle<SubscriptionRow>(),
+      ]);
+      if (!profile) return null;
+      return {
+        isAdmin: profile.is_admin === true,
+        locale: profile.locale ?? null,
+        email: profile.email ?? null,
+        subscriptionStatus: subscription?.status ?? null,
+      } satisfies Identity;
+    },
+  };
+}
+
+async function identitySource(): Promise<IdentitySource | null> {
+  if (isAuthConfigured()) return supabaseIdentitySource();
+  const sql = await getSqlRunner();
+  return sql === null ? null : sqlIdentitySource(sql);
 }
 
 /** anon | free | pro | admin, derived server-side. `anon` is the absence of a user. */
 export async function getViewer(): Promise<Viewer> {
-  const user = await getSessionUser();
-  if (!user) return ANON_VIEWER;
+  const sessionUser = await getSessionUser();
 
-  const db = createDataClient();
-  const [{ data: profile }, { data: subscription }] = await Promise.all([
-    db.from('profiles').select('is_admin, locale, email').eq('id', user.id).maybeSingle<ProfileRow>(),
-    db.from('subscriptions').select('status').eq('user_id', user.id).maybeSingle<SubscriptionRow>(),
-  ]);
+  // Dev-only, and only when there is no real session to speak of. See lib/auth/dev-identity.ts for
+  // why this cannot exist in a production build — and why it grants an identity, never a tier.
+  const userId = sessionUser?.id ?? devIdentityUserId();
+  if (!userId) return ANON_VIEWER;
 
-  const isAdmin = profile?.is_admin === true;
-  const tier: Tier = isAdmin ? 'admin' : isEntitled(subscription?.status) ? 'pro' : 'free';
+  const source = await identitySource();
+  if (source === null) return ANON_VIEWER;
 
-  return {
-    tier,
-    userId: user.id,
-    email: profile?.email ?? user.email ?? null,
-    isAdmin,
-    locale: profile?.locale ?? null,
-  };
+  const identity = await source.load(userId);
+  // A session whose profile row is missing is not a free user — it is an unknown one. Fail closed.
+  if (identity === null && sessionUser === null) return ANON_VIEWER;
+
+  return resolveViewer({ id: userId, email: sessionUser?.email ?? null }, identity);
 }
 
 /** §3.7 — `/admin/*` is gated at the edge on session, and HERE on `is_admin`. */

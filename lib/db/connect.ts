@@ -21,7 +21,23 @@ import { DEFAULT_LOCAL_SNAPSHOT } from './connect-shared';
  * than one with no featured cards.
  */
 
-let cached: Promise<SqlRunner | null> | null = null;
+/**
+ * The memo lives on `globalThis`, not in a module variable.
+ *
+ * `next dev` compiles each route into its own module registry, so a module-level singleton is
+ * re-created per route — which is invisible while every read model is read-only (M0–M2) and
+ * actively wrong the moment anything WRITES (M3): a subscription reconciled by `/billing/success`
+ * would land in that route's private copy of the PGlite snapshot and be invisible to the page it
+ * was supposed to unlock. In production this changes nothing (the module graph is already shared);
+ * it also stops `next dev` opening one `pg` Pool per route.
+ */
+interface RunnerCache {
+  promise: Promise<SqlRunner | null> | null;
+}
+
+const cache: RunnerCache = (((globalThis as Record<string, unknown>).__playbookSqlRunner ??= {
+  promise: null,
+}) as RunnerCache);
 
 function localSnapshotPath(): string {
   return process.env.PLAYBOOK_LOCAL_DB ?? DEFAULT_LOCAL_SNAPSHOT;
@@ -75,11 +91,11 @@ async function connect(): Promise<SqlRunner | null> {
 
 /** Memoised per server process; both drivers are expensive to open and safe to share. */
 export function getSqlRunner(): Promise<SqlRunner | null> {
-  cached ??= connect();
-  return cached;
+  cache.promise ??= connect();
+  return cache.promise;
 }
 
 /** Test/dev seam — drops the memoised connection so the next call re-resolves the driver. */
 export function resetSqlRunner(): void {
-  cached = null;
+  cache.promise = null;
 }

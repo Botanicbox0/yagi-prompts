@@ -8,6 +8,9 @@
   },
   "scripts": {
     "dev": "next dev",
+    "dev:free": "tsx scripts/dev-as.ts free",
+    "dev:pro": "tsx scripts/dev-as.ts pro",
+    "dev:admin": "tsx scripts/dev-as.ts admin",
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
@@ -17,7 +20,8 @@
     "fonts": "node scripts/copy-fonts.mjs",
     "seed": "tsx scripts/seed-cli.ts",
     "db:local": "tsx scripts/db-local.ts",
-    "sweep:anon": "tsx scripts/sweep-anon.ts"
+    "sweep:anon": "tsx scripts/sweep-anon.ts",
+    "stripe:retry": "tsx scripts/stripe-retry.ts"
   },
   "dependencies": {
     "@supabase/ssr": "0.12.4",

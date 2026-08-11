@@ -1,12 +1,15 @@
 import { TextSwap } from '@/components/ui/text-swap';
 import { GoatMark } from '@/components/nav/goat-mark';
+import { HireClickBeacon } from '@/components/analytics/beacon';
 
 /**
  * PLAN §3.1 — "Footer carries the B2B lead CTA: 'Work with the studio →' (mailto + `hire_click`
  * event). The same strip appears at the bottom of playbook detail pages."
  *
- * The mailto ships now; the `hire_click` row into `events` is wired with the rest of the funnel
- * analytics in M3 (§8), where the events client lands.
+ * M3 closes the deferred half: the mailto is wrapped in a beacon that posts `hire_click` to
+ * `/api/events`. The anchor is untouched, so the lead path still works with JavaScript disabled —
+ * the analytics is additive, never load-bearing. The footer stays a SERVER component (this page is
+ * static by contract, §3.1) and only the tiny beacon wrapper crosses to the client.
  */
 export interface FooterLabels {
   hireCta: string;
@@ -29,13 +32,15 @@ export function SiteFooter({ locale, labels }: { locale: string; labels: FooterL
     <footer data-section data-theme="dark" className="section border-t border-hairline">
       <div className="band py-20 lg:py-24">
         <div className="max-w-detail">
-          <a
-            href="mailto:hello@yagiworkshop.xyz?subject=PLAYBOOK%20%E2%80%94%20studio%20enquiry"
-            className="font-display text-title font-black uppercase"
-          >
-            {/* Non-breaking space: at display size the arrow must not wrap onto a line of its own. */}
-            <TextSwap>{labels.hireCta}&nbsp;→</TextSwap>
-          </a>
+          <HireClickBeacon>
+            <a
+              href="mailto:hello@yagiworkshop.xyz?subject=PLAYBOOK%20%E2%80%94%20studio%20enquiry"
+              className="font-display text-title font-black uppercase"
+            >
+              {/* Non-breaking space: at display size the arrow must not wrap onto a line of its own. */}
+              <TextSwap>{labels.hireCta}&nbsp;→</TextSwap>
+            </a>
+          </HireClickBeacon>
           <p className="mt-6 text-body opacity-70">{labels.hireLede}</p>
         </div>
 
@@ -64,12 +69,14 @@ export function SiteFooter({ locale, labels }: { locale: string; labels: FooterL
 
           <div className="flex flex-col gap-3">
             <p className="font-label text-eyebrow uppercase opacity-60">{labels.contactHeading}</p>
-            <a
-              href="mailto:hello@yagiworkshop.xyz?subject=PLAYBOOK%20%E2%80%94%20studio%20enquiry"
-              className="font-mono text-code"
-            >
-              hello@yagiworkshop.xyz
-            </a>
+            <HireClickBeacon>
+              <a
+                href="mailto:hello@yagiworkshop.xyz?subject=PLAYBOOK%20%E2%80%94%20studio%20enquiry"
+                className="font-mono text-code"
+              >
+                hello@yagiworkshop.xyz
+              </a>
+            </HireClickBeacon>
             <a href={`mailto:${labels.adContact}`} className="text-accent font-mono text-code">
               {labels.advertise} · {labels.adContact}
             </a>

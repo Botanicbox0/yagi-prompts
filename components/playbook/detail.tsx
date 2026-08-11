@@ -1,8 +1,10 @@
 import type { ReactNode } from 'react';
 import type { Neighbours } from '@/lib/content/load';
 import type { ShapedAssetRef, ShapedRevision, ShapedStep } from '@/lib/content/shape';
+import type { UpgradeIntent } from '@/lib/billing/links';
 import { formatCost, formatDate, interpolate, localize } from '@/lib/i18n/format';
 import { TextSwap } from '@/components/ui/text-swap';
+import { UpgradeCta } from '@/components/billing/upgrade-cta';
 import { BlockView } from './blocks';
 import { stepAnchor, type PlaybookLabels } from './labels';
 
@@ -137,11 +139,13 @@ function Step({
   locale,
   labels,
   canCopy,
+  upgrade,
 }: {
   step: ShapedStep;
   locale: string;
   labels: PlaybookLabels;
   canCopy: boolean;
+  upgrade?: UpgradeIntent;
 }) {
   return (
     <section
@@ -166,6 +170,7 @@ function Step({
             locale={locale}
             labels={labels}
             canCopy={canCopy}
+            {...(upgrade === undefined ? {} : { upgrade })}
           />
         ))}
       </div>
@@ -178,18 +183,27 @@ export function StepTimeline({
   locale,
   labels,
   tier,
+  upgrade,
 }: {
   steps: ShapedStep[];
   locale: string;
   labels: PlaybookLabels;
   tier: ShapedRevision['tier'];
+  upgrade?: UpgradeIntent;
 }) {
   // "One-click copy on prompts and params" is a Pro line on the pricing table (§3.4 / plan copy).
   const canCopy = tier === 'pro' || tier === 'admin';
   return (
     <div className="mt-16 space-y-16">
       {steps.map((step) => (
-        <Step key={step.id} step={step} locale={locale} labels={labels} canCopy={canCopy} />
+        <Step
+          key={step.id}
+          step={step}
+          locale={locale}
+          labels={labels}
+          canCopy={canCopy}
+          {...(upgrade === undefined ? {} : { upgrade })}
+        />
       ))}
     </div>
   );
@@ -204,24 +218,28 @@ export function ProCta({
   lockedCount,
   locale,
   labels,
+  upgrade,
 }: {
   lockedCount: number;
   locale: string;
   labels: PlaybookLabels;
+  upgrade?: UpgradeIntent;
 }) {
   if (lockedCount === 0) return null;
+  const ctaClass = 'text-accent mt-6 inline-block font-label text-label uppercase';
   return (
     <aside className="mt-16 border border-accent p-6 sm:p-8">
       <p className="font-display text-[clamp(1.5rem,2.6vw,2.125rem)] leading-[1] font-black uppercase">
         {interpolate(labels.proCtaHeading, { count: lockedCount })}
       </p>
       <p className="mt-4 max-w-detail text-body opacity-70">{labels.proCtaBody}</p>
-      <a
-        href={`/${locale}/pricing`}
-        className="text-accent mt-6 inline-block font-label text-label uppercase"
-      >
-        <TextSwap>{labels.lockedCta} →</TextSwap>
-      </a>
+      {upgrade === undefined ? (
+        <a href={`/${locale}/pricing`} className={ctaClass}>
+          <TextSwap>{labels.lockedCta} →</TextSwap>
+        </a>
+      ) : (
+        <UpgradeCta intent={upgrade} label={labels.lockedCta} className={ctaClass} />
+      )}
     </aside>
   );
 }
