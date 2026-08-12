@@ -571,6 +571,33 @@ create table prompt_items (
 4. Community media optional (text-only cards get a typographic poster in the design language); YAGI media required.
 5. Copy buttons: community/anon = free; YAGI-pro = entitlement-gated via the copy endpoint.
 
+---
+
+## 14. Contests — v1.6 surface (founder direction, 2026-08-13, pre-sleep brief)
+
+**Direction (Yagi)**: add a **Contests tab** — brand-hosted 공모전/film contests. Google login stays zero-friction, but **contest submission requires attaching the entrant's main SNS**. Design completeness pushed via Codex cross-validation ×3; HyperFrames available; images may be generated through Codex's connected Higgsfield.
+
+### 14.1 Model
+- v1 is **admin-curated**: brands run contests through the studio pipeline (B2B lane); no brand self-serve. Entries by logged-in users; entry rails are public after moderation (same pattern as prompt moderation).
+- `contests`: id, slug unique, status (draft/published/archived), title/summary/prize/rules jsonb {en,ko} (rules markdown), brand_name, brand_url, hero media jsonb (poster required, video optional), starts_at, deadline_at, created/published_at, updated_at. **Phase is derived server-side**: upcoming (< starts) / open (starts ≤ now < deadline) / closed (≥ deadline). Publishing is the founder's act (a prize is a public commitment — the seeded demo contest stays DRAFT).
+- `contest_entries`: id, contest_id fk, author_id fk profiles, title, video_url (external — YouTube/Vimeo/TikTok/Instagram/https; film files are links, not uploads, in v1), note ≤300, **sns_url NOT NULL** (entrant's main SNS; http(s), recognized hosts get a platform chip, generic https accepted), status (pending/approved/rejected), reject_reason, placement int null (1/2/3 set by admin post-deadline), timestamps. **unique (contest_id, author_id)** — one entry per user; resubmit while open replaces + resets to pending.
+- `profiles.sns_url` added (nullable): submission form prefills from it and writes it back — Google login stays extra-info-free until the first submission asks.
+- Entry editing closes at the deadline (server-enforced). Rate limit: ≤10 entry writes/day/user.
+
+### 14.2 Routes & design
+```
+/[locale]/contests            public listing  [static + tag 'contests']  — open first, then upcoming, then closed
+/[locale]/contests/[slug]     detail          [dynamic, no-store]        — published only; draft = admin preview path
+/contests/[slug]/submit       entry form      [login-gated, no-store]
+/admin/contests               CRUD + moderation queue + placements (registry-dispatcher pattern)
+```
+- Nav: **Prompts · Contests · Pricing.** Listing carries the B2B CTA ("Run a contest with the studio →" mailto) and a designed empty state (site is live — empty must look intentional).
+- §5 language throughout: contest card = poster-led, brand chip + phase chip + D-day label (server-rendered); detail = full-bleed hero, prize set in display type, brand strip, rules (markdown renderer reuse), approved-entries rail (@handle → SNS link), winners strip when placements exist; submit form in the prompts-submit register with the SNS field explained in one honest sentence.
+- Deny-all RLS + server actions + zod (URL validation, caps); sweep extensions (anon: draft invisible, pending/rejected entries invisible, submit redirects, sns required).
+
+### 14.3 Quality loop (this run)
+Build (Opus) → Director verify (tests/sweep/build/render) → **Codex cross-validation ×3** — R1 code correctness + security, R2 design completeness against §5 (geometry/type-scale data + code), R3 closure — fixes applied between rounds; then production deploy + prod verify.
+
 ### Execution log
 
 - **2026-08-13 · LAUNCHED — https://yagiprompts.com live in production.** Repo pushed to private GitHub `Botanicbox0/yagi-prompts` (browser-created; git push via credential manager); Vercel project `yagi-prompts` imported from Git on team "Yagi Workshop's projects" (Hobby), production deploy from main. Env provisioning hit two real snags, both root-caused: Vercel's env importer **appends** pasted rows instead of filling detected ones (duplicate empty rows silently block the submit — resolved by wiping all rows via DOM and one clean re-import; final inventory verified programmatically: 8 keys, all filled, APP_URL corrected from the imported localhost value to the prod URL — a non-secret edit) and a **BOM** from PowerShell's `-Encoding utf8` made `vercel.json` invalid ("Invalid vercel.json file provided" deploy error; rewritten BOM-less, functions pinned to **icn1 Seoul** for DB colocation, redeploy READY). Deployment protection left at Standard (previews protected, production public). Domain: `yagiprompts.com` bought by Yagi at **Cloudflare Registrar** ($11.25/yr); added to the Vercel project (apex primary, apex→www redirect declined — canonicals are apex), Cloudflare DNS `CNAME @ → e80aab7fd1a3054a.vercel-dns-017.com` **DNS-only** (proxy off per Vercel), SSL issued, domain 200. Supabase Auth: Site URL → `https://yagiprompts.com`, redirect allowlist = `http://localhost:3000/**` + `https://yagiprompts.com/**`. **Full production verification in the founder's browser**: Google login round-trip on yagiprompts.com → `/account` shows the founder signed in (무료/KO) → `/admin/prompts` ("YAGI PROMPTS 관리자") live against the cloud DB with the authoring form ready. Business note: Stripe confirmed unavailable to KR-registered merchants — billing stays honestly disconnected (designed 503 states); M8 = swap the injected `stripe-gateway` boundary to a merchant-of-record (Paddle-class) provider. Remaining: M8 billing provider, Resend domain/key, launch content, session-tier sweeps, www subdomain (optional).
