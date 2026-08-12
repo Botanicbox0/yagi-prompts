@@ -131,6 +131,24 @@ describe('migrations apply on a fresh database (PLAN §6)', () => {
     expect(glue).toContain('enable row level security');
     expect(glue).toContain('force  row level security');
     expect(glue).toContain('revoke all on public.%I from anon, authenticated');
+
+    /**
+     * M9 review, finding 7 — name the §14 tables explicitly rather than relying on the loop above.
+     *
+     * The loop asserts coverage for whatever tables the migrations happen to create, which is the
+     * right general property but would go quiet if a table were dropped from BOTH the schema and
+     * the posture at once. `contest_entries` is the second table a non-admin can cause rows to
+     * appear in and the first that stores a personal link, so its deny-all is spelled out here and
+     * probed for real against the cloud in `npm run cloud:smoke`.
+     */
+    const contests = readFileSync(join(MIGRATIONS_DIR, '0104_glue_contests_rls.sql'), 'utf8');
+    for (const table of ['contests', 'contest_entries', 'contest_entry_writes']) {
+      expect(contests, `0104 covers ${table}`).toContain(`'${table}'`);
+    }
+    expect(contests).toContain('enable row level security');
+    expect(contests).toContain('force  row level security');
+    expect(contests).toContain('revoke all on public.%I from anon, authenticated');
+    expect(contests).not.toMatch(/create\s+policy/i);
     // no policies anywhere — deny-all means the absence of policies, not a permissive one
     expect(glue).not.toMatch(/create\s+policy/i);
     for (const file of [...coreMigrationFiles(), ...glueMigrationFiles()]) {

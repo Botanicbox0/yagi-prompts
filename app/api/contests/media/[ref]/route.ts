@@ -28,9 +28,30 @@ import { getStorage, StorageObjectNotFound } from '@/lib/storage';
  */
 export const dynamic = 'force-dynamic';
 
-/** Public bytes, content-addressed keys, no per-viewer variation — so this response may be cached. */
-const HEADERS: Record<string, string> = {
-  'Cache-Control': 'public, max-age=3600, s-maxage=86400, immutable',
+/**
+ * The alias is MUTABLE, so it is never cached immutably (M9 review, finding 3).
+ *
+ * `{contestId}:{kind}` is a pointer, not an object: unpublishing a contest, archiving it or
+ * replacing its poster all change what the ref resolves to — or whether it resolves at all. The
+ * first version of this route answered with `immutable, s-maxage=86400`, which meant a withdrawn
+ * poster kept being served from a CDN for a day after the contest came down. That is the same
+ * mistake the §6 disclosure doctrine exists to avoid making twice.
+ *
+ * So the split is:
+ *   · the ALIAS (this route) → `no-store` on the redirect, `must-revalidate` on the streamed
+ *     fallback. Every request re-checks the row;
+ *   · the OBJECT it points at → the content-addressed `{sha256}.{ext}` URL on the public bucket,
+ *     which is immutable in the only sense that matters: the key IS the hash, so the bytes behind
+ *     it can never change and the CDN may keep them forever.
+ */
+const REDIRECT_HEADERS: Record<string, string> = { 'Cache-Control': 'no-store' };
+
+/**
+ * The no-CDN fallback streams the bytes itself, so it must be revalidated too — but it may still be
+ * stored, which keeps a local render fast without ever serving a withdrawn poster from cache.
+ */
+const STREAM_HEADERS: Record<string, string> = {
+  'Cache-Control': 'public, max-age=0, must-revalidate',
 };
 
 function refuse(status: 404 | 500, error: string): NextResponse {
@@ -57,9 +78,11 @@ export async function GET(
     return refuse(404, 'not_found');
   }
 
+  // 302 to the content-addressed object: THAT url is the immutable one, and it is the CDN's to
+  // cache. This hop is not.
   const cdn = publicContentUrl(asset.published_key);
   if (cdn) {
-    return new NextResponse(null, { status: 302, headers: { ...HEADERS, Location: cdn } });
+    return new NextResponse(null, { status: 302, headers: { ...REDIRECT_HEADERS, Location: cdn } });
   }
 
   try {
@@ -68,7 +91,10 @@ export async function GET(
     return new NextResponse(new Uint8Array(bytes), {
       status: 200,
       headers: {
-        ...HEADERS,
+        ...STREAM_HEADERS,
+        // The content hash, so a revalidating client gets a cheap 304 while the row stays the
+        // authority on whether it may have the bytes at all.
+        ETag: `"${asset.sha256}"`,
         'Content-Type': asset.mime,
         'Content-Length': String(bytes.byteLength),
       },

@@ -86,6 +86,13 @@ export type AdminErrorCode =
   | 'notPublishable'
   | 'deadlineNotPassed'
   | 'duplicatePlacement'
+  /**
+   * The entrant replaced their film between the queue being rendered and the moderator pressing a
+   * button. Not an error the moderator made — an instruction to watch the new one.
+   */
+  | 'staleReview'
+  /** A judged contest's deadline cannot be pushed outwards while medals are on the board. */
+  | 'placementsLocked'
   | 'unknown';
 
 export interface AdminSuccess {

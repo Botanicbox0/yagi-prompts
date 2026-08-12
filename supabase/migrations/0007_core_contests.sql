@@ -72,9 +72,25 @@ create table if not exists contests (
       )
     ),
 
-  -- §14.2 — the card is poster-led. A published contest with no poster has no card.
+  -- §14.2 — the card is poster-led, and a published contest's poster must actually be SERVABLE.
+  --
+  -- The first version of this CHECK tested key existence (`media ? 'poster'`), which `{"poster":
+  -- null}` satisfies — a published contest could carry a poster key pointing at nothing, and the
+  -- card would fall back to the typographic composition with no indication anything was wrong.
+  -- The condition below is what "has a poster" actually means downstream: an OBJECT, carrying a
+  -- non-empty `published_key`, in the PUBLIC bucket (i.e. the copier has run). `coalesce(..., false)`
+  -- is load-bearing — every jsonb operator on a NULL `media` yields NULL, and `false or NULL` is
+  -- NULL, which a CHECK constraint treats as a pass.
   constraint contests_published_requires_poster
-    check (status <> 'published' or coalesce(media ? 'poster', false)),
+    check (
+      status <> 'published'
+      or coalesce(
+           jsonb_typeof(media -> 'poster') = 'object'
+           and coalesce(btrim(media -> 'poster' ->> 'published_key'), '') <> ''
+           and media -> 'poster' ->> 'bucket' = 'public-content',
+           false
+         )
+    ),
 
   -- Ordering, not just sanity: `deadline > starts` is what makes "open" a non-empty interval.
   constraint contests_deadline_after_start

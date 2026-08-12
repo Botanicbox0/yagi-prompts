@@ -1,5 +1,10 @@
 import 'server-only';
-import type { SqlRunner } from './sql-runner';
+import {
+  makePooledRunner,
+  makeSingleConnectionRunner,
+  type PoolLike,
+  type SqlRunner,
+} from './sql-runner';
 import { LOCAL_DB_DIR_ENV } from './connect-shared';
 import { RUNTIME_MODE_ENV, selectDbDriver } from '@/lib/runtime-mode';
 
@@ -48,12 +53,8 @@ async function connectPostgres(connectionString: string): Promise<SqlRunner | nu
     const pg = await import('pg');
     const Pool = (pg as unknown as { default?: { Pool: typeof pg.Pool } }).default?.Pool ?? pg.Pool;
     const pool = new Pool({ connectionString, max: 4 });
-    return {
-      async query<T = Record<string, unknown>>(text: string, params: unknown[] = []) {
-        const result = await pool.query(text, params);
-        return { rows: result.rows as T[] };
-      },
-    };
+    // One shared implementation of the pinned-connection transaction (lib/db/sql-runner.ts).
+    return makePooledRunner(pool as unknown as PoolLike);
   } catch (err) {
     console.warn(`[db] DATABASE_URL is set but the pg driver could not connect: ${String(err)}`);
     return null;
@@ -72,12 +73,13 @@ async function connectLocalDirectory(dir: string): Promise<SqlRunner | null> {
     const { PGlite } = await import('@electric-sql/pglite');
     const db = new PGlite({ dataDir: resolve(dir) });
     await db.waitReady;
-    return {
-      async query<T = Record<string, unknown>>(text: string, params: unknown[] = []) {
-        const result = await db.query<T>(text, params as never[]);
-        return { rows: result.rows as T[] };
-      },
-    };
+    return makeSingleConnectionRunner(async <T = Record<string, unknown>>(
+      text: string,
+      params: unknown[] = [],
+    ) => {
+      const result = await db.query<T>(text, params as never[]);
+      return { rows: result.rows as T[] };
+    });
   } catch (err) {
     console.warn(`[db] ${LOCAL_DB_DIR_ENV}=${dir} could not be opened: ${String(err)}`);
     return null;
@@ -94,12 +96,13 @@ async function connectLocalSnapshot(path: string): Promise<SqlRunner | null> {
     const db = new PGlite({ loadDataDir: new Blob([new Uint8Array(bytes)]) });
     await db.waitReady;
 
-    return {
-      async query<T = Record<string, unknown>>(text: string, params: unknown[] = []) {
-        const result = await db.query<T>(text, params as never[]);
-        return { rows: result.rows as T[] };
-      },
-    };
+    return makeSingleConnectionRunner(async <T = Record<string, unknown>>(
+      text: string,
+      params: unknown[] = [],
+    ) => {
+      const result = await db.query<T>(text, params as never[]);
+      return { rows: result.rows as T[] };
+    });
   } catch {
     // No snapshot on this machine — expected in CI and on a fresh clone.
     return null;

@@ -849,6 +849,10 @@ export const en = {
     errNotPublishable: 'Not ready to publish — the detail below says exactly what is missing.',
     errDeadlineNotPassed: 'Placements open after the deadline, not before.',
     errDuplicatePlacement: 'That place is already taken in this contest.',
+    errStaleReview:
+      'The entrant replaced this film after the queue loaded. Reload and watch the new one before deciding.',
+    errPlacementsLocked:
+      'This contest already has winners. Clear the placements before moving the deadline out.',
     errUnknown: 'That did not work.',
     detailLabel: 'Detail',
   },

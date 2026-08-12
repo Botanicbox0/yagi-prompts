@@ -1,5 +1,5 @@
 import { PGlite } from '@electric-sql/pglite';
-import type { SqlRunner } from '@/lib/db/sql-runner';
+import { makeSingleConnectionRunner, type SqlRunner } from '@/lib/db/sql-runner';
 import { applyCoreMigrations } from '@/lib/db/migrations';
 
 export { MIGRATIONS_DIR, coreMigrationFiles, glueMigrationFiles } from '@/lib/db/migrations';
@@ -22,12 +22,15 @@ export async function freshDb(): Promise<PGlite> {
 
 /** Adapt PGlite to the driver-agnostic runner the seed script consumes. */
 export function runner(db: PGlite): SqlRunner {
-  return {
-    async query<T = Record<string, unknown>>(text: string, params: unknown[] = []) {
-      const res = await db.query<T>(text, params as never[]);
-      return { rows: res.rows as T[] };
-    },
-  };
+  // PGlite is single-connection, so BEGIN/COMMIT through `query` really are transactional — which
+  // is what lets the §14.1 submit path's atomicity be tested here for real (M9).
+  return makeSingleConnectionRunner(async <T = Record<string, unknown>>(
+    text: string,
+    params: unknown[] = [],
+  ) => {
+    const res = await db.query<T>(text, params as never[]);
+    return { rows: res.rows as T[] };
+  });
 }
 
 /** Create a non-superuser role that stands in for Supabase's `service_role`. */

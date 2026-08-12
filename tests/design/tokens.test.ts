@@ -8,6 +8,26 @@ const globals = readFileSync(fileURLToPath(new URL('../../app/globals.css', impo
  * PLAN §5.1 / §5.2 / §4 — `app/globals.css` is the single token source (Tailwind v4 CSS-first,
  * no tailwind.config.js). These assertions are the contract M1 builds against.
  */
+/**
+ * The full text of an at-rule block, matched by counting braces.
+ *
+ * A naive search for the next closing brace stops at the first NESTED rule, which quietly turns an
+ * assertion about a whole media block into an assertion about two characters.
+ */
+function braceBlock(css: string, header: string): string {
+  const start = css.indexOf(header);
+  if (start === -1) throw new Error(`no such block: ${header}`);
+  let depth = 0;
+  for (let i = css.indexOf('{', start); i < css.length; i += 1) {
+    if (css[i] === '{') depth += 1;
+    else if (css[i] === '}') {
+      depth -= 1;
+      if (depth === 0) return css.slice(start, i + 1);
+    }
+  }
+  throw new Error(`unterminated block: ${header}`);
+}
+
 describe('design tokens (§5.1/§5.2/§4)', () => {
   it('declares the theme statically so no token is tree-shaken away', () => {
     expect(globals).toContain('@theme static');
@@ -152,5 +172,32 @@ describe('design tokens (§5.1/§5.2/§4)', () => {
     expect(provider).toContain('autoRaf: false');
     expect(provider).toContain("pinType: 'fixed'");
     expect(provider).toContain('gsap.ticker.lagSmoothing(0)');
+  });
+
+  /**
+   * §5.3-3, and the bug M9 render-verify found in it.
+   *
+   * `.text-swap` clips its duplicate with `overflow: hidden`, and the duplicate rested at `110%` of
+   * its OWN height while the clip box is that height plus 0.2em of padding. At tight line-heights
+   * (`leading-none`, the 1.2 of `text-eyebrow`) the duplicate's top edge landed a hair inside the
+   * box and painted a sub-pixel ghost under every nav link and CTA on the site — visible as colour
+   * fringing on the footer links in the M9 screenshots.
+   *
+   * Two rules now stop it, and the test pins both because they fail in different ways: the geometry
+   * clears the box at ANY line-height, and with motion off the duplicate leaves the box model
+   * entirely (a transform can be overridden or interrupted; `display: none` cannot).
+   */
+  it('never lets the text-swap duplicate paint at rest (§5.3-3)', () => {
+    // Geometry: the offset is expressed against the padding, not as a bare percentage.
+    expect(globals).toContain('transform: translate3d(0, calc(100% + 0.2em), 0)');
+    expect(globals).toContain('transform: translate3d(0, calc(-100% - 0.2em), 0)');
+    expect(globals).not.toContain('translate3d(0, 110%, 0)');
+    expect(globals).not.toContain('translate3d(0, -110%, 0)');
+
+    // Structure: inside the reduced-motion block, the duplicate is removed outright.
+    const block = braceBlock(globals, '@media (prefers-reduced-motion: reduce)');
+    expect(block).toContain('.text-swap__b');
+    expect(block).toContain('display: none !important');
+    expect(block).toContain('.text-swap__a');
   });
 });

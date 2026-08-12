@@ -167,6 +167,8 @@ const ERROR_KEYS = {
   notPublishable: 'errNotPublishable',
   deadlineNotPassed: 'errDeadlineNotPassed',
   duplicatePlacement: 'errDuplicatePlacement',
+  staleReview: 'errStaleReview',
+  placementsLocked: 'errPlacementsLocked',
   unknown: 'errUnknown',
 } as const;
 

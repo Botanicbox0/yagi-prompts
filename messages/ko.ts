@@ -823,6 +823,10 @@ export const ko: Dictionary = {
     errNotPublishable: '아직 공개할 수 없습니다. 아래 상세에 빠진 항목이 그대로 나옵니다.',
     errDeadlineNotPassed: '수상 지정은 마감 이후에만 가능합니다.',
     errDuplicatePlacement: '이 콘테스트에서 이미 사용 중인 순위입니다.',
+    errStaleReview:
+      '목록을 불러온 뒤에 출품자가 작품을 교체했습니다. 새로고침해서 새 작품을 보고 결정해 주세요.',
+    errPlacementsLocked:
+      '이미 수상작이 정해진 콘테스트입니다. 마감을 뒤로 미루려면 먼저 수상 지정을 해제해 주세요.',
     errUnknown: '처리하지 못했습니다.',
     detailLabel: '상세',
   },

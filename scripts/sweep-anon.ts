@@ -4,7 +4,11 @@ import { PGlite } from '@electric-sql/pglite';
 import { DEFAULT_LOCAL_SNAPSHOT } from '@/lib/db/connect-shared';
 import { FIXTURE_SENTINELS } from './fixtures';
 import { HIDDEN_PROMPT_SLUGS, PROMPT_SENTINELS } from './prompt-fixtures';
-import { CONTEST_ENTRY_SENTINELS, HIDDEN_CONTEST_SLUGS } from './contest-fixtures';
+import {
+  CONTEST_ENTRY_SENTINELS,
+  HIDDEN_CONTEST_SLUGS,
+  PUBLISHED_CONTEST_SLUG,
+} from './contest-fixtures';
 import { RUNTIME_MODE_ENV } from '@/lib/runtime-mode';
 
 /**
@@ -749,16 +753,17 @@ async function sweepLandingPivot(): Promise<void> {
 // §14 — the contests surface (M9)
 // ---------------------------------------------------------------------------
 
-/** Every entry sentinel an anonymous reader must NEVER meet — in v1 that is all of them. */
+/** Every entry sentinel an anonymous reader must NEVER meet. */
 const FORBIDDEN_ENTRY_SENTINELS = CONTEST_ENTRY_SENTINELS.filter((s) => !s.publicToAnon);
 
 /**
- * The listing, with NOTHING published.
+ * The one sentinel that MUST be reachable: an approved entry of the published fixture contest.
  *
- * That is not a gap in the fixtures, it is the state the live site is in: §14.1 makes publishing
- * the founder's act and the demo contest stays DRAFT, so what a real visitor meets today is the
- * designed empty state — and this is the only place it can be checked against a real server.
+ * Without it every absence assertion below would pass on a page that renders no entries at all —
+ * the vacuity the M9 review called out. This is the positive control that makes them mean something.
  */
+const LIVE_ENTRY_SENTINEL = CONTEST_ENTRY_SENTINELS.find((s) => s.publicToAnon)!;
+
 async function sweepContestsListing(locale: string, contests: ContestProbe[]): Promise<void> {
   const path = `/${locale}/contests`;
   console.log(`\n${path} — the listing, anonymous`);
@@ -772,22 +777,23 @@ async function sweepContestsListing(locale: string, contests: ContestProbe[]): P
     page.body,
     locale === 'ko' ? '브리프는' : 'BRANDS BRING',
   );
-  expectPresent('the designed empty state', page.body, 'data-contests-empty');
+  expectPresent('the OPEN rail', page.body, 'data-contest-rail="open"');
   expectPresent(
-    '…with the empty-state copy',
+    'the published contest card',
     page.body,
-    locale === 'ko' ? '아직 열린 콘테스트가 없습니다' : 'NOTHING OPEN YET.',
+    `data-contest-card="${PUBLISHED_CONTEST_SLUG}"`,
   );
-  // §14.2 — "Listing carries the B2B CTA ('Run a contest with the studio →' mailto)". While the
-  // listing is empty the empty state carries it, and the bordered hire strip is suppressed so the
-  // same sentence does not appear twice eight lines apart.
-  expectPresent('the B2B CTA', page.body, 'mailto:hello@yagiworkshop.xyz');
+  expectPresent('…with its phase chip', page.body, 'data-phase-chip="open"');
+  expectPresent('…and a server-rendered D-day', page.body, 'data-dday');
+
+  // §14.2 — "Listing carries the B2B CTA ('Run a contest with the studio →' mailto)".
+  expectPresent('the B2B CTA strip', page.body, 'data-contest-hire');
+  expectPresent('…as a real mailto', page.body, 'mailto:hello@yagiworkshop.xyz');
   expectPresent(
     '…with the studio wording',
     page.body,
     locale === 'ko' ? '스튜디오와 콘테스트 열기' : 'Run a contest with the studio',
   );
-  expectAbsent('…and only once while empty', page.body, 'data-contest-hire');
   expectPresent('nav points at the tab', page.body, `href="/${locale}/contests"`);
 
   // The property that matters: a DRAFT contest is nowhere on the public listing.
@@ -796,9 +802,8 @@ async function sweepContestsListing(locale: string, contests: ContestProbe[]): P
     expectAbsent(`no ${contest.slug} card`, page.body, `data-contest-card="${contest.slug}"`);
     expectAbsent(`…and no ${contest.slug} link`, page.body, `/contests/${contest.slug}`);
   }
-  // With nothing published there is no rail at all — a heading over a void would be worse than none.
-  expectAbsent('no phase rails while empty', page.body, 'data-contest-rail=');
-  for (const sentinel of FORBIDDEN_ENTRY_SENTINELS) {
+  // No entry text of ANY status reaches a listing card — the card carries a COUNT, never a row.
+  for (const sentinel of CONTEST_ENTRY_SENTINELS) {
     expectAbsent(`no ${sentinel.status} entry text (${sentinel.token})`, page.body, sentinel.token);
   }
   expectAbsent('no staging keys in the listing', page.body, 'content/contest/');
@@ -807,6 +812,31 @@ async function sweepContestsListing(locale: string, contests: ContestProbe[]): P
 /** §14.2 — "published only; draft = admin preview path", checked from outside. */
 async function sweepContestDetails(locale: string, contests: ContestProbe[]): Promise<void> {
   console.log(`\n/${locale}/contests/[slug] — details, anonymous`);
+
+  // --- the PUBLISHED contest: the positive control the review asked for ----
+  const live = await get(`/${locale}/contests/${PUBLISHED_CONTEST_SLUG}`);
+  expectEqual('a published contest renders 200', live.status, 200);
+  expectEqual('…and is never cached (§14.2)', live.cacheControl, 'private, no-store');
+  expectPresent('…with its prize in display type', live.body, 'data-contest-prize');
+  expectPresent('…the phase-aware CTA', live.body, 'data-contest-cta="enter"');
+  expectPresent('…and the entries rail', live.body, 'data-contest-entries');
+  // The measurement: an APPROVED entry is here…
+  expectPresent(
+    `…carrying the approved entry (${LIVE_ENTRY_SENTINEL.token})`,
+    live.body,
+    LIVE_ENTRY_SENTINEL.token,
+  );
+  expectPresent('…as an addressable card', live.body, 'data-entry-card=');
+  expectPresent('…with its SNS credit chip', live.body, 'data-entry-sns=');
+  // …and every other moderation state is not, on the very page that proves the rail works.
+  for (const sentinel of FORBIDDEN_ENTRY_SENTINELS) {
+    expectAbsent(
+      `…and NO ${sentinel.status} entry (${sentinel.token})`,
+      live.body,
+      sentinel.token,
+    );
+  }
+  expectAbsent('…and no staging keys', live.body, 'content/contest/');
 
   for (const slug of HIDDEN_CONTEST_SLUGS) {
     expectEqual(`draft ${slug} 404s`, (await get(`/${locale}/contests/${slug}`)).status, 404);
@@ -836,6 +866,24 @@ async function sweepContestDetails(locale: string, contests: ContestProbe[]): Pr
       404,
     );
   }
+
+  const published = contests.find((c) => c.status === 'published');
+  if (published) {
+    const poster = await get(`/api/contests/media/${encodeURIComponent(`${published.id}:poster`)}`);
+    expectEqual('a PUBLISHED contest’s poster is served', poster.status, 200);
+    expectEqual('…as the declared type', poster.contentType, 'image/png');
+    const isPng = poster.bytes[0] === 0x89 && poster.bytes[1] === 0x50 && poster.bytes[2] === 0x4e;
+    if (isPng) ok('…and the bytes are the real object');
+    else fail('poster bytes', 'response is not a PNG');
+    /**
+     * M9 review, finding 3 — the `{id}:{kind}` alias is a MUTABLE pointer, so it must never be
+     * cached immutably: unpublishing a contest has to stop serving its poster immediately rather
+     * than a day later. The immutable thing is the content-addressed object it points at.
+     */
+    if (poster.cacheControl?.includes('immutable')) {
+      fail('alias cache', `mutable alias served as immutable: ${poster.cacheControl}`);
+    } else ok('…and the mutable alias is not cached immutably', poster.cacheControl ?? '(none)');
+  }
   expectEqual(
     'an unknown media ref 404s',
     (await get('/api/contests/media/11111111-2222-4333-8444-555555555555%3Aposter')).status,
@@ -848,7 +896,8 @@ async function sweepContestDetails(locale: string, contests: ContestProbe[]): Pr
 async function sweepContestGates(contests: ContestProbe[]): Promise<void> {
   console.log('\n/contests/[slug]/submit + /admin/contests — anonymous');
 
-  const slug = HIDDEN_CONTEST_SLUGS[0] ?? 'any-contest';
+  // The PUBLISHED contest, so the redirect proves the login gate rather than a 404.
+  const slug = PUBLISHED_CONTEST_SLUG;
   const submit = await get(`/contests/${slug}/submit`);
   expectOneOf('the entry form redirects anon', submit.status, [302, 307, 308]);
   if (submit.location && !submit.location.startsWith(`/contests/${slug}/submit`)) {
@@ -880,6 +929,16 @@ async function sweepContestSeo(): Promise<void> {
   const sitemap = await get('/sitemap.xml');
   expectPresent('lists the listing (en)', sitemap.body, '/en/contests<');
   expectPresent('lists the listing (ko)', sitemap.body, '/ko/contests<');
+  expectPresent(
+    'lists the published contest (en)',
+    sitemap.body,
+    `/en/contests/${PUBLISHED_CONTEST_SLUG}`,
+  );
+  expectPresent(
+    'lists the published contest (ko)',
+    sitemap.body,
+    `/ko/contests/${PUBLISHED_CONTEST_SLUG}`,
+  );
   for (const slug of HIDDEN_CONTEST_SLUGS) {
     expectAbsent(`never lists the draft ${slug}`, sitemap.body, slug);
   }

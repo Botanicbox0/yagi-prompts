@@ -90,12 +90,21 @@ async function smokeDatabase(url: string, anonKey: string, hasServiceKey: boolea
           where table_schema = 'public' and table_type = 'BASE TABLE'`,
       );
       const tableCount = Number(tables.rows[0]?.n ?? 0);
-      expect(group, 'public tables', tableCount >= 13, `${tableCount} (expected >= 13)`);
+      expect(group, 'public tables', tableCount >= 16, `${tableCount} (expected >= 16)`);
 
       const items = await client.query<{ n: string }>(
         'select count(*)::text as n from prompt_items',
       );
       record(group, 'prompt_items rows', 'pass', `${items.rows[0]?.n ?? '?'} (informational)`);
+
+      // §14 — the three M9 tables must EXIST on the cloud before the deny-all probe below means
+      // anything: a refusal from a table that is not there is not a posture.
+      const contests = await client.query<{ n: string }>(
+        `select count(*)::text as n from information_schema.tables
+          where table_schema = 'public'
+            and table_name in ('contests','contest_entries','contest_entry_writes')`,
+      );
+      expect(group, 'contest tables (0007)', Number(contests.rows[0]?.n ?? 0) === 3, `${contests.rows[0]?.n ?? '?'} of 3`);
 
       // The buckets from glue migration 0101 — the half a PGlite run can never assert.
       const buckets = await client.query<{ id: string; public: boolean }>(
@@ -156,21 +165,31 @@ async function smokeDatabase(url: string, anonKey: string, hasServiceKey: boolea
   // Deny-all RLS, from the OUTSIDE. This is the posture the whole gating doctrine rests on
   // (0100/0102 revoke every privilege from anon), so it is probed with the anon key over the same
   // REST surface a browser would use — not with a query the service role would always win.
-  try {
-    const response = await fetch(`${url}/rest/v1/prompt_items?select=id&limit=1`, {
-      headers: { apikey: anonKey, Authorization: `Bearer ${anonKey}` },
-    });
-    const body = await response.text();
-    const denied = !response.ok;
-    const emptied = response.ok && body.trim() === '[]';
-    expect(
-      group,
-      'anon REST on prompt_items is refused',
-      denied || emptied,
-      denied ? `HTTP ${response.status} (permission denied)` : 'HTTP 200 but zero rows',
-    );
-  } catch (err) {
-    fail(group, 'anon REST on prompt_items is refused', err);
+  /**
+   * Every table a non-admin can cause rows to appear in, plus the two beside them.
+   *
+   * M9 review, finding 7: `contest_entries` is the first table on the site that stores a personal
+   * link (`sns_url`), and a PENDING entry's is visible to nobody but the moderator. PGlite has no
+   * anon role, so the only place that posture can be MEASURED rather than asserted from the
+   * migration text is here, over the same REST surface a browser would use.
+   */
+  for (const table of ['prompt_items', 'contests', 'contest_entries', 'contest_entry_writes']) {
+    try {
+      const response = await fetch(`${url}/rest/v1/${table}?select=id&limit=1`, {
+        headers: { apikey: anonKey, Authorization: `Bearer ${anonKey}` },
+      });
+      const body = await response.text();
+      const denied = !response.ok;
+      const emptied = response.ok && body.trim() === '[]';
+      expect(
+        group,
+        `anon REST on ${table} is refused`,
+        denied || emptied,
+        denied ? `HTTP ${response.status} (permission denied)` : 'HTTP 200 but zero rows',
+      );
+    } catch (err) {
+      fail(group, `anon REST on ${table} is refused`, err);
+    }
   }
 
   if (!hasServiceKey) {

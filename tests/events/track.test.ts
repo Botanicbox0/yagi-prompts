@@ -97,6 +97,7 @@ describe('recordEvent (§6 events)', () => {
       async query() {
         throw new Error('connection terminated');
       },
+      transaction: (fn) => fn(broken),
     };
     await expect(recordEvent(broken, { type: 'view_playbook' })).resolves.toBe(false);
   });

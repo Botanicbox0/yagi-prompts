@@ -267,6 +267,10 @@ function EntryRowView({
           {entry.status !== 'approved' && (
             <OpForm op="contestEntry.approve" back={ADMIN_CONTESTS_PATH}>
               <input type="hidden" name="id" value={entry.id} />
+              {/* The stale-review token (§14.2 / M9 review): if the entrant replaces the film
+                  between this render and the press, the guarded UPDATE matches nothing and the
+                  moderator is told to watch the new one rather than blessing it unseen. */}
+              <input type="hidden" name="version" value={entry.version} />
               <button type="submit" className={BUTTON_PRIMARY}>
                 {a.approveEntry}
               </button>
@@ -278,6 +282,7 @@ function EntryRowView({
         {entry.status !== 'rejected' && (
           <OpForm op="contestEntry.reject" back={ADMIN_CONTESTS_PATH} className="flex flex-col gap-2">
             <input type="hidden" name="id" value={entry.id} />
+            <input type="hidden" name="version" value={entry.version} />
             <Field label={a.rejectReason} hint={a.entryRejectHint}>
               <textarea name="reason" rows={2} className={INPUT} />
             </Field>

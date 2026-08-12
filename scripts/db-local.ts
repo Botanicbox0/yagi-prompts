@@ -2,7 +2,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { PGlite } from '@electric-sql/pglite';
 import { applyCoreMigrations } from '@/lib/db/migrations';
-import type { SqlRunner } from '@/lib/db/sql-runner';
+import { makeSingleConnectionRunner, type SqlRunner } from '@/lib/db/sql-runner';
 import { DEFAULT_LOCAL_SNAPSHOT, LOCAL_DB_DIR_ENV } from '@/lib/db/connect-shared';
 import { createLocalStorageDriver } from '@/lib/storage/local-driver';
 import { RUNTIME_MODE_ENV } from '@/lib/runtime-mode';
@@ -59,12 +59,13 @@ async function main(): Promise<void> {
   `);
   await applyCoreMigrations(db);
 
-  const sql: SqlRunner = {
-    async query<T = Record<string, unknown>>(text: string, params: unknown[] = []) {
-      const res = await db.query<T>(text, params as never[]);
-      return { rows: res.rows };
-    },
-  };
+  const sql: SqlRunner = makeSingleConnectionRunner(async <T = Record<string, unknown>>(
+    text: string,
+    params: unknown[] = [],
+  ) => {
+    const res = await db.query<T>(text, params as never[]);
+    return { rows: res.rows };
+  });
 
   const storage = createLocalStorageDriver();
   const options = { sql, storage, createAuthUsers: true, log: (m: string) => console.log(m) };
@@ -79,8 +80,8 @@ async function main(): Promise<void> {
 
   const inventory =
     `${result.playbooks.length} core playbooks, ${edges.length} edge fixtures, ` +
-    `${result.prompts.length} prompt items, ${contests.length} draft contest(s), ` +
-    '3 entitlement fixtures';
+    `${result.prompts.length} prompt items, ${contests.length} contest(s) ` +
+    `(${contests.map((c) => c.status).join('/')}), 3 entitlement fixtures`;
 
   if (dir === null) {
     const dump = await db.dumpDataDir('gzip');

@@ -18,6 +18,8 @@ import {
 } from './fixtures';
 import { PROMPT_FIXTURES } from './prompt-fixtures';
 import { insertContest, upsertEntry } from '@/lib/contests/repo';
+import { publishContestMedia } from '@/lib/contests/media';
+import type { ContestMedia } from '@/lib/contests/schemas';
 import { CONTEST_ENTRANTS, CONTEST_FIXTURES } from './contest-fixtures';
 
 /**
@@ -610,7 +612,7 @@ export async function seedContests(opts: SeedOptions): Promise<ContestSeedResult
       const bytes = placeholderBytes(fixture.poster);
       const key = `content/contest/${fixture.id}/${randomUUID()}.${fixture.poster.ext}`;
       await storage.putStaging(key, bytes, fixture.poster.mime);
-      media = {
+      const staged: ContestMedia = {
         poster: AssetRefSchema.parse({
           staging_key: key,
           sha256: sha256Hex(bytes),
@@ -619,6 +621,14 @@ export async function seedContests(opts: SeedOptions): Promise<ContestSeedResult
           ...(fixture.poster.h === undefined ? {} : { h: fixture.poster.h }),
         }),
       };
+      // The copier runs for a PUBLISHED fixture only — a draft's poster stays private, which is
+      // what §14.1's "publishing is the founder's act" means for bytes. It is also what the
+      // strengthened `contests_published_requires_poster` CHECK demands of a published row: an
+      // object with a real `published_key` in the public bucket, not merely a key that exists.
+      media =
+        fixture.status === 'published'
+          ? (await publishContestMedia(storage, staged)).media
+          : staged;
     }
 
     // Relative dates, resolved against the seed instant. `Date.now()` is fine in a SCRIPT (the

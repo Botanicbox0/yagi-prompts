@@ -336,3 +336,122 @@ describe('PlacementSchema (§14.1)', () => {
     }
   });
 });
+
+describe('URL normalisation (M9 review, finding 8)', () => {
+  /**
+   * The DB CHECK is a case-SENSITIVE regex (`~ '^https?://'`), while schemes and hosts are
+   * case-INSENSITIVE by RFC and `new URL()` parses them happily. Without normalisation at the
+   * boundary the database would refuse a link the entrant typed correctly, for a reason no message
+   * could explain. `tests/db/contest-constraints.test.ts` proves the refusal is real.
+   */
+  it('lower-cases the scheme and host on the way in', () => {
+    const result = EntrySubmissionSchema.safeParse({
+      ...valid,
+      videoUrl: 'HTTPS://WWW.YouTube.com/watch?v=AbC',
+      snsUrl: 'HTTP://Instagram.com/Hana',
+    });
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.videoUrl).toBe('https://www.youtube.com/watch?v=AbC');
+    expect(result.data.snsUrl).toBe('http://instagram.com/Hana');
+  });
+
+  it('keeps the PATH case, which is the half that is case-sensitive', () => {
+    const result = EntrySubmissionSchema.safeParse({
+      ...valid,
+      videoUrl: 'https://vimeo.com/AbCdEf',
+    });
+    expect(result.success && result.data.videoUrl).toBe('https://vimeo.com/AbCdEf');
+  });
+
+  it('trims surrounding whitespace rather than storing it', () => {
+    const result = EntrySubmissionSchema.safeParse({
+      ...valid,
+      snsUrl: '  https://x.com/hana  ',
+    });
+    expect(result.success && result.data.snsUrl).toBe('https://x.com/hana');
+  });
+
+  it('still refuses a non-http(s) scheme after normalising', () => {
+    expect(
+      EntrySubmissionSchema.safeParse({ ...valid, videoUrl: 'JAVASCRIPT:alert(1)' }).success,
+    ).toBe(false);
+  });
+
+  it('normalises the admin brand link too', () => {
+    const result = ContestFormSchema.safeParse({
+      slug: 'launch-film-contest',
+      title: { en: 'Launch film', ko: '런칭 단편' },
+      summary: { en: 'Make a film.', ko: '단편을 만들어 주세요.' },
+      prize: { en: '$3,000', ko: '$3,000' },
+      rules: null,
+      brandName: 'YAGI WORKSHOP',
+      brandUrl: 'HTTPS://YagiWorkshop.xyz',
+      startsAt: '2026-09-01T00:00',
+      deadlineAt: '2026-09-30T00:00',
+    });
+    expect(result.success && result.data.brandUrl).toBe('https://yagiworkshop.xyz/');
+  });
+
+  /** A normalised URL still resolves to the same platform chip — the two must not disagree. */
+  it('agrees with the platform detector after normalisation', () => {
+    const result = EntrySubmissionSchema.safeParse({
+      ...valid,
+      snsUrl: 'HTTPS://WWW.TikTok.com/@hana',
+    });
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(platformOf(result.data.snsUrl)).toBe('tiktok');
+  });
+});
+
+describe('datetime blank vs invalid (M9 review, finding 9)', () => {
+  const form = {
+    slug: 'launch-film-contest',
+    title: { en: 'Launch film', ko: '런칭 단편' },
+    summary: { en: 'Make a film.', ko: '단편을 만들어 주세요.' },
+    prize: { en: '$3,000', ko: '$3,000' },
+    rules: null,
+    brandName: 'YAGI WORKSHOP',
+    brandUrl: null,
+    startsAt: '2026-09-01T00:00',
+    deadlineAt: '2026-09-30T00:00',
+  };
+
+  /** An empty date field is an undated draft, which §14.1 allows. */
+  it('reads a blank field as null', () => {
+    for (const blank of ['', '   ']) {
+      const result = ContestFormSchema.safeParse({ ...form, startsAt: blank, deadlineAt: blank });
+      expect(result.success, JSON.stringify(blank)).toBe(true);
+      if (result.success) {
+        expect(result.data.startsAt).toBeNull();
+        expect(result.data.deadlineAt).toBeNull();
+      }
+    }
+    const nulls = ContestFormSchema.safeParse({ ...form, startsAt: null, deadlineAt: null });
+    expect(nulls.success && nulls.data.startsAt).toBeNull();
+  });
+
+  /**
+   * A typed-but-unparseable date is a MISTAKE, and used to collapse into the same null — the author
+   * lost what they typed and then got a publish refusal pointing at a field they had filled in.
+   */
+  it('raises an issue for a date that was typed and is wrong', () => {
+    for (const bad of ['tomorrow', '2026-02-31T09:00', '2026-13-01T09:00', 'x']) {
+      const result = ContestFormSchema.safeParse({ ...form, startsAt: bad });
+      expect(result.success, bad).toBe(false);
+      if (!result.success) {
+        expect(result.error.issues.some((issue) => issue.path.includes('startsAt')), bad).toBe(true);
+      }
+    }
+  });
+
+  it('names the field that is wrong, not the other one', () => {
+    const result = ContestFormSchema.safeParse({ ...form, deadlineAt: 'never' });
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    const paths = result.error.issues.flatMap((issue) => issue.path);
+    expect(paths).toContain('deadlineAt');
+    expect(paths).not.toContain('startsAt');
+  });
+});

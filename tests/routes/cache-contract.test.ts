@@ -461,9 +461,30 @@ describe('contests route + API contract (§14.2)', () => {
     expect(media).not.toContain("searchParams.get('key')");
   });
 
-  it('lets those public bytes be cached — content-addressed and tier-independent', () => {
-    expect(media).toContain("'Cache-Control': 'public,");
-    expect(media).toContain('immutable');
+  /**
+   * M9 review, finding 3 — the `{contestId}:{kind}` ref is a MUTABLE ALIAS, not an object.
+   *
+   * Unpublishing a contest, archiving it or replacing its poster all change what the ref resolves
+   * to. The first version of this route answered `immutable, s-maxage=86400`, so a withdrawn poster
+   * kept being served from a CDN for a day — the §6 disclosure doctrine's failure mode, arrived at
+   * from the caching side. The alias must therefore be re-checked on every request; the immutable
+   * thing is the content-addressed `{sha256}.{ext}` object it redirects to.
+   */
+  it('never caches the mutable alias immutably', () => {
+    // Header VALUES only — the file's own comment uses the word to explain the split, and that
+    // sentence is the reason the code is right rather than something to grep away.
+    const headerValues = [...media.matchAll(/'Cache-Control':\s*'([^']*)'/g)].map((m) => m[1]!);
+    expect(headerValues.length).toBeGreaterThan(0);
+    for (const value of headerValues) {
+      expect(value, `Cache-Control: ${value}`).not.toContain('immutable');
+    }
+    expect(media).toContain("'Cache-Control': 'no-store'");
+    expect(media).toContain("'Cache-Control': 'public, max-age=0, must-revalidate'");
+    // The redirect target is the content-addressed URL, which IS safe to keep forever.
+    expect(media).toContain('publicContentUrl(asset.published_key)');
+    expect(media).toContain('status: 302');
+    // The streamed fallback offers a validator so a revalidation is cheap.
+    expect(media).toContain('ETag');
   });
 
   /**

@@ -9,18 +9,20 @@ import type { AssetSpec } from './fixtures';
  * moderation-state entry carries a unique, greppable SENTINEL, so `npm run sweep:anon` asserts a
  * real property against a real server rather than a proxy for one.
  *
- * The demo contest is a **DRAFT and stays a draft**. That is not a convenience, it is the §14.1
- * rule: "Publishing is the founder's act (a prize is a public commitment) — the seeded demo contest
- * stays DRAFT." A published fixture contest would put a fake prize on a live site, and it would
- * also destroy the sweep's most valuable assertion: with nothing published, `/contests` must render
- * the designed EMPTY STATE, which is what a real visitor meets today.
+ * TWO contests, and the pair is the point (M9 review, finding 6).
  *
- * So the fixture is shaped to exercise three things at once:
- *   · the empty listing (nothing published ⇒ empty state + the B2B CTA);
- *   · the draft's invisibility (`/{locale}/contests/{slug}` 404s; its poster is unreachable);
- *   · the admin preview path, which is the ONLY way the detail composition renders — and, because
- *     the draft carries one entry in each status, the only place the entries rail, the moderation
- *     queue and the winners strip can be seen at all before a real contest exists.
+ *   · **The DEMO contest is a DRAFT and stays one.** §14.1: "Publishing is the founder's act (a
+ *     prize is a public commitment) — the seeded demo contest stays DRAFT." It is what proves a
+ *     draft is invisible: its detail 404s, its poster is unreachable, and none of its entries —
+ *     approved ones included — may appear anywhere public.
+ *   · **The SWEEP contest is PUBLISHED**, and it exists because without it every entry-visibility
+ *     check in the sweep was vacuous: absence is trivially satisfied by a page that renders no
+ *     entries at all. It carries one APPROVED entry whose sentinel is a POSITIVE control (it MUST
+ *     appear on the public detail page) alongside a pending and a rejected one that must not. That
+ *     turns "pending entries are invisible" from an assumption into a measurement.
+ *
+ * These are `db:local` fixtures, not content: the cloud database has neither, so production still
+ * shows the designed empty state until the founder publishes a real contest.
  *
  * Dates are relative (`startsInDays` / `deadlineInDays`) and resolved by the seed against `now()`,
  * because a fixture with hardcoded 2026 dates would silently become a "closed" contest the moment
@@ -60,8 +62,7 @@ export interface ContestEntryFixture {
 export interface ContestFixture {
   id: string;
   slug: string;
-  /** Draft, and it stays that way — see the module comment. */
-  status: 'draft';
+  status: 'draft' | 'published';
   title: Localized;
   summary: Localized;
   prize: Localized;
@@ -215,6 +216,77 @@ export const CONTEST_FIXTURES: ContestFixture[] = [
       },
     ],
   },
+  {
+    /**
+     * The PUBLISHED sweep fixture. Local-only, and deliberately dull: its job is to make the
+     * entry-visibility assertions measurable, not to look like content.
+     *
+     * Dated so it is OPEN at seed time (started yesterday, closes in three weeks), because an open
+     * contest is the state with the most surface — a phase chip, a D-day, a live entry form and an
+     * entries rail all render only here.
+     */
+    id: '9c000000-0000-4000-8000-000000000002',
+    slug: 'sweep-open-film-contest',
+    status: 'published',
+    title: {
+      en: 'FIXTURE OPEN FILM CONTEST',
+      ko: '픽스처 공개 단편 공모전',
+    },
+    summary: {
+      en: 'A local fixture contest. It exists so the anonymous sweep has a published surface to measure.',
+      ko: '로컬 픽스처 콘테스트입니다. 익명 스윕이 측정할 공개 페이지가 있어야 해서 존재합니다.',
+    },
+    prize: { en: 'Fixture prize — not real', ko: '픽스처 상금 — 실제 아님' },
+    rules: {
+      en: '## Fixture brief\n\nThis contest is a test fixture and awards nothing.',
+      ko: '## 픽스처 브리프\n\n이 콘테스트는 테스트 픽스처이며 아무것도 수여하지 않습니다.',
+    },
+    brandName: 'FIXTURE BRAND',
+    brandUrl: 'https://example.com',
+    poster: {
+      label: 'contest-sweep-open',
+      ext: 'png',
+      mime: 'image/png',
+      w: 1600,
+      h: 900,
+    },
+    startsInDays: -1,
+    deadlineInDays: 21,
+    entries: [
+      {
+        /** POSITIVE control: this one MUST be visible on the public detail page. */
+        id: '9d000000-0000-4000-8000-000000000011',
+        author: ENTRANTS.hana,
+        title: 'Fixture approved film',
+        videoUrl: 'https://vimeo.com/fixture-approved',
+        snsUrl: 'https://www.instagram.com/fixture.approved',
+        note: 'An approved fixture entry.',
+        sentinel: 'SENTINEL_ENTRY_LIVE_APPROVED',
+        status: 'approved',
+      },
+      {
+        id: '9d000000-0000-4000-8000-000000000012',
+        author: ENTRANTS.jun,
+        title: 'Fixture pending film',
+        videoUrl: 'https://vimeo.com/fixture-pending',
+        snsUrl: 'https://vimeo.com/fixture-pending-author',
+        note: 'A pending fixture entry.',
+        sentinel: 'SENTINEL_ENTRY_LIVE_PENDING',
+        status: 'pending',
+      },
+      {
+        id: '9d000000-0000-4000-8000-000000000013',
+        author: ENTRANTS.minseo,
+        title: 'Fixture rejected film',
+        videoUrl: 'https://vimeo.com/fixture-rejected',
+        snsUrl: 'https://www.tiktok.com/@fixture.rejected',
+        note: 'A rejected fixture entry.',
+        sentinel: 'SENTINEL_ENTRY_LIVE_REJECTED',
+        status: 'rejected',
+        rejectReason: 'Fixture rejection reason.',
+      },
+    ],
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -224,12 +296,7 @@ export const CONTEST_FIXTURES: ContestFixture[] = [
 export interface ContestEntrySentinel {
   token: string;
   status: EntryStatus;
-  /**
-   * Always false in v1, and the field exists to say so out loud: the ONLY contest fixture is a
-   * draft, so not one of its entries — approved included — may appear on any public surface. The
-   * moment a published fixture contest exists, the approved tokens flip to true and the sweep's
-   * positive controls come with them.
-   */
+  /** True only for an approved entry of a PUBLISHED contest — the sweep's positive control. */
   publicToAnon: boolean;
 }
 
@@ -237,11 +304,19 @@ export const CONTEST_ENTRY_SENTINELS: ContestEntrySentinel[] = CONTEST_FIXTURES.
   contest.entries.map((entry) => ({
     token: entry.sentinel,
     status: entry.status,
-    publicToAnon: false,
+    // The one positive control on the whole surface: an APPROVED entry of a PUBLISHED contest.
+    // Everything else — every state of the draft, and the unapproved states of the published one —
+    // must be absent from every public byte.
+    publicToAnon: contest.status === 'published' && entry.status === 'approved',
   })),
 );
 
-/** Every contest slug that must 404 on the public route (all of them, in v1). */
+/** Every contest slug that must 404 on the public route — the unpublished ones. */
 export const HIDDEN_CONTEST_SLUGS = CONTEST_FIXTURES.filter(
-  (contest) => contest.status !== ('published' as string),
+  (contest) => contest.status !== 'published',
 ).map((contest) => contest.slug);
+
+/** The published fixture the sweep measures against. */
+export const PUBLISHED_CONTEST_SLUG = CONTEST_FIXTURES.find(
+  (contest) => contest.status === 'published',
+)!.slug;

@@ -137,11 +137,28 @@ export function snsDisplayHandle(raw: unknown): string | null {
   return `@${handle}`;
 }
 
+/**
+ * A http(s) URL, NORMALISED (M9 review, finding 8).
+ *
+ * `parseHttpUrl` accepts `HTTPS://X.com` — schemes and hosts are case-insensitive by RFC and
+ * `new URL()` parses it happily. The DB CHECK is a case-SENSITIVE regex (`~ '^https?://'`), so
+ * storing the raw string would hand the database a value it refuses for a reason the entrant could
+ * never guess. Emitting `url.href` fixes it at the boundary: the scheme and host are lower-cased,
+ * the path and query keep their case, and everything downstream (the platform chip, the SQL CHECK,
+ * the rendered href) sees one canonical form.
+ */
 const HttpUrl = z
   .string()
   .trim()
   .max(URL_MAX)
-  .refine((value) => parseHttpUrl(value) !== null, 'must be a http(s) link');
+  .transform((value, ctx) => {
+    const url = parseHttpUrl(value);
+    if (url === null) {
+      ctx.addIssue({ code: 'custom', message: 'must be a http(s) link' });
+      return z.NEVER;
+    }
+    return url.href;
+  });
 
 // ---------------------------------------------------------------------------
 // entry submission (§14.1/§14.2 — the login-gated form)
@@ -226,10 +243,26 @@ export function toDateTimeLocal(iso: string | null | undefined): string {
   return date.toISOString().slice(0, 16);
 }
 
+/**
+ * A `datetime-local` field, with BLANK and INVALID kept apart (M9 review, finding 9).
+ *
+ * They mean different things and used to collapse into the same `null`: an empty date field is an
+ * undated draft, which §14.1 allows, while `2026-02-31` is a mistake the author has to see. Folding
+ * the second into the first silently discarded a typed date and then refused to publish for a
+ * reason that pointed at the wrong field.
+ */
 const DateTimeField = z
   .string()
   .nullable()
-  .transform((value) => (value === null ? null : parseDateTimeLocal(value)));
+  .transform((value, ctx) => {
+    if (value === null || value.trim() === '') return null;
+    const parsedValue = parseDateTimeLocal(value);
+    if (parsedValue === null) {
+      ctx.addIssue({ code: 'custom', message: 'must be a date and time (UTC)' });
+      return z.NEVER;
+    }
+    return parsedValue;
+  });
 
 export const ContestFormSchema = z
   .object({
@@ -256,11 +289,21 @@ const Uuid = z.string().uuid();
 
 export const ContestIdSchema = z.object({ id: Uuid });
 
-export const EntryApprovalSchema = z.object({ id: Uuid });
+/**
+ * The moderation payloads carry the entry's VERSION (M9 review, finding 2).
+ *
+ * `updated_at` to microsecond precision, as rendered by `lib/contests/repo.ts`. It is required, not
+ * optional: a form that could omit it would be a form that silently opts out of the stale-review
+ * guard, which is the whole point of having one.
+ */
+const EntryVersion = z.string().trim().min(1, 'the review token is missing — reload the queue');
+
+export const EntryApprovalSchema = z.object({ id: Uuid, version: EntryVersion });
 
 export const EntryRejectionSchema = z.object({
   id: Uuid,
   reason: z.string().trim().min(3).max(REJECT_REASON_MAX),
+  version: EntryVersion,
 });
 
 export const PlacementSchema = z.object({

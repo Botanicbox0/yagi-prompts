@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { publishContestMedia, stageContestUpload } from '@/lib/contests/media';
 import {
   approveEntry,
+  countPlacedEntries,
   insertContest,
   loadContestById,
   loadEntryById,
@@ -148,6 +149,22 @@ const update: AdminOperation<{
     const row = await loadContestById(ctx.sql, id);
     if (row === null) return fail('notFound', NOT_FOUND_DETAIL);
 
+    /**
+     * §14.1 / M9 review — a judged contest's deadline cannot be pushed outwards.
+     *
+     * Placements are a post-deadline act, so extending the deadline under existing medals re-opens
+     * a contest that has already been judged: the entry form would start accepting films again
+     * while the winners strip named last week's. Shortening it, or moving the deadline on an
+     * unjudged contest, stays free — the refusal is aimed at exactly the contradictory move, and it
+     * names the way out (clear the placements first).
+     */
+    if (input.deadlineAt !== null && row.deadlineAt !== null) {
+      const extended = new Date(input.deadlineAt) > new Date(row.deadlineAt);
+      if (extended && (await countPlacedEntries(ctx.sql, id)) > 0) {
+        return fail('placementsLocked', row.slug);
+      }
+    }
+
     const staged = await applyUploads(ctx, id, form, parseContestMedia(row.media));
     if (!staged.ok) return fail('upload', staged.detail);
 
@@ -216,11 +233,38 @@ const archive: AdminOperation<z.infer<typeof Archive>> = {
 // entry moderation
 // ---------------------------------------------------------------------------
 
+/**
+ * Tell a STALE review apart from every other reason a moderation write matched no row.
+ *
+ * The version guard and the status predicate live in the same `WHERE`, so a zero-row result is
+ * ambiguous until the row is read back — and the two cases need different sentences: "someone else
+ * already handled this" versus "the entrant replaced the film you just watched".
+ */
+async function moderationFailure(
+  ctx: AdminContext,
+  id: string,
+  version: string,
+  fallback: string,
+): Promise<AdminOutcome> {
+  const row = await loadEntryById(ctx.sql, id);
+  if (row === null) return fail('notFound', 'the entry this form points at no longer exists');
+  if (row.version !== version) return fail('staleReview', row.title);
+  return fail('notFound', fallback);
+}
+
 const approve: AdminOperation<z.infer<typeof EntryApprovalSchema>> = {
-  parse: (form) => parsed(EntryApprovalSchema, { id: f.str(form, 'id') }),
+  parse: (form) =>
+    parsed(EntryApprovalSchema, { id: f.str(form, 'id'), version: f.str(form, 'version') }),
   async run(ctx, input) {
-    const moved = await approveEntry(ctx.sql, input.id);
-    if (!moved) return fail('notFound', 'only a pending or rejected entry can be approved');
+    const moved = await approveEntry(ctx.sql, input.id, input.version);
+    if (!moved) {
+      return moderationFailure(
+        ctx,
+        input.id,
+        input.version,
+        'only a pending or rejected entry can be approved',
+      );
+    }
     // The entries rail and the card's count both live on the cached listing/detail.
     ctx.revalidateContests?.();
     return ok('approved', { to: BACK });
@@ -229,13 +273,24 @@ const approve: AdminOperation<z.infer<typeof EntryApprovalSchema>> = {
 
 const reject: AdminOperation<z.infer<typeof EntryRejectionSchema>> = {
   parse: (form) =>
-    parsed(EntryRejectionSchema, { id: f.str(form, 'id'), reason: f.text(form, 'reason') }),
+    parsed(EntryRejectionSchema, {
+      id: f.str(form, 'id'),
+      reason: f.text(form, 'reason'),
+      version: f.str(form, 'version'),
+    }),
   async run(ctx, input) {
     const row = await loadEntryById(ctx.sql, input.id);
     if (row === null) return fail('notFound', 'the entry this form points at no longer exists');
 
-    const moved = await rejectEntry(ctx.sql, input.id, input.reason);
-    if (!moved) return fail('notFound', 'only a pending or approved entry can be rejected');
+    const moved = await rejectEntry(ctx.sql, input.id, input.reason, input.version);
+    if (!moved) {
+      return moderationFailure(
+        ctx,
+        input.id,
+        input.version,
+        'only a pending or approved entry can be rejected',
+      );
+    }
 
     // Only a visible entry disappearing changes a public page. Rejecting a pending one does not.
     if (row.status === 'approved') ctx.revalidateContests?.();
@@ -262,22 +317,23 @@ const placement: AdminOperation<z.infer<typeof PlacementSchema>> = {
     return parsed(PlacementSchema, { id: f.str(form, 'id'), placement: value });
   },
   async run(ctx, input) {
-    const entry = await loadEntryById(ctx.sql, input.id);
-    if (entry === null) return fail('notFound', 'the entry this form points at no longer exists');
-
-    if (input.placement !== null) {
-      const contest = await loadContestById(ctx.sql, entry.contestId);
-      if (contest === null) return fail('notFound', NOT_FOUND_DETAIL);
-      if (contestPhase(contest, Date.now()) !== 'closed') {
-        return fail('deadlineNotPassed', contest.slug);
-      }
+    // BOTH rules live in the UPDATE itself (`lib/contests/repo.ts`), so there is no window between
+    // reading the deadline and writing the medal. A zero-row result is then read back only to
+    // decide WHICH refusal to name.
+    const changed = await setEntryPlacement(ctx.sql, input.id, input.placement);
+    if (changed) {
+      ctx.revalidateContests?.();
+      return ok('saved', { to: BACK });
     }
 
-    const changed = await setEntryPlacement(ctx.sql, input.id, input.placement);
-    if (!changed) return fail('notFound', 'only an approved entry can be placed');
-
-    ctx.revalidateContests?.();
-    return ok('saved', { to: BACK });
+    const entry = await loadEntryById(ctx.sql, input.id);
+    if (entry === null) return fail('notFound', 'the entry this form points at no longer exists');
+    const contest = await loadContestById(ctx.sql, entry.contestId);
+    if (contest === null) return fail('notFound', NOT_FOUND_DETAIL);
+    if (input.placement !== null && contestPhase(contest, Date.now()) !== 'closed') {
+      return fail('deadlineNotPassed', contest.slug);
+    }
+    return fail('notFound', 'only an approved entry can be placed');
   },
 };
 

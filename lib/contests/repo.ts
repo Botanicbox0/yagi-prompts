@@ -49,6 +49,15 @@ export interface EntryRow {
   placement: Placement | null;
   createdAt: string | null;
   updatedAt: string | null;
+  /**
+   * The optimistic-concurrency token the moderation forms carry (§14.2 / M9 review).
+   *
+   * `updated_at` rendered to MICROSECOND precision as text, deliberately not the `updatedAt` field
+   * above: both drivers hand a timestamptz back as a JS `Date`, which truncates to milliseconds, so
+   * a token built from it would round to a value the database can never match. Formatting on both
+   * sides — here and in the `WHERE` clause — is what makes the comparison exact.
+   */
+  version: string;
 }
 
 interface RawContest {
@@ -81,13 +90,23 @@ interface RawEntry {
   placement: number | null;
   created_at: Date | string | null;
   updated_at: Date | string | null;
+  version: string;
 }
 
 const CONTEST_COLUMNS = `id, slug, status, title, summary, prize, rules, brand_name, brand_url,
                          media, starts_at, deadline_at, created_at, published_at`;
 
+/**
+ * `updated_at` as microsecond-precision UTC text — the optimistic-concurrency token.
+ *
+ * Spelled once and reused by both the projection and every guarded `WHERE`, because the two have to
+ * produce byte-identical strings or the guard would reject every review as stale.
+ */
+const VERSION_EXPR = `to_char(updated_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`;
+
 const ENTRY_COLUMNS = `id, contest_id, author_id, title, video_url, note, sns_url, status,
-                       reject_reason, placement, created_at, updated_at`;
+                       reject_reason, placement, created_at, updated_at,
+                       ${VERSION_EXPR} as version`;
 
 function toIso(value: Date | string | null): string | null {
   if (value === null) return null;
@@ -129,6 +148,7 @@ function toEntry(raw: RawEntry): EntryRow {
       : null) as Placement | null,
     createdAt: toIso(raw.created_at),
     updatedAt: toIso(raw.updated_at),
+    version: raw.version,
   };
 }
 
@@ -449,34 +469,56 @@ export async function upsertEntry(sql: SqlRunner, args: UpsertEntryArgs): Promis
   return rows[0]!.id;
 }
 
-export async function approveEntry(sql: SqlRunner, id: string): Promise<boolean> {
+/**
+ * Approve — guarded on the entry's VERSION (§14.2 / M9 review).
+ *
+ * The blocker this closes: a moderation form is rendered against one revision of an entry, and
+ * §14.1 lets the entrant replace that revision at any time before the deadline. Without the guard,
+ * an Approve pressed after a resubmit blesses content the moderator never watched. With it, the
+ * `WHERE` matches nothing and the caller reports "the entry changed — review it again".
+ */
+export async function approveEntry(
+  sql: SqlRunner,
+  id: string,
+  version: string,
+): Promise<boolean> {
   const { rows } = await sql.query<{ id: string }>(
     `update contest_entries set status = 'approved', reject_reason = null
-      where id = $1 and status in ('pending','rejected')
+      where id = $1 and status in ('pending','rejected') and ${VERSION_EXPR} = $2
       returning id`,
-    [id],
+    [id, version],
   );
   return rows.length > 0;
 }
 
-export async function rejectEntry(sql: SqlRunner, id: string, reason: string): Promise<boolean> {
+export async function rejectEntry(
+  sql: SqlRunner,
+  id: string,
+  reason: string,
+  version: string,
+): Promise<boolean> {
   const { rows } = await sql.query<{ id: string }>(
     // `placement = null` in the same statement: rejecting a placed entry must not leave a medal
     // pointing at a hidden row, and the CHECK would refuse the write anyway.
     `update contest_entries set status = 'rejected', reject_reason = $2, placement = null
-      where id = $1 and status in ('pending','approved')
+      where id = $1 and status in ('pending','approved') and ${VERSION_EXPR} = $3
       returning id`,
-    [id, reason],
+    [id, reason, version],
   );
   return rows.length > 0;
 }
 
 /**
- * Set or clear a placement.
+ * Set or clear a placement, with BOTH rules in the statement (§14.1 / M9 review).
  *
- * The `status = 'approved'` predicate is the same rule the CHECK enforces, applied where it can
- * produce "no row updated" instead of a constraint name; the unique partial index is what refuses a
- * second gold medal, and that one stays purely in the database because it is a race, not a rule.
+ * `UPDATE … FROM contests` rather than a read-then-write: the deadline is compared against the
+ * database's own `now()` in the same statement that writes the medal, so a deadline extended
+ * between the check and the write cannot leave a placement on a still-open contest. The
+ * `status = 'approved'` predicate is the same rule the CHECK enforces, applied where it can produce
+ * "no row updated" instead of a constraint name, and the partial unique index is what refuses a
+ * second gold — that one stays purely in the database because it is a race, not a rule.
+ *
+ * Clearing (`null`) skips the deadline test on purpose: correcting a mistake must not need a clock.
  */
 export async function setEntryPlacement(
   sql: SqlRunner,
@@ -484,12 +526,29 @@ export async function setEntryPlacement(
   placement: Placement | null,
 ): Promise<boolean> {
   const { rows } = await sql.query<{ id: string }>(
-    `update contest_entries set placement = $2
-      where id = $1 and ($2::int is null or status = 'approved')
-      returning id`,
+    `update contest_entries e
+        set placement = $2
+       from contests c
+      where e.id = $1
+        and c.id = e.contest_id
+        and (
+          $2::int is null
+          or (e.status = 'approved' and c.deadline_at is not null and c.deadline_at <= now())
+        )
+      returning e.id`,
     [id, placement],
   );
   return rows.length > 0;
+}
+
+/** How many entries of this contest currently hold a medal — the deadline-extension guard's input. */
+export async function countPlacedEntries(sql: SqlRunner, contestId: string): Promise<number> {
+  if (!UUID.test(contestId)) return 0;
+  const { rows } = await sql.query<{ n: number }>(
+    'select count(*)::int as n from contest_entries where contest_id = $1 and placement is not null',
+    [contestId],
+  );
+  return rows[0]?.n ?? 0;
 }
 
 // ---------------------------------------------------------------------------
