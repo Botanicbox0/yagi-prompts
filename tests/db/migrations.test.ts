@@ -26,6 +26,9 @@ describe('migrations apply on a fresh database (PLAN §6)', () => {
       'playbook_revisions',
       'playbooks',
       'profiles',
+      // §13.1 (M6) — the prompts pivot's one new table. Atomic by design: no revisions, no
+      // manifest, no constraint triggers; the machinery above still guards playbooks only.
+      'prompt_items',
       'publish_assets',
       'steps',
       'stripe_events',
@@ -105,7 +108,16 @@ describe('migrations apply on a fresh database (PLAN §6)', () => {
     );
     await db.close();
 
-    const glue = readFileSync(join(MIGRATIONS_DIR, '0100_glue_rls.sql'), 'utf8');
+    /**
+     * Every `*_glue_*` file, concatenated.
+     *
+     * M6 added `prompt_items` in `0102_glue_prompts_rls.sql` rather than editing `0100` — migrations
+     * are append-only. The PROPERTY under test is unchanged and is what matters: every table in the
+     * database is named by the deny-all posture somewhere, and no file anywhere creates a policy.
+     */
+    const glue = glueMigrationFiles()
+      .map((file) => readFileSync(join(MIGRATIONS_DIR, file), 'utf8'))
+      .join('\n');
     for (const { table_name } of rows) {
       expect(glue, `RLS coverage for ${table_name}`).toContain(`'${table_name}'`);
     }

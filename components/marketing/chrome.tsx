@@ -1,9 +1,22 @@
-import { SiteNav } from '@/components/nav/site-nav';
+import { SiteNav, type NavLink } from '@/components/nav/site-nav';
 import { SiteFooter } from '@/components/site-footer';
 import { LocaleToggle } from '@/components/locale-toggle';
+import { PLAYBOOKS_IN_NAV } from '@/lib/flags';
+import { promptsHref } from '@/lib/prompts/links';
 import type { Dictionary } from '@/lib/i18n/dictionaries';
 import type { Locale } from '@/lib/i18n/config';
 import type { SectionTheme } from '@/lib/motion/geometry';
+
+/**
+ * §13.2 — "Nav becomes: Prompts · Pricing". One list, built once, used by the bar and the footer,
+ * so the two can never disagree about what the site currently offers.
+ */
+export function siteLinks(locale: Locale, dict: Dictionary): NavLink[] {
+  const links: NavLink[] = [{ href: promptsHref(locale), label: dict.nav.prompts }];
+  if (PLAYBOOKS_IN_NAV) links.push({ href: '/library', label: dict.nav.library });
+  links.push({ href: `/${locale}/pricing`, label: dict.nav.pricing });
+  return links;
+}
 
 /**
  * The dictionary → chrome-props seam.
@@ -29,10 +42,10 @@ export function MarketingNav({
     <SiteNav
       locale={locale}
       initialTheme={initialTheme}
+      links={siteLinks(locale, dict)}
+      signInNext={promptsHref(locale)}
       labels={{
         brand: dict.meta.siteName,
-        library: dict.nav.library,
-        pricing: dict.nav.pricing,
         signIn: dict.auth.signIn,
         menu: dict.nav.menu,
         close: dict.nav.close,
@@ -48,6 +61,7 @@ export function MarketingFooter({ locale, dict }: { locale: Locale; dict: Dictio
   return (
     <SiteFooter
       locale={locale}
+      links={siteLinks(locale, dict)}
       labels={{
         hireCta: dict.footer.hireCta,
         hireLede: dict.footer.hireLede,
@@ -56,8 +70,6 @@ export function MarketingFooter({ locale, dict }: { locale: Locale; dict: Dictio
         builtIn: dict.footer.builtIn,
         navHeading: dict.footer.navHeading,
         contactHeading: dict.footer.contactHeading,
-        library: dict.nav.library,
-        pricing: dict.nav.pricing,
         brand: dict.meta.siteName,
         adContact: dict.ad.contact,
       }}

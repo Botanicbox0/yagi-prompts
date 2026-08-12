@@ -65,7 +65,7 @@ async function main(): Promise<void> {
 
   const inventory =
     `${result.playbooks.length} core playbooks, ${edges.length} edge fixtures, ` +
-    '3 entitlement fixtures';
+    `${result.prompts.length} prompt items, 3 entitlement fixtures`;
 
   if (dir === null) {
     const dump = await db.dumpDataDir('gzip');

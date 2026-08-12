@@ -143,6 +143,8 @@ const SUCCESS_KEYS = {
   draftOpened: 'okDraftOpened',
   archived: 'okArchived',
   unarchived: 'okUnarchived',
+  approved: 'okApproved',
+  rejected: 'okRejected',
 } as const;
 
 const ERROR_KEYS = {
@@ -160,6 +162,7 @@ const ERROR_KEYS = {
   localeIncomplete: 'errLocaleIncomplete',
   assetIncomplete: 'errAssetIncomplete',
   storage: 'errStorage',
+  upload: 'errUpload',
   unknown: 'errUnknown',
 } as const;
 
@@ -216,10 +219,10 @@ export function AdminShell({
 }: {
   dict: AdminDict;
   locale: string;
-  active: 'playbooks' | 'policy';
+  active: 'playbooks' | 'policy' | 'prompts';
   children: ReactNode;
 }) {
-  const navClass = (key: 'playbooks' | 'policy') =>
+  const navClass = (key: 'playbooks' | 'policy' | 'prompts') =>
     `font-label text-eyebrow uppercase ${active === key ? 'text-accent' : 'opacity-60'}`;
 
   return (
@@ -231,6 +234,11 @@ export function AdminShell({
               {dict.brand}
             </a>
             <nav className="flex items-center gap-5">
+              {/* §13 put prompts first: it is the v1.5 surface, and the moderation queue is the
+                  screen that has work waiting in it on any given day. */}
+              <a href="/admin/prompts" className={navClass('prompts')}>
+                {dict.navPrompts}
+              </a>
               <a href="/admin" className={navClass('playbooks')}>
                 {dict.navPlaybooks}
               </a>

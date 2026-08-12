@@ -15,6 +15,8 @@ import {
   PREFERENCES_OFF,
   type NotificationPreferences,
 } from '@/lib/notify/preferences';
+import { loadSubmissionsByAuthor, type PromptRow } from '@/lib/prompts/repo';
+import { promptHref, promptsHref, PROMPT_SUBMIT_PATH } from '@/lib/prompts/links';
 import { saveNotificationPreferences } from './actions';
 
 /**
@@ -105,6 +107,7 @@ export default async function AccountPage({
   let viewer = null as Awaited<ReturnType<typeof getViewer>> | null;
   let subscription: SubscriptionRecord | null = null;
   let preferences: NotificationPreferences = PREFERENCES_OFF;
+  let submissions: PromptRow[] = [];
   try {
     viewer = await getViewer();
     if (viewer.userId !== null) {
@@ -112,6 +115,8 @@ export default async function AccountPage({
       if (sql !== null) {
         subscription = await loadSubscription(sql, viewer.userId);
         preferences = (await loadPreferences(sql, viewer.userId)) ?? PREFERENCES_OFF;
+        // §13.1/E — "your submissions" list (slug, status, reject_reason when rejected).
+        submissions = await loadSubmissionsByAuthor(sql, viewer.userId);
       }
     }
   } catch {
@@ -154,8 +159,9 @@ export default async function AccountPage({
             </span>
           </a>
           <div className="flex items-center gap-6">
-            <a href="/library" className="font-label text-eyebrow uppercase">
-              {dict.nav.library}
+            {/* §13.2 — the app chrome follows the nav pivot: prompts is the way back to the site. */}
+            <a href={promptsHref(locale)} className="font-label text-eyebrow uppercase">
+              {dict.nav.prompts}
             </a>
             <LocaleToggle current={locale} rest="/account" prefixed={false} />
           </div>
@@ -264,6 +270,66 @@ export default async function AccountPage({
             </form>
           ) : (
             <p className="mt-4 max-w-detail text-[0.9375rem] opacity-70">{copy.notifProOnly}</p>
+          )}
+        </div>
+
+        {/* --- §13.1/E your submissions --------------------------------- */}
+        <div className="mt-14 max-w-detail border-t border-hairline pt-10">
+          <div className="flex flex-wrap items-baseline justify-between gap-4">
+            <p className="font-label text-eyebrow uppercase opacity-60">
+              {dict.submit.mySubmissions}
+            </p>
+            <a
+              href={PROMPT_SUBMIT_PATH}
+              className="text-accent font-label text-eyebrow uppercase"
+            >
+              <TextSwap>{dict.prompts.submitCta} →</TextSwap>
+            </a>
+          </div>
+
+          {submissions.length === 0 ? (
+            <p className="mt-4 text-[0.9375rem] opacity-70">{dict.submit.mySubmissionsEmpty}</p>
+          ) : (
+            <ul className="mt-6 flex flex-col gap-4">
+              {submissions.map((row) => (
+                <li
+                  key={row.id}
+                  data-submission={row.slug}
+                  data-status={row.status}
+                  className="border border-hairline p-4"
+                >
+                  <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+                    <span className="font-mono text-code">{row.title}</span>
+                    <span className="font-label text-eyebrow uppercase opacity-60">
+                      {row.status === 'published'
+                        ? dict.submit.statusPublished
+                        : row.status === 'rejected'
+                          ? dict.submit.statusRejected
+                          : row.status === 'archived'
+                            ? dict.submit.statusArchived
+                            : dict.submit.statusPending}
+                    </span>
+                  </div>
+                  <p className="mt-1 font-mono text-[0.72rem] opacity-45">{row.slug}</p>
+                  {row.status === 'published' && (
+                    <a
+                      href={promptHref(locale, row.slug)}
+                      className="text-accent mt-3 inline-block font-label text-eyebrow uppercase"
+                    >
+                      <TextSwap>{dict.prompts.openLabel} →</TextSwap>
+                    </a>
+                  )}
+                  {row.status === 'rejected' && row.rejectReason && (
+                    <p className="mt-3 border-t border-hairline pt-3 text-[0.9375rem] opacity-70">
+                      <span className="font-label text-eyebrow uppercase opacity-60">
+                        {dict.submit.rejectReasonLabel}
+                      </span>
+                      <span className="mt-1 block">{row.rejectReason}</span>
+                    </p>
+                  )}
+                </li>
+              ))}
+            </ul>
           )}
         </div>
 

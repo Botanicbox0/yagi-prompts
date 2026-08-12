@@ -25,6 +25,8 @@ export interface AdminHarness {
   storage: StorageDriver;
   root: string;
   revalidated: number;
+  /** §13.2 — the `prompts` tag is a SECOND invalidation event; the tests assert which fires. */
+  promptsRevalidated: number;
   ctx(viewer?: Viewer): AdminContext;
   run(name: string, fields: FormFields, viewer?: Viewer): Promise<AdminOutcome>;
   close(): Promise<void>;
@@ -91,6 +93,7 @@ export async function adminHarness(): Promise<AdminHarness> {
     storage,
     root,
     revalidated: 0,
+    promptsRevalidated: 0,
     ctx(viewer = ADMIN_VIEWER) {
       return {
         sql: runner(db),
@@ -98,6 +101,9 @@ export async function adminHarness(): Promise<AdminHarness> {
         viewer,
         revalidate: () => {
           harness.revalidated += 1;
+        },
+        revalidatePrompts: () => {
+          harness.promptsRevalidated += 1;
         },
       };
     },

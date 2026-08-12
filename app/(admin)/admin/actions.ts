@@ -2,7 +2,7 @@
 
 import { notFound, redirect } from 'next/navigation';
 import { requireAdmin } from '@/lib/auth/viewer';
-import { revalidateCatalog } from '@/lib/cache';
+import { revalidateCatalog, revalidatePrompts } from '@/lib/cache';
 import { getSqlRunner } from '@/lib/db/connect';
 import { getStorage } from '@/lib/storage';
 import { fail, type AdminOutcome } from '@/lib/admin/context';
@@ -43,5 +43,11 @@ async function execute(name: string, form: FormData): Promise<AdminOutcome> {
     // No database configured (§11) — every mutation is a no-op, and saying so is better than a 500.
     return fail('unknown', 'no database is configured on this deployment');
   }
-  return dispatchAdmin(name, form, { sql, storage, viewer, revalidate: revalidateCatalog });
+  return dispatchAdmin(name, form, {
+    sql,
+    storage,
+    viewer,
+    revalidate: revalidateCatalog,
+    revalidatePrompts,
+  });
 }

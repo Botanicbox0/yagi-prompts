@@ -1,0 +1,248 @@
+import { createHash, randomUUID } from 'node:crypto';
+import { AssetRefSchema, type AssetRef } from '@/lib/content/schemas';
+import { extensionFor } from '@/lib/admin/assets';
+import type { StorageDriver } from '@/lib/storage';
+import { mediaEntries, VIDEO_MAX_BYTES, VIDEO_MAX_SECONDS, type MediaKind, type PromptMedia } from './schemas';
+
+/**
+ * PLAN §13.1 — "Media lifecycle: uploads → staging; on publish/approve, copy to public keys
+ * (posters/videos are card surface = public marketing doctrine §3.1). Same storage interface,
+ * small dedicated path; no revisions."
+ *
+ * "Same storage interface" is the whole design: `StorageDriver.copy()` is still `upsert:false`,
+ * keys are still `{sha256}.{ext}`, there is still no delete path, and the local driver and the
+ * Supabase driver remain a swap rather than a rewrite. The only thing that differs is the staging
+ * namespace — a prompt has no revision to scope one to.
+ */
+
+/** `content/prompt/{promptId}/{uuid}.{ext}` — private, never served (cf. `content/rev/...`). */
+export function promptStagingKey(promptId: string, ext: string): string {
+  return `content/prompt/${promptId}/${randomUUID()}.${ext}`;
+}
+
+export function sha256Hex(bytes: Uint8Array): string {
+  return createHash('sha256').update(bytes).digest('hex');
+}
+
+/** `{sha256}.{ext}` — content-addressed, mirroring the `asset_ext()` SQL helper exactly. */
+export function publishedKeyFor(sha256: string, stagingKey: string): string {
+  const match = /\.[A-Za-z0-9]+$/.exec(stagingKey);
+  return `${sha256}${match ? match[0].toLowerCase() : ''}`;
+}
+
+// ---------------------------------------------------------------------------
+// upload validation (§13.1 caps)
+// ---------------------------------------------------------------------------
+
+export const ALLOWED_POSTER_MIMES = ['image/png', 'image/jpeg', 'image/webp', 'image/avif'] as const;
+export const ALLOWED_VIDEO_MIMES = ['video/mp4', 'video/webm', 'video/quicktime'] as const;
+
+export type UploadRejection =
+  | 'too_large'
+  | 'too_long'
+  | 'bad_type';
+
+export interface UploadCheckInput {
+  kind: MediaKind;
+  mime: string;
+  sizeBytes: number;
+  /** `null` when the container's duration could not be read — see `probeMp4DurationSeconds`. */
+  durationSeconds: number | null;
+}
+
+/**
+ * The server-side caps. Size and type are absolute; duration is enforced **where it is knowable**.
+ *
+ * Interpretation logged for the Director: §13.1 says "video ≤ 60s/32MB". 32MB is measured over the
+ * received bytes and is unconditional. Duration needs a container parser — mp4/mov carry it in
+ * `mvhd` and are read below with no new dependency; WebM stores it in an EBML float that would take
+ * a real parser, so an unreadable duration is ACCEPTED and left to moderation (every community
+ * submission is reviewed by a human before it is ever visible). The alternative — refusing every
+ * WebM — would be a stricter rule than the plan asks for, dressed up as the same one.
+ */
+export function checkUpload(input: UploadCheckInput): UploadRejection | null {
+  const mime = input.mime.split(';')[0]!.trim().toLowerCase();
+  const allowed: readonly string[] =
+    input.kind === 'video' ? ALLOWED_VIDEO_MIMES : ALLOWED_POSTER_MIMES;
+  if (!allowed.includes(mime)) return 'bad_type';
+  if (input.sizeBytes > VIDEO_MAX_BYTES) return 'too_large';
+  if (
+    input.kind === 'video' &&
+    input.durationSeconds !== null &&
+    input.durationSeconds > VIDEO_MAX_SECONDS
+  ) {
+    return 'too_long';
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// mp4 / mov duration, without a dependency
+// ---------------------------------------------------------------------------
+
+const TEXT = new TextDecoder('latin1');
+
+function boxType(bytes: Uint8Array, at: number): string {
+  return TEXT.decode(bytes.subarray(at, at + 4));
+}
+
+/**
+ * Walk ISO-BMFF boxes at `[start, end)` looking for `type`, returning its PAYLOAD range.
+ *
+ * Defensive by construction: a malformed size (0, negative after the header, or past the end)
+ * terminates the walk instead of looping. This reads a file an anonymous user uploaded.
+ */
+function findBox(
+  bytes: Uint8Array,
+  start: number,
+  end: number,
+  type: string,
+): { start: number; end: number } | null {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  let cursor = start;
+  while (cursor + 8 <= end) {
+    let size = view.getUint32(cursor);
+    let header = 8;
+    if (size === 1) {
+      if (cursor + 16 > end) return null;
+      // 64-bit largesize: the high word is beyond anything we would parse, so cap at 2^32.
+      const high = view.getUint32(cursor + 8);
+      const low = view.getUint32(cursor + 12);
+      if (high !== 0) return null;
+      size = low;
+      header = 16;
+    } else if (size === 0) {
+      size = end - cursor;
+    }
+    if (size < header || cursor + size > end) return null;
+    if (boxType(bytes, cursor + 4) === type) {
+      return { start: cursor + header, end: cursor + size };
+    }
+    cursor += size;
+  }
+  return null;
+}
+
+/** Seconds from `moov/mvhd`, or `null` when the container is not ISO-BMFF or is truncated. */
+export function probeMp4DurationSeconds(bytes: Uint8Array): number | null {
+  if (bytes.byteLength < 16) return null;
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+
+  const moov = findBox(bytes, 0, bytes.byteLength, 'moov');
+  if (!moov) return null;
+  const mvhd = findBox(bytes, moov.start, moov.end, 'mvhd');
+  if (!mvhd) return null;
+  if (mvhd.start + 4 > mvhd.end) return null;
+
+  const version = view.getUint8(mvhd.start);
+  // version+flags(4) then: v0 → created(4) modified(4) timescale(4) duration(4)
+  //                        v1 → created(8) modified(8) timescale(4) duration(8)
+  const at = mvhd.start + 4;
+  if (version === 1) {
+    if (at + 28 > mvhd.end) return null;
+    const timescale = view.getUint32(at + 16);
+    const high = view.getUint32(at + 20);
+    const low = view.getUint32(at + 24);
+    if (timescale === 0 || high !== 0) return null;
+    return low / timescale;
+  }
+  if (at + 16 > mvhd.end) return null;
+  const timescale = view.getUint32(at + 8);
+  const duration = view.getUint32(at + 12);
+  if (timescale === 0) return null;
+  return duration / timescale;
+}
+
+export function probeVideoDurationSeconds(bytes: Uint8Array, mime: string): number | null {
+  const type = mime.split(';')[0]!.trim().toLowerCase();
+  if (type === 'video/mp4' || type === 'video/quicktime') return probeMp4DurationSeconds(bytes);
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// staging
+// ---------------------------------------------------------------------------
+
+export interface StagedPromptAsset {
+  ref: AssetRef;
+  sizeBytes: number;
+  durationSeconds: number | null;
+}
+
+export type StageResult =
+  | { ok: true; value: StagedPromptAsset }
+  | { ok: false; reason: UploadRejection };
+
+/** Validate, hash and stage one uploaded file. The hash is computed HERE, over the real bytes. */
+export async function stagePromptUpload(
+  storage: StorageDriver,
+  promptId: string,
+  kind: MediaKind,
+  upload: File,
+): Promise<StageResult> {
+  const bytes = new Uint8Array(await upload.arrayBuffer());
+  const mime = upload.type && upload.type.length > 0 ? upload.type : 'application/octet-stream';
+  const durationSeconds = kind === 'video' ? probeVideoDurationSeconds(bytes, mime) : null;
+
+  const rejection = checkUpload({
+    kind,
+    mime,
+    sizeBytes: bytes.byteLength,
+    durationSeconds,
+  });
+  if (rejection !== null) return { ok: false, reason: rejection };
+
+  const key = promptStagingKey(promptId, extensionFor(upload.name, mime));
+  await storage.putStaging(key, bytes, mime);
+
+  const ref = AssetRefSchema.parse({
+    staging_key: key,
+    sha256: sha256Hex(bytes),
+    mime,
+    ...(durationSeconds === null ? {} : { duration_s: Math.round(durationSeconds * 100) / 100 }),
+  });
+  return { ok: true, value: { ref, sizeBytes: bytes.byteLength, durationSeconds } };
+}
+
+// ---------------------------------------------------------------------------
+// publication (§13.1 — copy to public keys on publish/approve)
+// ---------------------------------------------------------------------------
+
+export interface PromptCopyReport {
+  copied: number;
+  alreadyPresent: number;
+}
+
+/**
+ * Copy every staged asset into `public-content` and stamp the published key back onto the ref.
+ *
+ * Idempotent in both directions: `copy()` is `upsert:false`, so an identical content-addressed key
+ * already present is SUCCESS, and re-running over an already-stamped ref recomputes the same key
+ * from the same hash. That is what makes "approve" safe to press twice.
+ */
+export async function publishPromptMedia(
+  storage: StorageDriver,
+  media: PromptMedia,
+): Promise<{ media: PromptMedia; report: PromptCopyReport }> {
+  const report: PromptCopyReport = { copied: 0, alreadyPresent: 0 };
+  const next: PromptMedia = {};
+
+  for (const [kind, ref] of mediaEntries(media)) {
+    const toKey = publishedKeyFor(ref.sha256, ref.staging_key);
+    const outcome = await storage.copy({
+      fromKey: ref.staging_key,
+      toBucket: 'public-content',
+      toKey,
+    });
+    if (outcome === 'copied') report.copied += 1;
+    else report.alreadyPresent += 1;
+
+    next[kind] = AssetRefSchema.parse({
+      ...ref,
+      published_key: toKey,
+      bucket: 'public-content',
+    });
+  }
+
+  return { media: next, report };
+}

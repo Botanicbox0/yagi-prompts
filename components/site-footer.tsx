@@ -19,13 +19,25 @@ export interface FooterLabels {
   builtIn: string;
   navHeading: string;
   contactHeading: string;
-  library: string;
-  pricing: string;
   brand: string;
   adContact: string;
 }
 
-export function SiteFooter({ locale, labels }: { locale: string; labels: FooterLabels }) {
+export interface FooterLink {
+  href: string;
+  label: string;
+}
+
+export function SiteFooter({
+  locale: _locale,
+  labels,
+  links,
+}: {
+  locale: string;
+  labels: FooterLabels;
+  /** §13.2 — the same resolved list the nav uses, so a denavigated route stays denavigated here. */
+  links: FooterLink[];
+}) {
   const year = 2026;
 
   return (
@@ -59,12 +71,11 @@ export function SiteFooter({ locale, labels }: { locale: string; labels: FooterL
 
           <nav aria-label={labels.navHeading} className="flex flex-col gap-3">
             <p className="font-label text-eyebrow uppercase opacity-60">{labels.navHeading}</p>
-            <a href="/library" className="font-label text-eyebrow uppercase">
-              <TextSwap>{labels.library}</TextSwap>
-            </a>
-            <a href={`/${locale}/pricing`} className="font-label text-eyebrow uppercase">
-              <TextSwap>{labels.pricing}</TextSwap>
-            </a>
+            {links.map((link) => (
+              <a key={link.href} href={link.href} className="font-label text-eyebrow uppercase">
+                <TextSwap>{link.label}</TextSwap>
+              </a>
+            ))}
           </nav>
 
           <div className="flex flex-col gap-3">

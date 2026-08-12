@@ -1,7 +1,8 @@
 import type { Metadata } from 'next';
 import { DEFAULT_LOCALE, isLocale, type Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/dictionaries';
-import { getPublicCatalog } from '@/lib/content/public-catalog';
+import { getPromptCatalog } from '@/lib/prompts/public-catalog';
+import { promptsHref } from '@/lib/prompts/links';
 import { MarketingFooter, MarketingNav } from '@/components/marketing/chrome';
 import { countsLine, planCopy, planFeatures } from '@/components/landing/sections';
 import { PlanCards } from '@/components/pricing/plan-cards';
@@ -50,7 +51,9 @@ export default async function PricingPage({ params }: { params: Promise<{ locale
   const locale: Locale = isLocale(raw) ? raw : DEFAULT_LOCALE;
   const dict = getDictionary(locale);
 
-  const catalog = await getPublicCatalog();
+  // §13.2 — the pricing page counts PROMPTS now, from the tagged prompt projection.
+  const catalog = await getPromptCatalog();
+  const lockedYagi = catalog.yagi.filter((card) => card.hasLock).length;
   const features = planFeatures(dict);
 
   const rows = [
@@ -86,13 +89,13 @@ export default async function PricingPage({ params }: { params: Promise<{ locale
                 two and drops #0000EE on white to 4.38:1, just under AA. */}
             <p className="mt-3 font-mono text-code">
               <span className="opacity-60">{countsLine(dict, locale, catalog.totals)}</span>
-              {catalog.totals.proBlocks > 0 && (
+              {lockedYagi > 0 && (
                 <>
                   <span aria-hidden className="px-2 opacity-40">
                     ·
                   </span>
                   <span className="text-accent">
-                    {formatCount(catalog.totals.proBlocks, locale)} {dict.pricing.proBlocksLocked}
+                    {formatCount(lockedYagi, locale)} {dict.pricing.proBlocksLocked}
                   </span>
                 </>
               )}
@@ -126,10 +129,10 @@ export default async function PricingPage({ params }: { params: Promise<{ locale
               />
             </div>
             <a
-              href={`/auth/signin?next=%2Flibrary&locale=${locale}`}
+              href={promptsHref(locale)}
               className="mt-12 inline-block border border-current px-6 py-3 font-label text-label uppercase"
             >
-              <TextSwap>{dict.auth.startWithGoogle} →</TextSwap>
+              <TextSwap>{dict.nav.prompts} →</TextSwap>
             </a>
           </div>
         </section>

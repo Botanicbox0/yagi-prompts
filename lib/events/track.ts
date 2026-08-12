@@ -1,11 +1,12 @@
 import type { SqlRunner } from '@/lib/db/sql-runner';
 
 /**
- * PLAN §3.4 / §6 — the funnel, five types and no more.
+ * PLAN §3.4 / §6 — the funnel, six types and no more.
  *
  * The CHECK constraint on `events.type` is the same list; keeping the literal union here means a
  * typo is a type error rather than a runtime constraint violation on a fire-and-forget insert that
- * nobody would ever see fail.
+ * nobody would ever see fail. §6 shipped five; §13.2's copy endpoint added the sixth
+ * (`copy_prompt`) together with migration 0006 — the two move as one change, deliberately.
  *
  * The contract that matters: **analytics must never break a render**. `recordEvent` returns a
  * boolean and swallows everything — a missing table, a closed pool, a malformed meta payload. A
@@ -19,6 +20,12 @@ export const EVENT_TYPES = [
   'start_checkout',
   'unlock_success',
   'hire_click',
+  /**
+   * §13.2 — a reader took a prompt. The prompts surface's conversion signal: it is the moment the
+   * product delivered its value, and (unlike `hit_lock`) only the SERVER can observe it, because
+   * the text only ever leaves through the entitlement-checked copy endpoint.
+   */
+  'copy_prompt',
 ] as const;
 
 export type EventType = (typeof EVENT_TYPES)[number];

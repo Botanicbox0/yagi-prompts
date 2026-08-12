@@ -7,6 +7,7 @@ import {
   LOCALE_HEADER,
   isAppPath,
   isPlaybookDetailPath,
+  isPromptDetailPath,
   localizedPath,
   resolveLocale,
   splitLocale,
@@ -73,7 +74,7 @@ export async function middleware(request: NextRequest) {
 
   // §3.4: the one public route that is shaped per viewer never enters a cache. Indexable, but
   // never stored — the two are independent properties and §3.3/§3.9 asks for both.
-  if (isPlaybookDetailPath(rest)) {
+  if (isPlaybookDetailPath(rest) || isPromptDetailPath(rest)) {
     response.headers.set('Cache-Control', NO_STORE);
   }
 

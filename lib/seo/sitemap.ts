@@ -1,5 +1,7 @@
 import type { MetadataRoute } from 'next';
 import type { CatalogCard } from '@/lib/content/catalog';
+import type { PromptCard } from '@/lib/prompts/catalog';
+import { promptRest } from '@/lib/prompts/links';
 import { LOCALES, type Locale } from '@/lib/i18n/config';
 import { localeAlternates } from './playbook-metadata';
 
@@ -27,6 +29,17 @@ export interface SitemapInput {
   /** Absolute origin, no trailing slash (`lib/seo/site-url.ts`). */
   origin: string;
   cards: CatalogCard[];
+  /**
+   * §13.2 — "published prompt details join the sitemap with locale alternates; gallery indexed;
+   * submit/admin noindex."
+   *
+   * Note the difference from playbooks: there is NO showcase filter here, and there should not be.
+   * A Pro-gated prompt is still a fully public page — poster, clip, title, credit and model chip
+   * are all public marketing surface (§13.1) and only the text is gated. The catalog projection
+   * itself is the filter: it only ever contains `published` rows, so pending, rejected and
+   * archived items cannot reach the sitemap by construction.
+   */
+  prompts?: PromptCard[];
   /** Falls back to the card's own publish time; only used when that is missing. */
   now?: Date;
 }
@@ -43,11 +56,14 @@ function absoluteAlternates(origin: string, rest: string): Record<string, string
 }
 
 export function buildSitemap(input: SitemapInput): MetadataRoute.Sitemap {
-  const { origin, cards, now = new Date() } = input;
+  const { origin, cards, prompts = [], now = new Date() } = input;
   const entries: MetadataRoute.Sitemap = [];
 
   const marketing: Array<{ rest: string; priority: number; changeFrequency: 'daily' | 'weekly' }> = [
     { rest: '/', priority: 1, changeFrequency: 'daily' },
+    // §13.2 — the gallery is the v1.5 front door and is indexed; it changes as often as the studio
+    // publishes, which is the same cadence as the landing it now leads.
+    { rest: '/prompts', priority: 0.9, changeFrequency: 'daily' },
     { rest: '/pricing', priority: 0.8, changeFrequency: 'weekly' },
   ];
 
@@ -59,6 +75,20 @@ export function buildSitemap(input: SitemapInput): MetadataRoute.Sitemap {
         changeFrequency: page.changeFrequency,
         priority: page.priority,
         alternates: { languages: absoluteAlternates(origin, page.rest) },
+      });
+    }
+  }
+
+  // §13.2 — every published prompt, both rails, with reciprocal alternates.
+  for (const prompt of prompts) {
+    const rest = promptRest(prompt.slug);
+    for (const locale of LOCALES as readonly Locale[]) {
+      entries.push({
+        url: absolute(origin, `/${locale}${rest}`),
+        lastModified: prompt.publishedAt ? new Date(prompt.publishedAt) : now,
+        changeFrequency: 'monthly',
+        priority: 0.7,
+        alternates: { languages: absoluteAlternates(origin, rest) },
       });
     }
   }
@@ -88,7 +118,16 @@ export function buildSitemap(input: SitemapInput): MetadataRoute.Sitemap {
  * gate on every one of these paths. Listing them stops a crawler wasting requests on redirects to
  * a sign-in page, and stops `/api/media/...` capability URLs being followed at all.
  */
-export const DISALLOWED_PATHS = ['/admin', '/library', '/account', '/billing', '/api'] as const;
+export const DISALLOWED_PATHS = [
+  '/admin',
+  '/library',
+  '/account',
+  '/billing',
+  '/api',
+  // §13.2 — the submission form is login-gated app surface. `/prompts` itself is locale-prefixed
+  // and indexed, so this entry cannot catch the gallery.
+  '/prompts/submit',
+] as const;
 
 export function buildRobots(origin: string): MetadataRoute.Robots {
   return {

@@ -20,3 +20,16 @@ export const AD_SLOTS_DB_BACKED = false;
  * link to the public detail page, everything else funnels through the login wall.
  */
 export const PLAYBOOK_DETAIL_ROUTE_READY = true;
+
+/**
+ * PLAN §13.2 — "Nav becomes: **Prompts · Pricing** (+ locale toggle, sign in). Library/playbooks
+ * denavigated behind `PLAYBOOKS_IN_NAV=false` (routes stay functional; fixtures keep the machinery
+ * tested)."
+ *
+ * DENAVIGATED, not deleted, and the distinction is the whole point of the flag: `/library`,
+ * `/[locale]/p/[slug]`, the media gateway, the publish RPCs and every one of their tests keep
+ * working exactly as merged. Flipping this back to `true` restores the link in the nav and the
+ * footer and nothing else has to change — which is what "leave the nav until re-activated" asks
+ * for, as one greppable constant rather than a deletion somebody has to undo by hand.
+ */
+export const PLAYBOOKS_IN_NAV = false;
