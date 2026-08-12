@@ -1,26 +1,129 @@
-import type { StorageDriver } from './index';
+import type { SupabaseClient } from '@supabase/supabase-js';
+import type { PublishedBucket } from '@/lib/content/schemas';
+import { createServiceClient } from '@/lib/supabase/service-client';
+import {
+  STAGING_BUCKET,
+  StorageObjectNotFound,
+  type Bucket,
+  type CopyOutcome,
+  type CopyRequest,
+  type StorageDriver,
+} from './index';
 
 /**
- * TODO (later milestone, blocked on the Supabase cloud project — PLAN §11 open item):
- * implement `StorageDriver` against Supabase Storage.
+ * M7 — the production half of `lib/storage/`. Same interface as the local driver, same §6 posture:
  *
- * Contract notes for whoever writes it, so the semantics do not drift from lib/storage/index.ts:
- *   · putStaging  → `storage.from('content').upload(key, bytes, { contentType, upsert: false })`
- *   · copy        → `storage.from('content').copy(fromKey, toKey, { destinationBucket: toBucket })`
- *                   Treat "Duplicate"/409 as `'exists'` — that is the upsert:false success case.
- *   · signedUrl   → `storage.from(bucket).createSignedUrl(key, expiresInSeconds)` with ≤60s.
- *                   Pass `{ download: filename }` for workflow files so the attachment disposition
- *                   survives the redirect (the local path sets the header itself).
- *   · publicUrl   → `storage.from('public-content').getPublicUrl(key).data.publicUrl`
- *   · servesSignedUrls → TRUE. The gateway then redirects to Supabase instead of streaming, and
- *                   `lib/media/token.ts` stops being the last hop — but the ≤60s window, the
- *                   full-chain authorization and the `private, no-store` headers are unchanged.
- *   · NO delete method. Do not add one; the write-once posture is a security property (§6).
- * All calls use the service-role client (lib/supabase/data-client.ts) — storage RLS is deny-all.
+ *   · `putStaging` writes into the private `content` bucket with `upsert:false`.
+ *   · `copy` is the publish step. Content-addressed destination keys make an existing object
+ *     identical BY CONSTRUCTION, so "already there" is success, never an overwrite — proven twice
+ *     over: an exists-check first, and the duplicate error treated as `'exists'` if two publishes
+ *     race between the check and the copy.
+ *   · `signedUrl` is ≤60s, and `servesSignedUrls` is TRUE, so the media gateway redirects instead
+ *     of streaming: authorized bytes never transit the app server. The authorization chain, the
+ *     expiry window and the `private, no-store` headers are identical to the local path — only the
+ *     last hop differs.
+ *   · `publicUrl` is the one URL that needs no capability, and only for `public-content`
+ *     (§6 disclosure doctrine: anything ever served from there is permanently disclosed).
+ *   · There is still NO delete method, and there must never be one: write-once is a security
+ *     property, not a convenience. (The smoke script deletes its own STAGING probe with its own
+ *     client — staging is not published content, and it does not go through this interface.)
+ *
+ * Storage RLS is deny-all (migration 0101), so every call here is service-role.
  */
-export function createSupabaseStorageDriver(): StorageDriver {
-  throw new Error(
-    'STORAGE_DRIVER=supabase is not implemented yet (M0 ships the local driver only). ' +
-      'See lib/storage/supabase-driver.ts and docs/SETUP.md.',
-  );
+
+/** Supabase reports a would-be overwrite as 409 / "Duplicate" / "resource already exists". */
+function isDuplicate(error: { message?: string; statusCode?: string; status?: number }): boolean {
+  const status = String(error.statusCode ?? error.status ?? '');
+  if (status === '409') return true;
+  const message = (error.message ?? '').toLowerCase();
+  return message.includes('duplicate') || message.includes('already exists');
+}
+
+function isMissing(error: { message?: string; statusCode?: string; status?: number }): boolean {
+  const status = String(error.statusCode ?? error.status ?? '');
+  if (status === '404') return true;
+  const message = (error.message ?? '').toLowerCase();
+  return message.includes('not found') || message.includes('does not exist');
+}
+
+export function createSupabaseStorageDriver(client?: SupabaseClient): StorageDriver {
+  // Lazy: constructing the client reads the service-role key, and a driver may be built (e.g. by a
+  // health check) on a process that never touches an object.
+  let memo: SupabaseClient | null = client ?? null;
+  const db = (): SupabaseClient => (memo ??= createServiceClient());
+
+  return {
+    name: 'supabase',
+    servesSignedUrls: true,
+
+    async putStaging(key, bytes, contentType) {
+      const { error } = await db()
+        .storage.from(STAGING_BUCKET)
+        // `Blob` rather than the raw Uint8Array: supabase-js needs a length it can send, and this
+        // is the one form that behaves identically under Node 22 and the Next server runtime.
+        .upload(key, new Blob([new Uint8Array(bytes)], { type: contentType }), {
+          contentType,
+          upsert: false,
+        });
+      // Staging keys carry a uuid, so a duplicate here means the same upload was retried — the
+      // bytes are already where the caller wanted them.
+      if (error && !isDuplicate(error)) {
+        throw new Error(`storage upload failed: ${STAGING_BUCKET}/${key} — ${error.message}`);
+      }
+    },
+
+    async exists(bucket: Bucket, key: string) {
+      const { data, error } = await db().storage.from(bucket).exists(key);
+      if (error && !isMissing(error)) {
+        throw new Error(`storage exists failed: ${bucket}/${key} — ${error.message}`);
+      }
+      return data === true;
+    },
+
+    async read(bucket: Bucket, key: string) {
+      const { data, error } = await db().storage.from(bucket).download(key);
+      if (error || !data) {
+        if (!error || isMissing(error)) throw new StorageObjectNotFound(bucket, key);
+        throw new Error(`storage download failed: ${bucket}/${key} — ${error.message}`);
+      }
+      return new Uint8Array(await data.arrayBuffer());
+    },
+
+    async copy({ fromKey, toBucket, toKey }: CopyRequest): Promise<CopyOutcome> {
+      const storage = db().storage;
+
+      // upsert:false, part 1 — an identical content-addressed key is already the right bytes.
+      const { data: present } = await storage.from(toBucket).exists(toKey);
+      if (present === true) return 'exists';
+
+      const { error } = await storage
+        .from(STAGING_BUCKET)
+        .copy(fromKey, toKey, { destinationBucket: toBucket });
+      if (!error) return 'copied';
+
+      // part 2 — someone else published the same object between the check and the copy.
+      if (isDuplicate(error)) return 'exists';
+      if (isMissing(error)) throw new StorageObjectNotFound(STAGING_BUCKET, fromKey);
+      throw new Error(
+        `storage copy failed: ${STAGING_BUCKET}/${fromKey} → ${toBucket}/${toKey} — ${error.message}`,
+      );
+    },
+
+    async signedUrl(bucket: PublishedBucket, key: string, expiresInSeconds: number) {
+      // The ≤60s ceiling is the gateway's contract (§3.3); clamp here too so no caller can widen it.
+      const expiresIn = Math.max(1, Math.min(Math.floor(expiresInSeconds), 60));
+      const { data, error } = await db().storage.from(bucket).createSignedUrl(key, expiresIn);
+      if (error || !data) {
+        if (!error || isMissing(error)) throw new StorageObjectNotFound(bucket, key);
+        throw new Error(`storage sign failed: ${bucket}/${key} — ${error.message}`);
+      }
+      return data.signedUrl;
+    },
+
+    publicUrl(key: string) {
+      // `https://{ref}.supabase.co/storage/v1/object/public/public-content/{key}` — the same string
+      // `lib/content/asset-url.ts` builds for the shapers, via the SDK so the two cannot drift.
+      return db().storage.from('public-content').getPublicUrl(key).data.publicUrl;
+    },
+  };
 }

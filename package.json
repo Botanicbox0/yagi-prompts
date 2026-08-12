@@ -13,6 +13,8 @@
     "dev:admin": "tsx scripts/dev-as.ts admin",
     "build": "next build",
     "start": "next start",
+    "build:local": "tsx scripts/run-local.ts build",
+    "start:local": "tsx scripts/run-local.ts start",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -21,6 +23,7 @@
     "seed": "tsx scripts/seed-cli.ts",
     "db:local": "tsx scripts/db-local.ts",
     "sweep:anon": "tsx scripts/sweep-anon.ts",
+    "cloud:smoke": "tsx scripts/cloud-smoke.ts",
     "stripe:retry": "tsx scripts/stripe-retry.ts",
     "notify:worker": "tsx scripts/notify-worker.ts"
   },

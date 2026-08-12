@@ -46,7 +46,7 @@ export function SiteFooter({
         <div className="max-w-detail">
           <HireClickBeacon>
             <a
-              href="mailto:hello@yagiworkshop.xyz?subject=PLAYBOOK%20%E2%80%94%20studio%20enquiry"
+              href="mailto:hello@yagiworkshop.xyz?subject=YAGI%20PROMPTS%20%E2%80%94%20studio%20enquiry"
               className="font-display text-title font-black uppercase"
             >
               {/* Non-breaking space: at display size the arrow must not wrap onto a line of its own. */}
@@ -82,7 +82,7 @@ export function SiteFooter({
             <p className="font-label text-eyebrow uppercase opacity-60">{labels.contactHeading}</p>
             <HireClickBeacon>
               <a
-                href="mailto:hello@yagiworkshop.xyz?subject=PLAYBOOK%20%E2%80%94%20studio%20enquiry"
+                href="mailto:hello@yagiworkshop.xyz?subject=YAGI%20PROMPTS%20%E2%80%94%20studio%20enquiry"
                 className="font-mono text-code"
               >
                 hello@yagiworkshop.xyz

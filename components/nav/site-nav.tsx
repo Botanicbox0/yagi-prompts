@@ -126,7 +126,7 @@ export function SiteNav({
           aria-label={labels.primary}
           className="mx-auto flex h-full max-w-shell items-center justify-between px-gutter"
         >
-          {/* No aria-label: the visible "PLAYBOOK" wordmark IS the accessible name. An
+          {/* No aria-label: the visible "YAGI PROMPTS" wordmark IS the accessible name. An
               aria-label of "Home" would override it and mismatch the visible text (axe
               `label-content-name-mismatch`), which breaks voice control. */}
           <a href={`/${locale}`} className="flex items-center gap-2.5">

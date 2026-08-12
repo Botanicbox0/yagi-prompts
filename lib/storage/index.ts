@@ -1,4 +1,5 @@
 import type { PublishedBucket } from '@/lib/content/schemas';
+import { selectStorageDriver } from '@/lib/runtime-mode';
 
 /**
  * PLAN §6 — asset lifecycle behind one interface.
@@ -60,14 +61,15 @@ export class StorageObjectNotFound extends Error {
 }
 
 /**
- * Driver selection.
+ * Driver selection — M7 routes it through the one mode switch (`lib/runtime-mode.ts`).
  *
- * `local` (default in dev/test) writes under `.storage/` — see local-driver.ts.
- * `supabase` is a later-milestone task; see supabase-driver.ts.
+ * `local` writes under `.storage/`; `supabase` talks to the project's buckets with the service-role
+ * key. `PLAYBOOK_MODE` decides, `STORAGE_DRIVER` overrides it if you really mean to mix (cloud DB +
+ * local bytes, or the reverse). Both drivers are imported lazily so a local process never loads the
+ * Supabase SDK and a cloud process never loads `node:fs` paths it will not use.
  */
 export async function getStorage(): Promise<StorageDriver> {
-  const driver = process.env.STORAGE_DRIVER ?? 'local';
-  if (driver === 'supabase') {
+  if (selectStorageDriver(process.env) === 'supabase') {
     const { createSupabaseStorageDriver } = await import('./supabase-driver');
     return createSupabaseStorageDriver();
   }

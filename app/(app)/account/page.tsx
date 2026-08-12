@@ -81,10 +81,10 @@ function Toggle({
 }
 
 const DELETION_MAILTO = (email: string | null) => {
-  const subject = encodeURIComponent('PLAYBOOK — account deletion request');
+  const subject = encodeURIComponent('YAGI PROMPTS — account deletion request');
   const body = encodeURIComponent(
     [
-      'Please delete my PLAYBOOK account.',
+      'Please delete my YAGI PROMPTS account.',
       '',
       `Account: ${email ?? '(the address I am signed in with)'}`,
       '',

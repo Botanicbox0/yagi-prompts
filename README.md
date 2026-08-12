@@ -1,6 +1,11 @@
-# PLAYBOOK (working title)
+# YAGI PROMPTS
 
-The open production floor of an AI studio - bilingual (ko/en) step-by-step AI-media workflow playbooks.
+Original Seedance 2.5 prompts, written and tested in-house - bilingual (ko/en), plus a credited
+community rail. The playbook machinery (bilingual step-by-step AI-media workflows) stays built and
+tested behind `PLAYBOOKS_IN_NAV`.
+
+> The product name is **YAGI PROMPTS**; the repo, the npm package and every internal identifier
+> keep the `playbook` codename on purpose - renaming them would churn the whole tree for nothing.
 
 Execution contract: [PLAYBOOK-PLAN.md](./PLAYBOOK-PLAN.md) (v1.4, cross-validated READY).
 Milestones: M0-M5 per plan section 8. Director: Claude (Fable). Executor: Opus.

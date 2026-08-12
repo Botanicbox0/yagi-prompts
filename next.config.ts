@@ -8,6 +8,14 @@ const nextConfig: NextConfig = {
    * runtime rather than bundled: `pg` loads optional native bindings, PGlite ships a .wasm sidecar.
    */
   serverExternalPackages: ['pg', '@electric-sql/pglite'],
+  /**
+   * No `images.remotePatterns`, deliberately (M7 checked). Nothing in the tree uses `next/image`:
+   * every media surface — `components/prompts/card-media.tsx`, `detail-media.tsx`,
+   * `components/landing/playbook-card.tsx`, the §6.1 block renderers — renders a plain `<img>` or
+   * `<video>` so the same markup serves an absolute `public-content` URL in cloud mode and a
+   * relative gateway path in local mode without a loader in between. The moment anything adopts
+   * `next/image`, the Supabase project host has to be allow-listed here or it will 400 in prod.
+   */
   async headers() {
     return [
       {

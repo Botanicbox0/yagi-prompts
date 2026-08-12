@@ -3,14 +3,62 @@
 M0 ships everything that can be built without external accounts. What follows needs a human with
 console access. Each step is independent unless noted.
 
-Local development works today with no external service: `npm install && npm run check && npm run dev`.
+Local development works today with no external service:
+`npm install && npm run check && npm run db:local && npm run dev`.
+
+> **Naming (M7).** The product is **YAGI PROMPTS**. The repo directory, the npm package `name`, the
+> `PLAYBOOK_*` environment variables, the `playbook` database tables and every other internal
+> identifier keep the `playbook` codename deliberately — renaming them would churn the whole tree
+> and every migration for no user-visible gain. If a string is read by a user, it says YAGI PROMPTS;
+> if it is read by a machine, it still says playbook.
 
 ---
 
-## 1. Supabase cloud project — blocks M5, and every manual auth/storage gate
+## 0. Local or cloud — the one switch (M7)
 
-The org's free-project limit (2) is used by `twiin` and `yagi-workshop`. Creating `playbook`
-requires pausing one of them or upgrading the org — **Yagi's call** (PLAN §11).
+`.env.local` now carries live Supabase credentials, and Next reads it for `dev`, `build` **and**
+`start`. Without a switch, every offline flow (the PGlite snapshot, the fixture identities, the anon
+sweep, CI) would silently start reading the live database and writing to live buckets. So:
+
+| `PLAYBOOK_MODE` | Database | Storage | Public bucket URLs |
+|---|---|---|---|
+| `local` | PGlite — `PLAYBOOK_LOCAL_DB_DIR` if set, else `.pglite/catalog.tar.gz` | `.storage/` | none (cards fall back to the gateway/generated cover) |
+| `cloud` | `pg` against `DATABASE_URL` | Supabase buckets, service role | `{project}/storage/v1/object/public/public-content/{key}` |
+| *unset* | inferred: `DATABASE_URL` present ⇒ cloud, absent ⇒ local | follows the mode | follows the mode |
+
+**Precedence, highest first:**
+
+1. `STORAGE_DRIVER=local|supabase` — a per-driver override, for mixing (cloud DB + local bytes).
+   Escape hatch; leave it unset. It is **not** set by `.env.example` any more, precisely so a copied
+   env file cannot pin a deployment to the local driver.
+2. `PLAYBOOK_MODE=local|cloud` — the switch. An unrecognised value warns once and falls through.
+3. `DATABASE_URL` — the legacy inference, unchanged from M0–M6.
+
+`local` **ignores a present `DATABASE_URL` entirely**; that is the whole point. The selection is a
+pure function in `lib/runtime-mode.ts` and its matrix is pinned in `tests/runtime/mode.test.ts`.
+
+Which flows force which mode:
+
+| Command | Mode | Why |
+|---|---|---|
+| `npm run db:local` | forced `local` | it *builds* the offline database |
+| `npm run dev:free\|pro\|admin` | forced `local` | the fixture identities exist only in the snapshot |
+| `npm run build:local` / `npm run start:local` | forced `local` | the offline proof: build + serve + `sweep:anon` |
+| `npm run sweep:anon` | forced `local` | its oracle is the snapshot; point it at a `start:local` server |
+| CI (all jobs) | forced `local` (workflow `env:`) | hermetic by declaration, not by the absence of secrets |
+| `npm run dev` / `npm run build` / `npm start` | inferred → cloud | what a deployment wants |
+| `npm run cloud:smoke` | forced `cloud` | it exists to talk to the live project |
+
+---
+
+## 1. Supabase cloud project — DONE (2026-08-13)
+
+Project `yagi-prompts`, ref `nhokkikjkzjalxqsbzuk`, region `ap-northeast-2`. All ten migrations
+applied (including `0103_glue_supabase_hardening.sql`), four buckets created, 13 public tables.
+`npm run cloud:smoke` re-verifies all of that in about two seconds — run it rather than re-reading
+this paragraph.
+
+The steps below are kept as the recipe for the next environment (a staging project, a rebuild).
 
 1. Create the project (region closest to KR).
 2. Copy `Project settings → API` into `.env.local`:
@@ -100,10 +148,15 @@ update profiles set is_admin = true where email = 'yagi@yagiworkshop.xyz';
 
 `0101_glue_storage.sql` creates `content`, `public-content`, `content-published`,
 `artifacts-published`. Confirm in Storage that only `public-content` is public, and that **no**
-policies exist on `storage.objects` — deny-all is the intended posture.
+policies exist on `storage.objects` — deny-all is the intended posture. (`npm run cloud:smoke`
+asserts all four buckets and their `public` flags from `storage.buckets`.)
 
-Then implement `lib/storage/supabase-driver.ts` (the contract notes are in the file) and set
-`STORAGE_DRIVER=supabase`. Until then the local driver writes under `.storage/`.
+`lib/storage/supabase-driver.ts` is implemented as of M7 and is selected by `PLAYBOOK_MODE=cloud` —
+there is no longer a `STORAGE_DRIVER` line to set. It keeps the local driver's semantics exactly:
+`upsert:false` copies (an existing content-addressed key is success, never an overwrite), ≤60s
+signed URLs, and **no delete method**. Do not add one; write-once is a security property (§6). The
+one legitimate staging delete lives in `scripts/cloud-smoke.ts`, which cleans up its own probe with
+a raw client and never touches a published bucket.
 
 ## 6. Stripe — the M3 manual gate
 
@@ -155,11 +208,73 @@ tokens, and both bilingual templates. What follows is the part that needs an acc
    worker, and read both emails in a real inbox — one EN, one KO. Check the change note appears on
    the update, click the unsubscribe link, and confirm `/account` shows the switch off.
 
-## 8. Deploy
+## 8. Deploy to Vercel
 
-Vercel project → import the repo → set every variable from `.env.example` (service role and
-Stripe/Resend keys and both token secrets as **server-side only**). Naming and domain are a §11
-stop-gate.
+Nothing here is automated, and M7 deliberately does **not** deploy — this is the recipe plus the
+checks that say it worked.
+
+**Project settings**
+
+| Setting | Value |
+|---|---|
+| Framework preset | Next.js (auto-detected) |
+| Build command | `npm run build` — *not* `build:local`; the plain script infers cloud from `DATABASE_URL`, and `PLAYBOOK_MODE=cloud` below makes it explicit |
+| Install command | `npm ci` (lockfile is authoritative — see `docs/VERSIONS.md`) |
+| Output | `.next` (default) |
+| Node | 22.x or 24.x (`engines` requires ≥ 22) |
+| Root directory | repo root |
+
+**Environment variables** (names only — copy the values from `.env.local` / the provider consoles;
+everything except the three `NEXT_PUBLIC_*` names is **server-side only** and must never be exposed
+to the browser):
+
+| Variable | Scope | Notes |
+|---|---|---|
+| `PLAYBOOK_MODE` | all | **`cloud`.** Not strictly required (`DATABASE_URL` implies it) but set it: it makes the intent explicit and survives a future change to the inference. |
+| `NEXT_PUBLIC_SUPABASE_URL` | all | public by design |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | all | public by design; RLS is deny-all |
+| `SUPABASE_SERVICE_ROLE_KEY` | server | the data client and the storage driver |
+| `DATABASE_URL` | server | Supabase → Database → Connection string (URI). Use the **pooled** connection for serverless. |
+| `NEXT_PUBLIC_APP_URL` | all | the real origin, no trailing slash. Sitemap, robots, `metadataBase`/OG and every email link resolve against it. |
+| `MEDIA_TOKEN_SECRET` | server | ≤60s media capabilities; must be stable across restarts |
+| `NOTIFY_TOKEN_SECRET` | server | signs unsubscribe links that live in inboxes for months — **never rotate casually** |
+| `STRIPE_SECRET_KEY` | server | all three Stripe vars are required together, or billing renders its "not connected" panel |
+| `STRIPE_WEBHOOK_SECRET` | server | from the endpoint created in §6 |
+| `STRIPE_PRICE_PRO` | server | the $9/month price id |
+| `RESEND_API_KEY` | server | with `NOTIFY_FROM_EMAIL`, or the worker sends nothing |
+| `NOTIFY_FROM_EMAIL` | server | e.g. `YAGI PROMPTS <prompts@your-domain>` |
+
+Do **not** set `STORAGE_DRIVER`, `PLAYBOOK_LOCAL_DB`, `PLAYBOOK_LOCAL_DB_DIR` or
+`PLAYBOOK_DEV_IDENTITY` in Vercel. The first would override the mode; the middle two are PGlite
+paths that do not exist there; the last is dead code in a production build and setting it would only
+confuse the next reader.
+
+**Post-deploy checklist** — in order, each with its own check:
+
+1. **Supabase Auth → URL Configuration**: Site URL = the production origin, and add
+   `https://your-domain/**` *plus* the Vercel preview pattern (`https://*-yourteam.vercel.app/**`)
+   to Redirect URLs. Check: `/auth/signin?next=/library&locale=ko` on the deployed domain lands on
+   `/library` with the KO cookie — not on a Supabase error page.
+2. **Google OAuth client**: the authorised redirect URI is the *Supabase* callback
+   (`https://nhokkikjkzjalxqsbzuk.supabase.co/auth/v1/callback`), never the app's. Check: the
+   `google` line in `npm run cloud:smoke` reads `true`.
+3. **Stripe webhook endpoint** → `https://your-domain/api/stripe/webhook` with the four events from
+   §6, and its signing secret into `STRIPE_WEBHOOK_SECRET`. Check: Stripe's "Send test webhook"
+   returns 2xx, and the event appears in `stripe_events` with `processed_at` set.
+4. **OG / metadata**: fetch `https://your-domain/en` and confirm `og:url`, `og:image` and the
+   canonical are absolute on the real host (they come from `NEXT_PUBLIC_APP_URL` via
+   `lib/seo/site-url.ts`). A `localhost` in any of them means the variable is missing.
+5. **Sitemap + robots**: `/sitemap.xml` and `/robots.txt` carry the real origin; `/prompts/submit`,
+   `/admin` and `/api` are disallowed; the gallery is not.
+6. **Anon sweep against production**: `SWEEP_BASE_URL=https://your-domain npm run sweep:anon`.
+   Note this needs the production database to hold the same fixtures the sweep's oracle expects —
+   against a launch database it is the *shape* checks (headers, redirects, refusals) that carry, not
+   the sentinel ones.
+7. **Purge the build cache on a data-source switch.** Next persists `unstable_cache` results in
+   `.next/cache` *across builds*, so the first deploy after pointing at a different database can
+   serve the previous one's catalog. Vercel → Deployments → Redeploy with "use existing build cache"
+   **off**. (This bit M7's first cloud-build proof locally: a cloud build reused the local build's
+   cached catalog and rendered fixture data.)
 
 ---
 
@@ -170,18 +285,18 @@ perform — a step is not done because you did it, it is done because the check 
 
 | # | Step | Blocks | Verify |
 |---|---|---|---|
-| 1 | **Name + domain** decided (§11 open item) | everything below | the domain resolves and you own the DNS |
-| 2 | **Supabase project** created (§1 above) | 3–6, 10 | `select 1` over `DATABASE_URL` |
-| 3 | **Migrations applied in filename order**, core then `*_glue_*`, via Supabase MCP `apply_migration` | 4–6 | the three queries in §1.5: RPC owner = `publisher`, `prosecdef = true`, `rolbypassrls = true`, RLS forced on every table |
-| 4 | **Service role key** into `SUPABASE_SERVICE_ROLE_KEY` (server-side only) | 5–6 | `/library` renders for a signed-in user instead of the empty catalog |
+| 1 | **Name decided: YAGI PROMPTS** (2026-08-13) — domain still open | everything below | the domain resolves and you own the DNS |
+| 2 | ~~**Supabase project** created (§1)~~ **DONE** — `yagi-prompts` / `nhokkikjkzjalxqsbzuk` | 3–6, 10 | `npm run cloud:smoke` → `db select 1` PASS |
+| 3 | ~~**Migrations applied in filename order**~~ **DONE** — all ten, core then `*_glue_*` | 4–6 | `npm run cloud:smoke` → 13 tables, four buckets, `prepare_publish` executable by `service_role` and NOT by anon/authenticated |
+| 4 | **Service role key** into `SUPABASE_SERVICE_ROLE_KEY` (server-side only) — **still empty in `.env.local`** | 5–6, the storage half of the smoke | `npm run cloud:smoke` reports 0 skipped |
 | 5 | **Google OAuth client** + Supabase redirect URLs (§2) | login | `/auth/signin?next=/library&locale=ko` lands on `/library` with the KO cookie |
-| 6 | **Storage buckets + driver** (§5): `STORAGE_DRIVER=supabase`, only `public-content` public, **no** policies on `storage.objects` | media | a hero renders on `/en`; `/api/media/{a pro block}` answers 401 anonymously |
+| 6 | **Storage buckets + driver** (§5): buckets exist, driver shipped in M7, selected by `PLAYBOOK_MODE=cloud` | media | `npm run cloud:smoke` storage rows PASS; then a poster renders on `/en/prompts` and `/api/media/{a pro block}` answers 401 anonymously |
 | 7 | **Stripe live keys** — secret, price, webhook endpoint + signing secret (§6) | payment | `isBillingConfigured()` true; the CTA is a checkout form, not the "not connected" panel |
 | 8 | **Real test-mode checkout E2E** (§6 deferred gate) | payment | lock → pay `4242…` → same playbook unlocked → `/account` reads Active; then cancel in Stripe and confirm the blocks re-lock |
 | 9 | **Resend domain + key + sender** (§7) | notifications | `npm run notify:worker` prints `mailer live (…)`; a test publish delivers one EN and one KO email |
 | 10 | **Token secrets**: `MEDIA_TOKEN_SECRET` and `NOTIFY_TOKEN_SECRET` | media, unsubscribe | no `[media]` / `[notify]` "per-process random secret" warning in the deploy logs |
 | 11 | **`NEXT_PUBLIC_APP_URL`** set to the real origin | sitemap, emails | `/robots.txt` and `/sitemap.xml` carry absolute URLs on the real domain, not `localhost` |
-| 12 | **Deploy to Vercel** with every variable from `.env.example` | — | `/en` and `/ko` render; `npm run sweep:anon` with `SWEEP_BASE_URL=https://…` passes |
+| 12 | **Deploy to Vercel** — env table + post-deploy checklist in §8 | — | `/en` and `/ko` render; `npm run sweep:anon` with `SWEEP_BASE_URL=https://…` passes |
 | 13 | **Submit the sitemap** — Google Search Console, property on the real domain | indexing | `/sitemap.xml` fetched OK; the two showcase URLs appear, `/library` does not |
 | 14 | **Launch content** (§9, `content/MANIFEST.md`) | launch, not engineering | six playbooks published; fixtures no longer visible in production |
 
@@ -204,9 +319,14 @@ npm run seed       # fixture playbooks through the real prepare → copy → pub
 npm run stripe:retry -- --dry   # count pending stripe_events (needs DATABASE_URL)
 npm run notify:worker -- --dry  # count pending notification deliveries (needs a durable DB, below)
 
-# the M2 authz sweep — needs a server already running against the local snapshot
-npm run db:local; npm run build; npm start      # in one shell
-npm run sweep:anon                              # in another (SWEEP_BASE_URL to point elsewhere)
+# the M2 authz sweep — needs a server already running against the local snapshot.
+# `build:local` / `start:local` FORCE PLAYBOOK_MODE=local, which is what keeps this offline on a
+# machine whose .env.local carries live credentials (see §0).
+npm run db:local; npm run build:local; npm run start:local   # in one shell
+npm run sweep:anon                                           # in another (SWEEP_BASE_URL to point elsewhere)
+
+# the M7 cloud smoke — read-only against the LIVE project, plus one staging probe it deletes
+npm run cloud:smoke
 ```
 
 **Port hygiene**: `npm start` leaves a detached `next-server` holding :3000 after the npm wrapper is

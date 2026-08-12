@@ -26,7 +26,7 @@ import {
 function client(config: StripeConfig): Stripe {
   return new Stripe(config.secretKey, {
     // Identifies our traffic in the Stripe dashboard's request log.
-    appInfo: { name: 'PLAYBOOK', url: 'https://yagiworkshop.xyz' },
+    appInfo: { name: 'YAGI PROMPTS', url: 'https://yagiworkshop.xyz' },
     maxNetworkRetries: 2,
   });
 }

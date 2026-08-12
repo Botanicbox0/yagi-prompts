@@ -28,17 +28,19 @@ const MONO = "ui-monospace,SFMono-Regular,'SF Mono',Menlo,Consolas,monospace";
 const BLUE = '#0000EE';
 
 function shell(locale: Locale, title: string, body: string): string {
+  // Same brand token as the nav and the emails — the dictionary, never a literal.
+  const siteName = escapeHtml(getDictionary(locale).meta.siteName);
   return `<!doctype html>
 <html lang="${locale}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
-<title>${escapeHtml(title)} · PLAYBOOK</title>
+<title>${escapeHtml(title)} · ${siteName}</title>
 </head>
 <body style="${SHELL_STYLE}">
 <main style="max-width:34rem;margin:0 auto;padding:14vh 24px 24px;">
-  <p style="margin:0 0 40px 0;font-family:${MONO};font-size:11px;letter-spacing:0.12em;text-transform:uppercase;">PLAYBOOK</p>
+  <p style="margin:0 0 40px 0;font-family:${MONO};font-size:11px;letter-spacing:0.12em;text-transform:uppercase;">${siteName}</p>
   ${body}
 </main>
 </body>

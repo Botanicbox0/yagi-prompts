@@ -5,7 +5,17 @@ import { applyCoreMigrations } from '@/lib/db/migrations';
 import type { SqlRunner } from '@/lib/db/sql-runner';
 import { DEFAULT_LOCAL_SNAPSHOT, LOCAL_DB_DIR_ENV } from '@/lib/db/connect-shared';
 import { createLocalStorageDriver } from '@/lib/storage/local-driver';
+import { RUNTIME_MODE_ENV } from '@/lib/runtime-mode';
 import { seed, seedEdgeFixtures } from './seed';
+
+/**
+ * Hermetic by construction (M7). This script builds the OFFLINE database, so it pins the mode
+ * rather than inheriting it: without the pin, a `.env.local` carrying cloud credentials would make
+ * anything reaching for `getStorage()` write fixture media into live buckets. Safe here because
+ * every consumer reads the env at CALL time, not at import time (ESM hoists the imports above this
+ * line, so an import-time reader would not see it).
+ */
+process.env[RUNTIME_MODE_ENV] = 'local';
 
 /**
  * `npm run db:local` — build the local development database snapshot.

@@ -85,6 +85,37 @@ describe('dictionary completeness (§3.9)', () => {
     expect(untranslated).toEqual([]);
   });
 
+  /**
+   * M7 — the product is called YAGI PROMPTS. The repo, the npm package and every internal
+   * identifier keep the `playbook` codename on purpose, so a blanket grep would be wrong; what
+   * belongs in a test is the USER-FACING half, which is exactly the dictionaries.
+   *
+   * The allowlist below is the whole point of the test: `library.title` is the one remaining
+   * uppercase "PLAYBOOK", and it is the CONTENT TYPE ("every playbook we have published"), not the
+   * brand. Any new one has to be justified here before it can ship.
+   */
+  describe('brand (M7)', () => {
+    const contentNoun = new Set(['library.title']);
+
+    it('is YAGI PROMPTS in both locales', () => {
+      expect(en.meta.siteName).toBe('YAGI PROMPTS');
+      expect(ko.meta.siteName).toBe('YAGI PROMPTS');
+      expect(en.admin.brand).toContain('YAGI PROMPTS');
+      expect(ko.admin.brand).toContain('YAGI PROMPTS');
+    });
+
+    it('leaves no old brand token in any user-facing string', () => {
+      const stragglers = [...enLeaves, ...koLeaves]
+        .filter(([key, value]) => !contentNoun.has(key) && /\bPLAYBOOK\b/.test(value))
+        .map(([key]) => key);
+      expect(stragglers).toEqual([]);
+    });
+
+    it('keeps the brand identical across locales — it is a name, not a translation', () => {
+      expect(koMap.get('meta.siteName')).toBe(enMap.get('meta.siteName'));
+    });
+  });
+
   it('covers every M1 surface', () => {
     for (const key of [
       'hero.line1',
