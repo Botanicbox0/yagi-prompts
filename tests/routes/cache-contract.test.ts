@@ -3,7 +3,13 @@ import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { CATALOG_TAG, CATALOG_TTL_SECONDS } from '@/lib/cache';
-import { isPlaybookDetailPath, isPromptDetailPath } from '@/lib/i18n/config';
+import {
+  isAppPath,
+  isContestDetailPath,
+  isContestSubmitPath,
+  isPlaybookDetailPath,
+  isPromptDetailPath,
+} from '@/lib/i18n/config';
 
 const ROOT = fileURLToPath(new URL('../..', import.meta.url));
 const read = (...parts: string[]) => readFileSync(join(ROOT, ...parts), 'utf8');
@@ -37,6 +43,10 @@ describe('route cache modes (§3.4 / §4)', () => {
       // §13.2 — the prompts gallery joins them: static, tagged, TTL-floored. It can only be
       // static because its card projection carries zero gated bytes.
       ['app', '(marketing)', '[locale]', 'prompts', 'page.tsx'],
+      // §14.2 — and the contests listing, for a related but distinct reason: nothing on it varies
+      // by reader at all, and the one thing that varies (the phase) is derived at RENDER time from
+      // a projection that stores dates, so an ISR regeneration re-derives it.
+      ['app', '(marketing)', '[locale]', 'contests', 'page.tsx'],
     ]) {
       const source = read(...file);
       expect(source, file.join('/')).toContain(`export const revalidate = ${CATALOG_TTL_SECONDS}`);
@@ -67,6 +77,10 @@ describe('route cache modes (§3.4 / §4)', () => {
         ['app', '(marketing)', '[locale]', 'prompts', 'page.tsx'],
         ["from '@/lib/prompts/public-catalog'"],
       ],
+      [
+        ['app', '(marketing)', '[locale]', 'contests', 'page.tsx'],
+        ["from '@/lib/contests/public-catalog'"],
+      ],
     ];
     for (const [file, imports] of expected) {
       for (const needle of imports) {
@@ -77,6 +91,7 @@ describe('route cache modes (§3.4 / §4)', () => {
     for (const [projection, tag] of [
       [read('lib', 'content', 'public-catalog.ts'), 'tags: [CATALOG_TAG]'],
       [read('lib', 'prompts', 'public-catalog.ts'), 'tags: [PROMPTS_TAG]'],
+      [read('lib', 'contests', 'public-catalog.ts'), 'tags: [CONTESTS_TAG]'],
     ]) {
       expect(projection).toContain('unstable_cache');
       expect(projection).toContain(tag!);
@@ -149,6 +164,13 @@ describe('route cache modes (§3.4 / §4)', () => {
       ['app', 'api', 'prompts', 'media', '[ref]', 'route.ts'],
       ['app', '(app)', 'prompts', 'submit', 'page.tsx'],
       ['app', '(admin)', 'admin', 'prompts', 'page.tsx'],
+      // M9 §14.2: the contest detail is shaped per CLOCK, the entry form is login-gated, the media
+      // route reads a row per request, and both admin screens are admin surface.
+      ['app', '(marketing)', '[locale]', 'contests', '[slug]', 'page.tsx'],
+      ['app', '(app)', 'contests', '[slug]', 'submit', 'page.tsx'],
+      ['app', 'api', 'contests', 'media', '[ref]', 'route.ts'],
+      ['app', '(admin)', 'admin', 'contests', 'page.tsx'],
+      ['app', '(admin)', 'admin', 'contests', '[slug]', 'preview', 'page.tsx'],
     ]) {
       expect(read(...file), file.join('/')).toContain("export const dynamic = 'force-dynamic'");
     }
@@ -180,6 +202,9 @@ describe('route cache modes (§3.4 / §4)', () => {
     // M6 §13.2: the prompt detail is the SECOND viewer-shaped public route and joins the same
     // branch. The gallery is deliberately not in it — it is static and identical for every tier.
     expect(middleware).toContain('isPromptDetailPath(rest)');
+    // M9 §14.2: the contest detail is the third, and the only one whose HTML varies by CLOCK
+    // rather than by reader. The listing is deliberately not in it.
+    expect(middleware).toContain('isContestDetailPath(rest)');
     const detailBranch = middleware.slice(middleware.indexOf('isPlaybookDetailPath(rest)'));
     const branchBody = detailBranch.slice(0, detailBranch.indexOf('\n  }'));
     expect(branchBody).toContain("'Cache-Control', NO_STORE");
@@ -414,6 +439,111 @@ describe('prompt submission contract (§13.1/E)', () => {
       expect(action.includes(`form, '${forbidden}'`), forbidden).toBe(false);
       expect(action.includes(`form.get('${forbidden}')`), forbidden).toBe(false);
     }
+  });
+});
+
+/**
+ * M9 §14.2 — the contests surface's route contract.
+ *
+ * Three properties, and each of them is a different kind of decision:
+ *   `/[locale]/contests`             static + tag, because nothing on it varies by reader
+ *   `/[locale]/contests/[slug]`      no-store, because it varies by CLOCK
+ *   `/api/contests/media/[ref]`      cacheable, because the bytes are public and content-addressed
+ */
+describe('contests route + API contract (§14.2)', () => {
+  const media = read('app', 'api', 'contests', 'media', '[ref]', 'route.ts');
+
+  it('serves contest media from the PUBLIC bucket only, for published rows only', () => {
+    expect(media).toContain("asset.bucket !== 'public-content'");
+    expect(media).toContain("row.status !== 'published'");
+    // The key is read from the ROW, never from the request — there is no key parameter at all.
+    expect(media).toContain('loadContestById');
+    expect(media).not.toContain("searchParams.get('key')");
+  });
+
+  it('lets those public bytes be cached — content-addressed and tier-independent', () => {
+    expect(media).toContain("'Cache-Control': 'public,");
+    expect(media).toContain('immutable');
+  });
+
+  /**
+   * The no-store branch must catch the per-clock DETAIL and miss the static LISTING. Getting this
+   * backwards either serves a stale countdown from a CDN, or throws away the cache mode the whole
+   * §14.2 listing design is built on.
+   */
+  it('matches the contest detail path and not the listing', () => {
+    expect(isContestDetailPath('/contests/launch-film-contest')).toBe(true);
+    expect(isContestDetailPath('/contests')).toBe(false);
+    expect(isPromptDetailPath('/contests/launch-film-contest')).toBe(false);
+    expect(isPlaybookDetailPath('/contests/launch-film-contest')).toBe(false);
+  });
+
+  /**
+   * §14.2's entry form is the one app path whose slug sits in the MIDDLE, so it cannot be a prefix.
+   * The gate must catch exactly the leaf and nothing around it.
+   */
+  it('gates only /contests/{slug}/submit at the edge', () => {
+    expect(isContestSubmitPath('/contests/launch-film-contest/submit')).toBe(true);
+    expect(isAppPath('/contests/launch-film-contest/submit')).toBe(true);
+
+    for (const path of [
+      '/contests',
+      '/contests/launch-film-contest',
+      '/contests/launch-film-contest/submit/extra',
+      '/en/contests',
+      '/en/contests/launch-film-contest',
+    ]) {
+      expect(isContestSubmitPath(path), path).toBe(false);
+      expect(isAppPath(path), path).toBe(false);
+    }
+  });
+
+  it('routes the entry through one server action that never trusts the form', () => {
+    const action = read('app', '(app)', 'contests', '[slug]', 'submit', 'actions.ts');
+    expect(action).toContain("'use server'");
+    expect(action).toContain('getViewer');
+    expect(action).toContain('submitEntry');
+    expect(action.match(/export async function/g)).toHaveLength(1);
+
+    /**
+     * The action reads EXACTLY the fields an entrant is allowed to choose (plus the slug, which
+     * grants no authority — the server re-resolves the contest from it and refuses anything
+     * unpublished). Author id, status, placement and reject reason are supplied or cleared by
+     * `lib/contests/submit.ts` and appear nowhere in what is read from the request.
+     */
+    const readFields = [...action.matchAll(/(?:str|text|bool|file)\(form, '([^']+)'\)/g)].map(
+      (match) => match[1]!,
+    );
+    expect([...new Set(readFields)].sort()).toEqual([
+      'consent',
+      'note',
+      'slug',
+      'snsUrl',
+      'title',
+      'videoUrl',
+    ]);
+    for (const forbidden of ['status', 'authorId', 'userId', 'placement', 'rejectReason', 'contestId']) {
+      expect(action.includes(`form, '${forbidden}'`), forbidden).toBe(false);
+      expect(action.includes(`form.get('${forbidden}')`), forbidden).toBe(false);
+    }
+  });
+
+  /**
+   * §14.2: "draft = admin preview path". The public route must have no admin branch at all — the
+   * moment it grows one, a draft prize is one crafted URL away from being public.
+   */
+  it('keeps the draft preview OUT of the public detail route', () => {
+    const page = read('app', '(marketing)', '[locale]', 'contests', '[slug]', 'page.tsx');
+    expect(page).toContain('getShapedContest');
+    expect(page).not.toContain('getContestPreview');
+    // Import-level, not text-level: the file's own comment names `requireAdmin()` when explaining
+    // where drafts DO render, and that sentence should stay.
+    expect(page).not.toMatch(/^import .*requireAdmin/m);
+    expect(page).not.toMatch(/^import .*getViewer/m);
+
+    // …and the preview lives inside the (admin) group, whose layout is the gate.
+    const preview = read('app', '(admin)', 'admin', 'contests', '[slug]', 'preview', 'page.tsx');
+    expect(preview).toContain('getContestPreview');
   });
 });
 

@@ -19,6 +19,13 @@ describe('migrations apply on a fresh database (PLAN §6)', () => {
     );
     expect(rows.map((r) => r.table_name)).toEqual([
       'blocks',
+      // §14.1 (M9) — the contests pivot's three new tables. Atomic like `prompt_items`: no
+      // revisions, no manifest, no constraint triggers. `contest_entry_writes` is the append-only
+      // rate-limit ledger, because "≤10 entry writes/day/user" counts WRITES and an upserted entry
+      // row cannot.
+      'contest_entries',
+      'contest_entry_writes',
+      'contests',
       'default_policy',
       'events',
       'notification_deliveries',

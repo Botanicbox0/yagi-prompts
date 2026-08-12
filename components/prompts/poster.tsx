@@ -1,45 +1,20 @@
+import { posterHash, posterRatio, posterWords, POSTER_RATIOS } from '@/components/ui/poster-seed';
+
 /**
  * The typographic poster — PLAN §13.3-4: "text-only cards get a typographic poster in the design
  * language".
  *
  * It stands in for a missing (or not-yet-served) still, and it is deliberately NOT a grey box: two
  * inks, one accent, the display face at poster scale, and a deterministic composition derived from
- * the slug so the same prompt always looks like itself. That determinism matters twice — a static
- * page must render identically on every build, and a masonry column only reads as masonry if the
- * heights are stable between server and client.
+ * the slug so the same prompt always looks like itself.
  *
- * Every value below comes from the slug hash. Nothing random, nothing time-based.
+ * M9 moved the deterministic primitives (`posterHash`, `posterRatio`, `posterWords`) into
+ * `components/ui/poster-seed.ts` so the §14 contest poster can share them; the composition below is
+ * unchanged, and the two exports the rest of the app imports from here are re-exported so nothing
+ * downstream had to move with them.
  */
 
-/** FNV-1a, 32-bit — small, stable, and dependency-free. */
-function hash(input: string): number {
-  let h = 0x811c9dc5;
-  for (let i = 0; i < input.length; i += 1) {
-    h ^= input.charCodeAt(i);
-    h = Math.imul(h, 0x01000193) >>> 0;
-  }
-  return h >>> 0;
-}
-
-/**
- * §13.2 masonry: the rail wants columns of unequal height, and with no real media there is nothing
- * to get that from. Four ratios, picked by hash, give the wall its rhythm without ever changing
- * between renders. Real media overrides this with its own intrinsic ratio.
- */
-export const POSTER_RATIOS = ['4 / 5', '1 / 1', '3 / 4', '16 / 10'] as const;
-
-export function posterRatio(seed: string): string {
-  return POSTER_RATIOS[hash(seed) % POSTER_RATIOS.length]!;
-}
-
-/** Two or three words of the title, uppercased — a poster, not a paragraph. */
-function posterWords(title: string): string[] {
-  const words = title
-    .split(/\s+/)
-    .map((word) => word.replace(/[^\p{L}\p{N}\-]/gu, ''))
-    .filter((word) => word.length > 0);
-  return words.slice(0, 3);
-}
+export { POSTER_RATIOS, posterRatio };
 
 export function TypographicPoster({
   title,
@@ -54,7 +29,7 @@ export function TypographicPoster({
   ratio?: string;
 }) {
   const words = posterWords(title);
-  const seed = hash(slug);
+  const seed = posterHash(slug);
   // Which word gets the outline treatment, and where the accent block sits: both from the hash.
   const outlined = seed % Math.max(words.length, 1);
 

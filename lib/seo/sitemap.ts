@@ -1,7 +1,9 @@
 import type { MetadataRoute } from 'next';
 import type { CatalogCard } from '@/lib/content/catalog';
 import type { PromptCard } from '@/lib/prompts/catalog';
+import type { ContestCard } from '@/lib/contests/catalog';
 import { promptRest } from '@/lib/prompts/links';
+import { contestRest } from '@/lib/contests/links';
 import { LOCALES, type Locale } from '@/lib/i18n/config';
 import { localeAlternates } from './playbook-metadata';
 
@@ -40,6 +42,15 @@ export interface SitemapInput {
    * archived items cannot reach the sitemap by construction.
    */
   prompts?: PromptCard[];
+  /**
+   * §14.2 — published contests, with locale alternates.
+   *
+   * Like prompts and unlike playbooks there is no showcase filter, and for a stronger reason: a
+   * contest page has no gated half at all. The catalog projection is itself the filter — it only
+   * ever contains `published` rows, so a draft cannot reach the sitemap by construction, which is
+   * the property that matters (an unannounced prize must not be discoverable).
+   */
+  contests?: ContestCard[];
   /** Falls back to the card's own publish time; only used when that is missing. */
   now?: Date;
 }
@@ -56,7 +67,7 @@ function absoluteAlternates(origin: string, rest: string): Record<string, string
 }
 
 export function buildSitemap(input: SitemapInput): MetadataRoute.Sitemap {
-  const { origin, cards, prompts = [], now = new Date() } = input;
+  const { origin, cards, prompts = [], contests = [], now = new Date() } = input;
   const entries: MetadataRoute.Sitemap = [];
 
   const marketing: Array<{ rest: string; priority: number; changeFrequency: 'daily' | 'weekly' }> = [
@@ -64,6 +75,9 @@ export function buildSitemap(input: SitemapInput): MetadataRoute.Sitemap {
     // §13.2 — the gallery is the v1.5 front door and is indexed; it changes as often as the studio
     // publishes, which is the same cadence as the landing it now leads.
     { rest: '/prompts', priority: 0.9, changeFrequency: 'daily' },
+    // §14.2 — the contests listing. Weekly rather than daily: a contest is a month-long object, and
+    // claiming daily change on a page that gains a row every few weeks is noise for a crawler.
+    { rest: '/contests', priority: 0.8, changeFrequency: 'weekly' },
     { rest: '/pricing', priority: 0.8, changeFrequency: 'weekly' },
   ];
 
@@ -87,6 +101,20 @@ export function buildSitemap(input: SitemapInput): MetadataRoute.Sitemap {
         url: absolute(origin, `/${locale}${rest}`),
         lastModified: prompt.publishedAt ? new Date(prompt.publishedAt) : now,
         changeFrequency: 'monthly',
+        priority: 0.7,
+        alternates: { languages: absoluteAlternates(origin, rest) },
+      });
+    }
+  }
+
+  // §14.2 — every published contest, both locales, with reciprocal alternates.
+  for (const contest of contests) {
+    const rest = contestRest(contest.slug);
+    for (const locale of LOCALES as readonly Locale[]) {
+      entries.push({
+        url: absolute(origin, `/${locale}${rest}`),
+        lastModified: contest.publishedAt ? new Date(contest.publishedAt) : now,
+        changeFrequency: 'weekly',
         priority: 0.7,
         alternates: { languages: absoluteAlternates(origin, rest) },
       });
@@ -127,6 +155,14 @@ export const DISALLOWED_PATHS = [
   // §13.2 — the submission form is login-gated app surface. `/prompts` itself is locale-prefixed
   // and indexed, so this entry cannot catch the gallery.
   '/prompts/submit',
+  /**
+   * §14.2 — the entry form, whose slug sits in the MIDDLE of the path.
+   *
+   * A prefix rule cannot express that, so this is the one wildcard in the file (`*` is supported by
+   * every major crawler). `Disallow: /contests` would take the listing and every contest page down
+   * with it, which is the opposite of what we want.
+   */
+  '/contests/*/submit',
 ] as const;
 
 export function buildRobots(origin: string): MetadataRoute.Robots {

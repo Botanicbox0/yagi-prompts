@@ -1,6 +1,7 @@
 import type { MetadataRoute } from 'next';
 import { getPublicCatalog } from '@/lib/content/public-catalog';
 import { getPromptCatalog } from '@/lib/prompts/public-catalog';
+import { getContestCatalog } from '@/lib/contests/public-catalog';
 import { buildSitemap } from '@/lib/seo/sitemap';
 import { siteUrl } from '@/lib/seo/site-url';
 
@@ -22,12 +23,18 @@ import { siteUrl } from '@/lib/seo/site-url';
 export const revalidate = 3600;
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  // Both tagged projections (§13.2): publishing a playbook or approving a prompt each invalidates
-  // the sitemap through its own tag, and the 1h TTL floor covers a lost invalidation either way.
-  const [catalog, prompts] = await Promise.all([getPublicCatalog(), getPromptCatalog()]);
+  // All three tagged projections (§13.2, §14.2): publishing a playbook, approving a prompt or
+  // publishing a contest each invalidates the sitemap through its own tag, and the 1h TTL floor
+  // covers a lost invalidation either way.
+  const [catalog, prompts, contests] = await Promise.all([
+    getPublicCatalog(),
+    getPromptCatalog(),
+    getContestCatalog(),
+  ]);
   return buildSitemap({
     origin: siteUrl(),
     cards: catalog.cards,
     prompts: [...prompts.yagi, ...prompts.community],
+    contests: contests.contests,
   });
 }

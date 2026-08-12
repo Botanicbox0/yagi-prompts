@@ -145,6 +145,7 @@ const SUCCESS_KEYS = {
   unarchived: 'okUnarchived',
   approved: 'okApproved',
   rejected: 'okRejected',
+  unpublished: 'okUnpublished',
 } as const;
 
 const ERROR_KEYS = {
@@ -163,6 +164,9 @@ const ERROR_KEYS = {
   assetIncomplete: 'errAssetIncomplete',
   storage: 'errStorage',
   upload: 'errUpload',
+  notPublishable: 'errNotPublishable',
+  deadlineNotPassed: 'errDeadlineNotPassed',
+  duplicatePlacement: 'errDuplicatePlacement',
   unknown: 'errUnknown',
 } as const;
 
@@ -219,10 +223,10 @@ export function AdminShell({
 }: {
   dict: AdminDict;
   locale: string;
-  active: 'playbooks' | 'policy' | 'prompts';
+  active: 'playbooks' | 'policy' | 'prompts' | 'contests';
   children: ReactNode;
 }) {
-  const navClass = (key: 'playbooks' | 'policy' | 'prompts') =>
+  const navClass = (key: 'playbooks' | 'policy' | 'prompts' | 'contests') =>
     `font-label text-eyebrow uppercase ${active === key ? 'text-accent' : 'opacity-60'}`;
 
   return (
@@ -238,6 +242,10 @@ export function AdminShell({
                   screen that has work waiting in it on any given day. */}
               <a href="/admin/prompts" className={navClass('prompts')}>
                 {dict.navPrompts}
+              </a>
+              {/* §14 — the contests queue is the second screen with work waiting in it. */}
+              <a href="/admin/contests" className={navClass('contests')}>
+                {dict.navContests}
               </a>
               <a href="/admin" className={navClass('playbooks')}>
                 {dict.navPlaybooks}

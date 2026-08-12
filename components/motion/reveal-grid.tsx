@@ -3,10 +3,10 @@
 import { useRef, type ReactNode } from 'react';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
-import { useIsomorphicLayoutEffect } from '@/components/motion/use-isomorphic-layout-effect';
+import { useIsomorphicLayoutEffect } from './use-isomorphic-layout-effect';
 
 /**
- * PLAN §5.3 motion budget, calm tier — "reveals ≤400ms" — applied to the masonry wall.
+ * PLAN §5.3 motion budget, calm tier — "reveals ≤400ms" — applied to a wall of cards.
  *
  * The rule this follows is the same one `components/motion/reveal.tsx` follows and it is the one
  * that matters: **the hidden state is armed in a layout effect, never in the HTML or the
@@ -15,15 +15,21 @@ import { useIsomorphicLayoutEffect } from '@/components/motion/use-isomorphic-la
  *
  * `gsap.matchMedia` owns the reduced-motion branch, so under `prefers-reduced-motion: reduce` the
  * callback never runs and nothing is ever hidden — not a shortened animation, none at all.
+ *
+ * M9 moved it out of `components/prompts/` (it was never about prompts) and gave it an
+ * `itemSelector`, so the §14 contest rails can reuse the identical motion without borrowing the
+ * prompts wall's data attribute. The default is the M6 value, so that surface is untouched.
  */
 export function RevealGrid({
   children,
   className,
   stagger = 0.06,
+  itemSelector = '[data-prompt-item]',
 }: {
   children: ReactNode;
   className?: string;
   stagger?: number;
+  itemSelector?: string;
 }) {
   const ref = useRef<HTMLUListElement>(null);
 
@@ -34,7 +40,7 @@ export function RevealGrid({
 
     const mm = gsap.matchMedia();
     mm.add('(prefers-reduced-motion: no-preference)', () => {
-      const targets = root.querySelectorAll('[data-prompt-item]');
+      const targets = root.querySelectorAll(itemSelector);
       if (targets.length === 0) return;
 
       gsap.fromTo(
@@ -52,7 +58,7 @@ export function RevealGrid({
     });
 
     return () => mm.revert();
-  }, [stagger]);
+  }, [stagger, itemSelector]);
 
   return (
     <ul ref={ref} className={className}>

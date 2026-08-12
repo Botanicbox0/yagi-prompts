@@ -4,6 +4,7 @@ import { PGlite } from '@electric-sql/pglite';
 import { DEFAULT_LOCAL_SNAPSHOT } from '@/lib/db/connect-shared';
 import { FIXTURE_SENTINELS } from './fixtures';
 import { HIDDEN_PROMPT_SLUGS, PROMPT_SENTINELS } from './prompt-fixtures';
+import { CONTEST_ENTRY_SENTINELS, HIDDEN_CONTEST_SLUGS } from './contest-fixtures';
 import { RUNTIME_MODE_ENV } from '@/lib/runtime-mode';
 
 /**
@@ -135,6 +136,12 @@ interface PromptProbe {
   featured: boolean;
 }
 
+interface ContestProbe {
+  id: string;
+  slug: string;
+  status: string;
+}
+
 interface AssetBlockRow {
   id: string;
   kind: string;
@@ -171,11 +178,18 @@ async function readSnapshot() {
        from prompt_items order by slug`,
   );
 
+  // §14 — the contests surface. The demo contest is a DRAFT by design, so the ids are what let the
+  // sweep prove that its poster and its entries are unreachable rather than merely absent.
+  const contests = await db.query<ContestProbe>(
+    'select id, slug, status from contests order by slug',
+  );
+
   await db.close();
   return {
     assets: assets.rows,
     privateKeys: privateKeys.rows.map((r) => r.target_key),
     prompts: prompts.rows,
+    contests: contests.rows,
   };
 }
 
@@ -731,6 +745,168 @@ async function sweepLandingPivot(): Promise<void> {
   expectEqual('/library still works for anyone who has the URL', (await get('/library')).status, 307);
 }
 
+// ---------------------------------------------------------------------------
+// §14 — the contests surface (M9)
+// ---------------------------------------------------------------------------
+
+/** Every entry sentinel an anonymous reader must NEVER meet — in v1 that is all of them. */
+const FORBIDDEN_ENTRY_SENTINELS = CONTEST_ENTRY_SENTINELS.filter((s) => !s.publicToAnon);
+
+/**
+ * The listing, with NOTHING published.
+ *
+ * That is not a gap in the fixtures, it is the state the live site is in: §14.1 makes publishing
+ * the founder's act and the demo contest stays DRAFT, so what a real visitor meets today is the
+ * designed empty state — and this is the only place it can be checked against a real server.
+ */
+async function sweepContestsListing(locale: string, contests: ContestProbe[]): Promise<void> {
+  const path = `/${locale}/contests`;
+  console.log(`\n${path} — the listing, anonymous`);
+  const page = await get(path);
+
+  expectEqual('renders 200', page.status, 200);
+
+  // Positive controls: the page is a real page, not an error dressed as one.
+  expectPresent(
+    'the display headline',
+    page.body,
+    locale === 'ko' ? '브리프는' : 'BRANDS BRING',
+  );
+  expectPresent('the designed empty state', page.body, 'data-contests-empty');
+  expectPresent(
+    '…with the empty-state copy',
+    page.body,
+    locale === 'ko' ? '아직 열린 콘테스트가 없습니다' : 'NOTHING OPEN YET.',
+  );
+  // §14.2 — "Listing carries the B2B CTA ('Run a contest with the studio →' mailto)". While the
+  // listing is empty the empty state carries it, and the bordered hire strip is suppressed so the
+  // same sentence does not appear twice eight lines apart.
+  expectPresent('the B2B CTA', page.body, 'mailto:hello@yagiworkshop.xyz');
+  expectPresent(
+    '…with the studio wording',
+    page.body,
+    locale === 'ko' ? '스튜디오와 콘테스트 열기' : 'Run a contest with the studio',
+  );
+  expectAbsent('…and only once while empty', page.body, 'data-contest-hire');
+  expectPresent('nav points at the tab', page.body, `href="/${locale}/contests"`);
+
+  // The property that matters: a DRAFT contest is nowhere on the public listing.
+  for (const contest of contests) {
+    if (contest.status === 'published') continue;
+    expectAbsent(`no ${contest.slug} card`, page.body, `data-contest-card="${contest.slug}"`);
+    expectAbsent(`…and no ${contest.slug} link`, page.body, `/contests/${contest.slug}`);
+  }
+  // With nothing published there is no rail at all — a heading over a void would be worse than none.
+  expectAbsent('no phase rails while empty', page.body, 'data-contest-rail=');
+  for (const sentinel of FORBIDDEN_ENTRY_SENTINELS) {
+    expectAbsent(`no ${sentinel.status} entry text (${sentinel.token})`, page.body, sentinel.token);
+  }
+  expectAbsent('no staging keys in the listing', page.body, 'content/contest/');
+}
+
+/** §14.2 — "published only; draft = admin preview path", checked from outside. */
+async function sweepContestDetails(locale: string, contests: ContestProbe[]): Promise<void> {
+  console.log(`\n/${locale}/contests/[slug] — details, anonymous`);
+
+  for (const slug of HIDDEN_CONTEST_SLUGS) {
+    expectEqual(`draft ${slug} 404s`, (await get(`/${locale}/contests/${slug}`)).status, 404);
+  }
+  expectEqual(
+    'an unknown slug 404s',
+    (await get(`/${locale}/contests/no-such-contest`)).status,
+    404,
+  );
+
+  // The admin preview path is admin surface, so it must refuse an anonymous reader outright.
+  for (const slug of HIDDEN_CONTEST_SLUGS) {
+    const preview = await get(`/admin/contests/${slug}/preview`);
+    expectOneOf(`preview of ${slug} refuses anon`, preview.status, [302, 307, 308, 404]);
+    for (const sentinel of FORBIDDEN_ENTRY_SENTINELS) {
+      expectAbsent(`…and leaks no entry (${sentinel.token})`, preview.body, sentinel.token);
+    }
+  }
+
+  // A draft's poster exists on disk (staged) and has no published key, so the public media route
+  // must refuse it — that is the disclosure doctrine holding for an unannounced prize.
+  const draft = contests.find((c) => c.status !== 'published');
+  if (draft) {
+    expectEqual(
+      'a DRAFT contest’s poster is unreachable',
+      (await get(`/api/contests/media/${encodeURIComponent(`${draft.id}:poster`)}`)).status,
+      404,
+    );
+  }
+  expectEqual(
+    'an unknown media ref 404s',
+    (await get('/api/contests/media/11111111-2222-4333-8444-555555555555%3Aposter')).status,
+    404,
+  );
+  expectEqual('a malformed media ref 404s', (await get('/api/contests/media/nonsense')).status, 404);
+}
+
+/** §14.2 — the gated halves of the contests surface, from outside. */
+async function sweepContestGates(contests: ContestProbe[]): Promise<void> {
+  console.log('\n/contests/[slug]/submit + /admin/contests — anonymous');
+
+  const slug = HIDDEN_CONTEST_SLUGS[0] ?? 'any-contest';
+  const submit = await get(`/contests/${slug}/submit`);
+  expectOneOf('the entry form redirects anon', submit.status, [302, 307, 308]);
+  if (submit.location && !submit.location.startsWith(`/contests/${slug}/submit`)) {
+    ok('…away from the form', submit.location);
+  } else fail('entry form redirect target', `unexpected location ${submit.location}`);
+
+  const admin = await get('/admin/contests');
+  expectOneOf('/admin/contests refuses anon', admin.status, [302, 307, 308, 404]);
+  expectAbsent('…and leaks no queue', admin.body, 'data-contest-entry=');
+  for (const sentinel of FORBIDDEN_ENTRY_SENTINELS) {
+    expectAbsent(`…and no entry text (${sentinel.token})`, admin.body, sentinel.token);
+  }
+  for (const contest of contests) {
+    expectAbsent(`…and no ${contest.slug} editor`, admin.body, `data-admin-contest="${contest.slug}"`);
+  }
+
+  // The listing is public and must NOT be caught by the app-path gate.
+  expectEqual('/en/contests stays public', (await get('/en/contests')).status, 200);
+  const unprefixed = await get('/contests');
+  expectOneOf('unprefixed /contests 308s into a locale', unprefixed.status, [307, 308]);
+  if (unprefixed.location?.includes('/contests')) ok('…keeping the path', unprefixed.location);
+  else fail('/contests redirect target', `unexpected location ${unprefixed.location}`);
+}
+
+/** §14.2 SEO: the listing is indexed; a draft contest and the entry form are not. */
+async function sweepContestSeo(): Promise<void> {
+  console.log('\nsitemap + <head> — the contests surface');
+
+  const sitemap = await get('/sitemap.xml');
+  expectPresent('lists the listing (en)', sitemap.body, '/en/contests<');
+  expectPresent('lists the listing (ko)', sitemap.body, '/ko/contests<');
+  for (const slug of HIDDEN_CONTEST_SLUGS) {
+    expectAbsent(`never lists the draft ${slug}`, sitemap.body, slug);
+  }
+  expectAbsent('never lists an entry form', sitemap.body, '/submit');
+
+  const robots = await get('/robots.txt');
+  expectPresent('robots disallows the entry form', robots.body, 'Disallow: /contests/*/submit');
+  expectAbsent('…without disallowing the listing itself', robots.body, 'Disallow: /contests\n');
+
+  const listing = await get('/en/contests');
+  expectPresent('the listing self-canonicals', listing.body, `rel="canonical" href="${BASE}/en/contests"`);
+  expectPresent('hreflang ko', listing.body, `hrefLang="ko" href="${BASE}/ko/contests"`);
+  expectPresent('hreflang x-default', listing.body, 'hrefLang="x-default"');
+  expectAbsent('the listing is indexed', listing.body, 'name="robots" content="noindex');
+}
+
+/** §14.2 — Contests joins the nav between Prompts and Pricing, on every marketing page. */
+async function sweepContestNav(): Promise<void> {
+  console.log('\nnav — Prompts · Contests · Pricing');
+  for (const path of ['/en', '/en/prompts', '/en/pricing']) {
+    const page = await get(path);
+    expectPresent(`${path} links the contests tab`, page.body, 'href="/en/contests"');
+  }
+  const ko = await get('/ko');
+  expectPresent('/ko links the ko tab', ko.body, 'href="/ko/contests"');
+}
+
 async function main(): Promise<void> {
   console.log(`YAGI PROMPTS anon sweep → ${BASE} (local mode)`);
 
@@ -741,7 +917,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  const { assets, privateKeys, prompts } = await readSnapshot();
+  const { assets, privateKeys, prompts, contests } = await readSnapshot();
 
   await sweepShowcasePage('en', privateKeys);
   await sweepShowcasePage('ko', privateKeys);
@@ -763,6 +939,14 @@ async function main(): Promise<void> {
   await sweepPromptGates();
   await sweepPromptSeo();
   await sweepLandingPivot();
+
+  // --- M9 §14: the contests surface ---------------------------------------
+  await sweepContestsListing('en', contests);
+  await sweepContestsListing('ko', contests);
+  await sweepContestDetails('en', contests);
+  await sweepContestGates(contests);
+  await sweepContestSeo();
+  await sweepContestNav();
 
   console.log(
     `\n${failures === 0 ? 'SWEEP PASSED' : 'SWEEP FAILED'} — ${checks - failures}/${checks} checks passed`,

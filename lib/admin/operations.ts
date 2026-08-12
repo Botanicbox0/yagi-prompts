@@ -19,6 +19,7 @@ import {
 import { notifyKindFor } from '@/lib/notify/kinds';
 import { fail, ok, type AdminContext, type AdminOutcome } from './context';
 import { PROMPT_OPERATIONS } from './prompt-operations';
+import { CONTEST_OPERATIONS } from './contest-operations';
 import { stageUpload } from './assets';
 import { ensureDraftRevision } from './clone';
 import * as f from './form';
@@ -722,6 +723,8 @@ export const ADMIN_OPERATIONS = {
   // §13.2/F — the prompts surface joins the SAME registry, so the auth enumeration in
   // tests/admin/auth.test.ts covers it without being told it exists.
   ...PROMPT_OPERATIONS,
+  // §14 — and so does the contests surface, for the same reason and at the same cost: one line.
+  ...CONTEST_OPERATIONS,
 };
 
 export type AdminOperationName = keyof typeof ADMIN_OPERATIONS;

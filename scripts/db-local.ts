@@ -6,7 +6,7 @@ import type { SqlRunner } from '@/lib/db/sql-runner';
 import { DEFAULT_LOCAL_SNAPSHOT, LOCAL_DB_DIR_ENV } from '@/lib/db/connect-shared';
 import { createLocalStorageDriver } from '@/lib/storage/local-driver';
 import { RUNTIME_MODE_ENV } from '@/lib/runtime-mode';
-import { seed, seedEdgeFixtures } from './seed';
+import { seed, seedContests, seedEdgeFixtures } from './seed';
 
 /**
  * Hermetic by construction (M7). This script builds the OFFLINE database, so it pins the mode
@@ -72,10 +72,15 @@ async function main(): Promise<void> {
   // M2: the dev snapshot also carries the states the read path must refuse (draft / archived /
   // superseded), so `npm run sweep:anon` can assert them against a real server.
   const edges = await seedEdgeFixtures(options);
+  // M9 §14: the DRAFT demo contest and its four entries. Local-only for the same reason as the edge
+  // fixtures — and because leaving the public listing empty is what lets the sweep assert the
+  // designed empty state against a real server.
+  const contests = await seedContests(options);
 
   const inventory =
     `${result.playbooks.length} core playbooks, ${edges.length} edge fixtures, ` +
-    `${result.prompts.length} prompt items, 3 entitlement fixtures`;
+    `${result.prompts.length} prompt items, ${contests.length} draft contest(s), ` +
+    '3 entitlement fixtures';
 
   if (dir === null) {
     const dump = await db.dumpDataDir('gzip');
