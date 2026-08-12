@@ -9,6 +9,12 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# M7: CI is hermetic by DECLARATION, not by the accident of having no credentials. `local` forces
+# the PGlite snapshot + the `.storage/` driver even if a DATABASE_URL ever reaches this runner, so
+# no future secret can make CI read or write the live project. See lib/runtime-mode.ts.
+env:
+  PLAYBOOK_MODE: local
+
 jobs:
   check:
     name: typecheck + tests

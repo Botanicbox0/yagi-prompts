@@ -46,7 +46,7 @@ export function getMailer(): Mailer | null {
 
   const config = mailerConfigFromEnv();
   cache.mailer =
-    config !== null ? createLiveMailer(config) : createFakeMailer({ from: 'PLAYBOOK <fake@local>' });
+    config !== null ? createLiveMailer(config) : createFakeMailer({ from: 'YAGI PROMPTS <fake@local>' });
   cache.key = key;
   return cache.mailer;
 }

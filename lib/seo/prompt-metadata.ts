@@ -61,6 +61,13 @@ export function promptsGalleryMetadata(input: {
   locale: Locale;
   title: string;
   description: string;
+  /**
+   * The OG title, which must NAME the site because it is read outside it (a shared link, a card in
+   * a chat client). The `<title>` must NOT: the locale layout already appends `· {siteName}` as a
+   * template, so spelling the brand into `title` too produced "Prompts — YAGI PROMPTS · YAGI
+   * PROMPTS" in the browser tab. `/pricing` had it right; this is the same split. (M7)
+   */
+  ogTitle?: string;
 }): Metadata {
   return {
     title: input.title,
@@ -73,7 +80,7 @@ export function promptsGalleryMetadata(input: {
       type: 'website',
       locale: input.locale === 'ko' ? 'ko_KR' : 'en_US',
       url: `/${input.locale}/prompts`,
-      title: input.title,
+      title: input.ogTitle ?? input.title,
       description: input.description,
     },
   };

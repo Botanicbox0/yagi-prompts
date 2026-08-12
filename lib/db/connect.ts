@@ -1,23 +1,23 @@
 import 'server-only';
 import type { SqlRunner } from './sql-runner';
-import { DEFAULT_LOCAL_SNAPSHOT, LOCAL_DB_DIR_ENV } from './connect-shared';
+import { LOCAL_DB_DIR_ENV } from './connect-shared';
+import { RUNTIME_MODE_ENV, selectDbDriver } from '@/lib/runtime-mode';
 
 /**
  * The server-side `SqlRunner` factory (PLAN §7).
  *
  * M0 built every read model against the driver-agnostic `SqlRunner` so the same query text runs in
- * vitest (PGlite) and in production (`pg` against Supabase Postgres). This is where the app picks
- * one, in strict order:
+ * vitest (PGlite) and in production (`pg` against Supabase Postgres). M7 moved the CHOICE into
+ * `lib/runtime-mode.ts` — a pure function of the env — so it can be tested as a matrix and so one
+ * switch governs the database and the storage driver together. What lands here:
  *
- *   1. `DATABASE_URL`          → `pg` pool. The production path.
- *   2. `PLAYBOOK_LOCAL_DB_DIR` → a DURABLE PGlite data directory (M5). Opt-in, dev only, single
- *                                process. It exists because the notification worker runs in its
- *                                own process and must see what `/admin` enqueued in another —
- *                                which an in-memory snapshot can never provide.
- *   3. local snapshot          → in-memory PGlite loaded from `.pglite/catalog.tar.gz`
- *                                (`npm run db:local`). The dev/preview path while §11's Supabase
- *                                project stop-gate is open. Writes die with the process.
- *   4. none of the above       → `null`.
+ *   pg               `PLAYBOOK_MODE=cloud` (or unset with `DATABASE_URL` present) → the pool.
+ *   pglite-dir       local mode + `PLAYBOOK_LOCAL_DB_DIR` → a DURABLE PGlite data directory (M5).
+ *                    It exists because the notification worker runs in its own process and must
+ *                    see what `/admin` enqueued in another — an in-memory snapshot cannot do that.
+ *   pglite-snapshot  local mode → in-memory PGlite from `.pglite/catalog.tar.gz` (`npm run
+ *                    db:local`). Writes die with the process.
+ *   none             cloud mode with no `DATABASE_URL`.
  *
  * `null` is a first-class answer, not a failure: the public catalog degrades to its empty state so
  * `npm run build` stays green on a machine with no database at all (CI does exactly that). What it
@@ -42,10 +42,6 @@ interface RunnerCache {
 const cache: RunnerCache = (((globalThis as Record<string, unknown>).__playbookSqlRunner ??= {
   promise: null,
 }) as RunnerCache);
-
-function localSnapshotPath(): string {
-  return process.env.PLAYBOOK_LOCAL_DB ?? DEFAULT_LOCAL_SNAPSHOT;
-}
 
 async function connectPostgres(connectionString: string): Promise<SqlRunner | null> {
   try {
@@ -88,8 +84,7 @@ async function connectLocalDirectory(dir: string): Promise<SqlRunner | null> {
   }
 }
 
-async function connectLocalSnapshot(): Promise<SqlRunner | null> {
-  const path = localSnapshotPath();
+async function connectLocalSnapshot(path: string): Promise<SqlRunner | null> {
   try {
     const { readFile } = await import('node:fs/promises');
     const { resolve } = await import('node:path');
@@ -112,16 +107,28 @@ async function connectLocalSnapshot(): Promise<SqlRunner | null> {
 }
 
 async function connect(): Promise<SqlRunner | null> {
-  const url = process.env.DATABASE_URL;
-  if (url) return connectPostgres(url);
+  const selection = selectDbDriver(process.env);
 
-  const dir = process.env[LOCAL_DB_DIR_ENV];
-  if (dir) {
-    const durable = await connectLocalDirectory(dir);
-    if (durable !== null) return durable;
+  switch (selection.driver) {
+    case 'pg':
+      return connectPostgres(selection.connectionString);
+
+    case 'pglite-dir': {
+      // A held lock is the honest reason to fall through to the read-only snapshot.
+      const durable = await connectLocalDirectory(selection.dir);
+      return durable ?? connectLocalSnapshot(selection.snapshotPath);
+    }
+
+    case 'pglite-snapshot':
+      return connectLocalSnapshot(selection.path);
+
+    case 'none':
+      console.warn(
+        `[db] no database selected (${selection.reason}). The catalog renders its empty state. ` +
+          `Set DATABASE_URL, or ${RUNTIME_MODE_ENV}=local with a snapshot from \`npm run db:local\`.`,
+      );
+      return null;
   }
-
-  return connectLocalSnapshot();
 }
 
 /** Memoised per server process; both drivers are expensive to open and safe to share. */

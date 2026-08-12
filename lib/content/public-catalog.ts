@@ -1,5 +1,6 @@
 import 'server-only';
 import { unstable_cache } from 'next/cache';
+import { resolveRuntimeMode } from '@/lib/runtime-mode';
 import { CATALOG_TAG, CATALOG_TTL_SECONDS } from '@/lib/cache';
 import { getSqlRunner } from '@/lib/db/connect';
 import { EMPTY_CATALOG, loadPublicCatalog, type PublicCatalog } from './catalog';
@@ -27,7 +28,20 @@ async function readCatalog(): Promise<PublicCatalog> {
   }
 }
 
-export const getPublicCatalog = unstable_cache(readCatalog, ['public-catalog', 'v1'], {
-  tags: [CATALOG_TAG],
-  revalidate: CATALOG_TTL_SECONDS,
-});
+/**
+ * M7 — the runtime mode is part of the cache KEY, not just of the read.
+ *
+ * `unstable_cache` results persist in `.next/cache` ACROSS BUILDS, so without this a build that
+ * switched data sources would serve the previous source's catalog: locally, a cloud build reusing
+ * the local fixtures (or the reverse, which breaks the anon sweep); on Vercel, the first deploy
+ * after repointing `DATABASE_URL`. Keying by mode makes the two caches disjoint — cheaper, and far
+ * less surprising, than remembering to purge.
+ */
+export const getPublicCatalog = unstable_cache(
+  readCatalog,
+  ['public-catalog', 'v1', resolveRuntimeMode()],
+  {
+    tags: [CATALOG_TAG],
+    revalidate: CATALOG_TTL_SECONDS,
+  },
+);

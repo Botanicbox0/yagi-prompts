@@ -105,7 +105,7 @@ describe('prompt metadata (§13.2 SEO)', () => {
       description: 'Original prompts.',
       poster,
       video,
-      siteName: 'PLAYBOOK',
+      siteName: 'YAGI PROMPTS',
       ...overrides,
     });
 
@@ -140,7 +140,7 @@ describe('prompt metadata (§13.2 SEO)', () => {
   });
 
   it('deindexes anything that did not resolve', () => {
-    expect(unresolvedPromptMetadata('PLAYBOOK').robots).toEqual({ index: false, follow: false });
+    expect(unresolvedPromptMetadata('YAGI PROMPTS').robots).toEqual({ index: false, follow: false });
   });
 
   it('makes the gallery indexable and self-canonical', () => {
@@ -148,5 +148,22 @@ describe('prompt metadata (§13.2 SEO)', () => {
     expect(m.alternates?.canonical).toBe('/ko/prompts');
     expect(m.robots).toBeUndefined();
     expect((m.openGraph as { locale?: string }).locale).toBe('ko_KR');
+  });
+
+  /**
+   * M7 regression. The `<title>` and the OG title are NOT the same string: the locale layout
+   * appends `· {siteName}` to every child title, so a gallery title that also spelled the brand
+   * rendered "Prompts — YAGI PROMPTS · YAGI PROMPTS" in the tab. The OG card still needs the name,
+   * because it is read where the site is not.
+   */
+  it('names the site in the OG title and not in the tab title', () => {
+    const m = promptsGalleryMetadata({
+      locale: 'en',
+      title: 'Prompts',
+      ogTitle: 'Prompts — YAGI PROMPTS',
+      description: 'D',
+    });
+    expect(m.title).toBe('Prompts');
+    expect((m.openGraph as { title?: string }).title).toBe('Prompts — YAGI PROMPTS');
   });
 });

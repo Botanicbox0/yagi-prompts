@@ -20,7 +20,7 @@ const BASE = {
   slug: 'character-sheet-generation',
   title: { en: 'Character sheet generation', ko: '캐릭터 시트 제작' },
   summary: { en: 'One face, many poses.', ko: '한 얼굴, 여러 포즈.' },
-  siteName: 'PLAYBOOK',
+  siteName: 'YAGI PROMPTS',
 };
 
 const PUBLIC_HERO: ShapedAssetRef = {
@@ -93,8 +93,8 @@ describe('playbook metadata (§3.9)', () => {
   });
 
   it('deindexes draft / archived / unknown', () => {
-    expect(unresolvedPlaybookMetadata('PLAYBOOK')).toEqual({
-      title: 'PLAYBOOK',
+    expect(unresolvedPlaybookMetadata('YAGI PROMPTS')).toEqual({
+      title: 'YAGI PROMPTS',
       robots: { index: false, follow: false },
     });
   });

@@ -9,7 +9,7 @@ import type { Dictionary } from './en';
  */
 export const ko: Dictionary = {
   meta: {
-    siteName: 'PLAYBOOK',
+    siteName: 'YAGI PROMPTS',
     tagline: '직접 쓰고 직접 돌려본 Seedance 2.5 오리지널 프롬프트.',
     landingDescription:
       '여기 있는 프롬프트는 전부 저희 스튜디오에서 쓰고 Seedance 2.5로 돌려본 뒤에 올립니다. 긁어온 것도, 퍼온 것도 없습니다. 커뮤니티 레일은 @핸들과 함께 올라갑니다.',
@@ -191,9 +191,9 @@ export const ko: Dictionary = {
     fieldVideoHint: '선택이지만, 카드를 열게 만드는 건 결국 이겁니다. MP4 또는 WebM, {seconds}초·{mb}MB 이내.',
     fieldPoster: '포스터 프레임',
     fieldPosterHint: '선택입니다. 영상에서 스틸 한 장. 없으면 저희가 만듭니다.',
-    consentLabel: '제가 직접 쓴 프롬프트이며, 크레딧과 함께 PLAYBOOK에 공개되는 데 동의합니다.',
+    consentLabel: '제가 직접 쓴 프롬프트이며, 크레딧과 함께 YAGI PROMPTS에 공개되는 데 동의합니다.',
     consentLicense:
-      '프롬프트의 권리는 그대로 제출자에게 있습니다. PLAYBOOK이 이 사이트와 자체 홍보에서 @핸들과 함께 게시할 수 있는 이용 허락만 주시는 것입니다.',
+      '프롬프트의 권리는 그대로 제출자에게 있습니다. YAGI PROMPTS가 이 사이트와 자체 홍보에서 @핸들과 함께 게시할 수 있는 이용 허락만 주시는 것입니다.',
     submitButton: '검토 요청 보내기',
     successTitle: '대기열에 들어갔습니다.',
     successBody: '올리기 전에 전부 직접 확인합니다. 진행 상태는 내 계정에서 볼 수 있습니다.',
@@ -317,7 +317,7 @@ export const ko: Dictionary = {
     q3: '정말 전부 오리지널인가요?',
     a3: '네, 그게 이 제품의 전부입니다. YAGI 레일의 프롬프트는 전부 이 스튜디오에서 쓰고 Seedance 2.5로 돌려본 뒤에 공개합니다. 커뮤니티 제출도 사람이 먼저 결과를 확인한 뒤에 올라가고, 제출자의 @핸들이 함께 붙습니다.',
     q4: '여기서 생성도 돌릴 수 있나요?',
-    a4: '아니요. PLAYBOOK은 대신 생성해 주지 않습니다. 무엇을 어디서 어떤 값으로 돌려야 하는지를 알려줍니다.',
+    a4: '아니요. YAGI PROMPTS는 대신 생성해 주지 않습니다. 무엇을 어디서 어떤 값으로 돌려야 하는지를 알려줍니다.',
     q5: '전부 한국어로도 있나요?',
     a5: '제목과 설명은 한국어와 영어로 모두 씁니다. 프롬프트 자체는 번역하지 않습니다. 모델 입력값이라 번역하면 결과가 달라집니다.',
     q6: '저희 것도 만들어 주시나요?',
@@ -411,7 +411,7 @@ export const ko: Dictionary = {
     updateEyebrow: '플레이북 업데이트',
     changeNoteHeading: '무엇이 바뀌었나',
     cta: '플레이북 읽기',
-    signOff: 'PLAYBOOK — AI 스튜디오의 열린 작업장.',
+    signOff: 'YAGI PROMPTS — AI 스튜디오의 열린 작업장.',
     unsubscribe: '이 메일 수신 거부',
     manage: '알림 설정 관리',
   },
@@ -421,13 +421,13 @@ export const ko: Dictionary = {
     doneUpdates: '이제 "플레이북 업데이트" 메일은 보내지 않습니다.',
     reversible: '계정 설정에서 언제든 다시 켤 수 있습니다.',
     manage: '계정 설정',
-    home: 'PLAYBOOK으로 돌아가기',
+    home: 'YAGI PROMPTS로 돌아가기',
     invalidTitle: '유효하지 않은 링크입니다.',
     invalidBody:
       '메일 앱이 링크를 잘랐거나, 예전 서명 키로 만든 링크일 수 있습니다. 계정 설정에서 직접 스위치를 바꿔 주세요.',
   },
   admin: {
-    brand: 'PLAYBOOK 관리자',
+    brand: 'YAGI PROMPTS 관리자',
     navPrompts: '프롬프트',
     navPlaybooks: '플레이북',
     navPolicy: '기본 정책',

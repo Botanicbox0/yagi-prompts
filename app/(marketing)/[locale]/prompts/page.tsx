@@ -47,7 +47,10 @@ export async function generateMetadata({ params }: RouteParams): Promise<Metadat
   const dict = getDictionary(locale);
   return promptsGalleryMetadata({
     locale,
-    title: `${dict.meta.promptsTitle} — ${dict.meta.siteName}`,
+    // Bare in the tab (the layout template appends the brand); named in the OG card, which is read
+    // where the site is not.
+    title: dict.meta.promptsTitle,
+    ogTitle: `${dict.meta.promptsTitle} — ${dict.meta.siteName}`,
     description: dict.meta.promptsDescription,
   });
 }

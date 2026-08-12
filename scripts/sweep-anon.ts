@@ -4,6 +4,15 @@ import { PGlite } from '@electric-sql/pglite';
 import { DEFAULT_LOCAL_SNAPSHOT } from '@/lib/db/connect-shared';
 import { FIXTURE_SENTINELS } from './fixtures';
 import { HIDDEN_PROMPT_SLUGS, PROMPT_SENTINELS } from './prompt-fixtures';
+import { RUNTIME_MODE_ENV } from '@/lib/runtime-mode';
+
+/**
+ * M7: the sweep's oracle is the LOCAL snapshot (it opens `.pglite/catalog.tar.gz` directly), so the
+ * server it points at must be serving that same snapshot. Pinning the mode here does not reach the
+ * server process — start that with `npm run start:local` — but it keeps this script's own reads
+ * hermetic and states the assumption where a reader will look for it.
+ */
+process.env[RUNTIME_MODE_ENV] = 'local';
 
 /**
  * `npm run sweep:anon` — PLAN §8 M2, the authz sweep, run against a REAL server.
@@ -24,7 +33,7 @@ import { HIDDEN_PROMPT_SLUGS, PROMPT_SENTINELS } from './prompt-fixtures';
  * covered by the façade matrix on PGlite (tests/content/facade.test.ts) — see docs/SETUP.md for
  * the follow-up this leaves open.
  *
- * Usage:  npm run db:local && npm run build && npm start &  →  npm run sweep:anon
+ * Usage:  npm run db:local && npm run build:local && npm run start:local &  →  npm run sweep:anon
  *         SWEEP_BASE_URL=https://preview.example npm run sweep:anon
  */
 
@@ -723,11 +732,11 @@ async function sweepLandingPivot(): Promise<void> {
 }
 
 async function main(): Promise<void> {
-  console.log(`PLAYBOOK anon sweep → ${BASE}`);
+  console.log(`YAGI PROMPTS anon sweep → ${BASE} (local mode)`);
 
   const probe = await fetch(`${BASE}/en`, { redirect: 'manual' }).catch(() => null);
   if (probe === null) {
-    console.error(`\nno server at ${BASE}. Start one: npm run build && npm start`);
+    console.error(`\nno server at ${BASE}. Start one: npm run build:local && npm run start:local`);
     process.exitCode = 1;
     return;
   }

@@ -85,14 +85,18 @@ export function renderNotificationEmail(
   const eyebrow = isUpdate ? copy.updateEyebrow : copy.newEyebrow;
   const preheader = isUpdate ? copy.updatePreheader : copy.newPreheader;
 
+  // The wordmark is the dictionary's, not a literal: one brand token, shared with the nav.
+  const siteName = dict.meta.siteName;
+
   return {
     subject,
-    html: html({ eyebrow, preheader, title, summary, changeNote, copy, links }),
-    text: text({ eyebrow, title, summary, changeNote, copy, links }),
+    html: html({ eyebrow, preheader, title, summary, changeNote, copy, links, siteName }),
+    text: text({ eyebrow, title, summary, changeNote, copy, links, siteName }),
   };
 }
 
 interface Parts {
+  siteName: string;
   eyebrow: string;
   title: string;
   summary: string;
@@ -102,7 +106,7 @@ interface Parts {
 }
 
 function html(parts: Parts & { preheader: string }): string {
-  const { eyebrow, preheader, title, summary, changeNote, copy, links } = parts;
+  const { eyebrow, preheader, title, summary, changeNote, copy, links, siteName } = parts;
 
   const changeNoteBlock =
     changeNote === ''
@@ -125,7 +129,7 @@ function html(parts: Parts & { preheader: string }): string {
   <tr><td align="center" style="padding:40px 20px;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:560px;">
       <tr><td style="padding:0 0 32px 0;border-bottom:1px solid ${HAIRLINE};">
-        <p style="margin:0;font-family:${MONO_FONT};font-size:11px;letter-spacing:0.12em;text-transform:uppercase;color:${BLACK};">PLAYBOOK</p>
+        <p style="margin:0;font-family:${MONO_FONT};font-size:11px;letter-spacing:0.12em;text-transform:uppercase;color:${BLACK};">${escapeHtml(siteName)}</p>
       </td></tr>
 
       <tr><td style="padding:32px 0 8px 0;">
@@ -180,9 +184,9 @@ ${changeNoteBlock}
 }
 
 function text(parts: Parts): string {
-  const { eyebrow, title, summary, changeNote, copy, links } = parts;
+  const { eyebrow, title, summary, changeNote, copy, links, siteName } = parts;
   const lines = [
-    `PLAYBOOK — ${eyebrow}`,
+    `${siteName} — ${eyebrow}`,
     '',
     title,
     '',

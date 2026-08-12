@@ -39,6 +39,21 @@ describe('notification email templates (§3.5)', () => {
     expect(ko.subject).not.toBe(en.subject);
   });
 
+  /**
+   * M7: the wordmark used to be a literal in this file's HTML and again in its plain-text half.
+   * It now comes from `meta.siteName`, so the nav, the emails and the unsubscribe page rename
+   * together or not at all — the failure mode being an inbox that still says the old name months
+   * after the site stopped.
+   */
+  it('takes its wordmark from the dictionary, in both parts and both locales', () => {
+    for (const locale of ['en', 'ko'] as const) {
+      const mail = renderNotificationEmail({ kind: 'new_playbook', locale, ...CONTENT }, LINKS);
+      expect(mail.html).toContain('YAGI PROMPTS');
+      expect(mail.text.startsWith('YAGI PROMPTS — ')).toBe(true);
+      expect(mail.html).not.toMatch(/>PLAYBOOK</);
+    }
+  });
+
   it('carries the change note on an update and nothing like it on a first publication', () => {
     const update = renderNotificationEmail(
       { kind: 'playbook_update', locale: 'en', ...CONTENT },

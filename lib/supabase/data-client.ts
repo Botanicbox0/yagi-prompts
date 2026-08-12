@@ -1,5 +1,6 @@
 import 'server-only';
-import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import type { SupabaseClient } from '@supabase/supabase-js';
+import { createServiceClient } from './service-client';
 
 /**
  * PLAN §7 — factory #2 of two: the SERVICE-ROLE client.
@@ -9,25 +10,11 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
  * handlers and shaped per a server-verified session (§3.4 "enforcement is server-side only").
  *
  * The browser never sees this key and never queries data.
+ *
+ * M7 moved the construction itself into `./service-client` (same options, same memo) because the
+ * storage driver and the cloud smoke script run under `tsx`, where importing `server-only` throws.
+ * This module stays the app's only door, and keeps the guard.
  */
-
-let cached: SupabaseClient | null = null;
-
 export function createDataClient(): SupabaseClient {
-  if (cached) return cached;
-
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !serviceRoleKey) {
-    throw new Error(
-      'NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required for the data client. ' +
-        'See docs/SETUP.md.',
-    );
-  }
-
-  cached = createClient(url, serviceRoleKey, {
-    auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false },
-    global: { headers: { 'x-playbook-client': 'data' } },
-  });
-  return cached;
+  return createServiceClient();
 }

@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 import { notFound } from 'next/navigation';
 import { fontVariables } from '@/app/fonts';
 import { requireAdmin } from '@/lib/auth/viewer';
+import { getDictionary } from '@/lib/i18n/dictionaries';
 import { getLocaleFromHeaders } from '@/lib/i18n/server';
 
 /**
@@ -17,9 +18,14 @@ import { getLocaleFromHeaders } from '@/lib/i18n/server';
  */
 export const dynamic = 'force-dynamic';
 
-export const metadata: Metadata = {
-  robots: { index: false, follow: false },
-};
+/** Same reasoning as `app/(app)/layout.tsx`: own root layout, so own `<title>`. */
+export async function generateMetadata(): Promise<Metadata> {
+  const dict = getDictionary(await getLocaleFromHeaders());
+  return {
+    title: { default: dict.admin.brand, template: `%s · ${dict.admin.brand}` },
+    robots: { index: false, follow: false },
+  };
+}
 
 export default async function AdminRootLayout({ children }: { children: ReactNode }) {
   try {

@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 import { PGlite } from '@electric-sql/pglite';
 import { readFile } from 'node:fs/promises';
 import { DEFAULT_LOCAL_SNAPSHOT } from '@/lib/db/connect-shared';
+import { RUNTIME_MODE_ENV, describeRuntimeSelection } from '@/lib/runtime-mode';
 import { FIXTURE_USERS } from './fixtures';
 
 /**
@@ -22,6 +23,9 @@ import { FIXTURE_USERS } from './fixtures';
  *     here with an instruction rather than silently rendering `free`;
  *   · it enables the deterministic fake Stripe gateway when no real keys are present, so the
  *     lock → checkout → unlock loop is walkable end to end;
+ *   · M7: it pins `PLAYBOOK_MODE=local` on the child. The fixture identities exist only in the
+ *     local snapshot, so a `.env.local` carrying cloud credentials would otherwise send `dev:pro`
+ *     at an empty cloud database and render it as an anonymous visitor with no explanation;
  *   · it CANNOT affect a production build. `next dev` runs with NODE_ENV=development, and both
  *     `devIdentityUserId()` and `fakeBillingEnabled()` return null/false when NODE_ENV is
  *     'production' — which is what `npm start` (and therefore `npm run sweep:anon`) always is.
@@ -87,6 +91,7 @@ async function main(): Promise<void> {
 
   console.log(
     [
+      `runtime      : ${describeRuntimeSelection({ ...process.env, [RUNTIME_MODE_ENV]: 'local' })}`,
       `dev identity : ${verified.email} (${user.id})`,
       `derived tier : ${verified.tier}   ← from the subscriptions row, not from this flag`,
       `billing      : ${hasRealStripe ? 'live Stripe (env)' : 'deterministic fake gateway'}`,
@@ -108,6 +113,7 @@ async function main(): Promise<void> {
     stdio: 'inherit',
     env: {
       ...process.env,
+      [RUNTIME_MODE_ENV]: 'local',
       PLAYBOOK_DEV_IDENTITY: user.id,
       ...(hasRealStripe ? {} : { PLAYBOOK_FAKE_BILLING: '1' }),
     },

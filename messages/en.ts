@@ -1,7 +1,7 @@
 /** PLAN §3.9 — UI strings as dictionary modules. `en` is the shape; `ko` must match it. */
 export const en = {
   meta: {
-    siteName: 'PLAYBOOK',
+    siteName: 'YAGI PROMPTS',
     tagline: 'Original Seedance 2.5 prompts, written and tested in-house.',
     landingDescription:
       'Every prompt here was authored in our studio and run on Seedance 2.5 before it went up. Nothing scraped, nothing reposted. Plus a community rail, credited by @handle.',
@@ -190,9 +190,9 @@ export const en = {
     fieldVideoHint: 'Optional, but it is what makes a card worth opening. MP4 or WebM, up to {seconds}s and {mb}MB.',
     fieldPoster: 'Poster frame',
     fieldPosterHint: 'Optional. One still from the clip — we generate one otherwise.',
-    consentLabel: 'I wrote this prompt and I am happy for PLAYBOOK to publish it with my credit.',
+    consentLabel: 'I wrote this prompt and I am happy for YAGI PROMPTS to publish it with my credit.',
     consentLicense:
-      'You keep the prompt. You are giving PLAYBOOK a licence to display it, with your @handle, on this site and in its own promotion.',
+      'You keep the prompt. You are giving YAGI PROMPTS a licence to display it, with your @handle, on this site and in its own promotion.',
     submitButton: 'Send for review',
     successTitle: 'IN THE QUEUE.',
     successBody: 'We watch every submission back before it goes up. You will see its status on your account.',
@@ -316,7 +316,7 @@ export const en = {
     q3: 'Are these really original?',
     a3: 'Yes, and that is the whole product. Every prompt in the YAGI rail was written in this studio and run on Seedance 2.5 before it was published. Community submissions are watched back by a human before they appear, and they carry the submitter’s @handle.',
     q4: 'Can I run generations here?',
-    a4: 'No. PLAYBOOK never runs inference for you. It tells you exactly what to run, where, and with which numbers.',
+    a4: 'No. YAGI PROMPTS never runs inference for you. It tells you exactly what to run, where, and with which numbers.',
     q5: 'Is everything bilingual?',
     a5: 'Titles and explanations are written in Korean and English. Prompts themselves are not translated — they are model inputs, and translating them changes the output.',
     q6: 'Can you build this for us?',
@@ -417,7 +417,7 @@ export const en = {
     updateEyebrow: 'Playbook updated',
     changeNoteHeading: 'What changed',
     cta: 'Read the playbook',
-    signOff: 'PLAYBOOK — the open production floor of an AI studio.',
+    signOff: 'YAGI PROMPTS — the open production floor of an AI studio.',
     unsubscribe: 'Unsubscribe from these emails',
     manage: 'Manage notifications',
   },
@@ -428,7 +428,7 @@ export const en = {
     doneUpdates: 'You will not get "playbook updated" emails any more.',
     reversible: 'You can switch it back on from your account at any time.',
     manage: 'Account settings',
-    home: 'Back to PLAYBOOK',
+    home: 'Back to YAGI PROMPTS',
     invalidTitle: 'That link is not valid.',
     invalidBody:
       'It may have been cut in half by a mail client, or it belongs to an older sending key. Open your account settings and change the switch there instead.',
@@ -438,7 +438,7 @@ export const en = {
    * the completeness test does not carve out an exception, and neither should the product.
    */
   admin: {
-    brand: 'PLAYBOOK CMS',
+    brand: 'YAGI PROMPTS CMS',
     navPrompts: 'Prompts',
     navPlaybooks: 'Playbooks',
     navPolicy: 'Policy',

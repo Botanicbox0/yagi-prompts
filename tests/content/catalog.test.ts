@@ -147,4 +147,32 @@ describe('public asset URLs (§11 open item: no Supabase project yet)', () => {
     expect(publicContentUrl('abc.jpg', 'https://YOUR-PROJECT.supabase.co')).toBeNull();
     expect(publicContentUrl('abc.jpg', '')).toBeNull();
   });
+
+  /**
+   * M7 regression. The default argument reads the mode, not the raw variable: on a machine whose
+   * `.env.local` carries live credentials, a LOCAL run publishes into `.storage/` and the cloud
+   * bucket has never seen those objects — so a project URL here would render broken cards and the
+   * anon sweep would fail against bytes that were never uploaded.
+   */
+  it('is silent about a cloud project while PLAYBOOK_MODE=local', () => {
+    const saved = { mode: process.env.PLAYBOOK_MODE, url: process.env.NEXT_PUBLIC_SUPABASE_URL };
+    try {
+      process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://proj.supabase.co';
+
+      process.env.PLAYBOOK_MODE = 'local';
+      expect(publicContentUrl('abc.jpg')).toBeNull();
+      expect(isSupabaseConfigured()).toBe(false);
+
+      process.env.PLAYBOOK_MODE = 'cloud';
+      expect(publicContentUrl('abc.jpg')).toBe(
+        'https://proj.supabase.co/storage/v1/object/public/public-content/abc.jpg',
+      );
+      expect(isSupabaseConfigured()).toBe(true);
+    } finally {
+      if (saved.mode === undefined) delete process.env.PLAYBOOK_MODE;
+      else process.env.PLAYBOOK_MODE = saved.mode;
+      if (saved.url === undefined) delete process.env.NEXT_PUBLIC_SUPABASE_URL;
+      else process.env.NEXT_PUBLIC_SUPABASE_URL = saved.url;
+    }
+  });
 });
