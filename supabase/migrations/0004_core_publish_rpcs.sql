@@ -333,11 +333,13 @@ $$;
 -- ---------------------------------------------------------------------------
 -- The privileged channel: both RPCs run as `publisher`; nothing else does.
 -- ---------------------------------------------------------------------------
+-- Supabase note (cloud apply, 2026-08-13): the new owner must already hold CREATE on the schema
+-- when ownership transfers — so the schema grant comes FIRST. Harmless on PGlite (superuser applier).
+grant usage, create on schema public to publisher;
+
 alter function canonical_manifest(uuid) owner to publisher;
 alter function prepare_publish(uuid) owner to publisher;
 alter function publish_revision(uuid, uuid, text) owner to publisher;
-
-grant usage on schema public to publisher;
 grant select, insert, update, delete on
   playbooks, playbook_revisions, steps, blocks, publish_assets, notification_jobs
   to publisher;
