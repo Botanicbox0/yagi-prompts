@@ -512,6 +512,65 @@ Cadence after launch: 2 new playbooks/month minimum + revision passes when model
 
 **Final status: cross-validation complete. This document is the execution contract for Opus (M0→M5, §8), subject to the stop-gates in §11.**
 
+---
+
+## 13. Prompts pivot — v1.5 surface (founder direction, 2026-08-13)
+
+**Direction (Yagi, verbatim intent)**: the site's form follows **youmind.com/prompts/video** — but prompts-only for now, **two rails**: "Original prompts by YAGI" and community-submitted prompts, and a single model at launch: **Seedance 2.5**. Everything YAGI posts is 100% original (authored + tested in-house) — that is the positioning. Playbooks (§3) stay built but leave the nav until re-activated.
+
+**Measured reference form (YouMind, 2026-08-13 DOM)**: left-rail taxonomy (models / use-case / style / subject), masonry media-first cards (poster + hover video + title + `@author` credit + MODEL chip), weekly-popular rail, daily-drop promise. We reproduce the *form* in our §5 design language; our economics differ (they are 100% free aggregation with credits; we are original + Pro-gated).
+
+### 13.1 Content model — `prompt_items` (atomic; deliberately NOT the revision machinery)
+Prompts are single-field items with a moderation workflow; edit-in-place with status flips is honest for them. The playbook revision/trigger discipline continues to protect playbooks only.
+
+```sql
+create table prompt_items (
+  id uuid primary key default gen_random_uuid(),
+  slug text unique not null,
+  source text not null check (source in ('yagi','community')),
+  author_id uuid references profiles,        -- community: submitter; yagi: null
+  author_handle text,                        -- display credit (@handle); community defaults to profile name
+  status text not null default 'pending' check (status in ('pending','published','rejected','archived')),
+  model text not null default 'seedance-2.5',
+  title text not null,                       -- EN or submitter's language
+  title_ko text,                             -- YAGI items: required at publish; community: optional
+  prompt_text text not null,
+  text_visibility visibility not null,       -- yagi default 'pro' (admin may set 'public' teasers); community always 'public'
+  media jsonb,                               -- { video?: AssetRef, poster?: AssetRef } — zod-validated; YAGI items require media, community optional
+  use_case text[] not null default '{}',
+  featured boolean not null default false,
+  reject_reason text,
+  created_at timestamptz not null default now(),
+  published_at timestamptz,
+  updated_at timestamptz not null default now()
+);
+```
+- **Gating doctrine unchanged**: `pro` prompt text never enters any payload for non-entitled viewers (server shaping; lock panel + $9 CTA). Community text is public by definition (submission form carries a display-license consent line).
+- **Media lifecycle**: uploads → staging; on publish/approve, copy to public keys (posters/videos are card surface = public marketing doctrine §3.1). Same storage interface, small dedicated path; no revisions.
+- **Moderation**: community submissions land `pending` (visible to no one but admin + a "pending review" note to the submitter on `/account`); admin approves (may edit slug/tags/handle, set featured) or rejects with reason. Rate limit 3 submissions/day/user; text ≤ 2,000 chars; video ≤ 60s/32MB.
+
+### 13.2 IA (v1.5)
+```
+/[locale]/prompts              public gallery [static + revalidateTag('prompts')] — cards carry NO prompt text
+/[locale]/prompts/[slug]       prompt detail [dynamic, no-store] — text or lock panel per viewer
+/prompts/submit                community submission (login)      [dynamic, no-store, noindex]
+/api/prompts/copy/[id]         copy endpoint (entitlement-checked; enables copy on gallery cards without embedding text)
+/admin/prompts                 moderation queue + YAGI item authoring (admin)
+```
+- Nav becomes: **Prompts · Pricing** (+ locale toggle, sign in). Library/playbooks denavigated behind `PLAYBOOKS_IN_NAV=false` (routes stay functional; fixtures keep the machinery tested).
+- Gallery: two rails — **"ORIGINAL PROMPTS BY YAGI"** (featured-first, lock chips on pro items) and **"FROM THE COMMUNITY"** (@credits) — plus filter chips (use-case) and the single model chip SEEDANCE 2.5. Masonry, hover-autoplay muted, §5 card hover.
+- Detail: big media, prompt text/lock, model chip, author credit, use-case tags, copy button, 4 related, submit CTA strip.
+- Landing pivots copy to prompts-first (hero line, premise = 100% original manifesto, featured strip = YAGI prompt cards, stats = prompt counts); motion identity (§5) unchanged.
+- SEO: published prompt details join the sitemap with locale alternates; gallery indexed; submit/admin noindex.
+- Notifications for prompt drops: **backlog** (jobs are revision-bound today; do not extend in v1.5).
+
+### 13.3 Defaults locked (override before M6 merge)
+1. Community prompt text is always public (no paywalling other people's prompts).
+2. YAGI prompt text defaults `pro`; teasers are deliberate admin choices.
+3. Single model chip `SEEDANCE 2.5` (schema keeps `model` text for later).
+4. Community media optional (text-only cards get a typographic poster in the design language); YAGI media required.
+5. Copy buttons: community/anon = free; YAGI-pro = entitlement-gated via the copy endpoint.
+
 ### Execution log
 
 - **2026-08-12 · M5 offline scope merged** (`952e066` → main `c220b13`) — **engineering is now at "flip-the-switches" state.** Director re-ran 478/478 tests, sweep **139/139** (+63 checks: sitemap/robots content, hreflang/canonical/OG emission, unsubscribe refusals), and re-verified the worker's exactly-once posture on the demo DB (rerun = zero new sends, `sent` stays 1). Shipped: full notification pipeline (injected Resend boundary mirroring the Stripe shape; claim-time preference+entitlement re-check inside the `FOR UPDATE SKIP LOCKED` claim predicate; attempts spent at claim; 10-min lease recovery; RFC-8058 List-Unsubscribe; HMAC single-purpose unsubscribe tokens that can only ever write `false`); admin notify checkbox (kind DERIVED from prior publish state, never chosen); bilingual hand-rolled email templates (no gated content in bodies — sentinel-asserted); account toggles (Pro-only); NEW/UPDATED badges (14-day windows, NEW wins, `firstPublishedAt` = debut); sitemap/robots (showcase-only, locale alternates; middleware was 308-ing `/sitemap.xml` into a locale prefix — found by the sweep, fixed with regression test); deletion RUNBOOK; §9 content MANIFEST template with the 6-slate pre-filled; ordered 14-row go-live checklist in `docs/SETUP.md`. Durable local dev DB dir added (`PLAYBOOK_LOCAL_DB_DIR`) so the worker (a second process) shares state with the app. Zero new dependencies. **Remaining = cloud-gated only**: Supabase project (+glue migrations via MCP, service-role key, Google OAuth client, storage driver swap), Stripe live keys + webhook + real test-mode E2E, Resend domain/key, token secrets, domain + Vercel deploy, sitemap submission, launch content (§9), session-tier HTTP sweeps.
