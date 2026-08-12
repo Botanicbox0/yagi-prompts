@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 import { PGlite } from '@electric-sql/pglite';
 import { DEFAULT_LOCAL_SNAPSHOT } from '@/lib/db/connect-shared';
 import { FIXTURE_SENTINELS } from './fixtures';
+import { HIDDEN_PROMPT_SLUGS, PROMPT_SENTINELS } from './prompt-fixtures';
 
 /**
  * `npm run sweep:anon` — PLAN §8 M2, the authz sweep, run against a REAL server.
@@ -116,6 +117,15 @@ async function postJson(path: string, body: unknown): Promise<Fetched> {
 // what the running server is serving (read from the same snapshot it loaded)
 // ---------------------------------------------------------------------------
 
+interface PromptProbe {
+  id: string;
+  slug: string;
+  status: string;
+  source: string;
+  visibility: string;
+  featured: boolean;
+}
+
 interface AssetBlockRow {
   id: string;
   kind: string;
@@ -146,8 +156,18 @@ async function readSnapshot() {
     `select target_key from publish_assets where target_bucket <> 'public-content'`,
   );
 
+  // §13 — the prompts surface needs ids (the copy endpoint is keyed on them) and statuses.
+  const prompts = await db.query<PromptProbe>(
+    `select id, slug, status, source, text_visibility::text as visibility, featured
+       from prompt_items order by slug`,
+  );
+
   await db.close();
-  return { assets: assets.rows, privateKeys: privateKeys.rows.map((r) => r.target_key) };
+  return {
+    assets: assets.rows,
+    privateKeys: privateKeys.rows.map((r) => r.target_key),
+    prompts: prompts.rows,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -472,6 +492,236 @@ async function sweepUnsubscribe(): Promise<void> {
   expectAbsent('never redirects to sign-in', probe.body, '/auth/signin');
 }
 
+// ---------------------------------------------------------------------------
+// §13 — the prompts surface (M6)
+// ---------------------------------------------------------------------------
+
+const GATED_PROMPT = 'neon-alley-dolly'; // YAGI, text_visibility = pro
+const TEASER_PROMPT = 'static-portrait-window-light'; // YAGI, deliberate public teaser
+const COMMUNITY_PROMPT = 'skate-park-golden-hour'; // community, public by definition
+
+const promptToken = (slug: string) => PROMPT_SENTINELS.find((s) => s.slug === slug)!.token;
+
+/** Every sentinel an anonymous reader must NEVER meet: gated YAGI text + both moderation states. */
+const FORBIDDEN_PROMPT_SENTINELS = PROMPT_SENTINELS.filter((s) => !s.publicToAnon);
+
+/**
+ * The gallery is STATIC and cached, so it is served byte-identically to every tier. That makes it
+ * the highest-value sweep target on the site: if a single gated character can reach this document,
+ * it reaches everyone at once and stays in a CDN.
+ */
+async function sweepPromptGallery(locale: string): Promise<void> {
+  const path = `/${locale}/prompts`;
+  console.log(`\n${path} — the gallery, anonymous`);
+  const page = await get(path);
+
+  expectEqual('renders 200', page.status, 200);
+
+  // Positive controls first: without these, every absence below would pass on an empty page.
+  expectPresent('YAGI rail header', page.body, locale === 'ko' ? 'YAGI 오리지널' : 'ORIGINAL PROMPTS BY YAGI');
+  expectPresent('community rail header', page.body, locale === 'ko' ? '커뮤니티에서' : 'FROM THE COMMUNITY');
+  expectPresent('the model chip', page.body, 'SEEDANCE 2.5');
+  expectPresent('lock chips on gated cards', page.body, 'data-lock-chip');
+  expectPresent('cards are addressable', page.body, `data-prompt-card="${GATED_PROMPT}"`);
+  expectPresent('community credit', page.body, '@hana');
+  expectPresent('the use-case filter', page.body, 'data-use-case-filter');
+  expectPresent('the submit CTA', page.body, '/prompts/submit');
+
+  // The property that matters: no prompt text of ANY kind reaches a card.
+  for (const sentinel of PROMPT_SENTINELS) {
+    expectAbsent(`NO ${sentinel.status}/${sentinel.visibility} text on a card (${sentinel.token})`, page.body, sentinel.token);
+  }
+  for (const slug of HIDDEN_PROMPT_SLUGS) {
+    expectAbsent(`no ${slug} card at all`, page.body, `data-prompt-card="${slug}"`);
+  }
+  expectAbsent('no staging keys in the gallery', page.body, 'content/prompt/');
+}
+
+async function sweepPromptDetails(locale: string, prompts: PromptProbe[]): Promise<void> {
+  console.log(`\n/${locale}/prompts/[slug] — details, anonymous`);
+  const gatedRow = prompts.find((p) => p.slug === GATED_PROMPT)!;
+
+  const gated = await get(`/${locale}/prompts/${GATED_PROMPT}`);
+  expectEqual('a Pro-gated prompt still renders 200', gated.status, 200);
+  expectEqual('…and is never cached (§3.4)', gated.cacheControl, 'private, no-store');
+  expectPresent('…with the §5.5 lock panel', gated.body, 'data-lock-panel');
+  expectPresent('…and the card surface anyone may see', gated.body, 'data-model-chip');
+  expectAbsent('…and NONE of its text', gated.body, promptToken(GATED_PROMPT));
+  // Its OWN copy button is gone. The related cards keep theirs — they are a different prompt each,
+  // and the endpoint decides per id, so a copy control there is not a claim about this one.
+  expectAbsent('…and no copy button for itself', gated.body, `data-copy-prompt="${gatedRow.id}"`);
+
+  const teaser = await get(`/${locale}/prompts/${TEASER_PROMPT}`);
+  expectEqual('a public teaser renders 200', teaser.status, 200);
+  expectPresent('…with its text (positive control)', teaser.body, promptToken(TEASER_PROMPT));
+  expectPresent('…in the monospace block', teaser.body, 'data-prompt-text');
+  expectAbsent('…and no lock panel', teaser.body, 'data-lock-panel');
+
+  const community = await get(`/${locale}/prompts/${COMMUNITY_PROMPT}`);
+  expectEqual('a community prompt renders 200', community.status, 200);
+  expectPresent('…with its text, free to everyone (§13.3-1)', community.body, promptToken(COMMUNITY_PROMPT));
+
+  for (const slug of HIDDEN_PROMPT_SLUGS) {
+    expectEqual(`${slug} 404s`, (await get(`/${locale}/prompts/${slug}`)).status, 404);
+  }
+  expectEqual('an unknown slug 404s', (await get(`/${locale}/prompts/no-such-prompt`)).status, 404);
+
+  // Whatever the page did, the two moderation sentinels are nowhere on the public surface.
+  for (const path of [`/${locale}/prompts`, `/${locale}/prompts/${GATED_PROMPT}`, '/sitemap.xml']) {
+    const response = await get(path);
+    for (const sentinel of FORBIDDEN_PROMPT_SENTINELS) {
+      expectAbsent(`${path}: no ${sentinel.token}`, response.body, sentinel.token);
+    }
+  }
+}
+
+/** §13.3-5 — the gate that lets a static gallery offer copy at all. */
+async function sweepPromptCopy(prompts: PromptProbe[]): Promise<void> {
+  console.log('\n/api/prompts/copy — entitlement, anonymous');
+
+  const bySlug = (slug: string) => prompts.find((p) => p.slug === slug);
+  const community = bySlug(COMMUNITY_PROMPT);
+  const teaser = bySlug(TEASER_PROMPT);
+  const gated = bySlug(GATED_PROMPT);
+  const pending = prompts.find((p) => p.status === 'pending');
+  const rejected = prompts.find((p) => p.status === 'rejected');
+
+  if (!community || !teaser || !gated || !pending || !rejected) {
+    fail('prompt fixture discovery', 'the local snapshot is missing a prompt — re-run npm run db:local');
+    return;
+  }
+
+  const copy = (id: string) => postJson(`/api/prompts/copy/${id}`, {});
+
+  const open = await copy(community.id);
+  expectEqual('a community prompt copies for anon', open.status, 200);
+  expectPresent('…and the answer is the real text', open.body, promptToken(COMMUNITY_PROMPT));
+  expectEqual('…and is never cached', open.cacheControl, 'private, no-store');
+
+  const teaserCopy = await copy(teaser.id);
+  expectEqual('a public YAGI teaser copies for anon', teaserCopy.status, 200);
+
+  const refused = await copy(gated.id);
+  expectOneOf('a Pro prompt refuses anon', refused.status, [401, 403]);
+  expectAbsent('…with no text in the refusal', refused.body, promptToken(GATED_PROMPT));
+  expectPresent('…and a way forward', refused.body, 'sign_in_required');
+  expectEqual('…never cached either', refused.cacheControl, 'private, no-store');
+
+  expectEqual('a pending submission 404s', (await copy(pending.id)).status, 404);
+  expectEqual('a rejected submission 404s', (await copy(rejected.id)).status, 404);
+  expectEqual(
+    'an unknown id 404s',
+    (await copy('11111111-2222-4333-8444-555555555555')).status,
+    404,
+  );
+  expectEqual('a malformed id 404s rather than 500s', (await copy('not-a-uuid')).status, 404);
+  expectEqual('GET is not the copy verb', (await get(`/api/prompts/copy/${community.id}`)).status, 405);
+}
+
+/** §13.1 — poster/clip bytes are public marketing surface for PUBLISHED items and nothing else. */
+async function sweepPromptMedia(prompts: PromptProbe[]): Promise<void> {
+  console.log('\n/api/prompts/media — public bytes, published rows only');
+
+  const gated = prompts.find((p) => p.slug === GATED_PROMPT)!;
+  const pending = prompts.find((p) => p.status === 'pending')!;
+
+  const poster = await get(`/api/prompts/media/${encodeURIComponent(`${gated.id}:poster`)}`);
+  expectEqual('a published poster is served', poster.status, 200);
+  expectEqual('…as the declared type', poster.contentType, 'image/png');
+  const isPng = poster.bytes[0] === 0x89 && poster.bytes[1] === 0x50 && poster.bytes[2] === 0x4e;
+  if (isPng) ok('…and the bytes are the real object');
+  else fail('poster bytes', 'response is not a PNG');
+
+  const clip = await get(`/api/prompts/media/${encodeURIComponent(`${gated.id}:video`)}`);
+  expectEqual('a published clip is served', clip.status, 200);
+  expectEqual('…as video/mp4', clip.contentType, 'video/mp4');
+
+  // The pending submission's clip exists on disk and is unreachable here: it has no published key.
+  expectEqual(
+    'a PENDING submission’s clip is unreachable',
+    (await get(`/api/prompts/media/${encodeURIComponent(`${pending.id}:video`)}`)).status,
+    404,
+  );
+  expectEqual(
+    'an unknown ref 404s',
+    (await get('/api/prompts/media/11111111-2222-4333-8444-555555555555%3Aposter')).status,
+    404,
+  );
+  expectEqual('a malformed ref 404s', (await get('/api/prompts/media/nonsense')).status, 404);
+  expectEqual('a bad kind 404s', (await get(`/api/prompts/media/${gated.id}%3Aoriginal`)).status, 404);
+}
+
+/** §13.2 — the gated halves of the prompts surface, from outside. */
+async function sweepPromptGates(): Promise<void> {
+  console.log('\n/prompts/submit + /admin/prompts — anonymous');
+
+  const submit = await get('/prompts/submit');
+  expectOneOf('/prompts/submit redirects anon', submit.status, [302, 307, 308]);
+  if (submit.location && !submit.location.includes('/prompts/submit')) {
+    ok('…away from the form', submit.location);
+  } else fail('/prompts/submit redirect target', `unexpected location ${submit.location}`);
+
+  const admin = await get('/admin/prompts');
+  expectOneOf('/admin/prompts refuses anon', admin.status, [302, 307, 308, 404]);
+  expectAbsent('…and leaks no queue', admin.body, 'data-prompt-queue');
+
+  // The gallery is public and must NOT be caught by the app-path gate.
+  expectEqual('/en/prompts stays public', (await get('/en/prompts')).status, 200);
+  const unprefixed = await get('/prompts');
+  expectOneOf('unprefixed /prompts 308s into a locale', unprefixed.status, [307, 308]);
+  if (unprefixed.location?.includes('/prompts')) ok('…keeping the path', unprefixed.location);
+  else fail('/prompts redirect target', `unexpected location ${unprefixed.location}`);
+}
+
+/** §13.2 SEO: the gallery and every published prompt are indexed; moderation states are not. */
+async function sweepPromptSeo(): Promise<void> {
+  console.log('\nsitemap + <head> — the prompts surface');
+
+  const sitemap = await get('/sitemap.xml');
+  expectPresent('lists the gallery (en)', sitemap.body, '/en/prompts<');
+  expectPresent('lists the gallery (ko)', sitemap.body, '/ko/prompts<');
+  for (const slug of [GATED_PROMPT, TEASER_PROMPT, COMMUNITY_PROMPT]) {
+    expectPresent(`lists /en/prompts/${slug}`, sitemap.body, `/en/prompts/${slug}`);
+    expectPresent(`lists /ko/prompts/${slug}`, sitemap.body, `/ko/prompts/${slug}`);
+  }
+  for (const slug of HIDDEN_PROMPT_SLUGS) {
+    expectAbsent(`never lists ${slug}`, sitemap.body, slug);
+  }
+  expectAbsent('never lists the submission form', sitemap.body, '/prompts/submit');
+
+  const robots = await get('/robots.txt');
+  expectPresent('robots disallows the submission form', robots.body, 'Disallow: /prompts/submit');
+
+  const detail = await get(`/en/prompts/${GATED_PROMPT}`);
+  expectPresent('self-canonical', detail.body, `rel="canonical" href="${BASE}/en/prompts/${GATED_PROMPT}"`);
+  expectPresent('hreflang ko', detail.body, `hrefLang="ko" href="${BASE}/ko/prompts/${GATED_PROMPT}"`);
+  expectPresent('hreflang x-default', detail.body, 'hrefLang="x-default"');
+  // A gated prompt page is still a public page — only the text is gated.
+  expectAbsent('a Pro-gated prompt is NOT deindexed', detail.body, 'name="robots" content="noindex');
+
+  const gallery = await get('/en/prompts');
+  expectPresent('the gallery self-canonicals', gallery.body, `rel="canonical" href="${BASE}/en/prompts"`);
+  expectAbsent('the gallery is indexed', gallery.body, 'name="robots" content="noindex');
+}
+
+/** §13.2 — the landing pivot: prompts in the nav, prompt cards in the featured strip. */
+async function sweepLandingPivot(): Promise<void> {
+  console.log('\n/en — the landing after the pivot');
+  const page = await get('/en');
+
+  expectEqual('renders 200', page.status, 200);
+  expectPresent('nav points at the gallery', page.body, 'href="/en/prompts"');
+  expectPresent('featured strip is prompt cards', page.body, 'data-prompt-card=');
+  expectPresent('the model is on the page', page.body, 'SEEDANCE 2.5');
+  // PLAYBOOKS_IN_NAV=false: the library keeps working but is not linked from the marketing chrome.
+  expectAbsent('the library is denavigated', page.body, 'href="/library"');
+  for (const sentinel of PROMPT_SENTINELS) {
+    expectAbsent(`no prompt text on the landing (${sentinel.token})`, page.body, sentinel.token);
+  }
+
+  expectEqual('/library still works for anyone who has the URL', (await get('/library')).status, 307);
+}
+
 async function main(): Promise<void> {
   console.log(`PLAYBOOK anon sweep → ${BASE}`);
 
@@ -482,7 +732,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  const { assets, privateKeys } = await readSnapshot();
+  const { assets, privateKeys, prompts } = await readSnapshot();
 
   await sweepShowcasePage('en', privateKeys);
   await sweepShowcasePage('ko', privateKeys);
@@ -494,6 +744,16 @@ async function main(): Promise<void> {
   await sweepSeo();
   await sweepDetailMetadata();
   await sweepUnsubscribe();
+
+  // --- M6 §13: the prompts surface ----------------------------------------
+  await sweepPromptGallery('en');
+  await sweepPromptGallery('ko');
+  await sweepPromptDetails('en', prompts);
+  await sweepPromptCopy(prompts);
+  await sweepPromptMedia(prompts);
+  await sweepPromptGates();
+  await sweepPromptSeo();
+  await sweepLandingPivot();
 
   console.log(
     `\n${failures === 0 ? 'SWEEP PASSED' : 'SWEEP FAILED'} — ${checks - failures}/${checks} checks passed`,

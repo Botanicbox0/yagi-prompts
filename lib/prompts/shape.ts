@@ -1,0 +1,158 @@
+import type { AssetRef } from '@/lib/content/schemas';
+import { canView, type Tier, type Visibility } from '@/lib/content/visibility';
+import { promptMediaPath, promptMediaRef } from './links';
+import { parsePromptMedia, type MediaKind, type PromptSource } from './schemas';
+
+/**
+ * PLAN §13.1 — "Gating doctrine unchanged: `pro` prompt text never enters any payload for
+ * non-entitled viewers (server shaping; lock panel + $9 CTA)."
+ *
+ * This is `lib/content/shape.ts` for prompts: pure, side-effect free, no session, no DB, no env.
+ * The façade resolves the viewer and hands a tier down; everything below is a function of
+ * (row × tier).
+ *
+ * The same two rules the block shaper is held to, and they are tested the same way:
+ *   1. A gated prompt yields `{ locked: true }` — chrome, title, media and model chip, but the
+ *      `text` KEY DOES NOT EXIST on the object. Not empty string, not null: absent, so no
+ *      serialisation, Flight chunk or metadata tag can carry it by accident.
+ *   2. No storage key ever leaves this function. `staging_key` is dropped unconditionally and the
+ *      published key is replaced by a servable URL — posters and videos are public marketing
+ *      surface by doctrine (§13.1/§3.1), so that URL is public, never a capability.
+ */
+
+// ---------------------------------------------------------------------------
+// input — what the repo hands over
+// ---------------------------------------------------------------------------
+
+export interface PromptRowInput {
+  id: string;
+  slug: string;
+  source: PromptSource;
+  authorHandle: string | null;
+  model: string;
+  title: string;
+  titleKo: string | null;
+  promptText: string;
+  textVisibility: Visibility;
+  /** Raw `media` jsonb, parsed here through the §13.1 schema. */
+  media: unknown;
+  useCase: string[];
+  featured: boolean;
+  publishedAt: string | null;
+}
+
+// ---------------------------------------------------------------------------
+// output
+// ---------------------------------------------------------------------------
+
+export interface ShapedPromptMedia {
+  /** 'public' = CDN object in `public-content`; 'route' = the public prompt-media route. */
+  source: 'public' | 'route';
+  src: string;
+  mime: string;
+  w?: number;
+  h?: number;
+  duration_s?: number;
+}
+
+interface ShapedPromptBase {
+  id: string;
+  slug: string;
+  source: PromptSource;
+  authorHandle: string | null;
+  model: string;
+  title: string;
+  titleKo: string | null;
+  useCase: string[];
+  featured: boolean;
+  publishedAt: string | null;
+  poster: ShapedPromptMedia | null;
+  video: ShapedPromptMedia | null;
+  /** The gate this item's text sits behind — safe to publish; it is what the lock chip renders. */
+  visibility: Visibility;
+  tier: Tier;
+}
+
+export type ShapedPrompt =
+  | (ShapedPromptBase & { locked: true })
+  | (ShapedPromptBase & { locked: false; text: string });
+
+export interface PromptShapeOptions {
+  /**
+   * `public-content` key → servable URL, or `null` when no CDN is configured (§11).
+   *
+   * `null` is a meaningful answer, exactly as in `lib/content/shape.ts`: the fallback is the
+   * app's own public prompt-media route, which serves the same bytes under the same doctrine.
+   */
+  publicUrl?: (key: string) => string | null;
+  /** Ref (`{id}:poster`) → the public prompt-media route path. */
+  mediaUrl?: (ref: string) => string;
+}
+
+const defaultMediaUrl = (ref: string) => promptMediaPath(ref);
+
+function shapeAsset(
+  ref: AssetRef,
+  mediaRef: string,
+  opts: Required<PromptShapeOptions>,
+): ShapedPromptMedia | null {
+  // An asset that has not been copied to the public bucket yet is NOT servable. Returning null is
+  // the honest answer: the card falls back to its typographic poster (§13.3-4) rather than
+  // emitting a URL that 404s, and a staging key can never be the thing that leaks.
+  const published = ref.bucket === 'public-content' && Boolean(ref.published_key);
+  if (!published) return null;
+
+  const publicSrc = opts.publicUrl(ref.published_key as string);
+  const shaped: ShapedPromptMedia = publicSrc
+    ? { source: 'public', src: publicSrc, mime: ref.mime }
+    : { source: 'route', src: opts.mediaUrl(mediaRef), mime: ref.mime };
+  if (ref.w !== undefined) shaped.w = ref.w;
+  if (ref.h !== undefined) shaped.h = ref.h;
+  if (ref.duration_s !== undefined) shaped.duration_s = ref.duration_s;
+  return shaped;
+}
+
+/** The media half on its own — the card projection needs it without any of the text machinery. */
+export function shapePromptMedia(
+  id: string,
+  media: unknown,
+  options: PromptShapeOptions = {},
+): { poster: ShapedPromptMedia | null; video: ShapedPromptMedia | null } {
+  const opts: Required<PromptShapeOptions> = {
+    publicUrl: options.publicUrl ?? (() => null),
+    mediaUrl: options.mediaUrl ?? defaultMediaUrl,
+  };
+  const parsed = parsePromptMedia(media);
+  const shape = (kind: MediaKind, ref: AssetRef | undefined) =>
+    ref === undefined ? null : shapeAsset(ref, promptMediaRef(id, kind), opts);
+  return { poster: shape('poster', parsed.poster), video: shape('video', parsed.video) };
+}
+
+/** The gate: `canView(tier, text_visibility)` and nothing else decides whether `text` exists. */
+export function shapePrompt(
+  row: PromptRowInput,
+  tier: Tier,
+  options: PromptShapeOptions = {},
+): ShapedPrompt {
+  const { poster, video } = shapePromptMedia(row.id, row.media, options);
+
+  const base: ShapedPromptBase = {
+    id: row.id,
+    slug: row.slug,
+    source: row.source,
+    authorHandle: row.authorHandle,
+    model: row.model,
+    title: row.title,
+    titleKo: row.titleKo,
+    useCase: row.useCase,
+    featured: row.featured,
+    publishedAt: row.publishedAt,
+    poster,
+    video,
+    visibility: row.textVisibility,
+    tier,
+  };
+
+  if (!canView(tier, row.textVisibility)) return { ...base, locked: true };
+  return { ...base, locked: false, text: row.promptText };
+}

@@ -21,8 +21,22 @@ export function isLocale(value: unknown): value is Locale {
   return typeof value === 'string' && (LOCALES as readonly string[]).includes(value);
 }
 
-/** Public paths carry a locale prefix; everything else is app surface. */
-export const APP_PREFIXES = ['/library', '/account', '/billing', '/admin'] as const;
+/**
+ * Public paths carry a locale prefix; everything else is app surface.
+ *
+ * `/prompts/submit` is the §13.2 outlier and is listed DEEP on purpose: the gallery
+ * (`/[locale]/prompts`) is public and locale-prefixed, while the submission form is login-gated,
+ * `no-store` and `noindex`. Prefix matching is `=== p || startsWith(p + '/')`, so listing the two
+ * segments gates the form without ever catching an unprefixed `/prompts`, which still 308s into
+ * the reader's locale.
+ */
+export const APP_PREFIXES = [
+  '/library',
+  '/account',
+  '/billing',
+  '/admin',
+  '/prompts/submit',
+] as const;
 
 export function isAppPath(pathname: string): boolean {
   return APP_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
@@ -38,6 +52,20 @@ export function isAppPath(pathname: string): boolean {
  */
 export function isPlaybookDetailPath(rest: string): boolean {
   return rest === '/p' || rest.startsWith('/p/');
+}
+
+/**
+ * §13.2 — `/[locale]/prompts/[slug]`, the prompts surface's viewer-shaped route.
+ *
+ * The same two independent properties as the playbook detail: indexable (a Pro-gated prompt page is
+ * still public marketing surface — only the text is gated) and never stored (its HTML differs by
+ * tier). The GALLERY is deliberately excluded: `/{locale}/prompts` is static, cached and identical
+ * for everyone, which is the whole reason the card projection carries no text.
+ *
+ * `/prompts/submit` never reaches here — it is unprefixed app surface (`APP_PREFIXES`).
+ */
+export function isPromptDetailPath(rest: string): boolean {
+  return rest.startsWith('/prompts/');
 }
 
 /** Splits `/ko/pricing` into `{ locale: 'ko', rest: '/pricing' }`; `null` locale when unprefixed. */

@@ -49,8 +49,14 @@ describe('dictionary completeness (§3.9)', () => {
     for (const [key, value] of enLeaves) {
       expect(placeholders(koMap.get(key) ?? ''), key).toEqual(placeholders(value));
     }
-    // The count line is the one templated string M1 adds; guard it explicitly.
-    expect(placeholders(en.pricing.countsLine)).toEqual(['playbooks', 'prompts']);
+    /**
+     * The count line is the one templated string M1 added; guard it explicitly.
+     *
+     * M6 changed WHAT it counts, not that it is guarded: the pivot (§13) made prompt counts the
+     * honest headline number, so the placeholders moved from `{prompts}/{playbooks}` to
+     * `{yagi}/{community}` — the two rails §13.2 actually renders.
+     */
+    expect(placeholders(en.pricing.countsLine)).toEqual(['community', 'yagi']);
   });
 
   it('actually translates the prose rather than copying English into ko', () => {
@@ -67,6 +73,10 @@ describe('dictionary completeness (§3.9)', () => {
       'howItReads.stepsIndex',
       'howItReads.blocksIndex',
       'howItReads.unlockIndex',
+      // M6: the studio's own mark. "YAGI" is a name, and a transliteration ("야기") would read as
+      // a different brand rather than a translation — the same reason `meta.siteName` is here.
+      'featured.badge',
+      'admin.sourceYagi',
     ]);
 
     const untranslated = enLeaves

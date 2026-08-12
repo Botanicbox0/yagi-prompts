@@ -2,6 +2,7 @@ import type { Viewer } from '@/lib/auth/identity';
 import type { SqlRunner } from '@/lib/db/sql-runner';
 import { parseMediaRef } from '@/lib/content/media-ref';
 import { AssetRefSchema, safeParseBlock, type AssetRef, type BlockKind } from '@/lib/content/schemas';
+import { parsePromptMedia } from '@/lib/prompts/schemas';
 import { STAGING_BUCKET } from '@/lib/storage';
 
 /**
@@ -28,6 +29,30 @@ import { STAGING_BUCKET } from '@/lib/storage';
  */
 
 export const ADMIN_TOKEN_PREFIX = 'admin:';
+
+/**
+ * §13.2/F — prompt refs, namespaced so they cannot collide with a block id or `{revisionId}:hero`.
+ *
+ * `prompt:{promptId}:{poster|video}`. Moderation without watching the clip is not moderation, and
+ * a submission's media sits in PRIVATE staging until it is approved — so this is the only path
+ * that can show it, and it is admin-only for exactly as long as the item is unpublished.
+ */
+export const PROMPT_REF_PREFIX = 'prompt:';
+
+export function promptAdminRef(id: string, kind: 'poster' | 'video'): string {
+  return `${PROMPT_REF_PREFIX}${id}:${kind}`;
+}
+
+function parsePromptRef(raw: string): { id: string; kind: 'poster' | 'video' } | null {
+  if (!raw.startsWith(PROMPT_REF_PREFIX)) return null;
+  const rest = raw.slice(PROMPT_REF_PREFIX.length);
+  const at = rest.lastIndexOf(':');
+  if (at <= 0) return null;
+  const id = rest.slice(0, at);
+  const kind = rest.slice(at + 1);
+  if (kind !== 'poster' && kind !== 'video') return null;
+  return { id, kind };
+}
 
 export function adminTokenRef(ref: string): string {
   return `${ADMIN_TOKEN_PREFIX}${ref}`;
@@ -77,6 +102,37 @@ export async function authorizeAdminMedia(
 ): Promise<AdminMediaAuthorization> {
   const denied = gateViewer(viewer);
   if (denied) return denied;
+
+  // §13 prompts: a different table, the same three rules — admin only, key read from the ROW, and
+  // never anything but the private staging object.
+  const promptRef = parsePromptRef(rawRef);
+  if (promptRef !== null) {
+    if (!UUID.test(promptRef.id)) return NOT_FOUND;
+    const { rows } = await sql.query<{ media: unknown; slug: string }>(
+      'select media, slug from prompt_items where id = $1',
+      [promptRef.id],
+    );
+    const row = rows[0];
+    if (!row) return NOT_FOUND;
+    const asset = parsePromptMedia(row.media)[promptRef.kind];
+    if (!asset) return NOT_FOUND;
+    const key = stagingOf(asset);
+    if (key === null) return NOT_FOUND;
+    return {
+      status: 'ok',
+      object: {
+        ref: rawRef,
+        kind: 'asset',
+        bucket: STAGING_BUCKET,
+        key,
+        mime: asset.mime,
+        filename: null,
+        revisionId: promptRef.id,
+        revisionState: 'draft',
+        slug: row.slug,
+      },
+    };
+  }
 
   const ref = parseMediaRef(rawRef);
   if (ref === null) return NOT_FOUND;

@@ -38,13 +38,20 @@ describe('recordEvent (§6 events)', () => {
     (await sql.query<EventRow>('select type, user_id, playbook_id, meta from events order by id'))
       .rows;
 
-  it('carries exactly the five types §6 allows', () => {
+  /**
+   * §6 shipped five; §13.2's copy endpoint added the sixth together with migration 0006. The
+   * literal union and the CHECK constraint have to move as ONE change — this assertion is what
+   * makes forgetting the migration a red test rather than a runtime constraint violation on a
+   * fire-and-forget insert nobody would see fail.
+   */
+  it('carries exactly the six types §6 + §13.2 allow', () => {
     expect([...EVENT_TYPES]).toEqual([
       'view_playbook',
       'hit_lock',
       'start_checkout',
       'unlock_success',
       'hire_click',
+      'copy_prompt',
     ]);
   });
 

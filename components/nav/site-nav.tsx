@@ -22,8 +22,6 @@ import { BREAKPOINTS, NAV_HEIGHT, type SectionTheme } from '@/lib/motion/geometr
 
 export interface NavLabels {
   brand: string;
-  library: string;
-  pricing: string;
   signIn: string;
   menu: string;
   close: string;
@@ -31,14 +29,29 @@ export interface NavLabels {
   skipToContent: string;
 }
 
+export interface NavLink {
+  href: string;
+  label: string;
+}
+
 export function SiteNav({
   locale,
   labels,
+  links,
+  signInNext,
   localeToggle,
   initialTheme = 'light',
 }: {
   locale: string;
   labels: NavLabels;
+  /**
+   * §13.2 — the nav's contents are decided by the SERVER (`components/marketing/chrome.tsx`), which
+   * is where `PLAYBOOKS_IN_NAV` lives. Passing the resolved list keeps this client component free
+   * of product policy and keeps the flag a one-line change in one file.
+   */
+  links: NavLink[];
+  /** Where a sign-in returns to. `/prompts` is the v1.5 home; `/library` was the v1 one. */
+  signInNext: string;
   localeToggle: ReactNode;
   initialTheme?: SectionTheme;
 }) {
@@ -85,11 +98,7 @@ export function SiteNav({
     return () => window.removeEventListener('resize', onResize);
   }, [open]);
 
-  const signInHref = `/auth/signin?next=%2Flibrary&locale=${locale}`;
-  const links = [
-    { href: '/library', label: labels.library },
-    { href: `/${locale}/pricing`, label: labels.pricing },
-  ];
+  const signInHref = `/auth/signin?next=${encodeURIComponent(signInNext)}&locale=${locale}`;
 
   return (
     <>

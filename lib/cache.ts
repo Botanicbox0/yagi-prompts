@@ -14,3 +14,17 @@ export const CATALOG_TTL_SECONDS = 3600;
 export function revalidateCatalog(): void {
   revalidateTag(CATALOG_TAG);
 }
+
+/**
+ * PLAN §13.2 — the prompts gallery is `[static + revalidateTag('prompts')]`.
+ *
+ * A second tag rather than a wider `catalog` one: publishing a playbook and approving a community
+ * prompt are different events with different frequencies, and a moderation queue that invalidated
+ * the whole marketing tree on every approve would make the busiest write path the most expensive.
+ * The landing reads BOTH projections, so it carries both tags and either one refreshes it.
+ */
+export const PROMPTS_TAG = 'prompts';
+
+export function revalidatePrompts(): void {
+  revalidateTag(PROMPTS_TAG);
+}

@@ -25,6 +25,14 @@ export interface AdminContext {
    * and asserts that publishing — and only publishing — calls it.
    */
   revalidate?: () => void;
+  /**
+   * `revalidateTag('prompts')` (§13.2), injected on the same terms and for the same reason.
+   *
+   * A second function rather than a parameter on the first: the two tags belong to two different
+   * publication events (a playbook goes live vs a community prompt is approved), and an operation
+   * that called the wrong one would be a silently stale page rather than a test failure.
+   */
+  revalidatePrompts?: () => void;
 }
 
 /** Codes, never prose: the UI maps them through the bilingual dictionary (§3.9). */
@@ -38,7 +46,10 @@ export type AdminSuccessCode =
   | 'cachesRefreshed'
   | 'draftOpened'
   | 'archived'
-  | 'unarchived';
+  | 'unarchived'
+  /** §13.1 moderation outcomes — a submission becoming public is not the same event as a save. */
+  | 'approved'
+  | 'rejected';
 
 export type AdminErrorCode =
   | 'forbidden'
@@ -55,6 +66,8 @@ export type AdminErrorCode =
   | 'localeIncomplete'
   | 'assetIncomplete'
   | 'storage'
+  /** §13.1 caps: a posted file the server refused (size, duration or type). */
+  | 'upload'
   | 'unknown';
 
 export interface AdminSuccess {

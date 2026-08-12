@@ -2,8 +2,11 @@ import type { Metadata } from 'next';
 import { DEFAULT_LOCALE, isLocale, type Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/dictionaries';
 import { getPublicCatalog } from '@/lib/content/public-catalog';
-import { featuredCards } from '@/lib/content/catalog';
+import { getPromptCatalog } from '@/lib/prompts/public-catalog';
+import { landingPromptCards } from '@/lib/prompts/catalog';
+import { USE_CASES } from '@/lib/prompts/schemas';
 import { marqueeItems } from '@/lib/marquee';
+import { useCaseLabel } from '@/components/prompts/labels';
 import { MarketingFooter, MarketingNav, adLabels } from '@/components/marketing/chrome';
 import {
   Featured,
@@ -58,9 +61,17 @@ export default async function LandingPage({ params }: { params: Promise<{ locale
   const locale: Locale = isLocale(raw) ? raw : DEFAULT_LOCALE;
   const dict = getDictionary(locale);
 
-  const catalog = await getPublicCatalog();
-  const cards = featuredCards(catalog);
-  const ticker = marqueeItems(catalog.totals);
+  // Two tagged projections, two invalidation events (§13.2): `prompts` moves whenever a prompt is
+  // published or approved, `catalog` whenever a playbook is. The landing reads both, so either one
+  // refreshes it.
+  const [catalog, prompts] = await Promise.all([getPublicCatalog(), getPromptCatalog()]);
+  const cards = landingPromptCards(prompts);
+  // §13.2: "marquee items can include SEEDANCE 2.5 + use-case vocab". The model leads, the
+  // use cases follow, and the studio's real tool list from the playbook catalog tops it up.
+  const ticker = marqueeItems({
+    models: [prompts.totals.modelLabel, ...catalog.totals.models],
+    tools: [...USE_CASES.map((value) => useCaseLabel(dict, value)), ...catalog.totals.tools],
+  });
   const ads = adLabels(dict);
 
   return (
@@ -77,7 +88,7 @@ export default async function LandingPage({ params }: { params: Promise<{ locale
             <AdCard labels={ads} />
           </AdRail>
 
-          <Premise dict={dict} totals={catalog.totals} />
+          <Premise dict={dict} totals={prompts.totals} />
 
           <MarqueeStrip dict={dict} items={ticker} />
 
@@ -115,7 +126,7 @@ export default async function LandingPage({ params }: { params: Promise<{ locale
             </div>
           </section>
 
-          <PricingSummary locale={locale} dict={dict} totals={catalog.totals} />
+          <PricingSummary locale={locale} dict={dict} totals={prompts.totals} />
 
           <section data-section data-theme="dark" className="section">
             <Faq

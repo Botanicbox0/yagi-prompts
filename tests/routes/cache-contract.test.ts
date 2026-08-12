@@ -3,6 +3,7 @@ import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { CATALOG_TAG, CATALOG_TTL_SECONDS } from '@/lib/cache';
+import { isPlaybookDetailPath, isPromptDetailPath } from '@/lib/i18n/config';
 
 const ROOT = fileURLToPath(new URL('../..', import.meta.url));
 const read = (...parts: string[]) => readFileSync(join(ROOT, ...parts), 'utf8');
@@ -33,6 +34,9 @@ describe('route cache modes (§3.4 / §4)', () => {
     for (const file of [
       ['app', '(marketing)', '[locale]', 'page.tsx'],
       ['app', '(marketing)', '[locale]', 'pricing', 'page.tsx'],
+      // §13.2 — the prompts gallery joins them: static, tagged, TTL-floored. It can only be
+      // static because its card projection carries zero gated bytes.
+      ['app', '(marketing)', '[locale]', 'prompts', 'page.tsx'],
     ]) {
       const source = read(...file);
       expect(source, file.join('/')).toContain(`export const revalidate = ${CATALOG_TTL_SECONDS}`);
@@ -43,19 +47,41 @@ describe('route cache modes (§3.4 / §4)', () => {
     expect(CATALOG_TAG).toBe('catalog');
   });
 
-  it('reads the catalog through the tagged projection, not a fixture shortcut', () => {
-    for (const file of [
-      ['app', '(marketing)', '[locale]', 'page.tsx'],
-      ['app', '(marketing)', '[locale]', 'pricing', 'page.tsx'],
-    ]) {
-      expect(read(...file), file.join('/')).toContain(
-        "from '@/lib/content/public-catalog'",
-      );
+  /**
+   * M6 added a SECOND tagged projection (§13.2 tag `prompts`), so the static surfaces no longer
+   * all read the same one: the landing reads both, pricing and the gallery count prompts. What has
+   * not changed — and what this asserts — is that every static page reads a TAGGED, TTL-floored
+   * projection rather than the database directly or a fixture shortcut.
+   */
+  it('reads the catalog through the tagged projections, not a fixture shortcut', () => {
+    const expected: Array<[string[], string[]]> = [
+      [
+        ['app', '(marketing)', '[locale]', 'page.tsx'],
+        ["from '@/lib/content/public-catalog'", "from '@/lib/prompts/public-catalog'"],
+      ],
+      [
+        ['app', '(marketing)', '[locale]', 'pricing', 'page.tsx'],
+        ["from '@/lib/prompts/public-catalog'"],
+      ],
+      [
+        ['app', '(marketing)', '[locale]', 'prompts', 'page.tsx'],
+        ["from '@/lib/prompts/public-catalog'"],
+      ],
+    ];
+    for (const [file, imports] of expected) {
+      for (const needle of imports) {
+        expect(read(...file), `${file.join('/')} → ${needle}`).toContain(needle);
+      }
     }
-    const projection = read('lib', 'content', 'public-catalog.ts');
-    expect(projection).toContain('unstable_cache');
-    expect(projection).toContain('tags: [CATALOG_TAG]');
-    expect(projection).toContain('revalidate: CATALOG_TTL_SECONDS');
+
+    for (const [projection, tag] of [
+      [read('lib', 'content', 'public-catalog.ts'), 'tags: [CATALOG_TAG]'],
+      [read('lib', 'prompts', 'public-catalog.ts'), 'tags: [PROMPTS_TAG]'],
+    ]) {
+      expect(projection).toContain('unstable_cache');
+      expect(projection).toContain(tag!);
+      expect(projection).toContain('revalidate: CATALOG_TTL_SECONDS');
+    }
   });
 
   /**
@@ -116,6 +142,13 @@ describe('route cache modes (§3.4 / §4)', () => {
       ['app', 'api', 'admin', 'media', '[ref]', 'route.ts'],
       ['app', 'api', 'media', '[blockId]', 'route.ts'],
       ['app', 'api', 'stripe', 'webhook', 'route.ts'],
+      // M6 §13.2: the prompt detail is shaped per viewer, the copy endpoint IS the per-viewer
+      // decision, the submission form is login-gated, and the moderation queue is admin surface.
+      ['app', '(marketing)', '[locale]', 'prompts', '[slug]', 'page.tsx'],
+      ['app', 'api', 'prompts', 'copy', '[id]', 'route.ts'],
+      ['app', 'api', 'prompts', 'media', '[ref]', 'route.ts'],
+      ['app', '(app)', 'prompts', 'submit', 'page.tsx'],
+      ['app', '(admin)', 'admin', 'prompts', 'page.tsx'],
     ]) {
       expect(read(...file), file.join('/')).toContain("export const dynamic = 'force-dynamic'");
     }
@@ -141,9 +174,12 @@ describe('route cache modes (§3.4 / §4)', () => {
    * viewer). Middleware is where the second one is enforced, and it must not pick up the app
    * surface's `noindex` on the way.
    */
-  it('stamps no-store on the public detail route without deindexing it', () => {
+  it('stamps no-store on the public detail routes without deindexing them', () => {
     const middleware = read('middleware.ts');
     expect(middleware).toContain('isPlaybookDetailPath(rest)');
+    // M6 §13.2: the prompt detail is the SECOND viewer-shaped public route and joins the same
+    // branch. The gallery is deliberately not in it — it is static and identical for every tier.
+    expect(middleware).toContain('isPromptDetailPath(rest)');
     const detailBranch = middleware.slice(middleware.indexOf('isPlaybookDetailPath(rest)'));
     const branchBody = detailBranch.slice(0, detailBranch.indexOf('\n  }'));
     expect(branchBody).toContain("'Cache-Control', NO_STORE");
@@ -276,6 +312,107 @@ describe('admin CMS cache + gate contract (§3.4 / §3.8)', () => {
           false,
         );
       }
+    }
+  });
+});
+
+/**
+ * M6 §13.2. Two new API routes with deliberately OPPOSITE cache postures, and the difference is
+ * the whole doctrine:
+ *
+ *   `/api/prompts/copy/[id]`   per-viewer answer  ⇒ `private, no-store`, POST only, noindex
+ *   `/api/prompts/media/[ref]` public marketing bytes, content-addressed ⇒ cacheable, GET
+ *
+ * Both routes are `server-only` (service-role client) and cannot be imported into vitest, so this
+ * is a source-level contract exactly like the media gateway's above; the BEHAVIOUR lives in
+ * `tests/prompts/access.test.ts` and in `npm run sweep:anon`.
+ */
+describe('prompts API contract (§13.2)', () => {
+  const copy = read('app', 'api', 'prompts', 'copy', '[id]', 'route.ts');
+  const media = read('app', 'api', 'prompts', 'media', '[ref]', 'route.ts');
+
+  it('never lets a copy response — refusals included — enter a cache', () => {
+    expect(copy).toContain("'Cache-Control': 'private, no-store'");
+    expect(copy).toContain("'X-Robots-Tag': 'noindex, nofollow'");
+  });
+
+  it('exposes copy as POST only: it has a side effect and must not be prefetchable', () => {
+    expect(copy).toContain('export async function POST');
+    expect(copy).not.toContain('export async function GET');
+  });
+
+  it('speaks the full §13.3-5 refusal vocabulary and logs the conversion signal', () => {
+    for (const marker of ["'not_found' }, 404", "'sign_in_required'", "'pro_required'"]) {
+      expect(copy, marker).toContain(marker);
+    }
+    expect(copy).toContain('authorizePromptCopy');
+    expect(copy).toContain("type: 'copy_prompt'");
+  });
+
+  it('serves prompt media from the PUBLIC bucket only, for published rows only', () => {
+    expect(media).toContain("asset.bucket !== 'public-content'");
+    expect(media).toContain("row.status !== 'published'");
+    // The key is read from the ROW, never from the request — there is no key parameter at all.
+    expect(media).toContain('loadPromptById');
+    expect(media).not.toContain('searchParams.get(\'key\')');
+  });
+
+  it('lets those public bytes be cached — they are content-addressed and tier-independent', () => {
+    expect(media).toContain("'Cache-Control': 'public,");
+    expect(media).toContain('immutable');
+  });
+
+  /**
+   * The no-store branch must catch the per-viewer DETAIL and miss the static GALLERY. Getting this
+   * backwards either leaks one reader's unlocked render into a shared cache, or throws away the
+   * cache mode the whole §13.2 gallery design is built on.
+   */
+  it('matches the prompt detail path and not the gallery', () => {
+    expect(isPromptDetailPath('/prompts/neon-alley-dolly')).toBe(true);
+    expect(isPromptDetailPath('/prompts')).toBe(false);
+    expect(isPromptDetailPath('/p/character-sheet-generation')).toBe(false);
+    expect(isPlaybookDetailPath('/prompts/neon-alley-dolly')).toBe(false);
+  });
+});
+
+/**
+ * M6 §13.2 — the submission surface. Login-gated at the EDGE (unprefixed app path) and served by
+ * one guarded server action, exactly like the admin CMS.
+ */
+describe('prompt submission contract (§13.1/E)', () => {
+  it('gates /prompts/submit at the edge without catching the public gallery', () => {
+    const config = read('lib', 'i18n', 'config.ts');
+    expect(config).toContain("'/prompts/submit'");
+    // `/prompts` itself must stay a locale-prefixed PUBLIC path.
+    expect(config).not.toMatch(/APP_PREFIXES[\s\S]*'\/prompts'[,\s]/);
+  });
+
+  it('routes the submission through one server action that never trusts the form', () => {
+    const action = read('app', '(app)', 'prompts', 'submit', 'actions.ts');
+    expect(action).toContain("'use server'");
+    expect(action).toContain('getViewer');
+    expect(action).toContain('submitPrompt');
+    expect(action.match(/export async function/g)).toHaveLength(1);
+    /**
+     * The action reads EXACTLY the fields a submitter is allowed to choose. Author id, status,
+     * source, featured and text visibility are supplied by `lib/prompts/submit.ts` and appear
+     * nowhere in what is read from the request, so there is no field a caller could add to
+     * publish their own row.
+     */
+    const readFields = [...action.matchAll(/(?:str|text|bool|file)\(form, '([^']+)'\)/g)].map(
+      (match) => match[1]!,
+    );
+    expect([...new Set(readFields)].sort()).toEqual([
+      'consent',
+      'handle',
+      'poster',
+      'promptText',
+      'title',
+      'video',
+    ]);
+    for (const forbidden of ['status', 'source', 'authorId', 'userId', 'textVisibility', 'featured']) {
+      expect(action.includes(`form, '${forbidden}'`), forbidden).toBe(false);
+      expect(action.includes(`form.get('${forbidden}')`), forbidden).toBe(false);
     }
   });
 });

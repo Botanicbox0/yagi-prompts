@@ -18,6 +18,7 @@ import {
 } from '@/lib/publish/pipeline';
 import { notifyKindFor } from '@/lib/notify/kinds';
 import { fail, ok, type AdminContext, type AdminOutcome } from './context';
+import { PROMPT_OPERATIONS } from './prompt-operations';
 import { stageUpload } from './assets';
 import { ensureDraftRevision } from './clone';
 import * as f from './form';
@@ -718,6 +719,9 @@ export const ADMIN_OPERATIONS = {
   'block.delete': deleteBlock,
   'block.visibility': setBlockVisibility,
   'policy.update': savePolicy,
+  // §13.2/F — the prompts surface joins the SAME registry, so the auth enumeration in
+  // tests/admin/auth.test.ts covers it without being told it exists.
+  ...PROMPT_OPERATIONS,
 };
 
 export type AdminOperationName = keyof typeof ADMIN_OPERATIONS;

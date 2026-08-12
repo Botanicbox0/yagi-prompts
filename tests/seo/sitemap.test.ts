@@ -95,7 +95,8 @@ describe('sitemap (§8 M5)', () => {
 
   it('degrades to an empty catalog without producing a broken sitemap', () => {
     const empty = buildSitemap({ origin: ORIGIN, cards: [] });
-    expect(empty).toHaveLength(4);
+    // Three marketing pages × two locales: landing, the §13.2 gallery, pricing.
+    expect(empty).toHaveLength(6);
     expect(empty.every((entry) => entry.url.startsWith(ORIGIN))).toBe(true);
   });
 });
@@ -107,7 +108,16 @@ describe('robots (§8 M5)', () => {
     const rule = Array.isArray(robots.rules) ? robots.rules[0]! : robots.rules;
     expect(rule.userAgent).toBe('*');
     expect(rule.allow).toBe('/');
-    expect(rule.disallow).toEqual(['/admin', '/library', '/account', '/billing', '/api']);
+    // §13.2 adds the submission form; `/prompts` itself stays indexable, which is why the entry
+    // names both segments rather than the prefix.
+    expect(rule.disallow).toEqual([
+      '/admin',
+      '/library',
+      '/account',
+      '/billing',
+      '/api',
+      '/prompts/submit',
+    ]);
   });
 
   it('points at the sitemap', () => {

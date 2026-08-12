@@ -3,11 +3,15 @@ import { TextSwap } from '@/components/ui/text-swap';
 import { Marquee } from '@/components/ui/marquee';
 import { HeroMedia } from './hero-media';
 import { ReelPoster } from './reel-poster';
-import { PlaybookCard, type CardLabels } from './playbook-card';
 import { PlanCards } from '@/components/pricing/plan-cards';
+import { PromptCardView } from '@/components/prompts/prompt-card';
+import { promptLabels, useCaseLabel } from '@/components/prompts/labels';
 import { HERO_REEL } from '@/lib/content/slots';
 import { formatCount, interpolate } from '@/lib/i18n/format';
-import type { CatalogCard, CatalogTotals } from '@/lib/content/catalog';
+import type { PromptCard, PromptTotals } from '@/lib/prompts/catalog';
+import { promptsHref, PROMPT_SUBMIT_PATH } from '@/lib/prompts/links';
+import { USE_CASES } from '@/lib/prompts/schemas';
+import { UPGRADE_PATH, signInHref } from '@/lib/billing/links';
 import type { Dictionary } from '@/lib/i18n/dictionaries';
 import type { Locale } from '@/lib/i18n/config';
 
@@ -20,8 +24,9 @@ import type { Locale } from '@/lib/i18n/config';
  * [circle wipe] → featured dark → pricing light → FAQ dark → footer dark.
  */
 
-function signInHref(locale: Locale): string {
-  return `/auth/signin?next=%2Flibrary&locale=${locale}`;
+/** §13.2 — the nav pivot moved the default destination from the library to the gallery. */
+function startHref(locale: Locale): string {
+  return signInHref(promptsHref(locale), locale);
 }
 
 // ---------------------------------------------------------------------------
@@ -48,11 +53,13 @@ export function Hero({ locale, dict }: { locale: Locale; dict: Dictionary }) {
           <div>
             <p className="max-w-detail text-body opacity-70">{dict.hero.lede}</p>
             <div className="mt-9 flex flex-wrap items-center gap-x-8 gap-y-4">
+              {/* §13 pivots the primary CTA: the gallery IS the product now, and it is public —
+                  asking for a login before showing the work would be the old funnel, backwards. */}
               <a
-                href={signInHref(locale)}
+                href={promptsHref(locale)}
                 className="inline-block border border-current px-6 py-3 font-label text-label uppercase"
               >
-                <TextSwap>{dict.auth.startWithGoogle} →</TextSwap>
+                <TextSwap>{dict.nav.prompts} →</TextSwap>
               </a>
               <a
                 href={`/${locale}/pricing`}
@@ -88,12 +95,13 @@ export function Hero({ locale, dict }: { locale: Locale; dict: Dictionary }) {
 // Premise
 // ---------------------------------------------------------------------------
 
-export function Premise({ dict, totals }: { dict: Dictionary; totals: CatalogTotals }) {
+/** §13.2 — the premise section is now the 100% original manifesto, and the two rails explained. */
+export function Premise({ dict, totals }: { dict: Dictionary; totals: PromptTotals }) {
   const stats: Array<{ value: string; label: string }> = [
-    { value: String(totals.playbooks), label: dict.premise.statPlaybooksLabel },
-    { value: String(totals.prompts), label: dict.premise.statPromptsLabel },
-    { value: String(totals.steps), label: dict.premise.statStepsLabel },
-    { value: dict.premise.statUpdatedValue, label: dict.premise.statUpdatedLabel },
+    { value: String(totals.yagi), label: dict.premise.statYagiLabel },
+    { value: String(totals.community), label: dict.premise.statCommunityLabel },
+    { value: totals.modelLabel, label: dict.premise.statModelLabel },
+    { value: dict.premise.statTestedValue, label: dict.premise.statTestedLabel },
   ];
 
   return (
@@ -145,6 +153,7 @@ export function MarqueeStrip({ dict, items }: { dict: Dictionary; items: string[
 // Featured
 // ---------------------------------------------------------------------------
 
+/** §13.2 — "featured strip = YAGI prompt cards (from the prompts catalog)". */
 export function Featured({
   locale,
   dict,
@@ -152,22 +161,16 @@ export function Featured({
 }: {
   locale: Locale;
   dict: Dictionary;
-  cards: CatalogCard[];
+  cards: PromptCard[];
 }) {
-  const labels: CardLabels = {
-    steps: dict.featured.stepsLabel,
-    proBlocks: dict.featured.proBlocksLabel,
-    open: dict.featured.open,
-    showcase: dict.featured.showcaseLabel,
-    loginWall: dict.featured.loginWallLabel,
-    badgeNew: dict.badge.new,
-    badgeUpdated: dict.badge.updated,
-  };
-
-  const categoryLabel = (key: string) =>
-    (dict.category as Record<string, string>)[key] ?? key;
-  const difficultyLabel = (key: string) =>
-    (dict.difficulty as Record<string, string>)[key] ?? key;
+  const labels = promptLabels(dict);
+  const useCaseLabels = Object.fromEntries(
+    USE_CASES.map((value) => [value, useCaseLabel(dict, value)]),
+  );
+  // The landing is STATIC, so the copy button's refusal branches are pre-addressed exactly as they
+  // are on the gallery; the server decides which one a given reader actually lands on.
+  const signin = signInHref(promptsHref(locale), locale);
+  const upgrade = `${UPGRADE_PATH}?locale=${locale}`;
 
   return (
     <section data-section data-theme="dark" className="section">
@@ -196,27 +199,35 @@ export function Featured({
             </p>
             <p className="mt-5 max-w-detail text-body opacity-70">{dict.featured.emptyBody}</p>
             <a
-              href={signInHref(locale)}
+              href={PROMPT_SUBMIT_PATH}
               className="text-accent mt-8 inline-block font-label text-label uppercase"
             >
-              <TextSwap>{dict.auth.startWithGoogle} →</TextSwap>
+              <TextSwap>{dict.prompts.submitCta} →</TextSwap>
             </a>
           </div>
         ) : (
-          <ul className="mt-14 grid gap-6 sm:grid-cols-2">
-            {cards.map((card, index) => (
-              <li key={card.slug}>
-                <PlaybookCard
-                  card={card}
-                  index={index + 1}
-                  locale={locale}
-                  categoryLabel={categoryLabel(card.category)}
-                  difficultyLabel={difficultyLabel(card.difficulty)}
-                  labels={labels}
-                />
-              </li>
-            ))}
-          </ul>
+          <>
+            <ul className="mt-14 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+              {cards.map((card) => (
+                <li key={card.slug}>
+                  <PromptCardView
+                    card={card}
+                    locale={locale}
+                    labels={labels}
+                    useCaseLabels={useCaseLabels}
+                    signinHref={signin}
+                    upgradeHref={upgrade}
+                  />
+                </li>
+              ))}
+            </ul>
+            <a
+              href={promptsHref(locale)}
+              className="text-accent mt-12 inline-block font-label text-label uppercase"
+            >
+              <TextSwap>{dict.prompts.backToGallery} →</TextSwap>
+            </a>
+          </>
         )}
       </div>
     </section>
@@ -254,12 +265,18 @@ export function planCopy(dict: Dictionary) {
   };
 }
 
-/** §3.1 "N prompts across M playbooks", computed from the cached catalog projection. */
-export function countsLine(dict: Dictionary, locale: Locale, totals: CatalogTotals): string {
-  if (totals.playbooks === 0) return dict.pricing.countsEmpty;
+/**
+ * §13.2 — the counts line, now over the two rails.
+ *
+ * M1 counted "N prompts across M playbooks" from the playbook catalog; the pivot makes the two
+ * rails the honest headline number, and it comes from the SAME cached projection the gallery reads
+ * so the two can never disagree.
+ */
+export function countsLine(dict: Dictionary, locale: Locale, totals: PromptTotals): string {
+  if (totals.published === 0) return dict.pricing.countsEmpty;
   return interpolate(dict.pricing.countsLine, {
-    prompts: formatCount(totals.prompts, locale),
-    playbooks: formatCount(totals.playbooks, locale),
+    yagi: formatCount(totals.yagi, locale),
+    community: formatCount(totals.community, locale),
   });
 }
 
@@ -270,7 +287,7 @@ export function PricingSummary({
 }: {
   locale: Locale;
   dict: Dictionary;
-  totals: CatalogTotals;
+  totals: PromptTotals;
 }) {
   const features = planFeatures(dict);
 

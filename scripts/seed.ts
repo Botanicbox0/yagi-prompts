@@ -2,8 +2,11 @@ import { createHash, randomUUID } from 'node:crypto';
 import { deflateSync } from 'node:zlib';
 import type { SqlRunner } from '@/lib/db/sql-runner';
 import type { StorageDriver } from '@/lib/storage';
-import { parseBlock, type AssetRef, type Localized } from '@/lib/content/schemas';
+import { AssetRefSchema, parseBlock, type AssetRef, type Localized } from '@/lib/content/schemas';
 import { runPublishPipeline, type CopyReport } from '@/lib/publish/pipeline';
+import { publishPromptMedia } from '@/lib/prompts/media';
+import { insertPrompt } from '@/lib/prompts/repo';
+import { DEFAULT_PROMPT_MODEL, type PromptMedia } from '@/lib/prompts/schemas';
 import {
   EDGE_FIXTURE_PLAYBOOKS,
   FIXTURE_PLAYBOOKS,
@@ -13,6 +16,7 @@ import {
   type EdgePlaybookSpec,
   type PlaybookSpec,
 } from './fixtures';
+import { PROMPT_FIXTURES } from './prompt-fixtures';
 
 /**
  * PLAN §8 M0 — "seed script publishes 2 fixture playbooks through the REAL prepare→copy→publish
@@ -45,6 +49,8 @@ export interface SeededPlaybook {
 export interface SeedResult {
   users: Record<'free' | 'pro' | 'admin', string>;
   playbooks: SeededPlaybook[];
+  /** §13 — the prompts catalog, seeded through the same publish-media lifecycle. */
+  prompts: PromptSeedResult[];
 }
 
 const PLACEHOLDER_NOTE = (label: string) =>
@@ -128,9 +134,55 @@ function placeholderPng(label: string, width = 640, height = 360): Uint8Array {
   );
 }
 
+// --- a real, tiny MP4 container --------------------------------------------
+// §13 needs fixture VIDEO, and a video fixture has to be a real file for anything downstream to be
+// worth testing: `probeMp4DurationSeconds` must read a duration out of actual bytes, the copier
+// must move it, and the media route must serve it as `video/mp4`. This builds a structurally valid
+// ISO-BMFF file — `ftyp` + `moov`/`mvhd` + `mdat` — with no encoded video track, so it is honest
+// placeholder media in exactly the sense §9 asks for: clearly labelled (the note lives in `mdat`),
+// and a player that cannot decode it simply shows the poster underneath.
+
+function isoBox(type: string, payload: Buffer): Buffer {
+  const header = Buffer.alloc(8);
+  header.writeUInt32BE(payload.length + 8, 0);
+  header.write(type, 4, 'latin1');
+  return Buffer.concat([header, payload]);
+}
+
+function placeholderMp4(label: string, durationSeconds: number): Uint8Array {
+  const ftyp = isoBox(
+    'ftyp',
+    Buffer.concat([
+      Buffer.from('isom', 'latin1'),
+      Buffer.from([0x00, 0x00, 0x02, 0x00]), // minor version
+      Buffer.from('isomiso2mp41', 'latin1'),
+    ]),
+  );
+
+  const timescale = 1000;
+  const mvhd = Buffer.alloc(100);
+  mvhd.writeUInt32BE(0, 0); // version 0 + flags
+  mvhd.writeUInt32BE(0, 4); // creation time
+  mvhd.writeUInt32BE(0, 8); // modification time
+  mvhd.writeUInt32BE(timescale, 12);
+  mvhd.writeUInt32BE(Math.round(durationSeconds * timescale), 16);
+  mvhd.writeUInt32BE(0x00010000, 20); // rate 1.0
+  mvhd.writeUInt16BE(0x0100, 24); // volume 1.0
+  // 2 reserved + 8 reserved stay zero; the unity matrix starts at 36.
+  mvhd.writeUInt32BE(0x00010000, 36);
+  mvhd.writeUInt32BE(0x00010000, 52);
+  mvhd.writeUInt32BE(0x40000000, 68);
+  mvhd.writeUInt32BE(2, 96); // next track id
+
+  const moov = isoBox('moov', isoBox('mvhd', mvhd));
+  const mdat = isoBox('mdat', Buffer.from(`${PLACEHOLDER_NOTE(label)}\n`, 'latin1'));
+  return new Uint8Array(Buffer.concat([ftyp, moov, mdat]));
+}
+
 /** Deterministic, clearly-labelled placeholder bytes (§9: fixture media is labelled as such). */
 function placeholderBytes(spec: AssetSpec): Uint8Array {
   if (spec.mime === 'image/png') return placeholderPng(spec.label, spec.w, spec.h);
+  if (spec.mime === 'video/mp4') return placeholderMp4(spec.label, spec.duration_s ?? 6);
   return new TextEncoder().encode(`${PLACEHOLDER_NOTE(spec.label)}\n`);
 }
 
@@ -319,7 +371,10 @@ export async function seed(opts: SeedOptions): Promise<SeedResult> {
   for (const spec of FIXTURE_PLAYBOOKS) {
     playbooks.push(await seedPlaybook(opts, spec));
   }
-  return { users, playbooks };
+  // §13: the prompts catalog is part of the BASE seed, not an edge add-on — the landing, the
+  // gallery and the sitemap all read it now, so a seeded database without it is not the product.
+  const prompts = await seedPrompts(opts);
+  return { users, playbooks, prompts };
 }
 
 // ---------------------------------------------------------------------------
@@ -387,6 +442,109 @@ async function seedEdgePlaybook(
   log(`· ${spec.slug} republished — rev 1 superseded, rev 2 live`);
 
   return { slug: spec.slug, playbookId: spec.id, mode: spec.mode, revisionIds, skipped: false };
+}
+
+// ---------------------------------------------------------------------------
+// prompts (M6) — PLAN §13
+// ---------------------------------------------------------------------------
+
+export interface PromptSeedResult {
+  slug: string;
+  id: string;
+  status: string;
+  copied: number;
+}
+
+/**
+ * Seed the §13 prompt catalog through the REAL lifecycle.
+ *
+ * Nothing here shortcuts the doctrine that matters: assets are staged privately first, and only a
+ * PUBLISHED item's media is copied into `public-content` (via `publishPromptMedia`, the same
+ * function the approve operation calls). So the pending submission's clip exists on disk, is
+ * reachable to an admin, and has no `published_key` at all — which is exactly why the sweep can
+ * assert that its bytes are unreachable publicly.
+ *
+ * Published rows are backdated by `publishedDaysAgo` so the gallery order and the 14-day NEW badge
+ * window are deterministic rather than "whatever `now()` was when the snapshot was built".
+ */
+export async function seedPrompts(opts: SeedOptions): Promise<PromptSeedResult[]> {
+  const { sql, storage } = opts;
+  const log = opts.log ?? (() => {});
+  const results: PromptSeedResult[] = [];
+
+  for (const fixture of PROMPT_FIXTURES) {
+    const existing = await sql.query<{ id: string }>('select id from prompt_items where slug = $1', [
+      fixture.slug,
+    ]);
+    if (existing.rows.length > 0) {
+      log(`· prompt ${fixture.slug} already present — skipping`);
+      results.push({ slug: fixture.slug, id: existing.rows[0]!.id, status: 'skipped', copied: 0 });
+      continue;
+    }
+
+    const media: PromptMedia = {};
+    for (const [kind, spec] of [
+      ['poster', fixture.poster],
+      ['video', fixture.video],
+    ] as const) {
+      if (!spec) continue;
+      const bytes = placeholderBytes(spec);
+      const key = `content/prompt/${fixture.id}/${randomUUID()}.${spec.ext}`;
+      await storage.putStaging(key, bytes, spec.mime);
+      const ref: Record<string, unknown> = {
+        staging_key: key,
+        sha256: sha256Hex(bytes),
+        mime: spec.mime,
+      };
+      if (spec.w !== undefined) ref.w = spec.w;
+      if (spec.h !== undefined) ref.h = spec.h;
+      if (spec.duration_s !== undefined) ref.duration_s = spec.duration_s;
+      media[kind] = AssetRefSchema.parse(ref);
+    }
+
+    const published = fixture.status === 'published';
+    // The copier runs for published items ONLY — a pending submission's bytes stay private.
+    const { media: finalMedia, report } = published
+      ? await publishPromptMedia(storage, media)
+      : { media, report: { copied: 0, alreadyPresent: 0 } };
+
+    await insertPrompt(sql, {
+      id: fixture.id,
+      slug: fixture.slug,
+      source: fixture.source,
+      authorId: fixture.authorKey ? FIXTURE_USERS[fixture.authorKey].id : null,
+      authorHandle: fixture.handle ?? null,
+      status: fixture.status,
+      model: DEFAULT_PROMPT_MODEL,
+      title: fixture.title,
+      titleKo: fixture.titleKo,
+      // The sentinel rides INSIDE the gated bytes — that is the whole point of it.
+      promptText: `${fixture.text}\n:: ${fixture.sentinel}`,
+      textVisibility: fixture.textVisibility,
+      media: Object.keys(finalMedia).length === 0 ? null : finalMedia,
+      useCase: fixture.useCase,
+      featured: fixture.featured,
+      rejectReason: fixture.rejectReason ?? null,
+      publishedAt: published ? 'now' : null,
+    });
+
+    if (published && fixture.publishedDaysAgo !== undefined) {
+      await sql.query(
+        `update prompt_items set published_at = now() - ($2 || ' days')::interval where id = $1`,
+        [fixture.id, String(fixture.publishedDaysAgo)],
+      );
+    }
+
+    log(`· prompt ${fixture.slug} seeded (${fixture.status}, ${report.copied} copied)`);
+    results.push({
+      slug: fixture.slug,
+      id: fixture.id,
+      status: fixture.status,
+      copied: report.copied,
+    });
+  }
+
+  return results;
 }
 
 /**
