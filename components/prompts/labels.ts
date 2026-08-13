@@ -29,7 +29,16 @@ export interface PromptLabels {
   badgeNew: string;
   lockedHeading: string;
   lockedBody: string;
-  lockedCta: string;
+  // §15.3 — the three lock-panel variants' copy.
+  signinCta: string;
+  signinHint: string;
+  spendCta: string;
+  spendNote: string;
+  emptyTitle: string;
+  weeklyLine: string;
+  packTitle: string;
+  packNote: string;
+  packUnavailableBody: string;
 }
 
 export function promptLabels(dict: Dictionary): PromptLabels {
@@ -52,11 +61,20 @@ export function promptLabels(dict: Dictionary): PromptLabels {
     posterAlt: dict.prompts.posterAlt,
     playHint: dict.prompts.playHint,
     badgeNew: dict.badge.new,
-    // §5.5's lock panel is one design-system component; the prompts detail reuses its copy so a
-    // reader meets the same sentence here and on a playbook page.
-    lockedHeading: dict.plan.lockedPrompt,
-    lockedBody: dict.playbook.lockedBody,
-    lockedCta: dict.playbook.lockedCta,
+    // §15.3 — the lock panel speaks cookies now. The playbook library keeps the §5.5 Pro copy;
+    // this surface's gate is per-prompt, so its sentences are the wallet's.
+    lockedHeading: dict.cookies.lockedHeading,
+    lockedBody: dict.cookies.lockedBody,
+    signinCta: dict.cookies.signinCta,
+    signinHint: dict.cookies.signinHint,
+    spendCta: dict.cookies.spendCta,
+    spendNote: dict.cookies.spendNote,
+    emptyTitle: dict.cookies.emptyTitle,
+    weeklyLine: dict.cookies.weeklyLine,
+    packTitle: dict.cookies.packTitle,
+    packNote: dict.cookies.packNote,
+    // §15.1-5 — the pack renders the same honest not-connected state billing does (§11).
+    packUnavailableBody: dict.billing.unavailableBody,
   };
 }
 

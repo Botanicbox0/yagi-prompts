@@ -4,7 +4,7 @@ import { getDictionary } from '@/lib/i18n/dictionaries';
 import { getPromptCatalog } from '@/lib/prompts/public-catalog';
 import { PROMPT_SUBMIT_PATH } from '@/lib/prompts/links';
 import { USE_CASES } from '@/lib/prompts/schemas';
-import { UPGRADE_PATH, signInHref } from '@/lib/billing/links';
+import { signInHref } from '@/lib/billing/links';
 import { promptsGalleryMetadata } from '@/lib/seo/prompt-metadata';
 import { MarketingFooter, MarketingNav, adLabels } from '@/components/marketing/chrome';
 import { AdRail } from '@/components/ad/ad-rail';
@@ -70,10 +70,11 @@ export default async function PromptsGalleryPage({ params }: RouteParams) {
     (value) => [value, useCaseLabels[value]!] as [string, string],
   );
 
-  // Static strings: the gallery cannot know the viewer, so the copy button's refusal branches are
-  // pre-addressed and the SERVER decides which one the reader actually lands on (§13.3-5).
+  // Static strings: the gallery cannot know the viewer, so the copy button's refusal branches
+  // are pre-addressed and the SERVER decides which one the reader actually lands on (§13.3-5).
+  // §15: the 403 branch is per-card (the prompt's own page carries the cookie funnel), so the
+  // only page-level string left is where sign-in returns to.
   const signin = signInHref(`/${locale}/prompts`, locale);
-  const upgrade = `${UPGRADE_PATH}?locale=${locale}`;
 
   return (
     <>
@@ -127,7 +128,6 @@ export default async function PromptsGalleryPage({ params }: RouteParams) {
               emptyLabel={dict.prompts.emptyYagi}
               filteredEmptyLabel={dict.prompts.filterEmpty}
               signinHref={signin}
-              upgradeHref={upgrade}
             />
 
             <PromptRail
@@ -141,7 +141,6 @@ export default async function PromptsGalleryPage({ params }: RouteParams) {
               emptyLabel={dict.prompts.emptyCommunity}
               filteredEmptyLabel={dict.prompts.filterEmpty}
               signinHref={signin}
-              upgradeHref={upgrade}
             />
 
             <SubmitStrip

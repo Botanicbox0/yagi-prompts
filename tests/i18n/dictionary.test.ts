@@ -83,6 +83,11 @@ describe('dictionary completeness (§3.9)', () => {
       'admin.colEntrySns',
       // Founder pass: the verified-share stat is a figure, and a figure is locale-invariant.
       'premise.statTestedValue',
+      // M10 §15: the cookie table's three display slots are figures (3 / +1 / $4 = 5), and a
+      // figure is locale-invariant — the sentences around them are the translated part.
+      'pricing.cookieSignupValue',
+      'pricing.cookieWeeklyValue',
+      'pricing.cookiePackValue',
     ]);
 
     const untranslated = enLeaves
@@ -136,6 +141,12 @@ describe('dictionary completeness (§3.9)', () => {
       'nav.skipToContent',
       'category.pipeline',
       'difficulty.advanced',
+      // M10 §15 — the cookies surface.
+      'cookies.signinCta',
+      'cookies.spendCta',
+      'cookies.emptyTitle',
+      'cookies.weeklyLine',
+      'pricing.cookieRule',
     ]) {
       expect(enMap.has(key), `en.${key}`).toBe(true);
       expect(koMap.has(key), `ko.${key}`).toBe(true);

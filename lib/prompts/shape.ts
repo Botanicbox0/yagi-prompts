@@ -98,10 +98,13 @@ export interface PromptShapeOptions {
 
 const defaultMediaUrl = (ref: string) => promptMediaPath(ref);
 
+/** The two URL resolvers, always both present by the time media is shaped. */
+type MediaUrlOptions = Required<Pick<PromptShapeOptions, 'publicUrl' | 'mediaUrl'>>;
+
 function shapeAsset(
   ref: AssetRef,
   mediaRef: string,
-  opts: Required<PromptShapeOptions>,
+  opts: MediaUrlOptions,
 ): ShapedPromptMedia | null {
   // An asset that has not been copied to the public bucket yet is NOT servable. Returning null is
   // the honest answer: the card falls back to its typographic poster (§13.3-4) rather than
@@ -125,7 +128,7 @@ export function shapePromptMedia(
   media: unknown,
   options: PromptShapeOptions = {},
 ): { poster: ShapedPromptMedia | null; video: ShapedPromptMedia | null } {
-  const opts: Required<PromptShapeOptions> = {
+  const opts: MediaUrlOptions = {
     publicUrl: options.publicUrl ?? (() => null),
     mediaUrl: options.mediaUrl ?? defaultMediaUrl,
   };

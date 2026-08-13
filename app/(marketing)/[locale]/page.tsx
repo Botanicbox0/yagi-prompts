@@ -5,7 +5,7 @@ import { getPublicCatalog } from '@/lib/content/public-catalog';
 import { getPromptCatalog } from '@/lib/prompts/public-catalog';
 import { USE_CASES } from '@/lib/prompts/schemas';
 import { marqueeItems } from '@/lib/marquee';
-import { UPGRADE_PATH, signInHref } from '@/lib/billing/links';
+import { signInHref } from '@/lib/billing/links';
 import { promptLabels, presentUseCases, useCaseLabel } from '@/components/prompts/labels';
 import { MarketingFooter, MarketingNav, adLabels } from '@/components/marketing/chrome';
 import { Hero, MarqueeStrip, Premise } from '@/components/landing/sections';
@@ -79,7 +79,6 @@ export default async function LandingPage({ params }: { params: Promise<{ locale
     (value) => [value, useCaseLabels[value]!] as [string, string],
   );
   const signin = signInHref(`/${locale}`, locale);
-  const upgrade = `${UPGRADE_PATH}?locale=${locale}`;
 
   return (
     <>
@@ -115,7 +114,6 @@ export default async function LandingPage({ params }: { params: Promise<{ locale
                 emptyLabel={dict.prompts.emptyYagi}
                 filteredEmptyLabel={dict.prompts.filterEmpty}
                 signinHref={signin}
-                upgradeHref={upgrade}
               />
 
               <PromptRail
@@ -129,7 +127,6 @@ export default async function LandingPage({ params }: { params: Promise<{ locale
                 emptyLabel={dict.prompts.emptyCommunity}
                 filteredEmptyLabel={dict.prompts.filterEmpty}
                 signinHref={signin}
-                upgradeHref={upgrade}
               />
 
               <SubmitStrip

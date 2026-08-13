@@ -1,8 +1,10 @@
 import type { PromptCard } from '@/lib/prompts/catalog';
 import type { ShapedPrompt } from '@/lib/prompts/shape';
-import { promptsHref, PROMPT_SUBMIT_PATH } from '@/lib/prompts/links';
-import type { UpgradeIntent } from '@/lib/billing/links';
-import { UpgradeCta } from '@/components/billing/upgrade-cta';
+import type { UnlockPanel } from '@/lib/cookies/wallet';
+import { PACK_COOKIES, PACK_PRICE_USD } from '@/lib/cookies/wallet';
+import { promptHref, promptsHref, PROMPT_SUBMIT_PATH } from '@/lib/prompts/links';
+import { interpolate } from '@/lib/i18n/format';
+import { BillingUnavailable } from '@/components/billing/upgrade-cta';
 import { TextSwap } from '@/components/ui/text-swap';
 import { PromptCopyButton } from './copy-button';
 import { PromptDetailMedia } from './detail-media';
@@ -16,6 +18,10 @@ import type { PromptLabels } from './labels';
  * The gate is already decided by the time anything here renders: `shapePrompt` either put a `text`
  * key on the object or it did not. This file cannot leak, because there is nothing to leak from —
  * which is the same property `components/playbook/blocks.tsx` relies on, expressed one level up.
+ *
+ * §15.3 made the lock panel the funnel: which of its three variants renders is ALSO decided
+ * upstream (`unlockPanel`, resolved next to the gate in lib/prompts/access.ts), so the panel and
+ * the wallet can never disagree about what a press would do.
  */
 
 const CTA_CLASS =
@@ -93,6 +99,73 @@ export function PromptHeader({
 }
 
 /**
+ * The §15.3 funnel, one variant per resolved panel state:
+ *
+ *   'signin'  a link into Journey A that returns to THIS prompt — never a form anon cannot POST;
+ *   'spend'   a JS-free form to the unlock server action, wearing the real balance;
+ *   'empty'   the wallet panel: the weekly line, and the $4/5 pack in the §11 designed
+ *             not-connected state (`BillingUnavailable`) — a fact, not a dead button.
+ */
+function UnlockPanelView({
+  panel,
+  prompt,
+  locale,
+  labels,
+  signinHref,
+  unlockAction,
+}: {
+  panel: UnlockPanel;
+  prompt: ShapedPrompt;
+  locale: string;
+  labels: PromptLabels;
+  signinHref: string;
+  unlockAction?: (form: FormData) => Promise<void>;
+}) {
+  if (panel.state === 'signin') {
+    return (
+      <div>
+        <a data-unlock-cta="signin" href={signinHref} className={`text-accent ${CTA_CLASS}`}>
+          <TextSwap>{labels.signinCta} →</TextSwap>
+        </a>
+        <p className="mt-3 font-mono text-[0.72rem] opacity-45">
+          {interpolate(labels.signinHint, { count: '3' })}
+        </p>
+      </div>
+    );
+  }
+
+  if (panel.state === 'spend') {
+    return (
+      <form action={unlockAction} data-unlock-cta="spend" className="inline-block">
+        <input type="hidden" name="id" value={prompt.id} />
+        <input type="hidden" name="locale" value={locale} />
+        <button type="submit" className={CTA_CLASS}>
+          <TextSwap>{interpolate(labels.spendCta, { count: String(panel.balance) })} →</TextSwap>
+        </button>
+        <p className="mt-3 font-mono text-[0.72rem] opacity-45">{labels.spendNote}</p>
+      </form>
+    );
+  }
+
+  return (
+    <div data-unlock-cta="empty">
+      <p className="font-display text-[clamp(1.2rem,2vw,1.5rem)] leading-[1] font-black uppercase">
+        {labels.emptyTitle}
+      </p>
+      <p className="mt-3 text-[0.9375rem] opacity-70">{labels.weeklyLine}</p>
+      <BillingUnavailable
+        className="mt-5"
+        title={interpolate(labels.packTitle, {
+          count: String(PACK_COOKIES),
+          price: `$${PACK_PRICE_USD}`,
+        })}
+        body={`${labels.packNote} ${labels.packUnavailableBody}`}
+      />
+    </div>
+  );
+}
+
+/**
  * The text, or §5.5's lock panel. Never both, never a teaser, never a blur.
  *
  * The `locked` discriminant is the shaper's, so the branch below is a rendering decision about an
@@ -102,16 +175,18 @@ export function PromptBody({
   prompt,
   locale,
   labels,
-  upgrade,
+  panel,
   signinHref,
-  upgradeHref,
+  unlockAction,
 }: {
   prompt: ShapedPrompt;
   locale: string;
   labels: PromptLabels;
-  upgrade: UpgradeIntent;
+  /** §15.3 — resolved next to the gate; null when the text is visible (or nothing is for sale). */
+  panel: UnlockPanel | null;
   signinHref: string;
-  upgradeHref: string;
+  /** The unlock server action; bound by the page, absent in static renders. */
+  unlockAction?: (form: FormData) => Promise<void>;
 }) {
   return (
     <section className="mt-14 border-t border-hairline pt-10">
@@ -121,7 +196,7 @@ export function PromptBody({
           <PromptCopyButton
             id={prompt.id}
             signinHref={signinHref}
-            upgradeHref={upgradeHref}
+            upgradeHref={promptHref(locale, prompt.slug)}
             labels={{
               copy: labels.copy,
               copied: labels.copied,
@@ -139,7 +214,16 @@ export function PromptBody({
             <p className="font-label text-label uppercase">{labels.lockedHeading}</p>
             <p className="mt-2 text-[0.9375rem] opacity-70">{labels.lockedBody}</p>
           </div>
-          <UpgradeCta intent={upgrade} label={labels.lockedCta} className={CTA_CLASS} />
+          {panel !== null && (
+            <UnlockPanelView
+              panel={panel}
+              prompt={prompt}
+              locale={locale}
+              labels={labels}
+              signinHref={signinHref}
+              unlockAction={unlockAction}
+            />
+          )}
         </div>
       ) : (
         <>
@@ -169,14 +253,12 @@ export function RelatedPrompts({
   labels,
   useCaseLabels,
   signinHref,
-  upgradeHref,
 }: {
   cards: PromptCard[];
   locale: string;
   labels: PromptLabels;
   useCaseLabels: Record<string, string>;
   signinHref: string;
-  upgradeHref: string;
 }) {
   if (cards.length === 0) return null;
 
@@ -194,7 +276,6 @@ export function RelatedPrompts({
               labels={labels}
               useCaseLabels={useCaseLabels}
               signinHref={signinHref}
-              upgradeHref={upgradeHref}
             />
           </li>
         ))}
