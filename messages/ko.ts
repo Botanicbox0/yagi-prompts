@@ -49,6 +49,12 @@ export const ko: Dictionary = {
     signedInAs: '로그인 계정',
     signInRequired: '라이브러리는 로그인 후 이용할 수 있습니다.',
     adminOnly: '관리자 전용 페이지입니다.',
+    webviewEyebrow: 'Google 로그인',
+    webviewTitle: '기본 브라우저에서 열어 주세요.',
+    webviewBody:
+      'Google이 앱 안 브라우저에서는 로그인을 차단하기 때문에 여기서는 진행할 수 없습니다.',
+    webviewUrlLabel: '아래 주소를 길게 누르면 복사할 수 있습니다.',
+    webviewMenuHint: '오른쪽 위 ⋯ 메뉴에서 "다른 브라우저로 열기"를 누르면 바로 이동합니다.',
   },
   plan: {
     free: '무료',

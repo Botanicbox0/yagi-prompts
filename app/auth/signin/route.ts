@@ -1,6 +1,13 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { createAuthServerClient, getSessionUser } from '@/lib/supabase/auth-client';
-import { DEFAULT_LOCALE, isLocale, localizedPath } from '@/lib/i18n/config';
+import { isEmbeddedWebView } from '@/lib/auth/webview';
+import {
+  DEFAULT_LOCALE,
+  LOCALE_COOKIE,
+  LOCALE_COOKIE_MAX_AGE,
+  isLocale,
+  localizedPath,
+} from '@/lib/i18n/config';
 
 /**
  * `GET /auth/signin?next=/library&locale=ko` — starts the Google OAuth round trip (§3.7).
@@ -24,6 +31,25 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   // has to be a no-op for a reader who already has one rather than a redundant OAuth round trip.
   const existing = await getSessionUser();
   if (existing) return NextResponse.redirect(new URL(next, url.origin), { status: 303 });
+
+  // F1 — Google refuses OAuth inside embedded WebViews (`disallowed_useragent`), and the bio
+  // link on Instagram/KakaoTalk is how readers arrive. A detected reader gets the
+  // open-in-browser interstitial instead of Google's dead end. After the signed-in
+  // short-circuit on purpose: a reader with a session never needed Google on this trip.
+  if (isEmbeddedWebView(request.headers.get('user-agent') ?? '')) {
+    const interstitial = new URL('/auth/open-in-browser', url.origin);
+    interstitial.searchParams.set('next', next);
+    interstitial.searchParams.set('locale', locale);
+    const response = NextResponse.redirect(interstitial);
+    // Middleware never runs under /auth/*, so the (app) layout resolves `<html lang>` from the
+    // locale cookie — written here from the same explicit signal a locale-prefixed visit sets.
+    response.cookies.set(LOCALE_COOKIE, locale, {
+      path: '/',
+      maxAge: LOCALE_COOKIE_MAX_AGE,
+      sameSite: 'lax',
+    });
+    return response;
+  }
 
   const callback = new URL('/auth/callback', url.origin);
   callback.searchParams.set('next', next);

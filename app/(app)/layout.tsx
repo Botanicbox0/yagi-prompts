@@ -3,7 +3,7 @@ import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
 import { fontVariables } from '@/app/fonts';
 import { getDictionary } from '@/lib/i18n/dictionaries';
-import { getLocaleFromHeaders } from '@/lib/i18n/server';
+import { getRequestLocale } from '@/lib/i18n/server';
 
 /**
  * Root layout for the authenticated app surface (§4: `/library`, `/account`, `/billing/*`).
@@ -18,15 +18,21 @@ export const dynamic = 'force-dynamic';
  * from the dictionary (`meta.siteName`), the one place M7 renamed.
  */
 export async function generateMetadata(): Promise<Metadata> {
-  const dict = getDictionary(await getLocaleFromHeaders());
+  const dict = getDictionary(await getRequestLocale());
   return {
     title: { default: dict.meta.siteName, template: `%s · ${dict.meta.siteName}` },
     robots: { index: false, follow: false },
   };
 }
 
+/**
+ * `getRequestLocale`, not `getLocaleFromHeaders`: the header exists only where middleware ran,
+ * and `/auth/open-in-browser` (F1) lives under the matcher's `/auth/*` exclusion. The full
+ * chain reads the same cookie middleware would have — identical answers on every middleware-
+ * covered route, and the right `<html lang>` on the one that is not.
+ */
 export default async function AppRootLayout({ children }: { children: ReactNode }) {
-  const locale = await getLocaleFromHeaders();
+  const locale = await getRequestLocale();
   return (
     <html lang={locale} className={fontVariables}>
       <head>

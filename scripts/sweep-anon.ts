@@ -520,6 +520,74 @@ async function sweepUnsubscribe(): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
+// F1 — the embedded-WebView gate on the OAuth entry
+// ---------------------------------------------------------------------------
+
+/** Real captured UAs — the same fixtures tests/auth/webview.test.ts pins the token list with. */
+const INSTAGRAM_UA =
+  'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/21F90 Instagram 334.0.4.32.98 (iPhone16,2; iOS 17_5_1; en_US; en; scale=3.00; 1290x2796; 591149735)';
+const KAKAOTALK_UA =
+  'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 KAKAOTALK 10.8.5';
+const CHROME_UA =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
+
+/**
+ * `/auth/signin` from inside an in-app WebView must land on the interstitial — Google would
+ * answer `disallowed_useragent` — while a real browser keeps today's redirect (Google when
+ * OAuth is configured, the `?error=oauth*` landing otherwise; this sweep accepts either, the
+ * environments differ on it honestly).
+ */
+async function sweepWebViewSignin(): Promise<void> {
+  console.log('\n/auth/signin — the embedded-WebView gate (F1)');
+
+  const entry = '/auth/signin?next=%2Fen%2Fprompts&locale=en';
+  const webview = await request(entry, { headers: { 'user-agent': INSTAGRAM_UA } });
+  expectOneOf('an Instagram UA is redirected', webview.status, [302, 303, 307]);
+  const target = webview.location ? new URL(webview.location, BASE) : null;
+  if (target?.pathname === '/auth/open-in-browser') {
+    ok('…to the interstitial', `${target.pathname}${target.search}`);
+  } else {
+    fail('webview redirect target', `expected /auth/open-in-browser, got ${webview.location}`);
+    return;
+  }
+
+  const page = await request(`${target.pathname}${target.search}`, {
+    headers: { 'user-agent': INSTAGRAM_UA },
+  });
+  expectEqual('the interstitial renders 200', page.status, 200);
+  expectPresent('…as the designed page', page.body, 'data-webview-interstitial');
+  expectPresent('…with the display heading', page.body, 'OPEN IN YOUR BROWSER.');
+  expectPresent('…and the copyable absolute target', page.body, 'data-webview-next');
+  expectPresent('…which is absolute', page.body, 'http');
+  expectPresent('…and points at the next target', page.body, '/en/prompts');
+  if (page.cacheControl?.includes('no-store')) ok('…never cached', page.cacheControl);
+  else fail('interstitial cache-control', `expected no-store, got ${page.cacheControl}`);
+  expectPresent('…and noindex', page.body, 'noindex');
+
+  // The KO surface, through the KakaoTalk UA the founder's traffic actually carries.
+  const koEntry = '/auth/signin?next=%2Fko%2Fprompts&locale=ko';
+  const koHop = await request(koEntry, { headers: { 'user-agent': KAKAOTALK_UA } });
+  const koTarget = koHop.location ? new URL(koHop.location, BASE) : null;
+  if (koTarget?.pathname === '/auth/open-in-browser') {
+    const koPage = await request(`${koTarget.pathname}${koTarget.search}`, {
+      headers: { 'user-agent': KAKAOTALK_UA },
+    });
+    expectPresent('a KakaoTalk UA reads it in Korean', koPage.body, '기본 브라우저에서 열어 주세요.');
+  } else {
+    fail('kakaotalk redirect target', `expected /auth/open-in-browser, got ${koHop.location}`);
+  }
+
+  // A real browser is NOT interrupted: same entry, no interstitial anywhere in the answer.
+  const chrome = await request(entry, { headers: { 'user-agent': CHROME_UA } });
+  expectOneOf('a plain Chrome UA still redirects', chrome.status, [302, 303, 307]);
+  if (chrome.location && !chrome.location.includes('/auth/open-in-browser')) {
+    ok('…to Google/oauth-error as today', chrome.location);
+  } else {
+    fail('chrome redirect target', `unexpected interstitial: ${chrome.location}`);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // §13 — the prompts surface (M6)
 // ---------------------------------------------------------------------------
 
@@ -1045,6 +1113,9 @@ async function main(): Promise<void> {
   await sweepSeo();
   await sweepDetailMetadata();
   await sweepUnsubscribe();
+
+  // --- F1: the OAuth entry's WebView gate -----------------------------------
+  await sweepWebViewSignin();
 
   // --- M6 §13: the prompts surface ----------------------------------------
   await sweepPromptGallery('en');

@@ -38,6 +38,14 @@ export const en = {
     signedInAs: 'Signed in as',
     signInRequired: 'Sign in to open the library.',
     adminOnly: 'Admins only.',
+    // F1 — the open-in-browser interstitial: Google refuses OAuth inside in-app WebViews
+    // (Instagram, KakaoTalk, …), which is exactly where a bio-link visit starts.
+    webviewEyebrow: 'Google sign-in',
+    webviewTitle: 'OPEN IN YOUR BROWSER.',
+    webviewBody:
+      'Google blocks sign-in inside in-app browsers, so this step cannot continue here.',
+    webviewUrlLabel: 'Press and hold the address below to copy it.',
+    webviewMenuHint: 'The ⋯ menu in the corner has "Open in external browser".',
   },
   plan: {
     free: 'Free',
