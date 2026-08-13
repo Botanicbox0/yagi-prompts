@@ -373,16 +373,64 @@ describe('cookie wallet (§15.1)', () => {
 
   it('credits the pack and appends the purchase ledger row, transactionally', async () => {
     await setWallet(FREE, 0, '1 hour');
-    expect(await grantPurchase(sql(), FREE, PACK_COOKIES)).toBe(true);
+    expect(await grantPurchase(sql(), FREE, PACK_COOKIES, 'evt_pay_001')).toBe('credited');
     expect(await balance()).toBe(PACK_COOKIES);
     expect(await ledger()).toEqual([{ delta: PACK_COOKIES, reason: 'purchase', prompt_id: null }]);
   });
 
-  it('answers false for an unknown profile and refuses a non-positive credit', async () => {
-    expect(await grantPurchase(sql(), '00000000-0000-4000-8000-0000000000dd', 5)).toBe(false);
-    await expect(grantPurchase(sql(), FREE, 0)).rejects.toThrow();
-    await expect(grantPurchase(sql(), FREE, -5)).rejects.toThrow();
-    await expect(grantPurchase(sql(), FREE, 2.5)).rejects.toThrow();
+  /**
+   * M10 review R1, finding 2 — webhooks REDELIVER. The provider event id is claimed under the
+   * `cookie_purchase_events` primary key inside the crediting transaction, so the second delivery
+   * of one payment answers 'duplicate' and the wallet moves exactly once.
+   */
+  it('credits one payment exactly once however many times the webhook delivers it', async () => {
+    await setWallet(FREE, 0, '1 hour');
+    expect(await grantPurchase(sql(), FREE, PACK_COOKIES, 'evt_pay_dup')).toBe('credited');
+    expect(await grantPurchase(sql(), FREE, PACK_COOKIES, 'evt_pay_dup')).toBe('duplicate');
+    expect(await grantPurchase(sql(), FREE, PACK_COOKIES, 'evt_pay_dup')).toBe('duplicate');
+
+    expect(await balance()).toBe(PACK_COOKIES);
+    expect(await ledger()).toEqual([{ delta: PACK_COOKIES, reason: 'purchase', prompt_id: null }]);
+    const { rows } = await sql().query<{ n: number }>(
+      'select count(*)::int as n from cookie_purchase_events where event_id = $1',
+      ['evt_pay_dup'],
+    );
+    expect(rows[0]?.n).toBe(1);
+    // A DIFFERENT payment is a different event and credits normally.
+    expect(await grantPurchase(sql(), FREE, PACK_COOKIES, 'evt_pay_two')).toBe('credited');
+    expect(await balance()).toBe(PACK_COOKIES * 2);
+  });
+
+  it('answers notFound for an unknown profile and refuses a bad credit or a blank event', async () => {
+    expect(
+      await grantPurchase(sql(), '00000000-0000-4000-8000-0000000000dd', 5, 'evt_ghost'),
+    ).toBe('notFound');
+    // The refused credit claimed nothing: the same event id can land on the right profile later.
+    const { rows } = await sql().query<{ n: number }>(
+      'select count(*)::int as n from cookie_purchase_events',
+    );
+    expect(rows[0]?.n).toBe(0);
+    await expect(grantPurchase(sql(), FREE, 0, 'evt_zero')).rejects.toThrow();
+    await expect(grantPurchase(sql(), FREE, -5, 'evt_neg')).rejects.toThrow();
+    await expect(grantPurchase(sql(), FREE, 2.5, 'evt_frac')).rejects.toThrow();
+    await expect(grantPurchase(sql(), FREE, 5, '   ')).rejects.toThrow();
+  });
+
+  /**
+   * M10 review R1, finding 3 — the grant-inside-a-refused-unlock COMMITS. A due wallet pressing
+   * unlock on a prompt that turns out not to exist still banks its weekly cookie: the transaction
+   * returns 'notFound' as a VALUE, and `transaction()` commits on any non-throw return.
+   */
+  it('a notFound unlock still commits the weekly grant it observed on the way', async () => {
+    await setWallet(FREE, 0, '8 days');
+    expect(
+      await unlockPrompt(sql(), FREE, '11111111-2222-4333-8444-555555555555'),
+    ).toBe('notFound');
+    expect(await balance()).toBe(1);
+    expect(await ledger()).toEqual([{ delta: 1, reason: 'weekly', prompt_id: null }]);
+    // …and the stamp reset with it: an immediate second read grants nothing more.
+    const wallet = await getWallet(sql(), FREE);
+    expect(wallet?.balance).toBe(1);
   });
 });
 
@@ -401,12 +449,13 @@ describe('cookie pack purchase seam (§15.1-5)', () => {
     });
   });
 
-  it('credits exactly the pack when the (future) webhook calls in', async () => {
+  it('credits exactly the pack when the (future) webhook calls in — once per provider event', async () => {
     await harness.sql.query(
       `update profiles set cookie_balance = 0, cookies_granted_at = now() where id = $1`,
       [FREE],
     );
-    expect(await creditCookiePack(harness.sql, FREE)).toBe(true);
+    expect(await creditCookiePack(harness.sql, FREE, 'evt_seam_1')).toBe('credited');
+    expect(await creditCookiePack(harness.sql, FREE, 'evt_seam_1')).toBe('duplicate');
     const { rows } = await harness.sql.query<{ cookie_balance: number }>(
       'select cookie_balance from profiles where id = $1',
       [FREE],

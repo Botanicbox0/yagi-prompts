@@ -1,5 +1,5 @@
 import type { SqlRunner } from '@/lib/db/sql-runner';
-import { grantPurchase } from './repo';
+import { grantPurchase, type PurchaseOutcome } from './repo';
 import { PACK_COOKIES } from './wallet';
 
 /**
@@ -57,7 +57,15 @@ export async function startCookiePackPurchase(
   return { status: 'redirect', url };
 }
 
-/** The M8 webhook's one write: always the pack size, never a caller-supplied count. */
-export async function creditCookiePack(sql: SqlRunner, profileId: string): Promise<boolean> {
-  return grantPurchase(sql, profileId, PACK_COOKIES);
+/**
+ * The M8 webhook's one write: always the pack size, never a caller-supplied count — and always
+ * under the PROVIDER'S event id, so a redelivered webhook answers 'duplicate' instead of crediting
+ * one payment twice (M10 review R1, finding 2).
+ */
+export async function creditCookiePack(
+  sql: SqlRunner,
+  profileId: string,
+  providerEventId: string,
+): Promise<PurchaseOutcome> {
+  return grantPurchase(sql, profileId, PACK_COOKIES, providerEventId);
 }

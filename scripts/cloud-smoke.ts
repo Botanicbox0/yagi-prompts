@@ -111,9 +111,53 @@ async function smokeDatabase(url: string, anonKey: string, hasServiceKey: boolea
       const cookies = await client.query<{ n: string }>(
         `select count(*)::text as n from information_schema.tables
           where table_schema = 'public'
-            and table_name in ('prompt_unlocks','cookie_ledger')`,
+            and table_name in ('prompt_unlocks','cookie_ledger','cookie_purchase_events')`,
       );
-      expect(group, 'cookie tables (0008)', Number(cookies.rows[0]?.n ?? 0) === 2, `${cookies.rows[0]?.n ?? '?'} of 2`);
+      expect(group, 'cookie tables (0008)', Number(cookies.rows[0]?.n ?? 0) === 3, `${cookies.rows[0]?.n ?? '?'} of 3`);
+
+      // (M10 review R1, finding 4.) The REST probe below can only see the anon half of the
+      // posture, and answers "refused" to both a real deny and a permissive-but-empty table.
+      // This asserts the §6 posture ITSELF: RLS enabled AND forced, zero policies, zero grants
+      // to either browser role — measured from pg_catalog, not inferred from a status code.
+      const posture = await client.query<{ bad: string }>(
+        `select count(*)::text as bad
+           from pg_class c
+           join pg_namespace n on n.oid = c.relnamespace
+          where n.nspname = 'public'
+            and c.relname in ('prompt_unlocks','cookie_ledger','cookie_purchase_events')
+            and (
+              not c.relrowsecurity
+              or not c.relforcerowsecurity
+              or exists (select 1 from pg_policies p
+                          where p.schemaname = 'public' and p.tablename = c.relname)
+              or exists (select 1 from information_schema.role_table_grants g
+                          where g.table_schema = 'public' and g.table_name = c.relname
+                            and g.grantee in ('anon','authenticated'))
+            )`,
+      );
+      expect(
+        group,
+        'cookie tables hold the full deny-all posture (0105)',
+        Number(posture.rows[0]?.bad ?? 1) === 0,
+        `${posture.rows[0]?.bad ?? '?'} table(s) out of posture`,
+      );
+
+      // Finding 1's other half: the ledger must EXPLAIN the backfilled balances — a profile whose
+      // wallet says 3 with no signup line is the desync this migration exists to prevent.
+      const unexplained = await client.query<{ n: string }>(
+        `select count(*)::text as n
+           from profiles p
+          where not exists (
+            select 1 from cookie_ledger l
+             where l.profile_id = p.id and l.reason = 'signup'
+          )`,
+      );
+      expect(
+        group,
+        'every wallet is explained by a signup ledger line',
+        Number(unexplained.rows[0]?.n ?? 1) === 0,
+        `${unexplained.rows[0]?.n ?? '?'} profile(s) unexplained`,
+      );
 
       // 0008 backfills by default: whatever profiles exist must already hold a wallet ≥ 0.
       const wallets = await client.query<{ n: string }>(
@@ -198,6 +242,7 @@ async function smokeDatabase(url: string, anonKey: string, hasServiceKey: boolea
     'contest_entry_writes',
     'prompt_unlocks',
     'cookie_ledger',
+    'cookie_purchase_events',
   ]) {
     try {
       const response = await fetch(`${url}/rest/v1/${table}?select=id&limit=1`, {

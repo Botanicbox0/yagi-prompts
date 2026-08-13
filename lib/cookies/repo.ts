@@ -215,30 +215,59 @@ export async function listRecentUnlocks(
   }));
 }
 
+export type PurchaseOutcome = 'credited' | 'duplicate' | 'notFound';
+
 /**
  * Credit a purchased pack (§15.1-5). Not wired to a gateway yet — this is the function the
  * M8 Paddle-class webhook calls, and the reason it exists now is that the seam has to be tested
- * before there is money on it. Returns false for a profile that does not exist.
+ * before there is money on it.
+ *
+ * (M10 review R1, finding 2.) Webhooks REDELIVER, so the provider's event id is the idempotency
+ * key: the claim on `cookie_purchase_events` is taken FIRST, under its primary key, in the same
+ * transaction that credits. A second delivery of the same event finds `on conflict do nothing`
+ * returned no row and answers 'duplicate' — the wallet and the ledger are never touched twice
+ * for one payment.
  */
 export async function grantPurchase(
   sql: SqlRunner,
   profileId: string,
   cookies: number,
-): Promise<boolean> {
+  eventId: string,
+): Promise<PurchaseOutcome> {
   if (!Number.isInteger(cookies) || cookies <= 0) {
     throw new Error('a purchase credits a positive whole number of cookies');
   }
-  if (!UUID.test(profileId)) return false;
+  if (eventId.trim() === '') {
+    throw new Error('a purchase carries the provider event id that proves it happened once');
+  }
+  if (!UUID.test(profileId)) return 'notFound';
   return await sql.transaction(async (tx) => {
-    const { rows } = await tx.query<{ id: string }>(
-      'update profiles set cookie_balance = cookie_balance + $2 where id = $1 returning id',
+    // §15.1-6's first move even here: the profile row lock serializes a credit against any
+    // concurrent spend, and answers the missing-profile case before the FK could turn it into
+    // a thrown error instead of an outcome.
+    const profile = await tx.query<{ ok: number }>(
+      'select 1 as ok from profiles where id = $1 for update',
+      [profileId],
+    );
+    if (profile.rows.length === 0) return 'notFound';
+
+    const claim = await tx.query<{ event_id: string }>(
+      `insert into cookie_purchase_events (event_id, profile_id, cookies)
+       values ($1, $2, $3)
+       on conflict (event_id) do nothing
+       returning event_id`,
+      [eventId, profileId, cookies],
+    );
+    if (claim.rows.length === 0) return 'duplicate';
+
+    await tx.query(
+      'update profiles set cookie_balance = cookie_balance + $2 where id = $1',
       [profileId, cookies],
     );
-    if (rows.length === 0) return false;
     await tx.query(
       `insert into cookie_ledger (profile_id, delta, reason) values ($1, $2, 'purchase')`,
       [profileId, cookies],
     );
-    return true;
+    return 'credited';
   });
 }

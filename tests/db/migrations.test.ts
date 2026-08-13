@@ -26,10 +26,13 @@ describe('migrations apply on a fresh database (PLAN §6)', () => {
       'contest_entries',
       'contest_entry_writes',
       'contests',
-      // §15.2 (M10) — the cookies pivot's two new tables. `prompt_unlocks` is the permanent
+      // §15.2 (M10) — the cookies pivot's three new tables. `prompt_unlocks` is the permanent
       // per-(account, prompt) unlock; `cookie_ledger` is the append-only audit whose sum the
-      // `profiles.cookie_balance` column caches for the fast read.
+      // `profiles.cookie_balance` column caches for the fast read; `cookie_purchase_events`
+      // claims each provider payment id exactly once so a redelivered M8 webhook cannot credit
+      // one $4 pack twice (M10 review R1, finding 2).
       'cookie_ledger',
+      'cookie_purchase_events',
       'default_policy',
       'events',
       'notification_deliveries',

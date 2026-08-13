@@ -80,3 +80,40 @@ create table if not exists cookie_ledger (
 -- The support question: "what happened to this account's cookies", newest first.
 create index if not exists idx_cookie_ledger_profile
   on cookie_ledger (profile_id, created_at desc);
+
+-- ---------------------------------------------------------------------------
+-- Backfill the ledger to MATCH the backfilled balance (M10 review R1, finding 1)
+-- ---------------------------------------------------------------------------
+-- The ADD COLUMN above stamped every pre-cookie profile with balance 3; without this row their
+-- ledger would sum to 0 while the balance reads 3 — the "ledger is the truth" claim broken on
+-- day one. One idempotent row per profile that has never been granted a signup: re-running the
+-- file cannot double-book, and profiles created AFTER this migration get their row from the auth
+-- callback's create-profile transaction instead.
+insert into cookie_ledger (profile_id, delta, reason)
+select p.id, 3, 'signup'
+  from profiles p
+ where not exists (
+   select 1 from cookie_ledger l where l.profile_id = p.id and l.reason = 'signup'
+ );
+
+-- ---------------------------------------------------------------------------
+-- cookie_purchase_events (§15.1-5) — webhook idempotency, built BEFORE the money exists
+-- ---------------------------------------------------------------------------
+-- (M10 review R1, finding 2.) A merchant-of-record webhook redelivers; two deliveries of one $4
+-- payment must credit 5 cookies once, not 10. The provider's event id is claimed here FIRST,
+-- under the primary key, inside the same transaction that credits — the second delivery finds
+-- its claim taken and answers 'duplicate' without touching the wallet.
+create table if not exists cookie_purchase_events (
+  event_id text primary key,
+  profile_id uuid not null references profiles on delete cascade,
+  cookies int not null,
+  created_at timestamptz not null default now(),
+
+  constraint cookie_purchase_events_positive
+    check (cookies > 0),
+  constraint cookie_purchase_events_id_present
+    check (btrim(event_id) <> '')
+);
+
+create index if not exists idx_cookie_purchase_events_profile
+  on cookie_purchase_events (profile_id, created_at desc);

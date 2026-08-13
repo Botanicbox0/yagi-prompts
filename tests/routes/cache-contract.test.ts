@@ -510,9 +510,11 @@ describe('cookie unlock contract (§15.3)', () => {
       expect(action.includes(`form.get('${forbidden}')`), forbidden).toBe(false);
     }
 
-    // The webhook-side credit is pinned to the pack: no count parameter reaches grantPurchase.
+    // The webhook-side credit is pinned to the pack AND to the provider's event id (M10 review
+    // R1, finding 2): no count parameter reaches grantPurchase, and no credit lands without the
+    // idempotency key that makes a redelivered webhook a 'duplicate'.
     const seam = read('lib', 'cookies', 'purchase.ts');
-    expect(seam).toContain('grantPurchase(sql, profileId, PACK_COOKIES)');
+    expect(seam).toContain('grantPurchase(sql, profileId, PACK_COOKIES, providerEventId)');
   });
 });
 
