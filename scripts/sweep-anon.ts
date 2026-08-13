@@ -562,6 +562,8 @@ async function sweepPromptGallery(locale: string): Promise<void> {
     expectAbsent(`no ${slug} card at all`, page.body, `data-prompt-card="${slug}"`);
   }
   expectAbsent('no staging keys in the gallery', page.body, 'content/prompt/');
+  // §15 — the gallery is static and shared; a balance is per-viewer and must never reach it.
+  expectAbsent('no cookie balance in the gallery', page.body, 'data-cookie-balance');
 }
 
 async function sweepPromptDetails(locale: string, prompts: PromptProbe[]): Promise<void> {
@@ -577,6 +579,21 @@ async function sweepPromptDetails(locale: string, prompts: PromptProbe[]): Promi
   // Its OWN copy button is gone. The related cards keep theirs — they are a different prompt each,
   // and the endpoint decides per id, so a copy control there is not a claim about this one.
   expectAbsent('…and no copy button for itself', gated.body, `data-copy-prompt="${gatedRow.id}"`);
+
+  // §15.3 — the funnel, from outside: an anonymous reader is offered SIGN-IN and nothing else.
+  // The literal string is the positive control that the panel really rendered (keep it in step
+  // with messages/*.ts `cookies.signinCta`); the absences are the §15 posture — no spend form a
+  // stranger could POST, no wallet panel, and no balance figure anywhere anonymous.
+  expectPresent('…and the §15.3 sign-in funnel', gated.body, 'data-unlock-cta="signin"');
+  expectPresent(
+    '…in the dictionary words',
+    gated.body,
+    locale === 'ko' ? '로그인하고 프롬프트 확인하기' : 'Sign in to read the prompt',
+  );
+  expectPresent('…returning to this prompt', gated.body, encodeURIComponent(`/${locale}/prompts/${GATED_PROMPT}`));
+  expectAbsent('…never the spend CTA', gated.body, 'data-unlock-cta="spend"');
+  expectAbsent('…never the wallet panel', gated.body, 'data-unlock-cta="empty"');
+  expectAbsent('…and no cookie balance', gated.body, 'data-cookie-balance');
 
   const teaser = await get(`/${locale}/prompts/${TEASER_PROMPT}`);
   expectEqual('a public teaser renders 200', teaser.status, 200);
@@ -745,8 +762,38 @@ async function sweepLandingPivot(): Promise<void> {
   for (const sentinel of PROMPT_SENTINELS) {
     expectAbsent(`no prompt text on the landing (${sentinel.token})`, page.body, sentinel.token);
   }
+  // §15 — same rule as the gallery: static page, shared by every tier, no balance on it.
+  expectAbsent('no cookie balance on the landing', page.body, 'data-cookie-balance');
 
   expectEqual('/library still works for anyone who has the URL', (await get('/library')).status, 307);
+}
+
+// ---------------------------------------------------------------------------
+// §15 — the cookies surface (M10)
+// ---------------------------------------------------------------------------
+
+/**
+ * The pricing page presents the MODEL (가입 3 · 주 1 · $4/5) and never a wallet: it is static by
+ * contract (§3.1), so anything per-viewer on it would be one reader's balance in everyone's CDN
+ * copy. The literals below are kept in step with messages/*.ts `pricing.cookie*`.
+ */
+async function sweepPricingCookies(): Promise<void> {
+  console.log('\n/en/pricing + /ko/pricing — the cookie model, anonymous');
+  for (const locale of ['en', 'ko']) {
+    const page = await get(`/${locale}/pricing`);
+    expectEqual(`/${locale}/pricing renders 200`, page.status, 200);
+    expectPresent('…with the cookie table', page.body, 'data-cookie-table');
+    expectPresent('…and the $4 = 5 pack cell', page.body, '$4 = 5');
+    expectPresent(
+      '…and the one-cookie rule',
+      page.body,
+      locale === 'ko' ? '쿠키 1개로 YAGI 오리지널 1개가' : 'One cookie opens one YAGI original',
+    );
+    expectAbsent('…and no balance figure', page.body, 'data-cookie-balance');
+  }
+  // §15 — the subscription is de-emphasized, not sold: the $9 hero is off this surface.
+  const en = await get('/en/pricing');
+  expectAbsent('…and the $9 headline is gone', en.body, 'OUR ORIGINALS ARE $9');
 }
 
 // ---------------------------------------------------------------------------
@@ -1000,6 +1047,9 @@ async function main(): Promise<void> {
   await sweepPromptGates();
   await sweepPromptSeo();
   await sweepLandingPivot();
+
+  // --- M10 §15: the cookies surface ---------------------------------------
+  await sweepPricingCookies();
 
   // --- M9 §14: the contests surface ---------------------------------------
   await sweepContestsListing('en', contests);

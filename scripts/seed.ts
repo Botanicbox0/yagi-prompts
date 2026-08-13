@@ -7,6 +7,8 @@ import { runPublishPipeline, type CopyReport } from '@/lib/publish/pipeline';
 import { publishPromptMedia } from '@/lib/prompts/media';
 import { insertPrompt } from '@/lib/prompts/repo';
 import { DEFAULT_PROMPT_MODEL, type PromptMedia } from '@/lib/prompts/schemas';
+import { unlockPrompt } from '@/lib/cookies/repo';
+import { SIGNUP_COOKIES } from '@/lib/cookies/wallet';
 import {
   EDGE_FIXTURE_PLAYBOOKS,
   FIXTURE_PLAYBOOKS,
@@ -55,6 +57,8 @@ export interface SeedResult {
   playbooks: SeededPlaybook[];
   /** §13 — the prompts catalog, seeded through the same publish-media lifecycle. */
   prompts: PromptSeedResult[];
+  /** §15 — the wallet states the fixtures demonstrate (see `seedCookies`). */
+  cookies: CookieSeedResult;
 }
 
 const PLACEHOLDER_NOTE = (label: string) =>
@@ -369,6 +373,71 @@ async function seedPlaybook(opts: SeedOptions, spec: PlaybookSpec): Promise<Seed
   return { id: spec.id, slug: spec.slug, revisionId: spec.revisionId, copy, skipped: false };
 }
 
+// ---------------------------------------------------------------------------
+// cookies (M10) — PLAN §15: deterministic wallets + one real unlock
+// ---------------------------------------------------------------------------
+
+export interface CookieSeedResult {
+  /** The YAGI prompt the free fixture has already opened (by slug), or null when skipped. */
+  unlockedSlug: string | null;
+  freeBalance: number;
+}
+
+/** The free fixture's pre-spent unlock — the SECOND gated item, so the flagship stays locked and
+ *  `npm run dev:free` demonstrates the spend panel and the opened prompt side by side. */
+const FREE_UNLOCK_PROMPT_ID = '9a000000-0000-4000-8000-000000000002'; // handheld-market-run
+
+/**
+ * §15 — pin every fixture wallet to a deterministic state, then spend ONE cookie for real.
+ *
+ * The stamp is set to now() so a dev session's wallet reads do not collect a surprise weekly +1
+ * mid-verification, and the 'signup' ledger rows give the fixtures the same audit shape a real
+ * account gets from the callback. The unlock goes through `unlockPrompt` — the actual §15.1-6
+ * transaction — so the free fixture's balance (2), ledger (signup +3, unlock −1) and unlock row
+ * agree by construction rather than by hand-written INSERTs.
+ */
+export async function seedCookies(opts: SeedOptions): Promise<CookieSeedResult> {
+  const { sql } = opts;
+  const log = opts.log ?? (() => {});
+
+  const existing = await sql.query<{ n: number }>(
+    'select count(*)::int as n from cookie_ledger',
+  );
+  if ((existing.rows[0]?.n ?? 0) > 0) {
+    log('· cookie fixtures already present — skipping');
+    const { rows } = await sql.query<{ cookie_balance: number }>(
+      'select cookie_balance from profiles where id = $1',
+      [FIXTURE_USERS.free.id],
+    );
+    return { unlockedSlug: null, freeBalance: rows[0]?.cookie_balance ?? SIGNUP_COOKIES };
+  }
+
+  for (const user of Object.values(FIXTURE_USERS)) {
+    await sql.query(
+      `update profiles set cookie_balance = $2, cookies_granted_at = now() where id = $1`,
+      [user.id, SIGNUP_COOKIES],
+    );
+    await sql.query(
+      `insert into cookie_ledger (profile_id, delta, reason) values ($1, $2, 'signup')`,
+      [user.id, SIGNUP_COOKIES],
+    );
+  }
+
+  const outcome = await unlockPrompt(sql, FIXTURE_USERS.free.id, FREE_UNLOCK_PROMPT_ID);
+  if (outcome !== 'unlocked') {
+    throw new Error(`cookie fixture unlock failed: ${outcome} (is the prompt seed intact?)`);
+  }
+
+  const { rows } = await sql.query<{ cookie_balance: number; slug: string }>(
+    `select p.cookie_balance, i.slug from profiles p, prompt_items i
+      where p.id = $1 and i.id = $2`,
+    [FIXTURE_USERS.free.id, FREE_UNLOCK_PROMPT_ID],
+  );
+  const row = rows[0]!;
+  log(`· cookies seeded — free fixture holds ${row.cookie_balance}, unlocked ${row.slug}`);
+  return { unlockedSlug: row.slug, freeBalance: row.cookie_balance };
+}
+
 export async function seed(opts: SeedOptions): Promise<SeedResult> {
   const users = await seedUsers(opts);
   const playbooks: SeededPlaybook[] = [];
@@ -378,7 +447,10 @@ export async function seed(opts: SeedOptions): Promise<SeedResult> {
   // §13: the prompts catalog is part of the BASE seed, not an edge add-on — the landing, the
   // gallery and the sitemap all read it now, so a seeded database without it is not the product.
   const prompts = await seedPrompts(opts);
-  return { users, playbooks, prompts };
+  // §15: the wallets ride the base seed too — `/account` and the detail lock panel read them the
+  // moment a dev identity exists, so a seeded database without them is not the product either.
+  const cookies = await seedCookies(opts);
+  return { users, playbooks, prompts, cookies };
 }
 
 // ---------------------------------------------------------------------------

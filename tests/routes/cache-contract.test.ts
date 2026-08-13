@@ -443,6 +443,56 @@ describe('prompt submission contract (§13.1/E)', () => {
 });
 
 /**
+ * M10 §15 — the cookies surface's route contract.
+ *
+ * The unlock is a server action ON the (already-dynamic) detail page; the static surfaces gained
+ * nothing session-shaped — the marketing-tree scan above keeps proving that, and the assertions
+ * here pin the action to the same one-guarded-entry shape every other mutation has.
+ */
+describe('cookie unlock contract (§15.3)', () => {
+  it('keeps the pricing page static and session-free after the rewrite', () => {
+    const pricing = read('app', '(marketing)', '[locale]', 'pricing', 'page.tsx');
+    // The §15 model is presented, never a balance: a static page cannot know the viewer.
+    expect(pricing).toContain('CookieTable');
+    expect(pricing).not.toContain('getWallet');
+    expect(pricing).not.toContain('getViewer');
+    const table = read('components', 'pricing', 'cookie-table.tsx');
+    for (const needle of ['next/headers', 'getViewer', 'getWallet', 'auth-client']) {
+      expect(table.includes(needle), `cookie-table must not use ${needle}`).toBe(false);
+    }
+  });
+
+  it('routes the unlock through one server action that never trusts the form', () => {
+    const action = read('app', '(marketing)', '[locale]', 'prompts', '[slug]', 'actions.ts');
+    expect(action).toContain("'use server'");
+    expect(action).toContain('getViewer');
+    expect(action).toContain('unlockPrompt');
+    expect(action.match(/export async function/g)).toHaveLength(1);
+
+    /**
+     * The action reads EXACTLY the two fields the form may choose: the prompt id (the OBJECT of
+     * the action, re-verified against the row inside the spending transaction) and the locale
+     * (redirect cosmetics). Identity, balance and price appear nowhere in what is read from the
+     * request — there is no field a caller could add to spend someone else's cookie or to set
+     * the cost of their own.
+     */
+    const readFields = [...action.matchAll(/form\.get\('([^']+)'\)/g)].map((match) => match[1]!);
+    expect([...new Set(readFields)].sort()).toEqual(['id', 'locale']);
+    for (const forbidden of ['userId', 'profileId', 'balance', 'delta', 'cost']) {
+      expect(action.includes(`form.get('${forbidden}')`), forbidden).toBe(false);
+    }
+  });
+
+  it('spends only inside the repo transaction — the action carries no SQL of its own', () => {
+    const action = read('app', '(marketing)', '[locale]', 'prompts', '[slug]', 'actions.ts');
+    // Every wallet rule lives in lib/cookies/repo.ts (§15.1-6); an inline statement here would be
+    // a second place to get the lock order wrong.
+    expect(action).not.toContain('cookie_balance');
+    expect(action).not.toContain('insert into');
+  });
+});
+
+/**
  * M9 §14.2 — the contests surface's route contract.
  *
  * Three properties, and each of them is a different kind of decision:
