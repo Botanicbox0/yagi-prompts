@@ -72,7 +72,8 @@ export function Reveal({
 
   return (
     <Tag ref={ref} className={className}>
-      {lines.map((line, index) => (
+      {/* Empty strings are legal input — a locale may need fewer display lines than its twin. */}
+      {lines.filter(Boolean).map((line, index) => (
         <span
           key={`${index}-${line}`}
           data-reveal-line

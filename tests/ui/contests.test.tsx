@@ -104,9 +104,9 @@ describe('the designed empty state (§14.2)', () => {
       />,
     );
     expect(ko.contests.emptyTitle.split('\n')).toHaveLength(3);
-    expect(html).toContain('지금은\n열린 콘테스트가\n없습니다.');
+    expect(html).toContain('진행 중인\n콘테스트가\n없습니다.');
     expect(html).toContain('whitespace-pre-line');
-    expect(html).toContain('스튜디오와 콘테스트 열기');
+    expect(html).toContain('콘테스트 개최 문의');
   });
 
   /**

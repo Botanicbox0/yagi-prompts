@@ -1,12 +1,9 @@
 import { Reveal, ScrubY } from '@/components/motion/reveal';
 import { TextSwap } from '@/components/ui/text-swap';
 import { Marquee } from '@/components/ui/marquee';
-import { HeroMedia } from './hero-media';
-import { ReelPoster } from './reel-poster';
 import { PlanCards } from '@/components/pricing/plan-cards';
 import { PromptCardView } from '@/components/prompts/prompt-card';
 import { promptLabels, useCaseLabel } from '@/components/prompts/labels';
-import { HERO_REEL } from '@/lib/content/slots';
 import { formatCount, interpolate } from '@/lib/i18n/format';
 import type { PromptCard, PromptTotals } from '@/lib/prompts/catalog';
 import { promptsHref, PROMPT_SUBMIT_PATH } from '@/lib/prompts/links';
@@ -33,58 +30,41 @@ function startHref(locale: Locale): string {
 // Hero
 // ---------------------------------------------------------------------------
 
-export function Hero({ locale, dict }: { locale: Locale; dict: Dictionary }) {
+/**
+ * Founder pass (2026-08-13): the landing is gallery-first — the reference form puts real cards
+ * one scroll below the headline. The hero therefore lost its media panel and its viewport-height
+ * ambition: it is a compact type band on a LIGHT surface, and the primary CTA is an anchor to the
+ * gallery that starts immediately under it.
+ */
+export function Hero({ dict }: { locale: Locale; dict: Dictionary }) {
   return (
-    <section data-section data-theme="dark" className="section overflow-hidden">
-      {/* §4: `svh` hero on the small tier so mobile browser chrome cannot clip the CTA. */}
-      <div className="mx-auto flex min-h-svh max-w-shell flex-col justify-between px-gutter pt-30 pb-14 lg:min-h-0 lg:pt-36 lg:pb-24">
-        <div>
-          <p className="text-accent font-label text-eyebrow uppercase">{dict.hero.eyebrow}</p>
-          <Reveal
-            immediate
-            delay={0.05}
-            as="h1"
-            lines={[dict.hero.line1, dict.hero.line2, dict.hero.line3]}
-            className="mt-7 font-display text-display uppercase"
-          />
-        </div>
+    <section data-section data-theme="light" className="section overflow-hidden">
+      <div className="mx-auto max-w-shell px-gutter pt-28 pb-14 lg:pt-36 lg:pb-20">
+        <p className="text-accent font-label text-eyebrow uppercase">{dict.hero.eyebrow}</p>
+        <Reveal
+          immediate
+          delay={0.05}
+          as="h1"
+          lines={[dict.hero.line1, dict.hero.line2, dict.hero.line3]}
+          className="mt-7 font-display text-display uppercase"
+        />
 
-        <div className="mt-14 grid gap-10 lg:mt-20 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] lg:items-end lg:gap-14">
-          <div>
-            <p className="max-w-detail text-body opacity-70">{dict.hero.lede}</p>
-            <div className="mt-9 flex flex-wrap items-center gap-x-8 gap-y-4">
-              {/* §13 pivots the primary CTA: the gallery IS the product now, and it is public —
-                  asking for a login before showing the work would be the old funnel, backwards. */}
-              <a
-                href={promptsHref(locale)}
-                className="inline-block border border-current px-6 py-3 font-label text-label uppercase"
-              >
-                <TextSwap>{dict.nav.prompts} →</TextSwap>
-              </a>
-              <a
-                href={`/${locale}/pricing`}
-                className="text-accent inline-block font-label text-label uppercase"
-              >
-                <TextSwap>{dict.hero.secondaryCta} →</TextSwap>
-              </a>
-            </div>
+        <div className="mt-10 flex flex-wrap items-end justify-between gap-x-14 gap-y-6">
+          <p className="max-w-detail text-body opacity-70">{dict.hero.lede}</p>
+          <div className="flex flex-wrap items-center gap-x-8 gap-y-4">
+            <a
+              href="#gallery"
+              className="inline-block border border-current px-6 py-3 font-label text-label uppercase"
+            >
+              <TextSwap>{dict.nav.prompts} ↓</TextSwap>
+            </a>
+            <a
+              href={PROMPT_SUBMIT_PATH}
+              className="text-accent inline-block font-label text-label uppercase"
+            >
+              <TextSwap>{dict.prompts.submitCta} →</TextSwap>
+            </a>
           </div>
-
-          <HeroMedia
-            reel={HERO_REEL}
-            label={dict.hero.reelLabel}
-            poster={
-              <ReelPoster
-                kicker={dict.hero.reelKicker}
-                caption={dict.hero.reelCaption}
-                words={[
-                  dict.howItReads.stepsTitle,
-                  dict.howItReads.blocksTitle,
-                  dict.howItReads.unlockTitle,
-                ]}
-              />
-            }
-          />
         </div>
       </div>
     </section>

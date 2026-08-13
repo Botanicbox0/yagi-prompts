@@ -13,12 +13,17 @@ export interface AdLabels {
   contact: string;
 }
 
+/**
+ * Founder pass (2026-08-13): the rail unit is a true skyscraper — the IAB half-page 300×600, not a
+ * content-sized box. The placeholder line runs VERTICALLY (`writing-mode`), which is what makes
+ * 600px of height read as a designed surface instead of a short card with air under it.
+ */
 export function AdCard({ labels, className }: { labels: AdLabels; className?: string }) {
   return (
     <aside
       aria-label={labels.label}
       className={[
-        'flex max-h-[600px] w-full flex-col justify-between border border-hairline bg-surface p-6 text-on-surface',
+        'flex h-[600px] w-full flex-col border border-hairline bg-surface p-6 text-on-surface',
         className,
       ]
         .filter(Boolean)
@@ -26,15 +31,17 @@ export function AdCard({ labels, className }: { labels: AdLabels; className?: st
     >
       <p className="font-label text-eyebrow uppercase opacity-60">{labels.label}</p>
 
-      <p className="mt-8 font-display text-[2.5rem] leading-[0.88] font-black tracking-tight uppercase">
-        {labels.placeholder}
-      </p>
+      <div className="flex min-h-0 flex-1 items-center justify-center py-6">
+        <p className="font-display text-[3.25rem] leading-none font-black tracking-tight uppercase [writing-mode:vertical-rl]">
+          {labels.placeholder}
+        </p>
+      </div>
 
-      <p className="mt-4 text-[0.9375rem] leading-snug opacity-70">{labels.pitch}</p>
+      <p className="text-[0.9375rem] leading-snug opacity-70">{labels.pitch}</p>
 
       <a
         href={`mailto:${labels.contact}`}
-        className="text-accent mt-8 inline-block font-mono text-code underline-offset-4 hover:underline"
+        className="text-accent mt-4 inline-block font-mono text-code underline-offset-4 hover:underline"
       >
         {labels.contact}
       </a>
