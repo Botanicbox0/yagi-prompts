@@ -1,0 +1,75 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<link href="gf-local.css" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 1200px; height: 630px; background: #ffffff; overflow: hidden; }
+  .frame {
+    position: absolute; inset: 14px;
+    border: 1px solid rgba(0, 0, 0, 0.16);
+  }
+  .card {
+    position: relative; width: 1200px; height: 630px;
+    padding: 58px 64px 48px;
+    display: flex; flex-direction: column;
+    color: #000;
+  }
+  .top {
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .brand { display: flex; align-items: center; gap: 16px; }
+  .mark { width: 44px; height: 44px; }
+  .wordmark {
+    font-family: 'Big Shoulders', sans-serif; font-weight: 900;
+    font-size: 30px; letter-spacing: 0.02em;
+  }
+  .eyebrow {
+    font-family: 'Anton SC', sans-serif; font-size: 19px;
+    letter-spacing: 0.14em; color: #0000EE;
+  }
+  .display {
+    font-family: 'Big Shoulders', sans-serif; font-weight: 900;
+    font-size: 126px; line-height: 0.88; letter-spacing: -0.015em;
+    text-transform: uppercase; margin-top: 40px;
+  }
+  .display .accent { color: #0000EE; }
+  .bottom {
+    margin-top: auto;
+    border-top: 1px solid rgba(0, 0, 0, 0.16);
+    padding-top: 22px;
+    display: flex; align-items: baseline; justify-content: space-between;
+    font-family: 'Geist Mono', monospace; font-size: 21px; letter-spacing: 0.01em;
+  }
+  .bottom .url { font-weight: 500; }
+  .bottom .note { color: rgba(0, 0, 0, 0.55); }
+</style>
+</head>
+<body>
+  <div class="frame"></div>
+  <div class="card">
+    <div class="top">
+      <div class="brand">
+        <svg class="mark" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+          <rect width="32" height="32" fill="#000000"/>
+          <g fill="none" stroke="#ffffff" stroke-width="2.4" stroke-linecap="square">
+            <path d="M7 5c0 6.2 2.6 9.1 6.6 10.3"/>
+            <path d="M25 5c0 6.2-2.6 9.1-6.6 10.3"/>
+          </g>
+          <path d="M12.4 15.4h7.2L16 27z" fill="#ffffff"/>
+        </svg>
+        <div class="wordmark">YAGI PROMPTS</div>
+      </div>
+      <div class="eyebrow">ORIGINAL PROMPTS · SEEDANCE 2.5</div>
+    </div>
+
+    <div class="display">Prompts<br>that actually<br>ship<span class="accent">.</span></div>
+
+    <div class="bottom">
+      <span class="url">yagiprompts.com</span>
+      <span class="note">WRITTEN & TESTED IN-HOUSE — EVERY ONE</span>
+    </div>
+  </div>
+</body>
+</html>

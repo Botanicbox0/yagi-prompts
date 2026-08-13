@@ -3,6 +3,7 @@ import { DEFAULT_LOCALE, isLocale, type Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/dictionaries';
 import { getPromptCatalog } from '@/lib/prompts/public-catalog';
 import { promptsHref } from '@/lib/prompts/links';
+import { SITE_OG_IMAGE, SITE_TWITTER_CARD } from '@/lib/seo/og';
 import { MarketingFooter, MarketingNav } from '@/components/marketing/chrome';
 import { countsLine } from '@/components/landing/sections';
 import { CookieTable } from '@/components/pricing/cookie-table';
@@ -46,7 +47,9 @@ export async function generateMetadata({
       url: `/${locale}/pricing`,
       title: `${dict.meta.pricingTitle} — ${dict.meta.siteName}`,
       description: dict.meta.pricingDescription,
+      images: [SITE_OG_IMAGE],
     },
+    twitter: { card: SITE_TWITTER_CARD },
   };
 }
 

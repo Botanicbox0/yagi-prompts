@@ -3,6 +3,7 @@ import type { ShapedPrompt } from '@/lib/prompts/shape';
 import { promptRest } from '@/lib/prompts/links';
 import type { Locale } from '@/lib/i18n/config';
 import { localeAlternates } from './playbook-metadata';
+import { SITE_OG_IMAGE, SITE_TWITTER_CARD } from './og';
 
 /**
  * PLAN §13.2 — "published prompt details join the sitemap with locale alternates; gallery indexed;
@@ -50,9 +51,11 @@ export function promptMetadata(input: PromptMetaInput): Metadata {
       url: `/${input.locale}${rest}`,
       title,
       description: input.description,
-      ...(image ? { images: [{ url: image }] } : {}),
+      // The prompt's own poster when it has one; the brand card otherwise — never imageless.
+      images: [image ? { url: image } : SITE_OG_IMAGE],
       ...(input.video ? { videos: [{ url: input.video.src, type: input.video.mime }] } : {}),
     },
+    twitter: { card: SITE_TWITTER_CARD },
   };
 }
 
@@ -82,7 +85,9 @@ export function promptsGalleryMetadata(input: {
       url: `/${input.locale}/prompts`,
       title: input.ogTitle ?? input.title,
       description: input.description,
+      images: [SITE_OG_IMAGE],
     },
+    twitter: { card: SITE_TWITTER_CARD },
   };
 }
 

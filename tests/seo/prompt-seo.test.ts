@@ -134,9 +134,21 @@ describe('prompt metadata (§13.2 SEO)', () => {
     expect(og.videos?.[0]?.url).toBe('https://cdn.test/abc.mp4');
   });
 
-  it('omits og:image rather than pointing at nothing', () => {
-    const og = meta({ poster: null, video: null }).openGraph as { images?: unknown };
-    expect(og.images).toBeUndefined();
+  /**
+   * Founder share-link pass (2026-08-13): the policy INVERTED. A posterless prompt used to omit
+   * og:image; now nothing shareable is ever imageless — the brand card (`/og/card.png`, §5
+   * language) is the fallback, because a bare text row in a KakaoTalk/Notion preview is the worst
+   * rendering the link can have. A real poster still wins when one exists (test above).
+   */
+  it('falls back to the brand card rather than shipping an imageless share', () => {
+    const og = meta({ poster: null, video: null }).openGraph as {
+      images?: Array<{ url: string; width?: number; height?: number }>;
+    };
+    expect(og.images?.[0]?.url).toBe('/og/card.png');
+    expect(og.images?.[0]?.width).toBe(1200);
+    expect(og.images?.[0]?.height).toBe(630);
+    const twitter = meta({ poster: null, video: null }).twitter as { card?: string };
+    expect(twitter.card).toBe('summary_large_image');
   });
 
   it('deindexes anything that did not resolve', () => {
