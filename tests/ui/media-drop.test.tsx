@@ -1,0 +1,53 @@
+import { renderToStaticMarkup } from 'react-dom/server';
+import { describe, expect, it } from 'vitest';
+import { getDictionary } from '@/lib/i18n/dictionaries';
+import { MediaDrop, type MediaDropLabels } from '@/components/admin/media-drop';
+
+/**
+ * Founder direction (2026-08-13) — the admin media fields' drag/drop + frame-picker enhancement.
+ *
+ * What a server render can honestly pin is the PROGRESSIVE-ENHANCEMENT half of the contract
+ * (M4's JS-free-admin doctrine): before hydration the markup must carry the two PLAIN file
+ * inputs under their exact multipart names — the server operations read `video` and `poster`
+ * and do not know the component exists. The zones, the scrubber and the canvas capture are
+ * client-only behavior on top; their absence from static markup is the design, not a gap.
+ */
+
+function labelsOf(): MediaDropLabels {
+  const a = getDictionary('ko').admin;
+  return {
+    videoZone: a.mediaVideoZone,
+    videoReplace: a.mediaVideoReplace,
+    posterHeading: a.fieldPromptPoster,
+    frameScrub: a.mediaFrameScrub,
+    framePick: a.mediaFramePick,
+    framePicked: a.mediaFramePicked,
+    posterZone: a.mediaPosterZone,
+    posterPicked: a.mediaPosterPicked,
+    posterHint: a.mediaPosterHint,
+  };
+}
+
+describe('MediaDrop (admin media enhancement)', () => {
+  it('ships the two REAL multipart fields, visible, before any JavaScript runs', () => {
+    const html = renderToStaticMarkup(
+      <MediaDrop videoName="video" posterName="poster" labels={labelsOf()} />,
+    );
+    expect(html).toContain('name="video"');
+    expect(html).toContain('name="poster"');
+    expect(html).toContain('accept="video/*"');
+    expect(html).toContain('accept="image/*"');
+    // The no-JS state is a WORKING pair of pickers, not hidden stubs.
+    expect(html).not.toContain('sr-only');
+    // …and no zone chrome pretends to work without the client.
+    expect(html).not.toContain(labelsOf().videoZone);
+  });
+
+  it('keeps the field names caller-controlled — the contests forms can reuse it later', () => {
+    const html = renderToStaticMarkup(
+      <MediaDrop videoName="heroVideo" posterName="heroPoster" labels={labelsOf()} />,
+    );
+    expect(html).toContain('name="heroVideo"');
+    expect(html).toContain('name="heroPoster"');
+  });
+});

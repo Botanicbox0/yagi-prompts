@@ -3,14 +3,16 @@ import { GoatMark } from '@/components/nav/goat-mark';
 import { HireClickBeacon } from '@/components/analytics/beacon';
 
 /**
- * PLAN §3.1 — "Footer carries the B2B lead CTA: 'Work with the studio →' (mailto + `hire_click`
- * event). The same strip appears at the bottom of playbook detail pages."
+ * PLAN §3.1 — "Footer carries the B2B lead CTA: 'Work with the studio →' (+ `hire_click` event).
+ * The same strip appears at the bottom of playbook detail pages."
  *
- * M3 closes the deferred half: the mailto is wrapped in a beacon that posts `hire_click` to
- * `/api/events`. The anchor is untouched, so the lead path still works with JavaScript disabled —
- * the analytics is additive, never load-bearing. The footer stays a SERVER component (this page is
- * static by contract, §3.1) and only the tiny beacon wrapper crosses to the client.
+ * Founder direction (2026-08-13): the big CTA opens the studio's Pitch deck in a new tab — a
+ * deck sells the studio better than an empty compose window. The CONTACT email below stays a
+ * mailto: the deck is the pitch, the address is the reply channel. `hire_click` beacons both.
  */
+
+/** The studio intro deck the hire CTA opens. */
+const HIRE_DECK_URL = 'https://pitch.com/v/yagi-workshop-intro-9nbwak';
 export interface FooterLabels {
   hireCta: string;
   hireLede: string;
@@ -46,7 +48,9 @@ export function SiteFooter({
         <div className="max-w-detail">
           <HireClickBeacon>
             <a
-              href="mailto:hello@yagiworkshop.xyz?subject=YAGI%20PROMPTS%20%E2%80%94%20studio%20enquiry"
+              href={HIRE_DECK_URL}
+              target="_blank"
+              rel="noopener noreferrer"
               className="font-display text-title font-black uppercase"
             >
               {/* Non-breaking space: at display size the arrow must not wrap onto a line of its own. */}

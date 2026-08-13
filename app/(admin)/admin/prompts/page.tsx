@@ -24,7 +24,24 @@ import {
   OutcomeBanner,
   Panel,
 } from '@/components/admin/chrome';
+import { MediaDrop, type MediaDropLabels } from '@/components/admin/media-drop';
 import { useCaseLabel } from '@/components/prompts/labels';
+import type { Dictionary } from '@/lib/i18n/dictionaries';
+
+/** The drag/drop + frame-picker labels, shared by the authoring and the edit form. */
+function mediaDropLabels(a: Dictionary['admin']): MediaDropLabels {
+  return {
+    videoZone: a.mediaVideoZone,
+    videoReplace: a.mediaVideoReplace,
+    posterHeading: a.fieldPromptPoster,
+    frameScrub: a.mediaFrameScrub,
+    framePick: a.mediaFramePick,
+    framePicked: a.mediaFramePicked,
+    posterZone: a.mediaPosterZone,
+    posterPicked: a.mediaPosterPicked,
+    posterHint: a.mediaPosterHint,
+  };
+}
 
 /**
  * `/admin/prompts` — PLAN §13.2/F: the moderation queue and YAGI authoring, in one screen.
@@ -244,14 +261,9 @@ function PublishedItem({ row, dict }: { row: PromptRow; dict: Dict }) {
           </div>
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Field label={a.fieldPromptPoster} hint={a.promptMediaHint}>
-            <input type="file" name="poster" accept="image/*" className={INPUT} />
-          </Field>
-          <Field label={a.fieldPromptVideo}>
-            <input type="file" name="video" accept="video/*" className={INPUT} />
-          </Field>
-        </div>
+        <Field label={a.fieldPromptVideo} hint={a.promptMediaHint}>
+          <MediaDrop videoName="video" posterName="poster" labels={mediaDropLabels(a)} />
+        </Field>
 
         <div>
           <button type="submit" className={BUTTON_PRIMARY}>
@@ -405,14 +417,9 @@ export default async function AdminPromptsPage({
             </div>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Field label={a.fieldPromptPoster} hint={a.promptMediaHint}>
-              <input type="file" name="poster" accept="image/*" className={INPUT} />
-            </Field>
-            <Field label={a.fieldPromptVideo}>
-              <input type="file" name="video" accept="video/*" className={INPUT} />
-            </Field>
-          </div>
+          <Field label={a.fieldPromptVideo} hint={a.promptMediaHint}>
+            <MediaDrop videoName="video" posterName="poster" labels={mediaDropLabels(a)} />
+          </Field>
 
           <div>
             <button type="submit" className={BUTTON_PRIMARY}>
