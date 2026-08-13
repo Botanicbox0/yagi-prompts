@@ -33,6 +33,13 @@ export interface AdminContext {
    * that called the wrong one would be a silently stale page rather than a test failure.
    */
   revalidatePrompts?: () => void;
+  /**
+   * `revalidateTag('contests')` (§14.2), injected on the same terms as the other two.
+   *
+   * A third function rather than a flag, because the contests surface has the most write events per
+   * day of the three (every entry approval touches it) and the fewest reasons to move the others.
+   */
+  revalidateContests?: () => void;
 }
 
 /** Codes, never prose: the UI maps them through the bilingual dictionary (§3.9). */
@@ -49,7 +56,9 @@ export type AdminSuccessCode =
   | 'unarchived'
   /** §13.1 moderation outcomes — a submission becoming public is not the same event as a save. */
   | 'approved'
-  | 'rejected';
+  | 'rejected'
+  /** §14 — taking a contest off the listing is not an archive and not a save. */
+  | 'unpublished';
 
 export type AdminErrorCode =
   | 'forbidden'
@@ -68,6 +77,22 @@ export type AdminErrorCode =
   | 'storage'
   /** §13.1 caps: a posted file the server refused (size, duration or type). */
   | 'upload'
+  /**
+   * §14 contests. Three genuinely distinct refusals, each with its own next action:
+   *   notPublishable    — the contest is missing something a published contest must have
+   *   deadlineNotPassed — placements are a post-deadline act (§14.1)
+   *   duplicatePlacement— that podium step is taken (the partial unique index says so)
+   */
+  | 'notPublishable'
+  | 'deadlineNotPassed'
+  | 'duplicatePlacement'
+  /**
+   * The entrant replaced their film between the queue being rendered and the moderator pressing a
+   * button. Not an error the moderator made — an instruction to watch the new one.
+   */
+  | 'staleReview'
+  /** A judged contest's deadline cannot be pushed outwards while medals are on the board. */
+  | 'placementsLocked'
   | 'unknown';
 
 export interface AdminSuccess {

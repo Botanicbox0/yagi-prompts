@@ -3,16 +3,24 @@ import { SiteFooter } from '@/components/site-footer';
 import { LocaleToggle } from '@/components/locale-toggle';
 import { PLAYBOOKS_IN_NAV } from '@/lib/flags';
 import { promptsHref } from '@/lib/prompts/links';
+import { contestsHref } from '@/lib/contests/links';
 import type { Dictionary } from '@/lib/i18n/dictionaries';
 import type { Locale } from '@/lib/i18n/config';
 import type { SectionTheme } from '@/lib/motion/geometry';
 
 /**
- * §13.2 — "Nav becomes: Prompts · Pricing". One list, built once, used by the bar and the footer,
- * so the two can never disagree about what the site currently offers.
+ * §14.2 — "Nav: Prompts · Contests · Pricing". One list, built once, used by the bar and the
+ * footer, so the two can never disagree about what the site currently offers.
+ *
+ * Contests sits second because that is the order the site reads in: the prompts are what we make,
+ * the contests are what we ask you to make, and the price is the last question. (§13.2's two-item
+ * version is superseded, not amended — the library stays denavigated behind `PLAYBOOKS_IN_NAV`.)
  */
 export function siteLinks(locale: Locale, dict: Dictionary): NavLink[] {
-  const links: NavLink[] = [{ href: promptsHref(locale), label: dict.nav.prompts }];
+  const links: NavLink[] = [
+    { href: promptsHref(locale), label: dict.nav.prompts },
+    { href: contestsHref(locale), label: dict.nav.contests },
+  ];
   if (PLAYBOOKS_IN_NAV) links.push({ href: '/library', label: dict.nav.library });
   links.push({ href: `/${locale}/pricing`, label: dict.nav.pricing });
   return links;

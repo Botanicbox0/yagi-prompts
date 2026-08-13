@@ -17,6 +17,10 @@ import {
   type PlaybookSpec,
 } from './fixtures';
 import { PROMPT_FIXTURES } from './prompt-fixtures';
+import { insertContest, upsertEntry } from '@/lib/contests/repo';
+import { publishContestMedia } from '@/lib/contests/media';
+import type { ContestMedia } from '@/lib/contests/schemas';
+import { CONTEST_ENTRANTS, CONTEST_FIXTURES } from './contest-fixtures';
 
 /**
  * PLAN §8 M0 — "seed script publishes 2 fixture playbooks through the REAL prepare→copy→publish
@@ -541,6 +545,149 @@ export async function seedPrompts(opts: SeedOptions): Promise<PromptSeedResult[]
       id: fixture.id,
       status: fixture.status,
       copied: report.copied,
+    });
+  }
+
+  return results;
+}
+
+// ---------------------------------------------------------------------------
+// contests (M9) — PLAN §14
+// ---------------------------------------------------------------------------
+
+export interface ContestSeedResult {
+  slug: string;
+  id: string;
+  status: string;
+  entries: number;
+}
+
+/**
+ * Seed the §14 contest fixture — a DRAFT, deliberately, and applied by `npm run db:local` only.
+ *
+ * Two reasons it is not part of `seed()`, and they are the same two `seedEdgeFixtures` has:
+ *   · the M0/M1 acceptance suites assert on the exact shape of the published catalog, and their
+ *     subject must not drift because a later milestone needed a draft;
+ *   · this fixture's whole job is to leave the PUBLIC listing empty so the sweep can assert the
+ *     designed empty state — a job it can only do where the sweep runs.
+ *
+ * Nothing here shortcuts the doctrine: the poster is staged PRIVATELY and never copied, because the
+ * contest is unpublished and §14.1 makes publishing the founder's act. The entries go in through
+ * the same `upsertEntry` the submit path uses, then have their moderation state applied — so the
+ * pending and rejected rows are real rows in the real states the sweep asserts are invisible.
+ */
+export async function seedContests(opts: SeedOptions): Promise<ContestSeedResult[]> {
+  const { sql, storage } = opts;
+  const log = opts.log ?? (() => {});
+  const results: ContestSeedResult[] = [];
+
+  // §14.1 makes an entry `unique (contest_id, author_id)`, so four entries need four people. The
+  // entitlement fixtures are a different population (they exist to test tiers) and there are only
+  // three of them — reusing them silently collapsed two entries into one row.
+  for (const entrant of CONTEST_ENTRANTS) {
+    if (opts.createAuthUsers !== false) {
+      await sql.query('insert into auth.users (id) values ($1) on conflict (id) do nothing', [
+        entrant.id,
+      ]);
+    }
+    await sql.query(
+      `insert into profiles (id, email, display_name, locale, plan, is_admin)
+       values ($1, $2, $3, 'en', 'free', false) on conflict (id) do nothing`,
+      [entrant.id, entrant.email, entrant.displayName],
+    );
+  }
+
+  for (const fixture of CONTEST_FIXTURES) {
+    const existing = await sql.query<{ id: string }>('select id from contests where slug = $1', [
+      fixture.slug,
+    ]);
+    if (existing.rows.length > 0) {
+      log(`· contest ${fixture.slug} already present — skipping`);
+      results.push({ slug: fixture.slug, id: existing.rows[0]!.id, status: 'skipped', entries: 0 });
+      continue;
+    }
+
+    let media: unknown = null;
+    if (fixture.poster) {
+      const bytes = placeholderBytes(fixture.poster);
+      const key = `content/contest/${fixture.id}/${randomUUID()}.${fixture.poster.ext}`;
+      await storage.putStaging(key, bytes, fixture.poster.mime);
+      const staged: ContestMedia = {
+        poster: AssetRefSchema.parse({
+          staging_key: key,
+          sha256: sha256Hex(bytes),
+          mime: fixture.poster.mime,
+          ...(fixture.poster.w === undefined ? {} : { w: fixture.poster.w }),
+          ...(fixture.poster.h === undefined ? {} : { h: fixture.poster.h }),
+        }),
+      };
+      // The copier runs for a PUBLISHED fixture only — a draft's poster stays private, which is
+      // what §14.1's "publishing is the founder's act" means for bytes. It is also what the
+      // strengthened `contests_published_requires_poster` CHECK demands of a published row: an
+      // object with a real `published_key` in the public bucket, not merely a key that exists.
+      media =
+        fixture.status === 'published'
+          ? (await publishContestMedia(storage, staged)).media
+          : staged;
+    }
+
+    // Relative dates, resolved against the seed instant. `Date.now()` is fine in a SCRIPT (the
+    // workflow scripts are the ones that must not read a clock); a fixture with hardcoded dates
+    // would quietly become a closed contest the moment the calendar passed it.
+    const day = 24 * 60 * 60 * 1000;
+    const seededAt = Date.now();
+    const startsAt = new Date(seededAt + fixture.startsInDays * day).toISOString();
+    const deadlineAt = new Date(seededAt + fixture.deadlineInDays * day).toISOString();
+
+    await insertContest(sql, {
+      id: fixture.id,
+      slug: fixture.slug,
+      status: fixture.status,
+      title: fixture.title,
+      summary: fixture.summary,
+      prize: fixture.prize,
+      rules: fixture.rules,
+      brandName: fixture.brandName,
+      brandUrl: fixture.brandUrl,
+      startsAt,
+      deadlineAt,
+      media,
+    });
+
+    for (const entry of fixture.entries) {
+      const id = await upsertEntry(sql, {
+        id: entry.id,
+        contestId: fixture.id,
+        authorId: entry.author.id,
+        title: entry.title,
+        videoUrl: entry.videoUrl,
+        snsUrl: entry.snsUrl,
+        // The sentinel rides INSIDE the moderated bytes — that is the whole point of it.
+        note: `${entry.note} :: ${entry.sentinel}`,
+      });
+
+      // Moderation state applied AFTER the insert, because the CHECKs are ordered the same way a
+      // moderator is: a row is born pending, and a rejection cannot exist without its reason.
+      if (entry.status === 'approved') {
+        await sql.query(
+          'update contest_entries set status = $2, placement = $3 where id = $1',
+          [id, 'approved', entry.placement ?? null],
+        );
+      } else if (entry.status === 'rejected') {
+        await sql.query('update contest_entries set status = $2, reject_reason = $3 where id = $1', [
+          id,
+          'rejected',
+          entry.rejectReason ?? 'rejected',
+        ]);
+      }
+    }
+
+    log(`· contest ${fixture.slug} seeded (${fixture.status}, ${fixture.entries.length} entries)`);
+    results.push({
+      slug: fixture.slug,
+      id: fixture.id,
+      status: fixture.status,
+      entries: fixture.entries.length,
     });
   }
 

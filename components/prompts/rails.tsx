@@ -1,6 +1,6 @@
 import type { PromptCard } from '@/lib/prompts/catalog';
 import { PromptCardView } from './prompt-card';
-import { RevealGrid } from './reveal-grid';
+import { RevealGrid } from '@/components/motion/reveal-grid';
 import type { PromptLabels } from './labels';
 
 /**

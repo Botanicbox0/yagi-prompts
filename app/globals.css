@@ -226,6 +226,110 @@ html:lang(ko) {
     line-height: 1;
     letter-spacing: -0.012em;
   }
+
+  /* --- §14.2 contest display slots ---------------------------------------
+     The contests surface set every display size as a raw `text-[clamp(…)]` utility, which put those
+     sizes one step OUTSIDE the type system — and, the reason this block exists, outside the §5.2 KO
+     downscale: `html:lang(ko) .text-display` cannot reach a size that was never named. Each slot
+     below is therefore declared once, with its Korean twin at the 0.85× rule and `line-height: 1`
+     (Hangul fills its em box, so a 0.82–0.92 latin leading collides line-to-line).
+
+     The poster slot is the only one that steps rather than clamps: §14.2's hero poster is a real
+     responsive composition (24px / 32px / 56px padding, 1 → 8 → 12 columns), so its type moves in
+     the same three steps its grid does instead of sliding through them. */
+  .text-contest-poster {
+    font-size: 3rem; /* 48px — the <640 single-column poster */
+    line-height: 0.82;
+    letter-spacing: -0.02em;
+  }
+
+  .text-contest-poster-prize {
+    font-size: 2rem;
+    line-height: 0.9;
+    letter-spacing: -0.02em;
+  }
+
+  html:lang(ko) .text-contest-poster {
+    font-size: 2.55rem;
+    line-height: 1;
+  }
+
+  html:lang(ko) .text-contest-poster-prize {
+    font-size: 1.7rem;
+    line-height: 1;
+  }
+
+  @media (min-width: 40rem) {
+    .text-contest-poster {
+      font-size: 4rem; /* 64px — the 640–1023 eight-column tier */
+    }
+
+    .text-contest-poster-prize {
+      font-size: 3rem; /* 48px */
+    }
+
+    html:lang(ko) .text-contest-poster {
+      font-size: 3.4rem;
+    }
+
+    html:lang(ko) .text-contest-poster-prize {
+      font-size: 2.55rem;
+    }
+  }
+
+  @media (min-width: 64rem) {
+    .text-contest-poster {
+      font-size: clamp(4.75rem, 9vw, 8.5rem); /* 76 → 136px at the 12-column tier */
+    }
+
+    .text-contest-poster-prize {
+      font-size: clamp(3rem, 5.3vw, 5rem); /* 48 → 80px */
+    }
+
+    html:lang(ko) .text-contest-poster {
+      font-size: clamp(4.0375rem, 7.65vw, 7.225rem);
+    }
+
+    html:lang(ko) .text-contest-poster-prize {
+      font-size: clamp(2.55rem, 4.505vw, 4.25rem);
+    }
+  }
+
+  /* The card tile's own title — smaller frame, same rule. */
+  .text-contest-card {
+    font-size: clamp(1.75rem, 6.5vw, 3.5rem);
+    line-height: 0.86;
+    letter-spacing: -0.02em;
+  }
+
+  html:lang(ko) .text-contest-card {
+    font-size: clamp(1.4875rem, 5.525vw, 2.975rem);
+    line-height: 1;
+  }
+
+  /* §14.2 "prize in display type (the money shot of the page)" — the TOTAL only. */
+  .text-contest-prize {
+    font-size: clamp(3.5rem, 8vw, 7rem);
+    line-height: 0.86;
+    letter-spacing: -0.02em;
+  }
+
+  html:lang(ko) .text-contest-prize {
+    font-size: clamp(2.975rem, 6.8vw, 5.95rem);
+    line-height: 1;
+  }
+
+  /* One size for every section heading on the detail page (brief / winners / entries). */
+  .text-contest-section {
+    font-size: clamp(2rem, 4vw, 3rem);
+    line-height: 0.92;
+    letter-spacing: -0.015em;
+  }
+
+  html:lang(ko) .text-contest-section {
+    font-size: clamp(1.7rem, 3.4vw, 2.55rem);
+    line-height: 1;
+  }
 }
 
 @layer components {
@@ -366,17 +470,26 @@ html:lang(ko) {
     transition: transform var(--duration-hover) var(--ease-out-quint);
   }
 
+  /* The resting position of the duplicate has to CLEAR the clip box, not merely approach it.
+     `110%` is 110% of the duplicate's own height, while the box is that height plus the 0.2em of
+     padding above — so at tight line-heights (`leading-none`, the 1.2 of `text-eyebrow`) the top
+     edge of the duplicate landed a hair INSIDE the box and painted a sub-pixel ghost under every
+     nav link and CTA on the site. Found in M9 render-verify, on the footer links.
+     `calc(100% + 0.2em)` clears the padding by construction, at any line-height. */
   .text-swap__b {
     position: absolute;
     top: 0.1em;
     left: 0;
     right: 0;
-    transform: translate3d(0, 110%, 0);
+    transform: translate3d(0, calc(100% + 0.2em), 0);
   }
 
+  /* Symmetrical with the resting offset above, and clear of the box for the same reason: at
+     `leading-none` a plain `-110%` leaves the outgoing label's bottom edge exactly on the clip
+     boundary, which rounds into a visible sliver on the way out. */
   :is(a, button, summary):hover .text-swap__a,
   :is(a, button, summary):focus-visible .text-swap__a {
-    transform: translate3d(0, -110%, 0);
+    transform: translate3d(0, calc(-100% - 0.2em), 0);
   }
 
   :is(a, button, summary):hover .text-swap__b,
@@ -539,5 +652,21 @@ html:lang(ko) {
   .marquee__track {
     animation: none !important;
     transform: none !important;
+  }
+
+  /* §5.3-3 with motion off: the swap does not happen, so the duplicate has no reason to exist.
+     Removing it from the box model — rather than transforming it out of view — is a structural
+     guarantee that it can never paint, which a geometric offset alone can only approximate.
+     `__a` is pinned at rest for the same reason: with no transition to animate, a hover that
+     translated it would jump. */
+  .text-swap__b {
+    display: none !important;
+  }
+
+  .text-swap__a {
+    transform: none !important;
+    /* No transitionable transform left, so Chrome has no reason to keep a composited layer for
+       this text — which is also what keeps its antialiasing identical to the labels around it. */
+    transition: none !important;
   }
 }

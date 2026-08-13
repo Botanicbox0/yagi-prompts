@@ -4,6 +4,11 @@ import { PGlite } from '@electric-sql/pglite';
 import { DEFAULT_LOCAL_SNAPSHOT } from '@/lib/db/connect-shared';
 import { FIXTURE_SENTINELS } from './fixtures';
 import { HIDDEN_PROMPT_SLUGS, PROMPT_SENTINELS } from './prompt-fixtures';
+import {
+  CONTEST_ENTRY_SENTINELS,
+  HIDDEN_CONTEST_SLUGS,
+  PUBLISHED_CONTEST_SLUG,
+} from './contest-fixtures';
 import { RUNTIME_MODE_ENV } from '@/lib/runtime-mode';
 
 /**
@@ -135,6 +140,12 @@ interface PromptProbe {
   featured: boolean;
 }
 
+interface ContestProbe {
+  id: string;
+  slug: string;
+  status: string;
+}
+
 interface AssetBlockRow {
   id: string;
   kind: string;
@@ -171,11 +182,18 @@ async function readSnapshot() {
        from prompt_items order by slug`,
   );
 
+  // §14 — the contests surface. The demo contest is a DRAFT by design, so the ids are what let the
+  // sweep prove that its poster and its entries are unreachable rather than merely absent.
+  const contests = await db.query<ContestProbe>(
+    'select id, slug, status from contests order by slug',
+  );
+
   await db.close();
   return {
     assets: assets.rows,
     privateKeys: privateKeys.rows.map((r) => r.target_key),
     prompts: prompts.rows,
+    contests: contests.rows,
   };
 }
 
@@ -731,6 +749,225 @@ async function sweepLandingPivot(): Promise<void> {
   expectEqual('/library still works for anyone who has the URL', (await get('/library')).status, 307);
 }
 
+// ---------------------------------------------------------------------------
+// §14 — the contests surface (M9)
+// ---------------------------------------------------------------------------
+
+/** Every entry sentinel an anonymous reader must NEVER meet. */
+const FORBIDDEN_ENTRY_SENTINELS = CONTEST_ENTRY_SENTINELS.filter((s) => !s.publicToAnon);
+
+/**
+ * The one sentinel that MUST be reachable: an approved entry of the published fixture contest.
+ *
+ * Without it every absence assertion below would pass on a page that renders no entries at all —
+ * the vacuity the M9 review called out. This is the positive control that makes them mean something.
+ */
+const LIVE_ENTRY_SENTINEL = CONTEST_ENTRY_SENTINELS.find((s) => s.publicToAnon)!;
+
+async function sweepContestsListing(locale: string, contests: ContestProbe[]): Promise<void> {
+  const path = `/${locale}/contests`;
+  console.log(`\n${path} — the listing, anonymous`);
+  const page = await get(path);
+
+  expectEqual('renders 200', page.status, 200);
+
+  // Positive controls: the page is a real page, not an error dressed as one.
+  // M9 design review, finding 8: the KO hero is broken where the SENTENCE breaks
+  // ("브랜드가 / 브리프를 건넵니다."), not where the English one does.
+  expectPresent(
+    'the display headline',
+    page.body,
+    locale === 'ko' ? '브리프를 건넵니다' : 'BRANDS BRING',
+  );
+  expectPresent('the OPEN rail', page.body, 'data-contest-rail="open"');
+  expectPresent(
+    'the published contest card',
+    page.body,
+    `data-contest-card="${PUBLISHED_CONTEST_SLUG}"`,
+  );
+  expectPresent('…with its phase chip', page.body, 'data-phase-chip="open"');
+  expectPresent('…and a server-rendered D-day', page.body, 'data-dday');
+
+  // §14.2 — "Listing carries the B2B CTA ('Run a contest with the studio →' mailto)".
+  expectPresent('the B2B CTA strip', page.body, 'data-contest-hire');
+  expectPresent('…as a real mailto', page.body, 'mailto:hello@yagiworkshop.xyz');
+  expectPresent(
+    '…with the studio wording',
+    page.body,
+    locale === 'ko' ? '스튜디오와 콘테스트 열기' : 'Run a contest with the studio',
+  );
+  expectPresent('nav points at the tab', page.body, `href="/${locale}/contests"`);
+
+  // The property that matters: a DRAFT contest is nowhere on the public listing.
+  for (const contest of contests) {
+    if (contest.status === 'published') continue;
+    expectAbsent(`no ${contest.slug} card`, page.body, `data-contest-card="${contest.slug}"`);
+    expectAbsent(`…and no ${contest.slug} link`, page.body, `/contests/${contest.slug}`);
+  }
+  // No entry text of ANY status reaches a listing card — the card carries a COUNT, never a row.
+  for (const sentinel of CONTEST_ENTRY_SENTINELS) {
+    expectAbsent(`no ${sentinel.status} entry text (${sentinel.token})`, page.body, sentinel.token);
+  }
+  expectAbsent('no staging keys in the listing', page.body, 'content/contest/');
+}
+
+/** §14.2 — "published only; draft = admin preview path", checked from outside. */
+async function sweepContestDetails(locale: string, contests: ContestProbe[]): Promise<void> {
+  console.log(`\n/${locale}/contests/[slug] — details, anonymous`);
+
+  // --- the PUBLISHED contest: the positive control the review asked for ----
+  const live = await get(`/${locale}/contests/${PUBLISHED_CONTEST_SLUG}`);
+  expectEqual('a published contest renders 200', live.status, 200);
+  expectEqual('…and is never cached (§14.2)', live.cacheControl, 'private, no-store');
+  expectPresent('…with its prize in display type', live.body, 'data-contest-prize');
+  expectPresent('…the phase-aware CTA', live.body, 'data-contest-cta="enter"');
+  expectPresent('…and the entries rail', live.body, 'data-contest-entries');
+  // The measurement: an APPROVED entry is here…
+  expectPresent(
+    `…carrying the approved entry (${LIVE_ENTRY_SENTINEL.token})`,
+    live.body,
+    LIVE_ENTRY_SENTINEL.token,
+  );
+  expectPresent('…as an addressable card', live.body, 'data-entry-card=');
+  expectPresent('…with its SNS credit chip', live.body, 'data-entry-sns=');
+  // …and every other moderation state is not, on the very page that proves the rail works.
+  for (const sentinel of FORBIDDEN_ENTRY_SENTINELS) {
+    expectAbsent(
+      `…and NO ${sentinel.status} entry (${sentinel.token})`,
+      live.body,
+      sentinel.token,
+    );
+  }
+  expectAbsent('…and no staging keys', live.body, 'content/contest/');
+
+  for (const slug of HIDDEN_CONTEST_SLUGS) {
+    expectEqual(`draft ${slug} 404s`, (await get(`/${locale}/contests/${slug}`)).status, 404);
+  }
+  expectEqual(
+    'an unknown slug 404s',
+    (await get(`/${locale}/contests/no-such-contest`)).status,
+    404,
+  );
+
+  // The admin preview path is admin surface, so it must refuse an anonymous reader outright.
+  for (const slug of HIDDEN_CONTEST_SLUGS) {
+    const preview = await get(`/admin/contests/${slug}/preview`);
+    expectOneOf(`preview of ${slug} refuses anon`, preview.status, [302, 307, 308, 404]);
+    for (const sentinel of FORBIDDEN_ENTRY_SENTINELS) {
+      expectAbsent(`…and leaks no entry (${sentinel.token})`, preview.body, sentinel.token);
+    }
+  }
+
+  // A draft's poster exists on disk (staged) and has no published key, so the public media route
+  // must refuse it — that is the disclosure doctrine holding for an unannounced prize.
+  const draft = contests.find((c) => c.status !== 'published');
+  if (draft) {
+    expectEqual(
+      'a DRAFT contest’s poster is unreachable',
+      (await get(`/api/contests/media/${encodeURIComponent(`${draft.id}:poster`)}`)).status,
+      404,
+    );
+  }
+
+  const published = contests.find((c) => c.status === 'published');
+  if (published) {
+    const poster = await get(`/api/contests/media/${encodeURIComponent(`${published.id}:poster`)}`);
+    expectEqual('a PUBLISHED contest’s poster is served', poster.status, 200);
+    expectEqual('…as the declared type', poster.contentType, 'image/png');
+    const isPng = poster.bytes[0] === 0x89 && poster.bytes[1] === 0x50 && poster.bytes[2] === 0x4e;
+    if (isPng) ok('…and the bytes are the real object');
+    else fail('poster bytes', 'response is not a PNG');
+    /**
+     * M9 review, finding 3 — the `{id}:{kind}` alias is a MUTABLE pointer, so it must never be
+     * cached immutably: unpublishing a contest has to stop serving its poster immediately rather
+     * than a day later. The immutable thing is the content-addressed object it points at.
+     */
+    if (poster.cacheControl?.includes('immutable')) {
+      fail('alias cache', `mutable alias served as immutable: ${poster.cacheControl}`);
+    } else ok('…and the mutable alias is not cached immutably', poster.cacheControl ?? '(none)');
+  }
+  expectEqual(
+    'an unknown media ref 404s',
+    (await get('/api/contests/media/11111111-2222-4333-8444-555555555555%3Aposter')).status,
+    404,
+  );
+  expectEqual('a malformed media ref 404s', (await get('/api/contests/media/nonsense')).status, 404);
+}
+
+/** §14.2 — the gated halves of the contests surface, from outside. */
+async function sweepContestGates(contests: ContestProbe[]): Promise<void> {
+  console.log('\n/contests/[slug]/submit + /admin/contests — anonymous');
+
+  // The PUBLISHED contest, so the redirect proves the login gate rather than a 404.
+  const slug = PUBLISHED_CONTEST_SLUG;
+  const submit = await get(`/contests/${slug}/submit`);
+  expectOneOf('the entry form redirects anon', submit.status, [302, 307, 308]);
+  if (submit.location && !submit.location.startsWith(`/contests/${slug}/submit`)) {
+    ok('…away from the form', submit.location);
+  } else fail('entry form redirect target', `unexpected location ${submit.location}`);
+
+  const admin = await get('/admin/contests');
+  expectOneOf('/admin/contests refuses anon', admin.status, [302, 307, 308, 404]);
+  expectAbsent('…and leaks no queue', admin.body, 'data-contest-entry=');
+  for (const sentinel of FORBIDDEN_ENTRY_SENTINELS) {
+    expectAbsent(`…and no entry text (${sentinel.token})`, admin.body, sentinel.token);
+  }
+  for (const contest of contests) {
+    expectAbsent(`…and no ${contest.slug} editor`, admin.body, `data-admin-contest="${contest.slug}"`);
+  }
+
+  // The listing is public and must NOT be caught by the app-path gate.
+  expectEqual('/en/contests stays public', (await get('/en/contests')).status, 200);
+  const unprefixed = await get('/contests');
+  expectOneOf('unprefixed /contests 308s into a locale', unprefixed.status, [307, 308]);
+  if (unprefixed.location?.includes('/contests')) ok('…keeping the path', unprefixed.location);
+  else fail('/contests redirect target', `unexpected location ${unprefixed.location}`);
+}
+
+/** §14.2 SEO: the listing is indexed; a draft contest and the entry form are not. */
+async function sweepContestSeo(): Promise<void> {
+  console.log('\nsitemap + <head> — the contests surface');
+
+  const sitemap = await get('/sitemap.xml');
+  expectPresent('lists the listing (en)', sitemap.body, '/en/contests<');
+  expectPresent('lists the listing (ko)', sitemap.body, '/ko/contests<');
+  expectPresent(
+    'lists the published contest (en)',
+    sitemap.body,
+    `/en/contests/${PUBLISHED_CONTEST_SLUG}`,
+  );
+  expectPresent(
+    'lists the published contest (ko)',
+    sitemap.body,
+    `/ko/contests/${PUBLISHED_CONTEST_SLUG}`,
+  );
+  for (const slug of HIDDEN_CONTEST_SLUGS) {
+    expectAbsent(`never lists the draft ${slug}`, sitemap.body, slug);
+  }
+  expectAbsent('never lists an entry form', sitemap.body, '/submit');
+
+  const robots = await get('/robots.txt');
+  expectPresent('robots disallows the entry form', robots.body, 'Disallow: /contests/*/submit');
+  expectAbsent('…without disallowing the listing itself', robots.body, 'Disallow: /contests\n');
+
+  const listing = await get('/en/contests');
+  expectPresent('the listing self-canonicals', listing.body, `rel="canonical" href="${BASE}/en/contests"`);
+  expectPresent('hreflang ko', listing.body, `hrefLang="ko" href="${BASE}/ko/contests"`);
+  expectPresent('hreflang x-default', listing.body, 'hrefLang="x-default"');
+  expectAbsent('the listing is indexed', listing.body, 'name="robots" content="noindex');
+}
+
+/** §14.2 — Contests joins the nav between Prompts and Pricing, on every marketing page. */
+async function sweepContestNav(): Promise<void> {
+  console.log('\nnav — Prompts · Contests · Pricing');
+  for (const path of ['/en', '/en/prompts', '/en/pricing']) {
+    const page = await get(path);
+    expectPresent(`${path} links the contests tab`, page.body, 'href="/en/contests"');
+  }
+  const ko = await get('/ko');
+  expectPresent('/ko links the ko tab', ko.body, 'href="/ko/contests"');
+}
+
 async function main(): Promise<void> {
   console.log(`YAGI PROMPTS anon sweep → ${BASE} (local mode)`);
 
@@ -741,7 +978,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  const { assets, privateKeys, prompts } = await readSnapshot();
+  const { assets, privateKeys, prompts, contests } = await readSnapshot();
 
   await sweepShowcasePage('en', privateKeys);
   await sweepShowcasePage('ko', privateKeys);
@@ -763,6 +1000,14 @@ async function main(): Promise<void> {
   await sweepPromptGates();
   await sweepPromptSeo();
   await sweepLandingPivot();
+
+  // --- M9 §14: the contests surface ---------------------------------------
+  await sweepContestsListing('en', contests);
+  await sweepContestsListing('ko', contests);
+  await sweepContestDetails('en', contests);
+  await sweepContestGates(contests);
+  await sweepContestSeo();
+  await sweepContestNav();
 
   console.log(
     `\n${failures === 0 ? 'SWEEP PASSED' : 'SWEEP FAILED'} — ${checks - failures}/${checks} checks passed`,

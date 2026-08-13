@@ -19,6 +19,18 @@ interface Rule {
 }
 
 const RULES: Rule[] = [
+  /**
+   * §14 contests — named first because these constraint names contain words later rules match
+   * ("requires", "published"). The TypeScript gates in `lib/contests/schemas.ts` normally answer
+   * before the database has to; these rules exist for the case they did not (a concurrent edit, a
+   * direct SQL write, a future caller that forgot).
+   */
+  { code: 'duplicatePlacement', pattern: /uq_contest_entries_placement/i },
+  {
+    code: 'notPublishable',
+    pattern: /contests_published_requires_|contests_deadline_after_start|contests_brand_name_present/i,
+  },
+  { code: 'invalid', pattern: /contest_entries_[a-z_]+(?:_len|_http|_range|_approved)/i },
   { code: 'manifestStale', pattern: /manifest is stale/i },
   { code: 'manifestIncomplete', pattern: /manifest incomplete/i },
   { code: 'notPrepared', pattern: /not prepared|requires a draft revision/i },

@@ -8,6 +8,26 @@ const globals = readFileSync(fileURLToPath(new URL('../../app/globals.css', impo
  * PLAN §5.1 / §5.2 / §4 — `app/globals.css` is the single token source (Tailwind v4 CSS-first,
  * no tailwind.config.js). These assertions are the contract M1 builds against.
  */
+/**
+ * The full text of an at-rule block, matched by counting braces.
+ *
+ * A naive search for the next closing brace stops at the first NESTED rule, which quietly turns an
+ * assertion about a whole media block into an assertion about two characters.
+ */
+function braceBlock(css: string, header: string): string {
+  const start = css.indexOf(header);
+  if (start === -1) throw new Error(`no such block: ${header}`);
+  let depth = 0;
+  for (let i = css.indexOf('{', start); i < css.length; i += 1) {
+    if (css[i] === '{') depth += 1;
+    else if (css[i] === '}') {
+      depth -= 1;
+      if (depth === 0) return css.slice(start, i + 1);
+    }
+  }
+  throw new Error(`unterminated block: ${header}`);
+}
+
 describe('design tokens (§5.1/§5.2/§4)', () => {
   it('declares the theme statically so no token is tree-shaken away', () => {
     expect(globals).toContain('@theme static');
@@ -38,6 +58,49 @@ describe('design tokens (§5.1/§5.2/§4)', () => {
     expect(globals.slice(0, globals.indexOf('@layer utilities'))).not.toContain(
       'html:lang(ko) .text-display',
     );
+  });
+
+  /**
+   * M9 design review, finding 8. The contests surface set every display size as a raw
+   * `text-[clamp(…)]` utility, which put those sizes outside the type system — and, the part that
+   * shows, outside the §5.2 Korean downscale: `html:lang(ko) .text-display` cannot reach a size
+   * that was never named, so Hangul rendered at the full English size with a latin leading and
+   * collided line-to-line. Each contest slot is named once here, with its 0.85× twin.
+   */
+  it('names the §14.2 contest display slots, each with a KO twin (§5.2)', () => {
+    const utilities = globals.slice(globals.indexOf('@layer utilities'));
+    for (const slot of [
+      '.text-contest-poster',
+      '.text-contest-poster-prize',
+      '.text-contest-card',
+      '.text-contest-prize',
+      '.text-contest-section',
+    ]) {
+      expect(utilities, slot).toContain(`${slot} {`);
+      expect(utilities, `ko ${slot}`).toContain(`html:lang(ko) ${slot} {`);
+    }
+
+    // The three sizes finding 1 set on the hero poster, in the three steps its grid moves in.
+    expect(utilities).toContain('font-size: clamp(4.75rem, 9vw, 8.5rem)');
+    // …and the prize band's own slot (finding 3).
+    expect(utilities).toContain('font-size: clamp(3.5rem, 8vw, 7rem)');
+    // …and one size for every section heading (finding 7).
+    expect(utilities).toContain('font-size: clamp(2rem, 4vw, 3rem)');
+
+    // Every Korean twin buys back leading: Hangul fills its em box where latin does not. (The
+    // per-breakpoint twins restate the size only; the leading is set once, on the base rule.)
+    for (const slot of ['poster', 'poster-prize', 'card', 'prize', 'section']) {
+      const rules = [
+        ...utilities.matchAll(
+          new RegExp(`html:lang\\(ko\\) \\.text-contest-${slot} \\{([^}]*)\\}`, 'g'),
+        ),
+      ];
+      expect(rules.length, slot).toBeGreaterThan(0);
+      expect(
+        rules.some((rule) => rule[1]!.includes('line-height: 1')),
+        `ko .text-contest-${slot} must buy back leading`,
+      ).toBe(true);
+    }
   });
 
   it('carries the §4 layout math, including the 1440 rail tier', () => {
@@ -152,5 +215,32 @@ describe('design tokens (§5.1/§5.2/§4)', () => {
     expect(provider).toContain('autoRaf: false');
     expect(provider).toContain("pinType: 'fixed'");
     expect(provider).toContain('gsap.ticker.lagSmoothing(0)');
+  });
+
+  /**
+   * §5.3-3, and the bug M9 render-verify found in it.
+   *
+   * `.text-swap` clips its duplicate with `overflow: hidden`, and the duplicate rested at `110%` of
+   * its OWN height while the clip box is that height plus 0.2em of padding. At tight line-heights
+   * (`leading-none`, the 1.2 of `text-eyebrow`) the duplicate's top edge landed a hair inside the
+   * box and painted a sub-pixel ghost under every nav link and CTA on the site — visible as colour
+   * fringing on the footer links in the M9 screenshots.
+   *
+   * Two rules now stop it, and the test pins both because they fail in different ways: the geometry
+   * clears the box at ANY line-height, and with motion off the duplicate leaves the box model
+   * entirely (a transform can be overridden or interrupted; `display: none` cannot).
+   */
+  it('never lets the text-swap duplicate paint at rest (§5.3-3)', () => {
+    // Geometry: the offset is expressed against the padding, not as a bare percentage.
+    expect(globals).toContain('transform: translate3d(0, calc(100% + 0.2em), 0)');
+    expect(globals).toContain('transform: translate3d(0, calc(-100% - 0.2em), 0)');
+    expect(globals).not.toContain('translate3d(0, 110%, 0)');
+    expect(globals).not.toContain('translate3d(0, -110%, 0)');
+
+    // Structure: inside the reduced-motion block, the duplicate is removed outright.
+    const block = braceBlock(globals, '@media (prefers-reduced-motion: reduce)');
+    expect(block).toContain('.text-swap__b');
+    expect(block).toContain('display: none !important');
+    expect(block).toContain('.text-swap__a');
   });
 });

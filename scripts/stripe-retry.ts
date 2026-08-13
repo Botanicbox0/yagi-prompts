@@ -1,7 +1,7 @@
 import { countUnprocessedEvents, retryUnprocessedEvents } from '@/lib/billing/ledger';
 import { createLiveStripeGateway } from '@/lib/billing/stripe-live';
 import { stripeConfigFromEnv } from '@/lib/billing/stripe-gateway';
-import type { SqlRunner } from '@/lib/db/sql-runner';
+import { makePooledRunner, type PoolLike, type SqlRunner } from '@/lib/db/sql-runner';
 
 /**
  * `npm run stripe:retry` — reprocess the `stripe_events` rows that still carry
@@ -30,12 +30,7 @@ async function connect(connectionString: string): Promise<SqlRunner> {
   const pg = await import('pg');
   const Pool = (pg as unknown as { default?: { Pool: typeof pg.Pool } }).default?.Pool ?? pg.Pool;
   const pool = new Pool({ connectionString, max: 2 });
-  return {
-    async query<T = Record<string, unknown>>(text: string, params: unknown[] = []) {
-      const result = await pool.query(text, params);
-      return { rows: result.rows as T[] };
-    },
-  };
+  return makePooledRunner(pool as unknown as PoolLike);
 }
 
 function flag(name: string): string | null {

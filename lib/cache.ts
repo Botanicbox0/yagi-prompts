@@ -28,3 +28,17 @@ export const PROMPTS_TAG = 'prompts';
 export function revalidatePrompts(): void {
   revalidateTag(PROMPTS_TAG);
 }
+
+/**
+ * PLAN §14.2 — the contests listing is `[static + tag 'contests']`.
+ *
+ * A third tag on the same reasoning as the second: publishing a contest, approving an entry and
+ * naming a winner all move the listing and nothing else, while a playbook publish or a prompt
+ * approval must not. The moderation queue is the busiest write path here, and it would be the
+ * strangest thing on the site if approving one film re-rendered the whole marketing tree.
+ */
+export const CONTESTS_TAG = 'contests';
+
+export function revalidateContests(): void {
+  revalidateTag(CONTESTS_TAG);
+}

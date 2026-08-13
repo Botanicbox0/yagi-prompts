@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import { Client } from 'pg';
+import { makeSingleConnectionRunner } from '@/lib/db/sql-runner';
 import { createLocalStorageDriver } from '@/lib/storage/local-driver';
 import { getStorage, type StorageDriver } from '@/lib/storage';
 import { seed } from './seed';
@@ -33,12 +34,10 @@ async function main(): Promise<void> {
 
   try {
     const result = await seed({
-      sql: {
-        async query(text, params = []) {
-          const res = await client.query(text, params as unknown[]);
-          return { rows: res.rows };
-        },
-      },
+      sql: makeSingleConnectionRunner(async (text, params = []) => {
+        const res = await client.query(text, params as unknown[]);
+        return { rows: res.rows };
+      }),
       storage,
       createAuthUsers: process.env.SEED_CREATE_AUTH_USERS === '1',
       log: (m) => console.log(m),

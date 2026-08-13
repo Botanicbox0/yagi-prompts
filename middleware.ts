@@ -6,6 +6,7 @@ import {
   LOCALE_COOKIE_MAX_AGE,
   LOCALE_HEADER,
   isAppPath,
+  isContestDetailPath,
   isPlaybookDetailPath,
   isPromptDetailPath,
   localizedPath,
@@ -72,9 +73,10 @@ export async function middleware(request: NextRequest) {
     return withCookies(NextResponse.redirect(target, 308), response);
   }
 
-  // §3.4: the one public route that is shaped per viewer never enters a cache. Indexable, but
-  // never stored — the two are independent properties and §3.3/§3.9 asks for both.
-  if (isPlaybookDetailPath(rest) || isPromptDetailPath(rest)) {
+  // §3.4: the public routes that are shaped per viewer — or, for contests (§14.2), per clock —
+  // never enter a cache. Indexable, but never stored: the two are independent properties and
+  // §3.3/§3.9/§14.2 all ask for both.
+  if (isPlaybookDetailPath(rest) || isPromptDetailPath(rest) || isContestDetailPath(rest)) {
     response.headers.set('Cache-Control', NO_STORE);
   }
 

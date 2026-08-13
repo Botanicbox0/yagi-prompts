@@ -11,9 +11,13 @@ export const en = {
     promptsTitle: 'Prompts',
     promptsDescription:
       '100% original video prompts for Seedance 2.5 — authored and tested by YAGI, plus community submissions credited by @handle.',
+    contestsTitle: 'Contests',
+    contestsDescription:
+      'Brand-hosted film contests run through the YAGI studio. Enter with a link to your film and the SNS you post from.',
   },
   nav: {
     prompts: 'Prompts',
+    contests: 'Contests',
     library: 'Library',
     pricing: 'Pricing',
     account: 'Account',
@@ -210,6 +214,123 @@ export const en = {
     statusRejected: 'Not published',
     statusArchived: 'Taken down',
     rejectReasonLabel: 'Why',
+  },
+  /** §14.2 — the contests tab: listing, detail and the phase vocabulary they share. */
+  contests: {
+    eyebrow: 'Contests',
+    line1: 'BRANDS BRING',
+    line2: 'THE BRIEF.',
+    intro:
+      'Film contests hosted by brands and run through this studio. The entry form is a link to your film and the account you post from — nothing else.',
+    railOpen: 'OPEN NOW',
+    railOpenLede: 'Entries close on the date on the card.',
+    railUpcoming: 'OPENING SOON',
+    railUpcomingLede: 'Read the brief early. Enter on day one.',
+    railClosed: 'CLOSED',
+    railClosedLede: 'Finished, and judged where the judging is done.',
+    phaseOpen: 'Open',
+    phaseUpcoming: 'Upcoming',
+    phaseClosed: 'Closed',
+    opensLabel: 'Opens {date}',
+    deadlineLabel: 'Closes {date}',
+    closedLabel: 'Closed {date}',
+    resultsLabel: 'Results',
+    /** The closed card's top-right chip — the count IS the news (M9 review, finding 6). */
+    winnersAnnounced: 'Winners ×{count}',
+    hostedBy: 'Hosted by',
+    prizeLabel: 'Prize',
+    /** §14.2's meta grid: four column headers, each a word rather than a sentence. */
+    metaStatus: 'Status',
+    metaOpens: 'Opens',
+    metaDeadline: 'Deadline',
+    metaCountdown: 'Countdown',
+    entryCount: '{count} entered',
+    entryCountEmpty: 'No entries in yet',
+    rulesHeading: 'The brief',
+    entriesHeading: 'Entries',
+    entriesEmpty: 'No approved entries yet. Yours could be the first.',
+    entriesModerated: 'Every entry is watched back before it appears here.',
+    winnersHeading: 'Winners',
+    place1: '1st',
+    place2: '2nd',
+    place3: '3rd',
+    watchLabel: 'Watch the film',
+    platformLink: 'Link',
+    enterCta: 'Enter this contest',
+    /**
+     * What an upcoming contest actually offers. The old control restated the opening date inside a
+     * button-shaped box six lines under the metadata cell that already carries it — the same fact,
+     * shaped like an action that did not exist (M9 review, finding 4).
+     */
+    readBriefCta: 'Read the brief',
+    backToList: 'All contests',
+    previewBadge: 'Admin preview — not published',
+    posterAlt: 'Contest poster',
+    /**
+     * §14.2 — "a designed empty state (site is live — empty must look intentional)". Written as a
+     * statement about how contests start here, not as an apology for a missing row.
+     */
+    emptyTitle: 'NOTHING OPEN YET.',
+    emptyBody:
+      'No contest is running right now. The first one gets built with a brand, in this studio — a brief, a prize, and a wall of films at the end of it.',
+    emptyCta: 'Run a contest with the studio',
+    hireTitle: 'WANT ONE OF YOUR OWN?',
+    hireBody:
+      'We write the brief, run the production side, moderate the entries and put the whole thing on this page. Bring the brand and the prize.',
+    hireCta: 'Run a contest with the studio',
+  },
+  /** §14.1/§14.2 — the login-gated entry form, and its states. */
+  entry: {
+    eyebrow: 'Enter',
+    title: 'PUT YOUR FILM IN.',
+    lede:
+      'One entry per person. Replace it as often as you like before the deadline — it goes back into review each time.',
+    contestLabel: 'Contest',
+    deadlineLine: 'Closes {date} · {dday}',
+    fieldTitle: 'Film title',
+    fieldTitleHint: 'What you called it. Short.',
+    fieldVideo: 'Film link',
+    fieldVideoHint:
+      'YouTube, Vimeo, Instagram, TikTok — anywhere it plays. We link to films, we do not host them.',
+    fieldSns: 'Your main SNS',
+    /** The one honest sentence §14.2 asks for, above the field it explains. */
+    fieldSnsExplain:
+      'Your entry is published with this account attached — it is how the judges and everyone else know whose film it is.',
+    fieldSnsHint: 'Saved to your account, so the next contest asks one question less.',
+    fieldNote: 'Note to the judges',
+    fieldNoteHint: 'Optional. {max} characters.',
+    consentLabel:
+      'This is my film, and I am happy for it to appear on this page with my SNS credited.',
+    consentTerms:
+      'You keep the film. You are giving YAGI PROMPTS and the hosting brand a licence to show it, credited, on this contest page and in its promotion.',
+    submitButton: 'Send my entry',
+    /** The submit button's own pending state (`useFormStatus`), so a slow POST is not silence. */
+    submitPending: 'Sending…',
+    resubmitButton: 'Replace my entry',
+    resubmitHeading: 'You already have an entry',
+    resubmitNotice: 'Currently in: “{title}” — {status}.',
+    resubmitWarning:
+      'Sending a new one replaces it and puts it back into review. Any placement it holds is cleared.',
+    statusPending: 'in review',
+    statusApproved: 'live on the contest page',
+    statusRejected: 'not published',
+    rejectReasonLabel: 'Why',
+    successTitle: 'IN THE RUNNING.',
+    successBody:
+      'We watch every entry back before it appears on the contest page. You can replace it right up to the deadline.',
+    successBack: 'Back to the contest',
+    closedTitle: 'ENTRIES ARE CLOSED.',
+    closedBody:
+      'This one stopped taking entries at the deadline. The approved films are on the contest page.',
+    upcomingTitle: 'NOT OPEN YET.',
+    upcomingBody: 'This contest opens {date}. The brief is already up if you want a head start.',
+    errSignIn: 'Sign in first — an entry carries a credit, so it needs an account.',
+    errRateLimited: 'That is ten entry edits in a day — the limit. Try again tomorrow.',
+    errInvalid: 'Something in the form did not check out. Check both links start with https.',
+    /** Printed at the field the server named, so "something" stops meaning "somewhere". */
+    errField: 'This is the one to fix.',
+    errNotOpen: 'This contest is not taking entries right now.',
+    errNotFound: 'That contest is not published.',
   },
   pricing: {
     eyebrow: '04 / Pricing',
@@ -440,6 +561,7 @@ export const en = {
   admin: {
     brand: 'YAGI PROMPTS CMS',
     navPrompts: 'Prompts',
+    navContests: 'Contests',
     navPlaybooks: 'Playbooks',
     navPolicy: 'Policy',
     navSite: 'View site',
@@ -617,6 +739,7 @@ export const en = {
     okUnarchived: 'Restored.',
     okApproved: 'Approved and live.',
     okRejected: 'Rejected. The submitter sees the reason on their account.',
+    okUnpublished: 'Unpublished — it is off the listing.',
 
     // --- §13.2/F prompts CMS -------------------------------------------------
     promptsHeading: 'Prompts',
@@ -661,6 +784,67 @@ export const en = {
     previewMedia: 'Staged media',
     noMedia: 'No media on this submission.',
 
+    // --- §14 contests CMS ----------------------------------------------------
+    contestsHeading: 'Contests',
+    contestsLede:
+      'Draft it, publish it deliberately, moderate what comes in, name the winners after the deadline.',
+    contestListHeading: 'All contests',
+    contestListEmpty: 'No contests yet. Create the first one below.',
+    newContestHeading: 'New contest',
+    newContestLede:
+      'Creates it as a draft with placeholder copy you then fill in. Publishing is a separate press.',
+    fieldContestSlug: 'Slug',
+    contestSlugHint: 'Lowercase words joined by hyphens. It becomes the public URL.',
+    fieldContestTitle: 'Title',
+    fieldContestSummary: 'Summary',
+    fieldContestPrize: 'Prize',
+    contestPrizeHint: 'This is set in display type on the page. Say the number.',
+    fieldContestRules: 'The brief (markdown)',
+    contestRulesHint: 'Optional — but one language on its own will not publish.',
+    fieldBrandName: 'Brand',
+    fieldBrandUrl: 'Brand link',
+    fieldStartsAt: 'Opens (UTC)',
+    fieldDeadlineAt: 'Deadline (UTC)',
+    contestDatesHint:
+      'Both instants are read as UTC. The D-day chip and the printed dates come from these.',
+    fieldContestPoster: 'Poster',
+    fieldContestVideo: 'Hero clip',
+    contestMediaHint:
+      'Staged privately and copied to the public bucket at publish. Leave empty to keep what is staged.',
+    saveContest: 'Save contest',
+    createContest: 'Create draft',
+    publishContest: 'Publish',
+    publishContestHint:
+      'Checks both languages, both dates and the poster before it goes anywhere. A prize is a public commitment.',
+    unpublishContest: 'Unpublish',
+    previewContest: 'Preview',
+    contestPhaseLabel: 'Phase',
+    contestPhaseUpcoming: 'Upcoming',
+    contestPhaseOpen: 'Open',
+    contestPhaseClosed: 'Closed',
+    contestNotReady: 'Not publishable yet: {missing}.',
+    contestReady: 'Ready to publish.',
+
+    entriesHeading: 'Entries',
+    entriesEmpty: 'Nothing entered yet.',
+    entryQueueHeading: 'Awaiting review',
+    entryStatusPending: 'In review',
+    entryStatusApproved: 'Approved',
+    entryStatusRejected: 'Rejected',
+    colEntryTitle: 'Film',
+    colEntrySns: 'SNS',
+    colEntryNote: 'Note to the judges',
+    colPlacement: 'Placement',
+    placementNone: 'No placement',
+    placement1: '1st',
+    placement2: '2nd',
+    placement3: '3rd',
+    savePlacement: 'Set',
+    placementLocked: 'Placements open after the deadline.',
+    approveEntry: 'Approve',
+    rejectEntry: 'Reject',
+    entryRejectHint: 'The entrant reads this on the form. Say what would have made it work.',
+
     errForbidden: 'Admins only.',
     errUnknownOperation: 'That form posted an operation this build does not have.',
     errInvalid: 'The form did not validate.',
@@ -676,6 +860,13 @@ export const en = {
     errAssetIncomplete: 'An asset is missing its hash or its staged file. Upload it again.',
     errStorage: 'The stored file could not be read.',
     errUpload: 'That upload was refused — check the size, the length and the file type.',
+    errNotPublishable: 'Not ready to publish — the detail below says exactly what is missing.',
+    errDeadlineNotPassed: 'Placements open after the deadline, not before.',
+    errDuplicatePlacement: 'That place is already taken in this contest.',
+    errStaleReview:
+      'The entrant replaced this film after the queue loaded. Reload and watch the new one before deciding.',
+    errPlacementsLocked:
+      'This contest already has winners. Clear the placements before moving the deadline out.',
     errUnknown: 'That did not work.',
     detailLabel: 'Detail',
   },

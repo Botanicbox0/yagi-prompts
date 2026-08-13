@@ -1,5 +1,10 @@
 import { resolve } from 'node:path';
-import type { SqlRunner } from '@/lib/db/sql-runner';
+import {
+  makePooledRunner,
+  makeSingleConnectionRunner,
+  type PoolLike,
+  type SqlRunner,
+} from '@/lib/db/sql-runner';
 import { LOCAL_DB_DIR_ENV } from '@/lib/db/connect-shared';
 import { getMailer } from '@/lib/notify/service';
 import { isNotifyConfigured } from '@/lib/notify/mailer';
@@ -50,12 +55,7 @@ async function connectPostgres(connectionString: string): Promise<Connection> {
   const Pool = (pg as unknown as { default?: { Pool: typeof pg.Pool } }).default?.Pool ?? pg.Pool;
   const pool = new Pool({ connectionString, max: 2 });
   return {
-    sql: {
-      async query<T = Record<string, unknown>>(text: string, params: unknown[] = []) {
-        const result = await pool.query(text, params);
-        return { rows: result.rows as T[] };
-      },
-    },
+    sql: makePooledRunner(pool as unknown as PoolLike),
     close: () => pool.end(),
   };
 }
@@ -65,12 +65,13 @@ async function connectDirectory(dir: string): Promise<Connection> {
   const db = new PGlite({ dataDir: resolve(dir) });
   await db.waitReady;
   return {
-    sql: {
-      async query<T = Record<string, unknown>>(text: string, params: unknown[] = []) {
-        const result = await db.query<T>(text, params as never[]);
-        return { rows: result.rows as T[] };
-      },
-    },
+    sql: makeSingleConnectionRunner(async <T = Record<string, unknown>>(
+      text: string,
+      params: unknown[] = [],
+    ) => {
+      const result = await db.query<T>(text, params as never[]);
+      return { rows: result.rows as T[] };
+    }),
     close: () => db.close(),
   };
 }

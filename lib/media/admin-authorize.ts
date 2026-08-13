@@ -3,6 +3,7 @@ import type { SqlRunner } from '@/lib/db/sql-runner';
 import { parseMediaRef } from '@/lib/content/media-ref';
 import { AssetRefSchema, safeParseBlock, type AssetRef, type BlockKind } from '@/lib/content/schemas';
 import { parsePromptMedia } from '@/lib/prompts/schemas';
+import { parseContestMedia } from '@/lib/contests/schemas';
 import { STAGING_BUCKET } from '@/lib/storage';
 
 /**
@@ -46,6 +47,31 @@ export function promptAdminRef(id: string, kind: 'poster' | 'video'): string {
 function parsePromptRef(raw: string): { id: string; kind: 'poster' | 'video' } | null {
   if (!raw.startsWith(PROMPT_REF_PREFIX)) return null;
   const rest = raw.slice(PROMPT_REF_PREFIX.length);
+  const at = rest.lastIndexOf(':');
+  if (at <= 0) return null;
+  const id = rest.slice(0, at);
+  const kind = rest.slice(at + 1);
+  if (kind !== 'poster' && kind !== 'video') return null;
+  return { id, kind };
+}
+
+/**
+ * §14 — contest refs, namespaced the same way and for a sharper reason than prompts.
+ *
+ * `contest:{contestId}:{poster|video}`. A DRAFT contest's poster sits in private staging until the
+ * founder publishes (§14.1: "a prize is a public commitment"), so this is the only path that can
+ * show it — and it is admin-only for exactly as long as the contest is unannounced. The public
+ * route (`/api/contests/media`) refuses the same object until it has a `published_key`.
+ */
+export const CONTEST_REF_PREFIX = 'contest:';
+
+export function contestAdminRef(id: string, kind: 'poster' | 'video'): string {
+  return `${CONTEST_REF_PREFIX}${id}:${kind}`;
+}
+
+function parseContestRef(raw: string): { id: string; kind: 'poster' | 'video' } | null {
+  if (!raw.startsWith(CONTEST_REF_PREFIX)) return null;
+  const rest = raw.slice(CONTEST_REF_PREFIX.length);
   const at = rest.lastIndexOf(':');
   if (at <= 0) return null;
   const id = rest.slice(0, at);
@@ -128,6 +154,37 @@ export async function authorizeAdminMedia(
         mime: asset.mime,
         filename: null,
         revisionId: promptRef.id,
+        revisionState: 'draft',
+        slug: row.slug,
+      },
+    };
+  }
+
+  // §14 contests: a third table, the same three rules — admin only, key read from the ROW, and
+  // never anything but the private staging object.
+  const contestRef = parseContestRef(rawRef);
+  if (contestRef !== null) {
+    if (!UUID.test(contestRef.id)) return NOT_FOUND;
+    const { rows } = await sql.query<{ media: unknown; slug: string; status: string }>(
+      'select media, slug, status from contests where id = $1',
+      [contestRef.id],
+    );
+    const row = rows[0];
+    if (!row) return NOT_FOUND;
+    const asset = parseContestMedia(row.media)[contestRef.kind];
+    if (!asset) return NOT_FOUND;
+    const key = stagingOf(asset);
+    if (key === null) return NOT_FOUND;
+    return {
+      status: 'ok',
+      object: {
+        ref: rawRef,
+        kind: 'asset',
+        bucket: STAGING_BUCKET,
+        key,
+        mime: asset.mime,
+        filename: null,
+        revisionId: contestRef.id,
         revisionState: 'draft',
         slug: row.slug,
       },

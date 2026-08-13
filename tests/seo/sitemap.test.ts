@@ -95,8 +95,10 @@ describe('sitemap (§8 M5)', () => {
 
   it('degrades to an empty catalog without producing a broken sitemap', () => {
     const empty = buildSitemap({ origin: ORIGIN, cards: [] });
-    // Three marketing pages × two locales: landing, the §13.2 gallery, pricing.
-    expect(empty).toHaveLength(6);
+    // Four marketing pages × two locales: landing, the §13.2 gallery, the §14.2 contests listing,
+    // pricing. The listing is in the sitemap even with no contest published — it is a real page
+    // with a designed empty state (§14.2), not a page that only exists when it has rows.
+    expect(empty).toHaveLength(8);
     expect(empty.every((entry) => entry.url.startsWith(ORIGIN))).toBe(true);
   });
 });
@@ -109,7 +111,9 @@ describe('robots (§8 M5)', () => {
     expect(rule.userAgent).toBe('*');
     expect(rule.allow).toBe('/');
     // §13.2 adds the submission form; `/prompts` itself stays indexable, which is why the entry
-    // names both segments rather than the prefix.
+    // names both segments rather than the prefix. §14.2's entry form needs a WILDCARD for the same
+    // reason taken one step further — its slug sits in the middle of the path, so `/contests` as a
+    // prefix would take the listing and every contest page down with it.
     expect(rule.disallow).toEqual([
       '/admin',
       '/library',
@@ -117,6 +121,7 @@ describe('robots (§8 M5)', () => {
       '/billing',
       '/api',
       '/prompts/submit',
+      '/contests/*/submit',
     ]);
   });
 

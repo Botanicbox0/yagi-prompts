@@ -38,8 +38,28 @@ export const APP_PREFIXES = [
   '/prompts/submit',
 ] as const;
 
+/**
+ * §14.2 — `/contests/{slug}/submit`, the one app path that cannot be expressed as a prefix.
+ *
+ * The entry form is scoped to a contest, so its slug sits in the MIDDLE of the path: everything
+ * around it (`/{locale}/contests`, `/{locale}/contests/{slug}`) is public, locale-prefixed
+ * marketing surface, and only the leaf is login-gated. A prefix entry would have to be `/contests`,
+ * which would swallow the whole tab.
+ *
+ * Anchored at both ends on purpose: `/contests/x/submit/anything` is not this route and must not
+ * inherit its gate by accident.
+ */
+const CONTEST_SUBMIT_PATTERN = /^\/contests\/[^/]+\/submit\/?$/;
+
+export function isContestSubmitPath(pathname: string): boolean {
+  return CONTEST_SUBMIT_PATTERN.test(pathname);
+}
+
 export function isAppPath(pathname: string): boolean {
-  return APP_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+  return (
+    APP_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`)) ||
+    isContestSubmitPath(pathname)
+  );
 }
 
 /**
@@ -66,6 +86,22 @@ export function isPlaybookDetailPath(rest: string): boolean {
  */
 export function isPromptDetailPath(rest: string): boolean {
   return rest.startsWith('/prompts/');
+}
+
+/**
+ * §14.2 — `/[locale]/contests/[slug]`, the THIRD never-stored public route.
+ *
+ * The reason differs from the other two and is worth writing down: this page's HTML does not vary
+ * by reader (there is no tier gate anywhere on the contests surface), it varies by CLOCK. Phase,
+ * D-day and "submissions closed" all move on their own, and a shared cache holding "D-3" is a page
+ * that tells a reader they have three days left on the morning after the deadline.
+ *
+ * The LISTING is deliberately excluded: `/{locale}/contests` is static and tag-revalidated, and its
+ * countdown is calendar-day precision for exactly that reason (`lib/contests/phase.ts`).
+ * `/contests/{slug}/submit` never reaches here — it is unprefixed app surface.
+ */
+export function isContestDetailPath(rest: string): boolean {
+  return rest.startsWith('/contests/');
 }
 
 /** Splits `/ko/pricing` into `{ locale: 'ko', rest: '/pricing' }`; `null` locale when unprefixed. */
