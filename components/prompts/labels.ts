@@ -26,6 +26,8 @@ export interface PromptLabels {
   resultLabel: string;
   posterAlt: string;
   playHint: string;
+  audioLabel: string;
+  audioDownload: string;
   badgeNew: string;
   lockedHeading: string;
   lockedBody: string;
@@ -62,6 +64,8 @@ export function promptLabels(dict: Dictionary): PromptLabels {
     resultLabel: dict.prompts.resultLabel,
     posterAlt: dict.prompts.posterAlt,
     playHint: dict.prompts.playHint,
+    audioLabel: dict.prompts.audioLabel,
+    audioDownload: dict.prompts.audioDownload,
     badgeNew: dict.badge.new,
     // §15.3 — the lock panel speaks cookies now. The playbook library keeps the §5.5 Pro copy;
     // this surface's gate is per-prompt, so its sentences are the wallet's.

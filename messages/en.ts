@@ -218,6 +218,8 @@ export const en = {
     resultLabel: 'Result',
     posterAlt: 'Result frame',
     playHint: 'Hover to play',
+    audioLabel: 'Audio result',
+    audioDownload: 'Download',
   },
   /** §13.1/E — the community submission form, and its confirmation states. */
   submit: {
@@ -838,6 +840,8 @@ export const en = {
     mediaPosterZone: 'Drop a poster image here, or click to pick',
     mediaPosterPicked: '{name} selected',
     mediaPosterHint: 'Pick a frame from the clip, or upload an image of your own.',
+    fieldPromptAudio: 'Audio result',
+    mediaAudioZone: 'Drop an audio file here, or click to pick',
     promptVisibilityHint: 'Community submissions are always public — the database enforces it.',
     approve: 'Approve',
     rejectLabel: 'Reject',

@@ -29,6 +29,8 @@ export interface MediaDropLabels {
   posterZone: string;
   posterPicked: string;
   posterHint: string;
+  audioHeading: string;
+  audioZone: string;
 }
 
 function assign(input: HTMLInputElement | null, file: File | null): void {
@@ -38,7 +40,7 @@ function assign(input: HTMLInputElement | null, file: File | null): void {
   input.files = bag.files;
 }
 
-function firstFile(items: DataTransfer | null, kind: 'video' | 'image'): File | null {
+function firstFile(items: DataTransfer | null, kind: 'video' | 'image' | 'audio'): File | null {
   if (!items) return null;
   for (const file of Array.from(items.files)) {
     if (file.type.startsWith(`${kind}/`)) return file;
@@ -46,13 +48,16 @@ function firstFile(items: DataTransfer | null, kind: 'video' | 'image'): File | 
   return null;
 }
 
-export function MediaDrop({ labels, videoName, posterName }: {
+export function MediaDrop({ labels, videoName, posterName, audioName }: {
   labels: MediaDropLabels;
   videoName: string;
   posterName: string;
+  /** Present ⇒ the form also takes an audio result (music/voice prompts, founder 2026-08-13). */
+  audioName?: string;
 }) {
   const videoInputRef = useRef<HTMLInputElement>(null);
   const posterInputRef = useRef<HTMLInputElement>(null);
+  const audioInputRef = useRef<HTMLInputElement>(null);
   const previewRef = useRef<HTMLVideoElement>(null);
 
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
@@ -60,7 +65,9 @@ export function MediaDrop({ labels, videoName, posterName }: {
   const [duration, setDuration] = useState(0);
   const [posterUrl, setPosterUrl] = useState<string | null>(null);
   const [posterLabel, setPosterLabel] = useState<string | null>(null);
-  const [dragging, setDragging] = useState<'video' | 'poster' | null>(null);
+  const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [audioLabel, setAudioLabel] = useState<string | null>(null);
+  const [dragging, setDragging] = useState<'video' | 'poster' | 'audio' | null>(null);
 
   // M4's JS-free-admin contract survives: server HTML ships the two PLAIN file inputs; only a
   // hydrated client swaps them for the zones. No JS → ordinary pickers, same field names.
@@ -73,6 +80,14 @@ export function MediaDrop({ labels, videoName, posterName }: {
   // Blob URLs leak until revoked; one effect owns each slot's lifecycle.
   useEffect(() => () => { if (videoUrl) URL.revokeObjectURL(videoUrl); }, [videoUrl]);
   useEffect(() => () => { if (posterUrl) URL.revokeObjectURL(posterUrl); }, [posterUrl]);
+  useEffect(() => () => { if (audioUrl) URL.revokeObjectURL(audioUrl); }, [audioUrl]);
+
+  const takeAudio = (file: File | null) => {
+    if (!file) return;
+    assign(audioInputRef.current, file);
+    setAudioLabel(`${file.name} · ${(file.size / (1024 * 1024)).toFixed(1)}MB`);
+    setAudioUrl(URL.createObjectURL(file));
+  };
 
   const takeVideo = (file: File | null) => {
     if (!file) return;
@@ -220,6 +235,47 @@ export function MediaDrop({ labels, videoName, posterName }: {
           }}
         />
       </div>
+
+      {/* --- the audio result (optional slot) ------------------------------ */}
+      {audioName && (
+        <div>
+          <p className="font-label text-eyebrow uppercase opacity-60">{labels.audioHeading}</p>
+          {enhanced && (
+            <div
+              className={`mt-1.5 ${zone(dragging === 'audio')}`}
+              onClick={() => audioInputRef.current?.click()}
+              onDragOver={(e) => { e.preventDefault(); setDragging('audio'); }}
+              onDragLeave={() => setDragging(null)}
+              onDrop={(e) => {
+                e.preventDefault();
+                setDragging(null);
+                takeAudio(firstFile(e.dataTransfer, 'audio'));
+              }}
+            >
+              <span className="font-mono text-[0.72rem]">{audioLabel ?? labels.audioZone}</span>
+              {audioUrl && (
+                // Controls inside a click-to-pick zone: playing must not reopen the file dialog.
+                <audio
+                  controls
+                  preload="metadata"
+                  src={audioUrl}
+                  className="mt-2 w-full max-w-80"
+                  onClick={(e) => e.stopPropagation()}
+                />
+              )}
+            </div>
+          )}
+          <input
+            ref={audioInputRef}
+            type="file"
+            name={audioName}
+            accept="audio/*"
+            className={enhanced ? 'sr-only' : `mt-1.5 ${PLAIN_INPUT}`}
+            {...(enhanced ? { tabIndex: -1 } : {})}
+            onChange={(e) => takeAudio(e.currentTarget.files?.[0] ?? null)}
+          />
+        </div>
+      )}
     </div>
   );
 }

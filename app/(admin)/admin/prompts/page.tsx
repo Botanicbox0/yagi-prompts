@@ -40,6 +40,8 @@ function mediaDropLabels(a: Dictionary['admin']): MediaDropLabels {
     posterZone: a.mediaPosterZone,
     posterPicked: a.mediaPosterPicked,
     posterHint: a.mediaPosterHint,
+    audioHeading: a.fieldPromptAudio,
+    audioZone: a.mediaAudioZone,
   };
 }
 
@@ -262,7 +264,7 @@ function PublishedItem({ row, dict }: { row: PromptRow; dict: Dict }) {
         </div>
 
         <Field label={a.fieldPromptVideo} hint={a.promptMediaHint}>
-          <MediaDrop videoName="video" posterName="poster" labels={mediaDropLabels(a)} />
+          <MediaDrop videoName="video" posterName="poster" audioName="audio" labels={mediaDropLabels(a)} />
         </Field>
 
         <div>
@@ -418,7 +420,7 @@ export default async function AdminPromptsPage({
           </div>
 
           <Field label={a.fieldPromptVideo} hint={a.promptMediaHint}>
-            <MediaDrop videoName="video" posterName="poster" labels={mediaDropLabels(a)} />
+            <MediaDrop videoName="video" posterName="poster" audioName="audio" labels={mediaDropLabels(a)} />
           </Field>
 
           <div>

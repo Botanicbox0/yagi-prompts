@@ -25,6 +25,8 @@ function labelsOf(): MediaDropLabels {
     posterZone: a.mediaPosterZone,
     posterPicked: a.mediaPosterPicked,
     posterHint: a.mediaPosterHint,
+    audioHeading: a.fieldPromptAudio,
+    audioZone: a.mediaAudioZone,
   };
 }
 
@@ -49,5 +51,15 @@ describe('MediaDrop (admin media enhancement)', () => {
     );
     expect(html).toContain('name="heroVideo"');
     expect(html).toContain('name="heroPoster"');
+    // No audioName ⇒ no audio field at all — the slot is opt-in per form.
+    expect(html).not.toContain('accept="audio/*"');
+  });
+
+  it('ships the audio slot when asked, as the same plain-input contract', () => {
+    const html = renderToStaticMarkup(
+      <MediaDrop videoName="video" posterName="poster" audioName="audio" labels={labelsOf()} />,
+    );
+    expect(html).toContain('name="audio"');
+    expect(html).toContain('accept="audio/*"');
   });
 });

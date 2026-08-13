@@ -42,6 +42,8 @@ export interface PromptFixture {
   featured: boolean;
   poster?: AssetSpec;
   video?: AssetSpec;
+  /** The audio result (founder 2026-08-13) — public and downloadable on the detail page. */
+  audio?: AssetSpec;
   rejectReason?: string;
   /** Published items are ordered by this offset (days ago) so NEW badges are deterministic. */
   publishedDaysAgo?: number;
@@ -62,6 +64,13 @@ const mp4 = (label: string, seconds: number): AssetSpec => ({
   w: 1280,
   h: 720,
   duration_s: seconds,
+});
+
+/** Placeholder audio: labelled bytes under an audio mime — same honesty as the trackless mp4. */
+const mp3 = (label: string): AssetSpec => ({
+  label,
+  ext: 'mp3',
+  mime: 'audio/mpeg',
 });
 
 // ---------------------------------------------------------------------------
@@ -99,6 +108,8 @@ const YAGI: PromptFixture[] = [
     featured: true,
     poster: png('prompt-market-run', 1280, 720),
     video: mp4('prompt-market-run-clip', 8),
+    // The audio-carrying fixture: exercises staging→copy→route→download over real bytes.
+    audio: mp3('prompt-market-run-ambience'),
     publishedDaysAgo: 2,
   },
   {

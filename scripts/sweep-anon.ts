@@ -90,6 +90,8 @@ interface Fetched {
   location: string | null;
   cacheControl: string | null;
   contentType: string | null;
+  /** For the `?download=1` probes — the header that makes a browser SAVE instead of play. */
+  contentDisposition: string | null;
   body: string;
   bytes: Uint8Array;
 }
@@ -102,6 +104,7 @@ async function request(path: string, init?: RequestInit): Promise<Fetched> {
     location: response.headers.get('location'),
     cacheControl: response.headers.get('cache-control'),
     contentType: response.headers.get('content-type'),
+    contentDisposition: response.headers.get('content-disposition'),
     body: new TextDecoder().decode(bytes),
     bytes,
   };
@@ -594,6 +597,7 @@ async function sweepWebViewSignin(): Promise<void> {
 const GATED_PROMPT = 'neon-alley-dolly'; // YAGI, text_visibility = pro
 const TEASER_PROMPT = 'static-portrait-window-light'; // YAGI, deliberate public teaser
 const COMMUNITY_PROMPT = 'skate-park-golden-hour'; // community, public by definition
+const AUDIO_PROMPT = 'handheld-market-run'; // YAGI, carries the audio-result fixture
 
 const promptToken = (slug: string) => PROMPT_SENTINELS.find((s) => s.slug === slug)!.token;
 
@@ -761,6 +765,31 @@ async function sweepPromptMedia(prompts: PromptProbe[]): Promise<void> {
   );
   expectEqual('a malformed ref 404s', (await get('/api/prompts/media/nonsense')).status, 404);
   expectEqual('a bad kind 404s', (await get(`/api/prompts/media/${gated.id}%3Aoriginal`)).status, 404);
+
+  // --- the audio result (founder 2026-08-13): public, playable, downloadable ---------------
+  const withAudio = prompts.find((p) => p.slug === AUDIO_PROMPT)!;
+  const audio = await get(`/api/prompts/media/${encodeURIComponent(`${withAudio.id}:audio`)}`);
+  expectEqual('a published audio result is served', audio.status, 200);
+  expectEqual('…as audio/mpeg', audio.contentType, 'audio/mpeg');
+  expectEqual('…inline by default', audio.contentDisposition, null);
+
+  const download = await get(
+    `/api/prompts/media/${encodeURIComponent(`${withAudio.id}:audio`)}?download=1`,
+  );
+  expectEqual('?download=1 still serves the bytes', download.status, 200);
+  if (download.contentDisposition?.startsWith('attachment') && download.contentDisposition.includes(AUDIO_PROMPT)) {
+    ok('…as an attachment named after the slug', download.contentDisposition);
+  } else {
+    fail('audio download disposition', `got ${download.contentDisposition}`);
+  }
+
+  const detail = await get(`/en/prompts/${AUDIO_PROMPT}`);
+  expectPresent('the detail page carries the audio row', detail.body, 'data-prompt-audio');
+  expectPresent('…with the one-press download', detail.body, 'data-audio-download');
+  expectPresent('…that asks for the attachment', detail.body, 'download=1');
+  // Negative control: an item with no audio renders no empty audio chrome.
+  const noAudio = await get(`/en/prompts/${GATED_PROMPT}`);
+  expectAbsent('no audio row where there is no audio', noAudio.body, 'data-prompt-audio');
 }
 
 /** §13.2 — the gated halves of the prompts surface, from outside. */

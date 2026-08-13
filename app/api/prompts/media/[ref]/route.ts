@@ -42,7 +42,7 @@ function refuse(status: 404 | 500, error: string): NextResponse {
 }
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ ref: string }> },
 ): Promise<NextResponse> {
   const { ref: rawRef } = await params;
@@ -61,20 +61,30 @@ export async function GET(
     return refuse(404, 'not_found');
   }
 
+  // Founder direction (2026-08-13): audio results download in one press. `?download=1` answers
+  // with `Content-Disposition: attachment` — REQUIRED cross-origin, where the anchor `download`
+  // attribute is ignored. The filename is the slug (human) + the key's extension (true), and the
+  // CDN redirect is deliberately skipped on this branch: a 302 cannot carry the disposition.
+  const download = new URL(request.url).searchParams.get('download') === '1';
+
   const cdn = publicContentUrl(asset.published_key);
-  if (cdn) {
+  if (cdn && !download) {
     return new NextResponse(null, { status: 302, headers: { ...HEADERS, Location: cdn } });
   }
 
   try {
     const storage = await getStorage();
     const bytes = await storage.read('public-content', asset.published_key);
+    const ext = /\.[A-Za-z0-9]+$/.exec(asset.published_key)?.[0] ?? '';
     return new NextResponse(new Uint8Array(bytes), {
       status: 200,
       headers: {
         ...HEADERS,
         'Content-Type': asset.mime,
         'Content-Length': String(bytes.byteLength),
+        ...(download
+          ? { 'Content-Disposition': `attachment; filename="${row.slug}${ext}"` }
+          : {}),
       },
     });
   } catch (err) {

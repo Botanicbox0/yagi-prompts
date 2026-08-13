@@ -212,6 +212,8 @@ export const ko: Dictionary = {
     resultLabel: '결과',
     posterAlt: '결과 프레임',
     playHint: '마우스를 올리면 재생됩니다',
+    audioLabel: '오디오 결과물',
+    audioDownload: '다운로드',
   },
   submit: {
     eyebrow: '제출',
@@ -798,6 +800,8 @@ export const ko: Dictionary = {
     mediaPosterZone: '포스터 이미지를 끌어다 놓거나 클릭해서 선택하세요',
     mediaPosterPicked: '{name} 선택됨',
     mediaPosterHint: '영상에서 프레임을 고르거나, 이미지를 직접 올릴 수 있습니다.',
+    fieldPromptAudio: '오디오 결과물',
+    mediaAudioZone: '오디오 파일을 끌어다 놓거나 클릭해서 선택하세요',
     promptVisibilityHint: '커뮤니티 제출은 항상 공개입니다. 데이터베이스가 강제합니다.',
     approve: '승인',
     rejectLabel: '반려',
