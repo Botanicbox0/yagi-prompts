@@ -48,12 +48,28 @@ function firstFile(items: DataTransfer | null, kind: 'video' | 'image' | 'audio'
   return null;
 }
 
-export function MediaDrop({ labels, videoName, posterName, audioName }: {
+export function MediaDrop({
+  labels,
+  videoName,
+  posterName,
+  audioName,
+  existingVideoSrc,
+  existingPosterSrc,
+}: {
   labels: MediaDropLabels;
   videoName: string;
   posterName: string;
   /** Present ⇒ the form also takes an audio result (music/voice prompts, founder 2026-08-13). */
   audioName?: string;
+  /**
+   * The clip this row ALREADY has, as an admin-media path (founder question, 2026-08-14: "is
+   * changing the thumbnail frame set up?"). Without it the scrubber only existed for a clip you
+   * had just dropped, so re-picking a poster on a published prompt meant re-uploading the video.
+   * Same-origin by construction, which is what keeps the canvas capture untainted.
+   */
+  existingVideoSrc?: string;
+  /** The poster this row already has — shown so the panel says what it is about to replace. */
+  existingPosterSrc?: string;
 }) {
   const videoInputRef = useRef<HTMLInputElement>(null);
   const posterInputRef = useRef<HTMLInputElement>(null);
@@ -159,11 +175,13 @@ export function MediaDrop({ labels, videoName, posterName, audioName }: {
         onChange={(e) => takeVideo(e.currentTarget.files?.[0] ?? null)}
       />
 
-      {videoUrl && (
+      {/* The dropped clip wins; otherwise the one this row already has — so the frame picker
+          works on a PUBLISHED prompt without re-uploading its video. */}
+      {(videoUrl ?? existingVideoSrc) && (
         <div className="border border-hairline p-3">
           <video
             ref={previewRef}
-            src={videoUrl}
+            src={videoUrl ?? existingVideoSrc}
             muted
             playsInline
             preload="metadata"
@@ -214,9 +232,15 @@ export function MediaDrop({ labels, videoName, posterName, audioName }: {
               if (file) takePoster(file, labels.posterPicked.replace('{name}', file.name));
             }}
           >
-            {posterUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element -- local blob preview
-              <img src={posterUrl} alt="" className="max-h-40 object-contain" />
+            {/* The picked frame, or the poster this row is currently published with. */}
+            {(posterUrl ?? existingPosterSrc) ? (
+              // eslint-disable-next-line @next/next/no-img-element -- blob preview / admin object
+              <img
+                src={posterUrl ?? existingPosterSrc}
+                alt=""
+                className="max-h-40 object-contain"
+                data-poster-preview={posterUrl ? 'picked' : 'current'}
+              />
             ) : null}
             <span className="font-mono text-[0.72rem]">{posterLabel ?? labels.posterZone}</span>
           </div>

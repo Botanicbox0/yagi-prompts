@@ -201,6 +201,7 @@ function QueueItem({ row, dict }: { row: PromptRow; dict: Dict }) {
 
 function PublishedItem({ row, dict }: { row: PromptRow; dict: Dict }) {
   const a = dict.admin;
+  const existingMedia = parsePromptMedia(row.media);
   return (
     <li data-prompt-published={row.slug} className="border border-hairline p-4">
       <div className="flex flex-wrap items-baseline justify-between gap-3">
@@ -263,8 +264,21 @@ function PublishedItem({ row, dict }: { row: PromptRow; dict: Dict }) {
           </div>
         </div>
 
+        {/* Founder question (2026-08-14): re-picking a thumbnail frame must not require
+            re-uploading the clip — the panel loads what this row already has. */}
         <Field label={a.fieldPromptVideo} hint={a.promptMediaHint}>
-          <MediaDrop videoName="video" posterName="poster" audioName="audio" labels={mediaDropLabels(a)} />
+          <MediaDrop
+            videoName="video"
+            posterName="poster"
+            audioName="audio"
+            labels={mediaDropLabels(a)}
+            {...(existingMedia.video
+              ? { existingVideoSrc: adminMediaPath(promptAdminRef(row.id, 'video')) }
+              : {})}
+            {...(existingMedia.poster
+              ? { existingPosterSrc: adminMediaPath(promptAdminRef(row.id, 'poster')) }
+              : {})}
+          />
         </Field>
 
         <div>
