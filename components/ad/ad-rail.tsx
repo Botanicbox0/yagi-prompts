@@ -38,8 +38,10 @@ type Mode = 'hidden' | 'follow' | 'sticky';
  *   playbook detail    [220 | 40 | 720 | 40 | 300] = 1320 → this override
  * Passed in rather than sniffed, so the number in the component is the number in the plan.
  */
-export const DETAIL_RAIL_LEFT =
-  'calc(50% + (var(--container-stepindex) + var(--spacing-rail-gap) + var(--container-detail) + var(--spacing-rail-gap) - var(--container-rail)) / 2)';
+/** Founder pass: both bands defer to the viewport-edge anchor on wide screens (see globals.css). */
+const RAIL_EDGE_LEFT = 'calc(100% - var(--container-rail) - var(--spacing-gutter))';
+
+export const DETAIL_RAIL_LEFT = `max(calc(50% + (var(--container-stepindex) + var(--spacing-rail-gap) + var(--container-detail) + var(--spacing-rail-gap) - var(--container-rail)) / 2), ${RAIL_EDGE_LEFT})`;
 
 export function AdRail({
   anchorId,
@@ -141,7 +143,7 @@ export function AdRail({
         style={{
           left:
             left ??
-            'calc(50% + (var(--container-content) - var(--container-rail)) / 2 + var(--spacing-rail-gap) / 2)',
+            `max(calc(50% + (var(--container-content) - var(--container-rail)) / 2 + var(--spacing-rail-gap) / 2), ${RAIL_EDGE_LEFT})`,
           width: 'var(--container-rail)',
         }}
       >

@@ -81,6 +81,8 @@ describe('dictionary completeness (§3.9)', () => {
       // English and used unchanged in Korean copy. "소셜 미디어" would be a translation of the
       // English phrase rather than the Korean term for it.
       'admin.colEntrySns',
+      // Founder pass: the verified-share stat is a figure, and a figure is locale-invariant.
+      'premise.statTestedValue',
     ]);
 
     const untranslated = enLeaves

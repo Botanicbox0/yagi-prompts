@@ -3,21 +3,17 @@ import { DEFAULT_LOCALE, isLocale, type Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/dictionaries';
 import { getPublicCatalog } from '@/lib/content/public-catalog';
 import { getPromptCatalog } from '@/lib/prompts/public-catalog';
-import { landingPromptCards } from '@/lib/prompts/catalog';
 import { USE_CASES } from '@/lib/prompts/schemas';
 import { marqueeItems } from '@/lib/marquee';
-import { useCaseLabel } from '@/components/prompts/labels';
+import { UPGRADE_PATH, signInHref } from '@/lib/billing/links';
+import { promptLabels, presentUseCases, useCaseLabel } from '@/components/prompts/labels';
 import { MarketingFooter, MarketingNav, adLabels } from '@/components/marketing/chrome';
-import {
-  Featured,
-  Hero,
-  MarqueeStrip,
-  Premise,
-  PricingSummary,
-} from '@/components/landing/sections';
-import { HowItReads } from '@/components/landing/how-it-reads';
+import { Hero, MarqueeStrip, Premise } from '@/components/landing/sections';
 import { CircleWipe } from '@/components/landing/circle-wipe';
 import { Faq } from '@/components/landing/faq';
+import { PromptRail } from '@/components/prompts/rails';
+import { UseCaseFilter } from '@/components/prompts/filter-chips';
+import { SubmitStrip } from '@/components/prompts/detail';
 import { AdRail } from '@/components/ad/ad-rail';
 import { AdBanner, AdCard } from '@/components/ad/ad-card';
 
@@ -65,7 +61,6 @@ export default async function LandingPage({ params }: { params: Promise<{ locale
   // published or approved, `catalog` whenever a playbook is. The landing reads both, so either one
   // refreshes it.
   const [catalog, prompts] = await Promise.all([getPublicCatalog(), getPromptCatalog()]);
-  const cards = landingPromptCards(prompts);
   // §13.2: "marquee items can include SEEDANCE 2.5 + use-case vocab". The model leads, the
   // use cases follow, and the studio's real tool list from the playbook catalog tops it up.
   const ticker = marqueeItems({
@@ -74,10 +69,21 @@ export default async function LandingPage({ params }: { params: Promise<{ locale
   });
   const ads = adLabels(dict);
 
+  // Founder pass (2026-08-13): gallery-first. The landing carries the FULL rails one scroll under
+  // the hero — the reference form — so it shares the gallery's static-safe plumbing verbatim.
+  const labels = promptLabels(dict);
+  const useCaseLabels = Object.fromEntries(
+    USE_CASES.map((value) => [value, useCaseLabel(dict, value)]),
+  );
+  const filterOptions = presentUseCases(prompts.totals.useCases).map(
+    (value) => [value, useCaseLabels[value]!] as [string, string],
+  );
+  const signin = signInHref(`/${locale}`, locale);
+  const upgrade = `${UPGRADE_PATH}?locale=${locale}`;
+
   return (
     <>
-      {/* The hero is dark, so the bar starts inverted rather than flashing light on first paint. */}
-      <MarketingNav locale={locale} dict={dict} rest="/" initialTheme="dark" />
+      <MarketingNav locale={locale} dict={dict} rest="/" initialTheme="light" />
 
       <main id="main">
         <Hero locale={locale} dict={dict} />
@@ -88,45 +94,65 @@ export default async function LandingPage({ params }: { params: Promise<{ locale
             <AdCard labels={ads} />
           </AdRail>
 
-          <Premise dict={dict} totals={prompts.totals} />
+          {/* The gallery, immediately — cards and result clips are the first scroll. */}
+          <section id="gallery" data-section data-theme="light" className="section">
+            <div className="band pb-24">
+              <div className="border-t border-hairline pt-6">
+                <UseCaseFilter
+                  options={filterOptions}
+                  labels={{ heading: dict.prompts.filterHeading, all: dict.prompts.filterAll }}
+                />
+              </div>
+
+              <PromptRail
+                id="yagi"
+                heading={dict.prompts.railYagi}
+                lede={dict.prompts.railYagiLede}
+                cards={prompts.yagi}
+                locale={locale}
+                labels={labels}
+                useCaseLabels={useCaseLabels}
+                emptyLabel={dict.prompts.emptyYagi}
+                filteredEmptyLabel={dict.prompts.filterEmpty}
+                signinHref={signin}
+                upgradeHref={upgrade}
+              />
+
+              <PromptRail
+                id="community"
+                heading={dict.prompts.railCommunity}
+                lede={dict.prompts.railCommunityLede}
+                cards={prompts.community}
+                locale={locale}
+                labels={labels}
+                useCaseLabels={useCaseLabels}
+                emptyLabel={dict.prompts.emptyCommunity}
+                filteredEmptyLabel={dict.prompts.filterEmpty}
+                signinHref={signin}
+                upgradeHref={upgrade}
+              />
+
+              <SubmitStrip
+                title={dict.prompts.submitStripTitle}
+                body={dict.prompts.submitStripBody}
+                cta={dict.prompts.submitCta}
+              />
+            </div>
+          </section>
 
           <MarqueeStrip dict={dict} items={ticker} />
 
-          <HowItReads
-            eyebrow={dict.howItReads.eyebrow}
-            title={dict.howItReads.title}
-            panels={[
-              {
-                index: dict.howItReads.stepsIndex,
-                title: dict.howItReads.stepsTitle,
-                body: dict.howItReads.stepsBody,
-              },
-              {
-                index: dict.howItReads.blocksIndex,
-                title: dict.howItReads.blocksTitle,
-                body: dict.howItReads.blocksBody,
-              },
-              {
-                index: dict.howItReads.unlockIndex,
-                title: dict.howItReads.unlockTitle,
-                body: dict.howItReads.unlockBody,
-              },
-            ]}
-          />
-
-          {/* §5.3-2: the page's one circular wipe, on its one true inversion (light → dark). */}
-          <CircleWipe />
-
-          <Featured locale={locale} dict={dict} cards={cards} />
+          <Premise dict={dict} totals={prompts.totals} />
 
           {/* §3.6: below 1440 this is the single ad; the rail owns the tier above it. */}
-          <section data-section data-theme="dark" className="section rail:hidden">
+          <section data-section data-theme="light" className="section rail:hidden">
             <div className="band pb-24">
               <AdBanner labels={ads} />
             </div>
           </section>
 
-          <PricingSummary locale={locale} dict={dict} totals={prompts.totals} />
+          {/* §5.3-2: the page's one circular wipe, on its one true inversion (light → dark). */}
+          <CircleWipe />
 
           <section data-section data-theme="dark" className="section">
             <Faq

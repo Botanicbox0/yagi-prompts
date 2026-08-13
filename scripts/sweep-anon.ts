@@ -546,7 +546,7 @@ async function sweepPromptGallery(locale: string): Promise<void> {
 
   // Positive controls first: without these, every absence below would pass on an empty page.
   expectPresent('YAGI rail header', page.body, locale === 'ko' ? 'YAGI 오리지널' : 'ORIGINAL PROMPTS BY YAGI');
-  expectPresent('community rail header', page.body, locale === 'ko' ? '커뮤니티에서' : 'FROM THE COMMUNITY');
+  expectPresent('community rail header', page.body, locale === 'ko' ? '커뮤니티 프롬프트' : 'FROM THE COMMUNITY');
   expectPresent('the model chip', page.body, 'SEEDANCE 2.5');
   expectPresent('lock chips on gated cards', page.body, 'data-lock-chip');
   expectPresent('cards are addressable', page.body, `data-prompt-card="${GATED_PROMPT}"`);
@@ -772,12 +772,12 @@ async function sweepContestsListing(locale: string, contests: ContestProbe[]): P
   expectEqual('renders 200', page.status, 200);
 
   // Positive controls: the page is a real page, not an error dressed as one.
-  // M9 design review, finding 8: the KO hero is broken where the SENTENCE breaks
-  // ("브랜드가 / 브리프를 건넵니다."), not where the English one does.
+  // M9 design review, finding 8: the KO hero is broken where the SENTENCE breaks, not where the
+  // English one does. (Copy naturalized in the 2026-08-13 founder pass.)
   expectPresent(
     'the display headline',
     page.body,
-    locale === 'ko' ? '브리프를 건넵니다' : 'BRANDS BRING',
+    locale === 'ko' ? '필름 콘테스트' : 'BRANDS BRING',
   );
   expectPresent('the OPEN rail', page.body, 'data-contest-rail="open"');
   expectPresent(
@@ -794,7 +794,7 @@ async function sweepContestsListing(locale: string, contests: ContestProbe[]): P
   expectPresent(
     '…with the studio wording',
     page.body,
-    locale === 'ko' ? '스튜디오와 콘테스트 열기' : 'Run a contest with the studio',
+    locale === 'ko' ? '콘테스트 개최 문의' : 'Run a contest with the studio',
   );
   expectPresent('nav points at the tab', page.body, `href="/${locale}/contests"`);
 

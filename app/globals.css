@@ -624,11 +624,18 @@ html:lang(ko) {
      rule only owns the geometry, which is the §4 band math:
      the 1340 band is centred, so its right-hand 300 column starts at
      50% + (1000 − 300)/2 + 40/2 = 50% + 370. */
+  /* Founder pass (2026-08-13): the rail is anchored toward the VIEWPORT EDGE, not the band. At the
+     1440 floor the two expressions agree (the band's rail column already ends a gutter from the
+     edge); on wider screens the right-hand term wins and the unit rides the margin — "more to the
+     side" — while max() guarantees it can never cross into the 1000px content column. */
   .ad-rail-fixed {
     position: fixed;
     top: 0;
-    left: calc(
-      50% + (var(--container-content) - var(--container-rail)) / 2 + var(--spacing-rail-gap) / 2
+    left: max(
+      calc(
+        50% + (var(--container-content) - var(--container-rail)) / 2 + var(--spacing-rail-gap) / 2
+      ),
+      calc(100% - var(--container-rail) - var(--spacing-gutter))
     );
     width: var(--container-rail);
     z-index: 30;
