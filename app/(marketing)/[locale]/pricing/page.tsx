@@ -4,8 +4,8 @@ import { getDictionary } from '@/lib/i18n/dictionaries';
 import { getPromptCatalog } from '@/lib/prompts/public-catalog';
 import { promptsHref } from '@/lib/prompts/links';
 import { MarketingFooter, MarketingNav } from '@/components/marketing/chrome';
-import { countsLine, planCopy, planFeatures } from '@/components/landing/sections';
-import { PlanCards } from '@/components/pricing/plan-cards';
+import { countsLine } from '@/components/landing/sections';
+import { CookieTable } from '@/components/pricing/cookie-table';
 import { PlanTable } from '@/components/pricing/plan-table';
 import { Faq } from '@/components/landing/faq';
 import { Reveal } from '@/components/motion/reveal';
@@ -13,8 +13,12 @@ import { TextSwap } from '@/components/ui/text-swap';
 import { formatCount } from '@/lib/i18n/format';
 
 /**
- * Pricing — PLAN §3.4 (Free vs Pro) with the §3.1 "N prompts across M playbooks" line computed
- * from the same cached catalog projection the landing uses. Static, like landing.
+ * Pricing — PLAN §15.3: the cookie model (가입 3 · 주 1 · $4/5), with the §3.1 counts line from
+ * the same cached prompt projection the landing reads. Static, like landing — nothing here may
+ * know the viewer, which is exactly why the page can present the model but never a balance.
+ *
+ * The $9 plan cards are gone from this surface: the subscription is de-emphasized, not sold
+ * (§15). The `pro` tier survives only in access logic, where it keeps old entitlements honest.
  *
  * No ad rail here: §3.6 lists the rail on landing, `/library` and playbook detail only.
  */
@@ -54,17 +58,33 @@ export default async function PricingPage({ params }: { params: Promise<{ locale
   // §13.2 — the pricing page counts PROMPTS now, from the tagged prompt projection.
   const catalog = await getPromptCatalog();
   const lockedYagi = catalog.yagi.filter((card) => card.hasLock).length;
-  const features = planFeatures(dict);
 
+  // §15.3 — the three ways cookies arrive. Figures in display type; sentences do the explaining.
+  const cells = [
+    {
+      title: dict.pricing.cookieSignupTitle,
+      value: dict.pricing.cookieSignupValue,
+      note: dict.pricing.cookieSignupNote,
+    },
+    {
+      title: dict.pricing.cookieWeeklyTitle,
+      value: dict.pricing.cookieWeeklyValue,
+      note: dict.pricing.cookieWeeklyNote,
+    },
+    {
+      title: dict.pricing.cookiePackTitle,
+      value: dict.pricing.cookiePackValue,
+      note: dict.pricing.cookiePackNote,
+    },
+  ];
+
+  // What is free stays the whole §13 doctrine; what a cookie opens is one row of it.
   const rows = [
     { label: dict.pricing.featureStructure, free: true, pro: true },
     { label: dict.pricing.featureAssets, free: true, pro: true },
     { label: dict.pricing.featureBilingual, free: true, pro: true },
     { label: dict.pricing.featurePrompts, free: false, pro: true },
-    { label: dict.pricing.featureParams, free: false, pro: true },
     { label: dict.pricing.featureCopy, free: false, pro: true },
-    { label: dict.pricing.featureWorkflow, free: false, pro: true },
-    { label: dict.pricing.featureNotifications, free: false, pro: true },
   ];
 
   return (
@@ -102,13 +122,9 @@ export default async function PricingPage({ params }: { params: Promise<{ locale
             </p>
 
             <div className="mt-12">
-              <PlanCards
-                locale={locale}
-                copy={planCopy(dict)}
-                freeFeatures={features.free}
-                proFeatures={features.pro}
-              />
+              <CookieTable cells={cells} rule={dict.pricing.cookieRule} />
             </div>
+            <p className="mt-6 font-mono text-code opacity-60">{dict.pricing.cancelNote}</p>
           </div>
         </section>
 
@@ -122,7 +138,7 @@ export default async function PricingPage({ params }: { params: Promise<{ locale
                 heading={dict.pricing.featureHeading}
                 columnFeature={dict.pricing.columnFeature}
                 freeLabel={dict.plan.free}
-                proLabel={dict.plan.pro}
+                proLabel={dict.pricing.cookieColumn}
                 includedLabel={dict.pricing.included}
                 notIncludedLabel={dict.pricing.notIncluded}
                 rows={rows}

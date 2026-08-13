@@ -219,4 +219,47 @@ describe('seed publishes fixtures through the real prepare → copy → publish 
     ]);
     expect(Object.keys(result.users).sort()).toEqual(['admin', 'free', 'pro']);
   });
+
+  /**
+   * §15 — the wallet fixtures. The free fixture demonstrates BOTH states a dev session needs:
+   * an already-opened prompt (via the real `unlockPrompt`, so ledger + balance + unlock row agree
+   * by construction) and a spendable balance on everything still locked. The stamp is set so the
+   * lazy weekly grant stays out of dev verification for a week.
+   */
+  it('seeds deterministic wallets and one real unlock for the free fixture (§15)', async () => {
+    expect(result.cookies.unlockedSlug).toBe('handheld-market-run');
+    expect(result.cookies.freeBalance).toBe(2);
+
+    const { rows } = await db.query<{
+      email: string;
+      cookie_balance: number;
+      stamped: boolean;
+    }>(
+      `select email, cookie_balance, (cookies_granted_at is not null) as stamped
+         from profiles order by email`,
+    );
+    expect(rows).toEqual([
+      { email: 'admin@yagiworkshop.xyz', cookie_balance: 3, stamped: true },
+      { email: 'free@playbook.test', cookie_balance: 2, stamped: true },
+      { email: 'pro@playbook.test', cookie_balance: 3, stamped: true },
+    ]);
+
+    // The ledger explains the balance: signup +3 for everyone, one −1 spend for free.
+    const ledger = await db.query<{ email: string; delta: number; reason: string }>(
+      `select pr.email, l.delta, l.reason
+         from cookie_ledger l join profiles pr on pr.id = l.profile_id
+        order by pr.email, l.id`,
+    );
+    expect(ledger.rows).toEqual([
+      { email: 'admin@yagiworkshop.xyz', delta: 3, reason: 'signup' },
+      { email: 'free@playbook.test', delta: 3, reason: 'signup' },
+      { email: 'free@playbook.test', delta: -1, reason: 'unlock' },
+      { email: 'pro@playbook.test', delta: 3, reason: 'signup' },
+    ]);
+
+    const unlocks = await db.query<{ slug: string }>(
+      `select i.slug from prompt_unlocks u join prompt_items i on i.id = u.prompt_id`,
+    );
+    expect(unlocks.rows).toEqual([{ slug: 'handheld-market-run' }]);
+  });
 });

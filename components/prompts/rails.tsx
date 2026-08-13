@@ -27,7 +27,6 @@ export function PromptRail({
   emptyLabel,
   filteredEmptyLabel,
   signinHref,
-  upgradeHref,
   now,
 }: {
   id: string;
@@ -40,7 +39,6 @@ export function PromptRail({
   emptyLabel: string;
   filteredEmptyLabel: string;
   signinHref: string;
-  upgradeHref: string;
   now?: Date | number;
 }) {
   return (
@@ -75,7 +73,6 @@ export function PromptRail({
                   labels={labels}
                   useCaseLabels={useCaseLabels}
                   signinHref={signinHref}
-                  upgradeHref={upgradeHref}
                   {...(now === undefined ? {} : { now })}
                 />
               </li>

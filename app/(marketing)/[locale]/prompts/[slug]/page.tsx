@@ -6,8 +6,7 @@ import { USE_CASES } from '@/lib/prompts/schemas';
 import { DEFAULT_LOCALE, isLocale, type Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/dictionaries';
 import { promptMetadata, unresolvedPromptMetadata } from '@/lib/seo/prompt-metadata';
-import { upgradeIntent, UPGRADE_PATH, signInHref } from '@/lib/billing/links';
-import { isBillingConfigured } from '@/lib/billing/stripe-gateway';
+import { signInHref } from '@/lib/billing/links';
 import { MarketingFooter, MarketingNav, adLabels } from '@/components/marketing/chrome';
 import { AdRail } from '@/components/ad/ad-rail';
 import { AdBanner, AdCard } from '@/components/ad/ad-card';
@@ -18,6 +17,9 @@ import {
   SubmitStrip,
 } from '@/components/prompts/detail';
 import { promptLabels, useCaseLabel } from '@/components/prompts/labels';
+import { isCookiePackPurchasable } from '@/lib/cookies/purchase';
+import { unlockPromptAction } from './actions';
+import { purchaseCookiePackAction } from './purchase-action';
 
 /**
  * `/[locale]/prompts/[slug]` — PLAN §13.2, shaped per viewer.
@@ -70,22 +72,16 @@ export default async function PromptDetailPage({ params }: RouteParams) {
   const result = await resolve(slug);
   if (result.status !== 'ok') notFound();
 
-  const { prompt, related } = result;
+  const { prompt, related, unlockPanel } = result;
   const labels = promptLabels(dict);
   const ads = adLabels(dict);
   const useCaseLabels = Object.fromEntries(
     USE_CASES.map((value) => [value, useCaseLabel(dict, value)]),
   );
 
-  // Where "unlock" goes, decided once from the tier the gate already resolved (§3.4).
-  const upgrade = upgradeIntent({
-    tier: prompt.tier,
-    slug: null,
-    locale,
-    billingConfigured: isBillingConfigured(),
-  });
+  // §15.3 — which lock-panel variant renders was decided next to the gate (unlockPanel); the page
+  // only has to say where sign-in returns to: this prompt.
   const signin = signInHref(`/${locale}/prompts/${slug}`, locale);
-  const upgradeHref = `${UPGRADE_PATH}?locale=${locale}`;
 
   return (
     <>
@@ -104,9 +100,11 @@ export default async function PromptDetailPage({ params }: RouteParams) {
               prompt={prompt}
               locale={locale}
               labels={labels}
-              upgrade={upgrade}
+              panel={unlockPanel}
               signinHref={signin}
-              upgradeHref={upgradeHref}
+              unlockAction={unlockPromptAction}
+              packReady={isCookiePackPurchasable()}
+              packAction={purchaseCookiePackAction}
             />
 
             <RelatedPrompts
@@ -115,7 +113,6 @@ export default async function PromptDetailPage({ params }: RouteParams) {
               labels={labels}
               useCaseLabels={useCaseLabels}
               signinHref={signin}
-              upgradeHref={upgradeHref}
             />
 
             <SubmitStrip

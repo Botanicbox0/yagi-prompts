@@ -25,7 +25,6 @@ export function PromptCardView({
   labels,
   useCaseLabels,
   signinHref,
-  upgradeHref,
   now,
 }: {
   card: PromptCardData;
@@ -34,7 +33,6 @@ export function PromptCardView({
   /** use-case key → bilingual label, resolved by the caller (§3.9). */
   useCaseLabels: Record<string, string>;
   signinHref: string;
-  upgradeHref: string;
   /** Injectable clock so the NEW badge is testable without waiting fourteen days. */
   now?: Date | number;
 }) {
@@ -126,11 +124,13 @@ export function PromptCardView({
             ))}
           </span>
           {/* §13.2 — copy straight from the card, through the entitlement-checked endpoint, so
-              the static HTML never has to contain the thing being copied. */}
+              the static HTML never has to contain the thing being copied. §15 moved the 403
+              destination: not-unlocked lands on THIS prompt's own page, where the cookie funnel
+              is — never on a plan page that sells nothing. */}
           <PromptCopyButton
             id={card.id}
             signinHref={signinHref}
-            upgradeHref={upgradeHref}
+            upgradeHref={promptHref(locale, card.slug)}
             labels={{
               copy: labels.copy,
               copied: labels.copied,

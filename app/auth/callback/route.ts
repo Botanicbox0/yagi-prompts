@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { createAuthServerClient } from '@/lib/supabase/auth-client';
-import { createDataClient } from '@/lib/supabase/data-client';
+import { getSqlRunner } from '@/lib/db/connect';
+import { SIGNUP_COOKIES } from '@/lib/cookies/wallet';
 import {
   DEFAULT_LOCALE,
   LOCALE_COOKIE,
@@ -20,6 +21,18 @@ import {
  *   4. land on the originating page.
  *
  * `is_admin` is never derived here. Admins are seeded manually (§3.7, docs/SETUP.md).
+ *
+ * §15.1-2 — the signup grant arrives through the COLUMN DEFAULT (`cookie_balance` defaults 3;
+ * the insert below deliberately does not name it), so this route cannot get the number wrong.
+ * What it does add: `cookies_granted_at` is stamped at creation so a brand-new account reads
+ * exactly 3 — NULL means "weekly clock never read", which §15.1-3 treats as due, and that
+ * behavior belongs to backfilled pre-cookie profiles, not to someone who joined a minute ago.
+ *
+ * (M10 review R1, finding 1.) The profile row and its 'signup' ledger line are ONE transaction on
+ * `SqlRunner` — two PostgREST calls could commit the wallet and drop the audit line, breaking the
+ * "ledger is the truth" invariant on the very first row. `on conflict do nothing returning id`
+ * makes the racing second callback lose the insert AND the ledger write together, and a failed
+ * transaction rolls both back so the next login simply retries the branch.
  */
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const url = new URL(request.url);
@@ -41,25 +54,45 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   let profileLocale: Locale = uiLocale;
   try {
-    const db = createDataClient();
-    const { data: existing } = await db
-      .from('profiles')
-      .select('locale')
-      .eq('id', data.user.id)
-      .maybeSingle<{ locale: Locale }>();
-
-    if (existing) {
-      profileLocale = isLocale(existing.locale) ? existing.locale : uiLocale;
-    } else {
-      await db.from('profiles').insert({
-        id: data.user.id,
-        email: data.user.email ?? '',
-        display_name: (data.user.user_metadata?.['full_name'] as string | undefined) ?? null,
-        locale: uiLocale,
-      });
+    const sql = await getSqlRunner();
+    if (sql !== null) {
+      const existing = await sql.query<{ locale: string }>(
+        'select locale from profiles where id = $1',
+        [data.user.id],
+      );
+      const row = existing.rows[0];
+      if (row !== undefined) {
+        profileLocale = isLocale(row.locale) ? row.locale : uiLocale;
+      } else {
+        await sql.transaction(async (tx) => {
+          // The column default supplies the 3; naming it here would be a second place to get the
+          // number wrong. `now()` is the DB clock — the same one the weekly grant compares against.
+          const inserted = await tx.query<{ id: string }>(
+            `insert into profiles (id, email, display_name, locale, cookies_granted_at)
+             values ($1, $2, $3, $4, now())
+             on conflict (id) do nothing
+             returning id`,
+            [
+              data.user.id,
+              data.user.email ?? '',
+              (data.user.user_metadata?.['full_name'] as string | undefined) ?? null,
+              uiLocale,
+            ],
+          );
+          // Only the login that actually CREATED the row writes the audit line — a racing second
+          // callback loses the insert on the primary key and with it the ledger write.
+          if (inserted.rows.length > 0) {
+            await tx.query(
+              `insert into cookie_ledger (profile_id, delta, reason) values ($1, $2, 'signup')`,
+              [data.user.id, SIGNUP_COOKIES],
+            );
+          }
+        });
+      }
     }
   } catch {
-    // A profile write failure must not strand the user mid-login; the session is already valid.
+    // A profile write failure must not strand the user mid-login; the session is already valid,
+    // and the rolled-back transaction retries wholesale on the next login.
   }
 
   const response = NextResponse.redirect(new URL(next, url.origin));

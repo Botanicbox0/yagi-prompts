@@ -8,7 +8,7 @@ import { formatCount, interpolate } from '@/lib/i18n/format';
 import type { PromptCard, PromptTotals } from '@/lib/prompts/catalog';
 import { promptsHref, PROMPT_SUBMIT_PATH } from '@/lib/prompts/links';
 import { USE_CASES } from '@/lib/prompts/schemas';
-import { UPGRADE_PATH, signInHref } from '@/lib/billing/links';
+import { signInHref } from '@/lib/billing/links';
 import type { Dictionary } from '@/lib/i18n/dictionaries';
 import type { Locale } from '@/lib/i18n/config';
 
@@ -147,10 +147,10 @@ export function Featured({
   const useCaseLabels = Object.fromEntries(
     USE_CASES.map((value) => [value, useCaseLabel(dict, value)]),
   );
-  // The landing is STATIC, so the copy button's refusal branches are pre-addressed exactly as they
-  // are on the gallery; the server decides which one a given reader actually lands on.
+  // The landing is STATIC, so the copy button's refusal branches are pre-addressed exactly as
+  // they are on the gallery; the server decides which one a given reader actually lands on.
+  // §15: the 403 branch is per-card — each card's own page carries the cookie funnel.
   const signin = signInHref(promptsHref(locale), locale);
-  const upgrade = `${UPGRADE_PATH}?locale=${locale}`;
 
   return (
     <section data-section data-theme="dark" className="section">
@@ -196,7 +196,6 @@ export function Featured({
                     labels={labels}
                     useCaseLabels={useCaseLabels}
                     signinHref={signin}
-                    upgradeHref={upgrade}
                   />
                 </li>
               ))}

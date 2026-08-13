@@ -9,6 +9,7 @@ import { TypographicPoster, POSTER_RATIOS, posterRatio } from '@/components/prom
 import { PromptBody, PromptHeader, SubmitStrip } from '@/components/prompts/detail';
 import { promptLabels, presentUseCases, useCaseLabel } from '@/components/prompts/labels';
 import type { ShapedPrompt } from '@/lib/prompts/shape';
+import type { UnlockPanel } from '@/lib/cookies/wallet';
 
 /**
  * PLAN §13.2 — the gallery renders as STATIC HTML shared by every tier, so what it contains is a
@@ -53,7 +54,6 @@ const cardMarkup = (data: PromptCard, locale = 'en') =>
       labels={labels}
       useCaseLabels={useCaseLabels}
       signinHref="/auth/signin?next=%2Fen%2Fprompts&locale=en"
-      upgradeHref="/billing/upgrade?locale=en"
       now={new Date('2026-08-13T00:00:00.000Z')}
     />,
   );
@@ -141,7 +141,6 @@ describe('rails (§13.2)', () => {
         emptyLabel={dict.prompts.emptyYagi}
         filteredEmptyLabel={dict.prompts.filterEmpty}
         signinHref="/auth/signin"
-        upgradeHref="/billing/upgrade"
       />,
     );
 
@@ -170,7 +169,7 @@ describe('rails (§13.2)', () => {
   });
 });
 
-describe('prompt detail (§13.2 / §5.5)', () => {
+describe('prompt detail (§13.2 / §5.5 / §15.3)', () => {
   const base = {
     id: '9a000000-0000-4000-8000-000000000001',
     slug: 'neon-alley-dolly',
@@ -190,25 +189,80 @@ describe('prompt detail (§13.2 / §5.5)', () => {
   const locked: ShapedPrompt = { ...base, tier: 'anon', locked: true };
   const open: ShapedPrompt = { ...base, tier: 'pro', locked: false, text: `Slow dolly.\n:: ${SENTINEL}` };
 
-  const body = (prompt: ShapedPrompt) =>
+  const body = (prompt: ShapedPrompt, panel: UnlockPanel | null = null) =>
     render(
       <PromptBody
         prompt={prompt}
         locale="en"
         labels={labels}
-        upgrade={{ kind: 'signin', href: '/auth/signin' }}
-        signinHref="/auth/signin"
-        upgradeHref="/billing/upgrade"
+        panel={panel}
+        signinHref="/auth/signin?next=%2Fen%2Fprompts%2Fneon-alley-dolly&locale=en"
+        unlockAction={async () => {}}
       />,
     );
 
   it('renders the §5.5 lock panel with no text and no copy button', () => {
-    const html = body(locked);
+    const html = body(locked, { state: 'signin' });
     expect(html).toContain('data-lock-panel');
     expect(html).toContain('lock-panel');
     expect(html).not.toContain(SENTINEL);
     expect(html).not.toContain('data-copy-prompt');
-    expect(html).toContain('data-upgrade="signin"');
+  });
+
+  it('funnels anon through sign-in and back to this prompt (§15.3)', () => {
+    const html = body(locked, { state: 'signin' });
+    expect(html).toContain('data-unlock-cta="signin"');
+    expect(html).toContain(dict.cookies.signinCta);
+    expect(html).toContain('%2Fen%2Fprompts%2Fneon-alley-dolly');
+    // The funnel never renders a spend it cannot honor, nor a checkout.
+    expect(html).not.toContain('data-unlock-cta="spend"');
+    expect(html).not.toContain('data-upgrade="checkout"');
+  });
+
+  it('offers a funded reader the one-cookie spend with the real balance (§15.3)', () => {
+    const html = body({ ...locked, tier: 'free' }, { state: 'spend', balance: 3 });
+    expect(html).toContain('data-unlock-cta="spend"');
+    expect(html).toContain('Open with 1 cookie · 3 left');
+    // The server action receives the prompt id from a hidden field the server re-validates.
+    expect(html).toContain(`value="${base.id}"`);
+    expect(html).not.toContain(SENTINEL);
+  });
+
+  it('shows the wallet panel at zero: the weekly line and the $4 pack, honestly unavailable', () => {
+    const html = body({ ...locked, tier: 'free' }, { state: 'empty' });
+    expect(html).toContain('data-unlock-cta="empty"');
+    expect(html).toContain(dict.cookies.emptyTitle);
+    expect(html).toContain(dict.cookies.weeklyLine);
+    // §15.1-5 — no gateway is connected, so the pack renders the designed unavailable state,
+    // never a live buy button.
+    expect(html).toContain('data-billing="unavailable"');
+    expect(html).toContain('$4');
+    expect(html).not.toContain('data-cookie-pack');
+    expect(html).not.toContain('data-upgrade="checkout"');
+  });
+
+  /**
+   * The M8 seam, rendered ahead of the gateway that will flip it: with `packReady` the same panel
+   * is a real one-press form. Testing the unreachable branch NOW is what keeps "plug in a
+   * Paddle-class MoR later" a config change instead of a UI project.
+   */
+  it('renders the pack as a live form the moment a gateway reports ready (M8 seam)', () => {
+    const html = render(
+      <PromptBody
+        prompt={{ ...locked, tier: 'free' }}
+        locale="en"
+        labels={labels}
+        panel={{ state: 'empty' }}
+        signinHref="/auth/signin"
+        unlockAction={async () => {}}
+        packReady
+        packAction={async () => {}}
+      />,
+    );
+    expect(html).toContain('data-cookie-pack');
+    expect(html).toContain('Buy 5 cookies — $4');
+    expect(html).toContain(`value="${base.id}"`);
+    expect(html).not.toContain('data-billing="unavailable"');
   });
 
   it('renders the text in a monospace block with a copy button for an entitled reader', () => {
@@ -217,6 +271,7 @@ describe('prompt detail (§13.2 / §5.5)', () => {
     expect(html).toContain(SENTINEL);
     expect(html).toContain('data-copy-prompt');
     expect(html).not.toContain('data-lock-panel');
+    expect(html).not.toContain('data-unlock-cta');
   });
 
   it('shows the card surface for everyone — the header never depends on the gate', () => {

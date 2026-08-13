@@ -106,6 +106,64 @@ async function smokeDatabase(url: string, anonKey: string, hasServiceKey: boolea
       );
       expect(group, 'contest tables (0007)', Number(contests.rows[0]?.n ?? 0) === 3, `${contests.rows[0]?.n ?? '?'} of 3`);
 
+      // §15 — the two M10 tables, same reasoning: the deny-all probe below is only a posture if
+      // the table it is refused from actually exists.
+      const cookies = await client.query<{ n: string }>(
+        `select count(*)::text as n from information_schema.tables
+          where table_schema = 'public'
+            and table_name in ('prompt_unlocks','cookie_ledger','cookie_purchase_events')`,
+      );
+      expect(group, 'cookie tables (0008)', Number(cookies.rows[0]?.n ?? 0) === 3, `${cookies.rows[0]?.n ?? '?'} of 3`);
+
+      // (M10 review R1, finding 4.) The REST probe below can only see the anon half of the
+      // posture, and answers "refused" to both a real deny and a permissive-but-empty table.
+      // This asserts the §6 posture ITSELF: RLS enabled AND forced, zero policies, zero grants
+      // to either browser role — measured from pg_catalog, not inferred from a status code.
+      const posture = await client.query<{ bad: string }>(
+        `select count(*)::text as bad
+           from pg_class c
+           join pg_namespace n on n.oid = c.relnamespace
+          where n.nspname = 'public'
+            and c.relname in ('prompt_unlocks','cookie_ledger','cookie_purchase_events')
+            and (
+              not c.relrowsecurity
+              or not c.relforcerowsecurity
+              or exists (select 1 from pg_policies p
+                          where p.schemaname = 'public' and p.tablename = c.relname)
+              or exists (select 1 from information_schema.role_table_grants g
+                          where g.table_schema = 'public' and g.table_name = c.relname
+                            and g.grantee in ('anon','authenticated'))
+            )`,
+      );
+      expect(
+        group,
+        'cookie tables hold the full deny-all posture (0105)',
+        Number(posture.rows[0]?.bad ?? 1) === 0,
+        `${posture.rows[0]?.bad ?? '?'} table(s) out of posture`,
+      );
+
+      // Finding 1's other half, measured as the actual invariant (review R2): the balance column
+      // is a CACHE of the ledger sum, so the honest probe is the equation itself — not merely
+      // "some signup row exists", which a wrong delta or a duplicate row would slip past.
+      const unexplained = await client.query<{ n: string }>(
+        `select count(*)::text as n
+           from profiles p
+          where p.cookie_balance is distinct from coalesce(
+            (select sum(l.delta)::int from cookie_ledger l where l.profile_id = p.id), 0)`,
+      );
+      expect(
+        group,
+        'every wallet equals its ledger sum',
+        Number(unexplained.rows[0]?.n ?? 1) === 0,
+        `${unexplained.rows[0]?.n ?? '?'} wallet(s) out of balance`,
+      );
+
+      // 0008 backfills by default: whatever profiles exist must already hold a wallet ≥ 0.
+      const wallets = await client.query<{ n: string }>(
+        `select count(*)::text as n from profiles where cookie_balance is null or cookie_balance < 0`,
+      );
+      expect(group, 'profiles backfilled to a valid wallet', Number(wallets.rows[0]?.n ?? 0) === 0);
+
       // The buckets from glue migration 0101 — the half a PGlite run can never assert.
       const buckets = await client.query<{ id: string; public: boolean }>(
         `select id, public from storage.buckets order by id`,
@@ -172,8 +230,19 @@ async function smokeDatabase(url: string, anonKey: string, hasServiceKey: boolea
    * link (`sns_url`), and a PENDING entry's is visible to nobody but the moderator. PGlite has no
    * anon role, so the only place that posture can be MEASURED rather than asserted from the
    * migration text is here, over the same REST surface a browser would use.
+   *
+   * M10 §15 adds `prompt_unlocks` (a per-person reading history) and `cookie_ledger` (a
+   * per-person spending record) — 0105's deny-all is probed the same way.
    */
-  for (const table of ['prompt_items', 'contests', 'contest_entries', 'contest_entry_writes']) {
+  for (const table of [
+    'prompt_items',
+    'contests',
+    'contest_entries',
+    'contest_entry_writes',
+    'prompt_unlocks',
+    'cookie_ledger',
+    'cookie_purchase_events',
+  ]) {
     try {
       const response = await fetch(`${url}/rest/v1/${table}?select=id&limit=1`, {
         headers: { apikey: anonKey, Authorization: `Bearer ${anonKey}` },
