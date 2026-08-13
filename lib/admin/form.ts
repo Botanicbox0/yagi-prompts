@@ -13,6 +13,12 @@ import { isVisibility, type Visibility } from '@/lib/content/visibility';
 export const OP_FIELD = '_op';
 export const BACK_FIELD = '_back';
 
+/**
+ * Where every admin form posts (2026-08-14). A URL rather than a build-scoped server-action id, so
+ * an admin tab that was opened before the latest deploy still saves — see the route's own comment.
+ */
+export const ADMIN_ACTION_PATH = '/admin/do';
+
 export function str(form: FormData, name: string): string {
   const value = form.get(name);
   return typeof value === 'string' ? value.trim() : '';

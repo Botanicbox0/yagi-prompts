@@ -337,13 +337,17 @@ describe('admin CMS cache + gate contract (§3.4 / §3.8)', () => {
     expect(route).toContain("refuse(403, 'admin_only')");
   });
 
-  it('routes every admin mutation through one guarded server action', () => {
-    const action = read('app', '(admin)', 'admin', 'actions.ts');
-    expect(action).toContain("'use server'");
-    expect(action).toContain('requireAdmin');
-    expect(action).toContain('dispatchAdmin');
-    // The only exported action; a second one would be a second place to forget the guard.
-    expect(action.match(/export async function/g)).toHaveLength(1);
+  it('routes every admin mutation through one guarded door', () => {
+    // 2026-08-14: the door moved from a server action to `POST /admin/do` — an action id is
+    // build-scoped, and the founder's long-lived admin tab kept posting one the newest deployment
+    // no longer knew. Same guard, same dispatcher, stable address.
+    const route = read('app', '(admin)', 'admin', 'do', 'route.ts');
+    expect(route).toContain('requireAdmin');
+    expect(route).toContain('dispatchAdmin');
+    expect(route).toContain("export const dynamic = 'force-dynamic'");
+    // POST is the only verb: a GET door would make every mutation a link a crawler can pull.
+    expect(route).toContain('export async function POST');
+    expect(route.match(/export async function (GET|PUT|PATCH|DELETE)/g)).toBeNull();
   });
 
   it('never lets the admin editor read the session outside the guard', () => {
