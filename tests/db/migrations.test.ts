@@ -26,6 +26,10 @@ describe('migrations apply on a fresh database (PLAN §6)', () => {
       'contest_entries',
       'contest_entry_writes',
       'contests',
+      // §15.2 (M10) — the cookies pivot's two new tables. `prompt_unlocks` is the permanent
+      // per-(account, prompt) unlock; `cookie_ledger` is the append-only audit whose sum the
+      // `profiles.cookie_balance` column caches for the fast read.
+      'cookie_ledger',
       'default_policy',
       'events',
       'notification_deliveries',
@@ -36,6 +40,7 @@ describe('migrations apply on a fresh database (PLAN §6)', () => {
       // §13.1 (M6) — the prompts pivot's one new table. Atomic by design: no revisions, no
       // manifest, no constraint triggers; the machinery above still guards playbooks only.
       'prompt_items',
+      'prompt_unlocks',
       'publish_assets',
       'steps',
       'stripe_events',
@@ -149,11 +154,39 @@ describe('migrations apply on a fresh database (PLAN §6)', () => {
     expect(contests).toContain('force  row level security');
     expect(contests).toContain('revoke all on public.%I from anon, authenticated');
     expect(contests).not.toMatch(/create\s+policy/i);
+
+    /**
+     * M10 §15.2 — same explicitness for the cookies tables. `cookie_ledger` records what every
+     * account spent and on which prompt, and `prompt_unlocks` is a per-person reading history;
+     * both are exactly the kind of row PostgREST must never hand to a browser key. Probed for
+     * real against the cloud in `npm run cloud:smoke`.
+     */
+    const cookies = readFileSync(join(MIGRATIONS_DIR, '0105_glue_cookies_rls.sql'), 'utf8');
+    for (const table of ['prompt_unlocks', 'cookie_ledger']) {
+      expect(cookies, `0105 covers ${table}`).toContain(`'${table}'`);
+    }
+    expect(cookies).toContain('enable row level security');
+    expect(cookies).toContain('force  row level security');
+    expect(cookies).toContain('revoke all on public.%I from anon, authenticated');
+    expect(cookies).not.toMatch(/create\s+policy/i);
     // no policies anywhere — deny-all means the absence of policies, not a permissive one
     expect(glue).not.toMatch(/create\s+policy/i);
     for (const file of [...coreMigrationFiles(), ...glueMigrationFiles()]) {
       expect(readFileSync(join(MIGRATIONS_DIR, file), 'utf8'), file).not.toMatch(/create\s+policy/i);
     }
+  });
+
+  /**
+   * M10 §15.2 — the 0103 lesson as a standing rule: a new `public` function is a new PostgREST
+   * `/rpc` surface handed to anon/authenticated by Supabase's default privileges. The cookies
+   * migration therefore creates NONE — every wallet decision lives in `lib/cookies/repo.ts`
+   * inside `transaction()`, which is also what makes it testable here.
+   */
+  it('adds the cookie schema without creating a single SQL function', () => {
+    const migration = readFileSync(join(MIGRATIONS_DIR, '0008_core_cookies.sql'), 'utf8');
+    expect(migration).not.toMatch(/create\s+(or\s+replace\s+)?function/i);
+    expect(migration).toContain('cookie_balance');
+    expect(migration).toContain('cookies_granted_at');
   });
 
   it('exposes the publish RPCs to service_role only', () => {
