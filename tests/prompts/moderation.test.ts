@@ -149,6 +149,39 @@ describe('prompt moderation operations (§13.2/F)', () => {
     expect(harness.promptsRevalidated).toBe(1);
   });
 
+  /**
+   * Founder direction (2026-08-14) — the slug follows the EN title. A blank field derives
+   * `lowercase-words-joined-by-hyphens`, and a collision walks to `-2` instead of refusing:
+   * publishing is the act, naming is the default.
+   */
+  it('derives the slug from the EN title when the field is left blank', async () => {
+    const outcome = await harness.run('prompt.create', {
+      ...authoring,
+      slug: '',
+      title: 'Golden Hour Rooftop Sprint',
+      poster: upload('poster.png', 'POSTER-BYTES', 'image/png'),
+    });
+    expect(outcome).toMatchObject({ ok: true, code: 'published', detail: 'golden-hour-rooftop-sprint' });
+    expect(await loadPromptBySlug(sql(), 'golden-hour-rooftop-sprint')).not.toBeNull();
+
+    // Same title again: the derive walks to -2 rather than bouncing off the unique index.
+    const second = await harness.run('prompt.create', {
+      ...authoring,
+      slug: '',
+      title: 'Golden Hour Rooftop Sprint',
+      poster: upload('poster.png', 'POSTER-BYTES', 'image/png'),
+    });
+    expect(second).toMatchObject({ ok: true, detail: 'golden-hour-rooftop-sprint-2' });
+
+    // A TYPED slug still validates — the founder can be deliberate when they want to be.
+    const typed = await harness.run('prompt.create', {
+      ...authoring,
+      slug: 'NOT A SLUG',
+      poster: upload('poster.png', 'POSTER-BYTES', 'image/png'),
+    });
+    expect(typed).toMatchObject({ ok: false, code: 'invalid' });
+  });
+
   it('refuses a YAGI prompt with no poster (§13.3-4 media required)', async () => {
     const outcome = await harness.run('prompt.create', authoring);
     expect(outcome).toMatchObject({ ok: false, code: 'invalid' });

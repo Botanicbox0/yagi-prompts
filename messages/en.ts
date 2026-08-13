@@ -824,6 +824,7 @@ export const en = {
     fieldPromptTitleKo: 'Title (KO)',
     fieldPromptBody: 'Prompt text',
     fieldPromptSlug: 'Slug',
+    promptSlugAutoHint: 'Leave empty — it follows the EN title, lowercase with hyphens.',
     fieldPromptHandle: 'Credit (@handle)',
     fieldItemModel: 'Model',
     fieldPromptVisibility: 'Text visibility',

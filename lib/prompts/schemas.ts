@@ -179,9 +179,18 @@ const VisibilityEnum = z.enum(VISIBILITY_ORDER);
  * YAGI authoring. §13.3-2: text defaults to `pro`; a `public` teaser is a deliberate admin choice.
  * Media is REQUIRED here (§13.3-4) and `title_ko` with it — a YAGI card that cannot render in
  * Korean is not publishable on a bilingual site.
+ *
+ * The slug is OPTIONAL (founder direction, 2026-08-14): left blank it derives from the EN title
+ * (`slugify`), which is what the founder actually wants every time — the URL should simply
+ * follow the title with hyphens. A typed slug still validates against `SlugSchema`; the derive
+ * happens in the operation, where the collision-avoidance suffix lives.
  */
 export const AuthoringSchema = z.object({
-  slug: SlugSchema,
+  slug: z
+    .literal('')
+    .transform(() => null)
+    .or(SlugSchema)
+    .nullable(),
   title: z.string().trim().min(3).max(PROMPT_TITLE_MAX),
   titleKo: z.string().trim().min(1).max(PROMPT_TITLE_MAX),
   promptText: z.string().trim().min(10).max(PROMPT_TEXT_MAX),

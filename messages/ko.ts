@@ -785,6 +785,7 @@ export const ko: Dictionary = {
     fieldPromptTitleKo: '제목 (KO)',
     fieldPromptBody: '프롬프트 본문',
     fieldPromptSlug: '슬러그',
+    promptSlugAutoHint: '비워 두면 영문 제목을 따라 소문자-대시로 자동 생성됩니다.',
     fieldPromptHandle: '크레딧 (@핸들)',
     fieldItemModel: '모델',
     fieldPromptVisibility: '텍스트 공개 범위',
