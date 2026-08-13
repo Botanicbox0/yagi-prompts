@@ -165,7 +165,7 @@ describe('migrations apply on a fresh database (PLAN §6)', () => {
      * real against the cloud in `npm run cloud:smoke`.
      */
     const cookies = readFileSync(join(MIGRATIONS_DIR, '0105_glue_cookies_rls.sql'), 'utf8');
-    for (const table of ['prompt_unlocks', 'cookie_ledger']) {
+    for (const table of ['prompt_unlocks', 'cookie_ledger', 'cookie_purchase_events']) {
       expect(cookies, `0105 covers ${table}`).toContain(`'${table}'`);
     }
     expect(cookies).toContain('enable row level security');

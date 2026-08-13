@@ -142,21 +142,20 @@ async function smokeDatabase(url: string, anonKey: string, hasServiceKey: boolea
         `${posture.rows[0]?.bad ?? '?'} table(s) out of posture`,
       );
 
-      // Finding 1's other half: the ledger must EXPLAIN the backfilled balances — a profile whose
-      // wallet says 3 with no signup line is the desync this migration exists to prevent.
+      // Finding 1's other half, measured as the actual invariant (review R2): the balance column
+      // is a CACHE of the ledger sum, so the honest probe is the equation itself — not merely
+      // "some signup row exists", which a wrong delta or a duplicate row would slip past.
       const unexplained = await client.query<{ n: string }>(
         `select count(*)::text as n
            from profiles p
-          where not exists (
-            select 1 from cookie_ledger l
-             where l.profile_id = p.id and l.reason = 'signup'
-          )`,
+          where p.cookie_balance is distinct from coalesce(
+            (select sum(l.delta)::int from cookie_ledger l where l.profile_id = p.id), 0)`,
       );
       expect(
         group,
-        'every wallet is explained by a signup ledger line',
+        'every wallet equals its ledger sum',
         Number(unexplained.rows[0]?.n ?? 1) === 0,
-        `${unexplained.rows[0]?.n ?? '?'} profile(s) unexplained`,
+        `${unexplained.rows[0]?.n ?? '?'} wallet(s) out of balance`,
       );
 
       // 0008 backfills by default: whatever profiles exist must already hold a wallet ≥ 0.
