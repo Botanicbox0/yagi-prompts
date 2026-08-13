@@ -142,9 +142,14 @@ export const CONTEST_FIXTURES: ContestFixture[] = [
     id: '9c000000-0000-4000-8000-000000000001',
     slug: 'yagi-prompts-launch-film-contest',
     status: 'draft',
+    /**
+     * §5.2 "display lines manually broken" — the demo contest is the poster the review specified,
+     * so its title carries the author's own three lines rather than whatever a width happens to
+     * produce. The hero poster sets every authored line and outlines the last one.
+     */
     title: {
-      en: 'YAGI PROMPTS LAUNCH FILM CONTEST',
-      ko: 'YAGI PROMPTS 런칭 단편 공모전',
+      en: 'YAGI PROMPTS\nLAUNCH FILM\nCONTEST',
+      ko: 'YAGI PROMPTS\n론칭 단편\n공모전',
     },
     summary: {
       en: 'Make a short film with the prompts on this site. Post it, send us the link, and the best three get paid.',
@@ -236,7 +241,12 @@ export const CONTEST_FIXTURES: ContestFixture[] = [
       en: 'A local fixture contest. It exists so the anonymous sweep has a published surface to measure.',
       ko: '로컬 픽스처 콘테스트입니다. 익명 스윕이 측정할 공개 페이지가 있어야 해서 존재합니다.',
     },
-    prize: { en: 'Fixture prize — not real', ko: '픽스처 상금 — 실제 아님' },
+    /**
+     * Carries the `·` the real prizes carry, so the sweep's published surface actually exercises
+     * the split the prize band does (total in display type, breakdown in mono) — and stays
+     * obviously fake by making the total $0.
+     */
+    prize: { en: '$0 · Fixture prize — not real', ko: '$0 · 픽스처 상금 — 실제 아님' },
     rules: {
       en: '## Fixture brief\n\nThis contest is a test fixture and awards nothing.',
       ko: '## 픽스처 브리프\n\n이 콘테스트는 테스트 픽스처이며 아무것도 수여하지 않습니다.',

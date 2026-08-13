@@ -17,6 +17,8 @@ import {
   ENTRY_WRITES_PER_DAY,
   EntrySubmissionSchema,
   RATE_WINDOW_HOURS,
+  isEntryField,
+  type EntryField,
 } from './schemas';
 
 /**
@@ -49,7 +51,12 @@ export type EntrySubmitFailure =
   | { code: 'sign_in_required' }
   | { code: 'not_found' }
   | { code: 'not_open'; detail: string }
-  | { code: 'invalid'; detail: string }
+  /**
+   * `field` names the FIRST field zod refused, so the form can mark it instead of showing a banner
+   * over five identical boxes (M9 design review, finding 5). Optional because a payload can fail
+   * for a reason that belongs to no single field.
+   */
+  | { code: 'invalid'; detail: string; field?: EntryField }
   | { code: 'rate_limited'; detail: string };
 
 export type EntrySubmitOutcome =
@@ -179,7 +186,10 @@ export async function submitEntry(
       .slice(0, 4)
       .map((issue) => `${issue.path.join('.') || '(root)'}: ${issue.message}`)
       .join('; ');
-    return { ok: false, code: 'invalid', detail };
+    // The first issue's own field, when it has one the form can point at.
+    const first = parsed.error.issues[0]?.path[0];
+    const field = typeof first === 'string' && isEntryField(first) ? first : null;
+    return { ok: false, code: 'invalid', detail, ...(field === null ? {} : { field }) };
   }
 
   const at = deps.now === undefined ? null : new Date(deps.now).toISOString();

@@ -182,6 +182,22 @@ export const EntrySubmissionSchema = z.object({
 });
 export type EntrySubmissionInput = z.infer<typeof EntrySubmissionSchema>;
 
+/**
+ * The five fields an entrant owns, as a closed enum (M9 design review, finding 5).
+ *
+ * A refusal used to travel back as `err=invalid` plus a free-text `detail`, which the form could
+ * only print as a banner — "something in the form did not check out", above five identical boxes.
+ * The enum is what lets the server SAY WHICH ONE, and it is closed on purpose: it is echoed into a
+ * URL and read back out of one, so the page must be able to reject anything that is not one of
+ * these five rather than trusting a query parameter to name a field.
+ */
+export const ENTRY_FIELDS = ['title', 'videoUrl', 'snsUrl', 'note', 'consent'] as const;
+export type EntryField = (typeof ENTRY_FIELDS)[number];
+
+export function isEntryField(value: string | undefined | null): value is EntryField {
+  return typeof value === 'string' && (ENTRY_FIELDS as readonly string[]).includes(value);
+}
+
 // ---------------------------------------------------------------------------
 // admin authoring + moderation
 // ---------------------------------------------------------------------------

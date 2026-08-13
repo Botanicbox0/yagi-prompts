@@ -235,9 +235,15 @@ export const en = {
     deadlineLabel: 'Closes {date}',
     closedLabel: 'Closed {date}',
     resultsLabel: 'Results',
-    winnersAnnounced: 'Winners named',
+    /** The closed card's top-right chip — the count IS the news (M9 review, finding 6). */
+    winnersAnnounced: 'Winners ×{count}',
     hostedBy: 'Hosted by',
     prizeLabel: 'Prize',
+    /** §14.2's meta grid: four column headers, each a word rather than a sentence. */
+    metaStatus: 'Status',
+    metaOpens: 'Opens',
+    metaDeadline: 'Deadline',
+    metaCountdown: 'Countdown',
     entryCount: '{count} entered',
     entryCountEmpty: 'No entries in yet',
     rulesHeading: 'The brief',
@@ -251,8 +257,12 @@ export const en = {
     watchLabel: 'Watch the film',
     platformLink: 'Link',
     enterCta: 'Enter this contest',
-    enterOpensCta: 'Opens {date}',
-    enterClosedCta: 'See the entries',
+    /**
+     * What an upcoming contest actually offers. The old control restated the opening date inside a
+     * button-shaped box six lines under the metadata cell that already carries it — the same fact,
+     * shaped like an action that did not exist (M9 review, finding 4).
+     */
+    readBriefCta: 'Read the brief',
     backToList: 'All contests',
     previewBadge: 'Admin preview — not published',
     posterAlt: 'Contest poster',
@@ -294,6 +304,8 @@ export const en = {
     consentTerms:
       'You keep the film. You are giving YAGI PROMPTS and the hosting brand a licence to show it, credited, on this contest page and in its promotion.',
     submitButton: 'Send my entry',
+    /** The submit button's own pending state (`useFormStatus`), so a slow POST is not silence. */
+    submitPending: 'Sending…',
     resubmitButton: 'Replace my entry',
     resubmitHeading: 'You already have an entry',
     resubmitNotice: 'Currently in: “{title}” — {status}.',
@@ -315,6 +327,8 @@ export const en = {
     errSignIn: 'Sign in first — an entry carries a credit, so it needs an account.',
     errRateLimited: 'That is ten entry edits in a day — the limit. Try again tomorrow.',
     errInvalid: 'Something in the form did not check out. Check both links start with https.',
+    /** Printed at the field the server named, so "something" stops meaning "somewhere". */
+    errField: 'This is the one to fix.',
     errNotOpen: 'This contest is not taking entries right now.',
     errNotFound: 'That contest is not published.',
   },

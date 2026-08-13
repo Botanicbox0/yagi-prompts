@@ -65,54 +65,76 @@ export function ContestCardView({
               slug={card.slug}
               brand={card.brandName}
               prize={prize}
+              prizeLabel={labels.prizeLabel}
               ratio={ratio}
             />
           )}
         </div>
 
+        {/**
+         * §14.2's chip row, at the sizes the M9 design review set (finding 6).
+         *
+         * 12px rather than 11px — below 12 an Anton SC cap at 0.12em tracking stops being a chip and
+         * becomes texture — and one weight per phase rather than one style with a colour swapped:
+         * OPEN is solid (it is the only actionable state), UPCOMING is the inverse (a promise, in
+         * the page's own ink), CLOSED is quiet (black, at 70%).
+         */}
         <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-2 p-3">
           <span
             data-phase-chip={timing.phase}
             className={[
-              'px-2 py-1 font-label text-[0.6875rem] leading-none tracking-[0.12em] uppercase',
+              'px-2 py-1 font-label text-[0.75rem] leading-none tracking-[0.12em] uppercase',
               timing.phase === 'open'
-                ? 'bg-accent text-white'
-                : 'border border-white/35 bg-black/70 text-white',
+                ? // A solid chip carries its own surface, so it keeps the plan's #0000EE against
+                  // white text (9.40:1) rather than the dark-surface tone-map (finding 2).
+                  'bg-blue text-white'
+                : timing.phase === 'upcoming'
+                  ? 'bg-white text-black'
+                  : 'bg-black/70 text-white opacity-70',
             ].join(' ')}
           >
             {phaseLabel(labels, timing.phase)}
           </span>
-          {timing.dDay && timing.phase !== 'closed' && (
+          {timing.phase === 'closed' ? (
+            card.winnerCount > 0 && (
+              <span
+                data-winners-marker
+                className="border border-white/35 bg-black/70 px-2 py-1 font-label text-[0.75rem] leading-none tracking-[0.12em] text-white uppercase"
+              >
+                {interpolate(labels.winnersAnnounced, { count: String(card.winnerCount) })}
+              </span>
+            )
+          ) : timing.dDay ? (
             <span
               data-dday
-              className="border border-white/35 bg-black/70 px-2 py-1 font-mono text-[0.6875rem] leading-none tracking-[0.08em] text-white"
+              className="border border-white/35 bg-black/70 px-2 py-1 font-mono text-[0.75rem] leading-none tracking-[0.08em] text-white"
             >
               {timing.dDay}
             </span>
-          )}
-          {timing.phase === 'closed' && card.winnerCount > 0 && (
-            <span
-              data-winners-marker
-              className="border border-white/35 bg-black/70 px-2 py-1 font-label text-[0.6875rem] leading-none tracking-[0.12em] text-white uppercase"
-            >
-              {labels.winnersAnnounced}
-            </span>
-          )}
+          ) : null}
+        </div>
+
+        {/* The brand, BOXED and on the poster where it belongs — it is the "who is asking", and as
+            10.4px unboxed text in the meta line it read as a caption for the title. */}
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-end justify-start gap-2 p-3">
+          <span
+            data-brand-chip
+            className="border border-white/35 bg-black/70 px-2 py-1 font-label text-[0.75rem] leading-none tracking-[0.12em] text-white uppercase"
+          >
+            {card.brandName}
+          </span>
         </div>
       </div>
 
       <div className="flex flex-1 flex-col gap-3 p-4">
-        <div className="flex items-center justify-between gap-3 font-label text-[0.65rem] tracking-[0.12em] uppercase">
-          <span data-brand-chip className="opacity-60">
-            {card.brandName}
-          </span>
-          <span className="text-accent">{dateLine}</span>
-        </div>
+        <p className="text-accent font-label text-[0.75rem] tracking-[0.12em] uppercase">
+          {dateLine}
+        </p>
 
         <h3 className="font-display text-[clamp(1.35rem,2vw,1.85rem)] leading-[0.95] font-black uppercase">
           <a
             href={contestHref(locale, card.slug)}
-            className="after:absolute after:inset-0 after:content-['']"
+            className="whitespace-pre-line after:absolute after:inset-0 after:content-['']"
           >
             {title}
           </a>

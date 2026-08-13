@@ -67,7 +67,10 @@ export function ContestHero({
 
   return (
     <div ref={rootRef} data-contest-hero className="overflow-hidden border-b border-hairline">
-      <div ref={innerRef} className="aspect-4/3 w-full sm:aspect-16/9 lg:aspect-21/9">
+      {/* 4:5 below 640, not 4:3 (M9 design review, finding 1): the typographic poster is a real
+          composition at every tier, and a landscape band at phone width leaves it ~90px of black to
+          set a three-line title and a prize panel in. Portrait is the format a poster is. */}
+      <div ref={innerRef} className="aspect-4/5 w-full sm:aspect-16/9 lg:aspect-21/9">
         {video ? (
           <video
             className="h-full w-full object-cover"

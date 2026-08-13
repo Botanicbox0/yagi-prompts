@@ -49,7 +49,11 @@ async function run(slug: string, form: FormData): Promise<string> {
   if (!result.ok) {
     const detail =
       'detail' in result && result.detail ? `&detail=${encodeURIComponent(String(result.detail))}` : '';
-    return `err=${result.code}${detail}`;
+    // §14.2 / M9 review, finding 5: the refusal names the field, so the form can mark it rather
+    // than printing a banner over five identical boxes. The value is a closed enum
+    // (`ENTRY_FIELDS`), re-validated when it is read back off the URL.
+    const field = 'field' in result && result.field ? `&field=${result.field}` : '';
+    return `err=${result.code}${detail}${field}`;
   }
 
   // A new entry does not change the public page (it is pending), but the contest card's approved

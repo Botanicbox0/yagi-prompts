@@ -10,15 +10,11 @@ import { AdRail } from '@/components/ad/ad-rail';
 import { AdBanner, AdCard } from '@/components/ad/ad-card';
 import {
   ContestBackLink,
-  ContestCta,
-  ContestEntries,
+  ContestBody,
   ContestHeader,
   ContestMeta,
   ContestPrize,
-  ContestRules,
-  ContestWinners,
 } from '@/components/contests/detail';
-import { CONTEST_MAILTO, ContestHireStrip } from '@/components/contests/rails';
 import { contestLabels } from '@/components/contests/labels';
 
 /**
@@ -77,27 +73,28 @@ export default async function ContestDetailPage({ params }: RouteParams) {
             (§4's band rule keeps text-critical content out of the right 340px at ≥1440). */}
         <ContestHeader contest={contest} locale={locale} labels={labels} />
 
+        <div className="band">
+          <ContestMeta contest={contest} locale={locale} labels={labels} />
+        </div>
+
+        {/* §14.2's "money shot", as a full-width inversion — so it is also outside the rail anchor
+            (M9 design review, finding 3). A band that stopped 340px short of the right edge would be
+            a panel, and §5.1 makes the black↔white inversion the identity. */}
+        <ContestPrize contest={contest} locale={locale} labels={labels} />
+
         <div id="contest-rail-anchor" className="relative">
           <AdRail anchorId="contest-rail-anchor">
             <AdCard labels={ads} />
           </AdRail>
 
           <div className="band">
-            <ContestMeta contest={contest} locale={locale} labels={labels} />
-            <ContestPrize contest={contest} locale={locale} labels={labels} />
-            <ContestCta contest={contest} locale={locale} labels={labels} />
-            <ContestRules contest={contest} locale={locale} labels={labels} />
-            <ContestWinners contest={contest} labels={labels} />
-            <ContestEntries contest={contest} labels={labels} />
+            <ContestBody contest={contest} locale={locale} labels={labels} />
             <ContestBackLink locale={locale} labels={labels} />
 
-            <ContestHireStrip
-              title={dict.contests.hireTitle}
-              body={dict.contests.hireBody}
-              cta={dict.contests.hireCta}
-              mailto={CONTEST_MAILTO}
-            />
-
+            {/* §3.3/§14.2 — the B2B pitch belongs to the LISTING, which is where a brand who does
+                not yet have a contest is standing. Repeating it under every detail page, eight
+                lines above the footer that carries it a third time, was the same sentence three
+                times (M9 design review, finding 10). */}
             <div className="mt-16 rail:hidden">
               <AdBanner labels={ads} />
             </div>

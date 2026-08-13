@@ -79,18 +79,22 @@ export function ContestsEmptyState({
   mailto: string;
 }) {
   return (
-    <section
-      data-contests-empty
-      className="mt-12 border-t border-hairline pt-12 lg:mt-16 lg:pt-16"
-    >
+    /**
+     * The spacing and the CTA are both from the M9 design review (finding 9): 128px of combined
+     * margin+padding above the one statement on an otherwise empty page read as a rendering
+     * failure rather than as a decision, and a 14px CTA under 56px display type read as a
+     * footnote. 80px of air (64 on a phone), and a CTA with a real touch target under it.
+     */
+    <section data-contests-empty className="mt-8 border-t border-hairline pt-8 lg:mt-10 lg:pt-10">
       <div className="max-w-detail">
-        <p className="font-display text-[clamp(2rem,5vw,3.5rem)] leading-[0.92] font-black uppercase">
+        {/* §5.2 "display lines manually broken" — the KO copy carries its own breaks. */}
+        <p className="font-display text-[clamp(2rem,5vw,3.5rem)] leading-[0.92] font-black whitespace-pre-line uppercase">
           {title}
         </p>
         <p className="mt-6 text-body opacity-70">{body}</p>
         <a
           href={mailto}
-          className="text-accent mt-9 inline-block border border-current px-5 py-2.5 font-label text-label uppercase"
+          className="text-accent mt-9 inline-flex min-h-12 items-center border border-current px-6 py-3.5 font-label text-[1rem] tracking-[0.1em] uppercase"
         >
           <TextSwap>{cta} →</TextSwap>
         </a>

@@ -60,6 +60,49 @@ describe('design tokens (§5.1/§5.2/§4)', () => {
     );
   });
 
+  /**
+   * M9 design review, finding 8. The contests surface set every display size as a raw
+   * `text-[clamp(…)]` utility, which put those sizes outside the type system — and, the part that
+   * shows, outside the §5.2 Korean downscale: `html:lang(ko) .text-display` cannot reach a size
+   * that was never named, so Hangul rendered at the full English size with a latin leading and
+   * collided line-to-line. Each contest slot is named once here, with its 0.85× twin.
+   */
+  it('names the §14.2 contest display slots, each with a KO twin (§5.2)', () => {
+    const utilities = globals.slice(globals.indexOf('@layer utilities'));
+    for (const slot of [
+      '.text-contest-poster',
+      '.text-contest-poster-prize',
+      '.text-contest-card',
+      '.text-contest-prize',
+      '.text-contest-section',
+    ]) {
+      expect(utilities, slot).toContain(`${slot} {`);
+      expect(utilities, `ko ${slot}`).toContain(`html:lang(ko) ${slot} {`);
+    }
+
+    // The three sizes finding 1 set on the hero poster, in the three steps its grid moves in.
+    expect(utilities).toContain('font-size: clamp(4.75rem, 9vw, 8.5rem)');
+    // …and the prize band's own slot (finding 3).
+    expect(utilities).toContain('font-size: clamp(3.5rem, 8vw, 7rem)');
+    // …and one size for every section heading (finding 7).
+    expect(utilities).toContain('font-size: clamp(2rem, 4vw, 3rem)');
+
+    // Every Korean twin buys back leading: Hangul fills its em box where latin does not. (The
+    // per-breakpoint twins restate the size only; the leading is set once, on the base rule.)
+    for (const slot of ['poster', 'poster-prize', 'card', 'prize', 'section']) {
+      const rules = [
+        ...utilities.matchAll(
+          new RegExp(`html:lang\\(ko\\) \\.text-contest-${slot} \\{([^}]*)\\}`, 'g'),
+        ),
+      ];
+      expect(rules.length, slot).toBeGreaterThan(0);
+      expect(
+        rules.some((rule) => rule[1]!.includes('line-height: 1')),
+        `ko .text-contest-${slot} must buy back leading`,
+      ).toBe(true);
+    }
+  });
+
   it('carries the §4 layout math, including the 1440 rail tier', () => {
     expect(globals).toContain('--breakpoint-rail: 90rem');
     expect(globals).toContain('--container-rail: 18.75rem');

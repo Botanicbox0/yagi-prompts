@@ -36,6 +36,10 @@ export function ContestEntryCard({
       className="card group relative flex h-full flex-col border border-hairline"
     >
       <div
+        // §5.1/M9 design review, finding 2: a black panel is a DARK SURFACE, and it has to say so —
+        // otherwise the accent on the winner badge and the tick resolves to the light-surface
+        // #0000EE, which measures 2.23:1 against this exact background.
+        data-theme="dark"
         className="card__media relative flex min-h-[11rem] flex-col justify-between overflow-hidden bg-black p-5 text-white"
       >
         <span
@@ -51,7 +55,10 @@ export function ContestEntryCard({
           {placed ? (
             <span
               data-winner-badge
-              className="bg-accent px-2 py-1 font-display text-[0.9rem] leading-none font-black tracking-tight uppercase"
+              // The one blue that stays #0000EE inside a dark panel: a SOLID chip carries white
+              // text on its own surface (9.40:1), where the lifted #4C6FFF would drop to 3.6:1.
+              // Finding 2's second half — the tone-map is for ink on black, not for chips.
+              className="bg-blue px-2 py-1 font-display text-[0.9rem] leading-none font-black tracking-tight text-white uppercase"
             >
               {placementLabel(labels, entry.placement!)}
             </span>

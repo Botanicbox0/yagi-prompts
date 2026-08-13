@@ -218,8 +218,13 @@ export const ko: Dictionary = {
   },
   contests: {
     eyebrow: '콘테스트',
-    line1: '브리프는',
-    line2: '브랜드가.',
+    /**
+     * §5.2 "display lines manually broken" — the KO hero is broken where the SENTENCE breaks, not
+     * where the English one does. "브리프는 / 브랜드가." inverted the word order to imitate the
+     * English line break and left the verb missing (M9 review, finding 8).
+     */
+    line1: '브랜드가',
+    line2: '브리프를 건넵니다.',
     intro:
       '브랜드가 열고 이 스튜디오가 운영하는 영상 공모전입니다. 참가 폼에 적는 건 작품 링크와 평소 올리는 계정, 그게 전부입니다.',
     railOpen: '지금 접수 중',
@@ -235,9 +240,13 @@ export const ko: Dictionary = {
     deadlineLabel: '{date} 마감',
     closedLabel: '{date} 마감됨',
     resultsLabel: '결과',
-    winnersAnnounced: '수상작 발표',
+    winnersAnnounced: '수상작 ×{count}',
     hostedBy: '주최',
     prizeLabel: '상금',
+    metaStatus: '상태',
+    metaOpens: '시작',
+    metaDeadline: '마감',
+    metaCountdown: '남은 기간',
     entryCount: '{count}편 출품',
     entryCountEmpty: '아직 출품작이 없습니다',
     rulesHeading: '브리프',
@@ -251,12 +260,12 @@ export const ko: Dictionary = {
     watchLabel: '작품 보기',
     platformLink: '링크',
     enterCta: '이 콘테스트에 참가하기',
-    enterOpensCta: '{date} 시작',
-    enterClosedCta: '출품작 보기',
+    readBriefCta: '브리프 읽기',
     backToList: '전체 콘테스트',
     previewBadge: '관리자 미리보기 — 아직 공개 전',
     posterAlt: '콘테스트 포스터',
-    emptyTitle: '아직 열린 콘테스트가 없습니다.',
+    /** Authored line breaks — the empty state is display type, and display type is broken by hand. */
+    emptyTitle: '지금은\n열린 콘테스트가\n없습니다.',
     emptyBody:
       '지금 진행 중인 콘테스트는 없습니다. 첫 번째는 브랜드와 함께 이 스튜디오에서 만듭니다. 브리프 하나, 상금 하나, 그리고 마지막에 남는 작품들.',
     emptyCta: '스튜디오와 콘테스트 열기',
@@ -286,6 +295,7 @@ export const ko: Dictionary = {
     consentTerms:
       '작품의 권리는 그대로 출품자에게 있습니다. YAGI PROMPTS와 주최 브랜드가 이 콘테스트 페이지와 홍보에서 크레딧과 함께 보여줄 수 있는 이용 허락만 주시는 것입니다.',
     submitButton: '출품하기',
+    submitPending: '보내는 중…',
     resubmitButton: '출품작 교체하기',
     resubmitHeading: '이미 출품한 작품이 있습니다',
     resubmitNotice: '현재 등록: “{title}” — {status}.',
@@ -306,6 +316,7 @@ export const ko: Dictionary = {
     errSignIn: '먼저 로그인해 주세요. 크레딧이 붙는 출품이라 계정이 필요합니다.',
     errRateLimited: '하루 열 번이 한도입니다. 내일 다시 시도해 주세요.',
     errInvalid: '입력값 중 확인이 필요한 항목이 있습니다. 두 링크가 https로 시작하는지 확인해 주세요.',
+    errField: '이 항목을 확인해 주세요.',
     errNotOpen: '지금은 이 콘테스트의 접수 기간이 아닙니다.',
     errNotFound: '공개된 콘테스트가 아닙니다.',
   },

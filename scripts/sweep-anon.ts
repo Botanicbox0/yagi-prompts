@@ -772,10 +772,12 @@ async function sweepContestsListing(locale: string, contests: ContestProbe[]): P
   expectEqual('renders 200', page.status, 200);
 
   // Positive controls: the page is a real page, not an error dressed as one.
+  // M9 design review, finding 8: the KO hero is broken where the SENTENCE breaks
+  // ("브랜드가 / 브리프를 건넵니다."), not where the English one does.
   expectPresent(
     'the display headline',
     page.body,
-    locale === 'ko' ? '브리프는' : 'BRANDS BRING',
+    locale === 'ko' ? '브리프를 건넵니다' : 'BRANDS BRING',
   );
   expectPresent('the OPEN rail', page.body, 'data-contest-rail="open"');
   expectPresent(

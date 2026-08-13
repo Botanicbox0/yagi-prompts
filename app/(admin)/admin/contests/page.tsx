@@ -132,7 +132,11 @@ function ContestFields({ row, dict }: { row: ContestRow | null; dict: Dict }) {
         </Field>
       </div>
 
-      <LocalePair label={a.fieldContestTitle} name="title" value={row?.title ?? null} />
+      {/* §5.2 "display lines manually broken" — a contest title is set as a POSTER, so the editor
+          has to be able to author the break. Three rows rather than one line, so a line ending is a
+          decision the author took rather than whatever the browser's wrapping produced
+          (M9 design review, finding 8). */}
+      <LocalePair label={a.fieldContestTitle} name="title" value={row?.title ?? null} multiline />
       <LocalePair label={a.fieldContestSummary} name="summary" value={row?.summary ?? null} multiline />
       <LocalePair
         label={a.fieldContestPrize}

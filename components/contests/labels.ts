@@ -20,6 +20,11 @@ export interface ContestLabels {
   winnersAnnounced: string;
   hostedBy: string;
   prizeLabel: string;
+  /** §14.2 meta grid (M9 design review, finding 4) — four column headers, not four sentences. */
+  metaStatus: string;
+  metaOpens: string;
+  metaDeadline: string;
+  metaCountdown: string;
   entryCount: string;
   entryCountEmpty: string;
   rulesHeading: string;
@@ -33,8 +38,8 @@ export interface ContestLabels {
   watchLabel: string;
   platformLink: string;
   enterCta: string;
-  enterOpensCta: string;
-  enterClosedCta: string;
+  /** What an early reader can actually DO, in place of the old "Opens {date}" pseudo-button. */
+  readBriefCta: string;
   backToList: string;
   previewBadge: string;
   posterAlt: string;
@@ -53,6 +58,10 @@ export function contestLabels(dict: Dictionary): ContestLabels {
     winnersAnnounced: c.winnersAnnounced,
     hostedBy: c.hostedBy,
     prizeLabel: c.prizeLabel,
+    metaStatus: c.metaStatus,
+    metaOpens: c.metaOpens,
+    metaDeadline: c.metaDeadline,
+    metaCountdown: c.metaCountdown,
     entryCount: c.entryCount,
     entryCountEmpty: c.entryCountEmpty,
     rulesHeading: c.rulesHeading,
@@ -66,8 +75,7 @@ export function contestLabels(dict: Dictionary): ContestLabels {
     watchLabel: c.watchLabel,
     platformLink: c.platformLink,
     enterCta: c.enterCta,
-    enterOpensCta: c.enterOpensCta,
-    enterClosedCta: c.enterClosedCta,
+    readBriefCta: c.readBriefCta,
     backToList: c.backToList,
     previewBadge: c.previewBadge,
     posterAlt: c.posterAlt,

@@ -226,6 +226,110 @@ html:lang(ko) {
     line-height: 1;
     letter-spacing: -0.012em;
   }
+
+  /* --- §14.2 contest display slots ---------------------------------------
+     The contests surface set every display size as a raw `text-[clamp(…)]` utility, which put those
+     sizes one step OUTSIDE the type system — and, the reason this block exists, outside the §5.2 KO
+     downscale: `html:lang(ko) .text-display` cannot reach a size that was never named. Each slot
+     below is therefore declared once, with its Korean twin at the 0.85× rule and `line-height: 1`
+     (Hangul fills its em box, so a 0.82–0.92 latin leading collides line-to-line).
+
+     The poster slot is the only one that steps rather than clamps: §14.2's hero poster is a real
+     responsive composition (24px / 32px / 56px padding, 1 → 8 → 12 columns), so its type moves in
+     the same three steps its grid does instead of sliding through them. */
+  .text-contest-poster {
+    font-size: 3rem; /* 48px — the <640 single-column poster */
+    line-height: 0.82;
+    letter-spacing: -0.02em;
+  }
+
+  .text-contest-poster-prize {
+    font-size: 2rem;
+    line-height: 0.9;
+    letter-spacing: -0.02em;
+  }
+
+  html:lang(ko) .text-contest-poster {
+    font-size: 2.55rem;
+    line-height: 1;
+  }
+
+  html:lang(ko) .text-contest-poster-prize {
+    font-size: 1.7rem;
+    line-height: 1;
+  }
+
+  @media (min-width: 40rem) {
+    .text-contest-poster {
+      font-size: 4rem; /* 64px — the 640–1023 eight-column tier */
+    }
+
+    .text-contest-poster-prize {
+      font-size: 3rem; /* 48px */
+    }
+
+    html:lang(ko) .text-contest-poster {
+      font-size: 3.4rem;
+    }
+
+    html:lang(ko) .text-contest-poster-prize {
+      font-size: 2.55rem;
+    }
+  }
+
+  @media (min-width: 64rem) {
+    .text-contest-poster {
+      font-size: clamp(4.75rem, 9vw, 8.5rem); /* 76 → 136px at the 12-column tier */
+    }
+
+    .text-contest-poster-prize {
+      font-size: clamp(3rem, 5.3vw, 5rem); /* 48 → 80px */
+    }
+
+    html:lang(ko) .text-contest-poster {
+      font-size: clamp(4.0375rem, 7.65vw, 7.225rem);
+    }
+
+    html:lang(ko) .text-contest-poster-prize {
+      font-size: clamp(2.55rem, 4.505vw, 4.25rem);
+    }
+  }
+
+  /* The card tile's own title — smaller frame, same rule. */
+  .text-contest-card {
+    font-size: clamp(1.75rem, 6.5vw, 3.5rem);
+    line-height: 0.86;
+    letter-spacing: -0.02em;
+  }
+
+  html:lang(ko) .text-contest-card {
+    font-size: clamp(1.4875rem, 5.525vw, 2.975rem);
+    line-height: 1;
+  }
+
+  /* §14.2 "prize in display type (the money shot of the page)" — the TOTAL only. */
+  .text-contest-prize {
+    font-size: clamp(3.5rem, 8vw, 7rem);
+    line-height: 0.86;
+    letter-spacing: -0.02em;
+  }
+
+  html:lang(ko) .text-contest-prize {
+    font-size: clamp(2.975rem, 6.8vw, 5.95rem);
+    line-height: 1;
+  }
+
+  /* One size for every section heading on the detail page (brief / winners / entries). */
+  .text-contest-section {
+    font-size: clamp(2rem, 4vw, 3rem);
+    line-height: 0.92;
+    letter-spacing: -0.015em;
+  }
+
+  html:lang(ko) .text-contest-section {
+    font-size: clamp(1.7rem, 3.4vw, 2.55rem);
+    line-height: 1;
+  }
 }
 
 @layer components {

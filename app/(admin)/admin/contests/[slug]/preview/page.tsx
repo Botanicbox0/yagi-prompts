@@ -4,13 +4,10 @@ import { getDictionary } from '@/lib/i18n/dictionaries';
 import { getLocaleFromHeaders } from '@/lib/i18n/server';
 import { ADMIN_CONTESTS_PATH } from '@/lib/contests/links';
 import {
-  ContestCta,
-  ContestEntries,
+  ContestBody,
   ContestHeader,
   ContestMeta,
   ContestPrize,
-  ContestRules,
-  ContestWinners,
 } from '@/components/contests/detail';
 import { contestLabels } from '@/components/contests/labels';
 import { BUTTON } from '@/components/admin/chrome';
@@ -61,11 +58,10 @@ export default async function AdminContestPreviewPage({
         <ContestHeader contest={contest} locale={locale} labels={labels} />
         <div className="band">
           <ContestMeta contest={contest} locale={locale} labels={labels} />
-          <ContestPrize contest={contest} locale={locale} labels={labels} />
-          <ContestCta contest={contest} locale={locale} labels={labels} />
-          <ContestRules contest={contest} locale={locale} labels={labels} />
-          <ContestWinners contest={contest} labels={labels} />
-          <ContestEntries contest={contest} labels={labels} />
+        </div>
+        <ContestPrize contest={contest} locale={locale} labels={labels} />
+        <div className="band">
+          <ContestBody contest={contest} locale={locale} labels={labels} />
         </div>
       </main>
     </div>
