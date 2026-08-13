@@ -797,6 +797,8 @@ export const ko: Dictionary = {
     rejectReasonHint: '제출자가 내 계정에서 읽습니다. 구체적으로, 짧게 적어 주세요.',
     feature: '추천으로',
     unfeature: '추천 해제',
+    makePublic: '전체 공개로',
+    makePro: '쿠키 잠금으로',
     saveEdits: '저장',
     publishPrompt: '프롬프트 게시',
     previewMedia: '스테이징 미디어',

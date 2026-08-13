@@ -836,6 +836,9 @@ export const en = {
     rejectReasonHint: 'The submitter reads this on their account. Be specific and be quick.',
     feature: 'Feature',
     unfeature: 'Unfeature',
+    // Founder direction (2026-08-13): free presets are a one-press decision on the list.
+    makePublic: 'Open to everyone',
+    makePro: 'Back behind cookies',
     saveEdits: 'Save',
     publishPrompt: 'Publish prompt',
     previewMedia: 'Staged media',

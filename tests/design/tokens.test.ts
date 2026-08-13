@@ -143,6 +143,43 @@ describe('design tokens (§5.1/§5.2/§4)', () => {
   });
 
   /**
+   * Founder pass (2026-08-13, fonts). Two stack facts that each broke a real render:
+   * Satoshi finally exists (the EN body was falling to system faces — "the strongest remaining
+   * AI-template tell"), and the KO mono stack carries Pretendard right behind Geist Mono —
+   * Geist has no Hangul, so mono-styled Korean sentences were rendering through the browser's
+   * last-resort fallback.
+   */
+  it('loads Satoshi at the head of the EN body, and Hangul never falls out of the mono stack', () => {
+    expect(globals).toMatch(/--stack-body:\s*var\(--font-satoshi\)/);
+    const koBlock = globals.slice(globals.indexOf('html:lang(ko) {'));
+    const koStacks = koBlock.slice(0, koBlock.indexOf('}'));
+    // The alias must come FIRST: after the geist var it sits behind that variable's generic
+    // `monospace` terminal and never matches anything (per-glyph fallback stops at a generic).
+    expect(koStacks).toMatch(/--stack-mono:\s*'Pretendard Hangul',\s*var\(--font-geist-mono\)/);
+
+    // The generated alias file: present, latin-free, linked from every root layout.
+    const hangulMono = readFileSync(
+      fileURLToPath(new URL('../../public/fonts/pretendard/pretendard-hangul-mono.css', import.meta.url)),
+      'utf8',
+    );
+    expect(hangulMono).toContain("font-family: 'Pretendard Hangul';");
+    expect(hangulMono).not.toMatch(/unicode-range:[^;]*U\+00/i);
+    for (const layout of ['../../app/(marketing)/[locale]/layout.tsx', '../../app/(app)/layout.tsx', '../../app/(admin)/layout.tsx']) {
+      const source = readFileSync(fileURLToPath(new URL(layout, import.meta.url)), 'utf8');
+      expect(source, layout).toContain('/fonts/pretendard/pretendard-hangul-mono.css');
+    }
+
+    const fonts = readFileSync(
+      fileURLToPath(new URL('../../app/fonts.ts', import.meta.url)),
+      'utf8',
+    );
+    expect(fonts).toContain("variable: '--font-satoshi'");
+    expect(fonts).toContain('satoshi-400.woff2');
+    expect(fonts).toContain('satoshi-500.woff2');
+    expect(fonts).toMatch(/satoshi\.variable/);
+  });
+
+  /**
    * Post-M9 production render-verify. `footer.hireCta` — "스튜디오와 함께 작업하기" — wrapped as
    * "…작업하 / 기" on the live contests page: display type breaking INSIDE a Korean word. Latin
    * never does this (spaces are its only break points), so §5's manual-line-break doctrine was

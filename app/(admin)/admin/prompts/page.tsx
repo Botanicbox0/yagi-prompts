@@ -261,6 +261,21 @@ function PublishedItem({ row, dict }: { row: PromptRow; dict: Dict }) {
       </OpForm>
 
       <div className="mt-3 flex flex-wrap gap-2">
+        {/* Founder direction (2026-08-13): free presets are ONE press. YAGI rows only — a
+            community row is always public, so a toggle there would be a control that lies. */}
+        {row.source === 'yagi' && row.textVisibility !== 'hidden' && (
+          <OpForm op="prompt.visibility" back={ADMIN_PROMPTS_PATH}>
+            <input type="hidden" name="id" value={row.id} />
+            <input
+              type="hidden"
+              name="textVisibility"
+              value={row.textVisibility === 'pro' ? 'public' : 'pro'}
+            />
+            <button type="submit" className={BUTTON} data-visibility-toggle={row.slug}>
+              {row.textVisibility === 'pro' ? a.makePublic : a.makePro}
+            </button>
+          </OpForm>
+        )}
         <OpForm op="prompt.feature" back={ADMIN_PROMPTS_PATH}>
           <input type="hidden" name="id" value={row.id} />
           <input type="hidden" name="featured" value={row.featured ? 'false' : 'true'} />
