@@ -77,8 +77,17 @@ export function file(form: FormData, name: string): File | null {
   if (value === null || typeof value === 'string') return null;
   const candidate = value as File;
   if (typeof candidate.arrayBuffer !== 'function') return null;
-  // An untouched `<input type="file">` still posts an empty File in some runtimes.
-  return candidate.size > 0 || candidate.name !== '' ? candidate : null;
+  /**
+   * ZERO BYTES IS NOT A FILE. An untouched `<input type="file">` still posts an empty part, and
+   * the old guard only ignored it when the NAME was empty too — which the browser/React server-
+   * action encoding does not guarantee: it arrives named (`blob`) with size 0 and no type, so
+   * every admin save that did not re-upload media was refused with `upload: poster bad_type`.
+   * (Reproduced locally 2026-08-14 after fixing the dev-identity lookup that had made the admin
+   * un-renderable locally; it is the "저장이 안 된다" the founder reported.)
+   *
+   * The rule is now the honest one: a real upload always has bytes.
+   */
+  return candidate.size > 0 ? candidate : null;
 }
 
 /** Repeated fields (`paramKey` × N) zipped into rows, blank keys dropped. */

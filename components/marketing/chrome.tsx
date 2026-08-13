@@ -91,5 +91,6 @@ export function adLabels(dict: Dictionary) {
     placeholder: dict.ad.placeholder,
     pitch: dict.ad.pitch,
     contact: dict.ad.contact,
+    contactLabel: dict.ad.contactLabel,
   };
 }

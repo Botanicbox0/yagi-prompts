@@ -92,7 +92,9 @@ export function PromptCardMedia({
       onFocus={arm}
       onBlur={disarm}
       data-armed={armed ? 'true' : 'false'}
-      className={['card__media relative overflow-hidden', className].filter(Boolean).join(' ')}
+      /* Black ground: the card is a fixed 16:9 window (founder 2026-08-14) and a portrait result
+         is letterboxed into it, so the bars are part of the design rather than a gap. */
+      className={['card__media relative overflow-hidden bg-black', className].filter(Boolean).join(' ')}
       style={{ aspectRatio: ratio }}
     >
       {poster ? (
@@ -104,7 +106,7 @@ export function PromptCardMedia({
           {...(poster.h ? { height: poster.h } : {})}
           loading="lazy"
           decoding="async"
-          className="h-full w-full object-cover"
+          className="h-full w-full object-contain"
         />
       ) : (
         fallback
@@ -113,7 +115,7 @@ export function PromptCardMedia({
       {armed && video !== null && (
         <video
           ref={videoRef}
-          className="absolute inset-0 h-full w-full object-cover"
+          className="absolute inset-0 h-full w-full object-contain"
           autoPlay
           muted
           loop

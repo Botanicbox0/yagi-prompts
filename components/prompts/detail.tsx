@@ -27,6 +27,21 @@ import type { PromptLabels } from './labels';
 const CTA_CLASS =
   'inline-block border border-current px-4 py-2 font-label text-eyebrow uppercase';
 
+/** `audio/mpeg` → `MP3`. The reader wants the format, not the MIME type. */
+function audioFormat(mime: string): string {
+  const subtype = mime.split(';')[0]!.split('/')[1] ?? '';
+  const known: Record<string, string> = {
+    mpeg: 'MP3',
+    'x-wav': 'WAV',
+    wav: 'WAV',
+    mp4: 'M4A',
+    aac: 'AAC',
+    ogg: 'OGG',
+    flac: 'FLAC',
+  };
+  return known[subtype] ?? subtype.toUpperCase();
+}
+
 export function PromptHeader({
   prompt,
   labels,
@@ -65,25 +80,42 @@ export function PromptHeader({
         }
       />
 
-      {/* The audio result (founder direction, 2026-08-13): playable inline, downloadable in one
-          press. The href carries `?download=1` so the route answers Content-Disposition —
-          the anchor `download` attribute alone is ignored cross-origin. */}
+      {/**
+       * The attached audio file (founder direction 2026-08-13, redesigned 2026-08-14: the first
+       * cut was a bare label, a text link and a naked native player — "너무 투박"). It is now one
+       * §5 unit: a black inverted strip that reads as part of the media block above it, the format
+       * as a mono fact, and the download as a real bordered control rather than a sentence.
+       * `?download=1` is what makes the route answer `Content-Disposition: attachment` — the
+       * anchor attribute alone is ignored cross-origin.
+       */}
       {prompt.audio && (
-        <div data-prompt-audio className="mt-6 border border-hairline p-4">
-          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-            <span className="font-label text-eyebrow uppercase opacity-60">
-              {labels.audioLabel}
-            </span>
+        <div data-prompt-audio data-theme="dark" className="mt-4 bg-surface p-5 text-on-surface">
+          <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
+            <div className="flex items-baseline gap-3">
+              <span className="font-label text-eyebrow uppercase opacity-60">
+                {labels.audioLabel}
+              </span>
+              <span className="font-mono text-[0.7rem] tracking-[0.08em] uppercase opacity-40">
+                {audioFormat(prompt.audio.mime)}
+              </span>
+            </div>
             <a
               href={`${prompt.audio.src}${prompt.audio.src.includes('?') ? '&' : '?'}download=1`}
               download
               data-audio-download
-              className="text-accent font-mono text-code underline-offset-4 hover:underline"
+              className="inline-flex items-center gap-2 border border-current px-4 py-2 font-label text-[0.68rem] tracking-[0.12em] uppercase"
             >
-              {labels.audioDownload} ↓
+              <TextSwap>{labels.audioDownload}</TextSwap>
+              <span aria-hidden>↓</span>
             </a>
           </div>
-          <audio controls preload="none" src={prompt.audio.src} className="mt-3 w-full" />
+          {/* The native player, kept but framed — a custom transport would be a second product. */}
+          <audio
+            controls
+            preload="none"
+            src={prompt.audio.src}
+            className="mt-4 h-10 w-full [color-scheme:dark]"
+          />
         </div>
       )}
 
