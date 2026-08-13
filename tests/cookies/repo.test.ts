@@ -12,6 +12,11 @@ import {
   UNLOCK_COST,
   decideUnlockPanel,
 } from '@/lib/cookies/wallet';
+import {
+  creditCookiePack,
+  isCookiePackPurchasable,
+  startCookiePackPurchase,
+} from '@/lib/cookies/purchase';
 import { loadPromptBySlug } from '@/lib/prompts/repo';
 import type { SqlRunner } from '@/lib/db/sql-runner';
 import { FIXTURE_USERS } from '../../scripts/fixtures';
@@ -378,6 +383,40 @@ describe('cookie wallet (§15.1)', () => {
     await expect(grantPurchase(sql(), FREE, 0)).rejects.toThrow();
     await expect(grantPurchase(sql(), FREE, -5)).rejects.toThrow();
     await expect(grantPurchase(sql(), FREE, 2.5)).rejects.toThrow();
+  });
+});
+
+describe('cookie pack purchase seam (§15.1-5)', () => {
+  let harness: PromptHarness;
+
+  beforeEach(async () => {
+    harness = await promptHarness();
+  });
+  afterEach(async () => harness.close());
+
+  it('is not purchasable and starts nothing until an M8 gateway is connected', async () => {
+    expect(isCookiePackPurchasable()).toBe(false);
+    expect(await startCookiePackPurchase(FREE, '/en/prompts/neon-alley-dolly')).toEqual({
+      status: 'unavailable',
+    });
+  });
+
+  it('credits exactly the pack when the (future) webhook calls in', async () => {
+    await harness.sql.query(
+      `update profiles set cookie_balance = 0, cookies_granted_at = now() where id = $1`,
+      [FREE],
+    );
+    expect(await creditCookiePack(harness.sql, FREE)).toBe(true);
+    const { rows } = await harness.sql.query<{ cookie_balance: number }>(
+      'select cookie_balance from profiles where id = $1',
+      [FREE],
+    );
+    expect(rows[0]?.cookie_balance).toBe(PACK_COOKIES);
+    const ledger = await harness.sql.query<{ delta: number; reason: string }>(
+      'select delta, reason from cookie_ledger where profile_id = $1',
+      [FREE],
+    );
+    expect(ledger.rows).toEqual([{ delta: PACK_COOKIES, reason: 'purchase' }]);
   });
 });
 

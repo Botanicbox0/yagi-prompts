@@ -38,6 +38,7 @@ export interface PromptLabels {
   weeklyLine: string;
   packTitle: string;
   packNote: string;
+  packCta: string;
   packUnavailableBody: string;
 }
 
@@ -73,6 +74,7 @@ export function promptLabels(dict: Dictionary): PromptLabels {
     weeklyLine: dict.cookies.weeklyLine,
     packTitle: dict.cookies.packTitle,
     packNote: dict.cookies.packNote,
+    packCta: dict.cookies.packCta,
     // §15.1-5 — the pack renders the same honest not-connected state billing does (§11).
     packUnavailableBody: dict.billing.unavailableBody,
   };

@@ -63,6 +63,7 @@ export const en = {
     weeklyLine: 'One free cookie lands every week — it is added when you visit.',
     packTitle: '{count} cookies · {price}',
     packNote: 'One-time purchase, not a subscription.',
+    packCta: 'Buy {count} cookies — {price}',
     balanceHeading: 'Cookies',
     balanceHint: 'One cookie opens one YAGI original, permanently.',
     recentHeading: 'Prompts you opened',

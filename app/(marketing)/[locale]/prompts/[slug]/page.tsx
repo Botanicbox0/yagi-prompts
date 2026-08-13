@@ -17,7 +17,9 @@ import {
   SubmitStrip,
 } from '@/components/prompts/detail';
 import { promptLabels, useCaseLabel } from '@/components/prompts/labels';
+import { isCookiePackPurchasable } from '@/lib/cookies/purchase';
 import { unlockPromptAction } from './actions';
+import { purchaseCookiePackAction } from './purchase-action';
 
 /**
  * `/[locale]/prompts/[slug]` — PLAN §13.2, shaped per viewer.
@@ -101,6 +103,8 @@ export default async function PromptDetailPage({ params }: RouteParams) {
               panel={unlockPanel}
               signinHref={signin}
               unlockAction={unlockPromptAction}
+              packReady={isCookiePackPurchasable()}
+              packAction={purchaseCookiePackAction}
             />
 
             <RelatedPrompts

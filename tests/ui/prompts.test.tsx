@@ -237,7 +237,32 @@ describe('prompt detail (§13.2 / §5.5 / §15.3)', () => {
     // never a live buy button.
     expect(html).toContain('data-billing="unavailable"');
     expect(html).toContain('$4');
+    expect(html).not.toContain('data-cookie-pack');
     expect(html).not.toContain('data-upgrade="checkout"');
+  });
+
+  /**
+   * The M8 seam, rendered ahead of the gateway that will flip it: with `packReady` the same panel
+   * is a real one-press form. Testing the unreachable branch NOW is what keeps "plug in a
+   * Paddle-class MoR later" a config change instead of a UI project.
+   */
+  it('renders the pack as a live form the moment a gateway reports ready (M8 seam)', () => {
+    const html = render(
+      <PromptBody
+        prompt={{ ...locked, tier: 'free' }}
+        locale="en"
+        labels={labels}
+        panel={{ state: 'empty' }}
+        signinHref="/auth/signin"
+        unlockAction={async () => {}}
+        packReady
+        packAction={async () => {}}
+      />,
+    );
+    expect(html).toContain('data-cookie-pack');
+    expect(html).toContain('Buy 5 cookies — $4');
+    expect(html).toContain(`value="${base.id}"`);
+    expect(html).not.toContain('data-billing="unavailable"');
   });
 
   it('renders the text in a monospace block with a copy button for an entitled reader', () => {

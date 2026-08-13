@@ -113,6 +113,8 @@ function UnlockPanelView({
   labels,
   signinHref,
   unlockAction,
+  packReady = false,
+  packAction,
 }: {
   panel: UnlockPanel;
   prompt: ShapedPrompt;
@@ -120,6 +122,8 @@ function UnlockPanelView({
   labels: PromptLabels;
   signinHref: string;
   unlockAction?: (form: FormData) => Promise<void>;
+  packReady?: boolean;
+  packAction?: (form: FormData) => Promise<void>;
 }) {
   if (panel.state === 'signin') {
     return (
@@ -147,20 +151,41 @@ function UnlockPanelView({
     );
   }
 
+  const packTitle = interpolate(labels.packTitle, {
+    count: String(PACK_COOKIES),
+    price: `$${PACK_PRICE_USD}`,
+  });
+
   return (
     <div data-unlock-cta="empty">
       <p className="font-display text-[clamp(1.2rem,2vw,1.5rem)] leading-[1] font-black uppercase">
         {labels.emptyTitle}
       </p>
       <p className="mt-3 text-[0.9375rem] opacity-70">{labels.weeklyLine}</p>
-      <BillingUnavailable
-        className="mt-5"
-        title={interpolate(labels.packTitle, {
-          count: String(PACK_COOKIES),
-          price: `$${PACK_PRICE_USD}`,
-        })}
-        body={`${labels.packNote} ${labels.packUnavailableBody}`}
-      />
+      {packReady ? (
+        // M8, when a merchant-of-record is connected: the pack is a real one-press form.
+        <form action={packAction} data-cookie-pack className="mt-5">
+          <input type="hidden" name="id" value={prompt.id} />
+          <input type="hidden" name="locale" value={locale} />
+          <button type="submit" className={CTA_CLASS}>
+            <TextSwap>
+              {interpolate(labels.packCta, {
+                count: String(PACK_COOKIES),
+                price: `$${PACK_PRICE_USD}`,
+              })}{' '}
+              →
+            </TextSwap>
+          </button>
+          <p className="mt-3 font-mono text-[0.72rem] opacity-45">{labels.packNote}</p>
+        </form>
+      ) : (
+        // §15.1-5 today: no gateway, so the pack states its price and its status honestly.
+        <BillingUnavailable
+          className="mt-5"
+          title={packTitle}
+          body={`${labels.packNote} ${labels.packUnavailableBody}`}
+        />
+      )}
     </div>
   );
 }
@@ -178,6 +203,8 @@ export function PromptBody({
   panel,
   signinHref,
   unlockAction,
+  packReady,
+  packAction,
 }: {
   prompt: ShapedPrompt;
   locale: string;
@@ -187,6 +214,9 @@ export function PromptBody({
   signinHref: string;
   /** The unlock server action; bound by the page, absent in static renders. */
   unlockAction?: (form: FormData) => Promise<void>;
+  /** §15.1-5 — false until an M8 MoR is connected; decides form vs the designed unavailable. */
+  packReady?: boolean;
+  packAction?: (form: FormData) => Promise<void>;
 }) {
   return (
     <section className="mt-14 border-t border-hairline pt-10">
@@ -222,6 +252,8 @@ export function PromptBody({
               labels={labels}
               signinHref={signinHref}
               unlockAction={unlockAction}
+              {...(packReady === undefined ? {} : { packReady })}
+              {...(packAction === undefined ? {} : { packAction })}
             />
           )}
         </div>

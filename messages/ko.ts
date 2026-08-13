@@ -70,6 +70,7 @@ export const ko: Dictionary = {
     weeklyLine: '매주 1개가 무료로 채워집니다. 방문할 때 반영됩니다.',
     packTitle: '쿠키 {count}개 · {price}',
     packNote: '일회성 구매입니다. 구독이 아닙니다.',
+    packCta: '쿠키 {count}개 구매 — {price}',
     balanceHeading: '쿠키',
     balanceHint: '쿠키 1개로 YAGI 오리지널 1개가 영구히 열립니다.',
     recentHeading: '열어본 프롬프트',

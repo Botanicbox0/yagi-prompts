@@ -490,6 +490,30 @@ describe('cookie unlock contract (§15.3)', () => {
     expect(action).not.toContain('cookie_balance');
     expect(action).not.toContain('insert into');
   });
+
+  /**
+   * §15.1-5 — the purchase seam. The action exists ahead of the gateway that will make it
+   * reachable, so its trust posture is pinned NOW: the request may name a prompt to return to and
+   * a locale, and nothing else — the price and the count live in lib/cookies, and the credit
+   * (`creditCookiePack`) always books the pack size, never a caller-supplied number.
+   */
+  it('keeps the pack purchase behind the same one-action discipline, price never in the form', () => {
+    const action = read('app', '(marketing)', '[locale]', 'prompts', '[slug]', 'purchase-action.ts');
+    expect(action).toContain("'use server'");
+    expect(action).toContain('getViewer');
+    expect(action).toContain('startCookiePackPurchase');
+    expect(action.match(/export async function/g)).toHaveLength(1);
+
+    const readFields = [...action.matchAll(/form\.get\('([^']+)'\)/g)].map((match) => match[1]!);
+    expect([...new Set(readFields)].sort()).toEqual(['id', 'locale']);
+    for (const forbidden of ['cookies', 'count', 'price', 'amount', 'userId', 'profileId']) {
+      expect(action.includes(`form.get('${forbidden}')`), forbidden).toBe(false);
+    }
+
+    // The webhook-side credit is pinned to the pack: no count parameter reaches grantPurchase.
+    const seam = read('lib', 'cookies', 'purchase.ts');
+    expect(seam).toContain('grantPurchase(sql, profileId, PACK_COOKIES)');
+  });
 });
 
 /**
