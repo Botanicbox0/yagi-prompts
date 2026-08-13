@@ -39,26 +39,20 @@ export default function GlobalError({
 }) {
   useEffect(() => {
     if (!isChunkSkew(error)) return;
+    // TIME-based latch, not a boolean: a boolean stayed set for the whole tab session, so the
+    // SECOND skew of the day (each deploy makes a fresh one in a long-lived tab) showed the panel
+    // instead of healing — which is how the founder met this screen. A loop is a reload within
+    // seconds; distinct deploys are minutes apart, and each deserves its own silent reload.
     try {
-      if (sessionStorage.getItem(RELOAD_LATCH) === null) {
-        sessionStorage.setItem(RELOAD_LATCH, '1');
+      const last = Number(sessionStorage.getItem(RELOAD_LATCH) ?? 0);
+      if (Date.now() - last > 15_000) {
+        sessionStorage.setItem(RELOAD_LATCH, String(Date.now()));
         window.location.reload();
       }
     } catch {
       // Storage unavailable (rare) — fall through to the visible panel.
     }
   }, [error]);
-
-  useEffect(() => {
-    // A successful render of ANYTHING later in the session re-arms the latch.
-    return () => {
-      try {
-        sessionStorage.removeItem(RELOAD_LATCH);
-      } catch {
-        /* nothing to re-arm */
-      }
-    };
-  }, []);
 
   return (
     <html lang="en">
