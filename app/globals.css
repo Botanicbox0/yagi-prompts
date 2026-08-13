@@ -104,6 +104,13 @@ html:lang(ko) {
   --stack-label: 'Pretendard Variable', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
   --stack-body: 'Pretendard Variable', 'Apple SD Gothic Neo', 'Malgun Gothic', ui-sans-serif,
     system-ui, sans-serif;
+
+  /* Hangul breaks at spaces, like latin — never inside a word. Browsers treat CJK as breakable
+     between any two syllables, which set "작업하기" as "작업하 / 기" in display type wherever a
+     string shipped without §5's authored line breaks. `overflow-wrap` is the emergency valve for
+     a long unspaced compound on a narrow column. */
+  word-break: keep-all;
+  overflow-wrap: break-word;
 }
 
 [data-theme='light'] {
@@ -328,6 +335,21 @@ html:lang(ko) {
 
   html:lang(ko) .text-contest-section {
     font-size: clamp(1.7rem, 3.4vw, 2.55rem);
+    line-height: 1;
+  }
+
+  /* The landing premise band's stat values (§13.2). Named for the same reason as the contest
+     slots above: a raw `text-[clamp(…)]` cannot be reached by a §5.2 Korean twin, and this is
+     the one slot where that showed — "SEEDANCE 2.5" is a latin token that Pretendard sets ~30%
+     wider than Big Shoulders, so under :lang(ko) it painted 49px past its own grid cell
+     (measured on production, 2026-08-13). At 0.85× the token fits the cell with room. */
+  .text-stat {
+    font-size: clamp(2.25rem, 4vw, 3.25rem);
+    line-height: 1;
+  }
+
+  html:lang(ko) .text-stat {
+    font-size: clamp(1.9125rem, 3.4vw, 2.7625rem);
     line-height: 1;
   }
 }

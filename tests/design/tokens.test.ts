@@ -103,6 +103,28 @@ describe('design tokens (§5.1/§5.2/§4)', () => {
     }
   });
 
+  /**
+   * Post-M9 production render-verify, second finding. The premise band's stat values were the last
+   * display slot still set as a raw `text-[clamp(…)]`, i.e. outside the type system — the finding-8
+   * failure mode, and it showed the same way: no KO twin can reach an unnamed size, and Pretendard
+   * sets the latin token "SEEDANCE 2.5" ~30% wider than Big Shoulders, so under :lang(ko) the value
+   * painted 49px past its own grid cell (measured on production). The slot is named with a 0.85×
+   * twin like every contest slot above it.
+   */
+  it('names the premise stat slot with a KO twin (§5.2)', () => {
+    const utilities = globals.slice(globals.indexOf('@layer utilities'));
+    expect(utilities).toContain('.text-stat {');
+    expect(utilities).toContain('html:lang(ko) .text-stat {');
+    expect(utilities).toContain('font-size: clamp(1.9125rem, 3.4vw, 2.7625rem)');
+
+    const sections = readFileSync(
+      fileURLToPath(new URL('../../components/landing/sections.tsx', import.meta.url)),
+      'utf8',
+    );
+    expect(sections).toContain('text-stat');
+    expect(sections).not.toContain('text-[clamp(2.25rem,4vw,3.25rem)]');
+  });
+
   it('carries the §4 layout math, including the 1440 rail tier', () => {
     expect(globals).toContain('--breakpoint-rail: 90rem');
     expect(globals).toContain('--container-rail: 18.75rem');
@@ -118,6 +140,21 @@ describe('design tokens (§5.1/§5.2/§4)', () => {
     expect(koStacks).toContain('Pretendard Variable');
     expect(koStacks).not.toContain('big-shoulders');
     expect(koStacks).not.toContain('anton-sc');
+  });
+
+  /**
+   * Post-M9 production render-verify. `footer.hireCta` — "스튜디오와 함께 작업하기" — wrapped as
+   * "…작업하 / 기" on the live contests page: display type breaking INSIDE a Korean word. Latin
+   * never does this (spaces are its only break points), so §5's manual-line-break doctrine was
+   * silently doing double duty as the only thing keeping Hangul whole wherever a string shipped
+   * without authored breaks. `keep-all` makes spaces the break points for Korean too;
+   * `overflow-wrap` stays as the emergency valve so one long unspaced compound can never push a
+   * phone column into horizontal scroll.
+   */
+  it('breaks Korean at spaces, never inside a word (§5.2)', () => {
+    const koBlock = braceBlock(globals, 'html:lang(ko) {');
+    expect(koBlock).toContain('word-break: keep-all');
+    expect(koBlock).toContain('overflow-wrap: break-word');
   });
 
   it('drives section inversion from data-theme, never mix-blend-mode (§4)', () => {
