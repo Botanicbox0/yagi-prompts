@@ -264,31 +264,60 @@ export async function insertContest(
   );
 }
 
+/**
+ * §14.1 / M9 R3 — the judged-contest deadline lock is serialized on the contest row.
+ *
+ * The extension guard used to be a count-then-update in the operation layer; a placement landing
+ * between the two left medals on a reopened contest. Now the contest row is taken `FOR UPDATE`
+ * FIRST, and `setEntryPlacement` takes the same lock — the two writes cannot interleave. The
+ * placement count therefore runs after any in-flight placement has committed or rolled back.
+ */
 export async function updateContest(
   sql: SqlRunner,
   args: ContestWriteArgs & { id: string },
-): Promise<boolean> {
-  const { rows } = await sql.query<{ id: string }>(
-    `update contests
-        set slug = $2, title = $3::jsonb, summary = $4::jsonb, prize = $5::jsonb,
-            rules = $6::jsonb, brand_name = $7, brand_url = $8,
-            starts_at = $9::timestamptz, deadline_at = $10::timestamptz
-      where id = $1
-      returning id`,
-    [
-      args.id,
-      args.slug,
-      JSON.stringify(args.title),
-      JSON.stringify(args.summary),
-      JSON.stringify(args.prize),
-      args.rules === null ? null : JSON.stringify(args.rules),
-      args.brandName,
-      args.brandUrl,
-      args.startsAt,
-      args.deadlineAt,
-    ],
-  );
-  return rows.length > 0;
+): Promise<'saved' | 'notFound' | 'placementsLocked'> {
+  return await sql.transaction(async (tx) => {
+    const locked = await tx.query<{ deadline_at: string | null }>(
+      'select deadline_at from contests where id = $1 for update',
+      [args.id],
+    );
+    const current = locked.rows[0];
+    if (current === undefined) return 'notFound';
+
+    const extending =
+      args.deadlineAt !== null &&
+      current.deadline_at !== null &&
+      new Date(args.deadlineAt) > new Date(current.deadline_at);
+    if (extending) {
+      const placed = await tx.query<{ n: number }>(
+        'select count(*)::int as n from contest_entries where contest_id = $1 and placement is not null',
+        [args.id],
+      );
+      if ((placed.rows[0]?.n ?? 0) > 0) return 'placementsLocked';
+    }
+
+    const { rows } = await tx.query<{ id: string }>(
+      `update contests
+          set slug = $2, title = $3::jsonb, summary = $4::jsonb, prize = $5::jsonb,
+              rules = $6::jsonb, brand_name = $7, brand_url = $8,
+              starts_at = $9::timestamptz, deadline_at = $10::timestamptz
+        where id = $1
+        returning id`,
+      [
+        args.id,
+        args.slug,
+        JSON.stringify(args.title),
+        JSON.stringify(args.summary),
+        JSON.stringify(args.prize),
+        args.rules === null ? null : JSON.stringify(args.rules),
+        args.brandName,
+        args.brandUrl,
+        args.startsAt,
+        args.deadlineAt,
+      ],
+    );
+    return rows.length > 0 ? 'saved' : 'notFound';
+  });
 }
 
 /** Stamp the published media refs back onto the row after the copier has run. */
@@ -525,20 +554,31 @@ export async function setEntryPlacement(
   id: string,
   placement: Placement | null,
 ): Promise<boolean> {
-  const { rows } = await sql.query<{ id: string }>(
-    `update contest_entries e
-        set placement = $2
-       from contests c
-      where e.id = $1
-        and c.id = e.contest_id
-        and (
-          $2::int is null
-          or (e.status = 'approved' and c.deadline_at is not null and c.deadline_at <= now())
-        )
-      returning e.id`,
-    [id, placement],
-  );
-  return rows.length > 0;
+  // Same serialization point as `updateContest` (M9 R3): lock the contest row before judging, so a
+  // deadline extension in flight commits (and refuses us via the predicate) or waits for us (and is
+  // then refused by the placement count). The in-statement predicates stay as defense in depth.
+  return await sql.transaction(async (tx) => {
+    await tx.query(
+      `select c.id from contests c
+        where c.id = (select contest_id from contest_entries where id = $1)
+          for update`,
+      [id],
+    );
+    const { rows } = await tx.query<{ id: string }>(
+      `update contest_entries e
+          set placement = $2
+         from contests c
+        where e.id = $1
+          and c.id = e.contest_id
+          and (
+            $2::int is null
+            or (e.status = 'approved' and c.deadline_at is not null and c.deadline_at <= now())
+          )
+        returning e.id`,
+      [id, placement],
+    );
+    return rows.length > 0;
+  });
 }
 
 /** How many entries of this contest currently hold a medal — the deadline-extension guard's input. */

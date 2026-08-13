@@ -149,22 +149,6 @@ const update: AdminOperation<{
     const row = await loadContestById(ctx.sql, id);
     if (row === null) return fail('notFound', NOT_FOUND_DETAIL);
 
-    /**
-     * §14.1 / M9 review — a judged contest's deadline cannot be pushed outwards.
-     *
-     * Placements are a post-deadline act, so extending the deadline under existing medals re-opens
-     * a contest that has already been judged: the entry form would start accepting films again
-     * while the winners strip named last week's. Shortening it, or moving the deadline on an
-     * unjudged contest, stays free — the refusal is aimed at exactly the contradictory move, and it
-     * names the way out (clear the placements first).
-     */
-    if (input.deadlineAt !== null && row.deadlineAt !== null) {
-      const extended = new Date(input.deadlineAt) > new Date(row.deadlineAt);
-      if (extended && (await countPlacedEntries(ctx.sql, id)) > 0) {
-        return fail('placementsLocked', row.slug);
-      }
-    }
-
     const staged = await applyUploads(ctx, id, form, parseContestMedia(row.media));
     if (!staged.ok) return fail('upload', staged.detail);
 
@@ -176,8 +160,16 @@ const update: AdminOperation<{
         : staged.value;
     await updateContestMedia(ctx.sql, id, Object.keys(media).length === 0 ? null : media);
 
+    /**
+     * §14.1 / M9 R3 — a judged contest's deadline cannot be pushed outwards, and the guard is
+     * atomic: `updateContest` locks the contest row, counts placements under that lock, and only
+     * then writes. `setEntryPlacement` takes the same lock, so a medal can never slip in between
+     * the check and the save. Shortening, or moving an unjudged deadline, stays free; the refusal
+     * names the way out (clear the placements first).
+     */
     const saved = await updateContest(ctx.sql, { id, ...input });
-    if (!saved) return fail('notFound', NOT_FOUND_DETAIL);
+    if (saved === 'placementsLocked') return fail('placementsLocked', row.slug);
+    if (saved === 'notFound') return fail('notFound', NOT_FOUND_DETAIL);
 
     if (row.status === 'published') ctx.revalidateContests?.();
     return ok('saved', { detail: input.slug, to: BACK });
