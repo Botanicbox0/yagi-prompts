@@ -1,7 +1,6 @@
 import type { ReactNode } from 'react';
 import type { Dictionary } from '@/lib/i18n/dictionaries';
-import { runAdminOperation } from '@/app/(admin)/admin/actions';
-import { BACK_FIELD, OP_FIELD } from '@/lib/admin/form';
+import { ADMIN_ACTION_PATH, BACK_FIELD, OP_FIELD } from '@/lib/admin/form';
 import type { AdminOperationName } from '@/lib/admin/operations';
 
 /**
@@ -9,9 +8,9 @@ import type { AdminOperationName } from '@/lib/admin/operations';
  * rail, no scroll theatrics").
  *
  * Everything here is a SERVER component and every control is a plain `<form>` posting to the one
- * guarded server action. No client JS at all: an editor that keeps working with scripts disabled is
- * a smaller attack surface, a smaller bundle, and — for a tool used by two people — simply less to
- * go wrong. The trade is no optimistic UI, which a CMS does not need.
+ * guarded door (`POST /admin/do`). No client JS at all: an editor that keeps working with scripts
+ * disabled is a smaller attack surface, a smaller bundle, and — for a tool used by two people —
+ * simply less to go wrong. The trade is no optimistic UI, which a CMS does not need.
  */
 
 export type AdminDict = Dictionary['admin'];
@@ -28,8 +27,20 @@ export function OpForm({
   children: ReactNode;
   className?: string;
 }) {
+  /**
+   * A plain multipart POST to a STABLE URL, not a server action (2026-08-14). An action id is
+   * build-scoped, so a long-lived admin tab kept posting one the current deployment no longer
+   * knew — which Next answers with a bare re-render, i.e. "the button does nothing and my edit is
+   * gone". See app/(admin)/admin/do/route.ts. It also happens to be the most literal reading of
+   * §3.8's JS-free admin: this form works with scripting disabled entirely.
+   */
   return (
-    <form action={runAdminOperation} className={className}>
+    <form
+      method="post"
+      action={ADMIN_ACTION_PATH}
+      encType="multipart/form-data"
+      className={className}
+    >
       <input type="hidden" name={OP_FIELD} value={op} />
       <input type="hidden" name={BACK_FIELD} value={back} />
       {children}

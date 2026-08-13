@@ -342,7 +342,9 @@ describe('admin prompts screen contract (§3.8 / §13.2)', () => {
   it('is dynamic and posts through OpForm only', () => {
     expect(page).toContain("export const dynamic = 'force-dynamic'");
     expect(page).toContain('OpForm');
-    expect(page).not.toContain('runAdminOperation');
+    // The screen never names the door itself — OpForm owns that (now `POST /admin/do`).
+    expect(page).not.toContain('ADMIN_ACTION_PATH');
+    expect(page).not.toContain('method="post"');
   });
 
   it('offers the whole §13.2/F surface', () => {

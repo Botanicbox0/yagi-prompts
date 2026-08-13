@@ -72,24 +72,37 @@ describe('admin action auth matrix (§3.7 / §3.8)', () => {
   });
 
   /**
-   * The dispatcher's guard is only trustworthy because the server action resolved the viewer with
+   * The dispatcher's guard is only trustworthy because the DOOR resolved the viewer with
    * `requireAdmin()` first, and answers 404 (not 403) when it throws — §3.7's "the admin surface
    * should not confirm its own existence", the same rule the `(admin)` layout follows.
+   *
+   * 2026-08-14: the door is now `POST /admin/do`, a route handler, because a server action is
+   * addressed by a build-scoped id and the founder's long-lived admin tab kept posting an id the
+   * newest deployment no longer knew — a save that answered with a bare re-render. A URL survives
+   * deployment. The guard, the dispatcher and the outcome codes did not change; its address did.
    */
-  it('runs requireAdmin() in the server action, and 404s rather than 403s', () => {
-    const action = read('app', '(admin)', 'admin', 'actions.ts');
-    expect(action).toContain("'use server'");
-    expect(action).toContain('requireAdmin');
-    expect(action).toContain('notFound()');
-    expect(action).toContain('dispatchAdmin');
+  it('runs requireAdmin() in the one door, and 404s rather than 403s', () => {
+    const route = read('app', '(admin)', 'admin', 'do', 'route.ts');
+    expect(route).toContain('export async function POST');
+    expect(route).toContain('requireAdmin');
+    expect(route).toContain('notFound()');
+    expect(route).toContain('dispatchAdmin');
+    // A route handler has no built-in origin check, so it states one.
+    expect(route).toContain('sec-fetch-site');
+    // …and a redirect that turns the POST into a GET, so refresh never re-runs the mutation.
+    expect(route).toContain('303');
   });
 
-  it('routes every admin form through the one guarded action', () => {
-    // `OpForm` is the only thing in components/admin that may name the server action.
+  it('routes every admin form through that one door', () => {
     const chrome = read('components', 'admin', 'chrome.tsx');
-    expect(chrome).toContain('action={runAdminOperation}');
+    expect(chrome).toContain('method="post"');
+    expect(chrome).toContain('action={ADMIN_ACTION_PATH}');
+    expect(chrome).toContain('encType="multipart/form-data"');
+    // No panel may name the door or post on its own — `OpForm` is the only writer.
     for (const file of ['block-forms.tsx', 'editor-panels.tsx', 'step-editor.tsx']) {
-      expect(read('components', 'admin', file), file).not.toContain('runAdminOperation');
+      const source = read('components', 'admin', file);
+      expect(source, file).not.toContain('ADMIN_ACTION_PATH');
+      expect(source, file).not.toContain('method="post"');
     }
   });
 });
