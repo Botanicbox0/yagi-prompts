@@ -212,7 +212,7 @@ export const ko: Dictionary = {
     resultLabel: '결과',
     posterAlt: '결과 프레임',
     playHint: '마우스를 올리면 재생됩니다',
-    audioLabel: '오디오 결과물',
+    audioLabel: '첨부 오디오 파일',
     audioDownload: '다운로드',
   },
   submit: {
@@ -492,9 +492,10 @@ export const ko: Dictionary = {
   },
   ad: {
     placeholder: 'YOUR AD HERE',
-    contact: 'advertise@yagiworkshop.xyz',
+    contact: 'hello@yagiworkshop.xyz',
+    contactLabel: 'Contact',
     label: '광고',
-    pitch: 'AI 미디어를 만드는 사람들에게 직접 닿는 지면입니다.',
+    pitch: 'AI 미디어를 만들어가는 제작자에게 제품을 홍보하고 싶은 광고주를 찾습니다.',
   },
   account: {
     eyebrow: '계정',
@@ -801,7 +802,7 @@ export const ko: Dictionary = {
     mediaPosterZone: '포스터 이미지를 끌어다 놓거나 클릭해서 선택하세요',
     mediaPosterPicked: '{name} 선택됨',
     mediaPosterHint: '영상에서 프레임을 고르거나, 이미지를 직접 올릴 수 있습니다.',
-    fieldPromptAudio: '오디오 결과물',
+    fieldPromptAudio: '첨부 오디오 파일',
     mediaAudioZone: '오디오 파일을 끌어다 놓거나 클릭해서 선택하세요',
     promptVisibilityHint: '커뮤니티 제출은 항상 공개입니다. 데이터베이스가 강제합니다.',
     approve: '승인',

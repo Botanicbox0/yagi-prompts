@@ -3,8 +3,11 @@ import { promptHref } from '@/lib/prompts/links';
 import { badgeFor } from '@/lib/content/badges';
 import { PromptCardMedia } from './card-media';
 import { PromptCopyButton } from './copy-button';
-import { TypographicPoster, posterRatio } from './poster';
+import { TypographicPoster } from './poster';
 import type { PromptLabels } from './labels';
+
+/** §13.2, founder pass 2026-08-14 — one ratio for the whole wall. */
+export const CARD_RATIO = '16 / 9';
 
 /**
  * PLAN §13.2 — the gallery card. Media first, one line of type, and nothing else.
@@ -37,12 +40,11 @@ export function PromptCardView({
   now?: Date | number;
 }) {
   const title = locale === 'ko' && card.titleKo ? card.titleKo : card.title;
-  // Real media keeps its intrinsic ratio; otherwise the poster's deterministic one is what gives
-  // the wall its masonry rhythm (see poster.tsx — hashed, never random).
-  const ratio =
-    card.poster?.w && card.poster.h
-      ? `${card.poster.w} / ${card.poster.h}`
-      : posterRatio(card.slug);
+  // Founder direction (2026-08-14): every card is 16:9, and a portrait clip is LETTERBOXED into
+  // it rather than cropped — the reference form. The masonry rhythm went with it deliberately: a
+  // wall of one ratio reads as a catalogue, and a 9:16 result stays whole instead of losing its
+  // top and bottom to a cover crop. `card-media` paints the bars (black, object-contain).
+  const ratio = CARD_RATIO;
 
   const badge = badgeFor({
     firstPublishedAt: card.publishedAt,

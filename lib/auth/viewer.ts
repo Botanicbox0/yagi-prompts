@@ -67,10 +67,22 @@ function supabaseIdentitySource(): IdentitySource {
   };
 }
 
-async function identitySource(): Promise<IdentitySource | null> {
-  if (isAuthConfigured()) return supabaseIdentitySource();
+/**
+ * `local` ⇒ the SqlRunner (the snapshot the dev identity actually lives in); otherwise Supabase
+ * when a project is configured.
+ *
+ * The `local` argument is what makes the doc-comment above TRUE. Since cloud credentials landed in
+ * `.env.local` (M7), `isAuthConfigured()` has been true on this machine at all times, so a dev
+ * identity — a FIXTURE id that exists only in the local snapshot — was looked up in the CLOUD
+ * database, found nothing, and resolved to anonymous. `/admin/*` therefore 404'd for every local
+ * render-verify, which is why admin-form regressions kept reaching the founder instead of the
+ * Director. Production is untouched: `devIdentityUserId()` is null under NODE_ENV=production.
+ */
+async function identitySource(local: boolean): Promise<IdentitySource | null> {
+  if (!local && isAuthConfigured()) return supabaseIdentitySource();
   const sql = await getSqlRunner();
-  return sql === null ? null : sqlIdentitySource(sql);
+  if (sql !== null) return sqlIdentitySource(sql);
+  return isAuthConfigured() ? supabaseIdentitySource() : null;
 }
 
 /** anon | free | pro | admin, derived server-side. `anon` is the absence of a user. */
@@ -79,10 +91,11 @@ export async function getViewer(): Promise<Viewer> {
 
   // Dev-only, and only when there is no real session to speak of. See lib/auth/dev-identity.ts for
   // why this cannot exist in a production build — and why it grants an identity, never a tier.
-  const userId = sessionUser?.id ?? devIdentityUserId();
+  const devUserId = sessionUser === null ? devIdentityUserId() : null;
+  const userId = sessionUser?.id ?? devUserId;
   if (!userId) return ANON_VIEWER;
 
-  const source = await identitySource();
+  const source = await identitySource(devUserId !== null);
   if (source === null) return ANON_VIEWER;
 
   const identity = await source.load(userId);

@@ -88,6 +88,9 @@ describe('dictionary completeness (§3.9)', () => {
       'pricing.cookieSignupValue',
       'pricing.cookieWeeklyValue',
       'pricing.cookiePackValue',
+      // 2026-08-14: the ad rail sets its address row as "CONTACT : HELLO@…" — a latin wayfinding
+      // token in front of an email, identical in both locales by design, not an untranslated line.
+      'ad.contactLabel',
     ]);
 
     const untranslated = enLeaves

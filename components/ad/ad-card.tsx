@@ -11,6 +11,8 @@ export interface AdLabels {
   placeholder: string;
   pitch: string;
   contact: string;
+  /** "CONTACT" — the word in front of the address (founder direction, 2026-08-14). */
+  contactLabel: string;
 }
 
 /**
@@ -41,9 +43,9 @@ export function AdCard({ labels, className }: { labels: AdLabels; className?: st
 
       <a
         href={`mailto:${labels.contact}`}
-        className="text-accent mt-4 inline-block font-mono text-code underline-offset-4 hover:underline"
+        className="text-accent mt-4 inline-block font-mono text-[0.7rem] tracking-[0.06em] uppercase underline-offset-4 hover:underline"
       >
-        {labels.contact}
+        {labels.contactLabel} : {labels.contact}
       </a>
     </aside>
   );
@@ -70,9 +72,9 @@ export function AdBanner({ labels }: { labels: AdLabels }) {
         <p className="text-[0.9375rem] leading-snug opacity-70">{labels.pitch}</p>
         <a
           href={`mailto:${labels.contact}`}
-          className="text-accent mt-2 inline-block font-mono text-code underline-offset-4 hover:underline"
+          className="text-accent mt-2 inline-block font-mono text-[0.7rem] tracking-[0.06em] uppercase underline-offset-4 hover:underline"
         >
-          {labels.contact}
+          {labels.contactLabel} : {labels.contact}
         </a>
       </div>
     </aside>

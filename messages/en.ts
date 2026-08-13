@@ -218,7 +218,8 @@ export const en = {
     resultLabel: 'Result',
     posterAlt: 'Result frame',
     playHint: 'Hover to play',
-    audioLabel: 'Audio result',
+    // Founder direction (2026-08-14): it is a FILE the prompt comes with, not a "result".
+    audioLabel: 'Attached audio',
     audioDownload: 'Download',
   },
   /** §13.1/E — the community submission form, and its confirmation states. */
@@ -516,9 +517,12 @@ export const en = {
   },
   ad: {
     placeholder: 'YOUR AD HERE',
-    contact: 'advertise@yagiworkshop.xyz',
+    // Founder direction (2026-08-14): one studio address, and the rail says CONTACT, not a pitch
+    // dressed as a mailto. The label is rendered separately so the address stays a real link.
+    contact: 'hello@yagiworkshop.xyz',
+    contactLabel: 'Contact',
     label: 'Advertisement',
-    pitch: 'Reach people who actually ship AI media.',
+    pitch: 'Looking for advertisers who want to reach the people making AI media.',
   },
   account: {
     eyebrow: 'Account',
@@ -841,7 +845,7 @@ export const en = {
     mediaPosterZone: 'Drop a poster image here, or click to pick',
     mediaPosterPicked: '{name} selected',
     mediaPosterHint: 'Pick a frame from the clip, or upload an image of your own.',
-    fieldPromptAudio: 'Audio result',
+    fieldPromptAudio: 'Attached audio file',
     mediaAudioZone: 'Drop an audio file here, or click to pick',
     promptVisibilityHint: 'Community submissions are always public — the database enforces it.',
     approve: 'Approve',

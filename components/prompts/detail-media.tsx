@@ -46,11 +46,18 @@ export function PromptDetailMedia({
     return () => observer.disconnect();
   }, []);
 
+  /**
+   * Founder direction (2026-08-14): the detail media was rendering at the SOURCE's ratio and full
+   * column width, so a portrait result became a wall of video — "너무 과도하게 크게". It is now
+   * the same fixed 16:9 window the cards use, on black, with the media CONTAINED: a landscape clip
+   * fills it, a 9:16 clip is letterboxed whole, and nothing is cropped or oversized. `ratio` is
+   * still honoured for the typographic fallback, which has no intrinsic size to preserve.
+   */
   if (video === null) {
     return poster ? (
-      <div className="border border-hairline" style={{ aspectRatio: ratio }}>
+      <div className="flex items-center justify-center border border-hairline bg-black aspect-16/9">
         {/* eslint-disable-next-line @next/next/no-img-element -- public bucket object, no loader */}
-        <img src={poster.src} alt={alt} className="h-full w-full object-cover" />
+        <img src={poster.src} alt={alt} className="h-full w-full object-contain" />
       </div>
     ) : (
       <div className="border border-hairline" style={{ aspectRatio: ratio }}>
@@ -63,8 +70,7 @@ export function PromptDetailMedia({
     <video
       ref={ref}
       data-detail-media
-      className="w-full border border-hairline object-cover"
-      style={{ aspectRatio: ratio }}
+      className="w-full border border-hairline bg-black object-contain aspect-16/9"
       muted
       loop
       playsInline
