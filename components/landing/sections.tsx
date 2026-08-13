@@ -126,7 +126,7 @@ export function Premise({ dict, totals }: { dict: Dictionary; totals: PromptTota
           {stats.map((stat) => (
             <div key={stat.label} className="bg-surface px-5 py-7">
               <dt className="font-label text-eyebrow uppercase opacity-60">{stat.label}</dt>
-              <dd className="mt-3 font-display text-[clamp(2.25rem,4vw,3.25rem)] leading-none font-black">
+              <dd className="text-stat mt-3 font-display font-black">
                 {stat.value}
               </dd>
             </div>
