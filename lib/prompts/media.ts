@@ -2,7 +2,14 @@ import { createHash, randomUUID } from 'node:crypto';
 import { AssetRefSchema, type AssetRef } from '@/lib/content/schemas';
 import { extensionFor } from '@/lib/admin/assets';
 import type { StorageDriver } from '@/lib/storage';
-import { mediaEntries, VIDEO_MAX_BYTES, VIDEO_MAX_SECONDS, type MediaKind, type PromptMedia } from './schemas';
+import {
+  AUDIO_MAX_BYTES,
+  mediaEntries,
+  VIDEO_MAX_BYTES,
+  VIDEO_MAX_SECONDS,
+  type MediaKind,
+  type PromptMedia,
+} from './schemas';
 
 /**
  * PLAN §13.1 — "Media lifecycle: uploads → staging; on publish/approve, copy to public keys
@@ -36,6 +43,17 @@ export function publishedKeyFor(sha256: string, stagingKey: string): string {
 
 export const ALLOWED_POSTER_MIMES = ['image/png', 'image/jpeg', 'image/webp', 'image/avif'] as const;
 export const ALLOWED_VIDEO_MIMES = ['video/mp4', 'video/webm', 'video/quicktime'] as const;
+/** The formats music/TTS models actually emit. `audio/mp4` is m4a — ISO-BMFF, so the mvhd probe
+ *  reads its duration for free; the rest carry no cap beyond size (human moderation, as WebM). */
+export const ALLOWED_AUDIO_MIMES = [
+  'audio/mpeg',
+  'audio/wav',
+  'audio/x-wav',
+  'audio/mp4',
+  'audio/aac',
+  'audio/ogg',
+  'audio/flac',
+] as const;
 
 export type UploadRejection =
   | 'too_large'
@@ -63,9 +81,14 @@ export interface UploadCheckInput {
 export function checkUpload(input: UploadCheckInput): UploadRejection | null {
   const mime = input.mime.split(';')[0]!.trim().toLowerCase();
   const allowed: readonly string[] =
-    input.kind === 'video' ? ALLOWED_VIDEO_MIMES : ALLOWED_POSTER_MIMES;
+    input.kind === 'video'
+      ? ALLOWED_VIDEO_MIMES
+      : input.kind === 'audio'
+        ? ALLOWED_AUDIO_MIMES
+        : ALLOWED_POSTER_MIMES;
   if (!allowed.includes(mime)) return 'bad_type';
-  if (input.sizeBytes > VIDEO_MAX_BYTES) return 'too_large';
+  const maxBytes = input.kind === 'audio' ? AUDIO_MAX_BYTES : VIDEO_MAX_BYTES;
+  if (input.sizeBytes > maxBytes) return 'too_large';
   if (
     input.kind === 'video' &&
     input.durationSeconds !== null &&
@@ -182,7 +205,13 @@ export async function stagePromptUpload(
 ): Promise<StageResult> {
   const bytes = new Uint8Array(await upload.arrayBuffer());
   const mime = upload.type && upload.type.length > 0 ? upload.type : 'application/octet-stream';
-  const durationSeconds = kind === 'video' ? probeVideoDurationSeconds(bytes, mime) : null;
+  // m4a is ISO-BMFF too — the same mvhd walk answers, so the duration rides the ref for the UI.
+  const durationSeconds =
+    kind === 'video'
+      ? probeVideoDurationSeconds(bytes, mime)
+      : kind === 'audio' && mime.split(';')[0]!.trim().toLowerCase() === 'audio/mp4'
+        ? probeMp4DurationSeconds(bytes)
+        : null;
 
   const rejection = checkUpload({
     kind,

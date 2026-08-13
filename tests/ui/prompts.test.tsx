@@ -183,6 +183,7 @@ describe('prompt detail (§13.2 / §5.5 / §15.3)', () => {
     publishedAt: '2026-08-12T00:00:00.000Z',
     poster: null,
     video: null,
+    audio: null,
     visibility: 'pro' as const,
   };
 
@@ -301,6 +302,37 @@ describe('prompt detail (§13.2 / §5.5 / §15.3)', () => {
       expect(html).toContain('SEEDANCE 2.5');
       expect(html).not.toContain(SENTINEL);
     }
+  });
+
+  /**
+   * Founder direction (2026-08-13) — the audio result. Public like the clip, playable inline,
+   * and the download href must carry `?download=1`: that is what makes the route answer
+   * `Content-Disposition: attachment`, and the anchor attribute alone is ignored cross-origin.
+   */
+  it('renders the audio result with a one-press download, gate or no gate', () => {
+    const audio = {
+      source: 'route' as const,
+      src: '/api/prompts/media/9a000000-0000-4000-8000-000000000001%3Aaudio',
+      mime: 'audio/mpeg',
+    };
+    for (const prompt of [
+      { ...locked, audio },
+      { ...open, audio },
+    ] as ShapedPrompt[]) {
+      const html = render(
+        <PromptHeader prompt={prompt} labels={labels} useCaseLabels={useCaseLabels} />,
+      );
+      expect(html).toContain('data-prompt-audio');
+      expect(html).toContain('<audio');
+      expect(html).toContain('data-audio-download');
+      expect(html).toContain('download=1');
+      expect(html).not.toContain(SENTINEL);
+    }
+    // No audio ⇒ no row — the panel never renders empty chrome.
+    const bare = render(
+      <PromptHeader prompt={locked} labels={labels} useCaseLabels={useCaseLabels} />,
+    );
+    expect(bare).not.toContain('data-prompt-audio');
   });
 
   it('renders the submit strip pointing at the unprefixed form', () => {

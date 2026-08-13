@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createLocalStorageDriver } from '@/lib/storage/local-driver';
 import {
+  ALLOWED_AUDIO_MIMES,
   ALLOWED_VIDEO_MIMES,
   checkUpload,
   probeMp4DurationSeconds,
@@ -14,7 +15,7 @@ import {
   sha256Hex,
   stagePromptUpload,
 } from '@/lib/prompts/media';
-import { VIDEO_MAX_BYTES, VIDEO_MAX_SECONDS } from '@/lib/prompts/schemas';
+import { AUDIO_MAX_BYTES, VIDEO_MAX_BYTES, VIDEO_MAX_SECONDS } from '@/lib/prompts/schemas';
 
 /**
  * PLAN §13.1 — the caps and the publish copy, over real bytes.
@@ -107,6 +108,25 @@ describe('upload caps (§13.1)', () => {
     expect(checkUpload({ ...base, mime: 'video/webm', durationSeconds: null })).toBeNull();
   });
 
+  /**
+   * Founder direction (2026-08-13) — audio results. Its own byte cap (20MB), the formats
+   * music/TTS models actually emit, no duration rule (human moderation, exactly as WebM), and
+   * m4a's ISO-BMFF duration read for free where present.
+   */
+  it('accepts audio in the emitted formats, capped at 20MB', () => {
+    const audio = { kind: 'audio' as const, mime: 'audio/mpeg', sizeBytes: 1024, durationSeconds: null };
+    expect(AUDIO_MAX_BYTES).toBe(20 * 1024 * 1024);
+    for (const mime of ALLOWED_AUDIO_MIMES) {
+      expect(checkUpload({ ...audio, mime }), mime).toBeNull();
+    }
+    expect(checkUpload({ ...audio, sizeBytes: AUDIO_MAX_BYTES })).toBeNull();
+    expect(checkUpload({ ...audio, sizeBytes: AUDIO_MAX_BYTES + 1 })).toBe('too_large');
+    expect(checkUpload({ ...audio, mime: 'video/mp4' })).toBe('bad_type');
+    expect(checkUpload({ ...audio, mime: 'application/zip' })).toBe('bad_type');
+    // No duration cap for audio — a long track passes and a human hears it before it ships.
+    expect(checkUpload({ ...audio, durationSeconds: 600 })).toBeNull();
+  });
+
   it('refuses a file type outside the whitelist, per kind', () => {
     expect(checkUpload({ ...base, mime: 'application/zip' })).toBe('bad_type');
     expect(checkUpload({ ...base, kind: 'poster', mime: 'video/mp4' })).toBe('bad_type');
@@ -170,5 +190,24 @@ describe('staging + publication (§13.1 lifecycle)', () => {
     expect(publishedKeyFor('a'.repeat(64), 'content/prompt/x/y.PNG')).toBe(`${'a'.repeat(64)}.png`);
     expect(publishedKeyFor('a'.repeat(64), 'no-extension')).toBe('a'.repeat(64));
     expect(promptStagingKey('id', 'mp4')).toMatch(/^content\/prompt\/id\/[0-9a-f-]+\.mp4$/);
+  });
+
+  /** Audio rides the SAME staging→copy pipeline (founder 2026-08-13) — one asset kind, no fork. */
+  it('stages and publishes an audio result exactly like the other kinds', async () => {
+    const h = await harness();
+    const file = new File([filePart(Buffer.from('ID3 not-really-mp3-but-mime-gated', 'latin1'))], 'result.mp3', {
+      type: 'audio/mpeg',
+    });
+    const staged = await stagePromptUpload(h.storage, 'prompt-1', 'audio', file);
+    expect(staged.ok).toBe(true);
+    if (!staged.ok) return;
+    expect(staged.value.ref.staging_key).toMatch(/\.mp3$/);
+
+    const published = await publishPromptMedia(h.storage, { audio: staged.value.ref });
+    expect(published.report).toEqual({ copied: 1, alreadyPresent: 0 });
+    expect(published.media.audio?.bucket).toBe('public-content');
+    expect(published.media.audio?.published_key).toMatch(/\.mp3$/);
+    expect(await h.storage.exists('public-content', published.media.audio!.published_key!)).toBe(true);
+    await h.close();
   });
 });

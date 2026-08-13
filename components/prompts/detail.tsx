@@ -65,6 +65,28 @@ export function PromptHeader({
         }
       />
 
+      {/* The audio result (founder direction, 2026-08-13): playable inline, downloadable in one
+          press. The href carries `?download=1` so the route answers Content-Disposition —
+          the anchor `download` attribute alone is ignored cross-origin. */}
+      {prompt.audio && (
+        <div data-prompt-audio className="mt-6 border border-hairline p-4">
+          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+            <span className="font-label text-eyebrow uppercase opacity-60">
+              {labels.audioLabel}
+            </span>
+            <a
+              href={`${prompt.audio.src}${prompt.audio.src.includes('?') ? '&' : '?'}download=1`}
+              download
+              data-audio-download
+              className="text-accent font-mono text-code underline-offset-4 hover:underline"
+            >
+              {labels.audioDownload} ↓
+            </a>
+          </div>
+          <audio controls preload="none" src={prompt.audio.src} className="mt-3 w-full" />
+        </div>
+      )}
+
       <div className="mt-8 flex flex-wrap items-center gap-x-4 gap-y-2 font-label text-eyebrow uppercase">
         <span className="opacity-60">{credit}</span>
         <span aria-hidden className="opacity-30">

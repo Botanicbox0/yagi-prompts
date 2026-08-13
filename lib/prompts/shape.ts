@@ -68,6 +68,9 @@ interface ShapedPromptBase {
   publishedAt: string | null;
   poster: ShapedPromptMedia | null;
   video: ShapedPromptMedia | null;
+  /** The audio result (music/voice prompts) — public like the clip, and downloadable (founder
+   *  direction, 2026-08-13). */
+  audio: ShapedPromptMedia | null;
   /** The gate this item's text sits behind — safe to publish; it is what the lock chip renders. */
   visibility: Visibility;
   tier: Tier;
@@ -127,7 +130,11 @@ export function shapePromptMedia(
   id: string,
   media: unknown,
   options: PromptShapeOptions = {},
-): { poster: ShapedPromptMedia | null; video: ShapedPromptMedia | null } {
+): {
+  poster: ShapedPromptMedia | null;
+  video: ShapedPromptMedia | null;
+  audio: ShapedPromptMedia | null;
+} {
   const opts: MediaUrlOptions = {
     publicUrl: options.publicUrl ?? (() => null),
     mediaUrl: options.mediaUrl ?? defaultMediaUrl,
@@ -135,7 +142,11 @@ export function shapePromptMedia(
   const parsed = parsePromptMedia(media);
   const shape = (kind: MediaKind, ref: AssetRef | undefined) =>
     ref === undefined ? null : shapeAsset(ref, promptMediaRef(id, kind), opts);
-  return { poster: shape('poster', parsed.poster), video: shape('video', parsed.video) };
+  return {
+    poster: shape('poster', parsed.poster),
+    video: shape('video', parsed.video),
+    audio: shape('audio', parsed.audio),
+  };
 }
 
 /**
@@ -149,7 +160,7 @@ export function shapePrompt(
   tier: Tier,
   options: PromptShapeOptions = {},
 ): ShapedPrompt {
-  const { poster, video } = shapePromptMedia(row.id, row.media, options);
+  const { poster, video, audio } = shapePromptMedia(row.id, row.media, options);
 
   const base: ShapedPromptBase = {
     id: row.id,
@@ -164,6 +175,7 @@ export function shapePrompt(
     publishedAt: row.publishedAt,
     poster,
     video,
+    audio,
     visibility: row.textVisibility,
     tier,
   };

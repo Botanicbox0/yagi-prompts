@@ -63,6 +63,8 @@ export const PROMPT_HANDLE_MAX = 40;
 /** "video ≤ 60s/32MB". Size is measured over the received bytes; see `lib/prompts/media.ts`. */
 export const VIDEO_MAX_BYTES = 32 * 1024 * 1024;
 export const VIDEO_MAX_SECONDS = 60;
+/** Founder direction (2026-08-13): audio results are uploadable and freely downloadable. */
+export const AUDIO_MAX_BYTES = 20 * 1024 * 1024;
 /** "Rate limit 3 submissions/day/user" — the 4th inside 24h is refused. */
 export const SUBMISSIONS_PER_DAY = 3;
 export const RATE_WINDOW_HOURS = 24;
@@ -75,19 +77,22 @@ export const USE_CASE_MAX = 3;
 // ---------------------------------------------------------------------------
 
 /**
- * §13.1: `media jsonb` — `{ video?: AssetRef, poster?: AssetRef }`.
+ * §13.1: `media jsonb` — `{ video?: AssetRef, poster?: AssetRef, audio?: AssetRef }`.
  *
- * Both optional at the schema level because §13.3-4 makes community media optional entirely; the
+ * All optional at the schema level because §13.3-4 makes community media optional entirely; the
  * *authoring* schema below is what makes it required for YAGI items, which is where the rule
- * belongs (it is an editorial standard, not a data-integrity one).
+ * belongs (it is an editorial standard, not a data-integrity one). `audio` (founder direction,
+ * 2026-08-13) is the result of a music/voice prompt — public like the poster and the clip, and
+ * additionally offered as a plain DOWNLOAD on the detail page.
  */
 export const PromptMediaSchema = z.object({
   video: AssetRefSchema.optional(),
   poster: AssetRefSchema.optional(),
+  audio: AssetRefSchema.optional(),
 });
 export type PromptMedia = z.infer<typeof PromptMediaSchema>;
 
-export const MEDIA_KINDS = ['poster', 'video'] as const;
+export const MEDIA_KINDS = ['poster', 'video', 'audio'] as const;
 export type MediaKind = (typeof MEDIA_KINDS)[number];
 
 /** `null`/absent jsonb is "no media", never a parse failure — most community items have none. */
@@ -101,6 +106,7 @@ export function mediaEntries(media: PromptMedia): Array<[MediaKind, AssetRef]> {
   const out: Array<[MediaKind, AssetRef]> = [];
   if (media.poster) out.push(['poster', media.poster]);
   if (media.video) out.push(['video', media.video]);
+  if (media.audio) out.push(['audio', media.audio]);
   return out;
 }
 

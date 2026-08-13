@@ -562,6 +562,7 @@ export async function seedPrompts(opts: SeedOptions): Promise<PromptSeedResult[]
     for (const [kind, spec] of [
       ['poster', fixture.poster],
       ['video', fixture.video],
+      ['audio', fixture.audio],
     ] as const) {
       if (!spec) continue;
       const bytes = placeholderBytes(spec);

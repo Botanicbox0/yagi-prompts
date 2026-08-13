@@ -84,7 +84,7 @@ async function applyUploads(
   existing: PromptMedia,
 ): Promise<{ ok: true; value: PromptMedia } | { ok: false; detail: string }> {
   const next: PromptMedia = { ...existing };
-  for (const kind of ['poster', 'video'] as const) {
+  for (const kind of ['poster', 'video', 'audio'] as const) {
     const file = f.file(form, kind);
     if (file === null) continue;
     const staged = await stagePromptUpload(ctx.storage, promptId, kind, file);
