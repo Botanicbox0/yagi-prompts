@@ -10,9 +10,6 @@ import localFont from 'next/font/local';
  *
  * Pretendard is NOT here: its Korean coverage ships as a 92-slice `unicode-range` dynamic subset,
  * which next/font/local cannot express. It is linked as vendor CSS from app/layout.tsx.
- *
- * Satoshi (EN body) is NOT here either — see public/fonts/README.md. The EN body stack falls back
- * per §5.2 until the Fontshare licence file is added by hand.
  */
 
 /** Display, EN. Both display weights preload — §5.2 uses 700 and 900, nothing between. */
@@ -38,6 +35,24 @@ export const antonSC = localFont({
   adjustFontFallback: 'Arial',
 });
 
+/**
+ * Body, EN — the last §5.2 face to land (Fontshare's licence-accept is interactive; the founder
+ * supplied the files 2026-08-13, ITF-FFL committed under public/fonts/LICENSES). 400 for copy,
+ * 500 for the occasional emphasis. Body text is most of every page: preloading 400 keeps the
+ * swap off the LCP paragraph.
+ */
+export const satoshi = localFont({
+  src: [
+    { path: '../assets/fonts/satoshi-400.woff2', weight: '400', style: 'normal' },
+    { path: '../assets/fonts/satoshi-500.woff2', weight: '500', style: 'normal' },
+  ],
+  variable: '--font-satoshi',
+  display: 'swap',
+  preload: true,
+  fallback: ['Pretendard Variable', 'ui-sans-serif', 'system-ui', 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', 'sans-serif'],
+  adjustFontFallback: 'Arial',
+});
+
 /** Prompts and param tables. Always behind a lock or below the fold — not preloaded. */
 export const geistMono = localFont({
   src: [{ path: '../assets/fonts/geist-mono-400.woff2', weight: '400', style: 'normal' }],
@@ -51,5 +66,6 @@ export const geistMono = localFont({
 export const fontVariables = [
   bigShoulders.variable,
   antonSC.variable,
+  satoshi.variable,
   geistMono.variable,
 ].join(' ');

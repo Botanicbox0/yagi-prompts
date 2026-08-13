@@ -87,10 +87,9 @@
 :root {
   --stack-display: var(--font-big-shoulders), 'Arial Narrow', 'Helvetica Neue', Arial, sans-serif;
   --stack-label: var(--font-anton-sc), 'Arial Narrow', Impact, sans-serif;
-  /* Satoshi is licensed via Fontshare and is NOT in the repo yet
-     (public/fonts/README.md). Until it is, EN body resolves down this stack. */
-  --stack-body: 'Satoshi', 'Pretendard Variable', ui-sans-serif, system-ui, -apple-system,
-    'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  /* Satoshi landed 2026-08-13 (founder-supplied Fontshare files, ITF-FFL in LICENSES). */
+  --stack-body: var(--font-satoshi), 'Pretendard Variable', ui-sans-serif, system-ui,
+    -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   --stack-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
   --surface: var(--color-white);
@@ -104,6 +103,15 @@ html:lang(ko) {
   --stack-label: 'Pretendard Variable', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
   --stack-body: 'Pretendard Variable', 'Apple SD Gothic Neo', 'Malgun Gothic', ui-sans-serif,
     system-ui, sans-serif;
+  /* Geist Mono has no Hangul, so on the KO tree every mono-styled SENTENCE (rail ledes, form
+     hints, empty labels) was rendering its Korean through the browser's last-resort fallback —
+     the "구려 보이는" the founder called out. 'Pretendard Hangul' is a GENERATED alias of the
+     vendor subset whose unicode-range never covers latin (scripts/pretendard-hangul-mono.ts):
+     first in the stack it catches Hangul only, and latin/digits fall through to Geist Mono, so
+     the §5 mono identity is untouched. (Pretendard AFTER the geist var would be unreachable —
+     the next/font variable expands to Geist plus its fallbacks, ending in the generic
+     `monospace`, and a generic matches everything.) */
+  --stack-mono: 'Pretendard Hangul', var(--font-geist-mono), ui-monospace, monospace;
 
   /* Hangul breaks at spaces, like latin — never inside a word. Browsers treat CJK as breakable
      between any two syllables, which set "작업하기" as "작업하 / 기" in display type wherever a

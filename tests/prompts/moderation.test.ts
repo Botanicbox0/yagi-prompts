@@ -237,6 +237,28 @@ describe('prompt moderation operations (§13.2/F)', () => {
     expect((await loadPromptById(sql(), live.id))!.featured).toBe(false);
   });
 
+  /**
+   * Founder direction (2026-08-13): free presets are ONE press on the list. The fast path walks
+   * public↔pro on YAGI rows only — a community row is always public (§13.3-1), so the guard
+   * answers notFound rather than pretending a toggle exists there.
+   */
+  it('flips a YAGI original public and back with one press', async () => {
+    const live = (await loadPromptBySlug(sql(), 'neon-alley-dolly'))!;
+    expect(
+      await harness.run('prompt.visibility', { id: live.id, textVisibility: 'public' }),
+    ).toMatchObject({ ok: true });
+    expect((await loadPromptById(sql(), live.id))!.textVisibility).toBe('public');
+
+    await harness.run('prompt.visibility', { id: live.id, textVisibility: 'pro' });
+    expect((await loadPromptById(sql(), live.id))!.textVisibility).toBe('pro');
+
+    const community = (await loadPromptBySlug(sql(), 'skate-park-golden-hour'))!;
+    expect(
+      await harness.run('prompt.visibility', { id: community.id, textVisibility: 'pro' }),
+    ).toMatchObject({ ok: false, code: 'notFound' });
+    expect((await loadPromptById(sql(), community.id))!.textVisibility).toBe('public');
+  });
+
   it('unpublishes to archived — never a delete — and restores', async () => {
     const live = (await loadPromptBySlug(sql(), 'neon-alley-dolly'))!;
     expect(await harness.run('prompt.archive', { id: live.id, archived: 'true' })).toMatchObject({

@@ -42,6 +42,7 @@ export default async function AdminRootLayout({ children }: { children: ReactNod
     <html lang={locale} className={fontVariables}>
       <head>
         <link rel="stylesheet" href="/fonts/pretendard/pretendard-dynamic-subset.css" />
+        <link rel="stylesheet" href="/fonts/pretendard/pretendard-hangul-mono.css" />
       </head>
       <body>{children}</body>
     </html>

@@ -360,6 +360,23 @@ export async function setPromptFeatured(
   return rows.length > 0;
 }
 
+/**
+ * Founder direction (2026-08-13): free presets are a one-press decision, not a form edit. YAGI
+ * rows only — a community row is always public (§13.3-1, and the CHECK underneath would refuse
+ * anyway), so the guard makes "not a YAGI prompt" read as notFound rather than a constraint error.
+ */
+export async function setPromptTextVisibility(
+  sql: SqlRunner,
+  id: string,
+  visibility: 'public' | 'pro',
+): Promise<boolean> {
+  const { rows } = await sql.query<{ id: string }>(
+    `update prompt_items set text_visibility = $2 where id = $1 and source = 'yagi' returning id`,
+    [id, visibility],
+  );
+  return rows.length > 0;
+}
+
 /** §13.1/F — "unpublish → archived". Never a delete: the slug stays taken and the row stays audit. */
 export async function setPromptArchived(
   sql: SqlRunner,

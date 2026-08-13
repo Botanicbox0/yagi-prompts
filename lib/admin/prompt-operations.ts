@@ -8,6 +8,7 @@ import {
   rejectPrompt,
   setPromptArchived,
   setPromptFeatured,
+  setPromptTextVisibility,
   updatePrompt,
   updatePromptMedia,
 } from '@/lib/prompts/repo';
@@ -255,6 +256,24 @@ const feature: AdminOperation<z.infer<typeof Feature>> = {
   },
 };
 
+const Visibility = z.object({ id: Uuid, textVisibility: z.enum(['public', 'pro']) });
+
+/**
+ * Founder direction (2026-08-13): "버튼 누르면 바로 보이게" — flipping a YAGI original between
+ * pro and public is ONE press on the list, not a trip through the edit form. `hidden` stays a
+ * deliberate form-level choice; this fast path only walks the two states presets live in.
+ */
+const visibility: AdminOperation<z.infer<typeof Visibility>> = {
+  parse: (form) =>
+    parsed(Visibility, { id: f.str(form, 'id'), textVisibility: f.str(form, 'textVisibility') }),
+  async run(ctx, input) {
+    const changed = await setPromptTextVisibility(ctx.sql, input.id, input.textVisibility);
+    if (!changed) return fail('notFound', NOT_FOUND_DETAIL);
+    ctx.revalidatePrompts?.();
+    return ok('saved', { to: BACK });
+  },
+};
+
 const Archive = z.object({ id: Uuid, archived: z.boolean() });
 
 const archive: AdminOperation<z.infer<typeof Archive>> = {
@@ -277,5 +296,6 @@ export const PROMPT_OPERATIONS = {
   'prompt.reject': reject,
   'prompt.update': editPrompt,
   'prompt.feature': feature,
+  'prompt.visibility': visibility,
   'prompt.archive': archive,
 };

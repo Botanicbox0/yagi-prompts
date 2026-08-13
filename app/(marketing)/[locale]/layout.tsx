@@ -77,6 +77,9 @@ export default async function MarketingRootLayout({
         {/* Pretendard ships Korean as a 92-slice unicode-range dynamic subset; it cannot go
             through next/font/local, so it is linked as self-hosted vendor CSS (§5.2). */}
         <link rel="stylesheet" href="/fonts/pretendard/pretendard-dynamic-subset.css" />
+        {/* The Hangul-only alias for the KO mono stack — generated, see
+            scripts/pretendard-hangul-mono.ts. */}
+        <link rel="stylesheet" href="/fonts/pretendard/pretendard-hangul-mono.css" />
       </head>
       <body>
         <ScrollProvider>
