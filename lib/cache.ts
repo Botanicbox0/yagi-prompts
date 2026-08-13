@@ -1,4 +1,18 @@
-import { revalidateTag } from 'next/cache';
+import { revalidatePath, revalidateTag } from 'next/cache';
+
+/**
+ * Tag AND path, together (2026-08-14, found with the first real content). Locally `next start`
+ * honours tag→route invalidation, so the sweeps were green — but on Vercel the first real publish
+ * sat invisible behind the prerendered landing until the 1h TTL: `revalidateTag` emptied the DATA
+ * cache while the FULL-ROUTE cache of the static pages kept serving the old HTML. The fix is to
+ * name the routes too. The list is the §4 route table's static public surfaces, spelled per
+ * locale because `revalidatePath` takes concrete paths, not patterns.
+ */
+function revalidateStaticSurfaces(rests: readonly string[]): void {
+  for (const locale of ['en', 'ko']) {
+    for (const rest of rests) revalidatePath(`/${locale}${rest}`);
+  }
+}
 
 /**
  * PLAN §3.1 — landing and pricing are static with tag-based revalidation AND a TTL floor:
@@ -13,6 +27,7 @@ export const CATALOG_TTL_SECONDS = 3600;
 
 export function revalidateCatalog(): void {
   revalidateTag(CATALOG_TAG);
+  revalidateStaticSurfaces(['', '/pricing']);
 }
 
 /**
@@ -27,6 +42,8 @@ export const PROMPTS_TAG = 'prompts';
 
 export function revalidatePrompts(): void {
   revalidateTag(PROMPTS_TAG);
+  // The landing carries the rails and the pricing page carries the counts (§13.2/§15.3).
+  revalidateStaticSurfaces(['', '/prompts', '/pricing']);
 }
 
 /**
@@ -41,4 +58,5 @@ export const CONTESTS_TAG = 'contests';
 
 export function revalidateContests(): void {
   revalidateTag(CONTESTS_TAG);
+  revalidateStaticSurfaces(['/contests']);
 }
