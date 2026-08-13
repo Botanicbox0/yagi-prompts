@@ -48,6 +48,7 @@ export async function generateMetadata({
       url: `/${locale}/pricing`,
       title: `${dict.meta.pricingTitle} — ${dict.meta.siteName}`,
       description: dict.meta.pricingDescription,
+      siteName: dict.meta.siteName,
       images: [SITE_OG_IMAGE],
     },
     twitter: { card: SITE_TWITTER_CARD },

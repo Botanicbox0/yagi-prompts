@@ -53,6 +53,7 @@ export async function generateMetadata({ params }: RouteParams): Promise<Metadat
     title: dict.meta.contestsTitle,
     ogTitle: `${dict.meta.contestsTitle} — ${dict.meta.siteName}`,
     description: dict.meta.contestsDescription,
+    siteName: dict.meta.siteName,
   });
 }
 

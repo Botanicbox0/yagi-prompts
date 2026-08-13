@@ -49,6 +49,7 @@ export async function generateMetadata({
       url: `/${locale}`,
       title: `${dict.meta.siteName} — ${dict.meta.tagline}`,
       description: dict.meta.landingDescription,
+      siteName: dict.meta.siteName,
       images: [SITE_OG_IMAGE],
     },
     twitter: { card: SITE_TWITTER_CARD },

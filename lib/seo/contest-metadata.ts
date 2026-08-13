@@ -48,6 +48,8 @@ export function contestMetadata(input: ContestMetaInput): Metadata {
       url: `/${locale}${rest}`,
       title,
       description,
+      // F6 — og:site_name, same reason as the prompt card: read where the site is not.
+      siteName: input.siteName,
       // The contest's own poster when it has one; the brand card otherwise — never imageless.
       images: [image ? { url: image } : SITE_OG_IMAGE],
       ...(contest.video ? { videos: [{ url: contest.video.src, type: contest.video.mime }] } : {}),
@@ -61,6 +63,8 @@ export function contestsListingMetadata(input: {
   locale: Locale;
   title: string;
   description: string;
+  /** F6 — og:site_name on the listing card too. */
+  siteName: string;
   /**
    * The OG title must NAME the site because it is read outside it; the `<title>` must not — the
    * locale layout already appends `· {siteName}` as a template (the M7 lesson, §13's gallery).
@@ -80,6 +84,7 @@ export function contestsListingMetadata(input: {
       url: `/${input.locale}/contests`,
       title: input.ogTitle ?? input.title,
       description: input.description,
+      siteName: input.siteName,
       images: [SITE_OG_IMAGE],
     },
     twitter: { card: SITE_TWITTER_CARD },

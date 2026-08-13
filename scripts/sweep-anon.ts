@@ -810,10 +810,13 @@ async function sweepPromptSeo(): Promise<void> {
   expectPresent('hreflang x-default', detail.body, 'hrefLang="x-default"');
   // A gated prompt page is still a public page — only the text is gated.
   expectAbsent('a Pro-gated prompt is NOT deindexed', detail.body, 'name="robots" content="noindex');
+  // F6 — the share card names the site, because it is read where the site is not.
+  expectPresent('og:site_name on the detail', detail.body, 'property="og:site_name" content="YAGI PROMPTS"');
 
   const gallery = await get('/en/prompts');
   expectPresent('the gallery self-canonicals', gallery.body, `rel="canonical" href="${BASE}/en/prompts"`);
   expectAbsent('the gallery is indexed', gallery.body, 'name="robots" content="noindex');
+  expectPresent('og:site_name on the gallery', gallery.body, 'property="og:site_name" content="YAGI PROMPTS"');
 }
 
 /** §13.2 — the landing pivot: prompts in the nav, prompt cards in the featured strip. */
@@ -832,6 +835,8 @@ async function sweepLandingPivot(): Promise<void> {
   }
   // §15 — same rule as the gallery: static page, shared by every tier, no balance on it.
   expectAbsent('no cookie balance on the landing', page.body, 'data-cookie-balance');
+  // F6 — the landing's share card names the site.
+  expectPresent('og:site_name on the landing', page.body, 'property="og:site_name" content="YAGI PROMPTS"');
 
   expectEqual('/library still works for anyone who has the URL', (await get('/library')).status, 307);
 }
@@ -870,6 +875,8 @@ async function sweepPricingCookies(): Promise<void> {
   // §15 — the subscription is de-emphasized, not sold: the $9 hero is off this surface.
   const en = await get('/en/pricing');
   expectAbsent('…and the $9 headline is gone', en.body, 'OUR ORIGINALS ARE $9');
+  // F6 — pricing's share card names the site too.
+  expectPresent('og:site_name on pricing', en.body, 'property="og:site_name" content="YAGI PROMPTS"');
 }
 
 // ---------------------------------------------------------------------------
@@ -1078,6 +1085,8 @@ async function sweepContestSeo(): Promise<void> {
   expectPresent('hreflang ko', listing.body, `hrefLang="ko" href="${BASE}/ko/contests"`);
   expectPresent('hreflang x-default', listing.body, 'hrefLang="x-default"');
   expectAbsent('the listing is indexed', listing.body, 'name="robots" content="noindex');
+  // F6 — the listing's share card names the site.
+  expectPresent('og:site_name on the listing', listing.body, 'property="og:site_name" content="YAGI PROMPTS"');
 }
 
 /** §14.2 — Contests joins the nav between Prompts and Pricing, on every marketing page. */

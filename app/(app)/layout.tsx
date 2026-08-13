@@ -1,5 +1,5 @@
 import '@/app/globals.css';
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import type { ReactNode } from 'react';
 import { fontVariables } from '@/app/fonts';
 import { getDictionary } from '@/lib/i18n/dictionaries';
@@ -11,6 +11,9 @@ import { getRequestLocale } from '@/lib/i18n/server';
  * `force-dynamic` + `private, no-store` (middleware sets the header; this sets the render mode).
  */
 export const dynamic = 'force-dynamic';
+
+/** F6 — same browser-chrome color as the marketing tree: separate root, same product. */
+export const viewport: Viewport = { themeColor: '#ffffff' };
 
 /**
  * A separate root layout means nothing is inherited from the marketing group — including the

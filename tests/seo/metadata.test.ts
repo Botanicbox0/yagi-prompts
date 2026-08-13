@@ -5,6 +5,7 @@ import {
   playbookPath,
   unresolvedPlaybookMetadata,
 } from '@/lib/seo/playbook-metadata';
+import { contestMetadata, contestsListingMetadata } from '@/lib/seo/contest-metadata';
 import type { ShapedAssetRef } from '@/lib/content/shape';
 
 /**
@@ -106,5 +107,31 @@ describe('playbook metadata (§3.9)', () => {
       ko: '/ko/pricing',
       'x-default': '/en/pricing',
     });
+  });
+});
+
+/** F6 — og:site_name on the contests surface (the prompts twin lives in prompt-seo.test.ts). */
+describe('contest metadata og:site_name (F6)', () => {
+  it('names the site on the detail and listing OG objects', () => {
+    const detail = contestMetadata({
+      contest: {
+        slug: 'launch-film-contest',
+        title: { en: 'Launch film contest', ko: '런칭 필름 콘테스트' },
+        summary: { en: 'Bring the brief to life.', ko: '브리프를 영상으로.' },
+        poster: null,
+        video: null,
+      },
+      locale: 'en',
+      siteName: 'YAGI PROMPTS',
+    });
+    expect((detail.openGraph as { siteName?: string }).siteName).toBe('YAGI PROMPTS');
+
+    const listing = contestsListingMetadata({
+      locale: 'ko',
+      title: 'Contests',
+      description: 'D',
+      siteName: 'YAGI PROMPTS',
+    });
+    expect((listing.openGraph as { siteName?: string }).siteName).toBe('YAGI PROMPTS');
   });
 });

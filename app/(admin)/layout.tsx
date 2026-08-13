@@ -1,5 +1,5 @@
 import '@/app/globals.css';
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import type { ReactNode } from 'react';
 import { notFound } from 'next/navigation';
 import { fontVariables } from '@/app/fonts';
@@ -17,6 +17,9 @@ import { getLocaleFromHeaders } from '@/lib/i18n/server';
  * surface should not confirm its own existence.
  */
 export const dynamic = 'force-dynamic';
+
+/** F6 — same browser-chrome color as the other two roots. */
+export const viewport: Viewport = { themeColor: '#ffffff' };
 
 /** Same reasoning as `app/(app)/layout.tsx`: own root layout, so own `<title>`. */
 export async function generateMetadata(): Promise<Metadata> {

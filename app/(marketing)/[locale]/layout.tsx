@@ -1,5 +1,5 @@
 import '@/app/globals.css';
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import type { ReactNode } from 'react';
 import { fontVariables } from '@/app/fonts';
 import { ScrollProvider } from '@/components/motion/scroll-provider';
@@ -20,6 +20,9 @@ import { siteUrl } from '@/lib/seo/site-url';
 export function generateStaticParams(): Array<{ locale: Locale }> {
   return LOCALES.map((locale) => ({ locale }));
 }
+
+/** F6 — the browser chrome color. White: §5.1's base surface, and what the nav sits on. */
+export const viewport: Viewport = { themeColor: '#ffffff' };
 
 /** Anything that is not `en` or `ko` is a 404, not a dynamic render. */
 export const dynamicParams = false;
