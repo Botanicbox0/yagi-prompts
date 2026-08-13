@@ -22,6 +22,7 @@ import {
   effectiveTextVisibility,
   normalizeHandle,
   parsePromptMedia,
+  slugify,
   type PromptMedia,
 } from '@/lib/prompts/schemas';
 import { ADMIN_PROMPTS_PATH } from '@/lib/prompts/links';
@@ -123,11 +124,18 @@ const createPrompt: AdminOperation<{ input: z.infer<typeof AuthoringSchema>; for
       return fail('invalid', 'poster: a YAGI prompt needs a poster image');
     }
 
+    // Founder direction (2026-08-14): a blank slug FOLLOWS THE EN TITLE. Collisions get a short
+    // numeric suffix instead of a refusal — the founder is publishing, not naming database rows.
+    // (Single-admin surface: the read-then-insert window is acceptable, and the unique index is
+    // still the backstop underneath.)
+    const slug =
+      input.slug ?? (await freeSlug(ctx.sql, slugify(input.title, `prompt-${id.slice(0, 8)}`)));
+
     const { media } = await publishPromptMedia(ctx.storage, staged.value);
 
     await insertPrompt(ctx.sql, {
       id,
-      slug: input.slug,
+      slug,
       source: 'yagi',
       authorId: null,
       authorHandle: null,
@@ -144,9 +152,24 @@ const createPrompt: AdminOperation<{ input: z.infer<typeof AuthoringSchema>; for
     });
 
     ctx.revalidatePrompts?.();
-    return ok('published', { detail: input.slug, to: BACK });
+    return ok('published', { detail: slug, to: BACK });
   },
 };
+
+/** The first of `base`, `base-2` … `base-9` that no prompt row holds yet. */
+async function freeSlug(sql: AdminContext['sql'], base: string): Promise<string> {
+  const { rows } = await sql.query<{ slug: string }>(
+    `select slug from prompt_items where slug = $1 or slug like $2`,
+    [base, `${base}-%`],
+  );
+  const taken = new Set(rows.map((row) => row.slug));
+  if (!taken.has(base)) return base;
+  for (let n = 2; n <= 9; n += 1) {
+    if (!taken.has(`${base}-${n}`)) return `${base}-${n}`;
+  }
+  // Ten collisions on one title is a naming conversation, not a numbering one.
+  return `${base}-${randomUUID().slice(0, 8)}`;
+}
 
 // ---------------------------------------------------------------------------
 // moderation

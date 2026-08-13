@@ -376,8 +376,8 @@ export default async function AdminPromptsPage({
             <Field label={a.fieldPromptTitleKo}>
               <input type="text" name="titleKo" className={INPUT} />
             </Field>
-            <Field label={a.fieldPromptSlug}>
-              <input type="text" name="slug" className={INPUT} />
+            <Field label={a.fieldPromptSlug} hint={a.promptSlugAutoHint}>
+              <input type="text" name="slug" className={INPUT} placeholder={a.promptSlugAutoHint} />
             </Field>
             <Field label={a.fieldItemModel}>
               <input type="text" name="model" defaultValue={DEFAULT_PROMPT_MODEL} className={INPUT} />
