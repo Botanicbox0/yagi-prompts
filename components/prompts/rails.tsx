@@ -28,6 +28,7 @@ export function PromptRail({
   filteredEmptyLabel,
   signinHref,
   now,
+  topClassName = 'mt-16 first:mt-0 lg:mt-24',
 }: {
   id: string;
   heading: string;
@@ -40,9 +41,16 @@ export function PromptRail({
   filteredEmptyLabel: string;
   signinHref: string;
   now?: Date | number;
+  /**
+   * The rail's OWN top rhythm, owned by the page (F3): the landing tightens its first rail on
+   * mobile so a card makes the 375×667 first viewport, the gallery keeps the default. A single
+   * replaceable string rather than an appended class — two competing `mt-*` utilities would
+   * resolve by stylesheet order, not by intent.
+   */
+  topClassName?: string;
 }) {
   return (
-    <section data-rail={id} className="mt-16 first:mt-0 lg:mt-24">
+    <section data-rail={id} className={topClassName}>
       <div className="flex flex-wrap items-baseline justify-between gap-x-8 gap-y-2 border-b border-hairline pb-4">
         {/* §5.2: rail headers are DISPLAY type, and the KO variant is a different string rather
             than the same one at a smaller size (globals.css does the 0.85× on top). */}

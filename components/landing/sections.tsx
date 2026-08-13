@@ -35,11 +35,16 @@ function startHref(locale: Locale): string {
  * one scroll below the headline. The hero therefore lost its media panel and its viewport-height
  * ambition: it is a compact type band on a LIGHT surface, and the primary CTA is an anchor to the
  * gallery that starts immediately under it.
+ *
+ * Design review F3: below lg it sheds the lede and the submit link too — on a 375×667 WebView
+ * the full band pushed the first poster under the fold, and a gallery-first landing whose first
+ * screen shows zero cards is not gallery-first. The two reappear in `HeroLede`, after the first
+ * rail. Same type, same copy; only where they live changes.
  */
 export function Hero({ dict }: { locale: Locale; dict: Dictionary }) {
   return (
     <section data-section data-theme="light" className="section overflow-hidden">
-      <div className="mx-auto max-w-shell px-gutter pt-28 pb-14 lg:pt-36 lg:pb-20">
+      <div className="mx-auto max-w-shell px-gutter pt-24 pb-8 lg:pt-36 lg:pb-20">
         <p className="text-accent font-label text-eyebrow uppercase">{dict.hero.eyebrow}</p>
         <Reveal
           immediate
@@ -49,8 +54,8 @@ export function Hero({ dict }: { locale: Locale; dict: Dictionary }) {
           className="mt-7 font-display text-display uppercase"
         />
 
-        <div className="mt-10 flex flex-wrap items-end justify-between gap-x-14 gap-y-6">
-          <p className="max-w-detail text-body opacity-70">{dict.hero.lede}</p>
+        <div className="mt-8 flex flex-wrap items-end justify-between gap-x-14 gap-y-6 lg:mt-10">
+          <p className="hidden max-w-detail text-body opacity-70 lg:block">{dict.hero.lede}</p>
           <div className="flex flex-wrap items-center gap-x-8 gap-y-4">
             <a
               href="#gallery"
@@ -60,7 +65,7 @@ export function Hero({ dict }: { locale: Locale; dict: Dictionary }) {
             </a>
             <a
               href={PROMPT_SUBMIT_PATH}
-              className="text-accent inline-block font-label text-label uppercase"
+              className="text-accent hidden font-label text-label uppercase lg:inline-block"
             >
               <TextSwap>{dict.prompts.submitCta} →</TextSwap>
             </a>
@@ -68,6 +73,25 @@ export function Hero({ dict }: { locale: Locale; dict: Dictionary }) {
         </div>
       </div>
     </section>
+  );
+}
+
+/**
+ * F3's other half: the hero copy that left the small-screen first viewport, re-homed after the
+ * first rail. `lg:hidden` mirrors the hero's `hidden lg:*` exactly — every reader meets the lede
+ * and the submit link once, no width meets them twice.
+ */
+export function HeroLede({ dict }: { dict: Dictionary }) {
+  return (
+    <div data-hero-lede className="mt-12 border-t border-hairline pt-6 lg:hidden">
+      <p className="max-w-detail text-body opacity-70">{dict.hero.lede}</p>
+      <a
+        href={PROMPT_SUBMIT_PATH}
+        className="text-accent mt-5 inline-block font-label text-label uppercase"
+      >
+        <TextSwap>{dict.prompts.submitCta} →</TextSwap>
+      </a>
+    </div>
   );
 }
 
