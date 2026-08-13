@@ -4,6 +4,7 @@ import { contestRest } from '@/lib/contests/links';
 import type { Locale } from '@/lib/i18n/config';
 import { localize } from '@/lib/i18n/format';
 import { localeAlternates } from './playbook-metadata';
+import { SITE_OG_IMAGE, SITE_TWITTER_CARD } from './og';
 
 /**
  * PLAN §14.2 — "hreflang/canonical/OG from poster".
@@ -47,9 +48,11 @@ export function contestMetadata(input: ContestMetaInput): Metadata {
       url: `/${locale}${rest}`,
       title,
       description,
-      ...(image ? { images: [{ url: image }] } : {}),
+      // The contest's own poster when it has one; the brand card otherwise — never imageless.
+      images: [image ? { url: image } : SITE_OG_IMAGE],
       ...(contest.video ? { videos: [{ url: contest.video.src, type: contest.video.mime }] } : {}),
     },
+    twitter: { card: SITE_TWITTER_CARD },
   };
 }
 
@@ -77,7 +80,9 @@ export function contestsListingMetadata(input: {
       url: `/${input.locale}/contests`,
       title: input.ogTitle ?? input.title,
       description: input.description,
+      images: [SITE_OG_IMAGE],
     },
+    twitter: { card: SITE_TWITTER_CARD },
   };
 }
 

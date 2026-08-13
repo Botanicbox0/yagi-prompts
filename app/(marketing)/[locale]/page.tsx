@@ -7,6 +7,7 @@ import { USE_CASES } from '@/lib/prompts/schemas';
 import { marqueeItems } from '@/lib/marquee';
 import { signInHref } from '@/lib/billing/links';
 import { promptLabels, presentUseCases, useCaseLabel } from '@/components/prompts/labels';
+import { SITE_OG_IMAGE, SITE_TWITTER_CARD } from '@/lib/seo/og';
 import { MarketingFooter, MarketingNav, adLabels } from '@/components/marketing/chrome';
 import { Hero, MarqueeStrip, Premise } from '@/components/landing/sections';
 import { CircleWipe } from '@/components/landing/circle-wipe';
@@ -48,7 +49,9 @@ export async function generateMetadata({
       url: `/${locale}`,
       title: `${dict.meta.siteName} — ${dict.meta.tagline}`,
       description: dict.meta.landingDescription,
+      images: [SITE_OG_IMAGE],
     },
+    twitter: { card: SITE_TWITTER_CARD },
   };
 }
 
