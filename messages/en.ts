@@ -38,6 +38,14 @@ export const en = {
     signedInAs: 'Signed in as',
     signInRequired: 'Sign in to open the library.',
     adminOnly: 'Admins only.',
+    // F1 — the open-in-browser interstitial: Google refuses OAuth inside in-app WebViews
+    // (Instagram, KakaoTalk, …), which is exactly where a bio-link visit starts.
+    webviewEyebrow: 'Google sign-in',
+    webviewTitle: 'OPEN IN YOUR BROWSER.',
+    webviewBody:
+      'Google blocks sign-in inside in-app browsers, so this step cannot continue here.',
+    webviewUrlLabel: 'Press and hold the address below to copy it.',
+    webviewMenuHint: 'The ⋯ menu in the corner has "Open in external browser".',
   },
   plan: {
     free: 'Free',
@@ -61,6 +69,8 @@ export const en = {
     spendNote: 'Opens permanently on this account. Re-reading never charges.',
     emptyTitle: 'You are out of cookies.',
     weeklyLine: 'One free cookie lands every week — it is added when you visit.',
+    // F5 — wallet unreadable is a fact about the read, never a claim about the balance.
+    unavailableBody: 'Your wallet could not be read. Try again in a moment.',
     packTitle: '{count} cookies · {price}',
     packNote: 'One-time purchase, not a subscription.',
     packCta: 'Buy {count} cookies — {price}',
@@ -69,6 +79,16 @@ export const en = {
     recentHeading: 'Prompts you opened',
     recentEmpty: 'Nothing opened yet. Spend one on a YAGI original.',
     openedOn: 'Opened {date}',
+  },
+  /**
+   * F2 — the notice band (`components/marketing/notice.tsx`): the three URL codes the auth
+   * redirects land with, each as one plain sentence. Unknown codes render nothing.
+   */
+  notice: {
+    oauth: 'Sign-in did not complete. Please try again.',
+    oauthUnconfigured: 'Sign-in is not connected on this deployment yet.',
+    signin: 'That page needs an account. Sign in first.',
+    dismiss: 'Close',
   },
   hero: {
     eyebrow: 'Original prompts · Seedance 2.5',
@@ -390,6 +410,9 @@ export const en = {
     cookieWeeklyNote: 'One free cookie a week, added when you visit. It does not pile up while you are away.',
     cookiePackTitle: 'When you want more',
     cookiePackValue: '$4 = 5',
+    // F5 — worn by the pack cell while no gateway is connected: the price is real, the
+    // checkout is not, and the cell says so instead of implying it can be bought today.
+    cookiePackStatus: 'CHECKOUT OPENING SOON',
     cookiePackNote: 'Five cookies for four dollars, one time. Not a subscription — nothing to cancel.',
     cookieRule: 'One cookie opens one YAGI original — permanently, on your account.',
     cookieColumn: 'With a cookie',

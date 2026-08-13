@@ -101,10 +101,14 @@ export function PromptHeader({
 /**
  * The §15.3 funnel, one variant per resolved panel state:
  *
- *   'signin'  a link into Journey A that returns to THIS prompt — never a form anon cannot POST;
- *   'spend'   a JS-free form to the unlock server action, wearing the real balance;
- *   'empty'   the wallet panel: the weekly line, and the $4/5 pack in the §11 designed
- *             not-connected state (`BillingUnavailable`) — a fact, not a dead button.
+ *   'signin'       a link into Journey A that returns to THIS prompt — never a form anon cannot
+ *                  POST;
+ *   'spend'        a JS-free form to the unlock server action, wearing the real balance;
+ *   'empty'        the wallet panel: the weekly line, and the $4/5 pack in the §11 designed
+ *                  not-connected state (`BillingUnavailable`) — a fact, not a dead button;
+ *   'unavailable'  the wallet could not be read (F5) — one factual sentence in a hairline
+ *                  panel. No pack pitch, no zero-balance claim: both would be statements about
+ *                  a wallet nobody read.
  */
 function UnlockPanelView({
   panel,
@@ -148,6 +152,14 @@ function UnlockPanelView({
         </button>
         <p className="mt-3 font-mono text-[0.72rem] opacity-45">{labels.spendNote}</p>
       </form>
+    );
+  }
+
+  if (panel.state === 'unavailable') {
+    return (
+      <div data-unlock-cta="unavailable" className="border border-hairline p-6 sm:p-8">
+        <p className="text-[0.9375rem] opacity-70">{labels.walletUnavailable}</p>
+      </div>
     );
   }
 

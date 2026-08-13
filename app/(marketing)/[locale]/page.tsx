@@ -9,7 +9,7 @@ import { signInHref } from '@/lib/billing/links';
 import { promptLabels, presentUseCases, useCaseLabel } from '@/components/prompts/labels';
 import { SITE_OG_IMAGE, SITE_TWITTER_CARD } from '@/lib/seo/og';
 import { MarketingFooter, MarketingNav, adLabels } from '@/components/marketing/chrome';
-import { Hero, MarqueeStrip, Premise } from '@/components/landing/sections';
+import { Hero, HeroLede, MarqueeStrip, Premise } from '@/components/landing/sections';
 import { CircleWipe } from '@/components/landing/circle-wipe';
 import { Faq } from '@/components/landing/faq';
 import { PromptRail } from '@/components/prompts/rails';
@@ -49,6 +49,7 @@ export async function generateMetadata({
       url: `/${locale}`,
       title: `${dict.meta.siteName} — ${dict.meta.tagline}`,
       description: dict.meta.landingDescription,
+      siteName: dict.meta.siteName,
       images: [SITE_OG_IMAGE],
     },
     twitter: { card: SITE_TWITTER_CARD },
@@ -96,10 +97,12 @@ export default async function LandingPage({ params }: { params: Promise<{ locale
             <AdCard labels={ads} />
           </AdRail>
 
-          {/* The gallery, immediately — cards and result clips are the first scroll. */}
+          {/* The gallery, immediately — cards and result clips are the first scroll. F3 tightens
+              the mobile top rhythm (filter padding, first-rail margin) so the first poster's top
+              lands inside a 375×667 viewport; ≥lg keeps the M1 spacing. */}
           <section id="gallery" data-section data-theme="light" className="section">
             <div className="band pb-24">
-              <div className="border-t border-hairline pt-6">
+              <div className="border-t border-hairline pt-3 lg:pt-6">
                 <UseCaseFilter
                   options={filterOptions}
                   labels={{ heading: dict.prompts.filterHeading, all: dict.prompts.filterAll }}
@@ -117,7 +120,11 @@ export default async function LandingPage({ params }: { params: Promise<{ locale
                 emptyLabel={dict.prompts.emptyYagi}
                 filteredEmptyLabel={dict.prompts.filterEmpty}
                 signinHref={signin}
+                topClassName="mt-4 first:mt-0 lg:mt-24"
               />
+
+              {/* F3 — the hero's lede + submit link, re-homed below lg after the first rail. */}
+              <HeroLede dict={dict} />
 
               <PromptRail
                 id="community"

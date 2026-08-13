@@ -242,6 +242,23 @@ describe('prompt detail (§13.2 / §5.5 / §15.3)', () => {
   });
 
   /**
+   * Design review F5 — wallet-unreadable is a factual panel: one sentence, and NONE of the
+   * empty state's claims (no zero-balance headline, no weekly line, no pack pitch, no control).
+   */
+  it('renders wallet-unreadable as a fact, never as "you have 0 cookies"', () => {
+    const html = body({ ...locked, tier: 'free' }, { state: 'unavailable' });
+    expect(html).toContain('data-unlock-cta="unavailable"');
+    expect(html).toContain(dict.cookies.unavailableBody);
+    expect(html).not.toContain(dict.cookies.emptyTitle);
+    expect(html).not.toContain(dict.cookies.weeklyLine);
+    expect(html).not.toContain('data-billing="unavailable"');
+    expect(html).not.toContain('$4');
+    expect(html).not.toContain('data-unlock-cta="spend"');
+    expect(html).not.toContain('<button');
+    expect(html).not.toContain(SENTINEL);
+  });
+
+  /**
    * The M8 seam, rendered ahead of the gateway that will flip it: with `packReady` the same panel
    * is a real one-press form. Testing the unreachable branch NOW is what keeps "plug in a
    * Paddle-class MoR later" a config change instead of a UI project.

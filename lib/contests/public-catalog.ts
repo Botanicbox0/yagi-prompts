@@ -3,6 +3,7 @@ import { unstable_cache } from 'next/cache';
 import { resolveRuntimeMode } from '@/lib/runtime-mode';
 import { CATALOG_TTL_SECONDS, CONTESTS_TAG } from '@/lib/cache';
 import { getSqlRunner } from '@/lib/db/connect';
+import { readPublicProjection } from '@/lib/db/read-policy';
 import { EMPTY_CONTEST_CATALOG, loadContestCatalog, type ContestCatalog } from './catalog';
 
 /**
@@ -18,18 +19,12 @@ import { EMPTY_CONTEST_CATALOG, loadContestCatalog, type ContestCatalog } from '
  * one. That is what makes an hourly TTL an acceptable resolution for a countdown measured in days.
  *
  * No database configured ⇒ the empty catalog, never a throw: `npm run build` must survive a machine
- * with no database at all (CI does exactly that).
+ * with no database at all (CI does exactly that). A CONFIGURED database that fails to read throws
+ * instead — the F4 policy (`lib/db/read-policy.ts`): stale-good beats cached-empty.
  */
 
 async function readContestCatalog(): Promise<ContestCatalog> {
-  const sql = await getSqlRunner();
-  if (!sql) return EMPTY_CONTEST_CATALOG;
-  try {
-    return await loadContestCatalog(sql);
-  } catch (err) {
-    console.warn(`[contests] read failed, falling back to the empty catalog: ${String(err)}`);
-    return EMPTY_CONTEST_CATALOG;
-  }
+  return readPublicProjection(await getSqlRunner(), EMPTY_CONTEST_CATALOG, loadContestCatalog);
 }
 
 /** Keyed by runtime mode for the M7 reason: `.next/cache` outlives a data-source switch. */

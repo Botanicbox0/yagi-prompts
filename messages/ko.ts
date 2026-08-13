@@ -49,6 +49,12 @@ export const ko: Dictionary = {
     signedInAs: '로그인 계정',
     signInRequired: '라이브러리는 로그인 후 이용할 수 있습니다.',
     adminOnly: '관리자 전용 페이지입니다.',
+    webviewEyebrow: 'Google 로그인',
+    webviewTitle: '기본 브라우저에서 열어 주세요.',
+    webviewBody:
+      'Google이 앱 안 브라우저에서는 로그인을 차단하기 때문에 여기서는 진행할 수 없습니다.',
+    webviewUrlLabel: '아래 주소를 길게 누르면 복사할 수 있습니다.',
+    webviewMenuHint: '오른쪽 위 ⋯ 메뉴에서 "다른 브라우저로 열기"를 누르면 바로 이동합니다.',
   },
   plan: {
     free: '무료',
@@ -68,6 +74,7 @@ export const ko: Dictionary = {
     spendNote: '이 계정에 영구히 열립니다. 다시 읽어도 차감되지 않습니다.',
     emptyTitle: '쿠키를 모두 사용했습니다.',
     weeklyLine: '매주 1개가 무료로 채워집니다. 방문할 때 반영됩니다.',
+    unavailableBody: '지갑 정보를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.',
     packTitle: '쿠키 {count}개 · {price}',
     packNote: '일회성 구매입니다. 구독이 아닙니다.',
     packCta: '쿠키 {count}개 구매 — {price}',
@@ -76,6 +83,12 @@ export const ko: Dictionary = {
     recentHeading: '열어본 프롬프트',
     recentEmpty: '아직 연 프롬프트가 없습니다. YAGI 오리지널에 하나 써보세요.',
     openedOn: '{date} 열람',
+  },
+  notice: {
+    oauth: '로그인이 완료되지 않았습니다. 다시 시도해 주세요.',
+    oauthUnconfigured: '이 배포에는 아직 로그인이 연결되지 않았습니다.',
+    signin: '로그인이 필요한 페이지입니다. 먼저 로그인해 주세요.',
+    dismiss: '닫기',
   },
   hero: {
     eyebrow: '오리지널 프롬프트 · Seedance 2.5',
@@ -375,6 +388,7 @@ export const ko: Dictionary = {
     cookieWeeklyNote: '매주 1개가 무료로 채워집니다. 방문할 때 반영되며, 비운 기간만큼 쌓이지는 않습니다.',
     cookiePackTitle: '더 필요할 때',
     cookiePackValue: '$4 = 5',
+    cookiePackStatus: '결제 오픈 예정',
     cookiePackNote: '$4에 쿠키 5개를 한 번만 결제합니다. 구독이 아니므로 해지할 것도 없습니다.',
     cookieRule: '쿠키 1개로 YAGI 오리지널 1개가 열리고, 계정에 영구히 남습니다.',
     cookieColumn: '쿠키로 열면',

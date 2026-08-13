@@ -3,6 +3,7 @@ import { unstable_cache } from 'next/cache';
 import { resolveRuntimeMode } from '@/lib/runtime-mode';
 import { CATALOG_TTL_SECONDS, PROMPTS_TAG } from '@/lib/cache';
 import { getSqlRunner } from '@/lib/db/connect';
+import { readPublicProjection } from '@/lib/db/read-policy';
 import { EMPTY_PROMPT_CATALOG, loadPromptCatalog, type PromptCatalog } from './catalog';
 
 /**
@@ -14,18 +15,12 @@ import { EMPTY_PROMPT_CATALOG, loadPromptCatalog, type PromptCatalog } from './c
  * if an invalidation is ever lost.
  *
  * No database configured ⇒ the empty catalog, never a throw: `npm run build` must survive a machine
- * with no database at all (CI does exactly that).
+ * with no database at all (CI does exactly that). A CONFIGURED database that fails to read throws
+ * instead — the F4 policy (`lib/db/read-policy.ts`): stale-good beats cached-empty.
  */
 
 async function readPromptCatalog(): Promise<PromptCatalog> {
-  const sql = await getSqlRunner();
-  if (!sql) return EMPTY_PROMPT_CATALOG;
-  try {
-    return await loadPromptCatalog(sql);
-  } catch (err) {
-    console.warn(`[prompts] read failed, falling back to the empty catalog: ${String(err)}`);
-    return EMPTY_PROMPT_CATALOG;
-  }
+  return readPublicProjection(await getSqlRunner(), EMPTY_PROMPT_CATALOG, loadPromptCatalog);
 }
 
 /**

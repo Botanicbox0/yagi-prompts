@@ -52,6 +52,7 @@ export async function generateMetadata({ params }: RouteParams): Promise<Metadat
     title: dict.meta.promptsTitle,
     ogTitle: `${dict.meta.promptsTitle} — ${dict.meta.siteName}`,
     description: dict.meta.promptsDescription,
+    siteName: dict.meta.siteName,
   });
 }
 

@@ -51,6 +51,9 @@ export function promptMetadata(input: PromptMetaInput): Metadata {
       url: `/${input.locale}${rest}`,
       title,
       description: input.description,
+      // F6 — og:site_name: the share card is read where the site is not, and the article title
+      // alone does not say whose article it is.
+      siteName: input.siteName,
       // The prompt's own poster when it has one; the brand card otherwise — never imageless.
       images: [image ? { url: image } : SITE_OG_IMAGE],
       ...(input.video ? { videos: [{ url: input.video.src, type: input.video.mime }] } : {}),
@@ -64,6 +67,8 @@ export function promptsGalleryMetadata(input: {
   locale: Locale;
   title: string;
   description: string;
+  /** F6 — og:site_name on the listing card too. */
+  siteName: string;
   /**
    * The OG title, which must NAME the site because it is read outside it (a shared link, a card in
    * a chat client). The `<title>` must NOT: the locale layout already appends `· {siteName}` as a
@@ -85,6 +90,7 @@ export function promptsGalleryMetadata(input: {
       url: `/${input.locale}/prompts`,
       title: input.ogTitle ?? input.title,
       description: input.description,
+      siteName: input.siteName,
       images: [SITE_OG_IMAGE],
     },
     twitter: { card: SITE_TWITTER_CARD },

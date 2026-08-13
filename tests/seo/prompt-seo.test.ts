@@ -134,6 +134,11 @@ describe('prompt metadata (§13.2 SEO)', () => {
     expect(og.videos?.[0]?.url).toBe('https://cdn.test/abc.mp4');
   });
 
+  /** F6 — og:site_name: the card is read where the site is not, so the card names the site. */
+  it('names the site on the OG object', () => {
+    expect((meta().openGraph as { siteName?: string }).siteName).toBe('YAGI PROMPTS');
+  });
+
   /**
    * Founder share-link pass (2026-08-13): the policy INVERTED. A posterless prompt used to omit
    * og:image; now nothing shareable is ever imageless — the brand card (`/og/card.png`, §5
@@ -156,10 +161,16 @@ describe('prompt metadata (§13.2 SEO)', () => {
   });
 
   it('makes the gallery indexable and self-canonical', () => {
-    const m = promptsGalleryMetadata({ locale: 'ko', title: 'Prompts', description: 'D' });
+    const m = promptsGalleryMetadata({
+      locale: 'ko',
+      title: 'Prompts',
+      description: 'D',
+      siteName: 'YAGI PROMPTS',
+    });
     expect(m.alternates?.canonical).toBe('/ko/prompts');
     expect(m.robots).toBeUndefined();
     expect((m.openGraph as { locale?: string }).locale).toBe('ko_KR');
+    expect((m.openGraph as { siteName?: string }).siteName).toBe('YAGI PROMPTS');
   });
 
   /**
@@ -174,6 +185,7 @@ describe('prompt metadata (§13.2 SEO)', () => {
       title: 'Prompts',
       ogTitle: 'Prompts — YAGI PROMPTS',
       description: 'D',
+      siteName: 'YAGI PROMPTS',
     });
     expect(m.title).toBe('Prompts');
     expect((m.openGraph as { title?: string }).title).toBe('Prompts — YAGI PROMPTS');
