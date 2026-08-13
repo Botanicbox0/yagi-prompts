@@ -34,21 +34,24 @@ export const WEEKLY_INTERVAL = '7 days';
 /**
  * What the locked prompt page offers, as a pure function of (identity × wallet):
  *
- *   'signin'  anonymous — the funnel starts at Google and returns to this prompt;
- *   'spend'   signed in with a cookie — one press unlocks the prompt forever;
- *   'empty'   signed in at zero — the wallet panel: the weekly line and the $4/5 pack.
+ *   'signin'       anonymous — the funnel starts at Google and returns to this prompt;
+ *   'spend'        signed in with a cookie — one press unlocks the prompt forever;
+ *   'empty'        signed in at a REAL zero — the wallet panel: the weekly line, the $4/5 pack;
+ *   'unavailable'  signed in, wallet unreadable (no profile row) — a factual notice, nothing
+ *                  else. (Design review F5: folding this into 'empty' claimed "you have 0
+ *                  cookies" about a number nobody read, and pitched the pack on that claim.)
  *
- * A `null` balance for a signed-in viewer means the wallet could not be read (no profile row, no
- * database). That reader is shown 'empty' rather than a spend button that would refuse them:
- * fail closed, never a control that lies about being available.
+ * Every non-'spend' state fails closed — no control that a press would refuse.
  */
 export type UnlockPanel =
   | { state: 'signin' }
   | { state: 'spend'; balance: number }
-  | { state: 'empty' };
+  | { state: 'empty' }
+  | { state: 'unavailable' };
 
 export function decideUnlockPanel(userId: string | null, balance: number | null): UnlockPanel {
   if (userId === null) return { state: 'signin' };
-  if (balance !== null && balance >= UNLOCK_COST) return { state: 'spend', balance };
+  if (balance === null) return { state: 'unavailable' };
+  if (balance >= UNLOCK_COST) return { state: 'spend', balance };
   return { state: 'empty' };
 }

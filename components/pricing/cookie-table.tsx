@@ -12,6 +12,9 @@ export interface CookieCell {
   title: string;
   value: string;
   note: string;
+  /** F5 — a mono status qualifier under the figure (e.g. the pack's "checkout opening soon"
+   *  while no gateway is connected). The figure states the price; the chip states its status. */
+  chip?: string;
 }
 
 export function CookieTable({ cells, rule }: { cells: CookieCell[]; rule: string }) {
@@ -24,6 +27,16 @@ export function CookieTable({ cells, rule }: { cells: CookieCell[]; rule: string
             <p className="mt-4 font-display text-[clamp(2.5rem,5vw,4rem)] leading-[0.85] font-black">
               {cell.value}
             </p>
+            {cell.chip !== undefined && (
+              <p className="mt-3">
+                <span
+                  data-pack-status
+                  className="inline-block border border-hairline px-2 py-1 font-mono text-[0.7rem] tracking-[0.08em] uppercase opacity-70"
+                >
+                  {cell.chip}
+                </span>
+              </p>
+            )}
             <p className="mt-4 text-[0.9375rem] leading-snug opacity-70">{cell.note}</p>
           </section>
         ))}

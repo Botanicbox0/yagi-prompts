@@ -475,7 +475,15 @@ describe('decideUnlockPanel (§15.3)', () => {
     expect(decideUnlockPanel('user-1', 3)).toEqual({ state: 'spend', balance: 3 });
     expect(decideUnlockPanel('user-1', 1)).toEqual({ state: 'spend', balance: 1 });
     expect(decideUnlockPanel('user-1', 0)).toEqual({ state: 'empty' });
-    // A signed-in viewer whose wallet could not be read spends nothing — fail closed.
-    expect(decideUnlockPanel('user-1', null)).toEqual({ state: 'empty' });
+  });
+
+  /**
+   * Design review F5. An unreadable wallet used to fold into 'empty', which told the reader
+   * "you have 0 cookies" — a factual claim about a number nobody read — and pitched the pack at
+   * them on the strength of it. Unreadable is its own state: still no spend control (fail
+   * closed), but no zero-balance claim and no pitch either.
+   */
+  it('answers wallet-unreadable as its own state, never as a zero balance', () => {
+    expect(decideUnlockPanel('user-1', null)).toEqual({ state: 'unavailable' });
   });
 });

@@ -40,6 +40,7 @@ export interface PromptLabels {
   packNote: string;
   packCta: string;
   packUnavailableBody: string;
+  walletUnavailable: string;
 }
 
 export function promptLabels(dict: Dictionary): PromptLabels {
@@ -77,6 +78,8 @@ export function promptLabels(dict: Dictionary): PromptLabels {
     packCta: dict.cookies.packCta,
     // §15.1-5 — the pack renders the same honest not-connected state billing does (§11).
     packUnavailableBody: dict.billing.unavailableBody,
+    // F5 — the wallet-unreadable panel: one factual sentence, no pitch.
+    walletUnavailable: dict.cookies.unavailableBody,
   };
 }
 

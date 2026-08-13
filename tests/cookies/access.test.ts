@@ -82,6 +82,20 @@ describe('unlock-aware prompt access (§15)', () => {
     expect(result.unlockPanel).toEqual({ state: 'empty' });
   });
 
+  /**
+   * Design review F5. A session whose profile row is gone reads a null wallet; folding that
+   * into 'empty' claimed "you have 0 cookies" and pitched the $4 pack on a number nobody read.
+   * The panel is its own state now — still no spend control, but no claim and no pitch.
+   */
+  it('answers wallet-unreadable with the unavailable panel, not the empty pitch', async () => {
+    const ghost = { ...viewerOf('free'), userId: '00000000-0000-4000-8000-00000000dead' };
+    const result = await shapePromptDetail(deps(ghost), GATED);
+    expect(result.status).toBe('ok');
+    if (result.status !== 'ok') return;
+    expect(result.prompt.locked).toBe(true);
+    expect(result.unlockPanel).toEqual({ state: 'unavailable' });
+  });
+
   it('reads the wallet as a WALLET READ: the weekly grant lands on the detail view (§15.1-3)', async () => {
     await setWallet(FIXTURE_USERS.free.id, 0, '8 days');
     const result = await shapePromptDetail(deps(viewerOf('free')), GATED);

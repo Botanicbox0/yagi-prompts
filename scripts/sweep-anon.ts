@@ -784,6 +784,14 @@ async function sweepPricingCookies(): Promise<void> {
     expectEqual(`/${locale}/pricing renders 200`, page.status, 200);
     expectPresent('…with the cookie table', page.body, 'data-cookie-table');
     expectPresent('…and the $4 = 5 pack cell', page.body, '$4 = 5');
+    // F5 — no MoR gateway is connected, so the pack cell states its status instead of
+    // implying a purchasable checkout. (Kept in step with messages/*.ts `pricing.cookiePackStatus`.)
+    expectPresent('…wearing the not-purchasable-yet chip', page.body, 'data-pack-status');
+    expectPresent(
+      '…in the dictionary words',
+      page.body,
+      locale === 'ko' ? '결제 오픈 예정' : 'CHECKOUT OPENING SOON',
+    );
     expectPresent(
       '…and the one-cookie rule',
       page.body,

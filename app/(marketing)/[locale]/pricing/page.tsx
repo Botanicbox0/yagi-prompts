@@ -4,6 +4,7 @@ import { getDictionary } from '@/lib/i18n/dictionaries';
 import { getPromptCatalog } from '@/lib/prompts/public-catalog';
 import { promptsHref } from '@/lib/prompts/links';
 import { SITE_OG_IMAGE, SITE_TWITTER_CARD } from '@/lib/seo/og';
+import { isCookiePackPurchasable } from '@/lib/cookies/purchase';
 import { MarketingFooter, MarketingNav } from '@/components/marketing/chrome';
 import { countsLine } from '@/components/landing/sections';
 import { CookieTable } from '@/components/pricing/cookie-table';
@@ -63,6 +64,9 @@ export default async function PricingPage({ params }: { params: Promise<{ locale
   const lockedYagi = catalog.yagi.filter((card) => card.hasLock).length;
 
   // §15.3 — the three ways cookies arrive. Figures in display type; sentences do the explaining.
+  // F5: while no MoR gateway is connected (`isCookiePackPurchasable`, env-derived and
+  // static-safe — no session), the pack cell wears its status instead of implying a checkout
+  // that does not exist yet.
   const cells = [
     {
       title: dict.pricing.cookieSignupTitle,
@@ -78,6 +82,7 @@ export default async function PricingPage({ params }: { params: Promise<{ locale
       title: dict.pricing.cookiePackTitle,
       value: dict.pricing.cookiePackValue,
       note: dict.pricing.cookiePackNote,
+      ...(isCookiePackPurchasable() ? {} : { chip: dict.pricing.cookiePackStatus }),
     },
   ];
 

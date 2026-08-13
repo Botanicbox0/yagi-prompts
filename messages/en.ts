@@ -61,6 +61,8 @@ export const en = {
     spendNote: 'Opens permanently on this account. Re-reading never charges.',
     emptyTitle: 'You are out of cookies.',
     weeklyLine: 'One free cookie lands every week — it is added when you visit.',
+    // F5 — wallet unreadable is a fact about the read, never a claim about the balance.
+    unavailableBody: 'Your wallet could not be read. Try again in a moment.',
     packTitle: '{count} cookies · {price}',
     packNote: 'One-time purchase, not a subscription.',
     packCta: 'Buy {count} cookies — {price}',
@@ -390,6 +392,9 @@ export const en = {
     cookieWeeklyNote: 'One free cookie a week, added when you visit. It does not pile up while you are away.',
     cookiePackTitle: 'When you want more',
     cookiePackValue: '$4 = 5',
+    // F5 — worn by the pack cell while no gateway is connected: the price is real, the
+    // checkout is not, and the cell says so instead of implying it can be bought today.
+    cookiePackStatus: 'CHECKOUT OPENING SOON',
     cookiePackNote: 'Five cookies for four dollars, one time. Not a subscription — nothing to cancel.',
     cookieRule: 'One cookie opens one YAGI original — permanently, on your account.',
     cookieColumn: 'With a cookie',
