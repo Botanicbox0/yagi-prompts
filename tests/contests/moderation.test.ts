@@ -692,6 +692,34 @@ describe('placement + deadline races (§14.1 / M9 review, finding 4)', () => {
     expect((await loadEntryById(sql(), entryId))!.placement).toBe(3);
   });
 
+  // --- R3b: the judged-contest lock cannot be laundered through NULL --------
+
+  it('refuses to CLEAR the deadline while medals are on the board (null→future laundering, step 1)', async () => {
+    const { contestId, entryId } = await judged("now() - interval '1 second'");
+    expectOk(await harness.run('contestEntry.placement', { id: entryId, placement: '1' }));
+
+    const outcome = await harness.run('contest.update', {
+      id: contestId,
+      ...contestFields({ startsAt: iso(-30), deadlineAt: '' }),
+    });
+    expect(outcome.ok).toBe(false);
+    expect(outcome.ok === false && outcome.code).toBe('placementsLocked');
+    expect((await loadEntryById(sql(), entryId))!.placement).toBe(1);
+  });
+
+  it('refuses to PUBLISH a judged contest whose deadline was pushed open out-of-band (laundering, step 2)', async () => {
+    const { contestId, entryId } = await judged("now() - interval '1 second'");
+    expectOk(await harness.run('contestEntry.placement', { id: entryId, placement: '1' }));
+    await sql().query(
+      `update contests set status = 'draft', deadline_at = now() + interval '30 days' where id = $1`,
+      [contestId],
+    );
+
+    const outcome = await harness.run('contest.publish', { id: contestId });
+    expect(outcome.ok).toBe(false);
+    expect(outcome.ok === false && outcome.code).toBe('placementsLocked');
+  });
+
   it('leaves an unjudged contest’s deadline free to move', async () => {
     const { contestId } = await judged("now() - interval '1 second'");
     expectOk(

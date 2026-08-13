@@ -192,7 +192,8 @@ const publish: AdminOperation<z.infer<typeof ContestIdSchema>> = {
     await updateContestMedia(ctx.sql, input.id, media);
 
     const moved = await publishContest(ctx.sql, input.id);
-    if (!moved) return fail('notFound', 'only a draft or archived contest can be published');
+    if (moved === 'placementsLocked') return fail('placementsLocked', row.slug);
+    if (moved === 'notFound') return fail('notFound', 'only a draft or archived contest can be published');
 
     ctx.revalidateContests?.();
     return ok('published', { detail: row.slug, to: BACK });

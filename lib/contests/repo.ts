@@ -277,23 +277,25 @@ export async function updateContest(
   args: ContestWriteArgs & { id: string },
 ): Promise<'saved' | 'notFound' | 'placementsLocked'> {
   return await sql.transaction(async (tx) => {
-    const locked = await tx.query<{ deadline_at: string | null }>(
-      'select deadline_at from contests where id = $1 for update',
+    const locked = await tx.query<{ deadline_at: string | null; db_now: string }>(
+      'select deadline_at, now()::text as db_now from contests where id = $1 for update',
       [args.id],
     );
     const current = locked.rows[0];
     if (current === undefined) return 'notFound';
 
-    const extending =
-      args.deadlineAt !== null &&
-      current.deadline_at !== null &&
-      new Date(args.deadlineAt) > new Date(current.deadline_at);
-    if (extending) {
-      const placed = await tx.query<{ n: number }>(
-        'select count(*)::int as n from contest_entries where contest_id = $1 and placement is not null',
-        [args.id],
-      );
-      if ((placed.rows[0]?.n ?? 0) > 0) return 'placementsLocked';
+    // With medals on the board the contest must STAY closed — not merely "not extended". A
+    // null→future two-step (or any deadline that is missing or ahead of the database clock)
+    // would reopen a judged contest, so the rule is absolute: placed > 0 ⇒ deadline exists
+    // and has passed. (R3b finding — the earlier extension-only check was launderable via NULL.)
+    const placed = await tx.query<{ n: number }>(
+      'select count(*)::int as n from contest_entries where contest_id = $1 and placement is not null',
+      [args.id],
+    );
+    if ((placed.rows[0]?.n ?? 0) > 0) {
+      const staysClosed =
+        args.deadlineAt !== null && new Date(args.deadlineAt) <= new Date(current.db_now);
+      if (!staysClosed) return 'placementsLocked';
     }
 
     const { rows } = await tx.query<{ id: string }>(
@@ -336,15 +338,41 @@ export async function updateContestMedia(
  * draft → published. `published_at` is stamped once and never re-stamped: republishing after an
  * unpublish is the same contest, and moving its debut date would move it in the sitemap too.
  */
-export async function publishContest(sql: SqlRunner, id: string): Promise<boolean> {
-  const { rows } = await sql.query<{ id: string }>(
-    `update contests
-        set status = 'published', published_at = coalesce(published_at, now())
-      where id = $1 and status in ('draft','archived')
-      returning id`,
-    [id],
-  );
-  return rows.length > 0;
+export async function publishContest(
+  sql: SqlRunner,
+  id: string,
+): Promise<'published' | 'notFound' | 'placementsLocked'> {
+  // Same serialization point + the same judged-contest rule as `updateContest` (R3b): a contest
+  // carrying placements may only reach the public surface closed. Publishing is the second door
+  // to the null→future deadline laundering, so it takes the same lock and the same check.
+  return await sql.transaction(async (tx) => {
+    const locked = await tx.query<{ deadline_at: string | null; db_now: string; status: string }>(
+      'select deadline_at, status, now()::text as db_now from contests where id = $1 for update',
+      [id],
+    );
+    const current = locked.rows[0];
+    if (current === undefined || !['draft', 'archived'].includes(current.status)) return 'notFound';
+
+    const placed = await tx.query<{ n: number }>(
+      'select count(*)::int as n from contest_entries where contest_id = $1 and placement is not null',
+      [id],
+    );
+    if ((placed.rows[0]?.n ?? 0) > 0) {
+      const closed =
+        current.deadline_at !== null &&
+        new Date(current.deadline_at) <= new Date(current.db_now);
+      if (!closed) return 'placementsLocked';
+    }
+
+    const { rows } = await tx.query<{ id: string }>(
+      `update contests
+          set status = 'published', published_at = coalesce(published_at, now())
+        where id = $1 and status in ('draft','archived')
+        returning id`,
+      [id],
+    );
+    return rows.length > 0 ? 'published' : 'notFound';
+  });
 }
 
 /** published → draft. The listing loses it immediately; the disclosed poster stays disclosed (§6). */
