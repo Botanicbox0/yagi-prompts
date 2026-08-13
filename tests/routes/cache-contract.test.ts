@@ -100,6 +100,23 @@ describe('route cache modes (§3.4 / §4)', () => {
   });
 
   /**
+   * Design review F4. The projections are `server-only` and unimportable here, so the wiring is a
+   * source-level pin: both readers go through `readPublicProjection` (behaviour tested in
+   * tests/db/read-policy.test.ts), and neither swallows a read failure into the designed empty
+   * catalog any more — a swallowed outage was being ISR-cached for an hour as intentional design.
+   */
+  it('lets a prompts/contests catalog outage throw instead of caching as designed-empty', () => {
+    for (const file of [
+      read('lib', 'prompts', 'public-catalog.ts'),
+      read('lib', 'contests', 'public-catalog.ts'),
+    ]) {
+      expect(file).toContain('readPublicProjection');
+      expect(file).not.toContain('catch');
+      expect(file).not.toContain('console.warn');
+    }
+  });
+
+  /**
    * §3.1's cache mode is load-bearing, and the easiest way to lose it is a nav that renders
    * "Sign in / avatar" from the session: one `cookies()` anywhere in the marketing tree and both
    * pages become SSR. Authed chrome lives in the (app) group; the marketing nav is static.
