@@ -3,6 +3,7 @@ import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
 import { fontVariables } from '@/app/fonts';
 import { ScrollProvider } from '@/components/motion/scroll-provider';
+import { Notice, noticeLabels } from '@/components/marketing/notice';
 import { LOCALES, isLocale, DEFAULT_LOCALE, type Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/dictionaries';
 import { siteUrl } from '@/lib/seo/site-url';
@@ -64,6 +65,7 @@ export default async function MarketingRootLayout({
 }) {
   const { locale: raw } = await params;
   const locale: Locale = isLocale(raw) ? raw : DEFAULT_LOCALE;
+  const dict = getDictionary(locale);
 
   return (
     <html lang={locale} className={fontVariables}>
@@ -73,7 +75,12 @@ export default async function MarketingRootLayout({
         <link rel="stylesheet" href="/fonts/pretendard/pretendard-dynamic-subset.css" />
       </head>
       <body>
-        <ScrollProvider>{children}</ScrollProvider>
+        <ScrollProvider>
+          {/* F2 — the auth redirects' `?error=…` / `?signin=1` outcomes, rendered instead of
+              silent. Client-only read of location.search, so the tree stays static (§3.1). */}
+          <Notice labels={noticeLabels(dict)} />
+          {children}
+        </ScrollProvider>
       </body>
     </html>
   );

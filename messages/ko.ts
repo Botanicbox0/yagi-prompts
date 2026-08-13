@@ -84,6 +84,12 @@ export const ko: Dictionary = {
     recentEmpty: '아직 연 프롬프트가 없습니다. YAGI 오리지널에 하나 써보세요.',
     openedOn: '{date} 열람',
   },
+  notice: {
+    oauth: '로그인이 완료되지 않았습니다. 다시 시도해 주세요.',
+    oauthUnconfigured: '이 배포에는 아직 로그인이 연결되지 않았습니다.',
+    signin: '로그인이 필요한 페이지입니다. 먼저 로그인해 주세요.',
+    dismiss: '닫기',
+  },
   hero: {
     eyebrow: '오리지널 프롬프트 · Seedance 2.5',
     line1: '결과로',

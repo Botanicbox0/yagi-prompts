@@ -80,6 +80,16 @@ export const en = {
     recentEmpty: 'Nothing opened yet. Spend one on a YAGI original.',
     openedOn: 'Opened {date}',
   },
+  /**
+   * F2 — the notice band (`components/marketing/notice.tsx`): the three URL codes the auth
+   * redirects land with, each as one plain sentence. Unknown codes render nothing.
+   */
+  notice: {
+    oauth: 'Sign-in did not complete. Please try again.',
+    oauthUnconfigured: 'Sign-in is not connected on this deployment yet.',
+    signin: 'That page needs an account. Sign in first.',
+    dismiss: 'Close',
+  },
   hero: {
     eyebrow: 'Original prompts · Seedance 2.5',
     line1: 'PROMPTS',
