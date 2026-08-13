@@ -53,7 +53,7 @@ export function UseCaseFilter({
         data-active={on ? 'true' : 'false'}
         onClick={() => setActive(value)}
         className={[
-          'border px-3 py-1.5 font-label text-[0.65rem] tracking-[0.12em] uppercase transition-colors duration-200',
+          'shrink-0 border px-3 py-1.5 font-label text-[0.65rem] tracking-[0.12em] whitespace-nowrap uppercase transition-colors duration-200',
           on ? 'border-accent text-accent' : 'border-hairline opacity-70 hover:opacity-100',
         ].join(' ')}
       >
@@ -62,9 +62,14 @@ export function UseCaseFilter({
     );
   };
 
+  // F3: below lg the chips are ONE horizontally-scrollable row — three wrapped rows of chips
+  // were most of what pushed the landing's first card under a 375×667 fold. ≥lg wraps as before.
   return (
-    <div data-use-case-filter className="flex flex-wrap items-center gap-2">
-      <span className="mr-1 font-label text-[0.65rem] tracking-[0.12em] uppercase opacity-45">
+    <div
+      data-use-case-filter
+      className="flex items-center gap-2 overflow-x-auto lg:flex-wrap lg:overflow-x-visible"
+    >
+      <span className="mr-1 shrink-0 font-label text-[0.65rem] tracking-[0.12em] uppercase opacity-45">
         {labels.heading}
       </span>
       {chip(null, labels.all)}

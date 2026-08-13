@@ -1,13 +1,12 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { getDictionary } from '@/lib/i18n/dictionaries';
+import { Notice, NoticeBand } from '@/components/marketing/notice';
 import {
-  Notice,
-  NoticeBand,
   noticeLabels,
   parseNoticeCode,
   stripNoticeParams,
-} from '@/components/marketing/notice';
+} from '@/components/marketing/notice-codes';
 
 /**
  * Design review F2 — the auth outcomes that used to be silent.

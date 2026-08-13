@@ -102,7 +102,7 @@ export default async function LandingPage({ params }: { params: Promise<{ locale
               lands inside a 375×667 viewport; ≥lg keeps the M1 spacing. */}
           <section id="gallery" data-section data-theme="light" className="section">
             <div className="band pb-24">
-              <div className="border-t border-hairline pt-4 lg:pt-6">
+              <div className="border-t border-hairline pt-3 lg:pt-6">
                 <UseCaseFilter
                   options={filterOptions}
                   labels={{ heading: dict.prompts.filterHeading, all: dict.prompts.filterAll }}
@@ -120,7 +120,7 @@ export default async function LandingPage({ params }: { params: Promise<{ locale
                 emptyLabel={dict.prompts.emptyYagi}
                 filteredEmptyLabel={dict.prompts.filterEmpty}
                 signinHref={signin}
-                topClassName="mt-6 first:mt-0 lg:mt-24"
+                topClassName="mt-4 first:mt-0 lg:mt-24"
               />
 
               {/* F3 — the hero's lede + submit link, re-homed below lg after the first rail. */}
