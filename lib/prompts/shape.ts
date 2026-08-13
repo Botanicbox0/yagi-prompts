@@ -87,6 +87,13 @@ export interface PromptShapeOptions {
   publicUrl?: (key: string) => string | null;
   /** Ref (`{id}:poster`) → the public prompt-media route path. */
   mediaUrl?: (ref: string) => string;
+  /**
+   * §15.1-1 — this (account, prompt) pair holds an unlock row. An unlock grants the PRO view of
+   * exactly this prompt: `canView('pro', …)` rather than a blanket bypass, so a `hidden` item
+   * stays admin-only whatever rows exist. The caller (lib/prompts/access.ts) resolves it; this
+   * module stays pure.
+   */
+  unlocked?: boolean;
 }
 
 const defaultMediaUrl = (ref: string) => promptMediaPath(ref);
@@ -128,7 +135,12 @@ export function shapePromptMedia(
   return { poster: shape('poster', parsed.poster), video: shape('video', parsed.video) };
 }
 
-/** The gate: `canView(tier, text_visibility)` and nothing else decides whether `text` exists. */
+/**
+ * The gate. §15 widened it from one clause to two: `text` exists iff the TIER may view it
+ * (`canView`, which is where admin and the dormant `pro` tier live) OR this account has UNLOCKED
+ * this prompt (a per-pair grant of the pro view). Still a pure function of its inputs — the
+ * unlock row is a fact the caller looked up, not a query this module makes.
+ */
 export function shapePrompt(
   row: PromptRowInput,
   tier: Tier,
@@ -153,6 +165,9 @@ export function shapePrompt(
     tier,
   };
 
-  if (!canView(tier, row.textVisibility)) return { ...base, locked: true };
+  const visible =
+    canView(tier, row.textVisibility) ||
+    (options.unlocked === true && canView('pro', row.textVisibility));
+  if (!visible) return { ...base, locked: true };
   return { ...base, locked: false, text: row.promptText };
 }
