@@ -12,7 +12,7 @@ import {
 } from '@/components/contests/detail';
 import { ContestPoster, posterTitleLines } from '@/components/contests/poster';
 import {
-  CONTEST_MAILTO,
+  contestMailto,
   ContestFeature,
   ContestHireStrip,
   ContestHostKinds,
@@ -85,7 +85,7 @@ describe('the designed empty state (§14.2)', () => {
         title={dict.contests.emptyTitle}
         body={dict.contests.emptyBody}
         cta={dict.contests.emptyCta}
-        mailto={CONTEST_MAILTO}
+        mailto={contestMailto('en')}
       />,
     );
     expect(html).toContain('data-contests-empty');
@@ -106,7 +106,7 @@ describe('the designed empty state (§14.2)', () => {
         title={ko.contests.emptyTitle}
         body={ko.contests.emptyBody}
         cta={ko.contests.emptyCta}
-        mailto={CONTEST_MAILTO}
+        mailto={contestMailto('en')}
       />,
     );
     expect(ko.contests.emptyTitle.split('\n')).toHaveLength(3);
@@ -122,7 +122,7 @@ describe('the designed empty state (§14.2)', () => {
    */
   it('sits at the reviewed spacing, with a CTA that has a real touch target', () => {
     const html = renderToStaticMarkup(
-      <ContestsEmptyState title="T" body="B" cta="C" mailto={CONTEST_MAILTO} />,
+      <ContestsEmptyState title="T" body="B" cta="C" mailto={contestMailto('en')} />,
     );
     expect(html).toContain('mt-8 border-t border-hairline pt-8 lg:mt-10 lg:pt-10');
     for (const token of ['min-h-12', 'px-6', 'py-3.5', 'text-[1rem]', 'tracking-[0.1em]']) {
@@ -156,6 +156,37 @@ function readFileSyncSource(): string {
   return readSource('app', '(marketing)', '[locale]', 'contests', 'page.tsx');
 }
 
+/**
+ * Founder direction (2026-08-15): no host-application form — the enquiry stays an email. That makes
+ * the mailto BODY the intake form, and these are the fields the admin editor cannot open a contest
+ * without. A bare mailto would start a thread asking for them one at a time.
+ */
+describe('the contest enquiry mailto', () => {
+  it('prefills the fields a contest needs, in the reader’s language', () => {
+    const en = decodeURIComponent(contestMailto('en'));
+    expect(en.startsWith('mailto:hello@yagiworkshop.xyz?')).toBe(true);
+    for (const field of ['Host', 'Prize', 'Dates', 'brief', 'link']) {
+      expect(en, field).toContain(field);
+    }
+    // Every host kind is named, so the sender does not have to guess whether they qualify.
+    for (const kind of ['brand', 'platform', 'studio', 'creator', 'community']) {
+      expect(en, kind).toContain(kind);
+    }
+
+    const ko = decodeURIComponent(contestMailto('ko'));
+    expect(ko).toContain('주최');
+    expect(ko).toContain('보상');
+    expect(ko).toContain('일정');
+    expect(ko).toContain('플랫폼');
+  });
+
+  /** A `+` in a mailto query renders as a literal plus in most clients, never as a space. */
+  it('encodes spaces as %20, not as +', () => {
+    expect(contestMailto('en')).not.toContain('+');
+    expect(contestMailto('ko')).not.toContain('+');
+  });
+});
+
 describe('the hire strip (§14.2)', () => {
   it('renders the studio pitch and the same mailto', () => {
     const html = renderToStaticMarkup(
@@ -163,7 +194,7 @@ describe('the hire strip (§14.2)', () => {
         title={dict.contests.hireTitle}
         body={dict.contests.hireBody}
         cta={dict.contests.hireCta}
-        mailto={CONTEST_MAILTO}
+        mailto={contestMailto('en')}
       />,
     );
     expect(html).toContain('data-contest-hire');
@@ -179,7 +210,7 @@ describe('the hire strip (§14.2)', () => {
     expect(readFileSyncSource()).toContain('<ContestHireStrip');
     const detail = readSource('app', '(marketing)', '[locale]', 'contests', '[slug]', 'page.tsx');
     expect(detail).not.toContain('ContestHireStrip');
-    expect(detail).not.toContain('CONTEST_MAILTO');
+    expect(detail).not.toContain('contestMailto');
   });
 });
 

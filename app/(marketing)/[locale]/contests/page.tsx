@@ -9,7 +9,7 @@ import { AdRail } from '@/components/ad/ad-rail';
 import { AdBanner, AdCard } from '@/components/ad/ad-card';
 import { Reveal } from '@/components/motion/reveal';
 import {
-  CONTEST_MAILTO,
+  contestMailto,
   ContestFeature,
   ContestHireStrip,
   ContestHostKinds,
@@ -102,7 +102,7 @@ export default async function ContestsListingPage({ params }: RouteParams) {
                 title={dict.contests.emptyTitle}
                 body={dict.contests.emptyBody}
                 cta={dict.contests.emptyCta}
-                mailto={CONTEST_MAILTO}
+                mailto={contestMailto(locale)}
               />
             ) : (
               <div className="mt-10 border-t border-hairline pt-6">
@@ -166,7 +166,7 @@ export default async function ContestsListingPage({ params }: RouteParams) {
                 title={dict.contests.hireTitle}
                 body={dict.contests.hireBody}
                 cta={dict.contests.hireCta}
-                mailto={CONTEST_MAILTO}
+                mailto={contestMailto(locale)}
               />
             )}
 
