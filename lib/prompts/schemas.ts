@@ -58,6 +58,24 @@ export type PromptStatus = (typeof PROMPT_STATUSES)[number];
 
 /** "text ≤ 2,000 chars" — enforced by zod at the server boundary, not by a maxlength attribute. */
 export const PROMPT_TEXT_MAX = 2000;
+/**
+ * The "how it was made" write-up (founder direction, 2026-08-14). Ten times the prompt's own cap,
+ * because this is where the references, the failed passes and the settings go — a Notion page's
+ * worth — while still being a bound a moderator can read in one sitting.
+ */
+export const PROCESS_MAX = 20000;
+/**
+ * Empty textarea → NULL, never an empty string: "no write-up" is an absence, not blank content.
+ * `nullish` so an ABSENT field reads the same as an empty one — a form that predates this field
+ * (or a caller that never had one) is a prompt without a making-of, not an invalid payload.
+ */
+export const ProcessSchema = z
+  .string()
+  .trim()
+  .max(PROCESS_MAX)
+  .transform((value) => (value === '' ? null : value))
+  .nullish()
+  .transform((value) => value ?? null);
 export const PROMPT_TITLE_MAX = 160;
 export const PROMPT_HANDLE_MAX = 40;
 /** "video ≤ 60s/32MB". Size is measured over the received bytes; see `lib/prompts/media.ts`. */
@@ -159,6 +177,8 @@ export const SubmissionSchema = z.object({
     .trim()
     .min(10)
     .max(PROMPT_TEXT_MAX, `prompt must be ${PROMPT_TEXT_MAX} characters or fewer`),
+  /** The optional making-of, in whichever language the submitter writes (2026-08-14). */
+  processMd: ProcessSchema,
   useCase: UseCaseList,
   handle: z.string().max(PROMPT_HANDLE_MAX).nullable(),
   /**
@@ -194,6 +214,8 @@ export const AuthoringSchema = z.object({
   title: z.string().trim().min(3).max(PROMPT_TITLE_MAX),
   titleKo: z.string().trim().min(1).max(PROMPT_TITLE_MAX),
   promptText: z.string().trim().min(10).max(PROMPT_TEXT_MAX),
+  processMd: ProcessSchema,
+  processMdKo: ProcessSchema,
   useCase: UseCaseList,
   textVisibility: VisibilityEnum,
   featured: z.boolean(),
@@ -224,6 +246,8 @@ export const EditSchema = z.object({
   title: z.string().trim().min(3).max(PROMPT_TITLE_MAX),
   titleKo: z.string().trim().max(PROMPT_TITLE_MAX).nullable(),
   promptText: z.string().trim().min(10).max(PROMPT_TEXT_MAX),
+  processMd: ProcessSchema,
+  processMdKo: ProcessSchema,
   useCase: UseCaseList,
   handle: z.string().max(PROMPT_HANDLE_MAX).nullable(),
   textVisibility: VisibilityEnum,

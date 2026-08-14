@@ -44,11 +44,14 @@ export type SubmitOutcome = { ok: true; id: string; slug: string } | ({ ok: fals
 export interface SubmitInput {
   title: string;
   promptText: string;
+  /** The optional making-of (founder direction, 2026-08-14) — markdown, one field, any language. */
+  processMd: string | null;
   useCase: string[];
   handle: string | null;
   consent: boolean;
   video: File | null;
   poster: File | null;
+  audio: File | null;
 }
 
 /**
@@ -81,6 +84,7 @@ export async function submitPrompt(
   const parsed = SubmissionSchema.safeParse({
     title: input.title,
     promptText: input.promptText,
+    processMd: input.processMd ?? '',
     useCase: input.useCase,
     handle: input.handle,
     consent: input.consent === true ? true : undefined,
@@ -109,6 +113,7 @@ export async function submitPrompt(
   for (const [kind, file] of [
     ['poster', input.poster],
     ['video', input.video],
+    ['audio', input.audio],
   ] as const) {
     if (file === null) continue;
     const staged = await stagePromptUpload(deps.storage, id, kind, file);
@@ -129,6 +134,8 @@ export async function submitPrompt(
     title: parsed.data.title,
     titleKo: null,
     promptText: parsed.data.promptText,
+    // One field, whichever language they wrote in: the detail page falls back across locales.
+    processMd: parsed.data.processMd,
     // §13.3-1, and the DB CHECK agrees: community text is public by definition.
     textVisibility: 'public',
     media: Object.keys(media).length === 0 ? null : media,

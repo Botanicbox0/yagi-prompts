@@ -214,6 +214,7 @@ export const ko: Dictionary = {
     playHint: '마우스를 올리면 재생됩니다',
     audioLabel: '첨부 오디오 파일',
     audioDownload: '다운로드',
+    processHeading: '제작 과정',
   },
   submit: {
     eyebrow: '제출',
@@ -231,6 +232,11 @@ export const ko: Dictionary = {
     fieldVideoHint: '선택 사항입니다. 결과 영상이 있으면 채택 확률이 높아집니다. MP4 또는 WebM, {seconds}초·{mb}MB 이내.',
     fieldPoster: '포스터 프레임',
     fieldPosterHint: '선택 사항입니다. 영상의 스틸 한 장을 올려 주세요. 없으면 자동으로 생성됩니다.',
+    fieldAudio: '오디오 파일',
+    fieldAudioHint: '선택 사항입니다. 프롬프트로 나온 음악이나 음성을 올리면 방문자가 내려받을 수 있습니다.',
+    fieldProcess: '제작 과정',
+    fieldProcessHint:
+      '선택 사항이지만 사람들이 가장 오래 읽는 부분입니다. 참고 자료, 반복한 시도, 실패한 설정값을 적어 주세요. 마크다운(제목·목록·링크)을 쓸 수 있고, 편한 언어로 쓰시면 됩니다.',
     consentLabel: '제가 직접 작성한 프롬프트이며, 크레딧과 함께 YAGI PROMPTS에 게시되는 데 동의합니다.',
     consentLicense:
       '프롬프트의 권리는 제출자에게 그대로 있습니다. YAGI PROMPTS가 이 사이트와 홍보 채널에서 @핸들 크레딧과 함께 게시할 수 있도록 허락하는 것입니다.',
@@ -785,6 +791,10 @@ export const ko: Dictionary = {
     fieldPromptTitle: '제목 (EN)',
     fieldPromptTitleKo: '제목 (KO)',
     fieldPromptBody: '프롬프트 본문',
+    fieldProcess: '제작 과정 (EN, 마크다운)',
+    fieldProcessKo: '제작 과정 (KO, 마크다운)',
+    processHint:
+      '선택 사항입니다. 참고 자료, 반복한 시도, 실패한 설정값까지 적어 주세요. 제목·목록·링크를 쓸 수 있고, 한 언어만 채워도 됩니다.',
     fieldPromptSlug: '슬러그',
     promptSlugAutoHint: '비워 두면 영문 제목을 따라 소문자-대시로 자동 생성됩니다.',
     fieldPromptHandle: '크레딧 (@핸들)',

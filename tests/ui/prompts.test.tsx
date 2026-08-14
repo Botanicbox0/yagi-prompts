@@ -188,7 +188,14 @@ describe('prompt detail (§13.2 / §5.5 / §15.3)', () => {
   };
 
   const locked: ShapedPrompt = { ...base, tier: 'anon', locked: true };
-  const open: ShapedPrompt = { ...base, tier: 'pro', locked: false, text: `Slow dolly.\n:: ${SENTINEL}` };
+  const open: ShapedPrompt = {
+    ...base,
+    tier: 'pro',
+    locked: false,
+    text: `Slow dolly.\n:: ${SENTINEL}`,
+    process: null,
+    processKo: null,
+  };
 
   const body = (prompt: ShapedPrompt, panel: UnlockPanel | null = null) =>
     render(
@@ -201,6 +208,31 @@ describe('prompt detail (§13.2 / §5.5 / §15.3)', () => {
         unlockAction={async () => {}}
       />,
     );
+
+  /**
+   * The making-of (founder direction, 2026-08-14). Two properties, and the second is the one that
+   * matters: it renders as markdown for a reader who may see the text, and it is ABSENT — not
+   * blurred, not truncated — from a locked payload, because `shapePrompt` never put it there.
+   */
+  it('renders the process write-up as markdown, and never on a locked prompt', () => {
+    const PROCESS = 'SENTINEL_PROCESS_NOTE';
+    const withProcess: ShapedPrompt = {
+      ...open,
+      process: `## Passes\n\n- three takes\n- ${PROCESS}`,
+      processKo: null,
+    };
+    const html = body(withProcess);
+    expect(html).toContain('data-prompt-process');
+    expect(html).toContain(PROCESS);
+    // Markdown, not a pre block: the heading and the list are real elements.
+    expect(html).toContain('<h2');
+    expect(html).toContain('<li');
+
+    // Locked: the payload has no `process` key at all, so there is nothing to render.
+    expect(body(locked, { state: 'signin' })).not.toContain('data-prompt-process');
+    // And an unlocked prompt with no write-up renders no empty section.
+    expect(body(open)).not.toContain('data-prompt-process');
+  });
 
   it('renders the §5.5 lock panel with no text and no copy button', () => {
     const html = body(locked, { state: 'signin' });
