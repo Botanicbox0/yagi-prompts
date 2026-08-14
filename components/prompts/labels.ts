@@ -29,6 +29,7 @@ export interface PromptLabels {
   audioLabel: string;
   audioDownload: string;
   processHeading: string;
+  sourceLink: string;
   badgeNew: string;
   lockedHeading: string;
   lockedBody: string;
@@ -68,6 +69,7 @@ export function promptLabels(dict: Dictionary): PromptLabels {
     audioLabel: dict.prompts.audioLabel,
     audioDownload: dict.prompts.audioDownload,
     processHeading: dict.prompts.processHeading,
+    sourceLink: dict.prompts.sourceLink,
     badgeNew: dict.badge.new,
     // §15.3 — the lock panel speaks cookies now. The playbook library keeps the §5.5 Pro copy;
     // this surface's gate is per-prompt, so its sentences are the wallet's.

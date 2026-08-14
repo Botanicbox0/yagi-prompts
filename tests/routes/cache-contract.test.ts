@@ -455,6 +455,7 @@ describe('prompt submission contract (§13.1/E)', () => {
       'poster',
       'processMd',
       'promptText',
+      'sourceUrl',
       'title',
       'video',
     ]);

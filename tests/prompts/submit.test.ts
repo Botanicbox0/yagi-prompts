@@ -28,6 +28,7 @@ const input = (overrides: Partial<Parameters<typeof submitPrompt>[2]> = {}) => (
   title: 'Underwater drift',
   promptText: 'Slow drift past a kelp forest with god rays overhead, neutral buoyancy.',
   processMd: null,
+  sourceUrl: null,
   useCase: ['cinematic'],
   handle: '@hana',
   consent: true,
@@ -68,6 +69,35 @@ describe('submitPrompt (§13.1/E)', () => {
     expect(row.authorHandle).toBe('hana');
     expect(row.publishedAt).toBeNull();
     expect(row.featured).toBe(false);
+  });
+
+  /**
+   * The easy path (founder direction, 2026-08-15): a link to the creator's own post instead of an
+   * upload. The boundary is what matters — stored when it is a web URL, refused when it is
+   * anything that could become code in an `href`.
+   */
+  it('stores a link to the creator’s own post, and refuses a non-http one', async () => {
+    const posted = await submitPrompt(
+      deps(),
+      submitter,
+      input({ sourceUrl: 'https://www.instagram.com/reel/abc123/' }),
+    );
+    expect(posted.ok).toBe(true);
+    if (!posted.ok) return;
+    const row = (await loadPromptBySlug(harness.sql, posted.slug))!;
+    expect(row.sourceUrl).toBe('https://www.instagram.com/reel/abc123/');
+
+    for (const bad of ['javascript:alert(1)', 'data:text/html,x', 'instagram.com/reel/abc']) {
+      const refused = await submitPrompt(deps(), submitter, input({ sourceUrl: bad }));
+      expect(refused, bad).toMatchObject({ ok: false, code: 'invalid' });
+    }
+  });
+
+  it('treats an empty link field as an absence, not an invalid URL', async () => {
+    const result = await submitPrompt(deps(), submitter, input({ sourceUrl: '' }));
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect((await loadPromptBySlug(harness.sql, result.slug))!.sourceUrl).toBeNull();
   });
 
   it('refuses an anonymous submission before it validates anything', async () => {

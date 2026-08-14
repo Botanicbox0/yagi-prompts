@@ -40,6 +40,7 @@ async function run(form: FormData): Promise<string> {
       title: str(form, 'title'),
       promptText: text(form, 'promptText'),
       processMd: text(form, 'processMd') || null,
+      sourceUrl: str(form, 'sourceUrl') || null,
       useCase: form.getAll('useCase').filter((v): v is string => typeof v === 'string'),
       handle: str(form, 'handle') || null,
       consent: bool(form, 'consent'),

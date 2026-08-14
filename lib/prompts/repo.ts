@@ -28,6 +28,8 @@ export interface PromptRow {
   /** The "how it was made" write-up (markdown), per locale. Null is the common case. */
   processMd: string | null;
   processMdKo: string | null;
+  /** Where the creator originally posted it (their SNS post), if they gave a link. */
+  sourceUrl: string | null;
   textVisibility: Visibility;
   media: unknown;
   useCase: string[];
@@ -50,6 +52,7 @@ interface RawRow {
   prompt_text: string;
   process_md: string | null;
   process_md_ko: string | null;
+  source_url: string | null;
   text_visibility: Visibility;
   media: unknown;
   use_case: string[] | null;
@@ -60,7 +63,7 @@ interface RawRow {
 }
 
 const COLUMNS = `id, slug, source, author_id, author_handle, status, model, title, title_ko,
-                 prompt_text, process_md, process_md_ko,
+                 prompt_text, process_md, process_md_ko, source_url,
                  text_visibility::text as text_visibility, media, use_case, featured,
                  reject_reason, created_at, published_at`;
 
@@ -86,6 +89,7 @@ function toRow(raw: RawRow): PromptRow {
     promptText: raw.prompt_text,
     processMd: raw.process_md,
     processMdKo: raw.process_md_ko,
+    sourceUrl: raw.source_url,
     textVisibility: raw.text_visibility,
     media: raw.media,
     useCase: raw.use_case ?? [],
@@ -242,6 +246,7 @@ export interface InsertPromptArgs {
   promptText: string;
   processMd?: string | null;
   processMdKo?: string | null;
+  sourceUrl?: string | null;
   textVisibility: Visibility;
   media: unknown;
   useCase: string[];
@@ -260,11 +265,11 @@ export async function insertPrompt(sql: SqlRunner, args: InsertPromptArgs): Prom
   await sql.query(
     `insert into prompt_items
        (id, slug, source, author_id, author_handle, status, model, title, title_ko,
-        prompt_text, process_md, process_md_ko,
+        prompt_text, process_md, process_md_ko, source_url,
         text_visibility, media, use_case, featured, reject_reason, published_at)
-     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,
-             $13::visibility, $14::jsonb, $15, $16, $17,
-             case when $18::boolean then now() else null end)`,
+     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
+             $14::visibility, $15::jsonb, $16, $17, $18,
+             case when $19::boolean then now() else null end)`,
     [
       args.id,
       args.slug,
@@ -278,6 +283,7 @@ export async function insertPrompt(sql: SqlRunner, args: InsertPromptArgs): Prom
       args.promptText,
       args.processMd ?? null,
       args.processMdKo ?? null,
+      args.sourceUrl ?? null,
       args.textVisibility,
       args.media === null || args.media === undefined ? null : JSON.stringify(args.media),
       args.useCase,
@@ -308,6 +314,7 @@ export interface UpdatePromptArgs {
   promptText: string;
   processMd?: string | null;
   processMdKo?: string | null;
+  sourceUrl?: string | null;
   useCase: string[];
   authorHandle: string | null;
   textVisibility: Visibility;
@@ -319,7 +326,7 @@ export async function updatePrompt(sql: SqlRunner, args: UpdatePromptArgs): Prom
     `update prompt_items
         set slug = $2, title = $3, title_ko = $4, prompt_text = $5, use_case = $6,
             author_handle = $7, text_visibility = $8::visibility, featured = $9,
-            process_md = $10, process_md_ko = $11
+            process_md = $10, process_md_ko = $11, source_url = $12
       where id = $1
       returning id`,
     [
@@ -334,6 +341,7 @@ export async function updatePrompt(sql: SqlRunner, args: UpdatePromptArgs): Prom
       args.featured,
       args.processMd ?? null,
       args.processMdKo ?? null,
+      args.sourceUrl ?? null,
     ],
   );
   return rows.length > 0;

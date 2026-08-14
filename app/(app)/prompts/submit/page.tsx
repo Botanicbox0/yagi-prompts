@@ -5,6 +5,7 @@ import { interpolate } from '@/lib/i18n/format';
 import { promptsHref, PROMPT_SUBMIT_PATH } from '@/lib/prompts/links';
 import {
   PROCESS_MAX,
+  SOURCE_URL_MAX,
   PROMPT_TEXT_MAX,
   USE_CASES,
   USE_CASE_MAX,
@@ -162,6 +163,24 @@ export default async function SubmitPromptPage({
                 </span>
               </label>
 
+              {/* The easy path (founder direction, 2026-08-15): most creators already posted the
+                  result somewhere. A link costs them one paste; a re-export costs them an evening.
+                  It sits directly under the prompt because it is the SECOND thing we want. */}
+              <label className="block">
+                <span className={LABEL}>{copy.fieldSource}</span>
+                <input
+                  type="url"
+                  name="sourceUrl"
+                  inputMode="url"
+                  placeholder="https://"
+                  maxLength={SOURCE_URL_MAX}
+                  className={`${INPUT} mt-2`}
+                />
+                <span className="mt-1.5 block font-mono text-[0.72rem] opacity-50">
+                  {copy.fieldSourceHint}
+                </span>
+              </label>
+
               <fieldset>
                 <legend className={LABEL}>{copy.fieldUseCase}</legend>
                 <div className="mt-3 flex flex-wrap gap-2">
@@ -186,69 +205,81 @@ export default async function SubmitPromptPage({
                 </p>
               </fieldset>
 
-              {/* The making-of (founder direction, 2026-08-14): the half a submitter most wants
-                  room for. Optional, markdown, any language — the detail page falls back. */}
-              <label className="block">
-                <span className={LABEL}>{copy.fieldProcess}</span>
-                <textarea
-                  name="processMd"
-                  rows={10}
-                  maxLength={PROCESS_MAX}
-                  className={`${INPUT} mt-2`}
-                />
-                <span className="mt-1.5 block font-mono text-[0.72rem] opacity-50">
-                  {copy.fieldProcessHint}
-                </span>
-              </label>
+              {/**
+               * The making-of and the file uploads, FOLDED (founder direction, 2026-08-15): with
+               * them open the form read as a long chore, and everything below this line is
+               * optional. `<details>` rather than a toggle component — it opens with no JavaScript,
+               * and a closed field still posts (empty), so nothing about the submission changes.
+               */}
+              <details data-optional-fields className="border border-hairline">
+                <summary className="cursor-pointer list-none px-5 py-4 font-label text-eyebrow uppercase [&::-webkit-details-marker]:hidden">
+                  {copy.moreOptional} <span aria-hidden className="opacity-40">＋</span>
+                </summary>
 
-              <label className="block">
-                <span className={LABEL}>{copy.fieldHandle}</span>
-                <input type="text" name="handle" maxLength={40} className={`${INPUT} mt-2`} />
-                <span className="mt-1.5 block font-mono text-[0.72rem] opacity-50">
-                  {copy.fieldHandleHint}
-                </span>
-              </label>
+                <div className="flex flex-col gap-8 border-t border-hairline px-5 py-6">
+                  <label className="block">
+                    <span className={LABEL}>{copy.fieldProcess}</span>
+                    <textarea
+                      name="processMd"
+                      rows={10}
+                      maxLength={PROCESS_MAX}
+                      className={`${INPUT} mt-2`}
+                    />
+                    <span className="mt-1.5 block font-mono text-[0.72rem] opacity-50">
+                      {copy.fieldProcessHint}
+                    </span>
+                  </label>
 
-              <div className="grid gap-6 sm:grid-cols-2">
-                <label className="block">
-                  <span className={LABEL}>{copy.fieldVideo}</span>
-                  <input
-                    type="file"
-                    name="video"
-                    accept="video/mp4,video/webm,video/quicktime"
-                    className={`${INPUT} mt-2`}
-                  />
-                  <span className="mt-1.5 block font-mono text-[0.72rem] opacity-50">
-                    {interpolate(copy.fieldVideoHint, {
-                      seconds: String(VIDEO_MAX_SECONDS),
-                      mb: String(Math.round(VIDEO_MAX_BYTES / (1024 * 1024))),
-                    })}
-                  </span>
-                </label>
+                  <label className="block">
+                    <span className={LABEL}>{copy.fieldHandle}</span>
+                    <input type="text" name="handle" maxLength={40} className={`${INPUT} mt-2`} />
+                    <span className="mt-1.5 block font-mono text-[0.72rem] opacity-50">
+                      {copy.fieldHandleHint}
+                    </span>
+                  </label>
 
-                <label className="block">
-                  <span className={LABEL}>{copy.fieldPoster}</span>
-                  <input
-                    type="file"
-                    name="poster"
-                    accept="image/png,image/jpeg,image/webp,image/avif"
-                    className={`${INPUT} mt-2`}
-                  />
-                  <span className="mt-1.5 block font-mono text-[0.72rem] opacity-50">
-                    {copy.fieldPosterHint}
-                  </span>
-                </label>
-              </div>
+                  <div className="grid gap-6 sm:grid-cols-2">
+                    <label className="block">
+                      <span className={LABEL}>{copy.fieldVideo}</span>
+                      <input
+                        type="file"
+                        name="video"
+                        accept="video/mp4,video/webm,video/quicktime"
+                        className={`${INPUT} mt-2`}
+                      />
+                      <span className="mt-1.5 block font-mono text-[0.72rem] opacity-50">
+                        {interpolate(copy.fieldVideoHint, {
+                          seconds: String(VIDEO_MAX_SECONDS),
+                          mb: String(Math.round(VIDEO_MAX_BYTES / (1024 * 1024))),
+                        })}
+                      </span>
+                    </label>
 
-              {/* Audio results reached the admin on 2026-08-13; a community submitter can send
-                  one too — same caps, same staging, same approval copy to the public bucket. */}
-              <label className="block">
-                <span className={LABEL}>{copy.fieldAudio}</span>
-                <input type="file" name="audio" accept="audio/*" className={`${INPUT} mt-2`} />
-                <span className="mt-1.5 block font-mono text-[0.72rem] opacity-50">
-                  {copy.fieldAudioHint}
-                </span>
-              </label>
+                    <label className="block">
+                      <span className={LABEL}>{copy.fieldPoster}</span>
+                      <input
+                        type="file"
+                        name="poster"
+                        accept="image/png,image/jpeg,image/webp,image/avif"
+                        className={`${INPUT} mt-2`}
+                      />
+                      <span className="mt-1.5 block font-mono text-[0.72rem] opacity-50">
+                        {copy.fieldPosterHint}
+                      </span>
+                    </label>
+                  </div>
+
+                  {/* Audio results reached the admin on 2026-08-13; a community submitter can send
+                      one too — same caps, same staging, same approval copy to the public bucket. */}
+                  <label className="block">
+                    <span className={LABEL}>{copy.fieldAudio}</span>
+                    <input type="file" name="audio" accept="audio/*" className={`${INPUT} mt-2`} />
+                    <span className="mt-1.5 block font-mono text-[0.72rem] opacity-50">
+                      {copy.fieldAudioHint}
+                    </span>
+                  </label>
+                </div>
+              </details>
 
               <div className="border border-hairline p-5">
                 <label className="flex items-start gap-3">

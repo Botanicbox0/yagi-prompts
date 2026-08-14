@@ -76,6 +76,24 @@ export const ProcessSchema = z
   .transform((value) => (value === '' ? null : value))
   .nullish()
   .transform((value) => value ?? null);
+
+/**
+ * Where the creator already posted it (founder direction, 2026-08-15) — the EASY submission path:
+ * paste your Instagram/TikTok/YouTube link instead of re-exporting and uploading a file.
+ *
+ * `http(s)` only, matched by the same rule the DB CHECK enforces, because this value is rendered as
+ * an anchor: a `javascript:` or `data:` URL in an href is the one way a submitted string could
+ * become code. Blank → null, so an untouched field is an absence rather than an invalid URL.
+ */
+export const SOURCE_URL_MAX = 500;
+export const SourceUrlSchema = z
+  .string()
+  .trim()
+  .max(SOURCE_URL_MAX)
+  .refine((value) => value === '' || /^https?:\/\/\S+$/i.test(value), 'must start with http:// or https://')
+  .transform((value) => (value === '' ? null : value))
+  .nullish()
+  .transform((value) => value ?? null);
 export const PROMPT_TITLE_MAX = 160;
 export const PROMPT_HANDLE_MAX = 40;
 /** "video ≤ 60s/32MB". Size is measured over the received bytes; see `lib/prompts/media.ts`. */
@@ -179,6 +197,8 @@ export const SubmissionSchema = z.object({
     .max(PROMPT_TEXT_MAX, `prompt must be ${PROMPT_TEXT_MAX} characters or fewer`),
   /** The optional making-of, in whichever language the submitter writes (2026-08-14). */
   processMd: ProcessSchema,
+  /** The easy path (2026-08-15): a link to their own post, instead of an upload. */
+  sourceUrl: SourceUrlSchema,
   useCase: UseCaseList,
   handle: z.string().max(PROMPT_HANDLE_MAX).nullable(),
   /**
@@ -216,6 +236,7 @@ export const AuthoringSchema = z.object({
   promptText: z.string().trim().min(10).max(PROMPT_TEXT_MAX),
   processMd: ProcessSchema,
   processMdKo: ProcessSchema,
+  sourceUrl: SourceUrlSchema,
   useCase: UseCaseList,
   textVisibility: VisibilityEnum,
   featured: z.boolean(),
@@ -248,6 +269,7 @@ export const EditSchema = z.object({
   promptText: z.string().trim().min(10).max(PROMPT_TEXT_MAX),
   processMd: ProcessSchema,
   processMdKo: ProcessSchema,
+  sourceUrl: SourceUrlSchema,
   useCase: UseCaseList,
   handle: z.string().max(PROMPT_HANDLE_MAX).nullable(),
   textVisibility: VisibilityEnum,

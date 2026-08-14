@@ -233,6 +233,16 @@ function PublishedItem({ row, dict }: { row: PromptRow; dict: Dict }) {
           <textarea name="promptText" rows={6} defaultValue={row.promptText} className={INPUT} />
         </Field>
 
+        <Field label={a.fieldSourceUrl} hint={a.sourceUrlHint}>
+          <input
+            type="url"
+            name="sourceUrl"
+            defaultValue={row.sourceUrl ?? ''}
+            placeholder="https://"
+            className={INPUT}
+          />
+        </Field>
+
         <div className="grid gap-3 lg:grid-cols-2">
           <Field label={a.fieldProcess} hint={a.processHint}>
             <textarea
@@ -419,6 +429,10 @@ export default async function AdminPromptsPage({
 
           <Field label={a.fieldPromptBody}>
             <textarea name="promptText" rows={8} className={INPUT} />
+          </Field>
+
+          <Field label={a.fieldSourceUrl} hint={a.sourceUrlHint}>
+            <input type="url" name="sourceUrl" placeholder="https://" className={INPUT} />
           </Field>
 
           {/* The making-of (2026-08-14). Optional, markdown, and NOT a forced locale pair — a
