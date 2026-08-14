@@ -4,6 +4,7 @@ import { getDictionary } from '@/lib/i18n/dictionaries';
 import type { PromptCard } from '@/lib/prompts/catalog';
 import { PROMPT_MODEL_LABEL, USE_CASES } from '@/lib/prompts/schemas';
 import { PromptCardView } from '@/components/prompts/prompt-card';
+import { HOVER_HOST } from '@/components/prompts/card-media';
 import { PromptRail } from '@/components/prompts/rails';
 import { TypographicPoster, POSTER_RATIOS, posterRatio } from '@/components/prompts/poster';
 import { PromptBody, PromptHeader, SubmitStrip } from '@/components/prompts/detail';
@@ -108,6 +109,22 @@ describe('prompt card (§13.2)', () => {
     const html = cardMarkup(card({ poster: null, video: null }));
     expect(html).toContain('data-poster="typographic"');
     expect(html).not.toContain('<img');
+  });
+
+  /**
+   * The counterpart of the stretched link (founder report, 2026-08-15): because `a::after` covers
+   * the card, the pointer hit-tests to the anchor and enter/leave never reach the media element —
+   * hover-to-play was dead on every card until the listeners moved to an ANCESTOR. This asserts the
+   * one thing the client effect assumes: `HOVER_HOST` resolves, and it WRAPS the media.
+   */
+  it('hangs the hover host above the media, where the overlay link cannot mask it', () => {
+    expect(HOVER_HOST).toBe('[data-prompt-card]');
+    const html = cardMarkup(card());
+    const host = html.indexOf('data-prompt-card=');
+    const media = html.indexOf('class="card__media');
+    expect(host).toBeGreaterThanOrEqual(0);
+    expect(media).toBeGreaterThan(host);
+    expect(html.slice(host).indexOf('</article>')).toBeGreaterThan(html.slice(host).indexOf('card__media'));
   });
 });
 
