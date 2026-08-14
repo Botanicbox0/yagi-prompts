@@ -256,6 +256,45 @@ export function ContestHireStrip({
  * Built here rather than in the dictionary so the subject line carries the contest context and the
  * address stays a single literal — the footer's studio enquiry and this one land in the same inbox
  * and must not drift apart.
+ *
+ * Founder direction (2026-08-15): "개설 요청 폼은 따로 받는거보다 그냥 메일로 소통하는게 나을듯."
+ * So the BODY is the form. It prefills the five things the admin editor needs to open a contest —
+ * host and kind, prize kind and figure, the three dates, the brief, a link — which is the whole
+ * difference between an enquiry that starts the work and one that starts a thread asking for it.
+ * Five short lines, because a long mailto body is truncated by some clients.
  */
-export const CONTEST_MAILTO =
-  'mailto:hello@yagiworkshop.xyz?subject=YAGI%20PROMPTS%20%E2%80%94%20run%20a%20contest%20with%20the%20studio';
+const CONTEST_EMAIL = 'hello@yagiworkshop.xyz';
+
+const ENQUIRY: Record<'en' | 'ko', { subject: string; body: string[] }> = {
+  en: {
+    subject: 'YAGI PROMPTS — run a contest with the studio',
+    body: [
+      'Host (brand / platform / studio / creator / community):',
+      'Prize — kind (cash, credits, subscription, gear, feature) and the figure:',
+      'Dates — opens / deadline / results:',
+      'The brief, in a sentence:',
+      'A link to you:',
+    ],
+  },
+  ko: {
+    subject: 'YAGI PROMPTS — 콘테스트 개최 문의',
+    body: [
+      '주최 (브랜드 / 플랫폼 / 스튜디오 / 크리에이터 / 커뮤니티):',
+      '보상 — 종류(현금·크레딧·구독권·장비·피처링)와 금액:',
+      '일정 — 시작 / 마감 / 발표:',
+      '브리프 한 줄:',
+      '참고 링크:',
+    ],
+  },
+};
+
+export function contestMailto(locale: string): string {
+  const copy = locale === 'ko' ? ENQUIRY.ko : ENQUIRY.en;
+  const query = new URLSearchParams({
+    subject: copy.subject,
+    // Two newlines per line so a reply-under-each-question habit has room.
+    body: `${copy.body.join('\n\n')}\n`,
+  });
+  // `URLSearchParams` encodes a space as `+`, which mail clients render literally in a subject.
+  return `mailto:${CONTEST_EMAIL}?${query.toString().replace(/\+/g, '%20')}`;
+}
