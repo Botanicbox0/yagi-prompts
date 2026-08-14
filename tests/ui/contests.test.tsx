@@ -11,14 +11,16 @@ import {
   ContestPrize,
 } from '@/components/contests/detail';
 import { ContestPoster, posterTitleLines } from '@/components/contests/poster';
-import { splitPrize } from '@/components/contests/prize';
 import {
   CONTEST_MAILTO,
+  ContestFeature,
   ContestHireStrip,
+  ContestHostKinds,
   ContestRail,
   ContestsEmptyState,
 } from '@/components/contests/rails';
-import { contestLabels } from '@/components/contests/labels';
+import { contestLabels, hostKindLabel } from '@/components/contests/labels';
+import { HOST_KINDS } from '@/lib/contests/schemas';
 
 /**
  * PLAN §14.2 — the contests surface as MARKUP.
@@ -44,12 +46,16 @@ function card(overrides: Partial<ContestCard> = {}): ContestCard {
     slug: 'launch-film-contest',
     title: { en: 'Launch film contest', ko: '런칭 단편 공모전' },
     summary: { en: 'Make a short film.', ko: '단편을 만들어 주세요.' },
-    prize: { en: '$3,000', ko: '$3,000' },
-    brandName: 'YAGI WORKSHOP',
-    brandUrl: 'https://yagiworkshop.xyz',
+    prizeTotal: { en: '$3,000', ko: '$3,000' },
+    prizeKind: 'cash',
+    hostName: 'YAGI WORKSHOP',
+    hostKind: 'studio',
+    hostUrl: 'https://yagiworkshop.xyz',
+    hostLogo: null,
     poster: null,
     startsAt: new Date(NOW - 2 * DAY).toISOString(),
     deadlineAt: new Date(NOW + 7 * DAY).toISOString(),
+    announceAt: null,
     publishedAt: new Date(NOW - 3 * DAY).toISOString(),
     entryCount: 2,
     winnerCount: 0,
@@ -177,6 +183,68 @@ describe('the hire strip (§14.2)', () => {
   });
 });
 
+/**
+ * The host-agnostic surface (founder direction, 2026-08-15 — "brand뿐만 아니라 higgsfield나
+ * 플랫폼이나 다 관계없이 콘테스트 열 수 있게"). What is asserted is the thing that used to be
+ * impossible: a PLATFORM hosting a CREDITS contest reads correctly everywhere it appears.
+ */
+describe('a host that is not a brand', () => {
+  const platform = card({
+    hostName: 'HIGGSFIELD',
+    hostKind: 'platform',
+    prizeKind: 'credits',
+    prizeTotal: { en: '50,000 credits', ko: '크레딧 50,000' },
+  });
+
+  it('names the kind on the card, beside the host, in both locales', () => {
+    const html = renderToStaticMarkup(
+      <ContestCardView card={platform} locale="en" labels={labels} now={NOW} />,
+    );
+    expect(html).toContain('data-host-kind="platform"');
+    expect(html).toContain('HIGGSFIELD');
+    expect(html).toContain(dict.contests.hostKindPlatform);
+    // The card LEADS with the prize now, and says what kind of number it is.
+    expect(html).toContain('data-prize-kind="credits"');
+    expect(html).toMatch(/data-prize-total[^>]*>50,000 credits</);
+    expect(html).toContain('font-display');
+
+    const koHtml = renderToStaticMarkup(
+      <ContestCardView card={platform} locale="ko" labels={contestLabels(ko)} now={NOW} />,
+    );
+    expect(koHtml).toContain(ko.contests.hostKindPlatform);
+    expect(koHtml).toContain('크레딧 50,000');
+    // Never the word 브랜드 for a platform — that was the whole bug.
+    expect(koHtml).not.toContain(ko.contests.hostKindBrand);
+  });
+
+  it('gives the featured board the same host and prize, with one link to the contest', () => {
+    const html = renderToStaticMarkup(
+      <ContestFeature card={platform} locale="en" labels={labels} now={NOW} />,
+    );
+    expect(html).toContain('data-contest-feature="launch-film-contest"');
+    expect(html).toContain(dict.contests.hostKindPlatform);
+    expect(html).toMatch(/data-feature-prize[^>]*>50,000 credits</);
+    expect(html).toContain('href="/en/contests/launch-film-contest"');
+    // The inversion is the point: a dark surface so §5.1's accent maps to the dark-surface blue.
+    expect(html).toContain('data-theme="dark"');
+  });
+
+  /** The five kinds are a STATEMENT about who may host — it must list every one of them. */
+  it('lists every host kind in the who-can-host strip', () => {
+    const html = renderToStaticMarkup(
+      <ContestHostKinds
+        title={dict.contests.hostKindsTitle}
+        body={dict.contests.hostKindsBody}
+        kinds={HOST_KINDS.map((kind) => hostKindLabel(labels, kind))}
+      />,
+    );
+    for (const kind of HOST_KINDS) {
+      expect(html, kind).toContain(hostKindLabel(labels, kind));
+    }
+    expect(html).toContain('data-contest-host-kinds');
+  });
+});
+
 describe('the contest card (§14.2)', () => {
   it('renders the phase chip and a server-rendered D-day, never a live clock', () => {
     const html = renderToStaticMarkup(
@@ -185,7 +253,7 @@ describe('the contest card (§14.2)', () => {
     expect(html).toContain('data-phase-chip="open"');
     expect(html).toContain('D-7');
     expect(html).toContain('data-contest-card="launch-film-contest"');
-    expect(html).toContain('data-brand-chip');
+    expect(html).toContain('data-host-chip');
     // No script, no timer: the countdown is HTML.
     expect(html).not.toContain('<script');
   });
@@ -299,17 +367,23 @@ function shaped(overrides: Partial<ShapedContest> = {}): ShapedContest {
     slug: 'launch-film-contest',
     title: { en: 'YAGI PROMPTS\nLAUNCH FILM\nCONTEST', ko: 'YAGI PROMPTS\n론칭 단편\n공모전' },
     summary: { en: 'Make a short film.', ko: '단편을 만들어 주세요.' },
-    prize: {
-      en: '$3,000 · 1st $1,500 / 2nd $1,000 / 3rd $500',
-      ko: '총 $3,000 · 1위 $1,500 / 2위 $1,000 / 3위 $500',
-    },
+    prizeTotal: { en: '$3,000', ko: '총 $3,000' },
+    prizeKind: 'cash',
+    prizeTiers: [
+      { place: 1, value: { en: '$1,500', ko: '$1,500' } },
+      { place: 2, value: { en: '$1,000', ko: '$1,000' } },
+      { place: 3, value: { en: '$500', ko: '$500' } },
+    ],
     rules: { en: '## What we are looking for\n\nA short film.', ko: '## 이런 작품을 찾습니다' },
-    brandName: 'YAGI WORKSHOP',
-    brandUrl: 'https://yagiworkshop.xyz',
+    hostName: 'YAGI WORKSHOP',
+    hostKind: 'studio',
+    hostUrl: 'https://yagiworkshop.xyz',
+    hostLogo: null,
     poster: null,
     video: null,
     startsAt: new Date(NOW - 2 * DAY).toISOString(),
     deadlineAt: new Date(NOW + 7 * DAY).toISOString(),
+    announceAt: null,
     publishedAt: new Date(NOW - 3 * DAY).toISOString(),
     timing: { phase: 'open', daysRemaining: 7, dDay: 'D-7' },
     entries: [],
@@ -330,7 +404,7 @@ describe('the hero poster (finding 1)', () => {
     expect(posterTitleLines(title)).toEqual(['YAGI PROMPTS', 'LAUNCH FILM', 'CONTEST']);
 
     const html = renderToStaticMarkup(
-      <ContestPoster wide title={title} slug="s" brand="YAGI WORKSHOP" prize="$3,000 · 1st $1,500" />,
+      <ContestPoster wide title={title} slug="s" host="YAGI WORKSHOP" prize="$3,000" payouts={['1st $1,500']} />,
     );
     for (const line of ['YAGI PROMPTS', 'LAUNCH FILM', 'CONTEST']) {
       expect(html, line).toContain(line);
@@ -350,7 +424,7 @@ describe('the hero poster (finding 1)', () => {
   /** The outline is semantic: the LAST line, never a hash-picked word and never the studio name. */
   it('outlines the final line only', () => {
     const html = renderToStaticMarkup(
-      <ContestPoster wide title={'YAGI PROMPTS\nLAUNCH FILM\nCONTEST'} slug="s" brand="B" />,
+      <ContestPoster wide title={'YAGI PROMPTS\nLAUNCH FILM\nCONTEST'} slug="s" host="B" />,
     );
     expect(html.match(/-webkit-text-stroke:1px #ffffff/g)).toHaveLength(1);
     const finalSpan = /data-poster-line="final"[^>]*>([^<]*)</.exec(html)?.[1];
@@ -359,7 +433,7 @@ describe('the hero poster (finding 1)', () => {
 
   it('lays out a real responsive grid rather than one 21:9 band', () => {
     const html = renderToStaticMarkup(
-      <ContestPoster wide title="A B" slug="s" brand="B" prize="$1 · 1st $1" prizeLabel="Prize" />,
+      <ContestPoster wide title="A B" slug="s" host="B" prize="$1 · 1st $1" prizeLabel="Prize" />,
     );
     // one column → 8 → 12, at 24 / 32 / 56px padding
     for (const token of [
@@ -379,15 +453,17 @@ describe('the hero poster (finding 1)', () => {
     expect(html).not.toMatch(/style="left:/);
   });
 
-  it('splits the prize instead of setting the whole string in one run', () => {
+  /** The caller hands the poster parts, not a sentence to parse (2026-08-15). */
+  it('sets the total in display type and the payout small, in two runs', () => {
     const html = renderToStaticMarkup(
       <ContestPoster
         wide
         title="A"
         slug="s"
-        brand="B"
+        host="B"
         prizeLabel="Prize"
-        prize="$3,000 · 1st $1,500 / 2nd $1,000 / 3rd $500"
+        prize="$3,000"
+        payouts={['1st $1,500', '2nd $1,000', '3rd $500']}
       />,
     );
     expect(html).toContain('text-contest-poster-prize');
@@ -406,8 +482,8 @@ describe('the hero poster (finding 1)', () => {
 
 describe('black panels are dark surfaces (finding 2)', () => {
   it('declares data-theme on the poster, both variants', () => {
-    const wide = renderToStaticMarkup(<ContestPoster wide title="A" slug="s" brand="B" />);
-    const tile = renderToStaticMarkup(<ContestPoster title="A" slug="s" brand="B" />);
+    const wide = renderToStaticMarkup(<ContestPoster wide title="A" slug="s" host="B" />);
+    const tile = renderToStaticMarkup(<ContestPoster title="A" slug="s" host="B" />);
     expect(wide).toContain('data-theme="dark"');
     expect(tile).toContain('data-theme="dark"');
   });
@@ -454,25 +530,40 @@ describe('the prize band (finding 3)', () => {
     );
     expect(html).toContain('text-contest-prize');
     expect(html).toMatch(/data-prize-total[^>]*>\$3,000</);
-    expect(html).toContain('font-mono text-[0.875rem]');
-    for (const payout of ['1st $1,500', '2nd $1,000', '3rd $500']) {
-      expect(html, payout).toContain(payout);
+    // The podium is a TABLE of tiers now, not a parsed sentence: each place is its own cell.
+    for (const [place, value] of [
+      ['1', '$1,500'],
+      ['2', '$1,000'],
+      ['3', '$500'],
+    ]) {
+      expect(html, value).toMatch(new RegExp(`data-prize-tier="${place}"`));
+      expect(html, value).toContain(value);
     }
     expect(html).not.toContain('$3,000 · 1st');
   });
 
-  it('splits on the delimiters the copy actually uses', () => {
-    expect(splitPrize('$3,000 · 1st $1,500 / 2nd $1,000 / 3rd $500')).toEqual({
-      total: '$3,000',
-      payouts: ['1st $1,500', '2nd $1,000', '3rd $500'],
+  /**
+   * The whole point of the 2026-08-15 model change: a credits contest is a DIFFERENT thing from a
+   * cash one, and the page has to say which without the author writing the word into the figure.
+   */
+  it('names the prize KIND from the dictionary, in each locale', () => {
+    const credits = shaped({
+      prizeKind: 'credits',
+      prizeTotal: { en: '50,000 credits', ko: '크레딧 50,000' },
+      prizeTiers: [],
     });
-    expect(splitPrize('총 $3,000 · 1위 $1,500 / 2위 $1,000')).toEqual({
-      total: '총 $3,000',
-      payouts: ['1위 $1,500', '2위 $1,000'],
-    });
-    // A one-figure prize is a total, not a guess.
-    expect(splitPrize('£1,000')).toEqual({ total: '£1,000', payouts: [] });
-    expect(splitPrize('   ')).toEqual({ total: '', payouts: [] });
+    const en = renderToStaticMarkup(<ContestPrize contest={credits} locale="en" labels={labels} />);
+    expect(en).toContain('data-prize-kind="credits"');
+    expect(en).toContain(dict.contests.prizeKindCredits);
+    expect(en).not.toContain(dict.contests.prizeKindCash);
+
+    const koLabels = contestLabels(ko);
+    const koHtml = renderToStaticMarkup(
+      <ContestPrize contest={credits} locale="ko" labels={koLabels} />,
+    );
+    expect(koHtml).toContain(ko.contests.prizeKindCredits);
+    // No tiers authored → no payout table, rather than an empty heading over nothing.
+    expect(koHtml).not.toContain('data-prize-payouts');
   });
 
   /** It has to sit OUTSIDE the ad-rail anchor, or it is a panel rather than an inversion. */
@@ -492,19 +583,19 @@ describe('the prize band (finding 3)', () => {
 });
 
 describe('the metadata grid (finding 4)', () => {
-  it('is a dl of four labelled cells, not a slash-separated sentence', () => {
+  it('is a dl of five labelled cells, not a slash-separated sentence', () => {
     const html = renderToStaticMarkup(
       <ContestMeta contest={shaped()} locale="en" labels={labels} />,
     );
     expect(html).toContain('<dl');
-    for (const cell of ['status', 'opens', 'deadline', 'countdown']) {
+    for (const cell of ['status', 'opens', 'deadline', 'announce', 'countdown']) {
       expect(html, cell).toContain(`data-meta-cell="${cell}"`);
     }
-    expect(html.match(/<dt/g)).toHaveLength(4);
-    expect(html.match(/<dd/g)).toHaveLength(4);
+    expect(html.match(/<dt/g)).toHaveLength(5);
+    expect(html.match(/<dd/g)).toHaveLength(5);
     // 2 columns at 375, 4 from 768; 72px rows; 16px cells; internal hairlines
     expect(html).toContain('grid-cols-2');
-    expect(html).toContain('md:grid-cols-4');
+    expect(html).toContain('md:grid-cols-5');
     expect(html).toContain('min-h-[72px]');
     expect(html).toContain('p-4');
     expect(html).toContain('border-r border-b border-hairline');
@@ -521,7 +612,7 @@ describe('the metadata grid (finding 4)', () => {
         labels={labels}
       />,
     );
-    expect(closed.match(/data-meta-cell/g)).toHaveLength(4);
+    expect(closed.match(/data-meta-cell/g)).toHaveLength(5);
     expect(closed).toContain('—'); // the missing start date, held open rather than dropped
     expect(closed).toContain(dict.contests.resultsLabel);
   });
@@ -574,11 +665,11 @@ describe('the card chips (finding 6)', () => {
     expect(closed).toMatch(/data-phase-chip="closed"[^>]*bg-black\/70 text-white opacity-70/);
   });
 
-  it('boxes the brand chip on the poster instead of captioning the title', () => {
+  it('boxes the host chip on the poster instead of captioning the title', () => {
     const html = renderToStaticMarkup(
       <ContestCardView card={card()} locale="en" labels={labels} now={NOW} />,
     );
-    expect(html).toMatch(/data-brand-chip[^>]*border border-white\/35/);
+    expect(html).toMatch(/data-host-chip[^>]*border border-white\/35/);
     expect(html).not.toContain('text-[0.65rem]');
     expect(html.match(/YAGI WORKSHOP/g)).toHaveLength(1);
   });

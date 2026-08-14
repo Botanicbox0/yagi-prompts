@@ -1,6 +1,6 @@
 import type { Dictionary } from '@/lib/i18n/dictionaries';
 import type { ContestPhase } from '@/lib/contests/phase';
-import type { EntryPlatform, Placement } from '@/lib/contests/schemas';
+import type { EntryPlatform, HostKind, Placement, PrizeKind } from '@/lib/contests/schemas';
 
 /**
  * The dictionary → props seam for the contests surface (§14, §3.9).
@@ -20,6 +20,24 @@ export interface ContestLabels {
   winnersAnnounced: string;
   hostedBy: string;
   prizeLabel: string;
+  hostKindBrand: string;
+  hostKindPlatform: string;
+  hostKindStudio: string;
+  hostKindCreator: string;
+  hostKindCommunity: string;
+  prizeKindCash: string;
+  prizeKindCredits: string;
+  prizeKindSubscription: string;
+  prizeKindGear: string;
+  prizeKindFeature: string;
+  prizeKindMixed: string;
+  prizeBreakdown: string;
+  announceLabel: string;
+  metaAnnounce: string;
+  timelineHeading: string;
+  timelineNow: string;
+  featuredEyebrow: string;
+  featuredCta: string;
   /** §14.2 meta grid (M9 design review, finding 4) — four column headers, not four sentences. */
   metaStatus: string;
   metaOpens: string;
@@ -58,6 +76,24 @@ export function contestLabels(dict: Dictionary): ContestLabels {
     winnersAnnounced: c.winnersAnnounced,
     hostedBy: c.hostedBy,
     prizeLabel: c.prizeLabel,
+    hostKindBrand: c.hostKindBrand,
+    hostKindPlatform: c.hostKindPlatform,
+    hostKindStudio: c.hostKindStudio,
+    hostKindCreator: c.hostKindCreator,
+    hostKindCommunity: c.hostKindCommunity,
+    prizeKindCash: c.prizeKindCash,
+    prizeKindCredits: c.prizeKindCredits,
+    prizeKindSubscription: c.prizeKindSubscription,
+    prizeKindGear: c.prizeKindGear,
+    prizeKindFeature: c.prizeKindFeature,
+    prizeKindMixed: c.prizeKindMixed,
+    prizeBreakdown: c.prizeBreakdown,
+    announceLabel: c.announceLabel,
+    metaAnnounce: c.metaAnnounce,
+    timelineHeading: c.timelineHeading,
+    timelineNow: c.timelineNow,
+    featuredEyebrow: c.featuredEyebrow,
+    featuredCta: c.featuredCta,
     metaStatus: c.metaStatus,
     metaOpens: c.metaOpens,
     metaDeadline: c.metaDeadline,
@@ -80,6 +116,35 @@ export function contestLabels(dict: Dictionary): ContestLabels {
     previewBadge: c.previewBadge,
     posterAlt: c.posterAlt,
   };
+}
+
+/**
+ * Host kind → word, and prize kind → word (2026-08-15).
+ *
+ * A `Record` rather than a chain of ternaries, because the compiler is then the thing that notices
+ * when a sixth kind lands in `HOST_KINDS` and nobody wrote its label.
+ */
+export function hostKindLabel(labels: ContestLabels, kind: HostKind): string {
+  const map: Record<HostKind, string> = {
+    brand: labels.hostKindBrand,
+    platform: labels.hostKindPlatform,
+    studio: labels.hostKindStudio,
+    creator: labels.hostKindCreator,
+    community: labels.hostKindCommunity,
+  };
+  return map[kind];
+}
+
+export function prizeKindLabel(labels: ContestLabels, kind: PrizeKind): string {
+  const map: Record<PrizeKind, string> = {
+    cash: labels.prizeKindCash,
+    credits: labels.prizeKindCredits,
+    subscription: labels.prizeKindSubscription,
+    gear: labels.prizeKindGear,
+    feature: labels.prizeKindFeature,
+    mixed: labels.prizeKindMixed,
+  };
+  return map[kind];
 }
 
 export function phaseLabel(labels: ContestLabels, phase: ContestPhase): string {

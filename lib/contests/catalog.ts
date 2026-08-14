@@ -3,6 +3,7 @@ import type { Localized } from '@/lib/content/schemas';
 import { publicContentUrl } from '@/lib/content/asset-url';
 import { shapeContestMedia, type ContestMediaOptions, type ShapedContestMedia } from './media';
 import { countApprovedEntries, loadPublishedContests, type ContestRow } from './repo';
+import type { HostKind, PrizeKind } from './schemas';
 import { comparePhaseOrder, contestPhase, type ContestPhase } from './phase';
 
 /**
@@ -30,13 +31,20 @@ export interface ContestCard {
   slug: string;
   title: Localized;
   summary: Localized;
-  /** §14.2 — "prize set in display type" on the detail; the card carries it as the hook. */
-  prize: Localized;
-  brandName: string;
-  brandUrl: string | null;
+  /**
+   * §14.2 — "prize set in display type" on the detail; the card LEADS with it (2026-08-15). The
+   * kind rides along so a credits prize and a cash prize can read as different things.
+   */
+  prizeTotal: Localized;
+  prizeKind: PrizeKind;
+  hostName: string;
+  hostKind: HostKind;
+  hostUrl: string | null;
+  hostLogo: ShapedContestMedia | null;
   poster: ShapedContestMedia | null;
   startsAt: string | null;
   deadlineAt: string | null;
+  announceAt: string | null;
   publishedAt: string | null;
   /** Approved entries only. A count, never a row. */
   entryCount: number;
@@ -70,21 +78,26 @@ export function toContestCard(
   counts: { approved: number; winners: number } = { approved: 0, winners: 0 },
   options: ContestCatalogOptions = {},
 ): ContestCard {
-  const { poster } = shapeContestMedia(row.id, row.media, {
+  const mediaOptions = {
     publicUrl: options.publicUrl ?? publicContentUrl,
     ...(options.mediaUrl ? { mediaUrl: options.mediaUrl } : {}),
-  });
+  };
+  const { poster, logo } = shapeContestMedia(row.id, row.media, mediaOptions);
   return {
     id: row.id,
     slug: row.slug,
     title: row.title,
     summary: row.summary,
-    prize: row.prize,
-    brandName: row.brandName,
-    brandUrl: row.brandUrl,
+    prizeTotal: row.prizeTotal,
+    prizeKind: row.prizeKind,
+    hostName: row.hostName,
+    hostKind: row.hostKind,
+    hostUrl: row.hostUrl,
+    hostLogo: logo,
     poster,
     startsAt: row.startsAt,
     deadlineAt: row.deadlineAt,
+    announceAt: row.announceAt,
     publishedAt: row.publishedAt,
     entryCount: counts.approved,
     winnerCount: counts.winners,

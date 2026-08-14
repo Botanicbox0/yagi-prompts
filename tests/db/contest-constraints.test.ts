@@ -19,7 +19,7 @@ const BASE = {
   slug: 'probe',
   title: '{"en":"T","ko":"ㅌ"}',
   summary: '{"en":"S","ko":"ㅅ"}',
-  prize: '{"en":"$1","ko":"$1"}',
+  prizeTotal: '{"en":"$1","ko":"$1"}',
 };
 
 const POSTER = JSON.stringify({
@@ -38,14 +38,14 @@ async function insertPublished(media: string | null, extra: Record<string, strin
   const run = () =>
     sql.query(
       `insert into contests
-         (slug, status, title, summary, prize, brand_name, media, starts_at, deadline_at, published_at)
+         (slug, status, title, summary, prize_total, host_name, media, starts_at, deadline_at, published_at)
        values ($1, 'published', $2::jsonb, $3::jsonb, $4::jsonb, 'BRAND', $5::jsonb,
                now() - interval '1 day', now() + interval '1 day', now())`,
       [
         extra.slug ?? BASE.slug,
         extra.title ?? BASE.title,
         extra.summary ?? BASE.summary,
-        extra.prize ?? BASE.prize,
+        extra.prizeTotal ?? BASE.prizeTotal,
         media,
       ],
     );
@@ -132,7 +132,7 @@ describe('contests_published_requires_poster (§14.2)', () => {
     ] as const) {
       await expect(
         sql.query(
-          `insert into contests (slug, status, title, summary, prize, brand_name, media)
+          `insert into contests (slug, status, title, summary, prize_total, host_name, media)
            values ($1, 'draft', $2::jsonb, $2::jsonb, $2::jsonb, 'BRAND', $3::jsonb)`,
           [slug, BASE.title, media],
         ),
@@ -145,7 +145,7 @@ describe('contests_published_requires_poster (§14.2)', () => {
 
 describe('the other published-contest gates (§14.1)', () => {
   it('refuses a published contest missing a locale', async () => {
-    const { db, run } = await insertPublished(POSTER, { prize: '{"en":"$1","ko":""}' });
+    const { db, run } = await insertPublished(POSTER, { prizeTotal: '{"en":"$1","ko":""}' });
     expect(await expectReject(run)).toContain('contests_published_requires_localized');
     await db.close();
   });
@@ -156,7 +156,7 @@ describe('the other published-contest gates (§14.1)', () => {
     const message = await expectReject(() =>
       sql.query(
         `insert into contests
-           (slug, status, title, summary, prize, brand_name, media, published_at)
+           (slug, status, title, summary, prize_total, host_name, media, published_at)
          values ('undated', 'published', $1::jsonb, $1::jsonb, $1::jsonb, 'BRAND', $2::jsonb, now())`,
         [BASE.title, POSTER],
       ),
@@ -169,7 +169,7 @@ describe('the other published-contest gates (§14.1)', () => {
 describe('contest_entries constraints (§14.1)', () => {
   async function contestId(sql: ReturnType<typeof runner>): Promise<string> {
     const { rows } = await sql.query<{ id: string }>(
-      `insert into contests (slug, status, title, summary, prize, brand_name)
+      `insert into contests (slug, status, title, summary, prize_total, host_name)
        values ('probe', 'draft', $1::jsonb, $1::jsonb, $1::jsonb, 'BRAND') returning id`,
       [BASE.title],
     );

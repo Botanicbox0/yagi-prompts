@@ -4,7 +4,15 @@ import { publicContentUrl } from '@/lib/content/asset-url';
 import { shapeContestMedia, type ShapedContestMedia } from './media';
 import { contestTiming, type ContestTiming } from './phase';
 import { loadApprovedEntries, loadContestBySlug, type ContestRow, type EntryRow } from './repo';
-import { platformOf, snsDisplayHandle, type EntryPlatform, type Placement } from './schemas';
+import {
+  platformOf,
+  snsDisplayHandle,
+  type EntryPlatform,
+  type HostKind,
+  type Placement,
+  type PrizeKind,
+  type PrizeTier,
+} from './schemas';
 
 /**
  * PLAN §14.2 — the contests gate, as a pure function of (db × slug × clock).
@@ -53,14 +61,19 @@ export interface ShapedContest {
   slug: string;
   title: Localized;
   summary: Localized;
-  prize: Localized;
+  prizeTotal: Localized;
+  prizeKind: PrizeKind;
+  prizeTiers: PrizeTier[];
   rules: Localized | null;
-  brandName: string;
-  brandUrl: string | null;
+  hostName: string;
+  hostKind: HostKind;
+  hostUrl: string | null;
+  hostLogo: ShapedContestMedia | null;
   poster: ShapedContestMedia | null;
   video: ShapedContestMedia | null;
   startsAt: string | null;
   deadlineAt: string | null;
+  announceAt: string | null;
   publishedAt: string | null;
   timing: ContestTiming;
   entries: ContestEntryView[];
@@ -113,7 +126,7 @@ async function shape(
 ): Promise<ContestDetailOk> {
   const entryRows = await loadApprovedEntries(deps.sql, row.id);
   const entries = entryRows.map(toEntryView);
-  const { poster, video } = shapeContestMedia(row.id, row.media, {
+  const { poster, video, logo } = shapeContestMedia(row.id, row.media, {
     publicUrl: deps.publicUrl ?? publicContentUrl,
   });
 
@@ -124,14 +137,19 @@ async function shape(
       slug: row.slug,
       title: row.title,
       summary: row.summary,
-      prize: row.prize,
+      prizeTotal: row.prizeTotal,
+      prizeKind: row.prizeKind,
+      prizeTiers: row.prizeTiers,
       rules: row.rules,
-      brandName: row.brandName,
-      brandUrl: row.brandUrl,
+      hostName: row.hostName,
+      hostKind: row.hostKind,
+      hostUrl: row.hostUrl,
+      hostLogo: logo,
       poster,
       video,
       startsAt: row.startsAt,
       deadlineAt: row.deadlineAt,
+      announceAt: row.announceAt,
       publishedAt: row.publishedAt,
       timing: contestTiming(row, deps.now ?? Date.now()),
       entries,

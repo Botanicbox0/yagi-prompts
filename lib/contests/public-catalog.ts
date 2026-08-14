@@ -27,10 +27,18 @@ async function readContestCatalog(): Promise<ContestCatalog> {
   return readPublicProjection(await getSqlRunner(), EMPTY_CONTEST_CATALOG, loadContestCatalog);
 }
 
-/** Keyed by runtime mode for the M7 reason: `.next/cache` outlives a data-source switch. */
+/**
+ * Keyed by runtime mode for the M7 reason: `.next/cache` outlives a data-source switch.
+ *
+ * The VERSION is the second half of that lesson, learned the hard way on 2026-08-15. The cache
+ * outlives a SHAPE change too: `brand*` → `host*` and `prize` → `prizeTotal` left a v1 entry whose
+ * cards had none of the keys the renderer now reads, and the build crashed on
+ * `localize(undefined)` — which in production is a 500 on the live listing until the tag happens to
+ * be invalidated. **Bump this string in the same commit as any change to `ContestCard`.**
+ */
 export const getContestCatalog = unstable_cache(
   readContestCatalog,
-  ['contest-catalog', 'v1', resolveRuntimeMode()],
+  ['contest-catalog', 'v2-hosts', resolveRuntimeMode()],
   {
     tags: [CONTESTS_TAG],
     revalidate: CATALOG_TTL_SECONDS,

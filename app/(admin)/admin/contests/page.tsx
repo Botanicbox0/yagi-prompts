@@ -10,10 +10,13 @@ import {
 } from '@/lib/contests/repo';
 import { contestPhase, contestTiming } from '@/lib/contests/phase';
 import {
+  HOST_KINDS,
   PLACEMENTS,
+  PRIZE_KINDS,
   parseContestMedia,
   publishBlockers,
   toDateTimeLocal,
+  type Placement,
 } from '@/lib/contests/schemas';
 import {
   ADMIN_CONTESTS_PATH,
@@ -92,6 +95,11 @@ function StagedMedia({ row, dict }: { row: ContestRow; dict: Dict }) {
   );
 }
 
+/** The stored tier for a place, or `null` — the editor renders three rows either way. */
+function tierValue(row: ContestRow | null, place: Placement) {
+  return row?.prizeTiers.find((tier) => tier.place === place)?.value ?? null;
+}
+
 /** The §14.1 form body, shared by "new contest" and every editor — one field list, one truth. */
 function ContestFields({ row, dict }: { row: ContestRow | null; dict: Dict }) {
   const a = dict.admin;
@@ -101,19 +109,38 @@ function ContestFields({ row, dict }: { row: ContestRow | null; dict: Dict }) {
         <Field label={a.fieldContestSlug} hint={a.contestSlugHint}>
           <input type="text" name="slug" defaultValue={row?.slug ?? ''} className={INPUT} />
         </Field>
-        <Field label={a.fieldBrandName}>
-          <input type="text" name="brandName" defaultValue={row?.brandName ?? ''} className={INPUT} />
+        <Field label={a.fieldHostName}>
+          <input type="text" name="hostName" defaultValue={row?.hostName ?? ''} className={INPUT} />
         </Field>
-        <Field label={a.fieldBrandUrl}>
+        {/* Who is asking (2026-08-15). A contest is not a brand thing — the kind is what lets a
+            platform, a studio or one creator host without being mislabelled on every card. */}
+        <Field label={a.fieldHostKind} hint={a.hostKindHint}>
+          <select name="hostKind" defaultValue={row?.hostKind ?? 'brand'} className={INPUT}>
+            {HOST_KINDS.map((kind) => (
+              <option key={kind} value={kind}>
+                {a.hostKinds[kind]}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label={a.fieldHostUrl}>
           <input
             type="url"
-            name="brandUrl"
+            name="hostUrl"
             placeholder="https://"
-            defaultValue={row?.brandUrl ?? ''}
+            defaultValue={row?.hostUrl ?? ''}
             className={INPUT}
           />
         </Field>
-        <div />
+        <Field label={a.fieldPrizeKind} hint={a.prizeKindHint}>
+          <select name="prizeKind" defaultValue={row?.prizeKind ?? 'cash'} className={INPUT}>
+            {PRIZE_KINDS.map((kind) => (
+              <option key={kind} value={kind}>
+                {a.prizeKinds[kind]}
+              </option>
+            ))}
+          </select>
+        </Field>
         <Field label={a.fieldStartsAt} hint={a.contestDatesHint}>
           <input
             type="datetime-local"
@@ -130,6 +157,14 @@ function ContestFields({ row, dict }: { row: ContestRow | null; dict: Dict }) {
             className={INPUT}
           />
         </Field>
+        <Field label={a.fieldAnnounceAt} hint={a.contestAnnounceHint}>
+          <input
+            type="datetime-local"
+            name="announceAt"
+            defaultValue={toDateTimeLocal(row?.announceAt)}
+            className={INPUT}
+          />
+        </Field>
       </div>
 
       {/* §5.2 "display lines manually broken" — a contest title is set as a POSTER, so the editor
@@ -140,10 +175,26 @@ function ContestFields({ row, dict }: { row: ContestRow | null; dict: Dict }) {
       <LocalePair label={a.fieldContestSummary} name="summary" value={row?.summary ?? null} multiline />
       <LocalePair
         label={a.fieldContestPrize}
-        name="prize"
-        value={row?.prize ?? null}
+        name="prizeTotal"
+        value={row?.prizeTotal ?? null}
         hint={a.contestPrizeHint}
       />
+
+      {/* The podium, one row per place. Three fixed rows rather than an add-a-row control: a
+          JS-free form (§3.8) cannot grow, and a contest has exactly three places to give. Leaving a
+          row blank drops that tier — most contests fill one or none. */}
+      <fieldset className="grid gap-3">
+        <legend className={LABEL}>{a.fieldPrizeTiers}</legend>
+        <p className="font-mono text-[0.72rem] opacity-50">{a.prizeTiersHint}</p>
+        {PLACEMENTS.map((place) => (
+          <LocalePair
+            key={place}
+            label={place === 1 ? a.placement1 : place === 2 ? a.placement2 : a.placement3}
+            name={`prizeTier${place}`}
+            value={tierValue(row, place)}
+          />
+        ))}
+      </fieldset>
       <LocalePair
         label={a.fieldContestRules}
         name="rules"

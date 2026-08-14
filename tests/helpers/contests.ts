@@ -7,6 +7,7 @@ import type { SqlRunner } from '@/lib/db/sql-runner';
 import type { StorageDriver } from '@/lib/storage';
 import { createLocalStorageDriver } from '@/lib/storage/local-driver';
 import { insertContest } from '@/lib/contests/repo';
+import type { HostKind, PrizeKind, PrizeTier } from '@/lib/contests/schemas';
 import { FIXTURE_USERS } from '../../scripts/fixtures';
 import { freshDb, runner } from './pglite';
 
@@ -71,7 +72,11 @@ export interface MakeContestArgs {
   startsInDays?: number;
   deadlineInDays?: number;
   media?: unknown;
-  brandUrl?: string | null;
+  hostUrl?: string | null;
+  hostKind?: HostKind;
+  prizeKind?: PrizeKind;
+  prizeTiers?: PrizeTier[];
+  announceInDays?: number;
 }
 
 /**
@@ -101,12 +106,19 @@ export async function makeContest(
     status,
     title: L('Launch film contest'),
     summary: L('Make a short film with the prompts on this site.'),
-    prize: L('$3,000'),
+    prizeTotal: L('$3,000'),
+    prizeKind: args.prizeKind ?? 'cash',
+    prizeTiers: args.prizeTiers ?? [],
     rules: L('## What we are looking for\n\nA short film.'),
-    brandName: 'YAGI WORKSHOP',
-    brandUrl: args.brandUrl === undefined ? 'https://yagiworkshop.xyz' : args.brandUrl,
+    hostName: 'YAGI WORKSHOP',
+    hostKind: args.hostKind ?? 'studio',
+    hostUrl: args.hostUrl === undefined ? 'https://yagiworkshop.xyz' : args.hostUrl,
     startsAt,
     deadlineAt,
+    announceAt:
+      args.announceInDays === undefined
+        ? null
+        : new Date(NOW + args.announceInDays * DAY).toISOString(),
     media:
       args.media ??
       (status === 'published'

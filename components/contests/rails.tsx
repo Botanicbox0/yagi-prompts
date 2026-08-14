@@ -1,8 +1,11 @@
 import type { ContestCard } from '@/lib/contests/catalog';
+import { contestTiming } from '@/lib/contests/phase';
+import { contestHref } from '@/lib/contests/links';
+import { formatDate, interpolate, localize } from '@/lib/i18n/format';
 import { RevealGrid } from '@/components/motion/reveal-grid';
 import { TextSwap } from '@/components/ui/text-swap';
 import { ContestCardView } from './contest-card';
-import type { ContestLabels } from './labels';
+import { hostKindLabel, prizeKindLabel, type ContestLabels } from './labels';
 
 /**
  * PLAN §14.2 — the three phase rails, and the empty state that has to look like a decision.
@@ -12,6 +15,119 @@ import type { ContestLabels } from './labels';
  * a column-major masonry would only scramble the reading order of a list whose ORDER is the point
  * (soonest deadline first). §5.3-6's hover is identical either way — it lives on `.card`.
  */
+/**
+ * The featured board (founder direction, 2026-08-15 — "콘테스트 페이지도 sota급으로").
+ *
+ * The listing used to open with three equal rails, which is a filing cabinet: a reader who arrived
+ * because a contest is running had to scan a grid to find the one thing that is actually open. This
+ * takes the MOST URGENT open contest — soonest deadline, which is the order the catalog already
+ * arrives in — and gives it the treatment the fact deserves: a black inversion (§5.1), the prize in
+ * display type, the clock beside it, one link.
+ *
+ * It renders NOTHING when nothing is open. An "featured" slot filled with an upcoming contest would
+ * be an advert for a door that is shut.
+ */
+export function ContestFeature({
+  card,
+  locale,
+  labels,
+  now,
+}: {
+  card: ContestCard;
+  locale: string;
+  labels: ContestLabels;
+  now: Date | number;
+}) {
+  const timing = contestTiming(card, now);
+  const title = localize(card.title, locale);
+  const summary = localize(card.summary, locale);
+  const deadline = formatDate(card.deadlineAt, locale);
+
+  return (
+    <section
+      data-contest-feature={card.slug}
+      data-theme="dark"
+      className="mt-10 border border-hairline bg-black text-white"
+    >
+      <div className="grid gap-10 p-6 sm:p-10 lg:grid-cols-[1.15fr_0.85fr] lg:items-end lg:p-14">
+        <div>
+          <p className="text-accent font-label text-eyebrow uppercase">{labels.featuredEyebrow}</p>
+          <h2 className="mt-5 font-display text-[clamp(2rem,5vw,3.75rem)] leading-[0.9] font-black whitespace-pre-line uppercase">
+            <a href={contestHref(locale, card.slug)}>{title}</a>
+          </h2>
+          <p className="mt-5 max-w-detail text-[0.95rem] leading-relaxed opacity-70">{summary}</p>
+          <div className="mt-6 flex flex-wrap items-center gap-x-3 gap-y-2 font-label text-[0.75rem] tracking-[0.12em] uppercase">
+            <span className="opacity-50">{labels.hostedBy}</span>
+            <span data-feature-host>{card.hostName}</span>
+            <span className="border border-white/30 px-2 py-1 opacity-70">
+              {hostKindLabel(labels, card.hostKind)}
+            </span>
+          </div>
+        </div>
+
+        {/* The money and the clock, in that order — the two facts that decide whether to enter. */}
+        <div className="border-t border-white/20 pt-8 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-10">
+          <p className="font-label text-[0.7rem] tracking-[0.12em] uppercase opacity-50">
+            {prizeKindLabel(labels, card.prizeKind)}
+          </p>
+          <p
+            data-feature-prize
+            className="mt-3 font-display text-[clamp(2.25rem,6vw,4rem)] leading-[0.88] font-black uppercase"
+          >
+            {localize(card.prizeTotal, locale)}
+          </p>
+          <p className="mt-5 font-mono text-[0.8rem] opacity-70">
+            {deadline ? interpolate(labels.deadlineLabel, { date: deadline }) : labels.phaseOpen}
+            {timing.dDay ? ` · ${timing.dDay}` : ''}
+          </p>
+          <a
+            href={contestHref(locale, card.slug)}
+            className="mt-7 inline-block min-h-12 border border-current px-6 py-3.5 font-label text-[1rem] tracking-[0.1em] uppercase"
+          >
+            {labels.featuredCta}
+          </a>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/**
+ * "Who gets to host?" — the statement that makes the surface host-agnostic (2026-08-15).
+ *
+ * Five chips, not five logos: naming the KINDS is a true statement about what the product supports,
+ * while a row of company marks would imply clients that do not exist yet. When real hosts arrive
+ * this is the block their logos replace.
+ */
+export function ContestHostKinds({
+  title,
+  body,
+  kinds,
+}: {
+  title: string;
+  body: string;
+  kinds: string[];
+}) {
+  return (
+    <section data-contest-host-kinds className="mt-16 border-t border-hairline pt-10 lg:mt-24">
+      <h2 className="font-display text-[clamp(1.4rem,2.6vw,2.1rem)] leading-[0.95] font-black uppercase">
+        {title}
+      </h2>
+      <p className="mt-4 max-w-detail text-[0.95rem] leading-relaxed opacity-70">{body}</p>
+      <ul className="mt-6 flex flex-wrap gap-2">
+        {kinds.map((kind) => (
+          <li
+            key={kind}
+            className="border border-hairline px-3 py-2 font-label text-[0.75rem] tracking-[0.12em] uppercase opacity-75"
+          >
+            {kind}
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 export function ContestRail({
   id,
   heading,

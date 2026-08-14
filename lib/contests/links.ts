@@ -43,7 +43,7 @@ export function adminContestPreviewPath(slug: string): string {
 // media refs
 // ---------------------------------------------------------------------------
 
-export const CONTEST_MEDIA_KINDS = ['poster', 'video'] as const;
+export const CONTEST_MEDIA_KINDS = ['poster', 'video', 'logo'] as const;
 export type ContestMediaKind = (typeof CONTEST_MEDIA_KINDS)[number];
 
 /**

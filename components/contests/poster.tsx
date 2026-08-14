@@ -1,5 +1,4 @@
 import { posterRatio } from '@/components/ui/poster-seed';
-import { splitPrize } from './prize';
 
 /**
  * The contest poster stand-in — §14.2's "poster-led card", when there is not yet a poster.
@@ -56,8 +55,9 @@ function outlineStyle(): { WebkitTextStroke: string; color: string } {
 export function ContestPoster({
   title,
   slug,
-  brand,
+  host,
   prize,
+  payouts = [],
   prizeLabel,
   ratio,
   /**
@@ -80,16 +80,18 @@ export function ContestPoster({
 }: {
   title: string;
   slug: string;
-  brand: string;
-  /** The authored prize string; the composition splits it (`prize.ts`). */
+  host: string;
+  /** The headline figure, already localized. The poster does not parse money (2026-08-15). */
   prize?: string;
+  /** Optional payout lines ("1st $1,500"), pre-formatted by the caller that has the labels. */
+  payouts?: string[];
   /** "Prize" / "상금" — the poster has no dictionary of its own. */
   prizeLabel?: string;
   ratio?: string;
   wide?: boolean;
 }) {
   const lines = posterTitleLines(title);
-  const { total, payouts } = splitPrize(prize ?? '');
+  const total = (prize ?? '').trim();
 
   if (wide) {
     return (
@@ -117,7 +119,7 @@ export function ContestPoster({
         <div className="flex flex-col justify-between gap-8 border-t border-hairline p-6 sm:col-span-3 sm:border-t-0 sm:border-l sm:p-8 lg:col-span-4 lg:p-14">
           <div className="flex items-start justify-between gap-3">
             <span className="font-label text-[0.75rem] tracking-[0.14em] uppercase opacity-70">
-              {brand}
+              {host}
             </span>
             <span aria-hidden className="bg-accent mt-0.5 block h-3 w-3 shrink-0" />
           </div>
@@ -157,8 +159,8 @@ export function ContestPoster({
           rather than the two hash-placed rules this used to carry. */}
       <span aria-hidden className="bg-hairline absolute inset-y-0 left-2/3 w-px" />
 
-      {/* The brand kicker belongs to the HERO only. On a card the phase and D-day chips are
-          absolutely positioned over this exact corner, and the card prints the brand in its own
+      {/* The host kicker belongs to the HERO only. On a card the phase and D-day chips are
+          absolutely positioned over this exact corner, and the card prints the host in its own
           boxed chip — so printing it here would collide with a chip AND repeat itself. */}
       <div className="relative flex items-start justify-end">
         <span aria-hidden className="bg-accent mt-1 block h-2 w-2 shrink-0" />

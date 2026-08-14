@@ -936,7 +936,7 @@ async function sweepContestsListing(locale: string, contests: ContestProbe[]): P
   expectPresent(
     'the display headline',
     page.body,
-    locale === 'ko' ? '필름 콘테스트' : 'BRANDS BRING',
+    locale === 'ko' ? '필름 콘테스트' : 'SET THE BRIEF.',
   );
   expectPresent('the OPEN rail', page.body, 'data-contest-rail="open"');
   expectPresent(

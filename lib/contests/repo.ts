@@ -1,6 +1,7 @@
 import type { SqlRunner } from '@/lib/db/sql-runner';
 import type { Localized } from '@/lib/content/schemas';
-import type { ContestStatus, EntryStatus, Placement } from './schemas';
+import type { ContestStatus, EntryStatus, HostKind, Placement, PrizeKind, PrizeTier } from './schemas';
+import { isHostKind, isPrizeKind, parsePrizeTiers } from './schemas';
 
 /**
  * PLAN §14 — every `contests` / `contest_entries` query, in one driver-agnostic module.
@@ -25,13 +26,17 @@ export interface ContestRow {
   status: ContestStatus;
   title: Localized;
   summary: Localized;
-  prize: Localized;
+  prizeTotal: Localized;
+  prizeKind: PrizeKind;
+  prizeTiers: PrizeTier[];
   rules: Localized | null;
-  brandName: string;
-  brandUrl: string | null;
+  hostName: string;
+  hostKind: HostKind;
+  hostUrl: string | null;
   media: unknown;
   startsAt: string | null;
   deadlineAt: string | null;
+  announceAt: string | null;
   createdAt: string | null;
   publishedAt: string | null;
 }
@@ -66,13 +71,17 @@ interface RawContest {
   status: ContestStatus;
   title: Localized;
   summary: Localized;
-  prize: Localized;
+  prize_total: Localized;
+  prize_kind: string;
+  prize_tiers: unknown;
   rules: Localized | null;
-  brand_name: string;
-  brand_url: string | null;
+  host_name: string;
+  host_kind: string;
+  host_url: string | null;
   media: unknown;
   starts_at: Date | string | null;
   deadline_at: Date | string | null;
+  announce_at: Date | string | null;
   created_at: Date | string | null;
   published_at: Date | string | null;
 }
@@ -93,8 +102,9 @@ interface RawEntry {
   version: string;
 }
 
-const CONTEST_COLUMNS = `id, slug, status, title, summary, prize, rules, brand_name, brand_url,
-                         media, starts_at, deadline_at, created_at, published_at`;
+const CONTEST_COLUMNS = `id, slug, status, title, summary, prize_total, prize_kind, prize_tiers,
+                         rules, host_name, host_kind, host_url, media,
+                         starts_at, deadline_at, announce_at, created_at, published_at`;
 
 /**
  * `updated_at` as microsecond-precision UTC text — the optimistic-concurrency token.
@@ -120,13 +130,19 @@ function toContest(raw: RawContest): ContestRow {
     status: raw.status,
     title: raw.title,
     summary: raw.summary,
-    prize: raw.prize,
+    prizeTotal: raw.prize_total,
+    // The DB CHECK owns the vocabulary; this keeps a row written by a future migration renderable
+    // instead of crashing the listing on an unknown string.
+    prizeKind: isPrizeKind(raw.prize_kind) ? raw.prize_kind : 'cash',
+    prizeTiers: parsePrizeTiers(raw.prize_tiers),
     rules: raw.rules,
-    brandName: raw.brand_name,
-    brandUrl: raw.brand_url,
+    hostName: raw.host_name,
+    hostKind: isHostKind(raw.host_kind) ? raw.host_kind : 'brand',
+    hostUrl: raw.host_url,
     media: raw.media,
     startsAt: toIso(raw.starts_at),
     deadlineAt: toIso(raw.deadline_at),
+    announceAt: toIso(raw.announce_at),
     createdAt: toIso(raw.created_at),
     publishedAt: toIso(raw.published_at),
   };
@@ -228,12 +244,16 @@ export interface ContestWriteArgs {
   slug: string;
   title: Localized;
   summary: Localized;
-  prize: Localized;
+  prizeTotal: Localized;
+  prizeKind: PrizeKind;
+  prizeTiers: PrizeTier[];
   rules: Localized | null;
-  brandName: string;
-  brandUrl: string | null;
+  hostName: string;
+  hostKind: HostKind;
+  hostUrl: string | null;
   startsAt: string | null;
   deadlineAt: string | null;
+  announceAt: string | null;
 }
 
 export async function insertContest(
@@ -242,10 +262,11 @@ export async function insertContest(
 ): Promise<void> {
   await sql.query(
     `insert into contests
-       (id, slug, status, title, summary, prize, rules, brand_name, brand_url, media,
-        starts_at, deadline_at, published_at)
-     values ($1, $2, $3, $4::jsonb, $5::jsonb, $6::jsonb, $7::jsonb, $8, $9, $10::jsonb,
-             $11::timestamptz, $12::timestamptz,
+       (id, slug, status, title, summary, prize_total, prize_kind, prize_tiers, rules,
+        host_name, host_kind, host_url, media, starts_at, deadline_at, announce_at, published_at)
+     values ($1, $2, $3, $4::jsonb, $5::jsonb, $6::jsonb, $7, $8::jsonb, $9::jsonb,
+             $10, $11, $12, $13::jsonb,
+             $14::timestamptz, $15::timestamptz, $16::timestamptz,
              case when $3 = 'published' then now() else null end)`,
     [
       args.id,
@@ -253,13 +274,17 @@ export async function insertContest(
       args.status ?? 'draft',
       JSON.stringify(args.title),
       JSON.stringify(args.summary),
-      JSON.stringify(args.prize),
+      JSON.stringify(args.prizeTotal),
+      args.prizeKind,
+      JSON.stringify(args.prizeTiers),
       args.rules === null ? null : JSON.stringify(args.rules),
-      args.brandName,
-      args.brandUrl,
+      args.hostName,
+      args.hostKind,
+      args.hostUrl,
       args.media === null || args.media === undefined ? null : JSON.stringify(args.media),
       args.startsAt,
       args.deadlineAt,
+      args.announceAt,
     ],
   );
 }
@@ -300,9 +325,11 @@ export async function updateContest(
 
     const { rows } = await tx.query<{ id: string }>(
       `update contests
-          set slug = $2, title = $3::jsonb, summary = $4::jsonb, prize = $5::jsonb,
-              rules = $6::jsonb, brand_name = $7, brand_url = $8,
-              starts_at = $9::timestamptz, deadline_at = $10::timestamptz
+          set slug = $2, title = $3::jsonb, summary = $4::jsonb, prize_total = $5::jsonb,
+              prize_kind = $6, prize_tiers = $7::jsonb, rules = $8::jsonb,
+              host_name = $9, host_kind = $10, host_url = $11,
+              starts_at = $12::timestamptz, deadline_at = $13::timestamptz,
+              announce_at = $14::timestamptz
         where id = $1
         returning id`,
       [
@@ -310,12 +337,16 @@ export async function updateContest(
         args.slug,
         JSON.stringify(args.title),
         JSON.stringify(args.summary),
-        JSON.stringify(args.prize),
+        JSON.stringify(args.prizeTotal),
+        args.prizeKind,
+        JSON.stringify(args.prizeTiers),
         args.rules === null ? null : JSON.stringify(args.rules),
-        args.brandName,
-        args.brandUrl,
+        args.hostName,
+        args.hostKind,
+        args.hostUrl,
         args.startsAt,
         args.deadlineAt,
+        args.announceAt,
       ],
     );
     return rows.length > 0 ? 'saved' : 'notFound';
