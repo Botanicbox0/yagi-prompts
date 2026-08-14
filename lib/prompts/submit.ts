@@ -46,6 +46,8 @@ export interface SubmitInput {
   promptText: string;
   /** The optional making-of (founder direction, 2026-08-14) — markdown, one field, any language. */
   processMd: string | null;
+  /** The easy path (2026-08-15): a link to where the creator already posted it. */
+  sourceUrl: string | null;
   useCase: string[];
   handle: string | null;
   consent: boolean;
@@ -85,6 +87,7 @@ export async function submitPrompt(
     title: input.title,
     promptText: input.promptText,
     processMd: input.processMd ?? '',
+    sourceUrl: input.sourceUrl ?? '',
     useCase: input.useCase,
     handle: input.handle,
     consent: input.consent === true ? true : undefined,
@@ -136,6 +139,7 @@ export async function submitPrompt(
     promptText: parsed.data.promptText,
     // One field, whichever language they wrote in: the detail page falls back across locales.
     processMd: parsed.data.processMd,
+    sourceUrl: parsed.data.sourceUrl,
     // §13.3-1, and the DB CHECK agrees: community text is public by definition.
     textVisibility: 'public',
     media: Object.keys(media).length === 0 ? null : media,

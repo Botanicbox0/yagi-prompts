@@ -142,6 +142,24 @@ export function PromptHeader({
         <span data-model-chip className="text-accent">
           {prompt.model.toUpperCase().replace(/-/g, ' ')}
         </span>
+        {/* The creator's own post (2026-08-15). `noopener` + `ugc`: an outbound link a stranger
+            supplied should neither hand over the opener nor pass our ranking to them. */}
+        {prompt.sourceUrl && (
+          <>
+            <span aria-hidden className="opacity-30">
+              /
+            </span>
+            <a
+              href={prompt.sourceUrl}
+              target="_blank"
+              rel="noopener noreferrer nofollow ugc"
+              data-source-url
+              className="opacity-60 underline-offset-4 hover:opacity-100 hover:underline"
+            >
+              {labels.sourceLink} ↗
+            </a>
+          </>
+        )}
       </div>
 
       <h1 className="mt-5 font-display text-[clamp(2.25rem,5.5vw,4rem)] leading-[0.92] font-black uppercase">

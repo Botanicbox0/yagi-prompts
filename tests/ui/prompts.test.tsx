@@ -184,6 +184,7 @@ describe('prompt detail (§13.2 / §5.5 / §15.3)', () => {
     poster: null,
     video: null,
     audio: null,
+    sourceUrl: null,
     visibility: 'pro' as const,
   };
 

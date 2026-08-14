@@ -36,6 +36,8 @@ export interface PromptRowInput {
   /** The "how it was made" markdown, per locale (2026-08-14). */
   processMd?: string | null;
   processMdKo?: string | null;
+  /** The creator's own post (2026-08-15). */
+  sourceUrl?: string | null;
   textVisibility: Visibility;
   /** Raw `media` jsonb, parsed here through the §13.1 schema. */
   media: unknown;
@@ -74,6 +76,11 @@ interface ShapedPromptBase {
   /** The audio result (music/voice prompts) — public like the clip, and downloadable (founder
    *  direction, 2026-08-13). */
   audio: ShapedPromptMedia | null;
+  /**
+   * The creator's original post. PUBLIC, never gated: it is a link to something already published
+   * on the open internet, and hiding it would gate someone else's public page.
+   */
+  sourceUrl: string | null;
   /** The gate this item's text sits behind — safe to publish; it is what the lock chip renders. */
   visibility: Visibility;
   tier: Tier;
@@ -185,6 +192,9 @@ export function shapePrompt(
     poster,
     video,
     audio,
+    // Only ever an http(s) URL: the schema refuses anything else at the boundary and the DB CHECK
+    // refuses it underneath, so this cannot become a `javascript:` href.
+    sourceUrl: row.sourceUrl ?? null,
     visibility: row.textVisibility,
     tier,
   };

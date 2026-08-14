@@ -223,6 +223,7 @@ export const en = {
     audioDownload: 'Download',
     // The making-of (founder direction, 2026-08-14) — the long half of a prompt worth reading.
     processHeading: 'How it was made',
+    sourceLink: 'Original post',
   },
   /** §13.1/E — the community submission form, and its confirmation states. */
   submit: {
@@ -235,8 +236,13 @@ export const en = {
     fieldPromptHint: 'Paste it exactly as you ran it. {max} characters max.',
     fieldUseCase: 'Use case',
     fieldUseCaseHint: 'Pick up to {max}.',
-    fieldHandle: 'Credit',
-    fieldHandleHint: 'The @handle we credit you with. Leave it blank and we use your account name.',
+    // "Credit" collided with the cookie credits the product now sells (founder, 2026-08-15).
+    fieldHandle: 'Byline (@handle)',
+    fieldHandleHint: 'The @handle we put on it. Leave it blank and we use your account name.',
+    fieldSource: 'Link to your post',
+    fieldSourceHint:
+      'Already posted it? Paste the link — Instagram, TikTok, YouTube, anywhere it plays. Then you do not have to upload anything.',
+    moreOptional: 'More, all optional — how you made it, files',
     fieldVideo: 'Result clip',
     fieldVideoHint: 'Optional — submissions with a result clip are far more likely to be published. MP4 or WebM, up to {seconds}s and {mb}MB.',
     fieldPoster: 'Poster frame',
@@ -244,9 +250,10 @@ export const en = {
     fieldAudio: 'Audio file',
     fieldAudioHint: 'Optional. Music or voice that came out of the prompt. Readers can download it.',
     fieldProcess: 'How you made it',
+
     fieldProcessHint:
       'Optional, and the part people read twice. References, the passes you ran, the settings that failed. Markdown works — headings, lists, links. Write it in whichever language you think in.',
-    consentLabel: 'I wrote this prompt and I am happy for YAGI PROMPTS to publish it with my credit.',
+    consentLabel: 'I wrote this prompt and I am happy for YAGI PROMPTS to publish it under my @handle.',
     consentLicense:
       'You keep the prompt. You are giving YAGI PROMPTS a licence to display it, with your @handle, on this site and in its own promotion.',
     submitButton: 'Send for review',
@@ -830,7 +837,7 @@ export const en = {
       'Media is required, both titles are required, and the text defaults to Pro. It publishes immediately.',
     colPrompt: 'Prompt',
     colSource: 'Source',
-    colAuthor: 'Credit',
+    colAuthor: 'Byline',
     colUseCase: 'Use case',
     colVisibility: 'Text',
     colFeatured: 'Featured',
@@ -840,13 +847,15 @@ export const en = {
     fieldPromptTitle: 'Title (EN)',
     fieldPromptTitleKo: 'Title (KO)',
     fieldPromptBody: 'Prompt text',
+    fieldSourceUrl: 'Original post URL',
+    sourceUrlHint: 'Optional. Where this was first posted — shown as a link on the prompt page.',
     fieldProcess: 'How it was made (EN, markdown)',
     fieldProcessKo: 'How it was made (KO, markdown)',
     processHint:
       'Optional. The references, the passes, the settings that failed — headings, lists and links work. Either language on its own is fine.',
     fieldPromptSlug: 'Slug',
     promptSlugAutoHint: 'Leave empty — it follows the EN title, lowercase with hyphens.',
-    fieldPromptHandle: 'Credit (@handle)',
+    fieldPromptHandle: 'Byline (@handle)',
     fieldItemModel: 'Model',
     fieldPromptVisibility: 'Text visibility',
     fieldPromptFeatured: 'Featured',

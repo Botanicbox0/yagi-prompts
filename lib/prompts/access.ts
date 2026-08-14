@@ -71,6 +71,7 @@ function toRowInput(row: PromptRow) {
     promptText: row.promptText,
     processMd: row.processMd,
     processMdKo: row.processMdKo,
+    sourceUrl: row.sourceUrl,
     textVisibility: row.textVisibility,
     media: row.media,
     useCase: row.useCase,
