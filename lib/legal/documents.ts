@@ -23,16 +23,28 @@ import { PACK_COOKIES, PACK_PRICE_USD, SIGNUP_COOKIES, WEEKLY_COOKIES } from '@/
  */
 
 /**
- * 전자상거래법 §21 표시사항. Every `TODO` is a fact only the founder holds; the pages render the
- * placeholder verbatim so an unfilled field is visible rather than silently absent.
+ * 전자상거래법 §21 표시사항.
+ *
+ * 상호 · 대표자 · 본점 주소 are transcribed from the corporate registry certificate
+ * (등기사항전부증명서, 등기번호 0940868 / 법인등록번호 110111-0940868, 발급 2026-05-11): the head
+ * office moved to 구로구 on 2026-04-21 and was registered on 2026-05-06, so the 양천구 line struck
+ * through on that certificate is the OLD one and must never appear here. Nothing else from the
+ * registry is copied — a director's resident number and home address are on that document and have
+ * no business on a public page.
+ *
+ * The two remaining `TODO`s are not derivable from the registry: 사업자등록번호 lives on the
+ * 사업자등록증 and 통신판매업 신고번호 on the 통신판매업 신고증. Both are required for a domestic PG
+ * merchant review, so the pages render the placeholder verbatim — an unfilled field must be visible
+ * rather than silently absent.
  */
 export const BUSINESS = {
-  name: 'YAGI Workshop',
-  nameKo: '야기워크숍',
-  representative: 'TODO — 대표자 성명',
-  registrationNumber: 'TODO — 사업자등록번호 (000-00-00000)',
-  mailOrderNumber: 'TODO — 통신판매업 신고번호 (제0000-서울0000호)',
-  address: 'TODO — 사업장 주소',
+  name: 'YAGI WORKSHOP Inc.',
+  nameKo: '야기워크숍 주식회사',
+  representative: '윤병삼',
+  registrationNumber: 'TODO — 사업자등록번호 (사업자등록증)',
+  mailOrderNumber: 'TODO — 통신판매업 신고번호 (통신판매업 신고증)',
+  address: '서울특별시 구로구 디지털로34길 55, 비201-아이3 (구로동, 코오롱싸이언스밸리2차)',
+  addressEn: '55 Digital-ro 34-gil, Guro-gu, Seoul, Republic of Korea',
   phone: 'TODO — 연락처',
   email: 'hello@yagiworkshop.xyz',
   host: 'Vercel Inc. · Supabase Inc.',
@@ -389,7 +401,7 @@ export function businessRows(locale: Locale): Array<[string, string]> {
     [ko ? '대표자' : 'Representative', BUSINESS.representative],
     [ko ? '사업자등록번호' : 'Business registration no.', BUSINESS.registrationNumber],
     [ko ? '통신판매업 신고번호' : 'Mail-order sales registration no.', BUSINESS.mailOrderNumber],
-    [ko ? '사업장 주소' : 'Address', BUSINESS.address],
+    [ko ? '사업장 주소' : 'Address', ko ? BUSINESS.address : BUSINESS.addressEn],
     [ko ? '연락처' : 'Phone', BUSINESS.phone],
     [ko ? '이메일' : 'Email', BUSINESS.email],
     [ko ? '호스팅 제공자' : 'Hosting provider', BUSINESS.host],
