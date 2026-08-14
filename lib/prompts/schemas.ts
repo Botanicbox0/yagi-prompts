@@ -56,8 +56,34 @@ export type PromptStatus = (typeof PROMPT_STATUSES)[number];
 // caps (§13.1 moderation limits)
 // ---------------------------------------------------------------------------
 
-/** "text ≤ 2,000 chars" — enforced by zod at the server boundary, not by a maxlength attribute. */
-export const PROMPT_TEXT_MAX = 2000;
+/**
+ * §13.1 wrote "text ≤ 2,000 chars" when a prompt was a paragraph. It is not one any more: the
+ * founder's own 1994 ENG segment brief is 4,853 characters of shot-by-shot direction — timings,
+ * lens behaviour, wardrobe, a per-cut table — and the admin form REFUSED it (2026-08-15). A cap
+ * that refuses the studio's real work is a cap set against the wrong artefact.
+ *
+ * 12,000 fits a full multi-scene brief with room to spare, stays a bound a moderator reads in one
+ * sitting, and stays well under `PROCESS_MAX` — the making-of is still the long form. The abuse
+ * control on community text was never the length anyway: it is 3 submissions/day/user (§13.1) plus
+ * human review before anything is visible.
+ */
+export const PROMPT_TEXT_MAX = 12000;
+export const PROMPT_TEXT_MIN = 10;
+
+/**
+ * One definition for every path that takes prompt text — submission, admin authoring, admin edit.
+ * The bug was not the number alone: authoring silently inherited a limit written for community
+ * moderation, and three separate `.max(...)` calls made that look like three decisions.
+ *
+ * The messages are explicit because they are what the founder reads at 2am. Zod's default names the
+ * limit, but the admin banner shows this string with no field context around it, so it says what
+ * the field is and what the bound is.
+ */
+export const PromptTextSchema = z
+  .string()
+  .trim()
+  .min(PROMPT_TEXT_MIN, `prompt must be at least ${PROMPT_TEXT_MIN} characters`)
+  .max(PROMPT_TEXT_MAX, `prompt must be ${PROMPT_TEXT_MAX.toLocaleString('en-US')} characters or fewer`);
 /**
  * The "how it was made" write-up (founder direction, 2026-08-14). Ten times the prompt's own cap,
  * because this is where the references, the failed passes and the settings go — a Notion page's
@@ -190,11 +216,7 @@ const UseCaseList = z
 
 export const SubmissionSchema = z.object({
   title: z.string().trim().min(3).max(PROMPT_TITLE_MAX),
-  promptText: z
-    .string()
-    .trim()
-    .min(10)
-    .max(PROMPT_TEXT_MAX, `prompt must be ${PROMPT_TEXT_MAX} characters or fewer`),
+  promptText: PromptTextSchema,
   /** The optional making-of, in whichever language the submitter writes (2026-08-14). */
   processMd: ProcessSchema,
   /** The easy path (2026-08-15): a link to their own post, instead of an upload. */
@@ -233,7 +255,7 @@ export const AuthoringSchema = z.object({
     .nullable(),
   title: z.string().trim().min(3).max(PROMPT_TITLE_MAX),
   titleKo: z.string().trim().min(1).max(PROMPT_TITLE_MAX),
-  promptText: z.string().trim().min(10).max(PROMPT_TEXT_MAX),
+  promptText: PromptTextSchema,
   processMd: ProcessSchema,
   processMdKo: ProcessSchema,
   sourceUrl: SourceUrlSchema,
@@ -266,7 +288,7 @@ export const EditSchema = z.object({
   slug: SlugSchema,
   title: z.string().trim().min(3).max(PROMPT_TITLE_MAX),
   titleKo: z.string().trim().max(PROMPT_TITLE_MAX).nullable(),
-  promptText: z.string().trim().min(10).max(PROMPT_TEXT_MAX),
+  promptText: PromptTextSchema,
   processMd: ProcessSchema,
   processMdKo: ProcessSchema,
   sourceUrl: SourceUrlSchema,

@@ -41,22 +41,83 @@ const asset = (sha = 'a'.repeat(64)) => ({
   mime: 'image/png',
 });
 
+/** The two admin payloads, at module scope: the caps below must hold on every path, not just one. */
+const authoring = {
+  slug: 'neon-alley-dolly',
+  title: 'Neon alley dolly',
+  titleKo: '네온 골목 달리',
+  promptText: ok.promptText,
+  useCase: ['cinematic'],
+  textVisibility: 'pro',
+  featured: true,
+  model: DEFAULT_PROMPT_MODEL,
+};
+
+const edit = {
+  id: '9a000000-0000-4000-8000-000000000001',
+  slug: 'x-y-z',
+  title: 'Title',
+  titleKo: null,
+  promptText: ok.promptText,
+  useCase: ['cinematic'],
+  handle: null,
+  textVisibility: 'public',
+  featured: false,
+};
+
 describe('submission schema (§13.1)', () => {
   it('accepts a complete submission', () => {
     const parsed = SubmissionSchema.safeParse(ok);
     expect(parsed.success).toBe(true);
   });
 
-  it('refuses prompt text over 2,000 characters', () => {
+  it('refuses prompt text over the cap', () => {
     const parsed = SubmissionSchema.safeParse({ ...ok, promptText: 'x'.repeat(PROMPT_TEXT_MAX + 1) });
     expect(parsed.success).toBe(false);
-    expect(PROMPT_TEXT_MAX).toBe(2000);
   });
 
   it('accepts prompt text at exactly the cap', () => {
     expect(SubmissionSchema.safeParse({ ...ok, promptText: 'x'.repeat(PROMPT_TEXT_MAX) }).success).toBe(
       true,
     );
+  });
+
+  /**
+   * The cap has to fit the artefact it caps (founder report, 2026-08-15). A real shot-by-shot video
+   * brief — the founder's 1994 ENG segment is 4,853 characters of timed direction — was REFUSED by
+   * every prompt form at the old 2,000. Every schema that takes prompt text is asserted here
+   * TOGETHER, because the failure was that admin authoring inherited a limit written for community
+   * moderation, and nothing said the two were the same decision.
+   */
+  it('takes a full shot-by-shot brief on every path that accepts prompt text', () => {
+    expect(PROMPT_TEXT_MAX).toBeGreaterThanOrEqual(12000);
+    const brief = 'A. '.repeat(1618); // 4,854 chars — the founder's segment, to the character.
+    expect(brief.length).toBeGreaterThan(4800);
+
+    expect(SubmissionSchema.safeParse({ ...ok, promptText: brief }).success, 'submission').toBe(true);
+    expect(
+      AuthoringSchema.safeParse({ ...authoring, promptText: brief }).success,
+      'admin authoring',
+    ).toBe(true);
+    expect(EditSchema.safeParse({ ...edit, promptText: brief }).success, 'admin edit').toBe(true);
+  });
+
+  /** "Invalid input" tells the founder nothing. Every refusal names the limit it broke. */
+  it('names the limit in the message, on every path', () => {
+    const over = 'x'.repeat(PROMPT_TEXT_MAX + 1);
+    const message = (result: { success: boolean; error?: { issues: Array<{ message: string }> } }) =>
+      result.success ? '' : (result.error?.issues[0]?.message ?? '');
+
+    for (const [label, result] of [
+      ['submission', SubmissionSchema.safeParse({ ...ok, promptText: over })],
+      ['authoring', AuthoringSchema.safeParse({ ...authoring, promptText: over })],
+      ['edit', EditSchema.safeParse({ ...edit, promptText: over })],
+    ] as const) {
+      expect(result.success, label).toBe(false);
+      // Grouped for a human ("12,000"), which is who reads the banner.
+      expect(message(result), label).toContain(PROMPT_TEXT_MAX.toLocaleString('en-US'));
+      expect(message(result), label).not.toBe('Invalid input');
+    }
   });
 
   /** An unchecked box posts NOTHING, so "absent" has to fail exactly the way "false" does. */
@@ -146,17 +207,6 @@ describe('media schema (§13.1)', () => {
 });
 
 describe('admin payloads (§13.1/F)', () => {
-  const authoring = {
-    slug: 'neon-alley-dolly',
-    title: 'Neon alley dolly',
-    titleKo: '네온 골목 달리',
-    promptText: ok.promptText,
-    useCase: ['cinematic'],
-    textVisibility: 'pro',
-    featured: true,
-    model: DEFAULT_PROMPT_MODEL,
-  };
-
   it('requires a Korean title on a YAGI item (§13.3-4 bilingual publish gate)', () => {
     expect(AuthoringSchema.safeParse(authoring).success).toBe(true);
     expect(AuthoringSchema.safeParse({ ...authoring, titleKo: '' }).success).toBe(false);
@@ -188,17 +238,7 @@ describe('admin payloads (§13.1/F)', () => {
   });
 
   it('allows an edit to blank the Korean title but never the English one', () => {
-    const base = {
-      id: crypto.randomUUID(),
-      slug: 'x-y-z',
-      title: 'Title',
-      titleKo: null,
-      promptText: ok.promptText,
-      useCase: ['cinematic'],
-      handle: null,
-      textVisibility: 'public',
-      featured: false,
-    };
+    const base = { ...edit, id: crypto.randomUUID() };
     expect(EditSchema.safeParse(base).success).toBe(true);
     expect(EditSchema.safeParse({ ...base, title: '' }).success).toBe(false);
   });

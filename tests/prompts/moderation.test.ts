@@ -242,6 +242,40 @@ describe('prompt moderation operations (§13.2/F)', () => {
     expect(harness.promptsRevalidated).toBe(1);
   });
 
+  /**
+   * The founder's save, end to end (2026-08-15). A 1994 ENG segment brief — 4,853 characters of
+   * shot-by-shot direction — was refused by the admin form with `promptText: Invalid input`, and
+   * the schema test alone would not have caught a plumbing failure. So the real operation runs,
+   * against the real database, and the text is compared byte for byte on the way out.
+   */
+  it('saves a full shot-by-shot brief, whole, through the real edit path', async () => {
+    const brief = [
+      'Create a 15-second Korean archival TV segment. Preserve her exact face, skin tone and age.',
+      ...Array.from(
+        { length: 60 },
+        (_, n) =>
+          `${(n * 0.25).toFixed(3)}: servo zoom to off-center chest-up, focus lands late, interlace ` +
+          'combing across the highlights; she listens with closed lips, no overlapping reply.',
+      ),
+    ].join('\n');
+    expect(brief.length).toBeGreaterThan(4800);
+
+    const live = (await loadPromptBySlug(sql(), 'kitchen-tutorial-overhead'))!;
+    const outcome = await harness.run('prompt.update', {
+      id: live.id,
+      slug: live.slug,
+      title: live.title,
+      titleKo: '90년대 서울 사투리 인터뷰',
+      promptText: brief,
+      useCase: ['cinematic'],
+      handle: '',
+      textVisibility: 'pro',
+      featured: '',
+    });
+    expect(outcome).toMatchObject({ ok: true, code: 'saved' });
+    expect((await loadPromptById(sql(), live.id))!.promptText).toBe(brief);
+  });
+
   /** §13.3-1 in the operations layer: the request is normalised, and the CHECK backs it up. */
   it('cannot paywall a community prompt, however the form is posted', async () => {
     const community = (await loadPromptBySlug(sql(), 'skate-park-golden-hour'))!;
