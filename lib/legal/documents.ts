@@ -41,11 +41,12 @@ export const BUSINESS = {
   name: 'YAGI WORKSHOP Inc.',
   nameKo: '야기워크숍 주식회사',
   representative: '윤병삼',
-  registrationNumber: 'TODO — 사업자등록번호 (사업자등록증)',
+  registrationNumber: '519-81-04213',
   mailOrderNumber: 'TODO — 통신판매업 신고번호 (통신판매업 신고증)',
   address: '서울특별시 구로구 디지털로34길 55, 비201-아이3 (구로동, 코오롱싸이언스밸리2차)',
   addressEn: '55 Digital-ro 34-gil, Guro-gu, Seoul, Republic of Korea',
-  phone: 'TODO — 연락처',
+  phone: '010-6599-4020',
+  phoneEn: '+82 10-6599-4020',
   email: 'hello@yagiworkshop.xyz',
   host: 'Vercel Inc. · Supabase Inc.',
 } as const;
@@ -402,7 +403,7 @@ export function businessRows(locale: Locale): Array<[string, string]> {
     [ko ? '사업자등록번호' : 'Business registration no.', BUSINESS.registrationNumber],
     [ko ? '통신판매업 신고번호' : 'Mail-order sales registration no.', BUSINESS.mailOrderNumber],
     [ko ? '사업장 주소' : 'Address', ko ? BUSINESS.address : BUSINESS.addressEn],
-    [ko ? '연락처' : 'Phone', BUSINESS.phone],
+    [ko ? '연락처' : 'Phone', ko ? BUSINESS.phone : BUSINESS.phoneEn],
     [ko ? '이메일' : 'Email', BUSINESS.email],
     [ko ? '호스팅 제공자' : 'Hosting provider', BUSINESS.host],
   ];
