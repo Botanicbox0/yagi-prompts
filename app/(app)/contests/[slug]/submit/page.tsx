@@ -161,7 +161,7 @@ export default async function SubmitEntryPage({
 
         {/* The contest this form belongs to, named before anything is asked. */}
         <p className="mt-4 font-label text-eyebrow uppercase opacity-55">
-          {copy.contestLabel} · {contest.brandName}
+          {copy.contestLabel} · {contest.hostName}
         </p>
         <p className="mt-2 font-display text-[clamp(1.4rem,3vw,2rem)] leading-[0.95] font-black uppercase">
           <a href={contestHref(locale, slug)}>{title}</a>

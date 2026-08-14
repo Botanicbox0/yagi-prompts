@@ -1,5 +1,11 @@
 import type { Localized } from '@/lib/content/schemas';
-import type { EntryStatus, Placement } from '@/lib/contests/schemas';
+import type {
+  EntryStatus,
+  HostKind,
+  Placement,
+  PrizeKind,
+  PrizeTier,
+} from '@/lib/contests/schemas';
 import type { AssetSpec } from './fixtures';
 
 /**
@@ -65,14 +71,19 @@ export interface ContestFixture {
   status: 'draft' | 'published';
   title: Localized;
   summary: Localized;
-  prize: Localized;
+  prizeTotal: Localized;
+  prizeKind: PrizeKind;
+  prizeTiers: PrizeTier[];
   rules: Localized;
-  brandName: string;
-  brandUrl: string;
+  hostName: string;
+  hostKind: HostKind;
+  hostUrl: string;
   poster?: AssetSpec;
   /** Days from the seed instant. Positive = future. */
   startsInDays: number;
   deadlineInDays: number;
+  /** Days from the seed instant; `null` when the host has not committed to a results date. */
+  announceInDays: number | null;
   entries: ContestEntryFixture[];
 }
 
@@ -155,13 +166,17 @@ export const CONTEST_FIXTURES: ContestFixture[] = [
       en: 'Make a short film with the prompts on this site. Post it, send us the link, and the best three get paid.',
       ko: '이 사이트의 프롬프트로 단편을 만들어 주세요. 올리고 링크만 보내주시면 됩니다. 상위 세 편에 상금을 드립니다.',
     },
-    prize: {
-      en: '$3,000 · 1st $1,500 / 2nd $1,000 / 3rd $500',
-      ko: '총 $3,000 · 1위 $1,500 / 2위 $1,000 / 3위 $500',
-    },
+    prizeTotal: { en: '$3,000', ko: '총 $3,000' },
+    prizeKind: 'cash',
+    prizeTiers: [
+      { place: 1, value: { en: '$1,500', ko: '$1,500' } },
+      { place: 2, value: { en: '$1,000', ko: '$1,000' } },
+      { place: 3, value: { en: '$500', ko: '$500' } },
+    ],
     rules: { en: RULES_EN, ko: RULES_KO },
-    brandName: 'YAGI WORKSHOP',
-    brandUrl: 'https://yagiworkshop.xyz',
+    hostName: 'YAGI WORKSHOP',
+    hostKind: 'studio',
+    hostUrl: 'https://yagiworkshop.xyz',
     // A poster is staged but NOT published (the contest is a draft), so the public route refuses it
     // and both the listing card and the detail hero fall back to the typographic composition — the
     // exact path a real contest takes on the day before it goes live.
@@ -174,6 +189,7 @@ export const CONTEST_FIXTURES: ContestFixture[] = [
     },
     startsInDays: 1,
     deadlineInDays: 30,
+    announceInDays: 37,
     entries: [
       {
         id: '9d000000-0000-4000-8000-000000000001',
@@ -246,13 +262,21 @@ export const CONTEST_FIXTURES: ContestFixture[] = [
      * the split the prize band does (total in display type, breakdown in mono) — and stays
      * obviously fake by making the total $0.
      */
-    prize: { en: '$0 · Fixture prize — not real', ko: '$0 · 픽스처 상금 — 실제 아님' },
+    prizeTotal: { en: '0 credits', ko: '크레딧 0' },
+    /**
+     * A CREDITS prize on the swept fixture, deliberately (2026-08-15): the public surface then
+     * exercises the host-agnostic path — a platform paying in credits — rather than only the cash
+     * case the studio's own contest covers. Zero keeps it obviously fake.
+     */
+    prizeKind: 'credits',
+    prizeTiers: [{ place: 1, value: { en: '0 credits', ko: '크레딧 0' } }],
     rules: {
       en: '## Fixture brief\n\nThis contest is a test fixture and awards nothing.',
       ko: '## 픽스처 브리프\n\n이 콘테스트는 테스트 픽스처이며 아무것도 수여하지 않습니다.',
     },
-    brandName: 'FIXTURE BRAND',
-    brandUrl: 'https://example.com',
+    hostName: 'FIXTURE PLATFORM',
+    hostKind: 'platform',
+    hostUrl: 'https://example.com',
     poster: {
       label: 'contest-sweep-open',
       ext: 'png',
@@ -262,6 +286,7 @@ export const CONTEST_FIXTURES: ContestFixture[] = [
     },
     startsInDays: -1,
     deadlineInDays: 21,
+    announceInDays: null,
     entries: [
       {
         /** POSITIVE control: this one MUST be visible on the public detail page. */

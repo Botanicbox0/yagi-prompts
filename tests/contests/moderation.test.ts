@@ -40,12 +40,16 @@ const contestFields = (overrides: Record<string, string> = {}) => ({
   titleKo: '런칭 단편 공모전',
   summaryEn: 'Make a short film with the prompts on this site.',
   summaryKo: '이 사이트의 프롬프트로 단편을 만들어 주세요.',
-  prizeEn: '$3,000',
-  prizeKo: '$3,000',
+  prizeTotalEn: '$3,000',
+  prizeTotalKo: '$3,000',
+  prizeKind: 'cash',
+  prizeTier1En: '$1,500',
+  prizeTier1Ko: '$1,500',
   rulesEn: '## The brief\n\nA short film.',
   rulesKo: '## 브리프\n\n단편 하나.',
-  brandName: 'YAGI WORKSHOP',
-  brandUrl: 'https://yagiworkshop.xyz',
+  hostName: 'YAGI WORKSHOP',
+  hostKind: 'studio',
+  hostUrl: 'https://yagiworkshop.xyz',
   startsAt: iso(-1),
   deadlineAt: iso(30),
   ...overrides,
@@ -118,7 +122,7 @@ describe('contest CRUD + publish gate (§14.2)', () => {
 
   it('refuses to publish a contest that is missing something, and names all of it', async () => {
     await harness.run('contest.create', {
-      ...contestFields({ prizeKo: '', startsAt: '', deadlineAt: '' }),
+      ...contestFields({ prizeTotalKo: '', startsAt: '', deadlineAt: '' }),
     });
     const row = (await loadContestBySlug(sql(), 'launch-film-contest'))!;
 

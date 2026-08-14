@@ -21,12 +21,13 @@ import {
   ContestIdSchema,
   EntryApprovalSchema,
   EntryRejectionSchema,
+  PLACEMENTS,
   PlacementSchema,
   parseContestMedia,
   publishBlockers,
   type ContestMedia,
 } from '@/lib/contests/schemas';
-import { ADMIN_CONTESTS_PATH } from '@/lib/contests/links';
+import { ADMIN_CONTESTS_PATH, CONTEST_MEDIA_KINDS } from '@/lib/contests/links';
 import { fail, ok, type AdminContext, type AdminOutcome } from './context';
 import * as f from './form';
 import type { AdminOperation, ParseResult } from './operations';
@@ -63,6 +64,24 @@ function parsed<T>(schema: z.ZodType<T>, value: unknown): ParseResult<T> {
 const BACK = ADMIN_CONTESTS_PATH;
 const NOT_FOUND_DETAIL = 'the contest this form points at no longer exists';
 
+/**
+ * The podium, read out of three fixed rows of the form (2026-08-15).
+ *
+ * A row with BOTH sides blank is not a tier — the editor always ships three rows and most contests
+ * fill one or none. A row with one side filled is kept and REFUSED downstream by `LocalizedText`,
+ * because a podium that exists in English only is exactly what the §3.9 gate is for; dropping it
+ * here would publish a half-translated prize as if the author had never typed it.
+ */
+function prizeTiers(form: FormData): Array<{ place: number; value: { en: string; ko: string } }> {
+  const tiers = [];
+  for (const place of PLACEMENTS) {
+    const value = f.localized(form, `prizeTier${place}`);
+    if (value.en === '' && value.ko === '') continue;
+    tiers.push({ place, value });
+  }
+  return tiers;
+}
+
 /** The §14.1 contest form, read out of a plain multipart POST. */
 function contestFields(form: FormData) {
   const rules = f.optionalLocalized(form, 'rules');
@@ -70,12 +89,16 @@ function contestFields(form: FormData) {
     slug: f.str(form, 'slug'),
     title: f.localized(form, 'title'),
     summary: f.localized(form, 'summary'),
-    prize: f.localized(form, 'prize'),
+    prizeTotal: f.localized(form, 'prizeTotal'),
+    prizeKind: f.str(form, 'prizeKind') || 'cash',
+    prizeTiers: prizeTiers(form),
     rules,
-    brandName: f.str(form, 'brandName'),
-    brandUrl: f.str(form, 'brandUrl') || null,
+    hostName: f.str(form, 'hostName'),
+    hostKind: f.str(form, 'hostKind') || 'brand',
+    hostUrl: f.str(form, 'hostUrl') || null,
     startsAt: f.str(form, 'startsAt') || null,
     deadlineAt: f.str(form, 'deadlineAt') || null,
+    announceAt: f.str(form, 'announceAt') || null,
   };
 }
 
@@ -93,7 +116,7 @@ async function applyUploads(
   existing: ContestMedia,
 ): Promise<{ ok: true; value: ContestMedia } | { ok: false; detail: string }> {
   const next: ContestMedia = { ...existing };
-  for (const kind of ['poster', 'video'] as const) {
+  for (const kind of CONTEST_MEDIA_KINDS) {
     const file = f.file(form, kind);
     if (file === null) continue;
     const staged = await stageContestUpload(ctx.storage, contestId, kind, file);

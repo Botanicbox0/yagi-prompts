@@ -7,8 +7,13 @@ import { TextSwap } from '@/components/ui/text-swap';
 import { ContestEntryCard } from './entry-card';
 import { ContestHero } from './hero';
 import { ContestPoster } from './poster';
-import { splitPrize } from './prize';
-import { phaseLabel, placementLabel, type ContestLabels } from './labels';
+import {
+  hostKindLabel,
+  phaseLabel,
+  placementLabel,
+  prizeKindLabel,
+  type ContestLabels,
+} from './labels';
 
 /**
  * PLAN §14.2 — the contest detail page's sections.
@@ -33,7 +38,7 @@ const SECTION_CLASS = 'mt-14 border-t border-hairline pt-10';
 const SECTION_HEADING_CLASS = 'font-display text-contest-section font-black uppercase';
 
 // ---------------------------------------------------------------------------
-// hero + title + brand strip
+// hero + title + host strip
 // ---------------------------------------------------------------------------
 
 export function ContestHeader({
@@ -47,7 +52,7 @@ export function ContestHeader({
 }) {
   const title = localize(contest.title, locale);
   const summary = localize(contest.summary, locale);
-  const prize = localize(contest.prize, locale);
+  const prize = localize(contest.prizeTotal, locale);
 
   return (
     <header>
@@ -60,9 +65,12 @@ export function ContestHeader({
             wide
             title={title}
             slug={contest.slug}
-            brand={contest.brandName}
+            host={contest.hostName}
             prize={prize}
-            prizeLabel={labels.prizeLabel}
+            payouts={contest.prizeTiers.map(
+              (tier) => `${placementLabel(labels, tier.place)} ${localize(tier.value, locale)}`,
+            )}
+            prizeLabel={prizeKindLabel(labels, contest.prizeKind)}
           />
         }
       />
@@ -77,21 +85,47 @@ export function ContestHeader({
           </p>
         )}
 
-        {/* §14.2 brand strip — who is asking, and where they live. */}
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 font-label text-eyebrow uppercase">
-          <span className="opacity-50">{labels.hostedBy}</span>
-          {contest.brandUrl ? (
-            <a
-              href={contest.brandUrl}
-              rel="noreferrer"
-              data-brand-link
-              className="text-accent border-b border-current"
-            >
-              {contest.brandName}
-            </a>
-          ) : (
-            <span data-brand-chip>{contest.brandName}</span>
+        {/**
+         * §14.2's host strip — who is asking, what kind of thing they are, and where they live.
+         *
+         * The mark is optional and deliberately small: a host that uploaded a logo is recognised at
+         * a glance, and one that did not looks like the same component rather than a broken one.
+         * The KIND chip is what makes the surface host-agnostic to a reader (2026-08-15) — the word
+         * PLATFORM beside a name they have never seen is what tells them how to read the prize.
+         */}
+        <div
+          data-contest-host
+          data-host-kind={contest.hostKind}
+          className="flex flex-wrap items-center gap-x-4 gap-y-3"
+        >
+          {contest.hostLogo && (
+            // eslint-disable-next-line @next/next/no-img-element -- public bucket object, no loader
+            <img
+              src={contest.hostLogo.src}
+              alt=""
+              data-host-logo
+              className="h-7 w-auto max-w-[9rem] object-contain"
+              loading="lazy"
+            />
           )}
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2 font-label text-eyebrow uppercase">
+            <span className="opacity-50">{labels.hostedBy}</span>
+            {contest.hostUrl ? (
+              <a
+                href={contest.hostUrl}
+                rel="noreferrer"
+                data-host-link
+                className="text-accent border-b border-current"
+              >
+                {contest.hostName}
+              </a>
+            ) : (
+              <span data-host-chip>{contest.hostName}</span>
+            )}
+            <span data-host-kind-chip className="border border-hairline px-2 py-1 opacity-60">
+              {hostKindLabel(labels, contest.hostKind)}
+            </span>
+          </div>
         </div>
 
         {/* §5.2 "display lines manually broken" — the author's breaks are the composition. */}
@@ -118,9 +152,13 @@ export function ContestHeader({
  *     decides whether a reader keeps reading is the one place the page should invert. It therefore
  *     renders OUTSIDE the ad-rail anchor, because a band that stops 340px short of the right edge
  *     is a panel, not an inversion. It carries `data-section` so the nav's observer inverts with it.
- *   · **split** — the prize is authored as one string; setting "$3,000 · 1st $1,500 / 2nd $1,000 /
- *     3rd $500" in one display run gives a payout table the same voice as the headline number.
- *     `splitPrize` takes it apart: the total in display type, the breakdown in 14px mono under it.
+ *   · **split** — the total is display type and the payout is a table under it, because one run of
+ *     display type would give the breakdown the same voice as the headline figure.
+ *
+ * Where the split comes from changed on 2026-08-15. The prize used to be ONE authored string that
+ * `splitPrize()` took apart at a middle dot — punctuation as a schema, and no way for the code to
+ * know a credits prize from a cash one. Now the KIND is a translated word, the TOTAL is the
+ * author's own figure, and the payout is a real table of up to three tiers.
  */
 export function ContestPrize({
   contest,
@@ -131,29 +169,47 @@ export function ContestPrize({
   locale: string;
   labels: ContestLabels;
 }) {
-  const { total, payouts } = splitPrize(localize(contest.prize, locale));
+  const total = localize(contest.prizeTotal, locale);
+  const tiers = contest.prizeTiers;
 
   return (
     <section
       data-contest-prize
       data-section
       data-theme="dark"
+      data-prize-kind={contest.prizeKind}
       className="section py-12 lg:py-16"
     >
       <div className="band">
-        <p className="text-accent font-label text-eyebrow uppercase">{labels.prizeLabel}</p>
+        <p className="text-accent font-label text-eyebrow uppercase">
+          {prizeKindLabel(labels, contest.prizeKind)}
+        </p>
         <p data-prize-total className="mt-5 font-display text-contest-prize font-black uppercase">
           {total}
         </p>
-        {payouts.length > 0 && (
-          <ul
-            data-prize-payouts
-            className="mt-6 flex flex-wrap gap-x-8 gap-y-2 font-mono text-[0.875rem] opacity-70"
-          >
-            {payouts.map((payout) => (
-              <li key={payout}>{payout}</li>
-            ))}
-          </ul>
+
+        {tiers.length > 0 && (
+          <div data-prize-payouts className="mt-10 border-t border-white/20 pt-6">
+            <p className="font-label text-[0.6875rem] tracking-[0.12em] uppercase opacity-50">
+              {labels.prizeBreakdown}
+            </p>
+            <dl className="mt-4 grid sm:grid-cols-3">
+              {tiers.map((tier) => (
+                <div
+                  key={tier.place}
+                  data-prize-tier={tier.place}
+                  className="flex flex-col gap-2 border-t border-white/20 py-4 sm:border-t-0 sm:border-l sm:py-0 sm:pl-5 sm:first:border-l-0 sm:first:pl-0"
+                >
+                  <dt className="font-label text-[0.6875rem] tracking-[0.12em] uppercase opacity-50">
+                    {placementLabel(labels, tier.place)}
+                  </dt>
+                  <dd className="font-display text-[clamp(1.35rem,2.2vw,1.9rem)] leading-[0.95] font-black uppercase">
+                    {localize(tier.value, locale)}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          </div>
         )}
       </div>
     </section>
@@ -194,6 +250,13 @@ export function ContestMeta({
       value: formatDate(contest.deadlineAt, locale) ?? '—',
     },
     {
+      // The second question every entrant asks (2026-08-15). "—" while the host has not committed
+      // to a date, which is honest — a results date invented by the site is a promise nobody made.
+      key: 'announce',
+      label: labels.metaAnnounce,
+      value: formatDate(contest.announceAt, locale) ?? '—',
+    },
+    {
       key: 'countdown',
       label: labels.metaCountdown,
       // §14.2: "D-day or 결과" — the countdown while it matters, the word after it stops.
@@ -205,7 +268,7 @@ export function ContestMeta({
     <dl
       data-contest-meta
       data-phase={phase}
-      className="mt-10 grid grid-cols-2 border-t border-l border-hairline md:grid-cols-4"
+      className="mt-10 grid grid-cols-2 border-t border-l border-hairline md:grid-cols-5"
     >
       {cells.map((cell) => (
         <div

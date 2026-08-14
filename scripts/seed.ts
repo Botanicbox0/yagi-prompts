@@ -718,12 +718,19 @@ export async function seedContests(opts: SeedOptions): Promise<ContestSeedResult
       status: fixture.status,
       title: fixture.title,
       summary: fixture.summary,
-      prize: fixture.prize,
+      prizeTotal: fixture.prizeTotal,
+      prizeKind: fixture.prizeKind,
+      prizeTiers: fixture.prizeTiers,
       rules: fixture.rules,
-      brandName: fixture.brandName,
-      brandUrl: fixture.brandUrl,
+      hostName: fixture.hostName,
+      hostKind: fixture.hostKind,
+      hostUrl: fixture.hostUrl,
       startsAt,
       deadlineAt,
+      announceAt:
+        fixture.announceInDays === null
+          ? null
+          : new Date(seededAt + fixture.announceInDays * day).toISOString(),
       media,
     });
 

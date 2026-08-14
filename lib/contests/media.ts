@@ -9,7 +9,12 @@ import {
   type UploadRejection,
 } from '@/lib/prompts/media';
 import type { StorageDriver } from '@/lib/storage';
-import { contestMediaPath, contestMediaRef, type ContestMediaKind } from './links';
+import {
+  CONTEST_MEDIA_KINDS,
+  contestMediaPath,
+  contestMediaRef,
+  type ContestMediaKind,
+} from './links';
 import { parseContestMedia, type ContestMedia } from './schemas';
 
 /**
@@ -56,7 +61,9 @@ export async function stageContestUpload(
   const mime = upload.type && upload.type.length > 0 ? upload.type : 'application/octet-stream';
   const durationSeconds = kind === 'video' ? probeVideoDurationSeconds(bytes, mime) : null;
 
-  const rejection = checkUpload({ kind, mime, sizeBytes: bytes.byteLength, durationSeconds });
+  // A logo is an image with a poster's caps — `checkUpload` speaks the prompt vocabulary.
+  const capKind = kind === 'logo' ? 'poster' : kind;
+  const rejection = checkUpload({ kind: capKind, mime, sizeBytes: bytes.byteLength, durationSeconds });
   if (rejection !== null) return { ok: false, reason: rejection };
 
   const key = contestStagingKey(contestId, extensionFor(upload.name, mime));
@@ -90,7 +97,7 @@ export async function publishContestMedia(
   const report: ContestCopyReport = { copied: 0, alreadyPresent: 0 };
   const next: ContestMedia = {};
 
-  for (const kind of ['poster', 'video'] as const) {
+  for (const kind of CONTEST_MEDIA_KINDS) {
     const ref = media[kind];
     if (!ref) continue;
     const toKey = publishedKeyFor(ref.sha256, ref.staging_key);
@@ -149,7 +156,11 @@ export function shapeContestMedia(
   id: string,
   media: unknown,
   options: ContestMediaOptions = {},
-): { poster: ShapedContestMedia | null; video: ShapedContestMedia | null } {
+): {
+  poster: ShapedContestMedia | null;
+  video: ShapedContestMedia | null;
+  logo: ShapedContestMedia | null;
+} {
   const opts: Required<ContestMediaOptions> = {
     publicUrl: options.publicUrl ?? (() => null),
     mediaUrl: options.mediaUrl ?? contestMediaPath,
@@ -157,5 +168,9 @@ export function shapeContestMedia(
   const parsed = parseContestMedia(media);
   const shape = (kind: ContestMediaKind, ref: AssetRef | undefined) =>
     ref === undefined ? null : shapeAsset(ref, contestMediaRef(id, kind), opts);
-  return { poster: shape('poster', parsed.poster), video: shape('video', parsed.video) };
+  return {
+    poster: shape('poster', parsed.poster),
+    video: shape('video', parsed.video),
+    logo: shape('logo', parsed.logo),
+  };
 }

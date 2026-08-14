@@ -3,7 +3,7 @@ import { contestHref } from '@/lib/contests/links';
 import { contestTiming, type ContestPhase } from '@/lib/contests/phase';
 import { formatDate, interpolate, localize } from '@/lib/i18n/format';
 import { ContestPoster } from './poster';
-import { phaseLabel, type ContestLabels } from './labels';
+import { hostKindLabel, phaseLabel, prizeKindLabel, type ContestLabels } from './labels';
 import { posterRatio } from '@/components/ui/poster-seed';
 
 /**
@@ -39,7 +39,7 @@ export function ContestCardView({
 
   const title = localize(card.title, locale);
   const summary = localize(card.summary, locale);
-  const prize = localize(card.prize, locale);
+  const prizeTotal = localize(card.prizeTotal, locale);
 
   const dateLine = dateLineFor(card, timing.phase, locale, labels);
 
@@ -63,9 +63,9 @@ export function ContestCardView({
             <ContestPoster
               title={title}
               slug={card.slug}
-              brand={card.brandName}
-              prize={prize}
-              prizeLabel={labels.prizeLabel}
+              host={card.hostName}
+              prize={prizeTotal}
+              prizeLabel={prizeKindLabel(labels, card.prizeKind)}
               ratio={ratio}
             />
           )}
@@ -114,14 +114,22 @@ export function ContestCardView({
           ) : null}
         </div>
 
-        {/* The brand, BOXED and on the poster where it belongs — it is the "who is asking", and as
-            10.4px unboxed text in the meta line it read as a caption for the title. */}
+        {/* The host, BOXED and on the poster where it belongs — it is the "who is asking", and as
+            10.4px unboxed text in the meta line it read as a caption for the title. The KIND rides
+            beside the name (2026-08-15) because "PLATFORM" next to a name a reader has never seen
+            is the difference between a contest they understand and one they scroll past. */}
         <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-end justify-start gap-2 p-3">
           <span
-            data-brand-chip
+            data-host-chip
             className="border border-white/35 bg-black/70 px-2 py-1 font-label text-[0.75rem] leading-none tracking-[0.12em] text-white uppercase"
           >
-            {card.brandName}
+            {card.hostName}
+          </span>
+          <span
+            data-host-kind={card.hostKind}
+            className="border border-white/25 px-2 py-1 font-label text-[0.75rem] leading-none tracking-[0.12em] text-white/75 uppercase"
+          >
+            {hostKindLabel(labels, card.hostKind)}
           </span>
         </div>
       </div>
@@ -142,12 +150,28 @@ export function ContestCardView({
 
         <p className="text-[0.9375rem] leading-relaxed opacity-70">{summary}</p>
 
-        <div className="mt-auto flex flex-wrap items-baseline justify-between gap-x-3 gap-y-2 border-t border-hairline pt-3">
-          <span className="font-mono text-[0.8rem]">
-            <span className="opacity-45">{labels.prizeLabel} · </span>
-            {prize}
-          </span>
-          <span className="font-mono text-[0.7rem] opacity-55">
+        {/**
+         * The prize LEADS the footer (2026-08-15). It used to sit in 12.8px mono beside the entry
+         * count — the one fact that decides whether a reader opens the card, set at the size of a
+         * caption. Now the kind is the label and the figure is display type, so a card can be read
+         * at a glance as "credits, 50,000" or "cash, $5,000" without opening anything.
+         */}
+        <div className="mt-auto flex items-end justify-between gap-3 border-t border-hairline pt-3">
+          <div className="min-w-0">
+            <p
+              data-prize-kind={card.prizeKind}
+              className="font-label text-[0.7rem] tracking-[0.12em] uppercase opacity-45"
+            >
+              {prizeKindLabel(labels, card.prizeKind)}
+            </p>
+            <p
+              data-prize-total
+              className="mt-1 truncate font-display text-[clamp(1.45rem,2.3vw,2rem)] leading-[0.9] font-black uppercase"
+            >
+              {prizeTotal}
+            </p>
+          </div>
+          <span className="shrink-0 font-mono text-[0.7rem] opacity-55">
             {card.entryCount === 0
               ? labels.entryCountEmpty
               : interpolate(labels.entryCount, { count: String(card.entryCount) })}

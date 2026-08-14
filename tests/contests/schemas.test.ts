@@ -2,6 +2,11 @@ import { describe, expect, it } from 'vitest';
 import {
   ContestFormSchema,
   ENTRY_NOTE_MAX,
+  HOST_KINDS,
+  PrizeTiersSchema,
+  isHostKind,
+  isPrizeKind,
+  parsePrizeTiers,
   ENTRY_TITLE_MAX,
   EntrySubmissionSchema,
   PlacementSchema,
@@ -210,17 +215,66 @@ describe('parseDateTimeLocal — UTC by declaration (§14.2 admin)', () => {
   });
 });
 
+/**
+ * The podium (2026-08-15). A prize used to be one authored string that punctuation took apart;
+ * these are the rules that replaced the punctuation, and each one exists because the alternative
+ * renders as something a reader would misread.
+ */
+describe('prize tiers (§14.2)', () => {
+  const tier = (place: number, en: string) => ({ place, value: { en, ko: en } });
+
+  it('sorts the podium, however the form posted it', () => {
+    const parsed = PrizeTiersSchema.parse([tier(3, '$500'), tier(1, '$1,500'), tier(2, '$1,000')]);
+    expect(parsed.map((t) => t.place)).toEqual([1, 2, 3]);
+  });
+
+  it('refuses the same place twice, and a fourth place', () => {
+    expect(PrizeTiersSchema.safeParse([tier(1, 'a'), tier(1, 'b')]).success).toBe(false);
+    expect(PrizeTiersSchema.safeParse([tier(4 as 1, 'a')]).success).toBe(false);
+    expect(
+      PrizeTiersSchema.safeParse([tier(1, 'a'), tier(2, 'b'), tier(3, 'c'), tier(1, 'd')]).success,
+    ).toBe(false);
+  });
+
+  /** A half-translated podium is the §3.9 failure the publish gate exists for — not a shrug. */
+  it('keeps a one-sided tier rather than silently dropping it', () => {
+    const parsed = PrizeTiersSchema.parse([{ place: 1, value: { en: '$1,500', ko: '' } }]);
+    expect(parsed).toHaveLength(1);
+  });
+
+  it('reads absent/garbage jsonb as no podium, never as a crash', () => {
+    expect(parsePrizeTiers(null)).toEqual([]);
+    expect(parsePrizeTiers(undefined)).toEqual([]);
+    expect(parsePrizeTiers('nonsense')).toEqual([]);
+    expect(parsePrizeTiers([{ place: 9, value: { en: 'x', ko: 'x' } }])).toEqual([]);
+  });
+});
+
+describe('host + prize vocabularies (2026-08-15)', () => {
+  it('knows the five host kinds and refuses anything else', () => {
+    expect(HOST_KINDS).toEqual(['brand', 'platform', 'studio', 'creator', 'community']);
+    expect(isHostKind('platform')).toBe(true);
+    expect(isHostKind('agency')).toBe(false);
+    expect(isPrizeKind('credits')).toBe(true);
+    expect(isPrizeKind('bitcoin')).toBe(false);
+  });
+});
+
 describe('ContestFormSchema (§14.2 admin)', () => {
   const form = {
     slug: 'launch-film-contest',
     title: { en: 'Launch film', ko: '런칭 단편' },
     summary: { en: 'Make a film.', ko: '단편을 만들어 주세요.' },
-    prize: { en: '$3,000', ko: '$3,000' },
+    prizeTotal: { en: '$3,000', ko: '$3,000' },
+    prizeKind: 'cash',
+    prizeTiers: [{ place: 1, value: { en: '$1,500', ko: '$1,500' } }],
     rules: null,
-    brandName: 'YAGI WORKSHOP',
-    brandUrl: 'https://yagiworkshop.xyz',
+    hostName: 'YAGI WORKSHOP',
+    hostKind: 'studio',
+    hostUrl: 'https://yagiworkshop.xyz',
     startsAt: '2026-09-01T00:00',
     deadlineAt: '2026-09-30T00:00',
+    announceAt: null,
   };
 
   it('accepts a complete contest', () => {
@@ -253,9 +307,9 @@ describe('ContestFormSchema (§14.2 admin)', () => {
     }
   });
 
-  it('refuses a brand link that is not http(s)', () => {
-    expect(ContestFormSchema.safeParse({ ...form, brandUrl: 'javascript:x' }).success).toBe(false);
-    expect(ContestFormSchema.safeParse({ ...form, brandUrl: null }).success).toBe(true);
+  it('refuses a host link that is not http(s)', () => {
+    expect(ContestFormSchema.safeParse({ ...form, hostUrl: 'javascript:x' }).success).toBe(false);
+    expect(ContestFormSchema.safeParse({ ...form, hostUrl: null }).success).toBe(true);
   });
 });
 
@@ -266,7 +320,7 @@ describe('publishBlockers — the gate that names what is missing (§14.2)', () 
   const ready = {
     title: { en: 'A', ko: 'ㄱ' },
     summary: { en: 'B', ko: 'ㄴ' },
-    prize: { en: '$1', ko: '$1' },
+    prizeTotal: { en: '$1', ko: '$1' },
     rules: null,
     media: poster,
     startsAt: '2026-09-01T00:00:00.000Z',
@@ -278,7 +332,7 @@ describe('publishBlockers — the gate that names what is missing (§14.2)', () 
   });
 
   it('names a missing Korean prize line', () => {
-    expect(publishBlockers({ ...ready, prize: { en: '$1', ko: '' } })).toEqual(['prize (en + ko)']);
+    expect(publishBlockers({ ...ready, prizeTotal: { en: '$1', ko: '' } })).toEqual(['prize (en + ko)']);
   });
 
   it('names a half-written rules block, and lets an absent one pass', () => {
@@ -304,7 +358,7 @@ describe('publishBlockers — the gate that names what is missing (§14.2)', () 
       publishBlockers({
         title: { en: '', ko: '' },
         summary: { en: '', ko: '' },
-        prize: { en: '', ko: '' },
+        prizeTotal: { en: '', ko: '' },
         rules: null,
         media: null,
         startsAt: null,
@@ -378,19 +432,23 @@ describe('URL normalisation (M9 review, finding 8)', () => {
     ).toBe(false);
   });
 
-  it('normalises the admin brand link too', () => {
+  it('normalises the admin host link too', () => {
     const result = ContestFormSchema.safeParse({
       slug: 'launch-film-contest',
       title: { en: 'Launch film', ko: '런칭 단편' },
       summary: { en: 'Make a film.', ko: '단편을 만들어 주세요.' },
-      prize: { en: '$3,000', ko: '$3,000' },
+      prizeTotal: { en: '$3,000', ko: '$3,000' },
+      prizeKind: 'cash',
+      prizeTiers: [],
       rules: null,
-      brandName: 'YAGI WORKSHOP',
-      brandUrl: 'HTTPS://YagiWorkshop.xyz',
+      hostName: 'YAGI WORKSHOP',
+      hostKind: 'brand',
+      hostUrl: 'HTTPS://YagiWorkshop.xyz',
       startsAt: '2026-09-01T00:00',
       deadlineAt: '2026-09-30T00:00',
+      announceAt: null,
     });
-    expect(result.success && result.data.brandUrl).toBe('https://yagiworkshop.xyz/');
+    expect(result.success && result.data.hostUrl).toBe('https://yagiworkshop.xyz/');
   });
 
   /** A normalised URL still resolves to the same platform chip — the two must not disagree. */
@@ -410,12 +468,16 @@ describe('datetime blank vs invalid (M9 review, finding 9)', () => {
     slug: 'launch-film-contest',
     title: { en: 'Launch film', ko: '런칭 단편' },
     summary: { en: 'Make a film.', ko: '단편을 만들어 주세요.' },
-    prize: { en: '$3,000', ko: '$3,000' },
+    prizeTotal: { en: '$3,000', ko: '$3,000' },
+    prizeKind: 'cash',
+    prizeTiers: [],
     rules: null,
-    brandName: 'YAGI WORKSHOP',
-    brandUrl: null,
+    hostName: 'YAGI WORKSHOP',
+    hostKind: 'brand',
+    hostUrl: null,
     startsAt: '2026-09-01T00:00',
     deadlineAt: '2026-09-30T00:00',
+    announceAt: null,
   };
 
   /** An empty date field is an undated draft, which §14.1 allows. */

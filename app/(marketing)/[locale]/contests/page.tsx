@@ -10,11 +10,14 @@ import { AdBanner, AdCard } from '@/components/ad/ad-card';
 import { Reveal } from '@/components/motion/reveal';
 import {
   CONTEST_MAILTO,
+  ContestFeature,
   ContestHireStrip,
+  ContestHostKinds,
   ContestRail,
   ContestsEmptyState,
 } from '@/components/contests/rails';
-import { contestLabels } from '@/components/contests/labels';
+import { contestLabels, hostKindLabel } from '@/components/contests/labels';
+import { HOST_KINDS } from '@/lib/contests/schemas';
 
 /**
  * `/[locale]/contests` — PLAN §14.2, the contests listing.
@@ -103,6 +106,16 @@ export default async function ContestsListingPage({ params }: RouteParams) {
               />
             ) : (
               <div className="mt-10 border-t border-hairline pt-6">
+                {/* The soonest-closing OPEN contest, given the treatment the fact deserves. The
+                    catalog already arrives deadline-first, so `[0]` is that contest. */}
+                {phased.open[0] && (
+                  <ContestFeature
+                    card={phased.open[0]}
+                    locale={locale}
+                    labels={labels}
+                    now={now}
+                  />
+                )}
                 <ContestRail
                   id="open"
                   heading={dict.contests.railOpen}
@@ -131,6 +144,16 @@ export default async function ContestsListingPage({ params }: RouteParams) {
                   now={now}
                 />
               </div>
+            )}
+
+            {/* Who may open one (2026-08-15). It sits above the enquiry strip because it is the
+                answer to the question the strip's CTA provokes. */}
+            {!empty && (
+              <ContestHostKinds
+                title={dict.contests.hostKindsTitle}
+                body={dict.contests.hostKindsBody}
+                kinds={HOST_KINDS.map((kind) => hostKindLabel(labels, kind))}
+              />
             )}
 
             {/* §14.2's B2B CTA is on this page in both states — but only ONCE.
