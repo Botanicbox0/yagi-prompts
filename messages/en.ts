@@ -221,6 +221,8 @@ export const en = {
     // Founder direction (2026-08-14): it is a FILE the prompt comes with, not a "result".
     audioLabel: 'Attached audio',
     audioDownload: 'Download',
+    // The making-of (founder direction, 2026-08-14) — the long half of a prompt worth reading.
+    processHeading: 'How it was made',
   },
   /** §13.1/E — the community submission form, and its confirmation states. */
   submit: {
@@ -239,6 +241,11 @@ export const en = {
     fieldVideoHint: 'Optional — submissions with a result clip are far more likely to be published. MP4 or WebM, up to {seconds}s and {mb}MB.',
     fieldPoster: 'Poster frame',
     fieldPosterHint: 'Optional. One still from the clip — we generate one otherwise.',
+    fieldAudio: 'Audio file',
+    fieldAudioHint: 'Optional. Music or voice that came out of the prompt. Readers can download it.',
+    fieldProcess: 'How you made it',
+    fieldProcessHint:
+      'Optional, and the part people read twice. References, the passes you ran, the settings that failed. Markdown works — headings, lists, links. Write it in whichever language you think in.',
     consentLabel: 'I wrote this prompt and I am happy for YAGI PROMPTS to publish it with my credit.',
     consentLicense:
       'You keep the prompt. You are giving YAGI PROMPTS a licence to display it, with your @handle, on this site and in its own promotion.',
@@ -827,6 +834,10 @@ export const en = {
     fieldPromptTitle: 'Title (EN)',
     fieldPromptTitleKo: 'Title (KO)',
     fieldPromptBody: 'Prompt text',
+    fieldProcess: 'How it was made (EN, markdown)',
+    fieldProcessKo: 'How it was made (KO, markdown)',
+    processHint:
+      'Optional. The references, the passes, the settings that failed — headings, lists and links work. Either language on its own is fine.',
     fieldPromptSlug: 'Slug',
     promptSlugAutoHint: 'Leave empty — it follows the EN title, lowercase with hyphens.',
     fieldPromptHandle: 'Credit (@handle)',

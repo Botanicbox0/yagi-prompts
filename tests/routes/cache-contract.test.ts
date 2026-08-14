@@ -449,9 +449,11 @@ describe('prompt submission contract (§13.1/E)', () => {
       (match) => match[1]!,
     );
     expect([...new Set(readFields)].sort()).toEqual([
+      'audio',
       'consent',
       'handle',
       'poster',
+      'processMd',
       'promptText',
       'title',
       'video',

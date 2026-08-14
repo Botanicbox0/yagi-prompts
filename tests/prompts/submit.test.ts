@@ -27,11 +27,13 @@ const anon: Viewer = { tier: 'anon', userId: null, email: null, isAdmin: false, 
 const input = (overrides: Partial<Parameters<typeof submitPrompt>[2]> = {}) => ({
   title: 'Underwater drift',
   promptText: 'Slow drift past a kelp forest with god rays overhead, neutral buoyancy.',
+  processMd: null,
   useCase: ['cinematic'],
   handle: '@hana',
   consent: true,
   video: null,
   poster: null,
+  audio: null,
   ...overrides,
 });
 

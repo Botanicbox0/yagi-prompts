@@ -25,6 +25,9 @@ export interface PromptRow {
   title: string;
   titleKo: string | null;
   promptText: string;
+  /** The "how it was made" write-up (markdown), per locale. Null is the common case. */
+  processMd: string | null;
+  processMdKo: string | null;
   textVisibility: Visibility;
   media: unknown;
   useCase: string[];
@@ -45,6 +48,8 @@ interface RawRow {
   title: string;
   title_ko: string | null;
   prompt_text: string;
+  process_md: string | null;
+  process_md_ko: string | null;
   text_visibility: Visibility;
   media: unknown;
   use_case: string[] | null;
@@ -55,7 +60,8 @@ interface RawRow {
 }
 
 const COLUMNS = `id, slug, source, author_id, author_handle, status, model, title, title_ko,
-                 prompt_text, text_visibility::text as text_visibility, media, use_case, featured,
+                 prompt_text, process_md, process_md_ko,
+                 text_visibility::text as text_visibility, media, use_case, featured,
                  reject_reason, created_at, published_at`;
 
 /** §13.2 — the one ordering, so the gallery, the admin list and the sitemap never disagree. */
@@ -78,6 +84,8 @@ function toRow(raw: RawRow): PromptRow {
     title: raw.title,
     titleKo: raw.title_ko,
     promptText: raw.prompt_text,
+    processMd: raw.process_md,
+    processMdKo: raw.process_md_ko,
     textVisibility: raw.text_visibility,
     media: raw.media,
     useCase: raw.use_case ?? [],
@@ -232,6 +240,8 @@ export interface InsertPromptArgs {
   title: string;
   titleKo: string | null;
   promptText: string;
+  processMd?: string | null;
+  processMdKo?: string | null;
   textVisibility: Visibility;
   media: unknown;
   useCase: string[];
@@ -250,9 +260,11 @@ export async function insertPrompt(sql: SqlRunner, args: InsertPromptArgs): Prom
   await sql.query(
     `insert into prompt_items
        (id, slug, source, author_id, author_handle, status, model, title, title_ko,
-        prompt_text, text_visibility, media, use_case, featured, reject_reason, published_at)
-     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::visibility, $12::jsonb, $13, $14, $15,
-             case when $16::boolean then now() else null end)`,
+        prompt_text, process_md, process_md_ko,
+        text_visibility, media, use_case, featured, reject_reason, published_at)
+     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,
+             $13::visibility, $14::jsonb, $15, $16, $17,
+             case when $18::boolean then now() else null end)`,
     [
       args.id,
       args.slug,
@@ -264,6 +276,8 @@ export async function insertPrompt(sql: SqlRunner, args: InsertPromptArgs): Prom
       args.title,
       args.titleKo,
       args.promptText,
+      args.processMd ?? null,
+      args.processMdKo ?? null,
       args.textVisibility,
       args.media === null || args.media === undefined ? null : JSON.stringify(args.media),
       args.useCase,
@@ -292,6 +306,8 @@ export interface UpdatePromptArgs {
   title: string;
   titleKo: string | null;
   promptText: string;
+  processMd?: string | null;
+  processMdKo?: string | null;
   useCase: string[];
   authorHandle: string | null;
   textVisibility: Visibility;
@@ -302,7 +318,8 @@ export async function updatePrompt(sql: SqlRunner, args: UpdatePromptArgs): Prom
   const { rows } = await sql.query<{ id: string }>(
     `update prompt_items
         set slug = $2, title = $3, title_ko = $4, prompt_text = $5, use_case = $6,
-            author_handle = $7, text_visibility = $8::visibility, featured = $9
+            author_handle = $7, text_visibility = $8::visibility, featured = $9,
+            process_md = $10, process_md_ko = $11
       where id = $1
       returning id`,
     [
@@ -315,6 +332,8 @@ export async function updatePrompt(sql: SqlRunner, args: UpdatePromptArgs): Prom
       args.authorHandle,
       args.textVisibility,
       args.featured,
+      args.processMd ?? null,
+      args.processMdKo ?? null,
     ],
   );
   return rows.length > 0;

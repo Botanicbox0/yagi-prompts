@@ -33,6 +33,9 @@ export interface PromptRowInput {
   title: string;
   titleKo: string | null;
   promptText: string;
+  /** The "how it was made" markdown, per locale (2026-08-14). */
+  processMd?: string | null;
+  processMdKo?: string | null;
   textVisibility: Visibility;
   /** Raw `media` jsonb, parsed here through the §13.1 schema. */
   media: unknown;
@@ -78,7 +81,13 @@ interface ShapedPromptBase {
 
 export type ShapedPrompt =
   | (ShapedPromptBase & { locked: true })
-  | (ShapedPromptBase & { locked: false; text: string });
+  | (ShapedPromptBase & {
+      locked: false;
+      text: string;
+      /** The making-of, per locale — present only when the text is (2026-08-14). */
+      process: string | null;
+      processKo: string | null;
+    });
 
 export interface PromptShapeOptions {
   /**
@@ -184,5 +193,16 @@ export function shapePrompt(
     canView(tier, row.textVisibility) ||
     (options.unlocked === true && canView('pro', row.textVisibility));
   if (!visible) return { ...base, locked: true };
-  return { ...base, locked: false, text: row.promptText };
+  /**
+   * The process write-up rides WITH the text (2026-08-14). One gate, not two: it is the same
+   * knowledge in longer form, so a reader who may have the prompt may have the making-of, and a
+   * locked payload carries neither — the object simply has no key to leak from.
+   */
+  return {
+    ...base,
+    locked: false,
+    text: row.promptText,
+    process: row.processMd ?? null,
+    processKo: row.processMdKo ?? null,
+  };
 }

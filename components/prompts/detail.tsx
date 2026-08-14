@@ -5,6 +5,7 @@ import { PACK_COOKIES, PACK_PRICE_USD } from '@/lib/cookies/wallet';
 import { promptHref, promptsHref, PROMPT_SUBMIT_PATH } from '@/lib/prompts/links';
 import { interpolate } from '@/lib/i18n/format';
 import { BillingUnavailable } from '@/components/billing/upgrade-cta';
+import { Markdown } from '@/components/playbook/markdown';
 import { TextSwap } from '@/components/ui/text-swap';
 import { PromptCopyButton } from './copy-button';
 import { PromptDetailMedia } from './detail-media';
@@ -26,6 +27,20 @@ import type { PromptLabels } from './labels';
 
 const CTA_CLASS =
   'inline-block border border-current px-4 py-2 font-label text-eyebrow uppercase';
+
+/**
+ * The write-up in the reader's language, falling back to the other one.
+ *
+ * A fallback rather than a blank: the process notes are optional and NOT a translated pair (§13
+ * treats prompts as atomic), so a Korean-only making-of on a Korean prompt should still show for
+ * an English reader instead of vanishing — the alternative hides content that exists.
+ */
+function processFor(prompt: ShapedPrompt, locale: string): string | null {
+  if (prompt.locked) return null;
+  const ko = prompt.processKo?.trim() || null;
+  const en = prompt.process?.trim() || null;
+  return locale === 'ko' ? (ko ?? en) : (en ?? ko);
+}
 
 /** `audio/mpeg` → `MP3`. The reader wants the format, not the MIME type. */
 function audioFormat(mime: string): string {
@@ -333,6 +348,21 @@ export function PromptBody({
             {prompt.text}
           </pre>
           <p className="mt-3 font-mono text-[0.72rem] opacity-45">{labels.promptNote}</p>
+
+          {/**
+           * The making-of (founder direction, 2026-08-14): the prompt is the input, this is how it
+           * was actually built. Rendered by the SAME strict markdown renderer the contests brief
+           * uses — a subset with no raw HTML — so a community write-up cannot inject markup.
+           * It sits INSIDE the unlocked branch because it rides the prompt's own gate.
+           */}
+          {processFor(prompt, locale) && (
+            <section data-prompt-process className="mt-12 border-t border-hairline pt-8">
+              <h3 className="font-label text-label uppercase">{labels.processHeading}</h3>
+              <div className="mt-5 max-w-detail">
+                <Markdown source={processFor(prompt, locale)!} />
+              </div>
+            </section>
+          )}
         </>
       )}
 

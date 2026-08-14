@@ -233,6 +233,25 @@ function PublishedItem({ row, dict }: { row: PromptRow; dict: Dict }) {
           <textarea name="promptText" rows={6} defaultValue={row.promptText} className={INPUT} />
         </Field>
 
+        <div className="grid gap-3 lg:grid-cols-2">
+          <Field label={a.fieldProcess} hint={a.processHint}>
+            <textarea
+              name="processMd"
+              rows={10}
+              defaultValue={row.processMd ?? ''}
+              className={INPUT}
+            />
+          </Field>
+          <Field label={a.fieldProcessKo}>
+            <textarea
+              name="processMdKo"
+              rows={10}
+              defaultValue={row.processMdKo ?? ''}
+              className={INPUT}
+            />
+          </Field>
+        </div>
+
         <div>
           <span className={LABEL}>{a.colUseCase}</span>
           <div className="mt-1.5">
@@ -401,6 +420,17 @@ export default async function AdminPromptsPage({
           <Field label={a.fieldPromptBody}>
             <textarea name="promptText" rows={8} className={INPUT} />
           </Field>
+
+          {/* The making-of (2026-08-14). Optional, markdown, and NOT a forced locale pair — a
+              Korean-only write-up is honest content, not an incomplete translation. */}
+          <div className="grid gap-3 lg:grid-cols-2">
+            <Field label={a.fieldProcess} hint={a.processHint}>
+              <textarea name="processMd" rows={10} className={INPUT} />
+            </Field>
+            <Field label={a.fieldProcessKo}>
+              <textarea name="processMdKo" rows={10} className={INPUT} />
+            </Field>
+          </div>
 
           <div>
             <span className={LABEL}>{a.colUseCase}</span>

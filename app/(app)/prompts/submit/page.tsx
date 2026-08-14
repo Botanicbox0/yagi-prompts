@@ -4,6 +4,7 @@ import { getDictionary } from '@/lib/i18n/dictionaries';
 import { interpolate } from '@/lib/i18n/format';
 import { promptsHref, PROMPT_SUBMIT_PATH } from '@/lib/prompts/links';
 import {
+  PROCESS_MAX,
   PROMPT_TEXT_MAX,
   USE_CASES,
   USE_CASE_MAX,
@@ -185,6 +186,21 @@ export default async function SubmitPromptPage({
                 </p>
               </fieldset>
 
+              {/* The making-of (founder direction, 2026-08-14): the half a submitter most wants
+                  room for. Optional, markdown, any language — the detail page falls back. */}
+              <label className="block">
+                <span className={LABEL}>{copy.fieldProcess}</span>
+                <textarea
+                  name="processMd"
+                  rows={10}
+                  maxLength={PROCESS_MAX}
+                  className={`${INPUT} mt-2`}
+                />
+                <span className="mt-1.5 block font-mono text-[0.72rem] opacity-50">
+                  {copy.fieldProcessHint}
+                </span>
+              </label>
+
               <label className="block">
                 <span className={LABEL}>{copy.fieldHandle}</span>
                 <input type="text" name="handle" maxLength={40} className={`${INPUT} mt-2`} />
@@ -223,6 +239,16 @@ export default async function SubmitPromptPage({
                   </span>
                 </label>
               </div>
+
+              {/* Audio results reached the admin on 2026-08-13; a community submitter can send
+                  one too — same caps, same staging, same approval copy to the public bucket. */}
+              <label className="block">
+                <span className={LABEL}>{copy.fieldAudio}</span>
+                <input type="file" name="audio" accept="audio/*" className={`${INPUT} mt-2`} />
+                <span className="mt-1.5 block font-mono text-[0.72rem] opacity-50">
+                  {copy.fieldAudioHint}
+                </span>
+              </label>
 
               <div className="border border-hairline p-5">
                 <label className="flex items-start gap-3">
