@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { Viewer } from '@/lib/auth/identity';
 import { countRecentSubmissions, loadPromptBySlug, loadSubmissionsByAuthor } from '@/lib/prompts/repo';
 import { isRateLimited, submitPrompt, uniqueSlug } from '@/lib/prompts/submit';
-import { RATE_WINDOW_HOURS, SUBMISSIONS_PER_DAY } from '@/lib/prompts/schemas';
+import { PROMPT_TEXT_MAX, RATE_WINDOW_HOURS, SUBMISSIONS_PER_DAY } from '@/lib/prompts/schemas';
 import { FIXTURE_USERS } from '../../scripts/fixtures';
 import { emptyPromptHarness, type PromptHarness } from '../helpers/prompts';
 
@@ -113,9 +113,20 @@ describe('submitPrompt (§13.1/E)', () => {
     expect(await countRecentSubmissions(harness.sql, FIXTURE_USERS.free.id, RATE_WINDOW_HOURS)).toBe(0);
   });
 
+  /** Tracks the cap rather than restating it — the number moved once already (2026-08-15). */
   it('refuses over-long text at the server boundary', async () => {
-    const result = await submitPrompt(deps(), submitter, input({ promptText: 'x'.repeat(2001) }));
+    const over = 'x'.repeat(PROMPT_TEXT_MAX + 1);
+    const result = await submitPrompt(deps(), submitter, input({ promptText: over }));
     expect(result.ok === false && result.code).toBe('invalid');
+  });
+
+  /** A real shot-by-shot brief is not "over-long"; it is what a prompt looks like now. */
+  it('accepts a full-length video brief', async () => {
+    const brief = 'A. '.repeat(1618);
+    const result = await submitPrompt(deps(), submitter, input({ promptText: brief }));
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect((await loadPromptBySlug(harness.sql, result.slug))!.promptText).toHaveLength(brief.trim().length);
   });
 
   it('refuses the FOURTH submission inside the window', async () => {
