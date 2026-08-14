@@ -484,6 +484,11 @@ export const ko: Dictionary = {
     q6: '제작 의뢰도 받나요?',
     a6: '스튜디오는 1년에 소수의 프로덕션 프로젝트만 진행합니다. 필요한 파이프라인을 정리해 메일로 보내주세요.',
   },
+  legal: {
+    eyebrow: '약관·정책',
+    effective: '시행일',
+    businessHeading: '사업자 정보',
+  },
   footer: {
     hireCta: '스튜디오와 함께 작업하기',
     hireLede: '어떤 프로젝트를 진행 중인지, 어떤 도움이 필요한지 알려주세요.',

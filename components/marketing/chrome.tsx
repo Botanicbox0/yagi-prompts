@@ -4,6 +4,8 @@ import { LocaleToggle } from '@/components/locale-toggle';
 import { PLAYBOOKS_IN_NAV } from '@/lib/flags';
 import { promptsHref } from '@/lib/prompts/links';
 import { contestsHref } from '@/lib/contests/links';
+import { LEGAL_DOCS, legalDocument } from '@/lib/legal/documents';
+import { legalHref } from '@/lib/legal/links';
 import type { Dictionary } from '@/lib/i18n/dictionaries';
 import type { Locale } from '@/lib/i18n/config';
 import type { SectionTheme } from '@/lib/motion/geometry';
@@ -70,6 +72,14 @@ export function MarketingFooter({ locale, dict }: { locale: Locale; dict: Dictio
     <SiteFooter
       locale={locale}
       links={siteLinks(locale, dict)}
+      /* 전자상거래법 §21 and every payment provider's merchant review: the legal documents must be
+         reachable from anywhere on the site, so they live in the footer rather than on a page a
+         reviewer has to be told about. */
+      legalLinks={LEGAL_DOCS.map((doc) => ({
+        href: legalHref(locale, doc),
+        label: legalDocument(doc, locale).title,
+        doc,
+      }))}
       labels={{
         hireCta: dict.footer.hireCta,
         hireLede: dict.footer.hireLede,
