@@ -510,6 +510,12 @@ export const en = {
     q6: 'Can you build this for us?',
     a6: 'Sometimes. The studio takes a small number of production projects a year. Mail us and describe the pipeline you need.',
   },
+  /** The legal surface's chrome — the documents' own text lives in lib/legal/documents.ts. */
+  legal: {
+    eyebrow: 'Legal',
+    effective: 'Effective',
+    businessHeading: 'Business information',
+  },
   footer: {
     hireCta: 'Work with the studio',
     hireLede: 'Tell us what you are producing and where you need help.',

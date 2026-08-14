@@ -4,6 +4,8 @@ import type { PromptCard } from '@/lib/prompts/catalog';
 import type { ContestCard } from '@/lib/contests/catalog';
 import { promptRest } from '@/lib/prompts/links';
 import { contestRest } from '@/lib/contests/links';
+import { LEGAL_DOCS } from '@/lib/legal/documents';
+import { legalRest } from '@/lib/legal/links';
 import { LOCALES, type Locale } from '@/lib/i18n/config';
 import { localeAlternates } from './playbook-metadata';
 
@@ -70,7 +72,11 @@ export function buildSitemap(input: SitemapInput): MetadataRoute.Sitemap {
   const { origin, cards, prompts = [], contests = [], now = new Date() } = input;
   const entries: MetadataRoute.Sitemap = [];
 
-  const marketing: Array<{ rest: string; priority: number; changeFrequency: 'daily' | 'weekly' }> = [
+  const marketing: Array<{
+    rest: string;
+    priority: number;
+    changeFrequency: 'daily' | 'weekly' | 'yearly';
+  }> = [
     { rest: '/', priority: 1, changeFrequency: 'daily' },
     // §13.2 — the gallery is the v1.5 front door and is indexed; it changes as often as the studio
     // publishes, which is the same cadence as the landing it now leads.
@@ -79,6 +85,14 @@ export function buildSitemap(input: SitemapInput): MetadataRoute.Sitemap {
     // claiming daily change on a page that gains a row every few weeks is noise for a crawler.
     { rest: '/contests', priority: 0.8, changeFrequency: 'weekly' },
     { rest: '/pricing', priority: 0.8, changeFrequency: 'weekly' },
+    // The legal surface. Low priority — nobody searches for it — but LISTED, because a payment
+    // provider's merchant review and 전자상거래법 §21 both expect these to be publicly reachable,
+    // and a crawler that has them indexed is the cheapest evidence that they are.
+    ...LEGAL_DOCS.map((doc) => ({
+      rest: legalRest(doc),
+      priority: 0.2,
+      changeFrequency: 'yearly' as const,
+    })),
   ];
 
   for (const page of marketing) {

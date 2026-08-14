@@ -30,15 +30,22 @@ export interface FooterLink {
   label: string;
 }
 
+/** 전자상거래법 §21 / merchant review: terms, refund and privacy, reachable from every page. */
+export interface LegalLink extends FooterLink {
+  doc: string;
+}
+
 export function SiteFooter({
   locale: _locale,
   labels,
   links,
+  legalLinks = [],
 }: {
   locale: string;
   labels: FooterLabels;
   /** §13.2 — the same resolved list the nav uses, so a denavigated route stays denavigated here. */
   links: FooterLink[];
+  legalLinks?: LegalLink[];
 }) {
   const year = 2026;
 
@@ -97,6 +104,24 @@ export function SiteFooter({
             </a>
           </div>
         </div>
+
+        {legalLinks.length > 0 && (
+          <nav
+            data-legal-nav
+            className="mt-10 flex flex-wrap gap-x-6 gap-y-2 border-t border-hairline pt-6"
+          >
+            {legalLinks.map((link) => (
+              <a
+                key={link.href}
+                href={link.href}
+                data-legal-link={link.doc}
+                className="font-mono text-code opacity-60 underline-offset-4 hover:opacity-100 hover:underline"
+              >
+                {link.label}
+              </a>
+            ))}
+          </nav>
+        )}
       </div>
     </footer>
   );

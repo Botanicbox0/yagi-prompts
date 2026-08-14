@@ -95,10 +95,12 @@ describe('sitemap (§8 M5)', () => {
 
   it('degrades to an empty catalog without producing a broken sitemap', () => {
     const empty = buildSitemap({ origin: ORIGIN, cards: [] });
-    // Four marketing pages × two locales: landing, the §13.2 gallery, the §14.2 contests listing,
-    // pricing. The listing is in the sitemap even with no contest published — it is a real page
-    // with a designed empty state (§14.2), not a page that only exists when it has rows.
-    expect(empty).toHaveLength(8);
+    // Seven marketing pages × two locales: landing, the §13.2 gallery, the §14.2 contests listing,
+    // pricing, and the three legal documents (2026-08-14 — a payment provider's merchant review
+    // and 전자상거래법 §21 expect them publicly reachable). The contests listing is in the sitemap
+    // even with no contest published — it is a real page with a designed empty state (§14.2), not
+    // a page that only exists when it has rows.
+    expect(empty).toHaveLength(14);
     expect(empty.every((entry) => entry.url.startsWith(ORIGIN))).toBe(true);
   });
 });
