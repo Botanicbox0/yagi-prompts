@@ -65,17 +65,24 @@ describe('legal documents', () => {
     }
   });
 
-  it('renders the §21 seller block, and shows unfilled fields rather than hiding them', () => {
+  it('renders the §21 seller block with the registered company facts', () => {
     for (const locale of LOCALES) {
       const rows = businessRows(locale);
-      const labels = rows.map(([label]) => label).join(' ');
-      const values = rows.map(([, value]) => value).join(' ');
       expect(rows.length).toBe(8);
+      for (const [label, value] of rows) {
+        expect(label.trim(), label).not.toBe('');
+        // An unfilled review blocker must SHOW as a placeholder — never as an empty cell.
+        expect(value.trim(), label).not.toBe('');
+      }
+      const values = rows.map(([, value]) => value).join(' ');
       expect(values).toContain('hello@yagiworkshop.xyz');
-      // The founder-only facts are visible placeholders — an unfilled review blocker must SHOW.
-      expect(values).toContain('TODO');
-      expect(labels.length).toBeGreaterThan(0);
+      // 등기사항전부증명서 110111-0940868: 대표자, and the head office as registered 2026-05-06.
+      expect(values).toContain('윤병삼');
+      expect(values).toMatch(/구로|Guro/);
     }
+    expect(businessRows('ko').map(([, value]) => value)).toContain('야기워크숍 주식회사');
+    // The 양천구 office is struck through on the certificate — a dead address must not survive here.
+    expect(businessRows('ko').flat().join(' ')).not.toContain('양천구');
     expect(businessRows('ko').map(([l]) => l)).toContain('사업자등록번호');
     expect(businessRows('en').map(([l]) => l)).toContain('Business registration no.');
   });

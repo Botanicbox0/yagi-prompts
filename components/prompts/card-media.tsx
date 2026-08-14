@@ -18,7 +18,17 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
  *
  * The poster stays mounted underneath at all times: it is the LCP candidate, it is what a browser
  * with no JS shows, and it is what fills the frame while the first video frame decodes.
+ *
+ * Where the hover is listened for matters (founder report, 2026-08-15 — "썸네일 호버하면 영상 자동
+ * 재생되게"): the card is a STRETCHED LINK, so `a::after` covers the whole card and the pointer
+ * hit-tests to the anchor, never to this element. Enter/leave do not bubble, and the anchor is a
+ * sibling branch — so handlers on this div were never reached and no clip ever played. The
+ * listeners therefore live on the card (`HOVER_HOST`, an ancestor of both), which is entered no
+ * matter which descendant is topmost, and keyboard focus anywhere on the card arms it too.
  */
+
+/** The arming host: an ANCESTOR of this element, so the overlay link cannot mask the gesture. */
+export const HOVER_HOST = '[data-prompt-card]';
 
 export interface CardMediaSource {
   src: string;
@@ -69,28 +79,52 @@ export function PromptCardMedia({
     return () => observer.disconnect();
   }, [video, armed]);
 
-  const arm = () => {
-    if (video === null) return;
+  // Pointer tier: arm on hover of the CARD, not of this element (see the note above).
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!root || video === null) return;
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-    setArmed(true);
-    // Already mounted from a previous hover — just resume.
-    void videoRef.current?.play().catch(() => {});
-  };
+    if (!window.matchMedia('(hover: hover) and (pointer: fine)').matches) return;
 
-  const disarm = () => {
-    const element = videoRef.current;
-    if (!element) return;
-    element.pause();
-    element.currentTime = 0;
-  };
+    const host = root.closest<HTMLElement>(HOVER_HOST) ?? root;
+
+    const arm = () => {
+      setArmed(true);
+      // Already mounted from a previous hover — just resume.
+      void videoRef.current?.play().catch(() => {});
+    };
+    const disarm = () => {
+      const element = videoRef.current;
+      if (!element) return;
+      element.pause();
+      element.currentTime = 0;
+    };
+    // Tabbing between the title and the copy button stays inside the card — that is not a leave.
+    const blur = (event: FocusEvent) => {
+      const next = event.relatedTarget;
+      if (next instanceof Node && host.contains(next)) return;
+      disarm();
+    };
+
+    host.addEventListener('pointerenter', arm);
+    host.addEventListener('pointerleave', disarm);
+    host.addEventListener('focusin', arm);
+    host.addEventListener('focusout', blur);
+    // The page can finish hydrating with the cursor already resting on a card; that reader made
+    // the gesture before we were listening for it.
+    if (host.matches(':hover')) arm();
+
+    return () => {
+      host.removeEventListener('pointerenter', arm);
+      host.removeEventListener('pointerleave', disarm);
+      host.removeEventListener('focusin', arm);
+      host.removeEventListener('focusout', blur);
+    };
+  }, [video]);
 
   return (
     <div
       ref={rootRef}
-      onPointerEnter={arm}
-      onPointerLeave={disarm}
-      onFocus={arm}
-      onBlur={disarm}
       data-armed={armed ? 'true' : 'false'}
       /* Black ground: the card is a fixed 16:9 window (founder 2026-08-14) and a portrait result
          is letterboxed into it, so the bars are part of the design rather than a gap. */
