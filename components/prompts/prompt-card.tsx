@@ -63,7 +63,7 @@ export function PromptCardView({
     <article
       data-prompt-card={card.slug}
       data-source={card.source}
-      data-locked={card.hasLock ? 'true' : 'false'}
+      data-locked={card.lock ?? 'false'}
       className="card group relative block border border-hairline"
     >
       <div className="relative border-b border-hairline">
@@ -93,12 +93,14 @@ export function PromptCardView({
               </span>
             )}
           </span>
-          {card.hasLock && (
+          {/* The chip names the ACTION, not the fact of a gate (2026-08-15): a `free` prompt asks
+              for a sign-in and charges nothing, and saying COOKIE there was a price we do not take. */}
+          {card.lock && (
             <span
-              data-lock-chip
+              data-lock-chip={card.lock}
               className="border border-white/35 bg-black/70 px-2 py-1 font-label text-[0.6875rem] leading-none tracking-[0.12em] text-white uppercase"
             >
-              {labels.lockChip}
+              {card.lock === 'cookie' ? labels.lockChip : labels.lockChipSignin}
             </span>
           )}
         </div>

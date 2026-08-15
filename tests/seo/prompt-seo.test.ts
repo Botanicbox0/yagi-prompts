@@ -49,7 +49,7 @@ describe('prompt sitemap inclusion (§13.2)', () => {
 
   /** A gated prompt is still an indexable page — the gate is on the text, not on the page. */
   it('lists Pro-gated prompts exactly like open ones', () => {
-    const gated = prompts.find((card) => card.hasLock)!;
+    const gated = prompts.find((card) => card.lock !== null)!;
     expect(urls).toContain(`${ORIGIN}/en/prompts/${gated.slug}`);
   });
 

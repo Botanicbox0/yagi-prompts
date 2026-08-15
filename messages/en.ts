@@ -62,6 +62,10 @@ export const en = {
    */
   cookies: {
     lockedHeading: 'This prompt opens with a cookie',
+    /** A `free`-gated prompt: signing in is the whole price (2026-08-15). */
+    signinOnlyHeading: 'Sign in and it opens',
+    signinOnlyBody: 'Anyone can watch the result. The prompt itself is for signed-in readers — no cookie is spent.',
+    signinOnlyHint: 'No cookie is charged for this one. Signing up is free.',
     lockedBody: 'The result is free to watch. The exact text we ran is what a cookie opens — once, then it stays open on your account.',
     signinCta: 'Sign in to read the prompt',
     signinHint: 'Joining starts you with {count} free cookies.',
@@ -202,6 +206,7 @@ export const en = {
     byAuthor: 'by @{handle}',
     byAnonymous: 'Community',
     lockChip: 'Cookie',
+    lockChipSignin: 'Sign in',
     openLabel: 'Open',
     copy: 'Copy prompt',
     copied: 'Copied',

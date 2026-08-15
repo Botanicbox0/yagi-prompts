@@ -3,6 +3,7 @@ import { publicContentUrl } from '@/lib/content/asset-url';
 import { shapePromptMedia, type ShapedPromptMedia } from './shape';
 import { loadPublishedPrompts, type PromptRow } from './repo';
 import { PROMPT_MODEL_LABEL, promptModelLabel, type PromptSource } from './schemas';
+import { promptLock, type PromptLock } from './lock';
 
 /**
  * PLAN §13.2 — the public card projection: "cards carry NO prompt text".
@@ -30,8 +31,20 @@ export interface PromptCard {
   useCase: string[];
   poster: ShapedPromptMedia | null;
   video: ShapedPromptMedia | null;
-  /** True when the text sits behind a gate — the lock chip, and nothing about WHAT is locked. */
-  hasLock: boolean;
+  /**
+   * WHICH gate the text sits behind — not merely THAT one exists (founder report, 2026-08-15:
+   * "90s interview는 free인데 왜 cookie 요구?").
+   *
+   * The card used to carry a boolean and the chip always read COOKIE, so a `free` prompt — one that
+   * a signed-in reader opens for nothing — advertised a price it does not charge. Three visibilities
+   * collapse to two chips because that is what a reader can DO about them:
+   *   · `null`     public — nothing to say;
+   *   · 'signin'   free — sign in, spend nothing;
+   *   · 'cookie'   pro — one cookie, permanently.
+   * It still says nothing about the text itself; the detail page's shaper remains the only thing
+   * that can hand it over.
+   */
+  lock: PromptLock;
   featured: boolean;
   publishedAt: string | null;
 }
@@ -81,9 +94,7 @@ export function toPromptCard(row: PromptRow, options: PromptCatalogOptions = {})
     useCase: row.useCase,
     poster,
     video,
-    // The card advertises that a lock exists. It never says which tier opens it and never carries
-    // a byte of what is behind it — the detail page's shaper is the only thing that can.
-    hasLock: row.textVisibility !== 'public',
+    lock: promptLock(row.textVisibility),
     featured: row.featured,
     publishedAt: row.publishedAt,
   };

@@ -43,7 +43,7 @@ async function readPromptCatalog(): Promise<PromptCatalog> {
  */
 export const getPromptCatalog = unstable_cache(
   readPromptCatalog,
-  ['prompt-catalog', 'v2-models', resolveRuntimeMode()],
+  ['prompt-catalog', 'v3-lock', resolveRuntimeMode()],
   {
     tags: [PROMPTS_TAG],
     revalidate: CATALOG_TTL_SECONDS,

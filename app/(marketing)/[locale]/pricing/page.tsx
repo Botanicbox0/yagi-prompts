@@ -62,7 +62,8 @@ export default async function PricingPage({ params }: { params: Promise<{ locale
 
   // §13.2 — the pricing page counts PROMPTS now, from the tagged prompt projection.
   const catalog = await getPromptCatalog();
-  const lockedYagi = catalog.yagi.filter((card) => card.hasLock).length;
+  // Only the COOKIE ones: a free-gated prompt costs nothing and does not belong in a price count.
+  const lockedYagi = catalog.yagi.filter((card) => card.lock === 'cookie').length;
 
   // §15.3 — the three ways cookies arrive. Figures in display type; sentences do the explaining.
   // F5: while no MoR gateway is connected (`isCookiePackPurchasable`, env-derived and

@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { EMPTY_PROMPT_CATALOG, landingPromptCards, loadPromptCatalog } from '@/lib/prompts/catalog';
 import { PROMPT_MODEL_LABEL } from '@/lib/prompts/schemas';
+import { promptLock } from '@/lib/prompts/lock';
 import { badgeFor } from '@/lib/content/badges';
 import { PROMPT_SENTINELS } from '../../scripts/prompt-fixtures';
 import { promptHarness, type PromptHarness } from '../helpers/prompts';
@@ -28,8 +29,8 @@ describe('prompt catalog projection (§13.2)', () => {
     expect(Object.keys(card).sort()).toEqual([
       'authorHandle',
       'featured',
-      'hasLock',
       'id',
+      'lock',
       'modelLabels',
       'models',
       'poster',
@@ -68,17 +69,28 @@ describe('prompt catalog projection (§13.2)', () => {
     expect(catalog.community.map((card) => card.slug)).not.toContain('rejected-stock-lookalike');
   });
 
-  it('marks the lock chip from text visibility, and only from it', () => {
-    const locked = catalog.yagi.filter((card) => card.hasLock);
-    const open = catalog.yagi.filter((card) => !card.hasLock);
+  /**
+   * The chip names the ACTION (founder report, 2026-08-15: "90s interview는 free인데 왜 cookie
+   * 요구?"). A boolean could only say "gated", so a `free` prompt — opened by signing in, charged
+   * nothing — wore the COOKIE chip and quoted a price the server refuses to take.
+   */
+  it('marks the lock chip from text visibility, and names the right action', () => {
+    const locked = catalog.yagi.filter((card) => card.lock !== null);
+    const open = catalog.yagi.filter((card) => card.lock === null);
     expect(locked).toHaveLength(6);
+    // Nothing in the fixtures is free-gated, so the mapping itself is asserted directly.
+    expect(promptLock('public')).toBeNull();
+    expect(promptLock('free')).toBe('signin');
+    expect(promptLock('pro')).toBe('cookie');
+    expect(promptLock('hidden')).toBe('cookie');
+    expect(locked.every((card) => card.lock === 'cookie')).toBe(true);
     // §13.3-2: the two deliberate public teasers.
     expect(open.map((card) => card.slug).sort()).toEqual([
       'short-film-establishing-rooftop',
       'static-portrait-window-light',
     ]);
     // §13.3-1: community text is public by definition, so no community card ever wears the chip.
-    expect(catalog.community.every((card) => card.hasLock === false)).toBe(true);
+    expect(catalog.community.every((card) => card.lock === null)).toBe(true);
   });
 
   it('offers only the use cases that are actually present, sorted', () => {

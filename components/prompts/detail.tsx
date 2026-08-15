@@ -5,6 +5,7 @@ import { PACK_COOKIES, PACK_PRICE_USD } from '@/lib/cookies/wallet';
 import { promptHref, promptsHref, PROMPT_SUBMIT_PATH } from '@/lib/prompts/links';
 import { interpolate } from '@/lib/i18n/format';
 import { promptModelLabel } from '@/lib/prompts/schemas';
+import { promptLock } from '@/lib/prompts/lock';
 import { BillingUnavailable } from '@/components/billing/upgrade-cta';
 import { Markdown } from '@/components/playbook/markdown';
 import { TextSwap } from '@/components/ui/text-swap';
@@ -222,13 +223,16 @@ function UnlockPanelView({
   packAction?: (form: FormData) => Promise<void>;
 }) {
   if (panel.state === 'signin') {
+    // The cookie sweetener belongs to a COOKIE gate. On a free one it answers a question the
+    // reader did not ask, about a currency this prompt never charges.
+    const signinOnly = promptLock(prompt.visibility) === 'signin';
     return (
       <div>
         <a data-unlock-cta="signin" href={signinHref} className={`text-accent ${CTA_CLASS}`}>
           <TextSwap>{labels.signinCta} →</TextSwap>
         </a>
         <p className="mt-3 font-mono text-[0.72rem] opacity-45">
-          {interpolate(labels.signinHint, { count: '3' })}
+          {signinOnly ? labels.signinOnlyHint : interpolate(labels.signinHint, { count: '3' })}
         </p>
       </div>
     );
@@ -343,10 +347,20 @@ export function PromptBody({
       </div>
 
       {prompt.locked ? (
-        <div className="mt-6 lock-panel" data-lock-panel data-locked="true">
+        /**
+         * The panel says what THIS gate costs (founder report, 2026-08-15: "90s interview는 free인데
+         * 왜 cookie 요구?"). A `free` prompt opens on sign-in and spends nothing — `unlockPrompt`
+         * refuses to charge a cookie for one — so quoting the cookie copy here was asking for a
+         * price the server would not take.
+         */
+        <div className="mt-6 lock-panel" data-lock-panel data-locked={promptLock(prompt.visibility) ?? 'true'}>
           <div>
-            <p className="font-label text-label uppercase">{labels.lockedHeading}</p>
-            <p className="mt-2 text-[0.9375rem] opacity-70">{labels.lockedBody}</p>
+            <p className="font-label text-label uppercase">
+              {promptLock(prompt.visibility) === 'signin' ? labels.signinOnlyHeading : labels.lockedHeading}
+            </p>
+            <p className="mt-2 text-[0.9375rem] opacity-70">
+              {promptLock(prompt.visibility) === 'signin' ? labels.signinOnlyBody : labels.lockedBody}
+            </p>
           </div>
           {panel !== null && (
             <UnlockPanelView
