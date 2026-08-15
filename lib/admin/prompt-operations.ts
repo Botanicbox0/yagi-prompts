@@ -60,6 +60,21 @@ function parsed<T>(schema: z.ZodType<T>, value: unknown): ParseResult<T> {
   return result.success ? { ok: true, value: result.data } : { ok: false, detail: issues(result.error) };
 }
 
+/**
+ * The model checkboxes (2026-08-15). Unlike `useCase` this is NOT filtered to a vocabulary: the
+ * list in `lib/prompts/schemas.ts` is what the form OFFERS, and a value outside it is a model we
+ * have not heard of yet rather than an error. Empty → the default, so a form that predates the
+ * field still creates a valid row.
+ */
+function models(form: FormData): string[] {
+  const picked = form
+    .getAll('models')
+    .filter((value): value is string => typeof value === 'string')
+    .map((value) => value.trim())
+    .filter((value) => value !== '');
+  return picked.length > 0 ? picked : [DEFAULT_PROMPT_MODEL];
+}
+
 /** Repeated checkbox values, filtered to the §13.1 vocabulary. */
 function chips(form: FormData, name: string): string[] {
   const allowed = new Set<string>(USE_CASES);
@@ -141,7 +156,7 @@ const createPrompt: AdminOperation<{ input: z.infer<typeof AuthoringSchema>; for
       useCase: chips(form, 'useCase'),
       textVisibility: f.str(form, 'textVisibility') || 'pro',
       featured: f.bool(form, 'featured'),
-      model: f.str(form, 'model') || DEFAULT_PROMPT_MODEL,
+      models: models(form),
     });
     if (!base.ok) return base;
     return { ok: true, value: { input: base.value, form } };
@@ -172,7 +187,7 @@ const createPrompt: AdminOperation<{ input: z.infer<typeof AuthoringSchema>; for
       authorId: null,
       authorHandle: null,
       status: 'published',
-      model: input.model,
+      models: input.models,
       title: input.title,
       titleKo: input.titleKo,
       promptText: input.promptText,
@@ -273,6 +288,7 @@ const editPrompt: AdminOperation<{ input: z.infer<typeof EditSchema>; form: Form
       handle: f.str(form, 'handle') || null,
       textVisibility: f.str(form, 'textVisibility') || 'public',
       featured: f.bool(form, 'featured'),
+      models: models(form),
     });
     if (!base.ok) return base;
     return { ok: true, value: { input: base.value, form } };
@@ -291,6 +307,7 @@ const editPrompt: AdminOperation<{ input: z.infer<typeof EditSchema>; form: Form
       slug: input.slug,
       title: input.title,
       titleKo: input.titleKo,
+      models: input.models,
       promptText: input.promptText,
       processMd: input.processMd,
       processMdKo: input.processMdKo,

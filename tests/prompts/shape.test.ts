@@ -23,7 +23,7 @@ function row(overrides: Partial<PromptRowInput> = {}): PromptRowInput {
     slug: 'neon-alley-dolly',
     source: 'yagi',
     authorHandle: null,
-    model: 'seedance-2.5',
+    models: ['seedance-2.5'],
     title: 'Neon alley dolly',
     titleKo: '네온 골목 달리',
     promptText: `Slow dolly-in.\n:: ${SENTINEL}`,

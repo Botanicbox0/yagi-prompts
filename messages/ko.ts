@@ -855,6 +855,7 @@ export const ko: Dictionary = {
     fieldPromptSlug: '슬러그',
     promptSlugAutoHint: '비워 두면 영문 제목을 따라 소문자-대시로 자동 생성됩니다.',
     fieldPromptHandle: '작성자 표기 (@핸들)',
+    promptModelsHint: '여러 개 선택할 수 있습니다. 카드에 체크한 순서대로 칩이 붙습니다.',
     fieldItemModel: '모델',
     fieldPromptVisibility: '텍스트 공개 범위',
     fieldPromptFeatured: '추천',

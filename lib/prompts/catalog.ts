@@ -2,7 +2,7 @@ import type { SqlRunner } from '@/lib/db/sql-runner';
 import { publicContentUrl } from '@/lib/content/asset-url';
 import { shapePromptMedia, type ShapedPromptMedia } from './shape';
 import { loadPublishedPrompts, type PromptRow } from './repo';
-import { PROMPT_MODEL_LABEL, type PromptSource } from './schemas';
+import { PROMPT_MODEL_LABEL, promptModelLabel, type PromptSource } from './schemas';
 
 /**
  * PLAN §13.2 — the public card projection: "cards carry NO prompt text".
@@ -24,9 +24,9 @@ export interface PromptCard {
   titleKo: string | null;
   authorHandle: string | null;
   source: PromptSource;
-  /** Raw model id (`seedance-2.5`); `modelLabel` is what the chip renders. */
-  model: string;
-  modelLabel: string;
+  /** Raw model ids (`seedance-2.5`); `modelLabels` is what the chips render (2026-08-15). */
+  models: string[];
+  modelLabels: string[];
   useCase: string[];
   poster: ShapedPromptMedia | null;
   video: ShapedPromptMedia | null;
@@ -76,8 +76,8 @@ export function toPromptCard(row: PromptRow, options: PromptCatalogOptions = {})
     titleKo: row.titleKo,
     authorHandle: row.authorHandle,
     source: row.source,
-    model: row.model,
-    modelLabel: PROMPT_MODEL_LABEL,
+    models: row.models,
+    modelLabels: row.models.map(promptModelLabel),
     useCase: row.useCase,
     poster,
     video,

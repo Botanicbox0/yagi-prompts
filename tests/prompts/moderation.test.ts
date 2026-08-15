@@ -83,6 +83,50 @@ describe('prompt moderation operations (§13.2/F)', () => {
     expect(harness.revalidated).toBe(0);
   });
 
+  /** The founder's ask, end to end: two models checked, two chips stored (2026-08-15). */
+  it('stores every model the form checked, and lets an edit add one later', async () => {
+    const created = await harness.run('prompt.create', {
+      ...authoring,
+      slug: 'two-models',
+      models: ['seedance-2.5', 'seedance-2.0'],
+      poster: upload('poster.png', 'POSTER-BYTES', 'image/png'),
+    });
+    expect(created).toMatchObject({ ok: true });
+    const row = (await loadPromptBySlug(sql(), 'two-models'))!;
+    expect(row.models).toEqual(['seedance-2.5', 'seedance-2.0']);
+
+    const edited = await harness.run('prompt.update', {
+      id: row.id,
+      slug: row.slug,
+      title: row.title,
+      titleKo: row.titleKo ?? '',
+      promptText: row.promptText,
+      useCase: 'brand-ad',
+      handle: '',
+      textVisibility: row.textVisibility,
+      featured: '',
+      models: ['seedance-2.5', 'seedance-2.0', 'kling-3.0'],
+    });
+    expect(edited).toMatchObject({ ok: true });
+    expect((await loadPromptById(sql(), row.id))!.models).toEqual([
+      'seedance-2.5',
+      'seedance-2.0',
+      'kling-3.0',
+    ]);
+  });
+
+  /** A form that checked nothing still writes a runnable row rather than an empty chip row. */
+  it('falls back to the default model when the form checked none', async () => {
+    const outcome = await harness.run('prompt.create', {
+      ...authoring,
+      slug: 'no-model-checked',
+      models: [],
+      poster: upload('poster.png', 'POSTER-BYTES', 'image/png'),
+    });
+    expect(outcome).toMatchObject({ ok: true });
+    expect((await loadPromptBySlug(sql(), 'no-model-checked'))!.models).toEqual(['seedance-2.5']);
+  });
+
   it('drops a use case that is not in the vocabulary rather than storing it', async () => {
     const pending = (await loadPromptBySlug(sql(), 'pending-underwater-drift'))!;
     await harness.run('prompt.approve', {
@@ -129,7 +173,7 @@ describe('prompt moderation operations (§13.2/F)', () => {
     useCase: ['brand-ad'],
     textVisibility: 'pro',
     featured: 'on',
-    model: 'seedance-2.5',
+    models: ['seedance-2.5'],
   };
 
   it('authors a YAGI prompt, published immediately, with its media already public', async () => {

@@ -592,7 +592,7 @@ export async function seedPrompts(opts: SeedOptions): Promise<PromptSeedResult[]
       authorId: fixture.authorKey ? FIXTURE_USERS[fixture.authorKey].id : null,
       authorHandle: fixture.handle ?? null,
       status: fixture.status,
-      model: DEFAULT_PROMPT_MODEL,
+      models: [DEFAULT_PROMPT_MODEL],
       title: fixture.title,
       titleKo: fixture.titleKo,
       // The sentinel rides INSIDE the gated bytes — that is the whole point of it.

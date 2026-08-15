@@ -21,7 +21,7 @@ export interface PromptRow {
   authorId: string | null;
   authorHandle: string | null;
   status: PromptStatus;
-  model: string;
+  models: string[];
   title: string;
   titleKo: string | null;
   promptText: string;
@@ -46,7 +46,7 @@ interface RawRow {
   author_id: string | null;
   author_handle: string | null;
   status: PromptStatus;
-  model: string;
+  models: string[];
   title: string;
   title_ko: string | null;
   prompt_text: string;
@@ -62,7 +62,7 @@ interface RawRow {
   published_at: Date | string | null;
 }
 
-const COLUMNS = `id, slug, source, author_id, author_handle, status, model, title, title_ko,
+const COLUMNS = `id, slug, source, author_id, author_handle, status, models, title, title_ko,
                  prompt_text, process_md, process_md_ko, source_url,
                  text_visibility::text as text_visibility, media, use_case, featured,
                  reject_reason, created_at, published_at`;
@@ -83,7 +83,7 @@ function toRow(raw: RawRow): PromptRow {
     authorId: raw.author_id,
     authorHandle: raw.author_handle,
     status: raw.status,
-    model: raw.model,
+    models: raw.models ?? [],
     title: raw.title,
     titleKo: raw.title_ko,
     promptText: raw.prompt_text,
@@ -240,7 +240,7 @@ export interface InsertPromptArgs {
   authorId: string | null;
   authorHandle: string | null;
   status: PromptStatus;
-  model: string;
+  models: string[];
   title: string;
   titleKo: string | null;
   promptText: string;
@@ -264,7 +264,7 @@ export interface InsertPromptArgs {
 export async function insertPrompt(sql: SqlRunner, args: InsertPromptArgs): Promise<void> {
   await sql.query(
     `insert into prompt_items
-       (id, slug, source, author_id, author_handle, status, model, title, title_ko,
+       (id, slug, source, author_id, author_handle, status, models, title, title_ko,
         prompt_text, process_md, process_md_ko, source_url,
         text_visibility, media, use_case, featured, reject_reason, published_at)
      values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
@@ -277,7 +277,7 @@ export async function insertPrompt(sql: SqlRunner, args: InsertPromptArgs): Prom
       args.authorId,
       args.authorHandle,
       args.status,
-      args.model,
+      args.models,
       args.title,
       args.titleKo,
       args.promptText,
@@ -319,6 +319,7 @@ export interface UpdatePromptArgs {
   authorHandle: string | null;
   textVisibility: Visibility;
   featured: boolean;
+  models: string[];
 }
 
 export async function updatePrompt(sql: SqlRunner, args: UpdatePromptArgs): Promise<boolean> {
@@ -326,7 +327,7 @@ export async function updatePrompt(sql: SqlRunner, args: UpdatePromptArgs): Prom
     `update prompt_items
         set slug = $2, title = $3, title_ko = $4, prompt_text = $5, use_case = $6,
             author_handle = $7, text_visibility = $8::visibility, featured = $9,
-            process_md = $10, process_md_ko = $11, source_url = $12
+            process_md = $10, process_md_ko = $11, source_url = $12, models = $13
       where id = $1
       returning id`,
     [
@@ -342,6 +343,7 @@ export async function updatePrompt(sql: SqlRunner, args: UpdatePromptArgs): Prom
       args.processMd ?? null,
       args.processMdKo ?? null,
       args.sourceUrl ?? null,
+      args.models,
     ],
   );
   return rows.length > 0;
