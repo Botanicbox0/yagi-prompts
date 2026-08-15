@@ -122,8 +122,16 @@ export const SourceUrlSchema = z
   .transform((value) => value ?? null);
 export const PROMPT_TITLE_MAX = 160;
 export const PROMPT_HANDLE_MAX = 40;
-/** "video ≤ 60s/32MB". Size is measured over the received bytes; see `lib/prompts/media.ts`. */
-export const VIDEO_MAX_BYTES = 32 * 1024 * 1024;
+/**
+ * "video ≤ 60s/32MB" (§13.1) → 64MB on 2026-08-15, because a real export is bigger than the plan
+ * guessed: the founder's 15-second CapCut export is 57.7MB.
+ *
+ * Raised with a caveat worth writing down. This clip is what the gallery card PLAYS on hover, so
+ * its size is paid by every visitor who points at the card, on mobile data included. 64MB is a
+ * ceiling for what the tool accepts, not advice: a 15-second hover loop wants to be ~8-12MB, and
+ * the honest place to fix that is the export preset rather than a limit that refuses the work.
+ */
+export const VIDEO_MAX_BYTES = 64 * 1024 * 1024;
 export const VIDEO_MAX_SECONDS = 60;
 /** Founder direction (2026-08-13): audio results are uploadable and freely downloadable. */
 export const AUDIO_MAX_BYTES = 20 * 1024 * 1024;
@@ -156,6 +164,45 @@ export type PromptMedia = z.infer<typeof PromptMediaSchema>;
 
 export const MEDIA_KINDS = ['poster', 'video', 'audio'] as const;
 export type MediaKind = (typeof MEDIA_KINDS)[number];
+
+/**
+ * What the browser reports after uploading DIRECTLY to storage (2026-08-15).
+ *
+ * Vercel refuses a request body over ~4.5MB, so a real video can never be posted through the admin
+ * door; it goes browser → storage, and the form carries this receipt instead of the bytes.
+ *
+ * The `key` pattern is the security boundary and is deliberately narrow: only the direct-upload
+ * namespace, only a uuid filename, only an extension. A caller therefore cannot name an object it
+ * did not just create — the server minted this exact key one request earlier — which is what stops
+ * "attach an arbitrary staging object to my prompt" from being a request anyone can make.
+ *
+ * `sha256` is the client's digest and is TRUSTED, with eyes open: this surface is admin-only, and a
+ * wrong digest can only mis-name the content-addressed public copy (a dedup miss), never expose a
+ * byte. Re-hashing server-side would mean pulling the whole file back through the function, which
+ * is the transfer this design exists to avoid.
+ */
+export const STAGED_KEY_PATTERN = /^content\/prompt\/upload\/[0-9a-f-]{36}\.[A-Za-z0-9]{1,8}$/;
+
+export const StagedUploadSchema = z.object({
+  key: z.string().trim().regex(STAGED_KEY_PATTERN, 'not a staged upload key'),
+  sha256: z.string().trim().regex(/^[0-9a-f]{64}$/, 'sha256 must be 64 hex characters'),
+  mime: z.string().trim().min(1).max(120),
+  size: z.number().int().nonnegative(),
+});
+export type StagedUpload = z.infer<typeof StagedUploadSchema>;
+
+/** `null` for anything malformed — the caller falls back to the inline file, never to a guess. */
+export function parseStagedUpload(raw: unknown): StagedUpload | null {
+  if (typeof raw !== 'string' || raw.trim() === '') return null;
+  let json: unknown;
+  try {
+    json = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  const parsed = StagedUploadSchema.safeParse(json);
+  return parsed.success ? parsed.data : null;
+}
 
 /** `null`/absent jsonb is "no media", never a parse failure — most community items have none. */
 export function parsePromptMedia(value: unknown): PromptMedia {

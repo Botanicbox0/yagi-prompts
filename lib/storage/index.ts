@@ -43,6 +43,20 @@ export interface StorageDriver {
   readonly servesSignedUrls: boolean;
   /** Upload staging bytes (admin uploads in M4; fixtures in the seed script). */
   putStaging(key: string, bytes: Uint8Array, contentType: string): Promise<void>;
+  /**
+   * A one-shot URL the BROWSER may PUT a staging object to, or `null` when the driver cannot mint
+   * one (founder report, 2026-08-15).
+   *
+   * Why this exists: Vercel refuses a serverless request whose body exceeds ~4.5MB — a `413
+   * PAYLOAD_TOO_LARGE` produced by the platform BEFORE any of our code runs. A 57.7MB export
+   * therefore could not reach `POST /admin/do` at all, no matter what our own caps said. The bytes
+   * have to skip the app server entirely, which is exactly what a signed upload URL is for.
+   *
+   * `null` from the local driver is not a gap: `.storage/` is a directory rather than a service, so
+   * there is nothing to PUT to — and `next start` has no gateway limit to route around either. The
+   * client falls back to posting the file inline, which is what it has always done.
+   */
+  signedUploadUrl(key: string, contentType: string): Promise<string | null>;
   exists(bucket: Bucket, key: string): Promise<boolean>;
   read(bucket: Bucket, key: string): Promise<Uint8Array>;
   /** Phase B of publication. Idempotent: identical key already present => 'exists'. */

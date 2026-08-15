@@ -93,6 +93,24 @@ describe('admin action auth matrix (§3.7 / §3.8)', () => {
     expect(route).toContain('303');
   });
 
+  /**
+   * The upload-signing endpoint (2026-08-15) hands the BROWSER a URL that can write into the
+   * staging bucket, so it is a door in its own right and wears the same guard: admin first, 404
+   * rather than 403, same-origin, and a key the server mints rather than one the caller names.
+   */
+  it('guards the signed-upload endpoint exactly like the mutation door', () => {
+    const route = read('app', 'api', 'admin', 'staging-url', 'route.ts');
+    expect(route).toContain('export async function POST');
+    expect(route).toContain('requireAdmin');
+    expect(route).toContain('notFound()');
+    expect(route).toContain('sec-fetch-site');
+    // The caps are re-applied server-side: the client is not trusted about its own file.
+    expect(route).toContain('checkUpload');
+    // The key is minted here, never read off the request.
+    expect(route).toContain('directUploadKey');
+    expect(route).not.toMatch(/input\.key|body\.key/);
+  });
+
   it('routes every admin form through that one door', () => {
     const chrome = read('components', 'admin', 'chrome.tsx');
     expect(chrome).toContain('method="post"');

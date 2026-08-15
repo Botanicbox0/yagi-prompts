@@ -31,6 +31,10 @@ export interface MediaDropLabels {
   posterHint: string;
   audioHeading: string;
   audioZone: string;
+  /** Direct-upload status (2026-08-15). `{percent}` is interpolated. */
+  uploading: string;
+  uploaded: string;
+  uploadFailed: string;
 }
 
 function assign(input: HTMLInputElement | null, file: File | null): void {
@@ -46,6 +50,54 @@ function firstFile(items: DataTransfer | null, kind: 'video' | 'image' | 'audio'
     if (file.type.startsWith(`${kind}/`)) return file;
   }
   return null;
+}
+
+/**
+ * DIRECT UPLOAD (founder report, 2026-08-15): a 57.7MB clip came back as Vercel's own `413
+ * PAYLOAD_TOO_LARGE`, produced by the platform before any of our code ran. A serverless request
+ * body is capped at ~4.5MB, so a real video can never be POSTed through the admin door at all.
+ *
+ * So the bytes stop going through the door. The browser asks the server for a one-shot signed URL,
+ * PUTs the file straight to storage, and the form carries a small JSON receipt instead. The file
+ * input is CLEARED on success, which is the part that actually makes the form small enough to send.
+ *
+ * Every step degrades to the old behaviour rather than to a broken form: no JS → plain file inputs,
+ * no signing service (the local driver) → the file posts inline, upload fails → the file is left in
+ * the input and the operation refuses it the way it always did.
+ */
+const STAGING_URL_PATH = '/api/admin/staging-url';
+
+type UploadState =
+  | { phase: 'idle' }
+  | { phase: 'uploading'; percent: number }
+  | { phase: 'done'; sizeBytes: number }
+  | { phase: 'failed'; reason: string };
+
+async function sha256Hex(file: File): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', await file.arrayBuffer());
+  return Array.from(new Uint8Array(digest))
+    .map((byte) => byte.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+/** XHR rather than fetch: only XHR reports upload progress, and a 57MB PUT needs a number. */
+function put(url: string, file: File, onProgress: (percent: number) => void): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const request = new XMLHttpRequest();
+    request.open('PUT', url);
+    request.setRequestHeader('content-type', file.type || 'application/octet-stream');
+    request.upload.addEventListener('progress', (event) => {
+      if (event.lengthComputable) onProgress(Math.round((event.loaded / event.total) * 100));
+    });
+    request.addEventListener('load', () =>
+      request.status >= 200 && request.status < 300
+        ? resolve()
+        : reject(new Error(`upload_failed_${request.status}`)),
+    );
+    request.addEventListener('error', () => reject(new Error('upload_failed')));
+    request.addEventListener('abort', () => reject(new Error('upload_aborted')));
+    request.send(file);
+  });
 }
 
 export function MediaDrop({
@@ -85,6 +137,18 @@ export function MediaDrop({
   const [audioLabel, setAudioLabel] = useState<string | null>(null);
   const [dragging, setDragging] = useState<'video' | 'poster' | 'audio' | null>(null);
 
+  /** Per-slot upload progress, and the receipt each finished upload leaves in the form. */
+  const [uploads, setUploads] = useState<Record<'video' | 'poster' | 'audio', UploadState>>({
+    video: { phase: 'idle' },
+    poster: { phase: 'idle' },
+    audio: { phase: 'idle' },
+  });
+  const [receipts, setReceipts] = useState<Record<'video' | 'poster' | 'audio', string>>({
+    video: '',
+    poster: '',
+    audio: '',
+  });
+
   // M4's JS-free-admin contract survives: server HTML ships the two PLAIN file inputs; only a
   // hydrated client swaps them for the zones. No JS → ordinary pickers, same field names.
   const [enhanced, setEnhanced] = useState(false);
@@ -98,26 +162,105 @@ export function MediaDrop({
   useEffect(() => () => { if (posterUrl) URL.revokeObjectURL(posterUrl); }, [posterUrl]);
   useEffect(() => () => { if (audioUrl) URL.revokeObjectURL(audioUrl); }, [audioUrl]);
 
+  /**
+   * Ask for a signed URL, PUT the bytes, record the receipt, empty the file input.
+   *
+   * Order matters at the end: the receipt is written BEFORE the input is cleared, so there is no
+   * instant at which the form carries neither the file nor its receipt. Any failure leaves the file
+   * exactly where it was — the form still works, it just has to fit through the door.
+   */
+  const upload = async (
+    kind: 'video' | 'poster' | 'audio',
+    file: File,
+    input: HTMLInputElement | null,
+  ) => {
+    setUploads((current) => ({ ...current, [kind]: { phase: 'uploading', percent: 0 } }));
+    try {
+      const minted = await fetch(STAGING_URL_PATH, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          kind,
+          filename: file.name,
+          mime: file.type || 'application/octet-stream',
+          size: file.size,
+        }),
+      });
+      if (!minted.ok) throw new Error(`sign_failed_${minted.status}`);
+      const grant = (await minted.json()) as { direct?: boolean; key?: string; url?: string };
+      if (grant.direct !== true || !grant.key || !grant.url) {
+        // No signing service on this deployment — the inline path is correct here.
+        setUploads((current) => ({ ...current, [kind]: { phase: 'idle' } }));
+        return;
+      }
+
+      await put(grant.url, file, (percent) =>
+        setUploads((current) => ({ ...current, [kind]: { phase: 'uploading', percent } })),
+      );
+
+      const receipt = JSON.stringify({
+        key: grant.key,
+        sha256: await sha256Hex(file),
+        mime: file.type || 'application/octet-stream',
+        size: file.size,
+      });
+      setReceipts((current) => ({ ...current, [kind]: receipt }));
+      assign(input, null);
+      setUploads((current) => ({ ...current, [kind]: { phase: 'done', sizeBytes: file.size } }));
+    } catch (error) {
+      setUploads((current) => ({
+        ...current,
+        [kind]: { phase: 'failed', reason: error instanceof Error ? error.message : 'upload_failed' },
+      }));
+    }
+  };
+
   const takeAudio = (file: File | null) => {
     if (!file) return;
     assign(audioInputRef.current, file);
+    setReceipts((current) => ({ ...current, audio: '' }));
     setAudioLabel(`${file.name} · ${(file.size / (1024 * 1024)).toFixed(1)}MB`);
     setAudioUrl(URL.createObjectURL(file));
+    void upload('audio', file, audioInputRef.current);
   };
 
   const takeVideo = (file: File | null) => {
     if (!file) return;
     assign(videoInputRef.current, file);
+    setReceipts((current) => ({ ...current, video: '' }));
     setVideoLabel(`${file.name} · ${(file.size / (1024 * 1024)).toFixed(1)}MB`);
     setVideoUrl(URL.createObjectURL(file));
     setDuration(0);
+    void upload('video', file, videoInputRef.current);
   };
 
   const takePoster = (file: File | null, label: string) => {
     if (!file) return;
     assign(posterInputRef.current, file);
+    setReceipts((current) => ({ ...current, poster: '' }));
     setPosterLabel(label);
     setPosterUrl(URL.createObjectURL(file));
+    void upload('poster', file, posterInputRef.current);
+  };
+
+  /** One line per slot: the percentage while it climbs, the outcome after. */
+  const progress = (kind: 'video' | 'poster' | 'audio') => {
+    const state = uploads[kind];
+    if (state.phase === 'idle') return null;
+    const text =
+      state.phase === 'uploading'
+        ? labels.uploading.replace('{percent}', String(state.percent))
+        : state.phase === 'done'
+          ? labels.uploaded
+          : labels.uploadFailed;
+    return (
+      <p
+        data-upload-state={`${kind}:${state.phase}`}
+        className={`font-mono text-[0.65rem] ${state.phase === 'failed' ? 'text-accent' : 'opacity-55'}`}
+      >
+        {text}
+      </p>
+    );
   };
 
   const captureFrame = () => {
@@ -174,6 +317,8 @@ export function MediaDrop({
         {...(enhanced ? { tabIndex: -1 } : {})}
         onChange={(e) => takeVideo(e.currentTarget.files?.[0] ?? null)}
       />
+      <input type="hidden" name={`${videoName}Ref`} value={receipts.video} readOnly />
+      {progress('video')}
 
       {/* The dropped clip wins; otherwise the one this row already has — so the frame picker
           works on a PUBLISHED prompt without re-uploading its video. */}
@@ -258,6 +403,8 @@ export function MediaDrop({
             if (file) takePoster(file, labels.posterPicked.replace('{name}', file.name));
           }}
         />
+        <input type="hidden" name={`${posterName}Ref`} value={receipts.poster} readOnly />
+        {progress('poster')}
       </div>
 
       {/* --- the audio result (optional slot) ------------------------------ */}
@@ -298,6 +445,8 @@ export function MediaDrop({
             {...(enhanced ? { tabIndex: -1 } : {})}
             onChange={(e) => takeAudio(e.currentTarget.files?.[0] ?? null)}
           />
+          <input type="hidden" name={`${audioName}Ref`} value={receipts.audio} readOnly />
+          {progress('audio')}
         </div>
       )}
     </div>

@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
-import { publishPromptMedia, stagePromptUpload } from '@/lib/prompts/media';
+import { checkUpload, publishPromptMedia, stagePromptUpload } from '@/lib/prompts/media';
+import { AssetRefSchema } from '@/lib/content/schemas';
+import { STAGING_BUCKET } from '@/lib/storage';
 import {
   approvePrompt,
   insertPrompt,
@@ -17,11 +19,13 @@ import {
   AuthoringSchema,
   DEFAULT_PROMPT_MODEL,
   EditSchema,
+  MEDIA_KINDS,
   RejectionSchema,
   USE_CASES,
   effectiveTextVisibility,
   normalizeHandle,
   parsePromptMedia,
+  parseStagedUpload,
   slugify,
   type PromptMedia,
 } from '@/lib/prompts/schemas';
@@ -85,7 +89,32 @@ async function applyUploads(
   existing: PromptMedia,
 ): Promise<{ ok: true; value: PromptMedia } | { ok: false; detail: string }> {
   const next: PromptMedia = { ...existing };
-  for (const kind of ['poster', 'video', 'audio'] as const) {
+  for (const kind of MEDIA_KINDS) {
+    /**
+     * The DIRECT path first (2026-08-15): the browser already PUT the bytes to storage and the form
+     * carries only a receipt. It has to be checked before the file input, because the client clears
+     * that input once the direct upload succeeds — and a receipt for an object that is not actually
+     * there must fail loudly rather than attach a broken ref to a published row.
+     */
+    const receipt = parseStagedUpload(f.str(form, `${kind}Ref`));
+    if (receipt !== null) {
+      const present = await ctx.storage.exists(STAGING_BUCKET, receipt.key);
+      if (!present) return { ok: false, detail: `${kind}: upload_missing` };
+      const rejection = checkUpload({
+        kind,
+        mime: receipt.mime,
+        sizeBytes: receipt.size,
+        durationSeconds: null,
+      });
+      if (rejection !== null) return { ok: false, detail: `${kind}: ${rejection}` };
+      next[kind] = AssetRefSchema.parse({
+        staging_key: receipt.key,
+        sha256: receipt.sha256,
+        mime: receipt.mime,
+      });
+      continue;
+    }
+
     const file = f.file(form, kind);
     if (file === null) continue;
     const staged = await stagePromptUpload(ctx.storage, promptId, kind, file);

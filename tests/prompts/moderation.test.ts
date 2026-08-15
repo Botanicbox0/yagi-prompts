@@ -6,7 +6,7 @@ import { ADMIN_OPERATION_NAMES } from '@/lib/admin/operations';
 import { PROMPT_OPERATIONS } from '@/lib/admin/prompt-operations';
 import { dispatchAdmin } from '@/lib/admin/dispatch';
 import { loadPromptById, loadPromptBySlug, loadPublishedPrompts } from '@/lib/prompts/repo';
-import { parsePromptMedia } from '@/lib/prompts/schemas';
+import { VIDEO_MAX_BYTES, parsePromptMedia, parseStagedUpload } from '@/lib/prompts/schemas';
 import { seedPrompts } from '../../scripts/seed';
 import { FIXTURE_USERS } from '../../scripts/fixtures';
 import { adminHarness, formOf, upload, viewerOf, type AdminHarness } from '../helpers/admin';
@@ -206,8 +206,94 @@ describe('prompt moderation operations (§13.2/F)', () => {
     expect(outcome).toMatchObject({ ok: false, code: 'duplicateSlug' });
   });
 
+  /**
+   * The DIRECT upload path (founder report, 2026-08-15): Vercel refuses a request body over ~4.5MB
+   * with its own 413, so a real clip never reaches the operation as a file. The browser PUTs it to
+   * storage and the form carries a receipt instead — and the operation has to treat that receipt as
+   * a claim to verify, not a fact to trust.
+   */
+  it('takes a direct-upload receipt instead of the bytes, and checks the object is really there', async () => {
+    const key = `content/prompt/upload/${crypto.randomUUID()}.mp4`;
+    await harness.storage.putStaging(key, new TextEncoder().encode('mp4 placeholder'), 'video/mp4');
+
+    const live = (await loadPromptBySlug(sql(), 'kitchen-tutorial-overhead'))!;
+    const receipt = JSON.stringify({
+      key,
+      sha256: 'a'.repeat(64),
+      mime: 'video/mp4',
+      size: 57_700_000,
+    });
+    const outcome = await harness.run('prompt.update', {
+      id: live.id,
+      slug: live.slug,
+      title: live.title,
+      titleKo: live.titleKo ?? '',
+      promptText: live.promptText,
+      useCase: 'tutorial',
+      handle: '',
+      textVisibility: live.textVisibility,
+      featured: '',
+      videoRef: receipt,
+    });
+    expect(outcome).toMatchObject({ ok: true });
+
+    const media = parsePromptMedia((await loadPromptById(sql(), live.id))!.media);
+    expect(media.video?.staging_key).toBe(key);
+    expect(media.video?.sha256).toBe('a'.repeat(64));
+    // 57.7MB rode past the door as a few hundred bytes of JSON — the whole point.
+    expect(receipt.length).toBeLessThan(300);
+  });
+
+  it('refuses a receipt whose object is not in storage', async () => {
+    const live = (await loadPromptBySlug(sql(), 'kitchen-tutorial-overhead'))!;
+    const outcome = await harness.run('prompt.update', {
+      id: live.id,
+      slug: live.slug,
+      title: live.title,
+      titleKo: live.titleKo ?? '',
+      promptText: live.promptText,
+      useCase: 'tutorial',
+      handle: '',
+      textVisibility: live.textVisibility,
+      featured: '',
+      videoRef: JSON.stringify({
+        key: `content/prompt/upload/${crypto.randomUUID()}.mp4`,
+        sha256: 'b'.repeat(64),
+        mime: 'video/mp4',
+        size: 1000,
+      }),
+    });
+    expect(outcome).toMatchObject({ ok: false, code: 'upload', detail: 'video: upload_missing' });
+  });
+
+  /** A receipt is a key the SERVER minted. Anything else is someone naming an object they want. */
+  it('refuses a receipt pointing outside the direct-upload namespace', () => {
+    expect(parseStagedUpload('')).toBeNull();
+    expect(parseStagedUpload('not json')).toBeNull();
+    for (const key of [
+      'content/prompt/9a000000-0000-4000-8000-000000000001/x.mp4',
+      'content/rev/abc/x.mp4',
+      '../../../etc/passwd',
+      'content/prompt/upload/../../secret.mp4',
+    ]) {
+      const receipt = JSON.stringify({ key, sha256: 'a'.repeat(64), mime: 'video/mp4', size: 1 });
+      expect(parseStagedUpload(receipt), key).toBeNull();
+    }
+    // …and a digest that is not a digest.
+    expect(
+      parseStagedUpload(
+        JSON.stringify({
+          key: `content/prompt/upload/${crypto.randomUUID()}.mp4`,
+          sha256: 'nope',
+          mime: 'video/mp4',
+          size: 1,
+        }),
+      ),
+    ).toBeNull();
+  });
+
   it('refuses an oversized upload with the upload code, before writing a row', async () => {
-    const huge = new File([new Uint8Array(33 * 1024 * 1024)], 'big.mp4', { type: 'video/mp4' });
+    const huge = new File([new Uint8Array(VIDEO_MAX_BYTES + 1)], 'big.mp4', { type: 'video/mp4' });
     const outcome = await harness.run('prompt.create', {
       ...authoring,
       poster: upload('poster.png', 'POSTER-BYTES', 'image/png'),

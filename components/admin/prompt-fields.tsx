@@ -35,6 +35,9 @@ export function mediaDropLabels(a: Dictionary['admin']): MediaDropLabels {
     posterHint: a.mediaPosterHint,
     audioHeading: a.fieldPromptAudio,
     audioZone: a.mediaAudioZone,
+    uploading: a.mediaUploading,
+    uploaded: a.mediaUploaded,
+    uploadFailed: a.mediaUploadFailed,
   };
 }
 

@@ -2,7 +2,12 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { Viewer } from '@/lib/auth/identity';
 import { countRecentSubmissions, loadPromptBySlug, loadSubmissionsByAuthor } from '@/lib/prompts/repo';
 import { isRateLimited, submitPrompt, uniqueSlug } from '@/lib/prompts/submit';
-import { PROMPT_TEXT_MAX, RATE_WINDOW_HOURS, SUBMISSIONS_PER_DAY } from '@/lib/prompts/schemas';
+import {
+  PROMPT_TEXT_MAX,
+  RATE_WINDOW_HOURS,
+  SUBMISSIONS_PER_DAY,
+  VIDEO_MAX_BYTES,
+} from '@/lib/prompts/schemas';
 import { FIXTURE_USERS } from '../../scripts/fixtures';
 import { emptyPromptHarness, type PromptHarness } from '../helpers/prompts';
 
@@ -143,7 +148,7 @@ describe('submitPrompt (§13.1/E)', () => {
   });
 
   it('refuses an oversized upload and leaves no half-made row behind', async () => {
-    const huge = new File([new Uint8Array(33 * 1024 * 1024)], 'big.mp4', { type: 'video/mp4' });
+    const huge = new File([new Uint8Array(VIDEO_MAX_BYTES + 1)], 'big.mp4', { type: 'video/mp4' });
     const result = await submitPrompt(deps(), submitter, input({ video: huge }));
     expect(result).toEqual({ ok: false, code: 'upload', detail: 'too_large' });
     expect(await countRecentSubmissions(harness.sql, FIXTURE_USERS.free.id, RATE_WINDOW_HOURS)).toBe(0);

@@ -27,6 +27,22 @@ export function promptStagingKey(promptId: string, ext: string): string {
   return `content/prompt/${promptId}/${randomUUID()}.${ext}`;
 }
 
+/**
+ * The key for a DIRECT browser upload (2026-08-15), which is minted before a prompt id exists.
+ *
+ * `content/prompt/upload/{uuid}.{ext}`. The prompt-id folder in the key above is filing, not
+ * correctness — a staging object is private, is referenced by the row that points at it, and is
+ * copied to a content-addressed public key at publish. A create form has no row yet, so the upload
+ * lands in one shared folder rather than in a folder named after an id we would have to invent and
+ * then hope the form actually used.
+ *
+ * Minted SERVER-side from a uuid: a caller cannot choose where in the bucket to write, which is the
+ * whole reason handing a signed URL to a browser is safe.
+ */
+export function directUploadKey(filename: string, mime: string): string {
+  return `content/prompt/upload/${randomUUID()}.${extensionFor(filename, mime)}`;
+}
+
 export function sha256Hex(bytes: Uint8Array): string {
   return createHash('sha256').update(bytes).digest('hex');
 }

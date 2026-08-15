@@ -87,8 +87,9 @@ describe('upload caps (§13.1)', () => {
     expect(checkUpload(base)).toBeNull();
   });
 
-  it('refuses anything over 32MB, measured over the bytes', () => {
-    expect(VIDEO_MAX_BYTES).toBe(32 * 1024 * 1024);
+  it('refuses anything over the cap, measured over the bytes', () => {
+    // Raised to 64MB on 2026-08-15: a real 15s export is 57.7MB (founder's CapCut file).
+    expect(VIDEO_MAX_BYTES).toBe(64 * 1024 * 1024);
     expect(checkUpload({ ...base, sizeBytes: VIDEO_MAX_BYTES + 1 })).toBe('too_large');
     expect(checkUpload({ ...base, sizeBytes: VIDEO_MAX_BYTES })).toBeNull();
   });
