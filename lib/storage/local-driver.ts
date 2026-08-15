@@ -49,6 +49,11 @@ export function createLocalStorageDriver(rootDir?: string): StorageDriver {
     // `.storage/` is a directory on disk; nothing serves it over HTTP. The gateway streams instead.
     servesSignedUrls: false,
 
+    /** No service to PUT to — the client posts the file inline, as it always did. */
+    async signedUploadUrl() {
+      return null;
+    },
+
     async putStaging(key, bytes, _contentType) {
       const path = objectPath(root, STAGING_BUCKET, key);
       await mkdir(dirname(path), { recursive: true });

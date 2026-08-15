@@ -870,6 +870,10 @@ export const ko: Dictionary = {
     mediaPosterHint: '영상에서 프레임을 고르거나, 이미지를 직접 올릴 수 있습니다.',
     fieldPromptAudio: '첨부 오디오 파일',
     mediaAudioZone: '오디오 파일을 끌어다 놓거나 클릭해서 선택하세요',
+    /** Direct-to-storage upload (2026-08-15) — Vercel은 4.5MB 넘는 요청 본문을 거부한다. */
+    mediaUploading: '업로드 중… {percent}%',
+    mediaUploaded: '업로드 완료 — 저장을 누르면 반영됩니다.',
+    mediaUploadFailed: '업로드 실패. 파일을 다시 선택하거나 잠시 후 다시 시도해 주세요.',
     promptVisibilityHint: '커뮤니티 제출은 항상 공개입니다. 데이터베이스가 강제합니다.',
     approve: '승인',
     rejectLabel: '반려',

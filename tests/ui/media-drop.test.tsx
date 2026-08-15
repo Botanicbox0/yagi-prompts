@@ -2,6 +2,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { getDictionary } from '@/lib/i18n/dictionaries';
 import { MediaDrop, type MediaDropLabels } from '@/components/admin/media-drop';
+import { mediaDropLabels } from '@/components/admin/prompt-fields';
 
 /**
  * Founder direction (2026-08-13) — the admin media fields' drag/drop + frame-picker enhancement.
@@ -13,21 +14,9 @@ import { MediaDrop, type MediaDropLabels } from '@/components/admin/media-drop';
  * client-only behavior on top; their absence from static markup is the design, not a gap.
  */
 
+/** The real mapping the admin screens use — one definition, so a new label cannot be forgotten. */
 function labelsOf(): MediaDropLabels {
-  const a = getDictionary('ko').admin;
-  return {
-    videoZone: a.mediaVideoZone,
-    videoReplace: a.mediaVideoReplace,
-    posterHeading: a.fieldPromptPoster,
-    frameScrub: a.mediaFrameScrub,
-    framePick: a.mediaFramePick,
-    framePicked: a.mediaFramePicked,
-    posterZone: a.mediaPosterZone,
-    posterPicked: a.mediaPosterPicked,
-    posterHint: a.mediaPosterHint,
-    audioHeading: a.fieldPromptAudio,
-    audioZone: a.mediaAudioZone,
-  };
+  return mediaDropLabels(getDictionary('ko').admin);
 }
 
 describe('MediaDrop (admin media enhancement)', () => {

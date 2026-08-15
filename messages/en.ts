@@ -917,6 +917,10 @@ export const en = {
     mediaPosterHint: 'Pick a frame from the clip, or upload an image of your own.',
     fieldPromptAudio: 'Attached audio file',
     mediaAudioZone: 'Drop an audio file here, or click to pick',
+    /** Direct-to-storage upload (2026-08-15) — Vercel refuses a request body over 4.5MB. */
+    mediaUploading: 'Uploading… {percent}%',
+    mediaUploaded: 'Uploaded — press save to apply it.',
+    mediaUploadFailed: 'Upload failed. Pick the file again, or retry in a moment.',
     promptVisibilityHint: 'Community submissions are always public — the database enforces it.',
     approve: 'Approve',
     rejectLabel: 'Reject',

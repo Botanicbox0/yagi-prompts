@@ -72,6 +72,22 @@ export function createSupabaseStorageDriver(client?: SupabaseClient): StorageDri
       }
     },
 
+    /**
+     * `createSignedUploadUrl` — the browser PUTs the bytes straight to Supabase (2026-08-15).
+     *
+     * One key, one URL, `upsert:false` semantics inherited from the staging bucket: the key carries
+     * a uuid, so a replayed URL can only rewrite the object the same admin just created. The token
+     * is short-lived and scoped to that single path, which is why handing it to the browser is safe
+     * in a way that handing out the service-role key would never be.
+     */
+    async signedUploadUrl(key: string, _contentType: string) {
+      const { data, error } = await db().storage.from(STAGING_BUCKET).createSignedUploadUrl(key);
+      if (error || !data) {
+        throw new Error(`signed upload url failed: ${key} — ${error?.message ?? 'no url'}`);
+      }
+      return data.signedUrl;
+    },
+
     async exists(bucket: Bucket, key: string) {
       const { data, error } = await db().storage.from(bucket).exists(key);
       if (error && !isMissing(error)) {
