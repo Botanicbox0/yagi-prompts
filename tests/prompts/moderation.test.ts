@@ -221,7 +221,7 @@ describe('prompt moderation operations (§13.2/F)', () => {
       key,
       sha256: 'a'.repeat(64),
       mime: 'video/mp4',
-      size: 57_700_000,
+      size: 11_600_000,
     });
     const outcome = await harness.run('prompt.update', {
       id: live.id,
@@ -240,7 +240,7 @@ describe('prompt moderation operations (§13.2/F)', () => {
     const media = parsePromptMedia((await loadPromptById(sql(), live.id))!.media);
     expect(media.video?.staging_key).toBe(key);
     expect(media.video?.sha256).toBe('a'.repeat(64));
-    // 57.7MB rode past the door as a few hundred bytes of JSON — the whole point.
+    // 11.1MB rode past the 4.5MB door as a few hundred bytes of JSON — the whole point.
     expect(receipt.length).toBeLessThan(300);
   });
 

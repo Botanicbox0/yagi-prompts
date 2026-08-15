@@ -90,9 +90,11 @@ describe('submission schema (§13.1)', () => {
    * moderation, and nothing said the two were the same decision.
    */
   it('takes a full shot-by-shot brief on every path that accepts prompt text', () => {
-    expect(PROMPT_TEXT_MAX).toBeGreaterThanOrEqual(12000);
-    const brief = 'A. '.repeat(1618); // 4,854 chars — the founder's segment, to the character.
-    expect(brief.length).toBeGreaterThan(4800);
+    // 15,540 was the founder's SECOND brief the same day (a timecoded 30s reel). The cap has to
+    // clear the real artefact, not the one we pictured when we wrote the number.
+    expect(PROMPT_TEXT_MAX).toBeGreaterThanOrEqual(16000);
+    const brief = 'A. '.repeat(5200); // 15,600 chars — bigger than the real one.
+    expect(brief.length).toBeGreaterThan(15540);
 
     expect(SubmissionSchema.safeParse({ ...ok, promptText: brief }).success, 'submission').toBe(true);
     expect(

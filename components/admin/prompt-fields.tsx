@@ -38,6 +38,8 @@ export function mediaDropLabels(a: Dictionary['admin']): MediaDropLabels {
     uploading: a.mediaUploading,
     uploaded: a.mediaUploaded,
     uploadFailed: a.mediaUploadFailed,
+    blockedUploading: a.mediaBlockedUploading,
+    blockedFailed: a.mediaBlockedFailed,
   };
 }
 

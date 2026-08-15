@@ -35,6 +35,8 @@ export interface MediaDropLabels {
   uploading: string;
   uploaded: string;
   uploadFailed: string;
+  blockedUploading: string;
+  blockedFailed: string;
 }
 
 function assign(input: HTMLInputElement | null, file: File | null): void {
@@ -66,6 +68,17 @@ function firstFile(items: DataTransfer | null, kind: 'video' | 'image' | 'audio'
  * the input and the operation refuses it the way it always did.
  */
 const STAGING_URL_PATH = '/api/admin/staging-url';
+
+/**
+ * The gateway's own ceiling, minus headroom for the rest of the form.
+ *
+ * Everything above this MUST have travelled directly to storage, and a submit carrying such a file
+ * inline is not a fallback — it is a guaranteed 413 with a Vercel error page instead of the admin.
+ * The founder saw exactly that twice (2026-08-15): the first time because the bytes went through the
+ * door at all, the second time because a failed/incomplete direct upload silently handed the file
+ * back to the old path. So this number is a REFUSAL, not a hint.
+ */
+const INLINE_MAX_BYTES = 4 * 1024 * 1024;
 
 type UploadState =
   | { phase: 'idle' }
@@ -154,6 +167,44 @@ export function MediaDrop({
   const [enhanced, setEnhanced] = useState(false);
   useEffect(() => setEnhanced(true), []);
 
+  const rootRef = useRef<HTMLDivElement>(null);
+  const uploadsRef = useRef(uploads);
+  uploadsRef.current = uploads;
+  const [blocked, setBlocked] = useState<string | null>(null);
+
+  /**
+   * Hold the SUBMIT while bytes are still moving, or after a direct upload failed (2026-08-15).
+   *
+   * This is the half that was missing when the founder hit `413 PAYLOAD_TOO_LARGE` a second time. A
+   * 57.7MB file takes real seconds to reach storage, and until it lands the file input still holds
+   * it — so pressing save early posted the whole clip through a door that refuses 4.5MB. The submit
+   * listener sits on the form itself rather than on a button, because Enter in any field submits too.
+   */
+  useEffect(() => {
+    const form = rootRef.current?.closest('form');
+    if (!form) return;
+    const onSubmit = (event: Event) => {
+      const busy = (['video', 'poster', 'audio'] as const).filter((kind) => {
+        const state = uploadsRef.current[kind];
+        if (state.phase === 'uploading' || state.phase === 'failed') return true;
+        const file = { video: videoInputRef, poster: posterInputRef, audio: audioInputRef }[
+          kind
+        ].current?.files?.[0];
+        // A big file still sitting in the input means the direct upload did not happen.
+        return file !== undefined && file.size > INLINE_MAX_BYTES;
+      });
+      if (busy.length === 0) {
+        setBlocked(null);
+        return;
+      }
+      event.preventDefault();
+      const uploading = busy.some((kind) => uploadsRef.current[kind].phase === 'uploading');
+      setBlocked(uploading ? labels.blockedUploading : labels.blockedFailed);
+    };
+    form.addEventListener('submit', onSubmit);
+    return () => form.removeEventListener('submit', onSubmit);
+  }, [labels.blockedUploading, labels.blockedFailed]);
+
   const PLAIN_INPUT =
     'w-full border border-hairline bg-transparent px-2.5 py-1.5 font-mono text-code outline-none focus:border-accent';
 
@@ -189,7 +240,10 @@ export function MediaDrop({
       if (!minted.ok) throw new Error(`sign_failed_${minted.status}`);
       const grant = (await minted.json()) as { direct?: boolean; key?: string; url?: string };
       if (grant.direct !== true || !grant.key || !grant.url) {
-        // No signing service on this deployment — the inline path is correct here.
+        // No signing service on this deployment. Inline is correct for a SMALL file and impossible
+        // for a large one, so the large case is a failure the founder can read, not a silent retry
+        // of the thing that already 413'd.
+        if (file.size > INLINE_MAX_BYTES) throw new Error('no_direct_upload');
         setUploads((current) => ({ ...current, [kind]: { phase: 'idle' } }));
         return;
       }
@@ -289,7 +343,15 @@ export function MediaDrop({
     ].join(' ');
 
   return (
-    <div data-media-drop className="flex flex-col gap-4">
+    <div ref={rootRef} data-media-drop className="flex flex-col gap-4">
+      {blocked && (
+        <p
+          data-upload-blocked
+          className="border border-accent px-3 py-2 font-mono text-[0.72rem] text-accent"
+        >
+          {blocked}
+        </p>
+      )}
       {/* --- the clip ------------------------------------------------------ */}
       {enhanced && (
         <div
