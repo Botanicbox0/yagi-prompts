@@ -371,23 +371,46 @@ describe('prompt moderation operations (§13.2/F)', () => {
  * Source-level, because the page itself is `server-only` and cannot be imported into vitest.
  */
 describe('admin prompts screen contract (§3.8 / §13.2)', () => {
-  const page = read('app', '(admin)', 'admin', 'prompts', 'page.tsx');
+  /** Three screens since 2026-08-15: the board, the new-prompt page, and one prompt's page. */
+  const board = read('app', '(admin)', 'admin', 'prompts', 'page.tsx');
+  const create = read('app', '(admin)', 'admin', 'prompts', 'new', 'page.tsx');
+  const item = read('app', '(admin)', 'admin', 'prompts', '[id]', 'page.tsx');
+  const fields = read('components', 'admin', 'prompt-fields.tsx');
+  const screens = { board, create, item };
+  const surface = Object.values(screens).join('\n');
 
   it('is dynamic and posts through OpForm only', () => {
-    expect(page).toContain("export const dynamic = 'force-dynamic'");
-    expect(page).toContain('OpForm');
-    // The screen never names the door itself — OpForm owns that (now `POST /admin/do`).
-    expect(page).not.toContain('ADMIN_ACTION_PATH');
-    expect(page).not.toContain('method="post"');
+    for (const [name, src] of Object.entries(screens)) {
+      expect(src, name).toContain("export const dynamic = 'force-dynamic'");
+      // The screens never name the door itself — OpForm owns that (`POST /admin/do`).
+      expect(src, name).not.toContain('ADMIN_ACTION_PATH');
+      expect(src, name).not.toContain('method="post"');
+    }
+    expect(surface).toContain('OpForm');
   });
 
-  it('offers the whole §13.2/F surface', () => {
+  it('offers the whole §13.2/F surface across the three screens', () => {
     for (const op of Object.keys(PROMPT_OPERATIONS)) {
-      expect(page, op).toContain(`op="${op}"`);
+      expect(surface, op).toContain(`op="${op}"`);
     }
   });
 
+  /**
+   * The founder's complaint, as an assertion (2026-08-15): "스크롤 계속 내려서 추가 등록해야 해서
+   * 불편함." The authoring form sat under every published prompt's inline editor, so the board grew
+   * a screenful per prompt. It belongs on its own route, reached by a button in the header.
+   */
+  it('keeps the authoring form OFF the board', () => {
+    expect(board).not.toContain('op="prompt.create"');
+    expect(board).not.toContain('op="prompt.update"');
+    expect(create).toContain('op="prompt.create"');
+    expect(item).toContain('op="prompt.update"');
+    // …and the board links to it rather than hiding it further down.
+    expect(board).toContain('ADMIN_PROMPT_NEW_PATH');
+    expect(board).toContain('data-prompt-new');
+  });
+
   it('defaults YAGI text visibility to pro (§13.3-2)', () => {
-    expect(page).toContain('defaultValue="pro"');
+    expect(fields).toContain("row?.textVisibility ?? 'pro'");
   });
 });

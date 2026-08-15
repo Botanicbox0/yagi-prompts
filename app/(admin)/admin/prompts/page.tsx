@@ -1,61 +1,34 @@
 import { getSqlRunner } from '@/lib/db/connect';
 import { getDictionary } from '@/lib/i18n/dictionaries';
 import { getLocaleFromHeaders } from '@/lib/i18n/server';
-import { formatDate } from '@/lib/i18n/format';
 import { loadAllPrompts, type PromptRow } from '@/lib/prompts/repo';
-import { promptAdminRef } from '@/lib/media/admin-authorize';
-import { adminMediaPath } from '@/lib/media/admin-authorize';
 import {
-  DEFAULT_PROMPT_MODEL,
-  USE_CASES,
-  parsePromptMedia,
-  slugify,
-} from '@/lib/prompts/schemas';
-import { ADMIN_PROMPTS_PATH } from '@/lib/prompts/links';
-import { VISIBILITY_ORDER } from '@/lib/content/visibility';
-import {
-  AdminShell,
-  BUTTON,
-  BUTTON_PRIMARY,
-  Field,
-  INPUT,
-  LABEL,
-  OpForm,
-  OutcomeBanner,
-  Panel,
-} from '@/components/admin/chrome';
-import { MediaDrop, type MediaDropLabels } from '@/components/admin/media-drop';
-import { useCaseLabel } from '@/components/prompts/labels';
-import type { Dictionary } from '@/lib/i18n/dictionaries';
-
-/** The drag/drop + frame-picker labels, shared by the authoring and the edit form. */
-function mediaDropLabels(a: Dictionary['admin']): MediaDropLabels {
-  return {
-    videoZone: a.mediaVideoZone,
-    videoReplace: a.mediaVideoReplace,
-    posterHeading: a.fieldPromptPoster,
-    frameScrub: a.mediaFrameScrub,
-    framePick: a.mediaFramePick,
-    framePicked: a.mediaFramePicked,
-    posterZone: a.mediaPosterZone,
-    posterPicked: a.mediaPosterPicked,
-    posterHint: a.mediaPosterHint,
-    audioHeading: a.fieldPromptAudio,
-    audioZone: a.mediaAudioZone,
-  };
-}
+  ADMIN_PROMPTS_PATH,
+  ADMIN_PROMPT_NEW_PATH,
+  adminPromptPath,
+} from '@/lib/prompts/links';
+import { AdminShell, BUTTON_PRIMARY, INPUT, OutcomeBanner } from '@/components/admin/chrome';
+import { PromptCard } from '@/components/admin/prompt-fields';
 
 /**
- * `/admin/prompts` — PLAN §13.2/F: the moderation queue and YAGI authoring, in one screen.
+ * `/admin/prompts` — the BOARD (rebuilt 2026-08-15).
  *
- * Same doctrine as the rest of the CMS (§3.8/§4): a dense utilitarian tool, every control a plain
- * `<form>` posting to the ONE guarded server action, and no client JavaScript anywhere. The
- * operations themselves live in `lib/admin/prompt-operations.ts` inside the same registry every
- * other admin mutation is in, which is what makes `tests/admin/auth.test.ts` cover them without
- * being told they exist.
+ * Founder direction, with a reference screenshot: "관리자 페이지에서 프롬프트 등록하는 거 방식
+ * 불편함. 내가 스크롤 계속 내려서 추가 등록해야 해서… 지금 공개된 프롬프트 박스로 볼 수 있고 새로
+ * 추가 가능한 구조."
  *
- * Order is the working order: what needs a decision, then what is live, then the authoring form,
- * then the rejections (kept visible — a rejection the moderator cannot review is a black hole).
+ * What this replaced: ONE page that rendered the moderation queue, then a complete inline editor for
+ * every published prompt, then — at the very bottom — the authoring form. Publishing a prompt meant
+ * scrolling past the entire catalogue, and the page grew a screenful longer with each one. That is a
+ * layout whose cost rises with success.
+ *
+ * The board is a wall of cards with the ADD button in the header, and the two things a card can lead
+ * to are their own routes: `/admin/prompts/new` and `/admin/prompts/{id}`. Consequences worth
+ * naming:
+ *   · the page no longer grows an editor per row, so it stays one screen tall at any catalogue size;
+ *   · a card is poster-led, because the founder recognises their own work by the frame, not the slug;
+ *   · filtering and search are LINKS and a GET form. §3.8's no-JS rule is not relaxed for the admin,
+ *     and a tab that is a link is also a URL a moderator can bookmark or send to themselves.
  */
 export const dynamic = 'force-dynamic';
 
@@ -66,290 +39,25 @@ const one = (params: SearchParams, key: string): string | undefined => {
   return typeof value === 'string' ? value : undefined;
 };
 
-type Dict = ReturnType<typeof getDictionary>;
+/** The tabs, in working order: what needs a decision first, then what is live. */
+const TABS = ['all', 'pending', 'published', 'archived', 'rejected'] as const;
+type Tab = (typeof TABS)[number];
 
-function UseCaseChecks({
-  dict,
-  selected,
-}: {
-  dict: Dict;
-  selected: readonly string[];
-}) {
-  const set = new Set(selected);
-  return (
-    <div className="flex flex-wrap gap-2">
-      {USE_CASES.map((value) => (
-        <label
-          key={value}
-          className="flex items-center gap-1.5 border border-hairline px-2 py-1 font-label text-[0.62rem] tracking-[0.1em] uppercase"
-        >
-          <input
-            type="checkbox"
-            name="useCase"
-            value={value}
-            defaultChecked={set.has(value)}
-            className="h-3 w-3"
-            style={{ accentColor: 'var(--accent)' }}
-          />
-          {useCaseLabel(dict, value)}
-        </label>
-      ))}
-    </div>
-  );
+function isTab(value: string | undefined): value is Tab {
+  return value !== undefined && (TABS as readonly string[]).includes(value);
 }
 
-/** Staged (unpublished) media, playable — the whole point of a moderation queue. */
-function StagedMedia({ row, dict }: { row: PromptRow; dict: Dict }) {
-  const media = parsePromptMedia(row.media);
-  const a = dict.admin;
-  if (!media.poster && !media.video) {
-    return <p className="font-mono text-[0.72rem] opacity-50">{a.noMedia}</p>;
-  }
-  return (
-    <div className="flex flex-col gap-2">
-      <span className={LABEL}>{a.previewMedia}</span>
-      {media.video && (
-        <video
-          src={adminMediaPath(promptAdminRef(row.id, 'video'))}
-          controls
-          muted
-          playsInline
-          preload="metadata"
-          className="w-full max-w-sm border border-hairline"
-          {...(media.poster
-            ? { poster: adminMediaPath(promptAdminRef(row.id, 'poster')) }
-            : {})}
-        />
-      )}
-      {!media.video && media.poster && (
-        // eslint-disable-next-line @next/next/no-img-element -- staging object behind the admin gate
-        <img
-          src={adminMediaPath(promptAdminRef(row.id, 'poster'))}
-          alt=""
-          className="w-full max-w-sm border border-hairline"
-        />
-      )}
-    </div>
-  );
+function inTab(row: PromptRow, tab: Tab): boolean {
+  return tab === 'all' ? true : row.status === tab;
 }
 
-function QueueItem({ row, dict }: { row: PromptRow; dict: Dict }) {
-  const a = dict.admin;
-  return (
-    <li data-prompt-queue={row.slug} className="border border-hairline p-4">
-      <div className="flex flex-wrap items-baseline justify-between gap-3">
-        <span className="font-mono text-code">{row.title}</span>
-        <span className="font-label text-[0.62rem] tracking-[0.1em] uppercase opacity-50">
-          {a.sourceCommunity} · {formatDate(row.createdAt, 'en') ?? ''}
-        </span>
-      </div>
-
-      <pre className="mt-3 max-h-64 overflow-auto border border-hairline bg-transparent p-3 font-mono text-[0.75rem] whitespace-pre-wrap">
-        {row.promptText}
-      </pre>
-
-      <div className="mt-4">
-        <StagedMedia row={row} dict={dict} />
-      </div>
-
-      <div className="mt-5 grid gap-5 lg:grid-cols-2">
-        <OpForm op="prompt.approve" back={ADMIN_PROMPTS_PATH} className="flex flex-col gap-3">
-          <input type="hidden" name="id" value={row.id} />
-          <Field label={a.fieldPromptSlug}>
-            <input
-              type="text"
-              name="slug"
-              defaultValue={row.slug || slugify(row.title, `prompt-${row.id.slice(0, 8)}`)}
-              className={INPUT}
-            />
-          </Field>
-          <Field label={a.fieldPromptHandle}>
-            <input type="text" name="handle" defaultValue={row.authorHandle ?? ''} className={INPUT} />
-          </Field>
-          <div>
-            <span className={LABEL}>{a.colUseCase}</span>
-            <div className="mt-1.5">
-              <UseCaseChecks dict={dict} selected={row.useCase} />
-            </div>
-          </div>
-          <label className="flex items-center gap-2 font-label text-eyebrow uppercase">
-            <input type="checkbox" name="featured" className="h-3.5 w-3.5" style={{ accentColor: 'var(--accent)' }} />
-            {a.fieldPromptFeatured}
-          </label>
-          <div>
-            <button type="submit" className={BUTTON_PRIMARY}>
-              {a.approve}
-            </button>
-          </div>
-        </OpForm>
-
-        <OpForm op="prompt.reject" back={ADMIN_PROMPTS_PATH} className="flex flex-col gap-3">
-          <input type="hidden" name="id" value={row.id} />
-          <Field label={a.rejectReason} hint={a.rejectReasonHint}>
-            <textarea name="reason" rows={4} className={INPUT} />
-          </Field>
-          <div>
-            <button type="submit" className={BUTTON}>
-              {a.rejectLabel}
-            </button>
-          </div>
-        </OpForm>
-      </div>
-    </li>
-  );
-}
-
-function PublishedItem({ row, dict }: { row: PromptRow; dict: Dict }) {
-  const a = dict.admin;
-  const existingMedia = parsePromptMedia(row.media);
-  return (
-    <li data-prompt-published={row.slug} className="border border-hairline p-4">
-      <div className="flex flex-wrap items-baseline justify-between gap-3">
-        <span className="font-mono text-code">{row.title}</span>
-        <span className="font-label text-[0.62rem] tracking-[0.1em] uppercase opacity-50">
-          {row.source === 'yagi' ? a.sourceYagi : a.sourceCommunity} · {row.textVisibility}
-          {row.featured ? ' · ★' : ''}
-        </span>
-      </div>
-
-      <OpForm op="prompt.update" back={ADMIN_PROMPTS_PATH} className="mt-4 flex flex-col gap-3">
-        <input type="hidden" name="id" value={row.id} />
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Field label={a.fieldPromptTitle}>
-            <input type="text" name="title" defaultValue={row.title} className={INPUT} />
-          </Field>
-          <Field label={a.fieldPromptTitleKo}>
-            <input type="text" name="titleKo" defaultValue={row.titleKo ?? ''} className={INPUT} />
-          </Field>
-          <Field label={a.fieldPromptSlug}>
-            <input type="text" name="slug" defaultValue={row.slug} className={INPUT} />
-          </Field>
-          <Field label={a.fieldPromptHandle}>
-            <input type="text" name="handle" defaultValue={row.authorHandle ?? ''} className={INPUT} />
-          </Field>
-        </div>
-
-        <Field label={a.fieldPromptBody}>
-          <textarea name="promptText" rows={6} defaultValue={row.promptText} className={INPUT} />
-        </Field>
-
-        <Field label={a.fieldSourceUrl} hint={a.sourceUrlHint}>
-          <input
-            type="url"
-            name="sourceUrl"
-            defaultValue={row.sourceUrl ?? ''}
-            placeholder="https://"
-            className={INPUT}
-          />
-        </Field>
-
-        <div className="grid gap-3 lg:grid-cols-2">
-          <Field label={a.fieldProcess} hint={a.processHint}>
-            <textarea
-              name="processMd"
-              rows={10}
-              defaultValue={row.processMd ?? ''}
-              className={INPUT}
-            />
-          </Field>
-          <Field label={a.fieldProcessKo}>
-            <textarea
-              name="processMdKo"
-              rows={10}
-              defaultValue={row.processMdKo ?? ''}
-              className={INPUT}
-            />
-          </Field>
-        </div>
-
-        <div>
-          <span className={LABEL}>{a.colUseCase}</span>
-          <div className="mt-1.5">
-            <UseCaseChecks dict={dict} selected={row.useCase} />
-          </div>
-        </div>
-
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Field label={a.fieldPromptVisibility} hint={a.promptVisibilityHint}>
-            <select name="textVisibility" defaultValue={row.textVisibility} className={INPUT}>
-              {VISIBILITY_ORDER.map((value) => (
-                <option key={value} value={value}>
-                  {value}
-                </option>
-              ))}
-            </select>
-          </Field>
-          <div className="flex items-end">
-            <label className="flex items-center gap-2 font-label text-eyebrow uppercase">
-              <input
-                type="checkbox"
-                name="featured"
-                defaultChecked={row.featured}
-                className="h-3.5 w-3.5"
-                style={{ accentColor: 'var(--accent)' }}
-              />
-              {a.fieldPromptFeatured}
-            </label>
-          </div>
-        </div>
-
-        {/* Founder question (2026-08-14): re-picking a thumbnail frame must not require
-            re-uploading the clip — the panel loads what this row already has. */}
-        <Field label={a.fieldPromptVideo} hint={a.promptMediaHint}>
-          <MediaDrop
-            videoName="video"
-            posterName="poster"
-            audioName="audio"
-            labels={mediaDropLabels(a)}
-            {...(existingMedia.video
-              ? { existingVideoSrc: adminMediaPath(promptAdminRef(row.id, 'video')) }
-              : {})}
-            {...(existingMedia.poster
-              ? { existingPosterSrc: adminMediaPath(promptAdminRef(row.id, 'poster')) }
-              : {})}
-          />
-        </Field>
-
-        <div>
-          <button type="submit" className={BUTTON_PRIMARY}>
-            {a.saveEdits}
-          </button>
-        </div>
-      </OpForm>
-
-      <div className="mt-3 flex flex-wrap gap-2">
-        {/* Founder direction (2026-08-13): free presets are ONE press. YAGI rows only — a
-            community row is always public, so a toggle there would be a control that lies. */}
-        {row.source === 'yagi' && row.textVisibility !== 'hidden' && (
-          <OpForm op="prompt.visibility" back={ADMIN_PROMPTS_PATH}>
-            <input type="hidden" name="id" value={row.id} />
-            <input
-              type="hidden"
-              name="textVisibility"
-              value={row.textVisibility === 'pro' ? 'public' : 'pro'}
-            />
-            <button type="submit" className={BUTTON} data-visibility-toggle={row.slug}>
-              {row.textVisibility === 'pro' ? a.makePublic : a.makePro}
-            </button>
-          </OpForm>
-        )}
-        <OpForm op="prompt.feature" back={ADMIN_PROMPTS_PATH}>
-          <input type="hidden" name="id" value={row.id} />
-          <input type="hidden" name="featured" value={row.featured ? 'false' : 'true'} />
-          <button type="submit" className={BUTTON}>
-            {row.featured ? a.unfeature : a.feature}
-          </button>
-        </OpForm>
-        <OpForm op="prompt.archive" back={ADMIN_PROMPTS_PATH}>
-          <input type="hidden" name="id" value={row.id} />
-          <input type="hidden" name="archived" value={row.status === 'archived' ? 'false' : 'true'} />
-          <button type="submit" className={BUTTON}>
-            {row.status === 'archived' ? a.unarchive : a.archive}
-          </button>
-        </OpForm>
-      </div>
-    </li>
-  );
+/** Substring over the fields a moderator actually remembers: both titles, the slug, the handle. */
+function matches(row: PromptRow, query: string): boolean {
+  if (query === '') return true;
+  const hay = [row.title, row.titleKo ?? '', row.slug, row.authorHandle ?? '']
+    .join(' ')
+    .toLowerCase();
+  return hay.includes(query);
 }
 
 export default async function AdminPromptsPage({
@@ -366,17 +74,44 @@ export default async function AdminPromptsPage({
   const a = dict.admin;
   const rows: PromptRow[] = sql === null ? [] : await loadAllPrompts(sql);
 
-  const pending = rows.filter((row) => row.status === 'pending');
-  const live = rows.filter((row) => row.status === 'published' || row.status === 'archived');
-  const rejected = rows.filter((row) => row.status === 'rejected');
+  const rawTab = one(params, 'tab');
+  const tab: Tab = isTab(rawTab) ? rawTab : 'all';
+  const query = (one(params, 'q') ?? '').trim().toLowerCase();
+
+  const counts: Record<Tab, number> = {
+    all: rows.length,
+    pending: rows.filter((row) => row.status === 'pending').length,
+    published: rows.filter((row) => row.status === 'published').length,
+    archived: rows.filter((row) => row.status === 'archived').length,
+    rejected: rows.filter((row) => row.status === 'rejected').length,
+  };
+  const shown = rows.filter((row) => inTab(row, tab) && matches(row, query));
+
+  const tabHref = (value: Tab) => {
+    const search = new URLSearchParams();
+    if (value !== 'all') search.set('tab', value);
+    if (query !== '') search.set('q', query);
+    const rest = search.toString();
+    return rest === '' ? ADMIN_PROMPTS_PATH : `${ADMIN_PROMPTS_PATH}?${rest}`;
+  };
 
   return (
     <AdminShell dict={a} locale={locale} active="prompts">
-      <p className="text-accent font-label text-eyebrow uppercase">{a.navPrompts}</p>
-      <h1 className="mt-3 font-display text-[clamp(2rem,4vw,3rem)] leading-[0.95] font-black uppercase">
-        {a.promptsHeading}
-      </h1>
-      <p className="mt-3 max-w-detail text-body opacity-60">{a.promptsLede}</p>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <p className="text-accent font-label text-eyebrow uppercase">{a.navPrompts}</p>
+          <h1 className="mt-3 font-display text-[clamp(2rem,4vw,3rem)] leading-[0.95] font-black uppercase">
+            {a.promptsHeading}
+          </h1>
+          <p className="mt-3 max-w-detail text-body opacity-60">{a.promptsLede}</p>
+        </div>
+
+        {/* The whole point of the rebuild: adding a prompt is a button in the header, not a form
+            below the catalogue. */}
+        <a href={ADMIN_PROMPT_NEW_PATH} data-prompt-new className={BUTTON_PRIMARY}>
+          + {a.promptsNew}
+        </a>
+      </div>
 
       <OutcomeBanner
         dict={a}
@@ -385,132 +120,53 @@ export default async function AdminPromptsPage({
         {...(one(params, 'detail') ? { detail: one(params, 'detail')! } : {})}
       />
 
-      <Panel title={`${a.queueHeading} (${pending.length})`}>
-        {pending.length === 0 ? (
-          <p className="font-mono text-code opacity-60">{a.queueEmpty}</p>
-        ) : (
-          <ul className="flex flex-col gap-5">
-            {pending.map((row) => (
-              <QueueItem key={row.id} row={row} dict={dict} />
-            ))}
-          </ul>
-        )}
-      </Panel>
+      <div className="mt-8 flex flex-wrap items-center justify-between gap-4 border-b border-hairline pb-4">
+        <nav className="flex flex-wrap gap-1.5" aria-label={a.promptsFilterLabel}>
+          {TABS.map((value) => (
+            <a
+              key={value}
+              href={tabHref(value)}
+              data-tab={value}
+              aria-current={value === tab ? 'page' : undefined}
+              className={[
+                'border px-3 py-1.5 font-label text-[0.65rem] tracking-[0.1em] uppercase',
+                value === tab ? 'border-current bg-black text-white' : 'border-hairline opacity-60',
+              ].join(' ')}
+            >
+              {a.promptTabs[value]} {counts[value]}
+            </a>
+          ))}
+        </nav>
 
-      <Panel title={`${a.publishedHeading} (${live.length})`}>
-        {live.length === 0 ? (
-          <p className="font-mono text-code opacity-60">{a.publishedEmpty}</p>
-        ) : (
-          <ul className="flex flex-col gap-5">
-            {live.map((row) => (
-              <PublishedItem key={row.id} row={row} dict={dict} />
-            ))}
-          </ul>
-        )}
-      </Panel>
+        {/* A GET form: the query lands in the URL, which is what makes a filtered board shareable
+            and survivable across the redirect every mutation performs. */}
+        <form method="get" action={ADMIN_PROMPTS_PATH} className="flex items-center gap-2">
+          {tab !== 'all' && <input type="hidden" name="tab" value={tab} />}
+          <input
+            type="search"
+            name="q"
+            defaultValue={query}
+            placeholder={a.promptsSearch}
+            aria-label={a.promptsSearch}
+            className={`${INPUT} w-48`}
+          />
+        </form>
+      </div>
 
-      <Panel title={a.authorHeading}>
-        <p className="mb-4 max-w-detail font-mono text-[0.75rem] opacity-55">{a.authorLede}</p>
-        <OpForm op="prompt.create" back={ADMIN_PROMPTS_PATH} className="flex flex-col gap-4">
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Field label={a.fieldPromptTitle}>
-              <input type="text" name="title" className={INPUT} />
-            </Field>
-            <Field label={a.fieldPromptTitleKo}>
-              <input type="text" name="titleKo" className={INPUT} />
-            </Field>
-            <Field label={a.fieldPromptSlug} hint={a.promptSlugAutoHint}>
-              <input type="text" name="slug" className={INPUT} placeholder={a.promptSlugAutoHint} />
-            </Field>
-            <Field label={a.fieldItemModel}>
-              <input type="text" name="model" defaultValue={DEFAULT_PROMPT_MODEL} className={INPUT} />
-            </Field>
-          </div>
+      <p className="mt-5 font-mono text-[0.72rem] opacity-50">
+        {a.promptsCount.replace('{count}', String(shown.length))}
+      </p>
 
-          <Field label={a.fieldPromptBody}>
-            <textarea name="promptText" rows={8} className={INPUT} />
-          </Field>
-
-          <Field label={a.fieldSourceUrl} hint={a.sourceUrlHint}>
-            <input type="url" name="sourceUrl" placeholder="https://" className={INPUT} />
-          </Field>
-
-          {/* The making-of (2026-08-14). Optional, markdown, and NOT a forced locale pair — a
-              Korean-only write-up is honest content, not an incomplete translation. */}
-          <div className="grid gap-3 lg:grid-cols-2">
-            <Field label={a.fieldProcess} hint={a.processHint}>
-              <textarea name="processMd" rows={10} className={INPUT} />
-            </Field>
-            <Field label={a.fieldProcessKo}>
-              <textarea name="processMdKo" rows={10} className={INPUT} />
-            </Field>
-          </div>
-
-          <div>
-            <span className={LABEL}>{a.colUseCase}</span>
-            <div className="mt-1.5">
-              <UseCaseChecks dict={dict} selected={[]} />
-            </div>
-          </div>
-
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Field label={a.fieldPromptVisibility} hint={a.promptVisibilityHint}>
-              {/* §13.3-2 — YAGI text defaults to `pro`; a public teaser is a deliberate choice. */}
-              <select name="textVisibility" defaultValue="pro" className={INPUT}>
-                {VISIBILITY_ORDER.map((value) => (
-                  <option key={value} value={value}>
-                    {value}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            <div className="flex items-end">
-              <label className="flex items-center gap-2 font-label text-eyebrow uppercase">
-                <input
-                  type="checkbox"
-                  name="featured"
-                  className="h-3.5 w-3.5"
-                  style={{ accentColor: 'var(--accent)' }}
-                />
-                {a.fieldPromptFeatured}
-              </label>
-            </div>
-          </div>
-
-          <Field label={a.fieldPromptVideo} hint={a.promptMediaHint}>
-            <MediaDrop videoName="video" posterName="poster" audioName="audio" labels={mediaDropLabels(a)} />
-          </Field>
-
-          <div>
-            <button type="submit" className={BUTTON_PRIMARY}>
-              {a.publishPrompt}
-            </button>
-          </div>
-        </OpForm>
-      </Panel>
-
-      {rejected.length > 0 && (
-        <Panel title={`${a.rejectedHeading} (${rejected.length})`}>
-          <ul className="flex flex-col gap-3">
-            {rejected.map((row) => (
-              <li key={row.id} data-prompt-rejected={row.slug} className="border border-hairline p-3">
-                <span className="font-mono text-code">{row.title}</span>
-                <p className="mt-1 font-mono text-[0.72rem] opacity-55">{row.rejectReason}</p>
-                <OpForm op="prompt.approve" back={ADMIN_PROMPTS_PATH} className="mt-3">
-                  <input type="hidden" name="id" value={row.id} />
-                  <input type="hidden" name="slug" value={row.slug} />
-                  <input type="hidden" name="handle" value={row.authorHandle ?? ''} />
-                  {row.useCase.map((value) => (
-                    <input key={value} type="hidden" name="useCase" value={value} />
-                  ))}
-                  <button type="submit" className={BUTTON}>
-                    {a.approve}
-                  </button>
-                </OpForm>
-              </li>
-            ))}
-          </ul>
-        </Panel>
+      {shown.length === 0 ? (
+        <p className="mt-6 font-mono text-code opacity-60">
+          {rows.length === 0 ? a.publishedEmpty : a.promptsNoMatch}
+        </p>
+      ) : (
+        <ul className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {shown.map((row) => (
+            <PromptCard key={row.id} row={row} dict={dict} href={adminPromptPath(row.id)} />
+          ))}
+        </ul>
       )}
     </AdminShell>
   );
