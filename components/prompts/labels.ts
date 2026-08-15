@@ -13,6 +13,8 @@ export interface PromptLabels {
   byAuthor: string;
   byAnonymous: string;
   lockChip: string;
+  /** The `free` gate: sign in, spend nothing (2026-08-15). */
+  lockChipSignin: string;
   openLabel: string;
   copy: string;
   copied: string;
@@ -35,6 +37,10 @@ export interface PromptLabels {
   badgeNew: string;
   lockedHeading: string;
   lockedBody: string;
+  /** The `free` gate's own copy — sign in, spend nothing (2026-08-15). */
+  signinOnlyHeading: string;
+  signinOnlyBody: string;
+  signinOnlyHint: string;
   // §15.3 — the three lock-panel variants' copy.
   signinCta: string;
   signinHint: string;
@@ -55,6 +61,7 @@ export function promptLabels(dict: Dictionary): PromptLabels {
     byAuthor: dict.prompts.byAuthor,
     byAnonymous: dict.prompts.byAnonymous,
     lockChip: dict.prompts.lockChip,
+    lockChipSignin: dict.prompts.lockChipSignin,
     openLabel: dict.prompts.openLabel,
     copy: dict.prompts.copy,
     copied: dict.prompts.copied,
@@ -78,6 +85,9 @@ export function promptLabels(dict: Dictionary): PromptLabels {
     // this surface's gate is per-prompt, so its sentences are the wallet's.
     lockedHeading: dict.cookies.lockedHeading,
     lockedBody: dict.cookies.lockedBody,
+    signinOnlyHeading: dict.cookies.signinOnlyHeading,
+    signinOnlyBody: dict.cookies.signinOnlyBody,
+    signinOnlyHint: dict.cookies.signinOnlyHint,
     signinCta: dict.cookies.signinCta,
     signinHint: dict.cookies.signinHint,
     spendCta: dict.cookies.spendCta,

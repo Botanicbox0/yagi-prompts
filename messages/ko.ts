@@ -67,6 +67,10 @@ export const ko: Dictionary = {
   },
   cookies: {
     lockedHeading: '이 프롬프트는 쿠키로 열립니다',
+    /** 공개 범위가 free인 프롬프트: 로그인만 하면 되고 쿠키를 쓰지 않는다 (2026-08-15). */
+    signinOnlyHeading: '로그인하면 바로 볼 수 있습니다',
+    signinOnlyBody: '결과 영상은 누구나 볼 수 있고, 프롬프트 원문은 로그인한 분에게 공개합니다. 쿠키는 쓰지 않습니다.',
+    signinOnlyHint: '쿠키 없이 열립니다. 가입은 무료입니다.',
     lockedBody: '결과 영상은 누구나 볼 수 있습니다. 실제로 실행한 프롬프트 원문이 쿠키로 열리는 부분이며, 한 번 열면 계정에 계속 남습니다.',
     signinCta: '로그인하고 프롬프트 확인하기',
     signinHint: '가입하면 무료 쿠키 {count}개로 시작합니다.',
@@ -196,6 +200,7 @@ export const ko: Dictionary = {
     byAuthor: '@{handle} 제공',
     byAnonymous: '커뮤니티',
     lockChip: '쿠키',
+    lockChipSignin: '로그인',
     openLabel: '열기',
     copy: '프롬프트 복사',
     copied: '복사됨',

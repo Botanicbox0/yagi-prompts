@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { getDictionary } from '@/lib/i18n/dictionaries';
+import { interpolate } from '@/lib/i18n/format';
 import type { PromptCard } from '@/lib/prompts/catalog';
 import { PROMPT_MODEL_LABEL, USE_CASES } from '@/lib/prompts/schemas';
 import { PromptCardView } from '@/components/prompts/prompt-card';
@@ -38,7 +39,7 @@ function card(overrides: Partial<PromptCard> = {}): PromptCard {
     useCase: ['cinematic'],
     poster: { source: 'route', src: '/api/prompts/media/x%3Aposter', mime: 'image/png', w: 1280, h: 1600 },
     video: { source: 'route', src: '/api/prompts/media/x%3Avideo', mime: 'video/mp4' },
-    hasLock: true,
+    lock: 'cookie' as const,
     featured: true,
     publishedAt: '2026-08-12T00:00:00.000Z',
     ...overrides,
@@ -71,9 +72,23 @@ describe('prompt card (§13.2)', () => {
     expect(Object.hasOwn(card(), 'text')).toBe(false);
   });
 
-  it('wears the lock chip exactly when the projection says the text is gated', () => {
-    expect(cardMarkup(card({ hasLock: true }))).toContain('data-lock-chip');
-    expect(cardMarkup(card({ hasLock: false }))).not.toContain('data-lock-chip');
+  /**
+   * Founder report (2026-08-15): "90s interview는 free인데 왜 cookie 요구?" The chip was hardcoded
+   * to COOKIE for anything not public, so a free-gated prompt quoted a price the server refuses to
+   * charge — `unlockPrompt` will not spend a cookie on one. The chip now names the ACTION.
+   */
+  it('names the action the gate actually asks for', () => {
+    const cookie = cardMarkup(card({ lock: 'cookie' }));
+    expect(cookie).toContain('data-lock-chip="cookie"');
+    expect(cookie).toContain(dict.prompts.lockChip);
+
+    const signin = cardMarkup(card({ lock: 'signin' }));
+    expect(signin).toContain('data-lock-chip="signin"');
+    expect(signin).toContain(dict.prompts.lockChipSignin);
+    // …and never the word that means money on a prompt that costs none.
+    expect(signin).not.toContain(dict.prompts.lockChip);
+
+    expect(cardMarkup(card({ lock: null }))).not.toContain('data-lock-chip');
   });
 
   it('credits a community submitter by @handle, and falls back honestly', () => {
@@ -250,6 +265,22 @@ describe('prompt detail (§13.2 / §5.5 / §15.3)', () => {
     expect(body(locked, { state: 'signin' })).not.toContain('data-prompt-process');
     // And an unlocked prompt with no write-up renders no empty section.
     expect(body(open)).not.toContain('data-prompt-process');
+  });
+
+  /** The panel quotes the same price as the chip — one function decides both. */
+  it('tells a FREE-gated reader to sign in, and never mentions a cookie', () => {
+    const html = body({ ...locked, visibility: 'free' }, { state: 'signin' });
+    expect(html).toContain('data-locked="signin"');
+    expect(html).toContain(dict.cookies.signinOnlyHeading);
+    expect(html).toContain(dict.cookies.signinOnlyHint);
+    expect(html).not.toContain(dict.cookies.lockedHeading);
+    // The signup sweetener is about cookies; on a free prompt it answers an unasked question.
+    expect(html).not.toContain(interpolate(dict.cookies.signinHint, { count: '3' }));
+
+    // A pro-gated prompt keeps the cookie copy — that one really does cost a cookie.
+    const gated = body(locked, { state: 'signin' });
+    expect(gated).toContain(dict.cookies.lockedHeading);
+    expect(gated).not.toContain(dict.cookies.signinOnlyHeading);
   });
 
   it('renders the §5.5 lock panel with no text and no copy button', () => {
