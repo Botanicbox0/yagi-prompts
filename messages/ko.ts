@@ -874,6 +874,8 @@ export const ko: Dictionary = {
     mediaUploading: '업로드 중… {percent}%',
     mediaUploaded: '업로드 완료 — 저장을 누르면 반영됩니다.',
     mediaUploadFailed: '업로드 실패. 파일을 다시 선택하거나 잠시 후 다시 시도해 주세요.',
+    mediaBlockedUploading: '아직 업로드 중입니다. 완료되면 저장해 주세요.',
+    mediaBlockedFailed: '업로드가 끝나지 않은 파일이 있습니다. 파일을 다시 선택해 업로드를 마친 뒤 저장해 주세요.',
     promptVisibilityHint: '커뮤니티 제출은 항상 공개입니다. 데이터베이스가 강제합니다.',
     approve: '승인',
     rejectLabel: '반려',

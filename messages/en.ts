@@ -921,6 +921,8 @@ export const en = {
     mediaUploading: 'Uploading… {percent}%',
     mediaUploaded: 'Uploaded — press save to apply it.',
     mediaUploadFailed: 'Upload failed. Pick the file again, or retry in a moment.',
+    mediaBlockedUploading: 'Still uploading. Save once it finishes.',
+    mediaBlockedFailed: 'A file has not finished uploading. Pick it again, let it upload, then save.',
     promptVisibilityHint: 'Community submissions are always public — the database enforces it.',
     approve: 'Approve',
     rejectLabel: 'Reject',

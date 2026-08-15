@@ -57,17 +57,21 @@ export type PromptStatus = (typeof PROMPT_STATUSES)[number];
 // ---------------------------------------------------------------------------
 
 /**
- * §13.1 wrote "text ≤ 2,000 chars" when a prompt was a paragraph. It is not one any more: the
- * founder's own 1994 ENG segment brief is 4,853 characters of shot-by-shot direction — timings,
- * lens behaviour, wardrobe, a per-cut table — and the admin form REFUSED it (2026-08-15). A cap
- * that refuses the studio's real work is a cap set against the wrong artefact.
+ * How long a prompt may be. Raised TWICE on 2026-08-15, and the second time is the interesting one.
  *
- * 12,000 fits a full multi-scene brief with room to spare, stays a bound a moderator reads in one
- * sitting, and stays well under `PROCESS_MAX` — the making-of is still the long form. The abuse
- * control on community text was never the length anyway: it is 3 submissions/day/user (§13.1) plus
- * human review before anything is visible.
+ * §13.1 wrote "text ≤ 2,000 chars" when a prompt was a paragraph. The founder's 1994 ENG segment
+ * brief was 4,853 characters and was refused, so the cap went to 12,000 — "comfortably above a full
+ * multi-scene brief", said the comment. Four hours later the next brief arrived: a 30-second teen
+ * reel with timecoded beats, three wardrobe specs, six camera angles and a 200-item negative
+ * prompt. 15,540 characters.
+ *
+ * The lesson is not the number. It is that a cap chosen by imagining the artefact keeps landing
+ * under the real one, so this bound stops being a judgement about what a prompt SHOULD be: 40,000
+ * exists to refuse a paste-bomb, and nothing else. It is 40KB of text against a `text` column with
+ * no limit of its own, rendered into a `<pre>` that already scrolls. The abuse control on community
+ * submissions was never the length anyway — it is 3/day/user plus human review.
  */
-export const PROMPT_TEXT_MAX = 12000;
+export const PROMPT_TEXT_MAX = 40000;
 export const PROMPT_TEXT_MIN = 10;
 
 /**
@@ -123,15 +127,25 @@ export const SourceUrlSchema = z
 export const PROMPT_TITLE_MAX = 160;
 export const PROMPT_HANDLE_MAX = 40;
 /**
- * "video ≤ 60s/32MB" (§13.1) → 64MB on 2026-08-15, because a real export is bigger than the plan
- * guessed: the founder's 15-second CapCut export is 57.7MB.
+ * "video ≤ 60s/32MB" (§13.1) → 48MB on 2026-08-15, and the number is set by STORAGE, not taste.
  *
- * Raised with a caveat worth writing down. This clip is what the gallery card PLAYS on hover, so
- * its size is paid by every visitor who points at the card, on mobile data included. 64MB is a
- * ceiling for what the tool accepts, not advice: a 15-second hover loop wants to be ~8-12MB, and
- * the honest place to fix that is the export preset rather than a limit that refuses the work.
+ * Chasing one 57.7MB export uncovered three ceilings stacked behind each other, only one of which
+ * was ours:
+ *   1. Vercel refuses a serverless request body over ~4.5MB — fixed by uploading direct to storage;
+ *   2. this constant, then 32MB — raised;
+ *   3. **Supabase Storage refuses a single object over 50MB on the free plan** — a hard stop that
+ *      no code change reaches, and the one that actually decided the answer.
+ *
+ * So the cap sits just under (3). A limit ABOVE what storage will accept is worse than a low one:
+ * it lets the founder wait through a full upload and then fail with a storage error instead of our
+ * own message. If the project moves to a plan (or a bucket) with a higher object limit, raise this
+ * with it.
+ *
+ * Worth restating anyway: this clip is what the gallery card PLAYS on hover, so its size is paid by
+ * every visitor who points at the card. A 30-second hover loop wants to be ~10MB — the founder's
+ * 57.7MB master re-encodes to 11.1MB at 1080p with no visible difference at card size.
  */
-export const VIDEO_MAX_BYTES = 64 * 1024 * 1024;
+export const VIDEO_MAX_BYTES = 48 * 1024 * 1024;
 export const VIDEO_MAX_SECONDS = 60;
 /** Founder direction (2026-08-13): audio results are uploadable and freely downloadable. */
 export const AUDIO_MAX_BYTES = 20 * 1024 * 1024;

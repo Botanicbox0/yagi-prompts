@@ -88,8 +88,9 @@ describe('upload caps (§13.1)', () => {
   });
 
   it('refuses anything over the cap, measured over the bytes', () => {
-    // Raised to 64MB on 2026-08-15: a real 15s export is 57.7MB (founder's CapCut file).
-    expect(VIDEO_MAX_BYTES).toBe(64 * 1024 * 1024);
+    // 48MB on 2026-08-15: just under Supabase's 50MB per-object limit, so an oversized file
+    // fails with OUR message rather than after a full upload with a storage error.
+    expect(VIDEO_MAX_BYTES).toBe(48 * 1024 * 1024);
     expect(checkUpload({ ...base, sizeBytes: VIDEO_MAX_BYTES + 1 })).toBe('too_large');
     expect(checkUpload({ ...base, sizeBytes: VIDEO_MAX_BYTES })).toBeNull();
   });
