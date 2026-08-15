@@ -2,7 +2,12 @@ import { formatDate } from '@/lib/i18n/format';
 import type { Dictionary } from '@/lib/i18n/dictionaries';
 import type { PromptRow } from '@/lib/prompts/repo';
 import { adminMediaPath, promptAdminRef } from '@/lib/media/admin-authorize';
-import { DEFAULT_PROMPT_MODEL, USE_CASES, parsePromptMedia } from '@/lib/prompts/schemas';
+import {
+  DEFAULT_PROMPT_MODEL,
+  PROMPT_MODELS,
+  USE_CASES,
+  parsePromptMedia,
+} from '@/lib/prompts/schemas';
 import { VISIBILITY_ORDER } from '@/lib/content/visibility';
 import { Field, INPUT, LABEL } from '@/components/admin/chrome';
 import { MediaDrop, type MediaDropLabels } from '@/components/admin/media-drop';
@@ -129,20 +134,40 @@ export function PromptFields({ row, dict }: { row: PromptRow | null; dict: Dict 
             className={INPUT}
           />
         </Field>
-        {row === null ? (
-          <Field label={a.fieldItemModel}>
-            <input type="text" name="model" defaultValue={DEFAULT_PROMPT_MODEL} className={INPUT} />
-          </Field>
-        ) : (
-          <Field label={a.fieldPromptHandle}>
-            <input
-              type="text"
-              name="handle"
-              defaultValue={row.authorHandle ?? ''}
-              className={INPUT}
-            />
-          </Field>
-        )}
+        <Field label={a.fieldPromptHandle}>
+          <input
+            type="text"
+            name="handle"
+            defaultValue={row?.authorHandle ?? ''}
+            className={INPUT}
+          />
+        </Field>
+      </div>
+
+      {/* Models, as CHECKBOXES (founder, 2026-08-15: "seedance2.5랑 seedance2.0 둘 다 체크하고
+          싶으면 어떻게 해?"). A free-text field could hold one answer and invited a typo into a
+          public chip; the vocabulary lives in `lib/prompts/schemas.ts` and adding one is a line. */}
+      <div>
+        <span className={LABEL}>{a.fieldItemModel}</span>
+        <p className="mt-1 font-mono text-[0.72rem] opacity-50">{a.promptModelsHint}</p>
+        <div className="mt-1.5 flex flex-wrap gap-2">
+          {PROMPT_MODELS.map((model) => (
+            <label
+              key={model.id}
+              className="flex items-center gap-1.5 border border-hairline px-2 py-1 font-label text-[0.62rem] tracking-[0.1em] uppercase"
+            >
+              <input
+                type="checkbox"
+                name="models"
+                value={model.id}
+                defaultChecked={(row?.models ?? [DEFAULT_PROMPT_MODEL]).includes(model.id)}
+                className="h-3 w-3"
+                style={{ accentColor: 'var(--accent)' }}
+              />
+              {model.label}
+            </label>
+          ))}
+        </div>
       </div>
 
       <Field label={a.fieldPromptBody}>

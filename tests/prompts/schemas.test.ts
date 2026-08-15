@@ -4,6 +4,11 @@ import {
   AuthoringSchema,
   DEFAULT_PROMPT_MODEL,
   EditSchema,
+  MODELS_MAX,
+  ModelList,
+  PROMPT_MODEL_IDS,
+  isPromptModel,
+  promptModelLabel,
   PROMPT_MODEL_LABEL,
   PROMPT_TEXT_MAX,
   PromptMediaSchema,
@@ -50,7 +55,7 @@ const authoring = {
   useCase: ['cinematic'],
   textVisibility: 'pro',
   featured: true,
-  model: DEFAULT_PROMPT_MODEL,
+  models: [DEFAULT_PROMPT_MODEL],
 };
 
 const edit = {
@@ -63,6 +68,7 @@ const edit = {
   handle: null,
   textVisibility: 'public',
   featured: false,
+  models: [DEFAULT_PROMPT_MODEL],
 };
 
 describe('submission schema (§13.1)', () => {
@@ -161,6 +167,40 @@ describe('vocabulary + defaults (§13.3)', () => {
     expect(effectiveTextVisibility('community', 'hidden')).toBe('public');
     expect(effectiveTextVisibility('yagi', 'pro')).toBe('pro');
     expect(effectiveTextVisibility('yagi', 'public')).toBe('public');
+  });
+});
+
+/**
+ * Multiple models per prompt (founder, 2026-08-15: "seedance2.5랑 seedance2.0 둘 다 체크하고
+ * 싶으면 어떻게 해?"). §13.3-3's single chip was a CONSTANT on the card, so a prompt run on 2.0
+ * advertised 2.5. These pin the three rules that replaced it.
+ */
+describe('models (§13.3-3, plural)', () => {
+  it('takes more than one, in the order they were checked', () => {
+    const parsed = AuthoringSchema.parse({
+      ...authoring,
+      models: ['seedance-2.5', 'seedance-2.0'],
+    });
+    expect(parsed.models).toEqual(['seedance-2.5', 'seedance-2.0']);
+  });
+
+  it('de-duplicates, and refuses none or more than the card can show', () => {
+    expect(ModelList.parse(['seedance-2.5', 'seedance-2.5'])).toEqual(['seedance-2.5']);
+    expect(ModelList.safeParse([]).success).toBe(false);
+    expect(ModelList.safeParse(PROMPT_MODEL_IDS.slice(0, MODELS_MAX + 1)).success).toBe(false);
+  });
+
+  /**
+   * A model outside the vocabulary is ACCEPTED, unlike a use case. Model names change monthly, and
+   * the list here is what the form offers rather than what the world contains — refusing an unknown
+   * one would mean a deploy every time the founder tries something new.
+   */
+  it('accepts a model the vocabulary has not heard of, and still renders it', () => {
+    expect(ModelList.safeParse(['some-new-model-9']).success).toBe(true);
+    expect(promptModelLabel('some-new-model-9')).toBe('SOME NEW MODEL 9');
+    expect(promptModelLabel('seedance-2.0')).toBe('SEEDANCE 2.0');
+    expect(isPromptModel('seedance-2.0')).toBe(true);
+    expect(isPromptModel('some-new-model-9')).toBe(false);
   });
 });
 

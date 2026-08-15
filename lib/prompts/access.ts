@@ -65,7 +65,7 @@ function toRowInput(row: PromptRow) {
     slug: row.slug,
     source: row.source,
     authorHandle: row.authorHandle,
-    model: row.model,
+    models: row.models,
     title: row.title,
     titleKo: row.titleKo,
     promptText: row.promptText,

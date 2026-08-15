@@ -901,6 +901,7 @@ export const en = {
     fieldPromptSlug: 'Slug',
     promptSlugAutoHint: 'Leave empty — it follows the EN title, lowercase with hyphens.',
     fieldPromptHandle: 'Byline (@handle)',
+    promptModelsHint: 'Pick as many as ran it. The chips appear in the order you check them.',
     fieldItemModel: 'Model',
     fieldPromptVisibility: 'Text visibility',
     fieldPromptFeatured: 'Featured',

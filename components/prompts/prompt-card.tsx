@@ -76,7 +76,7 @@ export function PromptCardView({
             <TypographicPoster
               title={card.title}
               slug={card.slug}
-              kicker={card.modelLabel}
+              kicker={card.modelLabels.join(' · ')}
               ratio={ratio}
             />
           }
@@ -107,7 +107,16 @@ export function PromptCardView({
       <div className="flex flex-col gap-3 p-4">
         <div className="flex items-center justify-between gap-3 font-label text-[0.65rem] tracking-[0.12em] uppercase">
           <span className="opacity-60">{credit}</span>
-          <span className="text-accent">{card.modelLabel}</span>
+          {/* One chip per model (2026-08-15). A prompt run on 2.5 AND 2.0 says so, in the order
+              the author checked them; `flex-wrap` keeps a four-model row from pushing the credit
+              off the card at the narrowest column. */}
+          <span className="flex flex-wrap justify-end gap-x-2 text-accent">
+            {card.modelLabels.map((label) => (
+              <span key={label} data-model-chip>
+                {label}
+              </span>
+            ))}
+          </span>
         </div>
 
         <h3 className="font-display text-[clamp(1.35rem,2vw,1.75rem)] leading-[0.95] font-black uppercase">

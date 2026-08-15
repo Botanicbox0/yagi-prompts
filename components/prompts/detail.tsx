@@ -4,6 +4,7 @@ import type { UnlockPanel } from '@/lib/cookies/wallet';
 import { PACK_COOKIES, PACK_PRICE_USD } from '@/lib/cookies/wallet';
 import { promptHref, promptsHref, PROMPT_SUBMIT_PATH } from '@/lib/prompts/links';
 import { interpolate } from '@/lib/i18n/format';
+import { promptModelLabel } from '@/lib/prompts/schemas';
 import { BillingUnavailable } from '@/components/billing/upgrade-cta';
 import { Markdown } from '@/components/playbook/markdown';
 import { TextSwap } from '@/components/ui/text-swap';
@@ -89,7 +90,7 @@ export function PromptHeader({
           <TypographicPoster
             title={prompt.title}
             slug={prompt.slug}
-            kicker={prompt.model.toUpperCase()}
+            kicker={prompt.models.map(promptModelLabel).join(' · ')}
             ratio={ratio}
           />
         }
@@ -139,8 +140,12 @@ export function PromptHeader({
         <span aria-hidden className="opacity-30">
           /
         </span>
-        <span data-model-chip className="text-accent">
-          {prompt.model.toUpperCase().replace(/-/g, ' ')}
+        <span className="flex flex-wrap gap-x-2 text-accent">
+          {prompt.models.map((id) => (
+            <span key={id} data-model-chip>
+              {promptModelLabel(id)}
+            </span>
+          ))}
         </span>
         {/* The creator's own post (2026-08-15). `noopener` + `ugc`: an outbound link a stranger
             supplied should neither hand over the opener nor pass our ranking to them. */}

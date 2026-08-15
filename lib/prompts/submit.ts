@@ -133,7 +133,7 @@ export async function submitPrompt(
     authorId: viewer.userId,
     authorHandle: normalizeHandle(parsed.data.handle) ?? normalizeHandle(viewer.email?.split('@')[0] ?? null),
     status: 'pending',
-    model: DEFAULT_PROMPT_MODEL,
+    models: [DEFAULT_PROMPT_MODEL],
     title: parsed.data.title,
     titleKo: null,
     promptText: parsed.data.promptText,

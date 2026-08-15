@@ -29,7 +29,7 @@ export interface PromptRowInput {
   slug: string;
   source: PromptSource;
   authorHandle: string | null;
-  model: string;
+  models: string[];
   title: string;
   titleKo: string | null;
   promptText: string;
@@ -65,7 +65,7 @@ interface ShapedPromptBase {
   slug: string;
   source: PromptSource;
   authorHandle: string | null;
-  model: string;
+  models: string[];
   title: string;
   titleKo: string | null;
   useCase: string[];
@@ -183,7 +183,7 @@ export function shapePrompt(
     slug: row.slug,
     source: row.source,
     authorHandle: row.authorHandle,
-    model: row.model,
+    models: row.models,
     title: row.title,
     titleKo: row.titleKo,
     useCase: row.useCase,

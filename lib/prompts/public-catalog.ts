@@ -32,9 +32,18 @@ async function readPromptCatalog(): Promise<PromptCatalog> {
  * after repointing `DATABASE_URL`. Keying by mode makes the two caches disjoint — cheaper, and far
  * less surprising, than remembering to purge.
  */
+/**
+ * The VERSION moves with the projection's SHAPE, not just with the data source (2026-08-15).
+ *
+ * `modelLabel: string` became `modelLabels: string[]` and the build crashed on
+ * `undefined.join(...)` — a v1 entry rendered by v2 code. The identical trap caught the contests
+ * catalog the same morning, which is the whole argument for writing it on both: a cache that
+ * outlives a deploy also outlives a type. **Bump this string in the same commit as any change to
+ * `PromptCard`.**
+ */
 export const getPromptCatalog = unstable_cache(
   readPromptCatalog,
-  ['prompt-catalog', 'v1', resolveRuntimeMode()],
+  ['prompt-catalog', 'v2-models', resolveRuntimeMode()],
   {
     tags: [PROMPTS_TAG],
     revalidate: CATALOG_TTL_SECONDS,

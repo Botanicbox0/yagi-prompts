@@ -24,6 +24,62 @@ export const DEFAULT_PROMPT_MODEL = 'seedance-2.5';
 export const PROMPT_MODEL_LABEL = 'SEEDANCE 2.5';
 
 /**
+ * The models a prompt may name (founder direction, 2026-08-15: "seedance2.5랑 seedance2.0 둘 다
+ * 체크하고 싶으면 어떻게 해?").
+ *
+ * A LIST, because the honest answer to "which model made this" is often more than one: the same
+ * brief run on 2.5 and on 2.0, or a clip whose audio came from somewhere else. §13.3-3's single chip
+ * was a constant on the card rather than a fact about the row, so two prompts made with different
+ * models advertised the same one.
+ *
+ * The vocabulary lives HERE and nowhere else — not in SQL (model names change monthly and a CHECK
+ * would turn "the founder used something new" into a migration) and not in the dictionaries (these
+ * are proper nouns with fixed capitalisation, identical in both locales, exactly like the platform
+ * chips in `lib/contests/schemas.ts`). Adding one is a line in this array.
+ */
+export const PROMPT_MODELS = [
+  { id: 'seedance-2.5', label: 'SEEDANCE 2.5' },
+  { id: 'seedance-2.0', label: 'SEEDANCE 2.0' },
+  { id: 'kling-3.0', label: 'KLING 3.0' },
+  { id: 'sora-2', label: 'SORA 2' },
+  { id: 'veo-3', label: 'VEO 3' },
+  { id: 'higgsfield', label: 'HIGGSFIELD' },
+  { id: 'nano-banana-2', label: 'NANO BANANA 2' },
+  { id: 'gpt-image-2', label: 'GPT IMAGE 2' },
+] as const;
+
+export type PromptModelId = (typeof PROMPT_MODELS)[number]['id'];
+export const PROMPT_MODEL_IDS = PROMPT_MODELS.map((model) => model.id) as readonly PromptModelId[];
+
+/** Four is what fits on the narrowest card; the DB CHECK holds the same bound. */
+export const MODELS_MIN = 1;
+export const MODELS_MAX = 4;
+
+/**
+ * id → chip text, with an UNKNOWN id rendered rather than dropped.
+ *
+ * A row written before this vocabulary existed (or by a future admin who typed a new name into the
+ * database) still has to render. Hiding it would make the card lie by omission, so an unrecognised
+ * id is shown as itself, upper-cased — which reads as a model name because that is what it is.
+ */
+export function promptModelLabel(id: string): string {
+  return PROMPT_MODELS.find((model) => model.id === id)?.label ?? id.replace(/-/g, ' ').toUpperCase();
+}
+
+export function isPromptModel(value: unknown): value is PromptModelId {
+  return typeof value === 'string' && (PROMPT_MODEL_IDS as readonly string[]).includes(value);
+}
+
+/** Repeated checkboxes → a de-duplicated, order-preserving list. */
+export const ModelList = z
+  .array(z.string().trim().min(1).max(60))
+  .transform((values) => [...new Set(values)])
+  .refine((values) => values.length >= MODELS_MIN, { error: 'pick at least one model' })
+  .refine((values) => values.length <= MODELS_MAX, {
+    error: `pick at most ${MODELS_MAX} models`,
+  });
+
+/**
  * The use-case vocabulary: eight, fixed, bilingual at the UI layer.
  *
  * Small on purpose. A free-text tag field on a community submission is a moderation queue that
@@ -323,7 +379,7 @@ export const AuthoringSchema = z.object({
   useCase: UseCaseList,
   textVisibility: VisibilityEnum,
   featured: z.boolean(),
-  model: z.string().trim().min(1).max(60),
+  models: ModelList,
 });
 export type AuthoringInput = z.infer<typeof AuthoringSchema>;
 
@@ -357,6 +413,8 @@ export const EditSchema = z.object({
   handle: z.string().max(PROMPT_HANDLE_MAX).nullable(),
   textVisibility: VisibilityEnum,
   featured: z.boolean(),
+  /** Editable after the fact (2026-08-15) — the second model is usually discovered later. */
+  models: ModelList,
 });
 export type EditInput = z.infer<typeof EditSchema>;
 
