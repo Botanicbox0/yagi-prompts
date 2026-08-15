@@ -358,6 +358,23 @@ export function PromptBody({
         </div>
       ) : (
         <>
+          {/**
+           * "pro로 설정했는데 왜 프롬프트 다 공개되어있음?" (founder, 2026-08-15).
+           *
+           * Nothing was wrong — an admin outranks every gate, because a moderator has to be able to
+           * read what they moderate. But the page looked identical to a public one, so the only way
+           * to check your own paywall was to open a private window. A gate you cannot see from the
+           * inside is a gate you will misjudge. This says, to admins only, what a normal reader
+           * would be meeting here instead.
+           */}
+          {prompt.tier === 'admin' && prompt.visibility !== 'public' && (
+            <p
+              data-admin-view={prompt.visibility}
+              className="mt-6 border border-accent px-4 py-2.5 font-label text-eyebrow text-accent uppercase"
+            >
+              {interpolate(labels.adminBypass, { visibility: prompt.visibility })}
+            </p>
+          )}
           <pre
             data-prompt-text
             data-locked="false"

@@ -203,6 +203,7 @@ export const ko: Dictionary = {
     copyLocked: '프롬프트를 연 뒤 복사할 수 있습니다',
     promptHeading: '프롬프트',
     promptNote: '프롬프트는 모델 입력값이므로 번역하지 않습니다.',
+    adminBypass: '관리자로 보는 중 — 일반 이용자에게는 {visibility} 잠금 상태입니다.',
     relatedHeading: '비슷한 프롬프트',
     backToGallery: '전체 프롬프트',
     submitCta: '내 프롬프트 제출하기',

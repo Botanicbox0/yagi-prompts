@@ -333,6 +333,24 @@ describe('prompt detail (§13.2 / §5.5 / §15.3)', () => {
     expect(html).not.toContain('data-billing="unavailable"');
   });
 
+  /**
+   * The founder asked "pro로 설정했는데 왜 프롬프트 다 공개되어있음?" while signed in as admin
+   * (2026-08-15). Nothing was broken — an admin outranks every gate — but the page looked exactly
+   * like a public one, so the only way to check your own paywall was a private window.
+   */
+  it('tells an ADMIN what a normal reader would meet, and says nothing to anyone else', () => {
+    const gated = body({ ...open, tier: 'admin' });
+    expect(gated).toContain('data-admin-view="pro"');
+    expect(gated).toContain('Admin view');
+    // …and the text is still there: a moderator has to read what they moderate.
+    expect(gated).toContain('data-prompt-text');
+
+    // A public prompt has no gate to explain.
+    expect(body({ ...open, tier: 'admin', visibility: 'public' })).not.toContain('data-admin-view');
+    // A pro reader is past the gate; telling them about it would be noise.
+    expect(body(open)).not.toContain('data-admin-view');
+  });
+
   it('renders the text in a monospace block with a copy button for an entitled reader', () => {
     const html = body(open);
     expect(html).toContain('data-prompt-text');

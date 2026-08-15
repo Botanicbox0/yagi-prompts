@@ -20,6 +20,8 @@ export interface PromptLabels {
   copyLocked: string;
   promptHeading: string;
   promptNote: string;
+  /** Admin-only note: what a normal reader meets here (2026-08-15). */
+  adminBypass: string;
   relatedHeading: string;
   backToGallery: string;
   submitCta: string;
@@ -60,6 +62,7 @@ export function promptLabels(dict: Dictionary): PromptLabels {
     copyLocked: dict.prompts.copyLocked,
     promptHeading: dict.prompts.promptHeading,
     promptNote: dict.prompts.promptNote,
+    adminBypass: dict.prompts.adminBypass,
     relatedHeading: dict.prompts.relatedHeading,
     backToGallery: dict.prompts.backToGallery,
     submitCta: dict.prompts.submitCta,

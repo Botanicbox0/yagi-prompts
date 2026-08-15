@@ -209,6 +209,7 @@ export const en = {
     copyLocked: 'Open the prompt to copy it',
     promptHeading: 'The prompt',
     promptNote: 'Prompts are not translated — they are model inputs.',
+    adminBypass: 'Admin view — a normal reader meets the {visibility} gate here.',
     relatedHeading: 'More like this',
     backToGallery: 'All prompts',
     submitCta: 'Submit your prompt',
