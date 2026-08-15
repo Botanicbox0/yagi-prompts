@@ -849,7 +849,28 @@ export const en = {
 
     // --- §13.2/F prompts CMS -------------------------------------------------
     promptsHeading: 'Prompts',
-    promptsLede: 'The moderation queue first, then everything already published.',
+    promptsLede: 'The catalogue at a glance. New prompts start from the button, top right.',
+    /** The board (2026-08-15): a wall of cards, with ADD in the header. */
+    promptsNew: 'Add a prompt',
+    promptsCount: '{count} total',
+    promptsSearch: 'Search',
+    promptsFilterLabel: 'Filter by status',
+    promptsNoMatch: 'Nothing matches that filter.',
+    promptTabs: {
+      all: 'All',
+      pending: 'In review',
+      published: 'Live',
+      archived: 'Archived',
+      rejected: 'Rejected',
+    },
+    statusLabels: {
+      pending: 'In review',
+      published: 'Live',
+      archived: 'Archived',
+      rejected: 'Rejected',
+    },
+    backToPrompts: 'All prompts',
+    viewLive: 'View on site',
     queueHeading: 'Awaiting review',
     queueEmpty: 'Nothing waiting. The queue is clear.',
     publishedHeading: 'Published',

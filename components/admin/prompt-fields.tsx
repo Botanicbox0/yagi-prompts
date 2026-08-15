@@ -1,0 +1,307 @@
+import { formatDate } from '@/lib/i18n/format';
+import type { Dictionary } from '@/lib/i18n/dictionaries';
+import type { PromptRow } from '@/lib/prompts/repo';
+import { adminMediaPath, promptAdminRef } from '@/lib/media/admin-authorize';
+import { DEFAULT_PROMPT_MODEL, USE_CASES, parsePromptMedia } from '@/lib/prompts/schemas';
+import { VISIBILITY_ORDER } from '@/lib/content/visibility';
+import { Field, INPUT, LABEL } from '@/components/admin/chrome';
+import { MediaDrop, type MediaDropLabels } from '@/components/admin/media-drop';
+import { useCaseLabel } from '@/components/prompts/labels';
+
+/**
+ * The prompt editor's field list, extracted so THREE screens can share one truth (2026-08-15).
+ *
+ * Founder direction: "관리자 페이지에서 프롬프트 등록하는 거 방식 불편함 — 스크롤 계속 내려서 추가
+ * 등록해야 해서." The authoring form used to sit at the BOTTOM of a page that first rendered the
+ * moderation queue and then a full inline editor for every published prompt, so adding one meant
+ * scrolling past everything else on the site. The screen split into a BOARD (cards), a NEW page and
+ * an ITEM page — and the moment a field list is rendered by more than one route it has to live in
+ * one file, or the create form and the edit form drift apart silently.
+ */
+
+type Dict = Dictionary;
+
+/** The drag/drop + frame-picker labels, shared by the authoring and the edit form. */
+export function mediaDropLabels(a: Dictionary['admin']): MediaDropLabels {
+  return {
+    videoZone: a.mediaVideoZone,
+    videoReplace: a.mediaVideoReplace,
+    posterHeading: a.fieldPromptPoster,
+    frameScrub: a.mediaFrameScrub,
+    framePick: a.mediaFramePick,
+    framePicked: a.mediaFramePicked,
+    posterZone: a.mediaPosterZone,
+    posterPicked: a.mediaPosterPicked,
+    posterHint: a.mediaPosterHint,
+    audioHeading: a.fieldPromptAudio,
+    audioZone: a.mediaAudioZone,
+  };
+}
+
+export function UseCaseChecks({ dict, selected }: { dict: Dict; selected: readonly string[] }) {
+  const set = new Set(selected);
+  return (
+    <div className="flex flex-wrap gap-2">
+      {USE_CASES.map((value) => (
+        <label
+          key={value}
+          className="flex items-center gap-1.5 border border-hairline px-2 py-1 font-label text-[0.62rem] tracking-[0.1em] uppercase"
+        >
+          <input
+            type="checkbox"
+            name="useCase"
+            value={value}
+            defaultChecked={set.has(value)}
+            className="h-3 w-3"
+            style={{ accentColor: 'var(--accent)' }}
+          />
+          {useCaseLabel(dict, value)}
+        </label>
+      ))}
+    </div>
+  );
+}
+
+/** Staged (unpublished) media, playable — the whole point of a moderation queue. */
+export function StagedMedia({ row, dict }: { row: PromptRow; dict: Dict }) {
+  const media = parsePromptMedia(row.media);
+  const a = dict.admin;
+  if (!media.poster && !media.video) {
+    return <p className="font-mono text-[0.72rem] opacity-50">{a.noMedia}</p>;
+  }
+  return (
+    <div className="flex flex-col gap-2">
+      <span className={LABEL}>{a.previewMedia}</span>
+      {media.video && (
+        <video
+          src={adminMediaPath(promptAdminRef(row.id, 'video'))}
+          controls
+          muted
+          playsInline
+          preload="metadata"
+          className="w-full max-w-sm border border-hairline"
+          {...(media.poster ? { poster: adminMediaPath(promptAdminRef(row.id, 'poster')) } : {})}
+        />
+      )}
+      {!media.video && media.poster && (
+        // eslint-disable-next-line @next/next/no-img-element -- staging object behind the admin gate
+        <img
+          src={adminMediaPath(promptAdminRef(row.id, 'poster'))}
+          alt=""
+          className="w-full max-w-sm border border-hairline"
+        />
+      )}
+    </div>
+  );
+}
+
+/**
+ * Every editable field of a prompt, once.
+ *
+ * `row === null` is the CREATE case, and the only differences it makes are defaults: the model
+ * pre-filled, the visibility at §13.3-2's `pro`, the slug placeholder explaining it derives from the
+ * title. Nothing is conditionally hidden — a field that exists when editing and not when creating is
+ * a field the author discovers only after publishing.
+ */
+export function PromptFields({ row, dict }: { row: PromptRow | null; dict: Dict }) {
+  const a = dict.admin;
+  const existing = row === null ? {} : parsePromptMedia(row.media);
+  return (
+    <>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field label={a.fieldPromptTitle}>
+          <input type="text" name="title" defaultValue={row?.title ?? ''} className={INPUT} />
+        </Field>
+        <Field label={a.fieldPromptTitleKo}>
+          <input type="text" name="titleKo" defaultValue={row?.titleKo ?? ''} className={INPUT} />
+        </Field>
+        <Field label={a.fieldPromptSlug} hint={a.promptSlugAutoHint}>
+          <input
+            type="text"
+            name="slug"
+            defaultValue={row?.slug ?? ''}
+            placeholder={a.promptSlugAutoHint}
+            className={INPUT}
+          />
+        </Field>
+        {row === null ? (
+          <Field label={a.fieldItemModel}>
+            <input type="text" name="model" defaultValue={DEFAULT_PROMPT_MODEL} className={INPUT} />
+          </Field>
+        ) : (
+          <Field label={a.fieldPromptHandle}>
+            <input
+              type="text"
+              name="handle"
+              defaultValue={row.authorHandle ?? ''}
+              className={INPUT}
+            />
+          </Field>
+        )}
+      </div>
+
+      <Field label={a.fieldPromptBody}>
+        <textarea
+          name="promptText"
+          rows={12}
+          defaultValue={row?.promptText ?? ''}
+          className={INPUT}
+        />
+      </Field>
+
+      <Field label={a.fieldSourceUrl} hint={a.sourceUrlHint}>
+        <input
+          type="url"
+          name="sourceUrl"
+          defaultValue={row?.sourceUrl ?? ''}
+          placeholder="https://"
+          className={INPUT}
+        />
+      </Field>
+
+      {/* The making-of (2026-08-14). Optional, markdown, and NOT a forced locale pair — a
+          Korean-only write-up is honest content, not an incomplete translation. */}
+      <div className="grid gap-3 lg:grid-cols-2">
+        <Field label={a.fieldProcess} hint={a.processHint}>
+          <textarea
+            name="processMd"
+            rows={10}
+            defaultValue={row?.processMd ?? ''}
+            className={INPUT}
+          />
+        </Field>
+        <Field label={a.fieldProcessKo}>
+          <textarea
+            name="processMdKo"
+            rows={10}
+            defaultValue={row?.processMdKo ?? ''}
+            className={INPUT}
+          />
+        </Field>
+      </div>
+
+      <div>
+        <span className={LABEL}>{a.colUseCase}</span>
+        <div className="mt-1.5">
+          <UseCaseChecks dict={dict} selected={row?.useCase ?? []} />
+        </div>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field label={a.fieldPromptVisibility} hint={a.promptVisibilityHint}>
+          {/* §13.3-2 — YAGI text defaults to `pro`; a public teaser is a deliberate choice. */}
+          <select
+            name="textVisibility"
+            defaultValue={row?.textVisibility ?? 'pro'}
+            className={INPUT}
+          >
+            {VISIBILITY_ORDER.map((value) => (
+              <option key={value} value={value}>
+                {value}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <div className="flex items-end">
+          <label className="flex items-center gap-2 font-label text-eyebrow uppercase">
+            <input
+              type="checkbox"
+              name="featured"
+              defaultChecked={row?.featured ?? false}
+              className="h-3.5 w-3.5"
+              style={{ accentColor: 'var(--accent)' }}
+            />
+            {a.fieldPromptFeatured}
+          </label>
+        </div>
+      </div>
+
+      {/* Founder question (2026-08-14): re-picking a thumbnail frame must not require re-uploading
+          the clip — the panel loads what this row already has. */}
+      <Field label={a.fieldPromptVideo} hint={a.promptMediaHint}>
+        <MediaDrop
+          videoName="video"
+          posterName="poster"
+          audioName="audio"
+          labels={mediaDropLabels(a)}
+          {...(row && existing.video
+            ? { existingVideoSrc: adminMediaPath(promptAdminRef(row.id, 'video')) }
+            : {})}
+          {...(row && existing.poster
+            ? { existingPosterSrc: adminMediaPath(promptAdminRef(row.id, 'poster')) }
+            : {})}
+        />
+      </Field>
+    </>
+  );
+}
+
+/**
+ * One prompt as a CARD on the board (2026-08-15, modelled on the reference admin the founder sent).
+ *
+ * Poster-led, because that is how the founder recognises their own work — a list of slugs is a
+ * database, a wall of thumbnails is a catalogue. Everything on it is a fact the board is filtered
+ * by (status, visibility, source), and the title is the only link: an admin card carries no
+ * stretched link, so a future button on it cannot become an anchor inside an anchor.
+ */
+export function PromptCard({
+  row,
+  dict,
+  href,
+}: {
+  row: PromptRow;
+  dict: Dict;
+  href: string;
+}) {
+  const a = dict.admin;
+  const media = parsePromptMedia(row.media);
+  const poster = media.poster ? adminMediaPath(promptAdminRef(row.id, 'poster')) : null;
+  const marker =
+    row.status === 'pending'
+      ? { 'data-prompt-queue': row.slug || row.id }
+      : { 'data-prompt-published': row.slug };
+
+  return (
+    <li
+      {...marker}
+      data-prompt-card={row.id}
+      data-status={row.status}
+      className="flex flex-col border border-hairline"
+    >
+      <a href={href} className="block border-b border-hairline bg-black" aria-hidden={poster === null}>
+        <div className="flex aspect-video items-center justify-center overflow-hidden">
+          {poster ? (
+            // eslint-disable-next-line @next/next/no-img-element -- staging object behind the gate
+            <img src={poster} alt="" className="h-full w-full object-contain" />
+          ) : (
+            <span className="px-4 text-center font-mono text-[0.7rem] break-all text-white/45">
+              {row.slug || row.id.slice(0, 8)}
+            </span>
+          )}
+        </div>
+      </a>
+
+      <div className="flex flex-1 flex-col gap-2 p-3">
+        <div className="flex flex-wrap items-center gap-1.5 font-label text-[0.6rem] tracking-[0.1em] uppercase">
+          <span data-status-chip={row.status} className="border border-hairline px-1.5 py-0.5">
+            {a.statusLabels[row.status]}
+          </span>
+          <span className="border border-hairline px-1.5 py-0.5 opacity-60">
+            {row.textVisibility}
+          </span>
+          {row.featured && <span className="text-accent">★</span>}
+        </div>
+
+        <a href={href} className="font-mono text-[0.8rem] leading-snug break-words">
+          {row.titleKo || row.title}
+        </a>
+
+        <p className="mt-auto font-mono text-[0.68rem] opacity-45">
+          {row.source === 'yagi' ? a.sourceYagi : a.sourceCommunity}
+          {' · '}
+          {formatDate(row.publishedAt ?? row.createdAt, 'en') ?? '—'}
+        </p>
+      </div>
+    </li>
+  );
+}

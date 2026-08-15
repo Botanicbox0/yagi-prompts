@@ -13,6 +13,16 @@ export const PROMPTS_REST = '/prompts';
 /** §13.2: the submission form is UNPREFIXED app surface (login, no-store, noindex). */
 export const PROMPT_SUBMIT_PATH = '/prompts/submit';
 export const ADMIN_PROMPTS_PATH = '/admin/prompts';
+/**
+ * The board split into three screens on 2026-08-15 (founder: adding a prompt should not mean
+ * scrolling past every prompt that already exists). One place spells the paths so a card, a
+ * redirect and a back-link cannot disagree.
+ */
+export const ADMIN_PROMPT_NEW_PATH = `${ADMIN_PROMPTS_PATH}/new`;
+
+export function adminPromptPath(id: string): string {
+  return `${ADMIN_PROMPTS_PATH}/${encodeURIComponent(id)}`;
+}
 
 export function promptsHref(locale: Locale | string): string {
   return `/${locale}${PROMPTS_REST}`;
