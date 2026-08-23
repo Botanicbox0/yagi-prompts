@@ -10,6 +10,7 @@ import { BillingUnavailable } from '@/components/billing/upgrade-cta';
 import { Markdown } from '@/components/playbook/markdown';
 import { TextSwap } from '@/components/ui/text-swap';
 import { PromptCopyButton } from './copy-button';
+import { PromptRunButton } from './run-button';
 import { PromptDetailMedia } from './detail-media';
 import { PromptCardView } from './prompt-card';
 import { TypographicPoster, posterRatio } from './poster';
@@ -330,19 +331,32 @@ export function PromptBody({
     <section className="mt-14 border-t border-hairline pt-10">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <h2 className="font-label text-label uppercase">{labels.promptHeading}</h2>
+        {/**
+         * Copy, then GO (founder direction, 2026-08-15). The run button is accented and second
+         * because it is the action with somewhere to arrive; copy stays a hairline utility. Both
+         * appear only when the reader may actually have the text — a handoff for a prompt you
+         * cannot read would open a tab with nothing in the clipboard.
+         */}
         {!prompt.locked && (
-          <PromptCopyButton
-            id={prompt.id}
-            signinHref={signinHref}
-            upgradeHref={promptHref(locale, prompt.slug)}
-            labels={{
-              copy: labels.copy,
-              copied: labels.copied,
-              failed: labels.copyFailed,
-              locked: labels.copyLocked,
-            }}
-            className="border border-hairline px-4 py-2 font-label text-eyebrow uppercase transition-opacity hover:opacity-70"
-          />
+          <div className="flex flex-wrap items-center gap-2">
+            <PromptCopyButton
+              id={prompt.id}
+              signinHref={signinHref}
+              upgradeHref={promptHref(locale, prompt.slug)}
+              labels={{
+                copy: labels.copy,
+                copied: labels.copied,
+                failed: labels.copyFailed,
+                locked: labels.copyLocked,
+              }}
+              className="border border-hairline px-4 py-2 font-label text-eyebrow uppercase transition-opacity hover:opacity-70"
+            />
+            <PromptRunButton
+              id={prompt.id}
+              labels={{ run: labels.runCta, copied: labels.runCopied, failed: labels.runFailed }}
+              className="text-accent border border-current px-4 py-2 font-label text-eyebrow uppercase transition-opacity hover:opacity-70"
+            />
+          </div>
         )}
       </div>
 
@@ -457,7 +471,6 @@ export function RelatedPrompts({
               locale={locale}
               labels={labels}
               useCaseLabels={useCaseLabels}
-              signinHref={signinHref}
             />
           </li>
         ))}

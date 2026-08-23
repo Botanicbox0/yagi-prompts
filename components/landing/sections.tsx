@@ -219,7 +219,6 @@ export function Featured({
                     locale={locale}
                     labels={labels}
                     useCaseLabels={useCaseLabels}
-                    signinHref={signin}
                   />
                 </li>
               ))}

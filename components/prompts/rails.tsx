@@ -26,7 +26,6 @@ export function PromptRail({
   useCaseLabels,
   emptyLabel,
   filteredEmptyLabel,
-  signinHref,
   now,
   topClassName = 'mt-16 first:mt-0 lg:mt-24',
 }: {
@@ -39,7 +38,6 @@ export function PromptRail({
   useCaseLabels: Record<string, string>;
   emptyLabel: string;
   filteredEmptyLabel: string;
-  signinHref: string;
   now?: Date | number;
   /**
    * The rail's OWN top rhythm, owned by the page (F3): the landing tightens its first rail on
@@ -80,7 +78,6 @@ export function PromptRail({
                   locale={locale}
                   labels={labels}
                   useCaseLabels={useCaseLabels}
-                  signinHref={signinHref}
                   {...(now === undefined ? {} : { now })}
                 />
               </li>

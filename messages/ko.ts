@@ -200,6 +200,11 @@ export const ko: Dictionary = {
     byAuthor: '@{handle} 제공',
     byAnonymous: '커뮤니티',
     lockChip: '쿠키',
+    cardDetail: '자세히 보기',
+    /** 생성은 Higgsfield에서 (2026-08-15) — 프롬프트를 복사해 새 탭으로 넘긴다. */
+    runCta: 'Higgsfield에서 만들기 ↗',
+    runCopied: '복사됨 — 새 탭에 붙여넣으세요',
+    runFailed: '새 탭을 열었습니다 — 프롬프트는 직접 복사해 주세요',
     lockChipSignin: '로그인',
     openLabel: '열기',
     copy: '프롬프트 복사',

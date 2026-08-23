@@ -206,6 +206,11 @@ export const en = {
     byAuthor: 'by @{handle}',
     byAnonymous: 'Community',
     lockChip: 'Cookie',
+    cardDetail: 'See the prompt',
+    /** The handoff (2026-08-15) — copy the prompt, open the tool that runs it. */
+    runCta: 'Make it on Higgsfield ↗',
+    runCopied: 'Copied — paste it in the new tab',
+    runFailed: 'Tab opened — copy the prompt yourself',
     lockChipSignin: 'Sign in',
     openLabel: 'Open',
     copy: 'Copy prompt',

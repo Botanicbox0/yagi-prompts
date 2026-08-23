@@ -128,7 +128,6 @@ export default async function PromptsGalleryPage({ params }: RouteParams) {
               useCaseLabels={useCaseLabels}
               emptyLabel={dict.prompts.emptyYagi}
               filteredEmptyLabel={dict.prompts.filterEmpty}
-              signinHref={signin}
             />
 
             <PromptRail
@@ -141,7 +140,6 @@ export default async function PromptsGalleryPage({ params }: RouteParams) {
               useCaseLabels={useCaseLabels}
               emptyLabel={dict.prompts.emptyCommunity}
               filteredEmptyLabel={dict.prompts.filterEmpty}
-              signinHref={signin}
             />
 
             <SubmitStrip

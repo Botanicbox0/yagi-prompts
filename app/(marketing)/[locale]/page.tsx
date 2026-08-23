@@ -119,7 +119,6 @@ export default async function LandingPage({ params }: { params: Promise<{ locale
                 useCaseLabels={useCaseLabels}
                 emptyLabel={dict.prompts.emptyYagi}
                 filteredEmptyLabel={dict.prompts.filterEmpty}
-                signinHref={signin}
                 topClassName="mt-4 first:mt-0 lg:mt-24"
               />
 
@@ -136,7 +135,6 @@ export default async function LandingPage({ params }: { params: Promise<{ locale
                 useCaseLabels={useCaseLabels}
                 emptyLabel={dict.prompts.emptyCommunity}
                 filteredEmptyLabel={dict.prompts.filterEmpty}
-                signinHref={signin}
               />
 
               <SubmitStrip
