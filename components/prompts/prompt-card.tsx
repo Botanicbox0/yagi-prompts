@@ -2,7 +2,6 @@ import type { PromptCard as PromptCardData } from '@/lib/prompts/catalog';
 import { promptHref } from '@/lib/prompts/links';
 import { badgeFor } from '@/lib/content/badges';
 import { PromptCardMedia } from './card-media';
-import { PromptCopyButton } from './copy-button';
 import { TypographicPoster } from './poster';
 import type { PromptLabels } from './labels';
 
@@ -27,7 +26,6 @@ export function PromptCardView({
   locale,
   labels,
   useCaseLabels,
-  signinHref,
   now,
 }: {
   card: PromptCardData;
@@ -35,7 +33,6 @@ export function PromptCardView({
   labels: PromptLabels;
   /** use-case key → bilingual label, resolved by the caller (§3.9). */
   useCaseLabels: Record<string, string>;
-  signinHref: string;
   /** Injectable clock so the NEW badge is testable without waiting fourteen days. */
   now?: Date | number;
 }) {
@@ -136,21 +133,25 @@ export function PromptCardView({
               <span key={value}>{useCaseLabels[value] ?? value}</span>
             ))}
           </span>
-          {/* §13.2 — copy straight from the card, through the entitlement-checked endpoint, so
-              the static HTML never has to contain the thing being copied. §15 moved the 403
-              destination: not-unlocked lands on THIS prompt's own page, where the cookie funnel
-              is — never on a plan page that sells nothing. */}
-          <PromptCopyButton
-            id={card.id}
-            signinHref={signinHref}
-            upgradeHref={promptHref(locale, card.slug)}
-            labels={{
-              copy: labels.copy,
-              copied: labels.copied,
-              failed: labels.copyFailed,
-              locked: labels.copyLocked,
-            }}
-          />
+          {/**
+           * "자세히 보기", not "프롬프트 복사" (founder direction, 2026-08-15).
+           *
+           * Copy-from-the-card was technically fine — the text came from the entitlement-checked
+           * endpoint, never from the HTML — but it let a reader take the one thing the product
+           * sells without ever seeing the page that explains it, funds it and now hands it to
+           * Higgsfield. The prompt is obtained on its OWN page; the card's job is to make you want
+           * to go there.
+           *
+           * A second anchor rather than a button: it is a navigation, so it should be one — and
+           * `relative z-10` lifts it above the title's stretched `::after` so the press lands here.
+           */}
+          <a
+            href={promptHref(locale, card.slug)}
+            data-card-detail={card.slug}
+            className="relative z-10 border border-hairline px-3 py-1.5 font-label text-[0.65rem] tracking-[0.12em] uppercase transition-opacity hover:opacity-70"
+          >
+            {labels.cardDetail}
+          </a>
         </div>
       </div>
     </article>

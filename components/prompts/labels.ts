@@ -13,6 +13,12 @@ export interface PromptLabels {
   byAuthor: string;
   byAnonymous: string;
   lockChip: string;
+  /** The card's one control: go to the page where the prompt lives (2026-08-15). */
+  cardDetail: string;
+  /** The Higgsfield handoff (2026-08-15) — copy the prompt, open the tool. */
+  runCta: string;
+  runCopied: string;
+  runFailed: string;
   /** The `free` gate: sign in, spend nothing (2026-08-15). */
   lockChipSignin: string;
   openLabel: string;
@@ -61,6 +67,10 @@ export function promptLabels(dict: Dictionary): PromptLabels {
     byAuthor: dict.prompts.byAuthor,
     byAnonymous: dict.prompts.byAnonymous,
     lockChip: dict.prompts.lockChip,
+    cardDetail: dict.prompts.cardDetail,
+    runCta: dict.prompts.runCta,
+    runCopied: dict.prompts.runCopied,
+    runFailed: dict.prompts.runFailed,
     lockChipSignin: dict.prompts.lockChipSignin,
     openLabel: dict.prompts.openLabel,
     copy: dict.prompts.copy,

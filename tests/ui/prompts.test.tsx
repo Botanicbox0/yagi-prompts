@@ -55,7 +55,6 @@ const cardMarkup = (data: PromptCard, locale = 'en') =>
       locale={locale}
       labels={labels}
       useCaseLabels={useCaseLabels}
-      signinHref="/auth/signin?next=%2Fen%2Fprompts&locale=en"
       now={new Date('2026-08-13T00:00:00.000Z')}
     />,
   );
@@ -110,14 +109,23 @@ describe('prompt card (§13.2)', () => {
     expect(cardMarkup(card({ titleKo: null }), 'ko')).toContain('Neon alley dolly');
   });
 
-  /** A `<button>` inside an `<a>` is invalid and unusable; the card is a stretched link instead. */
-  it('is a stretched link, so the copy button is a real sibling button', () => {
+  /**
+   * The card's one control is "자세히 보기" (founder direction, 2026-08-15): copy left the card, so
+   * the only way to obtain a prompt is the page that explains, funds and hands it off. The card
+   * therefore carries NO prompt-bearing control at all, and its second anchor must sit above the
+   * title's stretched `::after` rather than nested inside it.
+   */
+  it('sends the reader to the page instead of handing over the prompt', () => {
     const html = cardMarkup(card());
     expect(html).toContain('<article');
     expect(html).toContain('after:absolute');
-    expect(html).toContain('data-copy-prompt=');
-    // No `<button>` anywhere BETWEEN an `<a>` and its own `</a>`.
-    expect(html).not.toMatch(/<a[^>]*>(?:(?!<\/a>)[\s\S])*<button/);
+    expect(html).toContain('data-card-detail="neon-alley-dolly"');
+    expect(html).toContain(dict.prompts.cardDetail);
+    // The copy endpoint is not reachable from the wall any more.
+    expect(html).not.toContain('data-copy-prompt=');
+    // A nested anchor would be invalid; the detail link is a SIBLING lifted by z-index.
+    expect(html).not.toMatch(/<a[^>]*>(?:(?!<\/a>)[\s\S])*<a/);
+    expect(html).toContain('relative z-10');
   });
 
   it('carries no media element when there is nothing published to show', () => {
@@ -172,7 +180,6 @@ describe('rails (§13.2)', () => {
         useCaseLabels={useCaseLabels}
         emptyLabel={dict.prompts.emptyYagi}
         filteredEmptyLabel={dict.prompts.filterEmpty}
-        signinHref="/auth/signin"
       />,
     );
 
@@ -380,6 +387,20 @@ describe('prompt detail (§13.2 / §5.5 / §15.3)', () => {
     expect(body({ ...open, tier: 'admin', visibility: 'public' })).not.toContain('data-admin-view');
     // A pro reader is past the gate; telling them about it would be noise.
     expect(body(open)).not.toContain('data-admin-view');
+  });
+
+  /**
+   * The handoff (founder direction, 2026-08-15). Running Seedance 2.5 with OUR key costs more per
+   * 10-second clip than a whole $4 cookie pack, so the first move is to hand the prompt to the tool
+   * that already has the reader's account. What matters structurally: it appears ONLY where the
+   * text does — a handoff for a prompt you cannot read opens a tab with an empty clipboard.
+   */
+  it('offers the Higgsfield handoff exactly where the prompt is readable', () => {
+    const open = body({ ...locked, ...{ locked: false, text: 'x', process: null, processKo: null } } as ShapedPrompt);
+    expect(open).toContain('data-run-prompt');
+    expect(open).toContain(dict.prompts.runCta);
+    // Locked: no run button, because there would be nothing to carry across.
+    expect(body(locked, { state: 'signin' })).not.toContain('data-run-prompt');
   });
 
   it('renders the text in a monospace block with a copy button for an entitled reader', () => {

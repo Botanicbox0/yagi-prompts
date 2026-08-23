@@ -121,13 +121,23 @@ describe('prompt catalog projection (§13.2)', () => {
     expect(cards[0]!.featured).toBe(true);
   });
 
-  /** §3.5 badge windows, applied to a prompt's publication rather than a playbook's debut. */
+  /**
+   * §3.5 badge windows, applied to a prompt's publication rather than a playbook's debut.
+   *
+   * The clock is derived from each fixture's OWN date rather than pinned to a calendar day. The
+   * pinned version passed until the fixtures — which are seeded relative to the real clock — drifted
+   * past it (2026-08-16), and a test that fails with the passage of time tests the calendar, not the
+   * window it claims to.
+   */
   it('drives the NEW badge from publishedAt on the 14-day window', () => {
-    const now = new Date('2026-08-13T00:00:00.000Z');
-    const fresh = catalog.yagi.find((card) => card.slug === 'neon-alley-dolly')!;
-    const old = catalog.yagi.find((card) => card.slug === 'short-film-establishing-rooftop')!;
-    expect(badgeFor({ firstPublishedAt: fresh.publishedAt, updatedAt: null, now })).toBe('new');
-    expect(badgeFor({ firstPublishedAt: old.publishedAt, updatedAt: null, now })).toBeNull();
+    const DAY = 24 * 60 * 60 * 1000;
+    const card = catalog.yagi.find((item) => item.publishedAt !== null)!;
+    const published = Date.parse(card.publishedAt!);
+
+    const inside = new Date(published + 13 * DAY);
+    const outside = new Date(published + 15 * DAY);
+    expect(badgeFor({ firstPublishedAt: card.publishedAt, updatedAt: null, now: inside })).toBe('new');
+    expect(badgeFor({ firstPublishedAt: card.publishedAt, updatedAt: null, now: outside })).toBeNull();
   });
 
   it('has an honest empty state', () => {
