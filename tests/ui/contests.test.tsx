@@ -396,7 +396,7 @@ function shaped(overrides: Partial<ShapedContest> = {}): ShapedContest {
   return {
     id: '9c000000-0000-4000-8000-000000000001',
     slug: 'launch-film-contest',
-    title: { en: 'YAGI PROMPTS\nLAUNCH FILM\nCONTEST', ko: 'YAGI PROMPTS\n론칭 단편\n공모전' },
+    title: { en: 'TWINGS\nLAUNCH FILM\nCONTEST', ko: 'TWINGS\n론칭 단편\n공모전' },
     summary: { en: 'Make a short film.', ko: '단편을 만들어 주세요.' },
     prizeTotal: { en: '$3,000', ko: '총 $3,000' },
     prizeKind: 'cash',
@@ -431,23 +431,23 @@ function order(html: string): string[] {
 
 describe('the hero poster (finding 1)', () => {
   it('sets EVERY authored line and discards nothing', () => {
-    const title = 'YAGI PROMPTS\nLAUNCH FILM\nCONTEST';
-    expect(posterTitleLines(title)).toEqual(['YAGI PROMPTS', 'LAUNCH FILM', 'CONTEST']);
+    const title = 'TWINGS\nLAUNCH FILM\nCONTEST';
+    expect(posterTitleLines(title)).toEqual(['TWINGS', 'LAUNCH FILM', 'CONTEST']);
 
     const html = renderToStaticMarkup(
       <ContestPoster wide title={title} slug="s" host="YAGI WORKSHOP" prize="$3,000" payouts={['1st $1,500']} />,
     );
-    for (const line of ['YAGI PROMPTS', 'LAUNCH FILM', 'CONTEST']) {
+    for (const line of ['TWINGS', 'LAUNCH FILM', 'CONTEST']) {
       expect(html, line).toContain(line);
     }
   });
 
   /** A title with no authored break is CHUNKED, never truncated — the old three-word cut. */
   it('chunks an unbroken title instead of throwing the rest away', () => {
-    expect(posterTitleLines('YAGI PROMPTS LAUNCH FILM CONTEST')).toEqual([
-      'YAGI PROMPTS',
-      'LAUNCH FILM',
-      'CONTEST',
+    // Four words now that the brand is one word (2026-08-16), so the chunker pairs them.
+    expect(posterTitleLines('TWINGS LAUNCH FILM CONTEST')).toEqual([
+      'TWINGS LAUNCH',
+      'FILM CONTEST',
     ]);
     expect(posterTitleLines('ONE')).toEqual(['ONE']);
   });
@@ -455,7 +455,7 @@ describe('the hero poster (finding 1)', () => {
   /** The outline is semantic: the LAST line, never a hash-picked word and never the studio name. */
   it('outlines the final line only', () => {
     const html = renderToStaticMarkup(
-      <ContestPoster wide title={'YAGI PROMPTS\nLAUNCH FILM\nCONTEST'} slug="s" host="B" />,
+      <ContestPoster wide title={'TWINGS\nLAUNCH FILM\nCONTEST'} slug="s" host="B" />,
     );
     expect(html.match(/-webkit-text-stroke:1px #ffffff/g)).toHaveLength(1);
     const finalSpan = /data-poster-line="final"[^>]*>([^<]*)</.exec(html)?.[1];

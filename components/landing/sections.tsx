@@ -41,7 +41,7 @@ function startHref(locale: Locale): string {
  * screen shows zero cards is not gallery-first. The two reappear in `HeroLede`, after the first
  * rail. Same type, same copy; only where they live changes.
  */
-export function Hero({ dict }: { locale: Locale; dict: Dictionary }) {
+export function Hero({ locale, dict }: { locale: Locale; dict: Dictionary }) {
   return (
     <section data-section data-theme="light" className="section overflow-hidden">
       <div className="mx-auto max-w-shell px-gutter pt-24 pb-8 lg:pt-36 lg:pb-20">
@@ -57,6 +57,18 @@ export function Hero({ dict }: { locale: Locale; dict: Dictionary }) {
         <div className="mt-8 flex flex-wrap items-end justify-between gap-x-14 gap-y-6 lg:mt-10">
           <p className="hidden max-w-detail text-body opacity-70 lg:block">{dict.hero.lede}</p>
           <div className="flex flex-wrap items-center gap-x-8 gap-y-4">
+            {/*
+             * The one filled button on the site (2026-08-16). Every other CTA here is an outline,
+             * so weight alone says which door is the product: photo in, film out. The catalogue
+             * link keeps its outline and stays beside it as the evidence you can read first.
+             */}
+            <a
+              href={`/${locale}/studio`}
+              data-hero-studio
+              className="inline-block bg-accent px-6 py-3 font-label text-label text-white uppercase"
+            >
+              <TextSwap>{dict.studio.heroCta} →</TextSwap>
+            </a>
             <a
               href="#gallery"
               className="inline-block border border-current px-6 py-3 font-label text-label uppercase"

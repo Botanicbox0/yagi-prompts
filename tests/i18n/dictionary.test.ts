@@ -100,7 +100,7 @@ describe('dictionary completeness (§3.9)', () => {
   });
 
   /**
-   * M7 — the product is called YAGI PROMPTS. The repo, the npm package and every internal
+   * M7 — the product is called TWINGS. The repo, the npm package and every internal
    * identifier keep the `playbook` codename on purpose, so a blanket grep would be wrong; what
    * belongs in a test is the USER-FACING half, which is exactly the dictionaries.
    *
@@ -111,11 +111,11 @@ describe('dictionary completeness (§3.9)', () => {
   describe('brand (M7)', () => {
     const contentNoun = new Set(['library.title']);
 
-    it('is YAGI PROMPTS in both locales', () => {
-      expect(en.meta.siteName).toBe('YAGI PROMPTS');
-      expect(ko.meta.siteName).toBe('YAGI PROMPTS');
-      expect(en.admin.brand).toContain('YAGI PROMPTS');
-      expect(ko.admin.brand).toContain('YAGI PROMPTS');
+    it('is TWINGS in both locales', () => {
+      expect(en.meta.siteName).toBe('TWINGS');
+      expect(ko.meta.siteName).toBe('TWINGS');
+      expect(en.admin.brand).toContain('TWINGS');
+      expect(ko.admin.brand).toContain('TWINGS');
     });
 
     it('leaves no old brand token in any user-facing string', () => {

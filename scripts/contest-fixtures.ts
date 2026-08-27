@@ -159,8 +159,8 @@ export const CONTEST_FIXTURES: ContestFixture[] = [
      * produce. The hero poster sets every authored line and outlines the last one.
      */
     title: {
-      en: 'YAGI PROMPTS\nLAUNCH FILM\nCONTEST',
-      ko: 'YAGI PROMPTS\n론칭 단편\n공모전',
+      en: 'TWINGS\nLAUNCH FILM\nCONTEST',
+      ko: 'TWINGS\n론칭 단편\n공모전',
     },
     summary: {
       en: 'Make a short film with the prompts on this site. Post it, send us the link, and the best three get paid.',

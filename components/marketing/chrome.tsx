@@ -20,6 +20,8 @@ import type { SectionTheme } from '@/lib/motion/geometry';
  */
 export function siteLinks(locale: Locale, dict: Dictionary): NavLink[] {
   const links: NavLink[] = [
+    // Studio leads because it is the product; the catalogue behind it is the evidence. (2026-08-16)
+    { href: `/${locale}/studio`, label: dict.nav.studio },
     { href: promptsHref(locale), label: dict.nav.prompts },
     { href: contestsHref(locale), label: dict.nav.contests },
   ];

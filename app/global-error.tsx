@@ -78,7 +78,7 @@ export default function GlobalError({
               margin: 0,
             }}
           >
-            YAGI PROMPTS
+            TWINGS
           </p>
           <h1
             style={{

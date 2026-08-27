@@ -19,8 +19,8 @@ import { posterRatio } from '@/components/ui/poster-seed';
  *
  * §5.2: "display lines manually broken". The author breaks the title in the admin editor (a
  * three-row textarea, so a break is a decision) and every authored line is set — the previous
- * version took the first three WORDS and silently discarded the rest, which turned "YAGI PROMPTS
- * LAUNCH FILM CONTEST" into "YAGI PROMPTS LAUNCH".
+ * version took the first three WORDS and silently discarded the rest, which turned "TWINGS
+ * LAUNCH FILM CONTEST" into "TWINGS LAUNCH".
  *
  * A title with no authored break is chunked into at most three balanced lines rather than
  * truncated: a poster still needs a stack, but nothing may be thrown away to get one.

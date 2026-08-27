@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { GoatMark } from './goat-mark';
+import { TwingsWordmark } from '@/components/brand/twings-wordmark';
 import { TextSwap } from '@/components/ui/text-swap';
 import { useScroll } from '@/components/motion/scroll-provider';
 import { useSectionThemeAt } from '@/components/motion/use-section-theme';
@@ -126,14 +126,11 @@ export function SiteNav({
           aria-label={labels.primary}
           className="mx-auto flex h-full max-w-shell items-center justify-between px-gutter"
         >
-          {/* No aria-label: the visible "YAGI PROMPTS" wordmark IS the accessible name. An
-              aria-label of "Home" would override it and mismatch the visible text (axe
-              `label-content-name-mismatch`), which breaks voice control. */}
-          <a href={`/${locale}`} className="flex items-center gap-2.5">
-            <GoatMark className="h-6 w-6" />
-            <span className="font-display text-[1.05rem] leading-none font-black tracking-[0.02em] uppercase">
-              <TextSwap>{labels.brand}</TextSwap>
-            </span>
+          {/* No aria-label: the wordmark's own `aria-label` IS the accessible name (2026-08-16 —
+              the mark became the logotype, so the text beside it would have been the same word
+              twice). */}
+          <a href={`/${locale}`} className="flex items-center" title={labels.brand}>
+            <TwingsWordmark className="h-[18px] w-auto" />
           </a>
 
           <div className="hidden items-center gap-8 md:flex">

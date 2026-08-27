@@ -42,7 +42,7 @@ export interface FakeMailer extends Mailer {
   reset(): void;
 }
 
-const DEFAULT_FROM = 'YAGI PROMPTS <prompts@fake.test>';
+const DEFAULT_FROM = 'TWINGS <prompts@fake.test>';
 
 export function createFakeMailer(options: FakeMailerOptions = {}): FakeMailer {
   const sent: RecordedEmail[] = [];
