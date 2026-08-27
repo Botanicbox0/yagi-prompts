@@ -21,7 +21,7 @@ const BASE = {
   slug: 'character-sheet-generation',
   title: { en: 'Character sheet generation', ko: '캐릭터 시트 제작' },
   summary: { en: 'One face, many poses.', ko: '한 얼굴, 여러 포즈.' },
-  siteName: 'YAGI PROMPTS',
+  siteName: 'TWINGS',
 };
 
 const PUBLIC_HERO: ShapedAssetRef = {
@@ -94,8 +94,8 @@ describe('playbook metadata (§3.9)', () => {
   });
 
   it('deindexes draft / archived / unknown', () => {
-    expect(unresolvedPlaybookMetadata('YAGI PROMPTS')).toEqual({
-      title: 'YAGI PROMPTS',
+    expect(unresolvedPlaybookMetadata('TWINGS')).toEqual({
+      title: 'TWINGS',
       robots: { index: false, follow: false },
     });
   });
@@ -122,16 +122,16 @@ describe('contest metadata og:site_name (F6)', () => {
         video: null,
       },
       locale: 'en',
-      siteName: 'YAGI PROMPTS',
+      siteName: 'TWINGS',
     });
-    expect((detail.openGraph as { siteName?: string }).siteName).toBe('YAGI PROMPTS');
+    expect((detail.openGraph as { siteName?: string }).siteName).toBe('TWINGS');
 
     const listing = contestsListingMetadata({
       locale: 'ko',
       title: 'Contests',
       description: 'D',
-      siteName: 'YAGI PROMPTS',
+      siteName: 'TWINGS',
     });
-    expect((listing.openGraph as { siteName?: string }).siteName).toBe('YAGI PROMPTS');
+    expect((listing.openGraph as { siteName?: string }).siteName).toBe('TWINGS');
   });
 });

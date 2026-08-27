@@ -75,7 +75,7 @@ const money = `$${PACK_PRICE_USD}`;
 
 const TERMS_KO = `## 제1조 (목적)
 
-이 약관은 ${BUSINESS.nameKo}(이하 "회사")가 운영하는 YAGI PROMPTS(이하 "서비스")의 이용 조건과 절차, 회사와 이용자의 권리·의무를 정합니다.
+이 약관은 ${BUSINESS.nameKo}(이하 "회사")가 운영하는 TWINGS(이하 "서비스")의 이용 조건과 절차, 회사와 이용자의 권리·의무를 정합니다.
 
 ## 제2조 (서비스의 내용)
 
@@ -129,7 +129,7 @@ const TERMS_KO = `## 제1조 (목적)
 
 const TERMS_EN = `## 1. Purpose
 
-These terms govern the use of YAGI PROMPTS (the "Service"), operated by ${BUSINESS.name} (the "Company").
+These terms govern the use of TWINGS (the "Service"), operated by ${BUSINESS.name} (the "Company").
 
 ## 2. What the Service is
 
@@ -185,7 +185,7 @@ These terms are governed by the laws of the Republic of Korea.`;
 
 const REFUND_KO = `## 1. 무엇을 파는가
 
-YAGI PROMPTS의 유료 상품은 "쿠키" ${PACK_COOKIES}개 묶음(${money})이며, **정기결제가 아닌 일회성 구매**입니다. 쿠키 1개는 잠긴 프롬프트 1개의 원문을 여는 데 사용됩니다.
+TWINGS의 유료 상품은 "쿠키" ${PACK_COOKIES}개 묶음(${money})이며, **정기결제가 아닌 일회성 구매**입니다. 쿠키 1개는 잠긴 프롬프트 1개의 원문을 여는 데 사용됩니다.
 
 ## 2. 청약철회 (전액 환불)
 
@@ -218,7 +218,7 @@ ${BUSINESS.email} 로 **결제하신 이메일 주소와 결제 일시**를 적�
 
 const REFUND_EN = `## 1. What is sold
 
-The only paid item on YAGI PROMPTS is a pack of ${PACK_COOKIES} cookies for ${money}. It is a **one-time purchase, not a subscription**. One cookie opens the full text of one gated prompt.
+The only paid item on TWINGS is a pack of ${PACK_COOKIES} cookies for ${money}. It is a **one-time purchase, not a subscription**. One cookie opens the full text of one gated prompt.
 
 ## 2. Full refund
 
@@ -361,8 +361,8 @@ The Service sets only the cookies needed to keep you signed in and to remember y
 
 const DOCUMENTS: Record<LegalDoc, Record<Locale, LegalDocument>> = {
   terms: {
-    ko: { title: '이용약관', summary: 'YAGI PROMPTS 서비스 이용 조건입니다.', body: TERMS_KO },
-    en: { title: 'Terms of Service', summary: 'The terms you use YAGI PROMPTS under.', body: TERMS_EN },
+    ko: { title: '이용약관', summary: 'TWINGS 서비스 이용 조건입니다.', body: TERMS_KO },
+    en: { title: 'Terms of Service', summary: 'The terms you use TWINGS under.', body: TERMS_EN },
   },
   refund: {
     ko: {

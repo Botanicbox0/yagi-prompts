@@ -267,7 +267,7 @@ const CONTEST_EMAIL = 'hello@yagiworkshop.xyz';
 
 const ENQUIRY: Record<'en' | 'ko', { subject: string; body: string[] }> = {
   en: {
-    subject: 'YAGI PROMPTS — run a contest with the studio',
+    subject: 'TWINGS — run a contest with the studio',
     body: [
       'Host (brand / platform / studio / creator / community):',
       'Prize — kind (cash, credits, subscription, gear, feature) and the figure:',
@@ -277,7 +277,7 @@ const ENQUIRY: Record<'en' | 'ko', { subject: string; body: string[] }> = {
     ],
   },
   ko: {
-    subject: 'YAGI PROMPTS — 콘테스트 개최 문의',
+    subject: 'TWINGS — 콘테스트 개최 문의',
     body: [
       '주최 (브랜드 / 플랫폼 / 스튜디오 / 크리에이터 / 커뮤니티):',
       '보상 — 종류(현금·크레딧·구독권·장비·피처링)와 금액:',

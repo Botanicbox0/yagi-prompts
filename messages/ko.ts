@@ -12,7 +12,7 @@ import type { Dictionary } from './en';
  */
 export const ko: Dictionary = {
   meta: {
-    siteName: 'YAGI PROMPTS',
+    siteName: 'TWINGS',
     tagline: '직접 만들고 검증한 Seedance 2.5 오리지널 프롬프트.',
     landingDescription:
       '모든 프롬프트를 스튜디오에서 직접 작성하고 Seedance 2.5로 검증한 뒤 공개합니다. 다른 곳에서 가져온 프롬프트는 없습니다. 커뮤니티 프롬프트는 @핸들과 함께 올라갑니다.',
@@ -27,6 +27,7 @@ export const ko: Dictionary = {
       '브랜드가 주최하고 YAGI 스튜디오가 운영하는 영상 공모전. 작품 링크와 SNS 계정만 있으면 참가할 수 있습니다.',
   },
   nav: {
+    studio: '스튜디오',
     prompts: '프롬프트',
     contests: '콘테스트',
     library: '라이브러리',
@@ -253,9 +254,9 @@ export const ko: Dictionary = {
     fieldProcess: '제작 과정',
     fieldProcessHint:
       '선택 사항이지만 사람들이 가장 오래 읽는 부분입니다. 참고 자료, 반복한 시도, 실패한 설정값을 적어 주세요. 마크다운(제목·목록·링크)을 쓸 수 있고, 편한 언어로 쓰시면 됩니다.',
-    consentLabel: '제가 직접 작성한 프롬프트이며, 제 @핸들과 함께 YAGI PROMPTS에 게시되는 데 동의합니다.',
+    consentLabel: '제가 직접 작성한 프롬프트이며, 제 @핸들과 함께 TWINGS에 게시되는 데 동의합니다.',
     consentLicense:
-      '프롬프트의 권리는 제출자에게 그대로 있습니다. YAGI PROMPTS가 이 사이트와 홍보 채널에서 @핸들과 함께 게시할 수 있도록 허락하는 것입니다.',
+      '프롬프트의 권리는 제출자에게 그대로 있습니다. TWINGS가 이 사이트와 홍보 채널에서 @핸들과 함께 게시할 수 있도록 허락하는 것입니다.',
     submitButton: '제출하기',
     successTitle: '제출이 완료됐습니다.',
     successBody: '검토 후 게시 여부가 결정됩니다. 진행 상태는 내 계정에서 확인할 수 있습니다.',
@@ -273,6 +274,38 @@ export const ko: Dictionary = {
     statusRejected: '게시되지 않음',
     statusArchived: '게시 중단',
     rejectReasonLabel: '사유',
+  },
+  studio: {
+    eyebrow: 'TWINGS 스튜디오',
+    heroCta: '사진 한 장으로 만들기',
+    headline: '사진 한 장이면\n당신이 주인공입니다.',
+    intro:
+      '얼굴 사진을 올리고 장면을 고르면, 스튜디오가 실제로 검증한 프롬프트로 완성된 영상을 만들어 드립니다. 편집도, 촬영도, 프롬프트를 쓸 필요도 없습니다.',
+    metaTitle: 'TWINGS 스튜디오 — 사진 한 장으로 만드는 영상',
+    metaDescription: '사진을 올리고 장면을 고르면 완성된 영상이 나옵니다.',
+    stepPhoto: '사진',
+    stepStyle: '장면',
+    stepPay: '결제',
+    stepResult: '완성',
+    dropZone: '사진을 여기에 놓거나 클릭해서 선택',
+    dropHint: '얼굴이 또렷하게 나온 정면 사진 한 장이면 충분합니다',
+    changePhoto: '사진 바꾸기',
+    chooseStyle: '어떤 장면의 주인공이 되고 싶으세요?',
+    payCta: '{price} 결제하고 만들기',
+    payNote: '한 편당 결제입니다. 정기결제가 아닙니다.',
+    demoBadge: '데모 — 실제 결제·생성은 아직 연결되지 않았습니다',
+    rendering: '영상을 만드는 중입니다',
+    renderingNote:
+      '실제 서비스에서는 2~5분이 걸립니다. 창을 닫아도 완성되면 알려드립니다.',
+    resultHeading: '완성된 영상',
+    resultNote:
+      '데모에서는 스튜디오가 미리 만들어 둔 예시 영상이 재생됩니다. 올리신 사진은 브라우저를 벗어나지 않습니다.',
+    again: '다른 장면으로 다시',
+    runtimeLabel: '{seconds}초',
+    blurbs: {
+      'seoul-90s': '1994년 서울, 베타캠으로 찍은 인터뷰',
+      'prom-queen': 'Y2K 하이틴 무비, 프롬 나이트',
+    },
   },
   contests: {
     eyebrow: '콘테스트',
@@ -373,7 +406,7 @@ export const ko: Dictionary = {
     fieldNoteHint: '선택 사항입니다. 최대 {max}자.',
     consentLabel: '제가 만든 작품이며, 제 SNS 계정과 함께 이 페이지에 게시되는 데 동의합니다.',
     consentTerms:
-      '작품의 권리는 출품자에게 그대로 있습니다. YAGI PROMPTS와 주최 측이 이 콘테스트 페이지와 홍보 채널에서 출품자 표기와 함께 보여줄 수 있도록 허락하는 것입니다.',
+      '작품의 권리는 출품자에게 그대로 있습니다. TWINGS와 주최 측이 이 콘테스트 페이지와 홍보 채널에서 출품자 표기와 함께 보여줄 수 있도록 허락하는 것입니다.',
     submitButton: '출품하기',
     submitPending: '제출 중…',
     resubmitButton: '출품작 교체하기',
@@ -517,7 +550,7 @@ export const ko: Dictionary = {
     q3: '정말 전부 오리지널인가요?',
     a3: '네. YAGI 레일의 프롬프트는 전부 이 스튜디오에서 직접 쓰고 Seedance 2.5로 검증한 뒤 공개합니다. 커뮤니티 제출작도 사람이 직접 확인한 뒤 게시되며, 제출자의 @핸들이 함께 표기됩니다.',
     q4: '여기서 영상 생성도 할 수 있나요?',
-    a4: '아니요. YAGI PROMPTS는 생성 서비스가 아닙니다. 어떤 프롬프트를 어디서 어떤 값으로 실행해야 하는지 알려주는 서비스입니다.',
+    a4: '아니요. TWINGS는 생성 서비스가 아닙니다. 어떤 프롬프트를 어디서 어떤 값으로 실행해야 하는지 알려주는 서비스입니다.',
     q5: '한국어로도 제공되나요?',
     a5: '제목과 설명은 한국어와 영어로 모두 제공합니다. 프롬프트 자체는 모델 입력값이므로 번역하지 않습니다. 번역하면 결과가 달라집니다.',
     q6: '제작 의뢰도 받나요?',
@@ -617,7 +650,7 @@ export const ko: Dictionary = {
     updateEyebrow: '플레이북 업데이트',
     changeNoteHeading: '변경 사항',
     cta: '플레이북 읽기',
-    signOff: 'YAGI PROMPTS — 검증된 프롬프트 라이브러리.',
+    signOff: 'TWINGS — 검증된 프롬프트 라이브러리.',
     unsubscribe: '수신 거부',
     manage: '알림 설정 관리',
   },
@@ -627,13 +660,13 @@ export const ko: Dictionary = {
     doneUpdates: '"플레이북 업데이트" 메일을 더 이상 보내지 않습니다.',
     reversible: '계정 설정에서 언제든 다시 켤 수 있습니다.',
     manage: '계정 설정',
-    home: 'YAGI PROMPTS로 돌아가기',
+    home: 'TWINGS로 돌아가기',
     invalidTitle: '유효하지 않은 링크입니다.',
     invalidBody:
       '메일 앱에서 링크가 잘렸거나 만료된 링크일 수 있습니다. 계정 설정에서 직접 알림을 변경해 주세요.',
   },
   admin: {
-    brand: 'YAGI PROMPTS 관리자',
+    brand: 'TWINGS 관리자',
     navPrompts: '프롬프트',
     navContests: '콘테스트',
     navPlaybooks: '플레이북',

@@ -1,7 +1,7 @@
 /** PLAN §3.9 — UI strings as dictionary modules. `en` is the shape; `ko` must match it. */
 export const en = {
   meta: {
-    siteName: 'YAGI PROMPTS',
+    siteName: 'TWINGS',
     tagline: 'Original Seedance 2.5 prompts, written and tested in-house.',
     landingDescription:
       'Every prompt here was authored in our studio and run on Seedance 2.5 before it went up. Nothing scraped, nothing reposted. Plus a community rail, credited by @handle.',
@@ -16,6 +16,7 @@ export const en = {
       'Brand-hosted film contests run through the YAGI studio. Enter with a link to your film and the SNS you post from.',
   },
   nav: {
+    studio: 'Studio',
     prompts: 'Prompts',
     contests: 'Contests',
     library: 'Library',
@@ -264,9 +265,9 @@ export const en = {
 
     fieldProcessHint:
       'Optional, and the part people read twice. References, the passes you ran, the settings that failed. Markdown works — headings, lists, links. Write it in whichever language you think in.',
-    consentLabel: 'I wrote this prompt and I am happy for YAGI PROMPTS to publish it under my @handle.',
+    consentLabel: 'I wrote this prompt and I am happy for TWINGS to publish it under my @handle.',
     consentLicense:
-      'You keep the prompt. You are giving YAGI PROMPTS a licence to display it, with your @handle, on this site and in its own promotion.',
+      'You keep the prompt. You are giving TWINGS a licence to display it, with your @handle, on this site and in its own promotion.',
     submitButton: 'Send for review',
     successTitle: 'IN THE QUEUE.',
     successBody: 'We watch every submission back before it goes up. You will see its status on your account.',
@@ -286,6 +287,38 @@ export const en = {
     rejectReasonLabel: 'Why',
   },
   /** §14.2 — the contests tab: listing, detail and the phase vocabulary they share. */
+  studio: {
+    eyebrow: 'TWINGS Studio',
+    heroCta: 'Make one from a photo',
+    headline: 'ONE PHOTO.\nYOU ARE THE LEAD.',
+    intro:
+      'Upload a face, pick a scene, and the studio returns a finished film — built from prompts we actually ran and verified. No shoot, no edit, no prompt to write.',
+    metaTitle: 'TWINGS Studio — a film from one photo',
+    metaDescription: 'Upload a photo, pick a scene, get a finished film.',
+    stepPhoto: 'Photo',
+    stepStyle: 'Scene',
+    stepPay: 'Pay',
+    stepResult: 'Film',
+    dropZone: 'Drop a photo here, or click to choose',
+    dropHint: 'One clear, front-facing photo is enough',
+    changePhoto: 'Change photo',
+    chooseStyle: 'Which scene do you want to star in?',
+    payCta: 'Pay {price} and make it',
+    payNote: 'One payment per film. Not a subscription.',
+    demoBadge: 'Demo — payment and rendering are not connected yet',
+    rendering: 'Making your film',
+    renderingNote:
+      'The real thing takes 2-5 minutes. You can close the tab; we tell you when it lands.',
+    resultHeading: 'Your film',
+    resultNote:
+      'In this demo the studio plays its own example film. Your photo never leaves the browser.',
+    again: 'Try another scene',
+    runtimeLabel: '{seconds}s',
+    blurbs: {
+      'seoul-90s': '1994 Seoul, shot on Betacam',
+      'prom-queen': 'Y2K teen movie, prom night',
+    },
+  },
   contests: {
     eyebrow: 'Contests',
     line1: 'ANYONE CAN',
@@ -395,7 +428,7 @@ export const en = {
     consentLabel:
       'This is my film, and I am happy for it to appear on this page with my SNS credited.',
     consentTerms:
-      'You keep the film. You are giving YAGI PROMPTS and the hosting brand a licence to show it, credited, on this contest page and in its promotion.',
+      'You keep the film. You are giving TWINGS and the hosting brand a licence to show it, credited, on this contest page and in its promotion.',
     submitButton: 'Send my entry',
     /** The submit button's own pending state (`useFormStatus`), so a slow POST is not silence. */
     submitPending: 'Sending…',
@@ -545,7 +578,7 @@ export const en = {
     q3: 'Are these really original?',
     a3: 'Yes, and that is the whole product. Every prompt in the YAGI rail was written in this studio and run on Seedance 2.5 before it was published. Community submissions are watched back by a human before they appear, and they carry the submitter’s @handle.',
     q4: 'Can I run generations here?',
-    a4: 'No. YAGI PROMPTS never runs inference for you. It tells you exactly what to run, where, and with which numbers.',
+    a4: 'No. TWINGS never runs inference for you. It tells you exactly what to run, where, and with which numbers.',
     q5: 'Is everything bilingual?',
     a5: 'Titles and explanations are written in Korean and English. Prompts themselves are not translated — they are model inputs, and translating them changes the output.',
     q6: 'Can you build this for us?',
@@ -655,7 +688,7 @@ export const en = {
     updateEyebrow: 'Playbook updated',
     changeNoteHeading: 'What changed',
     cta: 'Read the playbook',
-    signOff: 'YAGI PROMPTS — a library of verified prompts.',
+    signOff: 'TWINGS — a library of verified prompts.',
     unsubscribe: 'Unsubscribe from these emails',
     manage: 'Manage notifications',
   },
@@ -666,7 +699,7 @@ export const en = {
     doneUpdates: 'You will not get "playbook updated" emails any more.',
     reversible: 'You can switch it back on from your account at any time.',
     manage: 'Account settings',
-    home: 'Back to YAGI PROMPTS',
+    home: 'Back to TWINGS',
     invalidTitle: 'That link is not valid.',
     invalidBody:
       'It may have been cut in half by a mail client, or it belongs to an older sending key. Open your account settings and change the switch there instead.',
@@ -676,7 +709,7 @@ export const en = {
    * the completeness test does not carve out an exception, and neither should the product.
    */
   admin: {
-    brand: 'YAGI PROMPTS CMS',
+    brand: 'TWINGS CMS',
     navPrompts: 'Prompts',
     navContests: 'Contests',
     navPlaybooks: 'Playbooks',

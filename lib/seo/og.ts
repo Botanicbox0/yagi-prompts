@@ -18,7 +18,7 @@ export const SITE_OG_IMAGE = {
   url: '/og/card.png',
   width: 1200,
   height: 630,
-  alt: 'YAGI PROMPTS — prompts that actually ship.',
+  alt: 'TWINGS — prompts that actually ship.',
 };
 
 /** `summary_large_image` is what turns the card from a text row into the full-width preview. */

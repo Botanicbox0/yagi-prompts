@@ -48,8 +48,8 @@ describe('notification email templates (§3.5)', () => {
   it('takes its wordmark from the dictionary, in both parts and both locales', () => {
     for (const locale of ['en', 'ko'] as const) {
       const mail = renderNotificationEmail({ kind: 'new_playbook', locale, ...CONTENT }, LINKS);
-      expect(mail.html).toContain('YAGI PROMPTS');
-      expect(mail.text.startsWith('YAGI PROMPTS — ')).toBe(true);
+      expect(mail.html).toContain('TWINGS');
+      expect(mail.text.startsWith('TWINGS — ')).toBe(true);
       expect(mail.html).not.toMatch(/>PLAYBOOK</);
     }
   });

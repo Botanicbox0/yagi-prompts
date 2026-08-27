@@ -105,7 +105,7 @@ describe('prompt metadata (§13.2 SEO)', () => {
       description: 'Original prompts.',
       poster,
       video,
-      siteName: 'YAGI PROMPTS',
+      siteName: 'TWINGS',
       ...overrides,
     });
 
@@ -136,7 +136,7 @@ describe('prompt metadata (§13.2 SEO)', () => {
 
   /** F6 — og:site_name: the card is read where the site is not, so the card names the site. */
   it('names the site on the OG object', () => {
-    expect((meta().openGraph as { siteName?: string }).siteName).toBe('YAGI PROMPTS');
+    expect((meta().openGraph as { siteName?: string }).siteName).toBe('TWINGS');
   });
 
   /**
@@ -157,7 +157,7 @@ describe('prompt metadata (§13.2 SEO)', () => {
   });
 
   it('deindexes anything that did not resolve', () => {
-    expect(unresolvedPromptMetadata('YAGI PROMPTS').robots).toEqual({ index: false, follow: false });
+    expect(unresolvedPromptMetadata('TWINGS').robots).toEqual({ index: false, follow: false });
   });
 
   it('makes the gallery indexable and self-canonical', () => {
@@ -165,29 +165,29 @@ describe('prompt metadata (§13.2 SEO)', () => {
       locale: 'ko',
       title: 'Prompts',
       description: 'D',
-      siteName: 'YAGI PROMPTS',
+      siteName: 'TWINGS',
     });
     expect(m.alternates?.canonical).toBe('/ko/prompts');
     expect(m.robots).toBeUndefined();
     expect((m.openGraph as { locale?: string }).locale).toBe('ko_KR');
-    expect((m.openGraph as { siteName?: string }).siteName).toBe('YAGI PROMPTS');
+    expect((m.openGraph as { siteName?: string }).siteName).toBe('TWINGS');
   });
 
   /**
    * M7 regression. The `<title>` and the OG title are NOT the same string: the locale layout
    * appends `· {siteName}` to every child title, so a gallery title that also spelled the brand
-   * rendered "Prompts — YAGI PROMPTS · YAGI PROMPTS" in the tab. The OG card still needs the name,
+   * rendered "Prompts — TWINGS · TWINGS" in the tab. The OG card still needs the name,
    * because it is read where the site is not.
    */
   it('names the site in the OG title and not in the tab title', () => {
     const m = promptsGalleryMetadata({
       locale: 'en',
       title: 'Prompts',
-      ogTitle: 'Prompts — YAGI PROMPTS',
+      ogTitle: 'Prompts — TWINGS',
       description: 'D',
-      siteName: 'YAGI PROMPTS',
+      siteName: 'TWINGS',
     });
     expect(m.title).toBe('Prompts');
-    expect((m.openGraph as { title?: string }).title).toBe('Prompts — YAGI PROMPTS');
+    expect((m.openGraph as { title?: string }).title).toBe('Prompts — TWINGS');
   });
 });

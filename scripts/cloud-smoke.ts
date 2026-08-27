@@ -452,7 +452,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  console.log(`YAGI PROMPTS cloud smoke → ${new URL(url).host}`);
+  console.log(`TWINGS cloud smoke → ${new URL(url).host}`);
   console.log(`runtime: ${describeRuntimeSelection()}`);
 
   await smokeDatabase(url, anonKey, hasServiceKey);
