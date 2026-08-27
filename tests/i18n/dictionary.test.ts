@@ -91,6 +91,9 @@ describe('dictionary completeness (§3.9)', () => {
       // 2026-08-14: the ad rail sets its address row as "CONTACT : HELLO@…" — a latin wayfinding
       // token in front of an email, identical in both locales by design, not an untranslated line.
       'ad.contactLabel',
+      // 2026-08-16 (founder: "twings로 그냥 하자"): the product is named TWINGS in both locales,
+      // with no descriptor after it. A name is not a sentence, so there is nothing to translate.
+      'studio.eyebrow',
     ]);
 
     const untranslated = enLeaves
