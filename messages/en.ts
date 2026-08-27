@@ -16,7 +16,7 @@ export const en = {
       'Brand-hosted film contests run through the YAGI studio. Enter with a link to your film and the SNS you post from.',
   },
   nav: {
-    studio: 'Studio',
+    studio: 'Make a film',
     prompts: 'Prompts',
     contests: 'Contests',
     library: 'Library',
@@ -288,12 +288,12 @@ export const en = {
   },
   /** §14.2 — the contests tab: listing, detail and the phase vocabulary they share. */
   studio: {
-    eyebrow: 'TWINGS Studio',
+    eyebrow: 'TWINGS',
     heroCta: 'Make one from a photo',
     headline: 'ONE PHOTO.\nYOU ARE THE LEAD.',
     intro:
       'Upload a face, pick a scene, and the studio returns a finished film — built from prompts we actually ran and verified. No shoot, no edit, no prompt to write.',
-    metaTitle: 'TWINGS Studio — a film from one photo',
+    metaTitle: 'TWINGS — a film from one photo',
     metaDescription: 'Upload a photo, pick a scene, get a finished film.',
     stepPhoto: 'Photo',
     stepStyle: 'Scene',

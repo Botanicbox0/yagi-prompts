@@ -27,7 +27,7 @@ export const ko: Dictionary = {
       '브랜드가 주최하고 YAGI 스튜디오가 운영하는 영상 공모전. 작품 링크와 SNS 계정만 있으면 참가할 수 있습니다.',
   },
   nav: {
-    studio: '스튜디오',
+    studio: '영상 만들기',
     prompts: '프롬프트',
     contests: '콘테스트',
     library: '라이브러리',
@@ -276,12 +276,12 @@ export const ko: Dictionary = {
     rejectReasonLabel: '사유',
   },
   studio: {
-    eyebrow: 'TWINGS 스튜디오',
+    eyebrow: 'TWINGS',
     heroCta: '사진 한 장으로 만들기',
     headline: '사진 한 장이면\n당신이 주인공입니다.',
     intro:
       '얼굴 사진을 올리고 장면을 고르면, 스튜디오가 실제로 검증한 프롬프트로 완성된 영상을 만들어 드립니다. 편집도, 촬영도, 프롬프트를 쓸 필요도 없습니다.',
-    metaTitle: 'TWINGS 스튜디오 — 사진 한 장으로 만드는 영상',
+    metaTitle: 'TWINGS — 사진 한 장으로 만드는 영상',
     metaDescription: '사진을 올리고 장면을 고르면 완성된 영상이 나옵니다.',
     stepPhoto: '사진',
     stepStyle: '장면',
