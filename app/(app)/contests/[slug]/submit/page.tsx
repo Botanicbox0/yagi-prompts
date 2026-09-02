@@ -13,7 +13,7 @@ import {
   isEntryField,
   type EntryField,
 } from '@/lib/contests/schemas';
-import { GoatMark } from '@/components/nav/goat-mark';
+import { TwingsWordmark } from '@/components/brand/twings-wordmark';
 import { TextSwap } from '@/components/ui/text-swap';
 import { submitEntryAction } from './actions';
 import { EntrySubmitButton } from './submit-button';
@@ -142,10 +142,7 @@ export default async function SubmitEntryPage({
       <header className="border-b border-hairline">
         <div className="mx-auto flex max-w-shell items-center justify-between gap-4 px-gutter py-4">
           <a href={contestsHref(locale)} className="flex items-center gap-2.5">
-            <GoatMark className="h-5 w-5" />
-            <span className="font-display text-[1.05rem] leading-none font-black uppercase">
-              {dict.meta.siteName}
-            </span>
+            <TwingsWordmark className="h-[18px] w-auto" />
           </a>
           <a
             href={contestHref(locale, slug)}

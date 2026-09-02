@@ -1,5 +1,5 @@
 import { TextSwap } from '@/components/ui/text-swap';
-import { GoatMark } from '@/components/nav/goat-mark';
+import { TwingsWordmark } from '@/components/brand/twings-wordmark';
 import { HireClickBeacon } from '@/components/analytics/beacon';
 
 /**
@@ -69,7 +69,7 @@ export function SiteFooter({
 
         <div className="mt-20 grid gap-10 border-t border-hairline pt-10 sm:grid-cols-2 lg:grid-cols-[1fr_auto_auto]">
           <div className="flex items-start gap-2.5">
-            <GoatMark className="mt-0.5 h-5 w-5" />
+            <TwingsWordmark className="h-[16px] w-auto" />
             <div>
               <p className="font-display text-[1.05rem] leading-none font-black uppercase">
                 {labels.brand}

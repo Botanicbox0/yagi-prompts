@@ -85,7 +85,7 @@ export default async function MarketingRootLayout({
         <ScrollProvider>
           {/* F2 — the auth redirects' `?error=…` / `?signin=1` outcomes, rendered instead of
               silent. Client-only read of location.search, so the tree stays static (§3.1). */}
-          <Notice labels={noticeLabels(dict)} />
+          <Notice labels={noticeLabels(dict)} locale={locale} />
           {children}
         </ScrollProvider>
       </body>

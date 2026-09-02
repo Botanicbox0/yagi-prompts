@@ -275,6 +275,10 @@ export const ko: Dictionary = {
     statusArchived: '게시 중단',
     rejectReasonLabel: '사유',
   },
+  notFound: {
+    title: '여기엔 아무것도\n없습니다. 장면은 있죠.',
+    body: '옮겨졌거나, 내려갔거나, 처음부터 없던 주소입니다. 스튜디오와 카탈로그는 한 번 누르면 나옵니다.',
+  },
   studio: {
     eyebrow: 'TWINGS',
     heroCta: '사진 한 장으로 만들기',
@@ -606,9 +610,9 @@ export const ko: Dictionary = {
     manageBilling: '결제 관리',
     manageBillingHint: '결제 수단, 영수증, 해지는 Stripe 포털에서 관리합니다.',
     portalUnavailable: 'Stripe로 만든 구독이 아니어서 포털을 열 수 없습니다.',
-    upgradeHeading: '프로로 업그레이드',
-    upgradeBody: '프로는 라이브러리 전체의 프롬프트, 파라미터 표, 워크플로 파일을 모두 엽니다.',
-    upgradeCta: '프로 시작하기 — 월 $9',
+    cookiesHeading: '잠긴 프롬프트는 쿠키로 엽니다.',
+    cookiesBody: '가입하면 {signup}개, 매주 {weekly}개 무료, {pack}개 묶음은 {price}. 구독은 없습니다.',
+    cookiesCta: '쿠키 안내',
     languageHeading: '언어',
     notifHeading: '알림',
     notifLede: '이메일로만 보냅니다. 다이제스트나 마케팅 메일은 없습니다.',

@@ -21,10 +21,12 @@ import {
  */
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const url = new URL(request.url);
-  const requested = url.searchParams.get('next') ?? '/library';
-  const next = requested.startsWith('/') && !requested.startsWith('//') ? requested : '/library';
   const rawLocale = url.searchParams.get('locale');
   const locale = isLocale(rawLocale) ? rawLocale : DEFAULT_LOCALE;
+  // The library is denavigated (§13.2); a sign-in with nowhere to go returns to the gallery.
+  const fallback = `/${locale}/prompts`;
+  const requested = url.searchParams.get('next') ?? fallback;
+  const next = requested.startsWith('/') && !requested.startsWith('//') ? requested : fallback;
 
   // Already signed in ⇒ this is a return-to, not a login. M3 makes `/auth/signin?next=…` the CTA
   // for every STATIC surface (the marketing tree may not read the session, §3.1 cache mode), so it

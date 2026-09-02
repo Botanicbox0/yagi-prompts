@@ -287,6 +287,10 @@ export const en = {
     rejectReasonLabel: 'Why',
   },
   /** §14.2 — the contests tab: listing, detail and the phase vocabulary they share. */
+  notFound: {
+    title: 'NOTHING HERE.\nTHE SCENES ARE.',
+    body: 'That page moved, expired, or never existed. The studio and the catalogue are one click away.',
+  },
   studio: {
     eyebrow: 'TWINGS',
     heroCta: 'Make one from a photo',
@@ -637,9 +641,9 @@ export const en = {
     manageBilling: 'Manage billing',
     manageBillingHint: 'Payment method, invoices and cancellation live in the Stripe portal.',
     portalUnavailable: 'This plan was not set up through Stripe, so there is no portal to open.',
-    upgradeHeading: 'Everything is still locked.',
-    upgradeBody: 'Pro opens every prompt, parameter table and workflow file across the library.',
-    upgradeCta: 'Go Pro — $9/month',
+    cookiesHeading: 'Cookies open the locked prompts.',
+    cookiesBody: '{signup} free when you join, {weekly} more every week, and a pack of {pack} for {price}. No subscription.',
+    cookiesCta: 'How cookies work',
     languageHeading: 'Language',
     // §3.5 — the two toggles. Pro only; free users get the pitch line instead of a dead control.
     notifHeading: 'Notifications',

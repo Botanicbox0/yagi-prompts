@@ -33,10 +33,13 @@ export function NoticeBand({
   code,
   labels,
   onDismiss,
+  signinHref = null,
 }: {
   code: NoticeCode;
   labels: NoticeLabels;
   onDismiss: () => void;
+  /** For the `signin` code: the door, with the gated page as its return. */
+  signinHref?: string | null;
 }) {
   const message =
     code === 'oauth'
@@ -59,6 +62,11 @@ export function NoticeBand({
             {CODE_LABEL[code]}
           </p>
           <p className="mt-1 text-[0.9375rem] leading-snug">{message}</p>
+          {code === 'signin' && signinHref && (
+            <a href={signinHref} data-notice-signin className="text-accent mt-2 inline-block font-label text-eyebrow uppercase">
+              {labels.signIn} →
+            </a>
+          )}
         </div>
         <button
           type="button"
@@ -72,17 +80,24 @@ export function NoticeBand({
   );
 }
 
-export function Notice({ labels }: { labels: NoticeLabels }) {
+export function Notice({ labels, locale }: { labels: NoticeLabels; locale: string }) {
   const [code, setCode] = useState<NoticeCode | null>(null);
+  const [signinHref, setSigninHref] = useState<string | null>(null);
 
   useEffect(() => {
     const found = parseNoticeCode(window.location.search);
     if (found === null) return;
     setCode(found);
     const { pathname, hash } = window.location;
+    if (found === 'signin') {
+      // The gate sent `next` along; keep it as the sign-in's return before the URL is cleaned.
+      const next = new URLSearchParams(window.location.search).get('next') ?? pathname;
+      const safe = next.startsWith('/') && !next.startsWith('//') ? next : pathname;
+      setSigninHref(`/auth/signin?next=${encodeURIComponent(safe)}&locale=${locale}`);
+    }
     window.history.replaceState(null, '', `${pathname}${stripNoticeParams(window.location.search)}${hash}`);
-  }, []);
+  }, [locale]);
 
   if (code === null) return null;
-  return <NoticeBand code={code} labels={labels} onDismiss={() => setCode(null)} />;
+  return <NoticeBand code={code} labels={labels} signinHref={signinHref} onDismiss={() => setCode(null)} />;
 }

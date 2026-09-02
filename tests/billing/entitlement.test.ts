@@ -137,7 +137,7 @@ describe('origin carrying (§3.4 "origin slug + locale in metadata")', () => {
   });
 
   it('falls back to the library when there was no origin playbook', () => {
-    expect(originPath({ slug: null, locale: 'en' })).toBe('/library');
+    expect(originPath({ slug: null, locale: 'en' })).toBe('/en/prompts');
     expect(originPath({ slug: 'abc', locale: 'ko' })).toBe('/ko/p/abc');
   });
 

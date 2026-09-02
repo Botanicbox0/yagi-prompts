@@ -53,7 +53,7 @@ export function UseCaseFilter({
         data-active={on ? 'true' : 'false'}
         onClick={() => setActive(value)}
         className={[
-          'shrink-0 border px-3 py-1.5 font-label text-[0.65rem] tracking-[0.12em] whitespace-nowrap uppercase transition-colors duration-200',
+          'inline-flex min-h-11 shrink-0 items-center border px-3 py-1.5 font-label text-[0.65rem] tracking-[0.12em] whitespace-nowrap uppercase transition-colors duration-200',
           on ? 'border-accent text-accent' : 'border-hairline opacity-70 hover:opacity-100',
         ].join(' ')}
       >
