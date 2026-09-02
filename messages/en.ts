@@ -654,8 +654,7 @@ export const en = {
     notifUpdatesHint: 'One email when a published playbook is rewritten, with the change note.',
     notifSave: 'Save notifications',
     notifSaved: 'Notification preferences saved.',
-    notifProOnly:
-      'Notifications are part of Pro — the point of a maintained playbook is knowing when it changed.',
+    notifProOnly: 'Sign in to choose whether new scenes and updates reach your inbox.',
     signOut: 'Sign out',
     deletionHeading: 'Delete this account',
     deletionBody:

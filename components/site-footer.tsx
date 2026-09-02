@@ -68,16 +68,12 @@ export function SiteFooter({
         </div>
 
         <div className="mt-20 grid gap-10 border-t border-hairline pt-10 sm:grid-cols-2 lg:grid-cols-[1fr_auto_auto]">
-          <div className="flex items-start gap-2.5">
+          <div>
+            {/* The wordmark IS the brand name (2026-08-16); the text beside it said the same word twice. */}
             <TwingsWordmark className="h-[16px] w-auto" />
-            <div>
-              <p className="font-display text-[1.05rem] leading-none font-black uppercase">
-                {labels.brand}
-              </p>
-              <p className="mt-2 font-mono text-code opacity-60">
-                © {year} {labels.rights} · {labels.builtIn}
-              </p>
-            </div>
+            <p className="mt-3 font-mono text-code opacity-60">
+              © {year} {labels.rights} · {labels.builtIn}
+            </p>
           </div>
 
           <nav aria-label={labels.navHeading} className="flex flex-col gap-3">

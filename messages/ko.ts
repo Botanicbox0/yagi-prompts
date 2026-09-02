@@ -622,7 +622,7 @@ export const ko: Dictionary = {
     notifUpdatesHint: '공개된 플레이북이 수정될 때 변경 사항과 함께 메일을 보냅니다.',
     notifSave: '알림 설정 저장',
     notifSaved: '알림 설정을 저장했습니다.',
-    notifProOnly: '알림은 프로 기능입니다. 새 플레이북과 업데이트 소식을 이메일로 받아보세요.',
+    notifProOnly: '로그인하면 새 장면과 업데이트 소식을 이메일로 받을지 정할 수 있습니다.',
     signOut: '로그아웃',
     deletionHeading: '계정 삭제',
     deletionBody: '요청하시면 구독을 해지하고 계정을 삭제한 뒤 7일 이내에 확인 메일을 드립니다.',
