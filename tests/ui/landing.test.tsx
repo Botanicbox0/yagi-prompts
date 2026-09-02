@@ -25,7 +25,7 @@ describe('mobile-first hero (F3)', () => {
   });
 
   it('hides the lede and the submit link below lg — and only below lg', () => {
-    expect(hero).toMatch(/class="hidden [^"]*lg:block[^"]*"[^>]*>[^<]*in-house/);
+    expect(hero).toMatch(/class="hidden [^"]*lg:block[^"]*"[^>]*>[^<]*finished film/);
     expect(hero).toMatch(/href="\/prompts\/submit"[^>]*hidden[^>]*lg:inline-block/);
   });
 

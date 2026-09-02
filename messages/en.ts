@@ -2,9 +2,9 @@
 export const en = {
   meta: {
     siteName: 'TWINGS',
-    tagline: 'Original Seedance 2.5 prompts, written and tested in-house.',
+    tagline: 'One photo in, a finished film out — on Seedance 2.5, with the prompts to prove it.',
     landingDescription:
-      'Every prompt here was authored in our studio and run on Seedance 2.5 before it went up. Nothing scraped, nothing reposted. Plus a community rail, credited by @handle.',
+      'Upload one photo, pick a scene, get a finished film. Behind every scene is a prompt written in our studio and run on Seedance 2.5 before it went up — nothing scraped, nothing reposted.',
     pricingTitle: 'Pricing',
     pricingDescription:
       'Community prompts are free. A YAGI original opens with one cookie — three free when you join, one free every week, $4 for five.',
@@ -96,11 +96,11 @@ export const en = {
     dismiss: 'Close',
   },
   hero: {
-    eyebrow: 'Original prompts · Seedance 2.5',
-    line1: 'PROMPTS',
-    line2: 'THAT ACTUALLY',
-    line3: 'SHIP.',
-    lede: 'Every prompt is written in-house and run on Seedance 2.5 before it goes up. If the result does not hold up, it does not ship. Nothing is scraped.',
+    eyebrow: 'One photo · Seedance 2.5',
+    line1: 'ONE PHOTO.',
+    line2: 'ONE FILM.',
+    line3: "YOU'RE IN IT.",
+    lede: 'Upload a photo, pick a scene, get a finished film. Every scene runs on a prompt we wrote and tested on Seedance 2.5 first — nothing scraped.',
     secondaryCta: 'How cookies work',
     scroll: 'Scroll',
     reelLabel: 'Prompt reel',
@@ -277,7 +277,7 @@ export const en = {
     errUploadTooLarge: 'That file is over the size limit.',
     errUploadTooLong: 'That clip is longer than {seconds} seconds.',
     errUploadBadType: 'That file type is not accepted.',
-    errSignIn: 'Sign in first — submissions carry a credit, so they need an account.',
+    errSignIn: 'Sign in first — a submission carries your byline, so it needs an account.',
     mySubmissions: 'Your submissions',
     mySubmissionsEmpty: 'You have not sent one in yet.',
     statusPending: 'In review',
@@ -293,7 +293,7 @@ export const en = {
     headline: 'ONE PHOTO.\nYOU ARE THE LEAD.',
     intro:
       'Upload a face, pick a scene, and the studio returns a finished film — built from prompts we actually ran and verified. No shoot, no edit, no prompt to write.',
-    metaTitle: 'TWINGS — a film from one photo',
+    metaTitle: 'A film from one photo',
     metaDescription: 'Upload a photo, pick a scene, get a finished film.',
     stepPhoto: 'Photo',
     stepStyle: 'Scene',
@@ -450,7 +450,7 @@ export const en = {
       'This one stopped taking entries at the deadline. The approved films are on the contest page.',
     upcomingTitle: 'NOT OPEN YET.',
     upcomingBody: 'This contest opens {date}. The brief is already up if you want a head start.',
-    errSignIn: 'Sign in first — an entry carries a credit, so it needs an account.',
+    errSignIn: 'Sign in first — an entry carries your byline, so it needs an account.',
     errRateLimited: 'You can edit your entry up to ten times a day. Try again tomorrow.',
     errInvalid: 'Something in the form did not check out. Check both links start with https.',
     /** Printed at the field the server named, so "something" stops meaning "somewhere". */
@@ -484,7 +484,7 @@ export const en = {
     featureCopy: 'One-click copy on every prompt you have opened',
     featureWorkflow: 'Workflow files — ComfyUI graphs, LUTs, presets',
     featureNotifications: 'Notifications when a playbook drops or is rewritten',
-    proBlocksLocked: 'YAGI prompts waiting behind the lock',
+    proBlocksLocked: '{count} YAGI prompts waiting behind the lock',
     // §15 — the cookie table (가입 3 · 주 1 · $4/5), three cells and the one rule under them.
     cookieSignupTitle: 'When you join',
     cookieSignupValue: '3',
@@ -578,7 +578,7 @@ export const en = {
     q3: 'Are these really original?',
     a3: 'Yes, and that is the whole product. Every prompt in the YAGI rail was written in this studio and run on Seedance 2.5 before it was published. Community submissions are watched back by a human before they appear, and they carry the submitter’s @handle.',
     q4: 'Can I run generations here?',
-    a4: 'No. TWINGS never runs inference for you. It tells you exactly what to run, where, and with which numbers.',
+    a4: 'Yes — in the studio. One photo, one scene, one finished film. The prompt catalogue is the evidence: every scene is a prompt we wrote and ran first.',
     q5: 'Is everything bilingual?',
     a5: 'Titles and explanations are written in Korean and English. Prompts themselves are not translated — they are model inputs, and translating them changes the output.',
     q6: 'Can you build this for us?',

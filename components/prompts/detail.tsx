@@ -1,3 +1,4 @@
+import { SIGNUP_COOKIES } from '@/lib/cookies/wallet';
 import type { PromptCard } from '@/lib/prompts/catalog';
 import type { ShapedPrompt } from '@/lib/prompts/shape';
 import type { UnlockPanel } from '@/lib/cookies/wallet';
@@ -233,7 +234,7 @@ function UnlockPanelView({
           <TextSwap>{labels.signinCta} →</TextSwap>
         </a>
         <p className="mt-3 font-mono text-[0.72rem] opacity-45">
-          {signinOnly ? labels.signinOnlyHint : interpolate(labels.signinHint, { count: '3' })}
+          {signinOnly ? labels.signinOnlyHint : interpolate(labels.signinHint, { count: String(SIGNUP_COOKIES) })}
         </p>
       </div>
     );
