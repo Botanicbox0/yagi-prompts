@@ -25,7 +25,8 @@
     "sweep:anon": "tsx scripts/sweep-anon.ts",
     "cloud:smoke": "tsx scripts/cloud-smoke.ts",
     "stripe:retry": "tsx scripts/stripe-retry.ts",
-    "notify:worker": "tsx scripts/notify-worker.ts"
+    "notify:worker": "tsx scripts/notify-worker.ts",
+    "ark:smoke": "tsx scripts/ark-smoke.ts"
   },
   "dependencies": {
     "@supabase/ssr": "0.12.4",
