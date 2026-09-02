@@ -728,6 +728,16 @@ export const en = {
     navPolicy: 'Policy',
     navSite: 'View site',
     refreshCaches: 'Refresh caches',
+    contestFoldPending: '{count} awaiting review',
+    quickActions: 'Quick actions',
+    blockerTitle: 'title (en + ko)',
+    blockerSummary: 'summary (en + ko)',
+    blockerPrize: 'prize (en + ko)',
+    blockerRules: 'rules (en + ko)',
+    blockerStart: 'start date',
+    blockerDeadline: 'deadline',
+    blockerDeadlineOrder: 'a deadline after the start',
+    blockerPoster: 'poster image',
     refreshHint: 'Re-runs the catalog invalidation. Idempotent — safe to press twice.',
 
     listHeading: 'Playbooks',
@@ -886,7 +896,7 @@ export const en = {
 
     visPublic: 'public',
     visFree: 'free',
-    visPro: 'pro',
+    visPro: 'cookie',
     visHidden: 'hidden',
 
     okCreated: 'Created.',

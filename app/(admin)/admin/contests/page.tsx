@@ -63,6 +63,23 @@ const one = (params: SearchParams, key: string): string | undefined => {
 type Dict = ReturnType<typeof getDictionary>;
 
 /** The staged (unpublished) poster, playable — the whole point of an admin preview path. */
+/** `publishBlockers` speaks English literals (the operation's refusal detail); the banner speaks the dictionary. */
+const BLOCKER_KEYS: Record<string, keyof Dict['admin']> = {
+  'title (en + ko)': 'blockerTitle',
+  'summary (en + ko)': 'blockerSummary',
+  'prize (en + ko)': 'blockerPrize',
+  'rules (en + ko)': 'blockerRules',
+  'start date': 'blockerStart',
+  deadline: 'blockerDeadline',
+  'a deadline after the start': 'blockerDeadlineOrder',
+  'poster image': 'blockerPoster',
+};
+
+function blockerLabel(a: Dict['admin'], blocker: string): string {
+  const key = BLOCKER_KEYS[blocker];
+  return key ? String(a[key]) : blocker;
+}
+
 function StagedMedia({ row, dict }: { row: ContestRow; dict: Dict }) {
   const media = parseContestMedia(row.media);
   const a = dict.admin;
@@ -289,7 +306,7 @@ function EntryRowView({
         <div>
           <dt className={LABEL}>{a.colEntryTitle}</dt>
           <dd className="mt-1 break-all">
-            <a href={entry.videoUrl} rel="noreferrer" className="text-accent">
+            <a href={entry.videoUrl} target="_blank" rel="noopener noreferrer" className="text-accent">
               {entry.videoUrl}
             </a>
           </dd>
@@ -297,7 +314,7 @@ function EntryRowView({
         <div>
           <dt className={LABEL}>{a.colEntrySns}</dt>
           <dd className="mt-1 break-all">
-            <a href={entry.snsUrl} rel="noreferrer" className="text-accent">
+            <a href={entry.snsUrl} target="_blank" rel="noopener noreferrer" className="text-accent">
               {entry.snsUrl}
             </a>
           </dd>
@@ -339,7 +356,7 @@ function EntryRowView({
             <input type="hidden" name="id" value={entry.id} />
             <input type="hidden" name="version" value={entry.version} />
             <Field label={a.rejectReason} hint={a.entryRejectHint}>
-              <textarea name="reason" rows={2} className={INPUT} />
+              <textarea name="reason" rows={2} required minLength={3} className={INPUT} />
             </Field>
             <div>
               <button type="submit" className={BUTTON}>
@@ -425,7 +442,9 @@ function ContestEditor({
         >
           {blockers.length === 0
             ? a.contestReady
-            : interpolate(a.contestNotReady, { missing: blockers.join(', ') })}
+            : interpolate(a.contestNotReady, {
+                missing: blockers.map((blocker) => blockerLabel(a, blocker)).join(', '),
+              })}
         </p>
         <p className="font-mono text-[0.72rem] opacity-45">{a.publishContestHint}</p>
 
@@ -507,16 +526,31 @@ export default async function AdminContestsPage({
           <p className="font-mono text-code opacity-60">{a.contestListEmpty}</p>
         </Panel>
       ) : (
-        rows.map((row) => (
-          <ContestEditor
-            key={row.id}
-            row={row}
-            entries={entriesByContest.get(row.id) ?? []}
-            locale={locale}
-            dict={dict}
-            now={now}
-          />
-        ))
+        rows.map((row) => {
+          const entries = entriesByContest.get(row.id) ?? [];
+          const pending = entries.filter((entry) => entry.status === 'pending').length;
+          // Folded by default (2026-09-03): the page was one full editor per contest, stacked —
+          // the scroll the prompts board was rebuilt to remove. A contest with entries waiting
+          // opens itself; the rest open on a click.
+          return (
+            <details
+              key={row.id}
+              open={pending > 0}
+              data-contest-fold={row.slug}
+              className="mt-6 border border-hairline"
+            >
+              <summary className="cursor-pointer px-4 py-3 font-label text-eyebrow uppercase">
+                {row.slug} · {row.status}
+                {pending > 0 && (
+                  <span className="text-accent"> · {interpolate(a.contestFoldPending, { count: String(pending) })}</span>
+                )}
+              </summary>
+              <div className="px-4 pb-4">
+                <ContestEditor row={row} entries={entries} locale={locale} dict={dict} now={now} />
+              </div>
+            </details>
+          );
+        })
       )}
 
       <Panel title={a.newContestHeading}>

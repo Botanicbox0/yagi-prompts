@@ -685,6 +685,16 @@ export const ko: Dictionary = {
     navPolicy: '기본 정책',
     navSite: '사이트 보기',
     refreshCaches: '캐시 새로고침',
+    contestFoldPending: '{count}건 검수 대기',
+    quickActions: '빠른 작업',
+    blockerTitle: '제목 (en + ko)',
+    blockerSummary: '요약 (en + ko)',
+    blockerPrize: '상금 (en + ko)',
+    blockerRules: '규칙 (en + ko)',
+    blockerStart: '시작일',
+    blockerDeadline: '마감일',
+    blockerDeadlineOrder: '시작일 이후의 마감일',
+    blockerPoster: '포스터 이미지',
     refreshHint: '카탈로그 무효화를 다시 실행합니다. 여러 번 눌러도 안전합니다.',
 
     listHeading: '플레이북 목록',
@@ -842,7 +852,7 @@ export const ko: Dictionary = {
 
     visPublic: '공개',
     visFree: '무료',
-    visPro: '프로',
+    visPro: '쿠키',
     visHidden: '비공개',
 
     okCreated: '만들었습니다.',
