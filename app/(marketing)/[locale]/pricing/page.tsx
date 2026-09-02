@@ -12,7 +12,7 @@ import { PlanTable } from '@/components/pricing/plan-table';
 import { Faq } from '@/components/landing/faq';
 import { Reveal } from '@/components/motion/reveal';
 import { TextSwap } from '@/components/ui/text-swap';
-import { formatCount } from '@/lib/i18n/format';
+import { formatCount, interpolate } from '@/lib/i18n/format';
 
 /**
  * Pricing — PLAN §15.3: the cookie model (가입 3 · 주 1 · $4/5), with the §3.1 counts line from
@@ -125,7 +125,7 @@ export default async function PricingPage({ params }: { params: Promise<{ locale
                     ·
                   </span>
                   <span className="text-accent">
-                    {formatCount(lockedYagi, locale)} {dict.pricing.proBlocksLocked}
+                    {interpolate(dict.pricing.proBlocksLocked, { count: formatCount(lockedYagi, locale) })}
                   </span>
                 </>
               )}

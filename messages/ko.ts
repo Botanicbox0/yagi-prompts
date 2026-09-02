@@ -13,9 +13,9 @@ import type { Dictionary } from './en';
 export const ko: Dictionary = {
   meta: {
     siteName: 'TWINGS',
-    tagline: '직접 만들고 검증한 Seedance 2.5 오리지널 프롬프트.',
+    tagline: '사진 한 장을 넣으면 완성된 영상이 나옵니다 — Seedance 2.5, 검증된 프롬프트로.',
     landingDescription:
-      '모든 프롬프트를 스튜디오에서 직접 작성하고 Seedance 2.5로 검증한 뒤 공개합니다. 다른 곳에서 가져온 프롬프트는 없습니다. 커뮤니티 프롬프트는 @핸들과 함께 올라갑니다.',
+      '사진 한 장을 올리고 장면을 고르면 완성된 영상이 나옵니다. 모든 장면 뒤에는 스튜디오에서 직접 쓰고 Seedance 2.5로 검증한 프롬프트가 있습니다. 어디서도 긁어오지 않습니다.',
     pricingTitle: '요금제',
     pricingDescription:
       '커뮤니티 프롬프트는 무료입니다. YAGI 오리지널은 쿠키 1개로 열립니다. 가입하면 3개, 매주 1개가 무료이고, $4에 5개를 살 수 있습니다.',
@@ -96,11 +96,11 @@ export const ko: Dictionary = {
     dismiss: '닫기',
   },
   hero: {
-    eyebrow: '오리지널 프롬프트 · Seedance 2.5',
-    line1: '결과로',
-    line2: '검증된',
-    line3: '프롬프트.',
-    lede: '모든 프롬프트를 직접 작성하고 Seedance 2.5로 돌려본 뒤에 올립니다. 기대한 결과가 나온 프롬프트만 남기며, 어디서도 긁어오지 않습니다.',
+    eyebrow: '사진 한 장 · Seedance 2.5',
+    line1: '사진 한 장.',
+    line2: '영화 한 편.',
+    line3: '주인공은 당신.',
+    lede: '사진을 올리고 장면을 고르면 완성된 영상이 나옵니다. 모든 장면은 직접 쓰고 Seedance 2.5로 돌려본 프롬프트로 만들어집니다.',
     secondaryCta: '쿠키 안내 보기',
     scroll: '스크롤',
     reelLabel: '프롬프트 릴',
@@ -281,7 +281,7 @@ export const ko: Dictionary = {
     headline: '사진 한 장이면\n당신이 주인공입니다.',
     intro:
       '얼굴 사진을 올리고 장면을 고르면, 스튜디오가 실제로 검증한 프롬프트로 완성된 영상을 만들어 드립니다. 편집도, 촬영도, 프롬프트를 쓸 필요도 없습니다.',
-    metaTitle: 'TWINGS — 사진 한 장으로 만드는 영상',
+    metaTitle: '사진 한 장으로 만드는 영상',
     metaDescription: '사진을 올리고 장면을 고르면 완성된 영상이 나옵니다.',
     stepPhoto: '사진',
     stepStyle: '장면',
@@ -459,7 +459,7 @@ export const ko: Dictionary = {
     featureCopy: '연 프롬프트는 원클릭으로 복사',
     featureWorkflow: '워크플로 파일 — ComfyUI 그래프, LUT, 프리셋',
     featureNotifications: '새 플레이북·업데이트 알림',
-    proBlocksLocked: '개의 YAGI 프롬프트가 잠겨 있습니다',
+    proBlocksLocked: '{count}개의 YAGI 프롬프트가 잠겨 있습니다',
     cookieSignupTitle: '가입할 때',
     cookieSignupValue: '3',
     cookieSignupNote: '처음 로그인하면 쿠키 3개가 들어옵니다. 카드도, 입력할 정보도 없습니다.',
@@ -550,7 +550,7 @@ export const ko: Dictionary = {
     q3: '정말 전부 오리지널인가요?',
     a3: '네. YAGI 레일의 프롬프트는 전부 이 스튜디오에서 직접 쓰고 Seedance 2.5로 검증한 뒤 공개합니다. 커뮤니티 제출작도 사람이 직접 확인한 뒤 게시되며, 제출자의 @핸들이 함께 표기됩니다.',
     q4: '여기서 영상 생성도 할 수 있나요?',
-    a4: '아니요. TWINGS는 생성 서비스가 아닙니다. 어떤 프롬프트를 어디서 어떤 값으로 실행해야 하는지 알려주는 서비스입니다.',
+    a4: '네, 스튜디오에서 됩니다. 사진 한 장, 장면 하나, 완성된 영상 한 편. 프롬프트 카탈로그는 그 증거입니다 — 모든 장면은 저희가 먼저 쓰고 돌려본 프롬프트입니다.',
     q5: '한국어로도 제공되나요?',
     a5: '제목과 설명은 한국어와 영어로 모두 제공합니다. 프롬프트 자체는 모델 입력값이므로 번역하지 않습니다. 번역하면 결과가 달라집니다.',
     q6: '제작 의뢰도 받나요?',
@@ -577,7 +577,7 @@ export const ko: Dictionary = {
   ad: {
     placeholder: 'YOUR AD HERE',
     contact: 'hello@yagiworkshop.xyz',
-    contactLabel: 'Contact',
+    contactLabel: '문의',
     label: '광고',
     pitch: 'AI 미디어를 만들어가는 제작자에게 제품을 홍보하고 싶은 광고주를 찾습니다.',
   },

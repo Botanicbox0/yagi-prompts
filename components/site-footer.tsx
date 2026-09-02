@@ -93,7 +93,7 @@ export function SiteFooter({
             <p className="font-label text-eyebrow uppercase opacity-60">{labels.contactHeading}</p>
             <HireClickBeacon>
               <a
-                href="mailto:hello@yagiworkshop.xyz?subject=YAGI%20PROMPTS%20%E2%80%94%20studio%20enquiry"
+                href="mailto:hello@yagiworkshop.xyz?subject=TWINGS%20%E2%80%94%20studio%20enquiry"
                 className="font-mono text-code"
               >
                 hello@yagiworkshop.xyz

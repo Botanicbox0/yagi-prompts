@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { DEFAULT_LOCALE, isLocale, type Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/dictionaries';
 import { getPromptCatalog } from '@/lib/prompts/public-catalog';
+import { SITE_OG_IMAGE, SITE_TWITTER_CARD } from '@/lib/seo/og';
 import { formatPrice, joinStyles } from '@/lib/twings/products';
 import { MarketingFooter, MarketingNav } from '@/components/marketing/chrome';
 import { TwingsStudio, type StudioStyle } from '@/components/twings/studio';
@@ -28,8 +29,28 @@ function localeOf(raw: string): Locale {
 
 export async function generateMetadata({ params }: RouteParams): Promise<Metadata> {
   const { locale: raw } = await params;
-  const dict = getDictionary(localeOf(raw));
-  return { title: dict.studio.metaTitle, description: dict.studio.metaDescription };
+  const locale = localeOf(raw);
+  const dict = getDictionary(locale);
+  // Self-canonical, like pricing: without this the layout's `/${locale}` canonical hands the
+  // front door to the landing, and a shared link renders as a bare text row (no og:image).
+  return {
+    title: dict.studio.metaTitle,
+    description: dict.studio.metaDescription,
+    alternates: {
+      canonical: `/${locale}/studio`,
+      languages: { en: '/en/studio', ko: '/ko/studio', 'x-default': '/en/studio' },
+    },
+    openGraph: {
+      type: 'website',
+      locale: locale === 'ko' ? 'ko_KR' : 'en_US',
+      url: `/${locale}/studio`,
+      title: `${dict.studio.metaTitle} — ${dict.meta.siteName}`,
+      description: dict.studio.metaDescription,
+      siteName: dict.meta.siteName,
+      images: [SITE_OG_IMAGE],
+    },
+    twitter: { card: SITE_TWITTER_CARD },
+  };
 }
 
 export default async function StudioPage({ params }: RouteParams) {

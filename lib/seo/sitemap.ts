@@ -78,6 +78,9 @@ export function buildSitemap(input: SitemapInput): MetadataRoute.Sitemap {
     changeFrequency: 'daily' | 'weekly' | 'yearly';
   }> = [
     { rest: '/', priority: 1, changeFrequency: 'daily' },
+    // The studio is the product's front door (2026-09-03); weekly, because a style is added
+    // about as often as a contest, not as often as a prompt.
+    { rest: '/studio', priority: 0.9, changeFrequency: 'weekly' },
     // §13.2 — the gallery is the v1.5 front door and is indexed; it changes as often as the studio
     // publishes, which is the same cadence as the landing it now leads.
     { rest: '/prompts', priority: 0.9, changeFrequency: 'daily' },
