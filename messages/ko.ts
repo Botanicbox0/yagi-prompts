@@ -302,6 +302,10 @@ export const ko: Dictionary = {
       '데모에서는 스튜디오가 미리 만들어 둔 예시 영상이 재생됩니다. 올리신 사진은 브라우저를 벗어나지 않습니다.',
     again: '다른 장면으로 다시',
     runtimeLabel: '{seconds}초',
+    needPhoto: '먼저 사진을 올려주세요 — 얼굴이 들어오면 버튼이 켜집니다.',
+    noStyles: '지금 열려 있는 장면이 없습니다. 다음 장면은 아래 카탈로그에서 만들어지고 있습니다.',
+    seePrompt: '이 장면 뒤의 프롬프트 보기',
+    makeThis: '내 사진으로 이 장면 만들기',
     blurbs: {
       'seoul-90s': '1994년 서울, 베타캠으로 찍은 인터뷰',
       'prom-queen': 'Y2K 하이틴 무비, 프롬 나이트',
@@ -434,6 +438,9 @@ export const ko: Dictionary = {
     errNotFound: '공개된 콘테스트가 아닙니다.',
   },
   pricing: {
+    filmsTitle: '스튜디오 영상',
+    filmsBody: '사진 한 장을 넣으면 완성된 영상 한 편. 장면당 {min}–{max}, 1회 결제. 구독 없음.',
+    filmsCta: '스튜디오로',
     eyebrow: '04 / 요금제',
     line1: '구독은 없습니다.',
     line2: '쿠키만 있습니다.',

@@ -24,6 +24,8 @@ export interface StudioStyle {
   blurb: string;
   posterSrc: string | null;
   videoSrc: string | null;
+  /** The published prompt this scene is made from — the catalogue is the evidence. */
+  promptHref: string;
 }
 
 export interface StudioLabels {
@@ -44,6 +46,9 @@ export interface StudioLabels {
   resultNote: string;
   again: string;
   runtimeLabel: string;
+  needPhoto: string;
+  noStyles: string;
+  seePrompt: string;
 }
 
 type Phase = 'photo' | 'style' | 'pay' | 'rendering' | 'result';
@@ -93,6 +98,16 @@ export function TwingsStudio({ styles, labels }: { styles: StudioStyle[]; labels
     setPhase('style');
   };
 
+  // A style whose prompt is unpublished is dropped upstream; with none left, an empty grid and a
+  // permanently disabled button would read as a broken page rather than a closed one.
+  if (styles.length === 0) {
+    return (
+      <section data-twings-studio data-phase="empty" className="mt-10 border-t border-hairline pt-8">
+        <p className="max-w-detail text-body opacity-70">{labels.noStyles}</p>
+      </section>
+    );
+  }
+
   const stepIndex = phase === 'rendering' ? 2 : STEP_ORDER.indexOf(phase);
   const steps = [labels.stepPhoto, labels.stepStyle, labels.stepPay, labels.stepResult];
 
@@ -121,9 +136,9 @@ export function TwingsStudio({ styles, labels }: { styles: StudioStyle[]; labels
 
       <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
         <div className="border border-hairline">
-          <div
-            className="flex aspect-[3/4] cursor-pointer items-center justify-center overflow-hidden bg-black"
-            onClick={() => fileRef.current?.click()}
+          <label
+            htmlFor="studio-photo"
+            className="flex aspect-[3/4] cursor-pointer items-center justify-center overflow-hidden bg-black focus-within:outline focus-within:outline-2 focus-within:outline-accent"
             onDragOver={(event) => event.preventDefault()}
             onDrop={(event) => {
               event.preventDefault();
@@ -139,11 +154,13 @@ export function TwingsStudio({ styles, labels }: { styles: StudioStyle[]; labels
                 <p className="mt-2 font-mono text-[0.72rem] text-white/45">{labels.dropHint}</p>
               </div>
             )}
-          </div>
+          </label>
           <input
             ref={fileRef}
+            id="studio-photo"
             type="file"
             accept="image/*"
+            aria-label={labels.dropZone}
             className="sr-only"
             onChange={(event) => takePhoto(event.currentTarget.files?.[0])}
           />
@@ -207,12 +224,18 @@ export function TwingsStudio({ styles, labels }: { styles: StudioStyle[]; labels
                   type="button"
                   data-pay-cta
                   disabled={!photo || !chosen}
+                  aria-describedby={photo ? undefined : 'studio-cta-hint'}
                   onClick={() => setPhase('rendering')}
                   className="w-full border border-current px-5 py-4 font-label text-[0.95rem] tracking-[0.1em] text-accent uppercase transition-opacity hover:opacity-70 disabled:opacity-25"
                 >
                   {chosen ? labels.payCta.replace('{price}', chosen.price) : labels.payCta}
                 </button>
                 <p className="mt-3 font-mono text-[0.72rem] opacity-45">{labels.payNote}</p>
+                {!photo && (
+                  <p id="studio-cta-hint" data-studio-hint className="mt-2 font-mono text-[0.72rem] text-accent">
+                    {labels.needPhoto}
+                  </p>
+                )}
               </div>
             </>
           )}
@@ -256,13 +279,18 @@ export function TwingsStudio({ styles, labels }: { styles: StudioStyle[]; labels
                 )}
               </div>
               <p className="mt-3 font-mono text-[0.72rem] opacity-45">{labels.resultNote}</p>
-              <button
-                type="button"
-                onClick={() => setPhase('style')}
-                className="mt-6 self-start border border-current px-5 py-3 font-label text-eyebrow uppercase transition-opacity hover:opacity-70"
-              >
-                {labels.again}
-              </button>
+              <div className="mt-6 flex flex-wrap items-center gap-x-6 gap-y-3">
+                <button
+                  type="button"
+                  onClick={() => setPhase('style')}
+                  className="border border-current px-5 py-3 font-label text-eyebrow uppercase transition-opacity hover:opacity-70"
+                >
+                  {labels.again}
+                </button>
+                <a href={chosen.promptHref} data-studio-prompt-link className="text-accent font-label text-eyebrow uppercase">
+                  {labels.seePrompt} →
+                </a>
+              </div>
             </div>
           )}
         </div>

@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { DEFAULT_LOCALE, isLocale, type Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/dictionaries';
+import { TWINGS_STYLES, formatPrice } from '@/lib/twings/products';
 import { getPromptCatalog } from '@/lib/prompts/public-catalog';
 import { promptsHref } from '@/lib/prompts/links';
 import { SITE_OG_IMAGE, SITE_TWITTER_CARD } from '@/lib/seo/og';
@@ -88,6 +89,11 @@ export default async function PricingPage({ params }: { params: Promise<{ locale
     },
   ];
 
+  // The studio's films, priced per scene (2026-09-03). Min–max, because the number a visitor
+  // wants is "how much is a film", not a table.
+  const filmCents = TWINGS_STYLES.map((style) => style.priceCents);
+  const filmRange = { min: formatPrice(Math.min(...filmCents)), max: formatPrice(Math.max(...filmCents)) };
+
   // What is free stays the whole §13 doctrine; what a cookie opens is one row of it.
   const rows = [
     { label: dict.pricing.featureStructure, free: true, pro: true },
@@ -115,6 +121,26 @@ export default async function PricingPage({ params }: { params: Promise<{ locale
             />
 
             <p className="mt-8 max-w-detail text-body opacity-70">{dict.pricing.lede}</p>
+
+            {/* Nav order is Studio → Prompts → Contests → Pricing, so the price page answers the
+                studio's question before the cookie one. */}
+            <div
+              data-pricing-films
+              className="mt-10 flex flex-wrap items-end justify-between gap-6 border border-hairline p-6"
+            >
+              <div>
+                <p className="font-label text-label uppercase">{dict.pricing.filmsTitle}</p>
+                <p className="mt-2 max-w-detail text-body opacity-70">
+                  {interpolate(dict.pricing.filmsBody, filmRange)}
+                </p>
+              </div>
+              <a
+                href={`/${locale}/studio`}
+                className="inline-block bg-accent px-6 py-3 font-label text-label text-white uppercase"
+              >
+                <TextSwap>{dict.pricing.filmsCta} →</TextSwap>
+              </a>
+            </div>
             {/* The accent carries its own alpha: nesting it inside `opacity-60` multiplies the
                 two and drops #0000EE on white to 4.38:1, just under AA. */}
             <p className="mt-3 font-mono text-code">
