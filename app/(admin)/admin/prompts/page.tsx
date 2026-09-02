@@ -164,7 +164,7 @@ export default async function AdminPromptsPage({
       ) : (
         <ul className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {shown.map((row) => (
-            <PromptCard key={row.id} row={row} dict={dict} href={adminPromptPath(row.id)} />
+            <PromptCard key={row.id} row={row} dict={dict} href={adminPromptPath(row.id)} locale={locale} />
           ))}
         </ul>
       )}

@@ -1,6 +1,6 @@
 import { getDictionary } from '@/lib/i18n/dictionaries';
 import { getLocaleFromHeaders } from '@/lib/i18n/server';
-import { ADMIN_PROMPTS_PATH } from '@/lib/prompts/links';
+import { ADMIN_PROMPTS_PATH, ADMIN_PROMPT_NEW_PATH } from '@/lib/prompts/links';
 import { AdminShell, BUTTON_PRIMARY, OpForm, Panel } from '@/components/admin/chrome';
 import { PromptFields } from '@/components/admin/prompt-fields';
 
@@ -12,8 +12,11 @@ import { PromptFields } from '@/components/admin/prompt-fields';
  * route makes "add a prompt" a link in the header, and makes the form the only thing on the screen
  * — which is also the state in which a long shot-by-shot brief is actually pleasant to paste.
  *
- * `back` is the BOARD: publishing lands on the wall where the new card now is, with the outcome
- * banner over it. Landing back on an empty form would hide the very thing that just happened.
+ * SUCCESS lands on the board (the operation's own `to`), where the new card now is, with the
+ * outcome banner over it. `back` is this page: a refused submission (a short title, a missing
+ * poster) returns HERE with the reason, not to the board with the reason and no form. The
+ * fields also carry `required`/`minLength`, so the browser refuses the obvious cases before a
+ * 15,000-character brief is posted and lost (UX audit, 2026-09-03).
  */
 export const dynamic = 'force-dynamic';
 
@@ -33,7 +36,7 @@ export default async function AdminPromptNewPage() {
       <p className="mt-3 max-w-detail font-mono text-[0.75rem] opacity-55">{a.authorLede}</p>
 
       <Panel title={a.authorHeading}>
-        <OpForm op="prompt.create" back={ADMIN_PROMPTS_PATH} className="flex flex-col gap-4">
+        <OpForm op="prompt.create" back={ADMIN_PROMPT_NEW_PATH} className="flex flex-col gap-4">
           <PromptFields row={null} dict={dict} />
           <div>
             <button type="submit" className={BUTTON_PRIMARY}>

@@ -239,6 +239,9 @@ export function AdminShell({
   active: 'playbooks' | 'policy' | 'prompts' | 'contests';
   children: ReactNode;
 }) {
+  // "Refresh caches" used to send every page back to /admin; it returns to where it was pressed.
+  const refreshBack =
+    active === 'prompts' ? '/admin/prompts' : active === 'contests' ? '/admin/contests' : active === 'policy' ? '/admin/policy' : '/admin';
   const navClass = (key: 'playbooks' | 'policy' | 'prompts' | 'contests') =>
     `font-label text-eyebrow uppercase ${active === key ? 'text-accent' : 'opacity-60'}`;
 
@@ -271,7 +274,7 @@ export function AdminShell({
               </a>
             </nav>
           </div>
-          <OpForm op="caches.refresh" back="/admin" className="flex items-center gap-3">
+          <OpForm op="caches.refresh" back={refreshBack} className="flex items-center gap-3">
             <button type="submit" className={BUTTON}>
               {dict.refreshCaches}
             </button>

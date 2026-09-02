@@ -1,4 +1,7 @@
 import { formatDate } from '@/lib/i18n/format';
+import { PROMPT_TEXT_MAX, PROMPT_TEXT_MIN } from '@/lib/prompts/schemas';
+import { promptHref } from '@/lib/prompts/links';
+import { visibilityLabel, visibilityOptions } from '@/components/admin/labels';
 import type { Dictionary } from '@/lib/i18n/dictionaries';
 import type { PromptRow } from '@/lib/prompts/repo';
 import { adminMediaPath, promptAdminRef } from '@/lib/media/admin-authorize';
@@ -8,8 +11,7 @@ import {
   USE_CASES,
   parsePromptMedia,
 } from '@/lib/prompts/schemas';
-import { VISIBILITY_ORDER } from '@/lib/content/visibility';
-import { Field, INPUT, LABEL } from '@/components/admin/chrome';
+import { Field, INPUT, LABEL, OpForm } from '@/components/admin/chrome';
 import { MediaDrop, type MediaDropLabels } from '@/components/admin/media-drop';
 import { useCaseLabel } from '@/components/prompts/labels';
 
@@ -120,17 +122,17 @@ export function PromptFields({ row, dict }: { row: PromptRow | null; dict: Dict 
     <>
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label={a.fieldPromptTitle}>
-          <input type="text" name="title" defaultValue={row?.title ?? ''} className={INPUT} />
+          <input type="text" name="title" required minLength={3} defaultValue={row?.title ?? ''} className={INPUT} />
         </Field>
         <Field label={a.fieldPromptTitleKo}>
-          <input type="text" name="titleKo" defaultValue={row?.titleKo ?? ''} className={INPUT} />
+          <input type="text" name="titleKo" required minLength={1} defaultValue={row?.titleKo ?? ''} className={INPUT} />
         </Field>
         <Field label={a.fieldPromptSlug} hint={a.promptSlugAutoHint}>
           <input
             type="text"
             name="slug"
             defaultValue={row?.slug ?? ''}
-            placeholder={a.promptSlugAutoHint}
+            placeholder="auto"
             className={INPUT}
           />
         </Field>
@@ -174,6 +176,9 @@ export function PromptFields({ row, dict }: { row: PromptRow | null; dict: Dict 
         <textarea
           name="promptText"
           rows={12}
+          required
+          minLength={PROMPT_TEXT_MIN}
+          maxLength={PROMPT_TEXT_MAX}
           defaultValue={row?.promptText ?? ''}
           className={INPUT}
         />
@@ -225,9 +230,9 @@ export function PromptFields({ row, dict }: { row: PromptRow | null; dict: Dict 
             defaultValue={row?.textVisibility ?? 'pro'}
             className={INPUT}
           >
-            {VISIBILITY_ORDER.map((value) => (
+            {visibilityOptions(a).map(({ value, label }) => (
               <option key={value} value={value}>
-                {value}
+                {label}
               </option>
             ))}
           </select>
@@ -278,10 +283,12 @@ export function PromptCard({
   row,
   dict,
   href,
+  locale,
 }: {
   row: PromptRow;
   dict: Dict;
   href: string;
+  locale: string;
 }) {
   const a = dict.admin;
   const media = parsePromptMedia(row.media);
@@ -317,7 +324,7 @@ export function PromptCard({
             {a.statusLabels[row.status]}
           </span>
           <span className="border border-hairline px-1.5 py-0.5 opacity-60">
-            {row.textVisibility}
+            {visibilityLabel(a, row.textVisibility)}
           </span>
           {row.featured && <span className="text-accent">★</span>}
         </div>
@@ -329,8 +336,26 @@ export function PromptCard({
         <p className="mt-auto font-mono text-[0.68rem] opacity-45">
           {row.source === 'yagi' ? a.sourceYagi : a.sourceCommunity}
           {' · '}
-          {formatDate(row.publishedAt ?? row.createdAt, 'en') ?? '—'}
+          {formatDate(row.publishedAt ?? row.createdAt, locale) ?? '—'}
         </p>
+
+        {/* The two things an admin does from the wall without opening the editor (2026-09-03):
+            see it live, and star it. An OpForm, not a link — a form inside an <li> is fine, an
+            anchor inside an anchor is not. */}
+        {row.status === 'published' && (
+          <div className="flex items-center justify-between gap-2 border-t border-hairline pt-2 font-label text-[0.6rem] tracking-[0.1em] uppercase">
+            <a href={promptHref(locale, row.slug)} className="opacity-60 hover:opacity-100" data-card-live={row.slug}>
+              {a.viewLive} →
+            </a>
+            <OpForm op="prompt.feature" back="/admin/prompts">
+              <input type="hidden" name="id" value={row.id} />
+              <input type="hidden" name="featured" value={row.featured ? 'false' : 'true'} />
+              <button type="submit" data-card-feature={row.slug} className={row.featured ? 'text-accent' : 'opacity-60 hover:opacity-100'}>
+                {row.featured ? a.unfeature : a.feature}
+              </button>
+            </OpForm>
+          </div>
+        )}
       </div>
     </li>
   );
