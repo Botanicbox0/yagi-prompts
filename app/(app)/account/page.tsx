@@ -277,7 +277,8 @@ export default async function AccountPage({
           <p className="font-label text-eyebrow uppercase opacity-60">{copy.notifHeading}</p>
           <p className="mt-2 text-[0.9375rem] opacity-70">{copy.notifLede}</p>
 
-          {entitled ? (
+          {/* Any signed-in reader (2026-09-03): the Pro plan that used to gate these is gone. */}
+          {viewer?.userId ? (
             <form action={saveNotificationPreferences} className="mt-6">
               <Toggle
                 name="notifNewPlaybook"
