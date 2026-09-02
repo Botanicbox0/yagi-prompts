@@ -2,7 +2,7 @@
  * Design review F1 — embedded-WebView detection for the OAuth entry (§3.7).
  *
  * Google refuses OAuth inside in-app browsers (`disallowed_useragent`), and the founder shares
- * yagiprompts.com as a bio link — so sign-in presses arrive from EXACTLY those WebViews:
+ * twings.app as a bio link — so sign-in presses arrive from EXACTLY those WebViews:
  * Instagram, KakaoTalk, Facebook, Line, Naver, Daum, Everytime, plus anything built on the
  * Android WebView (`; wv)` is the platform's own marker). `/auth/signin` sends a detected
  * reader to `/auth/open-in-browser` instead of into Google's error page.

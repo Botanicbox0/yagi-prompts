@@ -1,0 +1,7 @@
+/* Local faces for the OG card render — the same woff2 files next/font/local ships (assets/fonts).
+   Committed this time: the first render (2026-08-13) used a scratch copy that was lost, and the
+   TWINGS re-render had to rebuild it. */
+@font-face { font-family: 'Big Shoulders'; font-weight: 900; src: url('../../assets/fonts/big-shoulders-latin-900.woff2') format('woff2'); }
+@font-face { font-family: 'Big Shoulders'; font-weight: 700; src: url('../../assets/fonts/big-shoulders-latin-700.woff2') format('woff2'); }
+@font-face { font-family: 'Anton SC'; font-weight: 400; src: url('../../assets/fonts/anton-sc-latin-400.woff2') format('woff2'); }
+@font-face { font-family: 'Geist Mono'; font-weight: 400 500; src: url('../../assets/fonts/geist-mono-400.woff2') format('woff2'); }
