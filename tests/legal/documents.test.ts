@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { LEGAL_DOCS, businessRows, isLegalDoc, legalDocument } from '@/lib/legal/documents';
+import { ESCROW, LEGAL_DOCS, businessRows, isLegalDoc, legalDocument } from '@/lib/legal/documents';
 import { legalHref, legalRest } from '@/lib/legal/links';
 import { LOCALES } from '@/lib/i18n/config';
 import { PACK_COOKIES, PACK_PRICE_USD, SIGNUP_COOKIES, WEEKLY_COOKIES } from '@/lib/cookies/wallet';
@@ -68,7 +68,7 @@ describe('legal documents', () => {
   it('renders the §21 seller block with the registered company facts', () => {
     for (const locale of LOCALES) {
       const rows = businessRows(locale);
-      expect(rows.length).toBe(8);
+      expect(rows.length).toBe(9);
       for (const [label, value] of rows) {
         expect(label.trim(), label).not.toBe('');
         // An unfilled review blocker must SHOW as a placeholder — never as an empty cell.
@@ -85,6 +85,15 @@ describe('legal documents', () => {
     expect(businessRows('ko').flat().join(' ')).not.toContain('양천구');
     expect(businessRows('ko').map(([l]) => l)).toContain('사업자등록번호');
     expect(businessRows('en').map(([l]) => l)).toContain('Business registration no.');
+    // 전자상거래법 §13 — the escrow (구매안전서비스) enrolment is a DISPLAY duty, not just a filing one.
+    expect(businessRows('ko').flat().join(' ')).toContain('KB에스크로');
+    expect(businessRows('en').flat().join(' ')).toContain('KB Escrow');
+  });
+
+  it('links the KB escrow mark to the bank-hosted seller-verification page', () => {
+    expect(ESCROW.href).toMatch(/^https:\/\/okbfex\.kbstar\.com\/quics\?page=C016760&mHValue=[0-9a-f]{32}$/);
+    // The mark image must be https — the bank's own snippet ships http://, which a secure page blocks.
+    expect(ESCROW.mark).toMatch(/^https:\/\/img1\.kbstar\.com\//);
   });
 
   it('addresses every document under one stable path', () => {

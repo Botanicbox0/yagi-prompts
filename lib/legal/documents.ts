@@ -51,6 +51,24 @@ export const BUSINESS = {
   host: 'Vercel Inc. · Supabase Inc.',
 } as const;
 
+/**
+ * 구매안전서비스 (전자상거래법 §13②⑩, §24) — KB국민은행 「KB에스크로 이체」, 판매자 등록 2026-09-02.
+ *
+ * The bank issues a JS snippet that form-posts to a popup; this is the same seller-verification page
+ * reached by the plain GET link the bank also hands out, so the site needs no inline script. The
+ * `mHValue` is the bank's public seller hash — it is what the mark discloses on purpose (상호 ·
+ * 쇼핑몰 · 예금주), not a credential. The bank's snippet references the mark image over http://; a
+ * secure page would block that, so the https host is used here (verified 200, image/gif).
+ */
+export const ESCROW = {
+  bank: 'KB국민은행',
+  bankEn: 'KB Kookmin Bank',
+  service: 'KB에스크로 이체',
+  serviceEn: 'KB Escrow Transfer',
+  href: 'https://okbfex.kbstar.com/quics?page=C016760&mHValue=9c8456fe46af3eed4b7c4f7a85484c91',
+  mark: 'https://img1.kbstar.com/img/escrow/escrowcmark.gif',
+} as const;
+
 export const LEGAL_DOCS = ['terms', 'refund', 'privacy'] as const;
 export type LegalDoc = (typeof LEGAL_DOCS)[number];
 
@@ -406,5 +424,11 @@ export function businessRows(locale: Locale): Array<[string, string]> {
     [ko ? '연락처' : 'Phone', ko ? BUSINESS.phone : BUSINESS.phoneEn],
     [ko ? '이메일' : 'Email', BUSINESS.email],
     [ko ? '호스팅 제공자' : 'Hosting provider', BUSINESS.host],
+    [
+      ko ? '구매안전서비스' : 'Buyer protection (escrow)',
+      ko
+        ? `${ESCROW.bank} ${ESCROW.service} 가입 (2026-09-02)`
+        : `${ESCROW.bankEn} — ${ESCROW.serviceEn}, enrolled 2026-09-02`,
+    ],
   ];
 }

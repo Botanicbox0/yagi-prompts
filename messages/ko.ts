@@ -560,6 +560,7 @@ export const ko: Dictionary = {
     eyebrow: '약관·정책',
     effective: '시행일',
     businessHeading: '사업자 정보',
+    escrowMark: 'KB에스크로 이체 인증마크 — 누르면 은행이 확인한 판매자 정보를 볼 수 있습니다.',
   },
   footer: {
     hireCta: '스튜디오와 함께 작업하기',

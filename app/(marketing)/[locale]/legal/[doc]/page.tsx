@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import { DEFAULT_LOCALE, LOCALES, isLocale, type Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/dictionaries';
 import {
+  ESCROW,
   LEGAL_DOCS,
   LEGAL_EFFECTIVE,
   businessRows,
@@ -107,6 +108,21 @@ export default async function LegalPage({ params }: RouteParams) {
                 </div>
               ))}
             </dl>
+
+            {/* 전자상거래법 §13 — the escrow enrolment is shown, and the mark opens the bank's own record. */}
+            <a
+              href={ESCROW.href}
+              target="_blank"
+              rel="noopener noreferrer"
+              data-escrow-mark
+              className="mt-6 inline-flex items-center gap-4 opacity-80 transition-opacity hover:opacity-100"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element -- the bank hosts the mark */}
+              <img src={ESCROW.mark} alt={`${ESCROW.service} 인증마크`} width={60} height={60} />
+              <span className="max-w-[26rem] font-mono text-[0.72rem] leading-relaxed opacity-70">
+                {dict.legal.escrowMark}
+              </span>
+            </a>
           </section>
         </div>
       </main>

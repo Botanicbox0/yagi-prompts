@@ -589,6 +589,7 @@ export const en = {
     eyebrow: 'Legal',
     effective: 'Effective',
     businessHeading: 'Business information',
+    escrowMark: 'KB Escrow Transfer mark — opens the bank-verified seller record.',
   },
   footer: {
     hireCta: 'Work with the studio',
