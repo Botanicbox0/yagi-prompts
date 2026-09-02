@@ -314,6 +314,10 @@ export const en = {
       'In this demo the studio plays its own example film. Your photo never leaves the browser.',
     again: 'Try another scene',
     runtimeLabel: '{seconds}s',
+    needPhoto: 'Add a photo first — the button wakes up once there is a face to work with.',
+    noStyles: 'No scenes are open right now. The next one is being made in the catalogue below.',
+    seePrompt: 'See the prompt behind this scene',
+    makeThis: 'Make this with your photo',
     blurbs: {
       'seoul-90s': '1994 Seoul, shot on Betacam',
       'prom-queen': 'Y2K teen movie, prom night',
@@ -459,6 +463,9 @@ export const en = {
     errNotFound: 'That contest is not published.',
   },
   pricing: {
+    filmsTitle: 'Studio films',
+    filmsBody: 'One photo in, a finished film out. {min}–{max} per scene, paid once. No subscription.',
+    filmsCta: 'Go to the studio',
     eyebrow: '04 / Pricing',
     line1: 'NO SUBSCRIPTION.',
     line2: 'JUST COOKIES.',

@@ -4,6 +4,7 @@ import { getDictionary } from '@/lib/i18n/dictionaries';
 import { getPromptCatalog } from '@/lib/prompts/public-catalog';
 import { SITE_OG_IMAGE, SITE_TWITTER_CARD } from '@/lib/seo/og';
 import { formatPrice, joinStyles } from '@/lib/twings/products';
+import { promptHref } from '@/lib/prompts/links';
 import { MarketingFooter, MarketingNav } from '@/components/marketing/chrome';
 import { TwingsStudio, type StudioStyle } from '@/components/twings/studio';
 
@@ -69,6 +70,7 @@ export default async function StudioPage({ params }: RouteParams) {
     blurb: blurbs[style.id] ?? '',
     posterSrc: style.card.poster?.src ?? null,
     videoSrc: style.card.video?.src ?? null,
+    promptHref: promptHref(locale, style.slug),
   }));
 
   return (
@@ -103,6 +105,9 @@ export default async function StudioPage({ params }: RouteParams) {
               resultNote: dict.studio.resultNote,
               again: dict.studio.again,
               runtimeLabel: dict.studio.runtimeLabel,
+              needPhoto: dict.studio.needPhoto,
+              noStyles: dict.studio.noStyles,
+              seePrompt: dict.studio.seePrompt,
             }}
           />
         </div>
