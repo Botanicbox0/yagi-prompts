@@ -16,6 +16,8 @@ export interface NoticeLabels {
   oauthUnconfigured: string;
   signin: string;
   dismiss: string;
+  /** The sign-in door itself, beside the sentence that says to use it. */
+  signIn: string;
 }
 
 /** The dictionary → props seam, so the client bundle never carries both locales. */
@@ -25,6 +27,7 @@ export function noticeLabels(dict: Dictionary): NoticeLabels {
     oauthUnconfigured: dict.notice.oauthUnconfigured,
     signin: dict.notice.signin,
     dismiss: dict.notice.dismiss,
+    signIn: dict.auth.signIn,
   };
 }
 

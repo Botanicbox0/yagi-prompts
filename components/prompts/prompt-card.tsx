@@ -67,7 +67,7 @@ export function PromptCardView({
         <PromptCardMedia
           poster={card.poster}
           video={card.video}
-          alt={labels.posterAlt}
+          alt={card.title}
           ratio={ratio}
           fallback={
             <TypographicPoster
@@ -148,7 +148,7 @@ export function PromptCardView({
           <a
             href={promptHref(locale, card.slug)}
             data-card-detail={card.slug}
-            className="relative z-10 border border-hairline px-3 py-1.5 font-label text-[0.65rem] tracking-[0.12em] uppercase transition-opacity hover:opacity-70"
+            className="relative z-10 inline-flex min-h-11 items-center border border-hairline px-3 py-1.5 font-label text-[0.65rem] tracking-[0.12em] uppercase transition-opacity hover:opacity-70"
           >
             {labels.cardDetail}
           </a>

@@ -55,7 +55,7 @@ export function ContestCardView({
             // eslint-disable-next-line @next/next/no-img-element -- public bucket object, no loader
             <img
               src={card.poster.src}
-              alt={labels.posterAlt}
+              alt={localize(card.title, locale)}
               className="h-full w-full object-cover"
               loading="lazy"
             />

@@ -30,7 +30,7 @@ export function sanitizeSlug(raw: unknown): string | null {
 
 /** Where a completed (or abandoned) checkout should put the reader back. */
 export function originPath(origin: { slug: string | null; locale: Locale }): string {
-  return origin.slug === null ? '/library' : `/${origin.locale}/p/${origin.slug}`;
+  return origin.slug === null ? `/${origin.locale}/prompts` : `/${origin.locale}/p/${origin.slug}`;
 }
 
 /** Same-origin relative paths only — never let a query parameter become an open redirect. */

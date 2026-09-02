@@ -1,13 +1,14 @@
 import { getViewer } from '@/lib/auth/viewer';
 import { loadSubscription, type SubscriptionRecord } from '@/lib/billing/reconcile';
 import { isBillingConfigured } from '@/lib/billing/stripe-gateway';
-import { PORTAL_ACTION, UPGRADE_PATH, signInHref } from '@/lib/billing/links';
+import { PORTAL_ACTION } from '@/lib/billing/links';
 import { getSqlRunner } from '@/lib/db/connect';
 import { getLocaleFromHeaders } from '@/lib/i18n/server';
 import { getDictionary } from '@/lib/i18n/dictionaries';
 import { formatDate, interpolate } from '@/lib/i18n/format';
 import { LocaleToggle } from '@/components/locale-toggle';
-import { GoatMark } from '@/components/nav/goat-mark';
+import { siteLinks } from '@/components/marketing/chrome';
+import { TwingsWordmark } from '@/components/brand/twings-wordmark';
 import { TextSwap } from '@/components/ui/text-swap';
 import { BillingUnavailable } from '@/components/billing/upgrade-cta';
 import {
@@ -16,8 +17,9 @@ import {
   type NotificationPreferences,
 } from '@/lib/notify/preferences';
 import { getWallet, listRecentUnlocks, type UnlockHistoryRow, type Wallet } from '@/lib/cookies/repo';
+import { PACK_COOKIES, PACK_PRICE_USD, SIGNUP_COOKIES, WEEKLY_COOKIES } from '@/lib/cookies/wallet';
 import { loadSubmissionsByAuthor, type PromptRow } from '@/lib/prompts/repo';
-import { promptHref, promptsHref, PROMPT_SUBMIT_PATH } from '@/lib/prompts/links';
+import { promptHref, PROMPT_SUBMIT_PATH } from '@/lib/prompts/links';
 import { saveNotificationPreferences } from './actions';
 
 /**
@@ -160,16 +162,18 @@ export default async function AccountPage({
       <header className="border-b border-hairline">
         <div className="mx-auto flex max-w-shell items-center justify-between px-gutter py-5">
           <a href={`/${locale}`} className="flex items-center gap-2.5">
-            <GoatMark className="h-5 w-5" />
-            <span className="font-display text-[1.05rem] leading-none font-black uppercase">
-              {dict.meta.siteName}
-            </span>
+            <TwingsWordmark className="h-[18px] w-auto" />
           </a>
           <div className="flex items-center gap-6">
-            {/* §13.2 — the app chrome follows the nav pivot: prompts is the way back to the site. */}
-            <a href={promptsHref(locale)} className="font-label text-eyebrow uppercase">
-              {dict.nav.prompts}
-            </a>
+            {siteLinks(locale, dict).map((link, index) => (
+              <a
+                key={link.href}
+                href={link.href}
+                className={[index === 0 ? '' : 'hidden sm:inline', 'font-label text-eyebrow uppercase'].join(' ')}
+              >
+                {link.label}
+              </a>
+            ))}
             <LocaleToggle current={locale} rest="/account" prefixed={false} />
           </div>
         </div>
@@ -246,16 +250,23 @@ export default async function AccountPage({
               <p className="mt-4 font-mono text-code opacity-60">{copy.manageBillingHint}</p>
             </div>
           ) : (
-            <aside className="border border-accent p-6 sm:p-8">
+            <aside data-account-cookies className="border border-accent p-6 sm:p-8">
               <p className="font-display text-[clamp(1.35rem,2.2vw,1.75rem)] leading-[1] font-black uppercase">
-                {copy.upgradeHeading}
+                {copy.cookiesHeading}
               </p>
-              <p className="mt-4 text-body opacity-70">{copy.upgradeBody}</p>
+              <p className="mt-4 text-body opacity-70">
+                {interpolate(copy.cookiesBody, {
+                  signup: String(SIGNUP_COOKIES),
+                  weekly: String(WEEKLY_COOKIES),
+                  pack: String(PACK_COOKIES),
+                  price: `$${PACK_PRICE_USD}`,
+                })}
+              </p>
               <a
-                href={viewer?.userId === null ? signInHref(UPGRADE_PATH, locale) : UPGRADE_PATH}
+                href={`/${locale}/pricing`}
                 className="text-accent mt-6 inline-block font-label text-label uppercase"
               >
-                <TextSwap>{copy.upgradeCta} →</TextSwap>
+                <TextSwap>{copy.cookiesCta} →</TextSwap>
               </a>
             </aside>
           )}

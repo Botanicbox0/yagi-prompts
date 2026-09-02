@@ -12,7 +12,7 @@ import {
   VIDEO_MAX_BYTES,
   VIDEO_MAX_SECONDS,
 } from '@/lib/prompts/schemas';
-import { GoatMark } from '@/components/nav/goat-mark';
+import { TwingsWordmark } from '@/components/brand/twings-wordmark';
 import { TextSwap } from '@/components/ui/text-swap';
 import { useCaseLabel } from '@/components/prompts/labels';
 import { submitPromptAction } from './actions';
@@ -82,10 +82,7 @@ export default async function SubmitPromptPage({
       <header className="border-b border-hairline">
         <div className="mx-auto flex max-w-shell items-center justify-between gap-4 px-gutter py-4">
           <a href={promptsHref(locale)} className="flex items-center gap-2.5">
-            <GoatMark className="h-5 w-5" />
-            <span className="font-display text-[1.05rem] leading-none font-black uppercase">
-              {dict.meta.siteName}
-            </span>
+            <TwingsWordmark className="h-[18px] w-auto" />
           </a>
           <a
             href={promptsHref(locale)}

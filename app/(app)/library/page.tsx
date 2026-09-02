@@ -10,10 +10,10 @@ import { getLocaleFromHeaders } from '@/lib/i18n/server';
 import { getDictionary } from '@/lib/i18n/dictionaries';
 import { formatCount, interpolate } from '@/lib/i18n/format';
 import { LocaleToggle } from '@/components/locale-toggle';
-import { GoatMark } from '@/components/nav/goat-mark';
+import { TwingsWordmark } from '@/components/brand/twings-wordmark';
 import { AdRail } from '@/components/ad/ad-rail';
 import { AdBanner, AdCard } from '@/components/ad/ad-card';
-import { adLabels } from '@/components/marketing/chrome';
+import { adLabels, siteLinks } from '@/components/marketing/chrome';
 import { FilterBar } from '@/components/library/filter-bar';
 import { LibraryEmpty, LibraryGrid, type GridLabels } from '@/components/library/grid';
 
@@ -71,15 +71,18 @@ export default async function LibraryPage({
       <header className="border-b border-hairline">
         <div className="mx-auto flex max-w-shell items-center justify-between px-gutter py-5">
           <a href={`/${locale}`} className="flex items-center gap-2.5">
-            <GoatMark className="h-5 w-5" />
-            <span className="font-display text-[1.05rem] leading-none font-black uppercase">
-              {dict.meta.siteName}
-            </span>
+            <TwingsWordmark className="h-[18px] w-auto" />
           </a>
           <div className="flex items-center gap-6">
-            <a href={`/${locale}/pricing`} className="font-label text-eyebrow uppercase">
-              {dict.nav.pricing}
-            </a>
+            {siteLinks(locale, dict).map((link, index) => (
+              <a
+                key={link.href}
+                href={link.href}
+                className={[index === 0 ? '' : 'hidden sm:inline', 'font-label text-eyebrow uppercase'].join(' ')}
+              >
+                {link.label}
+              </a>
+            ))}
             <LocaleToggle current={locale} rest="/library" prefixed={false} />
           </div>
         </div>
