@@ -33,16 +33,15 @@ function maskId(value: string): string {
   return `${value.slice(0, 4)}...${value.slice(-4)}`;
 }
 
-function dryConfig(config: ArkAssetsConfig | null): ArkAssetsConfig {
-  return (
-    config ?? {
-      accessKey: 'dry-access-key',
-      secretKey: 'dry-secret-key',
-      region: ARK_DEFAULT_REGION,
-      host: ARK_DEFAULT_OPENAPI_HOST,
-      projectName: 'default',
-    }
-  );
+function dryConfig(): ArkAssetsConfig {
+  // Never derive printable dry-run output from an ARK_* value. Only presence is reportable.
+  return {
+    accessKey: 'dry-access-key',
+    secretKey: 'dry-secret-key',
+    region: ARK_DEFAULT_REGION,
+    host: ARK_DEFAULT_OPENAPI_HOST,
+    projectName: 'default',
+  };
 }
 
 async function main(): Promise<number> {
@@ -52,12 +51,12 @@ async function main(): Promise<number> {
 
   if (dry) {
     const request = buildArkOpenApiRequest(
-      dryConfig(config),
+      dryConfig(),
       'ListAssetGroups',
       {
         Filter: { GroupType: 'LivenessFace' },
         MaxResults: 100,
-        ProjectName: config?.projectName ?? 'default',
+        ProjectName: 'default',
       },
       new Date(),
     );
