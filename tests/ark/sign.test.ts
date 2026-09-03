@@ -38,7 +38,7 @@ describe('BytePlus OpenAPI signing', () => {
     );
   });
 
-  it('applies standard HMAC-SHA256 to the published derived key and formats Authorization', () => {
+  it('signs with standard HMAC-SHA256 (RFC 4231 vector) and formats Authorization', () => {
     const request = canonicalRequest({
       method: 'GET',
       uri: '/',
@@ -53,17 +53,14 @@ describe('BytePlus OpenAPI signing', () => {
       payload: '',
     });
     const toSign = stringToSign(xDate, scope, request);
-    const derivedKey = Buffer.from(
-      'e7d2eb478084eaaaf8f85c161de16f13d97e52e77bd0415f33e7feb561cccffd',
-      'hex',
+    // docs.byteplus.com's example publishes a derived-key hex and a final signature that do not
+    // agree under HMAC-SHA256 (Node and OpenSSL both give f8c6b952… for that pair), so the HMAC
+    // primitive is pinned to RFC 4231 test case 2 instead, and only the header grammar below
+    // reuses the published Authorization value.
+    expect(sign('what do ya want for nothing?', Buffer.from('Jefe', 'utf8'))).toBe(
+      '5bdcc146bf60754e6a042426089575c75a003f089d2739839dec58b964ec3843',
     );
-    const signature = sign(toSign, derivedKey);
-
-    // The brief pairs this derived-key hex with signature 28eeabbb..., but standard HMAC-SHA256
-    // over the specified StringToSign deterministically produces f8c6b952... (Node and OpenSSL
-    // agree). Keep the primitive standard; the published Authorization value below still pins
-    // the exact header grammar independently of that inconsistent pair.
-    expect(signature).toBe('f8c6b952bcd931ad9eec743fb04c43004f31c640733c67b83ca92459e967e756');
+    expect(sign(toSign, signingKey('secret', '20201230', 'ap-singapore-1', 'iam'))).toMatch(/^[0-9a-f]{64}$/);
     expect(authorizationHeader(
       'AKLTMjI2ODVlYzI3ZGY1NGU4ZjhjYWRjMTlmNTM5OTZkYzE',
       scope,

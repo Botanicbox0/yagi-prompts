@@ -136,7 +136,7 @@ describe('signed transport and action mapping', () => {
               GroupId: 'group-1',
               Status: 'Active',
               AssetType: 'Image',
-              Name: 'front portrait',
+              Name: '',
               URL: 'asset://asset-1',
               CreateTime: '2026-09-01T00:00:00Z',
               UpdateTime: '2026-09-01T00:01:00Z',
@@ -165,6 +165,7 @@ describe('signed transport and action mapping', () => {
       id: 'asset-1',
       groupId: 'group-1',
       status: 'Active',
+      name: '',
       lastInferenceAt: '2026-09-02T00:00:00Z',
       moderation: { strategy: 'Default' },
     });

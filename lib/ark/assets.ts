@@ -497,7 +497,7 @@ function mapAsset(item: Record<string, unknown>): ArkAsset {
   return {
     ...mapAssetRecord(item),
     assetType: assetType(item.AssetType),
-    name: requiredString(item.Name, 'asset.Name'),
+    name: stringOrNull(item.Name) ?? '',
     url: requiredString(item.URL, 'asset.URL'),
     updatedAt: requiredString(item.UpdateTime, 'asset.UpdateTime'),
     projectName: requiredString(item.ProjectName, 'asset.ProjectName'),
@@ -511,7 +511,7 @@ function mapAssetGroup(item: Record<string, unknown>): ArkAssetGroupRecord {
   }
   return {
     id: requiredString(item.Id, 'assetGroup.Id'),
-    name: requiredString(item.Name, 'assetGroup.Name'),
+    name: stringOrNull(item.Name) ?? '',
     description: stringOrNull(item.Description) ?? '',
     groupType: 'LivenessFace',
     projectName: requiredString(item.ProjectName, 'assetGroup.ProjectName'),
