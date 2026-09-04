@@ -87,15 +87,17 @@ const Scene = ({ transparent }: { transparent: boolean }) => {
   // Where the camera looks, in the wordmark's own coordinates (x across the word, y down).
   const fx = interpolate(g, [0, 1], [0.34, 0.12]) * lockupWidth * (1 - u); // slides from "SHOP" toward "WOR", then to centre
   const fy = interpolate(g, [0, 1], [0.05, -0.12]) * capHeight * (1 - u);
-  const depth = interpolate(u, [0, 1], [P * (1 - 1 / CLOSE), 0]) - settle * 40 * k; // z of the focus point
+  // z of the focus point. Magnification = P·k / (P·k − z), so CLOSE× needs z = P·k·(1 − 1/CLOSE).
+  const depth = interpolate(u, [0, 1], [P * k * (1 - 1 / CLOSE), 0]) - settle * 40 * k;
   const rx = interpolate(u, [0, 1], [interpolate(g, [0, 1], [64, 58]), 5]) + drift(frame, 1.2, 6.1, 0.5, 2.6, 0.3) * (1 - 0.6 * u);
   const ry = interpolate(u, [0, 1], [-9, 2]) + drift(frame, 1.6, 5.3, 0.6, 3.1, 2.0) * (1 - 0.6 * u);
   const rz = interpolate(u, [0, 1], [-7, 0.4]) + drift(frame, 0.7, 7.3, 0.3, 3.4, 1.2) * (1 - 0.6 * u);
 
+  // fx/fy are already in composition pixels: no further scaling by k.
   const rd = rotate([fx, fy, 0], rx, ry, rz);
-  const tx = -rd[0] * k;
-  const ty = -rd[1] * k;
-  const tz = (depth - rd[2]) * k;
+  const tx = -rd[0];
+  const ty = -rd[1];
+  const tz = depth - rd[2];
 
   // --- light -------------------------------------------------------------------
   const macroBand = interpolate(g, [0, 1], [0.95, 0.25]);
