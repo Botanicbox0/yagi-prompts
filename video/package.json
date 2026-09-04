@@ -1,0 +1,27 @@
+{
+  "name": "yagi-ending-card",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Produced by YAGI WORKSHOP \u2014 3s cinematic end card (Remotion)",
+  "scripts": {
+    "studio": "remotion studio src/index.ts",
+    "render": "remotion render src/index.ts EndingCard renders/yagi-ending-16x9.mp4 --codec h264 --crf 16",
+    "render:vertical": "remotion render src/index.ts EndingCardVertical renders/yagi-ending-9x16.mp4 --codec h264 --crf 16",
+    "render:alpha": "remotion render src/index.ts EndingCard renders/yagi-ending-16x9-alpha.mov --codec prores --prores-profile 4444 --image-format png --props '{\"transparent\":true}'",
+    "still": "remotion still src/index.ts EndingCard renders/yagi-ending-poster.png --frame 60",
+    "brand": "node --experimental-strip-types scripts/export-mark.ts"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.520",
+    "@remotion/fonts": "4.0.520",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "remotion": "4.0.520"
+  },
+  "devDependencies": {
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.4",
+    "typescript": "5.9.3"
+  },
+  "type": "module"
+}

@@ -41,3 +41,4 @@ PGlite in-process, and storage uses the local filesystem driver under `.storage/
 | `supabase/migrations/` | core (PGlite-testable) + supabase-glue split — see `supabase/README.md` |
 | `scripts/seed.ts` | 2 fixture playbooks, every block kind x visibility, published for real |
 | `docs/` | `VERSIONS.md` (why each pin), `SETUP.md` (manual steps remaining) |
+| `video/` | Remotion workspace for the 3 s "Produced by YAGI WORKSHOP" end card + the monogram — own `package.json`, excluded from the root typecheck |

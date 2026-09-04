@@ -31,5 +31,5 @@
     "**/*.tsx",
     ".next/types/**/*.ts"
   ],
-  "exclude": ["node_modules", ".next", ".storage"]
+  "exclude": ["node_modules", ".next", ".storage", "video"]
 }

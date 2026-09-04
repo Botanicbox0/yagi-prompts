@@ -20,3 +20,6 @@ dist/
 next-env.d.ts
 coverage/
 .agents/
+
+# Remotion alpha renders are 50MB+ ProRes; keep them local (video/README.md: npm run render:alpha)
+video/renders/*.mov
