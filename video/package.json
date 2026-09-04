@@ -18,11 +18,16 @@
     "render:ship": "remotion render src/index.ts EndingCardShip renders/yagi-ending-ship-16x9.mp4 --codec h264 --crf 16",
     "render:ship:vertical": "remotion render src/index.ts EndingCardShipVertical renders/yagi-ending-ship-9x16.mp4 --codec h264 --crf 16",
     "render:ship:alpha": "remotion render src/index.ts EndingCardShip renders/yagi-ending-ship-16x9-alpha.mov --codec prores --prores-profile 4444 --image-format png --props '{\"transparent\":true,\"dust\":false}'",
-    "still:ship": "remotion still src/index.ts EndingCardShip renders/yagi-ending-ship-poster.png --frame 262"
+    "still:ship": "remotion still src/index.ts EndingCardShip renders/yagi-ending-ship-poster.png --frame 262",
+    "render:macro": "remotion render src/index.ts EndingCardMacro renders/yagi-ending-macro-16x9.mp4 --codec h264 --crf 16 --timeout 120000",
+    "render:macro:vertical": "remotion render src/index.ts EndingCardMacroVertical renders/yagi-ending-macro-9x16.mp4 --codec h264 --crf 16 --timeout 120000",
+    "render:macro:alpha": "remotion render src/index.ts EndingCardMacro renders/yagi-ending-macro-16x9-alpha.mov --codec prores --prores-profile 4444 --image-format png --props '{\"transparent\":true,\"dust\":false,\"motionBlur\":true}' --timeout 120000",
+    "still:macro": "remotion still src/index.ts EndingCardMacro renders/yagi-ending-macro-poster.png --frame 262 --timeout 120000"
   },
   "dependencies": {
     "@remotion/cli": "4.0.520",
     "@remotion/fonts": "4.0.520",
+    "@remotion/motion-blur": "^4.0.520",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "remotion": "4.0.520"

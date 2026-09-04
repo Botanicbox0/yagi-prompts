@@ -15,6 +15,9 @@ frame is deterministic and the piece can be re-rendered at any size or with the 
 | **10 s, "the ship"** | `renders/yagi-ending-ship-16x9.mp4` | 1920x1080, 300 frames — the wordmark as a 3D hull closing on the camera |
 | 10 s ship, vertical | `renders/yagi-ending-ship-9x16.mp4` | 1080x1920 |
 | 10 s ship poster | `renders/yagi-ending-ship-poster.png` | frame 262 |
+| **10 s, "macro"** | `renders/yagi-ending-macro-16x9.mp4` | 1920x1080, 300 frames — the camera starts ON the letters and pulls back |
+| 10 s macro, vertical | `renders/yagi-ending-macro-9x16.mp4` | 1080x1920 |
+| 10 s macro poster | `renders/yagi-ending-macro-poster.png` | frame 262 |
 | Wordmark | `brand/yagi-workshop.svg`, `brand/yagi-workshop-black.svg` | static, cream / near-black |
 
 ## Run it
@@ -36,6 +39,10 @@ npm run render:ship          # 10 s "ship", 16:9
 npm run render:ship:vertical # 10 s "ship", 9:16
 npm run render:ship:alpha    # 10 s "ship", ProRes 4444 with alpha (no dust)
 npm run still:ship           # 10 s "ship" poster (frame 262)
+npm run render:macro         # 10 s "macro", 16:9 (slow: real motion blur, ~15 min on 4 cores)
+npm run render:macro:vertical
+npm run render:macro:alpha
+npm run still:macro
 npm run brand           # regenerate the SVG wordmark from src/wordmark.ts
 ```
 
@@ -104,6 +111,32 @@ Forty faint motes drift past the camera with parallax (`dust: false` turns them 
 | 252–299 | hold — still drifting, creeping in 3 % |
 | 272–299 | dissolve to black |
 
+## The 10-second card, third cut: "macro"
+
+The impact version. The camera starts on the letters: a grazing close-up, four and a half times
+life size, gliding along the strokes of WORKSHOP while a band of light slides across the surfaces.
+For the first 1.7 s it is abstract architecture — cream faces, dark extruded sides, heavy grain.
+Then the camera lets go and retreats hard, with real multi-sample motion blur
+(`@remotion/motion-blur`, 4 samples, 200° shutter, only while it moves), and the fragment resolves
+into letters, the letters into the wordmark, the grazing angle levels out, and it lands on a long
+deceleration. On arrival one hard band of light crosses the strokes and a short monochrome bloom
+peaks behind them; the backlight comes up; `PRODUCED BY` appears. Then a hold, still easing back
+a hair, and the dissolve.
+
+The camera is expressed as a *focus point* in the wordmark's own coordinates plus a depth: the
+scene rotates the point through the same `rotateX rotateY rotateZ` CSS applies, then translates so
+that point sits at the wanted depth on the optical axis. Sliding the focus point along the word is
+the glide; driving its depth from `P·(1 − 1/4.5)` to 0 is the pull-back.
+
+| Frames | Beat |
+|---|---|
+| 0–52 | on the letters, gliding along WORKSHOP, light sliding across the faces |
+| 52–215 | the pull-back, motion-blurred, grazing angle → frontal |
+| 222–262 | arrival light pass, bloom peak at 238, backlight, `PRODUCED BY` |
+| 262–299 | hold, dissolve from 270 |
+
+`motionBlur: false` renders the same card in a minute for previews.
+
 ## Timeline of the 3-second card (30 fps)
 
 | Frames | Beat |
@@ -125,6 +158,8 @@ The whole lockup pushes in 2.5 % across the shot. Every curve is the site's `eas
 | `src/EndingCard.tsx` | the 3 s scene: timeline, credit line, vignette, dissolve, portrait sizing |
 | `src/LongCard.tsx` | the 10 s scene: the dolly, focus pull, backlight, light sweep |
 | `src/ShipCard.tsx` | the 10 s "ship": perspective, extrusion, drifting hull, dust |
+| `src/MacroCard.tsx` | the 10 s "macro": focus-point camera, pull-back with motion blur, bloom |
+| `src/Dust.tsx` | the motes, shared by the two 3D cards |
 | `src/Grain.tsx` | per-frame film grain |
 | `src/fonts.ts` | `@remotion/fonts` loader for the Satoshi WOFF2 in `public/fonts/` |
 | `scripts/export-wordmark.ts` | writes `brand/*.svg` from the geometry module |

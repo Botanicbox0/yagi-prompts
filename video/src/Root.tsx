@@ -2,6 +2,7 @@ import { Composition } from 'remotion';
 import { EndingCard, endingCardSchema } from './EndingCard';
 import { LongCard, longCardSchema } from './LongCard';
 import { ShipCard, shipCardSchema } from './ShipCard';
+import { MacroCard, macroCardSchema } from './MacroCard';
 
 export const FPS = 30;
 export const DURATION = 90; // 3.0 s
@@ -70,6 +71,26 @@ export const Root = () => (
       width={1080}
       height={1920}
       defaultProps={{ transparent: false, dust: true }}
+    />
+    <Composition
+      id="EndingCardMacro"
+      component={MacroCard}
+      schema={macroCardSchema}
+      durationInFrames={LONG_DURATION}
+      fps={FPS}
+      width={1920}
+      height={1080}
+      defaultProps={{ transparent: false, dust: true, motionBlur: true }}
+    />
+    <Composition
+      id="EndingCardMacroVertical"
+      component={MacroCard}
+      schema={macroCardSchema}
+      durationInFrames={LONG_DURATION}
+      fps={FPS}
+      width={1080}
+      height={1920}
+      defaultProps={{ transparent: false, dust: true, motionBlur: true }}
     />
   </>
 );

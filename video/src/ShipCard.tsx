@@ -1,5 +1,6 @@
-import { AbsoluteFill, Easing, interpolate, random, useCurrentFrame, useVideoConfig } from 'remotion';
+import { AbsoluteFill, Easing, interpolate, useCurrentFrame, useVideoConfig } from 'remotion';
 import { z } from 'zod';
+import { Dust } from './Dust';
 import { Grain } from './Grain';
 import { Wordmark } from './Wordmark';
 import { BODY, fontsReady } from './fonts';
@@ -53,40 +54,6 @@ const mix = (a: string, b: string, t: number) => {
   const A = [1, 3, 5].map((i) => parseInt(a.slice(i, i + 2), 16)) as [number, number, number];
   const B = [1, 3, 5].map((i) => parseInt(b.slice(i, i + 2), 16)) as [number, number, number];
   return `rgb(${A.map((v, i) => Math.round(v + (B[i]! - v) * t)).join(',')})`;
-};
-
-const Dust = ({ progress, width, height }: { progress: number; width: number; height: number }) => {
-  const motes = Array.from({ length: 40 }, (_, i) => {
-    const angle = random(`a${i}`) * Math.PI * 2;
-    const r0 = 0.06 + random(`r${i}`) * 0.4;
-    const depth = 0.3 + random(`d${i}`) * 0.7; // nearer motes fly past faster and brighter
-    const r = r0 * (1 + 3.2 * progress * depth);
-    const x = 0.5 + Math.cos(angle) * r;
-    const y = 0.5 + Math.sin(angle) * r * (width / height);
-    const edge = Math.max(Math.abs(x - 0.5), Math.abs(y - 0.5)) * 2;
-    const opacity = (0.1 + 0.26 * depth) * interpolate(edge, [0.7, 1.05], [1, 0], clamp);
-    return { x, y, size: (1 + depth * 1.6) * (height / 1080), opacity };
-  });
-  return (
-    <AbsoluteFill style={{ pointerEvents: 'none' }}>
-      {motes.map((m, i) => (
-        <div
-          key={i}
-          style={{
-            position: 'absolute',
-            left: m.x * width,
-            top: m.y * height,
-            width: m.size,
-            height: m.size,
-            borderRadius: '50%',
-            background: CREAM,
-            opacity: m.opacity,
-            filter: 'blur(0.4px)',
-          }}
-        />
-      ))}
-    </AbsoluteFill>
-  );
 };
 
 export const ShipCard = ({ transparent, dust }: Props) => {
