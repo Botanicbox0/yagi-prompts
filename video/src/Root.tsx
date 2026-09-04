@@ -1,6 +1,7 @@
 import { Composition } from 'remotion';
 import { EndingCard, endingCardSchema } from './EndingCard';
 import { LongCard, longCardSchema } from './LongCard';
+import { ShipCard, shipCardSchema } from './ShipCard';
 
 export const FPS = 30;
 export const DURATION = 90; // 3.0 s
@@ -49,6 +50,26 @@ export const Root = () => (
       width={1080}
       height={1920}
       defaultProps={{ transparent: false }}
+    />
+    <Composition
+      id="EndingCardShip"
+      component={ShipCard}
+      schema={shipCardSchema}
+      durationInFrames={LONG_DURATION}
+      fps={FPS}
+      width={1920}
+      height={1080}
+      defaultProps={{ transparent: false, dust: true }}
+    />
+    <Composition
+      id="EndingCardShipVertical"
+      component={ShipCard}
+      schema={shipCardSchema}
+      durationInFrames={LONG_DURATION}
+      fps={FPS}
+      width={1080}
+      height={1920}
+      defaultProps={{ transparent: false, dust: true }}
     />
   </>
 );

@@ -12,6 +12,9 @@ frame is deterministic and the piece can be re-rendered at any size or with the 
 | **10 s, landscape** | `renders/yagi-ending-10s-16x9.mp4` | 1920x1080, 30 fps, 300 frames — "the long approach" |
 | 10 s, vertical | `renders/yagi-ending-10s-9x16.mp4` | 1080x1920, same timeline |
 | 10 s poster | `renders/yagi-ending-10s-poster.png` | frame 258 (the hold) |
+| **10 s, "the ship"** | `renders/yagi-ending-ship-16x9.mp4` | 1920x1080, 300 frames — the wordmark as a 3D hull closing on the camera |
+| 10 s ship, vertical | `renders/yagi-ending-ship-9x16.mp4` | 1080x1920 |
+| 10 s ship poster | `renders/yagi-ending-ship-poster.png` | frame 262 |
 | Wordmark | `brand/yagi-workshop.svg`, `brand/yagi-workshop-black.svg` | static, cream / near-black |
 
 ## Run it
@@ -29,6 +32,10 @@ npm run render:long          # 10 s, 16:9
 npm run render:long:vertical # 10 s, 9:16
 npm run render:long:alpha    # 10 s, ProRes 4444 with alpha
 npm run still:long           # 10 s poster (frame 258)
+npm run render:ship          # 10 s "ship", 16:9
+npm run render:ship:vertical # 10 s "ship", 9:16
+npm run render:ship:alpha    # 10 s "ship", ProRes 4444 with alpha (no dust)
+npm run still:ship           # 10 s "ship" poster (frame 262)
 npm run brand           # regenerate the SVG wordmark from src/wordmark.ts
 ```
 
@@ -74,6 +81,29 @@ in, and dissolves.
 | 250–299 | hold, creeping in 2.5 % |
 | 270–299 | dissolve to black |
 
+## The 10-second card, second cut: "the ship"
+
+The same approach, but the wordmark is a body in space, not a plane on a screen. It sits in a
+real CSS perspective (`perspective: 1400px`) with twenty extrusion slices stacked behind the face,
+darkening with depth, so the letters have thickness and the sides catch as it turns. It starts
+far out and tilted hard away (pitch 58°, yaw −22°, roll −4°), constructs itself out there, then
+closes on the camera by travelling in Z — so it grows the way a body at constant speed does,
+slowly and then fast — while it levels out. Every axis carries two slow sines of unrelated
+periods: the hull drifts, it never moves on rails, and it is still drifting during the hold. A
+standing specular slides across the strokes with the yaw; one hard pass crosses them on arrival.
+Forty faint motes drift past the camera with parallax (`dust: false` turns them off).
+
+| Frames | Beat |
+|---|---|
+| 0–14 | black |
+| 14–120 | far out, tilted away, the wordmark constructs itself |
+| 10–252 | Z travel 5.2 → 1, pitch/yaw/roll level out, blur 3 px → 0, exposure 38 % → 100 % |
+| 50–252 | backlight gathers to 9 % |
+| 176–216 | `PRODUCED BY` comes up on the hull |
+| 218–258 | the arrival light crosses the letters |
+| 252–299 | hold — still drifting, creeping in 3 % |
+| 272–299 | dissolve to black |
+
 ## Timeline of the 3-second card (30 fps)
 
 | Frames | Beat |
@@ -94,6 +124,7 @@ The whole lockup pushes in 2.5 % across the shot. Every curve is the site's `eas
 | `src/Wordmark.tsx` | the animated wordmark (`draw` / `fade`) |
 | `src/EndingCard.tsx` | the 3 s scene: timeline, credit line, vignette, dissolve, portrait sizing |
 | `src/LongCard.tsx` | the 10 s scene: the dolly, focus pull, backlight, light sweep |
+| `src/ShipCard.tsx` | the 10 s "ship": perspective, extrusion, drifting hull, dust |
 | `src/Grain.tsx` | per-frame film grain |
 | `src/fonts.ts` | `@remotion/fonts` loader for the Satoshi WOFF2 in `public/fonts/` |
 | `scripts/export-wordmark.ts` | writes `brand/*.svg` from the geometry module |

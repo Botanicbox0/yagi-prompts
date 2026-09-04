@@ -14,7 +14,11 @@
     "render:long": "remotion render src/index.ts EndingCardLong renders/yagi-ending-10s-16x9.mp4 --codec h264 --crf 16",
     "render:long:vertical": "remotion render src/index.ts EndingCardLongVertical renders/yagi-ending-10s-9x16.mp4 --codec h264 --crf 16",
     "render:long:alpha": "remotion render src/index.ts EndingCardLong renders/yagi-ending-10s-16x9-alpha.mov --codec prores --prores-profile 4444 --image-format png --props '{\"transparent\":true}'",
-    "still:long": "remotion still src/index.ts EndingCardLong renders/yagi-ending-10s-poster.png --frame 258"
+    "still:long": "remotion still src/index.ts EndingCardLong renders/yagi-ending-10s-poster.png --frame 258",
+    "render:ship": "remotion render src/index.ts EndingCardShip renders/yagi-ending-ship-16x9.mp4 --codec h264 --crf 16",
+    "render:ship:vertical": "remotion render src/index.ts EndingCardShipVertical renders/yagi-ending-ship-9x16.mp4 --codec h264 --crf 16",
+    "render:ship:alpha": "remotion render src/index.ts EndingCardShip renders/yagi-ending-ship-16x9-alpha.mov --codec prores --prores-profile 4444 --image-format png --props '{\"transparent\":true,\"dust\":false}'",
+    "still:ship": "remotion still src/index.ts EndingCardShip renders/yagi-ending-ship-poster.png --frame 262"
   },
   "dependencies": {
     "@remotion/cli": "4.0.520",
