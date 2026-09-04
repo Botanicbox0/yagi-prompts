@@ -4,7 +4,7 @@ import { EndingCard, endingCardSchema } from './EndingCard';
 export const FPS = 30;
 export const DURATION = 90; // 3.0 s
 
-const defaultProps = { transparent: false };
+const defaultProps = { transparent: false, reveal: 'draw' as const };
 
 export const Root = () => (
   <>
