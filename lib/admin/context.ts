@@ -40,6 +40,8 @@ export interface AdminContext {
    * day of the three (every entry approval touches it) and the fewest reasons to move the others.
    */
   revalidateContests?: () => void;
+  /** `revalidateTag('campaigns')` (docs/CAMPAIGNS.md), injected on the same terms as the other three. */
+  revalidateCampaigns?: () => void;
 }
 
 /** Codes, never prose: the UI maps them through the bilingual dictionary (§3.9). */
@@ -58,7 +60,12 @@ export type AdminSuccessCode =
   | 'approved'
   | 'rejected'
   /** §14 — taking a contest off the listing is not an archive and not a save. */
-  | 'unpublished';
+  | 'unpublished'
+  /** Campaigns (docs/CAMPAIGNS.md): the four application outcomes a creator is told about. */
+  | 'selected'
+  | 'declined'
+  | 'verified'
+  | 'paid';
 
 export type AdminErrorCode =
   | 'forbidden'
@@ -93,6 +100,17 @@ export type AdminErrorCode =
   | 'staleReview'
   /** A judged contest's deadline cannot be pushed outwards while medals are on the board. */
   | 'placementsLocked'
+  /**
+   * Campaigns. Each is a distinct next action:
+   *   badTransition   — the state machine refuses that move from where the row is
+   *   slotsFull       — the client's slot count is a promise; the N+1th selection is refused
+   *   notReleasable   — the seven-day hold has not ended
+   *   metricsRequired — a view-based payout needs the snapshot before it can be priced
+   */
+  | 'badTransition'
+  | 'slotsFull'
+  | 'notReleasable'
+  | 'metricsRequired'
   | 'unknown';
 
 export interface AdminSuccess {

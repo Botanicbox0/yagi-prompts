@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { requireAdmin } from '@/lib/auth/viewer';
-import { revalidateCatalog, revalidateContests, revalidatePrompts } from '@/lib/cache';
+import { revalidateCampaigns, revalidateCatalog, revalidateContests, revalidatePrompts } from '@/lib/cache';
 import { getSqlRunner } from '@/lib/db/connect';
 import { getStorage } from '@/lib/storage';
 import { fail, type AdminOutcome } from '@/lib/admin/context';
@@ -87,5 +87,6 @@ async function execute(name: string, form: FormData): Promise<AdminOutcome> {
     revalidate: revalidateCatalog,
     revalidatePrompts,
     revalidateContests,
+    revalidateCampaigns,
   });
 }

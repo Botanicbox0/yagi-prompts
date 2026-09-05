@@ -723,6 +723,7 @@ export const en = {
     brand: 'TWINGS CMS',
     navPrompts: 'Prompts',
     navContests: 'Contests',
+    navCampaigns: 'Campaigns',
     navPlaybooks: 'Playbooks',
     navPolicy: 'Policy',
     navSite: 'View site',
@@ -910,6 +911,10 @@ export const en = {
     okUnarchived: 'Restored.',
     okApproved: 'Approved and live.',
     okRejected: 'Rejected. The submitter sees the reason on their account.',
+    okSelected: 'Selected. It shows on the creator\'s campaign page right away.',
+    okDeclined: 'Declined, politely.',
+    okVerified: 'Post verified. The seven-day hold has started; the row reaches the payout queue when it ends.',
+    okPaid: 'Recorded as paid.',
     okUnpublished: 'Unpublished — it is off the listing.',
 
     // --- §13.2/F prompts CMS -------------------------------------------------
@@ -1111,6 +1116,10 @@ export const en = {
       'The entrant replaced this film after the queue loaded. Reload and watch the new one before deciding.',
     errPlacementsLocked:
       'This contest already has winners. Clear the placements before moving the deadline out.',
+    errBadTransition: 'That move is not allowed from the current status — the detail shows current → requested.',
+    errSlotsFull: 'Every slot is taken. Raise the slot count or release a selection.',
+    errNotReleasable: 'The hold has not ended. The detail shows when it does.',
+    errMetricsRequired: 'A view-based payout needs the seven-day view count first.',
     errUnknown: 'Something went wrong.',
     detailLabel: 'Detail',
   },

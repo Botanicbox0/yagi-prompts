@@ -19,6 +19,12 @@ describe('migrations apply on a fresh database (PLAN §6)', () => {
     );
     expect(rows.map((r) => r.table_name)).toEqual([
       'blocks',
+      // docs/CAMPAIGNS.md (2026-09-03) — the paid cousin of contests: the campaign, one application per
+      // creator walked through the state machine, and the same append-only write ledger the contest
+      // entries use for the daily cap.
+      'campaign_application_writes',
+      'campaign_applications',
+      'campaigns',
       // §14.1 (M9) — the contests pivot's three new tables. Atomic like `prompt_items`: no
       // revisions, no manifest, no constraint triggers. `contest_entry_writes` is the append-only
       // rate-limit ledger, because "≤10 entry writes/day/user" counts WRITES and an upserted entry
