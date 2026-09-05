@@ -182,6 +182,10 @@ export const DISALLOWED_PATHS = [
    * with it, which is the opposite of what we want.
    */
   '/contests/*/submit',
+  // docs/CAMPAIGNS.md §6 — the same shape again: the apply form (slug in the middle) and the
+  // creator's own standing page are noindex app surface; `/campaigns` and every campaign page stay.
+  '/campaigns/*/apply',
+  '/campaigns/mine',
 ] as const;
 
 export function buildRobots(origin: string): MetadataRoute.Robots {

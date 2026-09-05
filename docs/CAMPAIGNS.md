@@ -84,3 +84,18 @@ metrics_at            'verified+hold' — 조회수 스냅샷 시점 = 홀드 �
 
 - **v1 (지금)**: 도메인(§3·§4, 테스트) → 0013/0106 → 리포지토리 → 어드민 빌더·큐 → 공개 목록/상세 → 지원/링크 제출/내 현황 → 사전(ko/en) → 스윕.
 - **v2**: 스튜디오 생성 연동(실인물 자산), 지급대행, 조회수 API, 클라이언트 리포트, 라이선스 협의, 진단.
+
+### v1 구현 상태 (2026-09-05)
+
+| 조각 | 위치 | 상태 |
+| --- | --- | --- |
+| 도메인·상태기계·정산 계산 | `lib/campaigns/{schemas,state,copy}.ts` | 완료 (테스트 `tests/campaigns/state.test.ts`) |
+| DB | `0013_core_campaigns`, `0014_core_campaigns_format_is_style`, `0106_glue_campaigns_rls` | 클라우드·PGlite 적용 |
+| 어드민 오퍼레이션 | `lib/admin/campaign-operations.ts` (`campaign.*`, `campaignApplication.*`) | 완료 (`tests/campaigns/operations.test.ts`) |
+| 공개 목록/상세 | `app/(marketing)/[locale]/campaigns/…` | 완료, 캐시 태그 `campaigns` |
+| 크리에이터 지원/링크/조회수 | `lib/campaigns/service.ts`, `app/(app)/campaigns/[slug]/apply`, `app/(app)/campaigns/mine` | 완료 (`tests/campaigns/service.test.ts`) — 엣지 게이트 `isCampaignAppPath` |
+| 어드민 보드/빌더/큐 | `app/(admin)/admin/campaigns/{page,new,[id]}` + `components/admin/campaign-fields.tsx` | 완료 — 정산 대기열은 보드 맨 위 |
+| 알림(선정·검수·지급·D-1) | §3.5 outbox | **미구현** — v1.1 |
+| 조회수 API 수집 | `metrics_source='api'` 자리만 | v2 |
+
+운영 순서(어드민): 새 캠페인(초안) → 원고료·두 마감일·인원 채우고 **모집 중**으로 → 지원자 큐에서 선정/미선정 → **선정 중**(이때부터 크리에이터가 링크 제출 가능) → 검수 대기 큐에서 검수 통과/반려 → 홀드 종료 후 보드 상단 정산 대기열에서 이체 참조 기록 → **종료**.

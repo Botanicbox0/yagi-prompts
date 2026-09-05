@@ -127,6 +127,8 @@ describe('robots (§8 M5)', () => {
       '/api',
       '/prompts/submit',
       '/contests/*/submit',
+      '/campaigns/*/apply',
+      '/campaigns/mine',
     ]);
   });
 

@@ -1129,6 +1129,58 @@ async function sweepContestNav(): Promise<void> {
   expectPresent('/ko links the ko tab', ko.body, 'href="/ko/contests"');
 }
 
+// ---------------------------------------------------------------------------
+// docs/CAMPAIGNS.md — the campaigns surface (2026-09-05)
+// ---------------------------------------------------------------------------
+
+/**
+ * The local snapshot seeds no campaign, so this sweep proves the SHAPE from outside: the listing is
+ * public in both locales and reachable from the nav, the two unprefixed leaves are gated at the
+ * edge (the 2026-09-05 bug: they built fine and 308'd into `/ko/campaigns/…` → 404), the admin
+ * board refuses anon, and robots agrees with the middleware about what is app surface.
+ */
+async function sweepCampaigns(): Promise<void> {
+  console.log('\n/campaigns — listing, gates, robots, anonymous');
+
+  for (const locale of ['en', 'ko'] as const) {
+    const listing = await get(`/${locale}/campaigns`);
+    expectEqual(`/${locale}/campaigns renders 200`, listing.status, 200);
+    expectPresent(`/${locale}/campaigns has the campaigns section`, listing.body, 'data-campaigns');
+    expectPresent(`/${locale}/campaigns self-canonicals`, listing.body, `rel="canonical" href="${BASE}/${locale}/campaigns"`);
+    const landing = await get(`/${locale}`);
+    expectPresent(`/${locale} nav links the campaigns tab`, landing.body, `href="/${locale}/campaigns"`);
+  }
+  expectEqual('an unknown campaign 404s', (await get('/en/campaigns/no-such-campaign')).status, 404);
+
+  // The two unprefixed leaves: gated, never 308'd into a locale.
+  for (const path of ['/campaigns/mine', '/campaigns/no-such-campaign/apply']) {
+    const gated = await get(path);
+    expectOneOf(`${path} redirects anon`, gated.status, [302, 307, 308]);
+    if (gated.location && gated.location.includes('signin=1')) ok('…to sign-in', gated.location);
+    else fail(`${path} redirect target`, `expected the sign-in redirect, got ${gated.location}`);
+  }
+  // …while the listing itself still 308s into a locale like every public page.
+  const unprefixed = await get('/campaigns');
+  expectOneOf('unprefixed /campaigns 308s into a locale', unprefixed.status, [307, 308]);
+  if (unprefixed.location?.includes('/campaigns')) ok('…keeping the path', unprefixed.location);
+  else fail('/campaigns redirect target', `unexpected location ${unprefixed.location}`);
+
+  for (const path of ['/admin/campaigns', '/admin/campaigns/new']) {
+    const admin = await get(path);
+    expectOneOf(`${path} refuses anon`, admin.status, [302, 307, 308, 404]);
+    expectAbsent('…and leaks no board', admin.body, 'data-admin-campaign=');
+    expectAbsent('…and no payout queue', admin.body, 'data-payout-queue');
+  }
+
+  const robots = await get('/robots.txt');
+  expectPresent('robots disallows the apply form', robots.body, 'Disallow: /campaigns/*/apply');
+  expectPresent('robots disallows my campaigns', robots.body, 'Disallow: /campaigns/mine');
+  expectAbsent('…without disallowing the listing itself', robots.body, 'Disallow: /campaigns\n');
+  const sitemap = await get('/sitemap.xml');
+  expectPresent('sitemap lists the listing (en)', sitemap.body, '/en/campaigns<');
+  expectPresent('sitemap lists the listing (ko)', sitemap.body, '/ko/campaigns<');
+}
+
 async function main(): Promise<void> {
   console.log(`TWINGS anon sweep → ${BASE} (local mode)`);
 
@@ -1175,6 +1227,9 @@ async function main(): Promise<void> {
   await sweepContestGates(contests);
   await sweepContestSeo();
   await sweepContestNav();
+
+  // --- docs/CAMPAIGNS.md: the campaigns surface --------------------------
+  await sweepCampaigns();
 
   console.log(
     `\n${failures === 0 ? 'SWEEP PASSED' : 'SWEEP FAILED'} — ${checks - failures}/${checks} checks passed`,

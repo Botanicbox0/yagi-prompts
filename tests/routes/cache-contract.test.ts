@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { CATALOG_TAG, CATALOG_TTL_SECONDS } from '@/lib/cache';
 import {
   isAppPath,
+  isCampaignAppPath,
   isContestDetailPath,
   isContestSubmitPath,
   isPlaybookDetailPath,
@@ -188,6 +189,13 @@ describe('route cache modes (§3.4 / §4)', () => {
       ['app', 'api', 'contests', 'media', '[ref]', 'route.ts'],
       ['app', '(admin)', 'admin', 'contests', 'page.tsx'],
       ['app', '(admin)', 'admin', 'contests', '[slug]', 'preview', 'page.tsx'],
+      // docs/CAMPAIGNS.md §6: the apply form and "my campaigns" are login-gated and read the
+      // viewer's own rows; the three admin screens are admin surface.
+      ['app', '(app)', 'campaigns', '[slug]', 'apply', 'page.tsx'],
+      ['app', '(app)', 'campaigns', 'mine', 'page.tsx'],
+      ['app', '(admin)', 'admin', 'campaigns', 'page.tsx'],
+      ['app', '(admin)', 'admin', 'campaigns', 'new', 'page.tsx'],
+      ['app', '(admin)', 'admin', 'campaigns', '[id]', 'page.tsx'],
     ]) {
       expect(read(...file), file.join('/')).toContain("export const dynamic = 'force-dynamic'");
     }
@@ -665,6 +673,63 @@ describe('contests route + API contract (§14.2)', () => {
     // …and the preview lives inside the (admin) group, whose layout is the gate.
     const preview = read('app', '(admin)', 'admin', 'contests', '[slug]', 'preview', 'page.tsx');
     expect(preview).toContain('getContestPreview');
+  });
+});
+
+/**
+ * docs/CAMPAIGNS.md §6 — the campaigns surface's route contract, the contests one with a second
+ * unprefixed leaf: the apply form (slug in the middle) and the creator's own `/campaigns/mine`.
+ * Found the hard way on 2026-09-05: both pages built and both 308'd into `/ko/campaigns/…` → 404
+ * until the edge learned them, which is what this block pins.
+ */
+describe('campaigns route contract (docs/CAMPAIGNS.md §6)', () => {
+  it('gates exactly /campaigns/{slug}/apply and /campaigns/mine at the edge', () => {
+    for (const path of ['/campaigns/seoul-94-reel/apply', '/campaigns/seoul-94-reel/apply/', '/campaigns/mine']) {
+      expect(isCampaignAppPath(path), path).toBe(true);
+      expect(isAppPath(path), path).toBe(true);
+    }
+    for (const path of [
+      '/campaigns',
+      '/campaigns/seoul-94-reel',
+      '/campaigns/seoul-94-reel/apply/extra',
+      '/campaigns/mine/extra',
+      '/en/campaigns',
+      '/en/campaigns/seoul-94-reel',
+      '/ko/campaigns/mine',
+    ]) {
+      expect(isCampaignAppPath(path), path).toBe(false);
+      expect(isAppPath(path), path).toBe(false);
+    }
+  });
+
+  it('routes the application through one server action that never trusts the form', () => {
+    const action = read('app', '(app)', 'campaigns', '[slug]', 'apply', 'actions.ts');
+    expect(action).toContain("'use server'");
+    expect(action).toContain('getViewer');
+    expect(action).toContain('applyToCampaign');
+    expect(action.match(/export async function/g)).toHaveLength(1);
+
+    // Exactly the fields a creator owns (plus the slug, which grants nothing — the service
+    // re-resolves the campaign and refuses anything not public). Status, creator id, selection,
+    // payout and reject reason are supplied by `lib/campaigns/service.ts` and the admin operations.
+    const readFields = [...action.matchAll(/(?:str|text|bool|file)\(form, '([^']+)'\)/g)].map((match) => match[1]!);
+    expect([...new Set(readFields)].sort()).toEqual(['consent', 'followerCount', 'pitch', 'slug', 'snsUrl']);
+    for (const forbidden of ['status', 'creatorId', 'userId', 'payoutCents', 'rejectReason', 'campaignId', 'version']) {
+      expect(action.includes(`form, '${forbidden}'`), forbidden).toBe(false);
+      expect(action.includes(`form.get('${forbidden}')`), forbidden).toBe(false);
+    }
+  });
+
+  it('lets the creator name only the post link and the view count on their own rows', () => {
+    const actions = read('app', '(app)', 'campaigns', 'mine', 'actions.ts');
+    expect(actions).toContain("'use server'");
+    expect(actions).toContain('submitCampaignPost');
+    expect(actions).toContain('reportCampaignViews');
+    const readFields = [...actions.matchAll(/(?:str|text|bool|file)\(form, '([^']+)'\)/g)].map((match) => match[1]!);
+    expect([...new Set(readFields)].sort()).toEqual(['id', 'postUrl', 'views']);
+    // Ownership is decided in the service by creator id, never by a field.
+    expect(actions.includes("form, 'creatorId'")).toBe(false);
+    expect(actions.includes("form, 'status'")).toBe(false);
   });
 });
 

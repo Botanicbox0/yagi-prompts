@@ -55,10 +55,24 @@ export function isContestSubmitPath(pathname: string): boolean {
   return CONTEST_SUBMIT_PATTERN.test(pathname);
 }
 
+/**
+ * docs/CAMPAIGNS.md §6 — the campaigns surface has the same shape as contests: `/{locale}/campaigns`
+ * and `/{locale}/campaigns/{slug}` are public marketing pages, and two unprefixed leaves are
+ * login-gated app surface — the apply form (slug in the middle, like the contest entry) and the
+ * creator's own `/campaigns/mine`. Anchored at both ends for the same reason as the contest pattern.
+ */
+const CAMPAIGN_APPLY_PATTERN = /^\/campaigns\/[^/]+\/apply\/?$/;
+const MY_CAMPAIGNS_PATTERN = /^\/campaigns\/mine\/?$/;
+
+export function isCampaignAppPath(pathname: string): boolean {
+  return CAMPAIGN_APPLY_PATTERN.test(pathname) || MY_CAMPAIGNS_PATTERN.test(pathname);
+}
+
 export function isAppPath(pathname: string): boolean {
   return (
     APP_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`)) ||
-    isContestSubmitPath(pathname)
+    isContestSubmitPath(pathname) ||
+    isCampaignAppPath(pathname)
   );
 }
 
