@@ -5,7 +5,6 @@ import { getShapedPrompt, type PromptDetailResult } from '@/lib/prompts/facade';
 import { USE_CASES } from '@/lib/prompts/schemas';
 import { DEFAULT_LOCALE, isLocale, type Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/dictionaries';
-import { TWINGS_STYLES } from '@/lib/twings/products';
 import { TextSwap } from '@/components/ui/text-swap';
 import { promptMetadata, unresolvedPromptMetadata } from '@/lib/seo/prompt-metadata';
 import { signInHref } from '@/lib/billing/links';
@@ -101,7 +100,7 @@ export default async function PromptDetailPage({ params }: RouteParams) {
             {/* A scene the studio sells opens a door back to it (2026-09-03): the catalogue is the
                 evidence, the studio is the product, and a reader who arrived here from a share
                 should not have to find the nav to make one. */}
-            {TWINGS_STYLES.some((style) => style.slug === prompt.slug) && (
+            {prompt.priceCents > 0 && (
               <a
                 href={`/${locale}/studio`}
                 data-studio-cta

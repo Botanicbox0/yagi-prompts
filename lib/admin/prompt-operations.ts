@@ -21,6 +21,7 @@ import {
   EditSchema,
   MEDIA_KINDS,
   RejectionSchema,
+  TEMPLATE_MEDIA,
   USE_CASES,
   effectiveTextVisibility,
   normalizeHandle,
@@ -82,6 +83,27 @@ function chips(form: FormData, name: string): string[] {
     .getAll(name)
     .map((value) => (typeof value === 'string' ? value.trim() : ''))
     .filter((value) => allowed.has(value));
+}
+
+/**
+ * docs/TEMPLATES-IA.md — the three fields that make a prompt item a sellable template. Parsed on
+ * their own so the authoring and edit schemas stay what §13 pinned; whole USD cents, and a runtime
+ * only for a film (the 0015 CHECK refuses one on an image, so it is dropped here rather than sent).
+ */
+const TemplateFields = z.object({
+  medium: z.enum(TEMPLATE_MEDIA),
+  priceCents: z.number().int().min(0).max(1_000_000),
+  runtimeSeconds: z.number().int().positive().max(600).nullable(),
+});
+
+function templateFields(form: FormData): ParseResult<z.infer<typeof TemplateFields>> {
+  const medium = f.str(form, 'medium') || 'video';
+  const runtime = f.optionalInt(form, 'runtimeSeconds');
+  return parsed(TemplateFields, {
+    medium,
+    priceCents: f.optionalInt(form, 'priceCents') ?? 0,
+    runtimeSeconds: medium === 'image' ? null : (runtime ?? null),
+  });
 }
 
 const Uuid = z.string().uuid();
@@ -162,6 +184,8 @@ const createPrompt: AdminOperation<{ input: z.infer<typeof AuthoringSchema>; for
     return { ok: true, value: { input: base.value, form } };
   },
   async run(ctx, { input, form }) {
+    const template = templateFields(form);
+    if (!template.ok) return fail('invalid', template.detail);
     const id = randomUUID();
     const staged = await applyUploads(ctx, id, form, {});
     if (!staged.ok) return fail('upload', staged.detail);
@@ -198,6 +222,7 @@ const createPrompt: AdminOperation<{ input: z.infer<typeof AuthoringSchema>; for
       media,
       useCase: input.useCase,
       featured: input.featured,
+      ...template.value,
       publishedAt: 'now',
     });
 
@@ -296,6 +321,8 @@ const editPrompt: AdminOperation<{ input: z.infer<typeof EditSchema>; form: Form
   async run(ctx, { input, form }) {
     const row = await loadPromptById(ctx.sql, input.id);
     if (row === null) return fail('notFound', NOT_FOUND_DETAIL);
+    const template = templateFields(form);
+    if (!template.ok) return fail('invalid', template.detail);
 
     const staged = await applyUploads(ctx, input.id, form, parsePromptMedia(row.media));
     if (!staged.ok) return fail('upload', staged.detail);
@@ -317,6 +344,7 @@ const editPrompt: AdminOperation<{ input: z.infer<typeof EditSchema>; form: Form
       // The community rule is applied to the payload here and enforced by the CHECK underneath.
       textVisibility: effectiveTextVisibility(row.source, input.textVisibility),
       featured: input.featured,
+      ...template.value,
     });
     if (!saved) return fail('notFound', NOT_FOUND_DETAIL);
 
