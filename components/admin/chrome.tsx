@@ -157,6 +157,10 @@ const SUCCESS_KEYS = {
   approved: 'okApproved',
   rejected: 'okRejected',
   unpublished: 'okUnpublished',
+  selected: 'okSelected',
+  declined: 'okDeclined',
+  verified: 'okVerified',
+  paid: 'okPaid',
 } as const;
 
 const ERROR_KEYS = {
@@ -180,6 +184,10 @@ const ERROR_KEYS = {
   duplicatePlacement: 'errDuplicatePlacement',
   staleReview: 'errStaleReview',
   placementsLocked: 'errPlacementsLocked',
+  badTransition: 'errBadTransition',
+  slotsFull: 'errSlotsFull',
+  notReleasable: 'errNotReleasable',
+  metricsRequired: 'errMetricsRequired',
   unknown: 'errUnknown',
 } as const;
 
@@ -236,13 +244,13 @@ export function AdminShell({
 }: {
   dict: AdminDict;
   locale: string;
-  active: 'playbooks' | 'policy' | 'prompts' | 'contests';
+  active: 'playbooks' | 'policy' | 'prompts' | 'contests' | 'campaigns';
   children: ReactNode;
 }) {
   // "Refresh caches" used to send every page back to /admin; it returns to where it was pressed.
   const refreshBack =
-    active === 'prompts' ? '/admin/prompts' : active === 'contests' ? '/admin/contests' : active === 'policy' ? '/admin/policy' : '/admin';
-  const navClass = (key: 'playbooks' | 'policy' | 'prompts' | 'contests') =>
+    active === 'prompts' ? '/admin/prompts' : active === 'contests' ? '/admin/contests' : active === 'campaigns' ? '/admin/campaigns' : active === 'policy' ? '/admin/policy' : '/admin';
+  const navClass = (key: 'playbooks' | 'policy' | 'prompts' | 'contests' | 'campaigns') =>
     `font-label text-eyebrow uppercase ${active === key ? 'text-accent' : 'opacity-60'}`;
 
   return (
@@ -262,6 +270,9 @@ export function AdminShell({
               {/* §14 — the contests queue is the second screen with work waiting in it. */}
               <a href="/admin/contests" className={navClass('contests')}>
                 {dict.navContests}
+              </a>
+              <a href="/admin/campaigns" className={navClass('campaigns')}>
+                {dict.navCampaigns}
               </a>
               <a href="/admin" className={navClass('playbooks')}>
                 {dict.navPlaybooks}

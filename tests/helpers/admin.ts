@@ -29,6 +29,8 @@ export interface AdminHarness {
   promptsRevalidated: number;
   /** §14.2 — and `contests` is the third. Counted separately so a test can prove which moved. */
   contestsRevalidated: number;
+  /** docs/CAMPAIGNS.md — the fourth tag. */
+  campaignsRevalidated: number;
   ctx(viewer?: Viewer): AdminContext;
   run(name: string, fields: FormFields, viewer?: Viewer): Promise<AdminOutcome>;
   close(): Promise<void>;
@@ -97,6 +99,7 @@ export async function adminHarness(): Promise<AdminHarness> {
     revalidated: 0,
     promptsRevalidated: 0,
     contestsRevalidated: 0,
+    campaignsRevalidated: 0,
     ctx(viewer = ADMIN_VIEWER) {
       return {
         sql: runner(db),
@@ -110,6 +113,9 @@ export async function adminHarness(): Promise<AdminHarness> {
         },
         revalidateContests: () => {
           harness.contestsRevalidated += 1;
+        },
+        revalidateCampaigns: () => {
+          harness.campaignsRevalidated += 1;
         },
       };
     },

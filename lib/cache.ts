@@ -60,3 +60,15 @@ export function revalidateContests(): void {
   revalidateTag(CONTESTS_TAG);
   revalidateStaticSurfaces(['/contests']);
 }
+
+/**
+ * docs/CAMPAIGNS.md — the campaigns listing is `[static + tag 'campaigns']`, on the same reasoning
+ * as contests: selecting a creator or verifying a post moves the listing's counters and nothing
+ * else on the marketing tree.
+ */
+export const CAMPAIGNS_TAG = 'campaigns';
+
+export function revalidateCampaigns(): void {
+  revalidateTag(CAMPAIGNS_TAG);
+  revalidateStaticSurfaces(['/campaigns']);
+}

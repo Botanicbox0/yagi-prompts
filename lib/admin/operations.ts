@@ -20,6 +20,7 @@ import { notifyKindFor } from '@/lib/notify/kinds';
 import { fail, ok, type AdminContext, type AdminOutcome } from './context';
 import { PROMPT_OPERATIONS } from './prompt-operations';
 import { CONTEST_OPERATIONS } from './contest-operations';
+import { CAMPAIGN_OPERATIONS } from './campaign-operations';
 import { stageUpload } from './assets';
 import { ensureDraftRevision } from './clone';
 import * as f from './form';
@@ -725,6 +726,8 @@ export const ADMIN_OPERATIONS = {
   ...PROMPT_OPERATIONS,
   // §14 — and so does the contests surface, for the same reason and at the same cost: one line.
   ...CONTEST_OPERATIONS,
+  // docs/CAMPAIGNS.md — and the campaigns surface.
+  ...CAMPAIGN_OPERATIONS,
 };
 
 export type AdminOperationName = keyof typeof ADMIN_OPERATIONS;

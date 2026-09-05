@@ -681,6 +681,7 @@ export const ko: Dictionary = {
     brand: 'TWINGS 관리자',
     navPrompts: '프롬프트',
     navContests: '콘테스트',
+    navCampaigns: '캠페인',
     navPlaybooks: '플레이북',
     navPolicy: '기본 정책',
     navSite: '사이트 보기',
@@ -868,6 +869,10 @@ export const ko: Dictionary = {
     okApproved: '승인했고 바로 게시됐습니다.',
     okRejected: '반려했습니다. 제출자는 내 계정에서 사유를 확인합니다.',
     okUnpublished: '게시를 내렸습니다. 목록에서 제외됩니다.',
+    okSelected: '선정했습니다. 크리에이터의 캠페인 현황에 바로 반영됩니다.',
+    okDeclined: '지원을 정중히 거절했습니다.',
+    okVerified: '게시물을 확인했습니다. 7일 홀드가 시작됐고, 종료 후 정산 대기열에 올라옵니다.',
+    okPaid: '정산을 완료로 기록했습니다.',
 
     promptsHeading: '프롬프트',
     promptsLede: '공개된 프롬프트를 한눈에 보고, 새 프롬프트는 오른쪽 위 버튼으로 추가합니다.',
@@ -1062,6 +1067,10 @@ export const ko: Dictionary = {
     errPlacementsLocked:
       '이미 수상작이 정해진 콘테스트입니다. 마감을 변경하려면 먼저 수상 지정을 해제해 주세요.',
     errUnknown: '처리하지 못했습니다.',
+    errBadTransition: '지금 상태에서는 할 수 없는 동작입니다. 상세에 현재 상태 → 요청 상태가 있습니다.',
+    errSlotsFull: '선정 슬롯이 모두 찼습니다. 슬롯을 늘리거나 다른 선정을 해제하세요.',
+    errNotReleasable: '아직 홀드 기간입니다. 상세의 시각 이후에 정산할 수 있습니다.',
+    errMetricsRequired: '조회수 기반 정산은 7일차 조회수가 먼저 입력되어야 합니다.',
     detailLabel: '상세',
   },
 };
