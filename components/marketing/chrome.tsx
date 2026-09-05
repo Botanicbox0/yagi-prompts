@@ -2,8 +2,7 @@ import { SiteNav, type NavLink } from '@/components/nav/site-nav';
 import { SiteFooter } from '@/components/site-footer';
 import { LocaleToggle } from '@/components/locale-toggle';
 import { PLAYBOOKS_IN_NAV } from '@/lib/flags';
-import { promptsHref } from '@/lib/prompts/links';
-import { contestsHref } from '@/lib/contests/links';
+import { templatesHref } from '@/lib/prompts/links';
 import { campaignsHref } from '@/lib/campaigns/links';
 import { LEGAL_DOCS, legalDocument } from '@/lib/legal/documents';
 import { legalHref } from '@/lib/legal/links';
@@ -20,12 +19,11 @@ import type { SectionTheme } from '@/lib/motion/geometry';
  * version is superseded, not amended — the library stays denavigated behind `PLAYBOOKS_IN_NAV`.)
  */
 export function siteLinks(locale: Locale, dict: Dictionary): NavLink[] {
+  // docs/TEMPLATES-IA.md (2026-09-05): the two things you can make, the way to get paid for
+  // making them, and the price. Studio, prompts and contests left the nav with the prompt site.
   const links: NavLink[] = [
-    // Studio leads because it is the product; the catalogue behind it is the evidence. (2026-08-16)
-    { href: `/${locale}/studio`, label: dict.nav.studio },
-    { href: promptsHref(locale), label: dict.nav.prompts },
-    { href: contestsHref(locale), label: dict.nav.contests },
-    // docs/CAMPAIGNS.md — the paid cousin sits beside the contests it grew out of.
+    { href: templatesHref(locale, 'video'), label: dict.nav.video },
+    { href: templatesHref(locale, 'image'), label: dict.nav.image },
     { href: campaignsHref(locale), label: dict.nav.campaigns },
   ];
   if (PLAYBOOKS_IN_NAV) links.push({ href: '/library', label: dict.nav.library });
@@ -58,7 +56,7 @@ export function MarketingNav({
       locale={locale}
       initialTheme={initialTheme}
       links={siteLinks(locale, dict)}
-      signInNext={promptsHref(locale)}
+      signInNext={templatesHref(locale, 'video')}
       labels={{
         brand: dict.meta.siteName,
         signIn: dict.auth.signIn,

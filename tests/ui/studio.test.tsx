@@ -29,7 +29,7 @@ const labels: StudioLabels = {
   runtimeLabel: dict.studio.runtimeLabel,
   needPhoto: dict.studio.needPhoto,
   noStyles: dict.studio.noStyles,
-  seePrompt: dict.studio.seePrompt,
+  moreTemplates: dict.studio.moreTemplates,
 };
 
 const styles: StudioStyle[] = [
@@ -41,7 +41,7 @@ const styles: StudioStyle[] = [
     blurb: '1994 Seoul, shot on Betacam',
     posterSrc: '/p.jpg',
     videoSrc: '/v.mp4',
-    promptHref: '/en/prompts/90s-seoul-interview',
+    moreHref: '/en/video',
   },
 ];
 
@@ -65,6 +65,25 @@ describe('the studio before a photo exists', () => {
   it('still wears the demo badge — the mock says it is a mock', () => {
     expect(html).toContain('data-demo-badge');
     expect(html).toContain(dict.studio.demoBadge);
+  });
+});
+
+/** docs/TEMPLATES-IA.md — on a template page the choice is the page: one style, no picking step. */
+describe('the studio on a template page (one style)', () => {
+  const html = renderToStaticMarkup(<TwingsStudio styles={styles} labels={labels} initialStyleId="seoul-90s" />);
+
+  it('states the chosen template instead of offering a grid, and drops the scene step', () => {
+    expect(html).toContain('data-single="true"');
+    expect(html).toContain('data-chosen-style="seoul-90s"');
+    expect(html).not.toContain('data-style-option');
+    expect(html).not.toContain(dict.studio.chooseStyle);
+    expect(html).not.toContain(`2. ${dict.studio.stepStyle}`);
+    expect(html).toContain(`2. ${dict.studio.stepPay}`);
+  });
+
+  it('still asks for the photo first and keeps the demo badge', () => {
+    expect(html).toContain('data-studio-hint');
+    expect(html).toContain('data-demo-badge');
   });
 });
 

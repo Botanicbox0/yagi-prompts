@@ -67,11 +67,16 @@
 
 ## 6. 단계
 
-- **P1 데이터**: 0015 마이그레이션(medium/price/runtime), 리포지토리·카탈로그·어드민 편집기 필드. — 이 커밋.
-- **P2 공개 IA**: video/image/t 페이지, 홈·요금제 재작성, 네비, 리다이렉트, 프롬프트 노출 제거(copy 410, 계정 페이지 정리), 사이트맵·robots·메타, 사전. 테스트·스윕 재작성.
-- **P3 어드민**: 네비 라벨(템플릿), 콘테스트 숨김.
-- **P4 PWA**: 매니페스트·SW·메타.
+- **P1 데이터** (완료, `ed38634`): 0015 마이그레이션(medium/price/runtime), 리포지토리·카탈로그·어드민 편집기 필드.
+- **P2 공개 IA** (완료): `/video`·`/image`·`/t/[slug]`, 홈·요금제 재작성, 네비, `next.config` 리다이렉트, 프롬프트 노출 제거(copy 410, 계정 페이지 정리), 사이트맵·robots·메타, 사전. 테스트·스윕 재작성(스윕 415/415).
+- **P3 어드민** (완료): 네비 라벨 '템플릿', 콘테스트 네비 제거(경로는 유지).
+- **P4 PWA** (완료): `app/manifest.ts`, `public/sw.js`(네비게이션 network-first + 오프라인 페이지만), `apple-mobile-web-app` 메타, 미들웨어 매처 예외.
 - **P5**: 배포·검증·메모리.
+
+### 남은 정리(후속)
+- 오디오 결과물이 붙은 프롬프트(`handheld-market-run` 픽스처)는 템플릿 페이지에 오디오 행을 그리지 않는다. 오디오 템플릿은 v1 범위 밖.
+- `components/prompts/detail.tsx`의 잠금 패널·복사 버튼·SubmitStrip, `components/pricing/{cookie-table,plan-table}`, `lib/contests/*` 공개용 코드는 참조가 끊긴 채 남아 있다. 어드민 콘테스트 미리보기가 `components/contests/*`를 쓰므로 한 번에 지우지 않고 다음 정리 패스에서 걷어낸다.
+- 어드민 '템플릿' 화면의 용어(프롬프트 → 템플릿)는 라벨만 바꿨다. 본문 카피는 후속.
 
 ## 7. 남는 질문(v2)
 - 이미지 템플릿 엔진(GPT Image 2 / Nano Banana)과 가격.

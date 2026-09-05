@@ -6,9 +6,7 @@ import {
   LOCALE_COOKIE_MAX_AGE,
   LOCALE_HEADER,
   isAppPath,
-  isContestDetailPath,
   isPlaybookDetailPath,
-  isPromptDetailPath,
   localizedPath,
   resolveLocale,
   splitLocale,
@@ -73,10 +71,10 @@ export async function middleware(request: NextRequest) {
     return withCookies(NextResponse.redirect(target, 308), response);
   }
 
-  // §3.4: the public routes that are shaped per viewer — or, for contests (§14.2), per clock —
-  // never enter a cache. Indexable, but never stored: the two are independent properties and
-  // §3.3/§3.9/§14.2 all ask for both.
-  if (isPlaybookDetailPath(rest) || isPromptDetailPath(rest) || isContestDetailPath(rest)) {
+  // §3.4: the one public route still shaped per viewer never enters a cache. Indexable, but
+  // never stored: the two are independent properties and §3.3/§3.9 ask for both. (The prompt and
+  // contest details that shared this branch left with the prompt site, 2026-09-05.)
+  if (isPlaybookDetailPath(rest)) {
     response.headers.set('Cache-Control', NO_STORE);
   }
 
@@ -99,12 +97,14 @@ export const config = {
      *   _next/static, _next/image, favicon, /fonts, /.storage (local storage driver in dev)
      *   /api/*   — route handlers set their own no-store headers and are not locale-prefixed
      *   /auth/*  — the OAuth callback must not be redirected mid-exchange
+     *   sw.js, offline.html, manifest.webmanifest — the PWA's three root files (docs/TEMPLATES-IA.md §5),
+     *     unprefixed by the same specification logic as the crawler endpoints.
      *   sitemap.xml, robots.txt (M5) — crawler endpoints live at the ROOT by specification. They
      *     are unprefixed public URLs, which is exactly what the 308 below rewrites, so without
      *     this exclusion `/sitemap.xml` answers 308 → `/en/sitemap.xml` → 404 and the site has no
      *     sitemap at all. (Found by the M5 sweep, not by a unit test — which is why the sweep runs
      *     against a real server.)
      */
-    '/((?!_next/static|_next/image|favicon.ico|sitemap\\.xml|robots\\.txt|fonts/|\\.storage/|api/|auth/|.*\\.(?:svg|png|jpg|jpeg|gif|webp|mp4|webm|woff2?)$).*)',
+    '/((?!_next/static|_next/image|favicon.ico|sitemap\\.xml|robots\\.txt|sw\\.js|offline\\.html|manifest\\.webmanifest|fonts/|\\.storage/|api/|auth/|.*\\.(?:svg|png|jpg|jpeg|gif|webp|mp4|webm|woff2?)$).*)',
   ],
 };

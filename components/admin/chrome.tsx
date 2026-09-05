@@ -267,10 +267,6 @@ export function AdminShell({
               <a href="/admin/prompts" className={navClass('prompts')}>
                 {dict.navPrompts}
               </a>
-              {/* §14 — the contests queue is the second screen with work waiting in it. */}
-              <a href="/admin/contests" className={navClass('contests')}>
-                {dict.navContests}
-              </a>
               <a href="/admin/campaigns" className={navClass('campaigns')}>
                 {dict.navCampaigns}
               </a>

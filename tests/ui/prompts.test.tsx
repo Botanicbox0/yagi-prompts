@@ -79,18 +79,15 @@ describe('prompt card (§13.2)', () => {
    * to COOKIE for anything not public, so a free-gated prompt quoted a price the server refuses to
    * charge — `unlockPrompt` will not spend a cookie on one. The chip now names the ACTION.
    */
-  it('names the action the gate actually asks for', () => {
-    const cookie = cardMarkup(card({ lock: 'cookie' }));
-    expect(cookie).toContain('data-lock-chip="cookie"');
-    expect(cookie).toContain(dict.prompts.lockChip);
-
-    const signin = cardMarkup(card({ lock: 'signin' }));
-    expect(signin).toContain('data-lock-chip="signin"');
-    expect(signin).toContain(dict.prompts.lockChipSignin);
-    // …and never the word that means money on a prompt that costs none.
-    expect(signin).not.toContain(dict.prompts.lockChip);
-
-    expect(cardMarkup(card({ lock: null }))).not.toContain('data-lock-chip');
+  /** docs/TEMPLATES-IA.md — the chip is the price of one render; nothing is locked any more. */
+  it('wears the price as its one chip, and no chip at all when not yet for sale', () => {
+    const priced = cardMarkup(card({ priceCents: 400 }));
+    expect(priced).toContain('data-price-chip');
+    expect(priced).toContain('$4');
+    expect(priced).not.toContain('data-lock-chip');
+    const closed = cardMarkup(card({ priceCents: 0 }));
+    expect(closed).not.toContain('data-price-chip');
+    expect(closed).not.toContain('data-lock-chip');
   });
 
   it('credits a community submitter by @handle, and falls back honestly', () => {
@@ -123,6 +120,7 @@ describe('prompt card (§13.2)', () => {
     expect(html).toContain('<article');
     expect(html).toContain('after:absolute');
     expect(html).toContain('data-card-detail="neon-alley-dolly"');
+    expect(html).toContain('href="/en/t/neon-alley-dolly"');
     expect(html).toContain(dict.prompts.cardDetail);
     // The copy endpoint is not reachable from the wall any more.
     expect(html).not.toContain('data-copy-prompt=');

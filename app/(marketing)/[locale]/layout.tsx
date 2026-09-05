@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 import { fontVariables } from '@/app/fonts';
 import { ScrollProvider } from '@/components/motion/scroll-provider';
 import { Notice } from '@/components/marketing/notice';
+import { RegisterServiceWorker } from '@/components/pwa/register-sw';
 import { noticeLabels } from '@/components/marketing/notice-codes';
 import { LOCALES, isLocale, DEFAULT_LOCALE, type Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/dictionaries';
@@ -49,6 +50,8 @@ export async function generateMetadata({
     metadataBase: new URL(appUrl),
     title: { default: dict.meta.siteName, template: `%s · ${dict.meta.siteName}` },
     description: dict.meta.tagline,
+    // docs/TEMPLATES-IA.md §5 — installable (PWA first); the manifest is served from app/manifest.ts.
+    appleWebApp: { capable: true, title: dict.meta.siteName, statusBarStyle: 'default' },
     alternates: {
       canonical: `/${locale}`,
       languages: {
@@ -88,6 +91,7 @@ export default async function MarketingRootLayout({
           <Notice labels={noticeLabels(dict)} locale={locale} />
           {children}
         </ScrollProvider>
+        <RegisterServiceWorker />
       </body>
     </html>
   );

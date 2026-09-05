@@ -52,9 +52,12 @@ describe('sitemap (§8 M5)', () => {
     expect(urls).toContain(`${ORIGIN}/ko`);
     expect(urls).toContain(`${ORIGIN}/en/pricing`);
     expect(urls).toContain(`${ORIGIN}/ko/pricing`);
-    // The studio is the front door (2026-09-03) — a front door a crawler cannot find is not one.
-    expect(urls).toContain(`${ORIGIN}/en/studio`);
-    expect(urls).toContain(`${ORIGIN}/ko/studio`);
+    // The two template tabs are the front doors (docs/TEMPLATES-IA.md) — a front door a crawler
+    // cannot find is not one.
+    for (const rest of ['/video', '/image', '/campaigns']) {
+      expect(urls).toContain(`${ORIGIN}/en${rest}`);
+      expect(urls).toContain(`${ORIGIN}/ko${rest}`);
+    }
   });
 
   it('lists showcase playbook details only', () => {
@@ -98,12 +101,11 @@ describe('sitemap (§8 M5)', () => {
 
   it('degrades to an empty catalog without producing a broken sitemap', () => {
     const empty = buildSitemap({ origin: ORIGIN, cards: [] });
-    // Nine marketing pages × two locales: landing, the studio (2026-09-03), the §13.2 gallery, the §14.2 contests listing, the campaigns listing,
-    // pricing, and the three legal documents (2026-08-14 — a payment provider's merchant review
-    // and 전자상거래법 §21 expect them publicly reachable). The contests listing is in the sitemap
-    // even with no contest published — it is a real page with a designed empty state (§14.2), not
-    // a page that only exists when it has rows.
-    expect(empty).toHaveLength(18);
+    // Eight marketing pages × two locales: landing, the two template tabs (docs/TEMPLATES-IA.md),
+    // the campaigns listing, pricing, and the three legal documents (2026-08-14 — a payment
+    // provider's merchant review and 전자상거래법 §21 expect them publicly reachable). The listings
+    // are in the sitemap even with no rows — each is a real page with a designed empty state.
+    expect(empty).toHaveLength(16);
     expect(empty.every((entry) => entry.url.startsWith(ORIGIN))).toBe(true);
   });
 });
@@ -125,8 +127,6 @@ describe('robots (§8 M5)', () => {
       '/account',
       '/billing',
       '/api',
-      '/prompts/submit',
-      '/contests/*/submit',
       '/campaigns/*/apply',
       '/campaigns/mine',
     ]);
