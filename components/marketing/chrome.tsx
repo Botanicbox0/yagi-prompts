@@ -4,6 +4,7 @@ import { LocaleToggle } from '@/components/locale-toggle';
 import { PLAYBOOKS_IN_NAV } from '@/lib/flags';
 import { promptsHref } from '@/lib/prompts/links';
 import { contestsHref } from '@/lib/contests/links';
+import { campaignsHref } from '@/lib/campaigns/links';
 import { LEGAL_DOCS, legalDocument } from '@/lib/legal/documents';
 import { legalHref } from '@/lib/legal/links';
 import type { Dictionary } from '@/lib/i18n/dictionaries';
@@ -24,6 +25,8 @@ export function siteLinks(locale: Locale, dict: Dictionary): NavLink[] {
     { href: `/${locale}/studio`, label: dict.nav.studio },
     { href: promptsHref(locale), label: dict.nav.prompts },
     { href: contestsHref(locale), label: dict.nav.contests },
+    // docs/CAMPAIGNS.md — the paid cousin sits beside the contests it grew out of.
+    { href: campaignsHref(locale), label: dict.nav.campaigns },
   ];
   if (PLAYBOOKS_IN_NAV) links.push({ href: '/library', label: dict.nav.library });
   links.push({ href: `/${locale}/pricing`, label: dict.nav.pricing });

@@ -87,6 +87,8 @@ export function buildSitemap(input: SitemapInput): MetadataRoute.Sitemap {
     // §14.2 — the contests listing. Weekly rather than daily: a contest is a month-long object, and
     // claiming daily change on a page that gains a row every few weeks is noise for a crawler.
     { rest: '/contests', priority: 0.8, changeFrequency: 'weekly' },
+    // docs/CAMPAIGNS.md — the campaigns listing, on the contests' cadence.
+    { rest: '/campaigns', priority: 0.8, changeFrequency: 'weekly' },
     { rest: '/pricing', priority: 0.8, changeFrequency: 'weekly' },
     // The legal surface. Low priority — nobody searches for it — but LISTED, because a payment
     // provider's merchant review and 전자상거래법 §21 both expect these to be publicly reachable,
