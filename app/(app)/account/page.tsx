@@ -20,6 +20,7 @@ import { getWallet, listRecentUnlocks, type UnlockHistoryRow, type Wallet } from
 import { PACK_COOKIES, PACK_PRICE_USD, SIGNUP_COOKIES, WEEKLY_COOKIES } from '@/lib/cookies/wallet';
 import { loadSubmissionsByAuthor, type PromptRow } from '@/lib/prompts/repo';
 import { promptHref, PROMPT_SUBMIT_PATH } from '@/lib/prompts/links';
+import { MY_CAMPAIGNS_PATH } from '@/lib/campaigns/links';
 import { saveNotificationPreferences } from './actions';
 
 /**
@@ -356,12 +357,18 @@ export default async function AccountPage({
             <p className="font-label text-eyebrow uppercase opacity-60">
               {dict.submit.mySubmissions}
             </p>
-            <a
-              href={PROMPT_SUBMIT_PATH}
-              className="text-accent font-label text-eyebrow uppercase"
-            >
-              <TextSwap>{dict.prompts.submitCta} →</TextSwap>
-            </a>
+            <span className="flex items-center gap-5">
+              {/* docs/CAMPAIGNS.md §6 — the creator's campaign standing lives on its own page. */}
+              <a href={MY_CAMPAIGNS_PATH} data-my-campaigns className="text-accent font-label text-eyebrow uppercase">
+                <TextSwap>{dict.campaigns.myCampaigns} →</TextSwap>
+              </a>
+              <a
+                href={PROMPT_SUBMIT_PATH}
+                className="text-accent font-label text-eyebrow uppercase"
+              >
+                <TextSwap>{dict.prompts.submitCta} →</TextSwap>
+              </a>
+            </span>
           </div>
 
           {submissions.length === 0 ? (

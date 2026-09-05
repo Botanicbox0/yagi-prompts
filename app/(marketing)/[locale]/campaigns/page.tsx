@@ -62,7 +62,7 @@ export default async function CampaignsListingPage({ params }: RouteParams) {
     <>
       <MarketingNav locale={locale} dict={dict} rest="/campaigns" initialTheme="light" />
 
-      <main id="main" data-section data-theme="light" className="section">
+      <main id="main" data-campaigns data-section data-theme="light" className="section">
         <div id="campaigns-rail-anchor" className="relative">
           <AdRail anchorId="campaigns-rail-anchor">
             <AdCard labels={ads} />
