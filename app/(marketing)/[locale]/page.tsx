@@ -3,39 +3,40 @@ import { DEFAULT_LOCALE, isLocale, type Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/dictionaries';
 import { getPublicCatalog } from '@/lib/content/public-catalog';
 import { getPromptCatalog } from '@/lib/prompts/public-catalog';
+import { getCampaignCatalog } from '@/lib/campaigns/public-catalog';
 import { USE_CASES } from '@/lib/prompts/schemas';
+import { templatesHref } from '@/lib/prompts/links';
+import { campaignsHref } from '@/lib/campaigns/links';
 import { marqueeItems } from '@/lib/marquee';
-import { signInHref } from '@/lib/billing/links';
 import { promptLabels, presentUseCases, useCaseLabel } from '@/components/prompts/labels';
+import { campaignLabels } from '@/components/campaigns/labels';
 import { SITE_OG_IMAGE, SITE_TWITTER_CARD } from '@/lib/seo/og';
 import { MarketingFooter, MarketingNav, adLabels } from '@/components/marketing/chrome';
-import { Hero, HeroLede, MarqueeStrip, Premise } from '@/components/landing/sections';
+import { Hero, HeroLede, MarqueeStrip } from '@/components/landing/sections';
 import { CircleWipe } from '@/components/landing/circle-wipe';
 import { Faq } from '@/components/landing/faq';
 import { PromptRail } from '@/components/prompts/rails';
 import { UseCaseFilter } from '@/components/prompts/filter-chips';
-import { SubmitStrip } from '@/components/prompts/detail';
+import { CampaignRail } from '@/components/campaigns/rails';
+import { TextSwap } from '@/components/ui/text-swap';
 import { AdRail } from '@/components/ad/ad-rail';
 import { AdBanner, AdCard } from '@/components/ad/ad-card';
 
 /**
- * Landing — PLAN §3.1, in the §5 register.
+ * Landing — docs/TEMPLATES-IA.md: the template site's front door.
  *
- * Cache mode per §3.1/§4: STATIC + tag `catalog` + a 1h TTL floor. No `headers()`, no `cookies()`,
- * no session read anywhere on this page or the mode silently degrades to dynamic — which is why
- * the nav's "Sign in" is an unconditional link rather than authed chrome.
+ * Hero (one photo, you are the lead) → the VIDEO templates, immediately → the IMAGE templates (or
+ * the honest "preparing" strip while there are none) → the campaigns recruiting right now → the
+ * marquee → FAQ. Two loops, in the order a visitor meets them: make, then earn.
  *
- * Section rhythm (§5.1, hard inversions): hero dark · premise light · marquee dark ·
- * how-it-reads light · [circle wipe] · featured dark · pricing light · FAQ dark · footer dark.
+ * Cache mode per §3.1/§4: STATIC + tags (`prompts`, `campaigns`, `catalog`) + a 1h TTL floor. No
+ * `headers()`, no `cookies()`, no session read anywhere on this page or the mode silently degrades
+ * to dynamic — which is why the nav's "Sign in" is an unconditional link rather than authed chrome.
  */
 /** Must stay equal to CATALOG_TTL_SECONDS — Next requires a literal here (tests pin the pair). */
 export const revalidate = 3600;
 
-export async function generateMetadata({
-  params,
-}: {
-  params: Promise<{ locale: string }>;
-}): Promise<Metadata> {
+export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
   const { locale: raw } = await params;
   const locale: Locale = isLocale(raw) ? raw : DEFAULT_LOCALE;
   const dict = getDictionary(locale);
@@ -60,29 +61,24 @@ export default async function LandingPage({ params }: { params: Promise<{ locale
   const { locale: raw } = await params;
   const locale: Locale = isLocale(raw) ? raw : DEFAULT_LOCALE;
   const dict = getDictionary(locale);
+  const t = dict.templates;
 
-  // Two tagged projections, two invalidation events (§13.2): `prompts` moves whenever a prompt is
-  // published or approved, `catalog` whenever a playbook is. The landing reads both, so either one
-  // refreshes it.
-  const [catalog, prompts] = await Promise.all([getPublicCatalog(), getPromptCatalog()]);
-  // §13.2: "marquee items can include SEEDANCE 2.5 + use-case vocab". The model leads, the
-  // use cases follow, and the studio's real tool list from the playbook catalog tops it up.
+  // Three tagged projections, three invalidation events: a template published, a campaign moved,
+  // a playbook published (the marquee still lists the studio's tools from the playbook catalog).
+  const [templates, campaigns, catalog] = await Promise.all([getPromptCatalog(), getCampaignCatalog(), getPublicCatalog()]);
   const ticker = marqueeItems({
-    models: [prompts.totals.modelLabel, ...catalog.totals.models],
+    models: [templates.totals.modelLabel, ...catalog.totals.models],
     tools: [...USE_CASES.map((value) => useCaseLabel(dict, value)), ...catalog.totals.tools],
   });
   const ads = adLabels(dict);
-
-  // Founder pass (2026-08-13): gallery-first. The landing carries the FULL rails one scroll under
-  // the hero — the reference form — so it shares the gallery's static-safe plumbing verbatim.
   const labels = promptLabels(dict);
-  const useCaseLabels = Object.fromEntries(
-    USE_CASES.map((value) => [value, useCaseLabel(dict, value)]),
-  );
-  const filterOptions = presentUseCases(prompts.totals.useCases).map(
+  const useCaseLabels = Object.fromEntries(USE_CASES.map((value) => [value, useCaseLabel(dict, value)]));
+  const filterOptions = presentUseCases([...new Set(templates.video.flatMap((card) => card.useCase))].sort()).map(
     (value) => [value, useCaseLabels[value]!] as [string, string],
   );
-  const signin = signInHref(`/${locale}`, locale);
+
+  const recruiting = campaigns.campaigns.filter((campaign) => campaign.status === 'recruiting');
+  const styles = new Map([...templates.video, ...templates.image].map((card) => [card.slug, card]));
 
   return (
     <>
@@ -97,57 +93,80 @@ export default async function LandingPage({ params }: { params: Promise<{ locale
             <AdCard labels={ads} />
           </AdRail>
 
-          {/* The gallery, immediately — cards and result clips are the first scroll. F3 tightens
-              the mobile top rhythm (filter padding, first-rail margin) so the first poster's top
-              lands inside a 375×667 viewport; ≥lg keeps the M1 spacing. */}
+          {/* The catalogue, immediately — the templates are the first scroll. */}
           <section id="gallery" data-section data-theme="light" className="section">
             <div className="band pb-24">
               <div className="border-t border-hairline pt-3 lg:pt-6">
-                <UseCaseFilter
-                  options={filterOptions}
-                  labels={{ heading: dict.prompts.filterHeading, all: dict.prompts.filterAll }}
-                />
+                {filterOptions.length > 0 && (
+                  <UseCaseFilter options={filterOptions} labels={{ heading: dict.prompts.filterHeading, all: dict.prompts.filterAll }} />
+                )}
               </div>
 
               <PromptRail
-                id="yagi"
-                heading={dict.prompts.railYagi}
-                lede={dict.prompts.railYagiLede}
-                cards={prompts.yagi}
+                id="video"
+                heading={t.video.rail}
+                lede={t.video.railLede}
+                cards={templates.video}
                 locale={locale}
                 labels={labels}
                 useCaseLabels={useCaseLabels}
-                emptyLabel={dict.prompts.emptyYagi}
+                emptyLabel={t.video.emptyTitle}
                 filteredEmptyLabel={dict.prompts.filterEmpty}
                 topClassName="mt-4 first:mt-0 lg:mt-24"
               />
+              <a href={templatesHref(locale, 'video')} data-all-video className="text-accent mt-8 inline-block font-label text-label uppercase">
+                <TextSwap>{t.allVideo} →</TextSwap>
+              </a>
 
-              {/* F3 — the hero's lede + submit link, re-homed below lg after the first rail. */}
+              {/* F3 — the hero's lede, re-homed below lg after the first rail. */}
               <HeroLede dict={dict} />
 
-              <PromptRail
-                id="community"
-                heading={dict.prompts.railCommunity}
-                lede={dict.prompts.railCommunityLede}
-                cards={prompts.community}
-                locale={locale}
-                labels={labels}
-                useCaseLabels={useCaseLabels}
-                emptyLabel={dict.prompts.emptyCommunity}
-                filteredEmptyLabel={dict.prompts.filterEmpty}
-              />
-
-              <SubmitStrip
-                title={dict.prompts.submitStripTitle}
-                body={dict.prompts.submitStripBody}
-                cta={dict.prompts.submitCta}
-              />
+              {templates.image.length > 0 ? (
+                <PromptRail
+                  id="image"
+                  heading={t.image.rail}
+                  lede={t.image.railLede}
+                  cards={templates.image}
+                  locale={locale}
+                  labels={labels}
+                  useCaseLabels={useCaseLabels}
+                  emptyLabel={t.image.emptyTitle}
+                  filteredEmptyLabel={dict.prompts.filterEmpty}
+                />
+              ) : (
+                <aside data-image-soon className="mt-16 border border-hairline p-8 sm:p-10">
+                  <p className="font-display text-[clamp(1.5rem,3vw,2.25rem)] leading-[0.95] font-black uppercase">{t.imageSoonTitle}</p>
+                  <p className="mt-4 max-w-detail text-body opacity-70">{t.imageSoonBody}</p>
+                  <a href={templatesHref(locale, 'image')} className="text-accent mt-7 inline-block font-label text-label uppercase">
+                    <TextSwap>{t.ctaImage} →</TextSwap>
+                  </a>
+                </aside>
+              )}
             </div>
           </section>
 
-          <MarqueeStrip dict={dict} items={ticker} />
+          {/* The earn loop: what is recruiting right now, straight under the templates it uses. */}
+          {recruiting.length > 0 && (
+            <section data-section data-theme="dark" className="section">
+              <div className="band py-24 lg:py-32">
+                <CampaignRail
+                  id="campaigns"
+                  heading={dict.campaigns.railRecruiting}
+                  lede={dict.campaigns.railRecruitingLede}
+                  cards={recruiting}
+                  styles={styles}
+                  locale={locale}
+                  labels={campaignLabels(dict)}
+                  now={Date.now()}
+                />
+                <a href={campaignsHref(locale)} className="text-accent mt-12 inline-block font-label text-label uppercase">
+                  <TextSwap>{dict.nav.campaigns} →</TextSwap>
+                </a>
+              </div>
+            </section>
+          )}
 
-          <Premise dict={dict} totals={prompts.totals} />
+          <MarqueeStrip dict={dict} items={ticker} />
 
           {/* §3.6: below 1440 this is the single ad; the rail owns the tier above it. */}
           <section data-section data-theme="light" className="section rail:hidden">

@@ -102,6 +102,16 @@ export function isUseCase(value: unknown): value is UseCase {
   return typeof value === 'string' && (USE_CASES as readonly string[]).includes(value);
 }
 
+/**
+ * docs/TEMPLATES-IA.md — what a template PRODUCES. The catalogue's first split (VIDEO · IMAGE), the
+ * two nav tabs, and the one field that decides whether a runtime makes sense.
+ */
+export const TEMPLATE_MEDIA = ['video', 'image'] as const;
+export type TemplateMedium = (typeof TEMPLATE_MEDIA)[number];
+export function isTemplateMedium(value: unknown): value is TemplateMedium {
+  return typeof value === 'string' && (TEMPLATE_MEDIA as readonly string[]).includes(value);
+}
+
 export const PROMPT_SOURCES = ['yagi', 'community'] as const;
 export type PromptSource = (typeof PROMPT_SOURCES)[number];
 

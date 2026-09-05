@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 import { fontVariables } from '@/app/fonts';
 import { getDictionary } from '@/lib/i18n/dictionaries';
 import { getRequestLocale } from '@/lib/i18n/server';
+import { RegisterServiceWorker } from '@/components/pwa/register-sw';
 
 /**
  * Root layout for the authenticated app surface (§4: `/library`, `/account`, `/billing/*`).
@@ -25,6 +26,7 @@ export async function generateMetadata(): Promise<Metadata> {
   return {
     title: { default: dict.meta.siteName, template: `%s · ${dict.meta.siteName}` },
     robots: { index: false, follow: false },
+    appleWebApp: { capable: true, title: dict.meta.siteName, statusBarStyle: 'default' },
   };
 }
 
@@ -42,7 +44,10 @@ export default async function AppRootLayout({ children }: { children: ReactNode 
         <link rel="stylesheet" href="/fonts/pretendard/pretendard-dynamic-subset.css" />
         <link rel="stylesheet" href="/fonts/pretendard/pretendard-hangul-mono.css" />
       </head>
-      <body>{children}</body>
+      <body>
+        {children}
+        <RegisterServiceWorker />
+      </body>
     </html>
   );
 }

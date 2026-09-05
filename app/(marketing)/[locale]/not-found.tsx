@@ -1,6 +1,7 @@
 import { DEFAULT_LOCALE, LOCALES } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/dictionaries';
-import { promptsHref } from '@/lib/prompts/links';
+import { templatesHref } from '@/lib/prompts/links';
+import { campaignsHref } from '@/lib/campaigns/links';
 import { MarketingFooter, MarketingNav } from '@/components/marketing/chrome';
 import { TextSwap } from '@/components/ui/text-swap';
 
@@ -35,16 +36,16 @@ export default function NotFound() {
                   <p className="mt-6 max-w-detail text-body opacity-70">{copy.notFound.body}</p>
                   <div className="mt-8 flex flex-wrap gap-x-6 gap-y-3">
                     <a
-                      href={`/${locale}/studio`}
+                      href={templatesHref(locale, 'video')}
                       className="inline-block bg-accent px-5 py-3 font-label text-label text-white uppercase"
                     >
-                      <TextSwap>{copy.studio.heroCta} →</TextSwap>
+                      <TextSwap>{copy.templates.ctaVideo} →</TextSwap>
                     </a>
                     <a
-                      href={promptsHref(locale)}
+                      href={campaignsHref(locale)}
                       className="inline-block border border-current px-5 py-3 font-label text-label uppercase"
                     >
-                      <TextSwap>{copy.nav.prompts} →</TextSwap>
+                      <TextSwap>{copy.nav.campaigns} →</TextSwap>
                     </a>
                   </div>
                 </section>

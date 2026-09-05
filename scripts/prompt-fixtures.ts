@@ -1,5 +1,5 @@
 import type { Visibility } from '@/lib/content/visibility';
-import type { PromptSource, PromptStatus, UseCase } from '@/lib/prompts/schemas';
+import type { PromptSource, PromptStatus, TemplateMedium, UseCase } from '@/lib/prompts/schemas';
 import type { AssetSpec } from './fixtures';
 
 /**
@@ -47,6 +47,10 @@ export interface PromptFixture {
   rejectReason?: string;
   /** Published items are ordered by this offset (days ago) so NEW badges are deterministic. */
   publishedDaysAgo?: number;
+  /** docs/TEMPLATES-IA.md — default video / not for sale; the priced ones exercise the studio. */
+  medium?: TemplateMedium;
+  priceCents?: number;
+  runtimeSeconds?: number;
 }
 
 const png = (label: string, w: number, h: number): AssetSpec => ({
@@ -81,6 +85,8 @@ const YAGI: PromptFixture[] = [
   {
     id: '9a000000-0000-4000-8000-000000000001',
     slug: 'neon-alley-dolly',
+    priceCents: 400,
+    runtimeSeconds: 15,
     source: 'yagi',
     status: 'published',
     title: 'Neon alley dolly',
@@ -97,6 +103,8 @@ const YAGI: PromptFixture[] = [
   {
     id: '9a000000-0000-4000-8000-000000000002',
     slug: 'handheld-market-run',
+    priceCents: 700,
+    runtimeSeconds: 30,
     source: 'yagi',
     status: 'published',
     title: 'Handheld market run',
@@ -176,6 +184,8 @@ const YAGI: PromptFixture[] = [
   {
     id: '9a000000-0000-4000-8000-000000000007',
     slug: 'static-portrait-window-light',
+    medium: 'image',
+    priceCents: 200,
     source: 'yagi',
     status: 'published',
     title: 'Static portrait, window light',

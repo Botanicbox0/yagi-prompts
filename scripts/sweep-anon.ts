@@ -4,11 +4,6 @@ import { PGlite } from '@electric-sql/pglite';
 import { DEFAULT_LOCAL_SNAPSHOT } from '@/lib/db/connect-shared';
 import { FIXTURE_SENTINELS } from './fixtures';
 import { HIDDEN_PROMPT_SLUGS, PROMPT_SENTINELS } from './prompt-fixtures';
-import {
-  CONTEST_ENTRY_SENTINELS,
-  HIDDEN_CONTEST_SLUGS,
-  PUBLISHED_CONTEST_SLUG,
-} from './contest-fixtures';
 import { RUNTIME_MODE_ENV } from '@/lib/runtime-mode';
 
 /**
@@ -143,12 +138,6 @@ interface PromptProbe {
   featured: boolean;
 }
 
-interface ContestProbe {
-  id: string;
-  slug: string;
-  status: string;
-}
-
 interface AssetBlockRow {
   id: string;
   kind: string;
@@ -185,18 +174,12 @@ async function readSnapshot() {
        from prompt_items order by slug`,
   );
 
-  // §14 — the contests surface. The demo contest is a DRAFT by design, so the ids are what let the
-  // sweep prove that its poster and its entries are unreachable rather than merely absent.
-  const contests = await db.query<ContestProbe>(
-    'select id, slug, status from contests order by slug',
-  );
 
   await db.close();
   return {
     assets: assets.rows,
     privateKeys: privateKeys.rows.map((r) => r.target_key),
     prompts: prompts.rows,
-    contests: contests.rows,
   };
 }
 
@@ -604,135 +587,8 @@ const promptToken = (slug: string) => PROMPT_SENTINELS.find((s) => s.slug === sl
 /** Every sentinel an anonymous reader must NEVER meet: gated YAGI text + both moderation states. */
 const FORBIDDEN_PROMPT_SENTINELS = PROMPT_SENTINELS.filter((s) => !s.publicToAnon);
 
-/**
- * The gallery is STATIC and cached, so it is served byte-identically to every tier. That makes it
- * the highest-value sweep target on the site: if a single gated character can reach this document,
- * it reaches everyone at once and stays in a CDN.
- */
-async function sweepPromptGallery(locale: string): Promise<void> {
-  const path = `/${locale}/prompts`;
-  console.log(`\n${path} — the gallery, anonymous`);
-  const page = await get(path);
 
-  expectEqual('renders 200', page.status, 200);
 
-  // Positive controls first: without these, every absence below would pass on an empty page.
-  expectPresent('YAGI rail header', page.body, locale === 'ko' ? 'YAGI 오리지널' : 'ORIGINAL PROMPTS BY YAGI');
-  expectPresent('community rail header', page.body, locale === 'ko' ? '커뮤니티 프롬프트' : 'FROM THE COMMUNITY');
-  expectPresent('the model chip', page.body, 'SEEDANCE 2.5');
-  expectPresent('lock chips on gated cards', page.body, 'data-lock-chip');
-  expectPresent('cards are addressable', page.body, `data-prompt-card="${GATED_PROMPT}"`);
-  expectPresent('community credit', page.body, '@hana');
-  expectPresent('the use-case filter', page.body, 'data-use-case-filter');
-  expectPresent('the submit CTA', page.body, '/prompts/submit');
-
-  // The property that matters: no prompt text of ANY kind reaches a card.
-  for (const sentinel of PROMPT_SENTINELS) {
-    expectAbsent(`NO ${sentinel.status}/${sentinel.visibility} text on a card (${sentinel.token})`, page.body, sentinel.token);
-  }
-  for (const slug of HIDDEN_PROMPT_SLUGS) {
-    expectAbsent(`no ${slug} card at all`, page.body, `data-prompt-card="${slug}"`);
-  }
-  expectAbsent('no staging keys in the gallery', page.body, 'content/prompt/');
-  // §15 — the gallery is static and shared; a balance is per-viewer and must never reach it.
-  expectAbsent('no cookie balance in the gallery', page.body, 'data-cookie-balance');
-}
-
-async function sweepPromptDetails(locale: string, prompts: PromptProbe[]): Promise<void> {
-  console.log(`\n/${locale}/prompts/[slug] — details, anonymous`);
-  const gatedRow = prompts.find((p) => p.slug === GATED_PROMPT)!;
-
-  const gated = await get(`/${locale}/prompts/${GATED_PROMPT}`);
-  expectEqual('a Pro-gated prompt still renders 200', gated.status, 200);
-  expectEqual('…and is never cached (§3.4)', gated.cacheControl, 'private, no-store');
-  expectPresent('…with the §5.5 lock panel', gated.body, 'data-lock-panel');
-  expectPresent('…and the card surface anyone may see', gated.body, 'data-model-chip');
-  expectAbsent('…and NONE of its text', gated.body, promptToken(GATED_PROMPT));
-  // Its OWN copy button is gone. The related cards keep theirs — they are a different prompt each,
-  // and the endpoint decides per id, so a copy control there is not a claim about this one.
-  expectAbsent('…and no copy button for itself', gated.body, `data-copy-prompt="${gatedRow.id}"`);
-
-  // §15.3 — the funnel, from outside: an anonymous reader is offered SIGN-IN and nothing else.
-  // The literal string is the positive control that the panel really rendered (keep it in step
-  // with messages/*.ts `cookies.signinCta`); the absences are the §15 posture — no spend form a
-  // stranger could POST, no wallet panel, and no balance figure anywhere anonymous.
-  expectPresent('…and the §15.3 sign-in funnel', gated.body, 'data-unlock-cta="signin"');
-  expectPresent(
-    '…in the dictionary words',
-    gated.body,
-    locale === 'ko' ? '로그인하고 프롬프트 확인하기' : 'Sign in to read the prompt',
-  );
-  expectPresent('…returning to this prompt', gated.body, encodeURIComponent(`/${locale}/prompts/${GATED_PROMPT}`));
-  expectAbsent('…never the spend CTA', gated.body, 'data-unlock-cta="spend"');
-  expectAbsent('…never the wallet panel', gated.body, 'data-unlock-cta="empty"');
-  expectAbsent('…and no cookie balance', gated.body, 'data-cookie-balance');
-
-  const teaser = await get(`/${locale}/prompts/${TEASER_PROMPT}`);
-  expectEqual('a public teaser renders 200', teaser.status, 200);
-  expectPresent('…with its text (positive control)', teaser.body, promptToken(TEASER_PROMPT));
-  expectPresent('…in the monospace block', teaser.body, 'data-prompt-text');
-  expectAbsent('…and no lock panel', teaser.body, 'data-lock-panel');
-
-  const community = await get(`/${locale}/prompts/${COMMUNITY_PROMPT}`);
-  expectEqual('a community prompt renders 200', community.status, 200);
-  expectPresent('…with its text, free to everyone (§13.3-1)', community.body, promptToken(COMMUNITY_PROMPT));
-
-  for (const slug of HIDDEN_PROMPT_SLUGS) {
-    expectEqual(`${slug} 404s`, (await get(`/${locale}/prompts/${slug}`)).status, 404);
-  }
-  expectEqual('an unknown slug 404s', (await get(`/${locale}/prompts/no-such-prompt`)).status, 404);
-
-  // Whatever the page did, the two moderation sentinels are nowhere on the public surface.
-  for (const path of [`/${locale}/prompts`, `/${locale}/prompts/${GATED_PROMPT}`, '/sitemap.xml']) {
-    const response = await get(path);
-    for (const sentinel of FORBIDDEN_PROMPT_SENTINELS) {
-      expectAbsent(`${path}: no ${sentinel.token}`, response.body, sentinel.token);
-    }
-  }
-}
-
-/** §13.3-5 — the gate that lets a static gallery offer copy at all. */
-async function sweepPromptCopy(prompts: PromptProbe[]): Promise<void> {
-  console.log('\n/api/prompts/copy — entitlement, anonymous');
-
-  const bySlug = (slug: string) => prompts.find((p) => p.slug === slug);
-  const community = bySlug(COMMUNITY_PROMPT);
-  const teaser = bySlug(TEASER_PROMPT);
-  const gated = bySlug(GATED_PROMPT);
-  const pending = prompts.find((p) => p.status === 'pending');
-  const rejected = prompts.find((p) => p.status === 'rejected');
-
-  if (!community || !teaser || !gated || !pending || !rejected) {
-    fail('prompt fixture discovery', 'the local snapshot is missing a prompt — re-run npm run db:local');
-    return;
-  }
-
-  const copy = (id: string) => postJson(`/api/prompts/copy/${id}`, {});
-
-  const open = await copy(community.id);
-  expectEqual('a community prompt copies for anon', open.status, 200);
-  expectPresent('…and the answer is the real text', open.body, promptToken(COMMUNITY_PROMPT));
-  expectEqual('…and is never cached', open.cacheControl, 'private, no-store');
-
-  const teaserCopy = await copy(teaser.id);
-  expectEqual('a public YAGI teaser copies for anon', teaserCopy.status, 200);
-
-  const refused = await copy(gated.id);
-  expectOneOf('a Pro prompt refuses anon', refused.status, [401, 403]);
-  expectAbsent('…with no text in the refusal', refused.body, promptToken(GATED_PROMPT));
-  expectPresent('…and a way forward', refused.body, 'sign_in_required');
-  expectEqual('…never cached either', refused.cacheControl, 'private, no-store');
-
-  expectEqual('a pending submission 404s', (await copy(pending.id)).status, 404);
-  expectEqual('a rejected submission 404s', (await copy(rejected.id)).status, 404);
-  expectEqual(
-    'an unknown id 404s',
-    (await copy('11111111-2222-4333-8444-555555555555')).status,
-    404,
-  );
-  expectEqual('a malformed id 404s rather than 500s', (await copy('not-a-uuid')).status, 404);
-  expectEqual('GET is not the copy verb', (await get(`/api/prompts/copy/${community.id}`)).status, 405);
-}
 
 /** §13.1 — poster/clip bytes are public marketing surface for PUBLISHED items and nothing else. */
 async function sweepPromptMedia(prompts: PromptProbe[]): Promise<void> {
@@ -783,350 +639,217 @@ async function sweepPromptMedia(prompts: PromptProbe[]): Promise<void> {
     fail('audio download disposition', `got ${download.contentDisposition}`);
   }
 
-  const detail = await get(`/en/prompts/${AUDIO_PROMPT}`);
-  expectPresent('the detail page carries the audio row', detail.body, 'data-prompt-audio');
-  expectPresent('…with the one-press download', detail.body, 'data-audio-download');
-  expectPresent('…that asks for the attachment', detail.body, 'download=1');
-  // Negative control: an item with no audio renders no empty audio chrome.
-  const noAudio = await get(`/en/prompts/${GATED_PROMPT}`);
-  expectAbsent('no audio row where there is no audio', noAudio.body, 'data-prompt-audio');
 }
 
-/** §13.2 — the gated halves of the prompts surface, from outside. */
-async function sweepPromptGates(): Promise<void> {
-  console.log('\n/prompts/submit + /admin/prompts — anonymous');
 
-  const submit = await get('/prompts/submit');
-  expectOneOf('/prompts/submit redirects anon', submit.status, [302, 307, 308]);
-  if (submit.location && !submit.location.includes('/prompts/submit')) {
-    ok('…away from the form', submit.location);
-  } else fail('/prompts/submit redirect target', `unexpected location ${submit.location}`);
 
-  const admin = await get('/admin/prompts');
-  expectOneOf('/admin/prompts refuses anon', admin.status, [302, 307, 308, 404]);
-  expectAbsent('…and leaks no queue', admin.body, 'data-prompt-queue');
 
-  // The gallery is public and must NOT be caught by the app-path gate.
-  expectEqual('/en/prompts stays public', (await get('/en/prompts')).status, 200);
-  const unprefixed = await get('/prompts');
-  expectOneOf('unprefixed /prompts 308s into a locale', unprefixed.status, [307, 308]);
-  if (unprefixed.location?.includes('/prompts')) ok('…keeping the path', unprefixed.location);
-  else fail('/prompts redirect target', `unexpected location ${unprefixed.location}`);
-}
 
-/** §13.2 SEO: the gallery and every published prompt are indexed; moderation states are not. */
-async function sweepPromptSeo(): Promise<void> {
-  console.log('\nsitemap + <head> — the prompts surface');
 
+
+
+
+
+// ---------------------------------------------------------------------------
+// docs/TEMPLATES-IA.md — the template surface (2026-09-05)
+// ---------------------------------------------------------------------------
+
+/** A template not yet for sale in the fixtures (price 0): the page says so instead of selling. */
+const CLOSED_TEMPLATE = 'mv-strobe-corridor';
+/** The one image template in the fixtures. */
+const IMAGE_TEMPLATE = TEASER_PROMPT;
+
+/**
+ * The two tabs and the template page, anonymous. The disclosure property is simpler than the
+ * prompt era's and stricter: NO prompt text of any kind reaches any public page any more — not on a
+ * card, not on the template page, not in a lock panel, because there is no lock panel.
+ */
+async function sweepTemplates(): Promise<void> {
+  for (const locale of ['en', 'ko'] as const) {
+    const path = `/${locale}/video`;
+    console.log(`\n${path} — the VIDEO tab, anonymous`);
+    const page = await get(path);
+    expectEqual('renders 200', page.status, 200);
+    expectPresent('is the video tab', page.body, 'data-templates="video"');
+    expectPresent('shows the tabs', page.body, 'data-medium-tab="image"');
+    expectPresent('cards are addressable', page.body, `data-prompt-card="${GATED_PROMPT}"`);
+    expectPresent('a priced card wears its price', page.body, 'data-price-chip');
+    expectPresent('…and the price itself', page.body, '$4');
+    expectPresent('cards link to template pages', page.body, `href="/${locale}/t/${GATED_PROMPT}"`);
+    expectPresent('the model chip', page.body, 'SEEDANCE 2.5');
+    expectPresent('the use-case filter', page.body, 'data-use-case-filter');
+    expectAbsent('no lock chips anywhere', page.body, 'data-lock-chip');
+    expectAbsent('no image template on the video tab', page.body, `data-prompt-card="${IMAGE_TEMPLATE}"`);
+    expectAbsent('no prompt submission door', page.body, '/prompts/submit');
+    for (const sentinel of PROMPT_SENTINELS) {
+      expectAbsent(`NO prompt text on a card (${sentinel.token})`, page.body, sentinel.token);
+    }
+    for (const slug of HIDDEN_PROMPT_SLUGS) {
+      expectAbsent(`no ${slug} card at all`, page.body, `data-prompt-card="${slug}"`);
+    }
+    expectAbsent('no staging keys', page.body, 'content/prompt/');
+  }
+
+  console.log('\n/en/image — the IMAGE tab, anonymous');
+  const image = await get('/en/image');
+  expectEqual('renders 200', image.status, 200);
+  expectPresent('is the image tab', image.body, 'data-templates="image"');
+  expectPresent('shows the image template', image.body, `data-prompt-card="${IMAGE_TEMPLATE}"`);
+  expectAbsent('and no video template', image.body, `data-prompt-card="${GATED_PROMPT}"`);
+
+  console.log('\n/en/t/[slug] — template pages, anonymous');
+  const detail = await get(`/en/t/${GATED_PROMPT}`);
+  expectEqual('a priced template renders 200', detail.status, 200);
+  if (detail.cacheControl !== 'private, no-store') ok('…and is cacheable — nothing on it is gated', detail.cacheControl ?? '(none)');
+  else fail('template detail cache mode', 'must not be private, no-store: the page has no per-viewer half');
+  expectPresent('…names itself', detail.body, `data-template="${GATED_PROMPT}"`);
+  expectPresent('…with the make section', detail.body, 'data-template-make');
+  expectPresent('…and the one-style studio', detail.body, 'data-single="true"');
+  expectPresent('…and the demo badge', detail.body, 'data-demo-badge');
+  expectAbsent('…and NONE of its prompt text', detail.body, promptToken(GATED_PROMPT));
+  expectAbsent('…no prompt block', detail.body, 'data-prompt-text');
+  expectAbsent('…no lock panel', detail.body, 'data-lock-panel');
+  expectAbsent('…no copy button', detail.body, 'data-copy-prompt');
+  expectAbsent('…no cookie balance', detail.body, 'data-cookie-balance');
+  for (const sentinel of PROMPT_SENTINELS) {
+    expectAbsent(`…no prompt text of any kind (${sentinel.token})`, detail.body, sentinel.token);
+  }
+
+  const closed = await get(`/en/t/${CLOSED_TEMPLATE}`);
+  expectEqual('a not-yet-for-sale template renders 200', closed.status, 200);
+  expectPresent('…and says so', closed.body, 'data-template-closed');
+  expectAbsent('…without a studio', closed.body, 'data-twings-studio');
+  // (Related cards below it may well carry price chips — the assertion is on ITS facts, not the page.)
+  expectPresent('…and no price in its facts', closed.body, 'data-template-closed');
+
+  const imageDetail = await get(`/en/t/${IMAGE_TEMPLATE}`);
+  expectEqual('an image template renders 200', imageDetail.status, 200);
+  expectPresent('…as an image', imageDetail.body, 'data-medium="image"');
+
+  for (const slug of HIDDEN_PROMPT_SLUGS) {
+    expectEqual(`${slug} 404s`, (await get(`/en/t/${slug}`)).status, 404);
+  }
+  expectEqual('an unknown slug 404s', (await get('/en/t/no-such-template')).status, 404);
+
+  // Whatever the pages did, the moderation sentinels are nowhere on the public surface.
+  for (const path of ['/en/video', '/en/image', `/en/t/${GATED_PROMPT}`, '/sitemap.xml']) {
+    const response = await get(path);
+    for (const sentinel of FORBIDDEN_PROMPT_SENTINELS) {
+      expectAbsent(`${path}: no ${sentinel.token}`, response.body, sentinel.token);
+    }
+  }
+
+  console.log('\nsitemap + robots + <head> — the template surface');
   const sitemap = await get('/sitemap.xml');
-  expectPresent('lists the gallery (en)', sitemap.body, '/en/prompts<');
-  expectPresent('lists the gallery (ko)', sitemap.body, '/ko/prompts<');
+  for (const rest of ['/en/video<', '/ko/video<', '/en/image<', '/ko/image<']) {
+    expectPresent(`lists ${rest.slice(0, -1)}`, sitemap.body, rest);
+  }
   for (const slug of [GATED_PROMPT, TEASER_PROMPT, COMMUNITY_PROMPT]) {
-    expectPresent(`lists /en/prompts/${slug}`, sitemap.body, `/en/prompts/${slug}`);
-    expectPresent(`lists /ko/prompts/${slug}`, sitemap.body, `/ko/prompts/${slug}`);
+    expectPresent(`lists /en/t/${slug}`, sitemap.body, `/en/t/${slug}`);
+    expectPresent(`lists /ko/t/${slug}`, sitemap.body, `/ko/t/${slug}`);
   }
   for (const slug of HIDDEN_PROMPT_SLUGS) {
     expectAbsent(`never lists ${slug}`, sitemap.body, slug);
   }
-  expectAbsent('never lists the submission form', sitemap.body, '/prompts/submit');
-
+  for (const gone of ['/prompts', '/contests', '/studio']) {
+    expectAbsent(`never lists the retired ${gone}`, sitemap.body, `${gone}<`);
+    expectAbsent(`never lists ${gone}/`, sitemap.body, `${gone}/`);
+  }
   const robots = await get('/robots.txt');
-  expectPresent('robots disallows the submission form', robots.body, 'Disallow: /prompts/submit');
+  expectAbsent('robots no longer names the retired forms', robots.body, '/prompts/submit');
+  expectAbsent('…nor the contest entry', robots.body, '/contests/*/submit');
+  expectPresent('self-canonical', detail.body, `rel="canonical" href="${BASE}/en/t/${GATED_PROMPT}"`);
+  expectPresent('hreflang ko', detail.body, `hrefLang="ko" href="${BASE}/ko/t/${GATED_PROMPT}"`);
+  expectAbsent('a template is NOT deindexed', detail.body, 'name="robots" content="noindex');
+  expectPresent('og:site_name on the template', detail.body, 'property="og:site_name" content="TWINGS"');
+  const video = await get('/en/video');
+  expectPresent('the video tab self-canonicals', video.body, `rel="canonical" href="${BASE}/en/video"`);
+  expectPresent('og:site_name on the tab', video.body, 'property="og:site_name" content="TWINGS"');
 
-  const detail = await get(`/en/prompts/${GATED_PROMPT}`);
-  expectPresent('self-canonical', detail.body, `rel="canonical" href="${BASE}/en/prompts/${GATED_PROMPT}"`);
-  expectPresent('hreflang ko', detail.body, `hrefLang="ko" href="${BASE}/ko/prompts/${GATED_PROMPT}"`);
-  expectPresent('hreflang x-default', detail.body, 'hrefLang="x-default"');
-  // A gated prompt page is still a public page — only the text is gated.
-  expectAbsent('a Pro-gated prompt is NOT deindexed', detail.body, 'name="robots" content="noindex');
-  // F6 — the share card names the site, because it is read where the site is not.
-  expectPresent('og:site_name on the detail', detail.body, 'property="og:site_name" content="TWINGS"');
-
-  const gallery = await get('/en/prompts');
-  expectPresent('the gallery self-canonicals', gallery.body, `rel="canonical" href="${BASE}/en/prompts"`);
-  expectAbsent('the gallery is indexed', gallery.body, 'name="robots" content="noindex');
-  expectPresent('og:site_name on the gallery', gallery.body, 'property="og:site_name" content="TWINGS"');
+  console.log('\n/manifest.webmanifest + /sw.js — the PWA files, unprefixed');
+  const manifest = await get('/manifest.webmanifest');
+  expectEqual('the manifest is served at the root', manifest.status, 200);
+  expectPresent('…and names the app', manifest.body, '"TWINGS"');
+  expectPresent('…in standalone display', manifest.body, '"standalone"');
+  expectEqual('the service worker is served at the root', (await get('/sw.js')).status, 200);
+  expectEqual('the offline page is served at the root', (await get('/offline.html')).status, 200);
+  expectPresent('the landing declares the manifest', (await get('/en')).body, 'rel="manifest"');
 }
 
-/** §13.2 — the landing pivot: prompts in the nav, prompt cards in the featured strip. */
-async function sweepLandingPivot(): Promise<void> {
-  console.log('\n/en — the landing after the pivot');
-  const page = await get('/en');
+/** The prompt site's URLs 308 onto the template site's; the copy door answers 410. */
+async function sweepTemplateRedirects(prompts: PromptProbe[]): Promise<void> {
+  console.log('\nredirects — the prompt site → the template site');
+  const cases: Array<[string, string]> = [
+    ['/en/studio', '/en/video'],
+    ['/ko/studio', '/ko/video'],
+    ['/en/prompts', '/en/video'],
+    [`/en/prompts/${GATED_PROMPT}`, `/en/t/${GATED_PROMPT}`],
+    ['/ko/contests', '/ko/campaigns'],
+    ['/en/contests/some-contest', '/en/campaigns'],
+    ['/prompts/submit', '/en/video'],
+    ['/contests/some-contest/submit', '/en/campaigns'],
+  ];
+  for (const [from, to] of cases) {
+    const response = await get(from);
+    expectEqual(`${from} redirects permanently`, response.status, 308);
+    if (response.location?.endsWith(to)) ok(`…to ${to}`);
+    else fail(`${from} redirect target`, `expected ${to}, got ${response.location}`);
+  }
+  // …while the unprefixed public forms still 308 into a locale like every public page.
+  const unprefixed = await get('/video');
+  expectOneOf('unprefixed /video 308s into a locale', unprefixed.status, [307, 308]);
+  if (unprefixed.location?.includes('/video')) ok('…keeping the path', unprefixed.location);
+  else fail('/video redirect target', `unexpected location ${unprefixed.location}`);
+  expectOneOf('/admin/prompts refuses anon', (await get('/admin/prompts')).status, [302, 307, 308, 404]);
 
+  console.log('\n/api/prompts/copy — closed (410)');
+  const community = prompts.find((p) => p.slug === COMMUNITY_PROMPT)!;
+  const gone = await postJson(`/api/prompts/copy/${community.id}`, {});
+  expectEqual('a community prompt no longer copies for anyone', gone.status, 410);
+  expectAbsent('…and no text in the answer', gone.body, promptToken(COMMUNITY_PROMPT));
+  expectEqual('…never cached', gone.cacheControl, 'private, no-store');
+  expectEqual('an unknown id is 410 too — there is nothing to look up', (await postJson('/api/prompts/copy/11111111-2222-4333-8444-555555555555', {})).status, 410);
+  expectEqual('GET is not the copy verb', (await get(`/api/prompts/copy/${community.id}`)).status, 405);
+}
+
+/** The landing after the template pivot: the two doors, the video rail, no prompt text. */
+async function sweepLandingTemplates(): Promise<void> {
+  console.log('\n/en — the landing as a template site');
+  const page = await get('/en');
   expectEqual('renders 200', page.status, 200);
-  expectPresent('nav points at the gallery', page.body, 'href="/en/prompts"');
-  expectPresent('featured strip is prompt cards', page.body, 'data-prompt-card=');
+  expectPresent('nav points at the video tab', page.body, 'href="/en/video"');
+  expectPresent('nav points at the image tab', page.body, 'href="/en/image"');
+  expectPresent('nav points at campaigns', page.body, 'href="/en/campaigns"');
+  expectAbsent('nav no longer points at prompts', page.body, 'href="/en/prompts"');
+  expectAbsent('nav no longer points at the studio', page.body, 'href="/en/studio"');
+  expectAbsent('nav no longer points at contests', page.body, 'href="/en/contests"');
+  expectPresent('the hero opens on the video door', page.body, 'data-hero-video');
+  expectPresent('the video rail is template cards', page.body, 'data-prompt-card=');
   expectPresent('the model is on the page', page.body, 'SEEDANCE 2.5');
-  // PLAYBOOKS_IN_NAV=false: the library keeps working but is not linked from the marketing chrome.
   expectAbsent('the library is denavigated', page.body, 'href="/library"');
   for (const sentinel of PROMPT_SENTINELS) {
     expectAbsent(`no prompt text on the landing (${sentinel.token})`, page.body, sentinel.token);
   }
-  // §15 — same rule as the gallery: static page, shared by every tier, no balance on it.
   expectAbsent('no cookie balance on the landing', page.body, 'data-cookie-balance');
-  // F6 — the landing's share card names the site.
   expectPresent('og:site_name on the landing', page.body, 'property="og:site_name" content="TWINGS"');
-
   expectEqual('/library still works for anyone who has the URL', (await get('/library')).status, 307);
 }
 
-// ---------------------------------------------------------------------------
-// §15 — the cookies surface (M10)
-// ---------------------------------------------------------------------------
-
-/**
- * The pricing page presents the MODEL (가입 3 · 주 1 · $4/5) and never a wallet: it is static by
- * contract (§3.1), so anything per-viewer on it would be one reader's balance in everyone's CDN
- * copy. The literals below are kept in step with messages/*.ts `pricing.cookie*`.
- */
-async function sweepPricingCookies(): Promise<void> {
-  console.log('\n/en/pricing + /ko/pricing — the cookie model, anonymous');
+/** Pricing: one price per template, the table, and nothing per-viewer. */
+async function sweepPricingTemplates(): Promise<void> {
+  console.log('\n/en/pricing + /ko/pricing — per-template prices, anonymous');
   for (const locale of ['en', 'ko']) {
     const page = await get(`/${locale}/pricing`);
     expectEqual(`/${locale}/pricing renders 200`, page.status, 200);
-    expectPresent('…with the cookie table', page.body, 'data-cookie-table');
-    expectPresent('…and the $4 = 5 pack cell', page.body, '$4 = 5');
-    // F5 — no MoR gateway is connected, so the pack cell states its status instead of
-    // implying a purchasable checkout. (Kept in step with messages/*.ts `pricing.cookiePackStatus`.)
-    expectPresent('…wearing the not-purchasable-yet chip', page.body, 'data-pack-status');
-    expectPresent(
-      '…in the dictionary words',
-      page.body,
-      locale === 'ko' ? '결제 오픈 예정' : 'CHECKOUT OPENING SOON',
-    );
-    expectPresent(
-      '…and the one-cookie rule',
-      page.body,
-      locale === 'ko' ? '쿠키 1개로 YAGI 오리지널 1개가' : 'One cookie opens one YAGI original',
-    );
-    expectAbsent('…and no balance figure', page.body, 'data-cookie-balance');
+    expectPresent('…with the price table', page.body, 'data-pricing-table');
+    expectPresent('…listing the priced template', page.body, `data-pricing-row="${GATED_PROMPT}"`);
+    expectPresent('…at its price', page.body, '$4');
+    expectAbsent('…without the closed one', page.body, `data-pricing-row="${CLOSED_TEMPLATE}"`);
+    expectAbsent('…no cookie table', page.body, 'data-cookie-table');
+    expectAbsent('…no balance figure', page.body, 'data-cookie-balance');
   }
-  // §15 — the subscription is de-emphasized, not sold: the $9 hero is off this surface.
   const en = await get('/en/pricing');
-  expectAbsent('…and the $9 headline is gone', en.body, 'OUR ORIGINALS ARE $9');
-  // F6 — pricing's share card names the site too.
   expectPresent('og:site_name on pricing', en.body, 'property="og:site_name" content="TWINGS"');
-}
-
-// ---------------------------------------------------------------------------
-// §14 — the contests surface (M9)
-// ---------------------------------------------------------------------------
-
-/** Every entry sentinel an anonymous reader must NEVER meet. */
-const FORBIDDEN_ENTRY_SENTINELS = CONTEST_ENTRY_SENTINELS.filter((s) => !s.publicToAnon);
-
-/**
- * The one sentinel that MUST be reachable: an approved entry of the published fixture contest.
- *
- * Without it every absence assertion below would pass on a page that renders no entries at all —
- * the vacuity the M9 review called out. This is the positive control that makes them mean something.
- */
-const LIVE_ENTRY_SENTINEL = CONTEST_ENTRY_SENTINELS.find((s) => s.publicToAnon)!;
-
-async function sweepContestsListing(locale: string, contests: ContestProbe[]): Promise<void> {
-  const path = `/${locale}/contests`;
-  console.log(`\n${path} — the listing, anonymous`);
-  const page = await get(path);
-
-  expectEqual('renders 200', page.status, 200);
-
-  // Positive controls: the page is a real page, not an error dressed as one.
-  // M9 design review, finding 8: the KO hero is broken where the SENTENCE breaks, not where the
-  // English one does. (Copy naturalized in the 2026-08-13 founder pass.)
-  expectPresent(
-    'the display headline',
-    page.body,
-    locale === 'ko' ? '필름 콘테스트' : 'SET THE BRIEF.',
-  );
-  expectPresent('the OPEN rail', page.body, 'data-contest-rail="open"');
-  expectPresent(
-    'the published contest card',
-    page.body,
-    `data-contest-card="${PUBLISHED_CONTEST_SLUG}"`,
-  );
-  expectPresent('…with its phase chip', page.body, 'data-phase-chip="open"');
-  expectPresent('…and a server-rendered D-day', page.body, 'data-dday');
-
-  // §14.2 — "Listing carries the B2B CTA ('Run a contest with the studio →' mailto)".
-  expectPresent('the B2B CTA strip', page.body, 'data-contest-hire');
-  expectPresent('…as a real mailto', page.body, 'mailto:hello@yagiworkshop.xyz');
-  expectPresent(
-    '…with the studio wording',
-    page.body,
-    locale === 'ko' ? '콘테스트 개최 문의' : 'Run a contest with the studio',
-  );
-  expectPresent('nav points at the tab', page.body, `href="/${locale}/contests"`);
-
-  // The property that matters: a DRAFT contest is nowhere on the public listing.
-  for (const contest of contests) {
-    if (contest.status === 'published') continue;
-    expectAbsent(`no ${contest.slug} card`, page.body, `data-contest-card="${contest.slug}"`);
-    expectAbsent(`…and no ${contest.slug} link`, page.body, `/contests/${contest.slug}`);
-  }
-  // No entry text of ANY status reaches a listing card — the card carries a COUNT, never a row.
-  for (const sentinel of CONTEST_ENTRY_SENTINELS) {
-    expectAbsent(`no ${sentinel.status} entry text (${sentinel.token})`, page.body, sentinel.token);
-  }
-  expectAbsent('no staging keys in the listing', page.body, 'content/contest/');
-}
-
-/** §14.2 — "published only; draft = admin preview path", checked from outside. */
-async function sweepContestDetails(locale: string, contests: ContestProbe[]): Promise<void> {
-  console.log(`\n/${locale}/contests/[slug] — details, anonymous`);
-
-  // --- the PUBLISHED contest: the positive control the review asked for ----
-  const live = await get(`/${locale}/contests/${PUBLISHED_CONTEST_SLUG}`);
-  expectEqual('a published contest renders 200', live.status, 200);
-  expectEqual('…and is never cached (§14.2)', live.cacheControl, 'private, no-store');
-  expectPresent('…with its prize in display type', live.body, 'data-contest-prize');
-  expectPresent('…the phase-aware CTA', live.body, 'data-contest-cta="enter"');
-  expectPresent('…and the entries rail', live.body, 'data-contest-entries');
-  // The measurement: an APPROVED entry is here…
-  expectPresent(
-    `…carrying the approved entry (${LIVE_ENTRY_SENTINEL.token})`,
-    live.body,
-    LIVE_ENTRY_SENTINEL.token,
-  );
-  expectPresent('…as an addressable card', live.body, 'data-entry-card=');
-  expectPresent('…with its SNS credit chip', live.body, 'data-entry-sns=');
-  // …and every other moderation state is not, on the very page that proves the rail works.
-  for (const sentinel of FORBIDDEN_ENTRY_SENTINELS) {
-    expectAbsent(
-      `…and NO ${sentinel.status} entry (${sentinel.token})`,
-      live.body,
-      sentinel.token,
-    );
-  }
-  expectAbsent('…and no staging keys', live.body, 'content/contest/');
-
-  for (const slug of HIDDEN_CONTEST_SLUGS) {
-    expectEqual(`draft ${slug} 404s`, (await get(`/${locale}/contests/${slug}`)).status, 404);
-  }
-  expectEqual(
-    'an unknown slug 404s',
-    (await get(`/${locale}/contests/no-such-contest`)).status,
-    404,
-  );
-
-  // The admin preview path is admin surface, so it must refuse an anonymous reader outright.
-  for (const slug of HIDDEN_CONTEST_SLUGS) {
-    const preview = await get(`/admin/contests/${slug}/preview`);
-    expectOneOf(`preview of ${slug} refuses anon`, preview.status, [302, 307, 308, 404]);
-    for (const sentinel of FORBIDDEN_ENTRY_SENTINELS) {
-      expectAbsent(`…and leaks no entry (${sentinel.token})`, preview.body, sentinel.token);
-    }
-  }
-
-  // A draft's poster exists on disk (staged) and has no published key, so the public media route
-  // must refuse it — that is the disclosure doctrine holding for an unannounced prize.
-  const draft = contests.find((c) => c.status !== 'published');
-  if (draft) {
-    expectEqual(
-      'a DRAFT contest’s poster is unreachable',
-      (await get(`/api/contests/media/${encodeURIComponent(`${draft.id}:poster`)}`)).status,
-      404,
-    );
-  }
-
-  const published = contests.find((c) => c.status === 'published');
-  if (published) {
-    const poster = await get(`/api/contests/media/${encodeURIComponent(`${published.id}:poster`)}`);
-    expectEqual('a PUBLISHED contest’s poster is served', poster.status, 200);
-    expectEqual('…as the declared type', poster.contentType, 'image/png');
-    const isPng = poster.bytes[0] === 0x89 && poster.bytes[1] === 0x50 && poster.bytes[2] === 0x4e;
-    if (isPng) ok('…and the bytes are the real object');
-    else fail('poster bytes', 'response is not a PNG');
-    /**
-     * M9 review, finding 3 — the `{id}:{kind}` alias is a MUTABLE pointer, so it must never be
-     * cached immutably: unpublishing a contest has to stop serving its poster immediately rather
-     * than a day later. The immutable thing is the content-addressed object it points at.
-     */
-    if (poster.cacheControl?.includes('immutable')) {
-      fail('alias cache', `mutable alias served as immutable: ${poster.cacheControl}`);
-    } else ok('…and the mutable alias is not cached immutably', poster.cacheControl ?? '(none)');
-  }
-  expectEqual(
-    'an unknown media ref 404s',
-    (await get('/api/contests/media/11111111-2222-4333-8444-555555555555%3Aposter')).status,
-    404,
-  );
-  expectEqual('a malformed media ref 404s', (await get('/api/contests/media/nonsense')).status, 404);
-}
-
-/** §14.2 — the gated halves of the contests surface, from outside. */
-async function sweepContestGates(contests: ContestProbe[]): Promise<void> {
-  console.log('\n/contests/[slug]/submit + /admin/contests — anonymous');
-
-  // The PUBLISHED contest, so the redirect proves the login gate rather than a 404.
-  const slug = PUBLISHED_CONTEST_SLUG;
-  const submit = await get(`/contests/${slug}/submit`);
-  expectOneOf('the entry form redirects anon', submit.status, [302, 307, 308]);
-  if (submit.location && !submit.location.startsWith(`/contests/${slug}/submit`)) {
-    ok('…away from the form', submit.location);
-  } else fail('entry form redirect target', `unexpected location ${submit.location}`);
-
-  const admin = await get('/admin/contests');
-  expectOneOf('/admin/contests refuses anon', admin.status, [302, 307, 308, 404]);
-  expectAbsent('…and leaks no queue', admin.body, 'data-contest-entry=');
-  for (const sentinel of FORBIDDEN_ENTRY_SENTINELS) {
-    expectAbsent(`…and no entry text (${sentinel.token})`, admin.body, sentinel.token);
-  }
-  for (const contest of contests) {
-    expectAbsent(`…and no ${contest.slug} editor`, admin.body, `data-admin-contest="${contest.slug}"`);
-  }
-
-  // The listing is public and must NOT be caught by the app-path gate.
-  expectEqual('/en/contests stays public', (await get('/en/contests')).status, 200);
-  const unprefixed = await get('/contests');
-  expectOneOf('unprefixed /contests 308s into a locale', unprefixed.status, [307, 308]);
-  if (unprefixed.location?.includes('/contests')) ok('…keeping the path', unprefixed.location);
-  else fail('/contests redirect target', `unexpected location ${unprefixed.location}`);
-}
-
-/** §14.2 SEO: the listing is indexed; a draft contest and the entry form are not. */
-async function sweepContestSeo(): Promise<void> {
-  console.log('\nsitemap + <head> — the contests surface');
-
-  const sitemap = await get('/sitemap.xml');
-  expectPresent('lists the listing (en)', sitemap.body, '/en/contests<');
-  expectPresent('lists the listing (ko)', sitemap.body, '/ko/contests<');
-  expectPresent(
-    'lists the published contest (en)',
-    sitemap.body,
-    `/en/contests/${PUBLISHED_CONTEST_SLUG}`,
-  );
-  expectPresent(
-    'lists the published contest (ko)',
-    sitemap.body,
-    `/ko/contests/${PUBLISHED_CONTEST_SLUG}`,
-  );
-  for (const slug of HIDDEN_CONTEST_SLUGS) {
-    expectAbsent(`never lists the draft ${slug}`, sitemap.body, slug);
-  }
-  expectAbsent('never lists an entry form', sitemap.body, '/submit');
-
-  const robots = await get('/robots.txt');
-  expectPresent('robots disallows the entry form', robots.body, 'Disallow: /contests/*/submit');
-  expectAbsent('…without disallowing the listing itself', robots.body, 'Disallow: /contests\n');
-
-  const listing = await get('/en/contests');
-  expectPresent('the listing self-canonicals', listing.body, `rel="canonical" href="${BASE}/en/contests"`);
-  expectPresent('hreflang ko', listing.body, `hrefLang="ko" href="${BASE}/ko/contests"`);
-  expectPresent('hreflang x-default', listing.body, 'hrefLang="x-default"');
-  expectAbsent('the listing is indexed', listing.body, 'name="robots" content="noindex');
-  // F6 — the listing's share card names the site.
-  expectPresent('og:site_name on the listing', listing.body, 'property="og:site_name" content="TWINGS"');
-}
-
-/** §14.2 — Contests joins the nav between Prompts and Pricing, on every marketing page. */
-async function sweepContestNav(): Promise<void> {
-  console.log('\nnav — Prompts · Contests · Pricing');
-  for (const path of ['/en', '/en/prompts', '/en/pricing']) {
-    const page = await get(path);
-    expectPresent(`${path} links the contests tab`, page.body, 'href="/en/contests"');
-  }
-  const ko = await get('/ko');
-  expectPresent('/ko links the ko tab', ko.body, 'href="/ko/contests"');
 }
 
 // ---------------------------------------------------------------------------
@@ -1191,7 +914,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  const { assets, privateKeys, prompts, contests } = await readSnapshot();
+  const { assets, privateKeys, prompts } = await readSnapshot();
 
   await sweepShowcasePage('en', privateKeys);
   await sweepShowcasePage('ko', privateKeys);
@@ -1208,25 +931,12 @@ async function main(): Promise<void> {
   await sweepWebViewSignin();
 
   // --- M6 §13: the prompts surface ----------------------------------------
-  await sweepPromptGallery('en');
-  await sweepPromptGallery('ko');
-  await sweepPromptDetails('en', prompts);
-  await sweepPromptCopy(prompts);
+  await sweepTemplates();
+  await sweepTemplateRedirects(prompts);
   await sweepPromptMedia(prompts);
-  await sweepPromptGates();
-  await sweepPromptSeo();
-  await sweepLandingPivot();
+  await sweepLandingTemplates();
+  await sweepPricingTemplates();
 
-  // --- M10 §15: the cookies surface ---------------------------------------
-  await sweepPricingCookies();
-
-  // --- M9 §14: the contests surface ---------------------------------------
-  await sweepContestsListing('en', contests);
-  await sweepContestsListing('ko', contests);
-  await sweepContestDetails('en', contests);
-  await sweepContestGates(contests);
-  await sweepContestSeo();
-  await sweepContestNav();
 
   // --- docs/CAMPAIGNS.md: the campaigns surface --------------------------
   await sweepCampaigns();

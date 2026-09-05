@@ -3,17 +3,17 @@
 import { useEffect, useRef, useState } from 'react';
 
 /**
- * TWINGS §2 — the four-step demo the founder asked for (2026-08-16): "사진만 넣으면 완성도 높은
- * 영상으로 변환된다는 걸 잘 보이게".
+ * TWINGS — the make loop, as a four-step demo (founder, 2026-08-16: "사진만 넣으면 완성도 높은
+ * 영상으로 변환된다는 걸 잘 보이게"), re-homed onto the template page (docs/TEMPLATES-IA.md).
  *
  * This is a MOCKUP and says so on screen. No file leaves the browser, no payment is taken, and the
- * film that plays at the end is the studio's own published example rather than a render of the
+ * film that plays at the end is the template's own published example rather than a render of the
  * uploaded face. Every one of those is stated in the UI, because a demo that lets someone believe
  * their photo was processed is not a demo — it is a lie with a progress bar.
  *
- * What it IS built to prove: the shape of the product. Pick a style, hand over one photo, pay once,
- * wait, get a finished film. When the real Seedance pipeline lands, only the rendering step
- * changes — the flow, the copy and the waiting UI are already the ones a real render needs.
+ * Two shapes: the catalogue shape (several styles, pick one) and the TEMPLATE shape (one style,
+ * already chosen — the page you are on IS the choice), which skips the picking step entirely.
+ * When the real render pipeline lands, only the rendering step changes.
  */
 
 export interface StudioStyle {
@@ -24,8 +24,8 @@ export interface StudioStyle {
   blurb: string;
   posterSrc: string | null;
   videoSrc: string | null;
-  /** The published prompt this scene is made from — the catalogue is the evidence. */
-  promptHref: string;
+  /** Where "see more" goes from the result — the catalogue this template belongs to. */
+  moreHref: string;
 }
 
 export interface StudioLabels {
@@ -48,20 +48,28 @@ export interface StudioLabels {
   runtimeLabel: string;
   needPhoto: string;
   noStyles: string;
-  seePrompt: string;
+  moreTemplates: string;
 }
 
 type Phase = 'photo' | 'style' | 'pay' | 'rendering' | 'result';
 
-const STEP_ORDER: Phase[] = ['photo', 'style', 'pay', 'result'];
-
 /** Long enough that the wait reads as work. A real render takes minutes; 400ms would teach a lie. */
 const RENDER_MS = 5200;
 
-export function TwingsStudio({ styles, labels }: { styles: StudioStyle[]; labels: StudioLabels }) {
+export function TwingsStudio({
+  styles,
+  labels,
+  initialStyleId,
+}: {
+  styles: StudioStyle[];
+  labels: StudioLabels;
+  /** Pre-chosen style (the template page); with exactly one style the picking step disappears. */
+  initialStyleId?: string;
+}) {
+  const single = styles.length === 1;
   const [phase, setPhase] = useState<Phase>('photo');
   const [photo, setPhoto] = useState<string | null>(null);
-  const [styleId, setStyleId] = useState<string>(styles[0]?.id ?? '');
+  const [styleId, setStyleId] = useState<string>(initialStyleId ?? styles[0]?.id ?? '');
   const [progress, setProgress] = useState(0);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -95,10 +103,10 @@ export function TwingsStudio({ styles, labels }: { styles: StudioStyle[]; labels
       if (current) URL.revokeObjectURL(current);
       return URL.createObjectURL(file);
     });
-    setPhase('style');
+    setPhase(single ? 'pay' : 'style');
   };
 
-  // A style whose prompt is unpublished is dropped upstream; with none left, an empty grid and a
+  // A style whose template is unpublished is dropped upstream; with none left, an empty grid and a
   // permanently disabled button would read as a broken page rather than a closed one.
   if (styles.length === 0) {
     return (
@@ -108,11 +116,19 @@ export function TwingsStudio({ styles, labels }: { styles: StudioStyle[]; labels
     );
   }
 
-  const stepIndex = phase === 'rendering' ? 2 : STEP_ORDER.indexOf(phase);
-  const steps = [labels.stepPhoto, labels.stepStyle, labels.stepPay, labels.stepResult];
+  // The step bar: three steps on a template page (the choice is the page), four in the catalogue.
+  const steps = single
+    ? [labels.stepPhoto, labels.stepPay, labels.stepResult]
+    : [labels.stepPhoto, labels.stepStyle, labels.stepPay, labels.stepResult];
+  const stepIndex = (() => {
+    if (phase === 'photo') return 0;
+    if (phase === 'result') return steps.length - 1;
+    if (single) return 1;
+    return phase === 'style' ? 1 : 2;
+  })();
 
   return (
-    <section data-twings-studio data-phase={phase} className="mt-10">
+    <section data-twings-studio data-phase={phase} data-single={single ? 'true' : 'false'} className="mt-10">
       {/* The one honest label the whole screen hangs on. */}
       <p
         data-demo-badge
@@ -178,46 +194,55 @@ export function TwingsStudio({ styles, labels }: { styles: StudioStyle[]; labels
         <div className="flex flex-col">
           {(phase === 'photo' || phase === 'style' || phase === 'pay') && (
             <>
-              <p className="font-label text-label uppercase">{labels.chooseStyle}</p>
-              <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                {styles.map((style) => (
-                  <button
-                    key={style.id}
-                    type="button"
-                    data-style-option={style.id}
-                    aria-pressed={style.id === styleId}
-                    onClick={() => {
-                      setStyleId(style.id);
-                      if (photo) setPhase('pay');
-                    }}
-                    className={[
-                      'flex flex-col border text-left transition-opacity',
-                      style.id === styleId
-                        ? 'border-accent'
-                        : 'border-hairline opacity-70 hover:opacity-100',
-                    ].join(' ')}
-                  >
-                    <span className="block aspect-video overflow-hidden bg-black">
-                      {style.posterSrc && (
-                        // eslint-disable-next-line @next/next/no-img-element -- public bucket object
-                        <img src={style.posterSrc} alt="" className="h-full w-full object-cover" />
-                      )}
-                    </span>
-                    <span className="flex flex-col gap-1 p-3">
-                      <span className="font-display text-[1.15rem] leading-[1] font-black uppercase">
-                        {style.title}
-                      </span>
-                      <span className="font-mono text-[0.72rem] opacity-55">{style.blurb}</span>
-                      <span className="mt-1 flex items-baseline justify-between font-label text-[0.7rem] tracking-[0.12em] uppercase">
-                        <span className="text-accent">{style.price}</span>
-                        <span className="opacity-45">
-                          {labels.runtimeLabel.replace('{seconds}', style.runtime)}
+              {single && chosen ? (
+                // The template page: the choice is made, so the panel states it instead of asking.
+                <div data-chosen-style={chosen.id} className="flex items-baseline justify-between gap-4 border-b border-hairline pb-4">
+                  <span className="font-display text-[1.3rem] leading-[1] font-black uppercase">{chosen.title}</span>
+                  <span className="flex items-baseline gap-3 font-label text-[0.7rem] tracking-[0.12em] uppercase">
+                    <span className="text-accent">{chosen.price}</span>
+                    {chosen.runtime !== '0' && (
+                      <span className="opacity-45">{labels.runtimeLabel.replace('{seconds}', chosen.runtime)}</span>
+                    )}
+                  </span>
+                </div>
+              ) : (
+                <>
+                  <p className="font-label text-label uppercase">{labels.chooseStyle}</p>
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                    {styles.map((style) => (
+                      <button
+                        key={style.id}
+                        type="button"
+                        data-style-option={style.id}
+                        aria-pressed={style.id === styleId}
+                        onClick={() => {
+                          setStyleId(style.id);
+                          if (photo) setPhase('pay');
+                        }}
+                        className={[
+                          'flex flex-col border text-left transition-opacity',
+                          style.id === styleId ? 'border-accent' : 'border-hairline opacity-70 hover:opacity-100',
+                        ].join(' ')}
+                      >
+                        <span className="block aspect-video overflow-hidden bg-black">
+                          {style.posterSrc && (
+                            // eslint-disable-next-line @next/next/no-img-element -- public bucket object
+                            <img src={style.posterSrc} alt="" className="h-full w-full object-cover" />
+                          )}
                         </span>
-                      </span>
-                    </span>
-                  </button>
-                ))}
-              </div>
+                        <span className="flex flex-col gap-1 p-3">
+                          <span className="font-display text-[1.15rem] leading-[1] font-black uppercase">{style.title}</span>
+                          <span className="font-mono text-[0.72rem] opacity-55">{style.blurb}</span>
+                          <span className="mt-1 flex items-baseline justify-between font-label text-[0.7rem] tracking-[0.12em] uppercase">
+                            <span className="text-accent">{style.price}</span>
+                            <span className="opacity-45">{labels.runtimeLabel.replace('{seconds}', style.runtime)}</span>
+                          </span>
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
 
               <div className="mt-auto pt-6">
                 <button
@@ -245,19 +270,11 @@ export function TwingsStudio({ styles, labels }: { styles: StudioStyle[]; labels
               <p className="font-display text-[clamp(1.6rem,3vw,2.4rem)] leading-[0.95] font-black uppercase">
                 {labels.rendering}
               </p>
-              <div
-                className="mt-6 h-1 w-full bg-hairline"
-                role="progressbar"
-                aria-valuenow={progress}
-                aria-valuemin={0}
-                aria-valuemax={100}
-              >
+              <div className="mt-6 h-1 w-full bg-hairline" role="progressbar" aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100}>
                 <div className="h-full bg-accent" style={{ width: `${progress}%` }} />
               </div>
               <p className="mt-3 font-mono text-[0.78rem] opacity-55">{progress}%</p>
-              <p className="mt-6 max-w-detail font-mono text-[0.72rem] opacity-45">
-                {labels.renderingNote}
-              </p>
+              <p className="mt-6 max-w-detail font-mono text-[0.72rem] opacity-45">{labels.renderingNote}</p>
             </div>
           )}
 
@@ -265,7 +282,7 @@ export function TwingsStudio({ styles, labels }: { styles: StudioStyle[]; labels
             <div className="flex flex-1 flex-col">
               <p className="font-label text-label uppercase">{labels.resultHeading}</p>
               <div className="mt-4 aspect-video overflow-hidden border border-hairline bg-black">
-                {chosen.videoSrc && (
+                {chosen.videoSrc ? (
                   <video
                     src={chosen.videoSrc}
                     {...(chosen.posterSrc ? { poster: chosen.posterSrc } : {})}
@@ -276,19 +293,24 @@ export function TwingsStudio({ styles, labels }: { styles: StudioStyle[]; labels
                     playsInline
                     className="h-full w-full object-contain"
                   />
+                ) : (
+                  chosen.posterSrc && (
+                    // eslint-disable-next-line @next/next/no-img-element -- public bucket object
+                    <img src={chosen.posterSrc} alt="" className="h-full w-full object-contain" />
+                  )
                 )}
               </div>
               <p className="mt-3 font-mono text-[0.72rem] opacity-45">{labels.resultNote}</p>
               <div className="mt-6 flex flex-wrap items-center gap-x-6 gap-y-3">
                 <button
                   type="button"
-                  onClick={() => setPhase('style')}
+                  onClick={() => setPhase(single ? 'pay' : 'style')}
                   className="border border-current px-5 py-3 font-label text-eyebrow uppercase transition-opacity hover:opacity-70"
                 >
                   {labels.again}
                 </button>
-                <a href={chosen.promptHref} data-studio-prompt-link className="text-accent font-label text-eyebrow uppercase">
-                  {labels.seePrompt} →
+                <a href={chosen.moreHref} data-studio-more-link className="text-accent font-label text-eyebrow uppercase">
+                  {labels.moreTemplates} →
                 </a>
               </div>
             </div>

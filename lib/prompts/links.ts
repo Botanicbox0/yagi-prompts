@@ -1,42 +1,54 @@
 import type { Locale } from '@/lib/i18n/config';
-import { MEDIA_KINDS, type MediaKind } from './schemas';
+import { MEDIA_KINDS, type MediaKind, type TemplateMedium } from './schemas';
 
 /**
- * PLAN §13.2 — every path the prompts surface uses, spelled once.
+ * Every path the template surface uses, spelled once (docs/TEMPLATES-IA.md §2).
  *
- * Pure and dependency-free (no `server-only`, no env) so the static gallery, the dynamic detail
- * page, the route handlers, the sitemap and the tests all speak the same grammar — the same reason
+ * Pure and dependency-free (no `server-only`, no env) so the static listings, the detail page, the
+ * route handlers, the sitemap and the tests all speak the same grammar — the same reason
  * `lib/content/media-ref.ts` and `lib/billing/links.ts` exist.
+ *
+ * History: this file was the PROMPTS surface's grammar (`/prompts`, `/prompts/[slug]`,
+ * `/prompts/submit`). On 2026-09-05 the founder retired the prompt site — a prompt is now the
+ * private recipe inside a TEMPLATE — so the public paths became `/video`, `/image` and `/t/[slug]`,
+ * and `next.config.ts` 308s the old ones onto them. The `prompt*` names below are kept as aliases so
+ * the admin editor, the account page and the tests did not all have to be renamed on the same day.
  */
 
-export const PROMPTS_REST = '/prompts';
-/** §13.2: the submission form is UNPREFIXED app surface (login, no-store, noindex). */
-export const PROMPT_SUBMIT_PATH = '/prompts/submit';
+/** The two tabs — the catalogue's first split is what a template PRODUCES. */
+export const TEMPLATE_LISTING_REST: Record<TemplateMedium, string> = { video: '/video', image: '/image' };
+/** One template's public page, which is also where it is made. */
+export const TEMPLATE_REST = '/t';
+
 export const ADMIN_PROMPTS_PATH = '/admin/prompts';
-/**
- * The board split into three screens on 2026-08-15 (founder: adding a prompt should not mean
- * scrolling past every prompt that already exists). One place spells the paths so a card, a
- * redirect and a back-link cannot disagree.
- */
 export const ADMIN_PROMPT_NEW_PATH = `${ADMIN_PROMPTS_PATH}/new`;
+
+/** Retired (2026-09-05): redirected to the video catalogue by `next.config.ts`. Kept for the redirect table. */
+export const PROMPT_SUBMIT_PATH = '/prompts/submit';
 
 export function adminPromptPath(id: string): string {
   return `${ADMIN_PROMPTS_PATH}/${encodeURIComponent(id)}`;
 }
 
-export function promptsHref(locale: Locale | string): string {
-  return `/${locale}${PROMPTS_REST}`;
-}
-
-export function promptHref(locale: Locale | string, slug: string): string {
-  return `/${locale}${PROMPTS_REST}/${slug}`;
+export function templatesHref(locale: Locale | string, medium: TemplateMedium = 'video'): string {
+  return `/${locale}${TEMPLATE_LISTING_REST[medium]}`;
 }
 
 /** Path without the locale prefix — what the locale toggle and hreflang alternates need. */
-export function promptRest(slug: string): string {
-  return `${PROMPTS_REST}/${slug}`;
+export function templateRest(slug: string): string {
+  return `${TEMPLATE_REST}/${slug}`;
 }
 
+export function templateHref(locale: Locale | string, slug: string): string {
+  return `/${locale}${templateRest(slug)}`;
+}
+
+// Aliases from the prompts era — same pages, new names (see the header note).
+export const promptsHref = (locale: Locale | string): string => templatesHref(locale, 'video');
+export const promptHref = templateHref;
+export const promptRest = templateRest;
+
+/** The copy endpoint answers 410 since 2026-09-05; the path stays so the client button can name it. */
 export function promptCopyPath(id: string): string {
   return `/api/prompts/copy/${id}`;
 }

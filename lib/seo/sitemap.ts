@@ -1,9 +1,7 @@
 import type { MetadataRoute } from 'next';
 import type { CatalogCard } from '@/lib/content/catalog';
 import type { PromptCard } from '@/lib/prompts/catalog';
-import type { ContestCard } from '@/lib/contests/catalog';
-import { promptRest } from '@/lib/prompts/links';
-import { contestRest } from '@/lib/contests/links';
+import { TEMPLATE_LISTING_REST, templateRest } from '@/lib/prompts/links';
 import { LEGAL_DOCS } from '@/lib/legal/documents';
 import { legalRest } from '@/lib/legal/links';
 import { LOCALES, type Locale } from '@/lib/i18n/config';
@@ -34,25 +32,12 @@ export interface SitemapInput {
   origin: string;
   cards: CatalogCard[];
   /**
-   * §13.2 — "published prompt details join the sitemap with locale alternates; gallery indexed;
-   * submit/admin noindex."
-   *
-   * Note the difference from playbooks: there is NO showcase filter here, and there should not be.
-   * A Pro-gated prompt is still a fully public page — poster, clip, title, credit and model chip
-   * are all public marketing surface (§13.1) and only the text is gated. The catalog projection
-   * itself is the filter: it only ever contains `published` rows, so pending, rejected and
-   * archived items cannot reach the sitemap by construction.
+   * docs/TEMPLATES-IA.md — every published template, with locale alternates. No showcase filter:
+   * a template page has no gated half at all. The catalogue projection is itself the filter — it
+   * only ever contains `published` rows, so pending, rejected and archived items cannot reach the
+   * sitemap by construction.
    */
-  prompts?: PromptCard[];
-  /**
-   * §14.2 — published contests, with locale alternates.
-   *
-   * Like prompts and unlike playbooks there is no showcase filter, and for a stronger reason: a
-   * contest page has no gated half at all. The catalog projection is itself the filter — it only
-   * ever contains `published` rows, so a draft cannot reach the sitemap by construction, which is
-   * the property that matters (an unannounced prize must not be discoverable).
-   */
-  contests?: ContestCard[];
+  templates?: PromptCard[];
   /** Falls back to the card's own publish time; only used when that is missing. */
   now?: Date;
 }
@@ -69,7 +54,7 @@ function absoluteAlternates(origin: string, rest: string): Record<string, string
 }
 
 export function buildSitemap(input: SitemapInput): MetadataRoute.Sitemap {
-  const { origin, cards, prompts = [], contests = [], now = new Date() } = input;
+  const { origin, cards, templates = [], now = new Date() } = input;
   const entries: MetadataRoute.Sitemap = [];
 
   const marketing: Array<{
@@ -78,16 +63,11 @@ export function buildSitemap(input: SitemapInput): MetadataRoute.Sitemap {
     changeFrequency: 'daily' | 'weekly' | 'yearly';
   }> = [
     { rest: '/', priority: 1, changeFrequency: 'daily' },
-    // The studio is the product's front door (2026-09-03); weekly, because a style is added
-    // about as often as a contest, not as often as a prompt.
-    { rest: '/studio', priority: 0.9, changeFrequency: 'weekly' },
-    // §13.2 — the gallery is the v1.5 front door and is indexed; it changes as often as the studio
-    // publishes, which is the same cadence as the landing it now leads.
-    { rest: '/prompts', priority: 0.9, changeFrequency: 'daily' },
-    // §14.2 — the contests listing. Weekly rather than daily: a contest is a month-long object, and
-    // claiming daily change on a page that gains a row every few weeks is noise for a crawler.
-    { rest: '/contests', priority: 0.8, changeFrequency: 'weekly' },
-    // docs/CAMPAIGNS.md — the campaigns listing, on the contests' cadence.
+    // docs/TEMPLATES-IA.md — the two tabs are the front doors; daily, because a template is
+    // published about as often as the landing changes.
+    { rest: TEMPLATE_LISTING_REST.video, priority: 0.9, changeFrequency: 'daily' },
+    { rest: TEMPLATE_LISTING_REST.image, priority: 0.9, changeFrequency: 'daily' },
+    // docs/CAMPAIGNS.md — the campaigns listing. Weekly: a campaign is a month-long object.
     { rest: '/campaigns', priority: 0.8, changeFrequency: 'weekly' },
     { rest: '/pricing', priority: 0.8, changeFrequency: 'weekly' },
     // The legal surface. Low priority — nobody searches for it — but LISTED, because a payment
@@ -112,28 +92,14 @@ export function buildSitemap(input: SitemapInput): MetadataRoute.Sitemap {
     }
   }
 
-  // §13.2 — every published prompt, both rails, with reciprocal alternates.
-  for (const prompt of prompts) {
-    const rest = promptRest(prompt.slug);
+  // docs/TEMPLATES-IA.md — every published template, both tabs, with reciprocal alternates.
+  for (const template of templates) {
+    const rest = templateRest(template.slug);
     for (const locale of LOCALES as readonly Locale[]) {
       entries.push({
         url: absolute(origin, `/${locale}${rest}`),
-        lastModified: prompt.publishedAt ? new Date(prompt.publishedAt) : now,
+        lastModified: template.publishedAt ? new Date(template.publishedAt) : now,
         changeFrequency: 'monthly',
-        priority: 0.7,
-        alternates: { languages: absoluteAlternates(origin, rest) },
-      });
-    }
-  }
-
-  // §14.2 — every published contest, both locales, with reciprocal alternates.
-  for (const contest of contests) {
-    const rest = contestRest(contest.slug);
-    for (const locale of LOCALES as readonly Locale[]) {
-      entries.push({
-        url: absolute(origin, `/${locale}${rest}`),
-        lastModified: contest.publishedAt ? new Date(contest.publishedAt) : now,
-        changeFrequency: 'weekly',
         priority: 0.7,
         alternates: { languages: absoluteAlternates(origin, rest) },
       });
@@ -171,17 +137,6 @@ export const DISALLOWED_PATHS = [
   '/account',
   '/billing',
   '/api',
-  // §13.2 — the submission form is login-gated app surface. `/prompts` itself is locale-prefixed
-  // and indexed, so this entry cannot catch the gallery.
-  '/prompts/submit',
-  /**
-   * §14.2 — the entry form, whose slug sits in the MIDDLE of the path.
-   *
-   * A prefix rule cannot express that, so this is the one wildcard in the file (`*` is supported by
-   * every major crawler). `Disallow: /contests` would take the listing and every contest page down
-   * with it, which is the opposite of what we want.
-   */
-  '/contests/*/submit',
   // docs/CAMPAIGNS.md §6 — the same shape again: the apply form (slug in the middle) and the
   // creator's own standing page are noindex app surface; `/campaigns` and every campaign page stay.
   '/campaigns/*/apply',

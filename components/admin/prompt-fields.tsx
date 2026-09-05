@@ -1,5 +1,5 @@
 import { formatDate } from '@/lib/i18n/format';
-import { PROMPT_TEXT_MAX, PROMPT_TEXT_MIN } from '@/lib/prompts/schemas';
+import { PROMPT_TEXT_MAX, PROMPT_TEXT_MIN, TEMPLATE_MEDIA } from '@/lib/prompts/schemas';
 import { promptHref } from '@/lib/prompts/links';
 import { visibilityLabel, visibilityOptions } from '@/components/admin/labels';
 import type { Dictionary } from '@/lib/i18n/dictionaries';
@@ -220,6 +220,25 @@ export function PromptFields({ row, dict }: { row: PromptRow | null; dict: Dict 
         <div className="mt-1.5">
           <UseCaseChecks dict={dict} selected={row?.useCase ?? []} />
         </div>
+      </div>
+
+      {/* docs/TEMPLATES-IA.md — what this template produces and what one render costs. */}
+      <div className="grid gap-3 sm:grid-cols-3">
+        <Field label={a.fieldTemplateMedium}>
+          <select name="medium" defaultValue={row?.medium ?? 'video'} className={INPUT}>
+            {TEMPLATE_MEDIA.map((medium) => (
+              <option key={medium} value={medium}>
+                {a.templateMedia[medium]}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label={a.fieldTemplatePrice} hint={a.templatePriceHint}>
+          <input type="number" name="priceCents" min={0} step={1} defaultValue={row?.priceCents ?? 0} className={INPUT} />
+        </Field>
+        <Field label={a.fieldTemplateRuntime} hint={a.templateRuntimeHint}>
+          <input type="number" name="runtimeSeconds" min={1} step={1} defaultValue={row?.runtimeSeconds ?? ''} className={INPUT} />
+        </Field>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2">

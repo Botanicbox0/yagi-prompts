@@ -2,7 +2,7 @@ import type { SqlRunner } from '@/lib/db/sql-runner';
 import { publicContentUrl } from '@/lib/content/asset-url';
 import { shapePromptMedia, type ShapedPromptMedia } from './shape';
 import { loadPublishedPrompts, type PromptRow } from './repo';
-import { PROMPT_MODEL_LABEL, promptModelLabel, type PromptSource } from './schemas';
+import { PROMPT_MODEL_LABEL, promptModelLabel, type PromptSource, type TemplateMedium } from './schemas';
 import { promptLock, type PromptLock } from './lock';
 
 /**
@@ -29,6 +29,11 @@ export interface PromptCard {
   models: string[];
   modelLabels: string[];
   useCase: string[];
+  /** docs/TEMPLATES-IA.md — the catalogue's first split, and whether a runtime makes sense. */
+  medium: TemplateMedium;
+  /** One render in USD cents; 0 = not for sale yet. */
+  priceCents: number;
+  runtimeSeconds: number | null;
   poster: ShapedPromptMedia | null;
   video: ShapedPromptMedia | null;
   /**
@@ -63,12 +68,17 @@ export interface PromptCatalog {
   yagi: PromptCard[];
   /** "FROM THE COMMUNITY" — @handle credits. */
   community: PromptCard[];
+  /** docs/TEMPLATES-IA.md — the two tabs: every published template by what it produces. */
+  video: PromptCard[];
+  image: PromptCard[];
   totals: PromptTotals;
 }
 
 export const EMPTY_PROMPT_CATALOG: PromptCatalog = {
   yagi: [],
   community: [],
+  video: [],
+  image: [],
   totals: { yagi: 0, community: 0, published: 0, useCases: [], modelLabel: PROMPT_MODEL_LABEL },
 };
 
@@ -92,6 +102,9 @@ export function toPromptCard(row: PromptRow, options: PromptCatalogOptions = {})
     models: row.models,
     modelLabels: row.models.map(promptModelLabel),
     useCase: row.useCase,
+    medium: row.medium,
+    priceCents: row.priceCents,
+    runtimeSeconds: row.runtimeSeconds,
     poster,
     video,
     lock: promptLock(row.textVisibility),
@@ -109,6 +122,8 @@ export async function loadPromptCatalog(
 
   const yagi = cards.filter((card) => card.source === 'yagi');
   const community = cards.filter((card) => card.source === 'community');
+  const video = cards.filter((card) => card.medium === 'video');
+  const image = cards.filter((card) => card.medium === 'image');
   const useCases = [...new Set(cards.flatMap((card) => card.useCase))].sort((a, b) =>
     a.localeCompare(b),
   );
@@ -116,6 +131,8 @@ export async function loadPromptCatalog(
   return {
     yagi,
     community,
+    video,
+    image,
     totals: {
       yagi: yagi.length,
       community: community.length,

@@ -1,6 +1,6 @@
 import type { SqlRunner } from '@/lib/db/sql-runner';
 import type { Visibility } from '@/lib/content/visibility';
-import type { PromptSource, PromptStatus } from './schemas';
+import type { PromptSource, PromptStatus, TemplateMedium } from './schemas';
 
 /**
  * PLAN §13 — every `prompt_items` query, in one driver-agnostic module.
@@ -34,6 +34,12 @@ export interface PromptRow {
   media: unknown;
   useCase: string[];
   featured: boolean;
+  /** docs/TEMPLATES-IA.md — what this template produces; the catalogue's first split. */
+  medium: TemplateMedium;
+  /** One render, in USD cents. 0 = not for sale yet (the detail page says so, no button). */
+  priceCents: number;
+  /** Films only; null for an image template (CHECK in 0015). */
+  runtimeSeconds: number | null;
   rejectReason: string | null;
   createdAt: string | null;
   publishedAt: string | null;
@@ -57,6 +63,9 @@ interface RawRow {
   media: unknown;
   use_case: string[] | null;
   featured: boolean;
+  medium: TemplateMedium;
+  price_cents: number;
+  runtime_seconds: number | null;
   reject_reason: string | null;
   created_at: Date | string | null;
   published_at: Date | string | null;
@@ -65,6 +74,7 @@ interface RawRow {
 const COLUMNS = `id, slug, source, author_id, author_handle, status, models, title, title_ko,
                  prompt_text, process_md, process_md_ko, source_url,
                  text_visibility::text as text_visibility, media, use_case, featured,
+                 medium, price_cents, runtime_seconds,
                  reject_reason, created_at, published_at`;
 
 /** §13.2 — the one ordering, so the gallery, the admin list and the sitemap never disagree. */
@@ -94,6 +104,9 @@ function toRow(raw: RawRow): PromptRow {
     media: raw.media,
     useCase: raw.use_case ?? [],
     featured: raw.featured,
+    medium: raw.medium,
+    priceCents: raw.price_cents,
+    runtimeSeconds: raw.runtime_seconds,
     rejectReason: raw.reject_reason,
     createdAt: toIso(raw.created_at),
     publishedAt: toIso(raw.published_at),
@@ -251,6 +264,10 @@ export interface InsertPromptArgs {
   media: unknown;
   useCase: string[];
   featured: boolean;
+  /** docs/TEMPLATES-IA.md — default 'video' / 0 / null: a row born before templates is a video not yet for sale. */
+  medium?: TemplateMedium;
+  priceCents?: number;
+  runtimeSeconds?: number | null;
   /**
    * Written in the SAME statement as the status, never after it: the
    * `prompt_items_reject_reason_present` CHECK fires at INSERT, so a two-step "insert rejected,
@@ -266,10 +283,12 @@ export async function insertPrompt(sql: SqlRunner, args: InsertPromptArgs): Prom
     `insert into prompt_items
        (id, slug, source, author_id, author_handle, status, models, title, title_ko,
         prompt_text, process_md, process_md_ko, source_url,
-        text_visibility, media, use_case, featured, reject_reason, published_at)
+        text_visibility, media, use_case, featured, reject_reason, published_at,
+        medium, price_cents, runtime_seconds)
      values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
              $14::visibility, $15::jsonb, $16, $17, $18,
-             case when $19::boolean then now() else null end)`,
+             case when $19::boolean then now() else null end,
+             $20, $21, $22)`,
     [
       args.id,
       args.slug,
@@ -290,6 +309,9 @@ export async function insertPrompt(sql: SqlRunner, args: InsertPromptArgs): Prom
       args.featured,
       args.rejectReason ?? null,
       args.publishedAt === 'now',
+      args.medium ?? 'video',
+      args.priceCents ?? 0,
+      args.runtimeSeconds ?? null,
     ],
   );
 }
@@ -320,6 +342,10 @@ export interface UpdatePromptArgs {
   textVisibility: Visibility;
   featured: boolean;
   models: string[];
+  /** Omitted ⇒ unchanged (a form that predates templates keeps what the row had). */
+  medium?: TemplateMedium;
+  priceCents?: number;
+  runtimeSeconds?: number | null;
 }
 
 export async function updatePrompt(sql: SqlRunner, args: UpdatePromptArgs): Promise<boolean> {
@@ -327,7 +353,10 @@ export async function updatePrompt(sql: SqlRunner, args: UpdatePromptArgs): Prom
     `update prompt_items
         set slug = $2, title = $3, title_ko = $4, prompt_text = $5, use_case = $6,
             author_handle = $7, text_visibility = $8::visibility, featured = $9,
-            process_md = $10, process_md_ko = $11, source_url = $12, models = $13
+            process_md = $10, process_md_ko = $11, source_url = $12, models = $13,
+            medium = coalesce($14, medium),
+            price_cents = coalesce($15::int, price_cents),
+            runtime_seconds = case when $16::boolean then $17::int else runtime_seconds end
       where id = $1
       returning id`,
     [
@@ -344,6 +373,10 @@ export async function updatePrompt(sql: SqlRunner, args: UpdatePromptArgs): Prom
       args.processMdKo ?? null,
       args.sourceUrl ?? null,
       args.models,
+      args.medium ?? null,
+      args.priceCents ?? null,
+      args.runtimeSeconds !== undefined,
+      args.runtimeSeconds ?? null,
     ],
   );
   return rows.length > 0;

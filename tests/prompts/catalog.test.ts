@@ -31,10 +31,13 @@ describe('prompt catalog projection (§13.2)', () => {
       'featured',
       'id',
       'lock',
+      'medium',
       'modelLabels',
       'models',
       'poster',
+      'priceCents',
       'publishedAt',
+      'runtimeSeconds',
       'slug',
       'source',
       'title',
@@ -53,6 +56,18 @@ describe('prompt catalog projection (§13.2)', () => {
     for (const sentinel of PROMPT_SENTINELS) {
       expect(serialised.includes(sentinel.token), sentinel.token).toBe(false);
     }
+  });
+
+  /** docs/TEMPLATES-IA.md — the two tabs: every published card lands in exactly one of them. */
+  it('splits published templates by medium, with the priced ones carrying their numbers', () => {
+    const all = [...catalog.yagi, ...catalog.community];
+    expect(catalog.video.length + catalog.image.length).toBe(all.length);
+    expect(catalog.video.every((card) => card.medium === 'video')).toBe(true);
+    expect(catalog.image.every((card) => card.medium === 'image' && card.runtimeSeconds === null)).toBe(true);
+    expect(catalog.image.map((card) => card.slug)).toEqual(['static-portrait-window-light']);
+    const priced = all.find((card) => card.slug === 'neon-alley-dolly')!;
+    expect(priced).toMatchObject({ medium: 'video', priceCents: 400, runtimeSeconds: 15 });
+    expect(all.filter((card) => card.priceCents === 0).length).toBeGreaterThan(0);
   });
 
   it('splits the two rails and counts them (§13.2)', () => {

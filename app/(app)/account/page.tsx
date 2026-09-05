@@ -16,11 +16,8 @@ import {
   PREFERENCES_OFF,
   type NotificationPreferences,
 } from '@/lib/notify/preferences';
-import { getWallet, listRecentUnlocks, type UnlockHistoryRow, type Wallet } from '@/lib/cookies/repo';
-import { PACK_COOKIES, PACK_PRICE_USD, SIGNUP_COOKIES, WEEKLY_COOKIES } from '@/lib/cookies/wallet';
-import { loadSubmissionsByAuthor, type PromptRow } from '@/lib/prompts/repo';
-import { promptHref, PROMPT_SUBMIT_PATH } from '@/lib/prompts/links';
 import { MY_CAMPAIGNS_PATH } from '@/lib/campaigns/links';
+import { templatesHref } from '@/lib/prompts/links';
 import { saveNotificationPreferences } from './actions';
 
 /**
@@ -111,9 +108,6 @@ export default async function AccountPage({
   let viewer = null as Awaited<ReturnType<typeof getViewer>> | null;
   let subscription: SubscriptionRecord | null = null;
   let preferences: NotificationPreferences = PREFERENCES_OFF;
-  let submissions: PromptRow[] = [];
-  let wallet: Wallet | null = null;
-  let unlockHistory: UnlockHistoryRow[] = [];
   try {
     viewer = await getViewer();
     if (viewer.userId !== null) {
@@ -121,12 +115,6 @@ export default async function AccountPage({
       if (sql !== null) {
         subscription = await loadSubscription(sql, viewer.userId);
         preferences = (await loadPreferences(sql, viewer.userId)) ?? PREFERENCES_OFF;
-        // §13.1/E — "your submissions" list (slug, status, reject_reason when rejected).
-        submissions = await loadSubmissionsByAuthor(sql, viewer.userId);
-        // §15.1-3 — the account page is a wallet READ point: the lazy weekly grant fires here,
-        // inside getWallet's own transaction, before the number below is printed.
-        wallet = await getWallet(sql, viewer.userId);
-        unlockHistory = await listRecentUnlocks(sql, viewer.userId);
       }
     }
   } catch {
@@ -210,21 +198,6 @@ export default async function AccountPage({
               </Row>
             )}
 
-            {/* §15.3 — the wallet: the balance, what a cookie does, and the weekly line. */}
-            {wallet !== null && (
-              <Row term={dict.cookies.balanceHeading}>
-                <span data-cookie-balance className="font-mono text-code">
-                  {wallet.balance}
-                </span>
-                <span className="mt-2 block text-[0.9375rem] opacity-70">
-                  {dict.cookies.balanceHint}
-                </span>
-                <span className="mt-1 block font-mono text-code opacity-60">
-                  {dict.cookies.weeklyLine}
-                </span>
-              </Row>
-            )}
-
             <Row term={copy.languageHeading}>
               <LocaleToggle current={locale} rest="/account" prefixed={false} />
             </Row>
@@ -250,27 +223,7 @@ export default async function AccountPage({
               </form>
               <p className="mt-4 font-mono text-code opacity-60">{copy.manageBillingHint}</p>
             </div>
-          ) : (
-            <aside data-account-cookies className="border border-accent p-6 sm:p-8">
-              <p className="font-display text-[clamp(1.35rem,2.2vw,1.75rem)] leading-[1] font-black uppercase">
-                {copy.cookiesHeading}
-              </p>
-              <p className="mt-4 text-body opacity-70">
-                {interpolate(copy.cookiesBody, {
-                  signup: String(SIGNUP_COOKIES),
-                  weekly: String(WEEKLY_COOKIES),
-                  pack: String(PACK_COOKIES),
-                  price: `$${PACK_PRICE_USD}`,
-                })}
-              </p>
-              <a
-                href={`/${locale}/pricing`}
-                className="text-accent mt-6 inline-block font-label text-label uppercase"
-              >
-                <TextSwap>{copy.cookiesCta} →</TextSwap>
-              </a>
-            </aside>
-          )}
+          ) : null}
         </div>
 
         {/* --- notifications (§3.5) -------------------------------------- */}
@@ -308,113 +261,18 @@ export default async function AccountPage({
           )}
         </div>
 
-        {/* --- §15.3 prompts you opened --------------------------------- */}
-        {viewer?.userId !== null && viewer !== null && (
-          <div className="mt-14 max-w-detail border-t border-hairline pt-10">
-            <p className="font-label text-eyebrow uppercase opacity-60">
-              {dict.cookies.recentHeading}
-            </p>
-
-            {unlockHistory.length === 0 ? (
-              <p className="mt-4 text-[0.9375rem] opacity-70">{dict.cookies.recentEmpty}</p>
-            ) : (
-              <ul className="mt-6 flex flex-col gap-4">
-                {unlockHistory.map((row) => (
-                  <li
-                    key={row.promptId}
-                    data-unlocked-prompt={row.slug}
-                    className="border border-hairline p-4"
-                  >
-                    <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-                      <span className="font-mono text-code">
-                        {locale === 'ko' && row.titleKo ? row.titleKo : row.title}
-                      </span>
-                      <span className="font-label text-eyebrow uppercase opacity-60">
-                        {interpolate(dict.cookies.openedOn, {
-                          date: formatDate(row.createdAt, locale) ?? '',
-                        })}
-                      </span>
-                    </div>
-                    {/* An unlock outlives the row's public life; only a published one links. */}
-                    {row.status === 'published' && (
-                      <a
-                        href={promptHref(locale, row.slug)}
-                        className="text-accent mt-3 inline-block font-label text-eyebrow uppercase"
-                      >
-                        <TextSwap>{dict.prompts.openLabel} →</TextSwap>
-                      </a>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        )}
-
-        {/* --- §13.1/E your submissions --------------------------------- */}
+        {/* --- activity: the two loops (docs/TEMPLATES-IA.md) ------------------------------- */}
         <div className="mt-14 max-w-detail border-t border-hairline pt-10">
-          <div className="flex flex-wrap items-baseline justify-between gap-4">
-            <p className="font-label text-eyebrow uppercase opacity-60">
-              {dict.submit.mySubmissions}
-            </p>
-            <span className="flex items-center gap-5">
-              {/* docs/CAMPAIGNS.md §6 — the creator's campaign standing lives on its own page. */}
-              <a href={MY_CAMPAIGNS_PATH} data-my-campaigns className="text-accent font-label text-eyebrow uppercase">
-                <TextSwap>{dict.campaigns.myCampaigns} →</TextSwap>
-              </a>
-              <a
-                href={PROMPT_SUBMIT_PATH}
-                className="text-accent font-label text-eyebrow uppercase"
-              >
-                <TextSwap>{dict.prompts.submitCta} →</TextSwap>
-              </a>
-            </span>
+          <p className="font-label text-eyebrow uppercase opacity-60">{copy.activityHeading}</p>
+          <p className="mt-2 text-[0.9375rem] opacity-70">{copy.activityBody}</p>
+          <div className="mt-5 flex flex-wrap items-center gap-x-6 gap-y-3">
+            <a href={MY_CAMPAIGNS_PATH} data-my-campaigns className="text-accent font-label text-eyebrow uppercase">
+              <TextSwap>{dict.campaigns.myCampaigns} →</TextSwap>
+            </a>
+            <a href={templatesHref(locale, 'video')} className="text-accent font-label text-eyebrow uppercase">
+              <TextSwap>{dict.templates.ctaVideo} →</TextSwap>
+            </a>
           </div>
-
-          {submissions.length === 0 ? (
-            <p className="mt-4 text-[0.9375rem] opacity-70">{dict.submit.mySubmissionsEmpty}</p>
-          ) : (
-            <ul className="mt-6 flex flex-col gap-4">
-              {submissions.map((row) => (
-                <li
-                  key={row.id}
-                  data-submission={row.slug}
-                  data-status={row.status}
-                  className="border border-hairline p-4"
-                >
-                  <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-                    <span className="font-mono text-code">{row.title}</span>
-                    <span className="font-label text-eyebrow uppercase opacity-60">
-                      {row.status === 'published'
-                        ? dict.submit.statusPublished
-                        : row.status === 'rejected'
-                          ? dict.submit.statusRejected
-                          : row.status === 'archived'
-                            ? dict.submit.statusArchived
-                            : dict.submit.statusPending}
-                    </span>
-                  </div>
-                  <p className="mt-1 font-mono text-[0.72rem] opacity-45">{row.slug}</p>
-                  {row.status === 'published' && (
-                    <a
-                      href={promptHref(locale, row.slug)}
-                      className="text-accent mt-3 inline-block font-label text-eyebrow uppercase"
-                    >
-                      <TextSwap>{dict.prompts.openLabel} →</TextSwap>
-                    </a>
-                  )}
-                  {row.status === 'rejected' && row.rejectReason && (
-                    <p className="mt-3 border-t border-hairline pt-3 text-[0.9375rem] opacity-70">
-                      <span className="font-label text-eyebrow uppercase opacity-60">
-                        {dict.submit.rejectReasonLabel}
-                      </span>
-                      <span className="mt-1 block">{row.rejectReason}</span>
-                    </p>
-                  )}
-                </li>
-              ))}
-            </ul>
-          )}
         </div>
 
         {/* --- account actions ------------------------------------------ */}

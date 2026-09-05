@@ -27,6 +27,25 @@ const nextConfig: NextConfig = {
       },
     ];
   },
+  /**
+   * docs/TEMPLATES-IA.md §2 — the prompt site's URLs, 308'd onto the template site's (2026-09-05).
+   *
+   * Config redirects are evaluated BEFORE middleware, which is what lets the two unprefixed app
+   * leaves (`/prompts/submit`, `/contests/{slug}/submit`) land on a public page instead of on the
+   * session gate that used to guard them. Permanent, because the old pages are gone for good and a
+   * crawler should move its index rather than keep asking.
+   */
+  async redirects() {
+    return [
+      { source: '/:locale(en|ko)/studio', destination: '/:locale/video', permanent: true },
+      { source: '/:locale(en|ko)/prompts', destination: '/:locale/video', permanent: true },
+      { source: '/:locale(en|ko)/prompts/:slug', destination: '/:locale/t/:slug', permanent: true },
+      { source: '/:locale(en|ko)/contests', destination: '/:locale/campaigns', permanent: true },
+      { source: '/:locale(en|ko)/contests/:slug', destination: '/:locale/campaigns', permanent: true },
+      { source: '/prompts/submit', destination: '/en/video', permanent: true },
+      { source: '/contests/:slug/submit', destination: '/en/campaigns', permanent: true },
+    ];
+  },
 };
 
 export default nextConfig;

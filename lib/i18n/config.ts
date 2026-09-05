@@ -24,36 +24,17 @@ export function isLocale(value: unknown): value is Locale {
 /**
  * Public paths carry a locale prefix; everything else is app surface.
  *
- * `/prompts/submit` is the §13.2 outlier and is listed DEEP on purpose: the gallery
- * (`/[locale]/prompts`) is public and locale-prefixed, while the submission form is login-gated,
- * `no-store` and `noindex`. Prefix matching is `=== p || startsWith(p + '/')`, so listing the two
- * segments gates the form without ever catching an unprefixed `/prompts`, which still 308s into
- * the reader's locale.
+ * Prefix matching is `=== p || startsWith(p + '/')`. The campaigns leaves that cannot be prefixes
+ * (`/campaigns/{slug}/apply`, `/campaigns/mine`) are matched by pattern below. (`/prompts/submit`
+ * and `/contests/{slug}/submit` were listed here until the prompt site retired, 2026-09-05; both
+ * now 308 to public pages from `next.config.ts`.)
  */
 export const APP_PREFIXES = [
   '/library',
   '/account',
   '/billing',
   '/admin',
-  '/prompts/submit',
 ] as const;
-
-/**
- * §14.2 — `/contests/{slug}/submit`, the one app path that cannot be expressed as a prefix.
- *
- * The entry form is scoped to a contest, so its slug sits in the MIDDLE of the path: everything
- * around it (`/{locale}/contests`, `/{locale}/contests/{slug}`) is public, locale-prefixed
- * marketing surface, and only the leaf is login-gated. A prefix entry would have to be `/contests`,
- * which would swallow the whole tab.
- *
- * Anchored at both ends on purpose: `/contests/x/submit/anything` is not this route and must not
- * inherit its gate by accident.
- */
-const CONTEST_SUBMIT_PATTERN = /^\/contests\/[^/]+\/submit\/?$/;
-
-export function isContestSubmitPath(pathname: string): boolean {
-  return CONTEST_SUBMIT_PATTERN.test(pathname);
-}
 
 /**
  * docs/CAMPAIGNS.md §6 — the campaigns surface has the same shape as contests: `/{locale}/campaigns`
@@ -71,7 +52,6 @@ export function isCampaignAppPath(pathname: string): boolean {
 export function isAppPath(pathname: string): boolean {
   return (
     APP_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`)) ||
-    isContestSubmitPath(pathname) ||
     isCampaignAppPath(pathname)
   );
 }
@@ -86,36 +66,6 @@ export function isAppPath(pathname: string): boolean {
  */
 export function isPlaybookDetailPath(rest: string): boolean {
   return rest === '/p' || rest.startsWith('/p/');
-}
-
-/**
- * §13.2 — `/[locale]/prompts/[slug]`, the prompts surface's viewer-shaped route.
- *
- * The same two independent properties as the playbook detail: indexable (a Pro-gated prompt page is
- * still public marketing surface — only the text is gated) and never stored (its HTML differs by
- * tier). The GALLERY is deliberately excluded: `/{locale}/prompts` is static, cached and identical
- * for everyone, which is the whole reason the card projection carries no text.
- *
- * `/prompts/submit` never reaches here — it is unprefixed app surface (`APP_PREFIXES`).
- */
-export function isPromptDetailPath(rest: string): boolean {
-  return rest.startsWith('/prompts/');
-}
-
-/**
- * §14.2 — `/[locale]/contests/[slug]`, the THIRD never-stored public route.
- *
- * The reason differs from the other two and is worth writing down: this page's HTML does not vary
- * by reader (there is no tier gate anywhere on the contests surface), it varies by CLOCK. Phase,
- * D-day and "submissions closed" all move on their own, and a shared cache holding "D-3" is a page
- * that tells a reader they have three days left on the morning after the deadline.
- *
- * The LISTING is deliberately excluded: `/{locale}/contests` is static and tag-revalidated, and its
- * countdown is calendar-day precision for exactly that reason (`lib/contests/phase.ts`).
- * `/contests/{slug}/submit` never reaches here — it is unprefixed app surface.
- */
-export function isContestDetailPath(rest: string): boolean {
-  return rest.startsWith('/contests/');
 }
 
 /** Splits `/ko/pricing` into `{ locale: 'ko', rest: '/pricing' }`; `null` locale when unprefixed. */

@@ -1,5 +1,6 @@
 import type { PromptCard as PromptCardData } from '@/lib/prompts/catalog';
-import { promptHref } from '@/lib/prompts/links';
+import { templateHref } from '@/lib/prompts/links';
+import { formatPrice, isForSale } from '@/lib/twings/products';
 import { badgeFor } from '@/lib/content/badges';
 import { PromptCardMedia } from './card-media';
 import { TypographicPoster } from './poster';
@@ -60,7 +61,8 @@ export function PromptCardView({
     <article
       data-prompt-card={card.slug}
       data-source={card.source}
-      data-locked={card.lock ?? 'false'}
+      data-medium={card.medium}
+      data-price={card.priceCents}
       className="card group relative block border border-hairline"
     >
       <div className="relative border-b border-hairline">
@@ -90,14 +92,14 @@ export function PromptCardView({
               </span>
             )}
           </span>
-          {/* The chip names the ACTION, not the fact of a gate (2026-08-15): a `free` prompt asks
-              for a sign-in and charges nothing, and saying COOKIE there was a price we do not take. */}
-          {card.lock && (
+          {/* docs/TEMPLATES-IA.md — the chip is the price of one render; a template not yet for
+              sale wears none rather than a promise it cannot keep. */}
+          {isForSale(card) && (
             <span
-              data-lock-chip={card.lock}
+              data-price-chip
               className="border border-white/35 bg-black/70 px-2 py-1 font-label text-[0.6875rem] leading-none tracking-[0.12em] text-white uppercase"
             >
-              {card.lock === 'cookie' ? labels.lockChip : labels.lockChipSignin}
+              {formatPrice(card.priceCents)}
             </span>
           )}
         </div>
@@ -120,7 +122,7 @@ export function PromptCardView({
 
         <h3 className="font-display text-[clamp(1.35rem,2vw,1.75rem)] leading-[0.95] font-black uppercase">
           <a
-            href={promptHref(locale, card.slug)}
+            href={templateHref(locale, card.slug)}
             className="after:absolute after:inset-0 after:content-['']"
           >
             {title}
@@ -146,7 +148,7 @@ export function PromptCardView({
            * `relative z-10` lifts it above the title's stretched `::after` so the press lands here.
            */}
           <a
-            href={promptHref(locale, card.slug)}
+            href={templateHref(locale, card.slug)}
             data-card-detail={card.slug}
             className="relative z-10 inline-flex min-h-11 items-center border border-hairline px-3 py-1.5 font-label text-[0.65rem] tracking-[0.12em] uppercase transition-opacity hover:opacity-70"
           >
