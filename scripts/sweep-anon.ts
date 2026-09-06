@@ -526,7 +526,29 @@ const CHROME_UA =
 async function sweepWebViewSignin(): Promise<void> {
   console.log('\n/auth/signin — the embedded-WebView gate (F1)');
 
-  const entry = '/auth/signin?next=%2Fen%2Fprompts&locale=en';
+  // docs/TEMPLATES-IA.md §8 — no provider named: the chooser, in the reader's language, with both doors.
+  const bare = await request('/auth/signin?next=%2Fen%2Fvideo&locale=en', { headers: { 'user-agent': CHROME_UA } });
+  expectOneOf('an unnamed provider is sent to the chooser', bare.status, [302, 303, 307]);
+  const bareTarget = bare.location ? new URL(bare.location, BASE) : null;
+  if (bareTarget?.pathname === '/auth/choose') ok('…at /auth/choose', `${bareTarget.pathname}${bareTarget.search}`);
+  else fail('bare signin redirect target', `expected /auth/choose, got ${bare.location}`);
+  const chooser = await request('/auth/choose?next=%2Fko%2Fvideo&locale=ko', { headers: { 'user-agent': CHROME_UA } });
+  expectEqual('the chooser renders 200', chooser.status, 200);
+  expectPresent('…as the designed page', chooser.body, 'data-auth-choose');
+  expectPresent('…with the Kakao door', chooser.body, 'data-auth-provider="kakao"');
+  expectPresent('…and the Google door', chooser.body, 'data-auth-provider="google"');
+  expectPresent('…Kakao first in Korean', chooser.body, '카카오로 시작하기');
+  if (chooser.body.indexOf('data-auth-provider="kakao"') < chooser.body.indexOf('data-auth-provider="google"')) ok('…listed first');
+  else fail('chooser order (ko)', 'Kakao should come before Google for a Korean reader');
+  expectPresent('…carrying the return path', chooser.body, 'next=%2Fko%2Fvideo');
+  expectPresent('…and noindex', chooser.body, 'noindex');
+  // Kakao is exempt from the WebView interstitial — KakaoTalk's browser can complete it.
+  const kakaoHop = await request('/auth/signin?provider=kakao&next=%2Fko%2Fvideo&locale=ko', { headers: { 'user-agent': KAKAOTALK_UA } });
+  expectOneOf('a Kakao sign-in from KakaoTalk redirects', kakaoHop.status, [302, 303, 307]);
+  if (kakaoHop.location && !kakaoHop.location.includes('/auth/open-in-browser')) ok('…without the interstitial', kakaoHop.location);
+  else fail('kakao webview handling', `expected no interstitial, got ${kakaoHop.location}`);
+
+  const entry = '/auth/signin?provider=google&next=%2Fen%2Fvideo&locale=en';
   const webview = await request(entry, { headers: { 'user-agent': INSTAGRAM_UA } });
   expectOneOf('an Instagram UA is redirected', webview.status, [302, 303, 307]);
   const target = webview.location ? new URL(webview.location, BASE) : null;
@@ -545,13 +567,13 @@ async function sweepWebViewSignin(): Promise<void> {
   expectPresent('…with the display heading', page.body, 'OPEN IN YOUR BROWSER.');
   expectPresent('…and the copyable absolute target', page.body, 'data-webview-next');
   expectPresent('…which is absolute', page.body, 'http');
-  expectPresent('…and points at the next target', page.body, '/en/prompts');
+  expectPresent('…and points at the next target', page.body, '/en/video');
   if (page.cacheControl?.includes('no-store')) ok('…never cached', page.cacheControl);
   else fail('interstitial cache-control', `expected no-store, got ${page.cacheControl}`);
   expectPresent('…and noindex', page.body, 'noindex');
 
   // The KO surface, through the KakaoTalk UA the founder's traffic actually carries.
-  const koEntry = '/auth/signin?next=%2Fko%2Fprompts&locale=ko';
+  const koEntry = '/auth/signin?provider=google&next=%2Fko%2Fvideo&locale=ko';
   const koHop = await request(koEntry, { headers: { 'user-agent': KAKAOTALK_UA } });
   const koTarget = koHop.location ? new URL(koHop.location, BASE) : null;
   if (koTarget?.pathname === '/auth/open-in-browser') {

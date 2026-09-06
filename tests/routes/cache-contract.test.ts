@@ -182,6 +182,8 @@ describe('route cache modes (§3.4 / §4)', () => {
       // viewer's own rows; the three admin screens are admin surface.
       ['app', '(app)', 'campaigns', '[slug]', 'apply', 'page.tsx'],
       ['app', '(app)', 'campaigns', 'mine', 'page.tsx'],
+      // docs/TEMPLATES-IA.md §8 — the sign-in door, under the (app) root like the WebView interstitial.
+      ['app', '(app)', 'auth', 'choose', 'page.tsx'],
       ['app', '(admin)', 'admin', 'campaigns', 'page.tsx'],
       ['app', '(admin)', 'admin', 'campaigns', 'new', 'page.tsx'],
       ['app', '(admin)', 'admin', 'campaigns', '[id]', 'page.tsx'],
@@ -600,5 +602,30 @@ describe('templates route contract (docs/TEMPLATES-IA.md)', () => {
     for (const needle of ['/studio', 'contestsHref', 'promptsHref(locale)']) {
       expect(chrome.includes(needle), `nav must not offer ${needle}`).toBe(false);
     }
+  });
+});
+
+/**
+ * docs/TEMPLATES-IA.md §8 — two OAuth doors. The sign-in handler never trusts the provider string:
+ * anything outside the vocabulary lands on the chooser, and only Google is routed through the
+ * embedded-WebView interstitial (Kakao's login works inside KakaoTalk's own browser).
+ */
+describe('sign-in doors (Google + Kakao)', () => {
+  it('routes an unnamed or unknown provider to the chooser and the named ones to Supabase', () => {
+    const route = read('app', 'auth', 'signin', 'route.ts');
+    expect(route).toContain('isAuthProvider(rawProvider)');
+    expect(route).toContain('chooseProviderHref(next, locale)');
+    expect(route).toContain('needsRealBrowser(provider) && isEmbeddedWebView');
+    expect(route).toMatch(/signInWithOAuth\(\{\s*provider,/); // CRLF-safe: the shape, not the line ending
+    expect(route).not.toContain("provider: 'google'");
+  });
+
+  it('lists Kakao first for a Korean reader and Google first otherwise', async () => {
+    const { providersForLocale, isAuthProvider, needsRealBrowser } = await import('@/lib/auth/providers');
+    expect(providersForLocale('ko')).toEqual(['kakao', 'google']);
+    expect(providersForLocale('en')).toEqual(['google', 'kakao']);
+    expect(isAuthProvider('naver')).toBe(false);
+    expect(needsRealBrowser('kakao')).toBe(false);
+    expect(needsRealBrowser('google')).toBe(true);
   });
 });
