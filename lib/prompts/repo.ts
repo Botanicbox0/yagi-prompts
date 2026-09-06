@@ -40,6 +40,10 @@ export interface PromptRow {
   priceCents: number;
   /** Films only; null for an image template (CHECK in 0015). */
   runtimeSeconds: number | null;
+  /** docs/TEMPLATES-IA.md §7 — the render engine (lib/images/engines.ts ids); null = the medium's default. */
+  engine: string | null;
+  /** The aspect the make step opens in ('4:5', '9:16', …); null = the medium's default. */
+  aspectDefault: string | null;
   rejectReason: string | null;
   createdAt: string | null;
   publishedAt: string | null;
@@ -66,6 +70,8 @@ interface RawRow {
   medium: TemplateMedium;
   price_cents: number;
   runtime_seconds: number | null;
+  engine: string | null;
+  aspect_default: string | null;
   reject_reason: string | null;
   created_at: Date | string | null;
   published_at: Date | string | null;
@@ -74,7 +80,7 @@ interface RawRow {
 const COLUMNS = `id, slug, source, author_id, author_handle, status, models, title, title_ko,
                  prompt_text, process_md, process_md_ko, source_url,
                  text_visibility::text as text_visibility, media, use_case, featured,
-                 medium, price_cents, runtime_seconds,
+                 medium, price_cents, runtime_seconds, engine, aspect_default,
                  reject_reason, created_at, published_at`;
 
 /** §13.2 — the one ordering, so the gallery, the admin list and the sitemap never disagree. */
@@ -107,6 +113,8 @@ function toRow(raw: RawRow): PromptRow {
     medium: raw.medium,
     priceCents: raw.price_cents,
     runtimeSeconds: raw.runtime_seconds,
+    engine: raw.engine,
+    aspectDefault: raw.aspect_default,
     rejectReason: raw.reject_reason,
     createdAt: toIso(raw.created_at),
     publishedAt: toIso(raw.published_at),
@@ -268,6 +276,8 @@ export interface InsertPromptArgs {
   medium?: TemplateMedium;
   priceCents?: number;
   runtimeSeconds?: number | null;
+  engine?: string | null;
+  aspectDefault?: string | null;
   /**
    * Written in the SAME statement as the status, never after it: the
    * `prompt_items_reject_reason_present` CHECK fires at INSERT, so a two-step "insert rejected,
@@ -284,11 +294,11 @@ export async function insertPrompt(sql: SqlRunner, args: InsertPromptArgs): Prom
        (id, slug, source, author_id, author_handle, status, models, title, title_ko,
         prompt_text, process_md, process_md_ko, source_url,
         text_visibility, media, use_case, featured, reject_reason, published_at,
-        medium, price_cents, runtime_seconds)
+        medium, price_cents, runtime_seconds, engine, aspect_default)
      values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
              $14::visibility, $15::jsonb, $16, $17, $18,
              case when $19::boolean then now() else null end,
-             $20, $21, $22)`,
+             $20, $21, $22, $23, $24)`,
     [
       args.id,
       args.slug,
@@ -312,6 +322,8 @@ export async function insertPrompt(sql: SqlRunner, args: InsertPromptArgs): Prom
       args.medium ?? 'video',
       args.priceCents ?? 0,
       args.runtimeSeconds ?? null,
+      args.engine ?? null,
+      args.aspectDefault ?? null,
     ],
   );
 }
@@ -346,6 +358,8 @@ export interface UpdatePromptArgs {
   medium?: TemplateMedium;
   priceCents?: number;
   runtimeSeconds?: number | null;
+  engine?: string | null;
+  aspectDefault?: string | null;
 }
 
 export async function updatePrompt(sql: SqlRunner, args: UpdatePromptArgs): Promise<boolean> {
@@ -356,7 +370,9 @@ export async function updatePrompt(sql: SqlRunner, args: UpdatePromptArgs): Prom
             process_md = $10, process_md_ko = $11, source_url = $12, models = $13,
             medium = coalesce($14, medium),
             price_cents = coalesce($15::int, price_cents),
-            runtime_seconds = case when $16::boolean then $17::int else runtime_seconds end
+            runtime_seconds = case when $16::boolean then $17::int else runtime_seconds end,
+            engine = case when $18::boolean then $19::text else engine end,
+            aspect_default = case when $20::boolean then $21::text else aspect_default end
       where id = $1
       returning id`,
     [
@@ -377,6 +393,10 @@ export async function updatePrompt(sql: SqlRunner, args: UpdatePromptArgs): Prom
       args.priceCents ?? null,
       args.runtimeSeconds !== undefined,
       args.runtimeSeconds ?? null,
+      args.engine !== undefined,
+      args.engine ?? null,
+      args.aspectDefault !== undefined,
+      args.aspectDefault ?? null,
     ],
   );
   return rows.length > 0;

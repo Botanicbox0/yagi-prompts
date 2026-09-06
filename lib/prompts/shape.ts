@@ -37,6 +37,8 @@ export interface PromptRowInput {
   medium?: TemplateMedium;
   priceCents?: number;
   runtimeSeconds?: number | null;
+  engine?: string | null;
+  aspectDefault?: string | null;
   /** The "how it was made" markdown, per locale (2026-08-14). */
   processMd?: string | null;
   processMdKo?: string | null;
@@ -78,6 +80,8 @@ interface ShapedPromptBase {
   medium: TemplateMedium;
   priceCents: number;
   runtimeSeconds: number | null;
+  engine: string | null;
+  aspectDefault: string | null;
   publishedAt: string | null;
   poster: ShapedPromptMedia | null;
   video: ShapedPromptMedia | null;
@@ -199,6 +203,8 @@ export function shapePrompt(
     medium: row.medium ?? 'video',
     priceCents: row.priceCents ?? 0,
     runtimeSeconds: row.runtimeSeconds ?? null,
+    engine: row.engine ?? null,
+    aspectDefault: row.aspectDefault ?? null,
     publishedAt: row.publishedAt,
     poster,
     video,

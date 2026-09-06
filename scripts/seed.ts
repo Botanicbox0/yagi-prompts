@@ -605,6 +605,8 @@ export async function seedPrompts(opts: SeedOptions): Promise<PromptSeedResult[]
       medium: fixture.medium ?? 'video',
       priceCents: fixture.priceCents ?? 0,
       runtimeSeconds: fixture.medium === 'image' ? null : (fixture.runtimeSeconds ?? null),
+      engine: fixture.engine ?? null,
+      aspectDefault: fixture.aspectDefault ?? null,
       publishedAt: published ? 'now' : null,
     });
 

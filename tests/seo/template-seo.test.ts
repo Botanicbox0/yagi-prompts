@@ -100,6 +100,8 @@ describe('template metadata (docs/TEMPLATES-IA.md SEO)', () => {
     medium: 'video',
     priceCents: 400,
     runtimeSeconds: 15,
+    engine: null,
+    aspectDefault: null,
     poster,
     video,
     lock: null,

@@ -34,6 +34,9 @@ export interface PromptCard {
   /** One render in USD cents; 0 = not for sale yet. */
   priceCents: number;
   runtimeSeconds: number | null;
+  /** Render engine id and opening aspect; null = the medium's default (lib/images/engines.ts). */
+  engine: string | null;
+  aspectDefault: string | null;
   poster: ShapedPromptMedia | null;
   video: ShapedPromptMedia | null;
   /**
@@ -105,6 +108,8 @@ export function toPromptCard(row: PromptRow, options: PromptCatalogOptions = {})
     medium: row.medium,
     priceCents: row.priceCents,
     runtimeSeconds: row.runtimeSeconds,
+    engine: row.engine,
+    aspectDefault: row.aspectDefault,
     poster,
     video,
     lock: promptLock(row.textVisibility),
