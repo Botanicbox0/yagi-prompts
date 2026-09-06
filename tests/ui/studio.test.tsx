@@ -30,6 +30,7 @@ const labels: StudioLabels = {
   needPhoto: dict.studio.needPhoto,
   noStyles: dict.studio.noStyles,
   moreTemplates: dict.studio.moreTemplates,
+  aspectLabel: dict.studio.aspectLabel,
 };
 
 const styles: StudioStyle[] = [
@@ -42,6 +43,11 @@ const styles: StudioStyle[] = [
     posterSrc: '/p.jpg',
     videoSrc: '/v.mp4',
     moreHref: '/en/video',
+    aspects: [
+      { id: '9:16', label: '9:16 · Reels & stories' },
+      { id: '16:9', label: '16:9 · Landscape' },
+    ],
+    defaultAspect: '9:16',
   },
 ];
 
@@ -79,6 +85,13 @@ describe('the studio on a template page (one style)', () => {
     expect(html).not.toContain(dict.studio.chooseStyle);
     expect(html).not.toContain(`2. ${dict.studio.stepStyle}`);
     expect(html).toContain(`2. ${dict.studio.stepPay}`);
+  });
+
+  it("opens in the template's default aspect and offers the others", () => {
+    expect(html).toContain('data-aspect="9:16"');
+    expect(html).toContain('data-aspect-picker');
+    expect(html).toMatch(/data-aspect-option="9:16"[^>]*aria-pressed="true"/);
+    expect(html).toMatch(/data-aspect-option="16:9"[^>]*aria-pressed="false"/);
   });
 
   it('still asks for the photo first and keeps the demo badge', () => {

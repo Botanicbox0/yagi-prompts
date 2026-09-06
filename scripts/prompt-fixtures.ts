@@ -51,6 +51,8 @@ export interface PromptFixture {
   medium?: TemplateMedium;
   priceCents?: number;
   runtimeSeconds?: number;
+  engine?: string;
+  aspectDefault?: string;
 }
 
 const png = (label: string, w: number, h: number): AssetSpec => ({
@@ -87,6 +89,8 @@ const YAGI: PromptFixture[] = [
     slug: 'neon-alley-dolly',
     priceCents: 400,
     runtimeSeconds: 15,
+    engine: 'seedance-2.0',
+    aspectDefault: '16:9',
     source: 'yagi',
     status: 'published',
     title: 'Neon alley dolly',
@@ -186,6 +190,8 @@ const YAGI: PromptFixture[] = [
     slug: 'static-portrait-window-light',
     medium: 'image',
     priceCents: 200,
+    engine: 'gpt-image-2',
+    aspectDefault: '4:5',
     source: 'yagi',
     status: 'published',
     title: 'Static portrait, window light',

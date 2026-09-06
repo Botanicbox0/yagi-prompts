@@ -1,3 +1,4 @@
+import { IMAGE_ASPECTS, IMAGE_ENGINES, IMAGE_ENGINE_IDS, VIDEO_ASPECTS, VIDEO_ENGINE_IDS } from '@/lib/images/engines';
 import { formatDate } from '@/lib/i18n/format';
 import { PROMPT_TEXT_MAX, PROMPT_TEXT_MIN, TEMPLATE_MEDIA } from '@/lib/prompts/schemas';
 import { promptHref } from '@/lib/prompts/links';
@@ -238,6 +239,36 @@ export function PromptFields({ row, dict }: { row: PromptRow | null; dict: Dict 
         </Field>
         <Field label={a.fieldTemplateRuntime} hint={a.templateRuntimeHint}>
           <input type="number" name="runtimeSeconds" min={1} step={1} defaultValue={row?.runtimeSeconds ?? ''} className={INPUT} />
+        </Field>
+      </div>
+
+      {/* docs/TEMPLATES-IA.md §7 — the engine and the aspect the make step opens in. Both lists are
+          the union across media; the operation refuses a pairing that does not match the output. */}
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field label={a.fieldTemplateEngine} hint={a.templateEngineHint}>
+          <select name="engine" defaultValue={row?.engine ?? ''} className={INPUT}>
+            <option value="">{a.templateEngineDefault}</option>
+            {VIDEO_ENGINE_IDS.map((id) => (
+              <option key={id} value={id}>
+                {a.templateMedia.video} · {id}
+              </option>
+            ))}
+            {IMAGE_ENGINE_IDS.map((id) => (
+              <option key={id} value={id}>
+                {a.templateMedia.image} · {IMAGE_ENGINES[id].label}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label={a.fieldTemplateAspect} hint={a.templateAspectHint}>
+          <select name="aspectDefault" defaultValue={row?.aspectDefault ?? ''} className={INPUT}>
+            <option value="">{a.templateAspectDefault}</option>
+            {[...new Set([...IMAGE_ASPECTS, ...VIDEO_ASPECTS])].map((aspect) => (
+              <option key={aspect} value={aspect}>
+                {dict.templates.aspects[aspect as keyof typeof dict.templates.aspects] ?? aspect}
+              </option>
+            ))}
+          </select>
         </Field>
       </div>
 

@@ -13,6 +13,7 @@ import { campaignHref } from '@/lib/campaigns/links';
 import { isCampaignPublic } from '@/lib/campaigns/state';
 import { payoutHeadline } from '@/lib/campaigns/copy';
 import { formatPrice, isForSale } from '@/lib/twings/products';
+import { aspectsForMedium, defaultAspect, engineLabel, resolveEngine } from '@/lib/images/engines';
 import { signInHref } from '@/lib/billing/links';
 import { templateMetadata, unresolvedTemplateMetadata } from '@/lib/seo/template-metadata';
 import { MarketingFooter, MarketingNav, adLabels } from '@/components/marketing/chrome';
@@ -99,6 +100,8 @@ export default async function TemplatePage({ params }: RouteParams) {
         posterSrc: card.poster?.src ?? null,
         videoSrc: card.video?.src ?? null,
         moreHref: templatesHref(locale, card.medium),
+        aspects: aspectsForMedium(card.medium).map((id) => ({ id, label: t.aspects[id as keyof typeof t.aspects] ?? id })),
+        defaultAspect: card.aspectDefault ?? defaultAspect(card.medium),
       }
     : null;
 
@@ -130,7 +133,8 @@ export default async function TemplatePage({ params }: RouteParams) {
               <div>
                 <p className="flex flex-wrap items-center gap-x-3 gap-y-1 font-label text-eyebrow uppercase">
                   <span data-medium-chip className="text-accent">{dict.nav[card.medium]}</span>
-                  <span className="opacity-60">{card.modelLabels.join(' · ')}</span>
+                  {/* The engine this template renders on — not the models the recipe was tried on. */}
+                  <span data-engine-chip className="opacity-60">{engineLabel(resolveEngine(card.engine, card.medium))}</span>
                 </p>
                 <h1 className="mt-5 font-display text-[clamp(2.2rem,5vw,4rem)] leading-[0.92] font-black uppercase">{title}</h1>
                 <p className="mt-4 font-label text-[0.7rem] tracking-[0.12em] uppercase opacity-60">{credit}</p>
@@ -203,6 +207,7 @@ export default async function TemplatePage({ params }: RouteParams) {
                     needPhoto: dict.studio.needPhoto,
                     noStyles: dict.studio.noStyles,
                     moreTemplates: dict.studio.moreTemplates,
+                    aspectLabel: dict.studio.aspectLabel,
                   }}
                 />
               )}

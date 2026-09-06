@@ -27,7 +27,9 @@ describe('prompt catalog projection (§13.2)', () => {
   it('exposes exactly the §13.2 card fields — and `text` is not one of them', () => {
     const card = catalog.yagi[0]!;
     expect(Object.keys(card).sort()).toEqual([
+      'aspectDefault',
       'authorHandle',
+      'engine',
       'featured',
       'id',
       'lock',

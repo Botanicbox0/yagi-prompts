@@ -26,6 +26,9 @@ export interface StudioStyle {
   videoSrc: string | null;
   /** Where "see more" goes from the result — the catalogue this template belongs to. */
   moreHref: string;
+  /** The aspects a visitor may pick for this style, and the one it opens in (founder, 2026-09-06). */
+  aspects: Array<{ id: string; label: string }>;
+  defaultAspect: string;
 }
 
 export interface StudioLabels {
@@ -49,6 +52,7 @@ export interface StudioLabels {
   needPhoto: string;
   noStyles: string;
   moreTemplates: string;
+  aspectLabel: string;
 }
 
 type Phase = 'photo' | 'style' | 'pay' | 'rendering' | 'result';
@@ -70,6 +74,7 @@ export function TwingsStudio({
   const [phase, setPhase] = useState<Phase>('photo');
   const [photo, setPhoto] = useState<string | null>(null);
   const [styleId, setStyleId] = useState<string>(initialStyleId ?? styles[0]?.id ?? '');
+  const [aspect, setAspect] = useState<string>(styles.find((item) => item.id === (initialStyleId ?? styles[0]?.id))?.defaultAspect ?? styles[0]?.defaultAspect ?? '');
   const [progress, setProgress] = useState(0);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -128,7 +133,7 @@ export function TwingsStudio({
   })();
 
   return (
-    <section data-twings-studio data-phase={phase} data-single={single ? 'true' : 'false'} className="mt-10">
+    <section data-twings-studio data-phase={phase} data-single={single ? 'true' : 'false'} data-aspect={aspect} className="mt-10">
       {/* The one honest label the whole screen hangs on. */}
       <p
         data-demo-badge
@@ -217,6 +222,7 @@ export function TwingsStudio({
                         aria-pressed={style.id === styleId}
                         onClick={() => {
                           setStyleId(style.id);
+                          setAspect(style.defaultAspect);
                           if (photo) setPhase('pay');
                         }}
                         className={[
@@ -242,6 +248,30 @@ export function TwingsStudio({
                     ))}
                   </div>
                 </>
+              )}
+
+              {/* The aspect: Instagram's feed (4:5) by default, the rest one press away. */}
+              {chosen && chosen.aspects.length > 1 && (
+                <fieldset data-aspect-picker className="mt-5">
+                  <legend className="font-label text-eyebrow uppercase opacity-60">{labels.aspectLabel}</legend>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {chosen.aspects.map((option) => (
+                      <button
+                        key={option.id}
+                        type="button"
+                        data-aspect-option={option.id}
+                        aria-pressed={option.id === aspect}
+                        onClick={() => setAspect(option.id)}
+                        className={[
+                          'border px-3 py-1.5 font-label text-[0.68rem] tracking-[0.12em] uppercase transition-opacity',
+                          option.id === aspect ? 'border-accent text-accent' : 'border-hairline opacity-60 hover:opacity-100',
+                        ].join(' ')}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                </fieldset>
               )}
 
               <div className="mt-auto pt-6">

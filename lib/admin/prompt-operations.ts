@@ -31,6 +31,7 @@ import {
   type PromptMedia,
 } from '@/lib/prompts/schemas';
 import { ADMIN_PROMPTS_PATH } from '@/lib/prompts/links';
+import { aspectsForMedium, enginesForMedium } from '@/lib/images/engines';
 import { fail, ok, type AdminContext, type AdminOutcome } from './context';
 import * as f from './form';
 import type { AdminOperation, ParseResult } from './operations';
@@ -90,11 +91,23 @@ function chips(form: FormData, name: string): string[] {
  * their own so the authoring and edit schemas stay what §13 pinned; whole USD cents, and a runtime
  * only for a film (the 0015 CHECK refuses one on an image, so it is dropped here rather than sent).
  */
-const TemplateFields = z.object({
-  medium: z.enum(TEMPLATE_MEDIA),
-  priceCents: z.number().int().min(0).max(1_000_000),
-  runtimeSeconds: z.number().int().positive().max(600).nullable(),
-});
+const TemplateFields = z
+  .object({
+    medium: z.enum(TEMPLATE_MEDIA),
+    priceCents: z.number().int().min(0).max(1_000_000),
+    runtimeSeconds: z.number().int().positive().max(600).nullable(),
+    /** docs/TEMPLATES-IA.md §7 — null = the medium's default; a named engine must be one of its medium's. */
+    engine: z.string().nullable(),
+    aspectDefault: z.string().nullable(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.engine !== null && !(enginesForMedium(value.medium) as readonly string[]).includes(value.engine)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['engine'], message: `not a ${value.medium} engine` });
+    }
+    if (value.aspectDefault !== null && !(aspectsForMedium(value.medium) as readonly string[]).includes(value.aspectDefault)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['aspectDefault'], message: `not a ${value.medium} aspect` });
+    }
+  });
 
 function templateFields(form: FormData): ParseResult<z.infer<typeof TemplateFields>> {
   const medium = f.str(form, 'medium') || 'video';
@@ -103,6 +116,8 @@ function templateFields(form: FormData): ParseResult<z.infer<typeof TemplateFiel
     medium,
     priceCents: f.optionalInt(form, 'priceCents') ?? 0,
     runtimeSeconds: medium === 'image' ? null : (runtime ?? null),
+    engine: f.str(form, 'engine') || null,
+    aspectDefault: f.str(form, 'aspectDefault') || null,
   });
 }
 
