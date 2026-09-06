@@ -537,9 +537,11 @@ async function sweepWebViewSignin(): Promise<void> {
   expectPresent('…as the designed page', chooser.body, 'data-auth-choose');
   expectPresent('…with the Kakao door', chooser.body, 'data-auth-provider="kakao"');
   expectPresent('…and the Google door', chooser.body, 'data-auth-provider="google"');
-  expectPresent('…Kakao first in Korean', chooser.body, '카카오로 시작하기');
-  if (chooser.body.indexOf('data-auth-provider="kakao"') < chooser.body.indexOf('data-auth-provider="google"')) ok('…listed first');
-  else fail('chooser order (ko)', 'Kakao should come before Google for a Korean reader');
+  expectPresent('…in Korean', chooser.body, '카카오로 시작하기');
+  if (chooser.body.indexOf('data-auth-provider="google"') < chooser.body.indexOf('data-auth-provider="kakao"')) ok('…Google listed first');
+  else fail('chooser order', 'Google should come before Kakao (founder, 2026-09-06)');
+  expectPresent('…with the Google mark', chooser.body, 'fill="#4285F4"');
+  expectPresent('…and the Kakao symbol', chooser.body, 'fill="#000000" fill-opacity="0.85"');
   expectPresent('…carrying the return path', chooser.body, 'next=%2Fko%2Fvideo');
   expectPresent('…and noindex', chooser.body, 'noindex');
   // Kakao is exempt from the WebView interstitial — KakaoTalk's browser can complete it.

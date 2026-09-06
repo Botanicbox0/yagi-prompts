@@ -51,6 +51,7 @@ export const en = {
     chooseTitle: 'HOW DO YOU\nWANT TO START?',
     chooseBody: 'One account keeps your films, images and campaign standing in one place. Start with Google or Kakao.',
     chooseNote: 'We take your name and email only. Your photo is used to make your result and is not kept without consent.',
+    chooseBack: 'Back',
     signedInAs: 'Signed in as',
     signInRequired: 'Sign in to open the library.',
     adminOnly: 'Admins only.',

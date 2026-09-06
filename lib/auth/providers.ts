@@ -3,9 +3,9 @@
  * 가입하기가 가능하면 좀 편할 것 같다").
  *
  * Both are Supabase Auth providers, so the round trip is the same code path with a different
- * `provider` string; what differs is the DOOR: Kakao first for a Korean reader, Google first for
- * everyone else, and the embedded-WebView interstitial (F1) applies to Google only — Kakao login
- * works inside KakaoTalk's own browser, which is where Korean readers arrive from.
+ * `provider` string; what differs is the DOOR page, and the embedded-WebView interstitial (F1),
+ * which applies to Google only — Kakao login works inside KakaoTalk's own browser, which is where
+ * Korean readers arrive from.
  */
 export const AUTH_PROVIDERS = ['google', 'kakao'] as const;
 export type AuthProvider = (typeof AUTH_PROVIDERS)[number];
@@ -14,9 +14,13 @@ export function isAuthProvider(value: unknown): value is AuthProvider {
   return typeof value === 'string' && (AUTH_PROVIDERS as readonly string[]).includes(value);
 }
 
-/** The order the chooser lists the doors in, by locale. */
-export function providersForLocale(locale: string): readonly AuthProvider[] {
-  return locale === 'ko' ? ['kakao', 'google'] : ['google', 'kakao'];
+/**
+ * The order the chooser lists the doors in: Google first everywhere (founder, 2026-09-06 —
+ * "구글을 맨 위로"), Kakao second. One order for both locales, so the page reads the same whichever
+ * language it opens in; the locale argument stays so a later A/B can bring the per-locale order back.
+ */
+export function providersForLocale(_locale: string): readonly AuthProvider[] {
+  return AUTH_PROVIDERS;
 }
 
 /** Google refuses OAuth inside embedded WebViews; Kakao does not. */

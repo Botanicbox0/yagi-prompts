@@ -620,9 +620,9 @@ describe('sign-in doors (Google + Kakao)', () => {
     expect(route).not.toContain("provider: 'google'");
   });
 
-  it('lists Kakao first for a Korean reader and Google first otherwise', async () => {
+  it('lists Google first, Kakao second, in both languages (founder, 2026-09-06)', async () => {
     const { providersForLocale, isAuthProvider, needsRealBrowser } = await import('@/lib/auth/providers');
-    expect(providersForLocale('ko')).toEqual(['kakao', 'google']);
+    expect(providersForLocale('ko')).toEqual(['google', 'kakao']);
     expect(providersForLocale('en')).toEqual(['google', 'kakao']);
     expect(isAuthProvider('naver')).toBe(false);
     expect(needsRealBrowser('kakao')).toBe(false);
