@@ -18,6 +18,9 @@ import {
 } from '@/lib/notify/preferences';
 import { MY_CAMPAIGNS_PATH } from '@/lib/campaigns/links';
 import { templatesHref } from '@/lib/prompts/links';
+import { listMyRenders, type RenderView } from '@/lib/renders/service';
+import { RENDERS_PATH } from '@/lib/renders/share';
+import { RenderList } from '@/components/renders/render-list';
 import { saveNotificationPreferences } from './actions';
 
 /**
@@ -108,6 +111,7 @@ export default async function AccountPage({
   let viewer = null as Awaited<ReturnType<typeof getViewer>> | null;
   let subscription: SubscriptionRecord | null = null;
   let preferences: NotificationPreferences = PREFERENCES_OFF;
+  let renders: RenderView[] = [];
   try {
     viewer = await getViewer();
     if (viewer.userId !== null) {
@@ -115,6 +119,7 @@ export default async function AccountPage({
       if (sql !== null) {
         subscription = await loadSubscription(sql, viewer.userId);
         preferences = (await loadPreferences(sql, viewer.userId)) ?? PREFERENCES_OFF;
+        renders = await listMyRenders(sql, viewer.userId, 3);
       }
     }
   } catch {
@@ -265,7 +270,15 @@ export default async function AccountPage({
         <div className="mt-14 max-w-detail border-t border-hairline pt-10">
           <p className="font-label text-eyebrow uppercase opacity-60">{copy.activityHeading}</p>
           <p className="mt-2 text-[0.9375rem] opacity-70">{copy.activityBody}</p>
+          {renders.length > 0 && (
+            <div className="mt-6">
+              <RenderList items={renders} locale={locale} dict={dict} />
+            </div>
+          )}
           <div className="mt-5 flex flex-wrap items-center gap-x-6 gap-y-3">
+            <a href={RENDERS_PATH} data-my-renders className="text-accent font-label text-eyebrow uppercase">
+              <TextSwap>{dict.renders.title} →</TextSwap>
+            </a>
             <a href={MY_CAMPAIGNS_PATH} data-my-campaigns className="text-accent font-label text-eyebrow uppercase">
               <TextSwap>{dict.campaigns.myCampaigns} →</TextSwap>
             </a>

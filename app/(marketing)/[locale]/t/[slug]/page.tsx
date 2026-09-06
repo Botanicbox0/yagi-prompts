@@ -186,6 +186,14 @@ export default async function TemplatePage({ params }: RouteParams) {
                 <TwingsStudio
                   styles={[style]}
                   initialStyleId={style.id}
+                  live={{
+                    endpoint: '/api/renders',
+                    accessEndpoint: '/api/renders/access',
+                    template: card.slug,
+                    locale,
+                    signinHref: signInHref(`${templateHref(locale, slug)}#make`, locale),
+                    labels: { badge: dict.renders.studio.badge, submitting: dict.renders.studio.submitting, errors: dict.renders.studio.errors },
+                  }}
                   labels={{
                     stepPhoto: dict.studio.stepPhoto,
                     stepStyle: dict.studio.stepStyle,

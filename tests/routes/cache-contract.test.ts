@@ -184,6 +184,15 @@ describe('route cache modes (§3.4 / §4)', () => {
       ['app', '(app)', 'campaigns', 'mine', 'page.tsx'],
       // docs/TEMPLATES-IA.md §8 — the sign-in door, under the (app) root like the WebView interstitial.
       ['app', '(app)', 'auth', 'choose', 'page.tsx'],
+      // docs/TEMPLATES-IA.md §8 — the render queue: the owner's pages, the 3-day link, its routes.
+      ['app', '(app)', 'renders', 'page.tsx'],
+      ['app', '(app)', 'renders', '[id]', 'page.tsx'],
+      ['app', '(app)', 'r', '[id]', '[token]', 'page.tsx'],
+      ['app', 'api', 'renders', 'route.ts'],
+      ['app', 'api', 'renders', 'access', 'route.ts'],
+      ['app', 'api', 'renders', 'tick', 'route.ts'],
+      ['app', 'api', 'renders', 'callback', 'route.ts'],
+      ['app', 'api', 'renders', 'media', '[id]', 'route.ts'],
       ['app', '(admin)', 'admin', 'campaigns', 'page.tsx'],
       ['app', '(admin)', 'admin', 'campaigns', 'new', 'page.tsx'],
       ['app', '(admin)', 'admin', 'campaigns', '[id]', 'page.tsx'],
@@ -637,5 +646,54 @@ describe('sign-in doors (Google + Kakao)', () => {
     expect(page).toContain("legalHref(locale, 'privacy')");
     expect(page).not.toContain('startWithKakao');
     expect(page).not.toContain('chooseBody');
+  });
+});
+
+/**
+ * docs/TEMPLATES-IA.md §8 — the render queue. The owner's pages sit behind the session gate, the
+ * 3-day link is public by token and never enters middleware (no locale redirect, no gate), every
+ * route is `private, no-store`, and the enqueue request runs the pass AFTER its response.
+ */
+describe('render queue (docs/TEMPLATES-IA.md §8)', () => {
+  it('gates the owner pages at the edge and keeps the 3-day link outside middleware', () => {
+    expect(isAppPath('/renders')).toBe(true);
+    expect(isAppPath('/renders/11111111-1111-4111-8111-111111111111')).toBe(true);
+    expect(isAppPath('/r/11111111-1111-4111-8111-111111111111/token')).toBe(false);
+    expect(read('middleware.ts')).toContain('|auth/|r/|');
+  });
+
+  it('keeps every render surface out of the index and on the daily tick', () => {
+    const sitemap = read('lib', 'seo', 'sitemap.ts');
+    expect(sitemap).toContain("'/renders'");
+    expect(sitemap).toContain("'/r/'");
+    const vercel = JSON.parse(read('vercel.json')) as { crons?: Array<{ path: string; schedule: string }> };
+    expect(vercel.crons).toEqual([{ path: '/api/renders/tick', schedule: expect.stringMatching(/^\d+ \d+ \* \* \*$/) }]);
+  });
+
+  it('never lets a render response enter a cache, refusals included', () => {
+    for (const file of [
+      ['app', 'api', 'renders', 'route.ts'],
+      ['app', 'api', 'renders', 'access', 'route.ts'],
+      ['app', 'api', 'renders', 'tick', 'route.ts'],
+      ['app', 'api', 'renders', 'callback', 'route.ts'],
+      ['app', 'api', 'renders', 'media', '[id]', 'route.ts'],
+    ]) {
+      const source = read(...file);
+      expect(source, file.join('/')).toContain("'Cache-Control': 'private, no-store'");
+      expect(source, file.join('/')).toContain("'X-Robots-Tag': 'noindex, nofollow'");
+    }
+  });
+
+  it('runs the pass after the enqueue response, inside the function budget, and gates the tick on the cron secret', () => {
+    const enqueue = read('app', 'api', 'renders', 'route.ts');
+    expect(enqueue).toContain('export const maxDuration = 300');
+    expect(enqueue).toMatch(/after\(async \(\) => \{/);
+    expect(enqueue).toContain("json({ ok: true, id: outcome.id, href: renderHref(outcome.id) }, 201)");
+    const tick = read('app', 'api', 'renders', 'tick', 'route.ts');
+    expect(tick).toContain('export const maxDuration = 300');
+    expect(tick).toContain('process.env.CRON_SECRET');
+    // The gate lives in the service, and the UI only asks about it.
+    expect(read('lib', 'renders', 'service.ts')).toContain('RENDER_PIPELINE_PUBLIC');
+    expect(read('components', 'twings', 'studio.tsx')).not.toContain('RENDER_PIPELINE_PUBLIC');
   });
 });

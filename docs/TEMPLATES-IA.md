@@ -90,7 +90,24 @@
 
 ## 8. 제안 (2026-09-06, 창업자 질문에 대한 답 — 미결정)
 
-- **생성 대기**: 영상 2~5분은 화면에 붙잡아 둘 수 없다. 작업 큐(`render_jobs`) + 결과 페이지(로그인, 영구 보관 "내 작품") + **완료 알림 메일**(이미 있는 Resend outbox 재사용)에 서명 링크(3일 만료)를 담는다. 링크는 로그인 없이 보기·다운로드까지만, 만료 후에는 계정 페이지에서 계속 접근. PWA 푸시는 그다음, 알림톡은 카카오 로그인 뒤.
+- **생성 대기 → 구현(2026-09-06, `render_jobs`, 마이그레이션 0017/0107)**: 스튜디오가 사진을 브라우저에서 1600px JPEG로 줄여 `POST /api/renders`에 보내면, 서버는 사진을 비공개 `renders` 버킷에 넣고 행을 큐잉한 뒤 201과 `/renders/{id}`를 돌려준다. 같은 함수 호출의 `after()`에서 패스가 돈다 — 이미지(GPT Image 2·Seedream)는 그 자리에서 1~2분 안에 끝나고, 영상은 ModelArk 태스크를 만든 뒤 대기. 완료 시 결과를 **우리 스토리지로 즉시 복사**(제공자 URL은 24h), 3일 공유 토큰 발급(`/r/{id}/{token}`, 로그인 없이 보기·다운로드), 완료 메일 발송(Resend, sume.com 톤 — 흰 시트·검정 알약 버튼·회색 메타). 실패는 이유 코드(`face_policy`·`moderated`·`engine_access`…)와 함께 실패 메일. 소유자 페이지 `/renders/{id}`는 영구, `/renders`·계정 페이지가 "내 작품".
+  - **패스는 한 함수(`runRenderPass`)를 네 곳에서 부른다**: 인큐 직후 `after()`, ModelArk 완료 콜백(`/api/renders/callback`, 본문은 힌트일 뿐 — 태스크는 제공자에서 다시 읽는다), 소유자 결과 페이지(열 때마다 폴링·6초 자동 새로고침), Vercel Cron(`/api/renders/tick`, **Hobby 플랜은 하루 1회 한도** → 매일 03:00 KST 안전망; Pro 전환 시 `vercel.json`에서 매분으로). 모든 단계가 멱등: 클레임은 `FOR UPDATE SKIP LOCKED` 리스, 시도 예산 3회, 메일은 `render:{job}:{user}` idempotency key. 20분 넘게 `running`인 동기 작업은 다음 패스가 회수.
+  - **공개 게이트**: 결제가 붙기 전까지 관리자만 실생성(`lib/flags.ts` `RENDER_PIPELINE_PUBLIC=false`), 나머지는 데모 그대로. 스튜디오는 `/api/renders/access`로 물어 배지와 버튼을 바꾼다. 결제(§8 다음 단계)가 붙으면 결제 완료 시점에 같은 `createRenderJob`을 호출하면 된다.
+  - **얼굴 정책**: GPT Image 2 경로는 본인 사진 그대로 통과(2026-09-06 실측). ModelArk(Seedream·Seedance)는 실제 얼굴을 거부하므로 그 템플릿에 실제 사진을 넣으면 `face_policy`로 즉시 실패하고 메일이 이유를 말한다 — 실인물 자산 라이브러리(H5 라이브니스) 연결이 그 다음 작업.
+  - **환경 변수**: `CRON_SECRET`(선택; 있으면 tick이 Bearer 검사), 엔진 키는 기존 `OPENAI_API_KEY`·`ARK_API_KEY`, 메일은 `RESEND_API_KEY`·`NOTIFY_FROM_EMAIL`(없으면 작업은 완료되고 메일만 `pending`으로 남았다가 설정 후 다음 패스에 발송).
+
+### 8.1 결과 링크 전달 채널 — 카카오톡·WhatsApp 설계 (창업자 질문, 2026-09-06)
+
+질문: "카카오톡으로 연동된 가입자는 카카오톡으로 링크 전달, 구글로 가입한 사람도 한국이면 카카오톡으로도 받게, WhatsApp 가입도."
+
+**원칙: 로그인 수단과 전달 채널을 분리한다.** 로그인은 신원(누구인가), 전달은 검증된 연락처(어디로 보낼까). 카카오로 로그인했다는 사실이 카톡으로 보낼 권한을 주지 않는다 — 카카오 로그인 토큰으로 보내는 "나에게 보내기"(`talk_message`) API는 카카오 가입자 전용이고, 토큰을 서버에 보관해야 하며, 하루 한도가 있고, 로그인 동의 화면에 항목이 하나 늘어난다. 쓰지 않는다.
+
+- **채널 1 — 이메일(기본, 구현됨)**: 카카오·구글 모두 이메일이 필수 동의라 모든 계정에 있다.
+- **채널 2 — 카카오 알림톡(한국 번호)**: 조건은 **휴대폰 번호**뿐이라 구글 가입자도 번호만 확인하면 받는다. 선행: 카카오톡 채널 개설 + 비즈니스 채널 인증(사업자등록증) + 발신프로필 등록 + **템플릿 사전 심사**("[TWINGS] 결과물이 완성됐어요. #{link} · 3일간 열립니다" 류). 전송은 대행사 REST API(Solapi·NHN Cloud Notification 등, 건당 ₩7~9, 카톡이 없는 번호는 SMS 대체발송). 카카오 로그인 동의항목에 `phone_number`(선택)를 켜면 번호가 미리 채워진다.
+- **채널 3 — WhatsApp(해외 번호)**: WhatsApp Business Platform의 승인 템플릿 메시지. Meta 비즈니스 인증 필요, Twilio 경유가 가장 단순. 알림톡과 같은 "번호 + 승인 템플릿" 모델이라 어댑터 하나 차이.
+- **UX**: 첫 실생성(또는 계정 페이지)에서 "결과 받을 곳"을 한 번 정한다 — 이메일(항상) + 휴대폰 번호(선택; `+82`면 알림톡, 그 외 WhatsApp; 인증 코드 1회). 프로필에 `phone_e164`·`phone_verified_at`·`notify_channels`를 두고, `render_jobs.notify_channel`이 실제 발송 채널을 기록한다. 코드는 이미 채널 무관(`lib/renders/notify.ts`의 `RenderNotifier`): 알림톡·WhatsApp은 구현체 두 개를 더하는 일이지 파이프라인을 고치는 일이 아니다.
+- **WhatsApp 가입**: Meta는 "WhatsApp으로 로그인" OAuth를 제공하지 않는다. 실질적인 방법은 Supabase Auth **전화번호 OTP를 WhatsApp 채널로** 보내는 것(Twilio Verify, `signInWithOtp({ phone, options: { channel: 'whatsapp' } })`). 이러면 번호가 곧 신원이라 WhatsApp 전달이 자동으로 검증된다. 선행: Twilio 계정 + Verify 서비스의 WhatsApp 발신자 승인(Meta 비즈니스 인증), Supabase Phone 프로바이더 활성화. 문(`/auth/choose`)에는 세 번째 버튼(번호 입력 → 코드)이 붙는다.
+- **순서 제안**: ① 알림톡(한국 고객 대부분·비용 최저) → ② WhatsApp 전달 → ③ WhatsApp 가입. 셋 다 창업자 쪽 계정·심사가 선행이라, 코드보다 먼저 카카오톡 채널 개설과 Meta 비즈니스 인증을 시작해 두는 편이 좋다.
 - **카카오 로그인**: Supabase Auth의 Kakao 프로바이더로 붙인다(코드 변경은 로그인 버튼 하나). 선행: 카카오 디벨로퍼스 앱 + **비즈 앱 전환**(사업자등록번호)으로 이메일을 필수 동의 항목으로 — Supabase가 이메일을 요구하기 때문. iOS 앱을 낼 때는 Apple 로그인이 같이 필수.
   - **설정 기록(2026-09-06, 라이브 로그인 확인)**: Supabase Kakao 프로바이더의 Client ID = 카카오 앱 **REST API 키**(앱 > 플랫폼 키 목록의 키 값, 16진수 32자리), Client Secret = **카카오 로그인 클라이언트 시크릿**(비즈니스 인증 시크릿·어드민 키는 쓰지 않음), Redirect URI = `https://nhokkikjkzjalxqsbzuk.supabase.co/auth/v1/callback`. 동의항목은 닉네임·이메일 **필수** + 프로필 사진 **선택** — Supabase는 `account_email profile_image profile_nickname` 세 scope를 항상 요청하므로 프로필 사진을 비워 두면 KOE205, Client ID가 틀리면 KOE101이 뜬다.
   - **문(`/auth/choose`) 워딩 원칙**: 로그인 문은 랜딩이 아니다(Linear·Figma·Notion과 같은 형태). 제목은 행위("로그인 또는 회원가입"), 한 줄 안내(첫 방문이면 계정 자동 생성), "…로 계속하기" 버튼 둘, 이용약관·개인정보처리방침 링크가 든 동의 한 줄. 가치 제안 문단과 사진 처리 안내는 넣지 않는다.

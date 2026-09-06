@@ -243,6 +243,8 @@ to the browser):
 | `STRIPE_PRICE_PRO` | server | the $9/month price id |
 | `RESEND_API_KEY` | server | with `NOTIFY_FROM_EMAIL`, or the worker sends nothing |
 | `NOTIFY_FROM_EMAIL` | server | e.g. `YAGI PROMPTS <prompts@your-domain>` |
+| `OPENAI_API_KEY` / `ARK_API_KEY` | server | the render engines (docs/TEMPLATES-IA.md §7–8); a missing key fails a job with `no_engine_key`, never a 500 |
+| `CRON_SECRET` | server | optional; any long random string. Vercel sends it as the bearer token on `/api/renders/tick`; without it the tick is open but idempotent |
 
 Do **not** set `STORAGE_DRIVER`, `PLAYBOOK_LOCAL_DB`, `PLAYBOOK_LOCAL_DB_DIR` or
 `PLAYBOOK_DEV_IDENTITY` in Vercel. The first would override the mode; the middle two are PGlite

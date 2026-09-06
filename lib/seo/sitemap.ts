@@ -141,6 +141,9 @@ export const DISALLOWED_PATHS = [
   // creator's own standing page are noindex app surface; `/campaigns` and every campaign page stay.
   '/campaigns/*/apply',
   '/campaigns/mine',
+  // docs/TEMPLATES-IA.md §8 — the owner's renders and the 3-day links: never indexable.
+  '/renders',
+  '/r/',
 ] as const;
 
 export function buildRobots(origin: string): MetadataRoute.Robots {

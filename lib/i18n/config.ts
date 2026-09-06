@@ -34,6 +34,9 @@ export const APP_PREFIXES = [
   '/account',
   '/billing',
   '/admin',
+  // docs/TEMPLATES-IA.md §8 — the owner's renders. The 3-day link (`/r/…`) is NOT here: it is
+  // public by token and excluded from middleware altogether, like `/auth/*`.
+  '/renders',
 ] as const;
 
 /**

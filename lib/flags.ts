@@ -33,3 +33,10 @@ export const PLAYBOOK_DETAIL_ROUTE_READY = true;
  * for, as one greppable constant rather than a deletion somebody has to undo by hand.
  */
 export const PLAYBOOKS_IN_NAV = false;
+
+/**
+ * docs/TEMPLATES-IA.md §8 — the render queue is LIVE for admins and a demo for everyone else until
+ * payment is wired. Flipping this opens `POST /api/renders` to every signed-in reader; the studio
+ * follows through `/api/renders/access`. Leave false until the pay step creates the job.
+ */
+export const RENDER_PIPELINE_PUBLIC = false;

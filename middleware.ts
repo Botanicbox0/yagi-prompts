@@ -97,6 +97,8 @@ export const config = {
      *   _next/static, _next/image, favicon, /fonts, /.storage (local storage driver in dev)
      *   /api/*   — route handlers set their own no-store headers and are not locale-prefixed
      *   /auth/*  — the OAuth callback must not be redirected mid-exchange
+     *   /r/*     — the 3-day render link (docs/TEMPLATES-IA.md §8): public by token, no locale prefix,
+     *     no session gate; the page itself decides from the token
      *   sw.js, offline.html, manifest.webmanifest — the PWA's three root files (docs/TEMPLATES-IA.md §5),
      *     unprefixed by the same specification logic as the crawler endpoints.
      *   sitemap.xml, robots.txt (M5) — crawler endpoints live at the ROOT by specification. They
@@ -105,6 +107,6 @@ export const config = {
      *     sitemap at all. (Found by the M5 sweep, not by a unit test — which is why the sweep runs
      *     against a real server.)
      */
-    '/((?!_next/static|_next/image|favicon.ico|sitemap\\.xml|robots\\.txt|sw\\.js|offline\\.html|manifest\\.webmanifest|fonts/|\\.storage/|api/|auth/|.*\\.(?:svg|png|jpg|jpeg|gif|webp|mp4|webm|woff2?)$).*)',
+    '/((?!_next/static|_next/image|favicon.ico|sitemap\\.xml|robots\\.txt|sw\\.js|offline\\.html|manifest\\.webmanifest|fonts/|\\.storage/|api/|auth/|r/|.*\\.(?:svg|png|jpg|jpeg|gif|webp|mp4|webm|woff2?)$).*)',
   ],
 };

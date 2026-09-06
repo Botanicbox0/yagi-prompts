@@ -932,6 +932,42 @@ async function sweepCampaigns(): Promise<void> {
   expectPresent('sitemap lists the listing (ko)', sitemap.body, '/ko/campaigns<');
 }
 
+/** docs/TEMPLATES-IA.md §8 — the render queue: gated where it must be, open where the token says. */
+async function sweepRenders(): Promise<void> {
+  console.log('\n/renders — the render queue, anonymous');
+  const ID = '00000000-0000-4000-8000-000000000000';
+  const TOKEN = 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
+
+  const mine = await request('/renders', { headers: { 'user-agent': CHROME_UA } });
+  expectOneOf('/renders redirects anon', mine.status, [302, 303, 307]);
+  if (mine.location?.includes('signin=1')) ok('…to sign-in', mine.location);
+  else fail('/renders redirect target', `expected the sign-in redirect, got ${mine.location}`);
+  const detail = await request(`/renders/${ID}`, { headers: { 'user-agent': CHROME_UA } });
+  expectOneOf('/renders/{id} redirects anon', detail.status, [302, 303, 307]);
+
+  const share = await request(`/r/${ID}/${TOKEN}`, { headers: { 'user-agent': CHROME_UA } });
+  expectEqual('an unknown 3-day link 404s', share.status, 404);
+  expectAbsent('…with no locale redirect in the way', String(share.location ?? ''), '/en/r/');
+
+  const media = await request(`/api/renders/media/${ID}`);
+  expectEqual('the render gateway refuses anon', media.status, 401);
+  expectPresent('…no-store', media.cacheControl ?? '', 'no-store');
+  const mediaShare = await request(`/api/renders/media/${ID}?s=${TOKEN}`);
+  expectEqual('…and an unknown token', mediaShare.status, 404);
+
+  const access = await request('/api/renders/access');
+  expectEqual('access answers anon', access.status, 200);
+  expectPresent('…with live:false', access.body, '"live":false');
+
+  const enqueue = await fetch(`${BASE}/api/renders`, { method: 'POST', redirect: 'manual' });
+  expectEqual('enqueue refuses anon', enqueue.status, 401);
+
+  const tick = await request('/api/renders/tick');
+  expectEqual('the tick runs (no secret locally)', tick.status, 200);
+  expectPresent('…and reports a pass', tick.body, '"summary"');
+  expectPresent('…no-store', tick.cacheControl ?? '', 'no-store');
+}
+
 async function main(): Promise<void> {
   console.log(`TWINGS anon sweep → ${BASE} (local mode)`);
 
@@ -968,6 +1004,9 @@ async function main(): Promise<void> {
 
   // --- docs/CAMPAIGNS.md: the campaigns surface --------------------------
   await sweepCampaigns();
+
+  // --- docs/TEMPLATES-IA.md §8: the render queue --------------------------
+  await sweepRenders();
 
   console.log(
     `\n${failures === 0 ? 'SWEEP PASSED' : 'SWEEP FAILED'} — ${checks - failures}/${checks} checks passed`,

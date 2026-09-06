@@ -55,7 +55,54 @@ export interface StudioLabels {
   aspectLabel: string;
 }
 
+/**
+ * The live make loop (docs/TEMPLATES-IA.md §8). When the server says this viewer may render for
+ * real (`accessEndpoint` → `{ live: true }`), the pay step posts the photo to `endpoint` and the
+ * browser moves to the result page; otherwise the demo below runs exactly as before.
+ */
+export interface StudioLive {
+  endpoint: string;
+  accessEndpoint: string;
+  template: string;
+  locale: string;
+  /** Where a `sign_in_required` answer sends the reader (back to this template afterwards). */
+  signinHref: string;
+  labels: { badge: string; submitting: string; errors: Record<string, string> };
+}
+
 type Phase = 'photo' | 'style' | 'pay' | 'rendering' | 'result';
+
+/** The longest edge the photo is sent at. Vercel refuses request bodies above ~4.5MB before any of our code runs. */
+const PHOTO_MAX_EDGE = 1600;
+const PHOTO_PASSTHROUGH_BYTES = 3_000_000;
+
+/**
+ * Downscale in the browser: a phone photo is 3–8MB and the request limit is the platform's, not
+ * ours. Anything that cannot be decoded here (HEIC on a non-Apple browser) goes up as it is and
+ * the server says what it wants instead.
+ */
+async function shrinkPhoto(file: File): Promise<Blob> {
+  try {
+    const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' } as ImageBitmapOptions);
+    const scale = Math.min(1, PHOTO_MAX_EDGE / Math.max(bitmap.width, bitmap.height));
+    if (scale === 1 && file.size <= PHOTO_PASSTHROUGH_BYTES && (file.type === 'image/jpeg' || file.type === 'image/png')) {
+      bitmap.close();
+      return file;
+    }
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+    const context = canvas.getContext('2d');
+    if (!context) throw new Error('no 2d context');
+    context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    bitmap.close();
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.9));
+    if (!blob) throw new Error('encode failed');
+    return blob;
+  } catch {
+    return file;
+  }
+}
 
 /** Long enough that the wait reads as work. A real render takes minutes; 400ms would teach a lie. */
 const RENDER_MS = 5200;
@@ -64,15 +111,22 @@ export function TwingsStudio({
   styles,
   labels,
   initialStyleId,
+  live,
 }: {
   styles: StudioStyle[];
   labels: StudioLabels;
   /** Pre-chosen style (the template page); with exactly one style the picking step disappears. */
   initialStyleId?: string;
+  /** The live make loop; absent on the catalogue shape, which is always the demo. */
+  live?: StudioLive;
 }) {
   const single = styles.length === 1;
   const [phase, setPhase] = useState<Phase>('photo');
   const [photo, setPhoto] = useState<string | null>(null);
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [liveMode, setLiveMode] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [liveError, setLiveError] = useState<string | null>(null);
   const [styleId, setStyleId] = useState<string>(initialStyleId ?? styles[0]?.id ?? '');
   const [aspect, setAspect] = useState<string>(styles.find((item) => item.id === (initialStyleId ?? styles[0]?.id))?.defaultAspect ?? styles[0]?.defaultAspect ?? '');
   const [progress, setProgress] = useState(0);
@@ -86,6 +140,24 @@ export function TwingsStudio({
     },
     [photo],
   );
+
+  // Static page, per-viewer answer: ask once whether this reader renders for real.
+  const accessEndpoint = live?.accessEndpoint ?? null;
+  useEffect(() => {
+    if (accessEndpoint === null) return;
+    let cancelled = false;
+    fetch(accessEndpoint, { cache: 'no-store', credentials: 'same-origin' })
+      .then((response) => (response.ok ? response.json() : { live: false }))
+      .then((json: { live?: boolean }) => {
+        if (!cancelled) setLiveMode(json.live === true);
+      })
+      .catch(() => {
+        /* the demo is the fallback */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [accessEndpoint]);
 
   useEffect(() => {
     if (phase !== 'rendering') return;
@@ -104,11 +176,42 @@ export function TwingsStudio({
 
   const takePhoto = (file: File | null | undefined) => {
     if (!file || !file.type.startsWith('image/')) return;
+    setPhotoFile(file);
+    setLiveError(null);
     setPhoto((current) => {
       if (current) URL.revokeObjectURL(current);
       return URL.createObjectURL(file);
     });
     setPhase(single ? 'pay' : 'style');
+  };
+
+  const submitLive = async () => {
+    if (!live || !photoFile || !chosen) return;
+    setSubmitting(true);
+    setLiveError(null);
+    try {
+      const blob = await shrinkPhoto(photoFile);
+      const form = new FormData();
+      form.set('template', live.template);
+      form.set('aspect', aspect);
+      form.set('locale', live.locale);
+      form.set('photo', blob, blob.type === 'image/png' ? 'photo.png' : 'photo.jpg');
+      const response = await fetch(live.endpoint, { method: 'POST', body: form, credentials: 'same-origin' });
+      const json = (await response.json().catch(() => ({}))) as { ok?: boolean; href?: string; code?: string };
+      if (response.ok && json.ok === true && typeof json.href === 'string') {
+        window.location.assign(json.href);
+        return;
+      }
+      if (json.code === 'sign_in_required') {
+        window.location.assign(live.signinHref);
+        return;
+      }
+      setLiveError(live.labels.errors[json.code ?? ''] ?? live.labels.errors.generic ?? 'error');
+    } catch {
+      setLiveError(live.labels.errors.generic ?? 'error');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   // A style whose template is unpublished is dropped upstream; with none left, an empty grid and a
@@ -133,13 +236,13 @@ export function TwingsStudio({
   })();
 
   return (
-    <section data-twings-studio data-phase={phase} data-single={single ? 'true' : 'false'} data-aspect={aspect} className="mt-10">
-      {/* The one honest label the whole screen hangs on. */}
+    <section data-twings-studio data-phase={phase} data-single={single ? 'true' : 'false'} data-aspect={aspect} data-live={liveMode ? 'true' : 'false'} className="mt-10">
+      {/* The one honest label the whole screen hangs on: a demo says so; a live loop says where the result goes. */}
       <p
         data-demo-badge
         className="inline-block border border-accent px-3 py-1.5 font-label text-[0.68rem] tracking-[0.12em] text-accent uppercase"
       >
-        {labels.demoBadge}
+        {liveMode && live ? live.labels.badge : labels.demoBadge}
       </p>
 
       <ol className="mt-6 flex flex-wrap gap-x-6 gap-y-2 font-label text-[0.68rem] tracking-[0.12em] uppercase">
@@ -278,14 +381,22 @@ export function TwingsStudio({
                 <button
                   type="button"
                   data-pay-cta
-                  disabled={!photo || !chosen}
+                  disabled={!photo || !chosen || submitting}
                   aria-describedby={photo ? undefined : 'studio-cta-hint'}
-                  onClick={() => setPhase('rendering')}
+                  onClick={() => {
+                    if (liveMode && live) void submitLive();
+                    else setPhase('rendering');
+                  }}
                   className="w-full border border-current px-5 py-4 font-label text-[0.95rem] tracking-[0.1em] text-accent uppercase transition-opacity hover:opacity-70 disabled:opacity-25"
                 >
-                  {chosen ? labels.payCta.replace('{price}', chosen.price) : labels.payCta}
+                  {submitting && live ? live.labels.submitting : chosen ? labels.payCta.replace('{price}', chosen.price) : labels.payCta}
                 </button>
                 <p className="mt-3 font-mono text-[0.72rem] opacity-45">{labels.payNote}</p>
+                {liveError && (
+                  <p data-live-error role="alert" className="mt-2 font-mono text-[0.72rem] text-accent">
+                    {liveError}
+                  </p>
+                )}
                 {!photo && (
                   <p id="studio-cta-hint" data-studio-hint className="mt-2 font-mono text-[0.72rem] text-accent">
                     {labels.needPhoto}
