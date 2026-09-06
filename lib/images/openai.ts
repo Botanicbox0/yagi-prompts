@@ -7,15 +7,15 @@ import { IMAGE_ENGINES, sizeString, type ImageAspect, imageSizeFor } from './eng
  *   POST https://api.openai.com/v1/images/generations   (JSON)      text → image
  *   POST https://api.openai.com/v1/images/edits         (multipart) image[] + prompt → image
  *     model gpt-image-2 · size `WxH` (multiples of 16, 1:3 … 3:1, ≤ 3840×2160) · quality high
- *     · output_format png|jpeg|webp · moderation auto|low · input_fidelity high (edits)
+ *     · output_format png|jpeg|webp · moderation auto|low (no input_fidelity on gpt-image-2)
  *     → { created, data: [{ b64_json }], usage: { input_tokens, output_tokens,
  *         input_tokens_details: { image_tokens, text_tokens } } }
  *
  * Founder rule (2026-09-06): `quality` is ALWAYS `high` — "우리는 고품질로 파는거니까". Not a
  * parameter here on purpose, so no caller can quietly sell a medium render.
  *
- * The visitor's photo goes in as a reference on the EDITS endpoint with `input_fidelity: high`,
- * which is what keeps a face recognisable. OpenAI's policy allows a person's own photo and
+ * The visitor's photo goes in as a reference on the EDITS endpoint; gpt-image-2 reads references
+ * at high fidelity on its own (the `input_fidelity` flag was gpt-image-1's and is refused here). OpenAI's policy allows a person's own photo and
  * forbids a likeness used without consent — consent is ours to collect (the template page's
  * checkbox), and a moderation refusal is surfaced as `OpenAiImageError.moderated` so the UI can
  * say so rather than retry.
@@ -108,7 +108,7 @@ export function toGenerationBody(input: GptImageInput): Record<string, unknown> 
   };
 }
 
-/** The edits form — the visitor's photo rides as `image[]`, with high input fidelity for the face. */
+/** The edits form — the visitor's photo rides as `image[]`. */
 export function toEditForm(input: GptImageInput): FormData {
   const references = input.references ?? [];
   const max = IMAGE_ENGINES['gpt-image-2'].maxReferenceImages;
@@ -120,7 +120,8 @@ export function toEditForm(input: GptImageInput): FormData {
   form.set('prompt', input.prompt);
   form.set('size', sizeString(imageSizeFor('gpt-image-2', input.aspect)));
   form.set('quality', GPT_IMAGE_QUALITY);
-  form.set('input_fidelity', 'high');
+  // No `input_fidelity`: gpt-image-2 refuses the parameter (400 invalid_input_fidelity_model,
+  // verified 2026-09-06) — it processes references at high fidelity by itself (gpt-image-1 needed the flag).
   form.set('output_format', input.outputFormat ?? 'png');
   form.set('moderation', input.moderation ?? 'auto');
   form.set('n', '1');

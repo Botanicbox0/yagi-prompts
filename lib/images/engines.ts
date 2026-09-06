@@ -10,7 +10,8 @@
  *     2K · 3K · 4K; explicit `WxH` allowed within [1280×720 … 2048×2048×1.1025] pixels and a
  *     1/16 … 16 aspect range; up to 10 reference images; result URL kept 24 h; "1.5K has the same
  *     price as 1K and provides better image generation quality".
- *   · ModelArk console pricing (2026-09-06): Pro output $0.045/image up to 2.36 MP, $0.09 above;
+ *   · ModelArk console pricing (2026-09-06): Pro output $0.045/image up to 2.36 MP, $0.09 above
+ *     (we render Pro at 2K, so $0.09);
  *     input reference image $0.003 each; Lite $0.035/image.
  *   · OpenAI images API reference: gpt-image-2 accepts arbitrary `WIDTHxHEIGHT` (multiples of 16,
  *     1:3 … 3:1, max 3840×2160); quality low/medium/high; edits take up to 16 reference images
@@ -120,27 +121,22 @@ export interface ImageEngine {
 }
 
 /**
- * Seedream 5.0 Pro at the 1.5K tier: same price as 1K, better quality, and every size below stays
- * under the 2.36 MP price step. 4:5 is not in ModelArk's example table, so it is spelled as an
- * explicit `WxH` inside the documented pixel window.
+ * Seedream 5.0 Pro at the 2K tier (founder, 2026-09-06: "seedream 5.0pro는 2k로 품질 더 올려줘").
+ * 2K sits above ModelArk's 2.36 MP price step, so a Pro render is $0.09 rather than $0.045 — the
+ * price of the founder's quality call, carried in `usdPerRender` below. Sizes are ModelArk's own
+ * 2K mappings; 4:5 is not in its table, so it is spelled as an explicit `WxH` inside the documented
+ * pixel window (1728×2160 = 3.73 MP ≤ 4.62 MP).
  */
-const SEEDREAM_15K: Record<ImageAspect, ImageSize> = {
-  '4:5': { width: 1344, height: 1680 },
-  '1:1': { width: 1536, height: 1536 },
-  '9:16': { width: 1152, height: 2048 },
-  // 1344×1792 would cross the 2.36 MP price step; 1296×1728 keeps 3:4 exactly and stays under it.
-  '3:4': { width: 1296, height: 1728 },
-  '16:9': { width: 2048, height: 1152 },
-};
-
-/** Seedream 5.0 Lite starts at 2K; these are the 2K mappings from the same table (4:5 explicit). */
-const SEEDREAM_2K: Record<ImageAspect, ImageSize> = {
+const SEEDREAM_PRO_2K: Record<ImageAspect, ImageSize> = {
   '4:5': { width: 1728, height: 2160 },
   '1:1': { width: 2048, height: 2048 },
   '9:16': { width: 1584, height: 2816 },
   '3:4': { width: 1776, height: 2368 },
   '16:9': { width: 2816, height: 1584 },
 };
+
+/** Seedream 5.0 Lite starts at 2K too — the same table. */
+const SEEDREAM_2K = SEEDREAM_PRO_2K;
 
 /** GPT Image 2 at `quality: high` — multiples of 16, sized like the 1024-class the price examples use. */
 const GPT_IMAGE_HIGH: Record<ImageAspect, ImageSize> = {
@@ -157,8 +153,9 @@ export const IMAGE_ENGINES: Record<ImageEngineId, ImageEngine> = {
     label: 'SEEDREAM 5.0 PRO',
     provider: 'modelark',
     model: 'dola-seedream-5-0-pro-260628',
-    sizes: SEEDREAM_15K,
-    usdPerRender: 0.045,
+    sizes: SEEDREAM_PRO_2K,
+    // 2K: above the 2.36 MP step, so the $0.09 rate (console pricing, 2026-09-06).
+    usdPerRender: 0.09,
     usdPerReference: 0.003,
     maxReferenceImages: 10,
   },
