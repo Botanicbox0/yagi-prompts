@@ -82,13 +82,18 @@
 
 - 이미지 엔진은 **Seedream 5.0 Pro/Lite (ModelArk) + GPT Image 2 (OpenAI)**. GPT Image 2는 **항상 `quality: high`** ("우리는 고품질로 파는거니까") — 코드에 파라미터가 없다.
 - 템플릿 행에 `engine`(null = 매체 기본: 영상 seedance-2.0, 이미지 gpt-image-2)과 `aspect_default`(null = 이미지 4:5, 영상 9:16)가 있다(0016). 어드민 편집기에서 고르고, 방문자는 만들기 화면의 비율 피커에서 바꾼다. **기본 4:5 = 인스타 피드.**
-- 비율 → 픽셀 표는 `lib/images/engines.ts` 한 곳. Seedream Pro는 1.5K 티어(1K와 같은 가격, 2.36MP 가격 계단 아래), Lite는 2K, GPT Image 2는 16의 배수 1024급. 테스트가 각 엔진의 문서 제약(픽셀 범위·비율 범위·16px 격자·가격 계단)을 고정한다.
+- 비율 → 픽셀 표는 `lib/images/engines.ts` 한 곳. Seedream Pro는 **2K 티어**(창업자 2026-09-06 "품질 더 올려줘"; 2.36MP 계단 위라 장당 $0.09), Lite도 2K, GPT Image 2는 16의 배수 1024급. 테스트가 각 엔진의 문서 제약(픽셀 범위·비율 범위·16px 격자·가격 계단)을 고정한다.
 - 클라이언트: `lib/images/seedream.ts`(ModelArk `images/generations`, 같은 `ARK_API_KEY`), `lib/images/openai.ts`(`/images/generations` + `/images/edits` with `input_fidelity: high`, `OPENAI_API_KEY`). 스모크: `npm run image:smoke -- --engine <id> --ratio 4:5 [--photo p]`.
-- 실측(2026-09-06): Seedream 5.0 Pro 4:5 1344×1680 26초 · GPT Image 2 4:5 1024×1280 high 92초, 토큰 기준 $0.18.
+- 실측(2026-09-06): Seedream 5.0 Pro 4:5 1344×1680(1.5K, 당시) 26초 · GPT Image 2 4:5 1024×1280 high 92초, 토큰 기준 $0.18.
 - **키 권한 함정**: ModelArk API 키가 'Customize' 범위면 활성화된 모델도 `403 AccessDenied`. 콘솔 API keys › edit permission에서 모델을 체크해야 한다(2026-09-06 Seedream 5.0 Pro/Lite 추가). `ModelNotOpen`(404)은 미활성화, `AccessDenied`(403)는 키 범위.
 - 얼굴 정책: ModelArk 이미지 생성도 실제 얼굴 참조를 거부 → 실인물 자산 라이브러리(`asset://`) 경로 재사용. GPT Image 2는 사진 직접 편집(본인·동의 인물만, 모더레이션 거부 가능).
 
-## 8. 남는 질문(v2)
+## 8. 제안 (2026-09-06, 창업자 질문에 대한 답 — 미결정)
+
+- **생성 대기**: 영상 2~5분은 화면에 붙잡아 둘 수 없다. 작업 큐(`render_jobs`) + 결과 페이지(로그인, 영구 보관 "내 작품") + **완료 알림 메일**(이미 있는 Resend outbox 재사용)에 서명 링크(3일 만료)를 담는다. 링크는 로그인 없이 보기·다운로드까지만, 만료 후에는 계정 페이지에서 계속 접근. PWA 푸시는 그다음, 알림톡은 카카오 로그인 뒤.
+- **카카오 로그인**: Supabase Auth의 Kakao 프로바이더로 붙인다(코드 변경은 로그인 버튼 하나). 선행: 카카오 디벨로퍼스 앱 + **비즈 앱 전환**(사업자등록번호)으로 이메일을 필수 동의 항목으로 — Supabase가 이메일을 요구하기 때문. iOS 앱을 낼 때는 Apple 로그인이 같이 필수.
+
+## 9. 남는 질문(v2)
 - 크레딧 전환 시점(생성 파이프라인이 붙을 때).
 - 콘테스트 데이터 보존 기간.
 - 이미지 템플릿 판매가(원가 $0.05~0.25 → $1~2 권장).

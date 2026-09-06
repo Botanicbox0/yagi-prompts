@@ -37,7 +37,7 @@ describe('Seedream client (ModelArk images/generations)', () => {
     expect(body).toEqual({
       model: 'dola-seedream-5-0-pro-260628',
       prompt: 'p',
-      size: '1344x1680',
+      size: '1728x2160',
       output_format: 'jpeg',
       response_format: 'url',
       watermark: false,
@@ -51,12 +51,12 @@ describe('Seedream client (ModelArk images/generations)', () => {
     const capture: { url?: string; init?: RequestInit } = {};
     const client = createSeedreamClient(
       { apiKey: 'k', baseUrl: 'https://ark.test/api/v3' },
-      fakeFetch(200, { model: 'dola-seedream-5-0-pro-260628', data: [{ url: 'https://cdn/x.jpg', size: '1344x1680', output_format: 'jpeg' }], usage: { input_images: 1, generated_images: 1, output_tokens: 4096, total_tokens: 4096 } }, capture),
+      fakeFetch(200, { model: 'dola-seedream-5-0-pro-260628', data: [{ url: 'https://cdn/x.jpg', size: '1728x2160', output_format: 'jpeg' }], usage: { input_images: 1, generated_images: 1, output_tokens: 4096, total_tokens: 4096 } }, capture),
     );
     const result = await client.generate({ engine: 'seedream-5.0-pro', prompt: 'p', aspect: '4:5', references: ['asset://a'] });
     expect(capture.url).toBe('https://ark.test/api/v3/images/generations');
     expect((capture.init?.headers as Record<string, string>).authorization).toBe('Bearer k');
-    expect(result.images[0]).toEqual({ url: 'https://cdn/x.jpg', b64: null, size: '1344x1680', outputFormat: 'jpeg' });
+    expect(result.images[0]).toEqual({ url: 'https://cdn/x.jpg', b64: null, size: '1728x2160', outputFormat: 'jpeg' });
     expect(result.usage).toEqual({ inputImages: 1, generatedImages: 1, outputTokens: 4096 });
   });
 
@@ -80,11 +80,11 @@ describe('GPT Image 2 client (OpenAI images)', () => {
     expect(body).toEqual({ model: 'gpt-image-2', prompt: 'p', size: '1024x1280', quality: 'high', output_format: 'png', moderation: 'auto', n: 1 });
   });
 
-  it('sends the visitor photo as a high-fidelity edit reference', () => {
+  it('sends the visitor photo as an edit reference — and never the gpt-image-1 fidelity flag', () => {
     const form = toEditForm({ prompt: 'p', aspect: '9:16', references: [{ bytes: new Uint8Array([137, 80, 78, 71]), mime: 'image/png' }] });
     expect(form.get('model')).toBe('gpt-image-2');
     expect(form.get('quality')).toBe('high');
-    expect(form.get('input_fidelity')).toBe('high');
+    expect(form.get('input_fidelity')).toBeNull();
     expect(form.get('size')).toBe('864x1536');
     const image = form.get('image[]');
     expect(image).toBeInstanceOf(Blob);

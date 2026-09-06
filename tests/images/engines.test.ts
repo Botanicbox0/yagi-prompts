@@ -67,11 +67,13 @@ describe('image engines (docs/TEMPLATES-IA.md §7)', () => {
     }
   });
 
-  it('keeps every Seedream Pro size under the $0.045 → $0.09 price step', () => {
+  it('renders Seedream Pro at 2K — above the $0.045 step, priced at the $0.09 rate (founder, 2026-09-06)', () => {
     for (const aspect of IMAGE_ASPECTS) {
       const { width, height } = imageSizeFor('seedream-5.0-pro', aspect);
-      expect(width * height, aspect).toBeLessThanOrEqual(SEEDREAM_PRO_CHEAP_PIXELS_MAX);
+      expect(width * height, aspect).toBeGreaterThan(SEEDREAM_PRO_CHEAP_PIXELS_MAX);
     }
+    expect(IMAGE_ENGINES['seedream-5.0-pro'].usdPerRender).toBe(0.09);
+    expect(sizeString(imageSizeFor('seedream-5.0-pro', '4:5'))).toBe('1728x2160');
   });
 
   it('keeps GPT Image 2 sizes on the 16-pixel grid, within the ceiling and the 1:3–3:1 band', () => {
@@ -88,7 +90,7 @@ describe('image engines (docs/TEMPLATES-IA.md §7)', () => {
   });
 
   it('prices a render with the visitor photo counted as one reference', () => {
-    expect(estimateImageUsd('seedream-5.0-pro', 1)).toBe(0.048);
+    expect(estimateImageUsd('seedream-5.0-pro', 1)).toBe(0.093);
     expect(estimateImageUsd('seedream-5.0-lite', 0)).toBe(0.035);
     expect(estimateImageUsd('gpt-image-2', 1)).toBe(0.24);
     expect(IMAGE_ENGINES['gpt-image-2'].maxReferenceImages).toBe(16);
