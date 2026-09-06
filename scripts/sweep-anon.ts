@@ -537,7 +537,11 @@ async function sweepWebViewSignin(): Promise<void> {
   expectPresent('…as the designed page', chooser.body, 'data-auth-choose');
   expectPresent('…with the Kakao door', chooser.body, 'data-auth-provider="kakao"');
   expectPresent('…and the Google door', chooser.body, 'data-auth-provider="google"');
-  expectPresent('…in Korean', chooser.body, '카카오로 시작하기');
+  expectPresent('…in Korean', chooser.body, '카카오로 계속하기');
+  expectPresent('…with Google in mixed case (brand rule, never "GOOGLE")', chooser.body, 'Google로 계속하기');
+  expectPresent('…the act, not a pitch', chooser.body, '로그인 또는 회원가입');
+  expectPresent('…the consent line linking the terms', chooser.body, 'href="/ko/legal/terms"');
+  expectPresent('…and the privacy policy', chooser.body, 'href="/ko/legal/privacy"');
   if (chooser.body.indexOf('data-auth-provider="google"') < chooser.body.indexOf('data-auth-provider="kakao"')) ok('…Google listed first');
   else fail('chooser order', 'Google should come before Kakao (founder, 2026-09-06)');
   expectPresent('…with the Google mark', chooser.body, 'fill="#4285F4"');

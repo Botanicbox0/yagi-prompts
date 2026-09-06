@@ -628,4 +628,14 @@ describe('sign-in doors (Google + Kakao)', () => {
     expect(needsRealBrowser('kakao')).toBe(false);
     expect(needsRealBrowser('google')).toBe(true);
   });
+
+  it('shapes the chooser as a door, not a landing: continue-with labels and the consent line with both legal links', () => {
+    const page = read('app', '(app)', 'auth', 'choose', 'page.tsx');
+    expect(page).toContain('dict.auth.continueWithGoogle');
+    expect(page).toContain('dict.auth.continueWithKakao');
+    expect(page).toContain("legalHref(locale, 'terms')");
+    expect(page).toContain("legalHref(locale, 'privacy')");
+    expect(page).not.toContain('startWithKakao');
+    expect(page).not.toContain('chooseBody');
+  });
 });

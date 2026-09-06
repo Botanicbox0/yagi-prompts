@@ -3,17 +3,27 @@ import { GoatMark } from '@/components/nav/goat-mark';
 import { DEFAULT_LOCALE, isLocale, type Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/dictionaries';
 import { AUTH_PROVIDERS, signInWithProviderHref, type AuthProvider } from '@/lib/auth/providers';
+import { legalDocument } from '@/lib/legal/documents';
+import { legalHref } from '@/lib/legal/links';
 
 /**
  * `/auth/choose?next=…&locale=…` — the sign-in door (docs/TEMPLATES-IA.md §8).
  *
- * Where `/auth/signin` sends a reader who has not named a provider: one compact panel, Google
- * first (founder, 2026-09-06), Kakao second, each a plain link back into `/auth/signin` with
- * `provider=` set. No JavaScript, no session read — the (app) root layout supplies `noindex` and
- * force-dynamic, and middleware never runs under `/auth/*`.
+ * Where `/auth/signin` sends a reader who has not named a provider. Shaped like the doors of
+ * Linear, Figma and Notion, not like a landing section (founder, 2026-09-06: "너무 가운데 몰려있고
+ * 여유 없고 워딩도 이상한 것 같은데"): one narrow centred column with air around it; a heading that
+ * names the act — "로그인 또는 회원가입", because OAuth makes the two the same move; one line saying a
+ * first visit creates the account; the two "Continue with …" buttons; and the consent line that
+ * links the terms and the privacy policy. No value proposition and no privacy prose — the reader
+ * already decided to sign in, and the page's whole job is to get out of the way.
  *
- * Both buttons follow their owner's brand rules: Google's is white with the four-colour "G" and a
- * neutral border; Kakao's is #FEE500 with the black speech-bubble symbol and 85% black text.
+ * No JavaScript, no session read — the (app) root layout supplies `noindex` and force-dynamic, and
+ * middleware never runs under `/auth/*`. Each button is a plain link back into `/auth/signin` with
+ * `provider=` set.
+ *
+ * Both buttons follow their owner's brand rules: Google's is white with the four-colour "G", the
+ * #747775 border and the name in mixed case (never "GOOGLE", so no `uppercase` here); Kakao's is
+ * #FEE500 with the black speech-bubble symbol and 85% black text.
  */
 export const dynamic = 'force-dynamic';
 
@@ -65,48 +75,78 @@ function KakaoMark({ className }: { className?: string }) {
   );
 }
 
+function ProviderMark({ provider, className }: { provider: AuthProvider; className?: string }) {
+  return provider === 'google' ? <GoogleMark className={className} /> : <KakaoMark className={className} />;
+}
+
 const STYLE: Record<AuthProvider, string> = {
-  google: 'border border-[#dadce0] bg-white text-[#1f1f1f]',
+  google: 'border border-[#747775] bg-white text-[#1f1f1f]',
   kakao: 'border border-[#FEE500] bg-[#FEE500] text-[#000000]/85',
 };
+
+interface LegalLink {
+  href: string;
+  label: string;
+}
+
+/**
+ * The consent line carries `{terms}` / `{privacy}` placeholders (the dictionaries keep ko/en
+ * placeholders in step); each becomes a link to the document, everything else stays text.
+ */
+function withLinks(template: string, links: Readonly<Record<string, LegalLink>>) {
+  return template.split(/(\{\w+\})/g).map((part, index) => {
+    const key = /^\{(\w+)\}$/.exec(part)?.[1];
+    const link = key ? links[key] : undefined;
+    if (!link) return part;
+    return (
+      <a key={index} href={link.href} className="underline underline-offset-2 hover:opacity-100">
+        {link.label}
+      </a>
+    );
+  });
+}
 
 export default async function ChooseProviderPage(props: RouteProps) {
   const { locale, dict, next } = await resolve(props);
   const labels: Record<AuthProvider, string> = {
-    google: dict.auth.startWithGoogle,
-    kakao: dict.auth.startWithKakao,
+    google: dict.auth.continueWithGoogle,
+    kakao: dict.auth.continueWithKakao,
   };
+  const legal = withLinks(dict.auth.chooseLegal, {
+    terms: { href: legalHref(locale, 'terms'), label: legalDocument('terms', locale).title },
+    privacy: { href: legalHref(locale, 'privacy'), label: legalDocument('privacy', locale).title },
+  });
 
   return (
     <main data-auth-choose className="mx-auto flex min-h-svh w-full max-w-shell flex-col items-center justify-center px-gutter py-16">
-      <div className="w-full max-w-[26rem]">
+      <div className="flex w-full max-w-[22rem] flex-col items-center text-center">
         <a href={`/${locale}`} className="inline-flex items-center gap-2.5">
           <GoatMark className="h-6 w-6" />
           <span className="font-display text-[1.05rem] leading-none font-black tracking-[0.02em] uppercase">{dict.meta.siteName}</span>
         </a>
 
-        <p className="text-accent mt-10 font-label text-eyebrow uppercase">{dict.auth.chooseEyebrow}</p>
-        <h1 className="mt-3 font-display text-[clamp(1.9rem,5vw,2.6rem)] leading-[0.95] font-black whitespace-pre-line uppercase">
-          {dict.auth.chooseTitle}
-        </h1>
-        <p className="mt-4 text-[0.95rem] leading-relaxed opacity-70">{dict.auth.chooseBody}</p>
+        <h1 className="mt-12 font-display text-[1.75rem] leading-tight font-black uppercase">{dict.auth.chooseTitle}</h1>
+        <p className="mt-3 text-[0.95rem] leading-relaxed opacity-60">{dict.auth.chooseLede}</p>
 
-        <div className="mt-8 flex flex-col gap-3">
+        <div className="mt-10 flex w-full flex-col gap-3">
           {AUTH_PROVIDERS.map((provider) => (
             <a
               key={provider}
               href={signInWithProviderHref(provider, next, locale)}
               data-auth-provider={provider}
-              className={`relative flex h-12 items-center justify-center rounded-[4px] pr-6 pl-12 font-label text-label uppercase transition-opacity hover:opacity-85 ${STYLE[provider]}`}
+              className={`relative flex h-12 w-full items-center justify-center rounded-[4px] px-12 text-[0.95rem] font-semibold transition-opacity hover:opacity-85 ${STYLE[provider]}`}
             >
-              {provider === 'google' ? <GoogleMark className="absolute top-1/2 left-4 h-5 w-5 -translate-y-1/2" /> : <KakaoMark className="absolute top-1/2 left-4 h-5 w-5 -translate-y-1/2" />}
+              <ProviderMark provider={provider} className="absolute top-1/2 left-4 h-5 w-5 -translate-y-1/2" />
               {labels[provider]}
             </a>
           ))}
         </div>
 
-        <p className="mt-6 font-mono text-[0.7rem] leading-relaxed opacity-45">{dict.auth.chooseNote}</p>
-        <a href={next} data-auth-back className="mt-8 inline-block font-label text-eyebrow uppercase opacity-60 hover:opacity-100">
+        <p data-auth-legal className="mt-8 text-[0.75rem] leading-relaxed opacity-50">
+          {legal}
+        </p>
+
+        <a href={next} data-auth-back className="mt-10 font-label text-eyebrow uppercase opacity-50 hover:opacity-100">
           ← {dict.auth.chooseBack}
         </a>
       </div>
