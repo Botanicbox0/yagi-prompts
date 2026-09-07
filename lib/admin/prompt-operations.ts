@@ -95,6 +95,8 @@ const TemplateFields = z
   .object({
     medium: z.enum(TEMPLATE_MEDIA),
     priceCents: z.number().int().min(0).max(1_000_000),
+    /** The fixed won price (0018); 0 = suggested from the dollar price. */
+    priceKrw: z.number().int().min(0).max(100_000_000),
     runtimeSeconds: z.number().int().positive().max(600).nullable(),
     /** docs/TEMPLATES-IA.md §7 — null = the medium's default; a named engine must be one of its medium's. */
     engine: z.string().nullable(),
@@ -115,6 +117,7 @@ function templateFields(form: FormData): ParseResult<z.infer<typeof TemplateFiel
   return parsed(TemplateFields, {
     medium,
     priceCents: f.optionalInt(form, 'priceCents') ?? 0,
+    priceKrw: f.optionalInt(form, 'priceKrw') ?? 0,
     runtimeSeconds: medium === 'image' ? null : (runtime ?? null),
     engine: f.str(form, 'engine') || null,
     aspectDefault: f.str(form, 'aspectDefault') || null,

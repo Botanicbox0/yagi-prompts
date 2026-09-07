@@ -38,6 +38,8 @@ export interface PromptRow {
   medium: TemplateMedium;
   /** One render, in USD cents. 0 = not for sale yet (the detail page says so, no button). */
   priceCents: number;
+  /** The fixed won price a Korean page shows (0018, founder 2026-09-07); 0 = the x,900 suggestion from the dollar price. */
+  priceKrw: number;
   /** Films only; null for an image template (CHECK in 0015). */
   runtimeSeconds: number | null;
   /** docs/TEMPLATES-IA.md §7 — the render engine (lib/images/engines.ts ids); null = the medium's default. */
@@ -69,6 +71,7 @@ interface RawRow {
   featured: boolean;
   medium: TemplateMedium;
   price_cents: number;
+  price_krw: number | null;
   runtime_seconds: number | null;
   engine: string | null;
   aspect_default: string | null;
@@ -80,7 +83,7 @@ interface RawRow {
 const COLUMNS = `id, slug, source, author_id, author_handle, status, models, title, title_ko,
                  prompt_text, process_md, process_md_ko, source_url,
                  text_visibility::text as text_visibility, media, use_case, featured,
-                 medium, price_cents, runtime_seconds, engine, aspect_default,
+                 medium, price_cents, price_krw, runtime_seconds, engine, aspect_default,
                  reject_reason, created_at, published_at`;
 
 /** §13.2 — the one ordering, so the gallery, the admin list and the sitemap never disagree. */
@@ -112,6 +115,7 @@ function toRow(raw: RawRow): PromptRow {
     featured: raw.featured,
     medium: raw.medium,
     priceCents: raw.price_cents,
+    priceKrw: raw.price_krw ?? 0,
     runtimeSeconds: raw.runtime_seconds,
     engine: raw.engine,
     aspectDefault: raw.aspect_default,
@@ -275,6 +279,7 @@ export interface InsertPromptArgs {
   /** docs/TEMPLATES-IA.md — default 'video' / 0 / null: a row born before templates is a video not yet for sale. */
   medium?: TemplateMedium;
   priceCents?: number;
+  priceKrw?: number;
   runtimeSeconds?: number | null;
   engine?: string | null;
   aspectDefault?: string | null;
@@ -294,11 +299,11 @@ export async function insertPrompt(sql: SqlRunner, args: InsertPromptArgs): Prom
        (id, slug, source, author_id, author_handle, status, models, title, title_ko,
         prompt_text, process_md, process_md_ko, source_url,
         text_visibility, media, use_case, featured, reject_reason, published_at,
-        medium, price_cents, runtime_seconds, engine, aspect_default)
+        medium, price_cents, price_krw, runtime_seconds, engine, aspect_default)
      values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
              $14::visibility, $15::jsonb, $16, $17, $18,
              case when $19::boolean then now() else null end,
-             $20, $21, $22, $23, $24)`,
+             $20, $21, $22, $23, $24, $25)`,
     [
       args.id,
       args.slug,
@@ -321,6 +326,7 @@ export async function insertPrompt(sql: SqlRunner, args: InsertPromptArgs): Prom
       args.publishedAt === 'now',
       args.medium ?? 'video',
       args.priceCents ?? 0,
+      args.priceKrw ?? 0,
       args.runtimeSeconds ?? null,
       args.engine ?? null,
       args.aspectDefault ?? null,
@@ -357,6 +363,7 @@ export interface UpdatePromptArgs {
   /** Omitted ⇒ unchanged (a form that predates templates keeps what the row had). */
   medium?: TemplateMedium;
   priceCents?: number;
+  priceKrw?: number;
   runtimeSeconds?: number | null;
   engine?: string | null;
   aspectDefault?: string | null;
@@ -370,6 +377,7 @@ export async function updatePrompt(sql: SqlRunner, args: UpdatePromptArgs): Prom
             process_md = $10, process_md_ko = $11, source_url = $12, models = $13,
             medium = coalesce($14, medium),
             price_cents = coalesce($15::int, price_cents),
+            price_krw = coalesce($22::int, price_krw),
             runtime_seconds = case when $16::boolean then $17::int else runtime_seconds end,
             engine = case when $18::boolean then $19::text else engine end,
             aspect_default = case when $20::boolean then $21::text else aspect_default end
@@ -397,6 +405,7 @@ export async function updatePrompt(sql: SqlRunner, args: UpdatePromptArgs): Prom
       args.engine ?? null,
       args.aspectDefault !== undefined,
       args.aspectDefault ?? null,
+      args.priceKrw ?? null,
     ],
   );
   return rows.length > 0;

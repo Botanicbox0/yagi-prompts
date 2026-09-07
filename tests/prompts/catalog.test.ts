@@ -38,6 +38,7 @@ describe('prompt catalog projection (§13.2)', () => {
       'models',
       'poster',
       'priceCents',
+      'priceKrw',
       'publishedAt',
       'runtimeSeconds',
       'slug',
@@ -68,7 +69,9 @@ describe('prompt catalog projection (§13.2)', () => {
     expect(catalog.image.every((card) => card.medium === 'image' && card.runtimeSeconds === null)).toBe(true);
     expect(catalog.image.map((card) => card.slug)).toEqual(['static-portrait-window-light']);
     const priced = all.find((card) => card.slug === 'neon-alley-dolly')!;
-    expect(priced).toMatchObject({ medium: 'video', priceCents: 400, runtimeSeconds: 15 });
+    expect(priced).toMatchObject({ medium: 'video', priceCents: 400, priceKrw: 0, runtimeSeconds: 15 });
+    // The one fixture with its own won price carries it through the projection (0018).
+    expect(all.find((card) => card.slug === 'static-portrait-window-light')).toMatchObject({ priceCents: 200, priceKrw: 2500 });
     expect(all.filter((card) => card.priceCents === 0).length).toBeGreaterThan(0);
   });
 

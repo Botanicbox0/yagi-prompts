@@ -36,6 +36,7 @@ export interface PromptRowInput {
   /** docs/TEMPLATES-IA.md — optional here so a row shaped before 0015 still reads as a video not for sale. */
   medium?: TemplateMedium;
   priceCents?: number;
+  priceKrw?: number;
   runtimeSeconds?: number | null;
   engine?: string | null;
   aspectDefault?: string | null;
@@ -79,6 +80,7 @@ interface ShapedPromptBase {
   /** docs/TEMPLATES-IA.md — what it produces, what one render costs (0 = not for sale), how long. */
   medium: TemplateMedium;
   priceCents: number;
+  priceKrw: number;
   runtimeSeconds: number | null;
   engine: string | null;
   aspectDefault: string | null;
@@ -202,6 +204,7 @@ export function shapePrompt(
     featured: row.featured,
     medium: row.medium ?? 'video',
     priceCents: row.priceCents ?? 0,
+    priceKrw: row.priceKrw ?? 0,
     runtimeSeconds: row.runtimeSeconds ?? null,
     engine: row.engine ?? null,
     aspectDefault: row.aspectDefault ?? null,

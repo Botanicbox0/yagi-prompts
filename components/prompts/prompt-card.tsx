@@ -1,6 +1,5 @@
 import type { PromptCard as PromptCardData } from '@/lib/prompts/catalog';
 import { templateHref } from '@/lib/prompts/links';
-import { formatPrice, isForSale } from '@/lib/twings/products';
 import { badgeFor } from '@/lib/content/badges';
 import { PromptCardMedia } from './card-media';
 import { TypographicPoster } from './poster';
@@ -62,7 +61,6 @@ export function PromptCardView({
       data-prompt-card={card.slug}
       data-source={card.source}
       data-medium={card.medium}
-      data-price={card.priceCents}
       className="card group relative block border border-hairline"
     >
       <div className="relative border-b border-hairline">
@@ -92,16 +90,8 @@ export function PromptCardView({
               </span>
             )}
           </span>
-          {/* docs/TEMPLATES-IA.md — the chip is the price of one render; a template not yet for
-              sale wears none rather than a promise it cannot keep. */}
-          {isForSale(card) && (
-            <span
-              data-price-chip
-              className="border border-white/35 bg-black/70 px-2 py-1 font-label text-[0.6875rem] leading-none tracking-[0.12em] text-white uppercase"
-            >
-              {formatPrice(card.priceCents)}
-            </span>
-          )}
+          {/* No price here (founder, 2026-09-07: "가격은 자세히 보기를 눌러야만"): the card sells the
+              result; the template page names the price, in the reader's currency. */}
         </div>
       </div>
 

@@ -701,8 +701,10 @@ async function sweepTemplates(): Promise<void> {
     expectPresent('is the video tab', page.body, 'data-templates="video"');
     expectPresent('shows the tabs', page.body, 'data-medium-tab="image"');
     expectPresent('cards are addressable', page.body, `data-prompt-card="${GATED_PROMPT}"`);
-    expectPresent('a priced card wears its price', page.body, 'data-price-chip');
-    expectPresent('…and the price itself', page.body, '$4');
+    // Founder, 2026-09-07: no price on a card — it lives on the template page, in the reader's currency.
+    expectAbsent('cards wear no price', page.body, 'data-price-chip');
+    // `>$4<` — the price as rendered text; a bare `$4` also matches React Flight's `"$4:props…"` references.
+    expectAbsent('…not even the number', page.body, locale === 'ko' ? '5,900원' : '>$4<');
     expectPresent('cards link to template pages', page.body, `href="/${locale}/t/${GATED_PROMPT}"`);
     expectPresent('the model chip', page.body, 'SEEDANCE 2.5');
     expectPresent('the use-case filter', page.body, 'data-use-case-filter');
@@ -734,6 +736,11 @@ async function sweepTemplates(): Promise<void> {
   expectPresent('…with the make section', detail.body, 'data-template-make');
   expectPresent('…and the one-style studio', detail.body, 'data-single="true"');
   expectPresent('…and the demo badge', detail.body, 'data-demo-badge');
+  expectPresent('…and the price in dollars on the English page', detail.body, '>$4<');
+  const detailKo = await get(`/ko/t/${GATED_PROMPT}`);
+  expectEqual('the Korean template page renders 200', detailKo.status, 200);
+  expectPresent('…with the price in won', detailKo.body, '5,900원');
+  expectAbsent('…and never a dollar', detailKo.body, '>$4<');
   expectAbsent('…and NONE of its prompt text', detail.body, promptToken(GATED_PROMPT));
   expectAbsent('…no prompt block', detail.body, 'data-prompt-text');
   expectAbsent('…no lock panel', detail.body, 'data-lock-panel');
@@ -871,7 +878,8 @@ async function sweepPricingTemplates(): Promise<void> {
     expectEqual(`/${locale}/pricing renders 200`, page.status, 200);
     expectPresent('…with the price table', page.body, 'data-pricing-table');
     expectPresent('…listing the priced template', page.body, `data-pricing-row="${GATED_PROMPT}"`);
-    expectPresent('…at its price', page.body, '$4');
+    expectPresent('…at its price, in the reader’s currency', page.body, locale === 'ko' ? '5,900원' : '>$4<');
+    if (locale === 'ko') expectAbsent('…with no dollar on the Korean table', page.body, '>$4<');
     expectAbsent('…without the closed one', page.body, `data-pricing-row="${CLOSED_TEMPLATE}"`);
     expectAbsent('…no cookie table', page.body, 'data-cookie-table');
     expectAbsent('…no balance figure', page.body, 'data-cookie-balance');

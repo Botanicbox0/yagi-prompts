@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import { DEFAULT_LOCALE, isLocale, type Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/dictionaries';
 import { formatCount, interpolate } from '@/lib/i18n/format';
-import { formatPrice, isForSale, priceRange } from '@/lib/twings/products';
+import { formatTemplatePrice, isForSale, priceRangeFor } from '@/lib/twings/products';
 import { getPromptCatalog } from '@/lib/prompts/public-catalog';
 import { templateHref, templatesHref } from '@/lib/prompts/links';
 import { SITE_OG_IMAGE, SITE_TWITTER_CARD } from '@/lib/seo/og';
@@ -56,8 +56,8 @@ export default async function PricingPage({ params }: { params: Promise<{ locale
   const all = [...catalog.video, ...catalog.image];
   const forSale = all.filter(isForSale);
   const pending = all.length - forSale.length;
-  const range = priceRange(all);
-  const filmRange = range ? { min: formatPrice(range.minCents), max: formatPrice(range.maxCents) } : null;
+  // The range and the table in the reader's currency: won on /ko, dollars on /en (2026-09-07).
+  const filmRange = priceRangeFor(all, locale);
 
   return (
     <>
@@ -109,7 +109,7 @@ export default async function PricingPage({ params }: { params: Promise<{ locale
                         <td className="py-3 pr-4 font-mono text-code opacity-70">
                           {card.medium === 'video' && card.runtimeSeconds ? interpolate(dict.studio.runtimeLabel, { seconds: String(card.runtimeSeconds) }) : '—'}
                         </td>
-                        <td className="py-3 text-right font-mono text-code text-accent">{formatPrice(card.priceCents)}</td>
+                        <td className="py-3 text-right font-mono text-code text-accent">{formatTemplatePrice(card, locale)}</td>
                       </tr>
                     ))}
                   </tbody>

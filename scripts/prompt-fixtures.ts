@@ -50,6 +50,8 @@ export interface PromptFixture {
   /** docs/TEMPLATES-IA.md — default video / not for sale; the priced ones exercise the studio. */
   medium?: TemplateMedium;
   priceCents?: number;
+  /** The fixed won price (0018); the one fixture that sets it proves the override beats the suggestion. */
+  priceKrw?: number;
   runtimeSeconds?: number;
   engine?: string;
   aspectDefault?: string;
@@ -190,6 +192,7 @@ const YAGI: PromptFixture[] = [
     slug: 'static-portrait-window-light',
     medium: 'image',
     priceCents: 200,
+    priceKrw: 2500,
     engine: 'gpt-image-2',
     aspectDefault: '4:5',
     source: 'yagi',

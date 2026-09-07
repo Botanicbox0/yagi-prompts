@@ -99,6 +99,7 @@ describe('template metadata (docs/TEMPLATES-IA.md SEO)', () => {
     useCase: ['cinematic'],
     medium: 'video',
     priceCents: 400,
+    priceKrw: 0,
     runtimeSeconds: 15,
     engine: null,
     aspectDefault: null,

@@ -39,6 +39,7 @@ function card(overrides: Partial<PromptCard> = {}): PromptCard {
     useCase: ['cinematic'],
     medium: 'video',
     priceCents: 400,
+    priceKrw: 0,
     runtimeSeconds: 15,
     engine: null,
     aspectDefault: null,
@@ -81,11 +82,12 @@ describe('prompt card (§13.2)', () => {
    * to COOKIE for anything not public, so a free-gated prompt quoted a price the server refuses to
    * charge — `unlockPrompt` will not spend a cookie on one. The chip now names the ACTION.
    */
-  /** docs/TEMPLATES-IA.md — the chip is the price of one render; nothing is locked any more. */
-  it('wears the price as its one chip, and no chip at all when not yet for sale', () => {
+  /** Founder, 2026-09-07: a price on the card dulls the wish to buy — it lives on the template page. */
+  it('wears no price and no lock chip; the template page names the price', () => {
     const priced = cardMarkup(card({ priceCents: 400 }));
-    expect(priced).toContain('data-price-chip');
-    expect(priced).toContain('$4');
+    expect(priced).not.toContain('data-price-chip');
+    expect(priced).not.toContain('$4');
+    expect(priced).not.toContain('data-price=');
     expect(priced).not.toContain('data-lock-chip');
     const closed = cardMarkup(card({ priceCents: 0 }));
     expect(closed).not.toContain('data-price-chip');
@@ -224,6 +226,7 @@ describe('prompt detail (§13.2 / §5.5 / §15.3)', () => {
     featured: true,
     medium: 'video' as const,
     priceCents: 400,
+    priceKrw: 0,
     runtimeSeconds: 15,
     engine: null,
     aspectDefault: null,

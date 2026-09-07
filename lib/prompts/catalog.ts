@@ -33,6 +33,8 @@ export interface PromptCard {
   medium: TemplateMedium;
   /** One render in USD cents; 0 = not for sale yet. */
   priceCents: number;
+  /** The fixed won price for Korean pages; 0 = suggested from the dollar price (lib/twings/products.ts). */
+  priceKrw: number;
   runtimeSeconds: number | null;
   /** Render engine id and opening aspect; null = the medium's default (lib/images/engines.ts). */
   engine: string | null;
@@ -107,6 +109,7 @@ export function toPromptCard(row: PromptRow, options: PromptCatalogOptions = {})
     useCase: row.useCase,
     medium: row.medium,
     priceCents: row.priceCents,
+    priceKrw: row.priceKrw,
     runtimeSeconds: row.runtimeSeconds,
     engine: row.engine,
     aspectDefault: row.aspectDefault,

@@ -1328,6 +1328,8 @@ export const en = {
     templateMedia: { video: 'Video', image: 'Image' },
     fieldTemplatePrice: 'Price per render (USD cents)',
     templatePriceHint: '400 = $4. Zero marks the template as not for sale yet.',
+    fieldTemplatePriceKrw: 'Price per render (KRW)',
+    templatePriceKrwHint: 'Shown on Korean pages. Zero derives it from the USD price with the x,900 rule.',
     fieldTemplateRuntime: 'Runtime (seconds)',
     templateRuntimeHint: 'Films only. Leave empty for an image.',
     fieldTemplateEngine: 'Render engine',

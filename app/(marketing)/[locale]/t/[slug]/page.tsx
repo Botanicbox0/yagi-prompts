@@ -12,7 +12,7 @@ import { getCampaignCatalog } from '@/lib/campaigns/public-catalog';
 import { campaignHref } from '@/lib/campaigns/links';
 import { isCampaignPublic } from '@/lib/campaigns/state';
 import { payoutHeadline } from '@/lib/campaigns/copy';
-import { formatPrice, isForSale } from '@/lib/twings/products';
+import { formatTemplatePrice, isForSale } from '@/lib/twings/products';
 import { aspectsForMedium, defaultAspect, engineLabel, resolveEngine } from '@/lib/images/engines';
 import { signInHref } from '@/lib/billing/links';
 import { templateMetadata, unresolvedTemplateMetadata } from '@/lib/seo/template-metadata';
@@ -94,7 +94,7 @@ export default async function TemplatePage({ params }: RouteParams) {
     ? {
         id: card.slug,
         title,
-        price: formatPrice(card.priceCents),
+        price: formatTemplatePrice(card, locale),
         runtime: String(card.runtimeSeconds ?? 0),
         blurb: card.useCase.map((value) => useCaseLabels[value] ?? value).join(' · '),
         posterSrc: card.poster?.src ?? null,
@@ -150,7 +150,7 @@ export default async function TemplatePage({ params }: RouteParams) {
                   <div className="bg-surface px-5 py-5">
                     <dt className="font-label text-eyebrow uppercase opacity-60">{t.priceLabel}</dt>
                     <dd className="mt-2 font-display text-[1.6rem] leading-none font-black">
-                      {isForSale(card) ? formatPrice(card.priceCents) : t.notForSale}
+                      {isForSale(card) ? formatTemplatePrice(card, locale) : t.notForSale}
                     </dd>
                   </div>
                   <div className="bg-surface px-5 py-5">

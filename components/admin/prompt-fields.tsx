@@ -1,5 +1,6 @@
 import { IMAGE_ASPECTS, IMAGE_ENGINES, IMAGE_ENGINE_IDS, VIDEO_ASPECTS, VIDEO_ENGINE_IDS } from '@/lib/images/engines';
 import { formatDate } from '@/lib/i18n/format';
+import { suggestedKrw } from '@/lib/twings/products';
 import { PROMPT_TEXT_MAX, PROMPT_TEXT_MIN, TEMPLATE_MEDIA } from '@/lib/prompts/schemas';
 import { promptHref } from '@/lib/prompts/links';
 import { visibilityLabel, visibilityOptions } from '@/components/admin/labels';
@@ -224,7 +225,7 @@ export function PromptFields({ row, dict }: { row: PromptRow | null; dict: Dict 
       </div>
 
       {/* docs/TEMPLATES-IA.md — what this template produces and what one render costs. */}
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-4">
         <Field label={a.fieldTemplateMedium}>
           <select name="medium" defaultValue={row?.medium ?? 'video'} className={INPUT}>
             {TEMPLATE_MEDIA.map((medium) => (
@@ -236,6 +237,10 @@ export function PromptFields({ row, dict }: { row: PromptRow | null; dict: Dict 
         </Field>
         <Field label={a.fieldTemplatePrice} hint={a.templatePriceHint}>
           <input type="number" name="priceCents" min={0} step={1} defaultValue={row?.priceCents ?? 0} className={INPUT} />
+        </Field>
+        {/* The won price a Korean page shows (0018). Empty/0 = the x,900 suggestion, offered as the placeholder. */}
+        <Field label={a.fieldTemplatePriceKrw} hint={a.templatePriceKrwHint}>
+          <input type="number" name="priceKrw" min={0} step={100} defaultValue={row?.priceKrw ?? 0} placeholder={String(suggestedKrw(row?.priceCents ?? 0))} className={INPUT} />
         </Field>
         <Field label={a.fieldTemplateRuntime} hint={a.templateRuntimeHint}>
           <input type="number" name="runtimeSeconds" min={1} step={1} defaultValue={row?.runtimeSeconds ?? ''} className={INPUT} />

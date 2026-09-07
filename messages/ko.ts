@@ -1283,6 +1283,8 @@ export const ko: Dictionary = {
     templateMedia: { video: '영상', image: '이미지' },
     fieldTemplatePrice: '1회 가격 (USD 센트)',
     templatePriceHint: '400 = $4. 0이면 아직 판매하지 않는 템플릿으로 표시됩니다.',
+    fieldTemplatePriceKrw: '1회 가격 (원)',
+    templatePriceKrwHint: '한국어 화면에 보이는 원화 가격. 0이면 USD 가격에서 x,900원 규칙으로 계산합니다.',
     fieldTemplateRuntime: '길이 (초)',
     templateRuntimeHint: '영상만. 이미지는 비워둡니다.',
     fieldTemplateEngine: '생성 엔진',
