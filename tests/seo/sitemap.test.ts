@@ -132,6 +132,7 @@ describe('robots (§8 M5)', () => {
       // docs/TEMPLATES-IA.md §8 — the owner's renders and the 3-day links.
       '/renders',
       '/r/',
+      '/identity',
     ]);
   });
 

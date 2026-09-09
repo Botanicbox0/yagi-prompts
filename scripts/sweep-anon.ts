@@ -970,6 +970,15 @@ async function sweepRenders(): Promise<void> {
   const enqueue = await fetch(`${BASE}/api/renders`, { method: 'POST', redirect: 'manual' });
   expectEqual('enqueue refuses anon', enqueue.status, 401);
 
+  // docs/TEMPLATES-IA.md §8.2 — the face check is app surface; the bank's callback is public but inert without a token.
+  const verify = await request('/identity/verify', { headers: { 'user-agent': CHROME_UA } });
+  expectOneOf('/identity/verify redirects anon', verify.status, [302, 303, 307]);
+  if (verify.location?.includes('signin=1')) ok('…to sign-in', verify.location);
+  else fail('/identity/verify redirect target', `expected the sign-in redirect, got ${verify.location}`);
+  const callback = await request('/api/identity/callback');
+  expectEqual('the identity callback answers a bare hit with a redirect', callback.status, 303);
+  expectPresent('…to the verify page, result unknown', callback.location ?? '', '/identity/verify?result=unknown');
+
   const tick = await request('/api/renders/tick');
   expectEqual('the tick runs (no secret locally)', tick.status, 200);
   expectPresent('…and reports a pass', tick.body, '"summary"');

@@ -15,6 +15,7 @@ import { payoutHeadline } from '@/lib/campaigns/copy';
 import { formatTemplatePrice, isForSale } from '@/lib/twings/products';
 import { aspectsForMedium, defaultAspect, engineLabel, resolveEngine } from '@/lib/images/engines';
 import { signInHref } from '@/lib/billing/links';
+import { identityVerifyHref } from '@/lib/identity/links';
 import { templateMetadata, unresolvedTemplateMetadata } from '@/lib/seo/template-metadata';
 import { MarketingFooter, MarketingNav, adLabels } from '@/components/marketing/chrome';
 import { AdRail } from '@/components/ad/ad-rail';
@@ -192,7 +193,17 @@ export default async function TemplatePage({ params }: RouteParams) {
                     template: card.slug,
                     locale,
                     signinHref: signInHref(`${templateHref(locale, slug)}#make`, locale),
-                    labels: { badge: dict.renders.studio.badge, submitting: dict.renders.studio.submitting, errors: dict.renders.studio.errors },
+                    identityHref: identityVerifyHref(`${templateHref(locale, slug)}#make`),
+                    labels: {
+                      badge: dict.renders.studio.badge,
+                      operatorBadge: dict.renders.studio.operatorBadge,
+                      freeCta: dict.renders.studio.freeCta,
+                      submitting: dict.renders.studio.submitting,
+                      identityNotice: dict.renders.studio.identityNotice,
+                      identityPending: dict.renders.studio.identityPending,
+                      identityCta: dict.renders.studio.identityCta,
+                      errors: dict.renders.studio.errors,
+                    },
                   }}
                   labels={{
                     stepPhoto: dict.studio.stepPhoto,

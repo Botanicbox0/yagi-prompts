@@ -36,6 +36,7 @@ const STATUS: Record<CreateRenderFailure, number> = {
   bad_photo: 400,
   photo_too_large: 413,
   rate_limited: 429,
+  identity_required: 403,
 };
 
 function json(body: unknown, status: number): NextResponse {

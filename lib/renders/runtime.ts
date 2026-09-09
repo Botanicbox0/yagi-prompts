@@ -1,6 +1,7 @@
 import 'server-only';
 import type { SqlRunner } from '@/lib/db/sql-runner';
 import { siteUrl } from '@/lib/seo/site-url';
+import { liveAssetsClient } from '@/lib/identity/runtime';
 import { getRenderNotifier } from './notify';
 import { runRenderPass, type RenderPassDeps, type RenderPassOptions, type RenderPassReport } from './service';
 import { getRenderStore } from './store';
@@ -18,6 +19,7 @@ export async function livePassDeps(sql: SqlRunner): Promise<RenderPassDeps> {
     notifier: getRenderNotifier(),
     siteUrl: origin,
     callbackUrl: `${origin}/api/renders/callback`,
+    assets: liveAssetsClient(),
   };
 }
 

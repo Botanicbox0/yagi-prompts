@@ -2,6 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import type { ArkAsset, ArkAssetsClient, ArkAssetStatus } from '@/lib/ark/assets';
 import type { ArkClient, ArkTask } from '@/lib/ark/client';
 import type { GptImageResult, OpenAiImageClient } from '@/lib/images/openai';
 import { OpenAiImageError } from '@/lib/images/openai';
@@ -38,10 +39,50 @@ const VIDEO_BYTES = new Uint8Array([0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x
 const NOW = new Date('2026-09-06T12:00:00.000Z');
 const SITE = 'https://twings.test';
 
-const okImage = (): GptImageResult => ({ b64: Buffer.from(RESULT_BYTES).toString('base64'), outputFormat: 'jpeg', size: '1024x1280', usage: null, usd: 0.19 });
+const okImage = (): GptImageResult => ({ b64: Buffer.from(RESULT_BYTES).toString('base64'), outputFormat: 'jpeg', size: '1024x1280', quality: 'high', usage: null, usd: 0.19 });
 
 function fakeOpenAi(impl: () => Promise<GptImageResult>): OpenAiImageClient {
   return { generate: impl, edit: impl } as OpenAiImageClient;
+}
+
+/** The bank's asset client, faked at its seam: one asset, whose status the test moves. */
+function fakeAssets(state: { status: ArkAssetStatus; created: number }): ArkAssetsClient {
+  const asset = (id: string): ArkAsset => ({
+    id,
+    groupId: 'grp-1',
+    status: state.status,
+    createdAt: '2026-09-10T00:00:00Z',
+    lastInferenceAt: null,
+    assetType: 'Image',
+    name: '',
+    url: 'https://store.test/photo.jpg',
+    updatedAt: '2026-09-10T00:00:00Z',
+    projectName: 'default',
+    moderation: { strategy: 'Default' },
+  });
+  return {
+    async createVisualValidateSession(input) {
+      return { bytedToken: 'tok', h5Link: 'https://h5.bank.test/x', callbackUrl: input.callbackUrl };
+    },
+    async getVisualValidateResult() {
+      return { groupId: 'grp-1' };
+    },
+    async createAsset() {
+      state.created += 1;
+      return { id: `asset-${state.created}` };
+    },
+    async getAsset(input) {
+      return asset(typeof input === 'string' ? input : input.id);
+    },
+    async listAssets() {
+      return [];
+    },
+    async listAssetGroups() {
+      return [];
+    },
+    async deleteAsset() {},
+    async deleteAssetGroup() {},
+  };
 }
 
 function task(status: ArkTask['status'], videoUrl: string | null = null): ArkTask {
@@ -196,9 +237,89 @@ describe('the render queue', () => {
     expect(mailer.sent).toHaveLength(1);
   });
 
-  it('hands a film to the provider and finishes it on a later poll, copying the file before the url dies', async () => {
+  it('refuses a ModelArk render with a photo until the person has verified their face (docs §8.2)', async () => {
+    expect(await enqueue(VIDEO_TEMPLATE, '9:16')).toEqual({ ok: false, code: 'identity_required' });
+    await h.sql.query(`insert into identity_groups (user_id, status) values ($1, 'pending')`, [ADMIN_VIEWER.userId]);
+    expect(await enqueue(VIDEO_TEMPLATE, '9:16')).toEqual({ ok: false, code: 'identity_required' });
+    await h.sql.query(`update identity_groups set status = 'active', group_id = 'grp-1', verified_at = now() where user_id = $1`, [ADMIN_VIEWER.userId]);
+    expect((await enqueue(VIDEO_TEMPLATE, '9:16')).ok).toBe(true);
+    // The OpenAI image path never asks: the photo itself is what it takes.
+    expect((await enqueue()).ok).toBe(true);
+  });
+
+  it('parks a film while the bank compares the photo, then references the asset — never the bytes', async () => {
+    await h.sql.query(`insert into identity_groups (user_id, status, group_id, verified_at) values ($1, 'active', 'grp-1', now())`, [ADMIN_VIEWER.userId]);
     const created = await enqueue(VIDEO_TEMPLATE, '9:16');
     if (!created.ok) throw new Error(created.code);
+    const bank = { status: 'Processing' as ArkAssetStatus, created: 0 };
+    const assets = fakeAssets(bank);
+    const bankStore = { ...store, url: async () => 'https://store.test/photo.jpg' };
+    const calls: Parameters<ArkClient['createVideoTask']>[0][] = [];
+    let state: ArkTask = task('queued');
+    const ark: ArkClient = {
+      async createVideoTask(input) {
+        calls.push(input);
+        return { id: 'cgt-1' };
+      },
+      async getVideoTask() {
+        return state;
+      },
+    };
+    const doFetch: typeof fetch = async () => new Response(VIDEO_BYTES, { status: 200, headers: { 'content-type': 'video/mp4' } });
+
+    const parked = await runRenderPass(deps({ ark, fetch: doFetch }, { assets, store: bankStore }), { jobId: created.id });
+    expect(parked).toMatchObject({ claimed: 1, waiting: 1, succeeded: 0, failed: 0 });
+    expect(bank.created).toBe(1);
+    expect(calls).toHaveLength(0);
+    let job = (await loadRenderJob(h.sql, created.id))!;
+    expect(job).toMatchObject({ status: 'running', provider: 'modelark', providerTaskId: 'asset:asset-1' });
+
+    // Still comparing: nothing moves, nothing is re-registered.
+    const still = await runRenderPass(deps({ ark, fetch: doFetch }, { assets, store: bankStore }), { limit: 0 });
+    expect(still).toMatchObject({ waiting: 1, claimed: 0 });
+    expect(bank.created).toBe(1);
+
+    // Active: the film task is created with the asset reference, and the job now waits on the task.
+    bank.status = 'Active';
+    const started = await runRenderPass(deps({ ark, fetch: doFetch }, { assets, store: bankStore }), { limit: 0 });
+    expect(started).toMatchObject({ waiting: 1, succeeded: 0 });
+    expect(calls).toHaveLength(1);
+    expect((calls[0]!.content[1] as { image_url: { url: string } }).image_url.url).toBe('asset://asset-1');
+    expect(JSON.stringify(calls[0])).not.toContain('base64');
+    job = (await loadRenderJob(h.sql, created.id))!;
+    expect(job).toMatchObject({ status: 'running', providerTaskId: 'cgt-1' });
+
+    state = task('succeeded', 'https://ark.example/out.mp4');
+    const done = await runRenderPass(deps({ ark, fetch: doFetch }, { assets, store: bankStore }), { limit: 0 });
+    expect(done).toMatchObject({ succeeded: 1, notified: 1 });
+    expect((await loadRenderJob(h.sql, created.id))!).toMatchObject({ status: 'succeeded', resultMime: 'video/mp4' });
+    const { rows } = await h.sql.query<{ last_used_at: string | null }>('select last_used_at from identity_assets where asset_id = $1', ['asset-1']);
+    expect(rows[0]?.last_used_at).not.toBeNull();
+  });
+
+  it('fails a ModelArk render whose photo the bank refuses, with the reason the page can explain', async () => {
+    await h.sql.query(`insert into identity_groups (user_id, status, group_id, verified_at) values ($1, 'active', 'grp-1', now())`, [ADMIN_VIEWER.userId]);
+    const created = await enqueue(VIDEO_TEMPLATE, '9:16');
+    if (!created.ok) throw new Error(created.code);
+    const assets = fakeAssets({ status: 'Failed', created: 0 });
+    const bankStore = { ...store, url: async () => 'https://store.test/photo.jpg' };
+    const report = await runRenderPass(deps({ ark: null }, { assets, store: bankStore }), { jobId: created.id });
+    expect(report).toMatchObject({ claimed: 1, failed: 1, waiting: 0 });
+    expect((await loadRenderJob(h.sql, created.id))!).toMatchObject({ status: 'failed', errorCode: 'asset_failed' });
+    // No bank client at all is a configuration gap, named as such.
+    const again = await enqueue(VIDEO_TEMPLATE, '9:16');
+    if (!again.ok) throw new Error(again.code);
+    const noBank = await runRenderPass(deps({ ark: null }, { assets: null, store: bankStore }), { jobId: again.id });
+    expect(noBank).toMatchObject({ failed: 1 });
+    expect((await loadRenderJob(h.sql, again.id))!.errorCode).toBe('identity_unavailable');
+  });
+
+  it('hands a film to the provider and finishes it on a later poll, copying the file before the url dies', async () => {
+    await h.sql.query(`insert into identity_groups (user_id, status, group_id, verified_at) values ($1, 'active', 'grp-1', now())`, [ADMIN_VIEWER.userId]);
+    const created = await enqueue(VIDEO_TEMPLATE, '9:16');
+    if (!created.ok) throw new Error(created.code);
+    const assets = fakeAssets({ status: 'Active', created: 0 });
+    const bankStore = { ...store, url: async () => 'https://store.test/photo.jpg' };
     let state: ArkTask = task('queued');
     const calls: Parameters<ArkClient['createVideoTask']>[0][] = [];
     const ark: ArkClient = {
@@ -215,22 +336,23 @@ describe('the render queue', () => {
     const { rows } = await h.sql.query<{ runtime_seconds: number | null }>('select runtime_seconds from prompt_items where slug = $1', [VIDEO_TEMPLATE]);
     const seconds = Math.min(15, Math.max(4, rows[0]?.runtime_seconds ?? 5));
 
-    const started = await runRenderPass(deps({ ark, fetch: doFetch }), { jobId: created.id });
+    const started = await runRenderPass(deps({ ark, fetch: doFetch }, { assets, store: bankStore }), { jobId: created.id });
     expect(started).toMatchObject({ claimed: 1, waiting: 1, succeeded: 0, notified: 0 });
     expect(calls).toHaveLength(1);
     expect(calls[0]).toMatchObject({ model: 'seedance-2.0', ratio: '9:16', duration: seconds, generateAudio: true, watermark: false });
     expect(calls[0]!.content[0]).toMatchObject({ type: 'text' });
     expect(calls[0]!.content[1]).toMatchObject({ type: 'image_url', role: 'reference_image' });
-    expect((calls[0]!.content[1] as { image_url: { url: string } }).image_url.url).toMatch(/^data:image\/jpeg;base64,/);
+    // The verified library's reference, never the photo's bytes (ModelArk refuses a real face in them).
+    expect((calls[0]!.content[1] as { image_url: { url: string } }).image_url.url).toBe('asset://asset-1');
     let job = (await loadRenderJob(h.sql, created.id))!;
     expect(job).toMatchObject({ status: 'running', provider: 'modelark', providerTaskId: 'cgt-1' });
 
     state = task('running');
-    const stillRunning = await runRenderPass(deps({ ark, fetch: doFetch }), { limit: 0 });
+    const stillRunning = await runRenderPass(deps({ ark, fetch: doFetch }, { assets, store: bankStore }), { limit: 0 });
     expect(stillRunning).toMatchObject({ claimed: 0, waiting: 1, succeeded: 0 });
 
     state = task('succeeded', 'https://ark.example/out.mp4');
-    const done = await runRenderPass(deps({ ark, fetch: doFetch }), { limit: 0 });
+    const done = await runRenderPass(deps({ ark, fetch: doFetch }, { assets, store: bankStore }), { limit: 0 });
     expect(done).toMatchObject({ waiting: 0, succeeded: 1, notified: 1 });
     job = (await loadRenderJob(h.sql, created.id))!;
     expect(job).toMatchObject({ status: 'succeeded', resultKey: `${created.id}/result.mp4`, resultMime: 'video/mp4', provider: 'modelark' });

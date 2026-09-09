@@ -1,31 +1,39 @@
-import { IMAGE_ENGINES, sizeString, type ImageAspect, imageSizeFor } from './engines';
+import { IMAGE_ENGINES, imageSizeFor, sizeString, type GptImageQuality, type ImageAspect, type OpenAiEngineId } from './engines';
 
 /**
- * OpenAI — the Images API for GPT Image 2, as ONE boundary (developers.openai.com API reference,
- * read 2026-09-06).
+ * OpenAI — the Images API for the GPT Image family, as ONE boundary (developers.openai.com API
+ * reference, read 2026-09-06; GPT Image 2.5 model pages + guide, read 2026-09-10).
  *
  *   POST https://api.openai.com/v1/images/generations   (JSON)      text → image
  *   POST https://api.openai.com/v1/images/edits         (multipart) image[] + prompt → image
- *     model gpt-image-2 · size `WxH` (multiples of 16, 1:3 … 3:1, ≤ 3840×2160) · quality high
- *     · output_format png|jpeg|webp · moderation auto|low (no input_fidelity on gpt-image-2)
+ *     model gpt-image-2.5-flare | gpt-image-2.5-sunburst | gpt-image-2 · size `WxH` (multiples of
+ *     16, 1:3 … 3:1) · quality (2.5: low … max; gpt-image-2: low/medium/high) · output_format
+ *     png|jpeg|webp · moderation auto|low (no input_fidelity on any of them)
  *     → { created, data: [{ b64_json }], usage: { input_tokens, output_tokens,
  *         input_tokens_details: { image_tokens, text_tokens } } }
  *
- * Founder rule (2026-09-06): `quality` is ALWAYS `high` — "우리는 고품질로 파는거니까". Not a
- * parameter here on purpose, so no caller can quietly sell a medium render.
+ * Founder rule (2026-09-06): quality is ALWAYS the engine's top tier — "우리는 고품질로 파는거니까".
+ * The tier comes from the engine table (`IMAGE_ENGINES[engine].quality`), so no caller can quietly
+ * sell a medium render; the only way to change it is to change the table. The `quality` field on
+ * the input exists for the smoke script's measurements and nothing else (a test pins that the
+ * render pass never sets it).
  *
- * The visitor's photo goes in as a reference on the EDITS endpoint; gpt-image-2 reads references
- * at high fidelity on its own (the `input_fidelity` flag was gpt-image-1's and is refused here). OpenAI's policy allows a person's own photo and
- * forbids a likeness used without consent — consent is ours to collect (the template page's
- * checkbox), and a moderation refusal is surfaced as `OpenAiImageError.moderated` so the UI can
- * say so rather than retry.
+ * The visitor's photo goes in as a reference on the EDITS endpoint; the GPT Image models read
+ * references at high fidelity on their own (the `input_fidelity` flag was gpt-image-1's and is
+ * refused here — 400 invalid_input_fidelity_model, verified 2026-09-06). OpenAI's policy allows a
+ * person's own photo and forbids a likeness used without consent — consent is ours to collect, and
+ * a moderation refusal is surfaced as `OpenAiImageError.moderated` so the UI can say so rather
+ * than retry.
  *
  * Same seam as the other clients: `fetch` injected, the key read from the environment by the
  * caller (`OPENAI_API_KEY`, no `NEXT_PUBLIC_` prefix, never in this code base or a conversation).
  */
 
 export const OPENAI_DEFAULT_BASE_URL = 'https://api.openai.com/v1';
+/** gpt-image-2's top tier, and the floor for every OpenAI engine (a table entry below it is a bug). */
 export const GPT_IMAGE_QUALITY = 'high' as const;
+/** What a request renders on when it names no engine: the product's image default. */
+export const DEFAULT_OPENAI_ENGINE: OpenAiEngineId = 'gpt-image-2';
 
 export interface OpenAiConfig {
   apiKey: string;
@@ -46,12 +54,16 @@ export interface ReferenceImage {
 }
 
 export interface GptImageInput {
+  /** Which GPT Image model; the table decides its size and quality. */
+  engine?: OpenAiEngineId;
   prompt: string;
   aspect: ImageAspect;
   /** The visitor's photo (and any template plates). Empty → plain generation. */
   references?: ReferenceImage[];
   outputFormat?: 'png' | 'jpeg' | 'webp';
   moderation?: 'auto' | 'low';
+  /** MEASUREMENT ONLY (scripts/image-smoke.ts): override the table's tier for one call. */
+  quality?: GptImageQuality;
 }
 
 export interface GptImageResult {
@@ -59,6 +71,7 @@ export interface GptImageResult {
   b64: string;
   outputFormat: 'png' | 'jpeg' | 'webp';
   size: string;
+  quality: GptImageQuality;
   usage: { inputTokens: number; outputTokens: number; inputImageTokens: number; inputTextTokens: number } | null;
   /** USD from the usage counters at the published token prices — the number to book, not the estimate. */
   usd: number | null;
@@ -83,7 +96,7 @@ export class OpenAiImageError extends Error {
   }
 }
 
-/** Published per-million token prices (2026-09-06). */
+/** Published per-million token prices (same for gpt-image-2 and both 2.5 models, 2026-09-10). */
 export const GPT_IMAGE_USD_PER_M = { textIn: 5, imageIn: 8, imageOut: 30 } as const;
 
 export function gptImageUsd(usage: { inputImageTokens: number; inputTextTokens: number; outputTokens: number }): number {
@@ -95,13 +108,23 @@ export function gptImageUsd(usage: { inputImageTokens: number; inputTextTokens: 
   return Math.round(usd * 10_000) / 10_000;
 }
 
+function engineOf(input: GptImageInput): OpenAiEngineId {
+  return input.engine ?? DEFAULT_OPENAI_ENGINE;
+}
+
+/** The tier a call renders at: the table's, unless the smoke script is measuring another. */
+export function qualityFor(engine: OpenAiEngineId, override?: GptImageQuality): GptImageQuality {
+  return override ?? IMAGE_ENGINES[engine].quality ?? GPT_IMAGE_QUALITY;
+}
+
 /** The generation body (no references) — exported so a test can pin the mapping. */
 export function toGenerationBody(input: GptImageInput): Record<string, unknown> {
+  const engine = engineOf(input);
   return {
-    model: IMAGE_ENGINES['gpt-image-2'].model,
+    model: IMAGE_ENGINES[engine].model,
     prompt: input.prompt,
-    size: sizeString(imageSizeFor('gpt-image-2', input.aspect)),
-    quality: GPT_IMAGE_QUALITY,
+    size: sizeString(imageSizeFor(engine, input.aspect)),
+    quality: qualityFor(engine, input.quality),
     output_format: input.outputFormat ?? 'png',
     moderation: input.moderation ?? 'auto',
     n: 1,
@@ -110,17 +133,18 @@ export function toGenerationBody(input: GptImageInput): Record<string, unknown> 
 
 /** The edits form — the visitor's photo rides as `image[]`. */
 export function toEditForm(input: GptImageInput): FormData {
+  const engine = engineOf(input);
   const references = input.references ?? [];
-  const max = IMAGE_ENGINES['gpt-image-2'].maxReferenceImages;
+  const max = IMAGE_ENGINES[engine].maxReferenceImages;
   if (references.length === 0 || references.length > max) {
-    throw new RangeError(`gpt-image-2 edits take 1–${max} reference images`);
+    throw new RangeError(`${engine} edits take 1–${max} reference images`);
   }
   const form = new FormData();
-  form.set('model', IMAGE_ENGINES['gpt-image-2'].model);
+  form.set('model', IMAGE_ENGINES[engine].model);
   form.set('prompt', input.prompt);
-  form.set('size', sizeString(imageSizeFor('gpt-image-2', input.aspect)));
-  form.set('quality', GPT_IMAGE_QUALITY);
-  // No `input_fidelity`: gpt-image-2 refuses the parameter (400 invalid_input_fidelity_model,
+  form.set('size', sizeString(imageSizeFor(engine, input.aspect)));
+  form.set('quality', qualityFor(engine, input.quality));
+  // No `input_fidelity`: the GPT Image 2 family refuses the parameter (400 invalid_input_fidelity_model,
   // verified 2026-09-06) — it processes references at high fidelity by itself (gpt-image-1 needed the flag).
   form.set('output_format', input.outputFormat ?? 'png');
   form.set('moderation', input.moderation ?? 'auto');
@@ -146,6 +170,7 @@ interface RawResponse {
 
 export function createOpenAiImageClient(config: OpenAiConfig, fetchImpl: typeof fetch = fetch) {
   async function call(path: string, init: RequestInit, input: GptImageInput): Promise<GptImageResult> {
+    const engine = engineOf(input);
     const response = await fetchImpl(`${config.baseUrl}${path}`, {
       ...init,
       headers: { ...(init.headers ?? {}), authorization: `Bearer ${config.apiKey}` },
@@ -173,7 +198,8 @@ export function createOpenAiImageClient(config: OpenAiConfig, fetchImpl: typeof 
     return {
       b64: first.b64_json,
       outputFormat: input.outputFormat ?? 'png',
-      size: sizeString(imageSizeFor('gpt-image-2', input.aspect)),
+      size: sizeString(imageSizeFor(engine, input.aspect)),
+      quality: qualityFor(engine, input.quality),
       usage,
       usd: usage ? gptImageUsd(usage) : null,
     };

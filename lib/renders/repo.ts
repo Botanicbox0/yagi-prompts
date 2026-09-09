@@ -192,6 +192,13 @@ export async function claimRenderJobs(sql: SqlRunner, args: { now: Date; limit: 
   return rows.map(toJob);
 }
 
+/** A job waiting on the bank's photo comparison (docs §8.2) carries the asset id here, under this prefix. */
+export const ASSET_TASK_PREFIX = 'asset:';
+
+export async function markRenderWaitingForAsset(sql: SqlRunner, id: string, assetId: string): Promise<void> {
+  await sql.query(`update render_jobs set provider = 'modelark', provider_task_id = $2 where id = $1`, [id, `${ASSET_TASK_PREFIX}${assetId}`]);
+}
+
 /** Films: the task is created and the job waits on the provider; the poll finishes it later. */
 export async function markRenderRunningWithTask(sql: SqlRunner, id: string, args: { provider: RenderProvider; taskId: string }): Promise<void> {
   await sql.query(`update render_jobs set provider = $2, provider_task_id = $3 where id = $1`, [id, args.provider, args.taskId]);

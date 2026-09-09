@@ -67,7 +67,19 @@ export interface StudioLive {
   locale: string;
   /** Where a `sign_in_required` answer sends the reader (back to this template afterwards). */
   signinHref: string;
-  labels: { badge: string; submitting: string; errors: Record<string, string> };
+  /** Where an `identity_required` answer sends them: the one-time face check (docs §8.2). */
+  identityHref: string;
+  labels: {
+    badge: string;
+    /** Operators render for real without a charge (founder, 2026-09-10). */
+    operatorBadge: string;
+    freeCta: string;
+    submitting: string;
+    identityNotice: string;
+    identityPending: string;
+    identityCta: string;
+    errors: Record<string, string>;
+  };
 }
 
 type Phase = 'photo' | 'style' | 'pay' | 'rendering' | 'result';
@@ -125,6 +137,9 @@ export function TwingsStudio({
   const [photo, setPhoto] = useState<string | null>(null);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [liveMode, setLiveMode] = useState(false);
+  const [charge, setCharge] = useState(true);
+  const [identityRequired, setIdentityRequired] = useState(false);
+  const [identity, setIdentity] = useState('not_needed');
   const [submitting, setSubmitting] = useState(false);
   const [liveError, setLiveError] = useState<string | null>(null);
   const [styleId, setStyleId] = useState<string>(initialStyleId ?? styles[0]?.id ?? '');
@@ -141,15 +156,20 @@ export function TwingsStudio({
     [photo],
   );
 
-  // Static page, per-viewer answer: ask once whether this reader renders for real.
-  const accessEndpoint = live?.accessEndpoint ?? null;
+  // Static page, per-viewer answer: ask once whether this reader renders for real, whether a
+  // payment is taken, and whether this template needs their verified face first.
+  const accessUrl = live ? `${live.accessEndpoint}?template=${encodeURIComponent(live.template)}` : null;
   useEffect(() => {
-    if (accessEndpoint === null) return;
+    if (accessUrl === null) return;
     let cancelled = false;
-    fetch(accessEndpoint, { cache: 'no-store', credentials: 'same-origin' })
+    fetch(accessUrl, { cache: 'no-store', credentials: 'same-origin' })
       .then((response) => (response.ok ? response.json() : { live: false }))
-      .then((json: { live?: boolean }) => {
-        if (!cancelled) setLiveMode(json.live === true);
+      .then((json: { live?: boolean; charge?: boolean; identityRequired?: boolean; identity?: string }) => {
+        if (cancelled) return;
+        setLiveMode(json.live === true);
+        setCharge(json.charge !== false);
+        setIdentityRequired(json.identityRequired === true);
+        setIdentity(typeof json.identity === 'string' ? json.identity : 'not_needed');
       })
       .catch(() => {
         /* the demo is the fallback */
@@ -157,7 +177,9 @@ export function TwingsStudio({
     return () => {
       cancelled = true;
     };
-  }, [accessEndpoint]);
+  }, [accessUrl]);
+
+  const identityBlocked = liveMode && identityRequired && identity !== 'active';
 
   useEffect(() => {
     if (phase !== 'rendering') return;
@@ -206,6 +228,10 @@ export function TwingsStudio({
         window.location.assign(live.signinHref);
         return;
       }
+      if (json.code === 'identity_required') {
+        window.location.assign(live.identityHref);
+        return;
+      }
       setLiveError(live.labels.errors[json.code ?? ''] ?? live.labels.errors.generic ?? 'error');
     } catch {
       setLiveError(live.labels.errors.generic ?? 'error');
@@ -236,13 +262,13 @@ export function TwingsStudio({
   })();
 
   return (
-    <section data-twings-studio data-phase={phase} data-single={single ? 'true' : 'false'} data-aspect={aspect} data-live={liveMode ? 'true' : 'false'} className="mt-10">
+    <section data-twings-studio data-phase={phase} data-single={single ? 'true' : 'false'} data-aspect={aspect} data-live={liveMode ? 'true' : 'false'} data-live-charge={liveMode && charge ? 'true' : 'false'} className="mt-10">
       {/* The one honest label the whole screen hangs on: a demo says so; a live loop says where the result goes. */}
       <p
         data-demo-badge
         className="inline-block border border-accent px-3 py-1.5 font-label text-[0.68rem] tracking-[0.12em] text-accent uppercase"
       >
-        {liveMode && live ? live.labels.badge : labels.demoBadge}
+        {liveMode && live ? (charge ? live.labels.badge : live.labels.operatorBadge) : labels.demoBadge}
       </p>
 
       <ol className="mt-6 flex flex-wrap gap-x-6 gap-y-2 font-label text-[0.68rem] tracking-[0.12em] uppercase">
@@ -378,18 +404,33 @@ export function TwingsStudio({
               )}
 
               <div className="mt-auto pt-6">
+                {identityBlocked && live && (
+                  <p data-identity-notice={identity} className="mb-3 border border-accent px-4 py-3 text-[0.9rem] leading-relaxed">
+                    {identity === 'pending' ? live.labels.identityPending : live.labels.identityNotice}
+                  </p>
+                )}
                 <button
                   type="button"
                   data-pay-cta
                   disabled={!photo || !chosen || submitting}
                   aria-describedby={photo ? undefined : 'studio-cta-hint'}
                   onClick={() => {
-                    if (liveMode && live) void submitLive();
-                    else setPhase('rendering');
+                    if (liveMode && live) {
+                      if (identityBlocked) window.location.assign(live.identityHref);
+                      else void submitLive();
+                    } else setPhase('rendering');
                   }}
                   className="w-full border border-current px-5 py-4 font-label text-[0.95rem] tracking-[0.1em] text-accent uppercase transition-opacity hover:opacity-70 disabled:opacity-25"
                 >
-                  {submitting && live ? live.labels.submitting : chosen ? labels.payCta.replace('{price}', chosen.price) : labels.payCta}
+                  {submitting && live
+                    ? live.labels.submitting
+                    : identityBlocked && live
+                      ? live.labels.identityCta
+                      : liveMode && live && !charge
+                        ? live.labels.freeCta
+                        : chosen
+                          ? labels.payCta.replace('{price}', chosen.price)
+                          : labels.payCta}
                 </button>
                 <p className="mt-3 font-mono text-[0.72rem] opacity-45">{labels.payNote}</p>
                 {liveError && (

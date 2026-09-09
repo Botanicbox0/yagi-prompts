@@ -193,6 +193,9 @@ describe('route cache modes (§3.4 / §4)', () => {
       ['app', 'api', 'renders', 'tick', 'route.ts'],
       ['app', 'api', 'renders', 'callback', 'route.ts'],
       ['app', 'api', 'renders', 'media', '[id]', 'route.ts'],
+      // docs/TEMPLATES-IA.md §8.2 — the face check and the bank's callback.
+      ['app', '(app)', 'identity', 'verify', 'page.tsx'],
+      ['app', 'api', 'identity', 'callback', 'route.ts'],
       ['app', '(admin)', 'admin', 'campaigns', 'page.tsx'],
       ['app', '(admin)', 'admin', 'campaigns', 'new', 'page.tsx'],
       ['app', '(admin)', 'admin', 'campaigns', '[id]', 'page.tsx'],
@@ -659,6 +662,7 @@ describe('render queue (docs/TEMPLATES-IA.md §8)', () => {
     expect(isAppPath('/renders')).toBe(true);
     expect(isAppPath('/renders/11111111-1111-4111-8111-111111111111')).toBe(true);
     expect(isAppPath('/r/11111111-1111-4111-8111-111111111111/token')).toBe(false);
+    expect(isAppPath('/identity/verify')).toBe(true);
     expect(read('middleware.ts')).toContain('|auth/|r/|');
   });
 
@@ -677,6 +681,7 @@ describe('render queue (docs/TEMPLATES-IA.md §8)', () => {
       ['app', 'api', 'renders', 'tick', 'route.ts'],
       ['app', 'api', 'renders', 'callback', 'route.ts'],
       ['app', 'api', 'renders', 'media', '[id]', 'route.ts'],
+      ['app', 'api', 'identity', 'callback', 'route.ts'],
     ]) {
       const source = read(...file);
       expect(source, file.join('/')).toContain("'Cache-Control': 'private, no-store'");

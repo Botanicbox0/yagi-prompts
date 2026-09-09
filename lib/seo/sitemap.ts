@@ -144,6 +144,7 @@ export const DISALLOWED_PATHS = [
   // docs/TEMPLATES-IA.md §8 — the owner's renders and the 3-day links: never indexable.
   '/renders',
   '/r/',
+  '/identity',
 ] as const;
 
 export function buildRobots(origin: string): MetadataRoute.Robots {

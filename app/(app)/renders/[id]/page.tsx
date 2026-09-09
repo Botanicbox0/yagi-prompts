@@ -7,6 +7,7 @@ import { absoluteUrl } from '@/lib/seo/site-url';
 import { getDictionary } from '@/lib/i18n/dictionaries';
 import { formatDate, interpolate } from '@/lib/i18n/format';
 import { templateHref } from '@/lib/prompts/links';
+import { identityVerifyHref } from '@/lib/identity/links';
 import { runLiveRenderPass } from '@/lib/renders/runtime';
 import { failureReason, loadOwnRender } from '@/lib/renders/service';
 import { RENDERS_PATH, renderMediaHref, shareHref } from '@/lib/renders/share';
@@ -116,9 +117,16 @@ export default async function RenderPage({ params }: { params: Promise<{ id: str
             <p className="font-display text-[clamp(1.4rem,2.6vw,2rem)] leading-[0.95] font-black uppercase">{r.failedTitle}</p>
             <p className="mt-5 text-body opacity-70">{failureReason(job.errorCode, locale)}</p>
             <p className="mt-2 font-mono text-[0.75rem] opacity-45">{r.notCharged}</p>
-            <a href={`${templateUrl}#make`} className="mt-8 inline-block border border-current px-6 py-3 font-label text-label uppercase">
-              <TextSwap>{r.makeAgain} →</TextSwap>
-            </a>
+            <div className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-3">
+              {(job.errorCode === 'identity_required' || job.errorCode === 'face_policy') && (
+                <a href={identityVerifyHref(`${templateUrl}#make`)} data-identity-door className="inline-block bg-accent px-6 py-3 font-label text-label text-white uppercase">
+                  <TextSwap>{dict.identity.start} →</TextSwap>
+                </a>
+              )}
+              <a href={`${templateUrl}#make`} className="inline-block border border-current px-6 py-3 font-label text-label uppercase">
+                <TextSwap>{r.makeAgain} →</TextSwap>
+              </a>
+            </div>
           </section>
         )}
       </main>

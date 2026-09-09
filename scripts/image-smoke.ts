@@ -9,7 +9,9 @@ import {
   imageSizeFor,
   isImageAspect,
   isImageEngine,
+  isOpenAiEngine,
   sizeString,
+  type GptImageQuality,
   type ImageAspect,
   type ImageEngineId,
 } from '@/lib/images/engines';
@@ -29,7 +31,8 @@ import { SeedreamError, createSeedreamClient, seedreamConfigFromEnv, toSeedreamB
  *
  * Usage:
  *   npm run image:smoke -- --engine seedream-5.0-pro --ratio 4:5
- *   npm run image:smoke -- --engine gpt-image-2 --ratio 4:5 --photo ./tmp/me.jpg
+ *   npm run image:smoke -- --engine gpt-image-2.5-flare --ratio 4:5 --photo ./tmp/me.jpg
+ *   npm run image:smoke -- --engine gpt-image-2.5-sunburst --ratio 4:5 --photo ./tmp/me.jpg --quality max   # measure a tier
  *   npm run image:smoke -- --engine gpt-image-2 --dry
  */
 
@@ -61,6 +64,13 @@ async function main(): Promise<number> {
     return 2;
   }
   const engine: ImageEngineId = engineArg;
+  const qualityArg = flag('quality');
+  const QUALITIES = ['low', 'medium', 'high', 'xhigh', 'max', 'auto'];
+  if (qualityArg !== null && !QUALITIES.includes(qualityArg)) {
+    console.error(`unknown quality "${qualityArg}" — one of ${QUALITIES.join(', ')}`);
+    return 2;
+  }
+  const quality = (qualityArg ?? undefined) as GptImageQuality | undefined;
   const ratioArg = flag('ratio') ?? DEFAULT_IMAGE_ASPECT;
   if (!isImageAspect(ratioArg)) {
     console.error(`unknown ratio "${ratioArg}"`);
@@ -77,10 +87,10 @@ async function main(): Promise<number> {
   console.log(`estimate  : ≈ $${estimateImageUsd(engine, references).toFixed(3)} for one image`);
   console.log(`reference : ${photoPath ?? '(none — text to image)'}`);
 
-  if (spec.provider === 'modelark') {
+  if (!isOpenAiEngine(engine)) {
     const config = seedreamConfigFromEnv();
     console.log(`ARK_API_KEY: ${config ? 'present' : 'MISSING'}`);
-    const body = toSeedreamBody({ engine: engine as 'seedream-5.0-pro' | 'seedream-5.0-lite', prompt, aspect, references: photoPath ? [photoPath] : [] });
+    const body = toSeedreamBody({ engine, prompt, aspect, references: photoPath ? [photoPath] : [] });
     if (dry || !config) {
       console.log(JSON.stringify(body, null, 2));
       return config ? 0 : 1;
@@ -89,7 +99,7 @@ async function main(): Promise<number> {
     const started = Date.now();
     try {
       const result = await client.generate({
-        engine: engine as 'seedream-5.0-pro' | 'seedream-5.0-lite',
+        engine,
         prompt,
         aspect,
         references: photoPath ? [photoPath] : [],
@@ -118,23 +128,25 @@ async function main(): Promise<number> {
 
   const config = openAiConfigFromEnv();
   console.log(`OPENAI_API_KEY: ${config ? 'present' : 'MISSING'}`);
+  console.log(`quality   : ${quality ?? spec.quality ?? 'high'}${quality ? ' (override — measurement only)' : ' (engine table)'}`);
   const photo = photoPath ? { bytes: new Uint8Array(await readFile(resolve(photoPath))), mime: mimeOf(photoPath) } : null;
+  const request = { engine, prompt, aspect, ...(quality ? { quality } : {}) };
   if (dry || !config) {
     if (photo) {
-      const form = toEditForm({ prompt, aspect, references: [photo] });
+      const form = toEditForm({ ...request, references: [photo] });
       console.log(JSON.stringify(Object.fromEntries([...form.entries()].map(([k, v]) => [k, v instanceof Blob ? `<${v.type} ${v.size} bytes>` : v])), null, 2));
     } else {
-      console.log(JSON.stringify(toGenerationBody({ prompt, aspect }), null, 2));
+      console.log(JSON.stringify(toGenerationBody(request), null, 2));
     }
     return config ? 0 : 1;
   }
   const client = createOpenAiImageClient(config);
   const started = Date.now();
   try {
-    const result = photo ? await client.edit({ prompt, aspect, references: [photo] }) : await client.generate({ prompt, aspect });
-    console.log(`done in ${((Date.now() - started) / 1000).toFixed(1)}s · size ${result.size} · usage ${JSON.stringify(result.usage)} · usd ${result.usd ?? '?'}`);
+    const result = photo ? await client.edit({ ...request, references: [photo] }) : await client.generate(request);
+    console.log(`done in ${((Date.now() - started) / 1000).toFixed(1)}s · size ${result.size} · quality ${result.quality} · usage ${JSON.stringify(result.usage)} · usd ${result.usd ?? '?'}`);
     const bytes = Buffer.from(result.b64, 'base64');
-    const out = resolve(`tmp/image-smoke-${engine}-${aspect.replace(':', 'x')}-${Date.now()}.${result.outputFormat}`);
+    const out = resolve(`tmp/image-smoke-${engine}-${result.quality}-${aspect.replace(':', 'x')}-${Date.now()}.${result.outputFormat}`);
     await mkdir(resolve('tmp'), { recursive: true });
     await writeFile(out, bytes);
     console.log(`saved     : ${out} (${bytes.length} bytes)`);

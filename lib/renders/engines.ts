@@ -1,14 +1,15 @@
 import { ARK_MODELS, estimateRenderUsd, type ArkModelKey, type ArkRatio, type ArkResolution } from '@/lib/ark/models';
 import { ArkError, arkConfigFromEnv, createArkClient, isTerminal, type ArkClient, type ArkContentItem } from '@/lib/ark/client';
-import { IMAGE_ENGINES, type ImageAspect, type ImageEngineId, type VideoAspect, type VideoEngineId } from '@/lib/images/engines';
+import { IMAGE_ENGINES, isOpenAiEngine, type ImageAspect, type ImageEngineId, type VideoAspect, type VideoEngineId } from '@/lib/images/engines';
 import { OpenAiImageError, createOpenAiImageClient, openAiConfigFromEnv, type OpenAiImageClient, type ReferenceImage } from '@/lib/images/openai';
-import { SeedreamError, createSeedreamClient, seedreamConfigFromEnv, type SeedreamClient, type SeedreamEngineId } from '@/lib/images/seedream';
+import { SeedreamError, createSeedreamClient, seedreamConfigFromEnv, type SeedreamClient } from '@/lib/images/seedream';
+import { assetReference } from '@/lib/identity/service';
 
 /**
  * The engine adapters the render pass drives — one call per engine family, every provider
  * quirk translated into ONE failure vocabulary the row, the page and the email can speak.
  *
- *   image   synchronous: GPT Image 2 (the visitor's photo rides the edits endpoint), Seedream
+ *   image   synchronous: the GPT Image family (the visitor's photo rides the edits endpoint), Seedream
  *           5.0 (photo as a base64 data URL; a real face is refused by policy — `face_policy`)
  *   film    asynchronous: ModelArk creates a task, the pass polls it, the finished `video_url`
  *           is copied into our storage at once (it lives 24h — `ARK_VIDEO_URL_TTL_HOURS`).
@@ -32,7 +33,13 @@ export type RenderFailureCode =
   | 'engine_error'
   | 'network'
   /** The provider answered without a usable object. */
-  | 'bad_output';
+  | 'bad_output'
+  /** ModelArk needs the person's verified face (docs §8.2) and they have not verified. */
+  | 'identity_required'
+  /** The identity service is not configured (AK/SK) or cannot hand the bank a photo URL. */
+  | 'identity_unavailable'
+  /** The bank compared the photo with the verified face and refused it, or never finished. */
+  | 'asset_failed';
 
 export class RenderFailure extends Error {
   constructor(
@@ -124,18 +131,21 @@ export interface ImageRenderInput {
   prompt: string;
   aspect: ImageAspect;
   photo: RenderPhoto | null;
+  /** ModelArk: the person's photo as a verified-library asset; when set, the bytes are never sent. */
+  assetId?: string | null;
 }
 
 export async function runImageRender(input: ImageRenderInput, deps: RenderEngineDeps = {}): Promise<EngineOutput> {
   try {
-    if (input.engine === 'gpt-image-2') {
+    if (isOpenAiEngine(input.engine)) {
       const client = deps.openai === undefined ? openAiClientFromEnv() : deps.openai;
       if (client === null) throw new RenderFailure('no_engine_key', 'OPENAI_API_KEY is not set', false);
       const references: ReferenceImage[] = input.photo ? [{ bytes: input.photo.bytes, mime: input.photo.mime, name: 'photo' }] : [];
+      // The engine table decides the quality tier; this call never names one.
       const result =
         references.length > 0
-          ? await client.edit({ prompt: input.prompt, aspect: input.aspect, references, outputFormat: 'jpeg' })
-          : await client.generate({ prompt: input.prompt, aspect: input.aspect, outputFormat: 'jpeg' });
+          ? await client.edit({ engine: input.engine, prompt: input.prompt, aspect: input.aspect, references, outputFormat: 'jpeg' })
+          : await client.generate({ engine: input.engine, prompt: input.prompt, aspect: input.aspect, outputFormat: 'jpeg' });
       const bytes = new Uint8Array(Buffer.from(result.b64, 'base64'));
       if (bytes.byteLength === 0) throw new RenderFailure('bad_output', 'the image came back empty', true);
       return { bytes, mime: 'image/jpeg', provider: 'openai', costUsd: result.usd };
@@ -143,12 +153,12 @@ export async function runImageRender(input: ImageRenderInput, deps: RenderEngine
 
     const client = deps.seedream === undefined ? seedreamClientFromEnv() : deps.seedream;
     if (client === null) throw new RenderFailure('no_engine_key', 'ARK_API_KEY is not set', false);
-    const engine: SeedreamEngineId = input.engine;
+    const engine = input.engine;
     const result = await client.generate({
       engine,
       prompt: input.prompt,
       aspect: input.aspect,
-      references: input.photo ? [dataUrl(input.photo)] : [],
+      references: input.assetId ? [assetReference(input.assetId)] : input.photo ? [dataUrl(input.photo)] : [],
       outputFormat: 'jpeg',
       responseFormat: 'b64_json',
     });
@@ -192,6 +202,8 @@ export interface VideoRenderInput {
   /** The template's runtime; clamped to what the chosen model can do in one task. */
   seconds: number;
   photo: RenderPhoto | null;
+  /** The person's photo as a verified-library asset (docs §8.2); when set, the bytes are never sent. */
+  assetId?: string | null;
   callbackUrl?: string;
 }
 
@@ -208,7 +220,8 @@ export async function startVideoRender(input: VideoRenderInput, deps: RenderEngi
   if (client === null) throw new RenderFailure('no_engine_key', 'ARK_API_KEY is not set', false);
   const { model, seconds } = videoModelFor(input.engine, input.seconds);
   const content: ArkContentItem[] = [{ type: 'text', text: input.prompt }];
-  if (input.photo) content.push({ type: 'image_url', image_url: { url: dataUrl(input.photo) }, role: 'reference_image' });
+  if (input.assetId) content.push({ type: 'image_url', image_url: { url: assetReference(input.assetId) }, role: 'reference_image' });
+  else if (input.photo) content.push({ type: 'image_url', image_url: { url: dataUrl(input.photo) }, role: 'reference_image' });
   try {
     const { id } = await client.createVideoTask({
       model,

@@ -84,7 +84,7 @@
 ## 7. 엔진과 비율 (창업자 결정 2026-09-06)
 
 - 이미지 엔진은 **Seedream 5.0 Pro/Lite (ModelArk) + GPT Image 2 (OpenAI)**. GPT Image 2는 **항상 `quality: high`** ("우리는 고품질로 파는거니까") — 코드에 파라미터가 없다.
-- 템플릿 행에 `engine`(null = 매체 기본: 영상 seedance-2.0, 이미지 gpt-image-2)과 `aspect_default`(null = 이미지 4:5, 영상 9:16)가 있다(0016). 어드민 편집기에서 고르고, 방문자는 만들기 화면의 비율 피커에서 바꾼다. **기본 4:5 = 인스타 피드.**
+- 템플릿 행에 `engine`(null = 매체 기본: 영상 seedance-2.0, 이미지 gpt-image-2; 2.5 Flare/Sunburst는 OpenAI 조직 인증 후 전환)과 `aspect_default`(null = 이미지 4:5, 영상 9:16)가 있다(0016). 어드민 편집기에서 고르고, 방문자는 만들기 화면의 비율 피커에서 바꾼다. **기본 4:5 = 인스타 피드.**
 - 비율 → 픽셀 표는 `lib/images/engines.ts` 한 곳. Seedream Pro는 **2K 티어**(창업자 2026-09-06 "품질 더 올려줘"; 2.36MP 계단 위라 장당 $0.09), Lite도 2K, GPT Image 2는 16의 배수 1024급. 테스트가 각 엔진의 문서 제약(픽셀 범위·비율 범위·16px 격자·가격 계단)을 고정한다.
 - 클라이언트: `lib/images/seedream.ts`(ModelArk `images/generations`, 같은 `ARK_API_KEY`), `lib/images/openai.ts`(`/images/generations` + `/images/edits` with `input_fidelity: high`, `OPENAI_API_KEY`). 스모크: `npm run image:smoke -- --engine <id> --ratio 4:5 [--photo p]`.
 - 실측(2026-09-06): Seedream 5.0 Pro 4:5 1344×1680(1.5K, 당시) 26초 · GPT Image 2 4:5 1024×1280 high 92초, 토큰 기준 $0.18.
@@ -111,6 +111,16 @@
 - **UX**: 첫 실생성(또는 계정 페이지)에서 "결과 받을 곳"을 한 번 정한다 — 이메일(항상) + 휴대폰 번호(선택; `+82`면 알림톡, 그 외 WhatsApp; 인증 코드 1회). 프로필에 `phone_e164`·`phone_verified_at`·`notify_channels`를 두고, `render_jobs.notify_channel`이 실제 발송 채널을 기록한다. 코드는 이미 채널 무관(`lib/renders/notify.ts`의 `RenderNotifier`): 알림톡·WhatsApp은 구현체 두 개를 더하는 일이지 파이프라인을 고치는 일이 아니다.
 - **WhatsApp 가입**: Meta는 "WhatsApp으로 로그인" OAuth를 제공하지 않는다. 실질적인 방법은 Supabase Auth **전화번호 OTP를 WhatsApp 채널로** 보내는 것(Twilio Verify, `signInWithOtp({ phone, options: { channel: 'whatsapp' } })`). 이러면 번호가 곧 신원이라 WhatsApp 전달이 자동으로 검증된다. 선행: Twilio 계정 + Verify 서비스의 WhatsApp 발신자 승인(Meta 비즈니스 인증), Supabase Phone 프로바이더 활성화. 문(`/auth/choose`)에는 세 번째 버튼(번호 입력 → 코드)이 붙는다.
 - **순서 제안**: ① 알림톡(한국 고객 대부분·비용 최저) → ② WhatsApp 전달 → ③ WhatsApp 가입. 셋 다 창업자 쪽 계정·심사가 선행이라, 코드보다 먼저 카카오톡 채널 개설과 Meta 비즈니스 인증을 시작해 두는 편이 좋다.
+
+### 8.2 본인 인증 — 실인물 자산 라이브러리 (2026-09-10 구현, 마이그레이션 0019/0108)
+
+프로덕션 첫 영상 실렌더(2026-09-09, 90년대 서울 인터뷰)가 ModelArk의 "input image may contain real person"으로 거부됐다. 요청은 정상이었고 정책이 막은 것이다. BytePlus가 정한 유일한 정식 경로는 실인물 자산 라이브러리이며, 이제 제품에 붙어 있다.
+
+- **흐름**: ① `/identity/verify`에서 "인증 시작하기" → 서버가 `CreateVisualValidateSession`(콜백 = `/api/identity/callback`)으로 세션을 열고 사람을 BytePlus H5 라이브니스 페이지(`lng=en`, 한국어 없음)로 보낸다 → ② 은행이 콜백으로 `bytedToken`·`resultCode`를 돌려주면 서버가 `GetVisualValidateResult`로 **그룹 ID**를 받아 `identity_groups`에 `active`로 기록한다(사람당 한 번) → ③ 렌더 패스가 사진을 sha256으로 식별해 `CreateAsset`(사진은 서명 URL로 전달)으로 그 그룹의 **자산**으로 등록하고, 은행이 대조를 끝낼 때까지(`Processing`) 작업을 `provider_task_id = asset:<id>`로 세워 둔 뒤 `Active`가 되면 영상 태스크를 `asset://<id>` 참조로 만든다. 바이트는 절대 보내지 않는다. `Failed`면 `asset_failed`, 24시간 넘게 `Processing`이면 같은 코드로 실패.
+- **어디에 필요한가**: ModelArk 엔진 전부(Seedance 영상, Seedream 이미지). OpenAI GPT Image는 사진 자체를 받으므로 불필요(`needsIdentity`). 인큐 시점에 `identity_required`로 거절하고 스튜디오가 인증 페이지로 보낸다(`/api/renders/access`가 템플릿별 필요 여부와 상태를 알려준다).
+- **정원**: 무료 등급 50명/50자산. 세션을 열기 전에 우리 장부(`identity_groups`·`identity_assets`)로 `hasCapacity`를 확인해 "잠시 후"로 안내한다. 슬롯 회수(`lib/ark/reclaim.ts`)를 일일 tick에 붙이는 일은 다음 차례.
+- **환경 변수**: Vercel에 `ARK_ACCESS_KEY`·`ARK_SECRET_KEY`(AK/SK, OpenAPI 서명)가 있어야 한다. 없으면 `/api/renders/tick`의 `config.arkAssets`가 false이고 인증 페이지는 `unavailable`을 말한다.
+- **운영자**: @yagiworkshop.xyz 관리자는 결제 없이 실제 생성한다(`/api/renders/access`의 `charge:false`, 배지 "운영자 테스트 · 결제 없음"). 결제가 붙어도 이 규칙은 유지한다.
 - **카카오 로그인**: Supabase Auth의 Kakao 프로바이더로 붙인다(코드 변경은 로그인 버튼 하나). 선행: 카카오 디벨로퍼스 앱 + **비즈 앱 전환**(사업자등록번호)으로 이메일을 필수 동의 항목으로 — Supabase가 이메일을 요구하기 때문. iOS 앱을 낼 때는 Apple 로그인이 같이 필수.
   - **설정 기록(2026-09-06, 라이브 로그인 확인)**: Supabase Kakao 프로바이더의 Client ID = 카카오 앱 **REST API 키**(앱 > 플랫폼 키 목록의 키 값, 16진수 32자리), Client Secret = **카카오 로그인 클라이언트 시크릿**(비즈니스 인증 시크릿·어드민 키는 쓰지 않음), Redirect URI = `https://nhokkikjkzjalxqsbzuk.supabase.co/auth/v1/callback`. 동의항목은 닉네임·이메일 **필수** + 프로필 사진 **선택** — Supabase는 `account_email profile_image profile_nickname` 세 scope를 항상 요청하므로 프로필 사진을 비워 두면 KOE205, Client ID가 틀리면 KOE101이 뜬다.
   - **문(`/auth/choose`) 워딩 원칙**: 로그인 문은 랜딩이 아니다(Linear·Figma·Notion과 같은 형태). 제목은 행위("로그인 또는 회원가입"), 한 줄 안내(첫 방문이면 계정 자동 생성), "…로 계속하기" 버튼 둘, 이용약관·개인정보처리방침 링크가 든 동의 한 줄. 가치 제안 문단과 사진 처리 안내는 넣지 않는다.

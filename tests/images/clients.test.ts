@@ -1,4 +1,7 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { IMAGE_ENGINES } from '@/lib/images/engines';
 import { SeedreamError, createSeedreamClient, seedreamConfigFromEnv, toSeedreamBody } from '@/lib/images/seedream';
 import {
   GPT_IMAGE_QUALITY,
@@ -68,20 +71,26 @@ describe('Seedream client (ModelArk images/generations)', () => {
   });
 });
 
-describe('GPT Image 2 client (OpenAI images)', () => {
+describe('GPT Image client (OpenAI images: 2.5 Flare · 2.5 Sunburst · 2)', () => {
   it('reads OPENAI_API_KEY only', () => {
     expect(openAiConfigFromEnv({})).toBeNull();
     expect(openAiConfigFromEnv({ OPENAI_API_KEY: 'sk' })).toEqual({ apiKey: 'sk', baseUrl: 'https://api.openai.com/v1' });
   });
 
-  it('always renders at high quality — there is no parameter to lower it', () => {
+  it('renders at the engine table’s tier — gpt-image-2 at high (the default until the org is verified), and nothing in the product can lower it', () => {
     expect(GPT_IMAGE_QUALITY).toBe('high');
-    const body = toGenerationBody({ prompt: 'p', aspect: '4:5' });
+    const body = toGenerationBody({ engine: 'gpt-image-2', prompt: 'p', aspect: '4:5' });
     expect(body).toEqual({ model: 'gpt-image-2', prompt: 'p', size: '1024x1280', quality: 'high', output_format: 'png', moderation: 'auto', n: 1 });
+    expect(toGenerationBody({ prompt: 'p', aspect: '4:5' })).toMatchObject({ model: 'gpt-image-2', quality: 'high' });
+    expect(toGenerationBody({ engine: 'gpt-image-2.5-flare', prompt: 'p', aspect: '4:5' })).toMatchObject({ model: 'gpt-image-2.5-flare', quality: IMAGE_ENGINES['gpt-image-2.5-flare'].quality });
+    expect(toGenerationBody({ engine: 'gpt-image-2.5-sunburst', prompt: 'p', aspect: '1:1' })).toMatchObject({ model: 'gpt-image-2.5-sunburst', size: '1024x1024', quality: IMAGE_ENGINES['gpt-image-2.5-sunburst'].quality });
+    // The override exists for the smoke script's measurements; the render pass never names a quality.
+    expect(toGenerationBody({ engine: 'gpt-image-2.5-flare', prompt: 'p', aspect: '4:5', quality: 'max' })).toMatchObject({ quality: 'max' });
+    expect(readFileSync(join(process.cwd(), 'lib', 'renders', 'engines.ts'), 'utf8')).not.toMatch(/quality\s*:/);
   });
 
   it('sends the visitor photo as an edit reference — and never the gpt-image-1 fidelity flag', () => {
-    const form = toEditForm({ prompt: 'p', aspect: '9:16', references: [{ bytes: new Uint8Array([137, 80, 78, 71]), mime: 'image/png' }] });
+    const form = toEditForm({ engine: 'gpt-image-2', prompt: 'p', aspect: '9:16', references: [{ bytes: new Uint8Array([137, 80, 78, 71]), mime: 'image/png' }] });
     expect(form.get('model')).toBe('gpt-image-2');
     expect(form.get('quality')).toBe('high');
     expect(form.get('input_fidelity')).toBeNull();
@@ -98,8 +107,9 @@ describe('GPT Image 2 client (OpenAI images)', () => {
       { apiKey: 'sk', baseUrl: 'https://openai.test/v1' },
       fakeFetch(200, { created: 1, data: [{ b64_json: 'AAAA' }], usage: { input_tokens: 2100, output_tokens: 6240, input_tokens_details: { image_tokens: 2000, text_tokens: 100 } } }, capture),
     );
-    const result = await client.edit({ prompt: 'p', aspect: '4:5', references: [{ bytes: new Uint8Array([1, 2, 3]), mime: 'image/jpeg' }] });
+    const result = await client.edit({ engine: 'gpt-image-2', prompt: 'p', aspect: '4:5', references: [{ bytes: new Uint8Array([1, 2, 3]), mime: 'image/jpeg' }] });
     expect(capture.url).toBe('https://openai.test/v1/images/edits');
+    expect(result.quality).toBe('high');
     expect(result.b64).toBe('AAAA');
     expect(result.size).toBe('1024x1280');
     expect(result.usd).toBe(gptImageUsd({ inputImageTokens: 2000, inputTextTokens: 100, outputTokens: 6240 }));

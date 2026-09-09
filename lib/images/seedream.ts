@@ -1,4 +1,4 @@
-import { IMAGE_ENGINES, sizeString, type ImageAspect, type ImageEngineId, imageSizeFor } from './engines';
+import { IMAGE_ENGINES, sizeString, type ImageAspect, type SeedreamEngineId, imageSizeFor } from './engines';
 
 /**
  * BytePlus ModelArk — the Seedream image generation API, as ONE boundary (docs.byteplus.com,
@@ -31,7 +31,7 @@ export function seedreamConfigFromEnv(env: Record<string, string | undefined> = 
   return { apiKey, baseUrl };
 }
 
-export type SeedreamEngineId = Exclude<ImageEngineId, 'gpt-image-2'>;
+export type { SeedreamEngineId };
 
 export interface SeedreamGenerateInput {
   engine: SeedreamEngineId;

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_IMAGE_ASPECT,
+  GPT_IMAGE_25,
   GPT_IMAGE_MAX,
   IMAGE_ASPECTS,
   IMAGE_ENGINES,
@@ -15,6 +16,7 @@ import {
   estimateImageUsd,
   imageSizeFor,
   isEngineId,
+  isOpenAiEngine,
   sizeString,
 } from '@/lib/images/engines';
 
@@ -30,12 +32,41 @@ function ratioOf(aspect: string): number {
 }
 
 describe('image engines (docs/TEMPLATES-IA.md §7)', () => {
-  it('names the two founder-chosen families and defaults to GPT Image 2 for images', () => {
-    expect(IMAGE_ENGINE_IDS).toEqual(['seedream-5.0-pro', 'seedream-5.0-lite', 'gpt-image-2']);
+  it('names the two founder-chosen families, carries GPT Image 2.5, and defaults images to GPT Image 2 until the org is verified', () => {
+    expect(IMAGE_ENGINE_IDS).toEqual(['gpt-image-2', 'gpt-image-2.5-flare', 'gpt-image-2.5-sunburst', 'seedream-5.0-pro', 'seedream-5.0-lite']);
     expect(defaultEngine('image')).toBe('gpt-image-2');
     expect(defaultEngine('video')).toBe('seedance-2.0');
     expect(enginesForMedium('video')).toEqual(['seedance-2.0', 'seedance-2.5']);
     expect(isEngineId('kling-3.0')).toBe(false);
+    expect(isOpenAiEngine('gpt-image-2.5-sunburst')).toBe(true);
+    expect(isOpenAiEngine('seedream-5.0-pro')).toBe(false);
+    for (const id of ['gpt-image-2.5-flare', 'gpt-image-2.5-sunburst', 'gpt-image-2'] as const) {
+      expect(IMAGE_ENGINES[id].provider).toBe('openai');
+      expect(IMAGE_ENGINES[id].model).toBe(id);
+    }
+  });
+
+  it('renders every OpenAI engine at its top tier — never below high (founder, 2026-09-06)', () => {
+    expect(IMAGE_ENGINES['gpt-image-2'].quality).toBe('high');
+    for (const id of ['gpt-image-2.5-flare', 'gpt-image-2.5-sunburst'] as const) {
+      expect(['high', 'xhigh', 'max']).toContain(IMAGE_ENGINES[id].quality);
+    }
+    for (const id of ['seedream-5.0-pro', 'seedream-5.0-lite'] as const) expect(IMAGE_ENGINES[id].quality).toBeUndefined();
+  });
+
+  it('keeps the GPT Image 2.5 sizes inside the documented window (16-grid, 1:3–3:1, ≤3840 edge, 655,360–8,294,400 px)', () => {
+    for (const engine of ['gpt-image-2.5-flare', 'gpt-image-2.5-sunburst'] as const) {
+      for (const aspect of IMAGE_ASPECTS) {
+        const { width, height } = imageSizeFor(engine, aspect);
+        expect(width % 16, `${engine} ${aspect}`).toBe(0);
+        expect(height % 16, `${engine} ${aspect}`).toBe(0);
+        expect(Math.max(width, height)).toBeLessThanOrEqual(GPT_IMAGE_25.maxEdge);
+        expect(width * height).toBeGreaterThanOrEqual(GPT_IMAGE_25.minPixels);
+        expect(width * height).toBeLessThanOrEqual(GPT_IMAGE_25.maxPixels);
+        expect(width / height).toBeGreaterThanOrEqual(1 / 3);
+        expect(width / height).toBeLessThanOrEqual(3);
+      }
+    }
   });
 
   it('defaults the picker to the Instagram feed ratio', () => {
@@ -93,6 +124,8 @@ describe('image engines (docs/TEMPLATES-IA.md §7)', () => {
     expect(estimateImageUsd('seedream-5.0-pro', 1)).toBe(0.093);
     expect(estimateImageUsd('seedream-5.0-lite', 0)).toBe(0.035);
     expect(estimateImageUsd('gpt-image-2', 1)).toBe(0.24);
+    expect(estimateImageUsd('gpt-image-2.5-flare', 1)).toBeGreaterThan(estimateImageUsd('gpt-image-2', 1) * 0.5);
+    expect(estimateImageUsd('gpt-image-2.5-sunburst', 1)).toBeGreaterThanOrEqual(estimateImageUsd('gpt-image-2.5-flare', 1));
     expect(IMAGE_ENGINES['gpt-image-2'].maxReferenceImages).toBe(16);
     expect(IMAGE_ENGINES['seedream-5.0-pro'].model).toBe('dola-seedream-5-0-pro-260628');
     expect(IMAGE_ENGINES['seedream-5.0-lite'].model).toBe('seedream-5-0-260128');

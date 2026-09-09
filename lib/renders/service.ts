@@ -1,16 +1,19 @@
 import { randomUUID } from 'node:crypto';
 import type { SqlRunner } from '@/lib/db/sql-runner';
 import type { Viewer } from '@/lib/auth/identity';
+import type { ArkAssetsClient } from '@/lib/ark/assets';
+import { ASSET_WAIT_HOURS, ensureIdentityAsset, identityStatusFor, loadIdentityGroup, needsIdentity, pollIdentityAsset, recordIdentityUse, type IdentityDeps } from '@/lib/identity/service';
 import { RENDER_PIPELINE_PUBLIC } from '@/lib/flags';
 import { DEFAULT_LOCALE, isLocale, type Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/dictionaries';
-import { aspectsForMedium, isImageAspect, isImageEngine, isVideoAspect, isVideoEngine, resolveEngine } from '@/lib/images/engines';
+import { aspectsForMedium, isEngineId, isImageAspect, isImageEngine, isVideoAspect, isVideoEngine, resolveEngine } from '@/lib/images/engines';
 import { loadPromptById, loadPromptBySlug, type PromptRow } from '@/lib/prompts/repo';
 import { isForSale } from '@/lib/twings/products';
-import { RenderFailure, pollVideoRender, runImageRender, startVideoRender, videoModelFor, type EngineOutput, type RenderEngineDeps, type RenderPhoto } from './engines';
+import { RenderFailure, pollVideoRender, runImageRender, startVideoRender, videoModelFor, type EngineOutput, type RenderEngineDeps, type RenderFailureCode, type RenderPhoto } from './engines';
 import type { RenderNotifier } from './notify';
 import { buildRenderPrompt } from './prompt';
 import {
+  ASSET_TASK_PREFIX,
   claimRenderJobs,
   countRenderJobsSince,
   insertRenderJob,
@@ -22,6 +25,7 @@ import {
   markRenderNotified,
   markRenderRunningWithTask,
   markRenderSucceeded,
+  markRenderWaitingForAsset,
   recoverStaleRenderJobs,
   requeueRenderJob,
   type RenderJob,
@@ -82,7 +86,9 @@ export type CreateRenderFailure =
   | 'bad_aspect'
   | 'bad_photo'
   | 'photo_too_large'
-  | 'rate_limited';
+  | 'rate_limited'
+  /** The template renders on ModelArk, which takes only a verified face (docs §8.2). */
+  | 'identity_required';
 
 export type CreateRenderOutcome = { ok: true; id: string } | { ok: false; code: CreateRenderFailure };
 
@@ -107,6 +113,10 @@ export async function createRenderJob(deps: RenderServiceDeps, viewer: Viewer, i
 
   if (input.photo === null || input.photo.bytes.byteLength === 0 || !isPhotoMime(input.photo.mime)) return { ok: false, code: 'bad_photo' };
   if (input.photo.bytes.byteLength > MAX_PHOTO_BYTES) return { ok: false, code: 'photo_too_large' };
+
+  // ModelArk refuses a real person's photo in the bytes: the person verifies their face once
+  // (docs/TEMPLATES-IA.md §8.2) and the pass sends an asset reference instead.
+  if (needsIdentity(engine) && (await identityStatusFor(deps.sql, viewer.userId)) !== 'active') return { ok: false, code: 'identity_required' };
 
   const recent = await countRenderJobsSince(deps.sql, viewer.userId, new Date(now.getTime() - 24 * 60 * 60 * 1000));
   if (recent >= RENDER_JOBS_PER_DAY) return { ok: false, code: 'rate_limited' };
@@ -141,6 +151,8 @@ export interface RenderPassDeps extends RenderServiceDeps {
   siteName?: string;
   /** Where ModelArk posts task completion; optional, the poll covers a lost callback. */
   callbackUrl?: string | null;
+  /** The bank's asset client (docs §8.2); null = AK/SK not configured, ModelArk renders with a photo fail as `identity_unavailable`. */
+  assets?: ArkAssetsClient | null;
 }
 
 export interface RenderPassReport {
@@ -205,36 +217,97 @@ export async function runRenderPass(deps: RenderPassDeps, options: RenderPassOpt
   return report;
 }
 
+const ASSET_URL_TTL_SECONDS = 15 * 60;
+
+function identityDeps(deps: RenderPassDeps): IdentityDeps {
+  return { sql: deps.sql, assets: deps.assets ?? null, siteUrl: deps.siteUrl, ...(deps.now ? { now: deps.now } : {}) };
+}
+
+type Reference =
+  | { kind: 'bytes' }
+  | { kind: 'asset'; assetId: string }
+  | { kind: 'wait'; assetId: string }
+  | { kind: 'fail'; failure: RenderFailure };
+
+/**
+ * How the person's photo reaches the engine. OpenAI takes the bytes. ModelArk takes only an
+ * `asset://` from the person's verified group (docs/TEMPLATES-IA.md §8.2) — registered here by
+ * content hash and, while the bank is still comparing, waited on rather than sent.
+ */
+async function resolveReference(deps: RenderPassDeps, job: RenderJob, photo: RenderPhoto | null): Promise<Reference> {
+  if (photo === null || !isEngineId(job.engine) || !needsIdentity(job.engine)) return { kind: 'bytes' };
+  const group = await loadIdentityGroup(deps.sql, job.userId);
+  if (group === null || group.status !== 'active') {
+    return { kind: 'fail', failure: new RenderFailure('identity_required', 'the person has not verified their face', false) };
+  }
+  const photoUrl = job.inputKey === null ? null : await deps.store.url(job.inputKey, ASSET_URL_TTL_SECONDS);
+  const ensured = await ensureIdentityAsset(identityDeps(deps), { group, photo: photo.bytes, photoUrl });
+  if (ensured.status === 'active') return { kind: 'asset', assetId: ensured.assetId };
+  if (ensured.status === 'processing') return { kind: 'wait', assetId: ensured.assetId };
+  const code: RenderFailureCode = ensured.reason === 'identity_required' || ensured.reason === 'identity_unavailable' ? ensured.reason : 'asset_failed';
+  return { kind: 'fail', failure: new RenderFailure(code, `the photo could not become an asset (${ensured.reason})`, false) };
+}
+
+/** The engine call itself, once the reference is settled. Films are handed over; images finish here. */
+async function renderNow(
+  deps: RenderPassDeps,
+  job: RenderJob,
+  template: PromptRow,
+  photo: RenderPhoto | null,
+  assetId: string | null,
+  now: Date,
+  report: RenderPassReport,
+  handedOff: Set<string>,
+): Promise<void> {
+  const prompt = buildRenderPrompt({ promptText: template.promptText, medium: job.medium, hasPhoto: photo !== null || assetId !== null });
+
+  if (job.medium === 'image') {
+    if (!isImageEngine(job.engine) || !isImageAspect(job.aspect)) throw new RenderFailure('engine_error', `unknown image engine/aspect ${job.engine} ${job.aspect}`, false);
+    const output = await runImageRender({ engine: job.engine, prompt: prompt.text, aspect: job.aspect, photo, assetId }, deps.engines ?? {});
+    await finish(deps, job, output, now);
+    if (assetId !== null) await recordIdentityUse(deps.sql, { userId: job.userId, assetId, now });
+    report.succeeded += 1;
+    return;
+  }
+
+  if (!isVideoEngine(job.engine) || !isVideoAspect(job.aspect)) throw new RenderFailure('engine_error', `unknown video engine/aspect ${job.engine} ${job.aspect}`, false);
+  const started = await startVideoRender(
+    { engine: job.engine, prompt: prompt.text, aspect: job.aspect, seconds: template.runtimeSeconds ?? 5, photo, assetId, ...(deps.callbackUrl ? { callbackUrl: deps.callbackUrl } : {}) },
+    deps.engines ?? {},
+  );
+  await markRenderRunningWithTask(deps.sql, job.id, { provider: 'modelark', taskId: started.taskId });
+  if (assetId !== null) await recordIdentityUse(deps.sql, { userId: job.userId, assetId, now });
+  handedOff.add(job.id);
+  report.waiting += 1;
+}
+
 async function executeClaimed(deps: RenderPassDeps, job: RenderJob, now: Date, report: RenderPassReport, handedOff: Set<string>): Promise<void> {
   try {
     const template = await loadPromptById(deps.sql, job.templateId);
     if (template === null) throw new RenderFailure('engine_error', 'the template no longer exists', false);
     const photo = await readPhoto(deps.store, job);
-    const prompt = buildRenderPrompt({ promptText: template.promptText, medium: job.medium, hasPhoto: photo !== null });
-
-    if (job.medium === 'image') {
-      if (!isImageEngine(job.engine) || !isImageAspect(job.aspect)) throw new RenderFailure('engine_error', `unknown image engine/aspect ${job.engine} ${job.aspect}`, false);
-      const output = await runImageRender({ engine: job.engine, prompt: prompt.text, aspect: job.aspect, photo }, deps.engines ?? {});
-      await finish(deps, job, output, now);
-      report.succeeded += 1;
+    const reference = await resolveReference(deps, job, photo);
+    if (reference.kind === 'fail') throw reference.failure;
+    if (reference.kind === 'wait') {
+      // The bank is still comparing the photo: park the job on the asset; the poll picks it up.
+      await markRenderWaitingForAsset(deps.sql, job.id, reference.assetId);
+      handedOff.add(job.id);
+      report.waiting += 1;
       return;
     }
-
-    if (!isVideoEngine(job.engine) || !isVideoAspect(job.aspect)) throw new RenderFailure('engine_error', `unknown video engine/aspect ${job.engine} ${job.aspect}`, false);
-    const started = await startVideoRender(
-      { engine: job.engine, prompt: prompt.text, aspect: job.aspect, seconds: template.runtimeSeconds ?? 5, photo, ...(deps.callbackUrl ? { callbackUrl: deps.callbackUrl } : {}) },
-      deps.engines ?? {},
-    );
-    await markRenderRunningWithTask(deps.sql, job.id, { provider: 'modelark', taskId: started.taskId });
-    handedOff.add(job.id);
-    report.waiting += 1;
+    await renderNow(deps, job, template, photo, reference.kind === 'asset' ? reference.assetId : null, now, report, handedOff);
   } catch (error) {
     await settleFailure(deps, job, error, now, report);
   }
 }
 
 async function pollAwaiting(deps: RenderPassDeps, job: RenderJob, now: Date, report: RenderPassReport): Promise<void> {
-  if (!job.providerTaskId || !isVideoEngine(job.engine)) return;
+  if (!job.providerTaskId) return;
+  if (job.providerTaskId.startsWith(ASSET_TASK_PREFIX)) {
+    await pollAssetWait(deps, job, job.providerTaskId.slice(ASSET_TASK_PREFIX.length), now, report);
+    return;
+  }
+  if (!isVideoEngine(job.engine)) return;
   try {
     const template = await loadPromptById(deps.sql, job.templateId);
     const { model, seconds } = videoModelFor(job.engine, template?.runtimeSeconds ?? 5);
@@ -249,6 +322,26 @@ async function pollAwaiting(deps: RenderPassDeps, job: RenderJob, now: Date, rep
       return;
     }
     await settleFailure(deps, job, polled.failure, now, report);
+  } catch (error) {
+    await settleFailure(deps, job, error, now, report);
+  }
+}
+
+/** The bank is comparing the photo: ask once; render when it says Active; give up on Failed, or after a day. */
+async function pollAssetWait(deps: RenderPassDeps, job: RenderJob, assetId: string, now: Date, report: RenderPassReport): Promise<void> {
+  try {
+    const status = await pollIdentityAsset(identityDeps(deps), assetId);
+    if (status === 'Active') {
+      const template = await loadPromptById(deps.sql, job.templateId);
+      if (template === null) throw new RenderFailure('engine_error', 'the template no longer exists', false);
+      const photo = await readPhoto(deps.store, job);
+      await renderNow(deps, job, template, photo, assetId, now, report, new Set());
+      return;
+    }
+    if (status === 'Failed') throw new RenderFailure('asset_failed', 'the bank could not match the photo to the verified face', false);
+    const since = Date.parse(job.claimedAt ?? job.createdAt);
+    if (now.getTime() - since > ASSET_WAIT_HOURS * 60 * 60 * 1000) throw new RenderFailure('asset_failed', 'the photo was not registered in time', false);
+    report.waiting += 1;
   } catch (error) {
     await settleFailure(deps, job, error, now, report);
   }
@@ -311,6 +404,15 @@ async function notifyFinished(deps: RenderPassDeps, now: Date, report: RenderPas
     if (outcome.ok) {
       await markRenderNotified(deps.sql, job.id, { status: 'sent', at: now, spendAttempt: true });
       report.notified += 1;
+      continue;
+    }
+    // A refusal that is OUR configuration (the sending domain not yet verified at Resend, a bad
+    // from address) is not this message's fault: leave it pending without spending an attempt, so
+    // it goes out on the first pass after the founder fixes the console (2026-09-09 production).
+    if (/domain is not verified|not verified|invalid_from_address|from address/i.test(outcome.error)) {
+      await markRenderNotified(deps.sql, job.id, { status: 'pending', at: now, spendAttempt: false });
+      report.notifyPending += 1;
+      report.errors.push(`${job.id}: notify (config, waiting) — ${outcome.error}`);
       continue;
     }
     const terminal = !outcome.retryable || job.notifyAttempts + 1 >= NOTIFY_MAX_ATTEMPTS;

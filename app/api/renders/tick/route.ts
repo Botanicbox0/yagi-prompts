@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server';
+import { arkAssetsConfigFromEnv } from '@/lib/ark/assets';
+import { arkConfigFromEnv } from '@/lib/ark/client';
 import { getSqlRunner } from '@/lib/db/connect';
+import { openAiConfigFromEnv } from '@/lib/images/openai';
 import { formatPassReport, runLiveRenderPass } from '@/lib/renders/runtime';
 
 /**
@@ -33,7 +36,9 @@ async function tick(request: Request): Promise<NextResponse> {
   const report = await runLiveRenderPass(sql, { limit: 5 });
   for (const line of report.errors) console.warn(`[renders] ${line}`);
   const { errors, ...counts } = report;
-  return NextResponse.json({ ok: true, summary: formatPassReport(report), report: counts, errorCount: errors.length }, { headers: HEADERS });
+  // Presence only, never a value: which engines this deployment can actually reach.
+  const config = { openai: openAiConfigFromEnv() !== null, ark: arkConfigFromEnv() !== null, arkAssets: arkAssetsConfigFromEnv() !== null };
+  return NextResponse.json({ ok: true, summary: formatPassReport(report), report: counts, errorCount: errors.length, config }, { headers: HEADERS });
 }
 
 export const GET = tick;

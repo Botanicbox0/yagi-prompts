@@ -1,19 +1,45 @@
 import { NextResponse } from 'next/server';
 import { getViewer } from '@/lib/auth/viewer';
+import { getSqlRunner } from '@/lib/db/connect';
+import { identityStatusFor, needsIdentity } from '@/lib/identity/service';
+import { resolveEngine } from '@/lib/images/engines';
+import { loadPromptBySlug } from '@/lib/prompts/repo';
 import { canStartRender } from '@/lib/renders/service';
 
 /**
- * `GET /api/renders/access` — may THIS viewer start a real render? The template page is static
- * (one HTML for everyone), so the studio asks at mount time and switches from the demo to the
- * live make loop on the answer. The same rule the enqueue route applies; a viewer who forges
- * `true` here only reaches the 403 there.
+ * `GET /api/renders/access?template=slug` — what THIS viewer's make button should do on THIS
+ * template. The template page is static (one HTML for everyone), so the studio asks at mount:
+ *
+ *   live              may this viewer start a real render at all (the same rule the enqueue route applies)
+ *   charge            will a payment be taken — false for operators (@yagiworkshop.xyz admins test for
+ *                     free, founder 2026-09-10) and, until payment is wired, for everyone
+ *   identityRequired  does the template's engine need a verified face (ModelArk) — docs §8.2
+ *   identity          where this viewer stands on that: none · pending · active · failed · not_needed
+ *
+ * A viewer who forges any of this only reaches the refusals the enqueue route already carries.
  */
 export const dynamic = 'force-dynamic';
 
-export async function GET(): Promise<NextResponse> {
+const HEADERS: Record<string, string> = {
+  'Cache-Control': 'private, no-store',
+  'X-Robots-Tag': 'noindex, nofollow',
+};
+
+export async function GET(request: Request): Promise<NextResponse> {
   const viewer = await getViewer();
-  return NextResponse.json(
-    { live: canStartRender(viewer) },
-    { headers: { 'Cache-Control': 'private, no-store', 'X-Robots-Tag': 'noindex, nofollow' } },
-  );
+  const live = canStartRender(viewer);
+  const slug = new URL(request.url).searchParams.get('template');
+
+  let identityRequired = false;
+  let identity: string = 'not_needed';
+  if (live && slug && viewer.userId !== null) {
+    const sql = await getSqlRunner();
+    const template = sql === null ? null : await loadPromptBySlug(sql, slug);
+    if (sql !== null && template !== null) {
+      identityRequired = needsIdentity(resolveEngine(template.engine, template.medium));
+      if (identityRequired) identity = await identityStatusFor(sql, viewer.userId);
+    }
+  }
+
+  return NextResponse.json({ live, charge: live && !viewer.isAdmin, identityRequired, identity }, { headers: HEADERS });
 }

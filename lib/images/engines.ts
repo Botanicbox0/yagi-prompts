@@ -1,22 +1,31 @@
 /**
- * The IMAGE engines TWINGS renders with (founder decision, 2026-09-06: "이미지 템플릿 엔진은
- * seedream5.0이랑 gpt image2으로 가자", and "openai api key는 무조건 high만"), and the one table
- * every image surface reads: which aspect ratios a template may be made in, what pixel size that
- * means on each engine, and roughly what one render costs.
+ * The IMAGE engines TWINGS renders with (founder decisions, 2026-09-06: "이미지 템플릿 엔진은
+ * seedream5.0이랑 gpt image2으로 가자", "openai api key는 무조건 high만"; 2026-09-10: "gpt image2.5가
+ * 나왔다고 해서 이것도 포함시켜야할 것 같은데"), and the one table every image surface reads: which
+ * aspect ratios a template may be made in, what pixel size that means on each engine, which quality
+ * tier it renders at, and roughly what one render costs.
  *
- * Sources (all read 2026-09-06):
- *   · Seedream 5.0 pro tutorial (docs.byteplus.com/en/docs/ModelArk/2582774): model ids
- *     `dola-seedream-5-0-pro-260628` / `seedream-5-0-260128`; Pro tiers 1K · 1.5K · 2K, Lite tiers
+ * Sources:
+ *   · Seedream 5.0 pro tutorial (docs.byteplus.com/en/docs/ModelArk/2582774, read 2026-09-06): model
+ *     ids `dola-seedream-5-0-pro-260628` / `seedream-5-0-260128`; Pro tiers 1K · 1.5K · 2K, Lite tiers
  *     2K · 3K · 4K; explicit `WxH` allowed within [1280×720 … 2048×2048×1.1025] pixels and a
- *     1/16 … 16 aspect range; up to 10 reference images; result URL kept 24 h; "1.5K has the same
- *     price as 1K and provides better image generation quality".
- *   · ModelArk console pricing (2026-09-06): Pro output $0.045/image up to 2.36 MP, $0.09 above
- *     (we render Pro at 2K, so $0.09);
- *     input reference image $0.003 each; Lite $0.035/image.
- *   · OpenAI images API reference: gpt-image-2 accepts arbitrary `WIDTHxHEIGHT` (multiples of 16,
- *     1:3 … 3:1, max 3840×2160); quality low/medium/high; edits take up to 16 reference images
- *     with `input_fidelity: high`. Token prices: text in $5/M, image in $8/M, image out $30/M —
- *     a 1024² high render lands around $0.21 before any reference image.
+ *     1/16 … 16 aspect range; up to 10 reference images; result URL kept 24 h.
+ *   · ModelArk console pricing (2026-09-06): Pro output $0.045/image up to 2.36 MP, $0.09 above (we
+ *     render Pro at 2K, so $0.09); input reference image $0.003 each; Lite $0.035/image.
+ *   · OpenAI model pages + image guide (developers.openai.com, read 2026-09-10): `gpt-image-2.5-flare`
+ *     ("fast, high-quality everyday image generation", OpenAI's default recommendation, higher
+ *     quality than gpt-image-2 at up to 50% lower latency) and `gpt-image-2.5-sunburst` ("our most
+ *     capable model for image generation and editing", for workflows where editing precision
+ *     matters), both on generations + edits, quality low · medium · high · xhigh · max · auto,
+ *     sizes `WxH` on the 16-pixel grid, 1:3 … 3:1, max edge 3840, 655,360 … 8,294,400 pixels. Same
+ *     token prices as gpt-image-2: text in $5/M, image in $8/M, image out $30/M. `gpt-image-2`:
+ *     quality low/medium/high, ≤ 3840×2160, edits up to 16 references, no `input_fidelity`.
+ *
+ * Quality (founder rule, "우리는 고품질로 파는거니까"): every OpenAI engine renders at the highest tier
+ * that keeps a render under a dollar — `high` on gpt-image-2 (its top), the table below on 2.5 —
+ * and no request can lower it. The `usdPerRender` figures for 2.5 are measured, not read: the docs
+ * publish no tokens-per-quality table (2026-09-10 smoke, 4:5 with a reference photo, see
+ * docs/TEMPLATES-IA.md §7).
  *
  * Why 4:5 is the default: Instagram's feed has been a 4:5 grid since 2025, so a 4:5 render fills a
  * phone without a crop — the founder's "인스타그램에 올리기 좋은 비율" (2026-09-06). 9:16 is for
@@ -25,7 +34,8 @@
 
 import type { TemplateMedium } from '@/lib/prompts/schemas';
 
-export const IMAGE_ENGINE_IDS = ['seedream-5.0-pro', 'seedream-5.0-lite', 'gpt-image-2'] as const;
+/** Order is the admin picker's order: the recommended default first. */
+export const IMAGE_ENGINE_IDS = ['gpt-image-2', 'gpt-image-2.5-flare', 'gpt-image-2.5-sunburst', 'seedream-5.0-pro', 'seedream-5.0-lite'] as const;
 export type ImageEngineId = (typeof IMAGE_ENGINE_IDS)[number];
 
 export const VIDEO_ENGINE_IDS = ['seedance-2.0', 'seedance-2.5'] as const;
@@ -33,6 +43,13 @@ export type VideoEngineId = (typeof VIDEO_ENGINE_IDS)[number];
 
 export type EngineId = ImageEngineId | VideoEngineId;
 export const ENGINE_IDS: readonly EngineId[] = [...VIDEO_ENGINE_IDS, ...IMAGE_ENGINE_IDS];
+
+/** The OpenAI half of the image table; the Seedream half is the rest. */
+export type OpenAiEngineId = 'gpt-image-2.5-flare' | 'gpt-image-2.5-sunburst' | 'gpt-image-2';
+export type SeedreamEngineId = Exclude<ImageEngineId, OpenAiEngineId>;
+
+/** The `quality` vocabulary of the OpenAI images API (2.5 added xhigh · max · auto). */
+export type GptImageQuality = 'low' | 'medium' | 'high' | 'xhigh' | 'max' | 'auto';
 
 export function isImageEngine(value: unknown): value is ImageEngineId {
   return typeof value === 'string' && (IMAGE_ENGINE_IDS as readonly string[]).includes(value);
@@ -43,12 +60,20 @@ export function isVideoEngine(value: unknown): value is VideoEngineId {
 export function isEngineId(value: unknown): value is EngineId {
   return isImageEngine(value) || isVideoEngine(value);
 }
+export function isOpenAiEngine(value: unknown): value is OpenAiEngineId {
+  return isImageEngine(value) && IMAGE_ENGINES[value].provider === 'openai';
+}
 
 /** The engines a template of this medium may name, first = default for a new template. */
 export function enginesForMedium(medium: TemplateMedium): readonly EngineId[] {
   return medium === 'image' ? IMAGE_ENGINE_IDS : VIDEO_ENGINE_IDS;
 }
 
+/**
+ * Images: GPT Image 2 until the OpenAI organisation is verified — the 2.5 models answer 403
+ * ("Your organization must be verified to use the model", smoke 2026-09-10) until the founder
+ * completes Verify Organization; flip this to 'gpt-image-2.5-flare' once a smoke passes.
+ */
 export function defaultEngine(medium: TemplateMedium): EngineId {
   return medium === 'image' ? 'gpt-image-2' : 'seedance-2.0';
 }
@@ -96,7 +121,7 @@ export function defaultAspect(medium: TemplateMedium): Aspect {
 }
 
 // ---------------------------------------------------------------------------
-// image engines: ids, sizes, money
+// image engines: ids, sizes, quality, money
 // ---------------------------------------------------------------------------
 
 export interface ImageSize {
@@ -112,6 +137,8 @@ export interface ImageEngine {
   model: string;
   /** Pixel size per aspect — every entry is valid on that engine by construction (tests pin it). */
   sizes: Record<ImageAspect, ImageSize>;
+  /** OpenAI engines only: the one quality tier this engine renders at. Nothing can lower it. */
+  quality?: GptImageQuality;
   /** Rough USD for one render at the size above, before reference images. */
   usdPerRender: number;
   /** Rough USD added per reference image (the visitor's photo is one). */
@@ -138,8 +165,12 @@ const SEEDREAM_PRO_2K: Record<ImageAspect, ImageSize> = {
 /** Seedream 5.0 Lite starts at 2K too — the same table. */
 const SEEDREAM_2K = SEEDREAM_PRO_2K;
 
-/** GPT Image 2 at `quality: high` — multiples of 16, sized like the 1024-class the price examples use. */
-const GPT_IMAGE_HIGH: Record<ImageAspect, ImageSize> = {
+/**
+ * The OpenAI sizes — multiples of 16, sized like the 1024-class the price examples use. Shared by
+ * gpt-image-2 and both 2.5 models (every entry sits inside 2.5's 655,360 … 8,294,400-pixel window
+ * and under gpt-image-2's 3840×2160 ceiling).
+ */
+const GPT_IMAGE_SIZES: Record<ImageAspect, ImageSize> = {
   '4:5': { width: 1024, height: 1280 },
   '1:1': { width: 1024, height: 1024 },
   '9:16': { width: 864, height: 1536 },
@@ -148,6 +179,43 @@ const GPT_IMAGE_HIGH: Record<ImageAspect, ImageSize> = {
 };
 
 export const IMAGE_ENGINES: Record<ImageEngineId, ImageEngine> = {
+  'gpt-image-2.5-flare': {
+    id: 'gpt-image-2.5-flare',
+    label: 'GPT IMAGE 2.5 FLARE',
+    provider: 'openai',
+    model: 'gpt-image-2.5-flare',
+    sizes: GPT_IMAGE_SIZES,
+    quality: 'xhigh',
+    // UNMEASURED: the 2026-09-10 smoke was refused (organisation not verified). Estimate from the
+    // gpt-image-2 high figure scaled for a higher tier; replace with the smoke's usage once it runs.
+    usdPerRender: 0.35,
+    usdPerReference: 0.03,
+    maxReferenceImages: 16,
+  },
+  'gpt-image-2.5-sunburst': {
+    id: 'gpt-image-2.5-sunburst',
+    label: 'GPT IMAGE 2.5 SUNBURST',
+    provider: 'openai',
+    model: 'gpt-image-2.5-sunburst',
+    sizes: GPT_IMAGE_SIZES,
+    quality: 'max',
+    usdPerRender: 0.6,
+    usdPerReference: 0.03,
+    maxReferenceImages: 16,
+  },
+  'gpt-image-2': {
+    id: 'gpt-image-2',
+    label: 'GPT IMAGE 2',
+    provider: 'openai',
+    model: 'gpt-image-2',
+    sizes: GPT_IMAGE_SIZES,
+    // `high` is gpt-image-2's top tier (founder, 2026-09-06). ≈$0.21 for a 1024² render; the rest scale.
+    quality: 'high',
+    usdPerRender: 0.21,
+    // One reference photo is roughly 2–3k image input tokens at $8/M, rounded up.
+    usdPerReference: 0.03,
+    maxReferenceImages: 16,
+  },
   'seedream-5.0-pro': {
     id: 'seedream-5.0-pro',
     label: 'SEEDREAM 5.0 PRO',
@@ -168,18 +236,6 @@ export const IMAGE_ENGINES: Record<ImageEngineId, ImageEngine> = {
     usdPerRender: 0.035,
     usdPerReference: 0.003,
     maxReferenceImages: 10,
-  },
-  'gpt-image-2': {
-    id: 'gpt-image-2',
-    label: 'GPT IMAGE 2',
-    provider: 'openai',
-    model: 'gpt-image-2',
-    sizes: GPT_IMAGE_HIGH,
-    // High quality only (founder, 2026-09-06). ≈$0.21 for a 1024² high render; the rest scale.
-    usdPerRender: 0.21,
-    // One high-fidelity reference photo is roughly 2–3k image input tokens at $8/M, rounded up.
-    usdPerReference: 0.03,
-    maxReferenceImages: 16,
   },
 };
 
@@ -204,3 +260,5 @@ export const SEEDREAM_PIXELS_MAX = Math.floor(2048 * 2048 * 1.1025);
 export const SEEDREAM_PRO_CHEAP_PIXELS_MAX = 2_360_000;
 /** OpenAI's stated ceiling for gpt-image-2 and its multiple-of-16 rule. */
 export const GPT_IMAGE_MAX = { width: 3840, height: 2160 } as const;
+/** GPT Image 2.5's stated window: max edge 3840, 655,360 … 8,294,400 pixels, 1:3 … 3:1, 16-pixel grid. */
+export const GPT_IMAGE_25 = { maxEdge: 3840, minPixels: 655_360, maxPixels: 8_294_400 } as const;
