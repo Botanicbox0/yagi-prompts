@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { TwingsWordmark } from '@/components/brand/twings-wordmark';
+import { TwingsLogo } from '@/components/brand/twings-mark';
 import { TextSwap } from '@/components/ui/text-swap';
 import { useScroll } from '@/components/motion/scroll-provider';
 import { useSectionThemeAt } from '@/components/motion/use-section-theme';
@@ -130,7 +130,7 @@ export function SiteNav({
               the mark became the logotype, so the text beside it would have been the same word
               twice). */}
           <a href={`/${locale}`} className="flex items-center" title={labels.brand}>
-            <TwingsWordmark className="h-[18px] w-auto" />
+            <TwingsLogo size={18} />
           </a>
 
           <div className="hidden items-center gap-8 md:flex">

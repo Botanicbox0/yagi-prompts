@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
-import { GoatMark } from '@/components/nav/goat-mark';
+import { TwingsMark } from '@/components/brand/twings-mark';
 import { getSqlRunner } from '@/lib/db/connect';
 import { getDictionary } from '@/lib/i18n/dictionaries';
 import { formatDate, interpolate } from '@/lib/i18n/format';
@@ -53,7 +53,7 @@ export default async function SharedRenderPage(props: RouteProps) {
   return (
     <main data-shared-render={job.id} data-share-status={resolved.status} className="mx-auto min-h-svh w-full max-w-shell px-gutter py-10">
       <a href={`/${locale}`} className="inline-flex items-center gap-2.5">
-        <GoatMark className="h-6 w-6" />
+        <TwingsMark className="h-7" />
         <span className="font-display text-[1.05rem] leading-none font-black tracking-[0.02em] uppercase">{dict.meta.siteName}</span>
       </a>
 

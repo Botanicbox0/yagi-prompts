@@ -1,6 +1,6 @@
 import type { Locale } from '@/lib/i18n/config';
 import type { Dictionary } from '@/lib/i18n/dictionaries';
-import { TwingsWordmark } from '@/components/brand/twings-wordmark';
+import { TwingsLogo } from '@/components/brand/twings-mark';
 import { LocaleToggle } from '@/components/locale-toggle';
 import { siteLinks } from '@/components/marketing/chrome';
 
@@ -13,8 +13,8 @@ export function AppHeader({ locale, dict, rest }: { locale: Locale; dict: Dictio
   return (
     <header className="border-b border-hairline">
       <div className="mx-auto flex max-w-shell items-center justify-between px-gutter py-5">
-        <a href={`/${locale}`} className="flex items-center gap-2.5">
-          <TwingsWordmark className="h-[18px] w-auto" />
+        <a href={`/${locale}`} className="flex items-center">
+          <TwingsLogo size={18} />
         </a>
         <div className="flex items-center gap-6">
           {siteLinks(locale, dict).map((link, index) => (

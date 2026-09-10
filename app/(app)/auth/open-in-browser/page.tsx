@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { GoatMark } from '@/components/nav/goat-mark';
+import { TwingsMark } from '@/components/brand/twings-mark';
 import { absoluteUrl } from '@/lib/seo/site-url';
 import { DEFAULT_LOCALE, isLocale, type Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/dictionaries';
@@ -56,7 +56,7 @@ export default async function OpenInBrowserPage(props: RouteProps) {
       className="mx-auto flex min-h-svh w-full max-w-detail flex-col justify-center px-gutter py-16"
     >
       <p className="flex items-center gap-2.5">
-        <GoatMark className="h-6 w-6" />
+        <TwingsMark className="h-7" />
         <span className="font-display text-[1.05rem] leading-none font-black tracking-[0.02em] uppercase">
           {dict.meta.siteName}
         </span>

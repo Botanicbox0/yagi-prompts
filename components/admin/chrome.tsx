@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { TwingsMark } from '@/components/brand/twings-mark';
 import type { Dictionary } from '@/lib/i18n/dictionaries';
 import { ADMIN_ACTION_PATH, BACK_FIELD, OP_FIELD } from '@/lib/admin/form';
 import type { AdminOperationName } from '@/lib/admin/operations';
@@ -271,7 +272,8 @@ export function AdminShell({
       <header className="border-b border-hairline">
         <div className="mx-auto flex max-w-shell flex-wrap items-center justify-between gap-4 px-gutter py-4">
           <div className="flex items-center gap-6">
-            <a href="/admin" className="font-display text-[1.05rem] leading-none font-black uppercase">
+            <a href="/admin" className="inline-flex items-center gap-2 font-display text-[1.05rem] leading-none font-black uppercase">
+              <TwingsMark className="h-[20px]" />
               {dict.brand}
             </a>
             <nav className="flex items-center gap-5">

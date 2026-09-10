@@ -4,7 +4,7 @@ import { getLocaleFromHeaders } from '@/lib/i18n/server';
 import { getDictionary } from '@/lib/i18n/dictionaries';
 import { LocaleToggle } from '@/components/locale-toggle';
 import { siteLinks } from '@/components/marketing/chrome';
-import { TwingsWordmark } from '@/components/brand/twings-wordmark';
+import { TwingsLogo } from '@/components/brand/twings-mark';
 import { TextSwap } from '@/components/ui/text-swap';
 import {
   loadPreferences,
@@ -124,7 +124,7 @@ export default async function AccountPage({
       <header className="border-b border-hairline">
         <div className="mx-auto flex max-w-shell items-center justify-between px-gutter py-5">
           <a href={`/${locale}`} className="flex items-center gap-2.5">
-            <TwingsWordmark className="h-[18px] w-auto" />
+            <TwingsLogo size={18} />
           </a>
           <div className="flex items-center gap-6">
             {siteLinks(locale, dict).map((link, index) => (

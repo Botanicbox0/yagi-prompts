@@ -1,5 +1,5 @@
 import { TextSwap } from '@/components/ui/text-swap';
-import { TwingsWordmark } from '@/components/brand/twings-wordmark';
+import { TwingsLogo } from '@/components/brand/twings-mark';
 import { HireClickBeacon } from '@/components/analytics/beacon';
 
 /**
@@ -73,7 +73,7 @@ export function SiteFooter({
         <div className="mt-20 grid gap-10 border-t border-hairline pt-10 sm:grid-cols-2 lg:grid-cols-[1fr_auto_auto]">
           <div>
             {/* The wordmark IS the brand name (2026-08-16); the text beside it said the same word twice. */}
-            <TwingsWordmark className="h-[16px] w-auto" />
+            <TwingsLogo size={16} />
             <p className="mt-3 font-mono text-code opacity-60">
               © {year} {labels.rights} · {labels.builtIn}
             </p>

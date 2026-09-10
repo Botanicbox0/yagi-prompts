@@ -10,7 +10,7 @@ import { getLocaleFromHeaders } from '@/lib/i18n/server';
 import { getDictionary } from '@/lib/i18n/dictionaries';
 import { formatCount, interpolate } from '@/lib/i18n/format';
 import { LocaleToggle } from '@/components/locale-toggle';
-import { TwingsWordmark } from '@/components/brand/twings-wordmark';
+import { TwingsLogo } from '@/components/brand/twings-mark';
 import { AdRail } from '@/components/ad/ad-rail';
 import { AdBanner, AdCard } from '@/components/ad/ad-card';
 import { adLabels, siteLinks } from '@/components/marketing/chrome';
@@ -71,7 +71,7 @@ export default async function LibraryPage({
       <header className="border-b border-hairline">
         <div className="mx-auto flex max-w-shell items-center justify-between px-gutter py-5">
           <a href={`/${locale}`} className="flex items-center gap-2.5">
-            <TwingsWordmark className="h-[18px] w-auto" />
+            <TwingsLogo size={18} />
           </a>
           <div className="flex items-center gap-6">
             {siteLinks(locale, dict).map((link, index) => (
