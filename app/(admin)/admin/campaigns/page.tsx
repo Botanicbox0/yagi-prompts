@@ -13,6 +13,7 @@ import {
 import { CAMPAIGN_STATUSES, type CampaignStatus } from '@/lib/campaigns/schemas';
 import { computePayout, formatWon, needsMetrics } from '@/lib/campaigns/state';
 import { ADMIN_CAMPAIGNS_PATH, ADMIN_CAMPAIGN_NEW_PATH, adminCampaignPath, campaignHref } from '@/lib/campaigns/links';
+import { listBrandInquiries, type BrandInquiry } from '@/lib/brands/repo';
 import { AdminShell, BUTTON, BUTTON_PRIMARY, INPUT, OpForm, OutcomeBanner, Panel } from '@/components/admin/chrome';
 
 /**
@@ -44,6 +45,17 @@ export default async function AdminCampaignsPage({ searchParams }: { searchParam
   const counts = sql === null ? new Map<string, CampaignCounts>() : await loadCampaignCounts(sql, rows.map((row) => row.id));
   const payoutQueue: ApplicationRow[] = sql === null ? [] : await loadPayoutQueue(sql, now);
   const byId = new Map(rows.map((row) => [row.id, row]));
+  // The brand inbox (2026-09-11): everything not yet closed, newest first.
+  const inquiries: BrandInquiry[] = sql === null ? [] : await listBrandInquiries(sql, { statuses: ['new', 'contacted'], limit: 50 });
+  const b = dict.campaigns.brands;
+  const budgetLabel: Record<BrandInquiry['budgetBand'], string> = {
+    under_3m: b.budgetUnder3m,
+    '3m_10m': b.budget3mTo10m,
+    '10m_30m': b.budget10mTo30m,
+    over_30m: b.budgetOver30m,
+    undecided: b.budgetUndecided,
+  };
+  const formatLabel = (slug: string | null) => (slug === 'new' ? b.templateNew : slug === null || slug === 'undecided' ? b.templateUndecided : slug);
 
   return (
     <AdminShell dict={a} locale={locale} active="campaigns">
@@ -99,6 +111,52 @@ export default async function AdminCampaignsPage({ searchParams }: { searchParam
                 </li>
               );
             })}
+          </ul>
+        </Panel>
+      )}
+
+      {/* The brand inbox: who asked, for what, and whether anyone has written back yet. */}
+      {inquiries.length > 0 && (
+        <Panel title={`${a.inquiriesHeading} (${inquiries.length})`}>
+          <p className="mb-4 font-mono text-[0.75rem] opacity-55">{a.inquiriesLede}</p>
+          <ul id="inquiries" data-brand-inquiries className="flex flex-col divide-y divide-hairline">
+            {inquiries.map((q) => (
+              <li key={q.id} data-brand-inquiry={q.status} className="flex flex-wrap items-start justify-between gap-4 py-4">
+                <div className="min-w-0 max-w-detail">
+                  <p className="font-mono text-code">
+                    <strong>{q.company}</strong> · {q.contactName} ·{' '}
+                    <a href={`mailto:${q.email}`} className="text-accent">
+                      {q.email}
+                    </a>
+                    {q.phone ? ` · ${q.phone}` : ''}
+                  </p>
+                  <p className="mt-1 font-mono text-[0.72rem] opacity-55">
+                    {a.inquiryBudget} {budgetLabel[q.budgetBand]} · {a.inquiryTemplate} {formatLabel(q.templateSlug)} · {a.inquiryTiming} {q.timing ?? '—'} ·{' '}
+                    {formatDate(q.createdAt, locale)}
+                  </p>
+                  <p className="mt-2 text-[0.85rem] leading-relaxed whitespace-pre-line opacity-80">{q.message}</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="font-label text-[0.62rem] tracking-[0.1em] uppercase opacity-60">{a.inquiryStatuses[q.status]}</span>
+                  {q.status === 'new' && (
+                    <OpForm op="brandInquiry.status" back={ADMIN_CAMPAIGNS_PATH}>
+                      <input type="hidden" name="id" value={q.id} />
+                      <input type="hidden" name="status" value="contacted" />
+                      <button type="submit" className={BUTTON_PRIMARY}>
+                        {a.inquiryMarkContacted}
+                      </button>
+                    </OpForm>
+                  )}
+                  <OpForm op="brandInquiry.status" back={ADMIN_CAMPAIGNS_PATH}>
+                    <input type="hidden" name="id" value={q.id} />
+                    <input type="hidden" name="status" value="closed" />
+                    <button type="submit" className={BUTTON}>
+                      {a.inquiryMarkClosed}
+                    </button>
+                  </OpForm>
+                </div>
+              </li>
+            ))}
           </ul>
         </Panel>
       )}

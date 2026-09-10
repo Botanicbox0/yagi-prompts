@@ -1,16 +1,11 @@
 import { getViewer } from '@/lib/auth/viewer';
-import { loadSubscription, type SubscriptionRecord } from '@/lib/billing/reconcile';
-import { isBillingConfigured } from '@/lib/billing/stripe-gateway';
-import { PORTAL_ACTION } from '@/lib/billing/links';
 import { getSqlRunner } from '@/lib/db/connect';
 import { getLocaleFromHeaders } from '@/lib/i18n/server';
 import { getDictionary } from '@/lib/i18n/dictionaries';
-import { formatDate, interpolate } from '@/lib/i18n/format';
 import { LocaleToggle } from '@/components/locale-toggle';
 import { siteLinks } from '@/components/marketing/chrome';
 import { TwingsWordmark } from '@/components/brand/twings-wordmark';
 import { TextSwap } from '@/components/ui/text-swap';
-import { BillingUnavailable } from '@/components/billing/upgrade-cta';
 import {
   loadPreferences,
   PREFERENCES_OFF,
@@ -92,7 +87,7 @@ const DELETION_MAILTO = (email: string | null) => {
       '',
       `Account: ${email ?? '(the address I am signed in with)'}`,
       '',
-      'I understand this cancels my subscription and removes my profile.',
+      'I understand this removes my profile and everything I made.',
     ].join('\n'),
   );
   return `mailto:hello@yagiworkshop.xyz?subject=${subject}&body=${body}`;
@@ -109,7 +104,6 @@ export default async function AccountPage({
   const params = (await searchParams) ?? {};
 
   let viewer = null as Awaited<ReturnType<typeof getViewer>> | null;
-  let subscription: SubscriptionRecord | null = null;
   let preferences: NotificationPreferences = PREFERENCES_OFF;
   let renders: RenderView[] = [];
   try {
@@ -117,7 +111,6 @@ export default async function AccountPage({
     if (viewer.userId !== null) {
       const sql = await getSqlRunner();
       if (sql !== null) {
-        subscription = await loadSubscription(sql, viewer.userId);
         preferences = (await loadPreferences(sql, viewer.userId)) ?? PREFERENCES_OFF;
         renders = await listMyRenders(sql, viewer.userId, 3);
       }
@@ -125,31 +118,6 @@ export default async function AccountPage({
   } catch {
     // Placeholder env (§11) — render the shell honestly rather than a 500.
   }
-
-  const entitled = subscription?.entitled === true || viewer?.tier === 'pro';
-  const billingReady = isBillingConfigured();
-
-  const statusLine = (() => {
-    if (subscription === null) return null;
-    switch (subscription.status) {
-      case 'active':
-        return copy.statusActive;
-      case 'past_due':
-        return copy.statusPastDue;
-      case 'canceled':
-        return copy.statusCanceled;
-      default:
-        return interpolate(copy.statusOther, { status: subscription.status });
-    }
-  })();
-
-  const periodDate = formatDate(subscription?.currentPeriodEnd ?? null, locale);
-  const periodLine =
-    periodDate === null
-      ? null
-      : subscription?.cancelAtPeriodEnd === true
-        ? interpolate(copy.endsOn, { date: periodDate })
-        : interpolate(copy.renewsOn, { date: periodDate });
 
   return (
     <div data-section data-theme="light" className="section min-h-screen">
@@ -183,52 +151,10 @@ export default async function AccountPage({
           <dl>
             <Row term={copy.emailLabel}>{viewer?.email ?? copy.notSignedIn}</Row>
 
-            <Row term={copy.planHeading}>
-              <span className="font-mono text-code">
-                {entitled ? copy.planPro : copy.planFree}
-              </span>
-              {subscription?.cancelAtPeriodEnd === true && (
-                <span className="text-accent ml-3 font-label text-eyebrow uppercase">
-                  {copy.cancelScheduled}
-                </span>
-              )}
-            </Row>
-
-            {statusLine !== null && (
-              <Row term={copy.statusHeading}>
-                <span>{statusLine}</span>
-                {periodLine !== null && (
-                  <span className="mt-2 block font-mono text-code opacity-60">{periodLine}</span>
-                )}
-              </Row>
-            )}
-
             <Row term={copy.languageHeading}>
               <LocaleToggle current={locale} rest="/account" prefixed={false} />
             </Row>
           </dl>
-        </div>
-
-        {/* --- billing -------------------------------------------------- */}
-        <div className="mt-14 max-w-detail">
-          {!billingReady ? (
-            <BillingUnavailable
-              title={dict.billing.unavailableTitle}
-              body={dict.billing.unavailableBody}
-            />
-          ) : entitled ? (
-            <div className="border border-hairline p-6 sm:p-8">
-              <form method="post" action={`${PORTAL_ACTION}?locale=${locale}`}>
-                <button
-                  type="submit"
-                  className="inline-block border border-current px-6 py-3 font-label text-label uppercase"
-                >
-                  <TextSwap>{copy.manageBilling} →</TextSwap>
-                </button>
-              </form>
-              <p className="mt-4 font-mono text-code opacity-60">{copy.manageBillingHint}</p>
-            </div>
-          ) : null}
         </div>
 
         {/* --- notifications (§3.5) -------------------------------------- */}

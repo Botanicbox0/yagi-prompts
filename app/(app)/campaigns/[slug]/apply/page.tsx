@@ -119,8 +119,8 @@ export default async function CampaignApplyPage({
           </dd>
           {campaign.requirements.disclosure && (
             <>
-              <dt className="text-accent">#</dt>
-              <dd>{c.reqDisclosure}</dd>
+              <dt className="opacity-50">{c.reqDisclosureLabel}</dt>
+              <dd className="text-accent">{c.reqDisclosure}</dd>
             </>
           )}
           <dt className="opacity-50">{c.slotsLabel}</dt>

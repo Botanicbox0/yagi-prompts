@@ -21,6 +21,7 @@ import { fail, ok, type AdminContext, type AdminOutcome } from './context';
 import { PROMPT_OPERATIONS } from './prompt-operations';
 import { CONTEST_OPERATIONS } from './contest-operations';
 import { CAMPAIGN_OPERATIONS } from './campaign-operations';
+import { BRAND_OPERATIONS } from './brand-operations';
 import { stageUpload } from './assets';
 import { ensureDraftRevision } from './clone';
 import * as f from './form';
@@ -728,6 +729,8 @@ export const ADMIN_OPERATIONS = {
   ...CONTEST_OPERATIONS,
   // docs/CAMPAIGNS.md — and the campaigns surface.
   ...CAMPAIGN_OPERATIONS,
+  // 2026-09-11 — the brand enquiries that arrive through the campaigns page.
+  ...BRAND_OPERATIONS,
 };
 
 export type AdminOperationName = keyof typeof ADMIN_OPERATIONS;

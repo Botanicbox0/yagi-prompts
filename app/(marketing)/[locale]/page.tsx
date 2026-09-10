@@ -36,6 +36,9 @@ import { AdBanner, AdCard } from '@/components/ad/ad-card';
 /** Must stay equal to CATALOG_TTL_SECONDS — Next requires a literal here (tests pin the pair). */
 export const revalidate = 3600;
 
+/** Below this many video templates the use-case filter stays hidden (founder, 2026-09-11). */
+const FILTER_MIN_TEMPLATES = 6;
+
 export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
   const { locale: raw } = await params;
   const locale: Locale = isLocale(raw) ? raw : DEFAULT_LOCALE;
@@ -65,12 +68,14 @@ export default async function LandingPage({ params }: { params: Promise<{ locale
 
   // Three tagged projections, three invalidation events: a template published, a campaign moved,
   // a playbook published (the marquee still lists the studio's tools from the playbook catalog).
-  const [templates, campaigns, catalog] = await Promise.all([getPromptCatalog(), getCampaignCatalog(), getPublicCatalog()]);
+  const [templates, campaigns] = await Promise.all([getPromptCatalog(), getCampaignCatalog()]);
+  // Founder, 2026-09-11: the strip names the engine the templates run on and the use cases they
+  // carry — never the playbook catalog's tool list, which advertised software TWINGS does not run.
   const ticker = marqueeItems({
-    models: [templates.totals.modelLabel, ...catalog.totals.models],
-    tools: [...USE_CASES.map((value) => useCaseLabel(dict, value)), ...catalog.totals.tools],
+    models: [templates.totals.modelLabel],
+    tools: USE_CASES.map((value) => useCaseLabel(dict, value)),
   });
-  const ads = adLabels(dict);
+  const ads = adLabels(dict, locale);
   const labels = promptLabels(dict);
   const useCaseLabels = Object.fromEntries(USE_CASES.map((value) => [value, useCaseLabel(dict, value)]));
   const filterOptions = presentUseCases([...new Set(templates.video.flatMap((card) => card.useCase))].sort()).map(
@@ -85,7 +90,7 @@ export default async function LandingPage({ params }: { params: Promise<{ locale
       <MarketingNav locale={locale} dict={dict} rest="/" initialTheme="light" />
 
       <main id="main">
-        <Hero locale={locale} dict={dict} />
+        <Hero locale={locale} dict={dict} showImage={templates.image.length > 0} />
 
         {/* §3.6: the rail runs from below the hero to the end of the content. */}
         <div id="rail-anchor" className="relative">
@@ -97,7 +102,8 @@ export default async function LandingPage({ params }: { params: Promise<{ locale
           <section id="gallery" data-section data-theme="light" className="section">
             <div className="band pb-24">
               <div className="border-t border-hairline pt-3 lg:pt-6">
-                {filterOptions.length > 0 && (
+                {/* A filter over two cards is furniture, not a tool: it appears once there is a catalogue to narrow. */}
+                {filterOptions.length > 0 && templates.video.length >= FILTER_MIN_TEMPLATES && (
                   <UseCaseFilter options={filterOptions} labels={{ heading: dict.prompts.filterHeading, all: dict.prompts.filterAll }} />
                 )}
               </div>

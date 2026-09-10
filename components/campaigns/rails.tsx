@@ -56,14 +56,15 @@ export function CampaignRail({
  * CTA that turns an empty page into a lead — the same enquiry mailto the contests use, because it
  * lands in the same inbox.
  */
-export function CampaignsEmptyState({ title, body, cta, mailto }: { title: string; body: string; cta: string; mailto: string }) {
+export function CampaignsEmptyState({ title, body, cta, href }: { title: string; body: string; cta: string; href: string }) {
   return (
     <section data-campaigns-empty className="mt-8 border-t border-hairline pt-8 lg:mt-10 lg:pt-10">
       <div className="max-w-detail">
         <p className="font-display text-[clamp(2rem,5vw,3.5rem)] leading-[0.92] font-black whitespace-pre-line uppercase">{title}</p>
         <p className="mt-6 text-body opacity-70">{body}</p>
         <a
-          href={mailto}
+          href={href}
+          data-campaigns-empty-cta
           className="text-accent mt-9 inline-flex min-h-12 items-center border border-current px-6 py-3.5 font-label text-[1rem] tracking-[0.1em] uppercase"
         >
           <TextSwap>{cta} →</TextSwap>

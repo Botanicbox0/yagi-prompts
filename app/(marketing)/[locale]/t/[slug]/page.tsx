@@ -81,7 +81,7 @@ export default async function TemplatePage({ params }: RouteParams) {
 
   const t = dict.templates;
   const labels = promptLabels(dict);
-  const ads = adLabels(dict);
+  const ads = adLabels(dict, locale);
   const useCaseLabels = Object.fromEntries(USE_CASES.map((value) => [value, useCaseLabel(dict, value)]));
   const title = locale === 'ko' && card.titleKo ? card.titleKo : card.title;
   const ratio = card.poster?.w && card.poster.h ? `${card.poster.w} / ${card.poster.h}` : posterRatio(card.slug);
@@ -190,6 +190,7 @@ export default async function TemplatePage({ params }: RouteParams) {
                   live={{
                     endpoint: '/api/renders',
                     accessEndpoint: '/api/renders/access',
+                    interestEndpoint: '/api/notify/interest',
                     template: card.slug,
                     locale,
                     signinHref: signInHref(`${templateHref(locale, slug)}#make`, locale),
@@ -216,12 +217,11 @@ export default async function TemplatePage({ params }: RouteParams) {
                     chooseStyle: dict.studio.chooseStyle,
                     payCta: dict.studio.payCta,
                     payNote: dict.studio.payNote,
-                    demoBadge: dict.studio.demoBadge,
-                    rendering: dict.studio.rendering,
-                    renderingNote: dict.studio.renderingNote,
-                    resultHeading: dict.studio.resultHeading,
-                    resultNote: dict.studio.resultNote,
-                    again: dict.studio.again,
+                    closedBadge: dict.studio.closedBadge,
+                    closedTitle: dict.studio.closedTitle,
+                    closedBody: dict.studio.closedBody,
+                    closedCta: dict.studio.closedCta,
+                    closedDone: dict.studio.closedDone,
                     runtimeLabel: dict.studio.runtimeLabel,
                     needPhoto: dict.studio.needPhoto,
                     noStyles: dict.studio.noStyles,

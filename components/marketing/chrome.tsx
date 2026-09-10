@@ -3,7 +3,7 @@ import { SiteFooter } from '@/components/site-footer';
 import { LocaleToggle } from '@/components/locale-toggle';
 import { PLAYBOOKS_IN_NAV } from '@/lib/flags';
 import { templatesHref } from '@/lib/prompts/links';
-import { campaignsHref } from '@/lib/campaigns/links';
+import { brandEnquiryHref, campaignsHref } from '@/lib/campaigns/links';
 import { LEGAL_DOCS, legalDocument } from '@/lib/legal/documents';
 import { legalHref } from '@/lib/legal/links';
 import type { Dictionary } from '@/lib/i18n/dictionaries';
@@ -92,18 +92,19 @@ export function MarketingFooter({ locale, dict }: { locale: Locale; dict: Dictio
         navHeading: dict.footer.navHeading,
         contactHeading: dict.footer.contactHeading,
         brand: dict.meta.siteName,
-        adContact: dict.ad.contact,
+        adHref: brandEnquiryHref(locale),
       }}
     />
   );
 }
 
-export function adLabels(dict: Dictionary) {
+/** The house ad (2026-09-11): the brand-campaign pitch, pointing at the enquiry form. */
+export function adLabels(dict: Dictionary, locale: Locale) {
   return {
     label: dict.ad.label,
-    placeholder: dict.ad.placeholder,
+    headline: dict.ad.headline,
     pitch: dict.ad.pitch,
-    contact: dict.ad.contact,
-    contactLabel: dict.ad.contactLabel,
+    cta: dict.ad.cta,
+    href: brandEnquiryHref(locale),
   };
 }

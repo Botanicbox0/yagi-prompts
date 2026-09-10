@@ -1,27 +1,29 @@
 /**
- * PLAN §5.3-5 — "KLING · VEO · COMFYUI · ELEVENLABS · ...", 40s linear loop, pause on hover.
+ * PLAN §5.3-5 — the strip under the catalogue: 40s linear loop, pause on hover.
  *
- * The strip prefers the REAL tools and models the catalog references, so it stays honest as the
- * library grows, and tops up from a house list so a thin (or empty) catalog still reads as a
- * ticker rather than three lonely words.
+ * The strip prefers what the catalog actually references (the engine label, the use cases the
+ * templates carry), and tops up from a house list so a thin catalog still reads as a ticker rather
+ * than three lonely words. Founder, 2026-09-11: the house list names only what TWINGS actually
+ * runs and ships — the engines, the aspects, the lengths, the destinations. No tool the studio
+ * does not use is allowed on the front door.
  */
 
-/** The names §5.3 names, plus the rest of the stack the studio actually runs. */
+/** What the studio actually runs and delivers. Engines first; the rest is the shape of a film. */
 export const HOUSE_MARQUEE_ITEMS = [
-  'KLING',
-  'VEO',
-  'COMFYUI',
-  'ELEVENLABS',
-  'SEEDANCE',
-  'NANO BANANA',
-  'FLUX',
-  'RUNWAY',
-  'WAN',
-  'TOPAZ',
-  'FFMPEG',
-  'HIGGSFIELD',
-  'SEEDREAM',
-  'HYPERFRAMES',
+  'SEEDANCE 2.5',
+  'SEEDREAM 5.0',
+  'GPT IMAGE 2',
+  '9:16',
+  '16:9',
+  '1:1',
+  '4:5',
+  '15S',
+  '30S',
+  '720P',
+  'REELS',
+  'SHORTS',
+  'STORIES',
+  'TWINGS',
 ] as const;
 
 export const MARQUEE_MAX_ITEMS = 14;

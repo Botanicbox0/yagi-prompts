@@ -3,6 +3,7 @@ import { getViewer } from '@/lib/auth/viewer';
 import { getSqlRunner } from '@/lib/db/connect';
 import { identityStatusFor, needsIdentity } from '@/lib/identity/service';
 import { resolveEngine } from '@/lib/images/engines';
+import { loadPreferences } from '@/lib/notify/preferences';
 import { loadPromptBySlug } from '@/lib/prompts/repo';
 import { canStartRender } from '@/lib/renders/service';
 
@@ -29,17 +30,23 @@ export async function GET(request: Request): Promise<NextResponse> {
   const viewer = await getViewer();
   const live = canStartRender(viewer);
   const slug = new URL(request.url).searchParams.get('template');
+  const signedIn = viewer.userId !== null;
 
   let identityRequired = false;
   let identity: string = 'not_needed';
-  if (live && slug && viewer.userId !== null) {
+  // The closed studio's one question: has this person already asked to be told when it opens?
+  let interest = false;
+  if (viewer.userId !== null) {
     const sql = await getSqlRunner();
-    const template = sql === null ? null : await loadPromptBySlug(sql, slug);
-    if (sql !== null && template !== null) {
-      identityRequired = needsIdentity(resolveEngine(template.engine, template.medium));
-      if (identityRequired) identity = await identityStatusFor(sql, viewer.userId);
+    if (sql !== null) {
+      interest = (await loadPreferences(sql, viewer.userId))?.newPlaybook === true;
+      const template = live && slug ? await loadPromptBySlug(sql, slug) : null;
+      if (template !== null) {
+        identityRequired = needsIdentity(resolveEngine(template.engine, template.medium));
+        if (identityRequired) identity = await identityStatusFor(sql, viewer.userId);
+      }
     }
   }
 
-  return NextResponse.json({ live, charge: live && !viewer.isAdmin, identityRequired, identity }, { headers: HEADERS });
+  return NextResponse.json({ live, charge: live && !viewer.isAdmin, identityRequired, identity, signedIn, interest }, { headers: HEADERS });
 }

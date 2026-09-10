@@ -42,12 +42,12 @@ export interface StudioLabels {
   chooseStyle: string;
   payCta: string;
   payNote: string;
-  demoBadge: string;
-  rendering: string;
-  renderingNote: string;
-  resultHeading: string;
-  resultNote: string;
-  again: string;
+  /** The template page before payment is wired: no mock, a promise with a date attached (founder, 2026-09-11). */
+  closedBadge: string;
+  closedTitle: string;
+  closedBody: string;
+  closedCta: string;
+  closedDone: string;
   runtimeLabel: string;
   needPhoto: string;
   noStyles: string;
@@ -58,11 +58,15 @@ export interface StudioLabels {
 /**
  * The live make loop (docs/TEMPLATES-IA.md §8). When the server says this viewer may render for
  * real (`accessEndpoint` → `{ live: true }`), the pay step posts the photo to `endpoint` and the
- * browser moves to the result page; otherwise the demo below runs exactly as before.
+ * browser moves to the result page. Otherwise the studio is CLOSED: it says payment opens soon and
+ * offers one thing — an email the day it does (`interestEndpoint`). There is no demo any more
+ * (founder, 2026-09-11): a mock progress bar on a paid product reads as a product that does not work.
  */
 export interface StudioLive {
   endpoint: string;
   accessEndpoint: string;
+  /** `POST` — records "tell me when it opens" for the signed-in viewer. */
+  interestEndpoint: string;
   template: string;
   locale: string;
   /** Where a `sign_in_required` answer sends the reader (back to this template afterwards). */
@@ -82,7 +86,7 @@ export interface StudioLive {
   };
 }
 
-type Phase = 'photo' | 'style' | 'pay' | 'rendering' | 'result';
+type Phase = 'photo' | 'style' | 'pay';
 
 /** The longest edge the photo is sent at. Vercel refuses request bodies above ~4.5MB before any of our code runs. */
 const PHOTO_MAX_EDGE = 1600;
@@ -116,9 +120,6 @@ async function shrinkPhoto(file: File): Promise<Blob> {
   }
 }
 
-/** Long enough that the wait reads as work. A real render takes minutes; 400ms would teach a lie. */
-const RENDER_MS = 5200;
-
 export function TwingsStudio({
   styles,
   labels,
@@ -129,7 +130,7 @@ export function TwingsStudio({
   labels: StudioLabels;
   /** Pre-chosen style (the template page); with exactly one style the picking step disappears. */
   initialStyleId?: string;
-  /** The live make loop; absent on the catalogue shape, which is always the demo. */
+  /** The live make loop; absent (tests, the catalogue shape) the studio is closed. */
   live?: StudioLive;
 }) {
   const single = styles.length === 1;
@@ -138,13 +139,15 @@ export function TwingsStudio({
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [liveMode, setLiveMode] = useState(false);
   const [charge, setCharge] = useState(true);
+  const [signedIn, setSignedIn] = useState(false);
+  const [interest, setInterest] = useState(false);
+  const [interestBusy, setInterestBusy] = useState(false);
   const [identityRequired, setIdentityRequired] = useState(false);
   const [identity, setIdentity] = useState('not_needed');
   const [submitting, setSubmitting] = useState(false);
   const [liveError, setLiveError] = useState<string | null>(null);
   const [styleId, setStyleId] = useState<string>(initialStyleId ?? styles[0]?.id ?? '');
   const [aspect, setAspect] = useState<string>(styles.find((item) => item.id === (initialStyleId ?? styles[0]?.id))?.defaultAspect ?? styles[0]?.defaultAspect ?? '');
-  const [progress, setProgress] = useState(0);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const chosen = styles.find((item) => item.id === styleId) ?? styles[0] ?? null;
@@ -164,15 +167,17 @@ export function TwingsStudio({
     let cancelled = false;
     fetch(accessUrl, { cache: 'no-store', credentials: 'same-origin' })
       .then((response) => (response.ok ? response.json() : { live: false }))
-      .then((json: { live?: boolean; charge?: boolean; identityRequired?: boolean; identity?: string }) => {
+      .then((json: { live?: boolean; charge?: boolean; identityRequired?: boolean; identity?: string; signedIn?: boolean; interest?: boolean }) => {
         if (cancelled) return;
         setLiveMode(json.live === true);
         setCharge(json.charge !== false);
         setIdentityRequired(json.identityRequired === true);
         setIdentity(typeof json.identity === 'string' ? json.identity : 'not_needed');
+        setSignedIn(json.signedIn === true);
+        setInterest(json.interest === true);
       })
       .catch(() => {
-        /* the demo is the fallback */
+        /* closed is the fallback */
       });
     return () => {
       cancelled = true;
@@ -180,21 +185,6 @@ export function TwingsStudio({
   }, [accessUrl]);
 
   const identityBlocked = liveMode && identityRequired && identity !== 'active';
-
-  useEffect(() => {
-    if (phase !== 'rendering') return;
-    setProgress(0);
-    const started = Date.now();
-    const timer = window.setInterval(() => {
-      const next = Math.min(100, Math.round(((Date.now() - started) / RENDER_MS) * 100));
-      setProgress(next);
-      if (next >= 100) {
-        window.clearInterval(timer);
-        setPhase('result');
-      }
-    }, 120);
-    return () => window.clearInterval(timer);
-  }, [phase]);
 
   const takePhoto = (file: File | null | undefined) => {
     if (!file || !file.type.startsWith('image/')) return;
@@ -246,6 +236,28 @@ export function TwingsStudio({
     }
   };
 
+  // "Tell me when it opens": signed out, the door; signed in, one POST and the button says so.
+  const registerInterest = async () => {
+    if (!live || interest || interestBusy) return;
+    if (!signedIn) {
+      window.location.assign(live.signinHref);
+      return;
+    }
+    setInterestBusy(true);
+    try {
+      const response = await fetch(live.interestEndpoint, { method: 'POST', credentials: 'same-origin' });
+      if (response.status === 401) {
+        window.location.assign(live.signinHref);
+        return;
+      }
+      if (response.ok) setInterest(true);
+    } catch {
+      /* the button simply stays; nothing was promised */
+    } finally {
+      setInterestBusy(false);
+    }
+  };
+
   // A style whose template is unpublished is dropped upstream; with none left, an empty grid and a
   // permanently disabled button would read as a broken page rather than a closed one.
   if (styles.length === 0) {
@@ -256,25 +268,49 @@ export function TwingsStudio({
     );
   }
 
+  // Closed until the server says otherwise: the static HTML every visitor gets is this panel, and
+  // an operator's page swaps to the live loop the moment the access call answers.
+  if (!liveMode || !live) {
+    return (
+      <section data-twings-studio data-phase="closed" data-single={single ? 'true' : 'false'} data-live="false" className="mt-10">
+        <p data-studio-closed className="inline-block border border-accent px-3 py-1.5 font-label text-[0.68rem] tracking-[0.12em] text-accent uppercase">
+          {labels.closedBadge}
+        </p>
+        <div className="mt-6 max-w-detail border border-hairline p-6 sm:p-8">
+          <p className="font-display text-[clamp(1.4rem,2.6vw,2rem)] leading-[0.95] font-black uppercase">{labels.closedTitle}</p>
+          <p className="mt-4 text-body opacity-70">{labels.closedBody}</p>
+          <button
+            type="button"
+            data-studio-interest={interest ? 'done' : 'open'}
+            disabled={!live || interest || interestBusy}
+            onClick={() => void registerInterest()}
+            className="mt-7 inline-block border border-current px-6 py-3 font-label text-label uppercase transition-opacity hover:opacity-70 disabled:opacity-60"
+          >
+            {interest ? labels.closedDone : `${labels.closedCta} →`}
+          </button>
+        </div>
+      </section>
+    );
+  }
+
   // The step bar: three steps on a template page (the choice is the page), four in the catalogue.
   const steps = single
     ? [labels.stepPhoto, labels.stepPay, labels.stepResult]
     : [labels.stepPhoto, labels.stepStyle, labels.stepPay, labels.stepResult];
   const stepIndex = (() => {
     if (phase === 'photo') return 0;
-    if (phase === 'result') return steps.length - 1;
     if (single) return 1;
     return phase === 'style' ? 1 : 2;
   })();
 
   return (
     <section data-twings-studio data-phase={phase} data-single={single ? 'true' : 'false'} data-aspect={aspect} data-live={liveMode ? 'true' : 'false'} data-live-charge={liveMode && charge ? 'true' : 'false'} className="mt-10">
-      {/* The one honest label the whole screen hangs on: a demo says so; a live loop says where the result goes. */}
+      {/* The one honest label the whole screen hangs on: where the result goes, and whether a payment is taken. */}
       <p
-        data-demo-badge
+        data-live-badge
         className="inline-block border border-accent px-3 py-1.5 font-label text-[0.68rem] tracking-[0.12em] text-accent uppercase"
       >
-        {liveMode && live ? (charge ? live.labels.badge : live.labels.operatorBadge) : labels.demoBadge}
+        {charge ? live.labels.badge : live.labels.operatorBadge}
       </p>
 
       <ol className="mt-6 flex flex-wrap gap-x-6 gap-y-2 font-label text-[0.68rem] tracking-[0.12em] uppercase">
@@ -421,19 +457,17 @@ export function TwingsStudio({
                   disabled={!photo || !chosen || submitting}
                   aria-describedby={photo ? undefined : 'studio-cta-hint'}
                   onClick={() => {
-                    if (liveMode && live) {
-                      // With a photo the press stores it and goes to the check (held job); without one, just the check.
-                      if (identityBlocked && !photoFile) window.location.assign(live.identityHref);
-                      else void submitLive();
-                    } else setPhase('rendering');
+                    // With a photo the press stores it and goes to the check (held job); without one, just the check.
+                    if (identityBlocked && !photoFile) window.location.assign(live.identityHref);
+                    else void submitLive();
                   }}
                   className="w-full border border-current px-5 py-4 font-label text-[0.95rem] tracking-[0.1em] text-accent uppercase transition-opacity hover:opacity-70 disabled:opacity-25"
                 >
-                  {submitting && live
+                  {submitting
                     ? live.labels.submitting
-                    : identityBlocked && live
+                    : identityBlocked
                       ? live.labels.identityCta
-                      : liveMode && live && !charge
+                      : !charge
                         ? live.labels.freeCta
                         : chosen
                           ? labels.payCta.replace('{price}', chosen.price)
@@ -452,57 +486,6 @@ export function TwingsStudio({
                 )}
               </div>
             </>
-          )}
-
-          {phase === 'rendering' && (
-            <div className="flex flex-1 flex-col justify-center">
-              <p className="font-display text-[clamp(1.6rem,3vw,2.4rem)] leading-[0.95] font-black uppercase">
-                {labels.rendering}
-              </p>
-              <div className="mt-6 h-1 w-full bg-hairline" role="progressbar" aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100}>
-                <div className="h-full bg-accent" style={{ width: `${progress}%` }} />
-              </div>
-              <p className="mt-3 font-mono text-[0.78rem] opacity-55">{progress}%</p>
-              <p className="mt-6 max-w-detail font-mono text-[0.72rem] opacity-45">{labels.renderingNote}</p>
-            </div>
-          )}
-
-          {phase === 'result' && chosen && (
-            <div className="flex flex-1 flex-col">
-              <p className="font-label text-label uppercase">{labels.resultHeading}</p>
-              <div className="mt-4 aspect-video overflow-hidden border border-hairline bg-black">
-                {chosen.videoSrc ? (
-                  <video
-                    src={chosen.videoSrc}
-                    {...(chosen.posterSrc ? { poster: chosen.posterSrc } : {})}
-                    controls
-                    autoPlay
-                    muted
-                    loop
-                    playsInline
-                    className="h-full w-full object-contain"
-                  />
-                ) : (
-                  chosen.posterSrc && (
-                    // eslint-disable-next-line @next/next/no-img-element -- public bucket object
-                    <img src={chosen.posterSrc} alt="" className="h-full w-full object-contain" />
-                  )
-                )}
-              </div>
-              <p className="mt-3 font-mono text-[0.72rem] opacity-45">{labels.resultNote}</p>
-              <div className="mt-6 flex flex-wrap items-center gap-x-6 gap-y-3">
-                <button
-                  type="button"
-                  onClick={() => setPhase(single ? 'pay' : 'style')}
-                  className="border border-current px-5 py-3 font-label text-eyebrow uppercase transition-opacity hover:opacity-70"
-                >
-                  {labels.again}
-                </button>
-                <a href={chosen.moreHref} data-studio-more-link className="text-accent font-label text-eyebrow uppercase">
-                  {labels.moreTemplates} →
-                </a>
-              </div>
-            </div>
           )}
         </div>
       </div>

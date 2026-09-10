@@ -89,7 +89,7 @@ export default async function PlaybookDetailPage({ params }: RouteParams) {
 
   const { playbook, neighbours, preview } = result;
   const labels = playbookLabels(dict);
-  const ads = adLabels(dict);
+  const ads = adLabels(dict, locale);
 
   // §3.4 funnel. Fire-and-forget: an analytics insert may never sit on this page's critical path,
   // and may never be able to fail it (lib/events/server.ts swallows everything).

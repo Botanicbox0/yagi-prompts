@@ -18,16 +18,23 @@ const dict = getDictionary('en');
 describe('mobile-first hero (F3 · templates)', () => {
   const hero = renderToStaticMarkup(<Hero locale="en" dict={dict} />);
 
-  it('keeps eyebrow, headline and the two template doors at every width', () => {
+  it('keeps eyebrow, headline and the video door at every width', () => {
     expect(hero).toContain(dict.hero.eyebrow);
     expect(hero).toContain(dict.hero.line1);
     expect(hero).toMatch(/data-hero-video="true"[^>]*href="\/en\/video"|href="\/en\/video"[^>]*data-hero-video/);
-    expect(hero).toContain('href="/en/image"');
     expect(hero).toContain(dict.templates.ctaVideo);
-    expect(hero).toContain(dict.templates.ctaImage);
-    // Neither door carries a width-gated visibility class.
+    // The door carries no width-gated visibility class.
     expect(hero).not.toMatch(/href="\/en\/video"[^>]*hidden/);
-    expect(hero).not.toMatch(/href="\/en\/image"[^>]*hidden/);
+  });
+
+  // Founder, 2026-09-11: a hero button that lands on "preparing" is a dead end dressed as a choice.
+  it('offers the image door only once an image template exists behind it', () => {
+    expect(hero).not.toContain('href="/en/image"');
+    expect(hero).not.toContain(dict.templates.ctaImage);
+    const withImages = renderToStaticMarkup(<Hero locale="en" dict={dict} showImage />);
+    expect(withImages).toContain('href="/en/image"');
+    expect(withImages).toContain(dict.templates.ctaImage);
+    expect(withImages).not.toMatch(/href="\/en\/image"[^>]*hidden/);
   });
 
   it('hides the lede below lg — and only below lg', () => {

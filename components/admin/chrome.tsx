@@ -223,7 +223,8 @@ export function OutcomeBanner({
       className={`mt-6 border px-4 py-3 ${failed ? 'border-accent' : 'border-hairline'}`}
     >
       <p className="font-label text-eyebrow uppercase">{String(message)}</p>
-      {detail && (
+      {/* The database's sentence matters when something failed; a slug under "Created." is noise (2026-09-11). */}
+      {failed && detail && (
         <p className="mt-1.5 font-mono text-[0.75rem] break-words opacity-60">
           {dict.detailLabel}: {detail}
         </p>
@@ -244,13 +245,23 @@ export function AdminShell({
 }: {
   dict: AdminDict;
   locale: string;
-  active: 'playbooks' | 'policy' | 'prompts' | 'contests' | 'campaigns';
+  active: 'home' | 'playbooks' | 'policy' | 'prompts' | 'contests' | 'campaigns';
   children: ReactNode;
 }) {
   // "Refresh caches" used to send every page back to /admin; it returns to where it was pressed.
   const refreshBack =
-    active === 'prompts' ? '/admin/prompts' : active === 'contests' ? '/admin/contests' : active === 'campaigns' ? '/admin/campaigns' : active === 'policy' ? '/admin/policy' : '/admin';
-  const navClass = (key: 'playbooks' | 'policy' | 'prompts' | 'contests' | 'campaigns') =>
+    active === 'prompts'
+      ? '/admin/prompts'
+      : active === 'contests'
+        ? '/admin/contests'
+        : active === 'campaigns'
+          ? '/admin/campaigns'
+          : active === 'policy'
+            ? '/admin/policy'
+            : active === 'playbooks'
+              ? '/admin/playbooks'
+              : '/admin';
+  const navClass = (key: 'home' | 'playbooks' | 'policy' | 'prompts' | 'contests' | 'campaigns') =>
     `font-label text-eyebrow uppercase ${active === key ? 'text-accent' : 'opacity-60'}`;
 
   return (
@@ -270,7 +281,7 @@ export function AdminShell({
               <a href="/admin/campaigns" className={navClass('campaigns')}>
                 {dict.navCampaigns}
               </a>
-              <a href="/admin" className={navClass('playbooks')}>
+              <a href="/admin/playbooks" className={navClass('playbooks')}>
                 {dict.navPlaybooks}
               </a>
               <a href="/admin/policy" className={navClass('policy')}>

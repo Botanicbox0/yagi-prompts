@@ -242,13 +242,17 @@ export default async function AdminCampaignPage({ params, searchParams }: { para
               : interpolate(a.campaignNotReady, { missing: blockers.map((b) => String(a[BLOCKER_KEYS[b] ?? 'blockerTitle'] ?? b)).join(', ') })}
           </p>
         )}
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Where it stands, then the verbs — each button says what happens, not which noun it lands on. */}
+          <span data-lifecycle-current className="font-label text-[0.68rem] tracking-[0.12em] text-accent uppercase">
+            {interpolate(a.lifecycleCurrent, { status: a.campaignStatuses[row.status] })}
+          </span>
           {moves.map((to) => (
             <OpForm key={to} op="campaign.status" back={back}>
               <input type="hidden" name="id" value={row.id} />
               <input type="hidden" name="to" value={to} />
               <button type="submit" className={to === 'recruiting' ? BUTTON_PRIMARY : BUTTON} disabled={to === 'recruiting' && blockers.length > 0}>
-                {interpolate(a.moveTo, { status: a.campaignStatuses[to] })}
+                {a.moveToStatus[to]}
               </button>
             </OpForm>
           ))}

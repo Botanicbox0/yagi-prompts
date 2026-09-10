@@ -75,7 +75,7 @@ export default async function AdminEditorPage({
   return (
     <AdminShell dict={a} locale={locale} active="playbooks">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <a href="/admin" className="font-label text-eyebrow uppercase text-accent">
+        <a href="/admin/playbooks" className="font-label text-eyebrow uppercase text-accent">
           ← {a.editorBack}
         </a>
         <a href={`/${locale}/p/${editor.playbook.slug}`} className={BUTTON}>

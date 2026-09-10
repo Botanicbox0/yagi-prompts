@@ -99,3 +99,18 @@ metrics_at            'verified+hold' — 조회수 스냅샷 시점 = 홀드 �
 | 조회수 API 수집 | `metrics_source='api'` 자리만 | v2 |
 
 운영 순서(어드민): 새 캠페인(초안) → 원고료·두 마감일·인원 채우고 **모집 중**으로 → 지원자 큐에서 선정/미선정 → **선정 중**(이때부터 크리에이터가 링크 제출 가능) → 검수 대기 큐에서 검수 통과/반려 → 홀드 종료 후 보드 상단 정산 대기열에서 이체 참조 기록 → **종료**.
+
+## 11. 브랜드 의뢰 폼 (2026-09-11)
+
+브랜드가 캠페인을 "만드는" 곳은 아직 어드민뿐이지만, **의뢰를 넣는 곳**은 이제 공개 페이지에 있다. 캠페인 목록 하단 `#brands` 섹션(`components/campaigns/brand-section.tsx`): 브랜드라면 / 포맷 하나로 채널 여러 개 / 3단계(포맷 → 브리프·예산 → 운영) / 의뢰 폼. 빈 상태의 "브랜드 의뢰하기", 하우스 광고, 푸터 "캠페인·광고 문의"가 모두 여기로 온다.
+
+| 조각 | 위치 | 비고 |
+| --- | --- | --- |
+| 스키마 | `lib/brands/schemas.ts` | 예산대 5구간(`under_3m`…`undecided`), 희망 포맷 = 공개 템플릿 슬러그 또는 `new`/`undecided`, 동의 `literal(true)`, 허니팟 `website` |
+| DB | `0021_core_brand_inquiries`, `0109_glue_brand_inquiries_rls` | 클라우드·PGlite 적용. deny-all RLS |
+| 서비스 | `lib/brands/service.ts` | `submitBrandInquiry`(검증·저장, 이메일당 하루 3건) / `notifyBrandInquiry`(스튜디오 알림 + 브랜드 접수 메일, 각자 idempotency 키) — `tests/brands/inquiries.test.ts` |
+| API | `POST /api/brands/inquiries` | JSON → JSON 답. 폼 인코딩(하이드레이션 전 제출) → 303 `/{locale}/campaigns?inquiry=sent#brands`; 섬이 마운트 시 읽고 주소에서 지운다 |
+| 폼 | `components/campaigns/brand-form.tsx` | 클라이언트 섬, 페이지는 정적 유지. 필드 오류는 `aria-invalid` |
+| 어드민 | `/admin/campaigns` 상단 "브랜드 의뢰" 패널, `brandInquiry.status`(`lib/admin/brand-operations.ts`) | 새 의뢰 → 연락함(`contacted_at` 스탬프) → 종료. 대시보드 `/admin`에 새 의뢰 수 |
+
+메일 발신은 `getMailer()`(Resend, `NOTIFY_FROM_EMAIL`)이며 스튜디오 수신 주소는 `BUSINESS.email`. 브랜드 셀프서브(예산 결제·브리프 편집)는 v2.

@@ -19,6 +19,8 @@ describe('migrations apply on a fresh database (PLAN §6)', () => {
     );
     expect(rows.map((r) => r.table_name)).toEqual([
       'blocks',
+      // 2026-09-11 — the brand enquiry form on the campaigns page: one row per enquiry, studio-only.
+      'brand_inquiries',
       // docs/CAMPAIGNS.md (2026-09-03) — the paid cousin of contests: the campaign, one application per
       // creator walked through the state machine, and the same append-only write ledger the contest
       // entries use for the daily cap.

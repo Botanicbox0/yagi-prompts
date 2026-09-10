@@ -150,3 +150,17 @@
 | 11 | 빌드 | 그 뒤: PWA 푸시, Apple 로그인(iOS 앱 시점), 캠페인 알림·조회수 API | — |
 
 선택: Vercel Pro(월 $20)로 올리면 `/api/renders/tick`을 매분 돌릴 수 있어 영상 완료 감지가 빨라진다. 지금 구조(인큐 `after()` + 콜백 + 결과 페이지 폴링 + 하루 1회 크론)로도 동작한다.
+
+## 11. 폴리시 배치 (2026-09-11, 대표 지시 "SOTA 유니콘급으로")
+
+공개 화면에서 미완성 흔적을 지우고, 브랜드가 의뢰를 넣을 수 있는 곳을 만들었다. 스키마 변경은 0021/0109 하나.
+
+- **스튜디오 데모 폐지.** `components/twings/studio.tsx`에서 가짜 진행바·결과 단계를 삭제. 결제 전(`RENDER_PIPELINE_PUBLIC=false`) 방문자는 `data-studio-closed` 패널("결제와 생성은 곧 열립니다" + "열리면 알려주세요")을 본다. 버튼은 `POST /api/notify/interest`로 계정의 `notif_new_playbook`(계정 페이지 라벨 "새 템플릿 알림")을 켠다. `/api/renders/access`가 `signedIn`·`interest`를 함께 답한다. 운영자는 접근 호출 뒤 라이브 루프로 바뀐다.
+- **자리표시 광고 → 하우스 광고.** `AdCard`/`AdBanner`(`data-house-ad`)는 브랜드 캠페인 피치 + `/{locale}/campaigns#brands` 링크. 푸터 "캠페인·광고 문의"도 같은 곳.
+- **홈.** 이미지 템플릿 0개면 히어로의 이미지 문 숨김(`Hero showImage`), 영상 템플릿 6개 미만이면 용도 필터 숨김, 마퀴는 엔진 라벨 + 용도만(플레이북 카탈로그의 KLING/VEO 등 제거, `HOUSE_MARQUEE_ITEMS`는 실제 스택).
+- **계정.** 플랜·Stripe 행 삭제, 알림 두 스위치를 "새 템플릿 알림 / 캠페인 알림"으로(컬럼은 그대로 `notif_new_playbook`/`notif_updates`; 발송 배선은 아직 없음 — 템플릿 공개·캠페인 모집 시작 시 보내는 워커가 다음 일).
+- **워딩.** `slotsLine` "{left}자리 남음 · 총 {slots}명", `seePrompt` "템플릿 자세히 보기", 게시 조건의 "#" 행 → "광고 표기" 라벨, 관리자 상태 버튼은 동사(`moveToStatus`), 배너의 상세 줄은 오류일 때만, 관리자 "프롬프트" → "템플릿", 요금제/FAQ 눈썹 번호 제거, `needPhoto` "사진을 올리면 버튼이 활성화됩니다."
+- **관리자.** `/admin`은 대시보드(캠페인·템플릿·생성·브랜드 의뢰 카운트, `summarizeRenderJobs`), 플레이북 목록은 `/admin/playbooks`.
+- **브랜드 의뢰(docs/CAMPAIGNS.md §11).** `/{locale}/campaigns#brands` 섹션 + `BrandInquiryForm`(클라이언트 섬, JSON POST; 하이드레이션 전 제출은 일반 POST → 303 `?inquiry=`) → `POST /api/brands/inquiries` → `brand_inquiries` 행 + `after()`로 스튜디오 알림 메일·브랜드 접수 메일. 관리자 캠페인 보드 상단 "브랜드 의뢰" 패널에서 연락함/종료. 하루 3건/이메일, 허니팟.
+
+남은 것(대표 결정): 푸터 사업자 정보 줄(전자상거래법 표시 의무 — 통신판매업 번호 나오면 같이), 템플릿 8~12개 확보, 알림 발송 워커.

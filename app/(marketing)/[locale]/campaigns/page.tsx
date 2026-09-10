@@ -10,9 +10,12 @@ import { MarketingFooter, MarketingNav, adLabels } from '@/components/marketing/
 import { AdRail } from '@/components/ad/ad-rail';
 import { AdCard } from '@/components/ad/ad-card';
 import { Reveal } from '@/components/motion/reveal';
-import { contestMailto } from '@/components/contests/rails';
 import { CampaignRail, CampaignSteps, CampaignsEmptyState } from '@/components/campaigns/rails';
+import { BrandSection } from '@/components/campaigns/brand-section';
 import { campaignLabels } from '@/components/campaigns/labels';
+import { BRANDS_ANCHOR } from '@/lib/campaigns/links';
+import { legalDocument } from '@/lib/legal/documents';
+import { legalHref } from '@/lib/legal/links';
 
 /**
  * `/[locale]/campaigns` — docs/CAMPAIGNS.md §6, the listing.
@@ -53,10 +56,13 @@ export default async function CampaignsListingPage({ params }: RouteParams) {
   const now = Date.now();
   const split = splitCampaigns(catalog);
   const labels = campaignLabels(dict);
-  const ads = adLabels(dict);
+  const ads = adLabels(dict, locale);
   const styles = new Map<string, PromptCard>([...prompts.yagi, ...prompts.community].map((card) => [card.slug, card]));
   const empty = catalog.totals.live === 0;
   const c = dict.campaigns;
+  // The brand form's format picker: every published video template, in the reader's language.
+  const formatOptions = prompts.video.map((card) => ({ slug: card.slug, title: locale === 'ko' && card.titleKo ? card.titleKo : card.title }));
+  const privacy = { href: legalHref(locale, 'privacy'), label: legalDocument('privacy', locale).title };
 
   return (
     <>
@@ -80,7 +86,7 @@ export default async function CampaignsListingPage({ params }: RouteParams) {
             <p className="mt-8 max-w-detail text-body opacity-70">{c.intro}</p>
 
             {empty ? (
-              <CampaignsEmptyState title={c.emptyTitle} body={c.emptyBody} cta={c.emptyCta} mailto={contestMailto(locale)} />
+              <CampaignsEmptyState title={c.emptyTitle} body={c.emptyBody} cta={c.emptyCta} href={`#${BRANDS_ANCHOR}`} />
             ) : (
               <div className="mt-10 border-t border-hairline pt-6">
                 <CampaignRail
@@ -107,6 +113,9 @@ export default async function CampaignsListingPage({ params }: RouteParams) {
             )}
 
             <CampaignSteps heading={c.stepsHeading} steps={[c.step1, c.step2, c.step3, c.step4, c.step5]} />
+
+            {/* The other audience (2026-09-11): the brand that pays for all of the above, and the form that starts it. */}
+            <BrandSection locale={locale} copy={c.brands} templates={formatOptions} privacy={privacy} />
           </div>
         </div>
       </main>

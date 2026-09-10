@@ -735,7 +735,11 @@ async function sweepTemplates(): Promise<void> {
   expectPresent('…names itself', detail.body, `data-template="${GATED_PROMPT}"`);
   expectPresent('…with the make section', detail.body, 'data-template-make');
   expectPresent('…and the one-style studio', detail.body, 'data-single="true"');
-  expectPresent('…and the demo badge', detail.body, 'data-demo-badge');
+  // Founder, 2026-09-11: no demo. The static page says payment opens soon and offers the email.
+  expectPresent('…and the studio is closed, not mocked', detail.body, 'data-studio-closed');
+  expectAbsent('…no demo badge anywhere', detail.body, 'data-demo-badge');
+  expectAbsent('…no placeholder ad', detail.body, 'YOUR AD HERE');
+  expectPresent('…the house ad points at the brand form', detail.body, 'data-house-ad');
   expectPresent('…and the price in dollars on the English page', detail.body, '>$4<');
   const detailKo = await get(`/ko/t/${GATED_PROMPT}`);
   expectEqual('the Korean template page renders 200', detailKo.status, 200);
@@ -859,6 +863,8 @@ async function sweepLandingTemplates(): Promise<void> {
   expectAbsent('nav no longer points at the studio', page.body, 'href="/en/studio"');
   expectAbsent('nav no longer points at contests', page.body, 'href="/en/contests"');
   expectPresent('the hero opens on the video door', page.body, 'data-hero-video');
+  expectAbsent('no placeholder ad on the landing', page.body, 'YOUR AD HERE');
+  expectPresent('the house ad is the brand pitch', page.body, 'data-house-ad');
   expectPresent('the video rail is template cards', page.body, 'data-prompt-card=');
   expectPresent('the model is on the page', page.body, 'SEEDANCE 2.5');
   expectAbsent('the library is denavigated', page.body, 'href="/library"');

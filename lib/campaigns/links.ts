@@ -15,6 +15,16 @@ export function campaignsHref(locale: Locale | string): string {
   return `/${locale}${CAMPAIGNS_REST}`;
 }
 
+/** The brand half of the campaigns page (2026-09-11): the pitch and the enquiry form, one anchor. */
+export const BRANDS_ANCHOR = 'brands';
+
+export function brandEnquiryHref(locale: Locale | string): string {
+  return `${campaignsHref(locale)}#${BRANDS_ANCHOR}`;
+}
+
+/** `POST` — the enquiry form's endpoint (app/api/brands/inquiries). */
+export const BRAND_INQUIRY_ENDPOINT = '/api/brands/inquiries';
+
 export function campaignHref(locale: Locale | string, slug: string): string {
   return `/${locale}${CAMPAIGNS_REST}/${encodeURIComponent(slug)}`;
 }

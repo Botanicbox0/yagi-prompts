@@ -22,7 +22,8 @@ export interface FooterLabels {
   navHeading: string;
   contactHeading: string;
   brand: string;
-  adContact: string;
+  /** The house ad and the footer send brands to the same place: the enquiry form. */
+  adHref: string;
 }
 
 export interface FooterLink {
@@ -95,8 +96,8 @@ export function SiteFooter({
                 hello@yagiworkshop.xyz
               </a>
             </HireClickBeacon>
-            <a href={`mailto:${labels.adContact}`} className="text-accent font-mono text-code">
-              {labels.advertise} · {labels.adContact}
+            <a href={labels.adHref} data-footer-brands className="text-accent font-label text-eyebrow uppercase">
+              <TextSwap>{labels.advertise} →</TextSwap>
             </a>
           </div>
         </div>

@@ -1,177 +1,101 @@
 import { getSqlRunner } from '@/lib/db/connect';
 import { getDictionary } from '@/lib/i18n/dictionaries';
 import { getLocaleFromHeaders } from '@/lib/i18n/server';
-import { formatDate, interpolate, localize } from '@/lib/i18n/format';
-import { loadAdminList, type AdminListRow } from '@/lib/admin/repo';
-import {
-  AdminShell,
-  BUTTON,
-  BUTTON_PRIMARY,
-  Field,
-  INPUT,
-  LocalePair,
-  OpForm,
-  OutcomeBanner,
-  Panel,
-} from '@/components/admin/chrome';
-import { CATEGORIES, categoryLabel } from '@/components/admin/labels';
+import { interpolate } from '@/lib/i18n/format';
+import { loadAllCampaigns, loadCampaignCounts, loadPayoutQueue } from '@/lib/campaigns/repo';
+import { ADMIN_CAMPAIGNS_PATH } from '@/lib/campaigns/links';
+import { loadAllPrompts } from '@/lib/prompts/repo';
+import { summarizeRenderJobs } from '@/lib/renders/repo';
+import { countBrandInquiries } from '@/lib/brands/repo';
+import { AdminShell } from '@/components/admin/chrome';
 
 /**
- * `/admin` — the playbook list (§3.8).
+ * `/admin` — the dashboard (founder, 2026-09-11). The old front door was the playbook list, a
+ * screen from a product TWINGS no longer is; it lives at /admin/playbooks now.
  *
- * Columns are the ones the plan names: title, slug, status, category, showcase (from BOTH the
- * published and the draft revision, because `is_showcase` is revisioned), updated, and the
- * has-draft-revision indicator. "Refresh caches" lives in the shell; "New playbook" is below the
- * table and creates the playbook plus its rev-1 draft in one action.
+ * Four panels, one question each: is anything waiting on the campaigns board, on the template
+ * queue, in the render pipeline, in the brand inbox. Every number is a link to the list it counts.
  */
 export const dynamic = 'force-dynamic';
 
-type SearchParams = Record<string, string | string[] | undefined>;
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
-const one = (params: SearchParams, key: string): string | undefined => {
-  const value = params[key];
-  return typeof value === 'string' ? value : undefined;
-};
+function Stat({ href, label, count, hot }: { href: string | null; label: string; count: number; hot?: boolean }) {
+  const text = interpolate(label, { count: count.toLocaleString() });
+  const className = ['font-mono text-code', hot && count > 0 ? 'text-accent' : 'opacity-80'].join(' ');
+  return (
+    <li data-admin-stat={count}>
+      {href ? (
+        <a href={href} className={`${className} underline-offset-4 hover:underline`}>
+          {text}
+        </a>
+      ) : (
+        <span className={className}>{text}</span>
+      )}
+    </li>
+  );
+}
 
-export default async function AdminListPage({
-  searchParams,
-}: {
-  searchParams: Promise<SearchParams>;
-}) {
-  const [locale, params, sql] = await Promise.all([
-    getLocaleFromHeaders(),
-    searchParams,
-    getSqlRunner(),
-  ]);
+function Card({ title, href, children }: { title: string; href: string | null; children: React.ReactNode }) {
+  return (
+    <section data-admin-card className="border border-hairline">
+      <header className="flex items-center justify-between border-b border-hairline px-4 py-2.5">
+        <h2 className="font-label text-eyebrow uppercase">{title}</h2>
+        {href && (
+          <a href={href} className="text-accent font-label text-[0.62rem] tracking-[0.1em] uppercase">
+            →
+          </a>
+        )}
+      </header>
+      <ul className="flex flex-col gap-2 p-4">{children}</ul>
+    </section>
+  );
+}
+
+export default async function AdminHomePage() {
+  const [locale, sql] = await Promise.all([getLocaleFromHeaders(), getSqlRunner()]);
   const dict = getDictionary(locale);
   const a = dict.admin;
-  const rows: AdminListRow[] = sql === null ? [] : await loadAdminList(sql);
+  const now = new Date();
 
-  const statusLabel = (status: AdminListRow['status']) =>
-    status === 'published' ? a.statusPublished : status === 'archived' ? a.statusArchived : a.statusDraft;
+  const campaigns = sql === null ? [] : await loadAllCampaigns(sql);
+  const counts = sql === null ? new Map() : await loadCampaignCounts(sql, campaigns.map((row) => row.id));
+  const recruiting = campaigns.filter((row) => row.status === 'recruiting').length;
+  const applicants = [...counts.values()].reduce((sum, c) => sum + (c as { applied: number }).applied, 0);
+  const payouts = sql === null ? 0 : (await loadPayoutQueue(sql, now)).length;
+
+  const prompts = sql === null ? [] : await loadAllPrompts(sql);
+  const pending = prompts.filter((row) => row.status === 'pending').length;
+  const published = prompts.filter((row) => row.status === 'published').length;
+
+  const renders = sql === null ? { recent: 0, failed: 0, held: 0, running: 0 } : await summarizeRenderJobs(sql, new Date(now.getTime() - WEEK_MS));
+  const inquiries = sql === null ? 0 : await countBrandInquiries(sql, 'new');
 
   return (
-    <AdminShell dict={a} locale={locale} active="playbooks">
-      <p className="text-accent font-label text-eyebrow uppercase">{a.navPlaybooks}</p>
-      <h1 className="mt-3 font-display text-[clamp(2rem,4vw,3rem)] leading-[0.95] font-black uppercase">
-        {a.listHeading}
-      </h1>
-      <p className="mt-3 max-w-detail text-body opacity-60">{a.listLede}</p>
+    <AdminShell dict={a} locale={locale} active="home">
+      <p className="text-accent font-label text-eyebrow uppercase">{a.navHome}</p>
+      <h1 className="mt-3 font-display text-[clamp(2rem,4vw,3rem)] leading-[0.95] font-black uppercase">{a.dashHeading}</h1>
+      <p className="mt-3 max-w-detail text-body opacity-60">{a.dashLede}</p>
 
-      <OutcomeBanner
-        dict={a}
-        {...(one(params, 'ok') ? { ok: one(params, 'ok')! } : {})}
-        {...(one(params, 'err') ? { err: one(params, 'err')! } : {})}
-        {...(one(params, 'detail') ? { detail: one(params, 'detail')! } : {})}
-      />
-
-      <Panel title={a.listHeading}>
-        {rows.length === 0 ? (
-          <p className="font-mono text-code opacity-60">{a.listEmpty}</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[56rem] border-collapse text-left">
-              <thead>
-                <tr className="font-label text-[0.68rem] uppercase tracking-[0.12em] opacity-50">
-                  <th className="border-b border-hairline py-2 pr-4">{a.colTitle}</th>
-                  <th className="border-b border-hairline py-2 pr-4">{a.colSlug}</th>
-                  <th className="border-b border-hairline py-2 pr-4">{a.colStatus}</th>
-                  <th className="border-b border-hairline py-2 pr-4">{a.colCategory}</th>
-                  <th className="border-b border-hairline py-2 pr-4">{a.colShowcase}</th>
-                  <th className="border-b border-hairline py-2 pr-4">{a.colDraft}</th>
-                  <th className="border-b border-hairline py-2 pr-4">{a.colUpdated}</th>
-                  <th className="border-b border-hairline py-2" />
-                </tr>
-              </thead>
-              <tbody className="font-mono text-code">
-                {rows.map((row) => (
-                  <tr key={row.id} data-playbook={row.slug} className="align-top">
-                    <td className="border-b border-hairline py-2.5 pr-4">
-                      <a href={`/admin/p/${row.id}`} className="text-accent">
-                        {row.title ? localize(row.title, locale) : row.slug}
-                      </a>
-                    </td>
-                    <td className="border-b border-hairline py-2.5 pr-4 opacity-70">{row.slug}</td>
-                    <td className="border-b border-hairline py-2.5 pr-4" data-status={row.status}>
-                      {statusLabel(row.status)}
-                    </td>
-                    <td className="border-b border-hairline py-2.5 pr-4 opacity-70">
-                      {categoryLabel(dict, row.category)}
-                    </td>
-                    <td className="border-b border-hairline py-2.5 pr-4 opacity-70">
-                      {row.publishedShowcase ? `${a.showcaseLive}` : ''}
-                      {row.publishedShowcase && row.draftShowcase ? ' · ' : ''}
-                      {row.draftRevisionId && row.draftShowcase ? `${a.showcaseNext}` : ''}
-                      {!row.publishedShowcase && !(row.draftRevisionId && row.draftShowcase)
-                        ? a.showcaseOff
-                        : ''}
-                    </td>
-                    <td
-                      className="border-b border-hairline py-2.5 pr-4"
-                      data-has-draft={row.draftRevisionId === null ? 'false' : 'true'}
-                    >
-                      {row.draftRevisionId === null ? (
-                        <span className="opacity-40">{a.draftNo}</span>
-                      ) : (
-                        <span className="text-accent">
-                          {interpolate(a.draftYes, { n: row.draftRevNo ?? 1 })}
-                        </span>
-                      )}
-                    </td>
-                    <td className="border-b border-hairline py-2.5 pr-4 opacity-60">
-                      {formatDate(row.updatedAt, locale) ?? '—'}
-                    </td>
-                    <td className="border-b border-hairline py-2.5">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <a href={`/admin/p/${row.id}`} className={BUTTON}>
-                          {a.open}
-                        </a>
-                        <OpForm op="playbook.archive" back="/admin">
-                          <input type="hidden" name="playbookId" value={row.id} />
-                          <input
-                            type="hidden"
-                            name="archived"
-                            value={row.status === 'archived' ? 'false' : 'true'}
-                          />
-                          <button type="submit" className={BUTTON}>
-                            {row.status === 'archived' ? a.unarchive : a.archive}
-                          </button>
-                        </OpForm>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </Panel>
-
-      <Panel title={a.newHeading}>
-        <p className="font-mono text-code opacity-60">{a.newLede}</p>
-        <OpForm op="playbook.create" back="/admin" className="mt-4 grid gap-4">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field label={a.newSlug} hint={a.newSlugHint}>
-              <input type="text" name="slug" required className={INPUT} />
-            </Field>
-            <Field label={a.newCategory}>
-              <select name="category" defaultValue="pipeline" className={INPUT}>
-                {CATEGORIES.map((key) => (
-                  <option key={key} value={key}>
-                    {categoryLabel(dict, key)}
-                  </option>
-                ))}
-              </select>
-            </Field>
-          </div>
-          <LocalePair label={a.fieldTitle} name="title" value={null} />
-          <div>
-            <button type="submit" className={BUTTON_PRIMARY}>
-              {a.newCreate}
-            </button>
-          </div>
-        </OpForm>
-      </Panel>
+      <div data-admin-dashboard className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <Card title={a.dashCampaigns} href={ADMIN_CAMPAIGNS_PATH}>
+          <Stat href={ADMIN_CAMPAIGNS_PATH} label={a.dashRecruiting} count={recruiting} />
+          <Stat href={ADMIN_CAMPAIGNS_PATH} label={a.dashApplicants} count={applicants} hot />
+          <Stat href={ADMIN_CAMPAIGNS_PATH} label={a.dashPayouts} count={payouts} hot />
+        </Card>
+        <Card title={a.dashTemplates} href="/admin/prompts">
+          <Stat href="/admin/prompts?tab=pending" label={a.dashPending} count={pending} hot />
+          <Stat href="/admin/prompts?tab=published" label={a.dashPublished} count={published} />
+        </Card>
+        <Card title={a.dashRenders} href={null}>
+          <Stat href={null} label={a.dashRendersWeek} count={renders.recent} />
+          <Stat href={null} label={a.dashRendersFailed} count={renders.failed} hot />
+          <Stat href={null} label={a.dashRendersHeld} count={renders.held} />
+        </Card>
+        <Card title={a.dashInquiries} href={`${ADMIN_CAMPAIGNS_PATH}#inquiries`}>
+          <Stat href={`${ADMIN_CAMPAIGNS_PATH}#inquiries`} label={a.dashInquiriesNew} count={inquiries} hot />
+        </Card>
+      </div>
     </AdminShell>
   );
 }

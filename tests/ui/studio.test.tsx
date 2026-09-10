@@ -1,11 +1,14 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { getDictionary } from '@/lib/i18n/dictionaries';
-import { TwingsStudio, type StudioLabels, type StudioStyle } from '@/components/twings/studio';
+import { TwingsStudio, type StudioLabels, type StudioLive, type StudioStyle } from '@/components/twings/studio';
 
 /**
  * The studio as MARKUP — the first render, before any interaction. What it says to someone who
  * has not uploaded anything yet is the whole first impression, and it is static HTML.
+ *
+ * Founder, 2026-09-11: there is no demo any more. The page every visitor gets is CLOSED — payment
+ * opens soon, leave your email — and only a viewer the access call admits sees the make loop.
  */
 
 const dict = getDictionary('en');
@@ -20,17 +23,36 @@ const labels: StudioLabels = {
   chooseStyle: dict.studio.chooseStyle,
   payCta: dict.studio.payCta,
   payNote: dict.studio.payNote,
-  demoBadge: dict.studio.demoBadge,
-  rendering: dict.studio.rendering,
-  renderingNote: dict.studio.renderingNote,
-  resultHeading: dict.studio.resultHeading,
-  resultNote: dict.studio.resultNote,
-  again: dict.studio.again,
+  closedBadge: dict.studio.closedBadge,
+  closedTitle: dict.studio.closedTitle,
+  closedBody: dict.studio.closedBody,
+  closedCta: dict.studio.closedCta,
+  closedDone: dict.studio.closedDone,
   runtimeLabel: dict.studio.runtimeLabel,
   needPhoto: dict.studio.needPhoto,
   noStyles: dict.studio.noStyles,
   moreTemplates: dict.studio.moreTemplates,
   aspectLabel: dict.studio.aspectLabel,
+};
+
+const live: StudioLive = {
+  endpoint: '/api/renders',
+  accessEndpoint: '/api/renders/access',
+  interestEndpoint: '/api/notify/interest',
+  template: 'seoul-90s',
+  locale: 'en',
+  signinHref: '/auth/signin?next=%2Fen%2Ft%2Fseoul-90s',
+  identityHref: '/identity/verify',
+  labels: {
+    badge: dict.renders.studio.badge,
+    operatorBadge: dict.renders.studio.operatorBadge,
+    freeCta: dict.renders.studio.freeCta,
+    submitting: dict.renders.studio.submitting,
+    identityNotice: dict.renders.studio.identityNotice,
+    identityPending: dict.renders.studio.identityPending,
+    identityCta: dict.renders.studio.identityCta,
+    errors: dict.renders.studio.errors,
+  },
 };
 
 const styles: StudioStyle[] = [
@@ -51,52 +73,36 @@ const styles: StudioStyle[] = [
   },
 ];
 
-describe('the studio before a photo exists', () => {
-  const html = renderToStaticMarkup(<TwingsStudio styles={styles} labels={labels} />);
+describe('the studio as every visitor first sees it — closed, never mocked', () => {
+  const html = renderToStaticMarkup(<TwingsStudio styles={styles} labels={labels} initialStyleId="seoul-90s" live={live} />);
 
-  it('says why the button is asleep, and ties the reason to the button', () => {
-    expect(html).toContain('data-studio-hint');
-    expect(html).toContain(dict.studio.needPhoto);
-    expect(html).toMatch(/data-pay-cta="true"[^>]*disabled=""/);
-    expect(html).toMatch(/data-pay-cta="true"[^>]*aria-describedby="studio-cta-hint"/);
+  it('says payment opens soon and offers the one thing it can: an email that day', () => {
+    expect(html).toContain('data-phase="closed"');
+    expect(html).toContain('data-studio-closed');
+    expect(html).toContain(dict.studio.closedTitle);
+    expect(html).toContain(dict.studio.closedBody);
+    expect(html).toMatch(/data-studio-interest="open"/);
+    expect(html).toContain(dict.studio.closedCta);
   });
 
-  it('makes the drop zone a real label for a named file input, so a keyboard reaches it', () => {
-    expect(html).toContain('<label for="studio-photo"');
-    expect(html).toMatch(/<input[^>]*id="studio-photo"[^>]*aria-label="[^"]+"/);
-    // No click handler on a div doing a button's job.
-    expect(html).not.toContain('role="button"');
+  it('carries no demo, no fake progress and no sleeping pay button', () => {
+    expect(html).not.toContain('data-demo-badge');
+    expect(html).not.toContain('data-pay-cta');
+    expect(html).not.toContain('progressbar');
+    expect(html).not.toContain('Demo');
   });
 
-  it('still wears the demo badge — the mock says it is a mock', () => {
-    expect(html).toContain('data-demo-badge');
-    expect(html).toContain(dict.studio.demoBadge);
+  it('still names the shape the page chose, so the sweep can find the one-style studio', () => {
+    expect(html).toContain('data-single="true"');
   });
 });
 
-/** docs/TEMPLATES-IA.md — on a template page the choice is the page: one style, no picking step. */
-describe('the studio on a template page (one style)', () => {
-  const html = renderToStaticMarkup(<TwingsStudio styles={styles} labels={labels} initialStyleId="seoul-90s" />);
-
-  it('states the chosen template instead of offering a grid, and drops the scene step', () => {
-    expect(html).toContain('data-single="true"');
-    expect(html).toContain('data-chosen-style="seoul-90s"');
-    expect(html).not.toContain('data-style-option');
-    expect(html).not.toContain(dict.studio.chooseStyle);
-    expect(html).not.toContain(`2. ${dict.studio.stepStyle}`);
-    expect(html).toContain(`2. ${dict.studio.stepPay}`);
-  });
-
-  it("opens in the template's default aspect and offers the others", () => {
-    expect(html).toContain('data-aspect="9:16"');
-    expect(html).toContain('data-aspect-picker');
-    expect(html).toMatch(/data-aspect-option="9:16"[^>]*aria-pressed="true"/);
-    expect(html).toMatch(/data-aspect-option="16:9"[^>]*aria-pressed="false"/);
-  });
-
-  it('still asks for the photo first and keeps the demo badge', () => {
-    expect(html).toContain('data-studio-hint');
-    expect(html).toContain('data-demo-badge');
+describe('the studio without a live loop at all (the catalogue shape)', () => {
+  it('is closed too — there is no third mode', () => {
+    const html = renderToStaticMarkup(<TwingsStudio styles={styles} labels={labels} />);
+    expect(html).toContain('data-phase="closed"');
+    // No endpoint to post to: the button exists for the copy, but cannot promise anything.
+    expect(html).toMatch(/data-studio-interest="open"[^>]*disabled=""/);
   });
 });
 

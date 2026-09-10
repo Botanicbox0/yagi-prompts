@@ -329,6 +329,28 @@ export async function listRenderJobsToNotify(sql: SqlRunner, args: { limit: numb
   return rows.map(toJob);
 }
 
+/** The admin dashboard's four numbers (2026-09-11): recent volume, recent failures, and what is waiting. */
+export interface RenderSummary {
+  recent: number;
+  failed: number;
+  held: number;
+  running: number;
+}
+
+export async function summarizeRenderJobs(sql: SqlRunner, since: Date): Promise<RenderSummary> {
+  const { rows } = await sql.query<{ recent: number | string; failed: number | string; held: number | string; running: number | string }>(
+    `select
+       count(*) filter (where created_at >= $1::timestamptz)::int as recent,
+       count(*) filter (where status = 'failed' and created_at >= $1::timestamptz)::int as failed,
+       count(*) filter (where status = 'held')::int as held,
+       count(*) filter (where status in ('queued', 'running'))::int as running
+     from render_jobs`,
+    [since.toISOString()],
+  );
+  const row = rows[0];
+  return { recent: Number(row?.recent ?? 0), failed: Number(row?.failed ?? 0), held: Number(row?.held ?? 0), running: Number(row?.running ?? 0) };
+}
+
 export async function countRenderJobsSince(sql: SqlRunner, userId: string, since: Date): Promise<number> {
   const { rows } = await sql.query<{ n: number | string }>(`select count(*)::int as n from render_jobs where user_id = $1 and created_at >= $2::timestamptz`, [
     userId,

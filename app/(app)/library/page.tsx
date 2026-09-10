@@ -63,7 +63,7 @@ export default async function LibraryPage({
     clear: dict.library.clear,
   };
 
-  const ads = adLabels(dict);
+  const ads = adLabels(dict, locale);
   const filtered = isFiltered(query);
 
   return (

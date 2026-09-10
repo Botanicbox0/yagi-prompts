@@ -41,7 +41,11 @@ function startHref(locale: Locale): string {
  * screen shows zero cards is not gallery-first. The two reappear in `HeroLede`, after the first
  * rail. Same type, same copy; only where they live changes.
  */
-export function Hero({ locale, dict }: { locale: Locale; dict: Dictionary }) {
+/**
+ * `showImage` — the second door exists only once there is an image template behind it (founder,
+ * 2026-09-11): a hero button that lands on "preparing" is a dead end dressed as a choice.
+ */
+export function Hero({ locale, dict, showImage = false }: { locale: Locale; dict: Dictionary; showImage?: boolean }) {
   return (
     <section data-section data-theme="light" className="section overflow-hidden">
       <div className="mx-auto max-w-shell px-gutter pt-24 pb-8 lg:pt-36 lg:pb-20">
@@ -69,13 +73,15 @@ export function Hero({ locale, dict }: { locale: Locale; dict: Dictionary }) {
             >
               <TextSwap>{dict.templates.ctaVideo} →</TextSwap>
             </a>
-            <a
-              href={templatesHref(locale, 'image')}
-              data-hero-image
-              className="inline-block border border-current px-6 py-3 font-label text-label uppercase"
-            >
-              <TextSwap>{dict.templates.ctaImage} →</TextSwap>
-            </a>
+            {showImage && (
+              <a
+                href={templatesHref(locale, 'image')}
+                data-hero-image
+                className="inline-block border border-current px-6 py-3 font-label text-label uppercase"
+              >
+                <TextSwap>{dict.templates.ctaImage} →</TextSwap>
+              </a>
+            )}
           </div>
         </div>
       </div>

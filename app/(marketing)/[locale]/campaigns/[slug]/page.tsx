@@ -197,8 +197,8 @@ export default async function CampaignDetailPage({ params }: RouteParams) {
             <dl className="mt-6 grid max-w-detail gap-x-8 gap-y-3 font-mono text-[0.8rem] sm:grid-cols-[auto_1fr]">
               {campaign.requirements.disclosure && (
                 <>
-                  <dt className="text-accent">#</dt>
-                  <dd>{c.reqDisclosure}</dd>
+                  <dt className="opacity-50">{c.reqDisclosureLabel}</dt>
+                  <dd className="text-accent">{c.reqDisclosure}</dd>
                 </>
               )}
               {campaign.requirements.hashtags.length > 0 && (

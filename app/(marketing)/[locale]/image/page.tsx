@@ -42,7 +42,7 @@ export default async function ImageTemplatesPage({ params }: RouteParams) {
   const locale = localeOf(raw);
   const dict = getDictionary(locale);
   const catalog = await getPromptCatalog();
-  const ads = adLabels(dict);
+  const ads = adLabels(dict, locale);
 
   return (
     <>
