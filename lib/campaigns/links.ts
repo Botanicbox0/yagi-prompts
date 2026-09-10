@@ -8,6 +8,8 @@ import type { Locale } from '@/lib/i18n/config';
 export const CAMPAIGNS_REST = '/campaigns';
 export const ADMIN_CAMPAIGNS_PATH = '/admin/campaigns';
 export const ADMIN_CAMPAIGN_NEW_PATH = `${ADMIN_CAMPAIGNS_PATH}/new`;
+/** The brand inbox — its own board, so enquiries and campaigns never share a list (2026-09-11). */
+export const ADMIN_INQUIRIES_PATH = '/admin/inquiries';
 /** The creator's own view of every campaign they applied to — in the (app) group, session-gated. */
 export const MY_CAMPAIGNS_PATH = '/campaigns/mine';
 

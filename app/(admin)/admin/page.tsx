@@ -3,7 +3,7 @@ import { getDictionary } from '@/lib/i18n/dictionaries';
 import { getLocaleFromHeaders } from '@/lib/i18n/server';
 import { interpolate } from '@/lib/i18n/format';
 import { loadAllCampaigns, loadCampaignCounts, loadPayoutQueue } from '@/lib/campaigns/repo';
-import { ADMIN_CAMPAIGNS_PATH } from '@/lib/campaigns/links';
+import { ADMIN_CAMPAIGNS_PATH, ADMIN_INQUIRIES_PATH } from '@/lib/campaigns/links';
 import { loadAllPrompts } from '@/lib/prompts/repo';
 import { summarizeRenderJobs } from '@/lib/renders/repo';
 import { countBrandInquiries } from '@/lib/brands/repo';
@@ -92,8 +92,8 @@ export default async function AdminHomePage() {
           <Stat href={null} label={a.dashRendersFailed} count={renders.failed} hot />
           <Stat href={null} label={a.dashRendersHeld} count={renders.held} />
         </Card>
-        <Card title={a.dashInquiries} href={`${ADMIN_CAMPAIGNS_PATH}#inquiries`}>
-          <Stat href={`${ADMIN_CAMPAIGNS_PATH}#inquiries`} label={a.dashInquiriesNew} count={inquiries} hot />
+        <Card title={a.dashInquiries} href={ADMIN_INQUIRIES_PATH}>
+          <Stat href={ADMIN_INQUIRIES_PATH} label={a.dashInquiriesNew} count={inquiries} hot />
         </Card>
       </div>
     </AdminShell>

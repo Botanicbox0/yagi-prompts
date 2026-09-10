@@ -1053,6 +1053,8 @@ export const en = {
     navPrompts: 'Templates',
     navContests: 'Contests',
     navCampaigns: 'Campaigns',
+    navInquiries: 'Brand enquiries',
+    campaignsStatusStrip: 'By status',
     campaignsHeading: 'Campaigns',
     campaignsLede: 'What is live on top, drafts below. Holds that have ended gather at the very top as the payout queue.',
     campaignListEmpty: 'No campaigns yet. Start the first one top right.',

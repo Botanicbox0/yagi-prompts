@@ -24,6 +24,8 @@ export interface FooterLabels {
   brand: string;
   /** The house ad and the footer send brands to the same place: the enquiry form. */
   adHref: string;
+  /** 전자상거래법 §21 — the seller identification lines, on every page (2026-09-11). */
+  business: string[];
 }
 
 export interface FooterLink {
@@ -118,6 +120,15 @@ export function SiteFooter({
               </a>
             ))}
           </nav>
+        )}
+
+        {/* 전자상거래법 §21: who sells this, on the page where it is sold — not only behind a policy link. */}
+        {labels.business.length > 0 && (
+          <address data-business-info className="mt-5 flex flex-col gap-1 font-mono text-[0.68rem] leading-relaxed not-italic opacity-50">
+            {labels.business.map((line) => (
+              <span key={line}>{line}</span>
+            ))}
+          </address>
         )}
       </div>
     </footer>

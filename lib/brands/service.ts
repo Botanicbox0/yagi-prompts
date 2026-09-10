@@ -74,7 +74,7 @@ export interface NotifyBrandInquiryResult {
 export async function notifyBrandInquiry(deps: NotifyBrandInquiryDeps, inquiry: BrandInquiry): Promise<NotifyBrandInquiryResult> {
   if (deps.mailer === null) return { studio: null, brand: null };
   const origin = deps.siteUrl.replace(/\/+$/, '');
-  const emails = brandInquiryEmails({ inquiry, siteName: deps.siteName, siteUrl: origin, adminUrl: `${origin}/admin/campaigns#inquiries` });
+  const emails = brandInquiryEmails({ inquiry, siteName: deps.siteName, siteUrl: origin, adminUrl: `${origin}/admin/inquiries` });
   const studioEmail = deps.studioEmail ?? BUSINESS.email;
 
   const studio = await deps.mailer

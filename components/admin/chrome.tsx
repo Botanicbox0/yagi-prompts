@@ -245,7 +245,7 @@ export function AdminShell({
 }: {
   dict: AdminDict;
   locale: string;
-  active: 'home' | 'playbooks' | 'policy' | 'prompts' | 'contests' | 'campaigns';
+  active: 'home' | 'playbooks' | 'policy' | 'prompts' | 'contests' | 'campaigns' | 'inquiries';
   children: ReactNode;
 }) {
   // "Refresh caches" used to send every page back to /admin; it returns to where it was pressed.
@@ -256,12 +256,14 @@ export function AdminShell({
         ? '/admin/contests'
         : active === 'campaigns'
           ? '/admin/campaigns'
+          : active === 'inquiries'
+            ? '/admin/inquiries'
           : active === 'policy'
             ? '/admin/policy'
             : active === 'playbooks'
               ? '/admin/playbooks'
               : '/admin';
-  const navClass = (key: 'home' | 'playbooks' | 'policy' | 'prompts' | 'contests' | 'campaigns') =>
+  const navClass = (key: 'home' | 'playbooks' | 'policy' | 'prompts' | 'contests' | 'campaigns' | 'inquiries') =>
     `font-label text-eyebrow uppercase ${active === key ? 'text-accent' : 'opacity-60'}`;
 
   return (
@@ -280,6 +282,9 @@ export function AdminShell({
               </a>
               <a href="/admin/campaigns" className={navClass('campaigns')}>
                 {dict.navCampaigns}
+              </a>
+              <a href="/admin/inquiries" className={navClass('inquiries')}>
+                {dict.navInquiries}
               </a>
               <a href="/admin/playbooks" className={navClass('playbooks')}>
                 {dict.navPlaybooks}

@@ -122,7 +122,7 @@ describe('brand enquiries', () => {
     const [studio, brand] = sent;
     expect(studio?.to).toBe('hello@yagiworkshop.xyz');
     expect(studio?.subject).toContain('ROYAL & CO.');
-    expect(studio?.text).toContain('https://twings.app/admin/campaigns#inquiries');
+    expect(studio?.text).toContain('https://twings.app/admin/inquiries');
     expect(studio?.html).toContain('ROYAL &amp; CO.');
     expect(brand?.to).toBe('brand@example.com');
     expect(brand?.subject).toContain('의뢰');

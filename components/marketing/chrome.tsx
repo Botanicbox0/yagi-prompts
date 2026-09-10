@@ -4,7 +4,7 @@ import { LocaleToggle } from '@/components/locale-toggle';
 import { PLAYBOOKS_IN_NAV } from '@/lib/flags';
 import { templatesHref } from '@/lib/prompts/links';
 import { brandEnquiryHref, campaignsHref } from '@/lib/campaigns/links';
-import { LEGAL_DOCS, legalDocument } from '@/lib/legal/documents';
+import { LEGAL_DOCS, businessFooterLines, legalDocument } from '@/lib/legal/documents';
 import { legalHref } from '@/lib/legal/links';
 import type { Dictionary } from '@/lib/i18n/dictionaries';
 import type { Locale } from '@/lib/i18n/config';
@@ -93,6 +93,7 @@ export function MarketingFooter({ locale, dict }: { locale: Locale; dict: Dictio
         contactHeading: dict.footer.contactHeading,
         brand: dict.meta.siteName,
         adHref: brandEnquiryHref(locale),
+        business: businessFooterLines(locale),
       }}
     />
   );
