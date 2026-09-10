@@ -188,6 +188,8 @@ export default async function LandingPage({ params }: { params: Promise<{ locale
                 { q: dict.faq.q3, a: dict.faq.a3 },
                 { q: dict.faq.q4, a: dict.faq.a4 },
                 { q: dict.faq.q5, a: dict.faq.a5 },
+                // Founder, 2026-09-10: the brand side of a campaign has to be visible here too.
+                { q: dict.faq.q7, a: dict.faq.a7 },
                 { q: dict.faq.q6, a: dict.faq.a6 },
               ]}
             />
