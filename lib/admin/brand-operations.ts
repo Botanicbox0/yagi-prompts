@@ -1,6 +1,7 @@
 import type { z } from 'zod';
 import { updateBrandInquiryStatus } from '@/lib/brands/repo';
 import { InquiryStatusChange } from '@/lib/brands/schemas';
+import { FeedbackStatusChange, updateRenderFeedbackStatus } from '@/lib/renders/feedback';
 import { ADMIN_INQUIRIES_PATH } from '@/lib/campaigns/links';
 import { fail, ok, type AdminOutcome } from './context';
 import * as f from './form';
@@ -30,8 +31,19 @@ const status: AdminOperation<z.infer<typeof InquiryStatusChange>> = {
   },
 };
 
+/** Result feedback shares the inbox and the shape: reply outside, record the state here. */
+const feedbackStatus: AdminOperation<z.infer<typeof FeedbackStatusChange>> = {
+  parse: (form) => parsed(FeedbackStatusChange, { id: f.str(form, 'id'), status: f.str(form, 'status') }),
+  async run(ctx, input) {
+    const moved = await updateRenderFeedbackStatus(ctx.sql, input.id, input.status);
+    if (!moved) return fail('notFound', 'the feedback this form points at no longer exists');
+    return ok('saved', { to: ADMIN_INQUIRIES_PATH });
+  },
+};
+
 export const BRAND_OPERATIONS = {
   'brandInquiry.status': status,
+  'renderFeedback.status': feedbackStatus,
 } as const;
 
 export type BrandOutcome = AdminOutcome;

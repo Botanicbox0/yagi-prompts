@@ -3,6 +3,7 @@ import { getDictionary } from '@/lib/i18n/dictionaries';
 import { getLocaleFromHeaders } from '@/lib/i18n/server';
 import { formatDate } from '@/lib/i18n/format';
 import { listBrandInquiries, type BrandInquiry } from '@/lib/brands/repo';
+import { listRenderFeedback, type RenderFeedbackRow } from '@/lib/renders/feedback';
 import { ADMIN_INQUIRIES_PATH } from '@/lib/campaigns/links';
 import { AdminShell, BUTTON, BUTTON_PRIMARY, OpForm, OutcomeBanner, Panel } from '@/components/admin/chrome';
 
@@ -31,6 +32,11 @@ export default async function AdminInquiriesPage({ searchParams }: { searchParam
   const closed: BrandInquiry[] = sql === null ? [] : await listBrandInquiries(sql, { statuses: ['closed'], limit: 30 });
   const fresh = open.filter((q) => q.status === 'new');
   const contacted = open.filter((q) => q.status === 'contacted');
+  // Result feedback (2026-09-11): the other kind of mail the studio owes an answer to.
+  const feedback: RenderFeedbackRow[] = sql === null ? [] : await listRenderFeedback(sql, { statuses: ['new', 'replied'], limit: 200 });
+  const feedbackNew = feedback.filter((f) => f.status === 'new');
+  const feedbackReplied = feedback.filter((f) => f.status === 'replied');
+  const reasonLabel = dict.renders.feedback.reasons;
 
   const budgetLabel: Record<BrandInquiry['budgetBand'], string> = {
     under_3m: b.budgetUnder3m,
@@ -81,6 +87,48 @@ export default async function AdminInquiriesPage({ searchParams }: { searchParam
     </li>
   );
 
+  const FeedbackRow = ({ f }: { f: RenderFeedbackRow }) => (
+    <li data-render-feedback={f.status} className="flex flex-wrap items-start justify-between gap-4 py-4">
+      <div className="min-w-0 max-w-detail">
+        <p className="font-mono text-code">
+          <strong>{reasonLabel[f.reason]}</strong> · {f.templateSlug} · {f.medium} · {f.renderStatus}
+        </p>
+        <p className="mt-1 font-mono text-[0.72rem] opacity-55">
+          {f.email ? (
+            <a href={`mailto:${f.email}`} className="text-accent">
+              {f.email}
+            </a>
+          ) : (
+            f.userId
+          )}
+          {' · '}
+          {a.feedbackRender} {f.renderId}
+          {' · '}
+          {formatDate(f.updatedAt, locale)}
+        </p>
+        {f.message && <p className="mt-2 text-[0.85rem] leading-relaxed whitespace-pre-line opacity-80">{f.message}</p>}
+      </div>
+      <div className="flex items-center gap-2">
+        {f.status === 'new' && (
+          <OpForm op="renderFeedback.status" back={ADMIN_INQUIRIES_PATH}>
+            <input type="hidden" name="id" value={f.id} />
+            <input type="hidden" name="status" value="replied" />
+            <button type="submit" className={BUTTON_PRIMARY}>
+              {a.feedbackMarkReplied}
+            </button>
+          </OpForm>
+        )}
+        <OpForm op="renderFeedback.status" back={ADMIN_INQUIRIES_PATH}>
+          <input type="hidden" name="id" value={f.id} />
+          <input type="hidden" name="status" value="closed" />
+          <button type="submit" className={BUTTON}>
+            {a.feedbackMarkClosed}
+          </button>
+        </OpForm>
+      </div>
+    </li>
+  );
+
   return (
     <AdminShell dict={a} locale={locale} active="inquiries">
       <p className="text-accent font-label text-eyebrow uppercase">{a.navInquiries}</p>
@@ -94,7 +142,30 @@ export default async function AdminInquiriesPage({ searchParams }: { searchParam
         {...(one(params, 'detail') ? { detail: one(params, 'detail')! } : {})}
       />
 
-      <Panel title={`${a.inquiryStatuses.new} (${fresh.length})`}>
+      {/* ---- result feedback: reply owed ------------------------------------------------ */}
+      <Panel title={`${a.feedbackHeading} · ${a.feedbackStatuses.new} (${feedbackNew.length})`}>
+        {feedbackNew.length === 0 ? (
+          <p className="font-mono text-code opacity-60">{a.feedbackEmpty}</p>
+        ) : (
+          <ul data-render-feedback-list="new" className="flex flex-col divide-y divide-hairline">
+            {feedbackNew.map((f) => (
+              <FeedbackRow key={f.id} f={f} />
+            ))}
+          </ul>
+        )}
+      </Panel>
+      {feedbackReplied.length > 0 && (
+        <Panel title={`${a.feedbackHeading} · ${a.feedbackStatuses.replied} (${feedbackReplied.length})`}>
+          <ul data-render-feedback-list="replied" className="flex flex-col divide-y divide-hairline">
+            {feedbackReplied.map((f) => (
+              <FeedbackRow key={f.id} f={f} />
+            ))}
+          </ul>
+        </Panel>
+      )}
+
+      {/* ---- brand enquiries ------------------------------------------------------------ */}
+      <Panel title={`${a.inquiriesBrandsHeading} · ${a.inquiryStatuses.new} (${fresh.length})`}>
         {fresh.length === 0 ? (
           <p className="font-mono text-code opacity-60">{a.inquiriesEmpty}</p>
         ) : (
@@ -107,7 +178,7 @@ export default async function AdminInquiriesPage({ searchParams }: { searchParam
       </Panel>
 
       {contacted.length > 0 && (
-        <Panel title={`${a.inquiryStatuses.contacted} (${contacted.length})`}>
+        <Panel title={`${a.inquiriesBrandsHeading} · ${a.inquiryStatuses.contacted} (${contacted.length})`}>
           <ul data-brand-inquiries="contacted" className="flex flex-col divide-y divide-hairline">
             {contacted.map((q) => (
               <Row key={q.id} q={q} />
@@ -117,7 +188,7 @@ export default async function AdminInquiriesPage({ searchParams }: { searchParam
       )}
 
       {closed.length > 0 && (
-        <Panel title={`${a.inquiryStatuses.closed} (${closed.length})`}>
+        <Panel title={`${a.inquiriesBrandsHeading} · ${a.inquiryStatuses.closed} (${closed.length})`}>
           <ul data-brand-inquiries="closed" className="flex flex-col divide-y divide-hairline opacity-60">
             {closed.map((q) => (
               <Row key={q.id} q={q} />

@@ -222,6 +222,7 @@ export default async function TemplatePage({ params }: RouteParams) {
                     closedBody: dict.studio.closedBody,
                     closedCta: dict.studio.closedCta,
                     closedDone: dict.studio.closedDone,
+                    aiNote: dict.studio.aiNote,
                     runtimeLabel: dict.studio.runtimeLabel,
                     needPhoto: dict.studio.needPhoto,
                     noStyles: dict.studio.noStyles,

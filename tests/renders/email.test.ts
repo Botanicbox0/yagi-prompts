@@ -6,6 +6,7 @@ const LINKS = {
   previewUrl: 'https://twings.app/api/renders/media/11111111-1111-4111-8111-111111111111?s=tok',
   templateUrl: 'https://twings.app/ko/t/static-portrait-window-light',
   rendersUrl: 'https://twings.app/renders',
+  feedbackUrl: 'https://twings.app/renders/r1#feedback',
 };
 
 describe('the completion email', () => {

@@ -193,6 +193,8 @@ export default async function LandingPage({ params }: { params: Promise<{ locale
                 { q: dict.faq.q2, a: dict.faq.a2 },
                 { q: dict.faq.q3, a: dict.faq.a3 },
                 { q: dict.faq.q4, a: dict.faq.a4 },
+                // Founder, 2026-09-11: say that AI gets details wrong before anyone has to ask.
+                { q: dict.faq.q8, a: dict.faq.a8 },
                 { q: dict.faq.q5, a: dict.faq.a5 },
                 // Founder, 2026-09-10: the brand side of a campaign has to be visible here too.
                 { q: dict.faq.q7, a: dict.faq.a7 },

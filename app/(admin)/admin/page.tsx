@@ -7,6 +7,7 @@ import { ADMIN_CAMPAIGNS_PATH, ADMIN_INQUIRIES_PATH } from '@/lib/campaigns/link
 import { loadAllPrompts } from '@/lib/prompts/repo';
 import { summarizeRenderJobs } from '@/lib/renders/repo';
 import { countBrandInquiries } from '@/lib/brands/repo';
+import { countRenderFeedback } from '@/lib/renders/feedback';
 import { AdminShell } from '@/components/admin/chrome';
 
 /**
@@ -70,6 +71,7 @@ export default async function AdminHomePage() {
 
   const renders = sql === null ? { recent: 0, failed: 0, held: 0, running: 0 } : await summarizeRenderJobs(sql, new Date(now.getTime() - WEEK_MS));
   const inquiries = sql === null ? 0 : await countBrandInquiries(sql, 'new');
+  const feedback = sql === null ? 0 : await countRenderFeedback(sql, 'new');
 
   return (
     <AdminShell dict={a} locale={locale} active="home">
@@ -91,6 +93,7 @@ export default async function AdminHomePage() {
           <Stat href={null} label={a.dashRendersWeek} count={renders.recent} />
           <Stat href={null} label={a.dashRendersFailed} count={renders.failed} hot />
           <Stat href={null} label={a.dashRendersHeld} count={renders.held} />
+          <Stat href={ADMIN_INQUIRIES_PATH} label={a.dashFeedbackNew} count={feedback} hot />
         </Card>
         <Card title={a.dashInquiries} href={ADMIN_INQUIRIES_PATH}>
           <Stat href={ADMIN_INQUIRIES_PATH} label={a.dashInquiriesNew} count={inquiries} hot />

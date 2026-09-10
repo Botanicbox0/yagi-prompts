@@ -28,6 +28,7 @@ const labels: StudioLabels = {
   closedBody: dict.studio.closedBody,
   closedCta: dict.studio.closedCta,
   closedDone: dict.studio.closedDone,
+  aiNote: dict.studio.aiNote,
   runtimeLabel: dict.studio.runtimeLabel,
   needPhoto: dict.studio.needPhoto,
   noStyles: dict.studio.noStyles,
@@ -83,6 +84,9 @@ describe('the studio as every visitor first sees it — closed, never mocked', (
     expect(html).toContain(dict.studio.closedBody);
     expect(html).toMatch(/data-studio-interest="open"/);
     expect(html).toContain(dict.studio.closedCta);
+    // Founder, 2026-09-11: AI-made is said before the money, not after the complaint.
+    expect(html).toContain('data-studio-ai-note');
+    expect(html).toContain(dict.studio.aiNote);
   });
 
   it('carries no demo, no fake progress and no sleeping pay button', () => {

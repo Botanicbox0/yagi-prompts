@@ -34,17 +34,18 @@ import type { Locale } from '@/lib/i18n/config';
  * registry is copied — a director's resident number and home address are on that document and have
  * no business on a public page.
  *
- * `mailOrderNumber` is not derivable from the registry: 통신판매업 신고번호 is on the 통신판매업
- * 신고증. It is required for a domestic PG merchant review, so the legal pages render the
- * placeholder verbatim — an unfilled field must be visible rather than silently absent — while the
- * site footer leaves the line out until the number exists (`businessFooterLines`).
+ * `mailOrderNumber` comes from the 통신판매업신고증 (구로구청, 2026-09-10; nothing else on that
+ * certificate — the representative's birth date is on it — belongs on a public page). Should it
+ * ever be blanked to a `TODO` again, the legal pages show the placeholder and the footer drops the
+ * line (`businessFooterLines`, `hasMailOrderNumber`).
  */
 export const BUSINESS = {
   name: 'YAGI WORKSHOP Inc.',
   nameKo: '야기워크숍 주식회사',
   representative: '윤병삼',
   registrationNumber: '519-81-04213',
-  mailOrderNumber: 'TODO — 통신판매업 신고번호 (통신판매업 신고증)',
+  /** 통신판매업신고증 제 2026-서울구로-1618 호 (구로구청, 신고 2026-09-10). */
+  mailOrderNumber: '2026-서울구로-1618',
   address: '서울특별시 구로구 디지털로34길 55, 비201-아이3 (구로동, 코오롱싸이언스밸리2차)',
   addressEn: '55 Digital-ro 34-gil, Guro-gu, Seoul, Republic of Korea',
   phone: '010-6599-4020',

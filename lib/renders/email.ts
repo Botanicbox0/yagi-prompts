@@ -27,6 +27,8 @@ export interface RenderEmailLinks {
   previewUrl: string | null;
   templateUrl: string;
   rendersUrl: string;
+  /** The owner's result page, at the feedback form (2026-09-11): where "not happy?" goes. */
+  feedbackUrl: string;
 }
 
 export interface RenderEmailInput {
@@ -135,6 +137,10 @@ ${preview}
           ${escapeHtml(copy.keepLine)}
           <a href="${escapeHtml(links.rendersUrl)}" style="color:${INK};text-decoration:underline;">${escapeHtml(copy.myRenders)}</a>
         </p>
+        <p style="margin:12px 0 0;font-family:${FONT};font-size:13px;line-height:1.6;color:${FOOTNOTE};">
+          ${escapeHtml(copy.feedbackLine)}
+          <a href="${escapeHtml(links.feedbackUrl)}" style="color:${INK};text-decoration:underline;">${escapeHtml(copy.feedbackCta)}</a>
+        </p>
       </td></tr>
     </table>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:520px;">
@@ -161,6 +167,7 @@ function text(parts: Parts): string {
     `${cta}: ${ctaUrl}`,
     '',
     `${copy.keepLine} ${copy.myRenders}: ${links.rendersUrl}`,
+    `${copy.feedbackLine} ${copy.feedbackCta}: ${links.feedbackUrl}`,
     '',
     '—',
     copy.footer,

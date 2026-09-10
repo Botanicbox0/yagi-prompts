@@ -4,7 +4,7 @@ import { getMailer } from '@/lib/notify/service';
 import { templateHref } from '@/lib/prompts/links';
 import { renderResultEmail } from './email';
 import type { RenderJob } from './repo';
-import { RENDERS_PATH, renderMediaHref, shareHref } from './share';
+import { RENDERS_PATH, renderHref, renderMediaHref, shareHref } from './share';
 
 /**
  * "Tell the person where their render is" — as a CHANNEL, not as an email.
@@ -63,6 +63,7 @@ export function createEmailRenderNotifier(mailer: Mailer): RenderNotifier {
           previewUrl: ready && job.medium === 'image' ? `${origin}${renderMediaHref(job.id, { share: job.shareToken! })}` : null,
           templateUrl: `${origin}${templateHref(input.recipient.locale, job.templateSlug)}`,
           rendersUrl: `${origin}${RENDERS_PATH}`,
+          feedbackUrl: `${origin}${renderHref(job.id)}#feedback`,
         },
         siteName: input.siteName,
       });

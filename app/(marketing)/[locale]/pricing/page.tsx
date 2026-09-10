@@ -130,6 +130,7 @@ export default async function PricingPage({ params }: { params: Promise<{ locale
             items={[
               { q: dict.faq.q2, a: dict.faq.a2 },
               { q: dict.faq.q4, a: dict.faq.a4 },
+              { q: dict.faq.q8, a: dict.faq.a8 },
               { q: dict.faq.q3, a: dict.faq.a3 },
               { q: dict.faq.q1, a: dict.faq.a1 },
             ]}

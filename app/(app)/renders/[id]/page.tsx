@@ -10,7 +10,9 @@ import { templateHref } from '@/lib/prompts/links';
 import { identityVerifyHref } from '@/lib/identity/links';
 import { runLiveRenderPass } from '@/lib/renders/runtime';
 import { failureReason, loadOwnRender } from '@/lib/renders/service';
+import { FEEDBACK_REASONS, loadRenderFeedback } from '@/lib/renders/feedback';
 import { ASSET_TASK_PREFIX } from '@/lib/renders/repo';
+import { submitFeedbackAction } from './actions';
 import { RENDERS_PATH, renderHref, renderMediaHref, shareHref } from '@/lib/renders/share';
 import { AppHeader } from '@/components/app/app-header';
 import { AutoRefresh } from '@/components/renders/auto-refresh';
@@ -28,8 +30,9 @@ export const dynamic = 'force-dynamic';
 /** A job still queued this long after it was created was not picked up by the enqueue request. */
 const STRANDED_AFTER_MS = 45_000;
 
-export default async function RenderPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function RenderPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams?: Promise<Record<string, string | string[] | undefined>> }) {
   const { id } = await params;
+  const query = (await searchParams) ?? {};
   const [locale, viewer, sql] = await Promise.all([getLocaleFromHeaders(), getViewer(), getSqlRunner()]);
   const dict = getDictionary(locale);
   const r = dict.renders;
@@ -41,6 +44,10 @@ export default async function RenderPage({ params }: { params: Promise<{ id: str
   const title = locale === 'ko' && view.templateTitleKo ? view.templateTitleKo : view.templateTitle;
   const held = job.status === 'held';
   const pending = job.status === 'queued' || job.status === 'running';
+  const finished = job.status === 'succeeded' || job.status === 'failed';
+  // "Not happy with the result?" — what they said before, and whether they just said it.
+  const feedback = finished ? await loadRenderFeedback(sql, job.id) : null;
+  const feedbackOutcome = typeof query.feedback === 'string' ? query.feedback : null;
   const matching = job.status === 'running' && job.providerTaskId !== null && job.providerTaskId.startsWith(ASSET_TASK_PREFIX);
 
   if (pending) {
@@ -140,6 +147,57 @@ export default async function RenderPage({ params }: { params: Promise<{ id: str
                 <TextSwap>{r.makeAgain} →</TextSwap>
               </a>
             </div>
+          </section>
+        )}
+
+        {/* Founder, 2026-09-11: the complaint has a place to go, on the page it is about. */}
+        {finished && (
+          <section id="feedback" data-render-feedback={feedback ? feedback.status : 'none'} className="mt-14 max-w-detail scroll-mt-24 border-t border-hairline pt-8">
+            <p className="font-mono text-[0.75rem] leading-relaxed opacity-50">{r.aiNote}</p>
+            <p className="mt-6 font-display text-[clamp(1.2rem,2.2vw,1.6rem)] leading-[0.95] font-black uppercase">{r.feedback.title}</p>
+            <p className="mt-3 text-body opacity-70">{r.feedback.lede}</p>
+
+            {feedbackOutcome === 'sent' && (
+              <div data-feedback-sent role="status" className="mt-6 border border-accent px-4 py-3">
+                <p className="font-label text-label uppercase">{r.feedback.sentTitle}</p>
+                <p className="mt-1 text-[0.9rem] opacity-70">{r.feedback.sentBody}</p>
+              </div>
+            )}
+            {feedbackOutcome === 'invalid' && (
+              <p data-feedback-error role="alert" className="mt-6 border border-accent px-4 py-3 text-[0.9rem] text-accent">
+                {r.feedback.errInvalid}
+              </p>
+            )}
+            {feedback && feedbackOutcome !== 'sent' && (
+              <p data-feedback-existing className="mt-6 font-mono text-[0.75rem] opacity-60">
+                {interpolate(r.feedback.existing, { date: formatDate(feedback.updatedAt, locale) ?? '', status: r.feedback.statuses[feedback.status] })}
+              </p>
+            )}
+
+            <form action={submitFeedbackAction} data-feedback-form className="mt-6 flex flex-col gap-5">
+              <input type="hidden" name="renderId" value={job.id} />
+              <fieldset>
+                <legend className="sr-only">{r.feedback.title}</legend>
+                <div className="flex flex-col gap-2">
+                  {FEEDBACK_REASONS.map((reason) => (
+                    <label key={reason} className="flex items-center gap-3 text-[0.95rem]">
+                      <input type="radio" name="reason" value={reason} required defaultChecked={feedback?.reason === reason} className="h-4 w-4" style={{ accentColor: 'var(--accent)' }} />
+                      {r.feedback.reasons[reason]}
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+              <label>
+                <span className="block font-label text-eyebrow uppercase opacity-60">{r.feedback.message}</span>
+                <textarea name="message" rows={3} maxLength={2000} defaultValue={feedback?.message ?? ''} className="mt-2 w-full border border-hairline bg-transparent px-4 py-3 text-body focus:outline focus:outline-2 focus:outline-accent" />
+                <span className="mt-1 block font-mono text-[0.7rem] opacity-45">{r.feedback.messageHint}</span>
+              </label>
+              <div>
+                <button type="submit" className="inline-block border border-current px-6 py-3 font-label text-label uppercase">
+                  {r.feedback.submit} →
+                </button>
+              </div>
+            </form>
           </section>
         )}
       </main>

@@ -48,6 +48,8 @@ export interface StudioLabels {
   closedBody: string;
   closedCta: string;
   closedDone: string;
+  /** What AI-made means, said before the money changes hands (founder, 2026-09-11). */
+  aiNote: string;
   runtimeLabel: string;
   needPhoto: string;
   noStyles: string;
@@ -279,6 +281,7 @@ export function TwingsStudio({
         <div className="mt-6 max-w-detail border border-hairline p-6 sm:p-8">
           <p className="font-display text-[clamp(1.4rem,2.6vw,2rem)] leading-[0.95] font-black uppercase">{labels.closedTitle}</p>
           <p className="mt-4 text-body opacity-70">{labels.closedBody}</p>
+          <p data-studio-ai-note className="mt-4 font-mono text-[0.72rem] leading-relaxed opacity-45">{labels.aiNote}</p>
           <button
             type="button"
             data-studio-interest={interest ? 'done' : 'open'}
@@ -474,6 +477,7 @@ export function TwingsStudio({
                           : labels.payCta}
                 </button>
                 <p className="mt-3 font-mono text-[0.72rem] opacity-45">{labels.payNote}</p>
+                <p data-studio-ai-note className="mt-2 font-mono text-[0.72rem] leading-relaxed opacity-45">{labels.aiNote}</p>
                 {liveError && (
                   <p data-live-error role="alert" className="mt-2 font-mono text-[0.72rem] text-accent">
                     {liveError}
