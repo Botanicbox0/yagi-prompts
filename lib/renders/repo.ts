@@ -8,7 +8,8 @@ import type { TemplateMedium } from '@/lib/prompts/schemas';
  * Supabase Postgres through `pg`. No viewer here — the service decides who may see what.
  */
 
-export type RenderStatus = 'queued' | 'running' | 'succeeded' | 'failed';
+/** `held` = stored and waiting behind the person's face check (0020); released to `queued` by the identity callback. */
+export type RenderStatus = 'held' | 'queued' | 'running' | 'succeeded' | 'failed';
 export type NotifyStatus = 'pending' | 'sent' | 'skipped' | 'failed';
 export type RenderProvider = 'openai' | 'modelark';
 
@@ -153,13 +154,15 @@ export interface InsertRenderJobArgs {
   locale: Locale;
   inputKey: string | null;
   inputMime: string | null;
+  /** `held` when the person still has to verify their face (docs §8.2); default `queued`. */
+  status?: 'queued' | 'held';
 }
 
 export async function insertRenderJob(sql: SqlRunner, args: InsertRenderJobArgs): Promise<void> {
   await sql.query(
-    `insert into render_jobs (id, user_id, template_id, template_slug, medium, engine, aspect, locale, input_key, input_mime)
-     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-    [args.id, args.userId, args.templateId, args.templateSlug, args.medium, args.engine, args.aspect, args.locale, args.inputKey, args.inputMime],
+    `insert into render_jobs (id, user_id, template_id, template_slug, medium, engine, aspect, locale, input_key, input_mime, status)
+     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+    [args.id, args.userId, args.templateId, args.templateSlug, args.medium, args.engine, args.aspect, args.locale, args.inputKey, args.inputMime, args.status ?? 'queued'],
   );
 }
 
@@ -190,6 +193,12 @@ export async function claimRenderJobs(sql: SqlRunner, args: { now: Date; limit: 
     [args.now.toISOString(), args.jobId ?? null, args.limit],
   );
   return rows.map(toJob);
+}
+
+/** The person is now verified: everything they had waiting goes to the queue, oldest first. */
+export async function releaseHeldRenderJobs(sql: SqlRunner, userId: string): Promise<string[]> {
+  const { rows } = await sql.query<{ id: string }>(`update render_jobs set status = 'queued' where user_id = $1 and status = 'held' returning id`, [userId]);
+  return rows.map((row) => row.id);
 }
 
 /** A job waiting on the bank's photo comparison (docs §8.2) carries the asset id here, under this prefix. */

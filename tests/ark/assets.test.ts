@@ -322,5 +322,8 @@ describe('liveness URL helpers', () => {
       resultCode: '10001',
       algorithmBaseRespCode: null,
     });
+    // The bank's page may spell the names differently; the token and the code are still found.
+    expect(parseLivenessCallback(new URLSearchParams('BytedToken=t-3&ResultCode=10000'))).toMatchObject({ bytedToken: 't-3', ok: true });
+    expect(parseLivenessCallback(new URLSearchParams('byted_token=t-4&result_code=10000'))).toMatchObject({ bytedToken: 't-4', ok: true });
   });
 });

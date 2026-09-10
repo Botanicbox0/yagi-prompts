@@ -218,8 +218,14 @@ export function TwingsStudio({
       form.set('aspect', aspect);
       form.set('locale', live.locale);
       form.set('photo', blob, blob.type === 'image/png' ? 'photo.png' : 'photo.jpg');
+      // Behind the face check: hold the job with its photo and go verify — the callback starts it.
+      if (identityBlocked) form.set('hold', '1');
       const response = await fetch(live.endpoint, { method: 'POST', body: form, credentials: 'same-origin' });
-      const json = (await response.json().catch(() => ({}))) as { ok?: boolean; href?: string; code?: string };
+      const json = (await response.json().catch(() => ({}))) as { ok?: boolean; href?: string; code?: string; held?: boolean; verifyHref?: string };
+      if (response.ok && json.ok === true && json.held === true) {
+        window.location.assign(typeof json.verifyHref === 'string' ? json.verifyHref : live.identityHref);
+        return;
+      }
       if (response.ok && json.ok === true && typeof json.href === 'string') {
         window.location.assign(json.href);
         return;
@@ -416,7 +422,8 @@ export function TwingsStudio({
                   aria-describedby={photo ? undefined : 'studio-cta-hint'}
                   onClick={() => {
                     if (liveMode && live) {
-                      if (identityBlocked) window.location.assign(live.identityHref);
+                      // With a photo the press stores it and goes to the check (held job); without one, just the check.
+                      if (identityBlocked && !photoFile) window.location.assign(live.identityHref);
                       else void submitLive();
                     } else setPhase('rendering');
                   }}

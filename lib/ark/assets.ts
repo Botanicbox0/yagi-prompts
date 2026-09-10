@@ -406,12 +406,21 @@ export function parseLivenessCallback(input: string | URLSearchParams): ArkLiven
       : input.startsWith('?') || (!input.includes('://') && input.includes('='))
         ? new URLSearchParams(input)
         : new URL(input).searchParams;
-  const resultCode = params.get('resultCode');
+  // The documented names are camelCase; a differently-cased or snake_cased variant is read too,
+  // because the one place this runs is the person's browser arriving from the bank's page.
+  const get = (...names: string[]): string | null => {
+    for (const name of names) {
+      const wanted = name.toLowerCase();
+      for (const [key, value] of params) if (key.toLowerCase() === wanted) return value;
+    }
+    return null;
+  };
+  const resultCode = get('resultCode', 'result_code');
   return {
-    bytedToken: params.get('bytedToken'),
+    bytedToken: get('bytedToken', 'byted_token', 'token'),
     ok: resultCode === '10000',
     resultCode,
-    algorithmBaseRespCode: params.get('algorithmBaseRespCode'),
+    algorithmBaseRespCode: get('algorithmBaseRespCode', 'algorithm_base_resp_code'),
   };
 }
 

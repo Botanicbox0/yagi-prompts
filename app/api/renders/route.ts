@@ -5,6 +5,7 @@ import { isLocale } from '@/lib/i18n/config';
 import { runLiveRenderPass } from '@/lib/renders/runtime';
 import { createRenderJob, type CreateRenderFailure } from '@/lib/renders/service';
 import { renderHref } from '@/lib/renders/share';
+import { identityVerifyHref } from '@/lib/identity/links';
 import { getRenderStore } from '@/lib/renders/store';
 
 /**
@@ -64,8 +65,15 @@ export async function POST(request: Request): Promise<NextResponse> {
     aspect: String(form.get('aspect') ?? ''),
     photo: photo instanceof File ? { bytes: new Uint8Array(await photo.arrayBuffer()), mime: photo.type } : null,
     locale: typeof rawLocale === 'string' && isLocale(rawLocale) ? rawLocale : null,
+    holdForIdentity: form.get('hold') === '1',
   });
   if (!outcome.ok) return json(outcome, STATUS[outcome.code]);
+
+  // Held behind the face check: nothing to run yet. The verify page brings the person back to
+  // this job's page, and the identity callback releases it the moment they are verified.
+  if (outcome.held) {
+    return json({ ok: true, id: outcome.id, href: renderHref(outcome.id), held: true, verifyHref: identityVerifyHref(renderHref(outcome.id)) }, 201);
+  }
 
   after(async () => {
     try {
@@ -76,5 +84,5 @@ export async function POST(request: Request): Promise<NextResponse> {
     }
   });
 
-  return json({ ok: true, id: outcome.id, href: renderHref(outcome.id) }, 201);
+  return json({ ok: true, id: outcome.id, href: renderHref(outcome.id), held: false }, 201);
 }

@@ -693,7 +693,10 @@ describe('render queue (docs/TEMPLATES-IA.md §8)', () => {
     const enqueue = read('app', 'api', 'renders', 'route.ts');
     expect(enqueue).toContain('export const maxDuration = 300');
     expect(enqueue).toMatch(/after\(async \(\) => \{/);
-    expect(enqueue).toContain("json({ ok: true, id: outcome.id, href: renderHref(outcome.id) }, 201)");
+    expect(enqueue).toContain("json({ ok: true, id: outcome.id, href: renderHref(outcome.id), held: false }, 201)");
+    // Held behind the face check: the answer names the door and no pass runs (docs §8.2, 0020).
+    expect(enqueue).toContain('if (outcome.held) {');
+    expect(enqueue).toContain('verifyHref: identityVerifyHref(renderHref(outcome.id))');
     const tick = read('app', 'api', 'renders', 'tick', 'route.ts');
     expect(tick).toContain('export const maxDuration = 300');
     expect(tick).toContain('process.env.CRON_SECRET');

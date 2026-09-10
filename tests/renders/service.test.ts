@@ -16,6 +16,7 @@ import {
   listMyRenders,
   loadOwnRender,
   loadSharedRender,
+  releaseHeldRendersFor,
   runRenderPass,
   type RenderPassDeps,
 } from '@/lib/renders/service';
@@ -245,6 +246,31 @@ describe('the render queue', () => {
     expect((await enqueue(VIDEO_TEMPLATE, '9:16')).ok).toBe(true);
     // The OpenAI image path never asks: the photo itself is what it takes.
     expect((await enqueue()).ok).toBe(true);
+  });
+
+  it('holds a film with its photo behind the face check, and releases it the moment the person is verified', async () => {
+    const held = await createRenderJob({ sql: h.sql, store }, ADMIN_VIEWER, { templateSlug: VIDEO_TEMPLATE, aspect: '9:16', photo: PHOTO, locale: 'ko', holdForIdentity: true });
+    expect(held).toMatchObject({ ok: true, held: true });
+    if (!held.ok) return;
+    const job = (await loadRenderJob(h.sql, held.id))!;
+    expect(job.status).toBe('held');
+    expect(await store.read(job.inputKey!)).toEqual(PHOTO.bytes);
+    // Nothing to run yet: a pass leaves it where it is.
+    expect(await runRenderPass(deps({ ark: null }), { limit: 5 })).toMatchObject({ claimed: 0 });
+    expect((await loadRenderJob(h.sql, held.id))!.status).toBe('held');
+
+    // Verified: the callback releases it and the next pass takes it through the asset path.
+    await h.sql.query(`insert into identity_groups (user_id, status, group_id, verified_at) values ($1, 'active', 'grp-1', now())`, [ADMIN_VIEWER.userId]);
+    expect(await releaseHeldRendersFor(h.sql, ADMIN_VIEWER.userId!)).toEqual([held.id]);
+    expect((await loadRenderJob(h.sql, held.id))!.status).toBe('queued');
+    const assets = fakeAssets({ status: 'Active', created: 0 });
+    const bankStore = { ...store, url: async () => 'https://store.test/photo.jpg' };
+    const ark: ArkClient = { async createVideoTask() { return { id: 'cgt-held' }; }, async getVideoTask() { return task('running'); } };
+    const report = await runRenderPass(deps({ ark }, { assets, store: bankStore }), { limit: 5 });
+    expect(report).toMatchObject({ claimed: 1, waiting: 1, failed: 0 });
+    expect((await loadRenderJob(h.sql, held.id))!).toMatchObject({ status: 'running', providerTaskId: 'cgt-held' });
+    // A verified person's next render is not held at all.
+    expect(await createRenderJob({ sql: h.sql, store }, ADMIN_VIEWER, { templateSlug: VIDEO_TEMPLATE, aspect: '9:16', photo: PHOTO, locale: 'ko', holdForIdentity: true })).toMatchObject({ ok: true, held: false });
   });
 
   it('parks a film while the bank compares the photo, then references the asset — never the bytes', async () => {

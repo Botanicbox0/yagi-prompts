@@ -10,7 +10,8 @@ import { templateHref } from '@/lib/prompts/links';
 import { identityVerifyHref } from '@/lib/identity/links';
 import { runLiveRenderPass } from '@/lib/renders/runtime';
 import { failureReason, loadOwnRender } from '@/lib/renders/service';
-import { RENDERS_PATH, renderMediaHref, shareHref } from '@/lib/renders/share';
+import { ASSET_TASK_PREFIX } from '@/lib/renders/repo';
+import { RENDERS_PATH, renderHref, renderMediaHref, shareHref } from '@/lib/renders/share';
 import { AppHeader } from '@/components/app/app-header';
 import { AutoRefresh } from '@/components/renders/auto-refresh';
 import { ResultMedia } from '@/components/renders/result-media';
@@ -38,7 +39,9 @@ export default async function RenderPage({ params }: { params: Promise<{ id: str
   if (view === null) notFound();
   const { job } = view;
   const title = locale === 'ko' && view.templateTitleKo ? view.templateTitleKo : view.templateTitle;
+  const held = job.status === 'held';
   const pending = job.status === 'queued' || job.status === 'running';
+  const matching = job.status === 'running' && job.providerTaskId !== null && job.providerTaskId.startsWith(ASSET_TASK_PREFIX);
 
   if (pending) {
     // The page is the tick when nothing else is: a film waiting on the provider gets polled, and
@@ -61,7 +64,7 @@ export default async function RenderPage({ params }: { params: Promise<{ id: str
   return (
     <div data-section data-theme="light" className="section min-h-screen">
       <AppHeader locale={locale} dict={dict} rest={`${RENDERS_PATH}/${job.id}`} />
-      {pending && <AutoRefresh />}
+      {(pending || held) && <AutoRefresh />}
 
       <main id="main" data-render={job.id} data-status={job.status} className="band py-16 lg:py-20">
         <a href={RENDERS_PATH} className="font-mono text-[0.72rem] opacity-60">
@@ -73,13 +76,23 @@ export default async function RenderPage({ params }: { params: Promise<{ id: str
           {dict.nav[job.medium]} · {job.aspect} · {formatDate(job.createdAt, locale) ?? ''}
         </p>
 
+        {held && (
+          <section data-render-held className="mt-10 max-w-detail border-t border-hairline pt-8">
+            <p className="font-display text-[clamp(1.4rem,2.6vw,2rem)] leading-[0.95] font-black uppercase">{r.heldTitle}</p>
+            <p className="mt-5 text-body opacity-70">{r.heldBody}</p>
+            <a href={identityVerifyHref(renderHref(job.id))} data-identity-door className="mt-8 inline-block bg-accent px-6 py-3 font-label text-label text-white uppercase">
+              <TextSwap>{dict.identity.start} →</TextSwap>
+            </a>
+          </section>
+        )}
+
         {pending && (
           <section data-render-waiting className="mt-10 max-w-detail border-t border-hairline pt-8">
             <p className="font-display text-[clamp(1.4rem,2.6vw,2rem)] leading-[0.95] font-black uppercase">{r.waitingTitle}</p>
             <div className="mt-6 h-1 w-full max-w-md overflow-hidden bg-hairline" role="progressbar" aria-busy="true">
               <div className="h-full w-1/3 animate-pulse bg-accent" />
             </div>
-            <p className="mt-6 text-body opacity-70">{r.waitingBody}</p>
+            <p className="mt-6 text-body opacity-70">{matching ? r.stageMatching : r.waitingBody}</p>
             <p className="mt-3 font-mono text-[0.75rem] opacity-45">{r.status[job.status]}</p>
           </section>
         )}

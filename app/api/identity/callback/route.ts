@@ -1,7 +1,9 @@
-import { NextResponse } from 'next/server';
+import { after, NextResponse } from 'next/server';
 import { getSqlRunner } from '@/lib/db/connect';
 import { liveIdentityDeps } from '@/lib/identity/runtime';
 import { completeIdentityVerification } from '@/lib/identity/service';
+import { runLiveRenderPass } from '@/lib/renders/runtime';
+import { releaseHeldRendersFor } from '@/lib/renders/service';
 
 /**
  * `/api/identity/callback` — where BytePlus's liveness page sends the person when they are done
@@ -18,7 +20,24 @@ const HEADERS: Record<string, string> = {
 
 async function handle(params: URLSearchParams): Promise<NextResponse> {
   const sql = await getSqlRunner();
-  const outcome = sql === null ? { status: 'unknown' as const, nextPath: null } : await completeIdentityVerification(liveIdentityDeps(sql), params);
+  const outcome = sql === null ? { status: 'unknown' as const, userId: null, nextPath: null } : await completeIdentityVerification(liveIdentityDeps(sql), params);
+
+  if (outcome.status === 'active' && sql !== null && outcome.userId !== null) {
+    // Verified: every render this person left waiting behind the check starts now, and the person
+    // lands straight where they were going (their job's page, or the template) — no detour.
+    const released = await releaseHeldRendersFor(sql, outcome.userId);
+    if (released.length > 0) {
+      after(async () => {
+        try {
+          await runLiveRenderPass(sql, { limit: released.length });
+        } catch (error) {
+          console.error('[identity] pass after release failed', error);
+        }
+      });
+    }
+    if (outcome.nextPath) return new NextResponse(null, { status: 303, headers: { ...HEADERS, Location: outcome.nextPath } });
+  }
+
   const target = new URL('/identity/verify', 'http://placeholder');
   target.searchParams.set('result', outcome.status);
   if (outcome.nextPath) target.searchParams.set('next', outcome.nextPath);

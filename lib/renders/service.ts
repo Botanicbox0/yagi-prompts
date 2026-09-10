@@ -27,6 +27,7 @@ import {
   markRenderSucceeded,
   markRenderWaitingForAsset,
   recoverStaleRenderJobs,
+  releaseHeldRenderJobs,
   requeueRenderJob,
   type RenderJob,
 } from './repo';
@@ -90,13 +91,16 @@ export type CreateRenderFailure =
   /** The template renders on ModelArk, which takes only a verified face (docs §8.2). */
   | 'identity_required';
 
-export type CreateRenderOutcome = { ok: true; id: string } | { ok: false; code: CreateRenderFailure };
+/** `held`: stored and waiting for the person's face check — the studio sends them there and the job starts itself afterwards. */
+export type CreateRenderOutcome = { ok: true; id: string; held: boolean } | { ok: false; code: CreateRenderFailure };
 
 export interface CreateRenderInput {
   templateSlug: string;
   aspect: string;
   photo: { bytes: Uint8Array; mime: string } | null;
   locale: string | null;
+  /** Store the photo and hold the job behind the face check instead of refusing (docs §8.2). */
+  holdForIdentity?: boolean;
 }
 
 export async function createRenderJob(deps: RenderServiceDeps, viewer: Viewer, input: CreateRenderInput): Promise<CreateRenderOutcome> {
@@ -115,8 +119,10 @@ export async function createRenderJob(deps: RenderServiceDeps, viewer: Viewer, i
   if (input.photo.bytes.byteLength > MAX_PHOTO_BYTES) return { ok: false, code: 'photo_too_large' };
 
   // ModelArk refuses a real person's photo in the bytes: the person verifies their face once
-  // (docs/TEMPLATES-IA.md §8.2) and the pass sends an asset reference instead.
-  if (needsIdentity(engine) && (await identityStatusFor(deps.sql, viewer.userId)) !== 'active') return { ok: false, code: 'identity_required' };
+  // (docs/TEMPLATES-IA.md §8.2) and the pass sends an asset reference instead. Asked to, the job
+  // is HELD with its photo until the check completes — one upload, no second visit to the studio.
+  const held = needsIdentity(engine) && (await identityStatusFor(deps.sql, viewer.userId)) !== 'active';
+  if (held && !input.holdForIdentity) return { ok: false, code: 'identity_required' };
 
   const recent = await countRenderJobsSince(deps.sql, viewer.userId, new Date(now.getTime() - 24 * 60 * 60 * 1000));
   if (recent >= RENDER_JOBS_PER_DAY) return { ok: false, code: 'rate_limited' };
@@ -135,8 +141,14 @@ export async function createRenderJob(deps: RenderServiceDeps, viewer: Viewer, i
     locale: isLocale(input.locale) ? input.locale : (viewer.locale ?? DEFAULT_LOCALE),
     inputKey,
     inputMime: input.photo.mime,
+    status: held ? 'held' : 'queued',
   });
-  return { ok: true, id };
+  return { ok: true, id, held };
+}
+
+/** The identity callback's half: the person is verified, so their held renders join the queue. */
+export async function releaseHeldRendersFor(sql: SqlRunner, userId: string): Promise<string[]> {
+  return releaseHeldRenderJobs(sql, userId);
 }
 
 // ---------------------------------------------------------------------------
