@@ -2,7 +2,7 @@ import { notFound } from 'next/navigation';
 import { getSqlRunner } from '@/lib/db/connect';
 import { getDictionary } from '@/lib/i18n/dictionaries';
 import { getLocaleFromHeaders } from '@/lib/i18n/server';
-import { formatDate } from '@/lib/i18n/format';
+import { formatDate, interpolate } from '@/lib/i18n/format';
 import { loadPromptById, type PromptRow } from '@/lib/prompts/repo';
 import { ADMIN_PROMPTS_PATH, adminPromptPath, promptHref } from '@/lib/prompts/links';
 import { slugify } from '@/lib/prompts/schemas';
@@ -257,6 +257,25 @@ export default async function AdminPromptItemPage({
           </button>
         </OpForm>
       </div>
+
+      {/* The weekly drop's mail (2026-09-13): one press, one time, everyone with the switch on. */}
+      {row.status === 'published' && (
+        <Panel title={a.announceTemplate}>
+          <p className="font-mono text-[0.75rem] opacity-55">{a.announceHint}</p>
+          {row.announcedAt ? (
+            <p data-announced className="mt-3 font-mono text-code">
+              {interpolate(a.announcedAt, { date: formatDate(row.announcedAt, locale) ?? '' })}
+            </p>
+          ) : (
+            <OpForm op="prompt.announce" back={back} className="mt-3">
+              <input type="hidden" name="id" value={row.id} />
+              <button type="submit" className={BUTTON_PRIMARY} data-announce={row.slug}>
+                {a.announceTemplate}
+              </button>
+            </OpForm>
+          )}
+        </Panel>
+      )}
 
       <Panel title={row.status === 'archived' ? a.statusLabels.archived : a.publishedHeading}>
         <OpForm

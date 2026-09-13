@@ -8,6 +8,7 @@ import { createLocalStorageDriver } from '@/lib/storage/local-driver';
 import type { StorageDriver } from '@/lib/storage';
 import type { AdminContext, AdminOutcome } from '@/lib/admin/context';
 import { dispatchAdmin } from '@/lib/admin/dispatch';
+import { createFakeMailer, type FakeMailer } from '@/lib/notify/mailer-fake';
 import { BACK_FIELD, OP_FIELD } from '@/lib/admin/form';
 import { freshDb, runner } from './pglite';
 
@@ -31,6 +32,11 @@ export interface AdminHarness {
   contestsRevalidated: number;
   /** docs/CAMPAIGNS.md — the fourth tag. */
   campaignsRevalidated: number;
+  /** 2026-09-13 — every mail an operation sent through `ctx.mail`, and the deferred tasks that sent them. */
+  mailer: FakeMailer;
+  deferred: Array<Promise<void>>;
+  /** Await every deferred task (the route runs them in `after()`; here they start inline). */
+  flush(): Promise<void>;
   ctx(viewer?: Viewer): AdminContext;
   run(name: string, fields: FormFields, viewer?: Viewer): Promise<AdminOutcome>;
   close(): Promise<void>;
@@ -100,6 +106,11 @@ export async function adminHarness(): Promise<AdminHarness> {
     promptsRevalidated: 0,
     contestsRevalidated: 0,
     campaignsRevalidated: 0,
+    mailer: createFakeMailer(),
+    deferred: [],
+    async flush() {
+      await Promise.all(harness.deferred);
+    },
     ctx(viewer = ADMIN_VIEWER) {
       return {
         sql: runner(db),
@@ -116,6 +127,10 @@ export async function adminHarness(): Promise<AdminHarness> {
         },
         revalidateCampaigns: () => {
           harness.campaignsRevalidated += 1;
+        },
+        mail: { mailer: harness.mailer, siteUrl: 'https://twings.test' },
+        defer: (task) => {
+          harness.deferred.push(task());
         },
       };
     },

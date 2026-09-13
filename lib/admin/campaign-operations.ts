@@ -28,7 +28,9 @@ import {
   payoutReleasable,
 } from '@/lib/campaigns/state';
 import { ADMIN_CAMPAIGNS_PATH, adminCampaignPath } from '@/lib/campaigns/links';
-import { fail, ok, type AdminOutcome } from './context';
+import { announceCampaignRecruiting, notifyApplicationStatus, type NotifiedApplicationStatus } from '@/lib/campaigns/notify';
+import type { CampaignRow } from '@/lib/campaigns/repo';
+import { fail, ok, type AdminContext, type AdminMail, type AdminOutcome } from './context';
 import * as f from './form';
 import type { AdminOperation, ParseResult } from './operations';
 
@@ -173,6 +175,10 @@ const status: AdminOperation<z.infer<typeof Status>> = {
     const moved = await setCampaignStatus(ctx.sql, input.id, input.to);
     if (!moved) return fail('notFound', NOT_FOUND);
     ctx.revalidateCampaigns?.();
+    // Recruiting opens: everyone with the campaign switch on hears about it, after the redirect.
+    if (input.to === 'recruiting') {
+      mailAfter(ctx, (mail) => announceCampaignRecruiting({ sql: ctx.sql, mailer: mail.mailer, siteUrl: mail.siteUrl }, { ...row, status: 'recruiting' }));
+    }
     const code =
       input.to === 'recruiting'
         ? 'published'
@@ -193,6 +199,26 @@ const Review = z.object({ id: z.string().uuid(), version: z.string().min(1) });
 const Rejection = Review.extend({ reason: z.string().trim().min(3).max(400) });
 const Metrics = Review.extend({ views: z.number().int().min(0) });
 const Pay = Review.extend({ payoutRef: z.string().trim().max(120).default('') });
+
+/**
+ * Mail after the commit (2026-09-13). Both halves are injected by the route; a test harness that
+ * passes neither gets the old behaviour — no mail, no error. The row is re-read inside the task so
+ * the message carries the post-transition version, which is also its idempotency key.
+ */
+function mailAfter(ctx: AdminContext, task: (mail: AdminMail) => Promise<unknown>): void {
+  const mail = ctx.mail;
+  if (!mail || !ctx.defer) return;
+  ctx.defer(async () => {
+    await task(mail);
+  });
+}
+
+function mailApplicationStatus(ctx: AdminContext, appId: string, campaign: CampaignRow, status: NotifiedApplicationStatus): void {
+  mailAfter(ctx, async (mail) => {
+    const fresh = await loadApplicationById(ctx.sql, appId);
+    if (fresh !== null) await notifyApplicationStatus({ sql: ctx.sql, mailer: mail.mailer, siteUrl: mail.siteUrl }, { app: fresh, campaign, status });
+  });
+}
 
 async function reviewTarget(ctx: Parameters<AdminOperation['run']>[0], id: string) {
   const app = await loadApplicationById(ctx.sql, id);
@@ -216,6 +242,7 @@ const select: AdminOperation<z.infer<typeof Review>> = {
     });
     if (!moved) return fail('staleReview');
     ctx.revalidateCampaigns?.();
+    mailApplicationStatus(ctx, app.id, campaign, 'selected');
     return ok('selected', { to: adminCampaignPath(campaign.id) });
   },
 };
@@ -229,6 +256,7 @@ const decline: AdminOperation<z.infer<typeof Review>> = {
     if (!canApplicationTransition(app.status, 'declined')) return fail('badTransition', `${app.status} → declined`);
     const moved = await transitionApplication(ctx.sql, app.id, input.version, 'declined');
     if (!moved) return fail('staleReview');
+    mailApplicationStatus(ctx, app.id, campaign, 'declined');
     return ok('declined', { to: adminCampaignPath(campaign.id) });
   },
 };
@@ -251,6 +279,7 @@ const verify: AdminOperation<z.infer<typeof Review>> = {
     });
     if (!moved) return fail('staleReview');
     ctx.revalidateCampaigns?.();
+    mailApplicationStatus(ctx, app.id, campaign, 'verified');
     return ok('verified', { to: adminCampaignPath(campaign.id) });
   },
 };
@@ -265,6 +294,7 @@ const reject: AdminOperation<z.infer<typeof Rejection>> = {
     if (!canApplicationTransition(app.status, 'rejected')) return fail('badTransition', `${app.status} → rejected`);
     const moved = await transitionApplication(ctx.sql, app.id, input.version, 'rejected', { rejectReason: input.reason });
     if (!moved) return fail('staleReview');
+    mailApplicationStatus(ctx, app.id, campaign, 'rejected');
     return ok('rejected', { to: adminCampaignPath(campaign.id) });
   },
 };
@@ -310,6 +340,7 @@ const pay: AdminOperation<z.infer<typeof Pay>> = {
       payoutRef: input.payoutRef || null,
     });
     if (!moved) return fail('staleReview');
+    mailApplicationStatus(ctx, app.id, campaign, 'paid');
     return ok('paid', { detail: String(amount), to: adminCampaignPath(campaign.id) });
   },
 };

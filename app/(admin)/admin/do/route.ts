@@ -1,8 +1,10 @@
-import { NextResponse, type NextRequest } from 'next/server';
+import { after, NextResponse, type NextRequest } from 'next/server';
 import { requireAdmin } from '@/lib/auth/viewer';
 import { revalidateCampaigns, revalidateCatalog, revalidateContests, revalidatePrompts } from '@/lib/cache';
 import { getSqlRunner } from '@/lib/db/connect';
 import { getStorage } from '@/lib/storage';
+import { getMailer } from '@/lib/notify/service';
+import { siteUrl } from '@/lib/seo/site-url';
 import { fail, type AdminOutcome } from '@/lib/admin/context';
 import { dispatchAdmin, outcomeUrl } from '@/lib/admin/dispatch';
 import { BACK_FIELD, OP_FIELD, str } from '@/lib/admin/form';
@@ -27,6 +29,8 @@ import { BACK_FIELD, OP_FIELD, str } from '@/lib/admin/form';
  * 403 (§3.7 — the admin surface does not confirm its own existence).
  */
 export const dynamic = 'force-dynamic';
+/** A broadcast to every subscriber runs in `after()` inside this invocation; give it the full budget. */
+export const maxDuration = 300;
 
 const NO_STORE = { 'Cache-Control': 'private, no-store' } as const;
 
@@ -88,5 +92,15 @@ async function execute(name: string, form: FormData): Promise<AdminOutcome> {
     revalidatePrompts,
     revalidateContests,
     revalidateCampaigns,
+    mail: { mailer: getMailer(), siteUrl: siteUrl() },
+    // After the redirect, never on the request path; a failure is logged, never a 500 for the operator.
+    defer: (task) =>
+      after(async () => {
+        try {
+          await task();
+        } catch (error) {
+          console.error('[admin] deferred task failed', error);
+        }
+      }),
   });
 }

@@ -114,3 +114,14 @@ metrics_at            'verified+hold' — 조회수 스냅샷 시점 = 홀드 �
 | 어드민 | `/admin/campaigns` 상단 "브랜드 의뢰" 패널, `brandInquiry.status`(`lib/admin/brand-operations.ts`) | 새 의뢰 → 연락함(`contacted_at` 스탬프) → 종료. 대시보드 `/admin`에 새 의뢰 수 |
 
 메일 발신은 `getMailer()`(Resend, `NOTIFY_FROM_EMAIL`)이며 스튜디오 수신 주소는 `BUSINESS.email`. 브랜드 셀프서브(예산 결제·브리프 편집)는 v2.
+
+## 12. 캠페인 알림 메일 (2026-09-13)
+
+§3.5의 "미구현" 칸을 채웠다. 큐 없이, 관리자 오퍼레이션이 커밋한 뒤 `ctx.defer`(라우트에서는 `after()`, 테스트에서는 인라인)로 보낸다. `lib/campaigns/notify.ts`.
+
+| 사건 | 받는 사람 | 게이트 | idempotency 키 |
+| --- | --- | --- | --- |
+| `campaign.status` → `recruiting` | "캠페인 알림"(`notif_updates`) 켠 계정 전원 | 토글 + 본인 서명 원클릭 해제 링크 | `campaign:{id}:recruiting:{userId}` |
+| `campaignApplication.select / decline / verify / reject / pay` | 그 지원자 1명 | 없음(거래 메일), 안내는 계정 페이지 | `application:{id}:{status}:{version}` |
+
+브로드캐스트 엔진은 `lib/notify/broadcast.ts`(구독자 조회, 동시성 2, 사람마다 `unsubscribePath` 서명). 같은 엔진으로 **주간 드롭 알림** `prompt.announce`(템플릿 편집기 "구독자에게 알리기", `prompt_items.announced_at`이 원샷 가드, 0023)가 "새 템플릿 알림"(`notif_new_playbook`) 구독자에게 나간다. 메일 본문은 공용 시트 `lib/notify/sheet.ts`. 테스트 `tests/campaigns/notify.test.ts`, `tests/prompts/announce.test.ts`. 구독자가 수천 명을 넘거나 Resend 분당 한도에 닿으면 이 함수 자리에 아웃박스를 넣는다.

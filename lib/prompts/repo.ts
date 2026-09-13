@@ -47,6 +47,8 @@ export interface PromptRow {
   /** The aspect the make step opens in ('4:5', '9:16', …); null = the medium's default. */
   aspectDefault: string | null;
   rejectReason: string | null;
+  /** When the weekly-drop alert went out for this template (0023); null = never. One shot. */
+  announcedAt: string | null;
   createdAt: string | null;
   publishedAt: string | null;
 }
@@ -76,6 +78,7 @@ interface RawRow {
   engine: string | null;
   aspect_default: string | null;
   reject_reason: string | null;
+  announced_at?: Date | string | null;
   created_at: Date | string | null;
   published_at: Date | string | null;
 }
@@ -84,7 +87,7 @@ const COLUMNS = `id, slug, source, author_id, author_handle, status, models, tit
                  prompt_text, process_md, process_md_ko, source_url,
                  text_visibility::text as text_visibility, media, use_case, featured,
                  medium, price_cents, price_krw, runtime_seconds, engine, aspect_default,
-                 reject_reason, created_at, published_at`;
+                 reject_reason, created_at, published_at, announced_at`;
 
 /** §13.2 — the one ordering, so the gallery, the admin list and the sitemap never disagree. */
 const RAIL_ORDER = 'featured desc, published_at desc nulls last, created_at desc, slug asc';
@@ -120,6 +123,7 @@ function toRow(raw: RawRow): PromptRow {
     engine: raw.engine,
     aspectDefault: raw.aspect_default,
     rejectReason: raw.reject_reason,
+    announcedAt: toIso(raw.announced_at ?? null),
     createdAt: toIso(raw.created_at),
     publishedAt: toIso(raw.published_at),
   };

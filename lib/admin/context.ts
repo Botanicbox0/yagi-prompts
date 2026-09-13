@@ -1,6 +1,7 @@
 import type { Viewer } from '@/lib/auth/identity';
 import type { SqlRunner } from '@/lib/db/sql-runner';
 import type { StorageDriver } from '@/lib/storage';
+import type { Mailer } from '@/lib/notify/mailer';
 
 /**
  * PLAN §3.8 — everything an admin mutation needs, injected.
@@ -42,6 +43,23 @@ export interface AdminContext {
   revalidateContests?: () => void;
   /** `revalidateTag('campaigns')` (docs/CAMPAIGNS.md), injected on the same terms as the other three. */
   revalidateCampaigns?: () => void;
+  /**
+   * Mail (2026-09-13): the configured mailer and the public origin, injected so the operations
+   * layer never reads env. Absent in older tests → the operation simply sends nothing.
+   */
+  mail?: AdminMail;
+  /**
+   * Run `task` after the response has gone out (`next/server`'s `after()` in the route). The
+   * campaign mails and the template-drop broadcast go through here so a slow provider can neither
+   * delay the redirect nor turn a committed status change into a 500. The test harness runs the
+   * task inline and records it.
+   */
+  defer?: (task: () => Promise<void>) => void;
+}
+
+export interface AdminMail {
+  mailer: Mailer | null;
+  siteUrl: string;
 }
 
 /** Codes, never prose: the UI maps them through the bilingual dictionary (§3.9). */
@@ -65,7 +83,9 @@ export type AdminSuccessCode =
   | 'selected'
   | 'declined'
   | 'verified'
-  | 'paid';
+  | 'paid'
+  /** 2026-09-13 — the weekly drop's mail went out (or is going out, after the redirect). */
+  | 'announced';
 
 export type AdminErrorCode =
   | 'forbidden'

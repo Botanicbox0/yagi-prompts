@@ -162,6 +162,7 @@ const SUCCESS_KEYS = {
   declined: 'okDeclined',
   verified: 'okVerified',
   paid: 'okPaid',
+  announced: 'okAnnounced',
 } as const;
 
 const ERROR_KEYS = {

@@ -31,6 +31,7 @@ import {
   type PromptMedia,
 } from '@/lib/prompts/schemas';
 import { ADMIN_PROMPTS_PATH } from '@/lib/prompts/links';
+import { announceTemplate, markPromptAnnounced } from '@/lib/prompts/announce';
 import { aspectsForMedium, enginesForMedium } from '@/lib/images/engines';
 import { fail, ok, type AdminContext, type AdminOutcome } from './context';
 import * as f from './form';
@@ -413,11 +414,39 @@ const archive: AdminOperation<z.infer<typeof Archive>> = {
   },
 };
 
+const Announce = z.object({ id: Uuid });
+
+/**
+ * The weekly drop's mail (founder, 2026-09-13). The stamp goes first and is the guard: a second
+ * press, a retried request or a second operator finds `announced_at` set and is refused before a
+ * single message leaves. The broadcast itself runs after the redirect.
+ */
+const announce: AdminOperation<z.infer<typeof Announce>> = {
+  parse: (form) => parsed(Announce, { id: f.str(form, 'id') }),
+  async run(ctx, input) {
+    const row = await loadPromptById(ctx.sql, input.id);
+    if (row === null) return fail('notFound', NOT_FOUND_DETAIL);
+    if (row.status !== 'published') return fail('badTransition', `${row.status}: only a published template can be announced`);
+    if (row.announcedAt !== null) return fail('badTransition', `already announced ${row.announcedAt}`);
+    const stamped = await markPromptAnnounced(ctx.sql, input.id);
+    if (!stamped) return fail('badTransition', 'already announced');
+    const mail = ctx.mail;
+    if (mail && ctx.defer) {
+      ctx.defer(async () => {
+        const result = await announceTemplate({ sql: ctx.sql, mailer: mail.mailer, siteUrl: mail.siteUrl }, row);
+        console.info(`[prompts] announce ${row.slug}: recipients=${result.recipients} sent=${result.sent} failed=${result.failed}${result.skipped ? ` skipped=${result.skipped}` : ''}`);
+      });
+    }
+    return ok('announced', { detail: row.slug, to: `${ADMIN_PROMPTS_PATH}/${row.id}` });
+  },
+};
+
 // ---------------------------------------------------------------------------
 // registry fragment
 // ---------------------------------------------------------------------------
 
 export const PROMPT_OPERATIONS = {
+  'prompt.announce': announce,
   'prompt.create': createPrompt,
   'prompt.approve': approve,
   'prompt.reject': reject,
