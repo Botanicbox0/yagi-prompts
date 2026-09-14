@@ -1,11 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import type { ArkAsset, ArkAssetsClient, ArkAssetStatus } from '@/lib/ark/assets';
+import { ArkOpenApiError, type ArkAsset, type ArkAssetsClient, type ArkAssetStatus } from '@/lib/ark/assets';
 import { loadIdentityAssetByPhoto, loadIdentityGroup } from '@/lib/identity/repo';
 import {
+  assetLibraryMode,
   completeIdentityVerification,
   ensureIdentityAsset,
+  ensureVirtualGroup,
   identityStatusFor,
   needsIdentity,
+  needsLiveness,
   photoSha256,
   startIdentityVerification,
   type IdentityDeps,
@@ -24,6 +27,8 @@ const PHOTO = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3, 4]);
 
 interface FakeBank extends ArkAssetsClient {
   sessions: Array<{ callbackUrl: string }>;
+  groups: Array<{ name: string; groupType: string | undefined }>;
+  groupError: Error | null;
   created: Array<{ groupId: string; url: string; assetType: string; name?: string }>;
   assetStatus: ArkAssetStatus;
   resultGroupId: string;
@@ -32,6 +37,8 @@ interface FakeBank extends ArkAssetsClient {
 function fakeBank(): FakeBank {
   const bank: FakeBank = {
     sessions: [],
+    groups: [],
+    groupError: null,
     created: [],
     assetStatus: 'Processing',
     resultGroupId: 'grp-1',
@@ -70,8 +77,10 @@ function fakeBank(): FakeBank {
       return [];
     },
     async deleteAsset() {},
-    async createAssetGroup() {
-      return { id: 'group-aigc-fake' };
+    async createAssetGroup(input) {
+      if (bank.groupError) throw bank.groupError;
+      bank.groups.push({ name: input.name, groupType: input.groupType });
+      return { id: `aigc-${bank.groups.length}` };
     },
     async deleteAssetGroup() {},
   };
@@ -93,7 +102,7 @@ describe('the real-person identity', () => {
     await h.close();
   });
 
-  const deps = (overrides: Partial<IdentityDeps> = {}): IdentityDeps => ({ sql: h.sql, assets: bank, siteUrl: SITE, now: NOW, ...overrides });
+  const deps = (overrides: Partial<IdentityDeps> = {}): IdentityDeps => ({ sql: h.sql, assets: bank, siteUrl: SITE, now: NOW, mode: 'liveness', ...overrides });
 
   it('names the engines that need it: everything on ModelArk, nothing on OpenAI', () => {
     expect(needsIdentity('seedance-2.0')).toBe(true);
@@ -165,5 +174,78 @@ describe('the real-person identity', () => {
     expect(await ensureIdentityAsset(deps(), { group, photo: new Uint8Array([7]), photoUrl: null })).toEqual({ status: 'failed', assetId: null, reason: 'identity_unavailable' });
     // And a person who has not verified cannot register anything.
     expect(await ensureIdentityAsset(deps(), { group: { ...group, status: 'pending', groupId: null }, photo: PHOTO, photoUrl: 'https://x' })).toEqual({ status: 'failed', assetId: null, reason: 'identity_required' });
+  });
+});
+
+/**
+ * The virtual library (2026-09-14, lib/flags.ts ASSET_LIBRARY_MODE): no camera check. The account's
+ * AIGC group is made on first use and reused; a liveness-mode read never mistakes it for a verified
+ * face; a quota refusal is the studio's problem (`identity_unavailable`), not the photo's.
+ */
+describe('the virtual library', () => {
+  let h: BillingHarness;
+  let bank: FakeBank;
+  const NOW = new Date('2026-09-14T12:00:00.000Z');
+
+  beforeEach(async () => {
+    h = await billingDb();
+    await seedProfile(h.sql, { id: ADMIN_VIEWER.userId!, email: ADMIN_VIEWER.email!, isAdmin: true });
+    bank = fakeBank();
+  });
+  afterEach(async () => {
+    await h.close();
+  });
+
+  const deps = (overrides: Partial<IdentityDeps> = {}): IdentityDeps => ({ sql: h.sql, assets: bank, siteUrl: SITE, now: NOW, mode: 'virtual', ...overrides });
+
+  it('reads the mode from the env override, else the flag', () => {
+    expect(assetLibraryMode({ ARK_ASSET_MODE: 'liveness' })).toBe('liveness');
+    expect(assetLibraryMode({ ARK_ASSET_MODE: 'VIRTUAL' })).toBe('virtual');
+    expect(assetLibraryMode({ ARK_ASSET_MODE: 'nonsense' })).toBe('virtual');
+    expect(assetLibraryMode({})).toBe('virtual');
+  });
+
+  it('asks nobody to look into a camera: no engine needs liveness in virtual mode', () => {
+    expect(needsIdentity('seedance-2.0')).toBe(true);
+    expect(needsLiveness('seedance-2.0', 'virtual')).toBe(false);
+    expect(needsLiveness('seedance-2.0', 'liveness')).toBe(true);
+    expect(needsLiveness('gpt-image-2', 'liveness')).toBe(false);
+  });
+
+  it('makes one AIGC group per account on first use and reuses it after', async () => {
+    const first = await ensureVirtualGroup(deps(), ADMIN_VIEWER.userId!);
+    expect(first).toMatchObject({ ok: true, group: { groupId: 'aigc-1', status: 'active', groupType: 'AIGC', verifiedAt: NOW.toISOString() } });
+    expect(bank.groups).toEqual([{ name: expect.stringMatching(/^twings-/), groupType: 'AIGC' }]);
+
+    const again = await ensureVirtualGroup(deps(), ADMIN_VIEWER.userId!);
+    expect(again).toMatchObject({ ok: true, group: { groupId: 'aigc-1' } });
+    expect(bank.groups).toHaveLength(1);
+
+    // The group is what the asset path needs — the same CreateAsset as the liveness route.
+    if (!first.ok) throw new Error('unreachable');
+    const asset = await ensureIdentityAsset(deps(), { group: first.group, photo: PHOTO, photoUrl: 'https://store.test/photo.jpg' });
+    expect(asset).toEqual({ status: 'processing', assetId: 'asset-1' });
+    expect(bank.created[0]).toMatchObject({ groupId: 'aigc-1' });
+  });
+
+  it('is not a verified face: a liveness-mode read still says none, and a verified face is reused as is', async () => {
+    await ensureVirtualGroup(deps(), ADMIN_VIEWER.userId!);
+    expect(await identityStatusFor(h.sql, ADMIN_VIEWER.userId!, 'virtual')).toBe('active');
+    expect(await identityStatusFor(h.sql, ADMIN_VIEWER.userId!, 'liveness')).toBe('none');
+
+    // Someone who already passed the camera check keeps that group in virtual mode too.
+    await h.sql.query(`update identity_groups set group_id = 'grp-live', group_type = 'LivenessFace' where user_id = $1`, [ADMIN_VIEWER.userId]);
+    const reused = await ensureVirtualGroup(deps(), ADMIN_VIEWER.userId!);
+    expect(reused).toMatchObject({ ok: true, group: { groupId: 'grp-live', groupType: 'LivenessFace' } });
+    expect(bank.groups).toHaveLength(1);
+  });
+
+  it('names a quota refusal as the studio’s problem, and no bank as unavailable', async () => {
+    bank.groupError = new ArkOpenApiError('QuotaExceeded', 'asset group quota exceeded', 'req-1', 400, false);
+    expect(await ensureVirtualGroup(deps(), ADMIN_VIEWER.userId!)).toEqual({ ok: false, reason: 'identity_unavailable' });
+    bank.groupError = new ArkOpenApiError('InvalidParameter', 'bad name', 'req-2', 400, false);
+    expect(await ensureVirtualGroup(deps(), ADMIN_VIEWER.userId!)).toEqual({ ok: false, reason: 'asset_failed' });
+    expect(await ensureVirtualGroup(deps({ assets: null }), ADMIN_VIEWER.userId!)).toEqual({ ok: false, reason: 'identity_unavailable' });
+    expect(await loadIdentityGroup(h.sql, ADMIN_VIEWER.userId!)).toBeNull();
   });
 });

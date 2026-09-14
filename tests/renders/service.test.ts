@@ -116,6 +116,7 @@ describe('the render queue', () => {
     sql: h.sql,
     store,
     now: NOW,
+    mode: 'liveness',
     engines,
     notifier,
     siteUrl: SITE,
@@ -124,7 +125,7 @@ describe('the render queue', () => {
   });
 
   const enqueue = (slug = IMAGE_TEMPLATE, aspect = '4:5') =>
-    createRenderJob({ sql: h.sql, store }, ADMIN_VIEWER, { templateSlug: slug, aspect, photo: PHOTO, locale: 'ko' });
+    createRenderJob({ sql: h.sql, store, mode: 'liveness' }, ADMIN_VIEWER, { templateSlug: slug, aspect, photo: PHOTO, locale: 'ko' });
 
   it('refuses the anonymous and the not-yet-open reader, checks the input, and queues an admin render', async () => {
     const service = { sql: h.sql, store };
@@ -252,7 +253,7 @@ describe('the render queue', () => {
   });
 
   it('holds a film with its photo behind the face check, and releases it the moment the person is verified', async () => {
-    const held = await createRenderJob({ sql: h.sql, store }, ADMIN_VIEWER, { templateSlug: VIDEO_TEMPLATE, aspect: '9:16', photo: PHOTO, locale: 'ko', holdForIdentity: true });
+    const held = await createRenderJob({ sql: h.sql, store, mode: 'liveness' }, ADMIN_VIEWER, { templateSlug: VIDEO_TEMPLATE, aspect: '9:16', photo: PHOTO, locale: 'ko', holdForIdentity: true });
     expect(held).toMatchObject({ ok: true, held: true });
     if (!held.ok) return;
     const job = (await loadRenderJob(h.sql, held.id))!;
@@ -273,7 +274,37 @@ describe('the render queue', () => {
     expect(report).toMatchObject({ claimed: 1, waiting: 1, failed: 0 });
     expect((await loadRenderJob(h.sql, held.id))!).toMatchObject({ status: 'running', providerTaskId: 'cgt-held' });
     // A verified person's next render is not held at all.
-    expect(await createRenderJob({ sql: h.sql, store }, ADMIN_VIEWER, { templateSlug: VIDEO_TEMPLATE, aspect: '9:16', photo: PHOTO, locale: 'ko', holdForIdentity: true })).toMatchObject({ ok: true, held: false });
+    expect(await createRenderJob({ sql: h.sql, store, mode: 'liveness' }, ADMIN_VIEWER, { templateSlug: VIDEO_TEMPLATE, aspect: '9:16', photo: PHOTO, locale: 'ko', holdForIdentity: true })).toMatchObject({ ok: true, held: false });
+  });
+
+  it('in virtual mode a first-time person is never held: the pass makes their AIGC group, then the asset, then the film', async () => {
+    // Enqueue in virtual mode: no door, the job is queued at once.
+    const created = await createRenderJob({ sql: h.sql, store, mode: 'virtual' }, ADMIN_VIEWER, { templateSlug: VIDEO_TEMPLATE, aspect: '9:16', photo: PHOTO, locale: 'ko', holdForIdentity: true });
+    expect(created).toMatchObject({ ok: true, held: false });
+    if (!created.ok) return;
+    expect((await loadRenderJob(h.sql, created.id))!.status).toBe('queued');
+
+    const groups: string[] = [];
+    const base = fakeAssets({ status: 'Active', created: 0 });
+    const assets: ArkAssetsClient = { ...base, async createAssetGroup(input) { groups.push(input.groupType ?? '?'); return { id: 'aigc-9' }; } };
+    const bankStore = { ...store, url: async () => 'https://store.test/photo.jpg' };
+    const calls: Parameters<ArkClient['createVideoTask']>[0][] = [];
+    const ark: ArkClient = { async createVideoTask(input) { calls.push(input); return { id: 'cgt-virtual' }; }, async getVideoTask() { return task('running'); } };
+
+    const report = await runRenderPass(deps({ ark }, { assets, store: bankStore, mode: 'virtual' }), { jobId: created.id });
+    expect(report).toMatchObject({ claimed: 1, waiting: 1, failed: 0 });
+    expect(groups).toEqual(['AIGC']);
+    expect((await h.sql.query<{ group_id: string; group_type: string; status: string }>('select group_id, group_type, status from identity_groups where user_id = $1', [ADMIN_VIEWER.userId])).rows[0]).toEqual({ group_id: 'aigc-9', group_type: 'AIGC', status: 'active' });
+    // The film references the asset, never the photo bytes.
+    const reference = calls[0]!.content.find((item) => item.type === 'image_url');
+    expect(reference && 'image_url' in reference ? reference.image_url.url : '').toMatch(/^asset:\/\//);
+    expect((await loadRenderJob(h.sql, created.id))!).toMatchObject({ status: 'running', providerTaskId: 'cgt-virtual' });
+
+    // The second render of the same person makes no second group.
+    const second = await createRenderJob({ sql: h.sql, store, mode: 'virtual' }, ADMIN_VIEWER, { templateSlug: VIDEO_TEMPLATE, aspect: '9:16', photo: PHOTO, locale: 'ko' });
+    if (!second.ok) throw new Error(second.code);
+    await runRenderPass(deps({ ark }, { assets, store: bankStore, mode: 'virtual' }), { jobId: second.id });
+    expect(groups).toEqual(['AIGC']);
   });
 
   it('parks a film while the bank compares the photo, then references the asset — never the bytes', async () => {

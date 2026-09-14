@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { SqlRunner } from '@/lib/db/sql-runner';
 import type { Viewer } from '@/lib/auth/identity';
 import type { ArkAssetsClient } from '@/lib/ark/assets';
-import { ASSET_WAIT_HOURS, ensureIdentityAsset, identityStatusFor, loadIdentityGroup, needsIdentity, pollIdentityAsset, recordIdentityUse, type IdentityDeps } from '@/lib/identity/service';
+import { ASSET_WAIT_HOURS, assetLibraryMode, ensureIdentityAsset, ensureVirtualGroup, identityStatusFor, loadIdentityGroup, needsIdentity, needsLiveness, pollIdentityAsset, recordIdentityUse, type AssetLibraryMode, type IdentityDeps } from '@/lib/identity/service';
 import { RENDER_PIPELINE_PUBLIC } from '@/lib/flags';
 import { DEFAULT_LOCALE, isLocale, type Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/dictionaries';
@@ -73,6 +73,8 @@ export interface RenderServiceDeps {
   sql: SqlRunner;
   store: RenderStore;
   now?: Date;
+  /** Which asset library a photo goes through (lib/flags.ts); tests pin it, production reads the flag. */
+  mode?: AssetLibraryMode;
 }
 
 // ---------------------------------------------------------------------------
@@ -121,7 +123,9 @@ export async function createRenderJob(deps: RenderServiceDeps, viewer: Viewer, i
   // ModelArk refuses a real person's photo in the bytes: the person verifies their face once
   // (docs/TEMPLATES-IA.md §8.2) and the pass sends an asset reference instead. Asked to, the job
   // is HELD with its photo until the check completes — one upload, no second visit to the studio.
-  const held = needsIdentity(engine) && (await identityStatusFor(deps.sql, viewer.userId)) !== 'active';
+  const mode = deps.mode ?? assetLibraryMode();
+  // Only the liveness mode has a door to hold a job behind; the virtual library makes the group on the way.
+  const held = needsLiveness(engine, mode) && (await identityStatusFor(deps.sql, viewer.userId, mode)) !== 'active';
   if (held && !input.holdForIdentity) return { ok: false, code: 'identity_required' };
 
   const recent = await countRenderJobsSince(deps.sql, viewer.userId, new Date(now.getTime() - 24 * 60 * 60 * 1000));
@@ -232,7 +236,7 @@ export async function runRenderPass(deps: RenderPassDeps, options: RenderPassOpt
 const ASSET_URL_TTL_SECONDS = 15 * 60;
 
 function identityDeps(deps: RenderPassDeps): IdentityDeps {
-  return { sql: deps.sql, assets: deps.assets ?? null, siteUrl: deps.siteUrl, ...(deps.now ? { now: deps.now } : {}) };
+  return { sql: deps.sql, assets: deps.assets ?? null, siteUrl: deps.siteUrl, mode: deps.mode ?? assetLibraryMode(), ...(deps.now ? { now: deps.now } : {}) };
 }
 
 type Reference =
@@ -248,12 +252,21 @@ type Reference =
  */
 async function resolveReference(deps: RenderPassDeps, job: RenderJob, photo: RenderPhoto | null): Promise<Reference> {
   if (photo === null || !isEngineId(job.engine) || !needsIdentity(job.engine)) return { kind: 'bytes' };
-  const group = await loadIdentityGroup(deps.sql, job.userId);
-  if (group === null || group.status !== 'active') {
-    return { kind: 'fail', failure: new RenderFailure('identity_required', 'the person has not verified their face', false) };
+  const ideps = identityDeps(deps);
+  let group;
+  if (ideps.mode === 'virtual') {
+    // The virtual library: the account's AIGC group, made on first use. No door, no wait.
+    const ensuredGroup = await ensureVirtualGroup(ideps, job.userId);
+    if (!ensuredGroup.ok) return { kind: 'fail', failure: new RenderFailure(ensuredGroup.reason, `no asset group for the person (${ensuredGroup.reason})`, false) };
+    group = ensuredGroup.group;
+  } else {
+    group = await loadIdentityGroup(deps.sql, job.userId);
+    if (group === null || group.status !== 'active' || group.groupType !== 'LivenessFace') {
+      return { kind: 'fail', failure: new RenderFailure('identity_required', 'the person has not verified their face', false) };
+    }
   }
   const photoUrl = job.inputKey === null ? null : await deps.store.url(job.inputKey, ASSET_URL_TTL_SECONDS);
-  const ensured = await ensureIdentityAsset(identityDeps(deps), { group, photo: photo.bytes, photoUrl });
+  const ensured = await ensureIdentityAsset(ideps, { group, photo: photo.bytes, photoUrl });
   if (ensured.status === 'active') return { kind: 'asset', assetId: ensured.assetId };
   if (ensured.status === 'processing') return { kind: 'wait', assetId: ensured.assetId };
   const code: RenderFailureCode = ensured.reason === 'identity_required' || ensured.reason === 'identity_unavailable' ? ensured.reason : 'asset_failed';

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getViewer } from '@/lib/auth/viewer';
 import { getSqlRunner } from '@/lib/db/connect';
-import { identityStatusFor, needsIdentity } from '@/lib/identity/service';
+import { assetLibraryMode, identityStatusFor, needsLiveness } from '@/lib/identity/service';
 import { resolveEngine } from '@/lib/images/engines';
 import { loadPreferences } from '@/lib/notify/preferences';
 import { loadPromptBySlug } from '@/lib/prompts/repo';
@@ -42,8 +42,10 @@ export async function GET(request: Request): Promise<NextResponse> {
       interest = (await loadPreferences(sql, viewer.userId))?.newPlaybook === true;
       const template = live && slug ? await loadPromptBySlug(sql, slug) : null;
       if (template !== null) {
-        identityRequired = needsIdentity(resolveEngine(template.engine, template.medium));
-        if (identityRequired) identity = await identityStatusFor(sql, viewer.userId);
+        // Only the liveness mode has a camera step to announce; the virtual library needs nothing from the person.
+        const mode = assetLibraryMode();
+        identityRequired = needsLiveness(resolveEngine(template.engine, template.medium), mode);
+        if (identityRequired) identity = await identityStatusFor(sql, viewer.userId, mode);
       }
     }
   }

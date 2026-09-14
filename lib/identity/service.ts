@@ -4,6 +4,7 @@ import type { Viewer } from '@/lib/auth/identity';
 import { ArkOpenApiError, arkQuotaFromEnv, parseLivenessCallback, withH5Language, type ArkAssetStatus, type ArkAssetsClient, type ArkH5Language, type ArkQuota } from '@/lib/ark/assets';
 import { hasCapacity } from '@/lib/ark/reclaim';
 import { IMAGE_ENGINES, isImageEngine, type EngineId } from '@/lib/images/engines';
+import { ASSET_LIBRARY_MODE } from '@/lib/flags';
 import {
   activateIdentityGroup,
   countIdentity,
@@ -17,6 +18,7 @@ import {
   touchIdentityRender,
   updateIdentityAssetStatus,
   upsertIdentitySession,
+  upsertVirtualIdentityGroup,
   type IdentityGroup,
   type IdentityStatus,
 } from './repo';
@@ -42,8 +44,23 @@ import {
 
 export const ASSET_WAIT_HOURS = 24;
 
+/**
+ * Which library a photo goes through (lib/flags.ts ASSET_LIBRARY_MODE, env `ARK_ASSET_MODE` wins).
+ *   virtual  — AIGC group per account, created on first use, no camera check (the product today)
+ *   liveness — the H5 real-person check, then face-matched assets (kept whole; per-account escalation)
+ */
+export type AssetLibraryMode = 'virtual' | 'liveness';
+
+export function assetLibraryMode(env: Record<string, string | undefined> = process.env): AssetLibraryMode {
+  const raw = env.ARK_ASSET_MODE?.trim().toLowerCase();
+  if (raw === 'virtual' || raw === 'liveness') return raw;
+  return ASSET_LIBRARY_MODE;
+}
+
 export interface IdentityDeps {
   sql: SqlRunner;
+  /** Pinned by tests; production reads the flag. */
+  mode?: AssetLibraryMode;
   /** null = AK/SK not configured; every operation then answers `unavailable`. */
   assets: ArkAssetsClient | null;
   siteUrl: string;
@@ -57,13 +74,46 @@ export function needsIdentity(engine: EngineId): boolean {
   return true; // every video engine is ModelArk
 }
 
+/** Does this engine put the person through the camera check first? Only in liveness mode. */
+export function needsLiveness(engine: EngineId, mode: AssetLibraryMode = assetLibraryMode()): boolean {
+  return mode === 'liveness' && needsIdentity(engine);
+}
+
 export function photoSha256(bytes: Uint8Array): string {
   return createHash('sha256').update(bytes).digest('hex');
 }
 
-export async function identityStatusFor(sql: SqlRunner, userId: string): Promise<'none' | IdentityStatus> {
+export async function identityStatusFor(sql: SqlRunner, userId: string, mode: AssetLibraryMode = assetLibraryMode()): Promise<'none' | IdentityStatus> {
   const group = await loadIdentityGroup(sql, userId);
-  return group?.status ?? 'none';
+  if (group === null) return 'none';
+  // In liveness mode an AIGC group is not a verified face: the person still has to pass the check.
+  if (mode === 'liveness' && group.groupType === 'AIGC') return 'none';
+  return group.status;
+}
+
+export type VirtualGroupOutcome = { ok: true; group: IdentityGroup } | { ok: false; reason: 'identity_unavailable' | 'asset_failed' };
+
+/**
+ * The virtual library's whole "verification": one AIGC group per account, made the first time the
+ * person renders and reused after. A LivenessFace group that is already active is reused too — a
+ * verified face is the stricter thing. Quota refusals surface as `identity_unavailable`, which the
+ * result page words as "the studio is looking into it" rather than blaming the photo.
+ */
+export async function ensureVirtualGroup(deps: IdentityDeps, userId: string): Promise<VirtualGroupOutcome> {
+  if (deps.assets === null) return { ok: false, reason: 'identity_unavailable' };
+  const existing = await loadIdentityGroup(deps.sql, userId);
+  if (existing !== null && existing.status === 'active' && existing.groupId !== null) return { ok: true, group: existing };
+  const now = deps.now ?? new Date();
+  try {
+    const created = await deps.assets.createAssetGroup({ name: `twings-${userId.slice(0, 8)}`, description: 'TWINGS account — the person’s own consented likeness', groupType: 'AIGC' });
+    await upsertVirtualIdentityGroup(deps.sql, { userId, groupId: created.id, now });
+  } catch (error) {
+    const code = error instanceof ArkOpenApiError ? error.code : 'create_group_failed';
+    console.error('[identity] CreateAssetGroup(AIGC) failed', error instanceof ArkOpenApiError ? `${error.code}: ${error.message}` : error);
+    return { ok: false, reason: /quota|limit|exceed/i.test(code) ? 'identity_unavailable' : 'asset_failed' };
+  }
+  const group = await loadIdentityGroup(deps.sql, userId);
+  return group === null ? { ok: false, reason: 'asset_failed' } : { ok: true, group };
 }
 
 export { loadIdentityGroup };

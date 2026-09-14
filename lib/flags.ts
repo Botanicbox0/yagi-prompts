@@ -40,3 +40,15 @@ export const PLAYBOOKS_IN_NAV = false;
  * follows through `/api/renders/access`. Leave false until the pay step creates the job.
  */
 export const RENDER_PIPELINE_PUBLIC = false;
+
+/**
+ * docs/TEMPLATES-IA.md §12 (2026-09-14) — how a person's photo becomes a ModelArk reference.
+ *
+ *   `virtual`   the AIGC ("digital character") library: no camera check, one group per account,
+ *               the photo is the asset. What the product runs on — BytePlus's account manager
+ *               confirmed in writing (2026-09-13) that a person's own consented selfie may use it.
+ *   `liveness`  the H5 real-person check first, then assets compared to the verified face. Kept
+ *               whole; `ARK_ASSET_MODE=liveness` switches back without a deploy of new code, and
+ *               tests pin their mode explicitly.
+ */
+export const ASSET_LIBRARY_MODE: 'virtual' | 'liveness' = 'virtual';

@@ -72,13 +72,16 @@ describe('legal documents', () => {
   it('states the likeness verification and management standard in the terms and the privacy policy', () => {
     const ko = legalDocument('terms', 'ko').body;
     expect(ko).toContain('본인의 얼굴이 찍힌 사진만');
-    expect(ko).toContain('본인 인증을 거친 계정에서만');
+    // 2026-09-14: the virtual library is the default path; the camera check is an escalation the Company may require.
+    expect(ko).toContain('계정마다 하나뿐인 인물 자산 그룹');
+    expect(ko).toContain('본인 인증(BytePlus 실인물 인증)을 요구');
     expect(ko).toContain('다른 사람의 얼굴은 생성이 거부');
     expect(ko).toContain('24시간 이내에 검토');
     expect(ko).toContain('미성년자');
     const en = legalDocument('terms', 'en').body;
     expect(en).toContain('only photos of your own face');
     expect(en).toContain('real-person verification');
+    expect(en).toContain('the one likeness asset group');
     expect(en).toContain('within 24 hours');
     // Overseas processing of the photo is a privacy disclosure, not a footnote.
     expect(legalDocument('privacy', 'ko').body).toContain('BytePlus Pte. Ltd.');

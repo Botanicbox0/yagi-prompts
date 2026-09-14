@@ -474,7 +474,7 @@ export const en = {
       errInvalid: 'Pick one reason.',
     },
     error: {
-      face_policy: 'The engine refused the photo under its real-person policy. This template only takes a verified photo.',
+      face_policy: 'The engine refused the photo under its real-person policy. Try another clear, front-facing photo; if it keeps happening, tell us on this page.',
       moderated: 'The prompt or the photo tripped the content policy. Try another photo.',
       engine_access: 'An engine setup problem stopped this render. The team is looking into it.',
       no_engine_key: 'This engine is not connected yet.',
@@ -483,8 +483,8 @@ export const en = {
       bad_output: 'The engine returned no usable result.',
       stalled: 'The render did not finish in time.',
       identity_required: 'This template needs a verified photo. Verify once and make it again.',
-      identity_unavailable: 'The identity service is not connected yet. The team is looking into it.',
-      asset_failed: 'The photo could not be matched to your verified face. Try another clear, front-facing photo.',
+      identity_unavailable: 'The likeness asset could not be registered. The team is looking into it; a failed render is never charged.',
+      asset_failed: 'The photo could not be registered as a likeness asset. Try another clear, front-facing photo with one person in it.',
     },
     studio: {
       badge: 'Live render — we email you the link when it is ready',
@@ -985,7 +985,7 @@ export const en = {
     q2: 'What does it cost?',
     a2: 'Each template has its own price, paid once per render. No subscription, nothing to cancel. The price is printed on every template page and on the pricing page.',
     q3: 'What happens to my photo?',
-    a3: "It is used only to make that template's result. Rendering runs on the AI engines we contract (BytePlus, OpenAI), and photos and results are deleted with your account. Real-person film templates are open only to verified accounts and are matched against the verified face. The privacy policy has the details.",
+    a3: "It is used only to make that template's result. Rendering runs on the AI engines we contract (BytePlus, OpenAI), and photos and results are deleted with your account. Each photo is registered to the one likeness asset an account may hold and used only for that account's results; where a report or warning sign appears we may require a camera check. The privacy policy has the details.",
     q4: 'How long does it take?',
     a4: 'A film usually takes 2-5 minutes; an image is faster. You can close the tab — we tell you when it lands.',
     q5: 'What is a campaign?',

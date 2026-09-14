@@ -8,10 +8,14 @@ import type { ArkAssetStatus } from '@/lib/ark/assets';
 
 export type IdentityStatus = 'pending' | 'active' | 'failed' | 'revoked';
 
+/** Which ModelArk library the group lives in (0024). See lib/flags.ts ASSET_LIBRARY_MODE. */
+export type IdentityGroupType = 'LivenessFace' | 'AIGC';
+
 export interface IdentityGroup {
   userId: string;
   groupId: string | null;
   status: IdentityStatus;
+  groupType: IdentityGroupType;
   bytedToken: string | null;
   h5Link: string | null;
   nextPath: string | null;
@@ -37,6 +41,7 @@ interface GroupRow {
   user_id: string;
   group_id: string | null;
   status: IdentityStatus;
+  group_type: IdentityGroupType;
   byted_token: string | null;
   h5_link: string | null;
   next_path: string | null;
@@ -58,7 +63,7 @@ interface AssetRow {
   last_used_at: Date | string | null;
 }
 
-const GROUP_COLUMNS = 'user_id, group_id, status, byted_token, h5_link, next_path, session_started_at, verified_at, last_render_at, failure_code';
+const GROUP_COLUMNS = 'user_id, group_id, status, group_type, byted_token, h5_link, next_path, session_started_at, verified_at, last_render_at, failure_code';
 const ASSET_COLUMNS = 'id, user_id, group_id, asset_id, photo_sha256, status, created_at, activated_at, last_used_at';
 
 function iso(value: Date | string | null): string | null {
@@ -71,6 +76,7 @@ function toGroup(row: GroupRow): IdentityGroup {
     userId: row.user_id,
     groupId: row.group_id,
     status: row.status,
+    groupType: row.group_type === 'AIGC' ? 'AIGC' : 'LivenessFace',
     bytedToken: row.byted_token,
     h5Link: row.h5_link,
     nextPath: row.next_path,
@@ -128,9 +134,25 @@ export async function upsertIdentitySession(
 export async function activateIdentityGroup(sql: SqlRunner, userId: string, args: { groupId: string; now: Date }): Promise<void> {
   await sql.query(
     `update identity_groups
-        set status = 'active', group_id = $2, verified_at = $3::timestamptz, byted_token = null, h5_link = null, failure_code = null
+        set status = 'active', group_id = $2, group_type = 'LivenessFace', verified_at = $3::timestamptz, byted_token = null, h5_link = null, failure_code = null
       where user_id = $1`,
     [userId, args.groupId, args.now.toISOString()],
+  );
+}
+
+/**
+ * The virtual library (0024): the person holds an AIGC group the moment we create one for them —
+ * no session, no token, `verified_at` is simply when it was made. A LivenessFace row already
+ * `active` is left alone by the caller (a verified face is the stricter thing and works as well).
+ */
+export async function upsertVirtualIdentityGroup(sql: SqlRunner, args: { userId: string; groupId: string; now: Date }): Promise<void> {
+  await sql.query(
+    `insert into identity_groups (user_id, status, group_id, group_type, verified_at, byted_token, h5_link, failure_code)
+     values ($1, 'active', $2, 'AIGC', $3::timestamptz, null, null, null)
+     on conflict (user_id) do update
+       set status = 'active', group_id = excluded.group_id, group_type = 'AIGC', verified_at = excluded.verified_at,
+           byted_token = null, h5_link = null, failure_code = null`,
+    [args.userId, args.groupId, args.now.toISOString()],
   );
 }
 

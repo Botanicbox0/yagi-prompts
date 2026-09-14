@@ -85,7 +85,7 @@ export function isLegalDoc(value: string): value is LegalDoc {
 }
 
 /** The effective date printed on every document. Bump it whenever the text below changes. */
-export const LEGAL_EFFECTIVE = '2026-09-11';
+export const LEGAL_EFFECTIVE = '2026-09-14';
 
 /** Stated once, used by the terms, the refund policy and the privacy policy alike. */
 const SHARE_LINK_DAYS = 3;
@@ -132,7 +132,7 @@ const TERMS_KO = `## 제1조 (목적)
    - 미성년자의 얼굴이 담긴 사진
    - 공인·유명인 등 제3자의 초상을 사칭하거나 오인하게 할 수 있는 사진
    - 타인의 사진을 무단으로 촬영·수집·복제한 사진
-3. **실제 인물의 얼굴로 영상을 만드는 템플릿은 본인 인증을 거친 계정에서만 이용할 수 있습니다.** 본인 인증은 카메라로 실제 인물임을 확인하는 절차(BytePlus 실인물 인증)이며, 이후 올리는 사진은 인증된 얼굴과 대조되어 **다른 사람의 얼굴은 생성이 거부됩니다.**
+3. **실제 인물의 얼굴이 담긴 사진은 회사의 검증 절차를 거친 뒤에만 생성에 사용됩니다.** 올린 사진은 AI 엔진 제공자(BytePlus)의 자동 콘텐츠 검수를 거쳐 **계정마다 하나뿐인 인물 자산 그룹**에 등록되며, 그 계정의 결과물에만 쓰입니다. 회사는 신고가 접수되거나 이상 징후가 있는 계정에 대해 **카메라로 실제 인물임을 확인하는 본인 인증(BytePlus 실인물 인증)을 요구**할 수 있고, 인증을 거친 계정에서는 이후 올리는 사진이 인증된 얼굴과 대조되어 **다른 사람의 얼굴은 생성이 거부됩니다.** 인증을 요구받고 응하지 않으면 실제 인물 템플릿 이용이 제한됩니다.
 4. 이용자는 올린 사진에 대해 초상권·저작권 등 필요한 권리와 동의를 갖추었음을 보증합니다. 이를 위반하여 발생하는 분쟁과 손해의 책임은 이용자에게 있으며, 회사는 위반 사실을 안 때 해당 결과물을 삭제하고 계정 이용을 제한할 수 있습니다.
 5. 누구나 자신의 초상이 무단으로 사용된 결과물을 ${BUSINESS.email} 로 신고할 수 있습니다. 회사는 신고를 받은 때로부터 **${REPORT_REVIEW_HOURS}시간 이내에 검토**하고, 침해가 확인되면 결과물과 공유 링크를 즉시 삭제·무효화합니다.
 6. 회사는 결과물을 만드는 데 필요한 범위에서만 사진을 처리하며, 이용자의 동의 없이 사진이나 결과물을 홍보에 사용하지 않습니다.
@@ -149,7 +149,7 @@ const TERMS_KO = `## 제1조 (목적)
 
 1. 제5조를 위반하여 타인의 얼굴로 결과물을 만드는 행위
 2. 결과물을 사칭·사기·명예훼손·성적 목적 등 위법한 용도로 이용하는 행위
-3. 본인 인증을 우회하거나 다른 사람의 인증을 이용하는 행위
+3. 회사의 검증 절차나 본인 인증을 우회하거나, 다른 사람의 계정·인증을 이용하는 행위
 4. 자동화된 수단으로 서비스를 과도하게 이용하거나 콘텐츠를 대량 수집하는 행위
 5. 법령과 공서양속에 반하는 사진·콘텐츠를 올리는 행위
 
@@ -205,7 +205,7 @@ These terms govern the use of TWINGS (the "Service"), operated by ${BUSINESS.nam
    - photos showing a minor's face;
    - photos that impersonate or could be mistaken for a public figure or any third party;
    - photos of others taken, collected or copied without permission.
-3. **Templates that make a film of a real person are available only to accounts that have passed real-person verification** — a camera check that a live person is present (BytePlus real-person verification). Every photo uploaded afterwards is compared with the verified face, and **another person's face is refused.**
+3. **A photo of a real person is used for rendering only after the Company's checks.** Each upload passes the AI provider's (BytePlus) automated content moderation and is registered to **the one likeness asset group an account may hold**, usable only for that account's results. Where a report is received or an account shows warning signs, the Company may **require real-person verification — a camera check that a live person is present (BytePlus real-person verification)**; on a verified account every later photo is compared with the verified face and **another person's face is refused.** An account that is asked to verify and does not is restricted from real-person templates.
 4. You warrant that you hold the rights and consents the photo requires. You are responsible for disputes and damages arising from a breach; on learning of one the Company removes the result and may restrict the account.
 5. Anyone may report a result that uses their likeness without permission at ${BUSINESS.email}. The Company reviews a report **within ${REPORT_REVIEW_HOURS} hours** and, where an infringement is confirmed, deletes the result and voids its share link at once.
 6. The Company processes photos only as far as making the result requires, and never uses a photo or result in its promotion without your consent.
@@ -220,7 +220,7 @@ These terms govern the use of TWINGS (the "Service"), operated by ${BUSINESS.nam
 
 1. Making a result with someone else's face in breach of section 5.
 2. Using a result for impersonation, fraud, defamation, sexual purposes or any other unlawful end.
-3. Circumventing real-person verification or using another person's verification.
+3. Circumventing the Company's checks or real-person verification, or using another person's account or verification.
 4. Automated overuse of the Service or bulk collection of its content.
 5. Uploading photos or content that are unlawful or offend public order.
 
@@ -332,7 +332,7 @@ const PRIVACY_KO = `## 1. 수집하는 개인정보
 | 필수 | 이메일 주소, 프로필 이름 | Google 또는 카카오 로그인 시 |
 | 필수 | 언어 설정, 알림 설정 | 서비스 이용 시 |
 | 필수 | **얼굴 사진**(이용자가 올린 사진), 생성된 결과물 | 결과물을 만들 때 |
-| 필수 | 실인물 인증 결과(성공 여부, 인증 자산 식별자) | 실인물 영상 템플릿의 본인 인증 시 |
+| 필수 | 인물 자산 식별자(자산 그룹·자산 ID), 카메라 본인 인증을 거친 경우 그 결과 | 실제 인물 사진으로 결과물을 만들 때 |
 | 선택 | 활동 SNS 주소, 팔로워 수, 게시물 링크, 조회수 | 캠페인 지원·게시 시 |
 | 선택 | 회사명, 담당자 이름, 업무 이메일, 연락처, 예산대 | 브랜드 캠페인 의뢰 시 |
 | 자동 | 접속 기록, 브라우저 정보 | 서비스 이용 시 |
@@ -355,7 +355,7 @@ const PRIVACY_KO = `## 1. 수집하는 개인정보
 
 - 회원 정보: 회원 탈퇴 시까지. 탈퇴 요청을 받으면 7일 이내에 삭제합니다.
 - 얼굴 사진과 결과물: 결과물을 계정에서 제공하는 동안. 계정을 삭제하면 함께 삭제되며, 결과물의 공유 링크는 발급 후 ${SHARE_LINK_DAYS}일이 지나면 만료됩니다.
-- 실인물 인증 결과: 계정이 유지되는 동안. 계정 삭제 시 인증 제공자에 등록된 자산도 삭제를 요청합니다.
+- 인물 자산 식별자와 인증 결과: 계정이 유지되는 동안. 계정 삭제 시 엔진 제공자에 등록된 자산 그룹과 자산도 삭제를 요청합니다.
 - 캠페인 기록: 정산 완료 후 5년(전자상거래법·세법상 거래기록).
 - 브랜드 의뢰: 회신 후 1년.
 - 결제·거래 기록: 전자상거래법에 따라 5년간 보관합니다.
@@ -405,7 +405,7 @@ const PRIVACY_EN = `## 1. What we collect
 | Required | Email address, profile name | Google or Kakao sign-in |
 | Required | Language and notification settings | Using the Service |
 | Required | **Face photo** (the one you upload), the generated result | Making a result |
-| Required | Real-person verification outcome (pass/fail, asset identifier) | Verifying for a real-person film template |
+| Required | Likeness asset identifiers (asset group and asset IDs) and, where a camera check was run, its outcome | Making a result from a real-person photo |
 | Optional | SNS link, follower count, post link, view count | Applying to and posting in a campaign |
 | Optional | Company, contact name, work email, phone, budget range | Sending a brand enquiry |
 | Automatic | Access logs, browser information | Using the Service |
@@ -428,7 +428,7 @@ We do not collect national identification numbers. Payment instrument details (c
 
 - Account data: until you delete your account. Deletion requests are completed within 7 days.
 - Face photos and results: while the result is available in your account. They are deleted with the account; a result's share link expires ${SHARE_LINK_DAYS} days after it is issued.
-- Verification outcome: while the account exists; on deletion we also request deletion of the asset registered with the provider.
+- Likeness asset identifiers and verification outcome: while the account exists; on deletion we also request deletion of the asset group and assets registered with the provider.
 - Campaign records: 5 years after payout (e-commerce and tax record-keeping).
 - Brand enquiries: 1 year after our reply.
 - Payment and transaction records: 5 years, as required by Korean e-commerce law.
