@@ -125,3 +125,21 @@ metrics_at            'verified+hold' — 조회수 스냅샷 시점 = 홀드 �
 | `campaignApplication.select / decline / verify / reject / pay` | 그 지원자 1명 | 없음(거래 메일), 안내는 계정 페이지 | `application:{id}:{status}:{version}` |
 
 브로드캐스트 엔진은 `lib/notify/broadcast.ts`(구독자 조회, 동시성 2, 사람마다 `unsubscribePath` 서명). 같은 엔진으로 **주간 드롭 알림** `prompt.announce`(템플릿 편집기 "구독자에게 알리기", `prompt_items.announced_at`이 원샷 가드, 0023)가 "새 템플릿 알림"(`notif_new_playbook`) 구독자에게 나간다. 메일 본문은 공용 시트 `lib/notify/sheet.ts`. 테스트 `tests/campaigns/notify.test.ts`, `tests/prompts/announce.test.ts`. 구독자가 수천 명을 넘거나 Resend 분당 한도에 닿으면 이 함수 자리에 아웃박스를 넣는다.
+
+## 13. 브랜드 랜딩 재편 (2026-09-14)
+
+대표: "캠페인 페이지는 브랜드가 보고 캠페인 의뢰하는 랜딩페이지. 원리를 잘 설명하면 된다. moat = 실제 인물의 초상권 라이선스 + 고품질 콘텐츠 포맷 제작 + 실제 인플루언서를 통한 spread. 개별 광고 프로덕션도 함." `/[locale]/campaigns`의 읽는 순서를 브랜드 → 크리에이터로 뒤집었다. 캐시 모드(정적 + `campaigns` 태그 + 1h)는 그대로.
+
+| 순서 | 섹션 | 컴포넌트 | 마커 |
+| --- | --- | --- | --- |
+| 1 | 히어로 "광고 한 편이 / 수십 개의 얼굴로 / 퍼집니다." + 두 문(의뢰 `#brands` / 크리에이터 `#creators`) | `components/campaigns/brand-landing.tsx` `CampaignHero` | `data-campaign-hero` |
+| 2 | 쇼릴 — 스튜디오 포맷 4편(뷰티 16:9, 레트로 폰 9:16 ×2, 하이틴 16:9) | `CampaignReelSection` → 클라이언트 섬 `showreel.tsx` | `data-campaign-reel`, `data-reel-item` ×4 |
+| 3 | 원리 3기둥 — 실제 인물의 초상권 / 고품질 포맷 제작 / 실제 채널로 확산 + "개별 프로덕션도 받음" | `CampaignPrinciples` | `data-campaign-principles` |
+| 4 | 실적 — 글로벌 AI 플랫폼 론칭(클라이언트명 비공개): 9편 · 200만 뷰+ · 파생 오가닉 300+ | `CampaignProof` | `data-campaign-proof` |
+| 5 | 의뢰 폼(§11 그대로, 문구만 "브리프 한 번, 채널 여러 개" / 2차 활용 범위·리포트 언급) | `brand-section.tsx` | `data-brands` |
+| 6 | 크리에이터 — 레일(모집 중·진행 중) 또는 빈 상태("캠페인 알림 켜기" → `/account`), 5단계 | 기존 `rails.tsx` | `data-creators` |
+
+쇼릴 파일은 `public/reel/campaigns/*.mp4|jpg`(H.264 CRF 24, 편당 3.5~4.5MB, 포스터 프레임 동봉), 목록은 `lib/campaigns/showreel.ts`. 타일은 포스터를 HTML에 두고 `preload="none"` + IntersectionObserver 50%에서만 재생(음소거, 타일마다 소리 토글), `prefers-reduced-motion`이면 포스터+재생 버튼. 퍼블릭 버킷 대신 리포지토리에 둔 이유: 로컬 모드에서 `publicContentUrl()`이 null이고, 대역폭 여유는 호스트 쪽이 크다. 교체는 파일 스왑 + 목록 한 줄.
+
+문구 원칙: 클라이언트 실명 없음("글로벌 AI 플랫폼"), 숫자는 대표가 정한 것만, 초상권 설명은 약관 §5.3과 같은 절차(계정당 자산 그룹 1개 + 제공사 자동 검수 + 필요 시 카메라 인증). 테스트 `tests/campaigns/showreel.test.ts`, 스윕은 마커 6개 + 타일 4개 + 실명 부재를 본다.
+

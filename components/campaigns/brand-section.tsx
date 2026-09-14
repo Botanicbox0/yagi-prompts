@@ -20,7 +20,7 @@ export function BrandSection({
 }) {
   const steps = [copy.step1, copy.step2, copy.step3];
   return (
-    <section id={BRANDS_ANCHOR} data-brands className="mt-24 scroll-mt-24 border-t border-hairline pt-12 lg:mt-32 lg:pt-16">
+    <section id={BRANDS_ANCHOR} data-brands className="scroll-mt-24 pt-20 lg:pt-28">
       <p className="text-accent font-label text-eyebrow uppercase">{copy.eyebrow}</p>
       <h2 className="mt-6 font-display text-[clamp(2rem,5vw,3.5rem)] leading-[0.92] font-black whitespace-pre-line uppercase">{copy.heading}</h2>
       <p className="mt-8 max-w-detail text-body opacity-70">{copy.lede}</p>

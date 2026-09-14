@@ -911,6 +911,12 @@ async function sweepCampaigns(): Promise<void> {
     const listing = await get(`/${locale}/campaigns`);
     expectEqual(`/${locale}/campaigns renders 200`, listing.status, 200);
     expectPresent(`/${locale}/campaigns has the campaigns section`, listing.body, 'data-campaigns');
+    // 2026-09-14 — the brand landing: hero, showreel (four posters in the HTML), principles, proof, form, creators.
+    for (const marker of ['data-campaign-hero', 'data-campaign-reel', 'data-campaign-principles', 'data-campaign-proof', 'data-brands', 'data-creators']) {
+      expectPresent(`/${locale}/campaigns carries ${marker}`, listing.body, marker);
+    }
+    expectEqual(`/${locale}/campaigns paints four reel tiles`, (listing.body.match(/data-reel-item=/g) ?? []).length, 4);
+    expectPresent(`/${locale}/campaigns never names the client`, listing.body.toLowerCase().includes('morphic') ? 'named' : 'unnamed', 'unnamed');
     expectPresent(`/${locale}/campaigns self-canonicals`, listing.body, `rel="canonical" href="${BASE}/${locale}/campaigns"`);
     const landing = await get(`/${locale}`);
     expectPresent(`/${locale} nav links the campaigns tab`, landing.body, `href="/${locale}/campaigns"`);
