@@ -28,6 +28,7 @@
     "notify:worker": "tsx scripts/notify-worker.ts",
     "ark:smoke": "tsx scripts/ark-smoke.ts",
     "ark:assets:smoke": "tsx scripts/ark-assets-smoke.ts",
+    "ark:virtual:smoke": "tsx scripts/ark-virtual-smoke.ts",
     "image:smoke": "tsx scripts/image-smoke.ts"
   },
   "dependencies": {

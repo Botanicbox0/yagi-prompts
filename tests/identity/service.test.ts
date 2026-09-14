@@ -70,6 +70,9 @@ function fakeBank(): FakeBank {
       return [];
     },
     async deleteAsset() {},
+    async createAssetGroup() {
+      return { id: 'group-aigc-fake' };
+    },
     async deleteAssetGroup() {},
   };
   return bank;

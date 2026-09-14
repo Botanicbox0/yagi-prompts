@@ -82,6 +82,9 @@ function fakeAssets(state: { status: ArkAssetStatus; created: number }): ArkAsse
       return [];
     },
     async deleteAsset() {},
+    async createAssetGroup() {
+      return { id: 'group-aigc-fake' };
+    },
     async deleteAssetGroup() {},
   };
 }

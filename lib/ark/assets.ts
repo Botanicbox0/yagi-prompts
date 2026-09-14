@@ -70,11 +70,21 @@ export interface ArkAsset extends ArkAssetRecord {
   moderation: { strategy: ArkModerationStrategy };
 }
 
+/**
+ * Two kinds of group (docs 2333589 / 2333565):
+ *   LivenessFace — one real person, created by the H5 liveness flow (CreateVisualValidateSession);
+ *   AIGC         — the "digital character" library, created directly by CreateAssetGroup. BytePlus's
+ *                  account manager confirmed in writing (2026-09-13) that a person's own consented
+ *                  selfie may go through this path under Advanced Creation Rights, which is what
+ *                  removes the camera check from the product.
+ */
+export type ArkAssetGroupType = 'LivenessFace' | 'AIGC';
+
 export interface ArkAssetGroupRecord {
   id: string;
   name: string;
   description: string;
-  groupType: 'LivenessFace';
+  groupType: ArkAssetGroupType;
   projectName: string;
   createdAt: string;
   updatedAt: string;
@@ -118,9 +128,19 @@ export interface GetAssetInput {
   projectName?: string;
 }
 
+export interface CreateAssetGroupInput {
+  name: string;
+  description?: string;
+  /** Only `AIGC` can be created directly; a LivenessFace group is born from the H5 flow. */
+  groupType?: 'AIGC';
+  projectName?: string;
+}
+
 export interface ListAssetGroupsInput {
   groupIds?: string[];
   name?: string;
+  /** Defaults to LivenessFace — the identity flow's groups. */
+  groupType?: ArkAssetGroupType;
   maxResults?: number;
   sortBy?: 'CreateTime';
   sortOrder?: 'Asc' | 'Desc';
@@ -133,6 +153,8 @@ export interface ArkAssetsClient extends ArkAssetsApi {
   getVisualValidateResult(input: string | GetVisualValidateResultInput): Promise<{ groupId: string }>;
   createAsset(input: CreateAssetInput): Promise<{ id: string }>;
   getAsset(input: string | GetAssetInput): Promise<ArkAsset>;
+  /** The virtual (AIGC) library: no liveness, the console authorization letter signed once. */
+  createAssetGroup(input: CreateAssetGroupInput): Promise<{ id: string }>;
   listAssetGroups(input?: ListAssetGroupsInput): Promise<ArkAssetGroupRecord[]>;
 }
 
@@ -150,6 +172,7 @@ type ArkAction =
   | 'CreateVisualValidateSession'
   | 'GetVisualValidateResult'
   | 'CreateAsset'
+  | 'CreateAssetGroup'
   | 'GetAsset'
   | 'ListAssets'
   | 'ListAssetGroups'
@@ -318,6 +341,17 @@ export function createArkAssetsClient(
       return { id: requiredString(result.Id, 'CreateAsset.Id') };
     },
 
+    async createAssetGroup(input) {
+      const body: Record<string, unknown> = {
+        Name: input.name,
+        GroupType: input.groupType ?? 'AIGC',
+        ProjectName: input.projectName ?? config.projectName,
+      };
+      if (input.description !== undefined) body.Description = input.description;
+      const result = await call('CreateAssetGroup', body);
+      return { id: requiredString(result.Id, 'CreateAssetGroup.Id') };
+    },
+
     async getAsset(input) {
       const normalized = typeof input === 'string' ? { id: input } : input;
       const result = await call('GetAsset', {
@@ -355,7 +389,7 @@ export function createArkAssetsClient(
       const seenTokens = new Set<string>();
       const maxResults = clampMaxResults(input.maxResults);
       do {
-        const wireFilter: Record<string, unknown> = { GroupType: 'LivenessFace' };
+        const wireFilter: Record<string, unknown> = { GroupType: input.groupType ?? 'LivenessFace' };
         if (input.groupIds !== undefined) wireFilter.GroupIds = input.groupIds;
         if (input.name !== undefined) wireFilter.Name = input.name;
         const body: Record<string, unknown> = {
@@ -507,7 +541,8 @@ function mapAsset(item: Record<string, unknown>): ArkAsset {
     ...mapAssetRecord(item),
     assetType: assetType(item.AssetType),
     name: stringOrNull(item.Name) ?? '',
-    url: requiredString(item.URL, 'asset.URL'),
+    // An AIGC asset answers GetAsset without a URL while it is processing (2026-09-14, observed live).
+    url: stringOrNull(item.URL) ?? '',
     updatedAt: requiredString(item.UpdateTime, 'asset.UpdateTime'),
     projectName: requiredString(item.ProjectName, 'asset.ProjectName'),
     moderation: { strategy: moderationStrategy(asRecord(item.Moderation).Strategy) },
@@ -515,14 +550,14 @@ function mapAsset(item: Record<string, unknown>): ArkAsset {
 }
 
 function mapAssetGroup(item: Record<string, unknown>): ArkAssetGroupRecord {
-  if (item.GroupType !== 'LivenessFace') {
+  if (item.GroupType !== 'LivenessFace' && item.GroupType !== 'AIGC') {
     throw new ArkOpenApiError('ark_openapi_malformed', 'asset group type is invalid', null, 0, false);
   }
   return {
     id: requiredString(item.Id, 'assetGroup.Id'),
     name: stringOrNull(item.Name) ?? '',
     description: stringOrNull(item.Description) ?? '',
-    groupType: 'LivenessFace',
+    groupType: item.GroupType,
     projectName: requiredString(item.ProjectName, 'assetGroup.ProjectName'),
     createdAt: requiredString(item.CreateTime, 'assetGroup.CreateTime'),
     updatedAt: requiredString(item.UpdateTime, 'assetGroup.UpdateTime'),
