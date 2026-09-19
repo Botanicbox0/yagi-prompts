@@ -1,10 +1,12 @@
 import '@/app/globals.css';
+import '@/app/(admin)/workspace.css';
 import type { Metadata, Viewport } from 'next';
 import type { ReactNode } from 'react';
 import { fontVariables } from '@/app/fonts';
 import { getDictionary } from '@/lib/i18n/dictionaries';
 import { getRequestLocale } from '@/lib/i18n/server';
 import { RegisterServiceWorker } from '@/components/pwa/register-sw';
+import { requestSurface } from '@/lib/routing/request-surface';
 
 /**
  * Root layout for the authenticated app surface (§4: `/library`, `/account`, `/billing/*`).
@@ -38,9 +40,11 @@ export async function generateMetadata(): Promise<Metadata> {
  */
 export default async function AppRootLayout({ children }: { children: ReactNode }) {
   const locale = await getRequestLocale();
+  const { admin } = await requestSurface();
   return (
-    <html lang={locale} className={fontVariables}>
+    <html lang={locale} className={fontVariables} data-workspace-admin={admin || undefined}>
       <head>
+        {admin && <link rel="stylesheet" href="/fonts/helvetica-neue/helvetica-neue.css" />}
         <link rel="stylesheet" href="/fonts/pretendard/pretendard-dynamic-subset.css" />
         <link rel="stylesheet" href="/fonts/pretendard/pretendard-hangul-mono.css" />
       </head>

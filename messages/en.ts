@@ -1171,6 +1171,7 @@ export const en = {
    */
   admin: {
     brand: 'TWINGS CMS',
+    byline: 'by yagi workshop',
     navPrompts: 'Templates',
     navContests: 'Contests',
     navCampaigns: 'Campaigns',

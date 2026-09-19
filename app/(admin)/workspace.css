@@ -1,0 +1,42 @@
+/* Admin-only typography. Consumer and marketing roots never carry this attribute. */
+html[data-workspace-admin][lang] {
+  --workspace-font: 'TWINGS Helvetica Neue', 'Pretendard Variable',
+    'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+  --workspace-code-font: 'Pretendard Hangul', var(--font-geist-mono), ui-monospace, monospace;
+  --stack-display: var(--workspace-font);
+  --stack-label: var(--workspace-font);
+  --stack-body: var(--workspace-font);
+  /* Legacy admin markup uses font-mono for ordinary labels, hints and form fields. */
+  --stack-mono: var(--workspace-font);
+  font-synthesis: none;
+}
+
+html[data-workspace-admin] :is(code, pre, kbd, samp) {
+  font-family: var(--workspace-code-font);
+}
+
+html[data-workspace-admin] .workspace-brand {
+  display: inline-flex;
+  min-height: 44px;
+  flex: none;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  line-height: 1;
+}
+
+html[data-workspace-admin] .workspace-brand-byline {
+  margin: 5px 0 0 41px;
+  font-family: var(--workspace-font);
+  font-size: 8.5px;
+  font-weight: 400;
+  line-height: 1.2;
+  letter-spacing: .01em;
+  text-transform: none;
+  white-space: nowrap;
+  opacity: .6;
+}
+
+html[data-workspace-admin] .workspace-auth-brand .workspace-brand-byline {
+  margin-left: 50px;
+}

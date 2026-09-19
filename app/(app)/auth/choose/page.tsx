@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { TwingsMark } from '@/components/brand/twings-mark';
+import { TwingsLogo, TwingsMark } from '@/components/brand/twings-mark';
 import { DEFAULT_LOCALE, isLocale, type Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/dictionaries';
 import { AUTH_PROVIDERS, signInWithProviderHref, type AuthProvider } from '@/lib/auth/providers';
@@ -119,9 +119,18 @@ export default async function ChooseProviderPage(props: RouteProps) {
   return (
     <main data-auth-choose className="mx-auto flex min-h-svh w-full max-w-shell flex-col items-center justify-center px-gutter py-16">
       <div className="flex w-full max-w-[22rem] flex-col items-center text-center">
-        <a href={publicHref(`/${locale}`, admin)} className="inline-flex items-center gap-2.5">
-          <TwingsMark className="h-7" />
-          <span className="font-display text-[1.05rem] leading-none font-black tracking-[0.02em] uppercase">{dict.meta.siteName}</span>
+        <a href={publicHref(`/${locale}`, admin)} className={admin ? 'workspace-brand workspace-auth-brand' : 'inline-flex items-center gap-2.5'}>
+          {admin ? (
+            <>
+              <TwingsLogo size={22} />
+              <span className="workspace-brand-byline">{dict.admin.byline}</span>
+            </>
+          ) : (
+            <>
+              <TwingsMark className="h-7" />
+              <span className="font-display text-[1.05rem] leading-none font-black tracking-[0.02em] uppercase">{dict.meta.siteName}</span>
+            </>
+          )}
         </a>
 
         <h1 className="mt-12 font-display text-[1.75rem] leading-tight font-black uppercase">{dict.auth.chooseTitle}</h1>

@@ -11,7 +11,7 @@ import {
   ContestPrize,
 } from '@/components/contests/detail';
 import { contestLabels } from '@/components/contests/labels';
-import { BUTTON } from '@/components/admin/chrome';
+import { AdminBrand, BUTTON } from '@/components/admin/chrome';
 
 /**
  * `/admin/contests/[slug]/preview` — PLAN §14.2: "draft = admin preview path".
@@ -52,9 +52,7 @@ export default async function AdminContestPreviewPage({
     <div data-section data-theme="light" className="section min-h-screen">
       <header className="border-b border-hairline">
         <div className="mx-auto flex max-w-shell flex-wrap items-center justify-between gap-4 px-gutter py-4">
-          <span className="font-display text-[1.05rem] leading-none font-black uppercase">
-            {dict.admin.brand}
-          </span>
+          <AdminBrand dict={dict.admin} />
           <a href={ADMIN_CONTESTS_PATH} className={BUTTON}>
             {dict.admin.editorBack}
           </a>

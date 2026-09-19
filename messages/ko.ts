@@ -1130,6 +1130,7 @@ export const ko: Dictionary = {
   },
   admin: {
     brand: 'TWINGS 관리자',
+    byline: 'by yagi workshop',
     navPrompts: '템플릿',
     navContests: '콘테스트',
     navCampaigns: '캠페인',

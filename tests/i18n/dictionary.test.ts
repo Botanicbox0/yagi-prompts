@@ -77,6 +77,8 @@ describe('dictionary completeness (§3.9)', () => {
       // a different brand rather than a translation — the same reason `meta.siteName` is here.
       'featured.badge',
       'admin.sourceYagi',
+      // Founder-specified studio attribution is a fixed brand lockup in both locales.
+      'admin.byline',
       // M9: "SNS" is the ordinary Korean word for the thing (SNS 계정), borrowed wholesale from
       // English and used unchanged in Korean copy. "소셜 미디어" would be a translation of the
       // English phrase rather than the Korean term for it.
