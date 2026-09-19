@@ -18,6 +18,7 @@ describe('migrations apply on a fresh database (PLAN §6)', () => {
         where table_schema = 'public' and table_type = 'BASE TABLE' order by table_name`,
     );
     expect(rows.map((r) => r.table_name)).toEqual([
+      'billing_payments',
       'blocks',
       // 2026-09-11 — the brand enquiry form on the campaigns page: one row per enquiry, studio-only.
       'brand_inquiries',
