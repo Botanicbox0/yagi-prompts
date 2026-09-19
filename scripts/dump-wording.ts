@@ -42,7 +42,7 @@ for (const key of [...enMap.keys()].sort()) {
     uses.map((use) => `${use.file}:${use.line} [${use.kind}]`).join('\n'),
     routes.join('\n'),
     /(^|\.)(email|notify)(\.|$)/.test(key) || uses.some((use) => /notify|mailer|announce/.test(use.file)) ? 'email-or-shared; approval required for outbound copy' : 'ui-or-metadata; visibility depends on route/state',
-    review ? 'human-reviewed-candidate' : 'rule-triage; human-review-pending',
+    review ? 'context-reviewed-candidate' : 'rule-triage; context-review-pending',
     koScore.clarity, koScore.specificity, koScore.naturalness,
     enScore.clarity, enScore.specificity, enScore.naturalness,
     min <= 2 ? 'review-priority' : 'no-low-score; not-an-approval',
@@ -61,11 +61,11 @@ const summary = {
   source: { en_sha256: createHash('sha256').update(fs.readFileSync(path.join(root, 'messages/en.ts'))).digest('hex'), ko_sha256: createHash('sha256').update(fs.readFileSync(path.join(root, 'messages/ko.ts'))).digest('hex') },
   dictionaryKeys: enMap.size, stringValues: enMap.size + koMap.size,
   referencedKeys: referenced, noStaticReferenceCandidates: enMap.size - referenced,
-  humanReviewedKeys: Object.keys(reviews).length, ruleTriageOnlyKeys: enMap.size - Object.keys(reviews).length,
+  contextReviewedKeys: Object.keys(reviews).length, ruleTriageOnlyKeys: enMap.size - Object.keys(reviews).length,
   changedProposalKeys: Object.values(reviews).filter((review) => review.source_ko !== review.proposed_ko || review.source_en !== review.proposed_en).length,
   reviewPriorityKeys: flagged, routeEntries: inventory.routeFiles.length,
   hardcodedCandidates: inventory.literals.length, sections,
-  limits: ['Import reachability is conservative, not runtime visibility.', 'No static reference is a removal candidate, not proof of dead code.', 'Rule scores default to 3 (unassessed), not a human quality grade.', 'CMS content, provider widgets and legal bodies are outside dictionary inventory; see README.'],
+  limits: ['Import reachability is conservative, not runtime visibility.', 'No static reference is a removal candidate, not proof of dead code.', 'Rule scores default to 3 (unassessed), not an editorial quality grade.', 'CMS content, provider widgets and legal bodies are outside dictionary inventory; see README.'],
 };
 const md = (value: string) => value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('|', '&#124;').replace(/\r?\n/g, '<br>');
 const proposals = Object.entries(reviews).filter(([, review]) => review.source_ko !== review.proposed_ko || review.source_en !== review.proposed_en);

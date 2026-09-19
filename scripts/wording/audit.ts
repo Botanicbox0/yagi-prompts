@@ -12,7 +12,7 @@ export interface Review {
   topic: string;
 }
 
-/** A transparent triage, not a substitute for a human language review. 3 = unassessed. */
+/** A transparent triage, not a substitute for a contextual language review. 3 = unassessed. */
 export function triage(key: string, text: string, locale: 'ko' | 'en'): { scores: Scores; flags: string[] } {
   const scores: Scores = { clarity: 3, specificity: 3, naturalness: 3 };
   const flags: string[] = [];

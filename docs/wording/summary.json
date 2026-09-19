@@ -7,7 +7,7 @@
   "stringValues": 2982,
   "referencedKeys": 1270,
   "noStaticReferenceCandidates": 221,
-  "humanReviewedKeys": 232,
+  "contextReviewedKeys": 232,
   "ruleTriageOnlyKeys": 1259,
   "changedProposalKeys": 110,
   "reviewPriorityKeys": 202,
@@ -55,7 +55,7 @@
   "limits": [
     "Import reachability is conservative, not runtime visibility.",
     "No static reference is a removal candidate, not proof of dead code.",
-    "Rule scores default to 3 (unassessed), not a human quality grade.",
+    "Rule scores default to 3 (unassessed), not an editorial quality grade.",
     "CMS content, provider widgets and legal bodies are outside dictionary inventory; see README."
   ]
 }
