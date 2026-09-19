@@ -18,6 +18,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     // Nothing to sign out of (placeholder env) — the redirect below is still the right answer.
   }
 
-  const destination = url.hostname === 'admin.twings.app' ? chooseProviderHref('/admin', locale) : localizedPath(locale, '/');
+  const destination = url.hostname === 'admin.twings.app' ? chooseProviderHref('/admin', locale) : url.hostname === 'brand.twings.app' ? chooseProviderHref('/brand', locale) : localizedPath(locale, '/');
   return NextResponse.redirect(new URL(destination, url.origin), { status: 303 });
 }

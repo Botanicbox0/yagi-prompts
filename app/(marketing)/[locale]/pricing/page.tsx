@@ -7,9 +7,10 @@ import { getPromptCatalog } from '@/lib/prompts/public-catalog';
 import { templateHref, templatesHref } from '@/lib/prompts/links';
 import { SITE_OG_IMAGE, SITE_TWITTER_CARD } from '@/lib/seo/og';
 import { MarketingFooter, MarketingNav } from '@/components/marketing/chrome';
-import { Faq } from '@/components/landing/faq';
+import { FaqSection } from '@/lib/seo/faq-section';
 import { Reveal } from '@/components/motion/reveal';
 import { TextSwap } from '@/components/ui/text-swap';
+import { RENDER_PIPELINE_PUBLIC } from '@/lib/flags';
 
 /**
  * Pricing — docs/TEMPLATES-IA.md §4: one price per template, paid per render, no subscription.
@@ -69,6 +70,8 @@ export default async function PricingPage({ params }: { params: Promise<{ locale
             <p className="text-accent font-label text-eyebrow uppercase">{p.eyebrow}</p>
             <Reveal immediate delay={0.05} as="h1" lines={[p.line1, p.line2]} className="mt-7 font-display text-title font-black uppercase" />
             <p className="mt-8 max-w-detail text-body opacity-70">{p.lede}</p>
+            {!RENDER_PIPELINE_PUBLIC && <p data-generation-availability className="mt-6 max-w-detail border-l-2 border-current pl-4 text-sm leading-relaxed">{dict.seo.generationClosed}</p>}
+            <p data-service-definition className="mt-6 max-w-detail text-body opacity-70">{dict.seo.definition}</p>
 
             <div data-pricing-films className="mt-10 flex flex-wrap items-end justify-between gap-6 border border-hairline p-6">
               <div>
@@ -123,19 +126,7 @@ export default async function PricingPage({ params }: { params: Promise<{ locale
           </div>
         </section>
 
-        <section data-section data-theme="dark" className="section">
-          <Faq
-            eyebrow={dict.faq.eyebrow}
-            title={dict.faq.title}
-            items={[
-              { q: dict.faq.q2, a: dict.faq.a2 },
-              { q: dict.faq.q4, a: dict.faq.a4 },
-              { q: dict.faq.q8, a: dict.faq.a8 },
-              { q: dict.faq.q3, a: dict.faq.a3 },
-              { q: dict.faq.q1, a: dict.faq.a1 },
-            ]}
-          />
-        </section>
+        <FaqSection dict={dict} locale={locale} placement="template" path={`/${locale}/pricing`} theme="dark" />
       </main>
 
       <MarketingFooter locale={locale} dict={dict} />

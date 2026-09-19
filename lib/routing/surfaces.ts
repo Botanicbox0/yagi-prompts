@@ -1,6 +1,6 @@
 import { safeReturnPath } from '@/lib/auth/return-path';
 
-export type Surface = 'consumer' | 'admin' | 'brands' | 'unknown';
+export type Surface = 'consumer' | 'admin' | 'brand' | 'brands' | 'unknown';
 export const SURFACE_HEADER = 'x-twings-surface';
 export const REQUEST_ORIGIN_HEADER = 'x-twings-request-origin';
 
@@ -19,6 +19,7 @@ const LOOPBACK = ['localhost', '127.0.0.1', '[::1]'];
 function surfaceForUrl(url: URL, deploymentHosts: Array<string | undefined>): Surface {
   const hostname = url.hostname.toLowerCase();
   if (hostname === 'admin.twings.app' && !url.port) return 'admin';
+  if (hostname === 'brand.twings.app' && !url.port) return 'brand';
   if (hostname === 'brands.twings.app' && !url.port) return 'brands';
   if (['twings.app', 'www.twings.app', 'yagi-prompts.vercel.app'].includes(hostname) && !url.port) return 'consumer';
   if (LOOPBACK.includes(hostname)) return 'consumer';
@@ -53,6 +54,11 @@ export function isAdminPath(pathname: string): boolean {
   return pathname === '/admin' || pathname.startsWith('/admin/');
 }
 
+/** Public logo files share /brand, but are not authenticated workspace routes. */
+export function isBrandPath(pathname: string): boolean {
+  return pathname === '/brand' || /^\/brand\/(?:projects|members|invite)(?:\/|$)/.test(pathname);
+}
+
 const AUTH_METHODS: Record<string, readonly string[]> = {
   '/auth/choose': ['GET', 'HEAD'],
   '/auth/open-in-browser': ['GET', 'HEAD'],
@@ -67,28 +73,46 @@ export function adminRouteAllowed(pathname: string, method: string): boolean {
   if (pathname === '/admin/do') return method === 'POST';
   if (isAdminPath(pathname)) return read;
   if (pathname === '/api/admin/staging-url') return method === 'POST';
+  if (pathname === '/api/admin/brand-workspace') return method === 'POST';
+  if (/^\/api\/admin\/brand-workspace\/attachments\/[^/]+$/.test(pathname)) return method === 'POST';
   if (/^\/api\/admin\/media\/[^/]+$/.test(pathname)) return read;
+  // The handler rechecks the current studio role; brand reference files stay private.
+  if (/^\/api\/brand-workspace\/attachments\/[^/]+$/.test(pathname)) return read;
   if (!read) return false;
   if (pathname.startsWith('/_next/static/')) return true;
   if (/^\/fonts\/[a-zA-Z0-9_./-]+\.(?:css|woff2?)$/.test(pathname)) return true;
   return ['/favicon.ico', '/icon.png', '/apple-icon.png', '/brand/twings.svg', '/brand/twings-mark-black.png', '/brand/twings-mark-white.png', '/brand/twings-mark-mask.png'].includes(pathname);
 }
 
+export function brandRouteAllowed(pathname: string, method: string): boolean {
+  const read = method === 'GET' || method === 'HEAD';
+  if (AUTH_METHODS[pathname]?.includes(method)) return true;
+  if (isBrandPath(pathname)) return read;
+  if (pathname === '/api/brand-workspace') return method === 'POST';
+  if (/^\/api\/brand-workspace\/attachments\/[^/]+$/.test(pathname)) return read || method === 'POST';
+  return read && !pathname.startsWith('/api/') && !isAdminPath(pathname) && adminRouteAllowed(pathname, method);
+}
+
 /** Former matcher exclusions now run only AFTER the host policy, preserving consumer behavior. */
 export function bypassConsumerLocale(pathname: string): boolean {
+  if (pathname === '/llms.txt' || pathname === '/llms-full.txt') return true;
   return /^\/(?:_next\/static|_next\/image|favicon\.ico|sitemap\.xml|robots\.txt|sw\.js|offline\.html|manifest\.webmanifest|fonts\/|\.storage\/|api\/|auth\/|r\/)/.test(pathname)
     || /\.(?:svg|png|jpg|jpeg|gif|webp|mp4|webm|woff2?)$/.test(pathname);
 }
 
 export function authReturnPath(raw: unknown, hostname: string, fallback: string): string {
-  const path = safeReturnPath(raw, hostname === 'admin.twings.app' ? '/admin' : fallback);
-  return hostname === 'admin.twings.app' && !isAdminPath(new URL(path, 'https://path.invalid').pathname) ? '/admin' : path;
+  const base = hostname === 'admin.twings.app' ? '/admin' : hostname === 'brand.twings.app' ? '/brand' : fallback;
+  const path = safeReturnPath(raw, base);
+  const pathname = new URL(path, 'https://path.invalid').pathname;
+  if (hostname === 'admin.twings.app' && !isAdminPath(pathname)) return '/admin';
+  if (hostname === 'brand.twings.app' && !isBrandPath(pathname)) return '/brand';
+  return path;
 }
 
 export function authFailurePath(hostname: string, locale: string, error: string, next = '/admin'): string {
   const query = new URLSearchParams({ error });
-  if (hostname === 'admin.twings.app') {
-    query.set('next', authReturnPath(next, hostname, '/admin'));
+  if (hostname === 'admin.twings.app' || hostname === 'brand.twings.app') {
+    query.set('next', authReturnPath(next, hostname, hostname === 'brand.twings.app' ? '/brand' : '/admin'));
     query.set('locale', locale);
     return `/auth/choose?${query}`;
   }

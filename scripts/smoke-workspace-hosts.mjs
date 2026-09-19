@@ -11,6 +11,7 @@ import http from 'node:http';
 const PORT = Number(process.argv[2] ?? 3000);
 if (!Number.isInteger(PORT) || PORT < 1 || PORT > 65535) throw new Error('Expected a valid local port');
 const ADMIN = 'admin.twings.app';
+const BRAND = 'brand.twings.app';
 const BRANDS = 'brands.twings.app';
 const FONT = '/fonts/pretendard/pretendard-dynamic-subset.css';
 const cases = [];
@@ -41,13 +42,20 @@ for (const path of ['/ko/video', '/account', '/api/renders/access', '/api/brands
   blocked('admin closed route', ADMIN, path);
 }
 
-for (const host of [ADMIN, BRANDS]) {
+for (const host of [ADMIN, BRAND, BRANDS]) {
   add('workspace robots', host, '/robots.txt', { status: 200, robotsClosed: true, noindex: true, private: true });
   add('workspace robots HEAD', host, '/robots.txt', { status: 200, empty: true, noindex: true, private: true }, { method: 'HEAD' });
 }
-for (const path of ['/', '/ko/video', '/auth/choose', '/api/renders/access', '/admin', FONT, '/anything.png']) {
-  blocked('brands not open', BRANDS, path);
+add('brand root', BRAND, '/', redirect(307, '/brand', {}, true));
+add('brand anonymous entry', BRAND, '/brand', redirect(307, '/auth/choose', {next:'/brand',locale:'ko'}, true));
+add('brand project return', BRAND, '/brand/projects/example', redirect(307, '/auth/choose', {next:'/brand/projects/example',locale:'ko'}, true));
+add('brand chooser renders', BRAND, '/auth/choose?next=%2Fbrand&locale=ko', {status:200,html:true,noindex:true,private:true,providerNext:'/brand'});
+add('brand font', BRAND, FONT, {status:200,css:true,noindex:true});
+add('plural brand alias', BRANDS, '/', {status:308,locationPath:'/brand',locationHost:BRAND,private:true,noindex:true});
+for (const path of ['/ko/video', '/auth/choose', '/api/renders/access', '/admin', FONT, '/anything.png']) {
+  blocked('plural alias closed route', BRANDS, path);
 }
+for (const path of ['/admin', '/account', '/api/admin/staging-url', '/api/renders/access', '/sitemap.xml','/sw.js']) blocked('brand closed route', BRAND, path);
 for (const path of ['/', '/ko/video', '/robots.txt', FONT, '/_next/static/probe.js']) {
   blocked('unknown host', 'unlisted.example.invalid', path);
 }
@@ -112,6 +120,7 @@ function inspect(test, response) {
       const target = new URL(response.headers.location, `http://${test.host}`);
       location = target.host === test.host ? target.pathname : '[different-host]';
       if (expected.sameHost) check(target.host === test.host, 'redirect changed host');
+      if (expected.locationHost) check(target.host === expected.locationHost, 'alias target mismatch');
       if (expected.locationPath) check(target.pathname === expected.locationPath, 'redirect pathname mismatch');
       for (const [key, value] of Object.entries(expected.locationQuery ?? {})) check(target.searchParams.get(key) === value, `redirect ${key} mismatch`);
       if (expected.noQuery) check(target.search === '', 'root redirect retained query');

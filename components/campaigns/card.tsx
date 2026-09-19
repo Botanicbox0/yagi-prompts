@@ -1,5 +1,4 @@
 import type { CampaignCard } from '@/lib/campaigns/catalog';
-import { payoutHeadline } from '@/lib/campaigns/copy';
 import { campaignHref } from '@/lib/campaigns/links';
 import { formatDate, interpolate, localize } from '@/lib/i18n/format';
 import type { PromptCard } from '@/lib/prompts/catalog';
@@ -84,11 +83,8 @@ export function CampaignCardView({
       </div>
 
       <div className="flex flex-1 flex-col gap-3 p-4">
-        {/* The money first — it is the question every creator asks first. */}
+        {/* Public recruitment describes the work; payment terms belong to the creator's application. */}
         <p className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-          <span data-card-payout className="font-display text-[1.6rem] leading-none font-black">
-            {card.payout ? payoutHeadline(card.payout, locale, labels.payout) : '—'}
-          </span>
           <span className="font-label text-[0.7rem] tracking-[0.12em] uppercase opacity-55">
             {card.platforms.map((p) => labels.platform[p]).join(' · ')} · {labels.deliverable[card.deliverable]}
           </span>

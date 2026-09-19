@@ -25,6 +25,13 @@ import {
   type ApplyField,
 } from './schemas';
 import { acceptsApplications, acceptsPosts, isCampaignPublic } from './state';
+import { toCampaignCard, type CampaignCard } from './catalog';
+
+/** A creator receives their participation terms, never the brand's internal budget row. */
+export type CreatorCampaign = CampaignCard & Pick<CampaignRow, 'payout'>;
+function creatorCampaign(row: CampaignRow, slotsTaken = 0): CreatorCampaign {
+  return { ...toCampaignCard(row, slotsTaken), payout: row.payout };
+}
 
 /**
  * The creator's three moves — apply, submit the post link, report the seven-day views — as one
@@ -59,7 +66,7 @@ export interface ApplyInputRaw {
 }
 
 export interface ApplyState {
-  campaign: CampaignRow;
+  campaign: CreatorCampaign;
   existing: ApplicationRow | null;
   open: boolean;
   slotsLeft: number;
@@ -73,7 +80,7 @@ export async function loadApplyState(deps: CampaignServiceDeps, slug: string, us
   const counts = await loadCampaignCounts(deps.sql, [campaign.id]);
   const taken = counts.get(campaign.id)?.slotsTaken ?? 0;
   return {
-    campaign,
+    campaign: creatorCampaign(campaign, taken),
     existing,
     open: acceptsApplications(campaign, deps.now ?? Date.now()),
     slotsLeft: Math.max(0, campaign.slots - taken),
@@ -200,7 +207,7 @@ export async function reportCampaignViews(
 
 export interface MyCampaign {
   application: ApplicationRow;
-  campaign: CampaignRow;
+  campaign: CreatorCampaign;
   canPost: boolean;
   canReportViews: boolean;
 }
@@ -214,7 +221,7 @@ export async function loadMyCampaigns(deps: CampaignServiceDeps, userId: string)
     if (campaign === null) continue;
     out.push({
       application,
-      campaign,
+      campaign: creatorCampaign(campaign),
       canPost: (application.status === 'selected' || application.status === 'rejected') && acceptsPosts(campaign, now),
       canReportViews: application.status === 'posted' || application.status === 'verified',
     });

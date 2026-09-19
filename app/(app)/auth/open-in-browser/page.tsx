@@ -5,6 +5,7 @@ import { DEFAULT_LOCALE, isLocale, type Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/dictionaries';
 import { authReturnPath } from '@/lib/routing/surfaces';
 import { requestSurface } from '@/lib/routing/request-surface';
+import { BrowserAddress } from '@/components/brand-workspace/browser-address';
 
 /**
  * `/auth/open-in-browser?next=…&locale=…` — design review F1.
@@ -20,7 +21,8 @@ import { requestSurface } from '@/lib/routing/request-surface';
  * supplies `noindex` and force-dynamic; auth skips middleware session refresh, which is why the
  * signin redirect writes the locale cookie the layout resolves `<html lang>` from.
  *
- * No JavaScript on purpose: a WebView that blocks OAuth is not a place to depend on anything.
+ * The generic destination is server-rendered. An invitation can additionally restore its
+ * fragment from this browser's sessionStorage, never from an OAuth/server query parameter.
  */
 export const dynamic = 'force-dynamic';
 
@@ -36,8 +38,8 @@ async function resolve(props: RouteProps) {
   const params = await props.searchParams;
   const rawLocale = first(params.locale);
   const locale: Locale = isLocale(rawLocale) ? rawLocale : DEFAULT_LOCALE;
-  const { admin, origin } = await requestSurface();
-  const next = authReturnPath(first(params.next), admin ? 'admin.twings.app' : '', '/');
+  const { admin, brand, origin } = await requestSurface();
+  const next = authReturnPath(first(params.next), admin ? 'admin.twings.app' : brand ? 'brand.twings.app' : '', '/');
   return { dict: getDictionary(locale), next, origin };
 }
 
@@ -73,12 +75,7 @@ export default async function OpenInBrowserPage(props: RouteProps) {
         {dict.auth.webviewUrlLabel}
       </p>
       {/* `select-all`: one long-press selects the WHOLE address — the copy this page exists for. */}
-      <p
-        data-webview-next
-        className="mt-3 border border-hairline p-4 font-mono text-code break-all select-all"
-      >
-        {origin ? new URL(next, origin).href : absoluteUrl(next)}
-      </p>
+      <BrowserAddress target={origin ? new URL(next, origin).href : absoluteUrl(next)} />
 
       <p className="mt-6 font-mono text-[0.72rem] leading-relaxed opacity-45">
         {dict.auth.webviewMenuHint}

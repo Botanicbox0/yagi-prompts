@@ -4,8 +4,10 @@ import { devIdentityUserId } from '@/lib/auth/dev-identity';
 import { chooseProviderHref } from '@/lib/auth/providers';
 import {
   adminRouteAllowed,
+  brandRouteAllowed,
   bypassConsumerLocale,
   isAdminPath,
+  isBrandPath,
   REQUEST_ORIGIN_HEADER,
   resolveRequestUrl,
   resolveSurface,
@@ -46,13 +48,25 @@ export async function middleware(request: NextRequest) {
   const surface = resolveSurface(new URL(request.url), request.headers);
   const privateHeaders = { 'Cache-Control': NO_STORE, 'X-Robots-Tag': 'noindex, nofollow' };
   if (surface === 'unknown' || requestUrl === null) return new NextResponse(null, { status: 404, headers: privateHeaders });
-  if ((surface === 'admin' || surface === 'brands') && pathname === '/robots.txt' && ['GET', 'HEAD'].includes(request.method)) {
+  if (['admin', 'brand', 'brands'].includes(surface) && pathname === '/robots.txt' && ['GET', 'HEAD'].includes(request.method)) {
     return new NextResponse(request.method === 'HEAD' ? null : 'User-agent: *\nDisallow: /\n', {
       headers: { ...privateHeaders, 'Content-Type': 'text/plain; charset=utf-8' },
     });
   }
-  // Brand organization membership and the real workspace are not implemented yet.
-  if (surface === 'brands') return new NextResponse(null, { status: 404, headers: privateHeaders });
+  // The historical plural host only redirects navigation. Never carry OAuth codes or POSTs.
+  if (surface === 'brands') {
+    if (!['GET', 'HEAD'].includes(request.method) || (pathname !== '/' && !isBrandPath(pathname))) return new NextResponse(null, { status: 404, headers: privateHeaders });
+    const target = new URL('https://brand.twings.app');
+    target.pathname = pathname === '/' ? '/brand' : pathname;
+    if (pathname !== '/') target.search = search;
+    return NextResponse.redirect(target, { status: 308, headers: privateHeaders });
+  }
+  if (surface === 'brand') {
+    if (pathname === '/' && ['GET', 'HEAD'].includes(request.method)) {
+      return NextResponse.redirect(new URL('/brand', requestUrl), { status: 307, headers: privateHeaders });
+    }
+    if (!brandRouteAllowed(pathname, request.method) || (!['GET', 'HEAD'].includes(request.method) && !sameOriginMutation(requestUrl, request.headers))) return new NextResponse(null, { status: 404, headers: privateHeaders });
+  }
   if (surface === 'admin') {
     if (pathname === '/' && ['GET', 'HEAD'].includes(request.method)) {
       const target = new URL(requestUrl); target.pathname = '/admin'; target.search = '';
@@ -81,14 +95,14 @@ export async function middleware(request: NextRequest) {
   // Unlike the old matcher exclusion, this cannot bypass the workspace host policy above.
   if (bypassConsumerLocale(pathname) || (surface === 'admin' && !isAdminPath(pathname))) {
     const response = NextResponse.next({ request: { headers: requestHeaders } });
-    if (surface === 'admin') for (const [key, value] of Object.entries(privateHeaders)) response.headers.set(key, value);
+    if (surface === 'admin' || surface === 'brand') for (const [key, value] of Object.entries(privateHeaders)) response.headers.set(key, value);
     return response;
   }
 
   const { response, user } = await updateSession(request, requestHeaders);
 
   // --- app surface: session required, never cached, never indexed ---------
-  if (isAppPath(pathname)) {
+  if (isAppPath(pathname) || isBrandPath(pathname)) {
     response.headers.set('Cache-Control', NO_STORE);
     response.headers.set('X-Robots-Tag', 'noindex, nofollow');
 
@@ -96,9 +110,12 @@ export async function middleware(request: NextRequest) {
     // identity has to be honoured here too, or `/account` and `/billing/*` would bounce during a
     // local render-verify even though every component below would resolve the right viewer. Same
     // fences as everywhere else: dead code under NODE_ENV=production, explicit env otherwise.
-    if (!user && devIdentityUserId() === null) {
+    // The invitation page holds no organization data. Its client clears the fragment token
+    // before OAuth navigation; membership is checked only by the authenticated accept API.
+    const invitationLanding = pathname === '/brand/invite' && ['GET', 'HEAD'].includes(request.method);
+    if (!invitationLanding && !user && devIdentityUserId() === null) {
       const target = new URL(requestUrl);
-      if (surface === 'admin') {
+      if (surface === 'admin' || surface === 'brand' || isBrandPath(pathname)) {
         if (!['GET', 'HEAD'].includes(request.method)) return withCookies(new NextResponse(null, { status: 404, headers: privateHeaders }), response);
         const chooser = new URL(chooseProviderHref(`${pathname}${search}`, locale), target.origin);
         return withCookies(NextResponse.redirect(chooser, { headers: privateHeaders }), response);
@@ -107,7 +124,7 @@ export async function middleware(request: NextRequest) {
       target.search = '';
       target.searchParams.set('signin', '1');
       target.searchParams.set('next', `${pathname}${search}`);
-      return withCookies(NextResponse.redirect(target), response);
+      return withCookies(NextResponse.redirect(target, { headers: privateHeaders }), response);
     }
     return response;
   }

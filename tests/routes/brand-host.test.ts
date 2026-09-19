@@ -1,0 +1,50 @@
+import { describe, expect, it, vi } from 'vitest';
+import { NextRequest, NextResponse } from 'next/server';
+import { authReturnPath } from '@/lib/routing/surfaces';
+vi.mock('@/lib/supabase/middleware', () => ({
+  updateSession: async (_r: NextRequest, headers: Headers) => ({ user: null, response: NextResponse.next({ request: { headers } }) }),
+  withCookies: (response: NextResponse) => response,
+}));
+vi.mock('@/lib/auth/dev-identity', () => ({ devIdentityUserId: () => null }));
+import { middleware } from '@/middleware';
+const req = (host: string, path: string, method = 'GET', origin?: string) => new NextRequest(`https://${host}${path}`, { method, headers: { host, ...(origin ? {origin} : {}) } });
+describe('brand host boundary', () => {
+  it('lets the empty invitation landing clear its fragment before starting OAuth', async () => {
+    const response = await middleware(req('brand.twings.app', '/brand/invite'));
+    expect(response.headers.get('x-middleware-next')).toBe('1');
+    expect(response.headers.get('cache-control')).toBe('private, no-store');
+    expect(response.headers.get('x-robots-tag')).toBe('noindex, nofollow');
+    expect((await middleware(req('brand.twings.app', '/brand/members'))).headers.get('location')).toContain('/auth/choose');
+  });
+  it('allows only the guarded studio upload transport on the admin host', async () => {
+    expect((await middleware(req('admin.twings.app','/api/admin/brand-workspace','POST','https://admin.twings.app'))).headers.get('x-middleware-next')).toBe('1');
+    expect((await middleware(req('admin.twings.app','/api/admin/brand-workspace','GET'))).status).toBe(404);
+    expect((await middleware(req('admin.twings.app','/api/admin/brand-workspace','POST','https://brand.twings.app'))).status).toBe(404);
+    expect((await middleware(req('brand.twings.app','/api/admin/brand-workspace','POST','https://brand.twings.app'))).status).toBe(404);
+    expect((await middleware(req('admin.twings.app','/api/admin/brand-workspace/attachments/example','POST','https://admin.twings.app'))).headers.get('x-middleware-next')).toBe('1');
+    expect((await middleware(req('admin.twings.app','/api/admin/brand-workspace/attachments/example','GET'))).status).toBe(404);
+  });
+  it('opens a private same-host brand entry and retains the return path at sign in', async () => {
+    expect((await middleware(req('brand.twings.app','/'))).headers.get('location')).toBe('https://brand.twings.app/brand');
+    const destination = new URL((await middleware(req('brand.twings.app','/brand/projects/example'))).headers.get('location')!);
+    expect(destination.origin).toBe('https://brand.twings.app');
+    expect(destination.pathname).toBe('/auth/choose');
+    expect(destination.searchParams.get('next')).toBe('/brand/projects/example');
+  });
+  it('redirects the plural alias only for navigations and never forwards auth codes or writes', async () => {
+    expect((await middleware(req('brands.twings.app','/'))).headers.get('location')).toBe('https://brand.twings.app/brand');
+    expect((await middleware(req('brands.twings.app','/brand/projects/abc?tab=report'))).headers.get('location')).toBe('https://brand.twings.app/brand/projects/abc?tab=report');
+    expect((await middleware(req('brands.twings.app','/auth/callback?code=secret'))).status).toBe(404);
+    expect((await middleware(req('brands.twings.app','/api/brand-workspace','POST'))).status).toBe(404);
+  });
+  it('blocks unrelated routes, methods, and cross-origin writes before handlers', async () => {
+    for(const path of ['/admin','/account','/api/admin/staging-url','/api/billing/checkout','/ko/campaigns','/sitemap.xml','/sw.js']) expect((await middleware(req('brand.twings.app',path))).status).toBe(404);
+    expect((await middleware(req('brand.twings.app','/api/brand-workspace','POST','https://twings.app'))).status).toBe(404);
+    expect((await middleware(req('brand.twings.app','/api/brand-workspace','POST','https://brand.twings.app'))).headers.get('x-middleware-next')).toBe('1');
+  });
+  it('normalizes brand return paths and keeps consumer assets distinct from the workspace', () => {
+    expect(authReturnPath('/brand/../admin','brand.twings.app','/')).toBe('/brand');
+    expect(authReturnPath('/brand/projects/abc','brand.twings.app','/')).toBe('/brand/projects/abc');
+    expect(authReturnPath('/brand/twings.svg','brand.twings.app','/')).toBe('/brand');
+  });
+});

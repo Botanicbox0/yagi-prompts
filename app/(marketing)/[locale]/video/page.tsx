@@ -7,6 +7,7 @@ import { MarketingFooter, MarketingNav, adLabels } from '@/components/marketing/
 import { AdRail } from '@/components/ad/ad-rail';
 import { AdBanner, AdCard } from '@/components/ad/ad-card';
 import { TemplatesListing } from '@/components/templates/listing';
+import { FaqSection } from '@/lib/seo/faq-section';
 
 /**
  * `/[locale]/video` — the VIDEO tab (docs/TEMPLATES-IA.md §2). Static + tag `prompts` + the 1h TTL
@@ -59,6 +60,7 @@ export default async function VideoTemplatesPage({ params }: RouteParams) {
           </div>
         </div>
       </main>
+      <FaqSection dict={dict} locale={locale} placement="template" path={`/${locale}/video`} />
       <MarketingFooter locale={locale} dict={dict} />
     </>
   );

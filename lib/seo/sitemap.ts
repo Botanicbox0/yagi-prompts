@@ -38,8 +38,8 @@ export interface SitemapInput {
    * sitemap by construction.
    */
   templates?: PromptCard[];
-  /** Falls back to the card's own publish time; only used when that is missing. */
-  now?: Date;
+  /** Real editorial dates only, keyed by locale-independent path. Omit when unknown. */
+  pageModifiedAt?: Partial<Record<string, string>>;
 }
 
 function absolute(origin: string, path: string): string {
@@ -54,7 +54,7 @@ function absoluteAlternates(origin: string, rest: string): Record<string, string
 }
 
 export function buildSitemap(input: SitemapInput): MetadataRoute.Sitemap {
-  const { origin, cards, templates = [], now = new Date() } = input;
+  const { origin, cards, templates = [], pageModifiedAt = {} } = input;
   const entries: MetadataRoute.Sitemap = [];
 
   const marketing: Array<{
@@ -70,6 +70,7 @@ export function buildSitemap(input: SitemapInput): MetadataRoute.Sitemap {
     // docs/CAMPAIGNS.md — the campaigns listing. Weekly: a campaign is a month-long object.
     { rest: '/campaigns', priority: 0.8, changeFrequency: 'weekly' },
     { rest: '/pricing', priority: 0.8, changeFrequency: 'weekly' },
+    { rest: '/faq', priority: 0.6, changeFrequency: 'weekly' },
     // The legal surface. Low priority — nobody searches for it — but LISTED, because a payment
     // provider's merchant review and 전자상거래법 §21 both expect these to be publicly reachable,
     // and a crawler that has them indexed is the cheapest evidence that they are.
@@ -84,7 +85,7 @@ export function buildSitemap(input: SitemapInput): MetadataRoute.Sitemap {
     for (const locale of LOCALES) {
       entries.push({
         url: absolute(origin, `/${locale}${page.rest === '/' ? '' : page.rest}`),
-        lastModified: now,
+        ...modifiedDate(pageModifiedAt[page.rest]),
         changeFrequency: page.changeFrequency,
         priority: page.priority,
         alternates: { languages: absoluteAlternates(origin, page.rest) },
@@ -98,7 +99,7 @@ export function buildSitemap(input: SitemapInput): MetadataRoute.Sitemap {
     for (const locale of LOCALES as readonly Locale[]) {
       entries.push({
         url: absolute(origin, `/${locale}${rest}`),
-        lastModified: template.publishedAt ? new Date(template.publishedAt) : now,
+        ...modifiedDate(template.publishedAt),
         changeFrequency: 'monthly',
         priority: 0.7,
         alternates: { languages: absoluteAlternates(origin, rest) },
@@ -113,7 +114,7 @@ export function buildSitemap(input: SitemapInput): MetadataRoute.Sitemap {
     for (const locale of LOCALES as readonly Locale[]) {
       entries.push({
         url: absolute(origin, `/${locale}${rest}`),
-        lastModified: card.publishedAt ? new Date(card.publishedAt) : now,
+        ...modifiedDate(card.updatedAt ?? card.publishedAt),
         changeFrequency: 'monthly',
         priority: 0.7,
         alternates: { languages: absoluteAlternates(origin, rest) },
@@ -122,6 +123,11 @@ export function buildSitemap(input: SitemapInput): MetadataRoute.Sitemap {
   }
 
   return entries;
+}
+
+/** Rendering a sitemap is not a content update. Unknown/invalid timestamps stay absent. */
+function modifiedDate(value: string | null | undefined): { lastModified?: Date } {
+  return value && Number.isFinite(Date.parse(value)) ? { lastModified: new Date(value) } : {};
 }
 
 /**
@@ -133,6 +139,11 @@ export function buildSitemap(input: SitemapInput): MetadataRoute.Sitemap {
  */
 export const DISALLOWED_PATHS = [
   '/admin',
+  // Exact root plus private workspace leaves: `/brand/` also contains public logo assets.
+  '/brand$',
+  '/brand/projects',
+  '/brand/members',
+  '/brand/invite',
   '/library',
   '/account',
   '/billing',

@@ -75,7 +75,7 @@ describe('campaign mail', () => {
     const ko = h.mailer.sent.find((m) => m.to === 'ko@playbook.test')!;
     const en = h.mailer.sent.find((m) => m.to === 'en@playbook.test')!;
     expect(ko.subject).toContain('서울 94');
-    expect(ko.text).toContain('20,000원');
+    expect(ko.text).not.toContain('20,000원'); // Broad recruitment mail must not disclose creator payment terms.
     expect(ko.text).toContain('https://twings.test/ko/campaigns/seoul-94-reel');
     expect(en.subject).toContain('Seoul 94');
     expect(en.text).toContain('https://twings.test/en/campaigns/seoul-94-reel');

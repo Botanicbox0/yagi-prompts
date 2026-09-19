@@ -65,6 +65,19 @@ describe('OAuth return paths remain on the request origin', () => {
     expect(auth.signInWithOAuth).toHaveBeenCalledWith({ provider: 'kakao', options: { redirectTo: 'http://admin.twings.app/auth/callback?next=%2Fadmin%2Fprompts&locale=en' } });
   });
 
+  it('keeps brand PKCE, failures and post-login returns on the canonical brand surface', async () => {
+    const signedIn = await signIn(new NextRequest('https://brand.twings.app/auth/signin?provider=kakao&next=/admin'));
+    expect(signedIn.headers.get('location')).toBe('https://brand.twings.app/brand');
+    auth.getSessionUser.mockResolvedValue(null);
+    auth.signInWithOAuth.mockResolvedValue({data:{url:'https://provider.example/oauth'},error:null});
+    await signIn(new NextRequest('https://brand.twings.app/auth/signin?provider=kakao&next=/brand/projects/example&locale=ko'));
+    expect(auth.signInWithOAuth).toHaveBeenCalledWith({provider:'kakao',options:{redirectTo:'https://brand.twings.app/auth/callback?next=%2Fbrand%2Fprojects%2Fexample&locale=ko'}});
+    const failure = await callback(new NextRequest('https://brand.twings.app/auth/callback?next=/admin'));
+    const target = new URL(failure.headers.get('location')!);
+    expect(target.origin).toBe('https://brand.twings.app'); expect(target.pathname).toBe('/auth/choose');
+    expect(target.searchParams.get('next')).toBe('/brand');
+  });
+
   it('returns missing-code and OAuth failures to the same admin chooser', async () => {
     const missingCode = await callback(new NextRequest('https://admin.twings.app/auth/callback?next=/admin/prompts'));
     const location = new URL(missingCode.headers.get('location')!);

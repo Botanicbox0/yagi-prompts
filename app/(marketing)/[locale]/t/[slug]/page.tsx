@@ -11,12 +11,16 @@ import { templateHref, templatesHref } from '@/lib/prompts/links';
 import { getCampaignCatalog } from '@/lib/campaigns/public-catalog';
 import { campaignHref } from '@/lib/campaigns/links';
 import { isCampaignPublic } from '@/lib/campaigns/state';
-import { payoutHeadline } from '@/lib/campaigns/copy';
 import { formatTemplatePrice, isForSale } from '@/lib/twings/products';
 import { aspectsForMedium, defaultAspect, engineLabel, resolveEngine } from '@/lib/images/engines';
 import { signInHref } from '@/lib/billing/links';
 import { identityVerifyHref } from '@/lib/identity/links';
 import { templateMetadata, unresolvedTemplateMetadata } from '@/lib/seo/template-metadata';
+import { RENDER_PIPELINE_PUBLIC } from '@/lib/flags';
+import { FaqSection } from '@/lib/seo/faq-section';
+import { JsonLd } from '@/lib/seo/json-ld';
+import { siteUrl } from '@/lib/seo/site-url';
+import { templateStructuredData } from '@/lib/seo/structured-data';
 import { MarketingFooter, MarketingNav, adLabels } from '@/components/marketing/chrome';
 import { AdRail } from '@/components/ad/ad-rail';
 import { AdBanner, AdCard } from '@/components/ad/ad-card';
@@ -109,6 +113,7 @@ export default async function TemplatePage({ params }: RouteParams) {
   return (
     <>
       <MarketingNav locale={locale} dict={dict} rest={`/t/${slug}`} initialTheme="light" />
+      <JsonLd id="template-structured-data" data={templateStructuredData({ origin: siteUrl(), locale, card, description: dict.meta.templateDescription, publicSalesEnabled: RENDER_PIPELINE_PUBLIC })} />
 
       <main id="main" data-template={card.slug} data-medium={card.medium} data-section data-theme="light" className="section pb-24">
         <div id="template-rail-anchor" className="relative">
@@ -138,6 +143,7 @@ export default async function TemplatePage({ params }: RouteParams) {
                   <span data-engine-chip className="opacity-60">{engineLabel(resolveEngine(card.engine, card.medium))}</span>
                 </p>
                 <h1 className="mt-5 font-display text-[clamp(2.2rem,5vw,4rem)] leading-[0.92] font-black uppercase">{title}</h1>
+                <p data-template-description className="mt-5 max-w-detail text-body opacity-70">{dict.meta.templateDescription}</p>
                 <p className="mt-4 font-label text-[0.7rem] tracking-[0.12em] uppercase opacity-60">{credit}</p>
                 {card.useCase.length > 0 && (
                   <p className="mt-4 flex flex-wrap gap-1.5 font-mono text-[0.75rem] opacity-60">
@@ -246,7 +252,7 @@ export default async function TemplatePage({ params }: RouteParams) {
                           {localize(c.title, locale).replace(/\s+/g, ' ')}
                         </a>
                         <p className="mt-1.5 font-mono text-[0.75rem] opacity-60">
-                          {c.hostName} · {c.payout ? payoutHeadline(c.payout, locale, cLabels.payout) : '—'} · {cLabels.status[c.status]}
+                          {c.hostName} · {cLabels.status[c.status]}
                         </p>
                       </div>
                       <a href={campaignHref(locale, c.slug)} className="inline-block border border-current px-4 py-2 font-label text-eyebrow uppercase">
@@ -272,7 +278,7 @@ export default async function TemplatePage({ params }: RouteParams) {
           </div>
         </div>
       </main>
-
+      <FaqSection dict={dict} locale={locale} placement="template" path={`/${locale}/t/${slug}`} />
       <MarketingFooter locale={locale} dict={dict} />
     </>
   );

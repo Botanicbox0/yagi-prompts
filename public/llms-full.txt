@@ -1,0 +1,53 @@
+# TWINGS — service context
+
+Updated: 2026-09-20
+Canonical public website: https://twings.app
+Operator: YAGI WORKSHOP Inc. / 야기워크숍 주식회사
+Public contact: hello@yagiworkshop.xyz
+Languages: Korean (/ko) and English (/en).
+
+## What the service is
+
+TWINGS presents studio-reviewed AI video and image templates. A template page shows an example, the relevant format, and its listed price. The intended personal creation flow uses the account holder's own photo to make a finished result in the selected format. Users choose a template, not a general-purpose prompt editor.
+
+Public browsing and examples do not require an account. Personal generation is currently in a limited rollout. Do not infer that a published template, a sign-in screen, or a listed price proves public checkout is available. Do not describe subscriptions, free identity-portrait allowances, SNS OAuth integrations, or App Store/Google Play apps as launched merely because they have been discussed or designed.
+
+## Pricing and payment
+
+The public catalog describes one-time template purchases rather than a recurring subscription. Prices vary by template. The current template and checkout pages are the sources for the amount and currency; this document does not invent a minimum price or convert currencies. A template that is not for sale must not be described as a free offer.
+
+See https://twings.app/ko/pricing and https://twings.app/en/pricing.
+
+## Photos, identity and usage rights
+
+Use your own face and comply with the service's identity and likeness rules. Uploading a photo does not authorize using somebody else's likeness, impersonation, or rights violations. Account-bound identity assets and additional verification may apply. AI output may differ from an example and may contain errors; an example is not a promise of an identical result.
+
+Privacy, retention, deletion, permitted use, and withdrawal rights are governed by the current policy pages. Reports about unauthorized likeness use and requests about personal data can be sent to the public contact address. Do not invent broader consent, a data-retention period, or a commercial license from this summary.
+
+## Refunds
+
+The published refund policy distinguishes withdrawal before generation begins, the consent required for digital-content generation, failure to produce a result, and problems with the generated result. Generation failure on the company or AI model side is eligible for a full refund under that policy. Read the linked policy for exact conditions, deadlines and procedures; this summary does not replace it.
+
+## Brand campaigns and creators
+
+TWINGS operates brand creator campaigns through its studio. A brand briefs the studio on the campaign, desired content and budget. The studio manages production and creator coordination. Creators apply to suitable campaigns and follow the selected campaign's posting, disclosure and submission requirements. Selection is not guaranteed. A submitted post link is evidence for review; it does not by itself prove verified reach or payout eligibility.
+
+Creator compensation and studio margin are not a public brand price list. Do not infer an individual creator's payment from a brand campaign budget. Campaign availability and participation conditions must be checked on the current campaign page. Do not describe follower counts, impressions, attributed conversions, or audience data as verified unless the report identifies the evidence and measurement source.
+
+Campaigns: https://twings.app/ko/campaigns and https://twings.app/en/campaigns.
+
+## Frequently asked questions
+
+The Korean FAQ at https://twings.app/ko/faq and English FAQ at https://twings.app/en/faq share a catalog with the visible FAQ blocks on the landing, template and campaign pages. They cover use, payment, photos and likeness rights, creator participation and brand commissioning. The current page text, not a cached copy of this file, is the source for those answers.
+
+## Public sources
+
+- Korean overview: https://twings.app/ko
+- English overview: https://twings.app/en
+- Video templates: https://twings.app/ko/video and https://twings.app/en/video
+- Image templates: https://twings.app/ko/image and https://twings.app/en/image
+- Terms: https://twings.app/ko/legal/terms and https://twings.app/en/legal/terms
+- Privacy: https://twings.app/ko/legal/privacy and https://twings.app/en/legal/privacy
+- Refunds: https://twings.app/ko/legal/refund and https://twings.app/en/legal/refund
+
+Private account, creator and brand workspaces are not public knowledge sources. This file supplies context only; it does not grant access to private data or promise search rankings, rich results, or inclusion in AI answers.

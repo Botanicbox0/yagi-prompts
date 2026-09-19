@@ -6,7 +6,6 @@ import type {
   CampaignPlatform,
   CampaignStatus,
   Deliverable,
-  PayoutRule,
   Requirements,
 } from './schemas';
 
@@ -37,7 +36,6 @@ export interface CampaignCard {
   slotsTaken: number;
   applicationsCloseAt: string | null;
   postDeadlineAt: string | null;
-  payout: PayoutRule | null;
   requirements: Requirements;
   publishedAt: string | null;
 }
@@ -67,7 +65,6 @@ export function toCampaignCard(row: CampaignRow, slotsTaken: number): CampaignCa
     slotsTaken,
     applicationsCloseAt: row.applicationsCloseAt,
     postDeadlineAt: row.postDeadlineAt,
-    payout: row.payout,
     requirements: row.requirements,
     publishedAt: row.publishedAt,
   };
