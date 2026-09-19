@@ -1,4 +1,5 @@
 import '@/app/globals.css';
+import './workspace.css';
 import type { Metadata, Viewport } from 'next';
 import type { ReactNode } from 'react';
 import { notFound } from 'next/navigation';
@@ -39,8 +40,9 @@ export default async function AdminRootLayout({ children }: { children: ReactNod
 
   const locale = await getLocaleFromHeaders();
   return (
-    <html lang={locale} className={fontVariables}>
+    <html lang={locale} className={fontVariables} data-workspace-admin>
       <head>
+        <link rel="stylesheet" href="/fonts/helvetica-neue/helvetica-neue.css" />
         <link rel="stylesheet" href="/fonts/pretendard/pretendard-dynamic-subset.css" />
         <link rel="stylesheet" href="/fonts/pretendard/pretendard-hangul-mono.css" />
       </head>

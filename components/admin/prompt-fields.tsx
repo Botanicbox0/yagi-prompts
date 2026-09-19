@@ -1,3 +1,4 @@
+import { PublicLink } from '@/components/admin/public-link';
 import { IMAGE_ASPECTS, IMAGE_ENGINES, IMAGE_ENGINE_IDS, VIDEO_ASPECTS, VIDEO_ENGINE_IDS } from '@/lib/images/engines';
 import { formatDate } from '@/lib/i18n/format';
 import { suggestedKrw } from '@/lib/twings/products';
@@ -399,9 +400,9 @@ export function PromptCard({
             anchor inside an anchor is not. */}
         {row.status === 'published' && (
           <div className="flex items-center justify-between gap-2 border-t border-hairline pt-2 font-label text-[0.6rem] tracking-[0.1em] uppercase">
-            <a href={promptHref(locale, row.slug)} className="opacity-60 hover:opacity-100" data-card-live={row.slug}>
+            <PublicLink href={promptHref(locale, row.slug)} className="opacity-60 hover:opacity-100" data-card-live={row.slug}>
               {a.viewLive} →
-            </a>
+            </PublicLink>
             <OpForm op="prompt.feature" back="/admin/prompts">
               <input type="hidden" name="id" value={row.id} />
               <input type="hidden" name="featured" value={row.featured ? 'false' : 'true'} />
