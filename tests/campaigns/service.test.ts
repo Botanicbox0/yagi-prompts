@@ -5,6 +5,7 @@ import { seedProfile } from '@/tests/helpers/billing';
 import type { Viewer } from '@/lib/auth/identity';
 import { loadCampaignBySlug, loadApplication } from '@/lib/campaigns/repo';
 import { applyToCampaign, loadApplyState, loadMyCampaigns, reportCampaignViews, submitCampaignPost } from '@/lib/campaigns/service';
+import { loadCampaignCatalog } from '@/lib/campaigns/catalog';
 
 /**
  * The creator's side of docs/CAMPAIGNS.md: apply (with the field-level refusal), the slot and
@@ -70,6 +71,11 @@ describe('applying, posting and reporting as a creator', () => {
     expect(app.followerCount).toBe(1200);
 
     const state = (await loadApplyState({ sql }, slug, CREATOR))!;
+    expect(state.campaign).not.toHaveProperty('budgetCents');
+    expect(state.campaign.payout).not.toBeNull(); // The applicant still sees their consent terms.
+    const publicCatalog = await loadCampaignCatalog(sql);
+    expect(publicCatalog.campaigns[0]).not.toHaveProperty('payout');
+    expect(publicCatalog.campaigns[0]).not.toHaveProperty('budgetCents');
     expect(state.open).toBe(true);
     expect(state.existing?.status).toBe('applied');
     expect(state.slotsLeft).toBe(1); // applying does not take a slot; selection does
@@ -122,5 +128,6 @@ describe('applying, posting and reporting as a creator', () => {
     expect(mine).toHaveLength(1);
     expect(mine[0]).toMatchObject({ canPost: false, canReportViews: true });
     expect(mine[0]!.campaign.slug).toBe(slug);
+    expect(mine[0]!.campaign).not.toHaveProperty('budgetCents');
   });
 });

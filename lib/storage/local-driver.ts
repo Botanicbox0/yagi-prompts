@@ -54,10 +54,14 @@ export function createLocalStorageDriver(rootDir?: string): StorageDriver {
       return null;
     },
 
+    async signedStagingUrl() { return null; },
+
     async putStaging(key, bytes, _contentType) {
       const path = objectPath(root, STAGING_BUCKET, key);
       await mkdir(dirname(path), { recursive: true });
-      await writeFile(path, bytes);
+      // A retried upload may not replace an attachment whose hash/version was already approved.
+      try { await writeFile(path, bytes, { flag: 'wx' }); }
+      catch (error) { if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error; }
     },
 
     async exists(bucket: Bucket, key: string) {

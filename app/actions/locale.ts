@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation';
 import { getSessionUser } from '@/lib/supabase/auth-client';
 import { createDataClient } from '@/lib/supabase/data-client';
 import { LOCALE_COOKIE, LOCALE_COOKIE_MAX_AGE, isLocale } from '@/lib/i18n/config';
+import { safeReturnPath } from '@/lib/auth/return-path';
 
 /**
  * PLAN §3.9 — "the toggle writes cookie + profile (when logged in) atomically and navigates to the
@@ -16,7 +17,7 @@ export async function setLocaleAction(formData: FormData): Promise<void> {
   const requested = String(formData.get('next') ?? '/');
 
   // Same-origin relative paths only — never let a form field become an open redirect.
-  const target = requested.startsWith('/') && !requested.startsWith('//') ? requested : '/';
+  const target = safeReturnPath(requested);
 
   if (!isLocale(locale)) redirect(target);
 

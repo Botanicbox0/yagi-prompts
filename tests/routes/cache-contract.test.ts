@@ -551,9 +551,9 @@ describe('sitemap + robots (§8 M5)', () => {
    * exclusion, `/sitemap.xml` answered 308 → `/en/sitemap.xml` → 404, and the site had no sitemap.
    */
   it('exempts the crawler endpoints from the locale redirect', () => {
-    const matcher = read('middleware.ts');
-    expect(matcher).toContain('sitemap\\\\.xml');
-    expect(matcher).toContain('robots\\\\.txt');
+    const policy = read('lib', 'routing', 'surfaces.ts');
+    expect(policy).toContain('sitemap\\.xml');
+    expect(policy).toContain('robots\\.txt');
   });
 });
 
@@ -663,7 +663,10 @@ describe('render queue (docs/TEMPLATES-IA.md §8)', () => {
     expect(isAppPath('/renders/11111111-1111-4111-8111-111111111111')).toBe(true);
     expect(isAppPath('/r/11111111-1111-4111-8111-111111111111/token')).toBe(false);
     expect(isAppPath('/identity/verify')).toBe(true);
-    expect(read('middleware.ts')).toContain('|auth/|r/|');
+    // Host checks now cover every request. Token links still skip locale/session work only
+    // after that boundary; excluding them in the matcher would expose them on brand/admin hosts.
+    expect(read('middleware.ts')).toContain('bypassConsumerLocale(pathname)');
+    expect(read('lib', 'routing', 'surfaces.ts')).toContain('auth\\/|r\\/');
   });
 
   it('keeps every render surface out of the index and on the daily tick', () => {

@@ -14,7 +14,7 @@ import { SITE_OG_IMAGE, SITE_TWITTER_CARD } from '@/lib/seo/og';
 import { MarketingFooter, MarketingNav, adLabels } from '@/components/marketing/chrome';
 import { Hero, HeroLede, MarqueeStrip } from '@/components/landing/sections';
 import { CircleWipe } from '@/components/landing/circle-wipe';
-import { Faq } from '@/components/landing/faq';
+import { FaqSection } from '@/lib/seo/faq-section';
 import { PromptRail } from '@/components/prompts/rails';
 import { UseCaseFilter } from '@/components/prompts/filter-chips';
 import { CampaignRail } from '@/components/campaigns/rails';
@@ -91,6 +91,9 @@ export default async function LandingPage({ params }: { params: Promise<{ locale
 
       <main id="main">
         <Hero locale={locale} dict={dict} showImage={templates.image.length > 0} />
+        <section data-section data-theme="light" className="section">
+          <div className="band pb-12"><p data-service-definition className="max-w-detail text-body opacity-70">{dict.seo.definition}</p></div>
+        </section>
 
         {/* §3.6: the rail runs from below the hero to the end of the content. */}
         <div id="rail-anchor" className="relative">
@@ -184,24 +187,7 @@ export default async function LandingPage({ params }: { params: Promise<{ locale
           {/* §5.3-2: the page's one circular wipe, on its one true inversion (light → dark). */}
           <CircleWipe />
 
-          <section data-section data-theme="dark" className="section">
-            <Faq
-              eyebrow={dict.faq.eyebrow}
-              title={dict.faq.title}
-              items={[
-                { q: dict.faq.q1, a: dict.faq.a1 },
-                { q: dict.faq.q2, a: dict.faq.a2 },
-                { q: dict.faq.q3, a: dict.faq.a3 },
-                { q: dict.faq.q4, a: dict.faq.a4 },
-                // Founder, 2026-09-11: say that AI gets details wrong before anyone has to ask.
-                { q: dict.faq.q8, a: dict.faq.a8 },
-                { q: dict.faq.q5, a: dict.faq.a5 },
-                // Founder, 2026-09-10: the brand side of a campaign has to be visible here too.
-                { q: dict.faq.q7, a: dict.faq.a7 },
-                { q: dict.faq.q6, a: dict.faq.a6 },
-              ]}
-            />
-          </section>
+          <FaqSection dict={dict} locale={locale} placement="landing" path={`/${locale}`} theme="dark" />
         </div>
       </main>
 

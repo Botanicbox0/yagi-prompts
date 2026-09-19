@@ -1,3 +1,4 @@
+import { PublicLink } from '@/components/admin/public-link';
 import { notFound } from 'next/navigation';
 import { getSqlRunner } from '@/lib/db/connect';
 import { getDictionary } from '@/lib/i18n/dictionaries';
@@ -65,9 +66,9 @@ function Header({ row, dict, locale }: { row: PromptRow; dict: Dict; locale: str
           </p>
         </div>
         {row.status === 'published' && (
-          <a href={promptHref(locale, row.slug)} className={BUTTON} target="_blank" rel="noopener noreferrer">
+          <PublicLink href={promptHref(locale, row.slug)} className={BUTTON} target="_blank" rel="noopener noreferrer">
             {a.viewLive}
-          </a>
+          </PublicLink>
         )}
       </div>
     </>

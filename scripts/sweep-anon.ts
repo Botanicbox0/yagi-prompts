@@ -85,6 +85,7 @@ interface Fetched {
   location: string | null;
   cacheControl: string | null;
   contentType: string | null;
+  robotsTag: string | null;
   /** For the `?download=1` probes — the header that makes a browser SAVE instead of play. */
   contentDisposition: string | null;
   body: string;
@@ -99,6 +100,7 @@ async function request(path: string, init?: RequestInit): Promise<Fetched> {
     location: response.headers.get('location'),
     cacheControl: response.headers.get('cache-control'),
     contentType: response.headers.get('content-type'),
+    robotsTag: response.headers.get('x-robots-tag'),
     contentDisposition: response.headers.get('content-disposition'),
     body: new TextDecoder().decode(bytes),
     bytes,
@@ -148,6 +150,14 @@ interface AssetBlockRow {
   status: string;
 }
 
+interface BrandWorkspaceProbe {
+  id: string;
+  title: string;
+  organization_name: string;
+  attachment_id: string;
+  storage_key: string;
+}
+
 async function readSnapshot() {
   const path = resolve(process.env.PLAYBOOK_LOCAL_DB ?? DEFAULT_LOCAL_SNAPSHOT);
   const bytes = await readFile(path);
@@ -173,13 +183,22 @@ async function readSnapshot() {
     `select id, slug, status, source, text_visibility::text as visibility, featured
        from prompt_items order by slug`,
   );
-
+  const brandWorkspace = await db.query<BrandWorkspaceProbe>(
+    `select p.id, p.title, o.name as organization_name,
+            a.id as attachment_id, a.storage_key
+       from brand_projects p
+       join brand_organizations o on o.id = p.organization_id
+       join brand_attachments a on a.project_id = p.id and a.status = 'ready'
+      where p.title like '[Local fixture]%' and o.name like '[Local fixture]%'
+      order by p.id, a.id`,
+  );
 
   await db.close();
   return {
     assets: assets.rows,
     privateKeys: privateKeys.rows.map((r) => r.target_key),
     prompts: prompts.rows,
+    brandWorkspace: brandWorkspace.rows,
   };
 }
 
@@ -447,6 +466,56 @@ async function sweepSeo(): Promise<void> {
   }
   expectPresent('allows the public surface', robots.body, 'Allow: /');
   expectPresent('points at the sitemap', robots.body, 'Sitemap: http');
+}
+
+/** AGENTS §7: assert the actual server HTML, not just metadata builders. */
+async function sweepStructuredData(): Promise<void> {
+  console.log('\nSEO/GEO — JSON-LD, shared FAQ, locale URLs and reading aids');
+  for (const locale of ['en', 'ko']) {
+    const routes = [
+      { rest: '', placement: 'landing' },
+      { rest: '/faq', placement: 'all' },
+      { rest: '/campaigns', placement: 'campaign' },
+      { rest: `/t/${GATED_PROMPT}`, placement: 'template' },
+    ];
+    for (const { rest, placement } of routes) {
+      const path = `/${locale}${rest}`;
+      const page = await get(path);
+      expectEqual(`${path} SEO page renders`, page.status, 200);
+      expectPresent(`${path} shared FAQ marker`, page.body, `data-faq-catalog="${placement}"`);
+      expectPresent(`${path} self-canonical`, page.body, `rel="canonical" href="${BASE}${path}"`);
+      for (const tag of ['en', 'ko', 'x-default']) {
+        expectPresent(`${path} alternate ${tag}`, page.body, `hrefLang="${tag}" href="${BASE}/${tag === 'x-default' ? 'en' : tag}${rest}"`);
+      }
+      const nodes: Record<string, unknown>[] = [];
+      const scripts = [...page.body.matchAll(/<script\b[^>]*type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/g)];
+      for (const script of scripts) {
+        try {
+          const data = JSON.parse(script[1]!);
+          nodes.push(...(Array.isArray(data['@graph']) ? data['@graph'] : [data]));
+        } catch {
+          fail(`${path} parseable JSON-LD`, 'invalid JSON');
+        }
+      }
+      for (const type of ['Organization', 'WebSite', 'FAQPage']) {
+        expectEqual(`${path} contains ${type}`, nodes.some((node) => node['@type'] === type), true);
+      }
+      if (rest === '/campaigns') expectEqual(`${path} contains Service`, nodes.some((node) => node['@type'] === 'Service'), true);
+      if (rest.startsWith('/t/')) {
+        expectEqual(`${path} no offer during closed generation rollout`, nodes.some((node) => node['@type'] === 'Product'), false);
+      }
+      const faq = nodes.find((node) => node['@type'] === 'FAQPage');
+      expectEqual(`${path} nonempty FAQ answers`, Array.isArray(faq?.mainEntity) && faq.mainEntity.length > 0 && faq.mainEntity.every((item: { acceptedAnswer?: { text?: string } }) => Boolean(item.acceptedAnswer?.text?.trim())), true);
+    }
+  }
+  const sitemap = await get('/sitemap.xml');
+  for (const locale of ['ko', 'en']) expectPresent(`sitemap includes ${locale} FAQ`, sitemap.body, `<loc>${BASE}/${locale}/faq</loc>`);
+  for (const path of ['/llms.txt', '/llms-full.txt']) {
+    const page = await get(path);
+    expectEqual(`${path} public reader aid`, page.status, 200);
+    expectPresent(`${path} names operator`, page.body, 'YAGI WORKSHOP');
+    expectPresent(`${path} links FAQ source`, page.body, 'https://twings.app/ko/faq');
+  }
 }
 
 /** M5 — canonical / hreflang / og:image, on the HTML a crawler is served. */
@@ -964,6 +1033,56 @@ async function sweepCampaigns(): Promise<void> {
   expectPresent('sitemap lists the listing (ko)', sitemap.body, '/ko/campaigns<');
 }
 
+/** Actual HTTP boundaries with nonempty private fixtures; no browser identity or cookies. */
+async function sweepBrandWorkspace(fixtures: BrandWorkspaceProbe[]): Promise<void> {
+  console.log('\n/brand — private workspace fixtures, anonymous');
+  const fixture = fixtures[0];
+  if (!fixture) {
+    fail('brand workspace fixture discovery', 'missing ready private attachment/project — re-run npm run db:local');
+    return;
+  }
+  ok('brand workspace has a real project and ready attachment to protect');
+  const noPrivateBytes = (label: string, response: Fetched) => {
+    // Never print private fixture values or storage keys, including on failure.
+    const leaked = fixtures.some(row => [row.title, row.organization_name, row.storage_key].some(value => response.body.includes(value)));
+    expectEqual(`${label}: no fixture content or private storage key`, leaked, false);
+  };
+  for (const path of ['/brand', `/brand/projects/${fixture.id}`, `/admin/brand-workspace/${fixture.id}`]) {
+    const page = await get(path);
+    const label = path.replace(fixture.id, '{fixture}');
+    expectEqual(`${label}: redirects anonymous access`, page.status, 307);
+    const target = new URL(page.location ?? '/', BASE);
+    expectEqual(`${label}: redirects only to same-origin sign-in`,
+      target.origin === new URL(BASE).origin && (target.pathname === '/auth/choose' || target.searchParams.get('signin') === '1'), true);
+    expectEqual(`${label}: private no-store`, page.cacheControl, 'private, no-store');
+    expectEqual(`${label}: noindex`, page.robotsTag, 'noindex, nofollow');
+    noPrivateBytes(label, page);
+  }
+  const attachment = await get(`/api/brand-workspace/attachments/${fixture.attachment_id}`);
+  expectEqual('brand attachment hides its existence from anonymous readers', attachment.status, 404);
+  expectEqual('brand attachment refusal contains no file bytes', attachment.bytes.length, 0);
+  expectEqual('brand attachment issues no signed download URL', attachment.location, null);
+  expectEqual('brand attachment refusal is private no-store', attachment.cacheControl, 'private, no-store');
+  noPrivateBytes('brand attachment', attachment);
+
+  // Preview sweeps remain read-only for this feature. Even locally this malformed input could
+  // not create a message if authentication regressed; the expected 401 must precede validation.
+  const base = new URL(BASE);
+  if (!['localhost', '127.0.0.1', '[::1]'].includes(base.hostname)) {
+    console.log('  SKIP  brand message POST — loopback targets only');
+    return;
+  }
+  const message = await request('/api/brand-workspace', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', origin: base.origin },
+    body: JSON.stringify({ operation: 'message.send', input: { projectId: fixture.id, body: '', requestId: 'invalid-sweep-probe' } }),
+  });
+  expectEqual('brand message refuses anonymous access before validation', message.status, 401);
+  expectEqual('brand message returns only the sign-in error', message.body, JSON.stringify({ ok: false, code: 'sign_in_required' }));
+  expectEqual('brand message refusal is private no-store', message.cacheControl, 'private, no-store');
+  noPrivateBytes('brand message', message);
+}
+
 /** docs/TEMPLATES-IA.md §8 — the render queue: gated where it must be, open where the token says. */
 async function sweepRenders(): Promise<void> {
   console.log('\n/renders — the render queue, anonymous');
@@ -1019,7 +1138,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  const { assets, privateKeys, prompts } = await readSnapshot();
+  const { assets, privateKeys, prompts, brandWorkspace } = await readSnapshot();
 
   await sweepShowcasePage('en', privateKeys);
   await sweepShowcasePage('ko', privateKeys);
@@ -1029,6 +1148,7 @@ async function main(): Promise<void> {
   await sweepConversionCta();
   await sweepMoney();
   await sweepSeo();
+  await sweepStructuredData();
   await sweepDetailMetadata();
   await sweepUnsubscribe();
 
@@ -1045,6 +1165,7 @@ async function main(): Promise<void> {
 
   // --- docs/CAMPAIGNS.md: the campaigns surface --------------------------
   await sweepCampaigns();
+  await sweepBrandWorkspace(brandWorkspace);
 
   // --- docs/TEMPLATES-IA.md §8: the render queue --------------------------
   await sweepRenders();

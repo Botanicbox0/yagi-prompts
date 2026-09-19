@@ -1,6 +1,8 @@
 import { fail, type AdminContext, type AdminOutcome } from './context';
 import { classifyDbError, shortMessage } from './errors';
 import { ADMIN_OPERATIONS, isAdminOperationName, type AdminOperation } from './operations';
+import { safeReturnPath } from '@/lib/auth/return-path';
+import { isAdminPath } from '@/lib/routing/surfaces';
 
 /**
  * The one guarded entry point for every admin mutation (§3.8 "All mutations = server actions:
@@ -49,8 +51,8 @@ export function outcomeUrl(back: string, outcome: AdminOutcome): string {
   // Never an open redirect: anything that is not an admin path collapses to the list. `to` is
   // constructed by the operations themselves and is checked by the same rule.
   const to = outcome.ok ? outcome.to : undefined;
-  const requested = to ?? back;
-  const safe = requested.startsWith('/admin') ? requested : '/admin';
+  const requested = safeReturnPath(to ?? back, '/admin');
+  const safe = isAdminPath(new URL(requested, 'https://path.invalid').pathname) ? requested : '/admin';
 
   const [path = '/admin', existing = ''] = safe.split('?');
   // A redirect to a DIFFERENT page drops the old page's query state; returning to the same page

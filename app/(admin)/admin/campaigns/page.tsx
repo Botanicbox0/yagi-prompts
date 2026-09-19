@@ -1,3 +1,4 @@
+import { PublicLink } from '@/components/admin/public-link';
 import { getSqlRunner } from '@/lib/db/connect';
 import { getDictionary } from '@/lib/i18n/dictionaries';
 import { getLocaleFromHeaders } from '@/lib/i18n/server';
@@ -158,9 +159,9 @@ export default async function AdminCampaignsPage({ searchParams }: { searchParam
                         </span>
                         {c.applied > 0 && <span className="text-accent font-label text-[0.62rem] tracking-[0.1em] uppercase">{interpolate(a.campaignPending, { count: String(c.applied) })}</span>}
                         {(row.status === 'recruiting' || row.status === 'selecting' || row.status === 'running') && (
-                          <a href={campaignHref(locale, row.slug)} className={BUTTON}>
+                          <PublicLink href={campaignHref(locale, row.slug)} className={BUTTON}>
                             {a.open}
-                          </a>
+                          </PublicLink>
                         )}
                       </div>
                     </li>

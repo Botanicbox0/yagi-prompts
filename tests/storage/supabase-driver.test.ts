@@ -77,8 +77,9 @@ function fakeClient(seed: Record<string, string[]> = {}) {
       bucketOf(target).objects.set(toKey, source);
       return { data: { path: toKey }, error: null };
     },
-    async createSignedUrl(key: string, expiresIn: number) {
+    async createSignedUrl(key: string, expiresIn: number, options?: { download?: boolean | string }) {
       calls.push({ op: 'sign', bucket, key, extra: String(expiresIn) });
+      if (options?.download) calls.push({ op: 'download', bucket, key, extra: String(options.download) });
       if (!bucketOf(bucket).objects.has(key)) {
         return { data: null, error: { message: 'Object not found', statusCode: '404' } };
       }
@@ -103,6 +104,15 @@ function fakeClient(seed: Record<string, string[]> = {}) {
 }
 
 describe('supabase storage driver', () => {
+  it('signs private brand attachments in staging for at most 60 seconds', async () => {
+    const fake = fakeClient({content: ['brand-workspace/private.png']});
+    const driver = createSupabaseStorageDriver(fake.client);
+    await driver.signedStagingUrl!('brand-workspace/private.png', 3600);
+    expect(fake.calls).toContainEqual({op:'sign',bucket:'content',key:'brand-workspace/private.png',extra:'60'});
+    expect(fake.calls).toContainEqual({op:'download',bucket:'content',key:'brand-workspace/private.png',extra:'true'});
+    expect(fake.calls.some(call => call.op === 'public')).toBe(false);
+    await expect(driver.signedStagingUrl!('missing.png', 60)).rejects.toBeInstanceOf(StorageObjectNotFound);
+  });
   it('declares the redirect contract the media gateway branches on', () => {
     const { client } = fakeClient();
     const driver = createSupabaseStorageDriver(client);

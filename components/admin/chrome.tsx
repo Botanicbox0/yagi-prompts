@@ -1,6 +1,9 @@
+import { PublicLink } from '@/components/admin/public-link';
 import type { ReactNode } from 'react';
-import { TwingsMark } from '@/components/brand/twings-mark';
+import { TwingsLogo } from '@/components/brand/twings-mark';
 import type { Dictionary } from '@/lib/i18n/dictionaries';
+import { getDictionary } from '@/lib/i18n/dictionaries';
+import { isLocale } from '@/lib/i18n/config';
 import { ADMIN_ACTION_PATH, BACK_FIELD, OP_FIELD } from '@/lib/admin/form';
 import type { AdminOperationName } from '@/lib/admin/operations';
 
@@ -239,6 +242,15 @@ export function OutcomeBanner({
 // shell
 // ---------------------------------------------------------------------------
 
+export function AdminBrand({ dict }: { dict: AdminDict }) {
+  return (
+    <a href="/admin" className="workspace-brand" aria-label={dict.brand}>
+      <TwingsLogo size={18} />
+      <span className="workspace-brand-byline">{dict.byline}</span>
+    </a>
+  );
+}
+
 export function AdminShell({
   dict,
   locale,
@@ -247,12 +259,12 @@ export function AdminShell({
 }: {
   dict: AdminDict;
   locale: string;
-  active: 'home' | 'playbooks' | 'policy' | 'prompts' | 'contests' | 'campaigns' | 'inquiries';
+  active: 'home' | 'playbooks' | 'policy' | 'prompts' | 'contests' | 'campaigns' | 'inquiries' | 'brandWorkspace';
   children: ReactNode;
 }) {
   // "Refresh caches" used to send every page back to /admin; it returns to where it was pressed.
   const refreshBack =
-    active === 'prompts'
+    active === 'brandWorkspace' ? '/admin/brand-workspace' : active === 'prompts'
       ? '/admin/prompts'
       : active === 'contests'
         ? '/admin/contests'
@@ -265,19 +277,17 @@ export function AdminShell({
             : active === 'playbooks'
               ? '/admin/playbooks'
               : '/admin';
-  const navClass = (key: 'home' | 'playbooks' | 'policy' | 'prompts' | 'contests' | 'campaigns' | 'inquiries') =>
+  const navClass = (key: 'home' | 'playbooks' | 'policy' | 'prompts' | 'contests' | 'campaigns' | 'inquiries' | 'brandWorkspace') =>
     `font-label text-eyebrow uppercase ${active === key ? 'text-accent' : 'opacity-60'}`;
 
   return (
     <div data-section data-theme="light" className="section min-h-screen">
       <header className="border-b border-hairline">
         <div className="mx-auto flex max-w-shell flex-wrap items-center justify-between gap-4 px-gutter py-4">
-          <div className="flex items-center gap-6">
-            <a href="/admin" className="inline-flex items-center gap-2 font-display text-[1.05rem] leading-none font-black uppercase">
-              <TwingsMark className="h-[20px]" />
-              {dict.brand}
-            </a>
-            <nav className="flex items-center gap-5">
+          <div className="flex min-w-0 flex-wrap items-center gap-x-6 gap-y-4">
+            <AdminBrand dict={dict} />
+            <nav className="flex flex-wrap items-center gap-x-5 gap-y-3">
+              <a href="/admin/brand-workspace" className={navClass('brandWorkspace')}>{getDictionary(isLocale(locale) ? locale : 'en').brandWorkspace.studioQueue}</a>
               {/* §13 put prompts first: it is the v1.5 surface, and the moderation queue is the
                   screen that has work waiting in it on any given day. */}
               <a href="/admin/prompts" className={navClass('prompts')}>
@@ -295,9 +305,9 @@ export function AdminShell({
               <a href="/admin/policy" className={navClass('policy')}>
                 {dict.navPolicy}
               </a>
-              <a href={`/${locale}`} className="font-label text-eyebrow uppercase opacity-60">
+              <PublicLink href={`/${locale}`} className="font-label text-eyebrow uppercase opacity-60">
                 {dict.navSite}
-              </a>
+              </PublicLink>
             </nav>
           </div>
           <OpForm op="caches.refresh" back={refreshBack} className="flex items-center gap-3">

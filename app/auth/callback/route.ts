@@ -2,12 +2,12 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { createAuthServerClient } from '@/lib/supabase/auth-client';
 import { getSqlRunner } from '@/lib/db/connect';
 import { SIGNUP_COOKIES } from '@/lib/cookies/wallet';
+import { authFailurePath, authReturnPath, resolveRequestUrl } from '@/lib/routing/surfaces';
 import {
   DEFAULT_LOCALE,
   LOCALE_COOKIE,
   LOCALE_COOKIE_MAX_AGE,
   isLocale,
-  localizedPath,
   type Locale,
 } from '@/lib/i18n/config';
 
@@ -35,21 +35,21 @@ import {
  * transaction rolls both back so the next login simply retries the branch.
  */
 export async function GET(request: NextRequest): Promise<NextResponse> {
-  const url = new URL(request.url);
+  const url = resolveRequestUrl(new URL(request.url), request.headers);
+  if (url === null) return new NextResponse(null, { status: 404 });
   const code = url.searchParams.get('code');
-  const requested = url.searchParams.get('next') ?? '/library';
-  const next = requested.startsWith('/') && !requested.startsWith('//') ? requested : '/library';
+  const next = authReturnPath(url.searchParams.get('next'), url.hostname, '/library');
   const uiLocaleRaw = url.searchParams.get('locale');
   const uiLocale: Locale = isLocale(uiLocaleRaw) ? uiLocaleRaw : DEFAULT_LOCALE;
 
   if (!code) {
-    return NextResponse.redirect(new URL(`${localizedPath(uiLocale, '/')}?error=oauth`, url.origin));
+    return NextResponse.redirect(new URL(authFailurePath(url.hostname, uiLocale, 'oauth', next), url.origin));
   }
 
   const supabase = await createAuthServerClient();
   const { data, error } = await supabase.auth.exchangeCodeForSession(code);
   if (error || !data.user) {
-    return NextResponse.redirect(new URL(`${localizedPath(uiLocale, '/')}?error=oauth`, url.origin));
+    return NextResponse.redirect(new URL(authFailurePath(url.hostname, uiLocale, 'oauth', next), url.origin));
   }
 
   let profileLocale: Locale = uiLocale;

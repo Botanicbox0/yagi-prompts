@@ -36,7 +36,7 @@ export function CampaignHero({ copy, brandHref, creatorHref }: { copy: Landing; 
           className="mt-6 font-display text-title font-black uppercase"
         />
         <div className="mt-8 flex flex-wrap items-end justify-between gap-x-14 gap-y-6 lg:mt-10">
-          <p className="max-w-detail text-body opacity-70">{copy.intro}</p>
+          <p data-campaign-definition className="max-w-detail text-body opacity-70">{copy.intro}</p>
           <div className="flex flex-wrap items-center gap-x-6 gap-y-4">
             <a href={brandHref} data-campaign-cta-brand className="inline-block bg-accent px-6 py-3 font-label text-label text-white uppercase">
               <TextSwap>{copy.ctaBrand} →</TextSwap>

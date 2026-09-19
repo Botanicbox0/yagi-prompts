@@ -2,12 +2,12 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { createAuthServerClient, getSessionUser } from '@/lib/supabase/auth-client';
 import { isEmbeddedWebView } from '@/lib/auth/webview';
 import { chooseProviderHref, isAuthProvider, needsRealBrowser } from '@/lib/auth/providers';
+import { authFailurePath, authReturnPath, resolveRequestUrl } from '@/lib/routing/surfaces';
 import {
   DEFAULT_LOCALE,
   LOCALE_COOKIE,
   LOCALE_COOKIE_MAX_AGE,
   isLocale,
-  localizedPath,
 } from '@/lib/i18n/config';
 
 /**
@@ -23,13 +23,13 @@ import {
  * the Supabase cloud project and the Google OAuth client exist. The code path is complete.
  */
 export async function GET(request: NextRequest): Promise<NextResponse> {
-  const url = new URL(request.url);
+  const url = resolveRequestUrl(new URL(request.url), request.headers);
+  if (url === null) return new NextResponse(null, { status: 404 });
   const rawLocale = url.searchParams.get('locale');
   const locale = isLocale(rawLocale) ? rawLocale : DEFAULT_LOCALE;
   // A sign-in with nowhere to go returns to the video templates (docs/TEMPLATES-IA.md).
   const fallback = `/${locale}/video`;
-  const requested = url.searchParams.get('next') ?? fallback;
-  const next = requested.startsWith('/') && !requested.startsWith('//') ? requested : fallback;
+  const next = authReturnPath(url.searchParams.get('next'), url.hostname, fallback);
 
   // Already signed in ⇒ this is a return-to, not a login. M3 makes `/auth/signin?next=…` the CTA
   // for every STATIC surface (the marketing tree may not read the session, §3.1 cache mode), so it
@@ -53,7 +53,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     interstitial.searchParams.set('next', next);
     interstitial.searchParams.set('locale', locale);
     const response = NextResponse.redirect(interstitial);
-    // Middleware never runs under /auth/*, so the (app) layout resolves `<html lang>` from the
+    // Auth skips middleware session/locale redirects, so the (app) layout resolves `<html lang>` from the
     // locale cookie — written here from the same explicit signal a locale-prefixed visit sets.
     response.cookies.set(LOCALE_COOKIE, locale, {
       path: '/',
@@ -74,11 +74,11 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       options: { redirectTo: callback.toString() },
     });
     if (error || !data.url) {
-      return NextResponse.redirect(new URL(`${localizedPath(locale, '/')}?error=oauth`, url.origin));
+      return NextResponse.redirect(new URL(authFailurePath(url.hostname, locale, 'oauth', next), url.origin));
     }
     return NextResponse.redirect(data.url);
   } catch {
     // Placeholder env (no Supabase project yet) — fail visibly but without a 500 page.
-    return NextResponse.redirect(new URL(`${localizedPath(locale, '/')}?error=oauth_unconfigured`, url.origin));
+    return NextResponse.redirect(new URL(authFailurePath(url.hostname, locale, 'oauth_unconfigured', next), url.origin));
   }
 }

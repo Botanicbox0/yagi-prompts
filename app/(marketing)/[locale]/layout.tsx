@@ -9,6 +9,8 @@ import { noticeLabels } from '@/components/marketing/notice-codes';
 import { LOCALES, isLocale, DEFAULT_LOCALE, type Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/dictionaries';
 import { siteUrl } from '@/lib/seo/site-url';
+import { JsonLd } from '@/lib/seo/json-ld';
+import { siteStructuredData } from '@/lib/seo/structured-data';
 
 /**
  * Root layout for the PUBLIC, locale-prefixed surface (§3.9 / §4).
@@ -85,6 +87,7 @@ export default async function MarketingRootLayout({
         <link rel="stylesheet" href="/fonts/pretendard/pretendard-hangul-mono.css" />
       </head>
       <body>
+        <JsonLd id="site-structured-data" data={siteStructuredData(appUrl)} />
         <ScrollProvider>
           {/* F2 — the auth redirects' `?error=…` / `?signin=1` outcomes, rendered instead of
               silent. Client-only read of location.search, so the tree stays static (§3.1). */}

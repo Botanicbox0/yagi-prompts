@@ -1,5 +1,19 @@
 # Toss 단건 결제 검증
 
+## 2026-09-20 최신 main 통합 검증
+
+브랜드 출시가 반영된 main `d14861c`를 `codex/toss-checkout`에 통합했다. 기존 결제 구현을 바꾸지 않고 브랜드·인증 호스트·문안·SEO 변경과 함께 작동하는지 검증했다.
+
+- `npx tsc --noEmit`: 통과
+- `npx vitest run`: **114 파일 / 1,352 테스트 통과**
+- `npm run build:local`, `npm run start:local`: 통과
+- `npm run sweep:anon`: **SWEEP PASSED — 601/601**
+- `node scripts/smoke-workspace-hosts.mjs 3000`: **HOST SMOKE PASSED — 87/87**
+
+아래 실제 테스트 카드 승인·환불 증거는 9월 19일 검증 기록이다. 이번 통합 검사에서는 카드 결제를 다시 실행하지 않았다. `.env.local`, 약관 본문, 공개 플래그는 변경하지 않았다. 클라우드 결제 마이그레이션 적용과 운영 배포는 아직 하지 않았다.
+
+## 기존 실제 카드·환불 검증
+
 2026-09-19, 로컬 일반 사용자 픽스처(`PLAYBOOK_DEV_IDENTITY`, free 계정)와 실제 토스 테스트 키로 검증했다. `RENDER_PIPELINE_PUBLIC`은 로컬 확인 동안만 열었으며, 최종 소스는 `false`다. `.env.local` 수정과 클라우드 마이그레이션 적용은 하지 않았다.
 
 ## 브라우저 증거

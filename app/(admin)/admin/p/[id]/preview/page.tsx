@@ -10,6 +10,7 @@ import { StepChips, StepIndex } from '@/components/playbook/step-index';
 import { playbookLabels } from '@/components/playbook/labels';
 import { AdminShell, BUTTON, Panel } from '@/components/admin/chrome';
 import { categoryLabel, difficultyLabel } from '@/components/admin/labels';
+import { publicHref, requestSurface } from '@/lib/routing/request-surface';
 
 /**
  * `/admin/p/[id]/preview?tier=visitor|free|pro` — §3.8 "Preview-as: render any revision as
@@ -62,6 +63,7 @@ export default async function AdminPreviewPage({
   const dict = getDictionary(locale);
   const a = dict.admin;
   const labels = playbookLabels(dict);
+  const { admin } = await requestSurface();
   const { playbook } = result;
 
   const tabs: Array<[string, string]> = [
@@ -127,6 +129,7 @@ export default async function AdminPreviewPage({
               locale={locale}
               labels={labels}
               tier={playbook.tier}
+              upgrade={{ kind: 'unavailable', href: publicHref(`/${locale}/pricing`, admin) }}
             />
           </div>
         </div>

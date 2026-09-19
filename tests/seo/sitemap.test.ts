@@ -54,7 +54,7 @@ describe('sitemap (§8 M5)', () => {
     expect(urls).toContain(`${ORIGIN}/ko/pricing`);
     // The two template tabs are the front doors (docs/TEMPLATES-IA.md) — a front door a crawler
     // cannot find is not one.
-    for (const rest of ['/video', '/image', '/campaigns']) {
+    for (const rest of ['/video', '/image', '/campaigns', '/faq']) {
       expect(urls).toContain(`${ORIGIN}/en${rest}`);
       expect(urls).toContain(`${ORIGIN}/ko${rest}`);
     }
@@ -101,12 +101,21 @@ describe('sitemap (§8 M5)', () => {
 
   it('degrades to an empty catalog without producing a broken sitemap', () => {
     const empty = buildSitemap({ origin: ORIGIN, cards: [] });
-    // Eight marketing pages × two locales: landing, the two template tabs (docs/TEMPLATES-IA.md),
-    // the campaigns listing, pricing, and the three legal documents (2026-08-14 — a payment
+    // Nine marketing pages × two locales: landing, the two template tabs (docs/TEMPLATES-IA.md),
+    // the campaigns listing, pricing, FAQ, and the three legal documents (2026-08-14 — a payment
     // provider's merchant review and 전자상거래법 §21 expect them publicly reachable). The listings
     // are in the sitemap even with no rows — each is a real page with a designed empty state.
-    expect(empty).toHaveLength(16);
+    expect(empty).toHaveLength(18);
     expect(empty.every((entry) => entry.url.startsWith(ORIGIN))).toBe(true);
+  });
+
+  it('never invents modification dates from the time of sitemap generation', () => {
+    expect(entries.find((entry) => entry.url === `${ORIGIN}/en`)).not.toHaveProperty('lastModified');
+    expect(entries.find((entry) => entry.url.endsWith('/en/p/voice-identity-setup'))).not.toHaveProperty('lastModified');
+    const changed = buildSitemap({ origin: ORIGIN, cards: [card({ updatedAt: '2026-09-20T10:00:00Z' })], pageModifiedAt: { '/faq': '2026-09-19T00:00:00Z', '/pricing': 'invalid' } });
+    expect(changed.find((entry) => entry.url.endsWith('/en/p/a-playbook'))?.lastModified).toEqual(new Date('2026-09-20T10:00:00Z'));
+    expect(changed.find((entry) => entry.url.endsWith('/en/faq'))?.lastModified).toEqual(new Date('2026-09-19T00:00:00Z'));
+    expect(changed.find((entry) => entry.url.endsWith('/en/pricing'))).not.toHaveProperty('lastModified');
   });
 });
 
@@ -123,6 +132,10 @@ describe('robots (§8 M5)', () => {
     // prefix would take the listing and every contest page down with it.
     expect(rule.disallow).toEqual([
       '/admin',
+      '/brand$',
+      '/brand/projects',
+      '/brand/members',
+      '/brand/invite',
       '/library',
       '/account',
       '/billing',

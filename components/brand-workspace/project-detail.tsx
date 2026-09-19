@@ -1,0 +1,397 @@
+import type {
+  BrandProjectDetail,
+  BrandPost,
+} from "@/lib/brands/workspace/types";
+import type { BrandCopy } from "./action-form";
+import { ActionForm } from "./action-form";
+import { BrandUpload } from "./upload";
+import { interpolate } from "@/lib/i18n/format";
+import { formatBrandTimestamp } from "./format";
+
+export function PostTable({
+  posts,
+  b,
+  locale,
+}: {
+  posts: BrandPost[];
+  b: BrandCopy;
+  locale: string;
+}) {
+  if (!posts.length) return <p className="bw-muted">{b.noPosts}</p>;
+  const value = (n: number | null) =>
+    n === null ? b.notMeasured : n.toLocaleString(locale);
+  return (
+    <div className="bw-table-wrap">
+      <table className="bw-table">
+        <thead>
+          <tr>
+            <th>{b.posts}</th>
+            <th>{b.views}</th>
+            <th>{b.likes}</th>
+            <th>{b.comments}</th>
+            <th>{b.shares}</th>
+            <th>{b.saves}</th>
+            <th>{b.source}</th>
+            <th>{b.measuredAt}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {posts.map((p) => (
+            <tr key={p.id}>
+              <td>
+                <a
+                  href={p.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title={b.external}
+                >
+                  {p.platform} ↗
+                </a>
+                <p className="bw-muted">
+                  {b.verificationLabels[p.verification]}
+                </p>
+              </td>
+              <td>{value(p.views)}</td>
+              <td>{value(p.likes)}</td>
+              <td>{value(p.comments)}</td>
+              <td>{value(p.shares)}</td>
+              <td>{value(p.saves)}</td>
+              <td>{b.sourceLabels[p.metricsSource]}</td>
+              <td>
+                {formatBrandTimestamp(p.measuredAt, locale) ?? b.notMeasured}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+export function ProjectDetail({
+  project: p,
+  b,
+  locale,
+  studio = false,
+}: {
+  project: BrandProjectDetail;
+  b: BrandCopy;
+  locale: string;
+  studio?: boolean;
+}) {
+  const writable = !studio && p.role !== "viewer" && p.status !== "cancelled";
+  const newest = new Map<string, number>();
+  for (const c of p.contents)
+    newest.set(c.slotKey, Math.max(newest.get(c.slotKey) ?? 0, c.version));
+  return (
+    <div data-brand-project={p.id}>
+      <div className="bw-heading">
+        <div>
+          <a href={studio ? "/admin/brand-workspace" : "/brand"}>← {b.back}</a>
+          <p className="bw-kicker">{p.organizationName}</p>
+          <h1>{p.title}</h1>
+          <p>
+            {b.latestUpdate} {formatBrandTimestamp(p.updatedAt, locale)}
+          </p>
+        </div>
+        <span className="bw-status" data-state={p.status}>
+          {b.status[p.status]}
+        </span>
+      </div>
+      {p.status === "requested" && <p className="bw-note">{b.requestedNext}</p>}
+      <nav className="bw-tabs">
+        <a href="#brief">{b.overview}</a>
+        <a href="#review">{b.review}</a>
+        <a href="#conversation">{b.conversation}</a>
+        <a href="#reports">{b.reports}</a>
+      </nav>
+      <div className="bw-grid-wide">
+        <div>
+          <section id="brief" className="bw-panel">
+            <h2>{b.overview}</h2>
+            <h3>{b.objective}</h3>
+            <p className="bw-prose">{p.objective}</p>
+            <dl className="bw-meta">
+              <div>
+                <dt>{b.audience}</dt>
+                <dd className="bw-prose">{p.audience || b.tax.unspecified}</dd>
+              </div>
+              <div>
+                <dt>{b.budget}</dt>
+                <dd>
+                  {p.budgetKrw === null
+                    ? b.tax.unspecified
+                    : new Intl.NumberFormat(locale, {
+                        style: "currency",
+                        currency: "KRW",
+                        maximumFractionDigits: 0,
+                      }).format(p.budgetKrw)}{" "}
+                  · {b.tax[p.budgetTaxBasis]}
+                </dd>
+              </div>
+              <div>
+                <dt>
+                  {b.startsOn} / {b.endsOn}
+                </dt>
+                <dd>
+                  {p.startsOn ?? b.tax.unspecified} —{" "}
+                  {p.endsOn ?? b.tax.unspecified}
+                </dd>
+              </div>
+              <div>
+                <dt>{b.production}</dt>
+                <dd>{b.productionModes[p.productionMode]}</dd>
+              </div>
+            </dl>
+            <h3>{b.criteria}</h3>
+            <p className="bw-muted">{b.criteriaHint}</p>
+            <dl className="bw-meta">
+              <div>
+                <dt>{b.platformLabel}</dt>
+                <dd>
+                  {p.criteria.platforms.map((x) => b.platforms[x]).join(", ") ||
+                    b.tax.unspecified}
+                </dd>
+              </div>
+              <div>
+                <dt>
+                  {b.minFollowers} / {b.maxFollowers}
+                </dt>
+                <dd>
+                  {p.criteria.minFollowers?.toLocaleString(locale) ??
+                    b.tax.unspecified}{" "}
+                  —{" "}
+                  {p.criteria.maxFollowers?.toLocaleString(locale) ??
+                    b.tax.unspecified}
+                </dd>
+              </div>
+              <div>
+                <dt>{b.primaryMetric}</dt>
+                <dd>{b.metricNames[p.criteria.primaryMetric]}</dd>
+              </div>
+              <div>
+                <dt>{b.targetValue}</dt>
+                <dd>
+                  {p.criteria.targetValue?.toLocaleString(locale) ??
+                    b.tax.unspecified}
+                </dd>
+              </div>
+            </dl>
+            {p.referenceLinks.length > 0 && (
+              <>
+                <h3>{b.references}</h3>
+                <ul className="bw-list">
+                  {p.referenceLinks.map((r, i) => (
+                    <li key={i}>
+                      <a
+                        href={r.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title={b.external}
+                        className="bw-prose"
+                      >
+                        {r.url} ↗
+                      </a>
+                      <p className="bw-prose bw-muted">{r.note}</p>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+          </section>
+          <section id="review" className="bw-panel">
+            <h2>{b.review}</h2>
+            <p className="bw-muted">{b.approvalNotice}</p>
+            {p.contents.length === 0 ? (
+              <p className="bw-note">{b.noContent}</p>
+            ) : (
+              p.contents.map((c) => (
+                <article
+                  className="bw-message"
+                  key={c.id}
+                  data-content-version={c.id}
+                >
+                  <div className="bw-row">
+                    <h3>
+                      {c.title} ·{" "}
+                      {interpolate(b.version, { number: c.version })}
+                    </h3>
+                    <span className="bw-status" data-state={c.decision}>
+                      {b.decisionStates[c.decision]}
+                    </span>
+                  </div>
+                  <a
+                    className="bw-button"
+                    href={c.mediaUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    {b.openContent} ↗
+                  </a>
+                  <dl className="bw-meta">
+                    <div>
+                      <dt>{b.caption}</dt>
+                      <dd className="bw-prose">{c.caption}</dd>
+                    </div>
+                    <div>
+                      <dt>{b.usage}</dt>
+                      <dd className="bw-prose">{c.usageRights}</dd>
+                    </div>
+                  </dl>
+                  {writable &&
+                    p.status === "active" &&
+                    newest.get(c.slotKey) === c.version &&
+                    c.decision === "pending" && (
+                      <ActionForm
+                        operation="content.decide"
+                        fixed={{
+                          projectId: p.id,
+                          contentVersionId: c.id,
+                          expectedRevision: c.reviewRevision,
+                        }}
+                        b={b}
+                        submit={b.save}
+                      >
+                        <label>
+                          {b.decision}
+                          <select name="decision">
+                            <option value="approved">{b.approve}</option>
+                            <option value="changes_requested">
+                              {b.requestChanges}
+                            </option>
+                          </select>
+                        </label>
+                        <label>
+                          {b.decisionComment}
+                          <textarea name="comment" maxLength={2000} />
+                        </label>
+                        <label className="bw-check">
+                          <input type="checkbox" required name="confirmed" />
+                          {b.approveConfirm}
+                        </label>
+                      </ActionForm>
+                    )}
+                  {p.decisions
+                    .filter((d) => d.contentVersionId === c.id)
+                    .map((d) => (
+                      <div className="bw-note" key={d.id}>
+                        <strong>{b.decisionStates[d.decision]}</strong> ·{" "}
+                        {formatBrandTimestamp(d.createdAt, locale)}
+                        <p className="bw-prose">{d.comment}</p>
+                      </div>
+                    ))}
+                </article>
+              ))
+            )}
+          </section>
+          <section id="reports" className="bw-panel">
+            <h2>{b.reports}</h2>
+            <p className="bw-muted">{b.metricsNote}</p>
+            {!p.reports.length ? (
+              <p className="bw-note">{b.noReports}</p>
+            ) : (
+              p.reports.map((r) => (
+                <article
+                  key={r.id}
+                  className="bw-message"
+                  data-report-version={r.version}
+                >
+                  <h3>{interpolate(b.reportCount, { number: r.version })}</h3>
+                  <p className="bw-muted">
+                    {b.period}: {r.periodStart} — {r.periodEnd} ·{" "}
+                    {b.publishedAt}: {formatBrandTimestamp(r.createdAt, locale)}
+                  </p>
+                  <div className="bw-stats">
+                    <div>
+                      <small>{b.totalViews}</small>
+                      <strong>
+                        {r.snapshot.viewsTotal === null
+                          ? b.notMeasured
+                          : r.snapshot.viewsTotal.toLocaleString(locale)}
+                      </strong>
+                    </div>
+                    <div>
+                      <small>{b.coverage}</small>
+                      <strong>
+                        {r.snapshot.measuredPosts} / {r.snapshot.totalPosts}
+                      </strong>
+                    </div>
+                    <div>
+                      <small>{b.posts}</small>
+                      <strong>{r.snapshot.totalPosts}</strong>
+                    </div>
+                  </div>
+                  <p className="bw-prose">{r.summary}</p>
+                  <PostTable posts={r.snapshot.posts} b={b} locale={locale} />
+                </article>
+              ))
+            )}
+          </section>
+          <section className="bw-panel">
+            <h2>{b.posts}</h2>
+            <PostTable posts={p.posts} b={b} locale={locale} />
+          </section>
+        </div>
+        <div>
+          <section id="conversation" className="bw-panel">
+            <h2>{b.conversation}</h2>
+            {!p.messages.length && <p className="bw-muted">{b.noMessages}</p>}
+            {p.messages.map((m) => (
+              <article
+                className="bw-message"
+                key={m.id}
+                data-author={m.authorRole}
+              >
+                <header>
+                  <strong>
+                    {m.authorRole === "studio" ? b.studioAuthor : b.brandAuthor}
+                  </strong>
+                  <time dateTime={m.createdAt}>
+                    {formatBrandTimestamp(m.createdAt, locale)}
+                  </time>
+                </header>
+                <p className="bw-prose">{m.body}</p>
+              </article>
+            ))}
+            {writable && (
+              <ActionForm
+                operation="message.send"
+                fixed={{ projectId: p.id }}
+                b={b}
+                submit={b.send}
+              >
+                <label>
+                  {b.message}
+                  <textarea name="body" required maxLength={4000} />
+                </label>
+              </ActionForm>
+            )}
+          </section>
+          <section className="bw-panel">
+            <h2>{b.files}</h2>
+            {!p.attachments.length && <p className="bw-muted">{b.noFiles}</p>}
+            <ul className="bw-list">
+              {p.attachments.map((f) => (
+                <li key={f.id}>
+                  <a
+                    href={`/api/brand-workspace/attachments/${f.id}`}
+                    rel="noreferrer"
+                    target="_blank"
+                    className="bw-prose"
+                  >
+                    {f.name} ↗
+                  </a>
+                  <p className="bw-muted">
+                    {Math.ceil(f.sizeBytes / 1024).toLocaleString(locale)} KB ·{" "}
+                    {formatBrandTimestamp(f.createdAt, locale)}
+                  </p>
+                </li>
+              ))}
+            </ul>
+            {writable && <BrandUpload projectId={p.id} b={b} />}
+          </section>
+        </div>
+      </div>
+    </div>
+  );
+}

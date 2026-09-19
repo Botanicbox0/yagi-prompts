@@ -1,0 +1,25 @@
+/* Helvetica Neue, supplied by the owner for licensed web embedding. Latin only. */
+@font-face {
+  font-family: 'TWINGS Helvetica Neue';
+  src: url('./helvetica-neue-roman.woff2') format('woff2');
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  unicode-range: U+0000-024F, U+1E00-1EFF, U+2000-206F, U+20A0-20CF, U+2122;
+}
+@font-face {
+  font-family: 'TWINGS Helvetica Neue';
+  src: url('./helvetica-neue-medium.woff2') format('woff2');
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  unicode-range: U+0000-024F, U+1E00-1EFF, U+2000-206F, U+20A0-20CF, U+2122;
+}
+@font-face {
+  font-family: 'TWINGS Helvetica Neue';
+  src: url('./helvetica-neue-bold.woff2') format('woff2');
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  unicode-range: U+0000-024F, U+1E00-1EFF, U+2000-206F, U+20A0-20CF, U+2122;
+}

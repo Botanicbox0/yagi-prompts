@@ -2,7 +2,8 @@ import { notFound } from 'next/navigation';
 import { getContestPreview } from '@/lib/contests/facade';
 import { getDictionary } from '@/lib/i18n/dictionaries';
 import { getLocaleFromHeaders } from '@/lib/i18n/server';
-import { ADMIN_CONTESTS_PATH } from '@/lib/contests/links';
+import { ADMIN_CONTESTS_PATH, contestSubmitPath } from '@/lib/contests/links';
+import { publicHref, requestSurface } from '@/lib/routing/request-surface';
 import {
   ContestBody,
   ContestHeader,
@@ -10,7 +11,7 @@ import {
   ContestPrize,
 } from '@/components/contests/detail';
 import { contestLabels } from '@/components/contests/labels';
-import { BUTTON } from '@/components/admin/chrome';
+import { AdminBrand, BUTTON } from '@/components/admin/chrome';
 
 /**
  * `/admin/contests/[slug]/preview` — PLAN §14.2: "draft = admin preview path".
@@ -39,15 +40,19 @@ export default async function AdminContestPreviewPage({
   if (result.status !== 'ok') notFound();
 
   const { contest } = result;
+  const { admin } = await requestSurface();
+  // Existing preview media includes published-only consumer URLs. Keep those public rather
+  // than widening the admin host's API allowlist; private preview assets keep their own gateway.
+  for (const media of [contest.poster, contest.video, contest.hostLogo]) {
+    if (media?.src.startsWith('/')) media.src = publicHref(media.src, admin);
+  }
   const labels = contestLabels(dict);
 
   return (
     <div data-section data-theme="light" className="section min-h-screen">
       <header className="border-b border-hairline">
         <div className="mx-auto flex max-w-shell flex-wrap items-center justify-between gap-4 px-gutter py-4">
-          <span className="font-display text-[1.05rem] leading-none font-black uppercase">
-            {dict.admin.brand}
-          </span>
+          <AdminBrand dict={dict.admin} />
           <a href={ADMIN_CONTESTS_PATH} className={BUTTON}>
             {dict.admin.editorBack}
           </a>
@@ -61,7 +66,7 @@ export default async function AdminContestPreviewPage({
         </div>
         <ContestPrize contest={contest} locale={locale} labels={labels} />
         <div className="band">
-          <ContestBody contest={contest} locale={locale} labels={labels} />
+          <ContestBody contest={contest} locale={locale} labels={labels} submitHref={publicHref(contestSubmitPath(contest.slug), admin)} />
         </div>
       </main>
     </div>
