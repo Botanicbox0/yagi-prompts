@@ -23,6 +23,8 @@
       .settlement-table th:last-child,.settlement-table td:last-child{padding-right:0;text-align:right}
       .settlement-table .button{min-height:44px;padding:7px 9px}
     }
+    .rules-summary{border:1px solid var(--line);padding:18px;margin-bottom:28px}.rules-summary .section-title{align-items:center;margin-bottom:10px}.rules-summary p{font-size:11px;color:var(--muted)}.rules-summary .rule-facts{display:flex;flex-wrap:wrap;gap:7px;margin:12px 0}.rules-dialog{width:720px}.rules-intro{font-size:11px;color:var(--muted);margin-bottom:20px}.rules-form fieldset{border:0;border-top:1px solid var(--line);padding:18px 0;margin:0;min-width:0}.rules-form legend{font-size:13px;font-weight:650;padding:0 8px 0 0}.rules-form .rule-hint{font-size:11px;color:var(--muted);margin-bottom:12px;line-height:1.8}.rule-fields{display:grid;grid-template-columns:1fr 1fr;gap:15px}.rule-field{min-width:0}.rule-field label{display:block;font-size:11px;margin-bottom:6px}.rule-field input,.rule-field select{width:100%;min-height:42px;background:#fff;border:1px solid #bbb;border-radius:4px;padding:8px 10px;font-size:12px;min-width:0}.rule-field input[aria-invalid=true]{border:2px solid #111}.rule-field small{display:block;font-size:10px;color:var(--muted);margin-top:5px}.rule-capabilities{background:var(--soft);padding:12px;margin-top:13px;font-size:11px;line-height:1.9}.rule-error{font-size:12px;border-left:3px solid #111;background:var(--soft);padding:12px;margin:12px 0}.rules-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}.rule-results{border-top:1px solid var(--line);margin-top:22px;padding-top:18px}.rule-results h3{margin-bottom:8px}.rule-result{padding:14px 0;border-bottom:1px solid var(--line)}.rule-result-head{display:flex;justify-content:space-between;gap:12px;align-items:center;font-size:12px}.rule-result p{font-size:11px;color:var(--muted);margin-top:6px}.rule-result .reference-note{font-size:10px}.rule-results:focus{outline:none}
+    @media(max-width:620px){.rules-summary{padding:14px}.rules-summary .section-title{align-items:flex-start;flex-direction:column;gap:9px}.rules-summary .button{min-height:44px;width:100%}.rules-dialog{max-width:calc(100vw - 20px)}.rule-fields{grid-template-columns:1fr;gap:13px}.rules-form fieldset{padding:16px 0}.rules-actions .button{width:100%;min-height:44px}.rules-dialog .dialog-top h2{font-size:19px}.rule-result-head{align-items:flex-start}.rule-result p{overflow-wrap:anywhere}}
     @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;animation:none!important;transition:none!important}}
     @media print{.sidebar,.topbar,.mobile-nav,.prototype-controls,.button{display:none}.shell{display:block}.page{padding:20px}.prototype-banner{background:#fff;color:#111;border-bottom:1px solid #111}.prototype-banner span:last-child{color:#666}}
   </style>
@@ -58,6 +60,7 @@
   </div>
   <dialog class="dialog drawer" id="detail-dialog" aria-labelledby="detail-title"><div class="dialog-content" id="detail-content"></div></dialog>
   <dialog class="dialog" id="info-dialog" aria-labelledby="info-title"><div class="dialog-content" id="info-content"></div></dialog>
+  <dialog class="dialog rules-dialog" id="rules-dialog" aria-labelledby="rules-title" aria-describedby="rules-intro"><div class="dialog-content" id="rules-content"></div></dialog>
   <dialog class="dialog menu-dialog" id="menu-dialog" aria-labelledby="menu-title"><div class="dialog-content"><div class="dialog-top"><h2 id="menu-title">운영 메뉴</h2><button class="button icon" data-close aria-label="메뉴 닫기"><svg aria-hidden="true"><use href="#i-close"/></svg></button></div><nav id="mobile-all-nav"></nav></div></dialog>
   <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
   <script>
@@ -84,6 +87,10 @@
       {version:1,status:'수정 요청',title:'문구 길이와 로고 위치 수정',description:'변경 요청을 다음 버전에 반영했습니다.'}
     ];
     let versionHistory=initialVersionHistory.map(entry=>({...entry}));
+    const initialRules={platform:'instagram',minFollowers:1000,maxFollowers:20000,medianViews:2000,referenceWindow:'30',goal:'posts',target:5,goalWindow:'7'};
+    let campaignRules={...initialRules};
+    const platformLabels={instagram:'Instagram',tiktok:'TikTok',x:'X'};
+    const goalLabels={posts:'게시 완료',views:'조회수',clicks:'링크 클릭'};
     const returnFocus=new WeakMap();
     const titles={today:'오늘 할 일',campaign:'가상 캠페인 A',settlement:'정산'};
     const navMarkup=()=>menuGroups.map(([label,entries])=>`<div class="nav-group"><p class="nav-label">${label}</p>${entries.map(([key,glyph,title])=>`<button class="nav-button" data-view="${key}" ${view===key?'aria-current="page"':''}>${icon(glyph)}<span>${title}</span>${key==='today'?`<span class="count mono">${items.length}</span>`:''}</button>`).join('')}</div>`).join('');
@@ -112,6 +119,7 @@
     function render(){
       renderNav();$('#breadcrumb-current').textContent=view==='campaign'?'캠페인':titles[view];
       $('#content').innerHTML=view==='today'?todayMarkup():view==='campaign'?campaignMarkup():settlementMarkup();
+      if(view==='campaign'&&prototypeState==='normal')$('.campaign-grid').insertAdjacentHTML('beforebegin',campaignRulesSummary());
       $('#state-select').value=prototypeState;
       renderQueue();
     }
@@ -137,6 +145,42 @@
       const row=Object.values(settlements).flat().find(entry=>entry[0]===id);
       showInfo(`${id} · 정산 근거`, `<p>상태와 증빙을 함께 검토하는 화면의 예시입니다.</p><ul class="info-list"><li><span>캠페인</span><strong>${row[1]}</strong></li><li><span>정산 가능 조건</span><strong>${row[2]}</strong></li><li><span>확인 근거</span><strong>${row[3]}</strong></li><li><span>지급 상태</span><strong>${row[4]}</strong></li><li><span>정산 금액</span><strong>시안에서 제공하지 않음</strong></li><li><span>조회수 측정 시각</span><strong>실제 기록 없음</strong></li></ul><div class="inline-note">지급 완료는 실제 이체 근거를 남긴 뒤 기록해야 합니다. 이 시안에서는 지급 상태를 변경할 수 없습니다.</div>`,`<button class="button" data-confirm-evidence="${id}">근거 검토 기록 시연</button>`);
     }
+    function campaignRulesSummary(){
+      const rule=campaignRules;
+      const range=rule.maxFollowers===null?`${rule.minFollowers.toLocaleString('ko-KR')}명 이상`:`${rule.minFollowers.toLocaleString('ko-KR')}–${rule.maxFollowers.toLocaleString('ko-KR')}명`;
+      return `<section class="rules-summary" aria-labelledby="rules-summary-title"><div class="section-title"><h2 id="rules-summary-title">지원 조건·성과 목표</h2><button class="button" data-action="campaign-rules">조건 설정·판정 시연 ${icon('arrow')}</button></div><p>일반 사용자가 SNS를 연결한 뒤, 캠페인별 조건을 확인하는 흐름입니다.</p><div class="rule-facts"><span class="badge">시연 입력 · ${platformLabels[rule.platform]}</span><span class="badge">팔로워 ${range}</span><span class="badge">${goalLabels[rule.goal]} 목표 ${rule.target.toLocaleString('ko-KR')}${rule.goal==='posts'?'건':'회'}</span></div><p>모든 수치는 가상 입력입니다. 지원 자격·선정 참고·성과 목표·정산 조건을 각각 구분합니다.</p></section>`;
+    }
+    function capabilityNote(platform,goal){
+      const notes={instagram:'Instagram: 지원되는 프로페셔널 계정과 승인된 권한이 필요합니다. 개인 계정의 상세 인사이트를 연결만으로 가져올 수 있다고 가정하지 않습니다. 인구통계·저장·도달은 계정과 권한, API의 실제 제공 여부를 확인합니다.',tiktok:'TikTok Display API: 허용된 기본 프로필·통계·게시 영상 데이터 범위만 사용합니다. 오디언스 인구통계·저장 수·도달 수는 이 연동으로 제공한다고 약속하지 않습니다.',x:'X: 승인된 API 접근 범위와 요금·사용량 한도를 확인해야 합니다. 공개 반응 수와 본인 게시물의 상세 지표를 구분합니다. 노출 수와 영상 재생 수는 별개이며, 북마크 수를 다른 플랫폼의 저장 수와 합산하지 않습니다.'};
+      const goalNote=goal==='clicks'?'링크 클릭 목표는 별도 추적 링크의 실제 집계가 필요합니다. SNS 연결만으로 캠페인 링크 클릭이 자동 수집되지는 않습니다.':goal==='posts'?'게시 완료는 TWINGS가 제출 링크와 게시 요구사항을 검수한 건수입니다. SNS 게시물 수 전체와 다릅니다.':'영상 콘텐츠의 플랫폼별 조회 지표와 관측 시점을 함께 보관합니다. X는 게시물 노출 대신 영상 재생 수를 확인합니다. 지원되지 않는 콘텐츠는 미수집으로 표시하고, 합계를 고유 도달 인원으로 부르지 않습니다.';
+      return `${notes[platform]}<br><strong>선택한 목표:</strong> ${goalNote}`;
+    }
+    function showCampaignRules(){
+      const rule=campaignRules;
+      $('#rules-content').innerHTML=`<div class="dialog-top"><div><span class="eyebrow">CAMPAIGN RULES · 설계 시연</span><h2 id="rules-title">지원 조건·성과 목표</h2></div><button class="button icon" type="button" data-close aria-label="지원 조건 설정 닫기">${icon('close')}</button></div><p id="rules-intro" class="rules-intro">모든 숫자는 <strong>시연 입력</strong>입니다. 실제 SNS 연결·지원·선정·계약 변경은 실행하지 않습니다. 새로고침하면 사라집니다.</p><form id="rules-form" class="rules-form" novalidate><fieldset><legend>1. 지원 자격</legend><p class="rule-hint">선택한 SNS의 계정 소유권과 팔로워 범위를 확인합니다. 연결이 만료되거나 값이 없으면 ‘확인 필요’입니다.</p><div class="rule-fields"><div class="rule-field"><label for="rule-platform">연결할 SNS</label><select id="rule-platform">${Object.entries(platformLabels).map(([key,label])=>`<option value="${key}" ${rule.platform===key?'selected':''}>${label}</option>`).join('')}</select></div><div class="rule-field"><label for="rule-min">최소 팔로워 수 · 시연 입력</label><input id="rule-min" type="number" inputmode="numeric" min="0" step="1" value="${rule.minFollowers}" required></div><div class="rule-field"><label for="rule-max">최대 팔로워 수 · 시연 입력</label><input id="rule-max" type="number" inputmode="numeric" min="0" step="1" value="${rule.maxFollowers??''}" aria-describedby="rule-max-hint"><small id="rule-max-hint">비워 두면 상한을 두지 않습니다.</small></div></div></fieldset><fieldset><legend>2. 선정 참고</legend><p class="rule-hint">최근 영상 중위 조회수는 검토를 돕는 참고값입니다. 지원 자격이나 정산 금액을 바꾸지 않습니다. 표본 수·관측일·게시 경과일을 함께 확인합니다.</p><div class="rule-fields"><div class="rule-field"><label for="rule-median">참고할 중위 조회수 · 시연 입력</label><input id="rule-median" type="number" inputmode="numeric" min="0" step="1" value="${rule.medianViews??''}" aria-describedby="rule-median-hint"><small id="rule-median-hint">비워 두면 이 참고 기준을 사용하지 않습니다.</small></div><div class="rule-field"><label for="rule-reference-window">최근 게시물 범위</label><select id="rule-reference-window">${['30','90'].map(days=>`<option value="${days}" ${rule.referenceWindow===days?'selected':''}>최근 ${days}일 게시 영상 · 시연 입력</option>`).join('')}</select></div></div></fieldset><fieldset><legend>3. 성과 목표</legend><p class="rule-hint">캠페인 리포트에서 비교할 목표입니다. 목표 달성을 보장하거나 자동 지급 조건으로 사용하지 않습니다.</p><div class="rule-fields"><div class="rule-field"><label for="rule-goal">핵심 목표</label><select id="rule-goal">${Object.entries(goalLabels).map(([key,label])=>`<option value="${key}" ${rule.goal===key?'selected':''}>${label}</option>`).join('')}</select></div><div class="rule-field"><label for="rule-target">목표값 · 시연 입력</label><input id="rule-target" type="number" inputmode="numeric" min="1" step="1" value="${rule.target}" required aria-describedby="rule-target-unit"><small id="rule-target-unit">단위: ${rule.goal==='posts'?'검수 완료한 게시 건수':'조회 또는 클릭 횟수'}</small></div><div class="rule-field"><label for="rule-goal-window">게시물별 집계 종료 시점</label><select id="rule-goal-window">${['7','14','30'].map(days=>`<option value="${days}" ${rule.goalWindow===days?'selected':''}>게시 후 ${days}일 · 시연 입력</option>`).join('')}</select><small>조회·클릭은 동일한 게시 경과일 기준입니다. 게시 완료는 이때까지 검수를 통과한 건수입니다.</small></div></div><div class="rule-capabilities" id="rule-capabilities" aria-live="polite">${capabilityNote(rule.platform,rule.goal)}</div></fieldset><fieldset><legend>4. 정산 조건</legend><p class="rule-hint">별도로 합의한 고정 원고료·성과료·측정 기준을 적용합니다. 이 시연에서는 가격·지급 기준을 정하거나 변경하지 않습니다.</p></fieldset><div class="rule-error" id="rule-error" role="alert" hidden></div><div class="rules-actions"><button class="button primary" type="button" data-action="simulate-rules">조건 판정 시연</button><button class="button" type="button" data-action="save-rules">설정 시연 저장</button><button class="button" type="button" data-close>닫기</button></div></form><section class="rule-results" id="rule-results" aria-label="가상 계정 조건 판정 결과" tabindex="-1" hidden></section>`;
+      openDialog($('#rules-dialog'));$('#rules-dialog').scrollTop=0;
+    }
+    function readCampaignRules(){
+      const fields=$$('input',$('#rules-form'));
+      fields.forEach(field=>{field.removeAttribute('aria-invalid');field.removeAttribute('aria-errormessage');});
+      $('#rule-error').hidden=true;
+      const errors=[];
+      function integer(id,label,optional=false){const field=$(`#${id}`),raw=field.value.trim();if(optional&&!raw)return null;const value=Number(raw),minimum=id==='rule-target'?1:0;if(!raw||!Number.isSafeInteger(value)||value<minimum){errors.push({id,message:`${label}: ${minimum} 이상의 정수를 입력해 주세요.`});return null;}return value;}
+      const minFollowers=integer('rule-min','최소 팔로워 수');
+      const maxFollowers=integer('rule-max','최대 팔로워 수',true);
+      const medianViews=integer('rule-median','중위 조회수',true);
+      const target=integer('rule-target','목표값');
+      if(minFollowers!==null&&maxFollowers!==null&&minFollowers>maxFollowers)errors.push({id:'rule-max',message:'최대 팔로워 수는 최소 팔로워 수 이상이어야 합니다.'});
+
+      if(errors.length){$('#rule-error').textContent=errors.map(error=>error.message).join(' ');$('#rule-error').hidden=false;errors.forEach(error=>{$(`#${error.id}`).setAttribute('aria-invalid','true');$(`#${error.id}`).setAttribute('aria-errormessage','rule-error');});$('#rule-results').hidden=true;$(`#${errors[0].id}`).focus();return null;}
+      return {platform:$('#rule-platform').value,minFollowers,maxFollowers,medianViews,referenceWindow:$('#rule-reference-window').value,goal:$('#rule-goal').value,target,goalWindow:$('#rule-goal-window').value};
+    }
+    function simulateCampaignRules(){
+      const rule=readCampaignRules();if(!rule)return;
+      const examples=[{name:'가상 계정 A',followers:6000,median:3500,connected:true},{name:'가상 계정 B',followers:80,median:300,connected:true},{name:'가상 계정 C',followers:null,median:null,connected:false}];
+      $('#rule-results').innerHTML=`<h3>조건 판정 시연</h3><p class="rule-hint">${platformLabels[rule.platform]} 계정을 연결했다고 가정한 시연입니다. 아래 숫자와 상태는 API 응답이 아닙니다.</p>${examples.map(account=>{const unknown=!account.connected||account.followers===null;const meets=!unknown&&account.followers>=rule.minFollowers&&(rule.maxFollowers===null||account.followers<=rule.maxFollowers);const status=unknown?'확인 필요':meets?'충족':'미충족';const detail=unknown?'계정 연결과 팔로워 수 확인이 필요합니다. 값이 없으므로 0명으로 계산하지 않습니다.':`연결 확인 상태를 가정 · 팔로워 ${account.followers.toLocaleString('ko-KR')}명 (시연 입력). ${meets?'설정한 팔로워 범위에 포함됩니다.':'설정한 팔로워 범위에 포함되지 않습니다.'}`;const reference=rule.medianViews===null?'중위 조회수 참고 기준을 사용하지 않습니다.':account.median===null?'중위 조회수: 확인할 데이터 없음. 선정 참고값이 없다고 자동 탈락시키지 않습니다.':`중위 조회수 ${account.median.toLocaleString('ko-KR')}회 (시연 입력) · 참고 기준 ${account.median>=rule.medianViews?'이상':'미만'}. 자격 판정에는 반영하지 않습니다.`;return `<article class="rule-result"><div class="rule-result-head"><strong>${account.name} · 시연 입력</strong><span class="badge ${unknown?'attention':meets?'dark':''}">${status}</span></div><p>${detail}</p><p class="reference-note">${reference}</p></article>`;}).join('')}<p class="rule-hint" style="margin-top:12px">충족은 지원 자격의 시연 결과입니다. 최종 선정·성과 달성·원고료 지급을 의미하지 않습니다.</p>`;
+      $('#rule-results').hidden=false;$('#rule-results').focus();record('캠페인 조건 판정 시연 · 누락 지표를 0으로 처리하지 않음');
+    }
     document.addEventListener('click',event=>{
       const button=event.target.closest('button');if(!button)return;
       if(button.hasAttribute('data-close')){closeDialog(button.closest('dialog'));return;}
@@ -147,11 +191,14 @@
       if(button.dataset.settlementDetail){showSettlementDetail(button.dataset.settlementDetail);return;}
       if(button.dataset.confirmEvidence){record(`${button.dataset.confirmEvidence} 정산 근거 검토 시연`);closeDialog($('#info-dialog'));notify('근거 검토를 시연 기록에 남겼습니다. 지급 상태는 변경되지 않았습니다.');return;}
       const action=button.dataset.action;
+      if(action==='campaign-rules'){showCampaignRules();}
+      if(action==='simulate-rules'){simulateCampaignRules();}
+      if(action==='save-rules'){const rule=readCampaignRules();if(rule){campaignRules=rule;record('지원 조건·성과 목표 설정 저장 시연 · 정산 조건 변경 없음');closeDialog($('#rules-dialog'));render();$('[data-action="campaign-rules"]').focus();notify('시연 입력을 이 탭에 저장했습니다. 실제 캠페인에는 적용하지 않았습니다.');}}
       if(action==='menu'){openDialog($('#menu-dialog'));}
       if(action==='audit'){showInfo('이 탭의 시연 기록',`<p style="margin-bottom:12px">실제 감사 로그가 아닙니다. 새로고침하면 사라지는 예시 기록입니다.</p><ul class="audit-list">${audit.length?audit.slice().reverse().map(entry=>`<li>${escapeHtml(entry.text)}<small>${entry.time} · 시연 계정 · 이 탭에서만 보관</small></li>`).join(''):'<li>아직 기록이 없습니다.<small>업무 검토나 브랜드 확인을 시연해 보세요.</small></li>'}</ul>`);}
       if(action==='normal'){prototypeState='normal';render();notify('기본 시안으로 돌아왔습니다. 실제 데이터를 요청하지 않았습니다.');}
       if(action==='clear-filter'){filter='all';query='';render();$('#queue-search').focus();}
-      if(action==='reset'){items=initialItems.map(item=>({...item}));audit=[];version=3;approval='검토 대기';versionHistory=initialVersionHistory.map(entry=>({...entry}));activeItem=null;filter='all';query='';prototypeState='normal';settlementTab='eligible';render();notify('예시 데이터를 초기화했습니다. 실제 데이터에는 영향이 없습니다.');}
+      if(action==='reset'){items=initialItems.map(item=>({...item}));audit=[];version=3;approval='검토 대기';versionHistory=initialVersionHistory.map(entry=>({...entry}));campaignRules={...initialRules};activeItem=null;filter='all';query='';prototypeState='normal';settlementTab='eligible';render();notify('예시 데이터를 초기화했습니다. 실제 데이터에는 영향이 없습니다.');}
       if(action==='campaign-b'){showInfo('가상 캠페인 B','<p>가상 캠페인 B는 검수·정산 단계의 예시입니다. 이 시안에서는 정산 화면에서 상태 구분과 확인 근거를 살펴볼 수 있습니다.</p>','<button class="button primary" data-view="settlement">정산 화면 보기</button>');}
       if(action==='complete-item'){const item=items.find(entry=>entry.id===activeItem);const note=$('#review-note').value.trim();record(`${item.id} 검토 완료 표시 시연${note?' · '+note:''}`);items=items.filter(entry=>entry.id!==activeItem);closeDialog($('#detail-dialog'));activeItem=null;render();$('#content').focus();notify('예시 업무를 검토 완료로 표시했습니다. 실제 처리는 실행하지 않았습니다.');}
       if(action==='related'){const item=items.find(entry=>entry.id===activeItem);closeDialog($('#detail-dialog'));if(item.filter==='settlement')navigate('settlement');else if(item.id==='V-003')navigate('campaign');else showInfo('정책 연결 영역','<p>구현 시 이 업무에 적용되는 운영 규칙과 변경 이력을 연결합니다. 현재 시안은 정책을 새로 정하거나 기존 정책을 변경하지 않습니다.</p>');}
@@ -163,8 +210,9 @@
       if(action==='approve-version'){approval='승인됨';record(`브랜드 역할 시연: 포맷 v${version} 승인 · 계약·정산에는 적용하지 않음`);closeDialog($('#info-dialog'));render();notify(`포맷 v${version} 승인 흐름을 시연했습니다. 실제 승인은 기록되지 않았습니다.`);}
       if(action==='request-change'){const input=$('#brand-feedback');const value=input.value.trim();if(!value){$('#feedback-error').hidden=false;input.setAttribute('aria-invalid','true');input.setAttribute('aria-describedby','feedback-error');input.focus();return;}approval='수정 요청';record(`브랜드 역할 시연: 포맷 v${version} 수정 요청 · ${value}`);closeDialog($('#info-dialog'));render();notify('수정 요청 흐름을 시연했습니다. 실제 메시지는 발송하지 않았습니다.');}
     });
-    document.addEventListener('input',event=>{if(event.target.id==='queue-search'){query=event.target.value;renderQueue();}if(event.target.id==='brand-feedback'){event.target.removeAttribute('aria-invalid');$('#feedback-error').hidden=true;}});
-    document.addEventListener('change',event=>{if(event.target.id==='state-select'){prototypeState=event.target.value;render();$('#state-select').focus();}});
+    document.addEventListener('input',event=>{if(event.target.id==='queue-search'){query=event.target.value;renderQueue();}if(event.target.id==='brand-feedback'){event.target.removeAttribute('aria-invalid');$('#feedback-error').hidden=true;}if(event.target.closest('#rules-form')){$('#rule-results').hidden=true;}});
+    document.addEventListener('change',event=>{if(event.target.id==='state-select'){prototypeState=event.target.value;render();$('#state-select').focus();}if(event.target.closest('#rules-form'))$('#rule-results').hidden=true;if(event.target.id==='rule-platform'||event.target.id==='rule-goal'){$('#rule-capabilities').innerHTML=capabilityNote($('#rule-platform').value,$('#rule-goal').value);$('#rule-target-unit').textContent=`단위: ${$('#rule-goal').value==='posts'?'검수 완료한 게시 건수':'조회 또는 클릭 횟수'}`;}});
+    document.addEventListener('submit',event=>{if(event.target.id==='rules-form'){event.preventDefault();simulateCampaignRules();}});
     document.addEventListener('keydown',event=>{
       if(event.target.matches('[role="tab"]')&&['ArrowLeft','ArrowRight','Home','End'].includes(event.key)){event.preventDefault();const tabs=['eligible','waiting','paid'];const index=tabs.indexOf(settlementTab);settlementTab=event.key==='Home'?tabs[0]:event.key==='End'?tabs[2]:tabs[(index+(event.key==='ArrowRight'?1:-1)+3)%3];render();$(`#tab-${settlementTab}`).focus();}
     });
