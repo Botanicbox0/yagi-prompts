@@ -1,3 +1,4 @@
+import { PublicLink } from '@/components/admin/public-link';
 import { notFound } from 'next/navigation';
 import { getSqlRunner } from '@/lib/db/connect';
 import { getDictionary, type Dictionary } from '@/lib/i18n/dictionaries';
@@ -219,9 +220,9 @@ export default async function AdminCampaignPage({ params, searchParams }: { para
           </p>
         </div>
         {row.status !== 'draft' && row.status !== 'archived' && (
-          <a href={campaignHref(locale, row.slug)} className={BUTTON}>
+          <PublicLink href={campaignHref(locale, row.slug)} className={BUTTON}>
             {a.open}
-          </a>
+          </PublicLink>
         )}
       </div>
 

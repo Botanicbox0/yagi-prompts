@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { safeReturnPath } from '@/lib/auth/return-path';
 import {
   CODE_LABEL,
   parseNoticeCode,
@@ -92,7 +93,7 @@ export function Notice({ labels, locale }: { labels: NoticeLabels; locale: strin
     if (found === 'signin') {
       // The gate sent `next` along; keep it as the sign-in's return before the URL is cleaned.
       const next = new URLSearchParams(window.location.search).get('next') ?? pathname;
-      const safe = next.startsWith('/') && !next.startsWith('//') ? next : pathname;
+      const safe = safeReturnPath(next, pathname);
       setSigninHref(`/auth/signin?next=${encodeURIComponent(safe)}&locale=${locale}`);
     }
     window.history.replaceState(null, '', `${pathname}${stripNoticeParams(window.location.search)}${hash}`);

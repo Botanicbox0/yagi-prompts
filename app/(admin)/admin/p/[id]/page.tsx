@@ -1,3 +1,4 @@
+import { PublicLink } from '@/components/admin/public-link';
 import { notFound } from 'next/navigation';
 import { getSqlRunner } from '@/lib/db/connect';
 import { getDictionary } from '@/lib/i18n/dictionaries';
@@ -78,9 +79,9 @@ export default async function AdminEditorPage({
         <a href="/admin/playbooks" className="font-label text-eyebrow uppercase text-accent">
           ← {a.editorBack}
         </a>
-        <a href={`/${locale}/p/${editor.playbook.slug}`} className={BUTTON}>
+        <PublicLink href={`/${locale}/p/${editor.playbook.slug}`} className={BUTTON}>
           {a.navSite}
-        </a>
+        </PublicLink>
       </div>
 
       <h1 className="mt-4 font-display text-[clamp(1.75rem,3.5vw,2.75rem)] leading-[0.95] font-black uppercase">

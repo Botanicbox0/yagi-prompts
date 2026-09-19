@@ -5,6 +5,8 @@ import { getDictionary } from '@/lib/i18n/dictionaries';
 import { AUTH_PROVIDERS, signInWithProviderHref, type AuthProvider } from '@/lib/auth/providers';
 import { legalDocument } from '@/lib/legal/documents';
 import { legalHref } from '@/lib/legal/links';
+import { authReturnPath } from '@/lib/routing/surfaces';
+import { publicHref, requestSurface } from '@/lib/routing/request-surface';
 
 /**
  * `/auth/choose?next=…&locale=…` — the sign-in door (docs/TEMPLATES-IA.md §8).
@@ -18,7 +20,7 @@ import { legalHref } from '@/lib/legal/links';
  * already decided to sign in, and the page's whole job is to get out of the way.
  *
  * No JavaScript, no session read — the (app) root layout supplies `noindex` and force-dynamic, and
- * middleware never runs under `/auth/*`. Each button is a plain link back into `/auth/signin` with
+ * auth bypasses the middleware locale/session pipeline after the host check. Each button links to `/auth/signin` with
  * `provider=` set.
  *
  * Both buttons follow their owner's brand rules: Google's is white with the four-colour "G", the
@@ -35,16 +37,13 @@ function first(value: string | string[] | undefined): string | null {
   return typeof value === 'string' ? value : (value?.[0] ?? null);
 }
 
-/** Same rule as `/auth/signin`: same-origin relative paths only. */
-function safeNext(raw: string | null): string {
-  return raw !== null && raw.startsWith('/') && !raw.startsWith('//') ? raw : '/';
-}
-
 async function resolve(props: RouteProps) {
   const params = await props.searchParams;
   const rawLocale = first(params.locale);
   const locale: Locale = isLocale(rawLocale) ? rawLocale : DEFAULT_LOCALE;
-  return { locale, dict: getDictionary(locale), next: safeNext(first(params.next)) };
+  const { admin } = await requestSurface();
+  const error = first(params.error);
+  return { locale, dict: getDictionary(locale), admin, error, next: authReturnPath(first(params.next), admin ? 'admin.twings.app' : '', '/') };
 }
 
 export async function generateMetadata(props: RouteProps): Promise<Metadata> {
@@ -107,26 +106,32 @@ function withLinks(template: string, links: Readonly<Record<string, LegalLink>>)
 }
 
 export default async function ChooseProviderPage(props: RouteProps) {
-  const { locale, dict, next } = await resolve(props);
+  const { locale, dict, next, admin, error } = await resolve(props);
   const labels: Record<AuthProvider, string> = {
     google: dict.auth.continueWithGoogle,
     kakao: dict.auth.continueWithKakao,
   };
   const legal = withLinks(dict.auth.chooseLegal, {
-    terms: { href: legalHref(locale, 'terms'), label: legalDocument('terms', locale).title },
-    privacy: { href: legalHref(locale, 'privacy'), label: legalDocument('privacy', locale).title },
+    terms: { href: publicHref(legalHref(locale, 'terms'), admin), label: legalDocument('terms', locale).title },
+    privacy: { href: publicHref(legalHref(locale, 'privacy'), admin), label: legalDocument('privacy', locale).title },
   });
 
   return (
     <main data-auth-choose className="mx-auto flex min-h-svh w-full max-w-shell flex-col items-center justify-center px-gutter py-16">
       <div className="flex w-full max-w-[22rem] flex-col items-center text-center">
-        <a href={`/${locale}`} className="inline-flex items-center gap-2.5">
+        <a href={publicHref(`/${locale}`, admin)} className="inline-flex items-center gap-2.5">
           <TwingsMark className="h-7" />
           <span className="font-display text-[1.05rem] leading-none font-black tracking-[0.02em] uppercase">{dict.meta.siteName}</span>
         </a>
 
         <h1 className="mt-12 font-display text-[1.75rem] leading-tight font-black uppercase">{dict.auth.chooseTitle}</h1>
         <p className="mt-3 text-[0.95rem] leading-relaxed opacity-60">{dict.auth.chooseLede}</p>
+
+        {(error === 'oauth' || error === 'oauth_unconfigured') && (
+          <p role="alert" className="mt-6 border-l-2 border-accent pl-3 text-left text-body">
+            {error === 'oauth' ? dict.notice.oauth : dict.notice.oauthUnconfigured}
+          </p>
+        )}
 
         <div className="mt-10 flex w-full flex-col gap-3">
           {AUTH_PROVIDERS.map((provider) => (

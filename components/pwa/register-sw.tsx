@@ -10,6 +10,7 @@ import { useEffect } from 'react';
 export function RegisterServiceWorker() {
   useEffect(() => {
     if (process.env.NODE_ENV !== 'production') return;
+    if (['admin.twings.app', 'brands.twings.app'].includes(window.location.hostname)) return;
     if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return;
     const register = () => {
       navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(() => {

@@ -1,3 +1,4 @@
+import { PublicLink } from '@/components/admin/public-link';
 import { getSqlRunner } from '@/lib/db/connect';
 import { getDictionary } from '@/lib/i18n/dictionaries';
 import { getLocaleFromHeaders } from '@/lib/i18n/server';
@@ -406,9 +407,9 @@ function ContestEditor({
             {a.previewContest}
           </a>
           {row.status === 'published' && (
-            <a href={contestHref(locale, row.slug)} className={BUTTON}>
+            <PublicLink href={contestHref(locale, row.slug)} className={BUTTON}>
               {a.open}
-            </a>
+            </PublicLink>
           )}
           {row.status !== 'published' ? (
             <OpForm op="contest.publish" back={ADMIN_CONTESTS_PATH}>

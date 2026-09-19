@@ -3,6 +3,8 @@ import { TwingsMark } from '@/components/brand/twings-mark';
 import { absoluteUrl } from '@/lib/seo/site-url';
 import { DEFAULT_LOCALE, isLocale, type Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/dictionaries';
+import { authReturnPath } from '@/lib/routing/surfaces';
+import { requestSurface } from '@/lib/routing/request-surface';
 
 /**
  * `/auth/open-in-browser?next=…&locale=…` — design review F1.
@@ -15,7 +17,7 @@ import { getDictionary } from '@/lib/i18n/dictionaries';
  *
  * A page route rather than HTML written by the signin handler, so the heading is set in the §5
  * display faces through the (app) root layout instead of a system stack. That layout also
- * supplies `noindex` and force-dynamic; middleware never runs under `/auth/*`, which is why the
+ * supplies `noindex` and force-dynamic; auth skips middleware session refresh, which is why the
  * signin redirect writes the locale cookie the layout resolves `<html lang>` from.
  *
  * No JavaScript on purpose: a WebView that blocks OAuth is not a place to depend on anything.
@@ -30,16 +32,13 @@ function first(value: string | string[] | undefined): string | null {
   return typeof value === 'string' ? value : (value?.[0] ?? null);
 }
 
-/** Same rule as `/auth/signin`: same-origin relative paths only. */
-function safeNext(raw: string | null): string {
-  return raw !== null && raw.startsWith('/') && !raw.startsWith('//') ? raw : '/';
-}
-
 async function resolve(props: RouteProps) {
   const params = await props.searchParams;
   const rawLocale = first(params.locale);
   const locale: Locale = isLocale(rawLocale) ? rawLocale : DEFAULT_LOCALE;
-  return { dict: getDictionary(locale), next: safeNext(first(params.next)) };
+  const { admin, origin } = await requestSurface();
+  const next = authReturnPath(first(params.next), admin ? 'admin.twings.app' : '', '/');
+  return { dict: getDictionary(locale), next, origin };
 }
 
 export async function generateMetadata(props: RouteProps): Promise<Metadata> {
@@ -48,7 +47,7 @@ export async function generateMetadata(props: RouteProps): Promise<Metadata> {
 }
 
 export default async function OpenInBrowserPage(props: RouteProps) {
-  const { dict, next } = await resolve(props);
+  const { dict, next, origin } = await resolve(props);
 
   return (
     <main
@@ -78,7 +77,7 @@ export default async function OpenInBrowserPage(props: RouteProps) {
         data-webview-next
         className="mt-3 border border-hairline p-4 font-mono text-code break-all select-all"
       >
-        {absoluteUrl(next)}
+        {origin ? new URL(next, origin).href : absoluteUrl(next)}
       </p>
 
       <p className="mt-6 font-mono text-[0.72rem] leading-relaxed opacity-45">

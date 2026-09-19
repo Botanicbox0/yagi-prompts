@@ -2,7 +2,8 @@ import { notFound } from 'next/navigation';
 import { getContestPreview } from '@/lib/contests/facade';
 import { getDictionary } from '@/lib/i18n/dictionaries';
 import { getLocaleFromHeaders } from '@/lib/i18n/server';
-import { ADMIN_CONTESTS_PATH } from '@/lib/contests/links';
+import { ADMIN_CONTESTS_PATH, contestSubmitPath } from '@/lib/contests/links';
+import { publicHref, requestSurface } from '@/lib/routing/request-surface';
 import {
   ContestBody,
   ContestHeader,
@@ -39,6 +40,12 @@ export default async function AdminContestPreviewPage({
   if (result.status !== 'ok') notFound();
 
   const { contest } = result;
+  const { admin } = await requestSurface();
+  // Existing preview media includes published-only consumer URLs. Keep those public rather
+  // than widening the admin host's API allowlist; private preview assets keep their own gateway.
+  for (const media of [contest.poster, contest.video, contest.hostLogo]) {
+    if (media?.src.startsWith('/')) media.src = publicHref(media.src, admin);
+  }
   const labels = contestLabels(dict);
 
   return (
@@ -61,7 +68,7 @@ export default async function AdminContestPreviewPage({
         </div>
         <ContestPrize contest={contest} locale={locale} labels={labels} />
         <div className="band">
-          <ContestBody contest={contest} locale={locale} labels={labels} />
+          <ContestBody contest={contest} locale={locale} labels={labels} submitHref={publicHref(contestSubmitPath(contest.slug), admin)} />
         </div>
       </main>
     </div>

@@ -1,6 +1,17 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { updateSession, withCookies } from '@/lib/supabase/middleware';
 import { devIdentityUserId } from '@/lib/auth/dev-identity';
+import { chooseProviderHref } from '@/lib/auth/providers';
+import {
+  adminRouteAllowed,
+  bypassConsumerLocale,
+  isAdminPath,
+  REQUEST_ORIGIN_HEADER,
+  resolveRequestUrl,
+  resolveSurface,
+  sameOriginMutation,
+  SURFACE_HEADER,
+} from '@/lib/routing/surfaces';
 import {
   LOCALE_COOKIE,
   LOCALE_COOKIE_MAX_AGE,
@@ -13,10 +24,11 @@ import {
 } from '@/lib/i18n/config';
 
 /**
- * Edge middleware does three jobs, in this order (PLAN §7):
+ * Edge middleware first checks the host/path boundary, including API/auth/static requests.
+ * Routes that need the locale/session pipeline then follow the existing PLAN §7 contract:
  *   1. resolve the locale and publish it to the render as `x-playbook-locale`
  *   2. refresh the Supabase session (@supabase/ssr contract, lib/supabase/middleware.ts)
- *   3. hard-gate the app surface on the presence of a session; 308-redirect unprefixed PUBLIC urls
+ *   3. hard-gate the app surface on session presence; 308-redirect unprefixed PUBLIC urls
  *
  * Two deliberate omissions, both logged for the Director:
  *   · `profile.locale` is not consulted HERE. RLS is deny-all, so the edge would need a
@@ -30,6 +42,27 @@ const NO_STORE = 'private, no-store';
 
 export async function middleware(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
+  const requestUrl = resolveRequestUrl(new URL(request.url), request.headers);
+  const surface = resolveSurface(new URL(request.url), request.headers);
+  const privateHeaders = { 'Cache-Control': NO_STORE, 'X-Robots-Tag': 'noindex, nofollow' };
+  if (surface === 'unknown' || requestUrl === null) return new NextResponse(null, { status: 404, headers: privateHeaders });
+  if ((surface === 'admin' || surface === 'brands') && pathname === '/robots.txt' && ['GET', 'HEAD'].includes(request.method)) {
+    return new NextResponse(request.method === 'HEAD' ? null : 'User-agent: *\nDisallow: /\n', {
+      headers: { ...privateHeaders, 'Content-Type': 'text/plain; charset=utf-8' },
+    });
+  }
+  // Brand organization membership and the real workspace are not implemented yet.
+  if (surface === 'brands') return new NextResponse(null, { status: 404, headers: privateHeaders });
+  if (surface === 'admin') {
+    if (pathname === '/' && ['GET', 'HEAD'].includes(request.method)) {
+      const target = new URL(requestUrl); target.pathname = '/admin'; target.search = '';
+      return NextResponse.redirect(target, { status: 307, headers: privateHeaders });
+    }
+    if (!adminRouteAllowed(pathname, request.method) ||
+      (!['GET', 'HEAD'].includes(request.method) && !sameOriginMutation(requestUrl, request.headers))) {
+      return new NextResponse(null, { status: 404, headers: privateHeaders });
+    }
+  }
   const { locale: urlLocale, rest } = splitLocale(pathname);
   const cookieLocale = request.cookies.get(LOCALE_COOKIE)?.value ?? null;
   const locale = resolveLocale({
@@ -40,6 +73,17 @@ export async function middleware(request: NextRequest) {
 
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set(LOCALE_HEADER, locale);
+  // Overwrite client-supplied context. Server components may use these for same-host auth links.
+  requestHeaders.set(SURFACE_HEADER, surface);
+  requestHeaders.set(REQUEST_ORIGIN_HEADER, requestUrl.origin);
+
+  // No locale/session work for OAuth exchanges, APIs, public render tokens or asset bytes.
+  // Unlike the old matcher exclusion, this cannot bypass the workspace host policy above.
+  if (bypassConsumerLocale(pathname) || (surface === 'admin' && !isAdminPath(pathname))) {
+    const response = NextResponse.next({ request: { headers: requestHeaders } });
+    if (surface === 'admin') for (const [key, value] of Object.entries(privateHeaders)) response.headers.set(key, value);
+    return response;
+  }
 
   const { response, user } = await updateSession(request, requestHeaders);
 
@@ -53,7 +97,12 @@ export async function middleware(request: NextRequest) {
     // local render-verify even though every component below would resolve the right viewer. Same
     // fences as everywhere else: dead code under NODE_ENV=production, explicit env otherwise.
     if (!user && devIdentityUserId() === null) {
-      const target = request.nextUrl.clone();
+      const target = new URL(requestUrl);
+      if (surface === 'admin') {
+        if (!['GET', 'HEAD'].includes(request.method)) return withCookies(new NextResponse(null, { status: 404, headers: privateHeaders }), response);
+        const chooser = new URL(chooseProviderHref(`${pathname}${search}`, locale), target.origin);
+        return withCookies(NextResponse.redirect(chooser, { headers: privateHeaders }), response);
+      }
       target.pathname = localizedPath(locale, '/');
       target.search = '';
       target.searchParams.set('signin', '1');
@@ -65,7 +114,7 @@ export async function middleware(request: NextRequest) {
 
   // --- public surface: locale-prefixed, 308 on the unprefixed form --------
   if (urlLocale === null) {
-    const target = request.nextUrl.clone();
+    const target = new URL(requestUrl);
     target.pathname = localizedPath(locale, rest);
     // 308: permanent + method-preserving, so the canonical URL is unambiguous for crawlers.
     return withCookies(NextResponse.redirect(target, 308), response);
@@ -91,22 +140,6 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: [
-    /*
-     * Everything except:
-     *   _next/static, _next/image, favicon, /fonts, /.storage (local storage driver in dev)
-     *   /api/*   — route handlers set their own no-store headers and are not locale-prefixed
-     *   /auth/*  — the OAuth callback must not be redirected mid-exchange
-     *   /r/*     — the 3-day render link (docs/TEMPLATES-IA.md §8): public by token, no locale prefix,
-     *     no session gate; the page itself decides from the token
-     *   sw.js, offline.html, manifest.webmanifest — the PWA's three root files (docs/TEMPLATES-IA.md §5),
-     *     unprefixed by the same specification logic as the crawler endpoints.
-     *   sitemap.xml, robots.txt (M5) — crawler endpoints live at the ROOT by specification. They
-     *     are unprefixed public URLs, which is exactly what the 308 below rewrites, so without
-     *     this exclusion `/sitemap.xml` answers 308 → `/en/sitemap.xml` → 404 and the site has no
-     *     sitemap at all. (Found by the M5 sweep, not by a unit test — which is why the sweep runs
-     *     against a real server.)
-     */
-    '/((?!_next/static|_next/image|favicon.ico|sitemap\\.xml|robots\\.txt|sw\\.js|offline\\.html|manifest\\.webmanifest|fonts/|\\.storage/|api/|auth/|r/|.*\\.(?:svg|png|jpg|jpeg|gif|webp|mp4|webm|woff2?)$).*)',
-  ],
+  // Every request must pass the host boundary; the old exclusions live in bypassConsumerLocale.
+  matcher: ['/:path*'],
 };

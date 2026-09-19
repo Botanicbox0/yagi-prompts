@@ -32,7 +32,7 @@ export async function generateMetadata(): Promise<Metadata> {
 
 /**
  * `getRequestLocale`, not `getLocaleFromHeaders`: the header exists only where middleware ran,
- * and `/auth/open-in-browser` (F1) lives under the matcher's `/auth/*` exclusion. The full
+ * and `/auth/open-in-browser` (F1) skips middleware session refresh after its host check. The full
  * chain reads the same cookie middleware would have — identical answers on every middleware-
  * covered route, and the right `<html lang>` on the one that is not.
  */
