@@ -1,0 +1,40 @@
+/* Shared by the standalone brand and studio design previews.
+   Pretendard is self-hosted from the repository; Helvetica Neue uses a user's
+   installed face only. No proprietary font file is bundled or downloaded. */
+@import url('../../public/fonts/pretendard/pretendard-dynamic-subset.css');
+
+@font-face {
+  font-family: 'TWINGS Helvetica Neue';
+  src: local('Helvetica Neue'), local('Helvetica Neue Roman'), local('HelveticaNeue-Roman');
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  unicode-range: U+0000-024F, U+2000-206F, U+20A0-20CF;
+}
+@font-face {
+  font-family: 'TWINGS Helvetica Neue';
+  src: local('Helvetica Neue Medium'), local('HelveticaNeue-Medium');
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  unicode-range: U+0000-024F, U+2000-206F, U+20A0-20CF;
+}
+@font-face {
+  font-family: 'TWINGS Helvetica Neue';
+  src: local('Helvetica Neue Bold'), local('HelveticaNeue-Bold');
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  unicode-range: U+0000-024F, U+2000-206F, U+20A0-20CF;
+}
+
+:root {
+  --font: 'TWINGS Helvetica Neue', 'Helvetica Neue', Helvetica, Arial,
+    'Pretendard Variable', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+}
+body { font-family: var(--font); font-weight: 400; }
+button, input, textarea, select { font-family: var(--font); }
+h1, h2, h3 { font-weight: 600; letter-spacing: -.025em; }
+.wordmark { font-weight: 700; letter-spacing: -.055em; }
+.eyebrow, .nav-caption { letter-spacing: .05em; }
+.mono { font-variant-numeric: tabular-nums; letter-spacing: 0; }

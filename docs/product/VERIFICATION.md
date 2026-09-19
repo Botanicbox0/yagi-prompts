@@ -68,3 +68,15 @@ SNS 조건 편집기 추가 후에도 같은 두 크기에서 화면을 확인�
 공식 OpenAI 문서와 기존 이미지 엔진을 대조해 Sunburst 모델 ID를 확인했다. 현재 계정의 API 권한·해상도 실응답·얼굴 동일성·비용은 미검증이며 유료 생성 호출을 하지 않았다. 원문 프롬프트는 보존했고 생성 결과를 검수 우회나 인증 증거로 취급하지 않는 경계를 기록했다.
 
 DNS는 읽기 전용으로 확인했다. 지정 가비아 화면은 `yagiworkshop.xyz`, `twings.app` NS는 Cloudflare, Vercel twings.app 연결은 Valid Configuration이었다. 도메인 레코드·Vercel 설정·Slack 채널을 변경하거나 메시지를 보내지 않았다. 공개 모집 화면/메일의 지급 금액 노출과 기존 리포트 ‘총 정산’ 개념은 기능 PR에서 전환해야 하는 현재 코드 차이로 명시했다.
+
+## 글꼴·주소 운영 검증 — 2026-09-20
+
+두 시안에 공통 CSS와 저장소의 Pretendard Variable subset을 연결했다. 영문·숫자는 로컬 Helvetica Neue를 우선한다. 현재 브라우저는 해당 로컬 글꼴을 사용할 수 없어 Arial로 대체되며, Helvetica Neue를 실제 사용했다고 주장하지 않는다. 유료 글꼴 파일을 복사하거나 배포하지 않았다.
+
+추가한 `scripts/preview-product-design.mjs`로 HTML·CSS·폰트를 제공하고 CSS와 WOFF2의 HTTP 200 및 `font/woff2` 응답을 확인했다. 브라우저에서 Pretendard 로드와 공통 font-family를 확인했다. Chrome의 1440×1000·390×844에서 어드민/브랜드 시안을 직접 확인했으며 두 시안 모두 문서 가로 넘침이 없었다. 실제 휴대폰 검사는 아니다.
+
+이번 변경 후 **tsc PASS → vitest 103파일/1,220테스트 PASS → build:local PASS → start:local Ready → sweep:anon SWEEP PASSED 484/484** 순서로 다시 확인했다. 기존 런타임 회귀 검사이며 시안의 서버 기능을 검증한 것은 아니다.
+
+대표가 `twings.app`·`brands.twings.app`·`admin.twings.app`의 역할 분리를 승인했다. 현재 코드와 Vercel/Supabase 공식 문서를 대조한 결과, 하나의 저장소·Next 앱·Vercel 프로젝트·Supabase를 유지하는 구성이 현재 운영에 적합하다. 호스트 라우팅과 인증 복귀 경계는 별도 기능 PR에서 먼저 구현한다.
+
+로그인된 Cloudflare DNS 화면에서 twings.app의 Full DNS 구성과 apex/www CNAME 두 개를 확인했다. 두 레코드는 DNS only이며 동일 Vercel 대상으로 연결된다. brands/admin 레코드는 없었다. DNS·Vercel·Supabase 설정을 변경하지 않았으며, 운영 도메인 연결은 라우팅 배포와 인증 검증 후 진행한다.

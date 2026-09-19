@@ -13,7 +13,7 @@
 | 무료 얼굴 생성 | 첫 생성 포함 총 3회, 기술적 실패는 미차감 | 총 3회인지 첫 생성+교체 3회인지 대표 답변 대기 |
 | 얼굴 모델 | `gpt-image-2.5-sunburst`; 버전 고정 후보 `gpt-image-2.5-sunburst-2026-09-08` | 공식 모델·저장소 등록 확인, 현재 계정 접근·실생성 미검증 |
 | 출력 크기 | 2:3, 1344×2016 후보: 긴 변 약 2K | ‘2K’ 기준 합의 필요. 타 서비스의 2K 프리셋과 동일하다고 주장하지 않음 |
-| 브랜드 주소 | `brands.twings.app` | 권장 후보. `admin.twings.app`은 스튜디오 내부용 권장 |
+| 브랜드 주소 | `brands.twings.app`, 내부 `admin.twings.app` | 2026-09-20 대표 확정. 단일 프로젝트에서 호스트·권한 분리 후 연결 |
 | 대화 | 캠페인별 브랜드–스튜디오 대화 + 별도 내부 메모 | 제안. 결재·승인은 구조화된 별도 동작 |
 | Slack | 내부 비공개 `twings-campaigns` 채널에 접수·지연 알림 | 제안. 워크스페이스·채널·앱 권한·최종 발송 문구 미확정 |
 
@@ -153,6 +153,8 @@ Slack은 대화의 원본이 아니라 운영 알림 창구다. 후보 이벤트
 시작은 특정 채널에 연결된 Incoming Webhook이면 충분하다. 메시지 수정·삭제·일관된 스레드 관리가 필요하면 봇 API를 선택한다. 웹훅 URL은 서버 비밀값이고 브라우저·PR·로그에 출력하지 않는다. [Slack Webhook](https://docs.slack.dev/messaging/sending-messages-using-incoming-webhooks/), [봇 메시지 API](https://docs.slack.dev/reference/methods/chat.postMessage/), [요청 제한](https://docs.slack.dev/apis/web-api/rate-limits/)
 
 ## 7. 주소와 배포 경계
+
+주소는 2026-09-20 대표가 추천안대로 확정했다. 단일 코드·배포·DB 유지와 호스트별 경계, DNS 개방 전 검증은 [글꼴·주소 운영](WORKSPACE-OPERATIONS.md)을 따른다.
 
 | 주소 후보 | 이용자 | 목적 |
 |---|---|---|

@@ -10,6 +10,7 @@
 - [내 얼굴과 브랜드 캠페인 운영](IDENTITY-AND-BRAND-WORKSPACE.md): 셀피·무료 얼굴 생성, 브랜드 총예산과 지급 정보 분리, 두 제작 방식, 레퍼런스·대화·리포트·도메인·Slack 설계.
 - [브랜드 공간 시안](brand-workspace-prototype.html): 의뢰·콘텐츠 승인·대화·리포트의 독립 HTML. 예시 데이터만 사용하며 실제 접수·발송·업로드가 없다.
 - [기준 얼굴 프롬프트 v1](prompts/identity-portrait-v1.md): 대표가 제공한 영문 원문 보존.
+- [글꼴·주소 운영](WORKSPACE-OPERATIONS.md): Pretendard Variable·Helvetica Neue 적용, 확정된 세 주소, 단일 배포 구조와 DNS 활성화 순서.
 
 확정 방향은 **일반 사용자 생성 앱부터 출시**, 이후 같은 사용자가 조건을 충족하면 캠페인에 참여하는 구조다. 캠페인은 **스튜디오 운영 + 브랜드 확인·승인**을 유지한다. 구독·라이브 결제·공개 플래그·가격·법무 문구 등 보류된 결정은 그대로 유지한다.
 
