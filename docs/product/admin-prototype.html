@@ -30,7 +30,7 @@
   </style>
   <link rel="stylesheet" href="workspace-typography.css">
 </head>
-<body>
+<body data-workspace-preview="admin">
   <svg aria-hidden="true" style="display:none"><defs>
     <symbol id="i-grid" viewBox="0 0 24 24"><rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><rect x="14" y="14" width="6" height="6" rx="1"/></symbol>
     <symbol id="i-campaign" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="2"/><path d="m10 9 5 3-5 3Z"/></symbol>
@@ -52,9 +52,9 @@
   </defs></svg>
   <div class="prototype-banner"><span>설계 시안 · 예시 데이터 · 실제 처리 없음</span><span>TWINGS / ADMIN CONCEPT 01</span></div>
   <div class="shell">
-    <aside class="sidebar" aria-label="운영 메뉴"><div class="wordmark">TWINGS<span>STUDIO WORKSPACE</span></div><nav id="desktop-nav"></nav><div class="nav-bottom"><div class="avatar" aria-hidden="true">ST</div><div>스튜디오 운영자<small>시연용 계정 · 모든 데이터 가상</small></div></div></aside>
+    <aside class="sidebar" aria-label="운영 메뉴"><div class="workspace-brand"><div class="workspace-logo"><span class="workspace-logo-mark" aria-hidden="true"></span><img class="workspace-logo-wordmark" src="../../public/brand/twings.svg" alt="TWINGS" width="960" height="250"></div><span class="workspace-signature">by yagi workshop</span></div><nav id="desktop-nav"></nav><div class="nav-bottom"><div class="avatar" aria-hidden="true">ST</div><div>스튜디오 운영자<small>시연용 계정 · 모든 데이터 가상</small></div></div></aside>
     <div class="main" id="main-shell">
-      <header class="topbar"><div class="breadcrumb"><span>운영 워크스페이스</span><span aria-hidden="true">/</span><strong id="breadcrumb-current">오늘 할 일</strong></div><div class="top-status"><span class="status-dot"></span>로컬 시안 · 서버 연결 없음</div><button class="button icon mobile-menu" aria-label="전체 메뉴 열기" data-action="menu"><svg aria-hidden="true"><use href="#i-menu"/></svg></button></header>
+      <header class="topbar"><div class="workspace-brand workspace-brand--mobile"><div class="workspace-logo"><span class="workspace-logo-mark" aria-hidden="true"></span><img class="workspace-logo-wordmark" src="../../public/brand/twings.svg" alt="TWINGS" width="960" height="250"></div><span class="workspace-signature">by yagi workshop</span></div><div class="breadcrumb"><span>운영 워크스페이스</span><span aria-hidden="true">/</span><strong id="breadcrumb-current">오늘 할 일</strong></div><div class="top-status"><span class="status-dot"></span>로컬 시안 · 서버 연결 없음</div><button class="button icon mobile-menu" aria-label="전체 메뉴 열기" data-action="menu"><svg aria-hidden="true"><use href="#i-menu"/></svg></button></header>
       <nav class="mobile-nav" aria-label="주요 운영 메뉴"><button data-view="today" aria-current="page">오늘 할 일</button><button data-view="campaign">캠페인</button><button data-view="settlement">정산</button></nav>
       <main class="page" id="content" tabindex="-1"></main>
     </div>

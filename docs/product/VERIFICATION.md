@@ -80,3 +80,11 @@ DNS는 읽기 전용으로 확인했다. 지정 가비아 화면은 `yagiworksho
 대표가 `twings.app`·`brands.twings.app`·`admin.twings.app`의 역할 분리를 승인했다. 현재 코드와 Vercel/Supabase 공식 문서를 대조한 결과, 하나의 저장소·Next 앱·Vercel 프로젝트·Supabase를 유지하는 구성이 현재 운영에 적합하다. 호스트 라우팅과 인증 복귀 경계는 별도 기능 PR에서 먼저 구현한다.
 
 로그인된 Cloudflare DNS 화면에서 twings.app의 Full DNS 구성과 apex/www CNAME 두 개를 확인했다. 두 레코드는 DNS only이며 동일 Vercel 대상으로 연결된다. brands/admin 레코드는 없었다. DNS·Vercel·Supabase 설정을 변경하지 않았으며, 운영 도메인 연결은 라우팅 배포와 인증 검증 후 진행한다.
+
+## 정식 Helvetica Neue·기존 로고 적용 — 2026-09-20 후속
+
+대표의 라이선스 보유 확인과 적용 요청에 따라 로컬 설치 의존을 제거했다. Helvetica Neue Roman/Medium/Bold OTF를 WOFF2로 변환해 원본의 글리프·문자 맵·CFF 윤곽과 대조했다. Pretendard Variable 92개 subset의 실제 family와 가변 굵기 축도 확인했다. 두 시안은 기존 토끼 마스크와 TWINGS SVG 워드마크를 사용하고 작은 `by yagi workshop`을 표시한다.
+
+Chrome에서 한글·영문 및 390×844 모바일 배치를 직접 확인했고 브랜드 데스크톱은 1440×1000으로 확인했다. `pageAssets`의 실제 resource 목록에 Helvetica Roman/Bold WOFF2와 Pretendard Variable subset들이 나타났고 `document.fonts.status`가 loaded였다. 미사용 굵기를 모두 다운로드했다고 주장하지 않는다. 두 시안의 가로 넘침이 없었다. 실제 휴대폰 검사는 아니다.
+
+다시 실행한 순서: **tsc PASS → vitest 103파일/1,220테스트 PASS → build:local PASS → start:local Ready → sweep:anon SWEEP PASSED 484/484**. 이 변경은 시안의 서버 기능을 구현한 것이 아니다. 실제 관리자 글꼴과 도메인 배포는 별도 main 기반 [PR #6](https://github.com/Botanicbox0/yagi-prompts/pull/6)에서 검증·배포한다.

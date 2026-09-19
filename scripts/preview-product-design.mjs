@@ -12,6 +12,10 @@ function assetFor(path) {
   if (path === '/' || path === `/${filename}`) return [`docs/product/${filename}`, 'text/html; charset=utf-8'];
   if (path === '/workspace-typography.css') return ['docs/product/workspace-typography.css', 'text/css; charset=utf-8'];
   if (path === '/public/fonts/pretendard/pretendard-dynamic-subset.css') return [path.slice(1), 'text/css; charset=utf-8'];
+  if (path === '/public/fonts/helvetica-neue/helvetica-neue.css') return [path.slice(1), 'text/css; charset=utf-8'];
+  if (/^\/public\/fonts\/helvetica-neue\/helvetica-neue-(?:roman|medium|bold)\.woff2$/.test(path)) return [path.slice(1), 'font/woff2'];
+  if (path === '/public/brand/twings.svg') return [path.slice(1), 'image/svg+xml'];
+  if (path === '/public/brand/twings-mark-mask.png') return [path.slice(1), 'image/png'];
   const font = path.match(/^\/public\/fonts\/pretendard\/woff2-dynamic-subset\/PretendardVariable\.subset\.(\d{1,2})\.woff2$/);
   if (font && Number(font[1]) <= 91) return [path.slice(1), 'font/woff2'];
   return null;

@@ -1,40 +1,37 @@
-/* Shared by the standalone brand and studio design previews.
-   Pretendard is self-hosted from the repository; Helvetica Neue uses a user's
-   installed face only. No proprietary font file is bundled or downloaded. */
+/* Shared standalone studio/brand typography. Both families are actual self-hosted
+   fonts: owner-authorized Helvetica Neue for Latin; Pretendard Variable for Korean. */
+@import url('../../public/fonts/helvetica-neue/helvetica-neue.css');
 @import url('../../public/fonts/pretendard/pretendard-dynamic-subset.css');
 
-@font-face {
-  font-family: 'TWINGS Helvetica Neue';
-  src: local('Helvetica Neue'), local('Helvetica Neue Roman'), local('HelveticaNeue-Roman');
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
-  unicode-range: U+0000-024F, U+2000-206F, U+20A0-20CF;
-}
-@font-face {
-  font-family: 'TWINGS Helvetica Neue';
-  src: local('Helvetica Neue Medium'), local('HelveticaNeue-Medium');
-  font-style: normal;
-  font-weight: 500;
-  font-display: swap;
-  unicode-range: U+0000-024F, U+2000-206F, U+20A0-20CF;
-}
-@font-face {
-  font-family: 'TWINGS Helvetica Neue';
-  src: local('Helvetica Neue Bold'), local('HelveticaNeue-Bold');
-  font-style: normal;
-  font-weight: 700;
-  font-display: swap;
-  unicode-range: U+0000-024F, U+2000-206F, U+20A0-20CF;
-}
-
 :root {
-  --font: 'TWINGS Helvetica Neue', 'Helvetica Neue', Helvetica, Arial,
-    'Pretendard Variable', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+  --font: 'TWINGS Helvetica Neue', 'Pretendard Variable',
+    'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
 }
-body { font-family: var(--font); font-weight: 400; }
+body { font-family: var(--font); font-weight: 400; font-synthesis: none; }
 button, input, textarea, select { font-family: var(--font); }
 h1, h2, h3 { font-weight: 600; letter-spacing: -.025em; }
-.wordmark { font-weight: 700; letter-spacing: -.055em; }
 .eyebrow, .nav-caption { letter-spacing: .05em; }
 .mono { font-variant-numeric: tabular-nums; letter-spacing: 0; }
+
+/* Exact production rabbit mask and seven-path TWINGS wordmark. */
+.workspace-brand { padding: 0 13px; line-height: 1; color: #111; }
+.workspace-logo { display: flex; align-items: center; gap: 9px; }
+.workspace-logo-mark {
+  display: block; flex: none; height: 28px; width: 39.424px; background: currentColor;
+  -webkit-mask: url('../../public/brand/twings-mark-mask.png') center / contain no-repeat;
+  mask: url('../../public/brand/twings-mark-mask.png') center / contain no-repeat;
+}
+.workspace-logo-wordmark { display: block; flex: none; height: 22px; width: 84.48px; }
+.workspace-signature { display: block; margin: 6px 0 0 48px; font-size: 8.5px; line-height: 1.2; letter-spacing: .01em; font-weight: 400; color: #777; white-space: nowrap; }
+.workspace-brand--mobile { display: none; padding: 0; }
+.workspace-brand--mobile .workspace-logo { gap: 8px; }
+.workspace-brand--mobile .workspace-logo-mark { height: 23px; width: 32.384px; }
+.workspace-brand--mobile .workspace-logo-wordmark { height: 18px; width: 69.12px; }
+.workspace-brand--mobile .workspace-signature { margin: 4px 0 0 40px; font-size: 8px; }
+@media (max-width: 620px) {
+  body[data-workspace-preview='admin'] .workspace-brand--mobile { display: block; }
+  body[data-workspace-preview='admin'] .topbar .breadcrumb { display: none; }
+}
+@media (max-width: 560px) {
+  body[data-workspace-preview='brand'] .workspace-brand--mobile { display: block; }
+}
