@@ -1,5 +1,6 @@
 import type { Locale } from '@/lib/i18n/config';
 import type { Tier } from '@/lib/content/visibility';
+import { safeReturnPath } from '@/lib/auth/return-path';
 
 /**
  * PLAN §3.4 — where the money CTAs point, as one pure module.
@@ -35,9 +36,7 @@ export function originPath(origin: { slug: string | null; locale: Locale }): str
 
 /** Same-origin relative paths only — never let a query parameter become an open redirect. */
 export function safeInternalPath(raw: unknown, fallback: string): string {
-  if (typeof raw !== 'string') return fallback;
-  if (!raw.startsWith('/') || raw.startsWith('//')) return fallback;
-  return raw;
+  return safeReturnPath(raw, fallback);
 }
 
 export function signInHref(next: string, locale: Locale): string {

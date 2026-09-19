@@ -8,6 +8,7 @@ import { siteUrl } from '@/lib/seo/site-url';
 import { fail, type AdminOutcome } from '@/lib/admin/context';
 import { dispatchAdmin, outcomeUrl } from '@/lib/admin/dispatch';
 import { BACK_FIELD, OP_FIELD, str } from '@/lib/admin/form';
+import { resolveRequestUrl } from '@/lib/routing/surfaces';
 
 /**
  * `POST /admin/do` — the one admin mutation door, as a ROUTE rather than a server action.
@@ -64,6 +65,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return notFound();
   }
   if (!sameOrigin(request)) return notFound();
+  const requestUrl = resolveRequestUrl(new URL(request.url), request.headers);
+  if (requestUrl === null) return notFound();
 
   const form = await request.formData();
   const name = str(form, OP_FIELD);
@@ -71,7 +74,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   const outcome = await execute(name, form);
   // 303: the POST becomes a GET on the way back, so a refresh never re-submits the operation.
-  return NextResponse.redirect(new URL(outcomeUrl(back, outcome), request.nextUrl.origin), {
+  return NextResponse.redirect(new URL(outcomeUrl(back, outcome), requestUrl.origin), {
     status: 303,
     headers: NO_STORE,
   });

@@ -1,3 +1,5 @@
+import { normalizeReturnPath } from '@/lib/auth/return-path';
+
 /**
  * The identity surface's paths, spelled once: the verify page (session-gated app surface, see
  * `APP_PREFIXES`), the bank's callback, and the studio's way in.
@@ -10,8 +12,7 @@ export const IDENTITY_CALLBACK_PATH = '/api/identity/callback';
 export function safeNextPath(raw: unknown): string | null {
   if (typeof raw !== 'string') return null;
   const value = raw.trim();
-  if (!value.startsWith('/') || value.startsWith('//')) return null;
-  return value.length > 512 ? null : value;
+  return value.length > 512 ? null : normalizeReturnPath(value);
 }
 
 export function identityVerifyHref(next: string | null, extra: { err?: string; result?: string } = {}): string {

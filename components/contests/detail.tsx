@@ -414,14 +414,14 @@ export function ContestEntries({
  * A closed contest gets no CTA at all: its winners and its entries are the next two sections
  * (finding 7's order), so a jump link would scroll a reader to what is already under their thumb.
  */
-export function ContestCta({ contest, labels }: { contest: ShapedContest; labels: ContestLabels }) {
+export function ContestCta({ contest, labels, submitHref }: { contest: ShapedContest; labels: ContestLabels; submitHref?: string }) {
   const { phase } = contest.timing;
 
   if (phase === 'open') {
     return (
       <p className="mt-10">
         <a
-          href={contestSubmitPath(contest.slug)}
+          href={submitHref ?? contestSubmitPath(contest.slug)}
           data-contest-cta="enter"
           className={`text-accent ${CTA_CLASS}`}
         >
@@ -456,10 +456,12 @@ export function ContestBody({
   contest,
   locale,
   labels,
+  submitHref,
 }: {
   contest: ShapedContest;
   locale: string;
   labels: ContestLabels;
+  submitHref?: string;
 }) {
   const brief = <ContestRules contest={contest} locale={locale} labels={labels} />;
   const entries = <ContestEntries contest={contest} labels={labels} />;
@@ -476,7 +478,7 @@ export function ContestBody({
 
   return (
     <>
-      <ContestCta contest={contest} labels={labels} />
+      <ContestCta contest={contest} labels={labels} {...(submitHref === undefined ? {} : { submitHref })} />
       {brief}
       {entries}
     </>

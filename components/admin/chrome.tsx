@@ -1,3 +1,4 @@
+import { PublicLink } from '@/components/admin/public-link';
 import type { ReactNode } from 'react';
 import { TwingsMark } from '@/components/brand/twings-mark';
 import type { Dictionary } from '@/lib/i18n/dictionaries';
@@ -295,9 +296,9 @@ export function AdminShell({
               <a href="/admin/policy" className={navClass('policy')}>
                 {dict.navPolicy}
               </a>
-              <a href={`/${locale}`} className="font-label text-eyebrow uppercase opacity-60">
+              <PublicLink href={`/${locale}`} className="font-label text-eyebrow uppercase opacity-60">
                 {dict.navSite}
-              </a>
+              </PublicLink>
             </nav>
           </div>
           <OpForm op="caches.refresh" back={refreshBack} className="flex items-center gap-3">
