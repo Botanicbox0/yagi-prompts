@@ -16,6 +16,10 @@ import { campaignLabels } from '@/components/campaigns/labels';
 import { BRANDS_ANCHOR } from '@/lib/campaigns/links';
 import { legalDocument } from '@/lib/legal/documents';
 import { legalHref } from '@/lib/legal/links';
+import { FaqSection } from '@/lib/seo/faq-section';
+import { JsonLd } from '@/lib/seo/json-ld';
+import { siteUrl } from '@/lib/seo/site-url';
+import { campaignServiceStructuredData } from '@/lib/seo/structured-data';
 
 /**
  * `/[locale]/campaigns` — docs/CAMPAIGNS.md §6 + §13.
@@ -72,6 +76,7 @@ export default async function CampaignsListingPage({ params }: RouteParams) {
   return (
     <>
       <MarketingNav locale={locale} dict={dict} rest="/campaigns" initialTheme="light" />
+      <JsonLd id="campaign-service-structured-data" data={campaignServiceStructuredData({ origin: siteUrl(), path: `/${locale}/campaigns`, locale, name: dict.meta.campaignsTitle, description: dict.meta.campaignsDescription, serviceType: dict.seo.serviceType })} />
 
       <main id="main" data-campaigns className="relative">
         <div id="campaigns-rail-anchor" className="relative">
@@ -132,7 +137,7 @@ export default async function CampaignsListingPage({ params }: RouteParams) {
           </section>
         </div>
       </main>
-
+      <FaqSection dict={dict} locale={locale} placement="campaign" path={`/${locale}/campaigns`} />
       <MarketingFooter locale={locale} dict={dict} />
     </>
   );

@@ -41,9 +41,9 @@ async function resolve(props: RouteProps) {
   const params = await props.searchParams;
   const rawLocale = first(params.locale);
   const locale: Locale = isLocale(rawLocale) ? rawLocale : DEFAULT_LOCALE;
-  const { admin } = await requestSurface();
+  const { admin, brand, workspace } = await requestSurface();
   const error = first(params.error);
-  return { locale, dict: getDictionary(locale), admin, error, next: authReturnPath(first(params.next), admin ? 'admin.twings.app' : '', '/') };
+  return { locale, dict: getDictionary(locale), admin: workspace, error, next: authReturnPath(first(params.next), admin ? 'admin.twings.app' : brand ? 'brand.twings.app' : '', '/') };
 }
 
 export async function generateMetadata(props: RouteProps): Promise<Metadata> {

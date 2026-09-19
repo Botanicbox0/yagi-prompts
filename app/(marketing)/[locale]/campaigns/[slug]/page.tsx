@@ -4,7 +4,6 @@ import { DEFAULT_LOCALE, isLocale, type Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/dictionaries';
 import { formatDate, interpolate, localize } from '@/lib/i18n/format';
 import { getCampaignCatalog } from '@/lib/campaigns/public-catalog';
-import { payoutParts } from '@/lib/campaigns/copy';
 import { campaignApplyPath, campaignsHref } from '@/lib/campaigns/links';
 import { acceptsApplications } from '@/lib/campaigns/state';
 import { getPromptCatalog } from '@/lib/prompts/public-catalog';
@@ -15,6 +14,10 @@ import { Markdown } from '@/components/playbook/markdown';
 import { TextSwap } from '@/components/ui/text-swap';
 import { CampaignSteps } from '@/components/campaigns/rails';
 import { campaignLabels } from '@/components/campaigns/labels';
+import { FaqSection } from '@/lib/seo/faq-section';
+import { JsonLd } from '@/lib/seo/json-ld';
+import { siteUrl } from '@/lib/seo/site-url';
+import { campaignServiceStructuredData } from '@/lib/seo/structured-data';
 
 /**
  * `/[locale]/campaigns/[slug]` — docs/CAMPAIGNS.md §6, the detail: brief, the format's example
@@ -68,13 +71,13 @@ export default async function CampaignDetailPage({ params }: RouteParams) {
   const title = localize(campaign.title, locale);
   const summary = localize(campaign.summary, locale);
   const brief = campaign.brief ? localize(campaign.brief, locale) : '';
-  const payout = campaign.payout ? payoutParts(campaign.payout, locale, labels.payout) : [];
   const closeDate = formatDate(campaign.applicationsCloseAt, locale);
   const postDate = formatDate(campaign.postDeadlineAt, locale);
 
   return (
     <>
       <MarketingNav locale={locale} dict={dict} rest={`/campaigns/${slug}`} initialTheme="light" />
+      <JsonLd id="campaign-service-structured-data" data={campaignServiceStructuredData({ origin: siteUrl(), path: `/${locale}/campaigns/${slug}`, locale, name: title, description: summary, serviceType: dict.seo.serviceType, offer: open })} />
 
       <main id="main" data-section data-theme="light" className="section">
         <div className="band pt-28 pb-24 lg:pt-36 lg:pb-32">
@@ -96,17 +99,7 @@ export default async function CampaignDetailPage({ params }: RouteParams) {
           </h1>
           <p className="mt-6 max-w-detail text-body opacity-70">{summary}</p>
 
-          {/* The money, the slots, the two clocks — the four facts that decide whether to apply. */}
-          <div data-campaign-facts className="mt-10 grid gap-px border border-hairline bg-hairline sm:grid-cols-2 lg:grid-cols-4">
-            <div className="bg-surface p-5">
-              <p className="font-label text-[0.68rem] tracking-[0.12em] uppercase opacity-50">{labels.payoutLabel}</p>
-              <p className="mt-2 font-display text-[1.6rem] leading-none font-black">{payout[0] ?? '—'}</p>
-              {payout.slice(1).map((part) => (
-                <p key={part} className="mt-1.5 font-mono text-[0.72rem] opacity-60">
-                  {part}
-                </p>
-              ))}
-            </div>
+          <div data-campaign-facts className="mt-10 grid gap-px border border-hairline bg-hairline sm:grid-cols-3">
             <div className="bg-surface p-5">
               <p className="font-label text-[0.68rem] tracking-[0.12em] uppercase opacity-50">{c.slotsLabel}</p>
               <p className="mt-2 font-display text-[1.6rem] leading-none font-black">
@@ -221,7 +214,7 @@ export default async function CampaignDetailPage({ params }: RouteParams) {
           <CampaignSteps heading={c.stepsHeading} steps={[c.step1, c.step2, c.step3, c.step4, c.step5]} />
         </div>
       </main>
-
+      <FaqSection dict={dict} locale={locale} placement="campaign" path={`/${locale}/campaigns/${slug}`} />
       <MarketingFooter locale={locale} dict={dict} />
     </>
   );

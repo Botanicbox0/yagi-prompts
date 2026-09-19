@@ -2,6 +2,8 @@ import { PublicLink } from '@/components/admin/public-link';
 import type { ReactNode } from 'react';
 import { TwingsLogo } from '@/components/brand/twings-mark';
 import type { Dictionary } from '@/lib/i18n/dictionaries';
+import { getDictionary } from '@/lib/i18n/dictionaries';
+import { isLocale } from '@/lib/i18n/config';
 import { ADMIN_ACTION_PATH, BACK_FIELD, OP_FIELD } from '@/lib/admin/form';
 import type { AdminOperationName } from '@/lib/admin/operations';
 
@@ -257,12 +259,12 @@ export function AdminShell({
 }: {
   dict: AdminDict;
   locale: string;
-  active: 'home' | 'playbooks' | 'policy' | 'prompts' | 'contests' | 'campaigns' | 'inquiries';
+  active: 'home' | 'playbooks' | 'policy' | 'prompts' | 'contests' | 'campaigns' | 'inquiries' | 'brandWorkspace';
   children: ReactNode;
 }) {
   // "Refresh caches" used to send every page back to /admin; it returns to where it was pressed.
   const refreshBack =
-    active === 'prompts'
+    active === 'brandWorkspace' ? '/admin/brand-workspace' : active === 'prompts'
       ? '/admin/prompts'
       : active === 'contests'
         ? '/admin/contests'
@@ -275,7 +277,7 @@ export function AdminShell({
             : active === 'playbooks'
               ? '/admin/playbooks'
               : '/admin';
-  const navClass = (key: 'home' | 'playbooks' | 'policy' | 'prompts' | 'contests' | 'campaigns' | 'inquiries') =>
+  const navClass = (key: 'home' | 'playbooks' | 'policy' | 'prompts' | 'contests' | 'campaigns' | 'inquiries' | 'brandWorkspace') =>
     `font-label text-eyebrow uppercase ${active === key ? 'text-accent' : 'opacity-60'}`;
 
   return (
@@ -285,6 +287,7 @@ export function AdminShell({
           <div className="flex min-w-0 flex-wrap items-center gap-x-6 gap-y-4">
             <AdminBrand dict={dict} />
             <nav className="flex flex-wrap items-center gap-x-5 gap-y-3">
+              <a href="/admin/brand-workspace" className={navClass('brandWorkspace')}>{getDictionary(isLocale(locale) ? locale : 'en').brandWorkspace.studioQueue}</a>
               {/* §13 put prompts first: it is the v1.5 surface, and the moderation queue is the
                   screen that has work waiting in it on any given day. */}
               <a href="/admin/prompts" className={navClass('prompts')}>

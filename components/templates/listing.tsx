@@ -63,6 +63,7 @@ export function TemplatesListing({
         <span className="block">{t.line2}</span>
       </h1>
       <p className="mt-8 max-w-detail text-body opacity-70">{t.intro}</p>
+      <p data-service-definition className="mt-6 max-w-detail text-body opacity-70">{dict.seo.definition}</p>
 
       <div className="mt-10 flex flex-wrap items-center justify-between gap-6 border-t border-hairline pt-6">
         <MediumTabs locale={locale} dict={dict} active={medium} />

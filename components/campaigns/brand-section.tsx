@@ -1,5 +1,5 @@
 import type { Dictionary } from '@/lib/i18n/dictionaries';
-import { BRANDS_ANCHOR, BRAND_INQUIRY_ENDPOINT } from '@/lib/campaigns/links';
+import { BRANDS_ANCHOR, BRAND_INQUIRY_ENDPOINT, brandWorkspaceHref } from '@/lib/campaigns/links';
 import { BrandInquiryForm, type BrandFormTemplate } from './brand-form';
 
 /**
@@ -35,7 +35,14 @@ export function BrandSection({
       </ol>
 
       <div className="mt-14 max-w-detail">
-        <BrandInquiryForm endpoint={BRAND_INQUIRY_ENDPOINT} locale={locale} labels={copy} templates={templates} privacy={privacy} />
+        <a data-brand-workspace-entry href={brandWorkspaceHref(locale)} className="inline-flex min-h-12 items-center justify-center rounded-full bg-black px-7 py-3 font-medium text-white transition-opacity hover:opacity-75 focus-visible:outline-2 focus-visible:outline-offset-4">
+          {copy.workspaceCta}
+        </a>
+        <p className="mt-4 text-sm leading-relaxed opacity-65">{copy.workspaceHelp}</p>
+        <details className="mt-10 border-t border-hairline pt-5">
+          <summary className="cursor-pointer text-sm font-medium underline underline-offset-4">{copy.consultationToggle}</summary>
+          <div className="pt-8"><BrandInquiryForm endpoint={BRAND_INQUIRY_ENDPOINT} locale={locale} labels={copy} templates={templates} privacy={privacy} /></div>
+        </details>
       </div>
     </section>
   );

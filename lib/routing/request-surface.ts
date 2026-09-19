@@ -5,8 +5,9 @@ import { REQUEST_ORIGIN_HEADER, SURFACE_HEADER } from './surfaces';
 export async function requestSurface() {
   const values = await headers();
   const admin = values.get(SURFACE_HEADER) === 'admin';
+  const brand = values.get(SURFACE_HEADER) === 'brand';
   const origin = values.get(REQUEST_ORIGIN_HEADER);
-  return { admin, origin };
+  return { admin, brand, workspace: admin || brand, origin };
 }
 
 /** Public links leave only the dedicated admin host; local/preview links stay relative. */

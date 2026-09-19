@@ -84,7 +84,7 @@ describe('workspace middleware boundary', () => {
     const allowed = await middleware(request('admin.twings.app', '/api/admin/staging-url', { method: 'POST', headers: { origin: 'https://admin.twings.app', 'sec-fetch-site': 'same-origin' } }));
     expect(allowed.headers.get('x-middleware-next')).toBe('1');
   });
-  it.each(['/', '/admin', '/auth/signin', '/api/admin/staging-url', '/api/billing/checkout', '/_next/static/app.js', '/brand/twings.svg'])('keeps the unimplemented brand app closed at %s', async path => {
+  it.each(['/admin', '/auth/signin', '/api/admin/staging-url', '/api/billing/checkout', '/_next/static/app.js', '/brand/twings.svg'])('rejects non-navigation paths on the plural brand alias at %s', async path => {
     const response = await middleware(request('brands.twings.app', path));
     expect(response.status).toBe(404); expect(response.headers.get('x-robots-tag')).toBe('noindex, nofollow'); expect(session.calls).toBe(0);
   });
@@ -102,6 +102,43 @@ describe('workspace middleware boundary', () => {
       expect((await middleware(request('twings.app', path))).headers.get('x-middleware-next')).toBe('1');
     }
     expect(session.calls).toBe(0);
+  });
+  it.each(['/llms.txt', '/llms-full.txt'])('serves public reader aid %s without locale or session routing', async path => {
+    for (const host of ['twings.app', 'www.twings.app', 'localhost:3000']) {
+      for (const method of ['GET', 'HEAD']) {
+        const response = await middleware(request(host, path, { method, headers: { 'accept-language': 'ko' } }));
+        expect(response.status).toBe(200);
+        expect(response.headers.get('x-middleware-next')).toBe('1');
+        expect(response.headers.get('location')).toBeNull();
+      }
+    }
+    expect(session.calls).toBe(0);
+  });
+  it.each(['/account', '/renders', '/admin/brand-workspace/00000000-0000-4000-8000-000000000000'])('keeps anonymous consumer app redirect private at %s', async path => {
+    const response = await middleware(request('twings.app', path));
+    expect(response.status).toBe(307);
+    const target = new URL(response.headers.get('location')!);
+    expect(target.origin).toBe('https://twings.app');
+    expect(target.searchParams.get('signin')).toBe('1');
+    expect(target.searchParams.get('next')).toBe(path);
+    expect(response.headers.get('cache-control')).toBe('private, no-store');
+    expect(response.headers.get('x-robots-tag')).toBe('noindex, nofollow');
+  });
+  it.each(['/llms.txt', '/llms-full.txt'])('keeps public reader aid %s outside every workspace and unknown host', async path => {
+    for (const host of ['admin.twings.app', 'brand.twings.app', 'brands.twings.app', 'unknown.example']) {
+      for (const method of ['GET', 'HEAD']) {
+        const response = await middleware(request(host, path, { method }));
+        expect(response.status).toBe(404);
+        expect(response.headers.get('cache-control')).toBe('private, no-store');
+        expect(response.headers.get('x-robots-tag')).toBe('noindex, nofollow');
+      }
+    }
+    expect(session.calls).toBe(0);
+  });
+  it.each(['/llms.txt.extra', '/llms-full.txt/', '/notes.txt'])('does not widen the reader-aid bypass to %s', async path => {
+    const response = await middleware(request('twings.app', path));
+    expect(response.status).toBe(308);
+    expect(response.headers.get('location')).toBe(`https://twings.app/en${path}`);
   });
   it('overwrites spoofed internal context headers', async () => {
     const response = await middleware(request('twings.app', '/auth/choose', { headers: { 'x-twings-surface': 'admin', 'x-twings-request-origin': 'https://evil.example' } }));

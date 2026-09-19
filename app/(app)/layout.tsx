@@ -40,17 +40,17 @@ export async function generateMetadata(): Promise<Metadata> {
  */
 export default async function AppRootLayout({ children }: { children: ReactNode }) {
   const locale = await getRequestLocale();
-  const { admin } = await requestSurface();
+  const { workspace } = await requestSurface();
   return (
-    <html lang={locale} className={fontVariables} data-workspace-admin={admin || undefined}>
+    <html lang={locale} className={fontVariables} data-workspace-admin={workspace || undefined}>
       <head>
-        {admin && <link rel="stylesheet" href="/fonts/helvetica-neue/helvetica-neue.css" />}
+        {workspace && <link rel="stylesheet" href="/fonts/helvetica-neue/helvetica-neue.css" />}
         <link rel="stylesheet" href="/fonts/pretendard/pretendard-dynamic-subset.css" />
         <link rel="stylesheet" href="/fonts/pretendard/pretendard-hangul-mono.css" />
       </head>
       <body>
         {children}
-        <RegisterServiceWorker />
+        {!workspace && <RegisterServiceWorker />}
       </body>
     </html>
   );

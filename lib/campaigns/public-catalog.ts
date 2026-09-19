@@ -19,7 +19,7 @@ async function readCampaignCatalog(): Promise<CampaignCatalog> {
  * Versioned key. A cached projection outlives a shape change (the site has been bitten three
  * times by this): **bump the version string in the same commit as any change to `CampaignCard`.**
  */
-export const getCampaignCatalog = unstable_cache(readCampaignCatalog, ['campaign-catalog', 'v1', resolveRuntimeMode()], {
+export const getCampaignCatalog = unstable_cache(readCampaignCatalog, ['campaign-catalog', 'v2-private-payment-terms', resolveRuntimeMode()], {
   tags: [CAMPAIGNS_TAG],
   revalidate: CATALOG_TTL_SECONDS,
 });

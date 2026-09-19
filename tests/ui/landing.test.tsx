@@ -38,7 +38,8 @@ describe('mobile-first hero (F3 · templates)', () => {
   });
 
   it('hides the lede below lg — and only below lg', () => {
-    expect(hero).toMatch(/class="hidden [^"]*lg:block[^"]*"[^>]*>[^<]*finished film/);
+    const desktopLede = hero.match(/class="hidden [^"]*lg:block[^"]*"[^>]*>([^<]*)/);
+    expect(desktopLede?.[1]).toBe(renderToStaticMarkup(<>{dict.hero.lede}</>));
   });
 
   it('no longer offers a prompt submission or a studio door', () => {

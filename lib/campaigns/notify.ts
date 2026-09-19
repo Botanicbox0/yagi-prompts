@@ -69,7 +69,7 @@ export async function announceCampaignRecruiting(deps: CampaignMailDeps, campaig
         const dict = getDictionary(locale);
         const c = dict.campaigns.email;
         const facts = campaignFacts(campaign, locale);
-        const vars = { title: facts.title, host: campaign.hostName, payout: facts.payout, slots: String(campaign.slots), applyBy: facts.applyBy };
+        const vars = { title: facts.title, host: campaign.hostName, slots: String(campaign.slots), applyBy: facts.applyBy };
         const args = {
           title: c.recruitingTitle,
           paragraphs: [interpolate(c.recruitingBody, vars)],

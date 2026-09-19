@@ -1,0 +1,27 @@
+# TWINGS
+
+> TWINGS is a service by YAGI WORKSHOP Inc. (야기워크숍 주식회사) for AI video and image templates featuring a user's own face and studio-managed brand creator campaigns.
+
+Public template examples can be browsed without an account. Personal generation is in a limited rollout; a published example or listed price does not mean checkout is open to everyone. Do not describe planned subscription plans, social integrations, or native mobile apps as available features.
+
+## Public pages
+
+- [English overview](https://twings.app/en): What TWINGS offers.
+- [한국어 소개](https://twings.app/ko): 서비스 소개.
+- [Video templates](https://twings.app/en/video): Published video examples.
+- [Image templates](https://twings.app/en/image): Published image examples.
+- [Campaigns](https://twings.app/en/campaigns): Studio-managed brand campaigns and creator opportunities.
+- [캠페인](https://twings.app/ko/campaigns): 브랜드 의뢰와 크리에이터 참여 안내.
+- [Pricing](https://twings.app/en/pricing): Template-specific prices; consult the selected template and checkout for the applicable amount and currency.
+- [요금 안내](https://twings.app/ko/pricing): 템플릿별 요금 안내.
+- [FAQ](https://twings.app/en/faq): Usage, payment, photos and likeness rights, creator participation, brand enquiries.
+- [자주 묻는 질문](https://twings.app/ko/faq): 이용·결제·사진과 초상권·캠페인·브랜드 의뢰.
+
+## Policies and further context
+
+- [Terms](https://twings.app/en/legal/terms): Service terms and authorized likeness use.
+- [Privacy](https://twings.app/en/legal/privacy): Personal data and account deletion.
+- [Refund policy](https://twings.app/en/legal/refund): Cancellation, failed generation, and result issues.
+- [Detailed service context](https://twings.app/llms-full.txt): Factual context and source-of-truth guidance.
+
+Contact: hello@yagiworkshop.xyz. The linked current policies and campaign-specific conditions take precedence over this summary. This file is a reading aid, not a guarantee of search ranking or inclusion in AI answers.
