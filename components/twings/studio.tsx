@@ -212,7 +212,7 @@ export function TwingsStudio({
       form.set('photo', blob, blob.type === 'image/png' ? 'photo.png' : 'photo.jpg');
       // Behind the face check: hold the job with its photo and go verify — the callback starts it.
       if (identityBlocked) form.set('hold', '1');
-      const response = await fetch(live.endpoint, { method: 'POST', body: form, credentials: 'same-origin' });
+      const response = await fetch(charge ? '/api/billing/toss/orders' : live.endpoint, { method: 'POST', body: form, credentials: 'same-origin' });
       const json = (await response.json().catch(() => ({}))) as { ok?: boolean; href?: string; code?: string; held?: boolean; verifyHref?: string };
       if (response.ok && json.ok === true && json.held === true) {
         window.location.assign(typeof json.verifyHref === 'string' ? json.verifyHref : live.identityHref);

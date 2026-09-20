@@ -4,6 +4,8 @@ import type { Viewer } from '@/lib/auth/identity';
 import type { ArkAssetsClient } from '@/lib/ark/assets';
 import { ASSET_WAIT_HOURS, assetLibraryMode, ensureIdentityAsset, ensureVirtualGroup, identityStatusFor, loadIdentityGroup, needsIdentity, needsLiveness, pollIdentityAsset, recordIdentityUse, type AssetLibraryMode, type IdentityDeps } from '@/lib/identity/service';
 import { RENDER_PIPELINE_PUBLIC } from '@/lib/flags';
+import { getTossGateway, type TossGateway } from '@/lib/billing/toss-gateway';
+import { reconcileTossPayments, renderPaymentStatus } from '@/lib/billing/toss-service';
 import { DEFAULT_LOCALE, isLocale, type Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/dictionaries';
 import { aspectsForMedium, isEngineId, isImageAspect, isImageEngine, isVideoAspect, isVideoEngine, resolveEngine } from '@/lib/images/engines';
@@ -103,11 +105,33 @@ export interface CreateRenderInput {
   locale: string | null;
   /** Store the photo and hold the job behind the face check instead of refusing (docs §8.2). */
   holdForIdentity?: boolean;
+  /** Server-only payment proof. The public render endpoint never accepts this field. */
+  paymentOrderId?: string;
 }
 
 export async function createRenderJob(deps: RenderServiceDeps, viewer: Viewer, input: CreateRenderInput): Promise<CreateRenderOutcome> {
   if (viewer.userId === null) return { ok: false, code: 'sign_in_required' };
-  if (!canStartRender(viewer)) return { ok: false, code: 'not_open' };
+  if (viewer.isAdmin) return createAuthorizedRender(deps, viewer, input);
+  // Opening the studio must never open a free direct POST /api/renders bypass.
+  if (!input.paymentOrderId) return { ok: false, code: 'not_open' };
+  return deps.sql.transaction(async (sql) => {
+    const { rows } = await sql.query<{
+      status: string; template_slug: string; aspect: string; render_ref: string; render_id: string | null;
+    }>("select status,template_slug,aspect,render_ref,render_id from billing_payments where id=$1 and user_id=$2 and payment_type='NORMAL' for update", [input.paymentOrderId, viewer.userId]);
+    const payment = rows[0];
+    if (!payment || payment.status !== 'paid' || payment.template_slug !== input.templateSlug || payment.aspect !== input.aspect) return { ok: false, code: 'not_open' };
+    if (payment.render_id) {
+      const job = await loadRenderJob(sql, payment.render_id);
+      return job ? { ok: true, id: job.id, held: job.status === 'held' } : { ok: false, code: 'not_found' };
+    }
+    const result = await createAuthorizedRender({ ...deps, sql }, viewer, input, payment.render_ref);
+    if (result.ok) await sql.query('update billing_payments set render_id=$2,fulfilled_at=$3,lease_until=null where id=$1', [input.paymentOrderId, result.id, deps.now ?? new Date()]);
+    return result;
+  });
+}
+
+async function createAuthorizedRender(deps: RenderServiceDeps, viewer: Viewer, input: CreateRenderInput, reservedId?: string): Promise<CreateRenderOutcome> {
+  if (viewer.userId === null) return { ok: false, code: 'sign_in_required' };
   const now = deps.now ?? new Date();
 
   const template = await loadPromptBySlug(deps.sql, input.templateSlug);
@@ -131,12 +155,12 @@ export async function createRenderJob(deps: RenderServiceDeps, viewer: Viewer, i
   const recent = await countRenderJobsSince(deps.sql, viewer.userId, new Date(now.getTime() - 24 * 60 * 60 * 1000));
   if (recent >= RENDER_JOBS_PER_DAY) return { ok: false, code: 'rate_limited' };
 
-  const id = randomUUID();
+  const id = reservedId ?? randomUUID();
   const inputKey = `${id}/input.${extensionFor(input.photo.mime)}`;
   await deps.store.put(inputKey, input.photo.bytes, input.photo.mime);
   await insertRenderJob(deps.sql, {
     id,
-    userId: viewer.userId,
+    userId: viewer.userId!,
     templateId: template.id,
     templateSlug: template.slug,
     medium: template.medium,
@@ -160,6 +184,8 @@ export async function releaseHeldRendersFor(sql: SqlRunner, userId: string): Pro
 // ---------------------------------------------------------------------------
 
 export interface RenderPassDeps extends RenderServiceDeps {
+  /** Payment seam; tests inject their gateway, runtime resolves the configured provider. */
+  tossGateway?: TossGateway | null;
   engines?: RenderEngineDeps;
   /** null = no channel configured; finished jobs keep `notify_status = pending` until one is. */
   notifier: RenderNotifier | null;
@@ -210,6 +236,12 @@ export async function runRenderPass(deps: RenderPassDeps, options: RenderPassOpt
     errors: [],
   };
 
+  const gateway = deps.tossGateway === undefined ? getTossGateway() : deps.tossGateway;
+  const settlePayments = async () => {
+    if (gateway) await reconcileTossPayments({ ...deps, gateway, createRender: createRenderJob });
+  };
+  // Recover approved orders before claiming, and refunds before sending the failure notice.
+  await settlePayments();
   // 1 — orphaned synchronous renders back to the queue (or failed once the budget is spent).
   report.recovered = await recoverStaleRenderJobs(deps.sql, { now, leaseMinutes: LEASE_MINUTES, maxAttempts: MAX_ATTEMPTS });
 
@@ -228,6 +260,7 @@ export async function runRenderPass(deps: RenderPassDeps, options: RenderPassOpt
     await pollAwaiting(deps, job, now, report);
   }
 
+  await settlePayments();
   // 4 — say so.
   await notifyFinished(deps, now, report);
   return report;
@@ -411,6 +444,11 @@ async function notifyFinished(deps: RenderPassDeps, now: Date, report: RenderPas
     return;
   }
   for (const job of due) {
+    const payment = job.status === 'failed' ? await renderPaymentStatus(deps.sql, job.id) : null;
+    if (payment === 'paid' || payment === 'refund_pending') {
+      report.notifyPending += 1;
+      continue;
+    }
     const recipient = await loadRecipient(deps.sql, job.userId);
     if (recipient === null) {
       await markRenderNotified(deps.sql, job.id, { status: 'skipped', at: now, spendAttempt: false });
@@ -422,7 +460,7 @@ async function notifyFinished(deps: RenderPassDeps, now: Date, report: RenderPas
       job,
       templateTitle: templateTitle(template, locale, job.templateSlug),
       recipient: { email: recipient.email, locale },
-      failureReason: job.status === 'failed' ? failureReason(job.errorCode, locale) : null,
+      failureReason: job.status === 'failed' ? [failureReason(job.errorCode, locale), payment === 'refunded' ? getDictionary(locale).billing.toss.refunded : null].filter(Boolean).join(' ') : null,
       siteUrl: deps.siteUrl,
       siteName: deps.siteName ?? getDictionary(locale).meta.siteName,
     });

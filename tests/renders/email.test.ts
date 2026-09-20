@@ -54,7 +54,8 @@ describe('the completion email', () => {
     expect(email.html).toContain(`href="${LINKS.templateUrl}"`);
     expect(email.html).not.toContain('<img');
     expect(email.html).toContain('Try again');
-    expect(email.text).toContain('not charged');
+    // Payment outcome is supplied by the settlement service after provider confirmation.
+    expect(email.text).not.toContain('not charged');
   });
 
   it('escapes a title that carries markup', () => {

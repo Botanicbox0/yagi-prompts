@@ -355,6 +355,18 @@ async function sweepGateway(assets: AssetBlockRow[]): Promise<void> {
 async function sweepMoney(): Promise<void> {
   console.log('\n/api/billing + /api/events — anon, production build (M3)');
 
+  // Toss: no anonymous order creation/approval, order reads, or private widget HTML.
+  for (const path of ['/api/billing/toss/orders', '/api/billing/toss/confirm']) {
+    const response = await request(path, { method: 'POST', headers: { Origin: BASE } });
+    expectEqual(`${path} refuses anonymous payment entry`, response.status, 401);
+    expectEqual(`${path} is never cached`, response.cacheControl, 'private, no-store');
+  }
+  const tossOrderId = '00000000-0000-4000-8000-000000000000';
+  expectEqual('Toss order API refuses anon', (await get(`/api/billing/toss/orders/${tossOrderId}`)).status, 401);
+  const tossPage = await get(`/billing/toss/${tossOrderId}`);
+  expectOneOf('Toss checkout page redirects anon', tossPage.status, [302, 307, 308]);
+  expectAbsent('Toss checkout HTML stays behind sign-in', tossPage.body, 'data-toss-checkout');
+
   const checkout = await postForm('/api/billing/checkout', {
     locale: 'en',
     slug: SHOWCASE,

@@ -18,6 +18,7 @@ describe('migrations apply on a fresh database (PLAN §6)', () => {
         where table_schema = 'public' and table_type = 'BASE TABLE' order by table_name`,
     );
     expect(rows.map((r) => r.table_name)).toEqual([
+      'billing_payments',
       'blocks',
       'brand_attachments',
       'brand_content_decisions',
