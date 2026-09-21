@@ -2,7 +2,10 @@ import 'server-only';
 import { getSqlRunner } from '@/lib/db/connect';
 import { getRenderStore } from '@/lib/renders/store';
 import { openAiConfigFromEnv } from '@/lib/images/openai';
-import { createPortraitProvider } from './portrait-provider';
+import { createPortraitProvider,createSeedreamPortraitProvider } from './portrait-provider';
+import {seedreamConfigFromEnv} from '@/lib/images/seedream';
+import {liveIdentityDeps} from './runtime';
+import {portraitSeedreamReference} from './portrait-reference';
 import type { PortraitDeps } from './portrait-service';
 
 /** Separate rollout from paid generation. Remains closed until this feature's migrations are applied. */
@@ -11,5 +14,7 @@ export async function portraitDeps():Promise<PortraitDeps|null>{
   if(!portraitEnabled()) return null;
   const sql=await getSqlRunner();if(!sql)return null;
   const config=openAiConfigFromEnv();
-  return {sql,store:await getRenderStore(),provider:config?createPortraitProvider(config):null};
+  const store=await getRenderStore(),seedream=seedreamConfigFromEnv(),identity=liveIdentityDeps(sql);
+  return {sql,store,provider:config?createPortraitProvider(config):null,
+    seedreamProvider:seedream&&identity.assets?createSeedreamPortraitProvider(seedream,(photo,context)=>portraitSeedreamReference(identity,store,photo,context)):null};
 }
