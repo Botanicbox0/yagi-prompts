@@ -107,6 +107,8 @@ export interface CreateRenderInput {
   holdForIdentity?: boolean;
   /** Server-only payment proof. The public render endpoint never accepts this field. */
   paymentOrderId?: string;
+  /** Server-resolved lineage, never trusted as a caller-supplied storage key. */
+  portraitId?: string;
 }
 
 export async function createRenderJob(deps: RenderServiceDeps, viewer: Viewer, input: CreateRenderInput): Promise<CreateRenderOutcome> {
@@ -116,15 +118,15 @@ export async function createRenderJob(deps: RenderServiceDeps, viewer: Viewer, i
   if (!input.paymentOrderId) return { ok: false, code: 'not_open' };
   return deps.sql.transaction(async (sql) => {
     const { rows } = await sql.query<{
-      status: string; template_slug: string; aspect: string; render_ref: string; render_id: string | null;
-    }>("select status,template_slug,aspect,render_ref,render_id from billing_payments where id=$1 and user_id=$2 and payment_type='NORMAL' for update", [input.paymentOrderId, viewer.userId]);
+      status: string; template_slug: string; aspect: string; render_ref: string; render_id: string | null; identity_portrait_id: string | null;
+    }>("select status,template_slug,aspect,render_ref,render_id,identity_portrait_id from billing_payments where id=$1 and user_id=$2 and payment_type='NORMAL' for update", [input.paymentOrderId, viewer.userId]);
     const payment = rows[0];
     if (!payment || payment.status !== 'paid' || payment.template_slug !== input.templateSlug || payment.aspect !== input.aspect) return { ok: false, code: 'not_open' };
     if (payment.render_id) {
       const job = await loadRenderJob(sql, payment.render_id);
       return job ? { ok: true, id: job.id, held: job.status === 'held' } : { ok: false, code: 'not_found' };
     }
-    const result = await createAuthorizedRender({ ...deps, sql }, viewer, input, payment.render_ref);
+    const result = await createAuthorizedRender({ ...deps, sql }, viewer, {...input,portraitId:payment.identity_portrait_id??undefined}, payment.render_ref);
     if (result.ok) await sql.query('update billing_payments set render_id=$2,fulfilled_at=$3,lease_until=null where id=$1', [input.paymentOrderId, result.id, deps.now ?? new Date()]);
     return result;
   });
@@ -171,6 +173,7 @@ async function createAuthorizedRender(deps: RenderServiceDeps, viewer: Viewer, i
     inputMime: input.photo.mime,
     status: held ? 'held' : 'queued',
   });
+  if (input.portraitId) await deps.sql.query('update render_jobs set identity_portrait_id=$2 where id=$1',[id,input.portraitId]);
   return { ok: true, id, held };
 }
 

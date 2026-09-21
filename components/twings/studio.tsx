@@ -75,6 +75,7 @@ export interface StudioLive {
   signinHref: string;
   /** Where an `identity_required` answer sends them: the one-time face check (docs §8.2). */
   identityHref: string;
+  portrait?: { manage: string; change: string; useSaved: string };
   labels: {
     badge: string;
     /** Operators render for real without a charge (founder, 2026-09-10). */
@@ -99,7 +100,7 @@ const PHOTO_PASSTHROUGH_BYTES = 3_000_000;
  * ours. Anything that cannot be decoded here (HEIC on a non-Apple browser) goes up as it is and
  * the server says what it wants instead.
  */
-async function shrinkPhoto(file: File): Promise<Blob> {
+export async function shrinkPhoto(file: File): Promise<Blob> {
   try {
     const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' } as ImageBitmapOptions);
     const scale = Math.min(1, PHOTO_MAX_EDGE / Math.max(bitmap.width, bitmap.height));
@@ -139,6 +140,8 @@ export function TwingsStudio({
   const [phase, setPhase] = useState<Phase>('photo');
   const [photo, setPhoto] = useState<string | null>(null);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [savedPortrait, setSavedPortrait] = useState<string | null>(null);
+  const [portraitRequired, setPortraitRequired] = useState(false);
   const [liveMode, setLiveMode] = useState(false);
   const [charge, setCharge] = useState(true);
   const [signedIn, setSignedIn] = useState(false);
@@ -169,13 +172,15 @@ export function TwingsStudio({
     let cancelled = false;
     fetch(accessUrl, { cache: 'no-store', credentials: 'same-origin' })
       .then((response) => (response.ok ? response.json() : { live: false }))
-      .then((json: { live?: boolean; charge?: boolean; identityRequired?: boolean; identity?: string; signedIn?: boolean; interest?: boolean }) => {
+      .then((json: { live?: boolean; charge?: boolean; identityRequired?: boolean; identity?: string; signedIn?: boolean; interest?: boolean; portraitEnabled?: boolean; portraitId?: string | null }) => {
         if (cancelled) return;
         setLiveMode(json.live === true);
         setCharge(json.charge !== false);
         setIdentityRequired(json.identityRequired === true);
         setIdentity(typeof json.identity === 'string' ? json.identity : 'not_needed');
         setSignedIn(json.signedIn === true);
+        setPortraitRequired(json.portraitEnabled === true);
+        if (json.portraitId) { setSavedPortrait(json.portraitId); setPhoto(`/api/identity/portrait/${json.portraitId}/image`); setPhase(single ? 'pay' : 'style'); }
         setInterest(json.interest === true);
       })
       .catch(() => {
@@ -200,16 +205,16 @@ export function TwingsStudio({
   };
 
   const submitLive = async () => {
-    if (!live || !photoFile || !chosen) return;
+    if (!live || (!photoFile && !savedPortrait) || !chosen) return;
     setSubmitting(true);
     setLiveError(null);
     try {
-      const blob = await shrinkPhoto(photoFile);
       const form = new FormData();
       form.set('template', live.template);
       form.set('aspect', aspect);
       form.set('locale', live.locale);
-      form.set('photo', blob, blob.type === 'image/png' ? 'photo.png' : 'photo.jpg');
+      if (savedPortrait) form.set('portraitId', savedPortrait);
+      else if (photoFile) { const blob = await shrinkPhoto(photoFile); form.set('photo', blob, blob.type === 'image/png' ? 'photo.png' : 'photo.jpg'); }
       // Behind the face check: hold the job with its photo and go verify — the callback starts it.
       if (identityBlocked) form.set('hold', '1');
       const response = await fetch(charge ? '/api/billing/toss/orders' : live.endpoint, { method: 'POST', body: form, credentials: 'same-origin' });
@@ -281,6 +286,7 @@ export function TwingsStudio({
         <div className="mt-6 max-w-detail border border-hairline p-6 sm:p-8">
           <p className="font-display text-[clamp(1.4rem,2.6vw,2rem)] leading-[0.95] font-black uppercase">{labels.closedTitle}</p>
           <p className="mt-4 text-body opacity-70">{labels.closedBody}</p>
+          {portraitRequired && live?.portrait && <a className="mt-5 inline-block underline" href={`/identity/portrait?next=${encodeURIComponent(`/${live.locale}/t/${live.template}#make`)}`}>{live.portrait.manage}</a>}
           <p data-studio-ai-note className="mt-4 font-mono text-[0.72rem] leading-relaxed opacity-45">{labels.aiNote}</p>
           <button
             type="button"
@@ -330,7 +336,10 @@ export function TwingsStudio({
       </ol>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-        <div className="border border-hairline">
+        {portraitRequired && live.portrait ? <div className="border border-hairline p-5">
+          {savedPortrait ? <img src={`/api/identity/portrait/${savedPortrait}/image`} alt={live.portrait.useSaved} className="mx-auto aspect-[2/3] max-h-96 w-full object-contain"/> : <p>{live.portrait.manage}</p>}
+          <a className="mt-5 inline-block underline" href={`/identity/portrait?next=${encodeURIComponent(`/${live.locale}/t/${live.template}#make`)}`}>{savedPortrait?live.portrait.change:live.portrait.manage}</a>
+        </div> : <div className="border border-hairline">
           <label
             htmlFor="studio-photo"
             className="flex aspect-[3/4] cursor-pointer items-center justify-center overflow-hidden bg-black focus-within:outline focus-within:outline-2 focus-within:outline-accent"
@@ -370,6 +379,7 @@ export function TwingsStudio({
           )}
         </div>
 
+        }
         <div className="flex flex-col">
           {(phase === 'photo' || phase === 'style' || phase === 'pay') && (
             <>

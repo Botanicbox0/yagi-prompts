@@ -83,6 +83,35 @@ describe('Toss one-time checkout on the real database', () => {
     );
   });
 
+  it('pins a selected portrait to its order and render after the user changes selection', async () => {
+    const first = '10000000-0000-4000-8000-000000000001';
+    const second = '10000000-0000-4000-8000-000000000002';
+    for (const [index, id] of [first, second].entries()) {
+      await h.sql.query(`insert into identity_portrait_attempts
+        (id,user_id,request_id,slot,status,model,prompt_version,input_key,result_key,consent_at,completed_at)
+        values($1,$2,$1,$3,'succeeded','gpt-image-2.5-sunburst','studio-identity-v1',$4,$5,now(),now())`,
+        [id, buyer.userId, index + 1, `${id}/input.png`, `${id}/result.png`]);
+    }
+    await h.sql.query('insert into identity_portrait_selections(user_id,attempt_id) values($1,$2)', [buyer.userId, first]);
+    const created = await createTossOrder(deps(), buyer, { ...input, portraitId: first });
+    if (!created.ok) throw new Error(created.code);
+    await h.sql.query('update identity_portrait_selections set attempt_id=$2 where user_id=$1', [buyer.userId, second]);
+    gateway.authorize(created.order.id, created.order.amountKrw);
+    const result = await confirmTossOrder(deps(), buyer, {
+      orderId: created.order.id, paymentKey: gateway.keyFor(created.order.id),
+      amount: created.order.amountKrw, consent: true,
+    });
+    if (!result.ok) throw new Error(result.code);
+    const payment = (await h.sql.query<{identity_portrait_id:string;input_key:string}>(
+      'select identity_portrait_id,input_key from billing_payments where id=$1', [created.order.id])).rows[0];
+    const render = (await h.sql.query<{identity_portrait_id:string;input_key:string}>(
+      'select identity_portrait_id,input_key from render_jobs where id=$1', [result.id])).rows[0];
+    if (!payment || !render) throw new Error('Missing payment or render');
+    expect(payment.identity_portrait_id).toBe(first);
+    expect(render.identity_portrait_id).toBe(first);
+    expect(await deps().store.read(render.input_key)).toEqual(input.photo.bytes);
+  });
+
   it('rejects a forged amount and an order whose server price changed before approval', async () => {
     const c = await order();
     if (!c.ok) throw new Error(c.code);
