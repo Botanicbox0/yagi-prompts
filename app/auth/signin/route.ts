@@ -2,12 +2,11 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { createAuthServerClient, getSessionUser } from '@/lib/supabase/auth-client';
 import { isEmbeddedWebView } from '@/lib/auth/webview';
 import { chooseProviderHref, isAuthProvider, needsRealBrowser } from '@/lib/auth/providers';
-import { authFailurePath, authReturnPath, resolveRequestUrl } from '@/lib/routing/surfaces';
+import { authFailurePath, authReturnPath, isBrandPath, resolveRequestUrl } from '@/lib/routing/surfaces';
 import {
-  DEFAULT_LOCALE,
+  resolveLocale,
   LOCALE_COOKIE,
   LOCALE_COOKIE_MAX_AGE,
-  isLocale,
 } from '@/lib/i18n/config';
 
 /**
@@ -26,7 +25,12 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const url = resolveRequestUrl(new URL(request.url), request.headers);
   if (url === null) return new NextResponse(null, { status: 404 });
   const rawLocale = url.searchParams.get('locale');
-  const locale = isLocale(rawLocale) ? rawLocale : DEFAULT_LOCALE;
+  const locale = resolveLocale({
+    urlLocale: rawLocale,
+    cookieLocale: request.cookies.get(LOCALE_COOKIE)?.value,
+    countryCode: url.hostname === 'brand.twings.app' || isBrandPath(url.searchParams.get('next') ?? '') ? request.headers.get('x-vercel-ip-country') : null,
+    acceptLanguage: request.headers.get('accept-language'),
+  });
   // A sign-in with nowhere to go returns to the video templates (docs/TEMPLATES-IA.md).
   const fallback = `/${locale}/video`;
   const next = authReturnPath(url.searchParams.get('next'), url.hostname, fallback);

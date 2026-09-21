@@ -616,6 +616,7 @@ async function sweepWebViewSignin(): Promise<void> {
   const chooser = await request('/auth/choose?next=%2Fko%2Fvideo&locale=ko', { headers: { 'user-agent': CHROME_UA } });
   expectEqual('the chooser renders 200', chooser.status, 200);
   expectPresent('…as the designed page', chooser.body, 'data-auth-choose');
+  expectPresent('…with manual language choice', chooser.body, 'data-auth-language');
   expectPresent('…with the Kakao door', chooser.body, 'data-auth-provider="kakao"');
   expectPresent('…and the Google door', chooser.body, 'data-auth-provider="google"');
   expectPresent('…in Korean', chooser.body, '카카오로 계속하기');

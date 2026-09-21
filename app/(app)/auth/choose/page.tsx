@@ -1,8 +1,9 @@
 import type { Metadata } from 'next';
 import { TwingsLogo, TwingsMark } from '@/components/brand/twings-mark';
-import { DEFAULT_LOCALE, isLocale, type Locale } from '@/lib/i18n/config';
+import { isLocale, type Locale } from '@/lib/i18n/config';
+import { getRequestLocale } from '@/lib/i18n/server';
 import { getDictionary } from '@/lib/i18n/dictionaries';
-import { AUTH_PROVIDERS, signInWithProviderHref, type AuthProvider } from '@/lib/auth/providers';
+import { AUTH_PROVIDERS, chooseProviderHref, signInWithProviderHref, type AuthProvider } from '@/lib/auth/providers';
 import { legalDocument } from '@/lib/legal/documents';
 import { legalHref } from '@/lib/legal/links';
 import { authReturnPath } from '@/lib/routing/surfaces';
@@ -40,7 +41,7 @@ function first(value: string | string[] | undefined): string | null {
 async function resolve(props: RouteProps) {
   const params = await props.searchParams;
   const rawLocale = first(params.locale);
-  const locale: Locale = isLocale(rawLocale) ? rawLocale : DEFAULT_LOCALE;
+  const locale: Locale = isLocale(rawLocale) ? rawLocale : await getRequestLocale();
   const { admin, brand, workspace } = await requestSurface();
   const error = first(params.error);
   return { locale, dict: getDictionary(locale), admin: workspace, error, next: authReturnPath(first(params.next), admin ? 'admin.twings.app' : brand ? 'brand.twings.app' : '', '/') };
@@ -159,6 +160,16 @@ export default async function ChooseProviderPage(props: RouteProps) {
         <p data-auth-legal className="mt-8 text-[0.75rem] leading-relaxed opacity-50">
           {legal}
         </p>
+
+        <div data-auth-language className="mt-6 flex gap-4 text-sm">
+          {(['ko', 'en'] as const).map(language => (
+            <a key={language} href={chooseProviderHref(next, language)} hrefLang={language}
+              lang={language} aria-current={locale === language ? 'true' : undefined}
+              className={locale === language ? 'underline underline-offset-4' : 'opacity-60 hover:opacity-100'}>
+              {language === 'ko' ? dict.nav.localeKo : dict.nav.localeEn}
+            </a>
+          ))}
+        </div>
 
         <a href={next} data-auth-back className="mt-10 font-label text-eyebrow uppercase opacity-50 hover:opacity-100">
           ← {dict.auth.chooseBack}
