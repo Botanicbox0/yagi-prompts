@@ -5,7 +5,8 @@ import { getLocaleFromHeaders } from "@/lib/i18n/server";
 import { getDictionary } from "@/lib/i18n/dictionaries";
 import { loadStudioWorkspace } from "@/lib/brands/workspace/service";
 import { AdminShell } from "@/components/admin/chrome";
-import { formatBrandTimestamp } from "@/components/brand-workspace/format";
+import { CampaignList } from "@/components/brand-workspace/campaign-list";
+import { WorkspaceLanguage } from '@/components/brand-workspace/language';
 export const dynamic = "force-dynamic";
 export default async function StudioBrands() {
   const [viewer, sql, locale] = await Promise.all([
@@ -20,7 +21,8 @@ export default async function StudioBrands() {
     <AdminShell dict={dict.admin} locale={locale} active="brandWorkspace">
       <div data-studio-brand-queue>
         <div className="bw-heading">
-          <h1>{b.studioTitle}</h1>
+          <div><h1>{b.studioTitle}</h1><p>{b.performance.queueHint}</p></div>
+          <WorkspaceLanguage locale={locale} label={dict.nav.localeToggle}/>
         </div>
         {!workspace ? (
           <p role="alert">{b.unavailable}</p>
@@ -28,23 +30,7 @@ export default async function StudioBrands() {
           <div className="bw-empty">{b.studioEmpty}</div>
         ) : (
           <section className="bw-panel">
-            <ul className="bw-list">
-              {workspace.projects.map((p) => (
-                <li key={p.id} className="bw-row">
-                  <div>
-                    <h3>
-                      <a href={`/admin/brand-workspace/${p.id}`}>{p.title}</a>
-                    </h3>
-                    <p className="bw-muted">
-                      {p.organizationName} · {formatBrandTimestamp(p.updatedAt, locale)}
-                    </p>
-                  </div>
-                  <span className="bw-status" data-state={p.status}>
-                    {b.status[p.status]}
-                  </span>
-                </li>
-              ))}
-            </ul>
+            <CampaignList projects={workspace.projects} b={b} locale={locale} studio/>
           </section>
         )}
       </div>

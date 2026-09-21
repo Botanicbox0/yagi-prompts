@@ -1047,7 +1047,10 @@ async function sweepBrandWorkspace(fixtures: BrandWorkspaceProbe[]): Promise<voi
     const leaked = fixtures.some(row => [row.title, row.organization_name, row.storage_key].some(value => response.body.includes(value)));
     expectEqual(`${label}: no fixture content or private storage key`, leaked, false);
   };
-  for (const path of ['/brand', `/brand/projects/${fixture.id}`, `/admin/brand-workspace/${fixture.id}`]) {
+  // Authorization must run before looking up either existing or guessed report IDs.
+  for (const path of ['/brand', `/brand/projects/${fixture.id}`, `/admin/brand-workspace/${fixture.id}`,
+    `/brand/projects/${fixture.id}/reports/${fixture.id}`,
+    `/admin/brand-workspace/${fixture.id}/reports/${fixture.id}`]) {
     const page = await get(path);
     const label = path.replace(fixture.id, '{fixture}');
     expectEqual(`${label}: redirects anonymous access`, page.status, 307);

@@ -43,7 +43,7 @@ async function resolve(props: RouteProps) {
   const locale: Locale = isLocale(rawLocale) ? rawLocale : DEFAULT_LOCALE;
   const { admin, brand, workspace } = await requestSurface();
   const error = first(params.error);
-  return { locale, dict: getDictionary(locale), admin: workspace, error, next: authReturnPath(first(params.next), admin ? 'admin.twings.app' : brand ? 'brand.twings.app' : '', '/') };
+  return { locale, dict: getDictionary(locale), admin: workspace, brand, error, next: authReturnPath(first(params.next), admin ? 'admin.twings.app' : brand ? 'brand.twings.app' : '', '/') };
 }
 
 export async function generateMetadata(props: RouteProps): Promise<Metadata> {
@@ -106,7 +106,7 @@ function withLinks(template: string, links: Readonly<Record<string, LegalLink>>)
 }
 
 export default async function ChooseProviderPage(props: RouteProps) {
-  const { locale, dict, next, admin, error } = await resolve(props);
+  const { locale, dict, next, admin, brand, error } = await resolve(props);
   const labels: Record<AuthProvider, string> = {
     google: dict.auth.continueWithGoogle,
     kakao: dict.auth.continueWithKakao,
@@ -134,7 +134,8 @@ export default async function ChooseProviderPage(props: RouteProps) {
         </a>
 
         <h1 className="mt-12 font-display text-[1.75rem] leading-tight font-black uppercase">{dict.auth.chooseTitle}</h1>
-        <p className="mt-3 text-[0.95rem] leading-relaxed opacity-60">{dict.auth.chooseLede}</p>
+        <p className="mt-3 text-[0.95rem] leading-relaxed opacity-60">{brand ? dict.brandWorkspace.performance.joinBody : dict.auth.chooseLede}</p>
+        {brand && <nav className="mt-4 flex gap-4 text-sm" aria-label={dict.nav.localeToggle}>{(["ko", "en"] as const).map(value => <a key={value} aria-current={locale === value ? "true" : undefined} href={`/auth/choose?next=${encodeURIComponent(next)}&locale=${value}`}>{value === "ko" ? "한국어" : "English"}</a>)}</nav>}
 
         {(error === 'oauth' || error === 'oauth_unconfigured') && (
           <p role="alert" className="mt-6 border-l-2 border-accent pl-3 text-left text-body">

@@ -132,14 +132,22 @@ export function ActionForm({
         setInviteUrl(
           `${location.origin}/brand/invite#token=${encodeURIComponent(result.token)}`,
         );
-      else if (operation === "project.create" && result.id)
-        router.push(`/brand/projects/${result.id}`);
+      else if (operation === "project.create" && result.id) {
+        location.assign(`/brand/projects/${encodeURIComponent(result.id)}`);
+        return;
+      }
       else if (operation === "invitation.accept") {
         try {
           sessionStorage.removeItem(PENDING_BRAND_INVITATION_KEY);
         } catch {}
-        router.push("/brand");
-      } else if (redirectTo) router.push(redirectTo);
+        location.assign("/brand");
+        return;
+      } else if (redirectTo) {
+        // A push followed by refresh can refresh the old page and cancel navigation.
+        // Read the newly created workspace from the server, without the old router cache.
+        location.assign(redirectTo);
+        return;
+      }
       else if (operation === "message.send") form.reset();
       router.refresh();
     } catch {

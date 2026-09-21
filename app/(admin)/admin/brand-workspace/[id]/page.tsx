@@ -64,7 +64,7 @@ export default async function StudioBrandProject({
         <h2>{b.files}</h2>
         <BrandUpload projectId={id} b={b} studio />
       </section>
-      <section className="bw-panel">
+      <section id="studio-actions" className="bw-panel">
         <h2>{b.studioTitle}</h2>
         <div className="bw-grid">
           <Form op="brandWorkspace.status" submit={b.save}>

@@ -1,5 +1,6 @@
 import "@/app/globals.css";
 import "./workspace.css";
+import { WorkspaceLanguage } from '@/components/brand-workspace/language';
 import type { ReactNode } from "react";
 import type { Metadata } from "next";
 import { fontVariables } from "@/app/fonts";
@@ -56,6 +57,7 @@ export default async function BrandLayout({
           <div className="bw-body">
             <header className="bw-topbar">
               <span>{b.title}</span>
+              <WorkspaceLanguage locale={locale} label={d.nav.localeToggle}/>
               <a href="/brand/projects/new" className="bw-button bw-primary">
                 {b.newProject}
               </a>

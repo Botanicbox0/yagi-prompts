@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import sharp from 'sharp';
 import type { SqlRunner } from '@/lib/db/sql-runner';
 import type { StorageDriver } from '@/lib/storage';
 import { STAGING_BUCKET } from '@/lib/storage';
@@ -44,4 +45,16 @@ export async function seedBrandWorkspaceFixtures(sql: SqlRunner, storage: Storag
     publishedAt: '2026-09-17T10:00:00+09:00', verification: 'unverified', metricsSource: 'unavailable', measuredAt: null,
     views: null, likes: null, comments: null, shares: null, saves: null }));
   value(await publishBrandReport(deps, studio, { projectId: project.id, requestId: randomUUID(), summary: '[Local fixture] One sample post. No performance metrics have been collected.', periodStart: '2026-09-01', periodEnd: '2026-09-30' }));
+  // Synthetic results exercise rankings, partial coverage and frozen report versions.
+  // The original unknown observation and report remain intact.
+  for (const [index, color] of ['#cbd5bd', '#e5cfc0', '#bacbd6'].entries()) {
+    const preview = await sharp(Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="480" height="640"><rect width="480" height="640" fill="${color}"/><circle cx="240" cy="280" r="130" fill="#f5f1e8"/><text x="240" y="310" text-anchor="middle" font-family="sans-serif" font-size="90" fill="#26332d">0${index + 1}</text><text x="240" y="550" text-anchor="middle" font-family="sans-serif" font-size="22" fill="#26332d">LOCAL QA SAMPLE</text></svg>`)).png().toBuffer();
+    const media = value(await reserveBrandAttachment(deps, studio, { projectId: project.id, requestId: randomUUID(), name: `local-qa-${index + 1}.png`, mime: 'image/png', sizeBytes: preview.length }));
+    await storage.putStaging(media.storageKey, preview, 'image/png');
+    value(await completeBrandAttachment(deps, studio, media.id));
+    const content = value(await addBrandContentVersion(deps, studio, { projectId: project.id, requestId: randomUUID(), slotKey: `ranking-${index}`, title: `[Local fixture] Creative ${index + 1}`, attachmentId: media.id, caption: 'Synthetic QA content', usageRights: 'Local development fixture only', creatorConsentConfirmed: false }));
+    value(await approveBrandContent(deps, owner, { projectId: project.id, contentVersionId: content.id, expectedRevision: 0, decision: 'approved', comment: '', requestId: randomUUID() }));
+    value(await recordBrandPost(deps, studio, { projectId: project.id, contentVersionId: content.id, requestId: randomUUID(), url: `https://www.instagram.com/p/LOCALQASAMPLE${index}/`, publishedAt: '2026-09-18T10:00:00+09:00', verification: 'manual', metricsSource: 'studio_review', measuredAt: '2026-09-21T09:00:00+09:00', views: [18000, 7000, 2000][index], likes: [120, 500, null][index], comments: [20, 90, 12][index], shares: null, saves: null }));
+  }
+  value(await publishBrandReport(deps, studio, { projectId: project.id, requestId: randomUUID(), summary: '[Local fixture] Synthetic comparison only. Creative 1 leads by views; Creative 2 leads by likes and comments. Missing likes remain unknown.', periodStart: '2026-09-01', periodEnd: '2026-09-30' }));
 }
