@@ -1,4 +1,6 @@
-import { NextResponse } from 'next/server';
+import { after, NextResponse } from 'next/server';
+import { portraitDeps } from '@/lib/identity/portrait-runtime';
+import { runPortraitPass } from '@/lib/identity/portrait-service';
 import { arkAssetsConfigFromEnv } from '@/lib/ark/assets';
 import { arkConfigFromEnv } from '@/lib/ark/client';
 import { getSqlRunner } from '@/lib/db/connect';
@@ -34,6 +36,7 @@ async function tick(request: Request): Promise<NextResponse> {
   if (sql === null) return NextResponse.json({ ok: false, code: 'unavailable' }, { status: 503, headers: HEADERS });
 
   const report = await runLiveRenderPass(sql, { limit: 5 });
+  after(async()=>{try{const portraits=await portraitDeps();if(portraits)await runPortraitPass(portraits);}catch{/* Durable portrait queue is resumed by its owner or a later tick. */}});
   for (const line of report.errors) console.warn(`[renders] ${line}`);
   const { errors, ...counts } = report;
   // Presence only, never a value: which engines this deployment can actually reach.

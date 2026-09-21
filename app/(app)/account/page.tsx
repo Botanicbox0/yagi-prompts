@@ -5,6 +5,7 @@ import { getDictionary } from '@/lib/i18n/dictionaries';
 import { LocaleToggle } from '@/components/locale-toggle';
 import { siteLinks } from '@/components/marketing/chrome';
 import { TwingsLogo } from '@/components/brand/twings-mark';
+import { portraitEnabled } from '@/lib/identity/portrait-runtime';
 import { TextSwap } from '@/components/ui/text-swap';
 import {
   loadPreferences,
@@ -157,6 +158,7 @@ export default async function AccountPage({
           </dl>
         </div>
 
+        {viewer?.userId && portraitEnabled() ? <div className="mt-10 max-w-detail border-t border-hairline pt-6"><a data-portrait-account href="/identity/portrait" className="inline-flex min-h-12 items-center rounded-full border border-current px-6 py-3">{dict.portrait.manage} →</a><p className="mt-3 text-sm opacity-65">{dict.portrait.allowance}</p></div> : null}
         {/* --- notifications (§3.5) -------------------------------------- */}
         <div className="mt-14 max-w-detail border-t border-hairline pt-10">
           <p className="font-label text-eyebrow uppercase opacity-60">{copy.notifHeading}</p>

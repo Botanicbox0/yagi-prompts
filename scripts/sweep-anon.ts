@@ -1119,6 +1119,15 @@ async function sweepRenders(): Promise<void> {
   if (verify.location?.includes('signin=1')) ok('…to sign-in', verify.location);
   else fail('/identity/verify redirect target', `expected the sign-in redirect, got ${verify.location}`);
   const callback = await request('/api/identity/callback');
+  const portrait = await request('/identity/portrait', { headers: { 'user-agent': CHROME_UA } });
+  expectOneOf('portrait page redirects anonymous', portrait.status, [302,303,307]);
+  const portraitState = await request('/api/identity/portrait');
+  expectEqual('portrait state refuses anonymous', portraitState.status, 401);
+  expectPresent('portrait response is private', portraitState.cacheControl ?? '', 'no-store');
+  const portraitImage = await request('/api/identity/portrait/00000000-0000-4000-8000-000000000000/image');
+  expectEqual('portrait image refuses anonymous', portraitImage.status, 401);
+  const portraitCreate = await fetch(`${BASE}/api/identity/portrait`, {method:'POST',headers:{origin:BASE}});
+  expectEqual('portrait creation refuses anonymous', portraitCreate.status, 401);
   expectEqual('the identity callback answers a bare hit with a redirect', callback.status, 303);
   expectPresent('…to the verify page, result unknown', callback.location ?? '', '/identity/verify?result=unknown');
 

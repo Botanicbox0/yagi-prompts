@@ -59,6 +59,8 @@ describe('migrations apply on a fresh database (PLAN §6)', () => {
       // docs/TEMPLATES-IA.md §8.2 (2026-09-10) — the real-person identity: one group per person, one asset per photo.
       'identity_assets',
       'identity_groups',
+      'identity_portrait_attempts',
+      'identity_portrait_selections',
       'notification_deliveries',
       'notification_jobs',
       'playbook_revisions',

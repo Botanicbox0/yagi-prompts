@@ -201,6 +201,7 @@ export default async function TemplatePage({ params }: RouteParams) {
                     locale,
                     signinHref: signInHref(`${templateHref(locale, slug)}#make`, locale),
                     identityHref: identityVerifyHref(`${templateHref(locale, slug)}#make`),
+                    portrait: { manage: dict.portrait.manage, change: dict.portrait.change, useSaved: dict.portrait.useSaved },
                     labels: {
                       badge: dict.renders.studio.badge,
                       operatorBadge: dict.renders.studio.operatorBadge,

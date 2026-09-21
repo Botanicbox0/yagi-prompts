@@ -6,6 +6,7 @@ import { resolveEngine } from '@/lib/images/engines';
 import { loadPreferences } from '@/lib/notify/preferences';
 import { loadPromptBySlug } from '@/lib/prompts/repo';
 import { canStartRender } from '@/lib/renders/service';
+import { portraitEnabled } from '@/lib/identity/portrait-runtime';
 
 /**
  * `GET /api/renders/access?template=slug` — what THIS viewer's make button should do on THIS
@@ -36,9 +37,12 @@ export async function GET(request: Request): Promise<NextResponse> {
   let identity: string = 'not_needed';
   // The closed studio's one question: has this person already asked to be told when it opens?
   let interest = false;
+  const portraits = portraitEnabled() && !viewer.isAdmin;
+  let portraitId: string | null = null;
   if (viewer.userId !== null) {
     const sql = await getSqlRunner();
     if (sql !== null) {
+      if (portraits) portraitId = (await sql.query<{attempt_id:string}>('select attempt_id from identity_portrait_selections where user_id=$1',[viewer.userId])).rows[0]?.attempt_id ?? null;
       interest = (await loadPreferences(sql, viewer.userId))?.newPlaybook === true;
       const template = live && slug ? await loadPromptBySlug(sql, slug) : null;
       if (template !== null) {
@@ -50,5 +54,5 @@ export async function GET(request: Request): Promise<NextResponse> {
     }
   }
 
-  return NextResponse.json({ live, charge: live && !viewer.isAdmin, identityRequired, identity, signedIn, interest }, { headers: HEADERS });
+  return NextResponse.json({ live, charge: live && !viewer.isAdmin, identityRequired, identity, signedIn, interest, portraitEnabled: portraits && signedIn, portraitId }, { headers: HEADERS });
 }
