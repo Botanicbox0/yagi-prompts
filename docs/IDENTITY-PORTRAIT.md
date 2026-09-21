@@ -8,6 +8,12 @@
 - 원본 셀피 한 장 + [대표 프롬프트 원문](product/prompts/identity-portrait-v1.md). 템플릿 프롬프트 치환을 통과시키지 않는다. 다음 시도도 새로 올린 원본을 사용한다.
 - Sunburst는 OpenAI Images edits, `gpt-image-2.5-sunburst`, `quality=max`, PNG, `moderation=auto`. Seedream은 ModelArk `dola-seedream-5-0-pro-260628`, 단일 PNG/base64 응답. 두 모델 모두 동일 원본과 프롬프트, **1344×2016 (2:3)**. 한 모델의 출력을 다른 모델의 입력으로 보내지 않는다. 자동 모델 대체·추가 생성 없음.
 - Seedream의 원본은 기존 ModelArk 자산 그룹·등록·검수 경로를 통과해야 한다. 처리 중에는 생성 요청 없이 등록 상태만 다시 확인한다. liveness 모드에서는 기존 카메라 검증을 요구하며 바이트 직접 전송으로 우회하지 않는다. 화면에서는 모델 선호가 판단에 영향을 주지 않도록 “사진 1 / 사진 2”로 표시한다.
+
+### 운영 차단 사항 — BytePlus 실측 (2026-09-22)
+
+Chrome 콘솔에서 Seedream 5.0 Pro의 활성화를 확인했다. 그러나 실제 사진 없이 만든 입력 형식 검사에서 API가 `sequential_image_generation: disabled`를 HTTP 400 `InvalidParameter`로 거절했다. 해당 필드를 제거한 두 번째 요청은 `asset://twings-format-probe-not-real`을 **invalid url**로 거절했다. 두 요청 모두 생성 결과 0장이다. 기존 코드의 Seedream 자산 URI 지원 가정은 검증되지 않았으며 현재 경로는 운영 준비 완료가 아니다.
+
+[이미지 API](https://docs.byteplus.com/en/docs/ModelArk/1541523)는 URL·Base64를 안내하고, [자산 라이브러리](https://docs.byteplus.com/en/docs/ModelArk/2333565)는 Seedance 영상용으로 설명한다. 본인 셀카의 Seedream 공식 허용 경로·계정 권한을 BytePlus에 확인하기 전까지 실사 직접 전송으로 대체하지 않는다. PR 병합·클라우드 마이그레이션·플래그 개방을 보류한다. 로컬 생성 fixture 통과는 실제 제공사 호환성 증명이 아니다.
 - 사용자가 원본·결과를 비교하고 선택해야 활성 얼굴이 바뀐다. 얼굴 인증 성공이라고 표시하지 않는다. 기존 ModelArk 계정당 그룹·제공사 검수·라이브니스 경로를 유지한다.
 - 선택된 버전의 바이트를 결제 주문에 복사하고 원본→기준 사진→주문→렌더 계보 ID를 저장한다. 결제 후 얼굴 변경은 이미 시작한 작품에 영향을 주지 않는다.
 

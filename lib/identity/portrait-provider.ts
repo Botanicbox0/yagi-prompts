@@ -25,7 +25,7 @@ export function seedreamPortraitBody(reference:string){
   if(!/^asset:\/\/[A-Za-z0-9_-]+$/.test(reference)) throw new PortraitProviderError('identity_required');
   return {model:PORTRAIT_SEEDREAM_MODEL,prompt:PORTRAIT_PROMPT,image:reference,
     size:`${PORTRAIT_SIZE.width}x${PORTRAIT_SIZE.height}`,output_format:'png',response_format:'b64_json',
-    watermark:false,sequential_image_generation:'disabled'};
+    watermark:false};
 }
 export function createSeedreamPortraitProvider(config:SeedreamConfig,reference:(photo:ReferenceImage,context:PortraitProviderContext)=>Promise<string>,fetchImpl:typeof fetch=fetch):PortraitProvider{
  return {async generate(photo,context){

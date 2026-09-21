@@ -12,7 +12,9 @@ describe('the fixed identity portrait request', () => {
   });
   it('uses the same prompt and dimensions for Seedream with one moderated original asset',async()=>{
     const body=seedreamPortraitBody('asset://asset-123');
-    expect(body).toMatchObject({model:'dola-seedream-5-0-pro-260628',prompt:PORTRAIT_PROMPT,image:'asset://asset-123',size:'1344x2016',sequential_image_generation:'disabled'});
+    expect(body).toMatchObject({model:'dola-seedream-5-0-pro-260628',prompt:PORTRAIT_PROMPT,image:'asset://asset-123',size:'1344x2016'});
+    // Live API rejects this field even when set to disabled (2026-09-22).
+    expect(body).not.toHaveProperty('sequential_image_generation');
     expect(()=>seedreamPortraitBody('data:image/png;base64,AAA')).toThrow('identity_required');
     let calls=0;const provider=createSeedreamPortraitProvider({apiKey:'test-only',baseUrl:'https://example.test'},async()=> 'asset://asset-123',async()=>{calls++;return new Response('{}',{status:503})});
     await expect(provider.generate(photo,{userId:'user',inputKey:'input',attemptId:'attempt'})).rejects.toMatchObject({code:'uncertain'});
