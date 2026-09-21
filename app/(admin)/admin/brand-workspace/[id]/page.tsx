@@ -10,6 +10,7 @@ import { AdminShell, OpForm, OutcomeBanner } from "@/components/admin/chrome";
 import type { AdminOperationName } from "@/lib/admin/operations";
 import { ProjectDetail } from "@/components/brand-workspace/project-detail";
 import { BrandUpload } from "@/components/brand-workspace/upload";
+import { CollectionConsole } from "@/components/brand-workspace/collection-console";
 import type { ReactNode } from "react";
 export const dynamic = "force-dynamic";
 export default async function StudioBrandProject({
@@ -140,7 +141,7 @@ export default async function StudioBrandProject({
           </Form>
         </section>
       )}
-      <section className="bw-panel">
+      {p.status === "active" && <section className="bw-panel">
         <h2>{b.recordPost}</h2>
         <p className="bw-note">{b.postHint}</p>
         <Form op="brandWorkspace.post" submit={b.recordMetrics}>
@@ -206,15 +207,28 @@ export default async function StudioBrandProject({
             )}
           </div>
         </Form>
-      </section>
-      {p.posts.map((post) => (
-        <section className="bw-panel" key={post.id}>
+      </section>}
+      <CollectionConsole
+        projectId={id}
+        status={p.status}
+        posts={p.posts}
+        b={b}
+        locale={locale}
+      />
+      {/* The single operation stays for a genuinely historical measurement time. It is frozen with
+          the console, so it is not offered once the campaign is no longer active. */}
+      {p.status === "active" && p.posts.map((post) => (
+        <details className="bw-panel" key={post.id}>
+          <summary>
+            {b.collectionHistorical} · {post.platform}
+          </summary>
           <h2>{b.updateMetrics}</h2>
           <p>
             <a href={post.url} target="_blank" rel="noopener noreferrer">
               {post.url} ↗
             </a>
           </p>
+          <p className="bw-note">{b.collectionHistoricalHint}</p>
           <p className="bw-note">{b.postHint}</p>
           <Form
             op="brandWorkspace.metrics"
@@ -278,7 +292,7 @@ export default async function StudioBrandProject({
               )}
             </div>
           </Form>
-        </section>
+        </details>
       ))}
       <section className="bw-panel">
         <h2>{b.publishReport}</h2>

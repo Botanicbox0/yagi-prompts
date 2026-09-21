@@ -77,8 +77,9 @@ describe('brand invitations, attachment bytes and database boundary', () => {
   it('forces RLS and denies all direct browser table access while granting minimal server writes', async () => {
     await db.exec('create role anon; create role authenticated; create role service_role bypassrls; grant usage on schema public to anon,authenticated,service_role;');
     await db.exec(readMigration('0113_glue_brand_workspace.sql'));
+    await db.exec(readMigration('0116_glue_brand_post_collection.sql'));
     const tables = (await sql.query<{ relname: string; relrowsecurity: boolean; relforcerowsecurity: boolean }>("select relname,relrowsecurity,relforcerowsecurity from pg_class where relkind='r' and relname like 'brand_%' and relname<>'brand_inquiries'")).rows;
-    expect(tables.length).toBe(12);
+    expect(tables.length).toBe(13);
     for (const table of tables) {
       expect(table.relrowsecurity && table.relforcerowsecurity).toBe(true);
       for (const role of ['anon', 'authenticated']) {
@@ -86,6 +87,10 @@ describe('brand invitations, attachment bytes and database boundary', () => {
       }
     }
     expect((await sql.query<{ allowed: boolean }>("select has_table_privilege('service_role','brand_reports','UPDATE,DELETE') as allowed")).rows[0]?.allowed).toBe(false);
+    for (const history of ['brand_post_measurements', 'brand_post_collection_batches']) {
+      expect((await sql.query<{ allowed: boolean }>('select has_table_privilege(\'service_role\',$1,\'UPDATE,DELETE\') as allowed', [history])).rows[0]?.allowed).toBe(false);
+      expect((await sql.query<{ allowed: boolean }>('select has_table_privilege(\'service_role\',$1,\'SELECT\') and has_table_privilege(\'service_role\',$1,\'INSERT\') as allowed', [history])).rows[0]?.allowed).toBe(true);
+    }
     await db.exec('set role authenticated');
     await expect(sql.query('select * from brand_projects')).rejects.toThrow(/permission denied/i);
     await db.exec('reset role');
