@@ -12,7 +12,8 @@ describe('portrait ownership, safety and persistence',()=>{
   h=await billingDb();await seedProfile(h.sql,{id:USER.buyer});await seedProfile(h.sql,{id:USER.other});
   input=new Uint8Array(await sharp({create:{width:300,height:400,channels:3,background:'#d6d6d6'}}).png().toBuffer());
   output=new Uint8Array(await sharp({create:{width:1344,height:2016,channels:3,background:'#d6d6d6'}}).png().toBuffer());
-  objects=new Map();d={sql:h.sql,now:new Date('2026-09-22T00:00:00Z'),provider:{generate:vi.fn(async()=>output)},seedreamProvider:{generate:vi.fn(async()=>output)},store:{name:'local',put:async(k,b)=>{objects.set(k,b)},read:async k=>{const b=objects.get(k);if(!b)throw Error('missing');return b;},url:async()=>null}};
+  const seedreamOutput=new Uint8Array(await sharp({create:{width:1664,height:2496,channels:3,background:'#d6d6d6'}}).png().toBuffer());
+  objects=new Map();d={sql:h.sql,now:new Date('2026-09-22T00:00:00Z'),provider:{generate:vi.fn(async()=>output)},seedreamProvider:{generate:vi.fn(async()=>seedreamOutput)},store:{name:'local',put:async(k,b)=>{objects.set(k,b)},read:async k=>{const b=objects.get(k);if(!b)throw Error('missing');return b;},url:async()=>null}};
  });
  afterEach(async()=>h.close());
  const request=()=>({requestId:randomUUID(),consent:true,bytes:input,mime:'image/png'});
@@ -25,7 +26,7 @@ describe('portrait ownership, safety and persistence',()=>{
   expect((await portraitState(h.sql,USER.buyer)).used).toBe(0);expect(objects.size).toBe(0);
  });
  it('prevents cross-owner reads, stale selection changes and pins selected bytes',async()=>{
-  const s=await pair();const [a,b]=s.attempts;expect(a&&b).toBeTruthy();
+  const s=await pair();const a=s.attempts.find(x=>x.slot===1),b=s.attempts.find(x=>x.slot===2);expect(a&&b).toBeTruthy();
   expect(await ownPortrait(h.sql,USER.other,a!.id)).toBeNull();expect(await selectPortrait(h.sql,USER.other,a!.id,null)).toBe(false);
   expect(await selectedPortraitPhoto(h.sql,d.store,USER.other,a!.id)).toBeNull();
   expect(await selectPortrait(h.sql,USER.buyer,a!.id,null)).toBe(true);

@@ -1,12 +1,10 @@
 import type { OpenAiConfig, ReferenceImage } from '@/lib/images/openai';
-import { PORTRAIT_MODEL, PORTRAIT_PROMPT, PORTRAIT_SIZE, PORTRAIT_SEEDREAM_MODEL } from './portrait-contract';
+import { PORTRAIT_MODEL, PORTRAIT_PROMPT, PORTRAIT_SIZE, PORTRAIT_SEEDREAM_MODEL, PORTRAIT_SEEDREAM_SIZE, PORTRAIT_SEEDREAM_PROMPT } from './portrait-contract';
 import type { SeedreamConfig } from '@/lib/images/seedream';
 
 export class PortraitProviderError extends Error {
   constructor(readonly code: 'provider_access' | 'moderated' | 'provider_failed' | 'uncertain' | 'identity_required') { super(code); }
 }
-/** Asset registration has not submitted an image generation. Safe to poll registration again. */
-export class PortraitReferencePending extends Error {}
 export function portraitForm(photo: ReferenceImage): FormData {
   const form=new FormData();
   form.set('model',PORTRAIT_MODEL);
@@ -21,18 +19,16 @@ export function portraitForm(photo: ReferenceImage): FormData {
 }
 export interface PortraitProviderContext { userId:string; inputKey:string; attemptId:string }
 export interface PortraitProvider { generate(photo: ReferenceImage, context?:PortraitProviderContext): Promise<Uint8Array> }
-export function seedreamPortraitBody(reference:string){
-  if(!/^asset:\/\/[A-Za-z0-9_-]+$/.test(reference)) throw new PortraitProviderError('identity_required');
-  return {model:PORTRAIT_SEEDREAM_MODEL,prompt:PORTRAIT_PROMPT,image:reference,
-    size:`${PORTRAIT_SIZE.width}x${PORTRAIT_SIZE.height}`,output_format:'png',response_format:'b64_json',
+/** Caller supplies the owner-consented, decoded original. Seedream applies its normal input moderation. */
+export function seedreamPortraitBody(photo:ReferenceImage){
+  return {model:PORTRAIT_SEEDREAM_MODEL,prompt:PORTRAIT_SEEDREAM_PROMPT,image:`data:${photo.mime};base64,${Buffer.from(photo.bytes).toString('base64')}`,
+    size:`${PORTRAIT_SEEDREAM_SIZE.width}x${PORTRAIT_SEEDREAM_SIZE.height}`,output_format:'png',response_format:'b64_json',
     watermark:false};
 }
-export function createSeedreamPortraitProvider(config:SeedreamConfig,reference:(photo:ReferenceImage,context:PortraitProviderContext)=>Promise<string>,fetchImpl:typeof fetch=fetch):PortraitProvider{
- return {async generate(photo,context){
-  if(!context)throw new PortraitProviderError('identity_required');
-  const asset=await reference(photo,context);
+export function createSeedreamPortraitProvider(config:SeedreamConfig,fetchImpl:typeof fetch=fetch):PortraitProvider{
+ return {async generate(photo){
   let response:Response;
-  try{response=await fetchImpl(`${config.baseUrl}/images/generations`,{method:'POST',headers:{authorization:`Bearer ${config.apiKey}`,'content-type':'application/json'},body:JSON.stringify(seedreamPortraitBody(asset)),signal:AbortSignal.timeout(240000)});}
+  try{response=await fetchImpl(`${config.baseUrl}/images/generations`,{method:'POST',headers:{authorization:`Bearer ${config.apiKey}`,'content-type':'application/json'},body:JSON.stringify(seedreamPortraitBody(photo)),signal:AbortSignal.timeout(240000)});}
   catch{throw new PortraitProviderError('uncertain');}
   if(response.status===401||response.status===403)throw new PortraitProviderError('provider_access');
   if(response.status>=500)throw new PortraitProviderError('uncertain');

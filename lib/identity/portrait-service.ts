@@ -1,9 +1,9 @@
 import { createHash,randomUUID } from 'node:crypto';
 import type { SqlRunner } from '@/lib/db/sql-runner';
 import type { RenderStore } from '@/lib/renders/store';
-import { PORTRAIT_FREE_LIMIT, PORTRAIT_MODEL, PORTRAIT_SEEDREAM_MODEL, PORTRAIT_PROMPT_VERSION } from './portrait-contract';
+import { PORTRAIT_FREE_LIMIT, PORTRAIT_MODEL, PORTRAIT_SEEDREAM_MODEL, PORTRAIT_PROMPT_VERSION, PORTRAIT_SEEDREAM_PROMPT_VERSION } from './portrait-contract';
 import { cleanPortraitInput, cleanPortraitResult } from './portrait-images';
-import { PortraitProviderError,PortraitReferencePending, type PortraitProvider } from './portrait-provider';
+import { PortraitProviderError, type PortraitProvider } from './portrait-provider';
 
 export type PortraitStatus='queued'|'running'|'uncertain'|'succeeded'|'failed';
 export interface PortraitAttempt {
@@ -82,7 +82,7 @@ export async function enqueuePortrait(d:PortraitDeps,userId:string|null,input:{r
     for(const slot of slots){
       const id=randomUUID();ids.push(id);
       await sql.query(`insert into identity_portrait_attempts(id,user_id,request_id,slot,status,model,prompt_version,input_key,consent_at,created_at,rejected_initial_at)
-        values($1,$2,$3,$4,'queued',$5,$6,$7,$8,$8,$9)`,[id,userId,input.requestId,slot,slot===2?PORTRAIT_SEEDREAM_MODEL:PORTRAIT_MODEL,PORTRAIT_PROMPT_VERSION,inputKey,now,rejectedAt]);
+        values($1,$2,$3,$4,'queued',$5,$6,$7,$8,$8,$9)`,[id,userId,input.requestId,slot,slot===2?PORTRAIT_SEEDREAM_MODEL:PORTRAIT_MODEL,slot===2?PORTRAIT_SEEDREAM_PROMPT_VERSION:PORTRAIT_PROMPT_VERSION,inputKey,now,rejectedAt]);
     }
     return {ok:true,id:ids[0]!};
   });
@@ -94,7 +94,7 @@ export async function runPortraitPass(d:PortraitDeps,userId?:string):Promise<voi
     where status='running' and started_at<$1 and ($2::uuid is null or user_id=$2)`,[new Date(clock(d).getTime()-10*60000),userId??null]);
   // A saved result is recoverable even if the transaction recording its success failed.
   const uncertain=(await d.sql.query<PortraitAttempt>("select * from identity_portrait_attempts where status='uncertain' and ($1::uuid is null or user_id=$1) limit 5",[userId??null])).rows;
-  for(const a of uncertain){try{await cleanPortraitResult(await d.store.read(`${a.id}/result.png`));await completePortrait(d,a.id);}catch{/* no output: keep the reservation for explicit operational review */}}
+  for(const a of uncertain){try{await cleanPortraitResult(await d.store.read(`${a.id}/result.png`),a.model);await completePortrait(d,a.id);}catch{/* no output: keep the reservation for explicit operational review */}}
   const claimed=await d.sql.transaction(async sql=>(await sql.query<PortraitAttempt>(`update identity_portrait_attempts set status='running',started_at=$1 where id in (
     select id from identity_portrait_attempts where status='queued' and ($2::uuid is null or user_id=$2) order by created_at,slot for update skip locked limit 2) returning *`,[clock(d),userId??null])).rows);
   await Promise.all(claimed.map(a=>runClaimedPortrait(d,a)));
@@ -104,14 +104,12 @@ async function runClaimedPortrait(d:PortraitDeps,claimed:PortraitAttempt){
   if(!provider){await d.sql.query("update identity_portrait_attempts set status='queued',started_at=null where id=$1 and status='running'",[claimed.id]);return;}
   let received=false;
   try {
-    if(claimed.slot===2&&clock(d).getTime()-new Date(claimed.created_at).getTime()>86400000)throw new PortraitProviderError('provider_failed');
     const input=await d.store.read(claimed.input_key);
     const result=await provider.generate({bytes:input,mime:'image/png'},{userId:claimed.user_id,inputKey:claimed.input_key,attemptId:claimed.id});received=true;
-    const clean=await cleanPortraitResult(result);
+    const clean=await cleanPortraitResult(result,claimed.model);
     await d.store.put(`${claimed.id}/result.png`,clean,'image/png');
     await completePortrait(d,claimed.id);
   }catch(error){
-    if(error instanceof PortraitReferencePending){await d.sql.query("update identity_portrait_attempts set status='queued',started_at=null where id=$1 and status='running'",[claimed.id]);return;}
     const code=error instanceof PortraitProviderError?error.code:received?'uncertain':'provider_failed';
     // Invalid output is definitive and releases the allowance. Storage/commit errors are ambiguous.
     const invalid=error instanceof Error && error.message==='invalid_result';
