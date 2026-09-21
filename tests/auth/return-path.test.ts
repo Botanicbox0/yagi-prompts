@@ -16,6 +16,18 @@ import { GET as signIn } from '@/app/auth/signin/route';
 import { GET as callback } from '@/app/auth/callback/route';
 
 describe('OAuth return paths remain on the request origin', () => {
+  it('detects the brand sign-in language before choosing a provider, while a URL choice wins', async () => {
+    auth.getSessionUser.mockResolvedValue(null);
+    for (const [country, query, expected] of [['KR', '', 'ko'], ['US', '', 'en'], ['KR', '&locale=en', 'en']]) {
+      const response = await signIn(new NextRequest(`https://brand.twings.app/auth/signin?next=%2Fbrand${query}`, {
+        headers: { 'x-vercel-ip-country': country!, 'accept-language': 'en' },
+      }));
+      const location = new URL(response.headers.get('location')!);
+      expect(location.pathname).toBe('/auth/choose');
+      expect(location.searchParams.get('locale')).toBe(expected);
+      expect(location.searchParams.get('next')).toBe('/brand');
+    }
+  });
   beforeEach(() => {
     vi.clearAllMocks();
     auth.getSessionUser.mockResolvedValue({ id: 'user' });

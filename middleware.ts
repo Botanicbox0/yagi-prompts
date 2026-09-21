@@ -19,6 +19,7 @@ import {
   LOCALE_COOKIE_MAX_AGE,
   LOCALE_HEADER,
   isAppPath,
+  isLocale,
   isPlaybookDetailPath,
   localizedPath,
   resolveLocale,
@@ -79,9 +80,13 @@ export async function middleware(request: NextRequest) {
   }
   const { locale: urlLocale, rest } = splitLocale(pathname);
   const cookieLocale = request.cookies.get(LOCALE_COOKIE)?.value ?? null;
+  const authEntry = ['/auth/choose', '/auth/signin', '/auth/open-in-browser'].includes(pathname);
+  const explicitLocale = authEntry ? request.nextUrl.searchParams.get('locale') : null;
+  const brandEntry = surface === 'brand' || isBrandPath(pathname) || (authEntry && isBrandPath(request.nextUrl.searchParams.get('next') ?? ''));
   const locale = resolveLocale({
-    urlLocale,
+    urlLocale: isLocale(explicitLocale) ? explicitLocale : urlLocale,
     cookieLocale,
+    countryCode: brandEntry ? request.headers.get('x-vercel-ip-country') : null,
     acceptLanguage: request.headers.get('accept-language'),
   });
 
@@ -95,6 +100,10 @@ export async function middleware(request: NextRequest) {
   // Unlike the old matcher exclusion, this cannot bypass the workspace host policy above.
   if (bypassConsumerLocale(pathname) || (surface === 'admin' && !isAdminPath(pathname))) {
     const response = NextResponse.next({ request: { headers: requestHeaders } });
+    // Remember the chooser URL's locale; never persist the raw country or IP address.
+    if (pathname === '/auth/choose' && isLocale(explicitLocale)) {
+      response.cookies.set(LOCALE_COOKIE, explicitLocale, { path: '/', maxAge: LOCALE_COOKIE_MAX_AGE, sameSite: 'lax' });
+    }
     if (surface === 'admin' || surface === 'brand') for (const [key, value] of Object.entries(privateHeaders)) response.headers.set(key, value);
     return response;
   }

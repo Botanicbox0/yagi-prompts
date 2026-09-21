@@ -115,6 +115,8 @@ export interface LocaleSignals {
   urlLocale?: string | null;
   cookieLocale?: string | null;
   profileLocale?: string | null;
+  /** Opt-in for brand entry only: Vercel's coarse IP country, never stored. */
+  countryCode?: string | null;
   acceptLanguage?: string | null;
 }
 
@@ -123,5 +125,7 @@ export function resolveLocale(signals: LocaleSignals): Locale {
   if (isLocale(signals.urlLocale)) return signals.urlLocale;
   if (isLocale(signals.cookieLocale)) return signals.cookieLocale;
   if (isLocale(signals.profileLocale)) return signals.profileLocale;
+  const country = signals.countryCode?.trim().toUpperCase();
+  if (country && /^[A-Z]{2}$/.test(country) && !['XX', 'ZZ', 'T1'].includes(country)) return country === 'KR' ? 'ko' : 'en';
   return parseAcceptLanguage(signals.acceptLanguage) ?? DEFAULT_LOCALE;
 }
