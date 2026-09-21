@@ -630,6 +630,14 @@ async function sweepWebViewSignin(): Promise<void> {
   expectPresent('…and the Kakao symbol', chooser.body, 'fill="#000000" fill-opacity="0.85"');
   expectPresent('…carrying the return path', chooser.body, 'next=%2Fko%2Fvideo');
   expectPresent('…and noindex', chooser.body, 'noindex');
+  for (const locale of ['ko', 'en']) {
+    const brandChooser = await request(`/auth/choose?next=%2Fbrand&locale=${locale}`);
+    expectEqual(`brand chooser ${locale} renders`, brandChooser.status, 200);
+    expectPresent(`brand chooser ${locale} explains the service`, brandChooser.body, 'data-brand-auth');
+    expectPresent(`brand chooser ${locale} includes the showcase`, brandChooser.body, 'data-brand-auth-showcase');
+    expectPresent(`brand chooser ${locale} keeps login`, brandChooser.body, 'data-auth-provider="google"');
+    expectPresent(`brand chooser ${locale} keeps consent`, brandChooser.body, 'data-auth-legal');
+  }
   // Kakao is exempt from the WebView interstitial — KakaoTalk's browser can complete it.
   const kakaoHop = await request('/auth/signin?provider=kakao&next=%2Fko%2Fvideo&locale=ko', { headers: { 'user-agent': KAKAOTALK_UA } });
   expectOneOf('a Kakao sign-in from KakaoTalk redirects', kakaoHop.status, [302, 303, 307]);
