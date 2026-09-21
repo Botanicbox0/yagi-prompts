@@ -13,7 +13,7 @@ export function PortraitStudio({copy,initial,next,available}:{copy:Dictionary['p
   const fileInput=useRef<HTMLInputElement>(null);
   const results=useRef<HTMLDivElement>(null);
   const completedCount=useRef(initial.used);
-  useEffect(()=>{if(state.used>completedCount.current)results.current?.scrollIntoView({block:'start',behavior:'smooth'});completedCount.current=state.used;},[state.used]);
+  useEffect(()=>{if(state.used>completedCount.current)results.current?.scrollIntoView({block:'start',behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth'});completedCount.current=state.used;},[state.used]);
   const pending=state.attempts.some(a=>['queued','running','uncertain'].includes(a.status));
   const message=(code?:string)=>code==='bad_photo'?copy.badPhoto:code==='rate_limited'?copy.rateLimited:code==='exhausted'?copy.exhausted:code==='selection_changed'?copy.selectionChanged:copy.error;
   async function refresh(){const r=await fetch('/api/identity/portrait',{cache:'no-store'});if(r.ok){const data=await r.json();setState(data);}}
@@ -36,7 +36,7 @@ export function PortraitStudio({copy,initial,next,available}:{copy:Dictionary['p
   }
   return <div data-identity-portrait className="mt-8 space-y-10">
     <div className="rounded-2xl border border-hairline p-5 sm:p-7">
-      <p className="text-lg font-medium" data-portrait-remaining={state.remaining}>{state.remaining===1?copy.remainingOne:copy.remaining.replace('{count}',String(state.remaining))}</p>
+      <p className="text-lg font-medium" data-portrait-remaining={state.remaining}>{pending?copy.pendingTitle:state.remaining===0?copy.remainingNone:state.remaining===1?copy.remainingOne:copy.remaining.replace('{count}',String(state.remaining))}</p>
       <p className="mt-2 text-sm opacity-65">{copy.allowance}</p>
       {!available?<p role="status" className="mt-5">{copy.unavailable}</p>:!pending && state.remaining>0?<>
         <p className="mt-6 max-w-xl leading-relaxed">{copy.guidance}</p>
@@ -46,7 +46,7 @@ export function PortraitStudio({copy,initial,next,available}:{copy:Dictionary['p
           <span>{copy.choose}</span><input ref={fileInput} type="file" accept="image/jpeg,image/png,image/webp" aria-label={copy.choose} className="max-w-full text-sm" disabled={busy} onChange={e=>{const f=e.target.files?.[0]??null;setFile(f);setPreview(f?URL.createObjectURL(f):null);requestId.current=null;setConsent(false);setError('');}}/>
         </label>
         <label className="mt-5 flex items-start gap-3 text-sm leading-relaxed"><input type="checkbox" checked={consent} disabled={busy} onChange={e=>setConsent(e.target.checked)} className="mt-1 size-4 shrink-0"/>{copy.consent}</label>
-        <button type="button" disabled={!file||!consent||busy} onClick={()=>void create()} className="mt-6 min-h-12 rounded-full bg-on-surface px-7 py-3 text-surface disabled:opacity-40">{busy?copy.creating:copy.create}</button>
+        <button type="button" disabled={!file||!consent||busy} onClick={()=>void create()} className="mt-6 min-h-12 rounded-full bg-on-surface px-7 py-3 text-surface disabled:opacity-40">{busy?copy.busy:copy.create}</button>
         {state.used>0?<p className="mt-4 text-sm opacity-65">{copy.retry}</p>:null}
       </>:!pending?<p className="mt-5">{copy.exhausted}</p>:null}
       {pending?<p role="status" className="mt-5" data-portrait-pending>{state.attempts.some(a=>a.status==='uncertain')?copy.uncertain:copy.creating}</p>:null}

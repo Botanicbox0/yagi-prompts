@@ -25,6 +25,16 @@
 
 개발 서버에서는 `http://localhost:4786`을 사용했다. `127.0.0.1`과 Next 개발 서버의 요청 기준 주소가 달라 POST가 403으로 거절되는 것을 확인했고, 동일 주소로 접속해 해결했다. CSRF 검사를 완화하지 않았다.
 
+## 모바일·PWA 재점검 및 문안 검토
+
+2026-09-22, 이동한 작업 폴더 `D:\dev\.worktrees\twings\identity-portrait`에서 재점검했다.
+
+- 360px·390px 화면: 예시 4장 로딩, 가로 넘침 없음, 동의 전 생성 버튼 비활성, 생성 버튼 높이 50px.
+- 계정 → 내 작품 → 템플릿 → 얼굴 준비 이동 확인. 템플릿 복귀용 `next` 경로 보존, 닫힌 공개 생성 상태에서 결제 진입 없음.
+- PWA manifest 200, `display=standalone`, 루트 start URL·scope 확인. 512px 아이콘·Apple 아이콘·서비스 워커·오프라인 HTML 모두 200. 앱용 viewport·theme-color·mobile-web-app-capable 메타 확인.
+- 실제 iPhone/Android 기기에서 설치·사진 보관함·카메라·앱 강제 종료 후 복귀는 이번 환경에서 검사하지 않았다. 모바일 브라우저 레이아웃 검사와 실제 기기 검증을 구분한다. 개발 서버는 서비스 워커 등록을 끄므로 실제 오프라인 전환도 미검증이다.
+- Claude Code **Sonnet 4.6**을 명시 호출해 문안을 검토했다. [채택·유지 결정](wording/identity-sonnet-4-6.md)을 참고한다. 버튼 진행 문구를 줄이고 첫 방문·소진·실패 상태의 표현을 다듬었다.
+
 ## 출시 전 남은 작업
 
 필수 로컬 루프: `npx tsc --noEmit` 통과 → `npx vitest run` 117파일·1,369개 통과 → `npm run build:local` 통과 → `npm run start:local` 정상 시작 → `npm run sweep:anon` **SWEEP PASSED — 606/606**. `git diff --check` 통과. 법무 본문·기존 생성 플래그·`.env.local` 변경 없음.
