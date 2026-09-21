@@ -50,7 +50,7 @@ export function BrandShowcase({ copy, assetOrigin }: { copy: Copy; assetOrigin: 
         // Keyboard focus stops rotation until the reader explicitly starts it again.
         if (event.target.matches(':focus-visible') && !event.currentTarget.contains(event.relatedTarget as Node | null)) setRotating(false);
       }}>
-      <div className={styles.picture}>
+      <div className={styles.picture} data-format={active === 0 ? 'portrait' : 'landscape'}>
         {failedImages.includes(slide.image) ? <p className={styles.imageFallback}>{copy.unavailable}</p> : (
           // Public, already published campaign media. No client identities or fabricated results.
           // eslint-disable-next-line @next/next/no-img-element

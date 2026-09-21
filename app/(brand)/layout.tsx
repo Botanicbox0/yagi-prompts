@@ -1,6 +1,7 @@
 import "@/app/globals.css";
 import "./workspace.css";
 import { WorkspaceLanguage } from '@/components/brand-workspace/language';
+import { WorkspaceNavigation } from '@/components/brand-workspace/navigation';
 import type { ReactNode } from "react";
 import type { Metadata } from "next";
 import { fontVariables } from "@/app/fonts";
@@ -46,10 +47,7 @@ export default async function BrandLayout({
               <span>{d.admin.byline}</span>
             </a>
             <p className="bw-kicker">{b.title}</p>
-            <nav>
-              <a href="/brand">{b.home}</a>
-              <a href="/brand/members">{b.members}</a>
-            </nav>
+            <WorkspaceNavigation home={b.home} members={b.members}/>
             <form action="/auth/signout" method="post" className="bw-signout">
               <button type="submit">{b.signOut}</button>
             </form>

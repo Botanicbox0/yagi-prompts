@@ -10,8 +10,8 @@ export default async function BrandHome() {
     <div data-brand-home>
       <div className="bw-heading">
         <div>
-          <h1>{b.intro}</h1>
-          <p>{b.introBody}</p>
+          <h1>{b.dashboard.title}</h1>
+          <p>{b.dashboard.subtitle}</p>
         </div>
       </div>
       {workspace.organizations.length === 0 ? (
@@ -47,12 +47,9 @@ export default async function BrandHome() {
               </a>
             </section>
           ) : (
-            <section className="bw-panel">
-              <h2>{b.home}</h2>
-              <CampaignList projects={workspace.projects} b={b} locale={locale}/>
-            </section>
+            <CampaignList projects={workspace.projects} b={b} locale={locale}/>
           )}
-          <section className="bw-panel">
+          <section className="bw-team-footer">
             <h2>{b.organizations}</h2>
             <ul className="bw-list">
               {workspace.organizations.map((o) => (

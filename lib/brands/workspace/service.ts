@@ -1,4 +1,5 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
+import { withHomeOverview } from './home-overview';
 import { z } from 'zod';
 import type { Viewer } from '@/lib/auth/identity';
 import type { SqlRunner } from '@/lib/db/sql-runner';
@@ -126,7 +127,7 @@ export async function loadBrandWorkspace(deps: BrandWorkspaceDeps, viewer: Viewe
       where m.user_id=$1 and m.status='active' order by o.created_at for share of m`, [viewer.userId])).rows;
     const projects = (await sql.query(`select p.*,o.name as organization_name from brand_projects p join brand_organizations o on o.id=p.organization_id
       join brand_memberships m on m.organization_id=p.organization_id where m.user_id=$1 and m.status='active' order by p.updated_at desc`, [viewer.userId])).rows;
-    return { organizations: memberships.map(r => ({ id: String(r.id), name: String(r.name), role: r.role as BrandRole })), projects: projects.map(summary) };
+    return { organizations: memberships.map(r => ({ id: String(r.id), name: String(r.name), role: r.role as BrandRole })), projects: await withHomeOverview(sql, projects.map(summary)) };
   });
 }
 export async function loadStudioWorkspace(deps: BrandWorkspaceDeps, viewer: Viewer): Promise<BrandWorkspace> {
@@ -134,7 +135,7 @@ export async function loadStudioWorkspace(deps: BrandWorkspaceDeps, viewer: View
   try { return await deps.sql.transaction(async sql => {
     await studio(sql, viewer.userId!);
     const rows = (await sql.query('select p.*,o.name as organization_name from brand_projects p join brand_organizations o on o.id=p.organization_id order by p.updated_at desc')).rows;
-    return { organizations: [], projects: rows.map(summary) };
+    return { organizations: [], projects: await withHomeOverview(sql, rows.map(summary)) };
   }); } catch (error) { if (error instanceof Denied) return { organizations: [], projects: [] }; throw error; }
 }
 async function loadProject(deps: BrandWorkspaceDeps, viewer: Viewer, id: string, isStudio: boolean): Promise<BrandProjectDetail | null> {

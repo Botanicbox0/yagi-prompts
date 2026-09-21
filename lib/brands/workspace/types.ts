@@ -11,11 +11,19 @@ export interface BrandCriteria {
   primaryMetric: 'views' | 'engagement' | 'content_count'; targetValue: number | null;
 }
 export interface BrandProjectSummary {
+  overview?: BrandHomeOverview;
   id: string; organizationId: string; organizationName: string; title: string; objective: string;
   audience: string; budgetKrw: number | null; budgetTaxBasis: 'unspecified' | 'included' | 'excluded';
   criteria: BrandCriteria;
   startsOn: string | null; endsOn: string | null; productionMode: ProductionMode;
   status: BrandProjectStatus; revision: number; createdAt: string; updatedAt: string;
+}
+export interface BrandHomeContent {
+  id: string; title: string; version: number; decision: BrandContentVersion['decision'];
+  mediaUrl: string | null; mime: string | null; createdAt: string;
+}
+export interface BrandHomeOverview {
+  pending: number; changes: number; published: number; contents: BrandHomeContent[];
 }
 export interface BrandContentVersion {
   id: string; slotKey: string; version: number; title: string; attachmentId: string; mediaUrl: string; caption: string;

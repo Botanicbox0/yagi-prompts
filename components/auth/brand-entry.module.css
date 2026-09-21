@@ -22,7 +22,7 @@
 .languages a[aria-current] { color: var(--on-surface); text-decoration: underline; text-underline-offset: 6px; }
 .content { margin: auto 0; padding: 60px 0 46px; }
 .eyebrow { font-size: 13px; font-weight: 500; margin-bottom: 24px; }
-.heading { font-size: clamp(36px, 3.5vw, 52px); font-weight: 700; line-height: 1.2; letter-spacing: -.055em; word-break: keep-all; }
+.heading { font-size: clamp(32px, 3.1vw, 46px); font-weight: 600; line-height: 1.3; letter-spacing: -.055em; word-break: keep-all; }
 .heading span { display: block; }
 .heading span + span { color: color-mix(in srgb, var(--on-surface) 60%, var(--surface)); }
 .description { max-width: 365px; margin-top: 24px; font-size: 16px; line-height: 1.75; word-break: keep-all; }
@@ -35,7 +35,7 @@
 .footer { display: flex; justify-content: space-between; align-items: center; gap: 16px; font-size: 12px; }
 .footer a { display: inline-flex; align-items: center; gap: 4px; min-height: 44px; }
 .footer a:hover { text-decoration: underline; text-underline-offset: 4px; }
-.showcase { display: flex; flex-direction: column; align-self: stretch; min-width: 0; overflow: hidden; border: 1px solid var(--color-hairline); border-radius: 8px; }
+.showcase { display: flex; flex-direction: column; align-self: stretch; min-width: 0; overflow: hidden; border: 1px solid var(--color-hairline); border-radius: 10px; }
 .picture { position: relative; flex: 1; min-height: 430px; background: var(--color-surface); overflow: hidden; }
 .picture img { position: absolute; width: 100%; height: 100%; object-fit: cover; object-position: center 38%; animation: appear 400ms ease-out; }
 .example, .counter { position: absolute; top: 20px; padding: 7px 10px; background: var(--surface); color: var(--on-surface); font-size: 11px; line-height: 1.2; }
@@ -82,3 +82,6 @@
   .choices button { font-size: 11px; }
 }
 @media (prefers-reduced-motion: reduce) { .picture img { animation: none; } }
+
+.picture[data-format="landscape"] { background:#171719; }
+.picture[data-format="landscape"] img { object-fit:contain; object-position:center; }

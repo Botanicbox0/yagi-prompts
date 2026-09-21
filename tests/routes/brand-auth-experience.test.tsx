@@ -39,7 +39,7 @@ describe('brand login experience', () => {
   });
   it('renders English copy and usable non-JavaScript login links with a static initial showcase', async () => {
     const html = await page({ next: '/brand', locale: 'en' });
-    expect(html).toContain('From the first brief');
+    expect(html).toContain('Content for your brand.');
     expect(html).toContain('data-brand-auth-showcase');
     expect(html).toContain('aria-pressed="true"');
     expect(html).toContain('aria-live="polite"');

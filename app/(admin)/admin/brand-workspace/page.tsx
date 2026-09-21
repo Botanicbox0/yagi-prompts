@@ -21,7 +21,7 @@ export default async function StudioBrands() {
     <AdminShell dict={dict.admin} locale={locale} active="brandWorkspace">
       <div data-studio-brand-queue>
         <div className="bw-heading">
-          <div><h1>{b.studioTitle}</h1><p>{b.performance.queueHint}</p></div>
+          <div><h1>{b.dashboard.studioTitle}</h1><p>{b.dashboard.studioSubtitle}</p></div>
           <WorkspaceLanguage locale={locale} label={dict.nav.localeToggle}/>
         </div>
         {!workspace ? (
@@ -29,9 +29,7 @@ export default async function StudioBrands() {
         ) : !workspace.projects.length ? (
           <div className="bw-empty">{b.studioEmpty}</div>
         ) : (
-          <section className="bw-panel">
-            <CampaignList projects={workspace.projects} b={b} locale={locale} studio/>
-          </section>
+          <CampaignList projects={workspace.projects} b={b} locale={locale} studio/>
         )}
       </div>
     </AdminShell>
