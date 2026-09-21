@@ -1,13 +1,15 @@
 # AGENTS.md — TWINGS (twings.app) 에이전트 운영 규칙
 
 > Codex와 Claude Code가 함께 읽는 파일. 이 저장소에서 일하기 전에 끝까지 읽는다.
-> 제품명은 **TWINGS**, 저장소 코드네임은 `playbook`(패키지명·내부 식별자는 그대로 둔다).
+> 제품명과 기본 작업 폴더는 **TWINGS / `D:\dev\twings`**다. 기존 `PLAYBOOK_*` 환경변수·DB 식별자는 호환성을 위해 유지한다.
+> 프로젝트 규칙의 단일 원본은 이 파일이다. `CLAUDE.md`에는 `@AGENTS.md` 한 줄만 둔다.
 
 ## 0. 위치와 배포
 
 | 항목 | 값 |
 | --- | --- |
-| 작업 경로 | `D:\dev\playbook` (Windows). **`D:\dev\twiin`은 폐기된 옛 제품이다. 거기서 작업하지 않는다.** |
+| 작업 경로 | `D:\dev\twings` (Windows). **`D:\dev\twiin`은 이전 제품이며 현재 TWINGS 저장소가 아니다.** |
+| 분리 작업 | `D:\dev\.worktrees\twings\<작업명>`. 보관 작업은 그 아래 `archive/`. [작업 공간 안내](docs/WORKSPACE.md)를 먼저 확인한다. |
 | GitHub | `Botanicbox0/yagi-prompts`, 기본 브랜치 `main` |
 | 배포 | Vercel 프로젝트 `yagi-prompts`(Hobby). `main`에 push되면 곧바로 twings.app에 반영된다. 브랜치 push는 프리뷰 URL이 생긴다. |
 | DB·스토리지 | Supabase 프로젝트 `nhokkikjkzjalxqsbzuk`. 로컬은 PGlite 스냅샷(`npm run db:local`)과 `.storage/`. |
@@ -66,15 +68,17 @@ npm run sweep:anon             # 익명 방문자 스윕 477+ 체크, "SWEEP PAS
 
 **대표 결정 필요(임의 결정 금지)**: 가격·패키지 금액, 신규 템플릿 선정, 고객 사례에 공개할 브랜드명과 수치, 결제 수단·PG 변경, 약관 문구 변경, 외부 발송(메일·SNS) 문안 확정.
 
-## 6. 현재 우선순위 (2026-09-17)
+## 6. 우선순위와 현재 상태 (2026-09-22)
 
 | # | 작업 | 상태·메모 |
 | --- | --- | --- |
-| 1 | **결제 연동(토스페이먼츠)** | 심사 진행 중. 테스트 키로 결제창 → 승인 API → 승인 시 `createRenderJob` → 실패 시 자동 환불. 결제 화면에 "생성 개시 후 청약철회 제한" 고지(환불정책 §2와 같은 문장). 라이브 키는 Vercel에서만 교체. Stripe 1회 결제는 해외용으로 유지(`lib/billing/*`). 끝나면 `lib/flags.ts RENDER_PIPELINE_PUBLIC` 개방은 대표가 결정. |
-| 2 | **SEO·GEO** | 현재: 페이지별 metadata, sitemap, OG 이미지는 있음. **없음**: JSON-LD 전부, hreflang, `llms.txt`, 독립 FAQ 라우트, 템플릿 VideoObject. 할 일은 §7. |
+| 1 | **결제 연동(토스페이먼츠)** | 단건 결제 PR #2 병합 완료. 공개 생성 플래그는 닫힘. 테스트 키로 결제창 → 승인 API → 승인 시 `createRenderJob` → 실패 시 자동 환불. 결제 화면에 "생성 개시 후 청약철회 제한" 고지(환불정책 §2와 같은 문장). 라이브 키는 Vercel에서만 교체. Stripe 1회 결제는 해외용으로 유지(`lib/billing/*`). 끝나면 `lib/flags.ts RENDER_PIPELINE_PUBLIC` 개방은 대표가 결정. |
+| 2 | **SEO·GEO** | metadata, sitemap, OG, JSON-LD, hreflang, `llms.txt`, 독립 FAQ가 구현되어 있다. §7은 유지·회귀 점검 기준이며 새 작업 전 실제 코드와 공개 페이지를 확인한다. |
 | 3 | **캠페인 탭 = 기업이 우리를 쓰는 방법 + 고객 사례** | §13 랜딩 위에 "활용 방식" 그리드와 고객 사례 모듈 추가. 사례 데이터는 정적 매니페스트(`lib/campaigns/case-studies.ts`)로 시작, 공개 항목은 대표 승인분만. 설계는 §8. |
 | 4 | **워딩 SOTA 패스** | 라우트별 모든 문자열을 표로 뽑아 어색함·설득력 기준으로 재작성. 방법은 §9. |
-| 5 | 로드맵 잔여(§12) | 크리에이터 프로필, 캠페인 리포트, 공유 카드(OG=사용자 프레임+나도 만들기), 내 트윈 배지, 실패 신고 시 관리자 승인 무료 재생성, 결과물 피드(임계치 후), 템플릿 8~12편(대표). |
+| 5 | 로드맵 점검(§12) | 크리에이터 프로필, 캠페인 리포트, 공유 카드(OG=사용자 프레임+나도 만들기), 내 트윈 배지, 실패 신고 시 관리자 승인 무료 재생성, 결과물 피드(임계치 후), 템플릿 8~12편(대표). |
+
+신규 얼굴 기준 사진은 PR #8에서 진행 중이다. 첫 생성 포함 무료 2회, Sunburst 고정, 사용자 결과 확인이며 클라우드 마이그레이션·공개는 별도 단계다. 작업 상태는 PR과 현재 코드로 다시 확인한다.
 
 ## 7. SEO·GEO 체크리스트
 

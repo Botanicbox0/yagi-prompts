@@ -1,16 +1,10 @@
-# Setup — manual steps remaining after M0
+# TWINGS 환경 설정
 
-M0 ships everything that can be built without external accounts. What follows needs a human with
-console access. Each step is independent unless noted.
+기본 작업 경로는 `D:\dev\twings`입니다. 작업용 worktree와 보관 폴더 구분은 [WORKSPACE.md](WORKSPACE.md)를 확인하세요.
 
-Local development works today with no external service:
-`npm install && npm run check && npm run db:local && npm run dev`.
+로컬 개발은 외부 서비스 없이 `npm install`, `npm run check`, `npm run db:local`, `npm run dev`로 시작할 수 있습니다. 실제 연결 검증은 별도입니다.
 
-> **Naming (M7).** The product is **YAGI PROMPTS**. The repo directory, the npm package `name`, the
-> `PLAYBOOK_*` environment variables, the `playbook` database tables and every other internal
-> identifier keep the `playbook` codename deliberately — renaming them would churn the whole tree
-> and every migration for no user-visible gain. If a string is read by a user, it says YAGI PROMPTS;
-> if it is read by a machine, it still says playbook.
+제품명은 **TWINGS**입니다. 기존 npm 패키지명, `PLAYBOOK_*` 환경변수, DB 테이블 식별자는 호환성을 위해 유지합니다. 아래 M0~M7 표기는 초기 구축 기록이므로 현재 연결·배포 상태는 실제 환경에서 다시 확인합니다.
 
 ---
 

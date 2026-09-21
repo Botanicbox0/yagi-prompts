@@ -1,21 +1,18 @@
-# YAGI PROMPTS
+# TWINGS
 
-Original Seedance 2.5 prompts, written and tested in-house - bilingual (ko/en), plus a credited
-community rail. The playbook machinery (bilingual step-by-step AI-media workflows) stays built and
-tested behind `PLAYBOOKS_IN_NAV`.
+내 얼굴로 영상·이미지 템플릿의 주인공이 되는 서비스와, 스튜디오가 운영하는 브랜드·크리에이터 캠페인 공간입니다.
 
-> The product name is **YAGI PROMPTS**; the repo, the npm package and every internal identifier
-> keep the `playbook` codename on purpose - renaming them would churn the whole tree for nothing.
+- 기본 작업 폴더: `D:\dev\twings`
+- 에이전트 규칙: [AGENTS.md](AGENTS.md)
+- 작업 폴더·브랜치 구분: [docs/WORKSPACE.md](docs/WORKSPACE.md)
+- 제품 결정: [docs/TEMPLATES-IA.md](docs/TEMPLATES-IA.md), [docs/CAMPAIGNS.md](docs/CAMPAIGNS.md)
+- 배포: `twings.app` · `brand.twings.app` · `admin.twings.app`
 
-Execution contract: [PLAYBOOK-PLAN.md](./PLAYBOOK-PLAN.md) (v1.4, cross-validated READY).
-Milestones: M0-M5 per plan section 8. Director: Claude (Fable). Executor: Opus.
+기존 npm 패키지명과 `PLAYBOOK_*` 환경변수, DB 식별자는 호환성을 위해 유지합니다. `PLAYBOOK-PLAN.md`는 초기 구현 기록이며 현재 제품 정책은 AGENTS와 제품 결정 문서를 따릅니다.
 
 ## Status
 
-**M0 Foundation** — scaffold, tokens + fonts, motion shell, locale routing, route skeletons,
-the full section 6 schema with the two-phase publish RPCs, and fixtures published through the real
-prepare -> copy -> publish flow. No landing scenes (M1), no renderers (M2), no Stripe (M3),
-no admin editor (M4), no notifications (M5).
+브랜드 의뢰·승인·리포트와 토스 단건 결제가 구현되어 있습니다. 공개 생성 플래그는 닫혀 있으며, 얼굴 기준 사진은 별도 PR #8에서 검증 중입니다. 상태 판단은 해당 PR·배포 기록과 함께 확인합니다.
 
 ## Run it
 
