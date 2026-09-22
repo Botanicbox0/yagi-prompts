@@ -44,6 +44,7 @@ export const en = {
     identityNote: 'This portrait is a visual reference, not proof of identity. Existing face checks still apply.',
   },
   brandWorkspace: {
+    languageApply: 'Change language',
     studioInquiry: {
       "action": "Request a template",
       "title": "What would you like to create?",

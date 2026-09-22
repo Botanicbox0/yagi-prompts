@@ -55,18 +55,17 @@ export default async function BrandLayout({
             </a>
             <p className="bw-kicker">{b.title}</p>
             <WorkspaceNavigation home={b.home} members={b.members} settings={b.managed.settings} library={b.managed.library} studio={b.productionStudio.title}/>
-            <form action="/auth/signout" method="post" className="bw-signout">
-              <button type="submit">{b.signOut}</button>
-            </form>
+            <div className="bw-sidebar-utilities">
+              <WorkspaceLanguage locale={locale} label={d.nav.localeToggle} compact applyLabel={b.languageApply}/>
+              <form action="/auth/signout" method="post" className="bw-signout">
+                <button type="submit" aria-label={b.signOut} title={b.signOut}>
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 4H4v16h6M14 8l4 4-4 4M8 12h10"/></svg>
+                  <span>{b.signOut}</span>
+                </button>
+              </form>
+            </div>
           </aside>
           <div className="bw-body">
-            <header className="bw-topbar">
-              <span>{b.title}</span>
-              <WorkspaceLanguage locale={locale} label={d.nav.localeToggle}/>
-              <a href="/brand/projects/new" className="bw-button bw-primary">
-                {b.newProject}
-              </a>
-            </header>
             <main id="main" className="bw-main">
               {children}
             </main>

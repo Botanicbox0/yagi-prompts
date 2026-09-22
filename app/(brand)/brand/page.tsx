@@ -14,6 +14,7 @@ export default async function BrandHome() {
           <h1>{b.dashboard.title}</h1>
           <p>{b.dashboard.subtitle}</p>
         </div>
+        {workspace.projects.length > 0 && workspace.organizations.some(o => o.role !== "viewer") && <a href="/brand/projects/new" className="bw-button bw-primary">{b.newProject}</a>}
       </div>
       <ServiceGuide kind="campaign" b={b} />
       {workspace.organizations.length === 0 && workspace.projects.length === 0 ? (

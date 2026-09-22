@@ -1,0 +1,391 @@
+{
+  "localeSwitch": true,
+  "organizationPreserved": true,
+  "reloadPersistence": true,
+  "contextualActions": true,
+  "keyboardTabOrder": true,
+  "noJsFallback": true,
+  "checks": [
+    {
+      "name": "studio-en-1440",
+      "width": 1440,
+      "overflow": false,
+      "select": {
+        "x": 57,
+        "y": 877,
+        "w": 137,
+        "h": 44,
+        "right": 194,
+        "bottom": 921
+      },
+      "signout": {
+        "x": 20,
+        "y": 932,
+        "w": 92.6875,
+        "h": 44,
+        "right": 112.6875,
+        "bottom": 976
+      },
+      "nav": {
+        "x": 20,
+        "y": 158.1875,
+        "w": 175,
+        "h": 271.59375,
+        "right": 195,
+        "bottom": 429.78125
+      },
+      "logo": {
+        "x": 20,
+        "y": 30,
+        "w": 175,
+        "h": 46.59375,
+        "right": 195,
+        "bottom": 76.59375
+      },
+      "hasGlobalCta": false
+    },
+    {
+      "name": "studio-en-768",
+      "width": 768,
+      "overflow": false,
+      "select": {
+        "x": 55,
+        "y": 873,
+        "w": 105,
+        "h": 44,
+        "right": 160,
+        "bottom": 917
+      },
+      "signout": {
+        "x": 18,
+        "y": 928,
+        "w": 92.6875,
+        "h": 44,
+        "right": 110.6875,
+        "bottom": 972
+      },
+      "nav": {
+        "x": 18,
+        "y": 156.1875,
+        "w": 143,
+        "h": 291.1875,
+        "right": 161,
+        "bottom": 447.375
+      },
+      "logo": {
+        "x": 18,
+        "y": 28,
+        "w": 143,
+        "h": 46.59375,
+        "right": 161,
+        "bottom": 74.59375
+      },
+      "hasGlobalCta": false
+    },
+    {
+      "name": "studio-en-390",
+      "width": 390,
+      "overflow": false,
+      "select": {
+        "x": 247,
+        "y": 21.296875,
+        "w": 74,
+        "h": 44,
+        "right": 321,
+        "bottom": 65.296875
+      },
+      "signout": {
+        "x": 326,
+        "y": 21.296875,
+        "w": 44,
+        "h": 44,
+        "right": 370,
+        "bottom": 65.296875
+      },
+      "nav": {
+        "x": 20,
+        "y": 84.59375,
+        "w": 350,
+        "h": 44,
+        "right": 370,
+        "bottom": 128.59375
+      },
+      "logo": {
+        "x": 20,
+        "y": 20,
+        "w": 183,
+        "h": 46.59375,
+        "right": 203,
+        "bottom": 66.59375
+      },
+      "hasGlobalCta": false
+    },
+    {
+      "name": "studio-en-320",
+      "width": 320,
+      "overflow": false,
+      "select": {
+        "x": 185,
+        "y": 17,
+        "w": 74,
+        "h": 44,
+        "right": 259,
+        "bottom": 61
+      },
+      "signout": {
+        "x": 264,
+        "y": 17,
+        "w": 44,
+        "h": 44,
+        "right": 308,
+        "bottom": 61
+      },
+      "nav": {
+        "x": 12,
+        "y": 80,
+        "w": 296,
+        "h": 44,
+        "right": 308,
+        "bottom": 124
+      },
+      "logo": {
+        "x": 12,
+        "y": 17,
+        "w": 160,
+        "h": 44,
+        "right": 172,
+        "bottom": 61
+      },
+      "hasGlobalCta": false
+    },
+    {
+      "name": "studio-ko-1440",
+      "width": 1440,
+      "overflow": false,
+      "select": {
+        "x": 57,
+        "y": 877,
+        "w": 137,
+        "h": 44,
+        "right": 194,
+        "bottom": 921
+      },
+      "signout": {
+        "x": 20,
+        "y": 932,
+        "w": 89.484375,
+        "h": 44,
+        "right": 109.484375,
+        "bottom": 976
+      },
+      "nav": {
+        "x": 20,
+        "y": 158.1875,
+        "w": 175,
+        "h": 252,
+        "right": 195,
+        "bottom": 410.1875
+      },
+      "logo": {
+        "x": 20,
+        "y": 30,
+        "w": 175,
+        "h": 46.59375,
+        "right": 195,
+        "bottom": 76.59375
+      },
+      "hasGlobalCta": false
+    },
+    {
+      "name": "studio-ko-768",
+      "width": 768,
+      "overflow": false,
+      "select": {
+        "x": 55,
+        "y": 873,
+        "w": 105,
+        "h": 44,
+        "right": 160,
+        "bottom": 917
+      },
+      "signout": {
+        "x": 18,
+        "y": 928,
+        "w": 89.484375,
+        "h": 44,
+        "right": 107.484375,
+        "bottom": 972
+      },
+      "nav": {
+        "x": 18,
+        "y": 156.1875,
+        "w": 143,
+        "h": 252,
+        "right": 161,
+        "bottom": 408.1875
+      },
+      "logo": {
+        "x": 18,
+        "y": 28,
+        "w": 143,
+        "h": 46.59375,
+        "right": 161,
+        "bottom": 74.59375
+      },
+      "hasGlobalCta": false
+    },
+    {
+      "name": "studio-ko-390",
+      "width": 390,
+      "overflow": false,
+      "select": {
+        "x": 247,
+        "y": 21.296875,
+        "w": 74,
+        "h": 44,
+        "right": 321,
+        "bottom": 65.296875
+      },
+      "signout": {
+        "x": 326,
+        "y": 21.296875,
+        "w": 44,
+        "h": 44,
+        "right": 370,
+        "bottom": 65.296875
+      },
+      "nav": {
+        "x": 20,
+        "y": 84.59375,
+        "w": 350,
+        "h": 44,
+        "right": 370,
+        "bottom": 128.59375
+      },
+      "logo": {
+        "x": 20,
+        "y": 20,
+        "w": 183,
+        "h": 46.59375,
+        "right": 203,
+        "bottom": 66.59375
+      },
+      "hasGlobalCta": false
+    },
+    {
+      "name": "studio-ko-320",
+      "width": 320,
+      "overflow": false,
+      "select": {
+        "x": 185,
+        "y": 17,
+        "w": 74,
+        "h": 44,
+        "right": 259,
+        "bottom": 61
+      },
+      "signout": {
+        "x": 264,
+        "y": 17,
+        "w": 44,
+        "h": 44,
+        "right": 308,
+        "bottom": 61
+      },
+      "nav": {
+        "x": 12,
+        "y": 80,
+        "w": 296,
+        "h": 44,
+        "right": 308,
+        "bottom": 124
+      },
+      "logo": {
+        "x": 12,
+        "y": 17,
+        "w": 160,
+        "h": 44,
+        "right": 172,
+        "bottom": 61
+      },
+      "hasGlobalCta": false
+    },
+    {
+      "name": "campaign-ko-320",
+      "width": 320,
+      "overflow": false,
+      "select": {
+        "x": 185,
+        "y": 17,
+        "w": 74,
+        "h": 44,
+        "right": 259,
+        "bottom": 61
+      },
+      "signout": {
+        "x": 264,
+        "y": 17,
+        "w": 44,
+        "h": 44,
+        "right": 308,
+        "bottom": 61
+      },
+      "nav": {
+        "x": 12,
+        "y": 80,
+        "w": 296,
+        "h": 44,
+        "right": 308,
+        "bottom": 124
+      },
+      "logo": {
+        "x": 12,
+        "y": 17,
+        "w": 160,
+        "h": 44,
+        "right": 172,
+        "bottom": 61
+      },
+      "hasGlobalCta": false
+    },
+    {
+      "name": "campaign-ko-1440",
+      "width": 1440,
+      "overflow": false,
+      "select": {
+        "x": 57,
+        "y": 877,
+        "w": 137,
+        "h": 44,
+        "right": 194,
+        "bottom": 921
+      },
+      "signout": {
+        "x": 20,
+        "y": 932,
+        "w": 89.484375,
+        "h": 44,
+        "right": 109.484375,
+        "bottom": 976
+      },
+      "nav": {
+        "x": 20,
+        "y": 158.1875,
+        "w": 175,
+        "h": 252,
+        "right": 195,
+        "bottom": 410.1875
+      },
+      "logo": {
+        "x": 20,
+        "y": 30,
+        "w": 175,
+        "h": 46.59375,
+        "right": 195,
+        "bottom": 76.59375
+      },
+      "hasGlobalCta": false
+    }
+  ],
+  "pageErrors": []
+}

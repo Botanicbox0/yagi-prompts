@@ -55,6 +55,7 @@ export const ko: Dictionary = {
     identityNote: '이 사진은 영상과 이미지에 쓸 얼굴의 기준이 돼요. 본인 인증을 대신하지 않으며, 생성 전에 얼굴 확인이 필요할 수 있어요.',
   },
   brandWorkspace: {
+    languageApply: '언어 변경',
     studioInquiry: {
       "action": "전용 템플릿 의뢰",
       "title": "어떤 영상을 만들고 싶으세요?",
