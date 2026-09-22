@@ -11,10 +11,9 @@ import { IMAGE_ENGINES, sizeString, type ImageAspect, type SeedreamEngineId, ima
  *         generated_images, output_tokens, total_tokens }, error?: { code, message } }
  *
  * Same seam and same reasons as `lib/ark/client.ts`: `fetch` is injected, the key is read from the
- * environment by the caller, and a reference image that "may contain a real person" is REJECTED
- * at input (`InputImageSensitiveContentDetected.PrivacyInformation`) — the policy that makes the
- * real-human asset library (`asset://…`) the only door for a visitor's own face on ModelArk, for
- * images exactly as for films. Result URLs live 24 hours; the caller copies them at once.
+ * environment by the caller. Moderation errors remain terminal; do not infer a blanket selfie
+ * restriction from one rejection. Seedream accepts URLs/base64, not Seedance's asset:// scheme
+ * (live Pro API verified 2026-09-22). Result URLs live 24 hours; copy them promptly.
  */
 
 export const SEEDREAM_DEFAULT_BASE_URL = 'https://ark.ap-southeast.bytepluses.com/api/v3';
@@ -37,7 +36,7 @@ export interface SeedreamGenerateInput {
   engine: SeedreamEngineId;
   prompt: string;
   aspect: ImageAspect;
-  /** Public URLs, `data:image/...;base64,…` strings, or `asset://…` ids from the asset library. */
+  /** Image URLs or `data:image/...;base64,…` strings. Seedance asset:// IDs are not supported. */
   references?: string[];
   outputFormat?: 'png' | 'jpeg';
   responseFormat?: 'url' | 'b64_json';

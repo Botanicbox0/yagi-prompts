@@ -18,6 +18,6 @@ export default async function PortraitPage({searchParams}:{searchParams:Promise<
   return <main id="main" className="mx-auto min-h-screen max-w-3xl px-5 py-8 sm:px-8" data-section data-theme="light">
     <header className="flex items-center justify-between border-b border-hairline pb-6"><a href={`/${locale}`}><TwingsLogo size={22}/></a><a href="/account" className="text-sm underline underline-offset-4">{copy.back}</a></header>
     <h1 className="mt-12 text-3xl font-semibold leading-tight sm:text-4xl">{copy.title}</h1><p className="mt-4 max-w-xl text-lg leading-relaxed opacity-75">{copy.intro}</p>
-    {state?<PortraitStudio copy={copy} initial={state} next={next} available={!!deps?.provider}/>:<p role="status" className="mt-8 rounded-xl border border-hairline p-6">{copy.unavailable}</p>}
+    {state?<PortraitStudio copy={copy} initial={state} next={next} available={!!deps?.provider&&(!state.canStart||!!deps?.seedreamProvider)}/>:<p role="status" className="mt-8 rounded-xl border border-hairline p-6">{copy.unavailable}</p>}
   </main>;
 }
