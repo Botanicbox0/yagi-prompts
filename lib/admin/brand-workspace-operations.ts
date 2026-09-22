@@ -1,4 +1,5 @@
 import {
+  sendBrandSupport, updateBrandSettings, revokeStudioInvitation, createStudioOrganization, createStudioProject, createStudioInvitation, setBrandProjectVisibility, revokeStudioAccess, addBrandContract, shareBrandContract,
   activateBrandProject,
   addBrandContentVersion,
   sendBrandMessage,
@@ -61,7 +62,31 @@ function operation(
     },
   };
 }
+function managedOperation(run:(ctx:AdminContext,input:Input)=>Promise<BrandOutcome<{id:string;token?:string}>>,destination:'home'|'project'='project'):AdminOperation<Input> {
+ return { parse(form) {
+   const input:Input=Object.fromEntries(form);
+   for(const key of ['expectedRevision']) if(key in input)input[key]=Number(input[key]);
+   for(const key of ['visible','shared']) if(key in input)input[key]=input[key]==='true';
+   for(const key of ['projectId','startsOn','endsOn']) if(input[key]==='')input[key]=null;
+   if('budgetKrw' in input)input.budgetKrw=input.budgetKrw===''?null:Number(input.budgetKrw);
+   return {ok:true,value:input};
+ },async run(ctx,input) {
+   const r=await run(ctx,input);
+   if(!r.ok)return fail(r.code==='conflict'?'staleReview':r.code==='forbidden'?'forbidden':'invalid');
+   return ok('saved',{to:destination==='home'?(input.organizationId?`/admin/brand-workspace/organizations/${String(input.organizationId)}`:'/admin/brand-workspace'):`/admin/brand-workspace/${String(input.projectId||r.id)}`,...(r.token?{invitationToken:r.token}:{})});
+ }};
+}
 export const BRAND_WORKSPACE_OPERATIONS = {
+ 'brandWorkspace.settings': managedOperation((ctx,v)=>updateBrandSettings(ctx,ctx.viewer,v),'home'),
+ 'brandWorkspace.support': managedOperation((ctx,v)=>sendBrandSupport(ctx,ctx.viewer,v),'home'),
+ 'brandWorkspace.revokeInvite': managedOperation((ctx,v)=>revokeStudioInvitation(ctx,ctx.viewer,v),'home'),
+ 'brandWorkspace.organization': managedOperation((ctx,v)=>createStudioOrganization(ctx,ctx.viewer,v),'home'),
+ 'brandWorkspace.createProject': managedOperation((ctx,v)=>createStudioProject(ctx,ctx.viewer,v)),
+ 'brandWorkspace.invite': managedOperation((ctx,v)=>createStudioInvitation(ctx,ctx.viewer,v),'home'),
+ 'brandWorkspace.visibility': managedOperation((ctx,v)=>setBrandProjectVisibility(ctx,ctx.viewer,v)),
+ 'brandWorkspace.revokeAccess': managedOperation((ctx,v)=>revokeStudioAccess(ctx,ctx.viewer,v),'home'),
+ 'brandWorkspace.contract': managedOperation((ctx,v)=>addBrandContract(ctx,ctx.viewer,v)),
+ 'brandWorkspace.contractShare': managedOperation((ctx,v)=>shareBrandContract(ctx,ctx.viewer,v)),
   "brandWorkspace.status": operation((ctx, input) =>
     activateBrandProject({ sql: ctx.sql }, ctx.viewer, input),
   ),

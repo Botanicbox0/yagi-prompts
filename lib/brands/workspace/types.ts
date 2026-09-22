@@ -11,7 +11,7 @@ export interface BrandCriteria {
   primaryMetric: 'views' | 'engagement' | 'content_count'; targetValue: number | null;
 }
 export interface BrandProjectSummary {
-  overview?: BrandHomeOverview;
+  overview?: BrandHomeOverview; clientVisible?: boolean;
   id: string; organizationId: string; organizationName: string; title: string; objective: string;
   audience: string; budgetKrw: number | null; budgetTaxBasis: 'unspecified' | 'included' | 'excluded';
   criteria: BrandCriteria;
@@ -53,6 +53,7 @@ export interface BrandReport {
   snapshot: BrandReportSnapshot; createdAt: string;
 }
 export interface BrandProjectDetail extends BrandProjectSummary {
+  contracts?: BrandContract[]; contractUploads?: BrandAttachment[];
   role: BrandRole | 'studio'; referenceLinks: BrandReferenceLink[]; contents: BrandContentVersion[];
   decisions: BrandDecision[]; messages: BrandMessage[]; attachments: BrandAttachment[];
   posts: BrandPost[]; reports: BrandReport[];
@@ -64,3 +65,5 @@ export interface BrandMembers {
   members: Array<{ id: string; userId: string; email: string | null; role: BrandRole; status: 'active' | 'revoked'; isSelf: boolean }>;
   invitations: Array<{ id: string; email: string; role: 'editor' | 'viewer'; expiresAt: string; status: 'pending' | 'accepted' | 'revoked' | 'expired' }>;
 }
+
+export interface BrandContract { id:string; documentKey:string;title:string;version:number;attachmentId:string;shared:boolean;revision:number;createdAt:string }

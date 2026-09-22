@@ -9,6 +9,14 @@ vi.mock('@/lib/auth/dev-identity', () => ({ devIdentityUserId: () => null }));
 import { middleware } from '@/middleware';
 const req = (host: string, path: string, method = 'GET', origin?: string) => new NextRequest(`https://${host}${path}`, { method, headers: { host, ...(origin ? {origin} : {}) } });
 describe('brand host boundary', () => {
+  it('routes settings and library through brand authentication and allows guarded support reads',async()=>{
+    for(const path of ['/brand/settings','/brand/library']) {
+      const r=await middleware(req('brand.twings.app',path));
+      expect(new URL(r.headers.get('location')!).searchParams.get('next')).toBe(path);
+      expect(authReturnPath(path,'brand.twings.app','/')).toBe(path);
+    }
+    expect((await middleware(req('brand.twings.app','/api/brand-workspace'))).headers.get('x-middleware-next')).toBe('1');
+  });
   it('lets the empty invitation landing clear its fragment before starting OAuth', async () => {
     const response = await middleware(req('brand.twings.app', '/brand/invite'));
     expect(response.headers.get('x-middleware-next')).toBe('1');

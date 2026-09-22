@@ -179,6 +179,16 @@ describe("brand workspace API boundary", () => {
     expect((await GET(read(), context)).status).toBe(404);
     expect(mocks.signed).toHaveBeenCalledOnce();
   });
+  it("streams large private contracts through authorized downloads instead of issuing bearer URLs", async()=>{
+    const bytes=new Uint8Array(6*1024*1024).fill(42);
+    mocks.access.mockResolvedValue({contract:true,key:'private',mime:'application/pdf',name:'agreement.pdf',sizeBytes:bytes.length});
+    mocks.read.mockResolvedValue(bytes);
+    const response=await GET(read(),context);
+    expect(response.status).toBe(200);expect(response.headers.get('location')).toBeNull();
+    expect(response.headers.get('cache-control')).toBe('private, no-store');
+    expect(mocks.signed).not.toHaveBeenCalled();
+    expect(new Uint8Array(await response.arrayBuffer())).toEqual(bytes);
+  });
   it("HEAD also checks access and does not mint URLs or load large bytes", async () => {
     const response = await HEAD(read(), context);
     expect(response.status).toBe(200);

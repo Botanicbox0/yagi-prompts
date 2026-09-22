@@ -1,3 +1,4 @@
+import { ManagedForm } from '@/components/brand-workspace/managed-form';
 import "@/app/(brand)/workspace.css";
 import { randomUUID } from "node:crypto";
 import { notFound } from "next/navigation";
@@ -59,6 +60,14 @@ export default async function StudioBrandProject({
         ok={typeof search.ok === "string" ? search.ok : undefined}
         err={typeof search.err === "string" ? search.err : undefined}
       />
+      <section className="bw-panel bw-sharing" data-managed-sharing>
+        <div><strong>{p.clientVisible?b.managed.visible:b.managed.prepared}</strong><p className="bw-muted">{b.managed.visibilityHint}</p></div>
+        <ManagedForm op="brandWorkspace.visibility" b={b} submit={p.clientVisible?b.managed.hide:b.managed.publish}><input type="hidden" name="projectId" value={p.id}/><input type="hidden" name="expectedRevision" value={p.revision}/><input type="hidden" name="visible" value={String(!p.clientVisible)}/></ManagedForm>
+        <a className="bw-button" href={`/admin/brand-workspace/organizations/${p.organizationId}`}>{b.managed.access}</a><details><summary>{b.managed.invite}</summary><p className="bw-muted">{b.managed.inviteHint}</p><ManagedForm op="brandWorkspace.invite" b={b} submit={b.managed.invite}>
+          <input type="hidden" name="organizationId" value={p.organizationId}/><label>{b.managed.email}<input type="email" name="email" required/></label>
+          <label>{b.managed.scope}<select name="projectId"><option value={p.id}>{b.managed.scopeProject}</option><option value="">{b.managed.scopeBrand}</option></select></label><input type="hidden" name="role" value="viewer"/>
+        </ManagedForm></details>
+      </section>
       <ProjectDetail project={p} b={b} locale={locale} studio />
       <section className="bw-panel">
         <h2>{b.files}</h2>

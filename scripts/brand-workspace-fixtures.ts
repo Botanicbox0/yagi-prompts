@@ -8,7 +8,7 @@ import type { Viewer } from '@/lib/auth/identity';
 import { FIXTURE_USERS } from './fixtures';
 import { createBrandOrganization, createBrandProject, activateBrandProject, reserveBrandAttachment,
   completeBrandAttachment, addBrandContentVersion, approveBrandContent, sendBrandMessage,
-  recordBrandPost, publishBrandReport,
+  recordBrandPost, publishBrandReport, addBrandContract, shareBrandContract, sendBrandSupport,
 } from '@/lib/brands/workspace/service';
 
 /** Local-only fixtures, never run in cloud seeds. No real client identity or claimed production results. */
@@ -62,5 +62,16 @@ export async function seedBrandWorkspaceFixtures(sql: SqlRunner, storage: Storag
     title: '[Local fixture] Winter launch', objective: 'Local layout fixture only. No customer results.', audience: 'Local QA audience',
     budgetKrw: 3000000, budgetTaxBasis: 'unspecified', startsOn: null, endsOn: null, productionMode: 'studio',
     criteria: { platforms: ['instagram'], minFollowers: null, maxFollowers: null, primaryMetric: 'views', targetValue: null }, referenceLinks: [] }));
+
+  // Contract files stay separate from creative attachments, including in the local sample UI.
+  for(const version of [1,2]) {
+    const pdf=Buffer.from('%PDF-1.7\nLocal contract storage fixture only. Version '+version+'\n%%EOF');
+    const file=value(await reserveBrandAttachment(deps,studio,{projectId:project.id,requestId:randomUUID(),name:`local-contract-v${version}.pdf`,mime:'application/pdf',sizeBytes:pdf.length,purpose:'contract'}));
+    await storage.putStaging(file.storageKey,pdf,'application/pdf');
+    value(await completeBrandAttachment(deps,studio,file.id));
+    const contract=value(await addBrandContract(deps,studio,{projectId:project.id,attachmentId:file.id,documentKey:'campaign-agreement',title:'[Local fixture] Campaign agreement',requestId:randomUUID()}));
+    if(version===1)value(await shareBrandContract(deps,studio,{projectId:project.id,contractId:contract.id,shared:true,expectedRevision:0}));
+  }
+  value(await sendBrandSupport(deps,studio,{organizationId:org.id,body:'[Local fixture] Welcome. You can ask the studio about your workspace here.',requestId:randomUUID()}));
 
 }

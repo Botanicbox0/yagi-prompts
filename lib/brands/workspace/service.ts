@@ -5,7 +5,7 @@ import type { Viewer } from '@/lib/auth/identity';
 import type { SqlRunner } from '@/lib/db/sql-runner';
 import { STAGING_BUCKET, type StorageDriver } from '@/lib/storage';
 import {
-  BrandOrganizationSchema, BrandProjectSchema, BrandProjectStatusSchema, BrandContentSchema,
+  BrandHttpsUrlSchema, BrandOrganizationSchema, BrandProjectSchema, BrandProjectStatusSchema, BrandContentSchema,
   BrandDecisionSchema, BrandMessageSchema, BrandPostSchema, BrandReportSchema, BrandAttachmentSchema,
   BRAND_ATTACHMENT_LIMITS, normalizeBrandPostUrl,
   BrandInvitationSchema, BrandInvitationAcceptSchema, BrandMemberRevokeSchema,
@@ -50,7 +50,15 @@ async function project(sql: SqlRunner, userId: string, id: string, options: { st
   const row = (await sql.query(`select p.*,o.name as organization_name from brand_projects p
     join brand_organizations o on o.id=p.organization_id where p.id=$1 ${options.write ? 'for update of p' : 'for share of p'}`, [id])).rows[0];
   if (!row) throw new Denied('not_found');
-  row.member_role = options.studio ? 'studio' : await member(sql, userId, String(row.organization_id), options.write);
+  if (options.studio) row.member_role = 'studio';
+  else {
+    if (!row.client_visible) throw new Denied('not_found');
+    const orgRole = (await sql.query("select role from brand_memberships where organization_id=$1 and user_id=$2 and status='active' for share", [row.organization_id,userId])).rows[0];
+    const grant = orgRole || (await sql.query("select user_id from brand_project_members where project_id=$1 and user_id=$2 and status='active' for share", [id,userId])).rows[0];
+    if (!grant) throw new Denied('not_found');
+    row.member_role = orgRole?.role ?? 'viewer';
+    if(options.write && row.member_role==='viewer') throw new Denied('forbidden');
+  }
   return row;
 }
 async function mutation<S extends z.ZodType, T>(deps: BrandWorkspaceDeps, viewer: Viewer, schema: S, input: unknown,
@@ -78,7 +86,7 @@ async function retry(sql: SqlRunner, table: string, projectId: string, userId: s
 }
 function summary(row: Row): BrandProjectSummary {
   return {
-    id: String(row.id), organizationId: String(row.organization_id), organizationName: String(row.organization_name),
+    clientVisible: Boolean(row.client_visible), id: String(row.id), organizationId: String(row.organization_id), organizationName: String(row.organization_name),
     title: String(row.title), objective: String(row.objective), audience: String(row.audience), budgetKrw: nullableNumber(row.budget_krw),
     criteria: BrandCriteriaSchema.parse(row.criteria),
     budgetTaxBasis: row.budget_tax_basis as BrandProjectSummary['budgetTaxBasis'], startsOn: day(row.starts_on), endsOn: day(row.ends_on),
@@ -106,7 +114,7 @@ async function detail(sql: SqlRunner, row: Row): Promise<BrandProjectDetail> {
   }));
   for (const decision of decisions) { const content = contents.find(c => c.id === decision.contentVersionId); if (content) content.decision = decision.decision; }
   const messages: BrandMessage[] = (await scoped('brand_messages', 'order by created_at,id')).map(r => ({ id: String(r.id), body: String(r.body), authorRole: r.author_role as BrandMessage['authorRole'], createdAt: stamp(r.created_at) }));
-  const attachments: BrandAttachment[] = (await scoped('brand_attachments', "and status='ready' order by created_at")).map(r => ({ id: String(r.id), name: String(r.name), mime: String(r.mime), sizeBytes: Number(r.size_bytes), createdAt: stamp(r.created_at) }));
+  const attachments: BrandAttachment[] = (await scoped('brand_attachments', "and status='ready' and access_scope='workspace' order by created_at")).map(r => ({ id: String(r.id), name: String(r.name), mime: String(r.mime), sizeBytes: Number(r.size_bytes), createdAt: stamp(r.created_at) }));
   const posts = (await scoped('brand_posts', 'order by created_at')).map(postDto);
   const reports: BrandReport[] = (await scoped('brand_reports', 'order by version desc')).map(r => {
     const source = r.snapshot as BrandReportSnapshot;
@@ -116,18 +124,22 @@ async function detail(sql: SqlRunner, row: Row): Promise<BrandProjectDetail> {
         publishedAt: p.publishedAt, metricRevision: p.metricRevision, verification: p.verification, metricsSource: p.metricsSource, measuredAt: p.measuredAt, views: p.views, likes: p.likes, comments: p.comments, shares: p.shares, saves: p.saves, createdAt: p.createdAt })) };
     return { id: String(r.id), version: Number(r.version), summary: String(r.summary), periodStart: day(r.period_start)!, periodEnd: day(r.period_end)!, snapshot, createdAt: stamp(r.created_at) };
   });
+  const contracts = (await scoped('brand_contract_documents', row.member_role === 'studio' ? 'order by created_at desc,version desc' : 'and shared=true order by created_at desc,version desc')).map(r=>({
+    id:String(r.id),documentKey:String(r.document_key),title:String(r.title),version:Number(r.version),attachmentId:String(r.attachment_id),shared:Boolean(r.shared),revision:Number(r.revision),createdAt:stamp(r.created_at)
+  }));
+  const contractUploads = row.member_role === 'studio' ? (await scoped('brand_attachments', "and status='ready' and access_scope='contract' and id not in (select attachment_id from brand_contract_documents) order by created_at desc")).map(r=>({id:String(r.id),name:String(r.name),mime:String(r.mime),sizeBytes:Number(r.size_bytes),createdAt:stamp(r.created_at)})) : [];
   const references = z.array(z.object({ url: z.string(), note: z.string() })).parse(row.reference_links);
-  return { ...summary(row), role: row.member_role as BrandProjectDetail['role'], referenceLinks: references, contents, decisions, messages, attachments, posts, reports };
+  return { ...summary(row), role: row.member_role as BrandProjectDetail['role'], referenceLinks: references, contracts, contractUploads, contents, decisions, messages, attachments, posts, reports };
 }
 
-export async function loadBrandWorkspace(deps: BrandWorkspaceDeps, viewer: Viewer): Promise<BrandWorkspace> {
+export async function loadBrandWorkspace(deps: BrandWorkspaceDeps, viewer: Viewer, options: { includeAllContent?: boolean } = {}): Promise<BrandWorkspace> {
   if (!uuid(viewer.userId)) return { organizations: [], projects: [] };
   return deps.sql.transaction(async sql => {
     const memberships = (await sql.query(`select o.id,o.name,m.role from brand_organizations o join brand_memberships m on m.organization_id=o.id
       where m.user_id=$1 and m.status='active' order by o.created_at for share of m`, [viewer.userId])).rows;
     const projects = (await sql.query(`select p.*,o.name as organization_name from brand_projects p join brand_organizations o on o.id=p.organization_id
-      join brand_memberships m on m.organization_id=p.organization_id where m.user_id=$1 and m.status='active' order by p.updated_at desc`, [viewer.userId])).rows;
-    return { organizations: memberships.map(r => ({ id: String(r.id), name: String(r.name), role: r.role as BrandRole })), projects: await withHomeOverview(sql, projects.map(summary)) };
+      where p.client_visible and (exists(select 1 from brand_memberships m where m.organization_id=p.organization_id and m.user_id=$1 and m.status='active') or exists(select 1 from brand_project_members m where m.project_id=p.id and m.user_id=$1 and m.status='active')) order by p.updated_at desc`, [viewer.userId])).rows;
+    return { organizations: memberships.map(r => ({ id: String(r.id), name: String(r.name), role: r.role as BrandRole })), projects: await withHomeOverview(sql, projects.map(summary), options.includeAllContent ? Infinity : 4) };
   });
 }
 export async function loadStudioWorkspace(deps: BrandWorkspaceDeps, viewer: Viewer): Promise<BrandWorkspace> {
@@ -135,7 +147,8 @@ export async function loadStudioWorkspace(deps: BrandWorkspaceDeps, viewer: View
   try { return await deps.sql.transaction(async sql => {
     await studio(sql, viewer.userId!);
     const rows = (await sql.query('select p.*,o.name as organization_name from brand_projects p join brand_organizations o on o.id=p.organization_id order by p.updated_at desc')).rows;
-    return { organizations: [], projects: await withHomeOverview(sql, rows.map(summary)) };
+    const orgs=(await sql.query('select id,name from brand_organizations order by created_at desc')).rows;
+    return { organizations: orgs.map(r=>({id:String(r.id),name:String(r.name),role:'owner' as const})), projects: await withHomeOverview(sql, rows.map(summary)) };
   }); } catch (error) { if (error instanceof Denied) return { organizations: [], projects: [] }; throw error; }
 }
 async function loadProject(deps: BrandWorkspaceDeps, viewer: Viewer, id: string, isStudio: boolean): Promise<BrandProjectDetail | null> {
@@ -159,10 +172,10 @@ export async function createBrandOrganization(deps: BrandWorkspaceDeps, viewer: 
     return { id };
   });
 }
-export async function createBrandProject(deps: BrandWorkspaceDeps, viewer: Viewer, input: unknown): Promise<BrandOutcome> {
+async function createProject(deps: BrandWorkspaceDeps, viewer: Viewer, input: unknown, managed: boolean): Promise<BrandOutcome> {
   return mutation(deps, viewer, BrandProjectSchema, input, async (sql, userId, v) => {
     await sql.query('select id from brand_organizations where id=$1 for update', [v.organizationId]);
-    await member(sql, userId, v.organizationId, true);
+    if(managed) await studio(sql,userId); else await member(sql, userId, v.organizationId, true);
     const existing = (await sql.query<{ id: string }>('select id from brand_projects where organization_id=$1 and created_by=$2 and request_id=$3', [v.organizationId, userId, v.requestId])).rows[0];
     if (existing) return { id: existing.id };
     const count = (await sql.query<{ n: number }>("select count(*)::int as n from brand_projects where organization_id=$1 and created_at>now()-interval '1 day'", [v.organizationId])).rows[0]!.n;
@@ -170,10 +183,13 @@ export async function createBrandProject(deps: BrandWorkspaceDeps, viewer: Viewe
     const id = randomUUID();
     await sql.query(`insert into brand_projects(id,organization_id,title,objective,audience,budget_krw,budget_tax_basis,starts_on,ends_on,production_mode,reference_links,created_by,request_id,criteria)
       values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,$12,$13,$14::jsonb)`, [id, v.organizationId, v.title, v.objective, v.audience, v.budgetKrw, v.budgetTaxBasis, v.startsOn, v.endsOn, v.productionMode, JSON.stringify(v.referenceLinks), userId, v.requestId, JSON.stringify(v.criteria)]);
-    await event(sql, { id, organization_id: v.organizationId }, 'project_requested', id);
+    if(managed) await sql.query('update brand_projects set client_visible=false where id=$1',[id]);
+    else await event(sql, { id, organization_id: v.organizationId }, 'project_requested', id);
     return { id };
   });
 }
+export const createBrandProject=(deps:BrandWorkspaceDeps,viewer:Viewer,input:unknown)=>createProject(deps,viewer,input,false);
+export const createStudioProject=(deps:BrandWorkspaceDeps,viewer:Viewer,input:unknown)=>createProject(deps,viewer,input,true);
 export async function activateBrandProject(deps: BrandWorkspaceDeps, viewer: Viewer, input: unknown): Promise<BrandOutcome> {
   return mutation(deps, viewer, BrandProjectStatusSchema, input, async (sql, userId, v) => {
     const p = await project(sql, userId, v.projectId, { studio: true, write: true });
@@ -190,7 +206,7 @@ export async function addBrandContentVersion(deps: BrandWorkspaceDeps, viewer: V
     const old = await retry(sql, 'brand_content_versions', v.projectId, userId, v.requestId); if (old) return { id: old };
     if (p.status !== 'active') throw new Denied('not_active');
     if (p.production_mode === 'studio' && !v.creatorConsentConfirmed) throw new Denied('consent_required');
-    const attachment = (await sql.query("select id,sha256 from brand_attachments where project_id=$1 and id=$2 and status='ready'", [p.id, v.attachmentId])).rows[0];
+    const attachment = (await sql.query("select id,sha256 from brand_attachments where project_id=$1 and id=$2 and status='ready' and access_scope='workspace'", [p.id, v.attachmentId])).rows[0];
     if (!attachment) throw new Denied('invalid');
     const version = Number((await sql.query<{ n: number }>('select coalesce(max(version),0)+1 as n from brand_content_versions where project_id=$1 and slot_key=$2', [p.id, v.slotKey])).rows[0]!.n);
     const id = randomUUID();
@@ -285,30 +301,32 @@ export async function reserveBrandAttachment(deps: BrandWorkspaceDeps, viewer: V
   return mutation(deps, viewer, BrandAttachmentSchema, input, async (sql, userId, v) => {
     const isStudio = (await profile(sql, userId)).is_admin === true;
     const p = await project(sql, userId, v.projectId, { studio: isStudio, write: true });
-    const old = (await sql.query<{ id: string; storage_key: string; status: string; name: string; mime: string; size_bytes: number }>('select id,storage_key,status,name,mime,size_bytes from brand_attachments where project_id=$1 and created_by=$2 and request_id=$3', [p.id, userId, v.requestId])).rows[0];
+    if(v.purpose === 'contract' && !isStudio) throw new Denied('forbidden');
+    const old = (await sql.query<{ id: string; access_scope: string; storage_key: string; status: string; name: string; mime: string; size_bytes: number }>('select id,access_scope,storage_key,status,name,mime,size_bytes from brand_attachments where project_id=$1 and created_by=$2 and request_id=$3', [p.id, userId, v.requestId])).rows[0];
     if (old) {
-      if (old.status !== 'pending' || old.name !== v.name || old.mime !== v.mime || Number(old.size_bytes) !== v.sizeBytes) throw new Denied('conflict');
+      if (old.access_scope !== v.purpose || old.status !== 'pending' || old.name !== v.name || old.mime !== v.mime || Number(old.size_bytes) !== v.sizeBytes) throw new Denied('conflict');
       return { id: old.id, storageKey: old.storage_key };
     }
     const count = (await sql.query<{ n: number }>('select count(*)::int as n from brand_attachments where project_id=$1', [p.id])).rows[0]!.n;
     if (count >= 100) throw new Denied('rate_limited');
     const id = randomUUID(), storageKey = `brands/${p.organization_id}/${p.id}/${id}`;
-    await sql.query('insert into brand_attachments(id,organization_id,project_id,name,mime,size_bytes,storage_key,created_by,request_id) values($1,$2,$3,$4,$5,$6,$7,$8,$9)', [id, p.organization_id, p.id, v.name, v.mime, v.sizeBytes, storageKey, userId, v.requestId]);
+    await sql.query('insert into brand_attachments(id,organization_id,project_id,name,mime,size_bytes,storage_key,created_by,request_id,access_scope) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)', [id, p.organization_id, p.id, v.name, v.mime, v.sizeBytes, storageKey, userId, v.requestId,v.purpose]);
     return { id, storageKey };
   });
 }
-export interface BrandAttachmentAccess { key: string; name: string; mime: string; sizeBytes: number }
+export interface BrandAttachmentAccess { contract?:boolean; key: string; name: string; mime: string; sizeBytes: number }
 async function attachmentRow(sql: SqlRunner, userId: string, id: string, upload = false): Promise<Row> {
   const row = (await sql.query('select * from brand_attachments where id=$1', [id])).rows[0];
   if (!row) throw new Denied('not_found');
   const isStudio = (await profile(sql, userId)).is_admin === true;
   await project(sql, userId, String(row.project_id), { studio: isStudio, write: upload });
+  if(!isStudio && row.access_scope==='contract' && !(await sql.query('select id from brand_contract_documents where attachment_id=$1 and project_id=$2 and shared=true',[id,row.project_id])).rows[0]) throw new Denied('not_found');
   if (upload ? row.created_by !== userId || row.status !== 'pending' : row.status !== 'ready') throw new Denied('not_found');
   return row;
 }
 async function attachmentAccess(deps: BrandWorkspaceDeps, viewer: Viewer, id: string, upload: boolean): Promise<BrandAttachmentAccess | null> {
   if (!uuid(viewer.userId) || !uuid(id)) return null;
-  try { return await deps.sql.transaction(async sql => { const r = await attachmentRow(sql, viewer.userId!, id, upload); return { key: String(r.storage_key), name: String(r.name), mime: String(r.mime), sizeBytes: Number(r.size_bytes) }; }); }
+  try { return await deps.sql.transaction(async sql => { const r = await attachmentRow(sql, viewer.userId!, id, upload); return { contract:r.access_scope==='contract', key: String(r.storage_key), name: String(r.name), mime: String(r.mime), sizeBytes: Number(r.size_bytes) }; }); }
   catch (error) { if (error instanceof Denied) return null; throw error; }
 }
 export const loadBrandAttachmentAccess = (deps: BrandWorkspaceDeps, viewer: Viewer, id: string) => attachmentAccess(deps, viewer, id, false);
@@ -374,7 +392,7 @@ export async function createBrandInvitation(deps: BrandWorkspaceDeps, viewer: Vi
     return { id, token };
   });
 }
-export async function acceptBrandInvitation(deps: BrandWorkspaceDeps, viewer: Viewer, input: unknown): Promise<BrandOutcome<{ organizationId: string }>> {
+export async function acceptBrandInvitation(deps: BrandWorkspaceDeps, viewer: Viewer, input: unknown): Promise<BrandOutcome<{ organizationId: string; projectId?: string }>> {
   return mutation(deps, viewer, BrandInvitationAcceptSchema, input, async (sql, userId, v) => {
     const row = (await sql.query(`select * from brand_invites where token_hash=$1`, [createHash('sha256').update(v.token).digest('hex')])).rows[0];
     if (!row) throw new Denied('not_found');
@@ -388,11 +406,18 @@ export async function acceptBrandInvitation(deps: BrandWorkspaceDeps, viewer: Vi
     if (invite.accepted_at) {
       if (invite.accepted_by !== userId) throw new Denied('not_found');
       // A response-lost retry confirms existing access; it never reactivates a revoked member.
-      await member(sql, userId, String(invite.organization_id));
-      return { organizationId: String(invite.organization_id) };
+      if(invite.project_id) { if(!(await sql.query("select user_id from brand_project_members where project_id=$1 and user_id=$2 and status='active'",[invite.project_id,userId])).rows[0]) throw new Denied('not_found'); }
+      else await member(sql, userId, String(invite.organization_id));
+      return { organizationId: String(invite.organization_id), ...(invite.project_id?{projectId:String(invite.project_id)}:{}) };
     }
     // Revoking the inviting owner's role also invalidates their still-outstanding invitations.
-    if (await member(sql, String(invite.created_by), String(invite.organization_id)) !== 'owner') throw new Denied('not_found');
+    if(invite.issued_by_studio) await studio(sql,String(invite.created_by));
+    else if (await member(sql, String(invite.created_by), String(invite.organization_id)) !== 'owner') throw new Denied('not_found');
+    if(invite.project_id) {
+      await sql.query("insert into brand_project_members(organization_id,project_id,user_id) values($1,$2,$3) on conflict(project_id,user_id) do update set status='active'",[invite.organization_id,invite.project_id,userId]);
+      await sql.query('update brand_invites set accepted_at=now(),accepted_by=$1 where id=$2',[userId,invite.id]);
+      return {organizationId:String(invite.organization_id),projectId:String(invite.project_id)};
+    }
     const current = (await sql.query('select role,status from brand_memberships where organization_id=$1 and user_id=$2 for update', [invite.organization_id, userId])).rows[0];
     if (current?.status === 'active') throw new Denied('conflict');
     await sql.query(`insert into brand_memberships(organization_id,user_id,role) values($1,$2,$3)
@@ -417,3 +442,135 @@ export async function revokeBrandMember(deps: BrandWorkspaceDeps, viewer: Viewer
 }
 export const createBrandInvite = createBrandInvitation;
 export const acceptBrandInvite = acceptBrandInvitation;
+
+/** Studio creates the organization, never a fabricated client profile or membership. */
+export async function createStudioOrganization(deps:BrandWorkspaceDeps,viewer:Viewer,input:unknown):Promise<BrandOutcome> {
+ return mutation(deps,viewer,BrandOrganizationSchema,input,async(sql,userId,v)=>{
+  await studio(sql,userId);
+  const old=(await sql.query('select id from brand_organizations where created_by=$1 and request_id=$2',[userId,v.requestId])).rows[0];
+  if(old)return {id:String(old.id)};
+  const id=randomUUID();
+  await sql.query('insert into brand_organizations(id,name,created_by,request_id,studio_managed) values($1,$2,$3,$4,true)',[id,v.name,userId,v.requestId]);
+  return {id};
+ });
+}
+export async function setBrandProjectVisibility(deps:BrandWorkspaceDeps,viewer:Viewer,input:unknown):Promise<BrandOutcome> {
+ return mutation(deps,viewer,z.object({projectId:z.uuid(),visible:z.boolean(),expectedRevision:z.number().int().nonnegative()}),input,async(sql,userId,v)=>{
+  const p=await project(sql,userId,v.projectId,{studio:true,write:true});
+  if(Number(p.revision)!==v.expectedRevision)throw new Denied('conflict');
+  await sql.query('update brand_projects set client_visible=$1,revision=revision+1,updated_at=now() where id=$2',[v.visible,p.id]);
+  return {id:String(p.id)};
+ });
+}
+const StudioInvitationSchema=z.object({organizationId:z.uuid(),projectId:z.uuid().nullable().default(null),email:z.email().trim().toLowerCase().max(254),role:z.enum(['owner','editor','viewer']),requestId:z.uuid()}).refine(v=>!v.projectId||v.role==='viewer');
+export async function createStudioInvitation(deps:BrandWorkspaceDeps,viewer:Viewer,input:unknown):Promise<BrandOutcome<{id:string;token:string}>> {
+ return mutation(deps,viewer,StudioInvitationSchema,input,async(sql,userId,v)=>{
+  await studio(sql,userId);
+  const org=(await sql.query('select id from brand_organizations where id=$1 for update',[v.organizationId])).rows[0];
+  if(!org)throw new Denied('not_found');
+  if(v.projectId && (await project(sql,userId,v.projectId,{studio:true})).organization_id!==v.organizationId)throw new Denied('not_found');
+  if((await sql.query('select id from brand_invites where organization_id=$1 and created_by=$2 and request_id=$3',[v.organizationId,userId,v.requestId])).rows[0])throw new Denied('conflict');
+  const count=(await sql.query("select count(*)::int as n from brand_invites where organization_id=$1 and created_at>now()-interval '1 day'",[v.organizationId])).rows[0];
+  if(Number(count?.n)>=20)throw new Denied('rate_limited');
+  await sql.query('update brand_invites set revoked_at=now() where organization_id=$1 and email=$2 and project_id is not distinct from $3::uuid and accepted_at is null and revoked_at is null',[v.organizationId,v.email,v.projectId]);
+  const id=randomUUID(),token=randomBytes(32).toString('base64url');
+  await sql.query("insert into brand_invites(id,organization_id,project_id,email,role,issued_by_studio,token_hash,expires_at,created_by,request_id) values($1,$2,$3,$4,$5,true,$6,now()+interval '7 days',$7,$8)",[id,v.organizationId,v.projectId,v.email,v.role,createHash('sha256').update(token).digest('hex'),userId,v.requestId]);
+  return {id,token};
+ });
+}
+export async function revokeStudioAccess(deps:BrandWorkspaceDeps,viewer:Viewer,input:unknown):Promise<BrandOutcome> {
+ return mutation(deps,viewer,z.object({organizationId:z.uuid(),userId:z.uuid(),projectId:z.uuid().nullable().default(null)}),input,async(sql,userId,v)=>{
+  await studio(sql,userId);
+  await sql.query('select id from brand_organizations where id=$1 for update',[v.organizationId]);
+  if(v.projectId)await sql.query("update brand_project_members set status='revoked' where organization_id=$1 and project_id=$2 and user_id=$3",[v.organizationId,v.projectId,v.userId]);
+  else {
+   await sql.query("update brand_memberships set status='revoked' where organization_id=$1 and user_id=$2",[v.organizationId,v.userId]);
+   await sql.query("update brand_project_members set status='revoked' where organization_id=$1 and user_id=$2",[v.organizationId,v.userId]);
+  }
+  await sql.query('update brand_invites set revoked_at=now() where organization_id=$1 and (accepted_by=$2 or email=(select lower(email) from profiles where id=$2)) and ($3::uuid is null or project_id=$3)',[v.organizationId,v.userId,v.projectId]);
+  return {id:v.userId};
+ });
+}
+export async function addBrandContract(deps:BrandWorkspaceDeps,viewer:Viewer,input:unknown):Promise<BrandOutcome> {
+ return mutation(deps,viewer,z.object({projectId:z.uuid(),attachmentId:z.uuid(),documentKey:z.string().regex(/^[a-zA-Z0-9_-]{1,60}$/),title:z.string().trim().min(1).max(160),requestId:z.uuid()}),input,async(sql,userId,v)=>{
+  const p=await project(sql,userId,v.projectId,{studio:true,write:true});
+  const old=await retry(sql,'brand_contract_documents',v.projectId,userId,v.requestId);if(old)return {id:old};
+  const file=(await sql.query("select id from brand_attachments where project_id=$1 and id=$2 and status='ready' and access_scope='contract' and mime='application/pdf'",[p.id,v.attachmentId])).rows[0];
+  if(!file)throw new Denied('invalid');
+  const version=Number((await sql.query('select coalesce(max(version),0)+1 as n from brand_contract_documents where project_id=$1 and document_key=$2',[p.id,v.documentKey])).rows[0]?.n);
+  const id=randomUUID();
+  await sql.query('insert into brand_contract_documents(id,organization_id,project_id,document_key,title,version,attachment_id,created_by,request_id) values($1,$2,$3,$4,$5,$6,$7,$8,$9)',[id,p.organization_id,p.id,v.documentKey,v.title,version,file.id,userId,v.requestId]);
+  return {id};
+ });
+}
+export async function shareBrandContract(deps:BrandWorkspaceDeps,viewer:Viewer,input:unknown):Promise<BrandOutcome> {
+ return mutation(deps,viewer,z.object({projectId:z.uuid(),contractId:z.uuid(),shared:z.boolean(),expectedRevision:z.number().int().nonnegative()}),input,async(sql,userId,v)=>{
+  await project(sql,userId,v.projectId,{studio:true,write:true});
+  const doc=(await sql.query('select * from brand_contract_documents where project_id=$1 and id=$2 for update',[v.projectId,v.contractId])).rows[0];
+  if(!doc)throw new Denied('not_found');
+  if(Number(doc.revision)!==v.expectedRevision)throw new Denied('conflict');
+  await sql.query('update brand_contract_documents set shared=$1,revision=revision+1 where id=$2',[v.shared,doc.id]);
+  await sql.query('insert into brand_contract_sharing_events(contract_id,shared,revision,created_by) values($1,$2,$3,$4)',[doc.id,v.shared,v.expectedRevision+1,userId]);
+  return {id:String(doc.id)};
+ });
+}
+
+export interface StudioBrandAccess {
+ id:string;name:string;
+ members:Array<{userId:string;email:string;role:string;projectId:string|null;projectTitle:string|null;status:string}>;
+ invitations:Array<{id:string;email:string;role:string;projectId:string|null;projectTitle:string|null;state:'pending'|'accepted'|'revoked'|'expired';expiresAt:string}>;
+}
+export async function loadStudioBrandAccess(deps:BrandWorkspaceDeps,viewer:Viewer,organizationId:string):Promise<StudioBrandAccess|null> {
+ if(!uuid(viewer.userId)||!uuid(organizationId))return null;
+ try{return await deps.sql.transaction(async sql=>{
+  await studio(sql,viewer.userId!);
+  const org=(await sql.query('select id,name from brand_organizations where id=$1',[organizationId])).rows[0];if(!org)return null;
+  const members=(await sql.query(`select m.user_id,p.email,m.role,m.status,null::uuid as project_id,null::text as project_title from brand_memberships m join profiles p on p.id=m.user_id where m.organization_id=$1
+    union all select m.user_id,p.email,'viewer',m.status,m.project_id,c.title from brand_project_members m join profiles p on p.id=m.user_id join brand_projects c on c.id=m.project_id where m.organization_id=$1`,[organizationId])).rows;
+  const invitations=(await sql.query('select i.id,i.email,i.role,i.project_id,c.title as project_title,i.accepted_at,i.revoked_at,i.expires_at from brand_invites i left join brand_projects c on c.id=i.project_id where i.organization_id=$1 order by i.created_at desc',[organizationId])).rows;
+  return {id:String(org.id),name:String(org.name),members:members.map(m=>({userId:String(m.user_id),email:String(m.email),role:String(m.role),status:String(m.status),projectId:m.project_id?String(m.project_id):null,projectTitle:m.project_title?String(m.project_title):null})),
+   invitations:invitations.map(i=>({id:String(i.id),email:String(i.email),role:String(i.role),projectId:i.project_id?String(i.project_id):null,projectTitle:i.project_title?String(i.project_title):null,expiresAt:stamp(i.expires_at),state:i.revoked_at?'revoked':i.accepted_at?'accepted':+new Date(stamp(i.expires_at))<=Date.now()?'expired':'pending'}))};
+ });}catch(e){if(e instanceof Denied)return null;throw e}
+}
+export async function revokeStudioInvitation(deps:BrandWorkspaceDeps,viewer:Viewer,input:unknown):Promise<BrandOutcome> {
+ return mutation(deps,viewer,z.object({organizationId:z.uuid(),invitationId:z.uuid()}),input,async(sql,userId,v)=>{
+  await studio(sql,userId);await sql.query('select id from brand_organizations where id=$1 for update',[v.organizationId]);
+  const r=(await sql.query('update brand_invites set revoked_at=now() where organization_id=$1 and id=$2 and accepted_at is null returning id',[v.organizationId,v.invitationId])).rows[0];
+  if(!r)throw new Denied('not_found');return {id:String(r.id)};
+ });
+}
+
+export interface BrandOrganizationSettings {id:string;name:string;website:string;description:string;contactEmail:string;revision:number;role:BrandRole|'studio'}
+export async function loadBrandSettings(deps:BrandWorkspaceDeps,viewer:Viewer,id:string,isStudio=false):Promise<BrandOrganizationSettings|null> {
+ if(!uuid(viewer.userId)||!uuid(id))return null;
+ try{return await deps.sql.transaction(async sql=>{
+  const role=isStudio?(await studio(sql,viewer.userId!),'studio' as const):await member(sql,viewer.userId!,id);
+  const r=(await sql.query('select id,name,website,description,contact_email,profile_revision from brand_organizations where id=$1',[id])).rows[0];
+  if(!r)return null;return {id:String(r.id),name:String(r.name),website:String(r.website),description:String(r.description),contactEmail:String(r.contact_email),revision:Number(r.profile_revision),role};
+ });}catch(e){if(e instanceof Denied)return null;throw e}
+}
+export async function updateBrandSettings(deps:BrandWorkspaceDeps,viewer:Viewer,input:unknown):Promise<BrandOutcome> {
+ return mutation(deps,viewer,z.object({organizationId:z.uuid(),name:z.string().trim().min(2).max(100),website:z.union([z.literal(''),BrandHttpsUrlSchema]),description:z.string().trim().max(2000),contactEmail:z.union([z.literal(''),z.email().max(254)]),expectedRevision:z.number().int().nonnegative()}),input,async(sql,userId,v)=>{
+  const isStudio=(await profile(sql,userId)).is_admin===true;
+  if(!isStudio && await member(sql,userId,v.organizationId)!=='owner')throw new Denied('forbidden');
+  const r=(await sql.query('update brand_organizations set name=$1,website=$2,description=$3,contact_email=$4,profile_revision=profile_revision+1 where id=$5 and profile_revision=$6 returning id',[v.name,v.website,v.description,v.contactEmail,v.organizationId,v.expectedRevision])).rows[0];
+  if(!r)throw new Denied('conflict');return {id:String(r.id)};
+ });
+}
+export async function loadBrandSupport(deps:BrandWorkspaceDeps,viewer:Viewer,id:string,isStudio=false):Promise<BrandMessage[]|null> {
+ if(!uuid(viewer.userId)||!uuid(id))return null;
+ try{return await deps.sql.transaction(async sql=>{
+  if(isStudio)await studio(sql,viewer.userId!);else await member(sql,viewer.userId!,id);
+  return (await sql.query('select id,body,author_role,created_at from brand_support_messages where organization_id=$1 order by created_at,id',[id])).rows.map(r=>({id:String(r.id),body:String(r.body),authorRole:r.author_role as BrandMessage['authorRole'],createdAt:stamp(r.created_at)}));
+ });}catch(e){if(e instanceof Denied)return null;throw e}
+}
+export async function sendBrandSupport(deps:BrandWorkspaceDeps,viewer:Viewer,input:unknown):Promise<BrandOutcome> {
+ return mutation(deps,viewer,z.object({organizationId:z.uuid(),body:z.string().trim().min(1).max(4000),requestId:z.uuid()}),input,async(sql,userId,v)=>{
+  const isStudio=(await profile(sql,userId)).is_admin===true;
+  if(!isStudio)await member(sql,userId,v.organizationId,true);
+  const org=(await sql.query('select id from brand_organizations where id=$1 for update',[v.organizationId])).rows[0];if(!org)throw new Denied('not_found');
+  const old=(await sql.query('select id from brand_support_messages where organization_id=$1 and created_by=$2 and request_id=$3',[v.organizationId,userId,v.requestId])).rows[0];if(old)return{id:String(old.id)};
+  const count=(await sql.query("select count(*)::int as n from brand_support_messages where created_by=$1 and created_at>now()-interval '1 hour'",[userId])).rows[0];if(Number(count?.n)>=30)throw new Denied('rate_limited');
+  const id=randomUUID();await sql.query('insert into brand_support_messages(id,organization_id,body,author_role,created_by,request_id) values($1,$2,$3,$4,$5,$6)',[id,v.organizationId,v.body,isStudio?'studio':'brand',userId,v.requestId]);return{id};
+ });
+}

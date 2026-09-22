@@ -2,7 +2,7 @@ import type { SqlRunner } from '@/lib/db/sql-runner';
 import type { BrandProjectSummary, BrandHomeContent } from './types';
 
 /** Only call with the membership/studio-authorized project list; never submitted ids. */
-export async function withHomeOverview(sql: SqlRunner, projects: BrandProjectSummary[]): Promise<BrandProjectSummary[]> {
+export async function withHomeOverview(sql: SqlRunner, projects: BrandProjectSummary[], contentLimit = 4): Promise<BrandProjectSummary[]> {
   if (!projects.length) return projects;
   const ids = projects.map(p => p.id);
   const contents = (await sql.query<{
@@ -18,7 +18,7 @@ export async function withHomeOverview(sql: SqlRunner, projects: BrandProjectSum
     left join lateral (select decision from brand_content_decisions where content_version_id=c.id
       and project_id=c.project_id and organization_id=c.organization_id order by revision desc limit 1) d on true
     left join brand_attachments a on a.id=c.attachment_id and a.project_id=c.project_id
-      and a.organization_id=c.organization_id and a.status='ready'
+      and a.organization_id=c.organization_id and a.status='ready' and a.access_scope='workspace'
     order by c.created_at desc,c.id`, [ids])).rows;
   const posts = (await sql.query<{ project_id: string; count: number }>(
     'select project_id,count(*)::int as count from brand_posts where project_id=any($1::uuid[]) group by project_id', [ids])).rows;
@@ -28,7 +28,7 @@ export async function withHomeOverview(sql: SqlRunner, projects: BrandProjectSum
       pending: own.filter(c => c.decision === 'pending').length,
       changes: own.filter(c => c.decision === 'changes_requested').length,
       published: posts.find(row => row.project_id === p.id)?.count ?? 0,
-      contents: own.slice(0, 4).map(c => ({ id: c.id, title: c.title, version: Number(c.version), decision: c.decision,
+      contents: own.slice(0, contentLimit).map(c => ({ id: c.id, title: c.title, version: Number(c.version), decision: c.decision,
         mediaUrl: c.attachment_id ? `/api/brand-workspace/attachments/${c.attachment_id}` : null, mime: c.mime,
         createdAt: c.created_at instanceof Date ? c.created_at.toISOString() : String(c.created_at) })),
     } };

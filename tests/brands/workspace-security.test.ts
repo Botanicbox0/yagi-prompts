@@ -77,8 +77,11 @@ describe('brand invitations, attachment bytes and database boundary', () => {
   it('forces RLS and denies all direct browser table access while granting minimal server writes', async () => {
     await db.exec('create role anon; create role authenticated; create role service_role bypassrls; grant usage on schema public to anon,authenticated,service_role;');
     await db.exec(readMigration('0113_glue_brand_workspace.sql'));
+    await db.exec(readMigration('0117_glue_brand_managed_workspace.sql'));
+    await db.exec(readMigration('0118_glue_brand_profile_support.sql'));
     const tables = (await sql.query<{ relname: string; relrowsecurity: boolean; relforcerowsecurity: boolean }>("select relname,relrowsecurity,relforcerowsecurity from pg_class where relkind='r' and relname like 'brand_%' and relname<>'brand_inquiries'")).rows;
-    expect(tables.length).toBe(12);
+    expect(tables.map(t=>t.relname)).toEqual(expect.arrayContaining(['brand_project_members','brand_contract_documents','brand_contract_sharing_events','brand_support_messages']));
+    expect(tables.length).toBe(16);
     for (const table of tables) {
       expect(table.relrowsecurity && table.relforcerowsecurity).toBe(true);
       for (const role of ['anon', 'authenticated']) {

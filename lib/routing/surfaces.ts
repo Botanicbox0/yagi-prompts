@@ -56,7 +56,7 @@ export function isAdminPath(pathname: string): boolean {
 
 /** Public logo files share /brand, but are not authenticated workspace routes. */
 export function isBrandPath(pathname: string): boolean {
-  return pathname === '/brand' || /^\/brand\/(?:projects|members|invite)(?:\/|$)/.test(pathname);
+  return pathname === '/brand' || /^\/brand\/(?:projects|members|invite|settings|library)(?:\/|$)/.test(pathname);
 }
 
 const AUTH_METHODS: Record<string, readonly string[]> = {
@@ -88,7 +88,7 @@ export function brandRouteAllowed(pathname: string, method: string): boolean {
   const read = method === 'GET' || method === 'HEAD';
   if (AUTH_METHODS[pathname]?.includes(method)) return true;
   if (isBrandPath(pathname)) return read;
-  if (pathname === '/api/brand-workspace') return method === 'POST';
+  if (pathname === '/api/brand-workspace') return read || method === 'POST';
   if (/^\/api\/brand-workspace\/attachments\/[^/]+$/.test(pathname)) return read || method === 'POST';
   return read && !pathname.startsWith('/api/') && !isAdminPath(pathname) && adminRouteAllowed(pathname, method);
 }

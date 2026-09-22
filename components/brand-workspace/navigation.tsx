@@ -1,6 +1,8 @@
+
 'use client';
 import { usePathname } from 'next/navigation';
-export function WorkspaceNavigation({ home, members }: { home: string; members: string }) {
-  const path = usePathname();
-  return <nav><a href="/brand" aria-current={!path.startsWith('/brand/members') ? 'page' : undefined}><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="3" width="14" height="14" rx="2"/><path d="M3 8h14M8 8v9"/></svg>{home}</a><a href="/brand/members" aria-current={path.startsWith('/brand/members') ? 'page' : undefined}><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="8" cy="6" r="3"/><path d="M2 17v-2a6 6 0 0 1 12 0v2M14 3a3 3 0 0 1 0 6m2 3a5 5 0 0 1 2 4v1"/></svg>{members}</a></nav>;
+export function WorkspaceNavigation({home,members,settings,library}:{home:string;members:string;settings:string;library:string}) {
+ const path=usePathname();
+ const entries=[['/brand',home,'M3 3h14v14H3z M3 8h14M8 8v9'],['/brand/library',library,'M3 5h14v12H3z M6 2h8M6 13l3-4 3 3 2-2 3 4'],['/brand/settings',settings,'M4 5h12M4 10h12M4 15h12M7 3v4M13 8v4M8 13v4'],['/brand/members',members,'M2 17v-2a6 6 0 0 1 12 0v2M5 6a3 3 0 1 0 6 0 3 3 0 1 0-6 0M16 12v5M14 14h5']] as const;
+ return <nav>{entries.map(([href,label,d])=><a key={href} href={href} aria-current={(href==='/brand'?path==='/brand'||path.startsWith('/brand/projects'):path.startsWith(href))?'page':undefined}><svg viewBox="0 0 20 20" aria-hidden="true"><path d={d}/></svg>{label}</a>)}</nav>;
 }

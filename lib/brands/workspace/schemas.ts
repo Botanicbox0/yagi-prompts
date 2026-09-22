@@ -77,10 +77,11 @@ export const BRAND_ATTACHMENT_LIMITS = {
 } as const;
 export type BrandAttachmentMime = keyof typeof BRAND_ATTACHMENT_LIMITS;
 export const BrandAttachmentSchema = z.object({
+  purpose: z.enum(['workspace','contract']).default('workspace'),
   projectId: id, requestId: id, name: text(1, 160).refine(v => !/[\\/<>:"|?*]/.test(v)),
   mime: z.enum(['image/jpeg', 'image/png', 'image/webp', 'video/mp4', 'video/webm', 'application/pdf']),
   sizeBytes: z.number().int().positive(),
-}).refine(v => v.sizeBytes <= BRAND_ATTACHMENT_LIMITS[v.mime], { path: ['sizeBytes'], message: 'File exceeds the format limit' });
+}).refine(v=>v.purpose!=='contract'||v.mime==='application/pdf',{path:['mime']}).refine(v => v.sizeBytes <= BRAND_ATTACHMENT_LIMITS[v.mime], { path: ['sizeBytes'], message: 'File exceeds the format limit' });
 
 /** Require an actual post path, not merely a social hostname/profile URL. */
 export function normalizeBrandPostUrl(raw: string): { url: string; platform: 'instagram' | 'tiktok' | 'x' | 'youtube'; postId: string } | null {

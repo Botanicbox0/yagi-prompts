@@ -7,6 +7,8 @@ import { ActionForm } from "./action-form";
 import { BrandUpload } from "./upload";
 import { interpolate } from "@/lib/i18n/format";
 import { formatBrandTimestamp } from "./format";
+import { ProjectTabs } from './project-tabs';
+import { CampaignContracts } from './contracts';
 import { CampaignPerformance } from './performance';
 
 export function PostTable({
@@ -100,17 +102,11 @@ export function ProjectDetail({
         </span>
       </div>
       {p.status === "requested" && <p className="bw-note">{b.requestedNext}</p>}
-      <nav className="bw-tabs">
-        <a href="#performance">{b.performance.title}</a>
-        <a href="#brief">{b.overview}</a>
-        <a href="#review">{b.review}</a>
-        <a href="#conversation">{b.conversation}</a>
-        <a href="#reports">{b.reports}</a>
-      </nav>
+      <ProjectTabs b={b}>
       <section id="performance" className="bw-panel">
         <CampaignPerformance project={p} b={b} locale={locale}/>
       </section>
-      <div className="bw-note bw-row bw-no-print">
+      <div className="bw-note bw-row bw-no-print bw-tab-next">
         <div><strong>{b.performance.nextAction}</strong><p>{p.contents.some(c=>c.version===newest.get(c.slotKey)&&c.decision==='pending')?interpolate(b.performance.reviewAction,{count:p.contents.filter(c=>c.version===newest.get(c.slotKey)&&c.decision==='pending').length}):b.performance.trackingAction}</p></div>
         <a className="bw-button" href={studio?'#studio-actions':'#review'}>{studio?b.performance.studioActions:b.review} →</a>
       </div>
@@ -373,7 +369,7 @@ export function ProjectDetail({
               </ActionForm>
             )}
           </section>
-          <section className="bw-panel">
+          <section id="files" className="bw-panel">
             <h2>{b.files}</h2>
             {!p.attachments.length && <p className="bw-muted">{b.noFiles}</p>}
             <ul className="bw-list">
@@ -398,6 +394,8 @@ export function ProjectDetail({
           </section>
         </div>
       </div>
+      <CampaignContracts project={p} b={b} locale={locale} studio={studio}/>
+      </ProjectTabs>
     </div>
   );
 }

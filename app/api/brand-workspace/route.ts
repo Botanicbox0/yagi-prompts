@@ -5,7 +5,7 @@ import { getSessionUser } from "@/lib/supabase/auth-client";
 import { getStorage } from "@/lib/storage";
 import { resolveRequestUrl, sameOriginMutation } from "@/lib/routing/surfaces";
 import {
-  createBrandOrganization,
+  updateBrandSettings, sendBrandSupport, loadBrandSupport, createBrandOrganization,
   createBrandProject,
   approveBrandContent,
   sendBrandMessage,
@@ -55,6 +55,10 @@ export async function POST(request: NextRequest) {
     if (!sql) return json({ ok: false, code: "storage_unavailable" }, 503);
     let result;
     switch (body.operation) {
+      case "organization.update":
+        result = await updateBrandSettings({sql},viewer,input); break;
+      case "support.send":
+        result = await sendBrandSupport({sql},viewer,input); break;
       case "organization.create":
         result = await createBrandOrganization({ sql }, viewer, input);
         break;
@@ -133,4 +137,11 @@ export async function POST(request: NextRequest) {
   } catch {
     return json({ ok: false, code: "storage_unavailable" }, 503);
   }
+}
+
+export async function GET(request:NextRequest) {
+ const [viewer,sql]=await Promise.all([getViewer(),getSqlRunner()]);
+ if(!sql||!viewer.userId)return json({ok:false},404);
+ const messages=await loadBrandSupport({sql},viewer,request.nextUrl.searchParams.get('organizationId')??'');
+ return messages?json({ok:true,messages}):json({ok:false},404);
 }

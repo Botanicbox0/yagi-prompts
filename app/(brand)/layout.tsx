@@ -1,3 +1,7 @@
+import { SupportDrawer } from '@/components/brand-workspace/support';
+import { getViewer } from '@/lib/auth/viewer';
+import { getSqlRunner } from '@/lib/db/connect';
+import { loadBrandWorkspace } from '@/lib/brands/workspace/service';
 import "@/app/globals.css";
 import "./workspace.css";
 import { WorkspaceLanguage } from '@/components/brand-workspace/language';
@@ -27,6 +31,9 @@ export default async function BrandLayout({
   const locale = await getRequestLocale();
   const d = getDictionary(locale);
   const b = d.brandWorkspace;
+  const viewer=await getViewer();
+  const sql=viewer.userId?await getSqlRunner():null;
+  const workspace=sql?await loadBrandWorkspace({sql},viewer):null;
   return (
     <html lang={locale} className={fontVariables} data-brand-workspace>
       <head>
@@ -47,7 +54,7 @@ export default async function BrandLayout({
               <span>{d.admin.byline}</span>
             </a>
             <p className="bw-kicker">{b.title}</p>
-            <WorkspaceNavigation home={b.home} members={b.members}/>
+            <WorkspaceNavigation home={b.home} members={b.members} settings={b.managed.settings} library={b.managed.library}/>
             <form action="/auth/signout" method="post" className="bw-signout">
               <button type="submit">{b.signOut}</button>
             </form>
@@ -65,6 +72,7 @@ export default async function BrandLayout({
             </main>
           </div>
         </div>
+        {workspace&&<SupportDrawer organizations={workspace.organizations} b={b} locale={locale}/>}
       </body>
     </html>
   );

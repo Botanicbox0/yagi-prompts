@@ -14,7 +14,7 @@ export default async function BrandHome() {
           <p>{b.dashboard.subtitle}</p>
         </div>
       </div>
-      {workspace.organizations.length === 0 ? (
+      {workspace.organizations.length === 0 && workspace.projects.length === 0 ? (
         <section className="bw-panel">
           <h2>{b.needOrganization}</h2><ol className="bw-setup"><li>{b.performance.setupOne}</li><li>{b.performance.setupTwo}</li><li>{b.performance.setupThree}</li></ol>
           <p className="bw-note">{b.organizationHint}</p>
