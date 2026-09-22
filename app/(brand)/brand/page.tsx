@@ -1,3 +1,4 @@
+import { ServiceGuide } from "@/components/brand-workspace/service-guide";
 import { brandContext } from "@/components/brand-workspace/context";
 import { ActionForm } from "@/components/brand-workspace/action-form";
 import { loadBrandWorkspace } from "@/lib/brands/workspace/service";
@@ -14,6 +15,7 @@ export default async function BrandHome() {
           <p>{b.dashboard.subtitle}</p>
         </div>
       </div>
+      <ServiceGuide kind="campaign" b={b} />
       {workspace.organizations.length === 0 && workspace.projects.length === 0 ? (
         <section className="bw-panel">
           <h2>{b.needOrganization}</h2><ol className="bw-setup"><li>{b.performance.setupOne}</li><li>{b.performance.setupTwo}</li><li>{b.performance.setupThree}</li></ol>

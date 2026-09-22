@@ -1,3 +1,4 @@
+import { ServiceGuide } from "@/components/brand-workspace/service-guide";
 import {
   assetLibraryMode,
   identityStatusFor,
@@ -45,6 +46,7 @@ export default async function BrandStudio({
           <p>{t.subtitle}</p>
         </div>
       </div>
+      <ServiceGuide kind="studio" b={b} />
       <nav className="bw-status-tabs">
         {workspace.organizations.map((o) => (
           <a

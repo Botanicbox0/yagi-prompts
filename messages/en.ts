@@ -44,11 +44,32 @@ export const en = {
     identityNote: 'This portrait is a visual reference, not proof of identity. Existing face checks still apply.',
   },
   brandWorkspace: {
+    serviceGuide: {
+      "label": "How this service works",
+      "campaign": {
+        "lead": "Let us take it from brief to published content",
+        "body": "Share your goals and budget. TWINGS develops the format and works with influencers to produce and publish the content.",
+        "scopeLabel": "What you review",
+        "scope": "Content approvals · Published posts · Performance reports",
+        "termsLabel": "Project scope",
+        "terms": "Production, publishing schedules and budget are agreed for each campaign.",
+        "other": "Just need to make videos? Open the self-serve studio →"
+      },
+      "studio": {
+        "lead": "Create here. Publish through your own channels.",
+        "body": "Make videos repeatedly from templates prepared by TWINGS for your brand. Your team handles publishing and ad distribution.",
+        "scopeLabel": "How it works",
+        "scope": "Choose a template → Confirm a portrait → Create and download",
+        "termsLabel": "Usage terms",
+        "terms": "Use the studio within your agreed contract period and video allowance. Influencer sourcing, publishing and performance reports are not included.",
+        "other": "Need influencer publishing too? Request a campaign →"
+      }
+    },
     productionStudio: {
 "verifyRequired":"A camera identity check is required","verifyAction":"Verify my identity",
 "preview":"Example image or video","noPreview":"No example yet",
-  "title": "Ad studio",
-  "subtitle": "Create videos with templates prepared for your brand.",
+  "title": "Self-serve studio",
+  "subtitle": "Choose a template made for your brand and create a video using a portrait.",
   "adminHint": "Register the agreed contract period and video allowance, then add templates for this brand.",
   "addContract": "Add production contract",
   "contractName": "Contract name",
@@ -177,7 +198,7 @@ export const en = {
       "saved": "Your changes have been saved."
     },
     dashboard: {
-      title: 'Campaigns', subtitle: 'Review the work and follow what happens after it goes live.',
+      title: "Managed campaigns", subtitle: "TWINGS handles your brand’s format, influencer content production and publishing, through to performance reporting.",
       studioTitle: 'Campaign operations', studioSubtitle: 'Start with new briefs and requested changes.',
       attention: 'Ready for your review', attentionNote: '{count} campaigns have content to review.',
       studioAttention: 'Needs attention', studioAttentionNote: '{count} campaigns with new briefs or requested changes',
@@ -243,7 +264,7 @@ export const en = {
     "invitationStates": {"pending":"Awaiting acceptance","accepted":"Accepted","revoked":"Revoked","expired":"Expired"},
     "postPublishedAt": "Post published at",
     "title": "Brand workspace",
-    "home": "Campaigns",
+    "home": "Managed campaigns",
     "members": "Team",
     "newProject": "Request a campaign",
     "signOut": "Sign out",

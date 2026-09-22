@@ -55,11 +55,32 @@ export const ko: Dictionary = {
     identityNote: '이 사진은 영상과 이미지에 쓸 얼굴의 기준이 돼요. 본인 인증을 대신하지 않으며, 생성 전에 얼굴 확인이 필요할 수 있어요.',
   },
   brandWorkspace: {
+    serviceGuide: {
+      "label": "서비스 이용 안내",
+      "campaign": {
+        "lead": "제작부터 발행까지 맡기세요",
+        "body": "목표와 예산을 알려주시면 TWINGS가 포맷을 만들고, 인플루언서와 콘텐츠 제작·발행을 진행합니다.",
+        "scopeLabel": "브랜드가 확인할 것",
+        "scope": "제작물 승인 · 게시 콘텐츠 · 성과 리포트",
+        "termsLabel": "진행 조건",
+        "terms": "제작 범위와 발행 일정, 예산은 캠페인별로 협의합니다.",
+        "other": "영상만 직접 만들고 싶다면 셀프 스튜디오로 →"
+      },
+      "studio": {
+        "lead": "제작은 직접, 발행은 브랜드에서",
+        "body": "TWINGS가 준비한 전용 템플릿으로 영상을 반복 제작합니다. 완성된 영상의 게시와 광고 집행은 브랜드가 직접 진행합니다.",
+        "scopeLabel": "이용 순서",
+        "scope": "템플릿 선택 → 인물 사진 확인 → 영상 제작·다운로드",
+        "termsLabel": "이용 조건",
+        "terms": "계약한 기간과 제작 횟수 안에서 이용합니다. 인플루언서 섭외·발행과 성과 리포트는 포함되지 않습니다.",
+        "other": "인플루언서 발행까지 맡기려면 캠페인 의뢰하기 →"
+      }
+    },
     productionStudio: {
 "verifyRequired":"카메라 본인 확인이 필요해요","verifyAction":"본인 확인하기",
 "preview":"예시 이미지 또는 영상","noPreview":"나중에 추가",
-  "title": "광고 영상 제작",
-  "subtitle": "우리 브랜드에 준비된 템플릿으로 영상을 만들어 보세요.",
+  "title": "셀프 스튜디오",
+  "subtitle": "우리 브랜드의 전용 템플릿을 고르고, 인물 사진으로 영상을 직접 만들어 보세요.",
   "adminHint": "합의한 계약 기간과 제작 편수를 등록한 뒤, 이 브랜드에서 사용할 템플릿을 추가하세요.",
   "addContract": "제작 계약 등록",
   "contractName": "계약 이름",
@@ -188,7 +209,7 @@ export const ko: Dictionary = {
       "saved": "변경 내용을 저장했습니다."
     },
     dashboard: {
-      title: '캠페인', subtitle: '제작물 검토부터 게시 결과까지 확인하세요.',
+      title: "캠페인 운영", subtitle: "브랜드 전용 포맷 기획부터 인플루언서 콘텐츠 제작·발행, 성과 보고까지 TWINGS가 함께합니다.",
       studioTitle: '캠페인 운영', studioSubtitle: '새 의뢰와 수정 요청부터 확인하세요.',
       attention: '확인할 제작물', attentionNote: '{count}개 캠페인에 검토할 콘텐츠가 있습니다.',
       studioAttention: '처리할 캠페인', studioAttentionNote: '새 의뢰 또는 수정 요청이 있는 캠페인 {count}개',
@@ -254,7 +275,7 @@ export const ko: Dictionary = {
     "invitationStates": {"pending":"수락 대기","accepted":"참여 완료","revoked":"초대 취소","expired":"기간 만료"},
     "postPublishedAt": "게시 시각",
     "title": "브랜드 워크스페이스",
-    "home": "캠페인",
+    "home": "캠페인 운영",
     "members": "팀",
     "newProject": "캠페인 의뢰",
     "signOut": "로그아웃",
