@@ -56,7 +56,7 @@ export function isAdminPath(pathname: string): boolean {
 
 /** Public logo files share /brand, but are not authenticated workspace routes. */
 export function isBrandPath(pathname: string): boolean {
-  return pathname === '/brand' || /^\/brand\/(?:projects|members|invite|settings|library)(?:\/|$)/.test(pathname);
+  return pathname === '/brand' || /^\/brand\/(?:projects|members|invite|settings|library|studio)(?:\/|$)/.test(pathname);
 }
 
 const AUTH_METHODS: Record<string, readonly string[]> = {
@@ -70,6 +70,7 @@ const AUTH_METHODS: Record<string, readonly string[]> = {
 export function adminRouteAllowed(pathname: string, method: string): boolean {
   const read = method === 'GET' || method === 'HEAD';
   if (AUTH_METHODS[pathname]?.includes(method)) return true;
+  if (pathname === '/api/workspace-locale') return method === 'POST';
   if (pathname === '/admin/do') return method === 'POST';
   if (isAdminPath(pathname)) return read;
   if (pathname === '/api/admin/staging-url') return method === 'POST';
@@ -87,7 +88,10 @@ export function adminRouteAllowed(pathname: string, method: string): boolean {
 export function brandRouteAllowed(pathname: string, method: string): boolean {
   const read = method === 'GET' || method === 'HEAD';
   if (AUTH_METHODS[pathname]?.includes(method)) return true;
+  if (pathname === '/api/workspace-locale') return method === 'POST';
   if (isBrandPath(pathname)) return read;
+  if (pathname === '/api/brand-production') return method === 'POST';
+  if (/^\/api\/brand-production\/[a-f0-9-]+(?:\/media)?$/.test(pathname)) return read;
   if (pathname === '/api/brand-workspace') return read || method === 'POST';
   if (/^\/api\/brand-workspace\/attachments\/[^/]+$/.test(pathname)) return read || method === 'POST';
   return read && !pathname.startsWith('/api/') && !isAdminPath(pathname) && adminRouteAllowed(pathname, method);

@@ -15,6 +15,7 @@ import type { PromptSource, PromptStatus, TemplateMedium } from './schemas';
  */
 
 export interface PromptRow {
+  audience?: 'public' | 'brand';
   id: string;
   slug: string;
   source: PromptSource;
@@ -54,6 +55,7 @@ export interface PromptRow {
 }
 
 interface RawRow {
+  audience: 'public' | 'brand';
   id: string;
   slug: string;
   source: PromptSource;
@@ -83,7 +85,7 @@ interface RawRow {
   published_at: Date | string | null;
 }
 
-const COLUMNS = `id, slug, source, author_id, author_handle, status, models, title, title_ko,
+const COLUMNS = `id, audience, slug, source, author_id, author_handle, status, models, title, title_ko,
                  prompt_text, process_md, process_md_ko, source_url,
                  text_visibility::text as text_visibility, media, use_case, featured,
                  medium, price_cents, price_krw, runtime_seconds, engine, aspect_default,
@@ -99,6 +101,7 @@ function toIso(value: Date | string | null): string | null {
 
 function toRow(raw: RawRow): PromptRow {
   return {
+    audience: raw.audience,
     id: raw.id,
     slug: raw.slug,
     source: raw.source,
@@ -136,7 +139,7 @@ function toRow(raw: RawRow): PromptRow {
 /** Every PUBLISHED item, both rails, in rail order. The gallery's single query. */
 export async function loadPublishedPrompts(sql: SqlRunner): Promise<PromptRow[]> {
   const { rows } = await sql.query<RawRow>(
-    `select ${COLUMNS} from prompt_items where status = 'published' order by ${RAIL_ORDER}`,
+    `select ${COLUMNS} from prompt_items where status = 'published' and audience = 'public' order by ${RAIL_ORDER}`,
   );
   return rows.map(toRow);
 }
@@ -186,7 +189,7 @@ export async function loadRelatedPrompts(
   const { rows } = await sql.query<RawRow & { shared: boolean }>(
     `select ${COLUMNS}, (use_case && $2::text[]) as shared
        from prompt_items
-      where status = 'published' and id <> $1
+      where status = 'published' and audience = 'public' and id <> $1
       order by (use_case && $2::text[]) desc,
                (source = $3) desc,
                published_at desc nulls last,
@@ -213,7 +216,7 @@ export async function loadPromptsByStatus(
 ): Promise<PromptRow[]> {
   const order = status === 'pending' ? 'created_at asc' : RAIL_ORDER;
   const { rows } = await sql.query<RawRow>(
-    `select ${COLUMNS} from prompt_items where status = $1 order by ${order}`,
+    `select ${COLUMNS} from prompt_items where status = $1 and audience = 'public' order by ${order}`,
     [status],
   );
   return rows.map(toRow);
@@ -221,7 +224,7 @@ export async function loadPromptsByStatus(
 
 export async function loadAllPrompts(sql: SqlRunner): Promise<PromptRow[]> {
   const { rows } = await sql.query<RawRow>(
-    `select ${COLUMNS} from prompt_items
+    `select ${COLUMNS} from prompt_items where audience = 'public'
       order by (status = 'pending') desc, ${RAIL_ORDER}`,
   );
   return rows.map(toRow);

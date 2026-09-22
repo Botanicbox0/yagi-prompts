@@ -55,4 +55,11 @@ describe('brand host boundary', () => {
     expect(authReturnPath('/brand/projects/abc','brand.twings.app','/')).toBe('/brand/projects/abc');
     expect(authReturnPath('/brand/twings.svg','brand.twings.app','/')).toBe('/brand');
   });
+  it('allows the narrow locale and production transports without opening other server actions', async()=>{
+    expect((await middleware(req('brand.twings.app','/api/workspace-locale','POST','https://brand.twings.app'))).headers.get('x-middleware-next')).toBe('1');
+    expect((await middleware(req('brand.twings.app','/api/workspace-locale','POST','https://evil.test'))).status).toBe(404);
+    expect((await middleware(req('brand.twings.app','/api/brand-production','POST','https://brand.twings.app'))).headers.get('x-middleware-next')).toBe('1');
+    expect((await middleware(req('brand.twings.app','/brand/studio','POST','https://brand.twings.app'))).status).toBe(404);
+    expect(authReturnPath('/brand/studio','brand.twings.app','/')).toBe('/brand/studio');
+  });
 });

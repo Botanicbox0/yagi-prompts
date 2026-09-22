@@ -1,3 +1,6 @@
+import { ProductionAdmin } from '@/components/brand-workspace/production-admin';
+import {loadProductionWorkspace} from '@/lib/brands/production/service';
+import {loadStudioWorkspace} from '@/lib/brands/workspace/service';
 import "@/app/(brand)/workspace.css";
 import { notFound } from "next/navigation";
 import { requireAdmin } from "@/lib/auth/viewer";
@@ -30,6 +33,9 @@ export default async function StudioOrganization({
   const org = await loadStudioBrandAccess({ sql }, viewer, id);
   if (!org) notFound();
   const messages = (await loadBrandSupport({ sql }, viewer, id, true)) ?? [];
+  const previews=(await sql.query<{id:string;project_id:string;name:string}>("select id,project_id,name from brand_attachments where organization_id=$1 and status='ready' and access_scope='workspace' and (mime like 'image/%' or mime like 'video/%')",[id])).rows;
+  const production=await loadProductionWorkspace({sql},viewer,id,true);
+  const projects=(await loadStudioWorkspace({sql},viewer)).projects.filter(p=>p.organizationId===id);
   return (
     <AdminShell dict={dict.admin} locale={locale} active="brandWorkspace">
       <div className="bw-heading">
@@ -118,6 +124,7 @@ export default async function StudioOrganization({
           </ManagedForm>
         </section>
       </div>
+      <ProductionAdmin organizationId={id} projects={projects} previews={previews} workspace={production} b={b}/>
       <section className="bw-panel" id="support">
         <h2>{c.supportTitle}</h2>
         <div className="bw-support-history">

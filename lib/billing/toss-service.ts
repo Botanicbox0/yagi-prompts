@@ -82,7 +82,7 @@ export async function createTossOrder(
   if (!RENDER_PIPELINE_PUBLIC) return fail('not_open');
   if (viewer.isAdmin) return fail('admin_free');
   const t = await loadPromptBySlug(deps.sql, input.templateSlug);
-  if (!t || t.status !== 'published') return fail('not_found');
+  if (!t || t.status !== 'published' || t.audience === 'brand') return fail('not_found');
   // Charge the stored KRW price, never a browser amount or an exchange-rate fallback.
   if (!isForSale(t) || !Number.isSafeInteger(t.priceKrw) || t.priceKrw <= 0)
     return fail('not_for_sale');

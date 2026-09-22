@@ -132,6 +132,7 @@ async function postJson(path: string, body: unknown): Promise<Fetched> {
 // ---------------------------------------------------------------------------
 
 interface PromptProbe {
+  audience: string;
   id: string;
   slug: string;
   status: string;
@@ -180,7 +181,7 @@ async function readSnapshot() {
 
   // §13 — the prompts surface needs ids (the copy endpoint is keyed on them) and statuses.
   const prompts = await db.query<PromptProbe>(
-    `select id, slug, status, source, text_visibility::text as visibility, featured
+    `select id, slug, audience, status, source, text_visibility::text as visibility, featured
        from prompt_items order by slug`,
   );
   const brandWorkspace = await db.query<BrandWorkspaceProbe>(
@@ -1187,6 +1188,21 @@ async function main(): Promise<void> {
   // --- docs/CAMPAIGNS.md: the campaigns surface --------------------------
   await sweepCampaigns();
   await sweepBrandWorkspace(brandWorkspace);
+  // Contract-only production must not become a consumer catalogue or media surface.
+  const brandTemplate = prompts.find(p => p.audience === 'brand');
+  if (!brandTemplate) fail('private production fixture', 'missing brand template; rebuild local snapshot');
+  else {
+    for (const locale of ['ko', 'en']) {
+      expectEqual(`${locale}: private brand template detail is 404`, (await get(`/${locale}/t/${brandTemplate.slug}`)).status, 404);
+      expectAbsent(`${locale}: private brand template absent from catalogue`, (await get(`/${locale}/video`)).body, brandTemplate.slug);
+    }
+    expectEqual('private template media is 404', (await get(`/api/prompts/media/${brandTemplate.id}:poster`)).status, 404);
+    expectAbsent('private template absent from sitemap', (await get('/sitemap.xml')).body, brandTemplate.slug);
+  }
+  expectOneOf('brand studio requires login', (await get('/brand/studio')).status, [302,303,307,308]);
+  expectEqual('brand production refuses anonymous creation', (await postJson('/api/brand-production', {})).status, 401);
+  expectEqual('brand production refuses anonymous status', (await get('/api/brand-production/00000000-0000-4000-8000-000000000000')).status, 404);
+  expectEqual('brand production refuses anonymous output', (await get('/api/brand-production/00000000-0000-4000-8000-000000000000/media')).status, 404);
 
   // --- docs/TEMPLATES-IA.md §8: the render queue --------------------------
   await sweepRenders();

@@ -54,7 +54,7 @@ export default async function BrandLayout({
               <span>{d.admin.byline}</span>
             </a>
             <p className="bw-kicker">{b.title}</p>
-            <WorkspaceNavigation home={b.home} members={b.members} settings={b.managed.settings} library={b.managed.library}/>
+            <WorkspaceNavigation home={b.home} members={b.members} settings={b.managed.settings} library={b.managed.library} studio={b.productionStudio.title}/>
             <form action="/auth/signout" method="post" className="bw-signout">
               <button type="submit">{b.signOut}</button>
             </form>

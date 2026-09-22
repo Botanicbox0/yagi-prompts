@@ -1,3 +1,4 @@
+import {createProductionContract,createProductionTemplate} from '@/lib/brands/production/service';
 import { randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
@@ -72,6 +73,8 @@ export async function seedBrandWorkspaceFixtures(sql: SqlRunner, storage: Storag
     const contract=value(await addBrandContract(deps,studio,{projectId:project.id,attachmentId:file.id,documentKey:'campaign-agreement',title:'[Local fixture] Campaign agreement',requestId:randomUUID()}));
     if(version===1)value(await shareBrandContract(deps,studio,{projectId:project.id,contractId:contract.id,shared:true,expectedRevision:0}));
   }
+  const production=value(await createProductionContract(deps,studio,{organizationId:org.id,projectId:project.id,title:'[Local fixture] Production agreement',startsAt:'2026-01-01T00:00:00Z',endsAt:'2099-01-01T00:00:00Z',limit:3,requestId:randomUUID()}));
+  value(await createProductionTemplate(deps,studio,{contractId:production.id,title:'[Local fixture] Portrait film',titleKo:'[로컬 예시] 인물 영상',promptText:'Local QA template only. Use the verified identity reference for a studio portrait film.',seconds:5,aspect:'9:16',previewAttachmentId:attachment.id,requestId:randomUUID()}));
   value(await sendBrandSupport(deps,studio,{organizationId:org.id,body:'[Local fixture] Welcome. You can ask the studio about your workspace here.',requestId:randomUUID()}));
 
 }

@@ -280,7 +280,7 @@ const approve: AdminOperation<z.infer<typeof ApprovalSchema>> = {
     }),
   async run(ctx, input) {
     const row = await loadPromptById(ctx.sql, input.id);
-    if (row === null) return fail('notFound', NOT_FOUND_DETAIL);
+    if (row === null || row.audience === 'brand') return fail('notFound', NOT_FOUND_DETAIL);
 
     // §13.1 lifecycle: the copy to public keys happens at APPROVAL, which is the first moment the
     // bytes become marketing surface. Before that they sit in private staging, visible to admin
@@ -339,7 +339,7 @@ const editPrompt: AdminOperation<{ input: z.infer<typeof EditSchema>; form: Form
   },
   async run(ctx, { input, form }) {
     const row = await loadPromptById(ctx.sql, input.id);
-    if (row === null) return fail('notFound', NOT_FOUND_DETAIL);
+    if (row === null || row.audience === 'brand') return fail('notFound', NOT_FOUND_DETAIL);
     const template = templateFields(form);
     if (!template.ok) return fail('invalid', template.detail);
 
@@ -425,7 +425,7 @@ const announce: AdminOperation<z.infer<typeof Announce>> = {
   parse: (form) => parsed(Announce, { id: f.str(form, 'id') }),
   async run(ctx, input) {
     const row = await loadPromptById(ctx.sql, input.id);
-    if (row === null) return fail('notFound', NOT_FOUND_DETAIL);
+    if (row === null || row.audience === 'brand') return fail('notFound', NOT_FOUND_DETAIL);
     if (row.status !== 'published') return fail('badTransition', `${row.status}: only a published template can be announced`);
     if (row.announcedAt !== null) return fail('badTransition', `already announced ${row.announcedAt}`);
     const stamped = await markPromptAnnounced(ctx.sql, input.id);

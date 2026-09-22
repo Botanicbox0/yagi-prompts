@@ -305,7 +305,7 @@ export async function loadRenderJobByTask(sql: SqlRunner, providerTaskId: string
 }
 
 export async function listRenderJobsForUser(sql: SqlRunner, userId: string, limit = 50): Promise<RenderJob[]> {
-  const { rows } = await sql.query<RawRow>(`select ${COLUMNS} from render_jobs where user_id = $1 order by created_at desc limit $2::int`, [userId, limit]);
+  const { rows } = await sql.query<RawRow>(`select ${COLUMNS} from render_jobs where user_id = $1 and not exists (select 1 from brand_production_reservations b where b.render_id=render_jobs.id) order by created_at desc limit $2::int`, [userId, limit]);
   return rows.map(toJob);
 }
 

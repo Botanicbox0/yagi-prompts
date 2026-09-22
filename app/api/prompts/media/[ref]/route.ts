@@ -53,7 +53,7 @@ export async function GET(
   if (sql === null) return refuse(404, 'not_found');
 
   const row = await loadPromptById(sql, ref.id);
-  if (row === null || row.status !== 'published') return refuse(404, 'not_found');
+  if (row === null || row.status !== 'published' || row.audience === 'brand') return refuse(404, 'not_found');
 
   const asset = parsePromptMedia(row.media)[ref.kind];
   // No published key ⇒ the copier has not run for this asset ⇒ it is not public yet ⇒ 404.
