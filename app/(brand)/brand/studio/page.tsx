@@ -1,3 +1,4 @@
+import { StudioInquiry } from "@/components/brand-workspace/studio-inquiry";
 import { ServiceGuide } from "@/components/brand-workspace/service-guide";
 import {
   assetLibraryMode,
@@ -45,6 +46,7 @@ export default async function BrandStudio({
           <h1>{t.title}</h1>
           <p>{t.subtitle}</p>
         </div>
+        <StudioInquiry organizations={workspace.organizations} organizationId={orgId} b={b} />
       </div>
       <ServiceGuide kind="studio" b={b} />
       <nav className="bw-status-tabs">
