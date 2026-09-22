@@ -1,5 +1,5 @@
 "use client";
-import { useRef, useState, type FormEvent, type ReactNode } from "react";
+import { useRef, useState, useEffect, type FormEvent, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import type { Dictionary } from "@/lib/i18n/dictionaries";
 import { PENDING_BRAND_INVITATION_KEY } from "@/lib/auth/invitation-transfer";
@@ -13,6 +13,7 @@ export function ActionForm({
   submit,
   redirectTo,
   className = "",
+  disabled = false,
 }: {
   operation: string;
   fixed?: Record<string, unknown>;
@@ -21,8 +22,11 @@ export function ActionForm({
   submit: string;
   redirectTo?: string;
   className?: string;
+  disabled?: boolean;
 }) {
   const router = useRouter();
+  const [ready,setReady]=useState(false);
+  useEffect(()=>setReady(true),[]);
   const request = useRef<{ fingerprint: string; id: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
@@ -31,7 +35,7 @@ export function ActionForm({
   const [inviteUrl, setInviteUrl] = useState("");
   async function send(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (busy) return;
+    if (busy || disabled) return;
     const form = event.currentTarget;
     const fields = new FormData(form);
     const input: Record<string, unknown> = {
@@ -39,6 +43,7 @@ export function ActionForm({
       ...fixed,
     };
     for (const key of [
+      "expectedRevision",
       "budgetKrw",
       "views",
       "likes",
@@ -132,15 +137,23 @@ export function ActionForm({
         setInviteUrl(
           `${location.origin}/brand/invite#token=${encodeURIComponent(result.token)}`,
         );
-      else if (operation === "project.create" && result.id)
-        router.push(`/brand/projects/${result.id}`);
+      else if (operation === "project.create" && result.id) {
+        location.assign(`/brand/projects/${encodeURIComponent(result.id)}`);
+        return;
+      }
       else if (operation === "invitation.accept") {
         try {
           sessionStorage.removeItem(PENDING_BRAND_INVITATION_KEY);
         } catch {}
-        router.push("/brand");
-      } else if (redirectTo) router.push(redirectTo);
-      else if (operation === "message.send") form.reset();
+        location.assign(result.projectId ? `/brand/projects/${encodeURIComponent(result.projectId)}` : "/brand");
+        return;
+      } else if (redirectTo) {
+        // A push followed by refresh can refresh the old page and cancel navigation.
+        // Read the newly created workspace from the server, without the old router cache.
+        location.assign(redirectTo);
+        return;
+      }
+      else if ((operation === "message.send" || operation === "support.send")) form.reset();
       router.refresh();
     } catch {
       setFailed(true);
@@ -150,10 +163,10 @@ export function ActionForm({
     }
   }
   return (
-    <form onSubmit={send} className={`bw-form ${className}`} aria-busy={busy}>
-      <fieldset disabled={busy}>{children}</fieldset>
+    <form method="post" action="/api/brand-workspace" onSubmit={send} className={`bw-form ${className}`} aria-busy={busy}>
+      <fieldset disabled={!ready || busy || disabled}>{children}</fieldset>
       <div className="bw-form-actions">
-        <button className="bw-button bw-primary" disabled={busy} type="submit">
+        <button className="bw-button bw-primary" disabled={!ready || busy || disabled} type="submit">
           {busy ? b.working : submit}
         </button>
         {conflict && (

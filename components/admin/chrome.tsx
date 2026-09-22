@@ -1,3 +1,4 @@
+import {WorkspaceLanguage} from '@/components/brand-workspace/language';
 import { PublicLink } from '@/components/admin/public-link';
 import type { ReactNode } from 'react';
 import { TwingsLogo } from '@/components/brand/twings-mark';
@@ -279,6 +280,16 @@ export function AdminShell({
               : '/admin';
   const navClass = (key: 'home' | 'playbooks' | 'policy' | 'prompts' | 'contests' | 'campaigns' | 'inquiries' | 'brandWorkspace') =>
     `font-label text-eyebrow uppercase ${active === key ? 'text-accent' : 'opacity-60'}`;
+
+  if (active === 'brandWorkspace') {
+    const b = getDictionary(isLocale(locale) ? locale : 'en').brandWorkspace;
+    return <div className="bw-shell bw-studio-shell" data-section data-theme="light">
+      <aside className="bw-sidebar"><AdminBrand dict={dict}/><p className="bw-kicker">{b.dashboard.studio}</p>
+        <nav><a href="/admin/brand-workspace" aria-current="page">{b.studioQueue}</a><a href="/admin/prompts">{dict.navPrompts}</a><a href="/admin/campaigns">{dict.navCampaigns}</a><a href="/admin/inquiries">{dict.navInquiries}</a><a href="/admin/playbooks">{dict.navPlaybooks}</a><a href="/admin/policy">{dict.navPolicy}</a></nav>
+        <div className="bw-signout"><PublicLink href={`/${locale}`}>{dict.navSite} ↗</PublicLink><OpForm op="caches.refresh" back={refreshBack}><button type="submit">{dict.refreshCaches}</button></OpForm></div>
+      </aside><div className="bw-body"><header className="bw-topbar"><span>{b.dashboard.workspace}</span><WorkspaceLanguage locale={locale} label={getDictionary(isLocale(locale)?locale:'en').nav.localeToggle}/><a href="/admin">{dict.brand} ↗</a></header><main id="main" className="bw-main">{children}</main></div>
+    </div>;
+  }
 
   return (
     <div data-section data-theme="light" className="section min-h-screen">

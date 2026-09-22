@@ -54,6 +54,30 @@ describe('brand workspace isolation and durable workflow', () => {
     expect(await loadStudioProject({ sql }, { ...a, isAdmin: true }, projectId)).toBeNull();
   });
 
+  it('projects only the latest content per slot into the home, without leaking private file keys', async () => {
+    await activate(); const first = await newContent();
+    await approveBrandContent({ sql }, a, { projectId, contentVersionId: first, expectedRevision: 0, decision: 'approved', comment: '', requestId: randomUUID() });
+    await newContent();
+    const home = (await loadBrandWorkspace({ sql }, a)).projects[0]!;
+    expect(home.overview).toMatchObject({ pending: 1, changes: 0, published: 0 });
+    expect(home.overview?.contents).toHaveLength(1);
+    expect(home.overview?.contents[0]?.version).toBe(2);
+    expect(JSON.stringify(home.overview)).not.toMatch(/storage_key|created_by|asset_sha256|budget/i);
+    expect((await loadBrandWorkspace({ sql }, b)).projects).toEqual([]);
+    await sql.query("update brand_memberships set status='revoked' where user_id=$1", [A]);
+    expect((await loadBrandWorkspace({ sql }, a)).projects).toEqual([]);
+  });
+
+  it('distinguishes changes requested from pending review and hides unfinished media', async () => {
+    await activate(); const id = await newContent();
+    await approveBrandContent({ sql }, a, { projectId, contentVersionId: id, expectedRevision: 0, decision: 'changes_requested', comment: 'Please revise', requestId: randomUUID() });
+    const home = (await loadBrandWorkspace({ sql }, a)).projects[0]!;
+    expect(home.overview).toMatchObject({ pending: 0, changes: 1, published: 0 });
+    expect(home.overview?.contents[0]?.decision).toBe('changes_requested');
+    // PDF is a valid delivery, but must never be rendered as an image.
+    expect(home.overview?.contents[0]?.mime).toBe('application/pdf');
+  });
+
   it('validates budget, dates and HTTPS references without contacting supplied URLs', async () => {
     for (const changes of [{ budgetKrw: -1 }, { endsOn: '2026-01-01' }, { referenceLinks: [{ url: 'http://example.com', note: '' }] }, { referenceLinks: [{ url: 'https://127.0.0.1/private', note: '' }] }]) {
       expect(await createBrandProject({ sql }, a, { ...brief(orgId), ...changes })).toMatchObject({ ok: false, code: 'invalid' });

@@ -90,7 +90,7 @@ describe('Toss one-time checkout on the real database', () => {
       await h.sql.query(`insert into identity_portrait_attempts
         (id,user_id,request_id,slot,status,model,prompt_version,input_key,result_key,consent_at,completed_at)
         values($1,$2,$1,$3,'succeeded','gpt-image-2.5-sunburst','studio-identity-v1',$4,$5,now(),now())`,
-        [id, buyer.userId, index + 1, `${id}/input.png`, `${id}/result.png`]);
+        [id, buyer.userId, index === 0 ? 1 : 3, `${id}/input.png`, `${id}/result.png`]);
     }
     await h.sql.query('insert into identity_portrait_selections(user_id,attempt_id) values($1,$2)', [buyer.userId, first]);
     const created = await createTossOrder(deps(), buyer, { ...input, portraitId: first });

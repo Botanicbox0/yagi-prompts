@@ -69,6 +69,21 @@ export const BrandPostMetricsSchema = z.object({
   const measured = [v.views, v.likes, v.comments, v.shares, v.saves].some(x => x !== null);
   return measured ? v.metricsSource !== 'unavailable' && v.measuredAt !== null : v.metricsSource === 'unavailable' && v.measuredAt === null;
 }, { path: ['metricsSource'], message: 'Measurements need a source and collection time' });
+/** One console save. Bounded so a single transaction never holds more than a screenful of row locks. */
+export const BRAND_METRICS_BATCH_LIMIT = 50;
+/**
+ * Strict on purpose: the console's measurement time is the server's, so a submitted `measuredAt`
+ * is refused rather than silently dropped. A row is an observation, so it carries at least one value.
+ */
+export const BrandPostMetricsBatchRowSchema = z.object({
+  postId: id, expectedRevision: z.number().int().nonnegative(),
+  verification: z.enum(['unverified', 'manual']).default('unverified'),
+  metricsSource: z.enum(['creator_evidence', 'studio_review']),
+  views: metric, likes: metric, comments: metric, shares: metric, saves: metric,
+}).strict().refine(v => [v.views, v.likes, v.comments, v.shares, v.saves].some(x => x !== null), { path: ['views'], message: 'Enter at least one observed value' });
+export const BrandPostMetricsBatchSchema = z.object({
+  projectId: id, requestId: id, rows: z.array(BrandPostMetricsBatchRowSchema).min(1).max(BRAND_METRICS_BATCH_LIMIT),
+}).strict().refine(v => new Set(v.rows.map(r => r.postId)).size === v.rows.length, { path: ['rows'], message: 'A post may appear once per save' });
 export const BrandReportSchema = z.object({ projectId: id, requestId: id, summary: text(1, 4000), periodStart: date, periodEnd: date })
   .refine(v => v.periodEnd >= v.periodStart, { path: ['periodEnd'], message: 'End must follow start' });
 export const BRAND_ATTACHMENT_LIMITS = {
@@ -77,10 +92,11 @@ export const BRAND_ATTACHMENT_LIMITS = {
 } as const;
 export type BrandAttachmentMime = keyof typeof BRAND_ATTACHMENT_LIMITS;
 export const BrandAttachmentSchema = z.object({
+  purpose: z.enum(['workspace','contract']).default('workspace'),
   projectId: id, requestId: id, name: text(1, 160).refine(v => !/[\\/<>:"|?*]/.test(v)),
   mime: z.enum(['image/jpeg', 'image/png', 'image/webp', 'video/mp4', 'video/webm', 'application/pdf']),
   sizeBytes: z.number().int().positive(),
-}).refine(v => v.sizeBytes <= BRAND_ATTACHMENT_LIMITS[v.mime], { path: ['sizeBytes'], message: 'File exceeds the format limit' });
+}).refine(v=>v.purpose!=='contract'||v.mime==='application/pdf',{path:['mime']}).refine(v => v.sizeBytes <= BRAND_ATTACHMENT_LIMITS[v.mime], { path: ['sizeBytes'], message: 'File exceeds the format limit' });
 
 /** Require an actual post path, not merely a social hostname/profile URL. */
 export function normalizeBrandPostUrl(raw: string): { url: string; platform: 'instagram' | 'tiktok' | 'x' | 'youtube'; postId: string } | null {

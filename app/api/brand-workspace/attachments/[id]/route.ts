@@ -37,7 +37,7 @@ async function read(request: NextRequest, context: Context, head: boolean) {
         headers: { ...headers, "Content-Length": String(file.sizeBytes) },
       });
     const storage = await getStorage();
-    if (storage.servesSignedUrls) {
+    if (storage.servesSignedUrls && !file.contract) {
       const url = await storage.signedStagingUrl?.(file.key, 60);
       return url
         ? new NextResponse(null, {
@@ -46,10 +46,20 @@ async function read(request: NextRequest, context: Context, head: boolean) {
           })
         : unavailable(503);
     }
-    return new NextResponse(
-      Buffer.from(await storage.read(STAGING_BUCKET, file.key)),
-      { headers },
-    );
+    const bytes = new Uint8Array(await storage.read(STAGING_BUCKET, file.key));
+    // Contracts keep authorization on the app route. Stream bounded chunks rather than a
+    // buffered 20MB response (Vercel's buffered payload limit is smaller than the PDF limit).
+    if (file.contract) {
+      let offset = 0;
+      return new NextResponse(new ReadableStream<Uint8Array>({
+        pull(controller) {
+          if (offset >= bytes.length) { controller.close(); return; }
+          const end = Math.min(offset + 64 * 1024, bytes.length);
+          controller.enqueue(bytes.subarray(offset, end)); offset = end;
+        },
+      }), { headers });
+    }
+    return new NextResponse(Buffer.from(bytes), { headers });
   } catch {
     return unavailable(503);
   }

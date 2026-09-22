@@ -1,4 +1,6 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
+import { reserveProduction } from '@/lib/brands/production/service';
+import { selectedPortraitPhoto } from '@/lib/identity/portrait-service';
 import type { SqlRunner } from '@/lib/db/sql-runner';
 import type { Viewer } from '@/lib/auth/identity';
 import type { ArkAssetsClient } from '@/lib/ark/assets';
@@ -132,13 +134,26 @@ export async function createRenderJob(deps: RenderServiceDeps, viewer: Viewer, i
   });
 }
 
-async function createAuthorizedRender(deps: RenderServiceDeps, viewer: Viewer, input: CreateRenderInput, reservedId?: string): Promise<CreateRenderOutcome> {
+/** Separate contract authorization; never impersonates an admin or accepts client storage keys. */
+export async function createBrandRenderJob(deps: RenderServiceDeps, viewer: Viewer, input: {contractId:string;templateId:string;requestId:string;portraitId:string;ownFaceConfirmed:boolean;locale:string|null}) {
+  if (!viewer.userId) return {ok:false as const,code:'sign_in_required' as const};
+  if (!input.ownFaceConfirmed) return {ok:false as const,code:'consent_required' as const};
+  const fingerprint=createHash('sha256').update(JSON.stringify([input.contractId,input.templateId,input.portraitId])).digest('hex');
+  return reserveProduction(deps,viewer,{...input,fingerprint},async(sql,template)=>{
+    const photo=await selectedPortraitPhoto(sql,deps.store,viewer.userId!,input.portraitId);
+    if(!photo)return {ok:false as const,code:'identity_required' as const};
+    return createAuthorizedRender({...deps,sql},viewer,{templateSlug:template.slug,aspect:template.aspectDefault??'9:16',photo,locale:input.locale,portraitId:input.portraitId},undefined,template);
+  });
+}
+
+async function createAuthorizedRender(deps: RenderServiceDeps, viewer: Viewer, input: CreateRenderInput, reservedId?: string, brandTemplate?: PromptRow): Promise<CreateRenderOutcome> {
   if (viewer.userId === null) return { ok: false, code: 'sign_in_required' };
   const now = deps.now ?? new Date();
 
-  const template = await loadPromptBySlug(deps.sql, input.templateSlug);
+  const template = brandTemplate ?? await loadPromptBySlug(deps.sql, input.templateSlug);
   if (template === null || template.status !== 'published') return { ok: false, code: 'not_found' };
-  if (!isForSale(template)) return { ok: false, code: 'not_for_sale' };
+  if (!brandTemplate && template.audience === 'brand') return {ok:false,code:'not_found'};
+  if (!brandTemplate && !isForSale(template)) return { ok: false, code: 'not_for_sale' };
 
   const engine = resolveEngine(template.engine, template.medium);
   if (!(aspectsForMedium(template.medium) as readonly string[]).includes(input.aspect)) return { ok: false, code: 'bad_aspect' };
@@ -447,6 +462,10 @@ async function notifyFinished(deps: RenderPassDeps, now: Date, report: RenderPas
     return;
   }
   for (const job of due) {
+    if ((await deps.sql.query('select render_id from brand_production_reservations where render_id=$1',[job.id])).rows.length) {
+      await markRenderNotified(deps.sql,job.id,{status:'skipped',at:now,spendAttempt:false});
+      continue;
+    }
     const payment = job.status === 'failed' ? await renderPaymentStatus(deps.sql, job.id) : null;
     if (payment === 'paid' || payment === 'refund_pending') {
       report.notifyPending += 1;
@@ -534,6 +553,7 @@ export async function loadOwnRender(sql: SqlRunner, viewer: Viewer, id: string):
   if (viewer.userId === null || !isRenderId(id)) return null;
   const job = await loadRenderJob(sql, id);
   if (job === null || job.userId !== viewer.userId) return null;
+  if ((await sql.query('select render_id from brand_production_reservations where render_id=$1',[id])).rows.length) return null;
   return (await withTitles(sql, [job]))[0] ?? null;
 }
 
@@ -544,6 +564,7 @@ export async function loadSharedRender(sql: SqlRunner, id: string, token: string
   if (!isRenderId(id) || !isShareTokenShape(token)) return { status: 'not_found' };
   const job = await loadRenderJob(sql, id);
   if (job === null || job.status !== 'succeeded' || job.shareToken === null || !constantTimeEqual(job.shareToken, token)) return { status: 'not_found' };
+  if ((await sql.query('select render_id from brand_production_reservations where render_id=$1',[id])).rows.length) return {status:'not_found'};
   const view = (await withTitles(sql, [job]))[0]!;
   return isShareExpired(job.shareExpiresAt, now) ? { status: 'expired', view } : { status: 'ok', view };
 }

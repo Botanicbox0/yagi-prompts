@@ -1,0 +1,120 @@
+﻿"file","line","kind","text","candidate_routes","review_status"
+"components/brand/twings-wordmark.tsx","17","jsx-aria-label","TWINGS","/[locale]
+/[locale]/campaigns
+/[locale]/campaigns/[slug]
+/[locale]/image
+/[locale]/legal/[doc]
+/[locale]/p/[slug]
+/[locale]/pricing
+/[locale]/t/[slug]
+/[locale]/video
+/account
+/admin
+/admin/campaigns
+/admin/campaigns/[id]
+/admin/campaigns/new
+/admin/contests
+/admin/contests/[slug]/preview
+/admin/inquiries
+/admin/p/[id]
+/admin/p/[id]/preview
+/admin/playbooks
+/admin/policy
+/admin/prompts
+/admin/prompts/[id]
+/admin/prompts/new
+/auth/choose
+/auth/open-in-browser
+/campaigns/[slug]/apply
+/campaigns/mine
+/identity/verify
+/library
+/r/[id]/[token]
+/renders
+/renders/[id]","candidate; may be internal/non-rendered; do not mass-replace"
+"components/admin/campaign-fields.tsx","59","jsx-placeholder","https://","/admin/campaigns/[id]
+/admin/campaigns/new","candidate; may be internal/non-rendered; do not mass-replace"
+"components/admin/campaign-fields.tsx","142","jsx-placeholder","#twings #광고","/admin/campaigns/[id]
+/admin/campaigns/new","candidate; may be internal/non-rendered; do not mass-replace"
+"components/admin/campaign-fields.tsx","142","localized-literal-candidate","#twings #광고","/admin/campaigns/[id]
+/admin/campaigns/new","candidate; may be internal/non-rendered; do not mass-replace"
+"components/admin/campaign-fields.tsx","145","jsx-placeholder","'@twings.app","/admin/campaigns/[id]
+/admin/campaigns/new","candidate; may be internal/non-rendered; do not mass-replace"
+"app/(admin)/admin/contests/page.tsx","147","jsx-placeholder","https://","/admin/contests","candidate; may be internal/non-rendered; do not mass-replace"
+"components/admin/editor-panels.tsx","234","jsx-text","mime","/admin/p/[id]","candidate; may be internal/non-rendered; do not mass-replace"
+"components/admin/editor-panels.tsx","236","jsx-text","sha256","/admin/p/[id]","candidate; may be internal/non-rendered; do not mass-replace"
+"components/admin/editor-panels.tsx","238","jsx-text","staging","/admin/p/[id]","candidate; may be internal/non-rendered; do not mass-replace"
+"components/admin/prompt-fields.tsx","137","jsx-placeholder","auto","/admin/prompts
+/admin/prompts/[id]
+/admin/prompts/new","candidate; may be internal/non-rendered; do not mass-replace"
+"components/admin/prompt-fields.tsx","194","jsx-placeholder","https://","/admin/prompts
+/admin/prompts/[id]
+/admin/prompts/new","candidate; may be internal/non-rendered; do not mass-replace"
+"components/site-footer.tsx","67","jsx-text","&nbsp;→","/[locale]
+/[locale]/campaigns
+/[locale]/campaigns/[slug]
+/[locale]/image
+/[locale]/legal/[doc]
+/[locale]/p/[slug]
+/[locale]/pricing
+/[locale]/t/[slug]
+/[locale]/video
+/account
+/campaigns/[slug]/apply
+/campaigns/mine
+/identity/verify
+/library
+/renders
+/renders/[id]","candidate; may be internal/non-rendered; do not mass-replace"
+"components/site-footer.tsx","98","jsx-text","hello@yagiworkshop.xyz","/[locale]
+/[locale]/campaigns
+/[locale]/campaigns/[slug]
+/[locale]/image
+/[locale]/legal/[doc]
+/[locale]/p/[slug]
+/[locale]/pricing
+/[locale]/t/[slug]
+/[locale]/video
+/account
+/campaigns/[slug]/apply
+/campaigns/mine
+/identity/verify
+/library
+/renders
+/renders/[id]","candidate; may be internal/non-rendered; do not mass-replace"
+"app/(app)/billing/toss/[id]/page.tsx","35","jsx-text","TWINGS","/billing/toss/[id]","candidate; may be internal/non-rendered; do not mass-replace"
+"app/(app)/campaigns/[slug]/apply/page.tsx","178","jsx-placeholder","https://instagram.com/…","/campaigns/[slug]/apply","candidate; may be internal/non-rendered; do not mass-replace"
+"app/(app)/campaigns/mine/page.tsx","131","jsx-placeholder","https://www.instagram.com/reel/…","/campaigns/mine","candidate; may be internal/non-rendered; do not mass-replace"
+"components/campaigns/brand-form.tsx","199","jsx-text","website","/[locale]/campaigns","candidate; may be internal/non-rendered; do not mass-replace"
+"app/api/billing/checkout/route.ts","80","localized-literal-candidate","이 배포에는 아직 결제가 연결되지 않았습니다.","/api/billing/checkout","candidate; may be internal/non-rendered; do not mass-replace"
+"app/api/billing/portal/route.ts","43","localized-literal-candidate","이 배포에는 아직 결제 포털이 연결되지 않았습니다.","/api/billing/portal","candidate; may be internal/non-rendered; do not mass-replace"
+"lib/brands/email.ts","16","localized-literal-candidate","300만원 미만","/api/brands/inquiries","candidate; may be internal/non-rendered; do not mass-replace"
+"lib/brands/email.ts","17","localized-literal-candidate","300만원 ~ 1,000만원","/api/brands/inquiries","candidate; may be internal/non-rendered; do not mass-replace"
+"lib/brands/email.ts","18","localized-literal-candidate","1,000만원 ~ 3,000만원","/api/brands/inquiries","candidate; may be internal/non-rendered; do not mass-replace"
+"lib/brands/email.ts","19","localized-literal-candidate","3,000만원 이상","/api/brands/inquiries","candidate; may be internal/non-rendered; do not mass-replace"
+"lib/brands/email.ts","20","localized-literal-candidate","미정","/api/brands/inquiries","candidate; may be internal/non-rendered; do not mass-replace"
+"lib/brands/email.ts","53","localized-literal-candidate","브랜드 전용 장면 제작","/api/brands/inquiries","candidate; may be internal/non-rendered; do not mass-replace"
+"lib/brands/email.ts","53","localized-literal-candidate","상담 후 결정","/api/brands/inquiries","candidate; may be internal/non-rendered; do not mass-replace"
+"lib/brands/email.ts","70","localized-literal-candidate","캠페인 페이지의 의뢰 폼으로 들어왔습니다. 1영업일 안에 회신하기로 약속한 건입니다.","/api/brands/inquiries","candidate; may be internal/non-rendered; do not mass-replace"
+"lib/brands/email.ts","72","localized-literal-candidate","관리자 보드에서 열기","/api/brands/inquiries","candidate; may be internal/non-rendered; do not mass-replace"
+"lib/brands/email.ts","82","localized-literal-candidate","의뢰를 받았습니다.","/api/brands/inquiries","candidate; may be internal/non-rendered; do not mass-replace"
+"lib/brands/email.ts","85","localized-literal-candidate","담당자가 1영업일 안에 이 주소로 회신합니다. 급한 건은 hello@yagiworkshop.xyz로 바로 보내 주세요.","/api/brands/inquiries","candidate; may be internal/non-rendered; do not mass-replace"
+"lib/brands/email.ts","88","localized-literal-candidate","예산대","/api/brands/inquiries","candidate; may be internal/non-rendered; do not mass-replace"
+"lib/brands/email.ts","89","localized-literal-candidate","희망 포맷","/api/brands/inquiries","candidate; may be internal/non-rendered; do not mass-replace"
+"lib/brands/email.ts","90","localized-literal-candidate","희망 시기","/api/brands/inquiries","candidate; may be internal/non-rendered; do not mass-replace"
+"lib/brands/email.ts","90","localized-literal-candidate","미정","/api/brands/inquiries","candidate; may be internal/non-rendered; do not mass-replace"
+"lib/brands/email.ts","92","localized-literal-candidate","캠페인 페이지 보기","/api/brands/inquiries","candidate; may be internal/non-rendered; do not mass-replace"
+"lib/brands/email.ts","95","localized-literal-candidate","담당자가 1영업일 안에 이 주소로 회신합니다.","/api/brands/inquiries","candidate; may be internal/non-rendered; do not mass-replace"
+"lib/brands/email.ts","95","localized-literal-candidate","미정","/api/brands/inquiries","candidate; may be internal/non-rendered; do not mass-replace"
+"app/global-error.tsx","81","jsx-text","TWINGS","","candidate; may be internal/non-rendered; do not mass-replace"
+"app/global-error.tsx","92","jsx-text","Something broke on the way here.","","candidate; may be internal/non-rendered; do not mass-replace"
+"app/global-error.tsx","95","jsx-text","새로고침 한 번이면 대부분 해결됩니다. If it keeps happening, the button below is the same thing, done politely.","","candidate; may be internal/non-rendered; do not mass-replace"
+"app/global-error.tsx","112","jsx-text","Reload","","candidate; may be internal/non-rendered; do not mass-replace"
+"app/global-error.tsx","129","jsx-text","Try again","","candidate; may be internal/non-rendered; do not mass-replace"
+"components/contests/rails.tsx","280","localized-literal-candidate","TWINGS — 콘테스트 개최 문의","","candidate; may be internal/non-rendered; do not mass-replace"
+"components/contests/rails.tsx","282","localized-literal-candidate","주최 (브랜드 / 플랫폼 / 스튜디오 / 크리에이터 / 커뮤니티):","","candidate; may be internal/non-rendered; do not mass-replace"
+"components/contests/rails.tsx","283","localized-literal-candidate","보상 — 종류(현금·크레딧·구독권·장비·피처링)와 금액:","","candidate; may be internal/non-rendered; do not mass-replace"
+"components/contests/rails.tsx","284","localized-literal-candidate","일정 — 시작 / 마감 / 발표:","","candidate; may be internal/non-rendered; do not mass-replace"
+"components/contests/rails.tsx","285","localized-literal-candidate","브리프 한 줄:","","candidate; may be internal/non-rendered; do not mass-replace"
+"components/contests/rails.tsx","286","localized-literal-candidate","참고 링크:","","candidate; may be internal/non-rendered; do not mass-replace"
+"components/landing/reel-poster.tsx","28","jsx-text","REEL / SLOT","","candidate; may be internal/non-rendered; do not mass-replace"

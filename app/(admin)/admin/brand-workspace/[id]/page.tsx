@@ -1,3 +1,4 @@
+import { ManagedForm } from '@/components/brand-workspace/managed-form';
 import "@/app/(brand)/workspace.css";
 import { randomUUID } from "node:crypto";
 import { notFound } from "next/navigation";
@@ -10,6 +11,7 @@ import { AdminShell, OpForm, OutcomeBanner } from "@/components/admin/chrome";
 import type { AdminOperationName } from "@/lib/admin/operations";
 import { ProjectDetail } from "@/components/brand-workspace/project-detail";
 import { BrandUpload } from "@/components/brand-workspace/upload";
+import { CollectionConsole } from "@/components/brand-workspace/collection-console";
 import type { ReactNode } from "react";
 export const dynamic = "force-dynamic";
 export default async function StudioBrandProject({
@@ -59,12 +61,20 @@ export default async function StudioBrandProject({
         ok={typeof search.ok === "string" ? search.ok : undefined}
         err={typeof search.err === "string" ? search.err : undefined}
       />
+      <section className="bw-panel bw-sharing" data-managed-sharing>
+        <div><strong>{p.clientVisible?b.managed.visible:b.managed.prepared}</strong><p className="bw-muted">{b.managed.visibilityHint}</p></div>
+        <ManagedForm op="brandWorkspace.visibility" b={b} submit={p.clientVisible?b.managed.hide:b.managed.publish}><input type="hidden" name="projectId" value={p.id}/><input type="hidden" name="expectedRevision" value={p.revision}/><input type="hidden" name="visible" value={String(!p.clientVisible)}/></ManagedForm>
+        <a className="bw-button" href={`/admin/brand-workspace/organizations/${p.organizationId}`}>{b.managed.access}</a><details><summary>{b.managed.invite}</summary><p className="bw-muted">{b.managed.inviteHint}</p><ManagedForm op="brandWorkspace.invite" b={b} submit={b.managed.invite}>
+          <input type="hidden" name="organizationId" value={p.organizationId}/><label>{b.managed.email}<input type="email" name="email" required/></label>
+          <label>{b.managed.scope}<select name="projectId"><option value={p.id}>{b.managed.scopeProject}</option><option value="">{b.managed.scopeBrand}</option></select></label><input type="hidden" name="role" value="viewer"/>
+        </ManagedForm></details>
+      </section>
       <ProjectDetail project={p} b={b} locale={locale} studio />
       <section className="bw-panel">
         <h2>{b.files}</h2>
         <BrandUpload projectId={id} b={b} studio />
       </section>
-      <section className="bw-panel">
+      <section id="studio-actions" className="bw-panel">
         <h2>{b.studioTitle}</h2>
         <div className="bw-grid">
           <Form op="brandWorkspace.status" submit={b.save}>
@@ -140,7 +150,7 @@ export default async function StudioBrandProject({
           </Form>
         </section>
       )}
-      <section className="bw-panel">
+      {p.status === "active" && <section className="bw-panel">
         <h2>{b.recordPost}</h2>
         <p className="bw-note">{b.postHint}</p>
         <Form op="brandWorkspace.post" submit={b.recordMetrics}>
@@ -206,15 +216,28 @@ export default async function StudioBrandProject({
             )}
           </div>
         </Form>
-      </section>
-      {p.posts.map((post) => (
-        <section className="bw-panel" key={post.id}>
+      </section>}
+      <CollectionConsole
+        projectId={id}
+        status={p.status}
+        posts={p.posts}
+        b={b}
+        locale={locale}
+      />
+      {/* The single operation stays for a genuinely historical measurement time. It is frozen with
+          the console, so it is not offered once the campaign is no longer active. */}
+      {p.status === "active" && p.posts.map((post) => (
+        <details className="bw-panel" key={post.id}>
+          <summary>
+            {b.collectionHistorical} · {post.platform}
+          </summary>
           <h2>{b.updateMetrics}</h2>
           <p>
             <a href={post.url} target="_blank" rel="noopener noreferrer">
               {post.url} ↗
             </a>
           </p>
+          <p className="bw-note">{b.collectionHistoricalHint}</p>
           <p className="bw-note">{b.postHint}</p>
           <Form
             op="brandWorkspace.metrics"
@@ -278,7 +301,7 @@ export default async function StudioBrandProject({
               )}
             </div>
           </Form>
-        </section>
+        </details>
       ))}
       <section className="bw-panel">
         <h2>{b.publishReport}</h2>

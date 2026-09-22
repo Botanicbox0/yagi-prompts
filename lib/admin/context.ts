@@ -134,6 +134,8 @@ export type AdminErrorCode =
   | 'unknown';
 
 export interface AdminSuccess {
+  /** One-time response body only; never included in redirects or logs. */
+  invitationToken?: string;
   ok: true;
   code: AdminSuccessCode;
   /** Extra context for the banner (a slug, a revision number) — never a secret. */

@@ -47,7 +47,7 @@ export async function announceTemplate(deps: { sql: SqlRunner; mailer: Mailer | 
 /** Stamp the one-shot guard. Returns false when it was already stamped — the caller must not send. */
 export async function markPromptAnnounced(sql: SqlRunner, id: string): Promise<boolean> {
   const { rows } = await sql.query<{ id: string }>(
-    `update prompt_items set announced_at = now() where id = $1 and announced_at is null and status = 'published' returning id`,
+    `update prompt_items set announced_at = now() where id = $1 and announced_at is null and status = 'published' and audience = 'public' returning id`,
     [id],
   );
   return rows.length > 0;

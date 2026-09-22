@@ -132,6 +132,7 @@ async function postJson(path: string, body: unknown): Promise<Fetched> {
 // ---------------------------------------------------------------------------
 
 interface PromptProbe {
+  audience: string;
   id: string;
   slug: string;
   status: string;
@@ -180,7 +181,7 @@ async function readSnapshot() {
 
   // §13 — the prompts surface needs ids (the copy endpoint is keyed on them) and statuses.
   const prompts = await db.query<PromptProbe>(
-    `select id, slug, status, source, text_visibility::text as visibility, featured
+    `select id, slug, audience, status, source, text_visibility::text as visibility, featured
        from prompt_items order by slug`,
   );
   const brandWorkspace = await db.query<BrandWorkspaceProbe>(
@@ -616,6 +617,7 @@ async function sweepWebViewSignin(): Promise<void> {
   const chooser = await request('/auth/choose?next=%2Fko%2Fvideo&locale=ko', { headers: { 'user-agent': CHROME_UA } });
   expectEqual('the chooser renders 200', chooser.status, 200);
   expectPresent('…as the designed page', chooser.body, 'data-auth-choose');
+  expectPresent('…with manual language choice', chooser.body, 'data-auth-language');
   expectPresent('…with the Kakao door', chooser.body, 'data-auth-provider="kakao"');
   expectPresent('…and the Google door', chooser.body, 'data-auth-provider="google"');
   expectPresent('…in Korean', chooser.body, '카카오로 계속하기');
@@ -629,6 +631,14 @@ async function sweepWebViewSignin(): Promise<void> {
   expectPresent('…and the Kakao symbol', chooser.body, 'fill="#000000" fill-opacity="0.85"');
   expectPresent('…carrying the return path', chooser.body, 'next=%2Fko%2Fvideo');
   expectPresent('…and noindex', chooser.body, 'noindex');
+  for (const locale of ['ko', 'en']) {
+    const brandChooser = await request(`/auth/choose?next=%2Fbrand&locale=${locale}`);
+    expectEqual(`brand chooser ${locale} renders`, brandChooser.status, 200);
+    expectPresent(`brand chooser ${locale} explains the service`, brandChooser.body, 'data-brand-auth');
+    expectPresent(`brand chooser ${locale} includes the showcase`, brandChooser.body, 'data-brand-auth-showcase');
+    expectPresent(`brand chooser ${locale} keeps login`, brandChooser.body, 'data-auth-provider="google"');
+    expectPresent(`brand chooser ${locale} keeps consent`, brandChooser.body, 'data-auth-legal');
+  }
   // Kakao is exempt from the WebView interstitial — KakaoTalk's browser can complete it.
   const kakaoHop = await request('/auth/signin?provider=kakao&next=%2Fko%2Fvideo&locale=ko', { headers: { 'user-agent': KAKAOTALK_UA } });
   expectOneOf('a Kakao sign-in from KakaoTalk redirects', kakaoHop.status, [302, 303, 307]);
@@ -1047,7 +1057,10 @@ async function sweepBrandWorkspace(fixtures: BrandWorkspaceProbe[]): Promise<voi
     const leaked = fixtures.some(row => [row.title, row.organization_name, row.storage_key].some(value => response.body.includes(value)));
     expectEqual(`${label}: no fixture content or private storage key`, leaked, false);
   };
-  for (const path of ['/brand', `/brand/projects/${fixture.id}`, `/admin/brand-workspace/${fixture.id}`]) {
+  // Authorization must run before looking up either existing or guessed report IDs.
+  for (const path of ['/brand', `/brand/projects/${fixture.id}`, `/admin/brand-workspace/${fixture.id}`,
+    `/brand/projects/${fixture.id}/reports/${fixture.id}`,
+    `/admin/brand-workspace/${fixture.id}/reports/${fixture.id}`]) {
     const page = await get(path);
     const label = path.replace(fixture.id, '{fixture}');
     expectEqual(`${label}: redirects anonymous access`, page.status, 307);
@@ -1175,6 +1188,21 @@ async function main(): Promise<void> {
   // --- docs/CAMPAIGNS.md: the campaigns surface --------------------------
   await sweepCampaigns();
   await sweepBrandWorkspace(brandWorkspace);
+  // Contract-only production must not become a consumer catalogue or media surface.
+  const brandTemplate = prompts.find(p => p.audience === 'brand');
+  if (!brandTemplate) fail('private production fixture', 'missing brand template; rebuild local snapshot');
+  else {
+    for (const locale of ['ko', 'en']) {
+      expectEqual(`${locale}: private brand template detail is 404`, (await get(`/${locale}/t/${brandTemplate.slug}`)).status, 404);
+      expectAbsent(`${locale}: private brand template absent from catalogue`, (await get(`/${locale}/video`)).body, brandTemplate.slug);
+    }
+    expectEqual('private template media is 404', (await get(`/api/prompts/media/${brandTemplate.id}:poster`)).status, 404);
+    expectAbsent('private template absent from sitemap', (await get('/sitemap.xml')).body, brandTemplate.slug);
+  }
+  expectOneOf('brand studio requires login', (await get('/brand/studio')).status, [302,303,307,308]);
+  expectEqual('brand production refuses anonymous creation', (await postJson('/api/brand-production', {})).status, 401);
+  expectEqual('brand production refuses anonymous status', (await get('/api/brand-production/00000000-0000-4000-8000-000000000000')).status, 404);
+  expectEqual('brand production refuses anonymous output', (await get('/api/brand-production/00000000-0000-4000-8000-000000000000/media')).status, 404);
 
   // --- docs/TEMPLATES-IA.md §8: the render queue --------------------------
   await sweepRenders();

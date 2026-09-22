@@ -26,9 +26,10 @@ export async function POST(request:Request){
   if(!deps)return json({code:'unavailable'},503);
   if(Number(request.headers.get('content-length')??0)>3_100_000)return json({code:'bad_photo'},413);
   try{
-    const form=await request.formData(),photo=form.get('photo');
-    if(!(photo instanceof File) || photo.size>3_000_000)return json({code:'bad_photo'},400);
-    const result=await enqueuePortrait(deps,viewer.userId,{requestId:String(form.get('requestId')??''),consent:form.get('consent')==='yes',bytes:new Uint8Array(await photo.arrayBuffer()),mime:photo.type});
+    const form=await request.formData(),photo=form.get('photo'),action=String(form.get('action')??'initial');
+    if(action!=='recover'&&(!(photo instanceof File) || photo.size>3_000_000))return json({code:'bad_photo'},400);
+    const result=await enqueuePortrait(deps,viewer.userId,{requestId:String(form.get('requestId')??''),consent:form.get('consent')==='yes',
+      ...(photo instanceof File?{bytes:new Uint8Array(await photo.arrayBuffer())}:{}),mime:photo instanceof File?photo.type:'image/png',action,rejectInitial:form.get('rejectInitial')==='yes'});
     if(!result.ok)return json(result,result.code==='rate_limited'?429:409);
     after(async()=>{try{await runPortraitPass(deps,viewer.userId!);}catch{/* Redacted; poll can recover saved output. */}});
     return json(result,202);

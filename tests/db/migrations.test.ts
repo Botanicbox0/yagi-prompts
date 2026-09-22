@@ -23,16 +23,25 @@ describe('migrations apply on a fresh database (PLAN §6)', () => {
       'brand_attachments',
       'brand_content_decisions',
       'brand_content_versions',
+      'brand_contract_documents',
+      'brand_contract_sharing_events',
       // 2026-09-11 — the brand enquiry form on the campaigns page: one row per enquiry, studio-only.
       'brand_inquiries',
       'brand_invites',
       'brand_memberships',
       'brand_messages',
       'brand_organizations',
+      // 2026-09-22 — one ledger row per studio collection-console save (idempotency + batch time).
+      'brand_post_collection_batches',
       'brand_post_measurements',
       'brand_posts',
+      'brand_production_contracts',
+      'brand_production_reservations',
+      'brand_production_templates',
+      'brand_project_members',
       'brand_projects',
       'brand_reports',
+      'brand_support_messages',
       'brand_workspace_events',
       // docs/CAMPAIGNS.md (2026-09-03) — the paid cousin of contests: the campaign, one application per
       // creator walked through the state machine, and the same append-only write ledger the contest

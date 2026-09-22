@@ -55,8 +55,8 @@ export type PromptDetailResult = PromptDetailOk | { status: 'not_found' };
 export const PROMPT_NOT_FOUND = { status: 'not_found' } as const;
 
 /** A published item is visible to everyone; everything else does not exist on the public surface. */
-export function isPubliclyVisible(row: Pick<PromptRow, 'status'>): boolean {
-  return row.status === 'published';
+export function isPubliclyVisible(row: Pick<PromptRow, 'status' | 'audience'>): boolean {
+  return row.status === 'published' && row.audience !== 'brand';
 }
 
 function toRowInput(row: PromptRow) {

@@ -9,6 +9,14 @@ vi.mock('@/lib/auth/dev-identity', () => ({ devIdentityUserId: () => null }));
 import { middleware } from '@/middleware';
 const req = (host: string, path: string, method = 'GET', origin?: string) => new NextRequest(`https://${host}${path}`, { method, headers: { host, ...(origin ? {origin} : {}) } });
 describe('brand host boundary', () => {
+  it('routes settings and library through brand authentication and allows guarded support reads',async()=>{
+    for(const path of ['/brand/settings','/brand/library']) {
+      const r=await middleware(req('brand.twings.app',path));
+      expect(new URL(r.headers.get('location')!).searchParams.get('next')).toBe(path);
+      expect(authReturnPath(path,'brand.twings.app','/')).toBe(path);
+    }
+    expect((await middleware(req('brand.twings.app','/api/brand-workspace'))).headers.get('x-middleware-next')).toBe('1');
+  });
   it('lets the empty invitation landing clear its fragment before starting OAuth', async () => {
     const response = await middleware(req('brand.twings.app', '/brand/invite'));
     expect(response.headers.get('x-middleware-next')).toBe('1');
@@ -46,5 +54,12 @@ describe('brand host boundary', () => {
     expect(authReturnPath('/brand/../admin','brand.twings.app','/')).toBe('/brand');
     expect(authReturnPath('/brand/projects/abc','brand.twings.app','/')).toBe('/brand/projects/abc');
     expect(authReturnPath('/brand/twings.svg','brand.twings.app','/')).toBe('/brand');
+  });
+  it('allows the narrow locale and production transports without opening other server actions', async()=>{
+    expect((await middleware(req('brand.twings.app','/api/workspace-locale','POST','https://brand.twings.app'))).headers.get('x-middleware-next')).toBe('1');
+    expect((await middleware(req('brand.twings.app','/api/workspace-locale','POST','https://evil.test'))).status).toBe(404);
+    expect((await middleware(req('brand.twings.app','/api/brand-production','POST','https://brand.twings.app'))).headers.get('x-middleware-next')).toBe('1');
+    expect((await middleware(req('brand.twings.app','/brand/studio','POST','https://brand.twings.app'))).status).toBe(404);
+    expect(authReturnPath('/brand/studio','brand.twings.app','/')).toBe('/brand/studio');
   });
 });

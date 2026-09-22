@@ -11,11 +11,19 @@ export interface BrandCriteria {
   primaryMetric: 'views' | 'engagement' | 'content_count'; targetValue: number | null;
 }
 export interface BrandProjectSummary {
+  overview?: BrandHomeOverview; clientVisible?: boolean;
   id: string; organizationId: string; organizationName: string; title: string; objective: string;
   audience: string; budgetKrw: number | null; budgetTaxBasis: 'unspecified' | 'included' | 'excluded';
   criteria: BrandCriteria;
   startsOn: string | null; endsOn: string | null; productionMode: ProductionMode;
   status: BrandProjectStatus; revision: number; createdAt: string; updatedAt: string;
+}
+export interface BrandHomeContent {
+  id: string; title: string; version: number; decision: BrandContentVersion['decision'];
+  mediaUrl: string | null; mime: string | null; createdAt: string;
+}
+export interface BrandHomeOverview {
+  pending: number; changes: number; published: number; contents: BrandHomeContent[];
 }
 export interface BrandContentVersion {
   id: string; slotKey: string; version: number; title: string; attachmentId: string; mediaUrl: string; caption: string;
@@ -35,6 +43,8 @@ export interface BrandPost {
   measuredAt: string | null; views: number | null; likes: number | null; comments: number | null;
   shares: number | null; saves: number | null; createdAt: string;
 }
+/** Studio console result only. `measuredAt` is the one server-side time shared by every saved row. */
+export interface BrandMetricsBatchResult { id: string; saved: number; measuredAt: string }
 export interface BrandReportSnapshot {
   totalPosts: number; measuredPosts: number; viewsTotal: number | null;
   /** Sum of latest per-post views, never unique reach and never summed over time. */
@@ -45,6 +55,7 @@ export interface BrandReport {
   snapshot: BrandReportSnapshot; createdAt: string;
 }
 export interface BrandProjectDetail extends BrandProjectSummary {
+  contracts?: BrandContract[]; contractUploads?: BrandAttachment[];
   role: BrandRole | 'studio'; referenceLinks: BrandReferenceLink[]; contents: BrandContentVersion[];
   decisions: BrandDecision[]; messages: BrandMessage[]; attachments: BrandAttachment[];
   posts: BrandPost[]; reports: BrandReport[];
@@ -56,3 +67,5 @@ export interface BrandMembers {
   members: Array<{ id: string; userId: string; email: string | null; role: BrandRole; status: 'active' | 'revoked'; isSelf: boolean }>;
   invitations: Array<{ id: string; email: string; role: 'editor' | 'viewer'; expiresAt: string; status: 'pending' | 'accepted' | 'revoked' | 'expired' }>;
 }
+
+export interface BrandContract { id:string; documentKey:string;title:string;version:number;attachmentId:string;shared:boolean;revision:number;createdAt:string }

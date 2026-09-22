@@ -1,7 +1,8 @@
+import { ServiceGuide } from "@/components/brand-workspace/service-guide";
 import { brandContext } from "@/components/brand-workspace/context";
 import { ActionForm } from "@/components/brand-workspace/action-form";
 import { loadBrandWorkspace } from "@/lib/brands/workspace/service";
-import { formatBrandTimestamp } from "@/components/brand-workspace/format";
+import { CampaignList } from "@/components/brand-workspace/campaign-list";
 export default async function BrandHome() {
   const { sql, viewer, b, locale } = await brandContext();
   if (!sql) return <p role="alert">{b.unavailable}</p>;
@@ -10,18 +11,21 @@ export default async function BrandHome() {
     <div data-brand-home>
       <div className="bw-heading">
         <div>
-          <h1>{b.intro}</h1>
-          <p>{b.introBody}</p>
+          <h1>{b.dashboard.title}</h1>
+          <p>{b.dashboard.subtitle}</p>
         </div>
+        {workspace.projects.length > 0 && workspace.organizations.some(o => o.role !== "viewer") && <a href="/brand/projects/new" className="bw-button bw-primary">{b.newProject}</a>}
       </div>
-      {workspace.organizations.length === 0 ? (
+      <ServiceGuide kind="campaign" b={b} />
+      {workspace.organizations.length === 0 && workspace.projects.length === 0 ? (
         <section className="bw-panel">
-          <h2>{b.needOrganization}</h2>
+          <h2>{b.needOrganization}</h2><ol className="bw-setup"><li>{b.performance.setupOne}</li><li>{b.performance.setupTwo}</li><li>{b.performance.setupThree}</li></ol>
           <p className="bw-note">{b.organizationHint}</p>
           <ActionForm
             operation="organization.create"
             b={b}
             submit={b.createOrganization}
+            redirectTo="/brand/projects/new"
           >
             <label>
               {b.organization}
@@ -46,31 +50,9 @@ export default async function BrandHome() {
               </a>
             </section>
           ) : (
-            <section className="bw-panel">
-              <h2>{b.home}</h2>
-              <ul className="bw-list">
-                {workspace.projects.map((p) => (
-                  <li key={p.id}>
-                    <div className="bw-row">
-                      <div>
-                        <h3>
-                          <a href={`/brand/projects/${p.id}`}>{p.title}</a>
-                        </h3>
-                        <p className="bw-muted">
-                          {p.organizationName} · {b.latestUpdate}{" "}
-                          {formatBrandTimestamp(p.updatedAt, locale)}
-                        </p>
-                      </div>
-                      <span className="bw-status" data-state={p.status}>
-                        {b.status[p.status]}
-                      </span>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            </section>
+            <CampaignList projects={workspace.projects} b={b} locale={locale}/>
           )}
-          <section className="bw-panel">
+          <section className="bw-team-footer">
             <h2>{b.organizations}</h2>
             <ul className="bw-list">
               {workspace.organizations.map((o) => (

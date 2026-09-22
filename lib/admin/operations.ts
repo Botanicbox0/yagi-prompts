@@ -1,3 +1,4 @@
+import { BRAND_PRODUCTION_OPERATIONS } from './brand-production-operations';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import {
@@ -733,6 +734,7 @@ export const ADMIN_OPERATIONS = {
   // 2026-09-11 — the brand enquiries that arrive through the campaigns page.
   ...BRAND_OPERATIONS,
   ...BRAND_WORKSPACE_OPERATIONS,
+  ...BRAND_PRODUCTION_OPERATIONS,
 };
 
 export type AdminOperationName = keyof typeof ADMIN_OPERATIONS;

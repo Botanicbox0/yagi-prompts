@@ -1,5 +1,11 @@
+import { SupportDrawer } from '@/components/brand-workspace/support';
+import { getViewer } from '@/lib/auth/viewer';
+import { getSqlRunner } from '@/lib/db/connect';
+import { loadBrandWorkspace } from '@/lib/brands/workspace/service';
 import "@/app/globals.css";
 import "./workspace.css";
+import { WorkspaceLanguage } from '@/components/brand-workspace/language';
+import { WorkspaceNavigation } from '@/components/brand-workspace/navigation';
 import type { ReactNode } from "react";
 import type { Metadata } from "next";
 import { fontVariables } from "@/app/fonts";
@@ -25,6 +31,9 @@ export default async function BrandLayout({
   const locale = await getRequestLocale();
   const d = getDictionary(locale);
   const b = d.brandWorkspace;
+  const viewer=await getViewer();
+  const sql=viewer.userId?await getSqlRunner():null;
+  const workspace=sql?await loadBrandWorkspace({sql},viewer):null;
   return (
     <html lang={locale} className={fontVariables} data-brand-workspace>
       <head>
@@ -45,26 +54,24 @@ export default async function BrandLayout({
               <span>{d.admin.byline}</span>
             </a>
             <p className="bw-kicker">{b.title}</p>
-            <nav>
-              <a href="/brand">{b.home}</a>
-              <a href="/brand/members">{b.members}</a>
-            </nav>
-            <form action="/auth/signout" method="post" className="bw-signout">
-              <button type="submit">{b.signOut}</button>
-            </form>
+            <WorkspaceNavigation home={b.home} members={b.members} settings={b.managed.settings} library={b.managed.library} studio={b.productionStudio.title}/>
+            <div className="bw-sidebar-utilities">
+              <WorkspaceLanguage locale={locale} label={d.nav.localeToggle} compact applyLabel={b.languageApply}/>
+              <form action="/auth/signout" method="post" className="bw-signout">
+                <button type="submit" aria-label={b.signOut} title={b.signOut}>
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 4H4v16h6M14 8l4 4-4 4M8 12h10"/></svg>
+                  <span>{b.signOut}</span>
+                </button>
+              </form>
+            </div>
           </aside>
           <div className="bw-body">
-            <header className="bw-topbar">
-              <span>{b.title}</span>
-              <a href="/brand/projects/new" className="bw-button bw-primary">
-                {b.newProject}
-              </a>
-            </header>
             <main id="main" className="bw-main">
               {children}
             </main>
           </div>
         </div>
+        {workspace&&<SupportDrawer organizations={workspace.organizations} b={b} locale={locale}/>}
       </body>
     </html>
   );

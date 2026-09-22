@@ -14,6 +14,11 @@
   --color-black: #000000;
   --color-white: #ffffff;
   --color-blue: #0000ee;
+  --color-workspace-canvas: #f7f7f8;
+  --color-workspace-paper: #ffffff;
+  --color-workspace-ink: #202126;
+  --color-workspace-muted: #6b6d75;
+  --color-workspace-line: #e8e8eb;
   --color-line-light: rgba(0, 0, 0, 0.12);
   --color-line-dark: rgba(255, 255, 255, 0.16);
 

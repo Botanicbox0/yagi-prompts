@@ -44,7 +44,8 @@ export async function GET(request: Request): Promise<NextResponse> {
     if (sql !== null) {
       if (portraits) portraitId = (await sql.query<{attempt_id:string}>('select attempt_id from identity_portrait_selections where user_id=$1',[viewer.userId])).rows[0]?.attempt_id ?? null;
       interest = (await loadPreferences(sql, viewer.userId))?.newPlaybook === true;
-      const template = live && slug ? await loadPromptBySlug(sql, slug) : null;
+      const candidate = live && slug ? await loadPromptBySlug(sql, slug) : null;
+      const template = candidate?.audience === 'brand' ? null : candidate;
       if (template !== null) {
         // Only the liveness mode has a camera step to announce; the virtual library needs nothing from the person.
         const mode = assetLibraryMode();

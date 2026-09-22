@@ -1,5 +1,5 @@
 "use client";
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import type { BrandCopy } from "./action-form";
 const CAPS: Record<string, number> = {
@@ -15,20 +15,25 @@ export function BrandUpload({
   projectId,
   b,
   studio = false,
+  purpose = "workspace",
 }: {
   projectId: string;
   b: BrandCopy;
   studio?: boolean;
+  purpose?: "workspace" | "contract";
 }) {
   const endpoint = studio
     ? "/api/admin/brand-workspace"
     : "/api/brand-workspace";
   const router = useRouter();
+  const [ready,setReady]=useState(false);
+  useEffect(()=>setReady(true),[]);
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState(0);
   const [notice, setNotice] = useState("");
   const [failed, setFailed] = useState(false);
+  const fileInput=useRef<HTMLInputElement>(null);
   const active = useRef<XMLHttpRequest | null>(null);
   const reservation = useRef<{
     file: File;
@@ -39,7 +44,7 @@ export function BrandUpload({
   async function upload() {
     if (busy || !file) return;
     const cap = CAPS[file.type];
-    if (!cap || file.size <= 0 || file.size > cap) {
+    if ((purpose === "contract" && file.type !== "application/pdf") || !cap || file.size <= 0 || file.size > cap) {
       setFailed(true);
       setNotice(b.badFile);
       return;
@@ -75,7 +80,7 @@ export function BrandUpload({
           body: JSON.stringify({
             operation: "attachment.reserve",
             input: {
-              projectId,
+              projectId, purpose,
               requestId: attempt.requestId,
               name: file.name,
               mime: file.type,
@@ -121,6 +126,7 @@ export function BrandUpload({
       if (!response.ok || !result.ok) throw Error("complete");
       setNotice(b.uploadDone);
       setFile(null);
+      if(fileInput.current)fileInput.current.value="";
       reservation.current = null;
       router.refresh();
     } catch {
@@ -136,16 +142,17 @@ export function BrandUpload({
       <label>
         {b.upload}
         <input
+          ref={fileInput}
           type="file"
-          accept={Object.keys(CAPS).join(",")}
-          disabled={busy}
+          accept={purpose === "contract" ? "application/pdf" : Object.keys(CAPS).join(",")}
+          disabled={!ready||busy}
           onChange={(e) => {
             setFile(e.target.files?.[0] ?? null);
             setNotice("");
           }}
         />
       </label>
-      <p className="bw-muted">{b.uploadHint}</p>
+      <p className="bw-muted">{purpose === "contract" ? b.managed.pdfHint : b.uploadHint}</p>
       <div className="bw-form-actions">
         <button
           className="bw-button"
