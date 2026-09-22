@@ -23,8 +23,8 @@ Forms disable until hydrated and use POST fallbacks. Successful mutations either
 
 Apply through the repository's migration process, after the predecessor migrations:
 
-1. `0029_core_brand_managed_workspace.sql`
-2. `0030_core_brand_profile_support.sql`
+1. `0031_core_brand_managed_workspace.sql`
+2. `0032_core_brand_profile_support.sql`
 3. `0117_glue_brand_managed_workspace.sql`
 4. `0118_glue_brand_profile_support.sql`
 

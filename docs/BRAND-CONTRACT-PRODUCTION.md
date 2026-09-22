@@ -37,7 +37,7 @@ The brand-host allowlist permits only the new production transports. A narrow sa
 
 ## Rollout and limits
 
-**클라우드 적용 필요:** `0031_core_brand_production.sql` and `0119_glue_brand_production.sql`, after PR #16's migrations. Browser roles have no direct access; server-role writes use limited grants. No cloud SQL, `.env.local`, legal text or public generation flag was changed. `RENDER_PIPELINE_PUBLIC=false` remains intact.
+**클라우드 적용 필요:** `0033_core_brand_production.sql` and `0119_glue_brand_production.sql`, after PR #16's migrations. Browser roles have no direct access; server-role writes use limited grants. No cloud SQL, `.env.local`, legal text or public generation flag was changed. `RENDER_PIPELINE_PUBLIC=false` remains intact.
 
 The code reuses the existing Seedance 2.5 integration; this PR does **not** certify a live provider generation, new model entitlement or real-person output quality. Those require an authorized user's selected portrait and the deployed provider configuration. Local examples and quota numbers are explicitly fixture-only. Production requires migrations, identity-portrait rollout, provider readiness, a real agreed contract/allowance and operator-selected templates.
 
