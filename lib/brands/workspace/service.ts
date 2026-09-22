@@ -65,7 +65,9 @@ async function mutation<S extends z.ZodType, T>(deps: BrandWorkspaceDeps, viewer
   perform: (sql: SqlRunner, userId: string, value: z.output<S>) => Promise<T>): Promise<BrandOutcome<T>> {
   if (!uuid(viewer.userId)) return fail('sign_in_required');
   const parsed = schema.safeParse(input);
-  if (!parsed.success) return { ok: false, code: 'invalid', field: String(parsed.error.issues[0]?.path[0] ?? '') };
+  // The full dotted path (`criteria.maxFollowers`, `referenceLinks.1.url`) lets the form mark the exact
+  // control; the brand workspace form is the only reader of this field.
+  if (!parsed.success) return { ok: false, code: 'invalid', field: (parsed.error.issues[0]?.path ?? []).map(String).join('.') };
   try {
     return await deps.sql.transaction(async sql => {
       await profile(sql, viewer.userId!, true);

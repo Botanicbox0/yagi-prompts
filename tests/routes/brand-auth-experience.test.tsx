@@ -37,6 +37,18 @@ describe('brand login experience', () => {
     context.surface = 'admin';
     expect(await page({ next: '/brand' })).not.toContain('data-brand-auth');
   });
+  it('offers no "back" link that would only redirect to this same sign-in page', async () => {
+    context.surface = 'brand';
+    for (const next of ['/brand', '/brand/projects/example', '/brand/members']) {
+      expect(await page({ next })).not.toContain('data-auth-back');
+    }
+    // The invitation landing is readable signed out, so going back there is real.
+    expect(await page({ next: '/brand/invite?token=example' })).toContain('data-auth-back');
+    context.surface = 'admin';
+    expect(await page({ next: '/admin' })).not.toContain('data-auth-back');
+    context.surface = 'consumer';
+    expect(await page({ next: '/ko/video' })).toContain('data-auth-back');
+  });
   it('renders English copy and usable non-JavaScript login links with a static initial showcase', async () => {
     const html = await page({ next: '/brand', locale: 'en' });
     expect(html).toContain('Content for your brand.');

@@ -63,6 +63,10 @@ export function CampaignContracts({
                   op="brandWorkspace.contractShare"
                   b={b}
                   submit={d.shared ? c.unshare : c.share}
+                  tone={d.shared ? "danger" : "secondary"}
+                  confirm={d.shared
+                    ? { prompt: b.confirm.unshareContract, action: b.confirm.unshareContractAction }
+                    : { prompt: b.confirm.shareContract, action: b.confirm.shareContractAction }}
                 >
                   <input type="hidden" name="projectId" value={p.id} />
                   <input type="hidden" name="contractId" value={d.id} />

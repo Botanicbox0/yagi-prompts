@@ -6,7 +6,7 @@ import { getDictionary } from '@/lib/i18n/dictionaries';
 import { AUTH_PROVIDERS, chooseProviderHref, signInWithProviderHref, type AuthProvider } from '@/lib/auth/providers';
 import { legalDocument } from '@/lib/legal/documents';
 import { legalHref } from '@/lib/legal/links';
-import { authReturnPath, isBrandPath } from '@/lib/routing/surfaces';
+import { authReturnPath, isAdminPath, isBrandPath } from '@/lib/routing/surfaces';
 import { publicHref, requestSurface } from '@/lib/routing/request-surface';
 import { BrandShowcase } from '@/components/auth/brand-showcase';
 import styles from '@/components/auth/brand-entry.module.css';
@@ -126,6 +126,10 @@ export default async function ChooseProviderPage(props: RouteProps) {
       {language === 'ko' ? dict.nav.localeKo : dict.nav.localeEn}
     </a>
   ));
+  // Signed-out visits to gated workspace paths are redirected straight back to this page, so a
+  // "back" link to them would only reload it. The invitation landing is readable signed out.
+  const nextPath = new URL(next, 'https://path.invalid').pathname;
+  const backReturnsHere = (brandEntry && isBrandPath(nextPath) && nextPath !== '/brand/invite') || (admin && isAdminPath(nextPath));
   const authError = (error === 'oauth' || error === 'oauth_unconfigured') && (
     <p role="alert" className="mt-6 border-l-2 border-accent pl-3 text-left text-body">
       {error === 'oauth' ? dict.notice.oauth : dict.notice.oauthUnconfigured}
@@ -162,7 +166,7 @@ export default async function ChooseProviderPage(props: RouteProps) {
             </div>
             <footer className={styles.footer}>
               <a href={publicHref(`/${locale}/campaigns`, admin)}>{copy.more} <span aria-hidden="true">↗</span></a>
-              <a href={next} data-auth-back>← {dict.auth.chooseBack}</a>
+              {!backReturnsHere && <a href={next} data-auth-back>← {dict.auth.chooseBack}</a>}
             </footer>
           </div>
           <BrandShowcase copy={copy} assetOrigin={admin ? 'https://twings.app' : ''} />
@@ -205,9 +209,11 @@ export default async function ChooseProviderPage(props: RouteProps) {
           {languageLinks}
         </div>
 
-        <a href={next} data-auth-back className="mt-10 font-label text-eyebrow uppercase opacity-50 hover:opacity-100">
-          ← {dict.auth.chooseBack}
-        </a>
+        {!backReturnsHere && (
+          <a href={next} data-auth-back className="mt-10 font-label text-eyebrow uppercase opacity-50 hover:opacity-100">
+            ← {dict.auth.chooseBack}
+          </a>
+        )}
       </div>
     </main>
   );

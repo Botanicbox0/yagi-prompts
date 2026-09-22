@@ -28,21 +28,27 @@ export default async function BrandSettings({
           <p>{c.profileHint}</p>
         </div>
       </div>
-      <nav className="bw-status-tabs">
-        {workspace.organizations.map((o) => (
-          <a
-            key={o.id}
-            href={`/brand/settings?organizationId=${o.id}`}
-            aria-current={org?.id === o.id ? "page" : undefined}
-          >
-            {o.name}
-          </a>
-        ))}
-      </nav>
+      {workspace.organizations.length > 0 && (
+        <nav className="bw-status-tabs" aria-label={b.organizations}>
+          {workspace.organizations.map((o) => (
+            <a
+              key={o.id}
+              href={`/brand/settings?organizationId=${o.id}`}
+              aria-current={org?.id === o.id ? "page" : undefined}
+            >
+              {o.name}
+            </a>
+          ))}
+        </nav>
+      )}
       {!org ? (
-        <p className="bw-note">{b.denied}</p>
+        <section className="bw-empty" data-brand-settings-unavailable>
+          <p>{workspace.organizations.length === 0 ? b.access.sharedOnly : b.denied}</p>
+          <a href="/brand" className="bw-button">{b.back}</a>
+        </section>
       ) : (
         <section className="bw-panel bw-settings-panel">
+          {org.role !== "owner" && <p className="bw-note" data-brand-settings-read-only>{b.access.ownerOnlySettings}</p>}
           <ActionForm
             operation="organization.update"
             fixed={{ organizationId: org.id, expectedRevision: org.revision }}

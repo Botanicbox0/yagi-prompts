@@ -1,5 +1,5 @@
 "use client";
-import { useRef, useState, useEffect, type FormEvent } from "react";
+import { useId, useRef, useState, useEffect, type FormEvent } from "react";
 import type {
   BrandOrganization,
   BrandMessage,
@@ -24,15 +24,17 @@ export function SupportDrawer({
     } | null>(null);
   const [organizationId, setOrg] = useState(organizations[0]?.id ?? ""),
     [messages, setMessages] = useState<BrandMessage[]>([]),
+    // "idle" until first opened; the empty invitation only shows once a load has actually answered.
+    [load, setLoad] = useState<"idle" | "loading" | "ready" | "failed">("idle"),
     [busy, setBusy] = useState(false),
-    [error, setError] = useState(false);
+    [notice, setNotice] = useState("");
+  const titleId = useId();
   useEffect(() => {
     if (list.current) list.current.scrollTop = list.current.scrollHeight;
   }, [messages]);
   if (!organizations.length) return null;
-  async function refresh(id = organizationId) {
-    setBusy(true);
-    setError(false);
+  async function refresh(id = organizationId): Promise<boolean> {
+    setLoad("loading");
     try {
       const r = await fetch(
         `/api/brand-workspace?organizationId=${encodeURIComponent(id)}`,
@@ -41,11 +43,18 @@ export function SupportDrawer({
       const data = await r.json();
       if (!r.ok || !data.ok) throw Error();
       setMessages(data.messages);
+      setLoad("ready");
+      return true;
     } catch {
-      setError(true);
-    } finally {
-      setBusy(false);
+      setLoad("failed");
+      return false;
     }
+  }
+  async function reload(id = organizationId) {
+    setBusy(true);
+    setNotice("");
+    await refresh(id);
+    setBusy(false);
   }
   async function send(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -59,7 +68,7 @@ export function SupportDrawer({
     )
       attempt.current = { body, organizationId, id: crypto.randomUUID() };
     setBusy(true);
-    setError(false);
+    setNotice("");
     try {
       const r = await fetch("/api/brand-workspace", {
         method: "POST",
@@ -70,12 +79,16 @@ export function SupportDrawer({
         }),
       });
       const result = await r.json();
-      if (!r.ok || !result.ok) throw Error();
+      if (!r.ok || !result.ok) {
+        setNotice(result.code === "rate_limited" ? b.errors.rateLimited : b.error);
+        return;
+      }
       attempt.current = null;
       form.reset();
-      await refresh();
+      // The message is stored; a failed reload must not read as a failed send.
+      if (!(await refresh())) setNotice(b.managed.supportSentNotLoaded);
     } catch {
-      setError(true);
+      setNotice(b.error);
     } finally {
       setBusy(false);
     }
@@ -86,7 +99,7 @@ export function SupportDrawer({
         className="bw-support-launch"
         onClick={() => {
           dialog.current?.showModal();
-          void refresh();
+          void reload();
         }}
         aria-label={b.managed.support}
       >
@@ -95,10 +108,10 @@ export function SupportDrawer({
           <path d="M8 8h8M8 12h5" />
         </svg>
       </button>
-      <dialog ref={dialog} className="bw-support-dialog">
+      <dialog ref={dialog} className="bw-support-dialog" aria-labelledby={titleId} data-support-dialog>
         <header>
           <div>
-            <strong>{b.managed.support}</strong>
+            <strong id={titleId}>{b.managed.support}</strong>
             <p>{b.managed.supportHint}</p>
           </div>
           <button
@@ -117,7 +130,7 @@ export function SupportDrawer({
             onChange={(e) => {
               setOrg(e.target.value);
               setMessages([]);
-              void refresh(e.target.value);
+              void reload(e.target.value);
             }}
           >
             {organizations.map((o) => (
@@ -126,12 +139,18 @@ export function SupportDrawer({
               </option>
             ))}
           </select>
-          <button type="button" disabled={busy} onClick={() => void refresh()}>
+          <button type="button" disabled={busy} onClick={() => void reload()}>
             {b.managed.refresh}
           </button>
         </div>
-        <div ref={list} className="bw-support-messages" aria-live="polite">
-          {!messages.length && (
+        <div ref={list} className="bw-support-messages" aria-live="polite" aria-busy={load === "loading"} data-support-state={load}>
+          {load === "loading" && !messages.length && (
+            <p className="bw-muted" role="status">{b.managed.supportLoading}</p>
+          )}
+          {load === "failed" && (
+            <p className="bw-error" role="alert">{b.managed.supportLoadFailed}</p>
+          )}
+          {load === "ready" && !messages.length && (
             <p className="bw-muted">{b.managed.supportEmpty}</p>
           )}
           {messages.map((m) => (
@@ -150,9 +169,9 @@ export function SupportDrawer({
             </article>
           ))}
         </div>
-        {error && (
+        {notice && (
           <p role="alert" className="bw-error">
-            {b.error}
+            {notice}
           </p>
         )}
         {organizations.find((o) => o.id === organizationId)?.role !==

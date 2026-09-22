@@ -6,6 +6,7 @@ import "@/app/globals.css";
 import "./workspace.css";
 import { WorkspaceLanguage } from '@/components/brand-workspace/language';
 import { WorkspaceNavigation } from '@/components/brand-workspace/navigation';
+import { navigationVisibility, workspaceAccess } from '@/components/brand-workspace/access';
 import type { ReactNode } from "react";
 import type { Metadata } from "next";
 import { fontVariables } from "@/app/fonts";
@@ -34,6 +35,7 @@ export default async function BrandLayout({
   const viewer=await getViewer();
   const sql=viewer.userId?await getSqlRunner():null;
   const workspace=sql?await loadBrandWorkspace({sql},viewer):null;
+  const visible=navigationVisibility(workspace?workspaceAccess(workspace):null);
   return (
     <html lang={locale} className={fontVariables} data-brand-workspace>
       <head>
@@ -47,6 +49,7 @@ export default async function BrandLayout({
         />
       </head>
       <body>
+        <a href="#main" className="bw-skip-link" data-skip-link>{b.skipToContent}</a>
         <div className="bw-shell">
           <aside className="bw-sidebar">
             <a href="/brand" className="bw-lockup">
@@ -54,7 +57,7 @@ export default async function BrandLayout({
               <span>{d.admin.byline}</span>
             </a>
             <p className="bw-kicker">{b.title}</p>
-            <WorkspaceNavigation home={b.home} members={b.members} settings={b.managed.settings} library={b.managed.library} studio={b.productionStudio.title}/>
+            <WorkspaceNavigation home={b.home} members={b.members} settings={b.managed.settings} library={b.managed.library} studio={b.productionStudio.title} visible={visible}/>
             <div className="bw-sidebar-utilities">
               <WorkspaceLanguage locale={locale} label={d.nav.localeToggle} compact applyLabel={b.languageApply}/>
               <form action="/auth/signout" method="post" className="bw-signout">

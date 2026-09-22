@@ -4,11 +4,15 @@ import type { BrandOrganization } from "@/lib/brands/workspace/types";
 import { ActionForm, type BrandCopy } from "./action-form";
 
 /** A structured brief in the existing private brand support thread, not a campaign or contract. */
-export function StudioInquiry({ organizations, organizationId, b }: {
+export function StudioInquiry({ organizations, organizationId, b, allowSetup = false }: {
   organizations: BrandOrganization[]; organizationId?: string; b: BrandCopy;
+  /** Only a brand-new account (no workspace, no shared campaigns) may create a workspace from here. */
+  allowSetup?: boolean;
 }) {
   const t = b.studioInquiry;
   const writable = organizations.filter(o => o.role !== "viewer");
+  // Viewers and campaign-only invitees cannot send a request; the page explains that instead.
+  const available = writable.length > 0 || (organizations.length === 0 && allowSetup);
   const dialog = useRef<HTMLDialogElement>(null);
   const attempt = useRef<{ fingerprint: string; id: string } | null>(null);
   const sending = useRef(false);
@@ -48,6 +52,7 @@ export function StudioInquiry({ organizations, organizationId, b }: {
     finally { sending.current = false; setBusy(false); }
   }
 
+  if (!available) return null;
   return <>
     <button type="button" className="bw-button bw-primary" disabled={!ready}
       onClick={() => dialog.current?.showModal()}>{t.action}</button>
@@ -56,12 +61,12 @@ export function StudioInquiry({ organizations, organizationId, b }: {
         <h2 id="studio-inquiry-title">{sent ? t.sent : t.title}</h2>
         <button type="button" className="bw-button" onClick={() => dialog.current?.close()}>{t.close}</button>
       </header>
-      {sent ? <p role="status">{t.sentHint}</p> : !organizations.length ? <>
+      {sent ? <p role="status">{t.sentHint}</p> : !writable.length ? <>
         <p>{t.setup}</p>
         <ActionForm operation="organization.create" b={b} submit={b.createOrganization} redirectTo="/brand/studio">
           <label>{b.organization}<input name="name" minLength={2} maxLength={100} required autoComplete="organization" /></label>
         </ActionForm>
-      </> : !writable.length ? <p>{t.readOnly}</p> : <>
+      </> : <>
         <p>{t.intro}</p>
         <form className="bw-form" onSubmit={send} aria-busy={busy}>
           <fieldset disabled={!ready || busy}>
