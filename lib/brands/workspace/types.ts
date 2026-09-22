@@ -43,6 +43,8 @@ export interface BrandPost {
   measuredAt: string | null; views: number | null; likes: number | null; comments: number | null;
   shares: number | null; saves: number | null; createdAt: string;
 }
+/** Studio console result only. `measuredAt` is the one server-side time shared by every saved row. */
+export interface BrandMetricsBatchResult { id: string; saved: number; measuredAt: string }
 export interface BrandReportSnapshot {
   totalPosts: number; measuredPosts: number; viewsTotal: number | null;
   /** Sum of latest per-post views, never unique reach and never summed over time. */

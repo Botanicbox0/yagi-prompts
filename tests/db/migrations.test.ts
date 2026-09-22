@@ -31,6 +31,8 @@ describe('migrations apply on a fresh database (PLAN §6)', () => {
       'brand_memberships',
       'brand_messages',
       'brand_organizations',
+      // 2026-09-22 — one ledger row per studio collection-console save (idempotency + batch time).
+      'brand_post_collection_batches',
       'brand_post_measurements',
       'brand_posts',
       'brand_production_contracts',

@@ -10,12 +10,12 @@ import {
   BRAND_ATTACHMENT_LIMITS, normalizeBrandPostUrl,
   BrandInvitationSchema, BrandInvitationAcceptSchema, BrandMemberRevokeSchema,
   BrandCriteriaSchema,
-  BrandPostMetricsSchema,
+  BrandPostMetricsSchema, BrandPostMetricsBatchSchema,
 } from './schemas';
 import type {
   BrandOutcome, BrandFailureCode, BrandRole, BrandProjectSummary, BrandProjectDetail, BrandWorkspace,
   BrandContentVersion, BrandDecision, BrandMessage, BrandAttachment, BrandPost, BrandReport, BrandReportSnapshot,
-  BrandMembers,
+  BrandMembers, BrandMetricsBatchResult,
 } from './types';
 export type * from './types';
 export interface BrandWorkspaceDeps {
@@ -243,6 +243,33 @@ export async function sendBrandMessage(deps: BrandWorkspaceDeps, viewer: Viewer,
     if (!isStudio) await event(sql, p, 'message_received', id); return { id };
   });
 }
+type Observation = { verification: string; metricsSource: string; views: number | null; likes: number | null; comments: number | null; shares: number | null; saves: number | null };
+/** Append one immutable observation. History is only ever inserted, by these three call sites. */
+async function observe(sql: SqlRunner, p: Row, postId: string, revision: number, o: Observation, measuredAt: string | null, userId: string, requestId: string, batchId: string | null): Promise<string> {
+  const id = randomUUID();
+  await sql.query(`insert into brand_post_measurements(id,organization_id,project_id,post_id,revision,verification,metrics_source,measured_at,views,likes,comments,shares,saves,created_by,request_id,batch_id)
+    values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`, [id, p.organization_id, p.id, postId, revision, o.verification, o.metricsSource, measuredAt, o.views, o.likes, o.comments, o.shares, o.saves, userId, requestId, batchId]);
+  return id;
+}
+/** brand_posts is the latest projection of that history, written in the same transaction. */
+async function projectLatest(sql: SqlRunner, postId: string, revision: number, o: Observation, measuredAt: string | null): Promise<void> {
+  await sql.query('update brand_posts set metric_revision=$1,verification=$2,metrics_source=$3,measured_at=$4,views=$5,likes=$6,comments=$7,shares=$8,saves=$9 where id=$10',
+    [revision, o.verification, o.metricsSource, measuredAt, o.views, o.likes, o.comments, o.shares, o.saves, postId]);
+}
+/**
+ * The latest projection only moves forward. An observation older than the latest known one is
+ * refused, and a known observation is never replaced by "unavailable". The SAME instant is accepted
+ * as a correction of that observation: both revisions stay in history. Counts may go down.
+ */
+function admissible(post: Row, measuredAt: string | null): void {
+  if (post.measured_at == null) return;
+  if (measuredAt === null || +new Date(measuredAt) < +new Date(stamp(post.measured_at))) throw new Denied('invalid');
+}
+/** Deterministic per-row request id, so a retried batch can never write a second history row. */
+function rowRequestId(batchRequestId: string, postId: string): string {
+  const h = createHash('sha256').update(`${batchRequestId}:${postId}`).digest('hex');
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-5${h.slice(13, 16)}-8${h.slice(17, 20)}-${h.slice(20, 32)}`;
+}
 export async function recordBrandPost(deps: BrandWorkspaceDeps, viewer: Viewer, input: unknown): Promise<BrandOutcome> {
   return mutation(deps, viewer, BrandPostSchema, input, async (sql, userId, v) => {
     const p = await project(sql, userId, v.projectId, { studio: true, write: true });
@@ -257,6 +284,8 @@ export async function recordBrandPost(deps: BrandWorkspaceDeps, viewer: Viewer, 
     const id = randomUUID();
     await sql.query(`insert into brand_posts(id,organization_id,project_id,content_version_id,url,platform,verification,metrics_source,measured_at,views,likes,comments,shares,saves,created_by,request_id,platform_post_id,published_at)
       values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)`, [id, p.organization_id, p.id, c.id, normalized.url, normalized.platform, v.verification, v.metricsSource, v.measuredAt, v.views, v.likes, v.comments, v.shares, v.saves, userId, v.requestId, normalized.postId, v.publishedAt]);
+    // The values entered with the post are its first real observation: history revision 0, same transaction.
+    if (v.metricsSource !== 'unavailable') await observe(sql, p, id, 0, v, v.measuredAt, userId, v.requestId, null);
     return { id };
   });
 }
@@ -283,17 +312,52 @@ export async function updateBrandPostMetrics(deps: BrandWorkspaceDeps, viewer: V
     const p = await project(sql, userId, v.projectId, { studio: true, write: true });
     const old = (await sql.query<{ id: string; post_id: string }>('select id,post_id from brand_post_measurements where project_id=$1 and created_by=$2 and request_id=$3', [p.id, userId, v.requestId])).rows[0];
     if (old) { if (old.post_id !== v.postId) throw new Denied('conflict'); return { id: old.id }; }
-    if (!['active', 'completed'].includes(String(p.status))) throw new Denied('not_active');
+    // Collection stops when the studio closes the campaign. `project(..., write)` holds the same row
+    // lock `activateBrandProject` takes, so a save can never commit after the close.
+    if (p.status !== 'active') throw new Denied('not_active');
     const post = (await sql.query('select * from brand_posts where project_id=$1 and id=$2 for update', [p.id, v.postId])).rows[0];
     if (!post) throw new Denied('not_found');
     if (Number(post.metric_revision) !== v.expectedRevision) throw new Denied('conflict');
     if (v.measuredAt && +new Date(v.measuredAt) > Date.now() + 300000) throw new Denied('invalid');
-    const id = randomUUID(), revision = v.expectedRevision + 1;
-    await sql.query(`insert into brand_post_measurements(id,organization_id,project_id,post_id,revision,verification,metrics_source,measured_at,views,likes,comments,shares,saves,created_by,request_id)
-      values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`, [id, p.organization_id, p.id, post.id, revision, v.verification, v.metricsSource, v.measuredAt, v.views, v.likes, v.comments, v.shares, v.saves, userId, v.requestId]);
-    await sql.query(`update brand_posts set metric_revision=$1,verification=$2,metrics_source=$3,measured_at=$4,views=$5,likes=$6,comments=$7,shares=$8,saves=$9 where id=$10`,
-      [revision, v.verification, v.metricsSource, v.measuredAt, v.views, v.likes, v.comments, v.shares, v.saves, post.id]);
+    admissible(post, v.measuredAt);
+    const id = await observe(sql, p, String(post.id), v.expectedRevision + 1, v, v.measuredAt, userId, v.requestId, null);
+    await projectLatest(sql, String(post.id), v.expectedRevision + 1, v, v.measuredAt);
     return { id };
+  });
+}
+
+/**
+ * The studio console: every explicitly selected row is saved in ONE transaction under ONE
+ * server-side measurement time. Any stale, missing or foreign row rolls the whole save back.
+ * No provider is called; the values are what an administrator read and typed just now.
+ */
+export async function saveBrandPostMetricsBatch(deps: BrandWorkspaceDeps, viewer: Viewer, input: unknown): Promise<BrandOutcome<BrandMetricsBatchResult>> {
+  return mutation(deps, viewer, BrandPostMetricsBatchSchema, input, async (sql, userId, v) => {
+    const p = await project(sql, userId, v.projectId, { studio: true, write: true });
+    const rows = [...v.rows].sort((x, y) => x.postId.localeCompare(y.postId));
+    const digest = createHash('sha256').update(JSON.stringify([p.id, rows.map(r => [r.postId, r.expectedRevision, r.verification, r.metricsSource, r.views, r.likes, r.comments, r.shares, r.saves])])).digest('hex');
+    const old = (await sql.query('select id,payload_sha256,row_count,measured_at from brand_post_collection_batches where project_id=$1 and created_by=$2 and request_id=$3', [p.id, userId, v.requestId])).rows[0];
+    if (old) {
+      if (old.payload_sha256 !== digest) throw new Denied('conflict');
+      return { id: String(old.id), saved: Number(old.row_count), measuredAt: stamp(old.measured_at) };
+    }
+    if (p.status !== 'active') throw new Denied('not_active');
+    // Locked in id order so two overlapping saves queue instead of deadlocking.
+    const posts = (await sql.query('select * from brand_posts where project_id=$1 and id=any($2::uuid[]) order by id for update', [p.id, rows.map(r => r.postId)])).rows;
+    if (posts.length !== rows.length) throw new Denied('not_found');
+    const measuredAt = new Date().toISOString(), id = randomUUID();
+    for (const r of rows) {
+      const post = posts.find(candidate => candidate.id === r.postId)!;
+      if (Number(post.metric_revision) !== r.expectedRevision) throw new Denied('conflict');
+      admissible(post, measuredAt);
+    }
+    await sql.query('insert into brand_post_collection_batches(id,organization_id,project_id,request_id,payload_sha256,row_count,measured_at,created_by) values($1,$2,$3,$4,$5,$6,$7,$8)',
+      [id, p.organization_id, p.id, v.requestId, digest, rows.length, measuredAt, userId]);
+    for (const r of rows) {
+      await observe(sql, p, r.postId, r.expectedRevision + 1, r, measuredAt, userId, rowRequestId(v.requestId, r.postId), id);
+      await projectLatest(sql, r.postId, r.expectedRevision + 1, r, measuredAt);
+    }
+    return { id, saved: rows.length, measuredAt };
   });
 }
 
