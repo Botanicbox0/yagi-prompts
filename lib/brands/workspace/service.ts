@@ -691,7 +691,7 @@ export async function loadBrandMembers(deps: BrandWorkspaceDeps, viewer: Viewer,
     return { organization: { id: String(org.id), name: String(org.name) }, members: members.map(m => ({
       id: String(m.id), userId: String(m.user_id), email: m.role !== 'owner' || m.user_id === viewer.userId ? String(m.email) : null,
       role: m.role as BrandRole, status: m.status as 'active' | 'revoked', isSelf: m.user_id === viewer.userId,
-    })), invitations: invitations.map(i => ({ id: String(i.id), email: String(i.email), role: i.role as 'editor' | 'viewer', expiresAt: stamp(i.expires_at),
+    })), invitations: invitations.map(i => ({ id: String(i.id), email: i.role === 'owner' ? null : String(i.email), role: i.role as 'owner' | 'editor' | 'viewer', expiresAt: stamp(i.expires_at),
       project: i.project_id ? { shared: i.project_shared === true, title: i.project_title == null ? null : String(i.project_title) } : null,
       status: i.revoked_at ? 'revoked' as const : i.accepted_at ? 'accepted' as const : +new Date(stamp(i.expires_at)) <= Date.now() ? 'expired' as const : 'pending' as const })) };
   }); } catch (error) { if (error instanceof Denied) return null; throw error; }

@@ -110,7 +110,7 @@ export default async function MembersPage({
                 {team.invitations.map((i) => (
                   <li key={i.id} className="bw-row">
                     <div>
-                      {i.email}
+                      {i.email ?? b.otherOwner}
                       <p className="bw-muted">
                         {i.project
                           ? i.project.title !== null ? interpolate(b.invitationCampaign, { title: i.project.title }) : b.invitationCampaignPending
