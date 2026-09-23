@@ -235,7 +235,7 @@ export const BRAND_WORKSPACE_OPERATIONS = {
   "brandWorkspace.externalPosts": externalPosts,
   "brandWorkspace.postPresentation": postPresentation,
  'brandWorkspace.settings': managedOperation((ctx,v)=>updateBrandSettings(ctx,ctx.viewer,v),'home'),
- 'brandWorkspace.support': managedOperation((ctx,v)=>sendBrandSupport(ctx,ctx.viewer,v),'home'),
+ 'brandWorkspace.support': managedOperation((ctx,v)=>sendBrandSupport(ctx,ctx.viewer,v,'studio'),'home'),
  'brandWorkspace.revokeInvite': managedOperation((ctx,v)=>revokeStudioInvitation(ctx,ctx.viewer,v),'home'),
  'brandWorkspace.organization': managedOperation((ctx,v)=>createStudioOrganization(ctx,ctx.viewer,v),'home'),
  'brandWorkspace.createProject': managedOperation((ctx,v)=>createStudioProject(ctx,ctx.viewer,v)),
@@ -252,7 +252,7 @@ export const BRAND_WORKSPACE_OPERATIONS = {
     addBrandContentVersion({ sql: ctx.sql }, ctx.viewer, input),
   ),
   "brandWorkspace.message": operation((ctx, input) =>
-    sendBrandMessage({ sql: ctx.sql }, ctx.viewer, input),
+    sendBrandMessage({ sql: ctx.sql }, ctx.viewer, input, "studio"),
   ),
   "brandWorkspace.post": operation((ctx, input) =>
     recordBrandPost({ sql: ctx.sql }, ctx.viewer, input),

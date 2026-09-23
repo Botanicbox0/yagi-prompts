@@ -367,11 +367,32 @@ export async function approveBrandContent(deps: BrandWorkspaceDeps, viewer: View
     await event(sql, p, 'content_decided', id); return { id };
   });
 }
-export async function sendBrandMessage(deps: BrandWorkspaceDeps, viewer: Viewer, input: unknown): Promise<BrandOutcome> {
+/**
+ * Which server surface a conversation write came through. Set by the server code that calls the
+ * service (the brand API passes `client`, the admin console passes `studio`), never by a request body.
+ *
+ *   · `studio`: the admin console. Requires `is_admin`; the row is the studio's even if that admin also
+ *     holds a seat in the brand.
+ *   · `client`: the brand workspace. The customer's own seat decides: a member or commenting guest
+ *     writes as the brand (and the studio is notified), even when that account is also `is_admin`.
+ *     Only an `is_admin` account with no customer access there writes as the studio, as before.
+ *     Domain-only staff (./staff.ts) hold a read right only and are refused on both paths.
+ */
+export type BrandWriteEntry = 'client' | 'studio';
+/** Customer access first; the studio only where the customer check finds nothing and the user is `is_admin`. */
+async function clientOrStudio<T>(sql: SqlRunner, userId: string, asClient: () => Promise<T>, asStudio: () => Promise<T>): Promise<{ row: T; studio: boolean }> {
+  try { return { row: await asClient(), studio: false }; }
+  catch (error) {
+    if (!(error instanceof Denied) || error.code !== 'not_found' || (await profile(sql, userId)).is_admin !== true) throw error;
+    return { row: await asStudio(), studio: true };
+  }
+}
+export async function sendBrandMessage(deps: BrandWorkspaceDeps, viewer: Viewer, input: unknown, entry: BrandWriteEntry = 'client'): Promise<BrandOutcome> {
   return mutation(deps, viewer, BrandMessageSchema, input, async (sql, userId, v) => {
-    const isStudio = (await profile(sql, userId)).is_admin === true;
     // Commenting is its own right: owners, editors and invited commenting guests; never org viewers.
-    const p = await project(sql, userId, v.projectId, { studio: isStudio, comment: true });
+    const asStudio = () => project(sql, userId, v.projectId, { studio: true, comment: true });
+    const { row: p, studio: isStudio } = entry === 'studio' ? { row: await asStudio(), studio: true }
+      : await clientOrStudio(sql, userId, () => project(sql, userId, v.projectId, { comment: true }), asStudio);
     const old = await retry(sql, 'brand_messages', v.projectId, userId, v.requestId); if (old) return { id: old };
     const recent = (await sql.query<{ n: number }>("select count(*)::int as n from brand_messages where created_by=$1 and created_at>now()-interval '1 minute'", [userId])).rows[0]!.n;
     if (recent >= 10) throw new Denied('rate_limited');
@@ -864,10 +885,11 @@ export async function loadBrandSupport(deps:BrandWorkspaceDeps,viewer:Viewer,id:
   return (await sql.query('select id,body,author_role,created_at from brand_support_messages where organization_id=$1 order by created_at,id',[id])).rows.map(r=>({id:String(r.id),body:String(r.body),authorRole:r.author_role as BrandMessage['authorRole'],createdAt:stamp(r.created_at)}));
  });}catch(e){if(e instanceof Denied)return null;throw e}
 }
-export async function sendBrandSupport(deps:BrandWorkspaceDeps,viewer:Viewer,input:unknown):Promise<BrandOutcome> {
+/** `entry` as for `sendBrandMessage`: server-provided, never from the request. */
+export async function sendBrandSupport(deps:BrandWorkspaceDeps,viewer:Viewer,input:unknown,entry:BrandWriteEntry='client'):Promise<BrandOutcome> {
  return mutation(deps,viewer,z.object({organizationId:z.uuid(),body:z.string().trim().min(1).max(4000),requestId:z.uuid()}),input,async(sql,userId,v)=>{
-  const isStudio=(await profile(sql,userId)).is_admin===true;
-  if(!isStudio)await member(sql,userId,v.organizationId,true);
+  const isStudio=entry==='studio'?(await studio(sql,userId),true)
+   :(await clientOrStudio(sql,userId,()=>member(sql,userId,v.organizationId,true),async()=>undefined)).studio;
   const org=(await sql.query('select id from brand_organizations where id=$1 for update',[v.organizationId])).rows[0];if(!org)throw new Denied('not_found');
   const old=(await sql.query('select id from brand_support_messages where organization_id=$1 and created_by=$2 and request_id=$3',[v.organizationId,userId,v.requestId])).rows[0];if(old)return{id:String(old.id)};
   const count=(await sql.query("select count(*)::int as n from brand_support_messages where created_by=$1 and created_at>now()-interval '1 hour'",[userId])).rows[0];if(Number(count?.n)>=30)throw new Denied('rate_limited');
