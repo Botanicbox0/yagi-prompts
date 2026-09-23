@@ -246,7 +246,6 @@ export async function loadPublicCatalog(sql: SqlRunner): Promise<PublicCatalog> 
 }
 
 /** §3.1: "the latest 4–6 published playbooks with hero media, newest first, labeled LATEST". */
-export const FEATURED_MIN = 4;
 export const FEATURED_MAX = 6;
 
 export function featuredCards(catalog: PublicCatalog): CatalogCard[] {

@@ -53,6 +53,19 @@ export function OpForm({
   );
 }
 
+/**
+ * P2-7: the JS-free confirmation for an irreversible or outbound action. A required checkbox inside
+ * the form, so the browser refuses the first press until the operator has read the sentence.
+ */
+export function ConfirmCheck({ label }: { label: string }) {
+  return (
+    <label className="bw-check flex items-start gap-2 font-mono text-[0.75rem]" data-confirm-check>
+      <input type="checkbox" name="_confirm" value="1" required />
+      <span>{label}</span>
+    </label>
+  );
+}
+
 export const BUTTON =
   'border border-hairline px-3 py-1.5 font-label text-eyebrow uppercase hover:border-accent hover:text-accent';
 export const BUTTON_PRIMARY =
@@ -194,6 +207,10 @@ const ERROR_KEYS = {
   slotsFull: 'errSlotsFull',
   notReleasable: 'errNotReleasable',
   metricsRequired: 'errMetricsRequired',
+  brandConflict: 'errBrandConflict',
+  brandNotActive: 'errBrandNotActive',
+  brandConsentRequired: 'errBrandConsentRequired',
+  brandNotShared: 'errBrandNotShared',
   unknown: 'errUnknown',
 } as const;
 
@@ -252,6 +269,18 @@ export function AdminBrand({ dict }: { dict: AdminDict }) {
   );
 }
 
+/**
+ * P1-6: sign-out on the admin host. A plain same-origin POST (no JS), like the brand workspace's;
+ * `/auth/signout` sends admin.twings.app back to the admin sign-in chooser.
+ */
+export function AdminSignOut({ dict, className }: { dict: AdminDict; className?: string }) {
+  return (
+    <form method="post" action="/auth/signout" data-admin-signout>
+      <button type="submit" className={className}>{dict.signOut}</button>
+    </form>
+  );
+}
+
 export function AdminShell({
   dict,
   locale,
@@ -286,7 +315,7 @@ export function AdminShell({
     return <div className="bw-shell bw-studio-shell" data-section data-theme="light">
       <aside className="bw-sidebar"><AdminBrand dict={dict}/><p className="bw-kicker">{b.dashboard.studio}</p>
         <nav><a href="/admin/brand-workspace" aria-current="page">{b.studioQueue}</a><a href="/admin/prompts">{dict.navPrompts}</a><a href="/admin/campaigns">{dict.navCampaigns}</a><a href="/admin/inquiries">{dict.navInquiries}</a><a href="/admin/playbooks">{dict.navPlaybooks}</a><a href="/admin/policy">{dict.navPolicy}</a></nav>
-        <div className="bw-signout"><PublicLink href={`/${locale}`}>{dict.navSite} ↗</PublicLink><OpForm op="caches.refresh" back={refreshBack}><button type="submit">{dict.refreshCaches}</button></OpForm></div>
+        <div className="bw-signout"><PublicLink href={`/${locale}`}>{dict.navSite} ↗</PublicLink><OpForm op="caches.refresh" back={refreshBack}><button type="submit">{dict.refreshCaches}</button></OpForm><AdminSignOut dict={dict} /></div>
       </aside><div className="bw-body"><header className="bw-topbar"><span>{b.dashboard.workspace}</span><WorkspaceLanguage locale={locale} label={getDictionary(isLocale(locale)?locale:'en').nav.localeToggle}/><a href="/admin">{dict.brand} ↗</a></header><main id="main" className="bw-main">{children}</main></div>
     </div>;
   }
@@ -321,11 +350,14 @@ export function AdminShell({
               </PublicLink>
             </nav>
           </div>
-          <OpForm op="caches.refresh" back={refreshBack} className="flex items-center gap-3">
-            <button type="submit" className={BUTTON}>
-              {dict.refreshCaches}
-            </button>
-          </OpForm>
+          <div className="flex items-center gap-3">
+            <OpForm op="caches.refresh" back={refreshBack} className="flex items-center gap-3">
+              <button type="submit" className={BUTTON}>
+                {dict.refreshCaches}
+              </button>
+            </OpForm>
+            <AdminSignOut dict={dict} className={BUTTON} />
+          </div>
         </div>
       </header>
       <main id="main" className="mx-auto max-w-shell px-gutter py-10">

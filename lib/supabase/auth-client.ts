@@ -1,4 +1,4 @@
-import { createBrowserClient, createServerClient } from '@supabase/ssr';
+import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 
 /**
@@ -43,11 +43,6 @@ export function supabaseUrl(): string {
 
 export function supabaseAnonKey(): string {
   return requireEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY');
-}
-
-/** Browser/client-components. Auth only. */
-export function createAuthBrowserClient() {
-  return createBrowserClient(supabaseUrl(), supabaseAnonKey());
 }
 
 /**

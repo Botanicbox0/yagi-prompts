@@ -16,10 +16,21 @@ class Refused extends Error {
   constructor(readonly code: string) { super(code); }
 }
 
+/**
+ * Where an invitation link points (H1). Only the production admin host hands out production brand
+ * links; local and Vercel preview hosts serve `/brand` themselves (consumer surface), so their links
+ * stay on the deployment that issued them and preview QA never lands on production.
+ */
+export function invitationOrigin(current: { hostname: string; origin: string }): string {
+  return current.hostname === "admin.twings.app" ? "https://brand.twings.app" : current.origin;
+}
+
 /** `/admin/do` failure codes, stated honestly instead of blaming the connection for every refusal. */
-export function managedErrorMessage(b: BrandCopy, code: string | null): string {
-  if (code === "staleReview") return b.conflict;
-  if (code === "invalid") return b.errors.adminInvalid;
+export function managedErrorMessage(b: BrandCopy, code: string | null, messages: Partial<Record<string, string>> = {}): string {
+  const specific = code ? messages[code] : undefined;
+  if (specific) return specific;
+  if (code === "staleReview" || code === "brandConflict") return b.conflict;
+  if (code === "invalid" || code === "brandNotActive" || code === "brandConsentRequired" || code === "brandNotShared") return b.errors.adminInvalid;
   if (code === "forbidden" || code === "notFound") return b.errors.adminDenied;
   return b.error;
 }
@@ -32,6 +43,7 @@ export function ManagedForm({
   submit,
   confirm,
   tone = "primary",
+  messages,
 }: {
   op: AdminOperationName;
   b: BrandCopy;
@@ -40,6 +52,8 @@ export function ManagedForm({
   /** Ask once more, inline, before a disclosure or removal is sent. */
   confirm?: ConfirmCopy;
   tone?: ButtonTone;
+  /** Admin-dictionary sentences for specific refusal codes (e.g. `brandNotShared`), from the page. */
+  messages?: Partial<Record<string, string>>;
 }) {
   const router = useRouter(),
     request = useRef<{fingerprint:string;id:string} | null>(null),
@@ -76,9 +90,7 @@ export function ManagedForm({
       if (!response.ok || !result.ok) throw new Refused(typeof result.code === "string" ? result.code : "unknown");
       request.current = null;
       if (result.invitationToken) {
-        const origin = /^(localhost|127\.0\.0\.1)$/.test(location.hostname)
-          ? location.origin
-          : "https://brand.twings.app";
+        const origin = invitationOrigin(location);
         setLink(
           `${origin}/brand/invite#token=${encodeURIComponent(result.invitationToken)}`,
         );
@@ -101,7 +113,7 @@ export function ManagedForm({
       // Invitation tokens cannot be recovered; a fresh invite revokes the lost one.
       // Other uncertain writes retain their idempotency key.
       if(op==="brandWorkspace.invite")request.current = null;
-      setError(managedErrorMessage(b, failure instanceof Refused ? failure.code : null));
+      setError(managedErrorMessage(b, failure instanceof Refused ? failure.code : null, messages));
     } finally {
       inFlight.current = false;
       setBusy(false);

@@ -1,7 +1,10 @@
 import { getSqlRunner } from '@/lib/db/connect';
 import { getDictionary } from '@/lib/i18n/dictionaries';
 import { getLocaleFromHeaders } from '@/lib/i18n/server';
-import { formatDate } from '@/lib/i18n/format';
+import { formatDate, interpolate } from '@/lib/i18n/format';
+
+/** Raw UUIDs are support lookups, not content: the first block is enough to find the row (P3). */
+const shortId = (id: string): string => id.slice(0, 8);
 import { listBrandInquiries, type BrandInquiry } from '@/lib/brands/repo';
 import { listRenderFeedback, type RenderFeedbackRow } from '@/lib/renders/feedback';
 import { ADMIN_INQUIRIES_PATH } from '@/lib/campaigns/links';
@@ -91,7 +94,7 @@ export default async function AdminInquiriesPage({ searchParams }: { searchParam
     <li data-render-feedback={f.status} className="flex flex-wrap items-start justify-between gap-4 py-4">
       <div className="min-w-0 max-w-detail">
         <p className="font-mono text-code">
-          <strong>{reasonLabel[f.reason]}</strong> · {f.templateSlug} · {f.medium} · {f.renderStatus}
+          <strong>{reasonLabel[f.reason]}</strong> · {f.templateSlug} · {a.templateMedia[f.medium as keyof typeof a.templateMedia] ?? a.unknownValue} · {a.renderStatuses[f.renderStatus as keyof typeof a.renderStatuses] ?? a.unknownValue}
         </p>
         <p className="mt-1 font-mono text-[0.72rem] opacity-55">
           {f.email ? (
@@ -99,10 +102,10 @@ export default async function AdminInquiriesPage({ searchParams }: { searchParam
               {f.email}
             </a>
           ) : (
-            f.userId
+            <span title={f.userId}>{interpolate(a.feedbackUser, { id: shortId(f.userId) })}</span>
           )}
           {' · '}
-          {a.feedbackRender} {f.renderId}
+          <span title={f.renderId}>{a.feedbackRender} {shortId(f.renderId)}</span>
           {' · '}
           {formatDate(f.updatedAt, locale)}
         </p>

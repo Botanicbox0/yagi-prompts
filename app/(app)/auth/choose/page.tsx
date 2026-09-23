@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { TwingsLogo, TwingsMark } from '@/components/brand/twings-mark';
-import { isLocale, type Locale } from '@/lib/i18n/config';
+import { isAppPath, isLocale, type Locale } from '@/lib/i18n/config';
 import { getRequestLocale } from '@/lib/i18n/server';
 import { getDictionary } from '@/lib/i18n/dictionaries';
 import { AUTH_PROVIDERS, chooseProviderHref, signInWithProviderHref, type AuthProvider } from '@/lib/auth/providers';
@@ -130,6 +130,9 @@ export default async function ChooseProviderPage(props: RouteProps) {
   // "back" link to them would only reload it. The invitation landing is readable signed out.
   const nextPath = new URL(next, 'https://path.invalid').pathname;
   const backReturnsHere = (brandEntry && isBrandPath(nextPath) && nextPath !== '/brand/invite') || (admin && isAdminPath(nextPath));
+  // Audit P3: on the consumer host a gated `next` (/renders/…, /account, an apply form) would bounce
+  // a signed-out reader straight back here, so "back" goes to the locale home instead.
+  const consumerBack = isAppPath(nextPath) ? publicHref(`/${locale}`, admin) : next;
   const authError = (error === 'oauth' || error === 'oauth_unconfigured') && (
     <p role="alert" className="mt-6 border-l-2 border-accent pl-3 text-left text-body">
       {error === 'oauth' ? dict.notice.oauth : dict.notice.oauthUnconfigured}
@@ -201,7 +204,7 @@ export default async function ChooseProviderPage(props: RouteProps) {
           {providers}
         </div>
 
-        <p data-auth-legal className="mt-8 text-[0.75rem] leading-relaxed opacity-50">
+        <p data-auth-legal className="mt-8 text-[0.75rem] leading-relaxed opacity-70">
           {legal}
         </p>
 
@@ -210,7 +213,7 @@ export default async function ChooseProviderPage(props: RouteProps) {
         </div>
 
         {!backReturnsHere && (
-          <a href={next} data-auth-back className="mt-10 font-label text-eyebrow uppercase opacity-50 hover:opacity-100">
+          <a href={consumerBack} data-auth-back className="mt-10 font-label text-eyebrow uppercase opacity-70 hover:opacity-100">
             ← {dict.auth.chooseBack}
           </a>
         )}

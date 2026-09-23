@@ -2,6 +2,7 @@
 import Script from 'next/script';
 import { useRef, useState } from 'react';
 import type { getDictionary } from '@/lib/i18n/dictionaries';
+import { formatKrw } from '@/lib/i18n/format';
 
 type Copy = ReturnType<typeof getDictionary>['billing']['toss'];
 interface Widgets {
@@ -50,10 +51,7 @@ export function TossCheckout(props: {
   const [consent, setConsent] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(false);
-  const amount =
-    props.locale === 'ko'
-      ? `${props.amount.toLocaleString('ko-KR')}원`
-      : `₩${props.amount.toLocaleString('en-US')}`;
+  const amount = formatKrw(props.amount, props.locale);
   async function initialize() {
     if (initialized.current) return;
     initialized.current = true;

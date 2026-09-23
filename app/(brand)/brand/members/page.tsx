@@ -2,6 +2,7 @@ import { brandContext } from "@/components/brand-workspace/context";
 import { ActionForm } from "@/components/brand-workspace/action-form";
 import { loadBrandMembers } from "@/lib/brands/workspace/service";
 import { formatBrandTimestamp } from "@/components/brand-workspace/format";
+import { interpolate } from "@/lib/i18n/format";
 import { brandScope } from "@/components/brand-workspace/scope";
 import { BrandUnavailable } from "@/components/brand-workspace/brand-unavailable";
 import { scopedHref } from "@/lib/brands/workspace/selection";
@@ -53,8 +54,9 @@ export default async function MembersPage({
                 .map((m) => (
                   <li className="bw-row" key={m.id}>
                     <div>
-                      <strong>{m.email ?? b.roles[m.role]}</strong>
-                      <p className="bw-muted">{b.roles[m.role]}</p>
+                      {/* Another owner's address stays private; the label alone says who it is. */}
+                      <strong>{m.email ?? b.otherOwner}</strong>
+                      {m.email !== null && <p className="bw-muted">{b.roles[m.role]}</p>}
                     </div>
                     {!staff && m.role !== "owner" && (
                       <ActionForm
@@ -108,9 +110,12 @@ export default async function MembersPage({
                 {team.invitations.map((i) => (
                   <li key={i.id} className="bw-row">
                     <div>
-                      {i.email}
+                      {i.email ?? b.otherOwner}
                       <p className="bw-muted">
-                        {b.roles[i.role]} · {b.expiresAt}{" "}
+                        {i.project
+                          ? i.project.title !== null ? interpolate(b.invitationCampaign, { title: i.project.title }) : b.invitationCampaignPending
+                          : b.roles[i.role]}{" "}
+                        · {b.expiresAt}{" "}
                         {formatBrandTimestamp(i.expiresAt, locale)}
                       </p>
                     </div>

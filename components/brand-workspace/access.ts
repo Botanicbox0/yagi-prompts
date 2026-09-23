@@ -25,11 +25,3 @@ export interface NavigationVisibility {
   settings: boolean;
   members: boolean;
 }
-export function navigationVisibility(access: WorkspaceAccess | null): NavigationVisibility {
-  if (!access) return { studio: true, settings: true, members: true };
-  return {
-    studio: !access.projectScopedOnly,
-    settings: access.hasOrganization,
-    members: access.isOwner,
-  };
-}

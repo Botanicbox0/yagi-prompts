@@ -11,6 +11,7 @@ import {
 } from '@/lib/campaigns/repo';
 import { ADMIN_VIEWER } from '@/tests/helpers/admin';
 import { seedProfile } from '@/tests/helpers/billing';
+import { outcomeUrl } from '@/lib/admin/dispatch';
 
 /**
  * docs/CAMPAIGNS.md, end to end against the real schema (0013/0014 in PGlite): author a campaign,
@@ -158,6 +159,9 @@ describe('campaigns — the whole lifecycle through the dispatcher', () => {
     const paid = expectOk(await h.run('campaignApplication.pay', { id: app.id, version: app.version, payoutRef: 'KB-20260917-001' }));
     expect(paid.code).toBe('paid');
     expect(paid.detail).toBe('22343');
+    // P2-8: no forced destination, so paying from the /admin/campaigns queue stays on the queue.
+    expect(paid.to).toBeUndefined();
+    expect(outcomeUrl('/admin/campaigns', paid)).toBe('/admin/campaigns?ok=paid&detail=22343');
     app = (await loadApplicationById(sql, app.id))!;
     expect(app.status).toBe('paid');
     expect(app.payoutCents).toBe(22_343);

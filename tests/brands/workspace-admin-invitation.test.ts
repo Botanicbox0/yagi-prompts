@@ -20,7 +20,10 @@ it('a studio-appointed workspace admin manages only the invited brand, never the
     const invitation = unwrap(await service.createStudioInvitation({ sql }, studio, { organizationId: own.id, email: client.email, role: 'owner', requestId: randomUUID() }));
     expect(await service.acceptBrandInvitation({ sql, verifiedEmail: client.email! }, client, { token: invitation.token })).toMatchObject({ ok: true, organizationId: own.id });
     expect((await service.loadBrandWorkspace({ sql }, client)).organizations).toEqual([expect.objectContaining({ id: own.id, role: 'owner' })]);
-    expect(await service.loadBrandMembers({ sql }, client, own.id)).not.toBeNull();
+    const team = await service.loadBrandMembers({ sql }, client, own.id);
+    expect(team).not.toBeNull();
+    // Owner emails stay hidden in the invitation history too, the same rule as the member list.
+    expect(team!.invitations).toEqual([expect.objectContaining({ role: 'owner', email: null })]);
     expect(await service.updateBrandSettings({ sql }, client, { organizationId: own.id, name: 'Managed brand', website: '', description: '', contactEmail: '', expectedRevision: 0 })).toMatchObject({ ok: true });
     expect(await service.createBrandInvitation({ sql }, client, { organizationId: own.id, email: colleague.email, role: 'editor', requestId: randomUUID() })).toMatchObject({ ok: true });
     expect(await service.loadBrandSettings({ sql }, client, other.id)).toBeNull();

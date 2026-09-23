@@ -6,7 +6,7 @@ import { DEFAULT_LOCALE, isLocale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/dictionaries';
 import { JsonLd } from '@/lib/seo/json-ld';
 import { localeAlternates } from '@/lib/seo/playbook-metadata';
-import { SITE_OG_IMAGE } from '@/lib/seo/og';
+import { siteOgImage } from '@/lib/seo/og';
 import { siteUrl } from '@/lib/seo/site-url';
 import { faqStructuredData } from '@/lib/seo/structured-data';
 
@@ -24,7 +24,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     openGraph: {
       type: 'website', title: dict.faq.title, description: dict.seo.faqDescription,
       url: `/${locale}/faq`, locale: locale === 'ko' ? 'ko_KR' : 'en_US',
-      siteName: dict.meta.siteName, images: [SITE_OG_IMAGE],
+      siteName: dict.meta.siteName, images: [siteOgImage(locale)],
     },
     twitter: { card: 'summary_large_image' },
   };

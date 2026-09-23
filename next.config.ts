@@ -1,4 +1,5 @@
 import type { NextConfig } from 'next';
+import type { Redirect } from 'next/dist/lib/load-custom-routes';
 
 // Next config redirects run before middleware. Restrict them to exact consumer/deployment
 // hosts so workspace and unknown hosts reach the fail-closed middleware boundary instead.
@@ -6,6 +7,19 @@ const consumerHosts = ['twings.app', 'www.twings.app', 'yagi-prompts.vercel.app'
   process.env.VERCEL_URL, process.env.VERCEL_BRANCH_URL, process.env.VERCEL_PROJECT_PRODUCTION_URL,
 ].filter((value): value is string => Boolean(value));
 const consumerHostPattern = `(?:${consumerHosts.map(value => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})`;
+
+/** Must match `LOCALE_COOKIE` in lib/i18n/config.ts (a config file cannot import app modules). */
+const LOCALE_COOKIE = 'playbook.locale';
+
+function retiredSubscriptionRedirects(): Array<Redirect & { permanent: boolean }> {
+  const source = '/billing/:page(upgrade|success|cancelled)';
+  const locale = '(?<locale>en|ko)';
+  return [
+    { source, destination: '/:locale/pricing', permanent: true, has: [{ type: 'query' as const, key: 'locale', value: locale }] },
+    { source, destination: '/:locale/pricing', permanent: true, has: [{ type: 'cookie' as const, key: LOCALE_COOKIE, value: locale }] },
+    { source, destination: '/pricing', permanent: true },
+  ];
+}
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
@@ -43,7 +57,7 @@ const nextConfig: NextConfig = {
    * crawler should move its index rather than keep asking.
    */
   async redirects() {
-    const redirects = [
+    const redirects: Array<Redirect & { permanent: boolean }> = [
       { source: '/:locale(en|ko)/studio', destination: '/:locale/video', permanent: true },
       { source: '/:locale(en|ko)/prompts', destination: '/:locale/video', permanent: true },
       { source: '/:locale(en|ko)/prompts/:slug', destination: '/:locale/t/:slug', permanent: true },
@@ -51,12 +65,17 @@ const nextConfig: NextConfig = {
       { source: '/:locale(en|ko)/contests/:slug', destination: '/:locale/campaigns', permanent: true },
       { source: '/prompts/submit', destination: '/en/video', permanent: true },
       { source: '/contests/:slug/submit', destination: '/en/campaigns', permanent: true },
+      // Audit P1-4 (대표: subscriptions on hold, one payment per template): the $9/month entry and
+      // its Stripe return pages land on the localized pricing page, BEFORE the session gate, in
+      // the reader's language — the explicit `?locale=` the old links carried, then the locale
+      // cookie, then unprefixed `/pricing`, which middleware localizes from Accept-Language.
+      ...retiredSubscriptionRedirects(),
     ];
     return redirects.flatMap(route => [
-      { ...route, has: [{ type: 'host' as const, value: consumerHostPattern }] },
+      { ...route, has: [...(route.has ?? []), { type: 'host' as const, value: consumerHostPattern }] },
       // Next's host matcher splits at ':' and cannot parse IPv6 loopback. Match that exact
       // authority in the original Host header instead; all other unknown hosts stay closed.
-      { ...route, has: [{ type: 'header' as const, key: 'host', value: '\\[::1\\](?::[0-9]+)?' }] },
+      { ...route, has: [...(route.has ?? []), { type: 'header' as const, key: 'host', value:'\\[::1\\](?::[0-9]+)?' }] },
     ]);
   },
 };

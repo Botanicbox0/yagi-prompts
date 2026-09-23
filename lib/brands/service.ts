@@ -10,8 +10,10 @@ import { BRAND_INQUIRIES_PER_DAY, BrandInquiryInput } from './schemas';
  *
  *   · `submitBrandInquiry` validates and STORES. It is the request's whole job; it must finish
  *     inside the request and it must never depend on a mail provider being up.
- *   · `notifyBrandInquiry` sends the two mails afterwards (`after()` in the route). A mail that
- *     fails leaves the row in place; the studio board still shows the enquiry.
+ *   · the mails come after the row: the brand's receipt inside the request, so the success panel
+ *     can say truthfully whether it went (`sendBrandInquiryReceipt`, audit Q7), and the studio's
+ *     alert in `after()` (`notifyBrandStudio`). A mail that fails leaves the row in place; the
+ *     studio board still shows the enquiry.
  *
  * Spam: a honeypot field is accepted and dropped without a word, and one address gets three
  * enquiries per rolling day. Neither is a CAPTCHA, which would cost more real brands than bots.
@@ -71,24 +73,30 @@ export interface NotifyBrandInquiryResult {
   brand: SendOutcome | null;
 }
 
-export async function notifyBrandInquiry(deps: NotifyBrandInquiryDeps, inquiry: BrandInquiry): Promise<NotifyBrandInquiryResult> {
-  if (deps.mailer === null) return { studio: null, brand: null };
+function mails(deps: NotifyBrandInquiryDeps, inquiry: BrandInquiry) {
   const origin = deps.siteUrl.replace(/\/+$/, '');
-  const emails = brandInquiryEmails({ inquiry, siteName: deps.siteName, siteUrl: origin, adminUrl: `${origin}/admin/inquiries` });
-  const studioEmail = deps.studioEmail ?? BUSINESS.email;
+  return { origin, emails: brandInquiryEmails({ inquiry, siteName: deps.siteName, siteUrl: origin, adminUrl: `${origin}/admin/inquiries` }) };
+}
 
-  const studio = await deps.mailer
+const failed = (error: unknown): SendOutcome => ({ ok: false, retryable: false, error: error instanceof Error ? error.message : String(error) });
+
+async function sendStudioAlert(deps: NotifyBrandInquiryDeps & { mailer: Mailer }, inquiry: BrandInquiry): Promise<SendOutcome> {
+  const { origin, emails } = mails(deps, inquiry);
+  return deps.mailer
     .send({
-      to: studioEmail,
+      to: deps.studioEmail ?? BUSINESS.email,
       subject: emails.studio.subject,
       html: emails.studio.html,
       text: emails.studio.text,
       idempotencyKey: `brand-inquiry:${inquiry.id}:studio`,
       unsubscribeUrl: `${origin}/admin/campaigns`,
     })
-    .catch((error: unknown): SendOutcome => ({ ok: false, retryable: false, error: error instanceof Error ? error.message : String(error) }));
+    .catch(failed);
+}
 
-  const brand = await deps.mailer
+async function sendBrandReceipt(deps: NotifyBrandInquiryDeps & { mailer: Mailer }, inquiry: BrandInquiry, signal?: AbortSignal): Promise<SendOutcome> {
+  const { origin, emails } = mails(deps, inquiry);
+  return deps.mailer
     .send({
       to: inquiry.email,
       subject: emails.brand.subject,
@@ -96,8 +104,47 @@ export async function notifyBrandInquiry(deps: NotifyBrandInquiryDeps, inquiry: 
       text: emails.brand.text,
       idempotencyKey: `brand-inquiry:${inquiry.id}:brand`,
       unsubscribeUrl: `${origin}/${inquiry.locale}/campaigns`,
+      ...(signal ? { signal } : {}),
     })
-    .catch((error: unknown): SendOutcome => ({ ok: false, retryable: false, error: error instanceof Error ? error.message : String(error) }));
+    .catch(failed);
+}
 
+/** How long the enquiry form waits for its receipt before answering without the receipt line. */
+export const BRAND_RECEIPT_TIMEOUT_MS = 5_000;
+
+export async function notifyBrandInquiry(deps: NotifyBrandInquiryDeps, inquiry: BrandInquiry): Promise<NotifyBrandInquiryResult> {
+  if (deps.mailer === null) return { studio: null, brand: null };
+  const withMailer = { ...deps, mailer: deps.mailer };
+  const studio = await sendStudioAlert(withMailer, inquiry);
+  const brand = await sendBrandReceipt(withMailer, inquiry);
   return { studio, brand };
+}
+
+/**
+ * Audit Q7: the success panel said "a confirmation email is on its way" even when no mailer was
+ * configured. The route now sends the brand's receipt inside the request and reports whether it
+ * went; the studio alert still goes out in `after()`. The row is stored before either, so a mail
+ * failure can never lose an enquiry — it only removes the receipt sentence.
+ */
+export async function sendBrandInquiryReceipt(deps: NotifyBrandInquiryDeps, inquiry: BrandInquiry, timeoutMs = BRAND_RECEIPT_TIMEOUT_MS): Promise<boolean> {
+  if (deps.mailer === null) return false;
+  // Release review L3: a slow provider must not hold the form (or reach the function limit and
+  // invite a re-submit into the daily cap). The signal aborts the live HTTP request; the timer
+  // also bounds a mailer that ignores signals. Timing out only drops the receipt sentence.
+  const controller = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<false>(resolve => {
+    timer = setTimeout(() => { controller.abort(new Error('receipt timeout')); resolve(false); }, timeoutMs);
+  });
+  try {
+    const sent = sendBrandReceipt({ ...deps, mailer: deps.mailer }, inquiry, controller.signal).then(outcome => outcome.ok === true);
+    return await Promise.race([sent, deadline]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+export async function notifyBrandStudio(deps: NotifyBrandInquiryDeps, inquiry: BrandInquiry): Promise<SendOutcome | null> {
+  if (deps.mailer === null) return null;
+  return sendStudioAlert({ ...deps, mailer: deps.mailer }, inquiry);
 }

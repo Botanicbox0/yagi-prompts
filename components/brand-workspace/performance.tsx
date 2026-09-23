@@ -4,7 +4,7 @@ import type {BrandCopy} from './action-form';
 import type {BrandPost,BrandProjectDetail,BrandReport} from '@/lib/brands/workspace/types';
 import {campaignPerformance,rankCampaignPosts,postEngagement,campaignCsv,postContentTitle,byLatestPublished,postPresentation,postHandle,postSearchText} from '@/lib/brands/workspace/performance';
 import {interpolate} from '@/lib/i18n/format';
-import {formatBrandTimestamp} from './format';
+import {formatBrandDate,formatBrandTimestamp} from './format';
 
 type PerformanceProject=Pick<BrandProjectDetail,'title'|'posts'|'contents'|'attachments'|'criteria'>;
 const shortDate=(iso:string,locale:string)=>new Intl.DateTimeFormat(locale==='ko'?'ko-KR':'en-US',{month:'short',day:'numeric',timeZone:'Asia/Seoul'}).format(new Date(iso));
@@ -80,5 +80,5 @@ export function CampaignPerformance({project:p,posts=p.posts,b,locale,frozen=fal
 }
 
 export function ReportResult({project,report,b,locale}:{project:BrandProjectDetail;report:BrandReport;b:BrandCopy;locale:string}){
- return <article className="bw-report" data-report-version={report.version}><header className="bw-heading"><div><p className="bw-kicker">{b.performance.reportTitle} · {interpolate(b.reportCount,{number:report.version})}</p><h1>{project.title}</h1><p>{project.organizationName}</p></div><button type="button" className="bw-button bw-no-print" onClick={()=>window.print()}>{b.performance.print}</button></header><p>{b.period}: {report.periodStart} — {report.periodEnd}</p><p className="bw-muted">{b.publishedAt}: {formatBrandTimestamp(report.createdAt,locale)} · {b.performance.reportBasis}</p><p className="bw-note">{b.performance.reportFrozen}</p><p className="bw-prose bw-report-summary">{report.summary}</p><CampaignPerformance project={project} posts={report.snapshot.posts} b={b} locale={locale} frozen/></article>;
+ return <article className="bw-report" data-report-version={report.version}><header className="bw-heading"><div><p className="bw-kicker">{b.performance.reportTitle} · {interpolate(b.reportCount,{number:report.version})}</p><h1>{project.title}</h1><p>{project.organizationName}</p></div><button type="button" className="bw-button bw-no-print" onClick={()=>window.print()}>{b.performance.print}</button></header><p>{b.period}: {formatBrandDate(report.periodStart,locale)} — {formatBrandDate(report.periodEnd,locale)}</p><p className="bw-muted">{b.publishedAt}: {formatBrandTimestamp(report.createdAt,locale)} · {b.performance.reportBasis}</p><p className="bw-note">{b.performance.reportFrozen}</p><p className="bw-prose bw-report-summary">{report.summary}</p><CampaignPerformance project={project} posts={report.snapshot.posts} b={b} locale={locale} frozen/></article>;
 }

@@ -372,14 +372,6 @@ export async function updateCampaign(sql: SqlRunner, id: string, args: CampaignW
   return rows.length > 0;
 }
 
-export async function updateCampaignMedia(sql: SqlRunner, id: string, media: unknown): Promise<boolean> {
-  const { rows } = await sql.query<{ id: string }>(`update campaigns set media = $2::jsonb where id = $1 returning id`, [
-    id,
-    media === null ? null : JSON.stringify(media),
-  ]);
-  return rows.length > 0;
-}
-
 /**
  * Status changes go through here and nowhere else. `published_at` is stamped the first time a
  * campaign leaves draft; the CHECKs in 0013 refuse a public status without dates, payout, localized

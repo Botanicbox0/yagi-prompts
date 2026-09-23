@@ -1,5 +1,5 @@
 import type { ShapedContest } from '@/lib/contests/access';
-import { contestSubmitPath, contestsHref } from '@/lib/contests/links';
+import { contestSubmitPath } from '@/lib/contests/links';
 import { formatDate, localize } from '@/lib/i18n/format';
 import { Markdown } from '@/components/playbook/markdown';
 import { RevealGrid } from '@/components/motion/reveal-grid';
@@ -482,15 +482,5 @@ export function ContestBody({
       {brief}
       {entries}
     </>
-  );
-}
-
-export function ContestBackLink({ locale, labels }: { locale: string; labels: ContestLabels }) {
-  return (
-    <p className="mt-12">
-      <a href={contestsHref(locale)} className="text-accent font-label text-eyebrow uppercase">
-        ← {labels.backToList}
-      </a>
-    </p>
   );
 }

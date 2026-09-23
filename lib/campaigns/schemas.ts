@@ -33,10 +33,6 @@ export const APPLICATION_STATUSES = [
 ] as const;
 export type ApplicationStatus = (typeof APPLICATION_STATUSES)[number];
 
-export function isApplicationStatus(value: unknown): value is ApplicationStatus {
-  return typeof value === 'string' && (APPLICATION_STATUSES as readonly string[]).includes(value);
-}
-
 export function isCampaignStatus(value: unknown): value is CampaignStatus {
   return typeof value === 'string' && (CAMPAIGN_STATUSES as readonly string[]).includes(value);
 }
@@ -47,10 +43,6 @@ export function isCampaignStatus(value: unknown): value is CampaignStatus {
 
 export const CAMPAIGN_PLATFORMS = ['instagram', 'tiktok', 'youtube'] as const;
 export type CampaignPlatform = (typeof CAMPAIGN_PLATFORMS)[number];
-
-export function isCampaignPlatform(value: unknown): value is CampaignPlatform {
-  return typeof value === 'string' && (CAMPAIGN_PLATFORMS as readonly string[]).includes(value);
-}
 
 /** Which platform a posted link belongs to, by host — the check the reviewer would otherwise do by eye. */
 export function platformOfUrl(raw: string): CampaignPlatform | null {

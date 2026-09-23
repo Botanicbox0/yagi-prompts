@@ -21,11 +21,18 @@ export interface FooterLabels {
   builtIn: string;
   navHeading: string;
   contactHeading: string;
+  /** The contact mailto's subject line, in the page's language (audit P2-17). */
+  mailSubject: string;
   brand: string;
   /** The house ad and the footer send brands to the same place: the enquiry form. */
   adHref: string;
   /** 전자상거래법 §21 — the seller identification lines, on every page (2026-09-11). */
   business: string[];
+  /**
+   * Audit P2-9: the way back to /account (내 작품, deletion) from every page. Static-safe — it goes
+   * through `/auth/signin?next=/account`, which is a plain redirect for a signed-in reader.
+   */
+  account?: { href: string; label: string };
 }
 
 export interface FooterLink {
@@ -86,13 +93,18 @@ export function SiteFooter({
                 <TextSwap>{link.label}</TextSwap>
               </a>
             ))}
+            {labels.account && (
+              <a href={labels.account.href} data-footer-account className="font-label text-eyebrow uppercase">
+                <TextSwap>{labels.account.label}</TextSwap>
+              </a>
+            )}
           </nav>
 
           <div className="flex flex-col gap-3">
             <p className="font-label text-eyebrow uppercase opacity-60">{labels.contactHeading}</p>
             <HireClickBeacon>
               <a
-                href="mailto:hello@yagiworkshop.xyz?subject=TWINGS%20%E2%80%94%20studio%20enquiry"
+                href={`mailto:hello@yagiworkshop.xyz?subject=${encodeURIComponent(labels.mailSubject)}`}
                 className="font-mono text-code"
               >
                 hello@yagiworkshop.xyz

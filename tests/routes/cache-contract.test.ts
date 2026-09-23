@@ -88,7 +88,6 @@ describe('route cache modes (§3.4 / §4)', () => {
     for (const [projection, tag] of [
       [read('lib', 'content', 'public-catalog.ts'), 'tags: [CATALOG_TAG]'],
       [read('lib', 'prompts', 'public-catalog.ts'), 'tags: [PROMPTS_TAG]'],
-      [read('lib', 'contests', 'public-catalog.ts'), 'tags: [CONTESTS_TAG]'],
     ]) {
       expect(projection).toContain('unstable_cache');
       expect(projection).toContain(tag!);
@@ -103,10 +102,7 @@ describe('route cache modes (§3.4 / §4)', () => {
    * catalog any more — a swallowed outage was being ISR-cached for an hour as intentional design.
    */
   it('lets a prompts/contests catalog outage throw instead of caching as designed-empty', () => {
-    for (const file of [
-      read('lib', 'prompts', 'public-catalog.ts'),
-      read('lib', 'contests', 'public-catalog.ts'),
-    ]) {
+    for (const file of [read('lib', 'prompts', 'public-catalog.ts')]) {
       expect(file).toContain('readPublicProjection');
       expect(file).not.toContain('catch');
       expect(file).not.toContain('console.warn');
@@ -131,7 +127,6 @@ describe('route cache modes (§3.4 / §4)', () => {
       ...sourcesUnder('components', 'landing'),
       ...sourcesUnder('components', 'nav'),
       ...sourcesUnder('components', 'ad'),
-      ...sourcesUnder('components', 'pricing'),
       ...sourcesUnder('components', 'ui'),
       ...sourcesUnder('components', 'marketing'),
       ...sourcesUnder('components', 'motion'),
@@ -591,7 +586,7 @@ describe('templates route contract (docs/TEMPLATES-IA.md)', () => {
   it('keeps the pricing page static and session-free, priced from the template projection', () => {
     const pricing = read('app', '(marketing)', '[locale]', 'pricing', 'page.tsx');
     expect(pricing).toContain("from '@/lib/prompts/public-catalog'");
-    expect(pricing).toContain('priceRange');
+    expect(pricing).toMatch(/\bpriceRangeFor\(/);
     for (const needle of ['getWallet', 'getViewer', 'CookieTable', 'next/headers']) {
       expect(pricing.includes(needle), `pricing must not use ${needle}`).toBe(false);
     }

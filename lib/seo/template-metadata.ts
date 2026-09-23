@@ -4,7 +4,7 @@ import type { PromptCard } from '@/lib/prompts/catalog';
 import type { TemplateMedium } from '@/lib/prompts/schemas';
 import { TEMPLATE_LISTING_REST, templateRest } from '@/lib/prompts/links';
 import { localeAlternates } from './playbook-metadata';
-import { SITE_OG_IMAGE, SITE_TWITTER_CARD } from './og';
+import { SITE_TWITTER_CARD, siteOgImage } from './og';
 
 /**
  * docs/TEMPLATES-IA.md — the template surface's metadata: the two listings and every published
@@ -37,7 +37,7 @@ export function templateMetadata(input: {
       title,
       description: input.description,
       siteName: input.siteName,
-      images: [image ? { url: image } : SITE_OG_IMAGE],
+      images: [image ? { url: image } : siteOgImage(locale)],
       ...(card.video ? { videos: [{ url: card.video.src, type: card.video.mime }] } : {}),
     },
     twitter: { card: SITE_TWITTER_CARD },
@@ -66,7 +66,7 @@ export function templatesListingMetadata(input: {
       title: input.ogTitle ?? input.title,
       description: input.description,
       siteName: input.siteName,
-      images: [SITE_OG_IMAGE],
+      images: [siteOgImage(input.locale)],
     },
     twitter: { card: SITE_TWITTER_CARD },
   };

@@ -78,7 +78,7 @@
 
 ### 남은 정리(후속)
 - 오디오 결과물이 붙은 프롬프트(`handheld-market-run` 픽스처)는 템플릿 페이지에 오디오 행을 그리지 않는다. 오디오 템플릿은 v1 범위 밖.
-- `components/prompts/detail.tsx`의 잠금 패널·복사 버튼·SubmitStrip, `components/pricing/{cookie-table,plan-table}`, `lib/contests/*` 공개용 코드는 참조가 끊긴 채 남아 있다. 어드민 콘테스트 미리보기가 `components/contests/*`를 쓰므로 한 번에 지우지 않고 다음 정리 패스에서 걷어낸다.
+- `components/pricing/*`, `lib/contests/public-catalog.ts`, `lib/prompts/facade.ts`는 2026-09-23 정리 패스에서 삭제했다([감사 기록](reviews/OPUS-SURFACE-AUDIT-2026-09-23.md)). `components/prompts/detail.tsx`의 잠금 패널·복사 버튼·SubmitStrip과 남은 `lib/contests/*` 공개용 코드는 테스트가 아직 참조하므로 남아 있다. 어드민 콘테스트 미리보기가 `components/contests/*`를 쓰므로 한 번에 지우지 않고 다음 정리 패스에서 걷어낸다.
 - 어드민 '템플릿' 화면의 용어(프롬프트 → 템플릿)는 라벨만 바꿨다. 본문 카피는 후속.
 
 ## 7. 엔진과 비율 (창업자 결정 2026-09-06)

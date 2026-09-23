@@ -126,7 +126,7 @@ export default async function AdminListPage({
                         <a href={`/admin/p/${row.id}`} className={BUTTON}>
                           {a.open}
                         </a>
-                        <OpForm op="playbook.archive" back="/admin">
+                        <OpForm op="playbook.archive" back="/admin/playbooks">
                           <input type="hidden" name="playbookId" value={row.id} />
                           <input
                             type="hidden"
@@ -149,7 +149,7 @@ export default async function AdminListPage({
 
       <Panel title={a.newHeading}>
         <p className="font-mono text-code opacity-60">{a.newLede}</p>
-        <OpForm op="playbook.create" back="/admin" className="mt-4 grid gap-4">
+        <OpForm op="playbook.create" back="/admin/playbooks" className="mt-4 grid gap-4">
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label={a.newSlug} hint={a.newSlugHint}>
               <input type="text" name="slug" required className={INPUT} />

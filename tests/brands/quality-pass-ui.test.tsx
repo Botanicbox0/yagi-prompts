@@ -36,6 +36,7 @@ vi.mock('@/components/brand-workspace/context', async () => {
 vi.mock('@/lib/brands/production/service', () => ({ loadProductionWorkspace: async () => ({ role: 'owner', contracts: [], jobs: [] }) }));
 vi.mock('@/lib/identity/service', () => ({ assetLibraryMode: () => 'off', needsLiveness: () => false, identityStatusFor: async () => 'active' }));
 vi.mock('@/lib/brands/workspace/service', () => ({
+  countPendingSharedCampaigns: async () => 0,
   loadBrandWorkspaceScope: async () => scopeOf(state.workspace),
   loadBrandWorkspace: async (_deps: unknown, _viewer: unknown, options: { organizationId?: string } = {}) => ({
     organizations: state.workspace.organizations.filter((o) => !options.organizationId || o.id === options.organizationId),

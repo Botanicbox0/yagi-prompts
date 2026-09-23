@@ -7,7 +7,8 @@ import {
   PAYOUT_MODELS,
   SLOTS_MAX,
 } from '@/lib/campaigns/schemas';
-import { HOST_KINDS, toDateTimeLocal } from '@/lib/contests/schemas';
+import { HOST_KINDS } from '@/lib/contests/schemas';
+import { toKstDateTimeLocal } from '@/lib/campaigns/dates';
 import { campaignLabels } from '@/components/campaigns/labels';
 import { Field, INPUT, LABEL, LocalePair } from '@/components/admin/chrome';
 
@@ -99,10 +100,10 @@ export function CampaignFields({
         </Field>
         <div />
         <Field label={a.fieldApplicationsCloseAt} hint={a.campaignDatesHint}>
-          <input type="datetime-local" name="applicationsCloseAt" defaultValue={toDateTimeLocal(row?.applicationsCloseAt)} className={INPUT} />
+          <input type="datetime-local" name="applicationsCloseAt" defaultValue={toKstDateTimeLocal(row?.applicationsCloseAt)} className={INPUT} />
         </Field>
         <Field label={a.fieldPostDeadlineAt}>
-          <input type="datetime-local" name="postDeadlineAt" defaultValue={toDateTimeLocal(row?.postDeadlineAt)} className={INPUT} />
+          <input type="datetime-local" name="postDeadlineAt" defaultValue={toKstDateTimeLocal(row?.postDeadlineAt)} className={INPUT} />
         </Field>
       </div>
 

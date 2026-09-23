@@ -1,8 +1,9 @@
 import type { SqlRunner } from '@/lib/db/sql-runner';
 import { DEFAULT_LOCALE, isLocale, type Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/dictionaries';
-import { formatDate, interpolate, localize } from '@/lib/i18n/format';
-import { BUSINESS } from '@/lib/legal/documents';
+import { interpolate, localize } from '@/lib/i18n/format';
+import { formatCampaignDateTime } from '@/lib/campaigns/dates';
+import { companyLine } from '@/lib/notify/company-line';
 import type { Mailer, SendOutcome } from '@/lib/notify/mailer';
 import { broadcast, type BroadcastResult } from '@/lib/notify/broadcast';
 import { sheet, sheetText } from '@/lib/notify/sheet';
@@ -10,7 +11,6 @@ import { campaignLabels } from '@/components/campaigns/labels';
 import { payoutHeadline } from './copy';
 import { MY_CAMPAIGNS_PATH, campaignHref, campaignsHref } from './links';
 import type { ApplicationRow, CampaignRow } from './repo';
-import type { ApplicationStatus } from './schemas';
 import { formatWon } from './state';
 
 /**
@@ -37,13 +37,9 @@ export interface CampaignMailDeps {
 export const NOTIFIED_APPLICATION_STATUSES = ['selected', 'declined', 'verified', 'rejected', 'paid'] as const;
 export type NotifiedApplicationStatus = (typeof NOTIFIED_APPLICATION_STATUSES)[number];
 
-export function isNotifiedStatus(status: ApplicationStatus): status is NotifiedApplicationStatus {
-  return (NOTIFIED_APPLICATION_STATUSES as readonly string[]).includes(status);
-}
-
 function footer(locale: Locale): string {
   const dict = getDictionary(locale);
-  return `${dict.campaigns.email.footer} · ${BUSINESS.nameKo} · ${BUSINESS.email}`;
+  return `${dict.campaigns.email.footer} · ${companyLine(locale)}`;
 }
 
 /** What a campaign says about itself in one line, in the reader's language. */
@@ -53,7 +49,7 @@ function campaignFacts(campaign: CampaignRow, locale: Locale): { title: string; 
   return {
     title: localize(campaign.title, locale).replace(/\s+/g, ' ').trim(),
     payout: campaign.payout ? payoutHeadline(campaign.payout, locale, labels.payout) : '',
-    applyBy: campaign.applicationsCloseAt ? (formatDate(campaign.applicationsCloseAt, locale) ?? '') : '',
+    applyBy: campaign.applicationsCloseAt ? (formatCampaignDateTime(campaign.applicationsCloseAt, locale) ?? '') : '',
   };
 }
 
@@ -106,7 +102,7 @@ export async function notifyApplicationStatus(
   const c = dict.campaigns.email;
   const origin = deps.siteUrl.replace(/\/+$/, '');
   const facts = campaignFacts(args.campaign, locale);
-  const postBy = args.campaign.postDeadlineAt ? (formatDate(args.campaign.postDeadlineAt, locale) ?? '') : '';
+  const postBy = args.campaign.postDeadlineAt ? (formatCampaignDateTime(args.campaign.postDeadlineAt, locale) ?? '') : '';
   const amount = args.app.payoutCents !== null ? formatWon(args.app.payoutCents, locale) : '';
   const vars = { title: facts.title, host: args.campaign.hostName, postBy, reason: args.app.rejectReason ?? '', amount, payout: facts.payout };
   const mine = `${origin}${MY_CAMPAIGNS_PATH}`;

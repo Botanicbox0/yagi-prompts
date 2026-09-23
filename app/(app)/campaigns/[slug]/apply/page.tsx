@@ -3,7 +3,8 @@ import { getViewer } from '@/lib/auth/viewer';
 import { getSqlRunner } from '@/lib/db/connect';
 import { getLocaleFromHeaders } from '@/lib/i18n/server';
 import { getDictionary } from '@/lib/i18n/dictionaries';
-import { formatDate, interpolate, localize } from '@/lib/i18n/format';
+import { interpolate, localize } from '@/lib/i18n/format';
+import { formatCampaignDateTime } from '@/lib/campaigns/dates';
 import { signInHref } from '@/lib/billing/links';
 import { loadApplyState } from '@/lib/campaigns/service';
 import { payoutSentence } from '@/lib/campaigns/copy';
@@ -113,9 +114,9 @@ export default async function CampaignApplyPage({
           <dd>{campaign.platforms.map((p) => labels.platform[p]).join(' · ')} · {labels.deliverable[campaign.deliverable]}</dd>
           <dt className="opacity-50">{c.timelineHeading}</dt>
           <dd>
-            {campaign.applicationsCloseAt ? interpolate(labels.applyBy, { date: formatDate(campaign.applicationsCloseAt, locale) ?? '' }) : '—'}
+            {campaign.applicationsCloseAt ? interpolate(labels.applyBy, { date: formatCampaignDateTime(campaign.applicationsCloseAt, locale) ?? '' }) : '—'}
             {' · '}
-            {campaign.postDeadlineAt ? interpolate(labels.postBy, { date: formatDate(campaign.postDeadlineAt, locale) ?? '' }) : '—'}
+            {campaign.postDeadlineAt ? interpolate(labels.postBy, { date: formatCampaignDateTime(campaign.postDeadlineAt, locale) ?? '' }) : '—'}
           </dd>
           {campaign.requirements.disclosure && (
             <>

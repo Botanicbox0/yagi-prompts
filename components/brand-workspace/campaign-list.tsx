@@ -40,7 +40,7 @@ export function CampaignList({ projects, b, locale, studio = false }: { projects
     </section>}
     <section className="bw-campaign-section">
       <div className="bw-board-toolbar">
-        <div className="bw-status-tabs" aria-label={b.projectStatus}>{(['all','requested','active','completed','cancelled'] as const).map(key => <button type="button" key={key} aria-pressed={status === key} onClick={() => setStatus(key)}>{key === 'all' ? b.performance.allCampaigns : b.status[key]}<span>{(key === 'all' ? projects : projects.filter(p => p.status === key)).length}</span></button>)}</div>
+        <div className="bw-status-tabs" role="group" aria-label={b.projectStatus}>{(['all','requested','active','completed','cancelled'] as const).map(key => <button type="button" key={key} aria-pressed={status === key} onClick={() => setStatus(key)}>{key === 'all' ? b.performance.allCampaigns : b.status[key]}<span>{(key === 'all' ? projects : projects.filter(p => p.status === key)).length}</span></button>)}</div>
         <label className="bw-search"><span className="sr-only">{d.search}</span><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5"/><path d="m13 13 4 4"/></svg><input value={query} onChange={e => setQuery(e.target.value)} placeholder={d.searchPlaceholder}/></label>
       </div>
       {!sorted.length ? <p className="bw-board-empty" role="status">{b.performance.noCampaignMatch}</p> : studio ? <div className="bw-ops-list">

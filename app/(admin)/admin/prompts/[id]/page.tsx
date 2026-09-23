@@ -14,6 +14,7 @@ import {
   Field,
   INPUT,
   LABEL,
+  ConfirmCheck,
   OpForm,
   OutcomeBanner,
   Panel,
@@ -268,8 +269,9 @@ export default async function AdminPromptItemPage({
               {interpolate(a.announcedAt, { date: formatDate(row.announcedAt, locale) ?? '' })}
             </p>
           ) : (
-            <OpForm op="prompt.announce" back={back} className="mt-3">
+            <OpForm op="prompt.announce" back={back} className="mt-3 flex flex-col items-start gap-2">
               <input type="hidden" name="id" value={row.id} />
+              <ConfirmCheck label={a.confirmAnnounce} />
               <button type="submit" className={BUTTON_PRIMARY} data-announce={row.slug}>
                 {a.announceTemplate}
               </button>

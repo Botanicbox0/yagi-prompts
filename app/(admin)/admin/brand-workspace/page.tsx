@@ -7,7 +7,8 @@ import { getDictionary } from "@/lib/i18n/dictionaries";
 import { loadStudioWorkspace } from "@/lib/brands/workspace/service";
 import { AdminShell } from "@/components/admin/chrome";
 import { CampaignList } from "@/components/brand-workspace/campaign-list";
-import { WorkspaceLanguage } from '@/components/brand-workspace/language';
+import { loadStudioInbox } from "@/lib/brands/workspace/inbox";
+import { StudioInboxPanel } from "@/components/admin/studio-inbox";
 export const dynamic = "force-dynamic";
 export default async function StudioBrands() {
   const [viewer, sql, locale] = await Promise.all([
@@ -17,14 +18,15 @@ export default async function StudioBrands() {
   ]);
   const dict = getDictionary(locale),
     b = dict.brandWorkspace;
-  const workspace = sql ? await loadStudioWorkspace({ sql }, viewer) : null;
+  const [workspace, inbox] = sql ? await Promise.all([loadStudioWorkspace({ sql }, viewer), loadStudioInbox({ sql }, viewer)]) : [null, null];
   return (
     <AdminShell dict={dict.admin} locale={locale} active="brandWorkspace">
       <div data-studio-brand-queue>
         <div className="bw-heading">
           <div><h1>{b.dashboard.studioTitle}</h1><p>{b.dashboard.studioSubtitle}</p></div>
-          <WorkspaceLanguage locale={locale} label={dict.nav.localeToggle}/>
         </div>
+        {/* The language switcher lives once, in the shell's top bar (AdminShell). */}
+        {inbox && <StudioInboxPanel entries={inbox} admin={dict.admin} locale={locale} />}
         {workspace&&<section className="bw-panel" data-managed-brands><div className="bw-section-heading"><h2>{b.managed.manageTitle}</h2></div><p className="bw-muted">{b.managed.manageHint}</p><div className="bw-grid">
           <details className="bw-contract-add"><summary>{b.managed.createBrand}</summary><ManagedForm op="brandWorkspace.organization" b={b} submit={b.managed.createBrand}><label>{b.organization}<input name="name" minLength={2} maxLength={100} required/></label></ManagedForm></details>
           {workspace.organizations.length>0&&<details className="bw-contract-add"><summary>{b.managed.createCampaign}</summary><ManagedForm op="brandWorkspace.createProject" b={b} submit={b.managed.createCampaign}>

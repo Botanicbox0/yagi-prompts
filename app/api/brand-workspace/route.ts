@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
       case "organization.logo.remove":
         result = await removeBrandOrganizationLogo({ sql }, viewer, input); break;
       case "support.send":
-        result = await sendBrandSupport({sql},viewer,input); break;
+        result = await sendBrandSupport({sql},viewer,input,"client"); break;
       case "organization.create":
         result = await createBrandOrganization({ sql }, viewer, input);
         break;
@@ -71,7 +71,7 @@ export async function POST(request: NextRequest) {
         result = await approveBrandContent({ sql }, viewer, input);
         break;
       case "message.send":
-        result = await sendBrandMessage({ sql }, viewer, input);
+        result = await sendBrandMessage({ sql }, viewer, input, "client");
         break;
       case "invitation.create":
         result = await createBrandInvitation({ sql }, viewer, input);
@@ -122,7 +122,7 @@ export async function POST(request: NextRequest) {
       result,
       result.ok
         ? 200
-        : result.code === "conflict"
+        : result.code === "conflict" || result.code === "existing_member_role_mismatch"
           ? 409
           : result.code === "not_found"
             ? 404

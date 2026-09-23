@@ -6,7 +6,7 @@ import type { BrandCopy } from "./action-form";
 import { ActionForm } from "./action-form";
 import { BrandUpload } from "./upload";
 import { interpolate } from "@/lib/i18n/format";
-import { formatBrandTimestamp } from "./format";
+import { formatBrandDate, formatBrandTimestamp, formatFileSize } from "./format";
 import { ProjectTabs } from './project-tabs';
 import { CampaignContracts } from './contracts';
 import { CampaignPerformance } from './performance';
@@ -14,6 +14,7 @@ import { postHandle, postPresentation } from '@/lib/brands/workspace/performance
 import { unsetDateKey } from '@/lib/brands/workspace/schedule';
 import { DecisionFields } from './decision-fields';
 import { StaffNotice } from './staff-notice';
+import { projectNextAction } from './next-action';
 import type { ReactNode } from "react";
 
 export function PostTable({
@@ -111,6 +112,8 @@ export function ProjectDetail({
   const newest = new Map<string, number>();
   for (const c of p.contents)
     newest.set(c.slotKey, Math.max(newest.get(c.slotKey) ?? 0, c.version));
+  // Decided by state and role (release review): a requested or empty campaign never asks for results.
+  const next = projectNextAction(p, studio ? "studio" : writable ? "approver" : "reader", b);
   return (
     <div data-brand-project={p.id}>
       <div className={p.coverUrl ? "bw-project-masthead" : undefined}>
@@ -136,14 +139,17 @@ export function ProjectDetail({
       {staffView && <StaffNotice b={b} manageHref={staffManageHref} />}
       {staffView && p.clientVisible === false && <p className="bw-note" data-project-unshared>{b.managed.prepared}</p>}
       {p.status === "requested" && <p className="bw-note">{b.requestedNext}</p>}
+      {/* Above the tabs, so it is seen whichever tab is open; its link switches to that tab. */}
+      {next && (
+        <div className="bw-note bw-row bw-no-print bw-tab-next" data-project-next-action={next.kind}>
+          <div><strong>{b.performance.nextAction}</strong><p>{next.text}</p></div>
+          {next.href && <a className="bw-button" href={next.href}>{next.label} →</a>}
+        </div>
+      )}
       <ProjectTabs b={b} comments={p.messages.length}>
       <section id="performance" className="bw-panel">
         <CampaignPerformance project={p} b={b} locale={locale}/>
       </section>
-      <div className="bw-note bw-row bw-no-print bw-tab-next">
-        <div><strong>{b.performance.nextAction}</strong><p>{p.contents.some(c=>c.version===newest.get(c.slotKey)&&c.decision==='pending')?interpolate(b.performance.reviewAction,{count:p.contents.filter(c=>c.version===newest.get(c.slotKey)&&c.decision==='pending').length}):b.performance.trackingAction}</p></div>
-        <a className="bw-button" href={studio?'#studio-actions':'#review'}>{studio?b.performance.studioActions:b.review} →</a>
-      </div>
       <div className="bw-grid-wide">
         <div>
           <section id="brief" className="bw-panel">
@@ -173,8 +179,8 @@ export function ProjectDetail({
                   {b.startsOn} / {b.endsOn}
                 </dt>
                 <dd>
-                  {p.startsOn ?? unsetDate} —{" "}
-                  {p.endsOn ?? unsetDate}
+                  {formatBrandDate(p.startsOn, locale) ?? unsetDate} —{" "}
+                  {formatBrandDate(p.endsOn, locale) ?? unsetDate}
                 </dd>
               </div>
               <div>
@@ -292,10 +298,6 @@ export function ProjectDetail({
                         submit={b.save}
                       >
                         <DecisionFields b={b} />
-                        <label className="bw-check">
-                          <input type="checkbox" required name="confirmed" />
-                          {b.approveConfirm}
-                        </label>
                       </ActionForm>
                     )}
                   {p.decisions
@@ -326,7 +328,7 @@ export function ProjectDetail({
                   <h3>{interpolate(b.reportCount, { number: r.version })}</h3>
                   <a className="bw-button" href={`${studio?'/admin/brand-workspace':'/brand/projects'}/${p.id}/reports/${r.id}`}>{b.performance.reportLink} →</a>
                   <p className="bw-muted">
-                    {b.period}: {r.periodStart} — {r.periodEnd} ·{" "}
+                    {b.period}: {formatBrandDate(r.periodStart, locale)} — {formatBrandDate(r.periodEnd, locale)} ·{" "}
                     {b.publishedAt}: {formatBrandTimestamp(r.createdAt, locale)}
                   </p>
                   <div className="bw-stats">
@@ -427,7 +429,7 @@ export function ProjectDetail({
                     {f.name} ↗
                   </a>
                   <p className="bw-muted">
-                    {Math.ceil(f.sizeBytes / 1024).toLocaleString(locale)} KB ·{" "}
+                    {formatFileSize(f.sizeBytes, locale)} ·{" "}
                     {formatBrandTimestamp(f.createdAt, locale)}
                   </p>
                 </li>

@@ -1,7 +1,7 @@
 import type { Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/dictionaries';
 import { formatDate, interpolate } from '@/lib/i18n/format';
-import { BUSINESS } from '@/lib/legal/documents';
+import { companyLine } from '@/lib/notify/company-line';
 import { escapeHtml, type RenderedEmail } from '@/lib/notify/templates';
 import type { TemplateMedium } from '@/lib/prompts/schemas';
 
@@ -74,8 +74,8 @@ export function renderResultEmail(input: RenderEmailInput): RenderedEmail {
 
   return {
     subject,
-    html: html({ preheader, title, body, cta, ctaUrl, meta, ready, copy, links: input.links, siteName: input.siteName }),
-    text: text({ title, body, cta, ctaUrl, meta, copy, links: input.links, siteName: input.siteName }),
+    html: html({ preheader, title, body, cta, ctaUrl, meta, ready, copy, links: input.links, siteName: input.siteName, locale: input.locale }),
+    text: text({ title, body, cta, ctaUrl, meta, copy, links: input.links, siteName: input.siteName, locale: input.locale }),
   };
 }
 
@@ -88,10 +88,11 @@ interface Parts {
   copy: ReturnType<typeof getDictionary>['renders']['email'];
   links: RenderEmailLinks;
   siteName: string;
+  locale: Locale;
 }
 
 function html(parts: Parts & { preheader: string; ready: boolean }): string {
-  const { preheader, title, body, cta, ctaUrl, meta, ready, copy, links, siteName } = parts;
+  const { preheader, title, body, cta, ctaUrl, meta, ready, copy, links, siteName, locale } = parts;
   const preview =
     ready && links.previewUrl
       ? `
@@ -146,7 +147,7 @@ ${preview}
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:520px;">
       <tr><td style="padding:24px 12px 0 12px;font-family:${FONT};font-size:12px;line-height:1.7;color:${FOOTNOTE};">
         ${escapeHtml(copy.footer)}<br />
-        ${escapeHtml(BUSINESS.nameKo)} · ${escapeHtml(BUSINESS.address)} · ${escapeHtml(BUSINESS.email)}
+        ${escapeHtml(companyLine(locale, { address: true }))}
       </td></tr>
     </table>
   </td></tr>
@@ -154,7 +155,7 @@ ${preview}
 }
 
 function text(parts: Parts): string {
-  const { title, body, cta, ctaUrl, meta, copy, links, siteName } = parts;
+  const { title, body, cta, ctaUrl, meta, copy, links, siteName, locale } = parts;
   return [
     `${siteName} — ${copy.kicker}`,
     '',
@@ -171,6 +172,6 @@ function text(parts: Parts): string {
     '',
     '—',
     copy.footer,
-    `${BUSINESS.nameKo} · ${BUSINESS.address} · ${BUSINESS.email}`,
+    companyLine(locale, { address: true }),
   ].join('\n');
 }

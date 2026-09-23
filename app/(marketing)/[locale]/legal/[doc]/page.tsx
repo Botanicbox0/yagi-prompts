@@ -118,7 +118,7 @@ export default async function LegalPage({ params }: RouteParams) {
               className="mt-6 inline-flex items-center gap-4 opacity-80 transition-opacity hover:opacity-100"
             >
               {/* eslint-disable-next-line @next/next/no-img-element -- the bank hosts the mark */}
-              <img src={ESCROW.mark} alt={`${ESCROW.service} 인증마크`} width={60} height={60} />
+              <img src={ESCROW.mark} alt={dict.legal.escrowAlt} width={60} height={60} />
               <span className="max-w-[26rem] font-mono text-[0.72rem] leading-relaxed opacity-70">
                 {dict.legal.escrowMark}
               </span>

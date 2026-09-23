@@ -88,7 +88,7 @@ export default async function AdminEditorPage({
         {title || editor.playbook.slug}
       </h1>
       <p className="mt-2 font-mono text-code opacity-60">
-        {editor.playbook.slug} · {editor.playbook.status}
+        {editor.playbook.slug} · {editor.playbook.status === 'published' ? a.statusPublished : editor.playbook.status === 'archived' ? a.statusArchived : a.statusDraft}
       </p>
 
       <OutcomeBanner

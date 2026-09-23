@@ -1,8 +1,10 @@
 'use client';
-import {usePathname} from 'next/navigation';
+import {usePathname,useSearchParams} from 'next/navigation';
 import {useEffect,useState,type FormEvent} from 'react';
 export function WorkspaceLanguage({locale,label,compact=false,applyLabel=label}:{locale:string;label:string;compact?:boolean;applyLabel?:string}){
- const pathname=usePathname();
+ // The no-JS form posts this value as is, so it carries the query too (?organizationId= keeps the brand).
+ const search=useSearchParams()?.toString()??'';
+ const pathname=usePathname()+(search?`?${search}`:'');
  const [ready,setReady]=useState(false);
  useEffect(()=>setReady(true),[]);
  const preserveLocation=(e:FormEvent<HTMLFormElement>)=>{const input=e.currentTarget.elements.namedItem('next') as HTMLInputElement;input.value=window.location.pathname+window.location.search;};

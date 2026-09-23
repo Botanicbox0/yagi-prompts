@@ -10,7 +10,7 @@ import { campaignsHref } from '@/lib/campaigns/links';
 import { marqueeItems } from '@/lib/marquee';
 import { promptLabels, presentUseCases, useCaseLabel } from '@/components/prompts/labels';
 import { campaignLabels } from '@/components/campaigns/labels';
-import { SITE_OG_IMAGE, SITE_TWITTER_CARD } from '@/lib/seo/og';
+import { SITE_TWITTER_CARD, siteOgImage } from '@/lib/seo/og';
 import { MarketingFooter, MarketingNav, adLabels } from '@/components/marketing/chrome';
 import { Hero, HeroLede, MarqueeStrip } from '@/components/landing/sections';
 import { CircleWipe } from '@/components/landing/circle-wipe';
@@ -54,7 +54,7 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
       title: `${dict.meta.siteName} — ${dict.meta.tagline}`,
       description: dict.meta.landingDescription,
       siteName: dict.meta.siteName,
-      images: [SITE_OG_IMAGE],
+      images: [siteOgImage(locale)],
     },
     twitter: { card: SITE_TWITTER_CARD },
   };

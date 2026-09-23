@@ -46,7 +46,6 @@ export function templateHref(locale: Locale | string, slug: string): string {
 // Aliases from the prompts era — same pages, new names (see the header note).
 export const promptsHref = (locale: Locale | string): string => templatesHref(locale, 'video');
 export const promptHref = templateHref;
-export const promptRest = templateRest;
 
 /** The copy endpoint answers 410 since 2026-09-05; the path stays so the client button can name it. */
 export function promptCopyPath(id: string): string {

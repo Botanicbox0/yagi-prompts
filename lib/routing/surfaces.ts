@@ -116,13 +116,17 @@ export function authReturnPath(raw: unknown, hostname: string, fallback: string)
   return path;
 }
 
-export function authFailurePath(hostname: string, locale: string, error: string, next = '/admin'): string {
+export function authFailurePath(hostname: string, locale: string, error: string, next?: string): string {
   const query = new URLSearchParams({ error });
   if (hostname === 'admin.twings.app' || hostname === 'brand.twings.app') {
     query.set('next', authReturnPath(next, hostname, hostname === 'brand.twings.app' ? '/brand' : '/admin'));
     query.set('locale', locale);
     return `/auth/choose?${query}`;
   }
+  // Audit P1-5: a cancelled Kakao/Google consent from a template, apply or checkout path used to
+  // drop the reader on home with no way back. `next` rides along, re-validated here (the callers
+  // already did) so an unsafe value can never reach the notice band's sign-in retry link.
+  query.set('next', authReturnPath(next, hostname, `/${locale}/video`));
   return `/${locale}?${query}`;
 }
 

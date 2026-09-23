@@ -1,6 +1,7 @@
 import type { CampaignCard } from '@/lib/campaigns/catalog';
 import { campaignHref } from '@/lib/campaigns/links';
-import { formatDate, interpolate, localize } from '@/lib/i18n/format';
+import { interpolate, localize } from '@/lib/i18n/format';
+import { formatCampaignDateTime } from '@/lib/campaigns/dates';
 import type { PromptCard } from '@/lib/prompts/catalog';
 import { TypographicPoster } from '@/components/prompts/poster';
 import { posterRatio } from '@/components/ui/poster-seed';
@@ -98,7 +99,7 @@ export function CampaignCardView({
         <p className="mt-auto flex flex-wrap justify-between gap-x-4 gap-y-1 font-mono text-[0.72rem] opacity-55">
           <span data-card-slots>{interpolate(labels.slotsLine, { left: String(slotsLeft), slots: String(card.slots) })}</span>
           {card.applicationsCloseAt && recruiting && (
-            <span>{interpolate(labels.applyBy, { date: formatDate(card.applicationsCloseAt, locale) ?? '' })}</span>
+            <span>{interpolate(labels.applyBy, { date: formatCampaignDateTime(card.applicationsCloseAt, locale) ?? '' })}</span>
           )}
         </p>
       </div>
