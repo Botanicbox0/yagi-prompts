@@ -475,6 +475,19 @@ export const ko: Dictionary = {
     "referenceHint": "링크는 참고용으로만 사용합니다. 파일은 의뢰를 보낸 뒤 비공개로 첨부할 수 있습니다.",
     "submitProject": "캠페인 의뢰 보내기",
     "requestedNext": "스튜디오가 의뢰를 검토합니다. 아래에서 참고 파일을 첨부하거나 대화로 내용을 더 알려주세요.",
+    "nextSteps": {
+      "preparing": "스튜디오가 첫 제작물을 준비하고 있어요. 올라오면 콘텐츠 확인 탭에 표시됩니다.",
+      "readerReview": "확인을 기다리는 제작물이 {count}개 있어요. 승인과 수정 요청은 소유자와 편집자가 할 수 있습니다.",
+      "awaitingPosts": "확인한 제작물이 게시되면 캠페인 성과 탭에서 결과를 볼 수 있어요.",
+      "completedReport": "캠페인이 끝났어요. 리포트에서 최종 결과를 확인해 주세요.",
+      "completedPosts": "캠페인이 끝났어요. 게시물 성과는 캠페인 성과 탭에서 볼 수 있어요.",
+      "studioRequested": "의뢰 내용을 확인하고 진행 여부를 정해 주세요.",
+      "studioNoContent": "첫 제작물을 올려 고객 확인을 요청해 주세요.",
+      "studioAwaitingReview": "고객 확인을 기다리는 제작물이 {count}개 있어요.",
+      "studioPublish": "확인이 끝난 제작물의 게시 링크를 등록해 주세요.",
+      "studioTracking": "게시물 조회수를 최신 값으로 입력해 주세요.",
+      "studioCompleted": "최종 리포트를 발행해 주세요."
+    },
     "status": {
       "requested": "의뢰 접수",
       "active": "진행 중",

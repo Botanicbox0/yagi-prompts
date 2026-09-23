@@ -464,6 +464,19 @@ export const en = {
     "referenceHint": "Links are references only. Files can be attached privately after submitting the brief.",
     "submitProject": "Send campaign brief",
     "requestedNext": "The studio will review your brief. Add files or a message below to share more context.",
+    "nextSteps": {
+      "preparing": "The studio is preparing the first piece of content. It will appear under Content review.",
+      "readerReview": "{count} pieces of content are waiting for review. Owners and editors can approve or request changes.",
+      "awaitingPosts": "Once reviewed content is posted, its results will appear under Campaign performance.",
+      "completedReport": "This campaign has ended. See the report for the final results.",
+      "completedPosts": "This campaign has ended. Post results are under Campaign performance.",
+      "studioRequested": "Review the request and decide whether to take it on.",
+      "studioNoContent": "Upload the first piece of content and ask the client to review it.",
+      "studioAwaitingReview": "{count} pieces of content are waiting for the client's review.",
+      "studioPublish": "Add the post links for reviewed content.",
+      "studioTracking": "Enter the latest view counts for the posts.",
+      "studioCompleted": "Publish the final report."
+    },
     "status": {
       "requested": "Brief received",
       "active": "In progress",

@@ -14,6 +14,7 @@ import { postHandle, postPresentation } from '@/lib/brands/workspace/performance
 import { unsetDateKey } from '@/lib/brands/workspace/schedule';
 import { DecisionFields } from './decision-fields';
 import { StaffNotice } from './staff-notice';
+import { projectNextAction } from './next-action';
 import type { ReactNode } from "react";
 
 export function PostTable({
@@ -111,7 +112,8 @@ export function ProjectDetail({
   const newest = new Map<string, number>();
   for (const c of p.contents)
     newest.set(c.slotKey, Math.max(newest.get(c.slotKey) ?? 0, c.version));
-  const pendingReviews = p.contents.filter((c) => c.version === newest.get(c.slotKey) && c.decision === "pending").length;
+  // Decided by state and role (release review): a requested or empty campaign never asks for results.
+  const next = projectNextAction(p, studio ? "studio" : writable ? "approver" : "reader", b);
   return (
     <div data-brand-project={p.id}>
       <div className={p.coverUrl ? "bw-project-masthead" : undefined}>
@@ -138,10 +140,12 @@ export function ProjectDetail({
       {staffView && p.clientVisible === false && <p className="bw-note" data-project-unshared>{b.managed.prepared}</p>}
       {p.status === "requested" && <p className="bw-note">{b.requestedNext}</p>}
       {/* Above the tabs, so it is seen whichever tab is open; its link switches to that tab. */}
-      <div className="bw-note bw-row bw-no-print bw-tab-next" data-project-next-action={pendingReviews > 0 ? "review" : "tracking"}>
-        <div><strong>{b.performance.nextAction}</strong><p>{pendingReviews > 0 ? interpolate(b.performance.reviewAction, { count: pendingReviews }) : b.performance.trackingAction}</p></div>
-        <a className="bw-button" href={studio?'#studio-actions':'#review'}>{studio?b.performance.studioActions:b.review} →</a>
-      </div>
+      {next && (
+        <div className="bw-note bw-row bw-no-print bw-tab-next" data-project-next-action={next.kind}>
+          <div><strong>{b.performance.nextAction}</strong><p>{next.text}</p></div>
+          {next.href && <a className="bw-button" href={next.href}>{next.label} →</a>}
+        </div>
+      )}
       <ProjectTabs b={b} comments={p.messages.length}>
       <section id="performance" className="bw-panel">
         <CampaignPerformance project={p} b={b} locale={locale}/>
