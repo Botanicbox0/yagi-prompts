@@ -44,7 +44,7 @@ vi.mock('@/lib/brands/workspace/service', () => ({
     state.workspaceCalls.push(options);
     const choice = state.scope.choices.find((c) => c.id === options.organizationId);
     return {
-      organizations: choice && choice.role !== 'guest' ? [{ id: choice.id, name: choice.name, role: choice.role }] : [],
+      organizations: choice && choice.role !== 'guest' && choice.role !== 'studio' ? [{ id: choice.id, name: choice.name, role: choice.role }] : [],
       projects: state.projects.filter((p) => p.organizationId === options.organizationId),
     };
   },

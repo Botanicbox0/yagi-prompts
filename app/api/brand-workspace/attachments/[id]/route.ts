@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getViewer } from "@/lib/auth/viewer";
+import { getVerifiedEmail } from "@/lib/auth/verified-email";
 import { getSqlRunner } from "@/lib/db/connect";
 import { getStorage, STAGING_BUCKET } from "@/lib/storage";
 import {
@@ -25,7 +26,8 @@ async function read(request: NextRequest, context: Context, head: boolean) {
       getSqlRunner(),
     ]);
     if (!viewer.userId || !sql) return unavailable();
-    const file = await loadBrandAttachmentAccess({ sql }, viewer, id);
+    // Same read rule as the campaign page that lists the file, TWINGS team view included.
+    const file = await loadBrandAttachmentAccess({ sql, verifiedEmail: await getVerifiedEmail(viewer.userId) }, viewer, id);
     if (!file) return unavailable();
     const headers = {
       ...HEADERS,

@@ -6,18 +6,19 @@ import { CampaignList } from "@/components/brand-workspace/campaign-list";
 import { brandScope, selectedAccess } from "@/components/brand-workspace/scope";
 import { BrandUnavailable } from "@/components/brand-workspace/brand-unavailable";
 import { scopedHref } from "@/lib/brands/workspace/selection";
+import { StaffNotice, adminOrganizationHref } from "@/components/brand-workspace/staff-notice";
 export default async function BrandHome({
   searchParams,
 }: {
   searchParams: Promise<{ organizationId?: string | string[] }>;
 }) {
-  const [{ organizationId }, { sql, viewer, b, locale }] = await Promise.all([searchParams, brandContext()]);
+  const [{ organizationId }, { sql, viewer, verifiedEmail, b, locale }] = await Promise.all([searchParams, brandContext()]);
   if (!sql) return <p role="alert">{b.unavailable}</p>;
-  const { selection, choice } = await brandScope(sql, viewer, organizationId);
+  const { selection, choice } = await brandScope({ sql, verifiedEmail }, viewer, organizationId);
   if (selection.state === "unavailable") return <BrandUnavailable b={b} />;
   // Only the selected brand's campaigns: another brand's work never mixes into this home.
   const workspace = choice
-    ? await loadBrandWorkspace({ sql }, viewer, { organizationId: choice.id })
+    ? await loadBrandWorkspace({ sql, verifiedEmail }, viewer, { organizationId: choice.id })
     : { organizations: [], projects: [] };
   const access = selectedAccess(choice, workspace.projects);
   const newProject = scopedHref("/brand/projects/new", choice);
@@ -30,6 +31,7 @@ export default async function BrandHome({
         </div>
         {workspace.projects.length > 0 && access.canRequest && <a href={newProject} className="bw-button bw-primary">{b.newProject}</a>}
       </div>
+      {access.staff && choice && <StaffNotice b={b} manageHref={viewer.isAdmin ? adminOrganizationHref(choice.id) : null} />}
       <ServiceGuide kind="campaign" b={b} showOther={!access.projectScopedOnly} organizationId={choice?.id} />
       {access.fresh ? (
         <section className="bw-panel">
@@ -56,7 +58,12 @@ export default async function BrandHome({
       ) : (
         <>
           {workspace.projects.length === 0 ? (
-            access.canRequest ? (
+            access.staff ? (
+              <section className="bw-empty" data-brand-empty="staff">
+                <h2>{b.access.staffEmpty}</h2>
+                <p>{b.access.staffEmptyBody}</p>
+              </section>
+            ) : access.canRequest ? (
               <section className="bw-empty" data-brand-empty="request">
                 <h2>{b.empty}</h2>
                 <p>{b.emptyBody}</p>
@@ -73,7 +80,7 @@ export default async function BrandHome({
           ) : (
             <CampaignList projects={workspace.projects} b={b} locale={locale}/>
           )}
-          {access.hasOrganization && (
+          {access.hasOrganization && workspace.organizations.length > 0 && (
             <section className="bw-team-footer">
               <h2>{b.organizations}</h2>
               <ul className="bw-list">

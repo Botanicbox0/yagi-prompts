@@ -909,6 +909,10 @@ summary.bw-identity-current:hover{background:#f5f5f5}
 .bw-identity-menu a{display:flex;align-items:center;gap:10px;min-height:44px;padding:6px 8px;border-radius:6px}
 .bw-identity-menu a:hover,.bw-identity-menu a[aria-current="true"]{background:#f5f5f7}
 .bw-identity-empty{font-size:12px;color:#747474;margin:0}
+.bw-identity-group{display:block;padding:10px 8px 4px;margin-top:4px;border-top:1px solid #eeeef0;font-size:11px;font-weight:500;color:#747474}
+li:first-child>.bw-identity-group{border-top:0;margin-top:0;padding-top:4px}
+.bw-staff-note{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+.bw-staff-note p{margin:4px 0 0}
 .bw-logo-section{margin-top:28px;display:grid;gap:12px}
 .bw-logo-section h2{margin:0}
 .bw-logo-current{display:flex;align-items:center;gap:12px}

@@ -1,4 +1,5 @@
 import { getViewer } from "@/lib/auth/viewer";
+import { getVerifiedEmail } from "@/lib/auth/verified-email";
 import { getSqlRunner } from "@/lib/db/connect";
 import { loadProductionOutput } from "@/lib/brands/production/service";
 import { getRenderStore } from "@/lib/renders/store";
@@ -17,7 +18,7 @@ async function serve(
     "X-Robots-Tag": "noindex, nofollow",
     "X-Content-Type-Options": "nosniff",
   };
-  const job = sql ? await loadProductionOutput({ sql }, viewer, id) : null;
+  const job = sql ? await loadProductionOutput({ sql, verifiedEmail: await getVerifiedEmail(viewer.userId) }, viewer, id) : null;
   if (!job || job.status !== "succeeded" || !job.resultKey || !job.resultMime)
     return new Response(null, { status: 404, headers });
   const store = await getRenderStore();

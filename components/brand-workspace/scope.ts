@@ -9,18 +9,23 @@ import { workspaceAccess } from "./access";
  * The brand a page works on, from its `?organizationId=` (validated against this account's own
  * choices) or the brand that owns the page's campaign. Same rule as the sidebar selector.
  */
-export async function brandScope(sql: SqlRunner, viewer: Viewer, query: string | string[] | undefined, routeOrganizationId?: string) {
-  const scope = await loadBrandWorkspaceScope({ sql }, viewer);
+export async function brandScope(deps: { sql: SqlRunner; verifiedEmail?: string }, viewer: Viewer, query: string | string[] | undefined, routeOrganizationId?: string) {
+  const scope = await loadBrandWorkspaceScope(deps, viewer);
   const selection = resolveWorkspaceSelection(scope.choices, { query: query ?? null, routeOrganizationId: routeOrganizationId ?? null });
   return { ...scope, selection, choice: selectedChoice(selection) };
 }
 
-/** The selected brand as a membership, or none for a campaign-only guest. */
+/** The selected brand as a membership, or none for a campaign-only guest or the TWINGS team view. */
 export function membershipOf(choice: BrandWorkspaceChoice | null): BrandOrganization[] {
-  return choice && choice.role !== "guest" ? [{ id: choice.id, name: choice.name, role: choice.role }] : [];
+  return choice && choice.role !== "guest" && choice.role !== "studio" ? [{ id: choice.id, name: choice.name, role: choice.role }] : [];
 }
 
-/** `workspaceAccess` for the SELECTED brand only: owning another brand grants nothing here. */
+/**
+ * `workspaceAccess` for the SELECTED brand only: owning another brand grants nothing here. The TWINGS
+ * team view is a brand with nothing to request, set up or own: every section reads, none writes.
+ */
 export function selectedAccess(choice: BrandWorkspaceChoice | null, projects: readonly unknown[]) {
-  return workspaceAccess({ organizations: membershipOf(choice), projects });
+  if (choice?.role === "studio")
+    return { hasOrganization: true, canRequest: false, isOwner: false, projectScopedOnly: false, fresh: false, staff: true };
+  return { ...workspaceAccess({ organizations: membershipOf(choice), projects }), staff: false };
 }

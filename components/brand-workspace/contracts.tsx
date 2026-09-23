@@ -48,7 +48,8 @@ export function CampaignContracts({
                 <p className="bw-muted">
                   {c.version.replace("{version}", String(d.version))} ·{" "}
                   {formatBrandTimestamp(d.createdAt, locale)}
-                  {studio && <> · {d.shared ? c.shared : c.private}</>}
+                  {/* The TWINGS team's read-only view also lists unshared documents, so it says which. */}
+                  {(studio || p.role === "studio") && <> · {d.shared ? c.shared : c.private}</>}
                 </p>
               </div>
               <a

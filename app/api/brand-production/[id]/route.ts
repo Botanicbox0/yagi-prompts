@@ -1,5 +1,6 @@
 import { after, NextResponse } from "next/server";
 import { getViewer } from "@/lib/auth/viewer";
+import { getVerifiedEmail } from "@/lib/auth/verified-email";
 import { getSqlRunner } from "@/lib/db/connect";
 import { loadProductionOutput } from "@/lib/brands/production/service";
 import { runLiveRenderPass } from "@/lib/renders/runtime";
@@ -18,7 +19,7 @@ export async function GET(
       "Cache-Control": "private, no-store",
       "X-Robots-Tag": "noindex, nofollow",
     };
-  const job = sql ? await loadProductionOutput({ sql }, viewer, id) : null;
+  const job = sql ? await loadProductionOutput({ sql, verifiedEmail: await getVerifiedEmail(viewer.userId) }, viewer, id) : null;
   if (!job)
     return NextResponse.json(
       { ok: false, code: "not_found" },

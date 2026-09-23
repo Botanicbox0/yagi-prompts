@@ -13,6 +13,7 @@ import { CampaignPerformance } from './performance';
 import { postHandle, postPresentation } from '@/lib/brands/workspace/performance';
 import { unsetDateKey } from '@/lib/brands/workspace/schedule';
 import { DecisionFields } from './decision-fields';
+import { StaffNotice } from './staff-notice';
 import type { ReactNode } from "react";
 
 export function PostTable({
@@ -89,6 +90,7 @@ export function ProjectDetail({
   locale,
   studio = false,
   studioReply,
+  staffManageHref = null,
 }: {
   project: BrandProjectDetail;
   b: BrandCopy;
@@ -96,10 +98,14 @@ export function ProjectDetail({
   studio?: boolean;
   /** The studio's own comment form, rendered where the conversation is instead of a separate panel. */
   studioReply?: ReactNode;
+  /** Existing admin page for this campaign, offered to DB admins in the TWINGS team view only. */
+  staffManageHref?: string | null;
 }) {
-  const writable = !studio && p.role !== "viewer" && p.status !== "cancelled";
+  // `role: "studio"` outside /admin is the TWINGS team's read-only view: it is not the customer's seat.
+  const staffView = !studio && p.role === "studio";
+  const writable = !studio && (p.role === "owner" || p.role === "editor") && p.status !== "cancelled";
   // Commenting is narrower than editing: invited campaign guests may comment without approving.
-  const canComment = !studio && p.canComment && p.status !== "cancelled";
+  const canComment = !studio && !staffView && p.canComment && p.status !== "cancelled";
   // "To be agreed" only while the request is open; afterwards an unset date is simply not set.
   const unsetDate = unsetDateKey(p.status) === "pending" ? b.tax.unspecified : b.dateNotSet;
   const newest = new Map<string, number>();
@@ -127,6 +133,8 @@ export function ProjectDetail({
         </span>
       </div>
       </div>
+      {staffView && <StaffNotice b={b} manageHref={staffManageHref} />}
+      {staffView && p.clientVisible === false && <p className="bw-note" data-project-unshared>{b.managed.prepared}</p>}
       {p.status === "requested" && <p className="bw-note">{b.requestedNext}</p>}
       <ProjectTabs b={b} comments={p.messages.length}>
       <section id="performance" className="bw-panel">

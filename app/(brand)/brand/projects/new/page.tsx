@@ -8,9 +8,9 @@ export default async function NewBrandProject({
 }: {
   searchParams: Promise<{ organizationId?: string | string[] }>;
 }) {
-  const [{ organizationId }, { sql, viewer, b }] = await Promise.all([searchParams, brandContext()]);
+  const [{ organizationId }, { sql, viewer, verifiedEmail, b }] = await Promise.all([searchParams, brandContext()]);
   if (!sql) return <p role="alert">{b.unavailable}</p>;
-  const { selection, choice, choices } = await brandScope(sql, viewer, organizationId);
+  const { selection, choice, choices } = await brandScope({ sql, verifiedEmail }, viewer, organizationId);
   if (selection.state === "unavailable") return <BrandUnavailable b={b} />;
   // A brief goes to the SELECTED brand, and only when that brand's role may send one.
   const workspace = { organizations: membershipOf(choice) };
@@ -47,7 +47,7 @@ export default async function NewBrandProject({
         </section>
       ) : organizations.length === 0 ? (
         <section className="bw-empty" data-brand-new-project-read-only>
-          <p>{choice?.role === "guest" ? b.access.sharedOnly : b.access.viewerCannotRequest}</p>
+          <p>{choice?.role === "guest" ? b.access.sharedOnly : choice?.role === "studio" ? b.access.staffReadOnly : b.access.viewerCannotRequest}</p>
           <a href={back} className="bw-button">
             {b.back}
           </a>

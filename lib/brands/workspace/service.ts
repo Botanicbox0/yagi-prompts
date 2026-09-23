@@ -5,6 +5,7 @@ import type { Viewer } from '@/lib/auth/identity';
 import type { SqlRunner } from '@/lib/db/sql-runner';
 import { STAGING_BUCKET, type StorageDriver } from '@/lib/storage';
 import type { BrandWorkspaceChoice, BrandWorkspaceScope } from './selection';
+import { hasStaffReadAccess } from './staff';
 import { UNKNOWN_POST_PRESENTATION } from './performance';
 import {
   BrandHttpsUrlSchema, BrandOrganizationSchema, BrandProjectSchema, BrandProjectStatusSchema, BrandContentSchema,
@@ -25,7 +26,11 @@ export type * from './types';
 export interface BrandWorkspaceDeps {
   sql: SqlRunner;
   storage?: Pick<StorageDriver, 'read'>;
-  /** Server-authenticated verified email only, never a request-body value. Used for invitations. */
+  /**
+   * Server-authenticated verified email only (`lib/auth/verified-email.ts`), never a request-body,
+   * profile or `Viewer.email` value. Used for invitations and for the TWINGS team's read-only view of
+   * every brand (`./staff.ts`).
+   */
   verifiedEmail?: string;
 }
 type Row = Record<string, unknown>;
@@ -53,13 +58,21 @@ async function member(sql: SqlRunner, userId: string, organizationId: string, wr
  * `write` is the owner/editor right (approve, upload, request). `comment` is narrower: it lets a
  * campaign-only guest who was explicitly invited to comment post in the campaign conversation and
  * grants nothing else. Organization viewers stay read-only.
+ *
+ * `staff` is the TWINGS team's READ view (./staff.ts): the studio's internal detail, re-checked here,
+ * and never combined with a write or comment right.
  */
-async function project(sql: SqlRunner, userId: string, id: string, options: { studio?: boolean; write?: boolean; comment?: boolean } = {}): Promise<Row> {
+async function project(sql: SqlRunner, userId: string, id: string, options: { studio?: boolean; staff?: { verifiedEmail?: string }; write?: boolean; comment?: boolean } = {}): Promise<Row> {
   if (options.studio) await studio(sql, userId);
+  if (options.staff) {
+    if (options.write || options.comment) throw new Denied('forbidden');
+    if (!await hasStaffReadAccess(sql, userId, options.staff.verifiedEmail)) throw new Denied('not_found');
+  }
   const row = (await sql.query(`select p.*,o.name as organization_name from brand_projects p
     join brand_organizations o on o.id=p.organization_id where p.id=$1 ${options.write ? 'for update of p' : 'for share of p'}`, [id])).rows[0];
   if (!row) throw new Denied('not_found');
   if (options.studio) { row.member_role = 'studio'; row.can_comment = true; }
+  else if (options.staff) { row.member_role = 'studio'; row.can_comment = false; }
   else {
     if (!row.client_visible) throw new Denied('not_found');
     const orgRole = (await sql.query("select role from brand_memberships where organization_id=$1 and user_id=$2 and status='active' for share", [row.organization_id,userId])).rows[0];
@@ -71,6 +84,23 @@ async function project(sql: SqlRunner, userId: string, id: string, options: { st
     if(options.comment && !row.can_comment) throw new Denied('forbidden');
   }
   return row;
+}
+/** The customer's own access first; the TWINGS team's read-only view only where that finds nothing. */
+async function readableProject(sql: SqlRunner, userId: string, id: string, verifiedEmail?: string): Promise<Row> {
+  try { return await project(sql, userId, id); }
+  catch (error) {
+    if (!(error instanceof Denied) || error.code !== 'not_found') throw error;
+    return project(sql, userId, id, { staff: { verifiedEmail } });
+  }
+}
+/** Brand-level READ role: the active membership, else `studio` for the TWINGS team, else not_found. */
+async function memberOrStaff(sql: SqlRunner, userId: string, organizationId: string, verifiedEmail?: string): Promise<BrandRole | 'studio'> {
+  try { return await member(sql, userId, organizationId); }
+  catch (error) {
+    if (!(error instanceof Denied) || error.code !== 'not_found') throw error;
+    if (await hasStaffReadAccess(sql, userId, verifiedEmail)) return 'studio';
+    throw error;
+  }
 }
 async function mutation<S extends z.ZodType, T>(deps: Pick<BrandWorkspaceDeps, 'sql'>, viewer: Viewer, schema: S, input: unknown,
   perform: (sql: SqlRunner, userId: string, value: z.output<S>) => Promise<T>): Promise<BrandOutcome<T>> {
@@ -195,6 +225,8 @@ async function detail(sql: SqlRunner, row: Row): Promise<BrandProjectDetail> {
 /**
  * `organizationId` narrows BOTH lists to one brand (the workspace selector's brand). Access is the
  * same rule either way: an active membership, or an active invitation to that visible campaign.
+ * The TWINGS team browsing a selected brand it is not a member of reads every campaign of that brand,
+ * including ones not yet shared, with no organization row (it holds no customer role there).
  */
 export async function loadBrandWorkspace(deps: BrandWorkspaceDeps, viewer: Viewer, options: { includeAllContent?: boolean; organizationId?: string } = {}): Promise<BrandWorkspace> {
   if (!uuid(viewer.userId)) return { organizations: [], projects: [] };
@@ -203,6 +235,11 @@ export async function loadBrandWorkspace(deps: BrandWorkspaceDeps, viewer: Viewe
   return deps.sql.transaction(async sql => {
     const memberships = (await sql.query(`select o.id,o.name,m.role from brand_organizations o join brand_memberships m on m.organization_id=o.id
       where m.user_id=$1 and m.status='active' and ($2::uuid is null or o.id=$2::uuid) order by o.created_at for share of m`, [viewer.userId, scope])).rows;
+    if (scope !== null && memberships.length === 0 && await hasStaffReadAccess(sql, viewer.userId!, deps.verifiedEmail)) {
+      const all = (await sql.query(`select p.*,o.name as organization_name from brand_projects p join brand_organizations o on o.id=p.organization_id
+        where p.organization_id=$1 order by p.updated_at desc`, [scope])).rows;
+      return { organizations: [], projects: await withHomeOverview(sql, all.map(summary), options.includeAllContent ? Infinity : 4) };
+    }
     const projects = (await sql.query(`select p.*,o.name as organization_name from brand_projects p join brand_organizations o on o.id=p.organization_id
       where p.client_visible and ($2::uuid is null or p.organization_id=$2::uuid) and (exists(select 1 from brand_memberships m where m.organization_id=p.organization_id and m.user_id=$1 and m.status='active') or exists(select 1 from brand_project_members m where m.project_id=p.id and m.user_id=$1 and m.status='active')) order by p.updated_at desc`, [viewer.userId, scope])).rows;
     return { organizations: memberships.map(r => ({ id: String(r.id), name: String(r.name), role: r.role as BrandRole })), projects: await withHomeOverview(sql, projects.map(summary), options.includeAllContent ? Infinity : 4) };
@@ -213,6 +250,8 @@ const logoUrl = (r: Row): string | null => r.logo_id ? `/api/brand-workspace/org
  * Every brand this account may pick in the workspace selector: its active memberships, then brands it
  * reaches only through an active invitation to a campaign that is currently shared. Such a guest is
  * listed as `guest` and gains no membership, owner control or brand-wide access from being listed.
+ * The TWINGS team (./staff.ts) instead lists every other brand, empty ones included, as `studio`
+ * (which replaces `guest`), and every campaign maps to its brand whether shared or not.
  */
 export async function loadBrandWorkspaceScope(deps: BrandWorkspaceDeps, viewer: Viewer): Promise<BrandWorkspaceScope> {
   if (!uuid(viewer.userId)) return { choices: [], projectOrganizations: {} };
@@ -226,6 +265,12 @@ export async function loadBrandWorkspaceScope(deps: BrandWorkspaceDeps, viewer: 
         or exists(select 1 from brand_project_members g where g.project_id=p.id and g.user_id=$1 and g.status='active'))
       order by o.created_at,o.id,p.id`, [viewer.userId])).rows;
     const choices: BrandWorkspaceChoice[] = memberships.map(r => ({ id: String(r.id), name: String(r.name), role: r.role as BrandRole, logoUrl: logoUrl(r) }));
+    if (await hasStaffReadAccess(sql, viewer.userId!, deps.verifiedEmail)) {
+      const brands = (await sql.query('select id,name,logo_id,logo_revision from brand_organizations order by lower(name),id')).rows;
+      for (const r of brands) if (!choices.some(c => c.id === r.id)) choices.push({ id: String(r.id), name: String(r.name), role: 'studio', logoUrl: logoUrl(r) });
+      const all = (await sql.query('select id,organization_id from brand_projects order by id')).rows;
+      return { choices, projectOrganizations: Object.fromEntries(all.map(r => [String(r.id), String(r.organization_id)])) };
+    }
     for (const r of projects) {
       if (r.member !== true && !choices.some(c => c.id === r.organization_id))
         choices.push({ id: String(r.organization_id), name: String(r.name), role: 'guest', logoUrl: logoUrl({ ...r, id: r.organization_id }) });
@@ -244,7 +289,7 @@ export async function loadStudioWorkspace(deps: BrandWorkspaceDeps, viewer: View
 }
 async function loadProject(deps: BrandWorkspaceDeps, viewer: Viewer, id: string, isStudio: boolean): Promise<BrandProjectDetail | null> {
   if (!uuid(viewer.userId) || !uuid(id)) return null;
-  try { return await deps.sql.transaction(async sql => detail(sql, await project(sql, viewer.userId!, id, { studio: isStudio }))); }
+  try { return await deps.sql.transaction(async sql => detail(sql, isStudio ? await project(sql, viewer.userId!, id, { studio: true }) : await readableProject(sql, viewer.userId!, id, deps.verifiedEmail))); }
   catch (error) { if (error instanceof Denied) return null; throw error; }
 }
 export const loadBrandProject = (deps: BrandWorkspaceDeps, viewer: Viewer, id: string) => loadProject(deps, viewer, id, false);
@@ -563,18 +608,20 @@ export async function reserveBrandAttachment(deps: BrandWorkspaceDeps, viewer: V
   });
 }
 export interface BrandAttachmentAccess { contract?:boolean; key: string; name: string; mime: string; sizeBytes: number }
-async function attachmentRow(sql: SqlRunner, userId: string, id: string, upload = false): Promise<Row> {
+async function attachmentRow(sql: SqlRunner, userId: string, id: string, upload = false, verifiedEmail?: string): Promise<Row> {
   const row = (await sql.query('select * from brand_attachments where id=$1', [id])).rows[0];
   if (!row) throw new Denied('not_found');
-  const isStudio = (await profile(sql, userId)).is_admin === true;
-  await project(sql, userId, String(row.project_id), { studio: isStudio, write: upload });
+  let isStudio = (await profile(sql, userId)).is_admin === true;
+  // A download follows the same rule as the project page that lists it; an upload never uses the team view.
+  if (isStudio || upload) await project(sql, userId, String(row.project_id), { studio: isStudio, write: upload });
+  else isStudio = (await readableProject(sql, userId, String(row.project_id), verifiedEmail)).member_role === 'studio';
   if(!isStudio && row.access_scope==='contract' && !(await sql.query('select id from brand_contract_documents where attachment_id=$1 and project_id=$2 and shared=true',[id,row.project_id])).rows[0]) throw new Denied('not_found');
   if (upload ? row.created_by !== userId || row.status !== 'pending' : row.status !== 'ready') throw new Denied('not_found');
   return row;
 }
 async function attachmentAccess(deps: BrandWorkspaceDeps, viewer: Viewer, id: string, upload: boolean): Promise<BrandAttachmentAccess | null> {
   if (!uuid(viewer.userId) || !uuid(id)) return null;
-  try { return await deps.sql.transaction(async sql => { const r = await attachmentRow(sql, viewer.userId!, id, upload); return { contract:r.access_scope==='contract', key: String(r.storage_key), name: String(r.name), mime: String(r.mime), sizeBytes: Number(r.size_bytes) }; }); }
+  try { return await deps.sql.transaction(async sql => { const r = await attachmentRow(sql, viewer.userId!, id, upload, upload ? undefined : deps.verifiedEmail); return { contract:r.access_scope==='contract', key: String(r.storage_key), name: String(r.name), mime: String(r.mime), sizeBytes: Number(r.size_bytes) }; }); }
   catch (error) { if (error instanceof Denied) return null; throw error; }
 }
 export const loadBrandAttachmentAccess = (deps: BrandWorkspaceDeps, viewer: Viewer, id: string) => attachmentAccess(deps, viewer, id, false);
@@ -609,8 +656,11 @@ export async function completeBrandAttachment(deps: BrandWorkspaceDeps, viewer: 
 export async function loadBrandMembers(deps: BrandWorkspaceDeps, viewer: Viewer, organizationId: string): Promise<BrandMembers | null> {
   if (!uuid(viewer.userId) || !uuid(organizationId)) return null;
   try { return await deps.sql.transaction(async sql => {
-    if (await member(sql, viewer.userId!, organizationId) !== 'owner') throw new Denied('forbidden');
-    const org = (await sql.query('select id,name from brand_organizations where id=$1', [organizationId])).rows[0]!;
+    // Owners manage the team; the TWINGS team may read it. Changes stay with owners and /admin.
+    const role = await memberOrStaff(sql, viewer.userId!, organizationId, deps.verifiedEmail);
+    if (role !== 'owner' && role !== 'studio') throw new Denied('forbidden');
+    const org = (await sql.query('select id,name from brand_organizations where id=$1', [organizationId])).rows[0];
+    if (!org) throw new Denied('not_found');
     const members = (await sql.query(`select m.id,m.user_id,m.role,m.status,p.email from brand_memberships m
       join profiles p on p.id=m.user_id where m.organization_id=$1 order by m.created_at`, [organizationId])).rows;
     const invitations = (await sql.query('select id,email,role,expires_at,accepted_at,revoked_at from brand_invites where organization_id=$1 order by created_at desc', [organizationId])).rows;
@@ -794,7 +844,7 @@ export interface BrandOrganizationSettings {id:string;name:string;website:string
 export async function loadBrandSettings(deps:BrandWorkspaceDeps,viewer:Viewer,id:string,isStudio=false):Promise<BrandOrganizationSettings|null> {
  if(!uuid(viewer.userId)||!uuid(id))return null;
  try{return await deps.sql.transaction(async sql=>{
-  const role=isStudio?(await studio(sql,viewer.userId!),'studio' as const):await member(sql,viewer.userId!,id);
+  const role=isStudio?(await studio(sql,viewer.userId!),'studio' as const):await memberOrStaff(sql,viewer.userId!,id,deps.verifiedEmail);
   const r=(await sql.query('select id,name,website,description,contact_email,profile_revision,logo_id,logo_revision from brand_organizations where id=$1',[id])).rows[0];
   if(!r)return null;return {id:String(r.id),name:String(r.name),website:String(r.website),description:String(r.description),contactEmail:String(r.contact_email),revision:Number(r.profile_revision),role,logoUrl:logoUrl(r),logoRevision:Number(r.logo_revision)};
  });}catch(e){if(e instanceof Denied)return null;throw e}
@@ -810,7 +860,7 @@ export async function updateBrandSettings(deps:BrandWorkspaceDeps,viewer:Viewer,
 export async function loadBrandSupport(deps:BrandWorkspaceDeps,viewer:Viewer,id:string,isStudio=false):Promise<BrandMessage[]|null> {
  if(!uuid(viewer.userId)||!uuid(id))return null;
  try{return await deps.sql.transaction(async sql=>{
-  if(isStudio)await studio(sql,viewer.userId!);else await member(sql,viewer.userId!,id);
+  if(isStudio)await studio(sql,viewer.userId!);else await memberOrStaff(sql,viewer.userId!,id,deps.verifiedEmail);
   return (await sql.query('select id,body,author_role,created_at from brand_support_messages where organization_id=$1 order by created_at,id',[id])).rows.map(r=>({id:String(r.id),body:String(r.body),authorRole:r.author_role as BrandMessage['authorRole'],createdAt:stamp(r.created_at)}));
  });}catch(e){if(e instanceof Denied)return null;throw e}
 }
@@ -893,13 +943,13 @@ export async function removeBrandOrganizationLogo(deps: { sql: SqlRunner }, view
 }
 export interface BrandLogoAccess { key: string; mime: BrandLogoMime; sizeBytes: number; sha256: string }
 /**
- * Who may see a brand's logo: the studio, an active member of the brand, or an active guest of one of
- * its currently shared campaigns. Everyone else, and a brand without a logo, gets null (404).
+ * Who may see a brand's logo: the TWINGS team (./staff.ts), an active member of the brand, or an active
+ * guest of one of its currently shared campaigns. Everyone else, and a brand without a logo, gets null (404).
  */
-export async function loadBrandOrganizationLogoAccess(deps: { sql: SqlRunner }, viewer: Viewer, organizationId: string): Promise<BrandLogoAccess | null> {
+export async function loadBrandOrganizationLogoAccess(deps: { sql: SqlRunner; verifiedEmail?: string }, viewer: Viewer, organizationId: string): Promise<BrandLogoAccess | null> {
   if (!uuid(viewer.userId) || !uuid(organizationId)) return null;
   try { return await deps.sql.transaction(async sql => {
-    const isStudio = (await profile(sql, viewer.userId!)).is_admin === true;
+    const isStudio = await hasStaffReadAccess(sql, viewer.userId!, deps.verifiedEmail);
     const allowed = isStudio || (await sql.query(`select 1 from brand_memberships m where m.organization_id=$1 and m.user_id=$2 and m.status='active'
       union all select 1 from brand_project_members g join brand_projects p on p.id=g.project_id and p.organization_id=g.organization_id
       where g.organization_id=$1 and g.user_id=$2 and g.status='active' and p.client_visible limit 1`, [organizationId, viewer.userId])).rows.length > 0;

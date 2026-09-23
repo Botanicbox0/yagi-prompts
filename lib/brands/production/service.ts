@@ -4,10 +4,16 @@ import { z } from "zod";
 import type { Viewer } from "@/lib/auth/identity";
 import type { SqlRunner } from "@/lib/db/sql-runner";
 import { loadPromptById, type PromptRow } from "@/lib/prompts/repo";
+import { hasStaffReadAccess } from "@/lib/brands/workspace/staff";
 
 export interface ProductionDeps {
   sql: SqlRunner;
   now?: Date;
+  /**
+   * Server-verified session email only (`lib/auth/verified-email.ts`). Lets the TWINGS team READ a
+   * brand's production page and results (`lib/brands/workspace/staff.ts`); never used to reserve.
+   */
+  verifiedEmail?: string;
 }
 export type ProductionCode =
   | "sign_in_required"
@@ -81,6 +87,21 @@ async function member(
   if (!m) throw new Denied("not_found");
   if (write && m.role === "viewer") throw new Denied("forbidden");
   return m.role;
+}
+/** Membership role, else `studio` for the TWINGS team's read-only view, else not_found. */
+async function reader(
+  sql: SqlRunner,
+  userId: string,
+  orgId: string,
+  verifiedEmail?: string,
+) {
+  try {
+    return await member(sql, userId, orgId);
+  } catch (e) {
+    if (!(e instanceof Denied) || e.code !== "not_found") throw e;
+    if (await hasStaffReadAccess(sql, userId, verifiedEmail)) return "studio";
+    throw e;
+  }
 }
 async function mutate<T>(
   deps: ProductionDeps,
@@ -301,7 +322,10 @@ export async function loadProductionWorkspace(
   try {
     return await deps.sql.transaction(async (sql) => {
       const user = await actor(sql, viewer, studio),
-        role = studio ? "studio" : await member(sql, user, organizationId);
+        role = studio
+          ? "studio"
+          : await reader(sql, user, organizationId, deps.verifiedEmail),
+        internal = role === "studio";
       const now = +(deps.now ?? new Date());
       const rows = (
         await sql.query<Row>(
@@ -339,7 +363,7 @@ export async function loadProductionWorkspace(
             seconds: Number(t.runtime_seconds),
             aspect: String(t.aspect_default),
             previewUrl:
-              t.preview_id && (studio || t.client_visible)
+              t.preview_id && (internal || t.client_visible)
                 ? `/api/brand-workspace/attachments/${t.preview_id}`
                 : null,
             previewMime: t.preview_mime ? String(t.preview_mime) : null,
@@ -499,7 +523,7 @@ export async function loadProductionOutput(
         )
       ).rows[0];
       if (!row) return null;
-      await member(sql, user, String(row.organization_id));
+      await reader(sql, user, String(row.organization_id), deps.verifiedEmail);
       return {
         id: String(row.id),
         organizationId: String(row.organization_id),
