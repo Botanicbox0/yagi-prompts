@@ -2,7 +2,7 @@ import type { SqlRunner } from '@/lib/db/sql-runner';
 import { DEFAULT_LOCALE, isLocale, type Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/dictionaries';
 import { formatDate, interpolate, localize } from '@/lib/i18n/format';
-import { BUSINESS } from '@/lib/legal/documents';
+import { companyLine } from '@/lib/notify/company-line';
 import type { Mailer, SendOutcome } from '@/lib/notify/mailer';
 import { broadcast, type BroadcastResult } from '@/lib/notify/broadcast';
 import { sheet, sheetText } from '@/lib/notify/sheet';
@@ -43,7 +43,7 @@ export function isNotifiedStatus(status: ApplicationStatus): status is NotifiedA
 
 function footer(locale: Locale): string {
   const dict = getDictionary(locale);
-  return `${dict.campaigns.email.footer} · ${BUSINESS.nameKo} · ${BUSINESS.email}`;
+  return `${dict.campaigns.email.footer} · ${companyLine(locale)}`;
 }
 
 /** What a campaign says about itself in one line, in the reader's language. */

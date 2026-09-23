@@ -5,7 +5,7 @@ import { getDictionary } from '@/lib/i18n/dictionaries';
 import { getMailer } from '@/lib/notify/service';
 import { siteUrl } from '@/lib/seo/site-url';
 import { BRANDS_ANCHOR, campaignsHref } from '@/lib/campaigns/links';
-import { notifyBrandInquiry, submitBrandInquiry } from '@/lib/brands/service';
+import { notifyBrandStudio, sendBrandInquiryReceipt, submitBrandInquiry } from '@/lib/brands/service';
 
 /**
  * `POST /api/brands/inquiries` — the brand form on the campaigns page (components/campaigns/brand-form.tsx).
@@ -16,9 +16,10 @@ import { notifyBrandInquiry, submitBrandInquiry } from '@/lib/brands/service';
  *     the campaigns page with `?inquiry=…#brands`, which the island reads on mount. Either way the
  *     page stays static, and no field ever travels in a GET.
  *
- * The row is written inside the request; the two mails (the studio's alert, the brand's receipt)
- * go out in `after()`, so a slow or absent mail provider can neither delay nor fail an enquiry
- * that has already been recorded.
+ * The row is written inside the request, then the brand's receipt is sent and its outcome is part
+ * of the answer (`receipt`), so the success panel only claims a confirmation mail that went out
+ * (audit Q7). The studio's alert goes out in `after()`. A slow or absent mail provider can never
+ * fail an enquiry that has already been recorded.
  */
 export const dynamic = 'force-dynamic';
 
@@ -45,14 +46,15 @@ async function readBody(request: Request): Promise<{ body: unknown; form: boolea
   return { body, form: true };
 }
 
-function answer(args: { form: boolean; locale: 'en' | 'ko'; outcome: Outcome; field?: string; origin: string }): NextResponse {
+function answer(args: { form: boolean; locale: 'en' | 'ko'; outcome: Outcome; field?: string; origin: string; receipt?: boolean }): NextResponse {
   if (!args.form) {
-    const payload = args.outcome === 'sent' ? { ok: true } : { ok: false, code: args.outcome, ...(args.field ? { field: args.field } : {}) };
+    const payload = args.outcome === 'sent' ? { ok: true, receipt: args.receipt === true } : { ok: false, code: args.outcome, ...(args.field ? { field: args.field } : {}) };
     return NextResponse.json(payload, { status: STATUS[args.outcome], headers: HEADERS });
   }
   const target = new URL(campaignsHref(args.locale), args.origin);
   target.searchParams.set('inquiry', args.outcome);
   if (args.field) target.searchParams.set('field', args.field);
+  if (args.outcome === 'sent' && args.receipt === true) target.searchParams.set('receipt', '1');
   target.hash = BRANDS_ANCHOR;
   return new NextResponse(null, { status: 303, headers: { ...HEADERS, Location: target.toString() } });
 }
@@ -77,18 +79,23 @@ export async function POST(request: Request): Promise<NextResponse> {
   if (!result.ok) return answer({ form, locale, outcome: result.code, ...(result.field ? { field: result.field } : {}), origin });
 
   const inquiry = result.inquiry;
+  let receipt = false;
   if (inquiry !== null) {
+    const deps = { mailer: getMailer(), siteUrl: siteUrl(), siteName: getDictionary(inquiry.locale).meta.siteName };
+    // Audit Q7: the brand's receipt goes out inside the request so the answer can say whether it
+    // did. The row is already stored; a failed or absent mailer only drops the receipt sentence.
+    receipt = await sendBrandInquiryReceipt(deps, inquiry).catch((error: unknown) => {
+      console.error(`[brands] receipt for inquiry ${inquiry.id} failed`, error);
+      return false;
+    });
     after(async () => {
       try {
-        const outcome = await notifyBrandInquiry(
-          { mailer: getMailer(), siteUrl: siteUrl(), siteName: getDictionary(inquiry.locale).meta.siteName },
-          inquiry,
-        );
-        console.info(`[brands] inquiry ${inquiry.id} mail studio=${outcome.studio?.ok ?? 'skipped'} brand=${outcome.brand?.ok ?? 'skipped'}`);
+        const studio = await notifyBrandStudio(deps, inquiry);
+        console.info(`[brands] inquiry ${inquiry.id} mail studio=${studio?.ok ?? 'skipped'} brand=${receipt}`);
       } catch (error) {
         console.error(`[brands] mail after inquiry ${inquiry.id} failed`, error);
       }
     });
   }
-  return answer({ form, locale, outcome: 'sent', origin });
+  return answer({ form, locale, outcome: 'sent', origin, receipt });
 }

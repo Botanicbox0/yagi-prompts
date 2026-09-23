@@ -1,7 +1,7 @@
 import type { SqlRunner } from '@/lib/db/sql-runner';
 import { getDictionary } from '@/lib/i18n/dictionaries';
 import { interpolate } from '@/lib/i18n/format';
-import { BUSINESS } from '@/lib/legal/documents';
+import { companyLine } from '@/lib/notify/company-line';
 import type { Mailer } from '@/lib/notify/mailer';
 import { broadcast, type BroadcastResult } from '@/lib/notify/broadcast';
 import { sheet, sheetText } from '@/lib/notify/sheet';
@@ -36,7 +36,7 @@ export async function announceTemplate(deps: { sql: SqlRunner; mailer: Mailer | 
           paragraphs: [interpolate(t.body, vars)],
           button: { label: t.cta, url: `${origin}${templateHref(locale, row.slug)}` },
           note: { text: t.unsubscribeLine, link: { label: t.unsubscribeCta, url: unsubscribeUrl } },
-          footer: `${t.footer} · ${BUSINESS.nameKo} · ${BUSINESS.email}`,
+          footer: `${t.footer} · ${companyLine(locale)}`,
         };
         return { subject: interpolate(t.subject, vars), html: sheet(args), text: sheetText(args) };
       },

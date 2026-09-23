@@ -4,7 +4,7 @@ import { freshDb, runner } from '@/tests/helpers/pglite';
 import type { SqlRunner } from '@/lib/db/sql-runner';
 import type { EmailMessage, Mailer, SendOutcome } from '@/lib/notify/mailer';
 import { countBrandInquiries, listBrandInquiries, loadBrandInquiry, updateBrandInquiryStatus } from '@/lib/brands/repo';
-import { notifyBrandInquiry, submitBrandInquiry } from '@/lib/brands/service';
+import { notifyBrandInquiry, notifyBrandStudio, sendBrandInquiryReceipt, submitBrandInquiry } from '@/lib/brands/service';
 import { BRAND_INQUIRIES_PER_DAY } from '@/lib/brands/schemas';
 
 /**
@@ -126,7 +126,12 @@ describe('brand enquiries', () => {
     expect(studio?.html).toContain('ROYAL &amp; CO.');
     expect(brand?.to).toBe('brand@example.com');
     expect(brand?.subject).toContain('의뢰');
-    expect(brand?.text).toContain('1영업일');
+    // Audit Q7: nothing enforces a reply SLA, so the receipt no longer promises "1영업일";
+    // the labels are the form's own dictionary entries (audit P2-17).
+    expect(brand?.text).not.toContain('1영업일');
+    expect(brand?.text).toContain('담당자가 이 주소로 회신합니다');
+    expect(brand?.text).toContain('예산대: 300만원 ~ 1,000만원');
+    expect(brand?.html).toContain('야기워크숍 주식회사');
     expect(new Set([studio?.idempotencyKey, brand?.idempotencyKey]).size).toBe(2);
     expect(studio?.idempotencyKey).toBe(`brand-inquiry:${result.inquiry.id}:studio`);
   });
@@ -137,7 +142,26 @@ describe('brand enquiries', () => {
     const { mailer, sent } = capturingMailer();
     await notifyBrandInquiry({ mailer, siteUrl: 'https://twings.app', siteName: 'TWINGS' }, result.inquiry);
     expect(sent[1]?.subject).toContain('enquiry');
-    expect(sent[1]?.text).toContain('one business day');
+    expect(sent[1]?.text).not.toContain('one business day');
+    expect(sent[1]?.text).toContain('Budget range: KRW 3M to 10M');
+    expect(sent[1]?.html).toContain('YAGI WORKSHOP Inc.');
+    expect(sent[1]?.html).not.toContain('야기워크숍');
     expect(await notifyBrandInquiry({ mailer: null, siteUrl: 'https://twings.app', siteName: 'TWINGS' }, result.inquiry)).toEqual({ studio: null, brand: null });
+  });
+
+  it('reports whether the receipt went out, so the success panel never claims a mail that was not sent (Q7)', async () => {
+    const result = await submitBrandInquiry({ sql }, good, null);
+    if (!result.ok || result.inquiry === null) throw new Error('expected a stored enquiry');
+    const deps = { siteUrl: 'https://twings.app', siteName: 'TWINGS' };
+    expect(await sendBrandInquiryReceipt({ ...deps, mailer: null }, result.inquiry)).toBe(false);
+    const failing: Mailer = { kind: 'fake', from: 'x@twings.test', send: async () => ({ ok: false, retryable: true, error: 'down' }) };
+    expect(await sendBrandInquiryReceipt({ ...deps, mailer: failing }, result.inquiry)).toBe(false);
+    const throwing: Mailer = { kind: 'fake', from: 'x@twings.test', send: async () => { throw new Error('boom'); } };
+    expect(await sendBrandInquiryReceipt({ ...deps, mailer: throwing }, result.inquiry)).toBe(false);
+    const { mailer, sent } = capturingMailer();
+    expect(await sendBrandInquiryReceipt({ ...deps, mailer }, result.inquiry)).toBe(true);
+    expect(sent.map((m) => m.to)).toEqual(['brand@example.com']);
+    expect(await notifyBrandStudio({ ...deps, mailer }, result.inquiry)).toMatchObject({ ok: true });
+    expect(sent[1]?.to).toBe('hello@yagiworkshop.xyz');
   });
 });
