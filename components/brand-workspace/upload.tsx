@@ -2,6 +2,15 @@
 import { useRef, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import type { BrandCopy } from "./action-form";
+/** Why an upload stopped: the person cancelled, the campaign's file limit was reached, or it failed. */
+export type UploadStop = "aborted" | "rate_limited" | "failed";
+export function uploadStopNotice(stop: UploadStop, b: BrandCopy): { notice: string; failed: boolean } {
+  if (stop === "aborted") return { notice: "", failed: false };
+  if (stop === "rate_limited") return { notice: b.errors.rateLimited, failed: true };
+  return { notice: b.uploadFailed, failed: true };
+}
+const stopOf = (error: unknown): UploadStop =>
+  error instanceof Error && (error.message === "aborted" || error.message === "rate_limited") ? error.message : "failed";
 const CAPS: Record<string, number> = {
   "image/jpeg": 15 * 1024 * 1024,
   "image/png": 15 * 1024 * 1024,
@@ -89,7 +98,7 @@ export function BrandUpload({
           }),
         });
         const target = await response.json();
-        if (!response.ok || !target.ok) throw Error("upload");
+        if (!response.ok || !target.ok) throw Error(target?.code === "rate_limited" ? "rate_limited" : "upload");
         attempt.id = target.id;
         await new Promise<void>((resolve, reject) => {
           const xhr = new XMLHttpRequest();
@@ -107,10 +116,12 @@ export function BrandUpload({
             xhr.status >= 200 && xhr.status < 300
               ? resolve()
               : reject(Error("upload"));
-          xhr.onerror = xhr.onabort = () => reject(Error("upload"));
+          xhr.onerror = () => reject(Error("upload"));
+          xhr.onabort = () => reject(Error("aborted"));
           xhr.send(file);
         }).catch(async (error) => {
-          if (!(await complete())) throw error;
+          // A cancel is the person's choice: stop, without probing whether bytes arrived anyway.
+          if (stopOf(error) === "aborted" || !(await complete())) throw error;
         });
         attempt.uploaded = true;
       }
@@ -129,9 +140,10 @@ export function BrandUpload({
       if(fileInput.current)fileInput.current.value="";
       reservation.current = null;
       router.refresh();
-    } catch {
-      setFailed(true);
-      setNotice(b.uploadFailed);
+    } catch (error) {
+      const stop = uploadStopNotice(stopOf(error), b);
+      setFailed(stop.failed);
+      setNotice(stop.notice);
     } finally {
       setBusy(false);
       active.current = null;

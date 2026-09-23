@@ -107,3 +107,14 @@ export function switchHref(pathname: string, choice: BrandWorkspaceChoice): stri
     : '/brand';
   return scopedHref(section, choice);
 }
+
+/**
+ * Where an accepted invitation lands: the brand it opens (never the account's oldest brand), or the
+ * campaign itself when it is shared with the client. A campaign the studio has not shared yet opens
+ * nothing, so the guest goes to the workspace home, which says the campaign is being prepared.
+ */
+export function invitationLanding(result: { organizationId: string; projectId?: string; projectShared?: boolean }): string {
+  if (result.projectId)
+    return result.projectShared ? scopedHref(`/brand/projects/${encodeURIComponent(result.projectId)}`, { id: result.organizationId }) : '/brand';
+  return scopedHref('/brand', { id: result.organizationId });
+}

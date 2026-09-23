@@ -23,6 +23,13 @@ export function DecisionFields({ b, initial = "approved" }: { b: BrandCopy; init
           {changes ? b.decisionForm.changesReasonHint : b.decisionForm.commentOptional}
         </span>
       </label>
+      {/* Only an approval is final enough to confirm; a change request just says what to change. */}
+      {!changes && (
+        <label className="bw-check">
+          <input type="checkbox" required name="confirmed" />
+          {b.approveConfirm}
+        </label>
+      )}
     </>
   );
 }

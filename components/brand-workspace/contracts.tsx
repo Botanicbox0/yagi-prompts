@@ -40,8 +40,9 @@ export function CampaignContracts({
         <ul className="bw-list">
           {p.contracts.map((d) => (
             <li key={d.id} className="bw-contract-row">
+              {/* A document mark, not a word: the title beside it names the file. */}
               <div className="bw-file-symbol" aria-hidden="true">
-                PDF
+                <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M9 12h6M9 16h6"/></svg>
               </div>
               <div className="bw-contract-info">
                 <strong>{d.title}</strong>

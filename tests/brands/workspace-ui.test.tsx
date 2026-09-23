@@ -119,7 +119,9 @@ describe("brand report and read-only UI", () => {
       'dateTime="2026-09-19T15:05:00Z">2026년 9월 20일 00:05 KST</time>',
     );
     expect(html.match(/2026년 9월 20일 00:05 KST/g)).toHaveLength(4);
-    expect(html).toContain("2026-09-19 — 2026-09-20");
+    // Authored calendar dates are the same day in the reader's language, never shifted by a zone.
+    expect(html).toContain("2026년 9월 19일 — 2026년 9월 20일");
+    expect(html).not.toMatch(/>[^<]*2026-09-19/); // only machine-readable attributes keep ISO
   });
   it.each(["ko", "en"] as const)(
     "renders actual missing data and snapshot coverage in %s",

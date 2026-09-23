@@ -10,6 +10,12 @@ const ids = [
   "files",
   "contracts",
 ] as const;
+export type ProjectTab = (typeof ids)[number];
+/** The tab a URL fragment names (`#review`), or null for any other fragment. */
+export function tabFromHash(hash: string): ProjectTab | null {
+  const id = hash.replace(/^#/, "");
+  return (ids as readonly string[]).includes(id) ? (id as ProjectTab) : null;
+}
 export function ProjectTabs({
   b,
   children,
@@ -23,10 +29,14 @@ export function ProjectTabs({
   const [active, setActive] = useState<string>("performance");
   useEffect(() => {
     const read = () => {
-      const id = location.hash.slice(1);
-      if ((ids as readonly string[]).includes(id)) setActive(id);
+      const id = tabFromHash(location.hash);
+      if (id) setActive(id);
+      return id;
     };
-    read();
+    // A link like /brand/projects/<id>#review arrives while that section is still hidden, so the
+    // browser had nothing to scroll to. Open the tab, then bring its section into view once shown.
+    const initial = read();
+    if (initial) requestAnimationFrame(() => document.getElementById(initial)?.scrollIntoView({ block: "start" }));
     window.addEventListener("hashchange", read);
     return () => window.removeEventListener("hashchange", read);
   }, []);
@@ -41,7 +51,7 @@ export function ProjectTabs({
   ];
   return (
     <div className="bw-project-sections" data-project-tab={active}>
-      <nav className="bw-tabs" aria-label={b.projectTitle}>
+      <nav className="bw-tabs" aria-label={b.projectSections}>
         {ids.map((id, i) => (
           <a
             key={id}

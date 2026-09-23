@@ -1,7 +1,7 @@
 import { ServiceGuide } from "@/components/brand-workspace/service-guide";
 import { brandContext } from "@/components/brand-workspace/context";
 import { ActionForm } from "@/components/brand-workspace/action-form";
-import { loadBrandWorkspace } from "@/lib/brands/workspace/service";
+import { countPendingSharedCampaigns, loadBrandWorkspace } from "@/lib/brands/workspace/service";
 import { CampaignList } from "@/components/brand-workspace/campaign-list";
 import { brandScope, selectedAccess } from "@/components/brand-workspace/scope";
 import { BrandUnavailable } from "@/components/brand-workspace/brand-unavailable";
@@ -21,6 +21,8 @@ export default async function BrandHome({
     ? await loadBrandWorkspace({ sql, verifiedEmail }, viewer, { organizationId: choice.id })
     : { organizations: [], projects: [] };
   const access = selectedAccess(choice, workspace.projects);
+  // Accepted campaign invitations the studio has not shared yet: honest waiting, never a "create a workspace" start.
+  const pendingShares = access.staff ? 0 : await countPendingSharedCampaigns({ sql }, viewer);
   const newProject = scopedHref("/brand/projects/new", choice);
   return (
     <div data-brand-home>
@@ -33,7 +35,13 @@ export default async function BrandHome({
       </div>
       {access.staff && choice && <StaffNotice b={b} manageHref={viewer.isAdmin ? adminOrganizationHref(choice.id, brandHost) : null} />}
       <ServiceGuide kind="campaign" b={b} showOther={!access.projectScopedOnly} organizationId={choice?.id} />
-      {access.fresh ? (
+      {pendingShares > 0 && (
+        <section className={access.fresh ? "bw-empty" : "bw-note"} data-brand-pending-share={pendingShares}>
+          <h2>{b.pendingShareTitle}</h2>
+          <p>{b.pendingShareBody}</p>
+        </section>
+      )}
+      {access.fresh && pendingShares > 0 ? null : access.fresh ? (
         <section className="bw-panel">
           <h2>{b.needOrganization}</h2><ol className="bw-setup"><li>{b.performance.setupOne}</li><li>{b.performance.setupTwo}</li><li>{b.performance.setupThree}</li></ol>
           <p className="bw-note">{b.organizationHint}</p>

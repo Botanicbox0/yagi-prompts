@@ -35,6 +35,7 @@ vi.mock('@/components/brand-workspace/context', async () => {
   return { brandContext: async () => { const dict = getDictionary('ko'); return { viewer: { userId: '00000000-0000-4000-8000-000000000001', isAdmin: state.isAdmin }, sql: {}, verifiedEmail: undefined, brandHost: state.brandHost, locale: 'ko', dict, b: dict.brandWorkspace }; } };
 });
 vi.mock('@/lib/brands/workspace/service', () => ({
+  countPendingSharedCampaigns: async () => 0,
   loadBrandWorkspaceScope: async () => state.scope,
   loadBrandWorkspace: async (_d: unknown, _v: unknown, options: { organizationId?: string } = {}): Promise<BrandWorkspace> => ({
     organizations: [], projects: state.projects.filter((p) => p.organizationId === options.organizationId),

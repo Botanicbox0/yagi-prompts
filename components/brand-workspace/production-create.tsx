@@ -1,9 +1,15 @@
 "use client";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import type { getDictionary } from "@/lib/i18n/dictionaries";
+/** The production result page, with the brand it belongs to so the workspace keeps that brand selected. */
+export function productionResultHref(id: string, organizationId: string | null, locale: string): string {
+  const query = new URLSearchParams(organizationId ? { organizationId, locale } : { locale });
+  return `/brand/studio/${encodeURIComponent(id)}?${query}`;
+}
 type T = ReturnType<typeof getDictionary>["brandWorkspace"]["productionStudio"];
 export function ProductionCreate({
   contractId,
+  organizationId = null,
   templateId,
   portraitId,
   locale,
@@ -11,6 +17,8 @@ export function ProductionCreate({
   disabled,
 }: {
   contractId: string;
+  /** The selected brand, kept on the result page link so it opens without a brand re-selection. */
+  organizationId?: string | null;
   templateId: string;
   portraitId: string | null;
   locale: string;
@@ -50,7 +58,7 @@ export function ProductionCreate({
         setBusy(false);
         return;
       }
-      window.location.assign(`/brand/studio/${data.id}?locale=${locale}`);
+      window.location.assign(productionResultHref(String(data.id), organizationId, locale));
     } catch {
       setError(t.errors.unavailable);
       setBusy(false);

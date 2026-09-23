@@ -13,6 +13,8 @@ const hooks = vi.hoisted(() => ({
 }));
 const nav = vi.hoisted(() => ({ refresh: vi.fn(), push: vi.fn() }));
 vi.mock('next/navigation', () => ({ useRouter: () => nav }));
+// The boundary's copy comes from the layout's context; this test calls the component outside a render.
+vi.mock('@/components/brand-workspace/error-copy', () => ({ useBrandErrorCopy: () => ({ title: 'Fixture title', retry: 'Fixture retry' }) }));
 vi.mock('react', async (original) => ({
   ...(await original<typeof import('react')>()),
   useEffect: (effect: () => void) => { hooks.effects.push(effect); },
