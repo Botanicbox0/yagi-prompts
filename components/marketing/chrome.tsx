@@ -7,7 +7,7 @@ import { brandEnquiryHref, campaignsHref } from '@/lib/campaigns/links';
 import { LEGAL_DOCS, businessFooterLines, legalDocument } from '@/lib/legal/documents';
 import { legalHref } from '@/lib/legal/links';
 import type { Dictionary } from '@/lib/i18n/dictionaries';
-import type { Locale } from '@/lib/i18n/config';
+import { localizedPath, type Locale } from '@/lib/i18n/config';
 import type { SectionTheme } from '@/lib/motion/geometry';
 
 /**
@@ -39,6 +39,15 @@ export function siteLinks(locale: Locale, dict: Dictionary): NavLink[] {
  * dictionaries to the browser on every page. The locale toggle is passed through as a
  * server-rendered node for the same reason.
  */
+/**
+ * Audit P3: the nav's sign-in returns to the page it was pressed on. `rest` is the page's own path,
+ * known at build time, so this stays static; the landing (`/`) keeps sending readers to the video
+ * templates, the one place a fresh sign-in has something to do.
+ */
+export function signInReturn(locale: Locale, rest: string): string {
+  return rest === '/' || rest === '' ? templatesHref(locale, 'video') : localizedPath(locale, rest);
+}
+
 export function MarketingNav({
   locale,
   dict,
@@ -56,7 +65,7 @@ export function MarketingNav({
       locale={locale}
       initialTheme={initialTheme}
       links={siteLinks(locale, dict)}
-      signInNext={templatesHref(locale, 'video')}
+      signInNext={signInReturn(locale, rest)}
       labels={{
         brand: dict.meta.siteName,
         signIn: dict.auth.signIn,

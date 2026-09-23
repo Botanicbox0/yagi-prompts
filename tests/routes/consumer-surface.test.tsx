@@ -50,7 +50,7 @@ import RenderPage from '@/app/(app)/renders/[id]/page';
 import VerifyIdentityPage from '@/app/(app)/identity/verify/page';
 import CampaignDetailPage from '@/app/(marketing)/[locale]/campaigns/[slug]/page';
 import { AppHeader } from '@/components/app/app-header';
-import { MarketingFooter } from '@/components/marketing/chrome';
+import { MarketingFooter, signInReturn } from '@/components/marketing/chrome';
 import { BrandInquiryReceived } from '@/components/campaigns/brand-form';
 import { deletionMailto } from '@/components/app/deletion-mailto';
 import { createSubmitGuard } from '@/components/twings/submit-guard';
@@ -82,6 +82,14 @@ describe('P2-9: a way back to the account', () => {
       // P2-17: the contact mail subject follows the page language.
       expect(html).toContain(`subject=${encodeURIComponent(dict.footer.mailSubject)}`);
     }
+  });
+});
+
+describe('P3: nav sign-in returns to the page it was pressed on', () => {
+  it('uses the static page path, and the templates from the landing', () => {
+    expect(signInReturn('ko', '/campaigns/seoul-94')).toBe('/ko/campaigns/seoul-94');
+    expect(signInReturn('en', '/t/tpl')).toBe('/en/t/tpl');
+    expect(signInReturn('ko', '/')).toBe('/ko/video');
   });
 });
 
