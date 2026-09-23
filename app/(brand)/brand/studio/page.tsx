@@ -18,7 +18,7 @@ export default async function BrandStudio({
 }: {
   searchParams: Promise<{ organizationId?: string | string[] }>;
 }) {
-  const [{ organizationId }, { sql, viewer, verifiedEmail, b, locale }] = await Promise.all([
+  const [{ organizationId }, { sql, viewer, verifiedEmail, brandHost, b, locale }] = await Promise.all([
     searchParams,
     brandContext(),
   ]);
@@ -74,7 +74,7 @@ export default async function BrandStudio({
   return (
     <div data-brand-production>
       {heading}
-      {access.staff && choice && <StaffNotice b={b} manageHref={viewer.isAdmin ? adminOrganizationHref(choice.id) : null} />}
+      {access.staff && choice && <StaffNotice b={b} manageHref={viewer.isAdmin ? adminOrganizationHref(choice.id, brandHost) : null} />}
       <ServiceGuide kind="studio" b={b} showOther={access.canRequest || access.fresh} organizationId={choice?.id} />
       {!production || !production.contracts.length ? (
         selectedRole === "viewer" || access.staff ? (

@@ -5,16 +5,18 @@ import { getVerifiedEmail } from "@/lib/auth/verified-email";
 import { getSqlRunner } from "@/lib/db/connect";
 import { getRequestLocale } from "@/lib/i18n/server";
 import { getDictionary } from "@/lib/i18n/dictionaries";
+import { requestSurface } from "@/lib/routing/request-surface";
 
 export async function brandContext() {
-  const [viewer, sql, locale] = await Promise.all([
+  const [viewer, sql, locale, surface] = await Promise.all([
     getViewer(),
     getSqlRunner(),
     getRequestLocale(),
+    requestSurface(),
   ]);
   if (!viewer.userId) redirect("/auth/choose?next=%2Fbrand");
   // Auth-server-confirmed only; the service decides whether it opens the TWINGS team view.
   const verifiedEmail = await getVerifiedEmail(viewer.userId);
   const dict = getDictionary(locale);
-  return { viewer, sql, verifiedEmail, locale, dict, b: dict.brandWorkspace };
+  return { viewer, sql, verifiedEmail, brandHost: surface.brand, locale, dict, b: dict.brandWorkspace };
 }

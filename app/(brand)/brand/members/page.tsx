@@ -11,7 +11,7 @@ export default async function MembersPage({
 }: {
   searchParams: Promise<{ organizationId?: string | string[] }>;
 }) {
-  const [{ organizationId }, { sql, viewer, verifiedEmail, b, locale }] = await Promise.all([
+  const [{ organizationId }, { sql, viewer, verifiedEmail, brandHost, b, locale }] = await Promise.all([
     searchParams,
     brandContext(),
   ]);
@@ -44,7 +44,7 @@ export default async function MembersPage({
         </section>
       ) : (
         <>
-          {staff && <StaffNotice b={b} manageHref={viewer.isAdmin ? adminOrganizationHref(team.organization.id) : null} />}
+          {staff && <StaffNotice b={b} manageHref={viewer.isAdmin ? adminOrganizationHref(team.organization.id, brandHost) : null} />}
           <section className="bw-panel">
             <h2>{team.organization.name}</h2>
             <ul className="bw-list">

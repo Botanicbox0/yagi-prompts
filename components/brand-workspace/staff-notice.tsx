@@ -18,5 +18,6 @@ export function StaffNotice({ b, manageHref }: { b: BrandCopy; manageHref?: stri
 }
 
 /** Existing admin destinations only; nothing new is opened by linking to them. */
-export const adminOrganizationHref = (organizationId: string) => `/admin/brand-workspace/organizations/${organizationId}`;
-export const adminProjectHref = (projectId: string) => `/admin/brand-workspace/${projectId}`;
+// The dedicated brand host rejects /admin. Local and preview hosts support both surfaces.
+export const adminOrganizationHref = (organizationId: string, brandHost = false) => `${brandHost ? 'https://admin.twings.app' : ''}/admin/brand-workspace/organizations/${organizationId}`;
+export const adminProjectHref = (projectId: string, brandHost = false) => `${brandHost ? 'https://admin.twings.app' : ''}/admin/brand-workspace/${projectId}`;

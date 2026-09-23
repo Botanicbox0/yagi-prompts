@@ -8,7 +8,7 @@ export default async function BrandProject({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const [{ id }, { sql, viewer, verifiedEmail, b, locale }] = await Promise.all([
+  const [{ id }, { sql, viewer, verifiedEmail, brandHost, b, locale }] = await Promise.all([
     params,
     brandContext(),
   ]);
@@ -16,5 +16,5 @@ export default async function BrandProject({
   const project = await loadBrandProject({ sql, verifiedEmail }, viewer, id);
   if (!project) notFound();
   // `studio` here is the TWINGS team's read-only view (never the customer's seat): no approve, upload or comment.
-  return <ProjectDetail project={project} b={b} locale={locale} staffManageHref={project.role === "studio" && viewer.isAdmin ? adminProjectHref(project.id) : null} />;
+  return <ProjectDetail project={project} b={b} locale={locale} staffManageHref={project.role === "studio" && viewer.isAdmin ? adminProjectHref(project.id, brandHost) : null} />;
 }

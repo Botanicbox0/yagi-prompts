@@ -21,7 +21,7 @@ const scope: BrandWorkspaceScope = { choices, projectOrganizations: { [P_B]: B, 
 
 const state = vi.hoisted(() => ({
   path: '/brand', query: '', scope: null as unknown as BrandWorkspaceScope, isAdmin: false,
-  projects: [] as BrandProjectSummary[],
+  projects: [] as BrandProjectSummary[], brandHost: false,
 }));
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }),
@@ -32,7 +32,7 @@ vi.mock('next/navigation', () => ({
 }));
 vi.mock('@/components/brand-workspace/context', async () => {
   const { getDictionary } = await import('@/lib/i18n/dictionaries');
-  return { brandContext: async () => { const dict = getDictionary('ko'); return { viewer: { userId: '00000000-0000-4000-8000-000000000001', isAdmin: state.isAdmin }, sql: {}, verifiedEmail: undefined, locale: 'ko', dict, b: dict.brandWorkspace }; } };
+  return { brandContext: async () => { const dict = getDictionary('ko'); return { viewer: { userId: '00000000-0000-4000-8000-000000000001', isAdmin: state.isAdmin }, sql: {}, verifiedEmail: undefined, brandHost: state.brandHost, locale: 'ko', dict, b: dict.brandWorkspace }; } };
 });
 vi.mock('@/lib/brands/workspace/service', () => ({
   loadBrandWorkspaceScope: async () => state.scope,
@@ -67,6 +67,7 @@ const summary = (id: string, title: string, clientVisible: boolean): BrandProjec
 
 beforeEach(() => {
   state.path = '/brand'; state.query = ''; state.scope = scope; state.isAdmin = false;
+  state.brandHost = false;
   state.projects = [summary(P_B, 'Shared campaign', true), summary(P_HIDDEN, 'Unshared campaign', false)];
 });
 
@@ -128,6 +129,15 @@ describe('logo switcher in the TWINGS team view', () => {
 });
 
 describe('pages in the TWINGS team view are read-only', () => {
+  it('leaves the restricted brand host for admin, while local and preview links stay local', async () => {
+    state.isAdmin = true;
+    state.brandHost = true;
+    for (const page of [BrandHome, MembersPage, BrandSettings]) {
+      expect(await html(page(search(B)))).toContain(`href="https://admin.twings.app/admin/brand-workspace/organizations/${B}"`);
+    }
+    state.brandHost = false;
+    expect(await html(BrandHome(search(B)))).toContain(`href="/admin/brand-workspace/organizations/${B}"`);
+  });
   it('home lists shared and unshared campaigns with a notice, and no setup or request form', async () => {
     const page = await html(BrandHome(search(B)));
     expect(page).toContain('data-brand-staff-view');

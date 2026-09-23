@@ -12,7 +12,7 @@ export default async function BrandSettings({
 }: {
   searchParams: Promise<{ organizationId?: string | string[] }>;
 }) {
-  const [{ organizationId }, { sql, viewer, verifiedEmail, b }] = await Promise.all([
+  const [{ organizationId }, { sql, viewer, verifiedEmail, brandHost, b }] = await Promise.all([
     searchParams,
     brandContext(),
   ]);
@@ -39,7 +39,7 @@ export default async function BrandSettings({
       ) : (
         <section className="bw-panel bw-settings-panel">
           {org.role === "studio" ? (
-            <StaffNotice b={b} manageHref={viewer.isAdmin ? adminOrganizationHref(org.id) : null} />
+            <StaffNotice b={b} manageHref={viewer.isAdmin ? adminOrganizationHref(org.id, brandHost) : null} />
           ) : org.role !== "owner" && <p className="bw-note" data-brand-settings-read-only>{b.access.ownerOnlySettings}</p>}
           <ActionForm
             operation="organization.update"
