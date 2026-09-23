@@ -2,7 +2,8 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { DEFAULT_LOCALE, isLocale, type Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/dictionaries';
-import { formatDate, interpolate, localize } from '@/lib/i18n/format';
+import { interpolate, localize } from '@/lib/i18n/format';
+import { formatCampaignDateTime } from '@/lib/campaigns/dates';
 import { getCampaignCatalog } from '@/lib/campaigns/public-catalog';
 import { campaignApplyPath, campaignsHref } from '@/lib/campaigns/links';
 import { acceptsApplications } from '@/lib/campaigns/state';
@@ -72,8 +73,8 @@ export default async function CampaignDetailPage({ params }: RouteParams) {
   const title = localize(campaign.title, locale);
   const summary = localize(campaign.summary, locale);
   const brief = campaign.brief ? localize(campaign.brief, locale) : '';
-  const closeDate = formatDate(campaign.applicationsCloseAt, locale);
-  const postDate = formatDate(campaign.postDeadlineAt, locale);
+  const closeDate = formatCampaignDateTime(campaign.applicationsCloseAt, locale);
+  const postDate = formatCampaignDateTime(campaign.postDeadlineAt, locale);
 
   return (
     <>

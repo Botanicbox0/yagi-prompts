@@ -3,6 +3,7 @@ import { getSqlRunner } from '@/lib/db/connect';
 import { getLocaleFromHeaders } from '@/lib/i18n/server';
 import { getDictionary } from '@/lib/i18n/dictionaries';
 import { formatDate, interpolate, localize } from '@/lib/i18n/format';
+import { formatCampaignDateTime } from '@/lib/campaigns/dates';
 import { signInHref } from '@/lib/billing/links';
 import { loadMyCampaigns } from '@/lib/campaigns/service';
 import { payoutSentence } from '@/lib/campaigns/copy';
@@ -132,7 +133,7 @@ export default async function MyCampaignsPage({ searchParams }: { searchParams?:
                         <span className="mt-1.5 block font-mono text-[0.72rem] opacity-45">
                           {interpolate(c.postHint, {
                             platforms: campaign.platforms.map((p) => labels.platform[p]).join(', '),
-                            date: formatDate(campaign.postDeadlineAt, locale) ?? '',
+                            date: formatCampaignDateTime(campaign.postDeadlineAt, locale) ?? '',
                           })}
                         </span>
                       </label>
