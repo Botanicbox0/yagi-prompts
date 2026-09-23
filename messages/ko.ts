@@ -651,7 +651,7 @@ export const ko: Dictionary = {
     videoDescription: "스튜디오가 설계한 AI 영상 템플릿의 예시와 길이, 비율을 살펴보고 내 얼굴로 만들 장면을 골라보세요.",
     imageTitle: '이미지 템플릿',
     imageDescription: "프로필부터 포스터, 룩북까지. 스튜디오가 설계한 AI 이미지 템플릿에서 원하는 분위기를 찾아보세요.",
-    templateDescription: '이 템플릿에 얼굴 사진 한 장을 올리면 같은 장면이 당신의 얼굴로 나옵니다. 한 편당 결제, 구독 없음.',
+    templateDescription: '이 템플릿에 얼굴 사진 한 장을 올리면 같은 장면이 내 얼굴로 나옵니다. 한 편당 결제, 구독 없음.',
     pricingTitle: "이용 요금",
     pricingDescription:
       '템플릿마다 가격이 있고 결제는 한 편당 한 번입니다. 구독도, 해지할 것도 없습니다.',
@@ -1212,7 +1212,7 @@ export const ko: Dictionary = {
       how3Title: '실제 채널로 확산',
       how3Body:
         "선정된 크리에이터가 자신의 채널에 게시하면 스튜디오가 링크와 광고 표기를 확인하고 캠페인 조건에 따라 정산합니다. 게시물 링크와 측정 출처·시점이 표시된 성과 리포트를 전용 공간에서 확인하세요.",
-      howNote: '크리에이터 확산 없이 브랜드 전용 영상만 필요한 경우도 받습니다. 개별 광고 프로덕션으로 의뢰해 주세요.',
+      howNote: '크리에이터 게시 없이 브랜드 전용 영상만 필요한 경우에도 제작을 의뢰할 수 있습니다.',
       proofEyebrow: '실적',
       proofHeading: '영상 9편으로\n시작한 유행.',
       proofBody:
@@ -1479,7 +1479,7 @@ export const ko: Dictionary = {
     pendingNote: '{count}개 템플릿은 가격 준비 중입니다.',
     note: '결제는 편당 1회. 구독도, 해지할 것도 없습니다.',
     filmsTitle: '스튜디오 영상',
-    filmsBody: '사진 한 장을 넣으면 완성된 영상 한 편. 장면당 {min}–{max}, 1회 결제. 구독 없음.',
+    filmsBody: '사진 한 장으로 영상 한 편을 만듭니다. 한 편당 {min}–{max}, 정기결제는 없습니다.',
     filmsCta: '템플릿 보기',
     eyebrow: "이용 요금",
     line1: '구독은 없습니다.',
@@ -1603,7 +1603,7 @@ export const ko: Dictionary = {
   },
   account: {
     activityHeading: '내 활동',
-    activityBody: '만든 영상과 이미지는 내 작품에, 지원한 캠페인의 진행 상태는 내 캠페인에 남습니다. 새 영상은 템플릿에서 시작합니다.',
+    activityBody: '만든 영상과 이미지는 내 작품에, 지원한 캠페인의 진행 상태는 내 캠페인에 남습니다. 새 영상은 템플릿에서 만들 수 있습니다.',
     eyebrow: '계정',
     title: '내 계정',
     emailLabel: '로그인 계정',
