@@ -1,7 +1,8 @@
 import type { SqlRunner } from '@/lib/db/sql-runner';
 import { DEFAULT_LOCALE, isLocale, type Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/dictionaries';
-import { formatDate, interpolate, localize } from '@/lib/i18n/format';
+import { interpolate, localize } from '@/lib/i18n/format';
+import { formatCampaignDateTime } from '@/lib/campaigns/dates';
 import { BUSINESS } from '@/lib/legal/documents';
 import type { Mailer, SendOutcome } from '@/lib/notify/mailer';
 import { broadcast, type BroadcastResult } from '@/lib/notify/broadcast';
@@ -53,7 +54,7 @@ function campaignFacts(campaign: CampaignRow, locale: Locale): { title: string; 
   return {
     title: localize(campaign.title, locale).replace(/\s+/g, ' ').trim(),
     payout: campaign.payout ? payoutHeadline(campaign.payout, locale, labels.payout) : '',
-    applyBy: campaign.applicationsCloseAt ? (formatDate(campaign.applicationsCloseAt, locale) ?? '') : '',
+    applyBy: campaign.applicationsCloseAt ? (formatCampaignDateTime(campaign.applicationsCloseAt, locale) ?? '') : '',
   };
 }
 
@@ -106,7 +107,7 @@ export async function notifyApplicationStatus(
   const c = dict.campaigns.email;
   const origin = deps.siteUrl.replace(/\/+$/, '');
   const facts = campaignFacts(args.campaign, locale);
-  const postBy = args.campaign.postDeadlineAt ? (formatDate(args.campaign.postDeadlineAt, locale) ?? '') : '';
+  const postBy = args.campaign.postDeadlineAt ? (formatCampaignDateTime(args.campaign.postDeadlineAt, locale) ?? '') : '';
   const amount = args.app.payoutCents !== null ? formatWon(args.app.payoutCents, locale) : '';
   const vars = { title: facts.title, host: args.campaign.hostName, postBy, reason: args.app.rejectReason ?? '', amount, payout: facts.payout };
   const mine = `${origin}${MY_CAMPAIGNS_PATH}`;
