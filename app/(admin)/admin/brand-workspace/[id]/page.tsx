@@ -12,6 +12,7 @@ import type { AdminOperationName } from "@/lib/admin/operations";
 import { ProjectDetail } from "@/components/brand-workspace/project-detail";
 import { BrandUpload } from "@/components/brand-workspace/upload";
 import { CollectionConsole } from "@/components/brand-workspace/collection-console";
+import { PostPresentationAdmin } from "@/components/brand-workspace/post-presentation-admin";
 import { postShortId } from "@/lib/brands/workspace/performance";
 import type { ReactNode } from "react";
 export const dynamic = "force-dynamic";
@@ -271,6 +272,7 @@ export default async function StudioBrandProject({
         b={b}
         locale={locale}
       />
+      <PostPresentationAdmin projectId={id} posts={p.posts} attachments={p.attachments} b={b} />
       {/* The single operation stays for a genuinely historical measurement time. It is frozen with
           the console, so it is not offered once the campaign is no longer active. */}
       {p.status === "active" && p.posts.map((post) => (

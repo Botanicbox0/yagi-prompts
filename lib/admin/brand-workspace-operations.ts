@@ -11,6 +11,7 @@ import {
   setBrandProjectCover,
   storeBrandOrganizationLogo,
   removeBrandOrganizationLogo,
+  setBrandPostPresentation,
   BRAND_LOGO_MAX_BYTES,
 } from "@/lib/brands/workspace/service";
 import type { BrandOutcome } from "@/lib/brands/workspace/types";
@@ -175,6 +176,42 @@ const externalPosts: AdminOperation<Input> = {
     return fail(result.code === "conflict" ? "staleReview" : result.code === "not_found" ? "notFound" : result.code === "forbidden" ? "forbidden" : "invalid", result.code);
   },
 };
+/** A `datetime-local` value read as Korea time. Blank is unknown (null); an impossible date is refused. */
+function koreaTime(raw: string): { ok: true; value: string | null } | { ok: false } {
+  if (!raw) return { ok: true, value: null };
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?$/.test(raw)) return { ok: false };
+  const date = new Date(`${raw}+09:00`);
+  if (!Number.isFinite(+date) || new Date(+date + 9 * 3600000).toISOString().slice(0, raw.length) !== raw) return { ok: false };
+  return { ok: true, value: date.toISOString() };
+}
+/**
+ * One post's presentation card on the project page. Blank means unknown and is sent as null, never 0 or
+ * an empty handle. Only the fields below are read; metric fields in the same request are ignored.
+ */
+const postPresentation: AdminOperation<Input> = {
+  parse(form) {
+    const blank = (name: string) => { const raw = f.str(form, name).trim(); return raw === "" ? null : raw; };
+    const followersRaw = blank("followers");
+    const measured = koreaTime(f.str(form, "followersMeasuredAt"));
+    if (!measured.ok) return { ok: false, detail: "invalid datetime" };
+    return { ok: true, value: {
+      projectId: f.str(form, "projectId"), postId: f.str(form, "postId"),
+      expectedRevision: Number(f.str(form, "expectedRevision") || NaN),
+      thumbnailAttachmentId: blank("thumbnailAttachmentId"),
+      handle: blank("handle"), displayName: blank("displayName"),
+      followers: followersRaw === null ? null : Number(followersRaw),
+      followersApproximate: f.bool(form, "followersApproximate"),
+      // A source without a count is dropped, so leaving the count blank always means "unknown".
+      followersSource: followersRaw === null ? null : blank("followersSource"),
+      followersMeasuredAt: measured.value,
+    } };
+  },
+  async run(ctx, input) {
+    const result = await setBrandPostPresentation({ sql: ctx.sql }, ctx.viewer, input);
+    if (result.ok) return ok("saved", { to: `/admin/brand-workspace/${String(input.projectId)}` });
+    return fail(result.code === "conflict" ? "staleReview" : result.code === "not_found" ? "notFound" : result.code === "forbidden" ? "forbidden" : "invalid", result.code);
+  },
+};
 /**
  * The studio sets a brand's logo from the organization page: one image file, inspected by the same
  * service an owner's upload goes through (bytes sniffed, 2 MiB, private staging only).
@@ -196,6 +233,7 @@ export const BRAND_WORKSPACE_OPERATIONS = {
  'brandWorkspace.logoRemove': managedOperation((ctx,v)=>removeBrandOrganizationLogo(ctx,ctx.viewer,v),'home'),
  'brandWorkspace.cover': managedOperation((ctx,v)=>setBrandProjectCover(ctx,ctx.viewer,v)),
   "brandWorkspace.externalPosts": externalPosts,
+  "brandWorkspace.postPresentation": postPresentation,
  'brandWorkspace.settings': managedOperation((ctx,v)=>updateBrandSettings(ctx,ctx.viewer,v),'home'),
  'brandWorkspace.support': managedOperation((ctx,v)=>sendBrandSupport(ctx,ctx.viewer,v),'home'),
  'brandWorkspace.revokeInvite': managedOperation((ctx,v)=>revokeStudioInvitation(ctx,ctx.viewer,v),'home'),

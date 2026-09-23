@@ -2,11 +2,30 @@
 import {useMemo,useState} from 'react';
 import type {BrandCopy} from './action-form';
 import type {BrandPost,BrandProjectDetail,BrandReport} from '@/lib/brands/workspace/types';
-import {campaignPerformance,rankCampaignPosts,postEngagement,campaignCsv,postContentTitle,postShortId,byLatestPublished} from '@/lib/brands/workspace/performance';
+import {campaignPerformance,rankCampaignPosts,postEngagement,campaignCsv,postContentTitle,byLatestPublished,postPresentation,postHandle,postSearchText} from '@/lib/brands/workspace/performance';
 import {interpolate} from '@/lib/i18n/format';
 import {formatBrandTimestamp} from './format';
 
-export function CampaignPerformance({project:p,posts=p.posts,b,locale,frozen=false,compact=false}:{project:Pick<BrandProjectDetail,'title'|'posts'|'contents'|'attachments'|'criteria'>;posts?:BrandPost[];b:BrandCopy;locale:string;frozen?:boolean;compact?:boolean}){
+type PerformanceProject=Pick<BrandProjectDetail,'title'|'posts'|'contents'|'attachments'|'criteria'>;
+const shortDate=(iso:string,locale:string)=>new Intl.DateTimeFormat(locale==='ko'?'ko-KR':'en-US',{month:'short',day:'numeric',timeZone:'Asia/Seoul'}).format(new Date(iso));
+
+/**
+ * The post's own picture only: the studio's thumbnail, else the approved content file behind the post.
+ * Never the campaign cover or another post's image. Without one, a small neutral mark, not a banner.
+ */
+function PostThumb({post,project,label,c}:{post:BrandPost;project:PerformanceProject;label:string;c:BrandCopy['performance']}){
+ const thumbnail=postPresentation(post).thumbnailUrl;
+ const content=project.contents.find(item=>item.id===post.contentVersionId),mime=project.attachments.find(item=>item.id===content?.attachmentId)?.mime;
+ const alt=`${c.thumbnailAlt}: ${label}`;
+ return <div className="bw-post-thumb" data-post-thumbnail={thumbnail?'studio':content&&mime?'content':undefined} data-thumbnail-missing={!thumbnail&&!(content&&mime&&/^(image|video)\//.test(mime))?'true':undefined}>
+  {thumbnail?<img src={thumbnail} alt={alt} loading="lazy"/>
+  :content&&mime?.startsWith('image/')?<img src={content.mediaUrl} alt={alt} loading="lazy"/>
+  :content&&mime?.startsWith('video/')?<video src={`${content.mediaUrl}#t=0.1`} aria-label={alt} muted playsInline preload="metadata"/>
+  :<span><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="m4 17 5-4.5 3.5 3 2.5-2 5 3.5"/></svg>{c.thumbnailMissing}</span>}
+ </div>;
+}
+
+export function CampaignPerformance({project:p,posts=p.posts,b,locale,frozen=false,compact=false}:{project:PerformanceProject;posts?:BrandPost[];b:BrandCopy;locale:string;frozen?:boolean;compact?:boolean}){
  const c=b.performance;
  const stats=useMemo(()=>campaignPerformance(posts),[posts]);
  const number=(n:number|null)=>n===null?'—':n.toLocaleString(locale);
@@ -16,8 +35,12 @@ export function CampaignPerformance({project:p,posts=p.posts,b,locale,frozen=fal
  const [query,setQuery]=useState(''),[platform,setPlatform]=useState('all'),[sort,setSort]=useState('views');
  const titles=Object.fromEntries(p.contents.map(content=>[content.id,content.title]));
  const linked=posts.filter(post=>post.origin==='external_import').length,undated=posts.filter(post=>post.publishedAt===null).length;
- const label=(post:BrandPost)=>postContentTitle(post,titles)??`${b.platforms[post.platform]} · ${postShortId(post.url)}`;
- const filtered=posts.filter(post=>(platform==='all'||post.platform===platform)&&`${postContentTitle(post,titles)??''} ${post.url}`.toLocaleLowerCase(locale).includes(query.toLocaleLowerCase(locale)));
+ // Customer-facing name: the recorded @handle, the approved content title, the recorded display name, or
+ // the localized generic "Instagram post". The platform's raw post code is never shown as text; it stays
+ // only in the link destination (and the CSV).
+ const label=(post:BrandPost)=>postHandle(post)??postContentTitle(post,titles)??postPresentation(post).displayName??b.platforms[post.platform];
+ const followers=(post:BrandPost)=>{const v=postPresentation(post);return v.followers===null||v.followersMeasuredAt===null?c.followersUnknown:`${interpolate(c.followers,{count:approx(v.followers,v.followersApproximate)})} · ${interpolate(c.followersAsOf,{date:shortDate(v.followersMeasuredAt,locale)})}`;};
+ const filtered=posts.filter(post=>(platform==='all'||post.platform===platform)&&postSearchText(post,titles).toLocaleLowerCase(locale).includes(query.toLocaleLowerCase(locale)));
  const sorted=sort==='latest'?filtered.slice().sort(byLatestPublished): [...rankCampaignPosts(filtered,sort==='engagement'?'engagement':'views'),...filtered.filter(post=>(sort==='engagement'?postEngagement(post):post.views)===null)];
  const targetValue=p.criteria.primaryMetric==='views'?stats.views.total:p.criteria.primaryMetric==='engagement'?stats.engagement.total:stats.totalPosts;
  const target=p.criteria.targetValue;
@@ -32,13 +55,26 @@ export function CampaignPerformance({project:p,posts=p.posts,b,locale,frozen=fal
   {stats.viewsApproximate>0&&<p className="bw-note" data-approximate-views={stats.viewsApproximate}>{interpolate(c.approxNote,{count:stats.viewsApproximate})}</p>}
   {linked>0&&<p className="bw-note" data-linked-posts={linked}>{interpolate(c.linkedNote,{count:linked})}{undated>0&&<> {interpolate(frozen?c.reportUndated:c.undatedNote,{count:undated})}</>}</p>}
   {!compact&&<>
-   <div className="bw-highlights">{(['views','engagement'] as const).map(ranking=><section key={ranking}><h3>{ranking==='views'?c.topViews:c.topEngagement}</h3><ol className="bw-top-posts">{rankCampaignPosts(posts,ranking).slice(0,3).map((post,index)=>{
-    const content=p.contents.find(item=>item.id===post.contentVersionId),attachment=p.attachments.find(item=>item.id===content?.attachmentId);
-    return <li key={post.id} className="bw-top-post"><div className="bw-preview">{content&&attachment?.mime.startsWith('image/')?<img src={content.mediaUrl} alt={`${c.preview}: ${content.title}`} loading="lazy"/>:content&&attachment?.mime.startsWith('video/')?<video src={`${content.mediaUrl}#t=0.1`} aria-label={`${c.preview}: ${content.title}`} muted playsInline preload="metadata" controls/>:<span>{post.origin==='external_import'?c.linkedPost:c.previewUnavailable}</span>}</div><div><span className="bw-kicker">{String(index+1).padStart(2,'0')} · {b.platforms[post.platform]}</span><h4>{label(post)}</h4><span className="bw-muted">{c.preview}</span><strong>{ranking==='views'?views(post):number(postEngagement(post))}</strong><small>{ranking==='views'?b.views:c.engagement}</small><a href={post.url} target="_blank" rel="noopener noreferrer">{c.openPost} ↗</a><span className="bw-muted">{b.sourceLabels[post.metricsSource]}</span></div></li>;
-   })}</ol>{!rankCampaignPosts(posts,ranking).length&&<p className="bw-note">{c.noRanking}</p>}</section>)}</div>
+   <div className="bw-highlights">{(['views','engagement'] as const).map(ranking=><section key={ranking}><h3>{ranking==='views'?c.topViews:c.topEngagement}</h3><ol className="bw-top-posts">{rankCampaignPosts(posts,ranking).slice(0,3).map((post,index)=>
+    <li key={post.id} className="bw-top-post"><PostThumb post={post} project={p} label={label(post)} c={c}/><div><span className="bw-kicker">{String(index+1).padStart(2,'0')} · {c.platformNames[post.platform]}</span><h4>{label(post)}</h4><span className="bw-muted">{followers(post)}</span><strong>{ranking==='views'?views(post):number(postEngagement(post))}</strong><small>{ranking==='views'?b.views:c.engagement}</small><a href={post.url} target="_blank" rel="noopener noreferrer">{c.openPost} ↗</a><span className="bw-muted">{b.sourceLabels[post.metricsSource]}</span></div></li>
+   )}</ol>{!rankCampaignPosts(posts,ranking).length&&<p className="bw-note">{c.noRanking}</p>}</section>)}</div>
    <div className="bw-method"><p>{c.engagementNote}</p><p><strong>{c.rate}: {stats.engagementRate===null?'—':stats.engagementRateApproximate?interpolate(c.approxValue,{value:`${stats.engagementRate.toLocaleString(locale,{maximumFractionDigits:2})}%`}):`${stats.engagementRate.toLocaleString(locale,{maximumFractionDigits:2})}%`}</strong> · {interpolate(c.rateCoverage,{count:stats.ratePosts})}</p><p className="bw-muted">{c.firstMeasured}: {formatBrandTimestamp(stats.firstMeasuredAt,locale)??'—'} · {c.lastMeasured}: {formatBrandTimestamp(stats.lastMeasuredAt,locale)??'—'}</p><p className="bw-muted">{c.sourceNotice}</p></div>
    <h3>{c.allPosts}</h3><div className="bw-filter-bar bw-no-print"><label>{c.search}<input value={query} onChange={event=>setQuery(event.target.value)} placeholder={c.searchHint}/></label><label>{b.platformLabel}<select value={platform} onChange={event=>setPlatform(event.target.value)}><option value="all">{c.allPlatforms}</option>{Object.entries(b.platforms).map(([key,label])=><option value={key} key={key}>{label}</option>)}</select></label><label>{c.sort}<select value={sort} onChange={event=>setSort(event.target.value)}><option value="views">{c.topViews}</option><option value="engagement">{c.topEngagement}</option><option value="latest">{c.latest}</option></select></label></div>
-   {sorted.length?<div className="bw-table-wrap" tabIndex={0} role="region" aria-label={c.allPosts}><table className="bw-table"><thead><tr>{[b.posts,b.views,b.likes,b.comments,b.shares,b.saves,b.source,b.measuredAt].map(label=><th key={label} scope="col">{label}</th>)}</tr></thead><tbody>{sorted.map(post=><tr key={post.id}><td><a href={post.url} target="_blank" rel="noopener noreferrer">{label(post)} ↗</a><p className="bw-muted">{b.platforms[post.platform]}{post.origin==='external_import'&&<> · {c.linkedPost}</>} · {b.verificationLabels[post.verification]}{post.publishedAt===null&&<> · {c.publishedUnknown}</>}</p></td><td data-approximate={post.viewsApproximate&&post.views!==null?'true':undefined}>{views(post)}</td>{[post.likes,post.comments,post.shares,post.saves].map((value,i)=><td key={i}>{number(value)}</td>)}<td>{b.sourceLabels[post.metricsSource]}</td><td>{formatBrandTimestamp(post.measuredAt,locale)??'—'}</td></tr>)}</tbody></table></div>:<p className="bw-note">{posts.length?c.noMatch:b.noPosts}</p>}
+   {sorted.length?<ul className="bw-post-grid" aria-label={c.allPosts}>{sorted.map(post=>{
+    const v=postPresentation(post),handle=postHandle(post),title=postContentTitle(post,titles);
+    return <li key={post.id} className="bw-post-card" data-post-card={post.id}>
+     <PostThumb post={post} project={p} label={label(post)} c={c}/>
+     <div className="bw-post-body">
+      <header><strong className="bw-post-name">{label(post)}</strong><span className="bw-post-meta">{[v.displayName&&handle?v.displayName:null,c.platformNames[post.platform]].filter(Boolean).join(' · ')}</span><span className="bw-post-meta" data-followers={v.followers===null?'unknown':v.followersApproximate?'approximate':'exact'}>{followers(post)}</span></header>
+      <dl className="bw-post-metrics">
+       <div data-approximate={post.viewsApproximate&&post.views!==null?'true':undefined}><dt>{b.views}</dt><dd>{views(post)}</dd></div>
+       <div><dt>{b.likes}</dt><dd>{number(post.likes)}</dd></div>
+       <div><dt>{b.comments}</dt><dd>{number(post.comments)}</dd></div>
+      </dl>
+      <a className="bw-post-open" href={post.url} target="_blank" rel="noopener noreferrer">{c.openPost} ↗</a>
+      <p className="bw-post-context">{[handle&&title,post.origin==='external_import'?c.linkedPost:null,b.verificationLabels[post.verification],post.publishedAt===null?c.publishedUnknown:interpolate(c.publishedOn,{date:shortDate(post.publishedAt,locale)}),b.sourceLabels[post.metricsSource],post.measuredAt&&interpolate(c.measuredOn,{date:formatBrandTimestamp(post.measuredAt,locale)!}),post.shares!==null?`${b.shares} ${number(post.shares)}`:null,post.saves!==null?`${b.saves} ${number(post.saves)}`:null].filter(Boolean).join(' · ')}</p>
+     </div>
+    </li>;})}</ul>:<p className="bw-note">{posts.length?c.noMatch:b.noPosts}</p>}
   </>}
  </section>;
 }

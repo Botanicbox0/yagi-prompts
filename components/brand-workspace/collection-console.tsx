@@ -4,7 +4,7 @@ import { BRAND_METRICS_BATCH_LIMIT } from "@/lib/brands/workspace/schemas";
 import { OpForm } from "@/components/admin/chrome";
 import type { BrandCopy } from "./action-form";
 import { formatBrandTimestamp } from "./format";
-import { postShortId } from "@/lib/brands/workspace/performance";
+import { postShortId, postHandle } from "@/lib/brands/workspace/performance";
 
 const METRICS = ["views", "likes", "comments", "shares", "saves"] as const;
 
@@ -78,8 +78,8 @@ export function CollectionConsole({
                 </thead>
                 <tbody>
                   {posts.map((post, index) => {
-                    // The platform's own post code keeps linked posts apart; no creator name is invented.
-                    const name = `${b.platforms[post.platform]} ${index + 1} · ${postShortId(post.url)}`;
+                    // The platform's own post code keeps linked posts apart; a handle appears only once recorded.
+                    const name = `${b.platforms[post.platform]} ${index + 1} · ${postShortId(post.url)}${postHandle(post) ? ` · ${postHandle(post)}` : ""}`;
                     return (
                       <tr key={post.id} data-collection-row={post.id}>
                         <td>
