@@ -568,6 +568,7 @@ export const ko: Dictionary = {
     "acceptInvite": "초대 수락",
     "inviteTitle": "브랜드 워크스페이스에 참여",
     "inviteInvalid": "만료되었거나 이미 사용했거나 다른 계정의 초대입니다.",
+    "inviteRoleMismatch": "이미 이 브랜드의 구성원이라 초대를 적용하지 않았습니다. 지금 역할은 그대로입니다. 역할을 바꾸려면 브랜드 소유자나 TWINGS 스튜디오에 요청해 주세요.",
     "inviteWrongAccount": "지금 로그인한 계정으로는 이 초대를 받을 수 없습니다. 초대받은 이메일로 인증을 마친 계정이어야 합니다. 로그아웃하고 그 계정으로 로그인한 뒤, 받은 초대 링크를 다시 열어 주세요.",
     "inviteSignOut": "로그아웃",
     "pendingShareTitle": "스튜디오가 캠페인 공유를 준비하고 있습니다",

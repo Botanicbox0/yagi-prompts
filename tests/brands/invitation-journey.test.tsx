@@ -93,16 +93,30 @@ describe("accepting an invitation lands in that brand", () => {
     expect(await s.loadBrandProject({ sql }, guest, shared)).not.toBeNull();
   });
 
-  it("R2: accepting again as an existing member is a success that changes nothing", async () => {
+  it("R2: a re-sent invitation for the same role is a success that changes nothing", async () => {
     expect(await accept(user, await token(user, brandA, "editor"))).toMatchObject({ ok: true });
-    const again = await accept(user, await token(user, brandA, "viewer"));
+    const again = await accept(user, await token(user, brandA, "editor"));
     expect(again).toMatchObject({ ok: true, organizationId: brandA });
     if (!again.ok) throw Error(again.code);
     expect(invitationLanding(again)).toBe(`/brand?organizationId=${brandA}`);
-    // The re-sent invitation never downgrades (or upgrades) the seat.
     expect((await s.loadBrandWorkspace({ sql }, user, { organizationId: brandA })).organizations).toEqual([{ id: brandA, name: "Fixture brand A", role: "editor" }]);
     // And it is used up: nothing is left pending.
     expect((await sql.query("select count(*)::int as n from brand_invites where organization_id=$1 and accepted_at is null and revoked_at is null", [brandA])).rows[0]).toMatchObject({ n: 0 });
+  });
+
+  it("R2b: an existing member offered a different role is refused, keeps the seat, and the invitation stays pending", async () => {
+    expect(await accept(user, await token(user, brandA, "editor"))).toMatchObject({ ok: true });
+    for (const role of ["viewer", "owner"] as const) {
+      const result = await accept(user, await token(user, brandA, role));
+      expect(result).toMatchObject({ ok: false, code: "existing_member_role_mismatch" });
+      expect(invitationFailure(!result.ok && result.code, b)).toEqual({ notice: b.inviteRoleMismatch, switchAccount: false });
+    }
+    // Neither a downgrade nor an escalation happened.
+    expect((await s.loadBrandWorkspace({ sql }, user, { organizationId: brandA })).organizations).toEqual([{ id: brandA, name: "Fixture brand A", role: "editor" }]);
+    // Nothing refused was marked accepted; the newest invitation (a new one to the same address
+    // supersedes the older) stays pending, so the studio still sees it as not accepted.
+    expect((await sql.query("select count(*)::int as n from brand_invites where organization_id=$1 and role<>'editor' and accepted_at is not null", [brandA])).rows[0]).toMatchObject({ n: 0 });
+    expect((await sql.query("select role from brand_invites where organization_id=$1 and accepted_at is null and revoked_at is null", [brandA])).rows).toEqual([{ role: "owner" }]);
   });
 
   it("R3: a wrong or unconfirmed account is told to switch account; expired or revoked links are invalid", async () => {

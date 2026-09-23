@@ -557,6 +557,7 @@ export const en = {
     "acceptInvite": "Accept invitation",
     "inviteTitle": "Join a brand workspace",
     "inviteInvalid": "This invitation is expired, already used, or belongs to another account.",
+    "inviteRoleMismatch": "You're already a member of this brand, so the invitation wasn't applied. Your current role stays the same. To change it, ask a brand owner or the TWINGS studio.",
     "inviteWrongAccount": "The account you're signed in with can't accept this invitation. It has to be the invited email address, verified. Sign out, sign in with that account, then open the invitation link again.",
     "inviteSignOut": "Sign out",
     "pendingShareTitle": "The studio is getting your campaign ready to share",

@@ -765,8 +765,10 @@ export async function acceptBrandInvitation(deps: BrandWorkspaceDeps, viewer: Vi
       return acceptedScope(sql, invite);
     }
     const current = (await sql.query('select role,status from brand_memberships where organization_id=$1 and user_id=$2 for update', [invite.organization_id, userId])).rows[0];
-    // Already an active member (a re-sent invitation): nothing to change, not even the role. The
-    // invitation is used up so it stops showing as pending, and the member lands in that brand.
+    // Already an active member. The same role (a re-sent invitation) is used up and lands in the
+    // brand. A different role is refused and left pending: accepting never changes a seat, and a
+    // silently "accepted" owner invitation that kept an editor seat would mislead the studio.
+    if (current?.status === 'active' && current.role !== invite.role) throw new Denied('existing_member_role_mismatch');
     if (current?.status !== 'active')
       await sql.query(`insert into brand_memberships(organization_id,user_id,role) values($1,$2,$3)
         on conflict(organization_id,user_id) do update set role=excluded.role,status='active'`, [invite.organization_id, userId, invite.role]);

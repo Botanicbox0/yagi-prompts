@@ -122,7 +122,7 @@ export async function POST(request: NextRequest) {
       result,
       result.ok
         ? 200
-        : result.code === "conflict"
+        : result.code === "conflict" || result.code === "existing_member_role_mismatch"
           ? 409
           : result.code === "not_found"
             ? 404
