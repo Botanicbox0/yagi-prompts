@@ -4,12 +4,16 @@ import { ProjectDetail } from "@/components/brand-workspace/project-detail";
 import { CollectionConsole } from "@/components/brand-workspace/collection-console";
 import { getDictionary } from "@/lib/i18n/dictionaries";
 import type { BrandPost, BrandProjectDetail } from "@/lib/brands/workspace/types";
+import { UNKNOWN_POST_PRESENTATION } from "@/lib/brands/workspace/performance";
+/** Text a person can read or hear: tags removed, but alt/aria-label/title kept since screen readers speak them. */
+const visible = (html: string) => html.replace(/<[^>]*?(?:alt|aria-label|title)="([^"]*)"[^>]*>/g, " $1 ").replace(/<[^>]*>/g, " ");
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }) }));
 
 const linked: BrandPost = {
   id: "linked", origin: "external_import", contentVersionId: null, url: "https://www.instagram.com/p/FIXTURE01/", platform: "instagram",
   publishedAt: null, metricRevision: 0, verification: "unverified", metricsSource: "unavailable", measuredAt: null,
   views: null, viewsApproximate: false, likes: null, comments: null, shares: null, saves: null, createdAt: "2026-09-20T00:00:00Z",
+  presentation: UNKNOWN_POST_PRESENTATION,
 };
 const project: BrandProjectDetail = {
   id: "project", organizationId: "org", organizationName: "Fixture brand", title: "Fixture campaign", objective: "Share results", audience: "",
@@ -44,7 +48,10 @@ describe.each(["ko", "en"] as const)("client sharing UI in %s", (locale) => {
     expect(html).toContain('data-linked-posts="1"');
     expect(html).toContain(b.performance.linkedPost);
     expect(html).toContain(b.performance.publishedUnknown);
-    expect(html).toContain("FIXTURE01");
+    // The raw platform post code is never customer text; it stays only in the link destination.
+    expect(visible(html)).not.toContain("FIXTURE01");
+    expect(html).toContain('href="https://www.instagram.com/p/FIXTURE01/"');
+    expect(html).toContain(b.platforms.instagram);
     expect(html).toContain(b.performance.reportUndated.replace("{count}", "1"));
     expect(html).not.toMatch(/>0<\/strong>/);
   });
@@ -66,9 +73,9 @@ describe.each(["ko", "en"] as const)("publicly rounded view counts in %s", (loca
     expect(html).toContain(b.performance.approxNote.replace("{count}", "1"));
     expect(html).toMatch(/data-approximate="true"><span>/);
     expect(html).toContain(`>${(1200).toLocaleString(locale)}<`);
-    // Each linked post keeps its own readable identity; no creator label or borrowed image.
-    expect(html).toContain("ROUNDED01");
-    expect(html).toContain("EXACT01");
+    // No borrowed image or invented creator label, and the post codes are not shown as text.
+    expect(visible(html)).not.toMatch(/ROUNDED01|EXACT01/);
+    expect(html).toContain('href="https://www.instagram.com/p/ROUNDED01/"');
   });
 
   it("shows exact counts without any approximate marker", () => {

@@ -1,7 +1,7 @@
 import {describe,expect,it} from 'vitest';
-import {campaignPerformance,rankCampaignPosts,campaignCsv} from '@/lib/brands/workspace/performance';
+import {campaignPerformance,rankCampaignPosts,campaignCsv,UNKNOWN_POST_PRESENTATION} from '@/lib/brands/workspace/performance';
 import type {BrandPost} from '@/lib/brands/workspace/types';
-const post=(id:string,values:Partial<BrandPost>={}):BrandPost=>({id,origin:'approved_content',contentVersionId:id,url:`https://www.instagram.com/p/${id}/`,platform:'instagram',publishedAt:'2026-09-01T00:00:00Z',metricRevision:0,verification:'manual',metricsSource:'studio_review',measuredAt:'2026-09-02T00:00:00Z',views:null,viewsApproximate:false,likes:null,comments:null,shares:null,saves:null,createdAt:'2026-09-01T00:00:00Z',...values});
+const post=(id:string,values:Partial<BrandPost>={}):BrandPost=>({id,origin:'approved_content',contentVersionId:id,url:`https://www.instagram.com/p/${id}/`,platform:'instagram',publishedAt:'2026-09-01T00:00:00Z',metricRevision:0,verification:'manual',metricsSource:'studio_review',measuredAt:'2026-09-02T00:00:00Z',views:null,viewsApproximate:false,likes:null,comments:null,shares:null,saves:null,createdAt:'2026-09-01T00:00:00Z',presentation:UNKNOWN_POST_PRESENTATION,...values});
 describe('client campaign performance',()=>{
  it('keeps missing figures unknown and measured zeros visible',()=>{
   const empty=campaignPerformance([post('a')]);expect(empty.views.total).toBeNull();expect(empty.engagement.total).toBeNull();

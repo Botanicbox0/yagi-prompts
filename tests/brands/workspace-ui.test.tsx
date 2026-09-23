@@ -6,6 +6,7 @@ import type {
   BrandProjectDetail,
   BrandPost,
 } from "@/lib/brands/workspace/types";
+import { UNKNOWN_POST_PRESENTATION } from "@/lib/brands/workspace/performance";
 const post: BrandPost = {
   id: "post",
   origin: "approved_content",
@@ -24,6 +25,7 @@ const post: BrandPost = {
   shares: null,
   saves: null,
   createdAt: "2026-09-20T00:00:00Z",
+  presentation: UNKNOWN_POST_PRESENTATION,
 };
 const project: BrandProjectDetail = {
   id: "project",

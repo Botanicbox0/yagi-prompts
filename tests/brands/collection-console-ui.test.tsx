@@ -5,12 +5,13 @@ import { BRAND_WORKSPACE_OPERATIONS } from "@/lib/admin/brand-workspace-operatio
 import { getDictionary } from "@/lib/i18n/dictionaries";
 import type { BrandPost } from "@/lib/brands/workspace/types";
 
+import { UNKNOWN_POST_PRESENTATION } from "@/lib/brands/workspace/performance";
 const P1 = "a0000000-0000-4000-8000-000000000001";
 const P2 = "a0000000-0000-4000-8000-000000000002";
 const post = (id: string, changes: Partial<BrandPost> = {}): BrandPost => ({
   id, origin: "approved_content", contentVersionId: "v1", url: `https://www.instagram.com/p/${id.slice(-4)}/`, platform: "instagram",
   publishedAt: "2026-09-20T00:00:00Z", metricRevision: 0, verification: "unverified", metricsSource: "unavailable",
-  measuredAt: null, views: null, viewsApproximate: false, likes: null, comments: null, shares: null, saves: null, createdAt: "2026-09-20T00:00:00Z", ...changes,
+  measuredAt: null, views: null, viewsApproximate: false, likes: null, comments: null, shares: null, saves: null, createdAt: "2026-09-20T00:00:00Z", presentation: UNKNOWN_POST_PRESENTATION, ...changes,
 });
 const posts = [post(P1), post(P2, { metricRevision: 3, verification: "manual", metricsSource: "creator_evidence", measuredAt: "2026-09-21T01:00:00Z", views: 0, likes: 12 })];
 

@@ -102,7 +102,25 @@ export const BrandExternalPostsSchema = z.object({
 /** Covers are images only; video and PDF stay ordinary files. */
 export const BRAND_COVER_MIMES = ['image/jpeg', 'image/png', 'image/webp'] as const;
 export const BrandProjectCoverSchema = z.object({ projectId: id, attachmentId: id.nullable(), expectedRevision: z.number().int().nonnegative() });
-export const BrandReportSchema = z.object({ projectId: id, requestId: id, summary: text(1, 4000), periodStart: date, periodEnd: date })
+/**
+ * Studio-only presentation of one post. `null` (or blank) is unknown; nothing here is a metric. A
+ * follower count is an observation: it needs where it was read and when, like any other count.
+ */
+export const BRAND_POST_HANDLE_PATTERN = /^[\p{L}\p{N}._-]{1,50}$/u;
+export const BrandPostPresentationSchema = z.object({
+  projectId: id, postId: id, expectedRevision: z.number().int().nonnegative(),
+  thumbnailAttachmentId: id.nullable().default(null),
+  handle: z.string().trim().transform(v => v.replace(/^@/, '')).pipe(z.string().regex(BRAND_POST_HANDLE_PATTERN)).nullable().default(null),
+  displayName: text(1, 80).nullable().default(null),
+  followers: z.number().int().min(0).max(10_000_000_000).nullable().default(null),
+  followersApproximate: z.boolean().default(false),
+  followersSource: z.enum(['creator_evidence', 'studio_review']).nullable().default(null),
+  followersMeasuredAt: z.iso.datetime({ offset: true }).nullable().default(null),
+}).strict().refine(v => v.followers === null
+  ? !v.followersApproximate && v.followersSource === null && v.followersMeasuredAt === null
+  : v.followersSource !== null && v.followersMeasuredAt !== null,
+{ path: ['followersMeasuredAt'], message: 'A follower count needs a source and the time it was read' });
+export const BrandReportSchema =z.object({ projectId: id, requestId: id, summary: text(1, 4000), periodStart: date, periodEnd: date })
   .refine(v => v.periodEnd >= v.periodStart, { path: ['periodEnd'], message: 'End must follow start' });
 export const BRAND_ATTACHMENT_LIMITS = {
   'image/jpeg': 15 * 1024 * 1024, 'image/png': 15 * 1024 * 1024, 'image/webp': 15 * 1024 * 1024,

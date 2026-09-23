@@ -1,4 +1,11 @@
-import type {BrandPost} from './types';
+import type {BrandPost,BrandPostPresentation} from './types';
+/** Every presentation field unknown: posts stored before presentation existed, and anything unreadable. */
+export const UNKNOWN_POST_PRESENTATION:BrandPostPresentation=Object.freeze({revision:0,thumbnailUrl:null,handle:null,displayName:null,followers:null,followersApproximate:false,followersSource:null,followersMeasuredAt:null});
+export function postPresentation(post:BrandPost):BrandPostPresentation{return post.presentation??UNKNOWN_POST_PRESENTATION;}
+/** '@handle' only when the studio recorded one; never a guessed or derived name. */
+export function postHandle(post:BrandPost):string|null{const handle=postPresentation(post).handle;return handle?`@${handle}`:null;}
+/** What the post search matches: content title, handle, display name and the link itself. */
+export function postSearchText(post:BrandPost,titles:Record<string,string>):string{const v=postPresentation(post);return [postContentTitle(post,titles),v.handle,v.handle&&`@${v.handle}`,v.displayName,post.url].filter(Boolean).join(' ');}
 type Count={total:number|null;measured:number};
 export type Ranking='views'|'engagement';
 export function postEngagement(post:BrandPost):number|null{return post.likes===null||post.comments===null?null:post.likes+post.comments;}

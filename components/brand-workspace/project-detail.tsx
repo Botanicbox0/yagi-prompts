@@ -10,7 +10,8 @@ import { formatBrandTimestamp } from "./format";
 import { ProjectTabs } from './project-tabs';
 import { CampaignContracts } from './contracts';
 import { CampaignPerformance } from './performance';
-import { postShortId } from '@/lib/brands/workspace/performance';
+import { postHandle, postPresentation } from '@/lib/brands/workspace/performance';
+import { unsetDateKey } from '@/lib/brands/workspace/schedule';
 import { DecisionFields } from './decision-fields';
 import type { ReactNode } from "react";
 
@@ -51,9 +52,11 @@ export function PostTable({
                   rel="noopener noreferrer"
                   title={b.external}
                 >
-                  {b.platforms[p.platform]} · {postShortId(p.url)} ↗
+                  {/* Never the raw platform post code: handle, display name, or the generic platform post. */}
+                  {postHandle(p) ?? postPresentation(p).displayName ?? b.platforms[p.platform]} ↗
                 </a>
                 <p className="bw-muted">
+                  {(postHandle(p) || postPresentation(p).displayName) && <>{b.platforms[p.platform]} · </>}
                   {p.origin === "external_import" && <>{b.performance.linkedPost} · </>}
                   {b.verificationLabels[p.verification]}
                   {p.publishedAt === null && <> · {b.performance.publishedUnknown}</>}
@@ -97,6 +100,8 @@ export function ProjectDetail({
   const writable = !studio && p.role !== "viewer" && p.status !== "cancelled";
   // Commenting is narrower than editing: invited campaign guests may comment without approving.
   const canComment = !studio && p.canComment && p.status !== "cancelled";
+  // "To be agreed" only while the request is open; afterwards an unset date is simply not set.
+  const unsetDate = unsetDateKey(p.status) === "pending" ? b.tax.unspecified : b.dateNotSet;
   const newest = new Map<string, number>();
   for (const c of p.contents)
     newest.set(c.slotKey, Math.max(newest.get(c.slotKey) ?? 0, c.version));
@@ -160,8 +165,8 @@ export function ProjectDetail({
                   {b.startsOn} / {b.endsOn}
                 </dt>
                 <dd>
-                  {p.startsOn ?? b.tax.unspecified} —{" "}
-                  {p.endsOn ?? b.tax.unspecified}
+                  {p.startsOn ?? unsetDate} —{" "}
+                  {p.endsOn ?? unsetDate}
                 </dd>
               </div>
               <div>

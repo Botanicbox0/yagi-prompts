@@ -5,6 +5,7 @@ import type { Viewer } from '@/lib/auth/identity';
 import type { SqlRunner } from '@/lib/db/sql-runner';
 import { STAGING_BUCKET, type StorageDriver } from '@/lib/storage';
 import type { BrandWorkspaceChoice, BrandWorkspaceScope } from './selection';
+import { UNKNOWN_POST_PRESENTATION } from './performance';
 import {
   BrandHttpsUrlSchema, BrandOrganizationSchema, BrandProjectSchema, BrandProjectStatusSchema, BrandContentSchema,
   BrandDecisionSchema, BrandMessageSchema, BrandPostSchema, BrandReportSchema, BrandAttachmentSchema,
@@ -13,11 +14,12 @@ import {
   BrandCriteriaSchema,
   BrandPostMetricsSchema, BrandPostMetricsBatchSchema,
   BrandExternalPostsSchema, BrandProjectCoverSchema, BRAND_COVER_MIMES,
+  BrandPostPresentationSchema, BRAND_POST_HANDLE_PATTERN,
 } from './schemas';
 import type {
   BrandOutcome, BrandFailureCode, BrandRole, BrandProjectSummary, BrandProjectDetail, BrandWorkspace,
   BrandContentVersion, BrandDecision, BrandMessage, BrandAttachment, BrandPost, BrandReport, BrandReportSnapshot,
-  BrandMembers, BrandMetricsBatchResult, BrandExternalPostsResult,
+  BrandMembers, BrandMetricsBatchResult, BrandExternalPostsResult, BrandPostPresentation,
 } from './types';
 export type * from './types';
 export interface BrandWorkspaceDeps {
@@ -107,6 +109,39 @@ function summary(row: Row): BrandProjectSummary {
     coverUrl: row.cover_attachment_id ? `/api/brand-workspace/attachments/${row.cover_attachment_id}` : null,
   };
 }
+const attachmentUrl = (id: string) => `/api/brand-workspace/attachments/${id}`;
+function presentationDto(row: Row): BrandPostPresentation {
+  const followers = nullableNumber(row.follower_count);
+  return { revision: Number(row.presentation_revision ?? 0),
+    // Only ever this project's own attachment (composite key); the route re-authorizes every read.
+    thumbnailUrl: row.thumbnail_attachment_id ? attachmentUrl(String(row.thumbnail_attachment_id)) : null,
+    handle: row.creator_handle == null ? null : String(row.creator_handle), displayName: row.creator_name == null ? null : String(row.creator_name),
+    followers, followersApproximate: followers !== null && row.followers_approximate === true,
+    followersSource: followers === null ? null : row.followers_source as BrandPostPresentation['followersSource'],
+    followersMeasuredAt: followers === null || row.followers_measured_at == null ? null : stamp(row.followers_measured_at) };
+}
+const FrozenPresentationSchema = z.object({
+  thumbnailUrl: z.string().regex(/^\/api\/brand-workspace\/attachments\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/).nullable().catch(null),
+  handle: z.string().regex(BRAND_POST_HANDLE_PATTERN).nullable().catch(null),
+  displayName: z.string().min(1).max(80).nullable().catch(null),
+  followers: z.number().int().nonnegative().nullable().catch(null),
+  followersApproximate: z.boolean().catch(false),
+  followersSource: z.enum(['creator_evidence', 'studio_review']).nullable().catch(null),
+  followersMeasuredAt: z.string().refine(v => Number.isFinite(Date.parse(v))).nullable().catch(null),
+});
+/**
+ * Presentation exactly as it was frozen into a report. Snapshots published before presentation existed
+ * carry none: every field is unknown. Only the private attachment route (never a signed or external URL)
+ * survives, and a follower count without its source and time is dropped rather than shown bare.
+ */
+function frozenPresentation(source: unknown): BrandPostPresentation {
+  const parsed = FrozenPresentationSchema.safeParse(source);
+  if (!parsed.success) return { ...UNKNOWN_POST_PRESENTATION };
+  const v = parsed.data, known = v.followers !== null && v.followersSource !== null && v.followersMeasuredAt !== null;
+  return { revision: 0, thumbnailUrl: v.thumbnailUrl, handle: v.handle, displayName: v.displayName,
+    followers: known ? v.followers : null, followersApproximate: known && v.followersApproximate,
+    followersSource: known ? v.followersSource : null, followersMeasuredAt: known ? v.followersMeasuredAt : null };
+}
 function postDto(row: Row): BrandPost {
   return { id: String(row.id), url: String(row.url), platform: row.platform as BrandPost['platform'],
     origin: row.origin === 'external_import' ? 'external_import' : 'approved_content',
@@ -114,7 +149,8 @@ function postDto(row: Row): BrandPost {
     publishedAt: row.published_at == null ? null : stamp(row.published_at), metricRevision: Number(row.metric_revision),
     verification: row.verification as BrandPost['verification'], metricsSource: row.metrics_source as BrandPost['metricsSource'],
     measuredAt: row.measured_at == null ? null : stamp(row.measured_at), views: nullableNumber(row.views), viewsApproximate: row.views_approximate === true, likes: nullableNumber(row.likes),
-    comments: nullableNumber(row.comments), shares: nullableNumber(row.shares), saves: nullableNumber(row.saves), createdAt: stamp(row.created_at) };
+    comments: nullableNumber(row.comments), shares: nullableNumber(row.shares), saves: nullableNumber(row.saves), createdAt: stamp(row.created_at),
+    presentation: presentationDto(row) };
 }
 async function detail(sql: SqlRunner, row: Row): Promise<BrandProjectDetail> {
   const params = [row.organization_id, row.id];
@@ -129,7 +165,11 @@ async function detail(sql: SqlRunner, row: Row): Promise<BrandProjectDetail> {
   }));
   for (const decision of decisions) { const content = contents.find(c => c.id === decision.contentVersionId); if (content) content.decision = decision.decision; }
   const messages: BrandMessage[] = (await scoped('brand_messages', 'order by created_at,id')).map(r => ({ id: String(r.id), body: String(r.body), authorRole: r.author_role as BrandMessage['authorRole'], createdAt: stamp(r.created_at) }));
-  const attachments: BrandAttachment[] = (await scoped('brand_attachments', "and status='ready' and access_scope='workspace' order by created_at")).map(r => ({ id: String(r.id), name: String(r.name), mime: String(r.mime), sizeBytes: Number(r.size_bytes), createdAt: stamp(r.created_at) }));
+  // A post thumbnail is how the post is shown, not a campaign file: clients see it on the post card only.
+  // An image that is also a content version's file stays listed, since content previews look it up here.
+  const thumbnails = row.member_role === 'studio' ? '' : ` and (not exists(select 1 from brand_posts t where t.project_id=brand_attachments.project_id and t.thumbnail_attachment_id=brand_attachments.id)
+    or exists(select 1 from brand_content_versions c where c.project_id=brand_attachments.project_id and c.attachment_id=brand_attachments.id))`;
+  const attachments: BrandAttachment[] = (await scoped('brand_attachments', `and status='ready' and access_scope='workspace'${thumbnails} order by created_at`)).map(r => ({ id: String(r.id), name: String(r.name), mime: String(r.mime), sizeBytes: Number(r.size_bytes), createdAt: stamp(r.created_at) }));
   const posts = (await scoped('brand_posts', 'order by created_at')).map(postDto);
   const reports: BrandReport[] = (await scoped('brand_reports', 'order by version desc')).map(r => {
     const source = r.snapshot as BrandReportSnapshot;
@@ -138,7 +178,8 @@ async function detail(sql: SqlRunner, row: Row): Promise<BrandProjectDetail> {
       // Snapshots stored before imported links or rounded counts existed carry neither field: approved content, exact counts.
       metricDefinition: 'sum_of_latest_post_views', posts: source.posts.map(p => ({ id: p.id, origin: p.origin === 'external_import' ? 'external_import' as const : 'approved_content' as const,
         contentVersionId: p.contentVersionId ?? null, url: p.url, platform: p.platform,
-        publishedAt: p.publishedAt ?? null, metricRevision: p.metricRevision, verification: p.verification, metricsSource: p.metricsSource, measuredAt: p.measuredAt, views: p.views, viewsApproximate: p.viewsApproximate === true && p.views != null, likes: p.likes, comments: p.comments, shares: p.shares, saves: p.saves, createdAt: p.createdAt })), viewsTotalApproximate: false };
+        publishedAt: p.publishedAt ?? null, metricRevision: p.metricRevision, verification: p.verification, metricsSource: p.metricsSource, measuredAt: p.measuredAt, views: p.views, viewsApproximate: p.viewsApproximate === true && p.views != null, likes: p.likes, comments: p.comments, shares: p.shares, saves: p.saves, createdAt: p.createdAt,
+        presentation: frozenPresentation((p as { presentation?: unknown }).presentation) })), viewsTotalApproximate: false };
     // Derived from the frozen rows themselves, so a stored total can never be shown as exact by mistake.
     snapshot.viewsTotalApproximate = snapshot.posts.some(p => p.viewsApproximate);
     return { id: String(r.id), version: Number(r.version), summary: String(r.summary), periodStart: day(r.period_start)!, periodEnd: day(r.period_end)!, snapshot, createdAt: stamp(r.created_at) };
@@ -471,6 +512,36 @@ export async function setBrandProjectCover(deps: BrandWorkspaceDeps, viewer: Vie
       and access_scope='workspace' and mime=any($3::text[])`, [p.id, v.attachmentId, [...BRAND_COVER_MIMES]])).rows[0]) throw new Denied('invalid');
     await sql.query('update brand_projects set cover_attachment_id=$1,revision=revision+1,updated_at=now() where id=$2', [v.attachmentId, p.id]);
     return { id: String(p.id) };
+  });
+}
+
+/**
+ * Studio-only. How one post is recognized on the campaign page: a thumbnail chosen from this project's
+ * own ready images, the creator's handle and, when actually known, a follower count with its source and
+ * time. Guarded by `presentation_revision` alone, so it never races or moves `metric_revision`, and it
+ * touches no metric or measurement history. Allowed in every campaign state: it describes the post,
+ * it is not a measurement. Reports already published keep the presentation they were frozen with.
+ */
+export async function setBrandPostPresentation(deps: BrandWorkspaceDeps, viewer: Viewer, input: unknown): Promise<BrandOutcome<{ id: string; revision: number }>> {
+  return mutation(deps, viewer, BrandPostPresentationSchema, input, async (sql, userId, v) => {
+    const p = await project(sql, userId, v.projectId, { studio: true, write: true });
+    const post = (await sql.query('select * from brand_posts where project_id=$1 and id=$2 for update', [p.id, v.postId])).rows[0];
+    if (!post) throw new Denied('not_found');
+    const current = presentationDto(post);
+    const wanted = { thumbnailUrl: v.thumbnailAttachmentId ? attachmentUrl(v.thumbnailAttachmentId) : null, handle: v.handle, displayName: v.displayName,
+      followers: v.followers, followersApproximate: v.followersApproximate, followersSource: v.followersSource };
+    const same = (Object.keys(wanted) as Array<keyof typeof wanted>).every(k => current[k] === wanted[k])
+      && (current.followersMeasuredAt === null ? v.followersMeasuredAt === null : v.followersMeasuredAt !== null && +new Date(current.followersMeasuredAt) === +new Date(v.followersMeasuredAt));
+    // A retry whose first attempt committed (or a save that changes nothing) succeeds without a new revision.
+    if (same) return { id: String(post.id), revision: current.revision };
+    if (current.revision !== v.expectedRevision) throw new Denied('conflict');
+    if (v.followersMeasuredAt && +new Date(v.followersMeasuredAt) > Date.now() + 300000) throw new Denied('invalid');
+    if (v.thumbnailAttachmentId && !(await sql.query(`select id from brand_attachments where project_id=$1 and id=$2 and status='ready'
+      and access_scope='workspace' and mime=any($3::text[])`, [p.id, v.thumbnailAttachmentId, [...BRAND_COVER_MIMES]])).rows[0]) throw new Denied('invalid');
+    await sql.query(`update brand_posts set thumbnail_attachment_id=$1,creator_handle=$2,creator_name=$3,follower_count=$4,followers_approximate=$5,
+      followers_source=$6,followers_measured_at=$7,presentation_revision=presentation_revision+1 where id=$8 and project_id=$9`,
+      [v.thumbnailAttachmentId, v.handle, v.displayName, v.followers, v.followersApproximate, v.followersSource, v.followersMeasuredAt, post.id, p.id]);
+    return { id: String(post.id), revision: current.revision + 1 };
   });
 }
 

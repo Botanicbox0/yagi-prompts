@@ -53,6 +53,22 @@ export interface BrandPost {
   viewsApproximate: boolean;
   likes: number | null; comments: number | null;
   shares: number | null; saves: number | null; createdAt: string;
+  presentation: BrandPostPresentation;
+}
+/**
+ * How a post is recognized on the campaign page, set by the studio only. Never metrics: editing it does
+ * not touch `metricRevision` or measurement history. Every field may be unknown (null), never guessed.
+ */
+export interface BrandPostPresentation {
+  /** Optimistic-concurrency token for presentation edits only. */
+  revision: number;
+  /** Private route to one of this project's own ready images; re-authorized on every read. */
+  thumbnailUrl: string | null;
+  /** Account handle without '@'. */
+  handle: string | null; displayName: string | null;
+  /** Unknown is null, never 0. A known count always has `followersSource` and `followersMeasuredAt`. */
+  followers: number | null; followersApproximate: boolean;
+  followersSource: 'creator_evidence' | 'studio_review' | null; followersMeasuredAt: string | null;
 }
 /** Studio console result only. `measuredAt` is the one server-side time shared by every saved row. */
 export interface BrandMetricsBatchResult { id: string; saved: number; measuredAt: string }
