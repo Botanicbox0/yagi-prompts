@@ -1,9 +1,9 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { safeReturnPath } from '@/lib/auth/return-path';
 import {
   CODE_LABEL,
+  noticeSigninHref,
   parseNoticeCode,
   stripNoticeParams,
   type NoticeCode,
@@ -39,7 +39,7 @@ export function NoticeBand({
   code: NoticeCode;
   labels: NoticeLabels;
   onDismiss: () => void;
-  /** For the `signin` code: the door, with the gated page as its return. */
+  /** The door, with the page the reader was heading to as its return (see `noticeSigninHref`). */
   signinHref?: string | null;
 }) {
   const message =
@@ -63,7 +63,7 @@ export function NoticeBand({
             {CODE_LABEL[code]}
           </p>
           <p className="mt-1 text-[0.9375rem] leading-snug">{message}</p>
-          {code === 'signin' && signinHref && (
+          {signinHref && (
             <a href={signinHref} data-notice-signin className="text-accent mt-2 inline-block font-label text-eyebrow uppercase">
               {labels.signIn} →
             </a>
@@ -90,12 +90,9 @@ export function Notice({ labels, locale }: { labels: NoticeLabels; locale: strin
     if (found === null) return;
     setCode(found);
     const { pathname, hash } = window.location;
-    if (found === 'signin') {
-      // The gate sent `next` along; keep it as the sign-in's return before the URL is cleaned.
-      const next = new URLSearchParams(window.location.search).get('next') ?? pathname;
-      const safe = safeReturnPath(next, pathname);
-      setSigninHref(`/auth/signin?next=${encodeURIComponent(safe)}&locale=${locale}`);
-    }
+    // The gate (and, since audit P1-5, a failed OAuth round trip) sent `next` along; keep it as
+    // the sign-in's return before the URL is cleaned.
+    setSigninHref(noticeSigninHref(found, window.location.search, pathname, locale));
     window.history.replaceState(null, '', `${pathname}${stripNoticeParams(window.location.search)}${hash}`);
   }, [locale]);
 

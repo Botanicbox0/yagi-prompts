@@ -7,6 +7,8 @@ import { getDictionary } from '@/lib/i18n/dictionaries';
 import { getRequestLocale } from '@/lib/i18n/server';
 import { RegisterServiceWorker } from '@/components/pwa/register-sw';
 import { requestSurface } from '@/lib/routing/request-surface';
+import { templatesHref } from '@/lib/prompts/links';
+import { AppErrorCopyProvider } from '@/components/app/error-copy';
 
 /**
  * Root layout for the authenticated app surface (§4: `/library`, `/account`, `/billing/*`).
@@ -41,6 +43,7 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function AppRootLayout({ children }: { children: ReactNode }) {
   const locale = await getRequestLocale();
   const { workspace } = await requestSurface();
+  const { appError } = getDictionary(locale);
   return (
     <html lang={locale} className={fontVariables} data-workspace-admin={workspace || undefined}>
       <head>
@@ -49,7 +52,9 @@ export default async function AppRootLayout({ children }: { children: ReactNode 
         <link rel="stylesheet" href="/fonts/pretendard/pretendard-hangul-mono.css" />
       </head>
       <body>
-        {children}
+        <AppErrorCopyProvider copy={{ locale, ...appError, homeHref: templatesHref(locale, 'video') }}>
+          {children}
+        </AppErrorCopyProvider>
         {!workspace && <RegisterServiceWorker />}
       </body>
     </html>

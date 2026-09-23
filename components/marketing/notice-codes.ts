@@ -1,4 +1,5 @@
 import type { Dictionary } from '@/lib/i18n/dictionaries';
+import { normalizeReturnPath, safeReturnPath } from '@/lib/auth/return-path';
 
 /**
  * Design review F2 — the notice band's pure half, shared across the boundary.
@@ -48,13 +49,35 @@ export function parseNoticeCode(search: string): NoticeCode | null {
 export function stripNoticeParams(search: string): string {
   const params = new URLSearchParams(search);
   const error = params.get('error');
-  if (error === 'oauth' || error === 'oauth_unconfigured') params.delete('error');
+  if (error === 'oauth' || error === 'oauth_unconfigured') {
+    params.delete('error');
+    // The failed round trip's return path (audit P1-5) belongs to the same redirect.
+    params.delete('next');
+  }
   if (params.get('signin') === '1') {
     params.delete('signin');
     params.delete('next');
   }
   const out = params.toString();
   return out === '' ? '' : `?${out}`;
+}
+
+/**
+ * The band's sign-in door, or none.
+ *
+ *   · `signin` (the login gate): the gated page the gate sent along, else this page;
+ *   · `oauth` / `oauth_unconfigured` (a cancelled or failed round trip, audit P1-5): a retry that
+ *     keeps the page the reader was heading to — only when the redirect carried a SAFE `next`.
+ *
+ * Every value goes through the same-origin path validator; `//evil`, `/\evil` and encoded
+ * separators never become an href.
+ */
+export function noticeSigninHref(code: NoticeCode, search: string, pathname: string, locale: string): string | null {
+  const next = new URLSearchParams(search).get('next');
+  let target: string | null;
+  if (code === 'signin') target = safeReturnPath(next ?? pathname, pathname);
+  else target = next === null ? null : normalizeReturnPath(next);
+  return target === null ? null : `/auth/signin?next=${encodeURIComponent(target)}&locale=${locale}`;
 }
 
 /** The mono label is the CODE, verbatim — locale-invariant, like every §5 code chip. */

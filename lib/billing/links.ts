@@ -15,6 +15,11 @@ import { safeReturnPath } from '@/lib/auth/return-path';
  * Everything here is pure and string-in/string-out so both can use it and both are tested.
  */
 
+/**
+ * The subscription checkout route. Retired with the $9/month plan (audit P1-4): it now answers 410
+ * `subscription_retired`, and nothing in the product posts to it. Kept as a named constant because
+ * the Stripe modules and their tests still describe the dormant flow.
+ */
 export const CHECKOUT_ACTION = '/api/billing/checkout';
 export const PORTAL_ACTION = '/api/billing/portal';
 export const UPGRADE_PATH = '/billing/upgrade';
@@ -27,6 +32,11 @@ export function sanitizeSlug(raw: unknown): string | null {
   const value = raw.trim();
   if (value.length === 0 || value.length > 120) return null;
   return SLUG_PATTERN.test(value) ? value : null;
+}
+
+/** The localized pricing page — where every retired subscription entry now lands. */
+export function pricingHref(locale: Locale): string {
+  return `/${locale}/pricing`;
 }
 
 /** Where a completed (or abandoned) checkout should put the reader back. */
@@ -68,14 +78,9 @@ export function upgradeIntent(args: {
 }): UpgradeIntent {
   const returnTo = originPath({ slug: args.slug, locale: args.locale });
   if (args.tier === 'anon') return { kind: 'signin', href: signInHref(returnTo, args.locale) };
-  if (!args.billingConfigured) return { kind: 'unavailable', href: `/${args.locale}/pricing` };
-  return {
-    kind: 'checkout',
-    action: CHECKOUT_ACTION,
-    slug: args.slug,
-    locale: args.locale,
-    returnTo,
-  };
+  // The $9/month subscription is retired (audit P1-4): a signed-in reader is never sent to a
+  // subscription checkout, configured or not — the pricing page says how billing works now.
+  return { kind: 'unavailable', href: pricingHref(args.locale) };
 }
 
 // ---------------------------------------------------------------------------

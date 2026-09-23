@@ -1,6 +1,24 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import type { getDictionary } from '@/lib/i18n/dictionaries';
+
+/**
+ * Audit P2-13: the provider parameters leave the URL at once (they carry the payment key), so a
+ * reload used to lose the order too. The order id — not a capability, the order page re-checks
+ * ownership — is kept for this tab so the reader can still reach its status page.
+ */
+export const TOSS_RETURN_ORDER_KEY = 'twings.toss.returnOrder';
+const ORDER_ID = /^[0-9a-f-]{36}$/i;
+
+function rememberedOrder(): string {
+  try {
+    const id = window.sessionStorage.getItem(TOSS_RETURN_ORDER_KEY) ?? '';
+    return ORDER_ID.test(id) ? id : '';
+  } catch {
+    return '';
+  }
+}
+
 export function TossReturn({
   copy: c,
 }: {
@@ -14,11 +32,18 @@ export function TossReturn({
     started.current = true;
     const p = new URLSearchParams(window.location.search);
     const id = p.get('orderId') ?? '';
-    if (!/^[0-9a-f-]{36}$/i.test(id)) {
+    if (!ORDER_ID.test(id)) {
+      // A reload after the URL was cleaned: never re-confirm, just point at the order.
+      setOrderId(rememberedOrder());
       setPending(true);
       return;
     }
     setOrderId(id);
+    try {
+      window.sessionStorage.setItem(TOSS_RETURN_ORDER_KEY, id);
+    } catch {
+      /* storage unavailable — the link below still shows for this render */
+    }
     const body = {
       orderId: id,
       paymentKey: p.get('paymentKey'),

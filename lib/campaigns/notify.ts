@@ -3,7 +3,7 @@ import { DEFAULT_LOCALE, isLocale, type Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/dictionaries';
 import { interpolate, localize } from '@/lib/i18n/format';
 import { formatCampaignDateTime } from '@/lib/campaigns/dates';
-import { BUSINESS } from '@/lib/legal/documents';
+import { companyLine } from '@/lib/notify/company-line';
 import type { Mailer, SendOutcome } from '@/lib/notify/mailer';
 import { broadcast, type BroadcastResult } from '@/lib/notify/broadcast';
 import { sheet, sheetText } from '@/lib/notify/sheet';
@@ -39,7 +39,7 @@ export type NotifiedApplicationStatus = (typeof NOTIFIED_APPLICATION_STATUSES)[n
 
 function footer(locale: Locale): string {
   const dict = getDictionary(locale);
-  return `${dict.campaigns.email.footer} · ${BUSINESS.nameKo} · ${BUSINESS.email}`;
+  return `${dict.campaigns.email.footer} · ${companyLine(locale)}`;
 }
 
 /** What a campaign says about itself in one line, in the reader's language. */

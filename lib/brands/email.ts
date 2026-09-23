@@ -1,4 +1,8 @@
 import type { BrandInquiry } from './repo';
+import { getDictionary } from '@/lib/i18n/dictionaries';
+import { interpolate } from '@/lib/i18n/format';
+import { BUSINESS } from '@/lib/legal/documents';
+import { companyName } from '@/lib/notify/company-line';
 
 /**
  * The two messages an enquiry sends (2026-09-11): the studio's alert with everything the brand
@@ -12,13 +16,29 @@ export interface EmailBody {
   text: string;
 }
 
-const BUDGET_LABEL: Record<BrandInquiry['budgetBand'], { ko: string; en: string }> = {
-  under_3m: { ko: '300만원 미만', en: 'Under KRW 3M' },
-  '3m_10m': { ko: '300만원 ~ 1,000만원', en: 'KRW 3M to 10M' },
-  '10m_30m': { ko: '1,000만원 ~ 3,000만원', en: 'KRW 10M to 30M' },
-  over_30m: { ko: '3,000만원 이상', en: 'Over KRW 30M' },
-  undecided: { ko: '미정', en: 'Not decided' },
+type BrandCopy = ReturnType<typeof getDictionary>['campaigns']['brands'];
+
+/**
+ * Audit P2-17: the budget and format labels are the form's own dictionary entries, so the receipt
+ * says exactly what the brand picked, in the words they picked it from.
+ */
+const BUDGET_KEY: Record<BrandInquiry['budgetBand'], keyof BrandCopy> = {
+  under_3m: 'budgetUnder3m',
+  '3m_10m': 'budget3mTo10m',
+  '10m_30m': 'budget10mTo30m',
+  over_30m: 'budgetOver30m',
+  undecided: 'budgetUndecided',
 };
+
+function budgetLabel(copy: BrandCopy, band: BrandInquiry['budgetBand']): string {
+  return copy[BUDGET_KEY[band]] as string;
+}
+
+function formatLabel(copy: BrandCopy, slug: string | null): string {
+  if (slug === 'new') return copy.templateNew;
+  if (slug === 'undecided' || slug === null) return copy.templateUndecided;
+  return slug;
+}
 
 function escapeHtml(value: string): string {
   return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -48,26 +68,29 @@ function sheet(args: { title: string; paragraphs: string[]; rows?: Array<[string
 
 export function brandInquiryEmails(args: { inquiry: BrandInquiry; siteName: string; siteUrl: string; adminUrl: string }): { studio: EmailBody; brand: EmailBody } {
   const { inquiry, siteName } = args;
-  const ko = inquiry.locale === 'ko';
-  const budget = BUDGET_LABEL[inquiry.budgetBand][ko ? 'ko' : 'en'];
-  const format = inquiry.templateSlug === 'new' ? (ko ? '브랜드 전용 장면 제작' : 'A brand-only scene') : inquiry.templateSlug === 'undecided' || inquiry.templateSlug === null ? (ko ? '상담 후 결정' : 'Decide after a call') : inquiry.templateSlug;
+  const locale = inquiry.locale === 'ko' ? 'ko' : 'en';
+  const copy = getDictionary(locale).campaigns.brands;
+  // The studio reads Korean, whatever language the brand wrote in.
+  const studioCopy = getDictionary('ko').campaigns.brands;
+  const budget = budgetLabel(copy, inquiry.budgetBand);
+  const format = formatLabel(copy, inquiry.templateSlug);
 
   const rows: Array<[string, string]> = [
     ['Company', inquiry.company],
     ['Contact', inquiry.contactName],
     ['Email', inquiry.email],
     ['Phone', inquiry.phone ?? '—'],
-    ['Budget', BUDGET_LABEL[inquiry.budgetBand].ko],
-    ['Format', format],
+    ['Budget', budgetLabel(studioCopy, inquiry.budgetBand)],
+    ['Format', formatLabel(studioCopy, inquiry.templateSlug)],
     ['Timing', inquiry.timing ?? '—'],
     ['Message', inquiry.message],
   ];
   const studioText = [`New brand enquiry — ${inquiry.company}`, '', ...rows.map(([k, v]) => `${k}: ${v}`), '', `Board: ${args.adminUrl}`].join('\n');
   const studio: EmailBody = {
-    subject: `[${siteName}] 브랜드 의뢰 — ${inquiry.company} (${budget})`,
+    subject: `[${siteName}] 브랜드 의뢰 — ${inquiry.company} (${budgetLabel(studioCopy, inquiry.budgetBand)})`,
     html: sheet({
       title: `브랜드 의뢰 — ${inquiry.company}`,
-      paragraphs: ['캠페인 페이지의 의뢰 폼으로 들어왔습니다. 1영업일 안에 회신하기로 약속한 건입니다.'],
+      paragraphs: ['캠페인 페이지의 의뢰 폼으로 들어왔습니다. 담당자가 이메일로 회신해 주세요.'],
       rows,
       button: { label: '관리자 보드에서 열기', url: args.adminUrl },
       footer: `${siteName} · brand enquiry ${inquiry.id}`,
@@ -75,43 +98,24 @@ export function brandInquiryEmails(args: { inquiry: BrandInquiry; siteName: stri
     text: studioText,
   };
 
-  const brand: EmailBody = ko
-    ? {
-        subject: `${siteName} — 캠페인 의뢰를 받았습니다`,
-        html: sheet({
-          title: '의뢰를 받았습니다.',
-          paragraphs: [
-            `${inquiry.contactName}님, ${inquiry.company}의 캠페인 의뢰가 접수됐습니다.`,
-            '담당자가 1영업일 안에 이 주소로 회신합니다. 급한 건은 hello@yagiworkshop.xyz로 바로 보내 주세요.',
-          ],
-          rows: [
-            ['예산대', budget],
-            ['희망 포맷', format],
-            ['희망 시기', inquiry.timing ?? '미정'],
-          ],
-          button: { label: '캠페인 페이지 보기', url: `${args.siteUrl}/ko/campaigns` },
-          footer: `${siteName} · 야기워크숍 주식회사 · 이 메일은 의뢰 접수 확인용으로 한 번만 발송됩니다.`,
-        }),
-        text: [`${inquiry.contactName}님, ${inquiry.company}의 캠페인 의뢰가 접수됐습니다.`, '담당자가 1영업일 안에 이 주소로 회신합니다.', '', `예산대: ${budget}`, `희망 포맷: ${format}`, `희망 시기: ${inquiry.timing ?? '미정'}`, '', 'hello@yagiworkshop.xyz'].join('\n'),
-      }
-    : {
-        subject: `${siteName} — we received your campaign enquiry`,
-        html: sheet({
-          title: 'Enquiry received.',
-          paragraphs: [
-            `${inquiry.contactName}, the campaign enquiry for ${inquiry.company} is in.`,
-            'Someone from the studio replies to this address within one business day. If it is urgent, write to hello@yagiworkshop.xyz.',
-          ],
-          rows: [
-            ['Budget', budget],
-            ['Format', format],
-            ['Timing', inquiry.timing ?? 'Not decided'],
-          ],
-          button: { label: 'See the campaigns page', url: `${args.siteUrl}/en/campaigns` },
-          footer: `${siteName} · YAGI WORKSHOP Inc. · Sent once, to confirm this enquiry.`,
-        }),
-        text: [`${inquiry.contactName}, the campaign enquiry for ${inquiry.company} is in.`, 'Someone from the studio replies within one business day.', '', `Budget: ${budget}`, `Format: ${format}`, `Timing: ${inquiry.timing ?? 'Not decided'}`, '', 'hello@yagiworkshop.xyz'].join('\n'),
-      };
+  const r = copy.receipt;
+  const received = interpolate(r.received, { name: inquiry.contactName, company: inquiry.company });
+  const timing = inquiry.timing ?? r.timingNone;
+  const brand: EmailBody = {
+    subject: interpolate(r.subject, { site: siteName }),
+    html: sheet({
+      title: r.title,
+      paragraphs: [received, r.reply],
+      rows: [
+        [copy.fieldBudget, budget],
+        [copy.fieldTemplate, format],
+        [r.timing, timing],
+      ],
+      button: { label: r.cta, url: `${args.siteUrl}/${locale}/campaigns` },
+      footer: `${siteName} · ${companyName(locale)} · ${r.footer}`,
+    }),
+    text: [received, r.reply, '', `${copy.fieldBudget}: ${budget}`, `${copy.fieldTemplate}: ${format}`, `${r.timing}: ${timing}`, '', BUSINESS.email].join('\n'),
+  };
 
   return { studio, brand };
 }

@@ -34,6 +34,8 @@ export interface BrandFormLabels {
   submitting: string;
   successTitle: string;
   successBody: string;
+  /** Shown only when the route reports the receipt mail went out (audit Q7). */
+  successReceipt: string;
   errInvalid: string;
   errRateLimited: string;
   errUnavailable: string;
@@ -48,6 +50,19 @@ const INPUT = 'w-full border border-hairline bg-transparent px-4 py-3 text-body 
 const LABEL = 'block font-label text-eyebrow uppercase opacity-60';
 
 type Status = 'idle' | 'sending' | 'sent' | 'invalid' | 'rate_limited' | 'unavailable';
+
+/** The success panel. The receipt sentence appears only when the receipt mail went out. */
+export function BrandInquiryReceived({ labels, receipt }: { labels: Pick<BrandFormLabels, 'successTitle' | 'successBody' | 'successReceipt'>; receipt: boolean }) {
+  return (
+    <div data-brand-inquiry="sent" role="status" className="border border-accent p-6 sm:p-8">
+      <p className="font-display text-[clamp(1.4rem,2.6vw,2rem)] leading-[0.95] font-black uppercase">{labels.successTitle}</p>
+      <p className="mt-4 max-w-detail text-body opacity-70">
+        {labels.successBody}
+        {receipt && <span data-brand-inquiry-receipt> {labels.successReceipt}</span>}
+      </p>
+    </div>
+  );
+}
 
 export function BrandInquiryForm({
   endpoint,
@@ -64,6 +79,7 @@ export function BrandInquiryForm({
 }) {
   const [status, setStatus] = useState<Status>('idle');
   const [field, setField] = useState<string | null>(null);
+  const [receipt, setReceipt] = useState(false);
 
   // Progressive enhancement: a submit that lands before hydration (slow phone, slow network) is a
   // plain POST to the same endpoint, which answers with a redirect back here carrying `?inquiry=`.
@@ -72,13 +88,17 @@ export function BrandInquiryForm({
     const params = new URLSearchParams(window.location.search);
     const outcome = params.get('inquiry');
     if (!outcome) return;
-    if (outcome === 'sent') setStatus('sent');
+    if (outcome === 'sent') {
+      setStatus('sent');
+      setReceipt(params.get('receipt') === '1');
+    }
     else if (outcome === 'rate_limited' || outcome === 'invalid' || outcome === 'unavailable') {
       setStatus(outcome);
       setField(params.get('field'));
     }
     params.delete('inquiry');
     params.delete('field');
+    params.delete('receipt');
     const rest = params.toString();
     window.history.replaceState(null, '', `${window.location.pathname}${rest ? `?${rest}` : ''}${window.location.hash}`);
   }, []);
@@ -110,8 +130,9 @@ export function BrandInquiryForm({
         credentials: 'same-origin',
         body: JSON.stringify(payload),
       });
-      const json = (await response.json().catch(() => ({}))) as { ok?: boolean; code?: string; field?: string };
+      const json = (await response.json().catch(() => ({}))) as { ok?: boolean; code?: string; field?: string; receipt?: boolean };
       if (response.ok && json.ok === true) {
+        setReceipt(json.receipt === true);
         setStatus('sent');
         return;
       }
@@ -127,10 +148,7 @@ export function BrandInquiryForm({
 
   if (status === 'sent') {
     return (
-      <div data-brand-inquiry="sent" role="status" className="border border-accent p-6 sm:p-8">
-        <p className="font-display text-[clamp(1.4rem,2.6vw,2rem)] leading-[0.95] font-black uppercase">{labels.successTitle}</p>
-        <p className="mt-4 max-w-detail text-body opacity-70">{labels.successBody}</p>
-      </div>
+      <BrandInquiryReceived labels={labels} receipt={receipt} />
     );
   }
 

@@ -4,7 +4,7 @@ import { contestRest } from '@/lib/contests/links';
 import type { Locale } from '@/lib/i18n/config';
 import { localize } from '@/lib/i18n/format';
 import { localeAlternates } from './playbook-metadata';
-import { SITE_OG_IMAGE, SITE_TWITTER_CARD } from './og';
+import { SITE_TWITTER_CARD, siteOgImage } from './og';
 
 /**
  * PLAN §14.2 — "hreflang/canonical/OG from poster".
@@ -51,7 +51,7 @@ export function contestMetadata(input: ContestMetaInput): Metadata {
       // F6 — og:site_name, same reason as the prompt card: read where the site is not.
       siteName: input.siteName,
       // The contest's own poster when it has one; the brand card otherwise — never imageless.
-      images: [image ? { url: image } : SITE_OG_IMAGE],
+      images: [image ? { url: image } : siteOgImage(locale)],
       ...(contest.video ? { videos: [{ url: contest.video.src, type: contest.video.mime }] } : {}),
     },
     twitter: { card: SITE_TWITTER_CARD },
@@ -85,7 +85,7 @@ export function contestsListingMetadata(input: {
       title: input.ogTitle ?? input.title,
       description: input.description,
       siteName: input.siteName,
-      images: [SITE_OG_IMAGE],
+      images: [siteOgImage(input.locale)],
     },
     twitter: { card: SITE_TWITTER_CARD },
   };

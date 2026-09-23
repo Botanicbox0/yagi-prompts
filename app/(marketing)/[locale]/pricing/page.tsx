@@ -5,7 +5,7 @@ import { formatCount, interpolate } from '@/lib/i18n/format';
 import { formatTemplatePrice, isForSale, priceRangeFor } from '@/lib/twings/products';
 import { getPromptCatalog } from '@/lib/prompts/public-catalog';
 import { templateHref, templatesHref } from '@/lib/prompts/links';
-import { SITE_OG_IMAGE, SITE_TWITTER_CARD } from '@/lib/seo/og';
+import { SITE_TWITTER_CARD, siteOgImage } from '@/lib/seo/og';
 import { MarketingFooter, MarketingNav } from '@/components/marketing/chrome';
 import { FaqSection } from '@/lib/seo/faq-section';
 import { Reveal } from '@/components/motion/reveal';
@@ -41,7 +41,7 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
       title: `${dict.meta.pricingTitle} — ${dict.meta.siteName}`,
       description: dict.meta.pricingDescription,
       siteName: dict.meta.siteName,
-      images: [SITE_OG_IMAGE],
+      images: [siteOgImage(locale)],
     },
     twitter: { card: SITE_TWITTER_CARD },
   };

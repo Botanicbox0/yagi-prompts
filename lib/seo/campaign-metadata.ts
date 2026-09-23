@@ -4,7 +4,7 @@ import { localize } from '@/lib/i18n/format';
 import type { CampaignCard } from '@/lib/campaigns/catalog';
 import { campaignRest } from '@/lib/campaigns/links';
 import { localeAlternates } from './playbook-metadata';
-import { SITE_OG_IMAGE, SITE_TWITTER_CARD } from './og';
+import { SITE_TWITTER_CARD, siteOgImage } from './og';
 
 /** A campaign detail: indexable, self-canonical, the style's poster as its card when it has one. */
 export function campaignMetadata(input: {
@@ -28,7 +28,7 @@ export function campaignMetadata(input: {
       title,
       description,
       siteName: input.siteName,
-      images: [input.posterSrc ? { url: input.posterSrc } : SITE_OG_IMAGE],
+      images: [input.posterSrc ? { url: input.posterSrc } : siteOgImage(locale)],
     },
     twitter: { card: SITE_TWITTER_CARD },
   };
@@ -46,7 +46,7 @@ export function campaignsListingMetadata(input: { locale: Locale; title: string;
       title: `${input.title} — ${input.siteName}`,
       description: input.description,
       siteName: input.siteName,
-      images: [SITE_OG_IMAGE],
+      images: [siteOgImage(input.locale)],
     },
     twitter: { card: SITE_TWITTER_CARD },
   };

@@ -7,6 +7,7 @@ import { siteLinks } from '@/components/marketing/chrome';
 import { TwingsLogo } from '@/components/brand/twings-mark';
 import { portraitEnabled } from '@/lib/identity/portrait-runtime';
 import { TextSwap } from '@/components/ui/text-swap';
+import { deletionMailto } from '@/components/app/deletion-mailto';
 import {
   loadPreferences,
   PREFERENCES_OFF,
@@ -80,19 +81,6 @@ function Toggle({
   );
 }
 
-const DELETION_MAILTO = (email: string | null) => {
-  const subject = encodeURIComponent('TWINGS — account deletion request');
-  const body = encodeURIComponent(
-    [
-      'Please delete my TWINGS account.',
-      '',
-      `Account: ${email ?? '(the address I am signed in with)'}`,
-      '',
-      'I understand this removes my profile and everything I made.',
-    ].join('\n'),
-  );
-  return `mailto:hello@yagiworkshop.xyz?subject=${subject}&body=${body}`;
-};
 
 export default async function AccountPage({
   searchParams,
@@ -229,7 +217,7 @@ export default async function AccountPage({
             <p className="font-label text-eyebrow uppercase opacity-60">{copy.deletionHeading}</p>
             <p className="mt-2 text-[0.9375rem] opacity-70">{copy.deletionBody}</p>
             <a
-              href={DELETION_MAILTO(viewer?.email ?? null)}
+              href={deletionMailto(copy, viewer?.email ?? null)}
               className="text-accent mt-3 inline-block font-label text-eyebrow uppercase"
             >
               <TextSwap>{copy.deletionCta} →</TextSwap>

@@ -87,7 +87,7 @@ export default async function SharedRenderPage(props: RouteProps) {
             </a>
           </div>
           {job.shareExpiresAt && (
-            <p className="mt-6 max-w-detail font-mono text-[0.75rem] opacity-45">
+            <p className="mt-6 max-w-detail font-mono text-[0.75rem] opacity-70">
               {interpolate(r.shareNote, { date: formatDate(job.shareExpiresAt, locale) ?? '' })}
             </p>
           )}

@@ -5,6 +5,8 @@ import { loadOwnTossOrder } from '@/lib/billing/toss-service';
 import { tossConfigFromEnv } from '@/lib/billing/toss-gateway';
 import { getDictionary } from '@/lib/i18n/dictionaries';
 import { RENDER_PIPELINE_PUBLIC } from '@/lib/flags';
+import { formatKrw } from '@/lib/i18n/format';
+import { templateHref } from '@/lib/prompts/links';
 import { TossCheckout } from '../checkout';
 import { TossStatus } from '../status';
 
@@ -23,10 +25,12 @@ export default async function TossOrderPage({
   const o = await loadOwnTossOrder(deps.sql, viewer, (await params).id);
   if (!o) notFound();
   const c = getDictionary(o.locale).billing.toss;
-  const canPay =
-    RENDER_PIPELINE_PUBLIC &&
-    o.status === 'pending' &&
-    new Date(o.expires_at) > new Date();
+  const live = new Date(o.expires_at) > new Date();
+  const canPay = RENDER_PIPELINE_PUBLIC && o.status === 'pending' && live;
+  // Audit P2-13: a pending order past its window with no payment key was never paid — it is
+  // expired, not "confirmation delayed". Say so and offer a fresh start on the template.
+  const expired = o.status === 'pending' && !live && o.payment_key === null;
+  const restartHref = `${templateHref(o.locale, o.template_slug)}#make`;
   const failed = (await searchParams).failed === '1';
   const config = canPay ? tossConfigFromEnv() : null;
   return (
@@ -40,7 +44,7 @@ export default async function TossOrderPage({
           <div className="shrink-0 text-right">
             <p className="text-xs opacity-60">{c.amount}</p>
             <p className="mt-1 text-2xl font-semibold">
-              ₩{o.amount_krw.toLocaleString(o.locale)}
+              {formatKrw(o.amount_krw, o.locale)}
             </p>
           </div>
         </div>
@@ -49,7 +53,20 @@ export default async function TossOrderPage({
             {c.failed}
           </p>
         )}
-        {canPay ? (
+        {expired ? (
+          <div data-payment-status="expired" className="mt-8">
+            <p role="status" className="text-lg leading-relaxed">
+              {c.expired}
+            </p>
+            <a
+              href={restartHref}
+              data-toss-restart
+              className="mt-6 inline-block rounded-full bg-black px-6 py-3 text-white"
+            >
+              {c.restart}
+            </a>
+          </div>
+        ) : canPay ? (
           <TossCheckout
             id={o.id}
             amount={o.amount_krw}

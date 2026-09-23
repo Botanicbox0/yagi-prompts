@@ -96,11 +96,11 @@ export default async function RenderPage({ params, searchParams }: { params: Pro
         {pending && (
           <section data-render-waiting className="mt-10 max-w-detail border-t border-hairline pt-8">
             <p className="font-display text-[clamp(1.4rem,2.6vw,2rem)] leading-[0.95] font-black uppercase">{r.waitingTitle}</p>
-            <div className="mt-6 h-1 w-full max-w-md overflow-hidden bg-hairline" role="progressbar" aria-busy="true">
+            <div className="mt-6 h-1 w-full max-w-md overflow-hidden bg-hairline" role="progressbar" aria-busy="true" aria-label={r.progressLabel}>
               <div className="h-full w-1/3 animate-pulse bg-accent" />
             </div>
             <p className="mt-6 text-body opacity-70">{matching ? r.stageMatching : r.waitingBody}</p>
-            <p className="mt-3 font-mono text-[0.75rem] opacity-45">{r.status[job.status]}</p>
+            <p className="mt-3 font-mono text-[0.75rem] opacity-70">{r.status[job.status]}</p>
           </section>
         )}
 
@@ -124,7 +124,7 @@ export default async function RenderPage({ params, searchParams }: { params: Pro
                 <p data-share-link className="mt-2 border border-hairline p-3 font-mono text-[0.78rem] break-all select-all">
                   {absoluteUrl(shareHref(job.id, job.shareToken))}
                 </p>
-                <p className="mt-3 font-mono text-[0.75rem] opacity-45">
+                <p className="mt-3 font-mono text-[0.75rem] opacity-70">
                   {interpolate(r.shareNote, { date: formatDate(job.shareExpiresAt, locale) ?? '' })}
                 </p>
               </div>
@@ -136,7 +136,7 @@ export default async function RenderPage({ params, searchParams }: { params: Pro
           <section data-render-failed className="mt-10 max-w-detail border-t border-hairline pt-8">
             <p className="font-display text-[clamp(1.4rem,2.6vw,2rem)] leading-[0.95] font-black uppercase">{r.failedTitle}</p>
             <p className="mt-5 text-body opacity-70">{failureReason(job.errorCode, locale)}</p>
-            <p className="mt-2 font-mono text-[0.75rem] opacity-45">{r.notCharged}</p>
+            <p className="mt-2 font-mono text-[0.75rem] opacity-70">{r.notCharged}</p>
             <div className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-3">
               {(job.errorCode === 'identity_required' || job.errorCode === 'face_policy') && (
                 <a href={identityVerifyHref(`${templateUrl}#make`)} data-identity-door className="inline-block bg-accent px-6 py-3 font-label text-label text-white uppercase">
@@ -153,7 +153,7 @@ export default async function RenderPage({ params, searchParams }: { params: Pro
         {/* Founder, 2026-09-11: the complaint has a place to go, on the page it is about. */}
         {finished && (
           <section id="feedback" data-render-feedback={feedback ? feedback.status : 'none'} className="mt-14 max-w-detail scroll-mt-24 border-t border-hairline pt-8">
-            <p className="font-mono text-[0.75rem] leading-relaxed opacity-50">{r.aiNote}</p>
+            <p className="font-mono text-[0.75rem] leading-relaxed opacity-70">{r.aiNote}</p>
             <p className="mt-6 font-display text-[clamp(1.2rem,2.2vw,1.6rem)] leading-[0.95] font-black uppercase">{r.feedback.title}</p>
             <p className="mt-3 text-body opacity-70">{r.feedback.lede}</p>
 
@@ -163,9 +163,11 @@ export default async function RenderPage({ params, searchParams }: { params: Pro
                 <p className="mt-1 text-[0.9rem] opacity-70">{r.feedback.sentBody}</p>
               </div>
             )}
-            {feedbackOutcome === 'invalid' && (
-              <p data-feedback-error role="alert" className="mt-6 border border-accent px-4 py-3 text-[0.9rem] text-accent">
-                {r.feedback.errInvalid}
+            {/* Audit P2-10: every non-`sent` outcome says something — `unavailable`, `not_found`
+                and `sign_in_required` used to fail in silence. */}
+            {feedbackOutcome !== null && feedbackOutcome !== 'sent' && (
+              <p data-feedback-error={feedbackOutcome === 'invalid' ? 'invalid' : 'unavailable'} role="alert" className="mt-6 border border-accent px-4 py-3 text-[0.9rem] text-accent">
+                {feedbackOutcome === 'invalid' ? r.feedback.errInvalid : r.feedback.errUnavailable}
               </p>
             )}
             {feedback && feedbackOutcome !== 'sent' && (
@@ -190,7 +192,7 @@ export default async function RenderPage({ params, searchParams }: { params: Pro
               <label>
                 <span className="block font-label text-eyebrow uppercase opacity-60">{r.feedback.message}</span>
                 <textarea name="message" rows={3} maxLength={2000} defaultValue={feedback?.message ?? ''} className="mt-2 w-full border border-hairline bg-transparent px-4 py-3 text-body focus:outline focus:outline-2 focus:outline-accent" />
-                <span className="mt-1 block font-mono text-[0.7rem] opacity-45">{r.feedback.messageHint}</span>
+                <span className="mt-1 block font-mono text-[0.7rem] opacity-70">{r.feedback.messageHint}</span>
               </label>
               <div>
                 <button type="submit" className="inline-block border border-current px-6 py-3 font-label text-label uppercase">

@@ -26,6 +26,10 @@ export function AppHeader({ locale, dict, rest }: { locale: Locale; dict: Dictio
               {link.label}
             </a>
           ))}
+          {/* Audit P2-9: session-gated pages link the account (내 작품, deletion) directly. */}
+          <a href="/account" data-app-account className="font-label text-eyebrow uppercase">
+            {dict.nav.account}
+          </a>
           <LocaleToggle current={locale} rest={rest} prefixed={false} />
         </div>
       </div>

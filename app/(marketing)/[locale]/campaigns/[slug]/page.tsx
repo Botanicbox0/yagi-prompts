@@ -7,7 +7,8 @@ import { getCampaignCatalog } from '@/lib/campaigns/public-catalog';
 import { campaignApplyPath, campaignsHref } from '@/lib/campaigns/links';
 import { acceptsApplications } from '@/lib/campaigns/state';
 import { getPromptCatalog } from '@/lib/prompts/public-catalog';
-import { promptHref } from '@/lib/prompts/links';
+import { promptHref, templateHref } from '@/lib/prompts/links';
+import { RENDER_PIPELINE_PUBLIC } from '@/lib/flags';
 import { campaignMetadata, unresolvedCampaignMetadata } from '@/lib/seo/campaign-metadata';
 import { MarketingFooter, MarketingNav } from '@/components/marketing/chrome';
 import { Markdown } from '@/components/playbook/markdown';
@@ -139,7 +140,8 @@ export default async function CampaignDetailPage({ params }: RouteParams) {
           {style && (
             <section data-campaign-format className="mt-16 border-t border-hairline pt-10">
               <h2 className="font-display text-[clamp(1.4rem,2.6vw,2.1rem)] leading-[0.95] font-black uppercase">{c.formatHeading}</h2>
-              <p className="mt-4 max-w-detail text-body opacity-70">{c.formatBody}</p>
+              {/* Q3: while personal generation is closed the page must not promise "upload and it comes out". */}
+              <p className="mt-4 max-w-detail text-body opacity-70">{RENDER_PIPELINE_PUBLIC ? c.formatBody : c.formatBodyClosed}</p>
               <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)] lg:items-start">
                 <div className="aspect-video overflow-hidden border border-hairline bg-black">
                   {style.video ? (
@@ -164,8 +166,10 @@ export default async function CampaignDetailPage({ params }: RouteParams) {
                     {locale === 'ko' && style.titleKo ? style.titleKo : style.title}
                   </p>
                   <div className="mt-5 flex flex-wrap gap-x-6 gap-y-3">
-                    <a href={`/${locale}/studio`} className="text-accent font-label text-label uppercase">
-                      <TextSwap>{c.makeItCta} →</TextSwap>
+                    {/* Audit P2-11: straight to this template's make section — `/{locale}/studio` 308'd
+                        to the generic listing and dropped the template. */}
+                    <a href={`${templateHref(locale, style.slug)}#make`} data-campaign-make className="text-accent font-label text-label uppercase">
+                      <TextSwap>{RENDER_PIPELINE_PUBLIC ? c.makeItCta : c.makeItCtaClosed} →</TextSwap>
                     </a>
                     <a href={promptHref(locale, style.slug)} className="font-label text-label uppercase opacity-70">
                       <TextSwap>{dict.studio.seePrompt} →</TextSwap>
