@@ -104,3 +104,55 @@ describe('OAuth return paths remain on the request origin', () => {
     expect(new URL(failed.headers.get('location')!).pathname).toBe('/auth/choose');
   });
 });
+
+/** Audit P1-5: a cancelled or failed consumer OAuth round trip keeps where the reader was going. */
+describe('consumer OAuth failures keep a safe return path', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    auth.getSessionUser.mockResolvedValue(null);
+  });
+
+  it('a cancelled consent (no code) returns to the locale home with next', async () => {
+    const response = await callback(new NextRequest('https://twings.app/auth/callback?next=%2Fko%2Ft%2Fsome-template%23make&locale=ko&error=access_denied'));
+    const location = new URL(response.headers.get('location')!);
+    expect(location.origin).toBe('https://twings.app');
+    expect(location.pathname).toBe('/ko');
+    expect(location.searchParams.get('error')).toBe('oauth');
+    expect(location.searchParams.get('next')).toBe('/ko/t/some-template#make');
+  });
+
+  it('a failed code exchange keeps next', async () => {
+    auth.exchangeCodeForSession.mockResolvedValue({ data: { user: null }, error: new Error('bad') });
+    const response = await callback(new NextRequest('https://twings.app/auth/callback?code=x&next=%2Frenders%2Fabc&locale=ko'));
+    expect(new URL(response.headers.get('location')!).searchParams.get('next')).toBe('/renders/abc');
+  });
+
+  it('a provider error at sign-in keeps next, for both failure codes', async () => {
+    auth.signInWithOAuth.mockResolvedValue({ data: { url: null }, error: new Error('provider') });
+    const failed = new URL((await signIn(new NextRequest('https://twings.app/auth/signin?provider=kakao&next=%2Fcampaigns%2Fx%2Fapply&locale=ko'))).headers.get('location')!);
+    expect(failed.pathname).toBe('/ko');
+    expect(failed.searchParams.get('error')).toBe('oauth');
+    expect(failed.searchParams.get('next')).toBe('/campaigns/x/apply');
+    auth.signInWithOAuth.mockRejectedValue(new Error('no project'));
+    const unconfigured = new URL((await signIn(new NextRequest('https://twings.app/auth/signin?provider=google&next=%2Faccount&locale=en'))).headers.get('location')!);
+    expect(unconfigured.searchParams.get('error')).toBe('oauth_unconfigured');
+    expect(unconfigured.searchParams.get('next')).toBe('/account');
+  });
+
+  for (const next of ['//evil.example/x', '/\\evil.example/x', '/%2fevil.example', '/%5cevil.example', 'https://evil.example/', '/\t/evil.example']) {
+    it(`never carries ${JSON.stringify(next)} into the failure redirect`, async () => {
+      const url = new URL('https://twings.app/auth/callback?locale=ko');
+      url.searchParams.set('next', next);
+      const location = new URL((await callback(new NextRequest(url))).headers.get('location')!);
+      expect(location.origin).toBe('https://twings.app');
+      expect(location.searchParams.get('next')).toBe('/ko/video');
+    });
+  }
+
+  it('authFailurePath re-validates next on its own', async () => {
+    const { authFailurePath } = await import('@/lib/routing/surfaces');
+    expect(authFailurePath('twings.app', 'ko', 'oauth', '//evil.example')).toBe('/ko?error=oauth&next=%2Fko%2Fvideo');
+    expect(authFailurePath('twings.app', 'en', 'oauth')).toBe('/en?error=oauth&next=%2Fen%2Fvideo');
+    expect(authFailurePath('twings.app', 'ko', 'oauth', '/ko/t/x')).toBe('/ko?error=oauth&next=%2Fko%2Ft%2Fx');
+  });
+});
