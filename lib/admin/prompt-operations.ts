@@ -368,7 +368,9 @@ const editPrompt: AdminOperation<{ input: z.infer<typeof EditSchema>; form: Form
     if (!saved) return fail('notFound', NOT_FOUND_DETAIL);
 
     ctx.revalidatePrompts?.();
-    return ok('saved', { detail: input.slug, to: BACK });
+    // No `to` (P2-8): update, feature and visibility are in-place edits, so the form's own `_back`
+    // (the prompt page, or the list with its ?tab=) is where the operator should land.
+    return ok('saved', { detail: input.slug });
   },
 };
 
@@ -380,7 +382,7 @@ const feature: AdminOperation<z.infer<typeof Feature>> = {
     const changed = await setPromptFeatured(ctx.sql, input.id, input.featured);
     if (!changed) return fail('notFound', NOT_FOUND_DETAIL);
     ctx.revalidatePrompts?.();
-    return ok('saved', { to: BACK });
+    return ok('saved');
   },
 };
 
@@ -398,7 +400,7 @@ const visibility: AdminOperation<z.infer<typeof Visibility>> = {
     const changed = await setPromptTextVisibility(ctx.sql, input.id, input.textVisibility);
     if (!changed) return fail('notFound', NOT_FOUND_DETAIL);
     ctx.revalidatePrompts?.();
-    return ok('saved', { to: BACK });
+    return ok('saved');
   },
 };
 

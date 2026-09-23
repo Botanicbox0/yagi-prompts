@@ -2,7 +2,8 @@ import { PublicLink } from '@/components/admin/public-link';
 import { getSqlRunner } from '@/lib/db/connect';
 import { getDictionary } from '@/lib/i18n/dictionaries';
 import { getLocaleFromHeaders } from '@/lib/i18n/server';
-import { formatDate, interpolate, localize } from '@/lib/i18n/format';
+import { interpolate, localize } from '@/lib/i18n/format';
+import { formatCampaignDateTime } from '@/lib/campaigns/dates';
 import {
   loadAllCampaigns,
   loadCampaignCounts,
@@ -14,7 +15,7 @@ import {
 import { CAMPAIGN_STATUSES, type CampaignStatus } from '@/lib/campaigns/schemas';
 import { computePayout, formatWon, needsMetrics } from '@/lib/campaigns/state';
 import { ADMIN_CAMPAIGNS_PATH, ADMIN_CAMPAIGN_NEW_PATH, adminCampaignPath, campaignHref } from '@/lib/campaigns/links';
-import { AdminShell, BUTTON, BUTTON_PRIMARY, INPUT, OpForm, OutcomeBanner, Panel } from '@/components/admin/chrome';
+import { AdminShell, BUTTON, BUTTON_PRIMARY, ConfirmCheck, INPUT, OpForm, OutcomeBanner, Panel } from '@/components/admin/chrome';
 
 /**
  * `/admin/campaigns` — the board (docs/CAMPAIGNS.md §6): one row per campaign with the numbers
@@ -84,7 +85,7 @@ export default async function AdminCampaignsPage({ searchParams }: { searchParam
                       {app.snsUrl.replace(/^https?:\/\/(www\.)?/, '')}
                     </a>
                     {' · '}
-                    {app.viewsSnapshot === null ? a.viewsMissing : `${app.viewsSnapshot.toLocaleString(locale)} views`}
+                    {app.viewsSnapshot === null ? a.viewsMissing : interpolate(a.viewsCount, { count: app.viewsSnapshot.toLocaleString(locale) })}
                     {' · '}
                     <strong>{amount === null ? a.viewsMissing : formatWon(amount, locale)}</strong>
                   </span>
@@ -92,6 +93,7 @@ export default async function AdminCampaignsPage({ searchParams }: { searchParam
                     <input type="hidden" name="id" value={app.id} />
                     <input type="hidden" name="version" value={app.version} />
                     <input type="text" name="payoutRef" placeholder={a.fieldPayoutRef} className={`${INPUT} w-44`} />
+                    {!missing && <ConfirmCheck label={a.confirmPay} />}
                     <button type="submit" className={BUTTON_PRIMARY} disabled={missing}>
                       {a.payNow}
                     </button>
@@ -142,8 +144,8 @@ export default async function AdminCampaignsPage({ searchParams }: { searchParam
                         <span className="ml-3 text-[0.85rem] opacity-70">{localize(row.title, locale).replace(/\s+/g, ' ')}</span>
                         <p className="mt-1 font-mono text-[0.72rem] opacity-55">
                           {row.hostName}
-                          {row.applicationsCloseAt ? ` · ${interpolate(dict.campaigns.applyBy, { date: formatDate(row.applicationsCloseAt, locale) ?? '' })}` : ''}
-                          {row.postDeadlineAt ? ` · ${interpolate(dict.campaigns.postBy, { date: formatDate(row.postDeadlineAt, locale) ?? '' })}` : ''}
+                          {row.applicationsCloseAt ? ` · ${interpolate(dict.campaigns.applyBy, { date: formatCampaignDateTime(row.applicationsCloseAt, locale) ?? '' })}` : ''}
+                          {row.postDeadlineAt ? ` · ${interpolate(dict.campaigns.postBy, { date: formatCampaignDateTime(row.postDeadlineAt, locale) ?? '' })}` : ''}
                         </p>
                       </div>
                       <div className="flex items-center gap-3">
