@@ -380,12 +380,6 @@ html:lang(ko) {
     padding-inline: var(--spacing-gutter);
   }
 
-  /* Full-bleed strips (hero, marquee, wipe) still need page gutters. */
-  .bleed {
-    width: 100%;
-    padding-inline: var(--spacing-gutter);
-  }
-
   /* --- §4 playbook-detail band -------------------------------------------
      The verified sums, and nothing else:
        <1024   single column, 720 max, page gutters
