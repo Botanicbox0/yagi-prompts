@@ -7,6 +7,8 @@ import {
   updateBrandPostMetrics,
   saveBrandPostMetricsBatch,
   publishBrandReport,
+  importBrandExternalPosts,
+  setBrandProjectCover,
 } from "@/lib/brands/workspace/service";
 import type { BrandOutcome } from "@/lib/brands/workspace/types";
 import type { AdminOperation } from "./operations";
@@ -21,6 +23,7 @@ function operation(
       const input: Input = Object.fromEntries(form);
       input.expectedRevision = Number(f.str(form, "expectedRevision"));
       input.creatorConsentConfirmed = f.bool(form, "creatorConsentConfirmed");
+      input.viewsApproximate = f.bool(form, "viewsApproximate");
       for (const name of ["views", "likes", "comments", "shares", "saves"]) {
         const raw = f.str(form, name);
         input[name] = raw === "" ? null : Number(raw);
@@ -68,7 +71,9 @@ function managedOperation(run:(ctx:AdminContext,input:Input)=>Promise<BrandOutco
    const input:Input=Object.fromEntries(form);
    for(const key of ['expectedRevision']) if(key in input)input[key]=Number(input[key]);
    for(const key of ['visible','shared']) if(key in input)input[key]=input[key]==='true';
-   for(const key of ['projectId','startsOn','endsOn']) if(input[key]==='')input[key]=null;
+   // Campaign-only invitations choose read-only or read-and-comment; brand-wide ones follow the role.
+   if('access' in input){const access=String(input.access);delete input.access;if(access==='brand')input.projectId='';input.canComment=access==='comment';}
+   for(const key of ['projectId','startsOn','endsOn','attachmentId']) if(input[key]==='')input[key]=null;
    if('budgetKrw' in input)input.budgetKrw=input.budgetKrw===''?null:Number(input.budgetKrw);
    return {ok:true,value:input};
  },async run(ctx,input) {
@@ -98,6 +103,8 @@ const metricsBatch: AdminOperation<Input> = {
         expectedRevision: Number(f.str(form, `rev:${postId}`) || NaN),
         verification: f.str(form, `verification:${postId}`),
         metricsSource: f.str(form, `metricsSource:${postId}`),
+        // Unticked is exact; only a ticked box marks the view count as a publicly rounded value.
+        viewsApproximate: f.bool(form, `viewsApproximate:${postId}`),
       };
       for (const name of METRIC_FIELDS) {
         const key = `${name}:${postId}`;
@@ -138,7 +145,36 @@ const metricsBatch: AdminOperation<Input> = {
     );
   },
 };
+/**
+ * Already-published links, one per line. A line is a link, optionally followed by the Korea-time
+ * publish time the studio actually knows (`2026-09-20 18:30` or `2026-09-20T18:30`). No time means
+ * unknown; nothing is guessed. Blank lines are ignored; anything else unreadable refuses the paste.
+ */
+const externalPosts: AdminOperation<Input> = {
+  parse(form) {
+    const posts: Input[] = [];
+    for (const line of f.str(form, "links").split(/\r?\n/)) {
+      const [url, ...rest] = line.trim().split(/\s+/);
+      if (!url) continue;
+      const when = rest.join("T");
+      if (!when) { posts.push({ url, publishedAt: null }); continue; }
+      if (rest.length > 2 || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(when)) return { ok: false, detail: "invalid line" };
+      const date = new Date(`${when}+09:00`);
+      if (!Number.isFinite(+date) || new Date(+date + 9 * 3600000).toISOString().slice(0, 16) !== when) return { ok: false, detail: "invalid datetime" };
+      posts.push({ url, publishedAt: date.toISOString() });
+    }
+    if (!posts.length) return { ok: false, detail: "no links" };
+    return { ok: true, value: { projectId: f.str(form, "projectId"), requestId: f.str(form, "requestId"), verification: f.str(form, "verification") || "unverified", posts } };
+  },
+  async run(ctx, input) {
+    const result = await importBrandExternalPosts({ sql: ctx.sql }, ctx.viewer, input);
+    if (result.ok) return ok("saved", { to: `/admin/brand-workspace/${String(input.projectId)}` });
+    return fail(result.code === "conflict" ? "staleReview" : result.code === "not_found" ? "notFound" : result.code === "forbidden" ? "forbidden" : "invalid", result.code);
+  },
+};
 export const BRAND_WORKSPACE_OPERATIONS = {
+ 'brandWorkspace.cover': managedOperation((ctx,v)=>setBrandProjectCover(ctx,ctx.viewer,v)),
+  "brandWorkspace.externalPosts": externalPosts,
  'brandWorkspace.settings': managedOperation((ctx,v)=>updateBrandSettings(ctx,ctx.viewer,v),'home'),
  'brandWorkspace.support': managedOperation((ctx,v)=>sendBrandSupport(ctx,ctx.viewer,v),'home'),
  'brandWorkspace.revokeInvite': managedOperation((ctx,v)=>revokeStudioInvitation(ctx,ctx.viewer,v),'home'),

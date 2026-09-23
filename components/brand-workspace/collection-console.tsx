@@ -4,6 +4,7 @@ import { BRAND_METRICS_BATCH_LIMIT } from "@/lib/brands/workspace/schemas";
 import { OpForm } from "@/components/admin/chrome";
 import type { BrandCopy } from "./action-form";
 import { formatBrandTimestamp } from "./format";
+import { postShortId } from "@/lib/brands/workspace/performance";
 
 const METRICS = ["views", "likes", "comments", "shares", "saves"] as const;
 
@@ -37,6 +38,7 @@ export function CollectionConsole({
         </p>
       )}
       {open && <p className="bw-note">{b.collectionHint}</p>}
+      {open && <p className="bw-muted">{b.viewsApproximateHint}</p>}
       {posts.length === 0 ? (
         <p className="bw-muted">{b.noPosts}</p>
       ) : (
@@ -76,7 +78,8 @@ export function CollectionConsole({
                 </thead>
                 <tbody>
                   {posts.map((post, index) => {
-                    const name = `${post.platform} ${index + 1}`;
+                    // The platform's own post code keeps linked posts apart; no creator name is invented.
+                    const name = `${b.platforms[post.platform]} ${index + 1} · ${postShortId(post.url)}`;
                     return (
                       <tr key={post.id} data-collection-row={post.id}>
                         <td>
@@ -118,6 +121,18 @@ export function CollectionConsole({
                               aria-label={`${b[k]} · ${name}`}
                               style={{ minWidth: 92 }}
                             />
+                            {k === "views" && (
+                              <label className="bw-check" style={{ fontSize: 12, whiteSpace: "nowrap" }}>
+                                <input
+                                  type="checkbox"
+                                  name={`viewsApproximate:${post.id}`}
+                                  value="true"
+                                  defaultChecked={post.viewsApproximate}
+                                  aria-label={`${b.viewsApproximate} · ${name}`}
+                                />
+                                {b.viewsApproximateShort}
+                              </label>
+                            )}
                           </td>
                         ))}
                         <td>

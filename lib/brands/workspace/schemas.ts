@@ -49,26 +49,30 @@ export const BrandDecisionSchema = z.object({
 }).refine(v => v.decision !== 'changes_requested' || v.comment.length > 0, { path: ['comment'], message: 'Describe the requested changes' });
 export const BrandMessageSchema = z.object({ projectId: id, requestId: id, body: text(1, 4000) });
 const metric = z.number().int().min(0).max(Number.MAX_SAFE_INTEGER).nullable().default(null);
+/** The views figure was read from a publicly rounded display ("12.3K"): kept, never presented as exact. */
+const viewsApproximate = z.boolean().default(false);
+const approximateNeedsViews = (v: { views: number | null; viewsApproximate: boolean }) => !v.viewsApproximate || v.views !== null;
+const approximateIssue = { path: ['viewsApproximate'], message: 'Only a recorded view count can be approximate' };
 export const BrandPostSchema = z.object({
   projectId: id, contentVersionId: id, requestId: id, url: BrandHttpsUrlSchema, publishedAt: z.iso.datetime({ offset: true }),
   verification: z.enum(['unverified', 'manual']).default('unverified'),
   metricsSource: z.enum(['unavailable', 'creator_evidence', 'studio_review']).default('unavailable'),
   measuredAt: z.iso.datetime({ offset: true }).nullable().default(null),
-  views: metric, likes: metric, comments: metric, shares: metric, saves: metric,
+  views: metric, viewsApproximate, likes: metric, comments: metric, shares: metric, saves: metric,
 }).refine(v => {
   const measured = [v.views, v.likes, v.comments, v.shares, v.saves].some(x => x !== null);
   return measured ? v.metricsSource !== 'unavailable' && v.measuredAt !== null : v.metricsSource === 'unavailable' && v.measuredAt === null;
-}, { path: ['metricsSource'], message: 'Measurements need a source and collection time' });
+}, { path: ['metricsSource'], message: 'Measurements need a source and collection time' }).refine(approximateNeedsViews, approximateIssue);
 export const BrandPostMetricsSchema = z.object({
   projectId: id, postId: id, requestId: id, expectedRevision: z.number().int().nonnegative(),
   verification: z.enum(['unverified', 'manual']).default('unverified'),
   metricsSource: z.enum(['unavailable', 'creator_evidence', 'studio_review']).default('unavailable'),
   measuredAt: z.iso.datetime({ offset: true }).nullable().default(null),
-  views: metric, likes: metric, comments: metric, shares: metric, saves: metric,
+  views: metric, viewsApproximate, likes: metric, comments: metric, shares: metric, saves: metric,
 }).refine(v => {
   const measured = [v.views, v.likes, v.comments, v.shares, v.saves].some(x => x !== null);
   return measured ? v.metricsSource !== 'unavailable' && v.measuredAt !== null : v.metricsSource === 'unavailable' && v.measuredAt === null;
-}, { path: ['metricsSource'], message: 'Measurements need a source and collection time' });
+}, { path: ['metricsSource'], message: 'Measurements need a source and collection time' }).refine(approximateNeedsViews, approximateIssue);
 /** One console save. Bounded so a single transaction never holds more than a screenful of row locks. */
 export const BRAND_METRICS_BATCH_LIMIT = 50;
 /**
@@ -79,11 +83,25 @@ export const BrandPostMetricsBatchRowSchema = z.object({
   postId: id, expectedRevision: z.number().int().nonnegative(),
   verification: z.enum(['unverified', 'manual']).default('unverified'),
   metricsSource: z.enum(['creator_evidence', 'studio_review']),
-  views: metric, likes: metric, comments: metric, shares: metric, saves: metric,
-}).strict().refine(v => [v.views, v.likes, v.comments, v.shares, v.saves].some(x => x !== null), { path: ['views'], message: 'Enter at least one observed value' });
+  views: metric, viewsApproximate, likes: metric, comments: metric, shares: metric, saves: metric,
+}).strict().refine(v => [v.views, v.likes, v.comments, v.shares, v.saves].some(x => x !== null), { path: ['views'], message: 'Enter at least one observed value' }).refine(approximateNeedsViews, approximateIssue);
 export const BrandPostMetricsBatchSchema = z.object({
   projectId: id, requestId: id, rows: z.array(BrandPostMetricsBatchRowSchema).min(1).max(BRAND_METRICS_BATCH_LIMIT),
 }).strict().refine(v => new Set(v.rows.map(r => r.postId)).size === v.rows.length, { path: ['rows'], message: 'A post may appear once per save' });
+/**
+ * Links to posts that were already published outside this workspace. They are appended as they are:
+ * no content version, no approval, no counts. A publish time is optional and stays unknown when absent.
+ */
+export const BRAND_EXTERNAL_POSTS_LIMIT = 50;
+export const BrandExternalPostsSchema = z.object({
+  projectId: id, requestId: id,
+  verification: z.enum(['unverified', 'manual']).default('unverified'),
+  posts: z.array(z.object({ url: BrandHttpsUrlSchema, publishedAt: z.iso.datetime({ offset: true }).nullable().default(null) }).strict())
+    .min(1).max(BRAND_EXTERNAL_POSTS_LIMIT),
+}).strict();
+/** Covers are images only; video and PDF stay ordinary files. */
+export const BRAND_COVER_MIMES = ['image/jpeg', 'image/png', 'image/webp'] as const;
+export const BrandProjectCoverSchema = z.object({ projectId: id, attachmentId: id.nullable(), expectedRevision: z.number().int().nonnegative() });
 export const BrandReportSchema = z.object({ projectId: id, requestId: id, summary: text(1, 4000), periodStart: date, periodEnd: date })
   .refine(v => v.periodEnd >= v.periodStart, { path: ['periodEnd'], message: 'End must follow start' });
 export const BRAND_ATTACHMENT_LIMITS = {

@@ -8,6 +8,7 @@ import type {
 } from "@/lib/brands/workspace/types";
 const post: BrandPost = {
   id: "post",
+  origin: "approved_content",
   contentVersionId: "v1",
   url: "https://www.instagram.com/p/example/",
   platform: "instagram",
@@ -17,6 +18,7 @@ const post: BrandPost = {
   metricsSource: "unavailable",
   measuredAt: null,
   views: null,
+  viewsApproximate: false,
   likes: null,
   comments: null,
   shares: null,
@@ -47,6 +49,7 @@ const project: BrandProjectDetail = {
   createdAt: "2026-09-20",
   updatedAt: "2026-09-20",
   role: "viewer",
+  canComment: false,
   referenceLinks: [],
   contents: [],
   decisions: [],
@@ -72,6 +75,7 @@ const project: BrandProjectDetail = {
         totalPosts: 1,
         measuredPosts: 0,
         viewsTotal: null,
+        viewsTotalApproximate: false,
         metricDefinition: "sum_of_latest_post_views",
         posts: [post],
       },

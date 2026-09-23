@@ -843,3 +843,14 @@ html[data-brand-workspace] {
 .bw-form select[aria-invalid]{border-color:#b32424}
 .bw-skip-link{position:absolute;left:12px;top:-60px;z-index:100;padding:10px 14px;background:#151515;color:#fff;border-radius:4px}
 .bw-skip-link:focus{top:12px}
+/* A portrait stays intact beside the brief, rather than losing the face in a wide banner. */
+.bw-project-masthead{display:grid;grid-template-columns:minmax(120px,180px) minmax(0,1fr);gap:28px;align-items:center;margin-bottom:28px}
+.bw-project-masthead>.bw-heading{margin:0;min-width:0;flex-wrap:wrap}
+.bw-project-cover{aspect-ratio:2/3;max-height:270px;overflow:hidden;border-radius:8px;background:#edeef0}
+.bw-project-cover img{width:100%;height:100%;object-fit:contain;display:block}
+@media(max-width:620px){.bw-project-masthead{grid-template-columns:96px minmax(0,1fr);gap:16px;margin-bottom:20px}.bw-project-masthead .bw-heading h1{font-size:21px;line-height:1.35}.bw-project-masthead .bw-heading p{font-size:12px}}
+.bw-tab-count{display:inline-block;min-width:18px;margin-left:6px;padding:1px 6px;border-radius:9px;background:#151515;color:#fff;font-size:11px;line-height:16px;text-align:center;vertical-align:1px}
+.bw-cover-options{display:flex;flex-wrap:wrap;gap:12px;margin:0;padding:0;border:0}
+.bw-cover-options label{display:grid;gap:6px;width:132px;font-size:12px;cursor:pointer}
+.bw-cover-options img{width:132px;aspect-ratio:4/3;object-fit:cover;border-radius:4px;border:1px solid #ddd}
+.bw-cover-options label:has(input:checked) img{outline:2px solid #151515;outline-offset:2px}

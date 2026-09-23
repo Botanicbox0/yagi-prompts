@@ -12,6 +12,7 @@ import type { AdminOperationName } from "@/lib/admin/operations";
 import { ProjectDetail } from "@/components/brand-workspace/project-detail";
 import { BrandUpload } from "@/components/brand-workspace/upload";
 import { CollectionConsole } from "@/components/brand-workspace/collection-console";
+import { postShortId } from "@/lib/brands/workspace/performance";
 import type { ReactNode } from "react";
 export const dynamic = "force-dynamic";
 export default async function StudioBrandProject({
@@ -33,6 +34,7 @@ export default async function StudioBrandProject({
   if (!sql) return <p role="alert">{b.unavailable}</p>;
   const p = await loadStudioProject({ sql }, viewer, id);
   if (!p) notFound();
+  const covers = p.attachments.filter((a) => ["image/jpeg", "image/png", "image/webp"].includes(a.mime));
   const Form = ({
     op,
     submit,
@@ -66,13 +68,36 @@ export default async function StudioBrandProject({
         <ManagedForm op="brandWorkspace.visibility" b={b} submit={p.clientVisible?b.managed.hide:b.managed.publish} tone={p.clientVisible?"danger":"primary"} confirm={p.clientVisible?{prompt:b.confirm.hide,action:b.confirm.hideAction}:{prompt:b.confirm.publish,action:b.confirm.publishAction}}><input type="hidden" name="projectId" value={p.id}/><input type="hidden" name="expectedRevision" value={p.revision}/><input type="hidden" name="visible" value={String(!p.clientVisible)}/></ManagedForm>
         <a className="bw-button" href={`/admin/brand-workspace/organizations/${p.organizationId}`}>{b.managed.access}</a><details><summary>{b.managed.invite}</summary><p className="bw-muted">{b.managed.inviteHint}</p><ManagedForm op="brandWorkspace.invite" b={b} submit={b.managed.invite}>
           <input type="hidden" name="organizationId" value={p.organizationId}/><label>{b.managed.email}<input type="email" name="email" required/></label>
-          <label>{b.managed.scope}<select name="projectId"><option value={p.id}>{b.managed.scopeProject}</option><option value="">{b.managed.scopeBrand}</option></select></label><input type="hidden" name="role" value="viewer"/>
+          <input type="hidden" name="projectId" value={p.id}/>
+          <label>{b.managed.scope}<select name="access" defaultValue="comment"><option value="comment">{b.managed.scopeProjectComment}</option><option value="read">{b.managed.scopeProject}</option><option value="brand">{b.managed.scopeBrand}</option></select><span className="bw-muted">{b.managed.scopeCommentHint}</span></label><input type="hidden" name="role" value="viewer"/>
         </ManagedForm></details>
       </section>
-      <ProjectDetail project={p} b={b} locale={locale} studio />
+      <ProjectDetail project={p} b={b} locale={locale} studio studioReply={
+        <Form op="brandWorkspace.message" submit={b.sendComment}>
+          <label>
+            {b.studioMessage}
+            <textarea name="body" required maxLength={4000} />
+          </label>
+        </Form>
+      } />
       <section className="bw-panel">
         <h2>{b.files}</h2>
         <BrandUpload projectId={id} b={b} studio />
+      </section>
+      <section className="bw-panel" data-cover-settings>
+        <h2>{b.cover.title}</h2>
+        <p className="bw-muted">{b.cover.hint}</p>
+        {covers.length === 0 ? <p className="bw-note">{b.cover.empty}</p> : (
+          <ManagedForm op="brandWorkspace.cover" b={b} submit={b.cover.save}>
+            <input type="hidden" name="projectId" value={p.id}/>
+            <input type="hidden" name="expectedRevision" value={p.revision}/>
+            <fieldset className="bw-cover-options">
+              <legend className="sr-only">{b.cover.title}</legend>
+              {covers.map(a => <label key={a.id}><input type="radio" name="attachmentId" value={a.id} defaultChecked={p.coverUrl?.endsWith(a.id)}/><img src={`/api/brand-workspace/attachments/${a.id}`} alt={a.name}/><span className="bw-prose">{a.name}</span></label>)}
+              <label><input type="radio" name="attachmentId" value="" defaultChecked={!p.coverUrl}/>{b.cover.none}</label>
+            </fieldset>
+          </ManagedForm>
+        )}
       </section>
       <section id="studio-actions" className="bw-panel">
         <h2>{b.studioTitle}</h2>
@@ -90,14 +115,31 @@ export default async function StudioBrandProject({
               </select>
             </label>
           </Form>
-          <Form op="brandWorkspace.message" submit={b.send}>
-            <label>
-              {b.studioMessage}
-              <textarea name="body" required maxLength={4000} />
-            </label>
-          </Form>
+          <p className="bw-muted">
+            <a href="#conversation">{b.studioCommentsLink} →</a>
+          </p>
         </div>
       </section>
+      {p.status === "active" && (
+        <section className="bw-panel" data-external-posts>
+          <h2>{b.externalPosts.title}</h2>
+          <p className="bw-note">{b.externalPosts.hint}</p>
+          <Form op="brandWorkspace.externalPosts" submit={b.externalPosts.submit}>
+            <label>
+              {b.externalPosts.links}
+              <textarea name="links" required rows={6} spellCheck={false} placeholder={b.externalPosts.placeholder} />
+              <span className="bw-muted">{b.externalPosts.format}</span>
+            </label>
+            <label>
+              {b.verification}
+              <select name="verification">
+                <option value="unverified">{b.verificationLabels.unverified}</option>
+                <option value="manual">{b.verificationLabels.manual}</option>
+              </select>
+            </label>
+          </Form>
+        </section>
+      )}
       {p.status === "active" && (
         <section className="bw-panel">
           <h2>{b.addContent}</h2>
@@ -215,6 +257,11 @@ export default async function StudioBrandProject({
               ),
             )}
           </div>
+          <label className="bw-check">
+            <input type="checkbox" name="viewsApproximate" value="true" />
+            {b.viewsApproximate}
+          </label>
+          <p className="bw-muted">{b.viewsApproximateHint}</p>
         </Form>
       </section>}
       <CollectionConsole
@@ -229,7 +276,7 @@ export default async function StudioBrandProject({
       {p.status === "active" && p.posts.map((post) => (
         <details className="bw-panel" key={post.id}>
           <summary>
-            {b.collectionHistorical} · {post.platform}
+            {b.collectionHistorical} · {b.platforms[post.platform]} · {postShortId(post.url)}
           </summary>
           <h2>{b.updateMetrics}</h2>
           <p>
@@ -300,6 +347,11 @@ export default async function StudioBrandProject({
                 ),
               )}
             </div>
+            <label className="bw-check">
+              <input type="checkbox" name="viewsApproximate" value="true" defaultChecked={post.viewsApproximate} />
+              {b.viewsApproximate}
+            </label>
+            <p className="bw-muted">{b.viewsApproximateHint}</p>
           </Form>
         </details>
       ))}

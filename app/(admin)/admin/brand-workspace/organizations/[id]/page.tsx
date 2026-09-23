@@ -57,6 +57,7 @@ export default async function StudioOrganization({
                     {m.projectTitle ?? c.scopeBrand} ·{" "}
                     {b.roles[m.role as keyof typeof b.roles]} ·{" "}
                     {m.status === "active" ? c.active : c.cancelled}
+                    {m.projectId && <> · {m.canComment ? c.canComment : c.readOnly}</>}
                   </p>
                 </div>
                 {m.status === "active" && (
@@ -89,6 +90,7 @@ export default async function StudioOrganization({
                     {i.projectTitle ?? c.scopeBrand} ·{" "}
                     {b.invitationStates[i.state]} ·{" "}
                     {formatBrandTimestamp(i.expiresAt, locale)}
+                    {i.projectId && <> · {i.canComment ? c.canComment : c.readOnly}</>}
                   </p>
                 </div>
                 {i.state === "pending" && (

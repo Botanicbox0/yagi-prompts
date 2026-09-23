@@ -11,11 +11,12 @@ import {
   BrandInvitationSchema, BrandInvitationAcceptSchema, BrandMemberRevokeSchema,
   BrandCriteriaSchema,
   BrandPostMetricsSchema, BrandPostMetricsBatchSchema,
+  BrandExternalPostsSchema, BrandProjectCoverSchema, BRAND_COVER_MIMES,
 } from './schemas';
 import type {
   BrandOutcome, BrandFailureCode, BrandRole, BrandProjectSummary, BrandProjectDetail, BrandWorkspace,
   BrandContentVersion, BrandDecision, BrandMessage, BrandAttachment, BrandPost, BrandReport, BrandReportSnapshot,
-  BrandMembers, BrandMetricsBatchResult,
+  BrandMembers, BrandMetricsBatchResult, BrandExternalPostsResult,
 } from './types';
 export type * from './types';
 export interface BrandWorkspaceDeps {
@@ -45,19 +46,26 @@ async function member(sql: SqlRunner, userId: string, organizationId: string, wr
   if (write && row.role === 'viewer') throw new Denied('forbidden');
   return row.role as BrandRole;
 }
-async function project(sql: SqlRunner, userId: string, id: string, options: { studio?: boolean; write?: boolean } = {}): Promise<Row> {
+/**
+ * `write` is the owner/editor right (approve, upload, request). `comment` is narrower: it lets a
+ * campaign-only guest who was explicitly invited to comment post in the campaign conversation and
+ * grants nothing else. Organization viewers stay read-only.
+ */
+async function project(sql: SqlRunner, userId: string, id: string, options: { studio?: boolean; write?: boolean; comment?: boolean } = {}): Promise<Row> {
   if (options.studio) await studio(sql, userId);
   const row = (await sql.query(`select p.*,o.name as organization_name from brand_projects p
     join brand_organizations o on o.id=p.organization_id where p.id=$1 ${options.write ? 'for update of p' : 'for share of p'}`, [id])).rows[0];
   if (!row) throw new Denied('not_found');
-  if (options.studio) row.member_role = 'studio';
+  if (options.studio) { row.member_role = 'studio'; row.can_comment = true; }
   else {
     if (!row.client_visible) throw new Denied('not_found');
     const orgRole = (await sql.query("select role from brand_memberships where organization_id=$1 and user_id=$2 and status='active' for share", [row.organization_id,userId])).rows[0];
-    const grant = orgRole || (await sql.query("select user_id from brand_project_members where project_id=$1 and user_id=$2 and status='active' for share", [id,userId])).rows[0];
-    if (!grant) throw new Denied('not_found');
+    const guest = (await sql.query("select can_comment from brand_project_members where organization_id=$1 and project_id=$2 and user_id=$3 and status='active' for share", [row.organization_id,id,userId])).rows[0];
+    if (!orgRole && !guest) throw new Denied('not_found');
     row.member_role = orgRole?.role ?? 'viewer';
+    row.can_comment = row.member_role !== 'viewer' || guest?.can_comment === true;
     if(options.write && row.member_role==='viewer') throw new Denied('forbidden');
+    if(options.comment && !row.can_comment) throw new Denied('forbidden');
   }
   return row;
 }
@@ -94,13 +102,17 @@ function summary(row: Row): BrandProjectSummary {
     budgetTaxBasis: row.budget_tax_basis as BrandProjectSummary['budgetTaxBasis'], startsOn: day(row.starts_on), endsOn: day(row.ends_on),
     productionMode: row.production_mode as BrandProjectSummary['productionMode'], status: row.status as BrandProjectSummary['status'],
     revision: Number(row.revision), createdAt: stamp(row.created_at), updatedAt: stamp(row.updated_at),
+    // Only ever this project's own attachment (composite key); the route re-authorizes every read.
+    coverUrl: row.cover_attachment_id ? `/api/brand-workspace/attachments/${row.cover_attachment_id}` : null,
   };
 }
 function postDto(row: Row): BrandPost {
-  return { id: String(row.id), contentVersionId: String(row.content_version_id), url: String(row.url), platform: row.platform as BrandPost['platform'],
-    publishedAt: stamp(row.published_at), metricRevision: Number(row.metric_revision),
+  return { id: String(row.id), url: String(row.url), platform: row.platform as BrandPost['platform'],
+    origin: row.origin === 'external_import' ? 'external_import' : 'approved_content',
+    contentVersionId: row.content_version_id == null ? null : String(row.content_version_id),
+    publishedAt: row.published_at == null ? null : stamp(row.published_at), metricRevision: Number(row.metric_revision),
     verification: row.verification as BrandPost['verification'], metricsSource: row.metrics_source as BrandPost['metricsSource'],
-    measuredAt: row.measured_at == null ? null : stamp(row.measured_at), views: nullableNumber(row.views), likes: nullableNumber(row.likes),
+    measuredAt: row.measured_at == null ? null : stamp(row.measured_at), views: nullableNumber(row.views), viewsApproximate: row.views_approximate === true, likes: nullableNumber(row.likes),
     comments: nullableNumber(row.comments), shares: nullableNumber(row.shares), saves: nullableNumber(row.saves), createdAt: stamp(row.created_at) };
 }
 async function detail(sql: SqlRunner, row: Row): Promise<BrandProjectDetail> {
@@ -122,8 +134,12 @@ async function detail(sql: SqlRunner, row: Row): Promise<BrandProjectDetail> {
     const source = r.snapshot as BrandReportSnapshot;
     // Rebuild even stored snapshots explicitly; extra JSON properties never reach consumers.
     const snapshot: BrandReportSnapshot = { totalPosts: source.totalPosts, measuredPosts: source.measuredPosts, viewsTotal: source.viewsTotal,
-      metricDefinition: 'sum_of_latest_post_views', posts: source.posts.map(p => ({ id: p.id, contentVersionId: p.contentVersionId, url: p.url, platform: p.platform,
-        publishedAt: p.publishedAt, metricRevision: p.metricRevision, verification: p.verification, metricsSource: p.metricsSource, measuredAt: p.measuredAt, views: p.views, likes: p.likes, comments: p.comments, shares: p.shares, saves: p.saves, createdAt: p.createdAt })) };
+      // Snapshots stored before imported links or rounded counts existed carry neither field: approved content, exact counts.
+      metricDefinition: 'sum_of_latest_post_views', posts: source.posts.map(p => ({ id: p.id, origin: p.origin === 'external_import' ? 'external_import' as const : 'approved_content' as const,
+        contentVersionId: p.contentVersionId ?? null, url: p.url, platform: p.platform,
+        publishedAt: p.publishedAt ?? null, metricRevision: p.metricRevision, verification: p.verification, metricsSource: p.metricsSource, measuredAt: p.measuredAt, views: p.views, viewsApproximate: p.viewsApproximate === true && p.views != null, likes: p.likes, comments: p.comments, shares: p.shares, saves: p.saves, createdAt: p.createdAt })), viewsTotalApproximate: false };
+    // Derived from the frozen rows themselves, so a stored total can never be shown as exact by mistake.
+    snapshot.viewsTotalApproximate = snapshot.posts.some(p => p.viewsApproximate);
     return { id: String(r.id), version: Number(r.version), summary: String(r.summary), periodStart: day(r.period_start)!, periodEnd: day(r.period_end)!, snapshot, createdAt: stamp(r.created_at) };
   });
   const contracts = (await scoped('brand_contract_documents', row.member_role === 'studio' ? 'order by created_at desc,version desc' : 'and shared=true order by created_at desc,version desc')).map(r=>({
@@ -131,7 +147,7 @@ async function detail(sql: SqlRunner, row: Row): Promise<BrandProjectDetail> {
   }));
   const contractUploads = row.member_role === 'studio' ? (await scoped('brand_attachments', "and status='ready' and access_scope='contract' and id not in (select attachment_id from brand_contract_documents) order by created_at desc")).map(r=>({id:String(r.id),name:String(r.name),mime:String(r.mime),sizeBytes:Number(r.size_bytes),createdAt:stamp(r.created_at)})) : [];
   const references = z.array(z.object({ url: z.string(), note: z.string() })).parse(row.reference_links);
-  return { ...summary(row), role: row.member_role as BrandProjectDetail['role'], referenceLinks: references, contracts, contractUploads, contents, decisions, messages, attachments, posts, reports };
+  return { ...summary(row), role: row.member_role as BrandProjectDetail['role'], canComment: row.can_comment === true, referenceLinks: references, contracts, contractUploads, contents, decisions, messages, attachments, posts, reports };
 }
 
 export async function loadBrandWorkspace(deps: BrandWorkspaceDeps, viewer: Viewer, options: { includeAllContent?: boolean } = {}): Promise<BrandWorkspace> {
@@ -236,7 +252,8 @@ export async function approveBrandContent(deps: BrandWorkspaceDeps, viewer: View
 export async function sendBrandMessage(deps: BrandWorkspaceDeps, viewer: Viewer, input: unknown): Promise<BrandOutcome> {
   return mutation(deps, viewer, BrandMessageSchema, input, async (sql, userId, v) => {
     const isStudio = (await profile(sql, userId)).is_admin === true;
-    const p = await project(sql, userId, v.projectId, { studio: isStudio, write: true });
+    // Commenting is its own right: owners, editors and invited commenting guests; never org viewers.
+    const p = await project(sql, userId, v.projectId, { studio: isStudio, comment: true });
     const old = await retry(sql, 'brand_messages', v.projectId, userId, v.requestId); if (old) return { id: old };
     const recent = (await sql.query<{ n: number }>("select count(*)::int as n from brand_messages where created_by=$1 and created_at>now()-interval '1 minute'", [userId])).rows[0]!.n;
     if (recent >= 10) throw new Denied('rate_limited');
@@ -245,18 +262,18 @@ export async function sendBrandMessage(deps: BrandWorkspaceDeps, viewer: Viewer,
     if (!isStudio) await event(sql, p, 'message_received', id); return { id };
   });
 }
-type Observation = { verification: string; metricsSource: string; views: number | null; likes: number | null; comments: number | null; shares: number | null; saves: number | null };
+type Observation = { verification: string; metricsSource: string; views: number | null; viewsApproximate: boolean; likes: number | null; comments: number | null; shares: number | null; saves: number | null };
 /** Append one immutable observation. History is only ever inserted, by these three call sites. */
 async function observe(sql: SqlRunner, p: Row, postId: string, revision: number, o: Observation, measuredAt: string | null, userId: string, requestId: string, batchId: string | null): Promise<string> {
   const id = randomUUID();
-  await sql.query(`insert into brand_post_measurements(id,organization_id,project_id,post_id,revision,verification,metrics_source,measured_at,views,likes,comments,shares,saves,created_by,request_id,batch_id)
-    values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`, [id, p.organization_id, p.id, postId, revision, o.verification, o.metricsSource, measuredAt, o.views, o.likes, o.comments, o.shares, o.saves, userId, requestId, batchId]);
+  await sql.query(`insert into brand_post_measurements(id,organization_id,project_id,post_id,revision,verification,metrics_source,measured_at,views,views_approximate,likes,comments,shares,saves,created_by,request_id,batch_id)
+    values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)`, [id, p.organization_id, p.id, postId, revision, o.verification, o.metricsSource, measuredAt, o.views, o.viewsApproximate, o.likes, o.comments, o.shares, o.saves, userId, requestId, batchId]);
   return id;
 }
 /** brand_posts is the latest projection of that history, written in the same transaction. */
 async function projectLatest(sql: SqlRunner, postId: string, revision: number, o: Observation, measuredAt: string | null): Promise<void> {
-  await sql.query('update brand_posts set metric_revision=$1,verification=$2,metrics_source=$3,measured_at=$4,views=$5,likes=$6,comments=$7,shares=$8,saves=$9 where id=$10',
-    [revision, o.verification, o.metricsSource, measuredAt, o.views, o.likes, o.comments, o.shares, o.saves, postId]);
+  await sql.query('update brand_posts set metric_revision=$1,verification=$2,metrics_source=$3,measured_at=$4,views=$5,views_approximate=$6,likes=$7,comments=$8,shares=$9,saves=$10 where id=$11',
+    [revision, o.verification, o.metricsSource, measuredAt, o.views, o.viewsApproximate, o.likes, o.comments, o.shares, o.saves, postId]);
 }
 /**
  * The latest projection only moves forward. An observation older than the latest known one is
@@ -284,8 +301,8 @@ export async function recordBrandPost(deps: BrandWorkspaceDeps, viewer: Viewer, 
       and not exists(select 1 from brand_content_versions newer where newer.project_id=c.project_id and newer.slot_key=c.slot_key and newer.version>c.version)`, [p.id, v.contentVersionId])).rows[0];
     if (!c) throw new Denied('not_approved');
     const id = randomUUID();
-    await sql.query(`insert into brand_posts(id,organization_id,project_id,content_version_id,url,platform,verification,metrics_source,measured_at,views,likes,comments,shares,saves,created_by,request_id,platform_post_id,published_at)
-      values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)`, [id, p.organization_id, p.id, c.id, normalized.url, normalized.platform, v.verification, v.metricsSource, v.measuredAt, v.views, v.likes, v.comments, v.shares, v.saves, userId, v.requestId, normalized.postId, v.publishedAt]);
+    await sql.query(`insert into brand_posts(id,organization_id,project_id,content_version_id,url,platform,verification,metrics_source,measured_at,views,views_approximate,likes,comments,shares,saves,created_by,request_id,platform_post_id,published_at)
+      values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)`, [id, p.organization_id, p.id, c.id, normalized.url, normalized.platform, v.verification, v.metricsSource, v.measuredAt, v.views, v.viewsApproximate, v.likes, v.comments, v.shares, v.saves, userId, v.requestId, normalized.postId, v.publishedAt]);
     // The values entered with the post are its first real observation: history revision 0, same transaction.
     if (v.metricsSource !== 'unavailable') await observe(sql, p, id, 0, v, v.measuredAt, userId, v.requestId, null);
     return { id };
@@ -297,11 +314,14 @@ export async function publishBrandReport(deps: BrandWorkspaceDeps, viewer: Viewe
     const old = await retry(sql, 'brand_reports', v.projectId, userId, v.requestId); if (old) return { id: old };
     if (!['active', 'completed'].includes(String(p.status))) throw new Denied('not_active');
     // Inclusive Korean calendar dates; metrics remain the latest known observation for each selected post.
+    // An imported link whose publish time is still unknown cannot be placed in or out of the period, so
+    // it is included and stays visibly undated in the snapshot rather than silently dropped.
     const posts = (await sql.query(`select * from brand_posts where organization_id=$1 and project_id=$2
-      and published_at >= ($3::date::timestamp at time zone 'Asia/Seoul')
-      and published_at < (($4::date+1)::timestamp at time zone 'Asia/Seoul') order by published_at`, [p.organization_id, p.id, v.periodStart, v.periodEnd])).rows.map(postDto);
+      and (published_at is null or (published_at >= ($3::date::timestamp at time zone 'Asia/Seoul')
+      and published_at < (($4::date+1)::timestamp at time zone 'Asia/Seoul'))) order by published_at nulls last,created_at,id`, [p.organization_id, p.id, v.periodStart, v.periodEnd])).rows.map(postDto);
     const measured = posts.filter(post => post.views !== null);
-    const snapshot: BrandReportSnapshot = { totalPosts: posts.length, measuredPosts: measured.length, viewsTotal: measured.length ? measured.reduce((sum, p) => sum + p.views!, 0) : null, metricDefinition: 'sum_of_latest_post_views', posts };
+    const snapshot: BrandReportSnapshot = { totalPosts: posts.length, measuredPosts: measured.length, viewsTotal: measured.length ? measured.reduce((sum, p) => sum + p.views!, 0) : null,
+      viewsTotalApproximate: measured.some(p => p.viewsApproximate), metricDefinition: 'sum_of_latest_post_views', posts };
     const version = Number((await sql.query<{ n: number }>('select coalesce(max(version),0)+1 as n from brand_reports where project_id=$1', [p.id])).rows[0]!.n);
     const id = randomUUID();
     await sql.query('insert into brand_reports(id,organization_id,project_id,version,summary,period_start,period_end,snapshot,created_by,request_id) values($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9,$10)', [id, p.organization_id, p.id, version, v.summary, v.periodStart, v.periodEnd, JSON.stringify(snapshot), userId, v.requestId]);
@@ -337,7 +357,7 @@ export async function saveBrandPostMetricsBatch(deps: BrandWorkspaceDeps, viewer
   return mutation(deps, viewer, BrandPostMetricsBatchSchema, input, async (sql, userId, v) => {
     const p = await project(sql, userId, v.projectId, { studio: true, write: true });
     const rows = [...v.rows].sort((x, y) => x.postId.localeCompare(y.postId));
-    const digest = createHash('sha256').update(JSON.stringify([p.id, rows.map(r => [r.postId, r.expectedRevision, r.verification, r.metricsSource, r.views, r.likes, r.comments, r.shares, r.saves])])).digest('hex');
+    const digest = createHash('sha256').update(JSON.stringify([p.id, rows.map(r => [r.postId, r.expectedRevision, r.verification, r.metricsSource, r.views, r.likes, r.comments, r.shares, r.saves, ...(r.viewsApproximate ? ['views_approximate'] : [])])])).digest('hex');
     const old = (await sql.query('select id,payload_sha256,row_count,measured_at from brand_post_collection_batches where project_id=$1 and created_by=$2 and request_id=$3', [p.id, userId, v.requestId])).rows[0];
     if (old) {
       if (old.payload_sha256 !== digest) throw new Denied('conflict');
@@ -360,6 +380,65 @@ export async function saveBrandPostMetricsBatch(deps: BrandWorkspaceDeps, viewer
       await projectLatest(sql, r.postId, r.expectedRevision + 1, r, measuredAt);
     }
     return { id, saved: rows.length, measuredAt };
+  });
+}
+
+/**
+ * Append links to posts that were already published outside this workspace. Each is stored as an
+ * `external_import`: no content version, no approval, no counts, and a publish time only when the
+ * studio actually knows it. Links are identified by their normalized platform post id, so the same
+ * post pasted as /reel/, with tracking parameters or twice in one paste is one post. A link already on
+ * the campaign is left as it is; the only change it can receive is a first known publish time.
+ * No link is fetched; counts are collected afterwards through the existing collection console.
+ */
+export async function importBrandExternalPosts(deps: BrandWorkspaceDeps, viewer: Viewer, input: unknown): Promise<BrandOutcome<BrandExternalPostsResult>> {
+  return mutation(deps, viewer, BrandExternalPostsSchema, input, async (sql, userId, v) => {
+    const p = await project(sql, userId, v.projectId, { studio: true, write: true });
+    // Same freeze as collection: a completed or cancelled campaign receives no new posts.
+    if (p.status !== 'active') throw new Denied('not_active');
+    const links = new Map<string, { url: string; platform: string; postId: string; publishedAt: string | null }>();
+    for (const post of v.posts) {
+      // Any unusable line refuses the whole paste, so nothing is half-saved.
+      const normalized = normalizeBrandPostUrl(post.url); if (!normalized) throw new Denied('invalid');
+      if (post.publishedAt && +new Date(post.publishedAt) > Date.now() + 300000) throw new Denied('invalid');
+      const key = `${normalized.platform}:${normalized.postId}`, seen = links.get(key);
+      if (!seen) { links.set(key, { ...normalized, publishedAt: post.publishedAt }); continue; }
+      if (seen.publishedAt && post.publishedAt && +new Date(seen.publishedAt) !== +new Date(post.publishedAt)) throw new Denied('invalid');
+      seen.publishedAt ??= post.publishedAt;
+    }
+    let added = 0, existing = 0, dated = 0;
+    for (const [key, link] of [...links].sort(([x], [y]) => x.localeCompare(y))) {
+      const requestId = rowRequestId(v.requestId, key);
+      const row = (await sql.query('select id,origin,published_at,created_by,request_id from brand_posts where project_id=$1 and platform=$2 and platform_post_id=$3 for update',
+        [p.id, link.platform, link.postId])).rows[0];
+      if (!row) {
+        await sql.query(`insert into brand_posts(id,organization_id,project_id,content_version_id,origin,url,platform,platform_post_id,published_at,verification,metrics_source,created_by,request_id)
+          values($1,$2,$3,null,'external_import',$4,$5,$6,$7,$8,'unavailable',$9,$10)`,
+          [randomUUID(), p.organization_id, p.id, link.url, link.platform, link.postId, link.publishedAt, v.verification, userId, requestId]);
+        added++; continue;
+      }
+      // A retried request finds its own rows and reports them as added again, writing nothing.
+      if (row.created_by === userId && row.request_id === requestId) { added++; continue; }
+      existing++;
+      if (link.publishedAt && row.origin === 'external_import' && row.published_at == null) {
+        await sql.query('update brand_posts set published_at=$1 where id=$2 and published_at is null', [link.publishedAt, row.id]);
+        dated++;
+      }
+    }
+    return { id: String(p.id), added, existing, dated };
+  });
+}
+
+/** Studio-only. The cover is one of this project's own ready images; `null` removes it. */
+export async function setBrandProjectCover(deps: BrandWorkspaceDeps, viewer: Viewer, input: unknown): Promise<BrandOutcome> {
+  return mutation(deps, viewer, BrandProjectCoverSchema, input, async (sql, userId, v) => {
+    const p = await project(sql, userId, v.projectId, { studio: true, write: true });
+    if ((p.cover_attachment_id ?? null) === v.attachmentId) return { id: String(p.id) };
+    if (Number(p.revision) !== v.expectedRevision) throw new Denied('conflict');
+    if (v.attachmentId && !(await sql.query(`select id from brand_attachments where project_id=$1 and id=$2 and status='ready'
+      and access_scope='workspace' and mime=any($3::text[])`, [p.id, v.attachmentId, [...BRAND_COVER_MIMES]])).rows[0]) throw new Denied('invalid');
+    await sql.query('update brand_projects set cover_attachment_id=$1,revision=revision+1,updated_at=now() where id=$2', [v.attachmentId, p.id]);
+    return { id: String(p.id) };
   });
 }
 
@@ -480,7 +559,8 @@ export async function acceptBrandInvitation(deps: BrandWorkspaceDeps, viewer: Vi
     if(invite.issued_by_studio) await studio(sql,String(invite.created_by));
     else if (await member(sql, String(invite.created_by), String(invite.organization_id)) !== 'owner') throw new Denied('not_found');
     if(invite.project_id) {
-      await sql.query("insert into brand_project_members(organization_id,project_id,user_id) values($1,$2,$3) on conflict(project_id,user_id) do update set status='active'",[invite.organization_id,invite.project_id,userId]);
+      // The newest invitation defines the guest's scope, including whether they may comment.
+      await sql.query("insert into brand_project_members(organization_id,project_id,user_id,can_comment) values($1,$2,$3,$4) on conflict(project_id,user_id) do update set status='active',can_comment=excluded.can_comment",[invite.organization_id,invite.project_id,userId,invite.can_comment===true]);
       await sql.query('update brand_invites set accepted_at=now(),accepted_by=$1 where id=$2',[userId,invite.id]);
       return {organizationId:String(invite.organization_id),projectId:String(invite.project_id)};
     }
@@ -528,7 +608,8 @@ export async function setBrandProjectVisibility(deps:BrandWorkspaceDeps,viewer:V
   return {id:String(p.id)};
  });
 }
-const StudioInvitationSchema=z.object({organizationId:z.uuid(),projectId:z.uuid().nullable().default(null),email:z.email().trim().toLowerCase().max(254),role:z.enum(['owner','editor','viewer']),requestId:z.uuid()}).refine(v=>!v.projectId||v.role==='viewer');
+// `canComment` applies to campaign-only guests; organization members' rights come from their role.
+const StudioInvitationSchema=z.object({organizationId:z.uuid(),projectId:z.uuid().nullable().default(null),email:z.email().trim().toLowerCase().max(254),role:z.enum(['owner','editor','viewer']),canComment:z.boolean().default(false),requestId:z.uuid()}).refine(v=>!v.projectId||v.role==='viewer').refine(v=>!v.canComment||v.projectId!==null,{path:['canComment']});
 export async function createStudioInvitation(deps:BrandWorkspaceDeps,viewer:Viewer,input:unknown):Promise<BrandOutcome<{id:string;token:string}>> {
  return mutation(deps,viewer,StudioInvitationSchema,input,async(sql,userId,v)=>{
   await studio(sql,userId);
@@ -540,7 +621,7 @@ export async function createStudioInvitation(deps:BrandWorkspaceDeps,viewer:View
   if(Number(count?.n)>=20)throw new Denied('rate_limited');
   await sql.query('update brand_invites set revoked_at=now() where organization_id=$1 and email=$2 and project_id is not distinct from $3::uuid and accepted_at is null and revoked_at is null',[v.organizationId,v.email,v.projectId]);
   const id=randomUUID(),token=randomBytes(32).toString('base64url');
-  await sql.query("insert into brand_invites(id,organization_id,project_id,email,role,issued_by_studio,token_hash,expires_at,created_by,request_id) values($1,$2,$3,$4,$5,true,$6,now()+interval '7 days',$7,$8)",[id,v.organizationId,v.projectId,v.email,v.role,createHash('sha256').update(token).digest('hex'),userId,v.requestId]);
+  await sql.query("insert into brand_invites(id,organization_id,project_id,email,role,can_comment,issued_by_studio,token_hash,expires_at,created_by,request_id) values($1,$2,$3,$4,$5,$6,true,$7,now()+interval '7 days',$8,$9)",[id,v.organizationId,v.projectId,v.email,v.role,v.canComment,createHash('sha256').update(token).digest('hex'),userId,v.requestId]);
   return {id,token};
  });
 }
@@ -583,19 +664,19 @@ export async function shareBrandContract(deps:BrandWorkspaceDeps,viewer:Viewer,i
 
 export interface StudioBrandAccess {
  id:string;name:string;
- members:Array<{userId:string;email:string;role:string;projectId:string|null;projectTitle:string|null;status:string}>;
- invitations:Array<{id:string;email:string;role:string;projectId:string|null;projectTitle:string|null;state:'pending'|'accepted'|'revoked'|'expired';expiresAt:string}>;
+ members:Array<{userId:string;email:string;role:string;projectId:string|null;projectTitle:string|null;status:string;canComment:boolean}>;
+ invitations:Array<{id:string;email:string;role:string;projectId:string|null;projectTitle:string|null;state:'pending'|'accepted'|'revoked'|'expired';expiresAt:string;canComment:boolean}>;
 }
 export async function loadStudioBrandAccess(deps:BrandWorkspaceDeps,viewer:Viewer,organizationId:string):Promise<StudioBrandAccess|null> {
  if(!uuid(viewer.userId)||!uuid(organizationId))return null;
  try{return await deps.sql.transaction(async sql=>{
   await studio(sql,viewer.userId!);
   const org=(await sql.query('select id,name from brand_organizations where id=$1',[organizationId])).rows[0];if(!org)return null;
-  const members=(await sql.query(`select m.user_id,p.email,m.role,m.status,null::uuid as project_id,null::text as project_title from brand_memberships m join profiles p on p.id=m.user_id where m.organization_id=$1
-    union all select m.user_id,p.email,'viewer',m.status,m.project_id,c.title from brand_project_members m join profiles p on p.id=m.user_id join brand_projects c on c.id=m.project_id where m.organization_id=$1`,[organizationId])).rows;
-  const invitations=(await sql.query('select i.id,i.email,i.role,i.project_id,c.title as project_title,i.accepted_at,i.revoked_at,i.expires_at from brand_invites i left join brand_projects c on c.id=i.project_id where i.organization_id=$1 order by i.created_at desc',[organizationId])).rows;
-  return {id:String(org.id),name:String(org.name),members:members.map(m=>({userId:String(m.user_id),email:String(m.email),role:String(m.role),status:String(m.status),projectId:m.project_id?String(m.project_id):null,projectTitle:m.project_title?String(m.project_title):null})),
-   invitations:invitations.map(i=>({id:String(i.id),email:String(i.email),role:String(i.role),projectId:i.project_id?String(i.project_id):null,projectTitle:i.project_title?String(i.project_title):null,expiresAt:stamp(i.expires_at),state:i.revoked_at?'revoked':i.accepted_at?'accepted':+new Date(stamp(i.expires_at))<=Date.now()?'expired':'pending'}))};
+  const members=(await sql.query(`select m.user_id,p.email,m.role,m.status,null::uuid as project_id,null::text as project_title,m.role<>'viewer' as can_comment from brand_memberships m join profiles p on p.id=m.user_id where m.organization_id=$1
+    union all select m.user_id,p.email,'viewer',m.status,m.project_id,c.title,m.can_comment from brand_project_members m join profiles p on p.id=m.user_id join brand_projects c on c.id=m.project_id where m.organization_id=$1`,[organizationId])).rows;
+  const invitations=(await sql.query('select i.id,i.email,i.role,i.project_id,c.title as project_title,i.accepted_at,i.revoked_at,i.expires_at,i.can_comment from brand_invites i left join brand_projects c on c.id=i.project_id where i.organization_id=$1 order by i.created_at desc',[organizationId])).rows;
+  return {id:String(org.id),name:String(org.name),members:members.map(m=>({userId:String(m.user_id),email:String(m.email),role:String(m.role),status:String(m.status),projectId:m.project_id?String(m.project_id):null,projectTitle:m.project_title?String(m.project_title):null,canComment:m.can_comment===true})),
+   invitations:invitations.map(i=>({id:String(i.id),email:String(i.email),role:String(i.role),projectId:i.project_id?String(i.project_id):null,projectTitle:i.project_title?String(i.project_title):null,expiresAt:stamp(i.expires_at),canComment:i.project_id?i.can_comment===true:i.role!=='viewer',state:i.revoked_at?'revoked':i.accepted_at?'accepted':+new Date(stamp(i.expires_at))<=Date.now()?'expired':'pending'}))};
  });}catch(e){if(e instanceof Denied)return null;throw e}
 }
 export async function revokeStudioInvitation(deps:BrandWorkspaceDeps,viewer:Viewer,input:unknown):Promise<BrandOutcome> {

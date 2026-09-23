@@ -13,9 +13,12 @@ const ids = [
 export function ProjectTabs({
   b,
   children,
+  comments = 0,
 }: {
   b: BrandCopy;
   children: ReactNode;
+  /** Shown on the comments tab so a new thread is visible from any tab. */
+  comments?: number;
 }) {
   const [active, setActive] = useState<string>("performance");
   useEffect(() => {
@@ -47,6 +50,9 @@ export function ProjectTabs({
             onClick={() => setActive(id)}
           >
             {labels[i]}
+            {id === "conversation" && comments > 0 && (
+              <span className="bw-tab-count" data-comment-count={comments}>{comments}</span>
+            )}
           </a>
         ))}
       </nav>
