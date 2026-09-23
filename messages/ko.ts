@@ -915,6 +915,12 @@ export const ko: Dictionary = {
     statusArchived: '게시 중단',
     rejectReasonLabel: '사유',
   },
+  appError: {
+    title: '페이지를 불러오지 못했습니다.',
+    body: '잠깐 문제가 생겼습니다. 다시 시도하면 대부분 해결됩니다. 계속되면 hello@yagiworkshop.xyz로 알려 주세요.',
+    retry: '다시 시도',
+    home: '템플릿 보기',
+  },
   notFound: {
     title: '여기엔 아무것도\n없습니다. 장면은 있죠.',
     body: '옮겨졌거나, 내려갔거나, 처음부터 없던 주소입니다. 템플릿과 캠페인은 한 번 누르면 나옵니다.',

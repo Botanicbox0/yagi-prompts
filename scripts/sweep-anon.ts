@@ -1112,6 +1112,10 @@ async function sweepRenders(): Promise<void> {
   const share = await request(`/r/${ID}/${TOKEN}`, { headers: { 'user-agent': CHROME_UA } });
   expectEqual('an unknown 3-day link 404s', share.status, 404);
   expectAbsent('…with no locale redirect in the way', String(share.location ?? ''), '/en/r/');
+  // Audit P1-3: a mistyped share link is the viral entry point — the branded (app) 404, not Next's default.
+  const badShare = await request(`/r/${ID}/bad`, { headers: { 'user-agent': CHROME_UA } });
+  expectEqual('a malformed share link 404s', badShare.status, 404);
+  expectPresent('…with the branded app 404', badShare.body, 'data-app-not-found');
 
   const media = await request(`/api/renders/media/${ID}`);
   expectEqual('the render gateway refuses anon', media.status, 401);

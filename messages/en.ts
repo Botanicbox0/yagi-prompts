@@ -927,6 +927,12 @@ export const en = {
     rejectReasonLabel: 'Why',
   },
   /** §14.2 — the contests tab: listing, detail and the phase vocabulary they share. */
+  appError: {
+    title: 'This page did not load.',
+    body: 'Something went wrong on our side. Trying again usually fixes it. If it keeps happening, email hello@yagiworkshop.xyz.',
+    retry: 'Try again',
+    home: 'See templates',
+  },
   notFound: {
     title: 'NOTHING HERE.\nTHE SCENES ARE.',
     body: 'That page moved, expired, or never existed. The templates and the campaigns are one click away.',
