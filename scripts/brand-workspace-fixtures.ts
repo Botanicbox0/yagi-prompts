@@ -9,7 +9,7 @@ import type { Viewer } from '@/lib/auth/identity';
 import { FIXTURE_USERS } from './fixtures';
 import { createBrandOrganization, createBrandProject, activateBrandProject, reserveBrandAttachment,
   completeBrandAttachment, addBrandContentVersion, approveBrandContent, sendBrandMessage,
-  recordBrandPost, publishBrandReport, addBrandContract, shareBrandContract, sendBrandSupport,
+  recordBrandPost, publishBrandReport, addBrandContract, shareBrandContract, sendBrandSupport, importBrandExternalPosts,
 } from '@/lib/brands/workspace/service';
 
 /** Local-only fixtures, never run in cloud seeds. No real client identity or claimed production results. */
@@ -65,16 +65,44 @@ export async function seedBrandWorkspaceFixtures(sql: SqlRunner, storage: Storag
     criteria: { platforms: ['instagram'], minFollowers: null, maxFollowers: null, primaryMetric: 'views', targetValue: null }, referenceLinks: [] }));
 
   // Contract files stay separate from creative attachments, including in the local sample UI.
+  let sharedContractId='';
   for(const version of [1,2]) {
     const pdf=Buffer.from('%PDF-1.7\nLocal contract storage fixture only. Version '+version+'\n%%EOF');
     const file=value(await reserveBrandAttachment(deps,studio,{projectId:project.id,requestId:randomUUID(),name:`local-contract-v${version}.pdf`,mime:'application/pdf',sizeBytes:pdf.length,purpose:'contract'}));
     await storage.putStaging(file.storageKey,pdf,'application/pdf');
     value(await completeBrandAttachment(deps,studio,file.id));
     const contract=value(await addBrandContract(deps,studio,{projectId:project.id,attachmentId:file.id,documentKey:'campaign-agreement',title:'[Local fixture] Campaign agreement',requestId:randomUUID()}));
-    if(version===1)value(await shareBrandContract(deps,studio,{projectId:project.id,contractId:contract.id,shared:true,expectedRevision:0}));
+    if(version===1){value(await shareBrandContract(deps,studio,{projectId:project.id,contractId:contract.id,shared:true,expectedRevision:0}));sharedContractId=contract.id;}
   }
+  await seedUsageFixtures(deps, { owner, studio, projectId: project.id, contractId: sharedContractId, value });
   const production=value(await createProductionContract(deps,studio,{organizationId:org.id,projectId:project.id,title:'[Local fixture] Production agreement',startsAt:'2026-01-01T00:00:00Z',endsAt:'2099-01-01T00:00:00Z',limit:3,requestId:randomUUID()}));
   value(await createProductionTemplate(deps,studio,{contractId:production.id,title:'[Local fixture] Portrait film',titleKo:'[로컬 예시] 인물 영상',promptText:'Local QA template only. Use the verified identity reference for a studio portrait film.',seconds:5,aspect:'9:16',previewAttachmentId:attachment.id,requestId:randomUUID()}));
   value(await sendBrandSupport(deps,studio,{organizationId:org.id,body:'[Local fixture] Welcome. You can ask the studio about your workspace here.',requestId:randomUUID()}));
 
+}
+
+/**
+ * Secondary usage (docs/SECONDARY-USAGE.md), local only: an imported post with a cost-only inquiry, and a
+ * second inquiry taken to a tax-inclusive quote on the shared local terms, ready to accept and pay with the
+ * local fake gateway (`BRAND_USAGE_PAYMENTS=on`). Dates are relative to when the snapshot is built.
+ * Synthetic amounts; no creator, price or result here is real.
+ */
+async function seedUsageFixtures(deps: { sql: SqlRunner }, f: { owner: Viewer; studio: Viewer; projectId: string; contractId: string; value: <T extends { ok: boolean }>(r: T) => Extract<T, { ok: true }> }) {
+  const u = await import('@/lib/brands/usage/service');
+  const { sql } = deps, { owner, studio, projectId, value } = f;
+  value(await importBrandExternalPosts(deps, studio, { projectId, requestId: randomUUID(), posts: [{ url: 'https://www.instagram.com/p/LOCALUSAGE01/', publishedAt: null }] }));
+  const postId = String((await sql.query("select id from brand_posts where project_id=$1 and platform_post_id='LOCALUSAGE01'", [projectId])).rows[0]!.id);
+  value(await u.submitUsageInquiry(deps, owner, { projectId, requestId: randomUUID(), subjects: [{ kind: 'post', id: postId }], intent: 'know_cost' }));
+  const caseId = value(await u.submitUsageInquiry(deps, owner, { projectId, requestId: randomUUID(), subjects: [{ kind: 'post', id: postId }], intent: 'recommend_terms', question: '[Local fixture] Brand Instagram repost for one month?' })).id;
+  const revision = async () => Number((await sql.query('select revision from brand_usage_cases where id=$1', [caseId])).rows[0]!.revision);
+  const day = (offset: number) => new Date(Date.now() + 9 * 3600000 + offset * 86400000).toISOString().slice(0, 10);
+  value(await u.triageUsageCase(deps, studio, { caseId, expectedRevision: await revision() }));
+  const itemId = String((await sql.query('select id from brand_usage_case_items where case_id=$1', [caseId])).rows[0]!.id);
+  const scopeRevisionId = value(await u.defineUsageScope(deps, studio, { caseId, expectedRevision: await revision(), requestId: randomUUID(), items: [{ itemId, pin: { kind: 'original_post' },
+    usageKinds: ['organic_repost'], channels: ['[Local fixture] Brand Instagram'], territory: ['KR'], advertiser: null, edits: 'none', timing: { kind: 'fixed', startsOn: day(7), endsOn: day(37) } }] })).id;
+  const compensationId = value(await u.recordUsageCompensation(deps, studio, { caseId, scopeRevisionId, requestId: randomUUID(), amountKrw: 1000, taxBasis: 'included', note: '[Local fixture] synthetic' })).id;
+  value(await u.recordUsageConsent(deps, studio, { caseId, itemId, scopeRevisionId, compensationId, requestId: randomUUID(), approverKind: 'creator', approvedAt: new Date().toISOString(),
+    evidenceReference: '[Local fixture] no real evidence', rightsChecks: ['ownership', 'music', 'people', 'marks'] }));
+  value(await u.issueUsageQuote(deps, studio, { caseId, expectedRevision: await revision(), requestId: randomUUID(), scopeRevisionId, totalKrw: 110000, taxBasis: 'included',
+    validUntil: new Date(Date.now() + 14 * 86400000).toISOString(), contractId: f.contractId, note: '[Local fixture] Synthetic quote for local checkout testing.' }));
 }

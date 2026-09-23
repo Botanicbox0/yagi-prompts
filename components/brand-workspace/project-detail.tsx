@@ -15,6 +15,8 @@ import { unsetDateKey } from '@/lib/brands/workspace/schedule';
 import { DecisionFields } from './decision-fields';
 import { StaffNotice } from './staff-notice';
 import { projectNextAction } from './next-action';
+import { SecondaryUsage } from './secondary-usage';
+import type { BrandUsageView } from "@/lib/brands/usage/types";
 import type { ReactNode } from "react";
 
 export function PostTable({
@@ -92,6 +94,7 @@ export function ProjectDetail({
   studio = false,
   studioReply,
   staffManageHref = null,
+  usage = null,
 }: {
   project: BrandProjectDetail;
   b: BrandCopy;
@@ -101,6 +104,8 @@ export function ProjectDetail({
   studioReply?: ReactNode;
   /** Existing admin page for this campaign, offered to DB admins in the TWINGS team view only. */
   staffManageHref?: string | null;
+  /** Secondary usage (docs/SECONDARY-USAGE.md): null hides the tab (campaign guests, or not loaded). */
+  usage?: BrandUsageView | null;
 }) {
   // `role: "studio"` outside /admin is the TWINGS team's read-only view: it is not the customer's seat.
   const staffView = !studio && p.role === "studio";
@@ -146,9 +151,9 @@ export function ProjectDetail({
           {next.href && <a className="bw-button" href={next.href}>{next.label} →</a>}
         </div>
       )}
-      <ProjectTabs b={b} comments={p.messages.length}>
+      <ProjectTabs b={b} comments={p.messages.length} usage={usage !== null}>
       <section id="performance" className="bw-panel">
-        <CampaignPerformance project={p} b={b} locale={locale}/>
+        <CampaignPerformance project={p} b={b} locale={locale} usageCta={Boolean(usage?.eligible.some((s) => s.kind === "post"))}/>
       </section>
       <div className="bw-grid-wide">
         <div>
@@ -283,6 +288,11 @@ export function ProjectDetail({
                       <dd className="bw-prose">{c.usageRights}</dd>
                     </div>
                   </dl>
+                  {usage?.eligible.some((s) => s.kind === "content_version" && s.id === c.id) && (
+                    <a className="bw-button bw-usage-cta" data-usage-cta={`content_version:${c.id}`} href={`#usage=content_version:${c.id}`} title={b.secondaryUsage.ctaHint}>
+                      {b.secondaryUsage.cta}
+                    </a>
+                  )}
                   {writable &&
                     p.status === "active" &&
                     newest.get(c.slotKey) === c.version &&
@@ -440,6 +450,7 @@ export function ProjectDetail({
         </div>
       </div>
       <CampaignContracts project={p} b={b} locale={locale} studio={studio}/>
+      {usage && <SecondaryUsage view={usage} projectId={p.id} b={b} locale={locale} project={p} />}
       </ProjectTabs>
     </div>
   );

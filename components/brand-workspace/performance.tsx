@@ -25,7 +25,8 @@ function PostThumb({post,project,label,c}:{post:BrandPost;project:PerformancePro
  </div>;
 }
 
-export function CampaignPerformance({project:p,posts=p.posts,b,locale,frozen=false,compact=false}:{project:PerformanceProject;posts?:BrandPost[];b:BrandCopy;locale:string;frozen?:boolean;compact?:boolean}){
+/** `usageCta`: owners and editors get a "2차 활용 견적 문의" link on each post, imported links included. */
+export function CampaignPerformance({project:p,posts=p.posts,b,locale,frozen=false,compact=false,usageCta=false}:{project:PerformanceProject;posts?:BrandPost[];b:BrandCopy;locale:string;frozen?:boolean;compact?:boolean;usageCta?:boolean}){
  const c=b.performance;
  const stats=useMemo(()=>campaignPerformance(posts),[posts]);
  const number=(n:number|null)=>n===null?'—':n.toLocaleString(locale);
@@ -72,6 +73,7 @@ export function CampaignPerformance({project:p,posts=p.posts,b,locale,frozen=fal
        <div><dt>{b.comments}</dt><dd>{number(post.comments)}</dd></div>
       </dl>
       <a className="bw-post-open" href={post.url} target="_blank" rel="noopener noreferrer">{c.openPost} ↗</a>
+      {usageCta&&!frozen&&<a className="bw-post-open bw-usage-cta bw-no-print" data-usage-cta={`post:${post.id}`} href={`#usage=post:${post.id}`} title={b.secondaryUsage.ctaHint}>{b.secondaryUsage.cta}</a>}
       <p className="bw-post-context">{[handle&&title,post.origin==='external_import'?c.linkedPost:null,b.verificationLabels[post.verification],post.publishedAt===null?c.publishedUnknown:interpolate(c.publishedOn,{date:shortDate(post.publishedAt,locale)}),b.sourceLabels[post.metricsSource],post.measuredAt&&interpolate(c.measuredOn,{date:formatBrandTimestamp(post.measuredAt,locale)!}),post.shares!==null?`${b.shares} ${number(post.shares)}`:null,post.saves!==null?`${b.saves} ${number(post.saves)}`:null].filter(Boolean).join(' · ')}</p>
      </div>
     </li>;})}</ul>:<p className="bw-note">{posts.length?c.noMatch:b.noPosts}</p>}

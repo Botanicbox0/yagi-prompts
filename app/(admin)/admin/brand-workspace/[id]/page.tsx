@@ -70,7 +70,7 @@ export default async function StudioBrandProject({
       <section className="bw-panel bw-sharing" data-managed-sharing>
         <div><strong>{p.clientVisible?b.managed.visible:b.managed.prepared}</strong><p className="bw-muted">{b.managed.visibilityHint}</p></div>
         <ManagedForm op="brandWorkspace.visibility" b={b} messages={refusals} submit={p.clientVisible?b.managed.hide:b.managed.publish} tone={p.clientVisible?"danger":"primary"} confirm={p.clientVisible?{prompt:b.confirm.hide,action:b.confirm.hideAction}:{prompt:b.confirm.publish,action:b.confirm.publishAction}}><input type="hidden" name="projectId" value={p.id}/><input type="hidden" name="expectedRevision" value={p.revision}/><input type="hidden" name="visible" value={String(!p.clientVisible)}/></ManagedForm>
-        <a className="bw-button" href={`/admin/brand-workspace/organizations/${p.organizationId}`}>{b.managed.access}</a><details><summary>{b.managed.invite}</summary><p className="bw-muted">{b.managed.inviteHint}</p>
+        <a className="bw-button" href={`/admin/brand-workspace/organizations/${p.organizationId}`}>{b.managed.access}</a><a className="bw-button" href={`/admin/brand-workspace/usage?projectId=${p.id}`} data-usage-queue-link>{b.secondaryUsage.admin.openQueue}</a><details><summary>{b.managed.invite}</summary><p className="bw-muted">{b.managed.inviteHint}</p>
           {/* P2-3: a campaign-only guest of a campaign the client cannot see would land on nothing.
               Until it is shared, the campaign-scope invite is off; brand-wide invites stay on the brand page. */}
           {p.clientVisible ? <ManagedForm op="brandWorkspace.invite" b={b} submit={b.managed.invite} messages={refusals}>

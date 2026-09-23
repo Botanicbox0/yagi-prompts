@@ -15,6 +15,14 @@ import {
   acceptBrandInvitation,
   revokeBrandMember,
 } from "@/lib/brands/workspace/service";
+import {
+  submitUsageInquiry,
+  sendUsageMessage,
+  withdrawUsageCase,
+  requestUsageChanges,
+  acceptUsageQuote,
+} from "@/lib/brands/usage/service";
+import { usagePaymentsOpen } from "@/lib/brands/usage/runtime";
 export const dynamic = "force-dynamic";
 const HEADERS = {
   "Cache-Control": "private, no-store",
@@ -85,6 +93,17 @@ export async function POST(request: NextRequest) {
         );
         break;
       }
+      // Secondary usage (docs/SECONDARY-USAGE.md). Payment has its own route: /api/brand-workspace/usage.
+      case "usage.inquire":
+        result = await submitUsageInquiry({ sql }, viewer, input); break;
+      case "usage.message":
+        result = await sendUsageMessage({ sql }, viewer, input, "client"); break;
+      case "usage.withdraw":
+        result = await withdrawUsageCase({ sql }, viewer, input); break;
+      case "usage.requestChanges":
+        result = await requestUsageChanges({ sql }, viewer, input); break;
+      case "usage.accept":
+        result = await acceptUsageQuote({ sql, paymentsOpen: usagePaymentsOpen() }, viewer, input); break;
       case "member.revoke":
         result = await revokeBrandMember({ sql }, viewer, input);
         break;

@@ -6,6 +6,8 @@ import { arkConfigFromEnv } from '@/lib/ark/client';
 import { getSqlRunner } from '@/lib/db/connect';
 import { openAiConfigFromEnv } from '@/lib/images/openai';
 import { formatPassReport, runLiveRenderPass } from '@/lib/renders/runtime';
+import { getTossGateway } from '@/lib/billing/toss-gateway';
+import { reconcileBrandUsagePayments } from '@/lib/brands/usage/payment';
 
 /**
  * `GET|POST /api/renders/tick` — one pass of the render queue (docs/TEMPLATES-IA.md §8).
@@ -37,11 +39,16 @@ async function tick(request: Request): Promise<NextResponse> {
 
   const report = await runLiveRenderPass(sql, { limit: 5 });
   after(async()=>{try{const portraits=await portraitDeps();if(portraits)await runPortraitPass(portraits);}catch{/* Durable portrait queue is resumed by its owner or a later tick. */}});
+  // Secondary-usage payments (docs/SECONDARY-USAGE.md): durable recovery of lost confirmations, unfinished
+  // activation and admin-requested refunds, with no page load. Independent of any render or public flag.
+  let brandUsage: { checked: number } | null = null;
+  try { const gateway = getTossGateway(); if (gateway) brandUsage = await reconcileBrandUsagePayments({ sql, gateway }); }
+  catch { console.warn('[brand-usage] reconcile pass failed'); }
   for (const line of report.errors) console.warn(`[renders] ${line}`);
   const { errors, ...counts } = report;
   // Presence only, never a value: which engines this deployment can actually reach.
   const config = { openai: openAiConfigFromEnv() !== null, ark: arkConfigFromEnv() !== null, arkAssets: arkAssetsConfigFromEnv() !== null };
-  return NextResponse.json({ ok: true, summary: formatPassReport(report), report: counts, errorCount: errors.length, config }, { headers: HEADERS });
+  return NextResponse.json({ ok: true, summary: formatPassReport(report), report: counts, errorCount: errors.length, config, brandUsage }, { headers: HEADERS });
 }
 
 export const GET = tick;

@@ -82,7 +82,7 @@ describe('brand invitations, attachment bytes and database boundary', () => {
     await db.exec(readMigration('0118_glue_brand_profile_support.sql'));
     await db.exec(readMigration('0119_glue_brand_production.sql'));
     await db.exec(readMigration('0121_glue_brand_organization_logo.sql'));
-    const tables = (await sql.query<{ relname: string; relrowsecurity: boolean; relforcerowsecurity: boolean }>("select relname,relrowsecurity,relforcerowsecurity from pg_class where relkind='r' and relname like 'brand_%' and relname<>'brand_inquiries'")).rows;
+    const tables = (await sql.query<{ relname: string; relrowsecurity: boolean; relforcerowsecurity: boolean }>("select relname,relrowsecurity,relforcerowsecurity from pg_class where relkind='r' and relname like 'brand_%' and relname<>'brand_inquiries' and relname not like 'brand_usage_%'")).rows; // brand_usage_* has its own test (tests/brands/usage-glue.test.ts)
     expect(tables.map(t=>t.relname)).toEqual(expect.arrayContaining(['brand_project_members','brand_contract_documents','brand_contract_sharing_events','brand_support_messages']));
     expect(tables.length).toBe(21);
     for (const table of tables) {

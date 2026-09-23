@@ -24,6 +24,7 @@ export default async function StudioBrands() {
       <div data-studio-brand-queue>
         <div className="bw-heading">
           <div><h1>{b.dashboard.studioTitle}</h1><p>{b.dashboard.studioSubtitle}</p></div>
+          <a className="bw-button" href="/admin/brand-workspace/usage" data-usage-queue-link>{b.secondaryUsage.admin.openQueue} →</a>
         </div>
         {/* The language switcher lives once, in the shell's top bar (AdminShell). */}
         {inbox && <StudioInboxPanel entries={inbox} admin={dict.admin} locale={locale} />}
