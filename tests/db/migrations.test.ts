@@ -44,6 +44,21 @@ describe('migrations apply on a fresh database (PLAN §6)', () => {
       'brand_projects',
       'brand_reports',
       'brand_support_messages',
+      // 2026-09-23 — secondary usage (docs/SECONDARY-USAGE.md): inquiry case → studio scope, creator
+      // compensation and consent (studio-only) → brand quote → payment → grants, plus history/outcomes.
+      'brand_usage_buyers',
+      'brand_usage_case_items',
+      'brand_usage_cases',
+      'brand_usage_compensations',
+      'brand_usage_consents',
+      'brand_usage_events',
+      'brand_usage_grant_events',
+      'brand_usage_grants',
+      'brand_usage_messages',
+      'brand_usage_outcomes',
+      'brand_usage_payments',
+      'brand_usage_quotes',
+      'brand_usage_scope_revisions',
       'brand_workspace_events',
       // docs/CAMPAIGNS.md (2026-09-03) — the paid cousin of contests: the campaign, one application per
       // creator walked through the state machine, and the same append-only write ledger the contest

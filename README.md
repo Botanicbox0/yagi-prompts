@@ -5,7 +5,7 @@
 - 기본 작업 폴더: `D:\dev\twings`
 - 에이전트 규칙: [AGENTS.md](AGENTS.md)
 - 작업 폴더·브랜치 구분: [docs/WORKSPACE.md](docs/WORKSPACE.md)
-- 제품 결정: [docs/TEMPLATES-IA.md](docs/TEMPLATES-IA.md), [docs/CAMPAIGNS.md](docs/CAMPAIGNS.md)
+- 제품 결정: [docs/TEMPLATES-IA.md](docs/TEMPLATES-IA.md), [docs/CAMPAIGNS.md](docs/CAMPAIGNS.md), 브랜드 2차 활용 [docs/SECONDARY-USAGE.md](docs/SECONDARY-USAGE.md)
 - 배포: `twings.app` · `brand.twings.app` · `admin.twings.app`
 
 기존 npm 패키지명과 `PLAYBOOK_*` 환경변수, DB 식별자는 호환성을 위해 유지합니다. `PLAYBOOK-PLAN.md`는 초기 구현 기록이며 현재 제품 정책은 AGENTS와 제품 결정 문서를 따릅니다.

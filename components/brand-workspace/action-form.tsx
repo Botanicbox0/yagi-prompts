@@ -20,6 +20,7 @@ export function ActionForm({
   disabled = false,
   confirm,
   tone = "primary",
+  successNotice,
 }: {
   operation: string;
   fixed?: Record<string, unknown>;
@@ -32,6 +33,8 @@ export function ActionForm({
   /** Ask once more, inline, before a removal or disclosure is sent. */
   confirm?: ConfirmCopy;
   tone?: ButtonTone;
+  /** Replaces the generic "Saved." after a successful send. */
+  successNotice?: string;
 }) {
   const router = useRouter();
   const [ready,setReady]=useState(false);
@@ -115,6 +118,17 @@ export function ActionForm({
       ])
         delete input[key];
     }
+    // Secondary usage: ticked subjects ("kind:id") and hint chips are lists; an unticked list is sent
+    // empty and stored as unknown. The acceptance box is a real boolean the server requires.
+    if (operation === "usage.inquire") {
+      input.subjects = fields.getAll("subject").map((raw) => {
+        const [kind, id] = String(raw).split(":");
+        return { kind, id };
+      });
+      input.hints = fields.getAll("hints").map(String);
+      delete input.subject;
+    }
+    if (operation === "usage.accept") input.confirmed = fields.get("confirmed") === "on";
     const fingerprint = JSON.stringify(input);
     if (request.current?.fingerprint !== fingerprint)
       request.current = { fingerprint, id: crypto.randomUUID() };
@@ -167,7 +181,7 @@ export function ActionForm({
         }
         return;
       }
-      setNotice(b.saved);
+      setNotice(successNotice ?? b.saved);
       request.current = null;
       if (operation === "invitation.create" && result.token)
         setInviteUrl(
@@ -189,7 +203,7 @@ export function ActionForm({
         location.assign(redirectTo);
         return;
       }
-      else if ((operation === "message.send" || operation === "support.send")) form.reset();
+      else if ((operation === "message.send" || operation === "support.send" || operation === "usage.message" || operation === "usage.inquire")) form.reset();
       router.refresh();
     } catch {
       setFailed(true);

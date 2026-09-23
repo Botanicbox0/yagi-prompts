@@ -24,6 +24,7 @@ import { CONTEST_OPERATIONS } from './contest-operations';
 import { CAMPAIGN_OPERATIONS } from './campaign-operations';
 import { BRAND_OPERATIONS } from './brand-operations';
 import { BRAND_WORKSPACE_OPERATIONS } from './brand-workspace-operations';
+import { BRAND_USAGE_OPERATIONS } from './brand-usage-operations';
 import { stageUpload } from './assets';
 import { ensureDraftRevision } from './clone';
 import * as f from './form';
@@ -734,6 +735,7 @@ export const ADMIN_OPERATIONS = {
   // 2026-09-11 — the brand enquiries that arrive through the campaigns page.
   ...BRAND_OPERATIONS,
   ...BRAND_WORKSPACE_OPERATIONS,
+  ...BRAND_USAGE_OPERATIONS,
   ...BRAND_PRODUCTION_OPERATIONS,
 };
 

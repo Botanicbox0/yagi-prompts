@@ -1060,7 +1060,9 @@ async function sweepBrandWorkspace(fixtures: BrandWorkspaceProbe[]): Promise<voi
   // Authorization must run before looking up either existing or guessed report IDs.
   for (const path of ['/brand', `/brand/projects/${fixture.id}`, `/admin/brand-workspace/${fixture.id}`,
     `/brand/projects/${fixture.id}/reports/${fixture.id}`,
-    `/admin/brand-workspace/${fixture.id}/reports/${fixture.id}`]) {
+    `/admin/brand-workspace/${fixture.id}/reports/${fixture.id}`,
+    // Secondary usage (docs/SECONDARY-USAGE.md): the pay page, the provider return page and the studio queue.
+    `/brand/projects/${fixture.id}/usage/${fixture.id}/pay`, '/brand/usage/return', '/admin/brand-workspace/usage']) {
     const page = await get(path);
     const label = path.replace(fixture.id, '{fixture}');
     expectEqual(`${label}: redirects anonymous access`, page.status, 307);
@@ -1077,6 +1079,10 @@ async function sweepBrandWorkspace(fixtures: BrandWorkspaceProbe[]): Promise<voi
   expectEqual('brand attachment issues no signed download URL', attachment.location, null);
   expectEqual('brand attachment refusal is private no-store', attachment.cacheControl, 'private, no-store');
   noPrivateBytes('brand attachment', attachment);
+  const usageStatus = await get(`/api/brand-workspace/usage?orderId=${fixture.id}`);
+  expectEqual('brand usage payment status refuses anonymous readers', usageStatus.status, 401);
+  expectEqual('brand usage payment status is private no-store', usageStatus.cacheControl, 'private, no-store');
+  noPrivateBytes('brand usage payment status', usageStatus);
 
   // Preview sweeps remain read-only for this feature. Even locally this malformed input could
   // not create a message if authentication regressed; the expected 401 must precede validation.
@@ -1094,6 +1100,14 @@ async function sweepBrandWorkspace(fixtures: BrandWorkspaceProbe[]): Promise<voi
   expectEqual('brand message returns only the sign-in error', message.body, JSON.stringify({ ok: false, code: 'sign_in_required' }));
   expectEqual('brand message refusal is private no-store', message.cacheControl, 'private, no-store');
   noPrivateBytes('brand message', message);
+  const usageOrder = await request('/api/brand-workspace/usage', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', origin: base.origin },
+    body: JSON.stringify({ operation: 'order.create', input: { caseId: fixture.id, requestId: 'invalid-sweep-probe', consent: true } }),
+  });
+  expectEqual('brand usage order refuses anonymous access before validation', usageOrder.status, 401);
+  expectEqual('brand usage order refusal is private no-store', usageOrder.cacheControl, 'private, no-store');
+  noPrivateBytes('brand usage order', usageOrder);
 }
 
 /** docs/TEMPLATES-IA.md §8 — the render queue: gated where it must be, open where the token says. */

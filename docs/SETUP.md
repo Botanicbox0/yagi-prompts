@@ -132,11 +132,32 @@ The follow-up above still needs real sessions.
 
 ## 4. Promote an admin
 
-`is_admin` is never derived from the email domain at runtime (§3.7 — "seeded manually"). Run:
+Team accounts need nothing (2026-09-24, 대표 결정). `0038_core_staff_admin.sql` makes every account
+whose `auth.users` email the auth server confirmed on exactly `@yagiworkshop.xyz` an admin, at the
+first profile insert, at email confirmation and at an email change, and revokes that grant when the
+email leaves the domain. Unconfirmed addresses, subdomains, suffixes, look-alike characters and
+`profiles.email` never count. `profiles.admin_source` records why: `staff_email` or `manual`.
+
+Anyone else is promoted by hand, which records `manual` and is never revoked automatically:
 
 ```sql
-update profiles set is_admin = true where email = 'yagi@yagiworkshop.xyz';
+update profiles set is_admin = true where id = '<auth user id>';
 ```
+
+An automatic grant already reads `is_admin = true`, so to pin it as manual set
+`admin_source = 'manual'` explicitly.
+
+Offboarding a team member: ban the auth user (Dashboard → Authentication → Ban), delete it, or change
+its email off the domain. A ban or email change revokes a `staff_email` grant in the same auth write;
+deletion removes the profile through its foreign key. A `manual` grant survives a ban or email change:
+also run `update profiles set is_admin = false where id = '<auth user id>';`.
+Google/Kakao report an address as verified once proven, so a former member's personal account still
+carrying the work address qualifies until one of these steps is taken.
+
+To find an account that should have been promoted but was not, compare `auth.users` with
+`is_twings_staff_email(email) and email_confirmed_at is not null` (not deleted, not banned). A team admin is still never a
+buyer: quote acceptance and payment stay with the brand's own owner or recorded buyer
+(`lib/brands/usage/core.ts isBuyer`).
 
 ## 5. Storage buckets
 

@@ -52,3 +52,14 @@ export const RENDER_PIPELINE_PUBLIC = false;
  *               tests pin their mode explicitly.
  */
 export const ASSET_LIBRARY_MODE: 'virtual' | 'liveness' = 'virtual';
+
+/**
+ * docs/SECONDARY-USAGE.md — on-site payment for brand secondary-usage ("2차 활용") quotes. Default
+ * OFF: open only when the server environment says exactly `BRAND_USAGE_PAYMENTS=on`. Independent of
+ * `RENDER_PIPELINE_PUBLIC` (neither opens the other). Inquiries, the studio's scope/consent/quote work
+ * and the brand's view of a quote all work while it is off; only acceptance and payment wait for it.
+ * Payment recovery (reconcile, admin refund) runs regardless, so an in-flight payment is never stranded.
+ */
+export function brandUsagePaymentsOpen(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.BRAND_USAGE_PAYMENTS === 'on';
+}
