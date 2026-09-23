@@ -1,6 +1,6 @@
 # 2차 활용 (Brand secondary usage) — phase 0
 
-> 상태: 구현됨(브랜치 `codex/secondary-usage`), **클라우드 적용 필요**, 결제는 기본 꺼짐.
+> 상태: 구현됨(PR #25). 2026-09-24 운영 DB에 0037/0123 적용 완료. 결제는 기본 꺼짐.
 > 설계 근거: 2026-09-23 logic design(Opus 5.5)·copy draft(Opus 4.6)·대표 결정(inquiry-first, 사이트 결제).
 > 약관·환불·개인정보 본문(`lib/legal/documents.ts`)은 바꾸지 않았다. 가격·세금·환불 규칙·기간 프리셋·PG 수단은 대표/법무 결정이다.
 

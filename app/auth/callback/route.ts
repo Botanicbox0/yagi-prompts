@@ -20,7 +20,9 @@ import {
  *      chain without a service-role round trip on every request (see middleware.ts);
  *   4. land on the originating page.
  *
- * `is_admin` is never derived here. Admins are seeded manually (§3.7, docs/SETUP.md).
+ * `is_admin` is never derived here. The DB sets it from `auth.users` alone: a confirmed exact
+ * @yagiworkshop.xyz email (0038_core_staff_admin.sql, also on this insert), otherwise a manual grant
+ * (docs/SETUP.md §4). Nothing from the OAuth payload's metadata decides it.
  *
  * §15.1-2 — the signup grant arrives through the COLUMN DEFAULT (`cookie_balance` defaults 3;
  * the insert below deliberately does not name it), so this route cannot get the number wrong.
