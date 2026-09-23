@@ -132,11 +132,6 @@ function warnOnce(message: string): void {
   console.warn(message);
 }
 
-/** Test seam. */
-export function resetRuntimeModeWarnings(): void {
-  warned.clear();
-}
-
 /** One line for a script banner: `local · pglite-snapshot · storage:local`. */
 export function describeRuntimeSelection(env: EnvLike = process.env): string {
   const db = selectDbDriver(env);

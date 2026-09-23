@@ -1,4 +1,4 @@
-import { isEventType, type EventType } from './track';
+import { isEventType } from './track';
 
 /**
  * The `/api/events` request contract, as a pure function so it is tested rather than trusted.
@@ -55,9 +55,4 @@ export function parseBeacon(body: unknown): ParsedBeacon {
       : null;
 
   return { ok: true, type: input.type, slug, surface };
-}
-
-/** Narrowing helper for callers that hold an `EventType` and want to know if a client may send it. */
-export function isBeaconEventType(type: EventType): type is BeaconType {
-  return (BEACON_TYPES as readonly string[]).includes(type);
 }

@@ -27,10 +27,6 @@ export function useScroll(): ScrollContextValue {
   return useContext(ScrollContext);
 }
 
-export function usePrefersReducedMotion(): boolean {
-  return useScroll().reducedMotion;
-}
-
 export function ScrollProvider({ children }: { children: ReactNode }) {
   const lenisRef = useRef<Lenis | null>(null);
   const [value, setValue] = useState<ScrollContextValue>({ lenis: null, reducedMotion: false });

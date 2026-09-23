@@ -1,10 +1,8 @@
 import { Reveal, ScrubY } from '@/components/motion/reveal';
 import { TextSwap } from '@/components/ui/text-swap';
 import { Marquee } from '@/components/ui/marquee';
-import { PlanCards } from '@/components/pricing/plan-cards';
 import { PromptCardView } from '@/components/prompts/prompt-card';
 import { promptLabels, useCaseLabel } from '@/components/prompts/labels';
-import { formatCount, interpolate } from '@/lib/i18n/format';
 import type { PromptCard, PromptTotals } from '@/lib/prompts/catalog';
 import { templatesHref } from '@/lib/prompts/links';
 import { USE_CASES } from '@/lib/prompts/schemas';
@@ -238,99 +236,6 @@ export function Featured({
             </a>
           </>
         )}
-      </div>
-    </section>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Pricing summary
-// ---------------------------------------------------------------------------
-
-export function planFeatures(dict: Dictionary): { free: string[]; pro: string[] } {
-  return {
-    free: [dict.pricing.featureStructure, dict.pricing.featureAssets, dict.pricing.featureBilingual],
-    pro: [
-      dict.pricing.featurePrompts,
-      dict.pricing.featureParams,
-      dict.pricing.featureCopy,
-      dict.pricing.featureWorkflow,
-      dict.pricing.featureNotifications,
-    ],
-  };
-}
-
-export function planCopy(dict: Dictionary) {
-  return {
-    free: dict.plan.free,
-    pro: dict.plan.pro,
-    freePrice: dict.pricing.freePrice,
-    proPrice: dict.pricing.proPrice,
-    perMonth: dict.pricing.perMonth,
-    freeTagline: dict.pricing.freeTagline,
-    proTagline: dict.pricing.proTagline,
-    cancelNote: dict.pricing.cancelNote,
-    startWithGoogle: dict.auth.startWithGoogle,
-  };
-}
-
-/**
- * §13.2 — the counts line, now over the two rails.
- *
- * M1 counted "N prompts across M playbooks" from the playbook catalog; the pivot makes the two
- * rails the honest headline number, and it comes from the SAME cached projection the gallery reads
- * so the two can never disagree.
- */
-export function countsLine(dict: Dictionary, locale: Locale, totals: PromptTotals): string {
-  if (totals.published === 0) return dict.pricing.countsEmpty;
-  return interpolate(dict.pricing.countsLine, {
-    yagi: formatCount(totals.yagi, locale),
-    community: formatCount(totals.community, locale),
-  });
-}
-
-export function PricingSummary({
-  locale,
-  dict,
-  totals,
-}: {
-  locale: Locale;
-  dict: Dictionary;
-  totals: PromptTotals;
-}) {
-  const features = planFeatures(dict);
-
-  return (
-    <section data-section data-theme="light" className="section">
-      <div className="band py-24 lg:py-32">
-        <p className="text-accent font-label text-eyebrow uppercase">{dict.pricing.eyebrow}</p>
-
-        <ScrubY className="mt-8">
-          <Reveal
-            as="h2"
-            lines={[dict.pricing.line1, dict.pricing.line2]}
-            className="font-display text-title font-black uppercase"
-          />
-        </ScrubY>
-
-        <p className="mt-8 max-w-detail text-body opacity-70">{dict.pricing.lede}</p>
-        <p className="mt-3 font-mono text-code opacity-60">{countsLine(dict, locale, totals)}</p>
-
-        <div className="mt-12">
-          <PlanCards
-            locale={locale}
-            copy={planCopy(dict)}
-            freeFeatures={features.free}
-            proFeatures={features.pro}
-          />
-        </div>
-
-        <a
-          href={`/${locale}/pricing`}
-          className="text-accent mt-10 inline-block font-label text-label uppercase"
-        >
-          <TextSwap>{dict.pricing.compare} →</TextSwap>
-        </a>
       </div>
     </section>
   );
