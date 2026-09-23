@@ -4,7 +4,7 @@ import { getLocaleFromHeaders } from '@/lib/i18n/server';
 import { getDictionary } from '@/lib/i18n/dictionaries';
 import { formatDate } from '@/lib/i18n/format';
 import { signInHref } from '@/lib/billing/links';
-import { IDENTITY_VERIFY_PATH, safeNextPath } from '@/lib/identity/links';
+import { IDENTITY_VERIFY_PATH, identityVerifyHref, safeNextPath } from '@/lib/identity/links';
 import { loadIdentityGroup } from '@/lib/identity/service';
 import { RENDERS_PATH } from '@/lib/renders/share';
 import { AppHeader } from '@/components/app/app-header';
@@ -31,7 +31,8 @@ export default async function VerifyIdentityPage({ searchParams }: { searchParam
   const [locale, viewer, sql, query] = await Promise.all([getLocaleFromHeaders(), getViewer(), getSqlRunner(), searchParams ?? Promise.resolve({} as SearchParams)]);
   const dict = getDictionary(locale);
   const t = dict.identity;
-  const next = safeNextPath(one(query, 'next')) ?? RENDERS_PATH;
+  const requestedNext = safeNextPath(one(query, 'next'));
+  const next = requestedNext ?? RENDERS_PATH;
   const result = one(query, 'result');
   const err = one(query, 'err');
   const group = viewer.userId !== null && sql !== null ? await loadIdentityGroup(sql, viewer.userId) : null;
@@ -54,7 +55,9 @@ export default async function VerifyIdentityPage({ searchParams }: { searchParam
 
   return (
     <div data-section data-theme="light" className="section min-h-screen">
-      <AppHeader locale={locale} dict={dict} rest={IDENTITY_VERIFY_PATH} />
+      {/* Audit P2-12: switching language keeps the page's return path (the transient
+          result/err outcome is not replayed). */}
+      <AppHeader locale={locale} dict={dict} rest={identityVerifyHref(requestedNext)} />
 
       <main id="main" data-identity-status={status} className="band py-16 lg:py-20">
         <p className="text-accent font-label text-eyebrow uppercase">{t.eyebrow}</p>

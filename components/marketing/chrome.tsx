@@ -70,6 +70,11 @@ export function MarketingNav({
   );
 }
 
+/** The static door to /account: sign-in short-circuits to it for a reader who has a session. */
+export function accountSigninHref(locale: Locale): string {
+  return `/auth/signin?next=${encodeURIComponent('/account')}&locale=${locale}`;
+}
+
 export function MarketingFooter({ locale, dict }: { locale: Locale; dict: Dictionary }) {
   return (
     <SiteFooter
@@ -91,9 +96,11 @@ export function MarketingFooter({ locale, dict }: { locale: Locale; dict: Dictio
         builtIn: dict.footer.builtIn,
         navHeading: dict.footer.navHeading,
         contactHeading: dict.footer.contactHeading,
+        mailSubject: dict.footer.mailSubject,
         brand: dict.meta.siteName,
         adHref: brandEnquiryHref(locale),
         business: businessFooterLines(locale),
+        account: { href: accountSigninHref(locale), label: dict.nav.account },
       }}
     />
   );

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { createSubmitGuard } from './submit-guard';
 
 /**
  * TWINGS — the make loop, as a four-step demo (founder, 2026-08-16: "사진만 넣으면 완성도 높은
@@ -154,6 +155,7 @@ export function TwingsStudio({
   const [styleId, setStyleId] = useState<string>(initialStyleId ?? styles[0]?.id ?? '');
   const [aspect, setAspect] = useState<string>(styles.find((item) => item.id === (initialStyleId ?? styles[0]?.id))?.defaultAspect ?? styles[0]?.defaultAspect ?? '');
   const fileRef = useRef<HTMLInputElement>(null);
+  const submitGuard = useRef(createSubmitGuard());
 
   const chosen = styles.find((item) => item.id === styleId) ?? styles[0] ?? null;
 
@@ -206,6 +208,13 @@ export function TwingsStudio({
 
   const submitLive = async () => {
     if (!live || (!photoFile && !savedPortrait) || !chosen) return;
+    // H3: a ref, not state — a second click in the same tick still sees the first one in flight.
+    const guard = submitGuard.current;
+    if (!guard.begin()) return;
+    const go = (href: string) => {
+      guard.leave();
+      window.location.assign(href);
+    };
     setSubmitting(true);
     setLiveError(null);
     try {
@@ -220,26 +229,27 @@ export function TwingsStudio({
       const response = await fetch(charge ? '/api/billing/toss/orders' : live.endpoint, { method: 'POST', body: form, credentials: 'same-origin' });
       const json = (await response.json().catch(() => ({}))) as { ok?: boolean; href?: string; code?: string; held?: boolean; verifyHref?: string };
       if (response.ok && json.ok === true && json.held === true) {
-        window.location.assign(typeof json.verifyHref === 'string' ? json.verifyHref : live.identityHref);
+        go(typeof json.verifyHref === 'string' ? json.verifyHref : live.identityHref);
         return;
       }
       if (response.ok && json.ok === true && typeof json.href === 'string') {
-        window.location.assign(json.href);
+        go(json.href);
         return;
       }
       if (json.code === 'sign_in_required') {
-        window.location.assign(live.signinHref);
+        go(live.signinHref);
         return;
       }
       if (json.code === 'identity_required') {
-        window.location.assign(live.identityHref);
+        go(live.identityHref);
         return;
       }
       setLiveError(live.labels.errors[json.code ?? ''] ?? live.labels.errors.generic ?? 'error');
     } catch {
       setLiveError(live.labels.errors.generic ?? 'error');
     } finally {
-      setSubmitting(false);
+      // Navigating away: keep the button disabled until the next page replaces this one.
+      if (guard.finish()) setSubmitting(false);
     }
   };
 

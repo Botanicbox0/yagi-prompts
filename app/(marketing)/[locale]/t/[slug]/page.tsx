@@ -176,7 +176,8 @@ export default async function TemplatePage({ params }: RouteParams) {
                   <p data-template-closed className="mt-6 max-w-detail text-body opacity-70">{t.notForSaleBody}</p>
                 ) : (
                   <a href="#make" data-template-make-cta className="mt-6 inline-block bg-accent px-6 py-3 font-label text-label text-white uppercase">
-                    <TextSwap>{t.makeCta} →</TextSwap>
+                    {/* Q3: the closed panel below offers the email signup, so the header says that. */}
+                    <TextSwap>{RENDER_PIPELINE_PUBLIC ? t.makeCta : t.makeCtaClosed} →</TextSwap>
                   </a>
                 )}
               </div>
@@ -186,7 +187,7 @@ export default async function TemplatePage({ params }: RouteParams) {
             <section id="make" data-template-make className="mt-16 border-t border-hairline pt-10">
               <p className="text-accent font-label text-eyebrow uppercase">{t.makeEyebrow}</p>
               <h2 className="mt-4 font-display text-[clamp(1.6rem,3vw,2.4rem)] leading-[0.95] font-black uppercase">{t.makeHeading}</h2>
-              <p className="mt-4 max-w-detail text-body opacity-70">{t.makeBody}</p>
+              <p className="mt-4 max-w-detail text-body opacity-70">{RENDER_PIPELINE_PUBLIC ? t.makeBody : t.makeBodyClosed}</p>
               {style === null ? (
                 <p data-template-closed className="mt-8 border border-hairline p-6 text-body opacity-70">{t.notForSaleBody}</p>
               ) : (

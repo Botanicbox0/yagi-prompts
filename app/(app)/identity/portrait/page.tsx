@@ -10,9 +10,10 @@ import {TwingsLogo} from '@/components/brand/twings-mark';
 export const dynamic='force-dynamic';
 export const metadata={robots:{index:false,follow:false}};
 export default async function PortraitPage({searchParams}:{searchParams:Promise<{next?:string}>}){
-  const viewer=await getViewer();if(!viewer.userId)redirect('/auth/choose?next=%2Fidentity%2Fportrait');
-  const locale=await getLocaleFromHeaders(),copy=getDictionary(locale).portrait;
   const next=safeNextPath((await searchParams).next);
+  // Audit P2-12: the chooser round trip keeps where the reader was going after the portrait.
+  const viewer=await getViewer();if(!viewer.userId)redirect(`/auth/choose?next=${encodeURIComponent(next?`/identity/portrait?next=${encodeURIComponent(next)}`:'/identity/portrait')}`);
+  const locale=await getLocaleFromHeaders(),copy=getDictionary(locale).portrait;
   const deps=await portraitDeps();
   let state=null;try{if(deps)state=await portraitState(deps.sql,viewer.userId);}catch{/* Missing cloud migration keeps this closed. */}
   return <main id="main" className="mx-auto min-h-screen max-w-3xl px-5 py-8 sm:px-8" data-section data-theme="light">

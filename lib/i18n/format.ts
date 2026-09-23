@@ -52,3 +52,12 @@ export function formatDate(iso: string | null | undefined, locale: string): stri
 export function localize(value: { en: string; ko: string }, locale: string): string {
   return locale === 'ko' ? value.ko : value.en;
 }
+
+/**
+ * The one KRW money format (audit P2-18): "9,900원" on Korean pages, "₩9,900" on English ones.
+ * The Toss order page and its checkout button used to disagree.
+ */
+export function formatKrw(amount: number, locale: string): string {
+  const digits = new Intl.NumberFormat(tag(locale)).format(amount);
+  return locale === 'ko' ? `${digits}원` : `₩${digits}`;
+}
