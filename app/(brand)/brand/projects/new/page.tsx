@@ -1,23 +1,33 @@
 import { brandContext } from "@/components/brand-workspace/context";
 import { ActionForm } from "@/components/brand-workspace/action-form";
-import { loadBrandWorkspace } from "@/lib/brands/workspace/service";
-export default async function NewBrandProject() {
-  const { sql, viewer, b } = await brandContext();
+import { brandScope, membershipOf } from "@/components/brand-workspace/scope";
+import { BrandUnavailable } from "@/components/brand-workspace/brand-unavailable";
+import { scopedHref } from "@/lib/brands/workspace/selection";
+export default async function NewBrandProject({
+  searchParams,
+}: {
+  searchParams: Promise<{ organizationId?: string | string[] }>;
+}) {
+  const [{ organizationId }, { sql, viewer, b }] = await Promise.all([searchParams, brandContext()]);
   if (!sql) return <p role="alert">{b.unavailable}</p>;
-  const workspace = await loadBrandWorkspace({ sql }, viewer);
+  const { selection, choice, choices } = await brandScope(sql, viewer, organizationId);
+  if (selection.state === "unavailable") return <BrandUnavailable b={b} />;
+  // A brief goes to the SELECTED brand, and only when that brand's role may send one.
+  const workspace = { organizations: membershipOf(choice) };
   const organizations = workspace.organizations.filter(
     (o) => o.role !== "viewer",
   );
+  const back = scopedHref("/brand", choice);
   return (
     <div data-brand-new-project>
       <div className="bw-heading">
         <div>
-          <a href="/brand">← {b.back}</a>
+          <a href={back}>← {b.back}</a>
           <h1>{b.newProject}</h1>
           <p>{b.emptyBody}</p>
         </div>
       </div>
-      {workspace.organizations.length === 0 ? (
+      {!choices.some((c) => c.role !== "guest") ? (
         // No workspace yet: create it here and come straight back, instead of bouncing via /brand
         // (which, for campaign-only invitees, shows their campaigns and no creation form).
         <section className="bw-panel" data-brand-new-project-setup>
@@ -37,8 +47,8 @@ export default async function NewBrandProject() {
         </section>
       ) : organizations.length === 0 ? (
         <section className="bw-empty" data-brand-new-project-read-only>
-          <p>{b.access.viewerCannotRequest}</p>
-          <a href="/brand" className="bw-button">
+          <p>{choice?.role === "guest" ? b.access.sharedOnly : b.access.viewerCannotRequest}</p>
+          <a href={back} className="bw-button">
             {b.back}
           </a>
         </section>

@@ -110,7 +110,7 @@ export function ProjectDetail({
       )}
       <div className="bw-heading">
         <div>
-          <a href={studio ? "/admin/brand-workspace" : "/brand"}>← {b.back}</a>
+          <a href={studio ? "/admin/brand-workspace" : `/brand?organizationId=${p.organizationId}`}>← {b.back}</a>
           <p className="bw-kicker">{p.organizationName}</p>
           <h1>{p.title}</h1>
           <p>

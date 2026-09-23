@@ -9,6 +9,9 @@ import {
   publishBrandReport,
   importBrandExternalPosts,
   setBrandProjectCover,
+  storeBrandOrganizationLogo,
+  removeBrandOrganizationLogo,
+  BRAND_LOGO_MAX_BYTES,
 } from "@/lib/brands/workspace/service";
 import type { BrandOutcome } from "@/lib/brands/workspace/types";
 import type { AdminOperation } from "./operations";
@@ -172,7 +175,25 @@ const externalPosts: AdminOperation<Input> = {
     return fail(result.code === "conflict" ? "staleReview" : result.code === "not_found" ? "notFound" : result.code === "forbidden" ? "forbidden" : "invalid", result.code);
   },
 };
+/**
+ * The studio sets a brand's logo from the organization page: one image file, inspected by the same
+ * service an owner's upload goes through (bytes sniffed, 2 MiB, private staging only).
+ */
+const logoUpload: AdminOperation<Input> = {
+  ...managedOperation(async (ctx, v) => {
+    const bytes = new Uint8Array(await (v.file as File).arrayBuffer());
+    return storeBrandOrganizationLogo(ctx, ctx.viewer, { organizationId: v.organizationId, requestId: v.requestId, expectedRevision: v.expectedRevision, bytes });
+  }, "home"),
+  parse(form) {
+    const file = f.file(form, "file");
+    if (!file) return { ok: false, detail: "file: choose a PNG, JPEG or WebP image" };
+    if (file.size > BRAND_LOGO_MAX_BYTES) return { ok: false, detail: "file: 2 MiB at most" };
+    return { ok: true, value: { organizationId: f.str(form, "organizationId"), requestId: f.str(form, "requestId"), expectedRevision: Number(f.str(form, "expectedRevision")), file } };
+  },
+};
 export const BRAND_WORKSPACE_OPERATIONS = {
+ 'brandWorkspace.logo': logoUpload,
+ 'brandWorkspace.logoRemove': managedOperation((ctx,v)=>removeBrandOrganizationLogo(ctx,ctx.viewer,v),'home'),
  'brandWorkspace.cover': managedOperation((ctx,v)=>setBrandProjectCover(ctx,ctx.viewer,v)),
   "brandWorkspace.externalPosts": externalPosts,
  'brandWorkspace.settings': managedOperation((ctx,v)=>updateBrandSettings(ctx,ctx.viewer,v),'home'),

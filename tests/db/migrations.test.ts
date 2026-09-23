@@ -30,6 +30,8 @@ describe('migrations apply on a fresh database (PLAN §6)', () => {
       'brand_invites',
       'brand_memberships',
       'brand_messages',
+      // 2026-09-23 — a brand's own logo history; the organization points at the current one.
+      'brand_organization_logos',
       'brand_organizations',
       // 2026-09-22 — one ledger row per studio collection-console save (idempotency + batch time).
       'brand_post_collection_batches',

@@ -1,13 +1,13 @@
-import { SupportDrawer } from '@/components/brand-workspace/support';
+import { WorkspaceHomeLink, WorkspaceSupport } from '@/components/brand-workspace/context-links';
 import { getViewer } from '@/lib/auth/viewer';
 import { getSqlRunner } from '@/lib/db/connect';
-import { loadBrandWorkspace } from '@/lib/brands/workspace/service';
+import { loadBrandWorkspaceScope } from '@/lib/brands/workspace/service';
 import "@/app/globals.css";
 import "./workspace.css";
 import { WorkspaceLanguage } from '@/components/brand-workspace/language';
 import { WorkspaceNavigation } from '@/components/brand-workspace/navigation';
-import { navigationVisibility, workspaceAccess } from '@/components/brand-workspace/access';
-import type { ReactNode } from "react";
+import { WorkspaceIdentity } from '@/components/brand-workspace/identity';
+import { Suspense, type ReactNode } from "react";
 import type { Metadata } from "next";
 import { fontVariables } from "@/app/fonts";
 import { TwingsLogo } from "@/components/brand/twings-mark";
@@ -34,8 +34,8 @@ export default async function BrandLayout({
   const b = d.brandWorkspace;
   const viewer=await getViewer();
   const sql=viewer.userId?await getSqlRunner():null;
-  const workspace=sql?await loadBrandWorkspace({sql},viewer):null;
-  const visible=navigationVisibility(workspace?workspaceAccess(workspace):null);
+  // Choices only (ids, names, roles, logo routes): the page itself loads the selected brand's data.
+  const scope=sql?await loadBrandWorkspaceScope({sql},viewer):null;
   return (
     <html lang={locale} className={fontVariables} data-brand-workspace>
       <head>
@@ -52,12 +52,14 @@ export default async function BrandLayout({
         <a href="#main" className="bw-skip-link" data-skip-link>{b.skipToContent}</a>
         <div className="bw-shell">
           <aside className="bw-sidebar">
-            <a href="/brand" className="bw-lockup">
-              <TwingsLogo size={22} />
-              <span>{d.admin.byline}</span>
-            </a>
-            <p className="bw-kicker">{b.title}</p>
-            <WorkspaceNavigation home={b.home} members={b.members} settings={b.managed.settings} library={b.managed.library} studio={b.productionStudio.title} visible={visible}/>
+            <Suspense fallback={null}>
+              {scope ? <WorkspaceHomeLink scope={scope}><TwingsLogo size={22} /><span>{d.admin.byline}</span></WorkspaceHomeLink> : <a href="/brand" className="bw-lockup"><TwingsLogo size={22} /><span>{d.admin.byline}</span></a>}
+            </Suspense>
+            {/* URL-derived: dynamic render resolves this on the server, the empty fallback never shows. */}
+            <Suspense fallback={null}>
+              {scope?<WorkspaceIdentity scope={scope} copy={b.identity} roles={b.roles}/>:<p className="bw-kicker">{b.title}</p>}
+              <WorkspaceNavigation home={b.home} members={b.members} settings={b.managed.settings} library={b.managed.library} studio={b.productionStudio.title} scope={scope}/>
+            </Suspense>
             <div className="bw-sidebar-utilities">
               <WorkspaceLanguage locale={locale} label={d.nav.localeToggle} compact applyLabel={b.languageApply}/>
               <form action="/auth/signout" method="post" className="bw-signout">
@@ -74,7 +76,7 @@ export default async function BrandLayout({
             </main>
           </div>
         </div>
-        {workspace&&<SupportDrawer organizations={workspace.organizations} b={b} locale={locale}/>}
+        {scope&&<Suspense fallback={null}><WorkspaceSupport scope={scope} b={b} locale={locale}/></Suspense>}
       </body>
     </html>
   );

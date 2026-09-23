@@ -14,6 +14,7 @@ import {
 import { AdminShell } from "@/components/admin/chrome";
 import { ManagedForm } from "@/components/brand-workspace/managed-form";
 import { formatBrandTimestamp } from "@/components/brand-workspace/format";
+import { BrandAvatar } from "@/components/brand-workspace/brand-avatar";
 export const dynamic = "force-dynamic";
 export default async function StudioOrganization({
   params,
@@ -45,6 +46,35 @@ export default async function StudioOrganization({
           <p>{c.access}</p>
         </div>
       </div>
+      {/* The brand's own logo, before or without any campaign. Same inspected, private path as owners use. */}
+      <section className="bw-panel bw-logo-section" data-brand-logo>
+        <h2>{b.identity.logo}</h2>
+        <div className="bw-logo-current">
+          <BrandAvatar name={org.name} logoUrl={org.logoUrl} />
+          {!org.logoUrl && <p className="bw-muted">{b.identity.logoNone}</p>}
+        </div>
+        <ManagedForm op="brandWorkspace.logo" b={b} submit={b.identity.logoUpload}>
+          <input type="hidden" name="organizationId" value={id} />
+          <input type="hidden" name="expectedRevision" value={org.logoRevision} />
+          <label>
+            {b.identity.logoFile}
+            <input name="file" type="file" accept="image/png,image/jpeg,image/webp" required />
+          </label>
+          <p className="bw-muted">{b.identity.logoHint}</p>
+        </ManagedForm>
+        {org.logoUrl && (
+          <ManagedForm
+            op="brandWorkspace.logoRemove"
+            b={b}
+            submit={b.identity.logoRemove}
+            tone="danger"
+            confirm={{ prompt: b.identity.logoRemoveConfirm, action: b.identity.logoRemove }}
+          >
+            <input type="hidden" name="organizationId" value={id} />
+            <input type="hidden" name="expectedRevision" value={org.logoRevision} />
+          </ManagedForm>
+        )}
+      </section>
       <div className="bw-grid-wide">
         <section className="bw-panel">
           <h2>{b.members}</h2>

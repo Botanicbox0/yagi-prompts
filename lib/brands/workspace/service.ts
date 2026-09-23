@@ -4,6 +4,7 @@ import { z } from 'zod';
 import type { Viewer } from '@/lib/auth/identity';
 import type { SqlRunner } from '@/lib/db/sql-runner';
 import { STAGING_BUCKET, type StorageDriver } from '@/lib/storage';
+import type { BrandWorkspaceChoice, BrandWorkspaceScope } from './selection';
 import {
   BrandHttpsUrlSchema, BrandOrganizationSchema, BrandProjectSchema, BrandProjectStatusSchema, BrandContentSchema,
   BrandDecisionSchema, BrandMessageSchema, BrandPostSchema, BrandReportSchema, BrandAttachmentSchema,
@@ -69,7 +70,7 @@ async function project(sql: SqlRunner, userId: string, id: string, options: { st
   }
   return row;
 }
-async function mutation<S extends z.ZodType, T>(deps: BrandWorkspaceDeps, viewer: Viewer, schema: S, input: unknown,
+async function mutation<S extends z.ZodType, T>(deps: Pick<BrandWorkspaceDeps, 'sql'>, viewer: Viewer, schema: S, input: unknown,
   perform: (sql: SqlRunner, userId: string, value: z.output<S>) => Promise<T>): Promise<BrandOutcome<T>> {
   if (!uuid(viewer.userId)) return fail('sign_in_required');
   const parsed = schema.safeParse(input);
@@ -150,14 +151,45 @@ async function detail(sql: SqlRunner, row: Row): Promise<BrandProjectDetail> {
   return { ...summary(row), role: row.member_role as BrandProjectDetail['role'], canComment: row.can_comment === true, referenceLinks: references, contracts, contractUploads, contents, decisions, messages, attachments, posts, reports };
 }
 
-export async function loadBrandWorkspace(deps: BrandWorkspaceDeps, viewer: Viewer, options: { includeAllContent?: boolean } = {}): Promise<BrandWorkspace> {
+/**
+ * `organizationId` narrows BOTH lists to one brand (the workspace selector's brand). Access is the
+ * same rule either way: an active membership, or an active invitation to that visible campaign.
+ */
+export async function loadBrandWorkspace(deps: BrandWorkspaceDeps, viewer: Viewer, options: { includeAllContent?: boolean; organizationId?: string } = {}): Promise<BrandWorkspace> {
   if (!uuid(viewer.userId)) return { organizations: [], projects: [] };
+  if (options.organizationId !== undefined && !uuid(options.organizationId)) return { organizations: [], projects: [] };
+  const scope = options.organizationId ?? null;
   return deps.sql.transaction(async sql => {
     const memberships = (await sql.query(`select o.id,o.name,m.role from brand_organizations o join brand_memberships m on m.organization_id=o.id
-      where m.user_id=$1 and m.status='active' order by o.created_at for share of m`, [viewer.userId])).rows;
+      where m.user_id=$1 and m.status='active' and ($2::uuid is null or o.id=$2::uuid) order by o.created_at for share of m`, [viewer.userId, scope])).rows;
     const projects = (await sql.query(`select p.*,o.name as organization_name from brand_projects p join brand_organizations o on o.id=p.organization_id
-      where p.client_visible and (exists(select 1 from brand_memberships m where m.organization_id=p.organization_id and m.user_id=$1 and m.status='active') or exists(select 1 from brand_project_members m where m.project_id=p.id and m.user_id=$1 and m.status='active')) order by p.updated_at desc`, [viewer.userId])).rows;
+      where p.client_visible and ($2::uuid is null or p.organization_id=$2::uuid) and (exists(select 1 from brand_memberships m where m.organization_id=p.organization_id and m.user_id=$1 and m.status='active') or exists(select 1 from brand_project_members m where m.project_id=p.id and m.user_id=$1 and m.status='active')) order by p.updated_at desc`, [viewer.userId, scope])).rows;
     return { organizations: memberships.map(r => ({ id: String(r.id), name: String(r.name), role: r.role as BrandRole })), projects: await withHomeOverview(sql, projects.map(summary), options.includeAllContent ? Infinity : 4) };
+  });
+}
+const logoUrl = (r: Row): string | null => r.logo_id ? `/api/brand-workspace/organizations/${r.id}/logo?v=${Number(r.logo_revision)}` : null;
+/**
+ * Every brand this account may pick in the workspace selector: its active memberships, then brands it
+ * reaches only through an active invitation to a campaign that is currently shared. Such a guest is
+ * listed as `guest` and gains no membership, owner control or brand-wide access from being listed.
+ */
+export async function loadBrandWorkspaceScope(deps: BrandWorkspaceDeps, viewer: Viewer): Promise<BrandWorkspaceScope> {
+  if (!uuid(viewer.userId)) return { choices: [], projectOrganizations: {} };
+  return deps.sql.transaction(async sql => {
+    const memberships = (await sql.query(`select o.id,o.name,o.logo_id,o.logo_revision,m.role from brand_organizations o join brand_memberships m on m.organization_id=o.id
+      where m.user_id=$1 and m.status='active' order by o.created_at,o.id`, [viewer.userId])).rows;
+    const projects = (await sql.query(`select p.id,p.organization_id,o.name,o.logo_id,o.logo_revision,
+      exists(select 1 from brand_memberships m where m.organization_id=p.organization_id and m.user_id=$1 and m.status='active') as member
+      from brand_projects p join brand_organizations o on o.id=p.organization_id
+      where p.client_visible and (exists(select 1 from brand_memberships m where m.organization_id=p.organization_id and m.user_id=$1 and m.status='active')
+        or exists(select 1 from brand_project_members g where g.project_id=p.id and g.user_id=$1 and g.status='active'))
+      order by o.created_at,o.id,p.id`, [viewer.userId])).rows;
+    const choices: BrandWorkspaceChoice[] = memberships.map(r => ({ id: String(r.id), name: String(r.name), role: r.role as BrandRole, logoUrl: logoUrl(r) }));
+    for (const r of projects) {
+      if (r.member !== true && !choices.some(c => c.id === r.organization_id))
+        choices.push({ id: String(r.organization_id), name: String(r.name), role: 'guest', logoUrl: logoUrl({ ...r, id: r.organization_id }) });
+    }
+    return { choices, projectOrganizations: Object.fromEntries(projects.map(r => [String(r.id), String(r.organization_id)])) };
   });
 }
 export async function loadStudioWorkspace(deps: BrandWorkspaceDeps, viewer: Viewer): Promise<BrandWorkspace> {
@@ -663,7 +695,7 @@ export async function shareBrandContract(deps:BrandWorkspaceDeps,viewer:Viewer,i
 }
 
 export interface StudioBrandAccess {
- id:string;name:string;
+ id:string;name:string;logoUrl:string|null;logoRevision:number;
  members:Array<{userId:string;email:string;role:string;projectId:string|null;projectTitle:string|null;status:string;canComment:boolean}>;
  invitations:Array<{id:string;email:string;role:string;projectId:string|null;projectTitle:string|null;state:'pending'|'accepted'|'revoked'|'expired';expiresAt:string;canComment:boolean}>;
 }
@@ -671,11 +703,11 @@ export async function loadStudioBrandAccess(deps:BrandWorkspaceDeps,viewer:Viewe
  if(!uuid(viewer.userId)||!uuid(organizationId))return null;
  try{return await deps.sql.transaction(async sql=>{
   await studio(sql,viewer.userId!);
-  const org=(await sql.query('select id,name from brand_organizations where id=$1',[organizationId])).rows[0];if(!org)return null;
+  const org=(await sql.query('select id,name,logo_id,logo_revision from brand_organizations where id=$1',[organizationId])).rows[0];if(!org)return null;
   const members=(await sql.query(`select m.user_id,p.email,m.role,m.status,null::uuid as project_id,null::text as project_title,m.role<>'viewer' as can_comment from brand_memberships m join profiles p on p.id=m.user_id where m.organization_id=$1
     union all select m.user_id,p.email,'viewer',m.status,m.project_id,c.title,m.can_comment from brand_project_members m join profiles p on p.id=m.user_id join brand_projects c on c.id=m.project_id where m.organization_id=$1`,[organizationId])).rows;
   const invitations=(await sql.query('select i.id,i.email,i.role,i.project_id,c.title as project_title,i.accepted_at,i.revoked_at,i.expires_at,i.can_comment from brand_invites i left join brand_projects c on c.id=i.project_id where i.organization_id=$1 order by i.created_at desc',[organizationId])).rows;
-  return {id:String(org.id),name:String(org.name),members:members.map(m=>({userId:String(m.user_id),email:String(m.email),role:String(m.role),status:String(m.status),projectId:m.project_id?String(m.project_id):null,projectTitle:m.project_title?String(m.project_title):null,canComment:m.can_comment===true})),
+  return {id:String(org.id),name:String(org.name),logoUrl:logoUrl(org),logoRevision:Number(org.logo_revision),members:members.map(m=>({userId:String(m.user_id),email:String(m.email),role:String(m.role),status:String(m.status),projectId:m.project_id?String(m.project_id):null,projectTitle:m.project_title?String(m.project_title):null,canComment:m.can_comment===true})),
    invitations:invitations.map(i=>({id:String(i.id),email:String(i.email),role:String(i.role),projectId:i.project_id?String(i.project_id):null,projectTitle:i.project_title?String(i.project_title):null,expiresAt:stamp(i.expires_at),canComment:i.project_id?i.can_comment===true:i.role!=='viewer',state:i.revoked_at?'revoked':i.accepted_at?'accepted':+new Date(stamp(i.expires_at))<=Date.now()?'expired':'pending'}))};
  });}catch(e){if(e instanceof Denied)return null;throw e}
 }
@@ -687,13 +719,13 @@ export async function revokeStudioInvitation(deps:BrandWorkspaceDeps,viewer:View
  });
 }
 
-export interface BrandOrganizationSettings {id:string;name:string;website:string;description:string;contactEmail:string;revision:number;role:BrandRole|'studio'}
+export interface BrandOrganizationSettings {id:string;name:string;website:string;description:string;contactEmail:string;revision:number;role:BrandRole|'studio';logoUrl:string|null;logoRevision:number}
 export async function loadBrandSettings(deps:BrandWorkspaceDeps,viewer:Viewer,id:string,isStudio=false):Promise<BrandOrganizationSettings|null> {
  if(!uuid(viewer.userId)||!uuid(id))return null;
  try{return await deps.sql.transaction(async sql=>{
   const role=isStudio?(await studio(sql,viewer.userId!),'studio' as const):await member(sql,viewer.userId!,id);
-  const r=(await sql.query('select id,name,website,description,contact_email,profile_revision from brand_organizations where id=$1',[id])).rows[0];
-  if(!r)return null;return {id:String(r.id),name:String(r.name),website:String(r.website),description:String(r.description),contactEmail:String(r.contact_email),revision:Number(r.profile_revision),role};
+  const r=(await sql.query('select id,name,website,description,contact_email,profile_revision,logo_id,logo_revision from brand_organizations where id=$1',[id])).rows[0];
+  if(!r)return null;return {id:String(r.id),name:String(r.name),website:String(r.website),description:String(r.description),contactEmail:String(r.contact_email),revision:Number(r.profile_revision),role,logoUrl:logoUrl(r),logoRevision:Number(r.logo_revision)};
  });}catch(e){if(e instanceof Denied)return null;throw e}
 }
 export async function updateBrandSettings(deps:BrandWorkspaceDeps,viewer:Viewer,input:unknown):Promise<BrandOutcome> {
@@ -720,4 +752,89 @@ export async function sendBrandSupport(deps:BrandWorkspaceDeps,viewer:Viewer,inp
   const count=(await sql.query("select count(*)::int as n from brand_support_messages where created_by=$1 and created_at>now()-interval '1 hour'",[userId])).rows[0];if(Number(count?.n)>=30)throw new Denied('rate_limited');
   const id=randomUUID();await sql.query('insert into brand_support_messages(id,organization_id,body,author_role,created_by,request_id) values($1,$2,$3,$4,$5,$6)',[id,v.organizationId,v.body,isStudio?'studio':'brand',userId,v.requestId]);return{id};
  });
+}
+
+/** 2 MiB, checked against the bytes themselves; the declared type is never trusted. */
+export const BRAND_LOGO_MAX_BYTES = 2 * 1024 * 1024;
+export const BRAND_LOGO_MIMES = ['image/png', 'image/jpeg', 'image/webp'] as const;
+export type BrandLogoMime = typeof BRAND_LOGO_MIMES[number];
+/** The image type the bytes actually are, or null. Only PNG, JPEG and WebP can be a logo. */
+export function brandLogoMime(bytes: Uint8Array): BrandLogoMime | null {
+  if (bytes.byteLength < 12) return null;
+  const mime = actualMime(bytes);
+  return (BRAND_LOGO_MIMES as readonly string[]).includes(mime ?? '') ? mime as BrandLogoMime : null;
+}
+const BrandLogoSchema = z.object({
+  organizationId: z.uuid(), requestId: z.uuid(), expectedRevision: z.number().int().nonnegative(),
+  bytes: z.instanceof(Uint8Array).refine(b => b.byteLength > 0 && b.byteLength <= BRAND_LOGO_MAX_BYTES, 'Use an image up to 2 MiB'),
+  /** Optional declared type (a browser's file.type). When present it must match the bytes. */
+  mime: z.enum(BRAND_LOGO_MIMES).optional(),
+});
+const BrandLogoRemoveSchema = z.object({ organizationId: z.uuid(), expectedRevision: z.number().int().nonnegative() });
+/**
+ * Owners of the brand and the studio set its logo. Unknown and not-a-member look the same (not_found);
+ * an editor or viewer of the brand is refused. The organization row is locked first, so two writers
+ * queue and the later one sees `conflict` through `expectedRevision`.
+ */
+async function logoWriter(sql: SqlRunner, userId: string, organizationId: string): Promise<Row> {
+  const isStudio = (await profile(sql, userId)).is_admin === true;
+  const org = (await sql.query('select id,logo_id,logo_revision from brand_organizations where id=$1 for update', [organizationId])).rows[0];
+  if (!org) throw new Denied('not_found');
+  if (!isStudio && await member(sql, userId, organizationId) !== 'owner') throw new Denied('forbidden');
+  return org;
+}
+/**
+ * Store an inspected image as the brand's current logo. No campaign is needed. Retrying the same
+ * `requestId` with the same bytes returns the first result; different bytes under it are a conflict.
+ * The bytes go to the private staging bucket only.
+ */
+export async function storeBrandOrganizationLogo(deps: { sql: SqlRunner; storage?: Pick<StorageDriver, 'putStaging'> }, viewer: Viewer, input: unknown): Promise<BrandOutcome<{ id: string; revision: number }>> {
+  return mutation(deps, viewer, BrandLogoSchema, input, async (sql, userId, v) => {
+    const mime = brandLogoMime(v.bytes);
+    if (!mime || (v.mime && v.mime !== mime)) throw new Denied('invalid');
+    const org = await logoWriter(sql, userId, v.organizationId);
+    const sha256 = createHash('sha256').update(v.bytes).digest('hex');
+    const old = (await sql.query('select id,sha256 from brand_organization_logos where organization_id=$1 and created_by=$2 and request_id=$3', [org.id, userId, v.requestId])).rows[0];
+    if (old) {
+      if (old.sha256 !== sha256) throw new Denied('conflict');
+      return { id: String(old.id), revision: Number(org.logo_revision) };
+    }
+    if (Number(org.logo_revision) !== v.expectedRevision) throw new Denied('conflict');
+    if (!deps.storage) throw new Denied('storage_unavailable');
+    const id = randomUUID(), storageKey = `brands/${org.id}/logos/${id}`;
+    await deps.storage.putStaging(storageKey, v.bytes, mime);
+    await sql.query('insert into brand_organization_logos(id,organization_id,storage_key,mime,size_bytes,sha256,created_by,request_id) values($1,$2,$3,$4,$5,$6,$7,$8)',
+      [id, org.id, storageKey, mime, v.bytes.byteLength, sha256, userId, v.requestId]);
+    await sql.query('update brand_organizations set logo_id=$1,logo_revision=logo_revision+1 where id=$2', [id, org.id]);
+    return { id, revision: Number(org.logo_revision) + 1 };
+  });
+}
+/** Back to the default avatar. The stored bytes stay (storage has no delete); nothing points at them. */
+export async function removeBrandOrganizationLogo(deps: { sql: SqlRunner }, viewer: Viewer, input: unknown): Promise<BrandOutcome<{ id: string; revision: number }>> {
+  return mutation(deps, viewer, BrandLogoRemoveSchema, input, async (sql, userId, v) => {
+    const org = await logoWriter(sql, userId, v.organizationId);
+    // Already on the default avatar: a retried removal succeeds without moving the revision.
+    if (org.logo_id == null) return { id: String(org.id), revision: Number(org.logo_revision) };
+    if (Number(org.logo_revision) !== v.expectedRevision) throw new Denied('conflict');
+    await sql.query('update brand_organizations set logo_id=null,logo_revision=logo_revision+1 where id=$1', [org.id]);
+    return { id: String(org.id), revision: Number(org.logo_revision) + 1 };
+  });
+}
+export interface BrandLogoAccess { key: string; mime: BrandLogoMime; sizeBytes: number; sha256: string }
+/**
+ * Who may see a brand's logo: the studio, an active member of the brand, or an active guest of one of
+ * its currently shared campaigns. Everyone else, and a brand without a logo, gets null (404).
+ */
+export async function loadBrandOrganizationLogoAccess(deps: { sql: SqlRunner }, viewer: Viewer, organizationId: string): Promise<BrandLogoAccess | null> {
+  if (!uuid(viewer.userId) || !uuid(organizationId)) return null;
+  try { return await deps.sql.transaction(async sql => {
+    const isStudio = (await profile(sql, viewer.userId!)).is_admin === true;
+    const allowed = isStudio || (await sql.query(`select 1 from brand_memberships m where m.organization_id=$1 and m.user_id=$2 and m.status='active'
+      union all select 1 from brand_project_members g join brand_projects p on p.id=g.project_id and p.organization_id=g.organization_id
+      where g.organization_id=$1 and g.user_id=$2 and g.status='active' and p.client_visible limit 1`, [organizationId, viewer.userId])).rows.length > 0;
+    if (!allowed) return null;
+    const r = (await sql.query(`select l.storage_key,l.mime,l.size_bytes,l.sha256 from brand_organizations o
+      join brand_organization_logos l on l.organization_id=o.id and l.id=o.logo_id where o.id=$1`, [organizationId])).rows[0];
+    return r ? { key: String(r.storage_key), mime: r.mime as BrandLogoMime, sizeBytes: Number(r.size_bytes), sha256: String(r.sha256) } : null;
+  }); } catch (error) { if (error instanceof Denied) return null; throw error; }
 }
