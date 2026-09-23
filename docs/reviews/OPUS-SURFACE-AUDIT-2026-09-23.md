@@ -54,7 +54,7 @@ Client names, handles and metrics are not in any document or fixture.
   - Test: `tests/brands/author-entry.test.ts`.
 - **Invitations (P2-1/2/3):**
   - After accepting, the user lands on that brand (or that campaign).
-  - Accepting as an existing member counts as success.
+  - Accepting again as an existing member counts as success only for the same role. A different role is refused with `existing_member_role_mismatch`, the seat is unchanged, and the invitation stays pending (release follow-up 1).
   - Expired, revoked or invalid links show "invalid link". The wrong account shows a message plus a sign-out button, and says to reopen the link.
   - The service refuses a campaign-only invite for a campaign not shared with the client (`not_shared`). Brand-wide invites still work before publication. The admin page shows a note instead of the form.
   - A guest who already received an invite to a hidden campaign sees "공유 준비 중", not "create a workspace".
@@ -107,6 +107,37 @@ Client names, handles and metrics are not in any document or fixture.
   - `docs/WORKSPACE-HOST-ROUTING.md`: brand.twings.app, the brands→brand 308, and the current allowlists.
   - `docs/CONTENT-SLOTS.md`: the HERO_REEL slot does not reach the current screen.
   - `docs/TEMPLATES-IA.md` §6: deletion status.
+
+## Release review follow-up (after PR #23 opened)
+
+An independent release review (`tmp/opus-release-review.md`) and the coordinator's browser check found no blocker. These four follow-ups were fixed. Verification on final code:
+
+| Check | Result |
+|---|---|
+| `tsc` | 0 errors |
+| vitest | 164 files / 1,776 tests passed |
+| `build:local` | succeeded |
+| `sweep:anon` | 643/643 |
+| host smoke | 87/87 |
+
+1. **Existing member accepts an invitation for a different role** (`lib/brands/workspace/service.ts` `acceptBrandInvitation`):
+   - Same-role re-invitations are still idempotent.
+   - A different role returns `existing_member_role_mismatch` (409). No automatic upgrade or downgrade, and the invitation stays pending.
+   - The KO/EN message tells the person their role is unchanged and to ask an owner or the studio.
+   - Test: `tests/brands/invitation-journey.test.tsx` R2 and R2b (editor→viewer and editor→owner).
+2. **Receipt email deadline** (`sendBrandInquiryReceipt`):
+   - Bounded at 5 seconds. An `AbortSignal` is passed through to the mailer; resend@6 hands its options straight to `fetch`, so the signal aborts the HTTP request itself.
+   - A timeout, rejection or failure returns `receipt=false`. The enquiry is stored before any mail and the response is still success (201).
+   - Studio alerts and other emails are unchanged.
+   - Tests: `tests/brands/inquiry-receipt-timeout.test.ts`, `tests/notify/mailer-live-signal.test.ts` (fetch stub, nothing sent).
+3. **Internal code on the marketing notice band:**
+   - The `ERROR=OAUTH` code label was removed.
+   - The code stays in the `data-notice` attribute; readers see only the localized sentence and the retry link.
+   - Test: `tests/ui/notice.test.tsx`.
+4. **Campaign "다음 할 일" (next step):**
+   - The new `components/brand-workspace/next-action.ts` picks the line from status (requested / active / completed / cancelled), whether content, posts and reports exist, and the viewer's role (studio / customer who can approve / read-only viewer).
+   - A requested campaign with nothing produced yet no longer shows "게시물의 집계 현황과 결과를 확인해 주세요" (check the posts' results).
+   - Test: `tests/brands/next-action.test.tsx`.
 
 ## On hold and remaining decisions
 
