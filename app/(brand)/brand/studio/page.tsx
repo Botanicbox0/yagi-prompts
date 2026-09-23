@@ -13,6 +13,7 @@ import { ProductionCreate } from "@/components/brand-workspace/production-create
 import { loadProductionWorkspace } from "@/lib/brands/production/service";
 import { formatBrandTimestamp } from "@/components/brand-workspace/format";
 import { StaffNotice, adminOrganizationHref } from "@/components/brand-workspace/staff-notice";
+import { studioIdentityHref } from "@/lib/brands/workspace/links";
 export default async function BrandStudio({
   searchParams,
 }: {
@@ -33,7 +34,7 @@ export default async function BrandStudio({
   const heading = (
     <div className="bw-heading">
       <div>
-        <p className="bw-kicker">TWINGS STUDIO</p>
+        <p className="bw-kicker">{t.eyebrow}</p>
         <h1>{t.title}</h1>
         <p>{t.subtitle}</p>
       </div>
@@ -104,7 +105,7 @@ export default async function BrandStudio({
             </div>
             <a
               className="bw-button"
-              href={`https://twings.app/identity/${verifyRequired ? "verify" : "portrait"}?locale=${locale}`}
+              href={studioIdentityHref(verifyRequired ? "verify" : "portrait", locale, brandHost)}
               target="_blank"
               rel="noopener noreferrer"
             >
@@ -159,7 +160,7 @@ export default async function BrandStudio({
                       </div>
                     ) : (
                       <div className="bw-production-format">
-                        <span>SEEDANCE 2.5</span>
+                        <span data-preview-pending>{t.previewPending}</span>
                         <strong>{v.aspect}</strong>
                         <span>
                           {v.seconds}
@@ -171,6 +172,7 @@ export default async function BrandStudio({
                     <p>{t.oneUse}</p>
                     <ProductionCreate
                       contractId={c.id}
+                      organizationId={orgId ?? null}
                       templateId={v.id}
                       portraitId={portrait}
                       locale={locale}
