@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import {
-  CODE_LABEL,
   noticeSigninHref,
   parseNoticeCode,
   stripNoticeParams,
@@ -28,7 +27,7 @@ import {
 
 /**
  * Presentational half, exported for tests: a §5 hairline band pinned under the 64px nav —
- * light surface, the accent as a left rule, mono code label, one sentence, a dismiss.
+ * light surface, the accent as a left rule, one sentence, a dismiss.
  */
 export function NoticeBand({
   code,
@@ -59,10 +58,8 @@ export function NoticeBand({
     >
       <div className="mx-auto flex max-w-shell items-start justify-between gap-6 px-gutter py-3">
         <div className="border-l-2 border-blue pl-4">
-          <p className="font-mono text-[0.7rem] tracking-[0.08em] uppercase opacity-50">
-            {CODE_LABEL[code]}
-          </p>
-          <p className="mt-1 text-[0.9375rem] leading-snug">{message}</p>
+          {/* The code stays machine-readable in `data-notice`; readers see only the sentence. */}
+          <p className="text-[0.9375rem] leading-snug">{message}</p>
           {signinHref && (
             <a href={signinHref} data-notice-signin className="text-accent mt-2 inline-block font-label text-eyebrow uppercase">
               {labels.signIn} →

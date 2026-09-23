@@ -37,6 +37,22 @@ describe('the sign-in notice band', () => {
     }
   });
 
+  // Coordinator browser QA: the band showed the internal "ERROR=OAUTH" chip to customers. The code
+  // stays in `data-notice` for the sweep and analytics; readers see only the localized sentence.
+  it('shows the localized sentence without the internal code label, in both languages', () => {
+    for (const locale of ['ko', 'en'] as const) {
+      const l = noticeLabels(getDictionary(locale));
+      for (const [code, message] of [['oauth', l.oauth], ['oauth_unconfigured', l.oauthUnconfigured], ['signin', l.signin]] as const) {
+        const html = renderToStaticMarkup(<NoticeBand code={code} labels={l} signinHref="/auth/signin?next=%2Fko&locale=ko" onDismiss={() => {}} />);
+        expect(html).toContain(`data-notice="${code}"`);
+        expect(html).toContain(message);
+        expect(html).toContain('data-notice-signin');
+        const visible = html.replace(/<[^>]+>/g, ' ');
+        expect(visible).not.toMatch(/error=|oauth_unconfigured|\boauth\b/i);
+      }
+    }
+  });
+
   it('shows no door when there is nothing safe to return to', () => {
     const html = renderToStaticMarkup(<NoticeBand code="oauth" labels={labels} signinHref={null} onDismiss={() => {}} />);
     expect(html).not.toContain('data-notice-signin');

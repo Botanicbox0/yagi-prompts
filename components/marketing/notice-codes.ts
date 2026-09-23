@@ -79,10 +79,3 @@ export function noticeSigninHref(code: NoticeCode, search: string, pathname: str
   else target = next === null ? null : normalizeReturnPath(next);
   return target === null ? null : `/auth/signin?next=${encodeURIComponent(target)}&locale=${locale}`;
 }
-
-/** The mono label is the CODE, verbatim — locale-invariant, like every §5 code chip. */
-export const CODE_LABEL: Record<NoticeCode, string> = {
-  oauth: 'error=oauth',
-  oauth_unconfigured: 'error=oauth_unconfigured',
-  signin: 'signin',
-};
