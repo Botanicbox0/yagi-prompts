@@ -10,7 +10,9 @@ import { formatBrandTimestamp } from "./format";
 import { ProjectTabs } from './project-tabs';
 import { CampaignContracts } from './contracts';
 import { CampaignPerformance } from './performance';
+import { postShortId } from '@/lib/brands/workspace/performance';
 import { DecisionFields } from './decision-fields';
+import type { ReactNode } from "react";
 
 export function PostTable({
   posts,
@@ -49,13 +51,19 @@ export function PostTable({
                   rel="noopener noreferrer"
                   title={b.external}
                 >
-                  {p.platform} ↗
+                  {b.platforms[p.platform]} · {postShortId(p.url)} ↗
                 </a>
                 <p className="bw-muted">
+                  {p.origin === "external_import" && <>{b.performance.linkedPost} · </>}
                   {b.verificationLabels[p.verification]}
+                  {p.publishedAt === null && <> · {b.performance.publishedUnknown}</>}
                 </p>
               </td>
-              <td>{value(p.views)}</td>
+              <td data-approximate={p.viewsApproximate && p.views !== null ? "true" : undefined}>
+                {p.viewsApproximate && p.views !== null
+                  ? interpolate(b.performance.approxValue, { value: p.views.toLocaleString(locale) })
+                  : value(p.views)}
+              </td>
               <td>{value(p.likes)}</td>
               <td>{value(p.comments)}</td>
               <td>{value(p.shares)}</td>
@@ -77,21 +85,32 @@ export function ProjectDetail({
   b,
   locale,
   studio = false,
+  studioReply,
 }: {
   project: BrandProjectDetail;
   b: BrandCopy;
   locale: string;
   studio?: boolean;
+  /** The studio's own comment form, rendered where the conversation is instead of a separate panel. */
+  studioReply?: ReactNode;
 }) {
   const writable = !studio && p.role !== "viewer" && p.status !== "cancelled";
+  // Commenting is narrower than editing: invited campaign guests may comment without approving.
+  const canComment = !studio && p.canComment && p.status !== "cancelled";
   const newest = new Map<string, number>();
   for (const c of p.contents)
     newest.set(c.slotKey, Math.max(newest.get(c.slotKey) ?? 0, c.version));
   return (
     <div data-brand-project={p.id}>
+      <div className={p.coverUrl ? "bw-project-masthead" : undefined}>
+      {p.coverUrl && (
+        <div className="bw-project-cover" data-project-cover>
+          <img src={p.coverUrl} alt={`${b.cover.alt}: ${p.title}`} />
+        </div>
+      )}
       <div className="bw-heading">
         <div>
-          <a href={studio ? "/admin/brand-workspace" : "/brand"}>← {b.back}</a>
+          <a href={studio ? "/admin/brand-workspace" : `/brand?organizationId=${p.organizationId}`}>← {b.back}</a>
           <p className="bw-kicker">{p.organizationName}</p>
           <h1>{p.title}</h1>
           <p>
@@ -102,8 +121,9 @@ export function ProjectDetail({
           {b.status[p.status]}
         </span>
       </div>
+      </div>
       {p.status === "requested" && <p className="bw-note">{b.requestedNext}</p>}
-      <ProjectTabs b={b}>
+      <ProjectTabs b={b} comments={p.messages.length}>
       <section id="performance" className="bw-panel">
         <CampaignPerformance project={p} b={b} locale={locale}/>
       </section>
@@ -302,7 +322,9 @@ export function ProjectDetail({
                       <strong>
                         {r.snapshot.viewsTotal === null
                           ? b.notMeasured
-                          : r.snapshot.viewsTotal.toLocaleString(locale)}
+                          : r.snapshot.viewsTotalApproximate
+                            ? interpolate(b.performance.approxValue, { value: r.snapshot.viewsTotal.toLocaleString(locale) })
+                            : r.snapshot.viewsTotal.toLocaleString(locale)}
                       </strong>
                     </div>
                     <div>
@@ -317,6 +339,20 @@ export function ProjectDetail({
                     </div>
                   </div>
                   <p className="bw-prose">{r.summary}</p>
+                  {r.snapshot.viewsTotalApproximate && (
+                    <p className="bw-note" data-approximate-views>
+                      {interpolate(b.performance.approxNote, {
+                        count: r.snapshot.posts.filter((x) => x.viewsApproximate).length,
+                      })}
+                    </p>
+                  )}
+                  {r.snapshot.posts.some((x) => x.publishedAt === null) && (
+                    <p className="bw-note">
+                      {interpolate(b.performance.reportUndated, {
+                        count: r.snapshot.posts.filter((x) => x.publishedAt === null).length,
+                      })}
+                    </p>
+                  )}
                   <PostTable posts={r.snapshot.posts} b={b} locale={locale} />
                 </article>
               ))
@@ -324,9 +360,10 @@ export function ProjectDetail({
           </section>
         </div>
         <div>
-          <section id="conversation" className="bw-panel">
+          <section id="conversation" className="bw-panel" data-comments={canComment || studio ? "open" : "read-only"}>
             <h2>{b.conversation}</h2>
-            {!p.messages.length && <p className="bw-muted">{b.noMessages}</p>}
+            <p className="bw-muted">{b.commentsHint}</p>
+            {!p.messages.length && <p className="bw-muted">{studio ? b.noStudioMessages : b.noMessages}</p>}
             {p.messages.map((m) => (
               <article
                 className="bw-message"
@@ -344,12 +381,12 @@ export function ProjectDetail({
                 <p className="bw-prose">{m.body}</p>
               </article>
             ))}
-            {writable && (
+            {canComment && (
               <ActionForm
                 operation="message.send"
                 fixed={{ projectId: p.id }}
                 b={b}
-                submit={b.send}
+                submit={b.sendComment}
               >
                 <label>
                   {b.message}
@@ -357,6 +394,10 @@ export function ProjectDetail({
                 </label>
               </ActionForm>
             )}
+            {!studio && !canComment && p.status !== "cancelled" && (
+              <p className="bw-note" data-comments-read-only>{b.commentsReadOnly}</p>
+            )}
+            {studio && studioReply}
           </section>
           <section id="files" className="bw-panel">
             <h2>{b.files}</h2>

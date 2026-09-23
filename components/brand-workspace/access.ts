@@ -1,11 +1,11 @@
-import type { BrandWorkspace } from "@/lib/brands/workspace/types";
+import type { BrandOrganization } from "@/lib/brands/workspace/types";
 
 /**
  * What the workspace chrome should offer, derived from memberships the server already scoped.
  * Presentation only: every page and API still authorizes on its own, so a hidden link is never
  * the thing that keeps someone out.
  */
-export function workspaceAccess(workspace: Pick<BrandWorkspace, "organizations" | "projects">) {
+export function workspaceAccess(workspace: { organizations: readonly BrandOrganization[]; projects: readonly unknown[] }) {
   const hasOrganization = workspace.organizations.length > 0;
   return {
     hasOrganization,

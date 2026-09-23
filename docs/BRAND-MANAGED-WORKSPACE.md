@@ -30,6 +30,8 @@ Apply through the repository's migration process, after the predecessor migratio
 
 **클라우드 적용 필요.** Existing campaigns default to client-visible to preserve their current behavior. Only the new studio preparation flow defaults to hidden. Existing files default to ordinary workspace attachments; contract scope cannot later be changed. Browser roles have no direct table access; server-role updates use explicit column grants. Migrations 0115/0116 remain reserved for the separate post-sampling PR.
 
+Follow-up for private client sharing (campaign cover, links to already-published posts, campaign-only commenters): `0034_core_brand_client_sharing.sql` then `0120_glue_brand_client_sharing.sql`, **클라우드 적용 필요**. See [the readiness review](reviews/MORPHIC-SHARING-READINESS.md).
+
 ## Separate production track
 
 The approved next track is contract-restricted brand creation, with operator-configured limits and private Seedance 2.5 templates. This PR does not claim to implement that render/quota system or enable generation. A real person's own verified identity remains the current legal and provider boundary; third-party likeness grants must be modeled explicitly. No template lineup, price, production limit, external notification copy or live provider entitlement has been invented.

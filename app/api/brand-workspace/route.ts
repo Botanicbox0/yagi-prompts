@@ -5,7 +5,7 @@ import { getSessionUser } from "@/lib/supabase/auth-client";
 import { getStorage } from "@/lib/storage";
 import { resolveRequestUrl, sameOriginMutation } from "@/lib/routing/surfaces";
 import {
-  updateBrandSettings, sendBrandSupport, loadBrandSupport, createBrandOrganization,
+  updateBrandSettings, removeBrandOrganizationLogo, sendBrandSupport, loadBrandSupport, createBrandOrganization,
   createBrandProject,
   approveBrandContent,
   sendBrandMessage,
@@ -57,6 +57,8 @@ export async function POST(request: NextRequest) {
     switch (body.operation) {
       case "organization.update":
         result = await updateBrandSettings({sql},viewer,input); break;
+      case "organization.logo.remove":
+        result = await removeBrandOrganizationLogo({ sql }, viewer, input); break;
       case "support.send":
         result = await sendBrandSupport({sql},viewer,input); break;
       case "organization.create":

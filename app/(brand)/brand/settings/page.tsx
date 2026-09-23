@@ -1,24 +1,25 @@
 import { brandContext } from "@/components/brand-workspace/context";
 import { ActionForm } from "@/components/brand-workspace/action-form";
-import {
-  loadBrandSettings,
-  loadBrandWorkspace,
-} from "@/lib/brands/workspace/service";
+import { loadBrandSettings } from "@/lib/brands/workspace/service";
+import { brandScope } from "@/components/brand-workspace/scope";
+import { BrandUnavailable } from "@/components/brand-workspace/brand-unavailable";
+import { LogoControl } from "@/components/brand-workspace/logo-control";
+import { BrandAvatar } from "@/components/brand-workspace/brand-avatar";
+import { scopedHref } from "@/lib/brands/workspace/selection";
 export default async function BrandSettings({
   searchParams,
 }: {
-  searchParams: Promise<{ organizationId?: string }>;
+  searchParams: Promise<{ organizationId?: string | string[] }>;
 }) {
   const [{ organizationId }, { sql, viewer, b }] = await Promise.all([
     searchParams,
     brandContext(),
   ]);
   if (!sql) return <p role="alert">{b.unavailable}</p>;
-  const workspace = await loadBrandWorkspace({ sql }, viewer);
-  const selected = organizationId ?? workspace.organizations[0]?.id;
-  const org = selected
-      ? await loadBrandSettings({ sql }, viewer, selected)
-      : null,
+  const { selection, choice } = await brandScope(sql, viewer, organizationId);
+  if (selection.state === "unavailable") return <BrandUnavailable b={b} />;
+  // Brand settings are for members of the selected brand; a campaign-only guest has none to open.
+  const org = choice && choice.role !== "guest" ? await loadBrandSettings({ sql }, viewer, choice.id) : null,
     c = b.managed;
   return (
     <div data-brand-settings>
@@ -28,23 +29,10 @@ export default async function BrandSettings({
           <p>{c.profileHint}</p>
         </div>
       </div>
-      {workspace.organizations.length > 0 && (
-        <nav className="bw-status-tabs" aria-label={b.organizations}>
-          {workspace.organizations.map((o) => (
-            <a
-              key={o.id}
-              href={`/brand/settings?organizationId=${o.id}`}
-              aria-current={org?.id === o.id ? "page" : undefined}
-            >
-              {o.name}
-            </a>
-          ))}
-        </nav>
-      )}
       {!org ? (
         <section className="bw-empty" data-brand-settings-unavailable>
-          <p>{workspace.organizations.length === 0 ? b.access.sharedOnly : b.denied}</p>
-          <a href="/brand" className="bw-button">{b.back}</a>
+          <p>{!choice || choice.role === "guest" ? b.access.sharedOnly : b.denied}</p>
+          <a href={scopedHref("/brand", choice)} className="bw-button">{b.back}</a>
         </section>
       ) : (
         <section className="bw-panel bw-settings-panel">
@@ -97,6 +85,17 @@ export default async function BrandSettings({
               </label>
             </fieldset>
           </ActionForm>
+          <section className="bw-logo-section" aria-labelledby="brand-logo-heading" data-brand-logo>
+            <h2 id="brand-logo-heading">{b.identity.logo}</h2>
+            {org.role === "owner" ? (
+              <LogoControl organizationId={org.id} name={org.name} logoUrl={org.logoUrl} logoRevision={org.logoRevision} b={b} />
+            ) : (
+              <div className="bw-logo-current">
+                <BrandAvatar name={org.name} logoUrl={org.logoUrl} />
+                {!org.logoUrl && <p className="bw-muted">{b.identity.logoNone}</p>}
+              </div>
+            )}
+          </section>
         </section>
       )}
     </div>

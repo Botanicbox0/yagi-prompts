@@ -3,10 +3,14 @@ import { useState } from 'react';
 import type { BrandHomeContent } from '@/lib/brands/workspace/types';
 import type { BrandCopy } from './action-form';
 
-export function WorkspacePreview({ content, b, title }: { content?: BrandHomeContent; b: BrandCopy; title: string }) {
-  const [failed, setFailed] = useState(false);
+/** `cover` is the campaign's chosen image; without one the latest content preview is used. */
+export function WorkspacePreview({ content, cover, b, title }: { content?: BrandHomeContent; cover?: string | null; b: BrandCopy; title: string }) {
+  const [failed, setFailed] = useState(false), [coverFailed, setCoverFailed] = useState(false);
   const image = content?.mime?.startsWith('image/');
   const video = content?.mime?.startsWith('video/');
+  if (cover && !coverFailed) return <div className="bw-cover" data-workspace-preview data-campaign-cover>
+    <img src={cover} alt={`${b.cover.alt}: ${title}`} loading="lazy" onError={() => setCoverFailed(true)}/>
+  </div>;
   return <div className="bw-cover" data-workspace-preview>
     {!failed && content?.mediaUrl && image ? <img src={content.mediaUrl} alt={`${b.dashboard.preview}: ${content.title}`} loading="lazy" onError={() => setFailed(true)}/>
       : !failed && content?.mediaUrl && video ? <video src={`${content.mediaUrl}#t=0.1`} aria-label={content.title} muted playsInline preload="metadata" onError={() => setFailed(true)}/>

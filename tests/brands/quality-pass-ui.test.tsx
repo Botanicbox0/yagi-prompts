@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { ReactElement } from 'react';
 import type { BrandMembers, BrandOrganization, BrandProjectSummary, BrandRole, BrandWorkspace } from '@/lib/brands/workspace/types';
+import type { BrandWorkspaceScope } from '@/lib/brands/workspace/selection';
 
 /**
  * Role-shaped workspace states (fresh, viewer, editor, owner, campaign-only invitee), rendered from
@@ -14,10 +15,12 @@ const state = vi.hoisted(() => ({
   settings: null as Record<string, unknown> | null,
   locale: 'ko' as 'ko' | 'en',
   path: '/brand',
+  query: '',
 }));
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }),
   usePathname: () => state.path,
+  useSearchParams: () => new URLSearchParams(state.query),
   redirect: vi.fn(),
   notFound: vi.fn(),
 }));
@@ -33,7 +36,11 @@ vi.mock('@/components/brand-workspace/context', async () => {
 vi.mock('@/lib/brands/production/service', () => ({ loadProductionWorkspace: async () => ({ role: 'owner', contracts: [], jobs: [] }) }));
 vi.mock('@/lib/identity/service', () => ({ assetLibraryMode: () => 'off', needsLiveness: () => false, identityStatusFor: async () => 'active' }));
 vi.mock('@/lib/brands/workspace/service', () => ({
-  loadBrandWorkspace: async () => state.workspace,
+  loadBrandWorkspaceScope: async () => scopeOf(state.workspace),
+  loadBrandWorkspace: async (_deps: unknown, _viewer: unknown, options: { organizationId?: string } = {}) => ({
+    organizations: state.workspace.organizations.filter((o) => !options.organizationId || o.id === options.organizationId),
+    projects: state.workspace.projects.filter((p) => !options.organizationId || p.organizationId === options.organizationId),
+  }),
   loadBrandMembers: async () => state.members,
   loadBrandSettings: async () => state.settings,
 }));
@@ -43,7 +50,6 @@ import NewBrandProject from '@/app/(brand)/brand/projects/new/page';
 import MembersPage from '@/app/(brand)/brand/members/page';
 import BrandSettings from '@/app/(brand)/brand/settings/page';
 import { WorkspaceNavigation } from '@/components/brand-workspace/navigation';
-import { navigationVisibility, workspaceAccess } from '@/components/brand-workspace/access';
 import { SupportDrawer } from '@/components/brand-workspace/support';
 import BrandStudio from '@/app/(brand)/brand/studio/page';
 import { StudioInquiry } from '@/components/brand-workspace/studio-inquiry';
@@ -64,23 +70,29 @@ const CASES: Record<string, BrandWorkspace> = {
   owner: { organizations: [org('owner')], projects: [] },
   projectScoped: { organizations: [], projects: [project] },
 };
+/** The same shape the real scope loader returns: memberships, then brands reached only via shared campaigns. */
+function scopeOf(w: BrandWorkspace): BrandWorkspaceScope {
+  const choices: BrandWorkspaceScope['choices'] = w.organizations.map((o) => ({ ...o, logoUrl: null }));
+  for (const p of w.projects) if (!choices.some((c) => c.id === p.organizationId)) choices.push({ id: p.organizationId, name: p.organizationName, role: 'guest', logoUrl: null });
+  return { choices, projectOrganizations: Object.fromEntries(w.projects.map((p) => [p.id, p.organizationId])) };
+}
 const html = async (page: Promise<ReactElement> | ReactElement) => renderToStaticMarkup(await page);
 const search = (organizationId?: string) => ({ searchParams: Promise.resolve(organizationId ? { organizationId } : {}) });
-const CREATE_LINK = 'href="/brand/projects/new"';
+const CREATE_LINK = 'href="/brand/projects/new';
 
-beforeEach(() => { state.members = null; state.settings = null; state.locale = 'ko'; state.path = '/brand'; });
+beforeEach(() => { state.members = null; state.settings = null; state.locale = 'ko'; state.path = '/brand'; state.query = ''; });
 
 describe('brand home by role', () => {
   it('keeps the workspace-creation path for a fresh account', async () => {
     state.workspace = CASES.fresh!;
-    const page = await html(BrandHome());
+    const page = await html(BrandHome(search()));
     expect(page).toContain(b.createOrganization);
     expect(page).toContain(b.needOrganization);
   });
 
   it('never sends a viewer-only account into the request loop', async () => {
     state.workspace = CASES.viewer!;
-    const page = await html(BrandHome());
+    const page = await html(BrandHome(search()));
     expect(page).not.toContain(CREATE_LINK);
     expect(page).not.toContain(b.createOrganization);
     expect(page).toContain(b.access.viewerEmpty);
@@ -91,18 +103,18 @@ describe('brand home by role', () => {
 
   it.each(['editor', 'owner'] as const)('offers the first brief to an %s', async (role) => {
     state.workspace = CASES[role]!;
-    const page = await html(BrandHome());
+    const page = await html(BrandHome(search()));
     expect(page).toContain(CREATE_LINK);
     expect(page).toContain('data-brand-empty="request"');
   });
 
   it('shows campaign-only invitees their campaigns, without an empty workspace section or creation', async () => {
     state.workspace = CASES.projectScoped!;
-    const page = await html(BrandHome());
+    const page = await html(BrandHome(search()));
     expect(page).toContain('Autumn launch');
     expect(page).not.toContain(CREATE_LINK);
     expect(page).not.toContain(b.organizations);
-    expect(page).not.toContain('href="/brand/studio"');
+    expect(page).not.toContain('href="/brand/studio');
   });
 });
 
@@ -110,7 +122,7 @@ describe('new brief page by role', () => {
   it('lets an account without a workspace create one in place and return here', async () => {
     for (const key of ['fresh', 'projectScoped'] as const) {
       state.workspace = CASES[key]!;
-      const page = await html(NewBrandProject());
+      const page = await html(NewBrandProject(search()));
       expect(page).toContain('data-brand-new-project-setup');
       expect(page).toContain('name="name"');
       // No bounce back to /brand, which offers no creation form once campaigns exist.
@@ -120,7 +132,7 @@ describe('new brief page by role', () => {
 
   it('tells a viewer who can request, and offers no creation form', async () => {
     state.workspace = CASES.viewer!;
-    const page = await html(NewBrandProject());
+    const page = await html(NewBrandProject(search()));
     expect(page).toContain(b.access.viewerCannotRequest);
     expect(page).not.toContain('name="organizationId"');
     expect(page).not.toContain('name="name"');
@@ -129,7 +141,7 @@ describe('new brief page by role', () => {
   it('keeps the brief form for editors and owners', async () => {
     for (const key of ['editor', 'owner'] as const) {
       state.workspace = CASES[key]!;
-      const page = await html(NewBrandProject());
+      const page = await html(NewBrandProject(search()));
       expect(page).toContain('name="organizationId"');
       expect(page).toContain('name="referenceUrl"');
     }
@@ -139,20 +151,20 @@ describe('new brief page by role', () => {
 describe('workspace navigation', () => {
   const labels = { home: 'Home', members: 'Team', settings: 'Settings', library: 'Library', studio: 'Studio' };
   const links = (key: keyof typeof CASES) =>
-    renderToStaticMarkup(<WorkspaceNavigation {...labels} visible={navigationVisibility(workspaceAccess(CASES[key]!))} />);
+    renderToStaticMarkup(<WorkspaceNavigation {...labels} scope={scopeOf(CASES[key]!)} />);
 
   it('shows team management only to owners', () => {
-    expect(links('owner')).toContain('href="/brand/members"');
-    for (const key of ['editor', 'viewer', 'projectScoped', 'fresh'] as const) expect(links(key)).not.toContain('href="/brand/members"');
+    expect(links('owner')).toContain('href="/brand/members');
+    for (const key of ['editor', 'viewer', 'projectScoped', 'fresh'] as const) expect(links(key)).not.toContain('href="/brand/members');
   });
 
   it('keeps read-only destinations for members and hides workspace-only ones from campaign-only invitees', () => {
-    expect(links('viewer')).toContain('href="/brand/settings"');
-    expect(links('viewer')).toContain('href="/brand/studio"');
-    expect(links('projectScoped')).not.toContain('href="/brand/settings"');
-    expect(links('projectScoped')).not.toContain('href="/brand/studio"');
-    expect(links('projectScoped')).toContain('href="/brand/library"');
-    expect(links('fresh')).toContain('href="/brand/studio"');
+    expect(links('viewer')).toContain('href="/brand/settings');
+    expect(links('viewer')).toContain('href="/brand/studio');
+    expect(links('projectScoped')).not.toContain('href="/brand/settings');
+    expect(links('projectScoped')).not.toContain('href="/brand/studio');
+    expect(links('projectScoped')).toContain('href="/brand/library');
+    expect(links('fresh')).toContain('href="/brand/studio');
   });
 
   it('shows everything while access is unknown (signed-out invitation landing)', () => {

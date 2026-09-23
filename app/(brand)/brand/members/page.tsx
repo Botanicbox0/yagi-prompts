@@ -1,24 +1,24 @@
 import { brandContext } from "@/components/brand-workspace/context";
 import { ActionForm } from "@/components/brand-workspace/action-form";
-import {
-  loadBrandWorkspace,
-  loadBrandMembers,
-} from "@/lib/brands/workspace/service";
+import { loadBrandMembers } from "@/lib/brands/workspace/service";
 import { formatBrandTimestamp } from "@/components/brand-workspace/format";
+import { brandScope } from "@/components/brand-workspace/scope";
+import { BrandUnavailable } from "@/components/brand-workspace/brand-unavailable";
+import { scopedHref } from "@/lib/brands/workspace/selection";
 export default async function MembersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ organizationId?: string }>;
+  searchParams: Promise<{ organizationId?: string | string[] }>;
 }) {
   const [{ organizationId }, { sql, viewer, b, locale }] = await Promise.all([
     searchParams,
     brandContext(),
   ]);
   if (!sql) return <p role="alert">{b.unavailable}</p>;
-  const workspace = await loadBrandWorkspace({ sql }, viewer);
-  const owners = workspace.organizations.filter((o) => o.role === "owner");
-  const id = organizationId ?? owners[0]?.id;
-  const team = id ? await loadBrandMembers({ sql }, viewer, id) : null;
+  const { selection, choice } = await brandScope(sql, viewer, organizationId);
+  if (selection.state === "unavailable") return <BrandUnavailable b={b} />;
+  // Team management follows the role in the SELECTED brand, never ownership of another one.
+  const team = choice?.role === "owner" ? await loadBrandMembers({ sql }, viewer, choice.id) : null;
   return (
     <div data-brand-members>
       <div className="bw-heading">
@@ -27,26 +27,17 @@ export default async function MembersPage({
           <p>{b.teamHint}</p>
         </div>
       </div>
-      {owners.length > 1 && (
-        <nav className="bw-tabs" aria-label={b.organizations}>
-          {owners.map((o) => (
-            <a key={o.id} href={`/brand/members?organizationId=${o.id}`} aria-current={team?.organization.id === o.id ? "page" : undefined}>
-              {o.name}
-            </a>
-          ))}
-        </nav>
-      )}
       {!team ? (
         // Reaching this page without ownership is an expected state, not an error: say who can act.
         <section className="bw-empty" data-brand-members-unavailable>
           <p>
-            {owners.length === 0
-              ? workspace.organizations.length === 0
-                ? b.access.sharedOnly
-                : b.access.ownerOnlyTeam
-              : b.denied}
+            {!choice || choice.role === "guest"
+              ? b.access.sharedOnly
+              : choice.role !== "owner"
+                ? b.access.ownerOnlyTeam
+                : b.denied}
           </p>
-          <a href="/brand" className="bw-button">{b.back}</a>
+          <a href={scopedHref("/brand", choice)} className="bw-button">{b.back}</a>
         </section>
       ) : (
         <>

@@ -1,12 +1,21 @@
 import { brandContext } from "@/components/brand-workspace/context";
 import { loadBrandWorkspace } from "@/lib/brands/workspace/service";
 import { WorkspacePreview } from "@/components/brand-workspace/preview";
-export default async function ContentLibrary() {
-  const { sql, viewer, b } = await brandContext();
+import { brandScope } from "@/components/brand-workspace/scope";
+import { BrandUnavailable } from "@/components/brand-workspace/brand-unavailable";
+export default async function ContentLibrary({
+  searchParams,
+}: {
+  searchParams: Promise<{ organizationId?: string | string[] }>;
+}) {
+  const [{ organizationId }, { sql, viewer, b }] = await Promise.all([searchParams, brandContext()]);
   if (!sql) return <p role="alert">{b.unavailable}</p>;
-  const w = await loadBrandWorkspace({ sql }, viewer, {
-      includeAllContent: true,
-    }),
+  const { selection, choice } = await brandScope(sql, viewer, organizationId);
+  if (selection.state === "unavailable") return <BrandUnavailable b={b} />;
+  // The selected brand's content only; with no brand at all there is nothing to list.
+  const w = choice
+      ? await loadBrandWorkspace({ sql }, viewer, { includeAllContent: true, organizationId: choice.id })
+      : { organizations: [], projects: [] },
     contents = w.projects.flatMap((p) =>
       (p.overview?.contents ?? []).map((c) => ({ p, c })),
     );

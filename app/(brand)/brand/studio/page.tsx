@@ -6,24 +6,28 @@ import {
   needsLiveness,
 } from "@/lib/identity/service";
 import { brandContext } from "@/components/brand-workspace/context";
-import { workspaceAccess } from "@/components/brand-workspace/access";
+import { brandScope, membershipOf, selectedAccess } from "@/components/brand-workspace/scope";
+import { BrandUnavailable } from "@/components/brand-workspace/brand-unavailable";
+import { scopedHref } from "@/lib/brands/workspace/selection";
 import { ProductionCreate } from "@/components/brand-workspace/production-create";
-import { loadBrandWorkspace } from "@/lib/brands/workspace/service";
 import { loadProductionWorkspace } from "@/lib/brands/production/service";
 import { formatBrandTimestamp } from "@/components/brand-workspace/format";
 export default async function BrandStudio({
   searchParams,
 }: {
-  searchParams: Promise<{ organizationId?: string }>;
+  searchParams: Promise<{ organizationId?: string | string[] }>;
 }) {
   const [{ organizationId }, { sql, viewer, b, locale }] = await Promise.all([
     searchParams,
     brandContext(),
   ]);
   if (!sql) return <p role="alert">{b.unavailable}</p>;
-  const workspace = await loadBrandWorkspace({ sql }, viewer),
-    access = workspaceAccess(workspace),
-    orgId = organizationId ?? workspace.organizations[0]?.id,
+  const { selection, choice, projectOrganizations } = await brandScope(sql, viewer, organizationId);
+  if (selection.state === "unavailable") return <BrandUnavailable b={b} />;
+  // Role and requests follow the SELECTED brand only. A guest brand has no membership here.
+  const organizations = membershipOf(choice),
+    access = selectedAccess(choice, Object.values(projectOrganizations).filter((o) => o === choice?.id)),
+    orgId = organizations[0]?.id,
     t = b.productionStudio;
   const heading = (
     <div className="bw-heading">
@@ -33,7 +37,7 @@ export default async function BrandStudio({
         <p>{t.subtitle}</p>
       </div>
       {/* Renders nothing for accounts that cannot send a request (viewer-only, campaign-only). */}
-      <StudioInquiry organizations={workspace.organizations} organizationId={orgId} b={b} allowSetup={access.fresh} />
+      <StudioInquiry organizations={organizations} organizationId={orgId} b={b} allowSetup={access.fresh} />
     </div>
   );
   // Campaign-only invitees reach this page only by typing the address: no onboarding, no creation.
@@ -43,11 +47,11 @@ export default async function BrandStudio({
         {heading}
         <section className="bw-empty">
           <p>{b.access.studioSharedOnly}</p>
-          <a href="/brand" className="bw-button">{b.back}</a>
+          <a href={scopedHref("/brand", choice)} className="bw-button">{b.back}</a>
         </section>
       </div>
     );
-  const selectedRole = workspace.organizations.find((o) => o.id === orgId)?.role;
+  const selectedRole = organizations[0]?.role;
   const production = orgId
     ? await loadProductionWorkspace({ sql }, viewer, orgId)
     : null;
@@ -66,18 +70,7 @@ export default async function BrandStudio({
   return (
     <div data-brand-production>
       {heading}
-      <ServiceGuide kind="studio" b={b} showOther={access.canRequest || access.fresh} />
-      <nav className="bw-status-tabs">
-        {workspace.organizations.map((o) => (
-          <a
-            key={o.id}
-            href={`/brand/studio?organizationId=${o.id}&locale=${locale}`}
-            aria-current={orgId === o.id ? "page" : undefined}
-          >
-            {o.name}
-          </a>
-        ))}
-      </nav>
+      <ServiceGuide kind="studio" b={b} showOther={access.canRequest || access.fresh} organizationId={choice?.id} />
       {!production || !production.contracts.length ? (
         selectedRole === "viewer" ? (
           // The request invitation would point at a button a viewer does not have.
@@ -198,7 +191,7 @@ export default async function BrandStudio({
             <ul className="bw-list">
               {production.jobs.map((j) => (
                 <li className="bw-row" key={j.id}>
-                  <a href={`/brand/studio/${j.id}?locale=${locale}`}>
+                  <a href={`/brand/studio/${j.id}?organizationId=${orgId}&locale=${locale}`}>
                     {locale === "ko" ? j.titleKo : j.title}
                   </a>
                   <span>

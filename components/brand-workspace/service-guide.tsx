@@ -1,10 +1,12 @@
 import type { Dictionary } from "@/messages/en";
+import { scopedHref } from "@/lib/brands/workspace/selection";
 
-export function ServiceGuide({ kind, b, showOther = true }: {
+export function ServiceGuide({ kind, b, showOther = true, organizationId }: {
   kind: "campaign" | "studio";
   b: Dictionary["brandWorkspace"];
   /** Off when the other service's entry would only lead to a page this account cannot use. */
   showOther?: boolean;
+  organizationId?: string;
 }) {
   const t = b.serviceGuide[kind];
   return (
@@ -17,7 +19,7 @@ export function ServiceGuide({ kind, b, showOther = true }: {
         <div><dt>{t.scopeLabel}</dt><dd>{t.scope}</dd></div>
         <div><dt>{t.termsLabel}</dt><dd>{t.terms}</dd></div>
       </dl>
-      {showOther && <a href={kind === "campaign" ? "/brand/studio" : "/brand/projects/new"}>{t.other}</a>}
+      {showOther && <a href={scopedHref(kind === "campaign" ? "/brand/studio" : "/brand/projects/new", organizationId ? { id: organizationId } : null)}>{t.other}</a>}
     </section>
   );
 }

@@ -75,6 +75,8 @@ describe("studio measurement form values", () => {
             expectedRevision: 2,
             verification: "manual",
             metricsSource: "studio_review",
+            // Unticked abbreviated-count box: the zero is an exact observation.
+            viewsApproximate: false,
             views: 0,
             likes: null,
             comments: null,
