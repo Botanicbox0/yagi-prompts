@@ -1,7 +1,7 @@
 "use client";
-import { startTransition, useEffect, useState } from "react";
+import { startTransition } from "react";
 import { useRouter } from "next/navigation";
-import { getDictionary } from "@/lib/i18n/dictionaries";
+import { useBrandErrorCopy } from "@/components/brand-workspace/error-copy";
 export default function BrandError({
   reset,
 }: {
@@ -9,14 +9,11 @@ export default function BrandError({
   reset: () => void;
 }) {
   const router = useRouter();
-  const [locale, setLocale] = useState<"en" | "ko">("ko");
-  useEffect(() => {
-    setLocale(document.documentElement.lang === "en" ? "en" : "ko");
-  }, []);
-  const b = getDictionary(locale).brandWorkspace;
+  // From the layout, in the request's language; no dictionary is imported into this client bundle.
+  const copy = useBrandErrorCopy();
   return (
-    <section className="bw-empty" role="alert">
-      <h1>{b.unavailable}</h1>
+    <section className="bw-empty" role="alert" data-brand-error>
+      {copy && <h1>{copy.title}</h1>}
       <button
         className="bw-button"
         onClick={() =>
@@ -28,7 +25,7 @@ export default function BrandError({
           })
         }
       >
-        {b.retry}
+        {copy?.retry ?? "↻"}
       </button>
     </section>
   );

@@ -790,7 +790,7 @@ html[data-brand-workspace] {
  .bw-contract-row .bw-form { flex-basis:100%; }
 }
 .bw-project-sections .bw-grid-wide,.bw-project-sections .bw-grid-wide>div { display:contents; }
-.bw-project-sections .bw-grid-wide>div>section:not([id]), .bw-project-sections .bw-tab-next { display:none; }
+.bw-project-sections .bw-grid-wide>div>section:not([id]) { display:none; }
 .bw-project-sections #performance,.bw-project-sections #brief,.bw-project-sections #review,.bw-project-sections #conversation,.bw-project-sections #reports,.bw-project-sections #contracts { display:none; }
 .bw-project-sections[data-project-tab='performance'] #performance,.bw-project-sections[data-project-tab='brief'] #brief,.bw-project-sections[data-project-tab='review'] #review,.bw-project-sections[data-project-tab='conversation'] #conversation,.bw-project-sections[data-project-tab='reports'] #reports,.bw-project-sections[data-project-tab='contracts'] #contracts { display:block; }
 .bw-tabs a[aria-current='page'] { color:#202125;border-bottom:2px solid #202125;font-weight:600; }

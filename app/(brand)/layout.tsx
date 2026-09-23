@@ -8,6 +8,7 @@ import "./workspace.css";
 import { WorkspaceLanguage } from '@/components/brand-workspace/language';
 import { WorkspaceNavigation } from '@/components/brand-workspace/navigation';
 import { WorkspaceIdentity } from '@/components/brand-workspace/identity';
+import { BrandErrorCopyProvider } from '@/components/brand-workspace/error-copy';
 import { Suspense, type ReactNode } from "react";
 import type { Metadata } from "next";
 import { fontVariables } from "@/app/fonts";
@@ -73,7 +74,7 @@ export default async function BrandLayout({
           </aside>
           <div className="bw-body">
             <main id="main" className="bw-main">
-              {children}
+              <BrandErrorCopyProvider copy={{ title: b.unavailable, retry: b.retry }}>{children}</BrandErrorCopyProvider>
             </main>
           </div>
         </div>
