@@ -5,20 +5,23 @@ import { formatBrandTimestamp } from "@/components/brand-workspace/format";
 import { brandScope } from "@/components/brand-workspace/scope";
 import { BrandUnavailable } from "@/components/brand-workspace/brand-unavailable";
 import { scopedHref } from "@/lib/brands/workspace/selection";
+import { StaffNotice, adminOrganizationHref } from "@/components/brand-workspace/staff-notice";
 export default async function MembersPage({
   searchParams,
 }: {
   searchParams: Promise<{ organizationId?: string | string[] }>;
 }) {
-  const [{ organizationId }, { sql, viewer, b, locale }] = await Promise.all([
+  const [{ organizationId }, { sql, viewer, verifiedEmail, brandHost, b, locale }] = await Promise.all([
     searchParams,
     brandContext(),
   ]);
   if (!sql) return <p role="alert">{b.unavailable}</p>;
-  const { selection, choice } = await brandScope(sql, viewer, organizationId);
+  const { selection, choice } = await brandScope({ sql, verifiedEmail }, viewer, organizationId);
   if (selection.state === "unavailable") return <BrandUnavailable b={b} />;
   // Team management follows the role in the SELECTED brand, never ownership of another one.
-  const team = choice?.role === "owner" ? await loadBrandMembers({ sql }, viewer, choice.id) : null;
+  // The TWINGS team reads the list; inviting and revoking stay with owners and the admin console.
+  const staff = choice?.role === "studio";
+  const team = choice?.role === "owner" || staff ? await loadBrandMembers({ sql, verifiedEmail }, viewer, choice!.id) : null;
   return (
     <div data-brand-members>
       <div className="bw-heading">
@@ -41,6 +44,7 @@ export default async function MembersPage({
         </section>
       ) : (
         <>
+          {staff && <StaffNotice b={b} manageHref={viewer.isAdmin ? adminOrganizationHref(team.organization.id, brandHost) : null} />}
           <section className="bw-panel">
             <h2>{team.organization.name}</h2>
             <ul className="bw-list">
@@ -52,7 +56,7 @@ export default async function MembersPage({
                       <strong>{m.email ?? b.roles[m.role]}</strong>
                       <p className="bw-muted">{b.roles[m.role]}</p>
                     </div>
-                    {m.role !== "owner" && (
+                    {!staff && m.role !== "owner" && (
                       <ActionForm
                         operation="member.revoke"
                         fixed={{
@@ -69,7 +73,7 @@ export default async function MembersPage({
                 ))}
             </ul>
           </section>
-          <section className="bw-panel">
+          {!staff && <section className="bw-panel">
             <h2>{b.createInvite}</h2>
             <ActionForm
               operation="invitation.create"
@@ -96,7 +100,7 @@ export default async function MembersPage({
               </label>
               <p className="bw-muted">{b.inviteExpiry}</p>
             </ActionForm>
-          </section>
+          </section>}
           {team.invitations.length > 0 && (
             <section className="bw-panel">
               <h2>{b.invitations}</h2>

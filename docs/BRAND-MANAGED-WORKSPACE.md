@@ -11,6 +11,7 @@ Implementation branch: `codex/brand-managed-workspace`, stacked on `codex/brand-
 - Downloads recheck membership, project visibility and contract sharing. Private contract bytes stream through the authenticated route; no reusable storage URL is handed to the client. Already downloaded files cannot be recalled. The streaming choice follows [Vercel's response-size guidance](https://vercel.com/kb/guide/how-to-bypass-vercel-body-size-limit-serverless-functions); cloud runtime verification remains part of migration/deployment rollout.
 - `/brand/settings`: owners edit brand name, HTTPS website, description and contact email. Other members have a disabled read-only form; optimistic revisions reject concurrent overwrites.
 - `/brand/library`: latest version of every content slot in authorized campaigns; it does not inherit the four-item home preview limit.
+- TWINGS team view: DB admins and auth-server-verified exact `@yagiworkshop.xyz` accounts can open every brand from the `/brand` logo switcher, read-only, without memberships. Trusted email source and the read/write split: [BRAND-STAFF-ACCESS.md](BRAND-STAFF-ACCESS.md).
 - General support drawer: organization-scoped stored messages, studio reply inbox, retry deduplication and rate limiting. Replies are retrieved when opened or refreshed. Campaign approvals and revisions remain in their campaign conversation. No invented support hours, automatic external dispatch or live-chat availability promise.
 
 ## Design

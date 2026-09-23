@@ -9,13 +9,13 @@ export default async function BrandProductionResult({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ organizationId?: string | string[] }>;
 }) {
-  const [{ id }, { organizationId }, { sql, viewer, b, locale }] = await Promise.all([
+  const [{ id }, { organizationId }, { sql, viewer, verifiedEmail, b, locale }] = await Promise.all([
     params,
     searchParams,
     brandContext(),
   ]);
   if (!sql) return <p>{b.unavailable}</p>;
-  const job = await loadProductionOutput({ sql }, viewer, id);
+  const job = await loadProductionOutput({ sql, verifiedEmail }, viewer, id);
   if (!job) notFound();
   // The result belongs to one brand; the URL (and so the sidebar selector) always names that brand.
   if (organizationId !== job.organizationId)

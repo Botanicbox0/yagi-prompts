@@ -6,20 +6,22 @@ import { BrandUnavailable } from "@/components/brand-workspace/brand-unavailable
 import { LogoControl } from "@/components/brand-workspace/logo-control";
 import { BrandAvatar } from "@/components/brand-workspace/brand-avatar";
 import { scopedHref } from "@/lib/brands/workspace/selection";
+import { StaffNotice, adminOrganizationHref } from "@/components/brand-workspace/staff-notice";
 export default async function BrandSettings({
   searchParams,
 }: {
   searchParams: Promise<{ organizationId?: string | string[] }>;
 }) {
-  const [{ organizationId }, { sql, viewer, b }] = await Promise.all([
+  const [{ organizationId }, { sql, viewer, verifiedEmail, brandHost, b }] = await Promise.all([
     searchParams,
     brandContext(),
   ]);
   if (!sql) return <p role="alert">{b.unavailable}</p>;
-  const { selection, choice } = await brandScope(sql, viewer, organizationId);
+  const { selection, choice } = await brandScope({ sql, verifiedEmail }, viewer, organizationId);
   if (selection.state === "unavailable") return <BrandUnavailable b={b} />;
   // Brand settings are for members of the selected brand; a campaign-only guest has none to open.
-  const org = choice && choice.role !== "guest" ? await loadBrandSettings({ sql }, viewer, choice.id) : null,
+  // The TWINGS team reads them here; edits stay with owners and the admin console.
+  const org = choice && choice.role !== "guest" ? await loadBrandSettings({ sql, verifiedEmail }, viewer, choice.id) : null,
     c = b.managed;
   return (
     <div data-brand-settings>
@@ -36,7 +38,9 @@ export default async function BrandSettings({
         </section>
       ) : (
         <section className="bw-panel bw-settings-panel">
-          {org.role !== "owner" && <p className="bw-note" data-brand-settings-read-only>{b.access.ownerOnlySettings}</p>}
+          {org.role === "studio" ? (
+            <StaffNotice b={b} manageHref={viewer.isAdmin ? adminOrganizationHref(org.id, brandHost) : null} />
+          ) : org.role !== "owner" && <p className="bw-note" data-brand-settings-read-only>{b.access.ownerOnlySettings}</p>}
           <ActionForm
             operation="organization.update"
             fixed={{ organizationId: org.id, expectedRevision: org.revision }}

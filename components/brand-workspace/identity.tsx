@@ -22,17 +22,19 @@ export function useWorkspaceSelection(scope: BrandWorkspaceScope) {
 }
 
 export interface IdentityCopy {
-  label: string; switch: string; current: string; guest: string; none: string; unavailable: string;
+  label: string; switch: string; current: string; guest: string; studio: string; staffGroup: string; none: string; unavailable: string;
 }
 /**
  * The brand under the TWINGS lockup. One brand: its identity, no control. Several: a disclosure of
  * plain links (keyboard, touch and no-JS all work), each keeping the current section when that
- * brand's role can open it.
+ * brand's role can open it. The TWINGS team's other brands follow under their own heading; the list
+ * scrolls inside the menu, so any number of brands stays reachable.
  */
 export function WorkspaceIdentity({ scope, copy, roles }: { scope: BrandWorkspaceScope; copy: IdentityCopy; roles: Record<BrandRole, string> }) {
   const { pathname, selection } = useWorkspaceSelection(scope);
   const details = useRef<HTMLDetailsElement>(null);
-  const roleLabel = (role: BrandChoiceRole) => (role === 'guest' ? copy.guest : roles[role]);
+  const roleLabel = (role: BrandChoiceRole) => (role === 'guest' ? copy.guest : role === 'studio' ? copy.studio : roles[role]);
+  const firstStaff = scope.choices.findIndex((c) => c.role === 'studio');
   if (selection.state === 'none')
     return <div className="bw-identity" data-brand-identity="none"><p className="bw-identity-empty">{copy.none}</p></div>;
   const choice = selectedChoice(selection);
@@ -62,10 +64,11 @@ export function WorkspaceIdentity({ scope, copy, roles }: { scope: BrandWorkspac
         {summary}
         <svg className="bw-identity-chevron" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5 6 7.5 9 4.5" /></svg>
       </summary>
-      <ul className="bw-identity-menu" aria-label={copy.switch}>
-        {scope.choices.map((c) => (
+      <ul className="bw-identity-menu" aria-label={copy.switch} data-brand-choices={scope.choices.length}>
+        {scope.choices.map((c, i) => (
           <li key={c.id}>
-            <a href={switchHref(pathname, c)} aria-current={c.id === choice?.id ? 'true' : undefined} data-brand-choice={c.id}>
+            {i === firstStaff && <span className="bw-identity-group" data-brand-staff-group>{copy.staffGroup}</span>}
+            <a href={switchHref(pathname, c)} aria-current={c.id === choice?.id ? 'true' : undefined} data-brand-choice={c.id} data-brand-role={c.role}>
               <BrandAvatar name={c.name} logoUrl={c.logoUrl} size="sm" />
               <span className="bw-identity-text"><strong>{c.name}</strong><small>{roleLabel(c.role)}</small></span>
             </a>

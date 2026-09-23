@@ -12,17 +12,18 @@ import { scopedHref } from "@/lib/brands/workspace/selection";
 import { ProductionCreate } from "@/components/brand-workspace/production-create";
 import { loadProductionWorkspace } from "@/lib/brands/production/service";
 import { formatBrandTimestamp } from "@/components/brand-workspace/format";
+import { StaffNotice, adminOrganizationHref } from "@/components/brand-workspace/staff-notice";
 export default async function BrandStudio({
   searchParams,
 }: {
   searchParams: Promise<{ organizationId?: string | string[] }>;
 }) {
-  const [{ organizationId }, { sql, viewer, b, locale }] = await Promise.all([
+  const [{ organizationId }, { sql, viewer, verifiedEmail, brandHost, b, locale }] = await Promise.all([
     searchParams,
     brandContext(),
   ]);
   if (!sql) return <p role="alert">{b.unavailable}</p>;
-  const { selection, choice, projectOrganizations } = await brandScope(sql, viewer, organizationId);
+  const { selection, choice, projectOrganizations } = await brandScope({ sql, verifiedEmail }, viewer, organizationId);
   if (selection.state === "unavailable") return <BrandUnavailable b={b} />;
   // Role and requests follow the SELECTED brand only. A guest brand has no membership here.
   const organizations = membershipOf(choice),
@@ -52,9 +53,12 @@ export default async function BrandStudio({
       </div>
     );
   const selectedRole = organizations[0]?.role;
-  const production = orgId
-    ? await loadProductionWorkspace({ sql }, viewer, orgId)
+  // The TWINGS team reads the brand's templates, remaining count and history; it never generates here.
+  const staffOrgId = access.staff ? choice?.id : undefined;
+  const production = orgId ?? staffOrgId
+    ? await loadProductionWorkspace({ sql, verifiedEmail }, viewer, (orgId ?? staffOrgId)!)
     : null;
+  const historyOrg = orgId ?? staffOrgId;
   const portrait =
     (
       await sql.query<{ attempt_id: string }>(
@@ -70,9 +74,10 @@ export default async function BrandStudio({
   return (
     <div data-brand-production>
       {heading}
+      {access.staff && choice && <StaffNotice b={b} manageHref={viewer.isAdmin ? adminOrganizationHref(choice.id, brandHost) : null} />}
       <ServiceGuide kind="studio" b={b} showOther={access.canRequest || access.fresh} organizationId={choice?.id} />
       {!production || !production.contracts.length ? (
-        selectedRole === "viewer" ? (
+        selectedRole === "viewer" || access.staff ? (
           // The request invitation would point at a button a viewer does not have.
           <section className="bw-panel bw-production-empty" data-brand-studio-read-only>
             <h2>{b.access.studioViewerTitle}</h2>
@@ -86,7 +91,7 @@ export default async function BrandStudio({
         )
       ) : (
         <>
-          <aside className="bw-note bw-production-identity">
+          {!access.staff && <aside className="bw-note bw-production-identity">
             <div>
               <strong>
                 {verifyRequired
@@ -105,7 +110,7 @@ export default async function BrandStudio({
             >
               {verifyRequired ? t.verifyAction : t.identityAction} ↗
             </a>
-          </aside>
+          </aside>}
           {production.contracts.map((c) => (
             <section key={c.id} className="bw-production-contract">
               <div className="bw-row">
@@ -175,7 +180,8 @@ export default async function BrandStudio({
                         !c.active ||
                         c.remaining < 1 ||
                         !portrait ||
-                        production.role === "viewer"
+                        production.role === "viewer" ||
+                        production.role === "studio"
                       }
                     />
                   </article>
@@ -191,7 +197,7 @@ export default async function BrandStudio({
             <ul className="bw-list">
               {production.jobs.map((j) => (
                 <li className="bw-row" key={j.id}>
-                  <a href={`/brand/studio/${j.id}?organizationId=${orgId}&locale=${locale}`}>
+                  <a href={`/brand/studio/${j.id}?organizationId=${historyOrg}&locale=${locale}`}>
                     {locale === "ko" ? j.titleKo : j.title}
                   </a>
                   <span>

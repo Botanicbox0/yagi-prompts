@@ -3,18 +3,19 @@ import { loadBrandWorkspace } from "@/lib/brands/workspace/service";
 import { WorkspacePreview } from "@/components/brand-workspace/preview";
 import { brandScope } from "@/components/brand-workspace/scope";
 import { BrandUnavailable } from "@/components/brand-workspace/brand-unavailable";
+import { StaffNotice } from "@/components/brand-workspace/staff-notice";
 export default async function ContentLibrary({
   searchParams,
 }: {
   searchParams: Promise<{ organizationId?: string | string[] }>;
 }) {
-  const [{ organizationId }, { sql, viewer, b }] = await Promise.all([searchParams, brandContext()]);
+  const [{ organizationId }, { sql, viewer, verifiedEmail, b }] = await Promise.all([searchParams, brandContext()]);
   if (!sql) return <p role="alert">{b.unavailable}</p>;
-  const { selection, choice } = await brandScope(sql, viewer, organizationId);
+  const { selection, choice } = await brandScope({ sql, verifiedEmail }, viewer, organizationId);
   if (selection.state === "unavailable") return <BrandUnavailable b={b} />;
   // The selected brand's content only; with no brand at all there is nothing to list.
   const w = choice
-      ? await loadBrandWorkspace({ sql }, viewer, { includeAllContent: true, organizationId: choice.id })
+      ? await loadBrandWorkspace({ sql, verifiedEmail }, viewer, { includeAllContent: true, organizationId: choice.id })
       : { organizations: [], projects: [] },
     contents = w.projects.flatMap((p) =>
       (p.overview?.contents ?? []).map((c) => ({ p, c })),
@@ -27,6 +28,7 @@ export default async function ContentLibrary({
           <p>{b.managed.libraryHint}</p>
         </div>
       </div>
+      {choice?.role === "studio" && <StaffNotice b={b} />}
       {contents.length ? (
         <div className="bw-content-grid">
           {contents.map(({ p, c }) => (

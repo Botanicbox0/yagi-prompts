@@ -1,5 +1,6 @@
 import { WorkspaceHomeLink, WorkspaceSupport } from '@/components/brand-workspace/context-links';
 import { getViewer } from '@/lib/auth/viewer';
+import { getVerifiedEmail } from '@/lib/auth/verified-email';
 import { getSqlRunner } from '@/lib/db/connect';
 import { loadBrandWorkspaceScope } from '@/lib/brands/workspace/service';
 import "@/app/globals.css";
@@ -35,7 +36,7 @@ export default async function BrandLayout({
   const viewer=await getViewer();
   const sql=viewer.userId?await getSqlRunner():null;
   // Choices only (ids, names, roles, logo routes): the page itself loads the selected brand's data.
-  const scope=sql?await loadBrandWorkspaceScope({sql},viewer):null;
+  const scope=sql?await loadBrandWorkspaceScope({sql,verifiedEmail:await getVerifiedEmail(viewer.userId)},viewer):null;
   return (
     <html lang={locale} className={fontVariables} data-brand-workspace>
       <head>

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getViewer } from "@/lib/auth/viewer";
+import { getVerifiedEmail } from "@/lib/auth/verified-email";
 import { getSqlRunner } from "@/lib/db/connect";
 import { getStorage, STAGING_BUCKET } from "@/lib/storage";
 import {
@@ -11,7 +12,7 @@ import { resolveRequestUrl, sameOriginMutation } from "@/lib/routing/surfaces";
 export const dynamic = "force-dynamic";
 /**
  * A brand's private logo. GET re-authorizes on every request (member, shared-campaign guest or
- * studio) and streams the bytes from the private staging bucket; there is no public copy. POST
+ * the TWINGS team) and streams the bytes from the private staging bucket; there is no public copy. POST
  * takes the raw image body (<= 2 MiB, well under the platform body limit) from an owner or the studio.
  */
 const HEADERS = {
@@ -27,7 +28,7 @@ async function read(context: Context, head: boolean) {
   try {
     const [{ id }, viewer, sql] = await Promise.all([context.params, getViewer(), getSqlRunner()]);
     if (!viewer.userId || !sql) return empty();
-    const logo = await loadBrandOrganizationLogoAccess({ sql }, viewer, id);
+    const logo = await loadBrandOrganizationLogoAccess({ sql, verifiedEmail: await getVerifiedEmail(viewer.userId) }, viewer, id);
     if (!logo) return empty();
     const headers = { ...HEADERS, "Content-Type": logo.mime, "Content-Length": String(logo.sizeBytes), ETag: `"${logo.sha256}"` };
     if (head) return new NextResponse(null, { headers });

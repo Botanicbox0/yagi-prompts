@@ -11,8 +11,12 @@ import type { BrandRole } from './types';
  * a choice listed here never grants anything.
  */
 
-/** `guest`: invited to individual campaigns of this brand only, with no workspace membership. */
-export type BrandChoiceRole = BrandRole | 'guest';
+/**
+ * `guest`: invited to individual campaigns of this brand only, with no workspace membership.
+ * `studio`: the TWINGS team browsing a brand it is not a member of (lib/brands/workspace/staff.ts).
+ * Read-only in the brand workspace; it is never a customer role and never an owner.
+ */
+export type BrandChoiceRole = BrandRole | 'guest' | 'studio';
 export interface BrandWorkspaceChoice {
   id: string;
   name: string;
@@ -21,9 +25,15 @@ export interface BrandWorkspaceChoice {
   logoUrl: string | null;
 }
 export interface BrandWorkspaceScope {
-  /** Memberships first (oldest brand first), then brands reached only through shared campaigns. */
+  /**
+   * Memberships first (oldest brand first), then brands reached only through shared campaigns, then,
+   * for the TWINGS team only, every other brand (by name) as `studio`.
+   */
   choices: BrandWorkspaceChoice[];
-  /** Visible campaign id -> owning organization id, so a campaign page always shows its own brand. */
+  /**
+   * Visible campaign id -> owning organization id, so a campaign page always shows its own brand. For
+   * the TWINGS team this includes campaigns not yet shared with the client.
+   */
   projectOrganizations: Record<string, string>;
 }
 export type WorkspaceSelection =
@@ -79,10 +89,11 @@ export interface SectionVisibility { studio: boolean; settings: boolean; members
 /**
  * Role of the SELECTED brand only: owning brand A never shows owner controls while viewing brand B.
  * No brand yet keeps the studio open (it doubles as the setup path) and hides brand-only sections.
+ * The TWINGS team sees every section of a brand it browses, each rendered read-only.
  */
 export function sectionVisibility(choice: Pick<BrandWorkspaceChoice, 'role'> | null): SectionVisibility {
   if (!choice) return { studio: true, settings: false, members: false };
-  return { studio: choice.role !== 'guest', settings: choice.role !== 'guest', members: choice.role === 'owner' };
+  return { studio: choice.role !== 'guest', settings: choice.role !== 'guest', members: choice.role === 'owner' || choice.role === 'studio' };
 }
 
 /** Where switching to `choice` lands: the same section when that brand's role can open it, else home. */

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getViewer } from "@/lib/auth/viewer";
 import { getSqlRunner } from "@/lib/db/connect";
-import { getSessionUser } from "@/lib/supabase/auth-client";
+import { getVerifiedEmail } from "@/lib/auth/verified-email";
 import { getStorage } from "@/lib/storage";
 import { resolveRequestUrl, sameOriginMutation } from "@/lib/routing/surfaces";
 import {
@@ -77,11 +77,7 @@ export async function POST(request: NextRequest) {
         result = await createBrandInvitation({ sql }, viewer, input);
         break;
       case "invitation.accept": {
-        const session = await getSessionUser();
-        const verifiedEmail =
-          session?.id === viewer.userId && session.email_confirmed_at
-            ? session.email
-            : undefined;
+        const verifiedEmail = await getVerifiedEmail(viewer.userId);
         result = await acceptBrandInvitation(
           { sql, verifiedEmail },
           viewer,
@@ -144,6 +140,6 @@ export async function POST(request: NextRequest) {
 export async function GET(request:NextRequest) {
  const [viewer,sql]=await Promise.all([getViewer(),getSqlRunner()]);
  if(!sql||!viewer.userId)return json({ok:false},404);
- const messages=await loadBrandSupport({sql},viewer,request.nextUrl.searchParams.get('organizationId')??'');
+ const messages=await loadBrandSupport({sql,verifiedEmail:await getVerifiedEmail(viewer.userId)},viewer,request.nextUrl.searchParams.get('organizationId')??'');
  return messages?json({ok:true,messages}):json({ok:false},404);
 }

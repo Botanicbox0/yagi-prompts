@@ -13,7 +13,8 @@ export function WorkspaceHomeLink({ scope, children }: { scope: BrandWorkspaceSc
 
 export function WorkspaceSupport({ scope, b, locale }: { scope: BrandWorkspaceScope; b: BrandCopy; locale: string }) {
   const choice = selectedChoice(useWorkspaceSelection(scope).selection);
-  if (!choice || choice.role === 'guest') return null;
+  // The support thread is the customer's own line to the studio; the TWINGS team answers it from /admin.
+  if (!choice || choice.role === 'guest' || choice.role === 'studio') return null;
   // Remount on brand change: an open thread or unsent message must not carry into another brand.
   return <SupportDrawer key={choice.id} organizations={[{ id: choice.id, name: choice.name, role: choice.role }]} b={b} locale={locale} />;
 }
