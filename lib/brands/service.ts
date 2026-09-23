@@ -94,7 +94,7 @@ async function sendStudioAlert(deps: NotifyBrandInquiryDeps & { mailer: Mailer }
     .catch(failed);
 }
 
-async function sendBrandReceipt(deps: NotifyBrandInquiryDeps & { mailer: Mailer }, inquiry: BrandInquiry): Promise<SendOutcome> {
+async function sendBrandReceipt(deps: NotifyBrandInquiryDeps & { mailer: Mailer }, inquiry: BrandInquiry, signal?: AbortSignal): Promise<SendOutcome> {
   const { origin, emails } = mails(deps, inquiry);
   return deps.mailer
     .send({
@@ -104,9 +104,13 @@ async function sendBrandReceipt(deps: NotifyBrandInquiryDeps & { mailer: Mailer 
       text: emails.brand.text,
       idempotencyKey: `brand-inquiry:${inquiry.id}:brand`,
       unsubscribeUrl: `${origin}/${inquiry.locale}/campaigns`,
+      ...(signal ? { signal } : {}),
     })
     .catch(failed);
 }
+
+/** How long the enquiry form waits for its receipt before answering without the receipt line. */
+export const BRAND_RECEIPT_TIMEOUT_MS = 5_000;
 
 export async function notifyBrandInquiry(deps: NotifyBrandInquiryDeps, inquiry: BrandInquiry): Promise<NotifyBrandInquiryResult> {
   if (deps.mailer === null) return { studio: null, brand: null };
@@ -122,10 +126,22 @@ export async function notifyBrandInquiry(deps: NotifyBrandInquiryDeps, inquiry: 
  * went; the studio alert still goes out in `after()`. The row is stored before either, so a mail
  * failure can never lose an enquiry — it only removes the receipt sentence.
  */
-export async function sendBrandInquiryReceipt(deps: NotifyBrandInquiryDeps, inquiry: BrandInquiry): Promise<boolean> {
+export async function sendBrandInquiryReceipt(deps: NotifyBrandInquiryDeps, inquiry: BrandInquiry, timeoutMs = BRAND_RECEIPT_TIMEOUT_MS): Promise<boolean> {
   if (deps.mailer === null) return false;
-  const outcome = await sendBrandReceipt({ ...deps, mailer: deps.mailer }, inquiry);
-  return outcome.ok === true;
+  // Release review L3: a slow provider must not hold the form (or reach the function limit and
+  // invite a re-submit into the daily cap). The signal aborts the live HTTP request; the timer
+  // also bounds a mailer that ignores signals. Timing out only drops the receipt sentence.
+  const controller = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<false>(resolve => {
+    timer = setTimeout(() => { controller.abort(new Error('receipt timeout')); resolve(false); }, timeoutMs);
+  });
+  try {
+    const sent = sendBrandReceipt({ ...deps, mailer: deps.mailer }, inquiry, controller.signal).then(outcome => outcome.ok === true);
+    return await Promise.race([sent, deadline]);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 export async function notifyBrandStudio(deps: NotifyBrandInquiryDeps, inquiry: BrandInquiry): Promise<SendOutcome | null> {
