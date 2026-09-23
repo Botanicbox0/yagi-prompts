@@ -9,6 +9,8 @@ import { summarizeRenderJobs } from '@/lib/renders/repo';
 import { countBrandInquiries } from '@/lib/brands/repo';
 import { countRenderFeedback } from '@/lib/renders/feedback';
 import { AdminShell } from '@/components/admin/chrome';
+import { requireAdmin } from '@/lib/auth/viewer';
+import { loadStudioInbox } from '@/lib/brands/workspace/inbox';
 
 /**
  * `/admin` — the dashboard (founder, 2026-09-11). The old front door was the playbook list, a
@@ -54,7 +56,7 @@ function Card({ title, href, children }: { title: string; href: string | null; c
 }
 
 export default async function AdminHomePage() {
-  const [locale, sql] = await Promise.all([getLocaleFromHeaders(), getSqlRunner()]);
+  const [locale, sql, viewer] = await Promise.all([getLocaleFromHeaders(), getSqlRunner(), requireAdmin()]);
   const dict = getDictionary(locale);
   const a = dict.admin;
   const now = new Date();
@@ -72,6 +74,7 @@ export default async function AdminHomePage() {
   const renders = sql === null ? { recent: 0, failed: 0, held: 0, running: 0 } : await summarizeRenderJobs(sql, new Date(now.getTime() - WEEK_MS));
   const inquiries = sql === null ? 0 : await countBrandInquiries(sql, 'new');
   const feedback = sql === null ? 0 : await countRenderFeedback(sql, 'new');
+  const waiting = sql === null ? 0 : ((await loadStudioInbox({ sql }, viewer))?.length ?? 0);
 
   return (
     <AdminShell dict={a} locale={locale} active="home">
@@ -97,6 +100,7 @@ export default async function AdminHomePage() {
         </Card>
         <Card title={a.dashInquiries} href={ADMIN_INQUIRIES_PATH}>
           <Stat href={ADMIN_INQUIRIES_PATH} label={a.dashInquiriesNew} count={inquiries} hot />
+          <Stat href="/admin/brand-workspace#studio-inbox" label={a.dashInbox} count={waiting} hot />
         </Card>
       </div>
     </AdminShell>

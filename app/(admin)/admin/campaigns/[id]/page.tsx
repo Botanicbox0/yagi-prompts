@@ -9,8 +9,9 @@ import { CAMPAIGN_STATUSES, recruitBlockers } from '@/lib/campaigns/schemas';
 import { canCampaignTransition, computePayout, formatWon, holdsSlot, needsMetrics, payoutReleasable } from '@/lib/campaigns/state';
 import { ADMIN_CAMPAIGNS_PATH, adminCampaignPath, campaignHref } from '@/lib/campaigns/links';
 import { loadPublishedPrompts } from '@/lib/prompts/repo';
-import { AdminShell, BUTTON, BUTTON_PRIMARY, Field, INPUT, OpForm, OutcomeBanner, Panel } from '@/components/admin/chrome';
+import { AdminShell, BUTTON, BUTTON_PRIMARY, ConfirmCheck, Field, INPUT, OpForm, OutcomeBanner, Panel } from '@/components/admin/chrome';
 import { CampaignFields } from '@/components/admin/campaign-fields';
+import { campaignLabels } from '@/components/campaigns/labels';
 
 /**
  * `/admin/campaigns/[id]` — one campaign: its lifecycle buttons, the recruit gate stated before it
@@ -111,7 +112,7 @@ function PostRow({ app, campaign, back, dict, locale }: { app: ApplicationRow; c
           <a href={app.postUrl} target="_blank" rel="noopener noreferrer nofollow" className="text-accent">
             {app.postUrl} ↗
           </a>
-          {app.postPlatform ? <span className="ml-2 opacity-55">{app.postPlatform}</span> : null}
+          {app.postPlatform ? <span className="ml-2 opacity-55">{campaignLabels(dict).platform[app.postPlatform]}</span> : null}
         </p>
       )}
       {/* The checklist the brief asked for, so the reviewer opens the post knowing what to look for. */}
@@ -173,6 +174,7 @@ function PostRow({ app, campaign, back, dict, locale }: { app: ApplicationRow; c
               <Field label={a.fieldPayoutRef} hint={a.payoutRefHint}>
                 <input type="text" name="payoutRef" maxLength={120} className={`${INPUT} w-64`} />
               </Field>
+              {releasable && !missing && <ConfirmCheck label={a.confirmPay} />}
               <button type="submit" className={BUTTON_PRIMARY} disabled={!releasable || missing}>
                 {a.payNow}
               </button>
@@ -249,9 +251,11 @@ export default async function AdminCampaignPage({ params, searchParams }: { para
             {interpolate(a.lifecycleCurrent, { status: a.campaignStatuses[row.status] })}
           </span>
           {moves.map((to) => (
-            <OpForm key={to} op="campaign.status" back={back}>
+            <OpForm key={to} op="campaign.status" back={back} className={to === 'recruiting' ? 'flex flex-col gap-2' : undefined}>
               <input type="hidden" name="id" value={row.id} />
               <input type="hidden" name="to" value={to} />
+              {/* Opening recruitment mails every subscriber with the campaign switch on (P2-7). */}
+              {to === 'recruiting' && blockers.length === 0 && <ConfirmCheck label={a.confirmRecruiting} />}
               <button type="submit" className={to === 'recruiting' ? BUTTON_PRIMARY : BUTTON} disabled={to === 'recruiting' && blockers.length > 0}>
                 {a.moveToStatus[to]}
               </button>

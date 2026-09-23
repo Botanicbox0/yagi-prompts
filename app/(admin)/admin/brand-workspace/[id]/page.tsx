@@ -7,7 +7,8 @@ import { getSqlRunner } from "@/lib/db/connect";
 import { getLocaleFromHeaders } from "@/lib/i18n/server";
 import { getDictionary } from "@/lib/i18n/dictionaries";
 import { loadStudioProject } from "@/lib/brands/workspace/service";
-import { AdminShell, OpForm, OutcomeBanner } from "@/components/admin/chrome";
+import { AdminShell, ConfirmCheck, OpForm, OutcomeBanner } from "@/components/admin/chrome";
+import { BrandStatusForms, brandRefusals } from "@/components/admin/brand-status";
 import type { AdminOperationName } from "@/lib/admin/operations";
 import { ProjectDetail } from "@/components/brand-workspace/project-detail";
 import { BrandUpload } from "@/components/brand-workspace/upload";
@@ -35,6 +36,7 @@ export default async function StudioBrandProject({
   if (!sql) return <p role="alert">{b.unavailable}</p>;
   const p = await loadStudioProject({ sql }, viewer, id);
   if (!p) notFound();
+  const refusals = brandRefusals(dict.admin);
   const covers = p.attachments.filter((a) => ["image/jpeg", "image/png", "image/webp"].includes(a.mime));
   const Form = ({
     op,
@@ -63,15 +65,19 @@ export default async function StudioBrandProject({
         dict={dict.admin}
         ok={typeof search.ok === "string" ? search.ok : undefined}
         err={typeof search.err === "string" ? search.err : undefined}
+        detail={typeof search.detail === "string" ? search.detail : undefined}
       />
       <section className="bw-panel bw-sharing" data-managed-sharing>
         <div><strong>{p.clientVisible?b.managed.visible:b.managed.prepared}</strong><p className="bw-muted">{b.managed.visibilityHint}</p></div>
-        <ManagedForm op="brandWorkspace.visibility" b={b} submit={p.clientVisible?b.managed.hide:b.managed.publish} tone={p.clientVisible?"danger":"primary"} confirm={p.clientVisible?{prompt:b.confirm.hide,action:b.confirm.hideAction}:{prompt:b.confirm.publish,action:b.confirm.publishAction}}><input type="hidden" name="projectId" value={p.id}/><input type="hidden" name="expectedRevision" value={p.revision}/><input type="hidden" name="visible" value={String(!p.clientVisible)}/></ManagedForm>
-        <a className="bw-button" href={`/admin/brand-workspace/organizations/${p.organizationId}`}>{b.managed.access}</a><details><summary>{b.managed.invite}</summary><p className="bw-muted">{b.managed.inviteHint}</p><ManagedForm op="brandWorkspace.invite" b={b} submit={b.managed.invite}>
+        <ManagedForm op="brandWorkspace.visibility" b={b} messages={refusals} submit={p.clientVisible?b.managed.hide:b.managed.publish} tone={p.clientVisible?"danger":"primary"} confirm={p.clientVisible?{prompt:b.confirm.hide,action:b.confirm.hideAction}:{prompt:b.confirm.publish,action:b.confirm.publishAction}}><input type="hidden" name="projectId" value={p.id}/><input type="hidden" name="expectedRevision" value={p.revision}/><input type="hidden" name="visible" value={String(!p.clientVisible)}/></ManagedForm>
+        <a className="bw-button" href={`/admin/brand-workspace/organizations/${p.organizationId}`}>{b.managed.access}</a><details><summary>{b.managed.invite}</summary><p className="bw-muted">{b.managed.inviteHint}</p>
+          {/* P2-3: a campaign-only guest of a campaign the client cannot see would land on nothing.
+              Until it is shared, the campaign-scope invite is off; brand-wide invites stay on the brand page. */}
+          {p.clientVisible ? <ManagedForm op="brandWorkspace.invite" b={b} submit={b.managed.invite} messages={refusals}>
           <input type="hidden" name="organizationId" value={p.organizationId}/><label>{b.managed.email}<input type="email" name="email" required/></label>
           <input type="hidden" name="projectId" value={p.id}/>
           <label>{b.managed.scope}<select name="access" defaultValue="comment"><option value="comment">{b.managed.scopeProjectComment}</option><option value="read">{b.managed.scopeProject}</option><option value="brand">{b.managed.scopeBrand}</option></select><span className="bw-muted">{b.managed.scopeCommentHint}</span></label><input type="hidden" name="role" value="viewer"/>
-        </ManagedForm></details>
+        </ManagedForm> : <p className="bw-note" data-invite-hidden-campaign>{dict.admin.inviteHiddenCampaign} <a href={`/admin/brand-workspace/organizations/${p.organizationId}`}>{b.managed.access} →</a></p>}</details>
       </section>
       <ProjectDetail project={p} b={b} locale={locale} studio studioReply={
         <Form op="brandWorkspace.message" submit={b.sendComment}>
@@ -89,7 +95,7 @@ export default async function StudioBrandProject({
         <h2>{b.cover.title}</h2>
         <p className="bw-muted">{b.cover.hint}</p>
         {covers.length === 0 ? <p className="bw-note">{b.cover.empty}</p> : (
-          <ManagedForm op="brandWorkspace.cover" b={b} submit={b.cover.save}>
+          <ManagedForm op="brandWorkspace.cover" b={b} messages={refusals} submit={b.cover.save}>
             <input type="hidden" name="projectId" value={p.id}/>
             <input type="hidden" name="expectedRevision" value={p.revision}/>
             <fieldset className="bw-cover-options">
@@ -103,19 +109,10 @@ export default async function StudioBrandProject({
       <section id="studio-actions" className="bw-panel">
         <h2>{b.studioTitle}</h2>
         <div className="bw-grid">
-          <Form op="brandWorkspace.status" submit={b.save}>
-            <label>
-              {b.projectStatus}
-              <select
-                name="status"
-                defaultValue={p.status === "requested" ? "active" : "completed"}
-              >
-                <option value="active">{b.activate}</option>
-                <option value="completed">{b.complete}</option>
-                <option value="cancelled">{b.close}</option>
-              </select>
-            </label>
-          </Form>
+          <div>
+            <p className="bw-kicker">{b.projectStatus}</p>
+            <BrandStatusForms projectId={id} status={p.status} revision={p.revision} b={b} admin={dict.admin} />
+          </div>
           <p className="bw-muted">
             <a href="#conversation">{b.studioCommentsLink} →</a>
           </p>
@@ -375,6 +372,7 @@ export default async function StudioBrandProject({
               <input name="periodEnd" type="date" required />
             </label>
           </div>
+          <ConfirmCheck label={dict.admin.confirmReportPublish} />
         </Form>
       </section>
     </AdminShell>

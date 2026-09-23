@@ -19,6 +19,23 @@ import type { AdminOperation } from "./operations";
 import { fail, ok, type AdminContext } from "./context";
 import * as f from "./form";
 type Input = Record<string, unknown>;
+/**
+ * The service's refusal → an admin outcome with brand wording (P2-6). The service code rides along as
+ * `detail`, so the banner (and a support conversation) can name exactly what was refused.
+ * `not_shared` is compared as a string: it is the campaign-only-invite refusal for a campaign the
+ * client cannot see yet.
+ */
+export function brandFailure(code: string) {
+  const admin =
+    code === "conflict" ? "brandConflict"
+    : code === "not_active" ? "brandNotActive"
+    : code === "consent_required" ? "brandConsentRequired"
+    : code === "not_shared" ? "brandNotShared"
+    : code === "not_found" ? "notFound"
+    : code === "forbidden" ? "forbidden"
+    : "invalid";
+  return fail(admin, code);
+}
 function operation(
   run: (ctx: AdminContext, input: Input) => Promise<BrandOutcome>,
 ): AdminOperation<Input> {
@@ -58,15 +75,7 @@ function operation(
         return ok("saved", {
           to: `/admin/brand-workspace/${String(input.projectId)}`,
         });
-      return fail(
-        result.code === "conflict"
-          ? "staleReview"
-          : result.code === "not_found"
-            ? "notFound"
-            : result.code === "forbidden"
-              ? "forbidden"
-              : "invalid",
-      );
+      return brandFailure(result.code);
     },
   };
 }
@@ -82,7 +91,7 @@ function managedOperation(run:(ctx:AdminContext,input:Input)=>Promise<BrandOutco
    return {ok:true,value:input};
  },async run(ctx,input) {
    const r=await run(ctx,input);
-   if(!r.ok)return fail(r.code==='conflict'?'staleReview':r.code==='forbidden'?'forbidden':'invalid');
+   if(!r.ok)return brandFailure(r.code);
    return ok('saved',{to:destination==='home'?(input.organizationId?`/admin/brand-workspace/organizations/${String(input.organizationId)}`:'/admin/brand-workspace'):`/admin/brand-workspace/${String(input.projectId||r.id)}`,...(r.token?{invitationToken:r.token}:{})});
  }};
 }
@@ -137,16 +146,7 @@ const metricsBatch: AdminOperation<Input> = {
       return ok("saved", {
         to: `/admin/brand-workspace/${String(input.projectId)}`,
       });
-    return fail(
-      result.code === "conflict"
-        ? "staleReview"
-        : result.code === "not_found"
-          ? "notFound"
-          : result.code === "forbidden"
-            ? "forbidden"
-            : "invalid",
-      result.code,
-    );
+    return brandFailure(result.code);
   },
 };
 /**
@@ -173,7 +173,7 @@ const externalPosts: AdminOperation<Input> = {
   async run(ctx, input) {
     const result = await importBrandExternalPosts({ sql: ctx.sql }, ctx.viewer, input);
     if (result.ok) return ok("saved", { to: `/admin/brand-workspace/${String(input.projectId)}` });
-    return fail(result.code === "conflict" ? "staleReview" : result.code === "not_found" ? "notFound" : result.code === "forbidden" ? "forbidden" : "invalid", result.code);
+    return brandFailure(result.code);
   },
 };
 /** A `datetime-local` value read as Korea time. Blank is unknown (null); an impossible date is refused. */
@@ -209,7 +209,7 @@ const postPresentation: AdminOperation<Input> = {
   async run(ctx, input) {
     const result = await setBrandPostPresentation({ sql: ctx.sql }, ctx.viewer, input);
     if (result.ok) return ok("saved", { to: `/admin/brand-workspace/${String(input.projectId)}` });
-    return fail(result.code === "conflict" ? "staleReview" : result.code === "not_found" ? "notFound" : result.code === "forbidden" ? "forbidden" : "invalid", result.code);
+    return brandFailure(result.code);
   },
 };
 /**

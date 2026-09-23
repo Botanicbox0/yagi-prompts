@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
-import { parseDateTimeLocal } from '@/lib/contests/schemas';
+import { parseKstDateTimeLocal } from '@/lib/campaigns/dates';
 import {
   campaignSlugExists,
   insertCampaign,
@@ -96,8 +96,8 @@ function campaignFields(form: FormData) {
     platforms,
     deliverable: f.str(form, 'deliverable') || 'reel',
     slots: intOrNull(form, 'slots') ?? 0,
-    applicationsCloseAt: parseDateTimeLocal(f.str(form, 'applicationsCloseAt')),
-    postDeadlineAt: parseDateTimeLocal(f.str(form, 'postDeadlineAt')),
+    applicationsCloseAt: parseKstDateTimeLocal(f.str(form, 'applicationsCloseAt')),
+    postDeadlineAt: parseKstDateTimeLocal(f.str(form, 'postDeadlineAt')),
     payout: {
       model: f.str(form, 'payoutModel') || 'flat',
       flatCents: intOrNull(form, 'payoutFlat') ?? 0,
@@ -341,7 +341,9 @@ const pay: AdminOperation<z.infer<typeof Pay>> = {
     });
     if (!moved) return fail('staleReview');
     mailApplicationStatus(ctx, app.id, campaign, 'paid');
-    return ok('paid', { detail: String(amount), to: adminCampaignPath(campaign.id) });
+    // No `to` (P2-8): the payout queue on /admin/campaigns and the campaign page both post their own
+    // `_back`, so settling from the queue keeps the operator on the queue.
+    return ok('paid', { detail: String(amount) });
   },
 };
 

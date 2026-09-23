@@ -231,11 +231,11 @@ export function HeroPanel({
             />
           )}
           <dl className="font-mono text-[0.75rem] opacity-60">
-            <dt className="opacity-70">mime</dt>
+            <dt className="opacity-70">{a.assetMime}</dt>
             <dd>{hero.mime}</dd>
-            <dt className="mt-2 opacity-70">sha256</dt>
+            <dt className="mt-2 opacity-70">{a.assetSha256}</dt>
             <dd className="break-all">{hero.sha256}</dd>
-            <dt className="mt-2 opacity-70">staging</dt>
+            <dt className="mt-2 opacity-70">{a.assetStaging}</dt>
             <dd className="break-all">{hero.staging_key}</dd>
           </dl>
         </div>
