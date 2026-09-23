@@ -28,16 +28,26 @@ export default async function MembersPage({
         </div>
       </div>
       {owners.length > 1 && (
-        <nav className="bw-tabs">
+        <nav className="bw-tabs" aria-label={b.organizations}>
           {owners.map((o) => (
-            <a key={o.id} href={`/brand/members?organizationId=${o.id}`}>
+            <a key={o.id} href={`/brand/members?organizationId=${o.id}`} aria-current={team?.organization.id === o.id ? "page" : undefined}>
               {o.name}
             </a>
           ))}
         </nav>
       )}
       {!team ? (
-        <p role="alert">{b.denied}</p>
+        // Reaching this page without ownership is an expected state, not an error: say who can act.
+        <section className="bw-empty" data-brand-members-unavailable>
+          <p>
+            {owners.length === 0
+              ? workspace.organizations.length === 0
+                ? b.access.sharedOnly
+                : b.access.ownerOnlyTeam
+              : b.denied}
+          </p>
+          <a href="/brand" className="bw-button">{b.back}</a>
+        </section>
       ) : (
         <>
           <section className="bw-panel">
@@ -60,6 +70,8 @@ export default async function MembersPage({
                         }}
                         b={b}
                         submit={b.revoke}
+                        tone="danger"
+                        confirm={{ prompt: b.confirm.revokeMember, action: b.confirm.revokeMemberAction }}
                       />
                     )}
                   </li>

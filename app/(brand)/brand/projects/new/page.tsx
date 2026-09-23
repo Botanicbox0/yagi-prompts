@@ -17,11 +17,29 @@ export default async function NewBrandProject() {
           <p>{b.emptyBody}</p>
         </div>
       </div>
-      {organizations.length === 0 ? (
-        <section className="bw-empty">
-          <p>{b.needOrganization}</p>
+      {workspace.organizations.length === 0 ? (
+        // No workspace yet: create it here and come straight back, instead of bouncing via /brand
+        // (which, for campaign-only invitees, shows their campaigns and no creation form).
+        <section className="bw-panel" data-brand-new-project-setup>
+          <h2>{b.needOrganization}</h2>
+          <p className="bw-note">{b.organizationHint}</p>
+          <ActionForm
+            operation="organization.create"
+            b={b}
+            submit={b.createOrganization}
+            redirectTo="/brand/projects/new"
+          >
+            <label>
+              {b.organization}
+              <input name="name" minLength={2} maxLength={100} required autoComplete="organization" />
+            </label>
+          </ActionForm>
+        </section>
+      ) : organizations.length === 0 ? (
+        <section className="bw-empty" data-brand-new-project-read-only>
+          <p>{b.access.viewerCannotRequest}</p>
           <a href="/brand" className="bw-button">
-            {b.createOrganization}
+            {b.back}
           </a>
         </section>
       ) : (

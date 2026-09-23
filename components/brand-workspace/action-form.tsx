@@ -1,8 +1,10 @@
 "use client";
-import { useRef, useState, useEffect, type FormEvent, type ReactNode } from "react";
+import { useId, useRef, useState, useEffect, type FormEvent, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import type { Dictionary } from "@/lib/i18n/dictionaries";
 import { PENDING_BRAND_INVITATION_KEY } from "@/lib/auth/invitation-transfer";
+import { createFieldFocus, locateField, revealField } from "./form-errors";
+import { ConfirmStep, toneClass, useConfirmStep, type ButtonTone, type ConfirmCopy } from "./confirm-step";
 
 export type BrandCopy = Dictionary["brandWorkspace"];
 export function ActionForm({
@@ -14,6 +16,8 @@ export function ActionForm({
   redirectTo,
   className = "",
   disabled = false,
+  confirm,
+  tone = "primary",
 }: {
   operation: string;
   fixed?: Record<string, unknown>;
@@ -23,19 +27,31 @@ export function ActionForm({
   redirectTo?: string;
   className?: string;
   disabled?: boolean;
+  /** Ask once more, inline, before a removal or disclosure is sent. */
+  confirm?: ConfirmCopy;
+  tone?: ButtonTone;
 }) {
   const router = useRouter();
   const [ready,setReady]=useState(false);
   useEffect(()=>setReady(true),[]);
   const request = useRef<{ fingerprint: string; id: string } | null>(null);
+  const inFlight = useRef(false);
+  const fieldFocus = useRef(createFieldFocus());
+  const step = useConfirmStep(Boolean(confirm));
+  const confirmId = useId();
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
   const [failed, setFailed] = useState(false);
   const [conflict, setConflict] = useState(false);
   const [inviteUrl, setInviteUrl] = useState("");
+  // Runs after the commit that re-enables the fieldset; focusing earlier is silently ignored.
+  useEffect(() => {
+    if (!busy) fieldFocus.current.flush();
+  }, [busy, notice]);
   async function send(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (busy || disabled) return;
+    if (busy || disabled || inFlight.current) return;
+    if (step.intercept(event)) return;
     const form = event.currentTarget;
     const fields = new FormData(form);
     const input: Record<string, unknown> = {
@@ -63,14 +79,19 @@ export function ActionForm({
       input.measuredAt = input.measuredAt
         ? new Date(String(input.measuredAt)).toISOString()
         : null;
+    // Submitted array index → DOM row, for arrays whose blank rows are dropped before posting.
+    const submittedRows: Record<string, number[]> = {};
     if (operation === "project.create") {
-      input.referenceLinks = fields
+      const references = fields
         .getAll("referenceUrl")
         .map((url, i) => ({
           url: String(url).trim(),
           note: String(fields.getAll("referenceNote")[i] ?? ""),
+          row: i,
         }))
         .filter((x) => x.url);
+      submittedRows.referenceLinks = references.map((x) => x.row);
+      input.referenceLinks = references.map(({ url, note }) => ({ url, note }));
       delete input.referenceUrl;
       delete input.referenceNote;
       input.criteria = {
@@ -93,6 +114,8 @@ export function ActionForm({
     if (request.current?.fingerprint !== fingerprint)
       request.current = { fingerprint, id: crypto.randomUUID() };
     input.requestId = request.current.id;
+    inFlight.current = true;
+    fieldFocus.current.clear();
     setBusy(true);
     setNotice("");
     setFailed(false);
@@ -115,19 +138,20 @@ export function ActionForm({
             ? b.conflict
             : result.code === "invalid"
               ? b.invalid
-              : ["forbidden", "not_found", "sign_in_required"].includes(
-                    result.code,
-                  )
-                ? b.denied
-                : b.error,
+              : result.code === "rate_limited"
+                ? b.errors.rateLimited
+                : ["forbidden", "not_found", "sign_in_required"].includes(
+                      result.code,
+                    )
+                  ? b.denied
+                  : b.error,
         );
         const field =
-          typeof result.field === "string"
-            ? form.elements.namedItem(result.field.split(".")[0])
-            : null;
-        if (field instanceof HTMLElement) {
+          typeof result.field === "string" ? locateField(form, result.field, submittedRows) : null;
+        if (field) {
           field.setAttribute("aria-invalid", "true");
-          field.focus();
+          revealField(field);
+          fieldFocus.current.request(field);
         }
         return;
       }
@@ -159,16 +183,24 @@ export function ActionForm({
       setFailed(true);
       setNotice(b.error);
     } finally {
+      inFlight.current = false;
       setBusy(false);
+      if (step.open) step.close();
     }
   }
   return (
     <form method="post" action="/api/brand-workspace" onSubmit={send} className={`bw-form ${className}`} aria-busy={busy}>
       <fieldset disabled={!ready || busy || disabled}>{children}</fieldset>
+      {confirm && step.open ? (
+        <ConfirmStep id={confirmId} copy={confirm} cancel={b.confirm.cancel} busy={busy} working={b.working}
+          tone={tone} accept={step.accept} onCancel={step.close} />
+      ) : null}
       <div className="bw-form-actions">
-        <button className="bw-button bw-primary" disabled={!ready || busy || disabled} type="submit">
-          {busy ? b.working : submit}
-        </button>
+        {!(confirm && step.open) && (
+          <button ref={step.trigger} className={toneClass(tone)} disabled={!ready || busy || disabled} type="submit">
+            {busy ? b.working : submit}
+          </button>
+        )}
         {conflict && (
           <button
             type="button"

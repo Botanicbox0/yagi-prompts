@@ -63,7 +63,7 @@ export default async function StudioBrandProject({
       />
       <section className="bw-panel bw-sharing" data-managed-sharing>
         <div><strong>{p.clientVisible?b.managed.visible:b.managed.prepared}</strong><p className="bw-muted">{b.managed.visibilityHint}</p></div>
-        <ManagedForm op="brandWorkspace.visibility" b={b} submit={p.clientVisible?b.managed.hide:b.managed.publish}><input type="hidden" name="projectId" value={p.id}/><input type="hidden" name="expectedRevision" value={p.revision}/><input type="hidden" name="visible" value={String(!p.clientVisible)}/></ManagedForm>
+        <ManagedForm op="brandWorkspace.visibility" b={b} submit={p.clientVisible?b.managed.hide:b.managed.publish} tone={p.clientVisible?"danger":"primary"} confirm={p.clientVisible?{prompt:b.confirm.hide,action:b.confirm.hideAction}:{prompt:b.confirm.publish,action:b.confirm.publishAction}}><input type="hidden" name="projectId" value={p.id}/><input type="hidden" name="expectedRevision" value={p.revision}/><input type="hidden" name="visible" value={String(!p.clientVisible)}/></ManagedForm>
         <a className="bw-button" href={`/admin/brand-workspace/organizations/${p.organizationId}`}>{b.managed.access}</a><details><summary>{b.managed.invite}</summary><p className="bw-muted">{b.managed.inviteHint}</p><ManagedForm op="brandWorkspace.invite" b={b} submit={b.managed.invite}>
           <input type="hidden" name="organizationId" value={p.organizationId}/><label>{b.managed.email}<input type="email" name="email" required/></label>
           <label>{b.managed.scope}<select name="projectId"><option value={p.id}>{b.managed.scopeProject}</option><option value="">{b.managed.scopeBrand}</option></select></label><input type="hidden" name="role" value="viewer"/>

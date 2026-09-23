@@ -6,6 +6,7 @@ import {
   needsLiveness,
 } from "@/lib/identity/service";
 import { brandContext } from "@/components/brand-workspace/context";
+import { workspaceAccess } from "@/components/brand-workspace/access";
 import { ProductionCreate } from "@/components/brand-workspace/production-create";
 import { loadBrandWorkspace } from "@/lib/brands/workspace/service";
 import { loadProductionWorkspace } from "@/lib/brands/production/service";
@@ -21,8 +22,32 @@ export default async function BrandStudio({
   ]);
   if (!sql) return <p role="alert">{b.unavailable}</p>;
   const workspace = await loadBrandWorkspace({ sql }, viewer),
+    access = workspaceAccess(workspace),
     orgId = organizationId ?? workspace.organizations[0]?.id,
     t = b.productionStudio;
+  const heading = (
+    <div className="bw-heading">
+      <div>
+        <p className="bw-kicker">TWINGS STUDIO</p>
+        <h1>{t.title}</h1>
+        <p>{t.subtitle}</p>
+      </div>
+      {/* Renders nothing for accounts that cannot send a request (viewer-only, campaign-only). */}
+      <StudioInquiry organizations={workspace.organizations} organizationId={orgId} b={b} allowSetup={access.fresh} />
+    </div>
+  );
+  // Campaign-only invitees reach this page only by typing the address: no onboarding, no creation.
+  if (access.projectScopedOnly)
+    return (
+      <div data-brand-production data-brand-studio-unavailable>
+        {heading}
+        <section className="bw-empty">
+          <p>{b.access.studioSharedOnly}</p>
+          <a href="/brand" className="bw-button">{b.back}</a>
+        </section>
+      </div>
+    );
+  const selectedRole = workspace.organizations.find((o) => o.id === orgId)?.role;
   const production = orgId
     ? await loadProductionWorkspace({ sql }, viewer, orgId)
     : null;
@@ -40,15 +65,8 @@ export default async function BrandStudio({
     (await identityStatusFor(sql, viewer.userId!, mode)) !== "active";
   return (
     <div data-brand-production>
-      <div className="bw-heading">
-        <div>
-          <p className="bw-kicker">TWINGS STUDIO</p>
-          <h1>{t.title}</h1>
-          <p>{t.subtitle}</p>
-        </div>
-        <StudioInquiry organizations={workspace.organizations} organizationId={orgId} b={b} />
-      </div>
-      <ServiceGuide kind="studio" b={b} />
+      {heading}
+      <ServiceGuide kind="studio" b={b} showOther={access.canRequest || access.fresh} />
       <nav className="bw-status-tabs">
         {workspace.organizations.map((o) => (
           <a
@@ -61,10 +79,18 @@ export default async function BrandStudio({
         ))}
       </nav>
       {!production || !production.contracts.length ? (
-        <section className="bw-panel bw-production-empty">
-          <h2>{t.emptyTitle}</h2>
-          <p>{t.emptyHint}</p>
-        </section>
+        selectedRole === "viewer" ? (
+          // The request invitation would point at a button a viewer does not have.
+          <section className="bw-panel bw-production-empty" data-brand-studio-read-only>
+            <h2>{b.access.studioViewerTitle}</h2>
+            <p>{b.access.studioViewer}</p>
+          </section>
+        ) : (
+          <section className="bw-panel bw-production-empty">
+            <h2>{t.emptyTitle}</h2>
+            <p>{t.emptyHint}</p>
+          </section>
+        )
       ) : (
         <>
           <aside className="bw-note bw-production-identity">

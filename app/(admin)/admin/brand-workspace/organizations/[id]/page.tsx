@@ -64,6 +64,8 @@ export default async function StudioOrganization({
                     op="brandWorkspace.revokeAccess"
                     b={b}
                     submit={c.revoke}
+                    tone="danger"
+                    confirm={{ prompt: b.confirm.revokeMember, action: b.confirm.revokeMemberAction }}
                   >
                     <input type="hidden" name="organizationId" value={id} />
                     <input
@@ -94,6 +96,8 @@ export default async function StudioOrganization({
                     op="brandWorkspace.revokeInvite"
                     b={b}
                     submit={c.revokeInvite}
+                    tone="danger"
+                    confirm={{ prompt: b.confirm.revokeInvite, action: b.confirm.revokeInviteAction }}
                   >
                     <input type="hidden" name="organizationId" value={id} />
                     <input type="hidden" name="invitationId" value={i.id} />

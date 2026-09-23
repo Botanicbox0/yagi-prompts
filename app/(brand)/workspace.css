@@ -833,3 +833,13 @@ html[data-brand-workspace] {
  .bw-language-select label{padding-left:6px}
 }
 .bw-language-apply{min-height:44px;padding:8px 10px;font-size:12px;text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+/* Removal and disclosure actions: quieter than primary, confirmed inline before sending. */
+.bw-danger{color:#ad2323;border-color:#e4bcbc}
+.bw-danger:hover:not(:disabled){border-color:#ad2323}
+.bw-danger-solid{background:#ad2323;border-color:#ad2323;color:#fff}
+.bw-danger-solid:hover:not(:disabled){background:#8f1c1c;border-color:#8f1c1c}
+.bw-confirm{display:grid;gap:10px;padding:14px 16px;border:1px solid #e5e5e5;border-left:2px solid #151515;border-radius:4px;background:#fafafb;font-size:13px}
+.bw-confirm p{margin:0;line-height:1.6}
+.bw-form select[aria-invalid]{border-color:#b32424}
+.bw-skip-link{position:absolute;left:12px;top:-60px;z-index:100;padding:10px 14px;background:#151515;color:#fff;border-radius:4px}
+.bw-skip-link:focus{top:12px}

@@ -1,7 +1,7 @@
 import {afterEach,describe,expect,it,vi} from 'vitest';
 const mocks=vi.hoisted(()=>({push:vi.fn(),refresh:vi.fn(),assign:vi.fn()}));
 vi.mock('next/navigation',()=>({useRouter:()=>({push:mocks.push,refresh:mocks.refresh})}));
-vi.mock('react',async original=>({...await original<typeof import('react')>(),useEffect:()=>{},useState:(value:unknown)=>[value,vi.fn()],useRef:(value:unknown)=>({current:value})}));
+vi.mock('react',async original=>({...await original<typeof import('react')>(),useEffect:()=>{},useState:(value:unknown)=>[value,vi.fn()],useRef:(value:unknown)=>({current:value}),useId:()=>'id'}));
 import {ManagedForm} from '@/components/brand-workspace/managed-form';
 import {ActionForm} from '@/components/brand-workspace/action-form';
 import {getDictionary} from '@/lib/i18n/dictionaries';

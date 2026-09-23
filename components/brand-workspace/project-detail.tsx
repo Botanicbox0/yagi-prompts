@@ -10,6 +10,7 @@ import { formatBrandTimestamp } from "./format";
 import { ProjectTabs } from './project-tabs';
 import { CampaignContracts } from './contracts';
 import { CampaignPerformance } from './performance';
+import { DecisionFields } from './decision-fields';
 
 export function PostTable({
   posts,
@@ -257,19 +258,7 @@ export function ProjectDetail({
                         b={b}
                         submit={b.save}
                       >
-                        <label>
-                          {b.decision}
-                          <select name="decision">
-                            <option value="approved">{b.approve}</option>
-                            <option value="changes_requested">
-                              {b.requestChanges}
-                            </option>
-                          </select>
-                        </label>
-                        <label>
-                          {b.decisionComment}
-                          <textarea name="comment" maxLength={2000} />
-                        </label>
+                        <DecisionFields b={b} />
                         <label className="bw-check">
                           <input type="checkbox" required name="confirmed" />
                           {b.approveConfirm}

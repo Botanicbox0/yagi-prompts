@@ -1,5 +1,6 @@
 "use client";
 import {
+  useId,
   useRef,
   useState,
   useEffect,
@@ -9,6 +10,19 @@ import {
 import { useRouter } from "next/navigation";
 import type { AdminOperationName } from "@/lib/admin/operations";
 import type { BrandCopy } from "./action-form";
+import { ConfirmStep, toneClass, useConfirmStep, type ButtonTone, type ConfirmCopy } from "./confirm-step";
+
+class Refused extends Error {
+  constructor(readonly code: string) { super(code); }
+}
+
+/** `/admin/do` failure codes, stated honestly instead of blaming the connection for every refusal. */
+export function managedErrorMessage(b: BrandCopy, code: string | null): string {
+  if (code === "staleReview") return b.conflict;
+  if (code === "invalid") return b.errors.adminInvalid;
+  if (code === "forbidden" || code === "notFound") return b.errors.adminDenied;
+  return b.error;
+}
 
 /** Same registered admin dispatcher, with one-time invitation data kept out of URL queries. */
 export function ManagedForm({
@@ -16,29 +30,39 @@ export function ManagedForm({
   b,
   children,
   submit,
+  confirm,
+  tone = "primary",
 }: {
   op: AdminOperationName;
   b: BrandCopy;
   children: ReactNode;
   submit: string;
+  /** Ask once more, inline, before a disclosure or removal is sent. */
+  confirm?: ConfirmCopy;
+  tone?: ButtonTone;
 }) {
   const router = useRouter(),
-    request = useRef<{fingerprint:string;id:string} | null>(null);
+    request = useRef<{fingerprint:string;id:string} | null>(null),
+    inFlight = useRef(false);
+  const step = useConfirmStep(Boolean(confirm));
+  const confirmId = useId();
   const [ready, setReady] = useState(false);
   useEffect(() => setReady(true), []);
   const [busy, setBusy] = useState(false),
-    [error, setError] = useState(false),
+    [error, setError] = useState(""),
     [link, setLink] = useState("");
   async function send(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (busy) return;
+    if (busy || inFlight.current) return;
+    if (step.intercept(e)) return;
     const data = new FormData(e.currentTarget);
     data.set("_op", op);
     const fingerprint=JSON.stringify([...data.entries()]);
     if(request.current?.fingerprint!==fingerprint)request.current={fingerprint,id:crypto.randomUUID()};
     data.set("requestId", request.current.id);
+    inFlight.current = true;
     setBusy(true);
-    setError(false);
+    setError("");
     setLink("");
     try {
       const response = await fetch("/admin/do", {
@@ -46,8 +70,10 @@ export function ManagedForm({
         headers: { Accept: "application/json" },
         body: data,
       });
-      const result = await response.json();
-      if (!response.ok || !result.ok) throw Error("save");
+      // A lost admin session answers 404 with no body; that is a refusal, not a network error.
+      const result = await response.json().catch(() => (response.status === 404 ? { ok: false, code: "notFound" } : null));
+      if (!result) throw Error("save");
+      if (!response.ok || !result.ok) throw new Refused(typeof result.code === "string" ? result.code : "unknown");
       request.current = null;
       if (result.invitationToken) {
         const origin = /^(localhost|127\.0\.0\.1)$/.test(location.hostname)
@@ -71,13 +97,15 @@ export function ManagedForm({
         return;
       }
       router.refresh();
-    } catch {
+    } catch (failure) {
       // Invitation tokens cannot be recovered; a fresh invite revokes the lost one.
       // Other uncertain writes retain their idempotency key.
       if(op==="brandWorkspace.invite")request.current = null;
-      setError(true);
+      setError(managedErrorMessage(b, failure instanceof Refused ? failure.code : null));
     } finally {
+      inFlight.current = false;
       setBusy(false);
+      if (step.open) step.close();
     }
   }
   return (
@@ -92,12 +120,17 @@ export function ManagedForm({
       <fieldset disabled={!ready || busy} className="bw-fields">
         {children}
       </fieldset>
-      <button className="bw-button bw-primary" disabled={!ready || busy}>
-        {busy ? b.working : submit}
-      </button>
+      {confirm && step.open ? (
+        <ConfirmStep id={confirmId} copy={confirm} cancel={b.confirm.cancel} busy={busy} working={b.working}
+          tone={tone} accept={step.accept} onCancel={step.close} />
+      ) : (
+        <button ref={step.trigger} className={toneClass(tone)} disabled={!ready || busy}>
+          {busy ? b.working : submit}
+        </button>
+      )}
       {error && (
         <p role="alert" className="bw-error">
-          {b.error}
+          {error}
         </p>
       )}
       {link && (
