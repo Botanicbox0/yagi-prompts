@@ -684,13 +684,28 @@ export async function loadBrandMembers(deps: BrandWorkspaceDeps, viewer: Viewer,
     if (!org) throw new Denied('not_found');
     const members = (await sql.query(`select m.id,m.user_id,m.role,m.status,p.email from brand_memberships m
       join profiles p on p.id=m.user_id where m.organization_id=$1 order by m.created_at`, [organizationId])).rows;
-    const invitations = (await sql.query('select id,email,role,expires_at,accepted_at,revoked_at from brand_invites where organization_id=$1 order by created_at desc', [organizationId])).rows;
+    // A campaign-only invitation names its campaign, but only once that campaign is shared with the client.
+    const invitations = (await sql.query(`select i.id,i.email,i.role,i.expires_at,i.accepted_at,i.revoked_at,i.project_id,p.client_visible as project_shared,
+      case when p.client_visible then p.title end as project_title from brand_invites i left join brand_projects p on p.id=i.project_id and p.organization_id=i.organization_id
+      where i.organization_id=$1 order by i.created_at desc`, [organizationId])).rows;
     return { organization: { id: String(org.id), name: String(org.name) }, members: members.map(m => ({
       id: String(m.id), userId: String(m.user_id), email: m.role !== 'owner' || m.user_id === viewer.userId ? String(m.email) : null,
       role: m.role as BrandRole, status: m.status as 'active' | 'revoked', isSelf: m.user_id === viewer.userId,
     })), invitations: invitations.map(i => ({ id: String(i.id), email: String(i.email), role: i.role as 'editor' | 'viewer', expiresAt: stamp(i.expires_at),
+      project: i.project_id ? { shared: i.project_shared === true, title: i.project_title == null ? null : String(i.project_title) } : null,
       status: i.revoked_at ? 'revoked' as const : i.accepted_at ? 'accepted' as const : +new Date(stamp(i.expires_at)) <= Date.now() ? 'expired' as const : 'pending' as const })) };
   }); } catch (error) { if (error instanceof Denied) return null; throw error; }
+}
+/**
+ * Campaigns this account was invited to as a guest that the studio has not shared yet, in brands where
+ * it holds no membership. Only a count: nothing about those campaigns is shown until they are shared.
+ */
+export async function countPendingSharedCampaigns(deps: BrandWorkspaceDeps, viewer: Viewer): Promise<number> {
+  if (!uuid(viewer.userId)) return 0;
+  const row = (await deps.sql.query<{ n: number }>(`select count(*)::int as n from brand_project_members g join brand_projects p on p.id=g.project_id and p.organization_id=g.organization_id
+    where g.user_id=$1 and g.status='active' and not p.client_visible
+    and not exists(select 1 from brand_memberships m where m.organization_id=g.organization_id and m.user_id=$1 and m.status='active')`, [viewer.userId])).rows[0];
+  return Number(row?.n ?? 0);
 }
 export async function createBrandInvitation(deps: BrandWorkspaceDeps, viewer: Viewer, input: unknown): Promise<BrandOutcome<{ id: string; token: string }>> {
   return mutation(deps, viewer, BrandInvitationSchema, input, async (sql, userId, v) => {
@@ -711,7 +726,18 @@ export async function createBrandInvitation(deps: BrandWorkspaceDeps, viewer: Vi
     return { id, token };
   });
 }
-export async function acceptBrandInvitation(deps: BrandWorkspaceDeps, viewer: Viewer, input: unknown): Promise<BrandOutcome<{ organizationId: string; projectId?: string }>> {
+/**
+ * Where an accepted invitation lands is decided from this result (`invitationLanding`): the brand
+ * itself, or the campaign when it is shared with the client. `projectShared` is false for a campaign
+ * the studio has not shared yet, so the guest is not sent to a page that cannot open.
+ */
+export type BrandInvitationAccepted = { organizationId: string; projectId?: string; projectShared?: boolean };
+async function acceptedScope(sql: SqlRunner, invite: Row): Promise<BrandInvitationAccepted> {
+  if (!invite.project_id) return { organizationId: String(invite.organization_id) };
+  const shared = (await sql.query('select client_visible from brand_projects where id=$1 and organization_id=$2', [invite.project_id, invite.organization_id])).rows[0]?.client_visible === true;
+  return { organizationId: String(invite.organization_id), projectId: String(invite.project_id), projectShared: shared };
+}
+export async function acceptBrandInvitation(deps: BrandWorkspaceDeps, viewer: Viewer, input: unknown): Promise<BrandOutcome<BrandInvitationAccepted>> {
   return mutation(deps, viewer, BrandInvitationAcceptSchema, input, async (sql, userId, v) => {
     const row = (await sql.query(`select * from brand_invites where token_hash=$1`, [createHash('sha256').update(v.token).digest('hex')])).rows[0];
     if (!row) throw new Denied('not_found');
@@ -727,7 +753,7 @@ export async function acceptBrandInvitation(deps: BrandWorkspaceDeps, viewer: Vi
       // A response-lost retry confirms existing access; it never reactivates a revoked member.
       if(invite.project_id) { if(!(await sql.query("select user_id from brand_project_members where project_id=$1 and user_id=$2 and status='active'",[invite.project_id,userId])).rows[0]) throw new Denied('not_found'); }
       else await member(sql, userId, String(invite.organization_id));
-      return { organizationId: String(invite.organization_id), ...(invite.project_id?{projectId:String(invite.project_id)}:{}) };
+      return acceptedScope(sql, invite);
     }
     // Revoking the inviting owner's role also invalidates their still-outstanding invitations.
     if(invite.issued_by_studio) await studio(sql,String(invite.created_by));
@@ -736,14 +762,16 @@ export async function acceptBrandInvitation(deps: BrandWorkspaceDeps, viewer: Vi
       // The newest invitation defines the guest's scope, including whether they may comment.
       await sql.query("insert into brand_project_members(organization_id,project_id,user_id,can_comment) values($1,$2,$3,$4) on conflict(project_id,user_id) do update set status='active',can_comment=excluded.can_comment",[invite.organization_id,invite.project_id,userId,invite.can_comment===true]);
       await sql.query('update brand_invites set accepted_at=now(),accepted_by=$1 where id=$2',[userId,invite.id]);
-      return {organizationId:String(invite.organization_id),projectId:String(invite.project_id)};
+      return acceptedScope(sql, invite);
     }
     const current = (await sql.query('select role,status from brand_memberships where organization_id=$1 and user_id=$2 for update', [invite.organization_id, userId])).rows[0];
-    if (current?.status === 'active') throw new Denied('conflict');
-    await sql.query(`insert into brand_memberships(organization_id,user_id,role) values($1,$2,$3)
-      on conflict(organization_id,user_id) do update set role=excluded.role,status='active'`, [invite.organization_id, userId, invite.role]);
+    // Already an active member (a re-sent invitation): nothing to change, not even the role. The
+    // invitation is used up so it stops showing as pending, and the member lands in that brand.
+    if (current?.status !== 'active')
+      await sql.query(`insert into brand_memberships(organization_id,user_id,role) values($1,$2,$3)
+        on conflict(organization_id,user_id) do update set role=excluded.role,status='active'`, [invite.organization_id, userId, invite.role]);
     await sql.query('update brand_invites set accepted_at=now(),accepted_by=$1 where id=$2', [userId, invite.id]);
-    return { organizationId: String(invite.organization_id) };
+    return acceptedScope(sql, invite);
   });
 }
 export async function revokeBrandMember(deps: BrandWorkspaceDeps, viewer: Viewer, input: unknown): Promise<BrandOutcome> {
@@ -789,7 +817,13 @@ export async function createStudioInvitation(deps:BrandWorkspaceDeps,viewer:View
   await studio(sql,userId);
   const org=(await sql.query('select id from brand_organizations where id=$1 for update',[v.organizationId])).rows[0];
   if(!org)throw new Denied('not_found');
-  if(v.projectId && (await project(sql,userId,v.projectId,{studio:true})).organization_id!==v.organizationId)throw new Denied('not_found');
+  if(v.projectId){
+   const p=await project(sql,userId,v.projectId,{studio:true});
+   if(p.organization_id!==v.organizationId)throw new Denied('not_found');
+   // A campaign-only guest can open nothing until the campaign is shared; invite once it is.
+   // Brand-wide invitations do not depend on any campaign and stay available before publication.
+   if(!p.client_visible)throw new Denied('not_shared');
+  }
   if((await sql.query('select id from brand_invites where organization_id=$1 and created_by=$2 and request_id=$3',[v.organizationId,userId,v.requestId])).rows[0])throw new Denied('conflict');
   const count=(await sql.query("select count(*)::int as n from brand_invites where organization_id=$1 and created_at>now()-interval '1 day'",[v.organizationId])).rows[0];
   if(Number(count?.n)>=20)throw new Denied('rate_limited');

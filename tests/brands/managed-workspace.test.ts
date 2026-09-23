@@ -85,6 +85,12 @@ it("creates a studio-managed brand without impersonating a customer and hides un
   expect(await s.loadBrandProject({ sql }, client, projectId)).not.toBeNull();
 });
 it("grants only the invited campaign after verified signup, and revocation blocks retry and files", async () => {
+  // A campaign-only invitation needs a campaign the client can open (hidden ones refuse: not_shared).
+  await s.setBrandProjectVisibility({ sql }, admin, {
+    projectId,
+    visible: true,
+    expectedRevision: 0,
+  });
   const invite = await s.createStudioInvitation({ sql }, admin, {
     organizationId: orgId,
     projectId,
@@ -106,11 +112,6 @@ it("grants only the invited campaign after verified signup, and revocation block
   expect(
     (await sql.query("select * from brand_memberships")).rows,
   ).toHaveLength(0);
-  await s.setBrandProjectVisibility({ sql }, admin, {
-    projectId,
-    visible: true,
-    expectedRevision: 0,
-  });
   expect((await s.loadBrandWorkspace({ sql }, client)).projects).toHaveLength(
     1,
   );

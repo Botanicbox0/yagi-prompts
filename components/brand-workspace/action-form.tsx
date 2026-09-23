@@ -5,6 +5,8 @@ import type { Dictionary } from "@/lib/i18n/dictionaries";
 import { PENDING_BRAND_INVITATION_KEY } from "@/lib/auth/invitation-transfer";
 import { createFieldFocus, locateField, revealField } from "./form-errors";
 import { ConfirmStep, toneClass, useConfirmStep, type ButtonTone, type ConfirmCopy } from "./confirm-step";
+import { invitationFailure } from "./invite-outcome";
+import { invitationLanding } from "@/lib/brands/workspace/selection";
 
 export type BrandCopy = Dictionary["brandWorkspace"];
 export function ActionForm({
@@ -44,11 +46,14 @@ export function ActionForm({
   const [failed, setFailed] = useState(false);
   const [conflict, setConflict] = useState(false);
   const [inviteUrl, setInviteUrl] = useState("");
+  const [switchAccount, setSwitchAccount] = useState(false);
   // Runs after the commit that re-enables the fieldset; focusing earlier is silently ignored.
   useEffect(() => {
     if (!busy) fieldFocus.current.flush();
   }, [busy, notice]);
   async function send(event: FormEvent<HTMLFormElement>) {
+    const submitter = (event.nativeEvent as SubmitEvent | undefined)?.submitter as HTMLElement | null | undefined;
+    if (submitter?.dataset?.signOut === "true") return;
     event.preventDefault();
     if (busy || disabled || inFlight.current) return;
     if (step.intercept(event)) return;
@@ -120,6 +125,7 @@ export function ActionForm({
     setNotice("");
     setFailed(false);
     setConflict(false);
+    setSwitchAccount(false);
     form
       .querySelectorAll("[aria-invalid]")
       .forEach((el) => el.removeAttribute("aria-invalid"));
@@ -132,6 +138,12 @@ export function ActionForm({
       const result = await response.json();
       if (!response.ok || !result.ok) {
         setFailed(true);
+        if (operation === "invitation.accept") {
+          const outcome = invitationFailure(result.code, b);
+          setNotice(outcome.notice);
+          setSwitchAccount(outcome.switchAccount);
+          return;
+        }
         setConflict(result.code === "conflict");
         setNotice(
           result.code === "conflict"
@@ -169,7 +181,7 @@ export function ActionForm({
         try {
           sessionStorage.removeItem(PENDING_BRAND_INVITATION_KEY);
         } catch {}
-        location.assign(result.projectId ? `/brand/projects/${encodeURIComponent(result.projectId)}` : "/brand");
+        location.assign(invitationLanding(result));
         return;
       } else if (redirectTo) {
         // A push followed by refresh can refresh the old page and cancel navigation.
@@ -199,6 +211,14 @@ export function ActionForm({
         {!(confirm && step.open) && (
           <button ref={step.trigger} className={toneClass(tone)} disabled={!ready || busy || disabled} type="submit">
             {busy ? b.working : submit}
+          </button>
+        )}
+        {switchAccount && (
+          // Posts this form natively to sign-out (forms cannot nest); `send` lets it through untouched.
+          // Only fields in the DOM travel, and the invitation token is never one of them.
+          <button type="submit" className="bw-button" formAction="/auth/signout" formMethod="post" formNoValidate
+            data-sign-out="true" data-invite-switch-account>
+            {b.inviteSignOut}
           </button>
         )}
         {conflict && (
