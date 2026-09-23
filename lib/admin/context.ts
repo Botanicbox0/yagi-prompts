@@ -131,6 +131,18 @@ export type AdminErrorCode =
   | 'slotsFull'
   | 'notReleasable'
   | 'metricsRequired'
+  /**
+   * Brand workspace (P2-6). The service's own refusal, phrased for a campaign rather than for the
+   * contest queue the generic `staleReview` sentence was written for:
+   *   brandConflict        — the campaign changed since the page loaded, or that status move is not allowed
+   *   brandNotActive       — only an active campaign takes content, posts and metrics
+   *   brandConsentRequired — studio production needs the creator-consent box ticked
+   *   brandNotShared       — a campaign-only invite for a campaign the client cannot see yet
+   */
+  | 'brandConflict'
+  | 'brandNotActive'
+  | 'brandConsentRequired'
+  | 'brandNotShared'
   | 'unknown';
 
 export interface AdminSuccess {
