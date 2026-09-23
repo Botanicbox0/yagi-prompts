@@ -49,7 +49,8 @@ describe('OAuth return paths remain on the request origin', () => {
       url.searchParams.set('next', next);
       const response = await callback(new NextRequest(url));
       expect(new URL(response.headers.get('location')!).origin).toBe(url.origin);
-      expect(new URL(response.headers.get('location')!).pathname).toBe('/library');
+      // Audit P1-4: the fallback is the video templates, like /auth/signin, not the denavigated /library.
+      expect(new URL(response.headers.get('location')!).pathname).toBe('/en/video');
     });
   }
 

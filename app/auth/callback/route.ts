@@ -38,9 +38,11 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const url = resolveRequestUrl(new URL(request.url), request.headers);
   if (url === null) return new NextResponse(null, { status: 404 });
   const code = url.searchParams.get('code');
-  const next = authReturnPath(url.searchParams.get('next'), url.hostname, '/library');
   const uiLocaleRaw = url.searchParams.get('locale');
   const uiLocale: Locale = isLocale(uiLocaleRaw) ? uiLocaleRaw : DEFAULT_LOCALE;
+  // A return trip with nowhere to go lands where `/auth/signin` would have sent it: the video
+  // templates (docs/TEMPLATES-IA.md). It used to be the denavigated `/library` (audit P1-4).
+  const next = authReturnPath(url.searchParams.get('next'), url.hostname, `/${uiLocale}/video`);
 
   if (!code) {
     return NextResponse.redirect(new URL(authFailurePath(url.hostname, uiLocale, 'oauth', next), url.origin));

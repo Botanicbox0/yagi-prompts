@@ -1770,28 +1770,8 @@ export const en = {
       test: 'Test payment. No real charge is made.',
       fake: 'Local payment simulation. This does not appear in Toss payment history.',
     },
-    unavailableTitle: 'BILLING IS NOT CONNECTED YET.',
     unavailableBody:
       'Stripe is not configured on this deployment, so nothing can be charged. The pricing is real; the checkout button is not live here.',
-    upgradeEyebrow: 'Upgrade',
-    upgradeTitle: 'ONE PLAN. $9 A MONTH.',
-    upgradeBody:
-      'Every prompt, every parameter table, every workflow file — across the whole library. Cancel anytime from your account.',
-    upgradeCta: 'Continue to checkout',
-    upgradeNote: 'You will be sent to Stripe. We never see your card.',
-    alreadyProTitle: 'YOU ARE ALREADY PRO.',
-    alreadyProBody: 'Nothing is locked for you. Manage the subscription from your account.',
-    confirmingTitle: 'CONFIRMING PAYMENT…',
-    confirmingBody: 'Stripe is finishing up. This page checks again in a moment.',
-    confirmingSlowTitle: 'STILL CONFIRMING.',
-    confirmingSlowBody:
-      'Payment went through but Stripe has not finished on its side. It usually lands within a minute — your account page will show it.',
-    unlockedTitle: 'UNLOCKED.',
-    cancelledTitle: 'CHECKOUT CANCELLED.',
-    cancelledBody: 'Nothing was charged and nothing changed.',
-    backToPlaybook: 'Back to the playbook',
-    backToLibrary: 'Back to the library',
-    backToAccount: 'Go to your account',
   },
   /**
    * §3.5 notification emails. Bilingual by `profiles.locale`, and deliberately short: an email

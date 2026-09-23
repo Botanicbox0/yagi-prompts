@@ -372,13 +372,9 @@ async function sweepMoney(): Promise<void> {
     locale: 'en',
     slug: SHOWCASE,
   });
-  expectEqual('checkout POST bounces anon with 303', checkout.status, 303);
-  if (checkout.location?.includes('/auth/signin')) {
-    ok('…to sign-in with a return-to', checkout.location);
-    if (checkout.location.includes(encodeURIComponent(`/en/p/${SHOWCASE}`)))
-      ok('…carrying the origin playbook');
-    else fail('checkout return-to', `origin missing from ${checkout.location}`);
-  } else fail('checkout redirect target', `expected /auth/signin, got ${checkout.location}`);
+  // Audit P1-4: the $9/month subscription checkout is retired — 410 with a code, for everyone.
+  expectEqual('retired subscription checkout answers 410', checkout.status, 410);
+  expectPresent('…with the retired code', checkout.body, 'subscription_retired');
   expectEqual('checkout is never cached', checkout.cacheControl, 'private, no-store');
 
   const portal = await postForm('/api/billing/portal', {});
@@ -413,8 +409,12 @@ async function sweepMoney(): Promise<void> {
   );
   expectEqual('a non-json body is rejected', (await postJson('/api/events', 'nope')).status, 400);
 
-  const upgrade = await get('/billing/upgrade');
-  expectOneOf('/billing/upgrade redirects anon', upgrade.status, [302, 307, 308]);
+  // Audit P1-4: the retired subscription pages 308 to the localized pricing page, not to sign-in.
+  for (const page of ['upgrade', 'success', 'cancelled']) {
+    const retired = await get(`/billing/${page}?locale=ko`);
+    expectEqual(`/billing/${page} is retired with a 308`, retired.status, 308);
+    expectEqual(`…to the Korean pricing page`, new URL(retired.location ?? '/', BASE).pathname, '/ko/pricing');
+  }
   const account = await get('/account');
   expectOneOf('/account redirects anon', account.status, [302, 307, 308]);
 }

@@ -1738,28 +1738,8 @@ export const ko: Dictionary = {
       test: '테스트 결제 · 실제 금액은 청구되지 않습니다.',
       fake: '로컬 결제 시뮬레이션 · 토스 결제내역에는 남지 않습니다.',
     },
-    unavailableTitle: '결제 준비 중입니다.',
     unavailableBody:
       '아직 결제 수단이 연결되지 않아 결제할 수 없습니다. 가격은 확정된 가격이며, 결제가 열리면 이 버튼으로 진행됩니다.',
-    upgradeEyebrow: '업그레이드',
-    upgradeTitle: '플랜 하나. 월 $9.',
-    upgradeBody:
-      '라이브러리 전체의 모든 프롬프트, 파라미터 표, 워크플로 파일이 열립니다. 해지는 내 계정에서 언제든 가능합니다.',
-    upgradeCta: '결제하기',
-    upgradeNote: '결제는 Stripe에서 안전하게 처리되며, 카드 정보는 저장하지 않습니다.',
-    alreadyProTitle: '이미 프로 이용 중입니다.',
-    alreadyProBody: '모든 콘텐츠가 열려 있습니다. 구독 관리는 내 계정에서 할 수 있습니다.',
-    confirmingTitle: '결제를 확인하는 중입니다…',
-    confirmingBody: 'Stripe에서 처리 중입니다. 잠시 후 자동으로 새로고침됩니다.',
-    confirmingSlowTitle: '아직 확인 중입니다.',
-    confirmingSlowBody:
-      '결제는 완료됐지만 반영에 시간이 걸리고 있습니다. 보통 1분 이내에 처리되며, 내 계정에서 확인할 수 있습니다.',
-    unlockedTitle: '프로가 시작됐습니다.',
-    cancelledTitle: '결제를 취소했습니다.',
-    cancelledBody: '청구된 금액은 없습니다.',
-    backToPlaybook: '플레이북으로 돌아가기',
-    backToLibrary: '라이브러리로 돌아가기',
-    backToAccount: '내 계정으로 이동',
   },
   email: {
     newSubject: '새 플레이북 — {title}',
