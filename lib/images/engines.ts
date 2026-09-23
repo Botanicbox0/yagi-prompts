@@ -42,7 +42,6 @@ export const VIDEO_ENGINE_IDS = ['seedance-2.0', 'seedance-2.5'] as const;
 export type VideoEngineId = (typeof VIDEO_ENGINE_IDS)[number];
 
 export type EngineId = ImageEngineId | VideoEngineId;
-export const ENGINE_IDS: readonly EngineId[] = [...VIDEO_ENGINE_IDS, ...IMAGE_ENGINE_IDS];
 
 /** The OpenAI half of the image table; the Seedream half is the rest. */
 export type OpenAiEngineId = 'gpt-image-2.5-flare' | 'gpt-image-2.5-sunburst' | 'gpt-image-2';

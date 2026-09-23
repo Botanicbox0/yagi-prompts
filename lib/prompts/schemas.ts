@@ -108,9 +108,6 @@ export function isUseCase(value: unknown): value is UseCase {
  */
 export const TEMPLATE_MEDIA = ['video', 'image'] as const;
 export type TemplateMedium = (typeof TEMPLATE_MEDIA)[number];
-export function isTemplateMedium(value: unknown): value is TemplateMedium {
-  return typeof value === 'string' && (TEMPLATE_MEDIA as readonly string[]).includes(value);
-}
 
 export const PROMPT_SOURCES = ['yagi', 'community'] as const;
 export type PromptSource = (typeof PROMPT_SOURCES)[number];

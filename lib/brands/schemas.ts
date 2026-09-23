@@ -15,10 +15,6 @@ export type BudgetBand = (typeof BUDGET_BANDS)[number];
 export const INQUIRY_STATUSES = ['new', 'contacted', 'closed'] as const;
 export type InquiryStatus = (typeof INQUIRY_STATUSES)[number];
 
-/** The two non-slug answers the format picker offers. */
-export const TEMPLATE_CHOICE_NEW = 'new';
-export const TEMPLATE_CHOICE_UNDECIDED = 'undecided';
-
 /** Per address, per rolling day — enough for a typo and a retry, not enough for a script. */
 export const BRAND_INQUIRIES_PER_DAY = 3;
 

@@ -54,33 +54,7 @@ export function isForSale(card: Pick<PromptCard, 'priceCents'>): boolean {
   return card.priceCents > 0;
 }
 
-/** A template joined to the numbers the studio needs. Cards not for sale are dropped. */
-export interface TwingsStyleView {
-  id: string;
-  slug: string;
-  priceCents: number;
-  runtimeSeconds: number;
-  card: PromptCard;
-}
-
-export function joinStyles(cards: readonly PromptCard[]): TwingsStyleView[] {
-  return cards.filter(isForSale).map((card) => ({
-    id: card.slug,
-    slug: card.slug,
-    priceCents: card.priceCents,
-    runtimeSeconds: card.runtimeSeconds ?? 0,
-    card,
-  }));
-}
-
-/** The price range across everything for sale, in cents. */
-export function priceRange(cards: readonly PromptCard[]): { minCents: number; maxCents: number } | null {
-  const cents = cards.filter(isForSale).map((card) => card.priceCents);
-  if (cents.length === 0) return null;
-  return { minCents: Math.min(...cents), maxCents: Math.max(...cents) };
-}
-
-/** The same range printed in the reader's currency, for the pricing page's one sentence. */
+/** The price range across everything for sale, printed in the reader's currency, for the pricing page's one sentence. */
 export function priceRangeFor(cards: readonly Priced[], locale: string): { min: string; max: string } | null {
   const sale = cards.filter(isForSale);
   if (sale.length === 0) return null;

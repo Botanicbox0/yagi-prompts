@@ -621,14 +621,8 @@ export const en = {
     pricingTitle: 'Pricing',
     pricingDescription:
       'Every template has its own price, paid once per render. No subscription, nothing to cancel.',
-    promptsTitle: 'Prompts',
-    promptsDescription:
-      '100% original video prompts for Seedance 2.5 — authored and tested by YAGI, plus community submissions credited by @handle.',
     campaignsTitle: "Brand creator campaigns",
     campaignsDescription: "The studio manages AI content production and creator campaigns around your brand's goals and budget. Review content, published posts and performance reports in your brand workspace.",
-    contestsTitle: 'Contests',
-    contestsDescription:
-      'Brand-hosted film contests run through the YAGI studio. Enter with a link to your film and the SNS you post from.',
   },
   nav: {
     video: 'Video',
@@ -676,9 +670,6 @@ export const en = {
       review: { label: 'Beauty', title: 'A fresh perspective on your product.', body: 'Settings and art direction shaped around the character of your brand.', alt: 'Beauty content featuring a person beside a perfume display' },
       report: { label: 'Product', title: 'Every detail, considered.', body: 'Product imagery that brings light, texture, and colour into view.', alt: 'Product content showing a close-up of transparent pink perfume bottles' },
     },
-    signedInAs: 'Signed in as',
-    signInRequired: 'Sign in to open the library.',
-    adminOnly: 'Admins only.',
     // F1 — the open-in-browser interstitial: Google refuses OAuth inside in-app WebViews
     // (Instagram, KakaoTalk, …), which is exactly where a bio-link visit starts.
     webviewEyebrow: 'Google sign-in',
@@ -719,11 +710,6 @@ export const en = {
     packTitle: '{count} cookies · {price}',
     packNote: 'One-time purchase, not a subscription.',
     packCta: 'Buy {count} cookies — {price}',
-    balanceHeading: 'Cookies',
-    balanceHint: 'One cookie opens one YAGI original, permanently.',
-    recentHeading: 'Prompts you opened',
-    recentEmpty: 'Nothing opened yet. Spend one on a YAGI original.',
-    openedOn: 'Opened {date}',
   },
   /**
    * F2 — the notice band (`components/marketing/notice.tsx`): the three URL codes the auth
@@ -743,9 +729,6 @@ export const en = {
     lede: "See yourself in a studio-made scene. Every template has sample results so you can preview the look.",
     secondaryCta: 'How cookies work',
     scroll: 'Scroll',
-    reelLabel: 'Prompt reel',
-    reelKicker: 'WRITE · RUN · KEEP',
-    reelCaption: 'Reel slot — placeholder composition until the render lands',
   },
   premise: {
     eyebrow: '01 / Premise',
@@ -790,8 +773,6 @@ export const en = {
     emptyTitle: 'The first originals are in production.',
     emptyBody: 'They go up as soon as they pass review.',
     open: 'Open',
-    stepsLabel: 'steps',
-    proBlocksLabel: 'pro blocks',
     showcaseLabel: 'Open to everyone',
     loginWallLabel: 'Sign in to read',
   },
@@ -883,48 +864,15 @@ export const en = {
     title: 'SEND US A PROMPT THAT WORKS.',
     lede: 'One model, Seedance 2.5. We watch every submission back before it goes up, and it carries your @handle when it does.',
     fieldTitle: 'Title',
-    fieldTitleHint: 'What the shot is. Short.',
-    fieldPrompt: 'Prompt',
-    fieldPromptHint: 'Paste it exactly as you ran it. {max} characters max.',
-    fieldUseCase: 'Use case',
-    fieldUseCaseHint: 'Pick up to {max}.',
-    // "Credit" collided with the cookie credits the product now sells (founder, 2026-08-15).
-    fieldHandle: 'Byline (@handle)',
-    fieldHandleHint: 'The @handle we put on it. Leave it blank and we use your account name.',
-    fieldSource: 'Link to your post',
-    fieldSourceHint:
-      'Already posted it? Paste the link — Instagram, TikTok, YouTube, anywhere it plays. Then you do not have to upload anything.',
-    moreOptional: 'More, all optional — how you made it, files',
-    fieldVideo: 'Result clip',
-    fieldVideoHint: 'Optional — submissions with a result clip are far more likely to be published. MP4 or WebM, up to {seconds}s and {mb}MB.',
-    fieldPoster: 'Poster frame',
-    fieldPosterHint: 'Optional. One still from the clip — we generate one otherwise.',
-    fieldAudio: 'Audio file',
-    fieldAudioHint: 'Optional. Music or voice that came out of the prompt. Readers can download it.',
     fieldProcess: 'How you made it',
 
-    fieldProcessHint:
-      'Optional, and the part people read twice. References, the passes you ran, the settings that failed. Markdown works — headings, lists, links. Write it in whichever language you think in.',
-    consentLabel: 'I wrote this prompt and I am happy for TWINGS to publish it under my @handle.',
-    consentLicense:
-      'You keep the prompt. You are giving TWINGS a licence to display it, with your @handle, on this site and in its own promotion.',
-    submitButton: 'Send for review',
     successTitle: 'IN THE QUEUE.',
     successBody: 'We watch every submission back before it goes up. You will see its status on your account.',
-    successAnother: 'Submit another',
     errInvalid: 'Something in the form did not check out.',
     errRateLimited: 'You can submit up to three a day. Try again tomorrow.',
-    errUploadTooLarge: 'That file is over the size limit.',
-    errUploadTooLong: 'That clip is longer than {seconds} seconds.',
-    errUploadBadType: 'That file type is not accepted.',
     errSignIn: 'Sign in first — a submission carries your byline, so it needs an account.',
-    mySubmissions: 'Your submissions',
-    mySubmissionsEmpty: 'You have not sent one in yet.',
-    statusPending: 'In review',
     statusPublished: 'Published',
-    statusRejected: 'Not published',
     statusArchived: 'Taken down',
-    rejectReasonLabel: 'Why',
   },
   /** §14.2 — the contests tab: listing, detail and the phase vocabulary they share. */
   notFound: {
@@ -1020,10 +968,6 @@ export const en = {
     aspectLabel: 'Aspect',
     aiNote: 'This is AI-made: details like hands, lettering and backgrounds can go wrong, and the result will not match the sample exactly. If your face is not reflected properly, ask within 7 days for a free re-render or a refund.',
     makeThis: 'Make this with your photo',
-    blurbs: {
-      'seoul-90s': '1994 Seoul, shot on Betacam',
-      'prom-queen': 'Y2K teen movie, prom night',
-    },
   },
   identity: {
     eyebrow: 'Verify your face',
@@ -1485,50 +1429,17 @@ export const en = {
     title: 'PUT YOUR FILM IN.',
     lede:
       'One entry per person. Replace it as often as you like before the deadline — it goes back into review each time.',
-    contestLabel: 'Contest',
-    deadlineLine: 'Closes {date} · {dday}',
     fieldTitle: 'Film title',
-    fieldTitleHint: 'What you called it. Short.',
-    fieldVideo: 'Film link',
-    fieldVideoHint:
-      'YouTube, Vimeo, Instagram, TikTok — anywhere it plays. We link to films, we do not host them.',
     fieldSns: 'Your main SNS',
-    /** The one honest sentence §14.2 asks for, above the field it explains. */
-    fieldSnsExplain:
-      'Your entry is published with this account attached — it is how the judges and everyone else know whose film it is.',
-    fieldSnsHint: 'Saved to your account and prefilled next time.',
-    fieldNote: 'Note to the judges',
-    fieldNoteHint: 'Optional. {max} characters.',
-    consentLabel:
-      'This is my film, and I am happy for it to appear on this page with my SNS credited.',
-    consentTerms:
-      'You keep the film. You are giving TWINGS and the hosting brand a licence to show it, credited, on this contest page and in its promotion.',
-    submitButton: 'Send my entry',
-    /** The submit button's own pending state (`useFormStatus`), so a slow POST is not silence. */
-    submitPending: 'Sending…',
-    resubmitButton: 'Replace my entry',
-    resubmitHeading: 'You already have an entry',
-    resubmitNotice: 'Currently in: “{title}” — {status}.',
-    resubmitWarning:
-      'Sending a new one replaces it and puts it back into review. Any placement it holds is cleared.',
-    statusPending: 'in review',
-    statusApproved: 'live on the contest page',
-    statusRejected: 'not published',
-    rejectReasonLabel: 'Why',
     successTitle: 'IN THE RUNNING.',
     successBody:
       'We watch every entry back before it appears on the contest page. You can replace it right up to the deadline.',
-    successBack: 'Back to the contest',
     closedTitle: 'ENTRIES ARE CLOSED.',
     closedBody:
       'This one stopped taking entries at the deadline. The approved films are on the contest page.',
-    upcomingTitle: 'NOT OPEN YET.',
-    upcomingBody: 'This contest opens {date}. The brief is already up if you want a head start.',
     errSignIn: 'Sign in first — an entry carries your byline, so it needs an account.',
     errRateLimited: 'You can edit your entry up to ten times a day. Try again tomorrow.',
     errInvalid: 'Something in the form did not check out. Check both links start with https.',
-    /** Printed at the field the server named, so "something" stops meaning "somewhere". */
-    errField: 'This is the one to fix.',
     errNotOpen: 'This contest is not taking entries right now.',
     errNotFound: 'That contest is not published.',
   },
@@ -1549,42 +1460,8 @@ export const en = {
     line2: 'PAY PER RENDER.',
     lede: 'Every template has its own price, paid once per render. Browsing templates and their example results costs nothing.',
     countsLine: '{yagi} YAGI originals and {community} community prompts, live right now.',
-    countsEmpty: 'The gallery opens with the first published prompts.',
-    perMonth: '/month',
-    freePrice: '$0',
-    proPrice: '$9',
-    freeTagline: 'Every community prompt, in full, forever.',
-    proTagline: 'Every YAGI prompt, exactly as we ran it.',
-    compare: 'Compare the plans',
-    cancelNote: 'Cookies are a one-time purchase, never a plan. There is nothing to cancel.',
-    featureHeading: 'What is free, what takes a cookie',
-    columnFeature: 'Feature',
     included: 'Included',
-    notIncluded: 'Not included',
-    featureStructure: 'Every community prompt, in full',
-    featureAssets: 'Every result clip and poster',
-    featureBilingual: 'Korean and English throughout',
-    featurePrompts: 'Every YAGI prompt, exactly as we ran it',
-    featureParams: 'Every parameter table in the playbooks',
-    featureCopy: 'One-click copy on every prompt you have opened',
-    featureWorkflow: 'Workflow files — ComfyUI graphs, LUTs, presets',
-    featureNotifications: 'Notifications when a playbook drops or is rewritten',
-    proBlocksLocked: '{count} YAGI prompts waiting behind the lock',
-    // §15 — the cookie table (가입 3 · 주 1 · $4/5), three cells and the one rule under them.
-    cookieSignupTitle: 'When you join',
-    cookieSignupValue: '3',
-    cookieSignupNote: 'Three cookies on your first sign-in. No card, no form to fill.',
-    cookieWeeklyTitle: 'Every week',
-    cookieWeeklyValue: '+1',
-    cookieWeeklyNote: 'One free cookie a week, added when you visit. It does not pile up while you are away.',
-    cookiePackTitle: 'When you want more',
-    cookiePackValue: '$4 = 5',
-    // F5 — worn by the pack cell while no gateway is connected: the price is real, the
-    // checkout is not, and the cell says so instead of implying it can be bought today.
-    cookiePackStatus: 'CHECKOUT OPENING SOON',
-    cookiePackNote: 'Five cookies for four dollars, one time. Not a subscription — nothing to cancel.',
     cookieRule: 'One cookie opens one YAGI original — permanently, on your account.',
-    cookieColumn: 'With a cookie',
   },
   playbook: {
     eyebrow: 'Playbook',
@@ -1628,7 +1505,6 @@ export const en = {
     prevLabel: 'Newer playbook',
     nextLabel: 'Older playbook',
     allPlaybooks: 'All playbooks',
-    signInToRead: 'Sign in to read this playbook',
   },
   library: {
     eyebrow: 'The library',
@@ -1704,9 +1580,6 @@ export const en = {
     eyebrow: 'Account',
     title: 'YOUR ACCOUNT.',
     emailLabel: 'Signed in as',
-    planHeading: 'Plan',
-    planFree: 'Free',
-    planPro: 'Pro — $9/month',
     statusHeading: 'Status',
     statusActive: 'Active',
     statusPastDue: 'Payment failed — Stripe is retrying. Your access continues meanwhile.',
@@ -1718,9 +1591,6 @@ export const en = {
     manageBilling: 'Manage billing',
     manageBillingHint: 'Payment method, invoices and cancellation live in the Stripe portal.',
     portalUnavailable: 'This plan was not set up through Stripe, so there is no portal to open.',
-    cookiesHeading: 'Cookies open the locked prompts.',
-    cookiesBody: '{signup} free when you join, {weekly} more every week, and a pack of {pack} for {price}. No subscription.',
-    cookiesCta: 'How cookies work',
     languageHeading: 'Language',
     // §3.5 — the two toggles. Pro only; free users get the pitch line instead of a dead control.
     notifHeading: 'Notifications',
@@ -1851,7 +1721,6 @@ export const en = {
       closed: 'Closed',
       archived: 'Archived',
     },
-    moveTo: 'To {status}',
     moveToStatus: {
       draft: 'Back to draft',
       recruiting: 'Start recruiting',
@@ -1988,7 +1857,6 @@ export const en = {
     blockerDeadline: 'deadline',
     blockerDeadlineOrder: 'a deadline after the start',
     blockerPoster: 'poster image',
-    refreshHint: 'Re-runs the catalog invalidation. Idempotent — safe to press twice.',
 
     listHeading: 'Playbooks',
     listLede: 'Everything in the catalog, most recently edited first.',
@@ -2057,7 +1925,6 @@ export const en = {
 
     blocksEmpty: 'No blocks in this step.',
     addBlock: 'Add block',
-    blockKind: 'Kind',
     chooseKind: 'Pick a kind',
     saveBlock: 'Save block',
     deleteBlock: 'Delete block',
@@ -2096,7 +1963,6 @@ export const en = {
     stampedNote: 'Stamped at prepare — this is exactly what ships.',
     unstampedNote: 'Not prepared yet, so effective values follow current policy.',
 
-    revisionHeading: 'Revision',
     revisionEditing: 'Editing revision {n}',
     revisionState: 'State',
     stateDraft: 'draft',
@@ -2193,20 +2059,13 @@ export const en = {
     backToPrompts: 'All templates',
     viewLive: 'View on site',
     queueHeading: 'Awaiting review',
-    queueEmpty: 'Nothing waiting. The queue is clear.',
     publishedHeading: 'Published',
     publishedEmpty: 'Nothing published yet.',
     rejectedHeading: 'Rejected',
     authorHeading: 'New YAGI template',
     authorLede:
       'Media is required, both titles are required, and the text defaults to Pro. It publishes immediately.',
-    colPrompt: 'Prompt',
-    colSource: 'Source',
-    colAuthor: 'Byline',
     colUseCase: 'Use case',
-    colVisibility: 'Text',
-    colFeatured: 'Featured',
-    colSubmitted: 'Submitted',
     sourceYagi: 'YAGI',
     sourceCommunity: 'Community',
     fieldPromptTitle: 'Title (EN)',
@@ -2322,7 +2181,6 @@ export const en = {
       'Every instant is read as UTC. The D-day chip and the printed dates come from these.',
     fieldContestPoster: 'Poster',
     fieldContestVideo: 'Hero clip',
-    fieldContestLogo: 'Host logo (optional)',
     contestMediaHint:
       'Staged privately and copied to the public bucket at publish. Leave empty to keep what is staged.',
     saveContest: 'Save contest',
@@ -2341,7 +2199,6 @@ export const en = {
 
     entriesHeading: 'Entries',
     entriesEmpty: 'Nothing entered yet.',
-    entryQueueHeading: 'Awaiting review',
     entryStatusPending: 'In review',
     entryStatusApproved: 'Approved',
     entryStatusRejected: 'Rejected',

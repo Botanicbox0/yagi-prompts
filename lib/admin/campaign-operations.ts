@@ -27,7 +27,7 @@ import {
   needsMetrics,
   payoutReleasable,
 } from '@/lib/campaigns/state';
-import { ADMIN_CAMPAIGNS_PATH, adminCampaignPath } from '@/lib/campaigns/links';
+import { adminCampaignPath } from '@/lib/campaigns/links';
 import { announceCampaignRecruiting, notifyApplicationStatus, type NotifiedApplicationStatus } from '@/lib/campaigns/notify';
 import type { CampaignRow } from '@/lib/campaigns/repo';
 import { fail, ok, type AdminContext, type AdminMail, type AdminOutcome } from './context';
@@ -357,5 +357,4 @@ export const CAMPAIGN_OPERATIONS = {
   'campaignApplication.pay': pay,
 } as const;
 
-export const CAMPAIGNS_BACK = ADMIN_CAMPAIGNS_PATH;
 export type CampaignOutcome = AdminOutcome;

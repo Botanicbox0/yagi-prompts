@@ -739,8 +739,6 @@ export async function revokeBrandMember(deps: BrandWorkspaceDeps, viewer: Viewer
     return { id: String(target.id) };
   });
 }
-export const createBrandInvite = createBrandInvitation;
-export const acceptBrandInvite = acceptBrandInvitation;
 
 /** Studio creates the organization, never a fabricated client profile or membership. */
 export async function createStudioOrganization(deps:BrandWorkspaceDeps,viewer:Viewer,input:unknown):Promise<BrandOutcome> {

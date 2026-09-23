@@ -8,11 +8,15 @@ placeholder. Filling one is a config or CMS change, never a code change.
 
 ## 1. Hero reel — `HERO_REEL`
 
-**Where** `lib/content/slots.ts` → consumed by `components/landing/hero-media.tsx`.
+**Where** `lib/content/slots.ts` → read only by `components/landing/hero-media.tsx`.
 
-**Now** `src` is `null`, so `<HeroMedia>` renders `components/landing/reel-poster.tsx`: an in-code,
-localised, typography-led composition in the two-inks-plus-blue language. No video is generated or
-downloaded at build time.
+**Now — not rendered.** The landing page (`app/(marketing)/[locale]/page.tsx`) renders `Hero` from
+`components/landing/sections.tsx`: a compact type band with the template CTAs and no media panel
+(founder pass, 2026-08-13). No page imports `<HeroMedia>`, so this slot and its poster fallback
+`components/landing/reel-poster.tsx` are currently unreachable, and setting the variables below
+changes nothing on the site. The components are kept pending an owner decision; the steps below
+apply only if `<HeroMedia>` is wired back into a page. When it was rendered, a `null` `src` showed
+the in-code poster composition; no video is generated or downloaded at build time.
 
 **Swap**
 

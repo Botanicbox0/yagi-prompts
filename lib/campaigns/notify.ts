@@ -10,7 +10,6 @@ import { campaignLabels } from '@/components/campaigns/labels';
 import { payoutHeadline } from './copy';
 import { MY_CAMPAIGNS_PATH, campaignHref, campaignsHref } from './links';
 import type { ApplicationRow, CampaignRow } from './repo';
-import type { ApplicationStatus } from './schemas';
 import { formatWon } from './state';
 
 /**
@@ -36,10 +35,6 @@ export interface CampaignMailDeps {
 /** The statuses a creator is told about. `withdrawn`/`expired` are their own doing or the clock's. */
 export const NOTIFIED_APPLICATION_STATUSES = ['selected', 'declined', 'verified', 'rejected', 'paid'] as const;
 export type NotifiedApplicationStatus = (typeof NOTIFIED_APPLICATION_STATUSES)[number];
-
-export function isNotifiedStatus(status: ApplicationStatus): status is NotifiedApplicationStatus {
-  return (NOTIFIED_APPLICATION_STATUSES as readonly string[]).includes(status);
-}
 
 function footer(locale: Locale): string {
   const dict = getDictionary(locale);

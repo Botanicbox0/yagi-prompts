@@ -224,18 +224,6 @@ export async function loadAllContests(sql: SqlRunner): Promise<ContestRow[]> {
   return rows.map(toContest);
 }
 
-export async function contestSlugExists(
-  sql: SqlRunner,
-  slug: string,
-  exceptId?: string,
-): Promise<boolean> {
-  const { rows } = await sql.query<{ n: number }>(
-    `select count(*)::int as n from contests where slug = $1 and ($2::uuid is null or id <> $2)`,
-    [slug, exceptId ?? null],
-  );
-  return (rows[0]?.n ?? 0) > 0;
-}
-
 // ---------------------------------------------------------------------------
 // contests — write paths
 // ---------------------------------------------------------------------------
@@ -503,15 +491,6 @@ export async function countApprovedEntries(
       group by contest_id`,
   );
   return new Map(rows.map((row) => [row.contest_id, { approved: row.approved, winners: row.winners }]));
-}
-
-/** `/account` — "your entries", across every contest. */
-export async function loadEntriesByAuthor(sql: SqlRunner, authorId: string): Promise<EntryRow[]> {
-  const { rows } = await sql.query<RawEntry>(
-    `select ${ENTRY_COLUMNS} from contest_entries where author_id = $1 order by created_at desc`,
-    [authorId],
-  );
-  return rows.map(toEntry);
 }
 
 // ---------------------------------------------------------------------------
