@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { NextRequest, NextResponse } from 'next/server';
-import { authReturnPath } from '@/lib/routing/surfaces';
+import { adminRouteAllowed, authReturnPath, brandRouteAllowed } from '@/lib/routing/surfaces';
 vi.mock('@/lib/supabase/middleware', () => ({
   updateSession: async (_r: NextRequest, headers: Headers) => ({ user: null, response: NextResponse.next({ request: { headers } }) }),
   withCookies: (response: NextResponse) => response,
@@ -61,5 +61,29 @@ describe('brand host boundary', () => {
     expect((await middleware(req('brand.twings.app','/api/brand-production','POST','https://brand.twings.app'))).headers.get('x-middleware-next')).toBe('1');
     expect((await middleware(req('brand.twings.app','/brand/studio','POST','https://brand.twings.app'))).status).toBe(404);
     expect(authReturnPath('/brand/studio','brand.twings.app','/')).toBe('/brand/studio');
+  });
+  // The self-serve studio's public example media (components/brand-workspace/studio-showcase.tsx).
+  const STUDIO_DEMO = ['designed-format.jpg','designed-format.mp4','different-person.jpg','different-person.mp4','reference-selfie.jpeg'].map(f=>`/reel/studio-demo/${f}`);
+  it('serves exactly the five studio demo files on the brand host, read-only', async () => {
+    for (const path of STUDIO_DEMO) for (const method of ['GET','HEAD']) {
+      expect(brandRouteAllowed(path, method), `${method} ${path}`).toBe(true);
+      expect((await middleware(req('brand.twings.app', path, method))).headers.get('x-middleware-next'), `${method} ${path}`).toBe('1');
+    }
+  });
+  it('keeps every other reel path, extension, method and the admin host closed', async () => {
+    const other = ['/reel/studio-demo/designed-format.webm','/reel/studio-demo/designed-format.mp4/x','/reel/studio-demo/unknown.mp4','/reel/studio-demo/','/reel/studio-demo','/reel/probe.mp4','/reel/campaigns/probe.mp4','/reel/studio-demo/../probe.mp4','/reel/studio-demo/DESIGNED-FORMAT.MP4','/brand/../reel/studio-demo/designed-format.mp4x'];
+    for (const path of other) {
+      expect(brandRouteAllowed(path, 'GET'), path).toBe(false);
+      expect((await middleware(req('brand.twings.app', path))).status, path).toBe(404);
+    }
+    for (const path of STUDIO_DEMO) {
+      for (const method of ['POST','PUT','DELETE','PATCH','OPTIONS']) {
+        expect(brandRouteAllowed(path, method), `${method} ${path}`).toBe(false);
+        expect((await middleware(req('brand.twings.app', path, method, 'https://brand.twings.app'))).status, `${method} ${path}`).toBe(404);
+      }
+      expect(adminRouteAllowed(path, 'GET'), path).toBe(false);
+      expect((await middleware(req('admin.twings.app', path))).status, `admin ${path}`).toBe(404);
+      expect((await middleware(req('brands.twings.app', path))).status, `brands ${path}`).toBe(404);
+    }
   });
 });

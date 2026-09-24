@@ -88,11 +88,20 @@ export function adminRouteAllowed(pathname: string, method: string): boolean {
   return ['/favicon.ico', '/icon.png', '/apple-icon.png', '/brand/twings.svg', '/brand/twings-mark-black.png', '/brand/twings-mark-white.png', '/brand/twings-mark-mask.png'].includes(pathname);
 }
 
+/**
+ * Public example media shown in the brand self-serve studio (components/brand-workspace/studio-showcase.tsx).
+ * Exact file names only: no other /reel path, extension or directory opens on the brand host.
+ */
+const STUDIO_DEMO_FILES = new Set(
+  ['designed-format.jpg', 'designed-format.mp4', 'different-person.jpg', 'different-person.mp4', 'reference-selfie.jpeg'].map((f) => `/reel/studio-demo/${f}`),
+);
+
 export function brandRouteAllowed(pathname: string, method: string): boolean {
   const read = method === 'GET' || method === 'HEAD';
   if (AUTH_METHODS[pathname]?.includes(method)) return true;
   if (pathname === '/api/workspace-locale') return method === 'POST';
   if (isBrandPath(pathname)) return read;
+  if (STUDIO_DEMO_FILES.has(pathname)) return read;
   if (pathname === '/api/brand-production') return method === 'POST';
   if (/^\/api\/brand-production\/[a-f0-9-]+(?:\/media)?$/.test(pathname)) return read;
   if (pathname === '/api/brand-workspace') return read || method === 'POST';
