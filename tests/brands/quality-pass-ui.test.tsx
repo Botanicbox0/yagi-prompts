@@ -44,6 +44,7 @@ vi.mock('@/lib/brands/workspace/service', () => ({
   }),
   loadBrandMembers: async () => state.members,
   loadBrandSettings: async () => state.settings,
+  loadBrandSupport: async () => [],
 }));
 
 import BrandHome from '@/app/(brand)/brand/page';
@@ -224,7 +225,8 @@ describe('self-serve studio by role (direct visits, not just navigation)', () =>
     expect(page).not.toContain('data-studio-inquiry');
     expect(page).not.toContain(b.studioInquiry.action);
     expect(page).not.toContain('name="name"');
-    expect(page).not.toContain(t.emptyHint);
+    expect(page).not.toContain('data-studio-onboarding');
+    expect(page).not.toContain('data-studio-showcase');
   });
 
   it('tells a viewer who can request, without a request button that cannot send', async () => {
@@ -232,7 +234,7 @@ describe('self-serve studio by role (direct visits, not just navigation)', () =>
     expect(page).toContain('data-brand-studio-read-only');
     expect(page).toContain(b.access.studioViewer);
     expect(page).not.toContain('data-studio-inquiry');
-    expect(page).not.toContain(t.emptyHint);
+    expect(page).not.toContain('data-studio-onboarding');
     expect(page).not.toContain('name="name"');
   });
 
@@ -240,7 +242,8 @@ describe('self-serve studio by role (direct visits, not just navigation)', () =>
     const page = await studio('fresh');
     expect(page).toContain('data-studio-inquiry');
     expect(page).toContain('name="name"');
-    expect(page).toContain(t.emptyHint);
+    expect(page).toContain('data-studio-onboarding');
+    expect(page).toContain(t.onboarding.next);
   });
 
   it.each(['editor', 'owner'] as const)('keeps the template request for an %s', async (role) => {

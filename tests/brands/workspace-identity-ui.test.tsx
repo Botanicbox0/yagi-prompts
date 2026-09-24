@@ -190,6 +190,22 @@ describe('pages scoped to the selected brand', () => {
     expect(state.workspaceCalls).toEqual([{ includeAllContent: true, organizationId: G }]);
   });
 
+  it('library points members and the TWINGS team at the selected brand\'s studio history, never campaign-only guests', async () => {
+    const S = 'd0000000-0000-4000-8000-00000000000d';
+    state.scope = { ...scope, choices: [...choices, { id: S, name: 'Staff fixture', role: 'studio', logoUrl: null }] };
+    for (const id of [A, B, S]) {
+      const page = await html(ContentLibrary(search(id)));
+      expect(page).toContain('data-library-studio-link');
+      expect(page).toContain(`href="/brand/studio?organizationId=${id}#studio-history"`);
+      expect(page).toContain(b.managed.libraryStudioLink);
+    }
+    const guest = await html(ContentLibrary(search(G)));
+    expect(guest).not.toContain('data-library-studio-link');
+    expect(guest).not.toContain('href="/brand/studio');
+    // Only the library's own content load: the link adds no query.
+    expect(state.workspaceCalls).toHaveLength(4);
+  });
+
   it('an inaccessible brand shows an honest unavailable page and loads nothing', async () => {
     for (const render of [BrandHome, ContentLibrary, MembersPage, BrandSettings, NewBrandProject]) {
       const page = await html(render(search(FORGED)));

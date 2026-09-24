@@ -956,3 +956,63 @@ li:first-child>.bw-identity-group{border-top:0;margin-top:0;padding-top:4px}
 .bw-usage-optional > summary { cursor:pointer; min-height:44px; display:flex; align-items:center; font-weight:500; }
 .bw-usage-optional[open] { display:grid; gap:18px; padding-bottom:4px; }
 @media (max-width: 520px) { .bw-usage-subjects { grid-template-columns:1fr; } }
+/* Self-serve studio onboarding: what the studio does, the first request, and two real examples. */
+.bw-studio-hero { align-items:flex-end; padding-bottom:28px; border-bottom:1px solid var(--color-workspace-line,#e9e9ed); }
+.bw-studio-hero h1 { margin-bottom:14px; }
+.bw-heading p.bw-studio-lead { font-size:17px; line-height:1.6; letter-spacing:-.015em; color:var(--color-workspace-ink,#151515); max-width:620px; margin-bottom:6px; }
+.bw-studio-hero-action { display:grid; justify-items:end; gap:8px; flex-shrink:0; }
+.bw-studio-hero-action .bw-muted { margin:0; }
+.bw-studio-status h2 { font-size:15px; font-weight:600; margin:0 0 4px; }
+.bw-studio-status p { margin:0; line-height:1.7; color:#4c4f56; }
+.bw-studio-process { margin:28px 0 36px; }
+.bw-studio-process > h2, .bw-studio-showcase h2 { font-size:18px; font-weight:500; letter-spacing:-.02em; margin:0 0 14px; }
+.bw-studio-process ol { list-style:none; margin:0; padding:0; display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:14px; }
+.bw-studio-process li { position:relative; border-top:2px solid #dcdde2; padding:14px 4px 0 0; min-width:0; }
+.bw-studio-process li[data-state=current] { border-top-color:#0000ee; }
+.bw-studio-process li[data-state=done] { border-top-color:#151515; }
+.bw-studio-process h3 { font-size:15px; font-weight:600; letter-spacing:-.01em; margin:6px 0 6px; }
+.bw-studio-process p { margin:0; font-size:13px; line-height:1.7; color:#666970; }
+.bw-studio-step-number { font-size:11px; letter-spacing:.04em; color:#8a8d94; font-variant-numeric:tabular-nums; }
+.bw-studio-step-state { display:inline-block; margin-top:10px; font-size:11px; font-weight:500; color:#0000bb; }
+.bw-studio-process li[data-state=done] .bw-studio-step-state { color:#4c4f56; }
+.bw-studio-showcase { margin:0 0 36px; }
+.bw-studio-showcase-intro p { margin:0 0 18px; max-width:680px; color:#666970; line-height:1.7; }
+.bw-studio-demo { display:grid; grid-template-columns:minmax(0,1fr) 28px minmax(0,.327fr) 28px minmax(0,1fr); align-items:start; }
+.bw-studio-demo figure { margin:0; min-width:0; }
+.bw-studio-demo video, .bw-studio-demo img { display:block; width:100%; height:auto; border-radius:6px; background:#eef0f4; }
+.bw-studio-demo video { aspect-ratio:16/9; }
+.bw-studio-demo-selfie img { aspect-ratio:1206/2075; object-fit:cover; }
+.bw-studio-demo video[hidden] { display:none; }
+/* Idle example: the poster under a real button. No <video> is visible, so no loading spinner. */
+.bw-studio-play { position:relative; display:block; width:100%; padding:0; border:0; border-radius:6px; background:#eef0f4; cursor:pointer; overflow:hidden; font:inherit; }
+.bw-studio-play img { aspect-ratio:16/9; object-fit:cover; border-radius:0; }
+.bw-studio-play-badge { position:absolute; left:14px; bottom:14px; display:inline-flex; align-items:center; gap:6px; min-height:36px; padding:6px 14px 6px 10px; border-radius:999px; background:#fff; color:#151515; font-size:13px; font-weight:500; box-shadow:0 1px 6px #1113; }
+.bw-studio-play-badge svg { width:18px; height:18px; fill:currentColor; }
+.bw-studio-play:hover .bw-studio-play-badge { background:#151515; color:#fff; }
+.bw-studio-play:focus-visible { outline:2px solid #0000ee; outline-offset:3px; }
+.bw-studio-play-error { margin:8px 0 0; }
+.bw-studio-demo figcaption { display:grid; gap:2px; margin-top:10px; font-size:12px; line-height:1.6; color:#666970; }
+.bw-studio-demo figcaption strong { font-size:13px; font-weight:600; color:var(--color-workspace-ink,#151515); }
+/* Centred on the media, not the caption below it (captions are about three lines). */
+.bw-studio-demo-op { align-self:center; margin-bottom:64px; text-align:center; font-size:20px; color:#9a9da4; line-height:1; }
+.bw-studio-showcase-note { margin:16px 0 0; max-width:680px; line-height:1.7; }
+.bw-studio-help { margin:0 0 24px; border-top:1px solid var(--color-workspace-line,#e9e9ed); border-bottom:1px solid var(--color-workspace-line,#e9e9ed); }
+.bw-studio-help > summary { min-height:48px; display:flex; align-items:center; cursor:pointer; font-weight:500; }
+.bw-studio-help[open] > summary { border-bottom:1px solid var(--color-workspace-line,#e9e9ed); }
+.bw-studio-help > div { padding-top:4px; }
+@media (max-width:900px) {
+ .bw-studio-process ol { grid-template-columns:repeat(2,minmax(0,1fr)); row-gap:22px; }
+}
+@media (max-width:760px) {
+ .bw-studio-demo { grid-template-columns:minmax(0,1fr); gap:10px; }
+ .bw-studio-demo-selfie { display:grid; grid-template-columns:96px minmax(0,1fr); gap:14px; align-items:center; }
+ .bw-studio-demo-selfie figcaption { margin:0; }
+ .bw-studio-demo-op { margin:0; font-size:16px; }
+}
+@media (max-width:620px) {
+ .bw-studio-hero-action { justify-items:stretch; margin-top:20px; }
+ .bw-studio-hero-action > .bw-button { width:100%; }
+ [data-brand-workspace] .bw-studio-hero-action > .bw-button { margin-top:0; }
+ .bw-heading p.bw-studio-lead { font-size:16px; }
+ .bw-studio-process ol { grid-template-columns:minmax(0,1fr); }
+}

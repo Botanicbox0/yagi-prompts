@@ -1,15 +1,21 @@
 "use client";
 import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useRouter } from "next/navigation";
 import type { BrandOrganization } from "@/lib/brands/workspace/types";
 import { ActionForm, type BrandCopy } from "./action-form";
 
 /** A structured brief in the existing private brand support thread, not a campaign or contract. */
-export function StudioInquiry({ organizations, organizationId, b, allowSetup = false }: {
+export function StudioInquiry({ organizations, organizationId, b, allowSetup = false, label, primary = true }: {
   organizations: BrandOrganization[]; organizationId?: string; b: BrandCopy;
   /** Only a brand-new account (no workspace, no shared campaigns) may create a workspace from here. */
   allowSetup?: boolean;
+  /** The opening button's text; defaults to the first-request label. */
+  label?: string;
+  /** Secondary once templates exist: creating videos is then the page's main action. */
+  primary?: boolean;
 }) {
   const t = b.studioInquiry;
+  const router = useRouter();
   const writable = organizations.filter(o => o.role !== "viewer");
   // Viewers and campaign-only invitees cannot send a request; the page explains that instead.
   const available = writable.length > 0 || (organizations.length === 0 && allowSetup);
@@ -54,9 +60,10 @@ export function StudioInquiry({ organizations, organizationId, b, allowSetup = f
 
   if (!available) return null;
   return <>
-    <button type="button" className="bw-button bw-primary" disabled={!ready}
-      onClick={() => dialog.current?.showModal()}>{t.action}</button>
-    <dialog ref={dialog} className="bw-studio-inquiry" aria-labelledby="studio-inquiry-title" data-studio-inquiry onClose={() => { if (sent) { setSent(false); attempt.current = null; } }}>
+    <button type="button" className={primary ? "bw-button bw-primary" : "bw-button"} disabled={!ready}
+      aria-haspopup="dialog" onClick={() => dialog.current?.showModal()}>{label ?? t.action}</button>
+    {/* After a sent request, refresh so the page shows the request as received. */}
+    <dialog ref={dialog} className="bw-studio-inquiry" aria-labelledby="studio-inquiry-title" data-studio-inquiry onClose={() => { if (sent) { setSent(false); attempt.current = null; router.refresh(); } }}>
       <header>
         <h2 id="studio-inquiry-title">{sent ? t.sent : t.title}</h2>
         <button type="button" className="bw-button" onClick={() => dialog.current?.close()}>{t.close}</button>
