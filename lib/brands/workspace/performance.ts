@@ -1,7 +1,15 @@
-import type {BrandPost,BrandPostPresentation} from './types';
+import type {BrandPost,BrandPostPresentation,BrandProjectDetail} from './types';
 /** Every presentation field unknown: posts stored before presentation existed, and anything unreadable. */
 export const UNKNOWN_POST_PRESENTATION:BrandPostPresentation=Object.freeze({revision:0,thumbnailUrl:null,handle:null,displayName:null,followers:null,followersApproximate:false,followersSource:null,followersMeasuredAt:null});
 export function postPresentation(post:BrandPost):BrandPostPresentation{return post.presentation??UNKNOWN_POST_PRESENTATION;}
+/** Card readiness is presentation only; it must never change measurements, totals or CSV evidence. */
+export function postPreview(post:BrandPost,project:Pick<BrandProjectDetail,'contents'|'attachments'>):{src:string;video:boolean}|null{
+ const thumbnail=postPresentation(post).thumbnailUrl;
+ if(thumbnail)return {src:thumbnail,video:false};
+ const content=project.contents.find(item=>item.id===post.contentVersionId);
+ const mime=project.attachments.find(item=>item.id===content?.attachmentId)?.mime;
+ return content&&mime&&/^(image|video)\//.test(mime)?{src:content.mediaUrl,video:mime.startsWith('video/')}:null;
+}
 /** '@handle' only when the studio recorded one; never a guessed or derived name. */
 export function postHandle(post:BrandPost):string|null{const handle=postPresentation(post).handle;return handle?`@${handle}`:null;}
 /** What the post search matches: content title, handle, display name and the link itself. */

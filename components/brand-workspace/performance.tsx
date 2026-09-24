@@ -2,7 +2,7 @@
 import {useMemo,useState} from 'react';
 import type {BrandCopy} from './action-form';
 import type {BrandPost,BrandProjectDetail,BrandReport} from '@/lib/brands/workspace/types';
-import {campaignPerformance,rankCampaignPosts,postEngagement,campaignCsv,postContentTitle,byLatestPublished,postPresentation,postHandle,postSearchText} from '@/lib/brands/workspace/performance';
+import {campaignPerformance,rankCampaignPosts,postEngagement,campaignCsv,postContentTitle,byLatestPublished,postPresentation,postHandle,postSearchText,postPreview} from '@/lib/brands/workspace/performance';
 import {interpolate} from '@/lib/i18n/format';
 import {formatBrandDate,formatBrandTimestamp} from './format';
 
@@ -15,18 +15,17 @@ const shortDate=(iso:string,locale:string)=>new Intl.DateTimeFormat(locale==='ko
  */
 function PostThumb({post,project,label,c}:{post:BrandPost;project:PerformanceProject;label:string;c:BrandCopy['performance']}){
  const thumbnail=postPresentation(post).thumbnailUrl;
- const content=project.contents.find(item=>item.id===post.contentVersionId),mime=project.attachments.find(item=>item.id===content?.attachmentId)?.mime;
+ const media=postPreview(post,project);
  const alt=`${c.thumbnailAlt}: ${label}`;
- return <div className="bw-post-thumb" data-post-thumbnail={thumbnail?'studio':content&&mime?'content':undefined} data-thumbnail-missing={!thumbnail&&!(content&&mime&&/^(image|video)\//.test(mime))?'true':undefined}>
-  {thumbnail?<img src={thumbnail} alt={alt} loading="lazy"/>
-  :content&&mime?.startsWith('image/')?<img src={content.mediaUrl} alt={alt} loading="lazy"/>
-  :content&&mime?.startsWith('video/')?<video src={`${content.mediaUrl}#t=0.1`} aria-label={alt} muted playsInline preload="metadata"/>
+ return <div className="bw-post-thumb" data-post-thumbnail={thumbnail?'studio':media?'content':undefined} data-thumbnail-missing={!media?'true':undefined}>
+  {media&&!media.video?<img src={media.src} alt={alt} loading="lazy"/>
+  :media?<video src={`${media.src}#t=0.1`} aria-label={alt} muted playsInline preload="metadata"/>
   :<span><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="m4 17 5-4.5 3.5 3 2.5-2 5 3.5"/></svg>{c.thumbnailMissing}</span>}
  </div>;
 }
 
 /** `usageCta`: owners and editors get a "2차 활용 견적 문의" link on each post, imported links included. */
-export function CampaignPerformance({project:p,posts=p.posts,b,locale,frozen=false,compact=false,usageCta=false}:{project:PerformanceProject;posts?:BrandPost[];b:BrandCopy;locale:string;frozen?:boolean;compact?:boolean;usageCta?:boolean}){
+export function CampaignPerformance({project:p,posts=p.posts,b,locale,frozen=false,compact=false,usageCta=false,showUnready=false}:{project:PerformanceProject;posts?:BrandPost[];b:BrandCopy;locale:string;frozen?:boolean;compact?:boolean;usageCta?:boolean;showUnready?:boolean}){
  const c=b.performance;
  const stats=useMemo(()=>campaignPerformance(posts),[posts]);
  const number=(n:number|null)=>n===null?'—':n.toLocaleString(locale);
@@ -41,7 +40,10 @@ export function CampaignPerformance({project:p,posts=p.posts,b,locale,frozen=fal
  // only in the link destination (and the CSV).
  const label=(post:BrandPost)=>postHandle(post)??postContentTitle(post,titles)??postPresentation(post).displayName??b.platforms[post.platform];
  const followers=(post:BrandPost)=>{const v=postPresentation(post);return v.followers===null||v.followersMeasuredAt===null?c.followersUnknown:`${interpolate(c.followers,{count:approx(v.followers,v.followersApproximate)})} · ${interpolate(c.followersAsOf,{date:shortDate(v.followersMeasuredAt,locale)})}`;};
- const filtered=posts.filter(post=>(platform==='all'||post.platform===platform)&&postSearchText(post,titles).toLocaleLowerCase(locale).includes(query.toLocaleLowerCase(locale)));
+ // Published report snapshots keep their original presentation; the live gallery waits for a preview.
+ const displayPosts=showUnready||frozen?posts:posts.filter(post=>postPreview(post,p)!==null);
+ const pending=posts.length-displayPosts.length;
+ const filtered=displayPosts.filter(post=>(platform==='all'||post.platform===platform)&&postSearchText(post,titles).toLocaleLowerCase(locale).includes(query.toLocaleLowerCase(locale)));
  const sorted=sort==='latest'?filtered.slice().sort(byLatestPublished): [...rankCampaignPosts(filtered,sort==='engagement'?'engagement':'views'),...filtered.filter(post=>(sort==='engagement'?postEngagement(post):post.views)===null)];
  const targetValue=p.criteria.primaryMetric==='views'?stats.views.total:p.criteria.primaryMetric==='engagement'?stats.engagement.total:stats.totalPosts;
  const target=p.criteria.targetValue;
@@ -56,9 +58,10 @@ export function CampaignPerformance({project:p,posts=p.posts,b,locale,frozen=fal
   {stats.viewsApproximate>0&&<p className="bw-note" data-approximate-views={stats.viewsApproximate}>{interpolate(c.approxNote,{count:stats.viewsApproximate})}</p>}
   {linked>0&&<p className="bw-note" data-linked-posts={linked}>{interpolate(c.linkedNote,{count:linked})}{undated>0&&<> {interpolate(frozen?c.reportUndated:c.undatedNote,{count:undated})}</>}</p>}
   {!compact&&<>
-   <div className="bw-highlights">{(['views','engagement'] as const).map(ranking=><section key={ranking}><h3>{ranking==='views'?c.topViews:c.topEngagement}</h3><ol className="bw-top-posts">{rankCampaignPosts(posts,ranking).slice(0,3).map((post,index)=>
+   {pending>0&&<p className="bw-note" data-pending-post-cards={pending}>{interpolate(c.pendingCards,{count:pending})}</p>}
+   <div className="bw-highlights">{(['views','engagement'] as const).map(ranking=><section key={ranking}><h3>{ranking==='views'?c.topViews:c.topEngagement}</h3><ol className="bw-top-posts">{rankCampaignPosts(displayPosts,ranking).slice(0,3).map((post,index)=>
     <li key={post.id} className="bw-top-post"><PostThumb post={post} project={p} label={label(post)} c={c}/><div><span className="bw-kicker">{String(index+1).padStart(2,'0')} · {c.platformNames[post.platform]}</span><h4>{label(post)}</h4><span className="bw-muted">{followers(post)}</span><strong>{ranking==='views'?views(post):number(postEngagement(post))}</strong><small>{ranking==='views'?b.views:c.engagement}</small><a href={post.url} target="_blank" rel="noopener noreferrer">{c.openPost} ↗</a><span className="bw-muted">{b.sourceLabels[post.metricsSource]}</span></div></li>
-   )}</ol>{!rankCampaignPosts(posts,ranking).length&&<p className="bw-note">{c.noRanking}</p>}</section>)}</div>
+   )}</ol>{!rankCampaignPosts(displayPosts,ranking).length&&<p className="bw-note">{c.noRanking}</p>}</section>)}</div>
    <div className="bw-method"><p>{c.engagementNote}</p><p><strong>{c.rate}: {stats.engagementRate===null?'—':stats.engagementRateApproximate?interpolate(c.approxValue,{value:`${stats.engagementRate.toLocaleString(locale,{maximumFractionDigits:2})}%`}):`${stats.engagementRate.toLocaleString(locale,{maximumFractionDigits:2})}%`}</strong> · {interpolate(c.rateCoverage,{count:stats.ratePosts})}</p><p className="bw-muted">{c.firstMeasured}: {formatBrandTimestamp(stats.firstMeasuredAt,locale)??'—'} · {c.lastMeasured}: {formatBrandTimestamp(stats.lastMeasuredAt,locale)??'—'}</p><p className="bw-muted">{c.sourceNotice}</p></div>
    <h3>{c.allPosts}</h3><div className="bw-filter-bar bw-no-print"><label>{c.search}<input value={query} onChange={event=>setQuery(event.target.value)} placeholder={c.searchHint}/></label><label>{b.platformLabel}<select value={platform} onChange={event=>setPlatform(event.target.value)}><option value="all">{c.allPlatforms}</option>{Object.entries(b.platforms).map(([key,label])=><option value={key} key={key}>{label}</option>)}</select></label><label>{c.sort}<select value={sort} onChange={event=>setSort(event.target.value)}><option value="views">{c.topViews}</option><option value="engagement">{c.topEngagement}</option><option value="latest">{c.latest}</option></select></label></div>
    {sorted.length?<ul className="bw-post-grid" aria-label={c.allPosts}>{sorted.map(post=>{
@@ -76,7 +79,7 @@ export function CampaignPerformance({project:p,posts=p.posts,b,locale,frozen=fal
       {usageCta&&!frozen&&<a className="bw-post-open bw-usage-cta bw-no-print" data-usage-cta={`post:${post.id}`} href={`#usage=post:${post.id}`} title={b.secondaryUsage.ctaHint}>{b.secondaryUsage.cta}</a>}
       <p className="bw-post-context">{[handle&&title,post.origin==='external_import'?c.linkedPost:null,b.verificationLabels[post.verification],post.publishedAt===null?c.publishedUnknown:interpolate(c.publishedOn,{date:shortDate(post.publishedAt,locale)}),b.sourceLabels[post.metricsSource],post.measuredAt&&interpolate(c.measuredOn,{date:formatBrandTimestamp(post.measuredAt,locale)!}),post.shares!==null?`${b.shares} ${number(post.shares)}`:null,post.saves!==null?`${b.saves} ${number(post.saves)}`:null].filter(Boolean).join(' · ')}</p>
      </div>
-    </li>;})}</ul>:<p className="bw-note">{posts.length?c.noMatch:b.noPosts}</p>}
+   </li>;})}</ul>:<p className="bw-note">{displayPosts.length?c.noMatch:pending?c.cardsNotReady:b.noPosts}</p>}
   </>}
  </section>;
 }

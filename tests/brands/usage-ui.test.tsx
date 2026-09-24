@@ -19,9 +19,12 @@ afterEach(async () => { await f.db.close(); });
 
 describe.each(["ko", "en"] as const)("secondary usage tab in %s", (locale) => {
   const b = getDictionary(locale).brandWorkspace, c = b.secondaryUsage;
-  it("offers the inquiry form and a card CTA to writers, with every scope field optional", async () => {
+  it("offers the inquiry form and a ready card CTA to writers, with every scope field optional", async () => {
     const view = (await u.loadBrandUsage({ sql: f.sql }, f.editor, f.projectId))!;
     const project = (await loadBrandProject({ sql: f.sql }, f.editor, f.projectId))!;
+    // The live gallery now requires a preview; eligibility and optional inquiry fields are unchanged.
+    project.posts = project.posts.map(post => ({ ...post, presentation: { ...post.presentation,
+      thumbnailUrl: '/api/brand-workspace/attachments/a0000000-0000-4000-8000-00000000000a' } }));
     const html = renderToStaticMarkup(<ProjectDetail project={project} b={b} locale={locale} usage={view} />);
     expect(html).toContain('data-usage-tab');
     expect(html).toContain(`href="#usage"`);

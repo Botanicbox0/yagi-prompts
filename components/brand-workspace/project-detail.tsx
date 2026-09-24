@@ -153,7 +153,7 @@ export function ProjectDetail({
       )}
       <ProjectTabs b={b} comments={p.messages.length} usage={usage !== null}>
       <section id="performance" className="bw-panel">
-        <CampaignPerformance project={p} b={b} locale={locale} usageCta={Boolean(usage?.eligible.some((s) => s.kind === "post"))}/>
+        <CampaignPerformance project={p} b={b} locale={locale} showUnready={studio} usageCta={Boolean(usage?.eligible.some((s) => s.kind === "post"))}/>
       </section>
       <div className="bw-grid-wide">
         <div>
