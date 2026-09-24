@@ -61,6 +61,10 @@ Owners/editors can submit; the existing service rechecks current membership on t
 
 Browser evidence in `docs/evidence/studio-inquiry/` covers KO/EN, desktop/mobile, a real local-fixture submission, persistence in the support thread and a simulated lost response after the server writes. Retrying stored exactly one message with the same request ID. The form explicitly says that scope, fees and usage conditions are agreed after consultation, and that submission itself does not create a contract or take payment.
 
+## Studio onboarding (2026-09-24)
+
+`/brand/studio` now lays itself out by stage (`lib/brands/production/stage.ts`). If there is no contract, the heading says what the studio does and makes **전용 템플릿 의뢰하기 / Request a custom template** the main action. Below it are the four steps (request → format design and contract → template and verified portrait → create and download), two example videos with a reference photo, and the studio/campaign scope. The face setup is only asked for once a template exists. After a brand sends a request, the page reads it back from the existing support thread by its `messageTitle` heading and says whether TWINGS has replied. This is a read of the thread, not a new status workflow. Returning brands see templates first; the explanation is folded into one `<details>`. When the allowance is used up or every contract has ended, the page says so and makes an additional request the main action. Viewers and the TWINGS team view get no request button. Review and evidence: `docs/reviews/STUDIO-ONBOARDING-20260924.md`.
+
 Validation for template intake: `npx tsc --noEmit`, `npx vitest run` (127 files / 1,423 tests), `npm run build:local`, `npm run start:local`, and `npm run sweep:anon` (637/637) passed in order. Existing support tests cover membership revocation, unrelated-user rejection and idempotency. Local browser verification covers the owner submission path; no real customer message, external notification or production deployment was sent.
 
 ## Language and action placement (2026-09-23)

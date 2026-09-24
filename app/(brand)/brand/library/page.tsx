@@ -4,6 +4,7 @@ import { WorkspacePreview } from "@/components/brand-workspace/preview";
 import { brandScope } from "@/components/brand-workspace/scope";
 import { BrandUnavailable } from "@/components/brand-workspace/brand-unavailable";
 import { StaffNotice } from "@/components/brand-workspace/staff-notice";
+import { scopedHref, sectionVisibility } from "@/lib/brands/workspace/selection";
 export default async function ContentLibrary({
   searchParams,
 }: {
@@ -29,6 +30,13 @@ export default async function ContentLibrary({
         </div>
       </div>
       {choice?.role === "studio" && <StaffNotice b={b} />}
+      {/* Studio-made videos live in the studio history. Same rule as the sidebar: campaign-only guests have no studio. */}
+      {choice && sectionVisibility(choice).studio && (
+        <p className="bw-note" data-library-studio-link>
+          {b.managed.libraryStudio}{" "}
+          <a href={scopedHref("/brand/studio#studio-history", choice)}>{b.managed.libraryStudioLink} →</a>
+        </p>
+      )}
       {contents.length ? (
         <div className="bw-content-grid">
           {contents.map(({ p, c }) => (

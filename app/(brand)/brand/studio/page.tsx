@@ -11,9 +11,17 @@ import { BrandUnavailable } from "@/components/brand-workspace/brand-unavailable
 import { scopedHref } from "@/lib/brands/workspace/selection";
 import { ProductionCreate } from "@/components/brand-workspace/production-create";
 import { loadProductionWorkspace } from "@/lib/brands/production/service";
+import { loadBrandSupport } from "@/lib/brands/workspace/service";
+import { studioRequestStatus, studioStage } from "@/lib/brands/production/stage";
 import { formatBrandTimestamp } from "@/components/brand-workspace/format";
 import { StaffNotice, adminOrganizationHref } from "@/components/brand-workspace/staff-notice";
+import { StudioHelp, StudioIntro } from "@/components/brand-workspace/studio-onboarding";
 import { studioIdentityHref } from "@/lib/brands/workspace/links";
+import { getDictionary } from "@/lib/i18n/dictionaries";
+
+/** Template requests are support messages headed in the sender's language; either heading counts. */
+const REQUEST_TITLES = [getDictionary("ko"), getDictionary("en")].map((d) => d.brandWorkspace.studioInquiry.messageTitle);
+
 export default async function BrandStudio({
   searchParams,
 }: {
@@ -30,89 +38,152 @@ export default async function BrandStudio({
   const organizations = membershipOf(choice),
     access = selectedAccess(choice, Object.values(projectOrganizations).filter((o) => o === choice?.id)),
     orgId = organizations[0]?.id,
-    t = b.productionStudio;
-  const heading = (
-    <div className="bw-heading">
-      <div>
-        <p className="bw-kicker">{t.eyebrow}</p>
-        <h1>{t.title}</h1>
-        <p>{t.subtitle}</p>
-      </div>
-      {/* Renders nothing for accounts that cannot send a request (viewer-only, campaign-only). */}
-      <StudioInquiry organizations={organizations} organizationId={orgId} b={b} allowSetup={access.fresh} />
-    </div>
-  );
+    t = b.productionStudio,
+    o = t.onboarding;
   // Campaign-only invitees reach this page only by typing the address: no onboarding, no creation.
   if (access.projectScopedOnly)
     return (
       <div data-brand-production data-brand-studio-unavailable>
-        {heading}
+        <div className="bw-heading">
+          <div>
+            <p className="bw-kicker">{t.eyebrow}</p>
+            <h1>{t.title}</h1>
+            <p>{t.subtitle}</p>
+          </div>
+        </div>
         <section className="bw-empty">
           <p>{b.access.studioSharedOnly}</p>
           <a href={scopedHref("/brand", choice)} className="bw-button">{b.back}</a>
         </section>
       </div>
     );
-  const selectedRole = organizations[0]?.role;
   // The TWINGS team reads the brand's templates, remaining count and history; it never generates here.
   const staffOrgId = access.staff ? choice?.id : undefined;
-  const production = orgId ?? staffOrgId
-    ? await loadProductionWorkspace({ sql, verifiedEmail }, viewer, (orgId ?? staffOrgId)!)
-    : null;
   const historyOrg = orgId ?? staffOrgId;
-  const portrait =
-    (
-      await sql.query<{ attempt_id: string }>(
-        "select s.attempt_id from identity_portrait_selections s join identity_portrait_attempts a on a.id=s.attempt_id and a.user_id=s.user_id where s.user_id=$1 and a.status='succeeded'",
-        [viewer.userId],
-      )
-    ).rows[0]?.attempt_id ?? null;
+  const production = historyOrg
+    ? await loadProductionWorkspace({ sql, verifiedEmail }, viewer, historyOrg)
+    : null;
+  const contracts = production?.contracts ?? [];
+  // Before any contract, a template request already sent changes what the brand should do next.
+  const support = !contracts.length && orgId ? await loadBrandSupport({ sql, verifiedEmail }, viewer, orgId) : null;
+  const request = support ? studioRequestStatus(support, REQUEST_TITLES) : null;
+  const canRequest = !access.staff && (access.canRequest || access.fresh);
+  const stage = studioStage({ contracts, canRequest, request });
+  // Viewers see templates and history; creating (and so the face setup) is for admins and editors.
+  const canCreate = !access.staff && production?.role !== "viewer";
+  // The face is asked for only once there is a template to use it with.
+  const hasTemplates = contracts.some((c) => c.templates.length > 0);
+  const portrait = hasTemplates
+    ? (
+        await sql.query<{ attempt_id: string }>(
+          "select s.attempt_id from identity_portrait_selections s join identity_portrait_attempts a on a.id=s.attempt_id and a.user_id=s.user_id where s.user_id=$1 and a.status='succeeded'",
+          [viewer.userId],
+        )
+      ).rows[0]?.attempt_id ?? null
+    : null;
   const mode = assetLibraryMode();
   const verifyRequired =
     !!portrait &&
     needsLiveness("seedance-2.5", mode) &&
     (await identityStatusFor(sql, viewer.userId!, mode)) !== "active";
+
+  // No contract yet (and not the TWINGS team): the explanation and the request are the page.
+  const explaining = !contracts.length && !access.staff;
+  const inquiry = (
+    // Renders nothing for accounts that cannot send a request (viewer-only, TWINGS team view).
+    <StudioInquiry
+      organizations={organizations}
+      organizationId={orgId}
+      b={b}
+      allowSetup={access.fresh}
+      label={stage === "onboarding" ? undefined : b.studioInquiry.actionMore}
+      primary={stage === "onboarding" || stage === "used-up"}
+    />
+  );
+  const guide = <ServiceGuide kind="studio" b={b} showOther={access.canRequest || access.fresh} organizationId={choice?.id} />;
   return (
-    <div data-brand-production>
-      {heading}
-      {access.staff && choice && <StaffNotice b={b} manageHref={viewer.isAdmin ? adminOrganizationHref(choice.id, brandHost) : null} />}
-      <ServiceGuide kind="studio" b={b} showOther={access.canRequest || access.fresh} organizationId={choice?.id} />
-      {!production || !production.contracts.length ? (
-        selectedRole === "viewer" || access.staff ? (
-          // The request invitation would point at a button a viewer does not have.
-          <section className="bw-panel bw-production-empty" data-brand-studio-read-only>
-            <h2>{b.access.studioViewerTitle}</h2>
-            <p>{b.access.studioViewer}</p>
-          </section>
+    <div data-brand-production data-studio-stage={stage}>
+      <div className={explaining ? "bw-heading bw-studio-hero" : "bw-heading"}>
+        <div>
+          <p className="bw-kicker">{t.eyebrow}</p>
+          <h1>{t.title}</h1>
+          {explaining ? (
+            <>
+              <p className="bw-studio-lead">{o.lead}</p>
+              {stage === "onboarding" && <p>{o.next}</p>}
+            </>
+          ) : (
+            <p>{t.subtitle}</p>
+          )}
+        </div>
+        {stage === "onboarding" ? (
+          <div className="bw-studio-hero-action" data-studio-onboarding>
+            {inquiry}
+            <p className="bw-muted">{o.noCommitment}</p>
+          </div>
         ) : (
-          <section className="bw-panel bw-production-empty">
-            <h2>{t.emptyTitle}</h2>
-            <p>{t.emptyHint}</p>
-          </section>
-        )
+          inquiry
+        )}
+      </div>
+      {access.staff && choice && <StaffNotice b={b} manageHref={viewer.isAdmin ? adminOrganizationHref(choice.id, brandHost) : null} />}
+      {stage === "requested" && request && (
+        <section className="bw-note bw-studio-status" data-studio-request={request.answered ? "answered" : "waiting"}>
+          <h2>{request.answered ? o.answeredTitle : o.requestedTitle}</h2>
+          <p>{request.answered ? o.answeredBody : o.requestedBody.replace("{date}", formatBrandTimestamp(request.sentAt, locale) ?? "")}</p>
+        </section>
+      )}
+      {stage === "read-only" && (
+        // The request invitation would point at a button a viewer does not have.
+        <section className="bw-note bw-studio-status" data-brand-studio-read-only>
+          <h2>{b.access.studioViewerTitle}</h2>
+          <p>{b.access.studioViewer}</p>
+        </section>
+      )}
+      {stage === "templates-pending" && (
+        <section className="bw-note bw-studio-status" data-studio-templates-pending>
+          <h2>{o.templatesPendingTitle}</h2>
+          <p>{o.templatesPendingBody}</p>
+        </section>
+      )}
+      {stage === "used-up" && (
+        <section className="bw-note bw-studio-status" data-studio-used-up>
+          <h2>{o.usedUpTitle}</h2>
+          <p>{canRequest ? o.usedUpBody : o.usedUpReadOnly}</p>
+        </section>
+      )}
+      {explaining ? (
+        <StudioIntro t={o} stage={stage} guide={guide} />
       ) : (
+        <StudioHelp t={o} stage={stage} guide={guide} />
+      )}
+      {production && contracts.length > 0 && (
         <>
-          {!access.staff && <aside className="bw-note bw-production-identity">
-            <div>
-              <strong>
-                {verifyRequired
-                  ? t.verifyRequired
-                  : portrait
-                    ? t.identityReady
-                    : t.identityNeeded}
-              </strong>
-              <p>{t.identityHint}</p>
-            </div>
-            <a
-              className="bw-button"
-              href={studioIdentityHref(verifyRequired ? "verify" : "portrait", locale, brandHost)}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              {verifyRequired ? t.verifyAction : t.identityAction} ↗
-            </a>
-          </aside>}
-          {production.contracts.map((c) => (
+          {stage === "ready" && canCreate && (
+            <aside className="bw-note bw-production-identity">
+              <div>
+                <strong>
+                  {verifyRequired
+                    ? t.verifyRequired
+                    : portrait
+                      ? t.identityReady
+                      : t.identityNeeded}
+                </strong>
+                <p>{t.identityHint}</p>
+              </div>
+              <a
+                className="bw-button"
+                href={studioIdentityHref(verifyRequired ? "verify" : "portrait", locale, brandHost)}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                {verifyRequired ? t.verifyAction : t.identityAction} ↗
+              </a>
+            </aside>
+          )}
+          {!access.staff && !canCreate && (
+            <p className="bw-note" data-studio-viewer-note>{o.viewerCannotCreate}</p>
+          )}
+          {contracts.map((c) => (
             <section key={c.id} className="bw-production-contract">
               <div className="bw-row">
                 <div>
@@ -130,7 +201,11 @@ export default async function BrandStudio({
                   </small>
                 </div>
               </div>
-              {!c.active && <p className="bw-note">{t.inactive}</p>}
+              {!c.active ? (
+                <p className="bw-note">{t.inactive}</p>
+              ) : c.remaining < 1 ? (
+                <p className="bw-note" data-contract-exhausted>{t.exhausted}</p>
+              ) : null}
               <div className="bw-production-grid">
                 {c.templates.map((v) => (
                   <article
@@ -145,6 +220,7 @@ export default async function BrandStudio({
                             controls
                             playsInline
                             preload="metadata"
+                            aria-label={locale === "ko" ? v.titleKo : v.title}
                           />
                         ) : (
                           <img
@@ -194,7 +270,7 @@ export default async function BrandStudio({
               )}
             </section>
           ))}
-          <section className="bw-panel">
+          <section className="bw-panel" id="studio-history">
             <h2>{t.history}</h2>
             <ul className="bw-list">
               {production.jobs.map((j) => (
