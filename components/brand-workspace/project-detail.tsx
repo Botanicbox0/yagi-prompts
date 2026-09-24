@@ -10,7 +10,7 @@ import { formatBrandDate, formatBrandTimestamp, formatFileSize } from "./format"
 import { ProjectTabs } from './project-tabs';
 import { CampaignContracts } from './contracts';
 import { CampaignPerformance } from './performance';
-import { postHandle, postPresentation } from '@/lib/brands/workspace/performance';
+import { metricProvenance, postHandle, postPresentation } from '@/lib/brands/workspace/performance';
 import { unsetDateKey } from '@/lib/brands/workspace/schedule';
 import { DecisionFields } from './decision-fields';
 import { StaffNotice } from './staff-notice';
@@ -61,9 +61,7 @@ export function PostTable({
                 </a>
                 <p className="bw-muted">
                   {(postHandle(p) || postPresentation(p).displayName) && <>{b.platforms[p.platform]} · </>}
-                  {p.origin === "external_import" && <>{b.performance.linkedPost} · </>}
-                  {b.verificationLabels[p.verification]}
-                  {p.publishedAt === null && <> · {b.performance.publishedUnknown}</>}
+                  {p.publishedAt === null ? b.performance.publishedUnknown : interpolate(b.performance.publishedOn, { date: formatBrandTimestamp(p.publishedAt, locale)! })}
                 </p>
               </td>
               <td data-approximate={p.viewsApproximate && p.views !== null ? "true" : undefined}>
@@ -75,7 +73,7 @@ export function PostTable({
               <td>{value(p.comments)}</td>
               <td>{value(p.shares)}</td>
               <td>{value(p.saves)}</td>
-              <td>{b.sourceLabels[p.metricsSource]}</td>
+              <td>{metricProvenance(p).map((x) => x.kind === "source" ? b.sourceLabels[x.value] : b.verificationLabels[x.value]).join(" · ")}</td>
               <td>
                 {formatBrandTimestamp(p.measuredAt, locale) ?? b.notMeasured}
               </td>

@@ -20,6 +20,16 @@ export function tabFromHash(hash: string): ProjectTab | null {
   const id = hash.replace(/^#/, "").split("=")[0]!;
   return (ids as readonly string[]).includes(id) ? (id as ProjectTab) : null;
 }
+/**
+ * The tab to open for a fragment, given the tabs this viewer actually has. A tab the viewer does not
+ * have (`#usage` for a campaign guest) opens the results tab instead of an empty panel. Any other
+ * fragment (an in-page anchor, or junk) is not a tab: null, so the open tab stays as it is.
+ */
+export function tabForViewer(hash: string, available: readonly ProjectTab[]): ProjectTab | null {
+  const id = tabFromHash(hash);
+  if (id === null) return null;
+  return available.includes(id) ? id : "performance";
+}
 export function ProjectTabs({
   b,
   children,
@@ -34,9 +44,12 @@ export function ProjectTabs({
   usage?: boolean;
 }) {
   const [active, setActive] = useState<string>("performance");
+  const available = ids.filter((id) => usage || id !== "usage");
   useEffect(() => {
+    // `#usage` (with or without a value) only opens for viewers who have that tab; others see results.
+    const allowed = ids.filter((id) => usage || id !== "usage");
     const read = () => {
-      const id = tabFromHash(location.hash);
+      const id = tabForViewer(location.hash, allowed);
       if (id) setActive(id);
       return id;
     };
@@ -51,7 +64,7 @@ export function ProjectTabs({
     };
     window.addEventListener("hashchange", change);
     return () => window.removeEventListener("hashchange", change);
-  }, []);
+  }, [usage]);
   const labels: Record<ProjectTab, string> = {
     performance: b.performance.title,
     brief: b.overview,
@@ -65,7 +78,7 @@ export function ProjectTabs({
   return (
     <div className="bw-project-sections" data-project-tab={active}>
       <nav className="bw-tabs" aria-label={b.projectSections}>
-        {ids.filter((id) => usage || id !== "usage").map((id) => (
+        {available.map((id) => (
           <a
             key={id}
             href={`#${id}`}

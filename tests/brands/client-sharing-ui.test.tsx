@@ -43,10 +43,10 @@ describe.each(["ko", "en"] as const)("client sharing UI in %s", (locale) => {
     expect(html).toContain(b.commentsReadOnly);
     expect(html).not.toContain(b.sendComment);
   });
-  it("labels linked posts as not approved here and leaves unknown dates and counts unknown", () => {
+  it("keeps how a post was added internal and leaves unknown dates and counts unknown", () => {
     const html = renderToStaticMarkup(<ProjectDetail project={project} b={b} locale={locale} />);
-    expect(html).toContain('data-linked-posts="1"');
-    expect(html).toContain(b.performance.linkedPost);
+    expect(html).not.toContain("data-linked-posts");
+    expect(html).toContain('data-undated-posts="1"');
     expect(html).toContain(b.performance.publishedUnknown);
     // The raw platform post code is never customer text; it stays only in the link destination.
     expect(visible(html)).not.toContain("FIXTURE01");

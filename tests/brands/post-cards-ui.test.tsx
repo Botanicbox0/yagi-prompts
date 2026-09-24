@@ -46,8 +46,8 @@ describe.each(["ko", "en"] as const)("post cards in %s", locale => {
     expect(first).toContain(`>${(410).toLocaleString(locale)}<`);
     expect(first).toContain(`href="${base.url}"`);
     expect(first).toContain(c.openPost);
-    // Provenance stays as small context, not a placeholder.
-    expect(first).toContain(c.linkedPost);
+    // Metric provenance stays as small context; how the post was added to the campaign does not.
+    expect(first).toContain(b.sourceLabels[base.metricsSource]);
     expect(visible(first!)).not.toContain("FIXTURE01");
     expect(first).toContain(c.publishedUnknown);
   });
@@ -92,7 +92,7 @@ describe.each(["ko", "en"] as const)("post cards in %s", locale => {
   it("never shows the campaign cover or the old linked-post banner as a post image", () => {
     expect(html).not.toContain(COVER);
     expect(html).not.toContain("bw-preview");
-    expect(html).not.toMatch(new RegExp(`<span>${c.linkedPost}</span>`));
+    expect(html).not.toContain("data-linked-posts");
   });
 
   it("uses the same thumbnail in the rankings", () => {

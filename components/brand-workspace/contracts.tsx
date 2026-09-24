@@ -35,7 +35,7 @@ export function CampaignContracts({
       </div>
       {studio && <p className="bw-muted">{c.contractHint}</p>}
       {!p.contracts?.length ? (
-        <p className="bw-muted">{c.contractEmpty}</p>
+        <p className="bw-muted">{studio || p.role === "studio" ? c.contractEmpty : c.contractEmptyClient}</p>
       ) : (
         <ul className="bw-list">
           {p.contracts.map((d) => (

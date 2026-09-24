@@ -197,7 +197,10 @@ async function detail(sql: SqlRunner, row: Row): Promise<BrandProjectDetail> {
   const messages: BrandMessage[] = (await scoped('brand_messages', 'order by created_at,id')).map(r => ({ id: String(r.id), body: String(r.body), authorRole: r.author_role as BrandMessage['authorRole'], createdAt: stamp(r.created_at) }));
   // A post thumbnail is how the post is shown, not a campaign file: clients see it on the post card only.
   // An image that is also a content version's file stays listed, since content previews look it up here.
-  const thumbnails = row.member_role === 'studio' ? '' : ` and (not exists(select 1 from brand_posts t where t.project_id=brand_attachments.project_id and t.thumbnail_attachment_id=brand_attachments.id)
+  // The campaign cover the TWINGS team uploaded is shown at the top of the page, not listed as a file;
+  // a cover picked from the brand's own upload stays in the brand's file list.
+  const thumbnails = row.member_role === 'studio' ? '' : ` and ((not exists(select 1 from brand_posts t where t.project_id=brand_attachments.project_id and t.thumbnail_attachment_id=brand_attachments.id)
+      and not exists(select 1 from brand_projects cp join profiles u on u.id=brand_attachments.created_by where cp.id=brand_attachments.project_id and cp.cover_attachment_id=brand_attachments.id and u.is_admin))
     or exists(select 1 from brand_content_versions c where c.project_id=brand_attachments.project_id and c.attachment_id=brand_attachments.id))`;
   const attachments: BrandAttachment[] = (await scoped('brand_attachments', `and status='ready' and access_scope='workspace'${thumbnails} order by created_at`)).map(r => ({ id: String(r.id), name: String(r.name), mime: String(r.mime), sizeBytes: Number(r.size_bytes), createdAt: stamp(r.created_at) }));
   const posts = (await scoped('brand_posts', 'order by created_at')).map(postDto);
