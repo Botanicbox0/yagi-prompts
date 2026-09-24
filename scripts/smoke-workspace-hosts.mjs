@@ -56,6 +56,12 @@ for (const path of ['/ko/video', '/auth/choose', '/api/renders/access', '/admin'
   blocked('plural alias closed route', BRANDS, path);
 }
 for (const path of ['/admin', '/account', '/api/admin/staging-url', '/api/renders/access', '/sitemap.xml','/sw.js']) blocked('brand closed route', BRAND, path);
+// Self-serve studio example media: exactly these five public files on the brand host (lib/routing/surfaces.ts).
+// JPEGs by GET; MP4s by HEAD so the smoke never downloads the videos.
+for (const file of ['designed-format.jpg', 'different-person.jpg', 'reference-selfie.jpeg']) add('brand studio demo image', BRAND, `/reel/studio-demo/${file}`, { status: 200, mime: 'image/jpeg', noindex: true });
+for (const file of ['designed-format.mp4', 'different-person.mp4']) add('brand studio demo video HEAD', BRAND, `/reel/studio-demo/${file}`, { status: 200, mime: 'video/mp4', empty: true, noindex: true }, { method: 'HEAD' });
+for (const path of ['/reel/studio-demo/unknown.mp4', '/reel/studio-demo/designed-format.webm', '/reel/probe.mp4']) blocked('brand closed reel path', BRAND, path);
+for (const host of [ADMIN, BRANDS]) blocked('studio demo closed off the brand host', host, '/reel/studio-demo/designed-format.jpg');
 for (const path of ['/', '/ko/video', '/robots.txt', FONT, '/_next/static/probe.js']) {
   blocked('unknown host', 'unlisted.example.invalid', path);
 }
@@ -108,6 +114,7 @@ function inspect(test, response) {
   }
   if (expected.html) check(String(response.headers['content-type'] ?? '').includes('text/html'), 'expected HTML');
   if (expected.css) check(String(response.headers['content-type'] ?? '').includes('text/css'), 'expected CSS');
+  if (expected.mime) check(String(response.headers['content-type'] ?? '').startsWith(expected.mime), `expected ${expected.mime}`);
   if (expected.empty) check(response.body.length === 0, 'HEAD included body');
   if (expected.robotsClosed) check(/^User-agent:\s*\*\s*\r?\nDisallow:\s*\/\s*$/i.test(response.body.trim()), 'robots not fully closed');
   if (expected.anonymousClosed) {
