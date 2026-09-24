@@ -292,7 +292,7 @@ describe("publicly rounded view counts", () => {
     expect(campaignPerformance(posts)).toMatchObject({ views: { total: 13300, measured: 2 }, viewsApproximate: 1, engagementRateApproximate: true });
     const exact = posts.filter(p => !p.viewsApproximate);
     expect(campaignPerformance(exact)).toMatchObject({ views: { total: 1000, measured: 1 }, viewsApproximate: 0, engagementRateApproximate: false });
-    const csv = campaignCsv(posts, {}, ["id", "title", "platform", "url", "published", "views", "likes", "comments", "shares", "saves", "source", "measured", "origin", "approx"]).split("\r\n");
+    const csv = campaignCsv(posts, {}, ["n", "title", "platform", "url", "published", "views", "likes", "comments", "shares", "saves", "source", "measured", "approx"]).split("\r\n");
     expect(csv.find(line => line.includes("FIXTURE02"))).toMatch(/"12300",.*"true"$/);
     expect(csv.find(line => line.includes("FIXTURE01"))).toMatch(/"1000",.*"false"$/);
   });

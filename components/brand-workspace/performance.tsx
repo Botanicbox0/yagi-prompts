@@ -2,7 +2,7 @@
 import {useMemo,useState} from 'react';
 import type {BrandCopy} from './action-form';
 import type {BrandPost,BrandProjectDetail,BrandReport} from '@/lib/brands/workspace/types';
-import {campaignPerformance,rankCampaignPosts,postEngagement,campaignCsv,postContentTitle,byLatestPublished,postPresentation,postHandle,postSearchText,postPreview} from '@/lib/brands/workspace/performance';
+import {campaignPerformance,rankCampaignPosts,postEngagement,campaignCsv,postContentTitle,byLatestPublished,postPresentation,postHandle,postSearchText,postPreview,metricProvenance} from '@/lib/brands/workspace/performance';
 import {interpolate} from '@/lib/i18n/format';
 import {formatBrandDate,formatBrandTimestamp} from './format';
 
@@ -34,11 +34,12 @@ export function CampaignPerformance({project:p,posts=p.posts,b,locale,frozen=fal
  const views=(post:BrandPost)=>approx(post.views,post.viewsApproximate);
  const [query,setQuery]=useState(''),[platform,setPlatform]=useState('all'),[sort,setSort]=useState('views');
  const titles=Object.fromEntries(p.contents.map(content=>[content.id,content.title]));
- const linked=posts.filter(post=>post.origin==='external_import').length,undated=posts.filter(post=>post.publishedAt===null).length;
+ const undated=posts.filter(post=>post.publishedAt===null).length;
  // Customer-facing name: the recorded @handle, the approved content title, the recorded display name, or
  // the localized generic "Instagram post". The platform's raw post code is never shown as text; it stays
  // only in the link destination (and the CSV).
  const label=(post:BrandPost)=>postHandle(post)??postContentTitle(post,titles)??postPresentation(post).displayName??b.platforms[post.platform];
+ const provenance=(post:BrandPost)=>metricProvenance(post).map(x=>x.kind==='source'?b.sourceLabels[x.value]:b.verificationLabels[x.value]).join(' · ');
  const followers=(post:BrandPost)=>{const v=postPresentation(post);return v.followers===null||v.followersMeasuredAt===null?c.followersUnknown:`${interpolate(c.followers,{count:approx(v.followers,v.followersApproximate)})} · ${interpolate(c.followersAsOf,{date:shortDate(v.followersMeasuredAt,locale)})}`;};
  // Published report snapshots keep their original presentation; the live gallery waits for a preview.
  const displayPosts=showUnready||frozen?posts:posts.filter(post=>postPreview(post,p)!==null);
@@ -48,7 +49,7 @@ export function CampaignPerformance({project:p,posts=p.posts,b,locale,frozen=fal
  const targetValue=p.criteria.primaryMetric==='views'?stats.views.total:p.criteria.primaryMetric==='engagement'?stats.engagement.total:stats.totalPosts;
  const target=p.criteria.targetValue;
  const coverage=(known:number)=>interpolate(c.coverage,{known,total:posts.length});
- function download(){const csv=campaignCsv(posts,titles,[c.csvId,c.csvTitle,b.platformLabel,c.csvUrl,b.postPublishedAt,b.views,b.likes,b.comments,b.shares,b.saves,b.source,b.measuredAt,c.csvOrigin,c.csvViewsApproximate]);const url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8;'}));const link=document.createElement('a');link.href=url;link.download='twings-campaign-results.csv';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
+ function download(){const csv=campaignCsv(posts,titles,[c.csvId,c.csvTitle,b.platformLabel,c.csvUrl,b.postPublishedAt,b.views,b.likes,b.comments,b.shares,b.saves,b.source,b.measuredAt,c.csvViewsApproximate],{platform:c.platformNames,source:b.sourceLabels,verification:b.verificationLabels,yes:c.csvYes,no:c.csvNo});const url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8;'}));const link=document.createElement('a');link.href=url;link.download='twings-campaign-results.csv';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
  const metricCards=[{label:c.views,...stats.views,approximate:stats.viewsApproximate>0},{label:c.engagement,...stats.engagement,approximate:false},{label:b.comments,...stats.comments,approximate:false},{label:c.posts,total:stats.totalPosts,measured:posts.length,approximate:false}];
  return <section className="bw-performance" data-campaign-performance>
   <div className="bw-row"><div><p className="bw-kicker">{frozen?c.snapshot:c.live}</p><h2>{c.title}</h2><p className="bw-muted">{c.subtitle}</p></div>{!compact&&<button type="button" className="bw-button bw-no-print" onClick={download} disabled={!posts.length}>{c.download}</button>}</div>
@@ -56,11 +57,12 @@ export function CampaignPerformance({project:p,posts=p.posts,b,locale,frozen=fal
   {!frozen&&target!==null&&target>0&&<div className="bw-target"><div className="bw-row"><span>{c.target} · {b.metricNames[p.criteria.primaryMetric]}</span><strong>{approx(targetValue,p.criteria.primaryMetric==='views'&&stats.viewsApproximate>0)} / {number(target)}</strong></div><progress max={target} value={targetValue===null?0:Math.min(target,targetValue)} aria-label={c.target}/><small>{c.targetNote}</small></div>}
   <p className="bw-muted">{c.viewsNote} {c.unknownNote}</p>
   {stats.viewsApproximate>0&&<p className="bw-note" data-approximate-views={stats.viewsApproximate}>{interpolate(c.approxNote,{count:stats.viewsApproximate})}</p>}
-  {linked>0&&<p className="bw-note" data-linked-posts={linked}>{interpolate(c.linkedNote,{count:linked})}{undated>0&&<> {interpolate(frozen?c.reportUndated:c.undatedNote,{count:undated})}</>}</p>}
+  {/* How a post reached the campaign is internal bookkeeping; an unknown publish date is the client's business. */}
+  {undated>0&&<p className="bw-note" data-undated-posts={undated}>{interpolate(frozen?c.reportUndated:c.undatedNote,{count:undated})}</p>}
   {!compact&&<>
    {pending>0&&<p className="bw-note" data-pending-post-cards={pending}>{interpolate(c.pendingCards,{count:pending})}</p>}
    <div className="bw-highlights">{(['views','engagement'] as const).map(ranking=><section key={ranking}><h3>{ranking==='views'?c.topViews:c.topEngagement}</h3><ol className="bw-top-posts">{rankCampaignPosts(displayPosts,ranking).slice(0,3).map((post,index)=>
-    <li key={post.id} className="bw-top-post"><PostThumb post={post} project={p} label={label(post)} c={c}/><div><span className="bw-kicker">{String(index+1).padStart(2,'0')} · {c.platformNames[post.platform]}</span><h4>{label(post)}</h4><span className="bw-muted">{followers(post)}</span><strong>{ranking==='views'?views(post):number(postEngagement(post))}</strong><small>{ranking==='views'?b.views:c.engagement}</small><a href={post.url} target="_blank" rel="noopener noreferrer">{c.openPost} ↗</a><span className="bw-muted">{b.sourceLabels[post.metricsSource]}</span></div></li>
+    <li key={post.id} className="bw-top-post"><PostThumb post={post} project={p} label={label(post)} c={c}/><div><span className="bw-kicker">{String(index+1).padStart(2,'0')} · {c.platformNames[post.platform]}</span><h4>{label(post)}</h4><span className="bw-muted">{followers(post)}</span><strong>{ranking==='views'?views(post):number(postEngagement(post))}</strong><small>{ranking==='views'?b.views:c.engagement}</small><a href={post.url} target="_blank" rel="noopener noreferrer">{c.openPost} ↗</a><span className="bw-muted">{provenance(post)}</span></div></li>
    )}</ol>{!rankCampaignPosts(displayPosts,ranking).length&&<p className="bw-note">{c.noRanking}</p>}</section>)}</div>
    <div className="bw-method"><p>{c.engagementNote}</p><p><strong>{c.rate}: {stats.engagementRate===null?'—':stats.engagementRateApproximate?interpolate(c.approxValue,{value:`${stats.engagementRate.toLocaleString(locale,{maximumFractionDigits:2})}%`}):`${stats.engagementRate.toLocaleString(locale,{maximumFractionDigits:2})}%`}</strong> · {interpolate(c.rateCoverage,{count:stats.ratePosts})}</p><p className="bw-muted">{c.firstMeasured}: {formatBrandTimestamp(stats.firstMeasuredAt,locale)??'—'} · {c.lastMeasured}: {formatBrandTimestamp(stats.lastMeasuredAt,locale)??'—'}</p><p className="bw-muted">{c.sourceNotice}</p></div>
    <h3>{c.allPosts}</h3><div className="bw-filter-bar bw-no-print"><label>{c.search}<input value={query} onChange={event=>setQuery(event.target.value)} placeholder={c.searchHint}/></label><label>{b.platformLabel}<select value={platform} onChange={event=>setPlatform(event.target.value)}><option value="all">{c.allPlatforms}</option>{Object.entries(b.platforms).map(([key,label])=><option value={key} key={key}>{label}</option>)}</select></label><label>{c.sort}<select value={sort} onChange={event=>setSort(event.target.value)}><option value="views">{c.topViews}</option><option value="engagement">{c.topEngagement}</option><option value="latest">{c.latest}</option></select></label></div>
@@ -77,7 +79,7 @@ export function CampaignPerformance({project:p,posts=p.posts,b,locale,frozen=fal
       </dl>
       <a className="bw-post-open" href={post.url} target="_blank" rel="noopener noreferrer">{c.openPost} ↗</a>
       {usageCta&&!frozen&&<a className="bw-post-open bw-usage-cta bw-no-print" data-usage-cta={`post:${post.id}`} href={`#usage=post:${post.id}`} title={b.secondaryUsage.ctaHint}>{b.secondaryUsage.cta}</a>}
-      <p className="bw-post-context">{[handle&&title,post.origin==='external_import'?c.linkedPost:null,b.verificationLabels[post.verification],post.publishedAt===null?c.publishedUnknown:interpolate(c.publishedOn,{date:shortDate(post.publishedAt,locale)}),b.sourceLabels[post.metricsSource],post.measuredAt&&interpolate(c.measuredOn,{date:formatBrandTimestamp(post.measuredAt,locale)!}),post.shares!==null?`${b.shares} ${number(post.shares)}`:null,post.saves!==null?`${b.saves} ${number(post.saves)}`:null].filter(Boolean).join(' · ')}</p>
+      <p className="bw-post-context">{[handle&&title,post.publishedAt===null?c.publishedUnknown:interpolate(c.publishedOn,{date:shortDate(post.publishedAt,locale)}),provenance(post),post.measuredAt&&interpolate(c.measuredOn,{date:formatBrandTimestamp(post.measuredAt,locale)!}),post.shares!==null?`${b.shares} ${number(post.shares)}`:null,post.saves!==null?`${b.saves} ${number(post.saves)}`:null].filter(Boolean).join(' · ')}</p>
      </div>
    </li>;})}</ul>:<p className="bw-note">{displayPosts.length?c.noMatch:pending?c.cardsNotReady:b.noPosts}</p>}
   </>}

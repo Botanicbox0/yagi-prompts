@@ -87,6 +87,47 @@ describe("post presentation service", () => {
     expect((await s.loadStudioProject({ sql }, studio, projectId))!.attachments.map(a => a.id)).toContain(image);
   });
 
+  it("shows the studio's campaign cover at the top only, never as a client file, and keeps a brand upload listed", async () => {
+    const cover = await file(projectId);
+    const revision = async () => (await s.loadStudioProject({ sql }, studio, projectId))!.revision;
+    idOf(await s.setBrandProjectCover({ sql }, studio, { projectId, attachmentId: cover, expectedRevision: await revision() }));
+    const client = (await s.loadBrandProject({ sql }, owner, projectId))!;
+    expect(client.coverUrl).toBe(`/api/brand-workspace/attachments/${cover}`);
+    expect(client.attachments.map(a => a.id)).not.toContain(cover);
+    expect(await s.loadBrandAttachmentAccess({ sql }, owner, cover)).toMatchObject({ mime: "image/png" });
+    expect((await s.loadStudioProject({ sql }, studio, projectId))!.attachments.map(a => a.id)).toContain(cover);
+    // The brand's own image chosen as the cover is still the brand's file.
+    const r = await s.reserveBrandAttachment({ sql }, owner, { projectId, requestId: randomUUID(), name: "key-visual.png", mime: "image/png", sizeBytes: PNG.length });
+    if (!r.ok) throw Error(r.code);
+    idOf(await s.completeBrandAttachment({ sql, storage: { read: async () => PNG } }, owner, r.id));
+    idOf(await s.setBrandProjectCover({ sql }, studio, { projectId, attachmentId: r.id, expectedRevision: await revision() }));
+    const after = (await s.loadBrandProject({ sql }, owner, projectId))!.attachments.map(a => a.id);
+    expect(after).toContain(r.id);
+    expect(after).toContain(cover);
+  });
+
+  it("keeps a studio image listed when it is also a content version, even as the cover, and leaves file access unchanged", async () => {
+    const shared = await file(projectId), coverOnly = await file(projectId);
+    const contentVersionId = idOf(await s.addBrandContentVersion({ sql }, studio, { projectId, requestId: randomUUID(), slotKey: "hero", title: "Hero", attachmentId: shared, caption: "", usageRights: "Organic social" }));
+    const revision = async () => (await s.loadStudioProject({ sql }, studio, projectId))!.revision;
+    idOf(await s.setBrandProjectCover({ sql }, studio, { projectId, attachmentId: shared, expectedRevision: await revision() }));
+    const client = (await s.loadBrandProject({ sql }, owner, projectId))!;
+    // Content previews look up the file's type in this list, so it must stay even while it is the cover.
+    expect(client.attachments.map(a => a.id)).toContain(shared);
+    expect(client.contents.find(c => c.id === contentVersionId)?.attachmentId).toBe(shared);
+    idOf(await s.setBrandProjectCover({ sql }, studio, { projectId, attachmentId: coverOnly, expectedRevision: await revision() }));
+    const now = (await s.loadBrandProject({ sql }, owner, projectId))!.attachments.map(a => a.id);
+    expect(now).toContain(shared);
+    expect(now).not.toContain(coverOnly);
+    // The list filter is presentation only: the private route authorizes exactly as before.
+    for (const id of [shared, coverOnly]) {
+      expect(await s.loadBrandAttachmentAccess({ sql }, owner, id)).toMatchObject({ mime: "image/png", contract: false });
+      expect(await s.loadBrandAttachmentAccess({ sql }, studio, id)).toMatchObject({ mime: "image/png" });
+      expect(await s.loadBrandAttachmentAccess({ sql }, guest, id)).toBeNull();
+      expect(await s.loadBrandAttachmentAccess({ sql }, outsider, id)).toBeNull();
+    }
+  });
+
   it("is studio-only", async () => {
     const post = await linkedPost();
     const input = { projectId, postId: post.id, expectedRevision: 0, handle: "fixture" };

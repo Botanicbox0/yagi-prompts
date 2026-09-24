@@ -36,6 +36,15 @@ export function rankCampaignPosts(posts:readonly BrandPost[],ranking:Ranking):Br
  const value=(p:BrandPost)=>ranking==='views'?p.views:postEngagement(p);
  return posts.filter(p=>value(p)!==null).slice().sort((a,b)=>value(b)!-value(a)!||a.id.localeCompare(b.id));
 }
+/**
+ * Where a post's figures came from, as the client reads it. The studio's own check needs no second
+ * "verified" word; anything the studio has not verified says so. Nothing is hidden, only not repeated.
+ */
+export function metricProvenance(post:Pick<BrandPost,'metricsSource'|'verification'>):Array<{kind:'source';value:BrandPost['metricsSource']}|{kind:'verification';value:BrandPost['verification']}>{
+ if(post.metricsSource==='unavailable')return [{kind:'source',value:'unavailable'}];
+ if(post.metricsSource==='studio_review'&&post.verification==='manual')return [{kind:'source',value:'studio_review'}];
+ return [{kind:'source',value:post.metricsSource},{kind:'verification',value:post.verification}];
+}
 /** Quoted cells are still formulas in spreadsheets unless dangerous prefixes are neutralized. */
 export function csvCell(value:unknown):string{
  let text=value==null?'':String(value);if(/^[\s]*[=+@-]/.test(text)||/^[\t\r\n]/.test(text))text="'"+text;
@@ -50,7 +59,16 @@ export function byLatestPublished(a:BrandPost,z:BrandPost):number{
  if(a.publishedAt===null||z.publishedAt===null)return Number(a.publishedAt===null)-Number(z.publishedAt===null)||a.id.localeCompare(z.id);
  return Date.parse(z.publishedAt)-Date.parse(a.publishedAt);
 }
-export function campaignCsv(posts:readonly BrandPost[],titles:Record<string,string>,headers:string[]):string{
- const rows=posts.map(p=>[p.id,postContentTitle(p,titles)??'',p.platform,p.url,p.publishedAt,p.views,p.likes,p.comments,p.shares,p.saves,p.metricsSource,p.measuredAt,p.origin,p.viewsApproximate]);
+/** Words for the coded CSV columns. Without them the codes are written as stored (tests, internal use). */
+export interface CampaignCsvLabels{platform:Record<BrandPost['platform'],string>;source:Record<BrandPost['metricsSource'],string>;verification:Record<BrandPost['verification'],string>;yes:string;no:string}
+/**
+ * The client's download. The first column is the row number, never the internal post id; the post's
+ * own link is the stable reference. How a post was added to the campaign is internal bookkeeping and
+ * is not a column. The source column says where the figures came from, unverified included
+ * (metricProvenance). Unknown values stay empty cells, never 0.
+ */
+export function campaignCsv(posts:readonly BrandPost[],titles:Record<string,string>,headers:string[],labels?:CampaignCsvLabels):string{
+ const source=(p:BrandPost)=>labels?metricProvenance(p).map(x=>x.kind==='source'?labels.source[x.value]:labels.verification[x.value]).join(' · '):p.metricsSource;
+ const rows=posts.map((p,i)=>[i+1,postContentTitle(p,titles)??'',labels?.platform[p.platform]??p.platform,p.url,p.publishedAt,p.views,p.likes,p.comments,p.shares,p.saves,source(p),p.measuredAt,labels?(p.viewsApproximate?labels.yes:labels.no):p.viewsApproximate]);
  return '\uFEFF'+[headers,...rows].map(row=>row.map(csvCell).join(',')).join('\r\n');
 }
