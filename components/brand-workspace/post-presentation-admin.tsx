@@ -19,6 +19,7 @@ export function PostPresentationAdmin({ projectId, posts, attachments, b }: { pr
     <section className="bw-panel" id="post-presentation" data-post-presentation>
       <h2>{t.title}</h2>
       <p className="bw-note">{t.hint}</p>
+      <p className="bw-note" data-thumbnail-publication-rule>{t.publicationRule}</p>
       <p className="bw-muted">{t.uploadHint} {t.reportNote}</p>
       <BrandUpload projectId={projectId} b={b} studio />
       {posts.length === 0 ? <p className="bw-muted">{b.noPosts}</p> : (

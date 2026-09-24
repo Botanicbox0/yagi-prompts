@@ -52,8 +52,22 @@ describe.each(["ko", "en"] as const)("post cards in %s", locale => {
     expect(first).toContain(c.publishedUnknown);
   });
 
-  it("marks a missing thumbnail with a small neutral label and keeps unknowns unknown", () => {
-    const second = cards(html)[1]!;
+  it("withholds unready customer cards and rankings without dropping measured totals", () => {
+    expect(cards(html)).toHaveLength(1);
+    expect(html).not.toContain(`href="${bare.url}"`);
+    expect(html).not.toContain('data-thumbnail-missing="true"');
+    expect(html).toContain((13100).toLocaleString(locale));
+    expect(html).toContain('data-pending-post-cards="1"');
+    const ready = { ...bare, presentation: { ...bare.presentation, thumbnailUrl: THUMB } };
+    const after = renderToStaticMarkup(<CampaignPerformance project={{ ...project, posts: [base, ready] }} b={b} locale={locale} />);
+    expect(cards(after)).toHaveLength(2);
+    expect(after).toContain(`href="${bare.url}"`);
+    expect(after).not.toContain('data-pending-post-cards');
+  });
+
+  it("keeps incomplete cards available to administrators", () => {
+    const admin = renderToStaticMarkup(<CampaignPerformance project={project} b={b} locale={locale} showUnready />);
+    const second = cards(admin)[1]!;
     expect(second).toContain('data-thumbnail-missing="true"');
     expect(second).toContain(c.thumbnailMissing);
     expect(second).not.toContain("<img");
@@ -64,6 +78,15 @@ describe.each(["ko", "en"] as const)("post cards in %s", locale => {
     expect(visible(second)).not.toContain("FIXTURE02");
     // No handle, title or display name: the localized generic post name, never the post code.
     expect(second).toContain(`<strong class="bw-post-name">${b.platforms.instagram}</strong>`);
+  });
+
+  it("explains an all-pending gallery without saying the campaign has no posts", () => {
+    const pending = renderToStaticMarkup(<CampaignPerformance project={{ ...project, posts: [bare] }} b={b} locale={locale} />);
+    expect(cards(pending)).toHaveLength(0);
+    expect(pending).toContain(c.cardsNotReady);
+    expect(pending).not.toContain(b.noPosts);
+    expect(pending).toContain('data-pending-post-cards="1"');
+    expect(pending).toContain('>800<');
   });
 
   it("never shows the campaign cover or the old linked-post banner as a post image", () => {
@@ -161,9 +184,9 @@ describe("dictionary parity", () => {
 describe.each(["ko", "en"] as const)("no raw post code in customer text (%s)", locale => {
   const b = getDictionary(locale).brandWorkspace;
   const CODE = "Xq9FixtureCode7", url = `https://www.instagram.com/p/${CODE}/`;
-  const unknown: BrandPost = { ...bare, id: "u", url };
+  const unknown: BrandPost = { ...bare, id: "u", url, presentation: { ...UNKNOWN_POST_PRESENTATION, thumbnailUrl: THUMB } };
   const known: BrandPost = { ...base, id: "k", url: `https://www.instagram.com/p/${CODE}K/` };
-  const named: BrandPost = { ...bare, id: "n", url: `https://www.instagram.com/p/${CODE}N/`, presentation: { ...UNKNOWN_POST_PRESENTATION, displayName: "Fixture Name" } };
+  const named: BrandPost = { ...bare, id: "n", url: `https://www.instagram.com/p/${CODE}N/`, presentation: { ...UNKNOWN_POST_PRESENTATION, thumbnailUrl: THUMB, displayName: "Fixture Name" } };
   const posts = [unknown, known, named];
   const check = (html: string) => {
     const text = visible(html);
