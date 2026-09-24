@@ -1,9 +1,15 @@
 name: CI
 
 on:
+  # Feature branches are checked through their PR, not once for push and again for the PR.
   push:
-    branches: ['**']
+    branches: [main]
   pull_request:
+  # A branch without a PR can still be checked explicitly from the Actions page.
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -19,6 +25,7 @@ jobs:
   check:
     name: typecheck + tests
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
@@ -34,9 +41,7 @@ jobs:
       - name: Typecheck + vitest
         run: npm run check
 
-      # The migrations/RPC/trigger suites run on PGlite — no Docker, no Supabase project needed.
-      - name: Build
-        run: npm run build
+      # The sweep job below owns the production build; both existing check names stay unchanged.
 
   # PLAN §8 M2 — "Playwright authz sweep: zero gated bytes or storage keys for anon".
   # Implemented as a fetch-level sweep against a real `next start` (scripts/sweep-anon.ts): no
@@ -45,6 +50,7 @@ jobs:
   sweep:
     name: anon authz sweep
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
@@ -82,4 +88,7 @@ jobs:
 
       - name: Stop the server
         if: always()
-        run: kill "$(cat .server.pid)" || true
+        run: |
+          if [ -f .server.pid ]; then
+            kill "$(cat .server.pid)" || true
+          fi

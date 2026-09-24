@@ -495,6 +495,39 @@ $env:PLAYBOOK_LOCAL_DB_DIR = ".pglite/dev"
 directory cannot be opened. **One process at a time** — PGlite takes an exclusive lock on a data
 directory, so stop `next dev` before running the worker against the same folder.
 
+## CI within the free Actions allowance
+
+`.github/workflows/ci.yml` runs for pull requests, pushes to `main`, and manual
+`workflow_dispatch`. Feature-branch pushes do not start a second run alongside the PR run.
+For a branch without a PR, use **Actions → CI → Run workflow** after this workflow is on `main`.
+
+Both check names are preserved: `typecheck + tests` runs the typecheck and full test suite;
+`anon authz sweep` creates the local catalog, builds once, starts that build and checks anonymous
+access. A successful typecheck job alone does not mean the build or sweep passed. The two jobs
+remain independently visible; neither uses a paid larger runner or live credentials. Superseded
+runs on the same ref are cancelled, and each job has a 30-minute timeout.
+
+If the account's included Actions allowance is exhausted with a zero paid budget, keep that
+budget unchanged and use the full local AGENTS §3 loop for each release:
+
+```powershell
+npx tsc --noEmit
+npx vitest run
+npm run build:local
+npm run start:local             # separate terminal, localhost:3000
+npm run sweep:anon
+```
+
+Record the exact commit and results on the PR, and check the Vercel preview before an authorized
+merge. Keep required-check rules unchanged: if they block the merge, wait for allowance renewal
+or a maintainer decision rather than bypassing them. Do not mark a blocked Actions run as passed.
+When the allowance renews, re-run the relevant failed workflow or dispatch CI for the current
+branch. Removing duplicate work prevents future waste; it does not restore already-used minutes.
+
+References: [workflow events](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows),
+[concurrency](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency),
+[Actions billing](https://docs.github.com/en/billing/concepts/product-billing/github-actions).
+
 ## Running the notification worker offline (M5)
 
 The full §3.5 loop, with no Resend account and no Supabase project:
