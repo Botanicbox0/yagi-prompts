@@ -1,6 +1,13 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import {
+  directUploadFailure,
+  uploadFailureText,
+  uploadMime,
+  type UploadFailure,
+  type UploadFailureLabels,
+} from '@/lib/admin/direct-upload';
 
 /**
  * Founder direction (2026-08-13) — the admin media fields grow hands.
@@ -19,7 +26,7 @@ import { useEffect, useRef, useState } from 'react';
  * input. Nothing uploads until the form submits — the founder can change their mind for free.
  */
 
-export interface MediaDropLabels {
+export interface MediaDropLabels extends UploadFailureLabels {
   videoZone: string;
   videoReplace: string;
   posterHeading: string;
@@ -49,7 +56,7 @@ function assign(input: HTMLInputElement | null, file: File | null): void {
 function firstFile(items: DataTransfer | null, kind: 'video' | 'image' | 'audio'): File | null {
   if (!items) return null;
   for (const file of Array.from(items.files)) {
-    if (file.type.startsWith(`${kind}/`)) return file;
+    if (uploadMime(file.name, file.type).startsWith(`${kind}/`)) return file;
   }
   return null;
 }
@@ -84,7 +91,14 @@ type UploadState =
   | { phase: 'idle' }
   | { phase: 'uploading'; percent: number }
   | { phase: 'done'; sizeBytes: number }
-  | { phase: 'failed'; reason: string };
+  | { phase: 'failed'; reason: UploadFailure };
+
+/** A failure whose reason is already known, as opposed to anything else that throws. */
+class UploadRefused extends Error {
+  constructor(readonly reason: UploadFailure) {
+    super(`upload_${reason}`);
+  }
+}
 
 async function sha256Hex(file: File): Promise<string> {
   const digest = await crypto.subtle.digest('SHA-256', await file.arrayBuffer());
@@ -94,18 +108,19 @@ async function sha256Hex(file: File): Promise<string> {
 }
 
 /** XHR rather than fetch: only XHR reports upload progress, and a 57MB PUT needs a number. */
-function put(url: string, file: File, onProgress: (percent: number) => void): Promise<void> {
+function put(url: string, file: File, mime: string, onProgress: (percent: number) => void): Promise<void> {
   return new Promise((resolve, reject) => {
     const request = new XMLHttpRequest();
     request.open('PUT', url);
-    request.setRequestHeader('content-type', file.type || 'application/octet-stream');
+    request.setRequestHeader('content-type', mime);
     request.upload.addEventListener('progress', (event) => {
       if (event.lengthComputable) onProgress(Math.round((event.loaded / event.total) * 100));
     });
     request.addEventListener('load', () =>
       request.status >= 200 && request.status < 300
         ? resolve()
-        : reject(new Error(`upload_failed_${request.status}`)),
+        // 413 is the storage side's own size ceiling: the same fix as our cap, a smaller file.
+        : reject(new UploadRefused(request.status === 413 ? 'too_large' : 'failed')),
     );
     request.addEventListener('error', () => reject(new Error('upload_failed')));
     request.addEventListener('abort', () => reject(new Error('upload_aborted')));
@@ -226,6 +241,7 @@ export function MediaDrop({
     input: HTMLInputElement | null,
   ) => {
     setUploads((current) => ({ ...current, [kind]: { phase: 'uploading', percent: 0 } }));
+    const mime = uploadMime(file.name, file.type);
     try {
       const minted = await fetch(STAGING_URL_PATH, {
         method: 'POST',
@@ -233,29 +249,33 @@ export function MediaDrop({
         body: JSON.stringify({
           kind,
           filename: file.name,
-          mime: file.type || 'application/octet-stream',
+          mime,
           size: file.size,
         }),
       });
-      if (!minted.ok) throw new Error(`sign_failed_${minted.status}`);
+      if (!minted.ok) {
+        // The refusal code (`too_large`/`bad_type`) is in the body; a guard 404 has none.
+        const body: unknown = await minted.json().catch(() => null);
+        throw new UploadRefused(directUploadFailure(minted.status, body));
+      }
       const grant = (await minted.json()) as { direct?: boolean; key?: string; url?: string };
       if (grant.direct !== true || !grant.key || !grant.url) {
         // No signing service on this deployment. Inline is correct for a SMALL file and impossible
         // for a large one, so the large case is a failure the founder can read, not a silent retry
         // of the thing that already 413'd.
-        if (file.size > INLINE_MAX_BYTES) throw new Error('no_direct_upload');
+        if (file.size > INLINE_MAX_BYTES) throw new UploadRefused('failed');
         setUploads((current) => ({ ...current, [kind]: { phase: 'idle' } }));
         return;
       }
 
-      await put(grant.url, file, (percent) =>
+      await put(grant.url, file, mime, (percent) =>
         setUploads((current) => ({ ...current, [kind]: { phase: 'uploading', percent } })),
       );
 
       const receipt = JSON.stringify({
         key: grant.key,
         sha256: await sha256Hex(file),
-        mime: file.type || 'application/octet-stream',
+        mime,
         size: file.size,
       });
       setReceipts((current) => ({ ...current, [kind]: receipt }));
@@ -264,7 +284,7 @@ export function MediaDrop({
     } catch (error) {
       setUploads((current) => ({
         ...current,
-        [kind]: { phase: 'failed', reason: error instanceof Error ? error.message : 'upload_failed' },
+        [kind]: { phase: 'failed', reason: error instanceof UploadRefused ? error.reason : 'failed' },
       }));
     }
   };
@@ -306,7 +326,7 @@ export function MediaDrop({
         ? labels.uploading.replace('{percent}', String(state.percent))
         : state.phase === 'done'
           ? labels.uploaded
-          : labels.uploadFailed;
+          : uploadFailureText(state.reason, labels);
     return (
       <p
         data-upload-state={`${kind}:${state.phase}`}

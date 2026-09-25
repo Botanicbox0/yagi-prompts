@@ -1,6 +1,6 @@
 import { PublicLink } from '@/components/admin/public-link';
 import { IMAGE_ASPECTS, IMAGE_ENGINES, IMAGE_ENGINE_IDS, VIDEO_ASPECTS, VIDEO_ENGINE_IDS } from '@/lib/images/engines';
-import { formatDate } from '@/lib/i18n/format';
+import { formatDate, interpolate } from '@/lib/i18n/format';
 import { suggestedKrw } from '@/lib/twings/products';
 import { PROMPT_TEXT_MAX, PROMPT_TEXT_MIN, TEMPLATE_MEDIA } from '@/lib/prompts/schemas';
 import { promptHref } from '@/lib/prompts/links';
@@ -9,9 +9,13 @@ import type { Dictionary } from '@/lib/i18n/dictionaries';
 import type { PromptRow } from '@/lib/prompts/repo';
 import { adminMediaPath, promptAdminRef } from '@/lib/media/admin-authorize';
 import {
+  AUDIO_MAX_BYTES,
   DEFAULT_PROMPT_MODEL,
+  VIDEO_MAX_BYTES,
   PROMPT_MODELS,
   USE_CASES,
+  USE_CASE_MAX,
+  USE_CASE_MIN,
   parsePromptMedia,
 } from '@/lib/prompts/schemas';
 import { Field, INPUT, LABEL, OpForm } from '@/components/admin/chrome';
@@ -48,6 +52,12 @@ export function mediaDropLabels(a: Dictionary['admin']): MediaDropLabels {
     uploading: a.mediaUploading,
     uploaded: a.mediaUploaded,
     uploadFailed: a.mediaUploadFailed,
+    // The same caps the signing route enforces, so the refusal names the real limit.
+    uploadTooLarge: a.mediaUploadTooLarge
+      .replace('{videoMb}', String(VIDEO_MAX_BYTES / (1024 * 1024)))
+      .replace('{audioMb}', String(AUDIO_MAX_BYTES / (1024 * 1024))),
+    uploadBadType: a.mediaUploadBadType,
+    uploadSession: a.mediaUploadSession,
     blockedUploading: a.mediaBlockedUploading,
     blockedFailed: a.mediaBlockedFailed,
   };
@@ -121,6 +131,10 @@ export function StagedMedia({ row, dict }: { row: PromptRow; dict: Dict }) {
 export function PromptFields({ row, dict }: { row: PromptRow | null; dict: Dict }) {
   const a = dict.admin;
   const existing = row === null ? {} : parsePromptMedia(row.media);
+  const creating = row === null;
+  // Create-only: the two things `prompt.create` refuses without (a use case, a poster) say so up front.
+  const labels = mediaDropLabels(a);
+  if (creating) labels.posterHeading = `${a.fieldPromptPoster} · ${a.requiredMark}`;
   return (
     <>
       <div className="grid gap-3 sm:grid-cols-2">
@@ -218,8 +232,16 @@ export function PromptFields({ row, dict }: { row: PromptRow | null; dict: Dict 
         </Field>
       </div>
 
-      <div>
-        <span className={LABEL}>{a.colUseCase}</span>
+      <div {...(creating ? { 'data-required-field': 'useCase' } : {})}>
+        <span className={LABEL}>
+          {a.colUseCase}
+          {creating && ` · ${a.requiredMark}`}
+        </span>
+        {creating && (
+          <p className="mt-1 font-mono text-[0.72rem] opacity-50">
+            {interpolate(a.useCaseRequiredHint, { min: USE_CASE_MIN, max: USE_CASE_MAX })}
+          </p>
+        )}
         <div className="mt-1.5">
           <UseCaseChecks dict={dict} selected={row?.useCase ?? []} />
         </div>
@@ -309,12 +331,12 @@ export function PromptFields({ row, dict }: { row: PromptRow | null; dict: Dict 
 
       {/* Founder question (2026-08-14): re-picking a thumbnail frame must not require re-uploading
           the clip — the panel loads what this row already has. */}
-      <Field label={a.fieldPromptVideo} hint={a.promptMediaHint}>
+      <Field label={a.fieldPromptVideo} hint={creating ? a.mediaCreateHint : a.promptMediaHint}>
         <MediaDrop
           videoName="video"
           posterName="poster"
           audioName="audio"
-          labels={mediaDropLabels(a)}
+          labels={labels}
           {...(row && existing.video
             ? { existingVideoSrc: adminMediaPath(promptAdminRef(row.id, 'video')) }
             : {})}
