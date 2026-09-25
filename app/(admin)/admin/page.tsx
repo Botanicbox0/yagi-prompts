@@ -8,7 +8,8 @@ import { loadAllPrompts } from '@/lib/prompts/repo';
 import { summarizeRenderJobs } from '@/lib/renders/repo';
 import { countBrandInquiries } from '@/lib/brands/repo';
 import { countRenderFeedback } from '@/lib/renders/feedback';
-import { AdminShell } from '@/components/admin/chrome';
+import { AdminShell, BUTTON, BUTTON_PRIMARY } from '@/components/admin/chrome';
+import { ADMIN_PROMPTS_PATH, ADMIN_PROMPT_NEW_PATH } from '@/lib/prompts/links';
 import { requireAdmin } from '@/lib/auth/viewer';
 import { loadStudioInbox } from '@/lib/brands/workspace/inbox';
 
@@ -81,6 +82,18 @@ export default async function AdminHomePage() {
       <p className="text-accent font-label text-eyebrow uppercase">{a.navHome}</p>
       <h1 className="mt-3 font-display text-[clamp(2rem,4vw,3rem)] leading-[0.95] font-black uppercase">{a.dashHeading}</h1>
       <p className="mt-3 max-w-detail text-body opacity-60">{a.dashLede}</p>
+
+      {/* Discoverability (2026-09-25): registering a template was only reachable through the small
+          arrow on the templates card. It is the most common admin task, so it gets its own row. */}
+      <div data-admin-template-actions className="mt-6 flex flex-wrap items-center gap-3 border border-hairline px-4 py-3">
+        <p className="min-w-48 flex-1 font-mono text-[0.75rem] opacity-70">{a.dashTemplateAction}</p>
+        <a href={ADMIN_PROMPT_NEW_PATH} data-admin-new-template className={BUTTON_PRIMARY}>
+          + {a.promptsNew}
+        </a>
+        <a href={ADMIN_PROMPTS_PATH} className={BUTTON}>
+          {a.dashTemplateManage}
+        </a>
+      </div>
 
       <div data-admin-dashboard className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card title={a.dashCampaigns} href={ADMIN_CAMPAIGNS_PATH}>
