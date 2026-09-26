@@ -187,7 +187,8 @@ async function applyUploads(
 const createPrompt: AdminOperation<{ input: z.infer<typeof AuthoringSchema>; form: FormData }> = {
   parse(form) {
     const base = parsed(AuthoringSchema, {
-      slug: f.str(form, 'slug'),
+      // Creation owns the URL. Ignore stale/manual slug inputs from older open tabs.
+      slug: '',
       title: f.str(form, 'title'),
       titleKo: f.str(form, 'titleKo'),
       promptText: f.text(form, 'promptText'),
@@ -214,12 +215,12 @@ const createPrompt: AdminOperation<{ input: z.infer<typeof AuthoringSchema>; for
       return fail('invalid', 'poster: a YAGI prompt needs a poster image');
     }
 
-    // Founder direction (2026-08-14): a blank slug FOLLOWS THE EN TITLE. Collisions get a short
+    // Founder direction (2026-09-26): creation always derives the URL from the EN title.
+    // Existing addresses stay unchanged on edit. Collisions get a short
     // numeric suffix instead of a refusal — the founder is publishing, not naming database rows.
     // (Single-admin surface: the read-then-insert window is acceptable, and the unique index is
     // still the backstop underneath.)
-    const slug =
-      input.slug ?? (await freeSlug(ctx.sql, slugify(input.title, `prompt-${id.slice(0, 8)}`)));
+    const slug = await freeSlug(ctx.sql, slugify(input.title, `prompt-${id.slice(0, 8)}`));
 
     const { media } = await publishPromptMedia(ctx.storage, staged.value);
 

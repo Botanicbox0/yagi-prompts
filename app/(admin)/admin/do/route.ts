@@ -73,6 +73,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const back = str(form, BACK_FIELD) || '/admin';
 
   const outcome = await execute(name, form);
+  // Keep refused new-template forms mounted; still use the guarded operation above.
+  if (name === 'prompt.create' && request.headers.get('accept') === 'application/vnd.twings.admin-form+json') {
+    const field = outcome.ok ? undefined : outcome.detail?.split(':')[0];
+    return NextResponse.json(outcome.ok
+      ? { ok: true, to: outcomeUrl(back, outcome) }
+      : { ok: false, code: outcome.code, field: ['useCase', 'poster'].includes(field ?? '') ? field : undefined },
+    { status: outcome.ok ? 200 : 400, headers: NO_STORE });
+  }
   if(request.headers.get('accept')==='application/json') return NextResponse.json(outcome.ok ? {ok:true,to:outcome.to,...(outcome.invitationToken?{invitationToken:outcome.invitationToken}:{})} : {ok:false,code:outcome.code}, {status:outcome.ok?200:400,headers:NO_STORE});
   // 303: the POST becomes a GET on the way back, so a refresh never re-submits the operation.
   return NextResponse.redirect(new URL(outcomeUrl(back, outcome), requestUrl.origin), {

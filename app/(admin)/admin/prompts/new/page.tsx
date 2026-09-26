@@ -5,6 +5,7 @@ import { USE_CASE_MAX, USE_CASE_MIN } from '@/lib/prompts/schemas';
 import { ADMIN_PROMPTS_PATH, ADMIN_PROMPT_NEW_PATH } from '@/lib/prompts/links';
 import { AdminShell, BUTTON_PRIMARY, OpForm, OutcomeBanner, Panel } from '@/components/admin/chrome';
 import { PromptFields } from '@/components/admin/prompt-fields';
+import { PromptCreateFeedback } from '@/components/admin/prompt-create-feedback';
 
 /**
  * `/admin/prompts/new` — one form, nothing else (2026-08-15).
@@ -94,6 +95,11 @@ export default async function AdminPromptNewPage({ searchParams }: { searchParam
       </section>
 
       <Panel title={a.authorFormTitle}>
+        <PromptCreateFeedback labels={{
+          useCase: interpolate(a.refusedUseCase, caps), poster: a.refusedPoster,
+          invalid: a.errInvalid, upload: a.mediaUploadFailed, session: a.mediaUploadSession,
+          uncertain: a.promptPublishUncertain, retained: a.promptInputsRetained, publishing: a.promptPublishing,
+        }}>
         <OpForm op="prompt.create" back={ADMIN_PROMPT_NEW_PATH} className="flex flex-col gap-4">
           <PromptFields row={null} dict={dict} />
           <div>
@@ -102,6 +108,7 @@ export default async function AdminPromptNewPage({ searchParams }: { searchParam
             </button>
           </div>
         </OpForm>
+        </PromptCreateFeedback>
       </Panel>
     </AdminShell>
   );

@@ -6,6 +6,19 @@ placeholder. Filling one is a config or CMS change, never a code change.
 
 ---
 
+## Template registration
+
+Use `/admin/prompts/new`. New template addresses are derived from the English title; operators do
+not enter a slug. Existing addresses receive a numeric suffix on collision. Older open forms may
+still submit a slug, but creation ignores it. Editing a published template keeps its current URL.
+
+Source and making-of notes are optional and collapsed on creation. With JavaScript enabled,
+validation errors stay on the current form, preserving its text, selected files and completed
+upload receipts. Nothing is saved to browser storage, so this is not a draft or reload recovery.
+An uncertain network response must be checked against the template list before retrying.
+
+---
+
 ## 1. Hero reel — `HERO_REEL`
 
 **Where** `lib/content/slots.ts` → read only by `components/landing/hero-media.tsx`.
