@@ -205,6 +205,8 @@ export interface VideoRenderInput {
   /** The person's photo as a verified-library asset (docs §8.2); when set, the bytes are never sent. */
   assetId?: string | null;
   callbackUrl?: string;
+  /** Reviewed product/set references, ordered AFTER the customer's identity. Server-owned only. */
+  fixedReferenceUrls?: readonly string[];
 }
 
 /** A 30-second template on Seedance 2.0 (15s per task) is rendered on 2.5 in one task instead. */
@@ -222,6 +224,9 @@ export async function startVideoRender(input: VideoRenderInput, deps: RenderEngi
   const content: ArkContentItem[] = [{ type: 'text', text: input.prompt }];
   if (input.assetId) content.push({ type: 'image_url', image_url: { url: assetReference(input.assetId) }, role: 'reference_image' });
   else if (input.photo) content.push({ type: 'image_url', image_url: { url: dataUrl(input.photo) }, role: 'reference_image' });
+  for (const url of input.fixedReferenceUrls ?? []) {
+    content.push({ type: 'image_url', image_url: { url }, role: 'reference_image' });
+  }
   try {
     const { id } = await client.createVideoTask({
       model,
