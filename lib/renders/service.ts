@@ -14,6 +14,7 @@ import { aspectsForMedium, isEngineId, isImageAspect, isImageEngine, isVideoAspe
 import { loadPromptById, loadPromptBySlug, type PromptRow } from '@/lib/prompts/repo';
 import { isForSale } from '@/lib/twings/products';
 import { RenderFailure, pollVideoRender, runImageRender, startVideoRender, videoModelFor, type EngineOutput, type RenderEngineDeps, type RenderFailureCode, type RenderPhoto } from './engines';
+import { fixedVideoReferenceUrls } from './template-references';
 import type { RenderNotifier } from './notify';
 import { buildRenderPrompt } from './prompt';
 import {
@@ -348,7 +349,9 @@ async function renderNow(
 
   if (!isVideoEngine(job.engine) || !isVideoAspect(job.aspect)) throw new RenderFailure('engine_error', `unknown video engine/aspect ${job.engine} ${job.aspect}`, false);
   const started = await startVideoRender(
-    { engine: job.engine, prompt: prompt.text, aspect: job.aspect, seconds: template.runtimeSeconds ?? 5, photo, assetId, ...(deps.callbackUrl ? { callbackUrl: deps.callbackUrl } : {}) },
+    { engine: job.engine, prompt: prompt.text, aspect: job.aspect, seconds: template.runtimeSeconds ?? 5, photo, assetId,
+      fixedReferenceUrls: fixedVideoReferenceUrls(template.id, deps.siteUrl),
+      ...(deps.callbackUrl ? { callbackUrl: deps.callbackUrl } : {}) },
     deps.engines ?? {},
   );
   await markRenderRunningWithTask(deps.sql, job.id, { provider: 'modelark', taskId: started.taskId });

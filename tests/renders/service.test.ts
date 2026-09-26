@@ -23,6 +23,7 @@ import {
 import { SHARE_TTL_DAYS } from '@/lib/renders/share';
 import { createLocalRenderStore, type RenderStore } from '@/lib/renders/store';
 import type { RenderEngineDeps } from '@/lib/renders/engines';
+import { BEAUTY_AD_TEMPLATE_ID } from '@/lib/renders/template-references';
 import { ADMIN_VIEWER, viewerOf } from '@/tests/helpers/admin';
 import { promptHarness, type PromptHarness } from '@/tests/helpers/prompts';
 
@@ -355,6 +356,32 @@ describe('the render queue', () => {
     expect((await loadRenderJob(h.sql, created.id))!).toMatchObject({ status: 'succeeded', resultMime: 'video/mp4' });
     const { rows } = await h.sql.query<{ last_used_at: string | null }>('select last_used_at from identity_assets where asset_id = $1', ['asset-1']);
     expect(rows[0]?.last_used_at).not.toBeNull();
+  });
+
+  it('automatically attaches the beauty product as Image 2 after the verified customer face, even after a title/slug edit', async () => {
+    await h.sql.query('update prompt_items set id = $1, prompt_text = $2 where slug = $3',
+      [BEAUTY_AD_TEMPLATE_ID, '@image1 supplies the face; @image2 supplies only the lip-gloss product.', VIDEO_TEMPLATE]);
+    await h.sql.query(`insert into identity_groups (user_id, status, group_id, verified_at) values ($1, 'active', 'grp-1', now())`, [ADMIN_VIEWER.userId]);
+    const created = await enqueue(VIDEO_TEMPLATE, '16:9');
+    if (!created.ok) throw new Error(created.code);
+    await h.sql.query('update prompt_items set slug = $1, title = $2 where id = $3', ['renamed-beauty-ad', 'Renamed beauty ad', BEAUTY_AD_TEMPLATE_ID]);
+    const calls: Parameters<ArkClient['createVideoTask']>[0][] = [];
+    const ark: ArkClient = {
+      async createVideoTask(input) { calls.push(input); return { id: 'cgt-beauty' }; },
+      async getVideoTask() { return task('running'); },
+    };
+    const report = await runRenderPass(deps({ ark }, {
+      assets: fakeAssets({ status: 'Active', created: 0 }),
+      store: { ...store, url: async () => 'https://store.test/photo.jpg' },
+    }), { jobId: created.id });
+    expect(report).toMatchObject({ waiting: 1, failed: 0 });
+    expect(calls).toHaveLength(1);
+    expect(calls[0]!.content).toEqual([
+      { type: 'text', text: 'Image 1 supplies the face; Image 2 supplies only the lip-gloss product.' },
+      { type: 'image_url', image_url: { url: 'asset://asset-1' }, role: 'reference_image' },
+      { type: 'image_url', image_url: { url: 'https://twings.test/templates/beauty-ad/yagi-lip-gloss.jpg' }, role: 'reference_image' },
+    ]);
+    expect(JSON.stringify(calls[0])).not.toContain('base64');
   });
 
   it('fails a ModelArk render whose photo the bank refuses, with the reason the page can explain', async () => {
