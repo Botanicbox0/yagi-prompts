@@ -144,7 +144,7 @@ export function PromptFields({ row, dict }: { row: PromptRow | null; dict: Dict 
         <Field label={a.fieldPromptTitleKo}>
           <input type="text" name="titleKo" required minLength={1} defaultValue={row?.titleKo ?? ''} className={INPUT} />
         </Field>
-        <Field label={a.fieldPromptSlug} hint={a.promptSlugAutoHint}>
+        {row && <Field label={a.fieldPromptSlug} hint={a.promptSlugAutoHint}>
           <input
             type="text"
             name="slug"
@@ -152,16 +152,18 @@ export function PromptFields({ row, dict }: { row: PromptRow | null; dict: Dict 
             placeholder="auto"
             className={INPUT}
           />
-        </Field>
-        <Field label={a.fieldPromptHandle}>
+        </Field>}
+        {row && <Field label={a.fieldPromptHandle}>
           <input
             type="text"
             name="handle"
             defaultValue={row?.authorHandle ?? ''}
             className={INPUT}
           />
-        </Field>
+        </Field>}
       </div>
+
+      {!row && <p className="font-mono text-[0.72rem] opacity-60">{a.promptAddressAutomatic}</p>}
 
       {/* Models, as CHECKBOXES (founder, 2026-08-15: "seedance2.5랑 seedance2.0 둘 다 체크하고
           싶으면 어떻게 해?"). A free-text field could hold one answer and invited a typo into a
@@ -201,6 +203,9 @@ export function PromptFields({ row, dict }: { row: PromptRow | null; dict: Dict 
         />
       </Field>
 
+      <details open={row !== null} className="border border-hairline p-3">
+        <summary className="cursor-pointer font-label text-eyebrow">{a.promptOptionalDetails}</summary>
+        <div className="mt-3 flex flex-col gap-3">
       <Field label={a.fieldSourceUrl} hint={a.sourceUrlHint}>
         <input
           type="url"
@@ -231,6 +236,9 @@ export function PromptFields({ row, dict }: { row: PromptRow | null; dict: Dict 
           />
         </Field>
       </div>
+
+        </div>
+      </details>
 
       <div {...(creating ? { 'data-required-field': 'useCase' } : {})}>
         <span className={LABEL}>
