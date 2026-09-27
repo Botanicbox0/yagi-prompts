@@ -867,7 +867,7 @@ export const en = {
       play: 'Start slideshow',
       pause: 'Pause slideshow',
       unavailable: 'This image could not be loaded.',
-      request: { label: 'Fashion', title: 'A scene worth a second look.', body: 'People, styling, and a distinct visual direction bring your brand into focus.', alt: 'Fashion content featuring a person holding a retro phone against a pink background' },
+      request: { label: 'Fashion', title: 'A scene worth a second look.', body: 'People, styling, and a distinct visual direction bring your brand into focus.', alt: 'Fashion film of a giant woman in a pink dress inside a miniature cream-and-blue room' },
       review: { label: 'Beauty', title: 'A fresh perspective on your product.', body: 'Settings and art direction shaped around the character of your brand.', alt: 'Beauty content featuring a person beside a perfume display' },
       report: { label: 'Product', title: 'Every detail, considered.', body: 'Product imagery that brings light, texture, and colour into view.', alt: 'Product content showing a close-up of transparent pink perfume bottles' },
     },

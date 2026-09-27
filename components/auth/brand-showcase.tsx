@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { getDictionary } from '@/lib/i18n/dictionaries';
 import styles from './brand-entry.module.css';
 
@@ -10,6 +10,8 @@ const SLIDES = [
   { key: 'review', image: 'highteen.jpg' },
   { key: 'report', image: 'beauty-rose.jpg' },
 ] as const;
+const FASHION_VIDEO = 'https://nhokkikjkzjalxqsbzuk.supabase.co/storage/v1/object/public/public-content/363fcfa1538c10fc5022cee15cf91c72271f3c0bbc254b68fea9842dd79d6c56.mp4';
+const FASHION_POSTER = 'https://nhokkikjkzjalxqsbzuk.supabase.co/storage/v1/object/public/public-content/5b93de5eb4050613fcfcfb26f0239199c0182c5dd614a20495576ada9b122126.jpg';
 
 /** Auth stays server-rendered; this island only changes the public showcase. */
 export function BrandShowcase({ copy, assetOrigin }: { copy: Copy; assetOrigin: string }) {
@@ -18,11 +20,17 @@ export function BrandShowcase({ copy, assetOrigin }: { copy: Copy; assetOrigin: 
   const [hovered, setHovered] = useState(false);
   const [visible, setVisible] = useState(true);
   const [failedImages, setFailedImages] = useState<string[]>([]);
+  const [motionAllowed, setMotionAllowed] = useState(false);
+  const video = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
     const preference = window.matchMedia('(prefers-reduced-motion: reduce)');
     setRotating(!preference.matches);
-    const stopForReducedMotion = () => { if (preference.matches) setRotating(false); };
+    setMotionAllowed(!preference.matches);
+    const stopForReducedMotion = () => {
+      setMotionAllowed(!preference.matches);
+      if (preference.matches) setRotating(false);
+    };
     const updateVisibility = () => setVisible(!document.hidden);
     updateVisibility();
     preference.addEventListener('change', stopForReducedMotion);
@@ -33,12 +41,19 @@ export function BrandShowcase({ copy, assetOrigin }: { copy: Copy; assetOrigin: 
     };
   }, []);
 
+  useEffect(() => {
+    if (!video.current) return;
+    if (motionAllowed && visible) void video.current.play().catch(() => {});
+    else video.current.pause();
+  }, [active, motionAllowed, visible]);
+
   const playing = rotating && !hovered && visible;
   useEffect(() => {
     if (!playing) return;
-    const timer = window.setInterval(() => setActive(index => (index + 1) % SLIDES.length), 6500);
-    return () => window.clearInterval(timer);
-  }, [playing]);
+    // Let the full 13-second film finish before rotating to the next example.
+    const timer = window.setTimeout(() => setActive(index => (index + 1) % SLIDES.length), active === 0 ? 14500 : 6500);
+    return () => window.clearTimeout(timer);
+  }, [playing, active]);
 
   const slide = SLIDES[active]!;
   const text = copy[slide.key];
@@ -50,13 +65,16 @@ export function BrandShowcase({ copy, assetOrigin }: { copy: Copy; assetOrigin: 
         // Keyboard focus stops rotation until the reader explicitly starts it again.
         if (event.target.matches(':focus-visible') && !event.currentTarget.contains(event.relatedTarget as Node | null)) setRotating(false);
       }}>
-      <div className={styles.picture} data-format={active === 0 ? 'portrait' : 'landscape'}>
-        {failedImages.includes(slide.image) ? <p className={styles.imageFallback}>{copy.unavailable}</p> : (
+      <div className={styles.picture} data-format="landscape">
+        {active === 0 ? (
+          <video ref={video} src={FASHION_VIDEO} poster={FASHION_POSTER}
+            width={1440} height={1080} muted loop playsInline controls preload="metadata"
+            aria-label={text.alt} onClick={() => setRotating(false)} />
+        ) : failedImages.includes(slide.image) ? <p className={styles.imageFallback}>{copy.unavailable}</p> : (
           // Public, already published campaign media. No client identities or fabricated results.
           // eslint-disable-next-line @next/next/no-img-element
           <img key={slide.image} src={`${assetOrigin}/reel/campaigns/${slide.image}`} alt={text.alt}
-            width={active === 0 ? 720 : 1280} height={active === 0 ? 1282 : 720}
-            fetchPriority={active === 0 ? 'high' : 'auto'} decoding="async"
+            width={1280} height={720} decoding="async"
             onError={() => setFailedImages(previous => [...previous, slide.image])} />
         )}
         <span className={styles.example}>{copy.example}</span>
