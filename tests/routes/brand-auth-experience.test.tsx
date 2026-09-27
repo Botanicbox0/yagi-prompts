@@ -18,7 +18,11 @@ describe('brand login experience', () => {
     expect(html).toContain('목표와 예산');
     expect(html).toContain('next=%2Fbrand');
     expect(html).toContain('https://twings.app/ko/legal/terms');
-    expect(html).toContain('https://twings.app/reel/campaigns/');
+    expect(html).toContain('public-content/363fcfa1538c10fc5022cee15cf91c72271f3c0bbc254b68fea9842dd79d6c56.mp4');
+    expect(html).toContain('width="1440" height="1080"');
+    expect(html).toContain('poster=');
+    expect(html).toContain('controls=');
+    expect(html).not.toContain('autoPlay=');
   });
   it('keeps invitation return paths, OAuth errors, legal consent and both providers in server HTML', async () => {
     const html = await page({ next: '/brand/invite?token=example', error: 'oauth' });
