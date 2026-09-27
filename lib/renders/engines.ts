@@ -1,9 +1,10 @@
-import { ARK_MODELS, estimateRenderUsd, type ArkModelKey, type ArkRatio, type ArkResolution } from '@/lib/ark/models';
+import { estimateRenderUsd, type ArkModelKey, type ArkRatio, type ArkResolution } from '@/lib/ark/models';
 import { ArkError, arkConfigFromEnv, createArkClient, isTerminal, type ArkClient, type ArkContentItem } from '@/lib/ark/client';
 import { IMAGE_ENGINES, isOpenAiEngine, type ImageAspect, type ImageEngineId, type VideoAspect, type VideoEngineId } from '@/lib/images/engines';
 import { OpenAiImageError, createOpenAiImageClient, openAiConfigFromEnv, type OpenAiImageClient, type ReferenceImage } from '@/lib/images/openai';
 import { SeedreamError, createSeedreamClient, seedreamConfigFromEnv, type SeedreamClient } from '@/lib/images/seedream';
 import { assetReference } from '@/lib/identity/service';
+import { arkModelForVideo, DEFAULT_CREATOR_RESOLUTION, type CreatorResolution } from '@/lib/twings/resolution';
 
 /**
  * The engine adapters the render pass drives — one call per engine family, every provider
@@ -73,8 +74,11 @@ export interface EngineOutput {
   costUsd: number | null;
 }
 
-/** ModelArk default (memory 2026-09-02: "기본 2.0@720p, 2.5는 프리미엄"). */
-export const VIDEO_RESOLUTION: ArkResolution = '720p';
+/**
+ * ModelArk default (memory 2026-09-02: "기본 2.0@720p, 2.5는 프리미엄"; docs/TEMPLATES-IA.md §12,
+ * 2026-09-17: "영상 기본 720p, 1080p는 선택"). A job asks for 1080p only when it was bought.
+ */
+export const VIDEO_RESOLUTION: ArkResolution = DEFAULT_CREATOR_RESOLUTION;
 
 function dataUrl(photo: RenderPhoto): string {
   return `data:${photo.mime};base64,${Buffer.from(photo.bytes).toString('base64')}`;
@@ -207,14 +211,13 @@ export interface VideoRenderInput {
   callbackUrl?: string;
   /** Reviewed product/set references, ordered AFTER the customer's identity. Server-owned only. */
   fixedReferenceUrls?: readonly string[];
+  /** What the job was bought at (render_jobs.resolution); absent = the 720p default. */
+  resolution?: CreatorResolution;
 }
 
 /** A 30-second template on Seedance 2.0 (15s per task) is rendered on 2.5 in one task instead. */
 export function videoModelFor(engine: VideoEngineId, seconds: number): { model: ArkModelKey; seconds: number } {
-  const wanted: ArkModelKey = engine === 'seedance-2.5' ? 'seedance-2.5' : 'seedance-2.0';
-  const model: ArkModelKey = seconds > ARK_MODELS[wanted].maxDurationSeconds ? 'seedance-2.5' : wanted;
-  const spec = ARK_MODELS[model];
-  return { model, seconds: Math.min(spec.maxDurationSeconds, Math.max(spec.minDurationSeconds, Math.round(seconds))) };
+  return arkModelForVideo(engine, seconds);
 }
 
 export async function startVideoRender(input: VideoRenderInput, deps: RenderEngineDeps = {}): Promise<{ taskId: string; model: ArkModelKey; seconds: number }> {
@@ -231,7 +234,7 @@ export async function startVideoRender(input: VideoRenderInput, deps: RenderEngi
     const { id } = await client.createVideoTask({
       model,
       content,
-      resolution: VIDEO_RESOLUTION,
+      resolution: input.resolution ?? VIDEO_RESOLUTION,
       ratio: input.aspect as ArkRatio,
       duration: seconds,
       generateAudio: true,
@@ -249,7 +252,7 @@ export type VideoPoll =
   | { status: 'succeeded'; output: EngineOutput }
   | { status: 'failed'; failure: RenderFailure };
 
-export async function pollVideoRender(args: { taskId: string; model: ArkModelKey; seconds: number }, deps: RenderEngineDeps = {}): Promise<VideoPoll> {
+export async function pollVideoRender(args: { taskId: string; model: ArkModelKey; seconds: number; resolution?: CreatorResolution }, deps: RenderEngineDeps = {}): Promise<VideoPoll> {
   const client = deps.ark === undefined ? arkClientFromEnv() : deps.ark;
   if (client === null) return { status: 'failed', failure: new RenderFailure('no_engine_key', 'ARK_API_KEY is not set', false) };
   let task;
@@ -273,7 +276,7 @@ export async function pollVideoRender(args: { taskId: string; model: ArkModelKey
   }
   try {
     const downloaded = await download(task.videoUrl, deps.fetch ?? globalThis.fetch, 'video/mp4');
-    const estimate = estimateRenderUsd({ model: args.model, resolution: VIDEO_RESOLUTION, seconds: args.seconds });
+    const estimate = estimateRenderUsd({ model: args.model, resolution: args.resolution ?? VIDEO_RESOLUTION, seconds: args.seconds });
     return { status: 'succeeded', output: { ...downloaded, provider: 'modelark', costUsd: estimate.ok ? estimate.usd : null } };
   } catch (error) {
     const failure = toFailure(error);

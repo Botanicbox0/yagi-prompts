@@ -1,7 +1,9 @@
 import { PublicLink } from '@/components/admin/public-link';
 import { IMAGE_ASPECTS, IMAGE_ENGINES, IMAGE_ENGINE_IDS, VIDEO_ASPECTS, VIDEO_ENGINE_IDS } from '@/lib/images/engines';
 import { formatDate, interpolate } from '@/lib/i18n/format';
-import { suggestedKrw } from '@/lib/twings/products';
+import { formatKrw, suggestedKrw } from '@/lib/twings/products';
+import { costFloor } from '@/lib/twings/cost-model';
+import { arkModelForVideo } from '@/lib/twings/resolution';
 import { PROMPT_TEXT_MAX, PROMPT_TEXT_MIN, TEMPLATE_MEDIA } from '@/lib/prompts/schemas';
 import { promptHref } from '@/lib/prompts/links';
 import { visibilityLabel, visibilityOptions } from '@/components/admin/labels';
@@ -128,6 +130,26 @@ export function StagedMedia({ row, dict }: { row: PromptRow; dict: Dict }) {
  * title. Nothing is conditionally hidden — a field that exists when editing and not when creating is
  * a field the author discovers only after publishing.
  */
+/**
+ * The cost floor under this template's prices (lib/twings/cost-model.ts), shown next to the price
+ * fields so a price is never set blind. A proposal only: it writes nothing and blocks nothing.
+ */
+function CostFloorNote({ row, dict }: { row: PromptRow | null; dict: Dict }) {
+  if (!row || row.medium !== 'video' || !row.runtimeSeconds) return null;
+  const a = dict.admin;
+  const { model, seconds } = arkModelForVideo(row.engine, row.runtimeSeconds);
+  const p720 = costFloor({ model, resolution: '720p', seconds });
+  const p1080 = costFloor({ model, resolution: '1080p', seconds });
+  if (!p720 || !p1080) return null;
+  const below = (row.priceKrw > 0 && row.priceKrw < p720.proposedKrw) || (row.price1080Krw > 0 && row.price1080Krw < p1080.proposedKrw);
+  return (
+    <p data-cost-floor={`${p720.proposedKrw}/${p1080.proposedKrw}`} className="font-mono text-[0.72rem] opacity-70">
+      {interpolate(a.templateCostFloor, { p720: formatKrw(p720.proposedKrw), p1080: formatKrw(p1080.proposedKrw) })}
+      {below ? ` ${a.templateBelowFloor}` : ''}
+    </p>
+  );
+}
+
 export function PromptFields({ row, dict }: { row: PromptRow | null; dict: Dict }) {
   const a = dict.admin;
   const existing = row === null ? {} : parsePromptMedia(row.media);
@@ -277,6 +299,17 @@ export function PromptFields({ row, dict }: { row: PromptRow | null; dict: Dict 
           <input type="number" name="runtimeSeconds" min={1} step={1} defaultValue={row?.runtimeSeconds ?? ''} className={INPUT} />
         </Field>
       </div>
+
+      {/* Creator resolution (0039): 720p is the default; 1080p sells only with its own price in both currencies. */}
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field label={a.fieldTemplatePrice1080} hint={a.templatePrice1080Hint}>
+          <input type="number" name="price1080Cents" min={0} step={1} defaultValue={row?.price1080Cents ?? 0} className={INPUT} />
+        </Field>
+        <Field label={a.fieldTemplatePrice1080Krw}>
+          <input type="number" name="price1080Krw" min={0} step={100} defaultValue={row?.price1080Krw ?? 0} className={INPUT} />
+        </Field>
+      </div>
+      <CostFloorNote row={row} dict={dict} />
 
       {/* docs/TEMPLATES-IA.md §7 — the engine and the aspect the make step opens in. Both lists are
           the union across media; the operation refuses a pairing that does not match the output. */}

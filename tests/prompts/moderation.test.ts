@@ -396,6 +396,27 @@ describe('prompt moderation operations (§13.2/F)', () => {
     expect(harness.promptsRevalidated).toBe(1);
   });
 
+  it('saves a 1080p price only for a film, in both currencies, and never below the base price', async () => {
+    const live = (await loadPromptBySlug(sql(), 'kitchen-tutorial-overhead'))!;
+    const form = (extra: Record<string, string>) => ({
+      id: live.id, slug: live.slug, title: live.title, titleKo: live.titleKo ?? '', promptText: live.promptText,
+      useCase: live.useCase, handle: '', textVisibility: 'public',
+      medium: 'video', priceCents: '400', priceKrw: '5900', runtimeSeconds: '15', ...extra,
+    });
+    expect(await harness.run('prompt.update', form({ price1080Cents: '900', price1080Krw: '11900' }))).toMatchObject({ ok: true });
+    expect(await loadPromptById(sql(), live.id)).toMatchObject({ price1080Cents: 900, price1080Krw: 11900 });
+    for (const bad of [
+      { price1080Cents: '900', price1080Krw: '0' },
+      { price1080Cents: '300', price1080Krw: '11900' },
+      { price1080Cents: '900', price1080Krw: '4900' },
+    ]) {
+      expect(await harness.run('prompt.update', form(bad)), JSON.stringify(bad)).toMatchObject({ ok: false });
+    }
+    // An image carries no resolution: whatever the form posts, nothing is stored.
+    expect(await harness.run('prompt.update', form({ medium: 'image', runtimeSeconds: '', price1080Cents: '900', price1080Krw: '11900' }))).toMatchObject({ ok: true });
+    expect(await loadPromptById(sql(), live.id)).toMatchObject({ medium: 'image', price1080Cents: 0, price1080Krw: 0 });
+  });
+
   /**
    * The founder's save, end to end (2026-08-15). A 1994 ENG segment brief — 4,853 characters of
    * shot-by-shot direction — was refused by the admin form with `promptText: Invalid input`, and

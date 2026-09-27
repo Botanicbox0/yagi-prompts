@@ -98,6 +98,9 @@ const TemplateFields = z
     priceCents: z.number().int().min(0).max(1_000_000),
     /** The fixed won price (0018); 0 = suggested from the dollar price. */
     priceKrw: z.number().int().min(0).max(100_000_000),
+    /** The 1080p price (0039), films only; 0 = 1080p not offered. Both currencies or neither. */
+    price1080Cents: z.number().int().min(0).max(1_000_000),
+    price1080Krw: z.number().int().min(0).max(100_000_000),
     runtimeSeconds: z.number().int().positive().max(600).nullable(),
     /** docs/TEMPLATES-IA.md §7 — null = the medium's default; a named engine must be one of its medium's. */
     engine: z.string().nullable(),
@@ -110,6 +113,17 @@ const TemplateFields = z
     if (value.aspectDefault !== null && !(aspectsForMedium(value.medium) as readonly string[]).includes(value.aspectDefault)) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['aspectDefault'], message: `not a ${value.medium} aspect` });
     }
+    const hd = value.price1080Cents > 0 || value.price1080Krw > 0;
+    if (hd && value.medium !== 'video') {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['price1080Cents'], message: 'a 1080p price is for films only' });
+    }
+    if (hd && (value.price1080Cents <= 0 || value.price1080Krw <= 0)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['price1080Krw'], message: 'set the 1080p price in both currencies, or neither' });
+    }
+    // 1080p costs the provider ~2.5× what 720p does; it can never sell for less than the default.
+    if (hd && (value.price1080Cents < value.priceCents || (value.priceKrw > 0 && value.price1080Krw < value.priceKrw))) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['price1080Krw'], message: 'the 1080p price must be at least the base price' });
+    }
   });
 
 function templateFields(form: FormData): ParseResult<z.infer<typeof TemplateFields>> {
@@ -119,6 +133,8 @@ function templateFields(form: FormData): ParseResult<z.infer<typeof TemplateFiel
     medium,
     priceCents: f.optionalInt(form, 'priceCents') ?? 0,
     priceKrw: f.optionalInt(form, 'priceKrw') ?? 0,
+    price1080Cents: medium === 'image' ? 0 : (f.optionalInt(form, 'price1080Cents') ?? 0),
+    price1080Krw: medium === 'image' ? 0 : (f.optionalInt(form, 'price1080Krw') ?? 0),
     runtimeSeconds: medium === 'image' ? null : (runtime ?? null),
     engine: f.str(form, 'engine') || null,
     aspectDefault: f.str(form, 'aspectDefault') || null,

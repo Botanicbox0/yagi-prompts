@@ -13,6 +13,7 @@ import { getDictionary } from '@/lib/i18n/dictionaries';
 import { aspectsForMedium, isEngineId, isImageAspect, isImageEngine, isVideoAspect, isVideoEngine, resolveEngine } from '@/lib/images/engines';
 import { loadPromptById, loadPromptBySlug, type PromptRow } from '@/lib/prompts/repo';
 import { isForSale } from '@/lib/twings/products';
+import { renderResolution, renderableResolution } from '@/lib/twings/resolution';
 import { RenderFailure, pollVideoRender, runImageRender, startVideoRender, videoModelFor, type EngineOutput, type RenderEngineDeps, type RenderFailureCode, type RenderPhoto } from './engines';
 import { fixedVideoReferenceUrls } from './template-references';
 import type { RenderNotifier } from './notify';
@@ -92,6 +93,8 @@ export type CreateRenderFailure =
   | 'not_found'
   | 'not_for_sale'
   | 'bad_aspect'
+  /** A resolution the template's engine cannot render (or any resolution on an image). */
+  | 'bad_resolution'
   | 'bad_photo'
   | 'photo_too_large'
   | 'rate_limited'
@@ -112,6 +115,11 @@ export interface CreateRenderInput {
   paymentOrderId?: string;
   /** Server-resolved lineage, never trusted as a caller-supplied storage key. */
   portraitId?: string;
+  /**
+   * '720p' | '1080p'; empty = 720p. Only an operator's free render reads this from a request. A paid
+   * render takes it from the ORDER row (below) — whatever the caller passed is overwritten.
+   */
+  resolution?: string | null;
 }
 
 export async function createRenderJob(deps: RenderServiceDeps, viewer: Viewer, input: CreateRenderInput): Promise<CreateRenderOutcome> {
@@ -121,15 +129,15 @@ export async function createRenderJob(deps: RenderServiceDeps, viewer: Viewer, i
   if (!input.paymentOrderId) return { ok: false, code: 'not_open' };
   return deps.sql.transaction(async (sql) => {
     const { rows } = await sql.query<{
-      status: string; template_slug: string; aspect: string; render_ref: string; render_id: string | null; identity_portrait_id: string | null;
-    }>("select status,template_slug,aspect,render_ref,render_id,identity_portrait_id from billing_payments where id=$1 and user_id=$2 and payment_type='NORMAL' for update", [input.paymentOrderId, viewer.userId]);
+      status: string; template_slug: string; aspect: string; render_ref: string; render_id: string | null; identity_portrait_id: string | null; resolution: string | null;
+    }>("select status,template_slug,aspect,render_ref,render_id,identity_portrait_id,resolution from billing_payments where id=$1 and user_id=$2 and payment_type='NORMAL' for update", [input.paymentOrderId, viewer.userId]);
     const payment = rows[0];
     if (!payment || payment.status !== 'paid' || payment.template_slug !== input.templateSlug || payment.aspect !== input.aspect) return { ok: false, code: 'not_open' };
     if (payment.render_id) {
       const job = await loadRenderJob(sql, payment.render_id);
       return job ? { ok: true, id: job.id, held: job.status === 'held' } : { ok: false, code: 'not_found' };
     }
-    const result = await createAuthorizedRender({ ...deps, sql }, viewer, {...input,portraitId:payment.identity_portrait_id??undefined}, payment.render_ref);
+    const result = await createAuthorizedRender({ ...deps, sql }, viewer, {...input,portraitId:payment.identity_portrait_id??undefined,resolution:payment.resolution}, payment.render_ref);
     if (result.ok) await sql.query('update billing_payments set render_id=$2,fulfilled_at=$3,lease_until=null where id=$1', [input.paymentOrderId, result.id, deps.now ?? new Date()]);
     return result;
   });
@@ -143,7 +151,7 @@ export async function createBrandRenderJob(deps: RenderServiceDeps, viewer: View
   return reserveProduction(deps,viewer,{...input,fingerprint},async(sql,template)=>{
     const photo=await selectedPortraitPhoto(sql,deps.store,viewer.userId!,input.portraitId);
     if(!photo)return {ok:false as const,code:'identity_required' as const};
-    return createAuthorizedRender({...deps,sql},viewer,{templateSlug:template.slug,aspect:template.aspectDefault??'9:16',photo,locale:input.locale,portraitId:input.portraitId},undefined,template);
+    return createAuthorizedRender({...deps,sql},viewer,{templateSlug:template.slug,aspect:template.aspectDefault??'9:16',photo,locale:input.locale,portraitId:input.portraitId,resolution:null},undefined,template);
   });
 }
 
@@ -158,6 +166,8 @@ async function createAuthorizedRender(deps: RenderServiceDeps, viewer: Viewer, i
 
   const engine = resolveEngine(template.engine, template.medium);
   if (!(aspectsForMedium(template.medium) as readonly string[]).includes(input.aspect)) return { ok: false, code: 'bad_aspect' };
+  const resolution = renderableResolution(template, input.resolution);
+  if (!resolution.ok) return { ok: false, code: 'bad_resolution' };
 
   if (input.photo === null || input.photo.bytes.byteLength === 0 || !isPhotoMime(input.photo.mime)) return { ok: false, code: 'bad_photo' };
   if (input.photo.bytes.byteLength > MAX_PHOTO_BYTES) return { ok: false, code: 'photo_too_large' };
@@ -184,6 +194,7 @@ async function createAuthorizedRender(deps: RenderServiceDeps, viewer: Viewer, i
     medium: template.medium,
     engine,
     aspect: input.aspect,
+    resolution: resolution.resolution,
     locale: isLocale(input.locale) ? input.locale : (viewer.locale ?? DEFAULT_LOCALE),
     inputKey,
     inputMime: input.photo.mime,
@@ -351,6 +362,7 @@ async function renderNow(
   const started = await startVideoRender(
     { engine: job.engine, prompt: prompt.text, aspect: job.aspect, seconds: template.runtimeSeconds ?? 5, photo, assetId,
       fixedReferenceUrls: fixedVideoReferenceUrls(template.id, deps.siteUrl),
+      resolution: renderResolution(job.resolution),
       ...(deps.callbackUrl ? { callbackUrl: deps.callbackUrl } : {}) },
     deps.engines ?? {},
   );
@@ -390,7 +402,7 @@ async function pollAwaiting(deps: RenderPassDeps, job: RenderJob, now: Date, rep
   try {
     const template = await loadPromptById(deps.sql, job.templateId);
     const { model, seconds } = videoModelFor(job.engine, template?.runtimeSeconds ?? 5);
-    const polled = await pollVideoRender({ taskId: job.providerTaskId, model, seconds }, deps.engines ?? {});
+    const polled = await pollVideoRender({ taskId: job.providerTaskId, model, seconds, resolution: renderResolution(job.resolution) }, deps.engines ?? {});
     if (polled.status === 'pending') {
       report.waiting += 1;
       return;

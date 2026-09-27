@@ -31,6 +31,7 @@ import { RelatedPrompts } from '@/components/prompts/detail';
 import { promptLabels, useCaseLabel } from '@/components/prompts/labels';
 import { campaignLabels } from '@/components/campaigns/labels';
 import { TwingsStudio, type StudioStyle } from '@/components/twings/studio';
+import { formatResolutionPrice, offeredResolutions } from '@/lib/twings/resolution';
 
 /**
  * `/[locale]/t/[slug]` — one template, which is also where it is made (docs/TEMPLATES-IA.md §2).
@@ -107,6 +108,7 @@ export default async function TemplatePage({ params }: RouteParams) {
         moreHref: templatesHref(locale, card.medium),
         aspects: aspectsForMedium(card.medium).map((id) => ({ id, label: t.aspects[id as keyof typeof t.aspects] ?? id })),
         defaultAspect: card.aspectDefault ?? defaultAspect(card.medium),
+        resolutions: offeredResolutions(card).map((id) => ({ id, price: formatResolutionPrice(card, id, locale) })),
       }
     : null;
 
@@ -236,6 +238,9 @@ export default async function TemplatePage({ params }: RouteParams) {
                     noStyles: dict.studio.noStyles,
                     moreTemplates: dict.studio.moreTemplates,
                     aspectLabel: dict.studio.aspectLabel,
+                    resolutionLabel: dict.studio.resolutionLabel,
+                    resolutionDefault: dict.studio.resolutionDefault,
+                    resolutionNote: dict.studio.resolutionNote,
                   }}
                 />
               )}

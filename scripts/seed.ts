@@ -605,6 +605,8 @@ export async function seedPrompts(opts: SeedOptions): Promise<PromptSeedResult[]
       medium: fixture.medium ?? 'video',
       priceCents: fixture.priceCents ?? 0,
       priceKrw: fixture.priceKrw ?? 0,
+      price1080Cents: fixture.price1080Cents ?? 0,
+      price1080Krw: fixture.price1080Krw ?? 0,
       runtimeSeconds: fixture.medium === 'image' ? null : (fixture.runtimeSeconds ?? null),
       engine: fixture.engine ?? null,
       aspectDefault: fixture.aspectDefault ?? null,

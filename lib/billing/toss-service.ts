@@ -6,6 +6,7 @@ import { isLocale } from '@/lib/i18n/config';
 import { aspectsForMedium } from '@/lib/images/engines';
 import { loadPromptBySlug } from '@/lib/prompts/repo';
 import { isForSale } from '@/lib/twings/products';
+import { chargeKrwFor, chooseResolution, isCreatorResolution } from '@/lib/twings/resolution';
 import type {
   CreateRenderInput,
   CreateRenderOutcome,
@@ -31,6 +32,8 @@ export interface TossOrder {
   template_slug: string;
   order_name: string;
   aspect: string;
+  /** '720p' | '1080p' for a film bought after 0039; NULL = image, or a film ordered before it (720p). */
+  resolution: string | null;
   locale: 'ko' | 'en';
   render_ref: string;
   input_key: string;
@@ -75,7 +78,7 @@ export async function createTossOrder(
   viewer: Viewer,
   input: CreateRenderInput,
 ): Promise<
-  | { ok: true; order: { id: string; amountKrw: number; name: string } }
+  | { ok: true; order: { id: string; amountKrw: number; name: string; resolution: string | null } }
   | TossFailure
 > {
   if (!viewer.userId) return fail('sign_in_required');
@@ -83,11 +86,16 @@ export async function createTossOrder(
   if (viewer.isAdmin) return fail('admin_free');
   const t = await loadPromptBySlug(deps.sql, input.templateSlug);
   if (!t || t.status !== 'published' || t.audience === 'brand') return fail('not_found');
-  // Charge the stored KRW price, never a browser amount or an exchange-rate fallback.
+  // Charge the stored KRW price for the chosen resolution, never a browser amount or an
+  // exchange-rate fallback. The browser names a resolution; the row names its price.
   if (!isForSale(t) || !Number.isSafeInteger(t.priceKrw) || t.priceKrw <= 0)
     return fail('not_for_sale');
   if (!(aspectsForMedium(t.medium) as readonly string[]).includes(input.aspect))
     return fail('bad_aspect');
+  const choice = chooseResolution(t, input.resolution);
+  if (!choice.ok) return fail('bad_resolution');
+  const amountKrw = chargeKrwFor(t, choice.resolution);
+  if (amountKrw === null) return fail('not_for_sale');
   if (
     !input.photo ||
     !['image/jpeg', 'image/png', 'image/webp'].includes(input.photo.mime) ||
@@ -107,21 +115,20 @@ export async function createTossOrder(
   const locale = isLocale(input.locale)
     ? input.locale
     : (viewer.locale ?? 'en');
-  const name =
-    `TWINGS · ${locale === 'ko' ? t.titleKo || t.title : t.title}`.slice(
-      0,
-      100,
-    );
+  // A 1080p order says so in the name the buyer sees at Toss; a 720p name is unchanged.
+  const hd = choice.resolution === '1080p' ? ' · 1080p' : '';
+  const title = `TWINGS · ${locale === 'ko' ? t.titleKo || t.title : t.title}`;
+  const name = `${title.slice(0, 100 - hd.length)}${hd}`;
   await deps.store.put(inputKey, input.photo.bytes, input.photo.mime);
   await deps.sql.query(
     `insert into billing_payments
-    (id,user_id,environment,amount_krw,template_id,template_slug,order_name,aspect,locale,render_ref,input_key,input_mime,expires_at,identity_portrait_id)
-    values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
+    (id,user_id,environment,amount_krw,template_id,template_slug,order_name,aspect,locale,render_ref,input_key,input_mime,expires_at,identity_portrait_id,resolution)
+    values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
     [
       id,
       viewer.userId,
       deps.gateway.kind,
-      t.priceKrw,
+      amountKrw,
       t.id,
       t.slug,
       name,
@@ -132,9 +139,10 @@ export async function createTossOrder(
       input.photo.mime,
       new Date(clock(deps).getTime() + 30 * 60_000),
       input.portraitId ?? null,
+      choice.resolution,
     ],
   );
-  return { ok: true, order: { id, amountKrw: t.priceKrw, name } };
+  return { ok: true, order: { id, amountKrw, name, resolution: choice.resolution } };
 }
 
 function matches(p: TossPayment, o: TossOrder): boolean {
@@ -180,11 +188,13 @@ export async function confirmTossOrder(
         return fail('amount_mismatch');
       if (new Date(o.expires_at) <= clock(deps)) return fail('expired');
       const t = await loadPromptBySlug(tx, o.template_slug);
+      // Re-derive the price for the resolution ON THE ORDER (NULL = a pre-0039 order: the base price).
       if (
         !t ||
         t.status !== 'published' ||
         !isForSale(t) ||
-        t.priceKrw !== o.amount_krw
+        (o.resolution !== null && !isCreatorResolution(o.resolution)) ||
+        chargeKrwFor(t, isCreatorResolution(o.resolution) ? o.resolution : null) !== o.amount_krw
       )
         return fail('price_changed');
       await tx.query(

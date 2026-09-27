@@ -40,7 +40,15 @@ export default async function TossOrderPage({
         <h1 className="mt-4 font-display text-4xl font-black">{c.title}</h1>
         <p className="mt-4 text-body opacity-70">{c.summary}</p>
         <div className="mt-8 flex items-start justify-between gap-4 border-y border-hairline py-5">
-          <p className="font-semibold">{o.order_name}</p>
+          <div>
+            <p className="font-semibold">{o.order_name}</p>
+            {/* What the amount buys: a film's resolution, stored on the order (pre-0039 orders carry none). */}
+            {o.resolution && (
+              <p data-order-resolution={o.resolution} className="mt-1 text-sm opacity-60">
+                {c.resolution} {o.resolution}
+              </p>
+            )}
+          </div>
           <div className="shrink-0 text-right">
             <p className="text-xs opacity-60">{c.amount}</p>
             <p className="mt-1 text-2xl font-semibold">
