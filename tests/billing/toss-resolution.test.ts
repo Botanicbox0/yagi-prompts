@@ -218,3 +218,20 @@ describe('the provider is asked for the job’s resolution, on every attempt', (
     expect((await loadRenderJob(h.sql, image.id))!.resolution).toBeNull();
   });
 });
+
+describe('between merge and the cloud migration', () => {
+  it('still serves every template, as 720p only, on a database without the 0039 price columns', async () => {
+    const h = await promptHarness();
+    try {
+      await h.sql.query('alter table prompt_items drop column price_1080_cents, drop column price_1080_krw');
+      const { loadPromptBySlug, loadPublishedPrompts } = await import('@/lib/prompts/repo');
+      const { offeredResolutions } = await import('@/lib/twings/resolution');
+      const row = (await loadPromptBySlug(h.sql, FILM))!;
+      expect(row).toMatchObject({ price1080Cents: 0, price1080Krw: 0 });
+      expect(offeredResolutions(row)).toEqual(['720p']);
+      expect((await loadPublishedPrompts(h.sql)).length).toBeGreaterThan(0);
+    } finally {
+      await h.close();
+    }
+  });
+});

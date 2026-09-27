@@ -90,10 +90,19 @@ interface RawRow {
   published_at: Date | string | null;
 }
 
+/**
+ * The 1080p price (0039) read through the row's JSON, so a database that has not had 0039 applied
+ * yet (the cloud, between merge and migration) still serves every template page — as 720p-only.
+ * Writes name the columns directly: they need the migration, and fail loudly without it.
+ */
+const PRICE_1080_COLUMNS = `coalesce((to_jsonb(prompt_items.*)->>'price_1080_cents')::int, 0) as price_1080_cents,
+                 coalesce((to_jsonb(prompt_items.*)->>'price_1080_krw')::int, 0) as price_1080_krw`;
+
 const COLUMNS = `id, audience, slug, source, author_id, author_handle, status, models, title, title_ko,
                  prompt_text, process_md, process_md_ko, source_url,
                  text_visibility::text as text_visibility, media, use_case, featured,
-                 medium, price_cents, price_krw, price_1080_cents, price_1080_krw, runtime_seconds, engine, aspect_default,
+                 medium, price_cents, price_krw, runtime_seconds, engine, aspect_default,
+                 ${PRICE_1080_COLUMNS},
                  reject_reason, created_at, published_at, announced_at`;
 
 /** §13.2 — the one ordering, so the gallery, the admin list and the sitemap never disagree. */
