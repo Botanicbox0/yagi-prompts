@@ -278,6 +278,11 @@ export async function loadResidentInventory(sql: SqlRunner): Promise<{ groups: R
   };
 }
 
+export async function userHasRenderInFlight(sql: SqlRunner, userId: string): Promise<boolean> {
+  const { rows } = await sql.query<{ busy: boolean }>(`select exists (select 1 from render_jobs where user_id = $1 and status in ('held', 'queued', 'running')) as busy`, [userId]);
+  return rows[0]?.busy === true;
+}
+
 export async function deleteIdentityAssetRow(sql: SqlRunner, assetId: string): Promise<void> {
   await sql.query(`delete from identity_assets where asset_id = $1`, [assetId]);
 }

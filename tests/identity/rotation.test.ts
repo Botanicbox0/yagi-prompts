@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { ArkOpenApiError, type ArkAsset, type ArkAssetsClient, type ArkAssetStatus } from '@/lib/ark/assets';
 import { loadIdentityAssetByPhoto, loadIdentityGroup } from '@/lib/identity/repo';
-import { planRotation, rotationPolicy, type RotationInventory } from '@/lib/identity/rotation';
+import { planRotation, releaseAfterUse, rotationPolicy, type RotationInventory } from '@/lib/identity/rotation';
 import { ensureIdentityAsset, ensureVirtualGroup, photoSha256 as photoSha, type IdentityDeps } from '@/lib/identity/service';
 import { loadPromptBySlug } from '@/lib/prompts/repo';
 import { seedProfile } from '@/tests/helpers/billing';
@@ -211,6 +211,31 @@ describe('rotation in the virtual library', () => {
     await render(4, 10);
     expect(bank.deletedGroups).toEqual(['aigc-2']);
     expect(await loadIdentityGroup(h.sql, USERS[0]!)).toMatchObject({ status: 'active' });
+  });
+
+  it('releases a person right after use (founder 2026-09-30), skipping anyone with a render in flight and verified faces', async () => {
+    for (let i = 0; i < 3; i += 1) await render(i, i);
+    const template = (await loadPromptBySlug(h.sql, 'neon-alley-dolly'))!;
+    await h.sql.query(
+      `insert into render_jobs (user_id, template_id, template_slug, medium, engine, aspect, status) values ($1, $2, $3, 'video', 'seedance-2.0', '9:16', 'queued')`,
+      [USERS[1], template.id, template.slug],
+    );
+    await h.sql.query(`update identity_groups set group_type = 'LivenessFace' where user_id = $1`, [USERS[2]]);
+
+    expect(await releaseAfterUse(deps(30))).toEqual({ released: 1, failed: 0 });
+    expect(bank.deletedAssets).toEqual(['asset-1']);
+    expect(bank.deletedGroups).toEqual(['aigc-1']);
+    expect(await loadIdentityGroup(h.sql, USERS[0]!)).toMatchObject({ status: 'evicted' });
+    expect(await loadIdentityGroup(h.sql, USERS[1]!)).toMatchObject({ status: 'active' });
+    expect(await loadIdentityGroup(h.sql, USERS[2]!)).toMatchObject({ status: 'active' });
+
+    // Nothing left to release is not an error.
+    expect(await releaseAfterUse(deps(31))).toEqual({ released: 0, failed: 0 });
+    // A throttled bank leaves the row as it was, for the next pass.
+    await h.sql.query(`delete from render_jobs`);
+    bank.deleteError = new ArkOpenApiError('RequestLimitExceeded', 'too many requests', 'req-9', 429);
+    expect(await releaseAfterUse(deps(32))).toEqual({ released: 0, failed: 1 });
+    expect(await loadIdentityGroup(h.sql, USERS[1]!)).toMatchObject({ status: 'active' });
   });
 
   it('treats a bank that already forgot the group as done, and a throttled delete as try-again-later', async () => {

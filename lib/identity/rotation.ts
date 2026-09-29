@@ -1,10 +1,12 @@
 import { ArkOpenApiError, arkQuotaFromEnv, type ArkAssetsApi, type ArkQuota } from '@/lib/ark/assets';
 import type { SqlRunner } from '@/lib/db/sql-runner';
+import { ASSET_RELEASE_AFTER_USE } from '@/lib/flags';
 import {
   countResident,
   deleteIdentityAssetRow,
   evictIdentityGroup,
   loadResidentInventory,
+  userHasRenderInFlight,
   type ResidentAssetRow,
   type ResidentGroupRow,
 } from './repo';
@@ -118,24 +120,13 @@ function isGone(error: unknown): boolean {
 }
 
 /**
- * Makes room for `need` before a create, deleting at the bank and then here — a row is changed
- * only after the bank confirmed (or had already forgotten). A delete the bank refuses stops the
- * run: the create would be refused too, so the caller retries the whole render later.
+ * Deletes at the bank and then here, in order — a row is changed only after the bank confirmed
+ * (or had already forgotten). A delete the bank refuses stops the run; the rows stay as they were.
  */
-export async function makeRoom(deps: MakeRoomDeps, need: RotationNeed, keepUserId: string): Promise<MakeRoomOutcome> {
-  if (deps.assets === null) return { ok: false, retryable: false };
-  const policy = rotationPolicy(deps.quota ?? arkQuotaFromEnv());
-  const resident = await countResident(deps.sql);
-  if (resident.groups + need.groups <= policy.limitGroups && resident.assets + need.assets <= policy.limitAssets) return { ok: true, evicted: 0 };
-
-  const plan = planRotation(await loadResidentInventory(deps.sql), need, policy, keepUserId);
-  if (!plan.fits) {
-    console.warn('[identity] rotation: no room — every resident person is busy or verified; upgrade or wait', { resident, need });
-    return { ok: false, retryable: true };
-  }
+async function applyActions(deps: MakeRoomDeps & { assets: ArkAssetsApi }, actions: readonly RotationAction[]): Promise<MakeRoomOutcome> {
   const now = deps.now ?? new Date();
   let evicted = 0;
-  for (const action of plan.actions) {
+  for (const action of actions) {
     try {
       if (action.kind === 'delete-asset') await deps.assets.deleteAsset(action.assetId);
       else await deps.assets.deleteAssetGroup(action.groupId);
@@ -152,4 +143,76 @@ export async function makeRoom(deps: MakeRoomDeps, need: RotationNeed, keepUserI
     }
   }
   return { ok: true, evicted };
+}
+
+/**
+ * Makes room for `need` before a create. A delete the bank refuses stops the run: the create would
+ * be refused too, so the caller retries the whole render later.
+ */
+export async function makeRoom(deps: MakeRoomDeps, need: RotationNeed, keepUserId: string): Promise<MakeRoomOutcome> {
+  if (deps.assets === null) return { ok: false, retryable: false };
+  const policy = rotationPolicy(deps.quota ?? arkQuotaFromEnv());
+  const resident = await countResident(deps.sql);
+  if (resident.groups + need.groups <= policy.limitGroups && resident.assets + need.assets <= policy.limitAssets) return { ok: true, evicted: 0 };
+
+  const plan = planRotation(await loadResidentInventory(deps.sql), need, policy, keepUserId);
+  if (!plan.fits) {
+    console.warn('[identity] rotation: no room — every resident person is busy or verified; upgrade or wait', { resident, need });
+    return { ok: false, retryable: true };
+  }
+  return applyActions({ ...deps, assets: deps.assets }, plan.actions);
+}
+
+// ---------------------------------------------------------------------------
+// release after use
+// ---------------------------------------------------------------------------
+
+/**
+ * Founder, 2026-09-30: "초반에는 일정 기간 쓰지 않은 얼굴 개념이 아니라 그냥 한번 쓰면 삭제하면 될 듯.
+ * 계속 무료로 쓸 수 있게." So the bank holds a face only while a render of that person is in flight:
+ * at the end of every render pass, each AIGC person with nothing held / queued / running has their
+ * photos and group deleted at the bank and their row marked `evicted`. The next render registers
+ * the photo again from our store. The rotation above stays as the safety net for a busy minute.
+ *
+ * `ASSET_RELEASE_AFTER_USE` (lib/flags.ts) turns this on; `ARK_RELEASE_AFTER_USE=off` turns it off
+ * without a code change (e.g. once the paid tier makes keeping faces worthwhile).
+ */
+export const RELEASE_BATCH = 10;
+
+export function releaseAfterUseEnabled(env: Record<string, string | undefined> = process.env): boolean {
+  const raw = env.ARK_RELEASE_AFTER_USE?.trim().toLowerCase();
+  if (raw === 'off' || raw === 'false' || raw === '0') return false;
+  if (raw === 'on' || raw === 'true' || raw === '1') return true;
+  return ASSET_RELEASE_AFTER_USE;
+}
+
+export interface ReleaseReport {
+  released: number;
+  /** People left in place because the bank refused a delete; the next pass tries again. */
+  failed: number;
+}
+
+export async function releaseAfterUse(deps: MakeRoomDeps, options: { limit?: number } = {}): Promise<ReleaseReport> {
+  if (deps.assets === null) return { released: 0, failed: 0 };
+  const inventory = await loadResidentInventory(deps.sql);
+  const idle = inventory.groups
+    .filter((g) => g.groupType === 'AIGC' && !g.busy)
+    .sort(byOldest)
+    .slice(0, options.limit ?? RELEASE_BATCH);
+  const report: ReleaseReport = { released: 0, failed: 0 };
+  for (const group of idle) {
+    // Asked again right before deleting: a render may have been queued since the inventory was read.
+    if (await userHasRenderInFlight(deps.sql, group.userId)) continue;
+    const actions: RotationAction[] = inventory.assets
+      .filter((a) => a.groupId === group.groupId && a.userId === group.userId)
+      .map((a) => ({ kind: 'delete-asset', assetId: a.assetId, groupId: a.groupId, userId: a.userId }));
+    actions.push({ kind: 'evict-group', groupId: group.groupId, userId: group.userId });
+    const outcome = await applyActions({ ...deps, assets: deps.assets }, actions);
+    if (outcome.ok) report.released += 1;
+    else {
+      report.failed += 1;
+      break; // a throttled bank will refuse the next one too
+    }
+  }
+  return report;
 }

@@ -4,6 +4,7 @@ import { selectedPortraitPhoto } from '@/lib/identity/portrait-service';
 import type { SqlRunner } from '@/lib/db/sql-runner';
 import type { Viewer } from '@/lib/auth/identity';
 import type { ArkAssetsClient } from '@/lib/ark/assets';
+import { releaseAfterUse, releaseAfterUseEnabled } from '@/lib/identity/rotation';
 import { ASSET_WAIT_HOURS, assetLibraryMode, ensureIdentityAsset, ensureVirtualGroup, identityStatusFor, loadIdentityGroup, needsIdentity, needsLiveness, pollIdentityAsset, recordIdentityUse, type AssetLibraryMode, type IdentityDeps } from '@/lib/identity/service';
 import { RENDER_PIPELINE_PUBLIC } from '@/lib/flags';
 import { getTossGateway, type TossGateway } from '@/lib/billing/toss-gateway';
@@ -225,6 +226,8 @@ export interface RenderPassDeps extends RenderServiceDeps {
   callbackUrl?: string | null;
   /** The bank's asset client (docs §8.2); null = AK/SK not configured, ModelArk renders with a photo fail as `identity_unavailable`. */
   assets?: ArkAssetsClient | null;
+  /** Pinned by tests; production reads `releaseAfterUseEnabled()` (lib/flags.ts ASSET_RELEASE_AFTER_USE). */
+  releaseAfterUse?: boolean;
 }
 
 export interface RenderPassReport {
@@ -239,6 +242,8 @@ export interface RenderPassReport {
   notifyFailed: number;
   notifyPending: number;
   notifier: string;
+  /** AIGC people whose face was deleted at the bank after their last render (release after use). */
+  released: number;
   errors: string[];
 }
 
@@ -263,6 +268,7 @@ export async function runRenderPass(deps: RenderPassDeps, options: RenderPassOpt
     notifyFailed: 0,
     notifyPending: 0,
     notifier: deps.notifier === null ? 'unconfigured' : `${deps.notifier.channel}:${deps.notifier.kind}`,
+    released: 0,
     errors: [],
   };
 
@@ -288,6 +294,17 @@ export async function runRenderPass(deps: RenderPassDeps, options: RenderPassOpt
   for (const job of awaiting) {
     if (handedOff.has(job.id)) continue;
     await pollAwaiting(deps, job, now, report);
+  }
+
+  // 3b — the free tier's face slots: whoever has nothing in flight is released at the bank.
+  if (deps.releaseAfterUse ?? releaseAfterUseEnabled()) {
+    try {
+      const released = await releaseAfterUse(identityDeps(deps));
+      report.released = released.released;
+      if (released.failed > 0) report.errors.push(`release: the bank refused a delete; left for the next pass`);
+    } catch (error) {
+      report.errors.push(`release: ${error instanceof Error ? error.message : String(error)}`);
+    }
   }
 
   await settlePayments();

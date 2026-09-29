@@ -54,6 +54,14 @@ export const RENDER_PIPELINE_PUBLIC = false;
 export const ASSET_LIBRARY_MODE: 'virtual' | 'liveness' = 'virtual';
 
 /**
+ * docs/TEMPLATES-IA.md §12 (founder, 2026-09-30) — on the free asset tier, a person's face stays at
+ * the bank only while one of their renders is in flight; each render pass then deletes it
+ * (lib/identity/rotation.ts `releaseAfterUse`). `ARK_RELEASE_AFTER_USE=off` stops it without a code
+ * change — e.g. after moving to the paid tier, where keeping faces saves a re-upload.
+ */
+export const ASSET_RELEASE_AFTER_USE = true;
+
+/**
  * docs/SECONDARY-USAGE.md — on-site payment for brand secondary-usage ("2차 활용") quotes. Default
  * OFF: open only when the server environment says exactly `BRAND_USAGE_PAYMENTS=on`. Independent of
  * `RENDER_PIPELINE_PUBLIC` (neither opens the other). Inquiries, the studio's scope/consent/quote work
