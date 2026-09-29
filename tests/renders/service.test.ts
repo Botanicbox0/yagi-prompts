@@ -2,7 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import type { ArkAsset, ArkAssetsClient, ArkAssetStatus } from '@/lib/ark/assets';
+import { ArkOpenApiError, type ArkAsset, type ArkAssetsClient, type ArkAssetStatus } from '@/lib/ark/assets';
 import type { ArkClient, ArkTask } from '@/lib/ark/client';
 import type { GptImageResult, OpenAiImageClient } from '@/lib/images/openai';
 import { OpenAiImageError } from '@/lib/images/openai';
@@ -306,6 +306,43 @@ describe('the render queue', () => {
     if (!second.ok) throw new Error(second.code);
     await runRenderPass(deps({ ark }, { assets, store: bankStore, mode: 'virtual' }), { jobId: second.id });
     expect(groups).toEqual(['AIGC']);
+  });
+
+  it('in virtual mode deletes the person’s face at the bank once the film is done, not while it renders', async () => {
+    const created = await createRenderJob({ sql: h.sql, store, mode: 'virtual' }, ADMIN_VIEWER, { templateSlug: VIDEO_TEMPLATE, aspect: '9:16', photo: PHOTO, locale: 'ko' });
+    if (!created.ok) throw new Error(created.code);
+    const deleted: string[] = [];
+    const base = fakeAssets({ status: 'Active', created: 0 });
+    const assets: ArkAssetsClient = {
+      ...base,
+      async createAssetGroup() { return { id: 'aigc-1' }; },
+      async deleteAsset(id) { deleted.push(`asset:${id}`); },
+      async deleteAssetGroup(id) { deleted.push(`group:${id}`); },
+    };
+    const bankStore = { ...store, url: async () => 'https://store.test/photo.jpg' };
+    let state: ArkTask = task('queued');
+    const ark: ArkClient = { async createVideoTask() { return { id: 'cgt-1' }; }, async getVideoTask() { return state; } };
+    const doFetch: typeof fetch = async () => new Response(VIDEO_BYTES, { status: 200, headers: { 'content-type': 'video/mp4' } });
+    const pass = (options: { jobId?: string; limit?: number }) => runRenderPass(deps({ ark, fetch: doFetch }, { assets, store: bankStore, mode: 'virtual' }), options);
+
+    expect(await pass({ jobId: created.id })).toMatchObject({ waiting: 1, released: 0 });
+    expect(deleted).toEqual([]);
+    state = task('succeeded', 'https://ark.example/out.mp4');
+    expect(await pass({ limit: 0 })).toMatchObject({ succeeded: 1, released: 1 });
+    expect(deleted).toEqual(['asset:asset-1', 'group:aigc-1']);
+    expect((await h.sql.query<{ status: string }>('select status from identity_groups where user_id = $1', [ADMIN_VIEWER.userId])).rows[0]).toEqual({ status: 'evicted' });
+  });
+
+  it('in virtual mode a full tier or a throttled bank puts the job back in the queue instead of failing it', async () => {
+    const created = await createRenderJob({ sql: h.sql, store, mode: 'virtual' }, ADMIN_VIEWER, { templateSlug: VIDEO_TEMPLATE, aspect: '9:16', photo: PHOTO, locale: 'ko' });
+    if (!created.ok) throw new Error(created.code);
+    const base = fakeAssets({ status: 'Active', created: 0 });
+    const assets: ArkAssetsClient = { ...base, async createAssetGroup() { throw new ArkOpenApiError('QuotaExceeded', 'asset group quota exceeded', 'req-1', 400); } };
+    const bankStore = { ...store, url: async () => 'https://store.test/photo.jpg' };
+
+    const report = await runRenderPass(deps({ ark: null }, { assets, store: bankStore, mode: 'virtual' }), { jobId: created.id });
+    expect(report).toMatchObject({ claimed: 1, requeued: 1, failed: 0 });
+    expect((await loadRenderJob(h.sql, created.id))!).toMatchObject({ status: 'queued', errorCode: 'identity_unavailable' });
   });
 
   it('parks a film while the bank compares the photo, then references the asset — never the bytes', async () => {
