@@ -2,7 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import type { ArkAsset, ArkAssetsClient, ArkAssetStatus } from '@/lib/ark/assets';
+import { ArkOpenApiError, type ArkAsset, type ArkAssetsClient, type ArkAssetStatus } from '@/lib/ark/assets';
 import type { ArkClient, ArkTask } from '@/lib/ark/client';
 import type { GptImageResult, OpenAiImageClient } from '@/lib/images/openai';
 import { OpenAiImageError } from '@/lib/images/openai';
@@ -306,6 +306,18 @@ describe('the render queue', () => {
     if (!second.ok) throw new Error(second.code);
     await runRenderPass(deps({ ark }, { assets, store: bankStore, mode: 'virtual' }), { jobId: second.id });
     expect(groups).toEqual(['AIGC']);
+  });
+
+  it('in virtual mode a full tier or a throttled bank puts the job back in the queue instead of failing it', async () => {
+    const created = await createRenderJob({ sql: h.sql, store, mode: 'virtual' }, ADMIN_VIEWER, { templateSlug: VIDEO_TEMPLATE, aspect: '9:16', photo: PHOTO, locale: 'ko' });
+    if (!created.ok) throw new Error(created.code);
+    const base = fakeAssets({ status: 'Active', created: 0 });
+    const assets: ArkAssetsClient = { ...base, async createAssetGroup() { throw new ArkOpenApiError('QuotaExceeded', 'asset group quota exceeded', 'req-1', 400); } };
+    const bankStore = { ...store, url: async () => 'https://store.test/photo.jpg' };
+
+    const report = await runRenderPass(deps({ ark: null }, { assets, store: bankStore, mode: 'virtual' }), { jobId: created.id });
+    expect(report).toMatchObject({ claimed: 1, requeued: 1, failed: 0 });
+    expect((await loadRenderJob(h.sql, created.id))!).toMatchObject({ status: 'queued', errorCode: 'identity_unavailable' });
   });
 
   it('parks a film while the bank compares the photo, then references the asset — never the bytes', async () => {

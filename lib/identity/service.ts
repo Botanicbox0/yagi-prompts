@@ -5,6 +5,7 @@ import { ArkOpenApiError, arkQuotaFromEnv, parseLivenessCallback, withH5Language
 import { hasCapacity } from '@/lib/ark/reclaim';
 import { IMAGE_ENGINES, isImageEngine, type EngineId } from '@/lib/images/engines';
 import { ASSET_LIBRARY_MODE } from '@/lib/flags';
+import { makeRoom } from './rotation';
 import {
   activateIdentityGroup,
   countIdentity,
@@ -91,26 +92,36 @@ export async function identityStatusFor(sql: SqlRunner, userId: string, mode: As
   return group.status;
 }
 
-export type VirtualGroupOutcome = { ok: true; group: IdentityGroup } | { ok: false; reason: 'identity_unavailable' | 'asset_failed' };
+export type VirtualGroupOutcome =
+  | { ok: true; group: IdentityGroup }
+  | { ok: false; reason: 'identity_unavailable' | 'asset_failed'; retryable?: true };
+
+/** A bank refusal about room or rate (quota, limit, throttling) passes; the render is tried again. */
+function isRoomRefusal(error: unknown): boolean {
+  if (!(error instanceof ArkOpenApiError)) return false;
+  return error.retryable || /quota|limit|exceed/i.test(error.code);
+}
 
 /**
  * The virtual library's whole "verification": one AIGC group per account, made the first time the
- * person renders and reused after. A LivenessFace group that is already active is reused too — a
- * verified face is the stricter thing. Quota refusals surface as `identity_unavailable`, which the
- * result page words as "the studio is looking into it" rather than blaming the photo.
+ * person renders and reused after — or again after slot rotation evicted it (lib/identity/rotation.ts).
+ * A LivenessFace group that is already active is reused too — a verified face is the stricter
+ * thing. Room and rate refusals surface as a retryable `identity_unavailable`, which the result page
+ * words as "the studio is looking into it" rather than blaming the photo.
  */
 export async function ensureVirtualGroup(deps: IdentityDeps, userId: string): Promise<VirtualGroupOutcome> {
   if (deps.assets === null) return { ok: false, reason: 'identity_unavailable' };
   const existing = await loadIdentityGroup(deps.sql, userId);
   if (existing !== null && existing.status === 'active' && existing.groupId !== null) return { ok: true, group: existing };
   const now = deps.now ?? new Date();
+  const room = await makeRoom(deps, { groups: 1, assets: 0 }, userId);
+  if (!room.ok) return { ok: false, reason: 'identity_unavailable', retryable: true };
   try {
     const created = await deps.assets.createAssetGroup({ name: `twings-${userId.slice(0, 8)}`, description: 'TWINGS account — the person’s own consented likeness', groupType: 'AIGC' });
     await upsertVirtualIdentityGroup(deps.sql, { userId, groupId: created.id, now });
   } catch (error) {
-    const code = error instanceof ArkOpenApiError ? error.code : 'create_group_failed';
     console.error('[identity] CreateAssetGroup(AIGC) failed', error instanceof ArkOpenApiError ? `${error.code}: ${error.message}` : error);
-    return { ok: false, reason: /quota|limit|exceed/i.test(code) ? 'identity_unavailable' : 'asset_failed' };
+    return isRoomRefusal(error) ? { ok: false, reason: 'identity_unavailable', retryable: true } : { ok: false, reason: 'asset_failed' };
   }
   const group = await loadIdentityGroup(deps.sql, userId);
   return group === null ? { ok: false, reason: 'asset_failed' } : { ok: true, group };
@@ -193,7 +204,7 @@ export async function completeIdentityVerification(deps: IdentityDeps, params: U
 export type EnsureAssetOutcome =
   | { status: 'active'; assetId: string }
   | { status: 'processing'; assetId: string }
-  | { status: 'failed'; assetId: string | null; reason: string };
+  | { status: 'failed'; assetId: string | null; reason: string; retryable?: true };
 
 /**
  * The photo as an asset in the person's group: reused by content hash, registered once, and
@@ -219,6 +230,8 @@ export async function ensureIdentityAsset(
   }
 
   if (input.photoUrl === null) return { status: 'failed', assetId: null, reason: 'identity_unavailable' };
+  const room = await makeRoom(deps, { groups: 0, assets: 1 }, input.group.userId);
+  if (!room.ok) return { status: 'failed', assetId: null, reason: 'identity_unavailable', retryable: true };
   let created: { id: string };
   try {
     created = await deps.assets.createAsset({
@@ -228,9 +241,8 @@ export async function ensureIdentityAsset(
       name: `twings-${input.group.userId.slice(0, 8)}-${sha.slice(0, 8)}`,
     });
   } catch (error) {
-    const code = error instanceof ArkOpenApiError ? error.code : 'create_asset_failed';
     console.error('[identity] CreateAsset failed', error instanceof ArkOpenApiError ? `${error.code}: ${error.message}` : error);
-    return { status: 'failed', assetId: null, reason: /quota|limit|exceed/i.test(code) ? 'identity_unavailable' : 'asset_failed' };
+    return isRoomRefusal(error) ? { status: 'failed', assetId: null, reason: 'identity_unavailable', retryable: true } : { status: 'failed', assetId: null, reason: 'asset_failed' };
   }
   await insertIdentityAsset(deps.sql, { userId: input.group.userId, groupId: input.group.groupId, assetId: created.id, photoSha256: sha, status: 'Processing' });
   const status = await pollIdentityAsset(deps, created.id);

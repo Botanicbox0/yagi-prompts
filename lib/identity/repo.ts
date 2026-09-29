@@ -6,7 +6,8 @@ import type { ArkAssetStatus } from '@/lib/ark/assets';
  * other repos: the tests drive these on PGlite, the app on Supabase Postgres.
  */
 
-export type IdentityStatus = 'pending' | 'active' | 'failed' | 'revoked';
+/** `evicted` (0040): the bank's copy was deleted by slot rotation; the next render makes it again. */
+export type IdentityStatus = 'pending' | 'active' | 'failed' | 'revoked' | 'evicted';
 
 /** Which ModelArk library the group lives in (0024). See lib/flags.ts ASSET_LIBRARY_MODE. */
 export type IdentityGroupType = 'LivenessFace' | 'AIGC';
@@ -207,4 +208,85 @@ export async function updateIdentityAssetStatus(sql: SqlRunner, assetId: string,
 
 export async function touchIdentityAsset(sql: SqlRunner, assetId: string, now: Date): Promise<void> {
   await sql.query(`update identity_assets set last_used_at = $2::timestamptz where asset_id = $1`, [assetId, now.toISOString()]);
+}
+
+// ---------------------------------------------------------------------------
+// slot rotation (0040, lib/identity/rotation.ts)
+// ---------------------------------------------------------------------------
+
+/**
+ * What the bank is holding for us right now, as far as our rows know: every active group, and every
+ * asset row — a Failed asset included, because it keeps its slot until someone deletes it.
+ */
+export async function countResident(sql: SqlRunner): Promise<{ groups: number; assets: number }> {
+  const { rows } = await sql.query<{ groups: number | string; assets: number | string }>(
+    `select (select count(*) from identity_groups where status = 'active' and group_id is not null)::int as groups,
+            (select count(*) from identity_assets)::int as assets`,
+  );
+  return { groups: Number(rows[0]?.groups ?? 0), assets: Number(rows[0]?.assets ?? 0) };
+}
+
+export interface ResidentGroupRow {
+  userId: string;
+  groupId: string;
+  groupType: IdentityGroupType;
+  /** The disuse clock: the last render, else when the group was made. */
+  lastUsedAt: string;
+  /** The person has a render held, queued or running — their assets may be in a task right now. */
+  busy: boolean;
+}
+
+export interface ResidentAssetRow {
+  assetId: string;
+  groupId: string;
+  userId: string;
+  groupType: IdentityGroupType;
+  status: ArkAssetStatus;
+  lastUsedAt: string;
+  busy: boolean;
+}
+
+const BUSY_USERS = `select distinct user_id from render_jobs where status in ('held', 'queued', 'running')`;
+
+export async function loadResidentInventory(sql: SqlRunner): Promise<{ groups: ResidentGroupRow[]; assets: ResidentAssetRow[] }> {
+  const groups = await sql.query<{ user_id: string; group_id: string; group_type: IdentityGroupType; last_used_at: Date | string; busy: boolean }>(
+    `select g.user_id, g.group_id, g.group_type,
+            coalesce(g.last_render_at, g.verified_at) as last_used_at,
+            (g.user_id in (${BUSY_USERS})) as busy
+       from identity_groups g
+      where g.status = 'active' and g.group_id is not null`,
+  );
+  const assets = await sql.query<{ asset_id: string; group_id: string; user_id: string; group_type: IdentityGroupType | null; status: ArkAssetStatus; last_used_at: Date | string; busy: boolean }>(
+    `select a.asset_id, a.group_id, a.user_id, g.group_type, a.status,
+            coalesce(a.last_used_at, a.activated_at, a.created_at) as last_used_at,
+            (a.user_id in (${BUSY_USERS})) as busy
+       from identity_assets a
+       left join identity_groups g on g.user_id = a.user_id`,
+  );
+  return {
+    groups: groups.rows.map((r) => ({ userId: r.user_id, groupId: r.group_id, groupType: r.group_type === 'AIGC' ? 'AIGC' : 'LivenessFace', lastUsedAt: iso(r.last_used_at) ?? '', busy: r.busy === true })),
+    assets: assets.rows.map((r) => ({
+      assetId: r.asset_id,
+      groupId: r.group_id,
+      userId: r.user_id,
+      // An asset whose group row is gone or was a verified face is never rotated.
+      groupType: r.group_type === 'AIGC' ? 'AIGC' : 'LivenessFace',
+      status: r.status,
+      lastUsedAt: iso(r.last_used_at) ?? '',
+      busy: r.busy === true,
+    })),
+  };
+}
+
+export async function deleteIdentityAssetRow(sql: SqlRunner, assetId: string): Promise<void> {
+  await sql.query(`delete from identity_assets where asset_id = $1`, [assetId]);
+}
+
+/** The bank no longer holds the group: the person's row says so and any photo rows left go with it. */
+export async function evictIdentityGroup(sql: SqlRunner, args: { userId: string; groupId: string; now: Date }): Promise<void> {
+  await sql.query(`delete from identity_assets where user_id = $1 and group_id = $2`, [args.userId, args.groupId]);
+  await sql.query(
+    `update identity_groups set status = 'evicted', evicted_at = $3::timestamptz where user_id = $1 and group_id = $2 and status = 'active'`,
+    [args.userId, args.groupId, args.now.toISOString()],
+  );
 }

@@ -242,7 +242,8 @@ describe('the virtual library', () => {
 
   it('names a quota refusal as the studio’s problem, and no bank as unavailable', async () => {
     bank.groupError = new ArkOpenApiError('QuotaExceeded', 'asset group quota exceeded', 'req-1', 400, false);
-    expect(await ensureVirtualGroup(deps(), ADMIN_VIEWER.userId!)).toEqual({ ok: false, reason: 'identity_unavailable' });
+    // Retryable since slot rotation (2026-09-28): a full tier or a throttled bank is "try again", not "never".
+    expect(await ensureVirtualGroup(deps(), ADMIN_VIEWER.userId!)).toEqual({ ok: false, reason: 'identity_unavailable', retryable: true });
     bank.groupError = new ArkOpenApiError('InvalidParameter', 'bad name', 'req-2', 400, false);
     expect(await ensureVirtualGroup(deps(), ADMIN_VIEWER.userId!)).toEqual({ ok: false, reason: 'asset_failed' });
     expect(await ensureVirtualGroup(deps({ assets: null }), ADMIN_VIEWER.userId!)).toEqual({ ok: false, reason: 'identity_unavailable' });

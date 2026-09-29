@@ -320,7 +320,8 @@ async function resolveReference(deps: RenderPassDeps, job: RenderJob, photo: Ren
   if (ideps.mode === 'virtual') {
     // The virtual library: the account's AIGC group, made on first use. No door, no wait.
     const ensuredGroup = await ensureVirtualGroup(ideps, job.userId);
-    if (!ensuredGroup.ok) return { kind: 'fail', failure: new RenderFailure(ensuredGroup.reason, `no asset group for the person (${ensuredGroup.reason})`, false) };
+    // A retryable refusal (no room yet, bank throttling) requeues the job; the next pass tries again.
+    if (!ensuredGroup.ok) return { kind: 'fail', failure: new RenderFailure(ensuredGroup.reason, `no asset group for the person (${ensuredGroup.reason})`, ensuredGroup.retryable === true) };
     group = ensuredGroup.group;
   } else {
     group = await loadIdentityGroup(deps.sql, job.userId);
@@ -333,7 +334,7 @@ async function resolveReference(deps: RenderPassDeps, job: RenderJob, photo: Ren
   if (ensured.status === 'active') return { kind: 'asset', assetId: ensured.assetId };
   if (ensured.status === 'processing') return { kind: 'wait', assetId: ensured.assetId };
   const code: RenderFailureCode = ensured.reason === 'identity_required' || ensured.reason === 'identity_unavailable' ? ensured.reason : 'asset_failed';
-  return { kind: 'fail', failure: new RenderFailure(code, `the photo could not become an asset (${ensured.reason})`, false) };
+  return { kind: 'fail', failure: new RenderFailure(code, `the photo could not become an asset (${ensured.reason})`, ensured.retryable === true) };
 }
 
 /** The engine call itself, once the reference is settled. Films are handed over; images finish here. */
