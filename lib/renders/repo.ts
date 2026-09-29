@@ -21,6 +21,8 @@ export interface RenderJob {
   medium: TemplateMedium;
   engine: string;
   aspect: string;
+  /** What the provider is asked for (0039). NULL = legacy, image or brand production: 720p. */
+  resolution: string | null;
   locale: Locale;
   status: RenderStatus;
   inputKey: string | null;
@@ -55,6 +57,7 @@ interface RawRow {
   medium: TemplateMedium;
   engine: string;
   aspect: string;
+  resolution: string | null;
   locale: Locale;
   status: RenderStatus;
   input_key: string | null;
@@ -82,7 +85,7 @@ interface RawRow {
 }
 
 const COLUMN_NAMES = [
-  'id', 'user_id', 'template_id', 'template_slug', 'medium', 'engine', 'aspect', 'locale', 'status',
+  'id', 'user_id', 'template_id', 'template_slug', 'medium', 'engine', 'aspect', 'resolution', 'locale', 'status',
   'input_key', 'input_mime', 'result_key', 'result_mime', 'result_bytes', 'provider', 'provider_task_id',
   'attempts', 'error_code', 'error_message', 'cost_usd', 'share_token', 'share_expires_at',
   'notify_status', 'notify_channel', 'notify_attempts', 'notified_at',
@@ -112,6 +115,7 @@ function toJob(raw: RawRow): RenderJob {
     medium: raw.medium,
     engine: raw.engine,
     aspect: raw.aspect,
+    resolution: raw.resolution ?? null,
     locale: raw.locale,
     status: raw.status,
     inputKey: raw.input_key,
@@ -151,6 +155,8 @@ export interface InsertRenderJobArgs {
   medium: TemplateMedium;
   engine: string;
   aspect: string;
+  /** Video only; null for images (and brand production, which keeps its 720p default). */
+  resolution?: string | null;
   locale: Locale;
   inputKey: string | null;
   inputMime: string | null;
@@ -160,9 +166,9 @@ export interface InsertRenderJobArgs {
 
 export async function insertRenderJob(sql: SqlRunner, args: InsertRenderJobArgs): Promise<void> {
   await sql.query(
-    `insert into render_jobs (id, user_id, template_id, template_slug, medium, engine, aspect, locale, input_key, input_mime, status)
-     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
-    [args.id, args.userId, args.templateId, args.templateSlug, args.medium, args.engine, args.aspect, args.locale, args.inputKey, args.inputMime, args.status ?? 'queued'],
+    `insert into render_jobs (id, user_id, template_id, template_slug, medium, engine, aspect, locale, input_key, input_mime, status, resolution)
+     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+    [args.id, args.userId, args.templateId, args.templateSlug, args.medium, args.engine, args.aspect, args.locale, args.inputKey, args.inputMime, args.status ?? 'queued', args.resolution ?? null],
   );
 }
 

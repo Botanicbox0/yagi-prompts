@@ -37,6 +37,8 @@ export interface PromptRowInput {
   medium?: TemplateMedium;
   priceCents?: number;
   priceKrw?: number;
+  price1080Cents?: number;
+  price1080Krw?: number;
   runtimeSeconds?: number | null;
   engine?: string | null;
   aspectDefault?: string | null;
@@ -81,6 +83,8 @@ interface ShapedPromptBase {
   medium: TemplateMedium;
   priceCents: number;
   priceKrw: number;
+  price1080Cents: number;
+  price1080Krw: number;
   runtimeSeconds: number | null;
   engine: string | null;
   aspectDefault: string | null;
@@ -205,6 +209,8 @@ export function shapePrompt(
     medium: row.medium ?? 'video',
     priceCents: row.priceCents ?? 0,
     priceKrw: row.priceKrw ?? 0,
+    price1080Cents: row.price1080Cents ?? 0,
+    price1080Krw: row.price1080Krw ?? 0,
     runtimeSeconds: row.runtimeSeconds ?? null,
     engine: row.engine ?? null,
     aspectDefault: row.aspectDefault ?? null,

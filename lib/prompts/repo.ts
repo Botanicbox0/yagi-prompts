@@ -41,6 +41,9 @@ export interface PromptRow {
   priceCents: number;
   /** The fixed won price a Korean page shows (0018, founder 2026-09-07); 0 = the x,900 suggestion from the dollar price. */
   priceKrw: number;
+  /** The 1080p price (0039), same two currencies; 0 = 1080p not offered (lib/twings/resolution.ts). */
+  price1080Cents: number;
+  price1080Krw: number;
   /** Films only; null for an image template (CHECK in 0015). */
   runtimeSeconds: number | null;
   /** docs/TEMPLATES-IA.md §7 — the render engine (lib/images/engines.ts ids); null = the medium's default. */
@@ -76,6 +79,8 @@ interface RawRow {
   medium: TemplateMedium;
   price_cents: number;
   price_krw: number | null;
+  price_1080_cents?: number | null;
+  price_1080_krw?: number | null;
   runtime_seconds: number | null;
   engine: string | null;
   aspect_default: string | null;
@@ -85,10 +90,19 @@ interface RawRow {
   published_at: Date | string | null;
 }
 
+/**
+ * The 1080p price (0039) read through the row's JSON, so a database that has not had 0039 applied
+ * yet (the cloud, between merge and migration) still serves every template page — as 720p-only.
+ * Writes name the columns directly: they need the migration, and fail loudly without it.
+ */
+const PRICE_1080_COLUMNS = `coalesce((to_jsonb(prompt_items.*)->>'price_1080_cents')::int, 0) as price_1080_cents,
+                 coalesce((to_jsonb(prompt_items.*)->>'price_1080_krw')::int, 0) as price_1080_krw`;
+
 const COLUMNS = `id, audience, slug, source, author_id, author_handle, status, models, title, title_ko,
                  prompt_text, process_md, process_md_ko, source_url,
                  text_visibility::text as text_visibility, media, use_case, featured,
                  medium, price_cents, price_krw, runtime_seconds, engine, aspect_default,
+                 ${PRICE_1080_COLUMNS},
                  reject_reason, created_at, published_at, announced_at`;
 
 /** §13.2 — the one ordering, so the gallery, the admin list and the sitemap never disagree. */
@@ -122,6 +136,8 @@ function toRow(raw: RawRow): PromptRow {
     medium: raw.medium,
     priceCents: raw.price_cents,
     priceKrw: raw.price_krw ?? 0,
+    price1080Cents: raw.price_1080_cents ?? 0,
+    price1080Krw: raw.price_1080_krw ?? 0,
     runtimeSeconds: raw.runtime_seconds,
     engine: raw.engine,
     aspectDefault: raw.aspect_default,
@@ -287,6 +303,8 @@ export interface InsertPromptArgs {
   medium?: TemplateMedium;
   priceCents?: number;
   priceKrw?: number;
+  price1080Cents?: number;
+  price1080Krw?: number;
   runtimeSeconds?: number | null;
   engine?: string | null;
   aspectDefault?: string | null;
@@ -306,11 +324,12 @@ export async function insertPrompt(sql: SqlRunner, args: InsertPromptArgs): Prom
        (id, slug, source, author_id, author_handle, status, models, title, title_ko,
         prompt_text, process_md, process_md_ko, source_url,
         text_visibility, media, use_case, featured, reject_reason, published_at,
-        medium, price_cents, price_krw, runtime_seconds, engine, aspect_default)
+        medium, price_cents, price_krw, runtime_seconds, engine, aspect_default,
+        price_1080_cents, price_1080_krw)
      values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
              $14::visibility, $15::jsonb, $16, $17, $18,
              case when $19::boolean then now() else null end,
-             $20, $21, $22, $23, $24, $25)`,
+             $20, $21, $22, $23, $24, $25, $26, $27)`,
     [
       args.id,
       args.slug,
@@ -337,6 +356,8 @@ export async function insertPrompt(sql: SqlRunner, args: InsertPromptArgs): Prom
       args.runtimeSeconds ?? null,
       args.engine ?? null,
       args.aspectDefault ?? null,
+      args.price1080Cents ?? 0,
+      args.price1080Krw ?? 0,
     ],
   );
 }
@@ -371,6 +392,8 @@ export interface UpdatePromptArgs {
   medium?: TemplateMedium;
   priceCents?: number;
   priceKrw?: number;
+  price1080Cents?: number;
+  price1080Krw?: number;
   runtimeSeconds?: number | null;
   engine?: string | null;
   aspectDefault?: string | null;
@@ -385,6 +408,8 @@ export async function updatePrompt(sql: SqlRunner, args: UpdatePromptArgs): Prom
             medium = coalesce($14, medium),
             price_cents = coalesce($15::int, price_cents),
             price_krw = coalesce($22::int, price_krw),
+            price_1080_cents = coalesce($23::int, price_1080_cents),
+            price_1080_krw = coalesce($24::int, price_1080_krw),
             runtime_seconds = case when $16::boolean then $17::int else runtime_seconds end,
             engine = case when $18::boolean then $19::text else engine end,
             aspect_default = case when $20::boolean then $21::text else aspect_default end
@@ -413,6 +438,8 @@ export async function updatePrompt(sql: SqlRunner, args: UpdatePromptArgs): Prom
       args.aspectDefault !== undefined,
       args.aspectDefault ?? null,
       args.priceKrw ?? null,
+      args.price1080Cents ?? null,
+      args.price1080Krw ?? null,
     ],
   );
   return rows.length > 0;

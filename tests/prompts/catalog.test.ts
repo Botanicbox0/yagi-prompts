@@ -37,6 +37,9 @@ describe('prompt catalog projection (§13.2)', () => {
       'modelLabels',
       'models',
       'poster',
+      // The 1080p price (0039) is public pricing, like the base price; 0 = not offered.
+      'price1080Cents',
+      'price1080Krw',
       'priceCents',
       'priceKrw',
       'publishedAt',
@@ -69,7 +72,7 @@ describe('prompt catalog projection (§13.2)', () => {
     expect(catalog.image.every((card) => card.medium === 'image' && card.runtimeSeconds === null)).toBe(true);
     expect(catalog.image.map((card) => card.slug)).toEqual(['static-portrait-window-light']);
     const priced = all.find((card) => card.slug === 'neon-alley-dolly')!;
-    expect(priced).toMatchObject({ medium: 'video', priceCents: 400, priceKrw: 0, runtimeSeconds: 15 });
+    expect(priced).toMatchObject({ medium: 'video', priceCents: 400, priceKrw: 0, price1080Cents: 900, price1080Krw: 11900, runtimeSeconds: 15 });
     // The one fixture with its own won price carries it through the projection (0018).
     expect(all.find((card) => card.slug === 'static-portrait-window-light')).toMatchObject({ priceCents: 200, priceKrw: 2500 });
     expect(all.filter((card) => card.priceCents === 0).length).toBeGreaterThan(0);

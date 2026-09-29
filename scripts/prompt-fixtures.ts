@@ -52,6 +52,9 @@ export interface PromptFixture {
   priceCents?: number;
   /** The fixed won price (0018); the one fixture that sets it proves the override beats the suggestion. */
   priceKrw?: number;
+  /** The 1080p price (0039); the one fixture that sets it shows the resolution choice locally. */
+  price1080Cents?: number;
+  price1080Krw?: number;
   runtimeSeconds?: number;
   engine?: string;
   aspectDefault?: string;
@@ -90,6 +93,9 @@ const YAGI: PromptFixture[] = [
     id: '9a000000-0000-4000-8000-000000000001',
     slug: 'neon-alley-dolly',
     priceCents: 400,
+    // Seedance 2.0 · 15s · 1080p: the cost floor (lib/twings/cost-model.ts) is 11,900원.
+    price1080Cents: 900,
+    price1080Krw: 11900,
     runtimeSeconds: 15,
     engine: 'seedance-2.0',
     aspectDefault: '16:9',

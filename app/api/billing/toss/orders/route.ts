@@ -31,6 +31,8 @@ export async function POST(request: Request) {
     const result = await createTossOrder(deps, viewer, {
       templateSlug: String(form.get('template') ?? ''),
       aspect: String(form.get('aspect') ?? ''),
+      // A name, never a price: the service prices it from the template row (lib/twings/resolution.ts).
+      resolution: String(form.get('resolution') ?? ''),
       locale: String(form.get('locale') ?? ''),
       portraitId: saved ? portraitId : undefined,
       photo:

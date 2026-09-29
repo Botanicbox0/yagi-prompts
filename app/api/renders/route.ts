@@ -34,6 +34,7 @@ const STATUS: Record<CreateRenderFailure, number> = {
   not_found: 404,
   not_for_sale: 409,
   bad_aspect: 400,
+  bad_resolution: 400,
   bad_photo: 400,
   photo_too_large: 413,
   rate_limited: 429,
@@ -66,6 +67,8 @@ export async function POST(request: Request): Promise<NextResponse> {
     photo: photo instanceof File ? { bytes: new Uint8Array(await photo.arrayBuffer()), mime: photo.type } : null,
     locale: typeof rawLocale === 'string' && isLocale(rawLocale) ? rawLocale : null,
     holdForIdentity: form.get('hold') === '1',
+    // Read only on an operator's free render; a paid render takes the order's own value.
+    resolution: typeof form.get('resolution') === 'string' ? String(form.get('resolution')) : null,
   });
   if (!outcome.ok) return json(outcome, STATUS[outcome.code]);
 

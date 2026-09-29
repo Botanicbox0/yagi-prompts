@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { getDictionary } from '@/lib/i18n/dictionaries';
-import { TwingsStudio, type StudioLabels, type StudioLive, type StudioStyle } from '@/components/twings/studio';
+import { ResolutionPicker, TwingsStudio, type StudioLabels, type StudioLive, type StudioStyle } from '@/components/twings/studio';
 
 /**
  * The studio as MARKUP — the first render, before any interaction. What it says to someone who
@@ -117,5 +117,38 @@ describe('the studio with no scene to sell', () => {
     expect(html).toContain(dict.studio.noStyles);
     expect(html).not.toContain('data-pay-cta');
     expect(html).not.toContain('data-style-option');
+  });
+});
+
+describe('the resolution choice (docs/CREATOR-RESOLUTION.md)', () => {
+  const options = [
+    { id: '720p', price: '5,900원' },
+    { id: '1080p', price: '11,900원' },
+  ];
+  for (const locale of ['ko', 'en'] as const) {
+    it(`offers 720p as the pressed default and 1080p with its own price (${locale})`, () => {
+      const d = getDictionary(locale).studio;
+      const html = renderToStaticMarkup(
+        <ResolutionPicker options={options} selected={null} onSelect={() => {}} labels={{ resolutionLabel: d.resolutionLabel, resolutionDefault: d.resolutionDefault, resolutionNote: d.resolutionNote }} />,
+      );
+      expect(html).toContain('data-resolution-picker');
+      expect(html).toMatch(/data-resolution-option="720p" aria-pressed="true"/);
+      expect(html).toMatch(/data-resolution-option="1080p" aria-pressed="false"/);
+      expect(html).toContain(`720p · ${d.resolutionDefault}`);
+      expect(html).toContain('11,900원');
+      expect(html).toContain(d.resolutionLabel);
+      expect(html).toContain(d.resolutionNote);
+    });
+  }
+
+  it('marks an explicit 1080p choice as pressed', () => {
+    const html = renderToStaticMarkup(<ResolutionPicker options={options} selected="1080p" onSelect={() => {}} labels={{}} />);
+    expect(html).toMatch(/data-resolution-option="1080p" aria-pressed="true"/);
+  });
+
+  it('shows no choice for a template that sells only 720p, and none on the closed page', () => {
+    expect(renderToStaticMarkup(<ResolutionPicker options={[options[0]!]} selected={null} onSelect={() => {}} labels={{}} />)).toBe('');
+    const closed = renderToStaticMarkup(<TwingsStudio styles={[{ ...styles[0]!, resolutions: options }]} labels={labels} initialStyleId="seoul-90s" live={live} />);
+    expect(closed).not.toContain('data-resolution-picker');
   });
 });

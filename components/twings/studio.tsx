@@ -30,6 +30,12 @@ export interface StudioStyle {
   /** The aspects a visitor may pick for this style, and the one it opens in (founder, 2026-09-06). */
   aspects: Array<{ id: string; label: string }>;
   defaultAspect: string;
+  /**
+   * The resolutions this template sells, each with its server-set price (lib/twings/resolution.ts).
+   * The first is the default (720p). Absent or one entry = no choice to make, nothing is shown.
+   * The price here is display only — the server prices the order from the row, not from this.
+   */
+  resolutions?: Array<{ id: string; price: string }>;
 }
 
 export interface StudioLabels {
@@ -56,6 +62,9 @@ export interface StudioLabels {
   noStyles: string;
   moreTemplates: string;
   aspectLabel: string;
+  resolutionLabel?: string;
+  resolutionDefault?: string;
+  resolutionNote?: string;
 }
 
 /**
@@ -124,6 +133,49 @@ export async function shrinkPhoto(file: File): Promise<Blob> {
   }
 }
 
+/**
+ * 720p or 1080p, each button naming its own price (docs/CREATOR-RESOLUTION.md). Nothing renders
+ * with fewer than two options: a template without a 1080p price shows no choice at all.
+ */
+export function ResolutionPicker({
+  options,
+  selected,
+  onSelect,
+  labels,
+}: {
+  options: ReadonlyArray<{ id: string; price: string }>;
+  selected: string | null;
+  onSelect: (id: string) => void;
+  labels: Pick<StudioLabels, 'resolutionLabel' | 'resolutionDefault' | 'resolutionNote'>;
+}) {
+  if (options.length < 2) return null;
+  const current = selected ?? options[0]!.id;
+  return (
+    <fieldset data-resolution-picker className="mt-5">
+      <legend className="font-label text-eyebrow uppercase opacity-60">{labels.resolutionLabel}</legend>
+      <div className="mt-2 flex flex-wrap gap-2">
+        {options.map((option, index) => (
+          <button
+            key={option.id}
+            type="button"
+            data-resolution-option={option.id}
+            aria-pressed={option.id === current}
+            onClick={() => onSelect(option.id)}
+            className={[
+              'flex items-baseline gap-2 border px-3 py-1.5 font-label text-[0.68rem] tracking-[0.12em] uppercase transition-opacity',
+              option.id === current ? 'border-accent text-accent' : 'border-hairline opacity-60 hover:opacity-100',
+            ].join(' ')}
+          >
+            <span>{index === 0 && labels.resolutionDefault ? `${option.id} · ${labels.resolutionDefault}` : option.id}</span>
+            <span className="font-mono normal-case tracking-normal">{option.price}</span>
+          </button>
+        ))}
+      </div>
+      {labels.resolutionNote && <p className="mt-2 font-mono text-[0.72rem] opacity-55">{labels.resolutionNote}</p>}
+    </fieldset>
+  );
+}
+
 export function TwingsStudio({
   styles,
   labels,
@@ -154,10 +206,14 @@ export function TwingsStudio({
   const [liveError, setLiveError] = useState<string | null>(null);
   const [styleId, setStyleId] = useState<string>(initialStyleId ?? styles[0]?.id ?? '');
   const [aspect, setAspect] = useState<string>(styles.find((item) => item.id === (initialStyleId ?? styles[0]?.id))?.defaultAspect ?? styles[0]?.defaultAspect ?? '');
+  const [resolution, setResolution] = useState<string>(styles.find((item) => item.id === (initialStyleId ?? styles[0]?.id))?.resolutions?.[0]?.id ?? '');
   const fileRef = useRef<HTMLInputElement>(null);
   const submitGuard = useRef(createSubmitGuard());
 
   const chosen = styles.find((item) => item.id === styleId) ?? styles[0] ?? null;
+  // The price the button names: the chosen resolution's, else the style's base price.
+  const chosenResolution = chosen?.resolutions?.find((option) => option.id === resolution) ?? chosen?.resolutions?.[0] ?? null;
+  const chosenPrice = chosenResolution?.price ?? chosen?.price ?? '';
 
   useEffect(
     () => () => {
@@ -221,6 +277,7 @@ export function TwingsStudio({
       const form = new FormData();
       form.set('template', live.template);
       form.set('aspect', aspect);
+      if (chosenResolution) form.set('resolution', chosenResolution.id);
       form.set('locale', live.locale);
       if (savedPortrait) form.set('portraitId', savedPortrait);
       else if (photoFile) { const blob = await shrinkPhoto(photoFile); form.set('photo', blob, blob.type === 'image/png' ? 'photo.png' : 'photo.jpg'); }
@@ -323,7 +380,7 @@ export function TwingsStudio({
   })();
 
   return (
-    <section data-twings-studio data-phase={phase} data-single={single ? 'true' : 'false'} data-aspect={aspect} data-live={liveMode ? 'true' : 'false'} data-live-charge={liveMode && charge ? 'true' : 'false'} className="mt-10">
+    <section data-twings-studio data-phase={phase} data-single={single ? 'true' : 'false'} data-aspect={aspect} data-resolution={chosenResolution?.id ?? ''} data-live={liveMode ? 'true' : 'false'} data-live-charge={liveMode && charge ? 'true' : 'false'} className="mt-10">
       {/* The one honest label the whole screen hangs on: where the result goes, and whether a payment is taken. */}
       <p
         data-live-badge
@@ -398,7 +455,7 @@ export function TwingsStudio({
                 <div data-chosen-style={chosen.id} className="flex items-baseline justify-between gap-4 border-b border-hairline pb-4">
                   <span className="font-display text-[1.3rem] leading-[1] font-black uppercase">{chosen.title}</span>
                   <span className="flex items-baseline gap-3 font-label text-[0.7rem] tracking-[0.12em] uppercase">
-                    <span className="text-accent">{chosen.price}</span>
+                    <span className="text-accent">{chosenPrice}</span>
                     {chosen.runtime !== '0' && (
                       <span className="opacity-45">{labels.runtimeLabel.replace('{seconds}', chosen.runtime)}</span>
                     )}
@@ -417,6 +474,7 @@ export function TwingsStudio({
                         onClick={() => {
                           setStyleId(style.id);
                           setAspect(style.defaultAspect);
+                          setResolution(style.resolutions?.[0]?.id ?? '');
                           if (photo) setPhase('pay');
                         }}
                         className={[
@@ -468,6 +526,11 @@ export function TwingsStudio({
                 </fieldset>
               )}
 
+              {/* The resolution: 720p unless the reader asks for 1080p, each with the price it costs. */}
+              {chosen && (
+                <ResolutionPicker options={chosen.resolutions ?? []} selected={chosenResolution?.id ?? null} onSelect={setResolution} labels={labels} />
+              )}
+
               <div className="mt-auto pt-6">
                 {identityBlocked && live && (
                   <p data-identity-notice={identity} className="mb-3 border border-accent px-4 py-3 text-[0.9rem] leading-relaxed">
@@ -493,7 +556,7 @@ export function TwingsStudio({
                       : !charge
                         ? live.labels.freeCta
                         : chosen
-                          ? labels.payCta.replace('{price}', chosen.price)
+                          ? labels.payCta.replace('{price}', chosenPrice)
                           : labels.payCta}
                 </button>
                 <p className="mt-3 font-mono text-[0.72rem] opacity-45">{labels.payNote}</p>

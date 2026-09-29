@@ -16,6 +16,7 @@ const order = vi.hoisted(() => ({
   template_slug: 'tpl',
   order_name: 'TWINGS · 템플릿',
   aspect: '9:16',
+  resolution: null as string | null,
   locale: 'ko' as 'ko' | 'en',
   render_ref: 'r',
   input_key: 'k',
@@ -43,6 +44,7 @@ describe('Toss order page', () => {
     order.status = 'pending';
     order.payment_key = null;
     order.locale = 'ko';
+    order.resolution = null;
     order.expires_at = new Date(Date.now() - 60 * 60_000).toISOString();
   });
 
@@ -78,5 +80,13 @@ describe('Toss order page', () => {
     expect(button).toContain('9,900원');
     order.locale = 'en';
     expect(await render()).toContain('₩9,900');
+  });
+
+  it('names the bought resolution before payment, in both languages, and nothing for a pre-0039 order', async () => {
+    expect(await render()).not.toContain('data-order-resolution');
+    order.resolution = '1080p';
+    expect(await render()).toContain(`${getDictionary('ko').billing.toss.resolution} 1080p`);
+    order.locale = 'en';
+    expect(await render()).toContain(`${getDictionary('en').billing.toss.resolution} 1080p`);
   });
 });
