@@ -36,10 +36,22 @@ export const PLAYBOOKS_IN_NAV = false;
 
 /**
  * docs/TEMPLATES-IA.md §8 — the render queue is LIVE for admins and a demo for everyone else until
- * payment is wired. Flipping this opens `POST /api/renders` to every signed-in reader; the studio
- * follows through `/api/renders/access`. Leave false until the pay step creates the job.
+ * payment is live. Opening it lets every signed-in reader pay (Toss) and start a render; the studio
+ * follows through `/api/renders/access`.
+ *
+ * Going live is an ENVIRONMENT change, not a code deploy (docs/qa/toss-checkout/README.md "운영
+ * 개시"): `RENDER_PIPELINE_PUBLIC=on` in Vercel, then redeploy. Production additionally refuses to
+ * open unless BOTH Toss keys are live keys (`live_…`) — a test key there would take no money and
+ * hand every visitor a free film. Preview and local runs may open on test keys for QA.
  */
-export const RENDER_PIPELINE_PUBLIC = false;
+export function renderPipelinePublic(env: Record<string, string | undefined> = process.env): boolean {
+  if (env.RENDER_PIPELINE_PUBLIC?.trim().toLowerCase() !== 'on') return false;
+  if (env.VERCEL_ENV !== 'production') return true;
+  const live = (key: string | undefined) => (key ?? '').trim().startsWith('live_');
+  return live(env.TOSS_CLIENT_KEY) && live(env.TOSS_SECRET_KEY);
+}
+
+export const RENDER_PIPELINE_PUBLIC = renderPipelinePublic();
 
 /**
  * docs/TEMPLATES-IA.md §12 (2026-09-14) — how a person's photo becomes a ModelArk reference.
