@@ -75,9 +75,9 @@ export const en = {
         body: "Participating creators publish their videos and submit links through TWINGS. Brands review the results in their workspace."
       }
     },
-    demoLabel: "A format with different faces",
-    demoTitle: "One format.\nAnother person in the film.",
-    demoBody: "Select either video to compare. Expressions, movement and shots can vary with each person.",
+    demoLabel: "A format creators can take part in",
+    demoTitle: "One format.\nDifferent faces.",
+    demoBody: "We design a format for your brand. Each creator makes a video with their own face. The two films below show different people in the same format; expressions, movement and cuts may vary.",
     demoSource: "Reference photo",
     demoFirst: "Designed format",
     demoSecond: "Another person",

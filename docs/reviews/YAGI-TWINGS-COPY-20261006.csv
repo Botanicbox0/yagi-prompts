@@ -55,11 +55,11 @@ Build a format others can use.","/yagi/[locale]"
 "yagi.pillars.people.body","누가 출연하고 어디에 사용할지 먼저 정합니다. 참여 크리에이터의 초상은 합의한 범위와 조건에 따라 사용합니다.","We agree on who appears and where the content goes. Each creator’s likeness is used only within the agreed scope and terms.","/yagi/[locale]"
 "yagi.pillars.reach.title","크리에이터 채널에 게시","Published by creators","/yagi/[locale]"
 "yagi.pillars.reach.body","TWINGS에서 캠페인에 참여한 크리에이터가 영상을 게시하고 링크를 제출합니다. 브랜드는 워크스페이스에서 결과를 확인합니다.","Participating creators publish their videos and submit links through TWINGS. Brands review the results in their workspace.","/yagi/[locale]"
-"yagi.demoLabel","인물을 바꿔 만든 영상","A format with different faces","/yagi/[locale]"
-"yagi.demoTitle","같은 포맷에
-다른 얼굴을 넣으면.","One format.
-Another person in the film.","/yagi/[locale]"
-"yagi.demoBody","두 영상을 선택해 비교해보세요. 인물에 따라 표정과 움직임, 컷 구성이 달라질 수 있습니다.","Select either video to compare. Expressions, movement and shots can vary with each person.","/yagi/[locale]"
+"yagi.demoLabel","크리에이터가 참여하는 영상 포맷","A format creators can take part in","/yagi/[locale]"
+"yagi.demoTitle","하나의 포맷,
+각자의 얼굴.","One format.
+Different faces.","/yagi/[locale]"
+"yagi.demoBody","브랜드에 맞춘 포맷 하나로, 여러 크리에이터가 각자 출연하는 영상을 만듭니다. 아래는 서로 다른 인물로 제작한 두 영상입니다. 표정과 움직임, 컷 구성은 달라질 수 있습니다.","We design a format for your brand. Each creator makes a video with their own face. The two films below show different people in the same format; expressions, movement and cuts may vary.","/yagi/[locale]"
 "yagi.demoSource","기준 사진","Reference photo","/yagi/[locale]"
 "yagi.demoFirst","설계한 포맷","Designed format","/yagi/[locale]"
 "yagi.demoSecond","다른 인물로 만든 영상","Another person","/yagi/[locale]"

@@ -29,13 +29,15 @@ The Pitch introduction was read through the authenticated browser. Its productio
 
 ## Copy and typography review
 
-The founder rejected the tiny tracked Korean labels and abstract slogans. The revision uses Pretendard throughout Korean text, 13–14px navigation/labels, normal spacing, larger body text and fewer decorative indices/symbols. The work examples lead the page; film controls and filters have an actual purpose.
+The founder rejected the tiny tracked Korean labels and abstract slogans. The revision uses Pretendard throughout Korean text, 13–14px navigation/labels, normal spacing, larger body text and fewer decorative indices/symbols. At the founder's follow-up request, the format comparison now appears after the hero and service definition, before the portfolio. Both result films appear together rather than behind a toggle, so the reusable-format proposition is visible immediately. Film controls and filters have an actual purpose.
 
 The 122 new dictionary entries are exported in `YAGI-TWINGS-COPY-20261006.csv`. Claude's authenticated web interface was explicitly set to **Opus 4.6 / Medium** for the founder-requested editorial review. The complete recovered response is saved as `YAGI-OPUS46-COPY-20261006.json`, with 22 proposals and before/after clarity, specificity and naturalness scores. These are model judgments, not audience testing or a claim of objective design quality.
 
 Accepted the concrete headline “AI로 만드는 브랜드 필름.” and aligned the English. Reworked awkward English noun compounds and mismatched step titles. Adapted the definition to avoid claiming every production task happens through TWINGS. Kept studio-example disclosure, own-face verification, per-video payment wording, agreed usage conditions and the possibility of varying AI results. Declined the proposal to turn “can vary” into a certainty and retained explicit recruitment-empty guidance. Legal documents are unchanged.
 
 ## Implementation
+
+A second Opus 4.6 review covered the earlier, side-by-side format demonstration. Its proposal and editorial decision are saved in `YAGI-OPUS46-SCALE-20261006.json`. The final headline is “하나의 포맷, 각자의 얼굴.” / “One format. Different faces.” We retained result variation and did not adopt “only the person changed,” because the sample shots and timing differ.
 
 - Production entry: `/yagi/ko` and `/yagi/en` on local/branch previews.
 - TWINGS links to its working `/yagi/[locale]` entry, so creator-to-studio navigation does not depend on the future Framer domain cutover.
@@ -48,6 +50,7 @@ Accepted the concrete headline “AI로 만드는 브랜드 필름.” and align
 ## Asset provenance
 
 - Logo sources: original 2048px transparent PNG attachments in the founder-provided Slack channel. Replaced the screenshot and opaque TWINGS export. Alpha transparency is verified with Sharp metadata and statistics; no AI redraw or background-removal approximation.
+- The founder's later supplied 2073×758 transparent YAGI text logo replaces the typeset header/footer wordmark. The original YW symbol remains the favicon and structured-data logo. The supplied bitmap is used without alteration.
 - Four campaign films/posters: existing `public/reel/campaigns` studio format examples. These are explicitly separate from campaign performance claims.
 - VP9/Opus WebM copies preserve these six existing films for browsers without H.264 playback. MP4 remains the first source. No new render/provider API is invoked.
 - Format comparison: existing `public/reel/studio-demo` assets. The two films differ in timing and shots and are not synchronized or claimed to be frame-for-frame identity substitutions.

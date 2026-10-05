@@ -7,9 +7,22 @@ vi.mock('@/lib/supabase/middleware', () => ({
 import { middleware } from '@/middleware';
 import { productionStructuredData, productionSitemap, productionUrl } from '@/lib/yagi/seo';
 import { getDictionary } from '@/lib/i18n/dictionaries';
+import { renderToStaticMarkup } from 'react-dom/server';
+import YagiPage from '@/app/(production)/yagi/[locale]/page';
 const req = (host: string, path: string, method = 'GET') => new NextRequest(`https://${host}${path}`, { method, headers: { host } });
 
 describe('YAGI public production surface', () => {
+  it('shows the reusable format and both examples before the portfolio', async () => {
+    for (const locale of ['en', 'ko'] as const) {
+      const html = renderToStaticMarkup(await YagiPage({ params: Promise.resolve({ locale }) }));
+      expect(html.indexOf('data-yagi-format-section')).toBeGreaterThan(html.indexOf('data-service-definition'));
+      expect(html.indexOf('data-yagi-format-section')).toBeLessThan(html.indexOf('data-yagi-work-section'));
+      expect(html).toContain('/reel/studio-demo/designed-format.mp4');
+      expect(html).toContain('/reel/studio-demo/different-person.mp4');
+      expect(html).toContain('/yagi/yagi-wordmark.png');
+      expect((await middleware(req('yagiworkshop.xyz', '/yagi/yagi-wordmark.png'))).status).toBe(200);
+    }
+  });
   it('serves both locales independently of the TWINGS app', async () => {
     for (const host of ['yagiworkshop.xyz']) {
       const r = await middleware(req(host, '/ko'));

@@ -16,8 +16,8 @@
 .yagi-skip { position: fixed; top: 8px; left: 20px; z-index: 200; padding: 12px; background: white; transform: translateY(-150%); }
 .yagi-skip:focus { transform: none; }
 .yagi-header { min-height: 88px; display: flex; align-items: center; justify-content: space-between; gap: 28px; padding: 16px clamp(20px,4vw,80px); border-bottom: 1px solid var(--color-yagi-line); }
-.yagi-brand { display: flex; align-items: center; gap: 8px; font-size: 31px; font-weight: 600; letter-spacing: -.06em; }
-.yagi-brand img { width: 42px; height: 42px; object-fit: contain; }
+.yagi-brand { display: flex; align-items: center; flex-shrink: 0; min-height: 44px; }
+.yagi-brand img { width: 145px; height: auto; object-fit: contain; }
 .yagi-header nav,.yagi-header-actions,.yagi-languages { display: flex; align-items: center; gap: 28px; font-size: 14px; font-weight: 500; letter-spacing: -.015em; }
 .yagi-header nav a { display: flex; align-items: center; gap: 8px; min-height: 44px; }
 .yagi-header nav a:hover,.yagi-text-link:hover { text-decoration: underline; text-underline-offset: 6px; }
@@ -74,13 +74,10 @@
 .yagi-demo-heading { margin-top: 140px; display: grid; grid-template-columns: 1fr 1.5fr 1fr; gap: 35px; align-items: start; }
 .yagi-demo-heading h3 { font-size: clamp(35px,4.2vw,64px); }
 .yagi-demo-heading>p:last-child { font-size: 16px; line-height: 1.7; color: #b5b5ac; }
-.yagi-demo { display: grid; grid-template-columns: 1fr .5fr 3fr; gap: 35px; align-items: center; margin: 50px 0 30px; }
+.yagi-demo { display: grid; grid-template-columns: .35fr 1fr 1fr; gap: 28px; align-items: center; margin: 50px 0 30px; }
 .yagi-demo-source img { aspect-ratio: 3/4; object-fit: cover; object-position: top; width: 100%; }
 .yagi-demo-source figcaption { font-size: 14px; margin-top: 12px; }
-.yagi-demo-arrow { font-size: clamp(35px,5vw,75px); text-align: center; }
-.yagi-demo-tabs { display: flex; gap: 25px; margin-bottom: 18px; }
-.yagi-demo-tabs button { cursor: pointer; min-height: 44px; padding: 12px 0; font-size: 14px; color: #b5b5ac; border-bottom: 1px solid transparent; }
-.yagi-demo-tabs [aria-pressed=true] { color: white; border-bottom-color: white; }
+.yagi-demo-result figcaption { margin-top: 14px; font-size: 14px; color: #b5b5ac; }
 .yagi-demo-screen { aspect-ratio: 16/9; }
 .yagi-services { border-top: 1px solid var(--color-yagi-line); }
 .yagi-services article { display: grid; grid-template-columns: 70px 1.1fr 1.5fr 55px; gap: 30px; align-items: start; border-bottom: 1px solid var(--color-yagi-line); padding: 38px 0; }
@@ -121,7 +118,8 @@
 .yagi-button-light:hover { background: white; }
 .yagi-email { display: inline-block; font-size: clamp(18px,3vw,40px); letter-spacing: -.03em; margin-top: 45px; padding-bottom: 8px; border-bottom: 1px solid #ffffff60; }
 .yagi-footer { padding-top: 50px; padding-bottom: 35px; }
-.yagi-footer-wordmark { font-size: clamp(90px,22vw,330px); letter-spacing: -.075em; line-height: 1; font-weight: 500; display: flex; justify-content: space-between; align-items: center; }
+.yagi-footer-wordmark { display: flex; justify-content: space-between; align-items: center; gap: 30px; }
+.yagi-footer-wordmark img { width: min(78%,850px); height: auto; }
 .yagi-footer-wordmark span { font-size: 100px; }
 .yagi-footer>p { margin-top: 25px; font-size: 13px; color: var(--color-yagi-muted); }
 .yagi-footer-bottom { border-top: 1px solid var(--color-yagi-line); margin-top: 40px; padding-top: 25px; display: flex; justify-content: space-between; gap: 35px; color: var(--color-yagi-muted); font-size: 10px; line-height: 1.8; }
@@ -132,7 +130,7 @@
 @media(max-width:700px) {
   .yagi-pad { padding-top: 64px; padding-bottom: 64px; }
   .yagi-header { padding-top: 16px; padding-bottom: 15px; min-height: 76px; flex-wrap: wrap; row-gap: 18px; }
-  .yagi-brand { font-size: 27px; } .yagi-brand img { width: 34px; height: 34px; }
+  .yagi-brand img { width: 125px; }
   .yagi-header nav { order: 3; width: 100%; justify-content: space-between; gap: 12px; font-size: 13px; }
   .yagi-hero { padding-top: 32px; } .yagi-hero-top .yagi-label { font-size: 13px; }
   .yagi-hero h1 { font-size: clamp(54px,11vw,78px); margin-top: 26px; }
@@ -150,7 +148,7 @@
   .yagi-work-portrait .yagi-work-media { max-height: 570px; margin: auto; } .yagi-work-item figcaption { gap: 14px; }
   .yagi-pillars { grid-template-columns: 1fr; gap: 35px; } .yagi-pillars article+article { border-top: 1px solid #ffffff30; padding-top: 30px; } .yagi-pillars p { max-width: none; margin-top: 12px; } .yagi-pillars h3 { font-size: 23px; }
   .yagi-demo-heading { margin-top: 75px; grid-template-columns: 1fr; gap: 20px; } .yagi-demo-heading h3 { font-size: 39px; }
-  .yagi-demo { grid-template-columns: 1fr 2fr; gap: 20px; margin-top: 32px; } .yagi-demo-arrow { font-size: 50px; } .yagi-demo-source { max-width: 110px; } .yagi-demo-result { grid-column: 1/3; } .yagi-demo-tabs { gap: 20px; } .yagi-demo-tabs button { font-size: 13px; }
+  .yagi-demo { grid-template-columns: 1fr; gap: 28px; margin-top: 32px; } .yagi-demo-source { max-width: 90px; } .yagi-demo-result figcaption { font-size: 13px; }
   .yagi-services article { grid-template-columns: 24px 1fr 44px; gap: 12px; padding: 27px 0; } .yagi-services h3 { font-size: 23px; } .yagi-services p { grid-column: 2; font-size: 15px; } .yagi-service-arrow { grid-column: 3; grid-row: 1/3; font-size: 29px; width: 44px; }
   .yagi-proof dl { gap: 12px; margin-top: 35px; } .yagi-proof dd { font-size: clamp(28px,8.6vw,43px); } .yagi-proof dt { font-size: 12px; }
   .yagi-creators { grid-template-columns: 1fr; gap: 28px; } .yagi-creator-art { max-width: 290px; margin: auto; width: 100%; } .yagi-creator-art>span { font-size: 32px; }

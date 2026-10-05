@@ -22,7 +22,7 @@ export default async function YagiPage({ params }: { params: Promise<{ locale: L
     <a className="yagi-skip" href="#main">{t.skip}</a>
     <header className="yagi-header" id="top" data-yagi-header>
       <a className="yagi-brand" href={`./${locale}`} aria-label={t.brand}>
-        <img src="/yagi/yagi-mark.png" width="2048" height="2048" alt="" /><span translate="no">{t.brand}</span>
+        <img src="/yagi/yagi-wordmark.png" width="2073" height="758" alt="" />
       </a>
       <nav aria-label={dict.nav.primary}>
         <a href="#work">{t.nav.work}</a><a href="#approach">{t.nav.approach}</a><a href="#brands">{t.nav.brands}</a>
@@ -43,6 +43,11 @@ export default async function YagiPage({ params }: { params: Promise<{ locale: L
         <div className="yagi-film-caption"><span>{t.heroCaption}</span><span aria-hidden="true">{t.brand}</span></div>
       </section>
       <section className="yagi-definition yagi-pad"><p data-service-definition>{t.definition}</p><span aria-hidden="true">↘</span></section>
+      <section id="format" className="yagi-dark yagi-pad yagi-format" data-yagi-format-section>
+        <div className="yagi-section-head"><p className="yagi-label">{t.demoLabel}</p><h2>{t.demoTitle}</h2><p>{t.demoBody}</p></div>
+        <FormatDemo t={t} />
+        <a className="yagi-text-link" href={`${app}/video`}>{t.demoCta}<span aria-hidden="true">↗</span></a>
+      </section>
       <section id="work" className="yagi-pad yagi-work" data-yagi-work-section>
         <div className="yagi-section-head"><p className="yagi-label">{t.workLabel}</p><h2>{t.workTitle}</h2><p>{t.workBody}</p></div>
         <WorkGallery t={t} />
@@ -50,9 +55,6 @@ export default async function YagiPage({ params }: { params: Promise<{ locale: L
       <section id="approach" className="yagi-dark yagi-pad yagi-approach" data-yagi-approach>
         <div className="yagi-section-head"><p className="yagi-label">{t.approachLabel}</p><h2>{t.approachTitle}</h2><p>{t.approachBody}</p></div>
         <div className="yagi-pillars">{Object.values(t.pillars).map(p => <article key={p.title}><h3>{p.title}</h3><p>{p.body}</p></article>)}</div>
-        <div className="yagi-demo-heading"><p className="yagi-label">{t.demoLabel}</p><h3>{t.demoTitle}</h3><p>{t.demoBody}</p></div>
-        <FormatDemo t={t} />
-        <a className="yagi-text-link" href={`${app}/video`}>{t.demoCta}<span aria-hidden="true">↗</span></a>
       </section>
       <section id="brands" className="yagi-pad yagi-brands" data-yagi-brands>
         <div className="yagi-section-head"><p className="yagi-label">{t.brandLabel}</p><h2>{t.brandTitle}</h2><p>{t.brandBody}</p></div>
@@ -76,6 +78,6 @@ export default async function YagiPage({ params }: { params: Promise<{ locale: L
       <section id="faq" className="yagi-pad yagi-faq" data-yagi-faq><h2>{t.faqTitle}</h2><div>{[1, 2, 3, 4].map(n => <details key={n}><summary><h3>{t.faq[`q${n}` as 'q1']}</h3><span aria-hidden="true">+</span></summary><p>{t.faq[`a${n}` as 'a1']}</p></details>)}</div></section>
       <section className="yagi-contact yagi-pad yagi-dark" data-yagi-contact><p className="yagi-label">{t.contactLabel}</p><h2>{t.contactTitle}</h2><div><p>{t.contactBody}</p><a className="yagi-button yagi-button-light" href={`mailto:${BUSINESS.email}`}>{t.emailCta}<span aria-hidden="true">↗</span></a></div><a className="yagi-email" href={`mailto:${BUSINESS.email}`}>{BUSINESS.email}</a></section>
     </main>
-    <footer className="yagi-footer yagi-pad"><a className="yagi-footer-wordmark" href="#top" translate="no">{t.brand}<span aria-hidden="true">↗</span></a><p>{t.footerLine}</p><div className="yagi-footer-bottom"><div>{businessFooterLines(locale).map(line => <p key={line}>{line}</p>)}<p>{t.rights}</p></div><nav aria-label={dict.footer.navHeading}><a href={`${app}/legal/privacy`}>{t.privacy}</a><a href={`${app}/legal/terms`}>{t.terms}</a><a href="#top">{t.backTop} ↑</a></nav></div></footer>
+    <footer className="yagi-footer yagi-pad"><a className="yagi-footer-wordmark" href="#top" aria-label={t.brand}><img src="/yagi/yagi-wordmark.png" width="2073" height="758" alt="" loading="lazy" /><span aria-hidden="true">↗</span></a><p>{t.footerLine}</p><div className="yagi-footer-bottom"><div>{businessFooterLines(locale).map(line => <p key={line}>{line}</p>)}<p>{t.rights}</p></div><nav aria-label={dict.footer.navHeading}><a href={`${app}/legal/privacy`}>{t.privacy}</a><a href={`${app}/legal/terms`}>{t.terms}</a><a href="#top">{t.backTop} ↑</a></nav></div></footer>
   </>;
 }
