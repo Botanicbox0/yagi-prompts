@@ -56,10 +56,10 @@ Build a format others can use.","/yagi/[locale]"
 "yagi.pillars.reach.title","크리에이터 채널에 게시","Published by creators","/yagi/[locale]"
 "yagi.pillars.reach.body","TWINGS에서 캠페인에 참여한 크리에이터가 영상을 게시하고 링크를 제출합니다. 브랜드는 워크스페이스에서 결과를 확인합니다.","Participating creators publish their videos and submit links through TWINGS. Brands review the results in their workspace.","/yagi/[locale]"
 "yagi.demoLabel","크리에이터가 참여하는 영상 포맷","A format creators can take part in","/yagi/[locale]"
-"yagi.demoTitle","하나의 포맷,
-각자의 얼굴.","One format.
-Different faces.","/yagi/[locale]"
-"yagi.demoBody","브랜드에 맞춘 포맷 하나로, 여러 크리에이터가 각자 출연하는 영상을 만듭니다. 아래는 서로 다른 인물로 제작한 두 영상입니다. 표정과 움직임, 컷 구성은 달라질 수 있습니다.","We design a format for your brand. Each creator makes a video with their own face. The two films below show different people in the same format; expressions, movement and cuts may vary.","/yagi/[locale]"
+"yagi.demoTitle","하나의 포맷으로
+여러 크리에이터의 영상을 만듭니다.","One format for your brand.
+A video for each creator.","/yagi/[locale]"
+"yagi.demoBody","브랜드에 맞는 영상 포맷을 한 번 제작합니다. 크리에이터들은 이 포맷으로 본인 얼굴이 나오는 영상을 만들고, 캠페인 조건에 따라 각자의 채널에 게시합니다. 아래 두 영상은 서로 다른 인물로 제작한 예시이며, 표정과 움직임, 컷 구성은 달라질 수 있습니다.","We produce a video format for your brand. Creators use it to make videos with their own faces and publish them on their channels under the campaign terms. The two films below show different people in the same format; expressions, movement and cuts may vary.","/yagi/[locale]"
 "yagi.demoSource","기준 사진","Reference photo","/yagi/[locale]"
 "yagi.demoFirst","설계한 포맷","Designed format","/yagi/[locale]"
 "yagi.demoSecond","다른 인물로 만든 영상","Another person","/yagi/[locale]"

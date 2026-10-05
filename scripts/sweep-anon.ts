@@ -1,5 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
+import { request as requestHttp } from 'node:http';
+import { request as requestHttps } from 'node:https';
 import { PGlite } from '@electric-sql/pglite';
 import { DEFAULT_LOCAL_SNAPSHOT } from '@/lib/db/connect-shared';
 import { FIXTURE_SENTINELS } from './fixtures';
@@ -90,6 +92,33 @@ interface Fetched {
   contentDisposition: string | null;
   body: string;
   bytes: Uint8Array;
+}
+
+/** Send an actual Host header. Node's fetch transport can replace it with the URL authority. */
+async function requestOnHost(path: string, host: string): Promise<Fetched> {
+  const url = new URL(`${BASE}${path}`);
+  const transport = url.protocol === 'https:' ? requestHttps : requestHttp;
+  return new Promise((resolveResponse, reject) => {
+    const req = transport(url, { headers: { host } }, response => {
+      const chunks: Buffer[] = [];
+      response.on('data', chunk => chunks.push(Buffer.from(chunk)));
+      response.on('error', reject);
+      response.on('end', () => {
+        const bytes = new Uint8Array(Buffer.concat(chunks));
+        const header = (name: string) => {
+          const value = response.headers[name];
+          return (Array.isArray(value) ? value[0] : value) ?? null;
+        };
+        resolveResponse({ status: response.statusCode ?? 0, location: header('location'),
+          cacheControl: header('cache-control'), contentType: header('content-type'),
+          robotsTag: header('x-robots-tag'), contentDisposition: header('content-disposition'),
+          body: new TextDecoder().decode(bytes), bytes });
+      });
+    });
+    req.on('error', reject);
+    req.setTimeout(15000, () => req.destroy(new Error('Host probe timed out')));
+    req.end();
+  });
 }
 
 async function request(path: string, init?: RequestInit): Promise<Fetched> {
@@ -1010,7 +1039,7 @@ async function sweepCampaigns(): Promise<void> {
     expectPresent(`/${locale}/campaigns never names the client`, listing.body.toLowerCase().includes('morphic') ? 'named' : 'unnamed', 'unnamed');
     expectPresent(`/${locale}/campaigns self-canonicals`, listing.body, `rel="canonical" href="${BASE}/${locale}/campaigns"`);
     const landing = await get(`/${locale}`);
-    expectPresent(`/${locale} nav links the campaigns tab`, landing.body, `href="/${locale}/campaigns"`);
+    expectPresent(`/${locale} nav links campaign participation`, landing.body, `href="/${locale}/campaigns#creators"`);
   }
   expectEqual('an unknown campaign 404s', (await get('/en/campaigns/no-such-campaign')).status, 404);
 
@@ -1215,12 +1244,14 @@ async function main(): Promise<void> {
     expectAbsent(`${locale}: no inherited TWINGS PWA manifest`, production.body, 'rel="manifest"');
     expectPresent(`${locale}: creator app linked`, production.body, `https://twings.app/${locale}/video`);
   }
-  const studioHost = { host: 'yagiworkshop.xyz' };
-  expectEqual('YAGI host landing rewrite', (await request('/ko', { headers: studioHost })).status, 200);
-  expectPresent('YAGI own sitemap', (await request('/sitemap.xml', { headers: studioHost })).body, 'https://yagiworkshop.xyz/en');
-  expectPresent('YAGI own GEO definition', (await request('/llms.txt', { headers: studioHost })).body, '# YAGI');
+  const studioHost = 'yagiworkshop.xyz';
+  const studioLanding = await requestOnHost('/ko', studioHost);
+  expectEqual('YAGI host landing rewrite', studioLanding.status, 200);
+  expectPresent('YAGI host renders studio content', studioLanding.body, 'data-yagi-hero');
+  expectPresent('YAGI own sitemap', (await requestOnHost('/sitemap.xml', studioHost)).body, 'https://yagiworkshop.xyz/en');
+  expectPresent('YAGI own GEO definition', (await requestOnHost('/llms.txt', studioHost)).body, '# YAGI');
   for (const path of ['/admin', '/auth/callback?code=fixture', '/account', '/api/billing/checkout', '/.storage/private.mp4']) {
-    expectEqual(`YAGI blocks private path ${path}`, (await request(path, { headers: studioHost })).status, 404);
+    expectEqual(`YAGI blocks private path ${path}`, (await requestOnHost(path, studioHost)).status, 404);
   }
   await sweepPricingTemplates();
 

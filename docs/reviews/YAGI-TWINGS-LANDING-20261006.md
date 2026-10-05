@@ -37,7 +37,7 @@ Accepted the concrete headline “AI로 만드는 브랜드 필름.” and align
 
 ## Implementation
 
-A second Opus 4.6 review covered the earlier, side-by-side format demonstration. Its proposal and editorial decision are saved in `YAGI-OPUS46-SCALE-20261006.json`. The final headline is “하나의 포맷, 각자의 얼굴.” / “One format. Different faces.” We retained result variation and did not adopt “only the person changed,” because the sample shots and timing differ.
+A second Opus 4.6 review covered the earlier, side-by-side format demonstration. Its proposal and editorial decision are saved in `YAGI-OPUS46-SCALE-20261006.json`. The founder found the short face-focused headline unclear, so the final version spells out the reusable-format benefit: “하나의 포맷으로 여러 크리에이터의 영상을 만듭니다.” / “One format for your brand. A video for each creator.” The body connects own-face creation with publishing under campaign terms. We retained result variation and did not adopt “only the person changed,” because the sample shots and timing differ.
 
 - Production entry: `/yagi/ko` and `/yagi/en` on local/branch previews.
 - TWINGS links to its working `/yagi/[locale]` entry, so creator-to-studio navigation does not depend on the future Framer domain cutover.
@@ -54,6 +54,7 @@ A second Opus 4.6 review covered the earlier, side-by-side format demonstration.
 - Four campaign films/posters: existing `public/reel/campaigns` studio format examples. These are explicitly separate from campaign performance claims.
 - VP9/Opus WebM copies preserve these six existing films for browsers without H.264 playback. MP4 remains the first source. No new render/provider API is invoked.
 - Format comparison: existing `public/reel/studio-demo` assets. The two films differ in timing and shots and are not synchronized or claimed to be frame-for-frame identity substitutions.
+- Each result now has its own reference photo. The original format uses the founder-supplied `codex-clipboard-0683a07d-455f-4e90-900f-fbf2f6aabf67.png`, also observed on slide 4 of the supplied [Pitch presentation](https://pitch.com/v/yagi-workshop_introduction-biu5b4/7a42e89a-914d-4a37-ac3c-624610e3c7f3). The other-person result uses the existing reference selfie, whose relationship to the variant is established in `components/brand-workspace/studio-showcase.tsx`. Images are copied without modification; the new photo is displayed at 74–88px.
 - The Framer hero video was inspected but asset export failed; it is not used in this implementation.
 
 ## Security patch

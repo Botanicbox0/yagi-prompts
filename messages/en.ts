@@ -76,8 +76,8 @@ export const en = {
       }
     },
     demoLabel: "A format creators can take part in",
-    demoTitle: "One format.\nDifferent faces.",
-    demoBody: "We design a format for your brand. Each creator makes a video with their own face. The two films below show different people in the same format; expressions, movement and cuts may vary.",
+    demoTitle: "One format for your brand.\nA video for each creator.",
+    demoBody: "We produce a video format for your brand. Creators use it to make videos with their own faces and publish them on their channels under the campaign terms. The two films below show different people in the same format; expressions, movement and cuts may vary.",
     demoSource: "Reference photo",
     demoFirst: "Designed format",
     demoSecond: "Another person",

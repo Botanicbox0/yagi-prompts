@@ -43,5 +43,5 @@ export function productionAssetAllowed(path: string): boolean {
     || /^\/fonts\/[a-zA-Z0-9_./-]+\.(?:css|woff2?)$/.test(path)
     || ['/yagi/yagi-mark.png', '/yagi/yagi-wordmark.png', '/yagi/twings-mark.png', '/yagi/icon.png', '/yagi/apple-icon.png', '/favicon.ico'].includes(path)
     || /^\/reel\/campaigns\/(?:beauty-rose|retro-phone-01|retro-phone-02|highteen)\.(?:jpg|mp4|webm)$/.test(path)
-    || /^\/reel\/studio-demo\/(?:designed-format\.(?:jpg|mp4|webm)|different-person\.(?:jpg|mp4|webm)|reference-selfie\.jpeg)$/.test(path);
+    || /^\/reel\/studio-demo\/(?:designed-format\.(?:jpg|mp4|webm)|different-person\.(?:jpg|mp4|webm)|reference-selfie\.jpeg|designed-reference\.png)$/.test(path);
 }

@@ -19,8 +19,12 @@ describe('YAGI public production surface', () => {
       expect(html.indexOf('data-yagi-format-section')).toBeLessThan(html.indexOf('data-yagi-work-section'));
       expect(html).toContain('/reel/studio-demo/designed-format.mp4');
       expect(html).toContain('/reel/studio-demo/different-person.mp4');
+      expect(html).toContain('data-format-reference="designed-format"');
+      expect(html).toContain('data-format-reference="different-person"');
+      expect(html).toContain('/reel/studio-demo/designed-reference.png');
       expect(html).toContain('/yagi/yagi-wordmark.png');
       expect((await middleware(req('yagiworkshop.xyz', '/yagi/yagi-wordmark.png'))).status).toBe(200);
+      expect((await middleware(req('yagiworkshop.xyz', '/reel/studio-demo/designed-reference.png'))).status).toBe(200);
     }
   });
   it('serves both locales independently of the TWINGS app', async () => {
