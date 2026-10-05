@@ -84,3 +84,40 @@ Preview screenshots: [hero](assets/yagi-hero-20261006.png), [reference-photo/res
 - Latest deployed preview (commit `9a6136d`) displays both reference photos and plays the actual MP4 demonstration without a media error. The native FAQ opens its answer. Korean and English pages have no horizontal overflow at 320px; the Korean photo/result pairing was also inspected visually at 390px.
 - Google Rich Results, code mode, tested the actual deployed JSON-LD graph plus its matching FAQ HTML on 2026-10-06. It detected one valid Organization item. The preview URL crawl failed, so this does not establish crawlability or indexing of the future custom domain. Repeat URL mode after domain cutover. Evidence: `yagi-google-structured-data.png` in the task's local visualization directory.
 - The earlier CI sweep exposed Node 24 Fetch overriding the supplied `Host` header, plus two outdated campaign-entry expectations. The sweep now sends a real HTTP request with the requested Host and checks the creator anchor intentionally used by navigation; it retains the production-host positive control and private-path refusals.
+
+## Design and interaction audit — 2026-10-06
+
+**Judgment:** the original assets, restrained cream/ink palette, asymmetric film layout and self-hosted typography establish a credible studio foundation. The page is not yet defensibly best-in-class. Its repeated large sales headings and narrow selection of example films still make parts of it feel like a polished landing template. Automated passes establish behavior and regression safety, not premium taste or conversion performance.
+
+The comparison used the founder's [Brandazine reference](https://www.brandazine.com/en) and the published project/case structure of [Nightjar](https://nightjar.co/). Brandazine's actual brand/creator split and media hierarchy were inspected visually; Nightjar's published project information was read, without claiming its animations were tested. The interaction review also used [Vercel's interface guidelines](https://vercel.com/design/guidelines), [native dialog semantics](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/dialog), [playback rejection handling](https://developer.mozilla.org/en-US/docs/Web/API/HTMLMediaElement/play), and [reduced-motion behavior](https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/At-rules/@media/prefers-reduced-motion).
+
+| Criterion | Finding | Revision / observed evidence |
+| --- | --- | --- |
+| Studio identity | Original transparent wordmarks and actual films are stronger than decorative AI illustrations. No gradient orb, glass card, bento badge wall or invented client logo is present. | Kept original assets and their natural film ratios. The TWINGS rabbit loaded correctly; an initially missing lazy image was not mistaken for a white-logo defect. |
+| Type hierarchy | Repeated oversized section titles flatten hierarchy; 10px footer text and 11px playback labels are too small. | Reduced approach/workflow heading scale; footer text is 12px, playback text 13px. Korean remains normally spaced Pretendard. |
+| Portfolio filtering | Four outlined boxes look like generic product UI. | Plain text categories with a restrained active underline. Actual counts: beauty 1, fashion 1, culture 2, all 4. Enter selects a category. |
+| Film inspection | Inline loops lack a comfortable way to inspect the complete work. | Added a native modal cinema viewer with natural-ratio video and browser playback controls. The second video mounts only when requested; initial HTML still contains one video per tile. |
+| Media resilience | Rejected play promises could silently leave a dead control. | Localized loading/error/retry feedback; deliberate AbortError pauses are not reported as failures. Rejection and success cases have tests. |
+| Keyboard / focus | Film viewing must remain usable without a mouse. | Close button receives focus, Tab remains inside the native modal, Escape closes and restores the opening button. Background videos are paused and page scrolling locked while open. |
+| Touch / responsive | Language links were 16px wide and legal links only 18px tall. A later 320px Korean check found a 2px footer-arrow overflow. | Language targets now 44×44px; footer links have 44px minimum height. Mobile wordmark gap reduced, then document width and scroll width both measured 305px at a 320px viewport. |
+| Contrast | Muted text needs measurable readability. | Observed computed colors give 5.26:1 on cream and 8.84:1 on ink. This samples body/footer text; it is not a complete WCAG certification. |
+
+Browser checks used Chromium in the Codex in-app browser at 320, 390, 768 and 1440px, across Korean and English. A 390px portrait viewer fit within the viewport with a 44px close button and uncropped 9:16 video. The 30.08-second landscape film played; clicking its native timeline sought to 13.49 seconds, with zero background films playing. At least one enlarged MP4 reached readyState 4 without a media error.
+
+Native fullscreen is **not a passed check**: activating the browser control produced a full-canvas view, but the DOM fullscreen signal remained false and Escape also closed the modal in this browser. Real Chrome/Safari fullscreen needs a separate check. Reduced-motion guards were inspected in code; this browser does not offer motion-preference emulation. Physical iPhone/Safari/Firefox, field Core Web Vitals/INP, target-buyer interviews and conversion impact were not tested.
+
+The largest remaining premium gap is editorial: a more varied, tightly selected showreel and genuine project case pages explaining the brief, production choices and result. Use only approved work, public client names and existing approved metrics. Do not fabricate missing case detail or add decorative effects to disguise it. Bespoke motion can follow that art direction, but a generic cursor or gratuitous scroll takeover is not a substitute.
+
+The copy export now contains 127 entries: the earlier 122 reviewed entries plus five new localized media-control/status strings. The new five were not submitted to Opus; the preserved Opus review remains evidence for its original scope only.
+
+Audit regression verification on implementation commit `d7697e47b5073816365801104961ccb23d8942dd`:
+
+- `npx tsc --noEmit`: passed, exit 0, before the full test suite.
+- `npx vitest run --maxWorkers=2 --reporter=verbose`: **185 files / 2,002 tests passed**, exit 0, 1,242.77 seconds. All existing suites were included.
+- `npm run build:local`: passed, exit 0; `/yagi/ko` and `/yagi/en` are static, 105kB reported First Load JS including the shared runtime. This is a build-size measurement, not field performance.
+- `npm run start:local`: ready on port 3000 with the local PGlite snapshot and local storage.
+- `npm run sweep:anon`: **SWEEP PASSED — 701/701**, exit 0.
+- Deployed branch preview: new viewer buttons present; actual enlarged MP4 played at readyState 4 with zero background videos playing and no captured console warning/error. Evidence: [work and filters](assets/yagi-audit-work-20261006.png), [native film viewer](assets/yagi-audit-viewer-20261006.png).
+- Final local production route opened successfully. The in-app browser had intermittent stale-tab/viewport-transition stalls during QA; a fresh tab recovered. These tool stalls are not counted as successful interactions or attributed to an application defect without evidence.
+
+No required local regression step was skipped. Browser/device and field-performance limitations remain as listed above. Production service, DNS and cloud state were not changed.
