@@ -187,7 +187,10 @@ describe("brand workspace API boundary", () => {
     expect(response.status).toBe(200);expect(response.headers.get('location')).toBeNull();
     expect(response.headers.get('cache-control')).toBe('private, no-store');
     expect(mocks.signed).not.toHaveBeenCalled();
-    expect(new Uint8Array(await response.arrayBuffer())).toEqual(bytes);
+    // Compare all 6MB natively; generic deep equality enumerates millions of byte keys.
+    const received = Buffer.from(await response.arrayBuffer());
+    expect(received.length).toBe(bytes.length);
+    expect(received.equals(Buffer.from(bytes))).toBe(true);
   });
   it("HEAD also checks access and does not mint URLs or load large bytes", async () => {
     const response = await HEAD(read(), context);
