@@ -44,6 +44,11 @@ Made with AI.","/yagi/[locale]"
 "yagi.pause","영상 일시정지","Pause film","/yagi/[locale]"
 "yagi.soundOn","소리 켜기","Turn sound on","/yagi/[locale]"
 "yagi.soundOff","소리 끄기","Mute film","/yagi/[locale]"
+"yagi.viewFilm","크게 보기","View film","/yagi/[locale]"
+"yagi.closeFilm","영상 닫기","Close film","/yagi/[locale]"
+"yagi.filmLoading","영상을 불러오는 중입니다.","Loading film…","/yagi/[locale]"
+"yagi.filmError","영상을 재생하지 못했습니다. 다시 시도해주세요.","The film could not play. Please try again.","/yagi/[locale]"
+"yagi.retryFilm","다시 재생","Try again","/yagi/[locale]"
 "yagi.approachLabel","제작 방식","The YAGI approach","/yagi/[locale]"
 "yagi.approachTitle","한 편을 만들고,
 함께 쓸 포맷으로 넓힙니다.","Make the film.
