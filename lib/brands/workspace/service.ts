@@ -7,6 +7,7 @@ import { STAGING_BUCKET, type StorageDriver } from '@/lib/storage';
 import type { BrandWorkspaceChoice, BrandWorkspaceScope } from './selection';
 import { hasStaffReadAccess } from './staff';
 import { UNKNOWN_POST_PRESENTATION } from './performance';
+import { completedMetricsPermit } from './completed-metrics-once';
 import {
   BrandHttpsUrlSchema, BrandOrganizationSchema, BrandProjectSchema, BrandProjectStatusSchema, BrandContentSchema,
   BrandDecisionSchema, BrandMessageSchema, BrandPostSchema, BrandReportSchema, BrandAttachmentSchema,
@@ -505,7 +506,14 @@ export async function saveBrandPostMetricsBatch(deps: BrandWorkspaceDeps, viewer
       if (old.payload_sha256 !== digest) throw new Denied('conflict');
       return { id: String(old.id), saved: Number(old.row_count), measuredAt: stamp(old.measured_at) };
     }
-    if (p.status !== 'active') throw new Denied('not_active');
+    if (p.status !== 'active') {
+      const permit = completedMetricsPermit();
+      if (p.status !== 'completed' || !permit || permit.projectId !== p.id || permit.requestId !== v.requestId.toLowerCase()) throw new Denied('not_active');
+      // The project lock serializes attempts by different administrators too. The append-only
+      // ledger consumes this exact request globally; author-scoped retries above remain harmless.
+      const used = await sql.query('select id from brand_post_collection_batches where project_id=$1 and request_id=$2', [p.id, permit.requestId]);
+      if (used.rows.length) throw new Denied('conflict');
+    }
     // Locked in id order so two overlapping saves queue instead of deadlocking.
     const posts = (await sql.query('select * from brand_posts where project_id=$1 and id=any($2::uuid[]) order by id for update', [p.id, rows.map(r => r.postId)])).rows;
     if (posts.length !== rows.length) throw new Denied('not_found');

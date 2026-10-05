@@ -68,4 +68,20 @@ describe("studio collection console", () => {
     if (!parsed.ok) throw Error(parsed.detail);
     expect(parsed.value.rows).toEqual([expect.objectContaining({ postId: P2, expectedRevision: 3, views: 0, likes: 12, comments: null })]);
   });
+
+  for (const locale of ['ko', 'en'] as const) {
+    it(`${locale}: a completed exception uses its fixed request and offers only one combined save`, () => {
+      const b = getDictionary(locale).brandWorkspace;
+      const request = 'c0000000-0000-4000-8000-000000000099';
+      const render = (status: 'completed' | 'cancelled') => renderToStaticMarkup(<CollectionConsole projectId="b0000000-0000-4000-8000-000000000001" status={status} posts={posts} b={b} locale={locale} completedRequestId={request} />);
+      const html = render('completed');
+      expect(html).not.toContain('<fieldset disabled');
+      expect(html).toContain(b.collectionOnceHint);
+      expect(html).toContain(b.collectionSaveOnce);
+      expect(html).toContain(`name="requestId" value="${request}"`);
+      expect(html).not.toContain('name="only"');
+      expect(render('cancelled')).toContain('<fieldset disabled');
+      expect(render('cancelled')).not.toContain(b.collectionOnceHint);
+    });
+  }
 });

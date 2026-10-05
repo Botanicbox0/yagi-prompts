@@ -13,6 +13,7 @@ import type { AdminOperationName } from "@/lib/admin/operations";
 import { ProjectDetail } from "@/components/brand-workspace/project-detail";
 import { BrandUpload } from "@/components/brand-workspace/upload";
 import { CollectionConsole } from "@/components/brand-workspace/collection-console";
+import { availableCompletedMetricsRequest } from "@/lib/brands/workspace/completed-metrics-once";
 import { PostPresentationAdmin } from "@/components/brand-workspace/post-presentation-admin";
 import { postShortId } from "@/lib/brands/workspace/performance";
 import type { ReactNode } from "react";
@@ -36,6 +37,7 @@ export default async function StudioBrandProject({
   if (!sql) return <p role="alert">{b.unavailable}</p>;
   const p = await loadStudioProject({ sql }, viewer, id);
   if (!p) notFound();
+  const completedRequestId = p.status === 'completed' ? await availableCompletedMetricsRequest(sql, id) : null;
   const refusals = brandRefusals(dict.admin);
   const covers = p.attachments.filter((a) => ["image/jpeg", "image/png", "image/webp"].includes(a.mime));
   const Form = ({
@@ -263,6 +265,7 @@ export default async function StudioBrandProject({
         </Form>
       </section>}
       <CollectionConsole
+        completedRequestId={completedRequestId}
         projectId={id}
         status={p.status}
         posts={p.posts}

@@ -21,14 +21,17 @@ export function CollectionConsole({
   posts,
   b,
   locale,
+  completedRequestId,
 }: {
   projectId: string;
   status: BrandProjectStatus;
   posts: BrandPost[];
   b: BrandCopy;
   locale: string;
+  completedRequestId?: string | null;
 }) {
-  const open = status === "active";
+  const once = status === "completed" && !!completedRequestId;
+  const open = status === "active" || once;
   return (
     <section className="bw-panel" data-collection-console={open ? "open" : "closed"}>
       <h2>{b.collectionTitle}</h2>
@@ -37,7 +40,7 @@ export function CollectionConsole({
           {b.collectionClosed}
         </p>
       )}
-      {open && <p className="bw-note">{b.collectionHint}</p>}
+      {open && <p className="bw-note">{once ? b.collectionOnceHint : b.collectionHint}</p>}
       {open && <p className="bw-muted">{b.viewsApproximateHint}</p>}
       {posts.length === 0 ? (
         <p className="bw-muted">{b.noPosts}</p>
@@ -48,12 +51,12 @@ export function CollectionConsole({
           className="bw-form"
         >
           <input type="hidden" name="projectId" value={projectId} />
-          <input type="hidden" name="requestId" value={randomUUID()} />
+          <input type="hidden" name="requestId" value={once ? completedRequestId! : randomUUID()} />
           <fieldset disabled={!open} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
             {/* First submit in tree order on purpose: Enter inside any cell means "save the ticked
                 rows", never the first row's own button. With nothing ticked that save is refused. */}
             <button className="bw-button bw-primary" type="submit">
-              {b.collectionSaveSelected}
+              {once ? b.collectionSaveOnce : b.collectionSaveSelected}
             </button>
             <p className="bw-muted">
               {b.collectionLimit.replace(
@@ -174,7 +177,7 @@ export function CollectionConsole({
                             b.notMeasured}
                         </td>
                         <td>
-                          <button
+                          {!once && <button
                             className="bw-button"
                             type="submit"
                             name="only"
@@ -182,7 +185,7 @@ export function CollectionConsole({
                             style={{ whiteSpace: "nowrap" }}
                           >
                             {b.collectionSaveRow}
-                          </button>
+                          </button>}
                         </td>
                       </tr>
                     );

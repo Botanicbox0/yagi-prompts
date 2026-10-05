@@ -586,6 +586,8 @@ export const ko: Dictionary = {
     collectionTitle: '지표 수집',
     collectionHint: '게시물을 열어 다섯 항목을 확인하세요. 확인하지 못한 값은 비워 두고, 실제로 0인 경우에만 0을 입력하세요. 선택한 행은 저장한 시각의 측정값으로 기록됩니다. 현재는 직접 확인해 입력하는 방식입니다.',
     collectionClosed: '진행 중인 캠페인에서만 지표를 수집합니다. 완료하거나 종료한 캠페인의 지표는 마지막 수집 값으로 고정됩니다.',
+    collectionOnceHint: '이 캠페인에 한해 지표를 한 번 업데이트할 수 있습니다. 업데이트할 게시물을 모두 선택하고 다섯 가지 수치를 확인한 뒤 한 번에 저장하세요. 저장 후 다시 잠기며, 캠페인의 완료 상태와 기존 리포트는 유지됩니다.',
+    collectionSaveOnce: '선택한 게시물 지표 한 번 업데이트',
     collectionSelect: '선택',
     collectionLastChecked: '마지막 수집',
     collectionSaveRow: '이 행 저장',

@@ -575,6 +575,8 @@ export const en = {
     collectionTitle: 'Measurement collection',
     collectionHint: 'Open each post and check all five metrics. Leave anything you could not check blank; enter 0 only for a confirmed zero. Selected rows are recorded as measured at the time you save. Collection is currently manual.',
     collectionClosed: 'Measurements are collected only while a campaign is active. Once a campaign is completed or closed, its measurements stay at the last collected values.',
+    collectionOnceHint: 'This campaign has permission for one metrics update. Select every post to update, check all five counts, and save them together. Collection locks again after the save. The campaign stays completed and existing reports remain unchanged.',
+    collectionSaveOnce: 'Update selected posts once',
     collectionSelect: 'Select',
     collectionLastChecked: 'Last collected',
     collectionSaveRow: 'Save this row',

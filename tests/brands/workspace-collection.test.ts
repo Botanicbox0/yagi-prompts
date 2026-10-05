@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import type { PGlite } from '@electric-sql/pglite';
 import { freshDb, runner } from '@/tests/helpers/pglite';
@@ -33,7 +33,7 @@ describe('brand post collection: history, latest projection and the batch consol
     if (!org.ok) throw Error(org.code); orgId = org.id;
     projectId = await newProject(); revision = 1;
   });
-  afterEach(async () => { await db?.close(); });
+  afterEach(async () => { vi.unstubAllEnvs(); await db?.close(); });
 
   let slot = 0;
   const newPost = async (metrics: Record<string, unknown> = {}, project = projectId) => {
@@ -182,6 +182,56 @@ describe('brand post collection: history, latest projection and the batch consol
     await expect(sql.query('delete from brand_post_measurements')).rejects.toThrow(/immutable/i);
     await expect(sql.query('update brand_post_collection_batches set row_count=9')).rejects.toThrow(/immutable/i);
     await expect(sql.query('delete from brand_post_collection_batches')).rejects.toThrow(/immutable/i);
+  });
+
+  it('allows only the configured completed campaign and request once, retaining frozen reports and normal guards', async () => {
+    const first = await newPost({ metricsSource: 'studio_review', measuredAt: '2026-09-02T09:00:00+09:00', views: 50 });
+    await publishBrandReport({ sql }, studio, { projectId, requestId: randomUUID(), summary: 'Original final', periodStart: '2026-09-01', periodEnd: '2026-09-30' });
+    await activateBrandProject({ sql }, studio, { projectId, expectedRevision: 1, status: 'completed' });
+    const input = batch([row(first, 0, { views: 600 })]);
+    const permit = { projectId, requestId: input.requestId, expiresAt: new Date(Date.now() + 3600000).toISOString() };
+    expect(await saveBrandPostMetricsBatch({ sql }, studio, input)).toMatchObject({ ok: false, code: 'not_active' });
+    vi.stubEnv('BRAND_COMPLETED_METRICS_ONCE', JSON.stringify(permit));
+    expect(await saveBrandPostMetricsBatch({ sql }, a, input)).toMatchObject({ ok: false, code: 'forbidden' });
+    expect(await saveBrandPostMetricsBatch({ sql }, studio, { ...input, requestId: randomUUID() })).toMatchObject({ ok: false, code: 'not_active' });
+    expect(await saveBrandPostMetricsBatch({ sql }, studio, { ...input, rows: [row(first, 9)] })).toMatchObject({ ok: false, code: 'conflict' });
+    expect(await updateBrandPostMetrics({ sql }, studio, single(first, 0, { measuredAt: new Date().toISOString() }))).toMatchObject({ ok: false, code: 'not_active' });
+    expect((await sql.query('select id from brand_post_collection_batches')).rows).toHaveLength(0);
+    const saved = await saveBrandPostMetricsBatch({ sql }, studio, input);
+    expect(saved).toMatchObject({ ok: true, saved: 1 });
+    expect(await saveBrandPostMetricsBatch({ sql }, studio, input)).toEqual(saved);
+    expect(await saveBrandPostMetricsBatch({ sql }, studio, { ...input, rows: [row(first, 1, { views: 601 })] })).toMatchObject({ ok: false, code: 'conflict' });
+    const otherAdmin = 'f0000000-0000-4000-8000-000000000014';
+    await seedProfile(sql, { id: otherAdmin, isAdmin: true });
+    expect(await saveBrandPostMetricsBatch({ sql }, viewer(otherAdmin, true), input)).toMatchObject({ ok: false, code: 'conflict' });
+    const loaded = (await loadBrandProject({ sql }, a, projectId))!;
+    expect(loaded.status).toBe('completed');
+    expect(loaded.posts[0]).toMatchObject({ views: 600, metricRevision: 1 });
+    expect(loaded.reports[0]!.snapshot.viewsTotal).toBe(50);
+    expect((await history(first)).map(r => Number(r.views))).toEqual([50, 600]);
+    expect((await sql.query('select id from brand_post_collection_batches')).rows).toHaveLength(1);
+  });
+
+  it('fails closed for expired, malformed or differently scoped one-time permits, including cancelled campaigns', async () => {
+    const postId = await newPost();
+    await activateBrandProject({ sql }, studio, { projectId, expectedRevision: 1, status: 'completed' });
+    const input = batch([row(postId, 0)]);
+    for (const value of [
+      'invalid',
+      JSON.stringify({ projectId, requestId: input.requestId, expiresAt: 'invalid' }),
+      JSON.stringify({ projectId, requestId: input.requestId, expiresAt: new Date(Date.now() - 1000).toISOString() }),
+      JSON.stringify({ projectId: randomUUID(), requestId: input.requestId, expiresAt: new Date(Date.now() + 3600000).toISOString() }),
+    ]) {
+      vi.stubEnv('BRAND_COMPLETED_METRICS_ONCE', value);
+      expect(await saveBrandPostMetricsBatch({ sql }, studio, input)).toMatchObject({ ok: false, code: 'not_active' });
+    }
+    const cancelled = await newProject();
+    const other = await newPost({}, cancelled);
+    await activateBrandProject({ sql }, studio, { projectId: cancelled, expectedRevision: 1, status: 'cancelled' });
+    const cancelledInput = { projectId: cancelled, requestId: randomUUID(), rows: [row(other, 0)] };
+    vi.stubEnv('BRAND_COMPLETED_METRICS_ONCE', JSON.stringify({ ...cancelledInput, rows: undefined, expiresAt: new Date(Date.now() + 3600000).toISOString() }));
+    expect(await saveBrandPostMetricsBatch({ sql }, studio, cancelledInput)).toMatchObject({ ok: false, code: 'not_active' });
+    expect(await history(postId)).toHaveLength(0);
   });
 });
 
