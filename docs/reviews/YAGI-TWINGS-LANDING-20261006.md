@@ -68,3 +68,19 @@ Branch/PR review precedes merge. Main is not pushed by the executor. Changing Fr
 ## Validation
 
 New failing tests were recorded before implementation, then passed: independent host boundary/SEO and persistent creator discovery. Full typecheck, Vitest, local build, HTTP sweep and responsive browser results are recorded in the PR once completed.
+
+Final local verification on implementation commit `9a6136dd2129b7034f47482c1885eff4cd12d890`:
+
+- `npx tsc --noEmit`: passed. Final affected route/dictionary suites: 13 tests passed.
+- `npx vitest run --maxWorkers=2 --reporter=verbose`: **184 files / 1,998 tests passed**, exit 0. Earlier resource-related timeout runs were not treated as passes.
+- `npm run build:local`: passed, exit 0; both YAGI locale pages are statically generated.
+- `npm run start:local`: ready on port 3000, explicitly using the PGlite snapshot and local storage.
+- `npm run sweep:anon`: **SWEEP PASSED — 701/701 checks**, exit 0, including production-host routing, private-path refusals and independent studio SEO.
+- `npm audit`: zero vulnerabilities after the dependency patch.
+- Final production browser: the different-person MP4 reached readyState 4 and played without a media error; no browser console error was captured. Original-format MP4 playback was separately verified on the deployment preview.
+
+Preview screenshots: [hero](assets/yagi-hero-20261006.png), [reference-photo/result pairs](assets/yagi-format-pairs-20261006.png).
+
+- Latest deployed preview (commit `9a6136d`) displays both reference photos and plays the actual MP4 demonstration without a media error. The native FAQ opens its answer. Korean and English pages have no horizontal overflow at 320px; the Korean photo/result pairing was also inspected visually at 390px.
+- Google Rich Results, code mode, tested the actual deployed JSON-LD graph plus its matching FAQ HTML on 2026-10-06. It detected one valid Organization item. The preview URL crawl failed, so this does not establish crawlability or indexing of the future custom domain. Repeat URL mode after domain cutover. Evidence: `yagi-google-structured-data.png` in the task's local visualization directory.
+- The earlier CI sweep exposed Node 24 Fetch overriding the supplied `Host` header, plus two outdated campaign-entry expectations. The sweep now sends a real HTTP request with the requested Host and checks the creator anchor intentionally used by navigation; it retains the production-host positive control and private-path refusals.
