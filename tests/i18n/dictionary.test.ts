@@ -62,6 +62,7 @@ describe('dictionary completeness (§3.9)', () => {
   it('actually translates the prose rather than copying English into ko', () => {
     // A handful of values are legitimately identical in both locales (brand, ad slate, prices).
     const sharedByDesign = new Set([
+      'yagi.brand', // Founder-named production brand, identical in both languages.
       'meta.siteName',
       'nav.localeEn',
       'nav.localeKo',

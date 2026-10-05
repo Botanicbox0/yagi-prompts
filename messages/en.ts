@@ -1,5 +1,179 @@
 /** PLAN §3.9 — UI strings as dictionary modules. `en` is the shape; `ko` must match it. */
 export const en = {
+  yagi: {
+    brand: "YAGI",
+    title: "YAGI — AI production & creator campaigns",
+    description: "YAGI is an AI production studio for brand films and creator campaigns. On TWINGS, creators make videos with their own faces and join campaigns.",
+    skip: "Skip to content",
+    nav: {
+      work: "Work",
+      approach: "Approach",
+      brands: "For brands",
+      creators: "For creators",
+      contact: "Start a project",
+      language: "Choose language"
+    },
+    eyebrow: "AI production · Creator campaigns",
+    headline: "Brand films.\nMade with AI.",
+    intro: "We produce brand films and video formats that creators can use with their own faces. Then we bring them together in a campaign.",
+    viewWork: "Explore our work",
+    heroCaption: "Beauty film · Studio example",
+    definition: "YAGI is an AI production studio for brand films and creator campaigns. We direct the films, agree how participating creators’ likenesses can be used, and coordinate creator publishing through TWINGS.",
+    workLabel: "Selected formats",
+    workTitle: "Work from the studio.",
+    workBody: "Beauty films, fashion spots and formats creators can use. These are studio production examples.",
+    filters: {
+      all: "All formats",
+      beauty: "Beauty",
+      fashion: "Fashion",
+      culture: "Culture"
+    },
+    work: {
+      beauty: {
+        title: "Rose beauty film",
+        category: "Beauty / AI film",
+        description: "A beauty film built around roses and pink textures.",
+        alt: "A beauty film in rose tones"
+      },
+      retro1: {
+        title: "Retro telephone",
+        category: "Culture / Creator format",
+        description: "A portrait video format featuring a vintage telephone.",
+        alt: "A portrait-format retro telephone film"
+      },
+      retro2: {
+        title: "Retro telephone · Another lead",
+        category: "Culture / Format variation",
+        description: "The same format, made with a different person.",
+        alt: "Another person in the retro telephone format"
+      },
+      highteen: {
+        title: "High-teen film",
+        category: "Fashion / AI film",
+        description: "A fashion film with the mood of a teen movie.",
+        alt: "A cinematic high-teen fashion scene"
+      }
+    },
+    play: "Play film",
+    pause: "Pause film",
+    soundOn: "Turn sound on",
+    soundOff: "Mute film",
+    approachLabel: "The YAGI approach",
+    approachTitle: "Make the film.\nBuild a format others can use.",
+    approachBody: "Creators don’t have to start from scratch. We set the visual direction for your brand, then build a format they can use with their own faces.",
+    pillars: {
+      craft: {
+        title: "Direction for your brand",
+        body: "Your product and message guide the concept, composition and movement. We test what AI can deliver in the actual film."
+      },
+      people: {
+        title: "Participation with consent",
+        body: "We agree on who appears and where the content goes. Each creator’s likeness is used only within the agreed scope and terms."
+      },
+      reach: {
+        title: "Published by creators",
+        body: "Participating creators publish their videos and submit links through TWINGS. Brands review the results in their workspace."
+      }
+    },
+    demoLabel: "A format with different faces",
+    demoTitle: "One format.\nAnother person in the film.",
+    demoBody: "Select either video to compare. Expressions, movement and shots can vary with each person.",
+    demoSource: "Reference photo",
+    demoFirst: "Designed format",
+    demoSecond: "Another person",
+    demoAlt: "Reference portrait used in the studio demonstration",
+    demoCta: "Make a film with my face",
+    brandLabel: "For brands",
+    brandTitle: "What are you\nplanning to make?",
+    brandBody: "Commission a film, run a creator campaign, or do both. Tell us the deliverables and channels you need. We’ll work out the scope together.",
+    services: {
+      production: {
+        title: "AI production",
+        body: "Brand films, fashion and beauty visuals, music videos and AI VFX. We start from your concept and references, set the direction and deliver the film."
+      },
+      campaigns: {
+        title: "Creator campaigns",
+        body: "We produce video formats creators can use with their own faces. Recruitment, publishing and result reviews are handled through TWINGS."
+      }
+    },
+    briefCta: "Tell us about your project",
+    workspaceCta: "Open brand workspace",
+    scopeNote: "Scope, schedule, usage rights and fees are agreed for each project.",
+    proofLabel: "A completed campaign for a global AI platform",
+    proofTitle: "Results from a campaign.",
+    proofVideos: "Videos",
+    proofViews: "Views",
+    proofOrganic: "Derivative organic posts",
+    proofNote: "Results from a completed campaign. Future performance depends on the project.",
+    creatorLabel: "For creators · TWINGS",
+    creatorTitle: "Find a film you like.\nPut yourself in it.",
+    creatorBody: "TWINGS is where you become the lead in a trending video format with your own face. Browse the examples, pick a format and apply to AI campaigns from brands.",
+    creatorMake: "Explore TWINGS formats",
+    creatorCampaigns: "Discover creator campaigns",
+    creatorNote: "Use only your own face. Check each campaign’s participation terms and compensation before applying.",
+    flowLabel: "How we work",
+    flowTitle: "How a project takes shape.",
+    flow: {
+      brief: {
+        title: "Tell us the goal",
+        body: "Share the idea, audience, channels and desired deliverables."
+      },
+      design: {
+        title: "Set the direction",
+        body: "We align the visual direction, scope and usage terms."
+      },
+      release: {
+        title: "Create and publish",
+        body: "We produce the work and coordinate the agreed creator campaign."
+      },
+      review: {
+        title: "Review the result",
+        body: "Published links and campaign results come together in the brand workspace."
+      }
+    },
+    faqTitle: "Frequently asked questions",
+    faq: {
+      q1: "How are YAGI and TWINGS connected?",
+      a1: "YAGI is the production studio. TWINGS is the creator app where you make videos with your own face and join AI campaigns. Brands work with YAGI; creators use TWINGS.",
+      q2: "Can I commission a film without a creator campaign?",
+      a2: "Yes. You can discuss a standalone film or a campaign that combines production and creator publishing. Scope and fees are agreed for your project.",
+      q3: "Can a brand reuse creator content?",
+      a3: "Usage follows the agreed scope, channels and period. For anything beyond that, contact us and confirm the terms before using the content.",
+      q4: "What do I need to make a video on TWINGS?",
+      a4: "Choose a format and set up your own face, including the required verification. Each template is a one-time purchase per video where sales are open. AI videos may not be perfect; check TWINGS for availability and pricing."
+    },
+    contactLabel: "Start a project",
+    contactTitle: "What would you\nlike to make?",
+    contactBody: "Send a reference or a rough idea. We’ll discuss how to make it and what the project needs.",
+    emailCta: "Email YAGI",
+    footerLine: "An AI production studio for brand films and creator campaigns.",
+    privacy: "Privacy",
+    terms: "Terms",
+    backTop: "Back to top",
+    rights: "YAGI · All rights reserved."
+  },
+  creatorJourney: {
+    title: "Pick a format. Make it yours.",
+    body: "Browse the examples and pick a format. Set up your own face to make a video with you in it.",
+    steps: {
+      choose: {
+        title: "Pick a format",
+        body: "Watch the example before choosing your video format."
+      },
+      face: {
+        title: "Set up your face",
+        body: "Use your own photo and complete the required face checks."
+      },
+      create: {
+        title: "Check your video",
+        body: "Review your finished film in My work. AI videos may not be perfect."
+      }
+    },
+    campaignTitle: "Join a brand campaign.",
+    campaignBody: "Discover AI campaigns, review their participation and compensation terms, then apply. You can keep exploring formats while recruitment is closed.",
+    campaignCta: "Explore creator campaigns",
+    brandCta: "For brands: meet YAGI"
+  },
   portrait: {
     title: 'A familiar face. Yours.',
     intro: 'Create two front-facing portraits from one selfie. Choose the one that looks more like you for your next videos and images.',

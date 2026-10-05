@@ -3,7 +3,7 @@ import { SiteFooter } from '@/components/site-footer';
 import { LocaleToggle } from '@/components/locale-toggle';
 import { PLAYBOOKS_IN_NAV } from '@/lib/flags';
 import { templatesHref } from '@/lib/prompts/links';
-import { brandEnquiryHref, campaignsHref } from '@/lib/campaigns/links';
+import { brandEnquiryHref, creatorCampaignsHref } from '@/lib/campaigns/links';
 import { LEGAL_DOCS, businessFooterLines, legalDocument } from '@/lib/legal/documents';
 import { legalHref } from '@/lib/legal/links';
 import type { Dictionary } from '@/lib/i18n/dictionaries';
@@ -24,7 +24,7 @@ export function siteLinks(locale: Locale, dict: Dictionary): NavLink[] {
   const links: NavLink[] = [
     { href: templatesHref(locale, 'video'), label: dict.nav.video },
     { href: templatesHref(locale, 'image'), label: dict.nav.image },
-    { href: campaignsHref(locale), label: dict.nav.campaigns },
+    { href: creatorCampaignsHref(locale), label: dict.nav.campaigns },
   ];
   if (PLAYBOOKS_IN_NAV) links.push({ href: '/library', label: dict.nav.library });
   links.push({ href: `/${locale}/pricing`, label: dict.nav.pricing });

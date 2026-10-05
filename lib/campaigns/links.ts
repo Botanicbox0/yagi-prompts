@@ -17,6 +17,11 @@ export function campaignsHref(locale: Locale | string): string {
   return `/${locale}${CAMPAIGNS_REST}`;
 }
 
+/** The consumer entry lands directly on participation, after the brand introduction. */
+export function creatorCampaignsHref(locale: Locale | string): string {
+  return `${campaignsHref(locale)}#creators`;
+}
+
 /** The brand half of the campaigns page (2026-09-11): the pitch and the enquiry form, one anchor. */
 export const BRANDS_ANCHOR = 'brands';
 

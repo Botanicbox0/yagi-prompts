@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { updateSession, withCookies } from '@/lib/supabase/middleware';
 import { devIdentityUserId } from '@/lib/auth/dev-identity';
 import { chooseProviderHref } from '@/lib/auth/providers';
+import { productionAssetAllowed, productionLlms, productionSitemap, YAGI_ORIGIN } from '@/lib/yagi/seo';
 import {
   adminRouteAllowed,
   brandRouteAllowed,
@@ -49,6 +50,33 @@ export async function middleware(request: NextRequest) {
   const surface = resolveSurface(new URL(request.url), request.headers);
   const privateHeaders = { 'Cache-Control': NO_STORE, 'X-Robots-Tag': 'noindex, nofollow' };
   if (surface === 'unknown' || requestUrl === null) return new NextResponse(null, { status: 404, headers: privateHeaders });
+  // An independent public studio surface, evaluated before any app/session transport.
+  if (surface === 'production') {
+    if (!['GET', 'HEAD'].includes(request.method)) return new NextResponse(null, { status: 404, headers: privateHeaders });
+    if (requestUrl.hostname === 'www.yagiworkshop.xyz') {
+      const publicPath = pathname === '/' || /^\/(?:en|ko)\/?$/.test(pathname)
+        || ['/robots.txt', '/sitemap.xml', '/llms.txt', '/llms-full.txt'].includes(pathname) || productionAssetAllowed(pathname);
+      return publicPath ? NextResponse.redirect(new URL(`${pathname}${search}`, YAGI_ORIGIN), 308)
+        : new NextResponse(null, { status: 404, headers: privateHeaders });
+    }
+    const documentHeaders = { 'Cache-Control': 'public, max-age=3600', 'Content-Type': 'text/plain; charset=utf-8' };
+    if (pathname === '/robots.txt') return new NextResponse(request.method === 'HEAD' ? null : `User-agent: *\nAllow: /en\nAllow: /ko\nDisallow: /yagi/\nSitemap: ${YAGI_ORIGIN}/sitemap.xml\n`, { headers: documentHeaders });
+    if (pathname === '/sitemap.xml') return new NextResponse(request.method === 'HEAD' ? null : productionSitemap(), { headers: { ...documentHeaders, 'Content-Type': 'application/xml; charset=utf-8' } });
+    if (pathname === '/llms.txt' || pathname === '/llms-full.txt') return new NextResponse(request.method === 'HEAD' ? null : productionLlms(pathname === '/llms-full.txt'), { headers: documentHeaders });
+    if (productionAssetAllowed(pathname)) return NextResponse.next();
+    if (pathname === '/') {
+      const locale = resolveLocale({ urlLocale: null, cookieLocale: request.cookies.get(LOCALE_COOKIE)?.value ?? null, acceptLanguage: request.headers.get('accept-language') });
+      return NextResponse.redirect(new URL(`/${locale}`, YAGI_ORIGIN), 307);
+    }
+    if (/^\/(?:ko|en)\/?$/.test(pathname)) {
+      const target = request.nextUrl.clone();
+      target.pathname = `/yagi/${pathname.split('/')[1]}`;
+      return NextResponse.rewrite(target);
+    }
+    return new NextResponse(null, { status: 404, headers: privateHeaders });
+  }
+  // Local and branch previews have a stable explicit path, without consumer locale redirects.
+  if (surface === 'consumer' && /^\/yagi\/(?:en|ko)(?:\/|$)/.test(pathname)) return NextResponse.next();
   if (['admin', 'brand', 'brands'].includes(surface) && pathname === '/robots.txt' && ['GET', 'HEAD'].includes(request.method)) {
     return new NextResponse(request.method === 'HEAD' ? null : 'User-agent: *\nDisallow: /\n', {
       headers: { ...privateHeaders, 'Content-Type': 'text/plain; charset=utf-8' },

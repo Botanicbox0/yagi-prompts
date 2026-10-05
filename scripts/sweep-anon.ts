@@ -949,7 +949,7 @@ async function sweepLandingTemplates(): Promise<void> {
   expectEqual('renders 200', page.status, 200);
   expectPresent('nav points at the video tab', page.body, 'href="/en/video"');
   expectPresent('nav points at the image tab', page.body, 'href="/en/image"');
-  expectPresent('nav points at campaigns', page.body, 'href="/en/campaigns"');
+  expectPresent('nav points at creator campaigns', page.body, 'href="/en/campaigns#creators"');
   expectAbsent('nav no longer points at prompts', page.body, 'href="/en/prompts"');
   expectAbsent('nav no longer points at the studio', page.body, 'href="/en/studio"');
   expectAbsent('nav no longer points at contests', page.body, 'href="/en/contests"');
@@ -1200,6 +1200,28 @@ async function main(): Promise<void> {
   await sweepTemplateRedirects(prompts);
   await sweepPromptMedia(prompts);
   await sweepLandingTemplates();
+  for (const locale of ['ko', 'en']) {
+    const home = await get(`/${locale}`);
+    expectPresent(`${locale}: durable creator journey`, home.body, 'data-creator-journey');
+    expectPresent(`${locale}: direct participation entry`, home.body, `/${locale}/campaigns#creators`);
+    const production = await get(`/yagi/${locale}`);
+    expectEqual(`${locale}: YAGI landing`, production.status, 200);
+    for (const marker of ['data-yagi-hero', 'data-yagi-gallery', 'data-format-demo', 'data-yagi-brands', 'data-yagi-creators', 'data-yagi-faq']) {
+      expectPresent(`${locale}: ${marker}`, production.body, marker);
+    }
+    expectPresent(`${locale}: YAGI structured data`, production.body, 'yagi-structured-data');
+    expectPresent(`${locale}: YAGI canonical`, production.body, `https://yagiworkshop.xyz/${locale}`);
+    expectAbsent(`${locale}: no TWINGS organization injected in studio`, production.body, 'id="site-structured-data"');
+    expectAbsent(`${locale}: no inherited TWINGS PWA manifest`, production.body, 'rel="manifest"');
+    expectPresent(`${locale}: creator app linked`, production.body, `https://twings.app/${locale}/video`);
+  }
+  const studioHost = { host: 'yagiworkshop.xyz' };
+  expectEqual('YAGI host landing rewrite', (await request('/ko', { headers: studioHost })).status, 200);
+  expectPresent('YAGI own sitemap', (await request('/sitemap.xml', { headers: studioHost })).body, 'https://yagiworkshop.xyz/en');
+  expectPresent('YAGI own GEO definition', (await request('/llms.txt', { headers: studioHost })).body, '# YAGI');
+  for (const path of ['/admin', '/auth/callback?code=fixture', '/account', '/api/billing/checkout', '/.storage/private.mp4']) {
+    expectEqual(`YAGI blocks private path ${path}`, (await request(path, { headers: studioHost })).status, 404);
+  }
   await sweepPricingTemplates();
 
 

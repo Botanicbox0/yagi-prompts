@@ -1,0 +1,360 @@
+{
+  "model": "Opus 4.6",
+  "effort": "Medium",
+  "date": "2026-10-06",
+  "note": "Model editorial judgments. Proposals reviewed and adapted by Codex; not blindly applied. All-through-TWINGS claim and removal of can-vary were declined.",
+  "proposals": [
+    {
+      "key": "yagi.headline",
+      "ko": "AI로 만드는\n브랜드 필름.",
+      "en": "Brand films.\nMade with AI.",
+      "reason": "'이야기'는 지적된 추상 반복어. 실제 결과물(필름)을 바로 말하면 헤드라인이 즉시 전달됨.",
+      "before": {
+        "clarity": 3,
+        "specificity": 2,
+        "naturalness": 3
+      },
+      "after": {
+        "clarity": 5,
+        "specificity": 4,
+        "naturalness": 5
+      }
+    },
+    {
+      "key": "yagi.description",
+      "ko": "YAGI는 브랜드 영상과 크리에이터 캠페인을 제작하는 AI 프로덕션입니다. TWINGS에서는 크리에이터가 본인 얼굴로 영상을 만들고 캠페인에 참여합니다.",
+      "en": "YAGI is an AI production studio for brand films and creator campaigns. On TWINGS, creators make videos with their own faces and join campaigns.",
+      "reason": "KO 유지. EN 'repeatable video formats'는 업계 용어라 일반 방문자에게 불투명 → 페이지 본문에 이미 설명이 있으므로 메타 디스크립션은 짧고 평이하게.",
+      "before": {
+        "clarity": 4,
+        "specificity": 4,
+        "naturalness": 4
+      },
+      "after": {
+        "clarity": 4,
+        "specificity": 4,
+        "naturalness": 4
+      }
+    },
+    {
+      "key": "yagi.definition",
+      "ko": "YAGI는 브랜드 영상과 크리에이터 캠페인을 제작하는 AI 프로덕션입니다. 영상 연출부터 참여 인물의 초상 사용 조건, 크리에이터 게시까지 함께 준비합니다. 크리에이터는 TWINGS에서 본인 얼굴로 영상을 만들고 캠페인에 참여합니다.",
+      "en": "YAGI is an AI production studio for brand films and creator campaigns. We handle the creative direction, the terms for each person's likeness, and the path to creator channels — all through TWINGS.",
+      "reason": "KO 유지. EN 'design the visual idea'는 어색한 직역, 'bring it to real creator channels'는 막연 → 실제 업무 흐름(연출→초상 조건→채널 게시)을 한 문장에 구체적으로.",
+      "before": {
+        "clarity": 4,
+        "specificity": 4,
+        "naturalness": 4
+      },
+      "after": {
+        "clarity": 4,
+        "specificity": 5,
+        "naturalness": 4
+      }
+    },
+    {
+      "key": "yagi.work.beauty.alt",
+      "ko": "장미 톤의 뷰티 영상",
+      "en": "A beauty film in rose tones",
+      "reason": "KO '장면으로 구성한'은 모든 영상에 해당되는 무의미 수식. EN 'visual world'는 지적된 추상어. alt 텍스트는 짧고 구체적이어야 함.",
+      "before": {
+        "clarity": 3,
+        "specificity": 2,
+        "naturalness": 3
+      },
+      "after": {
+        "clarity": 5,
+        "specificity": 4,
+        "naturalness": 5
+      }
+    },
+    {
+      "key": "yagi.work.retro2.description",
+      "ko": "다른 인물을 넣어 제작한 같은 포맷의 영상.",
+      "en": "The same format, made with a different person.",
+      "reason": "KO 유지. EN 'at its center'는 불필요한 수사 → 직설적으로.",
+      "before": {
+        "clarity": 4,
+        "specificity": 4,
+        "naturalness": 4
+      },
+      "after": {
+        "clarity": 4,
+        "specificity": 4,
+        "naturalness": 4
+      }
+    },
+    {
+      "key": "yagi.workBody",
+      "ko": "뷰티 필름부터 크리에이터가 참여하는 포맷까지. 스튜디오에서 제작한 영상 예시입니다.",
+      "en": "Beauty films, fashion spots and formats creators can join. A look at what we've made.",
+      "reason": "KO 유지. EN 'made for creator participation'은 번역투 명사구 → 'creators can join'으로 동사화.",
+      "before": {
+        "clarity": 4,
+        "specificity": 4,
+        "naturalness": 4
+      },
+      "after": {
+        "clarity": 4,
+        "specificity": 4,
+        "naturalness": 4
+      }
+    },
+    {
+      "key": "yagi.approachBody",
+      "ko": "영상마다 처음부터 시작할 필요는 없습니다. 브랜드에 맞는 연출을 정한 뒤, 참여 크리에이터가 자신의 얼굴로 활용할 수 있는 포맷을 만듭니다.",
+      "en": "Creators don't have to start from scratch. We set the visual direction for your brand, then build a format they can use with their own faces.",
+      "reason": "KO 유지. EN 'does not have to'·'Each creator'는 경직체 → 축약형·복수로 자연스럽게.",
+      "before": {
+        "clarity": 4,
+        "specificity": 4,
+        "naturalness": 4
+      },
+      "after": {
+        "clarity": 4,
+        "specificity": 4,
+        "naturalness": 4
+      }
+    },
+    {
+      "key": "yagi.pillars.people.body",
+      "ko": "누가 출연하고 어디에 사용할지 먼저 정합니다. 참여 크리에이터의 초상은 합의한 범위와 조건에 따라 사용합니다.",
+      "en": "We agree on who appears and where the content goes. Each creator's likeness is used only within the agreed scope and terms.",
+      "reason": "KO 유지. EN 'Creator likeness usage follows the agreed scope and terms'는 약관 문체 → 랜딩 톤에 맞게 주어+동사로 풀어 씀. 법적 범위·의미 동일 유지.",
+      "before": {
+        "clarity": 4,
+        "specificity": 4,
+        "naturalness": 4
+      },
+      "after": {
+        "clarity": 4,
+        "specificity": 4,
+        "naturalness": 4
+      }
+    },
+    {
+      "key": "yagi.brandBody",
+      "ko": "영상 제작만 맡기거나 크리에이터 캠페인까지 함께 진행할 수 있습니다. 필요한 결과물과 게시 채널을 알려주시면 제작 범위부터 상의합니다.",
+      "en": "Commission a film, run a creator campaign, or do both. Tell us the deliverable and channel — we'll work out the scope together.",
+      "reason": "KO 유지. EN 'We align the concept, people, usage scope and deliverables before production'은 나열형 기업체 → 행동 지시('Tell us')로 톤 전환.",
+      "before": {
+        "clarity": 4,
+        "specificity": 4,
+        "naturalness": 4
+      },
+      "after": {
+        "clarity": 4,
+        "specificity": 4,
+        "naturalness": 5
+      }
+    },
+    {
+      "key": "yagi.services.production.body",
+      "ko": "브랜드 필름, 패션·뷰티 영상, 뮤직비디오, AI VFX를 제작합니다. 콘셉트와 레퍼런스를 바탕으로 영상의 방향을 잡고 결과물을 만듭니다.",
+      "en": "Brand films, fashion and beauty visuals, music videos and AI VFX. We start from your concept and references, set the direction and deliver the film.",
+      "reason": "KO 유지. EN 'use your concept and references to establish the direction and produce the film' — 'establish'가 관료적 → 'set'으로 경량화.",
+      "before": {
+        "clarity": 4,
+        "specificity": 4,
+        "naturalness": 4
+      },
+      "after": {
+        "clarity": 4,
+        "specificity": 4,
+        "naturalness": 4
+      }
+    },
+    {
+      "key": "yagi.services.campaigns.body",
+      "ko": "크리에이터가 자기 얼굴로 참여할 영상 포맷을 제작합니다. 캠페인 모집, 참여자 게시, 결과 확인은 TWINGS에서 진행합니다.",
+      "en": "We produce video formats creators can join with their own faces. Recruitment, publishing and results are handled through TWINGS.",
+      "reason": "KO 유지. EN 'take place on'은 번역투 → 'handled through'가 자연스러움.",
+      "before": {
+        "clarity": 4,
+        "specificity": 4,
+        "naturalness": 4
+      },
+      "after": {
+        "clarity": 4,
+        "specificity": 4,
+        "naturalness": 4
+      }
+    },
+    {
+      "key": "yagi.creatorBody",
+      "ko": "TWINGS는 내 얼굴로 트렌드 포맷의 주인공이 되는 곳입니다. 예시 영상을 보고 포맷을 고르세요. 브랜드의 AI 캠페인에도 지원할 수 있습니다.",
+      "en": "TWINGS is where your face goes into a trending video format. Browse the examples, pick one and join AI campaigns from brands.",
+      "reason": "KO 유지(고정 포지셔닝 보존). EN 'become the lead in a trend video format, using your own face'는 길고 어색 → 짧은 능동문으로.",
+      "before": {
+        "clarity": 4,
+        "specificity": 4,
+        "naturalness": 4
+      },
+      "after": {
+        "clarity": 4,
+        "specificity": 4,
+        "naturalness": 5
+      }
+    },
+    {
+      "key": "yagi.faq.a1",
+      "ko": "YAGI는 프로덕션이고, TWINGS는 내 얼굴로 영상 포맷을 활용하고 AI 캠페인에 참여하는 크리에이터 앱입니다. 브랜드는 YAGI와 프로젝트를 진행하고, 크리에이터는 TWINGS에서 만들고 참여합니다.",
+      "en": "YAGI is the production studio. TWINGS is the creator app — you make videos with your own face and join AI campaigns there. Brands work with YAGI; creators use TWINGS.",
+      "reason": "KO 유지. EN 'our creator app for own-face video formats and AI campaign participation'은 명사 합성어 3단 적층 → 동사 문장으로 해체.",
+      "before": {
+        "clarity": 4,
+        "specificity": 4,
+        "naturalness": 4
+      },
+      "after": {
+        "clarity": 4,
+        "specificity": 4,
+        "naturalness": 5
+      }
+    },
+    {
+      "key": "yagi.faq.a3",
+      "ko": "합의한 사용 범위, 채널과 기간에 따라 사용합니다. 추가 사용은 문의 후 조건을 확정하고 진행해야 합니다.",
+      "en": "Usage follows the agreed scope, channels and period. For anything beyond that, reach out and confirm the terms first.",
+      "reason": "KO 유지. EN 'requires an inquiry and confirmed terms before publication'은 공문체 → 행동 중심('reach out and confirm')으로.",
+      "before": {
+        "clarity": 4,
+        "specificity": 4,
+        "naturalness": 4
+      },
+      "after": {
+        "clarity": 4,
+        "specificity": 4,
+        "naturalness": 5
+      }
+    },
+    {
+      "key": "yagi.faq.a4",
+      "ko": "포맷을 고르고 본인 얼굴 설정 절차를 따라주세요. 판매가 열려 있는 템플릿은 한 편당 1회 결제합니다. AI 영상은 완벽하지 않을 수 있으며, 이용 가능 여부와 가격은 TWINGS에서 확인할 수 있습니다.",
+      "en": "Pick a format and complete the face verification steps. Each template is a one-time purchase per video where sales are open. AI videos may not be perfect; check TWINGS for availability and pricing.",
+      "reason": "KO 유지. EN 'follow the own-face setup'는 영어로 성립 불가한 합성어 → 'face verification steps'로 구체화. 1회 결제·AI 불완전성·가격 안내 보존.",
+      "before": {
+        "clarity": 4,
+        "specificity": 4,
+        "naturalness": 4
+      },
+      "after": {
+        "clarity": 4,
+        "specificity": 4,
+        "naturalness": 5
+      }
+    },
+    {
+      "key": "yagi.creatorNote",
+      "ko": "본인 얼굴만 사용할 수 있습니다. 참여 조건과 보상은 각 캠페인의 안내를 확인해주세요.",
+      "en": "Use only your own face. Each campaign sets its own participation terms and compensation — check before applying.",
+      "reason": "KO 유지. EN 'Campaign eligibility and compensation follow each campaign's published terms'는 수동 관료체 → 능동문으로 톤 전환. 법적 범위 동일.",
+      "before": {
+        "clarity": 4,
+        "specificity": 4,
+        "naturalness": 4
+      },
+      "after": {
+        "clarity": 4,
+        "specificity": 4,
+        "naturalness": 5
+      }
+    },
+    {
+      "key": "creatorJourney.body",
+      "ko": "예시 영상을 보고 포맷을 골라보세요. 본인 얼굴을 설정하면 내가 출연하는 영상으로 만들 수 있습니다.",
+      "en": "Browse the examples and pick a format. Set up your face, and the video is made with you in it.",
+      "reason": "KO 유지. EN 'The scene is already designed'는 무의미한 서두, 'star in'은 과장 → 삭제 후 바로 행동 안내.",
+      "before": {
+        "clarity": 4,
+        "specificity": 4,
+        "naturalness": 4
+      },
+      "after": {
+        "clarity": 4,
+        "specificity": 4,
+        "naturalness": 5
+      }
+    },
+    {
+      "key": "creatorJourney.steps.choose.title",
+      "ko": "포맷 고르기",
+      "en": "Pick a format",
+      "reason": "KO '포맷 고르기'인데 EN 'Choose the scene'으로 의미 불일치. 이 단계는 장면이 아니라 포맷 선택이므로 EN을 KO에 맞춤.",
+      "before": {
+        "clarity": 4,
+        "specificity": 4,
+        "naturalness": 4
+      },
+      "after": {
+        "clarity": 4,
+        "specificity": 5,
+        "naturalness": 4
+      }
+    },
+    {
+      "key": "creatorJourney.steps.create.title",
+      "ko": "영상 확인하기",
+      "en": "Check your video",
+      "reason": "KO '완성된 영상 확인하기' — '완성된'은 body에서 이미 설명하므로 제목에선 군더더기. EN 'Make and share'는 KO와 전혀 다른 의미(만들기+공유 vs 확인). 양쪽 정렬.",
+      "before": {
+        "clarity": 3,
+        "specificity": 3,
+        "naturalness": 3
+      },
+      "after": {
+        "clarity": 5,
+        "specificity": 4,
+        "naturalness": 5
+      }
+    },
+    {
+      "key": "yagi.flow.design.title",
+      "ko": "제작 방향 확정",
+      "en": "Set the direction",
+      "reason": "KO '제작 방향 확정'인데 EN 'Build the format'은 다음 단계 의미를 선취. 이 단계는 방향 확정이므로 EN을 KO에 맞춤. 포맷 제작은 release 단계에 포함.",
+      "before": {
+        "clarity": 4,
+        "specificity": 3,
+        "naturalness": 4
+      },
+      "after": {
+        "clarity": 4,
+        "specificity": 4,
+        "naturalness": 4
+      }
+    },
+    {
+      "key": "creatorJourney.campaignBody",
+      "ko": "AI 캠페인의 참여 조건과 보상을 확인하고 지원하세요. 모집 중인 캠페인이 없어도 영상 포맷은 계속 둘러볼 수 있습니다.",
+      "en": "Browse open AI campaigns, check the terms and compensation, then apply. You can keep exploring formats between campaigns.",
+      "reason": "KO 유지. EN 'review their participation and compensation terms, then apply'는 나열이 길고 경직 → 동사 3연속 리듬으로.",
+      "before": {
+        "clarity": 4,
+        "specificity": 4,
+        "naturalness": 4
+      },
+      "after": {
+        "clarity": 4,
+        "specificity": 4,
+        "naturalness": 5
+      }
+    },
+    {
+      "key": "yagi.demoBody",
+      "ko": "두 영상을 선택해 비교해보세요. 인물에 따라 표정과 움직임, 컷 구성이 달라질 수 있습니다.",
+      "en": "Pick either video to compare. Expressions, movement and editing shift with each person.",
+      "reason": "KO 유지. EN 'Select either video'는 UI 안내문 어투 → 'Pick'으로 가볍게. 'can vary'를 'shift'로 동적화.",
+      "before": {
+        "clarity": 4,
+        "specificity": 4,
+        "naturalness": 4
+      },
+      "after": {
+        "clarity": 4,
+        "specificity": 4,
+        "naturalness": 5
+      }
+    }
+  ]
+}

@@ -1,6 +1,6 @@
 import { safeReturnPath } from '@/lib/auth/return-path';
 
-export type Surface = 'consumer' | 'admin' | 'brand' | 'brands' | 'unknown';
+export type Surface = 'consumer' | 'admin' | 'brand' | 'brands' | 'production' | 'unknown';
 export const SURFACE_HEADER = 'x-twings-surface';
 export const REQUEST_ORIGIN_HEADER = 'x-twings-request-origin';
 
@@ -18,6 +18,7 @@ const LOOPBACK = ['localhost', '127.0.0.1', '[::1]'];
 
 function surfaceForUrl(url: URL, deploymentHosts: Array<string | undefined>): Surface {
   const hostname = url.hostname.toLowerCase();
+  if (['yagiworkshop.xyz', 'www.yagiworkshop.xyz'].includes(hostname) && !url.port) return 'production';
   if (hostname === 'admin.twings.app' && !url.port) return 'admin';
   if (hostname === 'brand.twings.app' && !url.port) return 'brand';
   if (hostname === 'brands.twings.app' && !url.port) return 'brands';

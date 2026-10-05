@@ -605,7 +605,7 @@ describe('templates route contract (docs/TEMPLATES-IA.md)', () => {
     const chrome = read('components', 'marketing', 'chrome.tsx');
     expect(chrome).toContain("templatesHref(locale, 'video')");
     expect(chrome).toContain("templatesHref(locale, 'image')");
-    expect(chrome).toContain('campaignsHref(locale)');
+    expect(chrome).toContain('creatorCampaignsHref(locale)');
     for (const needle of ['/studio', 'contestsHref', 'promptsHref(locale)']) {
       expect(chrome.includes(needle), `nav must not offer ${needle}`).toBe(false);
     }

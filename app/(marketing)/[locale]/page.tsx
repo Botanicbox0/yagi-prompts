@@ -6,7 +6,7 @@ import { getPromptCatalog } from '@/lib/prompts/public-catalog';
 import { getCampaignCatalog } from '@/lib/campaigns/public-catalog';
 import { USE_CASES } from '@/lib/prompts/schemas';
 import { templatesHref } from '@/lib/prompts/links';
-import { campaignsHref } from '@/lib/campaigns/links';
+import { creatorCampaignsHref } from '@/lib/campaigns/links';
 import { marqueeItems } from '@/lib/marquee';
 import { promptLabels, presentUseCases, useCaseLabel } from '@/components/prompts/labels';
 import { campaignLabels } from '@/components/campaigns/labels';
@@ -21,6 +21,7 @@ import { CampaignRail } from '@/components/campaigns/rails';
 import { TextSwap } from '@/components/ui/text-swap';
 import { AdRail } from '@/components/ad/ad-rail';
 import { AdBanner, AdCard } from '@/components/ad/ad-card';
+import { CreatorJourney } from '@/components/landing/creator-journey';
 
 /**
  * Landing — docs/TEMPLATES-IA.md: the template site's front door.
@@ -168,13 +169,14 @@ export default async function LandingPage({ params }: { params: Promise<{ locale
                   labels={campaignLabels(dict)}
                   now={Date.now()}
                 />
-                <a href={campaignsHref(locale)} className="text-accent mt-12 inline-block font-label text-label uppercase">
+                <a href={creatorCampaignsHref(locale)} className="text-accent mt-12 inline-block font-label text-label uppercase">
                   <TextSwap>{dict.nav.campaigns} →</TextSwap>
                 </a>
               </div>
             </section>
           )}
 
+          <CreatorJourney dict={dict} locale={locale} />
           <MarqueeStrip dict={dict} items={ticker} />
 
           {/* §3.6: below 1440 this is the single ad; the rail owns the tier above it. */}

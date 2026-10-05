@@ -11,6 +11,180 @@ import type { Dictionary } from './en';
  * no forced rhythm, no personification. The copy states what the product does and stops.
  */
 export const ko: Dictionary = {
+  yagi: {
+    brand: "YAGI",
+    title: "YAGI — AI 프로덕션과 크리에이터 캠페인",
+    description: "YAGI는 브랜드 영상과 크리에이터 캠페인을 제작하는 AI 프로덕션입니다. TWINGS에서는 크리에이터가 본인 얼굴로 영상을 만들고 캠페인에 참여합니다.",
+    skip: "본문으로 이동",
+    nav: {
+      work: "제작 영상",
+      approach: "제작 방식",
+      brands: "브랜드",
+      creators: "크리에이터",
+      contact: "프로젝트 문의",
+      language: "언어 선택"
+    },
+    eyebrow: "AI 프로덕션 · 크리에이터 캠페인",
+    headline: "AI로 만드는\n브랜드 필름.",
+    intro: "브랜드 필름을 제작하고, 크리에이터가 자기 얼굴로 참여할 수 있는 영상 포맷과 캠페인을 만듭니다.",
+    viewWork: "제작 영상 보기",
+    heroCaption: "뷰티 필름 · 스튜디오 제작 예시",
+    definition: "YAGI는 브랜드 영상과 크리에이터 캠페인을 제작하는 AI 프로덕션입니다. 영상 연출부터 참여 인물의 초상 사용 조건, 크리에이터 게시까지 함께 준비합니다. 크리에이터는 TWINGS에서 본인 얼굴로 영상을 만들고 캠페인에 참여합니다.",
+    workLabel: "제작 영상",
+    workTitle: "이런 영상을 만듭니다.",
+    workBody: "뷰티 필름부터 크리에이터가 참여하는 포맷까지. 스튜디오에서 제작한 영상 예시입니다.",
+    filters: {
+      all: "전체 포맷",
+      beauty: "뷰티",
+      fashion: "패션",
+      culture: "컬처"
+    },
+    work: {
+      beauty: {
+        title: "로즈 뷰티 필름",
+        category: "뷰티 / AI 영상",
+        description: "장미와 핑크빛 질감을 활용한 뷰티 영상.",
+        alt: "장미 톤의 뷰티 영상"
+      },
+      retro1: {
+        title: "레트로 전화",
+        category: "컬처 / 크리에이터 포맷",
+        description: "빈티지 전화기를 소재로 만든 세로 영상 포맷.",
+        alt: "레트로 전화기를 활용한 세로 영상"
+      },
+      retro2: {
+        title: "레트로 전화 · 인물 변주",
+        category: "컬처 / 포맷 변주",
+        description: "다른 인물을 넣어 제작한 같은 포맷의 영상.",
+        alt: "다른 인물이 등장하는 레트로 전화 포맷"
+      },
+      highteen: {
+        title: "하이틴 필름",
+        category: "패션 / AI 영상",
+        description: "하이틴 영화의 분위기를 담은 패션 영상.",
+        alt: "영화 같은 하이틴 패션 장면"
+      }
+    },
+    play: "영상 재생",
+    pause: "영상 일시정지",
+    soundOn: "소리 켜기",
+    soundOff: "소리 끄기",
+    approachLabel: "제작 방식",
+    approachTitle: "한 편을 만들고,\n함께 쓸 포맷으로 넓힙니다.",
+    approachBody: "영상마다 처음부터 시작할 필요는 없습니다. 브랜드에 맞는 연출을 정한 뒤, 참여 크리에이터가 자신의 얼굴로 활용할 수 있는 포맷을 만듭니다.",
+    pillars: {
+      craft: {
+        title: "브랜드에 맞는 연출",
+        body: "제품과 메시지를 보고 콘셉트, 화면 구성, 움직임을 정합니다. AI로 구현할 수 있는 표현을 실제 영상으로 확인합니다."
+      },
+      people: {
+        title: "동의한 인물의 참여",
+        body: "누가 출연하고 어디에 사용할지 먼저 정합니다. 참여 크리에이터의 초상은 합의한 범위와 조건에 따라 사용합니다."
+      },
+      reach: {
+        title: "크리에이터 채널에 게시",
+        body: "TWINGS에서 캠페인에 참여한 크리에이터가 영상을 게시하고 링크를 제출합니다. 브랜드는 워크스페이스에서 결과를 확인합니다."
+      }
+    },
+    demoLabel: "인물을 바꿔 만든 영상",
+    demoTitle: "같은 포맷에\n다른 얼굴을 넣으면.",
+    demoBody: "두 영상을 선택해 비교해보세요. 인물에 따라 표정과 움직임, 컷 구성이 달라질 수 있습니다.",
+    demoSource: "기준 사진",
+    demoFirst: "설계한 포맷",
+    demoSecond: "다른 인물로 만든 영상",
+    demoAlt: "스튜디오 예시에 사용한 인물 기준 사진",
+    demoCta: "내 얼굴로 영상 만들기",
+    brandLabel: "브랜드 프로젝트",
+    brandTitle: "어떤 프로젝트를\n준비하고 있나요?",
+    brandBody: "영상 제작만 맡기거나 크리에이터 캠페인까지 함께 진행할 수 있습니다. 필요한 결과물과 게시 채널을 알려주시면 제작 범위부터 상의합니다.",
+    services: {
+      production: {
+        title: "AI 프로덕션",
+        body: "브랜드 필름, 패션·뷰티 영상, 뮤직비디오, AI VFX를 제작합니다. 콘셉트와 레퍼런스를 바탕으로 영상의 방향을 잡고 결과물을 만듭니다."
+      },
+      campaigns: {
+        title: "크리에이터 캠페인",
+        body: "크리에이터가 자기 얼굴로 참여할 영상 포맷을 제작합니다. 캠페인 모집, 참여자 게시, 결과 확인은 TWINGS에서 진행합니다."
+      }
+    },
+    briefCta: "프로젝트 문의하기",
+    workspaceCta: "브랜드 워크스페이스 열기",
+    scopeNote: "제작 범위, 일정, 사용 권한과 비용은 프로젝트별로 협의합니다.",
+    proofLabel: "글로벌 AI 플랫폼 캠페인 실적",
+    proofTitle: "캠페인 결과입니다.",
+    proofVideos: "제작 영상",
+    proofViews: "조회수",
+    proofOrganic: "파생 오가닉 콘텐츠",
+    proofNote: "완료된 캠페인의 실적입니다. 향후 성과는 프로젝트에 따라 달라집니다.",
+    creatorLabel: "크리에이터 앱 · TWINGS",
+    creatorTitle: "마음에 드는 영상에\n내 얼굴을 넣어보세요.",
+    creatorBody: "TWINGS는 내 얼굴로 트렌드 포맷의 주인공이 되는 곳입니다. 예시 영상을 보고 포맷을 고르세요. 브랜드의 AI 캠페인에도 지원할 수 있습니다.",
+    creatorMake: "TWINGS 포맷 둘러보기",
+    creatorCampaigns: "크리에이터 캠페인 보기",
+    creatorNote: "본인 얼굴만 사용할 수 있습니다. 참여 조건과 보상은 각 캠페인의 안내를 확인해주세요.",
+    flowLabel: "프로젝트 진행",
+    flowTitle: "이렇게 진행합니다.",
+    flow: {
+      brief: {
+        title: "프로젝트 상담",
+        body: "아이디어와 타깃, 게시 채널과 필요한 결과물을 알려주세요."
+      },
+      design: {
+        title: "제작 방향 확정",
+        body: "영상의 방향, 제작 범위와 사용 조건을 함께 맞춥니다."
+      },
+      release: {
+        title: "영상 제작과 게시",
+        body: "결과물을 만들고, 합의한 크리에이터 캠페인을 진행합니다."
+      },
+      review: {
+        title: "캠페인 결과 확인",
+        body: "게시 링크와 캠페인 결과를 브랜드 워크스페이스에서 확인합니다."
+      }
+    },
+    faqTitle: "자주 묻는 질문",
+    faq: {
+      q1: "YAGI와 TWINGS는 어떤 관계인가요?",
+      a1: "YAGI는 프로덕션이고, TWINGS는 내 얼굴로 영상 포맷을 활용하고 AI 캠페인에 참여하는 크리에이터 앱입니다. 브랜드는 YAGI와 프로젝트를 진행하고, 크리에이터는 TWINGS에서 만들고 참여합니다.",
+      q2: "캠페인 없이 영상 제작만 의뢰할 수 있나요?",
+      a2: "네. 영상 한 편만 의뢰하거나, 제작과 크리에이터 게시를 묶은 캠페인을 상담할 수 있습니다. 제작 범위와 비용은 프로젝트에 맞춰 협의합니다.",
+      q3: "브랜드가 크리에이터 콘텐츠를 다시 사용할 수 있나요?",
+      a3: "합의한 사용 범위, 채널과 기간에 따라 사용합니다. 추가 사용은 문의 후 조건을 확정하고 진행해야 합니다.",
+      q4: "TWINGS에서 영상을 만들려면 무엇이 필요한가요?",
+      a4: "포맷을 고르고 본인 얼굴 설정 절차를 따라주세요. 판매가 열려 있는 템플릿은 한 편당 1회 결제합니다. AI 영상은 완벽하지 않을 수 있으며, 이용 가능 여부와 가격은 TWINGS에서 확인할 수 있습니다."
+    },
+    contactLabel: "프로젝트 문의",
+    contactTitle: "만들고 싶은 영상이\n있으신가요?",
+    contactBody: "레퍼런스나 간단한 아이디어부터 보내주세요. 제작 방식과 범위를 함께 정하겠습니다.",
+    emailCta: "YAGI에 메일 보내기",
+    footerLine: "브랜드 영상과 크리에이터 캠페인을 만드는 AI 프로덕션.",
+    privacy: "개인정보처리방침",
+    terms: "이용약관",
+    backTop: "맨 위로",
+    rights: "YAGI · 모든 권리 보유."
+  },
+  creatorJourney: {
+    title: "마음에 드는 영상에 내 얼굴을.",
+    body: "예시 영상을 보고 포맷을 골라보세요. 본인 얼굴을 설정하면 내가 출연하는 영상으로 만들 수 있습니다.",
+    steps: {
+      choose: {
+        title: "포맷 고르기",
+        body: "예시 영상을 보고 원하는 포맷을 선택하세요."
+      },
+      face: {
+        title: "내 얼굴 설정하기",
+        body: "본인 사진을 사용하고 필요한 얼굴 검증을 진행하세요."
+      },
+      create: {
+        title: "영상 확인하기",
+        body: "완성된 영상은 내 작업에서 확인하세요. AI 영상은 완벽하지 않을 수 있습니다."
+      }
+    },
+    campaignTitle: "브랜드 캠페인에도 참여해보세요.",
+    campaignBody: "AI 캠페인의 참여 조건과 보상을 확인하고 지원하세요. 모집 중인 캠페인이 없어도 영상 포맷은 계속 둘러볼 수 있습니다.",
+    campaignCta: "크리에이터 캠페인 보기",
+    brandCta: "브랜드라면, YAGI 만나보기"
+  },
   portrait: {
     title: '영상 속 내 얼굴을 준비해요.',
     intro: '셀카 한 장으로 두 가지 정면 사진을 만들어요. 더 나를 닮은 사진을 골라 다음 영상과 이미지에 사용하세요.',
