@@ -95,6 +95,13 @@ export interface PromptCatalogOptions {
   publicUrl?: (key: string) => string | null;
 }
 
+/** The VIDEO catalogue is a release feed: the most recently published template leads. */
+function publishedNewestFirst(a: PromptCard, b: PromptCard): number {
+  const aTime = a.publishedAt === null ? Number.NEGATIVE_INFINITY : Date.parse(a.publishedAt);
+  const bTime = b.publishedAt === null ? Number.NEGATIVE_INFINITY : Date.parse(b.publishedAt);
+  return bTime - aTime || a.slug.localeCompare(b.slug);
+}
+
 /** One row → one card. The ONLY place a `PromptCard` is constructed. */
 export function toPromptCard(row: PromptRow, options: PromptCatalogOptions = {}): PromptCard {
   const { poster, video } = shapePromptMedia(row.id, row.media, {
@@ -135,7 +142,7 @@ export async function loadPromptCatalog(
 
   const yagi = cards.filter((card) => card.source === 'yagi');
   const community = cards.filter((card) => card.source === 'community');
-  const video = cards.filter((card) => card.medium === 'video');
+  const video = cards.filter((card) => card.medium === 'video').sort(publishedNewestFirst);
   const image = cards.filter((card) => card.medium === 'image');
   const useCases = [...new Set(cards.flatMap((card) => card.useCase))].sort((a, b) =>
     a.localeCompare(b),

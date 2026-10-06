@@ -78,6 +78,41 @@ describe('prompt catalog projection (§13.2)', () => {
     expect(all.filter((card) => card.priceCents === 0).length).toBeGreaterThan(0);
   });
 
+  it('orders the VIDEO catalogue by publication time even when an older template is featured', async () => {
+    const featuredId = '9a000000-0000-4000-8000-000000000001';
+    const newerPlainId = '9a000000-0000-4000-8000-000000000003';
+    const { rows: original } = await harness.sql.query<{ id: string; published_at: Date | string }>(
+      'select id, published_at from prompt_items where id = any($1::uuid[])',
+      [[featuredId, newerPlainId]],
+    );
+
+    try {
+      await harness.sql.query('update prompt_items set published_at = $2 where id = $1', [
+        featuredId,
+        '2026-01-01T00:00:00.000Z',
+      ]);
+      await harness.sql.query('update prompt_items set published_at = $2 where id = $1', [
+        newerPlainId,
+        '2026-12-31T00:00:00.000Z',
+      ]);
+
+      const reordered = await loadPromptCatalog(harness.sql, { publicUrl: () => null });
+      expect(reordered.video.findIndex((card) => card.id === newerPlainId)).toBeLessThan(
+        reordered.video.findIndex((card) => card.id === featuredId),
+      );
+      expect(reordered.yagi.findIndex((card) => card.id === featuredId)).toBeLessThan(
+        reordered.yagi.findIndex((card) => card.id === newerPlainId),
+      );
+    } finally {
+      for (const row of original) {
+        await harness.sql.query('update prompt_items set published_at = $2 where id = $1', [
+          row.id,
+          row.published_at,
+        ]);
+      }
+    }
+  });
+
   it('splits the two rails and counts them (§13.2)', () => {
     expect(catalog.yagi.every((card) => card.source === 'yagi')).toBe(true);
     expect(catalog.community.every((card) => card.source === 'community')).toBe(true);
