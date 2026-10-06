@@ -10,7 +10,7 @@ export function FormatDemo({ t }: { t: Dictionary['yagi'] }) {
         <div><p>{t.demoSource}</p><span aria-hidden="true">↓</span></div>
       </div>
       <div className="yagi-demo-screen"><FilmPlayer src={`/reel/studio-demo/${name}.mp4`} poster={`/reel/studio-demo/${name}.jpg`}
-        label={i === 0 ? t.demoFirst : t.demoSecond} labels={t} /></div>
+        label={i === 0 ? t.demoFirst : t.demoSecond} labels={t} autoplay /></div>
       <figcaption>{i === 0 ? t.demoFirst : t.demoSecond}</figcaption>
     </figure>)}
   </div>;

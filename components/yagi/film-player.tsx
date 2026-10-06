@@ -2,13 +2,13 @@
 
 import { useEffect, useId, useRef, useState } from 'react';
 import type { Dictionary } from '@/lib/i18n/dictionaries';
-import { playFilm } from '@/lib/yagi/playback';
+import { mayPreviewFilm, playFilm } from '@/lib/yagi/playback';
 
 type Labels = Pick<Dictionary['yagi'], 'play' | 'pause' | 'soundOn' | 'soundOff' | 'viewFilm' | 'closeFilm' | 'filmLoading' | 'filmError' | 'retryFilm'>;
 
 /** Poster first; silent motion only in view. A manual pause persists across scrolling. */
-export function FilmPlayer({ src, poster, label, labels, autoplay = false, eager = false }: {
-  src: string; poster: string; label: string; labels: Labels; autoplay?: boolean; eager?: boolean;
+export function FilmPlayer({ src, poster, label, labels, autoplay = false, eager = false, previewOnHover = false }: {
+  src: string; poster: string; label: string; labels: Labels; autoplay?: boolean; eager?: boolean; previewOnHover?: boolean;
 }) {
   const ref = useRef<HTMLVideoElement>(null);
   const dialog = useRef<HTMLDialogElement>(null);
@@ -17,6 +17,7 @@ export function FilmPlayer({ src, poster, label, labels, autoplay = false, eager
   const viewerId = useId();
   const startTime = useRef(0);
   const manualPause = useRef(false);
+  const hoverPreview = useRef(false);
   const visible = useRef(false);
   const [playing, setPlaying] = useState(false);
   const [muted, setMuted] = useState(true);
@@ -63,6 +64,7 @@ export function FilmPlayer({ src, poster, label, labels, autoplay = false, eager
   function toggle() {
     const video = ref.current;
     if (!video) return;
+    hoverPreview.current = false;
     if (video.paused) {
       manualPause.current = false;
       if (problem) video.load();
@@ -70,6 +72,22 @@ export function FilmPlayer({ src, poster, label, labels, autoplay = false, eager
       setWaiting(true);
       void playFilm(video, () => { setWaiting(false); setProblem(true); });
     } else { manualPause.current = true; video.pause(); }
+  }
+
+  function preview() {
+    const video = ref.current;
+    if (!previewOnHover || !video || !video.paused || !mayPreviewFilm({
+      hoverCapable: window.matchMedia('(hover: hover) and (pointer: fine)').matches,
+      reducedMotion: window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+      hidden: document.hidden, manuallyPaused: manualPause.current,
+      viewerOpen: Boolean(document.querySelector('[data-yagi-viewer][open]')),
+    })) return;
+    hoverPreview.current = true;
+    void playFilm(video, () => { hoverPreview.current = false; setProblem(true); });
+  }
+
+  function endPreview() {
+    if (hoverPreview.current) { ref.current?.pause(); hoverPreview.current = false; }
   }
   function sound() {
     const video = ref.current;
@@ -85,12 +103,13 @@ export function FilmPlayer({ src, poster, label, labels, autoplay = false, eager
   function openViewer() {
     startTime.current = ref.current?.currentTime ?? 0;
     manualPause.current = true;
+    hoverPreview.current = false;
     setProblem(false);
     setWaiting(false);
     setExpanded(true);
   }
 
-  return <><div className="yagi-film" data-yagi-film data-playing={playing}>
+  return <><div className="yagi-film" data-yagi-film data-playing={playing} onPointerEnter={preview} onPointerLeave={endPreview}>
     <video ref={ref} data-yagi-video poster={poster} aria-label={label} muted loop playsInline preload="none"
       onPlay={() => setPlaying(true)} onPause={() => { setPlaying(false); setWaiting(false); }}
       onPlaying={() => { setWaiting(false); setProblem(false); }} onWaiting={() => setWaiting(true)} onError={() => { setProblem(true); setWaiting(false); }}

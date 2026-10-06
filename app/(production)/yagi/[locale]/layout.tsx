@@ -28,7 +28,7 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: L
 
 export default async function ProductionLayout({ children, params }: { children: ReactNode; params: Promise<{ locale: Locale }> }) {
   const { locale } = await params;
-  return <html lang={locale} className={fontVariables}><head>
+  return <html lang={locale} className={`${fontVariables} yagi-document`}><head>
     <link rel="stylesheet" href="/fonts/pretendard/pretendard-dynamic-subset.css" />
   </head><body className="yagi-site">
     <JsonLd id="yagi-structured-data" data={productionStructuredData(locale, getDictionary(locale))} />

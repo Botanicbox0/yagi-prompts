@@ -17,7 +17,7 @@ export function WorkGallery({ t }: { t: Dictionary['yagi'] }) {
     <div className="yagi-work-grid" aria-live="polite">
       {items.map(item => <figure key={item.id} className={`yagi-work-item yagi-work-${item.orientation}`} data-yagi-work={item.id}>
         <div className="yagi-work-media" style={{ aspectRatio: item.ratio }}>
-          <FilmPlayer src={item.src} poster={item.poster} label={t.work[item.id].title} labels={t} />
+          <FilmPlayer src={item.src} poster={item.poster} label={t.work[item.id].title} labels={t} previewOnHover />
         </div>
         <figcaption><div>
           <p className="yagi-label">{t.work[item.id].category}</p><h3>{t.work[item.id].title}</h3><p>{t.work[item.id].description}</p>

@@ -3,7 +3,8 @@ import { getDictionary } from '@/lib/i18n/dictionaries';
 import { BUSINESS, businessFooterLines } from '@/lib/legal/documents';
 import { brandEnquiryHref, brandWorkspaceHref } from '@/lib/campaigns/links';
 import { WorkGallery } from '@/components/yagi/work-gallery';
-import { FilmPlayer } from '@/components/yagi/film-player';
+import { HeroStage } from '@/components/yagi/hero-stage';
+import { StudioMotion } from '@/components/yagi/studio-motion';
 import { FormatDemo } from '@/components/yagi/format-demo';
 import type { Metadata } from 'next';
 
@@ -19,6 +20,7 @@ export default async function YagiPage({ params }: { params: Promise<{ locale: L
   const app = `https://twings.app/${locale}`;
   const brief = `https://twings.app${brandEnquiryHref(locale)}`;
   return <>
+    <StudioMotion />
     <a className="yagi-skip" href="#main">{t.skip}</a>
     <header className="yagi-header" id="top" data-yagi-header>
       <a className="yagi-brand" href={`./${locale}`} aria-label={t.brand}>
@@ -35,14 +37,8 @@ export default async function YagiPage({ params }: { params: Promise<{ locale: L
     </header>
     <main id="main">
       <section className="yagi-hero" data-yagi-hero>
-        <div className="yagi-hero-top"><p className="yagi-label">{t.eyebrow}</p></div>
-        <h1>{t.headline}</h1>
-        <div className="yagi-hero-bottom"><p>{t.intro}</p><a className="yagi-text-link" href="#work">{t.viewWork}<span aria-hidden="true">↓</span></a></div>
-        <div className="yagi-hero-film"><FilmPlayer src="/reel/campaigns/beauty-rose.mp4" poster="/reel/campaigns/beauty-rose.jpg"
-          label={t.work.beauty.title} labels={t} autoplay eager /></div>
-        <div className="yagi-film-caption"><span>{t.heroCaption}</span><span aria-hidden="true">{t.brand}</span></div>
+        <HeroStage t={t} />
       </section>
-      <section className="yagi-definition yagi-pad"><p data-service-definition>{t.definition}</p><span aria-hidden="true">↘</span></section>
       <section id="format" className="yagi-dark yagi-pad yagi-format" data-yagi-format-section>
         <div className="yagi-section-head"><p className="yagi-label">{t.demoLabel}</p><h2>{t.demoTitle}</h2><p>{t.demoBody}</p></div>
         <FormatDemo t={t} />
