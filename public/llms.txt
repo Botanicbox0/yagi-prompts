@@ -12,8 +12,8 @@ Public template examples can be browsed without an account. Personal generation 
 - [Image templates](https://twings.app/en/image): Published image examples.
 - [Campaigns](https://twings.app/en/campaigns): Studio-managed brand campaigns and creator opportunities.
 - [캠페인](https://twings.app/ko/campaigns): 브랜드 의뢰와 크리에이터 참여 안내.
-- [Pricing](https://twings.app/en/pricing): Template-specific prices; consult the selected template and checkout for the applicable amount and currency.
-- [요금 안내](https://twings.app/ko/pricing): 템플릿별 요금 안내.
+- [Pricing](https://twings.app/en/pricing): Single-template prices and an upcoming monthly video plan; enrollment is not open.
+- [요금 안내](https://twings.app/ko/pricing): 템플릿별 단건 가격과 준비 중인 월 구독 설계. 구독 신청은 아직 받지 않습니다.
 - [FAQ](https://twings.app/en/faq): Usage, payment, photos and likeness rights, creator participation, brand enquiries.
 - [자주 묻는 질문](https://twings.app/ko/faq): 이용·결제·사진과 초상권·캠페인·브랜드 의뢰.
 

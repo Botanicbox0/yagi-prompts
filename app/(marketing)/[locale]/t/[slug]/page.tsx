@@ -32,6 +32,7 @@ import { promptLabels, useCaseLabel } from '@/components/prompts/labels';
 import { campaignLabels } from '@/components/campaigns/labels';
 import { TwingsStudio, type StudioStyle } from '@/components/twings/studio';
 import { formatResolutionPrice, offeredResolutions } from '@/lib/twings/resolution';
+import { templateSubscriptionQuote } from '@/lib/twings/subscription-plan';
 
 /**
  * `/[locale]/t/[slug]` — one template, which is also where it is made (docs/TEMPLATES-IA.md §2).
@@ -89,6 +90,7 @@ export default async function TemplatePage({ params }: RouteParams) {
   const ads = adLabels(dict, locale);
   const useCaseLabels = Object.fromEntries(USE_CASES.map((value) => [value, useCaseLabel(dict, value)]));
   const title = locale === 'ko' && card.titleKo ? card.titleKo : card.title;
+  const subscriptionQuote = isForSale(card) ? templateSubscriptionQuote(card) : null;
   const ratio = card.poster?.w && card.poster.h ? `${card.poster.w} / ${card.poster.h}` : posterRatio(card.slug);
   const credit = card.source === 'yagi' ? labels.byYagi : card.authorHandle ? labels.byAuthor.replace('{handle}', card.authorHandle) : labels.byAnonymous;
 
@@ -173,6 +175,11 @@ export default async function TemplatePage({ params }: RouteParams) {
                     </dd>
                   </div>
                 </dl>
+
+                {subscriptionQuote && <div data-template-subscription className="mt-4 text-sm leading-relaxed opacity-70">
+                  <p>{interpolate(dict.pricing.subscriptionTemplateNote, { count: String(subscriptionQuote.maxPerMonth) })}</p>
+                  <a href={`/${locale}/pricing#monthly`} className="mt-1 inline-block underline underline-offset-4">{dict.pricing.subscriptionDetailLink} →</a>
+                </div>}
 
                 {style === null ? (
                   <p data-template-closed className="mt-6 max-w-detail text-body opacity-70">{t.notForSaleBody}</p>

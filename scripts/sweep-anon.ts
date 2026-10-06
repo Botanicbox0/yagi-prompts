@@ -973,6 +973,11 @@ async function sweepPricingTemplates(): Promise<void> {
   for (const locale of ['en', 'ko']) {
     const page = await get(`/${locale}/pricing`);
     expectEqual(`/${locale}/pricing renders 200`, page.status, 200);
+    expectPresent('…with the upcoming monthly plan', page.body, 'data-pricing-subscription="preparing"');
+    expectPresent('…with its monthly won price', page.body, '19,000');
+    expectPresent('…with a usage preview', page.body, 'data-subscription-preview');
+    expectPresent('…with enrollment explicitly closed', page.body, 'data-subscription-unavailable');
+    expectAbsent('…without a subscription checkout endpoint', page.body, '/api/billing/subscription');
     expectPresent('…with the price table', page.body, 'data-pricing-table');
     expectPresent('…listing the priced template', page.body, `data-pricing-row="${GATED_PROMPT}"`);
     expectPresent('…at its price, in the reader’s currency', page.body, locale === 'ko' ? '5,900원' : '>$4<');
