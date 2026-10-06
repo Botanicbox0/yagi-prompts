@@ -9,7 +9,7 @@ import { productionStructuredData, productionUrl, YAGI_ORIGIN } from '@/lib/yagi
 
 export const dynamicParams = false;
 export const revalidate = 3600;
-export const viewport: Viewport = { themeColor: '#f7f6f2' };
+export const viewport: Viewport = { themeColor: '#ffffff' };
 export const generateStaticParams = () => LOCALES.map(locale => ({ locale }));
 
 export async function generateMetadata({ params }: { params: Promise<{ locale: Locale }> }): Promise<Metadata> {
