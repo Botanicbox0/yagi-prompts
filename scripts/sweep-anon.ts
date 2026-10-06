@@ -1235,7 +1235,7 @@ async function main(): Promise<void> {
     expectPresent(`${locale}: direct participation entry`, home.body, `/${locale}/campaigns#creators`);
     const production = await get(`/yagi/${locale}`);
     expectEqual(`${locale}: YAGI landing`, production.status, 200);
-    for (const marker of ['data-yagi-hero', 'data-yagi-gallery', 'data-format-demo', 'data-yagi-brands', 'data-yagi-creators', 'data-yagi-faq']) {
+    for (const marker of ['data-yagi-hero', 'data-yagi-stage', 'data-yagi-gallery', 'data-format-demo', 'data-yagi-brands', 'data-yagi-creators', 'data-yagi-faq']) {
       expectPresent(`${locale}: ${marker}`, production.body, marker);
     }
     expectPresent(`${locale}: YAGI structured data`, production.body, 'yagi-structured-data');

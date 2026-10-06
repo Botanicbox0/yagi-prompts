@@ -43,6 +43,7 @@
 .yagi-stage-title { position: absolute; z-index: 2; left: clamp(24px,4vw,64px); right: 32px; bottom: 94px; pointer-events: none; color: white; }
 .yagi-stage-title h1 { margin: 0; max-width: 1000px; }
 .yagi-stage .yagi-film-controls { z-index: 3; bottom: 22px; right: 24px; }
+.yagi-stage .yagi-film-feedback { z-index: 3; top: 24px; bottom: auto; left: 24px; }
 .yagi-stage-bottom { display: grid; grid-template-columns: 1fr 1.2fr; gap: 50px; align-items: start; padding-top: 26px; }
 .yagi-stage-bottom>p { max-width: 470px; font-size: 16px; line-height: 1.75; color: var(--color-yagi-muted); }
 .yagi-stage-choices { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
