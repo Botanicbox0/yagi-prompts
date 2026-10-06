@@ -1,6 +1,6 @@
 # TWINGS — service context
 
-Updated: 2026-09-20
+Updated: 2026-10-07
 Canonical public website: https://twings.app
 Operator: YAGI WORKSHOP Inc. / 야기워크숍 주식회사
 Public contact: hello@yagiworkshop.xyz
@@ -14,7 +14,7 @@ Public browsing and examples do not require an account. Personal generation is c
 
 ## Pricing and payment
 
-The public catalog describes one-time template purchases rather than a recurring subscription. Prices vary by template. The current template and checkout pages are the sources for the amount and currency; this document does not invent a minimum price or convert currencies. A template that is not for sale must not be described as a free offer.
+Single-template purchases remain the current payment flow. The pricing page also describes an upcoming monthly video plan with an estimated usage preview. Monthly enrollment and payment are not open. Do not describe the upcoming plan as an active subscription product. Prices vary by template. The current template and checkout pages are the sources for the amount and currency; this document does not invent a minimum price or convert currencies. A template that is not for sale must not be described as a free offer.
 
 See https://twings.app/ko/pricing and https://twings.app/en/pricing.
 
