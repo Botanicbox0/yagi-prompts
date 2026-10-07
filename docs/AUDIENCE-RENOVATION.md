@@ -48,22 +48,26 @@ Brandazine의 실제 공개 화면에서 브랜드 문의는 로그인 전에, �
 
 ## 검증 기록
 
-2026-10-07 로컬 필수 순서 검증:
+2026-10-07, 최종 런타임 소스 `da6c5ffc42996ef81a6eb717f9f9a52aa4ff2b1b`를 동결한 뒤 로컬 필수 순서 검증을 완료했다. 이후 검증 기록과 화면 증거만 추가한다.
 
 | 검사 | 결과 |
 | --- | --- |
 | `npx tsc --noEmit` | 종료 코드 0 |
-| `npx vitest run` | 189개 파일 / 2,033개 테스트 통과, 586.99초 |
+| `npx vitest run --maxWorkers=4` | 190개 파일 / 2,038개 테스트 통과, 835.18초. 전체 파일을 실행하며 worker 수만 제한 |
 | `npm run build:local` | 성공. 브랜드·크리에이터 목록 양 언어 SSG, TTL 1시간 |
 | `npm run start:local` | 3000 포트 local/PGlite/storage 모드 Ready |
 | `npm run sweep:anon` | `SWEEP PASSED — 711/711 checks passed` |
 
-첫 스윕은 삭제된 홈 광고 마커를 기대하던 검사 1건이 실패했다. 새 구조의 브랜드 진입부와 `/en/brands` 연결을 검사하도록 갱신한 뒤 전체 스윕을 통과했다. 첫 Vitest 실행 중 no-JS 보완과 사전 키가 동시에 변경돼 신규 결과화면 테스트 3건이 실패했으므로, 최종 소스를 고정한 뒤 전체를 다시 실행한 결과가 위 수치다. 로그는 작업공간의 `audience-typecheck.log`, `audience-vitest.log`, `audience-build.log`, `audience-sweep.log`에 보관한다(커밋 제외).
+초기 스윕은 삭제된 홈 광고 마커를 기대하던 검사 1건이 실패했다. 새 구조의 브랜드 진입부와 `/en/brands` 연결을 검사하도록 갱신했다. 초기 Vitest 실행 중 no-JS 보완과 사전 키가 동시에 변경돼 신규 결과화면 테스트 3건이 실패했으며, 소스를 동결한 재실행에서 2,033개가 통과했다. 최종 화면 보완과 회귀 테스트 추가 뒤 다시 전체 순서를 실행한 결과가 위 2,038개다. 로그는 작업공간의 `audience-typecheck.log`, `audience-vitest.log`, `audience-build.log`, `audience-start.log`, `audience-sweep.log`에 보관한다(커밋 제외).
 
 로컬 IAB 320×760에서 한국어 브랜드 화면을 실제 캡처했다. 수동 재생 정지 후 스크롤 이탈·복귀에도 정지 유지, 실행 중 reduced-motion 변경 시 4편 정지를 확인했다. 영문 폼은 `type=production`을 하이드레이션 후 올바르게 선택하고 한국어 계산기를 명시한다. 앱·모바일 실기기 로그인/실결제/영상 생성은 수행하지 않았다.
 
-로컬 fixture 영상은 운영 콘텐츠 품질 증거가 아니다. 프리뷰에서 실제 공개 카탈로그/미디어를 재확인해야 한다. 최종 PC·모바일 브라우저 캡처와 Slack 실제 수신은 PR/운영 담당의 후속 확인 단계다. Slack secret과 cron secret 저장, RLS SQL 적용은 root의 운영 작업이며 실제 사이트 수신 확인과 구분한다.
+로컬 fixture 영상은 운영 콘텐츠 품질 증거가 아니다. root가 최종 Preview의 실제 공개 카탈로그 8개와 미디어를 확인하고, 데스크톱·한국어 390px·영어 320px에서 브랜드와 크리에이터 화면을 각각 캡처했다. 구현 담당도 여섯 이미지를 독립적으로 열어 확인했다. 가로 넘침이 없고 320px 메뉴의 Tab 순환·Escape 초점 복귀를 확인했다. 스크린샷과 관찰 범위는 [Preview 검증 증거](qa/audience-renovation/README.md)에 보관한다. 모바일 폭 브라우저 검증이며 실기기·인증 완료·실결제·영상 생성 검증은 아니다.
+
+Slack secret과 cron secret 저장, RLS SQL 적용은 root의 운영 작업이며 실제 사이트 수신 확인과 구분한다. 이 기록 시점에는 Production의 발송 설정 `on` 저장을 확인했으나 새 배포와 실제 문의→Slack 수신·재제출 E2E가 남아 있다. 최신 상태는 [문의 운영 기록](BRAND-INQUIRY-DELIVERY.md)을 기준으로 한다.
 
 JavaScript가 꺼진 폼도 `/api/brands/inquiries/result`의 서버 HTML에서 접수 결과를 확인한다. 결과에는 실제 DB의 접수 UUID와 메일 발송 여부만 사용하고 PII는 읽지 않는다. 결과 HTML은 private/no-store·noindex·CSP를 적용한다. Slack의 live runtime은 `VERCEL_ENV=production`일 때만 활성화 설정을 읽으므로 운영 변수를 복사한 프리뷰/로컬에서도 발송하지 않는다.
 
-실제 Claude Fable 5.1 교차검토 후 작은 안내 문구 대비, 목적 선택의 group 의미, no-JS main landmark, UUID 미지원 fallback을 보완했다. 승인된 사례 매니페스트와 양 언어 페이지에서 실제 SSR한 숫자를 비교하는 회귀 검증을 추가했으며 관련 4개 파일 / 21개 테스트와 타입 검사를 통과했다. 최종 전체 테스트 수치는 위 2,033개 실행과 구분한다. 운영 담당이 저장한 PC 1280px·한국어 390px·영어 320px 실제 이미지도 별도로 열어 확인했다.
+root가 실제 Claude CLI의 `claude-fable-5-1`로 코드 교차검토와 최종 여섯 이미지 검토를 각각 수행했다. 코드 검토는 필수 검증 통과를 전제로 Ship, 시각 검토는 첫 화면 정적 캡처 범위에서 Ship이었다. 이 모델이 로컬 테스트·브라우저 조작·Production·Slack E2E를 수행했다고 주장하지 않는다.
+
+코드 검토 후 안내 문구 대비, 목적 선택의 group 의미, no-JS main landmark, UUID 미지원 fallback을 보완했다. 승인된 사례 매니페스트와 양 언어 실제 SSR 수치를 비교하는 회귀 검증도 추가했다. Preview에서 생성 옵션의 비율을 실제 미디어 비율로 오인한 문제를 발견해 완전한 양수 video 치수 쌍 → poster 치수 쌍 → 기존 카탈로그의 16:9 순서로 수정했다. 키보드 초점이 미리보기 host에 도달하도록 연결했다. 이 모든 수정이 위 최종 전체 검증에 포함된다.
