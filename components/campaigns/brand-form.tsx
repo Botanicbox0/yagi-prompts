@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
+import type { Dictionary } from '@/lib/i18n/dictionaries';
 
 /**
  * The brand enquiry form (founder, 2026-09-11) — a client island on a static page.
@@ -11,6 +12,11 @@ import { useEffect, useState, type FormEvent } from 'react';
  */
 
 export interface BrandFormLabels {
+  inquiryTypeLabel: string;
+  inquiryTypeOptions: Dictionary['campaigns']['brands']['inquiryTypeOptions'];
+  useCaseLabel: string;
+  useCaseOptions: Dictionary['campaigns']['brands']['useCaseOptions'];
+  referenceLabel: string;
   formHeading: string;
   fieldCompany: string;
   fieldName: string;
@@ -80,17 +86,33 @@ export function BrandInquiryForm({
   const [status, setStatus] = useState<Status>('idle');
   const [field, setField] = useState<string | null>(null);
   const [receipt, setReceipt] = useState(false);
+  const requestIdRef = useRef<HTMLInputElement>(null);
+  const [inquiryId, setInquiryId] = useState<string | null>(null);
+  const [inquiryType, setInquiryType] = useState('campaign');
+  const [useCase, setUseCase] = useState('undecided');
 
-  // Progressive enhancement: a submit that lands before hydration (slow phone, slow network) is a
-  // plain POST to the same endpoint, which answers with a redirect back here carrying `?inquiry=`.
-  // Read it once, show the same state the fetch path would, and take it off the address bar.
+  // Keep old receipt links readable after the public IA move. New non-JS submissions use the
+  // server-rendered /api/brands/inquiries/result route; hydrated submissions stay in this form.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
+    if (params.get('type') && params.get('type')! in labels.inquiryTypeOptions) setInquiryType(params.get('type')!);
+    if (params.get('useCase') && params.get('useCase')! in labels.useCaseOptions) setUseCase(params.get('useCase')!);
+    // Persist only a random request key, never the visitor's form contents. A lost network
+    // response can be retried without creating another enquiry or notification.
+    try {
+      const key = sessionStorage.getItem('twings.inquiry.request');
+      const id = key && /^[0-9a-f-]{36}$/i.test(key) ? key : crypto.randomUUID();
+      if (requestIdRef.current) requestIdRef.current.value = id;
+      sessionStorage.setItem('twings.inquiry.request', id);
+    } catch { /* Without storage or secure UUID support, the server accepts a blank request key. */ }
     const outcome = params.get('inquiry');
     if (!outcome) return;
     if (outcome === 'sent') {
       setStatus('sent');
       setReceipt(params.get('receipt') === '1');
+      const reference = params.get('id');
+      setInquiryId(reference && /^[0-9a-f-]{36}$/i.test(reference) ? reference : null);
+      try { sessionStorage.removeItem('twings.inquiry.request'); } catch { /* Storage may be disabled. */ }
     }
     else if (outcome === 'rate_limited' || outcome === 'invalid' || outcome === 'unavailable') {
       setStatus(outcome);
@@ -99,9 +121,10 @@ export function BrandInquiryForm({
     params.delete('inquiry');
     params.delete('field');
     params.delete('receipt');
+    params.delete('id');
     const rest = params.toString();
     window.history.replaceState(null, '', `${window.location.pathname}${rest ? `?${rest}` : ''}${window.location.hash}`);
-  }, []);
+  }, [labels.inquiryTypeOptions, labels.useCaseOptions]);
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -120,6 +143,9 @@ export function BrandInquiryForm({
       consent: form.get('consent') === 'on',
       locale,
       website: text('website'),
+      requestId: text('requestId') || undefined,
+      inquiryType: text('inquiryType'),
+      useCase: text('useCase'),
     };
     setStatus('sending');
     setField(null);
@@ -130,10 +156,12 @@ export function BrandInquiryForm({
         credentials: 'same-origin',
         body: JSON.stringify(payload),
       });
-      const json = (await response.json().catch(() => ({}))) as { ok?: boolean; code?: string; field?: string; receipt?: boolean };
+      const json = (await response.json().catch(() => ({}))) as { ok?: boolean; code?: string; field?: string; receipt?: boolean; id?: string };
       if (response.ok && json.ok === true) {
         setReceipt(json.receipt === true);
         setStatus('sent');
+        setInquiryId(typeof json.id === 'string' ? json.id : null);
+        try { sessionStorage.removeItem('twings.inquiry.request'); } catch { /* Optional persistence. */ }
         return;
       }
       if (json.code === 'rate_limited') setStatus('rate_limited');
@@ -148,7 +176,7 @@ export function BrandInquiryForm({
 
   if (status === 'sent') {
     return (
-      <BrandInquiryReceived labels={labels} receipt={receipt} />
+      <div><BrandInquiryReceived labels={labels} receipt={receipt} />{inquiryId && <p className="mt-3 break-all text-xs opacity-60">{labels.referenceLabel}: {inquiryId}</p>}</div>
     );
   }
 
@@ -159,6 +187,12 @@ export function BrandInquiryForm({
     <form data-brand-inquiry="form" method="post" action={endpoint} onSubmit={submit} className="flex flex-col gap-5">
       <p className="font-label text-label uppercase">{labels.formHeading}</p>
       <input type="hidden" name="locale" value={locale} />
+      <input ref={requestIdRef} type="hidden" name="requestId" />
+
+      <div className="grid gap-5 sm:grid-cols-2">
+        <label><span className={LABEL}>{labels.inquiryTypeLabel}</span><select name="inquiryType" value={inquiryType} onChange={event => setInquiryType(event.target.value)} className={`${INPUT} mt-2`}>{Object.entries(labels.inquiryTypeOptions).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+        <label><span className={LABEL}>{labels.useCaseLabel}</span><select name="useCase" value={useCase} onChange={event => setUseCase(event.target.value)} className={`${INPUT} mt-2`}>{Object.entries(labels.useCaseOptions).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+      </div>
 
       <div className="grid gap-5 sm:grid-cols-2">
         <label>

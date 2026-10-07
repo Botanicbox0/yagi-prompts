@@ -15,6 +15,11 @@ export type BudgetBand = (typeof BUDGET_BANDS)[number];
 export const INQUIRY_STATUSES = ['new', 'contacted', 'closed'] as const;
 export type InquiryStatus = (typeof INQUIRY_STATUSES)[number];
 
+export const INQUIRY_TYPES = ['campaign', 'production', 'filter', 'undecided'] as const;
+export type InquiryType = (typeof INQUIRY_TYPES)[number];
+export const INQUIRY_USE_CASES = ['launch', 'beauty_fashion', 'app_platform', 'local', 'seasonal', 'undecided'] as const;
+export type InquiryUseCase = (typeof INQUIRY_USE_CASES)[number];
+
 /** Per address, per rolling day — enough for a typo and a retry, not enough for a script. */
 export const BRAND_INQUIRIES_PER_DAY = 3;
 
@@ -27,6 +32,9 @@ const optionalLine = (max: number) =>
     .transform((value) => (value && value.length > 0 ? value : null));
 
 export const BrandInquiryInput = z.object({
+  requestId: z.uuid().optional(),
+  inquiryType: z.enum(INQUIRY_TYPES).default('campaign'),
+  useCase: z.enum(INQUIRY_USE_CASES).default('undecided'),
   company: z.string().trim().min(1).max(120),
   contactName: z.string().trim().min(1).max(80),
   email: z

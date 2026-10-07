@@ -1,5 +1,159 @@
 /** PLAN §3.9 — UI strings as dictionary modules. `en` is the shape; `ko` must match it. */
 export const en = {
+  audience: {
+    "label": "Choose your experience",
+    "creator": "Creators",
+    "brand": "Brands",
+    "services": "Campaigns",
+    "work": "Our work",
+    "process": "How it works",
+    "workspace": "Brand sign in",
+    "contact": "Discuss a campaign",
+    "start": "Explore templates",
+    "brandDoor": "Working on a brand campaign?",
+    "brandDoorBody": "Meet the studio behind the formats, and plan a campaign with creators.",
+    "brandDoorCta": "Explore TWINGS for brands",
+    "creatorDoor": "Here to create?",
+    "creatorDoorBody": "Find a format you like. Make it yours. Explore campaigns when you are ready.",
+    "creatorDoorCta": "Explore templates",
+    "myWork": "My work",
+    "browse": "Templates",
+    "myCampaigns": "My campaigns"
+  },
+  creatorJourney: {
+    "eyebrow": "TWINGS for creators",
+    "title": "Your face.\nYour next scene.",
+    "body": "Be the lead in a trend format. Watch the examples, choose a scene, and make it with your own face.",
+    "browse": "Find your template",
+    "how": "How it works",
+    "example": "A scene you can make yours",
+    "preparing": "Public creation is being prepared. You can explore every template and preview now.",
+    "ready": "Choose a template to see its price and start creating.",
+    "stepsHeading": "From a scene you love to a film starring you.",
+    "step1Title": "Choose a scene",
+    "step1Body": "Watch the example first. Check the length, framing, and available options on its template page.",
+    "step2Title": "Use your own face",
+    "step2Body": "Sign in to continue with the template you chose. Your face photo goes through the provider’s checks.",
+    "step3Title": "Keep your finished film",
+    "step3Body": "When creation opens, finished results will be available in My work. Campaigns have their own application and posting conditions.",
+    "libraryHeading": "Find your next scene",
+    "libraryBody": "Studio-made formats, ready to explore. Choose by the film you want to be in.",
+    "campaignHeading": "Make it. Post it. Take part.",
+    "campaignBody": "Explore the brief, fee rules, and dates before you apply for a brand campaign.",
+    "campaignCta": "Explore campaigns"
+  },
+  brandLanding: {
+    "moatEyebrow": "Why creators take part",
+    "moatHeading": "A format they want on their own channel.",
+    "moatBody": "We start with the creator’s audience: a scene worth making, watching, and sharing. That gives a brand a stronger reason to be part of the content.",
+    "moat1Title": "Creative motivation",
+    "moat1Body": "An appealing format gives creators a reason to join beyond completing an advertising brief.",
+    "moat2Title": "A shared starting point",
+    "moat2Body": "The studio makes and tests the format first, so creators have a clear scene and a practical path to their own version.",
+    "moat3Title": "A campaign built around participation",
+    "moat3Body": "We plan recruitment and operations around the format’s appeal. Participation and performance still depend on the brief, creators, and audience.",
+    "metaTitle": "Creator campaigns for brands",
+    "metaDescription": "Plan a creator campaign with TWINGS. The studio develops the format, manages creator participation and reviews posts, with results shared in your brand workspace.",
+    "eyebrow": "TWINGS for brands",
+    "title": "Campaigns creators\nwant to join.",
+    "body": "We build a film format for your brand, then run a campaign where selected creators make it their own and post it on their channels.",
+    "primaryCta": "Discuss your campaign",
+    "secondaryCta": "See the work",
+    "definition": "TWINGS runs brand campaigns through creators. The studio handles format development, recruitment, post review, and payout operations; the brand follows agreed deliverables and results in its workspace.",
+    "reelEyebrow": "Production examples",
+    "reelHeading": "The format comes first.",
+    "reelBody": "Different faces, the same compelling scene. Explore a few formats made by the studio.",
+    "typesEyebrow": "Your brief, our starting point",
+    "typesHeading": "What are you launching?",
+    "typesBody": "Start with the message and the audience. We shape the format and campaign around them.",
+    "brandProvides": "You bring",
+    "studioMakes": "We make",
+    "creatorPosts": "Creators post",
+    "report": "You review",
+    "useCases": {
+      "launch": {
+        "title": "Product launches",
+        "brand": "The product, the message, and the launch window.",
+        "studio": "A format that puts the product at the centre of the scene.",
+        "creator": "Their own version of the agreed film format.",
+        "report": "Published links and available performance figures."
+      },
+      "beauty_fashion": {
+        "title": "Beauty & fashion",
+        "brand": "The collection, visual references, and usage guidelines.",
+        "studio": "A look or scene built around the brand’s visual direction.",
+        "creator": "A film with their own face, following the campaign brief.",
+        "report": "Approved posts and the agreed content deliverables."
+      },
+      "app_platform": {
+        "title": "Apps & platforms",
+        "brand": "The experience to introduce and the action you want people to take.",
+        "studio": "A format that makes that experience visible.",
+        "creator": "Content and captions that introduce the experience.",
+        "report": "Post links and the campaign’s available metrics."
+      },
+      "local": {
+        "title": "Places & franchises",
+        "brand": "The place, local audience, and campaign period.",
+        "studio": "A format shaped around the place and its story.",
+        "creator": "The agreed film, with the place and required tags.",
+        "report": "Posting status and available results by campaign."
+      },
+      "seasonal": {
+        "title": "Seasonal campaigns",
+        "brand": "The occasion, offer, and communication dates.",
+        "studio": "A repeatable format with a shared campaign mood.",
+        "creator": "Their own interpretation within the agreed brief.",
+        "report": "Published content and the final campaign summary."
+      }
+    },
+    "caseEyebrow": "Campaign experience",
+    "caseHeading": "From a finished film\nto organic participation.",
+    "caseClient": "Global AI platform",
+    "caseGoal": "Launch campaign",
+    "caseFormat": "Studio-made films and derivative organic content",
+    "caseNote": "Aggregate results from a global AI platform launch campaign.",
+    "processEyebrow": "Working together",
+    "processHeading": "A clear brief.\nA visible process.",
+    "processBody": "We agree the scope, schedule, deliverables, and usage terms before the campaign begins.",
+    "processSteps": {
+      "brief": {
+        "title": "Tell us the goal",
+        "body": "Share the audience, message, and timing. An outline is enough to start."
+      },
+      "format": {
+        "title": "Agree the format",
+        "body": "Review the creative direction and campaign terms with the studio."
+      },
+      "creators": {
+        "title": "Bring in creators",
+        "body": "We recruit and select creators against the agreed brief and requirements."
+      },
+      "publish": {
+        "title": "Create and review",
+        "body": "Creators make and post the film. We check submitted links against the campaign requirements."
+      },
+      "report": {
+        "title": "Review the results",
+        "body": "Follow the campaign’s status and shared results in your brand workspace."
+      }
+    },
+    "workspaceHeading": "Already working with us?",
+    "workspaceBody": "Sign in to your brand workspace for shared campaigns, approvals, and reports.",
+    "workspaceCta": "Open brand workspace",
+    "productionEyebrow": "Also by YAGI",
+    "productionHeading": "Need the film or filter itself?",
+    "productionBody": "For a standalone brand film or filter production, discuss a separate production brief with YAGI.",
+    "productionCta": "Discuss production in English",
+    "pricingCta": "Production estimate · Korean",
+    "pricingNote": "The estimate calculator is currently in Korean. You can use the English enquiry form here.",
+    "inquiryEyebrow": "Start a conversation",
+    "inquiryHeading": "Tell us what you have in mind.",
+    "inquiryBody": "Share your brand, audience, and timing. We will review the brief and reply to your email.",
+    "inquiryNote": "Submitting an enquiry does not place an order. Scope and fees are agreed separately.",
+    "legacyBrandLink": "Looking to run a brand campaign?",
+    "legacyBrandCta": "Visit TWINGS for brands"
+  },
   portrait: {
     title: 'A familiar face. Yours.',
     intro: 'Create two front-facing portraits from one selfie. Choose the one that looks more like you for your next videos and images.',
@@ -823,7 +977,7 @@ export const en = {
     pricingDescription:
       'An upcoming video subscription at KRW 19,000/month, with up to four 10-second films at 720p. Compare single purchases and estimated monthly usage.',
     campaignsTitle: "Brand creator campaigns",
-    campaignsDescription: "The studio manages AI content production and creator campaigns around your brand's goals and budget. Review content, published posts and performance reports in your brand workspace.",
+    campaignsDescription: "Explore brand campaigns for creators. Read the brief, eligibility, fee rules and dates before you apply.",
   },
   nav: {
     video: 'Video',
@@ -1121,7 +1275,7 @@ export const en = {
       line2: 'FROM ONE PHOTO.',
       intro: "Choose a scene to appear in. Each video template was designed and tested by the studio.",
       rail: 'Video templates',
-      railLede: 'Paid per film. One photo, one scene, one finished film.',
+      railLede: 'Watch the examples. Choose the scene you want to star in.',
       emptyTitle: 'The first video template is being made.',
       emptyBody: 'Opening soon.',
       seeCta: 'See video templates',
@@ -1131,7 +1285,7 @@ export const en = {
       line2: 'FROM ONE PHOTO.',
       intro: "Portraits, posters, lookbooks. Find the image style you want to make with your own face.",
       rail: 'Image templates',
-      railLede: 'Paid per image. One photo, one scene, one finished frame.',
+      railLede: 'Find a scene you would love to make your own.',
       emptyTitle: 'IMAGE TEMPLATES\nARE ON THEIR WAY.',
       emptyBody: 'The first image template lands here the moment it opens. Start with a video template for now.',
       seeCta: 'See image templates',
@@ -1421,6 +1575,15 @@ export const en = {
       creatorsEyebrow: 'For creators',
     },
     brands: {
+      inquiryTypeLabel: "What do you need?",
+      inquiryTypeOptions: {"campaign":"Creator campaign","production":"Brand film production","filter":"Filter production","undecided":"Let’s discuss it"},
+      useCaseLabel: "Campaign purpose",
+      useCaseOptions: {"launch":"Product launch","beauty_fashion":"Beauty & fashion","app_platform":"App or platform","local":"Place or franchise","seasonal":"Seasonal promotion","undecided":"To be decided"},
+      slackDeliveryLabel: "Slack delivery",
+      slackDeliveryStatuses: {"pending":"Awaiting delivery","sending":"Sending","sent":"Delivered","uncertain":"Delivery needs checking","failed":"Delivery failed","untracked":"Earlier enquiry"},
+      referenceLabel: "Enquiry reference",
+      resultBack: 'Back to the enquiry page',
+      resultInvalid: 'Check the enquiry form and send it again.',
       workspaceCta: 'Plan a campaign in your brand workspace',
       workspaceHelp: 'Sign in to share your goals and budget. Review content, request changes, and follow published results in one place.',
       consultationToggle: 'Talk to us before signing up',
@@ -1793,11 +1956,11 @@ export const en = {
     q5: 'What is a campaign?',
     a5: "A paid project where a brand picks one template and commissions the same format from many creators. Creators apply; those selected make their own-face version with that template, post it on their channel, and are paid once the link is reviewed and the campaign's own holding period has passed. Each campaign page lists that period with the fee.",
     q7: 'I run a brand. Can I open a campaign?',
-    a7: "Yes. Share your goals, total budget, preferred channels and references in the brand workspace. The studio agrees the scope with you and manages production and recruitment. You can then approve content, request changes, and review posts and performance reports.",
+    a7: "Yes. Use the enquiry form on the Brands page to share your goals, total budget, preferred channels and references. The studio agrees the scope with you and manages production and recruitment. Ongoing campaigns, content and reports are available in your brand workspace.",
     q8: 'What if the result comes out wrong?',
     a8: 'It is AI-made, so details like hands, lettering and backgrounds can go wrong, and it may differ from the sample. If your face is not reflected or the film does not play, use "Not happy with the result?" on the result page. Within 7 days we re-render for free or refund.',
     q6: 'Do you take production work?',
-    a6: "Yes. You can commission brand-only videos or images without a creator campaign. Share your goals and references on the campaign page.",
+    a6: "Yes. You can commission standalone video or filter production from YAGI. Choose production in the enquiry form on the Brands page and share your goals and references.",
   },
   /** The legal surface's chrome — the documents' own text lives in lib/legal/documents.ts. */
   legal: {

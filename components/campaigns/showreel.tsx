@@ -52,31 +52,39 @@ function ReelTile({ item, caption, labels }: { item: ReelItem; caption: ReelCapt
   const [playing, setPlaying] = useState(false);
   const [muted, setMuted] = useState(true);
   const [reduced, setReduced] = useState(false);
+  const manuallyPaused = useRef(false);
+  const visible = useRef(false);
+  const reducedMotion = useRef(false);
 
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      setReduced(true);
-      return;
-    }
+    const media = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const synchronize = () => {
+      if (!visible.current || reducedMotion.current || manuallyPaused.current || document.hidden) video.pause();
+      else void video.play().catch(() => undefined);
+    };
+    const preferenceChanged = () => { reducedMotion.current = media.matches; setReduced(media.matches); synchronize(); };
+    preferenceChanged();
+    media.addEventListener('change', preferenceChanged);
+    document.addEventListener('visibilitychange', synchronize);
     const observer = new IntersectionObserver(
       ([entry]) => {
         if (!entry) return;
-        if (entry.isIntersecting) void video.play().catch(() => undefined);
-        else video.pause();
+        visible.current = entry.isIntersecting && entry.intersectionRatio >= 0.5;
+        synchronize();
       },
       { threshold: 0.5 },
     );
     observer.observe(video);
-    return () => observer.disconnect();
+    return () => { observer.disconnect(); media.removeEventListener('change', preferenceChanged); document.removeEventListener('visibilitychange', synchronize); };
   }, []);
 
   const toggle = () => {
     const video = videoRef.current;
     if (!video) return;
-    if (video.paused) void video.play().catch(() => undefined);
-    else video.pause();
+    if (video.paused) { manuallyPaused.current = false; void video.play().catch(() => undefined); }
+    else { manuallyPaused.current = true; video.pause(); }
   };
 
   const toggleSound = () => {
@@ -84,7 +92,6 @@ function ReelTile({ item, caption, labels }: { item: ReelItem; caption: ReelCapt
     if (!video) return;
     video.muted = !video.muted;
     setMuted(video.muted);
-    if (video.paused) void video.play().catch(() => undefined);
   };
 
   const landscape = item.orientation === 'landscape';
@@ -94,7 +101,7 @@ function ReelTile({ item, caption, labels }: { item: ReelItem; caption: ReelCapt
       data-reel-item={item.id}
       data-reel-playing={playing ? 'true' : 'false'}
       className={[
-        'relative w-full overflow-hidden border border-hairline bg-black',
+        'relative w-full overflow-hidden rounded-xl bg-black',
         // A landscape tile fills the row a portrait tile sets (grid stretch); below lg it keeps its own frame.
         landscape ? 'aspect-video lg:aspect-auto lg:h-full' : '',
       ].join(' ')}
@@ -102,7 +109,7 @@ function ReelTile({ item, caption, labels }: { item: ReelItem; caption: ReelCapt
     >
       <video
         ref={videoRef}
-        className="absolute inset-0 h-full w-full object-cover"
+        className="absolute inset-0 h-full w-full object-contain"
         poster={item.poster}
         muted
         loop
@@ -126,9 +133,9 @@ function ReelTile({ item, caption, labels }: { item: ReelItem; caption: ReelCapt
             type="button"
             onClick={toggle}
             aria-pressed={playing}
-            aria-label={playing ? labels.pause : labels.play}
+            aria-label={`${caption.title} · ${playing ? labels.pause : labels.play}`}
             className={[
-              'inline-flex h-8 min-w-8 items-center justify-center border border-white/40 bg-black/50 px-2 font-mono text-[0.7rem] leading-none backdrop-blur-sm',
+              'inline-flex h-11 min-w-11 items-center justify-center rounded-full border border-white/40 bg-black/60 px-2 font-mono text-[0.7rem] leading-none',
               reduced ? 'opacity-100' : '',
             ].join(' ')}
           >
@@ -138,8 +145,8 @@ function ReelTile({ item, caption, labels }: { item: ReelItem; caption: ReelCapt
             type="button"
             onClick={toggleSound}
             aria-pressed={!muted}
-            aria-label={muted ? labels.unmute : labels.mute}
-            className="inline-flex h-8 min-w-8 items-center justify-center border border-white/40 bg-black/50 px-2 font-mono text-[0.7rem] leading-none backdrop-blur-sm"
+            aria-label={`${caption.title} · ${muted ? labels.unmute : labels.mute}`}
+            className="inline-flex h-11 min-w-11 items-center justify-center rounded-full border border-white/40 bg-black/60 px-2 font-mono text-[0.7rem] leading-none"
           >
             {muted ? '♪̸' : '♪'}
           </button>

@@ -6,6 +6,7 @@ import type { PromptCard } from '@/lib/prompts/catalog';
 import { PROMPT_MODEL_LABEL, USE_CASES } from '@/lib/prompts/schemas';
 import { PromptCardView } from '@/components/prompts/prompt-card';
 import { HOVER_HOST } from '@/components/prompts/card-media';
+import { CreatorHero } from '@/components/audience/creator-home';
 import { PromptRail } from '@/components/prompts/rails';
 import { TypographicPoster, POSTER_RATIOS, posterRatio } from '@/components/prompts/poster';
 import { PromptBody, PromptHeader, SubmitStrip } from '@/components/prompts/detail';
@@ -148,13 +149,48 @@ describe('prompt card (§13.2)', () => {
    * one thing the client effect assumes: `HOVER_HOST` resolves, and it WRAPS the media.
    */
   it('hangs the hover host above the media, where the overlay link cannot mask it', () => {
-    expect(HOVER_HOST).toBe('[data-prompt-card]');
+    expect(HOVER_HOST.split(',').map(selector => selector.trim())).toContain('[data-prompt-card]');
     const html = cardMarkup(card());
     const host = html.indexOf('data-prompt-card=');
     const media = html.indexOf('class="card__media');
     expect(host).toBeGreaterThanOrEqual(0);
     expect(media).toBeGreaterThan(host);
     expect(html.slice(host).indexOf('</article>')).toBeGreaterThan(html.slice(host).indexOf('card__media'));
+  });
+});
+
+describe('the creator hero uses the uploaded example', () => {
+  it('keeps unknown media at 16:9 instead of borrowing generation settings and wraps its focusable link in a preview host', () => {
+    const html = renderToStaticMarkup(<CreatorHero dict={dict} locale="en" featured={card({
+      aspectDefault: '9:16',
+      poster: { source: 'public', src: 'https://media.example.test/poster.jpg', mime: 'image/jpeg' },
+      video: { source: 'public', src: 'https://media.example.test/film.mp4', mime: 'video/mp4' },
+    })} />);
+    expect(html).toContain('aspect-ratio:16 / 9');
+    expect(HOVER_HOST.split(',').map(selector => selector.trim())).toContain('[data-media-host]');
+    expect(html).toMatch(/<article[^>]*data-media-host[^>]*><a[^>]*>[\s\S]*class="card__media/);
+    expect(html).not.toContain('data-prompt-card=');
+  });
+
+  it('uses measured portrait media dimensions even when the generation default is wide', () => {
+    const html = renderToStaticMarkup(<CreatorHero dict={dict} locale="en" featured={card({
+      aspectDefault: '16:9',
+      video: { source: 'public', src: 'https://media.example.test/portrait.mp4', mime: 'video/mp4', w: 1080, h: 1920 },
+    })} />);
+    expect(html).toContain('aspect-ratio:1080 / 1920');
+  });
+
+  it('uses a complete measured pair rather than mixing partial video and poster dimensions', () => {
+    const html = renderToStaticMarkup(<CreatorHero dict={dict} locale="en" featured={card({
+      poster: { source: 'public', src: 'https://media.example.test/poster.jpg', mime: 'image/jpeg', w: 1920, h: 1080 },
+      video: { source: 'public', src: 'https://media.example.test/film.mp4', mime: 'video/mp4', w: 1080 },
+    })} />);
+    expect(html).toContain('aspect-ratio:1920 / 1080');
+    const unknown = renderToStaticMarkup(<CreatorHero dict={dict} locale="en" featured={card({
+      poster: null,
+      video: { source: 'public', src: 'https://media.example.test/film.mp4', mime: 'video/mp4', w: 0, h: 1920 },
+    })} />);
+    expect(unknown).toContain('aspect-ratio:16 / 9');
   });
 });
 

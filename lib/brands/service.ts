@@ -2,7 +2,7 @@ import type { SqlRunner } from '@/lib/db/sql-runner';
 import type { Mailer, SendOutcome } from '@/lib/notify/mailer';
 import { BUSINESS } from '@/lib/legal/documents';
 import { brandInquiryEmails } from './email';
-import { countBrandInquiriesByEmailSince, insertBrandInquiry, type BrandInquiry } from './repo';
+import { countBrandInquiriesByEmailSince, insertBrandInquiry, loadBrandInquiryByRequestId, type BrandInquiry } from './repo';
 import { BRAND_INQUIRIES_PER_DAY, BrandInquiryInput } from './schemas';
 
 /**
@@ -20,7 +20,7 @@ import { BRAND_INQUIRIES_PER_DAY, BrandInquiryInput } from './schemas';
  */
 
 export type SubmitBrandInquiryResult =
-  | { ok: true; inquiry: BrandInquiry | null }
+  | { ok: true; inquiry: BrandInquiry | null; replayed?: boolean }
   | { ok: false; code: 'invalid' | 'rate_limited'; field?: string };
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -40,12 +40,26 @@ export async function submitBrandInquiry(
   // A filled honeypot is a script. Say yes, store nothing, send nothing.
   if (input.website && input.website.length > 0) return { ok: true, inquiry: null };
 
+  // A lost HTTP response is a retry of the same acceptance, even after the daily cap is reached.
+  if (input.requestId) {
+    const existing = await loadBrandInquiryByRequestId(deps.sql, input.requestId);
+    if (existing) return { ok: true, inquiry: existing, replayed: true };
+  }
+
   const now = deps.now ?? new Date();
   const recent = await countBrandInquiriesByEmailSince(deps.sql, input.email, new Date(now.getTime() - DAY_MS));
-  if (recent >= BRAND_INQUIRIES_PER_DAY) return { ok: false, code: 'rate_limited' };
+  if (recent >= BRAND_INQUIRIES_PER_DAY) {
+    // The winner may have committed between the first replay check and the count.
+    const existing = input.requestId ? await loadBrandInquiryByRequestId(deps.sql, input.requestId) : null;
+    if (existing) return { ok: true, inquiry: existing, replayed: true };
+    return { ok: false, code: 'rate_limited' };
+  }
 
-  const inquiry = await insertBrandInquiry(deps.sql, {
+  const accepted = await insertBrandInquiry(deps.sql, {
+    ...(input.requestId ? { requestId: input.requestId } : {}),
     locale: input.locale,
+    inquiryType: input.inquiryType,
+    useCase: input.useCase,
     company: input.company,
     contactName: input.contactName,
     email: input.email,
@@ -57,7 +71,7 @@ export async function submitBrandInquiry(
     consentAt: now,
     userId,
   });
-  return { ok: true, inquiry };
+  return { ok: true, ...accepted };
 }
 
 export interface NotifyBrandInquiryDeps {

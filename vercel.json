@@ -7,6 +7,10 @@
     {
       "path": "/api/renders/tick",
       "schedule": "0 18 * * *"
+    },
+    {
+      "path": "/api/brands/inquiries/tick",
+      "schedule": "0 19 * * *"
     }
   ]
 }

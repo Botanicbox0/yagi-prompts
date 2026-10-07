@@ -477,6 +477,7 @@ async function sweepStructuredData(): Promise<void> {
       { rest: '', placement: 'landing' },
       { rest: '/faq', placement: 'all' },
       { rest: '/campaigns', placement: 'campaign' },
+      { rest: '/brands', placement: 'brand' },
       { rest: `/t/${GATED_PROMPT}`, placement: 'template' },
     ];
     for (const { rest, placement } of routes) {
@@ -501,7 +502,7 @@ async function sweepStructuredData(): Promise<void> {
       for (const type of ['Organization', 'WebSite', 'FAQPage']) {
         expectEqual(`${path} contains ${type}`, nodes.some((node) => node['@type'] === type), true);
       }
-      if (rest === '/campaigns') expectEqual(`${path} contains Service`, nodes.some((node) => node['@type'] === 'Service'), true);
+      if (rest === '/brands') expectEqual(`${path} contains Service`, nodes.some((node) => node['@type'] === 'Service'), true);
       if (rest.startsWith('/t/')) {
         expectEqual(`${path} no offer during closed generation rollout`, nodes.some((node) => node['@type'] === 'Product'), false);
       }
@@ -955,7 +956,8 @@ async function sweepLandingTemplates(): Promise<void> {
   expectAbsent('nav no longer points at contests', page.body, 'href="/en/contests"');
   expectPresent('the hero opens on the video door', page.body, 'data-hero-video');
   expectAbsent('no placeholder ad on the landing', page.body, 'YOUR AD HERE');
-  expectPresent('the house ad is the brand pitch', page.body, 'data-house-ad');
+  expectPresent('the creator home has a separate brand entry', page.body, 'data-brand-door');
+  expectPresent('the brand entry leads to public services', page.body, 'href="/en/brands"');
   expectPresent('the video rail is template cards', page.body, 'data-prompt-card=');
   expectPresent('the model is on the page', page.body, 'SEEDANCE 2.5');
   expectAbsent('the library is denavigated', page.body, 'href="/library"');
@@ -1007,12 +1009,18 @@ async function sweepCampaigns(): Promise<void> {
     const listing = await get(`/${locale}/campaigns`);
     expectEqual(`/${locale}/campaigns renders 200`, listing.status, 200);
     expectPresent(`/${locale}/campaigns has the campaigns section`, listing.body, 'data-campaigns');
-    // 2026-09-14 — the brand landing: hero, showreel (four posters in the HTML), principles, proof, form, creators.
-    for (const marker of ['data-campaign-hero', 'data-campaign-reel', 'data-campaign-principles', 'data-campaign-proof', 'data-brands', 'data-creators']) {
-      expectPresent(`/${locale}/campaigns carries ${marker}`, listing.body, marker);
+    expectPresent(`/${locale}/campaigns has creator opportunities`, listing.body, 'data-creators');
+    expectPresent(`/${locale}/campaigns preserves old brand bookmarks`, listing.body, 'data-legacy-brand-entry');
+    const brand = await get(`/${locale}/brands`);
+    expectEqual(`/${locale}/brands renders 200`, brand.status, 200);
+    for (const marker of ['data-campaign-hero', 'data-campaign-reel', 'data-campaign-principles', 'data-campaign-proof', 'data-brands', 'data-case-study', 'data-brand-workspace-entry', 'data-audience-switch']) {
+      expectPresent(`/${locale}/brands carries ${marker}`, brand.body, marker);
     }
-    expectEqual(`/${locale}/campaigns paints four reel tiles`, (listing.body.match(/data-reel-item=/g) ?? []).length, 4);
-    expectPresent(`/${locale}/campaigns never names the client`, listing.body.toLowerCase().includes('morphic') ? 'named' : 'unnamed', 'unnamed');
+    expectEqual(`/${locale}/brands paints four reel tiles`, (brand.body.match(/data-reel-item=/g) ?? []).length, 4);
+    expectEqual(`/${locale}/brands explains five campaign types`, (brand.body.match(/data-campaign-use-case=/g) ?? []).length, 5);
+    expectPresent(`/${locale}/brands never names the client`, brand.body.toLowerCase().includes('morphic') ? 'named' : 'unnamed', 'unnamed');
+    expectPresent(`/${locale}/brands visible inquiry form`, brand.body, 'data-brand-inquiry="form"');
+    expectPresent(`/${locale}/brands self-canonicals`, brand.body, `rel="canonical" href="${BASE}/${locale}/brands"`);
     expectPresent(`/${locale}/campaigns self-canonicals`, listing.body, `rel="canonical" href="${BASE}/${locale}/campaigns"`);
     const landing = await get(`/${locale}`);
     expectPresent(`/${locale} nav links the campaigns tab`, landing.body, `href="/${locale}/campaigns"`);

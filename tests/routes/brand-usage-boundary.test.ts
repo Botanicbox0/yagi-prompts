@@ -68,4 +68,21 @@ describe('brand usage edge boundary', () => {
       expect(source, file).not.toMatch(/billing_payments|RENDER_PIPELINE_PUBLIC|createRenderJob|@\/lib\/renders|toss-service/);
     }
   });
+  it('keeps render recovery available to the shared cron credential and rejects unauthenticated calls once installed', async () => {
+    vi.stubEnv('CRON_SECRET', 'fixture-shared-cron-secret');
+    try {
+      mocks.sql.mockClear(); mocks.renderPass.mockClear(); mocks.reconcile.mockClear();
+      mocks.sql.mockResolvedValue({ query: vi.fn() });
+      mocks.renderPass.mockResolvedValue({ errors: [] });
+      mocks.reconcile.mockResolvedValue({ checked: 0 });
+      expect((await tick(new Request('https://twings.app/api/renders/tick'))).status).toBe(401);
+      expect(mocks.sql).not.toHaveBeenCalled();
+      const response = await tick(new Request('https://twings.app/api/renders/tick', {
+        headers: { authorization: 'Bearer fixture-shared-cron-secret' },
+      }));
+      expect(response.status).toBe(200);
+      expect(mocks.renderPass).toHaveBeenCalledOnce();
+      expect(mocks.reconcile).toHaveBeenCalledOnce();
+    } finally { vi.unstubAllEnvs(); }
+  });
 });

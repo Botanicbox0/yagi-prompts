@@ -63,6 +63,9 @@
   --spacing-rail-gap: 2.5rem; /* the 40px column between content and rail */
 
   --container-shell: 90rem; /* 1440 */
+  --container-audience: 78rem;
+  --text-audience-title: clamp(2.5rem, 5.2vw, 4.8rem);
+  --text-audience-heading: clamp(1.8rem, 3vw, 3rem);
   --container-content: 62.5rem; /* 1000 — landing/library content column */
   --container-detail: 45rem; /* 720  — playbook detail body */
   --container-stepindex: 13.75rem; /* 220  — sticky step index */
@@ -177,6 +180,14 @@ html:lang(ko) {
     outline-offset: 2px;
   }
 }
+
+/* Audience pages use the full content width, with no advertising rail reservation. */
+.audience-shell { width: calc(100% - var(--spacing-gutter) * 2); max-width: var(--container-audience); margin-inline: auto; }
+.audience-title { font-size: var(--text-audience-title); font-weight: 650; line-height: 1.08; letter-spacing: -0.045em; text-wrap: balance; }
+.audience-heading { font-size: var(--text-audience-heading); font-weight: 600; line-height: 1.2; letter-spacing: -0.035em; text-wrap: balance; }
+.audience-eyebrow { font-size: 0.72rem; font-weight: 500; letter-spacing: 0.04em; opacity: 0.55; }
+.audience-button { display: inline-flex; min-height: 3rem; align-items: center; justify-content: center; border-radius: 999px; background: var(--color-black); color: var(--color-white); padding: 0.75rem 1.5rem; font-size: 0.875rem; font-weight: 500; }
+.audience-button:hover { opacity: 0.8; }
 
 /* ===========================================================================
    M1 — the eight moves of §5.3, and the §4 layout band they live in.

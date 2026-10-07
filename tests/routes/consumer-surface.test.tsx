@@ -68,6 +68,28 @@ const renderResult = async (query: Record<string, string> = {}) =>
   renderToStaticMarkup(await RenderPage({ params: Promise.resolve({ id: JOB_ID }), searchParams: Promise.resolve(query) }));
 
 describe('P2-9: a way back to the account', () => {
+  it('keeps the four creator destinations available on mobile with the current work route selected', () => {
+    for (const [locale, dict] of [['ko', ko], ['en', en]] as const) {
+      const html = renderToStaticMarkup(<AppHeader locale={locale} dict={dict} rest="/renders" />);
+      const mobile = html.split('data-app-mobile-nav')[1];
+      expect(mobile).toContain(`href="/${locale}/video"`);
+      expect(mobile).toContain(`href="/${locale}/campaigns"`);
+      expect(mobile).toContain('href="/renders" aria-current="page"');
+      expect(mobile).toContain('href="/account"');
+    }
+  });
+
+  it('keeps each audience footer on its primary conversion path', () => {
+    for (const [locale, dict] of [['ko', ko], ['en', en]] as const) {
+      const brand = renderToStaticMarkup(<MarketingFooter locale={locale} dict={dict} audience="brand" />);
+      expect(brand).toContain(`href="/${locale}/brands#brands" data-footer-primary`);
+      expect(brand).toContain(`href="/${locale}/brands#process"`);
+      expect(brand).not.toContain('pitch.com');
+      const creator = renderToStaticMarkup(<MarketingFooter locale={locale} dict={dict} />);
+      expect(creator).toContain(`href="/${locale}/video" data-footer-primary`);
+    }
+  });
+
   it('the app header links /account with the dictionary label', () => {
     const html = renderToStaticMarkup(<AppHeader locale="ko" dict={ko} rest="/renders" />);
     expect(html).toContain('href="/account"');

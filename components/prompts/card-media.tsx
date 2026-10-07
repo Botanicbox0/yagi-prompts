@@ -27,8 +27,8 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
  * matter which descendant is topmost, and keyboard focus anywhere on the card arms it too.
  */
 
-/** The arming host: an ANCESTOR of this element, so the overlay link cannot mask the gesture. */
-export const HOVER_HOST = '[data-prompt-card]';
+/** The arming host is an ancestor of media AND its link. Hero previews opt in without counting as catalog cards. */
+export const HOVER_HOST = '[data-prompt-card], [data-media-host]';
 
 export interface CardMediaSource {
   src: string;

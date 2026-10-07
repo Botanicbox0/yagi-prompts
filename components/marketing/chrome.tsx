@@ -3,12 +3,13 @@ import { SiteFooter } from '@/components/site-footer';
 import { LocaleToggle } from '@/components/locale-toggle';
 import { PLAYBOOKS_IN_NAV } from '@/lib/flags';
 import { templatesHref } from '@/lib/prompts/links';
-import { brandEnquiryHref, campaignsHref } from '@/lib/campaigns/links';
+import { brandEnquiryHref, brandsHref, brandWorkspaceHref, campaignsHref } from '@/lib/campaigns/links';
 import { LEGAL_DOCS, businessFooterLines, legalDocument } from '@/lib/legal/documents';
 import { legalHref } from '@/lib/legal/links';
 import type { Dictionary } from '@/lib/i18n/dictionaries';
 import { localizedPath, type Locale } from '@/lib/i18n/config';
 import type { SectionTheme } from '@/lib/motion/geometry';
+import { audienceNavigation, type Audience } from '@/lib/navigation/audience';
 
 /**
  * §14.2 — "Nav: Prompts · Contests · Pricing". One list, built once, used by the bar and the
@@ -60,15 +61,21 @@ export function MarketingNav({
   rest?: string;
   initialTheme?: SectionTheme;
 }) {
+  const navigation = audienceNavigation(locale, dict, rest);
   return (
     <SiteNav
       locale={locale}
       initialTheme={initialTheme}
-      links={siteLinks(locale, dict)}
+      links={navigation.links}
+      audience={navigation.audience}
+      modes={navigation.modes}
+      audienceLabel={dict.audience.label}
+      signInHref={navigation.signInHref}
+      primary={navigation.primary}
       signInNext={signInReturn(locale, rest)}
       labels={{
         brand: dict.meta.siteName,
-        signIn: dict.auth.signIn,
+        signIn: navigation.signInLabel,
         menu: dict.nav.menu,
         close: dict.nav.close,
         primary: dict.nav.primary,
@@ -84,11 +91,13 @@ export function accountSigninHref(locale: Locale): string {
   return `/auth/signin?next=${encodeURIComponent('/account')}&locale=${locale}`;
 }
 
-export function MarketingFooter({ locale, dict }: { locale: Locale; dict: Dictionary }) {
+export function MarketingFooter({ locale, dict, audience = 'creator' }: { locale: Locale; dict: Dictionary; audience?: Audience }) {
+  const brand = audience === 'brand';
+  const navigation = audienceNavigation(locale, dict, brand ? '/brands' : '/');
   return (
     <SiteFooter
       locale={locale}
-      links={siteLinks(locale, dict)}
+      links={brand ? [...navigation.links, navigation.primary] : siteLinks(locale, dict)}
       /* 전자상거래법 §21 and every payment provider's merchant review: the legal documents must be
          reachable from anywhere on the site, so they live in the footer rather than on a page a
          reviewer has to be told about. */
@@ -98,8 +107,10 @@ export function MarketingFooter({ locale, dict }: { locale: Locale; dict: Dictio
         doc,
       }))}
       labels={{
-        hireCta: dict.footer.hireCta,
-        hireLede: dict.footer.hireLede,
+        hireCta: brand ? dict.brandLanding.primaryCta : dict.creatorJourney.browse,
+        hireLede: brand ? dict.brandLanding.inquiryBody : dict.creatorJourney.libraryBody,
+        primaryHref: brand ? brandEnquiryHref(locale) : templatesHref(locale, 'video'),
+        crossDoor: brand ? { href: `/${locale}`, label: dict.audience.creatorDoorCta } : { href: brandsHref(locale), label: dict.audience.brandDoorCta },
         advertise: dict.footer.advertise,
         rights: dict.footer.rights,
         builtIn: dict.footer.builtIn,
@@ -109,7 +120,7 @@ export function MarketingFooter({ locale, dict }: { locale: Locale; dict: Dictio
         brand: dict.meta.siteName,
         adHref: brandEnquiryHref(locale),
         business: businessFooterLines(locale),
-        account: { href: accountSigninHref(locale), label: dict.nav.account },
+        account: brand ? { href: brandWorkspaceHref(locale), label: dict.audience.workspace } : { href: accountSigninHref(locale), label: dict.nav.account },
       }}
     />
   );

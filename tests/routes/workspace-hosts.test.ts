@@ -66,7 +66,7 @@ describe('workspace middleware boundary', () => {
     session.user = null;
     expect((await middleware(request('admin.twings.app', '/admin/do', { method: 'POST' }))).status).toBe(404);
   });
-  it.each(['/ko/video', '/account', '/api/billing/toss/order', '/api/renders/callback', '/api/renders/tick', '/r/id/token', '/auth/unknown', '/sitemap.xml', '/sw.js', '/brand/preview.html', '/api/anything.jpg', '/_next/image'])('blocks consumer or unknown surface %s on admin', async path => {
+  it.each(['/ko/video', '/account', '/api/billing/toss/order', '/api/renders/callback', '/api/renders/tick', '/api/brands/inquiries/tick', '/api/brands/inquiries/result', '/r/id/token', '/auth/unknown', '/sitemap.xml', '/sw.js', '/brand/preview.html', '/api/anything.jpg', '/_next/image'])('blocks consumer or unknown surface %s on admin', async path => {
     const response = await middleware(request('admin.twings.app', path));
     expect(response.status).toBe(404); expect(response.headers.get('cache-control')).toBe('private, no-store');
     expect(session.calls).toBe(0);
@@ -98,7 +98,7 @@ describe('workspace middleware boundary', () => {
     const root = await middleware(request('twings.app', '/video'));
     expect(root.status).toBe(308); expect(root.headers.get('location')).toBe('https://twings.app/en/video');
     session.calls = 0;
-    for (const path of ['/api/renders/tick', '/auth/signin', '/r/id/token', '/_next/static/app.js', '/sw.js', '/sitemap.xml']) {
+    for (const path of ['/api/renders/tick', '/api/brands/inquiries/tick', '/api/brands/inquiries/result', '/auth/signin', '/r/id/token', '/_next/static/app.js', '/sw.js', '/sitemap.xml']) {
       expect((await middleware(request('twings.app', path))).headers.get('x-middleware-next')).toBe('1');
     }
     expect(session.calls).toBe(0);

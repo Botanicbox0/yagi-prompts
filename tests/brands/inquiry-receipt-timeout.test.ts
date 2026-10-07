@@ -10,6 +10,7 @@ import type { EmailMessage, Mailer } from '@/lib/notify/mailer';
  * hung form. The live mailer receives a real AbortSignal that fires at the deadline.
  */
 const mocks = vi.hoisted(() => ({ sql: null as SqlRunner | null, mailer: null as Mailer | null }));
+vi.mock('server-only', () => ({}));
 vi.mock('next/server', async (orig) => ({ ...(await orig<typeof import('next/server')>()), after: () => undefined }));
 vi.mock('@/lib/db/connect', () => ({ getSqlRunner: async () => mocks.sql }));
 vi.mock('@/lib/auth/viewer', () => ({ getViewer: async () => ({ userId: null, email: null, isAdmin: false, tier: 'anonymous', locale: 'ko' }) }));
@@ -69,12 +70,12 @@ describe('brand enquiry receipt deadline', () => {
     await vi.advanceTimersByTimeAsync(BRAND_RECEIPT_TIMEOUT_MS + 10);
     const hung = await pending;
     expect(hung.status).toBe(201);
-    expect(await hung.json()).toEqual({ ok: true, receipt: false });
+    expect(await hung.json()).toEqual({ ok: true, receipt: false, id: expect.any(String) });
     vi.useRealTimers();
 
     mocks.mailer = { kind: 'fake', from: 'x@twings.test', send: async () => { throw new Error('provider down'); } };
     const rejected = await POST(request());
-    expect(await rejected.json()).toEqual({ ok: true, receipt: false });
+    expect(await rejected.json()).toEqual({ ok: true, receipt: false, id: expect.any(String) });
     expect(await countBrandInquiries(mocks.sql!, 'new')).toBe(2);
   });
 });

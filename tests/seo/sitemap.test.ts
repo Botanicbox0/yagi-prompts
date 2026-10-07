@@ -54,7 +54,7 @@ describe('sitemap (§8 M5)', () => {
     expect(urls).toContain(`${ORIGIN}/ko/pricing`);
     // The two template tabs are the front doors (docs/TEMPLATES-IA.md) — a front door a crawler
     // cannot find is not one.
-    for (const rest of ['/video', '/image', '/campaigns', '/faq']) {
+    for (const rest of ['/video', '/image', '/campaigns', '/brands', '/faq']) {
       expect(urls).toContain(`${ORIGIN}/en${rest}`);
       expect(urls).toContain(`${ORIGIN}/ko${rest}`);
     }
@@ -101,11 +101,11 @@ describe('sitemap (§8 M5)', () => {
 
   it('degrades to an empty catalog without producing a broken sitemap', () => {
     const empty = buildSitemap({ origin: ORIGIN, cards: [] });
-    // Nine marketing pages × two locales: landing, the two template tabs (docs/TEMPLATES-IA.md),
+    // Ten marketing pages × two locales: landing, the two template tabs (docs/TEMPLATES-IA.md),
     // the campaigns listing, pricing, FAQ, and the three legal documents (2026-08-14 — a payment
     // provider's merchant review and 전자상거래법 §21 expect them publicly reachable). The listings
     // are in the sitemap even with no rows — each is a real page with a designed empty state.
-    expect(empty).toHaveLength(18);
+    expect(empty).toHaveLength(20);
     expect(empty.every((entry) => entry.url.startsWith(ORIGIN))).toBe(true);
   });
 

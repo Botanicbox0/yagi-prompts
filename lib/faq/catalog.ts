@@ -3,7 +3,7 @@ import { RENDER_PIPELINE_PUBLIC } from '@/lib/flags';
 
 export const FAQ_CATEGORIES = ['usage', 'payment', 'rights', 'campaign', 'brand'] as const;
 export type FaqCategory = (typeof FAQ_CATEGORIES)[number];
-export type FaqPlacement = 'landing' | 'template' | 'campaign';
+export type FaqPlacement = 'landing' | 'template' | 'campaign' | 'brand';
 type FaqNumber = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
 
 /** One registry for every visible FAQ and its JSON-LD. Copy remains in the locale dictionaries. */
@@ -15,12 +15,12 @@ export const FAQ_CATALOG: ReadonlyArray<{
 }> = [
   { id: 'browsing', category: 'usage', number: 1, placements: ['landing', 'template'] },
   { id: 'pricing', category: 'payment', number: 2, placements: ['landing', 'template'] },
-  { id: 'photos', category: 'rights', number: 3, placements: ['landing', 'template', 'campaign'] },
+  { id: 'photos', category: 'rights', number: 3, placements: ['landing', 'template', 'campaign', 'brand'] },
   { id: 'generation-time', category: 'usage', number: 4, placements: ['landing', 'template'] },
   { id: 'result-issues', category: 'payment', number: 8, placements: ['landing', 'template'] },
   { id: 'creator-campaigns', category: 'campaign', number: 5, placements: ['landing', 'campaign'] },
-  { id: 'brand-campaigns', category: 'brand', number: 7, placements: ['landing', 'campaign'] },
-  { id: 'studio-projects', category: 'brand', number: 6, placements: ['landing', 'campaign'] },
+  { id: 'brand-campaigns', category: 'brand', number: 7, placements: ['brand'] },
+  { id: 'studio-projects', category: 'brand', number: 6, placements: ['brand'] },
 ];
 
 export interface FaqItem {

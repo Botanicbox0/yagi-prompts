@@ -20,8 +20,13 @@ export function campaignsHref(locale: Locale | string): string {
 /** The brand half of the campaigns page (2026-09-11): the pitch and the enquiry form, one anchor. */
 export const BRANDS_ANCHOR = 'brands';
 
+/** Public campaign-service landing; the authenticated workspace remains on its own host. */
+export function brandsHref(locale: Locale | string): string {
+  return `/${locale}/brands`;
+}
+
 export function brandEnquiryHref(locale: Locale | string): string {
-  return `${campaignsHref(locale)}#${BRANDS_ANCHOR}`;
+  return `${brandsHref(locale)}#${BRANDS_ANCHOR}`;
 }
 
 /** An explicit locale keeps the brand sign-in screen in the language of the landing page. */
