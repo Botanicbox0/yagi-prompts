@@ -12,6 +12,10 @@ Public template examples can be browsed without an account. Personal generation 
 - [Image templates](https://twings.app/en/image): Published image examples.
 - [For brands](https://twings.app/en/brands): Creator campaign formats, the public Morphic case studies, process and enquiry form.
 - [브랜드 서비스](https://twings.app/ko/brands): 크리에이터 캠페인 포맷, Morphic 공개 사례, 진행 방식과 상담 폼.
+- [Customer stories](https://twings.app/en/brands/stories): Real campaign films and verified results, grouped by customer.
+- [고객 사례](https://twings.app/ko/brands/stories): 고객별 실제 제작 영상과 확인된 캠페인 성과.
+- [Morphic campaign story](https://twings.app/en/brands/stories/morphic): August 1990s interview results and the separate September Korea-and-Japan follow-up.
+- [Morphic 캠페인 사례](https://twings.app/ko/brands/stories/morphic): 8월 90년대 인터뷰 성과와 9월 한국·일본 후속 캠페인.
 - [Campaigns](https://twings.app/en/campaigns): Creator opportunities, briefs and application conditions.
 - [캠페인](https://twings.app/ko/campaigns): 크리에이터가 참여할 캠페인과 지원 조건.
 - [Pricing](https://twings.app/en/pricing): Single-template prices and an upcoming monthly video plan; enrollment is not open.

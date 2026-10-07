@@ -155,15 +155,16 @@ export function campaignServiceStructuredData(input: {
 export function brandCaseStudiesStructuredData(input: {
   origin: string;
   locale: Locale;
-  cases: readonly { id: string; name: string; description: string }[];
+  path?: string;
+  cases: readonly { id: string; name: string; description: string; path?: string }[];
 }): StructuredData {
-  const page = seoUrl(input.origin, `/${input.locale}/brands`);
+  const page = seoUrl(input.origin, input.path ?? `/${input.locale}/brands`);
   const organization = { '@id': `${seoUrl(input.origin, '/')}#organization` };
   return {
     '@context': CONTEXT,
     '@type': 'ItemList',
     '@id': `${page}#case-studies`,
-    url: `${page}#morphic-case`,
+    url: input.path ? page : `${page}#morphic-case`,
     inLanguage: input.locale,
     numberOfItems: input.cases.length,
     itemListElement: input.cases.map((item, index) => ({
@@ -171,8 +172,8 @@ export function brandCaseStudiesStructuredData(input: {
       position: index + 1,
       item: {
         '@type': 'CreativeWork',
-        '@id': `${page}#${item.id}`,
-        url: `${page}#${item.id}`,
+        '@id': item.path ? seoUrl(input.origin, item.path) : `${page}#${item.id}`,
+        url: item.path ? seoUrl(input.origin, item.path) : `${page}#${item.id}`,
         name: item.name,
         description: item.description,
         inLanguage: input.locale,

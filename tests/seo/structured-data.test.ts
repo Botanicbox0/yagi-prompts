@@ -100,13 +100,13 @@ describe('single FAQ catalog', () => {
     for (const locale of ['ko', 'en'] as const) {
       const dict = getDictionary(locale);
       const all = faqItems(dict);
-      expect(all).toHaveLength(8);
+      expect(all).toHaveLength(14);
       expect(new Set(all.map((item) => item.q.trim().toLowerCase())).size).toBe(all.length);
       for (const item of all) {
         expect(item.q.trim().length).toBeGreaterThan(0);
         expect(item.a.trim().length).toBeGreaterThan(0);
       }
-      for (const placement of ['landing', 'template', 'campaign'] as const) {
+      for (const placement of ['landing', 'template', 'campaign', 'brand'] as const) {
         const visible = faqItems(dict, placement);
         const data = faqStructuredData(origin, `/${locale}/faq`, locale, visible);
         expect(data.mainEntity).toEqual(visible.map((item) => ({ '@type': 'Question', name: item.q, acceptedAnswer: { '@type': 'Answer', text: item.a } })));

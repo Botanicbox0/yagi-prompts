@@ -141,47 +141,6 @@
 .formatTabCopy strong { overflow: hidden; margin-top: 0.35rem; font-size: 0.82rem; text-overflow: ellipsis; white-space: nowrap; }
 .formatArrow { padding-right: 0.4rem; opacity: 0.35; }
 
-.useCaseExplorer {
-  display: grid;
-  overflow: hidden;
-  border: 1px solid rgb(0 0 0 / 14%);
-  border-radius: clamp(1rem, 2vw, 1.75rem);
-  background: var(--color-brand-soft);
-  grid-template-columns: minmax(15rem, 0.7fr) minmax(0, 1.3fr);
-}
-
-.useCaseTabs {
-  display: flex;
-  flex-direction: column;
-  border-right: 1px solid rgb(0 0 0 / 14%);
-}
-
-.useCaseTabs button {
-  display: grid;
-  min-height: 4.8rem;
-  align-items: center;
-  gap: 1rem;
-  grid-template-columns: 2rem 1fr;
-  border-bottom: 1px solid rgb(0 0 0 / 12%);
-  padding: 1rem 1.25rem;
-  text-align: left;
-  transition: color 180ms ease, background 180ms ease;
-}
-
-.useCaseTabs button:last-child { border-bottom: 0; }
-.useCaseTabs button span { font: 500 0.64rem/1 var(--font-label); opacity: 0.35; }
-.useCaseTabs button[aria-selected='true'] { background: var(--color-brand-ink); color: var(--color-white); }
-
-.useCasePanels { min-height: 28rem; }
-.useCasePanel { height: 100%; padding: clamp(1.5rem, 4vw, 4rem); }
-.useCaseStatement { max-width: 16ch; font-size: clamp(1.7rem, 3vw, 3rem); font-weight: 600; line-height: 1.15; letter-spacing: -0.045em; text-wrap: balance; }
-.useCaseContent { display: grid; grid-template-columns: 1.1fr .9fr; gap: 2rem; align-items: center; min-height: 23rem; }
-.useCaseDescription { margin-top: 1.5rem; max-width: 26rem; font-size: .9rem; line-height: 1.8; opacity: .65; }
-.useCaseExample { position: relative; aspect-ratio: 3 / 4; border-radius: 1rem; overflow: hidden; background: var(--color-brand-night); }
-.useCaseExample img { width: 100%; height: 100%; object-fit: cover; }
-.useCaseExample figcaption { position: absolute; bottom: .75rem; left: .75rem; padding: .4rem .6rem; background: rgb(0 0 0 / 65%); color: white; font-size: .65rem; border-radius: .4rem; }
-.useCaseCta { display: inline-flex; min-height: 2.75rem; align-items: center; gap: 1.4rem; margin-top: 2.5rem; border-bottom: 1px solid currentColor; font-size: 0.84rem; font-weight: 600; }
-
 .morphicPair {
   display: grid;
   gap: 0.75rem;
@@ -213,14 +172,8 @@
   .formatStage[data-orientation='portrait'] { height: 64svh; min-height: 64svh; }
   .formatVideo { min-height: 0; }
   .formatPicker { scrollbar-width: none; display: flex; overflow-x: auto; padding-bottom: 0.2rem; scroll-snap-type: x mandatory; }
-  .formatPicker::-webkit-scrollbar, .useCaseTabs::-webkit-scrollbar { display: none; }
+  .formatPicker::-webkit-scrollbar { display: none; }
   .formatTab { min-width: min(78vw, 20rem); scroll-snap-align: start; }
-  .useCaseExplorer { grid-template-columns: 1fr; }
-  .useCaseTabs { scrollbar-width: none; overflow-x: auto; flex-direction: row; border-right: 0; border-bottom: 1px solid rgb(0 0 0 / 14%); scroll-snap-type: x mandatory; }
-  .useCaseTabs button { min-width: 12rem; border-right: 1px solid rgb(0 0 0 / 12%); border-bottom: 0; scroll-snap-align: start; }
-  .useCasePanels { min-height: 0; }
-  .useCaseContent { grid-template-columns: 1fr; }
-  .useCaseExample { aspect-ratio: 4 / 3; }
   .morphicPair { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; }
   .morphicPair > div { flex: 0 0 86%; scroll-snap-align: start; }
   .morphicPair:has(> :only-child) > div { flex-basis: 100%; }
@@ -228,6 +181,6 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .formatTab, .useCaseTabs button { transition: none; }
+  .formatTab { transition: none; }
   .formatTab:hover { transform: none; }
 }

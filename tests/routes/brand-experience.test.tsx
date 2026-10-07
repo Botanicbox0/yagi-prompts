@@ -7,13 +7,20 @@ vi.mock('@/lib/seo/faq-section', () => ({ FaqSection: () => null }));
 import BrandsPage from '@/app/(marketing)/[locale]/brands/page';
 
 describe('the brand page shows the service before asking visitors to enquire', () => {
-  it('renders the visual format and use-case explorers with crawlable copy', async () => {
+  it('shows the finished work and publishing offer without hiding services behind five tabs', async () => {
     const html = renderToStaticMarkup(await BrandsPage({ params: Promise.resolve({ locale: 'ko' }) }));
     expect(html).toContain('data-brand-format-explorer');
     expect(html.match(/data-format-select=/g)).toHaveLength(3);
-    expect(html).toContain('data-brand-use-case-explorer');
-    expect(html.match(/data-use-case-select=/g)).toHaveLength(5);
-    expect(html.match(/data-use-case-panel=/g)).toHaveLength(5);
+    expect(html).toContain('data-brand-service-examples');
+    expect(html.match(/data-service-example=/g)).toHaveLength(3);
+    expect(html).not.toContain('data-use-case-select');
+    expect(html).toContain('크리에이터의 얼굴로');
+    expect(html).toContain('AI로 만드는');
+    expect(html).toContain('브랜드 광고 영상');
+    expect(html).not.toContain('브랜드는 방향을 정하고');
+    expect(html).not.toContain('문의 제출만으로 주문');
+    expect(html).not.toContain('승인할 콘텐츠와 리포트');
+    expect(html).toContain('/ko/brands/stories/morphic');
     expect(html).not.toContain('브리프');
     expect(html).not.toContain('brand-lime');
     expect(html).toContain('성공 사례 보기');

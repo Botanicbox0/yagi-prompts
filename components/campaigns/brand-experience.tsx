@@ -178,62 +178,6 @@ export function BrandFormatExplorer({
   );
 }
 
-export interface UseCaseItem {
-  id: string;
-  title: string;
-  statement: string;
-  steps: readonly [string, string, string, string];
-}
-
-export function BrandUseCaseExplorer({
-  items,
-  labels,
-  enquiryHref,
-}: {
-  items: readonly UseCaseItem[];
-  labels: { tabs: string; brief: string; format: string; publish: string; result: string; cta: string; example: string };
-  enquiryHref: string;
-}) {
-  const [activeId, setActiveId] = useState(items[0]?.id ?? 'launch');
-
-  function move(event: KeyboardEvent<HTMLDivElement>) {
-    if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
-    event.preventDefault();
-    const current = items.findIndex((item) => item.id === activeId);
-    const forward = event.key === 'ArrowDown' || event.key === 'ArrowRight';
-    const next = event.key === 'Home' ? 0 : event.key === 'End' ? items.length - 1 : forward ? (current + 1) % items.length : (current - 1 + items.length) % items.length;
-    const item = items[next];
-    if (!item) return;
-    setActiveId(item.id);
-    document.querySelector<HTMLButtonElement>(`[data-use-case-select="${item.id}"]`)?.focus();
-  }
-
-  return (
-    <div data-brand-use-case-explorer className={styles.useCaseExplorer}>
-      <div className={styles.useCaseTabs} role="tablist" aria-label={labels.tabs} onKeyDown={move}>
-        {items.map((item, index) => {
-          const selected = item.id === activeId;
-          return <button id={`use-case-tab-${item.id}`} key={item.id} type="button" role="tab" aria-selected={selected} aria-controls={`use-case-panel-${item.id}`} tabIndex={selected ? 0 : -1} data-use-case-select={item.id} onClick={() => setActiveId(item.id)}><span>0{index + 1}</span>{item.title}</button>;
-        })}
-      </div>
-      <div className={styles.useCasePanels}>
-        {items.map((item) => {
-          const selected = item.id === activeId;
-          return (
-            <article id={`use-case-panel-${item.id}`} key={item.id} role="tabpanel" aria-labelledby={`use-case-tab-${item.id}`} hidden={!selected} data-use-case-panel={item.id} data-campaign-use-case={item.id} className={styles.useCasePanel}>
-              <div className={styles.useCaseContent}>
-                <div><h3 className={styles.useCaseStatement}>{item.statement}</h3><p className={styles.useCaseDescription}>{item.steps[1]}</p><p className={styles.useCaseDescription}>{item.steps[2]}</p><a data-inquiry-trigger href={`${enquiryHref}?useCase=${item.id}#brands`} className={styles.useCaseCta}>{labels.cta}<span aria-hidden="true">↗</span></a></div>
-                <figure className={styles.useCaseExample}><img src={CAMPAIGN_EXAMPLES[item.id] ?? '/reel/brands/city-fashion.jpg'} alt="" width={720} height={960} loading="lazy" decoding="async" /><figcaption>{labels.example}</figcaption></figure>
-              </div>
-            </article>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-const CAMPAIGN_EXAMPLES: Record<string, string> = { launch: '/reel/brands/y2k-flip-phone.jpg', beauty_fashion: '/reel/brands/city-fashion.jpg', app_platform: '/reel/brands/morphic-august-01.jpg', local: '/reel/brands/production-paris.jpg', seasonal: '/reel/brands/tea-editorial.jpg' };
 export interface CampaignFilmMedia { id: string; src: string; poster: string; width: number; height: number; postUrl?: string }
 
 function CaseFilm({

@@ -32,11 +32,15 @@ The published refund policy distinguishes withdrawal before generation begins, t
 
 TWINGS operates brand creator campaigns through its studio. A brand briefs the studio on the campaign, desired content and budget. The studio manages production and creator coordination. Creators apply to suitable campaigns and follow the selected campaign's posting, disclosure and submission requirements. Selection is not guaranteed. A submitted post link is evidence for review; it does not by itself prove verified reach or payout eligibility.
 
+The brand service combines AI ad production, versions starring consenting creators using their own faces, and managed publishing on actual creator channels. One format can be used by multiple creators. Standalone AI brand ad production is also offered through YAGI, without requiring a creator campaign. Content reuse depends on agreed creator rights; campaign costs and timelines depend on scope.
+
 Creator compensation and studio margin are not a public brand price list. Do not infer an individual creator's payment from a brand campaign budget. Campaign availability and participation conditions must be checked on the current campaign page. Do not describe follower counts, impressions, attributed conversions, or audience data as verified unless the report identifies the evidence and measurement source.
 
 Brand services and the public enquiry form: https://twings.app/ko/brands and https://twings.app/en/brands. Initial enquiries do not require an account. The brand workspace on brand.twings.app is for ongoing work and requires authorization.
 
 ### Public Morphic case studies
+
+Customer stories are grouped by client at https://twings.app/ko/brands/stories and https://twings.app/en/brands/stories. The permanent Morphic story is https://twings.app/ko/brands/stories/morphic and https://twings.app/en/brands/stories/morphic. Campaign-specific evidence remains separate within that customer story.
 
 TWINGS publicly identifies Morphic for two approved case summaries. In the August 2026 1990s interview-format campaign, 9 campaign films reached 2M+ total views, and the format produced 300+ pieces of derivative organic content across Instagram and other channels. The film count of 9 is exact; 2M+ and 300+ are campaign-level lower bounds, not an individual creator result or an attributed conversion rate.
 

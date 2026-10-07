@@ -3,10 +3,10 @@ import { DEFAULT_LOCALE, isLocale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/dictionaries';
 import { MarketingNav, MarketingFooter } from '@/components/marketing/chrome';
 import { BrandInquiryDialog } from '@/components/campaigns/brand-inquiry-dialog';
-import { BrandFormatExplorer, BrandUseCaseExplorer, MorphicFilmPair, type UseCaseItem } from '@/components/campaigns/brand-experience';
+import { BrandFormatExplorer, MorphicFilmPair } from '@/components/campaigns/brand-experience';
 import { CAMPAIGN_REEL } from '@/lib/campaigns/showreel';
-import { CASE_STUDIES, formatCampaignMetric } from '@/lib/campaigns/case-studies';
-import { brandsHref, brandEnquiryHref, brandWorkspaceHref, BRAND_INQUIRY_ENDPOINT } from '@/lib/campaigns/links';
+import { BrandCustomerStory } from '@/components/campaigns/brand-customer-story';
+import { brandsHref, brandEnquiryHref, BRAND_INQUIRY_ENDPOINT } from '@/lib/campaigns/links';
 import { legalDocument } from '@/lib/legal/documents';
 import { legalHref } from '@/lib/legal/links';
 import { siteOgImage } from '@/lib/seo/og';
@@ -39,25 +39,10 @@ export default async function BrandsPage({ params }: Props) {
   const locale = isLocale(raw) ? raw : DEFAULT_LOCALE;
   const dict = getDictionary(locale);
   const t = dict.brandLanding;
-  const launchCase = CASE_STUDIES.find((study) => study.id === 'morphic-90s-interview');
-  const septemberCase = CASE_STUDIES.find((study) => study.id === 'morphic-september-kr-jp');
-  if (!launchCase || !septemberCase) throw new Error('The approved Morphic cases are incomplete.');
-  const launchCopy = t.cases[launchCase.copyKey];
-  const septemberCopy = t.cases[septemberCase.copyKey];
-  const useCases: readonly UseCaseItem[] = Object.entries(t.useCases).map(([id, item]) => ({
-    id,
-    title: item.title,
-    statement: item.statement,
-    steps: [item.brand, item.studio, item.creator, item.report],
-  }));
-
   return <>
     <MarketingNav locale={locale} dict={dict} rest="/brands" />
     <JsonLd id="campaign-service-structured-data" data={campaignServiceStructuredData({ origin: siteUrl(), path: brandsHref(locale), locale, name: t.metaTitle, description: t.metaDescription, serviceType: dict.seo.serviceType })} />
-    <JsonLd id="brand-case-studies-structured-data" data={brandCaseStudiesStructuredData({ origin: siteUrl(), locale, cases: [
-      { id: launchCase.id, name: launchCopy.eyebrow, description: launchCopy.body },
-      { id: septemberCase.id, name: septemberCopy.eyebrow, description: septemberCopy.body },
-    ] })} />
+    <JsonLd id="brand-case-studies-structured-data" data={brandCaseStudiesStructuredData({ origin: siteUrl(), locale, cases: [{ id: 'morphic', name: t.stories.title, description: t.stories.summary, path: `/${locale}/brands/stories/morphic` }] })} />
 
     <main id="main" data-brand-landing className="overflow-clip bg-brand-paper text-brand-ink">
       <section data-section data-theme="dark" data-campaign-hero className="section bg-brand-night text-white">
@@ -87,71 +72,46 @@ export default async function BrandsPage({ params }: Props) {
         </div>
       </section>
 
-      <section data-section data-theme="light" data-campaign-principles className="section border-t border-black/10 bg-white">
-        <div className="audience-shell py-16 lg:py-24">
-          <div className="grid gap-10 lg:grid-cols-[0.8fr_1.2fr] lg:gap-20">
-            <div><p className="audience-eyebrow">{t.moatEyebrow}</p><h2 className="audience-heading mt-5 max-w-2xl">{t.moatHeading}</h2><p className="mt-6 max-w-xl text-sm leading-relaxed opacity-60">{t.moatBody}</p></div>
-            <div className="grid gap-px overflow-hidden rounded-3xl bg-black/10 sm:grid-cols-3 lg:grid-cols-1">
-              {[[t.moat1Title, t.moat1Body], [t.moat2Title, t.moat2Body], [t.moat3Title, t.moat3Body]].map(([heading, body], index) => <article key={heading} className="grid gap-3 bg-brand-paper p-6 lg:grid-cols-[3rem_0.7fr_1.3fr] lg:items-start lg:gap-6 lg:p-7"><span className="font-mono text-xs opacity-35">0{index + 1}</span><h3 className="text-lg font-semibold tracking-tight">{heading}</h3><p className="text-sm leading-relaxed opacity-60">{body}</p></article>)}
-            </div>
-          </div>
+      <section id="process" data-section data-theme="light" data-campaign-principles data-campaign-process className="section scroll-mt-24 border-t border-black/10 bg-white">
+        <div className="audience-shell py-12 lg:py-16">
+          <p className="audience-eyebrow">{t.moatEyebrow}</p>
+          <ol className="mt-7 grid gap-8 sm:grid-cols-3 sm:gap-10">
+            {[[t.moat1Title, t.moat1Body], [t.moat2Title, t.moat2Body], [t.moat3Title, t.moat3Body]].map(([heading, body], index) => <li key={heading} className="border-t border-black/15 pt-5"><span className="font-mono text-xs text-blue">0{index + 1}</span><h2 className="mt-4 text-xl font-semibold tracking-tight">{heading}</h2><p className="mt-3 max-w-sm text-sm leading-relaxed opacity-65">{body}</p></li>)}
+          </ol>
         </div>
       </section>
 
       <section id="morphic-case" data-section data-theme="dark" data-campaign-proof className="section scroll-mt-20 bg-brand-night text-white">
-        <div className="audience-shell py-16 lg:py-28">
-          <p className="audience-eyebrow text-brand-blue-light">{t.caseEyebrow}</p>
-          <h2 className="audience-heading mt-5 max-w-4xl whitespace-pre-line text-[clamp(2.4rem,5vw,5rem)] leading-[1.02]">{t.caseHeading}</h2>
-
-          <article id={launchCase.id} data-case-study={launchCase.id} className="mt-16 scroll-mt-24 overflow-hidden rounded-[clamp(1.25rem,2.5vw,2.5rem)] border border-white/16 bg-brand-ink">
-            <div className="grid gap-10 p-6 sm:p-9 lg:grid-cols-[0.85fr_1.15fr] lg:p-14">
-              <div>
-                <p className="font-label text-[0.68rem] tracking-[0.15em] text-brand-blue-light">{launchCopy.eyebrow}</p>
-                <h3 className="mt-5 whitespace-pre-line text-[clamp(2.3rem,5.2vw,5.5rem)] font-semibold leading-[0.98] tracking-[-0.06em]">{launchCopy.title}</h3>
-              </div>
-              <div className="flex flex-col justify-end"><h4 className="text-sm font-semibold text-white/90">{launchCopy.question}</h4><p className="mt-4 max-w-2xl text-base leading-relaxed text-white/66">{launchCopy.body}</p><a href={launchCase.sourceUrl} target="_blank" rel="noopener noreferrer" className="mt-7 inline-flex min-h-11 w-fit items-center text-sm font-semibold underline decoration-white/35 underline-offset-6">{launchCopy.sourceCta} ↗</a></div>
-            </div>
-            <div className="grid gap-10 border-t border-white/14 p-6 sm:p-9 lg:grid-cols-[1.1fr_0.9fr] lg:p-14">
-              <div><MorphicFilmPair media={launchCase.media} labels={{ titles: launchCopy.films, play: t.media.play, pause: t.media.pause, post: launchCopy.postCta }} /><p className="mt-4 max-w-xl text-xs leading-relaxed text-white/60">{launchCopy.filmNote}</p></div>
-              <dl className="grid content-center gap-5 sm:grid-cols-3 lg:grid-cols-1">
-              {launchCase.metrics.map((metric) => {
-                const copy = launchCopy.metrics[metric.id];
-                return <div key={metric.id} data-case-metric={metric.id} className="flex items-end justify-between gap-4 border-b border-white/14 pb-5 sm:flex-col sm:items-start lg:flex-row lg:items-end"><dt className="text-sm text-white/60">{copy.label}</dt><dd className="text-[clamp(2.6rem,6vw,5rem)] leading-none font-semibold tracking-[-0.065em]">{formatCampaignMetric(metric, locale)}</dd></div>;
-              })}
-              </dl>
-            </div>
-            <p className="border-t border-white/14 px-6 py-4 text-xs leading-relaxed text-white/60 sm:px-9 lg:px-14">{launchCopy.note}</p>
-          </article>
-
-          <article id={septemberCase.id} data-case-study={septemberCase.id} className="mt-6 grid scroll-mt-24 gap-10 rounded-[clamp(1.25rem,2.5vw,2.5rem)] bg-brand-warm p-6 text-black sm:p-9 lg:grid-cols-[0.78fr_1.22fr] lg:p-14">
-            <div className="flex flex-col justify-between">
-              <div><p className="font-label text-[0.68rem] tracking-[0.15em] text-blue">{septemberCopy.eyebrow}</p><h3 className="mt-5 whitespace-pre-line text-[clamp(2.2rem,4.6vw,4.8rem)] font-semibold leading-[1.01] tracking-[-0.055em]">{septemberCopy.title}</h3><h4 className="mt-7 text-sm font-semibold">{septemberCopy.question}</h4><p className="mt-4 max-w-xl text-sm leading-relaxed opacity-62">{septemberCopy.body}</p></div>
-              <ul className="mt-10 grid grid-cols-2 gap-2">{septemberCopy.operations.map((item, index) => <li key={item} className="rounded-full border border-black/15 px-3 py-2 text-xs"><span className="mr-2 font-mono opacity-35">0{index + 1}</span>{item}</li>)}</ul>
-            </div>
-            <div><MorphicFilmPair media={septemberCase.media} labels={{ titles: septemberCopy.films, play: t.media.play, pause: t.media.pause }} /><p className="mt-4 text-xs leading-relaxed opacity-65">{septemberCopy.note}</p></div>
-          </article>
+        <div className="audience-shell py-16 lg:py-24">
+          <p className="audience-eyebrow text-brand-blue-light">{t.stories.eyebrow}</p>
+          <div className="mb-10 mt-5 flex flex-wrap items-end justify-between gap-7"><h2 className="audience-heading whitespace-pre-line">{t.stories.title}</h2><a href={`/${locale}/brands/stories`} className="inline-flex min-h-11 items-center text-sm underline decoration-white/35 underline-offset-6">{t.stories.allCta} ↗</a></div>
+          <BrandCustomerStory dict={dict} locale={locale} />
         </div>
       </section>
 
       <section id="campaign-types" data-section data-theme="light" data-campaign-use-cases className="section scroll-mt-24 bg-brand-paper">
         <div className="audience-shell py-16 lg:py-24">
-          <div className="mb-10 grid gap-5 lg:grid-cols-[0.8fr_1.2fr] lg:items-end"><div><p className="audience-eyebrow">{t.typesEyebrow}</p><h2 className="audience-heading mt-4">{t.typesHeading}</h2></div><p className="max-w-xl text-sm leading-relaxed opacity-60 lg:justify-self-end">{t.typesBody}</p></div>
-          <BrandUseCaseExplorer items={useCases} labels={{ tabs: t.typesHeading, brief: t.brandProvides, format: t.studioMakes, publish: t.creatorPosts, result: t.report, cta: t.primaryCta, example: t.exampleLabel }} enquiryHref={brandsHref(locale)} />
-        </div>
-      </section>
-
-      <section id="process" data-section data-theme="light" data-campaign-process className="section scroll-mt-24 border-t border-black/10 bg-white">
-        <div className="audience-shell py-16 lg:py-24">
-          <div className="grid gap-8 lg:grid-cols-[0.75fr_1.25fr] lg:gap-20"><div><p className="audience-eyebrow">{t.processEyebrow}</p><h2 className="audience-heading mt-5 whitespace-pre-line">{t.processHeading}</h2><p className="mt-6 max-w-md text-sm leading-relaxed opacity-60">{t.processBody}</p></div>
-            <ol className="grid gap-px overflow-hidden rounded-3xl bg-black/10">{Object.entries(t.processSteps).map(([key, step], index) => <li key={key} className="grid gap-4 bg-brand-paper p-6 sm:grid-cols-[3rem_0.8fr_1.2fr] sm:items-start"><span className="font-mono text-xs opacity-35">0{index + 1}</span><h3 className="text-base font-semibold">{step.title}</h3><p className="text-sm leading-relaxed opacity-60">{step.body}</p></li>)}</ol>
+          <div className="mb-10 flex flex-wrap items-end justify-between gap-5"><div><p className="audience-eyebrow">{t.typesEyebrow}</p><h2 className="audience-heading mt-4">{t.typesHeading}</h2></div><p className="max-w-md text-sm leading-relaxed opacity-65">{t.typesBody}</p></div>
+          <div data-brand-service-examples className="grid gap-5 sm:grid-cols-3">
+            {(['launch', 'app_platform', 'beauty_fashion'] as const).map((id) => {
+              const example = t.examples[id];
+              const image = {
+                launch: { src: '/reel/brands/y2k-flip-phone.jpg', width: 720, height: 1280 },
+                app_platform: { src: '/reel/brands/morphic-september-01.jpg', width: 960, height: 720 },
+                beauty_fashion: { src: '/reel/brands/city-fashion.jpg', width: 1280, height: 960 },
+              }[id];
+              return <a key={id} data-service-example={id} data-inquiry-trigger href={`${brandsHref(locale)}?useCase=${id}#brands`} className="group block overflow-hidden rounded-2xl bg-white focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-blue">
+                <div className="aspect-[4/3] overflow-hidden bg-brand-ink"><img src={image.src} alt="" width={image.width} height={image.height} loading="lazy" decoding="async" className="h-full w-full object-cover transition-transform duration-500 motion-safe:group-hover:scale-105" /></div>
+                <div className="p-6"><h3 className="flex items-center justify-between gap-4 text-xl font-semibold tracking-tight">{example.title}<span aria-hidden="true" className="text-blue">↗</span></h3><p className="mt-3 text-sm leading-relaxed opacity-65">{example.body}</p></div>
+              </a>;
+            })}
           </div>
         </div>
       </section>
 
       <section id="brands" data-section data-theme="light" data-brands className="section scroll-mt-24 border-y border-black/10 bg-brand-warm">
         <div className="audience-shell grid gap-12 py-16 lg:grid-cols-[0.75fr_1.25fr] lg:gap-20 lg:py-24">
-          <div><p className="audience-eyebrow">{t.inquiryEyebrow}</p><h2 className="audience-heading mt-5">{t.inquiryHeading}</h2><p className="mt-6 text-sm leading-relaxed opacity-60">{t.inquiryBody}</p><p className="mt-5 text-xs leading-relaxed opacity-65">{t.inquiryNote}</p>
-            <div className="mt-10 rounded-2xl border border-black/15 bg-white/45 p-5"><h3 className="text-sm font-semibold">{t.workspaceHeading}</h3><p className="mt-2 text-xs leading-relaxed opacity-60">{t.workspaceBody}</p><a data-brand-workspace-entry href={brandWorkspaceHref(locale)} className="mt-3 inline-flex min-h-11 items-center text-sm underline underline-offset-4">{t.workspaceCta} ↗</a></div>
+          <div><p className="audience-eyebrow">{t.inquiryEyebrow}</p><h2 className="audience-heading mt-5 whitespace-pre-line">{t.inquiryHeading}</h2><p className="mt-6 text-sm leading-relaxed opacity-60">{t.inquiryBody}</p>
           </div>
           <div className="flex items-center lg:justify-end"><a data-inquiry-trigger href={brandEnquiryHref(locale)} className="inline-flex min-h-14 items-center gap-10 rounded-full bg-blue px-8 py-4 text-base font-semibold text-white">{t.primaryCta} <span aria-hidden="true">↗</span></a></div>
           <BrandInquiryDialog endpoint={BRAND_INQUIRY_ENDPOINT} locale={locale} labels={dict.campaigns.brands} privacy={{ href: legalHref(locale, 'privacy'), label: legalDocument('privacy', locale).title }} title={t.inquiryDialogTitle} body={t.inquiryBody} close={t.inquiryClose} />
@@ -160,7 +120,7 @@ export default async function BrandsPage({ params }: Props) {
 
       <section data-section data-theme="dark" data-production-service className="section bg-brand-night text-white">
         <div className="audience-shell grid gap-10 py-16 lg:grid-cols-[0.7fr_1.3fr] lg:items-center lg:py-24">
-          <div><p className="audience-eyebrow text-brand-blue-light">{t.productionEyebrow}</p><h2 className="mt-5 text-[clamp(2rem,4vw,4rem)] font-semibold leading-tight tracking-tight">{t.productionHeading}</h2><p className="mt-5 max-w-md text-sm leading-relaxed text-white/65">{t.productionBody}</p>
+          <div><p className="audience-eyebrow text-brand-blue-light">{t.productionEyebrow}</p><h2 className="mt-5 text-[clamp(2rem,4vw,4rem)] whitespace-pre-line font-semibold leading-tight tracking-tight">{t.productionHeading}</h2><p className="mt-5 max-w-md text-sm leading-relaxed text-white/65">{t.productionBody}</p>
             <a href="https://pitch.com/v/yagi-production-wokrs-vsrgfd" target="_blank" rel="noopener noreferrer" data-production-deck className="mt-8 inline-flex min-h-12 items-center gap-6 rounded-full bg-blue px-6 text-sm font-semibold text-white">{t.productionDeckCta} ↗</a>
             <div className="mt-6 flex flex-wrap gap-x-6 gap-y-2"><a data-inquiry-trigger href={`${brandsHref(locale)}?type=production#brands`} className="inline-flex min-h-11 items-center text-sm underline decoration-white/35 underline-offset-6">{t.productionCta} ↗</a><a href="https://pricing.yagiworkshop.xyz/" target="_blank" rel="noopener noreferrer" data-production-pricing className="inline-flex min-h-11 items-center text-sm underline decoration-white/35 underline-offset-6">{t.pricingCta} ↗</a></div><p className="mt-3 max-w-md text-xs leading-relaxed text-white/60">{t.pricingNote}</p>
           </div>
