@@ -55,35 +55,42 @@ export const ko: Dictionary = {
   },
   brandLanding: {
     "moatEyebrow": "크리에이터가 참여하는 이유",
-    "moatHeading": "자기 채널에도 올리고 싶은 포맷.",
-    "moatBody": "내가 등장해보고 싶은 장면, 팔로워에게 보여주고 싶은 영상에서 시작합니다. 크리에이터의 콘텐츠와 브랜드의 메시지가 자연스럽게 만날 수 있도록 설계합니다.",
-    "moat1Title": "참여하고 싶은 장면",
-    "moat1Body": "흥미로운 포맷은 크리에이터에게 원고료 외에도 캠페인에 참여할 이유가 됩니다.",
-    "moat2Title": "같은 출발점, 각자의 영상",
-    "moat2Body": "스튜디오가 먼저 포맷을 만들고 검증합니다. 크리에이터는 명확한 장면을 바탕으로 자기 버전을 완성합니다.",
-    "moat3Title": "참여 동기까지 고려한 운영",
-    "moat3Body": "포맷의 매력을 바탕으로 모집과 운영을 설계합니다. 참여와 성과는 브리프, 크리에이터와 보는 사람에 따라 달라집니다.",
+    "moatHeading": "포맷 자체가 참여 이유가 됩니다.",
+    "moatBody": "브리프 수행에 그치지 않고, 크리에이터가 자기 콘텐츠로 완성해 채널에 올리고 싶은 캠페인을 만듭니다.",
+    "moat1Title": "장면을 먼저 만듭니다",
+    "moat1Body": "모집 전에 포맷을 제작해 브랜드 메시지가 영상 안에서 어떻게 보이는지 확인합니다.",
+    "moat2Title": "각자의 얼굴로 완성합니다",
+    "moat2Body": "선정된 크리에이터가 합의한 포맷을 자기 버전으로 만들어 자신의 채널에 게시합니다.",
+    "moat3Title": "한곳에서 운영합니다",
+    "moat3Body": "모집, 게시물 검수, 정산과 결과 정리까지 TWINGS가 맡습니다.",
     "metaTitle": "브랜드 크리에이터 캠페인",
-    "metaDescription": "브랜드의 메시지를 크리에이터의 영상으로 전합니다. 포맷 제작부터 모집, 게시물 검수와 운영까지 TWINGS 스튜디오가 함께합니다.",
+    "metaDescription": "크리에이터가 참여하고 싶은 영상 포맷을 설계하고 모집·게시 검수·리포트까지 운영합니다. Morphic 90년대 인터뷰와 한국·일본 후속 사례를 확인하세요.",
     "eyebrow": "브랜드를 위한 TWINGS",
-    "title": "크리에이터가\n먼저 만들고 싶은\n브랜드 캠페인.",
-    "body": "브랜드에 맞는 영상 포맷을 만들고, 선정된 크리에이터가 각자의 얼굴로 완성해 자기 채널에 게시하는 캠페인을 운영합니다.",
-    "primaryCta": "캠페인 상담하기",
-    "secondaryCta": "작업 먼저 보기",
-    "definition": "TWINGS는 크리에이터를 통해 브랜드 캠페인을 운영합니다. 스튜디오가 포맷 제작, 모집, 게시물 검수와 정산 운영을 맡고, 브랜드는 전용 공간에서 합의한 결과물과 진행 현황을 확인합니다.",
-    "reelEyebrow": "스튜디오 제작 예시",
-    "reelHeading": "먼저, 사람들이 만들고 싶은 장면.",
-    "reelBody": "얼굴이 바뀌어도 장면의 매력은 그대로. 스튜디오가 만든 포맷을 살펴보세요.",
-    "typesEyebrow": "브랜드가 전하고 싶은 이야기부터",
-    "typesHeading": "무엇을 알리고 싶으신가요?",
-    "typesBody": "메시지와 만날 사람을 정하면, 그에 맞는 포맷과 캠페인을 함께 설계합니다.",
-    "brandProvides": "브랜드가 주는 것",
-    "studioMakes": "스튜디오가 만드는 것",
-    "creatorPosts": "크리에이터가 올리는 것",
-    "report": "확인할 결과",
+    "title": "크리에이터가\n먼저 만들고 싶은\n브랜드 포맷.",
+    "body": "TWINGS가 장면을 만들고, 선정된 크리에이터가 자기 얼굴로 완성해 자신의 채널에 게시합니다. 기획부터 모집·검수·리포트까지 한 팀이 운영합니다.",
+    "primaryCta": "캠페인 시작하기",
+    "secondaryCta": "Morphic 사례 보기",
+    "definition": "TWINGS는 브랜드 전용 영상 포맷을 만들고, 그 포맷에 참여할 크리에이터를 모집해 실제 채널 게시까지 운영하는 크리에이터 캠페인 스튜디오입니다.",
+    "reelEyebrow": "포맷부터 시작합니다",
+    "reelHeading": "설명보다 먼저, 장면을 보여드립니다.",
+    "reelBody": "브랜드가 전할 한 장면을 먼저 만듭니다. 얼굴이 바뀌어도 포맷의 매력은 이어집니다.",
+    "formats": {
+      "city": { "title": "시티 패션 필름", "line": "포맷 스터디 · 4:3" },
+      "y2k": { "title": "Y2K 제품 필름", "line": "포맷 스터디 · 9:16" },
+      "tea": { "title": "에디토리얼 필름", "line": "포맷 스터디 · 4:3" }
+    },
+    "media": { "play": "재생", "pause": "정지", "formatPicker": "포맷 영상 선택", "filmLabel": "영상" },
+    "typesEyebrow": "함께 운영하는 캠페인",
+    "typesHeading": "브리프 하나에서, 캠페인 전체로.",
+    "typesBody": "알릴 것을 고르면, 장면과 크리에이터 운영을 함께 설계합니다.",
+    "brandProvides": "브리프",
+    "studioMakes": "포맷",
+    "creatorPosts": "게시",
+    "report": "결과",
     "useCases": {
       "launch": {
         "title": "신제품 론칭",
+        "statement": "제품이 장면의 주인공이 됩니다.",
         "brand": "제품과 핵심 메시지, 출시 일정",
         "studio": "제품이 장면의 중심이 되는 영상 포맷",
         "creator": "합의한 포맷을 자기 얼굴로 완성한 영상",
@@ -91,6 +98,7 @@ export const ko: Dictionary = {
       },
       "beauty_fashion": {
         "title": "뷰티·패션 룩",
+        "statement": "컬렉션의 무드를, 각자의 룩으로.",
         "brand": "컬렉션과 비주얼 레퍼런스, 사용 가이드",
         "studio": "브랜드의 무드를 담은 룩과 장면",
         "creator": "브리프에 맞춰 자기 얼굴로 만든 영상",
@@ -98,6 +106,7 @@ export const ko: Dictionary = {
       },
       "app_platform": {
         "title": "앱·플랫폼 소개",
+        "statement": "앱의 경험을, 써보고 싶은 장면으로.",
         "brand": "소개할 경험과 유도하고 싶은 행동",
         "studio": "그 경험이 눈에 보이는 영상 포맷",
         "creator": "사용 경험을 소개하는 영상과 캡션",
@@ -105,6 +114,7 @@ export const ko: Dictionary = {
       },
       "local": {
         "title": "지역·프랜차이즈",
+        "statement": "공간의 매력을, 찾아가고 싶은 장면으로.",
         "brand": "공간과 지역 고객, 캠페인 기간",
         "studio": "장소와 그 이야기를 담은 포맷",
         "creator": "장소 정보와 필수 태그를 담은 영상",
@@ -112,55 +122,76 @@ export const ko: Dictionary = {
       },
       "seasonal": {
         "title": "시즌 프로모션",
+        "statement": "한 시즌을, 반복 가능한 포맷으로.",
         "brand": "시즌 메시지와 혜택, 알릴 시기",
         "studio": "같은 분위기로 반복할 수 있는 포맷",
         "creator": "합의한 브리프 안에서 각자 완성한 영상",
         "report": "게시 콘텐츠와 캠페인 종료 요약"
       }
     },
-    "caseEyebrow": "캠페인 운영 경험",
-    "caseHeading": "완성된 영상에서\n자발적인 참여까지.",
-    "caseClient": "글로벌 AI 플랫폼",
-    "caseGoal": "론칭 캠페인",
-    "caseFormat": "스튜디오 제작 영상과 파생 오가닉 콘텐츠",
-    "caseNote": "글로벌 AI 플랫폼 론칭 캠페인의 누적 실적입니다.",
-    "processEyebrow": "함께 진행하는 순서",
-    "processHeading": "브리프부터 결과까지,\n진행 상황이 보이도록.",
-    "processBody": "캠페인을 시작하기 전에 범위와 일정, 결과물과 활용 조건을 함께 정합니다.",
-    "processSteps": {
-      "brief": {
-        "title": "목표를 듣습니다",
-        "body": "만날 사람과 전할 메시지, 원하는 시기를 알려주세요. 간단한 구상으로 시작해도 됩니다."
+    "caseEyebrow": "Morphic 캠페인 사례",
+    "caseHeading": "9편 · 200만+ · 파생 오가닉 300건+.\n이후 한국·일본 후속 캠페인을 진행했습니다.",
+    "cases": {
+      "morphic90s": {
+        "eyebrow": "MORPHIC · 2026년 8월 90년대 인터뷰 캠페인",
+        "title": "9편으로 시작한 포맷,\n300건+의 오가닉 콘텐츠로.",
+        "body": "크리에이터가 90년대 TV 인터뷰 속 주인공이 되는 포맷을 설계했습니다. 캠페인 영상 9편이 누적 조회수 200만+을 기록했고, 인스타그램을 포함해 같은 포맷의 파생 오가닉 콘텐츠 300건+가 확인됐습니다.",
+        "question": "Morphic 90년대 인터뷰 캠페인은 어떻게 확산됐나요?",
+        "sourceCta": "Morphic에서 90년대 인터뷰 포맷 보기",
+        "note": "Morphic 2026년 8월 캠페인 전체의 누적 공개 실적입니다. 개별 크리에이터 성과나 전환율이 아닙니다.",
+        "metrics": {
+          "films": { "label": "캠페인 영상" },
+          "views": { "label": "누적 조회수" },
+          "organic": { "label": "파생 오가닉 콘텐츠" }
+        }
       },
-      "format": {
-        "title": "포맷을 정합니다",
-        "body": "스튜디오와 제작 방향을 검토하고 캠페인 조건을 합의합니다."
-      },
-      "creators": {
-        "title": "크리에이터를 모읍니다",
-        "body": "정해진 브리프와 조건에 맞춰 크리에이터를 모집하고 선정합니다."
-      },
-      "publish": {
-        "title": "만들고 검수합니다",
-        "body": "크리에이터가 영상을 만들어 게시하면, 제출한 링크가 캠페인 조건에 맞는지 확인합니다."
-      },
-      "report": {
-        "title": "결과를 확인합니다",
-        "body": "브랜드 공간에서 진행 현황과 공유된 캠페인 결과를 확인합니다."
+      "morphicSeptember": {
+        "eyebrow": "MORPHIC · 2026년 9월 인플루언서 캠페인",
+        "title": "2026년 9월에는,\n한국과 일본을 함께 운영했습니다.",
+        "body": "첫 캠페인 뒤 Morphic과 한국·일본 후속 캠페인을 진행했습니다. TWINGS가 포맷 제작, 크리에이터 모집, 게시물 검수와 결과 정리를 한 흐름으로 운영했습니다.",
+        "question": "Morphic 후속 캠페인은 어떻게 운영됐나요?",
+        "note": "아래 영상은 9월 Morphic 캠페인의 실제 결과물입니다.",
+        "films": ["Morphic 9월 캠페인 영상 01", "Morphic 9월 캠페인 영상 02"],
+        "operations": ["포맷 제작", "크리에이터 모집", "게시물 검수", "결과 정리"]
       }
     },
-    "workspaceHeading": "이미 캠페인을 진행 중이신가요?",
-    "workspaceBody": "공유받은 캠페인과 승인할 항목, 리포트는 브랜드 공간에서 확인하세요.",
+    "processEyebrow": "브리프부터 리포트까지",
+    "processHeading": "브랜드는 방향을 정하고,\nTWINGS는 운영합니다.",
+    "processBody": "범위, 일정, 결과물과 활용 조건을 먼저 합의합니다.",
+    "processSteps": {
+      "brief": {
+        "title": "목표를 맞춥니다",
+        "body": "대상, 메시지, 채널과 시기를 정합니다."
+      },
+      "format": {
+        "title": "장면을 먼저 만듭니다",
+        "body": "포맷을 제작해 브랜드와 확정합니다."
+      },
+      "creators": {
+        "title": "참여할 크리에이터를 고릅니다",
+        "body": "합의한 조건으로 모집하고 선정합니다."
+      },
+      "publish": {
+        "title": "게시 전 확인합니다",
+        "body": "영상과 캡션, 필수 표기를 검수합니다."
+      },
+      "report": {
+        "title": "결과를 한곳에 모읍니다",
+        "body": "게시 링크와 합의한 결과를 브랜드 공간에 정리합니다."
+      }
+    },
+    "workspaceHeading": "진행 중인 캠페인이 있나요?",
+    "workspaceBody": "승인할 콘텐츠와 리포트는 브랜드 공간에서 확인하세요.",
     "workspaceCta": "브랜드 공간 열기",
     "productionEyebrow": "YAGI의 다른 작업",
-    "productionHeading": "영상이나 필터 제작이 필요하다면",
-    "productionBody": "크리에이터 캠페인 외에 브랜드 영상·필터 제작도 YAGI에 별도로 의뢰할 수 있습니다.",
+    "productionHeading": "크리에이터 확산 없이, 영상만 필요하신가요?",
+    "productionBody": "브랜드 영상·필터 제작은 YAGI 개별 프로덕션으로 진행합니다.",
     "productionCta": "제작 상담하기",
     "pricingCta": "제작 예상 견적 보기",
     "pricingNote": "제작 범위를 고르면 예상 견적을 확인할 수 있습니다. 최종 금액은 브리프 확인 후 정합니다.",
-    "inquiryEyebrow": "부담 없이 이야기부터",
-    "inquiryHeading": "어떤 캠페인을 생각하고 계신가요?",
-    "inquiryBody": "브랜드와 만나고 싶은 사람, 원하는 시기를 알려주세요. 내용을 검토하고 이메일로 답변드립니다.",
+    "inquiryEyebrow": "캠페인 시작하기",
+    "inquiryHeading": "다음 캠페인의 한 장면을 알려주세요.",
+    "inquiryBody": "제품, 만나고 싶은 사람, 원하는 시기만 적어도 됩니다. 검토 후 이메일로 답변드립니다.",
     "inquiryNote": "문의 제출만으로 주문이 접수되지는 않습니다. 진행 범위와 비용은 별도로 합의합니다.",
     "legacyBrandLink": "브랜드 캠페인을 의뢰하러 오셨나요?",
     "legacyBrandCta": "브랜드 서비스 보기"
@@ -1592,13 +1623,13 @@ export const ko: Dictionary = {
       budget10mTo30m: '1,000만원 ~ 3,000만원',
       budgetOver30m: '3,000만원 이상',
       budgetUndecided: '미정',
-      fieldTemplate: '희망 포맷',
+      fieldTemplate: '참고 템플릿 · 크리에이터 카탈로그',
       templateNew: '브랜드 전용 장면 제작',
       templateUndecided: '상담 후 결정',
       fieldTiming: '희망 시기 (선택)',
       timingPlaceholder: '예: 10월 중순 게시',
       fieldMessage: '내용',
-      messagePlaceholder: '제품·서비스, 목표, 참고 링크를 적어 주세요.',
+      messagePlaceholder: '제품·서비스, 목표, 참고 링크와 마음에 든 제작 예시 제목을 적어 주세요.',
       consent: '문의 회신을 위해 회사명, 이름, 이메일, 연락처를 수집·이용하는 데 동의합니다. 회신 후 1년간 보관하며, 개인정보처리방침을 따릅니다.',
       submit: '의뢰 보내기',
       submitting: '보내는 중…',

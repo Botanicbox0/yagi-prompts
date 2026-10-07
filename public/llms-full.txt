@@ -1,6 +1,6 @@
 # TWINGS — service context
 
-Updated: 2026-10-07
+Updated: 2026-10-08
 Canonical public website: https://twings.app
 Operator: YAGI WORKSHOP Inc. / 야기워크숍 주식회사
 Public contact: hello@yagiworkshop.xyz
@@ -35,6 +35,12 @@ TWINGS operates brand creator campaigns through its studio. A brand briefs the s
 Creator compensation and studio margin are not a public brand price list. Do not infer an individual creator's payment from a brand campaign budget. Campaign availability and participation conditions must be checked on the current campaign page. Do not describe follower counts, impressions, attributed conversions, or audience data as verified unless the report identifies the evidence and measurement source.
 
 Brand services and the public enquiry form: https://twings.app/ko/brands and https://twings.app/en/brands. Initial enquiries do not require an account. The brand workspace on brand.twings.app is for ongoing work and requires authorization.
+
+### Public Morphic case studies
+
+TWINGS publicly identifies Morphic for two approved case summaries. In the August 2026 1990s interview-format campaign, 9 campaign films reached 2M+ total views, and the format produced 300+ pieces of derivative organic content across Instagram and other channels. The film count of 9 is exact; 2M+ and 300+ are campaign-level lower bounds, not an individual creator result or an attributed conversion rate.
+
+After the first campaign, work continued in September 2026 through a Korea-and-Japan follow-up campaign. TWINGS handled format production, creator recruitment, post review and result organization. This continuation is evidence of a follow-up engagement; it must not be rewritten as a consumer conversion claim. The September films shown on the brand page belong to that follow-up and carry the Morphic mark. Morphic's official 1990s street-style interview guide is linked from the public case page as supporting context.
 
 Creator opportunities: https://twings.app/ko/campaigns and https://twings.app/en/campaigns. Creators can inspect briefs before signing in to apply. Choosing Brands or Creators in the public navigation changes the page, not the visitor's account role or permissions. The creator journey continues on the web without requiring an app installation.
 

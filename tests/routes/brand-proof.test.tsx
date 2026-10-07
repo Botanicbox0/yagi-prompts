@@ -4,24 +4,44 @@ import { CASE_STUDIES } from '@/lib/campaigns/case-studies';
 
 vi.mock('@/lib/prompts/public-catalog', () => ({ getPromptCatalog: async () => ({ video: [] }) }));
 vi.mock('@/components/marketing/chrome', () => ({ MarketingNav: () => null, MarketingFooter: () => null }));
-vi.mock('@/components/campaigns/showreel', () => ({ CampaignShowreel: () => null }));
+vi.mock('@/components/campaigns/brand-experience', () => ({
+  BrandFormatExplorer: () => <div data-brand-format-explorer />,
+  BrandUseCaseExplorer: () => <div data-brand-use-case-explorer />,
+  MorphicFilmPair: () => <div data-morphic-film-pair />,
+}));
 vi.mock('@/lib/seo/faq-section', () => ({ FaqSection: () => null }));
-import BrandsPage from '@/app/(marketing)/[locale]/brands/page';
+import BrandsPage, { generateMetadata } from '@/app/(marketing)/[locale]/brands/page';
 
-describe('the approved case evidence actually rendered to visitors', () => {
+describe('the approved Morphic evidence actually rendered to visitors', () => {
   for (const locale of ['ko', 'en'] as const) {
-    it(`keeps ${locale} rendered figures tied to the approved manifest`, async () => {
+    it(`keeps ${locale} figures tied only to the 90s interview case`, async () => {
       const html = renderToStaticMarkup(await BrandsPage({ params: Promise.resolve({ locale }) }));
-      for (const study of CASE_STUDIES) {
-        const article = html.match(new RegExp(`<article[^>]*data-case-study="${study.id}"[\\s\\S]*?</article>`))?.[0];
-        expect(article).toBeDefined();
-        const values = [...article!.matchAll(/<dd[^>]*>([^<]*)<\/dd>/g)].map(match => match[1]);
-        expect(values).toEqual([
-          `${study.films}${locale === 'ko' ? '편' : ''}`,
-          `${new Intl.NumberFormat(locale, { notation: 'compact' }).format(study.viewsAtLeast)}+`,
-          `${study.organicAtLeast}${locale === 'ko' ? '건' : ''}+`,
-        ]);
-      }
+      const launch = html.match(/<article[^>]*data-case-study="morphic-90s-interview"[\s\S]*?<\/article>/)?.[0];
+      const followUp = html.match(/<article[^>]*data-case-study="morphic-september-kr-jp"[\s\S]*?<\/article>/)?.[0];
+      expect(launch).toBeDefined();
+      expect(followUp).toBeDefined();
+      expect(launch).toContain('Morphic');
+      expect(launch).toContain(locale === 'ko' ? '90년대' : '1990s');
+      expect(launch).toContain(locale === 'ko' ? '9편' : '>9<');
+      expect(launch).toContain(locale === 'ko' ? '200만+' : '2M+');
+      expect(launch).toContain(locale === 'ko' ? '300건+' : '300+');
+      expect(followUp).toContain('Morphic');
+      expect(followUp).toContain(locale === 'ko' ? '한국과 일본' : 'Korea and Japan');
+      expect(followUp).not.toContain(locale === 'ko' ? '200만+' : '2M+');
+      expect(html).not.toMatch(/\/reel\/brands\/[^"'\s>]*@/i);
+      expect(html).toContain('https://morphic.com/resources/how-to/make-90s-street-style-interview-video');
+      expect(CASE_STUDIES).toHaveLength(2);
     });
   }
+
+  it('wires the public cases into page metadata and structured data without duplicating the site name', async () => {
+    const metadata = await generateMetadata({ params: Promise.resolve({ locale: 'ko' }) });
+    const html = renderToStaticMarkup(await BrandsPage({ params: Promise.resolve({ locale: 'ko' }) }));
+    expect(metadata.title).toBe('브랜드 크리에이터 캠페인');
+    expect(metadata.openGraph).toMatchObject({ siteName: 'TWINGS', title: '브랜드 크리에이터 캠페인' });
+    expect(html).toContain('id="brand-case-studies-structured-data"');
+    expect(html).toContain('morphic.com/resources/how-to/make-90s-street-style-interview-video');
+    expect(html).toContain('2026년 8월');
+    expect(html).toContain('2026년 9월');
+  });
 });

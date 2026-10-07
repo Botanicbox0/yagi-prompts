@@ -1016,9 +1016,22 @@ async function sweepCampaigns(): Promise<void> {
     for (const marker of ['data-campaign-hero', 'data-campaign-reel', 'data-campaign-principles', 'data-campaign-proof', 'data-brands', 'data-case-study', 'data-brand-workspace-entry', 'data-audience-switch']) {
       expectPresent(`/${locale}/brands carries ${marker}`, brand.body, marker);
     }
-    expectEqual(`/${locale}/brands paints four reel tiles`, (brand.body.match(/data-reel-item=/g) ?? []).length, 4);
-    expectEqual(`/${locale}/brands explains five campaign types`, (brand.body.match(/data-campaign-use-case=/g) ?? []).length, 5);
-    expectPresent(`/${locale}/brands never names the client`, brand.body.toLowerCase().includes('morphic') ? 'named' : 'unnamed', 'unnamed');
+    expectEqual(`/${locale}/brands offers three format films`, (brand.body.match(/data-format-select=/g) ?? []).length, 3);
+    expectEqual(`/${locale}/brands offers five campaign type selectors`, (brand.body.match(/data-use-case-select=/g) ?? []).length, 5);
+    expectEqual(`/${locale}/brands keeps five campaign explanations in HTML`, (brand.body.match(/data-use-case-panel=/g) ?? []).length, 5);
+    expectEqual(`/${locale}/brands carries two distinct Morphic cases`, (brand.body.match(/data-case-study=/g) ?? []).length, 2);
+    expectPresent(`/${locale}/brands names the founder-approved client`, brand.body, 'Morphic');
+    expectPresent(`/${locale}/brands carries the 90s case`, brand.body, 'data-case-study="morphic-90s-interview"');
+    expectPresent(`/${locale}/brands carries the September follow-up`, brand.body, 'data-case-study="morphic-september-kr-jp"');
+    expectPresent(`/${locale}/brands keeps video poster-first`, brand.body, 'preload="none"');
+    expectAbsent(`/${locale}/brands exposes no creator handle in campaign media URLs`, brand.body.toLowerCase(), '/reel/brands/@');
+    if (locale === 'ko') {
+      expectPresent('/ko/brands carries the approved view floor', brand.body, '200만+');
+      expectPresent('/ko/brands carries the approved organic floor', brand.body, '300건+');
+    } else {
+      expectPresent('/en/brands carries the approved view floor', brand.body, '2M+');
+      expectPresent('/en/brands carries the approved organic floor', brand.body, '300+');
+    }
     expectPresent(`/${locale}/brands visible inquiry form`, brand.body, 'data-brand-inquiry="form"');
     expectPresent(`/${locale}/brands self-canonicals`, brand.body, `rel="canonical" href="${BASE}/${locale}/brands"`);
     expectPresent(`/${locale}/campaigns self-canonicals`, listing.body, `rel="canonical" href="${BASE}/${locale}/campaigns"`);

@@ -4,7 +4,7 @@ export const en = {
     "label": "Choose your experience",
     "creator": "Creators",
     "brand": "Brands",
-    "services": "Campaigns",
+    "services": "Campaign types",
     "work": "Our work",
     "process": "How it works",
     "workspace": "Brand sign in",
@@ -43,36 +43,43 @@ export const en = {
     "campaignCta": "Explore campaigns"
   },
   brandLanding: {
-    "moatEyebrow": "Why creators take part",
-    "moatHeading": "A format they want on their own channel.",
-    "moatBody": "We start with the creator’s audience: a scene worth making, watching, and sharing. That gives a brand a stronger reason to be part of the content.",
-    "moat1Title": "Creative motivation",
-    "moat1Body": "An appealing format gives creators a reason to join beyond completing an advertising brief.",
-    "moat2Title": "A shared starting point",
-    "moat2Body": "The studio makes and tests the format first, so creators have a clear scene and a practical path to their own version.",
-    "moat3Title": "A campaign built around participation",
-    "moat3Body": "We plan recruitment and operations around the format’s appeal. Participation and performance still depend on the brief, creators, and audience.",
-    "metaTitle": "Creator campaigns for brands",
-    "metaDescription": "Plan a creator campaign with TWINGS. The studio develops the format, manages creator participation and reviews posts, with results shared in your brand workspace.",
-    "eyebrow": "TWINGS for brands",
-    "title": "Campaigns creators\nwant to join.",
-    "body": "We build a film format for your brand, then run a campaign where selected creators make it their own and post it on their channels.",
+    "moatEyebrow": "WHY CREATORS JOIN",
+    "moatHeading": "The format gives creators a reason to join.",
+    "moatBody": "We start with a scene creators would choose for their own channels. The brief becomes something they can make their own.",
+    "moat1Title": "Build the scene first",
+    "moat1Body": "Before recruitment, we make the format so the brand can see how its message lives inside the film.",
+    "moat2Title": "Make it personal",
+    "moat2Body": "Selected creators make the agreed format their own and publish it on their channels.",
+    "moat3Title": "Run it in one place",
+    "moat3Body": "TWINGS handles recruitment, post review, payouts, and the final results.",
+    "metaTitle": "Creator Campaigns for Brands",
+    "metaDescription": "TWINGS develops formats creators want to make, then handles recruitment, post review, and reporting. Explore the Morphic 1990s interview campaign and its Korea–Japan follow-up.",
+    "eyebrow": "TWINGS FOR BRANDS",
+    "title": "A brand format\ncreators want\nto make.",
+    "body": "TWINGS builds the scene. Selected creators make it their own and publish it on their channels. One team handles format design, recruitment, review, and reporting.",
     "primaryCta": "Discuss your campaign",
-    "secondaryCta": "See the work",
-    "definition": "TWINGS runs brand campaigns through creators. The studio handles format development, recruitment, post review, and payout operations; the brand follows agreed deliverables and results in its workspace.",
-    "reelEyebrow": "Production examples",
-    "reelHeading": "The format comes first.",
-    "reelBody": "Different faces, the same compelling scene. Explore a few formats made by the studio.",
-    "typesEyebrow": "Your brief, our starting point",
-    "typesHeading": "What are you launching?",
-    "typesBody": "Start with the message and the audience. We shape the format and campaign around them.",
-    "brandProvides": "You bring",
-    "studioMakes": "We make",
-    "creatorPosts": "Creators post",
-    "report": "You review",
+    "secondaryCta": "See the Morphic case",
+    "definition": "TWINGS is a creator campaign studio that develops a branded video format, recruits creators to take part, and manages publishing across their channels.",
+    "reelEyebrow": "FORMAT FIRST",
+    "reelHeading": "The scene comes before the explanation.",
+    "reelBody": "We make the first scene for the brand. The format stays recognisable as each creator makes it their own.",
+    "formats": {
+      "city": { "title": "City fashion film", "line": "Format study · 4:3" },
+      "y2k": { "title": "Y2K product film", "line": "Format study · 9:16" },
+      "tea": { "title": "Editorial film", "line": "Format study · 4:3" }
+    },
+    "media": { "play": "Play", "pause": "Pause", "formatPicker": "Choose a format film", "filmLabel": "FILM" },
+    "typesEyebrow": "WHAT WE RUN",
+    "typesHeading": "From one brief to the full campaign.",
+    "typesBody": "Tell us what needs to move. We shape the scene and the creator operation around it.",
+    "brandProvides": "Brief",
+    "studioMakes": "Format",
+    "creatorPosts": "Publish",
+    "report": "Results",
     "useCases": {
       "launch": {
         "title": "Product launches",
+        "statement": "Put the product at the centre of the scene.",
         "brand": "The product, the message, and the launch window.",
         "studio": "A format that puts the product at the centre of the scene.",
         "creator": "Their own version of the agreed film format.",
@@ -80,6 +87,7 @@ export const en = {
       },
       "beauty_fashion": {
         "title": "Beauty & fashion",
+        "statement": "One visual world. Each creator’s own look.",
         "brand": "The collection, visual references, and usage guidelines.",
         "studio": "A look or scene built around the brand’s visual direction.",
         "creator": "A film with their own face, following the campaign brief.",
@@ -87,6 +95,7 @@ export const en = {
       },
       "app_platform": {
         "title": "Apps & platforms",
+        "statement": "Turn the product experience into a scene.",
         "brand": "The experience to introduce and the action you want people to take.",
         "studio": "A format that makes that experience visible.",
         "creator": "Content and captions that introduce the experience.",
@@ -94,6 +103,7 @@ export const en = {
       },
       "local": {
         "title": "Places & franchises",
+        "statement": "Make the place worth seeing.",
         "brand": "The place, local audience, and campaign period.",
         "studio": "A format shaped around the place and its story.",
         "creator": "The agreed film, with the place and required tags.",
@@ -101,55 +111,76 @@ export const en = {
       },
       "seasonal": {
         "title": "Seasonal campaigns",
+        "statement": "One season, one repeatable format.",
         "brand": "The occasion, offer, and communication dates.",
         "studio": "A repeatable format with a shared campaign mood.",
         "creator": "Their own interpretation within the agreed brief.",
         "report": "Published content and the final campaign summary."
       }
     },
-    "caseEyebrow": "Campaign experience",
-    "caseHeading": "From a finished film\nto organic participation.",
-    "caseClient": "Global AI platform",
-    "caseGoal": "Launch campaign",
-    "caseFormat": "Studio-made films and derivative organic content",
-    "caseNote": "Aggregate results from a global AI platform launch campaign.",
-    "processEyebrow": "Working together",
-    "processHeading": "A clear brief.\nA visible process.",
+    "caseEyebrow": "MORPHIC CASE STUDIES",
+    "caseHeading": "9 films · 2M+ views · 300+ organic posts.\nA Korea–Japan follow-up came next.",
+    "cases": {
+      "morphic90s": {
+        "eyebrow": "MORPHIC · AUGUST 2026 · 1990s INTERVIEW CAMPAIGN",
+        "title": "Nine campaign films.\n300+ organic takes.",
+        "body": "We designed a format that places each creator inside a 1990s-style TV interview. Nine campaign films reached 2M+ views in total, and 300+ derivative organic posts were observed across Instagram and other channels.",
+        "question": "How did Morphic’s 1990s interview campaign spread?",
+        "sourceCta": "See the 1990s interview format on Morphic",
+        "note": "Public campaign-level totals from Morphic’s August 2026 campaign, not an individual creator result or an attributed conversion rate.",
+        "metrics": {
+          "films": { "label": "campaign films" },
+          "views": { "label": "total views" },
+          "organic": { "label": "derivative organic posts" }
+        }
+      },
+      "morphicSeptember": {
+        "eyebrow": "MORPHIC · SEPTEMBER 2026 FOLLOW-UP",
+        "title": "In September 2026,\nthe campaign continued across Korea and Japan.",
+        "body": "After the first campaign, Morphic continued with a follow-up across Korea and Japan. TWINGS managed format production, creator recruitment, post review, and results in one workflow.",
+        "question": "How was Morphic’s follow-up campaign run?",
+        "note": "These are real films from the September Morphic campaign.",
+        "films": ["Morphic September campaign film 01", "Morphic September campaign film 02"],
+        "operations": ["Format production", "Creator recruitment", "Post review", "Results"]
+      }
+    },
+    "processEyebrow": "FROM BRIEF TO REPORT",
+    "processHeading": "You set the direction.\nTWINGS runs the campaign.",
     "processBody": "We agree the scope, schedule, deliverables, and usage terms before the campaign begins.",
     "processSteps": {
       "brief": {
-        "title": "Tell us the goal",
-        "body": "Share the audience, message, and timing. An outline is enough to start."
+        "title": "Align the goal",
+        "body": "Set the audience, message, channels, and timing."
       },
       "format": {
-        "title": "Agree the format",
-        "body": "Review the creative direction and campaign terms with the studio."
+        "title": "Build the scene first",
+        "body": "We produce the format and agree it with the brand."
       },
       "creators": {
-        "title": "Bring in creators",
-        "body": "We recruit and select creators against the agreed brief and requirements."
+        "title": "Choose the creators",
+        "body": "We recruit and select against the agreed brief."
       },
       "publish": {
-        "title": "Create and review",
-        "body": "Creators make and post the film. We check submitted links against the campaign requirements."
+        "title": "Review before publishing",
+        "body": "We check the film, caption, and required disclosures."
       },
       "report": {
-        "title": "Review the results",
-        "body": "Follow the campaign’s status and shared results in your brand workspace."
+        "title": "Bring the results together",
+        "body": "Published links and agreed results are organised in the brand workspace."
       }
     },
-    "workspaceHeading": "Already working with us?",
-    "workspaceBody": "Sign in to your brand workspace for shared campaigns, approvals, and reports.",
+    "workspaceHeading": "Already running a campaign?",
+    "workspaceBody": "Review content and reports in your brand workspace.",
     "workspaceCta": "Open brand workspace",
     "productionEyebrow": "Also by YAGI",
-    "productionHeading": "Need the film or filter itself?",
-    "productionBody": "For a standalone brand film or filter production, discuss a separate production brief with YAGI.",
+    "productionHeading": "Need the film without creator distribution?",
+    "productionBody": "YAGI handles standalone brand films and filter production.",
     "productionCta": "Discuss production in English",
     "pricingCta": "Production estimate · Korean",
     "pricingNote": "The estimate calculator is currently in Korean. You can use the English enquiry form here.",
-    "inquiryEyebrow": "Start a conversation",
-    "inquiryHeading": "Tell us what you have in mind.",
-    "inquiryBody": "Share your brand, audience, and timing. We will review the brief and reply to your email.",
+    "inquiryEyebrow": "START A PROJECT",
+    "inquiryHeading": "Tell us the scene for your next campaign.",
+    "inquiryBody": "The product, the people you want to reach, and the timing are enough to start. We will review it and reply by email.",
     "inquiryNote": "Submitting an enquiry does not place an order. Scope and fees are agreed separately.",
     "legacyBrandLink": "Looking to run a brand campaign?",
     "legacyBrandCta": "Visit TWINGS for brands"
@@ -1604,13 +1635,13 @@ export const en = {
       budget10mTo30m: 'KRW 10M to 30M',
       budgetOver30m: 'Over KRW 30M',
       budgetUndecided: 'Not decided',
-      fieldTemplate: 'Preferred format',
+      fieldTemplate: 'Reference template · creator catalogue',
       templateNew: 'A brand-only scene',
       templateUndecided: 'Decide after a call',
       fieldTiming: 'Timing (optional)',
       timingPlaceholder: 'e.g. posts live mid-October',
       fieldMessage: 'Message',
-      messagePlaceholder: 'The product, the goal, any reference links.',
+      messagePlaceholder: 'The product, the goal, any reference links, and the title of a production example you liked.',
       consent: 'I agree that the company name, my name, email and phone are collected to answer this enquiry, kept for one year after the reply, and handled under the privacy policy.',
       submit: 'Send enquiry',
       submitting: 'Sending…',

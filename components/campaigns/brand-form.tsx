@@ -52,7 +52,7 @@ export interface BrandFormTemplate {
   title: string;
 }
 
-const INPUT = 'w-full border border-hairline bg-transparent px-4 py-3 text-body focus:outline focus:outline-2 focus:outline-accent';
+const INPUT = 'w-full border border-black/50 bg-transparent px-4 py-3 text-body focus:outline focus:outline-2 focus:outline-accent';
 const LABEL = 'block font-label text-eyebrow uppercase opacity-60';
 
 type Status = 'idle' | 'sending' | 'sent' | 'invalid' | 'rate_limited' | 'unavailable';
@@ -95,6 +95,11 @@ export function BrandInquiryForm({
   // server-rendered /api/brands/inquiries/result route; hydrated submissions stay in this form.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
+    const useCaseSelected = (event: Event) => {
+      const selected = (event as CustomEvent<string>).detail;
+      if (selected && selected in labels.useCaseOptions) setUseCase(selected);
+    };
+    window.addEventListener('twings:use-case', useCaseSelected);
     if (params.get('type') && params.get('type')! in labels.inquiryTypeOptions) setInquiryType(params.get('type')!);
     if (params.get('useCase') && params.get('useCase')! in labels.useCaseOptions) setUseCase(params.get('useCase')!);
     // Persist only a random request key, never the visitor's form contents. A lost network
@@ -106,7 +111,7 @@ export function BrandInquiryForm({
       sessionStorage.setItem('twings.inquiry.request', id);
     } catch { /* Without storage or secure UUID support, the server accepts a blank request key. */ }
     const outcome = params.get('inquiry');
-    if (!outcome) return;
+    if (!outcome) return () => window.removeEventListener('twings:use-case', useCaseSelected);
     if (outcome === 'sent') {
       setStatus('sent');
       setReceipt(params.get('receipt') === '1');
@@ -124,6 +129,7 @@ export function BrandInquiryForm({
     params.delete('id');
     const rest = params.toString();
     window.history.replaceState(null, '', `${window.location.pathname}${rest ? `?${rest}` : ''}${window.location.hash}`);
+    return () => window.removeEventListener('twings:use-case', useCaseSelected);
   }, [labels.inquiryTypeOptions, labels.useCaseOptions]);
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {

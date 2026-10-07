@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { getDictionary } from '@/lib/i18n/dictionaries';
 import { FAQ_CATALOG, FAQ_CATEGORIES, faqItems } from '@/lib/faq/catalog';
 import type { PromptCard } from '@/lib/prompts/catalog';
-import { campaignServiceStructuredData, faqStructuredData, siteStructuredData, templateStructuredData } from '@/lib/seo/structured-data';
+import { brandCaseStudiesStructuredData, campaignServiceStructuredData, faqStructuredData, siteStructuredData, templateStructuredData } from '@/lib/seo/structured-data';
 import { serializeJsonLd } from '@/lib/seo/json-ld';
 
 const origin = 'https://twings.example';
@@ -64,6 +64,20 @@ describe('public structured data', () => {
     expect(campaignServiceStructuredData({ origin, path: '/en/campaigns', locale: 'en', name: 'Campaigns', description: 'Brief', serviceType: 'Campaigns' })).not.toHaveProperty('offers');
   });
 
+  it('describes the two public Morphic cases without inventing exact counters or conversions', () => {
+    const data = brandCaseStudiesStructuredData({ origin, locale: 'ko', cases: [
+      { id: 'morphic-90s-interview', name: 'Morphic · 90년대 인터뷰', description: '9편, 200만+ 조회수, 파생 오가닉 콘텐츠 300건+.' },
+      { id: 'morphic-september-kr-jp', name: 'Morphic · 9월 후속', description: '한국과 일본에서 진행한 후속 캠페인.' },
+    ] });
+    expect(data).toMatchObject({ '@type': 'ItemList', numberOfItems: 2, inLanguage: 'ko' });
+    const items = data.itemListElement as { item: Record<string, unknown> }[];
+    expect(items.map(({ item }) => item['@type'])).toEqual(['CreativeWork', 'CreativeWork']);
+    expect(items[0]?.item).toMatchObject({ url: `${origin}/ko/brands#morphic-90s-interview`, publisher: { '@id': `${origin}/#organization` } });
+    expect(items[0]?.item).not.toHaveProperty('citation');
+    expect(items[1]?.item).not.toHaveProperty('citation');
+    expect(JSON.stringify(data)).not.toMatch(/Event|AggregateRating|price|payout|conversion|userInteractionCount/);
+  });
+
   it('escapes script breakouts without changing the parsed content', () => {
     const data = { text: '</script><script>alert("x")</script>&\u2028\u2029' };
     const text = serializeJsonLd(data);
@@ -108,5 +122,11 @@ describe('single FAQ catalog', () => {
       expect(content).toContain('https://twings.app/ko/faq');
       expect(content).not.toMatch(/https:\/\/[^\s]*(?:\/admin|\/account|\/api|\/billing|\/renders)|19,000|39,000|TOSS_SECRET_KEY|SUPABASE_SERVICE_ROLE_KEY/);
     }
+    const full = readFileSync('public/llms-full.txt', 'utf8');
+    expect(full).toContain('Morphic');
+    expect(full).toMatch(/9 (?:commissioned |campaign )?films|9편/);
+    expect(full).toMatch(/2M\+|200만\+/);
+    expect(full).toMatch(/300\+/);
+    expect(full).toContain('not an individual creator result or an attributed conversion rate');
   });
 });
