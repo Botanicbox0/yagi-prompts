@@ -27,6 +27,7 @@ describe('migrations apply on a fresh database (PLAN §6)', () => {
       'brand_contract_sharing_events',
       // 2026-09-11 — the brand enquiry form on the campaigns page: one row per enquiry, studio-only.
       'brand_inquiries',
+      'brand_inquiry_deliveries',
       'brand_invites',
       'brand_memberships',
       'brand_messages',

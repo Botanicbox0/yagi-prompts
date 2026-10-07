@@ -2,20 +2,11 @@ import { TextSwap } from '@/components/ui/text-swap';
 import { TwingsLogo } from '@/components/brand/twings-mark';
 import { HireClickBeacon } from '@/components/analytics/beacon';
 
-/**
- * PLAN §3.1 — "Footer carries the B2B lead CTA: 'Work with the studio →' (+ `hire_click` event).
- * The same strip appears at the bottom of playbook detail pages."
- *
- * Founder direction (2026-08-13): the big CTA opens the studio's Pitch deck in a new tab — a
- * deck sells the studio better than an empty compose window. The CONTACT email below stays a
- * mailto: the deck is the pitch, the address is the reply channel. `hire_click` beacons both.
- */
-
-/** The studio intro deck the hire CTA opens. */
-const HIRE_DECK_URL = 'https://pitch.com/v/yagi-workshop-intro-9nbwak';
 export interface FooterLabels {
   hireCta: string;
   hireLede: string;
+  primaryHref: string;
+  crossDoor: { href: string; label: string };
   advertise: string;
   rights: string;
   builtIn: string;
@@ -61,20 +52,18 @@ export function SiteFooter({
 
   return (
     <footer data-section data-theme="dark" className="section border-t border-hairline">
-      <div className="band py-20 lg:py-24">
+      <div className="audience-shell py-16 lg:py-20">
         <div className="max-w-detail">
-          <HireClickBeacon>
             <a
-              href={HIRE_DECK_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="font-display text-title font-black uppercase"
+              href={labels.primaryHref}
+              data-footer-primary
+              className="audience-heading inline-block underline-offset-8 hover:underline"
             >
               {/* Non-breaking space: at display size the arrow must not wrap onto a line of its own. */}
               <TextSwap>{labels.hireCta}&nbsp;→</TextSwap>
             </a>
-          </HireClickBeacon>
           <p className="mt-6 text-body opacity-70">{labels.hireLede}</p>
+          <a href={labels.crossDoor.href} className="mt-6 inline-flex min-h-11 items-center text-sm underline underline-offset-4 opacity-70 hover:opacity-100">{labels.crossDoor.label} →</a>
         </div>
 
         <div className="mt-20 grid gap-10 border-t border-hairline pt-10 sm:grid-cols-2 lg:grid-cols-[1fr_auto_auto]">

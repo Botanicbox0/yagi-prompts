@@ -69,6 +69,7 @@ export function buildSitemap(input: SitemapInput): MetadataRoute.Sitemap {
     { rest: TEMPLATE_LISTING_REST.image, priority: 0.9, changeFrequency: 'daily' },
     // docs/CAMPAIGNS.md — the campaigns listing. Weekly: a campaign is a month-long object.
     { rest: '/campaigns', priority: 0.8, changeFrequency: 'weekly' },
+    { rest: '/brands', priority: 0.8, changeFrequency: 'weekly' },
     { rest: '/pricing', priority: 0.8, changeFrequency: 'weekly' },
     { rest: '/faq', priority: 0.6, changeFrequency: 'weekly' },
     // The legal surface. Low priority — nobody searches for it — but LISTED, because a payment

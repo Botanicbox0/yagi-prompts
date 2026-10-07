@@ -34,7 +34,9 @@ TWINGS operates brand creator campaigns through its studio. A brand briefs the s
 
 Creator compensation and studio margin are not a public brand price list. Do not infer an individual creator's payment from a brand campaign budget. Campaign availability and participation conditions must be checked on the current campaign page. Do not describe follower counts, impressions, attributed conversions, or audience data as verified unless the report identifies the evidence and measurement source.
 
-Campaigns: https://twings.app/ko/campaigns and https://twings.app/en/campaigns.
+Brand services and the public enquiry form: https://twings.app/ko/brands and https://twings.app/en/brands. Initial enquiries do not require an account. The brand workspace on brand.twings.app is for ongoing work and requires authorization.
+
+Creator opportunities: https://twings.app/ko/campaigns and https://twings.app/en/campaigns. Creators can inspect briefs before signing in to apply. Choosing Brands or Creators in the public navigation changes the page, not the visitor's account role or permissions. The creator journey continues on the web without requiring an app installation.
 
 ## Frequently asked questions
 

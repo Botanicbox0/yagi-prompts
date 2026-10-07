@@ -115,6 +115,8 @@ metrics_at            'verified+hold' — 조회수 스냅샷 시점 = 홀드 �
 
 메일 발신은 `getMailer()`(Resend, `NOTIFY_FROM_EMAIL`)이며 스튜디오 수신 주소는 `BUSINESS.email`. 브랜드 셀프서브(예산 결제·브리프 편집)는 v2.
 
+2026-10-07: `/[locale]/brands` 폼에 문의 종류·활용 방식과 재요청 식별자를 추가한다. DB 접수와 함께 Slack 발송 대기 기록을 원자적으로 저장하며, 서버 환경에서 명시적으로 켠 경우에만 지정 private 채널로 문의 UUID·종류·관리자 링크를 보낸다. 회사명·연락처·본문은 Slack에 보내지 않는다. 중복 방지·불명 발송 처리·0041/0125/0126 클라우드 적용 및 활성화 절차는 [브랜드 문의 알림 운영](BRAND-INQUIRY-DELIVERY.md)을 따른다.
+
 ## 12. 캠페인 알림 메일 (2026-09-13)
 
 §3.5의 "미구현" 칸을 채웠다. 큐 없이, 관리자 오퍼레이션이 커밋한 뒤 `ctx.defer`(라우트에서는 `after()`, 테스트에서는 인라인)로 보낸다. `lib/campaigns/notify.ts`.
@@ -127,6 +129,8 @@ metrics_at            'verified+hold' — 조회수 스냅샷 시점 = 홀드 �
 브로드캐스트 엔진은 `lib/notify/broadcast.ts`(구독자 조회, 동시성 2, 사람마다 `unsubscribePath` 서명). 같은 엔진으로 **주간 드롭 알림** `prompt.announce`(템플릿 편집기 "구독자에게 알리기", `prompt_items.announced_at`이 원샷 가드, 0023)가 "새 템플릿 알림"(`notif_new_playbook`) 구독자에게 나간다. 메일 본문은 공용 시트 `lib/notify/sheet.ts`. 테스트 `tests/campaigns/notify.test.ts`, `tests/prompts/announce.test.ts`. 구독자가 수천 명을 넘거나 Resend 분당 한도에 닿으면 이 함수 자리에 아웃박스를 넣는다.
 
 ## 13. 브랜드 랜딩 재편 (2026-09-14)
+
+> 아래는 2026-09-14의 기존 구성 기록이다. 2026-10-07에는 공개 브랜드 서비스와 크리에이터 참여를 분리했다. 현재 구현은 `/[locale]/brands`의 브랜드 설명·쇼릴·활용 유형·사례·공개 상담 폼과 `/[locale]/campaigns`의 참여 안내다. 기존 도메인·인증 경계는 유지한다. [현재 정보구조와 검증 기록](AUDIENCE-RENOVATION.md)을 따른다.
 
 대표: "캠페인 페이지는 브랜드가 보고 캠페인 의뢰하는 랜딩페이지. 원리를 잘 설명하면 된다. moat = 실제 인물의 초상권 라이선스 + 고품질 콘텐츠 포맷 제작 + 실제 인플루언서를 통한 spread. 개별 광고 프로덕션도 함." `/[locale]/campaigns`의 읽는 순서를 브랜드 → 크리에이터로 뒤집었다. 캐시 모드(정적 + `campaigns` 태그 + 1h)는 그대로.
 

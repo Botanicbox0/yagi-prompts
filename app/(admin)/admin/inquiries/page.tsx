@@ -6,6 +6,7 @@ import { formatDate, interpolate } from '@/lib/i18n/format';
 /** Raw UUIDs are support lookups, not content: the first block is enough to find the row (P3). */
 const shortId = (id: string): string => id.slice(0, 8);
 import { listBrandInquiries, type BrandInquiry } from '@/lib/brands/repo';
+import { loadBrandInquiryDeliveryStates, type BrandInquiryDeliveryStatus } from '@/lib/brands/slack-delivery';
 import { listRenderFeedback, type RenderFeedbackRow } from '@/lib/renders/feedback';
 import { ADMIN_INQUIRIES_PATH } from '@/lib/campaigns/links';
 import { AdminShell, BUTTON, BUTTON_PRIMARY, OpForm, OutcomeBanner, Panel } from '@/components/admin/chrome';
@@ -33,6 +34,7 @@ export default async function AdminInquiriesPage({ searchParams }: { searchParam
 
   const open: BrandInquiry[] = sql === null ? [] : await listBrandInquiries(sql, { statuses: ['new', 'contacted'], limit: 200 });
   const closed: BrandInquiry[] = sql === null ? [] : await listBrandInquiries(sql, { statuses: ['closed'], limit: 30 });
+  const deliveryStates = sql === null ? new Map<string, BrandInquiryDeliveryStatus>() : await loadBrandInquiryDeliveryStates(sql, [...open, ...closed].map(q => q.id));
   const fresh = open.filter((q) => q.status === 'new');
   const contacted = open.filter((q) => q.status === 'contacted');
   // Result feedback (2026-09-11): the other kind of mail the studio owes an answer to.
@@ -51,7 +53,7 @@ export default async function AdminInquiriesPage({ searchParams }: { searchParam
   const formatLabel = (slug: string | null) => (slug === 'new' ? b.templateNew : slug === null || slug === 'undecided' ? b.templateUndecided : slug);
 
   const Row = ({ q }: { q: BrandInquiry }) => (
-    <li data-brand-inquiry={q.status} className="flex flex-wrap items-start justify-between gap-4 py-4">
+    <li id={`inquiry-${q.id}`} data-brand-inquiry={q.status} className="flex flex-wrap items-start justify-between gap-4 py-4">
       <div className="min-w-0 max-w-detail">
         <p className="font-mono text-code">
           <strong>{q.company}</strong> · {q.contactName} ·{' '}
@@ -61,11 +63,17 @@ export default async function AdminInquiriesPage({ searchParams }: { searchParam
           {q.phone ? ` · ${q.phone}` : ''}
         </p>
         <p className="mt-1 font-mono text-[0.72rem] opacity-55">
+          {b.inquiryTypeLabel} {b.inquiryTypeOptions[q.inquiryType]} · {b.useCaseLabel} {b.useCaseOptions[q.useCase]}
+        </p>
+        <p className="mt-1 font-mono text-[0.72rem] opacity-55">
           {a.inquiryBudget} {budgetLabel[q.budgetBand]} · {a.inquiryTemplate} {formatLabel(q.templateSlug)} · {a.inquiryTiming} {q.timing ?? '—'} ·{' '}
           {formatDate(q.createdAt, locale)}
           {q.locale === 'en' ? ' · EN' : ''}
         </p>
         <p className="mt-2 text-[0.85rem] leading-relaxed whitespace-pre-line opacity-80">{q.message}</p>
+        <p data-inquiry-slack={deliveryStates.get(q.id) ?? 'untracked'} className="mt-2 font-mono text-[0.72rem] opacity-55">
+          {b.slackDeliveryLabel} · {b.slackDeliveryStatuses[deliveryStates.get(q.id) ?? 'untracked']}
+        </p>
       </div>
       <div className="flex items-center gap-2">
         {q.status === 'new' && (

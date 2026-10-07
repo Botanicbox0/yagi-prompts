@@ -34,6 +34,7 @@ describe('route cache modes (§3.4 / §4)', () => {
     for (const file of [
       ['app', '(marketing)', '[locale]', 'page.tsx'],
       ['app', '(marketing)', '[locale]', 'pricing', 'page.tsx'],
+      ['app', '(marketing)', '[locale]', 'brands', 'page.tsx'],
       // docs/TEMPLATES-IA.md — the two tabs and the template detail: static, tagged, TTL-floored.
       // The detail can only be static because nothing on it is gated any more (the prompt text is
       // the studio's private recipe and never rendered).
@@ -60,7 +61,7 @@ describe('route cache modes (§3.4 / §4)', () => {
     const expected: Array<[string[], string[]]> = [
       [
         ['app', '(marketing)', '[locale]', 'page.tsx'],
-        ["from '@/lib/content/public-catalog'", "from '@/lib/prompts/public-catalog'"],
+        ["from '@/lib/prompts/public-catalog'", "from '@/lib/campaigns/public-catalog'"],
       ],
       [
         ['app', '(marketing)', '[locale]', 'pricing', 'page.tsx'],
@@ -669,7 +670,10 @@ describe('render queue (docs/TEMPLATES-IA.md §8)', () => {
     expect(sitemap).toContain("'/renders'");
     expect(sitemap).toContain("'/r/'");
     const vercel = JSON.parse(read('vercel.json')) as { crons?: Array<{ path: string; schedule: string }> };
-    expect(vercel.crons).toEqual([{ path: '/api/renders/tick', schedule: expect.stringMatching(/^\d+ \d+ \* \* \*$/) }]);
+    expect(vercel.crons).toEqual([
+      { path: '/api/renders/tick', schedule: expect.stringMatching(/^\d+ \d+ \* \* \*$/) },
+      { path: '/api/brands/inquiries/tick', schedule: expect.stringMatching(/^\d+ \d+ \* \* \*$/) },
+    ]);
   });
 
   it('never lets a render response enter a cache, refusals included', () => {
