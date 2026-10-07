@@ -52,9 +52,9 @@ export async function GET(request: Request): Promise<NextResponse> {
   const html = `<!doctype html>
 <html lang="${locale}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>${h(title)} · ${h(dict.meta.siteName)}</title>
 <style>body{margin:0;background:#fff;color:#171717;font-family:system-ui,sans-serif}main{max-width:40rem;margin:12vh auto;padding:2rem}p{line-height:1.7}h1{font-size:clamp(1.8rem,6vw,3rem);letter-spacing:-.04em}a{color:inherit;text-underline-offset:.25em}code{overflow-wrap:anywhere}footer{margin-top:2rem}</style></head>
-<body><main data-brand-inquiry="${outcome}" role="${outcome === 'sent' ? 'status' : 'alert'}"><p>${h(dict.meta.siteName)}</p><h1>${h(title)}</h1><p>${h(body)}</p>
+<body><main data-brand-inquiry="${outcome}"><div role="${outcome === 'sent' ? 'status' : 'alert'}"><p>${h(dict.meta.siteName)}</p><h1>${h(title)}</h1><p>${h(body)}</p>
 ${receipt ? `<p data-brand-inquiry-receipt>${h(copy.successReceipt)}</p>` : ''}
-${id ? `<p data-brand-inquiry-reference>${h(copy.referenceLabel)}: <code>${h(id)}</code></p>` : ''}
+${id ? `<p data-brand-inquiry-reference>${h(copy.referenceLabel)}: <code>${h(id)}</code></p>` : ''}</div>
 <footer><a href="${h(brandEnquiryHref(locale))}">${h(copy.resultBack)}</a></footer></main></body></html>`;
   return new NextResponse(html, { status: STATUS[outcome], headers: HEADERS });
 }

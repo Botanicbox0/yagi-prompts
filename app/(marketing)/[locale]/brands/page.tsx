@@ -83,7 +83,7 @@ export default async function BrandsPage({ params }: Props) {
             <div className="flex flex-wrap items-end justify-between gap-4 border-b border-hairline pb-6"><div><h3 className="text-2xl font-semibold">{t[study.clientKey]}</h3><p className="mt-2 text-sm opacity-60">{t[study.goalKey]} · {t[study.formatKey]}</p></div></div>
             <dl className="grid gap-8 py-9 sm:grid-cols-3">{[[reel.proofStat1Value,reel.proofStat1Label],[reel.proofStat2Value,reel.proofStat2Label],[reel.proofStat3Value,reel.proofStat3Label]].map(([value,label]) => <div key={label}><dd className="text-[clamp(2.8rem,5vw,5rem)] leading-none font-medium tracking-tight">{value}</dd><dt className="mt-4 text-sm opacity-60">{label}</dt></div>)}</dl>
           </article>)}
-          <p className="max-w-2xl text-xs leading-relaxed opacity-45">{t.caseNote}</p>
+          <p className="max-w-2xl text-xs leading-relaxed opacity-70">{t.caseNote}</p>
         </div>
       </section>
 
@@ -96,7 +96,7 @@ export default async function BrandsPage({ params }: Props) {
 
       <section id="brands" data-section data-theme="light" data-brands className="section scroll-mt-24 border-y border-hairline">
         <div className="audience-shell grid gap-12 py-16 lg:grid-cols-[0.8fr_1.2fr] lg:gap-20 lg:py-24">
-          <div><p className="audience-eyebrow">{t.inquiryEyebrow}</p><h2 className="audience-heading mt-5">{t.inquiryHeading}</h2><p className="mt-6 text-sm leading-relaxed opacity-60">{t.inquiryBody}</p><p className="mt-5 text-xs leading-relaxed opacity-45">{t.inquiryNote}</p>
+          <div><p className="audience-eyebrow">{t.inquiryEyebrow}</p><h2 className="audience-heading mt-5">{t.inquiryHeading}</h2><p className="mt-6 text-sm leading-relaxed opacity-60">{t.inquiryBody}</p><p className="mt-5 text-xs leading-relaxed opacity-70">{t.inquiryNote}</p>
             <div className="mt-10 border-t border-hairline pt-6"><h3 className="text-sm font-semibold">{t.workspaceHeading}</h3><p className="mt-2 text-xs leading-relaxed opacity-60">{t.workspaceBody}</p><a data-brand-workspace-entry href={brandWorkspaceHref(locale)} className="mt-3 inline-flex min-h-11 items-center text-sm underline underline-offset-4">{t.workspaceCta} ↗</a></div>
           </div>
           <BrandInquiryForm endpoint={BRAND_INQUIRY_ENDPOINT} locale={locale} labels={dict.campaigns.brands} templates={templates} privacy={{ href: legalHref(locale,'privacy'), label: legalDocument('privacy',locale).title }} />
@@ -104,7 +104,7 @@ export default async function BrandsPage({ params }: Props) {
       </section>
 
       <section data-section data-theme="light" data-production-service className="section">
-        <div className="audience-shell flex flex-wrap items-end justify-between gap-8 py-16"><div className="max-w-xl"><p className="audience-eyebrow">{t.productionEyebrow}</p><h2 className="mt-4 text-2xl font-semibold tracking-tight">{t.productionHeading}</h2><p className="mt-4 text-sm leading-relaxed opacity-60">{t.productionBody}</p></div><div className="max-w-sm"><a href={`${brandsHref(locale)}?type=production#brands`} className="inline-flex min-h-11 items-center text-sm font-medium underline underline-offset-4">{t.productionCta} ↗</a><a href="https://pricing.yagiworkshop.xyz/" target="_blank" rel="noopener noreferrer" data-production-pricing className="mt-2 block text-sm underline underline-offset-4">{t.pricingCta} ↗</a><p className="mt-3 text-xs leading-relaxed opacity-50">{t.pricingNote}</p></div></div>
+        <div className="audience-shell flex flex-wrap items-end justify-between gap-8 py-16"><div className="max-w-xl"><p className="audience-eyebrow">{t.productionEyebrow}</p><h2 className="mt-4 text-2xl font-semibold tracking-tight">{t.productionHeading}</h2><p className="mt-4 text-sm leading-relaxed opacity-60">{t.productionBody}</p></div><div className="max-w-sm"><a href={`${brandsHref(locale)}?type=production#brands`} className="inline-flex min-h-11 items-center text-sm font-medium underline underline-offset-4">{t.productionCta} ↗</a><a href="https://pricing.yagiworkshop.xyz/" target="_blank" rel="noopener noreferrer" data-production-pricing className="mt-2 block text-sm underline underline-offset-4">{t.pricingCta} ↗</a><p className="mt-3 text-xs leading-relaxed opacity-70">{t.pricingNote}</p></div></div>
       </section>
       <FaqSection dict={dict} locale={locale} placement="brand" path={brandsHref(locale)} />
       <aside data-creator-door className="audience-shell flex flex-wrap items-center justify-between gap-6 border-t border-hairline py-10"><div><h2 className="text-lg font-semibold">{dict.audience.creatorDoor}</h2><p className="mt-2 max-w-xl text-sm opacity-60">{dict.audience.creatorDoorBody}</p></div><a href={`/${locale}`} className="text-sm font-medium underline underline-offset-4">{dict.audience.creatorDoorCta} ↗</a></aside>

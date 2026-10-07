@@ -55,7 +55,7 @@ export const en = {
     "metaTitle": "Creator campaigns for brands",
     "metaDescription": "Plan a creator campaign with TWINGS. The studio develops the format, manages creator participation and reviews posts, with results shared in your brand workspace.",
     "eyebrow": "TWINGS for brands",
-    "title": "Campaigns creators\nwant to be part of.",
+    "title": "Campaigns creators\nwant to join.",
     "body": "We build a film format for your brand, then run a campaign where selected creators make it their own and post it on their channels.",
     "primaryCta": "Discuss your campaign",
     "secondaryCta": "See the work",

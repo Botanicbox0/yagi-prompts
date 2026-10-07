@@ -10,9 +10,10 @@ import { TypographicPoster } from '@/components/prompts/poster';
 export function CreatorHero({ dict, locale, featured }: { dict: Dictionary; locale: Locale; featured?: PromptCard }) {
   const t = dict.creatorJourney;
   const title = featured && (locale === 'ko' ? featured.titleKo || featured.title : featured.title);
-  const width = featured?.video?.w ?? featured?.poster?.w;
-  const height = featured?.video?.h ?? featured?.poster?.h;
-  const ratio = width && height ? `${width} / ${height}` : (featured?.aspectDefault ?? '16:9').replace(':', ' / ');
+  const measured = [featured?.video, featured?.poster].find(media => media?.w && media?.h && media.w > 0 && media.h > 0);
+  // Generation's aspectDefault is not the uploaded example's framing. Unknown media keeps
+  // the catalog's 16:9 preview window rather than inventing a portrait frame around a wide film.
+  const ratio = measured ? `${measured.w} / ${measured.h}` : '16 / 9';
   const [ratioWidth, ratioHeight] = ratio.split('/').map(Number);
   const portrait = (ratioWidth ?? 16) < (ratioHeight ?? 9);
   return <section data-section data-theme="light" data-creator-hero className="section">
@@ -27,7 +28,7 @@ export function CreatorHero({ dict, locale, featured }: { dict: Dictionary; loca
         </div>
         <p data-creator-availability className="mt-5 max-w-md text-xs leading-relaxed opacity-55">{RENDER_PIPELINE_PUBLIC ? t.ready : t.preparing}</p>
       </div>
-      {featured && <article data-featured-template={featured.slug} className={`relative min-w-0 w-full ${portrait ? 'max-w-xs justify-self-center' : ''}`}>
+      {featured && <article data-featured-template={featured.slug} data-media-host className={`relative min-w-0 w-full ${portrait ? 'max-w-xs justify-self-center' : ''}`}>
         <a href={templateHref(locale, featured.slug)} aria-label={title} className="block overflow-hidden rounded-2xl bg-black">
           <PromptCardMedia poster={featured.poster} video={featured.video} alt={title!} ratio={ratio} fallback={<TypographicPoster title={title!} slug={featured.slug} kicker={featured.modelLabels.join(' · ')} ratio={ratio} />} />
         </a>

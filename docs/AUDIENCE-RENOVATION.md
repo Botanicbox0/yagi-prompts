@@ -65,3 +65,5 @@ Brandazine의 실제 공개 화면에서 브랜드 문의는 로그인 전에, �
 로컬 fixture 영상은 운영 콘텐츠 품질 증거가 아니다. 프리뷰에서 실제 공개 카탈로그/미디어를 재확인해야 한다. 최종 PC·모바일 브라우저 캡처와 Slack 실제 수신은 PR/운영 담당의 후속 확인 단계다. Slack secret과 cron secret 저장, RLS SQL 적용은 root의 운영 작업이며 실제 사이트 수신 확인과 구분한다.
 
 JavaScript가 꺼진 폼도 `/api/brands/inquiries/result`의 서버 HTML에서 접수 결과를 확인한다. 결과에는 실제 DB의 접수 UUID와 메일 발송 여부만 사용하고 PII는 읽지 않는다. 결과 HTML은 private/no-store·noindex·CSP를 적용한다. Slack의 live runtime은 `VERCEL_ENV=production`일 때만 활성화 설정을 읽으므로 운영 변수를 복사한 프리뷰/로컬에서도 발송하지 않는다.
+
+실제 Claude Fable 5.1 교차검토 후 작은 안내 문구 대비, 목적 선택의 group 의미, no-JS main landmark, UUID 미지원 fallback을 보완했다. 승인된 사례 매니페스트와 양 언어 페이지에서 실제 SSR한 숫자를 비교하는 회귀 검증을 추가했으며 관련 4개 파일 / 21개 테스트와 타입 검사를 통과했다. 최종 전체 테스트 수치는 위 2,033개 실행과 구분한다. 운영 담당이 저장한 PC 1280px·한국어 390px·영어 320px 실제 이미지도 별도로 열어 확인했다.

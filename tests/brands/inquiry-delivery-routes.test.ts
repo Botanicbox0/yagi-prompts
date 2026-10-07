@@ -76,6 +76,7 @@ describe('inquiry delivery API boundaries', () => {
     expect(page.headers.get('referrer-policy')).toBe('no-referrer');
     const html = await page.text();
     expect(html).toContain('Enquiry received.');
+    expect(html).toContain('<main data-brand-inquiry="sent"><div role="status">');
     expect(html).toContain(id);
     expect(html).toContain('href="/en/brands#brands"');
     expect(html).not.toContain('<script');

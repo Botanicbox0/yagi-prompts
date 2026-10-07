@@ -104,7 +104,7 @@ export function BrandInquiryForm({
       const id = key && /^[0-9a-f-]{36}$/i.test(key) ? key : crypto.randomUUID();
       if (requestIdRef.current) requestIdRef.current.value = id;
       sessionStorage.setItem('twings.inquiry.request', id);
-    } catch { if (requestIdRef.current) requestIdRef.current.value = crypto.randomUUID(); }
+    } catch { /* Without storage or secure UUID support, the server accepts a blank request key. */ }
     const outcome = params.get('inquiry');
     if (!outcome) return;
     if (outcome === 'sent') {
