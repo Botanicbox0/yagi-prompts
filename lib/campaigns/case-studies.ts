@@ -30,12 +30,17 @@ const mediaFile = <T extends 'september-01' | 'september-02'>(id: T) => z.object
 
 export const CaseMedia = z.discriminatedUnion('id', [mediaFile('september-01'), mediaFile('september-02')]);
 
+const augustFilm = (id: 'august-01' | 'august-02', post: string) => z.object({
+  id: z.literal(id), src: z.literal(`/reel/brands/morphic-${id}.mp4`),
+  poster: z.literal(`/reel/brands/morphic-${id}.jpg`), width: z.literal(720), height: z.literal(1280), postUrl: z.literal(post),
+}).strict();
+
 const Morphic90sCase = z.object({
   id: z.literal('morphic-90s-interview'),
   copyKey: z.literal('morphic90s'),
   period: z.literal('2026-08'),
   metrics: z.tuple([FilmsMetric, ViewsMetric, OrganicMetric]),
-  media: z.tuple([]),
+  media: z.tuple([augustFilm('august-01', 'https://www.instagram.com/p/DcXjygPg8fE/'), augustFilm('august-02', 'https://www.instagram.com/p/DcShoikJklw/')]),
   evidence: z.string().min(1),
   sourceUrl: z.literal('https://morphic.com/resources/how-to/make-90s-street-style-interview-video'),
 }).strict();
@@ -83,7 +88,10 @@ export const CASE_STUDIES: readonly CampaignCaseStudy[] = z.array(CaseStudy).par
       { id: 'views', value: 2_000_000, relation: 'at_least' },
       { id: 'organic', value: 300, relation: 'at_least' },
     ],
-    media: [],
+    media: [
+      { id: 'august-01', src: '/reel/brands/morphic-august-01.mp4', poster: '/reel/brands/morphic-august-01.jpg', width: 720, height: 1280, postUrl: 'https://www.instagram.com/p/DcXjygPg8fE/' },
+      { id: 'august-02', src: '/reel/brands/morphic-august-02.mp4', poster: '/reel/brands/morphic-august-02.jpg', width: 720, height: 1280, postUrl: 'https://www.instagram.com/p/DcShoikJklw/' },
+    ],
     evidence: 'Founder-approved public aggregate: 9 films, 2M+ views, 300+ derivative organic posts.',
     sourceUrl: 'https://morphic.com/resources/how-to/make-90s-street-style-interview-video',
   },

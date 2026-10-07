@@ -1,7 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react';
-import type { CampaignCaseStudy } from '@/lib/campaigns/case-studies';
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import type { ReelId, ReelItem } from '@/lib/campaigns/showreel';
 import styles from './brand-experience.module.css';
 
@@ -192,11 +191,10 @@ export function BrandUseCaseExplorer({
   enquiryHref,
 }: {
   items: readonly UseCaseItem[];
-  labels: { tabs: string; brief: string; format: string; publish: string; result: string; cta: string };
+  labels: { tabs: string; brief: string; format: string; publish: string; result: string; cta: string; example: string };
   enquiryHref: string;
 }) {
   const [activeId, setActiveId] = useState(items[0]?.id ?? 'launch');
-  const labelsByStep = [labels.brief, labels.format, labels.publish, labels.result] as const;
 
   function move(event: KeyboardEvent<HTMLDivElement>) {
     if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
@@ -208,16 +206,6 @@ export function BrandUseCaseExplorer({
     if (!item) return;
     setActiveId(item.id);
     document.querySelector<HTMLButtonElement>(`[data-use-case-select="${item.id}"]`)?.focus();
-  }
-
-  function selectForEnquiry(event: MouseEvent<HTMLAnchorElement>, id: string) {
-    event.preventDefault();
-    window.dispatchEvent(new CustomEvent('twings:use-case', { detail: id }));
-    const url = new URL(window.location.href);
-    url.searchParams.set('useCase', id);
-    url.hash = 'brands';
-    window.history.replaceState(null, '', url);
-    document.getElementById('brands')?.scrollIntoView({ behavior: reducedOrMetered() ? 'auto' : 'smooth' });
   }
 
   return (
@@ -233,11 +221,10 @@ export function BrandUseCaseExplorer({
           const selected = item.id === activeId;
           return (
             <article id={`use-case-panel-${item.id}`} key={item.id} role="tabpanel" aria-labelledby={`use-case-tab-${item.id}`} hidden={!selected} data-use-case-panel={item.id} data-campaign-use-case={item.id} className={styles.useCasePanel}>
-              <p className={styles.useCaseStatement}>{item.statement}</p>
-              <dl className={styles.useCaseFlow}>
-                {item.steps.map((body, index) => <div key={labelsByStep[index]}><dt><span>0{index + 1}</span>{labelsByStep[index]}</dt><dd>{body}</dd></div>)}
-              </dl>
-              <a href={`${enquiryHref}?useCase=${item.id}#brands`} onClick={(event) => selectForEnquiry(event, item.id)} className={styles.useCaseCta}>{labels.cta}<span aria-hidden="true">↗</span></a>
+              <div className={styles.useCaseContent}>
+                <div><h3 className={styles.useCaseStatement}>{item.statement}</h3><p className={styles.useCaseDescription}>{item.steps[1]}</p><p className={styles.useCaseDescription}>{item.steps[2]}</p><a data-inquiry-trigger href={`${enquiryHref}?useCase=${item.id}#brands`} className={styles.useCaseCta}>{labels.cta}<span aria-hidden="true">↗</span></a></div>
+                <figure className={styles.useCaseExample}><img src={CAMPAIGN_EXAMPLES[item.id] ?? '/reel/brands/city-fashion.jpg'} alt="" width={720} height={960} loading="lazy" decoding="async" /><figcaption>{labels.example}</figcaption></figure>
+              </div>
             </article>
           );
         })}
@@ -246,6 +233,9 @@ export function BrandUseCaseExplorer({
   );
 }
 
+const CAMPAIGN_EXAMPLES: Record<string, string> = { launch: '/reel/brands/y2k-flip-phone.jpg', beauty_fashion: '/reel/brands/city-fashion.jpg', app_platform: '/reel/brands/morphic-august-01.jpg', local: '/reel/brands/production-paris.jpg', seasonal: '/reel/brands/tea-editorial.jpg' };
+export interface CampaignFilmMedia { id: string; src: string; poster: string; width: number; height: number; postUrl?: string }
+
 function CaseFilm({
   media,
   title,
@@ -253,13 +243,15 @@ function CaseFilm({
   pause,
   active,
   onActiveChange,
+  post,
 }: {
-  media: CampaignCaseStudy['media'][number];
+  media: CampaignFilmMedia;
   title: string;
   play: string;
   pause: string;
   active: boolean;
   onActiveChange: (id: string | null) => void;
+  post?: string;
 }) {
   const rootRef = useRef<HTMLElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -300,12 +292,12 @@ function CaseFilm({
   }
 
   return (
-    <figure ref={rootRef} className={styles.caseFilm} data-case-film={media.id}>
-      <video ref={videoRef} src={media.src} poster={media.poster} width={media.width} height={media.height} muted loop playsInline preload="none" aria-label={title} onPlay={() => { setPlaying(true); onActiveChange(media.id); }} onPause={() => setPlaying(false)} />
+    <div><figure ref={rootRef} className={styles.caseFilm} style={{ aspectRatio: `${media.width} / ${media.height}` }} data-case-film={media.id}>
+      <video ref={videoRef} src={media.src} poster={media.poster} width={media.width} height={media.height} muted controls playsInline preload="none" aria-label={title} onPlay={() => { setPlaying(true); onActiveChange(media.id); }} onPause={() => setPlaying(false)} />
       <button data-video-control type="button" aria-pressed={playing} aria-label={`${title} · ${playing ? pause : play}`} onClick={toggle}>
         <span aria-hidden="true">{playing ? 'Ⅱ' : '▶'}</span><span>{playing ? pause : play}</span>
       </button>
-    </figure>
+    </figure>{media.postUrl && post && <a className={styles.postLink} href={media.postUrl} target="_blank" rel="noopener noreferrer">{post} ↗</a>}</div>
   );
 }
 
@@ -313,12 +305,12 @@ export function MorphicFilmPair({
   media,
   labels,
 }: {
-  media: CampaignCaseStudy['media'];
-  labels: { readonly titles: readonly string[]; play: string; pause: string };
+  media: readonly CampaignFilmMedia[];
+  labels: { readonly titles: readonly string[]; play: string; pause: string; post?: string };
 }) {
   const [activeId, setActiveId] = useState<string | null>(null);
   return <div data-morphic-film-pair className={styles.morphicPair}>{media.map((item, index) => {
     const title = labels.titles[index] ?? labels.titles[0];
-    return title ? <CaseFilm key={item.id} media={item} title={title} play={labels.play} pause={labels.pause} active={activeId === item.id} onActiveChange={setActiveId} /> : null;
+    return title ? <CaseFilm key={item.id} media={item} title={title} play={labels.play} pause={labels.pause} post={labels.post} active={activeId === item.id} onActiveChange={setActiveId} /> : null;
   })}</div>;
 }

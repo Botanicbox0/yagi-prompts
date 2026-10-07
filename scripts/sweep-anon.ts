@@ -1032,7 +1032,13 @@ async function sweepCampaigns(): Promise<void> {
       expectPresent('/en/brands carries the approved view floor', brand.body, '2M+');
       expectPresent('/en/brands carries the approved organic floor', brand.body, '300+');
     }
-    expectPresent(`/${locale}/brands visible inquiry form`, brand.body, 'data-brand-inquiry="form"');
+    expectPresent(`/${locale}/brands progressive inquiry form`, brand.body, 'data-brand-inquiry="form"');
+    expectPresent(`/${locale}/brands accessible inquiry dialog`, brand.body, 'data-brand-inquiry-dialog');
+    expectPresent(`/${locale}/brands role field`, brand.body, 'name="contactRole"');
+    expectEqual(`/${locale}/brands shows real August film links`, (brand.body.match(/href="https:\/\/www.instagram.com\/p\/(?:DcXjygPg8fE|DcShoikJklw)\/"/g) ?? []).length, 2);
+    expectPresent(`/${locale}/brands shows the production film`, brand.body, 'data-production-films');
+    expectPresent(`/${locale}/brands links the production portfolio`, brand.body, 'https://pitch.com/v/yagi-production-wokrs-vsrgfd');
+    expectAbsent(`/${locale}/brands uses no green brand accent`, brand.body, 'brand-lime');
     expectPresent(`/${locale}/brands self-canonicals`, brand.body, `rel="canonical" href="${BASE}/${locale}/brands"`);
     expectPresent(`/${locale}/campaigns self-canonicals`, listing.body, `rel="canonical" href="${BASE}/${locale}/campaigns"`);
     const landing = await get(`/${locale}`);

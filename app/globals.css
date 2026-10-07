@@ -28,7 +28,7 @@
   --color-brand-night: #080808;
   --color-brand-ink: #111111;
   --color-brand-charcoal: #121212;
-  --color-brand-lime: #9cff57;
+  --color-brand-blue-light: #a5b4ff;
   --color-brand-pink: #ff8cc6;
   --color-brand-violet: #5c36ff;
 
@@ -191,7 +191,7 @@ html:lang(ko) {
   }
 
   [data-theme='dark'] :focus-visible {
-    outline-color: var(--color-brand-lime);
+    outline-color: var(--color-brand-blue-light);
   }
 }
 
