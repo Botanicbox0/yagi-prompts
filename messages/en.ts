@@ -44,8 +44,6 @@ export const en = {
   },
   brandLanding: {
     "moatEyebrow": "FROM PRODUCTION TO PUBLISHING",
-    "moatHeading": "Produce. Cast. Publish.",
-    "moatBody": "One team for creative production, creator recruitment, and campaign delivery.",
     "moat1Title": "AI ad production",
     "moat1Body": "We build a film format around your product and message, ready for creators to star in.",
     "moat2Title": "Creator participation",
@@ -53,7 +51,9 @@ export const en = {
     "moat3Title": "Publishing and reporting",
     "moat3Body": "We review films and ad disclosures, manage publishing, and collect posts and available results.",
     "metaTitle": "Creator Campaigns for Brands",
-    "metaDescription": "TWINGS develops formats creators want to make, then handles recruitment, post review, and reporting. Explore the Morphic 1990s interview campaign and its Korea–Japan follow-up.",
+    "metaDescription": "AI ad production and creator campaigns across Korea and Japan, from recruitment to publishing and reporting. Explore simultaneous market launches and real Morphic work.",
+    "marketsHeading": "Korea and Japan.\nOne campaign.",
+    "marketsBody": "Reach both markets simultaneously through our creator pools in Korea and Japan. We choose the message and creators for each market, then manage recruitment, publishing schedules, and reporting together.",
     "eyebrow": "TWINGS FOR BRANDS",
     "title": "Brand ads\ncreators want\nto be part of.",
     "body": "We produce AI ads starring real creators and manage publishing on their channels. One team handles production, recruitment, content review, and reporting.",
@@ -86,14 +86,10 @@ export const en = {
     "typesEyebrow": "CREATIVE EXAMPLES",
     "typesHeading": "Ads we can make for you.",
     "typesBody": "From product films to service experiences people want to try.",
-    "caseEyebrow": "CAMPAIGN RESULTS",
-    "caseHeading": "A campaign people\nchose to make their own.",
     "cases": {
       "morphic90s": {
         "eyebrow": "MORPHIC · AUGUST 2026 · 1990s INTERVIEW CAMPAIGN",
-        "title": "Your own\n1990s TV interview.",
         "body": "One selfie becomes a 1990s-style TV interview. Creators published their films and shared instructions with viewers in the comments. People outside the campaign began making their own versions.",
-        "question": "Watch it. Ask how. Make your own.",
         "films": [
           "1990s interview · published film 01",
           "1990s interview · published film 02"
@@ -116,25 +112,17 @@ export const en = {
       },
       "morphicSeptember": {
         "eyebrow": "MORPHIC · SEPTEMBER 2026 FOLLOW-UP",
-        "title": "Creator campaigns\nacross Korea and Japan.",
         "body": "The collaboration with Morphic continued with creator campaigns in Korea and Japan. TWINGS managed format production, recruitment, post review, and reporting.",
-        "question": "How was Morphic’s follow-up campaign run?",
         "note": "These are real films from the September Morphic campaign.",
         "films": [
           "Morphic September campaign film 01",
           "Morphic September campaign film 02"
-        ],
-        "operations": [
-          "Format production",
-          "Creator recruitment",
-          "Post review",
-          "Results"
         ]
       }
     },
     "productionEyebrow": "Also by YAGI",
     "productionHeading": "AI production.\nBrand ad films.",
-    "productionBody": "We plan and produce product ads and campaign films. You can commission a film without a creator campaign. Explore YAGI’s real work.",
+    "productionBody": "We plan and produce product ads and campaign films. You can commission a film without a creator campaign. Explore real work from YAGI, the studio behind TWINGS.",
     "productionDeckCta": "View the production portfolio",
     "productionFilms": [
       "Paris campaign film · YAGI production"
@@ -2001,6 +1989,10 @@ export const en = {
     a13: "We collect actual post links and available views and engagement, with the measurement date and scope. Measuring purchases or sign-ups requires an agreed tracking method, such as tracking links, before the campaign starts.",
     q14: "Can my brand reuse creator films in its own ads?",
     a14: "Brand channel posts and paid advertising depend on the rights agreed with the creator. Channels, duration, and editing permissions are discussed before the campaign starts.",
+    q15: "How do you handle likeness rights, personal data, and AI ad disclosures?",
+    a15: "Creators participate using their own likeness with consent. The AI model provider runs automated moderation before generation, and our team reviews content and ad disclosures before publishing. We check Korean advertising guidance, Japan’s stealth-marketing rules, and each channel’s AI content policies to set the required disclosures and usage scope. Face photos are processed only as needed to produce results; processors, overseas processing, retention, and deletion are disclosed in our privacy policy. Access to materials is limited by work-related permissions, and likeness misuse reports are reviewed within 24 hours.",
+    q16: "Can you run creator campaigns in Korea and Japan at the same time?",
+    a16: "Yes. We can run campaigns simultaneously through our creator pools in Korea and Japan. We adapt one brand concept with messages and creators for each market, managing production, recruitment, publishing schedules, and reporting together. Our Morphic work included campaigns in both countries.",
   },
   /** The legal surface's chrome — the documents' own text lives in lib/legal/documents.ts. */
   legal: {

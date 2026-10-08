@@ -25,6 +25,10 @@ describe('the brand page shows the service before asking visitors to enquire', (
     expect(html).not.toContain('brand-lime');
     expect(html).toContain('성공 사례 보기');
     expect(html).toContain('data-brand-inquiry-dialog');
+    expect(html).toContain('data-brand-markets');
+    expect(html).toContain('한국과 일본');
+    expect(html).toContain('동시에');
+    expect(html).toContain('크리에이터 풀');
     // The page uses Lenis; its wheel handler must not swallow scrolling inside the short modal.
     expect(html).toMatch(/<dialog[^>]*data-brand-inquiry-dialog[^>]*data-lenis-prevent/);
     expect(html).toContain('name="contactRole"');

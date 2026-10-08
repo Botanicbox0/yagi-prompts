@@ -22,9 +22,6 @@
   --color-line-light: rgba(0, 0, 0, 0.12);
   --color-line-dark: rgba(255, 255, 255, 0.16);
   /* Brand audience experience. Page and component styles reference these tokens only. */
-  --color-brand-paper: #f6f5f1;
-  --color-brand-soft: #f2f0eb;
-  --color-brand-warm: #ebe7de;
   --color-brand-night: #080808;
   --color-brand-ink: #111111;
   --color-brand-charcoal: #121212;

@@ -508,6 +508,12 @@ async function sweepStructuredData(): Promise<void> {
       }
       const faq = nodes.find((node) => node['@type'] === 'FAQPage');
       expectEqual(`${path} nonempty FAQ answers`, Array.isArray(faq?.mainEntity) && faq.mainEntity.length > 0 && faq.mainEntity.every((item: { acceptedAnswer?: { text?: string } }) => Boolean(item.acceptedAnswer?.text?.trim())), true);
+      if (rest === '/brands') {
+        expectPresent(`${path} simultaneous market service`, page.body, 'data-brand-markets');
+        expectPresent(`${path} simultaneous offer copy`, page.body, locale === 'ko' ? '동시에' : 'simultaneously');
+        expectEqual(`${path} eight buyer FAQ answers`, Array.isArray(faq?.mainEntity) ? faq.mainEntity.length : 0, 8);
+        expectPresent(`${path} AI safety answer in server HTML`, page.body, locale === 'ko' ? '국외 이전' : 'overseas processing');
+      }
     }
   }
   const sitemap = await get('/sitemap.xml');

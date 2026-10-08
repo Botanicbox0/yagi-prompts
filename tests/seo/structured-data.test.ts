@@ -100,7 +100,7 @@ describe('single FAQ catalog', () => {
     for (const locale of ['ko', 'en'] as const) {
       const dict = getDictionary(locale);
       const all = faqItems(dict);
-      expect(all).toHaveLength(14);
+      expect(all).toHaveLength(16);
       expect(new Set(all.map((item) => item.q.trim().toLowerCase())).size).toBe(all.length);
       for (const item of all) {
         expect(item.q.trim().length).toBeGreaterThan(0);
@@ -112,6 +112,22 @@ describe('single FAQ catalog', () => {
         expect(data.mainEntity).toEqual(visible.map((item) => ({ '@type': 'Question', name: item.q, acceptedAnswer: { '@type': 'Answer', text: item.a } })));
         for (const item of visible) expect(all).toContainEqual(item);
       }
+    }
+  });
+
+  it('answers brand AI safety and cross-market questions in both the page catalog and JSON-LD', () => {
+    for (const locale of ['ko', 'en'] as const) {
+      const items = faqItems(getDictionary(locale), 'brand');
+      expect(items).toHaveLength(8);
+      const safety = items.find(item => item.id === 'ai-campaign-safety');
+      const markets = items.find(item => item.id === 'korea-japan-campaigns');
+      expect(safety?.a).toContain(locale === 'ko' ? '본인 얼굴' : 'own likeness');
+      expect(safety?.a).toContain(locale === 'ko' ? '국외 이전' : 'overseas processing');
+      expect(safety?.a).toContain(locale === 'ko' ? '24시간' : '24 hours');
+      expect(markets?.a).toContain(locale === 'ko' ? '동시에' : 'simultaneously');
+      expect(markets?.a).not.toMatch(/200만|2M\+|300건|300\+/);
+      const data = faqStructuredData(origin, `/${locale}/brands`, locale, items);
+      expect(data.mainEntity).toContainEqual({ '@type': 'Question', name: safety?.q, acceptedAnswer: { '@type': 'Answer', text: safety?.a } });
     }
   });
 

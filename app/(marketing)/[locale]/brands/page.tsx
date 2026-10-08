@@ -44,7 +44,7 @@ export default async function BrandsPage({ params }: Props) {
     <JsonLd id="campaign-service-structured-data" data={campaignServiceStructuredData({ origin: siteUrl(), path: brandsHref(locale), locale, name: t.metaTitle, description: t.metaDescription, serviceType: dict.seo.serviceType })} />
     <JsonLd id="brand-case-studies-structured-data" data={brandCaseStudiesStructuredData({ origin: siteUrl(), locale, cases: [{ id: 'morphic', name: t.stories.title, description: t.stories.summary, path: `/${locale}/brands/stories/morphic` }] })} />
 
-    <main id="main" data-brand-landing className="overflow-clip bg-brand-paper text-brand-ink">
+    <main id="main" data-brand-landing className="overflow-clip bg-white text-brand-ink">
       <section data-section data-theme="dark" data-campaign-hero className="section bg-brand-night text-white">
         <div className="audience-shell pb-10 pt-28 lg:pb-16 lg:pt-36">
           <p className="audience-eyebrow text-brand-blue-light">{t.eyebrow}</p>
@@ -62,7 +62,7 @@ export default async function BrandsPage({ params }: Props) {
         </div>
       </section>
 
-      <section id="work" data-section data-theme="light" data-campaign-reel-section className="section scroll-mt-24 bg-brand-paper">
+      <section id="work" data-section data-theme="light" data-campaign-reel-section className="section scroll-mt-24 bg-white">
         <div className="audience-shell py-12 lg:py-20">
           <div className="mb-8 grid gap-5 lg:grid-cols-[0.8fr_1.2fr] lg:items-end">
             <div><p className="audience-eyebrow">{t.reelEyebrow}</p><h2 className="audience-heading mt-4 max-w-xl">{t.reelHeading}</h2></div>
@@ -78,6 +78,10 @@ export default async function BrandsPage({ params }: Props) {
           <ol className="mt-7 grid gap-8 sm:grid-cols-3 sm:gap-10">
             {[[t.moat1Title, t.moat1Body], [t.moat2Title, t.moat2Body], [t.moat3Title, t.moat3Body]].map(([heading, body], index) => <li key={heading} className="border-t border-black/15 pt-5"><span className="font-mono text-xs text-blue">0{index + 1}</span><h2 className="mt-4 text-xl font-semibold tracking-tight">{heading}</h2><p className="mt-3 max-w-sm text-sm leading-relaxed opacity-65">{body}</p></li>)}
           </ol>
+          <div data-brand-markets className="mt-12 grid gap-5 border-t border-black/15 pt-8 lg:grid-cols-[0.8fr_1.2fr] lg:items-end lg:gap-16">
+            <h2 className="whitespace-pre-line text-[clamp(1.7rem,3.2vw,3rem)] font-semibold leading-tight tracking-tight">{t.marketsHeading}</h2>
+            <p className="max-w-xl text-sm leading-relaxed opacity-65 lg:justify-self-end">{t.marketsBody}</p>
+          </div>
         </div>
       </section>
 
@@ -89,7 +93,7 @@ export default async function BrandsPage({ params }: Props) {
         </div>
       </section>
 
-      <section id="campaign-types" data-section data-theme="light" data-campaign-use-cases className="section scroll-mt-24 bg-brand-paper">
+      <section id="campaign-types" data-section data-theme="light" data-campaign-use-cases className="section scroll-mt-24 bg-white">
         <div className="audience-shell py-16 lg:py-24">
           <div className="mb-10 flex flex-wrap items-end justify-between gap-5"><div><p className="audience-eyebrow">{t.typesEyebrow}</p><h2 className="audience-heading mt-4">{t.typesHeading}</h2></div><p className="max-w-md text-sm leading-relaxed opacity-65">{t.typesBody}</p></div>
           <div data-brand-service-examples className="grid gap-5 sm:grid-cols-3">
@@ -109,7 +113,7 @@ export default async function BrandsPage({ params }: Props) {
         </div>
       </section>
 
-      <section id="brands" data-section data-theme="light" data-brands className="section scroll-mt-24 border-y border-black/10 bg-brand-warm">
+      <section id="brands" data-section data-theme="light" data-brands className="section scroll-mt-24 border-y border-black/10 bg-white">
         <div className="audience-shell grid gap-12 py-16 lg:grid-cols-[0.75fr_1.25fr] lg:gap-20 lg:py-24">
           <div><p className="audience-eyebrow">{t.inquiryEyebrow}</p><h2 className="audience-heading mt-5 whitespace-pre-line">{t.inquiryHeading}</h2><p className="mt-6 text-sm leading-relaxed opacity-60">{t.inquiryBody}</p>
           </div>

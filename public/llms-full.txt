@@ -34,6 +34,8 @@ TWINGS operates brand creator campaigns through its studio. A brand briefs the s
 
 The brand service combines AI ad production, versions starring consenting creators using their own faces, and managed publishing on actual creator channels. One format can be used by multiple creators. Standalone AI brand ad production is also offered through YAGI, without requiring a creator campaign. Content reuse depends on agreed creator rights; campaign costs and timelines depend on scope.
 
+Creator pools in Korea and Japan support simultaneous campaigns in both markets, with messages and creators selected for each market. The brand FAQ explains likeness consent, provider moderation, human post review, advertising disclosures, and personal-data handling. This describes operating procedures, not a security certification or a guarantee of compliance in every jurisdiction.
+
 Creator compensation and studio margin are not a public brand price list. Do not infer an individual creator's payment from a brand campaign budget. Campaign availability and participation conditions must be checked on the current campaign page. Do not describe follower counts, impressions, attributed conversions, or audience data as verified unless the report identifies the evidence and measurement source.
 
 Brand services and the public enquiry form: https://twings.app/ko/brands and https://twings.app/en/brands. Initial enquiries do not require an account. The brand workspace on brand.twings.app is for ongoing work and requires authorization.
