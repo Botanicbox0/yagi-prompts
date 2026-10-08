@@ -4,17 +4,8 @@ import { RevealGrid } from '@/components/motion/reveal-grid';
 import type { PromptLabels } from './labels';
 
 /**
- * PLAN §13.2 — the two rails, and the masonry wall each of them holds.
- *
- * **Masonry with CSS columns, not a row-span grid.** The choice is about the hover state: a
- * row-span grid needs every card to declare a row count, which means quantising heights, which
- * means either cropping posters or leaving gaps — and `scale(1.03)` inside a grid item that has
- * been given an explicit row span clips against its own track. Columns let each card keep its
- * media's intrinsic ratio, so the zoom happens inside a box that already fits it, at 375, 768,
- * 1024 and 1440 alike. `break-inside: avoid` is what makes a card indivisible.
- *
- * The trade — column-major reading order — is the right one here: this is a gallery to browse, not
- * a sequence to read, and every card is an independent link with its own accessible name.
+ * Fixed-ratio cards share grid rows. A wrapped title grows its row rather than shifting all
+ * subsequent cards in one column, and visual order stays the same as catalog and keyboard order.
  */
 export function PromptRail({
   id,
@@ -65,13 +56,13 @@ export function PromptRail({
         <p className="mt-8 font-mono text-code opacity-60">{emptyLabel}</p>
       ) : (
         <>
-          <RevealGrid className="mt-8 gap-6 [column-fill:balance] sm:columns-2 lg:columns-3">
+          <RevealGrid className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {cards.map((card) => (
               <li
                 key={card.slug}
                 data-prompt-item
                 data-use-case={card.useCase.join(' ')}
-                className="mb-6 break-inside-avoid"
+                className="min-w-0"
               >
                 <PromptCardView
                   card={card}

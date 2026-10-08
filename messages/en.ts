@@ -27,6 +27,8 @@ export const en = {
     "browse": "Find your template",
     "how": "How it works",
     "example": "A scene you can make yours",
+    "playPreview": "Play video",
+    "pausePreview": "Pause video",
     "preparing": "Public creation is being prepared. You can explore every template and preview now.",
     "ready": "Choose a template to see its price and start creating.",
     "stepsHeading": "From a scene you love to a film starring you.",

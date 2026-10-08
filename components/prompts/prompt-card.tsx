@@ -61,9 +61,9 @@ export function PromptCardView({
       data-prompt-card={card.slug}
       data-source={card.source}
       data-medium={card.medium}
-      className="card group relative block border border-hairline"
+      className="card group relative flex h-full min-w-0 flex-col border border-hairline"
     >
-      <div className="relative border-b border-hairline">
+      <div className="relative shrink-0 border-b border-hairline">
         <PromptCardMedia
           poster={card.poster}
           video={card.video}
@@ -95,7 +95,7 @@ export function PromptCardView({
         </div>
       </div>
 
-      <div className="flex flex-col gap-3 p-4">
+      <div className="flex flex-1 flex-col gap-3 p-4">
         <div className="flex items-center justify-between gap-3 font-label text-[0.65rem] tracking-[0.12em] uppercase">
           <span className="opacity-60">{credit}</span>
           {/* One chip per model (2026-08-15). A prompt run on 2.5 AND 2.0 says so, in the order
@@ -119,7 +119,7 @@ export function PromptCardView({
           </a>
         </h3>
 
-        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-t border-hairline pt-3">
+        <div className="mt-auto flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-t border-hairline pt-3">
           <span className="flex flex-wrap gap-1.5 font-mono text-[0.7rem] opacity-55">
             {card.useCase.map((value) => (
               <span key={value}>{useCaseLabels[value] ?? value}</span>
