@@ -36,14 +36,19 @@ export async function updateSession(
       getAll() {
         return request.cookies.getAll();
       },
-      setAll(cookiesToSet) {
+      setAll(cookiesToSet, cacheHeaders) {
         for (const { name, value } of cookiesToSet) {
           request.cookies.set(name, value);
         }
+        // middleware passes a cloned header set to the render. Mirror the refreshed Cookie
+        // header there too, otherwise Server Components read the expired token in this request.
+        if (requestHeaders) requestHeaders.set('cookie', request.headers.get('cookie') ?? '');
         response = forward();
         for (const { name, value, options } of cookiesToSet) {
           response.cookies.set(name, value, options);
         }
+        for (const [name, value] of Object.entries(cacheHeaders ?? {})) response.headers.set(name, value);
+        if (cookiesToSet.length) response.headers.set('Cache-Control', 'private, no-store');
       },
     },
   });
@@ -59,6 +64,10 @@ export async function updateSession(
 export function withCookies(target: NextResponse, source: NextResponse): NextResponse {
   for (const cookie of source.cookies.getAll()) {
     target.cookies.set(cookie);
+  }
+  for (const name of ['Cache-Control', 'Pragma', 'Expires']) {
+    const value = source.headers.get(name);
+    if (value && !target.headers.has(name)) target.headers.set(name, value);
   }
   return target;
 }

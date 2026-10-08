@@ -447,7 +447,7 @@ describe('campaigns route contract (docs/CAMPAIGNS.md §6)', () => {
     // re-resolves the campaign and refuses anything not public). Status, creator id, selection,
     // payout and reject reason are supplied by `lib/campaigns/service.ts` and the admin operations.
     const readFields = [...action.matchAll(/(?:str|text|bool|file)\(form, '([^']+)'\)/g)].map((match) => match[1]!);
-    expect([...new Set(readFields)].sort()).toEqual(['consent', 'followerCount', 'pitch', 'slug', 'snsUrl']);
+    expect([...new Set(readFields)].sort()).toEqual(['consent', 'followerCount', 'pitch', 'rememberSns', 'slug', 'snsUrl']);
     for (const forbidden of ['status', 'creatorId', 'userId', 'payoutCents', 'rejectReason', 'campaignId', 'version']) {
       expect(action.includes(`form, '${forbidden}'`), forbidden).toBe(false);
       expect(action.includes(`form.get('${forbidden}')`), forbidden).toBe(false);
@@ -498,7 +498,9 @@ describe('notification surface (§3.5, M5)', () => {
     expect(action).toContain('getViewer');
     // Identity from the session, never from the form.
     expect(action).not.toContain("form.get('userId')");
-    expect(action.match(/export async function/g)).toHaveLength(1);
+    expect(action).toContain('export async function saveNotificationPreferences');
+    expect(action).toContain('export async function saveCreatorProfile');
+    expect(action.match(/export async function/g)).toHaveLength(2);
   });
 
   it('gives the admin publish form a notify checkbox but never a kind picker', () => {

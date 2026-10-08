@@ -1242,6 +1242,11 @@ async function main(): Promise<void> {
   await sweepStructuredData();
   await sweepDetailMetadata();
   await sweepUnsubscribe();
+  const creatorSession = await get('/api/account/session');
+  expectEqual('creator session endpoint is reachable anonymously', creatorSession.status, 200);
+  expectEqual('creator session reveals no identity to an anonymous visitor', creatorSession.body, '{"signedIn":false}');
+  expectEqual('creator session is never cached', creatorSession.cacheControl, 'private, no-store');
+  expectEqual('creator session is never indexed', creatorSession.robotsTag, 'noindex, nofollow');
 
   // --- F1: the OAuth entry's WebView gate -----------------------------------
   await sweepWebViewSignin();

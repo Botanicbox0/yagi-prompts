@@ -30,6 +30,7 @@ async function run(slug: string, form: FormData): Promise<string> {
     snsUrl: str(form, 'snsUrl'),
     followerCount: str(form, 'followerCount'),
     consent: bool(form, 'consent'),
+    rememberSns: bool(form, 'rememberSns'),
   });
   if (!result.ok) {
     const detail = 'detail' in result && result.detail ? `&detail=${encodeURIComponent(String(result.detail))}` : '';

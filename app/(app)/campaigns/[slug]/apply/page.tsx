@@ -175,7 +175,7 @@ export default async function CampaignApplyPage({
                 name="snsUrl"
                 required
                 maxLength={URL_MAX}
-                defaultValue={existing?.snsUrl ?? ''}
+                defaultValue={state.snsPrefill ?? ''}
                 placeholder="https://instagram.com/…"
                 className={fieldClass('snsUrl')}
                 {...(badField === 'snsUrl' ? { 'aria-invalid': true } : {})}
@@ -193,6 +193,10 @@ export default async function CampaignApplyPage({
                 className={fieldClass('followerCount')}
                 {...(badField === 'followerCount' ? { 'aria-invalid': true } : {})}
               />
+            </label>
+            <label className="flex items-start gap-3 text-[0.9rem] leading-snug">
+              <input type="checkbox" name="rememberSns" className="mt-1" />
+              <span>{dict.creatorProfile.rememberSns}</span>
             </label>
             <label className="flex items-start gap-3 text-[0.9rem] leading-snug">
               <input type="checkbox" name="consent" required className="mt-1" />

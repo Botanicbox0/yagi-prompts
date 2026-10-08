@@ -72,6 +72,15 @@ export function MarketingNav({
       audienceLabel={dict.audience.label}
       signInHref={navigation.signInHref}
       primary={navigation.primary}
+      accountLabels={{
+        signIn: dict.auth.signIn,
+        profile: dict.creatorProfile.profileLink,
+        renders: dict.renders.title,
+        campaigns: dict.campaigns.myCampaigns,
+        signOut: dict.account.signOut,
+        menu: dict.creatorProfile.accountMenu,
+        fallbackName: dict.creatorProfile.fallbackName,
+      }}
       signInNext={signInReturn(locale, rest)}
       labels={{
         brand: dict.meta.siteName,

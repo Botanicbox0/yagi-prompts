@@ -6,12 +6,12 @@ import { TextSwap } from '@/components/ui/text-swap';
 import { useScroll } from '@/components/motion/scroll-provider';
 import { type SectionTheme } from '@/lib/motion/geometry';
 import type { Audience } from '@/lib/navigation/audience';
+import { CreatorAccountView, useCreatorSession, type CreatorAccountLabels } from './creator-account';
 
 /**
  * The fixed 64px audience navigation stays white so both public experiences have one stable door.
- *   · It NEVER reads the session. A marketing nav that awaited `getUser()` would drag `/[locale]`
- *     and `/[locale]/pricing` out of static rendering and break the §3.1 cache contract, so
- *     "Sign in" is an unconditional link. Authed chrome lives in the (app) group.
+ *   · Server HTML stays session-free. CreatorAccount reads a private session projection after
+ *     hydration, so names never enter the shared marketing cache.
  *   · Below 1024 the links collapse into an accessible overlay menu.
  */
 
@@ -35,7 +35,7 @@ export function SiteNav({
   links,
   signInNext,
   localeToggle,
-  audience = 'creator', modes = [], audienceLabel, signInHref: explicitSignInHref, primary,
+  audience = 'creator', modes = [], audienceLabel, signInHref: explicitSignInHref, primary, accountLabels,
 }: {
   locale: string;
   labels: NavLabels;
@@ -54,6 +54,7 @@ export function SiteNav({
   audienceLabel?: string;
   signInHref?: string;
   primary?: NavLink;
+  accountLabels?: CreatorAccountLabels;
 }) {
   const [scrolled, setScrolled] = useState(false);
   const [open, setOpen] = useState(false);
@@ -61,6 +62,7 @@ export function SiteNav({
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
   const { lenis } = useScroll();
+  const creatorSession = useCreatorSession(audience === 'creator');
 
   // --- hairline appears once the page has moved (§4) -----------------------
   useEffect(() => {
@@ -146,6 +148,7 @@ export function SiteNav({
             {modeLinks}
           </div>
 
+          <div className="flex shrink-0 items-center gap-2 sm:gap-3 lg:gap-5">
           <div className="hidden items-center gap-5 lg:flex">
             {links.map((link) => (
               <a
@@ -157,14 +160,15 @@ export function SiteNav({
               </a>
             ))}
             {localeToggle}
-            <a
+            {audience === 'brand' && <a
               href={signInHref}
               className="inline-flex min-h-10 items-center rounded-full border border-current px-4 py-2 text-xs font-medium"
             >
               <TextSwap>{labels.signIn}</TextSwap>
-            </a>
+            </a>}
             {audience === 'brand' && primary && <a href={primary.href} className="inline-flex min-h-10 items-center rounded-full bg-black px-4 py-2 text-xs font-medium text-white">{primary.label} ↗</a>}
           </div>
+          {audience === 'creator' && accountLabels && <div className="hidden lg:block"><CreatorAccountView session={creatorSession} labels={accountLabels} signInHref={signInHref} /></div>}
 
           <button
             type="button"
@@ -172,10 +176,14 @@ export function SiteNav({
             onClick={() => setOpen(true)}
             aria-expanded={open}
             aria-controls="nav-overlay"
+            aria-label={audience === 'creator' && creatorSession.signedIn && accountLabels ? `${creatorSession.displayName ?? accountLabels.fallbackName} · ${labels.menu}` : labels.menu}
             className="ml-2 min-h-11 min-w-11 shrink-0 text-xs font-medium lg:hidden"
           >
-            <TextSwap>{labels.menu}</TextSwap>
+            {audience === 'creator' && creatorSession.signedIn && accountLabels
+              ? <span data-creator-mobile-account aria-hidden="true" className="relative mx-auto flex size-9 items-center justify-center rounded-full bg-accent text-xs font-semibold text-white">{Array.from(creatorSession.displayName ?? accountLabels.fallbackName)[0]?.toUpperCase()}<span className="absolute -right-0.5 -bottom-0.5 size-2.5 rounded-full border-2 border-white bg-accent" /></span>
+              : <TextSwap>{labels.menu}</TextSwap>}
           </button>
+          </div>
         </nav>
       </header>
 
@@ -205,6 +213,7 @@ export function SiteNav({
 
           <div className="flex flex-1 flex-col justify-between px-gutter pt-10 pb-12">
             <div className="mb-8 self-start" onClick={() => setOpen(false)}>{modeLinks}</div>
+            {audience === 'creator' && creatorSession.signedIn && accountLabels && <p className="mb-6 break-words text-sm font-medium text-accent">{creatorSession.displayName ?? accountLabels.fallbackName}</p>}
             <ul className="flex flex-col gap-6">
               {links.map((link) => (
                 <li key={link.href}>
@@ -219,13 +228,18 @@ export function SiteNav({
               ))}
               <li>
                 <a
-                  href={signInHref}
+                  href={audience === 'creator' && creatorSession.signedIn ? '/account' : signInHref}
                   onClick={() => setOpen(false)}
                   className="inline-block pt-5 text-lg font-medium underline underline-offset-4"
                 >
-                  <TextSwap>{labels.signIn}</TextSwap>
+                  <TextSwap>{audience === 'creator' && creatorSession.signedIn && accountLabels ? accountLabels.profile : labels.signIn}</TextSwap>
                 </a>
               </li>
+              {audience === 'creator' && creatorSession.signedIn && accountLabels && <>
+                <li><a href="/renders" onClick={() => setOpen(false)} className="inline-flex min-h-11 items-center text-lg font-medium">{accountLabels.renders}</a></li>
+                <li><a href="/campaigns/mine" onClick={() => setOpen(false)} className="inline-flex min-h-11 items-center text-lg font-medium">{accountLabels.campaigns}</a></li>
+                <li><form method="post" action="/auth/signout"><button type="submit" className="min-h-11 text-sm opacity-60">{accountLabels.signOut}</button></form></li>
+              </>}
               {audience === 'brand' && primary && <li><a onClick={() => setOpen(false)} href={primary.href} className="inline-flex min-h-12 items-center rounded-full bg-black px-6 text-sm font-medium text-white">{primary.label} ↗</a></li>}
             </ul>
             <div className="pt-10">{localeToggle}</div>
