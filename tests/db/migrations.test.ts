@@ -81,6 +81,8 @@ describe('migrations apply on a fresh database (PLAN §6)', () => {
       // one $4 pack twice (M10 review R1, finding 2).
       'cookie_ledger',
       'cookie_purchase_events',
+      'creator_plan_versions',
+      'creator_subscription_terms',
       'default_policy',
       'events',
       // docs/TEMPLATES-IA.md §8.2 (2026-09-10) — the real-person identity: one group per person, one asset per photo.
