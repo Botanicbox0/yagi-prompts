@@ -15,6 +15,7 @@ import { quoteSubscriptionVideo, templateSubscriptionQuote } from '@/lib/twings/
 import { CURRENT_CREATOR_PLANS, getCreatorSubscriptionAvailability } from '@/lib/twings/subscription-versions';
 import { SubscriptionUsagePreview } from '@/components/twings/subscription-usage-preview';
 import { formatKrw } from '@/lib/twings/products';
+import { singleVideoPrice720 } from '@/lib/twings/pricing-comparison';
 
 /**
  * Single purchases plus the upcoming versioned credit subscriptions.
@@ -71,10 +72,10 @@ export default async function PricingPage({ params }: { params: Promise<{ locale
       { seconds: 25, resolution: '720p' as const, aspect: '4:3' },
       { seconds: 30, resolution: '720p' as const, aspect: '9:16' },
       { seconds: 10, resolution: '1080p' as const, aspect: '9:16' },
-    ].map(input => ({ id: `example-${input.seconds}-${input.resolution}-${input.aspect}`, label: interpolate(p.subscriptionExample, { seconds: String(input.seconds), resolution: input.resolution, aspect: input.aspect }), credits: quoteSubscriptionVideo(input)!.units })),
+    ].map(input => ({ id: `example-${input.seconds}-${input.resolution}-${input.aspect}`, label: interpolate(p.subscriptionExample, { seconds: String(input.seconds), resolution: input.resolution, aspect: input.aspect }), credits: quoteSubscriptionVideo(input)!.units, priceKrw: input.resolution === '720p' ? singleVideoPrice720(input.seconds) : null })),
     ...forSale.flatMap(card => {
       const quote = templateSubscriptionQuote(card);
-      return quote ? [{ id: card.slug, label: `${locale === 'ko' && card.titleKo ? card.titleKo : card.title} · 720p`, credits: quote.units }] : [];
+      return quote ? [{ id: card.slug, label: `${locale === 'ko' && card.titleKo ? card.titleKo : card.title} · 720p`, credits: quote.units, priceKrw: card.priceKrw > 0 ? card.priceKrw : null }] : [];
     }),
   ];
   const planName = (tier: 'creator' | 'advanced') => tier === 'creator' ? p.subscriptionCreator : p.subscriptionAdvanced;
@@ -93,12 +94,13 @@ export default async function PricingPage({ params }: { params: Promise<{ locale
             {!RENDER_PIPELINE_PUBLIC && <p data-generation-availability className="mt-6 max-w-detail border-l-2 border-current pl-4 text-sm leading-relaxed">{dict.seo.generationClosed}</p>}
             <p data-service-definition className="mt-6 max-w-detail text-body opacity-70">{dict.seo.definition}</p>
 
-            <section id="monthly" data-pricing-subscription={availability.status} className="mt-12 border border-hairline p-6 sm:p-8">
+            <section id="monthly" data-pricing-subscription={availability.status} className="mt-12 scroll-mt-24 border border-hairline p-6 sm:p-8">
                 <p className="font-label text-eyebrow text-accent">{p.subscriptionStatus}</p>
                 <h2 className="mt-4 font-display text-2xl font-black">{p.subscriptionTitle}</h2>
                 <div className="mt-6 grid gap-4 md:grid-cols-2">
                   {CURRENT_CREATOR_PLANS.map(plan => <article key={plan.id} data-plan-version={plan.id} className="border border-hairline p-5 sm:p-7">
                     <h3 className="font-display text-xl font-black">{planName(plan.tier)}</h3>
+                    <p className="mt-2 text-sm opacity-70">{plan.tier === 'creator' ? p.subscriptionCreatorFor : p.subscriptionAdvancedFor}</p>
                     <p data-subscription-price className="mt-5 font-display text-[clamp(1.8rem,4vw,3rem)] leading-tight font-black">{interpolate(p.subscriptionPrice, { price: locale === 'ko' ? formatKrw(plan.priceKrw) : `KRW ${plan.priceKrw.toLocaleString('en-US')}` })}</p>
                     <p className="mt-2 text-xs opacity-60">{p.subscriptionTax}</p>
                     <p className="mt-6 text-xl font-bold">{interpolate(p.subscriptionCredits, { credits: formatCount(plan.monthlyCredits, locale) })}</p>

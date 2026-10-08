@@ -3,8 +3,9 @@
 import { useState } from 'react';
 import { interpolate } from '@/lib/i18n/format';
 import type { getDictionary } from '@/lib/i18n/dictionaries';
+import { comparePurchaseOptions } from '@/lib/twings/pricing-comparison';
 
-export interface SubscriptionUsageOption { id: string; label: string; credits: number }
+export interface SubscriptionUsageOption { id: string; label: string; credits: number; priceKrw: number | null }
 export interface SubscriptionPreviewPlan { id: string; label: string; monthlyCredits: number }
 type Copy = ReturnType<typeof getDictionary>['pricing'];
 
@@ -16,6 +17,11 @@ export function SubscriptionUsagePreview({ options, plans, copy }: { options: Su
   const credits = rows.reduce((sum, row) => sum + (options.find(option => option.id === row.id)?.credits ?? 0) * row.count, 0);
   const total = plan ? credits / plan.monthlyCredits * 100 : 0;
   const exceeds = total > 100 + 1e-9;
+  const comparison = comparePurchaseOptions(rows.map(row => {
+    const option = options.find(option => option.id === row.id);
+    return { count: row.count, credits: option?.credits ?? 1, priceKrw: option?.priceKrw ?? null };
+  }));
+  const money = (value: number) => interpolate(copy.subscriptionComparisonMoney, { price: value.toLocaleString('en-US') });
   const update = (index: number, patch: Partial<(typeof rows)[number]>) => setRows(current => current.map((row, i) => i === index ? { ...row, ...patch } : row));
   return (
     <div data-subscription-preview className="mt-8 border-t border-hairline pt-6">
@@ -46,6 +52,17 @@ export function SubscriptionUsagePreview({ options, plans, copy }: { options: Su
         <div aria-hidden="true" className="mt-3 h-1 bg-hairline"><div className="h-full bg-accent" style={{ width: `${Math.min(total, 100)}%` }} /></div>
         <p data-subscription-estimate={exceeds ? 'exceeds' : 'fits'} className="mt-3 text-sm leading-relaxed">{exceeds ? copy.subscriptionExceeds : copy.subscriptionFits}</p>
       </div>
+      {comparison && credits > 0 && <div data-purchase-comparison className="mt-6 border border-hairline p-4 sm:p-5">
+        <h4 className="font-bold">{copy.subscriptionCheapest}</h4>
+        <dl className="mt-4 space-y-3 text-sm">
+          {comparison.choices.map(choice => <div key={choice.id} data-purchase-choice={choice.id} className="flex flex-wrap items-baseline justify-between gap-2">
+            <dt>{choice.id === 'single' ? copy.subscriptionSingles : plans.find(plan => plan.id === choice.id)?.label}{choice.id !== 'single' && choice.extraFilms > 0 ? interpolate(copy.subscriptionWithSingles, { count: String(choice.extraFilms) }) : ''}</dt>
+            <dd className="font-mono">{money(choice.totalKrw)}{choice.id === comparison.best.id ? ` · ${copy.subscriptionRecommended}` : ''}</dd>
+          </div>)}
+        </dl>
+        <p data-purchase-recommendation={comparison.best.id} className="mt-4 text-sm font-bold">{comparison.best.id === 'single' ? copy.subscriptionChooseSingles : interpolate(copy.subscriptionSavings, { savings: money(comparison.savingsKrw) })}</p>
+        <p className="mt-3 text-xs leading-relaxed opacity-60">{copy.subscriptionComparisonNote}</p>
+      </div>}
       <p className="mt-4 text-xs leading-relaxed opacity-60">{copy.subscriptionPreviewNote}</p>
     </div>
   );
