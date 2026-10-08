@@ -4,7 +4,7 @@ import type { PromptCard } from '@/lib/prompts/catalog';
 import { templateHref, templatesHref } from '@/lib/prompts/links';
 import { brandsHref, campaignsHref } from '@/lib/campaigns/links';
 import { RENDER_PIPELINE_PUBLIC } from '@/lib/flags';
-import { PromptCardMedia } from '@/components/prompts/card-media';
+import { CreatorPreview } from './creator-preview';
 import { TypographicPoster } from '@/components/prompts/poster';
 
 export function CreatorHero({ dict, locale, featured }: { dict: Dictionary; locale: Locale; featured?: PromptCard }) {
@@ -29,9 +29,7 @@ export function CreatorHero({ dict, locale, featured }: { dict: Dictionary; loca
         <p data-creator-availability className="mt-5 max-w-md text-xs leading-relaxed opacity-55">{RENDER_PIPELINE_PUBLIC ? t.ready : t.preparing}</p>
       </div>
       {featured && <article data-featured-template={featured.slug} data-media-host className={`relative min-w-0 w-full ${portrait ? 'max-w-xs justify-self-center' : ''}`}>
-        <a href={templateHref(locale, featured.slug)} aria-label={title} className="block overflow-hidden rounded-2xl bg-black">
-          <PromptCardMedia poster={featured.poster} video={featured.video} alt={title!} ratio={ratio} fallback={<TypographicPoster title={title!} slug={featured.slug} kicker={featured.modelLabels.join(' · ')} ratio={ratio} />} />
-        </a>
+        <CreatorPreview poster={featured.poster} video={featured.video} title={title!} href={templateHref(locale, featured.slug)} ratio={ratio} labels={{ play: t.playPreview, pause: t.pausePreview }} fallback={<TypographicPoster title={title!} slug={featured.slug} kicker={featured.modelLabels.join(' · ')} ratio={ratio} />} />
         <div className="mt-4 flex flex-wrap items-center justify-between gap-2 text-xs">
           <span className="opacity-50">{t.example}</span>
           <a href={templateHref(locale, featured.slug)} className="font-medium">{title} ↗</a>

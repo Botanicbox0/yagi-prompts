@@ -168,7 +168,10 @@ describe('the creator hero uses the uploaded example', () => {
     })} />);
     expect(html).toContain('aspect-ratio:16 / 9');
     expect(HOVER_HOST.split(',').map(selector => selector.trim())).toContain('[data-media-host]');
-    expect(html).toMatch(/<article[^>]*data-media-host[^>]*><a[^>]*>[\s\S]*class="card__media/);
+    expect(html).toContain('data-creator-preview');
+    expect(html).toContain('href="/en/t/neon-alley-dolly"');
+    expect(html).toContain('preload="none"');
+    expect(html).toContain('playsInline=""');
     expect(html).not.toContain('data-prompt-card=');
   });
 
@@ -232,7 +235,8 @@ describe('rails (§13.2)', () => {
     expect(html).toContain('data-rail="yagi"');
     expect(html).toContain('data-use-case="cinematic"');
     expect(html).toContain('data-use-case="mv vlog"');
-    expect(html).toContain('break-inside-avoid');
+    // Filtering and keyboard navigation use the same order as the visible grid.
+    expect(html.indexOf('data-prompt-card="neon-alley-dolly"')).toBeLessThan(html.indexOf('data-prompt-card="second"'));
   });
 
   it('says so when a rail is empty rather than leaving a headline over a void', () => {

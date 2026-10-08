@@ -38,6 +38,8 @@ export const ko: Dictionary = {
     "browse": "내가 나올 장면 고르기",
     "how": "이용 방법",
     "example": "내 얼굴로 만나볼 장면",
+    "playPreview": "영상 재생",
+    "pausePreview": "영상 멈추기",
     "preparing": "영상 생성은 공개 준비 중입니다. 지금은 템플릿과 예시 영상을 둘러볼 수 있습니다.",
     "ready": "템플릿 페이지에서 가격을 확인하고 내 영상 만들기를 시작하세요.",
     "stepsHeading": "마음에 드는 장면을, 내 영상으로.",
