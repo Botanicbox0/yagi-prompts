@@ -40,6 +40,13 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       {
+        source: '/auth/:path*',
+        headers: [
+          { key: 'Cache-Control', value: 'private, no-store' },
+          { key: 'X-Robots-Tag', value: 'noindex, nofollow' },
+        ],
+      },
+      {
         // §3.4 cache contract, belt-and-braces: route handlers set these themselves, and
         // middleware covers /library, /account, /billing/*, /admin/*; API handlers still own
         // their session behavior, so pin the cache contract here too.

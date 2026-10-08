@@ -18,23 +18,17 @@ import { templatesHref } from '@/lib/prompts/links';
 import { listMyRenders, type RenderView } from '@/lib/renders/service';
 import { RENDERS_PATH } from '@/lib/renders/share';
 import { RenderList } from '@/components/renders/render-list';
+import { CreatorProfileCard } from '@/components/app/creator-profile';
+import { loadCreatorProfile, type CreatorProfile } from '@/lib/creators/profile';
 import { saveNotificationPreferences } from './actions';
 
 /**
- * `/account` — PLAN §3.7 + §3.5.
+ * `/account` — private creator profile, activity and email preferences.
  *
- * Contents, exactly: plan status, the Stripe portal link, the **notification toggles** (M5), the
- * locale preference, sign out, and the deletion request.
+ * Profile name and existing campaign SNS, notification toggles, locale, activity, sign out and
+ * deletion request. No public projection contains this page's email or social profile.
  *
- * Plan status is shown from the stored row but DERIVED from the entitlement rule (§3.4): the copy
- * reads `subscriptions.status` through `isEntitled`, never `profiles.plan`, which is a mirror.
- * `cancel_at_period_end` is deliberately NOT a separate plan state — it is a note on an active
- * subscription ("access runs until … then stops"), because Stripe keeps the status `active` until
- * the period actually closes and the UI must not claim otherwise.
- *
- * The toggles follow the same rule: they exist for an entitled reader and are replaced by the pitch
- * line for everyone else (§3.5 "Toggles on /account (Pro)"). A disabled checkbox would be a control
- * that lies about being available; a sentence explaining what Pro is for does not.
+ * Any signed-in creator can save notifications. The old Pro-only restriction is retired.
  */
 export const dynamic = 'force-dynamic';
 
@@ -95,13 +89,18 @@ export default async function AccountPage({
   let viewer = null as Awaited<ReturnType<typeof getViewer>> | null;
   let preferences: NotificationPreferences = PREFERENCES_OFF;
   let renders: RenderView[] = [];
+  let profile: CreatorProfile | null = null;
   try {
     viewer = await getViewer();
     if (viewer.userId !== null) {
       const sql = await getSqlRunner();
       if (sql !== null) {
-        preferences = (await loadPreferences(sql, viewer.userId)) ?? PREFERENCES_OFF;
-        renders = await listMyRenders(sql, viewer.userId, 3);
+        const [prefs, works, creator] = await Promise.allSettled([
+          loadPreferences(sql, viewer.userId), listMyRenders(sql, viewer.userId, 3), loadCreatorProfile(sql, viewer.userId),
+        ]);
+        if (prefs.status === 'fulfilled') preferences = prefs.value ?? PREFERENCES_OFF;
+        if (works.status === 'fulfilled') renders = works.value;
+        if (creator.status === 'fulfilled') profile = creator.value;
       }
     }
   } catch {
@@ -133,13 +132,12 @@ export default async function AccountPage({
       <main id="main" className="band py-16 lg:py-20">
         <p className="text-accent font-label text-eyebrow uppercase">{copy.eyebrow}</p>
         <h1 className="mt-6 max-w-detail font-display text-title font-black uppercase">
-          {copy.title}
+          {dict.creatorProfile.title}
         </h1>
 
-        <div className="mt-14 max-w-detail">
+        {viewer?.userId && <CreatorProfileCard profile={profile} email={viewer.email} dict={dict} locale={locale} feedback={params.profile} />}
+        <div className="mt-8 max-w-detail">
           <dl>
-            <Row term={copy.emailLabel}>{viewer?.email ?? copy.notSignedIn}</Row>
-
             <Row term={copy.languageHeading}>
               <LocaleToggle current={locale} rest="/account" prefixed={false} />
             </Row>
@@ -176,6 +174,7 @@ export default async function AccountPage({
               {params.notif === 'saved' && (
                 <p className="text-accent mt-4 font-mono text-code">{copy.notifSaved}</p>
               )}
+              {params.notif === 'err' && <p role="alert" className="mt-4 text-sm text-accent">{dict.creatorProfile.notificationError}</p>}
             </form>
           ) : (
             <p className="mt-4 max-w-detail text-[0.9375rem] opacity-70">{copy.notifProOnly}</p>

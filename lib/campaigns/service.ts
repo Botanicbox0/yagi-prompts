@@ -26,6 +26,7 @@ import {
 } from './schemas';
 import { acceptsApplications, acceptsPosts, isCampaignPublic } from './state';
 import { toCampaignCard, type CampaignCard } from './catalog';
+import { loadProfileSnsUrl, saveProfileSnsUrl } from '@/lib/contests/repo';
 
 /** A creator receives their participation terms, never the brand's internal budget row. */
 export type CreatorCampaign = CampaignCard & Pick<CampaignRow, 'payout'>;
@@ -63,6 +64,7 @@ export interface ApplyInputRaw {
   snsUrl: string;
   followerCount: string;
   consent: boolean;
+  rememberSns?: boolean;
 }
 
 export interface ApplyState {
@@ -70,6 +72,7 @@ export interface ApplyState {
   existing: ApplicationRow | null;
   open: boolean;
   slotsLeft: number;
+  snsPrefill: string | null;
 }
 
 /** The apply page's state: a public campaign, the viewer's own row if any, and whether the door is open. */
@@ -77,6 +80,7 @@ export async function loadApplyState(deps: CampaignServiceDeps, slug: string, us
   const campaign = await loadCampaignBySlug(deps.sql, slug);
   if (campaign === null || !isCampaignPublic(campaign.status)) return null;
   const existing = userId === null ? null : await loadApplication(deps.sql, campaign.id, userId);
+  const snsPrefill = userId === null ? null : existing?.snsUrl ?? await loadProfileSnsUrl(deps.sql, userId);
   const counts = await loadCampaignCounts(deps.sql, [campaign.id]);
   const taken = counts.get(campaign.id)?.slotsTaken ?? 0;
   return {
@@ -84,6 +88,7 @@ export async function loadApplyState(deps: CampaignServiceDeps, slug: string, us
     existing,
     open: acceptsApplications(campaign, deps.now ?? Date.now()),
     slotsLeft: Math.max(0, campaign.slots - taken),
+    snsPrefill,
   };
 }
 
@@ -124,14 +129,18 @@ export async function applyToCampaign(
   if (recent >= APPLICATION_WRITES_PER_DAY) return { ok: false, code: 'rate_limited' };
 
   try {
-    const { id, created } = await upsertApplication(deps.sql, {
-      campaignId: state.campaign.id,
-      creatorId: userId,
-      pitch: parsed.data.pitch,
-      snsUrl: parsed.data.snsUrl,
-      followerCount: parsed.data.followerCount,
+    const { id, created } = await deps.sql.transaction(async tx => {
+      const application = await upsertApplication(tx, {
+        campaignId: state.campaign.id,
+        creatorId: userId,
+        pitch: parsed.data.pitch,
+        snsUrl: parsed.data.snsUrl,
+        followerCount: parsed.data.followerCount,
+      });
+      await recordApplicationWrite(tx, userId, state.campaign.id);
+      if (input.rememberSns === true) await saveProfileSnsUrl(tx, userId, parsed.data.snsUrl);
+      return application;
     });
-    await recordApplicationWrite(deps.sql, userId, state.campaign.id);
     return { ok: true, id, resubmitted: !created };
   } catch (error) {
     if (error instanceof ApplicationLocked) return { ok: false, code: 'locked' };

@@ -81,6 +81,28 @@ describe('applying, posting and reporting as a creator', () => {
     expect(state.slotsLeft).toBe(1); // applying does not take a slot; selection does
   });
 
+  it('remembers SNS only when requested and prefills only the same creator application', async () => {
+    const sql = runner(h.db);
+    expect((await loadApplyState({ sql }, slug, CREATOR))?.snsPrefill).toBeNull();
+    expect(await applyToCampaign({ sql }, creator, slug, GOOD)).toMatchObject({ ok: true });
+    expect((await sql.query<{ sns_url: string | null }>('select sns_url from profiles where id=$1', [CREATOR])).rows[0]?.sns_url).toBeNull();
+    expect(await applyToCampaign({ sql }, creator, slug, { ...GOOD, rememberSns: true })).toMatchObject({ ok: true });
+    expect((await sql.query<{ sns_url: string | null }>('select sns_url from profiles where id=$1', [CREATOR])).rows[0]?.sns_url).toBe(GOOD.snsUrl);
+    expect((await loadApplyState({ sql }, slug, CREATOR))?.snsPrefill).toBe(GOOD.snsUrl);
+    expect((await loadApplyState({ sql }, slug, null))?.snsPrefill).toBeNull();
+  });
+
+  it('rolls back the application if remembering the SNS fails', async () => {
+    const sql = runner(h.db);
+    const broken = { ...sql, transaction: <T,>(fn: (tx: typeof sql) => Promise<T>) => sql.transaction(tx => fn({ ...tx, query: async (text, params) => {
+      if (text.startsWith('update profiles set sns_url')) throw new Error('profile unavailable');
+      return tx.query(text, params);
+    } })) };
+    await expect(applyToCampaign({ sql: broken }, creator, slug, { ...GOOD, rememberSns: true })).rejects.toThrow('profile unavailable');
+    expect((await loadApplyState({ sql }, slug, CREATOR))?.existing).toBeNull();
+    expect((await sql.query('select * from campaign_application_writes where creator_id=$1', [CREATOR])).rows).toHaveLength(0);
+  });
+
   it('locks the pitch after selection and refuses a new applicant when the slots are gone', async () => {
     const sql = runner(h.db);
     await applyToCampaign({ sql }, creator, slug, GOOD);
