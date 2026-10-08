@@ -11,12 +11,12 @@ import { FaqSection } from '@/lib/seo/faq-section';
 import { Reveal } from '@/components/motion/reveal';
 import { TextSwap } from '@/components/ui/text-swap';
 import { RENDER_PIPELINE_PUBLIC } from '@/lib/flags';
-import { CREATOR_PLAN, quoteSubscriptionVideo, templateSubscriptionQuote } from '@/lib/twings/subscription-plan';
+import { CREATOR_PLANS, quoteSubscriptionVideo, templateSubscriptionQuote, type CreatorPlanId } from '@/lib/twings/subscription-plan';
 import { SubscriptionUsagePreview } from '@/components/twings/subscription-usage-preview';
 import { formatKrw } from '@/lib/twings/products';
 
 /**
- * Single purchases plus the upcoming 19,000 won subscription design.
+ * Single purchases plus the upcoming Creator and Premium subscription designs.
  * No enrollment or billing authorization until the separate launch requirements are met.
  *
  * The cookie model (§15.3) left this page with the prompts it priced (2026-09-05); `lib/cookies` and
@@ -63,20 +63,20 @@ export default async function PricingPage({ params }: { params: Promise<{ locale
   const pending = all.length - forSale.length;
   // The range and the table in the reader's currency: won on /ko, dollars on /en (2026-09-07).
   const filmRange = priceRangeFor(all, locale);
-  const subscriptionOptions = [
+  const subscriptionOptionsFor = (planId: CreatorPlanId) => [
     ...[
       { seconds: 10, resolution: '720p' as const, aspect: '9:16' },
       { seconds: 15, resolution: '720p' as const, aspect: '9:16' },
       { seconds: 25, resolution: '720p' as const, aspect: '4:3' },
       { seconds: 30, resolution: '720p' as const, aspect: '9:16' },
       { seconds: 10, resolution: '1080p' as const, aspect: '9:16' },
-    ].map(input => ({ id: `example-${input.seconds}-${input.resolution}-${input.aspect}`, label: interpolate(p.subscriptionExample, { seconds: String(input.seconds), resolution: input.resolution, aspect: input.aspect }), monthlyPercent: quoteSubscriptionVideo(input)!.monthlyPercent })),
+    ].map(input => ({ id: `example-${input.seconds}-${input.resolution}-${input.aspect}`, label: interpolate(p.subscriptionExample, { seconds: String(input.seconds), resolution: input.resolution, aspect: input.aspect }), monthlyPercent: quoteSubscriptionVideo(input, planId)!.monthlyPercent })),
     ...forSale.flatMap(card => {
-      const quote = templateSubscriptionQuote(card);
+      const quote = templateSubscriptionQuote(card, planId);
       return quote ? [{ id: card.slug, label: `${locale === 'ko' && card.titleKo ? card.titleKo : card.title} · 720p`, monthlyPercent: quote.monthlyPercent }] : [];
     }),
   ];
-  const planPrice = locale === 'ko' ? formatKrw(CREATOR_PLAN.priceKrw) : `KRW ${CREATOR_PLAN.priceKrw.toLocaleString('en-US')}`;
+  const subscriptionOptions = { creator: subscriptionOptionsFor('creator'), premium: subscriptionOptionsFor('premium') };
 
   return (
     <>
@@ -91,18 +91,31 @@ export default async function PricingPage({ params }: { params: Promise<{ locale
             {!RENDER_PIPELINE_PUBLIC && <p data-generation-availability className="mt-6 max-w-detail border-l-2 border-current pl-4 text-sm leading-relaxed">{dict.seo.generationClosed}</p>}
             <p data-service-definition className="mt-6 max-w-detail text-body opacity-70">{dict.seo.definition}</p>
 
-            <section id="monthly" data-pricing-subscription="preparing" className="mt-12 grid gap-8 border border-hairline p-6 sm:p-8 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
-              <div>
-                <p className="font-label text-eyebrow text-accent">{p.subscriptionStatus}</p>
-                <h2 className="mt-4 font-display text-2xl font-black">{p.subscriptionTitle}</h2>
-                <p data-subscription-price className="mt-6 font-display text-[clamp(2rem,5vw,3.5rem)] leading-none font-black">{interpolate(p.subscriptionPrice, { price: planPrice })}</p>
-                <p className="mt-3 text-xs opacity-60">{p.subscriptionTax}</p>
-                <p className="mt-8 font-display text-xl font-black">{p.subscriptionHeadline}</p>
-                <p className="mt-3 text-sm leading-relaxed opacity-75">{p.subscriptionDescription}</p>
-                <p className="mt-3 text-sm leading-relaxed opacity-75">{p.subscriptionMixed}</p>
-                <p data-subscription-unavailable className="mt-6 border-l-2 border-accent pl-4 text-sm leading-relaxed">{p.subscriptionUnavailable}</p>
+            <section id="monthly" data-pricing-subscription="preparing" className="mt-12">
+              <p className="font-label text-eyebrow text-accent">{p.subscriptionStatus}</p>
+              <h2 className="mt-4 font-display text-2xl font-black">{p.subscriptionTitle}</h2>
+              <div className="mt-6 grid gap-5 md:grid-cols-2">
+                {(Object.keys(CREATOR_PLANS) as CreatorPlanId[]).map(planId => {
+                  const plan = CREATOR_PLANS[planId];
+                  const copy = p.subscriptionPlans[planId];
+                  const price = locale === 'ko' ? formatKrw(plan.priceKrw) : `KRW ${plan.priceKrw.toLocaleString('en-US')}`;
+                  return <article key={planId} data-subscription-plan={planId} className="min-w-0 border border-hairline p-6 sm:p-8">
+                    <h3 className="font-label text-label text-accent">{copy.name}</h3>
+                    <p data-subscription-price className="mt-5 font-display text-[clamp(1.8rem,4vw,3rem)] leading-tight font-black">{interpolate(p.subscriptionPrice, { price })}</p>
+                    <p className="mt-2 text-xs opacity-60">{p.subscriptionTax}</p>
+                    <p className="mt-7 font-display text-xl font-black">{copy.headline}</p>
+                    <p className="mt-3 text-sm leading-relaxed opacity-75">{copy.description}</p>
+                    {plan.promptEditing === 'planned' && <div data-prompt-editing="planned" className="mt-5 space-y-3 border-t border-hairline pt-4 text-sm leading-relaxed">
+                      <p className="font-label text-xs text-accent">{p.subscriptionEditingStatus}</p>
+                      <p>{p.subscriptionPromptEditingSoon}</p>
+                      <p className="opacity-70">{p.subscriptionEditingBoundary}</p>
+                    </div>}
+                  </article>;
+                })}
               </div>
-              <div>
+              <p className="mt-5 max-w-detail text-sm leading-relaxed opacity-75">{p.subscriptionMixed}</p>
+              <p data-subscription-unavailable className="mt-5 border-l-2 border-accent pl-4 text-sm leading-relaxed">{p.subscriptionUnavailable}</p>
+              <div className="mt-8 border border-hairline p-6 sm:p-8">
                 <ul className="space-y-3 text-sm leading-relaxed opacity-75">
                   <li>{p.subscriptionReset}</li>
                   <li>{p.subscriptionOverflow}</li>
@@ -152,7 +165,7 @@ export default async function PricingPage({ params }: { params: Promise<{ locale
                           {card.medium === 'video' && card.runtimeSeconds ? interpolate(dict.studio.runtimeLabel, { seconds: String(card.runtimeSeconds) }) : '—'}
                         </td>
                         <td className="py-3 text-right font-mono text-code text-accent">{formatTemplatePrice(card, locale)}</td>
-                        <td data-subscription-template={card.slug} className="py-3 pl-5 text-sm opacity-70">{templateSubscriptionQuote(card) ? interpolate(p.subscriptionTemplateNote, { count: String(templateSubscriptionQuote(card)!.maxPerMonth) }) : p.subscriptionNotIncluded}</td>
+                        <td data-subscription-template={card.slug} className="py-3 pl-5 text-sm opacity-70">{templateSubscriptionQuote(card) ? interpolate(p.subscriptionTemplateNote, { count: String(templateSubscriptionQuote(card)!.maxPerMonth), premiumCount: String(templateSubscriptionQuote(card, 'premium')!.maxPerMonth) }) : p.subscriptionNotIncluded}</td>
                       </tr>
                     ))}
                   </tbody>

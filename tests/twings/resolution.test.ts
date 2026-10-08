@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { costFloor, costTable, roundUpToX900 } from '@/lib/twings/cost-model';
+import { costFloor, costTable, roundUpToHundred } from '@/lib/twings/cost-model';
 import {
   arkModelForVideo,
   chargeKrwFor,
@@ -83,47 +83,55 @@ describe('which resolutions a creator template sells', () => {
 });
 
 describe('the cost floor under a creator price (a proposal, not a price)', () => {
-  it('rounds up to the catalogue’s x,900 shape', () => {
-    expect(roundUpToX900(4909)).toBe(5900);
-    expect(roundUpToX900(4900)).toBe(4900);
-    expect(roundUpToX900(4901)).toBe(5900);
-    expect(roundUpToX900(10)).toBe(900);
+  it('rounds up only to the next 100 won, without a hidden x,900 markup', () => {
+    expect(roundUpToHundred(4909)).toBe(5000);
+    expect(roundUpToHundred(4900)).toBe(4900);
+    expect(roundUpToHundred(4901)).toBe(5000);
+    expect(roundUpToHundred(10)).toBe(100);
   });
 
-  it('prices the provider at the ModelArk page rate, +10% failures, at 1,400원', () => {
+  it('prices exact output tokens at 1,400원 without a remake reserve', () => {
     const floor = costFloor({ model: 'seedance-2.5', resolution: '720p', seconds: 10 })!;
-    // docs/TEMPLATES-IA.md §12: "2.5 720p 10초 ≈ 3,560원, 1080p 10초 ≈ 8,760원".
-    expect(floor.providerKrw).toBe(3557);
-    expect(costFloor({ model: 'seedance-2.5', resolution: '1080p', seconds: 10 })!.providerKrw).toBe(8763);
+    expect(floor.providerUsd).toBeCloseTo(2.3112, 6);
+    expect(floor.providerKrw).toBe(3236);
+    expect(costFloor({ model: 'seedance-2.5', resolution: '1080p', seconds: 10 })!.providerKrw).toBe(7961);
   });
 
-  it('needs ~1.52× the provider cost to clear VAT, the PG fee and a 20% margin', () => {
+  it('meets a 10% revenue margin after VAT and PG, with no cost markup or overhead allocation', () => {
     const floor = costFloor({ model: 'seedance-2.5', resolution: '720p', seconds: 15 })!;
-    // Over the raw provider bill (failures not yet added) the multiplier is ~1.518.
-    expect(floor.floorKrw / (floor.providerUsd * 1400)).toBeCloseTo(1.518, 2);
-    // Check the margin directly at the proposed price.
     const revenue = floor.proposedKrw / 1.1;
-    const variable = floor.providerKrw + 0.033 * floor.proposedKrw;
-    expect(revenue / variable).toBeGreaterThanOrEqual(1.2);
+    const variable = floor.providerUsd * 1400 + 0.033 * floor.proposedKrw;
+    expect((revenue - variable) / revenue).toBeGreaterThanOrEqual(0.10);
+    const lowerRevenue = (floor.proposedKrw - 100) / 1.1;
+    const lowerVariable = floor.providerUsd * 1400 + 0.033 * (floor.proposedKrw - 100);
+    expect((lowerRevenue - lowerVariable) / lowerRevenue).toBeLessThan(0.10);
+  });
+
+  it('accounts for the real output aspect ratio instead of adding a blanket contingency', () => {
+    const wide = costFloor({ model: 'seedance-2.5', resolution: '720p', seconds: 15, aspect: '4:3' })!;
+    const portrait = costFloor({ model: 'seedance-2.5', resolution: '720p', seconds: 15, aspect: '9:16' })!;
+    expect(wide.providerUsd).toBeCloseTo(3.4886480625, 8);
+    expect(wide.providerUsd).toBeGreaterThan(portrait.providerUsd);
+    expect(costFloor({ model: 'seedance-2.5', resolution: '720p', seconds: 30 })!.proposedKrw).toBe(12400);
   });
 
   it('proposes these floors (the table in docs/CREATOR-RESOLUTION.md)', () => {
     const table = Object.fromEntries(costTable([10, 14, 15, 30]).map((row) => [`${row.model} ${row.resolution} ${row.seconds}s`, row.proposedKrw]));
     expect(table).toEqual({
-      'seedance-2.0 720p 10s': 3900,
-      'seedance-2.0 720p 14s': 4900,
-      'seedance-2.0 720p 15s': 4900,
-      'seedance-2.0 1080p 10s': 7900,
-      'seedance-2.0 1080p 14s': 11900,
-      'seedance-2.0 1080p 15s': 11900,
-      'seedance-2.5 720p 10s': 5900,
-      'seedance-2.5 720p 14s': 6900,
-      'seedance-2.5 720p 15s': 7900,
-      'seedance-2.5 720p 30s': 14900,
-      'seedance-2.5 1080p 10s': 12900,
-      'seedance-2.5 1080p 14s': 17900,
-      'seedance-2.5 1080p 15s': 18900,
-      'seedance-2.5 1080p 30s': 36900,
+      'seedance-2.0 720p 10s': 2700,
+      'seedance-2.0 720p 14s': 3800,
+      'seedance-2.0 720p 15s': 4100,
+      'seedance-2.0 1080p 10s': 6700,
+      'seedance-2.0 1080p 14s': 9400,
+      'seedance-2.0 1080p 15s': 10100,
+      'seedance-2.5 720p 10s': 4200,
+      'seedance-2.5 720p 14s': 5800,
+      'seedance-2.5 720p 15s': 6200,
+      'seedance-2.5 720p 30s': 12400,
+      'seedance-2.5 1080p 10s': 10200,
+      'seedance-2.5 1080p 14s': 14200,
+      'seedance-2.5 1080p 15s': 15300,
+      'seedance-2.5 1080p 30s': 30500,
     });
   });
 });

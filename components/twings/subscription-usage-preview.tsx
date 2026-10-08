@@ -3,26 +3,34 @@
 import { useState } from 'react';
 import { interpolate } from '@/lib/i18n/format';
 import type { getDictionary } from '@/lib/i18n/dictionaries';
+import type { CreatorPlanId } from '@/lib/twings/subscription-plan';
 
 export interface SubscriptionUsageOption { id: string; label: string; monthlyPercent: number }
 type Copy = ReturnType<typeof getDictionary>['pricing'];
 
 /** Customer-facing proportions only: no internal units, money balance, or purchase endpoint. */
-export function SubscriptionUsagePreview({ options, copy }: { options: SubscriptionUsageOption[]; copy: Copy }) {
-  const [rows, setRows] = useState([{ id: options[0]?.id ?? '', count: 4 }, { id: options[1]?.id ?? options[0]?.id ?? '', count: 0 }]);
-  const total = rows.reduce((sum, row) => sum + (options.find(option => option.id === row.id)?.monthlyPercent ?? 0) * row.count, 0);
+export function SubscriptionUsagePreview({ options, copy }: { options: Record<CreatorPlanId, SubscriptionUsageOption[]>; copy: Copy }) {
+  const [planId, setPlanId] = useState<CreatorPlanId>('creator');
+  const selectedOptions = options[planId];
+  const [rows, setRows] = useState([{ id: options.creator[0]?.id ?? '', count: 6 }, { id: options.creator[1]?.id ?? options.creator[0]?.id ?? '', count: 0 }]);
+  const total = rows.reduce((sum, row) => sum + (selectedOptions.find(option => option.id === row.id)?.monthlyPercent ?? 0) * row.count, 0);
   const exceeds = total > 100 + 1e-9;
   const update = (index: number, patch: Partial<(typeof rows)[number]>) => setRows(current => current.map((row, i) => i === index ? { ...row, ...patch } : row));
   return (
     <div data-subscription-preview className="mt-8 border-t border-hairline pt-6">
       <h3 className="font-display text-xl font-black">{copy.subscriptionCompare}</h3>
+      <label htmlFor="subscription-plan" className="mt-5 block font-label text-eyebrow opacity-60">{copy.subscriptionPlanLabel}</label>
+      <select id="subscription-plan" value={planId} onChange={event => setPlanId(event.target.value as CreatorPlanId)} className="mt-2 w-full max-w-sm border border-hairline bg-surface p-3 text-sm">
+        <option value="creator">{copy.subscriptionPlans.creator.name}</option>
+        <option value="premium">{copy.subscriptionPlans.premium.name}</option>
+      </select>
       <div className="mt-5 grid gap-4 sm:grid-cols-2">
         {rows.map((row, index) => (
           <fieldset key={index} className="min-w-0 border border-hairline p-4">
             <legend className="px-1 font-mono text-xs">{index + 1}</legend>
             <label htmlFor={`subscription-film-${index}`} className="block font-label text-eyebrow opacity-60">{copy.subscriptionTemplate}</label>
             <select id={`subscription-film-${index}`} value={row.id} onChange={event => update(index, { id: event.target.value })} className="mt-2 w-full min-w-0 border border-hairline bg-surface p-2 text-sm">
-              {options.map(option => <option key={option.id} value={option.id}>{option.label}</option>)}
+              {selectedOptions.map(option => <option key={option.id} value={option.id}>{option.label}</option>)}
             </select>
             <label htmlFor={`subscription-count-${index}`} className="mt-4 block font-label text-eyebrow opacity-60">{copy.subscriptionQuantity}</label>
             <input id={`subscription-count-${index}`} type="number" min={0} max={20} step={1} value={row.count} onChange={event => {

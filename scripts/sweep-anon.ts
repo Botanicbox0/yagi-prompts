@@ -982,7 +982,9 @@ async function sweepPricingTemplates(): Promise<void> {
     const page = await get(`/${locale}/pricing`);
     expectEqual(`/${locale}/pricing renders 200`, page.status, 200);
     expectPresent('…with the upcoming monthly plan', page.body, 'data-pricing-subscription="preparing"');
-    expectPresent('…with its monthly won price', page.body, '19,000');
+    expectPresent('…with its Creator monthly won price', page.body, '24,900');
+    expectPresent('…with its Premium monthly won price', page.body, '49,000');
+    expectPresent('…with prompt editing honestly marked as planned', page.body, 'data-prompt-editing="planned"');
     expectPresent('…with a usage preview', page.body, 'data-subscription-preview');
     expectPresent('…with enrollment explicitly closed', page.body, 'data-subscription-unavailable');
     expectAbsent('…without a subscription checkout endpoint', page.body, '/api/billing/subscription');

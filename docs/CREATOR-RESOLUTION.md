@@ -1,8 +1,9 @@
 # Creator video resolution and cost floor
 
-Status: implemented on `codex/creator-resolution-pricing` (2026-09-28). Migration 0039 needs cloud
-application **before** this code is deployed. No customer price is changed by this work: the
-exact prices below are proposals for the founder (AGENTS.md §5).
+Resolution support was implemented on `codex/creator-resolution-pricing` (2026-09-28).
+The pricing policy below replaces the original proposal following the founder's 2026-10-09 decision:
+no remake or overhead reserves, exchange rate 1,400원/USD, and about 10% margin on revenue excluding VAT.
+Existing sale prices are updated through registered admin operations; this module never writes a price.
 
 ## 1. Behaviour
 
@@ -31,49 +32,52 @@ Rules live in `lib/twings/resolution.ts`:
 Template example videos do not decide the default. Giant Daydream's approved example is 1080p;
 a creator render of it is still 720p unless 1080p is priced and chosen.
 
-## 2. Cost evidence (checked 2026-09-28)
+## 2. Cost evidence (checked 2026-10-09)
 
 | Source | Figure |
 | --- | --- |
-| `lib/ark/models.ts` (ModelArk pricing page, 2026-08-31) | Seedance 2.5: $0.103 / $0.231 / $0.569 per second at 480p / 720p / 1080p. Seedance 2.0: $0.07 / $0.15 / $0.37 (4k $0.78). 16:9, no video input. |
-| Public price aggregators, Sept 2026 (CometAPI, CellCog, Actoria) | 2.5 at $10.70 per million tokens without video input; a 5-second 16:9 clip is $0.514 / $1.156 / $2.843 at 480p / 720p / 1080p, i.e. $0.2312 / $0.5686 per second at 720p / 1080p. Matches the table. |
+| [BytePlus ModelArk pricing](https://docs.byteplus.com/en/docs/modelark/model-pricing), updated 2026-10-08 | No video input: Seedance 2.5 $10.70/M output tokens at 720p, $11.70/M at 1080p. Seedance 2.0 $7.00/M and $7.70/M respectively. No contract discount. |
+| [Seedance 2.5 output dimensions](https://docs.byteplus.com/zh-TW/docs/modelark/seedance-2-5) | Tokens = width × height × 24 × output seconds / 1024. 720p 16:9 = 1280×720; 9:16 = 720×1280; 4:3 = 1112×834. Quotes use actual aspect ratio rather than a rounded per-second estimate. |
 | Production smoke (docs/TEMPLATES-IA.md §12, 2026-09-14) | 2.0 720p 5s = 108,900 tokens = 1280×720×24×5/1024 + ~1%. Confirms token = pixels × fps × seconds / 1024 at 720p. |
-| BytePlus docs pages | Render client-side, could not be read by fetch today; the tutorial page shows "last updated 2026-09-24". Re-check the console price before approving. |
+| Final provider response | `usage.completion_tokens` is authoritative for reconciliation. |
 
 What the evidence says about proportionality: 1080p is **2.46×** (2.5) and **2.47×** (2.0) the
 720p per-second price, more than the 2.25× pixel ratio. Audio (`generate_audio: true`) is included
-in the per-second price, not billed on top. A failed task is not billed. Video input would lower
-the per-token rate but add the input duration; creator renders send none. 4:3 and 9:16 differ from
-the 16:9 rate by a few percent in tokens.
+in the price, not billed on top. A failed task is not billed. Video input would lower
+the per-token rate but add the input duration and minimums; creator renders send none.
+4:3 costs slightly more than 16:9; 9:16 has the same pixel count as 16:9.
 
-## 3. Cost floor (proposal)
+## 3. Minimum-price policy
 
-`lib/twings/cost-model.ts`. Assumptions from docs/TEMPLATES-IA.md §12 (2026-09-17): 1,400원/USD,
-+10% for failed renders re-made at our cost, VAT 10% inside the price, PG fee 3.3% of the charged
-amount, margin: revenue after VAT ≥ 1.2 × variable cost. That solves to price ≥ ~1.518 × the raw
-provider bill, rounded up to the next x,900.
+`lib/ark/pricing.ts` quotes exact tokens. `lib/twings/cost-model.ts` applies 1,400원/USD,
+VAT 10% inside the price, and a provisional PG fee of 3.3% of the charged amount.
+The target is 10% of revenue excluding VAT after API and PG costs, not a 10% cost markup:
+
+`price = API_KRW / ((1 - 0.10) / 1.10 - 0.033)`, rounded up to the next **100원**.
+
+There is **no remake allowance, arbitrary direct-cost allocation, or FX buffer**.
+The actual PG contract must be checked before opening checkout.
 
 | Model · resolution | 10s | 14s | 15s | 30s |
 | --- | --- | --- | --- | --- |
-| Seedance 2.0 · 720p | 3,900원 | 4,900원 | 4,900원 | (2.5) |
-| Seedance 2.0 · 1080p | 7,900원 | 11,900원 | 11,900원 | (2.5) |
-| Seedance 2.5 · 720p | 5,900원 | 6,900원 | 7,900원 | 14,900원 |
-| Seedance 2.5 · 1080p | 12,900원 | 17,900원 | 18,900원 | 36,900원 |
+| Seedance 2.0 · 720p | 2,700원 | 3,800원 | 4,100원 | (2.5) |
+| Seedance 2.0 · 1080p | 6,700원 | 9,400원 | 10,100원 | (2.5) |
+| Seedance 2.5 · 720p | 4,200원 | 5,800원 | 6,200원 | 12,400원 |
+| Seedance 2.5 · 1080p | 10,200원 | 14,200원 | 15,300원 | 30,500원 |
 
-These are floors, not recommendations to raise anything. Where a template's current price is above
-its 720p floor, the price can come down to the floor and keep the 20% margin; the admin editor now
-shows each template's floors next to its price fields and flags a price below one. Where a
-template is below its floor today (for example a 15-second Seedance 2.5 film at 5,900원, floor
-7,900원), keeping 720p as the default is what makes it viable.
+This table uses 16:9. The admin editor calculates the template's actual aspect ratio;
+for example, 15 seconds at 4:3 is 6,300원 rather than 6,200원.
+The founder authorized existing priced 720p templates to use this minimum-price rule.
+Unpriced templates stay unpriced. USD display prices use the same exchange rate, rounded up to a cent.
 
-Not modelled: FX moves, fixed costs (asset library plan, storage, mail), and the 4:3 token delta.
+Monthly plans use the same provider quote and margin basis; see [CREATOR-SUBSCRIPTION.md](CREATOR-SUBSCRIPTION.md).
 
 ## 4. Founder decisions still open
 
 1. The 1080p price for each template (both `price_1080_cents` and `price_1080_krw`). Until set, no
    template offers 1080p.
-2. Whether to lower current 720p prices toward the floors in §3, per template.
-3. Whether the 20% margin / 10% failure allowance / 1,400원 rate are still the right assumptions.
+2. The final PG fee after contract. A change in fees does not silently change public prices.
+3. Live billing approval and launch readiness. Preparing a price does not enable checkout.
 
 ## 5. Rollout
 

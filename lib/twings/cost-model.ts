@@ -1,4 +1,5 @@
-import { ARK_MODELS, estimateRenderUsd, type ArkModelKey } from '@/lib/ark/models';
+import { ARK_MODELS, type ArkModelKey } from '@/lib/ark/models';
+import { quoteArkVideo } from '@/lib/ark/pricing';
 import type { CreatorResolution } from './resolution';
 
 /**
@@ -6,25 +7,18 @@ import type { CreatorResolution } from './resolution';
  * exact customer prices are the founder's decision (AGENTS.md §5). The admin editor shows the
  * floor next to each price field and flags a price below it; nothing here writes a price.
  *
- * Assumptions, all from docs/TEMPLATES-IA.md §12 (과금 결정 갱신, 2026-09-17) unless noted:
- *   · provider cost = ModelArk USD per output second (lib/ark/models.ts, 16:9, audio on, no video
- *     input — audio is included in the per-second rate, not billed on top) × seconds × 1,400원;
- *   · +10% for failed renders re-made at our cost (a failed ModelArk task itself is not billed);
- *   · prices include VAT 10%; the PG fee is 3.3% of the charged amount;
- *   · target margin: revenue after VAT ≥ 1.2 × variable cost (provider + failures + PG fee).
- * Solving price/1.1 ≥ 1.2 × (1.1·C + 0.033·price) gives price ≥ ≈1.518 × C. Rounded UP to the
- * catalogue's x,900 shape so the floor is a price someone could actually set.
- *
- * Not modelled: FX moves (re-run at the day's rate), the 4:3 / 9:16 token difference (±5% against
- * the 16:9 page rate), and fixed costs (asset library plan, storage, mail).
+ * Founder decision, 2026-10-09: one successful generation, no remake/overhead allocation.
+ * Exact ModelArk output tokens × list tariff × 1,400원; VAT 10%; provisional PG fee 3.3%.
+ * Target is 10% of revenue EXCLUDING VAT, after API and PG costs (not a 10% cost markup).
+ * price = API cost / ((1 − margin)/(1 + VAT) − PG rate), rounded up only to 100 won.
+ * No fixed costs, FX buffer, promotion or contract discount is added.
  */
 
 export const COST_ASSUMPTIONS = {
   krwPerUsd: 1400,
   vatRate: 0.1,
   pgFeeRate: 0.033,
-  failureAllowance: 0.1,
-  targetMargin: 0.2,
+  targetMargin: 0.1,
 } as const;
 
 export interface CostFloor {
@@ -32,39 +26,37 @@ export interface CostFloor {
   resolution: CreatorResolution;
   seconds: number;
   providerUsd: number;
-  /** Provider cost in won, failures included. */
+  /** Provider cost in won, rounded only for display; no remake reserve. */
   providerKrw: number;
   /** The lowest VAT-inclusive won price that meets the target margin, before rounding. */
   floorKrw: number;
-  /** `floorKrw` rounded up to the next x,900. */
+  /** `floorKrw` rounded up to the next 100 won. */
   proposedKrw: number;
-  /** The same floor in whole US dollars (display on English pages; Toss still charges won). */
+  /** The same price in USD cents (display only; Toss still charges won). */
   proposedCents: number;
 }
 
-/** Smallest n×1,000 − 100 at or above the amount; never below 900. */
-export function roundUpToX900(krw: number): number {
-  return Math.max(900, Math.ceil((krw + 100) / 1000) * 1000 - 100);
+/** Smallest whole 100-won amount at or above the floor. */
+export function roundUpToHundred(krw: number): number {
+  return Math.max(100, Math.ceil(krw / 100) * 100);
 }
 
-export function costFloor(input: { model: ArkModelKey; resolution: CreatorResolution; seconds: number }, assumptions = COST_ASSUMPTIONS): CostFloor | null {
-  const estimate = estimateRenderUsd(input);
-  if (!estimate.ok) return null;
-  const { krwPerUsd, vatRate, pgFeeRate, failureAllowance, targetMargin } = assumptions;
-  const providerKrw = estimate.usd * krwPerUsd * (1 + failureAllowance);
-  const multiplier = 1 + targetMargin;
-  // price/(1+vat) ≥ m·(providerKrw + pg·price)  ⇒  price ≥ m·providerKrw / (1/(1+vat) − m·pg)
-  const floorKrw = (multiplier * providerKrw) / (1 / (1 + vatRate) - multiplier * pgFeeRate);
-  const proposedKrw = roundUpToX900(floorKrw);
+export function costFloor(input: { model: ArkModelKey; resolution: CreatorResolution; seconds: number; aspect?: string }, assumptions = COST_ASSUMPTIONS): CostFloor | null {
+  const estimate = quoteArkVideo({ ...input, aspect: input.aspect ?? '16:9' });
+  if (!estimate) return null;
+  const { krwPerUsd, vatRate, pgFeeRate, targetMargin } = assumptions;
+  const providerKrw = estimate.providerUsd * krwPerUsd;
+  const floorKrw = providerKrw / ((1 - targetMargin) / (1 + vatRate) - pgFeeRate);
+  const proposedKrw = roundUpToHundred(floorKrw);
   return {
     model: input.model,
     resolution: input.resolution,
     seconds: input.seconds,
-    providerUsd: estimate.usd,
+    providerUsd: estimate.providerUsd,
     providerKrw: Math.round(providerKrw),
     floorKrw: Math.ceil(floorKrw),
     proposedKrw,
-    proposedCents: Math.ceil(proposedKrw / krwPerUsd) * 100,
+    proposedCents: Math.ceil(proposedKrw / krwPerUsd * 100),
   };
 }
 
