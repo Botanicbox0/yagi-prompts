@@ -508,6 +508,12 @@ async function sweepStructuredData(): Promise<void> {
       }
       const faq = nodes.find((node) => node['@type'] === 'FAQPage');
       expectEqual(`${path} nonempty FAQ answers`, Array.isArray(faq?.mainEntity) && faq.mainEntity.length > 0 && faq.mainEntity.every((item: { acceptedAnswer?: { text?: string } }) => Boolean(item.acceptedAnswer?.text?.trim())), true);
+      if (rest === '/brands') {
+        expectPresent(`${path} simultaneous market service`, page.body, 'data-brand-markets');
+        expectPresent(`${path} simultaneous offer copy`, page.body, locale === 'ko' ? '동시에' : 'simultaneously');
+        expectEqual(`${path} eight buyer FAQ answers`, Array.isArray(faq?.mainEntity) ? faq.mainEntity.length : 0, 8);
+        expectPresent(`${path} AI safety answer in server HTML`, page.body, locale === 'ko' ? '국외 이전' : 'overseas processing');
+      }
     }
   }
   const sitemap = await get('/sitemap.xml');
@@ -1013,14 +1019,46 @@ async function sweepCampaigns(): Promise<void> {
     expectPresent(`/${locale}/campaigns preserves old brand bookmarks`, listing.body, 'data-legacy-brand-entry');
     const brand = await get(`/${locale}/brands`);
     expectEqual(`/${locale}/brands renders 200`, brand.status, 200);
-    for (const marker of ['data-campaign-hero', 'data-campaign-reel', 'data-campaign-principles', 'data-campaign-proof', 'data-brands', 'data-case-study', 'data-brand-workspace-entry', 'data-audience-switch']) {
+    for (const marker of ['data-campaign-hero', 'data-campaign-reel', 'data-campaign-principles', 'data-campaign-proof', 'data-brands', 'data-case-study', 'data-customer-story', 'data-audience-switch']) {
       expectPresent(`/${locale}/brands carries ${marker}`, brand.body, marker);
     }
-    expectEqual(`/${locale}/brands paints four reel tiles`, (brand.body.match(/data-reel-item=/g) ?? []).length, 4);
-    expectEqual(`/${locale}/brands explains five campaign types`, (brand.body.match(/data-campaign-use-case=/g) ?? []).length, 5);
-    expectPresent(`/${locale}/brands never names the client`, brand.body.toLowerCase().includes('morphic') ? 'named' : 'unnamed', 'unnamed');
-    expectPresent(`/${locale}/brands visible inquiry form`, brand.body, 'data-brand-inquiry="form"');
+    expectEqual(`/${locale}/brands offers three format films`, (brand.body.match(/data-format-select=/g) ?? []).length, 3);
+    expectEqual(`/${locale}/brands shows three service examples`, (brand.body.match(/data-service-example=/g) ?? []).length, 3);
+    expectAbsent(`/${locale}/brands has no hidden service tabs`, brand.body, 'data-use-case-select');
+    expectAbsent(`/${locale}/brands has no misplaced workspace card`, brand.body, 'data-brand-workspace-entry');
+    expectEqual(`/${locale}/brands groups campaigns into one customer story`, (brand.body.match(/data-customer-story=/g) ?? []).length, 1);
+    expectEqual(`/${locale}/brands carries two distinct Morphic cases`, (brand.body.match(/data-case-study=/g) ?? []).length, 2);
+    expectPresent(`/${locale}/brands names the founder-approved client`, brand.body, 'Morphic');
+    expectPresent(`/${locale}/brands carries the 90s case`, brand.body, 'data-case-study="morphic-90s-interview"');
+    expectPresent(`/${locale}/brands carries the September follow-up`, brand.body, 'data-case-study="morphic-september-kr-jp"');
+    expectPresent(`/${locale}/brands keeps video poster-first`, brand.body, 'preload="none"');
+    expectAbsent(`/${locale}/brands exposes no creator handle in campaign media URLs`, brand.body.toLowerCase(), '/reel/brands/@');
+    if (locale === 'ko') {
+      expectPresent('/ko/brands carries the approved view floor', brand.body, '200만+');
+      expectPresent('/ko/brands carries the approved organic floor', brand.body, '300건+');
+    } else {
+      expectPresent('/en/brands carries the approved view floor', brand.body, '2M+');
+      expectPresent('/en/brands carries the approved organic floor', brand.body, '300+');
+    }
+    expectPresent(`/${locale}/brands progressive inquiry form`, brand.body, 'data-brand-inquiry="form"');
+    expectPresent(`/${locale}/brands accessible inquiry dialog`, brand.body, 'data-brand-inquiry-dialog');
+    expectPresent(`/${locale}/brands role field`, brand.body, 'name="contactRole"');
+    expectEqual(`/${locale}/brands shows real August film links`, (brand.body.match(/href="https:\/\/www.instagram.com\/p\/(?:DcXjygPg8fE|DcShoikJklw)\/"/g) ?? []).length, 2);
+    expectPresent(`/${locale}/brands shows the production film`, brand.body, 'data-production-films');
+    expectPresent(`/${locale}/brands links the production portfolio`, brand.body, 'https://pitch.com/v/yagi-production-wokrs-vsrgfd');
+    expectAbsent(`/${locale}/brands uses no green brand accent`, brand.body, 'brand-lime');
     expectPresent(`/${locale}/brands self-canonicals`, brand.body, `rel="canonical" href="${BASE}/${locale}/brands"`);
+    const storyIndex = await get(`/${locale}/brands/stories`);
+    expectEqual(`/${locale}/brands/stories renders 200`, storyIndex.status, 200);
+    expectPresent(`/${locale}/brands/stories links the customer detail`, storyIndex.body, `href="/${locale}/brands/stories/morphic"`);
+    const story = await get(`/${locale}/brands/stories/morphic`);
+    expectEqual(`/${locale}/brands/stories/morphic renders 200`, story.status, 200);
+    expectEqual(`/${locale}/brands/stories/morphic keeps both campaigns`, (story.body.match(/data-case-study=/g) ?? []).length, 2);
+    expectPresent(`/${locale}/brands/stories/morphic self-canonicals`, story.body, `rel="canonical" href="${BASE}/${locale}/brands/stories/morphic"`);
+    expectPresent(`/${locale}/brands/stories/morphic carries campaign limitations`, story.body, locale === 'ko' ? '전환율은 별도로 집계하지 않았습니다' : 'conversion');
+    expectEqual(`/${locale}/brands rejects unknown customer stories`, (await get(`/${locale}/brands/stories/unapproved`)).status, 404);
+    expectPresent(`/${locale}/brands carries buyer FAQ questions`, brand.body, locale === 'ko' ? '캠페인 성과는 어떻게 확인하나요?' : 'How do you report campaign results?');
+    expectAbsent(`/${locale}/brands has no redundant order warning`, brand.body, locale === 'ko' ? '문의 제출만으로 주문' : 'Submitting an enquiry does not place an order');
     expectPresent(`/${locale}/campaigns self-canonicals`, listing.body, `rel="canonical" href="${BASE}/${locale}/campaigns"`);
     const landing = await get(`/${locale}`);
     expectPresent(`/${locale} nav links the campaigns tab`, landing.body, `href="/${locale}/campaigns"`);

@@ -20,6 +20,7 @@ export interface BrandFormLabels {
   formHeading: string;
   fieldCompany: string;
   fieldName: string;
+  fieldRole: string;
   fieldEmail: string;
   fieldPhone: string;
   fieldBudget: string;
@@ -52,7 +53,7 @@ export interface BrandFormTemplate {
   title: string;
 }
 
-const INPUT = 'w-full border border-hairline bg-transparent px-4 py-3 text-body focus:outline focus:outline-2 focus:outline-accent';
+const INPUT = 'w-full border border-black/50 bg-transparent px-4 py-3 text-body focus:outline focus:outline-2 focus:outline-accent';
 const LABEL = 'block font-label text-eyebrow uppercase opacity-60';
 
 type Status = 'idle' | 'sending' | 'sent' | 'invalid' | 'rate_limited' | 'unavailable';
@@ -76,12 +77,14 @@ export function BrandInquiryForm({
   labels,
   templates,
   privacy,
+  compact = false,
 }: {
   endpoint: string;
   locale: 'en' | 'ko';
   labels: BrandFormLabels;
   templates: BrandFormTemplate[];
   privacy: { href: string; label: string };
+  compact?: boolean;
 }) {
   const [status, setStatus] = useState<Status>('idle');
   const [field, setField] = useState<string | null>(null);
@@ -95,6 +98,14 @@ export function BrandInquiryForm({
   // server-rendered /api/brands/inquiries/result route; hydrated submissions stay in this form.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
+    const useCaseSelected = (event: Event) => {
+      const selected = (event as CustomEvent<string>).detail;
+      if (selected && selected in labels.useCaseOptions) setUseCase(selected);
+    };
+    const typeSelected = (event: Event) => { const selected = (event as CustomEvent<string>).detail; if (selected in labels.inquiryTypeOptions) setInquiryType(selected); };
+    window.addEventListener('twings:use-case', useCaseSelected);
+    window.addEventListener('twings:inquiry-type', typeSelected);
+    const cleanup = () => { window.removeEventListener('twings:use-case', useCaseSelected); window.removeEventListener('twings:inquiry-type', typeSelected); };
     if (params.get('type') && params.get('type')! in labels.inquiryTypeOptions) setInquiryType(params.get('type')!);
     if (params.get('useCase') && params.get('useCase')! in labels.useCaseOptions) setUseCase(params.get('useCase')!);
     // Persist only a random request key, never the visitor's form contents. A lost network
@@ -106,7 +117,7 @@ export function BrandInquiryForm({
       sessionStorage.setItem('twings.inquiry.request', id);
     } catch { /* Without storage or secure UUID support, the server accepts a blank request key. */ }
     const outcome = params.get('inquiry');
-    if (!outcome) return;
+    if (!outcome) return cleanup;
     if (outcome === 'sent') {
       setStatus('sent');
       setReceipt(params.get('receipt') === '1');
@@ -124,6 +135,7 @@ export function BrandInquiryForm({
     params.delete('id');
     const rest = params.toString();
     window.history.replaceState(null, '', `${window.location.pathname}${rest ? `?${rest}` : ''}${window.location.hash}`);
+    return cleanup;
   }, [labels.inquiryTypeOptions, labels.useCaseOptions]);
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
@@ -134,6 +146,7 @@ export function BrandInquiryForm({
     const payload = {
       company: text('company'),
       contactName: text('contactName'),
+      contactRole: text('contactRole'),
       email: text('email'),
       phone: text('phone'),
       budgetBand: text('budgetBand'),
@@ -185,24 +198,25 @@ export function BrandInquiryForm({
 
   return (
     <form data-brand-inquiry="form" method="post" action={endpoint} onSubmit={submit} className="flex flex-col gap-5">
-      <p className="font-label text-label uppercase">{labels.formHeading}</p>
+      {!compact && <p className="font-label text-label uppercase">{labels.formHeading}</p>}
       <input type="hidden" name="locale" value={locale} />
       <input ref={requestIdRef} type="hidden" name="requestId" />
 
-      <div className="grid gap-5 sm:grid-cols-2">
+      {compact ? <><input type="hidden" name="inquiryType" value={inquiryType} /><input type="hidden" name="useCase" value={useCase} /><input type="hidden" name="budgetBand" value="undecided" /></> : <div className="grid gap-5 sm:grid-cols-2">
         <label><span className={LABEL}>{labels.inquiryTypeLabel}</span><select name="inquiryType" value={inquiryType} onChange={event => setInquiryType(event.target.value)} className={`${INPUT} mt-2`}>{Object.entries(labels.inquiryTypeOptions).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
         <label><span className={LABEL}>{labels.useCaseLabel}</span><select name="useCase" value={useCase} onChange={event => setUseCase(event.target.value)} className={`${INPUT} mt-2`}>{Object.entries(labels.useCaseOptions).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
-      </div>
+      </div>}
 
       <div className="grid gap-5 sm:grid-cols-2">
         <label>
           <span className={LABEL}>{labels.fieldCompany}</span>
-          <input name="company" required maxLength={120} autoComplete="organization" aria-invalid={invalid('company')} className={`${INPUT} mt-2`} />
+          <input name="company" required maxLength={120} autoFocus={compact} autoComplete="organization" aria-invalid={invalid('company')} className={`${INPUT} mt-2`} />
         </label>
         <label>
           <span className={LABEL}>{labels.fieldName}</span>
           <input name="contactName" required maxLength={80} autoComplete="name" aria-invalid={invalid('contactName')} className={`${INPUT} mt-2`} />
         </label>
+        {compact && <label><span className={LABEL}>{labels.fieldRole}</span><input name="contactRole" maxLength={80} autoComplete="organization-title" aria-invalid={invalid('contactRole')} className={`${INPUT} mt-2`} /></label>}
         <label>
           <span className={LABEL}>{labels.fieldEmail}</span>
           <input name="email" type="email" required maxLength={254} autoComplete="email" inputMode="email" aria-invalid={invalid('email')} className={`${INPUT} mt-2`} />
@@ -211,7 +225,7 @@ export function BrandInquiryForm({
           <span className={LABEL}>{labels.fieldPhone}</span>
           <input name="phone" type="tel" maxLength={40} autoComplete="tel" inputMode="tel" className={`${INPUT} mt-2`} />
         </label>
-        <label>
+        {!compact && <label>
           <span className={LABEL}>{labels.fieldBudget}</span>
           <select name="budgetBand" defaultValue="undecided" aria-invalid={invalid('budgetBand')} className={`${INPUT} mt-2`}>
             <option value="under_3m">{labels.budgetUnder3m}</option>
@@ -220,8 +234,8 @@ export function BrandInquiryForm({
             <option value="over_30m">{labels.budgetOver30m}</option>
             <option value="undecided">{labels.budgetUndecided}</option>
           </select>
-        </label>
-        <label>
+        </label>}
+        {!compact && <label>
           <span className={LABEL}>{labels.fieldTemplate}</span>
           <select name="templateSlug" defaultValue="undecided" className={`${INPUT} mt-2`}>
             <option value="undecided">{labels.templateUndecided}</option>
@@ -232,13 +246,13 @@ export function BrandInquiryForm({
               </option>
             ))}
           </select>
-        </label>
+        </label>}
       </div>
 
-      <label>
+      {!compact && <label>
         <span className={LABEL}>{labels.fieldTiming}</span>
         <input name="timing" maxLength={120} placeholder={labels.timingPlaceholder} className={`${INPUT} mt-2`} />
-      </label>
+      </label>}
 
       <label>
         <span className={LABEL}>{labels.fieldMessage}</span>

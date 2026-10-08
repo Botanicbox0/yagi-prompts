@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { getDictionary } from '@/lib/i18n/dictionaries';
 import { FAQ_CATALOG, FAQ_CATEGORIES, faqItems } from '@/lib/faq/catalog';
 import type { PromptCard } from '@/lib/prompts/catalog';
-import { campaignServiceStructuredData, faqStructuredData, siteStructuredData, templateStructuredData } from '@/lib/seo/structured-data';
+import { brandCaseStudiesStructuredData, campaignServiceStructuredData, faqStructuredData, siteStructuredData, templateStructuredData } from '@/lib/seo/structured-data';
 import { serializeJsonLd } from '@/lib/seo/json-ld';
 
 const origin = 'https://twings.example';
@@ -64,6 +64,20 @@ describe('public structured data', () => {
     expect(campaignServiceStructuredData({ origin, path: '/en/campaigns', locale: 'en', name: 'Campaigns', description: 'Brief', serviceType: 'Campaigns' })).not.toHaveProperty('offers');
   });
 
+  it('describes the two public Morphic cases without inventing exact counters or conversions', () => {
+    const data = brandCaseStudiesStructuredData({ origin, locale: 'ko', cases: [
+      { id: 'morphic-90s-interview', name: 'Morphic · 90년대 인터뷰', description: '9편, 200만+ 조회수, 파생 오가닉 콘텐츠 300건+.' },
+      { id: 'morphic-september-kr-jp', name: 'Morphic · 9월 후속', description: '한국과 일본에서 진행한 후속 캠페인.' },
+    ] });
+    expect(data).toMatchObject({ '@type': 'ItemList', numberOfItems: 2, inLanguage: 'ko' });
+    const items = data.itemListElement as { item: Record<string, unknown> }[];
+    expect(items.map(({ item }) => item['@type'])).toEqual(['CreativeWork', 'CreativeWork']);
+    expect(items[0]?.item).toMatchObject({ url: `${origin}/ko/brands#morphic-90s-interview`, publisher: { '@id': `${origin}/#organization` } });
+    expect(items[0]?.item).not.toHaveProperty('citation');
+    expect(items[1]?.item).not.toHaveProperty('citation');
+    expect(JSON.stringify(data)).not.toMatch(/Event|AggregateRating|price|payout|conversion|userInteractionCount/);
+  });
+
   it('escapes script breakouts without changing the parsed content', () => {
     const data = { text: '</script><script>alert("x")</script>&\u2028\u2029' };
     const text = serializeJsonLd(data);
@@ -86,18 +100,34 @@ describe('single FAQ catalog', () => {
     for (const locale of ['ko', 'en'] as const) {
       const dict = getDictionary(locale);
       const all = faqItems(dict);
-      expect(all).toHaveLength(8);
+      expect(all).toHaveLength(16);
       expect(new Set(all.map((item) => item.q.trim().toLowerCase())).size).toBe(all.length);
       for (const item of all) {
         expect(item.q.trim().length).toBeGreaterThan(0);
         expect(item.a.trim().length).toBeGreaterThan(0);
       }
-      for (const placement of ['landing', 'template', 'campaign'] as const) {
+      for (const placement of ['landing', 'template', 'campaign', 'brand'] as const) {
         const visible = faqItems(dict, placement);
         const data = faqStructuredData(origin, `/${locale}/faq`, locale, visible);
         expect(data.mainEntity).toEqual(visible.map((item) => ({ '@type': 'Question', name: item.q, acceptedAnswer: { '@type': 'Answer', text: item.a } })));
         for (const item of visible) expect(all).toContainEqual(item);
       }
+    }
+  });
+
+  it('answers brand AI safety and cross-market questions in both the page catalog and JSON-LD', () => {
+    for (const locale of ['ko', 'en'] as const) {
+      const items = faqItems(getDictionary(locale), 'brand');
+      expect(items).toHaveLength(8);
+      const safety = items.find(item => item.id === 'ai-campaign-safety');
+      const markets = items.find(item => item.id === 'korea-japan-campaigns');
+      expect(safety?.a).toContain(locale === 'ko' ? '본인 얼굴' : 'own likeness');
+      expect(safety?.a).toContain(locale === 'ko' ? '국외 이전' : 'overseas processing');
+      expect(safety?.a).toContain(locale === 'ko' ? '24시간' : '24 hours');
+      expect(markets?.a).toContain(locale === 'ko' ? '동시에' : 'simultaneously');
+      expect(markets?.a).not.toMatch(/200만|2M\+|300건|300\+/);
+      const data = faqStructuredData(origin, `/${locale}/brands`, locale, items);
+      expect(data.mainEntity).toContainEqual({ '@type': 'Question', name: safety?.q, acceptedAnswer: { '@type': 'Answer', text: safety?.a } });
     }
   });
 
@@ -108,5 +138,11 @@ describe('single FAQ catalog', () => {
       expect(content).toContain('https://twings.app/ko/faq');
       expect(content).not.toMatch(/https:\/\/[^\s]*(?:\/admin|\/account|\/api|\/billing|\/renders)|19,000|39,000|TOSS_SECRET_KEY|SUPABASE_SERVICE_ROLE_KEY/);
     }
+    const full = readFileSync('public/llms-full.txt', 'utf8');
+    expect(full).toContain('Morphic');
+    expect(full).toMatch(/9 (?:commissioned |campaign )?films|9편/);
+    expect(full).toMatch(/2M\+|200만\+/);
+    expect(full).toMatch(/300\+/);
+    expect(full).toContain('not an individual creator result or an attributed conversion rate');
   });
 });

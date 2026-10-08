@@ -334,7 +334,7 @@ const PRIVACY_KO = `## 1. 수집하는 개인정보
 | 필수 | **얼굴 사진**(이용자가 올린 사진), 생성된 결과물 | 결과물을 만들 때 |
 | 필수 | 인물 자산 식별자(자산 그룹·자산 ID), 카메라 본인 인증을 거친 경우 그 결과 | 실제 인물 사진으로 결과물을 만들 때 |
 | 선택 | 활동 SNS 주소, 팔로워 수, 게시물 링크, 조회수 | 캠페인 지원·게시 시 |
-| 선택 | 회사명, 담당자 이름, 업무 이메일, 연락처, 예산대 | 브랜드 캠페인 의뢰 시 |
+| 선택 | 회사명, 담당자 이름, 직위, 업무 이메일, 연락처, 예산대, 문의 내용 | 브랜드 캠페인 의뢰 시 |
 | 자동 | 접속 기록, 브라우저 정보 | 서비스 이용 시 |
 
 본인 인증 과정에서 카메라로 촬영되는 얼굴 영상은 인증 제공자(BytePlus)가 처리하며, **회사 서버에는 저장되지 않습니다.** 회사는 인증 결과와 식별자만 보관합니다.
@@ -407,7 +407,7 @@ const PRIVACY_EN = `## 1. What we collect
 | Required | **Face photo** (the one you upload), the generated result | Making a result |
 | Required | Likeness asset identifiers (asset group and asset IDs) and, where a camera check was run, its outcome | Making a result from a real-person photo |
 | Optional | SNS link, follower count, post link, view count | Applying to and posting in a campaign |
-| Optional | Company, contact name, work email, phone, budget range | Sending a brand enquiry |
+| Optional | Company, contact name, job title, work email, phone, budget range, enquiry text | Sending a brand enquiry |
 | Automatic | Access logs, browser information | Using the Service |
 
 The face video captured during verification is processed by the verification provider (BytePlus) and **is not stored on our servers**. We keep only the outcome and an identifier.

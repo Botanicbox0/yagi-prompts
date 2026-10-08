@@ -1,18 +1,17 @@
 import type { Metadata } from 'next';
 import { DEFAULT_LOCALE, isLocale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/dictionaries';
-import { getPromptCatalog } from '@/lib/prompts/public-catalog';
 import { MarketingNav, MarketingFooter } from '@/components/marketing/chrome';
-import { CampaignShowreel } from '@/components/campaigns/showreel';
-import { BrandInquiryForm } from '@/components/campaigns/brand-form';
+import { BrandInquiryDialog } from '@/components/campaigns/brand-inquiry-dialog';
+import { BrandFormatExplorer, MorphicFilmPair } from '@/components/campaigns/brand-experience';
 import { CAMPAIGN_REEL } from '@/lib/campaigns/showreel';
-import { CASE_STUDIES } from '@/lib/campaigns/case-studies';
-import { brandsHref, brandEnquiryHref, brandWorkspaceHref, BRAND_INQUIRY_ENDPOINT } from '@/lib/campaigns/links';
+import { BrandCustomerStory } from '@/components/campaigns/brand-customer-story';
+import { brandsHref, brandEnquiryHref, BRAND_INQUIRY_ENDPOINT } from '@/lib/campaigns/links';
 import { legalDocument } from '@/lib/legal/documents';
 import { legalHref } from '@/lib/legal/links';
 import { siteOgImage } from '@/lib/seo/og';
 import { JsonLd } from '@/lib/seo/json-ld';
-import { campaignServiceStructuredData } from '@/lib/seo/structured-data';
+import { brandCaseStudiesStructuredData, campaignServiceStructuredData } from '@/lib/seo/structured-data';
 import { siteUrl } from '@/lib/seo/site-url';
 import { FaqSection } from '@/lib/seo/faq-section';
 
@@ -23,88 +22,114 @@ type Props = { params: Promise<{ locale: string }> };
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { locale: raw } = await params;
   const locale = isLocale(raw) ? raw : DEFAULT_LOCALE;
-  const copy = getDictionary(locale).brandLanding;
-  return { title: copy.metaTitle, description: copy.metaDescription,
+  const dict = getDictionary(locale);
+  const copy = dict.brandLanding;
+  const image = siteOgImage(locale);
+  return {
+    title: copy.metaTitle,
+    description: copy.metaDescription,
     alternates: { canonical: brandsHref(locale), languages: { ko: brandsHref('ko'), en: brandsHref('en'), 'x-default': brandsHref('en') } },
-    openGraph: { title: copy.metaTitle, description: copy.metaDescription, url: brandsHref(locale), images: [siteOgImage(locale)] },
+    openGraph: { type: 'website', locale: locale === 'ko' ? 'ko_KR' : 'en_US', siteName: dict.meta.siteName, title: copy.metaTitle, description: copy.metaDescription, url: brandsHref(locale), images: [image] },
+    twitter: { card: 'summary_large_image', title: copy.metaTitle, description: copy.metaDescription, images: [image] },
   };
 }
 
 export default async function BrandsPage({ params }: Props) {
   const { locale: raw } = await params;
   const locale = isLocale(raw) ? raw : DEFAULT_LOCALE;
-  const dict = getDictionary(locale), t = dict.brandLanding, reel = dict.campaigns.landing;
-  const prompts = await getPromptCatalog();
-  const templates = prompts.video.map(card => ({ slug: card.slug, title: locale === 'ko' ? card.titleKo || card.title : card.title }));
+  const dict = getDictionary(locale);
+  const t = dict.brandLanding;
   return <>
     <MarketingNav locale={locale} dict={dict} rest="/brands" />
     <JsonLd id="campaign-service-structured-data" data={campaignServiceStructuredData({ origin: siteUrl(), path: brandsHref(locale), locale, name: t.metaTitle, description: t.metaDescription, serviceType: dict.seo.serviceType })} />
-    <main id="main" data-brand-landing>
-      <section data-section data-theme="light" data-campaign-hero className="section">
-        <div className="audience-shell pt-28 pb-12 lg:pt-36 lg:pb-16">
-          <p className="audience-eyebrow">{t.eyebrow}</p>
-          <div className="mt-6 grid gap-8 lg:grid-cols-[1.25fr_0.75fr] lg:items-end lg:gap-14">
-            <h1 className="audience-title whitespace-pre-line">{t.title}</h1>
-            <div className="max-w-xl"><p className="text-base leading-relaxed opacity-65">{t.body}</p><div className="mt-8 flex flex-wrap items-center gap-5"><a data-campaign-cta-brand href={brandEnquiryHref(locale)} className="audience-button">{t.primaryCta} ↗</a><a href="#work" className="inline-flex min-h-11 items-center text-sm underline underline-offset-4">{t.secondaryCta}</a></div></div>
+    <JsonLd id="brand-case-studies-structured-data" data={brandCaseStudiesStructuredData({ origin: siteUrl(), locale, cases: [{ id: 'morphic', name: t.stories.title, description: t.stories.summary, path: `/${locale}/brands/stories/morphic` }] })} />
+
+    <main id="main" data-brand-landing className="overflow-clip bg-white text-brand-ink">
+      <section data-section data-theme="dark" data-campaign-hero className="section bg-brand-night text-white">
+        <div className="audience-shell pb-10 pt-28 lg:pb-16 lg:pt-36">
+          <p className="audience-eyebrow text-brand-blue-light">{t.eyebrow}</p>
+          <div className="mt-6 grid gap-8 lg:grid-cols-[1.18fr_0.82fr] lg:items-end lg:gap-16">
+            <h1 className="audience-title max-w-[13ch] whitespace-pre-line text-[clamp(2.35rem,11vw,7.5rem)] leading-[0.94] tracking-[-0.065em] sm:text-[clamp(3.3rem,7.4vw,7.5rem)] lg:text-[clamp(4.6rem,6.5vw,6rem)]">{t.title}</h1>
+            <div className="max-w-xl pb-2">
+              <p className="text-base leading-relaxed text-white/68 sm:text-lg">{t.body}</p>
+              <div className="mt-8 flex flex-wrap items-center gap-5">
+                <a data-campaign-cta-brand data-inquiry-trigger href={brandEnquiryHref(locale)} className="inline-flex min-h-12 items-center rounded-full bg-blue px-6 text-sm font-semibold text-white transition-transform hover:-translate-y-0.5">{t.primaryCta} ↗</a>
+                <a href="#morphic-case" className="inline-flex min-h-11 items-center text-sm underline decoration-white/35 underline-offset-8">{t.secondaryCta}</a>
+              </div>
+            </div>
+          </div>
+          <p data-campaign-definition className="mt-14 max-w-3xl border-l border-blue pl-5 text-sm leading-relaxed text-white/62 lg:mt-20">{t.definition}</p>
+        </div>
+      </section>
+
+      <section id="work" data-section data-theme="light" data-campaign-reel-section className="section scroll-mt-24 bg-white">
+        <div className="audience-shell py-12 lg:py-20">
+          <div className="mb-8 grid gap-5 lg:grid-cols-[0.8fr_1.2fr] lg:items-end">
+            <div><p className="audience-eyebrow">{t.reelEyebrow}</p><h2 className="audience-heading mt-4 max-w-xl">{t.reelHeading}</h2></div>
+            <p className="max-w-xl text-sm leading-relaxed opacity-60 lg:justify-self-end">{t.reelBody}</p>
+          </div>
+          <BrandFormatExplorer items={CAMPAIGN_REEL} captions={t.formats} labels={t.media} />
+        </div>
+      </section>
+
+      <section id="process" data-section data-theme="light" data-campaign-principles data-campaign-process className="section scroll-mt-24 border-t border-black/10 bg-white">
+        <div className="audience-shell py-12 lg:py-16">
+          <p className="audience-eyebrow">{t.moatEyebrow}</p>
+          <ol className="mt-7 grid gap-8 sm:grid-cols-3 sm:gap-10">
+            {[[t.moat1Title, t.moat1Body], [t.moat2Title, t.moat2Body], [t.moat3Title, t.moat3Body]].map(([heading, body], index) => <li key={heading} className="border-t border-black/15 pt-5"><span className="font-mono text-xs text-blue">0{index + 1}</span><h2 className="mt-4 text-xl font-semibold tracking-tight">{heading}</h2><p className="mt-3 max-w-sm text-sm leading-relaxed opacity-65">{body}</p></li>)}
+          </ol>
+          <div data-brand-markets className="mt-12 grid gap-5 border-t border-black/15 pt-8 lg:grid-cols-[0.8fr_1.2fr] lg:items-end lg:gap-16">
+            <h2 className="whitespace-pre-line text-[clamp(1.7rem,3.2vw,3rem)] font-semibold leading-tight tracking-tight">{t.marketsHeading}</h2>
+            <p className="max-w-xl text-sm leading-relaxed opacity-65 lg:justify-self-end">{t.marketsBody}</p>
           </div>
         </div>
       </section>
 
-      <section id="work" data-section data-theme="light" data-campaign-reel-section className="section scroll-mt-24">
-        <div className="audience-shell pb-16 lg:pb-24">
-          <p className="audience-eyebrow mb-5">{t.reelEyebrow}</p>
-          <CampaignShowreel items={CAMPAIGN_REEL} captions={reel.reel} labels={{ play: reel.reelPlay, pause: reel.reelPause, unmute: reel.reelUnmute, mute: reel.reelMute }} />
-          <div className="mt-6 flex flex-wrap justify-between gap-4"><h2 className="text-lg font-semibold">{t.reelHeading}</h2><p className="max-w-lg text-xs leading-relaxed opacity-55">{t.reelBody}</p></div>
-          <p data-campaign-definition className="mt-12 max-w-3xl border-t border-hairline pt-7 text-base leading-relaxed opacity-65">{t.definition}</p>
-        </div>
-      </section>
-
-      <section data-section data-theme="light" data-campaign-principles className="section border-t border-hairline">
-        <div className="audience-shell py-16 lg:py-24"><p className="audience-eyebrow">{t.moatEyebrow}</p><h2 className="audience-heading mt-5 max-w-3xl">{t.moatHeading}</h2><p className="mt-6 max-w-2xl text-sm leading-relaxed opacity-60">{t.moatBody}</p><div className="mt-10 grid gap-8 md:grid-cols-3">{[[t.moat1Title,t.moat1Body],[t.moat2Title,t.moat2Body],[t.moat3Title,t.moat3Body]].map(([heading,body]) => <article key={heading} className="border-t border-hairline pt-5"><h3 className="text-lg font-semibold">{heading}</h3><p className="mt-3 text-sm leading-relaxed opacity-60">{body}</p></article>)}</div></div>
-      </section>
-
-      <section id="campaign-types" data-section data-theme="light" data-campaign-use-cases className="section scroll-mt-24 border-y border-hairline">
+      <section id="morphic-case" data-section data-theme="dark" data-campaign-proof className="section scroll-mt-20 bg-brand-night text-white">
         <div className="audience-shell py-16 lg:py-24">
-          <p className="audience-eyebrow">{t.typesEyebrow}</p><h2 className="audience-heading mt-4">{t.typesHeading}</h2><p className="mt-5 max-w-2xl text-sm leading-relaxed opacity-60">{t.typesBody}</p>
-          <div className="mt-10 grid gap-x-10 md:grid-cols-2">
-            {Object.entries(t.useCases).map(([key, item], index) => <article key={key} data-campaign-use-case={key} className="border-t border-hairline py-8">
-              <div className="flex items-baseline justify-between gap-3"><h3 className="text-2xl font-semibold tracking-tight">{item.title}</h3><span className="text-xs opacity-35">0{index+1}</span></div>
-              <dl className="mt-6 grid gap-4 text-sm">{[[t.brandProvides,item.brand],[t.studioMakes,item.studio],[t.creatorPosts,item.creator],[t.report,item.report]].map(([label,body]) => <div key={label} className="grid grid-cols-[7rem_1fr] gap-4"><dt className="opacity-45">{label}</dt><dd className="leading-relaxed">{body}</dd></div>)}</dl>
-              <a href={`${brandsHref(locale)}?useCase=${key}#brands`} className="mt-6 inline-flex min-h-11 items-center text-sm font-medium underline underline-offset-4">{t.primaryCta} ↗</a>
-            </article>)}
-          </div>
+          <p className="audience-eyebrow text-brand-blue-light">{t.stories.eyebrow}</p>
+          <div className="mb-10 mt-5 flex flex-wrap items-end justify-between gap-7"><h2 className="audience-heading whitespace-pre-line">{t.stories.title}</h2><a href={`/${locale}/brands/stories`} className="inline-flex min-h-11 items-center text-sm underline decoration-white/35 underline-offset-6">{t.stories.allCta} ↗</a></div>
+          <BrandCustomerStory dict={dict} locale={locale} />
         </div>
       </section>
 
-      <section data-section data-theme="dark" data-campaign-proof className="section">
+      <section id="campaign-types" data-section data-theme="light" data-campaign-use-cases className="section scroll-mt-24 bg-white">
         <div className="audience-shell py-16 lg:py-24">
-          <p className="audience-eyebrow">{t.caseEyebrow}</p><h2 className="audience-heading mt-5 whitespace-pre-line">{t.caseHeading}</h2>
-          {CASE_STUDIES.map(study => <article key={study.id} data-case-study={study.id} className="mt-12">
-            <div className="flex flex-wrap items-end justify-between gap-4 border-b border-hairline pb-6"><div><h3 className="text-2xl font-semibold">{t[study.clientKey]}</h3><p className="mt-2 text-sm opacity-60">{t[study.goalKey]} · {t[study.formatKey]}</p></div></div>
-            <dl className="grid gap-8 py-9 sm:grid-cols-3">{[[reel.proofStat1Value,reel.proofStat1Label],[reel.proofStat2Value,reel.proofStat2Label],[reel.proofStat3Value,reel.proofStat3Label]].map(([value,label]) => <div key={label}><dd className="text-[clamp(2.8rem,5vw,5rem)] leading-none font-medium tracking-tight">{value}</dd><dt className="mt-4 text-sm opacity-60">{label}</dt></div>)}</dl>
-          </article>)}
-          <p className="max-w-2xl text-xs leading-relaxed opacity-70">{t.caseNote}</p>
-        </div>
-      </section>
-
-      <section id="process" data-section data-theme="light" data-campaign-process className="section scroll-mt-24">
-        <div className="audience-shell grid gap-12 py-16 lg:grid-cols-[0.9fr_1.1fr] lg:gap-20 lg:py-24">
-          <div><p className="audience-eyebrow">{t.processEyebrow}</p><h2 className="audience-heading mt-5 whitespace-pre-line">{t.processHeading}</h2><p className="mt-6 text-sm leading-relaxed opacity-60">{t.processBody}</p></div>
-          <ol>{Object.entries(t.processSteps).map(([key,step],index) => <li key={key} className="grid grid-cols-[2rem_1fr] gap-4 border-t border-hairline py-6"><span className="pt-1 text-xs opacity-40">0{index+1}</span><div><h3 className="text-lg font-semibold">{step.title}</h3><p className="mt-2 text-sm leading-relaxed opacity-60">{step.body}</p></div></li>)}</ol>
-        </div>
-      </section>
-
-      <section id="brands" data-section data-theme="light" data-brands className="section scroll-mt-24 border-y border-hairline">
-        <div className="audience-shell grid gap-12 py-16 lg:grid-cols-[0.8fr_1.2fr] lg:gap-20 lg:py-24">
-          <div><p className="audience-eyebrow">{t.inquiryEyebrow}</p><h2 className="audience-heading mt-5">{t.inquiryHeading}</h2><p className="mt-6 text-sm leading-relaxed opacity-60">{t.inquiryBody}</p><p className="mt-5 text-xs leading-relaxed opacity-70">{t.inquiryNote}</p>
-            <div className="mt-10 border-t border-hairline pt-6"><h3 className="text-sm font-semibold">{t.workspaceHeading}</h3><p className="mt-2 text-xs leading-relaxed opacity-60">{t.workspaceBody}</p><a data-brand-workspace-entry href={brandWorkspaceHref(locale)} className="mt-3 inline-flex min-h-11 items-center text-sm underline underline-offset-4">{t.workspaceCta} ↗</a></div>
+          <div className="mb-10 flex flex-wrap items-end justify-between gap-5"><div><p className="audience-eyebrow">{t.typesEyebrow}</p><h2 className="audience-heading mt-4">{t.typesHeading}</h2></div><p className="max-w-md text-sm leading-relaxed opacity-65">{t.typesBody}</p></div>
+          <div data-brand-service-examples className="grid gap-5 sm:grid-cols-3">
+            {(['launch', 'app_platform', 'beauty_fashion'] as const).map((id) => {
+              const example = t.examples[id];
+              const image = {
+                launch: { src: '/reel/brands/y2k-flip-phone.jpg', width: 720, height: 1280 },
+                app_platform: { src: '/reel/brands/morphic-september-01.jpg', width: 960, height: 720 },
+                beauty_fashion: { src: '/reel/brands/city-fashion.jpg', width: 1280, height: 960 },
+              }[id];
+              return <a key={id} data-service-example={id} data-inquiry-trigger href={`${brandsHref(locale)}?useCase=${id}#brands`} className="group block overflow-hidden rounded-2xl bg-white focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-blue">
+                <div className="aspect-[4/3] overflow-hidden bg-brand-ink"><img src={image.src} alt="" width={image.width} height={image.height} loading="lazy" decoding="async" className="h-full w-full object-cover transition-transform duration-500 motion-safe:group-hover:scale-105" /></div>
+                <div className="p-6"><h3 className="flex items-center justify-between gap-4 text-xl font-semibold tracking-tight">{example.title}<span aria-hidden="true" className="text-blue">↗</span></h3><p className="mt-3 text-sm leading-relaxed opacity-65">{example.body}</p></div>
+              </a>;
+            })}
           </div>
-          <BrandInquiryForm endpoint={BRAND_INQUIRY_ENDPOINT} locale={locale} labels={dict.campaigns.brands} templates={templates} privacy={{ href: legalHref(locale,'privacy'), label: legalDocument('privacy',locale).title }} />
         </div>
       </section>
 
-      <section data-section data-theme="light" data-production-service className="section">
-        <div className="audience-shell flex flex-wrap items-end justify-between gap-8 py-16"><div className="max-w-xl"><p className="audience-eyebrow">{t.productionEyebrow}</p><h2 className="mt-4 text-2xl font-semibold tracking-tight">{t.productionHeading}</h2><p className="mt-4 text-sm leading-relaxed opacity-60">{t.productionBody}</p></div><div className="max-w-sm"><a href={`${brandsHref(locale)}?type=production#brands`} className="inline-flex min-h-11 items-center text-sm font-medium underline underline-offset-4">{t.productionCta} ↗</a><a href="https://pricing.yagiworkshop.xyz/" target="_blank" rel="noopener noreferrer" data-production-pricing className="mt-2 block text-sm underline underline-offset-4">{t.pricingCta} ↗</a><p className="mt-3 text-xs leading-relaxed opacity-70">{t.pricingNote}</p></div></div>
+      <section id="brands" data-section data-theme="light" data-brands className="section scroll-mt-24 border-y border-black/10 bg-white">
+        <div className="audience-shell grid gap-12 py-16 lg:grid-cols-[0.75fr_1.25fr] lg:gap-20 lg:py-24">
+          <div><p className="audience-eyebrow">{t.inquiryEyebrow}</p><h2 className="audience-heading mt-5 whitespace-pre-line">{t.inquiryHeading}</h2><p className="mt-6 text-sm leading-relaxed opacity-60">{t.inquiryBody}</p>
+          </div>
+          <div className="flex items-center lg:justify-end"><a data-inquiry-trigger href={brandEnquiryHref(locale)} className="inline-flex min-h-14 items-center gap-10 rounded-full bg-blue px-8 py-4 text-base font-semibold text-white">{t.primaryCta} <span aria-hidden="true">↗</span></a></div>
+          <BrandInquiryDialog endpoint={BRAND_INQUIRY_ENDPOINT} locale={locale} labels={dict.campaigns.brands} privacy={{ href: legalHref(locale, 'privacy'), label: legalDocument('privacy', locale).title }} title={t.inquiryDialogTitle} body={t.inquiryBody} close={t.inquiryClose} />
+        </div>
+      </section>
+
+      <section data-section data-theme="dark" data-production-service className="section bg-brand-night text-white">
+        <div className="audience-shell grid gap-10 py-16 lg:grid-cols-[0.7fr_1.3fr] lg:items-center lg:py-24">
+          <div><p className="audience-eyebrow text-brand-blue-light">{t.productionEyebrow}</p><h2 className="mt-5 text-[clamp(2rem,4vw,4rem)] whitespace-pre-line font-semibold leading-tight tracking-tight">{t.productionHeading}</h2><p className="mt-5 max-w-md text-sm leading-relaxed text-white/65">{t.productionBody}</p>
+            <a href="https://pitch.com/v/yagi-production-wokrs-vsrgfd" target="_blank" rel="noopener noreferrer" data-production-deck className="mt-8 inline-flex min-h-12 items-center gap-6 rounded-full bg-blue px-6 text-sm font-semibold text-white">{t.productionDeckCta} ↗</a>
+            <div className="mt-6 flex flex-wrap gap-x-6 gap-y-2"><a data-inquiry-trigger href={`${brandsHref(locale)}?type=production#brands`} className="inline-flex min-h-11 items-center text-sm underline decoration-white/35 underline-offset-6">{t.productionCta} ↗</a><a href="https://pricing.yagiworkshop.xyz/" target="_blank" rel="noopener noreferrer" data-production-pricing className="inline-flex min-h-11 items-center text-sm underline decoration-white/35 underline-offset-6">{t.pricingCta} ↗</a></div><p className="mt-3 max-w-md text-xs leading-relaxed text-white/60">{t.pricingNote}</p>
+          </div>
+          <div data-production-films><MorphicFilmPair media={[{ id: 'production-paris', src: '/reel/brands/production-paris.mp4', poster: '/reel/brands/production-paris.jpg', width: 1280, height: 720 }]} labels={{ titles: t.productionFilms, play: t.media.play, pause: t.media.pause }} /></div>
+        </div>
       </section>
       <FaqSection dict={dict} locale={locale} placement="brand" path={brandsHref(locale)} />
       <aside data-creator-door className="audience-shell flex flex-wrap items-center justify-between gap-6 border-t border-hairline py-10"><div><h2 className="text-lg font-semibold">{dict.audience.creatorDoor}</h2><p className="mt-2 max-w-xl text-sm opacity-60">{dict.audience.creatorDoorBody}</p></div><a href={`/${locale}`} className="text-sm font-medium underline underline-offset-4">{dict.audience.creatorDoorCta} ↗</a></aside>

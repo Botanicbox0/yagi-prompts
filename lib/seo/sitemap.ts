@@ -6,6 +6,7 @@ import { LEGAL_DOCS } from '@/lib/legal/documents';
 import { legalRest } from '@/lib/legal/links';
 import { LOCALES, type Locale } from '@/lib/i18n/config';
 import { localeAlternates } from './playbook-metadata';
+import { BRAND_STORIES } from '@/lib/campaigns/brand-stories';
 
 /**
  * PLAN §8 M5 — "sitemap + locale alternates", built as a pure function of (catalog, origin).
@@ -70,6 +71,8 @@ export function buildSitemap(input: SitemapInput): MetadataRoute.Sitemap {
     // docs/CAMPAIGNS.md — the campaigns listing. Weekly: a campaign is a month-long object.
     { rest: '/campaigns', priority: 0.8, changeFrequency: 'weekly' },
     { rest: '/brands', priority: 0.8, changeFrequency: 'weekly' },
+    { rest: '/brands/stories', priority: 0.7, changeFrequency: 'weekly' },
+    ...BRAND_STORIES.map(story => ({ rest: `/brands/stories/${story.slug}`, priority: 0.7, changeFrequency: 'weekly' as const })),
     { rest: '/pricing', priority: 0.8, changeFrequency: 'weekly' },
     { rest: '/faq', priority: 0.6, changeFrequency: 'weekly' },
     // The legal surface. Low priority — nobody searches for it — but LISTED, because a payment

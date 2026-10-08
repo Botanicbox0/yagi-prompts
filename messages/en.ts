@@ -4,7 +4,7 @@ export const en = {
     "label": "Choose your experience",
     "creator": "Creators",
     "brand": "Brands",
-    "services": "Campaigns",
+    "services": "Campaign types",
     "work": "Our work",
     "process": "How it works",
     "workspace": "Brand sign in",
@@ -43,116 +43,130 @@ export const en = {
     "campaignCta": "Explore campaigns"
   },
   brandLanding: {
-    "moatEyebrow": "Why creators take part",
-    "moatHeading": "A format they want on their own channel.",
-    "moatBody": "We start with the creator’s audience: a scene worth making, watching, and sharing. That gives a brand a stronger reason to be part of the content.",
-    "moat1Title": "Creative motivation",
-    "moat1Body": "An appealing format gives creators a reason to join beyond completing an advertising brief.",
-    "moat2Title": "A shared starting point",
-    "moat2Body": "The studio makes and tests the format first, so creators have a clear scene and a practical path to their own version.",
-    "moat3Title": "A campaign built around participation",
-    "moat3Body": "We plan recruitment and operations around the format’s appeal. Participation and performance still depend on the brief, creators, and audience.",
-    "metaTitle": "Creator campaigns for brands",
-    "metaDescription": "Plan a creator campaign with TWINGS. The studio develops the format, manages creator participation and reviews posts, with results shared in your brand workspace.",
-    "eyebrow": "TWINGS for brands",
-    "title": "Campaigns creators\nwant to join.",
-    "body": "We build a film format for your brand, then run a campaign where selected creators make it their own and post it on their channels.",
+    "moatEyebrow": "FROM PRODUCTION TO PUBLISHING",
+    "moat1Title": "AI ad production",
+    "moat1Body": "We build a film format around your product and message, ready for creators to star in.",
+    "moat2Title": "Creator participation",
+    "moat2Body": "We recruit creators for your brand and make the ads with their own faces.",
+    "moat3Title": "Publishing and reporting",
+    "moat3Body": "We review films and ad disclosures, manage publishing, and collect posts and available results.",
+    "metaTitle": "Creator Campaigns for Brands",
+    "metaDescription": "AI ad production and creator campaigns across Korea and Japan, from recruitment to publishing and reporting. Explore simultaneous market launches and real Morphic work.",
+    "marketsHeading": "Korea and Japan.\nOne campaign.",
+    "marketsBody": "Reach both markets simultaneously through our creator pools in Korea and Japan. We choose the message and creators for each market, then manage recruitment, publishing schedules, and reporting together.",
+    "eyebrow": "TWINGS FOR BRANDS",
+    "title": "Brand ads\ncreators want\nto be part of.",
+    "body": "We produce AI ads starring real creators and manage publishing on their channels. One team handles production, recruitment, content review, and reporting.",
     "primaryCta": "Discuss your campaign",
-    "secondaryCta": "See the work",
-    "definition": "TWINGS runs brand campaigns through creators. The studio handles format development, recruitment, post review, and payout operations; the brand follows agreed deliverables and results in its workspace.",
-    "reelEyebrow": "Production examples",
-    "reelHeading": "The format comes first.",
-    "reelBody": "Different faces, the same compelling scene. Explore a few formats made by the studio.",
-    "typesEyebrow": "Your brief, our starting point",
-    "typesHeading": "What are you launching?",
-    "typesBody": "Start with the message and the audience. We shape the format and campaign around them.",
-    "brandProvides": "You bring",
-    "studioMakes": "We make",
-    "creatorPosts": "Creators post",
-    "report": "You review",
-    "useCases": {
-      "launch": {
-        "title": "Product launches",
-        "brand": "The product, the message, and the launch window.",
-        "studio": "A format that puts the product at the centre of the scene.",
-        "creator": "Their own version of the agreed film format.",
-        "report": "Published links and available performance figures."
+    "secondaryCta": "See campaign results",
+    "definition": "TWINGS is a creator campaign studio that develops a branded video format, recruits creators to take part, and manages publishing across their channels.",
+    "reelEyebrow": "AI ADS × CREATORS",
+    "reelHeading": "Your brand ad.\nTheir own face.",
+    "reelBody": "Turn one ad format into films starring different creators. We manage real channel posts that introduce your product or service.",
+    "formats": {
+      "city": {
+        "title": "City fashion film",
+        "line": "Format study · 4:3"
       },
-      "beauty_fashion": {
-        "title": "Beauty & fashion",
-        "brand": "The collection, visual references, and usage guidelines.",
-        "studio": "A look or scene built around the brand’s visual direction.",
-        "creator": "A film with their own face, following the campaign brief.",
-        "report": "Approved posts and the agreed content deliverables."
+      "y2k": {
+        "title": "Y2K product film",
+        "line": "Format study · 9:16"
       },
-      "app_platform": {
-        "title": "Apps & platforms",
-        "brand": "The experience to introduce and the action you want people to take.",
-        "studio": "A format that makes that experience visible.",
-        "creator": "Content and captions that introduce the experience.",
-        "report": "Post links and the campaign’s available metrics."
-      },
-      "local": {
-        "title": "Places & franchises",
-        "brand": "The place, local audience, and campaign period.",
-        "studio": "A format shaped around the place and its story.",
-        "creator": "The agreed film, with the place and required tags.",
-        "report": "Posting status and available results by campaign."
-      },
-      "seasonal": {
-        "title": "Seasonal campaigns",
-        "brand": "The occasion, offer, and communication dates.",
-        "studio": "A repeatable format with a shared campaign mood.",
-        "creator": "Their own interpretation within the agreed brief.",
-        "report": "Published content and the final campaign summary."
+      "tea": {
+        "title": "Editorial film",
+        "line": "Format study · 4:3"
       }
     },
-    "caseEyebrow": "Campaign experience",
-    "caseHeading": "From a finished film\nto organic participation.",
-    "caseClient": "Global AI platform",
-    "caseGoal": "Launch campaign",
-    "caseFormat": "Studio-made films and derivative organic content",
-    "caseNote": "Aggregate results from a global AI platform launch campaign.",
-    "processEyebrow": "Working together",
-    "processHeading": "A clear brief.\nA visible process.",
-    "processBody": "We agree the scope, schedule, deliverables, and usage terms before the campaign begins.",
-    "processSteps": {
-      "brief": {
-        "title": "Tell us the goal",
-        "body": "Share the audience, message, and timing. An outline is enough to start."
+    "media": {
+      "play": "Play",
+      "pause": "Pause",
+      "formatPicker": "Choose a format film",
+      "filmLabel": "FILM"
+    },
+    "typesEyebrow": "CREATIVE EXAMPLES",
+    "typesHeading": "Ads we can make for you.",
+    "typesBody": "From product films to service experiences people want to try.",
+    "cases": {
+      "morphic90s": {
+        "eyebrow": "MORPHIC · AUGUST 2026 · 1990s INTERVIEW CAMPAIGN",
+        "body": "One selfie becomes a 1990s-style TV interview. Creators published their films and shared instructions with viewers in the comments. People outside the campaign began making their own versions.",
+        "films": [
+          "1990s interview · published film 01",
+          "1990s interview · published film 02"
+        ],
+        "postCta": "View the Instagram post",
+        "filmNote": "Actual films published during the August 2026 campaign. Turn on sound after playing to hear the interview.",
+        "sourceCta": "See the 1990s interview format on Morphic",
+        "note": "Public campaign-level totals from Morphic’s August 2026 campaign, not an individual creator result or an attributed conversion rate.",
+        "metrics": {
+          "films": {
+            "label": "campaign films"
+          },
+          "views": {
+            "label": "total views"
+          },
+          "organic": {
+            "label": "derivative organic posts"
+          }
+        }
       },
-      "format": {
-        "title": "Agree the format",
-        "body": "Review the creative direction and campaign terms with the studio."
-      },
-      "creators": {
-        "title": "Bring in creators",
-        "body": "We recruit and select creators against the agreed brief and requirements."
-      },
-      "publish": {
-        "title": "Create and review",
-        "body": "Creators make and post the film. We check submitted links against the campaign requirements."
-      },
-      "report": {
-        "title": "Review the results",
-        "body": "Follow the campaign’s status and shared results in your brand workspace."
+      "morphicSeptember": {
+        "eyebrow": "MORPHIC · SEPTEMBER 2026 FOLLOW-UP",
+        "body": "The collaboration with Morphic continued with creator campaigns in Korea and Japan. TWINGS managed format production, recruitment, post review, and reporting.",
+        "note": "These are real films from the September Morphic campaign.",
+        "films": [
+          "Morphic September campaign film 01",
+          "Morphic September campaign film 02"
+        ]
       }
     },
-    "workspaceHeading": "Already working with us?",
-    "workspaceBody": "Sign in to your brand workspace for shared campaigns, approvals, and reports.",
-    "workspaceCta": "Open brand workspace",
     "productionEyebrow": "Also by YAGI",
-    "productionHeading": "Need the film or filter itself?",
-    "productionBody": "For a standalone brand film or filter production, discuss a separate production brief with YAGI.",
+    "productionHeading": "AI production.\nBrand ad films.",
+    "productionBody": "We plan and produce product ads and campaign films. You can commission a film without a creator campaign. Explore real work from YAGI, the studio behind TWINGS.",
+    "productionDeckCta": "View the production portfolio",
+    "productionFilms": [
+      "Paris campaign film · YAGI production"
+    ],
     "productionCta": "Discuss production in English",
     "pricingCta": "Production estimate · Korean",
     "pricingNote": "The estimate calculator is currently in Korean. You can use the English enquiry form here.",
-    "inquiryEyebrow": "Start a conversation",
-    "inquiryHeading": "Tell us what you have in mind.",
-    "inquiryBody": "Share your brand, audience, and timing. We will review the brief and reply to your email.",
-    "inquiryNote": "Submitting an enquiry does not place an order. Scope and fees are agreed separately.",
+    "inquiryEyebrow": "START A PROJECT",
+    "inquiryHeading": "Let’s make\nyour brand ad.",
+    "inquiryBody": "Tell us about your brand and the film you want to make. We’ll get in touch by email.",
+    "inquiryClose": "Close enquiry",
+    "inquiryDialogTitle": "Video and campaign enquiry",
     "legacyBrandLink": "Looking to run a brand campaign?",
-    "legacyBrandCta": "Visit TWINGS for brands"
+    "legacyBrandCta": "Visit TWINGS for brands",
+    "stories": {
+      "eyebrow": "CUSTOMER STORIES",
+      "title": "Creator campaigns\nwith Morphic.",
+      "summary": "A collaboration that started with 1990s interviews and continued with creator campaigns across Korea and Japan.",
+      "detailCta": "Read the Morphic story",
+      "allCta": "Explore customer stories",
+      "indexTitle": "Brand campaigns.\nMade with creators.",
+      "indexBody": "Explore the actual films, published posts, and verified results.",
+      "back": "Explore brand services",
+      "augustHeading": "A 1990s interview\npeople wanted to make.",
+      "septemberHeading": "Creator campaigns\nacross Korea and Japan.",
+      "metaTitle": "Morphic creator campaign case study",
+      "metaDescription": "Explore real posts from Morphic’s 1990s interview campaign, August totals of 2M+ views and 300+ organic derivatives, and the September Korea and Japan follow-up.",
+      "indexMetaTitle": "Brand campaign customer stories",
+      "scope": "August 2026 campaign totals"
+    },
+    "examples": {
+      "launch": {
+        "title": "Product ads",
+        "body": "Put your product at the centre of a scene and introduce it on creator channels."
+      },
+      "app_platform": {
+        "title": "Apps and services",
+        "body": "Show what your service can do through results creators make themselves."
+      },
+      "beauty_fashion": {
+        "title": "Beauty and fashion",
+        "body": "Bring your brand’s visual world to life with creators as the lead."
+      }
+    }
   },
   portrait: {
     title: 'A familiar face. Yours.',
@@ -1596,6 +1610,8 @@ export const en = {
       formHeading: 'Campaign enquiry',
       fieldCompany: 'Company or brand',
       fieldName: 'Your name',
+      fieldRole: 'Job title (optional)',
+      rolePrefix: 'Role',
       fieldEmail: 'Work email',
       fieldPhone: 'Phone (optional)',
       fieldBudget: 'Budget range',
@@ -1604,14 +1620,14 @@ export const en = {
       budget10mTo30m: 'KRW 10M to 30M',
       budgetOver30m: 'Over KRW 30M',
       budgetUndecided: 'Not decided',
-      fieldTemplate: 'Preferred format',
+      fieldTemplate: 'Reference template · creator catalogue',
       templateNew: 'A brand-only scene',
       templateUndecided: 'Decide after a call',
       fieldTiming: 'Timing (optional)',
       timingPlaceholder: 'e.g. posts live mid-October',
       fieldMessage: 'Message',
-      messagePlaceholder: 'The product, the goal, any reference links.',
-      consent: 'I agree that the company name, my name, email and phone are collected to answer this enquiry, kept for one year after the reply, and handled under the privacy policy.',
+      messagePlaceholder: 'The product, the goal, any reference links, and the title of a production example you liked.',
+      consent: 'I agree that the company name, my name, job title, email, phone and request are collected to answer this enquiry, kept for one year after the reply, and handled under the privacy policy.',
       submit: 'Send enquiry',
       submitting: 'Sending…',
       successTitle: 'Enquiry received.',
@@ -1961,6 +1977,22 @@ export const en = {
     a8: 'It is AI-made, so details like hands, lettering and backgrounds can go wrong, and it may differ from the sample. If your face is not reflected or the film does not play, use "Not happy with the result?" on the result page. Within 7 days we re-render for free or refund.',
     q6: 'Do you take production work?',
     a6: "Yes. You can commission standalone video or filter production from YAGI. Choose production in the enquiry form on the Brands page and share your goals and references.",
+    q9: "How does a creator campaign work?",
+    a9: "We first produce an AI film format around your product and message. We recruit creators and make versions starring their own faces with their consent. TWINGS reviews the films and ad disclosures, then manages actual channel publishing, payment, and reporting.",
+    q10: "How is this different from a typical influencer ad?",
+    a10: "We start with a film format creators want to star in. The same concept becomes films featuring different creators, allowing multiple creators to join one campaign. In Morphic’s 1990s interview campaign, people outside the campaign also made content using the format.",
+    q11: "Can I commission a film without a creator campaign?",
+    a11: "Yes. YAGI provides standalone planning and production for product ads, brand films, and campaign films. Explore our real work in the production portfolio and tell us what you want to make in the enquiry form.",
+    q12: "How are campaign costs and schedules set?",
+    a12: "They depend on the number and length of films, creators, publishing channels, content usage, and target dates. We review your production and campaign needs before providing an estimate and schedule.",
+    q13: "How do you report campaign results?",
+    a13: "We collect actual post links and available views and engagement, with the measurement date and scope. Measuring purchases or sign-ups requires an agreed tracking method, such as tracking links, before the campaign starts.",
+    q14: "Can my brand reuse creator films in its own ads?",
+    a14: "Brand channel posts and paid advertising depend on the rights agreed with the creator. Channels, duration, and editing permissions are discussed before the campaign starts.",
+    q15: "How do you handle likeness rights, personal data, and AI ad disclosures?",
+    a15: "Creators participate using their own likeness with consent. The AI model provider runs automated moderation before generation, and our team reviews content and ad disclosures before publishing. We check Korean advertising guidance, Japan’s stealth-marketing rules, and each channel’s AI content policies to set the required disclosures and usage scope. Face photos are processed only as needed to produce results; processors, overseas processing, retention, and deletion are disclosed in our privacy policy. Access to materials is limited by work-related permissions, and likeness misuse reports are reviewed within 24 hours.",
+    q16: "Can you run creator campaigns in Korea and Japan at the same time?",
+    a16: "Yes. We can run campaigns simultaneously through our creator pools in Korea and Japan. We adapt one brand concept with messages and creators for each market, managing production, recruitment, publishing schedules, and reporting together. Our Morphic work included campaigns in both countries.",
   },
   /** The legal surface's chrome — the documents' own text lives in lib/legal/documents.ts. */
   legal: {

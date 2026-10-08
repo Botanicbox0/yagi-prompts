@@ -11,31 +11,31 @@ import { LOCALES } from '@/lib/i18n/config';
  * — so that is what is pinned.
  */
 describe('the campaigns showreel', () => {
-  it('lists four clips, two wide and two tall, in the grid order', () => {
-    expect(CAMPAIGN_REEL.map((item) => item.orientation)).toEqual(['landscape', 'portrait', 'portrait', 'landscape']);
-    expect(new Set(CAMPAIGN_REEL.map((item) => item.id)).size).toBe(4);
+  it('lists the three approved format studies with both wide and tall work', () => {
+    expect(CAMPAIGN_REEL.map((item) => item.id)).toEqual(['city', 'y2k', 'tea']);
+    expect(new Set(CAMPAIGN_REEL.map((item) => item.id)).size).toBe(CAMPAIGN_REEL.length);
+    expect(CAMPAIGN_REEL.some((item) => item.orientation === 'landscape')).toBe(true);
+    expect(CAMPAIGN_REEL.some((item) => item.orientation === 'portrait')).toBe(true);
   });
 
   it('points every clip and poster at a file that exists under public/', () => {
     for (const item of CAMPAIGN_REEL) {
       for (const url of [item.src, item.poster]) {
-        expect(url.startsWith('/reel/campaigns/'), url).toBe(true);
+        expect(url.startsWith('/reel/brands/'), url).toBe(true);
         expect(existsSync(join(process.cwd(), 'public', url)), url).toBe(true);
       }
+      expect(item.src).not.toContain('@');
+      expect(item.poster).not.toContain('@');
     }
   });
 
-  it('has a caption for every clip in both languages, and the proof numbers the founder set', () => {
+  it('has a caption for every format study in both languages', () => {
     for (const locale of LOCALES) {
-      const landing = getDictionary(locale).campaigns.landing;
+      const landing = getDictionary(locale).brandLanding;
       for (const item of CAMPAIGN_REEL) {
-        expect(landing.reel[item.id].title.trim(), `${locale}.${item.id}`).not.toBe('');
+        expect(landing.formats[item.id].title.trim(), `${locale}.${item.id}`).not.toBe('');
+        expect(landing.formats[item.id].line.trim(), `${locale}.${item.id}.line`).not.toBe('');
       }
-      // 2026-09-13: "200만 뷰+", "파생 오가닉 콘텐츠 300+건", the platform unnamed.
-      expect(landing.proofStat2Value).toMatch(/200만\+|2M\+/);
-      expect(landing.proofStat3Value).toMatch(/^300(건)?\+$/);
-      const text = Object.values(landing).filter((v): v is string => typeof v === 'string').join(' ');
-      expect(text.toLowerCase()).not.toContain('morphic');
     }
   });
 });

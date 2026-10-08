@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { getDictionary } from '@/lib/i18n/dictionaries';
 
 /**
  * Brand enquiries (founder, 2026-09-11) — the form on the campaigns page, validated once, here.
@@ -37,6 +38,7 @@ export const BrandInquiryInput = z.object({
   useCase: z.enum(INQUIRY_USE_CASES).default('undecided'),
   company: z.string().trim().min(1).max(120),
   contactName: z.string().trim().min(1).max(80),
+  contactRole: optionalLine(80),
   email: z
     .string()
     .trim()
@@ -52,7 +54,14 @@ export const BrandInquiryInput = z.object({
   locale: z.enum(['en', 'ko']).default('ko'),
   /** Honeypot: a real person never sees this field, so a value means a script filled the form. */
   website: z.string().max(200).optional(),
-});
+}).superRefine((input, ctx) => {
+  if (input.contactRole && input.message.length + input.contactRole.length + 8 > 4000) ctx.addIssue({ code: 'custom', path: ['message'], message: 'Combined inquiry exceeds storage limit' });
+}).transform(({ contactRole, ...input }) => ({
+  ...input,
+  // Keep the existing inbox, mail and outbox contract. Only the server adds this prefix,
+  // after the original message has passed validation, for both JSON and native form posts.
+  message: contactRole ? `${getDictionary(input.locale).campaigns.brands.rolePrefix}: ${contactRole}\n\n${input.message}` : input.message,
+}));
 
 export type BrandInquiryInput = z.infer<typeof BrandInquiryInput>;
 

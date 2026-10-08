@@ -149,3 +149,36 @@ export function campaignServiceStructuredData(input: {
     ...(input.offer ? { offers: { '@type': 'Offer', url, offeredBy: organization, itemOffered: { '@id': `${url}#service` } } } : {}),
   };
 }
+
+/** Public case summaries on the brand landing. Performance figures stay in visible prose rather
+ * than machine counters because only the film count is exact; the reach figures are lower bounds. */
+export function brandCaseStudiesStructuredData(input: {
+  origin: string;
+  locale: Locale;
+  path?: string;
+  cases: readonly { id: string; name: string; description: string; path?: string }[];
+}): StructuredData {
+  const page = seoUrl(input.origin, input.path ?? `/${input.locale}/brands`);
+  const organization = { '@id': `${seoUrl(input.origin, '/')}#organization` };
+  return {
+    '@context': CONTEXT,
+    '@type': 'ItemList',
+    '@id': `${page}#case-studies`,
+    url: input.path ? page : `${page}#morphic-case`,
+    inLanguage: input.locale,
+    numberOfItems: input.cases.length,
+    itemListElement: input.cases.map((item, index) => ({
+      '@type': 'ListItem',
+      position: index + 1,
+      item: {
+        '@type': 'CreativeWork',
+        '@id': item.path ? seoUrl(input.origin, item.path) : `${page}#${item.id}`,
+        url: item.path ? seoUrl(input.origin, item.path) : `${page}#${item.id}`,
+        name: item.name,
+        description: item.description,
+        inLanguage: input.locale,
+        publisher: organization,
+      },
+    })),
+  };
+}
