@@ -1,19 +1,10 @@
 import type { PromptCard } from '@/lib/prompts/catalog';
+import { CREATOR_COST_V1, DEFAULT_CREATOR_PLAN, getCreatorPlanVersion } from './subscription-versions';
 
 /** Pricing design, not a payment entitlement. No route may authorize a render from this quote.
  * BytePlus list prices, no contract/promotion discount. Billing uses actual completion_tokens.
  * Sources and launch requirements: docs/CREATOR-SUBSCRIPTION.md.
  */
-export const CREATOR_PLAN = {
-  priceKrw: 19000,
-  monthlyUnits: 400,
-  status: 'preparing',
-  krwPerUsd: 1400,
-  vatRate: 0.1,
-  pgFeeRate: 0.033,
-  remakeAllowance: 0.1,
-  otherDirectCostsKrw: 1000,
-} as const;
 
 /** The provider's published dimensions; 4:3 is slightly MORE expensive than 16:9. */
 const DIMENSIONS: Record<'720p' | '1080p', Record<string, readonly [number, number]>> = {
@@ -22,17 +13,22 @@ const DIMENSIONS: Record<'720p' | '1080p', Record<string, readonly [number, numb
 };
 const USD_PER_MILLION = { '720p': 10.70, '1080p': 11.70 } as const;
 const BASE_USD = 10 * 1280 * 720 * 24 / 1024 * USD_PER_MILLION['720p'] / 1_000_000;
-const KRW_PER_UNIT = BASE_USD * CREATOR_PLAN.krwPerUsd * (1 + CREATOR_PLAN.remakeAllowance) / 100;
+const KRW_PER_UNIT = BASE_USD * CREATOR_COST_V1.krwPerUsd * (1 + CREATOR_COST_V1.remakeAllowance) / 100;
 
-export function subscriptionEconomics(input: { pgFeeRate?: number } = {}) {
-  const revenueExVatKrw = CREATOR_PLAN.priceKrw / (1 + CREATOR_PLAN.vatRate);
-  const generationBudgetKrw = CREATOR_PLAN.monthlyUnits * KRW_PER_UNIT;
-  const pgFeeKrw = CREATOR_PLAN.priceKrw * (input.pgFeeRate ?? CREATOR_PLAN.pgFeeRate);
-  const marginKrw = revenueExVatKrw - generationBudgetKrw - pgFeeKrw - CREATOR_PLAN.otherDirectCostsKrw;
+export function subscriptionEconomics(input: { planVersionId?: string; pgFeeRate?: number } = {}) {
+  const plan = getCreatorPlanVersion(input.planVersionId ?? DEFAULT_CREATOR_PLAN.id);
+  const fee = input.pgFeeRate ?? CREATOR_COST_V1.pgFeeRate;
+  if (!plan || !Number.isFinite(fee) || fee < 0 || fee > 1) throw new Error('Invalid subscription economics');
+  const revenueExVatKrw = plan.priceKrw / (1 + CREATOR_COST_V1.vatRate);
+  const generationBudgetKrw = plan.monthlyCredits * KRW_PER_UNIT;
+  const pgFeeKrw = plan.priceKrw * fee;
+  const marginKrw = revenueExVatKrw - generationBudgetKrw - pgFeeKrw - CREATOR_COST_V1.otherDirectCostsKrw;
   return { revenueExVatKrw, generationBudgetKrw, pgFeeKrw, marginKrw, marginRate: marginKrw / revenueExVatKrw };
 }
 
-export function quoteSubscriptionVideo(input: { seconds: number; resolution: '720p' | '1080p'; aspect: string }) {
+export function quoteSubscriptionVideo(input: { seconds: number; resolution: '720p' | '1080p'; aspect: string }, planVersionId = DEFAULT_CREATOR_PLAN.id) {
+  const plan = getCreatorPlanVersion(planVersionId);
+  if (!plan || plan.deductionVersion !== 'seedance25-2026-10-07-v1') return null;
   if (!Number.isInteger(input.seconds) || input.seconds < 4 || input.seconds > 30) return null;
   const table = DIMENSIONS[input.resolution];
   const dimensions = table && Object.hasOwn(table, input.aspect) ? table[input.aspect] : null;
@@ -41,7 +37,7 @@ export function quoteSubscriptionVideo(input: { seconds: number; resolution: '72
   const providerUsd = providerTokens * USD_PER_MILLION[input.resolution] / 1_000_000;
   // Ceil to the next internal unit. Subtract only floating-point noise at exact boundaries.
   const units = Math.ceil(providerUsd / BASE_USD * 100 - 1e-9);
-  return { providerTokens, providerUsd, units, maxPerMonth: Math.floor(CREATOR_PLAN.monthlyUnits / units), monthlyPercent: units / CREATOR_PLAN.monthlyUnits * 100 };
+  return { providerTokens, providerUsd, units, maxPerMonth: Math.floor(plan.monthlyCredits / units), monthlyPercent: units / plan.monthlyCredits * 100 };
 }
 
 /** Unknown image/provider costs stay outside the published video estimate. A sample video is

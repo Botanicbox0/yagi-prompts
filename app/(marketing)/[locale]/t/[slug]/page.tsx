@@ -177,7 +177,7 @@ export default async function TemplatePage({ params }: RouteParams) {
                 </dl>
 
                 {subscriptionQuote && <div data-template-subscription className="mt-4 text-sm leading-relaxed opacity-70">
-                  <p>{interpolate(dict.pricing.subscriptionTemplateNote, { count: String(subscriptionQuote.maxPerMonth) })}</p>
+                  <p>{interpolate(dict.pricing.subscriptionTemplateNote, { credits: String(subscriptionQuote.units) })}</p>
                   <a href={`/${locale}/pricing#monthly`} className="mt-1 inline-block underline underline-offset-4">{dict.pricing.subscriptionDetailLink} →</a>
                 </div>}
 
