@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { readUseCase, useCaseHref } from '@/lib/navigation/public-state';
 
 /**
@@ -24,6 +24,7 @@ export function UseCaseFilter({
   options: Array<[string, string]>;
   labels: { heading: string; all: string; count: string; reset: string };
 }) {
+  const navigation = useRef<HTMLDivElement>(null);
   const [active, setActive] = useState<string | null>(null);
   const [count, setCount] = useState<number | null>(null);
   const valuesKey = options.map(([value]) => value).join('\n');
@@ -60,6 +61,23 @@ export function UseCaseFilter({
     return () => { for (const item of items) item.hidden = false; };
   }, [active, valuesKey]);
 
+  useEffect(() => {
+    const group = navigation.current;
+    if (!group) return;
+    const reveal = () => {
+      const selected = group.querySelector<HTMLElement>('[aria-pressed="true"]');
+      if (!selected || group.scrollWidth <= group.clientWidth) return;
+      const bounds = group.getBoundingClientRect(), item = selected.getBoundingClientRect();
+      // Only the chip row moves; restoring a saved filter must not move the page vertically.
+      if (item.left < bounds.left + 4) group.scrollLeft += item.left - bounds.left - 4;
+      else if (item.right > bounds.right - 4) group.scrollLeft += item.right - bounds.right + 4;
+    };
+    reveal();
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(reveal);
+    observer?.observe(group);
+    return () => observer?.disconnect();
+  }, [active, valuesKey]);
+
   if (options.length === 0) return null;
 
   const chip = (value: string | null, label: string) => {
@@ -86,7 +104,7 @@ export function UseCaseFilter({
   return <>
     <noscript><style>{'[data-use-case-filter]{display:none}'}</style></noscript>
     <div data-use-case-filter className="min-w-0 space-y-3">
-      <div role="group" aria-label={labels.heading} className="flex items-center gap-2 overflow-x-auto lg:flex-wrap lg:overflow-x-visible">
+      <div ref={navigation} role="group" aria-label={labels.heading} className="flex items-center gap-2 overflow-x-auto lg:flex-wrap lg:overflow-x-visible">
         {chip(null, labels.all)}
         {options.map(([value, label]) => chip(value, label))}
       </div>
