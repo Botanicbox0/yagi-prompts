@@ -3,8 +3,8 @@ import { RENDER_PIPELINE_PUBLIC } from '@/lib/flags';
 
 export const FAQ_CATEGORIES = ['usage', 'payment', 'rights', 'campaign', 'brand'] as const;
 export type FaqCategory = (typeof FAQ_CATEGORIES)[number];
-export type FaqPlacement = 'landing' | 'template' | 'campaign' | 'brand';
-type FaqNumber = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16;
+export type FaqPlacement = 'landing' | 'template' | 'campaign' | 'brand' | 'pricing';
+type FaqNumber = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22;
 
 /** One registry for every visible FAQ and its JSON-LD. Copy remains in the locale dictionaries. */
 export const FAQ_CATALOG: ReadonlyArray<{
@@ -29,6 +29,12 @@ export const FAQ_CATALOG: ReadonlyArray<{
   { id: 'creator-usage-rights', category: 'brand', number: 14, placements: ['brand'] },
   { id: 'ai-campaign-safety', category: 'brand', number: 15, placements: ['brand'] },
   { id: 'korea-japan-campaigns', category: 'brand', number: 16, placements: ['brand'] },
+  { id: 'subscription-availability', category: 'payment', number: 17, placements: ['pricing'] },
+  { id: 'subscription-video-count', category: 'usage', number: 18, placements: ['pricing'] },
+  { id: 'premium-customization', category: 'usage', number: 19, placements: ['pricing'] },
+  { id: 'subscription-rollover', category: 'payment', number: 20, placements: ['pricing'] },
+  { id: 'subscription-extra-video', category: 'payment', number: 21, placements: ['pricing'] },
+  { id: 'template-likeness-result', category: 'rights', number: 22, placements: ['pricing'] },
 ];
 
 export interface FaqItem {

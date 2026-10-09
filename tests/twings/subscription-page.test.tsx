@@ -16,6 +16,7 @@ import PricingPage from '@/app/(marketing)/[locale]/pricing/page';
 describe('public subscription design while enrollment is closed', () => {
   it.each(['ko', 'en'] as const)('publishes the price and an honest upcoming state in %s HTML', async locale => {
     const html = renderToStaticMarkup(await PricingPage({ params: Promise.resolve({ locale }) }));
+    const prose = html.replaceAll('&#x27;', "'");
     const copy = getDictionary(locale).pricing;
     expect(html).toContain('data-pricing-subscription="preparing"');
     expect(html).toContain('24,900');
@@ -23,16 +24,21 @@ describe('public subscription design while enrollment is closed', () => {
     expect(html).toContain('data-subscription-plan="creator"');
     expect(html).toContain('data-subscription-plan="premium"');
     expect(html).toContain('data-prompt-editing="planned"');
-    expect(html).toContain(copy.subscriptionPromptEditingSoon);
-    expect(html).toContain(copy.subscriptionEditingBoundary);
-    expect(html).toContain(copy.subscriptionEditingStatus);
-    expect(html.indexOf(copy.subscriptionEditingStatus)).toBeLessThan(html.indexOf(copy.subscriptionPromptEditingSoon));
+    expect(prose).toContain(copy.subscriptionPromptEditingSoon);
+    expect(prose).toContain(copy.subscriptionEditingBoundary);
+    expect(prose).toContain(copy.subscriptionEditingStatus);
+    expect(prose.indexOf(copy.subscriptionEditingStatus)).toBeLessThan(prose.indexOf(copy.subscriptionPromptEditingSoon));
     expect(html).not.toContain('19,000');
     expect(html).toContain(copy.subscriptionUnavailable);
-    expect(html).toContain('data-subscription-estimate="fits"');
-    expect(html).toContain('data-subscription-template="new-film"');
-    expect(html).toContain(locale === 'ko' ? '크리에이터 2편 · 프리미엄 4편' : 'Creator 2 · Premium 4');
-    expect(html).toContain(locale === 'ko' ? '14,900원' : '$10');
+    expect(html).toContain('data-subscription-preview');
+    expect(html).toContain('data-plan-film-count="creator"');
+    expect(html).toContain('data-plan-film-count="premium"');
+    expect(html).toMatch(/type="radio"[^>]*checked=""[^>]*value="15"/);
+    expect(html).toContain('data-faq-catalog="pricing"');
+    expect(html).not.toContain('data-pricing-table');
+    expect(html).not.toContain('data-pricing-row');
+    expect(html).not.toMatch(/14,900|\$10|example-25|<select/);
+    expect(html).toContain(`href="/${locale}/video"`);
     expect(html).not.toMatch(/구독 없음|NO SUBSCRIPTION|크레딧|충전|monthlyUnits|\/api\/billing\/subscription/);
     expect(html).not.toContain('"@type":"Product"');
     expect(html).not.toContain('<form');

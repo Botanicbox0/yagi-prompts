@@ -6,7 +6,7 @@ import { observePreviewPlayback } from '@/lib/media/preview-playback';
 
 /** First-screen media has its own playback lifecycle; catalog hover previews stay lightweight. */
 export function CreatorPreview({
-  poster, video, fallback, title, href, ratio, labels,
+  poster, video, fallback, title, href, ratio, labels, priority = true,
 }: {
   poster: CardMediaSource | null;
   video: CardMediaSource | null;
@@ -15,6 +15,7 @@ export function CreatorPreview({
   href: string;
   ratio: string;
   labels: { play: string; pause: string };
+  priority?: boolean;
 }) {
   const rootRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -39,7 +40,7 @@ export function CreatorPreview({
     <a href={href} aria-label={title} className="block h-full w-full">
       {poster ? (
         // eslint-disable-next-line @next/next/no-img-element -- public catalog media; the hero is the LCP image
-        <img src={poster.src} alt={title} width={poster.w} height={poster.h} loading="eager" fetchPriority="high" decoding="async" className="absolute inset-0 h-full w-full object-contain" />
+        <img src={poster.src} alt={title} width={poster.w} height={poster.h} loading={priority ? 'eager' : 'lazy'} fetchPriority={priority ? 'high' : 'auto'} decoding="async" className="absolute inset-0 h-full w-full object-contain" />
       ) : fallback}
       {video && <video
         key={video.src}
