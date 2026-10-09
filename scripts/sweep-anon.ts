@@ -268,11 +268,34 @@ async function sweepRedirects(): Promise<void> {
   else fail('/library redirect target', `unexpected location ${library.location}`);
 }
 
-async function sweepNotFound(): Promise<void> {
+async function sweepNotFound(privateKeys: string[], brandWorkspace: BrandWorkspaceProbe[]): Promise<void> {
   console.log('\n404s — draft, archived, unknown');
   expectEqual('archived playbook 404s', (await get(`/en/p/${ARCHIVED}`)).status, 404);
   expectEqual('draft playbook 404s', (await get('/en/p/insta-toon-pipeline')).status, 404);
   expectEqual('unknown slug 404s', (await get('/en/p/no-such-playbook')).status, 404);
+
+  // Unknown routes must reach the branded boundary, not Next's generic English dead end.
+  // Inspect the complete HTML/Flight response without ever logging fixture values on failure.
+  const forbidden = [
+    ...FIXTURE_SENTINELS.filter((sentinel) => sentinel.visibility !== 'public').map((sentinel) => sentinel.token),
+    ...PROMPT_SENTINELS.map((sentinel) => sentinel.token),
+    ...privateKeys,
+    ...brandWorkspace.flatMap((fixture) => [fixture.title, fixture.organization_name, fixture.storage_key]),
+    'content/rev/', 'content-published', 'artifacts-published',
+  ];
+  for (const locale of ['ko', 'en']) {
+    for (const suffix of ['qa-page-that-does-not-exist', 'qa-page-that-does-not-exist/nested']) {
+      const path = `/${locale}/${suffix}`;
+      const page = await get(path);
+      expectEqual(`${path}: HTTP 404`, page.status, 404);
+      for (const panelLocale of ['ko', 'en']) {
+        expectPresent(`${path}: ${panelLocale} branded panel`, page.body, `data-not-found="${panelLocale}"`);
+        expectPresent(`${path}: ${panelLocale} video return`, page.body, `href="/${panelLocale}/video"`);
+        expectPresent(`${path}: ${panelLocale} campaign return`, page.body, `href="/${panelLocale}/campaigns"`);
+      }
+      expectEqual(`${path}: no private content or storage keys`, forbidden.some((value) => value.length > 0 && page.body.includes(value)), false);
+    }
+  }
 }
 
 async function sweepGateway(assets: AssetBlockRow[]): Promise<void> {
@@ -1237,7 +1260,7 @@ async function main(): Promise<void> {
   await sweepShowcasePage('en', privateKeys);
   await sweepShowcasePage('ko', privateKeys);
   await sweepRedirects();
-  await sweepNotFound();
+  await sweepNotFound(privateKeys, brandWorkspace);
   await sweepGateway(assets);
   await sweepConversionCta();
   await sweepMoney();
