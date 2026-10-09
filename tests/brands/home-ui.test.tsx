@@ -9,6 +9,8 @@ describe('campaign workspace home',()=>{
     const b=getDictionary(locale).brandWorkspace;
     const html=renderToStaticMarkup(<CampaignList projects={[p]} b={b} locale={locale}/>);
     expect(html).toContain('data-home-attention');
+    expect(html).not.toContain('data-featured-campaign');
+    expect(html.indexOf('data-home-attention')).toBeLessThan(html.indexOf('bw-board-toolbar'));
     expect(html).toContain('href="/brand/projects/project#review"');
     expect(html).toContain('src="/api/brand-workspace/attachments/protected"');
     expect(html).toContain(b.dashboard.recent);

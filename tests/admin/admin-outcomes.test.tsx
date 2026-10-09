@@ -198,7 +198,27 @@ describe('P2-8 in-place prompt edits return to the page they were pressed on', (
     const featured = await h.run('prompt.feature', { id: live.id, featured: 'true' });
     expect(outcomeUrl(back, featured)).toBe(`${back}?ok=saved`);
     expect(outcomeUrl('/admin/prompts?tab=published', featured)).toBe('/admin/prompts?tab=published&ok=saved');
+    expect(outcomeUrl('/admin/prompts?tab=published#queue', featured)).toBe('/admin/prompts?tab=published&ok=saved#queue');
     const visibility = await h.run('prompt.visibility', { id: live.id, textVisibility: 'public' });
     expect(outcomeUrl(back, visibility)).toBe(`${back}?ok=saved`);
+  });
+});
+
+describe('campaign operation keeps the validated list return context', () => {
+  it('preserves returnTo only for the same campaign after a real message operation', async () => {
+    const path = `/admin/brand-workspace/${projectId}`;
+    const returnTo = '/admin/brand-workspace?status=requested&q=Fixture';
+    const back = `${path}?${new URLSearchParams({ returnTo })}`;
+    const result = await h.run('brandWorkspace.message', { projectId, requestId: randomUUID(), body: 'Fixture operation note' });
+    expect(result).toMatchObject({ ok: true, to: path });
+    const markup = await html(await StudioBrandProject({ params: Promise.resolve({ id: projectId }), searchParams: Promise.resolve({ returnTo }) }));
+    expect(markup).toContain(`name="_back" value="${back.replaceAll('&', '&amp;')}"`);
+    expect(new URL(outcomeUrl(back, result), 'https://admin.example.test').searchParams.get('returnTo')).toBe(returnTo);
+    expect(new URL(outcomeUrl(back, { ok: false, code: 'invalid' }), 'https://admin.example.test').searchParams.get('returnTo')).toBe(returnTo);
+    const other = `/admin/brand-workspace/${randomUUID()}`;
+    expect(new URL(outcomeUrl(back, { ok: true, code: 'saved', to: other }), 'https://admin.example.test').searchParams.has('returnTo')).toBe(false);
+    for (const invalid of ['https://outside.example', '/brand', '/admin/policy']) {
+      expect(new URL(outcomeUrl(`${path}?${new URLSearchParams({ returnTo: invalid })}`, result), 'https://admin.example.test').searchParams.has('returnTo')).toBe(false);
+    }
   });
 });

@@ -34,7 +34,7 @@ export default async function BrandHome({
         {workspace.projects.length > 0 && access.canRequest && <a href={newProject} className="bw-button bw-primary">{b.newProject}</a>}
       </div>
       {access.staff && choice && <StaffNotice b={b} manageHref={viewer.isAdmin ? adminOrganizationHref(choice.id, brandHost) : null} />}
-      <ServiceGuide kind="campaign" b={b} showOther={!access.projectScopedOnly} organizationId={choice?.id} />
+      {workspace.projects.length === 0 && <ServiceGuide kind="campaign" b={b} showOther={!access.projectScopedOnly} organizationId={choice?.id} />}
       {pendingShares > 0 && (
         <section className={access.fresh ? "bw-empty" : "bw-note"} data-brand-pending-share={pendingShares}>
           <h2>{b.pendingShareTitle}</h2>
@@ -88,6 +88,7 @@ export default async function BrandHome({
           ) : (
             <CampaignList projects={workspace.projects} b={b} locale={locale}/>
           )}
+          {workspace.projects.length > 0 && <details className="bw-service-disclosure" data-brand-service-disclosure><summary>{b.dashboard.serviceGuideToggle}</summary><ServiceGuide kind="campaign" b={b} showOther={!access.projectScopedOnly} organizationId={choice?.id} /></details>}
           {access.hasOrganization && workspace.organizations.length > 0 && (
             <section className="bw-team-footer">
               <h2>{b.organizations}</h2>

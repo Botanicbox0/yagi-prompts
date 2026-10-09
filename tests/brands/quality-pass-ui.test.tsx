@@ -90,6 +90,8 @@ describe('brand home by role', () => {
     const page = await html(BrandHome(search()));
     expect(page).toContain(b.createOrganization);
     expect(page).toContain(b.needOrganization);
+    expect(page).toContain('data-brand-service=');
+    expect(page).not.toContain('data-brand-service-disclosure');
   });
 
   it('never sends a viewer-only account into the request loop', async () => {
@@ -114,6 +116,8 @@ describe('brand home by role', () => {
     state.workspace = CASES.projectScoped!;
     const page = await html(BrandHome(search()));
     expect(page).toContain('Autumn launch');
+    expect(page).toContain('data-brand-service-disclosure');
+    expect(page.indexOf('data-workspace-board')).toBeLessThan(page.indexOf('data-brand-service-disclosure'));
     expect(page).not.toContain(CREATE_LINK);
     expect(page).not.toContain(b.organizations);
     expect(page).not.toContain('href="/brand/studio');

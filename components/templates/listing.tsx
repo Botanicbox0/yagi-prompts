@@ -56,19 +56,14 @@ export function TemplatesListing({
   const other: TemplateMedium = medium === 'video' ? 'image' : 'video';
 
   return (
-    <div className="band pt-28 pb-24 lg:pt-32">
-      <p className="text-accent font-label text-eyebrow uppercase">{dict.templates.eyebrow}</p>
-      <h1 className="mt-6 font-display text-title font-black uppercase">
-        <span className="block">{t.line1}</span>
-        <span className="block">{t.line2}</span>
-      </h1>
-      <p className="mt-8 max-w-detail text-body opacity-70">{t.intro}</p>
-      <p data-service-definition className="mt-6 max-w-detail text-body opacity-70">{dict.seo.definition}</p>
+    <div data-template-catalog={medium} className="band pt-24 pb-20 lg:pt-28">
+      <h1 className="font-display text-[clamp(2.25rem,5vw,4rem)] leading-tight font-black tracking-tight">{t.rail}</h1>
+      <p data-service-definition className="mt-4 max-w-2xl text-base leading-relaxed text-black/60">{dict.seo.definition}</p>
 
-      <div className="mt-10 flex flex-wrap items-center justify-between gap-6 border-t border-hairline pt-6">
+      <div className="mt-7 space-y-5 border-t border-hairline pt-5">
         <MediumTabs locale={locale} dict={dict} active={medium} />
         {filterOptions.length > 0 && (
-          <UseCaseFilter options={filterOptions} labels={{ heading: dict.prompts.filterHeading, all: dict.prompts.filterAll }} />
+          <UseCaseFilter options={filterOptions} labels={{ heading: dict.prompts.filterHeading, all: dict.prompts.filterAll, count: dict.prompts.filterCount, reset: dict.prompts.filterReset }} />
         )}
       </div>
 
@@ -91,7 +86,8 @@ export function TemplatesListing({
           useCaseLabels={useCaseLabels}
           emptyLabel={t.emptyTitle}
           filteredEmptyLabel={dict.prompts.filterEmpty}
-          topClassName="mt-10 lg:mt-14"
+          hideHeading
+          topClassName="mt-6"
         />
       )}
     </div>

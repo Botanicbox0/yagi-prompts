@@ -14,6 +14,7 @@ import { metricProvenance, postHandle, postPresentation } from '@/lib/brands/wor
 import { unsetDateKey } from '@/lib/brands/workspace/schedule';
 import { DecisionFields } from './decision-fields';
 import { StaffNotice } from './staff-notice';
+import { campaignListReturnPath } from '@/lib/brands/workspace/navigation';
 import { projectNextAction } from './next-action';
 import { SecondaryUsage } from './secondary-usage';
 import type { BrandUsageView } from "@/lib/brands/usage/types";
@@ -90,6 +91,7 @@ export function ProjectDetail({
   b,
   locale,
   studio = false,
+  backHref,
   studioReply,
   staffManageHref = null,
   usage = null,
@@ -98,6 +100,8 @@ export function ProjectDetail({
   b: BrandCopy;
   locale: string;
   studio?: boolean;
+  /** Validated list context; checked again against the loaded project before rendering. */
+  backHref?: string;
   /** The studio's own comment form, rendered where the conversation is instead of a separate panel. */
   studioReply?: ReactNode;
   /** Existing admin page for this campaign, offered to DB admins in the TWINGS team view only. */
@@ -127,7 +131,7 @@ export function ProjectDetail({
       )}
       <div className="bw-heading">
         <div>
-          <a href={studio ? "/admin/brand-workspace" : `/brand?organizationId=${p.organizationId}`}>← {b.back}</a>
+          <a href={campaignListReturnPath(backHref, p.organizationId, studio)}>← {b.back}</a>
           <p className="bw-kicker">{p.organizationName}</p>
           <h1>{p.title}</h1>
           <p>
@@ -149,7 +153,7 @@ export function ProjectDetail({
           {next.href && <a className="bw-button" href={next.href}>{next.label} →</a>}
         </div>
       )}
-      <ProjectTabs b={b} comments={p.messages.length} usage={usage !== null}>
+      <ProjectTabs b={b} pendingReviews={p.status === "active" ? p.contents.filter(c => c.version === newest.get(c.slotKey) && c.decision === "pending").length : 0} comments={p.messages.length} usage={usage !== null}>
       <section id="performance" className="bw-panel">
         <CampaignPerformance project={p} b={b} locale={locale} showUnready={studio} usageCta={Boolean(usage?.eligible.some((s) => s.kind === "post"))}/>
       </section>

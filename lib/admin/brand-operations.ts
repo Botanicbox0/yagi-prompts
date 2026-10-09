@@ -2,7 +2,6 @@ import type { z } from 'zod';
 import { updateBrandInquiryStatus } from '@/lib/brands/repo';
 import { InquiryStatusChange } from '@/lib/brands/schemas';
 import { FeedbackStatusChange, updateRenderFeedbackStatus } from '@/lib/renders/feedback';
-import { ADMIN_INQUIRIES_PATH } from '@/lib/campaigns/links';
 import { fail, ok, type AdminOutcome } from './context';
 import * as f from './form';
 import type { AdminOperation, ParseResult } from './operations';
@@ -26,8 +25,8 @@ const status: AdminOperation<z.infer<typeof InquiryStatusChange>> = {
   async run(ctx, input) {
     const moved = await updateBrandInquiryStatus(ctx.sql, input.id, input.status);
     if (!moved) return fail('notFound', 'the enquiry this form points at no longer exists');
-    // No fragment on `to`: the dispatcher appends `?ok=` and a hash would swallow it.
-    return ok('saved', { to: ADMIN_INQUIRIES_PATH });
+    // Stay in the operator's validated queue, including its filters and result anchor.
+    return ok('saved');
   },
 };
 
@@ -37,7 +36,7 @@ const feedbackStatus: AdminOperation<z.infer<typeof FeedbackStatusChange>> = {
   async run(ctx, input) {
     const moved = await updateRenderFeedbackStatus(ctx.sql, input.id, input.status);
     if (!moved) return fail('notFound', 'the feedback this form points at no longer exists');
-    return ok('saved', { to: ADMIN_INQUIRIES_PATH });
+    return ok('saved');
   },
 };
 

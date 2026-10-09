@@ -1,11 +1,13 @@
 'use client';
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { usePathname } from 'next/navigation';
 import { TwingsLogo } from '@/components/brand/twings-mark';
 import { TextSwap } from '@/components/ui/text-swap';
 import { useScroll } from '@/components/motion/scroll-provider';
 import { type SectionTheme } from '@/lib/motion/geometry';
 import type { Audience } from '@/lib/navigation/audience';
+import { isPublicNavCurrent } from '@/lib/navigation/public-state';
 import { CreatorAccountView, useCreatorSession, type CreatorAccountLabels } from './creator-account';
 
 /**
@@ -58,11 +60,22 @@ export function SiteNav({
 }) {
   const [scrolled, setScrolled] = useState(false);
   const [open, setOpen] = useState(false);
+  const pathname = usePathname();
+  const [hash, setHash] = useState('');
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
   const { lenis } = useScroll();
   const creatorSession = useCreatorSession(audience === 'creator');
+  const current = (link: NavLink) => isPublicNavCurrent(link.href, pathname, hash);
+
+  useEffect(() => {
+    const restore = () => setHash(window.location.hash);
+    restore();
+    window.addEventListener('hashchange', restore);
+    window.addEventListener('popstate', restore);
+    return () => { window.removeEventListener('hashchange', restore); window.removeEventListener('popstate', restore); };
+  }, [pathname]);
 
   // --- hairline appears once the page has moved (§4) -----------------------
   useEffect(() => {
@@ -154,7 +167,8 @@ export function SiteNav({
               <a
                 key={link.href}
                 href={link.href}
-                className="text-xs font-medium"
+                aria-current={current(link) ? (link.href.includes('#') ? 'location' : 'page') : undefined}
+                className={`inline-flex min-h-10 items-center text-xs font-medium ${current(link) ? 'text-accent underline decoration-2 underline-offset-8' : 'hover:text-accent'}`}
               >
                 <TextSwap>{link.label}</TextSwap>
               </a>
@@ -220,7 +234,8 @@ export function SiteNav({
                   <a
                     href={link.href}
                     onClick={() => setOpen(false)}
-                    className="text-[clamp(1.7rem,7vw,3rem)] leading-tight font-semibold tracking-tight"
+                    aria-current={current(link) ? (link.href.includes('#') ? 'location' : 'page') : undefined}
+                    className={`text-[clamp(1.7rem,7vw,3rem)] leading-tight font-semibold tracking-tight ${current(link) ? 'text-accent' : ''}`}
                   >
                     <TextSwap>{link.label}</TextSwap>
                   </a>

@@ -1,15 +1,50 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { BrandProjectSummary } from '@/lib/brands/workspace/types';
 import type { BrandCopy } from './action-form';
 import { interpolate } from '@/lib/i18n/format';
 import { WorkspacePreview } from './preview';
+import { campaignListReturnPath } from '@/lib/brands/workspace/navigation';
 import { campaignDateLine } from '@/lib/brands/workspace/schedule';
 
+const campaignStatuses = ['all', 'requested', 'active', 'completed', 'cancelled'] as const;
+type CampaignFilters = { query: string; status: string };
+export function campaignFiltersFromUrl(search: string): CampaignFilters {
+  const params = new URLSearchParams(search);
+  const status = params.get('status') ?? 'all';
+  return { query: params.get('q') ?? '', status: campaignStatuses.includes(status as typeof campaignStatuses[number]) ? status : 'all' };
+}
+export function campaignFilterHref(href: string, filters: CampaignFilters): string {
+  const url = new URL(href);
+  if (filters.query) url.searchParams.set('q', filters.query); else url.searchParams.delete('q');
+  if (filters.status !== 'all') url.searchParams.set('status', filters.status); else url.searchParams.delete('status');
+  return `${url.pathname}${url.search}${url.hash}`;
+}
+
 export function CampaignList({ projects, b, locale, studio = false }: { projects: BrandProjectSummary[]; b: BrandCopy; locale: string; studio?: boolean }) {
-  const [query, setQuery] = useState(''), [status, setStatus] = useState('all');
+  const [{ query, status }, setFilters] = useState<CampaignFilters>({ query: '', status: 'all' });
+  const [returnLocation, setReturnLocation] = useState<string | null>(null);
+  useEffect(() => {
+    const restore = () => {
+      setFilters(campaignFiltersFromUrl(window.location.search));
+      setReturnLocation(window.location.pathname + window.location.search + window.location.hash);
+    };
+    restore();
+    window.addEventListener('popstate', restore);
+    window.addEventListener('hashchange', restore);
+    return () => { window.removeEventListener('popstate', restore); window.removeEventListener('hashchange', restore); };
+  }, []);
+  function updateFilters(filters: CampaignFilters) {
+    setFilters(filters);
+    const href = campaignFilterHref(window.location.href, filters);
+    window.history.replaceState(window.history.state, '', href);
+    setReturnLocation(href);
+  }
   const d = b.dashboard;
-  const link = (p: BrandProjectSummary) => `${studio ? '/admin/brand-workspace' : '/brand/projects'}/${p.id}`;
+  const link = (p: BrandProjectSummary) => {
+    const detail = `${studio ? '/admin/brand-workspace' : '/brand/projects'}/${p.id}`;
+    return returnLocation === null ? detail : `${detail}?${new URLSearchParams({ returnTo: campaignListReturnPath(returnLocation, p.organizationId, studio) })}`;
+  };
   const needsAction = (p: BrandProjectSummary) => studio ? p.status === 'requested' || (p.status === 'active' && (p.overview?.changes ?? 0) > 0) : p.status === 'active' && (p.overview?.pending ?? 0) > 0;
   const attention = projects.filter(needsAction);
   const filtered = projects.filter(p => (status === 'all' || p.status === status) && `${p.organizationName} ${p.title}`.toLocaleLowerCase(locale).includes(query.toLocaleLowerCase(locale)));
@@ -28,21 +63,17 @@ export function CampaignList({ projects, b, locale, studio = false }: { projects
     if (p.status === 'active' && p.overview?.pending) return interpolate(d.reviewCount, { count: p.overview.pending });
     return p.overview?.published ? interpolate(d.publishedCount, { count: p.overview.published }) : d.allClear;
   }
-  const featured=attention[0]??projects.find(p=>p.status==='active')??projects[0];
   return <div data-campaign-queue data-workspace-board>
-    {!studio&&featured&&<section className="bw-featured-campaign" data-featured-campaign>
-      <a className="bw-featured-art" href={link(featured)}><WorkspacePreview cover={featured.coverUrl} content={featured.overview?.contents.find(c=>c.mime?.startsWith('image/'))??featured.overview?.contents[0]} b={b} title={featured.organizationName}/></a>
-      <div className="bw-featured-copy"><div><span className="bw-status" data-state={featured.status}>{b.status[featured.status]}</span><p className="bw-kicker">{featured.organizationName}</p><h2>{featured.title}</h2><p>{featured.objective}</p></div><footer><span className="bw-muted" data-campaign-date={campaignDateLine(featured)?.kind ?? 'none'}>{dateLine(featured)}</span><a className="bw-button bw-primary" href={link(featured)}>{d.viewCampaign} ↗</a></footer></div>
-    </section>}
     {attention.length > 0 && <section className="bw-attention" data-home-attention>
       <div><h2>{studio ? d.studioAttention : d.attention}<span>{attention.length}</span></h2><p>{interpolate(studio ? d.studioAttentionNote : d.attentionNote, { count: attention.length })}</p></div>
-      <div className="bw-attention-links">{attention.slice(0, 3).map(p => <a key={p.id} href={`${link(p)}${studio ? '' : '#review'}`}><span>{p.title}</span><strong>{studio ? (p.status === 'requested' ? d.openRequest : d.openChanges) : d.openReview} <i aria-hidden="true">↗</i></strong></a>)}</div>
+      <div className="bw-attention-links">{attention.map(p => <a key={p.id} href={`${link(p)}${studio ? '' : '#review'}`}><span>{p.title}</span><strong>{studio ? (p.status === 'requested' ? d.openRequest : d.openChanges) : d.openReview} <i aria-hidden="true">↗</i></strong></a>)}</div>
     </section>}
     <section className="bw-campaign-section">
       <div className="bw-board-toolbar">
-        <div className="bw-status-tabs" role="group" aria-label={b.projectStatus}>{(['all','requested','active','completed','cancelled'] as const).map(key => <button type="button" key={key} aria-pressed={status === key} onClick={() => setStatus(key)}>{key === 'all' ? b.performance.allCampaigns : b.status[key]}<span>{(key === 'all' ? projects : projects.filter(p => p.status === key)).length}</span></button>)}</div>
-        <label className="bw-search"><span className="sr-only">{d.search}</span><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5"/><path d="m13 13 4 4"/></svg><input value={query} onChange={e => setQuery(e.target.value)} placeholder={d.searchPlaceholder}/></label>
+        <div className="bw-status-tabs" role="group" aria-label={b.projectStatus}>{(['all','requested','active','completed','cancelled'] as const).map(key => <button type="button" key={key} aria-pressed={status === key} onClick={() => updateFilters({ query, status: key })}>{key === 'all' ? b.performance.allCampaigns : b.status[key]}<span>{(key === 'all' ? projects : projects.filter(p => p.status === key)).length}</span></button>)}</div>
+        <label className="bw-search"><span className="sr-only">{d.search}</span><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5"/><path d="m13 13 4 4"/></svg><input value={query} onChange={e => updateFilters({ query: e.target.value, status })} placeholder={d.searchPlaceholder}/></label>
       </div>
+      <div className="bw-filter-summary"><p role="status" aria-live="polite">{interpolate(d.resultCount, { count: sorted.length })}</p>{(query || status !== 'all') && <button type="button" onClick={() => updateFilters({ query: '', status: 'all' })}>{d.resetFilters}</button>}</div>
       {!sorted.length ? <p className="bw-board-empty" role="status">{b.performance.noCampaignMatch}</p> : studio ? <div className="bw-ops-list">
         <div className="bw-ops-labels" aria-hidden="true"><span>{d.campaign}</span><span>{d.activity}</span><span>{d.schedule}</span></div>
         {sorted.map(p => <a className="bw-ops-row" key={p.id} href={link(p)}><div className="bw-ops-name"><WorkspacePreview cover={p.coverUrl} content={p.overview?.contents.find(c => c.mime?.startsWith('image/')) ?? p.overview?.contents[0]} b={b} title={p.organizationName}/><div><small>{p.organizationName}</small><h3>{p.title}</h3><span className="bw-status" data-state={p.status}>{b.status[p.status]}</span>{p.clientVisible===false&&<small className="bw-private-label">{b.managed.prepared}</small>}</div></div><span className={needsAction(p) ? 'bw-action-needed' : 'bw-muted'}>{activity(p)}</span><span className="bw-ops-date" data-campaign-date={campaignDateLine(p)?.kind ?? 'none'}>{dateLine(p, false) ?? '—'}<span aria-hidden="true">↗</span></span></a>)}

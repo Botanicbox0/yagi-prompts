@@ -97,9 +97,9 @@ export default async function AdminHomePage() {
 
       <div data-admin-dashboard className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card title={a.dashCampaigns} href={ADMIN_CAMPAIGNS_PATH}>
-          <Stat href={ADMIN_CAMPAIGNS_PATH} label={a.dashRecruiting} count={recruiting} />
+          <Stat href={`${ADMIN_CAMPAIGNS_PATH}#status-recruiting`} label={a.dashRecruiting} count={recruiting} />
           <Stat href={ADMIN_CAMPAIGNS_PATH} label={a.dashApplicants} count={applicants} hot />
-          <Stat href={ADMIN_CAMPAIGNS_PATH} label={a.dashPayouts} count={payouts} hot />
+          <Stat href={payouts > 0 ? `${ADMIN_CAMPAIGNS_PATH}#payout-queue` : ADMIN_CAMPAIGNS_PATH} label={a.dashPayouts} count={payouts} hot />
         </Card>
         <Card title={a.dashTemplates} href="/admin/prompts">
           <Stat href="/admin/prompts?tab=pending" label={a.dashPending} count={pending} hot />
@@ -109,10 +109,10 @@ export default async function AdminHomePage() {
           <Stat href={null} label={a.dashRendersWeek} count={renders.recent} />
           <Stat href={null} label={a.dashRendersFailed} count={renders.failed} hot />
           <Stat href={null} label={a.dashRendersHeld} count={renders.held} />
-          <Stat href={ADMIN_INQUIRIES_PATH} label={a.dashFeedbackNew} count={feedback} hot />
+          <Stat href={`${ADMIN_INQUIRIES_PATH}?kind=feedback&status=new`} label={a.dashFeedbackNew} count={feedback} hot />
         </Card>
         <Card title={a.dashInquiries} href={ADMIN_INQUIRIES_PATH}>
-          <Stat href={ADMIN_INQUIRIES_PATH} label={a.dashInquiriesNew} count={inquiries} hot />
+          <Stat href={`${ADMIN_INQUIRIES_PATH}?kind=brand&status=new`} label={a.dashInquiriesNew} count={inquiries} hot />
           <Stat href="/admin/brand-workspace#studio-inbox" label={a.dashInbox} count={waiting} hot />
         </Card>
       </div>

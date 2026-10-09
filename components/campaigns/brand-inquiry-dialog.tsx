@@ -3,6 +3,7 @@
 import { useEffect, useRef } from 'react';
 import { BrandInquiryForm, type BrandFormLabels } from './brand-form';
 import styles from './brand-inquiry-dialog.module.css';
+import { inquiryDestination, inquirySelections } from '@/lib/campaigns/inquiry-navigation';
 
 /** All enquiry links keep their native anchor fallback. Only this small island owns the modal. */
 export function BrandInquiryDialog({ endpoint, locale, labels, privacy, title, body, close }: {
@@ -14,23 +15,64 @@ export function BrandInquiryDialog({ endpoint, locale, labels, privacy, title, b
     const dialog = dialogRef.current;
     if (!dialog) return;
     let previousOverflow = '';
+    let opener: HTMLElement | null = null;
+    let fromLocation = false;
+    let locked = false;
+    const show = (destination: URL, trigger: HTMLElement | null, incoming: boolean) => {
+      if (typeof dialog.showModal !== 'function') return;
+      const values = inquirySelections(destination, Object.keys(labels.inquiryTypeOptions), Object.keys(labels.useCaseOptions));
+      window.dispatchEvent(new CustomEvent('twings:inquiry-type', { detail: values.type }));
+      window.dispatchEvent(new CustomEvent('twings:use-case', { detail: values.useCase }));
+      if (dialog.open) return;
+      opener = trigger;
+      fromLocation = incoming;
+      if (!locked) {
+        previousOverflow = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+        locked = true;
+      }
+      dialog.showModal();
+    };
     const open = (event: MouseEvent) => {
       if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-      const anchor = (event.target as Element)?.closest<HTMLAnchorElement>('a[data-inquiry-trigger], a[href$="#brands"]');
+      if (!(event.target instanceof Element)) return;
+      const anchor = event.target.closest<HTMLAnchorElement>('a[data-inquiry-trigger], a[href$="#brands"]');
       if (!anchor || typeof dialog.showModal !== 'function') return;
-      const destination = new URL(anchor.href);
-      if (destination.origin !== window.location.origin || destination.pathname !== window.location.pathname) return;
+      const destination = inquiryDestination(anchor.href, window.location.href);
+      if (!destination) return;
       event.preventDefault();
-      const params = destination.searchParams;
-      window.dispatchEvent(new CustomEvent('twings:inquiry-type', { detail: params.get('type') ?? 'campaign' }));
-      window.dispatchEvent(new CustomEvent('twings:use-case', { detail: params.get('useCase') ?? 'undecided' }));
-      if (!dialog.open) { previousOverflow = document.body.style.overflow; document.body.style.overflow = 'hidden'; dialog.showModal(); }
+      show(destination, anchor, false);
     };
-    const restore = () => { document.body.style.overflow = previousOverflow; };
+    const restore = () => {
+      // A queued close event must not undo a dialog reopened before that event is delivered.
+      if (dialog.open) return;
+      if (locked) { document.body.style.overflow = previousOverflow; locked = false; }
+      if (fromLocation && window.location.hash === '#brands') {
+        window.history.replaceState(window.history.state, '', `${window.location.pathname}${window.location.search}`);
+      }
+      fromLocation = false;
+      if (opener?.isConnected) opener.focus();
+      opener = null;
+    };
+    const followLocation = () => {
+      const destination = inquiryDestination(window.location.href, window.location.href);
+      if (destination) show(destination, null, true);
+      else if (fromLocation && dialog.open) dialog.close();
+    };
     document.addEventListener('click', open);
     dialog.addEventListener('close', restore);
-    return () => { document.removeEventListener('click', open); dialog.removeEventListener('close', restore); if (dialog.open) { dialog.close(); restore(); } };
-  }, []);
+    window.addEventListener('hashchange', followLocation);
+    window.addEventListener('popstate', followLocation);
+    followLocation();
+    return () => {
+      document.removeEventListener('click', open);
+      dialog.removeEventListener('close', restore);
+      window.removeEventListener('hashchange', followLocation);
+      window.removeEventListener('popstate', followLocation);
+      if (dialog.open) dialog.close();
+      if (locked) document.body.style.overflow = previousOverflow;
+    };
+  }, [labels.inquiryTypeOptions, labels.useCaseOptions]);
   return <>
     <noscript><style>{`.${styles.dialog}:not([open]){display:block;position:static;max-height:none;width:100%;margin:0}.${styles.close}{display:none}`}</style></noscript>
     <dialog ref={dialogRef} data-brand-inquiry-dialog data-lenis-prevent aria-labelledby="inquiry-dialog-title" aria-describedby="inquiry-dialog-body" className={styles.dialog} onClick={event => {

@@ -16,6 +16,7 @@ const METRICS = ["views", "likes", "comments", "shares", "saves"] as const;
  * time per save. Nothing here collects automatically: the values are typed by a person.
  */
 export function CollectionConsole({
+  back,
   projectId,
   status,
   posts,
@@ -23,6 +24,7 @@ export function CollectionConsole({
   locale,
 }: {
   projectId: string;
+  back?: string;
   status: BrandProjectStatus;
   posts: BrandPost[];
   b: BrandCopy;
@@ -44,7 +46,7 @@ export function CollectionConsole({
       ) : (
         <OpForm
           op="brandWorkspace.metricsBatch"
-          back={`/admin/brand-workspace/${projectId}`}
+          back={back ?? `/admin/brand-workspace/${projectId}`}
           className="bw-form"
         >
           <input type="hidden" name="projectId" value={projectId} />
