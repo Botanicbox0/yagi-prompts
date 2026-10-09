@@ -62,6 +62,7 @@ export function PortraitStudio({copy,initial,next,available}:{copy:Dictionary['p
   {canUpload?<div ref={upload} className="scroll-mt-6 rounded-2xl border border-hairline p-5 sm:p-7">
    <h2 className="text-xl font-medium">{retryOpen?copy.retryTitle:copy.uploadTitle}</h2>
    <p className="mt-3 max-w-xl text-sm leading-relaxed">{retryOpen?copy.retry:copy.guidance}</p>
+   {retryOpen?<p className="mt-3 max-w-xl text-sm leading-relaxed">{copy.guidance}</p>:null}
    <PortraitPhotoGuide copy={copy}/>
    {!available?<p role="status" className="mt-5">{copy.unavailable}</p>:<>
     <label className="mt-5 flex min-h-36 cursor-pointer flex-col items-center justify-center gap-4 rounded-xl border border-dashed border-current p-5 text-center focus-within:ring-2 focus-within:ring-accent">

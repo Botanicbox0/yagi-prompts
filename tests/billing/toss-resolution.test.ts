@@ -181,7 +181,8 @@ describe('the provider is asked for the job’s resolution, on every attempt', (
     expect(calls[0]).toMatchObject({ model: 'seedance-2.0', resolution: '720p', duration: 15 });
     done = true;
     await pass(ark, null, { fetch: async () => new Response(new Uint8Array([0, 0, 0, 24]), { headers: { 'content-type': 'video/mp4' } }) });
-    expect((await loadRenderJob(h.sql, id))!.costUsd).toBeCloseTo(0.15 * 15, 2);
+    // Missing usage counters are estimates: 24fps pixel tokens at the official 720p $7/1M rate.
+    expect((await loadRenderJob(h.sql, id))!.costUsd).toBeCloseTo(15 * 720 * 1280 * 24 / 1024 * 7 / 1_000_000, 8);
   });
 
   it('asks for 1080p when the job was bought at 1080p, again after a retryable failure, and books the 1080p cost', async () => {
@@ -206,7 +207,8 @@ describe('the provider is asked for the job’s resolution, on every attempt', (
     done = true;
     await pass(ark, null, { fetch: async () => new Response(new Uint8Array([0, 0, 0, 24]), { headers: { 'content-type': 'video/mp4' } }) });
     expect((await loadRenderJob(h.sql, id))!).toMatchObject({ status: 'succeeded', resolution: '1080p' });
-    expect((await loadRenderJob(h.sql, id))!.costUsd).toBeCloseTo(0.37 * 15, 2);
+    // A 1080p job uses the official $7.70/1M rate and its own dimensions, including on retry.
+    expect((await loadRenderJob(h.sql, id))!.costUsd).toBeCloseTo(15 * 1080 * 1920 * 24 / 1024 * 7.7 / 1_000_000, 8);
   });
 
   it('refuses an operator render at a resolution the engine cannot do, and any resolution on an image', async () => {

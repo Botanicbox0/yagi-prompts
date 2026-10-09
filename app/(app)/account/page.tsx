@@ -21,6 +21,9 @@ import { RenderList } from '@/components/renders/render-list';
 import { CreatorProfileCard } from '@/components/app/creator-profile';
 import { loadCreatorProfile, type CreatorProfile } from '@/lib/creators/profile';
 import { saveNotificationPreferences } from './actions';
+import { SubscriptionStatus } from '@/components/billing/subscription-status';
+import { getSubscriptionSummary } from '@/lib/creator-subscriptions/service';
+import type { SubscriptionSummary } from '@/lib/creator-subscriptions/types';
 
 /**
  * `/account` — private creator profile, activity and email preferences.
@@ -90,17 +93,21 @@ export default async function AccountPage({
   let preferences: NotificationPreferences = PREFERENCES_OFF;
   let renders: RenderView[] = [];
   let profile: CreatorProfile | null = null;
+  let subscription: SubscriptionSummary | null = null;
+  let subscriptionLoaded = false;
   try {
     viewer = await getViewer();
     if (viewer.userId !== null) {
       const sql = await getSqlRunner();
       if (sql !== null) {
-        const [prefs, works, creator] = await Promise.allSettled([
+        const [prefs, works, creator, monthly] = await Promise.allSettled([
           loadPreferences(sql, viewer.userId), listMyRenders(sql, viewer.userId, 3), loadCreatorProfile(sql, viewer.userId),
+          getSubscriptionSummary(sql, viewer.userId, { environment: 'live' }),
         ]);
         if (prefs.status === 'fulfilled') preferences = prefs.value ?? PREFERENCES_OFF;
         if (works.status === 'fulfilled') renders = works.value;
         if (creator.status === 'fulfilled') profile = creator.value;
+        if (monthly.status === 'fulfilled') { subscription = monthly.value; subscriptionLoaded = true; }
       }
     }
   } catch {
@@ -136,6 +143,7 @@ export default async function AccountPage({
         </h1>
 
         {viewer?.userId && <CreatorProfileCard profile={profile} email={viewer.email} dict={dict} locale={locale} feedback={params.profile} />}
+        {viewer?.userId && <SubscriptionStatus initial={subscription} copy={dict.creatorSubscription} locale={locale} unavailable={!subscriptionLoaded} />}
         <div className="mt-8 max-w-detail">
           <dl>
             <Row term={copy.languageHeading}>

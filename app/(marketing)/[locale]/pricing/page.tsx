@@ -8,9 +8,11 @@ import { SITE_TWITTER_CARD, siteOgImage } from '@/lib/seo/og';
 import { MarketingFooter, MarketingNav } from '@/components/marketing/chrome';
 import { FaqSection } from '@/lib/seo/faq-section';
 import { CREATOR_PLANS, quoteSubscriptionVideo, type CreatorPlanId } from '@/lib/twings/subscription-plan';
-import { SubscriptionPlanComparison, type PublicCreatorPlan } from '@/components/twings/subscription-plan-comparison';
+import { SubscriptionPlanComparison, SubscriptionPricingText, SubscriptionEditingPreview, type PublicCreatorPlan } from '@/components/twings/subscription-plan-comparison';
+import { SubscriptionAvailabilityProvider } from '@/components/twings/subscription-availability';
 import { CreatorPreview } from '@/components/audience/creator-preview';
 import { formatKrw } from '@/lib/twings/products';
+import { cachedSubscriptionAvailability } from '@/lib/creator-subscriptions/cached-availability';
 
 /**
  * Single purchases plus the upcoming Creator and Premium subscription designs.
@@ -52,7 +54,7 @@ export default async function PricingPage({ params }: { params: Promise<{ locale
   const dict = getDictionary(locale);
   const p = dict.pricing;
 
-  const catalog = await getPromptCatalog();
+  const [catalog, availability] = await Promise.all([getPromptCatalog(), cachedSubscriptionAvailability()]);
   const plans: PublicCreatorPlan[] = (Object.keys(CREATOR_PLANS) as CreatorPlanId[]).map(id => ({
     id,
     price: locale === 'ko' ? formatKrw(CREATOR_PLANS[id].priceKrw) : `₩${CREATOR_PLANS[id].priceKrw.toLocaleString('en-US')}`,
@@ -71,26 +73,30 @@ export default async function PricingPage({ params }: { params: Promise<{ locale
     subscriptionFilmLength: p.subscriptionFilmLength, subscriptionEditingTitle: p.subscriptionEditingTitle,
     subscriptionEditingStatus: p.subscriptionEditingStatus, subscriptionMore: p.subscriptionMore,
     subscriptionBrowse: p.subscriptionBrowse, subscriptionCountBasis: p.subscriptionCountBasis,
+    subscriptionTitle: p.subscriptionTitle, subscriptionStatus: p.subscriptionStatus,
+    subscriptionUnavailable: p.subscriptionUnavailable, subscriptionOpenTitle: p.subscriptionOpenTitle,
+    subscriptionOpenStatus: p.subscriptionOpenStatus, subscriptionOpenBody: p.subscriptionOpenBody,
+    subscriptionPausedStatus: p.subscriptionPausedStatus, subscriptionPausedBody: p.subscriptionPausedBody,
+    subscriptionStart: p.subscriptionStart, subscriptionEditingOpenStatus: p.subscriptionEditingOpenStatus,
+    subscriptionEditRequestLimit: p.subscriptionEditRequestLimit, subscriptionEditCountNotice: p.subscriptionEditCountNotice,
   };
+  const textCopy = { lede: p.lede, subscriptionOpenLede: p.subscriptionOpenLede, filmsBody: p.filmsBody, filmsOpenBody: p.filmsOpenBody };
+  const editingCopy = { subscriptionEditingStatus: p.subscriptionEditingStatus, subscriptionEditingOpenStatus: p.subscriptionEditingOpenStatus, subscriptionEditingTitle: p.subscriptionEditingTitle, subscriptionPromptEditingSoon: p.subscriptionPromptEditingSoon, subscriptionEditingOpenBody: p.subscriptionEditingOpenBody, subscriptionEditingExample: p.subscriptionEditingExample, subscriptionEditingBoundary: p.subscriptionEditingBoundary };
 
   return (
     <>
       <MarketingNav locale={locale} dict={dict} rest="/pricing" initialTheme="light" />
 
+      <SubscriptionAvailabilityProvider initialAvailability={availability}>
       <main id="main" data-creator-pricing>
         <section data-section data-theme="light" className="section">
           <div className="audience-shell pt-24 pb-14 lg:pt-28 lg:pb-20">
             <header className="max-w-3xl">
               <p className="audience-eyebrow">{p.eyebrow}</p>
               <h1 className="mt-4 font-display text-[clamp(2rem,3.5vw,3rem)] leading-[1.12] font-bold tracking-tight">{p.line1}<br />{p.line2}</h1>
-              <p data-service-definition className="mt-3 max-w-2xl text-sm leading-relaxed text-black/65">{p.lede}</p>
+              <p data-service-definition className="mt-3 max-w-2xl text-sm leading-relaxed text-black/65"><SubscriptionPricingText copy={textCopy} field="lede" /></p>
             </header>
-            <section id="monthly" data-pricing-subscription="preparing" className="mt-6 scroll-mt-24">
-              <div className="mb-6 flex flex-wrap items-center gap-x-4 gap-y-2 border-y border-hairline py-3">
-                <h2 className="text-sm font-semibold">{p.subscriptionTitle}</h2>
-                <span className="rounded-full border border-hairline px-3 py-1 text-xs">{p.subscriptionStatus}</span>
-                <p data-subscription-unavailable data-generation-availability className="w-full text-xs leading-relaxed text-black/65 lg:w-auto">{p.subscriptionUnavailable}</p>
-              </div>
+            <section id="monthly" className="mt-6 scroll-mt-24">
               <SubscriptionPlanComparison plans={plans} copy={comparisonCopy} browseHref={templatesHref(locale)} />
               <div className="mt-6 flex flex-wrap items-center gap-x-6 gap-y-3 text-sm">
                 <p className="font-semibold">{p.subscriptionShared}</p>
@@ -102,18 +108,13 @@ export default async function PricingPage({ params }: { params: Promise<{ locale
               </details>
             </section>
             <aside data-pricing-films className="mt-9 flex flex-wrap items-center justify-between gap-5">
-              <div className="max-w-2xl"><h2 className="text-lg font-semibold">{p.filmsTitle}</h2><p className="mt-2 text-sm leading-relaxed text-black/65">{p.filmsBody}</p></div>
+              <div className="max-w-2xl"><h2 className="text-lg font-semibold">{p.filmsTitle}</h2><p className="mt-2 text-sm leading-relaxed text-black/65"><SubscriptionPricingText copy={textCopy} field="single" /></p></div>
               <a href={templatesHref(locale)} className="inline-flex min-h-12 items-center gap-3 text-sm font-medium underline underline-offset-4">{p.filmsCta}<span aria-hidden="true">↗</span></a>
             </aside>
           </div>
         </section>
 
-        <section id="customization" data-section data-theme="light" data-prompt-editing="planned" className="section scroll-mt-24 border-y border-hairline">
-          <div className="audience-shell grid gap-8 py-12 md:grid-cols-2 md:items-center lg:py-16">
-            <div><p className="text-xs font-medium text-accent">{p.subscriptionEditingStatus}</p><h2 className="mt-4 max-w-lg text-2xl leading-snug font-semibold tracking-tight sm:text-3xl">{p.subscriptionEditingTitle}</h2><p className="mt-4 max-w-lg text-sm leading-relaxed text-black/65">{p.subscriptionPromptEditingSoon}</p></div>
-            <div><blockquote className="border-l-2 border-accent pl-5 text-xl leading-relaxed font-medium sm:text-2xl">“{p.subscriptionEditingExample}”</blockquote><p className="mt-5 max-w-lg text-xs leading-relaxed text-black/65">{p.subscriptionEditingBoundary}</p></div>
-          </div>
-        </section>
+        <SubscriptionEditingPreview copy={editingCopy} />
 
         <section data-section data-theme="light" data-pricing-examples className="section">
           <div className="audience-shell py-14 lg:py-20">
@@ -129,8 +130,9 @@ export default async function PricingPage({ params }: { params: Promise<{ locale
           </div>
         </section>
 
-        <FaqSection dict={dict} locale={locale} placement="pricing" path={`/${locale}/pricing`} />
+        <FaqSection dict={dict} locale={locale} placement="pricing" path={`/${locale}/pricing`} availability={availability} />
       </main>
+      </SubscriptionAvailabilityProvider>
 
       <MarketingFooter locale={locale} dict={dict} />
     </>

@@ -29,7 +29,8 @@
     "ark:smoke": "tsx scripts/ark-smoke.ts",
     "ark:assets:smoke": "tsx scripts/ark-assets-smoke.ts",
     "ark:virtual:smoke": "tsx scripts/ark-virtual-smoke.ts",
-    "image:smoke": "tsx scripts/image-smoke.ts"
+    "image:smoke": "tsx scripts/image-smoke.ts",
+    "subscription:readiness": "tsx scripts/subscription-readiness.ts"
   },
   "dependencies": {
     "@supabase/ssr": "0.12.4",

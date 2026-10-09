@@ -24,6 +24,7 @@ import { SHARE_TTL_DAYS } from '@/lib/renders/share';
 import { createLocalRenderStore, type RenderStore } from '@/lib/renders/store';
 import type { RenderEngineDeps } from '@/lib/renders/engines';
 import { BEAUTY_AD_TEMPLATE_ID } from '@/lib/renders/template-references';
+import { quoteArkVideo } from '@/lib/ark/pricing';
 import { ADMIN_VIEWER, viewerOf } from '@/tests/helpers/admin';
 import { promptHarness, type PromptHarness } from '@/tests/helpers/prompts';
 
@@ -480,7 +481,7 @@ describe('the render queue', () => {
     expect(done).toMatchObject({ waiting: 0, succeeded: 1, notified: 1 });
     job = (await loadRenderJob(h.sql, created.id))!;
     expect(job).toMatchObject({ status: 'succeeded', resultKey: `${created.id}/result.mp4`, resultMime: 'video/mp4', provider: 'modelark' });
-    expect(job.costUsd).toBeCloseTo(0.15 * seconds, 2); // $0.15 per second at 720p on Seedance 2.0
+    expect(job.costUsd).toBeCloseTo(quoteArkVideo({ model: 'seedance-2.0', seconds, resolution: '720p', aspect: '9:16' })!.providerUsd, 6);
     expect(await store.read(job.resultKey!)).toEqual(VIDEO_BYTES);
     expect(mailer.sent).toHaveLength(1);
     // A film has no frame to preview; the email carries the link and nothing else from the gateway.

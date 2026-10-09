@@ -9,6 +9,10 @@ const film = vi.hoisted(() => ({
   source: 'yagi', authorHandle: null, models: [], modelLabels: [], useCase: [], poster: null, video: null, lock: null, featured: false, publishedAt: null,
 }));
 vi.mock('@/lib/prompts/public-catalog', () => ({ getPromptCatalog: async () => ({ video: [film as PromptCard], image: [] }) }));
+vi.mock('@/lib/creator-subscriptions/cached-availability', () => ({ cachedSubscriptionAvailability: async () => ({
+  status: 'preparing', version: 'creator-monthly-2026-10-09-v1',
+  plans: { creator: { status: 'preparing' }, premium: { status: 'preparing' } }, editing: 'preparing', premiumEditRequestsPerPeriod: null,
+}) }));
 vi.mock('@/components/marketing/chrome', () => ({ MarketingNav: () => null, MarketingFooter: () => null }));
 vi.mock('@/components/motion/reveal', () => ({ Reveal: ({ lines }: { lines: string[] }) => <h1>{lines.join(' ')}</h1> }));
 import PricingPage from '@/app/(marketing)/[locale]/pricing/page';

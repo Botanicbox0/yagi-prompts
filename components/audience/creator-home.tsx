@@ -6,6 +6,7 @@ import { brandsHref, campaignsHref } from '@/lib/campaigns/links';
 import { RENDER_PIPELINE_PUBLIC } from '@/lib/flags';
 import { CreatorPreview } from './creator-preview';
 import { TypographicPoster } from '@/components/prompts/poster';
+import { CreatorAvailabilityNotice } from '@/components/twings/subscription-public-notices';
 
 export function CreatorHero({ dict, locale, featured }: { dict: Dictionary; locale: Locale; featured?: PromptCard }) {
   const t = dict.creatorJourney;
@@ -26,7 +27,7 @@ export function CreatorHero({ dict, locale, featured }: { dict: Dictionary; loca
           <a href={templatesHref(locale, 'video')} data-hero-video className="audience-button">{t.browse} ↗</a>
           <a href="#how-it-works" className="inline-flex min-h-11 items-center text-sm underline underline-offset-4">{t.how}</a>
         </div>
-        <p data-creator-availability className="mt-5 max-w-md text-xs leading-relaxed opacity-55">{RENDER_PIPELINE_PUBLIC ? t.ready : t.preparing}</p>
+        <p data-creator-availability className="mt-5 max-w-md text-xs leading-relaxed opacity-55"><CreatorAvailabilityNotice copy={{ ready: t.ready, preparing: t.preparing, subscriptionReady: t.subscriptionReady, subscriptionPaused: t.subscriptionPaused }} oneTimeAvailable={RENDER_PIPELINE_PUBLIC} /></p>
       </div>
       {featured && <article data-featured-template={featured.slug} data-media-host className={`relative min-w-0 w-full ${portrait ? 'max-w-xs justify-self-center' : ''}`}>
         <CreatorPreview poster={featured.poster} video={featured.video} title={title!} href={templateHref(locale, featured.slug)} ratio={ratio} labels={{ play: t.playPreview, pause: t.pausePreview }} fallback={<TypographicPoster title={title!} slug={featured.slug} kicker={featured.modelLabels.join(' · ')} ratio={ratio} />} />
