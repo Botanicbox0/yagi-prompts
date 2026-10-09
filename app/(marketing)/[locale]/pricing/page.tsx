@@ -79,17 +79,17 @@ export default async function PricingPage({ params }: { params: Promise<{ locale
 
       <main id="main" data-creator-pricing>
         <section data-section data-theme="light" className="section">
-          <div className="audience-shell pt-28 pb-14 lg:pt-32 lg:pb-20">
+          <div className="audience-shell pt-24 pb-14 lg:pt-28 lg:pb-20">
             <header className="max-w-3xl">
               <p className="audience-eyebrow">{p.eyebrow}</p>
-              <h1 className="mt-5 font-display text-[clamp(2.25rem,4.5vw,4rem)] leading-[1.12] font-bold tracking-tight">{p.line1}<br />{p.line2}</h1>
-              <p data-service-definition className="mt-5 max-w-2xl text-base leading-relaxed text-black/65">{p.lede}</p>
+              <h1 className="mt-4 font-display text-[clamp(2rem,3.5vw,3rem)] leading-[1.12] font-bold tracking-tight">{p.line1}<br />{p.line2}</h1>
+              <p data-service-definition className="mt-3 max-w-2xl text-sm leading-relaxed text-black/65">{p.lede}</p>
             </header>
-            <section id="monthly" data-pricing-subscription="preparing" className="mt-9 scroll-mt-24">
-              <div className="mb-7 flex flex-wrap items-center gap-x-4 gap-y-2 border-y border-hairline py-4">
+            <section id="monthly" data-pricing-subscription="preparing" className="mt-6 scroll-mt-24">
+              <div className="mb-6 flex flex-wrap items-center gap-x-4 gap-y-2 border-y border-hairline py-3">
                 <h2 className="text-sm font-semibold">{p.subscriptionTitle}</h2>
                 <span className="rounded-full border border-hairline px-3 py-1 text-xs">{p.subscriptionStatus}</span>
-                <p data-subscription-unavailable data-generation-availability className="w-full text-xs leading-relaxed text-black/65">{p.subscriptionUnavailable}</p>
+                <p data-subscription-unavailable data-generation-availability className="w-full text-xs leading-relaxed text-black/65 lg:w-auto">{p.subscriptionUnavailable}</p>
               </div>
               <SubscriptionPlanComparison plans={plans} copy={comparisonCopy} browseHref={templatesHref(locale)} />
               <div className="mt-6 flex flex-wrap items-center gap-x-6 gap-y-3 text-sm">

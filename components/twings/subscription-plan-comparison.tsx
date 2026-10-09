@@ -26,7 +26,7 @@ export function SubscriptionPlanComparison({ plans, copy, browseHref }: {
 }) {
   const [seconds, setSeconds] = useState<FilmLength>(15);
   return <div data-subscription-preview>
-    <fieldset className="mb-7 flex min-w-0 flex-wrap items-center justify-between gap-4">
+    <fieldset className="mb-5 flex min-w-0 flex-wrap items-center justify-between gap-4">
       <legend className="sr-only">{copy.subscriptionDurationLabel}</legend>
       <p aria-hidden="true" className="text-sm font-medium">{copy.subscriptionDurationLabel}</p>
       <div className="inline-flex max-w-full rounded-full border border-hairline p-1">
