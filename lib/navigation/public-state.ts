@@ -12,8 +12,8 @@ export function useCaseHref(href: string, value: string | null, options: readonl
 }
 
 /** Section links match their fragment; page links also match genuine descendant routes. */
-export function isPublicNavCurrent(href: string, pathname: string, hash: string): boolean {
-  if (!href.startsWith('/') || href.startsWith('//')) return false;
+export function isPublicNavCurrent(href: string, pathname: string | null, hash: string): boolean {
+  if (!pathname || !href.startsWith('/') || href.startsWith('//')) return false;
   const destination = new URL(href, 'https://twings.app');
   const clean = (path: string) => path.replace(/\/+$/, '') || '/';
   const target = clean(destination.pathname);

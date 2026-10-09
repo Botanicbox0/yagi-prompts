@@ -26,6 +26,12 @@ describe('public navigation and shareable catalog filters', () => {
     expect(isPublicNavCurrent('https://brand.twings.app', '/ko/brands', '')).toBe(false);
   });
 
+  it('keeps fallback and not-found navigation usable before a path is available', () => {
+    expect(isPublicNavCurrent('/ko/video', null, '')).toBe(false);
+    expect(isPublicNavCurrent('/', null, '')).toBe(false);
+    expect(isPublicNavCurrent('/ko/brands#work', '', '#work')).toBe(false);
+  });
+
   it('marks only the matching brand section rather than every same-page link', () => {
     expect(isPublicNavCurrent('/ko/brands#work', '/ko/brands', '#work')).toBe(true);
     expect(isPublicNavCurrent('/ko/brands#process', '/ko/brands', '#work')).toBe(false);
