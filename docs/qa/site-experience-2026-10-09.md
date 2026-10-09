@@ -47,3 +47,18 @@ Claude Opus 4.6은 공개 또는 공개 예정 문안과 일반적인 사용 흐
 이번 변경은 UI와 탐색 개선이다. DB 마이그레이션, 운영 가격 저장, 결제 개방, 계정 권한 변경은 포함하지 않는다. 월 구독은 준비 중이며 결제 준비 판정기의 명세가 실제 구현 완료를 의미하지 않는다. 가격과 제공량은 PR #47의 확정 값을 그대로 사용한다.
 
 운영 확인에는 실제 고객의 승인·게시·계약·결제 작업을 실행하지 않는다. 로컬 테스트 계정과 PGlite 스냅샷으로 운영 화면을 검증하고, 프리뷰·실제 도메인에서 공개 화면과 접근 경계를 확인한다. 필수 검증 결과와 커밋 SHA는 PR에 기록한다.
+
+## 404 implementation and regression coverage
+
+Unmatched URLs use the installed Next.js 15.5.27 `global-not-found` convention with
+`experimental.globalNotFound`. It handles this application's multiple root layouts without
+relaxing the public locale root's `dynamicParams=false` or reading sessions in static pages.
+The document has static English chrome and separate Korean/English panels with native return
+links, self-hosted fonts, 404 metadata and no canonical URL. Existing route-level recovery
+screens remain in place. This experimental option should be rechecked on a Next.js upgrade.
+
+Reference: [Next 15 not-found conventions](https://nextjs.org/docs/15/app/api-reference/file-conventions/not-found).
+HTTP regression coverage includes GET/HEAD 404, empty HEAD responses, both panel languages and
+return links, private-data absence, API/auth no-store, and fail-closed workspace hosts.
+Local Host probes use `node:http.request`: this installed Node runtime's fetch transport
+replaces an overridden Host header with the connection authority.
