@@ -50,7 +50,7 @@ export default async function LandingPage({ params }: { params: Promise<{ locale
           <div className="mb-8 border-t border-hairline pt-8">
             <h2 className="audience-heading">{dict.creatorJourney.libraryHeading}</h2>
             <p className="mt-4 max-w-xl text-sm leading-relaxed opacity-60">{dict.creatorJourney.libraryBody}</p>
-            {filterOptions.length > 0 && templates.video.length >= FILTER_MIN_TEMPLATES && <div className="mt-6"><UseCaseFilter options={filterOptions} labels={{ heading: dict.prompts.filterHeading, all: dict.prompts.filterAll }} /></div>}
+            {filterOptions.length > 0 && templates.video.length >= FILTER_MIN_TEMPLATES && <div className="mt-6"><UseCaseFilter options={filterOptions} labels={{ heading: dict.prompts.filterHeading, all: dict.prompts.filterAll, count: dict.prompts.filterCount, reset: dict.prompts.filterReset }} /></div>}
           </div>
           <PromptRail id="video" heading={t.video.rail} lede={t.video.railLede} cards={templates.video} locale={locale} labels={labels} useCaseLabels={useCaseLabels} emptyLabel={t.video.emptyTitle} filteredEmptyLabel={dict.prompts.filterEmpty} topClassName="mt-0" />
           <a href={templatesHref(locale,'video')} data-all-video className="mt-8 inline-flex min-h-11 items-center text-sm font-medium underline underline-offset-4">{t.allVideo} ↗</a>

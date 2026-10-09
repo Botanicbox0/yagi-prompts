@@ -70,7 +70,7 @@ export default async function AdminCampaignsPage({ searchParams }: { searchParam
       {payoutQueue.length > 0 && (
         <Panel title={`${a.payoutQueueHeading} (${payoutQueue.length})`}>
           <p className="mb-4 font-mono text-[0.75rem] opacity-55">{a.payoutQueueLede}</p>
-          <ul data-payout-queue className="flex flex-col gap-3">
+          <ul id="payout-queue" data-payout-queue className="flex flex-col gap-3">
             {payoutQueue.map((app) => {
               const campaign = byId.get(app.campaignId);
               const rule = campaign?.payout ?? null;

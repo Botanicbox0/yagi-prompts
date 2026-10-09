@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { BrandCopy } from "./action-form";
 const ids = [
   "performance",
@@ -34,15 +34,18 @@ export function ProjectTabs({
   b,
   children,
   comments = 0,
+  pendingReviews = 0,
   usage = false,
 }: {
   b: BrandCopy;
   children: ReactNode;
-  /** Shown on the comments tab so a new thread is visible from any tab. */
+  /** Total conversation messages; never an unread count. */
   comments?: number;
+  pendingReviews?: number;
   /** The secondary-usage tab exists only for brand members, the TWINGS team and the studio (never guests). */
   usage?: boolean;
 }) {
+  const navigation = useRef<HTMLElement>(null);
   const [active, setActive] = useState<string>("performance");
   const available = ids.filter((id) => usage || id !== "usage");
   useEffect(() => {
@@ -50,7 +53,10 @@ export function ProjectTabs({
     const allowed = ids.filter((id) => usage || id !== "usage");
     const read = () => {
       const id = tabForViewer(location.hash, allowed);
-      if (id) setActive(id);
+      if (id) {
+        setActive(id);
+        requestAnimationFrame(() => navigation.current?.querySelector<HTMLAnchorElement>(`a[href="#${id}"]`)?.scrollIntoView({ block: "nearest", inline: "nearest" }));
+      }
       return id;
     };
     // A link like /brand/projects/<id>#review arrives while that section is still hidden, so the
@@ -77,15 +83,16 @@ export function ProjectTabs({
   };
   return (
     <div className="bw-project-sections" data-project-tab={active}>
-      <nav className="bw-tabs" aria-label={b.projectSections}>
+      <nav ref={navigation} className="bw-tabs" aria-label={b.projectSections}>
         {available.map((id) => (
           <a
             key={id}
             href={`#${id}`}
             aria-current={id === active ? "page" : undefined}
-            onClick={() => setActive(id)}
+            onClick={(event) => { setActive(id); event.currentTarget.scrollIntoView({ block: "nearest", inline: "nearest" }); }}
           >
             {labels[id]}
+            {id === "review" && pendingReviews > 0 && <span className="bw-tab-count" data-review-count={pendingReviews}>{pendingReviews}</span>}
             {id === "conversation" && comments > 0 && (
               <span className="bw-tab-count" data-comment-count={comments}>{comments}</span>
             )}

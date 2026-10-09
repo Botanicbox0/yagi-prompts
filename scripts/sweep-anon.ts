@@ -1,4 +1,5 @@
 import { readFile } from 'node:fs/promises';
+import { request as httpRequest } from 'node:http';
 import { resolve } from 'node:path';
 import { PGlite } from '@electric-sql/pglite';
 import { DEFAULT_LOCAL_SNAPSHOT } from '@/lib/db/connect-shared';
@@ -93,6 +94,35 @@ interface Fetched {
 }
 
 async function request(path: string, init?: RequestInit): Promise<Fetched> {
+  // Undici intentionally replaces Host; use the native transport for local workspace probes.
+  const headers = new Headers(init?.headers);
+  if (headers.has('host') && new URL(BASE).protocol === 'http:') {
+    return new Promise<Fetched>((resolveResponse, reject) => {
+      const probe = httpRequest(new URL(`${BASE}${path}`), {
+        method: init?.method ?? 'GET', headers: Object.fromEntries(headers),
+      }, (response) => {
+        const chunks: Buffer[] = [];
+        response.on('data', (chunk: Buffer) => chunks.push(chunk));
+        response.on('error', reject);
+        response.on('end', () => {
+          const bytes = Buffer.concat(chunks);
+          const header = (name: string) => {
+            const value = response.headers[name];
+            return Array.isArray(value) ? value.join(', ') : value ?? null;
+          };
+          resolveResponse({
+            status: response.statusCode ?? 0, location: header('location'),
+            cacheControl: header('cache-control'), contentType: header('content-type'),
+            robotsTag: header('x-robots-tag'), contentDisposition: header('content-disposition'),
+            body: bytes.toString('utf8'), bytes,
+          });
+        });
+      });
+      probe.setTimeout(30_000, () => probe.destroy(new Error('Host probe timed out')));
+      probe.on('error', reject);
+      probe.end();
+    });
+  }
   const response = await fetch(`${BASE}${path}`, { redirect: 'manual', ...init });
   const bytes = new Uint8Array(await response.arrayBuffer());
   return {
@@ -268,11 +298,59 @@ async function sweepRedirects(): Promise<void> {
   else fail('/library redirect target', `unexpected location ${library.location}`);
 }
 
-async function sweepNotFound(): Promise<void> {
+async function sweepNotFound(privateKeys: string[], brandWorkspace: BrandWorkspaceProbe[]): Promise<void> {
   console.log('\n404s — draft, archived, unknown');
   expectEqual('archived playbook 404s', (await get(`/en/p/${ARCHIVED}`)).status, 404);
   expectEqual('draft playbook 404s', (await get('/en/p/insta-toon-pipeline')).status, 404);
   expectEqual('unknown slug 404s', (await get('/en/p/no-such-playbook')).status, 404);
+
+  // Unknown routes must reach the branded boundary, not Next's generic English dead end.
+  // Inspect the complete HTML/Flight response without ever logging fixture values on failure.
+  const forbidden = [
+    ...FIXTURE_SENTINELS.filter((sentinel) => sentinel.visibility !== 'public').map((sentinel) => sentinel.token),
+    ...PROMPT_SENTINELS.map((sentinel) => sentinel.token),
+    ...privateKeys,
+    ...brandWorkspace.flatMap((fixture) => [fixture.title, fixture.organization_name, fixture.storage_key]),
+    'content/rev/', 'content-published', 'artifacts-published',
+  ];
+  for (const locale of ['ko', 'en']) {
+    for (const suffix of ['qa-page-that-does-not-exist', 'qa-page-that-does-not-exist/nested']) {
+      const path = `/${locale}/${suffix}`;
+      const page = await get(path);
+      expectEqual(`${path}: HTTP 404`, page.status, 404);
+      expectPresent(`${path}: static bilingual document`, page.body, '<html lang="en"');
+      const head = await request(path, { method: 'HEAD' });
+      expectEqual(`${path}: HEAD 404`, head.status, 404);
+      expectEqual(`${path}: HEAD has no body`, head.bytes.length, 0);
+      for (const panelLocale of ['ko', 'en']) {
+        expectPresent(`${path}: ${panelLocale} branded panel`, page.body, `data-not-found="${panelLocale}"`);
+        expectPresent(`${path}: ${panelLocale} video return`, page.body, `href="/${panelLocale}/video"`);
+        expectPresent(`${path}: ${panelLocale} campaign return`, page.body, `href="/${panelLocale}/campaigns"`);
+      }
+      expectEqual(`${path}: no private content or storage keys`, forbidden.some((value) => value.length > 0 && page.body.includes(value)), false);
+    }
+  }
+  for (const path of ['/api/qa-route-that-does-not-exist', '/auth/qa-route-that-does-not-exist']) {
+    const page = await get(path);
+    expectEqual(`${path}: HTTP 404`, page.status, 404);
+    expectPresent(`${path}: remains no-store`, page.cacheControl ?? '', 'no-store');
+    expectPresent(`${path}: default document locale`, page.body, '<html lang="en"');
+    expectEqual(`${path}: no private content or storage keys`, forbidden.some((value) => value.length > 0 && page.body.includes(value)), false);
+  }
+  // Local Host overrides exercise the actual workspace middleware before global 404 routing.
+  // On a deployed preview the proxy owns Host, so these checks belong to the local server sweep.
+  if (['localhost', '127.0.0.1', '[::1]'].includes(new URL(BASE).hostname)) {
+    for (const host of ['admin.twings.app', 'brand.twings.app', 'brands.twings.app']) {
+      const path = '/ko/qa-page-that-does-not-exist/nested';
+      const page = await request(path, { headers: { host } });
+      expectEqual(`${host}${path}: host boundary 404`, page.status, 404);
+      expectPresent(`${host}${path}: private`, page.cacheControl ?? '', 'private');
+      expectPresent(`${host}${path}: no-store`, page.cacheControl ?? '', 'no-store');
+      expectEqual(`${host}${path}: noindex`, page.robotsTag, 'noindex, nofollow');
+      expectEqual(`${host}${path}: no public fallback or private payload`, page.bytes.length, 0);
+      expectEqual(`${host}${path}: no private content or storage keys`, forbidden.some((value) => value.length > 0 && page.body.includes(value)), false);
+    }
+  }
 }
 
 async function sweepGateway(assets: AssetBlockRow[]): Promise<void> {
@@ -1237,7 +1315,7 @@ async function main(): Promise<void> {
   await sweepShowcasePage('en', privateKeys);
   await sweepShowcasePage('ko', privateKeys);
   await sweepRedirects();
-  await sweepNotFound();
+  await sweepNotFound(privateKeys, brandWorkspace);
   await sweepGateway(assets);
   await sweepConversionCta();
   await sweepMoney();

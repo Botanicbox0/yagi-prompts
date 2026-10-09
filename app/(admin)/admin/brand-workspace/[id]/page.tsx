@@ -1,3 +1,4 @@
+import { campaignListReturnPath } from '@/lib/brands/workspace/navigation';
 import { ManagedForm } from '@/components/brand-workspace/managed-form';
 import "@/app/(brand)/workspace.css";
 import { randomUUID } from "node:crypto";
@@ -36,6 +37,8 @@ export default async function StudioBrandProject({
   if (!sql) return <p role="alert">{b.unavailable}</p>;
   const p = await loadStudioProject({ sql }, viewer, id);
   if (!p) notFound();
+  const listReturn = campaignListReturnPath(search.returnTo, p.organizationId, true);
+  const formBack = `/admin/brand-workspace/${id}?${new URLSearchParams({ returnTo: listReturn })}`;
   const refusals = brandRefusals(dict.admin);
   const covers = p.attachments.filter((a) => ["image/jpeg", "image/png", "image/webp"].includes(a.mime));
   const Form = ({
@@ -49,7 +52,7 @@ export default async function StudioBrandProject({
     children: ReactNode;
     revision?: number;
   }) => (
-    <OpForm op={op} back={`/admin/brand-workspace/${id}`} className="bw-form">
+    <OpForm op={op} back={formBack} className="bw-form">
       <input type="hidden" name="projectId" value={id} />
       <input type="hidden" name="requestId" value={randomUUID()} />
       <input type="hidden" name="expectedRevision" value={revision} />
@@ -79,7 +82,7 @@ export default async function StudioBrandProject({
           <label>{b.managed.scope}<select name="access" defaultValue="comment"><option value="comment">{b.managed.scopeProjectComment}</option><option value="read">{b.managed.scopeProject}</option><option value="brand">{b.managed.scopeBrand}</option></select><span className="bw-muted">{b.managed.scopeCommentHint}</span></label><input type="hidden" name="role" value="viewer"/>
         </ManagedForm> : <p className="bw-note" data-invite-hidden-campaign>{dict.admin.inviteHiddenCampaign} <a href={`/admin/brand-workspace/organizations/${p.organizationId}`}>{b.managed.access} →</a></p>}</details>
       </section>
-      <ProjectDetail project={p} b={b} locale={locale} studio studioReply={
+      <ProjectDetail backHref={listReturn} project={p} b={b} locale={locale} studio studioReply={
         <Form op="brandWorkspace.message" submit={b.sendComment}>
           <label>
             {b.studioMessage}
@@ -111,7 +114,7 @@ export default async function StudioBrandProject({
         <div className="bw-grid">
           <div>
             <p className="bw-kicker">{b.projectStatus}</p>
-            <BrandStatusForms projectId={id} status={p.status} revision={p.revision} b={b} admin={dict.admin} />
+            <BrandStatusForms back={formBack} projectId={id} status={p.status} revision={p.revision} b={b} admin={dict.admin} />
           </div>
           <p className="bw-muted">
             <a href="#conversation">{b.studioCommentsLink} →</a>
@@ -263,6 +266,7 @@ export default async function StudioBrandProject({
         </Form>
       </section>}
       <CollectionConsole
+        back={formBack}
         projectId={id}
         status={p.status}
         posts={p.posts}

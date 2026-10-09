@@ -24,6 +24,8 @@ function retiredSubscriptionRedirects(): Array<Redirect & { permanent: boolean }
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
+  // Public locale, app and admin surfaces have separate roots; use the routing-level 404.
+  experimental: { globalNotFound: true },
   /**
    * Both SqlRunner drivers (lib/db/connect.ts) are native/WASM-backed and must be `require`d at
    * runtime rather than bundled: `pg` loads optional native bindings, PGlite ships a .wasm sidecar.

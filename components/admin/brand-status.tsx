@@ -21,8 +21,9 @@ const TERMINAL = new Set(['completed', 'cancelled']);
  * cancelling freezes the campaign, so those two carry a required confirmation box. A finished
  * campaign offers no status control at all.
  */
-export function BrandStatusForms({ projectId, status, revision, b, admin }: {
+export function BrandStatusForms({ projectId, status, revision, b, admin, back }: {
   projectId: string;
+  back?: string;
   status: BrandProjectStatus;
   revision: number;
   b: Dictionary['brandWorkspace'];
@@ -34,7 +35,7 @@ export function BrandStatusForms({ projectId, status, revision, b, admin }: {
   return (
     <div className="bw-grid" data-brand-status-moves={moves.join(' ')}>
       {moves.map((to) => (
-        <OpForm key={to} op="brandWorkspace.status" back={`/admin/brand-workspace/${projectId}`} className="bw-form">
+        <OpForm key={to} op="brandWorkspace.status" back={back ?? `/admin/brand-workspace/${projectId}`} className="bw-form">
           <input type="hidden" name="projectId" value={projectId} />
           <input type="hidden" name="requestId" value={randomUUID()} />
           <input type="hidden" name="expectedRevision" value={revision} />

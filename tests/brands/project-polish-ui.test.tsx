@@ -70,6 +70,26 @@ describe("campaign page", () => {
     expect(html).toContain('href="#review"');
   });
 
+  it("counts only the latest pending review per slot on active campaigns", () => {
+    const b = getDictionary("en").brandWorkspace;
+    const first = project.contents[0]!;
+    const contents = [first, { ...first, id: "v2", version: 2, decision: "approved" as const }, { ...first, id: "other", slotKey: "other" }];
+    const html = renderToStaticMarkup(<ProjectDetail project={{ ...project, contents }} b={b} locale="en" />);
+    expect(html).toContain('data-review-count="1"');
+    expect(html).not.toContain('data-review-count="2"');
+    const closed = renderToStaticMarkup(<ProjectDetail project={{ ...project, contents, status: "completed" }} b={b} locale="en" />);
+    expect(closed).not.toContain('data-review-count');
+  });
+
+  it("preserves a filtered list on explicit back without accepting another organization", () => {
+    const b = getDictionary("en").brandWorkspace;
+    const html = renderToStaticMarkup(<ProjectDetail project={project} backHref="/brand?organizationId=org&q=launch&status=active#campaigns" b={b} locale="en" />);
+    expect(html).toContain('href="/brand?organizationId=org&amp;q=launch&amp;status=active#campaigns"');
+    const foreign = renderToStaticMarkup(<ProjectDetail project={project} backHref="/brand?organizationId=other&q=launch" b={b} locale="en" />);
+    expect(foreign).toContain('href="/brand?organizationId=org"');
+    expect(foreign).not.toContain('organizationId=other');
+  });
+
   it("opens the tab a link's fragment names", () => {
     expect(tabFromHash("#review")).toBe("review");
     expect(tabFromHash("#files")).toBe("files");

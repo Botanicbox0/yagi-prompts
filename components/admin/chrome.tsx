@@ -1,3 +1,4 @@
+import { AdminNavigationScroll } from './navigation-scroll';
 import {WorkspaceLanguage} from '@/components/brand-workspace/language';
 import { PublicLink } from '@/components/admin/public-link';
 import type { ReactNode } from 'react';
@@ -307,62 +308,37 @@ export function AdminShell({
             : active === 'playbooks'
               ? '/admin/playbooks'
               : '/admin';
-  const navClass = (key: 'home' | 'playbooks' | 'policy' | 'prompts' | 'contests' | 'campaigns' | 'inquiries' | 'brandWorkspace') =>
-    `font-label text-eyebrow uppercase ${active === key ? 'text-accent' : 'opacity-60'}`;
-
-  if (active === 'brandWorkspace') {
-    const b = getDictionary(isLocale(locale) ? locale : 'en').brandWorkspace;
-    return <div className="bw-shell bw-studio-shell" data-section data-theme="light">
-      <aside className="bw-sidebar"><AdminBrand dict={dict}/><p className="bw-kicker">{b.dashboard.studio}</p>
-        <nav><a href="/admin/brand-workspace" aria-current="page">{b.studioQueue}</a><a href="/admin/prompts">{dict.navPrompts}</a><a href="/admin/campaigns">{dict.navCampaigns}</a><a href="/admin/inquiries">{dict.navInquiries}</a><a href="/admin/playbooks">{dict.navPlaybooks}</a><a href="/admin/policy">{dict.navPolicy}</a></nav>
-        <div className="bw-signout"><PublicLink href={`/${locale}`}>{dict.navSite} ↗</PublicLink><OpForm op="caches.refresh" back={refreshBack}><button type="submit">{dict.refreshCaches}</button></OpForm><AdminSignOut dict={dict} /></div>
-      </aside><div className="bw-body"><header className="bw-topbar"><span>{b.dashboard.workspace}</span><WorkspaceLanguage locale={locale} label={getDictionary(isLocale(locale)?locale:'en').nav.localeToggle}/><a href="/admin">{dict.brand} ↗</a></header><main id="main" className="bw-main">{children}</main></div>
-    </div>;
-  }
-
+  const dictionary = getDictionary(isLocale(locale) ? locale : 'en');
+  const entries = [
+    ['home', '/admin', dict.navHome],
+    ['brandWorkspace', '/admin/brand-workspace', dictionary.brandWorkspace.studioQueue],
+    ['prompts', '/admin/prompts', dict.navPrompts],
+    ['campaigns', '/admin/campaigns', dict.navCampaigns],
+    ['inquiries', '/admin/inquiries', dict.navInquiries],
+    ['playbooks', '/admin/playbooks', dict.navPlaybooks],
+    ['policy', '/admin/policy', dict.navPolicy],
+  ] as const;
   return (
-    <div data-section data-theme="light" className="section min-h-screen">
-      <header className="border-b border-hairline">
-        <div className="mx-auto flex max-w-shell flex-wrap items-center justify-between gap-4 px-gutter py-4">
-          <div className="flex min-w-0 flex-wrap items-center gap-x-6 gap-y-4">
-            <AdminBrand dict={dict} />
-            <nav className="flex flex-wrap items-center gap-x-5 gap-y-3">
-              <a href="/admin/brand-workspace" className={navClass('brandWorkspace')}>{getDictionary(isLocale(locale) ? locale : 'en').brandWorkspace.studioQueue}</a>
-              {/* §13 put prompts first: it is the v1.5 surface, and the moderation queue is the
-                  screen that has work waiting in it on any given day. */}
-              <a href="/admin/prompts" className={navClass('prompts')}>
-                {dict.navPrompts}
-              </a>
-              <a href="/admin/campaigns" className={navClass('campaigns')}>
-                {dict.navCampaigns}
-              </a>
-              <a href="/admin/inquiries" className={navClass('inquiries')}>
-                {dict.navInquiries}
-              </a>
-              <a href="/admin/playbooks" className={navClass('playbooks')}>
-                {dict.navPlaybooks}
-              </a>
-              <a href="/admin/policy" className={navClass('policy')}>
-                {dict.navPolicy}
-              </a>
-              <PublicLink href={`/${locale}`} className="font-label text-eyebrow uppercase opacity-60">
-                {dict.navSite}
-              </PublicLink>
-            </nav>
-          </div>
-          <div className="flex items-center gap-3">
-            <OpForm op="caches.refresh" back={refreshBack} className="flex items-center gap-3">
-              <button type="submit" className={BUTTON}>
-                {dict.refreshCaches}
-              </button>
-            </OpForm>
-            <AdminSignOut dict={dict} className={BUTTON} />
-          </div>
+    <div className="admin-workspace" data-admin-active={active} data-section data-theme="light">
+      <aside className="admin-sidebar">
+        <AdminBrand dict={dict} />
+        <nav data-admin-navigation aria-label={dict.brand}>
+          <AdminNavigationScroll active={active} />
+          {entries.map(([key, href, label]) => <a key={key} href={href} aria-current={active === key ? 'page' : undefined}>{label}</a>)}
+        </nav>
+        <div className="admin-utilities">
+          <PublicLink href={`/${locale}`}>{dict.navSite} ↗</PublicLink>
+          <OpForm op="caches.refresh" back={refreshBack}><button type="submit">{dict.refreshCaches}</button></OpForm>
+          <AdminSignOut dict={dict} />
         </div>
-      </header>
-      <main id="main" className="mx-auto max-w-shell px-gutter py-10">
-        {children}
-      </main>
+      </aside>
+      <div className="admin-body">
+        <header className="admin-topbar">
+          <span>{entries.find(([key]) => key === active)?.[2] ?? dict.brand}</span>
+          <WorkspaceLanguage locale={locale} label={dictionary.nav.localeToggle} />
+        </header>
+        <main id="main" className="admin-main">{children}</main>
+      </div>
     </div>
   );
 }

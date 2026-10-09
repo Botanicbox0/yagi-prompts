@@ -13,7 +13,7 @@ vi.mock('@/lib/i18n/server', () => ({
 }));
 vi.mock('@/app/actions/locale', () => ({ setLocaleAction: async () => undefined }));
 const router = vi.hoisted(() => ({ refresh: vi.fn() }));
-vi.mock('next/navigation', () => ({ useRouter: () => router }));
+vi.mock('next/navigation', () => ({ useRouter: () => router, usePathname: () => null }));
 
 import AppNotFound from '@/app/(app)/not-found';
 import AppError from '@/app/(app)/error';
