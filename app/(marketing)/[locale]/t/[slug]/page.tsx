@@ -33,6 +33,9 @@ import { campaignLabels } from '@/components/campaigns/labels';
 import { TwingsStudio, type StudioStyle } from '@/components/twings/studio';
 import { formatResolutionPrice, offeredResolutions } from '@/lib/twings/resolution';
 import { templateSubscriptionQuote } from '@/lib/twings/subscription-plan';
+import { cachedSubscriptionAvailability } from '@/lib/creator-subscriptions/cached-availability';
+import { SubscriptionAvailabilityProvider } from '@/components/twings/subscription-availability';
+import { TemplateMakeAvailability, TemplateSubscriptionNote } from '@/components/twings/subscription-public-notices';
 
 /**
  * `/[locale]/t/[slug]` — one template, which is also where it is made (docs/TEMPLATES-IA.md §2).
@@ -82,7 +85,7 @@ export default async function TemplatePage({ params }: RouteParams) {
   const { locale: raw, slug } = await params;
   const locale = localeOf(raw);
   const dict = getDictionary(locale);
-  const { card, all } = await resolve(slug);
+  const [{ card, all }, availability, campaignCatalog] = await Promise.all([resolve(slug), cachedSubscriptionAvailability(), getCampaignCatalog()]);
   if (card === null) notFound();
 
   const t = dict.templates;
@@ -91,11 +94,12 @@ export default async function TemplatePage({ params }: RouteParams) {
   const useCaseLabels = Object.fromEntries(USE_CASES.map((value) => [value, useCaseLabel(dict, value)]));
   const title = locale === 'ko' && card.titleKo ? card.titleKo : card.title;
   const subscriptionQuote = isForSale(card) ? templateSubscriptionQuote(card) : null;
+  const makeAvailabilityCopy = { makeCta: t.makeCta, makeCtaClosed: t.makeCtaClosed, makeBody: t.makeBody, makeBodyClosed: t.makeBodyClosed, makeBodySubscription: t.makeBodySubscription, makeBodySubscriptionPaused: t.makeBodySubscriptionPaused };
   const ratio = card.poster?.w && card.poster.h ? `${card.poster.w} / ${card.poster.h}` : posterRatio(card.slug);
   const credit = card.source === 'yagi' ? labels.byYagi : card.authorHandle ? labels.byAuthor.replace('{handle}', card.authorHandle) : labels.byAnonymous;
 
   // The campaigns that ask for THIS template — the earn loop, one click from the make loop.
-  const campaigns = (await getCampaignCatalog()).campaigns.filter((c) => c.styleSlug === card.slug && isCampaignPublic(c.status));
+  const campaigns = campaignCatalog.campaigns.filter((c) => c.styleSlug === card.slug && isCampaignPublic(c.status));
   const cLabels = campaignLabels(dict);
 
   const style: StudioStyle | null = isForSale(card)
@@ -119,6 +123,7 @@ export default async function TemplatePage({ params }: RouteParams) {
       <MarketingNav locale={locale} dict={dict} rest={`/t/${slug}`} initialTheme="light" />
       <JsonLd id="template-structured-data" data={templateStructuredData({ origin: siteUrl(), locale, card, description: dict.meta.templateDescription, publicSalesEnabled: RENDER_PIPELINE_PUBLIC })} />
 
+      <SubscriptionAvailabilityProvider initialAvailability={availability}>
       <main id="main" data-template={card.slug} data-medium={card.medium} data-section data-theme="light" className="section pb-24">
         <div id="template-rail-anchor" className="relative">
           <AdRail anchorId="template-rail-anchor">
@@ -176,17 +181,13 @@ export default async function TemplatePage({ params }: RouteParams) {
                   </div>
                 </dl>
 
-                {subscriptionQuote && <div data-template-subscription className="mt-4 text-sm leading-relaxed opacity-70">
-                  <p>{interpolate(dict.pricing.subscriptionTemplateNote, { count: String(subscriptionQuote.maxPerMonth), premiumCount: String(templateSubscriptionQuote(card, 'premium')!.maxPerMonth) })}</p>
-                  <a href={`/${locale}/pricing#monthly`} className="mt-1 inline-block underline underline-offset-4">{dict.pricing.subscriptionDetailLink} →</a>
-                </div>}
+                {subscriptionQuote && <TemplateSubscriptionNote copy={{ subscriptionTemplateNote: dict.pricing.subscriptionTemplateNote, subscriptionTemplateOpenNote: dict.pricing.subscriptionTemplateOpenNote, subscriptionTemplateCreatorNote: dict.pricing.subscriptionTemplateCreatorNote, subscriptionTemplatePausedNote: dict.pricing.subscriptionTemplatePausedNote, subscriptionDetailLink: dict.pricing.subscriptionDetailLink }} count={subscriptionQuote.maxPerMonth} premiumCount={templateSubscriptionQuote(card, 'premium')!.maxPerMonth} locale={locale} />}
 
                 {style === null ? (
                   <p data-template-closed className="mt-6 max-w-detail text-body opacity-70">{t.notForSaleBody}</p>
                 ) : (
                   <a href="#make" data-template-make-cta className="mt-6 inline-block bg-accent px-6 py-3 font-label text-label text-white uppercase">
-                    {/* Q3: the closed panel below offers the email signup, so the header says that. */}
-                    <TextSwap>{RENDER_PIPELINE_PUBLIC ? t.makeCta : t.makeCtaClosed} →</TextSwap>
+                    <TextSwap><TemplateMakeAvailability copy={makeAvailabilityCopy} oneTimeAvailable={RENDER_PIPELINE_PUBLIC} subscriptionEligible={subscriptionQuote !== null} field="cta" /> →</TextSwap>
                   </a>
                 )}
               </div>
@@ -196,7 +197,7 @@ export default async function TemplatePage({ params }: RouteParams) {
             <section id="make" data-template-make className="mt-16 border-t border-hairline pt-10">
               <p className="text-accent font-label text-eyebrow uppercase">{t.makeEyebrow}</p>
               <h2 className="mt-4 font-display text-[clamp(1.6rem,3vw,2.4rem)] leading-[0.95] font-black uppercase">{t.makeHeading}</h2>
-              <p className="mt-4 max-w-detail text-body opacity-70">{RENDER_PIPELINE_PUBLIC ? t.makeBody : t.makeBodyClosed}</p>
+              <p className="mt-4 max-w-detail text-body opacity-70"><TemplateMakeAvailability copy={makeAvailabilityCopy} oneTimeAvailable={RENDER_PIPELINE_PUBLIC} subscriptionEligible={subscriptionQuote !== null} field="body" /></p>
               {style === null ? (
                 <p data-template-closed className="mt-8 border border-hairline p-6 text-body opacity-70">{t.notForSaleBody}</p>
               ) : (
@@ -212,6 +213,8 @@ export default async function TemplatePage({ params }: RouteParams) {
                     signinHref: signInHref(`${templateHref(locale, slug)}#make`, locale),
                     identityHref: identityVerifyHref(`${templateHref(locale, slug)}#make`),
                     portrait: { manage: dict.portrait.manage, change: dict.portrait.change, useSaved: dict.portrait.useSaved },
+                    photoGuide: dict.portrait,
+                    subscription: { copy: dict.creatorSubscription, editorCopy: dict.premiumEditor },
                     labels: {
                       badge: dict.renders.studio.badge,
                       operatorBadge: dict.renders.studio.operatorBadge,
@@ -292,7 +295,8 @@ export default async function TemplatePage({ params }: RouteParams) {
           </div>
         </div>
       </main>
-      <FaqSection dict={dict} locale={locale} placement="template" path={`/${locale}/t/${slug}`} />
+      <FaqSection dict={dict} locale={locale} placement="template" path={`/${locale}/t/${slug}`} availability={availability} />
+      </SubscriptionAvailabilityProvider>
       <MarketingFooter locale={locale} dict={dict} />
     </>
   );

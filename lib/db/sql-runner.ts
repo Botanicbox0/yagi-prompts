@@ -93,30 +93,35 @@ export function makePooledRunner(pool: PoolLike): SqlRunner {
 }
 
 export function makeSingleConnectionRunner(query: SqlRunner['query']): SqlRunner {
-  const runner: SqlRunner = {
-    query,
-    transaction: (fn) => singleConnectionTransaction(runner)(fn),
-  };
-  return runner;
+  return { query, transaction: singleConnectionTransaction({ query }) };
 }
 
 export function singleConnectionTransaction(
   runner: Pick<SqlRunner, 'query'>,
 ): <T>(fn: (tx: SqlRunner) => Promise<T>) => Promise<T> {
-  const self = runner as SqlRunner;
+  const tx: SqlRunner = {
+    query: (text, params) => runner.query(text, params),
+    // A nested domain reuses this connection without prematurely committing the outer write.
+    transaction: (fn) => fn(tx),
+  };
+  let tail: Promise<void> = Promise.resolve();
   return async <T>(fn: (tx: SqlRunner) => Promise<T>): Promise<T> => {
-    await self.query('begin');
+    let unlock!: () => void;
+    const previous = tail;
+    tail = new Promise<void>((resolve) => { unlock = resolve; });
+    await previous;
     try {
-      const result = await fn(self);
-      await self.query('commit');
-      return result;
-    } catch (err) {
+      await runner.query('begin');
       try {
-        await self.query('rollback');
-      } catch {
-        // A rollback that itself fails must not mask the original error.
+        const result = await fn(tx);
+        await runner.query('commit');
+        return result;
+      } catch (err) {
+        try { await runner.query('rollback'); } catch {
+          // A rollback that itself fails must not mask the original error.
+        }
+        throw err;
       }
-      throw err;
-    }
+    } finally { unlock(); }
   };
 }

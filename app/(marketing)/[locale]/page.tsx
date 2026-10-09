@@ -15,6 +15,8 @@ import { PromptRail } from '@/components/prompts/rails';
 import { UseCaseFilter } from '@/components/prompts/filter-chips';
 import { CampaignRail } from '@/components/campaigns/rails';
 import { CreatorHero, CreatorHowItWorks, CreatorCampaignDoor, BrandDoor } from '@/components/audience/creator-home';
+import { cachedSubscriptionAvailability } from '@/lib/creator-subscriptions/cached-availability';
+import { SubscriptionAvailabilityProvider } from '@/components/twings/subscription-availability';
 export const revalidate = 3600;
 const FILTER_MIN_TEMPLATES = 6;
 export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
@@ -34,7 +36,7 @@ export default async function LandingPage({ params }: { params: Promise<{ locale
   const { locale: raw } = await params;
   const locale: Locale = isLocale(raw) ? raw : DEFAULT_LOCALE;
   const dict = getDictionary(locale), t = dict.templates;
-  const [templates, campaigns] = await Promise.all([getPromptCatalog(), getCampaignCatalog()]);
+  const [templates, campaigns, availability] = await Promise.all([getPromptCatalog(), getCampaignCatalog(), cachedSubscriptionAvailability()]);
   const labels = promptLabels(dict);
   const useCaseLabels = Object.fromEntries(USE_CASES.map(value => [value, useCaseLabel(dict, value)]));
   const filterOptions = presentUseCases([...new Set(templates.video.flatMap(card => card.useCase))].sort()).map(value => [value, useCaseLabels[value]!] as [string, string]);
@@ -43,6 +45,7 @@ export default async function LandingPage({ params }: { params: Promise<{ locale
   const featured = templates.video.find(card => card.video && card.poster) ?? templates.video[0];
   return <>
     <MarketingNav locale={locale} dict={dict} rest="/" />
+    <SubscriptionAvailabilityProvider initialAvailability={availability}>
     <main id="main" data-creator-home>
       <CreatorHero locale={locale} dict={dict} featured={featured} />
       <section id="gallery" data-section data-theme="light" className="section">
@@ -60,9 +63,10 @@ export default async function LandingPage({ params }: { params: Promise<{ locale
       </section>
       <CreatorHowItWorks dict={dict} />
       {recruiting.length > 0 ? <section data-section data-theme="light" className="section"><div className="audience-shell py-16"><CampaignRail id="campaigns" heading={dict.campaigns.railRecruiting} lede={dict.campaigns.railRecruitingLede} cards={recruiting} styles={styles} locale={locale} labels={campaignLabels(dict)} now={Date.now()} /><a href={campaignsHref(locale)} className="mt-8 inline-flex min-h-11 items-center text-sm underline underline-offset-4">{dict.creatorJourney.campaignCta} ↗</a></div></section> : <CreatorCampaignDoor dict={dict} locale={locale} />}
-      <FaqSection dict={dict} locale={locale} placement="landing" path={`/${locale}`} />
+      <FaqSection dict={dict} locale={locale} placement="landing" path={`/${locale}`} availability={availability} />
       <BrandDoor dict={dict} locale={locale} />
     </main>
+    </SubscriptionAvailabilityProvider>
     <MarketingFooter locale={locale} dict={dict} />
   </>;
 }

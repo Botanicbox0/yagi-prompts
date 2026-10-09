@@ -1,4 +1,4 @@
-import { access, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { access, mkdir, readFile, writeFile, unlink } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -27,6 +27,8 @@ export interface RenderStore {
   readonly name: 'local' | 'supabase';
   put(key: string, bytes: Uint8Array, contentType: string): Promise<void>;
   read(key: string): Promise<Uint8Array>;
+  /** Optional for test stores; runtime drivers delete expired private edit references. */
+  delete?(key: string): Promise<void>;
   /**
    * An absolute URL an outside host will honour for `ttlSeconds`, or `null` when nothing serves
    * the object over HTTP (local driver) and the gateway must stream it.
@@ -73,6 +75,10 @@ export function createLocalRenderStore(rootDir?: string): RenderStore {
       if (!(await fileExists(path))) throw new RenderObjectNotFound(key);
       return new Uint8Array(await readFile(path));
     },
+    async delete(key) {
+      const path = pathOf(key);
+      try { await unlink(path); } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
+    },
     async url() {
       return null;
     },
@@ -112,6 +118,11 @@ export function createSupabaseRenderStore(client?: SupabaseClient): RenderStore 
         throw new Error(`render download failed: ${key} — ${error.message}`);
       }
       return new Uint8Array(await data.arrayBuffer());
+    },
+    async delete(key) {
+      assertRenderKey(key);
+      const { error } = await (await db()).storage.from(RENDERS_BUCKET).remove([key]);
+      if (error && !isMissing(error)) throw new Error('private edit reference deletion failed');
     },
     async url(key, ttlSeconds, options = {}) {
       assertRenderKey(key);

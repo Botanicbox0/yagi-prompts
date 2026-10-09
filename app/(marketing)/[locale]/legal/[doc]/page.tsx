@@ -13,6 +13,9 @@ import {
 import { legalHref } from '@/lib/legal/links';
 import { MarketingFooter, MarketingNav } from '@/components/marketing/chrome';
 import { Markdown } from '@/components/playbook/markdown';
+import { subscriptionLegalDocument } from '@/lib/creator-subscriptions/legal-projection';
+import { cachedSubscriptionTermsApproved } from '@/lib/creator-subscriptions/cached-availability';
+import { SUBSCRIPTION_TERMS_VERSION } from '@/lib/creator-subscriptions/legal';
 
 /**
  * `/[locale]/legal/[doc]` — 이용약관 · 환불정책 · 개인정보처리방침.
@@ -26,6 +29,7 @@ import { Markdown } from '@/components/playbook/markdown';
  * three near-identical page files would be three places for that frame to drift.
  */
 export const dynamic = 'force-static';
+export const revalidate = 3600;
 
 interface RouteParams {
   params: Promise<{ locale: string; doc: string }>;
@@ -39,7 +43,7 @@ export async function generateMetadata({ params }: RouteParams): Promise<Metadat
   const { locale: rawLocale, doc } = await params;
   const locale: Locale = isLocale(rawLocale) ? rawLocale : DEFAULT_LOCALE;
   if (!isLegalDoc(doc)) return {};
-  const document = legalDocument(doc, locale);
+  const document = subscriptionLegalDocument(doc, locale, await cachedSubscriptionTermsApproved());
   const rest = `/legal/${doc}`;
   return {
     title: document.title,
@@ -57,7 +61,8 @@ export default async function LegalPage({ params }: RouteParams) {
   if (!isLegalDoc(doc)) notFound();
 
   const dict = getDictionary(locale);
-  const document = legalDocument(doc, locale);
+  const termsApproved = await cachedSubscriptionTermsApproved();
+  const document = subscriptionLegalDocument(doc, locale, termsApproved);
   const rows = businessRows(locale);
 
   return (
@@ -72,8 +77,9 @@ export default async function LegalPage({ params }: RouteParams) {
           </h1>
           <p className="mt-5 max-w-detail text-body opacity-70">{document.summary}</p>
           <p className="mt-3 font-mono text-[0.72rem] tracking-[0.06em] uppercase opacity-45">
-            {dict.legal.effective} {LEGAL_EFFECTIVE}
+            {termsApproved ? dict.legal.baseEffective : dict.legal.effective} {LEGAL_EFFECTIVE}
           </p>
+          {termsApproved && <p data-subscription-legal-version className="mt-2 text-xs opacity-60">{dict.legal.subscriptionVersion} · {SUBSCRIPTION_TERMS_VERSION}</p>}
 
           {/* The sibling documents, so a reviewer reaches all three from any one of them. */}
           <nav aria-label={dict.legal.eyebrow} className="mt-8 flex flex-wrap gap-2">

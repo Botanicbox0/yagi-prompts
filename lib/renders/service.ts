@@ -15,6 +15,15 @@ import { aspectsForMedium, isEngineId, isImageAspect, isImageEngine, isVideoAspe
 import { loadPromptById, loadPromptBySlug, type PromptRow } from '@/lib/prompts/repo';
 import { isForSale } from '@/lib/twings/products';
 import { renderResolution, renderableResolution } from '@/lib/twings/resolution';
+import { reserveSubscriptionUsage, settleSubscriptionUsage } from '@/lib/creator-subscriptions/usage';
+import type { BillingEnvironment } from '@/lib/creator-subscriptions/types';
+import { EDIT_REFERENCE_RETENTION_DAYS, MAX_SUBSCRIPTION_BODY_BYTES, type EditReference, type EditValidationCode } from '@/lib/premium-editing/contract';
+import { cleanEditReferences, PREMIUM_EDIT_GUIDE_VERSION, validateEditRequest } from '@/lib/premium-editing/guard';
+import { subscriptionTemplateEligibility } from '@/lib/premium-editing/eligibility';
+import { getPremiumEditBudget } from '@/lib/premium-editing/budget';
+import { deleteExpiredEditReferences, loadSubscriptionRender, subscriptionRenderSchemaReady, subscriptionUsageTrackingPresent } from '@/lib/premium-editing/repo';
+import { prepareSubscriptionPrompt } from '@/lib/premium-editing/service';
+import type { PremiumEditClient } from '@/lib/premium-editing/provider';
 import { RenderFailure, pollVideoRender, runImageRender, startVideoRender, videoModelFor, type EngineOutput, type RenderEngineDeps, type RenderFailureCode, type RenderPhoto } from './engines';
 import { fixedVideoReferenceUrls } from './template-references';
 import type { RenderNotifier } from './notify';
@@ -156,6 +165,93 @@ export async function createBrandRenderJob(deps: RenderServiceDeps, viewer: View
   });
 }
 
+export interface CreateSubscriptionRenderInput {
+  requestId: string;
+  templateSlug: string;
+  ownFaceConsent: boolean;
+  portraitId?: string;
+  photo?: { bytes: Uint8Array; mime: string } | null;
+  locale: string | null;
+  editText?: string;
+  references?: readonly EditReference[];
+  /** Includes the disclosed OpenAI processing of the optional reference images. */
+  referencesConsent?: boolean;
+}
+export type CreateSubscriptionRenderOutcome = { ok: true; id: string; held: boolean } | { ok: false; code: CreateRenderFailure | EditValidationCode | 'consent_required' | 'bad_request' | 'unsupported_template' | 'subscription_required' | 'premium_required' | 'usage_exhausted' | 'conflict' | 'not_open' | 'edit_unavailable' | 'edit_request_limit' };
+class SubscriptionEnqueueAbort extends Error { constructor(readonly code: CreateRenderFailure | 'edit_unavailable' | 'edit_request_limit') { super(code); } }
+const SUBSCRIPTION_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+/** Paid monthly usage is an independent authorization path. It never impersonates an admin,
+ * creates a free regeneration, accepts a recipe/storage key or derives entitlement from a quote.
+ */
+export async function createSubscriptionRenderJob(deps: RenderServiceDeps & { environment: BillingEnvironment }, viewer: Viewer, input: CreateSubscriptionRenderInput): Promise<CreateSubscriptionRenderOutcome> {
+  if (!viewer.userId) return { ok: false, code: 'sign_in_required' };
+  if (input.ownFaceConsent !== true) return { ok: false, code: 'consent_required' };
+  const allowedKeys = ['requestId', 'templateSlug', 'ownFaceConsent', 'portraitId', 'photo', 'locale', 'editText', 'references', 'referencesConsent'];
+  if (!SUBSCRIPTION_UUID.test(input.requestId) || typeof input.templateSlug !== 'string' || !['test', 'live'].includes(deps.environment) || Object.keys(input).some(key => !allowedKeys.includes(key)) || (input.editText !== undefined && typeof input.editText !== 'string') || (input.references !== undefined && !Array.isArray(input.references))) return { ok: false, code: 'bad_request' };
+  const references = input.references ?? [];
+  const wantsEdit = !!input.editText?.trim() || references.length > 0;
+  const text = wantsEdit ? validateEditRequest(input.editText, references.length) : null;
+  if (text && !text.ok) return text;
+  if (references.length && !input.referencesConsent) return { ok: false, code: 'reference_consent_required' };
+  const totalBytes = (input.photo?.bytes.length ?? 0) + references.reduce((sum, reference) => sum + reference.bytes.length, 0) + Buffer.byteLength(input.editText ?? '', 'utf8');
+  if (totalBytes >= MAX_SUBSCRIPTION_BODY_BYTES) return { ok: false, code: 'references_too_large' };
+  const cleaned = await cleanEditReferences(references);
+  if (!cleaned.ok) return cleaned;
+  const fingerprint = createHash('sha256').update(JSON.stringify([input.templateSlug, input.portraitId ?? null,
+    input.portraitId ? null : input.photo ? createHash('sha256').update(input.photo.bytes).digest('hex') : null,
+    input.portraitId ? null : input.photo?.mime ?? null, text?.ok ? text.text : null,
+    cleaned.references.map(reference => createHash('sha256').update(reference.bytes).digest('hex'))])).digest('hex');
+  const now = deps.now ?? new Date();
+  const writtenKeys: string[] = [];
+  try {
+    return await deps.sql.transaction(async sql => {
+      // Serializes this account's request keys without blocking foreign-key KEY SHARE locks.
+      await sql.query('select id from profiles where id=$1 for no key update', [viewer.userId]);
+      const existing = (await sql.query<{ render_ref: string; fingerprint: string }>('select render_ref,fingerprint from creator_subscription_renders where user_id=$1 and environment=$2 and request_id=$3', [viewer.userId, deps.environment, input.requestId])).rows[0];
+      if (existing) {
+        if (existing.fingerprint !== fingerprint) return { ok: false, code: 'conflict' };
+        const job = await loadRenderJob(sql, existing.render_ref);
+        return job?.userId === viewer.userId ? { ok: true, id: job.id, held: job.status === 'held' } : { ok: false, code: 'not_found' };
+      }
+      const template = await loadPromptBySlug(sql, input.templateSlug);
+      if (!template || template.status !== 'published' || template.audience === 'brand') return { ok: false, code: 'not_found' };
+      if (!isForSale(template)) return { ok: false, code: 'not_for_sale' };
+      const eligibility = subscriptionTemplateEligibility(template);
+      if (!eligibility) return { ok: false, code: 'unsupported_template' };
+      const { quote, scopes } = eligibility;
+      const photo = input.portraitId ? await selectedPortraitPhoto(sql, deps.store, viewer.userId!, input.portraitId) : input.photo ?? null;
+      if (input.portraitId && !photo) return { ok: false, code: 'identity_required' };
+      const id = randomUUID();
+      const reservation = await reserveSubscriptionUsage(sql, { userId: viewer.userId!, renderRef: id, units: quote.units, environment: deps.environment, now, premium: wantsEdit });
+      if (!reservation.ok) return { ok: false, code: reservation.code === 'premium_required' ? 'premium_required' : reservation.code === 'insufficient_allowance' ? 'usage_exhausted' : 'subscription_required' };
+      if (wantsEdit) {
+        const budget = await getPremiumEditBudget(sql, viewer.userId!, { environment: deps.environment, now });
+        if (!budget) throw new SubscriptionEnqueueAbort('edit_unavailable');
+        if (!budget.remaining) throw new SubscriptionEnqueueAbort('edit_request_limit');
+      }
+      if (photo) writtenKeys.push(`${id}/input.${extensionFor(photo.mime)}`);
+      const result = await createAuthorizedRender({ ...deps, sql }, viewer, { templateSlug: template.slug, aspect: template.aspectDefault ?? '9:16', photo, portraitId: input.portraitId, locale: input.locale, resolution: '720p', holdForIdentity: true }, id);
+      if (!result.ok) throw new SubscriptionEnqueueAbort(result.code);
+      const referenceKeys: string[] = [];
+      for (const [index, reference] of cleaned.references.entries()) {
+        const key = `${id}/reference${String.fromCharCode(97 + index)}.jpg`;
+        writtenKeys.push(key);
+        await deps.store.put(key, reference.bytes, reference.mime);
+        referenceKeys.push(key);
+      }
+      await sql.query(`insert into creator_subscription_renders(render_ref,user_id,environment,request_id,fingerprint,base_prompt,runtime_seconds,edit_text,allowed_scopes,reference_keys,guide_version,edit_status,references_expire_at,created_at)
+        values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11,$12,$13,$14)`, [id, viewer.userId, deps.environment, input.requestId, fingerprint, template.promptText, template.runtimeSeconds, text?.ok ? text.text : null, scopes, JSON.stringify(referenceKeys), PREMIUM_EDIT_GUIDE_VERSION, wantsEdit ? 'pending' : 'not_requested', new Date(now.getTime() + EDIT_REFERENCE_RETENTION_DAYS * 86400000), now]);
+      return result;
+    });
+  } catch (error) {
+    // Rollback also removes the reservation. Clean only this server-generated request's objects.
+    if (deps.store.delete) for (const key of writtenKeys) { try { await deps.store.delete(key); } catch { /* Private storage cleanup can retry separately. */ } }
+    if (error instanceof SubscriptionEnqueueAbort) return { ok: false, code: error.code };
+    throw error;
+  }
+}
+
 async function createAuthorizedRender(deps: RenderServiceDeps, viewer: Viewer, input: CreateRenderInput, reservedId?: string, brandTemplate?: PromptRow): Promise<CreateRenderOutcome> {
   if (viewer.userId === null) return { ok: false, code: 'sign_in_required' };
   const now = deps.now ?? new Date();
@@ -215,6 +311,9 @@ export async function releaseHeldRendersFor(sql: SqlRunner, userId: string): Pro
 // ---------------------------------------------------------------------------
 
 export interface RenderPassDeps extends RenderServiceDeps {
+  premiumEditor?: PremiumEditClient | null;
+  /** Set by the pass's schema probe, never an authorization claim from a request. */
+  subscriptionSchemaReady?: boolean;
   /** Payment seam; tests inject their gateway, runtime resolves the configured provider. */
   tossGateway?: TossGateway | null;
   engines?: RenderEngineDeps;
@@ -255,6 +354,8 @@ export interface RenderPassOptions {
 }
 
 export async function runRenderPass(deps: RenderPassDeps, options: RenderPassOptions = {}): Promise<RenderPassReport> {
+  deps = { ...deps, subscriptionSchemaReady: await subscriptionRenderSchemaReady(deps.sql) };
+  const canTrackSubscriptions = !deps.subscriptionSchemaReady && await subscriptionUsageTrackingPresent(deps.sql);
   const now = deps.now ?? new Date();
   const limit = options.limit ?? 5;
   const report: RenderPassReport = {
@@ -280,19 +381,33 @@ export async function runRenderPass(deps: RenderPassDeps, options: RenderPassOpt
   await settlePayments();
   // 1 — orphaned synchronous renders back to the queue (or failed once the budget is spent).
   report.recovered = await recoverStaleRenderJobs(deps.sql, { now, leaseMinutes: LEASE_MINUTES, maxAttempts: MAX_ATTEMPTS });
+  if (deps.subscriptionSchemaReady) {
+    report.failed += await expireUnpreparedSubscriptionRenders(deps.sql, now);
+    await reconcileFinishedSubscriptionRenders(deps.sql);
+  }
 
   // 2 — claim and run.
   const handedOff = new Set<string>();
+  const privateJobBlocked = async (job: RenderJob): Promise<boolean> => {
+    if (!canTrackSubscriptions) return false;
+    const linked = await deps.sql.query('select render_ref from creator_subscription_usage where render_ref=$1', [job.id]);
+    if (!linked.rows.length) return false;
+    // A missing/unsafe optional schema must never turn a paid edit into a legacy dispatch.
+    // Keep its lease for repair; the next ready pass reconciles terminal usage as usual.
+    report.waiting += 1;
+    return true;
+  };
   if (limit > 0 || options.jobId) {
     const claimed = await claimRenderJobs(deps.sql, { now, limit: options.jobId ? 1 : limit, jobId: options.jobId ?? null });
     report.claimed = claimed.length;
-    for (const job of claimed) await executeClaimed(deps, job, now, report, handedOff);
+    for (const job of claimed) if (!await privateJobBlocked(job)) await executeClaimed(deps, job, now, report, handedOff);
   }
 
   // 3 — films the provider is still rendering (not the ones handed over a moment ago).
   const awaiting = await listRenderJobsAwaitingProvider(deps.sql, 20);
   for (const job of awaiting) {
     if (handedOff.has(job.id)) continue;
+    if (await privateJobBlocked(job)) continue;
     await pollAwaiting(deps, job, now, report);
   }
 
@@ -308,6 +423,10 @@ export async function runRenderPass(deps: RenderPassDeps, options: RenderPassOpt
   }
 
   await settlePayments();
+  if (deps.subscriptionSchemaReady) {
+    await reconcileFinishedSubscriptionRenders(deps.sql);
+    await deleteExpiredEditReferences(deps.sql, deps.store, now);
+  }
   // 4 — say so.
   await notifyFinished(deps, now, report);
   return report;
@@ -365,7 +484,9 @@ async function renderNow(
   report: RenderPassReport,
   handedOff: Set<string>,
 ): Promise<void> {
-  const prompt = buildRenderPrompt({ promptText: template.promptText, medium: job.medium, hasPhoto: photo !== null || assetId !== null });
+  const request = deps.subscriptionSchemaReady ? await loadSubscriptionRender(deps.sql, job.id) : null;
+  const prepared = request ? await prepareSubscriptionPrompt(deps.sql, deps.store, request, now, deps.premiumEditor) : null;
+  const prompt = buildRenderPrompt({ promptText: prepared?.promptText ?? template.promptText, medium: job.medium, hasPhoto: photo !== null || assetId !== null });
 
   if (job.medium === 'image') {
     if (!isImageEngine(job.engine) || !isImageAspect(job.aspect)) throw new RenderFailure('engine_error', `unknown image engine/aspect ${job.engine} ${job.aspect}`, false);
@@ -377,8 +498,14 @@ async function renderNow(
   }
 
   if (!isVideoEngine(job.engine) || !isVideoAspect(job.aspect)) throw new RenderFailure('engine_error', `unknown video engine/aspect ${job.engine} ${job.aspect}`, false);
+  if (request) {
+    // Asset polls can overlap. One provider dispatch per claimed attempt, after one cached edit.
+    const dispatch = await deps.sql.query<{ render_ref: string }>(`update creator_subscription_renders e set dispatch_attempt=$2,dispatch_started_at=$3
+      where e.render_ref=$1 and e.dispatch_attempt<$2 and exists(select 1 from render_jobs j where j.id=e.render_ref and j.status='running' and j.attempts=$2) returning e.render_ref`, [job.id, job.attempts, now]);
+    if (!dispatch.rows.length) { report.waiting += 1; return; }
+  }
   const started = await startVideoRender(
-    { engine: job.engine, prompt: prompt.text, aspect: job.aspect, seconds: template.runtimeSeconds ?? 5, photo, assetId,
+    { engine: job.engine, prompt: prompt.text, aspect: job.aspect, seconds: prepared?.seconds ?? template.runtimeSeconds ?? 5, photo, assetId,
       fixedReferenceUrls: fixedVideoReferenceUrls(template.id, deps.siteUrl),
       resolution: renderResolution(job.resolution),
       ...(deps.callbackUrl ? { callbackUrl: deps.callbackUrl } : {}) },
@@ -419,8 +546,9 @@ async function pollAwaiting(deps: RenderPassDeps, job: RenderJob, now: Date, rep
   if (!isVideoEngine(job.engine)) return;
   try {
     const template = await loadPromptById(deps.sql, job.templateId);
-    const { model, seconds } = videoModelFor(job.engine, template?.runtimeSeconds ?? 5);
-    const polled = await pollVideoRender({ taskId: job.providerTaskId, model, seconds, resolution: renderResolution(job.resolution) }, deps.engines ?? {});
+    const request = deps.subscriptionSchemaReady ? await loadSubscriptionRender(deps.sql, job.id) : null;
+    const { model, seconds } = videoModelFor(job.engine, request?.runtime_seconds ?? template?.runtimeSeconds ?? 5);
+    const polled = await pollVideoRender({ taskId: job.providerTaskId, model, seconds, resolution: renderResolution(job.resolution), aspect: job.aspect }, deps.engines ?? {});
     if (polled.status === 'pending') {
       report.waiting += 1;
       return;
@@ -464,28 +592,71 @@ async function readPhoto(store: RenderStore, job: RenderJob): Promise<RenderPhot
 async function finish(deps: RenderPassDeps, job: RenderJob, output: EngineOutput, now: Date): Promise<void> {
   const resultKey = `${job.id}/result.${extensionFor(output.mime)}`;
   await deps.store.put(resultKey, output.bytes, output.mime);
-  await markRenderSucceeded(deps.sql, job.id, {
-    resultKey,
-    resultMime: output.mime,
-    resultBytes: output.bytes.byteLength,
-    provider: output.provider,
-    costUsd: output.costUsd,
-    shareToken: newShareToken(),
-    shareExpiresAt: shareExpiresAt(now),
-    finishedAt: now,
+  await deps.sql.transaction(async sql => {
+    await markRenderSucceeded(sql, job.id, {
+      resultKey,
+      resultMime: output.mime,
+      resultBytes: output.bytes.byteLength,
+      provider: output.provider,
+      costUsd: output.costUsd,
+      shareToken: newShareToken(),
+      shareExpiresAt: shareExpiresAt(now),
+      finishedAt: now,
+    });
+    if (deps.subscriptionSchemaReady) await sql.query('update render_jobs set provider_completion_tokens=$2,cost_source=$3 where id=$1', [job.id, output.completionTokens ?? null, output.costSource ?? (output.costUsd === null ? null : 'estimate')]);
+    if (deps.subscriptionSchemaReady) await settleSubscriptionUsage(sql, job.id, 'completed');
   });
 }
 
 async function settleFailure(deps: RenderPassDeps, job: RenderJob, error: unknown, now: Date, report: RenderPassReport): Promise<void> {
-  const failure = error instanceof RenderFailure ? error : new RenderFailure('engine_error', error instanceof Error ? error.message : String(error), false);
+  const rawFailure = error instanceof RenderFailure ? error : new RenderFailure('engine_error', error instanceof Error ? error.message : String(error), false);
+  const privateRequest = deps.subscriptionSchemaReady ? await loadSubscriptionRender(deps.sql, job.id) : null;
+  const failure = privateRequest ? new RenderFailure(rawFailure.code, rawFailure.code, rawFailure.retryable) : rawFailure;
+  // Another worker owns the one paid interpretation; leave its lease/status intact.
+  if (privateRequest && failure.code === 'edit_in_progress') { report.waiting += 1; return; }
   report.errors.push(`${job.id}: ${failure.code} — ${failure.message}`);
   if (failure.retryable && job.attempts < MAX_ATTEMPTS) {
     await requeueRenderJob(deps.sql, job.id, { code: failure.code, message: failure.message });
     report.requeued += 1;
     return;
   }
-  await markRenderFailed(deps.sql, job.id, { code: failure.code, message: failure.message, finishedAt: now });
+  await deps.sql.transaction(async sql => {
+    await markRenderFailed(sql, job.id, { code: failure.code, message: failure.message, finishedAt: now });
+    if (deps.subscriptionSchemaReady) await settleSubscriptionUsage(sql, job.id, 'failed');
+  });
   report.failed += 1;
+}
+
+/** Handles jobs failed by stale recovery, plus a worker that died after its terminal row write. */
+async function reconcileFinishedSubscriptionRenders(sql: SqlRunner): Promise<void> {
+  const { rows } = await sql.query<{ render_ref: string; status: 'succeeded' | 'failed' }>(`select u.render_ref,j.status from creator_subscription_usage u join render_jobs j on j.id=u.render_ref
+    where u.state='reserved' and j.status in ('succeeded','failed') order by j.finished_at asc nulls last limit 50`);
+  for (const row of rows) await settleSubscriptionUsage(sql, row.render_ref, row.status === 'succeeded' ? 'completed' : 'failed');
+}
+
+/** Never retry an ambiguous paid edit, nor send a reference that has passed its retention date.
+ * An actual video task already accepted by the provider remains owned by the normal poll.
+ */
+async function expireUnpreparedSubscriptionRenders(sql: SqlRunner, now: Date): Promise<number> {
+  const { rows } = await sql.query<{ render_ref: string }>(`select e.render_ref from creator_subscription_renders e join render_jobs j on j.id=e.render_ref
+    where j.status in ('held','queued','running') and (j.provider_task_id is null or j.provider_task_id like 'asset:%')
+      and ((e.edit_status='preparing' and e.prepare_started_at <= $1::timestamptz - interval '20 minutes')
+        or (e.edit_status='pending' and e.references_expire_at <= $1::timestamptz)
+        or (e.dispatch_started_at <= $1::timestamptz - interval '20 minutes')) limit 50`, [now]);
+  let expired = 0;
+  for (const row of rows) await sql.transaction(async tx => {
+    const locked = (await tx.query<{ id: string; provider_task_id: string | null; status: string }>('select id,provider_task_id,status from render_jobs where id=$1 for update', [row.render_ref])).rows[0];
+    if (!locked || !['held', 'queued', 'running'].includes(locked.status) || (locked.provider_task_id && !locked.provider_task_id.startsWith('asset:'))) return;
+    const changed = await tx.query<{ render_ref: string }>(`update creator_subscription_renders set edit_status=case when edit_status in ('pending','preparing') then 'failed' else edit_status end,failure_code='edit_unavailable'
+      where render_ref=$1 and ((edit_status='preparing' and prepare_started_at <= $2::timestamptz - interval '20 minutes')
+        or (edit_status='pending' and references_expire_at <= $2::timestamptz)
+        or dispatch_started_at <= $2::timestamptz - interval '20 minutes') returning render_ref`, [row.render_ref, now]);
+    if (!changed.rows.length) return;
+    await markRenderFailed(tx, row.render_ref, { code: 'edit_unavailable', message: 'edit_unavailable', finishedAt: now });
+    await settleSubscriptionUsage(tx, row.render_ref, 'failed');
+    expired += 1;
+  });
+  return expired;
 }
 
 async function notifyFinished(deps: RenderPassDeps, now: Date, report: RenderPassReport): Promise<void> {

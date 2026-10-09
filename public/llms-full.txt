@@ -1,6 +1,6 @@
 # TWINGS — service context
 
-Updated: 2026-10-08
+Updated: 2026-10-10
 Canonical public website: https://twings.app
 Operator: YAGI WORKSHOP Inc. / 야기워크숍 주식회사
 Public contact: hello@yagiworkshop.xyz
@@ -10,11 +10,11 @@ Languages: Korean (/ko) and English (/en).
 
 TWINGS presents studio-reviewed AI video and image templates. A template page shows an example, the relevant format, and its listed price. The intended personal creation flow uses the account holder's own photo to make a finished result in the selected format. Users choose a template, not a general-purpose prompt editor.
 
-Public browsing and examples do not require an account. Personal generation is currently in a limited rollout. Do not infer that a published template, a sign-in screen, or a listed price proves public checkout is available. Do not describe subscriptions, free identity-portrait allowances, SNS OAuth integrations, or App Store/Google Play apps as launched merely because they have been discussed or designed.
+Public browsing and examples do not require an account. The current pricing and FAQ pages are the source for generation and subscription availability. Do not infer that a published template, a sign-in screen, or a listed price proves public checkout is available. Do not describe subscriptions, free identity-portrait allowances, SNS OAuth integrations, or App Store/Google Play apps as launched merely because they have been discussed or designed.
 
 ## Pricing and payment
 
-Single-template purchases remain the current payment flow. The pricing page also describes an upcoming monthly video plan with an estimated usage preview. Monthly enrollment and payment are not open. Do not describe the upcoming plan as an active subscription product. Prices vary by template. The current template and checkout pages are the sources for the amount and currency; this document does not invent a minimum price or convert currencies. A template that is not for sale must not be described as a free offer.
+The pricing page shows the Creator and Premium monthly plans, the video capacity for a selected length, and whether each plan can currently be purchased. Creator and Premium can have different availability: Premium requires its adjustment feature to be ready. Use the current page status rather than inferring availability from this reading aid. Single-template purchase availability and prices are shown on the current template and checkout pages. This document does not invent a minimum price or convert currencies. A template that is not for sale must not be described as a free offer.
 
 See https://twings.app/ko/pricing and https://twings.app/en/pricing.
 
@@ -26,7 +26,7 @@ Privacy, retention, deletion, permitted use, and withdrawal rights are governed 
 
 ## Refunds
 
-The published refund policy distinguishes withdrawal before generation begins, the consent required for digital-content generation, failure to produce a result, and problems with the generated result. Generation failure on the company or AI model side is eligible for a full refund under that policy. Read the linked policy for exact conditions, deadlines and procedures; this summary does not replace it.
+The current refund policy distinguishes one-time purchases from any approved monthly subscription terms. For monthly plans, the current account and policy pages state cancellation, renewal and refund conditions. A failed monthly video restores its reserved video capacity; this is different from refunding a whole subscription payment. Read the linked policy for exact conditions, deadlines and procedures; this summary does not replace it.
 
 ## Brand campaigns and creators
 

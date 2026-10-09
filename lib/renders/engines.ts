@@ -1,9 +1,10 @@
-import { estimateRenderUsd, type ArkModelKey, type ArkRatio, type ArkResolution } from '@/lib/ark/models';
+import type { ArkModelKey, ArkRatio, ArkResolution } from '@/lib/ark/models';
 import { ArkError, arkConfigFromEnv, createArkClient, isTerminal, type ArkClient, type ArkContentItem } from '@/lib/ark/client';
 import { IMAGE_ENGINES, isOpenAiEngine, type ImageAspect, type ImageEngineId, type VideoAspect, type VideoEngineId } from '@/lib/images/engines';
 import { OpenAiImageError, createOpenAiImageClient, openAiConfigFromEnv, type OpenAiImageClient, type ReferenceImage } from '@/lib/images/openai';
 import { SeedreamError, createSeedreamClient, seedreamConfigFromEnv, type SeedreamClient } from '@/lib/images/seedream';
 import { assetReference } from '@/lib/identity/service';
+import { quoteArkVideo } from '@/lib/ark/pricing';
 import { arkModelForVideo, DEFAULT_CREATOR_RESOLUTION, type CreatorResolution } from '@/lib/twings/resolution';
 
 /**
@@ -40,7 +41,12 @@ export type RenderFailureCode =
   /** The identity service is not configured (AK/SK) or cannot hand the bank a photo URL. */
   | 'identity_unavailable'
   /** The bank compared the photo with the verified face and refused it, or never finished. */
-  | 'asset_failed';
+  | 'asset_failed'
+  | 'edit_refused'
+  | 'edit_invalid'
+  | 'edit_unavailable'
+  | 'edit_request_limit'
+  | 'edit_in_progress';
 
 export class RenderFailure extends Error {
   constructor(
@@ -72,6 +78,8 @@ export interface EngineOutput {
   provider: 'openai' | 'modelark';
   /** Booked from the provider's usage counters where it reports them, else the estimate. */
   costUsd: number | null;
+  costSource?: 'provider_usage' | 'estimate';
+  completionTokens?: number | null;
 }
 
 /**
@@ -252,7 +260,7 @@ export type VideoPoll =
   | { status: 'succeeded'; output: EngineOutput }
   | { status: 'failed'; failure: RenderFailure };
 
-export async function pollVideoRender(args: { taskId: string; model: ArkModelKey; seconds: number; resolution?: CreatorResolution }, deps: RenderEngineDeps = {}): Promise<VideoPoll> {
+export async function pollVideoRender(args: { taskId: string; model: ArkModelKey; seconds: number; resolution?: CreatorResolution | '480p'; aspect?: string }, deps: RenderEngineDeps = {}): Promise<VideoPoll> {
   const client = deps.ark === undefined ? arkClientFromEnv() : deps.ark;
   if (client === null) return { status: 'failed', failure: new RenderFailure('no_engine_key', 'ARK_API_KEY is not set', false) };
   let task;
@@ -276,8 +284,13 @@ export async function pollVideoRender(args: { taskId: string; model: ArkModelKey
   }
   try {
     const downloaded = await download(task.videoUrl, deps.fetch ?? globalThis.fetch, 'video/mp4');
-    const estimate = estimateRenderUsd({ model: args.model, resolution: args.resolution ?? VIDEO_RESOLUTION, seconds: args.seconds });
-    return { status: 'succeeded', output: { ...downloaded, provider: 'modelark', costUsd: estimate.ok ? estimate.usd : null } };
+    const resolution = args.resolution ?? VIDEO_RESOLUTION;
+    // Public subscription quotes cover 720p/1080p. Preserve legacy 480p polling without
+    // claiming a tariff or dimensions that have not been verified for that resolution.
+    const quote = resolution === '720p' || resolution === '1080p' ? quoteArkVideo({ model: args.model, resolution, seconds: args.seconds, aspect: args.aspect ?? '9:16' }) : null;
+    const completionTokens = Number.isSafeInteger(task.completionTokens) && (task.completionTokens ?? 0) > 0 ? task.completionTokens : null;
+    const costUsd = quote ? completionTokens === null ? quote.providerUsd : completionTokens * quote.providerUsd / quote.providerTokens : null;
+    return { status: 'succeeded', output: { ...downloaded, provider: 'modelark', costUsd, costSource: costUsd === null ? undefined : completionTokens === null ? 'estimate' : 'provider_usage', completionTokens } };
   } catch (error) {
     const failure = toFailure(error);
     return failure.retryable ? { status: 'pending' } : { status: 'failed', failure };

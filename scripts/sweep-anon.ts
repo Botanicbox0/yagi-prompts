@@ -446,6 +446,27 @@ async function sweepMoney(): Promise<void> {
   expectOneOf('Toss checkout page redirects anon', tossPage.status, [302, 307, 308]);
   expectAbsent('Toss checkout HTML stays behind sign-in', tossPage.body, 'data-toss-checkout');
 
+  // New recurring entry points do not inherit the legacy anonymous or retired paths.
+  for (const path of ['/api/creator-subscriptions', '/api/creator-subscriptions/confirm', '/api/creator-subscriptions/renders',
+    `/api/creator-subscriptions/${tossOrderId}/cancel`, `/api/creator-subscriptions/${tossOrderId}/refund`]) {
+    const response = await request(path, { method: 'POST', headers: { Origin: BASE } });
+    expectEqual(`${path} refuses anonymous subscription entry`, response.status, 401);
+    expectEqual(`${path} remains private and uncached`, response.cacheControl, 'private, no-store');
+    expectAbsent(`${path} never reveals a billing key`, response.body, 'billingKey');
+  }
+  expectEqual('Subscription order lookup refuses anon', (await get(`/api/creator-subscriptions/${tossOrderId}`)).status, 401);
+  expectEqual('Subscription worker refuses missing private authorization', (await request('/api/creator-subscriptions/tick', { method: 'POST' })).status, 401);
+  const availability = await get('/api/creator-subscriptions/availability');
+  expectEqual('Anonymous subscription availability is public', availability.status, 200);
+  expectPresent('Offline availability stays preparing', availability.body, '"status":"preparing"');
+  for (const field of ['billingKey', 'customerKey', 'monthlyUnits', 'implementationSha', 'evidenceDigest', 'configurationDigest'])
+    expectAbsent(`Public availability excludes ${field}`, availability.body, field);
+  for (const path of ['/billing/subscription', '/admin/subscriptions']) {
+    const page = await get(path);
+    expectOneOf(`${path} requires sign-in`, page.status, [302, 307, 308]);
+    expectAbsent(`${path} has no anonymous enrollment controls`, page.body, 'data-subscription-enroll');
+  }
+
   const checkout = await postForm('/api/billing/checkout', {
     locale: 'en',
     slug: SHOWCASE,

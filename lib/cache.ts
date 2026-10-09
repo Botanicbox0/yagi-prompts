@@ -72,3 +72,11 @@ export function revalidateCampaigns(): void {
   revalidateTag(CAMPAIGNS_TAG);
   revalidateStaticSurfaces(['/campaigns']);
 }
+
+export function revalidateSubscriptions(): void {
+  revalidateTag('creator-subscription-status');
+  revalidateStaticSurfaces(['', '/pricing', '/faq', '/legal/terms', '/legal/refund', '/legal/privacy']);
+  revalidatePath('/[locale]/t/[slug]', 'page');
+  revalidatePath('/llms.txt');
+  revalidatePath('/llms-full.txt');
+}
