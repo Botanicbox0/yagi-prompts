@@ -586,10 +586,12 @@ describe('templates route contract (docs/TEMPLATES-IA.md)', () => {
     }
   });
 
-  it('keeps the pricing page static and session-free, priced from the template projection', () => {
+  it('keeps pricing static and session-free, with public examples and authoritative plan quotes', () => {
     const pricing = read('app', '(marketing)', '[locale]', 'pricing', 'page.tsx');
     expect(pricing).toContain("from '@/lib/prompts/public-catalog'");
-    expect(pricing).toMatch(/\bpriceRangeFor\(/);
+    expect(pricing).toContain("from '@/lib/twings/subscription-plan'");
+    expect(pricing).toMatch(/\bquoteSubscriptionVideo\(/);
+    expect(pricing).not.toMatch(/\bpriceRangeFor\(/);
     for (const needle of ['getWallet', 'getViewer', 'CookieTable', 'next/headers']) {
       expect(pricing.includes(needle), `pricing must not use ${needle}`).toBe(false);
     }

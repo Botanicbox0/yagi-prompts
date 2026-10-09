@@ -138,8 +138,8 @@ function CostFloorNote({ row, dict }: { row: PromptRow | null; dict: Dict }) {
   if (!row || row.medium !== 'video' || !row.runtimeSeconds) return null;
   const a = dict.admin;
   const { model, seconds } = arkModelForVideo(row.engine, row.runtimeSeconds);
-  const p720 = costFloor({ model, resolution: '720p', seconds });
-  const p1080 = costFloor({ model, resolution: '1080p', seconds });
+  const p720 = costFloor({ model, resolution: '720p', seconds, aspect: row.aspectDefault ?? '9:16' });
+  const p1080 = costFloor({ model, resolution: '1080p', seconds, aspect: row.aspectDefault ?? '9:16' });
   if (!p720 || !p1080) return null;
   const below = (row.priceKrw > 0 && row.priceKrw < p720.proposedKrw) || (row.price1080Krw > 0 && row.price1080Krw < p1080.proposedKrw);
   return (

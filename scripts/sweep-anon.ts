@@ -975,22 +975,25 @@ async function sweepLandingTemplates(): Promise<void> {
   expectEqual('/library still works for anyone who has the URL', (await get('/library')).status, 307);
 }
 
-/** Pricing: one price per template, the table, and nothing per-viewer. */
+/** Public monthly outcomes, no per-template price table or account data. */
 async function sweepPricingTemplates(): Promise<void> {
-  console.log('\n/en/pricing + /ko/pricing — per-template prices, anonymous');
+  console.log('\n/en/pricing + /ko/pricing — monthly plan comparison, anonymous');
   for (const locale of ['en', 'ko']) {
     const page = await get(`/${locale}/pricing`);
     expectEqual(`/${locale}/pricing renders 200`, page.status, 200);
     expectPresent('…with the upcoming monthly plan', page.body, 'data-pricing-subscription="preparing"');
-    expectPresent('…with its monthly won price', page.body, '19,000');
+    expectPresent('…with its Creator monthly won price', page.body, '24,900');
+    expectPresent('…with its Premium monthly won price', page.body, '49,000');
+    expectPresent('…with prompt editing honestly marked as planned', page.body, 'data-prompt-editing="planned"');
     expectPresent('…with a usage preview', page.body, 'data-subscription-preview');
     expectPresent('…with enrollment explicitly closed', page.body, 'data-subscription-unavailable');
     expectAbsent('…without a subscription checkout endpoint', page.body, '/api/billing/subscription');
-    expectPresent('…with the price table', page.body, 'data-pricing-table');
-    expectPresent('…listing the priced template', page.body, `data-pricing-row="${GATED_PROMPT}"`);
-    expectPresent('…at its price, in the reader’s currency', page.body, locale === 'ko' ? '5,900원' : '>$4<');
-    if (locale === 'ko') expectAbsent('…with no dollar on the Korean table', page.body, '>$4<');
-    expectAbsent('…without the closed one', page.body, `data-pricing-row="${CLOSED_TEMPLATE}"`);
+    expectPresent('…with Creator output counts', page.body, 'data-plan-film-count="creator"');
+    expectPresent('…with Premium output counts', page.body, 'data-plan-film-count="premium"');
+    expectPresent('…with pricing-specific FAQs', page.body, 'data-faq-catalog="pricing"');
+    expectPresent('…with the front-facing photo guide', page.body, 'data-pricing-photo-guide');
+    expectAbsent('…without a template price table', page.body, 'data-pricing-table');
+    expectAbsent('…without technical dropdowns', page.body, '<select');
     expectAbsent('…no cookie table', page.body, 'data-cookie-table');
     expectAbsent('…no balance figure', page.body, 'data-cookie-balance');
   }
