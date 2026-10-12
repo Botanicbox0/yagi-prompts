@@ -28,7 +28,17 @@ export function BrandCustomerStory({ dict, locale, detail = false }: { dict: Dic
               </dl>
               <p className="mt-3 text-xs leading-relaxed text-white/55">{t.stories.scope}</p>
             </>}
-            {campaign.sourceUrl && <a href={campaign.sourceUrl} target="_blank" rel="noopener noreferrer" className="mt-7 inline-flex min-h-11 items-center text-sm underline underline-offset-6">{t.cases.morphic90s.sourceCta} ↗</a>}
+            {campaign.id === 'morphic-september-kr-jp' && <div className="mt-7" data-case-post-list>
+              <p className="text-xs text-white/60">{t.cases.morphicSeptember.postsHeading}</p>
+              <ul aria-label={t.cases.morphicSeptember.postsHeading} className="mt-3 grid gap-3 sm:grid-cols-2">
+                {campaign.posts.map(post => <li key={post.id}>
+                  <a href={post.url} data-case-post={post.id} data-post-market={post.market} target="_blank" rel="noopener noreferrer" className="flex min-h-12 items-center justify-between gap-3 rounded-xl border border-white/20 px-4 py-3 text-sm transition-colors hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-brand-blue-light">
+                    <span>{t.stories.postLabels[post.id]}</span><span aria-hidden="true">↗</span>
+                  </a>
+                </li>)}
+              </ul>
+            </div>}
+            {detail && campaign.sourceUrl && <a data-case-source={campaign.id} href={campaign.sourceUrl} target="_blank" rel="noopener noreferrer" className="mt-7 inline-flex min-h-11 items-center text-sm text-white/65 underline underline-offset-6">{t.cases.morphic90s.sourceCta} ↗</a>}
             {!detail && index === 0 && <a href={`/${locale}/brands/stories/morphic`} className="mt-4 flex min-h-11 w-fit items-center gap-5 rounded-full bg-blue px-5 text-sm font-semibold">{t.stories.detailCta} ↗</a>}
           </div>
           <div>

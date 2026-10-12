@@ -7,6 +7,23 @@ vi.mock('@/lib/seo/faq-section', () => ({ FaqSection: () => null }));
 import BrandsPage from '@/app/(marketing)/[locale]/brands/page';
 
 describe('the brand page shows the service before asking visitors to enquire', () => {
+  for (const locale of ['ko', 'en'] as const) {
+    it(`keeps ${locale} case visitors on real posts instead of a Morphic workflow`, async () => {
+      const html = renderToStaticMarkup(await BrandsPage({ params: Promise.resolve({ locale }) }));
+      expect(html).not.toMatch(/href="https:\/\/morphic\.com\//);
+      expect(html).not.toContain('make-90s-street-style-interview-video');
+      expect(html).toContain('href="https://www.instagram.com/p/DcXjygPg8fE/"');
+      for (const code of ['DdqhUUvRUik', 'DdqirU_yjr-', 'Dd1CiCDSlix', 'Dd0VQJaz8h-']) {
+        expect(html).toContain(`href="https://www.instagram.com/p/${code}/"`);
+      }
+      expect(html.match(/data-case-post="/g)).toHaveLength(4);
+      expect(html.match(/data-post-market="KR"/g)).toHaveLength(2);
+      expect(html.match(/data-post-market="JP"/g)).toHaveLength(2);
+      // Internal workspace details are evidence sources, never visitor destinations.
+      expect(html).not.toMatch(/href="https:\/\/brand\.twings\.app\/brand\/projects\//);
+    });
+  }
+
   it('shows the finished work and publishing offer without hiding services behind five tabs', async () => {
     const html = renderToStaticMarkup(await BrandsPage({ params: Promise.resolve({ locale: 'ko' }) }));
     expect(html).toContain('data-brand-format-explorer');

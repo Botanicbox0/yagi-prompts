@@ -1146,6 +1146,14 @@ async function sweepCampaigns(): Promise<void> {
     expectPresent(`/${locale}/brands accessible inquiry dialog`, brand.body, 'data-brand-inquiry-dialog');
     expectPresent(`/${locale}/brands role field`, brand.body, 'name="contactRole"');
     expectEqual(`/${locale}/brands shows real August film links`, (brand.body.match(/href="https:\/\/www.instagram.com\/p\/(?:DcXjygPg8fE|DcShoikJklw)\/"/g) ?? []).length, 2);
+    expectAbsent(`/${locale}/brands does not send case visitors to Morphic`, brand.body, 'href="https://morphic.com/');
+    expectAbsent(`/${locale}/brands removes the generic Morphic guide`, brand.body, 'make-90s-street-style-interview-video');
+    expectEqual(`/${locale}/brands shows four September originals`, (brand.body.match(/data-case-post="/g) ?? []).length, 4);
+    expectEqual(`/${locale}/brands shows two Korea originals`, (brand.body.match(/data-post-market="KR"/g) ?? []).length, 2);
+    expectEqual(`/${locale}/brands shows two Japan originals`, (brand.body.match(/data-post-market="JP"/g) ?? []).length, 2);
+    for (const code of ['DdqhUUvRUik', 'DdqirU_yjr-', 'Dd1CiCDSlix', 'Dd0VQJaz8h-']) {
+      expectPresent(`/${locale}/brands links the published September original ${code}`, brand.body, `href="https://www.instagram.com/p/${code}/"`);
+    }
     expectPresent(`/${locale}/brands shows the production film`, brand.body, 'data-production-films');
     expectPresent(`/${locale}/brands links the production portfolio`, brand.body, 'https://pitch.com/v/yagi-production-wokrs-vsrgfd');
     expectAbsent(`/${locale}/brands uses no green brand accent`, brand.body, 'brand-lime');
@@ -1158,6 +1166,9 @@ async function sweepCampaigns(): Promise<void> {
     expectEqual(`/${locale}/brands/stories/morphic keeps both campaigns`, (story.body.match(/data-case-study=/g) ?? []).length, 2);
     expectPresent(`/${locale}/brands/stories/morphic self-canonicals`, story.body, `rel="canonical" href="${BASE}/${locale}/brands/stories/morphic"`);
     expectPresent(`/${locale}/brands/stories/morphic carries campaign limitations`, story.body, locale === 'ko' ? '전환율은 별도로 집계하지 않았습니다' : 'conversion');
+    expectPresent(`/${locale}/brands/stories/morphic offers only the founder's own format`, story.body, 'href="https://morphic.com/en/workflows/019feecc-c7ec-77bd-bc3a-2ddc1f680105/90s-korean-street-interview"');
+    expectAbsent(`/${locale}/brands/stories/morphic removes the generic guide`, story.body, 'make-90s-street-style-interview-video');
+    expectEqual(`/${locale}/brands/stories/morphic keeps four published September originals`, (story.body.match(/data-case-post="/g) ?? []).length, 4);
     expectEqual(`/${locale}/brands rejects unknown customer stories`, (await get(`/${locale}/brands/stories/unapproved`)).status, 404);
     expectPresent(`/${locale}/brands carries buyer FAQ questions`, brand.body, locale === 'ko' ? '캠페인 성과는 어떻게 확인하나요?' : 'How do you report campaign results?');
     expectAbsent(`/${locale}/brands has no redundant order warning`, brand.body, locale === 'ko' ? '문의 제출만으로 주문' : 'Submitting an enquiry does not place an order');

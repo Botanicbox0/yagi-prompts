@@ -16,6 +16,14 @@ describe('public customer stories', () => {
       const detail = renderToStaticMarkup(await StoryPage({ params: Promise.resolve({ locale, slug: 'morphic' }) }));
       expect(detail.match(/data-case-study=/g)).toHaveLength(2);
       expect(detail).toContain(locale === 'ko' ? '200만+' : '2M+');
+      expect(detail).not.toContain('make-90s-street-style-interview-video');
+      expect(detail).toContain('href="https://morphic.com/en/workflows/019feecc-c7ec-77bd-bc3a-2ddc1f680105/90s-korean-street-interview"');
+      expect(detail.match(/data-case-source="/g)).toHaveLength(1);
+      for (const code of ['DdqhUUvRUik', 'DdqirU_yjr-', 'Dd1CiCDSlix', 'Dd0VQJaz8h-']) {
+        expect(detail).toContain(`href="https://www.instagram.com/p/${code}/"`);
+      }
+      expect(detail.match(/data-post-market="KR"/g)).toHaveLength(2);
+      expect(detail.match(/data-post-market="JP"/g)).toHaveLength(2);
       const followUp = detail.match(/<article[^>]*data-case-study="morphic-september-kr-jp"[\s\S]*?<\/article>/)?.[0];
       expect(followUp).not.toContain('data-case-metric');
       const metadata = await generateMetadata({ params: Promise.resolve({ locale, slug: 'morphic' }) });
