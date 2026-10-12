@@ -28,7 +28,9 @@ describe('the approved Morphic evidence actually rendered to visitors', () => {
       expect(followUp).toContain(locale === 'ko' ? '한국과 일본' : 'Korea and Japan');
       expect(followUp).not.toContain(locale === 'ko' ? '200만+' : '2M+');
       expect(html).not.toMatch(/\/reel\/brands\/[^"'\s>]*@/i);
-      expect(html).toContain('https://morphic.com/resources/how-to/make-90s-street-style-interview-video');
+      expect(html).not.toContain('href="https://morphic.com/');
+      expect(followUp).toContain('href="https://www.instagram.com/p/DdqhUUvRUik/"');
+      expect(followUp).toContain('href="https://www.instagram.com/p/Dd1CiCDSlix/"');
       expect(CASE_STUDIES).toHaveLength(2);
     });
   }
@@ -39,7 +41,8 @@ describe('the approved Morphic evidence actually rendered to visitors', () => {
     expect(metadata.title).toBe('브랜드 크리에이터 캠페인');
     expect(metadata.openGraph).toMatchObject({ siteName: 'TWINGS', title: '브랜드 크리에이터 캠페인' });
     expect(html).toContain('id="brand-case-studies-structured-data"');
-    expect(html).toContain('morphic.com/resources/how-to/make-90s-street-style-interview-video');
+    expect(html).not.toContain('morphic.com/resources/how-to/make-90s-street-style-interview-video');
+    expect(html).toContain('href="https://www.instagram.com/p/Dd0VQJaz8h-/"');
     expect(html).toContain('2026년 8월');
     expect(html).toContain('2026년 9월');
   });

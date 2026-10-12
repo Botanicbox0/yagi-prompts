@@ -35,6 +35,10 @@ const augustFilm = (id: 'august-01' | 'august-02', post: string) => z.object({
   poster: z.literal(`/reel/brands/morphic-${id}.jpg`), width: z.literal(720), height: z.literal(1280), postUrl: z.literal(post),
 }).strict();
 
+const campaignPost = <Id extends string, Market extends 'KR' | 'JP'>(id: Id, market: Market, url: string) => z.object({
+  id: z.literal(id), market: z.literal(market), url: z.literal(url),
+}).strict();
+
 const Morphic90sCase = z.object({
   id: z.literal('morphic-90s-interview'),
   copyKey: z.literal('morphic90s'),
@@ -42,7 +46,7 @@ const Morphic90sCase = z.object({
   metrics: z.tuple([FilmsMetric, ViewsMetric, OrganicMetric]),
   media: z.tuple([augustFilm('august-01', 'https://www.instagram.com/p/DcXjygPg8fE/'), augustFilm('august-02', 'https://www.instagram.com/p/DcShoikJklw/')]),
   evidence: z.string().min(1),
-  sourceUrl: z.literal('https://morphic.com/resources/how-to/make-90s-street-style-interview-video'),
+  sourceUrl: z.literal('https://morphic.com/en/workflows/019feecc-c7ec-77bd-bc3a-2ddc1f680105/90s-korean-street-interview'),
 }).strict();
 
 const MorphicSeptemberCase = z.object({
@@ -51,6 +55,12 @@ const MorphicSeptemberCase = z.object({
   period: z.literal('2026-09'),
   metrics: z.tuple([]),
   media: z.tuple([mediaFile('september-01'), mediaFile('september-02')]),
+  posts: z.tuple([
+    campaignPost('kr01', 'KR', 'https://www.instagram.com/p/DdqhUUvRUik/'),
+    campaignPost('kr02', 'KR', 'https://www.instagram.com/p/DdqirU_yjr-/'),
+    campaignPost('jp01', 'JP', 'https://www.instagram.com/p/Dd1CiCDSlix/'),
+    campaignPost('jp02', 'JP', 'https://www.instagram.com/p/Dd0VQJaz8h-/'),
+  ]),
   evidence: z.string().min(1),
   sourceUrl: z.null(),
 }).strict();
@@ -93,7 +103,7 @@ export const CASE_STUDIES: readonly CampaignCaseStudy[] = z.array(CaseStudy).par
       { id: 'august-02', src: '/reel/brands/morphic-august-02.mp4', poster: '/reel/brands/morphic-august-02.jpg', width: 720, height: 1280, postUrl: 'https://www.instagram.com/p/DcShoikJklw/' },
     ],
     evidence: 'Founder-approved public aggregate: 9 films, 2M+ views, 300+ derivative organic posts.',
-    sourceUrl: 'https://morphic.com/resources/how-to/make-90s-street-style-interview-video',
+    sourceUrl: 'https://morphic.com/en/workflows/019feecc-c7ec-77bd-bc3a-2ddc1f680105/90s-korean-street-interview',
   },
   {
     id: 'morphic-september-kr-jp',
@@ -103,6 +113,14 @@ export const CASE_STUDIES: readonly CampaignCaseStudy[] = z.array(CaseStudy).par
     media: [
       { id: 'september-01', src: '/reel/brands/morphic-september-01.mp4', poster: '/reel/brands/morphic-september-01.jpg', width: 960, height: 720 },
       { id: 'september-02', src: '/reel/brands/morphic-september-02.mp4', poster: '/reel/brands/morphic-september-02.jpg', width: 960, height: 720 },
+    ],
+    // Published posts verified in the brand workspace and the D2 Pitch deck on 2026-10-12.
+    // They are campaign evidence, not asserted to be the two studio preview films above.
+    posts: [
+      { id: 'kr01', market: 'KR', url: 'https://www.instagram.com/p/DdqhUUvRUik/' },
+      { id: 'kr02', market: 'KR', url: 'https://www.instagram.com/p/DdqirU_yjr-/' },
+      { id: 'jp01', market: 'JP', url: 'https://www.instagram.com/p/Dd1CiCDSlix/' },
+      { id: 'jp02', market: 'JP', url: 'https://www.instagram.com/p/Dd0VQJaz8h-/' },
     ],
     evidence: 'Campaign films exported 2026-09-24 with visible Morphic marks; no public performance figure attached.',
     sourceUrl: null,

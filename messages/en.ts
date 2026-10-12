@@ -53,7 +53,7 @@ export const en = {
     "moat2Title": "Creator participation",
     "moat2Body": "We recruit creators for your brand and make the ads with their own faces.",
     "moat3Title": "Publishing and reporting",
-    "moat3Body": "We review films and ad disclosures, manage publishing, and collect posts and available results.",
+    "moat3Body": "We review films and ad disclosures, manage publishing, and collect posts and verified results.",
     "metaTitle": "Creator Campaigns for Brands",
     "metaDescription": "AI ad production and creator campaigns across Korea and Japan, from recruitment to publishing and reporting. Explore simultaneous market launches and real Morphic work.",
     "marketsHeading": "Korea and Japan.\nOne campaign.",
@@ -100,8 +100,8 @@ export const en = {
         ],
         "postCta": "View the Instagram post",
         "filmNote": "Actual films published during the August 2026 campaign. Turn on sound after playing to hear the interview.",
-        "sourceCta": "See the 1990s interview format on Morphic",
-        "note": "Public campaign-level totals from Morphic’s August 2026 campaign, not an individual creator result or an attributed conversion rate.",
+        "sourceCta": "See the 1990s interview format by YAGI",
+        "note": "Public campaign-level totals from the August 2026 campaign. Views include repeat plays; conversion rates were not tracked separately.",
         "metrics": {
           "films": {
             "label": "campaign films"
@@ -116,8 +116,9 @@ export const en = {
       },
       "morphicSeptember": {
         "eyebrow": "MORPHIC · SEPTEMBER 2026 FOLLOW-UP",
-        "body": "The collaboration with Morphic continued with creator campaigns in Korea and Japan. TWINGS managed format production, recruitment, post review, and reporting.",
-        "note": "These are real films from the September Morphic campaign.",
+        "body": "We ran Morphic's creator campaigns in Korea and Japan. TWINGS managed format production, recruitment, post review, and reporting.",
+        "note": "Production films from the September campaign. Follow the Instagram links to see posts from Korea and Japan.",
+        "postsHeading": "Original Instagram posts",
         "films": [
           "Morphic September campaign film 01",
           "Morphic September campaign film 02"
@@ -142,6 +143,12 @@ export const en = {
     "legacyBrandLink": "Looking to run a brand campaign?",
     "legacyBrandCta": "Visit TWINGS for brands",
     "stories": {
+      "postLabels": {
+        "kr01": "Korea · published film 01",
+        "kr02": "Korea · published film 02",
+        "jp01": "Japan · published film 01",
+        "jp02": "Japan · published film 02"
+      },
       "eyebrow": "CUSTOMER STORIES",
       "title": "Creator campaigns\nwith Morphic.",
       "summary": "A collaboration that started with 1990s interviews and continued with creator campaigns across Korea and Japan.",

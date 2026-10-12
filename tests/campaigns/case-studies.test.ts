@@ -17,7 +17,7 @@ describe('the approved public Morphic case manifest', () => {
     expect(CASE_STUDIES[1]?.metrics).toEqual([]);
     expect(CASE_STUDIES.map((study) => study.period)).toEqual(['2026-08', '2026-09']);
     expect(CASE_STUDIES.map((study) => study.copyKey)).toEqual(['morphic90s', 'morphicSeptember']);
-    expect(CASE_STUDIES[0]?.sourceUrl).toBe('https://morphic.com/resources/how-to/make-90s-street-style-interview-video');
+    expect(CASE_STUDIES[0]?.sourceUrl).toBe('https://morphic.com/en/workflows/019feecc-c7ec-77bd-bc3a-2ddc1f680105/90s-korean-street-interview');
     expect(CASE_STUDIES[1]?.sourceUrl).toBeNull();
     expect(CASE_STUDIES[0]?.metrics.map((metric) => formatCampaignMetric(metric, 'ko'))).toEqual(['9편', '200만+', '300건+']);
     expect(CASE_STUDIES[0]?.metrics.map((metric) => formatCampaignMetric(metric, 'en'))).toEqual(['9', '2M+', '300+']);
