@@ -22,7 +22,7 @@ export function BrandCustomerStory({ dict, locale, detail = false }: { dict: Dic
             {campaign.metrics.length > 0 && <>
               <dl className="mt-8 grid grid-cols-3 gap-3 border-y border-white/15 py-6">
                 {campaign.metrics.map(metric => <div key={metric.id} data-case-metric={metric.id}>
-                  <dd className="text-[clamp(1.8rem,3.5vw,3rem)] font-semibold leading-none tracking-[-0.05em]">{formatCampaignMetric(metric, locale)}</dd>
+                  <dd className="whitespace-nowrap text-[clamp(1.25rem,3.5vw,3rem)] font-semibold leading-none tracking-[-0.05em]">{formatCampaignMetric(metric, locale)}</dd>
                   <dt className="mt-3 text-xs leading-relaxed text-white/60">{t.cases.morphic90s.metrics[metric.id].label}</dt>
                 </div>)}
               </dl>
