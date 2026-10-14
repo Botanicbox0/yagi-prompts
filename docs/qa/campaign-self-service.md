@@ -33,7 +33,7 @@
 
 ## 배포·운영 개방
 
-클라우드 적용 필요: `0045_core_campaign_production.sql`, `0128_glue_campaign_production.sql`. AGENTS.md §3에 따라 대표/Director 적용 대상이다. 기존 데이터는 삭제하지 않는다. 새 테이블이 없는 배포에서는 수동 캠페인 화면을 유지하고 직접 제작 요청은 닫힌 상태로 응답한다.
+클라우드 적용 필요: `0045_core_campaign_production.sql`, `0130_glue_campaign_production.sql`. AGENTS.md §3에 따라 대표/Director 적용 대상이다. 기존 데이터는 삭제하지 않는다. 새 테이블이 없는 배포에서는 수동 캠페인 화면을 유지하고 직접 제작 요청은 닫힌 상태로 응답한다.
 
 서버 환경변수 `CAMPAIGN_PRODUCTION_PUBLIC=on`과 캠페인의 명시적 제작 허용, 활성 브랜드 프로젝트·계약이 모두 필요하다. 기본값은 닫힘이다. PG 소비자 결제 승인은 캠페인 제작 개방 조건으로 사용하지 않는다. 브랜드 제작비 계약과 실제 모델·자산·큐 운영 검증은 별도다.
 

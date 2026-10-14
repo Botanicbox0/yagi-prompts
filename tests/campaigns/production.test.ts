@@ -193,7 +193,7 @@ it('requires a successful sponsored video to submit, then atomically adds review
 });
 it('denies direct anonymous/authenticated access to both private sponsorship tables', async () => {
   await createAppRole(db, 'anon'); await createAppRole(db, 'authenticated'); await createAppRole(db, 'service_role');
-  await db.exec(await readFile('supabase/migrations/0128_glue_campaign_production.sql', 'utf8'));
+  await db.exec(await readFile('supabase/migrations/0130_glue_campaign_production.sql', 'utf8'));
   for (const role of ['anon', 'authenticated']) for (const table of ['campaign_productions', 'campaign_render_jobs']) await asRole(db, role, async () => { expect(await expectReject(() => db.query(`select * from ${table}`))).toContain('permission denied'); });
 });
 it('recovers the original provider task without a second create call and refuses a foreign render task', async () => {
