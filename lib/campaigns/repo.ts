@@ -244,6 +244,10 @@ export async function loadCampaignById(sql: SqlRunner, id: string): Promise<Camp
   const { rows } = await sql.query<RawCampaign>(`select ${CAMPAIGN_COLUMNS} from campaigns where id = $1`, [id]);
   return rows[0] ? toCampaign(rows[0]) : null;
 }
+export async function loadCampaignsByIds(sql: SqlRunner, ids: string[]): Promise<CampaignRow[]> {
+  if (!ids.length) return [];
+  return (await sql.query<RawCampaign>(`select ${CAMPAIGN_COLUMNS} from campaigns where id=any($1::uuid[])`, [ids])).rows.map(toCampaign);
+}
 
 /** The admin board: drafts first, then the live ones, then newest. */
 export async function loadAllCampaigns(sql: SqlRunner): Promise<CampaignRow[]> {

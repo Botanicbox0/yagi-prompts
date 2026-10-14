@@ -1,4 +1,9 @@
 import { createHash, randomUUID } from 'node:crypto';
+import { reserveCampaignProduction, type CampaignProductionCode } from '@/lib/campaigns/production';
+import { campaignProductReferences, campaignRenderReferenceUrls } from '@/lib/campaigns/production-references';
+import { claimCampaignDispatch, acknowledgeCampaignTask, resumeCampaignDispatch, CAMPAIGN_DISPATCH_PREFIX } from '@/lib/campaigns/production-dispatch';
+import { cleanPortraitInput } from '@/lib/identity/portrait-images';
+import type { StorageDriver } from '@/lib/storage';
 import { reserveProduction } from '@/lib/brands/production/service';
 import { selectedPortraitPhoto } from '@/lib/identity/portrait-service';
 import type { SqlRunner } from '@/lib/db/sql-runner';
@@ -91,6 +96,48 @@ export interface RenderServiceDeps {
   now?: Date;
   /** Which asset library a photo goes through (lib/flags.ts); tests pin it, production reads the flag. */
   mode?: AssetLibraryMode;
+}
+
+export interface CreateCampaignRenderInput {
+  applicationId: string; requestId: string; ownFaceConsent: boolean;
+  portraitId?: string; photo?: { bytes: Uint8Array; mime: string } | null; locale: string | null;
+}
+/** Selected campaign participation pays for production; no consumer plan or admin impersonation. */
+export async function createCampaignRenderJob(deps: RenderServiceDeps & { referenceStorage?: Pick<StorageDriver, 'read'> }, viewer: Viewer, input: CreateCampaignRenderInput): Promise<CreateRenderOutcome | { ok: false; code: CampaignProductionCode | 'consent_required' }> {
+  if (!viewer.userId) return { ok: false, code: 'sign_in_required' };
+  if (input.ownFaceConsent !== true) return { ok: false, code: 'consent_required' };
+  if (Object.keys(input).some(key => !['applicationId', 'requestId', 'ownFaceConsent', 'portraitId', 'photo', 'locale'].includes(key))) return { ok: false, code: 'invalid' };
+  if (!SUBSCRIPTION_UUID.test(input.applicationId) || !SUBSCRIPTION_UUID.test(input.requestId) || input.portraitId && (!SUBSCRIPTION_UUID.test(input.portraitId) || input.photo)) return { ok: false, code: 'invalid' };
+  let photo = input.photo ?? null;
+  if (!input.portraitId) {
+    if (!photo || photo.bytes.byteLength > 3_000_000) return { ok: false, code: photo ? 'photo_too_large' : 'bad_photo' };
+    try { photo = { bytes: await cleanPortraitInput(photo.bytes, photo.mime), mime: 'image/png' }; }
+    catch { return { ok: false, code: 'bad_photo' }; }
+  }
+  const fingerprint = createHash('sha256').update(JSON.stringify([input.applicationId, input.portraitId ?? null, input.portraitId ? null : createHash('sha256').update(photo!.bytes).digest('hex')])).digest('hex');
+  const writtenKeys: string[] = [];
+  try {
+    const result = await reserveCampaignProduction(deps, viewer, { applicationId: input.applicationId, requestId: input.requestId, fingerprint }, async (sql, template, ids) => {
+      const ownPhoto = input.portraitId ? await selectedPortraitPhoto(sql, deps.store, viewer.userId!, input.portraitId) : photo;
+      if (!ownPhoto) return { ok: false as const, code: 'identity_required' as const };
+      const references = await campaignProductReferences(sql, template.id, ids, deps.referenceStorage);
+      const id = randomUUID();
+      writtenKeys.push(`${id}/input.${extensionFor(ownPhoto.mime)}`);
+      const created = await createAuthorizedRender({ ...deps, sql }, viewer, { templateSlug: template.slug, aspect: template.aspectDefault ?? '9:16', resolution: '720p', photo: ownPhoto, portraitId: input.portraitId, locale: input.locale, holdForIdentity: true }, id, template);
+      if (!created.ok) return created;
+      const referenceKeys: string[] = [];
+      for (const [index, reference] of references.entries()) {
+        const key = `${id}/product${String.fromCharCode(97 + index)}.jpg`;
+        writtenKeys.push(key); await deps.store.put(key, reference.bytes, reference.mime); referenceKeys.push(key);
+      }
+      return { ...created, referenceKeys };
+    });
+    if (!result.ok && deps.store.delete) for (const key of writtenKeys) { try { await deps.store.delete(key); } catch { /* Retain the original refusal. */ } }
+    return result;
+  } catch (error) {
+    if (deps.store.delete) for (const key of writtenKeys) { try { await deps.store.delete(key); } catch { /* Cleanup cannot replace the original error. */ } }
+    throw error;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -504,14 +551,25 @@ async function renderNow(
       where e.render_ref=$1 and e.dispatch_attempt<$2 and exists(select 1 from render_jobs j where j.id=e.render_ref and j.status='running' and j.attempts=$2) returning e.render_ref`, [job.id, job.attempts, now]);
     if (!dispatch.rows.length) { report.waiting += 1; return; }
   }
+  const referenceUrls = [...fixedVideoReferenceUrls(template.id, deps.siteUrl), ...await campaignRenderReferenceUrls(deps.sql, deps.store, job.id)];
+  const dispatch = await claimCampaignDispatch(deps.sql, job.id, job.attempts, now);
+  if (dispatch.campaign && !dispatch.claimed) { report.waiting += 1; return; }
+  try {
   const started = await startVideoRender(
     { engine: job.engine, prompt: prompt.text, aspect: job.aspect, seconds: prepared?.seconds ?? template.runtimeSeconds ?? 5, photo, assetId,
-      fixedReferenceUrls: fixedVideoReferenceUrls(template.id, deps.siteUrl),
+      fixedReferenceUrls: referenceUrls,
       resolution: renderResolution(job.resolution),
       ...(deps.callbackUrl ? { callbackUrl: deps.callbackUrl } : {}) },
     deps.engines ?? {},
   );
-  await markRenderRunningWithTask(deps.sql, job.id, { provider: 'modelark', taskId: started.taskId });
+  if (dispatch.campaign) await acknowledgeCampaignTask(deps.sql, job.id, started.taskId);
+  else await markRenderRunningWithTask(deps.sql, job.id, { provider: 'modelark', taskId: started.taskId });
+  } catch (error) {
+    if (!dispatch.campaign) throw error;
+    // No blind repeat on a lost API response/DB acknowledgement. Marker keeps the live face asset
+    // and contract capacity reserved until the studio recovers the original task or verifies absence.
+    report.waiting += 1; return;
+  }
   if (assetId !== null) await recordIdentityUse(deps.sql, { userId: job.userId, assetId, now });
   handedOff.add(job.id);
   report.waiting += 1;
@@ -519,6 +577,8 @@ async function renderNow(
 
 async function executeClaimed(deps: RenderPassDeps, job: RenderJob, now: Date, report: RenderPassReport, handedOff: Set<string>): Promise<void> {
   try {
+    const resumed = await resumeCampaignDispatch(deps.sql, job.id);
+    if (resumed.resumed) { handedOff.add(job.id); report.waiting += 1; return; }
     const template = await loadPromptById(deps.sql, job.templateId);
     if (template === null) throw new RenderFailure('engine_error', 'the template no longer exists', false);
     const photo = await readPhoto(deps.store, job);
@@ -539,6 +599,7 @@ async function executeClaimed(deps: RenderPassDeps, job: RenderJob, now: Date, r
 
 async function pollAwaiting(deps: RenderPassDeps, job: RenderJob, now: Date, report: RenderPassReport): Promise<void> {
   if (!job.providerTaskId) return;
+  if (job.providerTaskId.startsWith(CAMPAIGN_DISPATCH_PREFIX)) { report.waiting += 1; return; }
   if (job.providerTaskId.startsWith(ASSET_TASK_PREFIX)) {
     await pollAssetWait(deps, job, job.providerTaskId.slice(ASSET_TASK_PREFIX.length), now, report);
     return;

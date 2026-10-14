@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { syncVerifiedCampaignPost, CampaignPostSyncFailed } from '@/lib/campaigns/production-posts';
 import { z } from 'zod';
 import { parseKstDateTimeLocal } from '@/lib/campaigns/dates';
 import {
@@ -230,20 +231,24 @@ async function reviewTarget(ctx: Parameters<AdminOperation['run']>[0], id: strin
 const select: AdminOperation<z.infer<typeof Review>> = {
   parse: (form) => parsed(Review, { id: f.str(form, 'id'), version: f.str(form, 'version') }),
   async run(ctx, input) {
-    const target = await reviewTarget(ctx, input.id);
-    if (target === null) return fail('notFound', APP_NOT_FOUND);
-    const { app, campaign } = target;
-    if (!canApplicationTransition(app.status, 'selected')) return fail('badTransition', `${app.status} → selected`);
-    // Slots are a promise to the client: the N-th selection past the cap is refused, not queued.
-    const taken = (await loadApplicationsForCampaign(ctx.sql, campaign.id)).filter((a) => holdsSlot(a.status)).length;
-    if (taken >= campaign.slots) return fail('slotsFull', `${taken}/${campaign.slots}`);
-    const moved = await transitionApplication(ctx.sql, app.id, input.version, 'selected', {
-      selectedAt: new Date().toISOString(),
+    let selected: { appId: string; campaign: CampaignRow } | null = null;
+    const outcome = await ctx.sql.transaction(async sql => {
+      const initial = await loadApplicationById(sql, input.id);
+      if (!initial) return fail('notFound', APP_NOT_FOUND);
+      await sql.query('select id from campaigns where id=$1 for update', [initial.campaignId]);
+      const target = await reviewTarget({ ...ctx, sql }, input.id);
+      if (!target) return fail('notFound', APP_NOT_FOUND);
+      const { app, campaign } = target;
+      if (!canApplicationTransition(app.status, 'selected')) return fail('badTransition', `${app.status} → selected`);
+      const taken = (await loadApplicationsForCampaign(sql, campaign.id)).filter(a => holdsSlot(a.status)).length;
+      if (taken >= campaign.slots) return fail('slotsFull', `${taken}/${campaign.slots}`);
+      if (!await transitionApplication(sql, app.id, input.version, 'selected', { selectedAt: new Date().toISOString() })) return fail('staleReview');
+      selected = { appId: app.id, campaign };
+      return ok('selected', { to: adminCampaignPath(campaign.id) });
     });
-    if (!moved) return fail('staleReview');
-    ctx.revalidateCampaigns?.();
-    mailApplicationStatus(ctx, app.id, campaign, 'selected');
-    return ok('selected', { to: adminCampaignPath(campaign.id) });
+    const committed = selected as { appId: string; campaign: CampaignRow } | null;
+    if (committed) { ctx.revalidateCampaigns?.(); mailApplicationStatus(ctx, committed.appId, committed.campaign, 'selected'); }
+    return outcome;
   },
 };
 
@@ -265,22 +270,24 @@ const decline: AdminOperation<z.infer<typeof Review>> = {
 const verify: AdminOperation<z.infer<typeof Review>> = {
   parse: (form) => parsed(Review, { id: f.str(form, 'id'), version: f.str(form, 'version') }),
   async run(ctx, input) {
-    const target = await reviewTarget(ctx, input.id);
-    if (target === null) return fail('notFound', APP_NOT_FOUND);
-    const { app, campaign } = target;
-    if (!canApplicationTransition(app.status, 'verified')) return fail('badTransition', `${app.status} → verified`);
-    if (campaign.payout === null) return fail('notPublishable', 'payout rule');
-    const verifiedAt = new Date();
-    const moved = await transitionApplication(ctx.sql, app.id, input.version, 'verified', {
-      verifiedAt: verifiedAt.toISOString(),
-      holdUntil: holdUntil(verifiedAt, campaign.payout.holdDays).toISOString(),
-      // A flat fee is known now; a view-based one waits for the snapshot at the end of the hold.
-      payoutCents: needsMetrics(campaign.payout) ? null : computePayout(campaign.payout, { views: 0 }).cents,
-    });
-    if (!moved) return fail('staleReview');
-    ctx.revalidateCampaigns?.();
-    mailApplicationStatus(ctx, app.id, campaign, 'verified');
-    return ok('verified', { to: adminCampaignPath(campaign.id) });
+    let verified: { appId: string; campaign: CampaignRow } | null = null;
+    try {
+      const result = await ctx.sql.transaction(async sql => {
+        const target = await reviewTarget({ ...ctx, sql }, input.id);
+        if (!target) return fail('notFound', APP_NOT_FOUND);
+        const { app, campaign } = target;
+        if (!canApplicationTransition(app.status, 'verified')) return fail('badTransition', `${app.status} → verified`);
+        if (!campaign.payout) return fail('notPublishable', 'payout rule');
+        const verifiedAt = new Date();
+        if (!await transitionApplication(sql, app.id, input.version, 'verified', { verifiedAt: verifiedAt.toISOString(), holdUntil: holdUntil(verifiedAt, campaign.payout.holdDays).toISOString(), payoutCents: needsMetrics(campaign.payout) ? null : computePayout(campaign.payout, { views: 0 }).cents })) return fail('staleReview');
+        await syncVerifiedCampaignPost(sql, ctx.viewer, app.id);
+        verified = { appId: app.id, campaign };
+        return ok('verified', { to: adminCampaignPath(campaign.id) });
+      });
+      const committed = verified as { appId: string; campaign: CampaignRow } | null;
+      if (committed) { ctx.revalidateCampaigns?.(); mailApplicationStatus(ctx, committed.appId, committed.campaign, 'verified'); }
+      return result;
+    } catch (e) { if (e instanceof CampaignPostSyncFailed) return fail(e.code); throw e; }
   },
 };
 

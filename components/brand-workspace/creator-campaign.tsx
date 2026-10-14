@@ -1,0 +1,9 @@
+import type { Dictionary } from '@/lib/i18n/dictionaries';
+import type { CampaignParticipation } from '@/lib/campaigns/production';
+import { localize } from '@/lib/i18n/format';
+export function CreatorCampaignProgress({ participation, copy, locale }: { participation: CampaignParticipation[]; copy: Dictionary['brandWorkspace']['creatorCampaign']; locale: string }) {
+  if (!participation.length) return null;
+  const stages = ['selected', 'generated', 'posted', 'verified', 'paid'] as const;
+  const language = locale === 'ko' ? 'ko' : 'en';
+  return <section className="mt-6" data-creator-campaign-progress><h2>{copy.title}</h2><p className="bw-muted">{copy.hint}</p>{participation.map(c => <article key={c.id} className="mt-6"><h3>{localize(c.title, language)}</h3><dl className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">{stages.map(stage => <div key={stage} className="min-w-0 rounded-xl border border-hairline p-4"><dt className="text-xs opacity-60">{copy[stage]}</dt><dd className="mt-2 text-xl font-semibold tabular-nums">{c[stage].toLocaleString(language)}{stage === 'selected' ? ` / ${c.slots.toLocaleString(language)}` : ''}</dd></div>)}</dl>{c.posts.length > 0 && <div className="mt-6"><h4>{copy.posts}</h4><ul className="mt-3 grid gap-3">{c.posts.map(post => <li key={post.id} className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-hairline p-4"><div className="min-w-0"><a href={post.url} target="_blank" rel="noopener noreferrer nofollow" className="break-all text-sm text-accent">{post.url.replace(/^https?:\/\//, '')} ↗</a><p className="mt-1 text-xs opacity-60">{post.status === 'posted' ? copy.unverified : copy.reviewed}</p></div>{post.renderId && <a href={`/api/campaign-production/${post.renderId}/media`} target="_blank" rel="noopener noreferrer" className="bw-button">{copy.video} ↗</a>}</li>)}</ul></div>}</article>)}</section>;
+}

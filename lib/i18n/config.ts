@@ -47,7 +47,7 @@ export const APP_PREFIXES = [
  * login-gated app surface — the apply form (slug in the middle, like the contest entry) and the
  * creator's own `/campaigns/mine`. Anchored at both ends for the same reason as the contest pattern.
  */
-const CAMPAIGN_APPLY_PATTERN = /^\/campaigns\/[^/]+\/apply\/?$/;
+const CAMPAIGN_APPLY_PATTERN = /^\/campaigns\/[^/]+\/(?:apply|make)\/?$/;
 const MY_CAMPAIGNS_PATTERN = /^\/campaigns\/mine\/?$/;
 
 export function isCampaignAppPath(pathname: string): boolean {

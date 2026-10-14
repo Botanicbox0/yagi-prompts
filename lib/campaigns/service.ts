@@ -6,6 +6,7 @@ import {
   loadApplication,
   loadApplicationsByCreator,
   loadCampaignById,
+  loadCampaignsByIds,
   loadCampaignBySlug,
   loadCampaignCounts,
   recordApplicationWrite,
@@ -27,6 +28,8 @@ import {
 import { acceptsApplications, acceptsPosts, isCampaignPublic } from './state';
 import { toCampaignCard, type CampaignCard } from './catalog';
 import { loadProfileSnsUrl, saveProfileSnsUrl } from '@/lib/contests/repo';
+import { loadCreatorProduction, loadCreatorProductions, type CreatorProduction } from './production';
+import { normalizeBrandPostUrl } from '@/lib/brands/workspace/schemas';
 
 /** A creator receives their participation terms, never the brand's internal budget row. */
 export type CreatorCampaign = CampaignCard & Pick<CampaignRow, 'payout'>;
@@ -158,6 +161,7 @@ export type PostFailure =
   | { code: 'not_selected' }
   | { code: 'not_open' }
   | { code: 'wrong_platform' }
+  | { code: 'production_required' }
   | { code: 'invalid'; detail: string };
 
 export type PostOutcome = { ok: true } | ({ ok: false } & PostFailure);
@@ -179,6 +183,9 @@ export async function submitCampaignPost(
   const campaign = await loadCampaignById(deps.sql, mine.campaignId);
   if (campaign === null) return { ok: false, code: 'not_found' };
   if (!acceptsPosts(campaign, deps.now ?? Date.now())) return { ok: false, code: 'not_open' };
+  const production = await loadCreatorProduction(deps.sql, viewer.userId, mine.id, new Date(deps.now ?? Date.now()));
+  if (production?.requiresProduction && production.job?.status !== 'succeeded') return { ok: false, code: 'production_required' };
+  if (production?.requiresProduction && !normalizeBrandPostUrl(parsed.data.postUrl)) return { ok: false, code: 'invalid', detail: 'A full HTTPS post URL is required.' };
   // The link must belong to one of the platforms the brief named — checked by host, before a
   // reviewer ever opens it.
   const platform = platformOfUrl(parsed.data.postUrl);
@@ -215,6 +222,7 @@ export async function reportCampaignViews(
 // ---------------------------------------------------------------------------
 
 export interface MyCampaign {
+  production: CreatorProduction | null;
   application: ApplicationRow;
   campaign: CreatorCampaign;
   canPost: boolean;
@@ -225,13 +233,17 @@ export async function loadMyCampaigns(deps: CampaignServiceDeps, userId: string)
   const applications = await loadApplicationsByCreator(deps.sql, userId);
   const now = deps.now ?? Date.now();
   const out: MyCampaign[] = [];
+  const rows = await loadCampaignsByIds(deps.sql, [...new Set(applications.map(a => a.campaignId))]);
+  const campaigns = new Map(rows.map(c => [c.id, c]));
+  const production = await loadCreatorProductions(deps.sql, userId, applications.map(a => a.id), new Date(now));
   for (const application of applications) {
-    const campaign = await loadCampaignById(deps.sql, application.campaignId);
-    if (campaign === null) continue;
+    const campaign = campaigns.get(application.campaignId);
+    if (!campaign) continue;
     out.push({
+      production: production.get(application.id) ?? null,
       application,
       campaign: creatorCampaign(campaign),
-      canPost: (application.status === 'selected' || application.status === 'rejected') && acceptsPosts(campaign, now),
+      canPost: (application.status === 'selected' || application.status === 'rejected') && acceptsPosts(campaign, now) && (!production.get(application.id)?.requiresProduction || production.get(application.id)?.job?.status === 'succeeded'),
       canReportViews: application.status === 'posted' || application.status === 'verified',
     });
   }

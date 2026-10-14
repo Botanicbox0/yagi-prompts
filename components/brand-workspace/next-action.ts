@@ -21,7 +21,7 @@ export interface NextAction {
  * `null` means there is nothing to prompt (cancelled, or the requested note already says it).
  */
 export function projectNextAction(
-  p: Pick<BrandProjectDetail, "status" | "contents" | "posts" | "reports">,
+  p: Pick<BrandProjectDetail, "status" | "contents" | "posts" | "reports"> & Partial<Pick<BrandProjectDetail, 'participation'>>,
   audience: NextActionAudience,
   b: Copy,
 ): NextAction | null {
@@ -42,6 +42,7 @@ export function projectNextAction(
   }
 
   // Active.
+  if (p.participation?.length && pending === 0) return { kind: 'creator-production', text: t.creatorProduction, href: '#performance', label: b.creatorCampaign.title };
   if (pending > 0) {
     if (studio) return { kind: "review", text: interpolate(t.studioAwaitingReview, { count: pending }), href: "#review", label: b.review };
     return { kind: "review", text: interpolate(audience === "approver" ? b.performance.reviewAction : t.readerReview, { count: pending }), href: "#review", label: b.review };
