@@ -5,7 +5,8 @@ import { isLocale } from '@/lib/i18n/config';
 import { TwingsMark } from '@/components/brand/twings-mark';
 
 export const dynamic = 'force-dynamic';
-export const metadata: Metadata = { robots: { index: false, follow: false }, referrer: 'no-referrer' };
+// Keep Origin on the same-origin form POST; do not send referrers to other sites.
+export const metadata: Metadata = { robots: { index: false, follow: false }, referrer: 'same-origin' };
 export default async function ReviewLogin({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const params = await searchParams;
   const locale = isLocale(params.locale) ? params.locale : await getRequestLocale();
