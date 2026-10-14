@@ -9,3 +9,5 @@ do $$ declare t text; begin
 end $$;
 revoke all on function platform_immutable() from public,anon,authenticated;
 revoke all on function platform_private_format() from public,anon,authenticated;
+alter function platform_immutable() set search_path=public,pg_temp;
+alter function platform_private_format() set search_path=public,pg_temp;

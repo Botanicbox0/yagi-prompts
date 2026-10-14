@@ -1,7 +1,8 @@
 -- Server-owned subscription render requests and bounded edit preparation. Cloud application is
 -- a separate operator step. No browser role gets the recipe, request text or private image keys.
-alter table render_jobs add column provider_completion_tokens bigint check (provider_completion_tokens is null or provider_completion_tokens >= 0);
-alter table render_jobs add column cost_source text check (cost_source is null or cost_source in ('provider_usage','estimate'));
+-- 0046 may be released independently before these subscription features.
+alter table render_jobs add column if not exists provider_completion_tokens bigint check (provider_completion_tokens is null or provider_completion_tokens >= 0);
+alter table render_jobs add column if not exists cost_source text check (cost_source is null or cost_source in ('provider_usage','estimate'));
 create table creator_subscription_renders (
   render_ref uuid primary key references render_jobs(id),
   user_id uuid not null references profiles(id),

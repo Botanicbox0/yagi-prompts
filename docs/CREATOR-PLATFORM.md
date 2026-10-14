@@ -35,9 +35,9 @@ Moderation excludes duplicate/abusive/fraudulent ratings with reason, actor and 
 
 ## Face-photo funnel
 
-Show eye-level, front-facing, one-person examples before upload and keep them visible on retry. After selection, ask explicit checks: face is straight, camera is at eye height, eyes/nose/mouth are visible. Show a large preview before the limited generation attempt is spent. Explain that a high-angle selfie can change facial proportions. Never promise generated normalization can reconstruct unseen features reliably.
+Show eye-level, front-facing, one-person examples before upload and keep them visible on retry. A self-hosted, version-pinned MediaPipe Face Landmarker runs in a disposable browser worker after file selection. No pixels or landmarks are transmitted for assessment. The SDK's built-in usage telemetry is blocked before fetch; a worker-specific CSP restricts connections and scripts to this origin as a second boundary. The model is SHA-256 checked at build time; runtime files come from the exact lockfile version. The worker resizes to 1024 pixels, closes resources, and is terminated on file change, navigation or a 15-second timeout.
 
-Next measurement stage: locally execute a pinned [MediaPipe Face Landmarker](https://developers.google.com/edge/mediapipe/solutions/vision/face_landmarker/web_js) model for face count, orientation, coverage and blur hints. Calibrate thresholds with consented diverse photos and measure false rejections/device speed before enforcing hard pose gates. Browser inference is guidance, not identity/security evidence. Keep provider moderation and identity checks unchanged. No face image is sent to a new vendor simply to score it.
+Owner decision on 2026-10-15: face-angle assessment is **advisory only**. Angle, missing/multiple face, loading and unavailable states never disable submission. The customer may continue with the selected photo after the existing rights consent. No second override checkbox is required. Existing provider moderation and identity verification stay mandatory. Broad yaw/pitch/roll hints (20/25/15 degrees) are engineering heuristics, not calibrated measurements or approval of identity. Validate diverse consented photos/device performance before tuning; never turn these thresholds into a submission gate without a new owner decision.
 
 ## Security model and rollout
 
@@ -45,7 +45,7 @@ Public HTML, JavaScript and media can be copied. Zero scraping is impossible. Pr
 
 Use explicit DTO allowlists, server-only boundaries, default-deny RLS and no direct browser table privileges. Bind mutations to the session, same-origin requests and strict bounded payloads. Serialize per-user quotas and money operations in database transactions. Use CSP/secure headers where compatible, short-lived private media access, redacted errors and tests that attempt cross-account reads and forbidden property injection. Preserve SEO for public catalog pages; apply abuse controls to expensive authenticated operations.
 
-Release independently: (1) photo guidance and leak regression checks; (2) private requests and verified ratings; (3) invited creator submission and admin review; (4) image reward pilot after commercial/terms approval; (5) royalties and global expansion after accounting/contract verification. New schema needs cloud application by owner/Director. Preview must fail closed when schema/flags are absent. Never enable real-money behavior from a client flag.
+Release independently: (1) photo guidance and leak regression checks; (2) private requests and verified ratings; (3) invited creator submission and admin review; (4) image reward pilot after commercial/terms approval; (5) royalties and global expansion after accounting/contract verification. The owner authorized cloud application and deployment on 2026-10-15; migration 0046 + 0131 was applied as one transaction. Preview must fail closed when schema/flags are absent. Never enable real-money behavior from a client flag.
 
 ## Acceptance evidence
 
@@ -55,7 +55,7 @@ The [security selection report](SECURITY-RESEARCH-2026-10-15.md) records the dai
 
 ## Operator activation contract
 
-1. Owner/Director applies `0046_core_creator_platform.sql` and `0131_glue_creator_platform.sql` after their main-branch prerequisites. Executor has not applied either to Supabase.
+1. Applied `0046_core_creator_platform.sql` and `0131_glue_creator_platform.sql` to Supabase on 2026-10-15 (owner authorized) on the verified cloud baseline. 0046 also supplies the two shared render cost fields without opening the separately staged subscription features; 0043 tolerates these existing fields when it is applied later. The owner explicitly authorized cloud application and deployment on 2026-10-15.
 2. `TWINGS_COMMUNITY=on` opens private requests and verified ratings; `TWINGS_FORMAT_CREATORS=on` opens supplier submissions for explicitly approved accounts. Both default off. `/admin/community` uses the existing admin role and `/admin/do` operation registry.
 3. Approve a supplier's contract version before granting permission. Accepting a format creates a pending catalog entry. Complete media, translations, engine/price and QA through the existing editor before publication. The DB refuses disclosure or reassignment of an accepted private recipe.
 4. Before rewards, approve country eligibility, credit denomination, cap, expiry/retention, account closure, incentive disclosure and legal wording. Register the immutable initial policy and a measured studio-owned image offer through admin. No such policy or amounts are seeded in production. Changes to an already active denomination need a separate migration/version plan, not editing historical grants.

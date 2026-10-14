@@ -32,9 +32,16 @@
     "ark:assets:smoke": "tsx scripts/ark-assets-smoke.ts",
     "ark:virtual:smoke": "tsx scripts/ark-virtual-smoke.ts",
     "image:smoke": "tsx scripts/image-smoke.ts",
-    "subscription:readiness": "tsx scripts/subscription-readiness.ts"
+    "subscription:readiness": "tsx scripts/subscription-readiness.ts",
+    "predev": "node scripts/prepare-face-assets.mjs",
+    "prebuild": "node scripts/prepare-face-assets.mjs",
+    "prebuild:local": "node scripts/prepare-face-assets.mjs",
+    "predev:free": "node scripts/prepare-face-assets.mjs",
+    "predev:pro": "node scripts/prepare-face-assets.mjs",
+    "predev:admin": "node scripts/prepare-face-assets.mjs"
   },
   "dependencies": {
+    "@mediapipe/tasks-vision": "1.1.0",
     "@supabase/ssr": "0.12.4",
     "@supabase/supabase-js": "2.112.3",
     "gsap": "3.15.0",

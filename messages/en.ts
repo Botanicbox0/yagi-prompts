@@ -300,6 +300,9 @@ export const en = {
     }
   },
   portrait: {
+    photoAdvice: {"checking":"Checking the angle. You can submit without waiting.","ready":"Your face appears close to straight on. Check the likeness after generation.","angle":"Your face may be tilted or photographed from above, below or the side. A straight-on photo at eye level may work better.","noFace":"We could not clearly find a face. You can choose another photo or submit this one.","multipleFaces":"There may be more than one face. We recommend a photo of just you, but you can still submit.","unavailable":"The automatic check could not finish. You can check the photo yourself and submit."},
+    photoAdvisoryHint: "This is only guidance. Analysis happens on your device and its results are not stored. Your consent and provider checks still apply.",
+    continuePhoto: "Continue with this photo",
     photoCheckTitle: 'Before you use a free attempt',
     photoCheckHint: 'A selfie taken from above can change the proportions of your face. Choose a photo taken at eye level; both eyes should be visible and level.',
     checkFront: 'My face looks straight at the camera, not to the side.',

@@ -1,4 +1,7 @@
 -- CLOUD APPLICATION REQUIRED. Closed-by-default feature flags; no prices, grants or creators seeded.
+-- Shared accounting fields can ship before the separately gated 0042-0045 subscription release.
+alter table render_jobs add column if not exists provider_completion_tokens bigint check (provider_completion_tokens is null or provider_completion_tokens >= 0);
+alter table render_jobs add column if not exists cost_source text check (cost_source is null or cost_source in ('provider_usage','estimate'));
 create table platform_creators (
  user_id uuid primary key references profiles on delete cascade,
  active boolean not null default false,

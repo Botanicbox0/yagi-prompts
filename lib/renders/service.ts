@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { reserveRewardImage, reconcileRewards } from '@/lib/creator-platform/rewards';
 import { demand } from '@/lib/creator-platform/contract';
+import { platformReady } from '@/lib/creator-platform/service';
 import { reserveCampaignProduction, type CampaignProductionCode } from '@/lib/campaigns/production';
 import { campaignProductReferences, campaignRenderReferenceUrls } from '@/lib/campaigns/production-references';
 import { claimCampaignDispatch, acknowledgeCampaignTask, resumeCampaignDispatch, CAMPAIGN_DISPATCH_PREFIX } from '@/lib/campaigns/production-dispatch';
@@ -680,7 +681,7 @@ async function finish(deps: RenderPassDeps, job: RenderJob, output: EngineOutput
       shareExpiresAt: shareExpiresAt(now),
       finishedAt: now,
     });
-    if (deps.subscriptionSchemaReady) await sql.query('update render_jobs set provider_completion_tokens=$2,cost_source=$3 where id=$1', [job.id, output.completionTokens ?? null, output.costSource ?? (output.costUsd === null ? null : 'estimate')]);
+    if (deps.subscriptionSchemaReady || await platformReady(sql)) await sql.query('update render_jobs set provider_completion_tokens=$2,cost_source=$3 where id=$1', [job.id, output.completionTokens ?? null, output.costSource ?? (output.costUsd === null ? null : 'estimate')]);
     if (deps.subscriptionSchemaReady) await settleSubscriptionUsage(sql, job.id, 'completed');
   });
 }
