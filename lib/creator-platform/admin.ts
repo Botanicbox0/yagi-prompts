@@ -55,10 +55,13 @@ export async function administerPlatform(sql:SqlRunner,viewer:Viewer,raw:unknown
    await tx.query('insert into platform_quality(template_id,score) values($1,$2) on conflict(template_id) do update set score=excluded.score,updated_at=now()',[input.id,input.score]);
   } else if(input.action==='settle') {
    // Current paid provider is KRW-only. Global currencies need their own verified order adapters.
-   const {rows}=await tx.query<{payment_id:string;amount_krw:number;cost_usd:string|null;cost_source:string|null;creator_id:string|null}>(`select p.id payment_id,p.amount_krw,j.cost_usd,j.cost_source,f.user_id creator_id from render_jobs j
+   const {rows}=await tx.query<{payment_id:string;amount_krw:number;cost_usd:string|null;cost_source:string|null;attempts:number;creator_id:string|null}>(`select p.id payment_id,p.amount_krw,j.cost_usd,j.cost_source,j.attempts,f.user_id creator_id from render_jobs j
     join billing_payments p on p.render_id=j.id left join platform_formats f on f.template_id=j.template_id and f.status='accepted'
     where j.id=$1 and j.status='succeeded' and p.status='paid' and p.environment='live' and p.payment_type='NORMAL' for update of p`,[input.id]);
    demand(rows.length,'not_eligible');const row=rows[0]!;demand(row.cost_source==='provider_usage'&&row.cost_usd!==null&&Number.isFinite(Number(row.cost_usd)),'cost_pending');
+   // The render row records the final result's cost, not every possibly billable retry.
+   // Keep retry jobs pending until a complete per-attempt invoice adapter exists.
+   demand(row.attempts===1,'cost_pending');
    const existing=await tx.query('select render_id from platform_settlements where render_id=$1',[input.id]);demand(!existing.rows.length,'already_settled');
    demand(input.tax+input.fees<=row.amount_krw);
    const cost=Math.ceil(Number(row.cost_usd)*input.fx),split=marginSplit({revenue:row.amount_krw,tax:input.tax,fees:input.fees,providerCost:cost,creator:!!row.creator_id});

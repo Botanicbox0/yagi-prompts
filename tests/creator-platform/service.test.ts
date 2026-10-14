@@ -19,7 +19,7 @@ describe('private creator platform against PostgreSQL',()=>{
  afterAll(async()=>{await h?.close();});
  async function render(template:string,medium:'image'|'video') {
   const id=randomUUID();await insertRenderJob(h.sql,{id,userId:user.userId!,templateId:template,templateSlug:'neon-alley-dolly',medium,engine:medium==='image'?'gpt-image-2':'seedance-2.0',aspect:'9:16',locale:'ko',inputKey:null,inputMime:null});
-  await h.sql.query("update render_jobs set status='succeeded',cost_usd=1,cost_source='provider_usage',result_key='test/result.png',result_mime='image/png',share_token=id::text,share_expires_at=now()+interval '1 day',finished_at=now() where id=$1",[id]);return id;
+  await h.sql.query("update render_jobs set status='succeeded',attempts=1,cost_usd=1,cost_source='provider_usage',result_key='test/result.png',result_mime='image/png',share_token=id::text,share_expires_at=now()+interval '1 day',finished_at=now() where id=$1",[id]);return id;
  }
  it('enforces auth, closed flags, strict properties, private conversations and replay',async()=>{
   const input={action:'request',requestId:randomUUID(),message:'A rainy city portrait please',reference:''};
@@ -69,7 +69,11 @@ describe('private creator platform against PostgreSQL',()=>{
   const claim=await submitPlatform(h.sql,user,{action:'claim',renderId,url:'https://instagram.com/reel/reward123/',ownership:true,disclosure:true},access);
   const approval={action:'claim',id:claim.id,decision:'approve',ownership:true,content:true,disclosure:true,reason:'Post account, content and disclosure verified'};
   await expect(administerPlatform(h.sql,ADMIN_VIEWER,approval)).rejects.toThrow('cost_pending');
-  await administerPlatform(h.sql,ADMIN_VIEWER,{action:'settle',id:renderId,tax:900,fees:300,fx:1000,reason:'Actual provider invoice and PG fee evidence'});
+  const settlement={action:'settle',id:renderId,tax:900,fees:300,fx:1000,reason:'Actual provider invoice and PG fee evidence'};
+  await h.sql.query('update render_jobs set attempts=2 where id=$1',[renderId]);
+  await expect(administerPlatform(h.sql,ADMIN_VIEWER,settlement)).rejects.toThrow('cost_pending');
+  await h.sql.query('update render_jobs set attempts=1 where id=$1',[renderId]);
+  await administerPlatform(h.sql,ADMIN_VIEWER,settlement);
   await administerPlatform(h.sql,ADMIN_VIEWER,{action:'policy',version:'test-v1',costPerCredit:1000,cap:100,termsVersion:'test-terms',reason:'Test only approved terms'});
   await administerPlatform(h.sql,ADMIN_VIEWER,approval);await administerPlatform(h.sql,ADMIN_VIEWER,approval);
   expect((await platformHome(h.sql,user)).balance).toBe(7);

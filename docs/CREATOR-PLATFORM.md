@@ -63,4 +63,6 @@ The [security selection report](SECURITY-RESEARCH-2026-10-15.md) records the dai
 6. Verify actual usage-cost reporting and payment evidence, then record the order settlement before approving its SNS claim. Keep the claim pending if any cost or evidence is missing. Disable an image offer when its provider pricing changes; editing the template invalidates its existing fingerprint. A policy cost budget is not an external provider spending limit.
 7. Review creator accruals and refunds before manually controlled payouts. Bank transfer, global-currency order adapters, subscription revenue attribution, minimum payout, reserves and tax/KYC are not implemented by this pilot.
 
+Jobs without provider-usage cost evidence, and jobs with multiple execution attempts, remain `cost_pending`: the current render row does not establish every possibly billable retry's total cost. Some image providers currently report estimates only. A complete invoice/per-attempt cost adapter is required before those jobs can earn rewards or finalize royalty accruals.
+
 No new outbound email or SNS posting is part of this feature. The feature is intentionally staged behind the above gates; enabling it is not an automatic consequence of merging this branch.
