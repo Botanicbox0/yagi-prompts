@@ -6,6 +6,7 @@
 - 에이전트 규칙: [AGENTS.md](AGENTS.md)
 - 작업 폴더·브랜치 구분: [docs/WORKSPACE.md](docs/WORKSPACE.md)
 - 제품 결정: [docs/TEMPLATES-IA.md](docs/TEMPLATES-IA.md), [docs/CAMPAIGNS.md](docs/CAMPAIGNS.md), 브랜드 2차 활용 [docs/SECONDARY-USAGE.md](docs/SECONDARY-USAGE.md)
+- YAGI-SERVER 개발 이관: [docs/SERVER-HANDOFF.md](docs/SERVER-HANDOFF.md)
 - 배포: `twings.app` · `brand.twings.app` · `admin.twings.app`
 - 공개 이용자 동선: [브랜드·크리에이터 진입 분리](docs/AUDIENCE-RENOVATION.md), [브랜드 문의 Slack 운영](docs/BRAND-INQUIRY-DELIVERY.md)
 

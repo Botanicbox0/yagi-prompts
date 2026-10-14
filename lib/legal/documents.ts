@@ -85,7 +85,7 @@ export function isLegalDoc(value: string): value is LegalDoc {
 }
 
 /** The effective date printed on every document. Bump it whenever the text below changes. */
-export const LEGAL_EFFECTIVE = '2026-09-14';
+export const LEGAL_EFFECTIVE = '2026-10-14';
 
 /** Stated once, used by the terms, the refund policy and the privacy policy alike. */
 const SHARE_LINK_DAYS = 3;
@@ -267,15 +267,17 @@ TWINGS의 유료 상품은 **템플릿 한 편당 한 번 결제**하는 맞춤 
 
 ## 4. 결과물에 명백한 하자가 있는 경우
 
-올린 얼굴이 반영되지 않았거나 영상이 재생되지 않는 등 명백한 하자가 있으면, 결과물을 받은 날로부터 7일 이내에 요청하실 때 **무상 재생성 1회 또는 전액 환불** 중 하나로 처리합니다.
+올린 얼굴이 반영되지 않았거나 영상이 재생되지 않는 등 명백한 하자가 있으면, 결과물을 받은 날로부터 7일 이내에 요청하시면 **무상 재생성 1회 또는 전액 환불** 중 하나로 처리합니다.
+
+표시·광고 내용과 다르거나 계약대로 제공되지 않은 경우에는 전자상거래법 제17조 제3항에 따른 청약철회 기간(공급받은 날부터 3개월, 그 사실을 안 날 또는 알 수 있었던 날부터 30일)을 적용합니다. 위 7일 안내가 법령에 따른 권리를 제한하지는 않습니다.
 
 ## 5. 환불되지 않는 경우
 
 - 완성된 결과물이 정상적으로 제공된 뒤의 단순 변심 (예시 영상과 분위기가 다르다는 이유 등)
 - 이용약관 제5조·제7조를 위반하여 이용이 제한된 경우
-- 결제일로부터 7일이 지난 경우
+- 청약철회 기간이 지난 뒤 정상적으로 제공된 결과물에 대한 단순 변심
 
-이 경우에는 환불되지 않습니다.
+위 사유에 따른 단순 변심은 환불되지 않습니다. 다만 서비스의 하자나 표시·광고 및 계약 내용과 다른 제공에 대한 법령상 청약철회·환불 권리는 별도로 적용됩니다.
 
 ## 6. 서비스 종료 시
 
@@ -283,7 +285,7 @@ TWINGS의 유료 상품은 **템플릿 한 편당 한 번 결제**하는 맞춤 
 
 ## 7. 환불 신청 방법
 
-${BUSINESS.email} 로 **결제하신 이메일 주소와 결제 일시**를 적어 보내주세요. 영업일 기준 3일 이내에 회신하고, 확인 후 3영업일 이내에 결제 수단으로 환불합니다. 카드 결제의 경우 카드사 사정에 따라 취소 반영까지 추가 시간이 소요될 수 있습니다.`;
+${BUSINESS.email} 로 **결제하신 이메일 주소와 결제 일시**를 적어 보내주세요. 영업일 기준 3일 이내에 회신합니다. 법령상 청약철회가 가능한 경우에는 청약철회 의사를 전달한 날부터 3영업일 이내에 원래 결제 수단으로 환불합니다. 카드사에 취소 내역이 반영되기까지는 추가 시간이 걸릴 수 있습니다.`;
 
 const REFUND_EN = `## 1. What is sold
 
@@ -305,13 +307,15 @@ If no result is produced for reasons on the Company's or the AI model's side (yo
 
 If your face is not reflected, the film does not play, or the result is otherwise plainly defective, ask within 7 days of receiving it and you get **one free re-render or a full refund**, your choice.
 
+If delivery differs from the advertised or agreed terms, the withdrawal periods in Article 17(3) of the same Act apply: within 3 months of delivery or within 30 days of when you learned or could have learned of the problem. The 7-day service remedy above does not limit statutory rights.
+
 ## 5. When a refund is not available
 
 - A change of mind after a completed result has been delivered (for example, that the mood differs from the sample).
 - Access was restricted for conduct prohibited under sections 5 and 7 of the Terms.
-- More than 7 days have passed since payment.
+- A change of mind about a properly delivered result after the applicable withdrawal period.
 
-These cases are not refundable.
+These changes of mind are not refundable. Statutory withdrawal and refund rights for defects or delivery that differs from the advertised or agreed terms still apply.
 
 ## 6. If the Service closes
 
@@ -319,7 +323,7 @@ If the Company discontinues the Service, every paid result that has not been com
 
 ## 7. How to request one
 
-Email ${BUSINESS.email} with **the address you paid from and the date of the payment**. We reply within 3 business days and refund to the original payment method within 3 business days of confirming. Card refunds may take additional time to appear, depending on the issuer.`;
+Email ${BUSINESS.email} with **the address you paid from and the date of the payment**. We reply within 3 business days. Where statutory withdrawal applies, we refund the original payment method within 3 business days of receiving your withdrawal. Your card issuer may take additional time to display the cancellation.`;
 
 // ---------------------------------------------------------------------------
 // 개인정보처리방침 / Privacy
