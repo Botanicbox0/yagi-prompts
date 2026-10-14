@@ -4,6 +4,11 @@ import { describe, expect, it } from 'vitest';
 import { MIGRATIONS_DIR, coreMigrationFiles, freshDb, glueMigrationFiles } from '../helpers/pglite';
 
 describe('migrations apply on a fresh database (PLAN §6)', () => {
+  it('has a unique migration version for cloud application', () => {
+    const versions = [...coreMigrationFiles(), ...glueMigrationFiles()].map(file => file.split('_')[0]);
+    expect(new Set(versions).size).toBe(versions.length);
+  });
+
   it('splits into core (PGlite-testable) and supabase-glue files', () => {
     expect(coreMigrationFiles().length).toBeGreaterThan(0);
     expect(glueMigrationFiles().length).toBeGreaterThan(0);
@@ -66,6 +71,8 @@ describe('migrations apply on a fresh database (PLAN §6)', () => {
       // entries use for the daily cap.
       'campaign_application_writes',
       'campaign_applications',
+      'campaign_productions',
+      'campaign_render_jobs',
       'campaigns',
       // §14.1 (M9) — the contests pivot's three new tables. Atomic like `prompt_items`: no
       // revisions, no manifest, no constraint triggers. `contest_entry_writes` is the append-only

@@ -72,6 +72,7 @@ export function adminRouteAllowed(pathname: string, method: string): boolean {
   const read = method === 'GET' || method === 'HEAD';
   if (AUTH_METHODS[pathname]?.includes(method)) return true;
   if (pathname === '/api/workspace-locale') return method === 'POST';
+  if (/^\/api\/campaign-production\/[a-f0-9-]+\/media$/.test(pathname)) return read;
   if (pathname === '/admin/do') return method === 'POST';
   if (isAdminPath(pathname)) return read;
   if (pathname === '/api/admin/staging-url') return method === 'POST';
@@ -98,6 +99,7 @@ const STUDIO_DEMO_FILES = new Set(
 
 export function brandRouteAllowed(pathname: string, method: string): boolean {
   const read = method === 'GET' || method === 'HEAD';
+  if (/^\/api\/campaign-production\/[a-f0-9-]+\/media$/.test(pathname)) return read;
   if (AUTH_METHODS[pathname]?.includes(method)) return true;
   if (pathname === '/api/workspace-locale') return method === 'POST';
   if (isBrandPath(pathname)) return read;

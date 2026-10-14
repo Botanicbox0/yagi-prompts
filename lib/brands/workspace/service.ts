@@ -1,5 +1,6 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { withHomeOverview } from './home-overview';
+import { loadCampaignParticipation } from '@/lib/campaigns/production';
 import { z } from 'zod';
 import type { Viewer } from '@/lib/auth/identity';
 import type { SqlRunner } from '@/lib/db/sql-runner';
@@ -222,7 +223,7 @@ async function detail(sql: SqlRunner, row: Row): Promise<BrandProjectDetail> {
   }));
   const contractUploads = row.member_role === 'studio' ? (await scoped('brand_attachments', "and status='ready' and access_scope='contract' and id not in (select attachment_id from brand_contract_documents) order by created_at desc")).map(r=>({id:String(r.id),name:String(r.name),mime:String(r.mime),sizeBytes:Number(r.size_bytes),createdAt:stamp(r.created_at)})) : [];
   const references = z.array(z.object({ url: z.string(), note: z.string() })).parse(row.reference_links);
-  return { ...summary(row), role: row.member_role as BrandProjectDetail['role'], canComment: row.can_comment === true, referenceLinks: references, contracts, contractUploads, contents, decisions, messages, attachments, posts, reports };
+  return { ...summary(row), role: row.member_role as BrandProjectDetail['role'], canComment: row.can_comment === true, referenceLinks: references, contracts, contractUploads, contents, decisions, messages, attachments, posts, reports, participation: await loadCampaignParticipation(sql, String(row.id)) };
 }
 
 /**
@@ -297,6 +298,12 @@ async function loadProject(deps: BrandWorkspaceDeps, viewer: Viewer, id: string,
 }
 export const loadBrandProject = (deps: BrandWorkspaceDeps, viewer: Viewer, id: string) => loadProject(deps, viewer, id, false);
 export const loadStudioProject = (deps: BrandWorkspaceDeps, viewer: Viewer, id: string) => loadProject(deps, viewer, id, true);
+/** Lightweight current authorization for output media; does not load reports/attachments/contents. */
+export async function canReadBrandProject(deps: BrandWorkspaceDeps, viewer: Viewer, id: string): Promise<boolean> {
+  if (!uuid(viewer.userId) || !uuid(id)) return false;
+  try { return await deps.sql.transaction(async sql => { await readableProject(sql, viewer.userId!, id, deps.verifiedEmail); return true; }); }
+  catch (error) { if (error instanceof Denied) return false; throw error; }
+}
 
 export async function createBrandOrganization(deps: BrandWorkspaceDeps, viewer: Viewer, input: unknown): Promise<BrandOutcome> {
   return mutation(deps, viewer, BrandOrganizationSchema, input, async (sql, userId, v) => {

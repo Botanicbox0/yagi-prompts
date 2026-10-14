@@ -49,6 +49,9 @@ export function campaignRest(slug: string): string {
 export function campaignApplyPath(slug: string): string {
   return `${CAMPAIGNS_REST}/${encodeURIComponent(slug)}/apply`;
 }
+export function campaignMakePath(slug: string): string {
+  return `${CAMPAIGNS_REST}/${encodeURIComponent(slug)}/make`;
+}
 
 export function adminCampaignPath(id: string): string {
   return `${ADMIN_CAMPAIGNS_PATH}/${encodeURIComponent(id)}`;

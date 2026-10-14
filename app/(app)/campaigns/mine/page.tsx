@@ -7,7 +7,8 @@ import { formatCampaignDateTime } from '@/lib/campaigns/dates';
 import { signInHref } from '@/lib/billing/links';
 import { loadMyCampaigns } from '@/lib/campaigns/service';
 import { payoutSentence } from '@/lib/campaigns/copy';
-import { MY_CAMPAIGNS_PATH, campaignHref, campaignsHref } from '@/lib/campaigns/links';
+import { MY_CAMPAIGNS_PATH, campaignHref, campaignsHref, campaignMakePath } from '@/lib/campaigns/links';
+import { renderHref } from '@/lib/renders/share';
 import { applicationStep, formatWon } from '@/lib/campaigns/state';
 import { URL_MAX } from '@/lib/campaigns/schemas';
 import { AppHeader } from '@/components/app/app-header';
@@ -45,6 +46,8 @@ export default async function MyCampaignsPage({ searchParams }: { searchParams?:
     if (ok === 'posted') return c.postSaved;
     if (ok === 'views') return c.viewsSaved;
     switch (err) {
+      case 'production_required':
+        return c.production.errors.production_required;
       case 'sign_in_required':
         return c.errSignIn;
       case 'wrong_platform':
@@ -90,7 +93,7 @@ export default async function MyCampaignsPage({ searchParams }: { searchParams?:
           </div>
         ) : (
           <ul className="mt-10 flex flex-col gap-6">
-            {mine.map(({ application, campaign, canPost, canReportViews }) => {
+            {mine.map(({ application, campaign, canPost, canReportViews, production }) => {
               const step = applicationStep(application.status);
               const title = localize(campaign.title, locale);
               return (
@@ -124,6 +127,15 @@ export default async function MyCampaignsPage({ searchParams }: { searchParams?:
                     </p>
                   )}
 
+                  {production && <div data-campaign-production className="mt-6 rounded-xl border border-hairline p-5">
+                    <p className="text-sm opacity-70">{c.production.sponsored}</p>
+                    <div className="mt-3 flex flex-wrap gap-3">
+                      {production.canCreate && <a href={campaignMakePath(campaign.slug)} className="rounded-full bg-accent px-5 py-3 text-sm text-white">{c.production.create} →</a>}
+                      {production.job && <a href={renderHref(production.job.id)} className="rounded-full border border-current px-5 py-3 text-sm">{c.production.result} · {c.production.states[production.job.status as keyof typeof c.production.states]} →</a>}
+                    </div>
+                    {!production.canCreate && !production.job && <p className="mt-3 text-sm opacity-60">{c.production.errors[production.blockedReason as keyof typeof c.production.errors] ?? c.production.unavailable}</p>}
+                    {production.job?.status === 'failed' && !production.canCreate && <p className="mt-3 text-sm opacity-60">{c.production.retryPending}</p>}
+                  </div>}
                   {canPost && (
                     <form action={submitPostAction} data-post-form className="mt-6 flex flex-col gap-3 border-t border-hairline pt-5">
                       <input type="hidden" name="id" value={application.id} />

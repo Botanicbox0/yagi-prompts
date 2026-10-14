@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest, NextResponse } from 'next/server';
-import { adminRouteAllowed, authReturnPath, resolveRequestUrl, resolveSurface } from '@/lib/routing/surfaces';
+import { adminRouteAllowed, brandRouteAllowed, authReturnPath, resolveRequestUrl, resolveSurface } from '@/lib/routing/surfaces';
 import { normalizeReturnPath, safeReturnPath } from '@/lib/auth/return-path';
 
 const session = vi.hoisted(() => ({ user: null as { id: string } | null, calls: 0 }));
@@ -12,6 +12,10 @@ vi.mock('@/lib/auth/dev-identity', () => ({ devIdentityUserId: () => null }));
 import { config, middleware } from '@/middleware';
 
 const request = (host: string, path: string, init: { method?: string; headers?: HeadersInit } = {}) => new NextRequest(`https://${host}${path}`, { ...init, headers: { host, ...Object.fromEntries(new Headers(init.headers)) } });
+it('allows authenticated campaign OUTPUT reads on workspaces without opening creator generation there', () => {
+  const media = '/api/campaign-production/a0000000-0000-4000-8000-000000000001/media';
+  for (const allowed of [adminRouteAllowed, brandRouteAllowed]) { expect(allowed(media, 'GET')).toBe(true); expect(allowed(media, 'HEAD')).toBe(true); expect(allowed(media, 'POST')).toBe(false); expect(allowed('/api/campaign-production', 'POST')).toBe(false); }
+});
 
 describe('same-origin path normalization', () => {
   it.each(['/\\evil.example', '/\t/evil.example', '/\n/evil.example', '/%5cevil.example', '/%2fevil.example', '//evil.example', 'https://evil.example', 'javascript:alert(1)', ' /admin', '/admin\u0000', '/bad%path'])('rejects %j', value => {

@@ -1,4 +1,7 @@
 import { PublicLink } from '@/components/admin/public-link';
+import { getViewer } from '@/lib/auth/viewer';
+import { loadCampaignProductionAdmin } from '@/lib/campaigns/production-admin';
+import { CampaignProductionAdmin } from '@/components/campaigns/production-admin';
 import { notFound } from 'next/navigation';
 import { getSqlRunner } from '@/lib/db/connect';
 import { getDictionary, type Dictionary } from '@/lib/i18n/dictionaries';
@@ -197,6 +200,7 @@ export default async function AdminCampaignPage({ params, searchParams }: { para
 
   const [applications, prompts] = await Promise.all([loadApplicationsForCampaign(sql, row.id), loadPublishedPrompts(sql)]);
   const back = adminCampaignPath(row.id);
+  const production = await loadCampaignProductionAdmin(sql, await getViewer(), row.id);
   const blockers = recruitBlockers(row);
   const slotsTaken = applications.filter((app) => holdsSlot(app.status)).length;
   const slotsLeft = Math.max(0, row.slots - slotsTaken);
@@ -266,6 +270,7 @@ export default async function AdminCampaignPage({ params, searchParams }: { para
       </Panel>
 
       {/* Work waiting, in the order it arrives. */}
+      <CampaignProductionAdmin campaignId={row.id} data={production} back={back} copy={c.production} locale={locale} />
       <Panel title={`${a.queueApplicants} (${applicants.length})`}>
         {applicants.length === 0 ? (
           <p className="font-mono text-code opacity-60">{a.campaignQueueEmpty}</p>

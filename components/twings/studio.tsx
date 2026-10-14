@@ -6,6 +6,8 @@ import type { Dictionary } from '@/lib/i18n/dictionaries';
 import { formatCount, interpolate } from '@/lib/i18n/format';
 import { PortraitPhotoGuide } from '@/components/identity/portrait-photo-guide';
 import { PremiumEditor } from './premium-editor';
+import { shrinkPhoto } from '@/lib/images/client-photo';
+export { shrinkPhoto } from '@/lib/images/client-photo';
 import type { EditScope } from '@/lib/premium-editing/contract';
 
 /**
@@ -107,42 +109,6 @@ export interface StudioLive {
 }
 
 type Phase = 'photo' | 'style' | 'pay';
-
-/** The longest edge the photo is sent at. Vercel refuses request bodies above ~4.5MB before any of our code runs. */
-const PHOTO_MAX_EDGE = 1600;
-const PHOTO_PASSTHROUGH_BYTES = 3_000_000;
-
-/**
- * Downscale in the browser: a phone photo is 3–8MB and the request limit is the platform's, not
- * ours. Anything that cannot be decoded here (HEIC on a non-Apple browser) goes up as it is and
- * the server says what it wants instead.
- */
-export async function shrinkPhoto(file: File, maxBytes = PHOTO_PASSTHROUGH_BYTES): Promise<Blob> {
-  try {
-    const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' } as ImageBitmapOptions);
-    const scale = Math.min(1, PHOTO_MAX_EDGE / Math.max(bitmap.width, bitmap.height));
-    if (scale === 1 && file.size <= maxBytes && (file.type === 'image/jpeg' || file.type === 'image/png')) {
-      bitmap.close();
-      return file;
-    }
-    const canvas = document.createElement('canvas');
-    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
-    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
-    const context = canvas.getContext('2d');
-    if (!context) throw new Error('no 2d context');
-    context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-    bitmap.close();
-    let blob: Blob | null = null;
-    for (const quality of [0.9, 0.8, 0.65, 0.5, 0.35]) {
-      blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', quality));
-      if (blob && blob.size <= maxBytes) break;
-    }
-    if (!blob) throw new Error('encode failed');
-    return blob;
-  } catch {
-    return file;
-  }
-}
 
 /** A monthly request never carries a raw prompt or client-selected output format. */
 export function buildSubscriptionRenderForm(input: {

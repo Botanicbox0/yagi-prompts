@@ -86,6 +86,7 @@ export interface BrandReport {
   snapshot: BrandReportSnapshot; createdAt: string;
 }
 export interface BrandProjectDetail extends BrandProjectSummary {
+  participation?: import('@/lib/campaigns/production').CampaignParticipation[];
   contracts?: BrandContract[]; contractUploads?: BrandAttachment[];
   role: BrandRole | 'studio';
   /** May post in the campaign comments. Owners, editors, the studio and guests invited to comment. */

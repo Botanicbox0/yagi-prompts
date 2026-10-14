@@ -15,6 +15,7 @@ import { unsetDateKey } from '@/lib/brands/workspace/schedule';
 import { DecisionFields } from './decision-fields';
 import { StaffNotice } from './staff-notice';
 import { campaignListReturnPath } from '@/lib/brands/workspace/navigation';
+import { CreatorCampaignProgress } from './creator-campaign';
 import { projectNextAction } from './next-action';
 import { SecondaryUsage } from './secondary-usage';
 import type { BrandUsageView } from "@/lib/brands/usage/types";
@@ -156,6 +157,7 @@ export function ProjectDetail({
       <ProjectTabs b={b} pendingReviews={p.status === "active" ? p.contents.filter(c => c.version === newest.get(c.slotKey) && c.decision === "pending").length : 0} comments={p.messages.length} usage={usage !== null}>
       <section id="performance" className="bw-panel">
         <CampaignPerformance project={p} b={b} locale={locale} showUnready={studio} usageCta={Boolean(usage?.eligible.some((s) => s.kind === "post"))}/>
+        <CreatorCampaignProgress participation={p.participation ?? []} copy={b.creatorCampaign} locale={locale} />
       </section>
       <div className="bw-grid-wide">
         <div>

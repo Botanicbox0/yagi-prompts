@@ -155,6 +155,7 @@ export const DISALLOWED_PATHS = [
   // docs/CAMPAIGNS.md §6 — the same shape again: the apply form (slug in the middle) and the
   // creator's own standing page are noindex app surface; `/campaigns` and every campaign page stay.
   '/campaigns/*/apply',
+  '/campaigns/*/make',
   '/campaigns/mine',
   // docs/TEMPLATES-IA.md §8 — the owner's renders and the 3-day links: never indexable.
   '/renders',

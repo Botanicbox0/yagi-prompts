@@ -392,6 +392,8 @@ export async function loadProductionWorkspace(
 }
 
 /** Contract row lock serializes every reservation across users. No external provider call here. */
+// Shared with campaigns: lock the contract before counting reservations. This member-only path
+// does not lock the project. If project checks are added, take project -> contract (campaign path).
 export async function reserveProduction<F extends string>(
   deps: ProductionDeps,
   viewer: Viewer,

@@ -1178,8 +1178,8 @@ async function sweepCampaigns(): Promise<void> {
   }
   expectEqual('an unknown campaign 404s', (await get('/en/campaigns/no-such-campaign')).status, 404);
 
-  // The two unprefixed leaves: gated, never 308'd into a locale.
-  for (const path of ['/campaigns/mine', '/campaigns/no-such-campaign/apply']) {
+  // Private participation leaves stay behind login, including sponsored creation.
+  for (const path of ['/campaigns/mine', '/campaigns/no-such-campaign/apply', '/campaigns/no-such-campaign/make']) {
     const gated = await get(path);
     expectOneOf(`${path} redirects anon`, gated.status, [302, 307, 308]);
     if (gated.location && gated.location.includes('signin=1')) ok('…to sign-in', gated.location);
@@ -1200,6 +1200,7 @@ async function sweepCampaigns(): Promise<void> {
 
   const robots = await get('/robots.txt');
   expectPresent('robots disallows the apply form', robots.body, 'Disallow: /campaigns/*/apply');
+  expectPresent('robots disallows campaign production', robots.body, 'Disallow: /campaigns/*/make');
   expectPresent('robots disallows my campaigns', robots.body, 'Disallow: /campaigns/mine');
   expectAbsent('…without disallowing the listing itself', robots.body, 'Disallow: /campaigns\n');
   const sitemap = await get('/sitemap.xml');
@@ -1307,6 +1308,14 @@ async function sweepRenders(): Promise<void> {
 
   const enqueue = await fetch(`${BASE}/api/renders`, { method: 'POST', redirect: 'manual' });
   expectEqual('enqueue refuses anon', enqueue.status, 401);
+  const campaignEnqueue = await fetch(`${BASE}/api/campaign-production`, { method: 'POST', redirect: 'manual', headers: { Origin: BASE } });
+  expectEqual('campaign production refuses anon', campaignEnqueue.status, 401);
+  expectPresent('campaign production refusal is private', campaignEnqueue.headers.get('cache-control') ?? '', 'no-store');
+  for (const leaf of ['media', 'preview']) {
+    const output = await request(`/api/campaign-production/${ID}/${leaf}`);
+    expectEqual(`campaign ${leaf} refuses anon`, output.status, 404);
+    expectPresent(`campaign ${leaf} response is private`, output.cacheControl ?? '', 'no-store');
+  }
 
   // docs/TEMPLATES-IA.md §8.2 — the face check is app surface; the bank's callback is public but inert without a token.
   const verify = await request('/identity/verify', { headers: { 'user-agent': CHROME_UA } });
