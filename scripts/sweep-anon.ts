@@ -298,6 +298,29 @@ async function sweepRedirects(): Promise<void> {
   else fail('/library redirect target', `unexpected location ${library.location}`);
 }
 
+async function sweepMonthlyLegal(): Promise<void> {
+  console.log('\nmonthly legal information — published, launch unapproved');
+  for (const locale of ['ko', 'en']) {
+    for (const doc of ['terms', 'refund']) {
+      const page = await get(`/${locale}/legal/${doc}`);
+      expectEqual(`${locale} ${doc}: public HTTP 200`, page.status, 200);
+      expectPresent(`${locale} ${doc}: preparing disclosure`, page.body, 'data-subscription-legal-status="preparing"');
+      expectAbsent(`${locale} ${doc}: publication does not claim approval`, page.body, 'data-subscription-legal-version');
+      expectPresent(`${locale} ${doc}: launch notice is server-rendered`, page.body, locale === 'ko' ? '월 구독은 현재 준비 중' : 'Monthly subscriptions are being prepared');
+      expectPresent(`${locale} ${doc}: monthly content is server-rendered`, page.body, locale === 'ko' ? '월 구독' : 'Monthly subscription');
+      if (doc === 'refund') {
+        expectPresent(`${locale}: unused current-period refund`, page.body, locale === 'ko' ? '현재 결제 기간의 제작량을 사용하지 않았고' : 'none of its video-making capacity has been used');
+        expectPresent(`${locale}: failed creation restores capacity`, page.body, locale === 'ko' ? '해당 작업에 사용한 제작량' : 'unused capacity for that job');
+        expectPresent(`${locale}: one-time refunds retain separate scope`, page.body, locale === 'ko' ? '템플릿 단건 구매의 환불' : 'One-time template purchase refunds');
+      }
+    }
+    const privacy = await get(`/${locale}/legal/privacy`);
+    expectEqual(`${locale} privacy: public HTTP 200`, privacy.status, 200);
+    // Flight serializes an undefined prop name; only a rendered HTML attribute signals activation.
+    expectAbsent(`${locale} privacy: unapproved processing is not activated by publication`, privacy.body, 'data-subscription-legal-status=');
+  }
+}
+
 async function sweepNotFound(privateKeys: string[], brandWorkspace: BrandWorkspaceProbe[]): Promise<void> {
   console.log('\n404s — draft, archived, unknown');
   expectEqual('archived playbook 404s', (await get(`/en/p/${ARCHIVED}`)).status, 404);
@@ -1356,6 +1379,7 @@ async function main(): Promise<void> {
   await sweepShowcasePage('en', privateKeys);
   await sweepShowcasePage('ko', privateKeys);
   await sweepRedirects();
+  await sweepMonthlyLegal();
   await sweepNotFound(privateKeys, brandWorkspace);
   await sweepGateway(assets);
   await sweepConversionCta();

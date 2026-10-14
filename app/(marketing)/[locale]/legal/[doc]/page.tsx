@@ -69,7 +69,7 @@ export default async function LegalPage({ params }: RouteParams) {
     <>
       <MarketingNav locale={locale} dict={dict} rest={`/legal/${doc}`} initialTheme="light" />
 
-      <main id="main" data-section data-theme="light" className="section">
+      <main id="main" data-section data-theme="light" data-subscription-legal-status={doc === 'privacy' && !termsApproved ? undefined : termsApproved ? 'approved' : 'preparing'} className="section">
         <div className="band pt-28 pb-24 lg:pt-36 lg:pb-32">
           <p className="text-accent font-label text-eyebrow uppercase">{dict.legal.eyebrow}</p>
           <h1 className="mt-6 font-display text-[clamp(2rem,4vw,3rem)] leading-[0.95] font-black uppercase">

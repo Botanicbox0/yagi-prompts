@@ -23,7 +23,7 @@ export const publicSubscriptionAvailability = unstable_cache(
   { tags: [SUBSCRIPTION_AVAILABILITY_TAG], revalidate: 15 },
 );
 
-/** Legal pages remain static/indexable and change only after approval of the exact published text. */
+/** Public pages preview monthly information; this controls applicability, never publication alone. */
 export const cachedSubscriptionTermsApproved = unstable_cache(
   async () => subscriptionTermsApproved(await getSqlRunner()),
   ['creator-subscription-terms-approved', ...identity],

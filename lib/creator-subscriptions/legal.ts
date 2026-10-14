@@ -1,5 +1,11 @@
 /** A reviewable draft, never an implicit approval of a new recurring sales contract. */
-export const SUBSCRIPTION_TERMS_VERSION = 'creator-subscription-2026-10-09-v1';
+export const SUBSCRIPTION_TERMS_VERSION = 'creator-subscription-2026-10-14-v2';
+
+/** Publication is informational; live contract/evidence approval is checked separately. */
+export const SUBSCRIPTION_PREPARING_NOTICE = {
+  ko: '월 구독은 현재 준비 중입니다. 아래는 구독 출시 후 적용할 결제·해지·환불 기준입니다.',
+  en: 'Monthly subscriptions are being prepared. The billing, cancellation and refund terms below apply when subscriptions launch.',
+} as const;
 
 export const SUBSCRIPTION_TERMS_DRAFT = {
   ko: `## 월 구독과 결제
@@ -22,11 +28,17 @@ export const SUBSCRIPTION_TERMS_DRAFT = {
 
 ## 해지
 
-계정에서 다음 자동결제를 해지할 수 있습니다. 해지하면 다음 결제 기간부터 요금이 청구되지 않으며, 이미 결제한 기간이 끝날 때까지 남은 제작량을 사용할 수 있습니다. 결제가 진행 중이면 결과를 확인한 뒤에 해지합니다.
+계정에서 구독을 해지하면 다음 자동결제가 중단됩니다. 이미 결제한 기간이 끝날 때까지 남은 제작량은 사용할 수 있습니다. 해지는 결제 취소나 환불과는 별개이므로, 환불을 원하시면 따로 요청해 주세요. 이미 진행 중인 결제가 있으면 그 결과를 확인한 뒤에 다음 결제를 중단합니다.
 
 ## 환불
 
-현재 결제 기간의 제작량을 사용하지 않았고 제작 대기 중인 작업도 없다면 계정에서 전액 환불을 요청할 수 있습니다. 결제사에서 취소가 확인되면 해당 기간의 이용 권한과 다음 자동결제가 함께 끝납니다. 이미 제작을 시작한 작업이 있으면 고객센터에서 확인 후 안내해 드립니다. 서비스 결함이나 관련 법령에 따른 권리는 이 안내로 제한되지 않습니다.
+현재 결제 기간의 제작량을 사용하지 않았고 제작 대기 중인 작업도 없다면, 기간이 끝나기 전에 계정에서 이번 결제 금액의 전액 환불을 요청할 수 있습니다. 다른 결제가 진행 중이면 먼저 그 처리 결과를 확인합니다. 환불 처리 중에는 영상 제작과 다음 자동결제가 중단됩니다. 결제사에서 취소가 확인되면 환불이 완료되고 해당 기간의 이용도 종료됩니다.
+
+영상 제작을 이미 이용했거나 지난 결제 기간의 환불을 원하시면 hello@yagiworkshop.xyz로 문의해 주세요. 이용 내역과 요청 사유를 확인한 뒤 환불 가능 여부와 금액을 안내합니다. 이미 이용했다는 이유만으로 아직 제공받지 않은 부분의 청약철회나 서비스 문제에 따른 환불 권리가 사라지는 것은 아닙니다. 관련 법령에 따른 권리는 계정의 자동 환불 조건과 별도로 적용됩니다.
+
+생성 실패로 영상이 완성되지 않으면 해당 작업에 사용한 제작량을 돌려드립니다. 월 구독료 전체가 자동으로 환불되는 것은 아닙니다. 실패한 작업만 있어 이번 기간의 제작량이 미사용 상태라면 위 전액 환불 조건에 따라 요청할 수 있습니다. 영상이 재생되지 않는 등 서비스 문제로 이용하지 못한 경우나 서비스 종료 시 미제공 부분의 환불도 hello@yagiworkshop.xyz로 문의해 주세요.
+
+법령상 청약철회가 가능한 경우에는 청약철회 의사를 전달한 날부터 3영업일 이내에 원래 결제 수단으로 환불합니다. 카드사에 취소 내역이 반영되기까지는 추가 시간이 걸릴 수 있습니다. 문의 시 계정 이메일, 결제 일시와 요청 사유를 알려주세요.
 
 ## 변경과 문의
 
@@ -51,11 +63,17 @@ Use only your own face photo. The identity and likeness checks in the existing t
 
 ## Cancellation
 
-You can stop the next automatic payment from your account. Once cancellation is recorded, no new period is billed; you retain unused capacity until the end of the period already paid for. If a payment is in progress, its outcome is checked before processing the request.
+You can cancel your subscription from your account to stop the next automatic payment. Unused capacity remains available until the end of the period already paid for. Cancellation does not itself refund a payment; request a refund separately if needed. A payment already in progress is resolved before future payments are stopped.
 
 ## Refunds
 
-You may request a full refund of the current period from your account if none of its capacity has been used and no creation jobs are pending. Once the payment provider confirms cancellation, access for that period and the next renewal end. If creation has already started, contact support so we can check your activity. This notice does not restrict rights arising from service defects or applicable law.
+Before the current period ends, you may request a full refund of its payment from your account if none of its video-making capacity has been used and no creation jobs are pending. Any other payment in progress must first be resolved. Creation and future automatic payments stop while the refund is being processed. Once the provider confirms cancellation, the refund is complete and access for that period ends.
+
+If you have used video-making capacity or need a refund for an earlier period, contact hello@yagiworkshop.xyz. We check your activity and reason for the request and explain eligibility and the refund amount. Prior use does not by itself remove withdrawal rights for unprovided parts or refund rights for service defects. Rights under applicable law apply separately from account-based automatic refund eligibility.
+
+If generation fails without a completed video, unused capacity for that job is restored. This does not automatically refund the whole monthly fee. If only failed jobs were attempted and the period's capacity remains unused, you can request the full refund described above. Contact support about unusable videos, service failures or unprovided services when the Service closes.
+
+Where statutory withdrawal applies, we refund the original payment method within 3 business days of receiving your withdrawal. Your card issuer may take additional time to display the cancellation. Include your account email, payment date and reason when contacting us.
 
 ## Changes and support
 
