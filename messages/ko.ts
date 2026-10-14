@@ -1042,6 +1042,14 @@ export const ko: Dictionary = {
     skipToContent: '본문으로 건너뛰기',
   },
   auth: {
+    review: {
+      entryLink: '심사 계정 로그인',
+      title: '결제 서비스 심사용 로그인',
+      description: '발급받은 심사 계정으로 로그인해 주세요. 일반 회원과 같은 서비스 이용 조건이 적용됩니다.',
+      email: '심사 계정 이메일', password: '비밀번호', submit: '로그인',
+      invalid: '로그인 정보를 확인해 주세요. 계속되지 않으면 TWINGS 담당자에게 문의해 주세요.',
+      customerLogin: '일반 회원 로그인으로 돌아가기',
+    },
     signIn: '로그인',
     signOut: '로그아웃',
     startWithGoogle: 'Google로 시작하기',
