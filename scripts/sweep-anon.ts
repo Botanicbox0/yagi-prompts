@@ -736,6 +736,14 @@ const CHROME_UA =
  */
 async function sweepWebViewSignin(): Promise<void> {
   console.log('\n/auth/signin — the embedded-WebView gate (F1)');
+  for (const locale of ['ko', 'en']) {
+    const review = await request(`/auth/review?locale=${locale}`);
+    expectEqual(`${locale}: review login is reachable`, review.status, 200);
+    expectPresent(`${locale}: review login form`, review.body, 'data-review-login');
+    expectPresent(`${locale}: review login is not indexed`, review.body, 'noindex');
+    expectPresent(`${locale}: review credentials are not cached`, review.cacheControl ?? '', 'no-store');
+    expectPresent(`${locale}: review password uses POST`, review.body, 'action="/auth/review/login"');
+  }
 
   // docs/TEMPLATES-IA.md §8 — no provider named: the chooser, in the reader's language, with both doors.
   const bare = await request('/auth/signin?next=%2Fen%2Fvideo&locale=en', { headers: { 'user-agent': CHROME_UA } });
