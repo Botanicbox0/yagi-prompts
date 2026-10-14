@@ -1,4 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
+import { reserveRewardImage, reconcileRewards } from '@/lib/creator-platform/rewards';
+import { demand } from '@/lib/creator-platform/contract';
 import { reserveCampaignProduction, type CampaignProductionCode } from '@/lib/campaigns/production';
 import { campaignProductReferences, campaignRenderReferenceUrls } from '@/lib/campaigns/production-references';
 import { claimCampaignDispatch, acknowledgeCampaignTask, resumeCampaignDispatch, CAMPAIGN_DISPATCH_PREFIX } from '@/lib/campaigns/production-dispatch';
@@ -299,6 +301,19 @@ export async function createSubscriptionRenderJob(deps: RenderServiceDeps & { en
   }
 }
 
+/** Server-authorized image reward only. All likeness/provider safeguards remain in the common path. */
+export async function createRewardImageJob(deps:RenderServiceDeps,viewer:Viewer,input:{requestId:string;offerId:string;portraitId:string}) {
+  demand(viewer.userId,'sign_in_required');
+  demand([input.requestId,input.offerId,input.portraitId].every(v=>SUBSCRIPTION_UUID.test(v)));
+  return reserveRewardImage(deps.sql,viewer,input,async(sql,templateId)=>{
+    const template=await loadPromptById(sql,templateId);
+    demand(template?.medium==='image'&&template.audience==='public','not_eligible');
+    const photo=await selectedPortraitPhoto(sql,deps.store,viewer.userId!,input.portraitId);
+    demand(photo,'identity_required');
+    return createAuthorizedRender({...deps,sql},viewer,{templateSlug:template.slug,aspect:template.aspectDefault??'4:5',photo,portraitId:input.portraitId,locale:viewer.locale,holdForIdentity:true},undefined,template);
+  });
+}
+
 async function createAuthorizedRender(deps: RenderServiceDeps, viewer: Viewer, input: CreateRenderInput, reservedId?: string, brandTemplate?: PromptRow): Promise<CreateRenderOutcome> {
   if (viewer.userId === null) return { ok: false, code: 'sign_in_required' };
   const now = deps.now ?? new Date();
@@ -475,6 +490,7 @@ export async function runRenderPass(deps: RenderPassDeps, options: RenderPassOpt
     await deleteExpiredEditReferences(deps.sql, deps.store, now);
   }
   // 4 — say so.
+  await reconcileRewards(deps.sql);
   await notifyFinished(deps, now, report);
   return report;
 }

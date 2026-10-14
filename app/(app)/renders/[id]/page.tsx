@@ -202,6 +202,7 @@ export default async function RenderPage({ params, searchParams }: { params: Pro
             </form>
           </section>
         )}
+        {finished&&process.env.TWINGS_COMMUNITY==='on'?<a href={`/community?render=${job.id}`} className="mt-8 inline-flex min-h-12 items-center rounded-full border border-current px-6 py-3 text-sm">{dict.community.ratingTitle}</a>:null}
       </main>
     </div>
   );

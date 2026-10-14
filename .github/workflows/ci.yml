@@ -41,6 +41,9 @@ jobs:
       - name: Typecheck + vitest
         run: npm run check
 
+      - name: Private client import boundaries
+        run: npm run security:client
+
       # The sweep job below owns the production build; both existing check names stay unchanged.
 
   # PLAN §8 M2 — "Playwright authz sweep: zero gated bytes or storage keys for anon".
@@ -69,6 +72,9 @@ jobs:
 
       - name: Build
         run: npm run build
+
+      - name: Public bundle recipe and source-map check
+        run: npm run security:built
 
       # No wait-on / start-server-and-test: a curl loop needs no dependency the repo does not pin.
       - name: Start the server

@@ -1366,6 +1366,17 @@ async function sweepRenders(): Promise<void> {
   expectEqual('the identity callback answers a bare hit with a redirect', callback.status, 303);
   expectPresent('…to the verify page, result unknown', callback.location ?? '', '/identity/verify?result=unknown');
 
+  const community = await request('/community', { headers: { 'user-agent': CHROME_UA } });
+  expectOneOf('private content conversations redirect anonymous', community.status, [302,303,307]);
+  const communityState = await request('/api/community');
+  expectEqual('community state refuses anonymous', communityState.status, 401);
+  expectPresent('community response is private', communityState.cacheControl ?? '', 'no-store');
+  const communityCreate = await fetch(`${BASE}/api/community`, {method:'POST',headers:{origin:BASE,'content-type':'application/json'},body:'{}'});
+  expectEqual('community mutation refuses anonymous', communityCreate.status, 401);
+  const evidence = await request(`/api/admin/community/${ID}/media`);
+  expectEqual('reward evidence conceals existence from anonymous', evidence.status, 404);
+  expectPresent('reward evidence response is private', evidence.cacheControl ?? '', 'no-store');
+
   const tick = await request('/api/renders/tick');
   expectEqual('the tick runs (no secret locally)', tick.status, 200);
   expectPresent('…and reports a pass', tick.body, '"summary"');

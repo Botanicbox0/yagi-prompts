@@ -1,4 +1,5 @@
 import { cache } from 'react';
+import { TemplateRatings } from '@/components/community/ratings';
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { DEFAULT_LOCALE, isLocale, type Locale } from '@/lib/i18n/config';
@@ -281,6 +282,7 @@ export default async function TemplatePage({ params }: RouteParams) {
               </section>
             )}
 
+            {await TemplateRatings({templateId:card.id,copy:dict.community})}
             <RelatedPrompts
               cards={related(card, all)}
               locale={locale}

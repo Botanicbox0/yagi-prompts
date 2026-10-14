@@ -7,6 +7,8 @@
     "node": ">=22.0.0"
   },
   "scripts": {
+    "security:client": "tsx scripts/check-private-client.ts",
+    "security:built": "tsx scripts/check-private-client.ts --built",
     "dev": "next dev",
     "dev:free": "tsx scripts/dev-as.ts free",
     "dev:pro": "tsx scripts/dev-as.ts pro",

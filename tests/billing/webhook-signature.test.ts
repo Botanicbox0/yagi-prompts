@@ -15,7 +15,7 @@ import { StripeSignatureError } from '@/lib/billing/stripe-gateway';
  * then retries forever.
  */
 
-const SECRET = 'whsec_test_2f7c9d1a55b4e08c1f6d3a9b7e4c2510';
+const SECRET = 'test-only-secret-00000000000000000000';
 
 const CONFIG = {
   secretKey: 'sk_test_offline_never_used',

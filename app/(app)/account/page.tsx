@@ -231,6 +231,7 @@ export default async function AccountPage({
             </a>
           </div>
         </div>
+        {process.env.TWINGS_COMMUNITY==='on'||process.env.TWINGS_FORMAT_CREATORS==='on'||process.env.TWINGS_IMAGE_REWARDS==='on'?<a href="/community" className="mt-8 inline-flex min-h-12 items-center rounded-full border border-current px-6 py-3 text-sm">{dict.community.title}</a>:null}
       </main>
     </div>
   );

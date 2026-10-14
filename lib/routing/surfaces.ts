@@ -79,6 +79,7 @@ export function adminRouteAllowed(pathname: string, method: string): boolean {
   if (pathname === '/api/admin/brand-workspace') return method === 'POST';
   if (/^\/api\/admin\/brand-workspace\/attachments\/[^/]+$/.test(pathname)) return method === 'POST';
   if (/^\/api\/admin\/media\/[^/]+$/.test(pathname)) return read;
+  if (/^\/api\/admin\/community\/[a-f0-9-]+\/media$/.test(pathname)) return read;
   // The handler rechecks the current studio role; brand reference files stay private.
   if (/^\/api\/brand-workspace\/attachments\/[^/]+$/.test(pathname)) return read;
   // Organization logos: the handler rechecks the studio role before any byte leaves storage.

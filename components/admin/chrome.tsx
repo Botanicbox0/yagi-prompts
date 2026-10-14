@@ -290,12 +290,12 @@ export function AdminShell({
 }: {
   dict: AdminDict;
   locale: string;
-  active: 'home' | 'playbooks' | 'policy' | 'prompts' | 'contests' | 'campaigns' | 'inquiries' | 'brandWorkspace' | 'subscriptions';
+  active: 'home' | 'playbooks' | 'policy' | 'prompts' | 'contests' | 'campaigns' | 'inquiries' | 'brandWorkspace' | 'subscriptions' | 'community';
   children: ReactNode;
 }) {
   // "Refresh caches" used to send every page back to /admin; it returns to where it was pressed.
   const refreshBack =
-    active === 'subscriptions' ? '/admin/subscriptions' : active === 'brandWorkspace' ? '/admin/brand-workspace' : active === 'prompts'
+    active === 'community' ? '/admin/community' : active === 'subscriptions' ? '/admin/subscriptions' : active === 'brandWorkspace' ? '/admin/brand-workspace' : active === 'prompts'
       ? '/admin/prompts'
       : active === 'contests'
         ? '/admin/contests'
@@ -315,6 +315,7 @@ export function AdminShell({
     ['prompts', '/admin/prompts', dict.navPrompts],
     ['campaigns', '/admin/campaigns', dict.navCampaigns],
     ['inquiries', '/admin/inquiries', dict.navInquiries],
+    ['community', '/admin/community', dictionary.community.adminTitle],
     ['subscriptions', '/admin/subscriptions', dictionary.creatorLaunch.nav],
     ['playbooks', '/admin/playbooks', dict.navPlaybooks],
     ['policy', '/admin/policy', dict.navPolicy],

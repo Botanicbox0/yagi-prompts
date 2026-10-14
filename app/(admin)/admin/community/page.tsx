@@ -1,0 +1,46 @@
+import { randomUUID } from 'node:crypto';
+import type { ReactNode } from 'react';
+import { getViewer } from '@/lib/auth/viewer';
+import { notFound } from 'next/navigation';
+import { getSqlRunner } from '@/lib/db/connect';
+import { getDictionary } from '@/lib/i18n/dictionaries';
+import { getLocaleFromHeaders } from '@/lib/i18n/server';
+import { platformReady } from '@/lib/creator-platform/service';
+import { AdminShell,OpForm,OutcomeBanner,INPUT,BUTTON_PRIMARY } from '@/components/admin/chrome';
+export const dynamic='force-dynamic';
+export default async function PlatformAdminPage({searchParams}:{searchParams:Promise<Record<string,string|string[]|undefined>>}) {
+ const [viewer,sql,locale,query]=await Promise.all([getViewer(),getSqlRunner(),getLocaleFromHeaders(),searchParams]);if(!viewer.isAdmin)notFound();
+ const dict=getDictionary(locale),c=dict.community;
+ const wrap=(children:ReactNode)=><AdminShell dict={dict.admin} locale={locale} active="community"><div className="space-y-6 p-5 sm:p-8"><h1 className="text-2xl font-semibold">{c.adminTitle}</h1><p className="text-sm opacity-65">{c.adminHint}</p><OutcomeBanner dict={dict.admin} ok={typeof query.ok==='string'?query.ok:undefined} err={typeof query.err==='string'?query.err:undefined}/>{children}</div></AdminShell>;
+ if(!sql||!await platformReady(sql))return wrap(<p>{c.unavailable}</p>);
+ const [threads,messages,formats,ratings,claims,creators,offers,history]=await Promise.all([
+  sql.query<{id:string;user_id:string}>('select id,user_id from platform_threads order by created_at desc limit 40'),
+  sql.query<{id:string;thread_id:string;body:string;from_studio:boolean}>('select id,thread_id,body,from_studio from platform_messages where thread_id in (select id from platform_threads order by created_at desc limit 40) order by created_at limit 800'),
+  sql.query<{id:string;user_id:string;title:string;recipe:string;example_url:string;status:string;template_id:string|null}>('select id,user_id,title,recipe,example_url,status,template_id from platform_formats order by created_at desc limit 40'),
+  sql.query<{id:string;template_id:string;stars:number;message:string;excluded:boolean}>('select id,template_id,stars,message,excluded from platform_ratings order by updated_at desc limit 40'),
+  sql.query<{id:string;render_id:string;post_url:string;status:string;credits:number}>('select id,render_id,post_url,status,credits from platform_claims order by created_at desc limit 40'),
+  sql.query<{user_id:string;active:boolean;contract_version:string}>('select user_id,active,contract_version from platform_creators order by created_at desc limit 100'),
+  sql.query<{id:string;title:string;credits:number}>('select o.id,p.title,o.credits from platform_image_offers o join prompt_items p on p.id=o.template_id where o.active order by o.created_at desc limit 100'),
+  sql.query<{id:string;actor_id:string|null;action:string;reason:string;created_at:string}>('select id,actor_id,action,reason,created_at from platform_audit order by created_at desc limit 100'),
+ ]);
+ const hidden=(name:string,value:string)=><input type="hidden" name={name} value={value}/>;
+ const input=(name:string,label:string,type='text',step?:string)=><label className="block text-sm">{label}<input className={`${INPUT} mt-1 min-h-10`} name={name} type={type} step={step} required maxLength={type==='text'?2000:undefined}/></label>;
+ const reason=()=>input('reason',c.reason);
+ const check=(name:string,label:string)=><label className="flex items-center gap-3 text-sm">{hidden(name,'false')}<input type="checkbox" name={name} value="true"/>{label}</label>;
+ const form=(action:string,children:ReactNode,id?:string)=><OpForm op="platform.manage" back="/admin/community" className="space-y-3 rounded-xl border border-hairline p-4">{hidden('action',action)}{id?hidden('id',id):null}{children}{reason()}</OpForm>;
+ const submit=(label:string,name?:string,value?:string)=><button className={`${BUTTON_PRIMARY} min-h-10`} name={name} value={value}>{label}</button>;
+ return wrap(<div data-platform-admin className="grid items-start gap-8 xl:grid-cols-2">
+  <div className="space-y-5"><h2 className="text-lg font-semibold">{c.requestTitle}</h2>{threads.rows.map(t=><section key={t.id} className="space-y-3 border-b border-hairline pb-5"><p className="break-all text-xs opacity-60">{t.user_id}</p>{messages.rows.filter(m=>m.thread_id===t.id).map(m=><p key={m.id} className="whitespace-pre-wrap break-words text-sm"><strong>{m.from_studio?c.studio:c.you}: </strong>{m.body}</p>)}{form('reply',<>{hidden('requestId',randomUUID())}<label className="block text-sm">{c.message}<textarea name="message" required maxLength={2000} className={INPUT}/></label>{submit(c.reply)}</>,t.id)}</section>)}
+   <h2 className="text-lg font-semibold">{c.formatTitle}</h2>{formats.rows.map(f=><section key={f.id} className="space-y-3 rounded-xl border border-hairline p-4"><h3>{f.title}</h3><a className="text-sm underline" href={f.example_url} target="_blank" rel="noopener noreferrer">{c.example} ↗</a><details><summary className="cursor-pointer text-sm">{c.recipe}</summary><pre className="mt-3 whitespace-pre-wrap break-words text-xs">{f.recipe}</pre></details>{f.status==='submitted'?form('format',<div className="flex flex-wrap gap-3">{submit(c.accept,'accept','true')}{submit(c.reject,'accept','false')}</div>,f.id):null}{f.template_id?<a href={`/admin/prompts/${f.template_id}`} className="underline">{c.manageTemplate}</a>:null}</section>)}
+   <h2 className="text-lg font-semibold">{c.customerRating}</h2>{ratings.rows.map(r=><section key={r.id} className="space-y-3"><p className="text-sm">{r.stars} ★ · {r.template_id}</p><p className="whitespace-pre-wrap text-sm">{r.message}</p>{form('moderate',<>{hidden('excluded',String(!r.excluded))}{r.excluded?hidden('category','restore'):<label className="block text-sm">{c.category}<select name="category" className={INPUT}><option value="duplicate">{c.duplicate}</option><option value="fraud">{c.fraud}</option><option value="abuse">{c.abuse}</option></select></label>}{submit(r.excluded?c.restore:c.exclude)}</>,r.id)}</section>)}
+   {form('quality',<>{input('id',c.templateId)}{input('score',c.score,'number','0.1')}{submit(c.quality)}</>)}
+  </div>
+  <div className="space-y-5"><h2 className="text-lg font-semibold">{c.grant}</h2>{form('creator',<>{input('id',c.userId)}{input('contract',c.contract)}<div className="flex flex-wrap gap-3">{submit(c.grant,'active','true')}{submit(c.revoke,'active','false')}</div></>)}{creators.rows.map(u=><p key={u.user_id} className="break-all text-xs">{u.user_id} · {u.active?c.grant:c.revoke} · {u.contract_version}</p>)}
+   <h2 className="text-lg font-semibold">{c.claimTitle}</h2>{claims.rows.map(r=><section key={r.id} className="space-y-3 border-b border-hairline pb-5"><a className="block break-all text-sm underline" href={r.post_url} target="_blank" rel="noopener noreferrer">{r.post_url} ↗</a><a href={`/api/admin/community/${r.id}/media`} target="_blank" rel="noopener noreferrer" className="text-xs underline">{r.render_id}</a><p className="text-sm">{c.status[r.status as keyof typeof c.status]} · {r.credits}</p>{r.status==='submitted'||r.status==='approved'?form('claim',<>{check('ownership',c.verifiedOwner)}{check('content',c.verifiedContent)}{check('disclosure',c.verifiedDisclosure)}<div className="flex flex-wrap gap-3">{r.status==='submitted'?<>{submit(c.approve,'decision','approve')}{submit(c.reject,'decision','reject')}</>:submit(c.revokeAward,'decision','revoke')}</div></>,r.id):null}</section>)}
+   <details className="space-y-4 rounded-xl border border-hairline p-4"><summary className="cursor-pointer py-2 font-medium">{c.settle}</summary>{form('settle',<>{input('id',c.renderId)}{input('tax',c.tax,'number','1')}{input('fees',c.fees,'number','1')}{input('fx',c.fx,'number','0.000001')}{submit(c.settle)}</>)}</details>
+   <details className="space-y-4 rounded-xl border border-hairline p-4"><summary className="cursor-pointer py-2 font-medium">{c.policy}</summary><p className="text-sm opacity-65">{c.policyHint}</p>{form('policy',<>{input('version',c.version)}{input('termsVersion',c.termsVersion)}{input('costPerCredit',c.cost,'number','1')}{input('cap',c.cap,'number','1')}{submit(c.configure)}</>)}</details>
+   <details className="space-y-4 rounded-xl border border-hairline p-4"><summary className="cursor-pointer py-2 font-medium">{c.offer}</summary>{form('offer',<>{input('id',c.templateId)}{input('credits',c.credits,'number','1')}{input('maxCost',c.maxCost,'number','1')}{submit(c.offerAdd)}</>)}{offers.rows.map(o=><section key={o.id}><p className="my-3 text-sm">{o.title} · {o.credits}</p>{form('offerDisable',submit(c.offerDisable),o.id)}</section>)}</details>
+   <details className="space-y-4 rounded-xl border border-hairline p-4"><summary className="cursor-pointer py-2 font-medium">{c.auditHistory}</summary>{history.rows.length?history.rows.map(h=><section key={h.id} className="space-y-2 border-t border-hairline pt-3 text-xs"><p className="break-all opacity-65">{String(h.created_at)} · {h.actor_id}</p><p>{h.action}</p><p className="whitespace-pre-wrap break-words">{h.reason}</p></section>):<p className="text-sm">{c.auditEmpty}</p>}</details>
+  </div>
+ </div>);
+}
