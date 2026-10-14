@@ -79,6 +79,7 @@ export function adminRouteAllowed(pathname: string, method: string): boolean {
   if (pathname === '/api/admin/brand-workspace') return method === 'POST';
   if (/^\/api\/admin\/brand-workspace\/attachments\/[^/]+$/.test(pathname)) return method === 'POST';
   if (/^\/api\/admin\/media\/[^/]+$/.test(pathname)) return read;
+  if (/^\/api\/admin\/community\/[a-f0-9-]+\/media$/.test(pathname)) return read;
   // The handler rechecks the current studio role; brand reference files stay private.
   if (/^\/api\/brand-workspace\/attachments\/[^/]+$/.test(pathname)) return read;
   // Organization logos: the handler rechecks the studio role before any byte leaves storage.
@@ -116,6 +117,9 @@ export function brandRouteAllowed(pathname: string, method: string): boolean {
 
 /** Former matcher exclusions now run only AFTER the host policy, preserving consumer behavior. */
 export function bypassConsumerLocale(pathname: string): boolean {
+  // Self-hosted photo hints are static assets. Keep the host boundary above intact.
+  if (pathname === '/workers/photo-advice-v1.js' || pathname === '/models/face-landmarker-float16-v1.task' ||
+    /^\/vendor\/face-1\.1\.0\/(?:vision_bundle\.js|wasm\/vision_wasm_(?:nosimd_)?internal\.(?:js|wasm))$/.test(pathname)) return true;
   if (pathname === '/llms.txt' || pathname === '/llms-full.txt') return true;
   return /^\/(?:_next\/static|_next\/image|favicon\.ico|sitemap\.xml|robots\.txt|sw\.js|offline\.html|manifest\.webmanifest|fonts\/|\.storage\/|api\/|auth\/|r\/)/.test(pathname)
     || /\.(?:svg|png|jpg|jpeg|gif|webp|mp4|webm|woff2?)$/.test(pathname);

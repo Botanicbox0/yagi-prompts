@@ -22,10 +22,14 @@ env:
   PLAYBOOK_MODE: local
 
 jobs:
-  check:
-    name: typecheck + tests
+  test_shards:
+    name: tests (${{ matrix.shard }}/4)
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
     steps:
       - uses: actions/checkout@v4
 
@@ -37,11 +41,27 @@ jobs:
       - name: Install (exact pins, lockfile authoritative)
         run: npm ci
 
-      # Same command a developer runs locally: npm run check
-      - name: Typecheck + vitest
-        run: npm run check
+      - name: Typecheck
+        run: npm run typecheck
 
-      # The sweep job below owns the production build; both existing check names stay unchanged.
+      # Every file is assigned exactly once; all shards feed the existing required check below.
+      - name: Vitest shard
+        run: npx vitest run --shard=${{ matrix.shard }}/4
+
+      - name: Private client import boundaries
+        run: npm run security:client
+
+  check:
+    name: typecheck + tests
+    needs: test_shards
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require every shard to pass
+        env:
+          SHARD_RESULT: ${{ needs.test_shards.result }}
+        run: test "$SHARD_RESULT" = success
 
   # PLAN §8 M2 — "Playwright authz sweep: zero gated bytes or storage keys for anon".
   # Implemented as a fetch-level sweep against a real `next start` (scripts/sweep-anon.ts): no
@@ -69,6 +89,9 @@ jobs:
 
       - name: Build
         run: npm run build
+
+      - name: Public bundle recipe and source-map check
+        run: npm run security:built
 
       # No wait-on / start-server-and-test: a curl loop needs no dependency the repo does not pin.
       - name: Start the server

@@ -1,4 +1,5 @@
 import { BRAND_PRODUCTION_OPERATIONS } from './brand-production-operations';
+import { PLATFORM_OPERATIONS } from './platform-operations';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import {
@@ -739,6 +740,7 @@ export const ADMIN_OPERATIONS = {
   ...BRAND_WORKSPACE_OPERATIONS,
   ...BRAND_USAGE_OPERATIONS,
   ...BRAND_PRODUCTION_OPERATIONS,
+  ...PLATFORM_OPERATIONS,
 };
 
 export type AdminOperationName = keyof typeof ADMIN_OPERATIONS;

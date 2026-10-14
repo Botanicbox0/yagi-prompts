@@ -16,7 +16,7 @@ import {
  * of a request without credentials or a live call.
  */
 
-export const ARK_DEFAULT_OPENAPI_HOST = 'ark.ap-southeast-1.byteplusapi.com';
+export const ARK_DEFAULT_OPENAPI_HOST = 'ark.ap-southeast-1.byteplusapi.com'; // gitleaks:allow -- public API hostname, not a credential
 export const ARK_OPENAPI_VERSION = '2024-01-01';
 export const ARK_OPENAPI_SERVICE = 'ark';
 export const ARK_DEFAULT_REGION = 'ap-southeast-1';

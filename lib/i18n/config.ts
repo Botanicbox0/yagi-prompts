@@ -39,6 +39,7 @@ export const APP_PREFIXES = [
   '/renders',
   // docs/TEMPLATES-IA.md §8.2 — the one-time face check.
   '/identity',
+  '/community',
 ] as const;
 
 /**

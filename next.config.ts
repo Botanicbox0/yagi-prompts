@@ -24,6 +24,7 @@ function retiredSubscriptionRedirects(): Array<Redirect & { permanent: boolean }
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
+  productionBrowserSourceMaps: false,
   // Public locale, app and admin surfaces have separate roots; use the routing-level 404.
   experimental: { globalNotFound: true },
   /**
@@ -41,6 +42,16 @@ const nextConfig: NextConfig = {
    */
   async headers() {
     return [
+      { source: '/:path*', headers: [
+        { key: 'X-Content-Type-Options', value: 'nosniff' },
+        { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+        { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
+        { key: 'Content-Security-Policy', value: "base-uri 'self'; object-src 'none'; frame-ancestors 'self'" },
+      ] },
+      { source: '/workers/photo-advice-v1.js', headers: [
+        { key: 'Content-Security-Policy', value: "default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self'" },
+        { key: 'Cache-Control', value: 'no-cache' },
+      ] },
       {
         source: '/auth/:path*',
         headers: [

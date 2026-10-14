@@ -4,10 +4,14 @@ import type {Dictionary} from '@/messages/en';
 import type {PortraitState} from '@/lib/identity/portrait-service';
 import {shrinkPhoto} from '@/components/twings/studio';
 import {PortraitPhotoGuide} from './portrait-photo-guide';
+import {usePhotoAdvice} from './use-photo-advice';
+import {canSubmitPortrait} from '@/lib/identity/photo-advice';
 
 export function PortraitStudio({copy,initial,next,available}:{copy:Dictionary['portrait'];initial:PortraitState;next:string|null;available:boolean}){
  const [state,setState]=useState(initial),[file,setFile]=useState<File|null>(null),[preview,setPreview]=useState<string|null>(null);
  const [consent,setConsent]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState(''),[retryOpen,setRetryOpen]=useState(false);
+ const advice=usePhotoAdvice(file);
+ const photoReady=canSubmitPortrait({hasFile:!!file,consent,busy,advice});
  const requestId=useRef<string|null>(null),results=useRef<HTMLDivElement>(null),upload=useRef<HTMLDivElement>(null),completedCount=useRef(initial.used);
  const pending=state.attempts.some(a=>['queued','running','uncertain'].includes(a.status));
  const canUpload=state.canStart||(retryOpen&&state.canRetry);
@@ -21,7 +25,7 @@ export function PortraitStudio({copy,initial,next,available}:{copy:Dictionary['p
  useEffect(()=>()=>{if(preview)URL.revokeObjectURL(preview)},[preview]);
  useEffect(()=>{if(retryOpen)scroll(upload.current);},[retryOpen]);
  async function create(action:'initial'|'retry'|'recover'){
-  if(busy||(action!=='recover'&&(!file||!consent)))return;
+  if(busy||(action!=='recover'&&(!file||!consent||!photoReady)))return;
   setBusy(true);setError('');requestId.current??=crypto.randomUUID();
   try{
    const form=new FormData();form.set('requestId',requestId.current);form.set('action',action);
@@ -69,8 +73,9 @@ export function PortraitStudio({copy,initial,next,available}:{copy:Dictionary['p
      {preview?<img src={preview} alt={copy.original} className="max-h-64 max-w-full rounded-lg object-contain"/>:null}
      <span>{copy.choose}</span><input type="file" accept="image/jpeg,image/png,image/webp" aria-label={copy.choose} className="max-w-full text-sm" disabled={busy} onChange={e=>{const f=e.target.files?.[0]??null;setFile(f);setPreview(f?URL.createObjectURL(f):null);requestId.current=null;setConsent(false);setError('');}}/>
     </label>
+    {file?<section data-photo-preflight data-photo-advice={advice} className="mt-5 space-y-3 rounded-xl border border-hairline p-4"><h3 className="text-sm font-medium">{copy.photoCheckTitle}</h3><p role="status" aria-live="polite" className="text-sm leading-relaxed">{copy.photoAdvice[advice]}</p><p className="text-xs leading-relaxed opacity-70">{copy.photoAdvisoryHint}</p></section>:null}
     <label className="mt-5 flex items-start gap-3 text-sm leading-relaxed"><input type="checkbox" checked={consent} disabled={busy} onChange={e=>setConsent(e.target.checked)} className="mt-1 size-4 shrink-0"/>{copy.consent}</label>
-    <button type="button" disabled={!file||!consent||busy} onClick={()=>void create(retryOpen?'retry':'initial')} className="mt-6 min-h-12 rounded-full bg-on-surface px-7 py-3 text-surface disabled:opacity-40">{busy?copy.busy:retryOpen?copy.retryCreate:copy.create}</button>
+    <button type="button" disabled={!file||!consent||!photoReady||busy} onClick={()=>void create(retryOpen?'retry':'initial')} className="mt-6 min-h-12 rounded-full bg-on-surface px-7 py-3 text-surface disabled:opacity-40">{busy?copy.busy:file&&advice!=='ready'&&advice!=='checking'?copy.continuePhoto:retryOpen?copy.retryCreate:copy.create}</button>
     {retryOpen?<button disabled={busy} className="ml-4 min-h-12 text-sm underline underline-offset-4" onClick={()=>setRetryOpen(false)}>{copy.cancelRetry}</button>:null}
    </>}
   </div>:null}

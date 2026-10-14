@@ -20,3 +20,6 @@ dist/
 next-env.d.ts
 coverage/
 .agents/
+
+# Generated pinned MediaPipe runtime (prepared before build/dev)
+/public/vendor/face-1.1.0/
