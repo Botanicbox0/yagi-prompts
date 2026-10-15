@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import type { Viewer } from "@/lib/auth/identity";
 import { TossError, type TossPayment } from "@/lib/billing/toss-gateway";
+import { fundingProviderMethodSupported } from "./payment-method";
 import {
   Denied,
   run,
@@ -242,6 +243,10 @@ export async function confirmFundingPayment(
           p.orderId !== preflight.orderId)
       )
         return { ok: false, code: "payment_review" };
+      // Refuse unsupported/unknown real methods before any approval call.
+      // Existing issued orders still reconcile their provider truth separately.
+      if (deps.gateway.kind !== "fake" && !fundingProviderMethodSupported(p))
+        return { ok: false, code: "payment_review" };
     } catch {
       return { ok: false, code: "confirm_pending" };
     }
@@ -467,6 +472,7 @@ export async function refundFundingPayment(
     )
       return { ok: false, code: "payment_review" };
     const started = await deps.sql.transaction(async (sql) => {
+      await studio(sql, result.actorId);
       await lockCase(sql, String(o.case_id));
       const updated = (
         await sql.query(
@@ -500,7 +506,8 @@ export async function refundFundingPayment(
     return (await settleRefund(deps, o, p))
       ? { ok: true }
       : { ok: false, code: "payment_review" };
-  } catch {
+  } catch (error) {
+    if (error instanceof Denied) return { ok: false, code: error.code };
     return { ok: false, code: "confirm_pending" };
   } finally {
     if (!crossed)
@@ -579,6 +586,7 @@ export async function releaseUnpaidFundingOrder(
       : o.failure_code === "confirm_rejected";
     if (!proven) return { ok: false, code: "confirm_pending" };
     return await deps.sql.transaction(async (sql) => {
+      await studio(sql, claim.actorId);
       const c = await lockCase(sql, String(o.case_id));
       const changed = (
         await sql.query(
@@ -603,7 +611,13 @@ export async function releaseUnpaidFundingOrder(
       );
       return { ok: true as const };
     });
-  } catch {
+  } catch (error) {
+    if (error instanceof Denied) return { ok: false, code: error.code };
     return { ok: false, code: "confirm_pending" };
+  } finally {
+    await deps.sql.query(
+      "update campaign_funding_payments set lease_token=null,lease_until=null where id=$1 and lease_token=$2 and status in ('confirming','review','awaiting_deposit')",
+      [o.id, o.lease_token],
+    );
   }
 }

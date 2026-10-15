@@ -43,4 +43,7 @@ it('renders a localized disabled Slack status separately from the analysis-disab
   expect(html).toContain('분석이 꺼져 있습니다.');
   expect(html).toContain('로컬 모델 분석에 실패한 작업이 있습니다.');
   expect(html).not.toContain('>disabled<');
+  expect(html).toContain('campaignRisk.slackConnectionTest');
+  expect(html).toContain('Slack 연결 점검');
+  expect(html).toMatch(/<button[^>]*disabled=""/);
 });

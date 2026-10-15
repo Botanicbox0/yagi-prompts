@@ -126,15 +126,13 @@ it('rejects malformed deep-link identifiers before contacting Slack', async () =
   expect(fake).not.toHaveBeenCalled();
 });
 it('disables supported thinking for structured classification and caps the lease-safe deadline', async () => {
-  const fake = vi
-    .fn()
-    .mockResolvedValue(
-      response({
-        done: true,
-        done_reason: 'stop',
-        message: { content: '{"category":"none","confidence":1,"evidence":[]}' },
-      }),
-    );
+  const fake = vi.fn().mockResolvedValue(
+    response({
+      done: true,
+      done_reason: 'stop',
+      message: { content: '{"category":"none","confidence":1,"evidence":[]}' },
+    }),
+  );
   await classifyRiskLocally('Synthetic benign text', 'synthetic:model', fake);
   expect(JSON.parse(fake.mock.calls[0]![1].body).think).toBe(false);
   await expect(classifyRiskLocally('Synthetic', 'synthetic:model', fake, 180001)).rejects.toThrow(
@@ -143,25 +141,23 @@ it('disables supported thinking for structured classification and caps the lease
 });
 it('canonicalizes only exact unique evidence from the actual model offset failure pattern', async () => {
   const body = 'Please transfer the money to my bank account outside this platform.';
-  const fake = vi
-    .fn()
-    .mockResolvedValue(
-      response({
-        done: true,
-        done_reason: 'stop',
-        total_duration: 17737000000,
-        load_duration: 16285000000,
-        prompt_eval_count: 170,
-        eval_count: 76,
-        message: {
-          content: JSON.stringify({
-            category: 'transfer_solicitation',
-            confidence: 0.99,
-            evidence: [{ start: 7, end: 66, text: body.slice(7) }],
-          }),
-        },
-      }),
-    );
+  const fake = vi.fn().mockResolvedValue(
+    response({
+      done: true,
+      done_reason: 'stop',
+      total_duration: 17737000000,
+      load_duration: 16285000000,
+      prompt_eval_count: 170,
+      eval_count: 76,
+      message: {
+        content: JSON.stringify({
+          category: 'transfer_solicitation',
+          confidence: 0.99,
+          evidence: [{ start: 7, end: 66, text: body.slice(7) }],
+        }),
+      },
+    }),
+  );
   const metrics = vi.fn();
   const result = await classifyRiskLocally(body, 'synthetic:model', fake, 180000, metrics);
   expect(result).toEqual({
@@ -181,4 +177,32 @@ it('canonicalizes only exact unique evidence from the actual model offset failur
     }),
   );
   expect(JSON.stringify(metrics.mock.calls)).not.toContain('bank account');
+});
+it('uses the same private-channel checks for an explicit connection test without fake events', async () => {
+  const fake = vi
+    .fn()
+    .mockResolvedValueOnce(response(auth))
+    .mockResolvedValueOnce(response(info))
+    .mockResolvedValueOnce(response({ ok: true, channel: RISK_CHANNEL, ts: '1.3' }));
+  const { createRiskSlackConnectionTestSender } = await import('@/lib/campaigns/risk/slack');
+  expect(await createRiskSlackConnectionTestSender('synthetic', 'ko', fake)()).toEqual({
+    state: 'sent',
+    code: 'acknowledged',
+  });
+  const payload = JSON.parse(fake.mock.calls[2]![1].body);
+  expect(payload).toEqual({
+    channel: RISK_CHANNEL,
+    text: 'TWINGS 연결 점검 · 실제 위험 사건이 아닙니다.\nhttps://admin.twings.app/admin/risk',
+    unfurl_links: false,
+    unfurl_media: false,
+  });
+  expect(payload.client_msg_id).toBeUndefined();
+  const denied = vi
+    .fn()
+    .mockResolvedValueOnce(response(auth))
+    .mockResolvedValueOnce(response({ ok: true, channel: { ...info.channel, is_private: false } }));
+  expect((await createRiskSlackConnectionTestSender('synthetic', 'en', denied)()).state).toBe(
+    'failed',
+  );
+  expect(denied).toHaveBeenCalledTimes(2);
 });

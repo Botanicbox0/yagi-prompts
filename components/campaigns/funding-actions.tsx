@@ -2,6 +2,11 @@
 import Script from "next/script";
 import { useEffect, useRef, useState } from "react";
 import { fundingCopy } from "@/messages/campaign-funding";
+import { fundingWidgetMethodSupported } from "@/lib/campaigns/funding/payment-method";
+import {
+  observeFundingAgreement,
+  type FundingAgreementWidget,
+} from "@/lib/campaigns/funding/widget-agreement";
 
 async function request(operation: string, input: unknown) {
   const response = await fetch("/api/campaign-funding", {
@@ -76,10 +81,10 @@ export function FundingAction({
 }
 interface Widgets {
   setAmount(v: { currency: string; value: number }): Promise<void>;
-  renderPaymentMethods(v: { selector: string }): Promise<unknown>;
-  renderAgreement(v: { selector: string }): Promise<{
-    on(event: string, cb: (v: { agreedRequiredTerms: boolean }) => void): void;
-  }>;
+  renderPaymentMethods(v: {
+    selector: string;
+  }): Promise<{ getSelectedPaymentMethod(): Promise<{ code: string }> }>;
+  renderAgreement(v: { selector: string }): Promise<FundingAgreementWidget>;
   requestPayment(v: {
     orderId: string;
     orderName: string;
@@ -109,6 +114,9 @@ export function FundingCheckout({
 }) {
   const t = fundingCopy(locale),
     widgets = useRef<Widgets | null>(null),
+    methods = useRef<Awaited<
+      ReturnType<Widgets["renderPaymentMethods"]>
+    > | null>(null),
     initializing = useRef(false),
     [ready, setReady] = useState(kind === "fake"),
     [agreed, setAgreed] = useState(kind === "fake"),
@@ -123,13 +131,13 @@ export function FundingCheckout({
       const w = init(clientKey).widgets({ customerKey });
       widgets.current = w;
       await w.setAmount({ currency: "KRW", value: order.amountKrw });
-      await w.renderPaymentMethods({ selector: "#funding-methods" });
+      methods.current = await w.renderPaymentMethods({
+        selector: "#funding-methods",
+      });
       const agreement = await w.renderAgreement({
         selector: "#funding-agreement",
       });
-      agreement.on("agreementStatusChange", (s) =>
-        setAgreed(s.agreedRequiredTerms),
-      );
+      await observeFundingAgreement(agreement, setAgreed);
       setReady(true);
     } catch {
       setError(t.error);
@@ -148,6 +156,12 @@ export function FundingCheckout({
         if (!r.ok) throw Error();
         window.location.assign(`/brand/projects/${projectId}/funding`);
       } else {
+        const selected = await methods.current?.getSelectedPaymentMethod();
+        if (!selected || !fundingWidgetMethodSupported(selected.code)) {
+          setError(t.supportedMethods);
+          setBusy(false);
+          return;
+        }
         await widgets.current!.requestPayment({
           orderId: order.id,
           orderName: order.name,
@@ -174,6 +188,9 @@ export function FundingCheckout({
       </p>
       <div id="funding-methods" />
       <div id="funding-agreement" />
+      {kind !== "fake" && (
+        <p className="my-4 text-sm leading-relaxed">{t.supportedMethods}</p>
+      )}
       {!ready && !error && <p role="status">{t.preparing}</p>}
       <p className="my-4 text-sm leading-relaxed">{t.recordOnly}</p>
       {error && <p role="alert">{error}</p>}

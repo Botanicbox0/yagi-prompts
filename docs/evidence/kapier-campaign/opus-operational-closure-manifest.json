@@ -1,0 +1,115 @@
+{
+  "captured_at_utc": "2026-10-15T22:22:13.442131+00:00",
+  "head": "8082a688854c2dfdb91558b6c7940c1733c8f55d",
+  "branch": "codex/kapier-self-serve",
+  "prompt_sha256": "0e7dc103a722fd854a4f4ed0a69ab253dd991c304a868f1522b49039fba28036",
+  "prompt_bytes": 228361,
+  "model_requested": "claude-opus-5-5",
+  "files": [
+    {
+      "file": "lib/campaigns/funding/payment.ts",
+      "sha256": "64ec779548c6c964e98ffdf8dd4026a3bae0effcd871a3fa917bb88b2868c417",
+      "bytes": 21057
+    },
+    {
+      "file": "lib/campaigns/funding/payment-method.ts",
+      "sha256": "cc4f4c0b0422d7e2cdba02346518883f227e4a11d52ef06783c92f5215ee7cb0",
+      "bytes": 489
+    },
+    {
+      "file": "lib/campaigns/funding/core.ts",
+      "sha256": "60439ab075557a5f5dfc66ac0e2321e8ffd0b50fd77fb561e61d16a38eabeb2f",
+      "bytes": 4577
+    },
+    {
+      "file": "lib/campaigns/funding/service.ts",
+      "sha256": "45cea1ed03f68378019a17daca49b02411377062b533962b1775d8056cfec96b",
+      "bytes": 15633
+    },
+    {
+      "file": "lib/campaigns/funding/widget-agreement.ts",
+      "sha256": "63f99e0d7ceabe1add5e0d1cdbbebcdfaad94c86b86367c98d90f688cfc7505f",
+      "bytes": 858
+    },
+    {
+      "file": "lib/billing/toss-gateway.ts",
+      "sha256": "53be88c6748b94e2b85e5ac4efac2a736a5117f33fe87241926fcd7906412db0",
+      "bytes": 5032
+    },
+    {
+      "file": "lib/billing/toss-fake.ts",
+      "sha256": "03f57891d2bef0b369b2d69c8a8eb93c095577f35371312b5cfd736bb29c8cf6",
+      "bytes": 2509
+    },
+    {
+      "file": "app/api/campaign-funding/route.ts",
+      "sha256": "5490b3aabfbfbd04945d5b409e6ce6bd667c77ecef053c61c73f65aef200ca16",
+      "bytes": 6849
+    },
+    {
+      "file": "components/campaigns/funding-actions.tsx",
+      "sha256": "8d089c7f903d45057451d45dc740165939655aba6f0a1858ed8386b8009b8513",
+      "bytes": 11971
+    },
+    {
+      "file": "app/(admin)/admin/funding/page.tsx",
+      "sha256": "0dadf2650cac5ee53a046f7ee9ddef409712ba2947a2231ff9dea3f91b267456",
+      "bytes": 14639
+    },
+    {
+      "file": "messages/campaign-funding.ts",
+      "sha256": "24fd22c671ace47fc451f6c7ddd1cc804f7ef876ea66d5efc333d59cb43a3237",
+      "bytes": 13440
+    },
+    {
+      "file": "lib/legal/documents.ts",
+      "sha256": "98b6e51e48f03f0651889dc83a199d16d68419bda60a64f4bc03273affdb15d4",
+      "bytes": 41755
+    },
+    {
+      "file": "lib/creator-subscriptions/legal-projection.ts",
+      "sha256": "2e29302ac17bac722127556d08ab6ffda9c43f4deb7493768bfc2289c102837a",
+      "bytes": 8474
+    },
+    {
+      "file": "tests/campaigns/funding.test.ts",
+      "sha256": "3f119bc1b8b387805b091337f2bd0d7e8e44f67c779a49e23b4b1952916534e7",
+      "bytes": 31640
+    },
+    {
+      "file": "tests/campaigns/funding-widget.test.ts",
+      "sha256": "715b84c13e79ab171e3782812d722b9c0bd56ea3840b48ea5006012eaad9118c",
+      "bytes": 2747
+    },
+    {
+      "file": "tests/campaigns/funding-http.test.ts",
+      "sha256": "5d6838eb49227d17bc0de492e78ed95f5f859edcf40d7ac8c0e731b6439d50ea",
+      "bytes": 3549
+    },
+    {
+      "file": "tests/billing/toss-gateway.test.ts",
+      "sha256": "bfa42c9172d50d03b1d0a764d61f8a148e90dd50c1e7a55bc6cc19d15d1b2146",
+      "bytes": 3597
+    },
+    {
+      "file": "tests/creator-subscriptions/legal-projection.test.ts",
+      "sha256": "1c30946e71ca0dbfd8fee8dd6c79e4f66fc0bf773ac2f95b0bac8aa653f61589",
+      "bytes": 7155
+    },
+    {
+      "file": "tests/legal/documents.test.ts",
+      "sha256": "db98ac8adde021407715b752a79cc34b49296aae66b6a97b543990b976872721",
+      "bytes": 9331
+    },
+    {
+      "file": "docs/qa/campaign-funding-recovery.md",
+      "sha256": "dd32236f33ab6fdb948ce137225b3d2cb1622864f1f68af3cdbaccd6f7b87d30",
+      "bytes": 4404
+    },
+    {
+      "file": "docs/legal/drafts/KAIPER-CAMPAIGN-PAYMENT-POLICY.md",
+      "sha256": "e0575ccd8a756e9527edc282c9a76f95fd537264f6c7422db75ee88c9858ec43",
+      "bytes": 10784
+    }
+  ]
+}

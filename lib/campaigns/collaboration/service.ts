@@ -158,10 +158,11 @@ async function projectAccess(
   userId: string,
   projectId: string,
   write = false,
+  lock = write,
 ) {
   const p = (
     await sql.query<Row>(
-      `select * from brand_projects where id=$1 ${write ? "for share" : ""}`,
+      `select * from brand_projects where id=$1 ${lock ? "for share" : ""}`,
       [projectId],
     )
   ).rows[0];
@@ -171,7 +172,7 @@ async function projectAccess(
   if (p.client_visible !== true) throw new Denied("not_found");
   const m = (
     await sql.query<Row>(
-      `select role from brand_memberships where organization_id=$1 and user_id=$2 and status='active' ${write ? "for share" : ""}`,
+      `select role from brand_memberships where organization_id=$1 and user_id=$2 and status='active' ${lock ? "for share" : ""}`,
       [p.organization_id, userId],
     )
   ).rows[0];
@@ -184,16 +185,17 @@ async function campaignAccess(
   userId: string,
   campaignId: string,
   write = false,
+  lock = write,
 ) {
   const c = (
     await sql.query<Row>(
-      "select c.id,c.slug,c.title,c.status,c.slots,c.applications_close_at,l.project_id from campaigns c join campaign_collaboration_links l on l.campaign_id=c.id where c.id=$1 for share of c,l",
+      `select c.id,c.slug,c.title,c.status,c.slots,c.applications_close_at,l.project_id from campaigns c join campaign_collaboration_links l on l.campaign_id=c.id where c.id=$1 ${lock ? "for share of c,l" : ""}`,
       [campaignId],
     )
   ).rows[0];
   if (!c) throw new Denied("not_found");
   return {
-    ...(await projectAccess(sql, userId, String(c.project_id), write)),
+    ...(await projectAccess(sql, userId, String(c.project_id), write, lock)),
     c,
   };
 }
@@ -203,26 +205,30 @@ async function participantAccess(
   id: string,
   write = false,
   audit = true,
+  lock = write,
 ) {
   if (!uuid.safeParse(id).success) throw new Denied("not_found");
   // Discover without a row lock, then serialize writes using the campaign root before any
   // application lock. Admin selection, invitation claims and production use this order too.
-  if (write) {
-    const root = (
-      await sql.query<{ campaign_id: string }>(
-        "select campaign_id from campaign_applications where id=$1",
-        [id],
-      )
-    ).rows[0];
-    if (!root) throw new Denied("not_found");
+  if (write && lock) {
+    // Reject callers without current write authority before they can contend on a campaign.
+    // The normal checks below run again after locking to close revocation races.
+    const preflight = await participantAccess(
+      sql,
+      userId,
+      id,
+      true,
+      false,
+      false,
+    );
     await sql.query("select id from campaigns where id=$1 for update", [
-      root.campaign_id,
+      preflight.a.campaign_id,
     ]);
   }
   const a = (
     await sql.query<Row>(
       `select a.id,a.creator_id,a.status,a.campaign_id,a.sns_url,a.post_url,c.slug,c.title,c.status as campaign_status,l.project_id,p.status as project_status,p.client_visible
- from campaign_applications a join campaigns c on c.id=a.campaign_id join campaign_collaboration_links l on l.campaign_id=c.id join brand_projects p on p.id=l.project_id where a.id=$1 ${write ? "for share of a,l,p" : ""}`,
+ from campaign_applications a join campaigns c on c.id=a.campaign_id join campaign_collaboration_links l on l.campaign_id=c.id join brand_projects p on p.id=l.project_id where a.id=$1 ${lock ? "for share of a,l,p" : ""}`,
       [id],
     )
   ).rows[0];
@@ -238,6 +244,7 @@ async function participantAccess(
       userId,
       String(a.project_id),
       write,
+      lock,
     );
     role = access.role;
     canWrite = access.canWrite;
@@ -326,6 +333,7 @@ export async function issueInvitation(
     .safeParse(input);
   if (!p.success) return { ok: false, code: "invalid" };
   return run(d, v, async (sql, id) => {
+    await campaignAccess(sql, id, p.data.campaignId, true, false);
     await sql.query("select id from campaigns where id=$1 for update", [
       p.data.campaignId,
     ]);
@@ -403,6 +411,7 @@ export async function revokeInvitation(
       )
     ).rows[0];
     if (!r) throw new Denied("not_found");
+    await campaignAccess(sql, id, String(r.campaign_id), true, false);
     await sql.query("select id from campaigns where id=$1 for update", [
       r.campaign_id,
     ]);

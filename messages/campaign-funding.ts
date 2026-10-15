@@ -1,4 +1,8 @@
 const en = {
+  supportedMethods:
+    "Use a card or Toss Pay for this campaign payment. Virtual accounts and other methods are not supported here.",
+  pendingRefundHelp:
+    "The cancellation result is unresolved. Do not send another cancellation. Ask the payment provider through its merchant console or support to confirm this order’s cancellation result, then check the provider status here again. A pending record is not a completed refund.",
   reward: {
     title: "Propose a participant reward",
     hint: "Send an amount per participant and conditions to the studio for review. This is a nonbinding proposal, separate from the TWINGS service quote. It does not change campaign terms already shown to applicants or trigger a payout.",
@@ -123,6 +127,10 @@ const en = {
   },
 };
 const ko: typeof en = {
+  supportedMethods:
+    "캠페인 대금은 카드 또는 토스페이로 결제해 주세요. 가상계좌와 그 밖의 결제수단은 지원하지 않습니다.",
+  pendingRefundHelp:
+    "취소 결과를 확인하고 있습니다. 취소를 다시 요청하지 마세요. 결제 제공사 관리자 콘솔이나 고객센터에서 이 주문의 취소 결과를 확인한 뒤, 여기서 제공사 상태를 다시 확인해 주세요. 확인 중인 기록은 환불 완료를 뜻하지 않습니다.",
   reward: {
     title: "참여자 보상 제안",
     hint: "참여자 1명당 금액과 조건을 스튜디오에 검토 요청합니다. TWINGS 서비스 견적과 별개의 비확정 제안입니다. 기존 지원자에게 제시한 캠페인 조건을 바꾸거나 지급을 실행하지 않습니다.",

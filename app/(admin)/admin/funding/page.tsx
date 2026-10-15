@@ -277,6 +277,14 @@ export default async function FundingAdmin({
                               ? t.test
                               : t.fake}
                         </p>
+                        {p.status === "refund_pending" && (
+                          <p
+                            className="mt-3 max-w-prose leading-relaxed"
+                            role="status"
+                          >
+                            {t.pendingRefundHelp}
+                          </p>
+                        )}
                         {recovery && ["paid", "review"].includes(p.status) && (
                           <OpForm
                             op="campaignFunding.refund"

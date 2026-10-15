@@ -48,6 +48,7 @@ const snapshot = (id: string, key: string): TossPayment => ({
   currency: "KRW",
   balance: 120000,
   status: "DONE",
+  method: "카드",
 });
 const provider = new Map<string, TossPayment>();
 let confirms = 0,
@@ -159,6 +160,212 @@ async function ordered() {
   return { ...f, order: r.order };
 }
 describe("campaign funding boundary", () => {
+  it.each([
+    { method: "가상계좌", allowed: false },
+    { method: undefined, allowed: false },
+    { method: "간편결제", easyPayProvider: "다른 제공사", allowed: false },
+    { method: "카드", allowed: true },
+    { method: "간편결제", easyPayProvider: "토스페이", allowed: true },
+  ])(
+    "validates real provider method before confirmation: $method/$easyPayProvider",
+    async ({ method, easyPayProvider, allowed }) => {
+      const f = await accepted();
+      const real = {
+        ...deps(),
+        gateway: { ...gateway, kind: "test" as const },
+      };
+      const created = await createFundingOrder(real, owner, {
+        caseId: f.caseId,
+        requestId: randomUUID(),
+      });
+      if (!created.ok) throw Error(created.code);
+      const key = created.order.id;
+      provider.set(key, {
+        ...snapshot(key, key),
+        status: "IN_PROGRESS",
+        method,
+        easyPayProvider,
+      });
+      const before = confirms;
+      const result = await confirmFundingPayment(real, owner, {
+        orderId: key,
+        amount: 120000,
+        paymentKey: key,
+      });
+      expect(result.ok).toBe(allowed);
+      expect(confirms - before).toBe(allowed ? 1 : 0);
+      if (!allowed) {
+        expect(result).toMatchObject({ code: "payment_review" });
+        expect(
+          (
+            await sql.query(
+              "select status,payment_key from campaign_funding_payments where id=$1",
+              [key],
+            )
+          ).rows[0],
+        ).toEqual({ status: "pending", payment_key: null });
+      }
+    },
+  );
+
+  it.each(["lost-request", "rejected"] as const)(
+    "keeps %s cancellation unresolved without a resend, then records externally proven refund",
+    async (failure) => {
+      const f = await ordered();
+      await confirmFundingPayment(deps(), owner, {
+        orderId: f.order.id,
+        amount: 120000,
+        paymentKey: f.order.id,
+      });
+      let cancelCalls = 0;
+      const unavailable = {
+        ...gateway,
+        cancel: async () => {
+          cancelCalls++;
+          throw failure === "rejected"
+            ? new TossError("HTTP_400", false)
+            : new Error("request lost");
+        },
+      };
+      const recovery = { ...deps(), gateway: unavailable };
+      const input = {
+        paymentId: f.order.id,
+        reason: "Explicit refund requiring provider review",
+        confirmed: true,
+      };
+      expect(await refundFundingPayment(recovery, admin, input)).toMatchObject({
+        ok: false,
+        code: "confirm_pending",
+      });
+      expect(await refundFundingPayment(recovery, admin, input)).toMatchObject({
+        ok: false,
+        code: "conflict",
+      });
+      const later = { ...recovery, now: new Date(+now + 120000) };
+      await reconcileFunding(later, f.order.id);
+      expect(
+        (
+          await sql.query(
+            "select status,refund_started_at from campaign_funding_payments where id=$1",
+            [f.order.id],
+          )
+        ).rows[0],
+      ).toMatchObject({ status: "refund_pending", refund_started_at: now });
+      expect(cancelCalls).toBe(1);
+      provider.set(f.order.id, {
+        ...snapshot(f.order.id, f.order.id),
+        status: "CANCELED",
+        balance: 0,
+      });
+      await reconcileFunding(
+        { ...later, now: new Date(+now + 240000) },
+        f.order.id,
+      );
+      expect(
+        (
+          await sql.query(
+            "select status from campaign_funding_payments where id=$1",
+            [f.order.id],
+          )
+        ).rows[0]?.status,
+      ).toBe("refunded");
+      expect(cancelCalls).toBe(1);
+    },
+  );
+  it("rechecks admin authority after refund provider preflight before sending cancellation", async () => {
+    const f = await ordered();
+    await confirmFundingPayment(deps(), owner, {
+      orderId: f.order.id,
+      amount: 120000,
+      paymentKey: f.order.id,
+    });
+    const before = cancels;
+    const revoke: TossGateway = {
+      ...gateway,
+      async retrieve(key) {
+        await sql.query("update profiles set is_admin=false where id=$1", [
+          adminId,
+        ]);
+        return provider.get(key) ?? null;
+      },
+    };
+    try {
+      expect(
+        await refundFundingPayment({ ...deps(), gateway: revoke }, admin, {
+          paymentId: f.order.id,
+          reason: "Review full refund",
+          confirmed: true,
+        }),
+      ).toMatchObject({ ok: false, code: "forbidden" });
+      expect(cancels).toBe(before);
+      expect(
+        (
+          await sql.query(
+            "select status,refund_started_at from campaign_funding_payments where id=$1",
+            [f.order.id],
+          )
+        ).rows[0],
+      ).toEqual({ status: "paid", refund_started_at: null });
+      expect(
+        (
+          await sql.query(
+            "select * from campaign_funding_events where case_id=$1 and kind='refund_requested'",
+            [f.caseId],
+          )
+        ).rows,
+      ).toHaveLength(0);
+    } finally {
+      await sql.query("update profiles set is_admin=true where id=$1", [
+        adminId,
+      ]);
+    }
+  });
+  it("rechecks admin authority after release provider lookup before releasing the order", async () => {
+    const f = await ordered(),
+      key = "release-" + f.order.id;
+    await sql.query(
+      "update campaign_funding_payments set status='confirming',payment_key=$2 where id=$1",
+      [f.order.id, key],
+    );
+    const revoke: TossGateway = {
+      ...gateway,
+      async retrieve() {
+        await sql.query("update profiles set is_admin=false where id=$1", [
+          adminId,
+        ]);
+        return { ...snapshot(f.order.id, key), status: "EXPIRED", balance: 0 };
+      },
+    };
+    try {
+      expect(
+        await releaseUnpaidFundingOrder({ ...deps(), gateway: revoke }, admin, {
+          paymentId: f.order.id,
+          reason: "Provider proved expired",
+          confirmed: true,
+        }),
+      ).toMatchObject({ ok: false, code: "forbidden" });
+      expect(
+        (
+          await sql.query(
+            "select status from campaign_funding_payments where id=$1",
+            [f.order.id],
+          )
+        ).rows[0]?.status,
+      ).toBe("confirming");
+      expect(
+        (
+          await sql.query(
+            "select * from campaign_funding_events where case_id=$1 and kind='unpaid_order_released'",
+            [f.caseId],
+          )
+        ).rows,
+      ).toHaveLength(0);
+    } finally {
+      await sql.query("update profiles set is_admin=true where id=$1", [
+        adminId,
+      ]);
+    }
+  });
   it("rejects verified foreign keys before binding or confirming and leaves the correct order usable", async () => {
     const f = await ordered(),
       foreignId = randomUUID(),

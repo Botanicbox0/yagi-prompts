@@ -3,7 +3,7 @@ import {
   type TossConfirm,
   type TossGateway,
   type TossPayment,
-} from './toss-gateway';
+} from "./toss-gateway";
 
 /** The provider seam, never an alternative success path on a deployed site. */
 export interface FakeTossGateway extends TossGateway {
@@ -19,7 +19,7 @@ export function createFakeTossGateway(): FakeTossGateway {
   const confirmations = new Map<string, TossPayment>();
   const cancellations = new Map<string, TossPayment>();
   const fake: FakeTossGateway = {
-    kind: 'fake',
+    kind: "fake",
     confirmCalls: 0,
     cancelCalls: 0,
     loseConfirmResponse: false,
@@ -32,9 +32,10 @@ export function createFakeTossGateway(): FakeTossGateway {
           paymentKey,
           orderId,
           amount,
-          currency: 'KRW',
-          status: 'IN_PROGRESS',
+          currency: "KRW",
+          status: "IN_PROGRESS",
           balance: amount,
+          method: "카드",
         });
     },
     async confirm(input: TossConfirm) {
@@ -42,14 +43,14 @@ export function createFakeTossGateway(): FakeTossGateway {
       if (previous) return { ...previous };
       const p = payments.get(input.paymentKey);
       if (!p || p.orderId !== input.orderId || p.amount !== input.amount)
-        throw new TossError('INVALID_PAYMENT', false);
+        throw new TossError("INVALID_PAYMENT", false);
       fake.confirmCalls += 1;
-      const paid = { ...p, status: 'DONE' };
+      const paid = { ...p, status: "DONE" };
       payments.set(input.paymentKey, paid);
       confirmations.set(input.idempotencyKey, paid);
       if (fake.loseConfirmResponse) {
         fake.loseConfirmResponse = false;
-        throw new TossError('NETWORK_ERROR');
+        throw new TossError("NETWORK_ERROR");
       }
       return { ...paid };
     },
@@ -58,13 +59,13 @@ export function createFakeTossGateway(): FakeTossGateway {
       return p ? { ...p } : null;
     },
     async cancel(input) {
-      if (fake.failCancel) throw new TossError('NETWORK_ERROR');
+      if (fake.failCancel) throw new TossError("NETWORK_ERROR");
       const previous = cancellations.get(input.idempotencyKey);
       if (previous) return { ...previous };
       const p = payments.get(input.paymentKey);
-      if (!p) throw new TossError('NOT_FOUND', false);
+      if (!p) throw new TossError("NOT_FOUND", false);
       fake.cancelCalls += 1;
-      const refunded = { ...p, status: 'CANCELED', balance: 0 };
+      const refunded = { ...p, status: "CANCELED", balance: 0 };
       payments.set(input.paymentKey, refunded);
       cancellations.set(input.idempotencyKey, refunded);
       return { ...refunded };

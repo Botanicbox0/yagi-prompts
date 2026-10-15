@@ -949,3 +949,51 @@ it("denies owner DELETE of immutable collaboration records and removes inherited
     expect(rights).toEqual({ can_delete: false, can_select: true });
   }
 });
+it("rejects unauthorized collaboration writes before acquiring campaign or membership row locks", async () => {
+  const f = await fixture(),
+    applicationId = randomUUID();
+  await sql.query(
+    "insert into campaign_applications(id,campaign_id,creator_id,status,pitch,sns_url,follower_count) values($1,$2,$3,'selected','Selected participant','https://instagram.com/selected',10)",
+    [applicationId, f.campaign, creatorId],
+  );
+  const invitation = await issueInvitation({ sql, now }, brand, {
+    campaignId: f.campaign,
+    requestId: randomUUID(),
+  });
+  if (!invitation.ok) throw Error(invitation.code);
+  const statements: string[] = [];
+  const track = (base: SqlRunner): SqlRunner => ({
+    query: async <T>(q: string, args?: unknown[]) => {
+      statements.push(q);
+      return base.query<T>(q, args);
+    },
+    transaction: (fn) => base.transaction((tx) => fn(track(tx))),
+  });
+  expect(
+    await sendParticipantMessage({ sql: track(sql), now }, other, {
+      applicationId,
+      requestId: randomUUID(),
+      body: "Not authorized",
+    }),
+  ).toMatchObject({ ok: false, code: "not_found" });
+  expect(statements.some((q) => /for (share|update)/i.test(q))).toBe(false);
+  statements.length = 0;
+  await sql.query(
+    "update brand_memberships set role='viewer' where organization_id=$1 and user_id=$2",
+    [f.org, brandId],
+  );
+  expect(
+    await issueInvitation({ sql: track(sql), now }, brand, {
+      campaignId: f.campaign,
+      requestId: randomUUID(),
+    }),
+  ).toMatchObject({ ok: false, code: "forbidden" });
+  expect(statements.some((q) => /for (share|update)/i.test(q))).toBe(false);
+  statements.length = 0;
+  expect(
+    await revokeInvitation({ sql: track(sql), now }, brand, {
+      invitationId: invitation.id,
+    }),
+  ).toMatchObject({ ok: false, code: "forbidden" });
+  expect(statements.some((q) => /for (share|update)/i.test(q))).toBe(false);
+});

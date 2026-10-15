@@ -2,6 +2,7 @@ import { readBoundedResponse } from './transport';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import type { SqlRunner } from '@/lib/db/sql-runner';
+import { campaignRiskMessages } from '@/messages/campaign-risk';
 export type SlackRiskConfig =
   | { status: 'disabled' | 'unconfigured' }
   | { status: 'configured'; token: string };
@@ -16,14 +17,12 @@ export type SlackRiskOutcome =
   | { state: 'retry'; code: 'rate_limited'; delay: number };
 export const RISK_CHANNEL = 'C0C9DRS4DT7';
 const RISK_TEAM = 'T0AJ7QBQM39';
-export function createRiskSlackSender(
+function createPrivateRiskSlackSender(
   token: string,
   fetcher: typeof fetch = fetch,
   timeoutMs = 5000,
 ) {
-  return async (id: string, flagId: string): Promise<SlackRiskOutcome> => {
-    if (!z.string().uuid().safeParse(id).success || !z.string().uuid().safeParse(flagId).success)
-      return { state: 'failed', code: 'invalid_id' };
+  return async (payload: { text: string; client_msg_id?: string }): Promise<SlackRiskOutcome> => {
     let sending = false;
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -72,8 +71,7 @@ export function createRiskSlackSender(
         sending = true;
         const sent = await call('chat.postMessage', {
           channel: RISK_CHANNEL,
-          client_msg_id: id,
-          text: `TWINGS risk_review_required ${id}\nhttps://admin.twings.app/admin/risk?flag=${flagId}#flag-${flagId}`,
+          ...payload,
           unfurl_links: false,
           unfurl_media: false,
         });
@@ -104,6 +102,34 @@ export function createRiskSlackSender(
       clearTimeout(timer);
     }
   };
+}
+export function createRiskSlackSender(
+  token: string,
+  fetcher: typeof fetch = fetch,
+  timeoutMs = 5000,
+) {
+  const send = createPrivateRiskSlackSender(token, fetcher, timeoutMs);
+  return async (id: string, flagId: string): Promise<SlackRiskOutcome> => {
+    if (!z.string().uuid().safeParse(id).success || !z.string().uuid().safeParse(flagId).success)
+      return { state: 'failed', code: 'invalid_id' };
+    return send({
+      client_msg_id: id,
+      text: `TWINGS risk_review_required ${id}\nhttps://admin.twings.app/admin/risk?flag=${flagId}#flag-${flagId}`,
+    });
+  };
+}
+/** Explicit admin diagnostic only. Never create a fake risk event or drain the outbox. */
+export function createRiskSlackConnectionTestSender(
+  token: string,
+  locale: 'ko' | 'en',
+  fetcher: typeof fetch = fetch,
+  timeoutMs = 5000,
+) {
+  const send = createPrivateRiskSlackSender(token, fetcher, timeoutMs);
+  return () =>
+    send({
+      text: `${campaignRiskMessages[locale].slackConnectionMessage}\nhttps://admin.twings.app/admin/risk`,
+    });
 }
 /** Durable claim before outbound I/O. A crashed send is uncertain, never blindly reclaimed. */
 export async function dispatchRiskSlack(

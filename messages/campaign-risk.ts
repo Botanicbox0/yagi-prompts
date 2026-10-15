@@ -20,6 +20,18 @@ export const campaignRiskMessages = {
     queue: '분석 대기·처리 상태',
     slack: 'Slack 알림 상태',
     slackDisabled: '발송 꺼짐',
+    slackConnectionMessage: 'TWINGS 연결 점검 · 실제 위험 사건이 아닙니다.',
+    slackConnectionTest: 'Slack 연결 점검',
+    slackConnectionHint:
+      '관리자가 누르면 연결 점검 메시지 한 건을 보냅니다. 같은 관리자는 10분에 한 번만 실행할 수 있습니다.',
+    slackConnectionPending: '연결 점검 중…',
+    slackTestSent: 'Slack 연결 점검 메시지를 보냈습니다.',
+    slackTestUncertain:
+      '전송 여부를 확정하지 못했습니다. 다시 누르기 전에 Slack 채널을 확인해 주세요.',
+    slackTestFailed: 'Slack 연결 점검에 실패했습니다. 봇 설정과 채널 멤버십을 확인해 주세요.',
+    slackTestDisabled: '운영 Slack 발송 설정이 준비되지 않아 점검하지 않았습니다.',
+    slackTestCooldown:
+      '최근 10분 안에 연결 점검을 요청했습니다. Slack 채널과 기록을 먼저 확인해 주세요.',
     empty: '검토할 신호가 없습니다. 분석 대기·실패 상태도 확인하세요.',
     reviewed: '확인함',
     dismissed: '무시',
@@ -67,6 +79,19 @@ export const campaignRiskMessages = {
     queue: 'Analysis queue states',
     slack: 'Slack delivery states',
     slackDisabled: 'Delivery disabled',
+    slackConnectionMessage: 'TWINGS connection test · This is not a real risk incident.',
+    slackConnectionTest: 'Test Slack connection',
+    slackConnectionHint:
+      'Sends one diagnostic message when an administrator presses the button. Limited to once per administrator every 10 minutes.',
+    slackConnectionPending: 'Testing connection…',
+    slackTestSent: 'The Slack connection test message was sent.',
+    slackTestUncertain:
+      'Delivery could not be confirmed. Check the Slack channel before trying again.',
+    slackTestFailed:
+      'Slack connection test failed. Check the bot configuration and channel membership.',
+    slackTestDisabled: 'Production Slack delivery is not configured; no test was sent.',
+    slackTestCooldown:
+      'A connection test was requested within the last 10 minutes. Check the channel and audit record first.',
     empty: 'No review flags. Also check pending and failed analysis.',
     reviewed: 'Reviewed',
     dismissed: 'Dismissed',

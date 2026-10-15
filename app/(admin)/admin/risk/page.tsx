@@ -7,6 +7,7 @@ import { getDictionary } from '@/lib/i18n/dictionaries';
 import { AdminShell, Panel, OpForm, INPUT, BUTTON } from '@/components/admin/chrome';
 import { loadRiskInbox } from '@/lib/campaigns/risk/admin';
 import { campaignRiskMessages } from '@/messages/campaign-risk';
+import { RiskSlackConnectionForm } from './connection-test-form';
 export const dynamic = 'force-dynamic';
 export default async function RiskPage({
   searchParams,
@@ -21,6 +22,17 @@ export default async function RiskPage({
   ]);
   const t = campaignRiskMessages[locale];
   const label = (s: string) => t[s as keyof typeof t] ?? s;
+  const connectionResult =
+    typeof params.detail === 'string' &&
+    [
+      'slackTestSent',
+      'slackTestUncertain',
+      'slackTestFailed',
+      'slackTestDisabled',
+      'slackTestCooldown',
+    ].includes(params.detail)
+      ? label(params.detail)
+      : null;
   const inbox = sql
     ? await loadRiskInbox(
         sql,
@@ -36,6 +48,11 @@ export default async function RiskPage({
       <div data-risk-inbox>
         <h1 className="font-display text-3xl">{t.title}</h1>
         <p className="my-4">{t.lede}</p>
+        {connectionResult && (
+          <p role="status" className="my-4 border border-hairline p-3">
+            {connectionResult}
+          </p>
+        )}
         {!inbox.ready ? (
           <p role="status">{t.unavailable}</p>
         ) : (
@@ -62,6 +79,12 @@ export default async function RiskPage({
             </Panel>
             <Panel title={t.slack}>
               <p>{inbox.slackConfig === 'disabled' ? t.slackDisabled : label(inbox.slackConfig)}</p>
+              <p className="my-3">{t.slackConnectionHint}</p>
+              <RiskSlackConnectionForm
+                label={t.slackConnectionTest}
+                pendingLabel={t.slackConnectionPending}
+                disabled={inbox.slackConfig !== 'configured'}
+              />
               {inbox.slack.map((j) => (
                 <p key={j.state}>
                   {label(j.state)}: {j.n}
