@@ -35,15 +35,17 @@ function createPrivateRiskSlackSender(
     const run = async (): Promise<SlackRiskOutcome> => {
       try {
         const call = async (method: string, body: object) => {
-          const r = await fetcher(`https://slack.com/api/${method}`, {
-            method: 'POST',
+          const readChannel = method === 'conversations.info';
+          const query = readChannel ? `?${new URLSearchParams({ channel: RISK_CHANNEL })}` : '';
+          const r = await fetcher(`https://slack.com/api/${method}${query}`, {
+            method: readChannel ? 'GET' : 'POST',
             redirect: 'error',
             signal: controller.signal,
             headers: {
               Authorization: `Bearer ${token}`,
-              'Content-Type': 'application/json; charset=utf-8',
+              ...(!readChannel ? { 'Content-Type': 'application/json; charset=utf-8' } : {}),
             },
-            body: JSON.stringify(body),
+            ...(!readChannel ? { body: JSON.stringify(body) } : {}),
           });
           if (r.status === 429)
             return {

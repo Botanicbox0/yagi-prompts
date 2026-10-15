@@ -187,7 +187,9 @@ def task_query():
     import xml.etree.ElementTree as ET
     root = ET.fromstring(result.stdout)
     ns = {'t': 'http://schemas.microsoft.com/windows/2004/02/mit/task'}
-    return {'installed': True, 'enabled': root.findtext('t:Settings/t:Enabled', namespaces=ns) == 'true'}
+    # Task Scheduler omits schema-default settings when exporting XML.
+    # Settings.Enabled defaults to true; an explicit false still disables it.
+    return {'installed': True, 'enabled': root.findtext('t:Settings/t:Enabled', default='true', namespaces=ns) == 'true'}
 
 
 def install_task(state):
