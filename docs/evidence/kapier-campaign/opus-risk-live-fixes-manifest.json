@@ -1,0 +1,34 @@
+{
+  "captured_at_utc": "2026-10-15T22:48:59.169929+00:00",
+  "base": "b8aa62df7f5003bca92fe0270768157fc74fb95d",
+  "branch": "codex/campaign-risk-live-fixes",
+  "prompt_sha256": "eab04d762f98f258612bf1d6c5a1163972e1beb076be456bf05726f908ea5f32",
+  "bytes": 48154,
+  "files": [
+    {
+      "file": "lib/campaigns/risk/slack.ts",
+      "sha256": "d46b6c958472b16629af1e1ac3e2e5e7d8349776d45fb3a8f72f4a76bcd0959d",
+      "bytes": 7598
+    },
+    {
+      "file": "scripts/campaign-risk-background.py",
+      "sha256": "6610de5eb11e1a1bf50b93f5dc7f89e61d3ec2e2f2787919da434aee302b185e",
+      "bytes": 13402
+    },
+    {
+      "file": "scripts/campaign-risk-background.test.py",
+      "sha256": "6c0df419586aba2fd667c3e120289d5e3d8436f50c904b52dc46a630d32670c7",
+      "bytes": 4240
+    },
+    {
+      "file": "tests/campaigns/risk/transports.test.ts",
+      "sha256": "57d42d4ce73553b78d22fc223eb01303f2ea7af198b93059cc1b85315e87cd9d",
+      "bytes": 10567
+    }
+  ],
+  "official_sources": [
+    "https://docs.slack.dev/reference/methods/conversations.info/",
+    "https://learn.microsoft.com/en-us/windows/win32/taskschd/taskschedulerschema-enabled-settingstype-element"
+  ],
+  "probe_sha256": "14af27443a4f4b98f7198e570272446813e74c0e72082267d93ed4c96e593898"
+}

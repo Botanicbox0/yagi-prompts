@@ -9,6 +9,7 @@ import sys
 import tempfile
 import time
 import unittest
+from unittest.mock import patch
 
 sys.dont_write_bytecode = True
 SPEC = importlib.util.spec_from_file_location('risk_background', Path(__file__).with_name('campaign-risk-background.py'))
@@ -17,6 +18,23 @@ SPEC.loader.exec_module(manager)
 
 
 class QuietWorkerTests(unittest.TestCase):
+    def test_task_query_uses_scheduler_default_for_omitted_enabled_setting(self):
+        namespace = 'http://schemas.microsoft.com/windows/2004/02/mit/task'
+        for settings, expected in [
+            ('<Settings/>', True),
+            ('<Settings><Enabled>true</Enabled></Settings>', True),
+            ('<Settings><Enabled>false</Enabled></Settings>', False),
+        ]:
+            with self.subTest(settings=settings):
+                result = subprocess.CompletedProcess([], 0, stdout=f'<Task xmlns="{namespace}">{settings}</Task>')
+                with patch.object(manager.subprocess, 'run', return_value=result) as run:
+                    self.assertEqual(manager.task_query(), {'installed': True, 'enabled': expected})
+                    self.assertEqual(run.call_args.args[0], ['schtasks.exe', '/Query', '/TN', manager.TASK_NAME, '/XML'])
+
+    def test_task_query_reports_absent_task_without_parsing_error_output(self):
+        with patch.object(manager.subprocess, 'run', return_value=subprocess.CompletedProcess([], 1, stdout='not XML')):
+            self.assertEqual(manager.task_query(), {'installed': False})
+
     def test_dpapi_round_trip_without_plaintext(self):
         secret = b'synthetic-test-secret-not-a-real-token-12345'
         cipher = manager.dpapi(secret)

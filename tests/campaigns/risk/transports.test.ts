@@ -9,6 +9,37 @@ const info = {
   ok: true,
   channel: { id: RISK_CHANNEL, is_private: true, is_member: true, is_archived: false },
 };
+it('reads private channel info using GET query arguments, with credentials only in the header', async () => {
+  const token = 'synthetic-private-bot-token';
+  const fake = vi.fn(async (input: URL | RequestInfo, init?: RequestInit) => {
+    const url = new URL(String(input));
+    expect(url.href).not.toContain(token);
+    expect(url.searchParams.has('token')).toBe(false);
+    expect(new Headers(init?.headers).get('Authorization')).toBe(`Bearer ${token}`);
+    if (url.pathname.endsWith('/auth.test')) {
+      expect(init?.method).toBe('POST');
+      return response(auth);
+    }
+    if (url.pathname.endsWith('/conversations.info')) {
+      // Actual provider behavior: the previous JSON POST is rejected, even for
+      // a correct bot/private channel. Only documented GET succeeds here.
+      if (init?.method !== 'GET') return response({ ok: false, error: 'invalid_arguments' });
+      expect(url.searchParams.get('channel')).toBe(RISK_CHANNEL);
+      expect([...url.searchParams.keys()]).toEqual(['channel']);
+      expect(init.body).toBeUndefined();
+      return response(info);
+    }
+    expect(url.pathname).toBe('/api/chat.postMessage');
+    expect(init?.method).toBe('POST');
+    return response({ ok: true, channel: RISK_CHANNEL, ts: '1.2' });
+  });
+  const id = randomUUID();
+  expect(await createRiskSlackSender(token, fake)(id, id)).toEqual({
+    state: 'sent',
+    code: 'acknowledged',
+  });
+  expect(fake).toHaveBeenCalledTimes(3);
+});
 it('requires explicit production environment before configuring Slack delivery', () => {
   const enabled = {
     CAMPAIGN_RISK_SLACK_ENABLED: 'on',
@@ -46,8 +77,10 @@ it('defaults Slack off and verifies current private channel membership and works
     unfurl_media: false,
   });
   for (const channel of [
+    { ...info.channel, id: 'C_OTHER' },
     { ...info.channel, is_private: false },
     { ...info.channel, is_member: false },
+    { ...info.channel, is_archived: true },
   ]) {
     const closed = vi
       .fn()
@@ -59,6 +92,21 @@ it('defaults Slack off and verifies current private channel membership and works
   const wrong = vi.fn().mockResolvedValueOnce(response({ ...auth, team_id: 'other' }));
   expect((await createRiskSlackSender('synthetic', wrong)(id, id)).state).toBe('failed');
   expect(wrong).toHaveBeenCalledTimes(1);
+});
+it('keeps channel GET rate limits and pre-send timeouts from sending a message', async () => {
+  const limited = vi.fn().mockResolvedValueOnce(response(auth)).mockResolvedValueOnce(
+    new Response('', { status: 429, headers: { 'retry-after': '180' } }),
+  );
+  expect(await createRiskSlackSender('synthetic', limited)(randomUUID(), randomUUID())).toEqual({
+    state: 'retry', code: 'rate_limited', delay: 180,
+  });
+  expect(limited).toHaveBeenCalledTimes(2);
+  const timeout = vi.fn().mockResolvedValueOnce(response(auth))
+    .mockImplementationOnce(() => new Promise(() => {}));
+  expect(await createRiskSlackSender('synthetic', timeout, 10)(randomUUID(), randomUUID())).toEqual({
+    state: 'failed', code: 'timeout',
+  });
+  expect(timeout).toHaveBeenCalledTimes(2);
 });
 it('preserves ambiguous send, explicit rate-limit and timeout outcomes', async () => {
   const fake = vi
