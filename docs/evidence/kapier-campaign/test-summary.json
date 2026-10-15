@@ -1,0 +1,14 @@
+{
+  "command": "npx vitest run --maxWorkers=8 --reporter=json",
+  "success": true,
+  "files": 261,
+  "totalTests": 2501,
+  "passedTests": 2501,
+  "failedTests": 0,
+  "pendingTests": 0,
+  "next": "15.5.27",
+  "vitest": "4.1.11",
+  "rawResultSha256": "46319f24d3398e2708c009ca9c10dcfe80ec6bd03381598af74e67fc8ca0fdba",
+  "sourceManifest": "release-source-manifest.json",
+  "sourceDrift": 0
+}

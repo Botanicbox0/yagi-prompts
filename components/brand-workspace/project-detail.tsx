@@ -96,6 +96,7 @@ export function ProjectDetail({
   studioReply,
   staffManageHref = null,
   usage = null,
+  campaignActions,
 }: {
   project: BrandProjectDetail;
   b: BrandCopy;
@@ -109,6 +110,8 @@ export function ProjectDetail({
   staffManageHref?: string | null;
   /** Secondary usage (docs/SECONDARY-USAGE.md): null hides the tab (campaign guests, or not loaded). */
   usage?: BrandUsageView | null;
+  /** Feature-ready project actions, loaded only after the caller has authorized this project. */
+  campaignActions?: ReactNode;
 }) {
   // `role: "studio"` outside /admin is the TWINGS team's read-only view: it is not the customer's seat.
   const staffView = !studio && p.role === "studio";
@@ -145,6 +148,7 @@ export function ProjectDetail({
       </div>
       </div>
       {staffView && <StaffNotice b={b} manageHref={staffManageHref} />}
+      {campaignActions}
       {staffView && p.clientVisible === false && <p className="bw-note" data-project-unshared>{b.managed.prepared}</p>}
       {p.status === "requested" && <p className="bw-note">{b.requestedNext}</p>}
       {/* Above the tabs, so it is seen whichever tab is open; its link switches to that tab. */}

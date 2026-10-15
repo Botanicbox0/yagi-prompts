@@ -1,4 +1,4 @@
-import { createFakeTossGateway } from './toss-fake';
+import { createFakeTossGateway } from "./toss-fake";
 
 /** Narrow payment snapshots shared by normal checkout and a future billing-key adapter. */
 export interface TossPayment {
@@ -8,6 +8,8 @@ export interface TossPayment {
   currency: string;
   status: string;
   balance: number;
+  method?: string;
+  easyPayProvider?: string;
 }
 export interface TossConfirm {
   paymentKey: string;
@@ -16,7 +18,7 @@ export interface TossConfirm {
   idempotencyKey: string;
 }
 export interface TossGateway {
-  readonly kind: 'test' | 'live' | 'fake';
+  readonly kind: "test" | "live" | "fake";
   confirm(input: TossConfirm): Promise<TossPayment>;
   retrieve(paymentKey: string): Promise<TossPayment | null>;
   cancel(input: {
@@ -32,15 +34,15 @@ export class TossError extends Error {
     public readonly code: string,
     public readonly retryable = true,
   ) {
-    super('Payment provider request could not be completed');
-    this.name = 'TossError';
+    super("Payment provider request could not be completed");
+    this.name = "TossError";
   }
 }
 
 export interface TossConfig {
   clientKey: string;
   secretKey: string;
-  kind: 'test' | 'live';
+  kind: "test" | "live";
 }
 export function tossConfigFromEnv(
   env: NodeJS.ProcessEnv = process.env,
@@ -48,13 +50,13 @@ export function tossConfigFromEnv(
   const clientKey = env.TOSS_CLIENT_KEY?.trim();
   const secretKey = env.TOSS_SECRET_KEY?.trim();
   if (!clientKey && !secretKey) return null;
-  const kind = clientKey?.startsWith('test_gck_')
-    ? 'test'
-    : clientKey?.startsWith('live_gck_')
-      ? 'live'
+  const kind = clientKey?.startsWith("test_gck_")
+    ? "test"
+    : clientKey?.startsWith("live_gck_")
+      ? "live"
       : null;
   if (!kind || !secretKey?.startsWith(`${kind}_gsk_`))
-    throw new TossError('INVALID_CONFIGURATION', false);
+    throw new TossError("INVALID_CONFIGURATION", false);
   return { clientKey: clientKey!, secretKey, kind };
 }
 
@@ -62,14 +64,14 @@ function snapshot(body: unknown): TossPayment {
   const b = body as Record<string, unknown> | null;
   if (
     !b ||
-    typeof b.paymentKey !== 'string' ||
-    typeof b.orderId !== 'string' ||
+    typeof b.paymentKey !== "string" ||
+    typeof b.orderId !== "string" ||
     !Number.isSafeInteger(b.totalAmount) ||
     !Number.isSafeInteger(b.balanceAmount) ||
-    typeof b.currency !== 'string' ||
-    typeof b.status !== 'string'
+    typeof b.currency !== "string" ||
+    typeof b.status !== "string"
   )
-    throw new TossError('INVALID_RESPONSE');
+    throw new TossError("INVALID_RESPONSE");
   return {
     paymentKey: b.paymentKey,
     orderId: b.orderId,
@@ -77,6 +79,15 @@ function snapshot(body: unknown): TossPayment {
     currency: b.currency,
     status: b.status,
     balance: b.balanceAmount as number,
+    ...(typeof b.method === "string" ? { method: b.method } : {}),
+    ...(b.easyPay &&
+    typeof b.easyPay === "object" &&
+    typeof (b.easyPay as Record<string, unknown>).provider === "string"
+      ? {
+          easyPayProvider: (b.easyPay as Record<string, unknown>)
+            .provider as string,
+        }
+      : {}),
   };
 }
 
@@ -86,7 +97,7 @@ export function createTossGateway(
 ): TossGateway {
   async function request(
     path: string,
-    method: 'GET' | 'POST',
+    method: "GET" | "POST",
     body?: unknown,
     key?: string,
   ): Promise<TossPayment | null> {
@@ -96,20 +107,20 @@ export function createTossGateway(
         `https://api.tosspayments.com/v1/payments${path}`,
         {
           method,
-          cache: 'no-store',
+          cache: "no-store",
           signal: AbortSignal.timeout(15_000),
           headers: {
-            Authorization: `Basic ${Buffer.from(`${config.secretKey}:`).toString('base64')}`,
-            'Content-Type': 'application/json',
-            ...(key ? { 'Idempotency-Key': key } : {}),
+            Authorization: `Basic ${Buffer.from(`${config.secretKey}:`).toString("base64")}`,
+            "Content-Type": "application/json",
+            ...(key ? { "Idempotency-Key": key } : {}),
           },
           ...(body ? { body: JSON.stringify(body) } : {}),
         },
       );
     } catch {
-      throw new TossError('NETWORK_ERROR');
+      throw new TossError("NETWORK_ERROR");
     }
-    if (method === 'GET' && response.status === 404) return null;
+    if (method === "GET" && response.status === 404) return null;
     if (!response.ok)
       throw new TossError(
         `HTTP_${response.status}`,
@@ -119,7 +130,7 @@ export function createTossGateway(
     try {
       payload = await response.json();
     } catch {
-      throw new TossError('INVALID_RESPONSE');
+      throw new TossError("INVALID_RESPONSE");
     }
     return snapshot(payload);
   }
@@ -127,18 +138,18 @@ export function createTossGateway(
     kind: config.kind,
     async confirm({ paymentKey, orderId, amount, idempotencyKey }) {
       return (await request(
-        '/confirm',
-        'POST',
+        "/confirm",
+        "POST",
         { paymentKey, orderId, amount },
         idempotencyKey,
       ))!;
     },
     retrieve: (paymentKey) =>
-      request(`/${encodeURIComponent(paymentKey)}`, 'GET'),
+      request(`/${encodeURIComponent(paymentKey)}`, "GET"),
     async cancel({ paymentKey, reason, idempotencyKey }) {
       return (await request(
         `/${encodeURIComponent(paymentKey)}/cancel`,
-        'POST',
+        "POST",
         { cancelReason: reason },
         idempotencyKey,
       ))!;
@@ -152,7 +163,7 @@ export function getTossGateway(
 ): TossGateway | null {
   const config = tossConfigFromEnv(env);
   if (config) return createTossGateway(config);
-  if (env.VERCEL || (env.PLAYBOOK_MODE !== 'local' && env.NODE_ENV !== 'test'))
+  if (env.VERCEL || (env.PLAYBOOK_MODE !== "local" && env.NODE_ENV !== "test"))
     return null;
   const g = globalThis as typeof globalThis & {
     __twingsFakeToss?: TossGateway;

@@ -1,0 +1,638 @@
+[
+  {
+    "path": "app/(admin)/admin/campaigns/[id]/page.tsx",
+    "sha256": "848ca1f78b932477ce501f054683015fee830dbefcbf556c4a2a0c19a87c9305",
+    "gitContentSha256": "848ca1f78b932477ce501f054683015fee830dbefcbf556c4a2a0c19a87c9305",
+    "gitBlob": "a4b6fb9b5bc6cb3e3323e1f57dab0717e217a5b0"
+  },
+  {
+    "path": "app/(admin)/admin/campaigns/participants/[id]/page.tsx",
+    "sha256": "c3d0c18819701f4e79fcde08db6b892a6b372ac599d1205cb7da70cd30b43a56",
+    "gitContentSha256": "c3d0c18819701f4e79fcde08db6b892a6b372ac599d1205cb7da70cd30b43a56",
+    "gitBlob": "393896b7a3cdfe7c25b0405730997c286dd54833"
+  },
+  {
+    "path": "app/(admin)/admin/funding/page.tsx",
+    "sha256": "5684add6108c0330933fb26fcb19c42d6fb18904397183b528290b454ae85c80",
+    "gitContentSha256": "5684add6108c0330933fb26fcb19c42d6fb18904397183b528290b454ae85c80",
+    "gitBlob": "6e863e855c90019a6d57c18b77e463e734c5e273"
+  },
+  {
+    "path": "app/(admin)/admin/page.tsx",
+    "sha256": "c36d5441163d28c5afa849e730827cc80ebbc4a442689850190dd2ebdecb7f09",
+    "gitContentSha256": "c36d5441163d28c5afa849e730827cc80ebbc4a442689850190dd2ebdecb7f09",
+    "gitBlob": "a0fc2b1b315c5c7e2ae5cb7bef3d45377debef54"
+  },
+  {
+    "path": "app/(admin)/admin/risk/page.tsx",
+    "sha256": "c89971aa6a367d7ada5f2f7c281c8eefc7993ab9aa6b1bcf6b42a4b3d42c88f7",
+    "gitContentSha256": "c89971aa6a367d7ada5f2f7c281c8eefc7993ab9aa6b1bcf6b42a4b3d42c88f7",
+    "gitBlob": "de82c1edcda844a6c17a7d2dc23fbac367402fa6"
+  },
+  {
+    "path": "app/(admin)/workspace.css",
+    "sha256": "93d26591c20524e523c02718622f785bdaab5f4658dd9a50d9d01ba3b553c5d7",
+    "gitContentSha256": "93d26591c20524e523c02718622f785bdaab5f4658dd9a50d9d01ba3b553c5d7",
+    "gitBlob": "25b7d37cf2b07b4e1978d08426f263b8f15e32c8"
+  },
+  {
+    "path": "app/(app)/campaigns/[slug]/join/page.tsx",
+    "sha256": "7e59d7fa29b2756cac57837bb5d0fcbfc114417b5f4f3075e22b6c46c6e6479e",
+    "gitContentSha256": "7e59d7fa29b2756cac57837bb5d0fcbfc114417b5f4f3075e22b6c46c6e6479e",
+    "gitBlob": "2a883c74eb656190f62073362cf33784446de313"
+  },
+  {
+    "path": "app/(app)/campaigns/mine/page.tsx",
+    "sha256": "6896a4112e9ada4ed4b6f312765b8e67df04baaa7236da0bcfd8315016bcd8de",
+    "gitContentSha256": "6896a4112e9ada4ed4b6f312765b8e67df04baaa7236da0bcfd8315016bcd8de",
+    "gitBlob": "20671b29593116f3192e3417308da053e8db3cab"
+  },
+  {
+    "path": "app/(app)/campaigns/participations/[id]/page.tsx",
+    "sha256": "bc9bcbddd141c3cd648f007790bc30ae12ed9b780ba1a4a6d528fc23e7650202",
+    "gitContentSha256": "bc9bcbddd141c3cd648f007790bc30ae12ed9b780ba1a4a6d528fc23e7650202",
+    "gitBlob": "d789115f3e0399c9a188ff0f2b723c2d450421dc"
+  },
+  {
+    "path": "app/(brand)/brand/projects/[id]/funding/[orderId]/page.tsx",
+    "sha256": "268bf7be27709bc2ba77f8ea9053ef33d28db1a9853e4d2b7ca1281ea47ebbce",
+    "gitContentSha256": "268bf7be27709bc2ba77f8ea9053ef33d28db1a9853e4d2b7ca1281ea47ebbce",
+    "gitBlob": "a35c35750135e76c0192db517f20c253a8fa6963"
+  },
+  {
+    "path": "app/(brand)/brand/projects/[id]/funding/page.tsx",
+    "sha256": "d87ab03bdc16afb4523453a70dedf25b6208baf8aecbf89871beb4ad172112ef",
+    "gitContentSha256": "d87ab03bdc16afb4523453a70dedf25b6208baf8aecbf89871beb4ad172112ef",
+    "gitBlob": "def13c7fbf19d211ea01f88c5cf1738b22d9a7f7"
+  },
+  {
+    "path": "app/(brand)/brand/projects/[id]/funding/return/page.tsx",
+    "sha256": "c89fac05d6cd90a3750004b6c3f3ab11407b403c2008a75a0ddb279f53936389",
+    "gitContentSha256": "c89fac05d6cd90a3750004b6c3f3ab11407b403c2008a75a0ddb279f53936389",
+    "gitBlob": "97b37452573332e21b1e01eb80d18bd5154cbe44"
+  },
+  {
+    "path": "app/(brand)/brand/projects/[id]/page.tsx",
+    "sha256": "7c8e2e256a7b0d3598c7cbf8d84880b8be22894732978af4881640fe27ef0a46",
+    "gitContentSha256": "7c8e2e256a7b0d3598c7cbf8d84880b8be22894732978af4881640fe27ef0a46",
+    "gitBlob": "89afadb68d32345ca14e933236b051271c4dd994"
+  },
+  {
+    "path": "app/(brand)/brand/projects/[id]/participants/[applicationId]/page.tsx",
+    "sha256": "09f9eaf43b08ad163302169e590d880f14c11ac560911d14a66df63a6ff8b220",
+    "gitContentSha256": "09f9eaf43b08ad163302169e590d880f14c11ac560911d14a66df63a6ff8b220",
+    "gitBlob": "f206cabb93ba22dc98e0b31762c4cd26a61a62f2"
+  },
+  {
+    "path": "app/(brand)/brand/projects/[id]/participants/page.tsx",
+    "sha256": "77473cf32a4f6a4fba760af48537f7ae79899f8f48a91de11b86a64463785c6b",
+    "gitContentSha256": "77473cf32a4f6a4fba760af48537f7ae79899f8f48a91de11b86a64463785c6b",
+    "gitBlob": "51123e63b80bb25a5868181adf5c46c879fadcae"
+  },
+  {
+    "path": "app/api/campaign-collaboration/files/[id]/route.ts",
+    "sha256": "d6816cb6fc93466c402174074657c99f044b080616b5bcd3db6146416239cda2",
+    "gitContentSha256": "d6816cb6fc93466c402174074657c99f044b080616b5bcd3db6146416239cda2",
+    "gitBlob": "bd99dd2206266216b8c4fa58e6da9c2c8fee167b"
+  },
+  {
+    "path": "app/api/campaign-collaboration/route.ts",
+    "sha256": "3240dca1b3cc7d05a5b41e922acb2b9b6d1183d7a0c461ed4b2902979a785a17",
+    "gitContentSha256": "3240dca1b3cc7d05a5b41e922acb2b9b6d1183d7a0c461ed4b2902979a785a17",
+    "gitBlob": "c95ba7b3fd21736b89ff12517c00cdc798568f8e"
+  },
+  {
+    "path": "app/api/campaign-funding/route.ts",
+    "sha256": "5490b3aabfbfbd04945d5b409e6ce6bd667c77ecef053c61c73f65aef200ca16",
+    "gitContentSha256": "5490b3aabfbfbd04945d5b409e6ce6bd667c77ecef053c61c73f65aef200ca16",
+    "gitBlob": "210b5db8b30156d5396962d553bc00735ae67921"
+  },
+  {
+    "path": "app/api/campaign-risk-worker/claim/route.ts",
+    "sha256": "e1007bea1a312a863e2cecd5d92275a067e1da158873ed447c3f1e3a869ea1b1",
+    "gitContentSha256": "e1007bea1a312a863e2cecd5d92275a067e1da158873ed447c3f1e3a869ea1b1",
+    "gitBlob": "0c5d02b5248b30ce966cba51842a4a91b3d52112"
+  },
+  {
+    "path": "app/api/campaign-risk-worker/complete/route.ts",
+    "sha256": "7d7ecaa8c5e5d4ff8276e485393865c367fecbb38124d9a373e57338729600de",
+    "gitContentSha256": "7d7ecaa8c5e5d4ff8276e485393865c367fecbb38124d9a373e57338729600de",
+    "gitBlob": "6a46387b770b2a827ada61f8c25cac86f3689381"
+  },
+  {
+    "path": "app/api/campaign-risk-worker/heartbeat/route.ts",
+    "sha256": "634f1ea43afb863ac7e83dca584c9945f807eefd313ac68d72078593f214a250",
+    "gitContentSha256": "634f1ea43afb863ac7e83dca584c9945f807eefd313ac68d72078593f214a250",
+    "gitBlob": "f2020bba9f8e293c90a9e970a29576830b2d9623"
+  },
+  {
+    "path": "app/api/campaign-risk-worker/slack/route.ts",
+    "sha256": "f61a352ac773f8d4141bfd51b8f7a633d06161b9bcb7a48df48a9d3592894e84",
+    "gitContentSha256": "f61a352ac773f8d4141bfd51b8f7a633d06161b9bcb7a48df48a9d3592894e84",
+    "gitBlob": "cdb749034c444c2f24d5d912dd0f1e1736215ba0"
+  },
+  {
+    "path": "components/admin/campaign-workflow.tsx",
+    "sha256": "44c7732c758a2c0b0f9f7b3445e5628a20d349a44869da7567f0a7057c8b7bc2",
+    "gitContentSha256": "44c7732c758a2c0b0f9f7b3445e5628a20d349a44869da7567f0a7057c8b7bc2",
+    "gitBlob": "b25b25eb81c31b6a56b267f46c11a2a0890d25d5"
+  },
+  {
+    "path": "components/admin/chrome.tsx",
+    "sha256": "45cda6130998665cc2cfd1d3d63c45fe2c085496d5ef4c22f9438e19017de550",
+    "gitContentSha256": "45cda6130998665cc2cfd1d3d63c45fe2c085496d5ef4c22f9438e19017de550",
+    "gitBlob": "d003298559818f55cc61775c1fa5ffd5d3e3fd65"
+  },
+  {
+    "path": "components/brand-workspace/browser-address.tsx",
+    "sha256": "4d9061bbd4d01d6549d2d488b49cc9c81d1e53406192217f5bd791ca2e519a48",
+    "gitContentSha256": "4d9061bbd4d01d6549d2d488b49cc9c81d1e53406192217f5bd791ca2e519a48",
+    "gitBlob": "1cd3cd28f4fdbe701037c837ef772ba721ff8036"
+  },
+  {
+    "path": "components/brand-workspace/project-detail.tsx",
+    "sha256": "ccc8bfb66bcd4b1808892e95f510a8d04e17ef6a3b7ac900b35079d2f6bf67b6",
+    "gitContentSha256": "ccc8bfb66bcd4b1808892e95f510a8d04e17ef6a3b7ac900b35079d2f6bf67b6",
+    "gitBlob": "8b9b6589667752a0ef8124ec8a5a431c220f608d"
+  },
+  {
+    "path": "components/campaigns/collaboration-admin.tsx",
+    "sha256": "052830788f10f73c2dcad007d09ecedaa7613723ca5d4a552563a2995fb0f578",
+    "gitContentSha256": "052830788f10f73c2dcad007d09ecedaa7613723ca5d4a552563a2995fb0f578",
+    "gitBlob": "a2744e934279de49d0c9e988bff871ac7de8c26b"
+  },
+  {
+    "path": "components/campaigns/collaboration-forms.tsx",
+    "sha256": "7455259993b99528c693e32e6767c9a5c7b5b73941af9d1d8a8eeeb1ed92576a",
+    "gitContentSha256": "7455259993b99528c693e32e6767c9a5c7b5b73941af9d1d8a8eeeb1ed92576a",
+    "gitBlob": "b8e6b349277138176ddeaadf71a80ff83580f10d"
+  },
+  {
+    "path": "components/campaigns/funding-actions.tsx",
+    "sha256": "49b296d3c97b7f2a01ca2c4b0219c8517161214ab2e1a9e77ce691a915686917",
+    "gitContentSha256": "49b296d3c97b7f2a01ca2c4b0219c8517161214ab2e1a9e77ce691a915686917",
+    "gitBlob": "ed5c20961c108bbb9c862a3935ca2c73125b70c4"
+  },
+  {
+    "path": "components/campaigns/invitation-terms.tsx",
+    "sha256": "dd3361eb4f2af2e1bcd830f3d9056941725e3e18ba164e6626bf0bfad9019e98",
+    "gitContentSha256": "dd3361eb4f2af2e1bcd830f3d9056941725e3e18ba164e6626bf0bfad9019e98",
+    "gitBlob": "61637e975e512c31f8d2b1e8cf1b463df0890d3c"
+  },
+  {
+    "path": "components/campaigns/participant-detail.tsx",
+    "sha256": "925d665156aaa0e5187d5121e912a1eec6d7f8891083420986ccc2170d29a2a7",
+    "gitContentSha256": "925d665156aaa0e5187d5121e912a1eec6d7f8891083420986ccc2170d29a2a7",
+    "gitBlob": "fdb8a6d49002e39bf92a5df5c10d0617fbc06762"
+  },
+  {
+    "path": "lib/admin/campaign-collaboration-operations.ts",
+    "sha256": "7e2b1d05cd96b74b6e8b49d6f2abc42974bd32933b484d88547610a340c3a1b2",
+    "gitContentSha256": "7e2b1d05cd96b74b6e8b49d6f2abc42974bd32933b484d88547610a340c3a1b2",
+    "gitBlob": "77d0c4d15813a2d60e94802367d9de7301757c55"
+  },
+  {
+    "path": "lib/admin/campaign-funding-operations.ts",
+    "sha256": "0f990d787759d9d2e57d5afecc0aa9848d63e2149caebe4f352d175807febb1e",
+    "gitContentSha256": "0f990d787759d9d2e57d5afecc0aa9848d63e2149caebe4f352d175807febb1e",
+    "gitBlob": "d76449613f46c9bc063460e9d94b51dd4e9355c9"
+  },
+  {
+    "path": "lib/admin/campaign-operations.ts",
+    "sha256": "86007cb7583b57c9b0b6b70a018b5b7b2fb988e79e52be83f50315c42c57706f",
+    "gitContentSha256": "86007cb7583b57c9b0b6b70a018b5b7b2fb988e79e52be83f50315c42c57706f",
+    "gitBlob": "fab60946cb1d9e70b342076050fe3b48bd1f90bb"
+  },
+  {
+    "path": "lib/admin/campaign-risk-operations.ts",
+    "sha256": "21c9b2f4ab5ca29a6ade9cfaca3f66fdde77838823159e403d9f5dfb29b282bc",
+    "gitContentSha256": "21c9b2f4ab5ca29a6ade9cfaca3f66fdde77838823159e403d9f5dfb29b282bc",
+    "gitBlob": "9041afaad76242210afe8b83aed9b08ad8614c7a"
+  },
+  {
+    "path": "lib/admin/campaign-workflow.ts",
+    "sha256": "acdf07eed8071a121643f3b4347329269a57c3db91ffd84e0a064c4802ecc76f",
+    "gitContentSha256": "acdf07eed8071a121643f3b4347329269a57c3db91ffd84e0a064c4802ecc76f",
+    "gitBlob": "f304510e75ab1d67d9b65ec1bbc347b40fbfd2a4"
+  },
+  {
+    "path": "lib/admin/context.ts",
+    "sha256": "7c81c256d4246f546dc08d4ecc748ac0ae52dac15c47db00b0fe7a44a7bb467d",
+    "gitContentSha256": "7c81c256d4246f546dc08d4ecc748ac0ae52dac15c47db00b0fe7a44a7bb467d",
+    "gitBlob": "17acebc75149d3bba87164ece254bfc01fd28cf8"
+  },
+  {
+    "path": "lib/admin/operations.ts",
+    "sha256": "145dc682eaf9ce3939e21eae32410d4130a18a2996ecde1f1f57a093537c69c1",
+    "gitContentSha256": "145dc682eaf9ce3939e21eae32410d4130a18a2996ecde1f1f57a093537c69c1",
+    "gitBlob": "df3b69b37aadd1ba32409230edf42b274cc3fe4a"
+  },
+  {
+    "path": "lib/admin/workflow.ts",
+    "sha256": "6fa90dff8c8ea4de025759d9876cfd7736ec779159bdb2c33443fd9303fc97be",
+    "gitContentSha256": "6fa90dff8c8ea4de025759d9876cfd7736ec779159bdb2c33443fd9303fc97be",
+    "gitBlob": "8d22e035947bee66921171bf6f94d05e887e0cff"
+  },
+  {
+    "path": "lib/auth/identity.ts",
+    "sha256": "ff538f08630df233f7dc24b1a4ff2e75f7a295cebb97a443a432358fbb335162",
+    "gitContentSha256": "ff538f08630df233f7dc24b1a4ff2e75f7a295cebb97a443a432358fbb335162",
+    "gitBlob": "196f19ba5a0c8f1a210add87e6ebc310be86c977"
+  },
+  {
+    "path": "lib/billing/toss-fake.ts",
+    "sha256": "16ab0207767029d9cc6ba5b5b60f0000540d9a8861b9dcf7db6c7ae1959c5852",
+    "gitContentSha256": "16ab0207767029d9cc6ba5b5b60f0000540d9a8861b9dcf7db6c7ae1959c5852",
+    "gitBlob": "f06820aa4c4cc92c43e4e33de3fd0dee8718efd7"
+  },
+  {
+    "path": "lib/billing/toss-gateway.ts",
+    "sha256": "36e9c0abb41438d901e115fb8635702e67220fe3ccf07371d1082d7bf5e834d2",
+    "gitContentSha256": "36e9c0abb41438d901e115fb8635702e67220fe3ccf07371d1082d7bf5e834d2",
+    "gitBlob": "2336d52826bd56a946e37a99bb5fbbca6137b1b8"
+  },
+  {
+    "path": "lib/campaigns/collaboration/invitation-transfer.ts",
+    "sha256": "585feacc9587826f5a38442d0025b33f49552c46a1bfd59a252c8f98d03f9ed0",
+    "gitContentSha256": "585feacc9587826f5a38442d0025b33f49552c46a1bfd59a252c8f98d03f9ed0",
+    "gitBlob": "385edbcc07d2aaa4207a6897ae7703ca8417d2a0"
+  },
+  {
+    "path": "lib/campaigns/collaboration/service.ts",
+    "sha256": "6fb35a17917ebb6f906ad5a4f528b35f1e52f3ff53014be09f084593832c4197",
+    "gitContentSha256": "6fb35a17917ebb6f906ad5a4f528b35f1e52f3ff53014be09f084593832c4197",
+    "gitBlob": "02cdce56eaf1f467995edbf6bab09e248fa405e6"
+  },
+  {
+    "path": "lib/campaigns/dates.ts",
+    "sha256": "3470c3d6959bc9d3e57076386d3d18daa473d78452b6e840c2c77907bed2bc69",
+    "gitContentSha256": "3470c3d6959bc9d3e57076386d3d18daa473d78452b6e840c2c77907bed2bc69",
+    "gitBlob": "fc1b65757a9d17293d69c7bb70c13ea5c6e54a1e"
+  },
+  {
+    "path": "lib/campaigns/funding/core.ts",
+    "sha256": "60439ab075557a5f5dfc66ac0e2321e8ffd0b50fd77fb561e61d16a38eabeb2f",
+    "gitContentSha256": "60439ab075557a5f5dfc66ac0e2321e8ffd0b50fd77fb561e61d16a38eabeb2f",
+    "gitBlob": "274fa1c8160f7f3919e7fd7c8eed278977a5039e"
+  },
+  {
+    "path": "lib/campaigns/funding/payment.ts",
+    "sha256": "6e0a948be3db8a180f6840064166fced21b3dae0cc064c56c8d442373828152c",
+    "gitContentSha256": "6e0a948be3db8a180f6840064166fced21b3dae0cc064c56c8d442373828152c",
+    "gitBlob": "181493647f150a5e6a74c3029fed41394fa959e8"
+  },
+  {
+    "path": "lib/campaigns/funding/runtime.ts",
+    "sha256": "acc02da439e87b64cf9a06cf921c20148a1fef1dedc3c29dfd18aa55c8a8385d",
+    "gitContentSha256": "acc02da439e87b64cf9a06cf921c20148a1fef1dedc3c29dfd18aa55c8a8385d",
+    "gitBlob": "0075cdded4f735cd07652088949ec2ffb2bb79d1"
+  },
+  {
+    "path": "lib/campaigns/funding/service.ts",
+    "sha256": "45cea1ed03f68378019a17daca49b02411377062b533962b1775d8056cfec96b",
+    "gitContentSha256": "45cea1ed03f68378019a17daca49b02411377062b533962b1775d8056cfec96b",
+    "gitBlob": "ec557ea7975c119cec217cb4578761feaf913488"
+  },
+  {
+    "path": "lib/campaigns/repo.ts",
+    "sha256": "d2f8bd1be0b20467a599ba78f0aae37cbb0ff6dc380ca4c9fe18f9ef7656d52d",
+    "gitContentSha256": "d2f8bd1be0b20467a599ba78f0aae37cbb0ff6dc380ca4c9fe18f9ef7656d52d",
+    "gitBlob": "d78017ae36217913cd99108ec5195f8e56a56b6c"
+  },
+  {
+    "path": "lib/campaigns/risk/admin.ts",
+    "sha256": "7554e48849bc9465082d8b48be06981ac3f9e120911c6790de475ec03ea370d3",
+    "gitContentSha256": "7554e48849bc9465082d8b48be06981ac3f9e120911c6790de475ec03ea370d3",
+    "gitBlob": "98e04ef728a4e542412b1aea3d54f9b234a0a47c"
+  },
+  {
+    "path": "lib/campaigns/risk/detector.ts",
+    "sha256": "a562f856a118546b66167b4fc873cd0453bc618343471fd047baf6f46beda0e3",
+    "gitContentSha256": "a562f856a118546b66167b4fc873cd0453bc618343471fd047baf6f46beda0e3",
+    "gitBlob": "8adf312ff8e60f8b2c8d032d88f843f60e8e003d"
+  },
+  {
+    "path": "lib/campaigns/risk/evidence.ts",
+    "sha256": "a8e42997a92ec6c629de53a17a6837beeceafdd5b7e0f37ca7f75787be0e51ce",
+    "gitContentSha256": "a8e42997a92ec6c629de53a17a6837beeceafdd5b7e0f37ca7f75787be0e51ce",
+    "gitBlob": "4e3d4a5e3fdc2665c8fc74da73b3d05d58f5b38f"
+  },
+  {
+    "path": "lib/campaigns/risk/http.ts",
+    "sha256": "c883ef801e5f314fd7837e6ae10371ab328e72b06c440344f6dd620f0d82d35d",
+    "gitContentSha256": "c883ef801e5f314fd7837e6ae10371ab328e72b06c440344f6dd620f0d82d35d",
+    "gitBlob": "4af05e3bfbfa1ddb13bcdaa1e9e3c4ca4e62bf10"
+  },
+  {
+    "path": "lib/campaigns/risk/local-model.ts",
+    "sha256": "aa1fc9b6b922adeca254b32b2f6d2d03a8b9bd1efdf8944f7a130c9abd94f161",
+    "gitContentSha256": "aa1fc9b6b922adeca254b32b2f6d2d03a8b9bd1efdf8944f7a130c9abd94f161",
+    "gitBlob": "b07a2c1861b327beac7e5d6f5bb50ed8bc968d2b"
+  },
+  {
+    "path": "lib/campaigns/risk/queue.ts",
+    "sha256": "67204fdda95aca9a99fb053b531602971d26dd7eb15f8121e78058f2ebab7dff",
+    "gitContentSha256": "67204fdda95aca9a99fb053b531602971d26dd7eb15f8121e78058f2ebab7dff",
+    "gitBlob": "4e65523aab1b9e891da5c19f8a7ca5ec8ffe86ae"
+  },
+  {
+    "path": "lib/campaigns/risk/slack.ts",
+    "sha256": "7c633a5dc9a4195092c111c12757a541e7052e1ee84553833147a1db943d1051",
+    "gitContentSha256": "7c633a5dc9a4195092c111c12757a541e7052e1ee84553833147a1db943d1051",
+    "gitBlob": "4e3cf533b58cbc863904f266475506a76e408e65"
+  },
+  {
+    "path": "lib/campaigns/risk/transport.ts",
+    "sha256": "5c230ca4ab26f4155002cf87dbcc4f48c054bac2292018e8ad787b53dfe7fa0e",
+    "gitContentSha256": "5c230ca4ab26f4155002cf87dbcc4f48c054bac2292018e8ad787b53dfe7fa0e",
+    "gitBlob": "62b3238373deb22ef42c9d445c1c928e71890e12"
+  },
+  {
+    "path": "lib/campaigns/risk/worker.ts",
+    "sha256": "0581d653354928268c0739a112d1167c7a7083b32789ef80f18c113250e5f857",
+    "gitContentSha256": "0581d653354928268c0739a112d1167c7a7083b32789ef80f18c113250e5f857",
+    "gitBlob": "dc1bbe1691b10f34d4a68399c1a1dc5172542b32"
+  },
+  {
+    "path": "lib/campaigns/schemas.ts",
+    "sha256": "390279b8a42301cf5cccd8e2bf8e763a9b38706440d94c77b927cdd0bf55b149",
+    "gitContentSha256": "390279b8a42301cf5cccd8e2bf8e763a9b38706440d94c77b927cdd0bf55b149",
+    "gitBlob": "55c136152b7ac0ff2dc40a1014fc7ea7af6d7d9b"
+  },
+  {
+    "path": "lib/campaigns/state.ts",
+    "sha256": "0a120945ebc8e77ff6a70355f4dc7477190c8a55a12b4f9e09bec67997664701",
+    "gitContentSha256": "0a120945ebc8e77ff6a70355f4dc7477190c8a55a12b4f9e09bec67997664701",
+    "gitBlob": "d642f344366ee8595351ab353603eca98eebb47c"
+  },
+  {
+    "path": "lib/db/sql-runner.ts",
+    "sha256": "0f872ef29452469764a18baebc1dfc519cb04f3776f5f5d2e2797e86f38ee567",
+    "gitContentSha256": "0f872ef29452469764a18baebc1dfc519cb04f3776f5f5d2e2797e86f38ee567",
+    "gitBlob": "de6d99f8167a46901f48206c8755c316b225c813"
+  },
+  {
+    "path": "lib/i18n/config.ts",
+    "sha256": "46b3876fc3025d29f313bdb03db0e88096c54fecf85691dd0145a9525777db65",
+    "gitContentSha256": "46b3876fc3025d29f313bdb03db0e88096c54fecf85691dd0145a9525777db65",
+    "gitBlob": "4627cd96a5d2561b06b0ba646fdfd16c3bd22a5a"
+  },
+  {
+    "path": "lib/routing/surfaces.ts",
+    "sha256": "88f52f246c49c31c0777223d91b02d0b7cf9072729eb25eee8ccbcfb80075ae4",
+    "gitContentSha256": "88f52f246c49c31c0777223d91b02d0b7cf9072729eb25eee8ccbcfb80075ae4",
+    "gitBlob": "aa41870fc559011243e9bd1131594bd9884fc9a3"
+  },
+  {
+    "path": "lib/storage/index.ts",
+    "sha256": "7c8f3c27cd5f85408df58bb6ee37d48e15a4ffb0f18436bfea09929dda306faa",
+    "gitContentSha256": "7c8f3c27cd5f85408df58bb6ee37d48e15a4ffb0f18436bfea09929dda306faa",
+    "gitBlob": "bc207d51acd6a5e7e80b0ed48e365693c021d06b"
+  },
+  {
+    "path": "lib/storage/supabase-driver.ts",
+    "sha256": "6d85e88689049a07be4ff6b0aec6604cd985470053529f9d65a9ce1376525cf0",
+    "gitContentSha256": "6d85e88689049a07be4ff6b0aec6604cd985470053529f9d65a9ce1376525cf0",
+    "gitBlob": "b769f61e509e4c76ad8fce7ae62a5d98a9a7022f"
+  },
+  {
+    "path": "messages/admin-workflow.ts",
+    "sha256": "035f9099dd93f03d199875615d89de1c26ea7440fe0f22fed00a6864706d9ed9",
+    "gitContentSha256": "035f9099dd93f03d199875615d89de1c26ea7440fe0f22fed00a6864706d9ed9",
+    "gitBlob": "67e5cc9a3ec33afff9bddffd46f5321bd9dfcc80"
+  },
+  {
+    "path": "messages/campaign-collaboration.ts",
+    "sha256": "2f0cf0a864444a45d32ca06115c150e5d0d79e05b6025b9aec9f9c2c8516d130",
+    "gitContentSha256": "2f0cf0a864444a45d32ca06115c150e5d0d79e05b6025b9aec9f9c2c8516d130",
+    "gitBlob": "4fb754baf71dd7777ff5c9f5edbf6169c6b934b3"
+  },
+  {
+    "path": "messages/campaign-funding.ts",
+    "sha256": "a5744c8ddffbc5be55a4fb1aaff95af47742fe983d7a5093ed6b450437a97cb7",
+    "gitContentSha256": "a5744c8ddffbc5be55a4fb1aaff95af47742fe983d7a5093ed6b450437a97cb7",
+    "gitBlob": "014239fd1f361bd42359c7c287be9c3fb2ec6922"
+  },
+  {
+    "path": "messages/campaign-risk.ts",
+    "sha256": "ada0c84bc53cce656cf0bfb98ddd936d4303cc5238fe1ea18fd1bce5c978b76d",
+    "gitContentSha256": "ada0c84bc53cce656cf0bfb98ddd936d4303cc5238fe1ea18fd1bce5c978b76d",
+    "gitBlob": "8e64bd41bab670556cf5842087c25096ab5587e7"
+  },
+  {
+    "path": "messages/en.ts",
+    "sha256": "808dc18c89d754a705f4e9a19162f3a69431bf8231af45f423233e5df8f654f5",
+    "gitContentSha256": "808dc18c89d754a705f4e9a19162f3a69431bf8231af45f423233e5df8f654f5",
+    "gitBlob": "c523d3bb7edb5fc576cd5c76131180702435100b"
+  },
+  {
+    "path": "messages/ko.ts",
+    "sha256": "45bb3b47ed7667796d479009138f3686175fd7eda8010656c7736057c0b84c75",
+    "gitContentSha256": "45bb3b47ed7667796d479009138f3686175fd7eda8010656c7736057c0b84c75",
+    "gitBlob": "f967baf6377c9d844a0fdbf196b2cea1863609e0"
+  },
+  {
+    "path": "middleware.ts",
+    "sha256": "4beaf6e0909f52c6c0f4a8ade7004f748cde4db8722decd82199ca85ea1aa2bf",
+    "gitContentSha256": "4beaf6e0909f52c6c0f4a8ade7004f748cde4db8722decd82199ca85ea1aa2bf",
+    "gitBlob": "809e1380ae250f7c6cb9eac27ab903f1c6ba4b5b"
+  },
+  {
+    "path": "scripts/campaign-risk-diagnosis.ts",
+    "sha256": "afa837f3d92b9f14b9b44aaae424b79d80fdfa9df05986dda7ecb42f6fbd1db2",
+    "gitContentSha256": "afa837f3d92b9f14b9b44aaae424b79d80fdfa9df05986dda7ecb42f6fbd1db2",
+    "gitBlob": "3b69104e7d6b9ec15391a768e175b4a251eedccf"
+  },
+  {
+    "path": "scripts/campaign-risk-replay.ts",
+    "sha256": "87dcccaaa805e3a540ee36977dd3adad598ac5cc1374e5aa6b67fe513b2c23fd",
+    "gitContentSha256": "87dcccaaa805e3a540ee36977dd3adad598ac5cc1374e5aa6b67fe513b2c23fd",
+    "gitBlob": "4dacd30f94fee3ba0e40d6dfd9b752ca8ad50ae7"
+  },
+  {
+    "path": "scripts/campaign-risk-smoke.ts",
+    "sha256": "0bfaf70cfdd95f0bc447e94804b048c1f22bc4b4b19b1500197bfb3196ac38d2",
+    "gitContentSha256": "0bfaf70cfdd95f0bc447e94804b048c1f22bc4b4b19b1500197bfb3196ac38d2",
+    "gitBlob": "e9ebc6cf2ca6e83e9c33215bdf6a242343b6fcc0"
+  },
+  {
+    "path": "scripts/campaign-risk-worker.ts",
+    "sha256": "461a5b8f65fe840c82718243aeafffbb6d4f8486a1fce311762d3c8a8c1bb702",
+    "gitContentSha256": "461a5b8f65fe840c82718243aeafffbb6d4f8486a1fce311762d3c8a8c1bb702",
+    "gitBlob": "36f05b698def379df59395482b61a459ce32e156"
+  },
+  {
+    "path": "scripts/sweep-anon.ts",
+    "sha256": "f17404b92012bbe1ee72ef955a80226fa3758b6b5510340be6197b41a42e6bb1",
+    "gitContentSha256": "f17404b92012bbe1ee72ef955a80226fa3758b6b5510340be6197b41a42e6bb1",
+    "gitBlob": "86a22538f6828e2e951a234349bdb984f8e660c5"
+  },
+  {
+    "path": "supabase/migrations/0027_core_brand_workspace.sql",
+    "sha256": "5f7ca2626baeb993e01e00903d9619c367538c73d221a378bc00888aa076edf6",
+    "gitContentSha256": "5f7ca2626baeb993e01e00903d9619c367538c73d221a378bc00888aa076edf6",
+    "gitBlob": "b72fae57495940fb1bd5b882cfba1627f1efee80"
+  },
+  {
+    "path": "supabase/migrations/0031_core_brand_managed_workspace.sql",
+    "sha256": "7ffae62abcbd50ad99c9a49d7d970ae3f3466b68a9c0a9f40795804a2f720186",
+    "gitContentSha256": "7ffae62abcbd50ad99c9a49d7d970ae3f3466b68a9c0a9f40795804a2f720186",
+    "gitBlob": "e342007817978168329933d1e983a5c844d74b1c"
+  },
+  {
+    "path": "supabase/migrations/0047_core_campaign_collaboration.sql",
+    "sha256": "c153c418831db64d77271a02f0e94c44d264f64bbb9c57eb82cf343f43c34174",
+    "gitContentSha256": "c153c418831db64d77271a02f0e94c44d264f64bbb9c57eb82cf343f43c34174",
+    "gitBlob": "073e77f6012f401ff5f7a4585ab2518a86d2f70f"
+  },
+  {
+    "path": "supabase/migrations/0048_core_campaign_risk.sql",
+    "sha256": "fbcfd65829276ddf784bc7e5b46b5220d6e6c3a4cc46fede31520d14c38f3550",
+    "gitContentSha256": "1684fe9614f61ac3aa62578b63ab1ea8fa8c23e5304d40d95710c2424aebfbd8",
+    "gitBlob": "ec304e2b0f5ccb38744afca10dff17fc652c8a79"
+  },
+  {
+    "path": "supabase/migrations/0049_core_campaign_funding.sql",
+    "sha256": "7b53c624b8cb7764e46ad085478771c7ffd3e15861fc8aa5ee4548e0234c44c9",
+    "gitContentSha256": "e04619ea2d815c7997b1e8c6c07b7c8bf14b39437ea739551b1305bc3769abfd",
+    "gitBlob": "c9cf7c31441e71af600eadc035de3571051fbbf7"
+  },
+  {
+    "path": "supabase/migrations/0132_glue_campaign_collaboration.sql",
+    "sha256": "fcaf7c87cef9e93eb33623f16903b9109a903fa84145d06911a4506394785f50",
+    "gitContentSha256": "fcaf7c87cef9e93eb33623f16903b9109a903fa84145d06911a4506394785f50",
+    "gitBlob": "6e83c1957455022dda8395d942c93e050db4ee64"
+  },
+  {
+    "path": "supabase/migrations/0133_glue_campaign_risk.sql",
+    "sha256": "cf710f7e1a7a347e67369eb789aeebc5f071578f3edaa784b3d33832defa91ac",
+    "gitContentSha256": "f0313ce796c760c938394cf771439c524674f13b99633f79f6a2bdac51a448fd",
+    "gitBlob": "33c220fdee6dae21fc1aaa6d6d912f3f47f20e2c"
+  },
+  {
+    "path": "supabase/migrations/0134_glue_campaign_funding.sql",
+    "sha256": "3e60df3995de8416fc3ab50c611e28da663aa4a56d7c55aa2a38ad969c290384",
+    "gitContentSha256": "4db414cce3c53c78bc08751c24309643fad3d49f9f251dd27f161f0195f74ea6",
+    "gitBlob": "023658075d5bc4ba63dec371fb2be9a99b60252a"
+  },
+  {
+    "path": "tests/admin/prompt-new-page.test.tsx",
+    "sha256": "fd03fa69058ce8e771a919db1c8e5094f0508e89ca7ecbb487e2da22e0d1b825",
+    "gitContentSha256": "fd03fa69058ce8e771a919db1c8e5094f0508e89ca7ecbb487e2da22e0d1b825",
+    "gitBlob": "4687dee765ca311342b578d97a6975b49c713448"
+  },
+  {
+    "path": "tests/admin/workflow.test.tsx",
+    "sha256": "2fa64e3e5badae54402f6efdebd4a4d790131dd8df9d7eac91965cdb52a710be",
+    "gitContentSha256": "2fa64e3e5badae54402f6efdebd4a4d790131dd8df9d7eac91965cdb52a710be",
+    "gitBlob": "3c0545267cbeffb5c0bc3ce793b175474a034aea"
+  },
+  {
+    "path": "tests/campaigns/collaboration.test.ts",
+    "sha256": "42da75a8d07b51330a00446313a7b736dd15405e94a387f9f703472f9374d520",
+    "gitContentSha256": "42da75a8d07b51330a00446313a7b736dd15405e94a387f9f703472f9374d520",
+    "gitBlob": "b588de75ab353c2d0851fe9edb2e696032ff8b6a"
+  },
+  {
+    "path": "tests/campaigns/funding-http.test.ts",
+    "sha256": "5d6838eb49227d17bc0de492e78ed95f5f859edcf40d7ac8c0e731b6439d50ea",
+    "gitContentSha256": "5d6838eb49227d17bc0de492e78ed95f5f859edcf40d7ac8c0e731b6439d50ea",
+    "gitBlob": "3c01165a883b52eef4a73749fac29002a836ba93"
+  },
+  {
+    "path": "tests/campaigns/funding-privileges.test.ts",
+    "sha256": "b7b26e26f37d14fecaf06f7db55c605610c8e99a2bdbe258f9286705900e7d25",
+    "gitContentSha256": "b7b26e26f37d14fecaf06f7db55c605610c8e99a2bdbe258f9286705900e7d25",
+    "gitBlob": "2b700e3e1ad92a2079ba323c298f529e3e4f237e"
+  },
+  {
+    "path": "tests/campaigns/funding.test.ts",
+    "sha256": "da4411c9d66d3caba0b57c1a936b3d34fe9dd6b9742032fe7da9dc04985971ed",
+    "gitContentSha256": "da4411c9d66d3caba0b57c1a936b3d34fe9dd6b9742032fe7da9dc04985971ed",
+    "gitBlob": "1b741037048db3867af5ed56c4fd954b07453794"
+  },
+  {
+    "path": "tests/campaigns/invitation-transfer.test.ts",
+    "sha256": "f3e5356c9f014bf3317b6fbda36bf84a43639a2f4673e696799f2ed786be825f",
+    "gitContentSha256": "f3e5356c9f014bf3317b6fbda36bf84a43639a2f4673e696799f2ed786be825f",
+    "gitBlob": "38903d6f1e5b1a37a97e85f0267af5120c460b77"
+  },
+  {
+    "path": "tests/campaigns/operations.test.ts",
+    "sha256": "87819271d6d9263401d051c4b147596d756b4ca34f9988be7fe582b39c75d2a0",
+    "gitContentSha256": "87819271d6d9263401d051c4b147596d756b4ca34f9988be7fe582b39c75d2a0",
+    "gitBlob": "2985dd5b3f5367bb26f673a7e15c3d4b8e9fc06b"
+  },
+  {
+    "path": "tests/campaigns/risk/detector.test.ts",
+    "sha256": "1aefa6e5e055cef2fdb4833b837205828c8f9e7b43be1d20f568f5c690012c22",
+    "gitContentSha256": "1aefa6e5e055cef2fdb4833b837205828c8f9e7b43be1d20f568f5c690012c22",
+    "gitBlob": "4d2a4bcbcdf8f2d4b577b74c5f44fb332ef107f5"
+  },
+  {
+    "path": "tests/campaigns/risk/http.test.ts",
+    "sha256": "7b134b978fc4917c0e509b3566080e6b916e64c6b7ee37c105e85836ffd7d234",
+    "gitContentSha256": "7b134b978fc4917c0e509b3566080e6b916e64c6b7ee37c105e85836ffd7d234",
+    "gitBlob": "ec9ba9ea3b66c4a2ba6200cbd8cedff421643d0a"
+  },
+  {
+    "path": "tests/campaigns/risk/page.test.tsx",
+    "sha256": "7c3df4785e995465554f94ff6bb3168d0ee64661badc0907699e5fcd2c207055",
+    "gitContentSha256": "7c3df4785e995465554f94ff6bb3168d0ee64661badc0907699e5fcd2c207055",
+    "gitBlob": "57f50e48681fb552a4e340aef8d66c69a104470a"
+  },
+  {
+    "path": "tests/campaigns/risk/service.test.ts",
+    "sha256": "46b10185034269fbe1e6e1b5149bbac79be2c4a5d1edd09668b58f306ebe9c4f",
+    "gitContentSha256": "46b10185034269fbe1e6e1b5149bbac79be2c4a5d1edd09668b58f306ebe9c4f",
+    "gitBlob": "9ee3ddb7015eef94d44788563dcdc555c2885cb2"
+  },
+  {
+    "path": "tests/campaigns/risk/transports.test.ts",
+    "sha256": "15d19118af639f2ab0cd2839e01da3e21eda3694ad0c0f8072bed595146d1e94",
+    "gitContentSha256": "15d19118af639f2ab0cd2839e01da3e21eda3694ad0c0f8072bed595146d1e94",
+    "gitBlob": "d3ce6881e513855e9b11d885b214a19f8f910af1"
+  },
+  {
+    "path": "tests/db/migrations.test.ts",
+    "sha256": "87998e4e0b19d889088d3553b7ed8f3b11687f81b0aa5ee22c4c39addacf1bec",
+    "gitContentSha256": "87998e4e0b19d889088d3553b7ed8f3b11687f81b0aa5ee22c4c39addacf1bec",
+    "gitBlob": "4426671f8fc361a01daa0a464a13d654bfce76f8"
+  },
+  {
+    "path": "tests/helpers/pglite.ts",
+    "sha256": "dba053e76f0a195ccf0b8d7d1e8bb7d93b41771d67ca64b0457ae0136826cb57",
+    "gitContentSha256": "dba053e76f0a195ccf0b8d7d1e8bb7d93b41771d67ca64b0457ae0136826cb57",
+    "gitBlob": "927d8ae6d90033c1475742ebad6e74a49a0c0288"
+  },
+  {
+    "path": "tests/routes/cache-contract.test.ts",
+    "sha256": "a325d09a0d236f27d605fc441c8f7510232d624d363a3d9687d0f84c082c54ba",
+    "gitContentSha256": "a325d09a0d236f27d605fc441c8f7510232d624d363a3d9687d0f84c082c54ba",
+    "gitBlob": "556cce9e81217324063fd487fad2f1aee12632aa"
+  },
+  {
+    "path": "tests/routes/campaign-collaboration-api.test.ts",
+    "sha256": "2bb4825add0f006c5e4ecb9189bccf7bd431b5acb5d41664ab69acd91e601a5d",
+    "gitContentSha256": "2bb4825add0f006c5e4ecb9189bccf7bd431b5acb5d41664ab69acd91e601a5d",
+    "gitBlob": "e594241bc45d9f2f82c7abd2f2f301dbcc034c4f"
+  },
+  {
+    "path": "tests/routes/campaign-collaboration-host.test.ts",
+    "sha256": "a1aa666302793533fa0d10be336af4d3298d893a621a48dc59b25f6283bb6c47",
+    "gitContentSha256": "a1aa666302793533fa0d10be336af4d3298d893a621a48dc59b25f6283bb6c47",
+    "gitBlob": "ff09ccb112d41167fec85da5a7791c6aa8544593"
+  },
+  {
+    "path": "tests/routes/campaign-join-middleware.test.ts",
+    "sha256": "425a905a2e75d614546b258902d107593de05edc7e865b23f59f110d318a3ad6",
+    "gitContentSha256": "425a905a2e75d614546b258902d107593de05edc7e865b23f59f110d318a3ad6",
+    "gitBlob": "bb1983c5cb60613b90aa8ab31fa81e5ffa14eb99"
+  },
+  {
+    "path": "tests/ui/campaign-collaboration.test.tsx",
+    "sha256": "b0a4512053f40a6cd8a7690a8823e12533ed6462b22bc8c3a3c7950e6db95de6",
+    "gitContentSha256": "b0a4512053f40a6cd8a7690a8823e12533ed6462b22bc8c3a3c7950e6db95de6",
+    "gitBlob": "2fe8314410d721368b4c543c733297ddfedea6cf"
+  }
+]

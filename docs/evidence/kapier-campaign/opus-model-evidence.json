@@ -1,0 +1,9 @@
+{
+  "exit": 0,
+  "models": [
+    "claude-opus-5-5"
+  ],
+  "isError": false,
+  "files": 84,
+  "promptSha256": "053fd90ccb9922544813ac1005408c7454a51cd30b5985dddad4ac931333e5fc"
+}

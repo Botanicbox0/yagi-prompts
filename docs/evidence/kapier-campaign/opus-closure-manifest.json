@@ -1,0 +1,117 @@
+[
+  {
+    "path": "app/(admin)/admin/funding/page.tsx",
+    "sha256": "5684add6108c0330933fb26fcb19c42d6fb18904397183b528290b454ae85c80",
+    "changedSincePriorReview": true
+  },
+  {
+    "path": "app/(app)/campaigns/[slug]/join/page.tsx",
+    "sha256": "7e59d7fa29b2756cac57837bb5d0fcbfc114417b5f4f3075e22b6c46c6e6479e",
+    "changedSincePriorReview": true
+  },
+  {
+    "path": "app/(brand)/brand/projects/[id]/funding/page.tsx",
+    "sha256": "d87ab03bdc16afb4523453a70dedf25b6208baf8aecbf89871beb4ad172112ef",
+    "changedSincePriorReview": true
+  },
+  {
+    "path": "app/api/campaign-collaboration/route.ts",
+    "sha256": "3240dca1b3cc7d05a5b41e922acb2b9b6d1183d7a0c461ed4b2902979a785a17",
+    "changedSincePriorReview": true
+  },
+  {
+    "path": "app/api/campaign-funding/route.ts",
+    "sha256": "5490b3aabfbfbd04945d5b409e6ce6bd667c77ecef053c61c73f65aef200ca16",
+    "changedSincePriorReview": true
+  },
+  {
+    "path": "lib/billing/toss-fake.ts",
+    "sha256": "16ab0207767029d9cc6ba5b5b60f0000540d9a8861b9dcf7db6c7ae1959c5852",
+    "changedSincePriorReview": false
+  },
+  {
+    "path": "lib/billing/toss-gateway.ts",
+    "sha256": "36e9c0abb41438d901e115fb8635702e67220fe3ccf07371d1082d7bf5e834d2",
+    "changedSincePriorReview": false
+  },
+  {
+    "path": "lib/campaigns/collaboration/service.ts",
+    "sha256": "6fb35a17917ebb6f906ad5a4f528b35f1e52f3ff53014be09f084593832c4197",
+    "changedSincePriorReview": true
+  },
+  {
+    "path": "lib/campaigns/dates.ts",
+    "sha256": "3470c3d6959bc9d3e57076386d3d18daa473d78452b6e840c2c77907bed2bc69",
+    "changedSincePriorReview": false
+  },
+  {
+    "path": "lib/campaigns/funding/core.ts",
+    "sha256": "60439ab075557a5f5dfc66ac0e2321e8ffd0b50fd77fb561e61d16a38eabeb2f",
+    "changedSincePriorReview": false
+  },
+  {
+    "path": "lib/campaigns/funding/payment.ts",
+    "sha256": "6e0a948be3db8a180f6840064166fced21b3dae0cc064c56c8d442373828152c",
+    "changedSincePriorReview": true
+  },
+  {
+    "path": "lib/campaigns/funding/runtime.ts",
+    "sha256": "acc02da439e87b64cf9a06cf921c20148a1fef1dedc3c29dfd18aa55c8a8385d",
+    "changedSincePriorReview": false
+  },
+  {
+    "path": "lib/campaigns/funding/service.ts",
+    "sha256": "45cea1ed03f68378019a17daca49b02411377062b533962b1775d8056cfec96b",
+    "changedSincePriorReview": true
+  },
+  {
+    "path": "lib/campaigns/repo.ts",
+    "sha256": "d2f8bd1be0b20467a599ba78f0aae37cbb0ff6dc380ca4c9fe18f9ef7656d52d",
+    "changedSincePriorReview": true
+  },
+  {
+    "path": "messages/campaign-collaboration.ts",
+    "sha256": "2f0cf0a864444a45d32ca06115c150e5d0d79e05b6025b9aec9f9c2c8516d130",
+    "changedSincePriorReview": true
+  },
+  {
+    "path": "supabase/migrations/0047_core_campaign_collaboration.sql",
+    "sha256": "c153c418831db64d77271a02f0e94c44d264f64bbb9c57eb82cf343f43c34174",
+    "changedSincePriorReview": true
+  },
+  {
+    "path": "supabase/migrations/0049_core_campaign_funding.sql",
+    "sha256": "7b53c624b8cb7764e46ad085478771c7ffd3e15861fc8aa5ee4548e0234c44c9",
+    "changedSincePriorReview": false
+  },
+  {
+    "path": "supabase/migrations/0132_glue_campaign_collaboration.sql",
+    "sha256": "fcaf7c87cef9e93eb33623f16903b9109a903fa84145d06911a4506394785f50",
+    "changedSincePriorReview": true
+  },
+  {
+    "path": "supabase/migrations/0134_glue_campaign_funding.sql",
+    "sha256": "2f0c4e7da2177220c2ccf625a5d85cef45d8254ef09f9b70377f0406e85f7e4e",
+    "changedSincePriorReview": false
+  },
+  {
+    "path": "tests/campaigns/collaboration.test.ts",
+    "sha256": "42da75a8d07b51330a00446313a7b736dd15405e94a387f9f703472f9374d520",
+    "changedSincePriorReview": true
+  },
+  {
+    "path": "tests/campaigns/funding-http.test.ts",
+    "sha256": "5d6838eb49227d17bc0de492e78ed95f5f859edcf40d7ac8c0e731b6439d50ea",
+    "changedSincePriorReview": true
+  },
+  {
+    "path": "tests/campaigns/funding.test.ts",
+    "sha256": "da4411c9d66d3caba0b57c1a936b3d34fe9dd6b9742032fe7da9dc04985971ed",
+    "changedSincePriorReview": true
+  },
+  {
+    "path": "tests/helpers/pglite.ts",
+    "sha256": "dba053e76f0a195ccf0b8d7d1e8bb7d93b41771d67ca64b0457ae0136826cb57",
+    "changedSincePriorReview": false
+  }
+]

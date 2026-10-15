@@ -1,6 +1,9 @@
-import type { Locale } from '@/lib/i18n/config';
-import { legalDocument, type LegalDoc } from '@/lib/legal/documents';
-import { SUBSCRIPTION_PREPARING_NOTICE, SUBSCRIPTION_TERMS_DRAFT } from './legal';
+import type { Locale } from "@/lib/i18n/config";
+import { legalDocument, type LegalDoc } from "@/lib/legal/documents";
+import {
+  SUBSCRIPTION_PREPARING_NOTICE,
+  SUBSCRIPTION_TERMS_DRAFT,
+} from "./legal";
 
 /** Reviewable public contract/privacy text. No approval is inferred from a deployed page. */
 export const SUBSCRIPTION_PRIVACY_DRAFT = {
@@ -22,30 +25,66 @@ OpenAI response storage is disabled. Abuse-monitoring records may generally be r
 
 function section(source: string, heading: string): string {
   const start = source.indexOf(`## ${heading}\n`);
-  if (start < 0) throw new Error('subscription_legal_section_missing');
-  const end = source.indexOf('\n## ', start + 3);
+  if (start < 0) throw new Error("subscription_legal_section_missing");
+  const end = source.indexOf("\n## ", start + 3);
   return source.slice(start, end < 0 ? undefined : end).trim();
 }
 
 /** Monthly information is published before launch; publication never grants billing approval. */
-export function subscriptionLegalDocument(doc: LegalDoc, locale: Locale, approved: boolean): ReturnType<typeof legalDocument> {
+export function subscriptionLegalDocument(
+  doc: LegalDoc,
+  locale: Locale,
+  approved: boolean,
+): ReturnType<typeof legalDocument> {
   const base = legalDocument(doc, locale);
-  const ko = locale === 'ko';
-  if (doc === 'privacy') return approved ? { ...base, body: `${base.body}\n\n${SUBSCRIPTION_PRIVACY_DRAFT[locale]}` } : base;
-  const notice = approved ? '' : `${SUBSCRIPTION_PREPARING_NOTICE[locale]}\n\n`;
-  if (doc === 'refund') {
-    const intro = ko ? '템플릿을 단건으로 구매하면 해당 영상·이미지 한 편의 생성 비용을 한 번 결제합니다. 가격은 템플릿 페이지에 원화로 표시됩니다. 충전식 재화, 포인트, 이용권은 판매하지 않습니다.' : 'A one-time template purchase pays for one made-to-order AI film or image. Its price is shown in Korean won on the template page. No stored value, points or credits are sold.';
-    const parts = base.body.split('\n\n');
-    const body = [parts[0], intro, ...parts.slice(2)].join('\n\n');
-    const refund = section(SUBSCRIPTION_TERMS_DRAFT[locale], ko ? '환불' : 'Refunds');
-    const cancellation = section(SUBSCRIPTION_TERMS_DRAFT[locale], ko ? '해지' : 'Cancellation');
-    return { ...base, summary: ko ? '템플릿 단건 구매와 월 구독의 해지·환불 기준입니다.' : 'Cancellation and refunds for one-time templates and monthly subscriptions.',
-      body: `${notice}## ${ko ? '월 구독의 해지와 환불' : 'Monthly subscription cancellation and refunds'}\n\n${cancellation.replace(/^## /gm, '### ')}\n\n${refund.replace(/^## /gm, '### ')}\n\n## ${ko ? '템플릿 단건 구매의 환불' : 'One-time template purchase refunds'}\n\n${body.replace(/^## /gm, '### ')}` };
+  const ko = locale === "ko";
+  if (doc === "privacy")
+    return approved
+      ? {
+          ...base,
+          body: `${base.body}\n\n${SUBSCRIPTION_PRIVACY_DRAFT[locale]}`,
+        }
+      : base;
+  const notice = approved ? "" : `${SUBSCRIPTION_PREPARING_NOTICE[locale]}\n\n`;
+  if (doc === "refund") {
+    const intro = ko
+      ? "템플릿을 단건으로 구매하면 해당 영상·이미지 한 편의 생성 비용을 한 번 결제합니다. 가격은 템플릿 페이지에 원화로 표시됩니다. 충전식 재화, 포인트, 이용권은 판매하지 않습니다."
+      : "A one-time template purchase pays for one made-to-order AI film or image. Its price is shown in Korean won on the template page. No stored value, points or credits are sold.";
+    // The scope notice may add paragraphs before the template description.
+    // Replace that description, rather than a positional paragraph, retaining
+    // the campaign scope notice and every campaign refund condition.
+    const description = ko
+      ? /^TWINGS의 (?:템플릿 )?유료 상품은[^\n]+$/m
+      : /^(?:The paid template item on TWINGS|The only paid item)[^\n]+$/m;
+    if (!description.test(base.body))
+      throw new Error("subscription_legal_refund_description_missing");
+    const body = base.body.replace(description, intro);
+    const refund = section(
+      SUBSCRIPTION_TERMS_DRAFT[locale],
+      ko ? "환불" : "Refunds",
+    );
+    const cancellation = section(
+      SUBSCRIPTION_TERMS_DRAFT[locale],
+      ko ? "해지" : "Cancellation",
+    );
+    return {
+      ...base,
+      summary: ko
+        ? "템플릿 단건 구매와 월 구독의 해지·환불 기준입니다."
+        : "Cancellation and refunds for one-time templates and monthly subscriptions.",
+      body: `${notice}## ${ko ? "월 구독의 해지와 환불" : "Monthly subscription cancellation and refunds"}\n\n${cancellation.replace(/^## /gm, "### ")}\n\n${refund.replace(/^## /gm, "### ")}\n\n## ${ko ? "템플릿 단건 구매의 환불" : "One-time template purchase refunds"}\n\n${body.replace(/^## /gm, "### ")}`,
+    };
   }
-  const start = base.body.indexOf(ko ? '## 제4조 (결제)' : '## 4. Payment');
-  const end = base.body.indexOf(ko ? '## 제5조' : '## 5.', start);
-  if (start < 0 || end < 0) throw new Error('subscription_legal_payment_section_missing');
-  const payment = ko ? `## 제4조 (결제)
+  // Match the article number, not its editable title. Stop at the next heading
+  // so the separate brand payment article (4의2 / 4A) remains untouched.
+  const start = base.body.search(
+    ko ? /^## 제4조 \([^\n]+\)\n/m : /^## 4\. [^\n]+\n/m,
+  );
+  const end = base.body.indexOf("\n## ", start + 3);
+  if (start < 0 || end < 0)
+    throw new Error("subscription_legal_payment_section_missing");
+  const payment = ko
+    ? `## 제4조 (결제)
 
 1. 템플릿 단건 구매는 한 편당 한 번 결제하며, 가격은 템플릿 페이지에 원화로 표시합니다. 단건 구매의 생성은 결제가 완료되면 시작됩니다. 결과물은 계정의 "내 작품"에 보관되고, 완성 알림이 이메일로 발송됩니다.
 2. 서비스에는 충전식 재화, 포인트, 이용권이 없습니다. 단건 결제 금액은 그 결제로 만드는 결과물 한 편에만 쓰입니다.
@@ -53,7 +92,8 @@ export function subscriptionLegalDocument(doc: LegalDoc, locale: Locale, approve
 4. 결제·해지·환불과 맞춤 수정에 관한 월 구독 기준은 이 문서 마지막의 월 구독 약관을 따릅니다. 단건 구매의 환불은 별도의 환불정책을 따릅니다.
 5. 본인 얼굴과 초상권 검증, 결과물과 템플릿의 권리, 금지 행위에 관한 아래 조항은 단건 구매와 월 구독에 모두 적용됩니다.
 
-` : `## 4. Payment
+`
+    : `## 4. Payment
 
 1. A one-time template purchase is paid once per result. Its price is shown in Korean won on the template page, and creation starts after payment completes. The result is kept in your account under "My work", and an email tells you when it is ready.
 2. There is no stored value, points or credits on the Service. A one-time payment buys exactly the one result made with it.
@@ -62,5 +102,8 @@ export function subscriptionLegalDocument(doc: LegalDoc, locale: Locale, approve
 5. The likeness checks, result and template rights, and prohibited-conduct clauses below apply to both one-time purchases and monthly subscriptions.
 
 `;
-  return { ...base, body: `${notice}${base.body.slice(0, start)}${payment}${base.body.slice(end)}\n\n## ${ko ? '월 구독 약관' : 'Monthly subscription terms'}\n\n${SUBSCRIPTION_TERMS_DRAFT[locale].replace(/^## /gm, '### ')}` };
+  return {
+    ...base,
+    body: `${notice}${base.body.slice(0, start)}${payment}${base.body.slice(end)}\n\n## ${ko ? "월 구독 약관" : "Monthly subscription terms"}\n\n${SUBSCRIPTION_TERMS_DRAFT[locale].replace(/^## /gm, "### ")}`,
+  };
 }

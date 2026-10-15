@@ -85,7 +85,7 @@ export function isLegalDoc(value: string): value is LegalDoc {
 }
 
 /** The effective date printed on every document. Bump it whenever the text below changes. */
-export const LEGAL_EFFECTIVE = '2026-10-14';
+export const LEGAL_EFFECTIVE = '2026-10-16';
 
 /** Stated once, used by the terms, the refund policy and the privacy policy alike. */
 const SHARE_LINK_DAYS = 3;
@@ -118,12 +118,20 @@ const TERMS_KO = `## 제1조 (목적)
 3. 계정은 본인만 사용할 수 있으며 타인에게 양도·공유할 수 없습니다.
 4. 이용자는 계정 페이지에서 언제든지 탈퇴를 요청할 수 있습니다.
 
-## 제4조 (결제)
+## 제4조 (템플릿 결과물 결제)
 
 1. 결과물은 **템플릿 한 편당 한 번 결제**합니다. 가격은 각 템플릿 페이지에 원화로 표시되며, **정기결제가 아닙니다.**
 2. 서비스에는 충전식 재화, 포인트, 이용권이 없습니다. 결제 금액은 그 결제로 만드는 결과물 한 편에만 쓰입니다.
 3. 결제가 완료되면 결과물 생성이 곧바로 시작됩니다. 결과물은 계정의 "내 작품"에 보관되고, 완성 알림이 이메일로 발송됩니다.
 4. 환불은 별도의 환불정책을 따릅니다.
+
+## 제4조의2 (브랜드 캠페인 서비스 대금)
+
+1. 브랜드 캠페인 결제는 **TWINGS 자체 서비스 대금**을 수납합니다. 서비스명은 "TWINGS 브랜드 캠페인 운영 서비스"이며, 참여자에게 전달할 자금의 수납이나 지급 대행은 포함하지 않습니다.
+2. 최종 결제 총액, 세금 기준, 제공 범위, 시작 조건과 환불 조건, 유효기간, 합의 문서의 참조·버전은 견적마다 정합니다. 결제 총액은 수락한 견적에 적힌 원화 금액이며 결제 화면에서 바꾸지 않습니다.
+3. 결제 완료는 **입금 확인**을 뜻합니다. 캠페인 공개, 참여자 선정, 제작 시작이나 원고료 지급을 자동 실행하지 않습니다. 서비스는 견적에 적힌 시작 조건을 충족하고 회사와 브랜드가 확인한 뒤 진행합니다.
+4. 참여자 보상 제안은 TWINGS 서비스 견적과 별개입니다. 제안을 보내거나 스튜디오가 검토했다는 사실만으로 참여자 보상 조건이 확정되거나 지급되지 않으며, 기존 지원자가 동의한 캠페인 조건을 바꾸지 않습니다.
+5. 현재는 합의된 환불 조건을 전액 환불로 처리할 수 있는 계약을 우선 수납합니다. 환불 대상과 금액은 해당 견적과 적용되는 법령에 따라 확인하며, 이 조항은 법령상 보장된 청약철회·환불 권리를 제한하지 않습니다. 세부 안내는 환불정책 제8항을 따릅니다.
 
 ## 제5조 (사진과 초상권 — 검증과 관리 기준)
 
@@ -191,12 +199,20 @@ These terms govern the use of TWINGS (the "Service"), operated by ${BUSINESS.nam
 3. An account is personal. It may not be transferred or shared.
 4. You may request deletion of your account at any time from the account page.
 
-## 4. Payment
+## 4. Payment for template results
 
 1. A result is **paid for once, per template**. The price is shown on each template page in Korean won. **This is not a subscription.**
 2. There is no stored value, points or credits on the Service. A payment buys exactly the one result made with it.
 3. Rendering starts as soon as payment completes. The result is kept in your account under "My work", and an email tells you when it is ready.
 4. Refunds follow the Refund Policy.
+
+## 4A. Brand campaign service payments
+
+1. Brand campaign payments collect **TWINGS's own service fees** for the "TWINGS Brand Campaign Operations Service". They do not collect funds to pass on to participants or provide a participant payout service.
+2. Each quote specifies the final total, tax basis, scope, start conditions and refund conditions, validity period, and the reference and version of the agreed document. The amount charged is the Korean-won total in the accepted quote and cannot be changed at checkout.
+3. A completed payment records receipt of funds. It **does not automatically** publish a campaign, select participants, start production or pay creator fees. Work proceeds after the quoted start conditions are met and confirmed by the Company and the brand.
+4. A participant reward proposal is separate from the TWINGS service quote. Submission or studio review alone does not establish a participant reward or pay it, and does not change campaign terms already accepted by applicants.
+5. At present, collection prioritizes contracts whose agreed refund conditions can be handled through full refunds. Refund eligibility and amount are assessed under the relevant quote and applicable law. This section does not limit statutory withdrawal or refund rights. See section 8 of the Refund Policy.
 
 ## 5. Photos and likeness — the verification and management standard
 
@@ -251,7 +267,9 @@ These terms are governed by the laws of the Republic of Korea.`;
 
 const REFUND_KO = `## 1. 무엇을 파는가
 
-TWINGS의 유료 상품은 **템플릿 한 편당 한 번 결제**하는 맞춤 생성 결과물(AI 영상·이미지)입니다. 가격은 템플릿 페이지에 원화로 표시되며, **정기결제가 아닌 일회성 결제**입니다. 충전식 재화, 포인트, 이용권은 판매하지 않습니다.
+제1항부터 제7항까지는 템플릿 결과물 결제에 적용하며, 브랜드 캠페인 서비스 대금은 제8항에서 별도로 안내합니다.
+
+TWINGS의 템플릿 유료 상품은 **템플릿 한 편당 한 번 결제**하는 맞춤 생성 결과물(AI 영상·이미지)입니다. 가격은 템플릿 페이지에 원화로 표시되며, **정기결제가 아닌 일회성 결제**입니다. 충전식 재화, 포인트, 이용권은 판매하지 않습니다.
 
 결제가 완료되면 이용자가 올린 사진으로 결과물 생성이 곧바로 시작됩니다. 결과물은 이용자 한 사람을 위해 그때 만들어지는 디지털콘텐츠입니다.
 
@@ -285,11 +303,21 @@ TWINGS의 유료 상품은 **템플릿 한 편당 한 번 결제**하는 맞춤 
 
 ## 7. 환불 신청 방법
 
-${BUSINESS.email} 로 **결제하신 이메일 주소와 결제 일시**를 적어 보내주세요. 영업일 기준 3일 이내에 회신합니다. 법령상 청약철회가 가능한 경우에는 청약철회 의사를 전달한 날부터 3영업일 이내에 원래 결제 수단으로 환불합니다. 카드사에 취소 내역이 반영되기까지는 추가 시간이 걸릴 수 있습니다.`;
+${BUSINESS.email} 로 **결제하신 이메일 주소와 결제 일시**를 적어 보내주세요. 영업일 기준 3일 이내에 회신합니다. 법령상 청약철회가 가능한 경우에는 청약철회 의사를 전달한 날부터 3영업일 이내에 원래 결제 수단으로 환불합니다. 카드사에 취소 내역이 반영되기까지는 추가 시간이 걸릴 수 있습니다.
+
+## 8. 브랜드 캠페인 서비스 대금
+
+브랜드 캠페인 결제는 TWINGS 자체 서비스 대금을 수납하며 참여자 원고료 지급과 분리합니다. 서비스의 제공 범위, 시작 조건과 환불 조건은 수락한 견적에 명시합니다. 입금 확인만으로 제작이 시작되지는 않습니다.
+
+현재는 합의된 환불 조건을 전액 환불로 처리할 수 있는 계약을 우선 수납합니다. 환불의 대상과 금액은 해당 견적에 명시한 조건과 적용되는 법령에 따라 확인합니다. 환불이 확정되면 원래 결제 수단으로 처리하며, 제공사 처리 결과가 확인되지 않은 경우 완료로 안내하지 않고 확인 중임을 알립니다.
+
+이 안내는 법령상 보장된 청약철회·환불 권리를 제한하지 않습니다.`;
 
 const REFUND_EN = `## 1. What is sold
 
-The only paid item on TWINGS is a made-to-order result (an AI film or image), **paid for once per template**. The price is shown on the template page in Korean won. It is a **one-time payment, not a subscription**. No stored value, points or credits are sold.
+Sections 1 through 7 apply to template result payments. Brand campaign service payments are addressed separately in section 8.
+
+The paid template item on TWINGS is a made-to-order result (an AI film or image), **paid for once per template**. The price is shown on the template page in Korean won. It is a **one-time payment, not a subscription**. No stored value, points or credits are sold.
 
 Rendering starts as soon as payment completes, using the photo you uploaded. The result is digital content made at that moment for you alone.
 
@@ -323,7 +351,15 @@ If the Company discontinues the Service, every paid result that has not been com
 
 ## 7. How to request one
 
-Email ${BUSINESS.email} with **the address you paid from and the date of the payment**. We reply within 3 business days. Where statutory withdrawal applies, we refund the original payment method within 3 business days of receiving your withdrawal. Your card issuer may take additional time to display the cancellation.`;
+Email ${BUSINESS.email} with **the address you paid from and the date of the payment**. We reply within 3 business days. Where statutory withdrawal applies, we refund the original payment method within 3 business days of receiving your withdrawal. Your card issuer may take additional time to display the cancellation.
+
+## 8. Brand campaign service payments
+
+Brand campaign payments collect TWINGS's own service fees, separately from creator fee payments. The accepted quote states the scope of service, start conditions and refund conditions. Receipt of funds alone does not start production.
+
+At present, collection prioritizes contracts whose agreed refund conditions can be handled through full refunds. Refund eligibility and amount are assessed under the quoted conditions and applicable law. Once a refund is confirmed, it is processed through the original payment method. An unconfirmed provider result is described as pending, not completed.
+
+This guidance does not limit statutory withdrawal or refund rights.`;
 
 // ---------------------------------------------------------------------------
 // 개인정보처리방침 / Privacy

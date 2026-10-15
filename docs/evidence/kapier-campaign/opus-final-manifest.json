@@ -1,0 +1,414 @@
+[
+  {
+    "path": "app/(admin)/admin/campaigns/[id]/page.tsx",
+    "sha256": "848ca1f78b932477ce501f054683015fee830dbefcbf556c4a2a0c19a87c9305"
+  },
+  {
+    "path": "app/(admin)/admin/campaigns/participants/[id]/page.tsx",
+    "sha256": "c3d0c18819701f4e79fcde08db6b892a6b372ac599d1205cb7da70cd30b43a56"
+  },
+  {
+    "path": "app/(admin)/admin/funding/page.tsx",
+    "sha256": "9e0033c01eccc89bcd4d03b41925ad1f736c41b8533153dddad7891a8af842c5"
+  },
+  {
+    "path": "app/(admin)/admin/page.tsx",
+    "sha256": "c36d5441163d28c5afa849e730827cc80ebbc4a442689850190dd2ebdecb7f09"
+  },
+  {
+    "path": "app/(admin)/admin/risk/page.tsx",
+    "sha256": "c89971aa6a367d7ada5f2f7c281c8eefc7993ab9aa6b1bcf6b42a4b3d42c88f7"
+  },
+  {
+    "path": "app/(admin)/workspace.css",
+    "sha256": "93d26591c20524e523c02718622f785bdaab5f4658dd9a50d9d01ba3b553c5d7"
+  },
+  {
+    "path": "app/(app)/campaigns/[slug]/join/page.tsx",
+    "sha256": "46eeeec8d2f28ffae26b98f96e31fc9f1e871ecb4a27eb887155c58056b76e6d"
+  },
+  {
+    "path": "app/(app)/campaigns/mine/page.tsx",
+    "sha256": "6896a4112e9ada4ed4b6f312765b8e67df04baaa7236da0bcfd8315016bcd8de"
+  },
+  {
+    "path": "app/(app)/campaigns/participations/[id]/page.tsx",
+    "sha256": "bc9bcbddd141c3cd648f007790bc30ae12ed9b780ba1a4a6d528fc23e7650202"
+  },
+  {
+    "path": "app/(brand)/brand/projects/[id]/funding/[orderId]/page.tsx",
+    "sha256": "268bf7be27709bc2ba77f8ea9053ef33d28db1a9853e4d2b7ca1281ea47ebbce"
+  },
+  {
+    "path": "app/(brand)/brand/projects/[id]/funding/page.tsx",
+    "sha256": "73f49e8c02ab3113bd3988115687351b3b667774c4c9425d184b8b6388e95069"
+  },
+  {
+    "path": "app/(brand)/brand/projects/[id]/funding/return/page.tsx",
+    "sha256": "c89fac05d6cd90a3750004b6c3f3ab11407b403c2008a75a0ddb279f53936389"
+  },
+  {
+    "path": "app/(brand)/brand/projects/[id]/page.tsx",
+    "sha256": "7c8e2e256a7b0d3598c7cbf8d84880b8be22894732978af4881640fe27ef0a46"
+  },
+  {
+    "path": "app/(brand)/brand/projects/[id]/participants/[applicationId]/page.tsx",
+    "sha256": "09f9eaf43b08ad163302169e590d880f14c11ac560911d14a66df63a6ff8b220"
+  },
+  {
+    "path": "app/(brand)/brand/projects/[id]/participants/page.tsx",
+    "sha256": "77473cf32a4f6a4fba760af48537f7ae79899f8f48a91de11b86a64463785c6b"
+  },
+  {
+    "path": "app/api/campaign-collaboration/files/[id]/route.ts",
+    "sha256": "d6816cb6fc93466c402174074657c99f044b080616b5bcd3db6146416239cda2"
+  },
+  {
+    "path": "app/api/campaign-collaboration/route.ts",
+    "sha256": "c04fe8224785f5d76fa77250cddc4e4f3e75b0a4dadbfe7a45df48f82d34a343"
+  },
+  {
+    "path": "app/api/campaign-funding/route.ts",
+    "sha256": "b6b68f621d88c7b4babbe0521c7d0abc1ac83d96cfdbbbd37e22247d9d7efeb5"
+  },
+  {
+    "path": "app/api/campaign-risk-worker/claim/route.ts",
+    "sha256": "e1007bea1a312a863e2cecd5d92275a067e1da158873ed447c3f1e3a869ea1b1"
+  },
+  {
+    "path": "app/api/campaign-risk-worker/complete/route.ts",
+    "sha256": "7d7ecaa8c5e5d4ff8276e485393865c367fecbb38124d9a373e57338729600de"
+  },
+  {
+    "path": "app/api/campaign-risk-worker/heartbeat/route.ts",
+    "sha256": "634f1ea43afb863ac7e83dca584c9945f807eefd313ac68d72078593f214a250"
+  },
+  {
+    "path": "app/api/campaign-risk-worker/slack/route.ts",
+    "sha256": "f61a352ac773f8d4141bfd51b8f7a633d06161b9bcb7a48df48a9d3592894e84"
+  },
+  {
+    "path": "components/admin/campaign-workflow.tsx",
+    "sha256": "44c7732c758a2c0b0f9f7b3445e5628a20d349a44869da7567f0a7057c8b7bc2"
+  },
+  {
+    "path": "components/admin/chrome.tsx",
+    "sha256": "45cda6130998665cc2cfd1d3d63c45fe2c085496d5ef4c22f9438e19017de550"
+  },
+  {
+    "path": "components/brand-workspace/browser-address.tsx",
+    "sha256": "4d9061bbd4d01d6549d2d488b49cc9c81d1e53406192217f5bd791ca2e519a48"
+  },
+  {
+    "path": "components/brand-workspace/project-detail.tsx",
+    "sha256": "ccc8bfb66bcd4b1808892e95f510a8d04e17ef6a3b7ac900b35079d2f6bf67b6"
+  },
+  {
+    "path": "components/campaigns/collaboration-admin.tsx",
+    "sha256": "052830788f10f73c2dcad007d09ecedaa7613723ca5d4a552563a2995fb0f578"
+  },
+  {
+    "path": "components/campaigns/collaboration-forms.tsx",
+    "sha256": "7455259993b99528c693e32e6767c9a5c7b5b73941af9d1d8a8eeeb1ed92576a"
+  },
+  {
+    "path": "components/campaigns/funding-actions.tsx",
+    "sha256": "49b296d3c97b7f2a01ca2c4b0219c8517161214ab2e1a9e77ce691a915686917"
+  },
+  {
+    "path": "components/campaigns/invitation-terms.tsx",
+    "sha256": "dd3361eb4f2af2e1bcd830f3d9056941725e3e18ba164e6626bf0bfad9019e98"
+  },
+  {
+    "path": "components/campaigns/participant-detail.tsx",
+    "sha256": "925d665156aaa0e5187d5121e912a1eec6d7f8891083420986ccc2170d29a2a7"
+  },
+  {
+    "path": "lib/admin/campaign-collaboration-operations.ts",
+    "sha256": "7e2b1d05cd96b74b6e8b49d6f2abc42974bd32933b484d88547610a340c3a1b2"
+  },
+  {
+    "path": "lib/admin/campaign-funding-operations.ts",
+    "sha256": "0f990d787759d9d2e57d5afecc0aa9848d63e2149caebe4f352d175807febb1e"
+  },
+  {
+    "path": "lib/admin/campaign-operations.ts",
+    "sha256": "86007cb7583b57c9b0b6b70a018b5b7b2fb988e79e52be83f50315c42c57706f"
+  },
+  {
+    "path": "lib/admin/campaign-risk-operations.ts",
+    "sha256": "21c9b2f4ab5ca29a6ade9cfaca3f66fdde77838823159e403d9f5dfb29b282bc"
+  },
+  {
+    "path": "lib/admin/campaign-workflow.ts",
+    "sha256": "acdf07eed8071a121643f3b4347329269a57c3db91ffd84e0a064c4802ecc76f"
+  },
+  {
+    "path": "lib/admin/context.ts",
+    "sha256": "7c81c256d4246f546dc08d4ecc748ac0ae52dac15c47db00b0fe7a44a7bb467d"
+  },
+  {
+    "path": "lib/admin/operations.ts",
+    "sha256": "145dc682eaf9ce3939e21eae32410d4130a18a2996ecde1f1f57a093537c69c1"
+  },
+  {
+    "path": "lib/admin/workflow.ts",
+    "sha256": "6fa90dff8c8ea4de025759d9876cfd7736ec779159bdb2c33443fd9303fc97be"
+  },
+  {
+    "path": "lib/auth/identity.ts",
+    "sha256": "ff538f08630df233f7dc24b1a4ff2e75f7a295cebb97a443a432358fbb335162"
+  },
+  {
+    "path": "lib/billing/toss-gateway.ts",
+    "sha256": "36e9c0abb41438d901e115fb8635702e67220fe3ccf07371d1082d7bf5e834d2"
+  },
+  {
+    "path": "lib/campaigns/collaboration/invitation-transfer.ts",
+    "sha256": "585feacc9587826f5a38442d0025b33f49552c46a1bfd59a252c8f98d03f9ed0"
+  },
+  {
+    "path": "lib/campaigns/collaboration/service.ts",
+    "sha256": "46c68fd0c04b8d63f28388bbbe63292670e103c5e3e7ddf3a167de6b3d7ddd6e"
+  },
+  {
+    "path": "lib/campaigns/dates.ts",
+    "sha256": "3470c3d6959bc9d3e57076386d3d18daa473d78452b6e840c2c77907bed2bc69"
+  },
+  {
+    "path": "lib/campaigns/funding/core.ts",
+    "sha256": "60439ab075557a5f5dfc66ac0e2321e8ffd0b50fd77fb561e61d16a38eabeb2f"
+  },
+  {
+    "path": "lib/campaigns/funding/payment.ts",
+    "sha256": "091e227fa043328fa24cd688d127f66f8fea3742a0067a125c299e5d430952b3"
+  },
+  {
+    "path": "lib/campaigns/funding/runtime.ts",
+    "sha256": "acc02da439e87b64cf9a06cf921c20148a1fef1dedc3c29dfd18aa55c8a8385d"
+  },
+  {
+    "path": "lib/campaigns/funding/service.ts",
+    "sha256": "49796db533fedf57b64d6110ddfec1554ad80a2693a94cb097863274ea0c9583"
+  },
+  {
+    "path": "lib/campaigns/repo.ts",
+    "sha256": "09242d00c8be991ab0bbfe8d36a9997d7658080eda87d8f64f8cb038849b07f2"
+  },
+  {
+    "path": "lib/campaigns/risk/admin.ts",
+    "sha256": "7554e48849bc9465082d8b48be06981ac3f9e120911c6790de475ec03ea370d3"
+  },
+  {
+    "path": "lib/campaigns/risk/detector.ts",
+    "sha256": "a562f856a118546b66167b4fc873cd0453bc618343471fd047baf6f46beda0e3"
+  },
+  {
+    "path": "lib/campaigns/risk/evidence.ts",
+    "sha256": "a8e42997a92ec6c629de53a17a6837beeceafdd5b7e0f37ca7f75787be0e51ce"
+  },
+  {
+    "path": "lib/campaigns/risk/http.ts",
+    "sha256": "c883ef801e5f314fd7837e6ae10371ab328e72b06c440344f6dd620f0d82d35d"
+  },
+  {
+    "path": "lib/campaigns/risk/local-model.ts",
+    "sha256": "aa1fc9b6b922adeca254b32b2f6d2d03a8b9bd1efdf8944f7a130c9abd94f161"
+  },
+  {
+    "path": "lib/campaigns/risk/queue.ts",
+    "sha256": "67204fdda95aca9a99fb053b531602971d26dd7eb15f8121e78058f2ebab7dff"
+  },
+  {
+    "path": "lib/campaigns/risk/slack.ts",
+    "sha256": "7c633a5dc9a4195092c111c12757a541e7052e1ee84553833147a1db943d1051"
+  },
+  {
+    "path": "lib/campaigns/risk/transport.ts",
+    "sha256": "5c230ca4ab26f4155002cf87dbcc4f48c054bac2292018e8ad787b53dfe7fa0e"
+  },
+  {
+    "path": "lib/campaigns/risk/worker.ts",
+    "sha256": "0581d653354928268c0739a112d1167c7a7083b32789ef80f18c113250e5f857"
+  },
+  {
+    "path": "lib/campaigns/schemas.ts",
+    "sha256": "390279b8a42301cf5cccd8e2bf8e763a9b38706440d94c77b927cdd0bf55b149"
+  },
+  {
+    "path": "lib/campaigns/state.ts",
+    "sha256": "0a120945ebc8e77ff6a70355f4dc7477190c8a55a12b4f9e09bec67997664701"
+  },
+  {
+    "path": "lib/db/sql-runner.ts",
+    "sha256": "0f872ef29452469764a18baebc1dfc519cb04f3776f5f5d2e2797e86f38ee567"
+  },
+  {
+    "path": "lib/i18n/config.ts",
+    "sha256": "46b3876fc3025d29f313bdb03db0e88096c54fecf85691dd0145a9525777db65"
+  },
+  {
+    "path": "lib/routing/surfaces.ts",
+    "sha256": "88f52f246c49c31c0777223d91b02d0b7cf9072729eb25eee8ccbcfb80075ae4"
+  },
+  {
+    "path": "lib/storage/index.ts",
+    "sha256": "7c8f3c27cd5f85408df58bb6ee37d48e15a4ffb0f18436bfea09929dda306faa"
+  },
+  {
+    "path": "lib/storage/supabase-driver.ts",
+    "sha256": "6d85e88689049a07be4ff6b0aec6604cd985470053529f9d65a9ce1376525cf0"
+  },
+  {
+    "path": "messages/admin-workflow.ts",
+    "sha256": "035f9099dd93f03d199875615d89de1c26ea7440fe0f22fed00a6864706d9ed9"
+  },
+  {
+    "path": "messages/campaign-collaboration.ts",
+    "sha256": "5ed6495fcb87212562fdccd8dfa4b3cded2b4b801654dfdfc928c02e7b3bda34"
+  },
+  {
+    "path": "messages/campaign-funding.ts",
+    "sha256": "a5744c8ddffbc5be55a4fb1aaff95af47742fe983d7a5093ed6b450437a97cb7"
+  },
+  {
+    "path": "messages/campaign-risk.ts",
+    "sha256": "ada0c84bc53cce656cf0bfb98ddd936d4303cc5238fe1ea18fd1bce5c978b76d"
+  },
+  {
+    "path": "messages/en.ts",
+    "sha256": "808dc18c89d754a705f4e9a19162f3a69431bf8231af45f423233e5df8f654f5"
+  },
+  {
+    "path": "messages/ko.ts",
+    "sha256": "45bb3b47ed7667796d479009138f3686175fd7eda8010656c7736057c0b84c75"
+  },
+  {
+    "path": "middleware.ts",
+    "sha256": "4beaf6e0909f52c6c0f4a8ade7004f748cde4db8722decd82199ca85ea1aa2bf"
+  },
+  {
+    "path": "scripts/campaign-risk-diagnosis.ts",
+    "sha256": "afa837f3d92b9f14b9b44aaae424b79d80fdfa9df05986dda7ecb42f6fbd1db2"
+  },
+  {
+    "path": "scripts/campaign-risk-replay.ts",
+    "sha256": "87dcccaaa805e3a540ee36977dd3adad598ac5cc1374e5aa6b67fe513b2c23fd"
+  },
+  {
+    "path": "scripts/campaign-risk-smoke.ts",
+    "sha256": "0bfaf70cfdd95f0bc447e94804b048c1f22bc4b4b19b1500197bfb3196ac38d2"
+  },
+  {
+    "path": "scripts/campaign-risk-worker.ts",
+    "sha256": "461a5b8f65fe840c82718243aeafffbb6d4f8486a1fce311762d3c8a8c1bb702"
+  },
+  {
+    "path": "scripts/sweep-anon.ts",
+    "sha256": "f17404b92012bbe1ee72ef955a80226fa3758b6b5510340be6197b41a42e6bb1"
+  },
+  {
+    "path": "supabase/migrations/0027_core_brand_workspace.sql",
+    "sha256": "5f7ca2626baeb993e01e00903d9619c367538c73d221a378bc00888aa076edf6"
+  },
+  {
+    "path": "supabase/migrations/0031_core_brand_managed_workspace.sql",
+    "sha256": "7ffae62abcbd50ad99c9a49d7d970ae3f3466b68a9c0a9f40795804a2f720186"
+  },
+  {
+    "path": "supabase/migrations/0047_core_campaign_collaboration.sql",
+    "sha256": "45c2192da6e0554defe869d5fd63c52038f2beef68c50e9e3ca738c589c5f592"
+  },
+  {
+    "path": "supabase/migrations/0048_core_campaign_risk.sql",
+    "sha256": "fbcfd65829276ddf784bc7e5b46b5220d6e6c3a4cc46fede31520d14c38f3550"
+  },
+  {
+    "path": "supabase/migrations/0049_core_campaign_funding.sql",
+    "sha256": "7b53c624b8cb7764e46ad085478771c7ffd3e15861fc8aa5ee4548e0234c44c9"
+  },
+  {
+    "path": "supabase/migrations/0132_glue_campaign_collaboration.sql",
+    "sha256": "f766d4a0fc6b422ae8210566f98e85e4df1546c7db551c24412cbcc2bcf898ee"
+  },
+  {
+    "path": "supabase/migrations/0133_glue_campaign_risk.sql",
+    "sha256": "cf710f7e1a7a347e67369eb789aeebc5f071578f3edaa784b3d33832defa91ac"
+  },
+  {
+    "path": "supabase/migrations/0134_glue_campaign_funding.sql",
+    "sha256": "2f0c4e7da2177220c2ccf625a5d85cef45d8254ef09f9b70377f0406e85f7e4e"
+  },
+  {
+    "path": "tests/admin/prompt-new-page.test.tsx",
+    "sha256": "fd03fa69058ce8e771a919db1c8e5094f0508e89ca7ecbb487e2da22e0d1b825"
+  },
+  {
+    "path": "tests/admin/workflow.test.tsx",
+    "sha256": "2fa64e3e5badae54402f6efdebd4a4d790131dd8df9d7eac91965cdb52a710be"
+  },
+  {
+    "path": "tests/campaigns/collaboration.test.ts",
+    "sha256": "b9ebafc37c22539a7380eec1dd2d264d0332673494cd648838fce9ba349807e7"
+  },
+  {
+    "path": "tests/campaigns/funding-http.test.ts",
+    "sha256": "64ff8955581f7af14bcd86704e6bab7860121736f2a66dddb0bd204a83e7c2fe"
+  },
+  {
+    "path": "tests/campaigns/funding.test.ts",
+    "sha256": "9b41842acab90e794a708d97ad31ddc71d24b974fef53639d23438a23b90fe18"
+  },
+  {
+    "path": "tests/campaigns/invitation-transfer.test.ts",
+    "sha256": "f3e5356c9f014bf3317b6fbda36bf84a43639a2f4673e696799f2ed786be825f"
+  },
+  {
+    "path": "tests/campaigns/operations.test.ts",
+    "sha256": "87819271d6d9263401d051c4b147596d756b4ca34f9988be7fe582b39c75d2a0"
+  },
+  {
+    "path": "tests/campaigns/risk/detector.test.ts",
+    "sha256": "1aefa6e5e055cef2fdb4833b837205828c8f9e7b43be1d20f568f5c690012c22"
+  },
+  {
+    "path": "tests/campaigns/risk/http.test.ts",
+    "sha256": "7b134b978fc4917c0e509b3566080e6b916e64c6b7ee37c105e85836ffd7d234"
+  },
+  {
+    "path": "tests/campaigns/risk/page.test.tsx",
+    "sha256": "7c3df4785e995465554f94ff6bb3168d0ee64661badc0907699e5fcd2c207055"
+  },
+  {
+    "path": "tests/campaigns/risk/service.test.ts",
+    "sha256": "46b10185034269fbe1e6e1b5149bbac79be2c4a5d1edd09668b58f306ebe9c4f"
+  },
+  {
+    "path": "tests/campaigns/risk/transports.test.ts",
+    "sha256": "15d19118af639f2ab0cd2839e01da3e21eda3694ad0c0f8072bed595146d1e94"
+  },
+  {
+    "path": "tests/db/migrations.test.ts",
+    "sha256": "87998e4e0b19d889088d3553b7ed8f3b11687f81b0aa5ee22c4c39addacf1bec"
+  },
+  {
+    "path": "tests/routes/cache-contract.test.ts",
+    "sha256": "a325d09a0d236f27d605fc441c8f7510232d624d363a3d9687d0f84c082c54ba"
+  },
+  {
+    "path": "tests/routes/campaign-collaboration-api.test.ts",
+    "sha256": "2bb4825add0f006c5e4ecb9189bccf7bd431b5acb5d41664ab69acd91e601a5d"
+  },
+  {
+    "path": "tests/routes/campaign-collaboration-host.test.ts",
+    "sha256": "a1aa666302793533fa0d10be336af4d3298d893a621a48dc59b25f6283bb6c47"
+  },
+  {
+    "path": "tests/routes/campaign-join-middleware.test.ts",
+    "sha256": "425a905a2e75d614546b258902d107593de05edc7e865b23f59f110d318a3ad6"
+  },
+  {
+    "path": "tests/ui/campaign-collaboration.test.tsx",
+    "sha256": "b0a4512053f40a6cd8a7690a8823e12533ed6462b22bc8c3a3c7950e6db95de6"
+  }
+]

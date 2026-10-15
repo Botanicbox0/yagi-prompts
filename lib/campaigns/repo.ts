@@ -163,7 +163,7 @@ const HOST_KINDS: readonly string[] = ['brand', 'platform', 'studio', 'creator',
 const PLATFORMS: readonly string[] = ['instagram', 'tiktok', 'youtube'];
 const DELIVERABLES: readonly string[] = ['reel', 'feed', 'story', 'short', 'video'];
 
-function toCampaign(raw: RawCampaign): CampaignRow {
+export function toCampaign(raw: RawCampaign): CampaignRow {
   return {
     id: raw.id,
     slug: raw.slug,
@@ -344,13 +344,13 @@ export async function insertCampaign(sql: SqlRunner, args: CampaignWriteArgs & {
   );
 }
 
-export async function updateCampaign(sql: SqlRunner, id: string, args: CampaignWriteArgs): Promise<boolean> {
+export async function updateCampaign(sql: SqlRunner, id: string, args: CampaignWriteArgs, preserveStoredPayout = false): Promise<boolean> {
   const { rows } = await sql.query<{ id: string }>(
     `update campaigns
         set slug = $2, title = $3::jsonb, summary = $4::jsonb, brief = $5::jsonb, host_name = $6, host_kind = $7,
             host_url = $8, style_slug = $9, platforms = $10::text[], deliverable = $11, slots = $12,
             applications_close_at = $13::timestamptz, post_deadline_at = $14::timestamptz,
-            payout = $15::jsonb, requirements = $16::jsonb, budget_cents = $17
+            payout = case when $18::boolean then payout else $15::jsonb end, requirements = $16::jsonb, budget_cents = $17
       where id = $1
       returning id`,
     [
@@ -371,6 +371,7 @@ export async function updateCampaign(sql: SqlRunner, id: string, args: CampaignW
       JSON.stringify(args.payout),
       JSON.stringify(args.requirements),
       args.budgetCents,
+      preserveStoredPayout,
     ],
   );
   return rows.length > 0;

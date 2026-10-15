@@ -1342,6 +1342,33 @@ async function sweepRenders(): Promise<void> {
   const campaignEnqueue = await fetch(`${BASE}/api/campaign-production`, { method: 'POST', redirect: 'manual', headers: { Origin: BASE } });
   expectEqual('campaign production refuses anon', campaignEnqueue.status, 401);
   expectPresent('campaign production refusal is private', campaignEnqueue.headers.get('cache-control') ?? '', 'no-store');
+  const collaboration = await request('/api/campaign-collaboration', { method: 'POST', headers: { Origin: BASE, 'Content-Type': 'application/json' }, body: '{}' });
+  expectEqual('campaign collaboration refuses anonymous writes', collaboration.status, 401);
+  expectPresent('campaign collaboration refusal is private', collaboration.cacheControl ?? '', 'no-store');
+  const funding = await request('/api/campaign-funding', { method: 'POST', headers: { Origin: BASE, 'Content-Type': 'application/json' }, body: '{}' });
+  expectEqual('campaign funding refuses anonymous writes', funding.status, 401);
+  expectPresent('campaign funding refusal is private', funding.cacheControl ?? '', 'no-store');
+  const fundingStatus = await request('/api/campaign-funding');
+  expectEqual('campaign funding conceals order status from anonymous', fundingStatus.status, 401);
+  expectPresent('campaign funding status is private', fundingStatus.cacheControl ?? '', 'no-store');
+  const participantFile = await request(`/api/campaign-collaboration/files/${ID}`);
+  expectEqual('participant file conceals existence from anonymous', participantFile.status, 404);
+  expectEqual('participant file returns no bytes to anonymous', participantFile.bytes.length, 0);
+  expectPresent('participant file refusal is private', participantFile.cacheControl ?? '', 'no-store');
+  for (const path of [`/campaigns/participations/${ID}`]) {
+    const participantPage = await request(path, { headers: { 'user-agent': CHROME_UA } });
+    expectOneOf(`${path} redirects anonymous`, participantPage.status, [302, 303, 307]);
+    expectPresent(`${path} redirects to sign-in`, participantPage.location ?? '', 'signin=1');
+  }
+  const invitationLanding = await request('/campaigns/fixture-campaign/join', { headers: { 'user-agent': CHROME_UA } });
+  expectEqual('campaign invitation landing can preserve a fragment before sign-in', invitationLanding.status, 200);
+  expectPresent('campaign invitation landing is private and uncached', invitationLanding.cacheControl ?? '', 'no-store');
+  expectPresent('campaign invitation landing is not indexed', invitationLanding.robotsTag ?? '', 'noindex');
+  for (const action of ['claim', 'complete', 'heartbeat', 'slack']) {
+    const worker = await request(`/api/campaign-risk-worker/${action}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+    expectEqual(`campaign risk ${action} rejects unsigned requests`, worker.status, 404);
+    expectPresent(`campaign risk ${action} refusal is private`, worker.cacheControl ?? '', 'no-store');
+  }
   for (const leaf of ['media', 'preview']) {
     const output = await request(`/api/campaign-production/${ID}/${leaf}`);
     expectEqual(`campaign ${leaf} refuses anon`, output.status, 404);

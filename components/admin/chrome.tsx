@@ -1,13 +1,17 @@
-import { AdminNavigationScroll } from './navigation-scroll';
-import {WorkspaceLanguage} from '@/components/brand-workspace/language';
-import { PublicLink } from '@/components/admin/public-link';
-import type { ReactNode } from 'react';
-import { TwingsLogo } from '@/components/brand/twings-mark';
-import type { Dictionary } from '@/lib/i18n/dictionaries';
-import { getDictionary } from '@/lib/i18n/dictionaries';
-import { isLocale } from '@/lib/i18n/config';
-import { ADMIN_ACTION_PATH, BACK_FIELD, OP_FIELD } from '@/lib/admin/form';
-import type { AdminOperationName } from '@/lib/admin/operations';
+import {
+  ADMIN_NAV_GROUPS,
+  ADMIN_NAV_PATHS,
+  type AdminNavKey,
+} from "@/lib/admin/workflow";
+import { WorkspaceLanguage } from "@/components/brand-workspace/language";
+import { PublicLink } from "@/components/admin/public-link";
+import type { ReactNode } from "react";
+import { TwingsLogo } from "@/components/brand/twings-mark";
+import type { Dictionary } from "@/lib/i18n/dictionaries";
+import { getDictionary } from "@/lib/i18n/dictionaries";
+import { isLocale } from "@/lib/i18n/config";
+import { ADMIN_ACTION_PATH, BACK_FIELD, OP_FIELD } from "@/lib/admin/form";
+import type { AdminOperationName } from "@/lib/admin/operations";
 
 /**
  * The admin surface's furniture (§4: "dense utilitarian layout, left nav + table/editor; no ad
@@ -19,7 +23,7 @@ import type { AdminOperationName } from '@/lib/admin/operations';
  * simply less to go wrong. The trade is no optimistic UI, which a CMS does not need.
  */
 
-export type AdminDict = Dictionary['admin'];
+export type AdminDict = Dictionary["admin"];
 
 export function OpForm({
   op,
@@ -60,7 +64,10 @@ export function OpForm({
  */
 export function ConfirmCheck({ label }: { label: string }) {
   return (
-    <label className="bw-check flex items-start gap-2 font-mono text-[0.75rem]" data-confirm-check>
+    <label
+      className="bw-check flex items-start gap-2 font-mono text-[0.75rem]"
+      data-confirm-check
+    >
       <input type="checkbox" name="_confirm" value="1" required />
       <span>{label}</span>
     </label>
@@ -68,12 +75,12 @@ export function ConfirmCheck({ label }: { label: string }) {
 }
 
 export const BUTTON =
-  'border border-hairline px-3 py-1.5 font-label text-eyebrow uppercase hover:border-accent hover:text-accent';
+  "border border-hairline px-3 py-1.5 font-label text-eyebrow uppercase hover:border-accent hover:text-accent";
 export const BUTTON_PRIMARY =
-  'border border-accent bg-accent px-4 py-2 font-label text-eyebrow uppercase text-white';
+  "border border-accent bg-accent px-4 py-2 font-label text-eyebrow uppercase text-white";
 export const INPUT =
-  'w-full border border-hairline bg-transparent px-2.5 py-1.5 font-mono text-code outline-none focus:border-accent';
-export const LABEL = 'block font-label text-eyebrow uppercase opacity-60';
+  "w-full border border-hairline bg-transparent px-2.5 py-1.5 font-mono text-code outline-none focus:border-accent";
+export const LABEL = "block font-label text-eyebrow uppercase opacity-60";
 
 export function Field({
   label,
@@ -88,7 +95,11 @@ export function Field({
     <label className="block">
       <span className={LABEL}>{label}</span>
       <span className="mt-1.5 block">{children}</span>
-      {hint && <span className="mt-1 block font-mono text-[0.72rem] opacity-50">{hint}</span>}
+      {hint && (
+        <span className="mt-1 block font-mono text-[0.72rem] opacity-50">
+          {hint}
+        </span>
+      )}
     </label>
   );
 }
@@ -109,18 +120,28 @@ export function LocalePair({
   multiline?: boolean;
   rows?: number;
 }) {
-  const cell = (locale: 'en' | 'ko', tag: string) => {
-    const field = `${name}${locale === 'en' ? 'En' : 'Ko'}`;
-    const current = value?.[locale] ?? '';
+  const cell = (locale: "en" | "ko", tag: string) => {
+    const field = `${name}${locale === "en" ? "En" : "Ko"}`;
+    const current = value?.[locale] ?? "";
     return (
       <label className="block">
         <span className="font-label text-[0.68rem] uppercase tracking-[0.12em] opacity-45">
           {tag}
         </span>
         {multiline ? (
-          <textarea name={field} rows={rows} defaultValue={current} className={`${INPUT} mt-1`} />
+          <textarea
+            name={field}
+            rows={rows}
+            defaultValue={current}
+            className={`${INPUT} mt-1`}
+          />
         ) : (
-          <input type="text" name={field} defaultValue={current} className={`${INPUT} mt-1`} />
+          <input
+            type="text"
+            name={field}
+            defaultValue={current}
+            className={`${INPUT} mt-1`}
+          />
         )}
       </label>
     );
@@ -130,10 +151,12 @@ export function LocalePair({
     <div>
       <span className={LABEL}>{label}</span>
       <div className="mt-1.5 grid gap-3 sm:grid-cols-2">
-        {cell('en', 'EN')}
-        {cell('ko', 'KO')}
+        {cell("en", "EN")}
+        {cell("ko", "KO")}
       </div>
-      {hint && <p className="mt-1 font-mono text-[0.72rem] opacity-50">{hint}</p>}
+      {hint && (
+        <p className="mt-1 font-mono text-[0.72rem] opacity-50">{hint}</p>
+      )}
     </div>
   );
 }
@@ -163,56 +186,57 @@ export function Panel({
 // ---------------------------------------------------------------------------
 
 const SUCCESS_KEYS = {
-  created: 'okCreated',
-  saved: 'okSaved',
-  deleted: 'okDeleted',
-  moved: 'okMoved',
-  prepared: 'okPrepared',
-  published: 'okPublished',
-  cachesRefreshed: 'okCachesRefreshed',
-  draftOpened: 'okDraftOpened',
-  archived: 'okArchived',
-  unarchived: 'okUnarchived',
-  approved: 'okApproved',
-  rejected: 'okRejected',
-  unpublished: 'okUnpublished',
-  selected: 'okSelected',
-  declined: 'okDeclined',
-  verified: 'okVerified',
-  paid: 'okPaid',
-  announced: 'okAnnounced',
+  created: "okCreated",
+  saved: "okSaved",
+  deleted: "okDeleted",
+  moved: "okMoved",
+  prepared: "okPrepared",
+  published: "okPublished",
+  cachesRefreshed: "okCachesRefreshed",
+  draftOpened: "okDraftOpened",
+  archived: "okArchived",
+  unarchived: "okUnarchived",
+  approved: "okApproved",
+  rejected: "okRejected",
+  unpublished: "okUnpublished",
+  selected: "okSelected",
+  declined: "okDeclined",
+  verified: "okVerified",
+  paid: "okPaid",
+  announced: "okAnnounced",
 } as const;
 
 const ERROR_KEYS = {
-  forbidden: 'errForbidden',
-  unknownOperation: 'errUnknownOperation',
-  invalid: 'errInvalid',
-  notFound: 'errNotFound',
-  duplicateSlug: 'errDuplicateSlug',
-  notDraft: 'errNotDraft',
-  privileged: 'errPrivileged',
-  notPrepared: 'errNotPrepared',
-  manifestIncomplete: 'errManifestIncomplete',
-  manifestStale: 'errManifestStale',
-  changeNoteRequired: 'errChangeNoteRequired',
-  localeIncomplete: 'errLocaleIncomplete',
-  assetIncomplete: 'errAssetIncomplete',
-  storage: 'errStorage',
-  upload: 'errUpload',
-  notPublishable: 'errNotPublishable',
-  deadlineNotPassed: 'errDeadlineNotPassed',
-  duplicatePlacement: 'errDuplicatePlacement',
-  staleReview: 'errStaleReview',
-  placementsLocked: 'errPlacementsLocked',
-  badTransition: 'errBadTransition',
-  slotsFull: 'errSlotsFull',
-  notReleasable: 'errNotReleasable',
-  metricsRequired: 'errMetricsRequired',
-  brandConflict: 'errBrandConflict',
-  brandNotActive: 'errBrandNotActive',
-  brandConsentRequired: 'errBrandConsentRequired',
-  brandNotShared: 'errBrandNotShared',
-  unknown: 'errUnknown',
+  forbidden: "errForbidden",
+  unknownOperation: "errUnknownOperation",
+  invalid: "errInvalid",
+  notFound: "errNotFound",
+  duplicateSlug: "errDuplicateSlug",
+  notDraft: "errNotDraft",
+  privileged: "errPrivileged",
+  notPrepared: "errNotPrepared",
+  manifestIncomplete: "errManifestIncomplete",
+  manifestStale: "errManifestStale",
+  changeNoteRequired: "errChangeNoteRequired",
+  localeIncomplete: "errLocaleIncomplete",
+  assetIncomplete: "errAssetIncomplete",
+  storage: "errStorage",
+  upload: "errUpload",
+  notPublishable: "errNotPublishable",
+  deadlineNotPassed: "errDeadlineNotPassed",
+  duplicatePlacement: "errDuplicatePlacement",
+  staleReview: "errStaleReview",
+  placementsLocked: "errPlacementsLocked",
+  badTransition: "errBadTransition",
+  slotsFull: "errSlotsFull",
+  notReleasable: "errNotReleasable",
+  metricsRequired: "errMetricsRequired",
+  brandConflict: "errBrandConflict",
+  collaborationRateLimited: "errCollaborationRateLimited",
+  brandNotActive: "errBrandNotActive",
+  brandConsentRequired: "errBrandConsentRequired",
+  brandNotShared: "errBrandNotShared",
+  unknown: "errUnknown",
 } as const;
 
 /**
@@ -231,7 +255,9 @@ export function OutcomeBanner({
   err?: string;
   detail?: string;
 }) {
-  const successKey = ok ? SUCCESS_KEYS[ok as keyof typeof SUCCESS_KEYS] : undefined;
+  const successKey = ok
+    ? SUCCESS_KEYS[ok as keyof typeof SUCCESS_KEYS]
+    : undefined;
   const errorKey = err ? ERROR_KEYS[err as keyof typeof ERROR_KEYS] : undefined;
   if (!successKey && !errorKey) return null;
 
@@ -243,8 +269,8 @@ export function OutcomeBanner({
   return (
     <div
       role="status"
-      data-outcome={failed ? 'error' : 'ok'}
-      className={`mt-6 border px-4 py-3 ${failed ? 'border-accent' : 'border-hairline'}`}
+      data-outcome={failed ? "error" : "ok"}
+      className={`mt-6 border px-4 py-3 ${failed ? "border-accent" : "border-hairline"}`}
     >
       <p className="font-label text-eyebrow uppercase">{String(message)}</p>
       {/* The database's sentence matters when something failed; a slug under "Created." is noise (2026-09-11). */}
@@ -274,10 +300,18 @@ export function AdminBrand({ dict }: { dict: AdminDict }) {
  * P1-6: sign-out on the admin host. A plain same-origin POST (no JS), like the brand workspace's;
  * `/auth/signout` sends admin.twings.app back to the admin sign-in chooser.
  */
-export function AdminSignOut({ dict, className }: { dict: AdminDict; className?: string }) {
+export function AdminSignOut({
+  dict,
+  className,
+}: {
+  dict: AdminDict;
+  className?: string;
+}) {
   return (
     <form method="post" action="/auth/signout" data-admin-signout>
-      <button type="submit" className={className}>{dict.signOut}</button>
+      <button type="submit" className={className}>
+        {dict.signOut}
+      </button>
     </form>
   );
 }
@@ -290,56 +324,111 @@ export function AdminShell({
 }: {
   dict: AdminDict;
   locale: string;
-  active: 'home' | 'playbooks' | 'policy' | 'prompts' | 'contests' | 'campaigns' | 'inquiries' | 'brandWorkspace' | 'subscriptions' | 'community';
+  active: AdminNavKey | "contests";
   children: ReactNode;
 }) {
   // "Refresh caches" used to send every page back to /admin; it returns to where it was pressed.
   const refreshBack =
-    active === 'community' ? '/admin/community' : active === 'subscriptions' ? '/admin/subscriptions' : active === 'brandWorkspace' ? '/admin/brand-workspace' : active === 'prompts'
-      ? '/admin/prompts'
-      : active === 'contests'
-        ? '/admin/contests'
-        : active === 'campaigns'
-          ? '/admin/campaigns'
-          : active === 'inquiries'
-            ? '/admin/inquiries'
-          : active === 'policy'
-            ? '/admin/policy'
-            : active === 'playbooks'
-              ? '/admin/playbooks'
-              : '/admin';
-  const dictionary = getDictionary(isLocale(locale) ? locale : 'en');
+    active === "funding"
+      ? "/admin/funding"
+      : active === "risk"
+        ? "/admin/risk"
+        : active === "community"
+          ? "/admin/community"
+          : active === "subscriptions"
+            ? "/admin/subscriptions"
+            : active === "brandWorkspace"
+              ? "/admin/brand-workspace"
+              : active === "prompts"
+                ? "/admin/prompts"
+                : active === "contests"
+                  ? "/admin/contests"
+                  : active === "campaigns"
+                    ? "/admin/campaigns"
+                    : active === "inquiries"
+                      ? "/admin/inquiries"
+                      : active === "policy"
+                        ? "/admin/policy"
+                        : active === "playbooks"
+                          ? "/admin/playbooks"
+                          : "/admin";
+  const dictionary = getDictionary(isLocale(locale) ? locale : "en");
+  const workflow = dictionary.adminWorkflow;
   const entries = [
-    ['home', '/admin', dict.navHome],
-    ['brandWorkspace', '/admin/brand-workspace', dictionary.brandWorkspace.studioQueue],
-    ['prompts', '/admin/prompts', dict.navPrompts],
-    ['campaigns', '/admin/campaigns', dict.navCampaigns],
-    ['inquiries', '/admin/inquiries', dict.navInquiries],
-    ['community', '/admin/community', dictionary.community.adminTitle],
-    ['subscriptions', '/admin/subscriptions', dictionary.creatorLaunch.nav],
-    ['playbooks', '/admin/playbooks', dict.navPlaybooks],
-    ['policy', '/admin/policy', dict.navPolicy],
+    ["home", "/admin", dict.navHome],
+    ["risk", "/admin/risk", workflow.riskNav],
+    ["funding", "/admin/funding", workflow.fundingNav],
+    [
+      "brandWorkspace",
+      "/admin/brand-workspace",
+      dictionary.brandWorkspace.studioQueue,
+    ],
+    ["prompts", "/admin/prompts", dict.navPrompts],
+    ["campaigns", "/admin/campaigns", dict.navCampaigns],
+    ["inquiries", "/admin/inquiries", dict.navInquiries],
+    ["community", "/admin/community", dictionary.community.adminTitle],
+    ["subscriptions", "/admin/subscriptions", dictionary.creatorLaunch.nav],
+    ["playbooks", "/admin/playbooks", dict.navPlaybooks],
+    ["policy", "/admin/policy", dict.navPolicy],
   ] as const;
   return (
-    <div className="admin-workspace" data-admin-active={active} data-section data-theme="light">
+    <div
+      className="admin-workspace"
+      data-admin-active={active}
+      data-section
+      data-theme="light"
+    >
+      <a href="#main" className="admin-skip-link">
+        {workflow.skip}
+      </a>
       <aside className="admin-sidebar">
         <AdminBrand dict={dict} />
-        <nav data-admin-navigation aria-label={dict.brand}>
-          <AdminNavigationScroll active={active} />
-          {entries.map(([key, href, label]) => <a key={key} href={href} aria-current={active === key ? 'page' : undefined}>{label}</a>)}
+        <nav data-admin-navigation aria-label={workflow.navigation}>
+          {ADMIN_NAV_GROUPS.map((group) => (
+            <section
+              key={group.key}
+              className="admin-nav-group"
+              aria-labelledby={`admin-nav-${group.key}`}
+            >
+              <h2 id={`admin-nav-${group.key}`}>
+                {workflow.groups[group.key]}
+              </h2>
+              {group.items.map((key) => (
+                <a
+                  key={key}
+                  href={ADMIN_NAV_PATHS[key]}
+                  aria-current={active === key ? "page" : undefined}
+                >
+                  <span>{entries.find(([entry]) => entry === key)?.[2]}</span>
+                  <span className="admin-nav-description">
+                    {workflow.descriptions[key]}
+                  </span>
+                </a>
+              ))}
+            </section>
+          ))}
         </nav>
         <div className="admin-utilities">
           <PublicLink href={`/${locale}`}>{dict.navSite} ↗</PublicLink>
-          <OpForm op="caches.refresh" back={refreshBack}><button type="submit">{dict.refreshCaches}</button></OpForm>
+          <OpForm op="caches.refresh" back={refreshBack}>
+            <button type="submit">{dict.refreshCaches}</button>
+          </OpForm>
           <AdminSignOut dict={dict} />
         </div>
       </aside>
       <div className="admin-body">
         <header className="admin-topbar">
-          <span>{entries.find(([key]) => key === active)?.[2] ?? dict.brand}</span>
-          <WorkspaceLanguage locale={locale} label={dictionary.nav.localeToggle} />
+          <span>
+            {entries.find(([key]) => key === active)?.[2] ?? dict.brand}
+          </span>
+          <WorkspaceLanguage
+            locale={locale}
+            label={dictionary.nav.localeToggle}
+          />
         </header>
-        <main id="main" className="admin-main">{children}</main>
+        <main id="main" className="admin-main">
+          {children}
+        </main>
       </div>
     </div>
   );

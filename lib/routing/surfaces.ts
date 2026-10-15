@@ -73,6 +73,7 @@ export function adminRouteAllowed(pathname: string, method: string): boolean {
   if (AUTH_METHODS[pathname]?.includes(method)) return true;
   if (pathname === '/api/workspace-locale') return method === 'POST';
   if (/^\/api\/campaign-production\/[a-f0-9-]+\/media$/.test(pathname)) return read;
+  if (/^\/api\/campaign-collaboration\/files\/[a-f0-9-]+$/.test(pathname)) return read;
   if (pathname === '/admin/do') return method === 'POST';
   if (isAdminPath(pathname)) return read;
   if (pathname === '/api/admin/staging-url') return method === 'POST';
@@ -106,6 +107,9 @@ export function brandRouteAllowed(pathname: string, method: string): boolean {
   if (isBrandPath(pathname)) return read;
   if (STUDIO_DEMO_FILES.has(pathname)) return read;
   if (pathname === '/api/brand-production') return method === 'POST';
+  if (pathname === '/api/campaign-collaboration') return method === 'POST';
+  if (pathname === '/api/campaign-funding') return read || method === 'POST';
+  if (/^\/api\/campaign-collaboration\/files\/[a-f0-9-]+$/.test(pathname)) return read;
   if (/^\/api\/brand-production\/[a-f0-9-]+(?:\/media)?$/.test(pathname)) return read;
   if (pathname === '/api/brand-workspace') return read || method === 'POST';
   // Secondary-usage payment (docs/SECONDARY-USAGE.md): create/confirm by POST, status by GET.

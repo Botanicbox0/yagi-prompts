@@ -1,5 +1,8 @@
 import { BRAND_PRODUCTION_OPERATIONS } from './brand-production-operations';
 import { PLATFORM_OPERATIONS } from './platform-operations';
+import { CAMPAIGN_RISK_OPERATIONS } from './campaign-risk-operations';
+import { CAMPAIGN_COLLABORATION_OPERATIONS } from './campaign-collaboration-operations';
+import { CAMPAIGN_FUNDING_OPERATIONS } from './campaign-funding-operations';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import {
@@ -741,6 +744,9 @@ export const ADMIN_OPERATIONS = {
   ...BRAND_USAGE_OPERATIONS,
   ...BRAND_PRODUCTION_OPERATIONS,
   ...PLATFORM_OPERATIONS,
+  ...CAMPAIGN_RISK_OPERATIONS,
+  ...CAMPAIGN_COLLABORATION_OPERATIONS,
+  ...CAMPAIGN_FUNDING_OPERATIONS,
 };
 
 export type AdminOperationName = keyof typeof ADMIN_OPERATIONS;
