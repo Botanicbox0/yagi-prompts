@@ -119,9 +119,10 @@ export async function middleware(request: NextRequest) {
     // identity has to be honoured here too, or `/account` and `/billing/*` would bounce during a
     // local render-verify even though every component below would resolve the right viewer. Same
     // fences as everywhere else: dead code under NODE_ENV=production, explicit env otherwise.
-    // The invitation page holds no organization data. Its client clears the fragment token
-    // before OAuth navigation; membership is checked only by the authenticated accept API.
-    const invitationLanding = pathname === '/brand/invite' && ['GET', 'HEAD'].includes(request.method);
+    // Invitation landings expose only public campaign terms or no organization data. Their
+    // clients must capture the fragment before OAuth; acceptance still requires an authenticated API.
+    const invitationLanding = (pathname === '/brand/invite' || /^\/campaigns\/[^/]+\/join\/?$/.test(pathname))
+      && ['GET', 'HEAD'].includes(request.method);
     if (!invitationLanding && !user && devIdentityUserId() === null) {
       const target = new URL(requestUrl);
       if (surface === 'admin' || surface === 'brand' || isBrandPath(pathname)) {

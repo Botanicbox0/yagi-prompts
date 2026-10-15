@@ -1,0 +1,16 @@
+{
+  "checkedAt": "2026-10-15T16:02:10.862Z",
+  "model": "qwen3.8:27b-q4_K_M",
+  "detectorVersion": "campaign-risk-v1",
+  "adapter": "localhost:11434/api/chat",
+  "syntheticOnly": true,
+  "dbClaims": 0,
+  "slackSends": 0,
+  "results": [
+    {
+      "fixture": "external_payment_request",
+      "latencyMs": 60005,
+      "error": "model_unavailable_or_invalid_json"
+    }
+  ]
+}

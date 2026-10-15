@@ -1,0 +1,20 @@
+{
+  "checkedAt": "2026-10-15T16:24:56.437Z",
+  "mode": "offline_recorded_response_replay",
+  "sourceEvidenceFile": "docs/evidence/kapier-campaign/risk-local-model-diagnosis.json",
+  "newModelRequests": 0,
+  "dbClaims": 0,
+  "slackSends": 0,
+  "output": {
+    "category": "transfer_solicitation",
+    "confidence": 0.99,
+    "evidence": [
+      {
+        "start": 7,
+        "end": 67,
+        "text": "transfer the money to my bank account outside this platform."
+      }
+    ]
+  },
+  "sourceEvidenceValid": true
+}

@@ -1,0 +1,52 @@
+{
+  "checkedAt": "2026-10-15T16:22:07.046Z",
+  "model": "qwen3.8:27b-q4_K_M",
+  "detectorVersion": "campaign-risk-v1",
+  "syntheticOnly": true,
+  "syntheticText": "Please transfer the money to my bank account outside this platform.",
+  "request": {
+    "think": false,
+    "timeoutMs": 180000,
+    "stream": false,
+    "temperature": 0,
+    "numPredict": 700
+  },
+  "dbClaims": 0,
+  "slackSends": 0,
+  "showMetadata": {
+    "supportedThinking": [
+      false,
+      "low",
+      "medium",
+      "xhigh"
+    ],
+    "defaultThinking": "medium"
+  },
+  "officialDocs": [
+    "https://docs.ollama.com/capabilities/thinking",
+    "https://docs.ollama.com/api/chat"
+  ],
+  "latencyMs": 16395,
+  "output": {
+    "category": "transfer_solicitation",
+    "confidence": 0.99,
+    "evidence": [
+      {
+        "start": 7,
+        "end": 66,
+        "text": "transfer the money to my bank account outside this platform."
+      }
+    ]
+  },
+  "sourceEvidenceValid": false,
+  "metrics": {
+    "done": true,
+    "doneReason": "stop",
+    "totalDurationMs": 17737,
+    "loadDurationMs": 16285,
+    "promptEvalCount": 170,
+    "evalCount": 76,
+    "thinkingCharacters": 0,
+    "contentCharacters": 208
+  }
+}

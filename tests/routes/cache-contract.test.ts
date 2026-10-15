@@ -196,7 +196,7 @@ describe('route cache modes (§3.4 / §4)', () => {
       ['app', '(admin)', 'admin', 'campaigns', 'new', 'page.tsx'],
       ['app', '(admin)', 'admin', 'campaigns', '[id]', 'page.tsx'],
     ]) {
-      expect(read(...file), file.join('/')).toContain("export const dynamic = 'force-dynamic'");
+      expect(read(...file), file.join('/')).toMatch(/export const dynamic\s*=\s*(['"])force-dynamic\1/);
     }
   });
 

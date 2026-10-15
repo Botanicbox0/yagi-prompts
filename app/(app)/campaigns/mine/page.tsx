@@ -1,4 +1,6 @@
 import { getViewer } from '@/lib/auth/viewer';
+import { linkedParticipationIds } from '@/lib/campaigns/collaboration/service';
+import { collaborationCopy } from '@/messages/campaign-collaboration';
 import { getSqlRunner } from '@/lib/db/connect';
 import { getLocaleFromHeaders } from '@/lib/i18n/server';
 import { getDictionary } from '@/lib/i18n/dictionaries';
@@ -38,6 +40,7 @@ export default async function MyCampaignsPage({ searchParams }: { searchParams?:
   const labels = campaignLabels(dict);
   const sql = await getSqlRunner();
   const mine = viewer.userId === null || sql === null ? [] : await loadMyCampaigns({ sql }, viewer.userId);
+  const linked = sql ? await linkedParticipationIds(sql, mine.map(({ application }) => application.id)) : new Set<string>();
   const ok = one(query, 'ok');
   const err = one(query, 'err');
   const steps = [c.stepApplied, c.stepSelected, c.stepPosted, c.stepVerified, c.stepPaid];
@@ -113,6 +116,7 @@ export default async function MyCampaignsPage({ searchParams }: { searchParams?:
                   </div>
 
                   {/* The five steps, the current one in the accent. */}
+                  {linked.has(application.id) && <a className="mt-4 inline-block text-accent underline" href={`/campaigns/participations/${application.id}`}>{collaborationCopy(locale).open} →</a>}
                   <ol className="mt-6 grid grid-cols-5 gap-2 font-label text-[0.62rem] tracking-[0.1em] uppercase">
                     {steps.map((label, index) => (
                       <li key={label} className={`border-t-2 pt-2 ${index + 1 <= step ? 'border-accent text-accent' : 'border-hairline opacity-40'}`}>

@@ -60,7 +60,25 @@ describe('campaigns — the whole lifecycle through the dispatcher', () => {
   afterEach(async () => {
     await h.close();
   });
+  it('refuses changing payout conditions once an application exists, while allowing unchanged terms', async () => {
+    expectOk(await h.run('campaign.create', FORM));
+    const sql=runner(h.db),campaign=await loadCampaignBySlug(sql,FORM.slug);
+    await upsertApplication(sql,{campaignId:campaign!.id,creatorId:CREATOR,pitch:'My campaign application',snsUrl:'https://instagram.com/test',followerCount:100});
+    expect(await h.run('campaign.update',{...FORM,id:campaign!.id,payoutFlat:'90000',payoutMax:'100000'})).toMatchObject({ok:false,code:'badTransition'});
+    expect((await loadCampaignBySlug(sql,FORM.slug))?.payout?.flatCents).toBe(20000);
+    expectOk(await h.run('campaign.update',{...FORM,id:campaign!.id,titleKo:'서울 캠페인'}));
+    await expect(sql.query('update campaigns set payout=$2::jsonb where id=$1',[campaign!.id,JSON.stringify({...campaign!.payout,flatCents:99999})])).rejects.toThrow('immutable after application');
+  });
 
+  it('preserves legacy raw payout JSON on title-only edits after application',async()=>{
+    const flat={...FORM,payoutModel:'flat',payoutFlat:'20000',payoutPerK:'0',payoutMin:'0',payoutMax:''};
+    expectOk(await h.run('campaign.create',flat));const sql=runner(h.db),row=await loadCampaignBySlug(sql,FORM.slug),raw={model:'flat',flatCents:20000};
+    await sql.query('update campaigns set payout=$2::jsonb where id=$1',[row!.id,JSON.stringify(raw)]);
+    await upsertApplication(sql,{campaignId:row!.id,creatorId:CREATOR,pitch:'Application with original terms',snsUrl:'https://instagram.com/test',followerCount:10});
+    expectOk(await h.run('campaign.update',{...flat,id:row!.id,titleKo:'제목만 수정'}));
+    expect((await sql.query('select payout from campaigns where id=$1',[row!.id])).rows[0]?.payout).toEqual(raw);
+    expect(await h.run('campaign.update',{...flat,id:row!.id,payoutFlat:'21000'})).toMatchObject({ok:false,code:'badTransition'});
+  });
   it('authors a draft with a hybrid payout rule and normalised requirements', async () => {
     const outcome = expectOk(await h.run('campaign.create', FORM));
     expect(outcome.code).toBe('created');

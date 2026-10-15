@@ -1,5 +1,7 @@
 /** PLAN §3.9 — UI strings as dictionary modules. `en` is the shape; `ko` must match it. */
+import { adminWorkflowEn } from './admin-workflow';
 export const en = {
+  adminWorkflow: adminWorkflowEn,
   community: {
   "title": "Your next creation",
   "intro": "Tell the studio what you want to make, follow your requests and share your experience.",
@@ -2721,6 +2723,7 @@ export const en = {
     brandStatusFinal: 'This campaign has ended. Its status cannot change any more.',
     inviteHiddenCampaign: 'This campaign is not shared with the client yet. Campaign-only invitations open once it is shared. For brand-wide access, invite from the brand access page.',
     errBrandConflict: 'The campaign changed in the meantime, or that change is not possible from its current status. Refresh to see where it stands.',
+    errCollaborationRateLimited: 'Too many requests. Try again shortly.',
     errBrandNotActive: 'Only an active campaign accepts this. Move the campaign to active first.',
     errBrandConsentRequired: 'A campaign produced by TWINGS needs the creator-consent box ticked before content can be added.',
     errBrandNotShared: 'A campaign the client cannot see yet cannot take campaign-only invitations. Share the campaign first, or invite to the whole brand.',

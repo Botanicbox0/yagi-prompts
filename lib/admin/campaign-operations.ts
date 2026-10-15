@@ -15,6 +15,7 @@ import {
 import {
   CAMPAIGN_PLATFORMS,
   CampaignFormSchema,
+  PayoutRuleSchema,
   isCampaignStatus,
   recruitBlockers,
   type CampaignPlatform,
@@ -143,13 +144,25 @@ const update: AdminOperation<{ id: string; input: z.infer<typeof CampaignFormSch
     return { ok: true, value: { id: id.data.id, input: base.value } };
   },
   async run(ctx, { id, input }) {
-    const row = await loadCampaignById(ctx.sql, id);
-    if (row === null) return fail('notFound', NOT_FOUND);
-    if (await campaignSlugExists(ctx.sql, input.slug, id)) return fail('duplicateSlug', input.slug);
-    const saved = await updateCampaign(ctx.sql, id, input);
-    if (!saved) return fail('notFound', NOT_FOUND);
-    if (row.status !== 'draft' && row.status !== 'archived') ctx.revalidateCampaigns?.();
-    return ok('saved', { detail: input.slug, to: adminCampaignPath(id) });
+    return ctx.sql.transaction(async sql => {
+      await sql.query('select id from campaigns where id=$1 for update', [id]);
+      const row = await loadCampaignById(sql, id);
+      if (row === null) return fail('notFound', NOT_FOUND);
+      const acceptedTerms = (await sql.query<{ locked: boolean }>(
+        `select exists(select 1 from campaign_applications where campaign_id=$1) as locked`,
+        [id],
+      )).rows[0];
+      const previous=PayoutRuleSchema.safeParse(row.payout),next=PayoutRuleSchema.safeParse(input.payout);
+      const same=previous.success&&next.success&&JSON.stringify(previous.data)===JSON.stringify(next.data);
+      if (acceptedTerms?.locked&&!same) return fail('badTransition', 'campaign payout terms immutable after application');
+      if (await campaignSlugExists(sql, input.slug, id)) return fail('duplicateSlug', input.slug);
+      // Preserve historical raw JSON when its normalized terms are unchanged; a title edit
+      // must not become a payout rewrite merely because newer defaults add missing keys.
+      const saved = await updateCampaign(sql, id, input, acceptedTerms?.locked===true);
+      if (!saved) return fail('notFound', NOT_FOUND);
+      if (row.status !== 'draft' && row.status !== 'archived') ctx.revalidateCampaigns?.();
+      return ok('saved', { detail: input.slug, to: adminCampaignPath(id) });
+    });
   },
 };
 

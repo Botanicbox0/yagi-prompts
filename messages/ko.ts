@@ -1,4 +1,5 @@
 import type { Dictionary } from './en';
+import { adminWorkflowKo } from './admin-workflow';
 
 /**
  * PLAN §3.9 — manual bilingual authoring in v1; the type keeps the two dictionaries in step.
@@ -11,6 +12,7 @@ import type { Dictionary } from './en';
  * no forced rhythm, no personification. The copy states what the product does and stops.
  */
 export const ko: Dictionary = {
+  adminWorkflow: adminWorkflowKo,
   community: {
   "title": "다음에는 무엇을 만들까요",
   "intro": "만들고 싶은 콘텐츠를 이야기하고, 요청에 대한 답변과 제작 후기를 확인하세요.",
@@ -2689,6 +2691,7 @@ export const ko: Dictionary = {
     brandStatusFinal: '끝난 캠페인입니다. 상태를 더 바꿀 수 없습니다.',
     inviteHiddenCampaign: '이 캠페인은 아직 고객에게 공개하지 않았습니다. 캠페인만 보는 초대는 공개한 뒤에 보낼 수 있습니다. 브랜드 전체 초대는 브랜드 권한 화면에서 보내세요.',
     errBrandConflict: '캠페인이 그사이 바뀌었거나, 지금 상태에서는 할 수 없는 변경입니다. 새로고침해 현재 상태를 확인해 주세요.',
+    errCollaborationRateLimited: '요청이 많습니다. 잠시 후 다시 시도해 주세요.',
     errBrandNotActive: '진행 중인 캠페인에서만 할 수 있습니다. 먼저 캠페인을 진행 상태로 바꿔 주세요.',
     errBrandConsentRequired: 'TWINGS 제작 캠페인은 크리에이터 동의 확인에 체크해야 올릴 수 있습니다.',
     errBrandNotShared: '고객에게 공개하지 않은 캠페인에는 캠페인만 보는 초대를 보낼 수 없습니다. 캠페인을 먼저 공개하거나 브랜드 전체 초대를 쓰세요.',

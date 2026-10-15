@@ -140,6 +140,7 @@ export type AdminErrorCode =
    *   brandNotShared       — a campaign-only invite for a campaign the client cannot see yet
    */
   | 'brandConflict'
+  | 'collaborationRateLimited'
   | 'brandNotActive'
   | 'brandConsentRequired'
   | 'brandNotShared'

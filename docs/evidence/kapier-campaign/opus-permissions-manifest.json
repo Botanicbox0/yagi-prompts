@@ -1,0 +1,10 @@
+[
+  {
+    "path": "supabase/migrations/0134_glue_campaign_funding.sql",
+    "sha256": "3e60df3995de8416fc3ab50c611e28da663aa4a56d7c55aa2a38ad969c290384"
+  },
+  {
+    "path": "tests/campaigns/funding-privileges.test.ts",
+    "sha256": "b7b26e26f37d14fecaf06f7db55c605610c8e99a2bdbe258f9286705900e7d25"
+  }
+]
