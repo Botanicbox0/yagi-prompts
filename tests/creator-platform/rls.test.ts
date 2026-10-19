@@ -6,8 +6,9 @@ describe('creator-platform direct database access',()=>{
   const db=await freshDb();try{
    await db.exec('create role anon; create role authenticated; create role service_role bypassrls; grant usage on schema public to anon,authenticated,service_role;');
    await db.exec(await readFile('supabase/migrations/0131_glue_creator_platform.sql','utf8'));
+   await db.exec(await readFile('supabase/migrations/0137_glue_creator_onboarding.sql','utf8'));
    const tables=await db.query<{tablename:string}>('select tablename from pg_tables where schemaname=\'public\' and tablename like \'platform_%\'');
-   expect(tables.rows.length).toBe(14);
+   expect(tables.rows.length).toBe(15);
    for(const role of ['anon','authenticated']) {
     await db.exec(`set role ${role}`);
     for(const {tablename} of tables.rows)await expect(db.query(`select * from ${tablename}`)).rejects.toThrow();

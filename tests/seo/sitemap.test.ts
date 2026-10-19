@@ -109,6 +109,14 @@ describe('sitemap (§8 M5)', () => {
     expect(empty.every((entry) => entry.url.startsWith(ORIGIN))).toBe(true);
   });
 
+  it('lists the format creator program only while its public intake gate is open', () => {
+    expect(urls.some((url) => url.includes('/creators'))).toBe(false);
+    const open = buildSitemap({ origin: ORIGIN, cards: [], includeCreatorProgram: true }).map((entry) => entry.url);
+    expect(open).toContain(`${ORIGIN}/en/creators`);
+    expect(open).toContain(`${ORIGIN}/ko/creators`);
+    expect(open.some((url) => url.includes('/creators/'))).toBe(false);
+  });
+
   it('never invents modification dates from the time of sitemap generation', () => {
     expect(entries.find((entry) => entry.url === `${ORIGIN}/en`)).not.toHaveProperty('lastModified');
     expect(entries.find((entry) => entry.url.endsWith('/en/p/voice-identity-setup'))).not.toHaveProperty('lastModified');
@@ -147,6 +155,9 @@ describe('robots (§8 M5)', () => {
       '/renders',
       '/r/',
       '/identity',
+      // The format creator application and workspace; the program page stays public.
+      '/creators/apply',
+      '/creators/workspace',
     ]);
   });
 

@@ -8,6 +8,12 @@ export async function platformReady(sql:SqlRunner):Promise<boolean> {
   const {rows}=await sql.query<{ready:boolean}>(`select to_regclass('public.platform_redemptions') is not null as ready`);
   return rows[0]?.ready===true;
 }
+/** 0050 is applied separately from 0046. Every caller must keep working on the older schema. */
+export async function onboardingReady(sql:SqlRunner):Promise<boolean> {
+  const {rows}=await sql.query<{ready:boolean}>(`select to_regclass('public.platform_creator_applications') is not null
+    and (select count(*) from pg_attribute where attrelid=to_regclass('public.platform_formats') and attname in ('review_note','reviewed_at','revision_of') and not attisdropped)=3 as ready`);
+  return rows[0]?.ready===true;
+}
 export async function lockUser(sql:SqlRunner,userId:string) {
   const {rows}=await sql.query('select id from profiles where id=$1 for update',[userId]);
   demand(rows.length,'not_found');
@@ -57,7 +63,12 @@ export async function submitPlatform(sql:SqlRunner,viewer:Viewer,raw:unknown,acc
       if(old.rows.length) {demand(old.rows[0]!.user_id===viewer.userId,'not_found');return {id:input.requestId};}
       const count=await tx.query<{n:number}>("select count(*)::int n from platform_formats where user_id=$1 and created_at>now()-interval '1 day'",[viewer.userId]);demand(count.rows[0]!.n<3,'rate_limited');
       const example=canonicalPost(input.example);demand(example);
-      await tx.query('insert into platform_formats(id,user_id,title,recipe,example_url,medium) values($1,$2,$3,$4,$5,$6)',[input.requestId,viewer.userId,input.title,input.recipe,example.url,input.medium]);
+      if(input.revisionOf) {
+        // Only the owner's own rejected submission can be revised; accepted recipes need a new review plan.
+        demand(await onboardingReady(tx),'not_open');
+        demand((await tx.query("select id from platform_formats where id=$1 and user_id=$2 and status='rejected'",[input.revisionOf,viewer.userId])).rows.length,'not_found');
+        await tx.query('insert into platform_formats(id,user_id,title,recipe,example_url,medium,revision_of) values($1,$2,$3,$4,$5,$6,$7)',[input.requestId,viewer.userId,input.title,input.recipe,example.url,input.medium,input.revisionOf]);
+      } else await tx.query('insert into platform_formats(id,user_id,title,recipe,example_url,medium) values($1,$2,$3,$4,$5,$6)',[input.requestId,viewer.userId,input.title,input.recipe,example.url,input.medium]);
       return {id:input.requestId};
     }
     const render=await tx.query<{template_id:string;status:string}>("select template_id,status from render_jobs where id=$1 and user_id=$2 and status in ('succeeded','failed')",[input.renderId,viewer.userId]);demand(render.rows.length,'not_found');

@@ -5,14 +5,17 @@ import type { Viewer } from '@/lib/auth/identity';
 import { insertPrompt,loadPromptById } from '@/lib/prompts/repo';
 import { imageOfferFingerprint } from './offer';
 import { demand } from './contract';
-import { audit, approvedCreator, lockUser } from './service';
+import { audit, approvedCreator, lockUser, onboardingReady } from './service';
 import { marginSplit, rewardQuote } from './economics';
 
 const reason=z.string().trim().min(3).max(2000), money=z.number().int().min(0).max(100_000_000);
+// Creator-facing text. Empty form fields arrive as '' and mean "no note".
+const note=z.string().trim().max(1000).optional();
 export const PlatformAdminInput=z.discriminatedUnion('action',[
  z.object({action:z.literal('creator'),id:z.uuid(),active:z.boolean(),contract:z.string().trim().min(1).max(120),reason}).strict(),
  z.object({action:z.literal('reply'),id:z.uuid(),message:z.string().trim().min(1).max(2000),requestId:z.uuid(),reason}).strict(),
- z.object({action:z.literal('format'),id:z.uuid(),accept:z.boolean(),reason}).strict(),
+ z.object({action:z.literal('format'),id:z.uuid(),accept:z.boolean(),note,reason}).strict(),
+ z.object({action:z.literal('application'),id:z.uuid(),decision:z.enum(['approve','decline']),contract:z.string().trim().max(120).optional(),note,reason}).strict(),
  z.object({action:z.literal('moderate'),id:z.uuid(),excluded:z.boolean(),category:z.enum(['duplicate','fraud','abuse','restore']),reason}).strict(),
  z.object({action:z.literal('quality'),id:z.uuid(),score:z.number().min(1).max(5).multipleOf(0.1),reason}).strict(),
  z.object({action:z.literal('settle'),id:z.uuid(),tax:money,fees:money,fx:z.number().positive().max(1_000_000),reason}).strict(),
@@ -35,9 +38,25 @@ export async function administerPlatform(sql:SqlRunner,viewer:Viewer,raw:unknown
    const old=await tx.query<{thread_id:string}>('select thread_id from platform_messages where id=$1',[input.requestId]);
    if(old.rows.length){demand(old.rows[0]!.thread_id===input.id,'conflict');return {id:input.id};}
    await tx.query('insert into platform_messages(id,thread_id,actor_id,from_studio,body) values($1,$2,$3,true,$4)',[input.requestId,input.id,viewer.userId,input.message]);
+  } else if(input.action==='application') {
+   demand(await onboardingReady(tx),'not_open');
+   const {rows}=await tx.query<{user_id:string;status:string}>('select user_id,status from platform_creator_applications where id=$1 for update',[input.id]);demand(rows.length,'not_found');const row=rows[0]!;
+   const decided=input.decision==='approve'?'approved':'declined';
+   if(row.status!=='submitted'){demand(row.status===decided,'conflict');return {id:input.id};}
+   const text=input.note||null;
+   if(input.decision==='approve') {
+    demand(input.contract,'invalid');
+    await lockUser(tx,row.user_id);
+    await tx.query(`insert into platform_creators(user_id,active,approved_by,contract_version) values($1,true,$2,$3)
+     on conflict(user_id) do update set active=true,approved_by=excluded.approved_by,contract_version=excluded.contract_version`,[row.user_id,viewer.userId,input.contract]);
+   } else demand(text&&text.length>=3,'invalid');
+   await tx.query('update platform_creator_applications set status=$2,decision_note=$3,decided_by=$4,decided_at=now() where id=$1',[input.id,decided,text,viewer.userId]);
   } else if(input.action==='format') {
    const {rows}=await tx.query<{user_id:string;title:string;recipe:string;medium:'video'|'image';status:string;template_id:string|null}>('select user_id,title,recipe,medium,status,template_id from platform_formats where id=$1 for update',[input.id]);demand(rows.length,'not_found');const row=rows[0]!;
    if(row.status!=='submitted'){demand((input.accept&&row.status==='accepted')||(!input.accept&&row.status==='rejected'),'conflict');return {id:row.template_id??input.id};}
+   // A note is never silently discarded: on the older schema it is refused, on 0050 a rejection needs one.
+   const text=input.note||null,feedback=await onboardingReady(tx);
+   if(!feedback)demand(!text,'not_open');else if(!input.accept)demand(text&&text.length>=3,'invalid');
    if(input.accept) {
     demand(await approvedCreator(tx,row.user_id),'forbidden');
     const templateId=randomUUID();
@@ -46,6 +65,7 @@ export async function administerPlatform(sql:SqlRunner,viewer:Viewer,raw:unknown
     await insertPrompt(tx,{id:templateId,slug:`format-${templateId}`,source:'yagi',authorId:row.user_id,authorHandle:null,status:'pending',models:[row.medium==='image'?'gpt-image-2':'seedance-2.5'],title:row.title,titleKo:null,promptText:row.recipe,textVisibility:'hidden',media:null,useCase:[],featured:false,medium:row.medium});
     await tx.query("update platform_formats set status='accepted',template_id=$2 where id=$1",[input.id,templateId]);entityId=templateId;
    } else await tx.query("update platform_formats set status='rejected' where id=$1",[input.id]);
+   if(feedback)await tx.query('update platform_formats set review_note=$2,reviewed_at=now() where id=$1',[input.id,text]);
   } else if(input.action==='moderate') {
    demand(input.excluded?input.category!=='restore':input.category==='restore');
    const old=await tx.query<{excluded:boolean}>('select excluded from platform_ratings where id=$1 for update',[input.id]);demand(old.rows.length,'not_found');
@@ -98,7 +118,7 @@ export async function administerPlatform(sql:SqlRunner,viewer:Viewer,raw:unknown
    }
   }
   // Recipe and customer message bodies are deliberately absent from the audit payload.
-  const details=input.action==='creator'?{active:input.active,contract:input.contract}:input.action==='quality'?{score:input.score}:{};
+  const details=input.action==='creator'?{active:input.active,contract:input.contract}:input.action==='application'?{decision:input.decision,contract:input.decision==='approve'?input.contract:null}:input.action==='quality'?{score:input.score}:{};
   await audit(tx,viewer.userId!,entityId,input.action,input.reason,details);
   return {id:entityId};
  });

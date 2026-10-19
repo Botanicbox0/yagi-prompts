@@ -1,6 +1,7 @@
 import 'server-only';
 import type { SqlRunner } from '@/lib/db/sql-runner';
-import { platformReady } from './service';
+import { onboardingReady, platformReady } from './service';
+import { creatorProgramOpen } from './links';
 export async function platformAccess(sql:SqlRunner) {
   const ready=await platformReady(sql);
   const community=ready&&process.env.TWINGS_COMMUNITY==='on';
@@ -10,5 +11,10 @@ export async function platformAccess(sql:SqlRunner) {
     const {rows}=await sql.query<{terms_version:string}>('select terms_version from platform_reward_policy where id=1');
     rewards=!!rows[0]&&rows[0].terms_version===process.env.TWINGS_REWARD_TERMS_VERSION;
   }
-  return {ready,community,creators,rewards};
+  // Review notes, revisions and applications need 0050. Invited suppliers keep the older submission path without it.
+  const onboarding=ready&&await onboardingReady(sql);
+  // Public intake collects new personal data, so it has its own default-off gate on top of the supplier gate.
+  const applications=creators&&onboarding&&creatorProgramOpen();
+  return {ready,community,creators,rewards,onboarding,applications};
 }
+export type PlatformAccess=Awaited<ReturnType<typeof platformAccess>>;
