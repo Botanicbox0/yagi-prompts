@@ -52,6 +52,8 @@ async function message(body = '외부 계좌로 송금해 주세요') {
     await enqueueCampaignRisk(tx, { id, applicationId, body, authorRole: 'creator' });
   });
   await sql.query('update campaign_risk_jobs set available_at=$2 where message_id=$1', [id, now]);
+  // Both queues must be due at the fixture clock, independent of the real database clock.
+  await sql.query('update campaign_risk_slack_outbox set available_at=$2 where message_id=$1', [id, now]);
   return { id, applicationId, body };
 }
 it('stores only offsets/hash, deduplicates enqueue, keeps message deliverable, guards admin/audits original access', async () => {
