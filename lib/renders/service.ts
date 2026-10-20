@@ -14,7 +14,7 @@ import type { Viewer } from '@/lib/auth/identity';
 import type { ArkAssetsClient } from '@/lib/ark/assets';
 import { releaseAfterUse, releaseAfterUseEnabled } from '@/lib/identity/rotation';
 import { ASSET_WAIT_HOURS, assetLibraryMode, ensureIdentityAsset, ensureVirtualGroup, identityStatusFor, loadIdentityGroup, needsIdentity, needsLiveness, pollIdentityAsset, recordIdentityUse, type AssetLibraryMode, type IdentityDeps } from '@/lib/identity/service';
-import { RENDER_PIPELINE_PUBLIC } from '@/lib/flags';
+import { purchaseOpenFor } from '@/lib/auth/purchase-gate';
 import { getTossGateway, type TossGateway } from '@/lib/billing/toss-gateway';
 import { reconcileTossPayments, renderPaymentStatus } from '@/lib/billing/toss-service';
 import { DEFAULT_LOCALE, isLocale, type Locale } from '@/lib/i18n/config';
@@ -87,11 +87,12 @@ export function isPhotoMime(value: unknown): value is PhotoMime {
   return typeof value === 'string' && (PHOTO_MIMES as readonly string[]).includes(value);
 }
 
-/** The one gate. Anonymous never; everyone once payment is wired; admins now (live verification). */
-export function canStartRender(viewer: Viewer): boolean {
-  if (viewer.userId === null) return false;
-  return viewer.isAdmin || RENDER_PIPELINE_PUBLIC;
-}
+/**
+ * The one gate, now `lib/auth/purchase-gate.ts` so the billing service applies the identical rule.
+ * Anonymous never; admins always; everyone once RENDER_PIPELINE_PUBLIC=on; the PG 심사 계정 alone
+ * under `=review`. Re-exported here because this is where every render caller already looks.
+ */
+export const canStartRender = purchaseOpenFor;
 
 export interface RenderServiceDeps {
   sql: SqlRunner;

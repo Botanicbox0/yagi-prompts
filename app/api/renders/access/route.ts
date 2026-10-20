@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getViewer } from '@/lib/auth/viewer';
+import { storefrontOpen } from '@/lib/auth/purchase-gate';
 import { getSqlRunner } from '@/lib/db/connect';
 import { assetLibraryMode, identityStatusFor, needsLiveness } from '@/lib/identity/service';
 import { resolveEngine } from '@/lib/images/engines';
@@ -20,6 +21,8 @@ import { getPremiumEditBudget, type PremiumEditBudget } from '@/lib/premium-edit
  * `GET /api/renders/access?template=slug` — what THIS viewer's make button should do on THIS
  * template. The template page is static (one HTML for everyone), so the studio asks at mount:
  *
+ *   open              is the SHOP open at all — a signed-out visitor should be offered "sign in to
+ *                     buy" rather than "곧 열립니다". Distinct from `live`, which is about THIS viewer.
  *   live              may this viewer start a real render at all (the same rule the enqueue route applies)
  *   charge            will a payment be taken — false for operators (@yagiworkshop.xyz admins test for
  *                     free, founder 2026-09-10) and, until payment is wired, for everyone
@@ -85,5 +88,5 @@ export async function GET(request: Request): Promise<NextResponse> {
     }
   }
 
-  return NextResponse.json({ live, charge: canStartRender(viewer) && !viewer.isAdmin, identityRequired, identity, signedIn, interest, portraitEnabled: portraits && signedIn, portraitId, subscription, subscriptionEligible, subscriptionUsePercent, editing, editFields, premiumEditBudget }, { headers: HEADERS });
+  return NextResponse.json({ open: storefrontOpen(), live, charge: canStartRender(viewer) && !viewer.isAdmin, identityRequired, identity, signedIn, interest, portraitEnabled: portraits && signedIn, portraitId, subscription, subscriptionEligible, subscriptionUsePercent, editing, editFields, premiumEditBudget }, { headers: HEADERS });
 }

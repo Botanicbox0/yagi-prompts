@@ -62,6 +62,11 @@ export interface StudioLabels {
   closedBody: string;
   closedCta: string;
   closedDone: string;
+  /** The shop is open but nobody is signed in: offer the sale, not a waitlist. */
+  signedOutBadge?: string;
+  signedOutTitle?: string;
+  signedOutBody?: string;
+  signedOutCta?: string;
   /** What AI-made means, said before the money changes hands (founder, 2026-09-11). */
   aiNote: string;
   runtimeLabel: string;
@@ -232,6 +237,8 @@ export function TwingsStudio({
   const [liveMode, setLiveMode] = useState(false);
   const [charge, setCharge] = useState(true);
   const [signedIn, setSignedIn] = useState(false);
+  // The shop's own state, separate from this viewer's: see /api/renders/access.
+  const [shopOpen, setShopOpen] = useState(false);
   const [interest, setInterest] = useState(false);
   const [interestBusy, setInterestBusy] = useState(false);
   const [identityRequired, setIdentityRequired] = useState(false);
@@ -301,9 +308,10 @@ export function TwingsStudio({
       const request = ++latest;
       return fetch(accessUrl, { cache: 'no-store', credentials: 'same-origin' })
       .then((response) => (response.ok ? response.json() : { live: false }))
-      .then((json: { live?: boolean; charge?: boolean; identityRequired?: boolean; identity?: string; signedIn?: boolean; interest?: boolean; portraitEnabled?: boolean; portraitId?: string | null; subscription?: typeof subscription; subscriptionEligible?: boolean; editing?: boolean; subscriptionUsePercent?: number | null; editFields?: string[]; premiumEditBudget?: unknown }) => {
+      .then((json: { open?: boolean; live?: boolean; charge?: boolean; identityRequired?: boolean; identity?: string; signedIn?: boolean; interest?: boolean; portraitEnabled?: boolean; portraitId?: string | null; subscription?: typeof subscription; subscriptionEligible?: boolean; editing?: boolean; subscriptionUsePercent?: number | null; editFields?: string[]; premiumEditBudget?: unknown }) => {
         if (cancelled || request !== latest) return;
         setLiveMode(json.live === true);
+        setShopOpen(json.open === true);
         setCharge(json.charge !== false);
         setIdentityRequired(json.identityRequired === true);
         setIdentity(typeof json.identity === 'string' ? json.identity : 'not_needed');
@@ -476,6 +484,30 @@ export function TwingsStudio({
 
   // Closed until the server says otherwise: the static HTML every visitor gets is this panel, and
   // an operator's page swaps to the live loop the moment the access call answers.
+  // 토스 심사 체크리스트의 "판매 가능한 상품 1개 이상"은 로그인 전 화면에서 판정된다. 상점이 열려
+  // 있는데 이 방문자가 로그인하지 않았을 뿐이라면, 대기자 명단이 아니라 판매를 제안한다.
+  if (!liveMode && live && shopOpen && !signedIn && labels.signedOutCta) {
+    return (
+      <section data-twings-studio data-phase="signed-out" data-single={single ? 'true' : 'false'} data-live="false" data-shop-open="true" className="mt-10">
+        <p data-studio-signed-out className="inline-block border border-accent px-3 py-1.5 font-label text-[0.68rem] tracking-[0.12em] text-accent uppercase">
+          {labels.signedOutBadge ?? labels.closedBadge}
+        </p>
+        <div className="mt-6 max-w-detail border border-hairline p-6 sm:p-8">
+          <p className="font-display text-[clamp(1.4rem,2.6vw,2rem)] leading-[0.95] font-black uppercase">{labels.signedOutTitle ?? labels.closedTitle}</p>
+          <p className="mt-4 text-body opacity-70">{labels.signedOutBody ?? labels.closedBody}</p>
+          <p data-studio-ai-note className="mt-4 font-mono text-[0.72rem] leading-relaxed opacity-45">{labels.aiNote}</p>
+          <a
+            data-studio-signin
+            href={live.signinHref}
+            className="mt-7 inline-block border border-current px-6 py-3 font-label text-label uppercase transition-opacity hover:opacity-70"
+          >
+            {labels.signedOutCta} →
+          </a>
+        </div>
+      </section>
+    );
+  }
+
   if (!liveMode || !live) {
     return (
       <section data-twings-studio data-phase="closed" data-single={single ? 'true' : 'false'} data-live="false" className="mt-10">

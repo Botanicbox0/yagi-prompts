@@ -10,7 +10,7 @@ import {
   reconcileTossPayments,
   TOSS_CONSENT_VERSION,
 } from '@/lib/billing/toss-service';
-import { RENDER_PIPELINE_PUBLIC } from '@/lib/flags';
+import { purchaseOpenFor } from '@/lib/auth/purchase-gate';
 import { runLiveRenderPass } from '@/lib/renders/runtime';
 
 export const dynamic = 'force-dynamic';
@@ -48,7 +48,7 @@ export async function GET(_request: Request, { params }: Context) {
 export async function POST(request: Request, { params }: Context) {
   if (!isSameOrigin(request)) return json({ ok: false }, 403);
   const viewer = await getViewer();
-  if (!viewer.userId || !RENDER_PIPELINE_PUBLIC)
+  if (!purchaseOpenFor(viewer))
     return json({ ok: false }, 403);
   try {
     const body = await request.json();

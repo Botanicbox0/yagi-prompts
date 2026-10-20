@@ -19,6 +19,11 @@ vi.mock('@/lib/flags', async (original) => ({
   get RENDER_PIPELINE_PUBLIC() {
     return gate.open;
   },
+  // The gate the purchase now reads (lib/auth/purchase-gate.ts); `on` is the public sale this
+  // suite exercises, and closing it must close both.
+  get RENDER_PIPELINE_MODE() {
+    return gate.open ? 'on' : 'off';
+  },
 }));
 
 const buyer = viewerOf('free');
