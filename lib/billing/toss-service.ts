@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { Viewer } from '@/lib/auth/identity';
 import type { SqlRunner } from '@/lib/db/sql-runner';
-import { RENDER_PIPELINE_PUBLIC } from '@/lib/flags';
+import { purchaseOpenFor } from '@/lib/auth/purchase-gate';
 import { isLocale } from '@/lib/i18n/config';
 import { aspectsForMedium } from '@/lib/images/engines';
 import { loadPromptBySlug } from '@/lib/prompts/repo';
@@ -82,7 +82,7 @@ export async function createTossOrder(
   | TossFailure
 > {
   if (!viewer.userId) return fail('sign_in_required');
-  if (!RENDER_PIPELINE_PUBLIC) return fail('not_open');
+  if (!purchaseOpenFor(viewer)) return fail('not_open');
   if (viewer.isAdmin) return fail('admin_free');
   const t = await loadPromptBySlug(deps.sql, input.templateSlug);
   if (!t || t.status !== 'published' || t.audience === 'brand') return fail('not_found');
@@ -166,7 +166,7 @@ export async function confirmTossOrder(
   },
 ): Promise<TossApproval> {
   if (!viewer.userId) return fail('sign_in_required');
-  if (!RENDER_PIPELINE_PUBLIC) return fail('not_open');
+  if (!purchaseOpenFor(viewer)) return fail('not_open');
   if (!input.consent) return fail('consent_required');
   if (
     !uuid.test(input.orderId) ||

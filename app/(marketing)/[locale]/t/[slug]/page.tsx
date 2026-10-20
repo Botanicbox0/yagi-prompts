@@ -18,6 +18,7 @@ import { signInHref } from '@/lib/billing/links';
 import { identityVerifyHref } from '@/lib/identity/links';
 import { templateMetadata, unresolvedTemplateMetadata } from '@/lib/seo/template-metadata';
 import { RENDER_PIPELINE_PUBLIC } from '@/lib/flags';
+import { storefrontOpen } from '@/lib/auth/purchase-gate';
 import { FaqSection } from '@/lib/seo/faq-section';
 import { JsonLd } from '@/lib/seo/json-ld';
 import { siteUrl } from '@/lib/seo/site-url';
@@ -188,7 +189,7 @@ export default async function TemplatePage({ params }: RouteParams) {
                   <p data-template-closed className="mt-6 max-w-detail text-body opacity-70">{t.notForSaleBody}</p>
                 ) : (
                   <a href="#make" data-template-make-cta className="mt-6 inline-block bg-accent px-6 py-3 font-label text-label text-white uppercase">
-                    <TextSwap><TemplateMakeAvailability copy={makeAvailabilityCopy} oneTimeAvailable={RENDER_PIPELINE_PUBLIC} subscriptionEligible={subscriptionQuote !== null} field="cta" /> →</TextSwap>
+                    <TextSwap><TemplateMakeAvailability copy={makeAvailabilityCopy} oneTimeAvailable={storefrontOpen()} subscriptionEligible={subscriptionQuote !== null} field="cta" /> →</TextSwap>
                   </a>
                 )}
               </div>
@@ -198,7 +199,7 @@ export default async function TemplatePage({ params }: RouteParams) {
             <section id="make" data-template-make className="mt-16 border-t border-hairline pt-10">
               <p className="text-accent font-label text-eyebrow uppercase">{t.makeEyebrow}</p>
               <h2 className="mt-4 font-display text-[clamp(1.6rem,3vw,2.4rem)] leading-[0.95] font-black uppercase">{t.makeHeading}</h2>
-              <p className="mt-4 max-w-detail text-body opacity-70"><TemplateMakeAvailability copy={makeAvailabilityCopy} oneTimeAvailable={RENDER_PIPELINE_PUBLIC} subscriptionEligible={subscriptionQuote !== null} field="body" /></p>
+              <p className="mt-4 max-w-detail text-body opacity-70"><TemplateMakeAvailability copy={makeAvailabilityCopy} oneTimeAvailable={storefrontOpen()} subscriptionEligible={subscriptionQuote !== null} field="body" /></p>
               {style === null ? (
                 <p data-template-closed className="mt-8 border border-hairline p-6 text-body opacity-70">{t.notForSaleBody}</p>
               ) : (
@@ -243,6 +244,10 @@ export default async function TemplatePage({ params }: RouteParams) {
                     closedBody: dict.studio.closedBody,
                     closedCta: dict.studio.closedCta,
                     closedDone: dict.studio.closedDone,
+                    signedOutBadge: dict.studio.signedOutBadge,
+                    signedOutTitle: dict.studio.signedOutTitle,
+                    signedOutBody: dict.studio.signedOutBody,
+                    signedOutCta: dict.studio.signedOutCta,
                     aiNote: dict.studio.aiNote,
                     runtimeLabel: dict.studio.runtimeLabel,
                     needPhoto: dict.studio.needPhoto,

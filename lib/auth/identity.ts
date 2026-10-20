@@ -23,6 +23,14 @@ export interface Viewer {
   email: string | null;
   isAdmin: boolean;
   locale: Locale | null;
+  /**
+   * The PG 심사 계정, and ONLY from the auth server's own `app_metadata.purpose` — never a profile
+   * column, a claim in the request, or an email pattern a customer could arrange. It grants no
+   * tier and no admin: it is read exactly once, by `canStartRender` under
+   * `RENDER_PIPELINE_PUBLIC=review`, so a reviewer can complete a test-key purchase while ordinary
+   * customers still see the closed studio (lib/flags.ts).
+   */
+  review?: boolean;
 }
 
 export const ANON_VIEWER: Viewer = {
@@ -50,6 +58,7 @@ export interface IdentitySource {
 export function resolveViewer(
   user: { id: string; email?: string | null } | null,
   identity: Identity | null,
+  options: { review?: boolean } = {},
 ): Viewer {
   if (user === null) return ANON_VIEWER;
   const isAdmin = identity?.isAdmin === true;
@@ -64,6 +73,8 @@ export function resolveViewer(
     email: identity?.email ?? user.email ?? null,
     isAdmin,
     locale: identity?.locale ?? null,
+    // An admin is never the review account; the marker only ever widens the narrow review path.
+    review: isAdmin ? false : options.review === true,
   };
 }
 

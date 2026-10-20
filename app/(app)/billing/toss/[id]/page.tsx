@@ -4,7 +4,7 @@ import { getTossContext } from '@/lib/billing/toss-runtime';
 import { loadOwnTossOrder } from '@/lib/billing/toss-service';
 import { tossConfigFromEnv } from '@/lib/billing/toss-gateway';
 import { getDictionary } from '@/lib/i18n/dictionaries';
-import { RENDER_PIPELINE_PUBLIC } from '@/lib/flags';
+import { purchaseOpenFor } from '@/lib/auth/purchase-gate';
 import { formatKrw } from '@/lib/i18n/format';
 import { templateHref } from '@/lib/prompts/links';
 import { TossCheckout } from '../checkout';
@@ -26,7 +26,7 @@ export default async function TossOrderPage({
   if (!o) notFound();
   const c = getDictionary(o.locale).billing.toss;
   const live = new Date(o.expires_at) > new Date();
-  const canPay = RENDER_PIPELINE_PUBLIC && o.status === 'pending' && live;
+  const canPay = purchaseOpenFor(viewer) && o.status === 'pending' && live;
   // Audit P2-13: a pending order past its window with no payment key was never paid — it is
   // expired, not "confirmation delayed". Say so and offer a fresh start on the template.
   const expired = o.status === 'pending' && !live && o.payment_key === null;

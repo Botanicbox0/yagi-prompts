@@ -43,15 +43,36 @@ export const PLAYBOOKS_IN_NAV = false;
  * 개시"): `RENDER_PIPELINE_PUBLIC=on` in Vercel, then redeploy. Production additionally refuses to
  * open unless BOTH Toss keys are live keys (`live_…`) — a test key there would take no money and
  * hand every visitor a free film. Preview and local runs may open on test keys for QA.
+ *
+ * `=review` is the third state, and it exists because `=on` alone cannot pass a PG review.
+ * 토스페이먼츠 심사 체크리스트(notice/20057)는 **테스트 API 키로 결제창 연동을 끝낸 상태**와
+ * **판매 가능한 상품 1개 이상**을 요구한다. 그런데 라이브 키는 그 심사를 통과해야 발급된다. 즉
+ * `=on`의 라이브 키 조건은 심사를 구조적으로 통과 불가능하게 만든다 — 이것이 반려의 실제 원인이다.
+ *
+ * `review` resolves that without handing anyone a free film: the storefront reads as open (a real
+ * price and a real buy CTA, which is what an anonymous reviewer checks), but only the server-marked
+ * 심사 계정(`app_metadata.purpose = 'toss_review'`, lib/auth/review-login.ts)이 결제·생성까지 끝낼
+ * 수 있다. Ordinary customers keep seeing the closed studio, so test keys can never take a real
+ * order. It is NOT 공개 판매 개시 — that stays `=on`, and stays 대표 결정 (AGENTS.md §6).
  */
-export function renderPipelinePublic(env: Record<string, string | undefined> = process.env): boolean {
-  if (env.RENDER_PIPELINE_PUBLIC?.trim().toLowerCase() !== 'on') return false;
-  if (env.VERCEL_ENV !== 'production') return true;
+export type RenderPipelineMode = 'off' | 'review' | 'on';
+
+export function renderPipelineMode(env: Record<string, string | undefined> = process.env): RenderPipelineMode {
+  const setting = env.RENDER_PIPELINE_PUBLIC?.trim().toLowerCase();
+  if (setting === 'review') return 'review';
+  if (setting !== 'on') return 'off';
+  if (env.VERCEL_ENV !== 'production') return 'on';
   const live = (key: string | undefined) => (key ?? '').trim().startsWith('live_');
-  return live(env.TOSS_CLIENT_KEY) && live(env.TOSS_SECRET_KEY);
+  return live(env.TOSS_CLIENT_KEY) && live(env.TOSS_SECRET_KEY) ? 'on' : 'off';
 }
 
-export const RENDER_PIPELINE_PUBLIC = renderPipelinePublic();
+/** Unchanged meaning: the pipeline is open to EVERY signed-in reader. `review` is not that. */
+export function renderPipelinePublic(env: Record<string, string | undefined> = process.env): boolean {
+  return renderPipelineMode(env) === 'on';
+}
+
+export const RENDER_PIPELINE_MODE = renderPipelineMode();
+export const RENDER_PIPELINE_PUBLIC = RENDER_PIPELINE_MODE === 'on';
 
 /**
  * docs/TEMPLATES-IA.md §12 (2026-09-14) — how a person's photo becomes a ModelArk reference.

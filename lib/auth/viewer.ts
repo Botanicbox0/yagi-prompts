@@ -102,7 +102,10 @@ export async function getViewer(): Promise<Viewer> {
   // A session whose profile row is missing is not a free user — it is an unknown one. Fail closed.
   if (identity === null && sessionUser === null) return ANON_VIEWER;
 
-  return resolveViewer({ id: userId, email: sessionUser?.email ?? null }, identity);
+  // `app_metadata` is written by the auth server and is not user-editable (docs/qa/toss-checkout/
+  // REVIEW-ACCOUNT.md); `user_metadata` would be, so it is never consulted here.
+  const review = sessionUser?.app_metadata?.purpose === 'toss_review';
+  return resolveViewer({ id: userId, email: sessionUser?.email ?? null }, identity, { review });
 }
 
 /** §3.7 — `/admin/*` is gated at the edge on session, and HERE on `is_admin`. */
