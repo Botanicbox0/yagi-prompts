@@ -1,5 +1,5 @@
 import type { Dictionary } from '@/lib/i18n/dictionaries';
-import { RENDER_PIPELINE_PUBLIC } from '@/lib/flags';
+import { storefrontOpen } from '@/lib/auth/purchase-gate';
 
 export const FAQ_CATEGORIES = ['usage', 'payment', 'rights', 'campaign', 'brand'] as const;
 export type FaqCategory = (typeof FAQ_CATEGORIES)[number];
@@ -44,7 +44,12 @@ export interface FaqItem {
   a: string;
 }
 
-export function faqItems(dict: Dictionary, placement?: FaqPlacement, publicGeneration = RENDER_PIPELINE_PUBLIC): FaqItem[] {
+/**
+ * `publicGeneration` follows the STOREFRONT, not public sale: under `RENDER_PIPELINE_PUBLIC=review`
+ * the template page carries a price and a buy CTA, so an FAQ still answering "결제는 준비 중입니다"
+ * right beneath it contradicts the page a PG reviewer is reading. The two must say the same thing.
+ */
+export function faqItems(dict: Dictionary, placement?: FaqPlacement, publicGeneration = storefrontOpen()): FaqItem[] {
   return FAQ_CATALOG.filter((entry) => !placement || entry.placements.includes(placement)).map((entry) => ({
     id: entry.id,
     category: entry.category,
