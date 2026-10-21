@@ -41,7 +41,14 @@ jobs:
       - name: Install (exact pins, lockfile authoritative)
         run: npm ci
 
+      # Shard-independent checks run once. They were in every shard, which bought nothing: the
+      # tree they read is identical in all four. Shard 1 carries them rather than a job of their
+      # own, because a separate job pays a fresh checkout + install and another rounded-up
+      # billing minute (GitHub bills each job to the whole minute) to save 23 seconds of work.
+      # Keeping them ahead of the vitest step also preserves fail-fast: a type error stops
+      # shard 1 in well under a minute instead of after the suite.
       - name: Typecheck
+        if: ${{ matrix.shard == 1 }}
         run: npm run typecheck
 
       # Every file is assigned exactly once; all shards feed the existing required check below.
@@ -49,6 +56,7 @@ jobs:
         run: npx vitest run --shard=${{ matrix.shard }}/4
 
       - name: Private client import boundaries
+        if: ${{ matrix.shard == 1 }}
         run: npm run security:client
 
   check:
