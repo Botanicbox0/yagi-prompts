@@ -104,9 +104,10 @@ export function costTable(seconds: readonly number[]): CostFloor[] {
  * 2026-10-21: "이미지는 장당 최소로 200원 정도로"). Only Seedream 5.0 Lite falls under it (its 5%
  * floor is 100원); every other engine's floor is already 200원 or more.
  *
- * It does not fix the bank-transfer minimum: 계좌이체 charges at least 220원 a payment
- * (docs/TOSS-CONTRACT.md), so a 200원 image paid by transfer still loses money. Image checkout needs
- * card-only payment methods (or a higher price) before an image template goes on sale.
+ * It does not cover the bank-transfer minimum: 계좌이체 charges at least 220원 a payment, so a 200원
+ * image paid by transfer would lose money. That is handled outside the code — bank transfer and
+ * virtual account were removed from the Toss payment UI on 2026-10-21 (docs/TOSS-CONTRACT.md,
+ * "실제로 노출하는 결제수단"). Re-enabling either there brings the loss back.
  */
 export const IMAGE_MIN_PRICE_KRW = 200;
 
