@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { MIGRATIONS_DIR, coreMigrationFiles, freshDb, glueMigrationFiles } from '../helpers/pglite';
+import { MIGRATIONS_DIR, coreMigrationFiles, migratedDb, glueMigrationFiles } from '../helpers/pglite';
 
 describe('migrations apply on a fresh database (PLAN §6)', () => {
   it('has a unique migration version for cloud application', () => {
@@ -17,7 +17,7 @@ describe('migrations apply on a fresh database (PLAN §6)', () => {
   });
 
   it('creates every §6 table', async () => {
-    const db = await freshDb();
+    const db = await migratedDb();
     const { rows } = await db.query<{ table_name: string }>(
       `select table_name from information_schema.tables
         where table_schema = 'public' and table_type = 'BASE TABLE' order by table_name`,
@@ -153,7 +153,7 @@ describe('migrations apply on a fresh database (PLAN §6)', () => {
   });
 
   it('declares the visibility enum in gating order public < free < pro < hidden', async () => {
-    const db = await freshDb();
+    const db = await migratedDb();
     const { rows } = await db.query<{ label: string }>(
       `select enumlabel as label from pg_enum e
          join pg_type t on t.oid = e.enumtypid
@@ -171,7 +171,7 @@ describe('migrations apply on a fresh database (PLAN §6)', () => {
   });
 
   it('seeds the default visibility policy per kind (§3.8 /admin/policy)', async () => {
-    const db = await freshDb();
+    const db = await migratedDb();
     const { rows } = await db.query<{ kind: string; visibility: string }>(
       'select kind, visibility from default_policy order by kind',
     );
@@ -187,7 +187,7 @@ describe('migrations apply on a fresh database (PLAN §6)', () => {
   });
 
   it('installs the same-playbook composite FK and the block content CHECK', async () => {
-    const db = await freshDb();
+    const db = await migratedDb();
     const { rows } = await db.query<{ conname: string; contype: string }>(
       `select conname, contype from pg_constraint
         where conname in ('fk_published_revision_same_playbook','blocks_content_min')
@@ -201,7 +201,7 @@ describe('migrations apply on a fresh database (PLAN §6)', () => {
   });
 
   it('owns both publish RPCs with the publisher role and marks them SECURITY DEFINER', async () => {
-    const db = await freshDb();
+    const db = await migratedDb();
     const { rows } = await db.query<{ proname: string; owner: string; secdef: boolean }>(
       `select p.proname, r.rolname as owner, p.prosecdef as secdef
          from pg_proc p
@@ -216,7 +216,7 @@ describe('migrations apply on a fresh database (PLAN §6)', () => {
   });
 
   it('forces deny-all RLS on EVERY table in the glue migration (§6 security posture)', async () => {
-    const db = await freshDb();
+    const db = await migratedDb();
     const { rows } = await db.query<{ table_name: string }>(
       `select table_name from information_schema.tables
         where table_schema = 'public' and table_type = 'BASE TABLE'`,
@@ -302,7 +302,7 @@ describe('migrations apply on a fresh database (PLAN §6)', () => {
   });
 
   it('registers the immutability constraint triggers', async () => {
-    const db = await freshDb();
+    const db = await migratedDb();
     const { rows } = await db.query<{ tgname: string }>(
       `select tgname from pg_trigger where not tgisinternal and tgname like 'trg_guard_%' order by tgname`,
     );

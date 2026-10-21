@@ -15,6 +15,8 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['tests/**/*.test.ts', 'tests/**/*.test.tsx'],
+    // Migrates one template database per run; `freshDb()` restores copies of it.
+    globalSetup: ['tests/setup/pglite-template.ts'],
     // PGlite boots a WASM Postgres per suite; give migrations room on cold CI runners.
     testTimeout: 60_000,
     hookTimeout: 60_000,

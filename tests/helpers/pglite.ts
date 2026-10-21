@@ -1,4 +1,6 @@
+import { readFile } from 'node:fs/promises';
 import { PGlite } from '@electric-sql/pglite';
+import { inject } from 'vitest';
 import { makeSingleConnectionRunner, type SqlRunner } from '@/lib/db/sql-runner';
 import { applyCoreMigrations } from '@/lib/db/migrations';
 
@@ -7,10 +9,37 @@ export { MIGRATIONS_DIR, coreMigrationFiles, glueMigrationFiles } from '@/lib/db
 /**
  * A fresh in-memory Postgres with the core migrations applied.
  *
+ * Restored from the template `tests/setup/pglite-template.ts` migrated once for the whole run, so
+ * a suite pays for a PGlite boot instead of initdb plus every migration. Each call is its own
+ * database: nothing written in one suite or test is visible to another.
+ */
+export async function freshDb(): Promise<PGlite> {
+  const template = await templateBytes();
+  if (!template) return migratedDb();
+  const db = new PGlite({ loadDataDir: new Blob([template]) });
+  await db.waitReady;
+  return db;
+}
+
+let template: Promise<Uint8Array<ArrayBuffer> | null> | null = null;
+
+function templateBytes(): Promise<Uint8Array<ArrayBuffer> | null> {
+  // No globalSetup (a narrower config) → the slow path below still gives a correct database.
+  template ??= (async () => {
+    const path = inject('pgliteTemplate');
+    return path ? new Uint8Array(await readFile(path)) : null;
+  })();
+  return template;
+}
+
+/**
+ * A fresh in-memory Postgres built by actually running the core migrations.
+ *
+ * For suites whose subject IS the migrations, and for building the `freshDb()` template.
  * The `auth.users` stub lives HERE, not in a migration: on Supabase that table is managed by
  * GoTrue, and `profiles.id` references it. PLAN §6 / Director deviation 1.
  */
-export async function freshDb(): Promise<PGlite> {
+export async function migratedDb(): Promise<PGlite> {
   const db = new PGlite();
   await db.exec(`
     create schema if not exists auth;

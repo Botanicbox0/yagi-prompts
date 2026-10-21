@@ -1,9 +1,9 @@
 import { readFile } from 'node:fs/promises';
 import { describe,expect,it } from 'vitest';
-import { freshDb } from '@/tests/helpers/pglite';
+import { migratedDb } from '@/tests/helpers/pglite';
 describe('creator-platform direct database access',()=>{
  it('denies every platform table to browser roles, including recipes and ledgers',async()=>{
-  const db=await freshDb();try{
+  const db=await migratedDb();try{
    await db.exec('create role anon; create role authenticated; create role service_role bypassrls; grant usage on schema public to anon,authenticated,service_role;');
    await db.exec(await readFile('supabase/migrations/0131_glue_creator_platform.sql','utf8'));
    const tables=await db.query<{tablename:string}>('select tablename from pg_tables where schemaname=\'public\' and tablename like \'platform_%\'');
