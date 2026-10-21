@@ -2,9 +2,25 @@ name: CI
 
 on:
   # Feature branches are checked through their PR, not once for push and again for the PR.
+  #
+  # Docs-only changes skip CI (2026-10-21: the month's 2,000 free Actions minutes ran out, and five
+  # of that day's PRs were documentation running all eight jobs). Order matters — a later pattern
+  # wins: everything, minus `docs/**` and any `*.md`, plus `docs/product/prompts/**` back in, because
+  # tests/identity/portrait-provider.test.ts reads those prompt files and pins them to the code.
+  # security.yml (secret scan) still runs on every change: a key can leak into a doc too.
   push:
     branches: [main]
+    paths:
+      - '**'
+      - '!docs/**'
+      - '!**/*.md'
+      - 'docs/product/prompts/**'
   pull_request:
+    paths:
+      - '**'
+      - '!docs/**'
+      - '!**/*.md'
+      - 'docs/product/prompts/**'
   # A branch without a PR can still be checked explicitly from the Actions page.
   workflow_dispatch:
 
