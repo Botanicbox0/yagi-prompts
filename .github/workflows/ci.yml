@@ -22,8 +22,75 @@ env:
   PLAYBOOK_MODE: local
 
 jobs:
+  # A documentation edit cannot change what the suite asserts, and the suite costs ~32 billed
+  # minutes a run. This gate decides once, cheaply, whether the rest of the workflow has anything
+  # to do.
+  #
+  # The jobs below are SKIPPED by `if:`, never removed by `paths-ignore`. A workflow that does not
+  # run reports no checks at all, which leaves a branch rule waiting for a status that will never
+  # arrive; a job skipped by a condition still reports, and a required check counts a skip as a
+  # pass. Every branch that cannot classify a change falls through to the full suite, so a filter
+  # bug costs minutes rather than coverage.
+  changes:
+    name: changed paths
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      code: ${{ steps.filter.outputs.code }}
+    steps:
+      - name: Decide whether this change can affect the suite
+        id: filter
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.sha }}
+        run: |
+          set -uo pipefail
+
+          full() { echo "$1 — running the full suite"; echo "code=true" >> "$GITHUB_OUTPUT"; exit 0; }
+
+          # The file list comes from the API rather than a checkout: this job exists to be cheap,
+          # and cloning the tree to read its names would cost more than it saves.
+          case "$EVENT" in
+            pull_request)
+              files=$(gh api --paginate "repos/$REPO/pulls/$PR/files" --jq '.[].filename') || full "cannot list PR files"
+              ;;
+            push)
+              [ -n "$BEFORE" ] && [ "$BEFORE" != "0000000000000000000000000000000000000000" ] || full "no base commit"
+              files=$(gh api "repos/$REPO/compare/$BEFORE...$AFTER" --jq '.files[].filename') || full "cannot compare commits"
+              ;;
+            *)
+              full "$EVENT is not a change event"
+              ;;
+          esac
+
+          [ -n "$files" ] || full "empty file list"
+          echo "changed files:"; echo "$files" | sed 's/^/  /'
+
+          code=false
+          while IFS= read -r file; do
+            [ -n "$file" ] || continue
+            case "$file" in
+              # Workflow edits must prove themselves by running.
+              .github/*) code=true ;;
+              docs/*|*.md) ;;
+              *) code=true ;;
+            esac
+          done <<< "$files"
+
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          echo "verdict: code=$code"
+
   test_shards:
     name: tests (${{ matrix.shard }}/4)
+    needs: changes
+    if: ${{ needs.changes.outputs.code == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
@@ -61,15 +128,26 @@ jobs:
 
   check:
     name: typecheck + tests
-    needs: test_shards
+    needs: [changes, test_shards]
     if: ${{ always() }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - name: Require every shard to pass
         env:
+          FILTER_RESULT: ${{ needs.changes.result }}
+          CODE: ${{ needs.changes.outputs.code }}
           SHARD_RESULT: ${{ needs.test_shards.result }}
-        run: test "$SHARD_RESULT" = success
+        run: |
+          set -eu
+          # The filter decides whether the shards had to run, so a broken filter is a failed
+          # gate, not a free pass.
+          test "$FILTER_RESULT" = success
+          if [ "$CODE" != "true" ]; then
+            echo "documentation-only change: no shard to wait for"
+            exit 0
+          fi
+          test "$SHARD_RESULT" = success
 
   # PLAN §8 M2 — "Playwright authz sweep: zero gated bytes or storage keys for anon".
   # Implemented as a fetch-level sweep against a real `next start` (scripts/sweep-anon.ts): no
@@ -77,6 +155,8 @@ jobs:
   # it reads the bytes on the wire rather than the DOM after hydration.
   sweep:
     name: anon authz sweep
+    needs: changes
+    if: ${{ needs.changes.outputs.code == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
