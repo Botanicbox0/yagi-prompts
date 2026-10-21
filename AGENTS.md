@@ -74,7 +74,7 @@ npm run sweep:anon             # 익명 방문자 스윕 477+ 체크, "SWEEP PAS
 
 | # | 작업 | 상태·메모 |
 | --- | --- | --- |
-| 1 | **결제 연동(토스페이먼츠)** | 단건 결제 PR #2 병합 완료. 공개 생성 플래그는 닫힘. 테스트 키로 결제창 → 승인 API → 승인 시 `createRenderJob` → 실패 시 자동 환불. 결제 화면에 "생성 개시 후 청약철회 제한" 고지(환불정책 §2와 같은 문장). 라이브 키는 Vercel에서만 교체. Stripe 1회 결제는 해외용으로 유지(`lib/billing/*`). 개방은 코드가 아니라 Vercel 환경변수 `RENDER_PIPELINE_PUBLIC=on` + 라이브 키(운영은 `live_` 키일 때만 열림) — 순서는 `docs/qa/toss-checkout/README.md` "운영 개시". 개방 시점은 대표가 결정(2026-09-30 기준 토스 가맹 심사 대기). |
+| 1 | **결제 연동(토스페이먼츠)** | 단건 결제 PR #2 병합 완료. 공개 생성 플래그는 닫힘. 테스트 키로 결제창 → 승인 API → 승인 시 `createRenderJob` → 실패 시 자동 환불. 결제 화면에 "생성 개시 후 청약철회 제한" 고지(환불정책 §2와 같은 문장). 라이브 키는 Vercel에서만 교체. Stripe 1회 결제는 해외용으로 유지(`lib/billing/*`). 개방은 코드가 아니라 Vercel 환경변수 `RENDER_PIPELINE_PUBLIC=on` + 라이브 키(운영은 `live_` 키일 때만 열림) — 순서는 `docs/qa/toss-checkout/README.md` "운영 개시". 개방 시점은 대표가 결정. **2026-10-21 토스 심사 통과·계약 진행 중** — 계약 조건(카드 수수료 3.74% 부가세 포함, 계좌이체 2.2%·최소 220원, 정산 거래일+4영업일·수수료 선취, 월 정산한도 1천만원·보증보험 1천만원, 임시 MID 2542)과 가격·마진 영향은 **`docs/TOSS-CONTRACT.md`가 원본**이다. 심사 중에는 `RENDER_PIPELINE_PUBLIC=review`(심사 계정만 결제)가 켜져 있다(`docs/qa/toss-checkout/PG-REVIEW-MODE.md`). |
 | 2 | **SEO·GEO** | metadata, sitemap, OG, JSON-LD, hreflang, `llms.txt`, 독립 FAQ가 구현되어 있다. §7은 유지·회귀 점검 기준이며 새 작업 전 실제 코드와 공개 페이지를 확인한다. |
 | 3 | **캠페인 탭 = 기업이 우리를 쓰는 방법 + 고객 사례** | §13 랜딩 위에 "활용 방식" 그리드와 고객 사례 모듈 추가. 사례 데이터는 정적 매니페스트(`lib/campaigns/case-studies.ts`)로 시작, 공개 항목은 대표 승인분만. 설계는 §8. |
 | 4 | **워딩 SOTA 패스** | 라우트별 모든 문자열을 표로 뽑아 어색함·설득력 기준으로 재작성. 방법은 §9. |
