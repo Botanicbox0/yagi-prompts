@@ -41,9 +41,17 @@ async function readPromptCatalog(): Promise<PromptCatalog> {
  * outlives a deploy also outlives a type. **Bump this string in the same commit as any change to
  * `PromptCard`.**
  */
+/**
+ * 2026-10-21 (`v4-price-5pct`): prices changed in the database, not in `PromptCard`'s shape, and the
+ * Vercel data cache carried the old catalog straight into the next deployment — the template pages
+ * kept showing 8,900원 while checkout charged the new server price, the one mismatch a PG review
+ * rejects outright ("상품 금액과 결제 금액이 상이"). The edge-cache purge API is not available on
+ * this plan, and the admin "Refresh caches" button revalidates `catalog`, not `prompts`. A bulk
+ * price change made outside the admin form needs this bump too.
+ */
 export const getPromptCatalog = unstable_cache(
   readPromptCatalog,
-  ['prompt-catalog', 'v3-lock', resolveRuntimeMode()],
+  ['prompt-catalog', 'v4-price-5pct', resolveRuntimeMode()],
   {
     tags: [PROMPTS_TAG],
     revalidate: CATALOG_TTL_SECONDS,
