@@ -8,16 +8,27 @@ import { COST_ASSUMPTIONS } from './cost-model';
  */
 const BASE_USD = quoteArkVideo({ model: 'seedance-2.5', seconds: 10, resolution: '720p', aspect: '9:16' })!.providerUsd;
 const KRW_PER_UNIT = BASE_USD * COST_ASSUMPTIONS.krwPerUsd / 100;
+
+/**
+ * The subscription keeps the ORIGINAL 10% target, deliberately apart from the template floor
+ * (`COST_ASSUMPTIONS.targetMargin`, dropped to 5% on 2026-10-21). The allowance is a contract term,
+ * not a display price: lowering the margin here does not make a subscription cheaper, it hands the
+ * same 24,900원 subscriber 35 more units a month — the approved contract is 604 units
+ * (`lib/creator-subscriptions/plans.ts`, "Cost-model changes must never change an existing charge").
+ * Changing a live subscriber's allowance is a founder decision with its own plan version.
+ */
+export const SUBSCRIPTION_TARGET_MARGIN = 0.1;
+
 function allowanceAtTarget(priceKrw: number) {
-  const apiBudget = priceKrw / (1 + COST_ASSUMPTIONS.vatRate) * (1 - COST_ASSUMPTIONS.targetMargin) - priceKrw * COST_ASSUMPTIONS.pgFeeRate;
+  const apiBudget = priceKrw / (1 + COST_ASSUMPTIONS.vatRate) * (1 - SUBSCRIPTION_TARGET_MARGIN) - priceKrw * COST_ASSUMPTIONS.pgFeeRate;
   return Math.floor(apiBudget / KRW_PER_UNIT);
 }
 
 /** No remake/overhead reserves. Future prompt editing is not currently an entitlement. */
 export const CREATOR_PLANS = {
-  creator: { ...COST_ASSUMPTIONS, priceKrw: 24900, monthlyUnits: allowanceAtTarget(24900), status: 'preparing', promptEditing: 'not-included' },
+  creator: { ...COST_ASSUMPTIONS, targetMargin: SUBSCRIPTION_TARGET_MARGIN, priceKrw: 24900, monthlyUnits: allowanceAtTarget(24900), status: 'preparing', promptEditing: 'not-included' },
   // Four 30-second / twelve 10-second films: 9.20% margin at full use.
-  premium: { ...COST_ASSUMPTIONS, priceKrw: 49000, monthlyUnits: 1200, status: 'preparing', promptEditing: 'planned' },
+  premium: { ...COST_ASSUMPTIONS, targetMargin: SUBSCRIPTION_TARGET_MARGIN, priceKrw: 49000, monthlyUnits: 1200, status: 'preparing', promptEditing: 'planned' },
 } as const;
 export type CreatorPlanId = keyof typeof CREATOR_PLANS;
 

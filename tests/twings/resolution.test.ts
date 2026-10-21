@@ -97,14 +97,16 @@ describe('the cost floor under a creator price (a proposal, not a price)', () =>
     expect(costFloor({ model: 'seedance-2.5', resolution: '1080p', seconds: 10 })!.providerKrw).toBe(7961);
   });
 
-  it('meets a 10% revenue margin after VAT and PG, with no cost markup or overhead allocation', () => {
+  // Founder decision 2026-10-21: the template floor targets 5%, down from 10%. The subscription
+  // allowance keeps 10% of its own (SUBSCRIPTION_TARGET_MARGIN) and is asserted separately.
+  it('meets a 5% revenue margin after VAT and PG, with no cost markup or overhead allocation', () => {
     const floor = costFloor({ model: 'seedance-2.5', resolution: '720p', seconds: 15 })!;
     const revenue = floor.proposedKrw / 1.1;
     const variable = floor.providerUsd * 1400 + 0.033 * floor.proposedKrw;
-    expect((revenue - variable) / revenue).toBeGreaterThanOrEqual(0.10);
+    expect((revenue - variable) / revenue).toBeGreaterThanOrEqual(0.05);
     const lowerRevenue = (floor.proposedKrw - 100) / 1.1;
     const lowerVariable = floor.providerUsd * 1400 + 0.033 * (floor.proposedKrw - 100);
-    expect((lowerRevenue - lowerVariable) / lowerRevenue).toBeLessThan(0.10);
+    expect((lowerRevenue - lowerVariable) / lowerRevenue).toBeLessThan(0.05);
   });
 
   it('accounts for the real output aspect ratio instead of adding a blanket contingency', () => {
@@ -112,26 +114,26 @@ describe('the cost floor under a creator price (a proposal, not a price)', () =>
     const portrait = costFloor({ model: 'seedance-2.5', resolution: '720p', seconds: 15, aspect: '9:16' })!;
     expect(wide.providerUsd).toBeCloseTo(3.4886480625, 8);
     expect(wide.providerUsd).toBeGreaterThan(portrait.providerUsd);
-    expect(costFloor({ model: 'seedance-2.5', resolution: '720p', seconds: 30 })!.proposedKrw).toBe(12400);
+    expect(costFloor({ model: 'seedance-2.5', resolution: '720p', seconds: 30 })!.proposedKrw).toBe(11700);
   });
 
   it('proposes these floors (the table in docs/CREATOR-RESOLUTION.md)', () => {
     const table = Object.fromEntries(costTable([10, 14, 15, 30]).map((row) => [`${row.model} ${row.resolution} ${row.seconds}s`, row.proposedKrw]));
     expect(table).toEqual({
-      'seedance-2.0 720p 10s': 2700,
-      'seedance-2.0 720p 14s': 3800,
-      'seedance-2.0 720p 15s': 4100,
-      'seedance-2.0 1080p 10s': 6700,
-      'seedance-2.0 1080p 14s': 9400,
-      'seedance-2.0 1080p 15s': 10100,
-      'seedance-2.5 720p 10s': 4200,
-      'seedance-2.5 720p 14s': 5800,
-      'seedance-2.5 720p 15s': 6200,
-      'seedance-2.5 720p 30s': 12400,
-      'seedance-2.5 1080p 10s': 10200,
-      'seedance-2.5 1080p 14s': 14200,
-      'seedance-2.5 1080p 15s': 15300,
-      'seedance-2.5 1080p 30s': 30500,
+      'seedance-2.0 720p 10s': 2600,
+      'seedance-2.0 720p 14s': 3600,
+      'seedance-2.0 720p 15s': 3900,
+      'seedance-2.0 1080p 10s': 6400,
+      'seedance-2.0 1080p 14s': 8900,
+      'seedance-2.0 1080p 15s': 9500,
+      'seedance-2.5 720p 10s': 3900,
+      'seedance-2.5 720p 14s': 5500,
+      'seedance-2.5 720p 15s': 5900,
+      'seedance-2.5 720p 30s': 11700,
+      'seedance-2.5 1080p 10s': 9600,
+      'seedance-2.5 1080p 14s': 13500,
+      'seedance-2.5 1080p 15s': 14400,
+      'seedance-2.5 1080p 30s': 28800,
     });
   });
 });
