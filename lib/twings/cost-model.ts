@@ -99,6 +99,17 @@ export function costTable(seconds: readonly number[]): CostFloor[] {
  * 4,854원 fifteen-second film. That is why an image template is the only thing in this catalogue
  * that can carry an impulse price. Nothing here writes a price; §5 of AGENTS.md still applies.
  */
+/**
+ * The lowest price ANY image template is offered at, whatever its engine costs (founder decision,
+ * 2026-10-21: "이미지는 장당 최소로 200원 정도로"). Only Seedream 5.0 Lite falls under it (its 5%
+ * floor is 100원); every other engine's floor is already 200원 or more.
+ *
+ * It does not fix the bank-transfer minimum: 계좌이체 charges at least 220원 a payment
+ * (docs/TOSS-CONTRACT.md), so a 200원 image paid by transfer still loses money. Image checkout needs
+ * card-only payment methods (or a higher price) before an image template goes on sale.
+ */
+export const IMAGE_MIN_PRICE_KRW = 200;
+
 export interface ImageCostFloor {
   engine: ImageEngineId;
   referenceImages: number;
@@ -123,7 +134,7 @@ export function imageCostFloor(
     providerUsd,
     providerKrw: Math.round(providerKrw),
     floorKrw: Math.ceil(floorKrw),
-    proposedKrw: roundUpToHundred(floorKrw),
+    proposedKrw: Math.max(IMAGE_MIN_PRICE_KRW, roundUpToHundred(floorKrw)),
   };
 }
 

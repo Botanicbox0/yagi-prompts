@@ -77,10 +77,11 @@ one reference photo, the same 5% formula. Per-image costs are the official ones 
 publishes them (re-read 2026-10-21): Seedream 5.0 Pro $0.09 at 2K with the first reference free,
 Lite $0.035 with free references, gpt-image-2 high $0.211 at 1024². OpenAI publishes only token
 rates for the two 2.5 models, so sunburst is a measured figure and flare an estimate.
+No image is proposed below **200원** (`IMAGE_MIN_PRICE_KRW`, founder 2026-10-21).
 
 | Engine | Cost | Floor |
 | --- | --- | --- |
-| Seedream 5.0 Lite | 49원 | 100원 |
+| Seedream 5.0 Lite | 49원 | 200원 (5% 하한 100원 → 이미지 최소가 200원) |
 | Seedream 5.0 Pro | 126원 | 200원 |
 | GPT Image 2 | 336원 | 500원 |
 | GPT Image 2.5 Flare | 532원 | 700원 |
