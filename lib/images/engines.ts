@@ -10,8 +10,13 @@
  *     ids `dola-seedream-5-0-pro-260628` / `seedream-5-0-260128`; Pro tiers 1K · 1.5K · 2K, Lite tiers
  *     2K · 3K · 4K; explicit `WxH` allowed within [1280×720 … 2048×2048×1.1025] pixels and a
  *     1/16 … 16 aspect range; up to 10 reference images; result URL kept 24 h.
- *   · ModelArk console pricing (2026-09-06): Pro output $0.045/image up to 2.36 MP, $0.09 above (we
- *     render Pro at 2K, so $0.09); input reference image $0.003 each; Lite $0.035/image.
+ *   · ModelArk pricing, re-read from the official page 2026-10-21
+ *     (docs.byteplus.com/en/docs/modelark/model-pricing): Pro output $0.045/image up to 2.61 MP
+ *     ("1.5K or lower"), $0.09 above — every 2K size below is 3.7–4.5 MP, so $0.09; Pro input: the
+ *     FIRST reference image is free, $0.003 from the second; Lite `seedream-5-0-lite-260128` $0.035/image
+ *     with free reference input. (2026-09-06 console notes had a 2.36 MP step and $0.003 on every
+ *     reference — both corrected here.) The page also lists `dola-seedream-5-0-flash-260915` at
+ *     $0.018/image; not wired.
  *   · OpenAI model pages + image guide (developers.openai.com, read 2026-09-10): `gpt-image-2.5-flare`
  *     ("fast, high-quality everyday image generation", OpenAI's default recommendation, higher
  *     quality than gpt-image-2 at up to 50% lower latency) and `gpt-image-2.5-sunburst` ("our most
@@ -23,9 +28,15 @@
  *
  * Quality (founder rule, "우리는 고품질로 파는거니까"): every OpenAI engine renders at the highest tier
  * that keeps a render under a dollar — `high` on gpt-image-2 (its top), the table below on 2.5 —
- * and no request can lower it. The `usdPerRender` figures for 2.5 are measured, not read: the docs
- * publish no tokens-per-quality table (2026-09-10 smoke, 4:5 with a reference photo, see
- * docs/TEMPLATES-IA.md §7).
+ * and no request can lower it.
+ *
+ * Which figures are official (OpenAI pricing + image guide, re-read 2026-10-21): gpt-image-2 `high`
+ * is the published $0.211 for 1024² ($0.165 for 1024×1536), so `0.21` below is the official figure
+ * at its square size and conservative for the portrait ones. The two 2.5 models publish ONLY token
+ * rates (image in $8/M, image out $30/M, text in $5/M) and no per-image table, so their `usdPerRender`
+ * cannot be read off a page: sunburst is measured (2026-09-10 smoke, 4:5 with a reference photo,
+ * docs/TEMPLATES-IA.md §7) and flare is still an estimate. Replace either with the `usage` of a real
+ * render once one is recorded.
  *
  * Why 4:5 is the default: Instagram's feed has been a 4:5 grid since 2025, so a 4:5 render fills a
  * phone without a crop — the founder's "인스타그램에 올리기 좋은 비율" (2026-09-06). 9:16 is for
@@ -140,8 +151,10 @@ export interface ImageEngine {
   quality?: GptImageQuality;
   /** Rough USD for one render at the size above, before reference images. */
   usdPerRender: number;
-  /** Rough USD added per reference image (the visitor's photo is one). */
+  /** Rough USD added per BILLED reference image (the visitor's photo is one). */
   usdPerReference: number;
+  /** References the provider does not bill. Seedream 5.0 Pro bills from the second (official, 2026-10-21). */
+  freeReferenceImages?: number;
   /** The most reference images one request may carry. */
   maxReferenceImages: number;
 }
@@ -221,9 +234,10 @@ export const IMAGE_ENGINES: Record<ImageEngineId, ImageEngine> = {
     provider: 'modelark',
     model: 'dola-seedream-5-0-pro-260628',
     sizes: SEEDREAM_PRO_2K,
-    // 2K: above the 2.36 MP step, so the $0.09 rate (console pricing, 2026-09-06).
+    // 2K: above the official 2.61 MP step, so the $0.09 rate. First reference free, $0.003 after.
     usdPerRender: 0.09,
     usdPerReference: 0.003,
+    freeReferenceImages: 1,
     maxReferenceImages: 10,
   },
   'seedream-5.0-lite': {
@@ -232,8 +246,9 @@ export const IMAGE_ENGINES: Record<ImageEngineId, ImageEngine> = {
     provider: 'modelark',
     model: 'seedream-5-0-260128',
     sizes: SEEDREAM_2K,
+    // Official: $0.035/image, reference input free.
     usdPerRender: 0.035,
-    usdPerReference: 0.003,
+    usdPerReference: 0,
     maxReferenceImages: 10,
   },
 };
@@ -249,14 +264,15 @@ export function sizeString(size: ImageSize): string {
 
 export function estimateImageUsd(engine: ImageEngineId, referenceImages = 1): number {
   const spec = IMAGE_ENGINES[engine];
-  return Math.round((spec.usdPerRender + spec.usdPerReference * referenceImages) * 1000) / 1000;
+  const billed = Math.max(0, referenceImages - (spec.freeReferenceImages ?? 0));
+  return Math.round((spec.usdPerRender + spec.usdPerReference * billed) * 1000) / 1000;
 }
 
 /** ModelArk's explicit-size window for Seedream image generation (pixels and aspect), from the tutorial. */
 export const SEEDREAM_PIXELS_MIN = 1280 * 720;
 export const SEEDREAM_PIXELS_MAX = Math.floor(2048 * 2048 * 1.1025);
-/** Seedream's $0.045 → $0.09 price step for the Pro model. */
-export const SEEDREAM_PRO_CHEAP_PIXELS_MAX = 2_360_000;
+/** Seedream's $0.045 → $0.09 price step for the Pro model — "≤ 2.61 million pixels" (official, 2026-10-21). */
+export const SEEDREAM_PRO_CHEAP_PIXELS_MAX = 2_610_000;
 /** OpenAI's stated ceiling for gpt-image-2 and its multiple-of-16 rule. */
 export const GPT_IMAGE_MAX = { width: 3840, height: 2160 } as const;
 /** GPT Image 2.5's stated window: max edge 3840, 655,360 … 8,294,400 pixels, 1:3 … 3:1, 16-pixel grid. */

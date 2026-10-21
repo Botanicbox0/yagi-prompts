@@ -121,8 +121,12 @@ describe('image engines (docs/TEMPLATES-IA.md §7)', () => {
   });
 
   it('prices a render with the visitor photo counted as one reference', () => {
-    expect(estimateImageUsd('seedream-5.0-pro', 1)).toBe(0.093);
+    // Official ModelArk pricing (2026-10-21): Pro's first reference is free, $0.003 from the second;
+    // Lite's reference input is free.
+    expect(estimateImageUsd('seedream-5.0-pro', 1)).toBe(0.09);
+    expect(estimateImageUsd('seedream-5.0-pro', 2)).toBe(0.093);
     expect(estimateImageUsd('seedream-5.0-lite', 0)).toBe(0.035);
+    expect(estimateImageUsd('seedream-5.0-lite', 1)).toBe(0.035);
     expect(estimateImageUsd('gpt-image-2', 1)).toBe(0.24);
     expect(estimateImageUsd('gpt-image-2.5-flare', 1)).toBeGreaterThan(estimateImageUsd('gpt-image-2', 1) * 0.5);
     expect(estimateImageUsd('gpt-image-2.5-sunburst', 1)).toBeGreaterThanOrEqual(estimateImageUsd('gpt-image-2.5-flare', 1));

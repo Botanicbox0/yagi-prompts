@@ -1,5 +1,6 @@
 import { ARK_MODELS, type ArkModelKey } from '@/lib/ark/models';
 import { quoteArkVideo } from '@/lib/ark/pricing';
+import { estimateImageUsd, IMAGE_ENGINE_IDS, type ImageEngineId } from '@/lib/images/engines';
 import type { CreatorResolution } from './resolution';
 
 /**
@@ -9,16 +10,29 @@ import type { CreatorResolution } from './resolution';
  *
  * Founder decision, 2026-10-09: one successful generation, no remake/overhead allocation.
  * Exact ModelArk output tokens × list tariff × 1,400원; VAT 10%; provisional PG fee 3.3%.
- * Target is 10% of revenue EXCLUDING VAT, after API and PG costs (not a 10% cost markup).
+ * Target is a share of revenue EXCLUDING VAT, after API and PG costs (NOT a cost markup).
  * price = API cost / ((1 − margin)/(1 + VAT) − PG rate), rounded up only to 100 won.
  * No fixed costs, FX buffer, promotion or contract discount is added.
+ *
+ * Founder decision, 2026-10-21: the target drops 10% → **5%** for TEMPLATE prices. The live prices
+ * had been set 40~75% above the 10% floor (가상 뷰티 광고 8,900원 against a 6,200원 floor), so the
+ * floor was never what made a film expensive — but the founder wants the floor itself lower.
+ *
+ * What 5% costs, stated once so nobody re-derives it: the free-remake promise published in the FAQ
+ * ("얼굴이 제대로 반영되지 않으면 7일 안에 무상으로 다시 만들거나 환불") is paid out of this margin,
+ * and the break-even remake rate halves from ~12% to ~6%. One remake in sixteen sales erases the
+ * profit on that template. The PG rate is also still a provisional 3.3%, not a signed one.
+ *
+ * This figure drives TEMPLATE prices only. The subscription allowance keeps its own 10% target in
+ * `subscription-plan.ts` — moving it here would silently hand every Creator subscriber 35 more
+ * units a month against an already-approved 604-unit contract.
  */
 
 export const COST_ASSUMPTIONS = {
   krwPerUsd: 1400,
   vatRate: 0.1,
   pgFeeRate: 0.033,
-  targetMargin: 0.1,
+  targetMargin: 0.05,
 } as const;
 
 export interface CostFloor {
@@ -73,4 +87,47 @@ export function costTable(seconds: readonly number[]): CostFloor[] {
     }
   }
   return rows;
+}
+
+/**
+ * The same floor for an IMAGE template (founder decision, 2026-10-21: "이미지 모델에서도 마진율을
+ * 5% 정도로"). Images are one render, not a duration, so the cost comes from `estimateImageUsd` —
+ * the engine's measured per-render price plus the reference photo — and the margin arithmetic is
+ * identical to the video floor.
+ *
+ * The numbers are a different order of magnitude: a Seedream 5.0 Lite render is ~53원 against a
+ * 4,854원 fifteen-second film. That is why an image template is the only thing in this catalogue
+ * that can carry an impulse price. Nothing here writes a price; §5 of AGENTS.md still applies.
+ */
+export interface ImageCostFloor {
+  engine: ImageEngineId;
+  referenceImages: number;
+  providerUsd: number;
+  providerKrw: number;
+  floorKrw: number;
+  proposedKrw: number;
+}
+
+export function imageCostFloor(
+  input: { engine: ImageEngineId; referenceImages?: number },
+  assumptions = COST_ASSUMPTIONS,
+): ImageCostFloor {
+  const references = input.referenceImages ?? 1;
+  const providerUsd = estimateImageUsd(input.engine, references);
+  const { krwPerUsd, vatRate, pgFeeRate, targetMargin } = assumptions;
+  const providerKrw = providerUsd * krwPerUsd;
+  const floorKrw = providerKrw / ((1 - targetMargin) / (1 + vatRate) - pgFeeRate);
+  return {
+    engine: input.engine,
+    referenceImages: references,
+    providerUsd,
+    providerKrw: Math.round(providerKrw),
+    floorKrw: Math.ceil(floorKrw),
+    proposedKrw: roundUpToHundred(floorKrw),
+  };
+}
+
+/** Every image engine a template can sell on, at one reference photo. */
+export function imageCostTable(referenceImages = 1): ImageCostFloor[] {
+  return IMAGE_ENGINE_IDS.map((engine) => imageCostFloor({ engine, referenceImages }));
 }
