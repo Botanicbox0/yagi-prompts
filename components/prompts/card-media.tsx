@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { observeCardArming } from '@/lib/media/card-arming';
 
 /**
  * PLAN §13.2 — "hover video autoplay muted (video only loads on hover/intersection — perf)".
@@ -12,7 +13,9 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
  *   · pointer:fine (mouse/trackpad) → `pointerenter`, and it pauses + rewinds on leave, so a
  *     40-card wall never has more than one clip decoding;
  *   · no hover (touch) → IntersectionObserver at 60%, because there is no hover to wait for and a
- *     card the reader has deliberately scrolled to is the closest thing to intent;
+ *     card the reader has deliberately scrolled to is the closest thing to intent. It releases
+ *     again on the way out (`lib/media/card-arming.ts`): iPhone Safari caps concurrent media
+ *     decoders, and a rail that only ever arms starves the cards further down;
  *   · `prefers-reduced-motion` → never. §5.3's reduced-motion rule is a kill switch, not a
  *     softening, and an autoplaying clip is exactly what it exists to stop.
  *
@@ -57,27 +60,17 @@ export function PromptCardMedia({
   const videoRef = useRef<HTMLVideoElement>(null);
   const [armed, setArmed] = useState(false);
 
-  // Touch tier: arm on real visibility. Set up once, and only when there is a clip to arm.
+  // Touch tier: arm on real visibility, and release on the way out so the rail never holds more
+  // decoders than fit on screen. The observer stays live for the session — a card the reader
+  // scrolls back to has to arm a second time.
   useEffect(() => {
     const root = rootRef.current;
-    if (!root || video === null || armed) return;
+    if (!root || video === null) return;
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     if (window.matchMedia('(hover: hover) and (pointer: fine)').matches) return;
 
-    const observer = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          if (entry.isIntersecting) {
-            setArmed(true);
-            observer.disconnect();
-          }
-        }
-      },
-      { threshold: 0.6 },
-    );
-    observer.observe(root);
-    return () => observer.disconnect();
-  }, [video, armed]);
+    return observeCardArming(root, setArmed);
+  }, [video]);
 
   // Pointer tier: arm on hover of the CARD, not of this element (see the note above).
   useEffect(() => {
