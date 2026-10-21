@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { costFloor, costTable, imageCostFloor, imageCostTable, roundUpToHundred } from '@/lib/twings/cost-model';
+import { costFloor, costTable, IMAGE_MIN_PRICE_KRW, imageCostFloor, imageCostTable, roundUpToHundred } from '@/lib/twings/cost-model';
 import {
   arkModelForVideo,
   chargeKrwFor,
@@ -146,8 +146,14 @@ describe('image cost floor — one price per engine (founder, 2026-10-21)', () =
       'gpt-image-2.5-flare': 700,
       'gpt-image-2.5-sunburst': 1100,
       'seedream-5.0-pro': 200,
-      'seedream-5.0-lite': 100,
+      // The 5% floor is 100원; the founder's 200원 minimum per image lifts it (2026-10-21).
+      'seedream-5.0-lite': 200,
     });
+  });
+
+  it('never proposes an image below the 200원 minimum, and leaves pricier engines on their own floor', () => {
+    for (const row of imageCostTable()) expect(row.proposedKrw, row.engine).toBeGreaterThanOrEqual(IMAGE_MIN_PRICE_KRW);
+    expect(imageCostFloor({ engine: 'gpt-image-2.5-sunburst' }).proposedKrw).toBe(1100);
   });
 
   it('meets the 5% revenue margin and no more than a 100-won rounding above it', () => {
@@ -155,7 +161,7 @@ describe('image cost floor — one price per engine (founder, 2026-10-21)', () =
       const revenue = row.proposedKrw / 1.1;
       const margin = (revenue - row.providerKrw - 0.033 * row.proposedKrw) / revenue;
       expect(margin, row.engine).toBeGreaterThanOrEqual(0.05);
-      if (row.proposedKrw > 100) {
+      if (row.proposedKrw > IMAGE_MIN_PRICE_KRW) {
         const lower = (row.proposedKrw - 100) / 1.1;
         expect((lower - row.providerKrw - 0.033 * (row.proposedKrw - 100)) / lower, row.engine).toBeLessThan(0.05);
       }
