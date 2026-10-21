@@ -1511,7 +1511,7 @@ export const en = {
     resolutionLabel: 'Resolution',
     resolutionDefault: 'Default',
     resolutionNote: 'Films render at 720p. 1080p is sharper and costs more.',
-    aiNote: 'AI makes this film, so details like hands, lettering and backgrounds come out differently every time. The scene and the length follow the sample; the finished film is its own.',
+    aiNote: 'Because it is made with AI, details like hands, lettering and backgrounds may come out a little differently from the sample. The scene and the length follow the sample.',
     makeThis: 'Make this with your photo',
   },
   identity: {
@@ -1569,7 +1569,7 @@ export const en = {
     shareLinkLabel: 'Share link · opens without a login for 3 days',
     notCharged: 'If rendering fails permanently, the payment is refunded in full.',
 
-    aiNote: 'AI made this film, so the details differ from the sample. If it does not play, or the face you uploaded is not in it, tell us below.',
+    aiNote: 'Because it is made with AI, details may differ a little from the sample. If it does not play, or the face you uploaded is not in it, tell us below.',
     feedback: {
       title: 'Something wrong with the film?',
       lede: 'Tell us what went wrong. We check it and reply by email.',
@@ -2341,7 +2341,7 @@ export const en = {
     q7: 'I run a brand. Can I open a campaign?',
     a7: "Yes. Use the enquiry form on the Brands page to share your goals, total budget, preferred channels and references. The studio agrees the scope with you and manages production and recruitment. Ongoing campaigns, content and reports are available in your brand workspace.",
     q8: 'What if the result comes out wrong?',
-    a8: 'AI makes the film, so details like hands, lettering and backgrounds come out differently every time. The scene and the length follow the sample. If it does not play, or the face you uploaded is not in it, use "Something wrong with the film?" on the result page. The refund policy says how we handle it.',
+    a8: 'Because it is made with AI, details like hands, lettering and backgrounds may come out a little differently from the sample. The scene and the length follow the sample. If it does not play, or the face you uploaded is not in it, use "Something wrong with the film?" on the result page. The refund policy says how we handle it.',
     q6: 'Do you take production work?',
     a6: "Yes. You can commission standalone video or filter production from YAGI. Choose production in the enquiry form on the Brands page and share your goals and references.",
     q9: "How does a creator campaign work?",
@@ -3001,7 +3001,8 @@ export const en = {
     fieldTemplatePrice1080: '1080p price (USD cents)',
     fieldTemplatePrice1080Krw: '1080p price (KRW)',
     templatePrice1080Hint: 'Films only. Both fields above zero offer 1080p as a choice. The default stays 720p.',
-    templateCostFloor: 'Cost floor (10% revenue margin, 1,400 KRW/USD, VAT and a provisional 3.3% PG fee): 720p {p720} · 1080p {p1080}. No remake or overhead reserve. Final prices need founder approval.',
+    templateCostFloor: 'Cost floor (5% revenue margin, 1,400 KRW/USD, VAT and a provisional 3.3% PG fee): 720p {p720} · 1080p {p1080}. No remake or overhead reserve. Final prices need founder approval.',
+    templateImageCostFloor: 'Cost floor ({engine} official price, one reference photo, 5% revenue margin, 1,400 KRW/USD, VAT and a provisional 3.3% PG fee): {price}. Each image model is priced differently, so changing the engine changes the floor. Final prices need founder approval.',
     templateBelowFloor: 'Below the cost floor.',
     fieldTemplateRuntime: 'Runtime (seconds)',
     templateRuntimeHint: 'Films only. Leave empty for an image.',

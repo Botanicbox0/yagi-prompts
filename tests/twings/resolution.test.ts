@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { costFloor, costTable, roundUpToHundred } from '@/lib/twings/cost-model';
+import { costFloor, costTable, imageCostFloor, imageCostTable, roundUpToHundred } from '@/lib/twings/cost-model';
 import {
   arkModelForVideo,
   chargeKrwFor,
@@ -135,5 +135,35 @@ describe('the cost floor under a creator price (a proposal, not a price)', () =>
       'seedance-2.5 1080p 15s': 14400,
       'seedance-2.5 1080p 30s': 28800,
     });
+  });
+});
+
+describe('image cost floor — one price per engine (founder, 2026-10-21)', () => {
+  it('prices each image model from its own official per-image cost at a 5% margin', () => {
+    const floors = Object.fromEntries(imageCostTable().map((row) => [row.engine, row.proposedKrw]));
+    expect(floors).toEqual({
+      'gpt-image-2': 500,
+      'gpt-image-2.5-flare': 700,
+      'gpt-image-2.5-sunburst': 1100,
+      'seedream-5.0-pro': 200,
+      'seedream-5.0-lite': 100,
+    });
+  });
+
+  it('meets the 5% revenue margin and no more than a 100-won rounding above it', () => {
+    for (const row of imageCostTable()) {
+      const revenue = row.proposedKrw / 1.1;
+      const margin = (revenue - row.providerKrw - 0.033 * row.proposedKrw) / revenue;
+      expect(margin, row.engine).toBeGreaterThanOrEqual(0.05);
+      if (row.proposedKrw > 100) {
+        const lower = (row.proposedKrw - 100) / 1.1;
+        expect((lower - row.providerKrw - 0.033 * (row.proposedKrw - 100)) / lower, row.engine).toBeLessThan(0.05);
+      }
+    }
+  });
+
+  it('charges Seedream Pro nothing for the first reference and $0.003 from the second', () => {
+    expect(imageCostFloor({ engine: 'seedream-5.0-pro', referenceImages: 1 }).providerUsd).toBe(0.09);
+    expect(imageCostFloor({ engine: 'seedream-5.0-pro', referenceImages: 3 }).providerUsd).toBe(0.096);
   });
 });

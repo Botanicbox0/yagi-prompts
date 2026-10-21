@@ -1,6 +1,6 @@
 import type { ArkModelKey, ArkRatio, ArkResolution } from '@/lib/ark/models';
 import { ArkError, arkConfigFromEnv, createArkClient, isTerminal, type ArkClient, type ArkContentItem } from '@/lib/ark/client';
-import { IMAGE_ENGINES, isOpenAiEngine, type ImageAspect, type ImageEngineId, type VideoAspect, type VideoEngineId } from '@/lib/images/engines';
+import { IMAGE_ENGINES, estimateImageUsd, isOpenAiEngine, type ImageAspect, type ImageEngineId, type VideoAspect, type VideoEngineId } from '@/lib/images/engines';
 import { OpenAiImageError, createOpenAiImageClient, openAiConfigFromEnv, type OpenAiImageClient, type ReferenceImage } from '@/lib/images/openai';
 import { SeedreamError, createSeedreamClient, seedreamConfigFromEnv, type SeedreamClient } from '@/lib/images/seedream';
 import { assetReference } from '@/lib/identity/service';
@@ -176,8 +176,8 @@ export async function runImageRender(input: ImageRenderInput, deps: RenderEngine
     });
     const image = result.images[0];
     if (!image) throw new RenderFailure('bad_output', 'Seedream answered with no image', true);
-    const spec = IMAGE_ENGINES[engine];
-    const estimate = spec.usdPerRender + (input.photo ? spec.usdPerReference : 0);
+    // The same rule the price floor uses, so a free first reference is free here too.
+    const estimate = estimateImageUsd(engine, input.photo ? 1 : 0);
     if (image.b64) {
       const bytes = new Uint8Array(Buffer.from(image.b64, 'base64'));
       if (bytes.byteLength === 0) throw new RenderFailure('bad_output', 'the image came back empty', true);

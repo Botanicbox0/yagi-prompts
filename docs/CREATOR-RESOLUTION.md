@@ -2,7 +2,9 @@
 
 Resolution support was implemented on `codex/creator-resolution-pricing` (2026-09-28).
 The pricing policy below replaces the original proposal following the founder's 2026-10-09 decision:
-no remake or overhead reserves, exchange rate 1,400원/USD, and about 10% margin on revenue excluding VAT.
+no remake or overhead reserves, exchange rate 1,400원/USD, and a margin on revenue excluding VAT —
+10% from 2026-10-09, **5% from 2026-10-21** (founder decision; the subscription allowance keeps 10%,
+see `SUBSCRIPTION_TARGET_MARGIN` in `lib/twings/subscription-plan.ts`).
 Existing sale prices are updated through registered admin operations; this module never writes a price.
 
 ## 1. Behaviour
@@ -51,22 +53,38 @@ the per-token rate but add the input duration and minimums; creator renders send
 
 `lib/ark/pricing.ts` quotes exact tokens. `lib/twings/cost-model.ts` applies 1,400원/USD,
 VAT 10% inside the price, and a provisional PG fee of 3.3% of the charged amount.
-The target is 10% of revenue excluding VAT after API and PG costs, not a 10% cost markup:
+The target is 5% of revenue excluding VAT after API and PG costs, not a 5% cost markup:
 
-`price = API_KRW / ((1 - 0.10) / 1.10 - 0.033)`, rounded up to the next **100원**.
+`price = API_KRW / ((1 - 0.05) / 1.10 - 0.033)`, rounded up to the next **100원**.
 
 There is **no remake allowance, arbitrary direct-cost allocation, or FX buffer**.
 The actual PG contract must be checked before opening checkout.
 
 | Model · resolution | 10s | 14s | 15s | 30s |
 | --- | --- | --- | --- | --- |
-| Seedance 2.0 · 720p | 2,700원 | 3,800원 | 4,100원 | (2.5) |
-| Seedance 2.0 · 1080p | 6,700원 | 9,400원 | 10,100원 | (2.5) |
-| Seedance 2.5 · 720p | 4,200원 | 5,800원 | 6,200원 | 12,400원 |
-| Seedance 2.5 · 1080p | 10,200원 | 14,200원 | 15,300원 | 30,500원 |
+| Seedance 2.0 · 720p | 2,600원 | 3,600원 | 3,900원 | (2.5) |
+| Seedance 2.0 · 1080p | 6,400원 | 8,900원 | 9,500원 | (2.5) |
+| Seedance 2.5 · 720p | 3,900원 | 5,500원 | 5,900원 | 11,700원 |
+| Seedance 2.5 · 1080p | 9,600원 | 13,500원 | 14,400원 | 28,800원 |
 
-This table uses 16:9. The admin editor calculates the template's actual aspect ratio;
-for example, 15 seconds at 4:3 is 6,300원 rather than 6,200원.
+This table uses 16:9. The admin editor calculates the template's actual aspect ratio; 4:3 is ~0.6%
+more pixels than 16:9, which rarely moves the price past a 100-won step.
+
+### Image templates
+
+An image's cost is its engine's, so the floor follows the template's engine (`imageCostFloor`),
+one reference photo, the same 5% formula. Per-image costs are the official ones where a page
+publishes them (re-read 2026-10-21): Seedream 5.0 Pro $0.09 at 2K with the first reference free,
+Lite $0.035 with free references, gpt-image-2 high $0.211 at 1024². OpenAI publishes only token
+rates for the two 2.5 models, so sunburst is a measured figure and flare an estimate.
+
+| Engine | Cost | Floor |
+| --- | --- | --- |
+| Seedream 5.0 Lite | 49원 | 100원 |
+| Seedream 5.0 Pro | 126원 | 200원 |
+| GPT Image 2 | 336원 | 500원 |
+| GPT Image 2.5 Flare | 532원 | 700원 |
+| GPT Image 2.5 Sunburst | 882원 | 1,100원 |
 The founder authorized existing priced 720p templates to use this minimum-price rule.
 Unpriced templates stay unpriced. USD display prices use the same exchange rate, rounded up to a cent.
 

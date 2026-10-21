@@ -1,8 +1,8 @@
 import { PublicLink } from '@/components/admin/public-link';
-import { IMAGE_ASPECTS, IMAGE_ENGINES, IMAGE_ENGINE_IDS, VIDEO_ASPECTS, VIDEO_ENGINE_IDS } from '@/lib/images/engines';
+import { IMAGE_ASPECTS, IMAGE_ENGINES, IMAGE_ENGINE_IDS, VIDEO_ASPECTS, VIDEO_ENGINE_IDS, isImageEngine, resolveEngine } from '@/lib/images/engines';
 import { formatDate, interpolate } from '@/lib/i18n/format';
 import { formatKrw, suggestedKrw } from '@/lib/twings/products';
-import { costFloor } from '@/lib/twings/cost-model';
+import { costFloor, imageCostFloor } from '@/lib/twings/cost-model';
 import { arkModelForVideo } from '@/lib/twings/resolution';
 import { PROMPT_TEXT_MAX, PROMPT_TEXT_MIN, TEMPLATE_MEDIA } from '@/lib/prompts/schemas';
 import { promptHref } from '@/lib/prompts/links';
@@ -135,8 +135,23 @@ export function StagedMedia({ row, dict }: { row: PromptRow; dict: Dict }) {
  * fields so a price is never set blind. A proposal only: it writes nothing and blocks nothing.
  */
 function CostFloorNote({ row, dict }: { row: PromptRow | null; dict: Dict }) {
-  if (!row || row.medium !== 'video' || !row.runtimeSeconds) return null;
+  if (!row) return null;
   const a = dict.admin;
+  // An image's cost is its ENGINE's, not a duration: each model has its own official per-image
+  // price (lib/images/engines.ts), so the floor follows whichever engine this template renders on.
+  if (row.medium === 'image') {
+    const engine = resolveEngine(row.engine, 'image');
+    if (!isImageEngine(engine)) return null;
+    const floor = imageCostFloor({ engine, referenceImages: 1 });
+    const below = row.priceKrw > 0 && row.priceKrw < floor.proposedKrw;
+    return (
+      <p data-cost-floor={String(floor.proposedKrw)} data-cost-floor-engine={engine} className="font-mono text-[0.72rem] opacity-70">
+        {interpolate(a.templateImageCostFloor, { engine: IMAGE_ENGINES[engine].label, price: formatKrw(floor.proposedKrw) })}
+        {below ? ` ${a.templateBelowFloor}` : ''}
+      </p>
+    );
+  }
+  if (row.medium !== 'video' || !row.runtimeSeconds) return null;
   const { model, seconds } = arkModelForVideo(row.engine, row.runtimeSeconds);
   const p720 = costFloor({ model, resolution: '720p', seconds, aspect: row.aspectDefault ?? '9:16' });
   const p1080 = costFloor({ model, resolution: '1080p', seconds, aspect: row.aspectDefault ?? '9:16' });
