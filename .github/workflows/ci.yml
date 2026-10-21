@@ -38,14 +38,18 @@ env:
   PLAYBOOK_MODE: local
 
 jobs:
+  # Two shards, not four (2026-10-22). Measured on PR #72: the four shards billed 6+6+10+10 minutes
+  # for ~27 minutes of actual vitest time — the rest was four copies of install + typecheck and four
+  # jobs each rounded up to a whole minute. Two shards keep the same tests and the same files, cost
+  # roughly 15% less per run, and take a few minutes longer on the wall clock.
   test_shards:
-    name: tests (${{ matrix.shard }}/4)
+    name: tests (${{ matrix.shard }}/2)
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4]
+        shard: [1, 2]
     steps:
       - uses: actions/checkout@v4
 
@@ -57,14 +61,17 @@ jobs:
       - name: Install (exact pins, lockfile authoritative)
         run: npm ci
 
+      # Whole-repo checks, not per-file: once is enough, so only the first shard runs them.
       - name: Typecheck
+        if: matrix.shard == 1
         run: npm run typecheck
 
       # Every file is assigned exactly once; all shards feed the existing required check below.
       - name: Vitest shard
-        run: npx vitest run --shard=${{ matrix.shard }}/4
+        run: npx vitest run --shard=${{ matrix.shard }}/2
 
       - name: Private client import boundaries
+        if: matrix.shard == 1
         run: npm run security:client
 
   check:
