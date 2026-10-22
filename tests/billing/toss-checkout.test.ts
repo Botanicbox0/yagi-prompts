@@ -12,8 +12,12 @@ import { createFakeMailer } from '@/lib/notify/mailer-fake';
 import { createEmailRenderNotifier } from '@/lib/renders/notify';
 import { ADMIN_VIEWER, viewerOf } from '@/tests/helpers/admin';
 import { promptHarness, type PromptHarness } from '@/tests/helpers/prompts';
+import { saveSelfie, savedSelfiePhoto } from '@/lib/identity/selfie-service';
+import sharp from 'sharp';
 
-const gate = vi.hoisted(() => ({ open: true }));
+const selfiePng = async (color: string) => ({ bytes: new Uint8Array(await sharp({ create: { width: 320, height: 400, channels: 3, background: color } }).png().toBuffer()) });
+
+const gate = vi.hoisted(() => ({ open: true, mode: null as null | 'review' }));
 vi.mock('@/lib/flags', async (original) => ({
   ...(await original<typeof import('@/lib/flags')>()),
   get RENDER_PIPELINE_PUBLIC() {
@@ -22,7 +26,7 @@ vi.mock('@/lib/flags', async (original) => ({
   // The gate the purchase now reads (lib/auth/purchase-gate.ts); `on` is the public sale this
   // suite exercises, and closing it must close both.
   get RENDER_PIPELINE_MODE() {
-    return gate.open ? 'on' : 'off';
+    return gate.mode ?? (gate.open ? 'on' : 'off');
   },
 }));
 
@@ -39,6 +43,7 @@ describe('Toss one-time checkout on the real database', () => {
   let gateway: ReturnType<typeof createFakeTossGateway>;
   beforeEach(async () => {
     gate.open = true;
+    gate.mode = null;
     h = await promptHarness();
     gateway = createFakeTossGateway();
   });
@@ -88,33 +93,50 @@ describe('Toss one-time checkout on the real database', () => {
     );
   });
 
-  it('pins a selected portrait to its order and render after the user changes selection', async () => {
-    const first = '10000000-0000-4000-8000-000000000001';
-    const second = '10000000-0000-4000-8000-000000000002';
-    for (const [index, id] of [first, second].entries()) {
-      await h.sql.query(`insert into identity_portrait_attempts
-        (id,user_id,request_id,slot,status,model,prompt_version,input_key,result_key,consent_at,completed_at)
-        values($1,$2,$1,$3,'succeeded','gpt-image-2.5-sunburst','studio-identity-v1',$4,$5,now(),now())`,
-        [id, buyer.userId, index === 0 ? 1 : 3, `${id}/input.png`, `${id}/result.png`]);
-    }
-    await h.sql.query('insert into identity_portrait_selections(user_id,attempt_id) values($1,$2)', [buyer.userId, first]);
-    const created = await createTossOrder(deps(), buyer, { ...input, portraitId: first });
+  it('pins the saved selfie to its order and render even after the person replaces it', async () => {
+    const { bytes: selfieBytes } = await selfiePng('#d6d6d6');
+    const first = await saveSelfie(deps(), buyer.userId, { bytes: selfieBytes, mime: 'image/png', consent: true });
+    if (!first.ok) throw new Error(first.code);
+    const photo = await savedSelfiePhoto(h.sql, deps().store, buyer.userId!, first.id);
+    if (!photo) throw new Error('selfie missing');
+    const created = await createTossOrder(deps(), buyer, { ...input, selfieId: first.id, photo });
     if (!created.ok) throw new Error(created.code);
-    await h.sql.query('update identity_portrait_selections set attempt_id=$2 where user_id=$1', [buyer.userId, second]);
+    // A replacement between order and approval changes nothing about the paid job.
+    const second = await saveSelfie(deps(), buyer.userId, { ...(await selfiePng('#aaaaaa')), mime: 'image/png', consent: true });
+    if (!second.ok) throw new Error(second.code);
+    expect(second.id).not.toBe(first.id);
     gateway.authorize(created.order.id, created.order.amountKrw);
     const result = await confirmTossOrder(deps(), buyer, {
       orderId: created.order.id, paymentKey: gateway.keyFor(created.order.id),
       amount: created.order.amountKrw, consent: true,
     });
     if (!result.ok) throw new Error(result.code);
-    const payment = (await h.sql.query<{identity_portrait_id:string;input_key:string}>(
-      'select identity_portrait_id,input_key from billing_payments where id=$1', [created.order.id])).rows[0];
-    const render = (await h.sql.query<{identity_portrait_id:string;input_key:string}>(
-      'select identity_portrait_id,input_key from render_jobs where id=$1', [result.id])).rows[0];
+    const payment = (await h.sql.query<{identity_selfie_id:string;input_key:string}>(
+      'select identity_selfie_id,input_key from billing_payments where id=$1', [created.order.id])).rows[0];
+    const render = (await h.sql.query<{identity_selfie_id:string;input_key:string}>(
+      'select identity_selfie_id,input_key from render_jobs where id=$1', [result.id])).rows[0];
     if (!payment || !render) throw new Error('Missing payment or render');
-    expect(payment.identity_portrait_id).toBe(first);
-    expect(render.identity_portrait_id).toBe(first);
-    expect(await deps().store.read(render.input_key)).toEqual(input.photo.bytes);
+    expect(payment.identity_selfie_id).toBe(first.id);
+    expect(render.identity_selfie_id).toBe(first.id);
+    expect(await deps().store.read(render.input_key)).toEqual(photo.bytes);
+    // The replaced selfie no longer answers for a NEW order: the studio must show the uploader instead.
+    expect(await savedSelfiePhoto(h.sql, deps().store, buyer.userId!, first.id)).toBeNull();
+  });
+
+  it('lets the PG review account save a selfie and reach the checkout under RENDER_PIPELINE_PUBLIC=review', async () => {
+    // docs/qa/toss-checkout/PG-REVIEW-MODE.md: the reviewer logs in, uploads the one photo, pays with test keys.
+    gate.mode = 'review';
+    const reviewer = { ...viewerOf('free'), review: true };
+    const saved = await saveSelfie(deps(), reviewer.userId, { ...(await selfiePng('#cccccc')), mime: 'image/png', consent: true });
+    if (!saved.ok) throw new Error(saved.code);
+    const photo = await savedSelfiePhoto(h.sql, deps().store, reviewer.userId!, saved.id);
+    if (!photo) throw new Error('selfie missing');
+    const created = await createTossOrder(deps(), reviewer, { ...input, selfieId: saved.id, photo });
+    expect(created.ok).toBe(true);
+    // An ordinary customer with the same selfie is still refused: review mode is not the public sale.
+    const customer = await saveSelfie(deps(), buyer.userId, { ...(await selfiePng('#bbbbbb')), mime: 'image/png', consent: true });
+    if (!customer.ok) throw new Error(customer.code);
+    expect(await createTossOrder(deps(), buyer, { ...input, selfieId: customer.id, photo })).toEqual({ ok: false, code: 'not_open' });
   });
 
   it('rejects a forged amount and an order whose server price changed before approval', async () => {

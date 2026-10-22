@@ -17,7 +17,6 @@ vi.mock('@/lib/auth/dev-identity', () => ({ devIdentityUserId: () => null }));
 vi.mock('@/lib/auth/viewer', () => ({ getViewer: mocks.viewer }));
 vi.mock('@/lib/db/connect', () => ({ getSqlRunner: mocks.sql }));
 vi.mock('@/lib/renders/runtime', () => ({ runLiveRenderPass: mocks.renderPass, formatPassReport: () => 'ok' }));
-vi.mock('@/lib/identity/portrait-runtime', () => ({ portraitDeps: async () => null }));
 vi.mock('@/lib/brands/usage/payment', async (original) => ({ ...(await original<object>()), reconcileBrandUsagePayments: mocks.reconcile }));
 vi.mock('next/server', async (original) => ({ ...(await original<object>()), after: () => undefined }));
 import { middleware } from '@/middleware';

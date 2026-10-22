@@ -122,7 +122,7 @@ export async function createTossOrder(
   await deps.store.put(inputKey, input.photo.bytes, input.photo.mime);
   await deps.sql.query(
     `insert into billing_payments
-    (id,user_id,environment,amount_krw,template_id,template_slug,order_name,aspect,locale,render_ref,input_key,input_mime,expires_at,identity_portrait_id,resolution)
+    (id,user_id,environment,amount_krw,template_id,template_slug,order_name,aspect,locale,render_ref,input_key,input_mime,expires_at,identity_selfie_id,resolution)
     values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
     [
       id,
@@ -138,7 +138,7 @@ export async function createTossOrder(
       inputKey,
       input.photo.mime,
       new Date(clock(deps).getTime() + 30 * 60_000),
-      input.portraitId ?? null,
+      input.selfieId ?? null,
       choice.resolution,
     ],
   );

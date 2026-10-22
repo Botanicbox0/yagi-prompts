@@ -1,7 +1,7 @@
 import {describe,it,expect,vi} from 'vitest';
 import {readFileSync} from 'node:fs';
 import {runInNewContext} from 'node:vm';
-import {assessPhotoPose,canSubmitPortrait} from '@/lib/identity/photo-advice';
+import {assessPhotoPose,assessPhotoLight,canSubmitSelfie} from '@/lib/identity/photo-advice';
 import {bypassConsumerLocale,brandRouteAllowed,adminRouteAllowed} from '@/lib/routing/surfaces';
 
 const identity=[1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1];
@@ -41,12 +41,21 @@ describe('advisory selfie assessment',()=>{
  it('treats missing, invalid and degenerate output as unavailable',()=>{
   for(const matrix of [undefined,[],[NaN],new Array(16).fill(0)])expect(assessPhotoPose(1,matrix)).toBe('unavailable');
  });
+ it('hints at dark and overexposed photos from the luma summary, and never fails closed',()=>{
+  expect(assessPhotoLight({mean:120,clippedHigh:0.02,clippedLow:0.05})).toBe('ok');
+  expect(assessPhotoLight({mean:40,clippedHigh:0,clippedLow:0.2})).toBe('dark');
+  expect(assessPhotoLight({mean:130,clippedHigh:0,clippedLow:0.6})).toBe('dark');
+  expect(assessPhotoLight({mean:230,clippedHigh:0.1,clippedLow:0})).toBe('bright');
+  expect(assessPhotoLight({mean:150,clippedHigh:0.5,clippedLow:0})).toBe('bright');
+  expect(assessPhotoLight({mean:NaN,clippedHigh:0,clippedLow:0})).toBe('unavailable');
+  for(const light of ['ok','dark','bright','unavailable'] as const)expect(canSubmitSelfie({hasFile:true,consent:true,busy:false,advice:'ready',light})).toBe(true);
+ });
  it('every assessment including pending is advisory; consent and file stay required',()=>{
   for(const advice of ['checking','ready','angle','noFace','multipleFaces','unavailable'] as const){
-   expect(canSubmitPortrait({hasFile:true,consent:true,busy:false,advice})).toBe(true);
-   expect(canSubmitPortrait({hasFile:true,consent:false,busy:false,advice})).toBe(false);
-   expect(canSubmitPortrait({hasFile:false,consent:true,busy:false,advice})).toBe(false);
-   expect(canSubmitPortrait({hasFile:true,consent:true,busy:true,advice})).toBe(false);
+   expect(canSubmitSelfie({hasFile:true,consent:true,busy:false,advice})).toBe(true);
+   expect(canSubmitSelfie({hasFile:true,consent:false,busy:false,advice})).toBe(false);
+   expect(canSubmitSelfie({hasFile:false,consent:true,busy:false,advice})).toBe(false);
+   expect(canSubmitSelfie({hasFile:true,consent:true,busy:true,advice})).toBe(false);
   }
  });
 });

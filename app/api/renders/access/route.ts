@@ -7,7 +7,7 @@ import { resolveEngine } from '@/lib/images/engines';
 import { loadPreferences } from '@/lib/notify/preferences';
 import { loadPromptBySlug } from '@/lib/prompts/repo';
 import { canStartRender } from '@/lib/renders/service';
-import { portraitEnabled } from '@/lib/identity/portrait-runtime';
+import { currentSelfie, selfieView, type SelfieView } from '@/lib/identity/selfie-service';
 import { getSubscriptionSummary, getSubscriptionUsePercent } from '@/lib/creator-subscriptions/repo';
 import { subscriptionQaAllowed } from '@/lib/creator-subscriptions/access';
 import { billingConfigFromEnv } from '@/lib/creator-subscriptions/gateway';
@@ -28,6 +28,7 @@ import { getPremiumEditBudget, type PremiumEditBudget } from '@/lib/premium-edit
  *                     free, founder 2026-09-10) and, until payment is wired, for everyone
  *   identityRequired  does the template's engine need a verified face (ModelArk) — docs §8.2
  *   identity          where this viewer stands on that: none · pending · active · failed · not_needed
+ *   selfie            the saved photo every order reuses (docs/IDENTITY-SELFIE.md), or null to upload inline
  *
  * A viewer who forges any of this only reaches the refusals the enqueue route already carries.
  */
@@ -48,8 +49,7 @@ export async function GET(request: Request): Promise<NextResponse> {
   let identity: string = 'not_needed';
   // The closed studio's one question: has this person already asked to be told when it opens?
   let interest = false;
-  const portraits = portraitEnabled() && !viewer.isAdmin;
-  let portraitId: string | null = null;
+  let selfie: SelfieView | null = null;
   let subscription: SubscriptionSummary | null = null;
   let subscriptionEligible = false;
   let subscriptionUsePercent: number | null = null;
@@ -59,7 +59,7 @@ export async function GET(request: Request): Promise<NextResponse> {
   if (viewer.userId !== null) {
     const sql = await getSqlRunner();
     if (sql !== null) {
-      if (portraits) portraitId = (await sql.query<{attempt_id:string}>('select attempt_id from identity_portrait_selections where user_id=$1',[viewer.userId])).rows[0]?.attempt_id ?? null;
+      try { const row = await currentSelfie(sql, viewer.userId); selfie = row ? selfieView(row) : null; } catch { /* Before the selfie migration lands the studio simply asks for one. */ }
       interest = (await loadPreferences(sql, viewer.userId))?.newPlaybook === true;
       const candidate = slug ? await loadPromptBySlug(sql, slug) : null;
       const template = candidate?.audience === 'brand' ? null : candidate;
@@ -88,5 +88,5 @@ export async function GET(request: Request): Promise<NextResponse> {
     }
   }
 
-  return NextResponse.json({ open: storefrontOpen(), live, charge: canStartRender(viewer) && !viewer.isAdmin, identityRequired, identity, signedIn, interest, portraitEnabled: portraits && signedIn, portraitId, subscription, subscriptionEligible, subscriptionUsePercent, editing, editFields, premiumEditBudget }, { headers: HEADERS });
+  return NextResponse.json({ open: storefrontOpen(), live, charge: canStartRender(viewer) && !viewer.isAdmin, identityRequired, identity, signedIn, interest, selfie, subscription, subscriptionEligible, subscriptionUsePercent, editing, editFields, premiumEditBudget }, { headers: HEADERS });
 }

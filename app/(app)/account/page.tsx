@@ -5,7 +5,9 @@ import { getDictionary } from '@/lib/i18n/dictionaries';
 import { LocaleToggle } from '@/components/locale-toggle';
 import { siteLinks } from '@/components/marketing/chrome';
 import { TwingsLogo } from '@/components/brand/twings-mark';
-import { portraitEnabled } from '@/lib/identity/portrait-runtime';
+import { currentSelfie, selfieView, type SelfieView } from '@/lib/identity/selfie-service';
+import { IDENTITY_SELFIE_PATH } from '@/lib/identity/links';
+import { selfieSavedOn } from '@/lib/identity/selfie-format';
 import { TextSwap } from '@/components/ui/text-swap';
 import { deletionMailto } from '@/components/app/deletion-mailto';
 import {
@@ -95,19 +97,21 @@ export default async function AccountPage({
   let profile: CreatorProfile | null = null;
   let subscription: SubscriptionSummary | null = null;
   let subscriptionLoaded = false;
+  let selfie: SelfieView | null = null;
   try {
     viewer = await getViewer();
     if (viewer.userId !== null) {
       const sql = await getSqlRunner();
       if (sql !== null) {
-        const [prefs, works, creator, monthly] = await Promise.allSettled([
+        const [prefs, works, creator, monthly, face] = await Promise.allSettled([
           loadPreferences(sql, viewer.userId), listMyRenders(sql, viewer.userId, 3), loadCreatorProfile(sql, viewer.userId),
-          getSubscriptionSummary(sql, viewer.userId, { environment: 'live' }),
+          getSubscriptionSummary(sql, viewer.userId, { environment: 'live' }), currentSelfie(sql, viewer.userId),
         ]);
         if (prefs.status === 'fulfilled') preferences = prefs.value ?? PREFERENCES_OFF;
         if (works.status === 'fulfilled') renders = works.value;
         if (creator.status === 'fulfilled') profile = creator.value;
         if (monthly.status === 'fulfilled') { subscription = monthly.value; subscriptionLoaded = true; }
+        if (face.status === 'fulfilled' && face.value) selfie = selfieView(face.value);
       }
     }
   } catch {
@@ -143,6 +147,24 @@ export default async function AccountPage({
         </h1>
 
         {viewer?.userId && <CreatorProfileCard profile={profile} email={viewer.email} dict={dict} locale={locale} feedback={params.profile} />}
+        {/* The one photo (docs/IDENTITY-SELFIE.md): the first thing a creator needs, so the first card after the name. */}
+        {viewer?.userId && (
+          <section data-selfie-account data-selfie-present={selfie ? 'true' : 'false'} className="mt-6 flex max-w-detail items-center gap-5 rounded-3xl border border-hairline bg-white p-5 sm:p-6">
+            <a href={IDENTITY_SELFIE_PATH} aria-label={dict.selfie.panelTitle} className="block size-20 shrink-0 overflow-hidden rounded-2xl bg-black/5 sm:size-24">
+              {selfie
+                // eslint-disable-next-line @next/next/no-img-element -- owner-only private route
+                ? <img src={selfie.imageUrl} alt="" width={selfie.width} height={selfie.height} className="h-full w-full object-cover" />
+                : <svg aria-hidden="true" viewBox="0 0 96 96" className="h-full w-full p-4 opacity-40" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><ellipse cx="48" cy="40" rx="20" ry="25" /><path d="M14 88c3-20 65-20 68 0" /></svg>}
+            </a>
+            <div className="min-w-0 flex-1">
+              <p className="text-base font-semibold">{selfie ? dict.selfie.savedTitle : dict.selfie.panelTitle}</p>
+              <p className="mt-1 text-sm leading-relaxed opacity-65">{selfie ? selfieSavedOn(dict.selfie.savedOn, selfie.createdAt, locale) ?? dict.selfie.savedTitle : dict.selfie.accountEmpty}</p>
+              <a href={selfie ? `${IDENTITY_SELFIE_PATH}?change=1` : IDENTITY_SELFIE_PATH} className={selfie ? 'mt-3 inline-flex min-h-11 items-center border border-current px-4 font-label text-eyebrow uppercase' : 'mt-3 inline-flex min-h-11 items-center bg-accent px-5 font-label text-eyebrow text-white uppercase'}>
+                <TextSwap>{selfie ? dict.selfie.change : `${dict.selfie.manage} →`}</TextSwap>
+              </a>
+            </div>
+          </section>
+        )}
         {viewer?.userId && <SubscriptionStatus initial={subscription} copy={dict.creatorSubscription} locale={locale} unavailable={!subscriptionLoaded} />}
         <div className="mt-8 max-w-detail">
           <dl>
@@ -152,7 +174,6 @@ export default async function AccountPage({
           </dl>
         </div>
 
-        {viewer?.userId && portraitEnabled() ? <div className="mt-10 max-w-detail border-t border-hairline pt-6"><a data-portrait-account href="/identity/portrait" className="inline-flex min-h-12 items-center rounded-full border border-current px-6 py-3">{dict.portrait.manage} →</a><p className="mt-3 text-sm opacity-65">{dict.portrait.allowance}</p></div> : null}
         {/* --- notifications (§3.5) -------------------------------------- */}
         <div className="mt-14 max-w-detail border-t border-hairline pt-10">
           <p className="font-label text-eyebrow uppercase opacity-60">{copy.notifHeading}</p>

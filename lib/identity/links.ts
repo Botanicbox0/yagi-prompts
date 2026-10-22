@@ -6,6 +6,8 @@ import { normalizeReturnPath } from '@/lib/auth/return-path';
  */
 export const IDENTITY_PATH = '/identity';
 export const IDENTITY_VERIFY_PATH = '/identity/verify';
+/** The one photo (docs/IDENTITY-SELFIE.md): upload, see, change. */
+export const IDENTITY_SELFIE_PATH = '/identity/selfie';
 export const IDENTITY_CALLBACK_PATH = '/api/identity/callback';
 
 /** Same rule as `/auth/signin`: same-origin relative paths only. */

@@ -4,7 +4,8 @@ import { useEffect, useRef, useState } from 'react';
 import { createSubmitGuard } from './submit-guard';
 import type { Dictionary } from '@/lib/i18n/dictionaries';
 import { formatCount, interpolate } from '@/lib/i18n/format';
-import { PortraitPhotoGuide } from '@/components/identity/portrait-photo-guide';
+import { SelfieUploader } from '@/components/identity/selfie-uploader';
+import type { SelfieView } from '@/lib/identity/selfie-service';
 import { PremiumEditor } from './premium-editor';
 import { shrinkPhoto } from '@/lib/images/client-photo';
 export { shrinkPhoto } from '@/lib/images/client-photo';
@@ -97,8 +98,8 @@ export interface StudioLive {
   signinHref: string;
   /** Where an `identity_required` answer sends them: the one-time face check (docs §8.2). */
   identityHref: string;
-  portrait?: { manage: string; change: string; useSaved: string };
-  photoGuide?: Dictionary['portrait'];
+  /** The one photo, uploaded inline and reused by every order (docs/IDENTITY-SELFIE.md). */
+  selfie?: Dictionary['selfie'];
   subscription?: { copy: Dictionary['creatorSubscription']; editorCopy: Dictionary['premiumEditor'] };
   labels: {
     badge: string;
@@ -117,7 +118,7 @@ type Phase = 'photo' | 'style' | 'pay';
 
 /** A monthly request never carries a raw prompt or client-selected output format. */
 export function buildSubscriptionRenderForm(input: {
-  requestId: string; template: string; locale: string; portraitId?: string | null; photo?: Blob | null;
+  requestId: string; template: string; locale: string; selfieId?: string | null; photo?: Blob | null;
   editText: string; references: Blob[]; referencesConsent: boolean;
 }) {
   const form = new FormData();
@@ -125,7 +126,7 @@ export function buildSubscriptionRenderForm(input: {
   form.set('template', input.template);
   form.set('locale', input.locale);
   form.set('ownFaceConsent', '1');
-  if (input.portraitId) form.set('portraitId', input.portraitId);
+  if (input.selfieId) form.set('selfieId', input.selfieId);
   else if (input.photo) form.set('photo', input.photo, input.photo.type === 'image/png' ? 'photo.png' : 'photo.jpg');
   if (input.editText.trim()) form.set('editText', input.editText.trim());
   if (input.references.length && input.referencesConsent) {
@@ -230,10 +231,10 @@ export function TwingsStudio({
 }) {
   const single = styles.length === 1;
   const [phase, setPhase] = useState<Phase>('photo');
-  const [photo, setPhoto] = useState<string | null>(null);
-  const [photoFile, setPhotoFile] = useState<File | null>(null);
-  const [savedPortrait, setSavedPortrait] = useState<string | null>(null);
-  const [portraitRequired, setPortraitRequired] = useState(false);
+  // The saved selfie is the photo. There is no per-order upload any more (founder, 2026-10-22).
+  const [selfie, setSelfie] = useState<SelfieView | null>(null);
+  const [selfieEditing, setSelfieEditing] = useState(false);
+  const photo = selfie?.imageUrl ?? null;
   const [liveMode, setLiveMode] = useState(false);
   const [charge, setCharge] = useState(true);
   const [signedIn, setSignedIn] = useState(false);
@@ -259,11 +260,14 @@ export function TwingsStudio({
   const [edit, setEdit] = useState({ editText: '', references: [] as File[], referencesConsent: false });
   const [paymentMode, setPaymentMode] = useState<'monthly' | 'single'>('monthly');
   const [usageExhausted, setUsageExhausted] = useState(false);
-  const fileRef = useRef<HTMLInputElement>(null);
+  const payRef = useRef<HTMLButtonElement>(null);
+  const selfiePanelRef = useRef<HTMLDivElement>(null);
   const submitGuard = useRef(createSubmitGuard());
   const subscriptionRequestId = useRef<string | null>(null);
-  const hasManualPhoto = useRef(false);
-  const previousPortraitId = useRef<string | null>(null);
+  const selfieEditingRef = useRef(false);
+  const previousSelfieId = useRef<string | null>(null);
+  // Bumped only when the access call reports a selfie this screen did not save itself (another tab).
+  const [selfieEpoch, setSelfieEpoch] = useState(0);
 
   const chosen = styles.find((item) => item.id === styleId) ?? styles[0] ?? null;
   // The price the button names: the chosen resolution's, else the style's base price.
@@ -290,13 +294,6 @@ export function TwingsStudio({
     subscriptionRequestId.current = null;
   }, [live?.template, initialStyleId, subscription?.id, subscription?.periodStart, subscription?.planId, subscription?.hasAccess, subscriptionEligible]);
 
-  useEffect(
-    () => () => {
-      if (photo) URL.revokeObjectURL(photo);
-    },
-    [photo],
-  );
-
   // Static page, per-viewer answer: ask once whether this reader renders for real, whether a
   // payment is taken, and whether this template needs their verified face first.
   const accessUrl = live ? `${live.accessEndpoint}?template=${encodeURIComponent(live.template)}` : null;
@@ -308,7 +305,7 @@ export function TwingsStudio({
       const request = ++latest;
       return fetch(accessUrl, { cache: 'no-store', credentials: 'same-origin' })
       .then((response) => (response.ok ? response.json() : { live: false }))
-      .then((json: { open?: boolean; live?: boolean; charge?: boolean; identityRequired?: boolean; identity?: string; signedIn?: boolean; interest?: boolean; portraitEnabled?: boolean; portraitId?: string | null; subscription?: typeof subscription; subscriptionEligible?: boolean; editing?: boolean; subscriptionUsePercent?: number | null; editFields?: string[]; premiumEditBudget?: unknown }) => {
+      .then((json: { open?: boolean; live?: boolean; charge?: boolean; identityRequired?: boolean; identity?: string; signedIn?: boolean; interest?: boolean; selfie?: SelfieView | null; subscription?: typeof subscription; subscriptionEligible?: boolean; editing?: boolean; subscriptionUsePercent?: number | null; editFields?: string[]; premiumEditBudget?: unknown }) => {
         if (cancelled || request !== latest) return;
         setLiveMode(json.live === true);
         setShopOpen(json.open === true);
@@ -316,14 +313,15 @@ export function TwingsStudio({
         setIdentityRequired(json.identityRequired === true);
         setIdentity(typeof json.identity === 'string' ? json.identity : 'not_needed');
         setSignedIn(json.signedIn === true);
-        setPortraitRequired(json.portraitEnabled === true);
-        if (!hasManualPhoto.current && (json.portraitId ?? null) !== previousPortraitId.current) {
-          previousPortraitId.current = json.portraitId ?? null;
+        // While the person is choosing a new photo, a refresh must not yank the panel out from under them.
+        const nextSelfie = json.selfie ?? null;
+        if (!selfieEditingRef.current && (nextSelfie?.id ?? null) !== previousSelfieId.current) {
+          previousSelfieId.current = nextSelfie?.id ?? null;
           subscriptionRequestId.current = null;
           setOwnFaceConsent(false);
-          setSavedPortrait(json.portraitId ?? null);
-          setPhoto(json.portraitId ? `/api/identity/portrait/${json.portraitId}/image` : null);
-          setPhase(json.portraitId ? single ? 'pay' : 'style' : 'photo');
+          setSelfie(nextSelfie);
+          setSelfieEpoch(epoch => epoch + 1);
+          setPhase(nextSelfie ? single ? 'pay' : 'style' : 'photo');
         }
         setInterest(json.interest === true);
         setSubscription(json.subscription ?? null);
@@ -352,23 +350,34 @@ export function TwingsStudio({
 
   const identityBlocked = liveMode && identityRequired && identity !== 'active';
 
-  const takePhoto = (file: File | null | undefined) => {
-    if (submitting || !file || !file.type.startsWith('image/')) return;
-    hasManualPhoto.current = true;
-    setSavedPortrait(null);
-    setOwnFaceConsent(false);
-    subscriptionRequestId.current = null;
-    setPhotoFile(file);
+  // The uploader saved (or kept) a selfie: it is the photo for this and every later order.
+  const onSelfieSaved = (saved: SelfieView, replaced: boolean) => {
+    selfieEditingRef.current = false;
+    setSelfieEditing(false);
+    if (replaced || saved.id !== selfie?.id) { subscriptionRequestId.current = null; setOwnFaceConsent(false); }
+    previousSelfieId.current = saved.id;
+    setSelfie(saved);
     setLiveError(null);
-    setPhoto((current) => {
-      if (current) URL.revokeObjectURL(current);
-      return URL.createObjectURL(file);
+    setPhase(current => current === 'photo' ? single ? 'pay' : 'style' : current);
+    // On a phone the pay button sits below the photo: bring it into view and hand it the focus.
+    requestAnimationFrame(() => {
+      payRef.current?.scrollIntoView({ block: 'center', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' });
+      payRef.current?.focus({ preventScroll: true });
     });
-    setPhase(single ? 'pay' : 'style');
+  };
+  // The uploader's own "change"/"keep" buttons report here; the pay button waits while the chooser is open.
+  const onSelfieEditing = (editing: boolean) => {
+    selfieEditingRef.current = editing;
+    setSelfieEditing(editing);
+  };
+  const openSelfieEditor = () => {
+    onSelfieEditing(true);
+    setSelfieEpoch(epoch => epoch + 1);
+    requestAnimationFrame(() => selfiePanelRef.current?.scrollIntoView({ block: 'start', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' }));
   };
 
   const submitLive = async () => {
-    if (!live || (!photoFile && !savedPortrait) || !chosen) return;
+    if (!live || !selfie || !chosen) return;
     if (subscriptionAvailable && !ownFaceConsent) return;
     if (monthly && (edit.editText.trim() || edit.references.length) && !editorOpen) {
       setLiveError((editorAvailable ? editBudgetExhausted ? subscriptionCopy?.premiumEditLimitReached : subscriptionCopy?.premiumEditBudgetUnavailable : subscriptionCopy?.studioEditUnavailable) ?? live.labels.errors.generic ?? null);
@@ -388,21 +397,19 @@ export function TwingsStudio({
       let form: FormData;
       if (monthly) {
         const requestId = subscriptionRequestId.current ??= crypto.randomUUID();
-        const image = !savedPortrait && photoFile ? await shrinkPhoto(photoFile, 1_200_000) : null;
         const references = await Promise.all(edit.references.map(file => shrinkPhoto(file, 700_000)));
-        if ((image?.size ?? 0) + references.reduce((sum, file) => sum + file.size, 0) > 3_700_000) {
+        if (references.reduce((sum, file) => sum + file.size, 0) > 3_700_000) {
           setLiveError(subscriptionCopy?.studioReferenceLarge ?? live.labels.errors.generic ?? null);
           return;
         }
-        form = buildSubscriptionRenderForm({ requestId, template: live.template, locale: live.locale, portraitId: savedPortrait, photo: image, editText: edit.editText, references, referencesConsent: edit.referencesConsent });
+        form = buildSubscriptionRenderForm({ requestId, template: live.template, locale: live.locale, selfieId: selfie.id, editText: edit.editText, references, referencesConsent: edit.referencesConsent });
       } else {
         form = new FormData();
         form.set('template', live.template);
         form.set('aspect', aspect);
         if (chosenResolution) form.set('resolution', chosenResolution.id);
         form.set('locale', live.locale);
-        if (savedPortrait) form.set('portraitId', savedPortrait);
-        else if (photoFile) { const blob = await shrinkPhoto(photoFile); form.set('photo', blob, blob.type === 'image/png' ? 'photo.png' : 'photo.jpg'); }
+        form.set('selfieId', selfie.id);
       }
       // Behind the face check: hold the job with its photo and go verify — the callback starts it.
       if (identityBlocked && !monthly) form.set('hold', '1');
@@ -424,6 +431,13 @@ export function TwingsStudio({
       if (json.code === 'identity_required') {
         go(live.identityHref);
         return;
+      }
+      // The saved photo is gone or was replaced elsewhere: show the uploader right here, keep the order's choices.
+      if (json.code === 'selfie_required') {
+        previousSelfieId.current = null;
+        setSelfie(null);
+        setPhase('photo');
+        openSelfieEditor();
       }
       if (monthly && ['insufficient_usage', 'usage_exhausted'].includes(json.code ?? '')) setUsageExhausted(true);
       if (monthly && json.code === 'edit_request_limit') setEditRequestLimitReached(true);
@@ -517,7 +531,6 @@ export function TwingsStudio({
         <div className="mt-6 max-w-detail border border-hairline p-6 sm:p-8">
           <p className="font-display text-[clamp(1.4rem,2.6vw,2rem)] leading-[0.95] font-black uppercase">{labels.closedTitle}</p>
           <p className="mt-4 text-body opacity-70">{labels.closedBody}</p>
-          {portraitRequired && live?.portrait && <a className="mt-5 inline-block underline" href={`/identity/portrait?next=${encodeURIComponent(`/${live.locale}/t/${live.template}#make`)}`}>{live.portrait.manage}</a>}
           <p data-studio-ai-note className="mt-4 font-mono text-[0.72rem] leading-relaxed opacity-45">{labels.aiNote}</p>
           <button
             type="button"
@@ -567,57 +580,26 @@ export function TwingsStudio({
       </ol>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-        {portraitRequired && live.portrait ? <div className="border border-hairline p-5">
-          {savedPortrait ? <img src={`/api/identity/portrait/${savedPortrait}/image`} alt={live.portrait.useSaved} className="mx-auto aspect-[2/3] max-h-96 w-full object-contain"/> : <p>{live.portrait.manage}</p>}
-          <a className="mt-5 inline-block underline" href={`/identity/portrait?next=${encodeURIComponent(`/${live.locale}/t/${live.template}#make`)}`}>{savedPortrait?live.portrait.change:live.portrait.manage}</a>
-        </div> : <div className="border border-hairline">
-          <div data-studio-photo-guide className="border-b border-hairline p-5">
-            {subscriptionCopy && <h3 className="text-sm font-semibold">{subscriptionCopy.studioPhotoTitle}</h3>}
-            <p className="mt-2 text-sm leading-relaxed opacity-75">{subscriptionCopy?.studioPhotoGuidance ?? labels.dropHint}</p>
-            {live.photoGuide && <PortraitPhotoGuide copy={live.photoGuide} />}
-          </div>
-          <label
-            htmlFor="studio-photo"
-            className="flex aspect-[3/4] cursor-pointer items-center justify-center overflow-hidden bg-black focus-within:outline focus-within:outline-2 focus-within:outline-accent"
-            onDragOver={(event) => event.preventDefault()}
-            onDrop={(event) => {
-              event.preventDefault();
-              takePhoto(event.dataTransfer.files?.[0]);
-            }}
-          >
-            {photo ? (
-              // eslint-disable-next-line @next/next/no-img-element -- a local object URL
-              <img src={photo} alt="" className="h-full w-full object-cover" />
-            ) : (
-              <div className="px-6 text-center text-white/70">
-                <p className="font-label text-label uppercase">{labels.dropZone}</p>
-                <p className="mt-2 font-mono text-[0.72rem] text-white/45">{labels.dropHint}</p>
-              </div>
-            )}
-          </label>
-          <input
-            ref={fileRef}
-            id="studio-photo"
-            type="file"
-            accept="image/*"
-            disabled={submitting}
-            aria-label={labels.dropZone}
-            className="sr-only"
-            onChange={(event) => takePhoto(event.currentTarget.files?.[0])}
-          />
-          {photo && (
-            <button
-              type="button"
-              disabled={submitting}
-              onClick={() => fileRef.current?.click()}
-              className="w-full border-t border-hairline px-4 py-3 font-label text-eyebrow uppercase transition-opacity hover:opacity-70"
-            >
-              {labels.changePhoto}
-            </button>
+        {/* The photo column: the saved selfie, or the uploader when there is none (or they pressed change). */}
+        <div ref={selfiePanelRef} data-selfie-panel data-selfie-present={selfie ? 'true' : 'false'} className="scroll-mt-6 border border-hairline p-5">
+          <h3 className="text-sm font-semibold">{live.selfie?.panelTitle ?? labels.stepPhoto}</h3>
+          {live.selfie ? (
+            <div className="mt-4">
+              <SelfieUploader
+                key={selfieEpoch}
+                copy={live.selfie}
+                locale={live.locale}
+                initial={selfie}
+                startEditing={selfieEditing}
+                signinHref={live.signinHref}
+                onSaved={onSelfieSaved}
+                onEditingChange={onSelfieEditing}
+              />
+            </div>
+          ) : (
+            <p className="mt-4 text-sm leading-relaxed opacity-70">{labels.dropHint}</p>
           )}
         </div>
-
-        }
         <div className="flex flex-col">
           {(phase === 'photo' || phase === 'style' || phase === 'pay') && (
             <>
@@ -744,15 +726,12 @@ export function TwingsStudio({
                   </p>
                 )}
                 <button
+                  ref={payRef}
                   type="button"
                   data-pay-cta
-                  disabled={!photo || !chosen || submitting || (subscriptionAvailable && !ownFaceConsent) || (monthly && (edit.references.length > 0 && (!edit.referencesConsent || !edit.editText.trim())))}
+                  disabled={!selfie || selfieEditing || !chosen || submitting || (subscriptionAvailable && !ownFaceConsent) || (monthly && (edit.references.length > 0 && (!edit.referencesConsent || !edit.editText.trim())))}
                   aria-describedby={photo ? undefined : 'studio-cta-hint'}
-                  onClick={() => {
-                    // With a photo the press stores it and goes to the check (held job); without one, just the check.
-                    if (identityBlocked && !photoFile) window.location.assign(live.identityHref);
-                    else void submitLive();
-                  }}
+                  onClick={() => void submitLive()}
                   className="w-full border border-current px-5 py-4 font-label text-[0.95rem] tracking-[0.1em] text-accent uppercase transition-opacity hover:opacity-70 disabled:opacity-25"
                 >
                   {submitting
@@ -774,9 +753,9 @@ export function TwingsStudio({
                     {liveError}
                   </p>
                 )}
-                {!photo && (
+                {!selfie && (
                   <p id="studio-cta-hint" data-studio-hint className="mt-2 font-mono text-[0.72rem] text-accent">
-                    {labels.needPhoto}
+                    {live.selfie?.needSelfie ?? labels.needPhoto}
                   </p>
                 )}
                 {subscriptionAvailable && photo && !ownFaceConsent && subscriptionCopy && <p className="mt-2 text-xs text-accent">{subscriptionCopy.studioConsentHint}</p>}

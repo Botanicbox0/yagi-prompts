@@ -5,10 +5,10 @@ import { platformReady } from '@/lib/creator-platform/service';
 import { reserveCampaignProduction, type CampaignProductionCode } from '@/lib/campaigns/production';
 import { campaignProductReferences, campaignRenderReferenceUrls } from '@/lib/campaigns/production-references';
 import { claimCampaignDispatch, acknowledgeCampaignTask, resumeCampaignDispatch, CAMPAIGN_DISPATCH_PREFIX } from '@/lib/campaigns/production-dispatch';
-import { cleanPortraitInput } from '@/lib/identity/portrait-images';
+import { cleanSelfie } from '@/lib/identity/selfie-images';
 import type { StorageDriver } from '@/lib/storage';
 import { reserveProduction } from '@/lib/brands/production/service';
-import { selectedPortraitPhoto } from '@/lib/identity/portrait-service';
+import { savedSelfiePhoto } from '@/lib/identity/selfie-service';
 import type { SqlRunner } from '@/lib/db/sql-runner';
 import type { Viewer } from '@/lib/auth/identity';
 import type { ArkAssetsClient } from '@/lib/ark/assets';
@@ -104,30 +104,30 @@ export interface RenderServiceDeps {
 
 export interface CreateCampaignRenderInput {
   applicationId: string; requestId: string; ownFaceConsent: boolean;
-  portraitId?: string; photo?: { bytes: Uint8Array; mime: string } | null; locale: string | null;
+  selfieId?: string; photo?: { bytes: Uint8Array; mime: string } | null; locale: string | null;
 }
 /** Selected campaign participation pays for production; no consumer plan or admin impersonation. */
 export async function createCampaignRenderJob(deps: RenderServiceDeps & { referenceStorage?: Pick<StorageDriver, 'read'> }, viewer: Viewer, input: CreateCampaignRenderInput): Promise<CreateRenderOutcome | { ok: false; code: CampaignProductionCode | 'consent_required' }> {
   if (!viewer.userId) return { ok: false, code: 'sign_in_required' };
   if (input.ownFaceConsent !== true) return { ok: false, code: 'consent_required' };
-  if (Object.keys(input).some(key => !['applicationId', 'requestId', 'ownFaceConsent', 'portraitId', 'photo', 'locale'].includes(key))) return { ok: false, code: 'invalid' };
-  if (!SUBSCRIPTION_UUID.test(input.applicationId) || !SUBSCRIPTION_UUID.test(input.requestId) || input.portraitId && (!SUBSCRIPTION_UUID.test(input.portraitId) || input.photo)) return { ok: false, code: 'invalid' };
+  if (Object.keys(input).some(key => !['applicationId', 'requestId', 'ownFaceConsent', 'selfieId', 'photo', 'locale'].includes(key))) return { ok: false, code: 'invalid' };
+  if (!SUBSCRIPTION_UUID.test(input.applicationId) || !SUBSCRIPTION_UUID.test(input.requestId) || input.selfieId && (!SUBSCRIPTION_UUID.test(input.selfieId) || input.photo)) return { ok: false, code: 'invalid' };
   let photo = input.photo ?? null;
-  if (!input.portraitId) {
+  if (!input.selfieId) {
     if (!photo || photo.bytes.byteLength > 3_000_000) return { ok: false, code: photo ? 'photo_too_large' : 'bad_photo' };
-    try { photo = { bytes: await cleanPortraitInput(photo.bytes, photo.mime), mime: 'image/png' }; }
+    try { photo = { bytes: (await cleanSelfie(photo.bytes, photo.mime)).bytes, mime: 'image/png' }; }
     catch { return { ok: false, code: 'bad_photo' }; }
   }
-  const fingerprint = createHash('sha256').update(JSON.stringify([input.applicationId, input.portraitId ?? null, input.portraitId ? null : createHash('sha256').update(photo!.bytes).digest('hex')])).digest('hex');
+  const fingerprint = createHash('sha256').update(JSON.stringify([input.applicationId, input.selfieId ?? null, input.selfieId ? null : createHash('sha256').update(photo!.bytes).digest('hex')])).digest('hex');
   const writtenKeys: string[] = [];
   try {
     const result = await reserveCampaignProduction(deps, viewer, { applicationId: input.applicationId, requestId: input.requestId, fingerprint }, async (sql, template, ids) => {
-      const ownPhoto = input.portraitId ? await selectedPortraitPhoto(sql, deps.store, viewer.userId!, input.portraitId) : photo;
+      const ownPhoto = input.selfieId ? await savedSelfiePhoto(sql, deps.store, viewer.userId!, input.selfieId) : photo;
       if (!ownPhoto) return { ok: false as const, code: 'identity_required' as const };
       const references = await campaignProductReferences(sql, template.id, ids, deps.referenceStorage);
       const id = randomUUID();
       writtenKeys.push(`${id}/input.${extensionFor(ownPhoto.mime)}`);
-      const created = await createAuthorizedRender({ ...deps, sql }, viewer, { templateSlug: template.slug, aspect: template.aspectDefault ?? '9:16', resolution: '720p', photo: ownPhoto, portraitId: input.portraitId, locale: input.locale, holdForIdentity: true }, id, template);
+      const created = await createAuthorizedRender({ ...deps, sql }, viewer, { templateSlug: template.slug, aspect: template.aspectDefault ?? '9:16', resolution: '720p', photo: ownPhoto, selfieId: input.selfieId, locale: input.locale, holdForIdentity: true }, id, template);
       if (!created.ok) return created;
       const referenceKeys: string[] = [];
       for (const [index, reference] of references.entries()) {
@@ -174,8 +174,8 @@ export interface CreateRenderInput {
   holdForIdentity?: boolean;
   /** Server-only payment proof. The public render endpoint never accepts this field. */
   paymentOrderId?: string;
-  /** Server-resolved lineage, never trusted as a caller-supplied storage key. */
-  portraitId?: string;
+  /** Server-resolved lineage (the saved selfie this job copied), never a caller-supplied storage key. */
+  selfieId?: string;
   /**
    * '720p' | '1080p'; empty = 720p. Only an operator's free render reads this from a request. A paid
    * render takes it from the ORDER row (below) — whatever the caller passed is overwritten.
@@ -190,29 +190,29 @@ export async function createRenderJob(deps: RenderServiceDeps, viewer: Viewer, i
   if (!input.paymentOrderId) return { ok: false, code: 'not_open' };
   return deps.sql.transaction(async (sql) => {
     const { rows } = await sql.query<{
-      status: string; template_slug: string; aspect: string; render_ref: string; render_id: string | null; identity_portrait_id: string | null; resolution: string | null;
-    }>("select status,template_slug,aspect,render_ref,render_id,identity_portrait_id,resolution from billing_payments where id=$1 and user_id=$2 and payment_type='NORMAL' for update", [input.paymentOrderId, viewer.userId]);
+      status: string; template_slug: string; aspect: string; render_ref: string; render_id: string | null; identity_selfie_id: string | null; resolution: string | null;
+    }>("select status,template_slug,aspect,render_ref,render_id,identity_selfie_id,resolution from billing_payments where id=$1 and user_id=$2 and payment_type='NORMAL' for update", [input.paymentOrderId, viewer.userId]);
     const payment = rows[0];
     if (!payment || payment.status !== 'paid' || payment.template_slug !== input.templateSlug || payment.aspect !== input.aspect) return { ok: false, code: 'not_open' };
     if (payment.render_id) {
       const job = await loadRenderJob(sql, payment.render_id);
       return job ? { ok: true, id: job.id, held: job.status === 'held' } : { ok: false, code: 'not_found' };
     }
-    const result = await createAuthorizedRender({ ...deps, sql }, viewer, {...input,portraitId:payment.identity_portrait_id??undefined,resolution:payment.resolution}, payment.render_ref);
+    const result = await createAuthorizedRender({ ...deps, sql }, viewer, {...input,selfieId:payment.identity_selfie_id??undefined,resolution:payment.resolution}, payment.render_ref);
     if (result.ok) await sql.query('update billing_payments set render_id=$2,fulfilled_at=$3,lease_until=null where id=$1', [input.paymentOrderId, result.id, deps.now ?? new Date()]);
     return result;
   });
 }
 
 /** Separate contract authorization; never impersonates an admin or accepts client storage keys. */
-export async function createBrandRenderJob(deps: RenderServiceDeps, viewer: Viewer, input: {contractId:string;templateId:string;requestId:string;portraitId:string;ownFaceConfirmed:boolean;locale:string|null}) {
+export async function createBrandRenderJob(deps: RenderServiceDeps, viewer: Viewer, input: {contractId:string;templateId:string;requestId:string;selfieId:string;ownFaceConfirmed:boolean;locale:string|null}) {
   if (!viewer.userId) return {ok:false as const,code:'sign_in_required' as const};
   if (!input.ownFaceConfirmed) return {ok:false as const,code:'consent_required' as const};
-  const fingerprint=createHash('sha256').update(JSON.stringify([input.contractId,input.templateId,input.portraitId])).digest('hex');
+  const fingerprint=createHash('sha256').update(JSON.stringify([input.contractId,input.templateId,input.selfieId])).digest('hex');
   return reserveProduction(deps,viewer,{...input,fingerprint},async(sql,template)=>{
-    const photo=await selectedPortraitPhoto(sql,deps.store,viewer.userId!,input.portraitId);
+    const photo=await savedSelfiePhoto(sql,deps.store,viewer.userId!,input.selfieId);
     if(!photo)return {ok:false as const,code:'identity_required' as const};
-    return createAuthorizedRender({...deps,sql},viewer,{templateSlug:template.slug,aspect:template.aspectDefault??'9:16',photo,locale:input.locale,portraitId:input.portraitId,resolution:null},undefined,template);
+    return createAuthorizedRender({...deps,sql},viewer,{templateSlug:template.slug,aspect:template.aspectDefault??'9:16',photo,locale:input.locale,selfieId:input.selfieId,resolution:null},undefined,template);
   });
 }
 
@@ -220,7 +220,7 @@ export interface CreateSubscriptionRenderInput {
   requestId: string;
   templateSlug: string;
   ownFaceConsent: boolean;
-  portraitId?: string;
+  selfieId?: string;
   photo?: { bytes: Uint8Array; mime: string } | null;
   locale: string | null;
   editText?: string;
@@ -238,7 +238,7 @@ const SUBSCRIPTION_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a
 export async function createSubscriptionRenderJob(deps: RenderServiceDeps & { environment: BillingEnvironment }, viewer: Viewer, input: CreateSubscriptionRenderInput): Promise<CreateSubscriptionRenderOutcome> {
   if (!viewer.userId) return { ok: false, code: 'sign_in_required' };
   if (input.ownFaceConsent !== true) return { ok: false, code: 'consent_required' };
-  const allowedKeys = ['requestId', 'templateSlug', 'ownFaceConsent', 'portraitId', 'photo', 'locale', 'editText', 'references', 'referencesConsent'];
+  const allowedKeys = ['requestId', 'templateSlug', 'ownFaceConsent', 'selfieId', 'photo', 'locale', 'editText', 'references', 'referencesConsent'];
   if (!SUBSCRIPTION_UUID.test(input.requestId) || typeof input.templateSlug !== 'string' || !['test', 'live'].includes(deps.environment) || Object.keys(input).some(key => !allowedKeys.includes(key)) || (input.editText !== undefined && typeof input.editText !== 'string') || (input.references !== undefined && !Array.isArray(input.references))) return { ok: false, code: 'bad_request' };
   const references = input.references ?? [];
   const wantsEdit = !!input.editText?.trim() || references.length > 0;
@@ -249,9 +249,9 @@ export async function createSubscriptionRenderJob(deps: RenderServiceDeps & { en
   if (totalBytes >= MAX_SUBSCRIPTION_BODY_BYTES) return { ok: false, code: 'references_too_large' };
   const cleaned = await cleanEditReferences(references);
   if (!cleaned.ok) return cleaned;
-  const fingerprint = createHash('sha256').update(JSON.stringify([input.templateSlug, input.portraitId ?? null,
-    input.portraitId ? null : input.photo ? createHash('sha256').update(input.photo.bytes).digest('hex') : null,
-    input.portraitId ? null : input.photo?.mime ?? null, text?.ok ? text.text : null,
+  const fingerprint = createHash('sha256').update(JSON.stringify([input.templateSlug, input.selfieId ?? null,
+    input.selfieId ? null : input.photo ? createHash('sha256').update(input.photo.bytes).digest('hex') : null,
+    input.selfieId ? null : input.photo?.mime ?? null, text?.ok ? text.text : null,
     cleaned.references.map(reference => createHash('sha256').update(reference.bytes).digest('hex'))])).digest('hex');
   const now = deps.now ?? new Date();
   const writtenKeys: string[] = [];
@@ -271,8 +271,8 @@ export async function createSubscriptionRenderJob(deps: RenderServiceDeps & { en
       const eligibility = subscriptionTemplateEligibility(template);
       if (!eligibility) return { ok: false, code: 'unsupported_template' };
       const { quote, scopes } = eligibility;
-      const photo = input.portraitId ? await selectedPortraitPhoto(sql, deps.store, viewer.userId!, input.portraitId) : input.photo ?? null;
-      if (input.portraitId && !photo) return { ok: false, code: 'identity_required' };
+      const photo = input.selfieId ? await savedSelfiePhoto(sql, deps.store, viewer.userId!, input.selfieId) : input.photo ?? null;
+      if (input.selfieId && !photo) return { ok: false, code: 'identity_required' };
       const id = randomUUID();
       const reservation = await reserveSubscriptionUsage(sql, { userId: viewer.userId!, renderRef: id, units: quote.units, environment: deps.environment, now, premium: wantsEdit });
       if (!reservation.ok) return { ok: false, code: reservation.code === 'premium_required' ? 'premium_required' : reservation.code === 'insufficient_allowance' ? 'usage_exhausted' : 'subscription_required' };
@@ -282,7 +282,7 @@ export async function createSubscriptionRenderJob(deps: RenderServiceDeps & { en
         if (!budget.remaining) throw new SubscriptionEnqueueAbort('edit_request_limit');
       }
       if (photo) writtenKeys.push(`${id}/input.${extensionFor(photo.mime)}`);
-      const result = await createAuthorizedRender({ ...deps, sql }, viewer, { templateSlug: template.slug, aspect: template.aspectDefault ?? '9:16', photo, portraitId: input.portraitId, locale: input.locale, resolution: '720p', holdForIdentity: true }, id);
+      const result = await createAuthorizedRender({ ...deps, sql }, viewer, { templateSlug: template.slug, aspect: template.aspectDefault ?? '9:16', photo, selfieId: input.selfieId, locale: input.locale, resolution: '720p', holdForIdentity: true }, id);
       if (!result.ok) throw new SubscriptionEnqueueAbort(result.code);
       const referenceKeys: string[] = [];
       for (const [index, reference] of cleaned.references.entries()) {
@@ -304,15 +304,15 @@ export async function createSubscriptionRenderJob(deps: RenderServiceDeps & { en
 }
 
 /** Server-authorized image reward only. All likeness/provider safeguards remain in the common path. */
-export async function createRewardImageJob(deps:RenderServiceDeps,viewer:Viewer,input:{requestId:string;offerId:string;portraitId:string}) {
+export async function createRewardImageJob(deps:RenderServiceDeps,viewer:Viewer,input:{requestId:string;offerId:string;selfieId:string}) {
   demand(viewer.userId,'sign_in_required');
-  demand([input.requestId,input.offerId,input.portraitId].every(v=>SUBSCRIPTION_UUID.test(v)));
+  demand([input.requestId,input.offerId,input.selfieId].every(v=>SUBSCRIPTION_UUID.test(v)));
   return reserveRewardImage(deps.sql,viewer,input,async(sql,templateId)=>{
     const template=await loadPromptById(sql,templateId);
     demand(template?.medium==='image'&&template.audience==='public','not_eligible');
-    const photo=await selectedPortraitPhoto(sql,deps.store,viewer.userId!,input.portraitId);
+    const photo=await savedSelfiePhoto(sql,deps.store,viewer.userId!,input.selfieId);
     demand(photo,'identity_required');
-    return createAuthorizedRender({...deps,sql},viewer,{templateSlug:template.slug,aspect:template.aspectDefault??'4:5',photo,portraitId:input.portraitId,locale:viewer.locale,holdForIdentity:true},undefined,template);
+    return createAuthorizedRender({...deps,sql},viewer,{templateSlug:template.slug,aspect:template.aspectDefault??'4:5',photo,selfieId:input.selfieId,locale:viewer.locale,holdForIdentity:true},undefined,template);
   });
 }
 
@@ -361,7 +361,7 @@ async function createAuthorizedRender(deps: RenderServiceDeps, viewer: Viewer, i
     inputMime: input.photo.mime,
     status: held ? 'held' : 'queued',
   });
-  if (input.portraitId) await deps.sql.query('update render_jobs set identity_portrait_id=$2 where id=$1',[id,input.portraitId]);
+  if (input.selfieId) await deps.sql.query('update render_jobs set identity_selfie_id=$2 where id=$1',[id,input.selfieId]);
   return { ok: true, id, held };
 }
 

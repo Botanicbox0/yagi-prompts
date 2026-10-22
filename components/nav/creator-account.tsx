@@ -1,10 +1,11 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { IDENTITY_SELFIE_PATH } from '@/lib/identity/links';
 import { ANONYMOUS_SESSION, observeCreatorSession, type CreatorSession } from '@/lib/auth/observe-creator-session';
 
 export interface CreatorAccountLabels {
-  signIn: string; profile: string; renders: string; campaigns: string; signOut: string; menu: string; fallbackName: string;
+  signIn: string; profile: string; selfie: string; renders: string; campaigns: string; signOut: string; menu: string; fallbackName: string;
 }
 
 export function CreatorAccountView({ session, labels, signInHref }: { session: CreatorSession; labels: CreatorAccountLabels; signInHref: string }) {
@@ -31,6 +32,7 @@ export function CreatorAccountView({ session, labels, signInHref }: { session: C
       </summary>
       <div className="absolute right-0 top-full z-[60] mt-2 min-w-48 rounded-2xl border border-hairline bg-white p-2 text-sm shadow-lg">
         <a href="/account" className="flex min-h-11 items-center rounded-xl px-3 hover:bg-black/5">{labels.profile}</a>
+        <a href={IDENTITY_SELFIE_PATH} data-creator-selfie className="flex min-h-11 items-center rounded-xl px-3 hover:bg-black/5">{labels.selfie}</a>
         <a href="/renders" className="flex min-h-11 items-center rounded-xl px-3 hover:bg-black/5">{labels.renders}</a>
         <a href="/campaigns/mine" className="flex min-h-11 items-center rounded-xl px-3 hover:bg-black/5">{labels.campaigns}</a>
         <form method="post" action="/auth/signout" className="mt-1 border-t border-hairline pt-1"><button type="submit" className="flex min-h-11 w-full items-center rounded-xl px-3 text-left opacity-65 hover:bg-black/5">{labels.signOut}</button></form>

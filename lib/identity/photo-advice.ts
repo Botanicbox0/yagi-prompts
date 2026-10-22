@@ -1,4 +1,5 @@
 export type PhotoAdvice='checking'|'ready'|'angle'|'noFace'|'multipleFaces'|'unavailable';
+export type LightAdvice='ok'|'dark'|'bright'|'unavailable';
 
 /** Broad quality hints, never an identity verdict or a calibrated pose measurement. */
 export function assessPhotoPose(faces:number,matrix?:readonly number[]):Exclude<PhotoAdvice,'checking'> {
@@ -14,7 +15,20 @@ export function assessPhotoPose(faces:number,matrix?:readonly number[]):Exclude<
  return Math.abs(yaw)>20||Math.abs(pitch)>25||Math.abs(roll)>15?'angle':'ready';
 }
 
+/**
+ * Exposure hint from a downscaled luma histogram (founder 2026-10-22: "각도/밝기 즉시 권고").
+ * `mean` is the average luma 0–255; `clippedHigh`/`clippedLow` are the fractions of pixels at the
+ * extremes. Thresholds are coarse by design: a hint about the light, never a gate.
+ */
+export function assessPhotoLight(input:{mean:number;clippedHigh:number;clippedLow:number}):LightAdvice {
+ const {mean,clippedHigh,clippedLow}=input;
+ if(![mean,clippedHigh,clippedLow].every(Number.isFinite))return 'unavailable';
+ if(mean<60||clippedLow>0.45)return 'dark';
+ if(mean>205||clippedHigh>0.35)return 'bright';
+ return 'ok';
+}
+
 /** The advisory state deliberately never grants or denies permission. */
-export function canSubmitPortrait(input:{hasFile:boolean;consent:boolean;busy:boolean;advice:PhotoAdvice}) {
+export function canSubmitSelfie(input:{hasFile:boolean;consent:boolean;busy:boolean;advice:PhotoAdvice;light?:LightAdvice}) {
  return input.hasFile&&input.consent&&!input.busy;
 }

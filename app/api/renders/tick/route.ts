@@ -1,6 +1,4 @@
 import { after, NextResponse } from 'next/server';
-import { portraitDeps } from '@/lib/identity/portrait-runtime';
-import { runPortraitPass } from '@/lib/identity/portrait-service';
 import { arkAssetsConfigFromEnv } from '@/lib/ark/assets';
 import { arkConfigFromEnv } from '@/lib/ark/client';
 import { getSqlRunner } from '@/lib/db/connect';
@@ -38,7 +36,6 @@ async function tick(request: Request): Promise<NextResponse> {
   if (sql === null) return NextResponse.json({ ok: false, code: 'unavailable' }, { status: 503, headers: HEADERS });
 
   const report = await runLiveRenderPass(sql, { limit: 5 });
-  after(async()=>{try{const portraits=await portraitDeps();if(portraits)await runPortraitPass(portraits);}catch{/* Durable portrait queue is resumed by its owner or a later tick. */}});
   // Secondary-usage payments (docs/SECONDARY-USAGE.md): durable recovery of lost confirmations, unfinished
   // activation and admin-requested refunds, with no page load. Independent of any render or public flag.
   let brandUsage: { checked: number } | null = null;

@@ -75,6 +75,7 @@ export function MarketingNav({
       accountLabels={{
         signIn: dict.auth.signIn,
         profile: dict.creatorProfile.profileLink,
+        selfie: dict.nav.mySelfie,
         renders: dict.renders.title,
         campaigns: dict.campaigns.myCampaigns,
         signOut: dict.account.signOut,

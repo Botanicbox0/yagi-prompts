@@ -24,10 +24,20 @@ describe('review login HTTP boundary', () => {
     state.setSession.mockResolvedValue({ error: null });
     const response = await POST(request());
     expect(response.status).toBe(303);
-    expect(response.headers.get('location')).toBe('https://twings.app/account');
+    // Founder 2026-10-22: a login lands on the formats, never on the account page.
+    expect(response.headers.get('location')).toBe('https://twings.app/ko/video');
     expect(response.headers.get('cache-control')).toBe('private, no-store');
     expect(response.headers.get('referrer-policy')).toBe('no-referrer');
     expect(state.setSession).toHaveBeenCalledWith({ access_token: 'test-access', refresh_token: 'test-refresh' });
+  });
+  it('returns the reviewer to the template they came from, and never to another origin', async () => {
+    state.auth.mockResolvedValue({ data: { user: { id: 'review-id', app_metadata: { purpose: 'toss_review' } }, session: { access_token: 'test-access', refresh_token: 'test-refresh' } }, error: null });
+    state.profile.mockResolvedValue({ data: { is_admin: false }, error: null });
+    state.setSession.mockResolvedValue({ error: null });
+    const back = await POST(request('twings.app', 'https://twings.app', 'email=pg-review%40twings.app&password=test-password&locale=ko&next=%2Fko%2Ft%2Fseoul-90s%23make'));
+    expect(back.headers.get('location')).toBe('https://twings.app/ko/t/seoul-90s#make');
+    const forged = await POST(request('twings.app', 'https://twings.app', 'email=pg-review%40twings.app&password=test-password&locale=ko&next=https%3A%2F%2Fevil.example%2F'));
+    expect(forged.headers.get('location')).toBe('https://twings.app/ko/video');
   });
   it('never commits a profile with admin access and returns only a generic error', async () => {
     state.setSession.mockClear();
