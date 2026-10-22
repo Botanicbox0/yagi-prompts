@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import type { getDictionary } from '@/lib/i18n/dictionaries';
+import { tossSignInHref } from './resume';
 
 /**
  * Audit P2-13: the provider parameters leave the URL at once (they carry the payment key), so a
@@ -26,6 +27,7 @@ export function TossReturn({
 }) {
   const started = useRef(false);
   const [pending, setPending] = useState(false);
+  const [signingIn, setSigningIn] = useState(false);
   const [orderId, setOrderId] = useState('');
   useEffect(() => {
     if (started.current) return;
@@ -44,6 +46,7 @@ export function TossReturn({
     } catch {
       /* storage unavailable — the link below still shows for this render */
     }
+    const locale = p.get('locale') === 'en' ? 'en' : 'ko';
     const body = {
       orderId: id,
       paymentKey: p.get('paymentKey'),
@@ -57,6 +60,21 @@ export function TossReturn({
       body: JSON.stringify(body),
     })
       .then(async (r) => {
+        // The session lapsed on the way back: sign in and return here with the same approval
+        // (docs/PLATFORM-2.0.md §2.2-2). Every other answer is on the order page — a refusal ends
+        // the order there with its reason, never with the old checkout reopened.
+        if (r.status === 401) {
+          setSigningIn(true);
+          window.location.replace(
+            tossSignInHref({
+              orderId: id,
+              paymentKey: body.paymentKey ?? '',
+              amount: p.get('amount') ?? '',
+              locale,
+            }),
+          );
+          return;
+        }
         const result = await r.json();
         if (r.ok && result.ok && typeof result.href === 'string')
           window.location.replace(result.href);
@@ -67,9 +85,9 @@ export function TossReturn({
   return (
     <div data-toss-return>
       <h1 className="font-display text-3xl font-black">
-        {pending ? c.pending : c.confirming}
+        {signingIn ? c.signIn : pending ? c.pending : c.confirming}
       </h1>
-      {orderId && (
+      {orderId && !signingIn && (
         <a
           href={`/billing/toss/${orderId}`}
           className="mt-6 inline-block underline"
