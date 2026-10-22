@@ -5,7 +5,8 @@ import { createSubmitGuard } from './submit-guard';
 import type { Dictionary } from '@/lib/i18n/dictionaries';
 import { formatCount, interpolate } from '@/lib/i18n/format';
 import { SelfieUploader } from '@/components/identity/selfie-uploader';
-import type { SelfieView } from '@/lib/identity/selfie-service';
+import { SelfieSheet, type SheetChoice } from '@/components/identity/selfie-sheet';
+import type { SelfieLibrary, SelfieView } from '@/lib/identity/selfie-service';
 import { PremiumEditor } from './premium-editor';
 import { shrinkPhoto } from '@/lib/images/client-photo';
 export { shrinkPhoto } from '@/lib/images/client-photo';
@@ -231,10 +232,13 @@ export function TwingsStudio({
 }) {
   const single = styles.length === 1;
   const [phase, setPhase] = useState<Phase>('photo');
-  // The saved selfie is the photo. There is no per-order upload any more (founder, 2026-10-22).
+  // The saved photos are the photo (founder, 2026-10-22): `selfie` is the one the sheet offers (the
+  // default), `chosenSelfie` the face this order uses once the person answers "이 얼굴로 만들까요?".
   const [selfie, setSelfie] = useState<SelfieView | null>(null);
+  const [chosenSelfie, setChosenSelfie] = useState<SelfieView | null>(null);
+  const [selfieJustSaved, setSelfieJustSaved] = useState(false);
   const [selfieEditing, setSelfieEditing] = useState(false);
-  const photo = selfie?.imageUrl ?? null;
+  const photo = chosenSelfie?.imageUrl ?? null;
   const [liveMode, setLiveMode] = useState(false);
   const [charge, setCharge] = useState(true);
   const [signedIn, setSignedIn] = useState(false);
@@ -313,15 +317,18 @@ export function TwingsStudio({
         setIdentityRequired(json.identityRequired === true);
         setIdentity(typeof json.identity === 'string' ? json.identity : 'not_needed');
         setSignedIn(json.signedIn === true);
-        // While the person is choosing a new photo, a refresh must not yank the panel out from under them.
+        // While the person is choosing a photo, a refresh must not yank the panel out from under them.
+        // A different default (changed in another tab) asks the question again.
         const nextSelfie = json.selfie ?? null;
         if (!selfieEditingRef.current && (nextSelfie?.id ?? null) !== previousSelfieId.current) {
           previousSelfieId.current = nextSelfie?.id ?? null;
           subscriptionRequestId.current = null;
           setOwnFaceConsent(false);
           setSelfie(nextSelfie);
+          setChosenSelfie(null);
+          setSelfieJustSaved(false);
           setSelfieEpoch(epoch => epoch + 1);
-          setPhase(nextSelfie ? single ? 'pay' : 'style' : 'photo');
+          setPhase('photo');
         }
         setInterest(json.interest === true);
         setSubscription(json.subscription ?? null);
@@ -350,34 +357,57 @@ export function TwingsStudio({
 
   const identityBlocked = liveMode && identityRequired && identity !== 'active';
 
-  // The uploader saved (or kept) a selfie: it is the photo for this and every later order.
-  const onSelfieSaved = (saved: SelfieView, replaced: boolean) => {
+  // The face for this order is settled (answered, picked, or just uploaded) and the pay button is
+  // next: on a phone it sits below the photo, so bring it into view and hand it the focus.
+  const settleSelfie = (face: SelfieView, offered: SelfieView | null, justSaved: boolean) => {
     selfieEditingRef.current = false;
     setSelfieEditing(false);
-    if (replaced || saved.id !== selfie?.id) { subscriptionRequestId.current = null; setOwnFaceConsent(false); }
-    previousSelfieId.current = saved.id;
-    setSelfie(saved);
+    if (face.id !== chosenSelfie?.id) { subscriptionRequestId.current = null; setOwnFaceConsent(false); }
+    if (offered) { previousSelfieId.current = offered.id; setSelfie(offered); }
+    setChosenSelfie(face);
+    setSelfieJustSaved(justSaved);
     setLiveError(null);
     setPhase(current => current === 'photo' ? single ? 'pay' : 'style' : current);
-    // On a phone the pay button sits below the photo: bring it into view and hand it the focus.
     requestAnimationFrame(() => {
       payRef.current?.scrollIntoView({ block: 'center', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' });
       payRef.current?.focus({ preventScroll: true });
     });
   };
-  // The uploader's own "change"/"keep" buttons report here; the pay button waits while the chooser is open.
+  // The first photo, uploaded right here: this order's face, no question asked (and the default, unless another tab got there first).
+  const onSelfieSaved = (saved: SelfieView, _replaced: boolean, library: SelfieLibrary | null) =>
+    settleSelfie(saved, library?.items.find(item => item.id === library.defaultId) ?? saved, true);
+  // "이 얼굴로 만들까요?" answered: the offered face, another saved one, or a new one from the sheet.
+  // A new upload may have replaced the default; the library (or the photo itself) says what to offer next.
+  const onSelfieChosen = (face: SelfieView, how: SheetChoice, library: SelfieLibrary | null) => {
+    const offered = library?.items.find(item => item.id === library.defaultId) ?? (face.isDefault ? face : null);
+    settleSelfie(face, offered, how === 'upload');
+  };
+  // The sheet's chooser and the first upload report here; the pay button waits while they are open.
   const onSelfieEditing = (editing: boolean) => {
     selfieEditingRef.current = editing;
     setSelfieEditing(editing);
   };
-  const openSelfieEditor = () => {
-    onSelfieEditing(true);
+  // The chosen photo is gone (deleted or replaced in another tab): ask again with what is saved now.
+  const reloadSelfies = async (): Promise<SelfieView | null> => {
+    previousSelfieId.current = null;
+    setChosenSelfie(null);
+    setSelfieJustSaved(false);
+    setPhase('photo');
+    let next: SelfieView | null = null;
+    try {
+      const response = await fetch('/api/identity/selfie', { cache: 'no-store', credentials: 'same-origin' });
+      const data = (await response.json()) as Partial<SelfieLibrary> & { ok?: boolean };
+      if (response.ok && data.ok === true && Array.isArray(data.items)) next = data.items.find(item => item.id === data.defaultId) ?? data.items[0] ?? null;
+    } catch { /* no library: the uploader asks for a first photo */ }
+    previousSelfieId.current = next?.id ?? null;
+    setSelfie(next);
     setSelfieEpoch(epoch => epoch + 1);
     requestAnimationFrame(() => selfiePanelRef.current?.scrollIntoView({ block: 'start', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' }));
+    return next;
   };
 
   const submitLive = async () => {
-    if (!live || !selfie || !chosen) return;
+    if (!live || !chosenSelfie || !chosen) return;
     if (subscriptionAvailable && !ownFaceConsent) return;
     if (monthly && (edit.editText.trim() || edit.references.length) && !editorOpen) {
       setLiveError((editorAvailable ? editBudgetExhausted ? subscriptionCopy?.premiumEditLimitReached : subscriptionCopy?.premiumEditBudgetUnavailable : subscriptionCopy?.studioEditUnavailable) ?? live.labels.errors.generic ?? null);
@@ -402,14 +432,14 @@ export function TwingsStudio({
           setLiveError(subscriptionCopy?.studioReferenceLarge ?? live.labels.errors.generic ?? null);
           return;
         }
-        form = buildSubscriptionRenderForm({ requestId, template: live.template, locale: live.locale, selfieId: selfie.id, editText: edit.editText, references, referencesConsent: edit.referencesConsent });
+        form = buildSubscriptionRenderForm({ requestId, template: live.template, locale: live.locale, selfieId: chosenSelfie.id, editText: edit.editText, references, referencesConsent: edit.referencesConsent });
       } else {
         form = new FormData();
         form.set('template', live.template);
         form.set('aspect', aspect);
         if (chosenResolution) form.set('resolution', chosenResolution.id);
         form.set('locale', live.locale);
-        form.set('selfieId', selfie.id);
+        form.set('selfieId', chosenSelfie.id);
       }
       // Behind the face check: hold the job with its photo and go verify — the callback starts it.
       if (identityBlocked && !monthly) form.set('hold', '1');
@@ -432,12 +462,11 @@ export function TwingsStudio({
         go(live.identityHref);
         return;
       }
-      // The saved photo is gone or was replaced elsewhere: show the uploader right here, keep the order's choices.
+      // The chosen photo was deleted or replaced elsewhere: ask again right here, keeping the order's choices.
       if (json.code === 'selfie_required') {
-        previousSelfieId.current = null;
-        setSelfie(null);
-        setPhase('photo');
-        openSelfieEditor();
+        const remaining = await reloadSelfies();
+        setLiveError((remaining ? live.selfie?.libraryChanged : undefined) ?? live.labels.errors.selfie_required ?? live.labels.errors.generic ?? 'error');
+        return;
       }
       if (monthly && ['insufficient_usage', 'usage_exhausted'].includes(json.code ?? '')) setUsageExhausted(true);
       if (monthly && json.code === 'edit_request_limit') setEditRequestLimitReached(true);
@@ -580,21 +609,34 @@ export function TwingsStudio({
       </ol>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-        {/* The photo column: the saved selfie, or the uploader when there is none (or they pressed change). */}
+        {/* The photo column: "이 얼굴로 만들까요?" over the saved photos, or the uploader when there is none. */}
         <div ref={selfiePanelRef} data-selfie-panel data-selfie-present={selfie ? 'true' : 'false'} className="scroll-mt-6 border border-hairline p-5">
           <h3 className="text-sm font-semibold">{live.selfie?.panelTitle ?? labels.stepPhoto}</h3>
           {live.selfie ? (
             <div className="mt-4">
-              <SelfieUploader
-                key={selfieEpoch}
-                copy={live.selfie}
-                locale={live.locale}
-                initial={selfie}
-                startEditing={selfieEditing}
-                signinHref={live.signinHref}
-                onSaved={onSelfieSaved}
-                onEditingChange={onSelfieEditing}
-              />
+              {selfie ? (
+                <SelfieSheet
+                  key={`${selfieEpoch}:${selfie.id}`}
+                  copy={live.selfie}
+                  locale={live.locale}
+                  suggested={selfie}
+                  chosen={chosenSelfie}
+                  justSaved={selfieJustSaved}
+                  signinHref={live.signinHref}
+                  onChoose={onSelfieChosen}
+                  onEditingChange={onSelfieEditing}
+                />
+              ) : (
+                <SelfieUploader
+                  key={selfieEpoch}
+                  copy={live.selfie}
+                  locale={live.locale}
+                  initial={null}
+                  signinHref={live.signinHref}
+                  onSaved={onSelfieSaved}
+                  onEditingChange={onSelfieEditing}
+                />
+              )}
             </div>
           ) : (
             <p className="mt-4 text-sm leading-relaxed opacity-70">{labels.dropHint}</p>
@@ -729,7 +771,7 @@ export function TwingsStudio({
                   ref={payRef}
                   type="button"
                   data-pay-cta
-                  disabled={!selfie || selfieEditing || !chosen || submitting || (subscriptionAvailable && !ownFaceConsent) || (monthly && (edit.references.length > 0 && (!edit.referencesConsent || !edit.editText.trim())))}
+                  disabled={!chosenSelfie || selfieEditing || !chosen || submitting || (subscriptionAvailable && !ownFaceConsent) || (monthly && (edit.references.length > 0 && (!edit.referencesConsent || !edit.editText.trim())))}
                   aria-describedby={photo ? undefined : 'studio-cta-hint'}
                   onClick={() => void submitLive()}
                   className="w-full border border-current px-5 py-4 font-label text-[0.95rem] tracking-[0.1em] text-accent uppercase transition-opacity hover:opacity-70 disabled:opacity-25"
@@ -753,9 +795,9 @@ export function TwingsStudio({
                     {liveError}
                   </p>
                 )}
-                {!selfie && (
+                {!chosenSelfie && (
                   <p id="studio-cta-hint" data-studio-hint className="mt-2 font-mono text-[0.72rem] text-accent">
-                    {live.selfie?.needSelfie ?? labels.needPhoto}
+                    {selfie ? live.selfie?.needChoice ?? labels.needPhoto : live.selfie?.needSelfie ?? labels.needPhoto}
                   </p>
                 )}
                 {subscriptionAvailable && photo && !ownFaceConsent && subscriptionCopy && <p className="mt-2 text-xs text-accent">{subscriptionCopy.studioConsentHint}</p>}

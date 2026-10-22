@@ -3,7 +3,10 @@ import { getSqlRunner } from '@/lib/db/connect';
 import { getRenderStore } from '@/lib/renders/store';
 import { ownSelfie } from '@/lib/identity/selfie-service';
 
-/** The selfie's bytes, for its owner only. Replaced selfies still answer (an order's history shows them). */
+/**
+ * A saved photo's bytes, for its owner only. Replaced photos still answer (an order's history shows
+ * them); a deleted one is gone for its owner too, even though its file stays until account deletion.
+ */
 export const dynamic = 'force-dynamic';
 const headers = { 'Cache-Control': 'private, no-store', 'X-Robots-Tag': 'noindex, nofollow', 'X-Content-Type-Options': 'nosniff' };
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {

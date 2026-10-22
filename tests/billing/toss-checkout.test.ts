@@ -12,7 +12,7 @@ import { createFakeMailer } from '@/lib/notify/mailer-fake';
 import { createEmailRenderNotifier } from '@/lib/renders/notify';
 import { ADMIN_VIEWER, viewerOf } from '@/tests/helpers/admin';
 import { promptHarness, type PromptHarness } from '@/tests/helpers/prompts';
-import { saveSelfie, savedSelfiePhoto } from '@/lib/identity/selfie-service';
+import { deleteSelfie, saveSelfie, savedSelfiePhoto } from '@/lib/identity/selfie-service';
 import sharp from 'sharp';
 
 const selfiePng = async (color: string) => ({ bytes: new Uint8Array(await sharp({ create: { width: 320, height: 400, channels: 3, background: color } }).png().toBuffer()) });
@@ -102,7 +102,7 @@ describe('Toss one-time checkout on the real database', () => {
     const created = await createTossOrder(deps(), buyer, { ...input, selfieId: first.id, photo });
     if (!created.ok) throw new Error(created.code);
     // A replacement between order and approval changes nothing about the paid job.
-    const second = await saveSelfie(deps(), buyer.userId, { ...(await selfiePng('#aaaaaa')), mime: 'image/png', consent: true });
+    const second = await saveSelfie(deps(), buyer.userId, { ...(await selfiePng('#aaaaaa')), mime: 'image/png', consent: true, replaceId: first.id });
     if (!second.ok) throw new Error(second.code);
     expect(second.id).not.toBe(first.id);
     gateway.authorize(created.order.id, created.order.amountKrw);
@@ -119,8 +119,36 @@ describe('Toss one-time checkout on the real database', () => {
     expect(payment.identity_selfie_id).toBe(first.id);
     expect(render.identity_selfie_id).toBe(first.id);
     expect(await deps().store.read(render.input_key)).toEqual(photo.bytes);
-    // The replaced selfie no longer answers for a NEW order: the studio must show the uploader instead.
+    // The replaced selfie no longer answers for a NEW order: the studio must ask for a photo again.
     expect(await savedSelfiePhoto(h.sql, deps().store, buyer.userId!, first.id)).toBeNull();
+  });
+
+  it('lets any active photo of the owner pay, stamps last_used_at, and refuses a deleted one', async () => {
+    // docs/IDENTITY-SELFIE.md §4 (2.0): up to N photos; the order names one, the server copies its bytes.
+    const library = { ...deps(), limit: 3, now: new Date('2026-10-22T09:00:00Z') };
+    const a = await saveSelfie(library, buyer.userId, { ...(await selfiePng('#d6d6d6')), mime: 'image/png', consent: true });
+    const b = await saveSelfie(library, buyer.userId, { ...(await selfiePng('#a0a0a0')), mime: 'image/png', consent: true });
+    if (!a.ok || !b.ok) throw new Error('selfie not saved');
+    // b is not the default and still pays: "the owner's active photo", not "the one current photo".
+    const photo = await savedSelfiePhoto(h.sql, deps().store, buyer.userId!, b.id);
+    if (!photo) throw new Error('selfie missing');
+    const created = await createTossOrder(deps(), buyer, { ...input, selfieId: b.id, photo });
+    if (!created.ok) throw new Error(created.code);
+    const used = async (id: string) => (await h.sql.query<{ last_used_at: Date | null; is_default: boolean }>('select last_used_at,is_default from identity_selfies where id=$1', [id])).rows[0];
+    expect(await used(b.id)).toMatchObject({ is_default: false });
+    expect((await used(b.id))?.last_used_at).toBeInstanceOf(Date);
+    expect((await used(a.id))?.last_used_at).toBeNull();
+    expect((await h.sql.query('select identity_selfie_id from billing_payments where id=$1', [created.order.id])).rows[0]).toEqual({ identity_selfie_id: b.id });
+    // Deleting the default hands the default to b; a's id never pays again.
+    expect(await deleteSelfie(library, buyer.userId, a.id)).toEqual({ ok: true });
+    expect(await savedSelfiePhoto(h.sql, deps().store, buyer.userId!, a.id)).toBeNull();
+    expect(await used(b.id)).toMatchObject({ is_default: true });
+    // Deleting the photo an order was made with is soft: the order keeps its lineage and its own byte copy.
+    expect(await deleteSelfie(library, buyer.userId, b.id)).toEqual({ ok: true });
+    expect(await savedSelfiePhoto(h.sql, deps().store, buyer.userId!, b.id)).toBeNull();
+    const payment = (await h.sql.query<{ identity_selfie_id: string; input_key: string }>('select identity_selfie_id,input_key from billing_payments where id=$1', [created.order.id])).rows[0];
+    expect(payment?.identity_selfie_id).toBe(b.id);
+    expect(await deps().store.read(payment!.input_key)).toEqual(photo.bytes);
   });
 
   it('lets the PG review account save a selfie and reach the checkout under RENDER_PIPELINE_PUBLIC=review', async () => {
@@ -134,7 +162,8 @@ describe('Toss one-time checkout on the real database', () => {
     const created = await createTossOrder(deps(), reviewer, { ...input, selfieId: saved.id, photo });
     expect(created.ok).toBe(true);
     // An ordinary customer with the same selfie is still refused: review mode is not the public sale.
-    const customer = await saveSelfie(deps(), buyer.userId, { ...(await selfiePng('#bbbbbb')), mime: 'image/png', consent: true });
+    // (Same account in this fixture, so the new photo replaces the reviewer's under the default limit of 1.)
+    const customer = await saveSelfie(deps(), buyer.userId, { ...(await selfiePng('#bbbbbb')), mime: 'image/png', consent: true, replaceId: saved.id });
     if (!customer.ok) throw new Error(customer.code);
     expect(await createTossOrder(deps(), buyer, { ...input, selfieId: customer.id, photo })).toEqual({ ok: false, code: 'not_open' });
   });

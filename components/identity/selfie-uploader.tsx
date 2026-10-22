@@ -1,7 +1,8 @@
 'use client';
 import { useEffect, useId, useRef, useState } from 'react';
 import type { Dictionary } from '@/messages/en';
-import type { SelfieView } from '@/lib/identity/selfie-service';
+import type { SelfieLibrary, SelfieView } from '@/lib/identity/selfie-service';
+import { interpolate } from '@/lib/i18n/format';
 import { selfieSavedOn } from '@/lib/identity/selfie-format';
 import { shrinkPhoto } from '@/lib/images/client-photo';
 import { SelfiePhotoGuide } from './selfie-photo-guide';
@@ -24,10 +25,16 @@ export interface SelfieUploaderProps {
   copy: Dictionary['selfie'];
   locale: string;
   initial: SelfieView | null;
-  /** Fires after a save (new or unchanged) with the current selfie. */
-  onSaved?: (selfie: SelfieView, replaced: boolean) => void;
+  /** Fires after a save (new or unchanged) with the saved photo and, when the server sent it, the whole library. */
+  onSaved?: (selfie: SelfieView, replaced: boolean, library: SelfieLibrary | null) => void;
   /** Fires when the chooser opens or closes, so a parent can hold its own next step meanwhile. */
   onEditingChange?: (editing: boolean) => void;
+  /** Fires while a save is in flight, so a sheet around it does not close under it. */
+  onBusyChange?: (busy: boolean) => void;
+  /** Swap this saved photo for the new one (a full library, or "change" at one photo) instead of adding. */
+  replaceId?: string | null;
+  /** A file the person already picked in the surrounding sheet: open straight on its preview. */
+  initialFile?: File | null;
   /** Open on the chooser even though a selfie exists (the "change" deep link). */
   startEditing?: boolean;
   /** Where a `sign_in_required` answer sends the person. */
@@ -37,9 +44,9 @@ export interface SelfieUploaderProps {
   continueLabel?: string;
 }
 
-type SaveCode = 'bad_photo' | 'rate_limited' | 'unavailable' | 'error';
+type SaveCode = 'bad_photo' | 'rate_limited' | 'limit_reached' | 'not_found' | 'unavailable' | 'error';
 
-export function SelfieUploader({ copy, locale, initial, onSaved, onEditingChange, startEditing = false, signinHref, continueHref = null, continueLabel }: SelfieUploaderProps) {
+export function SelfieUploader({ copy, locale, initial, onSaved, onEditingChange, onBusyChange, replaceId = null, initialFile = null, startEditing = false, signinHref, continueHref = null, continueLabel }: SelfieUploaderProps) {
   const [selfie, setSelfie] = useState<SelfieView | null>(initial);
   const [editing, setEditing] = useState(initial === null || startEditing);
   const [file, setFile] = useState<File | null>(null);
@@ -48,6 +55,7 @@ export function SelfieUploader({ copy, locale, initial, onSaved, onEditingChange
   const [consentHint, setConsentHint] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<SaveCode | null>(null);
+  const [limit, setLimit] = useState(1);
   const [justSaved, setJustSaved] = useState(false);
   const [canCapture, setCanCapture] = useState(false);
   const [dragging, setDragging] = useState(false);
@@ -81,6 +89,9 @@ export function SelfieUploader({ copy, locale, initial, onSaved, onEditingChange
     setJustSaved(false);
     setPreviewUrl(URL.createObjectURL(next));
   };
+  // A file picked by the sheet around this uploader opens straight on its preview (once, on mount).
+  const initialFileRef = useRef(initialFile);
+  useEffect(() => { if (initialFileRef.current) choose(initialFileRef.current); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const clearFile = () => {
     setFile(null);
     setPreviewUrl(null);
@@ -97,17 +108,20 @@ export function SelfieUploader({ copy, locale, initial, onSaved, onEditingChange
     if (!file || busy) return;
     if (!consent) { setConsentHint(true); consentRef.current?.focus(); return; }
     setBusy(true);
+    onBusyChange?.(true);
     setError(null);
     try {
       const form = new FormData();
       const image = await shrinkPhoto(file, 2_800_000);
       form.set('photo', image, image.type === 'image/png' ? 'selfie.png' : 'selfie.jpg');
       form.set('consent', 'yes');
+      if (replaceId) form.set('replaceId', replaceId);
       const response = await fetch('/api/identity/selfie', { method: 'POST', body: form, credentials: 'same-origin' });
-      const data = (await response.json().catch(() => ({}))) as { ok?: boolean; code?: string; selfie?: SelfieView | null; replaced?: boolean };
+      const data = (await response.json().catch(() => ({}))) as { ok?: boolean; code?: string; limit?: number; selfie?: SelfieView | null; replaced?: boolean; library?: SelfieLibrary };
       if (data.code === 'sign_in_required' && signinHref) { window.location.assign(signinHref); return; }
       if (!response.ok || data.ok !== true || !data.selfie) {
-        setError(data.code === 'bad_photo' ? 'bad_photo' : data.code === 'rate_limited' ? 'rate_limited' : response.status === 503 ? 'unavailable' : 'error');
+        if (typeof data.limit === 'number') setLimit(data.limit);
+        setError(data.code === 'bad_photo' || data.code === 'rate_limited' || data.code === 'limit_reached' || data.code === 'not_found' ? data.code : response.status === 503 ? 'unavailable' : 'error');
         return;
       }
       clearFile();
@@ -115,15 +129,19 @@ export function SelfieUploader({ copy, locale, initial, onSaved, onEditingChange
       setEditing(false);
       setJustSaved(true);
       onEditingChange?.(false);
-      onSaved?.(data.selfie, data.replaced === true);
+      onSaved?.(data.selfie, data.replaced === true, data.library ?? null);
     } catch {
       setError('error');
     } finally {
       setBusy(false);
+      onBusyChange?.(false);
     }
   }
 
-  const errorCopy = error === 'bad_photo' ? copy.badPhoto : error === 'rate_limited' ? copy.rateLimited : error === 'unavailable' ? copy.unavailable : copy.error;
+  const errorCopy = {
+    bad_photo: copy.badPhoto, rate_limited: copy.rateLimited, limit_reached: interpolate(copy.limitReached, { limit: String(limit) }),
+    not_found: copy.libraryChanged, unavailable: copy.unavailable, error: copy.error,
+  }[error ?? 'error'];
   // One live region, mounted from the first render, so assistive tech hears each change of advice.
   const announcement = selfie && !editing
     ? (justSaved ? copy.savedToast : '')

@@ -1,4 +1,4 @@
--- CLOUD APPLICATION REQUIRED. A selfie is owner-only through authenticated server routes;
+-- CLOUD APPLICATION REQUIRED. A saved photo is owner-only through authenticated server routes;
 -- no browser role may read or write the rows or the private object directly.
 do $$
 declare t text;
@@ -10,4 +10,6 @@ begin
   end loop;
 end
 $$;
+-- No delete: removing a photo sets `deleted_at` (paid orders keep their lineage); the rows and the
+-- `{id}/selfie.png` objects go only with the account (docs/RUNBOOK-deletion.md).
 grant select,insert,update on public.identity_selfies to service_role;

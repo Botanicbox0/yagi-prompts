@@ -8,7 +8,7 @@ import { selfieSavedOn } from '@/lib/identity/selfie-format';
  * The uploader as MARKUP (docs/IDENTITY-SELFIE.md): what the person sees before any interaction,
  * in both its states, and the invariants the studio and the sweep lean on.
  */
-const selfie = { id: '10000000-0000-4000-8000-000000000001', width: 320, height: 400, createdAt: '2026-10-22T20:30:00.000Z', imageUrl: '/api/identity/selfie/10000000-0000-4000-8000-000000000001/image' };
+const selfie = { id: '10000000-0000-4000-8000-000000000001', width: 320, height: 400, createdAt: '2026-10-22T20:30:00.000Z', imageUrl: '/api/identity/selfie/10000000-0000-4000-8000-000000000001/image', label: null, isDefault: true, lastUsedAt: null };
 
 describe('selfie uploader — empty', () => {
   for (const locale of ['ko', 'en'] as const) {

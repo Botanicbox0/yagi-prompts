@@ -1395,6 +1395,16 @@ async function sweepRenders(): Promise<void> {
   expectEqual('selfie upload refuses anonymous', selfieCreate.status, 401);
   const selfieCross = await fetch(`${BASE}/api/identity/selfie`, {method:'POST',headers:{origin:'https://evil.example'}});
   expectEqual('selfie upload refuses cross-origin', selfieCross.status, 403);
+  // docs/IDENTITY-SELFIE.md §4 — "make default", the note and soft delete are owner-only, same-origin writes.
+  for (const method of ['PATCH', 'DELETE'] as const) {
+    const body = JSON.stringify(method === 'PATCH' ? {id:'00000000-0000-4000-8000-000000000000',isDefault:true} : {id:'00000000-0000-4000-8000-000000000000'});
+    const anonymous = await request('/api/identity/selfie', {method,headers:{origin:BASE,'content-type':'application/json'},body});
+    expectEqual(`selfie ${method} refuses anonymous`, anonymous.status, 401);
+    expectPresent(`selfie ${method} response is private`, anonymous.cacheControl ?? '', 'no-store');
+    const cross = await request('/api/identity/selfie', {method,headers:{origin:'https://evil.example','content-type':'application/json'},body});
+    expectEqual(`selfie ${method} refuses cross-origin`, cross.status, 403);
+    expectPresent(`selfie ${method} cross-origin response is private`, cross.cacheControl ?? '', 'no-store');
+  }
   const selfieOrder = await fetch(`${BASE}/api/billing/toss/orders`, {method:'POST',headers:{origin:BASE},body:new FormData()});
   expectEqual('toss order without a session refuses', selfieOrder.status, 401);
   expectEqual('the identity callback answers a bare hit with a redirect', callback.status, 303);
