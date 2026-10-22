@@ -1,8 +1,7 @@
 # PR 초안 — feat(identity): 내 사진 여러 장 보관과 "이 얼굴로 만들까요?" 시트
 
-- **base**: `claude/selfie-upload-ux-c3dff2` (PR #76, `cd34b77`) · **head**: `claude/selfie-library-70826b`
-- 이 머신에 `gh`가 PATH에 없어 PR을 열지 못했다. 브랜치는 push했다:
-  https://github.com/Botanicbox0/yagi-prompts/pull/new/claude/selfie-library-70826b (base를 `claude/selfie-upload-ux-c3dff2`로 바꿔서 열 것)
+- **갱신(2026-10-22 저녁)**: 이 브랜치는 PR #81로 열렸고 base가 `main`으로 바뀌었다(PR #76의 `cd34b77`을 포함하므로 #81 하나로 셀카 전체를 병합). `main`(PR #78 결제 하드닝, `5d23b43`)을 병합했고, 다시 결제하기(`retryTossOrder`)가 셀카 계보를 넘기며 교체·삭제된 사진이면 `selfie_required`로 거절하도록 보강했다. 아래 본문의 검증 수치는 병합 전 기준이며, 병합 후 결과는 병합 커밋 메시지에 있다.
+- **base**: `main` (원래 `claude/selfie-upload-ux-c3dff2`, PR #76 `cd34b77`) · **head**: `claude/selfie-library-70826b`
 - 기능 커밋 `git rev-parse`: `ffbce7c0e6d6b730a74e7420ee9cdb80f35f7673` (이 PR.md는 그 다음 문서 커밋)
 
 ## 무엇을 왜

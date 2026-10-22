@@ -1,9 +1,10 @@
-import { after, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { arkAssetsConfigFromEnv } from '@/lib/ark/assets';
 import { arkConfigFromEnv } from '@/lib/ark/client';
 import { getSqlRunner } from '@/lib/db/connect';
 import { openAiConfigFromEnv } from '@/lib/images/openai';
 import { formatPassReport, runLiveRenderPass } from '@/lib/renders/runtime';
+import type { RenderPassReport } from '@/lib/renders/service';
 import { getTossGateway } from '@/lib/billing/toss-gateway';
 import { reconcileBrandUsagePayments } from '@/lib/brands/usage/payment';
 
@@ -35,12 +36,16 @@ async function tick(request: Request): Promise<NextResponse> {
   const sql = await getSqlRunner();
   if (sql === null) return NextResponse.json({ ok: false, code: 'unavailable' }, { status: 503, headers: HEADERS });
 
-  const report = await runLiveRenderPass(sql, { limit: 5 });
+  // A failed pass must not take the secondary-usage recovery down with it (docs/PLATFORM-2.0.md §2.2-3).
+  let report: RenderPassReport | null = null;
+  try { report = await runLiveRenderPass(sql, { limit: 5 }); }
+  catch (error) { console.error(`[renders] ${JSON.stringify({ event: 'render_pass_failed', code: error instanceof Error ? error.name : 'unknown' })}`); }
   // Secondary-usage payments (docs/SECONDARY-USAGE.md): durable recovery of lost confirmations, unfinished
   // activation and admin-requested refunds, with no page load. Independent of any render or public flag.
   let brandUsage: { checked: number } | null = null;
   try { const gateway = getTossGateway(); if (gateway) brandUsage = await reconcileBrandUsagePayments({ sql, gateway }); }
   catch { console.warn('[brand-usage] reconcile pass failed'); }
+  if (report === null) return NextResponse.json({ ok: false, code: 'pass_failed', brandUsage }, { status: 503, headers: HEADERS });
   for (const line of report.errors) console.warn(`[renders] ${line}`);
   const { errors, ...counts } = report;
   // Presence only, never a value: which engines this deployment can actually reach.

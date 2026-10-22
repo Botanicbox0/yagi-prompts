@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation';
 import { getViewer } from '@/lib/auth/viewer';
 import { getTossContext } from '@/lib/billing/toss-runtime';
-import { loadOwnTossOrder } from '@/lib/billing/toss-service';
+import { loadOwnTossOrder, tossOrderView } from '@/lib/billing/toss-service';
 import { tossConfigFromEnv } from '@/lib/billing/toss-gateway';
 import { getDictionary } from '@/lib/i18n/dictionaries';
 import { purchaseOpenFor } from '@/lib/auth/purchase-gate';
@@ -26,10 +26,17 @@ export default async function TossOrderPage({
   if (!o) notFound();
   const c = getDictionary(o.locale).billing.toss;
   const live = new Date(o.expires_at) > new Date();
-  const canPay = purchaseOpenFor(viewer) && o.status === 'pending' && live;
+  const open = purchaseOpenFor(viewer);
+  // Only a pending order opens the provider window. A refusal at approval ends the order
+  // (docs/PLATFORM-2.0.md §2.2-1, -2), so an old price or a closed sale is never offered again.
+  const canPay = open && o.status === 'pending' && live;
+  const view = tossOrderView(o);
   // Audit P2-13: a pending order past its window with no payment key was never paid — it is
-  // expired, not "confirmation delayed". Say so and offer a fresh start on the template.
-  const expired = o.status === 'pending' && !live && o.payment_key === null;
+  // expired, not "confirmation delayed". Say so and offer a fresh start on the template. The
+  // reconcile records the same as `failed(expired)`.
+  const expired =
+    (o.status === 'pending' && !live && o.payment_key === null) ||
+    (o.status === 'failed' && view.reason === 'expired');
   const restartHref = `${templateHref(o.locale, o.template_slug)}#make`;
   const failed = (await searchParams).failed === '1';
   const config = canPay ? tossConfigFromEnv() : null;
@@ -90,6 +97,9 @@ export default async function TossOrderPage({
             id={o.id}
             initialStatus={o.status}
             renderId={o.render_id}
+            reason={view.reason}
+            retry={view.retry && open}
+            restartHref={restartHref}
             copy={c}
           />
         )}

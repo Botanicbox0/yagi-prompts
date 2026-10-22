@@ -16,7 +16,7 @@ import { releaseAfterUse, releaseAfterUseEnabled } from '@/lib/identity/rotation
 import { ASSET_WAIT_HOURS, assetLibraryMode, ensureIdentityAsset, ensureVirtualGroup, identityStatusFor, loadIdentityGroup, needsIdentity, needsLiveness, pollIdentityAsset, recordIdentityUse, type AssetLibraryMode, type IdentityDeps } from '@/lib/identity/service';
 import { purchaseOpenFor } from '@/lib/auth/purchase-gate';
 import { getTossGateway, type TossGateway } from '@/lib/billing/toss-gateway';
-import { reconcileTossPayments, renderPaymentStatus } from '@/lib/billing/toss-service';
+import { addTossReport, billingErrorCode, emptyTossReport, logBilling, reconcileTossPayments, renderPaymentStatus, type TossReconcileReport } from '@/lib/billing/toss-service';
 import { DEFAULT_LOCALE, isLocale, type Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/dictionaries';
 import { aspectsForMedium, isEngineId, isImageAspect, isImageEngine, isVideoAspect, isVideoEngine, resolveEngine } from '@/lib/images/engines';
@@ -407,6 +407,8 @@ export interface RenderPassReport {
   notifier: string;
   /** AIGC people whose face was deleted at the bank after their last render (release after use). */
   released: number;
+  /** What the Toss reconcile settled this pass (docs/PLATFORM-2.0.md §2.2-4). */
+  payments: TossReconcileReport;
   errors: string[];
 }
 
@@ -434,12 +436,25 @@ export async function runRenderPass(deps: RenderPassDeps, options: RenderPassOpt
     notifyPending: 0,
     notifier: deps.notifier === null ? 'unconfigured' : `${deps.notifier.channel}:${deps.notifier.kind}`,
     released: 0,
+    payments: emptyTossReport(),
     errors: [],
   };
 
-  const gateway = deps.tossGateway === undefined ? getTossGateway() : deps.tossGateway;
+  // Payments never stop renders (docs/PLATFORM-2.0.md §2.2-3): a broken key configuration or a
+  // provider outage is one structured log line — no key value — and the queue below still runs.
+  let gateway: TossGateway | null = null;
+  try {
+    gateway = deps.tossGateway === undefined ? getTossGateway() : deps.tossGateway;
+  } catch (error) {
+    logBilling('error', 'toss_gateway_unavailable', { code: billingErrorCode(error) });
+  }
   const settlePayments = async () => {
-    if (gateway) await reconcileTossPayments({ ...deps, gateway, createRender: createRenderJob });
+    if (!gateway) return;
+    try {
+      addTossReport(report.payments, await reconcileTossPayments({ ...deps, gateway, createRender: createRenderJob }));
+    } catch (error) {
+      logBilling('error', 'toss_reconcile_failed', { code: billingErrorCode(error) });
+    }
   };
   // Recover approved orders before claiming, and refunds before sending the failure notice.
   await settlePayments();

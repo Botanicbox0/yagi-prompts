@@ -1,6 +1,7 @@
-import { describe, expect, it } from 'vitest';
-import { renderPipelineMode, renderPipelinePublic } from '@/lib/flags';
+import { describe, expect, it, vi } from 'vitest';
+import { renderPipelineMode, renderPipelinePublic, tossKeyKind } from '@/lib/flags';
 import { purchaseOpenFor, storefrontOpen } from '@/lib/auth/purchase-gate';
+import { tossConfigFromEnv } from '@/lib/billing/toss-gateway';
 import type { Viewer } from '@/lib/auth/identity';
 
 /**
@@ -63,5 +64,80 @@ describe('review mode', () => {
     expect(storefrontOpen('review')).toBe(true);
     expect(storefrontOpen('on')).toBe(true);
     expect(storefrontOpen('off')).toBe(false);
+  });
+});
+
+/**
+ * docs/PLATFORM-2.0.md §2.2-3 — the switch and the gateway read keys by ONE rule. `live_` alone used
+ * to open the sale on an API key pair (`live_ck_`/`live_sk_`) that the payment-widget gateway then
+ * refused: an open storefront whose every payment failed.
+ */
+const API_KEYS = { TOSS_CLIENT_KEY: 'live_ck_example', TOSS_SECRET_KEY: 'live_sk_example' };
+const DOCS = { TOSS_CLIENT_KEY: 'test_gck_docs_example', TOSS_SECRET_KEY: 'test_gsk_docs_example' };
+const logger = () => ({ warn: vi.fn(), error: vi.fn() });
+const printed = (log: ReturnType<typeof logger>) =>
+  [...log.warn.mock.calls, ...log.error.mock.calls].flat().map(String).join('\n');
+
+describe('the key rule', () => {
+  it('is the gateway’s: a widget client key and a secret key of the same kind', () => {
+    const pairs: Array<Record<string, string>> = [
+      LIVE, TEST, API_KEYS, DOCS, {},
+      { TOSS_CLIENT_KEY: LIVE.TOSS_CLIENT_KEY },
+      { TOSS_CLIENT_KEY: LIVE.TOSS_CLIENT_KEY, TOSS_SECRET_KEY: TEST.TOSS_SECRET_KEY },
+      { TOSS_CLIENT_KEY: TEST.TOSS_CLIENT_KEY, TOSS_SECRET_KEY: LIVE.TOSS_SECRET_KEY },
+      { TOSS_CLIENT_KEY: ` ${LIVE.TOSS_CLIENT_KEY} `, TOSS_SECRET_KEY: ` ${LIVE.TOSS_SECRET_KEY}\n` },
+    ];
+    for (const pair of pairs) {
+      let gateway: string | null;
+      try {
+        gateway = tossConfigFromEnv({ NODE_ENV: 'test', ...pair })?.kind ?? null;
+      } catch {
+        gateway = null;
+      }
+      expect(tossKeyKind(pair), JSON.stringify(Object.keys(pair))).toBe(gateway);
+    }
+  });
+
+  it('keeps production `on` closed on an API key pair the widget gateway refuses', () => {
+    const log = logger();
+    expect(renderPipelineMode({ ...API_KEYS, VERCEL_ENV: 'production', RENDER_PIPELINE_PUBLIC: 'on' }, log)).toBe('off');
+    expect(log.error).toHaveBeenCalledTimes(1);
+    expect(printed(log)).not.toContain('example');
+    expect(renderPipelineMode({ ...LIVE, VERCEL_ENV: 'production', RENDER_PIPELINE_PUBLIC: 'on' }, logger())).toBe('on');
+  });
+});
+
+describe('review in production', () => {
+  it('opens only on a test key pair; live keys or none close it with one error line and no key value', () => {
+    for (const keys of [LIVE, {}, API_KEYS]) {
+      const log = logger();
+      expect(renderPipelineMode({ ...keys, VERCEL_ENV: 'production', RENDER_PIPELINE_PUBLIC: 'review' }, log)).toBe('off');
+      expect(log.error).toHaveBeenCalledTimes(1);
+      expect(printed(log)).not.toMatch(/example|live_gck|live_gsk/);
+    }
+    const quiet = logger();
+    expect(renderPipelineMode({ ...TEST, VERCEL_ENV: 'production', RENDER_PIPELINE_PUBLIC: 'review' }, quiet)).toBe('review');
+    expect(quiet.error).not.toHaveBeenCalled();
+    expect(quiet.warn).not.toHaveBeenCalled();
+  });
+
+  it('stays as it was outside production: preview and local runs open review for QA', () => {
+    expect(renderPipelineMode({ ...LIVE, VERCEL_ENV: 'preview', RENDER_PIPELINE_PUBLIC: 'review' }, logger())).toBe('review');
+    expect(renderPipelineMode({ RENDER_PIPELINE_PUBLIC: 'review' }, logger())).toBe('review');
+  });
+
+  it('warns, without closing, on a docs example key — it leaves no transaction at this shop', () => {
+    const log = logger();
+    expect(renderPipelineMode({ ...DOCS, VERCEL_ENV: 'production', RENDER_PIPELINE_PUBLIC: 'review' }, log)).toBe('review');
+    expect(log.warn).toHaveBeenCalledTimes(1);
+    expect(log.error).not.toHaveBeenCalled();
+    expect(printed(log)).not.toContain('docs_example');
+  });
+
+  it('says nothing while the switch is off', () => {
+    const log = logger();
+    expect(renderPipelineMode({ ...DOCS, VERCEL_ENV: 'production' }, log)).toBe('off');
+    expect(log.warn).not.toHaveBeenCalled();
+    expect(log.error).not.toHaveBeenCalled();
   });
 });

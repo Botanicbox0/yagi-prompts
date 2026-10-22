@@ -2535,6 +2535,25 @@ export const en = {
       back: 'Back to the template',
       test: 'Test payment. No real charge is made.',
       fake: 'Local payment simulation. This does not appear in Toss payment history.',
+      // docs/PLATFORM-2.0.md §2.2 — every order ends in a named state, and the page says which.
+      signIn: 'Sign in to finish confirming your payment.',
+      paidPreparing: 'Payment confirmed. We are getting your render ready. Check this page again shortly.',
+      refundManual: 'The automatic refund is delayed, so a person on our team is handling it. Your full refund still goes ahead. Questions: hello@yagiworkshop.xyz.',
+      fulfilManual: 'Your payment went through, but rendering could not start. A person on our team is looking into it, and if it cannot be made you are refunded in full. Questions: hello@yagiworkshop.xyz.',
+      partialBalance: 'Part of this payment was canceled. A person on our team is reviewing the order. Questions: hello@yagiworkshop.xyz.',
+      reasons: {
+        declined: 'The payment was not approved. You have not been charged.',
+        price_changed: 'The price changed, so the order has to be made again. You have not been charged.',
+        not_open: 'We are not taking payments right now. You have not been charged.',
+        canceled: 'The payment was canceled. Your card issuer may take additional time to show the cancellation.',
+        aborted: 'The payment stopped before it went through. You have not been charged.',
+        unknown_payment: 'We could not find a record of this payment. You have not been charged.',
+        provider_mismatch: 'The payment details did not match this order, so we did not go ahead. You have not been charged for this order.',
+      },
+      retry: 'Pay again',
+      retryHint: 'Starts a new order with the same photo and options.',
+      retryLimited: 'You cannot place more orders today. Please try again tomorrow.',
+      retryError: 'We could not start a new order. Start again from the template.',
     },
     unavailableBody:
       'Stripe is not configured on this deployment, so nothing can be charged. The pricing is real; the checkout button is not live here.',
@@ -2701,6 +2720,7 @@ export const en = {
     dashRendersWeek: 'Last 7 days {count}',
     dashRendersFailed: 'Failed {count}',
     dashRendersHeld: 'Awaiting verification {count}',
+    dashPaymentsManual: 'Payments to review {count}',
     dashInquiries: 'Brand enquiries',
     dashInquiriesNew: 'New {count}',
     inbox: {

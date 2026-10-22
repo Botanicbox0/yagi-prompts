@@ -204,3 +204,13 @@ export async function savedSelfiePhoto(sql: SqlRunner, store: RenderStore, userI
   await sql.query('update identity_selfies set last_used_at=$3 where id=$1 and user_id=$2', [row.id, userId, now]);
   return { bytes, mime: 'image/png' };
 }
+
+/**
+ * The same rule for a new order that already holds the bytes (다시 결제하기 copies the failed order's
+ * input): the photo must still be an ACTIVE photo of its owner. Stamps `last_used_at` in the same
+ * statement; false for a replaced, deleted or foreign id, so the caller answers `selfie_required`.
+ */
+export async function useSavedSelfie(sql: SqlRunner, userId: string, id: string, now: Date = new Date()): Promise<boolean> {
+  if (!uuid.test(id)) return false;
+  return (await sql.query(`update identity_selfies set last_used_at=$3 where id=$1 and user_id=$2 and ${ACTIVE} returning id`, [id, userId, now])).rows.length > 0;
+}
