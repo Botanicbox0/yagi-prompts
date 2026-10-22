@@ -152,7 +152,8 @@ export function NotifyChoicePanel({ copy, iosHelp, publicKey, mode }: { copy: Co
     }
   };
 
-  const button = 'inline-flex min-h-11 items-center px-5 font-label text-label uppercase';
+  // The site's own button: `px-6 py-3 font-label text-label uppercase`, filled accent or outlined.
+  const button = 'inline-flex min-h-11 items-center px-6 py-3 font-label text-label uppercase';
   return (
     <section
       data-notify-choice={state}

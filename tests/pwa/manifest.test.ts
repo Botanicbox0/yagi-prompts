@@ -7,19 +7,20 @@ import { getDictionary } from '@/lib/i18n/dictionaries';
 
 /**
  * docs/PLATFORM-2.0.md §5.2 — the manifest is what makes the home-screen app look like ours: the
- * brand black behind the splash and the status bar, maskable icons Android can crop into any
+ * site's own white behind the splash and the status bar, maskable icons Android can crop into any
  * shape, a stable id, and the two shortcuts a long-press offers.
  */
 
 const ROOT = process.cwd();
-const BRAND_BG = '#0A0A0A';
+/** The site's base surface (`--color-white` in app/globals.css): the app is the same product. */
+const SITE_BG = '#ffffff';
 
 describe('app/manifest.ts (docs/PLATFORM-2.0.md §5.2)', () => {
   const m = manifest();
 
-  it('paints the splash and the status bar brand black, not white', () => {
-    expect(m.theme_color).toBe(BRAND_BG);
-    expect(m.background_color).toBe(BRAND_BG);
+  it('paints the splash and the status bar in the site’s own background', () => {
+    expect(m.theme_color).toBe(SITE_BG);
+    expect(m.background_color).toBe(SITE_BG);
     expect(m.display).toBe('standalone');
   });
 

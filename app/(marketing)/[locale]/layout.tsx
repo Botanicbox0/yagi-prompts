@@ -5,7 +5,6 @@ import { fontVariables } from '@/app/fonts';
 import { ScrollProvider } from '@/components/motion/scroll-provider';
 import { Notice } from '@/components/marketing/notice';
 import { RegisterServiceWorker } from '@/components/pwa/register-sw';
-import { APP_SHELL_BG } from '@/components/pwa/shell';
 import { BottomTabs } from '@/components/app/bottom-tabs';
 import { noticeLabels } from '@/components/marketing/notice-codes';
 import { LOCALES, isLocale, DEFAULT_LOCALE, type Locale } from '@/lib/i18n/config';
@@ -28,14 +27,11 @@ export function generateStaticParams(): Array<{ locale: Locale }> {
 }
 
 /**
- * F6 — the browser chrome color. White in a browser tab: §5.1's base surface, and what the nav sits
- * on. Brand black in the installed app (docs/PLATFORM-2.0.md §5.2), where `viewport-fit: cover`
- * lets the page run under the status bar and app/globals.css pads it by the safe areas.
+ * F6 — the browser chrome color. White: §5.1's base surface, and what the nav sits on — in a tab and
+ * in the installed app alike. `viewport-fit: cover` (docs/PLATFORM-2.0.md §5.2) hands the installed
+ * app the whole screen; app/globals.css pads the page by the safe areas.
  */
-export const viewport: Viewport = {
-  themeColor: [{ media: '(display-mode: standalone)', color: APP_SHELL_BG }, { color: '#ffffff' }],
-  viewportFit: 'cover',
-};
+export const viewport: Viewport = { themeColor: '#ffffff', viewportFit: 'cover' };
 
 /** Anything that is not `en` or `ko` is a 404, not a dynamic render. */
 export const dynamicParams = false;
@@ -62,7 +58,7 @@ export async function generateMetadata({
     title: { default: dict.meta.siteName, template: `%s · ${dict.meta.siteName}` },
     description: dict.meta.tagline,
     // docs/TEMPLATES-IA.md §5 — installable (PWA first); the manifest is served from app/manifest.ts.
-    appleWebApp: { capable: true, title: dict.meta.siteName, statusBarStyle: 'black-translucent' },
+    appleWebApp: { capable: true, title: dict.meta.siteName, statusBarStyle: 'default' },
     alternates: {
       canonical: `/${locale}`,
       languages: {

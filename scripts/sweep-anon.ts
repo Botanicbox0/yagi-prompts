@@ -1039,9 +1039,9 @@ async function sweepTemplates(): Promise<void> {
   expectEqual('the manifest is served at the root', manifest.status, 200);
   expectPresent('…and names the app', manifest.body, '"TWINGS"');
   expectPresent('…in standalone display', manifest.body, '"standalone"');
-  // docs/PLATFORM-2.0.md §5.2 — the installed app's manifest.
-  expectPresent('…brand black splash and status bar', manifest.body, '"theme_color":"#0A0A0A"');
-  expectPresent('…brand black background', manifest.body, '"background_color":"#0A0A0A"');
+  // docs/PLATFORM-2.0.md §5.2 — the installed app's manifest, in the site's own white.
+  expectPresent('…splash and status bar in the site’s white', manifest.body, '"theme_color":"#ffffff"');
+  expectPresent('…white background', manifest.body, '"background_color":"#ffffff"');
   expectPresent('…starting on the formats in the reader’s locale', manifest.body, '"start_url":"/video?source=pwa"');
   expectPresent('…with the fixed app id', manifest.body, '"id":"/"');
   expectPresent('…maskable icons', manifest.body, '"purpose":"maskable"');
@@ -1060,8 +1060,9 @@ async function sweepTemplates(): Promise<void> {
   const landing = await get('/en');
   expectPresent('the landing declares the manifest', landing.body, 'rel="manifest"');
   expectPresent('…runs edge to edge (safe areas padded in CSS)', landing.body, 'viewport-fit=cover');
-  expectPresent('…under a black-translucent iOS status bar', landing.body, 'content="black-translucent"');
-  expectPresent('…brand black only in the installed app', landing.body, 'media="(display-mode: standalone)" content="#0A0A0A"');
+  // A white page under the iOS `default` bar (dark text on white); black-translucent would hide it.
+  expectPresent('…under the default iOS status bar', landing.body, 'name="apple-mobile-web-app-status-bar-style" content="default"');
+  expectPresent('…with the white browser chrome', landing.body, 'name="theme-color" content="#ffffff"');
   // 2026-10-07: no bottom-fixed UI in the mobile browser — the tabs exist only after the page
   // finds itself installed, never in server HTML.
   expectAbsent('…and never ships the bottom tabs in its HTML', landing.body, 'data-bottom-tabs');

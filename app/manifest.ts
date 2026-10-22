@@ -1,5 +1,4 @@
 import type { MetadataRoute } from 'next';
-import { APP_SHELL_BG } from '@/components/pwa/shell';
 import { getDictionary } from '@/lib/i18n/dictionaries';
 
 /**
@@ -8,8 +7,8 @@ import { getDictionary } from '@/lib/i18n/dictionaries';
  * docs/PLATFORM-2.0.md §5.2 (2026-10-22: the store's in-app-payment cut does not fit the 5% margin,
  * so the installed web app IS the app).
  *
- * - Brand black (`#0A0A0A`, YAGI v1.2 Dark Brand) behind the splash and the status bar; the old
- *   white theme belonged to the browser tab, not to the app.
+ * - The site's own white behind the splash and the status bar: the installed app is the same
+ *   product as the site (white surface, black ink, blue accent), not a second skin over it.
  * - `id` stays `/`, the value the first manifest shipped: a new id would make every installed copy
  *   a different app in the browser's eyes.
  * - `start_url` is the video formats, unprefixed: middleware 308s it to the reader's own
@@ -38,8 +37,8 @@ export default function manifest(): MetadataRoute.Manifest {
     scope: '/',
     display: 'standalone',
     orientation: 'portrait',
-    background_color: APP_SHELL_BG,
-    theme_color: APP_SHELL_BG,
+    background_color: '#ffffff',
+    theme_color: '#ffffff',
     lang: 'ko',
     categories: ['photo', 'video', 'entertainment'],
     icons: [

@@ -99,10 +99,16 @@ function TabIcon({ id }: { id: BottomTabId }) {
   }
 }
 
-/** The bar itself — dark brand tokens only, 56px rows, the current tab named for assistive tech. */
+/**
+ * The bar itself — the site's own tokens (white surface, hairline, ink; the current tab in the
+ * accent blue), 56px rows, the current tab named for assistive tech. The bar always sits on white,
+ * so the blue is `text-blue` (#0000EE) — app/globals.css keeps `text-accent` for section-inverting
+ * chrome, and a plain class takes no `aria-*` variant in Tailwind v4. The focus ring is the site's
+ * own, drawn inside the tab so the screen edge never clips it.
+ */
 export function BottomTabsBar({ items, label }: { items: BottomTabItem[]; label: string }) {
   return (
-    <nav data-bottom-tabs aria-label={label} className="fixed inset-x-0 bottom-0 z-50 border-t border-app-line bg-app-bg text-app-ink">
+    <nav data-bottom-tabs aria-label={label} className="fixed inset-x-0 bottom-0 z-50 border-t border-hairline bg-surface text-on-surface">
       <ul className="mx-auto grid max-w-md" style={{ gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))` }}>
         {items.map((item) => (
           <li key={item.id}>
@@ -110,9 +116,8 @@ export function BottomTabsBar({ items, label }: { items: BottomTabItem[]; label:
               href={item.href}
               data-tab={item.id}
               aria-current={item.current ? 'page' : undefined}
-              className="relative flex min-h-14 flex-col items-center justify-center gap-1 px-1 text-[0.6875rem] leading-none font-medium text-app-ink/60 aria-[current=page]:text-app-ink focus-visible:outline-2 focus-visible:outline-offset-[-3px] focus-visible:outline-app-gold"
+              className="flex min-h-14 flex-col items-center justify-center gap-1 px-1 text-[0.6875rem] leading-none font-medium text-on-surface aria-[current=page]:font-semibold aria-[current=page]:text-blue focus-visible:outline-offset-[-3px]"
             >
-              {item.current && <span aria-hidden="true" className="absolute inset-x-[32%] top-0 h-0.5 rounded-full bg-app-red" />}
               <TabIcon id={item.id} />
               <span>{item.label}</span>
             </a>

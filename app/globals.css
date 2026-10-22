@@ -28,14 +28,6 @@
   --color-brand-blue-light: #a5b4ff;
   --color-brand-pink: #ff8cc6;
   --color-brand-violet: #5c36ff;
-  /* The installed app's chrome (docs/PLATFORM-2.0.md §5.2): YAGI v1.2 Dark Brand. The bottom tabs
-     and the status-bar strip use these and nothing else; pages keep the §5.1 inks. */
-  --color-app-bg: #0a0a0a;
-  --color-app-surface: #161616;
-  --color-app-ink: #f0f0f0;
-  --color-app-line: #2a2a2a;
-  --color-app-red: #ed1e1e;
-  --color-app-gold: #fad204;
 
   /* Section-state driven surfaces (§4: IntersectionObserver flips data-theme). */
   --color-surface: var(--surface);
@@ -746,7 +738,8 @@ html:lang(ko) {
    components/pwa/display-mode.ts sets for iOS's legacy `navigator.standalone` and the QA flag. In a
    browser tab the standalone rules collapse to zero, and the 2026-10-07 decision (no bottom-fixed
    UI in the mobile browser) holds. Unlayered on purpose: they must beat the `top-0` utility on the
-   fixed nav and anything else in a layer.
+   fixed nav and anything else in a layer. Colours are the site's own (surface, hairline, ink,
+   accent): the installed app is the same product, not a second skin.
    =========================================================================== */
 :root {
   --safe-top: env(safe-area-inset-top, 0px);
@@ -772,18 +765,20 @@ html[data-standalone] {
 body {
   padding-left: var(--safe-left);
   padding-right: var(--safe-right);
-  /* The status bar is black-translucent in the installed app: everything in flow starts below it. */
+  /* Where the installed app runs under the status bar (Android edge to edge; iOS keeps its own white
+     `default` bar, so the inset is 0 there): everything in flow starts below it. */
   padding-top: calc(var(--is-standalone) * var(--safe-top));
 }
 
-/* …and the strip it floats over is painted brand black, so its white text always reads. */
+/* …and the strip it floats over is the page's own surface, so scrolling content never runs behind
+   the status bar's dark icons. */
 body::before {
   content: '';
   position: fixed;
   inset: 0 0 auto;
   z-index: 70;
   height: calc(var(--is-standalone) * var(--safe-top));
-  background: var(--color-app-bg);
+  background: var(--surface);
   pointer-events: none;
 }
 

@@ -106,7 +106,7 @@ export function InstallCard({ copy, allowed }: { copy: Dictionary['appShell']['i
       <p className="mt-2 text-[0.9375rem] opacity-70">{variant === 'ios' ? copy.iosBody : copy.androidBody}</p>
       <div className="mt-5 flex flex-wrap items-center gap-x-6 gap-y-3">
         {variant === 'android' && (
-          <button type="button" onClick={install} className="inline-flex min-h-11 items-center bg-accent px-5 font-label text-label text-white uppercase">
+          <button type="button" onClick={install} className="inline-flex min-h-11 items-center bg-accent px-6 py-3 font-label text-label text-white uppercase">
             {copy.androidAction}
           </button>
         )}

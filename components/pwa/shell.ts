@@ -1,11 +1,8 @@
 /**
- * The installed app's shared constants (docs/PLATFORM-2.0.md §5.2). No directive on purpose: the
- * server layouts and the manifest read these values, and a `'use client'` module would hand them a
- * client reference instead of the string.
+ * The installed app's shared constants (docs/PLATFORM-2.0.md §5.2). No directive on purpose: server
+ * code may read these values too, and a `'use client'` module would hand it a client reference
+ * instead of the string.
  */
-
-/** YAGI v1.2 Dark Brand bg — the manifest colours, the standalone theme-color, `--color-app-bg`. */
-export const APP_SHELL_BG = '#0A0A0A';
 
 /**
  * QA only: `localStorage['twings:display-mode'] = 'standalone'` makes a browser tab behave like the

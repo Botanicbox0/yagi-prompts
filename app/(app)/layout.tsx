@@ -6,7 +6,6 @@ import { fontVariables } from '@/app/fonts';
 import { getDictionary } from '@/lib/i18n/dictionaries';
 import { getRequestLocale } from '@/lib/i18n/server';
 import { RegisterServiceWorker } from '@/components/pwa/register-sw';
-import { APP_SHELL_BG } from '@/components/pwa/shell';
 import { requestSurface } from '@/lib/routing/request-surface';
 import { templatesHref } from '@/lib/prompts/links';
 import { AppErrorCopyProvider } from '@/components/app/error-copy';
@@ -20,14 +19,11 @@ import { BottomTabs } from '@/components/app/bottom-tabs';
 export const dynamic = 'force-dynamic';
 
 /**
- * F6 — same browser-chrome color as the marketing tree: separate root, same product. White in a
- * browser tab; brand black in the installed app (docs/PLATFORM-2.0.md §5.2), where `viewport-fit:
- * cover` lets the page run under the status bar and app/globals.css pads it by the safe areas.
+ * F6 — same browser-chrome color as the marketing tree: separate root, same product. `viewport-fit:
+ * cover` (docs/PLATFORM-2.0.md §5.2) hands the installed app the whole screen; app/globals.css pads
+ * the page by the safe areas.
  */
-export const viewport: Viewport = {
-  themeColor: [{ media: '(display-mode: standalone)', color: APP_SHELL_BG }, { color: '#ffffff' }],
-  viewportFit: 'cover',
-};
+export const viewport: Viewport = { themeColor: '#ffffff', viewportFit: 'cover' };
 
 /**
  * A separate root layout means nothing is inherited from the marketing group — including the
@@ -39,7 +35,7 @@ export async function generateMetadata(): Promise<Metadata> {
   return {
     title: { default: dict.meta.siteName, template: `%s · ${dict.meta.siteName}` },
     robots: { index: false, follow: false },
-    appleWebApp: { capable: true, title: dict.meta.siteName, statusBarStyle: 'black-translucent' },
+    appleWebApp: { capable: true, title: dict.meta.siteName, statusBarStyle: 'default' },
   };
 }
 

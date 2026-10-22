@@ -6,9 +6,9 @@
 
 | 항목 | 내용 | 파일 |
 | --- | --- | --- |
-| A. manifest | `theme_color`·`background_color` `#0A0A0A`, `id: '/'` 유지, `start_url: /video?source=pwa`, 192/512 `any`+`maskable` 아이콘, 바로가기 2개(영상 포맷 `/video?source=pwa` · 내 작품 `/renders`) | `app/manifest.ts`, `public/icons/*`, `scripts/pwa-icons.mjs` |
-| B. viewport·safe-area | 두 루트 레이아웃 `viewport-fit=cover`, 설치형에서만 테마색 `#0A0A0A`(브라우저 탭은 흰색 유지), iOS 상태바 `black-translucent`. 설치형에서 상단 인셋을 브랜드 검정 띠로 칠하고 본문·고정 헤더·모바일 메뉴를 그 아래로 내린다. 가로 노치 인셋은 항상 비켜 간다. | 두 `layout.tsx`, `app/globals.css` "App shell" |
-| C. 하단 탭 | 설치형(standalone) 전용. 서버 HTML과 브라우저 탭에서는 렌더하지 않는다(JS 판정 + CSS 이중 가드). 포맷·내 작품·계정 3개 — "내 사진"은 전용 라우트가 생기기 전까지 `/account`와 같은 곳이라 접힌다. 로그아웃 상태의 내 작품은 `/auth/choose?next=%2Frenders`. | `components/app/bottom-tabs.tsx` |
+| A. manifest | `theme_color`·`background_color`는 사이트 배경 흰색(`#ffffff`), `id: '/'` 유지, `start_url: /video?source=pwa`, 192/512 `any`+`maskable` 아이콘, 바로가기 2개(영상 포맷 `/video?source=pwa` · 내 작품 `/renders`) | `app/manifest.ts`, `public/icons/*`, `scripts/pwa-icons.mjs` |
+| B. viewport·safe-area | 두 루트 레이아웃 `viewport-fit=cover`, 테마색은 흰색 그대로, iOS 상태바 `default`(흰 바탕·검정 글자 — 흰 페이지에 `black-translucent`면 상태바 글자가 안 보인다). 설치형에서 페이지가 상태바 아래로 확장되는 경우(Android edge-to-edge) 상단 인셋을 페이지 배경으로 칠하고 본문·고정 헤더·모바일 메뉴를 그 아래로 내린다. 가로 노치 인셋은 항상 비켜 간다. | 두 `layout.tsx`, `app/globals.css` "App shell" |
+| C. 하단 탭 | 설치형(standalone) 전용. 서버 HTML과 브라우저 탭에서는 렌더하지 않는다(JS 판정 + CSS 이중 가드). 사이트 토큰만: 흰 surface + 상단 hairline, 글자·아이콘 ink, 현재 탭은 파란 강조색(`text-blue`)과 굵기. 포맷·내 작품·계정 3개 — "내 사진"은 전용 라우트가 생기기 전까지 `/account`와 같은 곳이라 접힌다. 로그아웃 상태의 내 작품은 `/auth/choose?next=%2Frenders`. | `components/app/bottom-tabs.tsx` |
 | D. 설치 안내 | Android는 `beforeinstallprompt`를 붙잡아 두었다가 카드의 버튼으로 띄운다. iOS Safari는 공유 시트 안내. `/account`(Android만 — iOS는 알림 선택이 직접 안내)와 결과 페이지 완료 상태에 1장. 설치형·인앱 브라우저·데스크톱·푸시 미설정 환경에서는 나오지 않는다. "다시 보지 않기"·Chrome 대화상자 거절 뒤에는 다시 나오지 않는다(localStorage, try/catch). | `components/pwa/install-card.tsx`, `install-prompt.ts`, `platform.ts` |
 | E. 웹 푸시 | `web-push` 3.6.7(정확 고정). 키 3개가 모두 있고 형식이 맞을 때만 켜진다. 작업 소유자의 활성 기기 전부에 발송, 404/410은 `revoked_at`, 1건 이상 성공이면 전달로 본다. 이메일은 그대로 항상 보낸다. 푸시가 도달한 작업은 `notify_channel = 'push'`. | `lib/notify/push.ts`, `lib/renders/notify.ts`, `app/api/notify/push/route.ts`, `public/sw.js` |
 | F. 알림 선택 | `data-notify-choice`. 대기 중 결과 페이지에 "완성되면 알려드릴까요?", 계정 알림 섹션에 같은 선택(설정). 권한은 버튼을 누른 뒤에만 요청, iPhone Safari 탭에서는 홈 화면 추가 안내로 연결, 켠 뒤 상태와 끄기. | `components/notify/notify-choice.tsx`, `notify-choice-panel.tsx` |
@@ -28,7 +28,7 @@
 
 ## QA: 설치하지 않고 설치형 모드 보기
 
-브라우저 콘솔에서 `localStorage.setItem('twings:display-mode', 'standalone')` 후 새로고침하면 그 브라우저에서만 설치형처럼 동작한다(하단 탭, 상단 띠). 끌 때는 `localStorage.removeItem('twings:display-mode')`. 제품 코드는 이 키를 쓰지 않는다. DevTools의 Rendering › Emulate CSS media feature `display-mode: standalone`도 같은 결과를 낸다(아래 캡처는 CDP `Emulation.setEmulatedMedia`로 이 방식을 썼다).
+브라우저 콘솔에서 `localStorage.setItem('twings:display-mode', 'standalone')` 후 새로고침하면 그 브라우저에서만 설치형처럼 동작한다(하단 탭, 안전 영역). 끌 때는 `localStorage.removeItem('twings:display-mode')`. 제품 코드는 이 키를 쓰지 않는다. 아래 캡처도 이 플래그로 찍었다 — CDP `Emulation.setEmulatedMedia`의 `display-mode` 특성은 Chrome이 받기만 하고 적용하지 않는다(실측).
 
 ## 운영 반영 순서 (대표·Director)
 
@@ -39,12 +39,14 @@
 
 ## 화면 증거 (390px, 320px)
 
-캡처는 헤드리스 Chrome(CDP)으로 남겼다. 기기 크기·사용자 에이전트(Android Chrome / iPhone Safari)·안전 영역(상단 47px, 하단 34px)은 CDP로 에뮬레이션했고, 설치형 모드는 위의 QA 플래그로 켰다 — Chrome은 CDP의 `display-mode` 미디어 에뮬레이션을 받기만 하고 적용하지 않는다(실측). 내장 브라우저(앱 브라우저 패널)에서도 390px로 같은 결과를 확인했다(탭 3개, 가로 넘침 0).
+캡처는 헤드리스 Chrome(CDP)으로 남겼다. 기기 크기·사용자 에이전트(Android Chrome / iPhone Safari)·안전 영역은 CDP로 에뮬레이션했고(iPhone: 상단 0 — iOS `default` 상태바는 웹뷰 밖에 그려진다 —, 하단 홈 인디케이터 34px), 설치형 모드는 위의 QA 플래그로 켰다. 내장 브라우저(앱 브라우저 패널)에서도 390px로 같은 결과를 확인했다(탭 3개, 가로 넘침 0).
+
+디자인 정정(2026-10-22): 처음 올린 캡처는 브리프의 YAGI v1.2 다크 지시(검정 상단 띠, 검정 탭바, 빨간 활성 표시)대로였다. 상위 세션이 지시를 바로잡아 사이트 자체 토큰(흰 바탕·검정 글자·파란 강조)으로 바꾸고 1·3·4·5·6·7·8·9를 다시 찍었다(2는 브라우저 모드라 바뀐 것이 없다).
 
 | # | 파일 | 확인한 것 |
 | --- | --- | --- |
-| 1 | [01-standalone-tabs-ko-video-390.png](01-standalone-tabs-ko-video-390.png) | 설치형 iPhone 모양: 상단 47px 브랜드 검정 띠, 고정 헤더가 그 아래(`top: 47px`), 하단 탭 3개(56px, 포맷 `aria-current`), 본문 하단 여백 90px(56+34), 가로 넘침 0, `viewport-fit=cover`·`black-translucent`·설치형 전용 테마색 |
-| 2 | [02-browser-mode-ko-video-390.png](02-browser-mode-ko-video-390.png) | 같은 페이지 브라우저 모드: 탭 없음, 상단 띠·여백 없음 |
+| 1 | [01-standalone-tabs-ko-video-390.png](01-standalone-tabs-ko-video-390.png) | 설치형 iPhone: 흰 탭바 + 상단 hairline, 탭 3개(56px, 현재 탭 "포맷"은 파란색·굵게, `aria-current`), 홈 인디케이터만큼 아래 여백, 본문 하단 여백, 가로 넘침 0, `viewport-fit=cover`·iOS 상태바 `default`·흰 테마색 |
+| 2 | [02-browser-mode-ko-video-390.png](02-browser-mode-ko-video-390.png) | 같은 페이지 브라우저 모드: 탭 없음, 안전 영역 여백 없음 |
 | 3 | [03-standalone-tabs-320.png](03-standalone-tabs-320.png) | 320px 설치형: 가로 넘침 0, 탭 107px×3 |
 | 4 | [04-standalone-tabs-en-renders-signin.png](04-standalone-tabs-en-renders-signin.png) | 로그아웃 상태 내 작품 탭 → `/auth/choose?next=%2Frenders&locale=en` |
 | 5 | [05-account-notify-choice-android-390.png](05-account-notify-choice-android-390.png) | Android 브라우저 `/account`: 완성 알림 "푸시 알림 켜기" + "이메일은 항상 보내드려요" + Android 설치 카드, 탭 없음. 캡처는 합성 `beforeinstallprompt`를 보냈고, 서비스워커가 등록된 실행에서는 Chrome이 낸 실제 이벤트로 같은 카드가 떴다 |
@@ -72,14 +74,14 @@ QA 중 발견해 고친 것:
 
 ## 검증 기록
 
-2026-10-22, 최종 코드(기준 main `866f168`)로 AGENTS.md §3 순서 그대로:
+2026-10-22, 최종 코드(기준 main `866f168`, 디자인 정정·픽스처 키 수정 포함)로 AGENTS.md §3 순서 그대로:
 
 - `npm run db:local`: 통과
 - `npx tsc --noEmit`: 통과
-- `npx vitest run`: **277 파일 / 2,637 테스트 통과** (기준선 269 / 2,559 + 신규 8 파일)
+- `npx vitest run`: **277 파일 / 2,638 테스트 통과** (기준선 269 / 2,559 + 신규 8 파일)
 - `npm run build:local` (`APP_URL=http://localhost:3003`): 통과
 - `npm run start:local` (`PORT=3003`, 푸시 키 없음): 통과
-- `npm run sweep:anon` (`SWEEP_BASE_URL=http://localhost:3003`): **SWEEP PASSED — 1006/1006** (신규 체크: manifest 필드·아이콘 5개·sw.js `push`/`notificationclick`·`viewport-fit=cover`·`black-translucent`·설치형 전용 테마색·서버 HTML에 하단 탭 없음·`/api/notify/push` 익명 POST/DELETE 401 + `no-store`). 푸시 키를 넣은 빌드에서도 같은 1006/1006을 확인했다.
+- `npm run sweep:anon` (`SWEEP_BASE_URL=http://localhost:3003`): **SWEEP PASSED — 1006/1006** (신규 체크: manifest 필드·아이콘 5개·sw.js `push`/`notificationclick`·`viewport-fit=cover`·iOS 상태바 `default`·흰 테마색·서버 HTML에 하단 탭 없음·`/api/notify/push` 익명 POST/DELETE 401 + `no-store`). 푸시 키를 넣은 빌드에서도 같은 1006/1006을 확인했다.
 - `npm run security:client`, `security:built`: 통과 (클라이언트 엔트리 82개, `web-push`는 서버 번들에만)
 
 포트 3000은 다른 세션이 써서 3003을 썼다. 정적 페이지의 canonical·hreflang은 빌드 시점 origin으로 구워지므로 `APP_URL`을 같은 포트로 맞춰 빌드해야 스윕의 절대 URL 체크(56개)가 통과한다.

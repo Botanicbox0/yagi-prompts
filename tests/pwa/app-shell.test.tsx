@@ -79,7 +79,7 @@ describe('bottom tabs (standalone only)', () => {
     expect(at('/ko/campaigns')).toEqual([]);
   });
 
-  it('renders 44px+ targets with aria-current and a visible focus ring, in the dark brand tokens', () => {
+  it('renders 44px+ targets with aria-current and a visible focus ring, in the site’s own tokens', () => {
     const items = bottomTabItems({ locale: 'ko', pathname: '/renders', signedIn: true, labels });
     const html = renderToStaticMarkup(<BottomTabsBar items={items} label={labels.nav} />);
     expect(html).toContain('data-bottom-tabs');
@@ -88,10 +88,21 @@ describe('bottom tabs (standalone only)', () => {
     expect(html.match(/aria-current="page"/g)).toHaveLength(1);
     expect(html).toMatch(/<a [^>]*href="\/renders"[^>]*aria-current="page"/);
     expect(html).toContain('min-h-14');
-    expect(html).toContain('focus-visible:outline-app-gold');
-    expect(html).toContain('bg-app-bg');
-    expect(html).not.toMatch(/bg-white|text-black|bg-blue/);
+    // White surface, hairline on top, ink text; the current tab in the accent blue. No extra marker.
+    expect(html).toContain('bg-surface');
+    expect(html).toContain('border-hairline');
+    expect(html).toContain('text-on-surface');
+    // Always on white, so the accent is the `--color-blue` utility (a theme token takes the variant).
+    expect(html).toContain('aria-[current=page]:text-blue');
+    expect(html).toContain('focus-visible:outline-offset-[-3px]');
+    expect(html).not.toMatch(/app-(bg|ink|line|red|gold|surface)|#0a0a0a|#ed1e1e/i);
     for (const label of [labels.formats, labels.renders, labels.account]) expect(html).toContain(label);
+  });
+
+  it('adds no colour of its own to the design tokens', () => {
+    const css = readFileSync(join(process.cwd(), 'app', 'globals.css'), 'utf8');
+    expect(css).not.toContain('--color-app-');
+    expect(css).not.toMatch(/#0a0a0a|#ed1e1e|#fad204/i);
   });
 
   it('is hidden by CSS outside standalone and wherever a page declares data-hide-tabs', () => {
