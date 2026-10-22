@@ -22,6 +22,8 @@ import { loadStudioInbox } from "@/lib/brands/workspace/inbox";
 import { adminNextActions, campaignWorkCounts } from "@/lib/admin/workflow";
 import { loadRiskQueueSummary } from "@/lib/campaigns/risk/admin";
 import { countManualTossPayments } from "@/lib/billing/toss-service";
+import { platformReady } from "@/lib/creator-platform/service";
+import { creatorApplicationCount } from "@/lib/creator-platform/onboarding";
 
 /**
  * `/admin` — the dashboard (founder, 2026-09-11). The old front door was the playbook list, a
@@ -115,6 +117,7 @@ export default async function AdminHomePage() {
     inbox,
     risk,
     paymentsManual,
+    creatorApplications,
   ] =
     sql === null
       ? ([
@@ -126,6 +129,7 @@ export default async function AdminHomePage() {
           0,
           [],
           null,
+          0,
           0,
         ] as const)
       : await Promise.all([
@@ -139,6 +143,10 @@ export default async function AdminHomePage() {
           loadRiskQueueSummary(sql, viewer, now),
           // docs/PLATFORM-2.0.md §2.2-4: refunds and renders automation handed to an operator.
           countManualTossPayments(sql),
+          // 0 when 0046/0051 are absent; the queue then stays out of the list instead of failing the page.
+          platformReady(sql)
+            .then((ready) => (ready ? creatorApplicationCount(sql) : 0))
+            .catch(() => 0),
         ]);
   const counts =
     sql === null
@@ -164,6 +172,7 @@ export default async function AdminHomePage() {
     feedback,
     templates: pending,
     risk: risk?.ready ? risk.open : 0,
+    creatorApplications,
   });
 
   return (

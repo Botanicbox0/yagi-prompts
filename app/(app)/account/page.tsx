@@ -23,6 +23,7 @@ import { RenderList } from '@/components/renders/render-list';
 import { CreatorProfileCard } from '@/components/app/creator-profile';
 import { loadCreatorProfile, type CreatorProfile } from '@/lib/creators/profile';
 import { saveNotificationPreferences } from './actions';
+import { CREATOR_WORKSPACE_PATH, creatorProgramOpen } from '@/lib/creator-platform/links';
 import { SubscriptionStatus } from '@/components/billing/subscription-status';
 import { getSubscriptionSummary } from '@/lib/creator-subscriptions/service';
 import type { SubscriptionSummary } from '@/lib/creator-subscriptions/types';
@@ -251,7 +252,8 @@ export default async function AccountPage({
             </a>
           </div>
         </div>
-        {process.env.TWINGS_COMMUNITY==='on'||process.env.TWINGS_FORMAT_CREATORS==='on'||process.env.TWINGS_IMAGE_REWARDS==='on'?<a href="/community" className="mt-8 inline-flex min-h-12 items-center rounded-full border border-current px-6 py-3 text-sm">{dict.community.title}</a>:null}
+        {process.env.TWINGS_COMMUNITY==='on'||process.env.TWINGS_FORMAT_CREATORS==='on'||process.env.TWINGS_IMAGE_REWARDS==='on'?<a href="/community" className="mt-8 mr-3 inline-flex min-h-12 items-center rounded-full border border-current px-6 py-3 text-sm">{dict.community.title}</a>:null}
+        {viewer?.userId && creatorProgramOpen() ? <a href={CREATOR_WORKSPACE_PATH} data-creator-workspace-link className="mt-8 mr-3 inline-flex min-h-12 items-center rounded-full border border-current px-6 py-3 text-sm">{dict.creatorProgram.workspaceTitle}</a> : null}
       </main>
     </div>
   );

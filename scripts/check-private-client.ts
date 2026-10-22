@@ -3,7 +3,7 @@ import { resolve,dirname,relative,extname } from 'node:path';
 import ts from 'typescript';
 
 const root=process.cwd();
-const privateModules=new Set(['lib/renders/prompt.ts','lib/premium-editing/provider.ts','lib/creator-platform/admin.ts','lib/creator-platform/rewards.ts','lib/creator-platform/service.ts']);
+const privateModules=new Set(['lib/renders/prompt.ts','lib/premium-editing/provider.ts','lib/creator-platform/admin.ts','lib/creator-platform/rewards.ts','lib/creator-platform/service.ts','lib/creator-platform/onboarding.ts']);
 async function files(dir:string):Promise<string[]> {
  try {const entries=await readdir(dir,{withFileTypes:true});return (await Promise.all(entries.map(e=>e.isDirectory()?files(resolve(dir,e.name)):Promise.resolve([resolve(dir,e.name)])))).flat();}catch{return [];}
 }

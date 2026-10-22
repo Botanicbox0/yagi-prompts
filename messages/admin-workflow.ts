@@ -76,6 +76,11 @@ export const adminWorkflowEn = {
       hint: "Review reported results and decide how to respond.",
       action: "Review feedback",
     },
+    creatorApplications: {
+      title: "Review format creator applications",
+      hint: "Check the portfolio and example posts, then approve or decline. Approval does not publish any template.",
+      action: "Review applications",
+    },
     templates: {
       title: "Review submitted templates",
       hint: "Check content and publication requirements.",
@@ -228,6 +233,11 @@ export const adminWorkflowKo: typeof adminWorkflowEn = {
       title: "생성 결과 문의를 확인하세요",
       hint: "접수된 결과물을 확인하고 대응 방법을 정합니다.",
       action: "결과 문의 확인하기",
+    },
+    creatorApplications: {
+      title: "포맷 작가 지원서를 검토하세요",
+      hint: "포트폴리오와 예시 게시물을 확인한 뒤 승인 또는 반려합니다. 승인해도 템플릿이 공개되지는 않아요.",
+      action: "지원서 검토하기",
     },
     templates: {
       title: "제출된 템플릿을 검토하세요",
