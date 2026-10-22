@@ -52,6 +52,16 @@ const CAMPAIGN_APPLY_PATTERN = /^\/campaigns\/[^/]+\/(?:apply|make|join)\/?$/;
 const CAMPAIGN_PARTICIPATION_PATTERN = /^\/campaigns\/participations\/[^/]+\/?$/;
 const MY_CAMPAIGNS_PATTERN = /^\/campaigns\/mine\/?$/;
 
+/**
+ * docs/CREATOR-PLATFORM.md — the format creator program: `/{locale}/creators` is public, and its two
+ * login-gated leaves (application, workspace) are unprefixed app surface. Anchored like the campaigns.
+ */
+const CREATOR_PROGRAM_PATTERN = /^\/creators\/(?:apply|workspace)\/?$/;
+
+export function isCreatorProgramAppPath(pathname: string): boolean {
+  return CREATOR_PROGRAM_PATTERN.test(pathname);
+}
+
 export function isCampaignAppPath(pathname: string): boolean {
   return CAMPAIGN_APPLY_PATTERN.test(pathname) || CAMPAIGN_PARTICIPATION_PATTERN.test(pathname) || MY_CAMPAIGNS_PATTERN.test(pathname);
 }
@@ -59,7 +69,8 @@ export function isCampaignAppPath(pathname: string): boolean {
 export function isAppPath(pathname: string): boolean {
   return (
     APP_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`)) ||
-    isCampaignAppPath(pathname)
+    isCampaignAppPath(pathname) ||
+    isCreatorProgramAppPath(pathname)
   );
 }
 

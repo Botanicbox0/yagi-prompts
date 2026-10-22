@@ -2,6 +2,9 @@ import { prerender } from "react-dom/static";
 import { describe, expect, it, vi } from "vitest";
 import { getDictionary } from "@/lib/i18n/dictionaries";
 
+// The admin home reads the creator-application count through a server-only module.
+vi.mock("server-only", () => ({}));
+
 vi.mock("@/lib/i18n/server", () => ({
   getLocaleFromHeaders: async () => "ko",
 }));

@@ -1423,6 +1423,32 @@ async function sweepRenders(): Promise<void> {
   expectPresent('community response is private', communityState.cacheControl ?? '', 'no-store');
   const communityCreate = await fetch(`${BASE}/api/community`, {method:'POST',headers:{origin:BASE,'content-type':'application/json'},body:'{}'});
   expectEqual('community mutation refuses anonymous', communityCreate.status, 401);
+  // docs/CREATOR-PLATFORM.md — the format creator program. The two leaves are login-gated app
+  // surface; the public page exists only while BOTH gates were on at build (same shell as start:local).
+  for (const leaf of ['/creators/apply', '/creators/workspace']) {
+    const gated = await request(leaf, { headers: { 'user-agent': CHROME_UA } });
+    expectOneOf(`${leaf} redirects anonymous`, gated.status, [302, 303, 307]);
+    expectPresent(`${leaf} → sign-in`, gated.location ?? '', 'signin=1');
+    expectPresent(`${leaf} refusal is private`, gated.cacheControl ?? '', 'no-store');
+    expectPresent(`${leaf} refusal is noindex`, gated.robotsTag ?? '', 'noindex');
+  }
+  const programBare = await request('/creators', { headers: { 'accept-language': 'ko' } });
+  expectEqual('/creators is a public page: 308 to its locale', programBare.status, 308);
+  expectPresent('…to /ko/creators', programBare.location ?? '', '/ko/creators');
+  const programOpen = process.env.TWINGS_FORMAT_CREATORS === 'on' && process.env.TWINGS_CREATOR_APPLICATIONS === 'on';
+  console.log(`  (format creator program gate in this shell: ${programOpen ? 'open' : 'closed'})`);
+  for (const locale of ['ko', 'en']) {
+    const program = await request(`/${locale}/creators`);
+    if (!programOpen) { expectEqual(`/${locale}/creators is absent while intake is closed`, program.status, 404); continue; }
+    expectEqual(`/${locale}/creators renders`, program.status, 200);
+    expectPresent(`/${locale}/creators program marker`, program.body, 'data-creator-program');
+    expectPresent(`/${locale}/creators steps marker`, program.body, 'data-creator-steps');
+    expectAbsent(`/${locale}/creators carries no recipe canary`, program.body, 'PRIVATE_RECIPE');
+    for (const sentinel of PROMPT_SENTINELS.filter((s) => !s.publicToAnon)) expectAbsent(`/${locale}/creators omits ${sentinel.slug} prompt`, program.body, sentinel.token);
+  }
+  const revision = await fetch(`${BASE}/api/community`, {method:'POST',headers:{origin:BASE,'content-type':'application/json'},body:JSON.stringify({action:'format',requestId:ID,revisionOf:ID})});
+  expectEqual('format revision refuses anonymous', revision.status, 401);
+
   const evidence = await request(`/api/admin/community/${ID}/media`);
   expectEqual('reward evidence conceals existence from anonymous', evidence.status, 404);
   expectPresent('reward evidence response is private', evidence.cacheControl ?? '', 'no-store');

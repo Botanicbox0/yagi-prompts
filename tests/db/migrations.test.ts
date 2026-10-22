@@ -121,6 +121,7 @@ describe('migrations apply on a fresh database (PLAN §6)', () => {
       'notification_jobs',
       'platform_audit',
       'platform_claims',
+      'platform_creator_applications',
       'platform_creators',
       'platform_credit_ledger',
       'platform_formats',

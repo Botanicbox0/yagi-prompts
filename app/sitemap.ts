@@ -3,6 +3,7 @@ import { getPublicCatalog } from '@/lib/content/public-catalog';
 import { getPromptCatalog } from '@/lib/prompts/public-catalog';
 import { buildSitemap } from '@/lib/seo/sitemap';
 import { siteUrl } from '@/lib/seo/site-url';
+import { creatorProgramOpen } from '@/lib/creator-platform/links';
 
 /**
  * `/sitemap.xml` — PLAN §8 M5.
@@ -30,5 +31,6 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     cards: catalog.cards,
     templates: [...templates.video, ...templates.image],
     pageModifiedAt: { '/brands': '2026-10-08T00:00:00+09:00' },
+    includeCreatorProgram: creatorProgramOpen(),
   });
 }

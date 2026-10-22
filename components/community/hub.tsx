@@ -7,7 +7,8 @@ const field='mt-2 min-h-12 w-full rounded-xl border border-hairline bg-transpare
 const button='min-h-12 rounded-full bg-on-surface px-6 py-3 text-sm text-surface disabled:opacity-40';
 const panel='space-y-5 rounded-2xl border border-hairline p-5 sm:p-7';
 type Access={community:boolean;creators:boolean;rewards:boolean};
-export function CommunityHub({initial,copy,access,portraitId,initialRender}:{initial:PlatformHome;copy:Dictionary['community'];access:Access;portraitId:string|null;initialRender:string}) {
+/** `creatorDoor` is resolved on the server: the program page for others, the workspace for approved suppliers. */
+export function CommunityHub({initial,copy,access,portraitId,initialRender,creatorDoor}:{initial:PlatformHome;copy:Dictionary['community'];access:Access;portraitId:string|null;initialRender:string;creatorDoor?:{href:string;label:string}|null}) {
  const [home,setHome]=useState(initial),[busy,setBusy]=useState(false),[notice,setNotice]=useState(''),[error,setError]=useState(false);
  const requests=useRef(new Map<string,string>());
  const status=(s:string)=>copy.status[s as keyof typeof copy.status]??s;
@@ -15,7 +16,7 @@ export function CommunityHub({initial,copy,access,portraitId,initialRender}:{ini
   event.preventDefault();if(busy)return;const form=event.currentTarget,data=new FormData(form);
   const key=`${action}:${String(extra.threadId??'')}`;let requestId=requests.current.get(key);if(!requestId){requestId=crypto.randomUUID();requests.current.set(key,requestId);}
   const values:Record<string,unknown>={action,...Object.fromEntries(data),...extra};
-  if(['request','reply','format','image'].includes(action))values.requestId=requestId;
+  if(['request','reply','image'].includes(action))values.requestId=requestId;
   for(const name of ['rights','disclosure','ownership'])if(name in values)values[name]=values[name]==='on';
   if('stars' in values)values.stars=Number(values.stars);
   setBusy(true);setNotice('');
@@ -46,18 +47,7 @@ export function CommunityHub({initial,copy,access,portraitId,initialRender}:{ini
      {t.status==='open'?<form className="space-y-3" onSubmit={e=>void send(e,'reply',{threadId:t.id})}><label className="block text-sm">{copy.message}<textarea name="message" required maxLength={2000} className={field}/></label><button disabled={busy} className={button}>{copy.reply}</button></form>:null}
     </section>):<p className="text-sm opacity-65">{copy.empty}</p>}
    </>:null}
-   {access.creators&&home.creator?<section className={panel}><h2 className="text-xl font-semibold">{copy.formatTitle}</h2><p className="text-sm leading-relaxed opacity-70">{copy.formatHint}</p>
-    <form className="space-y-4" onSubmit={e=>void send(e,'format')}>
-     <label className="block text-sm">{copy.formatName}<input name="title" required minLength={3} maxLength={120} className={field}/></label>
-     <label className="block text-sm">{copy.medium}<select name="medium" className={field}><option value="video">{copy.video}</option><option value="image">{copy.image}</option></select></label>
-     <label className="block text-sm">{copy.example}<input name="example" type="url" required maxLength={2048} className={field}/></label>
-     <label className="block text-sm">{copy.recipe}<textarea name="recipe" required minLength={20} maxLength={20000} rows={6} className={field} autoComplete="off"/></label>
-     <label className="flex gap-3 text-sm"><input type="checkbox" name="rights" required/>{copy.rights}</label><button disabled={busy} className={button}>{copy.submitFormat}</button>
-    </form>
-    {home.formats.map(f=><p key={f.id} className="border-t border-hairline pt-4 text-sm">{f.title} · {status(f.status)}</p>)}
-    {!home.formats.length?<p className="text-sm opacity-65">{copy.formatEmpty}</p>:null}
-    <h3 className="text-sm font-semibold">{copy.royalty}</h3><p className="text-xs opacity-65">{copy.royaltyHint}</p>{home.royalties.map(r=><p key={r.currency}>{Number(r.amount).toLocaleString()} {r.currency}</p>)}
-   </section>:null}
+   {creatorDoor?<p data-creator-door className="border-t border-hairline pt-5 text-sm"><a href={creatorDoor.href} className="underline underline-offset-4">{creatorDoor.label} →</a></p>:null}
   </div>
   <div className="space-y-8">
    {access.community?<section className={panel}><h2 className="text-xl font-semibold">{copy.ratingTitle}</h2><p className="text-sm leading-relaxed opacity-70">{copy.ratingHint}</p>
