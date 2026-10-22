@@ -21,6 +21,7 @@ import { requireAdmin } from "@/lib/auth/viewer";
 import { loadStudioInbox } from "@/lib/brands/workspace/inbox";
 import { adminNextActions, campaignWorkCounts } from "@/lib/admin/workflow";
 import { loadRiskQueueSummary } from "@/lib/campaigns/risk/admin";
+import { countManualTossPayments } from "@/lib/billing/toss-service";
 import { platformReady } from "@/lib/creator-platform/service";
 import { creatorApplicationCount } from "@/lib/creator-platform/onboarding";
 
@@ -115,6 +116,7 @@ export default async function AdminHomePage() {
     feedback,
     inbox,
     risk,
+    paymentsManual,
     creatorApplications,
   ] =
     sql === null
@@ -128,6 +130,7 @@ export default async function AdminHomePage() {
           [],
           null,
           0,
+          0,
         ] as const)
       : await Promise.all([
           loadAllCampaigns(sql),
@@ -138,6 +141,8 @@ export default async function AdminHomePage() {
           countRenderFeedback(sql, "new"),
           loadStudioInbox({ sql }, viewer),
           loadRiskQueueSummary(sql, viewer, now),
+          // docs/PLATFORM-2.0.md §2.2-4: refunds and renders automation handed to an operator.
+          countManualTossPayments(sql),
           // 0 when 0046/0051 are absent; the queue then stays out of the list instead of failing the page.
           platformReady(sql)
             .then((ready) => (ready ? creatorApplicationCount(sql) : 0))
@@ -359,6 +364,12 @@ export default async function AdminHomePage() {
                 href={null}
                 label={a.dashRendersHeld}
                 count={renders.held}
+              />
+              <Stat
+                href={null}
+                label={a.dashPaymentsManual}
+                count={paymentsManual}
+                hot
               />
               <Stat
                 href={`${ADMIN_INQUIRIES_PATH}?kind=feedback&status=new`}

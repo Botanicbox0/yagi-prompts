@@ -98,6 +98,39 @@ describe("Toss provider boundary", () => {
       message: "Payment provider request could not be completed",
     });
   });
+  it("names a refusal by the provider's code alone, and keeps network and 5xx retryable", async () => {
+    const answer = { body: "", status: 200 };
+    const g = createTossGateway(
+      {
+        kind: "test",
+        clientKey: "test_gck_fixture",
+        secretKey: "test_gsk_fixture",
+      },
+      async () => new Response(answer.body, { status: answer.status }),
+    );
+    const confirm = () =>
+      g.confirm({
+        paymentKey: "fixture_payment",
+        orderId: "fixture_order",
+        amount: 2900,
+        idempotencyKey: "confirm-fixture",
+      });
+    answer.body = JSON.stringify({ code: "REJECT_CARD_COMPANY", message: "카드사 사유 원문" });
+    answer.status = 403;
+    const refused = await confirm().catch((error: unknown) => error);
+    expect(refused).toBeInstanceOf(TossError);
+    expect(refused).toMatchObject({ code: "HTTP_403", retryable: false, providerCode: "REJECT_CARD_COMPANY" });
+    expect(JSON.stringify(refused) + String((refused as Error).message)).not.toContain("카드사 사유");
+    // A code that is not the provider's enum shape is dropped, not echoed.
+    answer.body = JSON.stringify({ code: "drop table; <script>", message: "x" });
+    answer.status = 400;
+    expect(await confirm().catch((error: unknown) => error)).toMatchObject({ code: "HTTP_400", retryable: false, providerCode: undefined });
+    answer.body = "not json";
+    expect(await confirm().catch((error: unknown) => error)).toMatchObject({ code: "HTTP_400", providerCode: undefined });
+    answer.body = JSON.stringify({ code: "FAILED_INTERNAL_SYSTEM_PROCESSING" });
+    answer.status = 500;
+    expect(await confirm().catch((error: unknown) => error)).toMatchObject({ code: "HTTP_500", retryable: true });
+  });
   it("uses the exact existing refund section for checkout consent in both languages", () => {
     for (const locale of ["ko", "en"] as const) {
       const body = legalDocument("refund", locale).body;

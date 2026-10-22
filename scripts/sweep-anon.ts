@@ -469,6 +469,29 @@ async function sweepMoney(): Promise<void> {
   expectOneOf('Toss checkout page redirects anon', tossPage.status, [302, 307, 308]);
   expectAbsent('Toss checkout HTML stays behind sign-in', tossPage.body, 'data-toss-checkout');
 
+  // docs/PLATFORM-2.0.md §2.2: 다시 결제하기 is the owner's alone; the webhook is a hint, never an oracle;
+  // a return from the provider with no session keeps its approval parameters through sign-in.
+  const retry = await request(`/api/billing/toss/orders/${tossOrderId}/retry`, { method: 'POST', headers: { Origin: BASE } });
+  expectEqual('Toss retry refuses anonymous re-ordering', retry.status, 401);
+  expectEqual('Toss retry is never cached', retry.cacheControl, 'private, no-store');
+  const hint = await postJson('/api/billing/toss/webhook', {
+    eventType: 'PAYMENT_STATUS_CHANGED',
+    data: { orderId: tossOrderId, paymentKey: 'sweep_probe', status: 'CANCELED' },
+  });
+  expectEqual('Toss webhook answers an unknown order with 200', hint.status, 200);
+  expectEqual('…and an empty body', hint.body, '');
+  expectEqual('Toss webhook is never cached', hint.cacheControl, 'private, no-store');
+  const malformed = await request('/api/billing/toss/webhook', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{' });
+  expectEqual('Toss webhook answers a malformed body with 200', malformed.status, 200);
+  expectEqual('…and an empty body', malformed.body, '');
+  expectEqual('GET on the Toss webhook is 405', (await get('/api/billing/toss/webhook')).status, 405);
+  const back = await get(`/billing/toss/return?locale=ko&paymentKey=sweep_probe&orderId=${tossOrderId}&amount=1000`);
+  expectOneOf('Toss return without a session goes to sign-in', back.status, [302, 307, 308]);
+  const resume = new URL(back.location ?? '/', BASE).searchParams.get('next') ?? '';
+  expectPresent('…keeping the approval parameters in next', resume, `/billing/toss/return?`);
+  expectPresent('…the payment key included', resume, 'paymentKey=sweep_probe');
+  expectPresent('…and the order', resume, `orderId=${tossOrderId}`);
+
   // New recurring entry points do not inherit the legacy anonymous or retired paths.
   for (const path of ['/api/creator-subscriptions', '/api/creator-subscriptions/confirm', '/api/creator-subscriptions/renders',
     `/api/creator-subscriptions/${tossOrderId}/cancel`, `/api/creator-subscriptions/${tossOrderId}/refund`]) {

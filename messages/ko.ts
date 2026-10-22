@@ -2623,6 +2623,25 @@ export const ko: Dictionary = {
       back: '템플릿으로 돌아가기',
       test: '테스트 결제 · 실제 금액은 청구되지 않습니다.',
       fake: '로컬 결제 시뮬레이션 · 토스 결제내역에는 남지 않습니다.',
+      // docs/PLATFORM-2.0.md §2.2 — every order ends in a named state, and the page says which.
+      signIn: '로그인하면 결제 확인을 이어서 진행해요.',
+      paidPreparing: '결제가 완료됐어요. 만들기를 준비하고 있어요. 잠시 후 이 페이지에서 확인해 주세요.',
+      refundManual: '자동 환불이 늦어져 담당자가 직접 처리하고 있어요. 전액 환불은 그대로 진행돼요. 궁금한 점은 hello@yagiworkshop.xyz로 보내 주세요.',
+      fulfilManual: '결제는 완료됐지만 만들기를 시작하지 못했어요. 담당자가 확인하고 있고, 만들 수 없으면 전액 환불해요. 궁금한 점은 hello@yagiworkshop.xyz로 보내 주세요.',
+      partialBalance: '결제 금액 일부가 취소된 주문이에요. 담당자가 확인하고 있어요. 궁금한 점은 hello@yagiworkshop.xyz로 보내 주세요.',
+      reasons: {
+        declined: '결제가 승인되지 않았어요. 청구된 금액은 없어요.',
+        price_changed: '가격이 바뀌어 주문을 다시 만들어야 해요. 청구된 금액은 없어요.',
+        not_open: '지금은 결제를 받지 않고 있어요. 청구된 금액은 없어요.',
+        canceled: '결제가 취소됐어요. 카드사에 따라 취소 내역이 반영되기까지 시간이 걸릴 수 있어요.',
+        aborted: '결제가 중간에 멈췄어요. 청구된 금액은 없어요.',
+        unknown_payment: '결제 기록을 찾지 못했어요. 청구된 금액은 없어요.',
+        provider_mismatch: '결제 정보가 이 주문과 맞지 않아 진행하지 않았어요. 이 주문으로 청구된 금액은 없어요.',
+      },
+      retry: '다시 결제하기',
+      retryHint: '같은 사진과 옵션으로 새 주문을 만들어요.',
+      retryLimited: '오늘은 주문을 더 만들 수 없어요. 내일 다시 시도해 주세요.',
+      retryError: '새 주문을 만들지 못했어요. 템플릿에서 다시 시작해 주세요.',
     },
     unavailableBody:
       '아직 결제 수단이 연결되지 않아 결제할 수 없습니다. 가격은 확정된 가격이며, 결제가 열리면 이 버튼으로 진행됩니다.',
@@ -2780,6 +2799,7 @@ export const ko: Dictionary = {
     dashRendersWeek: '최근 7일 {count}건',
     dashRendersFailed: '실패 {count}',
     dashRendersHeld: '인증 대기 {count}',
+    dashPaymentsManual: '결제 확인 필요 {count}',
     dashInquiries: '브랜드 의뢰',
     dashInquiriesNew: '새 의뢰 {count}',
     inbox: {
