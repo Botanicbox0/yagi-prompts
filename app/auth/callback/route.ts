@@ -78,7 +78,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
              returning id`,
             [
               data.user.id,
-              data.user.email ?? '',
+              // A Kakao account that did not share an email has none: NULL, never '' (0053).
+              data.user.email?.trim() || null,
               (data.user.user_metadata?.['full_name'] as string | undefined) ?? null,
               uiLocale,
             ],

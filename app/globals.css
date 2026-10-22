@@ -28,6 +28,14 @@
   --color-brand-blue-light: #a5b4ff;
   --color-brand-pink: #ff8cc6;
   --color-brand-violet: #5c36ff;
+  /* The installed app's chrome (docs/PLATFORM-2.0.md §5.2): YAGI v1.2 Dark Brand. The bottom tabs
+     and the status-bar strip use these and nothing else; pages keep the §5.1 inks. */
+  --color-app-bg: #0a0a0a;
+  --color-app-surface: #161616;
+  --color-app-ink: #f0f0f0;
+  --color-app-line: #2a2a2a;
+  --color-app-red: #ed1e1e;
+  --color-app-gold: #fad204;
 
   /* Section-state driven surfaces (§4: IntersectionObserver flips data-theme). */
   --color-surface: var(--surface);
@@ -727,4 +735,105 @@ html:lang(ko) {
        this text — which is also what keeps its antialiasing identical to the labels around it. */
     transition: none !important;
   }
+}
+
+/* ===========================================================================
+   App shell — the installed app (docs/PLATFORM-2.0.md §5.2, 2026-10-22).
+
+   `viewport-fit: cover` (both root layouts) hands the page the whole screen; these rules give the
+   notch, the status bar and the home indicator their room back. `--is-standalone` is 1 only in
+   the installed app — the display-mode query, or `html[data-standalone]`, which
+   components/pwa/display-mode.ts sets for iOS's legacy `navigator.standalone` and the QA flag. In a
+   browser tab the standalone rules collapse to zero, and the 2026-10-07 decision (no bottom-fixed
+   UI in the mobile browser) holds. Unlayered on purpose: they must beat the `top-0` utility on the
+   fixed nav and anything else in a layer.
+   =========================================================================== */
+:root {
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --is-standalone: 0;
+  /* One 56px row of tabs. */
+  --app-tabs-height: 3.5rem;
+}
+
+@media (display-mode: standalone) {
+  :root {
+    --is-standalone: 1;
+  }
+}
+
+html[data-standalone] {
+  --is-standalone: 1;
+}
+
+/* Sideways: keep text clear of the notch in landscape (0 everywhere else). */
+body {
+  padding-left: var(--safe-left);
+  padding-right: var(--safe-right);
+  /* The status bar is black-translucent in the installed app: everything in flow starts below it. */
+  padding-top: calc(var(--is-standalone) * var(--safe-top));
+}
+
+/* …and the strip it floats over is painted brand black, so its white text always reads. */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0 0 auto;
+  z-index: 70;
+  height: calc(var(--is-standalone) * var(--safe-top));
+  background: var(--color-app-bg);
+  pointer-events: none;
+}
+
+/* The fixed public nav (components/nav/site-nav.tsx) sits under the strip, not behind it — and so
+   does its full-screen mobile menu, whose close button lives in its first 64px. */
+[data-audience-nav] {
+  top: calc(var(--is-standalone) * var(--safe-top));
+  padding-left: var(--safe-left);
+  padding-right: var(--safe-right);
+}
+
+#nav-overlay {
+  padding: calc(var(--is-standalone) * var(--safe-top)) var(--safe-right) var(--safe-bottom) var(--safe-left);
+}
+
+/* Bottom tabs (components/app/bottom-tabs.tsx): never outside standalone, never over a page that
+   declares `data-hide-tabs` (its own bottom-fixed bar), always clear of the home indicator. */
+[data-bottom-tabs] {
+  display: none;
+}
+
+@media (display-mode: standalone) {
+  [data-bottom-tabs] {
+    display: block;
+  }
+}
+
+html[data-standalone] [data-bottom-tabs] {
+  display: block;
+}
+
+body:has([data-hide-tabs]) [data-bottom-tabs] {
+  display: none;
+}
+
+nav[data-bottom-tabs] {
+  padding: 0 var(--safe-right) var(--safe-bottom) var(--safe-left);
+}
+
+/* Reserve the bar's height so the end of every page can scroll clear of it. */
+html[data-app-tabs] body {
+  padding-bottom: calc(var(--app-tabs-height) + var(--safe-bottom));
+}
+
+html[data-app-tabs] body:has([data-hide-tabs]) {
+  padding-bottom: 0;
+}
+
+/* A bottom-fixed CTA (the template make screen) pads itself clear of the home indicator:
+   `class="fixed inset-x-0 bottom-0 pb-safe" data-hide-tabs`. */
+@utility pb-safe {
+  padding-bottom: max(1rem, var(--safe-bottom));
 }

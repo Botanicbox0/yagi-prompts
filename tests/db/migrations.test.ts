@@ -141,6 +141,8 @@ describe('migrations apply on a fresh database (PLAN §6)', () => {
       'prompt_items',
       'prompt_unlocks',
       'publish_assets',
+      // docs/PLATFORM-2.0.md §5.3 (2026-10-22) — one row per device that said yes to the completion push.
+      'push_subscriptions',
       // 2026-09-11 — the owner's complaint about a result, one per render, worked from the admin inbox.
       'render_feedback',
       // docs/TEMPLATES-IA.md §8 (2026-09-06) — the render queue: one row per make, from photo to link.

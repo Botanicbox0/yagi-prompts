@@ -1,3 +1,4 @@
+import { createECDH, randomBytes } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { request as httpRequest } from 'node:http';
 import { resolve } from 'node:path';
@@ -1038,9 +1039,32 @@ async function sweepTemplates(): Promise<void> {
   expectEqual('the manifest is served at the root', manifest.status, 200);
   expectPresent('…and names the app', manifest.body, '"TWINGS"');
   expectPresent('…in standalone display', manifest.body, '"standalone"');
-  expectEqual('the service worker is served at the root', (await get('/sw.js')).status, 200);
+  // docs/PLATFORM-2.0.md §5.2 — the installed app's manifest.
+  expectPresent('…brand black splash and status bar', manifest.body, '"theme_color":"#0A0A0A"');
+  expectPresent('…brand black background', manifest.body, '"background_color":"#0A0A0A"');
+  expectPresent('…starting on the formats in the reader’s locale', manifest.body, '"start_url":"/video?source=pwa"');
+  expectPresent('…with the fixed app id', manifest.body, '"id":"/"');
+  expectPresent('…maskable icons', manifest.body, '"purpose":"maskable"');
+  expectPresent('…and the two shortcuts', manifest.body, '"shortcuts"');
+  for (const icon of ['/icons/icon-192.png', '/icons/icon-512.png', '/icons/maskable-192.png', '/icons/maskable-512.png', '/icons/badge-96.png']) {
+    const served = await get(icon);
+    expectEqual(`${icon} is served`, served.status, 200);
+    expectPresent(`${icon} is a PNG`, served.contentType ?? '', 'image/png');
+  }
+  const worker = await get('/sw.js');
+  expectEqual('the service worker is served at the root', worker.status, 200);
+  expectPresent('…and shows the completion push', worker.body, "self.addEventListener('push'");
+  expectPresent('…and opens its link on a tap', worker.body, "self.addEventListener('notificationclick'");
+  expectPresent('…keeping navigations network first', worker.body, "if (request.mode !== 'navigate') return;");
   expectEqual('the offline page is served at the root', (await get('/offline.html')).status, 200);
-  expectPresent('the landing declares the manifest', (await get('/en')).body, 'rel="manifest"');
+  const landing = await get('/en');
+  expectPresent('the landing declares the manifest', landing.body, 'rel="manifest"');
+  expectPresent('…runs edge to edge (safe areas padded in CSS)', landing.body, 'viewport-fit=cover');
+  expectPresent('…under a black-translucent iOS status bar', landing.body, 'content="black-translucent"');
+  expectPresent('…brand black only in the installed app', landing.body, 'media="(display-mode: standalone)" content="#0A0A0A"');
+  // 2026-10-07: no bottom-fixed UI in the mobile browser — the tabs exist only after the page
+  // finds itself installed, never in server HTML.
+  expectAbsent('…and never ships the bottom tabs in its HTML', landing.body, 'data-bottom-tabs');
 }
 
 /** The prompt site's URLs 308 onto the template site's; the copy door answers 410. */
@@ -1339,6 +1363,17 @@ async function sweepRenders(): Promise<void> {
 
   const enqueue = await fetch(`${BASE}/api/renders`, { method: 'POST', redirect: 'manual' });
   expectEqual('enqueue refuses anon', enqueue.status, 401);
+  // docs/PLATFORM-2.0.md §5.3 — a device's push subscription needs a session, even from our own page.
+  // A well-formed body, so the 401 shows the session check comes first. The browser keys are made
+  // here, never written as literals (the secret scan reads long base64url strings as leaked keys).
+  const browserKey = createECDH('prime256v1');
+  browserKey.generateKeys();
+  const subscription = { endpoint: 'https://fcm.googleapis.com/fcm/send/sweep', keys: { p256dh: browserKey.getPublicKey().toString('base64url'), auth: randomBytes(16).toString('base64url') } };
+  const pushOn = await request('/api/notify/push', { method: 'POST', headers: { Origin: BASE, 'Content-Type': 'application/json' }, body: JSON.stringify(subscription) });
+  expectEqual('push subscription refuses anon', pushOn.status, 401);
+  expectPresent('…privately', pushOn.cacheControl ?? '', 'no-store');
+  const pushOff = await request('/api/notify/push', { method: 'DELETE', headers: { Origin: BASE, 'Content-Type': 'application/json' }, body: JSON.stringify({ endpoint: subscription.endpoint }) });
+  expectEqual('push unsubscribe refuses anon', pushOff.status, 401);
   const campaignEnqueue = await fetch(`${BASE}/api/campaign-production`, { method: 'POST', redirect: 'manual', headers: { Origin: BASE } });
   expectEqual('campaign production refuses anon', campaignEnqueue.status, 401);
   expectPresent('campaign production refusal is private', campaignEnqueue.headers.get('cache-control') ?? '', 'no-store');

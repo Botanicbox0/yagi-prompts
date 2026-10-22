@@ -2539,6 +2539,53 @@ export const en = {
       'It may have been cut in half by a mail client, or it belongs to an older sending key. Open your account settings and change the switch there instead.',
   },
   /**
+   * docs/PLATFORM-2.0.md §5.2–§5.3 (2026-10-22) — the installed app: bottom tabs that exist only in
+   * standalone mode, the one-time install card, "want a ping when it is ready?", and the push itself.
+   */
+  appShell: {
+    tabs: {
+      nav: 'App menu',
+      formats: 'Formats',
+      renders: 'My work',
+      photo: 'My photo',
+      account: 'Account',
+    },
+    shortcuts: {
+      formats: 'Browse video formats',
+      formatsShort: 'Formats',
+      renders: 'See my work',
+      rendersShort: 'My work',
+    },
+    install: {
+      title: 'Add TWINGS to your home screen to hear when it is ready',
+      androidBody: 'It opens like an app, and this phone tells you the moment your video is done.',
+      androidAction: 'Add to home screen',
+      iosBody: 'Tap the Share button at the bottom of Safari, then choose “Add to Home Screen”. Notifications can be turned on from the added app.',
+      dismiss: 'Do not show again',
+    },
+    notify: {
+      title: 'Want a ping when it is ready?',
+      settingsTitle: 'Ready alerts',
+      lede: 'A video takes a few minutes. Turn on push and this device hears the moment it is done.',
+      enable: 'Turn on push',
+      disable: 'Turn off',
+      busy: 'Setting up…',
+      on: 'This device gets a push when your work is ready.',
+      emailAlways: 'We always email you as well.',
+      unavailable: 'Push is not available here.',
+      install: 'On iPhone, notifications only reach TWINGS once it is added to the home screen.',
+      installAction: 'Show me how',
+      denied: 'Notifications are blocked. Allow them for TWINGS in your browser settings.',
+      error: 'Could not turn notifications on. Try again in a moment.',
+    },
+    push: {
+      readyTitle: 'It is ready',
+      readyBody: 'Your {template} result is ready. Tap to see it.',
+      failedTitle: 'This one did not finish',
+      failedBody: 'Your {template} render did not finish. {reason}',
+    },
+  },
+  /**
    * PLAN §3.8 admin CMS. Bilingual like everything else (§3.9) even though only staff read it —
    * the completeness test does not carve out an exception, and neither should the product.
    */
