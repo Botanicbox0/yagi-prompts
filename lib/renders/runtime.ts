@@ -25,8 +25,9 @@ export async function livePassDeps(sql: SqlRunner): Promise<RenderPassDeps> {
 
 export async function runLiveRenderPass(sql: SqlRunner, options: RenderPassOptions = {}): Promise<RenderPassReport> {
   const report = await runRenderPass(await livePassDeps(sql), options);
+  const { payments } = report;
   // One line per pass in the deployment's logs — the only trace an `after()` run leaves.
-  if (report.claimed + report.succeeded + report.failed + report.requeued + report.waiting + report.notified + report.notifyFailed > 0 || report.errors.length > 0) {
+  if (report.claimed + report.succeeded + report.failed + report.requeued + report.waiting + report.notified + report.notifyFailed > 0 || payments.confirmed + payments.refunded + payments.failed + payments.manual > 0 || report.errors.length > 0) {
     console.log(`[renders] pass${options.jobId ? ` ${options.jobId}` : ''} — ${formatPassReport(report)}`);
     for (const line of report.errors) console.warn(`[renders] ${line}`);
   }
@@ -37,6 +38,7 @@ export function formatPassReport(report: RenderPassReport): string {
   return (
     `notifier ${report.notifier} · recovered ${report.recovered.requeued}/${report.recovered.failed} · claimed ${report.claimed} · ` +
     `succeeded ${report.succeeded} · failed ${report.failed} · requeued ${report.requeued} · waiting ${report.waiting} · ` +
-    `notified ${report.notified} · notify failed ${report.notifyFailed} · notify pending ${report.notifyPending}`
+    `notified ${report.notified} · notify failed ${report.notifyFailed} · notify pending ${report.notifyPending} · ` +
+    `payments confirmed ${report.payments.confirmed} · refunded ${report.payments.refunded} · failed ${report.payments.failed} · manual ${report.payments.manual}`
   );
 }

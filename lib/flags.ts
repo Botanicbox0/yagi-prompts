@@ -41,8 +41,9 @@ export const PLAYBOOKS_IN_NAV = false;
  *
  * Going live is an ENVIRONMENT change, not a code deploy (docs/qa/toss-checkout/README.md "운영
  * 개시"): `RENDER_PIPELINE_PUBLIC=on` in Vercel, then redeploy. Production additionally refuses to
- * open unless BOTH Toss keys are live keys (`live_…`) — a test key there would take no money and
- * hand every visitor a free film. Preview and local runs may open on test keys for QA.
+ * open unless BOTH Toss keys are a live widget pair (`live_gck_`/`live_gsk_`, `tossKeyKind`) — a
+ * test key there would take no money and hand every visitor a free film. Preview and local runs
+ * may open on test keys for QA.
  *
  * `=review` is the third state, and it exists because `=on` alone cannot pass a PG review.
  * 토스페이먼츠 심사 체크리스트(notice/20057)는 **테스트 API 키로 결제창 연동을 끝낸 상태**와
@@ -57,13 +58,40 @@ export const PLAYBOOKS_IN_NAV = false;
  */
 export type RenderPipelineMode = 'off' | 'review' | 'on';
 
-export function renderPipelineMode(env: Record<string, string | undefined> = process.env): RenderPipelineMode {
+/**
+ * The one rule for a usable Toss key pair, shared with `lib/billing/toss-gateway.ts`: a payment-widget
+ * client key (`*_gck_`) and the secret key of the same kind (`*_gsk_`). null = not a usable pair.
+ *
+ * docs/PLATFORM-2.0.md §2.2-3 — production reads the keys by THIS rule, not by a `live_` prefix: `on`
+ * needs a live widget pair, `review` a test widget pair. Anything else closes the pipeline with one
+ * error line, because an open storefront whose every payment the gateway refuses is worse than a
+ * closed one. Preview and local runs keep opening on any keys, for QA.
+ */
+export function tossKeyKind(env: Record<string, string | undefined>): 'test' | 'live' | null {
+  const client = env.TOSS_CLIENT_KEY?.trim() ?? '';
+  const secret = env.TOSS_SECRET_KEY?.trim() ?? '';
+  const kind = client.startsWith('test_gck_') ? 'test' : client.startsWith('live_gck_') ? 'live' : null;
+  return kind !== null && secret.startsWith(`${kind}_gsk_`) ? kind : null;
+}
+
+type FlagLog = Pick<Console, 'warn' | 'error'>;
+
+export function renderPipelineMode(
+  env: Record<string, string | undefined> = process.env,
+  log: FlagLog = console,
+): RenderPipelineMode {
   const setting = env.RENDER_PIPELINE_PUBLIC?.trim().toLowerCase();
-  if (setting === 'review') return 'review';
-  if (setting !== 'on') return 'off';
-  if (env.VERCEL_ENV !== 'production') return 'on';
-  const live = (key: string | undefined) => (key ?? '').trim().startsWith('live_');
-  return live(env.TOSS_CLIENT_KEY) && live(env.TOSS_SECRET_KEY) ? 'on' : 'off';
+  if (setting !== 'review' && setting !== 'on') return 'off';
+  // A documentation example key takes no payment at THIS shop: no review evidence, no sale. Said, not blocked.
+  if (`${env.TOSS_CLIENT_KEY ?? ''} ${env.TOSS_SECRET_KEY ?? ''}`.includes('_docs_'))
+    log.warn(`[billing] ${JSON.stringify({ event: 'toss_docs_key', setting })}`);
+  if (env.VERCEL_ENV !== 'production') return setting;
+  const required = setting === 'on' ? 'live' : 'test';
+  const keys = tossKeyKind(env);
+  if (keys === required) return setting;
+  // Kinds only, never a key value.
+  log.error(`[billing] ${JSON.stringify({ event: 'render_pipeline_closed', setting, required, keys: keys ?? 'invalid' })}`);
+  return 'off';
 }
 
 /** Unchanged meaning: the pipeline is open to EVERY signed-in reader. `review` is not that. */

@@ -21,6 +21,7 @@ import { requireAdmin } from "@/lib/auth/viewer";
 import { loadStudioInbox } from "@/lib/brands/workspace/inbox";
 import { adminNextActions, campaignWorkCounts } from "@/lib/admin/workflow";
 import { loadRiskQueueSummary } from "@/lib/campaigns/risk/admin";
+import { countManualTossPayments } from "@/lib/billing/toss-service";
 
 /**
  * `/admin` — the dashboard (founder, 2026-09-11). The old front door was the playbook list, a
@@ -113,6 +114,7 @@ export default async function AdminHomePage() {
     feedback,
     inbox,
     risk,
+    paymentsManual,
   ] =
     sql === null
       ? ([
@@ -124,6 +126,7 @@ export default async function AdminHomePage() {
           0,
           [],
           null,
+          0,
         ] as const)
       : await Promise.all([
           loadAllCampaigns(sql),
@@ -134,6 +137,8 @@ export default async function AdminHomePage() {
           countRenderFeedback(sql, "new"),
           loadStudioInbox({ sql }, viewer),
           loadRiskQueueSummary(sql, viewer, now),
+          // docs/PLATFORM-2.0.md §2.2-4: refunds and renders automation handed to an operator.
+          countManualTossPayments(sql),
         ]);
   const counts =
     sql === null
@@ -350,6 +355,12 @@ export default async function AdminHomePage() {
                 href={null}
                 label={a.dashRendersHeld}
                 count={renders.held}
+              />
+              <Stat
+                href={null}
+                label={a.dashPaymentsManual}
+                count={paymentsManual}
+                hot
               />
               <Stat
                 href={`${ADMIN_INQUIRIES_PATH}?kind=feedback&status=new`}

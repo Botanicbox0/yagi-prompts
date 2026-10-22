@@ -8,6 +8,7 @@ import {
 import {
   loadOwnTossOrder,
   reconcileTossPayments,
+  tossOrderView,
   TOSS_CONSENT_VERSION,
 } from '@/lib/billing/toss-service';
 import { purchaseOpenFor } from '@/lib/auth/purchase-gate';
@@ -28,7 +29,8 @@ export async function GET(_request: Request, { params }: Context) {
     const { id } = await params;
     if (!(await loadOwnTossOrder(deps.sql, viewer, id)))
       return json({ ok: false }, 404);
-    await reconcileTossPayments(deps);
+    // This order only (docs/PLATFORM-2.0.md §2.2-8); everyone's payments are the render pass's and the cron's.
+    await reconcileTossPayments(deps, { orderId: id });
     const o = (await loadOwnTossOrder(deps.sql, viewer, id))!;
     if (o.status === 'paid' && o.render_id)
       after(async () => {
@@ -38,7 +40,14 @@ export async function GET(_request: Request, { params }: Context) {
           /* durable queue retries */
         }
       });
-    return json({ ok: true, status: o.status, renderId: o.render_id });
+    const view = tossOrderView(o);
+    return json({
+      ok: true,
+      status: view.status,
+      reason: view.reason,
+      retry: view.retry && purchaseOpenFor(viewer),
+      renderId: view.renderId,
+    });
   } catch {
     return json({ ok: false }, 503);
   }
@@ -59,8 +68,9 @@ export async function POST(request: Request, { params }: Context) {
     const { id } = await params;
     const o = await loadOwnTossOrder(deps.sql, viewer, id);
     if (!o || o.status !== 'pending') return json({ ok: false }, 409);
+    // The first consent stands (§2.2-7): reopening the window does not move it.
     await deps.sql.query(
-      "update billing_payments set consent_at=now(),consent_version=$2 where id=$1 and user_id=$3 and status='pending'",
+      "update billing_payments set consent_at=coalesce(consent_at,now()),consent_version=coalesce(consent_version,$2) where id=$1 and user_id=$3 and status='pending'",
       [id, TOSS_CONSENT_VERSION, viewer.userId],
     );
     return json({ ok: true });
