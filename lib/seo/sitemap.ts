@@ -39,6 +39,8 @@ export interface SitemapInput {
    * sitemap by construction.
    */
   templates?: PromptCard[];
+  /** The format creator program page exists only while its public intake gate is open. */
+  includeCreatorProgram?: boolean;
   /** Real editorial dates only, keyed by locale-independent path. Omit when unknown. */
   pageModifiedAt?: Partial<Record<string, string>>;
 }
@@ -55,7 +57,7 @@ function absoluteAlternates(origin: string, rest: string): Record<string, string
 }
 
 export function buildSitemap(input: SitemapInput): MetadataRoute.Sitemap {
-  const { origin, cards, templates = [], pageModifiedAt = {} } = input;
+  const { origin, cards, templates = [], pageModifiedAt = {}, includeCreatorProgram = false } = input;
   const entries: MetadataRoute.Sitemap = [];
 
   const marketing: Array<{
@@ -75,6 +77,7 @@ export function buildSitemap(input: SitemapInput): MetadataRoute.Sitemap {
     ...BRAND_STORIES.map(story => ({ rest: `/brands/stories/${story.slug}`, priority: 0.7, changeFrequency: 'weekly' as const })),
     { rest: '/pricing', priority: 0.8, changeFrequency: 'weekly' },
     { rest: '/faq', priority: 0.6, changeFrequency: 'weekly' },
+    ...(includeCreatorProgram ? [{ rest: '/creators', priority: 0.6, changeFrequency: 'weekly' as const }] : []),
     // The legal surface. Low priority — nobody searches for it — but LISTED, because a payment
     // provider's merchant review and 전자상거래법 §21 both expect these to be publicly reachable,
     // and a crawler that has them indexed is the cheapest evidence that they are.
@@ -161,6 +164,9 @@ export const DISALLOWED_PATHS = [
   '/renders',
   '/r/',
   '/identity',
+  // The format creator application and workspace; `/{locale}/creators` itself stays public.
+  '/creators/apply',
+  '/creators/workspace',
 ] as const;
 
 export function buildRobots(origin: string): MetadataRoute.Robots {
