@@ -2,13 +2,15 @@ import { NextResponse } from 'next/server';
 import { getViewer } from '@/lib/auth/viewer';
 import { getSqlRunner } from '@/lib/db/connect';
 import { loadOwnRender, loadSharedRender, type RenderView } from '@/lib/renders/service';
+import { loadRenderExtras } from '@/lib/renders/extras';
 import { RenderObjectNotFound, extensionFor, getRenderStore } from '@/lib/renders/store';
 
 /**
  * `GET /api/renders/media/[id]` — the render gateway. Two doors, one object:
  *   · the owner, on a session (`/renders/{id}`);
  *   · anyone holding the 3-day token (`?s=…`, from `/r/{id}/{token}` and the email preview).
- * `?download=1` asks for an attachment. Cloud: a signed URL for `MEDIA_URL_TTL_SECONDS` (a film
+ * `?download=1` asks for an attachment; `?poster=1` serves the film's captured frame instead (0055,
+ * `POST /api/renders/[id]/poster`) — the share card's OG image, scoped by the same token. Cloud: a signed URL for `MEDIA_URL_TTL_SECONDS` (a film
  * has to survive a seek, so minutes, not the publish gateway's 60s). Local: the bytes are
  * streamed. Every answer is `private, no-store` + noindex, refusals included.
  */
@@ -34,7 +36,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   const { id } = await params;
   const url = new URL(request.url);
   const share = url.searchParams.get('s');
-  const download = url.searchParams.get('download') === '1';
+  const poster = url.searchParams.get('poster') === '1';
+  const download = !poster && url.searchParams.get('download') === '1';
 
   const sql = await getSqlRunner();
   if (sql === null) return refuse(404, 'not_found');
@@ -55,17 +58,22 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   const { job } = view;
   if (job.status !== 'succeeded' || job.resultKey === null || job.resultMime === null) return refuse(404, 'not_ready');
 
+  const posterKey = poster ? (await loadRenderExtras(sql, job.id)).posterKey : null;
+  if (poster && posterKey === null) return refuse(404, 'not_found');
+  const objectKey = posterKey ?? job.resultKey;
+  const objectMime = posterKey ? 'image/jpeg' : job.resultMime;
+
   const store = await getRenderStore();
   const filename = `twings-${job.templateSlug}-${job.id.slice(0, 8)}.${extensionFor(job.resultMime)}`;
   try {
-    const signed = await store.url(job.resultKey, MEDIA_URL_TTL_SECONDS, download ? { download: filename } : undefined);
+    const signed = await store.url(objectKey, MEDIA_URL_TTL_SECONDS, download ? { download: filename } : undefined);
     // 302, not 307/308: a one-off capability URL, never a permanent identity for the object.
     if (signed) return new NextResponse(null, { status: 302, headers: { ...HEADERS, Location: signed } });
 
-    const bytes = await store.read(job.resultKey);
+    const bytes = await store.read(objectKey);
     const headers: Record<string, string> = {
       ...HEADERS,
-      'Content-Type': job.resultMime,
+      'Content-Type': objectMime,
       'Content-Length': String(bytes.byteLength),
     };
     if (download) headers['Content-Disposition'] = attachment(filename);

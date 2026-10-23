@@ -8,21 +8,23 @@ import { ASSET_TASK_PREFIX } from '@/lib/renders/repo';
  *   make   만드는 중  running against the provider
  *   finish 마무리     copying the result and sending the notice
  *
- * The service does not record `finish` as its own state: the provider's "done", the copy into our
- * storage and `markRenderSucceeded` happen in one pass. So a live job is never shown in `finish`
- * — it reads "making" until it is `succeeded`, and the page then shows the result instead of the
- * stages. Saying "finishing" earlier would be a guess dressed as progress.
+ * `finish` is real since 0055: the pass writes `render_jobs.finishing_at` the moment the provider
+ * says done and before it copies the result into our storage (`lib/renders/extras.ts`), so a job
+ * still `running` with that timestamp is in its last stage. Without the timestamp (or before 0055)
+ * a live job reads "making" until it is `succeeded` — saying "finishing" earlier would be a guess
+ * dressed as progress.
  */
 export const RENDER_STAGES = ['check', 'make', 'finish'] as const;
 export type RenderStage = (typeof RENDER_STAGES)[number];
 export type StageState = 'done' | 'current' | 'todo';
 
-export function renderStage(job: Pick<RenderJob, 'status' | 'providerTaskId'>): RenderStage | null {
+export function renderStage(job: Pick<RenderJob, 'status' | 'providerTaskId'> & { finishingAt?: string | null }): RenderStage | null {
   switch (job.status) {
     case 'held':
     case 'queued':
       return 'check';
     case 'running':
+      if (job.finishingAt) return 'finish';
       return job.providerTaskId !== null && job.providerTaskId.startsWith(ASSET_TASK_PREFIX) ? 'check' : 'make';
     case 'succeeded':
       return 'finish';

@@ -260,7 +260,11 @@ export type VideoPoll =
   | { status: 'succeeded'; output: EngineOutput }
   | { status: 'failed'; failure: RenderFailure };
 
-export async function pollVideoRender(args: { taskId: string; model: ArkModelKey; seconds: number; resolution?: CreatorResolution | '480p'; aspect?: string }, deps: RenderEngineDeps = {}): Promise<VideoPoll> {
+export async function pollVideoRender(args: {
+  taskId: string; model: ArkModelKey; seconds: number; resolution?: CreatorResolution | '480p'; aspect?: string;
+  /** Called once the provider reports success, before the film is downloaded (the wait's "마무리"). Must not throw. */
+  onProviderDone?: () => Promise<void>;
+}, deps: RenderEngineDeps = {}): Promise<VideoPoll> {
   const client = deps.ark === undefined ? arkClientFromEnv() : deps.ark;
   if (client === null) return { status: 'failed', failure: new RenderFailure('no_engine_key', 'ARK_API_KEY is not set', false) };
   let task;
@@ -282,6 +286,7 @@ export async function pollVideoRender(args: { taskId: string; model: ArkModelKey
         : new RenderFailure('engine_error', message, task.status === 'expired');
     return { status: 'failed', failure };
   }
+  await args.onProviderDone?.();
   try {
     const downloaded = await download(task.videoUrl, deps.fetch ?? globalThis.fetch, 'video/mp4');
     const resolution = args.resolution ?? VIDEO_RESOLUTION;

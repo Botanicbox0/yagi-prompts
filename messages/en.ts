@@ -1757,7 +1757,9 @@ export const en = {
       body: {
         check: 'Checking the photo you uploaded.',
         make: 'Building the scene around your face. This is the longest step.',
+        finish: 'It is made. Saving it and making your share link.',
       },
+      finishEta: 'It will show up here in a moment.',
       eta: 'Usually about {minutes} min.',
       etaNote: 'You can close this page; it keeps going.',
       browseTitle: 'Browse other formats while you wait',
