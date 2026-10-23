@@ -7,6 +7,9 @@ import { imageOfferFingerprint } from './offer';
 import { demand } from './contract';
 import { audit, approvedCreator, lockUser, onboardingReady } from './service';
 import { marginSplit, rewardQuote } from './economics';
+import { legacyPromptText, parseRecipe, primaryStep } from '@/lib/recipes/schema';
+import { centsForKrw, quoteRecipe } from '@/lib/recipes/pricing';
+import { parseDisclosure, parsePresentation } from '@/lib/recipes/repo';
 
 const reason=z.string().trim().min(3).max(2000), money=z.number().int().min(0).max(100_000_000);
 // Creator-facing text. Empty form fields arrive as '' and mean "no note".
@@ -14,7 +17,8 @@ const note=z.string().trim().max(1000).optional();
 export const PlatformAdminInput=z.discriminatedUnion('action',[
  z.object({action:z.literal('creator'),id:z.uuid(),active:z.boolean(),contract:z.string().trim().min(1).max(120),reason}).strict(),
  z.object({action:z.literal('reply'),id:z.uuid(),message:z.string().trim().min(1).max(2000),requestId:z.uuid(),reason}).strict(),
- z.object({action:z.literal('format'),id:z.uuid(),accept:z.boolean(),note,reason}).strict(),
+ // priceKrw: a recipe (v2) acceptance names the final won price; the floor + royalty is only the proposal.
+ z.object({action:z.literal('format'),id:z.uuid(),accept:z.boolean(),note,priceKrw:z.number().int().min(100).max(1_000_000).optional(),reason}).strict(),
  z.object({action:z.literal('application'),id:z.uuid(),decision:z.enum(['approve','decline']),contract:z.string().trim().max(120).optional(),note,reason}).strict(),
  z.object({action:z.literal('moderate'),id:z.uuid(),excluded:z.boolean(),category:z.enum(['duplicate','fraud','abuse','restore']),reason}).strict(),
  z.object({action:z.literal('quality'),id:z.uuid(),score:z.number().min(1).max(5).multipleOf(0.1),reason}).strict(),
@@ -52,7 +56,8 @@ export async function administerPlatform(sql:SqlRunner,viewer:Viewer,raw:unknown
    } else demand(text&&text.length>=3,'invalid');
    await tx.query('update platform_creator_applications set status=$2,decision_note=$3,decided_by=$4,decided_at=now() where id=$1',[input.id,decided,text,viewer.userId]);
   } else if(input.action==='format') {
-   const {rows}=await tx.query<{user_id:string;title:string;recipe:string;medium:'video'|'image';status:string;template_id:string|null}>('select user_id,title,recipe,medium,status,template_id from platform_formats where id=$1 for update',[input.id]);demand(rows.length,'not_found');const row=rows[0]!;
+   // to_jsonb: the v2 columns (0059) are read without naming them, so the older schema still answers.
+   const {rows}=await tx.query<{user_id:string;title:string;recipe:string;medium:'video'|'image';status:string;template_id:string|null;v2:{recipe_v2?:unknown;title_ko?:string|null;disclosure?:unknown;presentation?:string;royalty_krw?:number|null}}>("select user_id,title,recipe,medium,status,template_id,jsonb_build_object('recipe_v2',to_jsonb(f.*)->'recipe_v2','title_ko',to_jsonb(f.*)->'title_ko','disclosure',to_jsonb(f.*)->'disclosure','presentation',to_jsonb(f.*)->'presentation','royalty_krw',to_jsonb(f.*)->'royalty_krw') v2 from platform_formats f where id=$1 for update",[input.id]);demand(rows.length,'not_found');const row=rows[0]!;
    if(row.status!=='submitted'){demand((input.accept&&row.status==='accepted')||(!input.accept&&row.status==='rejected'),'conflict');return {id:row.template_id??input.id};}
    // A note is never silently discarded: on the older schema it is refused, on 0051 a rejection needs one.
    const text=input.note||null,feedback=await onboardingReady(tx);
@@ -62,7 +67,8 @@ export async function administerPlatform(sql:SqlRunner,viewer:Viewer,raw:unknown
     const templateId=randomUUID();
     // The retired community-prompt path mandates public recipes. This private supplier path uses
     // the studio catalog source and separate supplier attribution; it is never a public prompt submission.
-    await insertPrompt(tx,{id:templateId,slug:`format-${templateId}`,source:'yagi',authorId:row.user_id,authorHandle:null,status:'pending',models:[row.medium==='image'?'gpt-image-2':'seedance-2.5'],title:row.title,titleKo:null,promptText:row.recipe,textVisibility:'hidden',media:null,useCase:[],featured:false,medium:row.medium});
+    if(row.v2?.recipe_v2!==null&&row.v2?.recipe_v2!==undefined) await acceptRecipe(tx,templateId,row,input.priceKrw);
+    else {demand(input.priceKrw===undefined,'invalid');await insertPrompt(tx,{id:templateId,slug:`format-${templateId}`,source:'yagi',authorId:row.user_id,authorHandle:null,status:'pending',models:[row.medium==='image'?'gpt-image-2':'seedance-2.5'],title:row.title,titleKo:null,promptText:row.recipe,textVisibility:'hidden',media:null,useCase:[],featured:false,medium:row.medium});}
     await tx.query("update platform_formats set status='accepted',template_id=$2 where id=$1",[input.id,templateId]);entityId=templateId;
    } else await tx.query("update platform_formats set status='rejected' where id=$1",[input.id]);
    if(feedback)await tx.query('update platform_formats set review_note=$2,reviewed_at=now() where id=$1',[input.id,text]);
@@ -122,6 +128,21 @@ export async function administerPlatform(sql:SqlRunner,viewer:Viewer,raw:unknown
   await audit(tx,viewer.userId!,entityId,input.action,input.reason,details);
   return {id:entityId};
  });
+}
+/**
+ * A recipe (v2) becomes a pending studio template: the recipe, the maker's page choices, the
+ * studio's final price (never below the cost floor) and the maker as author. Still `pending` and
+ * hidden — publishing (media, translation) stays the studio's step in /admin/prompts. The recipe is
+ * written before the format links to the row, so 0059's guard freezes it from then on.
+ */
+async function acceptRecipe(tx:SqlRunner,templateId:string,row:{user_id:string;title:string;v2:{recipe_v2?:unknown;title_ko?:string|null;disclosure?:unknown;presentation?:string;royalty_krw?:number|null}},priceKrw:number|undefined) {
+ const checked=parseRecipe(row.v2.recipe_v2);demand(checked.ok,'recipe_invalid');
+ const recipe=checked.recipe,primary=primaryStep(recipe),film=recipe.steps.find(step=>step.kind==='video');
+ demand(priceKrw!==undefined,'price_required');
+ const quote=quoteRecipe(recipe,row.v2.royalty_krw??0);demand(priceKrw>=quote.floorKrw,'price_below_floor');
+ await insertPrompt(tx,{id:templateId,slug:`format-${templateId}`,source:'yagi',authorId:row.user_id,authorHandle:null,status:'pending',models:[primary.engine],title:row.title,titleKo:row.v2.title_ko??null,promptText:legacyPromptText(recipe),textVisibility:'hidden',media:null,useCase:[],featured:false,
+  medium:primary.kind,engine:primary.engine,aspectDefault:primary.params.aspect,runtimeSeconds:film?.kind==='video'?film.params.duration:null,priceKrw,priceCents:centsForKrw(priceKrw)});
+ await tx.query('update prompt_items set recipe=$2::jsonb,disclosure=$3::jsonb,presentation=$4 where id=$1',[templateId,JSON.stringify(recipe),JSON.stringify(parseDisclosure(row.v2.disclosure)),parsePresentation(row.v2.presentation)]);
 }
 export async function revokeClaim(sql:SqlRunner,id:string,userId:string,credits:number) {
  await sql.query("insert into platform_credit_ledger(user_id,delta,kind,claim_id,event_key) values($1,$2,'revoke',$3,$4) on conflict(event_key) do nothing",[userId,-credits,id,`revoke:${id}`]);

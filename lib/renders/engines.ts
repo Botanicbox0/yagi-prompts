@@ -53,10 +53,17 @@ export class RenderFailure extends Error {
     readonly code: RenderFailureCode,
     message: string,
     readonly retryable: boolean,
+    /** A recipe step that failed (lib/recipes/execute.ts); recorded as `code:step` on the row. */
+    readonly step?: string,
   ) {
     super(message);
     this.name = 'RenderFailure';
   }
+}
+
+/** `face_policy:shot1` → `face_policy`: the reader-facing vocabulary never includes a step id. */
+export function baseFailureCode(code: string | null): string | null {
+  return code === null ? null : code.split(':')[0]!;
 }
 
 export interface RenderPhoto {
@@ -145,14 +152,26 @@ export interface ImageRenderInput {
   photo: RenderPhoto | null;
   /** ModelArk: the person's photo as a verified-library asset; when set, the bytes are never sent. */
   assetId?: string | null;
+  /**
+   * A recipe step's references, in prompt order ("Image 1", "Image 2", …), replacing photo/assetId.
+   * OpenAI takes bytes only; Seedream takes bytes (sent as a data URL) or a URL (`asset://`, https).
+   */
+  references?: readonly StepReference[];
 }
+
+export type StepReference = { kind: 'bytes'; bytes: Uint8Array; mime: RenderPhoto['mime'] } | { kind: 'url'; url: string };
 
 export async function runImageRender(input: ImageRenderInput, deps: RenderEngineDeps = {}): Promise<EngineOutput> {
   try {
     if (isOpenAiEngine(input.engine)) {
       const client = deps.openai === undefined ? openAiClientFromEnv() : deps.openai;
       if (client === null) throw new RenderFailure('no_engine_key', 'OPENAI_API_KEY is not set', false);
-      const references: ReferenceImage[] = input.photo ? [{ bytes: input.photo.bytes, mime: input.photo.mime, name: 'photo' }] : [];
+      const references: ReferenceImage[] = input.references
+        ? input.references.map((reference, index) => {
+            if (reference.kind !== 'bytes') throw new RenderFailure('engine_error', 'OpenAI takes reference bytes only', false);
+            return { bytes: reference.bytes, mime: reference.mime, name: `image${index + 1}` };
+          })
+        : input.photo ? [{ bytes: input.photo.bytes, mime: input.photo.mime, name: 'photo' }] : [];
       // The engine table decides the quality tier; this call never names one.
       const result =
         references.length > 0
@@ -170,14 +189,16 @@ export async function runImageRender(input: ImageRenderInput, deps: RenderEngine
       engine,
       prompt: input.prompt,
       aspect: input.aspect,
-      references: input.assetId ? [assetReference(input.assetId)] : input.photo ? [dataUrl(input.photo)] : [],
+      references: input.references
+        ? input.references.map((reference) => (reference.kind === 'url' ? reference.url : dataUrl(reference)))
+        : input.assetId ? [assetReference(input.assetId)] : input.photo ? [dataUrl(input.photo)] : [],
       outputFormat: 'jpeg',
       responseFormat: 'b64_json',
     });
     const image = result.images[0];
     if (!image) throw new RenderFailure('bad_output', 'Seedream answered with no image', true);
     // The same rule the price floor uses, so a free first reference is free here too.
-    const estimate = estimateImageUsd(engine, input.photo ? 1 : 0);
+    const estimate = estimateImageUsd(engine, input.references ? input.references.length : input.photo ? 1 : 0);
     if (image.b64) {
       const bytes = new Uint8Array(Buffer.from(image.b64, 'base64'));
       if (bytes.byteLength === 0) throw new RenderFailure('bad_output', 'the image came back empty', true);
@@ -221,6 +242,8 @@ export interface VideoRenderInput {
   fixedReferenceUrls?: readonly string[];
   /** What the job was bought at (render_jobs.resolution); absent = the 720p default. */
   resolution?: CreatorResolution;
+  /** A recipe step's references in prompt order, replacing photo/assetId/fixedReferenceUrls. */
+  references?: ReadonlyArray<{ type: 'image' | 'video'; url: string }>;
 }
 
 /** A 30-second template on Seedance 2.0 (15s per task) is rendered on 2.5 in one task instead. */
@@ -233,9 +256,15 @@ export async function startVideoRender(input: VideoRenderInput, deps: RenderEngi
   if (client === null) throw new RenderFailure('no_engine_key', 'ARK_API_KEY is not set', false);
   const { model, seconds } = videoModelFor(input.engine, input.seconds);
   const content: ArkContentItem[] = [{ type: 'text', text: input.prompt }];
-  if (input.assetId) content.push({ type: 'image_url', image_url: { url: assetReference(input.assetId) }, role: 'reference_image' });
+  if (input.references) {
+    for (const reference of input.references) {
+      content.push(reference.type === 'video'
+        ? { type: 'video_url', video_url: { url: reference.url }, role: 'reference_video' }
+        : { type: 'image_url', image_url: { url: reference.url }, role: 'reference_image' });
+    }
+  } else if (input.assetId) content.push({ type: 'image_url', image_url: { url: assetReference(input.assetId) }, role: 'reference_image' });
   else if (input.photo) content.push({ type: 'image_url', image_url: { url: dataUrl(input.photo) }, role: 'reference_image' });
-  for (const url of input.fixedReferenceUrls ?? []) {
+  for (const url of input.references ? [] : input.fixedReferenceUrls ?? []) {
     content.push({ type: 'image_url', image_url: { url }, role: 'reference_image' });
   }
   try {

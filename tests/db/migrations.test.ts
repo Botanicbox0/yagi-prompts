@@ -127,6 +127,7 @@ describe('migrations apply on a fresh database (PLAN §6)', () => {
       'platform_creator_applications',
       'platform_creators',
       'platform_credit_ledger',
+      'platform_format_assets',
       'platform_formats',
       'platform_image_offers',
       'platform_messages',
@@ -150,6 +151,8 @@ describe('migrations apply on a fresh database (PLAN §6)', () => {
       // 2026-09-11 — the owner's complaint about a result, one per render, worked from the admin inbox.
       'render_feedback',
       // docs/TEMPLATES-IA.md §8 (2026-09-06) — the render queue: one row per make, from photo to link.
+      'render_job_outputs',
+      'render_job_recipes',
       'render_jobs',
       // docs/PLATFORM-2.0.md §17.1 (2026-10-23) — linked SNS accounts, their write ledger, the local worker's heartbeat.
       'social_account_writes',

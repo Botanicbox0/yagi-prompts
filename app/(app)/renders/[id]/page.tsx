@@ -11,6 +11,7 @@ import { getPromptCatalog } from '@/lib/prompts/public-catalog';
 import { identityVerifyHref } from '@/lib/identity/links';
 import { runLiveRenderPass } from '@/lib/renders/runtime';
 import { failureReason, loadOwnRender } from '@/lib/renders/service';
+import { baseFailureCode } from '@/lib/renders/engines';
 import { FEEDBACK_REASONS, loadRenderFeedback } from '@/lib/renders/feedback';
 import { estimateRenderMinutes } from '@/lib/renders/eta';
 import { loadRenderExtras } from '@/lib/renders/extras';
@@ -175,7 +176,7 @@ export default async function RenderPage({ params, searchParams }: { params: Pro
             {/* The refund is the sentence a reader looks for first after a failure: full ink, framed. */}
             <p data-render-refund className="mt-4 border-l-2 border-accent pl-3 text-body">{r.notCharged}</p>
             <div className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-3">
-              {(job.errorCode === 'identity_required' || job.errorCode === 'face_policy') && (
+              {(baseFailureCode(job.errorCode) === 'identity_required' || baseFailureCode(job.errorCode) === 'face_policy') && (
                 <a href={identityVerifyHref(`${templateUrl}#make`)} data-identity-door className="inline-block bg-accent px-6 py-3 font-label text-label text-white uppercase">
                   <TextSwap>{dict.identity.start} →</TextSwap>
                 </a>
