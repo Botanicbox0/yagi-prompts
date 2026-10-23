@@ -26,12 +26,15 @@
 4. 공개 캠페인 목록(`loadPublicCampaigns`)은 `audience='public'`만.
 5. 문안: 브랜드 화면 문안은 `brandWorkspace`(`wizard`·`timeline`·`tabs`·`applicants`·`payments`·`paymentStates`)로. `messages/campaign-*.ts`에서 브랜드 화면만 쓰던 키(`buyer`·`receipt`·`noReceipt`·`participants`·`none`·`invitations`) 삭제, 크리에이터·관리자 문안은 그대로.
 
-### 클라우드 적용 필요 (코드 배포 **전**)
+### 클라우드 적용 — 완료 (2026-10-23, Director, `0056_core_brand_campaign_terms_with_glue_0140`)
 - `supabase/migrations/0056_core_brand_campaign_terms.sql` — `brand_projects.campaign_terms jsonb`(객체만), `campaigns.audience text not null default 'public' check in ('public','influencers','invited')`, `campaign_targets(campaign_id, user_id, invited_by, invited_at, pk(campaign_id,user_id))`, `campaign_applications.brand_preferred_at timestamptz`
 - `supabase/migrations/0140_glue_brand_campaign_terms.sql` — `campaign_targets` RLS enable+force, public/anon/authenticated revoke, service_role grant(0131 형태)
-- 순서가 중요: 0056 없이 배포하면 공개 캠페인 목록 쿼리(`audience`)가 실패한다. `supabase/README.md` 원장에 "미적용(B1)"으로 기록.
+- 순서가 중요: 0056 없이 배포하면 공개 캠페인 목록 쿼리(`audience`)가 실패한다. `supabase/README.md` 운영 적용 이력에 #89 행으로 기록(main 병합 커밋에서).
 
-### 검증 (worktree, Windows)
+### 재검증 — main(#87·#88) 병합 뒤 (2026-10-23)
+병합 커밋 `589c61d`(충돌은 `supabase/README.md`만: main의 0055 미적용 메모 유지 + 0056/0140 적용 행 추가). `npm ci` → `db:local` OK → `tsc` exit 0 → `vitest` **304 files / 2,935 tests passed** → `build:local`(3014) exit 0 → `start:local` 3014 + `sweep:anon` **SWEEP PASSED — 1086/1086**.
+
+### 검증 (worktree, Windows — 병합 전 첫 실행)
 | 단계 | 결과 |
 | --- | --- |
 | `npm run db:local` | OK (로컬 픽스처: 마법사로 보낸 요청 1건 + 픽스처 프로젝트에 연결된 `invited` 캠페인과 가상 지원자 3명) |
