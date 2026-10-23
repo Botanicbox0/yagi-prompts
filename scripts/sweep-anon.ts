@@ -1404,15 +1404,32 @@ async function sweepRenders(): Promise<void> {
   if (verify.location?.includes('signin=1')) ok('…to sign-in', verify.location);
   else fail('/identity/verify redirect target', `expected the sign-in redirect, got ${verify.location}`);
   const callback = await request('/api/identity/callback');
-  const portrait = await request('/identity/portrait', { headers: { 'user-agent': CHROME_UA } });
-  expectOneOf('portrait page redirects anonymous', portrait.status, [302,303,307]);
-  const portraitState = await request('/api/identity/portrait');
-  expectEqual('portrait state refuses anonymous', portraitState.status, 401);
-  expectPresent('portrait response is private', portraitState.cacheControl ?? '', 'no-store');
-  const portraitImage = await request('/api/identity/portrait/00000000-0000-4000-8000-000000000000/image');
-  expectEqual('portrait image refuses anonymous', portraitImage.status, 401);
-  const portraitCreate = await fetch(`${BASE}/api/identity/portrait`, {method:'POST',headers:{origin:BASE}});
-  expectEqual('portrait creation refuses anonymous', portraitCreate.status, 401);
+  // docs/IDENTITY-SELFIE.md — the one photo is app surface; its bytes and state are owner-only.
+  const selfiePage = await request('/identity/selfie', { headers: { 'user-agent': CHROME_UA } });
+  expectOneOf('selfie page redirects anonymous', selfiePage.status, [302,303,307]);
+  expectPresent('selfie page redirects to sign-in', selfiePage.location ?? '', 'signin=1');
+  const selfieState = await request('/api/identity/selfie');
+  expectEqual('selfie state refuses anonymous', selfieState.status, 401);
+  expectPresent('selfie response is private', selfieState.cacheControl ?? '', 'no-store');
+  const selfieImage = await request('/api/identity/selfie/00000000-0000-4000-8000-000000000000/image');
+  expectEqual('selfie image refuses anonymous', selfieImage.status, 401);
+  expectPresent('selfie image response is private', selfieImage.cacheControl ?? '', 'no-store');
+  const selfieCreate = await fetch(`${BASE}/api/identity/selfie`, {method:'POST',headers:{origin:BASE}});
+  expectEqual('selfie upload refuses anonymous', selfieCreate.status, 401);
+  const selfieCross = await fetch(`${BASE}/api/identity/selfie`, {method:'POST',headers:{origin:'https://evil.example'}});
+  expectEqual('selfie upload refuses cross-origin', selfieCross.status, 403);
+  // docs/IDENTITY-SELFIE.md §4 — "make default", the note and soft delete are owner-only, same-origin writes.
+  for (const method of ['PATCH', 'DELETE'] as const) {
+    const body = JSON.stringify(method === 'PATCH' ? {id:'00000000-0000-4000-8000-000000000000',isDefault:true} : {id:'00000000-0000-4000-8000-000000000000'});
+    const anonymous = await request('/api/identity/selfie', {method,headers:{origin:BASE,'content-type':'application/json'},body});
+    expectEqual(`selfie ${method} refuses anonymous`, anonymous.status, 401);
+    expectPresent(`selfie ${method} response is private`, anonymous.cacheControl ?? '', 'no-store');
+    const cross = await request('/api/identity/selfie', {method,headers:{origin:'https://evil.example','content-type':'application/json'},body});
+    expectEqual(`selfie ${method} refuses cross-origin`, cross.status, 403);
+    expectPresent(`selfie ${method} cross-origin response is private`, cross.cacheControl ?? '', 'no-store');
+  }
+  const selfieOrder = await fetch(`${BASE}/api/billing/toss/orders`, {method:'POST',headers:{origin:BASE},body:new FormData()});
+  expectEqual('toss order without a session refuses', selfieOrder.status, 401);
   expectEqual('the identity callback answers a bare hit with a redirect', callback.status, 303);
   expectPresent('…to the verify page, result unknown', callback.location ?? '', '/identity/verify?result=unknown');
 

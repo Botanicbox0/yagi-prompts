@@ -17,6 +17,7 @@ import { formatBrandTimestamp } from "@/components/brand-workspace/format";
 import { StaffNotice, adminOrganizationHref } from "@/components/brand-workspace/staff-notice";
 import { StudioHelp, StudioIntro } from "@/components/brand-workspace/studio-onboarding";
 import { studioIdentityHref } from "@/lib/brands/workspace/links";
+import { currentSelfie } from "@/lib/identity/selfie-service";
 import { getDictionary } from "@/lib/i18n/dictionaries";
 
 /** Template requests are support messages headed in the sender's language; either heading counts. */
@@ -73,17 +74,10 @@ export default async function BrandStudio({
   const canCreate = !access.staff && production?.role !== "viewer";
   // The face is asked for only once there is a template to use it with.
   const hasTemplates = contracts.some((c) => c.templates.length > 0);
-  const portrait = hasTemplates
-    ? (
-        await sql.query<{ attempt_id: string }>(
-          "select s.attempt_id from identity_portrait_selections s join identity_portrait_attempts a on a.id=s.attempt_id and a.user_id=s.user_id where s.user_id=$1 and a.status='succeeded'",
-          [viewer.userId],
-        )
-      ).rows[0]?.attempt_id ?? null
-    : null;
+  const selfie = hasTemplates ? (await currentSelfie(sql, viewer.userId!))?.id ?? null : null;
   const mode = assetLibraryMode();
   const verifyRequired =
-    !!portrait &&
+    !!selfie &&
     needsLiveness("seedance-2.5", mode) &&
     (await identityStatusFor(sql, viewer.userId!, mode)) !== "active";
 
@@ -164,7 +158,7 @@ export default async function BrandStudio({
                 <strong>
                   {verifyRequired
                     ? t.verifyRequired
-                    : portrait
+                    : selfie
                       ? t.identityReady
                       : t.identityNeeded}
                 </strong>
@@ -172,7 +166,7 @@ export default async function BrandStudio({
               </div>
               <a
                 className="bw-button"
-                href={studioIdentityHref(verifyRequired ? "verify" : "portrait", locale, brandHost)}
+                href={studioIdentityHref(verifyRequired ? "verify" : "selfie", locale, brandHost)}
                 target="_blank"
                 rel="noopener noreferrer"
               >
@@ -250,14 +244,14 @@ export default async function BrandStudio({
                       contractId={c.id}
                       organizationId={orgId ?? null}
                       templateId={v.id}
-                      portraitId={portrait}
+                      selfieId={selfie}
                       locale={locale}
                       t={t}
                       disabled={
                         verifyRequired ||
                         !c.active ||
                         c.remaining < 1 ||
-                        !portrait ||
+                        !selfie ||
                         production.role === "viewer" ||
                         production.role === "studio"
                       }

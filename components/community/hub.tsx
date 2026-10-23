@@ -8,7 +8,7 @@ const button='min-h-12 rounded-full bg-on-surface px-6 py-3 text-sm text-surface
 const panel='space-y-5 rounded-2xl border border-hairline p-5 sm:p-7';
 type Access={community:boolean;creators:boolean;rewards:boolean};
 /** `creatorDoor` is resolved on the server: the program page for others, the workspace for approved suppliers. */
-export function CommunityHub({initial,copy,access,portraitId,initialRender,creatorDoor}:{initial:PlatformHome;copy:Dictionary['community'];access:Access;portraitId:string|null;initialRender:string;creatorDoor?:{href:string;label:string}|null}) {
+export function CommunityHub({initial,copy,access,selfieId,initialRender,creatorDoor}:{initial:PlatformHome;copy:Dictionary['community'];access:Access;selfieId:string|null;initialRender:string;creatorDoor?:{href:string;label:string}|null}) {
  const [home,setHome]=useState(initial),[busy,setBusy]=useState(false),[notice,setNotice]=useState(''),[error,setError]=useState(false);
  const requests=useRef(new Map<string,string>());
  const status=(s:string)=>copy.status[s as keyof typeof copy.status]??s;
@@ -65,8 +65,8 @@ export function CommunityHub({initial,copy,access,portraitId,initialRender,creat
      {!home.claims.length?<p className="text-sm opacity-65">{copy.claimEmpty}</p>:null}
     </section>
     <section className={panel}><h2 className="text-xl font-semibold">{copy.balance}</h2><p className="text-4xl font-semibold tabular-nums">{home.balance.toLocaleString()}</p><p className="text-sm leading-relaxed opacity-70">{copy.rewardHint}</p>
-     {!portraitId?<p className="text-sm">{copy.portraitRequired} <a className="underline" href="/identity/portrait?next=%2Fcommunity">{copy.portraitLink}</a></p>:null}
-     {home.offers.map(o=><form key={o.id} className="space-y-3 border-t border-hairline pt-4" onSubmit={e=>void send(e,'image',{offerId:o.id,portraitId})}><h3>{o.title}</h3><p className="text-sm">{o.credits} · {copy.balance}</p><button disabled={busy||!portraitId||home.balance<o.credits} className={button}>{copy.creditUse}</button></form>)}
+     {!selfieId?<p className="text-sm">{copy.selfieRequired} <a className="underline" href="/identity/selfie?next=%2Fcommunity">{copy.selfieLink}</a></p>:null}
+     {home.offers.map(o=><form key={o.id} className="space-y-3 border-t border-hairline pt-4" onSubmit={e=>void send(e,'image',{offerId:o.id,selfieId})}><h3>{o.title}</h3><p className="text-sm">{o.credits} · {copy.balance}</p><button disabled={busy||!selfieId||home.balance<o.credits} className={button}>{copy.creditUse}</button></form>)}
     </section>
    </>:null}
   </div>

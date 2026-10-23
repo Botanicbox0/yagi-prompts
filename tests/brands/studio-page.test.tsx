@@ -15,7 +15,7 @@ vi.mock("@/components/brand-workspace/context", async () => {
   const { getDictionary } = await import("@/lib/i18n/dictionaries");
   return { brandContext: async () => { const dict = getDictionary(state.locale); return {
     viewer: { userId: "00000000-0000-4000-8000-000000000001", isAdmin: false },
-    sql: { query: async () => ({ rows: [{ attempt_id: "portrait" }] }) },
+    sql: { query: async () => ({ rows: [{ id: "selfie", replaced_at: null }] }) },
     verifiedEmail: undefined, brandHost: state.brandHost, locale: state.locale, dict, b: dict.brandWorkspace }; } };
 });
 vi.mock("@/lib/brands/workspace/service", () => ({
@@ -51,7 +51,7 @@ describe("brand studio page", () => {
   it("keeps the face setup link relative off the brand host, through sign-in with the workspace language", async () => {
     state.locale = "en";
     const html = await render();
-    expect(html).toContain('href="/auth/signin?next=%2Fidentity%2Fportrait%3Flocale%3Den&amp;locale=en"');
+    expect(html).toContain('href="/auth/signin?next=%2Fidentity%2Fselfie%3Flocale%3Den&amp;locale=en"');
     expect(html).not.toContain("https://twings.app/identity");
   });
 
@@ -62,7 +62,7 @@ describe("brand studio page", () => {
   });
 
   it("builds links that the consumer sign-in accepts as its return path", () => {
-    for (const kind of ["portrait", "verify"] as const) {
+    for (const kind of ["selfie", "verify"] as const) {
       const url = new URL(studioIdentityHref(kind, "ko", true));
       expect(url.origin).toBe("https://twings.app");
       const next = url.searchParams.get("next");

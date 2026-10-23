@@ -172,10 +172,10 @@ describe('subscription return credentials', () => {
 
 describe('monthly render request boundary', () => {
   it('sends consent and a stable submission id, without overriding the template format', () => {
-    const form = buildSubscriptionRenderForm({ requestId: 'stable-request', template: 'film', locale: 'ko', portraitId: 'portrait', editText: '셔츠를 파란색으로 바꿔주세요.', references: [], referencesConsent: false });
+    const form = buildSubscriptionRenderForm({ requestId: 'stable-request', template: 'film', locale: 'ko', selfieId: 'selfie', editText: '셔츠를 파란색으로 바꿔주세요.', references: [], referencesConsent: false });
     expect(form.get('requestId')).toBe('stable-request');
     expect(form.get('ownFaceConsent')).toBe('1');
-    expect(form.get('portraitId')).toBe('portrait');
+    expect(form.get('selfieId')).toBe('selfie');
     expect(form.get('editText')).toBe('셔츠를 파란색으로 바꿔주세요.');
     for (const key of ['aspect', 'resolution', 'prompt', 'rawPrompt', 'referenceConsent']) expect(form.has(key)).toBe(false);
   });

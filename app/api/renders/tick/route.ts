@@ -1,6 +1,4 @@
-import { after, NextResponse } from 'next/server';
-import { portraitDeps } from '@/lib/identity/portrait-runtime';
-import { runPortraitPass } from '@/lib/identity/portrait-service';
+import { NextResponse } from 'next/server';
 import { arkAssetsConfigFromEnv } from '@/lib/ark/assets';
 import { arkConfigFromEnv } from '@/lib/ark/client';
 import { getSqlRunner } from '@/lib/db/connect';
@@ -38,11 +36,10 @@ async function tick(request: Request): Promise<NextResponse> {
   const sql = await getSqlRunner();
   if (sql === null) return NextResponse.json({ ok: false, code: 'unavailable' }, { status: 503, headers: HEADERS });
 
-  // A failed pass must not take the portrait and secondary-usage recoveries down with it (docs/PLATFORM-2.0.md §2.2-3).
+  // A failed pass must not take the secondary-usage recovery down with it (docs/PLATFORM-2.0.md §2.2-3).
   let report: RenderPassReport | null = null;
   try { report = await runLiveRenderPass(sql, { limit: 5 }); }
   catch (error) { console.error(`[renders] ${JSON.stringify({ event: 'render_pass_failed', code: error instanceof Error ? error.name : 'unknown' })}`); }
-  after(async()=>{try{const portraits=await portraitDeps();if(portraits)await runPortraitPass(portraits);}catch{/* Durable portrait queue is resumed by its owner or a later tick. */}});
   // Secondary-usage payments (docs/SECONDARY-USAGE.md): durable recovery of lost confirmations, unfinished
   // activation and admin-requested refunds, with no page load. Independent of any render or public flag.
   let brandUsage: { checked: number } | null = null;

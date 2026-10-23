@@ -6,7 +6,7 @@ import { publicHref } from '@/lib/routing/request-surface';
  * workspace language. On brand.twings.app it is absolute (the page lives on twings.app); on local and
  * preview hosts it stays relative, so testing never jumps to production.
  */
-export function studioIdentityHref(kind: 'portrait' | 'verify', locale: string, brandHost: boolean): string {
+export function studioIdentityHref(kind: 'selfie' | 'verify', locale: string, brandHost: boolean): string {
   const next = `/identity/${kind}?locale=${encodeURIComponent(locale)}`;
   return publicHref(`/auth/signin?next=${encodeURIComponent(next)}&locale=${encodeURIComponent(locale)}`, brandHost);
 }

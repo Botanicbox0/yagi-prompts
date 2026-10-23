@@ -5,7 +5,9 @@ import { getDictionary } from '@/lib/i18n/dictionaries';
 import { LocaleToggle } from '@/components/locale-toggle';
 import { siteLinks } from '@/components/marketing/chrome';
 import { TwingsLogo } from '@/components/brand/twings-mark';
-import { portraitEnabled } from '@/lib/identity/portrait-runtime';
+import { selfieLibrary, selfieLimit, type SelfieLibrary } from '@/lib/identity/selfie-service';
+import { IDENTITY_SELFIE_PATH } from '@/lib/identity/links';
+import { SelfieLibraryPanel } from '@/components/identity/selfie-grid';
 import { TextSwap } from '@/components/ui/text-swap';
 import { deletionMailto } from '@/components/app/deletion-mailto';
 import {
@@ -96,19 +98,21 @@ export default async function AccountPage({
   let profile: CreatorProfile | null = null;
   let subscription: SubscriptionSummary | null = null;
   let subscriptionLoaded = false;
+  let selfies: SelfieLibrary | null = null;
   try {
     viewer = await getViewer();
     if (viewer.userId !== null) {
       const sql = await getSqlRunner();
       if (sql !== null) {
-        const [prefs, works, creator, monthly] = await Promise.allSettled([
+        const [prefs, works, creator, monthly, face] = await Promise.allSettled([
           loadPreferences(sql, viewer.userId), listMyRenders(sql, viewer.userId, 3), loadCreatorProfile(sql, viewer.userId),
-          getSubscriptionSummary(sql, viewer.userId, { environment: 'live' }),
+          getSubscriptionSummary(sql, viewer.userId, { environment: 'live' }), selfieLibrary(sql, viewer.userId, selfieLimit()),
         ]);
         if (prefs.status === 'fulfilled') preferences = prefs.value ?? PREFERENCES_OFF;
         if (works.status === 'fulfilled') renders = works.value;
         if (creator.status === 'fulfilled') profile = creator.value;
         if (monthly.status === 'fulfilled') { subscription = monthly.value; subscriptionLoaded = true; }
+        if (face.status === 'fulfilled') selfies = face.value;
       }
     }
   } catch {
@@ -144,6 +148,23 @@ export default async function AccountPage({
         </h1>
 
         {viewer?.userId && <CreatorProfileCard profile={profile} email={viewer.email} dict={dict} locale={locale} feedback={params.profile} />}
+        {/* The saved photos (docs/IDENTITY-SELFIE.md): the first thing a creator needs, so the first card after the name. */}
+        {viewer?.userId && (
+          <section data-selfie-account data-selfie-present={selfies?.items.length ? 'true' : 'false'} aria-labelledby="account-selfie-title" className="mt-6 max-w-detail rounded-3xl border border-hairline bg-white p-5 sm:p-6">
+            <h2 id="account-selfie-title" className="text-base font-semibold">{dict.selfie.panelTitle}</h2>
+            <div className="mt-4">
+              {/* Before the cloud migration the card still invites the first upload; the selfie page then says it is unavailable. */}
+              <SelfieLibraryPanel
+                copy={dict.selfie}
+                locale={locale}
+                variant="account"
+                initial={selfies ?? { limit: selfieLimit(), defaultId: null, items: [] }}
+                manageHref={IDENTITY_SELFIE_PATH}
+                signinHref={`/auth/signin?next=${encodeURIComponent('/account')}&locale=${locale}`}
+              />
+            </div>
+          </section>
+        )}
         {viewer?.userId && <SubscriptionStatus initial={subscription} copy={dict.creatorSubscription} locale={locale} unavailable={!subscriptionLoaded} />}
         <div className="mt-8 max-w-detail">
           <dl>
@@ -153,7 +174,6 @@ export default async function AccountPage({
           </dl>
         </div>
 
-        {viewer?.userId && portraitEnabled() ? <div className="mt-10 max-w-detail border-t border-hairline pt-6"><a data-portrait-account href="/identity/portrait" className="inline-flex min-h-12 items-center rounded-full border border-current px-6 py-3">{dict.portrait.manage} →</a><p className="mt-3 text-sm opacity-65">{dict.portrait.allowance}</p></div> : null}
         {/* --- notifications (§3.5) -------------------------------------- */}
         <div className="mt-14 max-w-detail border-t border-hairline pt-10">
           <p className="font-label text-eyebrow uppercase opacity-60">{copy.notifHeading}</p>

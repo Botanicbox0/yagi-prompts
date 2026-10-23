@@ -7,9 +7,15 @@ import {
 } from '@/lib/billing/toss-runtime';
 import { createTossOrder } from '@/lib/billing/toss-service';
 import { canStartRender } from '@/lib/renders/service';
-import { portraitEnabled } from '@/lib/identity/portrait-runtime';
-import { selectedPortraitPhoto } from '@/lib/identity/portrait-service';
+import { savedSelfiePhoto } from '@/lib/identity/selfie-service';
 
+/**
+ * `POST /api/billing/toss/orders` — an order for one template, paid with the saved selfie.
+ *
+ * The photo never travels with the order any more (founder, 2026-10-22): the studio names the
+ * selfie it showed (`selfieId`) and the server copies the CURRENT selfie's bytes into the order,
+ * so a selfie replaced in another tab answers `selfie_required` instead of being charged for.
+ */
 export const dynamic = 'force-dynamic';
 export async function POST(request: Request) {
   const json = (body: unknown, status: number) =>
@@ -24,24 +30,17 @@ export async function POST(request: Request) {
     const deps = await getTossContext();
     if (!deps) return json({ ok: false, code: 'unavailable' }, 503);
     const form = await request.formData();
-    const photo = form.get('photo');
-    const portraitId = portraitEnabled() ? String(form.get('portraitId') ?? '') : '';
-    const saved = portraitId ? await selectedPortraitPhoto(deps.sql,deps.store,viewer.userId,portraitId) : null;
-    if (portraitEnabled() && !saved) return json({ok:false,code:'bad_photo'},400);
+    const selfieId = String(form.get('selfieId') ?? '');
+    const saved = selfieId ? await savedSelfiePhoto(deps.sql, deps.store, viewer.userId, selfieId) : null;
+    if (!saved) return json({ ok: false, code: 'selfie_required' }, 400);
     const result = await createTossOrder(deps, viewer, {
       templateSlug: String(form.get('template') ?? ''),
       aspect: String(form.get('aspect') ?? ''),
       // A name, never a price: the service prices it from the template row (lib/twings/resolution.ts).
       resolution: String(form.get('resolution') ?? ''),
       locale: String(form.get('locale') ?? ''),
-      portraitId: saved ? portraitId : undefined,
-      photo:
-        saved ?? (photo instanceof File
-          ? {
-              bytes: new Uint8Array(await photo.arrayBuffer()),
-              mime: photo.type,
-            }
-          : null),
+      selfieId,
+      photo: saved,
     });
     return result.ok
       ? json({ ok: true, href: `/billing/toss/${result.order.id}` }, 201)

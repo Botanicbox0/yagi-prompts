@@ -39,7 +39,7 @@ export async function POST(request: Request) {
         contractId: String(v.contractId ?? ""),
         templateId: String(v.templateId ?? ""),
         requestId: String(v.requestId ?? ""),
-        portraitId: String(v.portraitId ?? ""),
+        selfieId: String(v.selfieId ?? ""),
         ownFaceConfirmed: v.ownFaceConfirmed === true,
         locale: typeof v.locale === "string" ? v.locale : null,
       },

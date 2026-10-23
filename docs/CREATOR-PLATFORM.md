@@ -37,6 +37,8 @@ Moderation excludes duplicate/abusive/fraudulent ratings with reason, actor and 
 
 Show eye-level, front-facing, one-person examples before upload and keep them visible on retry. A self-hosted, version-pinned MediaPipe Face Landmarker runs in a disposable browser worker after file selection. No pixels or landmarks are transmitted for assessment. The SDK's built-in usage telemetry is blocked before fetch; a worker-specific CSP restricts connections and scripts to this origin as a second boundary. The model is SHA-256 checked at build time; runtime files come from the exact lockfile version. The worker resizes to 1024 pixels, closes resources, and is terminated on file change, navigation or a 15-second timeout.
 
+2026-10-22: the generated reference portrait is gone; the same advisory check now runs inside the one-time selfie upload (inline in every template's make loop, `docs/IDENTITY-SELFIE.md`), joined by an on-device exposure hint (64×64 luma summary, `assessPhotoLight`) that is equally advisory.
+
 Owner decision on 2026-10-15: face-angle assessment is **advisory only**. Angle, missing/multiple face, loading and unavailable states never disable submission. The customer may continue with the selected photo after the existing rights consent. No second override checkbox is required. Existing provider moderation and identity verification stay mandatory. Broad yaw/pitch/roll hints (20/25/15 degrees) are engineering heuristics, not calibrated measurements or approval of identity. Validate diverse consented photos/device performance before tuning; never turn these thresholds into a submission gate without a new owner decision.
 
 ## Security model and rollout

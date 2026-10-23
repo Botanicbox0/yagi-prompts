@@ -310,7 +310,7 @@ it("keeps outputs in the organization after expiry, blocks public sharing and re
   );
   expect(await loadProductionOutput({ sql }, user, r.id)).toBeNull();
 });
-it("requires the selected own portrait, preserves identity gates, and restores a real terminal render failure", async () => {
+it("requires the saved own selfie, preserves identity gates, and restores a real terminal render failure", async () => {
   const objects = new Map<string, Uint8Array>();
   const store: RenderStore = {
     name: "local",
@@ -324,27 +324,24 @@ it("requires the selected own portrait, preserves identity gates, and restores a
     },
     url: async () => null,
   };
-  const portraitId = randomUUID(),
-    key = `${portraitId}/result.png`;
+  const selfieId = randomUUID(),
+    key = `${selfieId}/selfie.png`;
   objects.set(key, new Uint8Array([1, 2, 3]));
-  await sql.query(
-    `insert into identity_portrait_attempts(id,user_id,request_id,slot,status,model,prompt_version,input_key,result_key,consent_at,completed_at) values($1,$2,$3,1,'succeeded','gpt-image-2.5-sunburst','fixture',$4,$4,now(),now())`,
-    [portraitId, userId, randomUUID(), key],
-  );
   const input = {
     contractId,
     templateId,
     requestId: randomUUID(),
-    portraitId,
+    selfieId,
     ownFaceConfirmed: true,
     locale: "ko",
   };
+  // No saved selfie under that id: nothing to copy, nothing to send.
   expect(
     await createBrandRenderJob({ sql, store, now }, user, input),
   ).toMatchObject({ ok: false, code: "identity_required" });
   await sql.query(
-    "insert into identity_portrait_selections(user_id,attempt_id) values($1,$2)",
-    [userId, portraitId],
+    `insert into identity_selfies(id,user_id,input_key,sha256,width,height,consent_at) values($1,$2,$3,$4,320,400,now())`,
+    [selfieId, userId, key, "a".repeat(64)],
   );
   expect(
     await createBrandRenderJob({ sql, store, now }, user, {

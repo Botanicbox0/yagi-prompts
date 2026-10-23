@@ -27,7 +27,7 @@ export async function POST(request:Request) {
   let raw:unknown;try{raw=JSON.parse(new TextDecoder().decode(bytes));}catch{return json({code:'invalid'},400);}
   const sql=await getSqlRunner();if(!sql)return json({code:'unavailable'},503);
   const access=await platformAccess(sql);if(!access.ready)return json({code:'not_open'},403);
-  const image=z.object({action:z.literal('image'),requestId:z.uuid(),offerId:z.uuid(),portraitId:z.uuid()}).strict().safeParse(raw);
+  const image=z.object({action:z.literal('image'),requestId:z.uuid(),offerId:z.uuid(),selfieId:z.uuid()}).strict().safeParse(raw);
   if(image.success) {
    if(!access.rewards)return json({code:'not_open'},403);
    const result=await createRewardImageJob({sql,store:await getRenderStore()},viewer,image.data);

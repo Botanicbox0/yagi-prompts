@@ -11,7 +11,7 @@ export function ProductionCreate({
   contractId,
   organizationId = null,
   templateId,
-  portraitId,
+  selfieId,
   locale,
   t,
   disabled,
@@ -20,7 +20,7 @@ export function ProductionCreate({
   /** The selected brand, kept on the result page link so it opens without a brand re-selection. */
   organizationId?: string | null;
   templateId: string;
-  portraitId: string | null;
+  selfieId: string | null;
   locale: string;
   t: T;
   disabled: boolean;
@@ -43,7 +43,7 @@ export function ProductionCreate({
         body: JSON.stringify({
           contractId,
           templateId,
-          portraitId,
+          selfieId,
           requestId: request.current,
           locale,
           ownFaceConfirmed:

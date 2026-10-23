@@ -62,6 +62,7 @@ select status from subscriptions where user_id = 'THE-ID';   -- expect 'canceled
 and `notification_jobs`'s recipients all hang off `profiles` with `on delete cascade` (§6). Deleting
 the auth user therefore removes the account and everything personal attached to it in one step.
 
+- [ ] **Before** deleting the user, remove their saved photos from the private `renders` bucket: every `input_key` of `select input_key from identity_selfies where user_id = 'THE-ID'` — soft-deleted (`deleted_at`) and replaced rows included, because deleting a photo in the app keeps its `{selfieId}/selfie.png` (docs/IDENTITY-SELFIE.md §4) and the row cascade below never touches storage.
 - [ ] Supabase dashboard → Authentication → Users → find the address → **Delete user**.
       (Or `supabase.auth.admin.deleteUser(id)` with the service role.)
 - [ ] Verify the cascade:

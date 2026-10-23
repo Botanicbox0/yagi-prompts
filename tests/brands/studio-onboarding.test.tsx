@@ -54,7 +54,7 @@ const set = (role: BrandChoiceRole, contracts: ProductionContractView[] = [], su
   state.role = role; state.contracts = contracts; state.support = support;
 };
 /** The face setup link (`studioIdentityHref`), encoded inside the sign-in return path. */
-const IDENTITY_LINK = "%2Fidentity%2Fportrait";
+const IDENTITY_LINK = "%2Fidentity%2Fselfie";
 
 beforeEach(() => { set("owner"); state.locale = "ko"; state.queries = 0; });
 

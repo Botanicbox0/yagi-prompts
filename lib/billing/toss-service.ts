@@ -13,6 +13,7 @@ import type {
   RenderServiceDeps,
 } from '@/lib/renders/service';
 import { extensionFor } from '@/lib/renders/store';
+import { useSavedSelfie } from '@/lib/identity/selfie-service';
 import { TossError, type TossGateway, type TossPayment } from './toss-gateway';
 
 export const TOSS_CONSENT_VERSION = 'refund-2026-09-14-section-2';
@@ -71,6 +72,8 @@ export interface TossOrder {
   expires_at: string | Date;
   failure_code: string | null;
   identity_portrait_id: string | null;
+  /** 0050: the saved photo this order copied its input from (docs/IDENTITY-SELFIE.md §4). */
+  identity_selfie_id: string | null;
   /** 0052: the order's own photo copy is gone (it never became a render). */
   input_deleted_at: string | Date | null;
   /** 0052: the order 다시 결제하기 made from this one. */
@@ -210,7 +213,7 @@ export async function createTossOrder(
   await deps.store.put(inputKey, input.photo.bytes, input.photo.mime);
   await deps.sql.query(
     `insert into billing_payments
-    (id,user_id,environment,amount_krw,template_id,template_slug,order_name,aspect,locale,render_ref,input_key,input_mime,expires_at,identity_portrait_id,resolution)
+    (id,user_id,environment,amount_krw,template_id,template_slug,order_name,aspect,locale,render_ref,input_key,input_mime,expires_at,identity_selfie_id,resolution)
     values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
     [
       id,
@@ -226,7 +229,7 @@ export async function createTossOrder(
       inputKey,
       input.photo.mime,
       new Date(clock(deps).getTime() + 30 * 60_000),
-      input.portraitId ?? null,
+      input.selfieId ?? null,
       choice.resolution,
     ],
   );
@@ -257,6 +260,8 @@ export async function retryTossOrder(
       if (!o) return fail('not_found');
       if (o.retried_by) return { ok: true, order: { id: o.retried_by } };
       if (!tossOrderView(o).retry) return fail('not_retryable');
+      // A new order only on a photo the reader still keeps: replaced or deleted since → selfie_required.
+      if (o.identity_selfie_id && !(await useSavedSelfie(tx, o.user_id!, o.identity_selfie_id, clock(deps)))) return fail('selfie_required');
       let bytes: Uint8Array;
       try {
         bytes = await deps.store.read(o.input_key);
@@ -268,7 +273,7 @@ export async function retryTossOrder(
         aspect: o.aspect,
         resolution: o.resolution ?? '',
         locale: o.locale,
-        portraitId: o.identity_portrait_id ?? undefined,
+        selfieId: o.identity_selfie_id ?? undefined,
         photo: { bytes, mime: o.input_mime },
       });
       if (!created.ok) return created;

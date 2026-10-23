@@ -82,6 +82,8 @@ npm run sweep:anon             # 익명 방문자 스윕 477+ 체크, "SWEEP PAS
 
 얼굴 기준 사진 PR #8과 0028/0114는 운영 반영됐다. 대표의 후속 결정은 최초 셀카로 Sunburst·Seedream 5.0 Pro 각각 1장 비교 후 선택, 둘 다 닮지 않으면 다른 셀카로 Sunburst 1장 추가 무료 생성이다. 기존 Sunburst 2회 규칙을 대체한다. `codex/portrait-comparison` PR #10에 구현했다. Seedream은 2026-09-22 대표가 새로 준 전용 프롬프트·공식 Base64 입력·1664×2496, Sunburst는 기존 프롬프트·1344×2016을 쓴다. Seedream에 Seedance용 `asset://`를 보내던 요청 형식 오류를 수정했으며 실제 API 200을 확인했다. 이것은 셀카 이용 제한이나 얼굴 보존 품질 검증을 의미하지 않는다. 새 0029/0115 클라우드 적용·공개는 별도 단계다. 상세는 `docs/IDENTITY-PORTRAIT.md`. 작업 상태는 PR과 현재 코드로 다시 확인한다.
 
+**2026-10-22 대표 결정(위 생성 흐름을 대체):** 기준 사진 생성은 없앤다. 정면 셀카 한 장을 올려 저장하고 모든 주문에서 재사용한다(교체 가능). 로그인 후에는 계정 페이지가 아니라 영상 포맷 목록(보던 템플릿이 있으면 그 템플릿)으로 간다. 셀카 업로드 진입점은 템플릿 스튜디오 인라인·계정 첫 카드·헤더 계정 메뉴·`/identity/selfie`. 설계·테이블 결정은 `docs/IDENTITY-SELFIE.md`. 0050/0137 클라우드 적용 필요.
+
 ## 7. SEO·GEO 체크리스트
 
 - **구조화 데이터(JSON-LD)**: 전 페이지 `Organization`(야기워크숍 주식회사, 로고, sameAs) + `WebSite`; 랜딩·FAQ에 `FAQPage`; 템플릿 페이지 `VideoObject`(예시 영상, 썸네일, 길이) + `Product`/`Offer`(원화, 1회 결제); 캠페인 페이지 `Service`; 캠페인 상세 `Event` 대신 `Offer`+`Organization`. 렌더 위치는 각 페이지의 `generateMetadata` 옆 서버 컴포넌트, 값은 사전과 카탈로그에서만 가져온다.
