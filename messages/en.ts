@@ -1527,6 +1527,10 @@ export const en = {
     byAnonymous: 'Community',
     lockChip: 'Cookie',
     cardDetail: 'View template',
+    /** Card chips and creator credit (PLATFORM-2.0 §15.3-4, 2026-10-23). Studio formats carry no byline. */
+    cardSeconds: '{seconds}s',
+    cardAuthor: 'by @{handle}',
+    cardAuthorAnonymous: 'Creator format',
     /** The handoff (2026-08-15) — copy the prompt, open the tool that runs it. */
     runCta: 'Make it on Higgsfield ↗',
     runCopied: 'Copied — paste it in the new tab',
@@ -1738,6 +1742,28 @@ export const en = {
     signInToView: 'Sign in to view',
     shareLinkLabel: 'Share link · opens without a login for 3 days',
     notCharged: 'If rendering fails permanently, the payment is refunded in full.',
+    /** Wait, result and share card (PLATFORM-2.0 §3.2-4·5, §15.3-6, 2026-10-23). */
+    wait: {
+      title: 'Making it now',
+      steps: { check: 'Photo check', make: 'Making', finish: 'Finishing' },
+      progressText: 'Step {step} of 3 · {label}',
+      body: {
+        check: 'Checking the photo you uploaded.',
+        make: 'Building the scene around your face. This is the longest step.',
+      },
+      eta: 'Usually about {minutes} min.',
+      etaNote: 'You can close this page; it keeps going.',
+      browseTitle: 'Browse other formats while you wait',
+      browseAll: 'See all formats',
+    },
+    share: 'Share',
+    shareCopied: 'Link copied.',
+    shareFailed: 'Could not copy. Press and hold the link below to copy it.',
+    oneMore: 'Make another with this face',
+    shareCard: {
+      title: 'Made with my face: {template}',
+      description: 'One front-facing selfie and you are in this scene too.',
+    },
 
     aiNote: 'Because it is made with AI, details may differ a little from the sample. If it does not play, or the face you uploaded is not in it, tell us below.',
     feedback: {

@@ -1522,6 +1522,10 @@ export const ko: Dictionary = {
     byAnonymous: '커뮤니티',
     lockChip: '쿠키',
     cardDetail: '자세히 보기',
+    /** 카드 칩·작가 표기 (PLATFORM-2.0 §15.3-4, 2026-10-23). 스튜디오 포맷에는 표기가 없다. */
+    cardSeconds: '{seconds}초',
+    cardAuthor: '작가 @{handle}',
+    cardAuthorAnonymous: '작가 포맷',
     /** 생성은 Higgsfield에서 (2026-08-15) — 프롬프트를 복사해 새 탭으로 넘긴다. */
     runCta: 'Higgsfield에서 만들기 ↗',
     runCopied: '복사됨 — 새 탭에 붙여넣으세요',
@@ -1728,6 +1732,28 @@ export const ko: Dictionary = {
     signInToView: '로그인하고 보기',
     shareLinkLabel: '공유 링크 · 3일간 로그인 없이 열립니다',
     notCharged: '생성이 최종 실패하면 결제 금액을 전액 환불합니다.',
+    /** 대기·결과·공유 카드 (PLATFORM-2.0 §3.2-4·5, §15.3-6, 2026-10-23). */
+    wait: {
+      title: '만들고 있어요',
+      steps: { check: '사진 확인', make: '만드는 중', finish: '마무리' },
+      progressText: '3단계 중 {step}단계 · {label}',
+      body: {
+        check: '올린 사진을 확인하고 있어요.',
+        make: '포맷에 맞춰 장면을 만들고 있어요. 가장 오래 걸리는 단계예요.',
+      },
+      eta: '보통 {minutes}분쯤 걸려요.',
+      etaNote: '이 창을 닫아도 계속 만들어요.',
+      browseTitle: '기다리는 동안 다른 포맷 보기',
+      browseAll: '포맷 전체 보기',
+    },
+    share: '공유',
+    shareCopied: '링크를 복사했어요.',
+    shareFailed: '복사하지 못했어요. 아래 링크를 길게 눌러 복사해 주세요.',
+    oneMore: '같은 얼굴로 하나 더',
+    shareCard: {
+      title: '내 얼굴로 만든 {template}',
+      description: '정면 셀카 한 장이면 나도 이 장면의 주인공이 돼요.',
+    },
     aiNote: 'AI 특성상 세부는 예시와 조금씩 다를 수 있습니다. 재생이 안 되거나 올린 얼굴이 반영되지 않았다면 아래에서 알려주세요.',
     feedback: {
       title: '영상에 문제가 있나요?',
