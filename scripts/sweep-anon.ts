@@ -958,8 +958,22 @@ async function sweepTemplates(): Promise<void> {
     // `>$4<` — the price as rendered text; a bare `$4` also matches React Flight's `"$4:props…"` references.
     expectAbsent('…not even the number', page.body, locale === 'ko' ? '5,900원' : '>$4<');
     expectPresent('cards link to template pages', page.body, `href="/${locale}/t/${GATED_PROMPT}"`);
-    expectPresent('the model chip', page.body, 'SEEDANCE 2.5');
+    // PLATFORM-2.0 §15.3-4 (founder 2026-10-23): portrait templates are 4:5 cards, 16:9 is for
+    // landscape ones; the card names length and shape, never the engine, and is one link.
+    expectPresent('portrait templates sit in 4:5 cards', page.body, 'data-frame="portrait"');
+    expectPresent('…landscape ones keep 16:9', page.body, 'data-frame="landscape"');
+    expectPresent('…with a length chip', page.body, 'data-card-duration');
+    expectPresent('…and a ratio chip', page.body, 'data-card-aspect');
+    expectAbsent('…and no engine chip', page.body, 'data-model-chip');
+    expectAbsent('…and no "view template" button', page.body, 'data-card-detail');
     expectPresent('the use-case filter', page.body, 'data-use-case-filter');
+    // §15.3-5: the GEO definition is still in the HTML, under the grid rather than above it.
+    {
+      const definition = page.body.indexOf('data-service-definition');
+      const lastCard = page.body.lastIndexOf('data-prompt-card=');
+      if (definition > lastCard && lastCard > -1) ok('the service definition follows the grid', `${definition} > ${lastCard}`);
+      else fail('the service definition follows the grid', `definition at ${definition}, last card at ${lastCard}`);
+    }
     expectAbsent('no lock chips anywhere', page.body, 'data-lock-chip');
     expectAbsent('no image template on the video tab', page.body, `data-prompt-card="${IMAGE_TEMPLATE}"`);
     expectAbsent('no prompt submission door', page.body, '/prompts/submit');

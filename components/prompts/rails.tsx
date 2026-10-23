@@ -1,11 +1,17 @@
 import type { PromptCard } from '@/lib/prompts/catalog';
 import { PromptCardView } from './prompt-card';
 import { RevealGrid } from '@/components/motion/reveal-grid';
+import { railOrder } from './card-frame';
 import type { PromptLabels } from './labels';
 
 /**
  * Fixed-ratio cards share grid rows. A wrapped title grows its row rather than shifting all
  * subsequent cards in one column, and visual order stays the same as catalog and keyboard order.
+ *
+ * docs/PLATFORM-2.0.md §15.3-4 (founder 2026-10-23): two columns from the narrowest phone, three
+ * on a tablet, four on a desktop — the 4:5 card is sized for that. NEW cards lead the rail; the
+ * rest keep the catalog's featured → newest order. A landscape card keeps one column and its
+ * 16:9 frame (no dense packing: it would reorder the grid against the keyboard).
  */
 export function PromptRail({
   id,
@@ -59,8 +65,8 @@ export function PromptRail({
         <p className="mt-8 font-mono text-code opacity-60">{emptyLabel}</p>
       ) : (
         <>
-          <RevealGrid className={`${hideHeading ? '' : 'mt-8 '}grid gap-6 sm:grid-cols-2 lg:grid-cols-3`}>
-            {cards.map((card) => (
+          <RevealGrid className={`${hideHeading ? '' : 'mt-8 '}grid grid-cols-2 items-start gap-x-3 gap-y-6 sm:gap-x-4 md:grid-cols-3 lg:grid-cols-4`}>
+            {railOrder(cards, now).map((card) => (
               <li
                 key={card.slug}
                 data-prompt-item

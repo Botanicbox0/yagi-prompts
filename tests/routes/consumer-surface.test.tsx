@@ -147,7 +147,8 @@ describe('P2-10 and P3: the result page', () => {
     expect(ok).not.toMatch(/opacity-45/);
     state.status = 'failed';
     const failed = await renderResult();
-    expect(failed).toMatch(/<p class="[^"]*opacity-70[^"]*">생성이 최종 실패하면/);
+    // PLATFORM-2.0 §3.2-4 (2026-10-23): the refund sentence is now full ink in its own frame.
+    expect(failed).toMatch(/<p data-render-refund="true" class="(?![^"]*opacity-)[^"]*">생성이 최종 실패하면/);
   });
 });
 
