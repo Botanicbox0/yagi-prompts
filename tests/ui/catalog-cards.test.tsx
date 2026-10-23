@@ -1,6 +1,8 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { getDictionary } from '@/lib/i18n/dictionaries';
+import { KO_TERMS } from '@/messages/ko';
+import { EN_TERMS } from '@/messages/en';
 import type { PromptCard } from '@/lib/prompts/catalog';
 import { PROMPT_MODEL_LABEL, USE_CASES } from '@/lib/prompts/schemas';
 import { PromptCardView } from '@/components/prompts/prompt-card';
@@ -137,14 +139,14 @@ describe('maker credit (PLATFORM-2.0 §7.5·§14.1: only maker templates say who
     expect(markup(card())).not.toContain('data-card-author');
   });
 
-  it('credits "메이커 @handle" / "by @handle" on a maker template, and "메이커 템플릿" without a public handle', () => {
+  it('credits "by @handle" on a maker template, and the maker label without a public handle', () => {
     const maker = card({ origin: 'maker', source: 'community', authorHandle: 'hana' });
     expect(cardAuthor(maker)).toEqual({ handle: 'hana' });
-    expect(markup(maker, 'ko')).toMatch(/data-card-author[^>]*>메이커 @hana</);
-    expect(markup(maker, 'en')).toMatch(/data-card-author[^>]*>by @hana</);
+    expect(markup(maker, 'ko')).toContain(`>${KO_TERMS.creditPrefix} @hana<`);
+    expect(markup(maker, 'en')).toContain(`>${EN_TERMS.creditPrefix} @hana<`);
     // A maker template is a `source='yagi'` row with an author (0046): origin decides, not source.
     expect(markup(card({ origin: 'maker', source: 'yagi', authorHandle: null }), 'ko')).toContain(dicts.ko.prompts.cardAuthorAnonymous);
-    expect(dicts.ko.prompts.cardAuthorAnonymous).toBe('메이커 템플릿');
+    expect(dicts.ko.prompts.cardAuthorAnonymous).toContain(KO_TERMS.maker);
     expect(markup(card({ origin: 'studio', authorHandle: 'hana' }))).not.toContain('data-card-author');
   });
 
@@ -255,7 +257,7 @@ describe('catalog first screen (§15.3-5)', () => {
   });
 });
 
-describe('TWINGS 오리지널 / 메이커 템플릿 (PLATFORM-2.0 §7.5·§14.1)', () => {
+describe('studio and maker collections (PLATFORM-2.0 §7.5·§14.1)', () => {
   const listing = (cards: PromptCard[], locale: 'ko' | 'en' = 'ko') =>
     renderToStaticMarkup(<TemplatesListing locale={locale} dict={dicts[locale]} medium="video" cards={cards} />);
   const maker = (slug: string, handle: string | null = 'hana') =>
@@ -279,11 +281,11 @@ describe('TWINGS 오리지널 / 메이커 템플릿 (PLATFORM-2.0 §7.5·§14.1)
     expect(html.indexOf('data-prompt-card="maker-one"')).toBeGreaterThan(makers);
     expect(html).toContain('data-origin-filter');
     for (const label of [dicts.ko.templates.originAll, dicts.ko.templates.originStudio, dicts.ko.templates.originMaker]) expect(html).toContain(`>${label}<`);
-    expect([dicts.ko.templates.originAll, dicts.ko.templates.originStudio, dicts.ko.templates.originMaker]).toEqual(['전체', '오리지널', '메이커']);
+    expect([dicts.ko.templates.originAll, dicts.ko.templates.originStudio, dicts.ko.templates.originMaker]).toEqual(['전체', '오리지널', KO_TERMS.maker]);
     expect(html).toContain(`>${dicts.ko.templates.studioRail}<`);
     expect(html).toContain(`>${dicts.ko.templates.makerRail}<`);
-    expect([dicts.ko.templates.studioRail, dicts.ko.templates.makerRail]).toEqual(['TWINGS 오리지널', '메이커 템플릿']);
-    expect(listing([card(), maker('maker-one')], 'en')).toContain('>Maker templates<');
+    expect([dicts.ko.templates.studioRail, dicts.ko.templates.makerRail]).toEqual([KO_TERMS.studioCollection, KO_TERMS.makerCollection]);
+    expect(listing([card(), maker('maker-one')], 'en')).toContain(`>${EN_TERMS.makerCollection}<`);
   });
 
   it('a maker-only catalogue still opens on its maker rail without an empty studio rail', () => {

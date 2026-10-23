@@ -10,7 +10,7 @@ vi.mock('@/lib/creator-platform/onboarding',()=>({loadCreatorWorkspace:mock.work
 vi.mock('@/components/app/app-header',()=>({AppHeader:()=>null}));
 vi.mock('@/lib/makers/profile',async(original)=>({...(await original<typeof import('@/lib/makers/profile')>()),loadMakerSettings:mock.maker}));
 import CreatorWorkspacePage from '@/app/(app)/creators/workspace/page';
-import { ko } from '@/messages/ko';
+import { KO_TERMS, ko } from '@/messages/ko';
 import type { CreatorWorkspace } from '@/lib/creator-platform/onboarding';
 
 const t=ko.creatorProgram;
@@ -50,7 +50,7 @@ describe('creator workspace states',()=>{
  it('labels the supplier row date as registration, not as the latest approval',async()=>{
   const html=await render({...base,creator:{...base.creator!,active:true}});
   expect(html).toContain('data-creator-state="approved"');
-  expect(html).toMatch(/템플릿 메이커 · [^<]*등록 · 계약 pilot-v1/);
+  expect(html).toMatch(new RegExp(`${KO_TERMS.makerFull} · [^<]*등록 · 계약 pilot-v1`));
   expect(html).not.toContain('승인 · 계약');
  });
  it('gives an approved maker the public-profile form, off by default (PLATFORM-2.0 §7.5)',async()=>{

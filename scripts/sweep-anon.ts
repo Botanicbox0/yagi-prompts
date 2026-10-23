@@ -7,6 +7,8 @@ import { DEFAULT_LOCAL_SNAPSHOT } from '@/lib/db/connect-shared';
 import { FIXTURE_SENTINELS } from './fixtures';
 import { HIDDEN_PROMPT_SLUGS, PROMPT_SENTINELS } from './prompt-fixtures';
 import { RUNTIME_MODE_ENV } from '@/lib/runtime-mode';
+import { KO_TERMS } from '@/messages/ko';
+import { EN_TERMS } from '@/messages/en';
 
 /**
  * M7: the sweep's oracle is the LOCAL snapshot (it opens `.pglite/catalog.tar.gz` directly), so the
@@ -1214,23 +1216,23 @@ async function sweepLandingTemplates(): Promise<void> {
  */
 async function sweepMakers(): Promise<void> {
   console.log('\n§14.1 names — the header audience switch');
-  for (const [locale, personal, brand] of [['ko', '개인', '브랜드'], ['en', 'Personal', 'Brands']] as const) {
+  for (const [locale, personal, brand] of [['ko', KO_TERMS.personal, '브랜드'], ['en', EN_TERMS.personal, 'Brands']] as const) {
     const page = await get(`/${locale}`);
     const side = (id: string) => new RegExp(`data-audience="${id}"[^>]*>([^<]*)</a>`).exec(page.body)?.[1] ?? null;
     expectEqual(`${locale}: the switch's consumer side reads "${personal}"`, side('creator'), personal);
     expectEqual(`${locale}: …and its brand side "${brand}"`, side('brand'), brand);
   }
 
-  console.log('\n/ko/video — TWINGS 오리지널, then 메이커 템플릿');
+  console.log(`\n/ko/video — ${KO_TERMS.studioCollection}, then ${KO_TERMS.makerCollection}`);
   const video = await get('/ko/video');
   const studioRail = video.body.indexOf('data-rail-origin="studio"');
   const makerRail = video.body.indexOf('data-rail-origin="maker"');
   if (studioRail > -1 && makerRail > studioRail) ok('the studio rail comes first, the maker rail second', `${studioRail} < ${makerRail}`);
   else fail('the studio rail comes first, the maker rail second', `studio at ${studioRail}, maker at ${makerRail}`);
   expectPresent('the origin chips', video.body, 'data-origin-filter');
-  expectPresent('…"전체 · 오리지널 · 메이커"', video.body, '>오리지널</button>');
-  expectPresent('the maker rail is named', video.body, '>메이커 템플릿</h2>');
-  expectPresent('a public maker is credited by handle', video.body, '메이커 @jun');
+  expectPresent('…"전체 · 오리지널 · 메이커"', video.body, `>${KO_TERMS.maker}</button>`);
+  expectPresent('the maker rail is named', video.body, `>${KO_TERMS.makerCollection}</h2>`);
+  expectPresent('a public maker is credited by handle', video.body, `${KO_TERMS.creditPrefix} @jun`);
   expectAbsent('no "작가" anywhere on the catalogue', video.body, '작가');
   expectAbsent('no author account id reaches the page', video.body, 'f0000000-0000-4000-8000-000000000002');
 
@@ -1241,10 +1243,10 @@ async function sweepMakers(): Promise<void> {
   expectPresent('…linking to the maker page', makerTemplate.body, 'href="/ko/makers/jun"');
   expectPresent('the verified mark', makerTemplate.body, 'data-template-verified');
   const legacy = await get('/ko/t/skate-park-golden-hour');
-  expectPresent('a handle without a maker page is a plain credit', legacy.body, '메이커 @hana');
+  expectPresent('a handle without a maker page is a plain credit', legacy.body, `${KO_TERMS.creditPrefix} @hana`);
   expectAbsent('…with no maker block', legacy.body, 'data-template-maker');
   const studio = await get(`/ko/t/${GATED_PROMPT}`);
-  expectPresent('a studio template says TWINGS 오리지널', studio.body, 'TWINGS 오리지널');
+  expectPresent('a studio template names the studio collection', studio.body, KO_TERMS.studioCollection);
   expectAbsent('…and has no maker block', studio.body, 'data-template-maker');
 
   console.log('\n/{locale}/makers/[handle] — a public maker page');

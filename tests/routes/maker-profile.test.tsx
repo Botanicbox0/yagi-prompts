@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { PromptCard, PublicMaker } from '@/lib/prompts/catalog';
+import { en } from '@/messages/en';
 
 /**
  * docs/PLATFORM-2.0.md §7.5 — `/{locale}/makers/{handle}`. A page exists only for a maker in the
@@ -80,7 +81,7 @@ describe('maker profile route', () => {
     expect(meta.robots).toBeUndefined();
     expect(meta.alternates?.canonical).toBe('/en/makers/jun_01');
     expect(meta.alternates?.languages).toEqual({ en: '/en/makers/jun_01', ko: '/ko/makers/jun_01', 'x-default': '/en/makers/jun_01' });
-    expect(meta.title).toBe('@jun_01 · Template maker');
+    expect(meta.title).toBe(en.makers.metaTitle.replace('{handle}', 'jun_01'));
     expect(meta.description).toBe('AI 영상 템플릿을 만듭니다.');
     expect(meta.openGraph).toMatchObject({ type: 'profile', url: '/en/makers/jun_01' });
     state.makers = [];
