@@ -27,6 +27,8 @@ import type { UsageOutcome } from './types';
  *   · IN_PROGRESS / READY                                                    → still pending at the provider
  *   · not found: proof of non-payment only once the approval window is over, or right after the provider
  *     itself refused the confirm. A timeout or network error proves nothing and keeps the claim.
+ *   · after `paid`, anything but DONE with the full balance (a merchant-console cancellation, read only
+ *     on the webhook's hint)                                                 → `review` (studio decides)
  */
 export interface UsagePaymentDeps { sql: SqlRunner; gateway: TossGateway; paymentsOpen: boolean; now?: Date; runtime?: UsageRuntime }
 export const USAGE_PAYMENT_CONSENT_VERSION = 'usage-payment-2026-09-23';
@@ -214,22 +216,26 @@ async function accept(deps: Omit<UsagePaymentDeps, 'paymentsOpen'>, o: Row): Pro
 
 /**
  * Durable recovery with no page load: called by the existing daily `/api/renders/tick`, by the admin
- * `brandUsage.reconcile` op and opportunistically by the buyer's status read. Every step is idempotent.
+ * `brandUsage.reconcile` op and opportunistically by the buyer's status read — and, narrowed to the one
+ * order it names (`paymentId`), by the Toss webhook. Every step is idempotent.
  * Activation and refunds run first, each with its own batch, so no number of unresolved confirmations
  * can starve them; each unresolved confirmation is pushed back by `BACKOFF_MS` after every attempt.
  */
-export async function reconcileBrandUsagePayments(deps: Omit<UsagePaymentDeps, 'paymentsOpen'>): Promise<{ checked: number }> {
+export async function reconcileBrandUsagePayments(deps: Omit<UsagePaymentDeps, 'paymentsOpen'>, paymentId?: string): Promise<{ checked: number }> {
+  if (paymentId !== undefined && !uuid(paymentId)) return { checked: 0 };
   const now = clock(deps);
   let checked = 0;
-  await deps.sql.query("update brand_usage_payments set status='expired',updated_at=now() where status='pending' and expires_at<=$1", [now]);
+  const only = (column: string, n: number) => (paymentId === undefined ? '' : `and ${column}=$${n}`);
+  const ids = paymentId === undefined ? [] : [paymentId];
+  await deps.sql.query(`update brand_usage_payments set status='expired',updated_at=now() where status='pending' and expires_at<=$1 ${only('id', 2)}`, [now, ...ids]);
   const activation = (await deps.sql.query(`select p.case_id from brand_usage_payments p join brand_usage_cases c on c.id=p.case_id
-    where p.status='paid' and c.status='paid' order by p.updated_at limit ${BATCH}`)).rows;
+    where p.status='paid' and c.status='paid' ${only('p.id', 1)} order by p.updated_at limit ${BATCH}`, ids)).rows;
   for (const r of activation) { checked++; await activateUsageCase(deps.sql, r.case_id, 'system', null, runtimeOf(deps)); }
   const refunds = (await deps.sql.query(`select id from brand_usage_payments where environment=$1 and status='refund_pending'
-    and (lease_until is null or lease_until<=$2) order by coalesce(lease_until,updated_at) limit ${BATCH}`, [deps.gateway.kind, now])).rows;
+    and (lease_until is null or lease_until<=$2) ${only('id', 3)} order by coalesce(lease_until,updated_at) limit ${BATCH}`, [deps.gateway.kind, now, ...ids])).rows;
   for (const r of refunds) { checked++; await refund(deps, String(r.id)); }
   const confirming = (await deps.sql.query(`select * from brand_usage_payments where environment=$1 and status='confirming' and payment_key is not null
-    and lease_until<=$2 order by lease_until limit ${BATCH}`, [deps.gateway.kind, now])).rows;
+    and lease_until<=$2 ${only('id', 3)} order by lease_until limit ${BATCH}`, [deps.gateway.kind, now, ...ids])).rows;
   for (const o of confirming) {
     checked++;
     const claimed = (await deps.sql.query("update brand_usage_payments set lease_until=$2,updated_at=now() where id=$1 and status='confirming' and lease_until<=$3 returning id", [o.id, new Date(+now + BACKOFF_MS), now])).rows[0];
@@ -243,6 +249,47 @@ export async function reconcileBrandUsagePayments(deps: Omit<UsagePaymentDeps, '
     } catch { /* Unknown outcome: the claim stays, backed off; never a new order, never a release. */ }
   }
   return { checked };
+}
+
+/**
+ * After `paid` the provider can still lose the money: a cancellation in the merchant console, whole or
+ * in part (docs/PLATFORM-2.0.md §2.2-5). A grant ends only by the studio's refund decision, with its
+ * termination events, so nothing ends here: the order goes to `review`, a case still waiting for its
+ * activation is blocked, and a licensed one leads the studio queue. That refund then finds the money
+ * already returned and never cancels twice; after a partial cancellation it returns the rest.
+ */
+async function reviewIfCanceled(deps: Omit<UsagePaymentDeps, 'paymentsOpen'>, o: Row): Promise<void> {
+  const p = await deps.gateway.retrieve(String(o.payment_key));
+  if (!p || !matches(p, o) || (p.status === 'DONE' && p.balance === Number(o.amount_krw))) return;
+  await deps.sql.transaction(async sql => {
+    const c = await lockCase(sql, String(o.case_id));
+    const moved = (await sql.query("update brand_usage_payments set status='review',failure_code=$2,lease_until=null,updated_at=now() where id=$1 and status='paid' returning id",
+      [o.id, `provider_${p.status.toLowerCase()}_after_paid`.slice(0, 40)])).rows[0];
+    if (!moved) return;
+    if (c.status === 'paid') {
+      await setStatus(sql, c, 'blocked_after_payment', { blockedReason: 'payment_canceled' });
+      await usageEvent(sql, c.id, 'blocked', 'system', null, o.quote_id);
+    } else if (c.status === 'fulfilled') {
+      await sql.query("update brand_usage_cases set blocked_reason='payment_canceled',updated_at=now() where id=$1", [c.id]);
+    }
+  });
+}
+
+/**
+ * The Toss webhook's hint for this table (app/api/billing/toss/webhook): the body only names an order.
+ * That one order, in this environment, is read again at the provider with its OWN stored key — never
+ * the hint's — and settled by the steps above. An unknown order reads nothing.
+ */
+export async function reconcileBrandUsageWebhook(deps: Omit<UsagePaymentDeps, 'paymentsOpen'>, hint: { orderId?: string; paymentKey?: string }): Promise<{ matched: false } | { matched: true; status: string }> {
+  const find = async (column: 'id' | 'payment_key', value: string) =>
+    (await deps.sql.query(`select * from brand_usage_payments where environment=$1 and ${column}=$2`, [deps.gateway.kind, value])).rows[0];
+  let o = uuid(hint.orderId) ? await find('id', hint.orderId) : undefined;
+  if (!o && hint.paymentKey) o = await find('payment_key', hint.paymentKey);
+  if (!o) return { matched: false };
+  if (o.status === 'paid') await reviewIfCanceled(deps, o);
+  await reconcileBrandUsagePayments(deps, String(o.id));
+  const after = (await deps.sql.query('select status from brand_usage_payments where id=$1', [o.id])).rows[0]!;
+  return { matched: true, status: String(after.status) };
 }
 
 async function refund(deps: Omit<UsagePaymentDeps, 'paymentsOpen'>, paymentId: string): Promise<boolean> {

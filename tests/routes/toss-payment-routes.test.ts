@@ -4,16 +4,22 @@ import type { Viewer } from '@/lib/auth/identity';
 import { createFakeTossGateway, type FakeTossGateway } from '@/lib/billing/toss-fake';
 import { TossError } from '@/lib/billing/toss-gateway';
 import { createTossOrder, resetTossWebhookLimit, TOSS_WEBHOOK_LIMIT } from '@/lib/billing/toss-service';
+import { acceptUsageQuote } from '@/lib/brands/usage/service';
+import { confirmUsagePayment, createUsageOrder } from '@/lib/brands/usage/payment';
+import { acceptFundingQuote, issueFundingQuote } from '@/lib/campaigns/funding/service';
+import { confirmFundingPayment, createFundingOrder } from '@/lib/campaigns/funding/payment';
 import { createRenderJob } from '@/lib/renders/service';
 import { createLocalRenderStore } from '@/lib/renders/store';
 import { authReturnPath } from '@/lib/routing/surfaces';
 import { noticeSigninHref } from '@/components/marketing/notice-codes';
 import { viewerOf } from '@/tests/helpers/admin';
+import { usageFixture } from '@/tests/helpers/brand-usage';
 import { promptHarness, type PromptHarness } from '@/tests/helpers/prompts';
 
 /**
  * The Toss routes over a real (PGlite) database with the local fake gateway — docs/PLATFORM-2.0.md
- * §2.2: approval, the return after a sign-in, 다시 결제하기, the webhook hint and the status poll.
+ * §2.2: approval, the return after a sign-in, 다시 결제하기, the webhook hint (for all three tables
+ * the merchant account takes) and the status poll.
  */
 const mocks = vi.hoisted(() => ({
   viewer: vi.fn(),
@@ -280,6 +286,88 @@ describe('POST /api/billing/toss/webhook', () => {
     expect(await response.text()).toBe('');
     expect(await row(o.id)).toMatchObject({ status: 'refunded' });
     expect(lines.join('\n')).not.toMatch(/hint_secret_probe|deposit_secret_probe|2026-10-22T00:00:00/);
+  });
+
+  it('settles a secondary-usage order the template table does not know: a console cancellation goes to review', async () => {
+    const f = await usageFixture();
+    try {
+      mocks.sql.mockResolvedValue(f.sql);
+      const usage = { sql: f.sql, gateway: fake(), paymentsOpen: true };
+      const { caseId, quoteId } = await f.quoted(330000);
+      expect(await acceptUsageQuote(usage, f.owner, { caseId, quoteId, expectedRevision: 3, requestId: crypto.randomUUID(), confirmed: true })).toMatchObject({ ok: true });
+      const order = await createUsageOrder(usage, f.owner, { caseId, requestId: crypto.randomUUID(), consent: true });
+      if (!order.ok) throw new Error(order.code);
+      fake().authorize(order.order.id, 330000);
+      const key = fake().keyFor(order.order.id);
+      expect(await confirmUsagePayment(usage, f.owner, { orderId: order.order.id, paymentKey: key, amount: 330000 })).toMatchObject({ ok: true, state: 'fulfilled' });
+      await fake().cancel({ paymentKey: key, reason: 'console', idempotencyKey: 'console' });
+      const lines: string[] = [];
+      for (const level of ['log', 'info', 'warn', 'error'] as const)
+        vi.spyOn(console, level).mockImplementation((...args: unknown[]) => void lines.push(args.map(String).join(' ')));
+      const response = await webhook(
+        json(
+          '/api/billing/toss/webhook',
+          { eventType: 'PAYMENT_STATUS_CHANGED', data: { orderId: order.order.id, paymentKey: 'hint_secret_probe', status: 'CANCELED' } },
+          { origin: 'https://api.tosspayments.com' },
+        ),
+      );
+      expect(response.status).toBe(200);
+      expect(await response.text()).toBe('');
+      expect((await f.sql.query('select status from brand_usage_payments where id=$1', [order.order.id])).rows[0]).toEqual({ status: 'review' });
+      expect((await f.sql.query('select status from brand_usage_cases where id=$1', [caseId])).rows[0]).toEqual({ status: 'fulfilled' });
+      expect(lines.join('\n')).not.toMatch(/hint_secret_probe/);
+      expect(lines.join('\n')).toMatch(/"kind":"brand_usage","status":"review"/);
+    } finally {
+      await f.db.close();
+    }
+  });
+
+  it('settles a campaign-funding receipt neither other table knows, answering 503 while the provider cannot be read', async () => {
+    const admin = viewerOf('admin');
+    const funding = { sql: h.sql, gateway: fake(), enabled: true, policyReady: true, production: false };
+    const [org, project, campaign] = [crypto.randomUUID(), crypto.randomUUID(), crypto.randomUUID()];
+    await h.sql.query('insert into brand_organizations(id,name,created_by,request_id) values($1,$2,$3,$4)', [org, 'Fixture brand', admin.userId, crypto.randomUUID()]);
+    await h.sql.query("insert into brand_memberships(organization_id,user_id,role) values($1,$2,'owner')", [org, buyer.userId]);
+    await h.sql.query(
+      "insert into brand_projects(id,organization_id,title,objective,production_mode,status,client_visible,created_by,request_id) values($1,$2,'Fixture campaign','Fixture objective','creator','active',true,$3,$4)",
+      [project, org, admin.userId, crypto.randomUUID()],
+    );
+    await h.sql.query(
+      "insert into campaigns(id,slug,status,title,summary,host_name,platforms,slots) values($1,$2,'draft',$3::jsonb,$3::jsonb,'Fixture brand',array['instagram'],2)",
+      [campaign, `funding-${campaign}`, JSON.stringify({ en: 'Fixture', ko: '픽스처' })],
+    );
+    await h.sql.query('insert into campaign_collaboration_links(campaign_id,project_id,created_by) values($1,$2,$3)', [campaign, project, admin.userId]);
+    const quote = await issueFundingQuote({ sql: h.sql }, admin, {
+      campaignId: campaign,
+      requestId: crypto.randomUUID(),
+      totalKrw: 120000,
+      taxBasis: 'Fixture tax basis',
+      termsSummary: 'Fixture service scope and refund terms',
+      termsRef: 'fixture-v1',
+      validUntil: new Date(Date.now() + 86400_000).toISOString(),
+    });
+    if (!quote.ok) throw new Error(quote.code);
+    expect(await acceptFundingQuote(funding, buyer, { quoteId: quote.id, revision: quote.revision, consent: true })).toMatchObject({ ok: true });
+    const order = await createFundingOrder(funding, buyer, { caseId: quote.caseId, requestId: crypto.randomUUID() });
+    if (!order.ok) throw new Error(order.code);
+    fake().authorize(order.order.id, 120000);
+    const key = fake().keyFor(order.order.id);
+    expect(await confirmFundingPayment(funding, buyer, { orderId: order.order.id, amount: 120000, paymentKey: key })).toMatchObject({ ok: true, state: 'paid' });
+    await fake().cancel({ paymentKey: key, reason: 'console', idempotencyKey: 'console' });
+    const hint = () =>
+      webhook(json('/api/billing/toss/webhook', { eventType: 'PAYMENT_STATUS_CHANGED', data: { paymentKey: key, status: 'CANCELED' } }, { origin: 'https://api.tosspayments.com' }));
+    const retrieve = fake().retrieve;
+    fake().retrieve = async () => {
+      throw new TossError('NETWORK_ERROR');
+    };
+    expect((await hint()).status).toBe(503);
+    expect((await h.sql.query('select status from campaign_funding_payments where id=$1', [order.order.id])).rows[0]).toEqual({ status: 'paid' });
+    fake().retrieve = retrieve;
+    const response = await hint();
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe('');
+    expect((await h.sql.query('select status from campaign_funding_payments where id=$1', [order.order.id])).rows[0]).toEqual({ status: 'refunded' });
+    expect((await h.sql.query('select status from campaign_funding_cases where id=$1', [quote.caseId])).rows[0]).toEqual({ status: 'refunded' });
   });
 
   it(`takes at most ${TOSS_WEBHOOK_LIMIT.perClient} hints a minute from one sender`, async () => {
