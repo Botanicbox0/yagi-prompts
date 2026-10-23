@@ -89,6 +89,7 @@ describe('migrations apply on a fresh database (PLAN §6)', () => {
       'campaign_risk_reviews',
       'campaign_risk_slack_outbox',
       'campaign_risk_workers',
+      'campaign_targets',
       'campaigns',
       // §14.1 (M9) — the contests pivot's three new tables. Atomic like `prompt_items`: no
       // revisions, no manifest, no constraint triggers. `contest_entry_writes` is the append-only

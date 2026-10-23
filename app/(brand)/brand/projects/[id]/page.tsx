@@ -2,14 +2,16 @@ import { campaignListReturnPath } from "@/lib/brands/workspace/navigation";
 import { notFound } from "next/navigation";
 import { brandContext } from "@/components/brand-workspace/context";
 import { ProjectDetail } from "@/components/brand-workspace/project-detail";
+import { CampaignApplicants, CampaignPayments } from "@/components/brand-workspace/campaign-sections";
 import { loadBrandProject } from "@/lib/brands/workspace/service";
 import { loadBrandUsage } from "@/lib/brands/usage/service";
 import { usagePaymentsOpen } from "@/lib/brands/usage/runtime";
 import { adminProjectHref } from "@/components/brand-workspace/staff-notice";
-import { loadProjectCollaboration } from "@/lib/campaigns/collaboration/service";
-import { collaborationCopy } from "@/messages/campaign-collaboration";
+import { loadProjectApplicants, loadProjectCollaboration } from "@/lib/campaigns/collaboration/service";
 import { loadFundingProject } from "@/lib/campaigns/funding/service";
-import { fundingCopy } from "@/messages/campaign-funding";
+import { fundingDeps, fundingRuntime } from "@/lib/campaigns/funding/runtime";
+import { open } from "@/lib/campaigns/funding/core";
+import { loadPromptBySlug } from "@/lib/prompts/repo";
 export default async function BrandProject({
   params,
   searchParams,
@@ -25,18 +27,33 @@ export default async function BrandProject({
   if (!sql) return <p role="alert">{b.unavailable}</p>;
   const project = await loadBrandProject({ sql, verifiedEmail }, viewer, id);
   if (!project) notFound();
-  // Secondary usage is the brand's commercial matter: null (no tab) for campaign-only guests.
+  // Applicants and payment are the brand's own matters: no such tabs for campaign-only guests or the TWINGS view.
   const member = project.role === "owner" || project.role === "editor" || project.role === "viewer";
-  const [usage, collaboration, funding] = await Promise.all([
+  const [usage, collaboration, applicants, funding] = await Promise.all([
     loadBrandUsage({ sql, verifiedEmail, paymentsOpen: usagePaymentsOpen() }, viewer, id),
     member ? loadProjectCollaboration({ sql }, viewer, id) : Promise.resolve(null),
+    member ? loadProjectApplicants({ sql }, viewer, id) : Promise.resolve(null),
     member ? loadFundingProject({ sql }, viewer, id) : Promise.resolve(null),
   ]);
-  const hasFunding = !!(funding?.items.length || funding?.campaigns.length);
-  const campaignActions = collaboration?.campaigns.length || hasFunding ? <nav className="bw-panel bw-row bw-no-print" aria-label={collaborationCopy(locale).title}>
-    {!!collaboration?.campaigns.length && <a className="bw-button" href={`/brand/projects/${id}/participants`}>{collaborationCopy(locale).title} →</a>}
-    {hasFunding && <a className="bw-button" href={`/brand/projects/${id}/funding`}>{fundingCopy(locale).reward.title} · {fundingCopy(locale).title} →</a>}
-  </nav> : null;
+  const deps = member ? fundingDeps(sql) : null;
+  const requested = project.campaignTerms?.format.kind === "template" ? await loadPromptBySlug(sql, project.campaignTerms.format.slug).catch(() => null) : null;
+  const formatTitle = requested ? (locale === "ko" && requested.titleKo ? requested.titleKo : requested.title) : null;
   // `studio` here is the TWINGS team's read-only view (never the customer's seat): no approve, upload or comment.
-  return <ProjectDetail campaignActions={campaignActions} backHref={campaignListReturnPath(search.returnTo, project.organizationId)} project={project} b={b} locale={locale} usage={usage} staffManageHref={project.role === "studio" && viewer.isAdmin ? adminProjectHref(project.id, brandHost) : null} />;
+  return (
+    <ProjectDetail
+      backHref={campaignListReturnPath(search.returnTo, project.organizationId)}
+      project={project}
+      b={b}
+      locale={locale}
+      usage={usage}
+      formatTitle={formatTitle}
+      staffManageHref={project.role === "studio" && viewer.isAdmin ? adminProjectHref(project.id, brandHost) : null}
+      applicants={member ? (
+        <CampaignApplicants view={applicants} invitations={collaboration?.campaigns ?? []} canInvite={Boolean(collaboration?.canInvite) && !viewer.isAdmin} b={b} locale={locale} projectId={id} />
+      ) : null}
+      payments={member ? (
+        <CampaignPayments view={funding} rollout={fundingRuntime().enabled} enabled={deps !== null && open(deps)} failed={Boolean(search.failed)} b={b} locale={locale} projectId={id} />
+      ) : null}
+    />
+  );
 }

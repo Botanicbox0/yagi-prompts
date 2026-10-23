@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { en } from '@/messages/en';
 import { ko } from '@/messages/ko';
+import { fundingCopy } from '@/messages/campaign-funding';
+import { collaborationCopy } from '@/messages/campaign-collaboration';
 
 /**
  * PLAN §3.9 — "both locales required", "manual bilingual authoring in v1".
@@ -165,6 +167,30 @@ describe('dictionary completeness (§3.9)', () => {
     ]) {
       expect(enMap.has(key), `en.${key}`).toBe(true);
       expect(koMap.has(key), `ko.${key}`).toBe(true);
+    }
+  });
+
+  it('keeps the brand campaign page copy in brandWorkspace, not in the campaign modules (docs/PLATFORM-2.0.md §16.4)', () => {
+    for (const key of [
+      'brandWorkspace.wizard.steps.review',
+      'brandWorkspace.wizard.schedule.disclosureFixed',
+      'brandWorkspace.timeline.stages.settlement',
+      'brandWorkspace.applicants.closed',
+      'brandWorkspace.applicants.sources.self',
+      'brandWorkspace.applicants.preferHint',
+      'brandWorkspace.payments.closed',
+      'brandWorkspace.payments.buyer',
+      'brandWorkspace.paymentStates.paid',
+      'brandWorkspace.tabs.applicants',
+    ]) {
+      expect(enMap.has(key), key).toBe(true);
+      expect(koMap.has(key), key).toBe(true);
+    }
+    // Moved, not copied: the brand-page-only strings left the shared campaign copy.
+    for (const locale of ['en', 'ko'] as const) {
+      const funding = fundingCopy(locale) as Record<string, unknown>, collaboration = collaborationCopy(locale) as Record<string, unknown>;
+      for (const key of ['buyer', 'receipt', 'noReceipt']) expect(funding[key], key).toBeUndefined();
+      for (const key of ['participants', 'none', 'invitations']) expect(collaboration[key], key).toBeUndefined();
     }
   });
 });

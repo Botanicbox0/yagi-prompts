@@ -10,6 +10,7 @@ import {
   acceptInvitation,
   revokeInvitation,
   sendParticipantMessage,
+  setApplicantPreference,
   storeParticipantFile,
 } from "@/lib/campaigns/collaboration/service";
 export const dynamic = "force-dynamic";
@@ -92,6 +93,9 @@ export async function POST(request: NextRequest) {
           break;
         case "message.send":
           result = await sendParticipantMessage({ sql }, viewer, body.input);
+          break;
+        case "applicant.prefer":
+          result = await setApplicantPreference({ sql }, viewer, body.input);
           break;
         default:
           return json({ ok: false, code: "invalid" }, 400);

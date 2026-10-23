@@ -1022,3 +1022,129 @@ export async function loadProjectCollaboration(
   });
   return r.ok ? r : null;
 }
+
+/**
+ * The brand's view of who applied (docs/PLATFORM-2.0.md §16.4). Every application to a campaign
+ * linked to this project, `applied` included: handle, platform, follower count with where it came
+ * from, profile link and the application message. Never the creator's account id, email or name.
+ * Follower counts are what the creator typed (`self`) until account verification exists (§16.5).
+ */
+export interface ProjectApplicant {
+  id: string;
+  status: string;
+  handle: string | null;
+  platform: "instagram" | "tiktok" | "youtube" | null;
+  followers: number;
+  followersSource: "self" | "verified";
+  profileUrl: string | null;
+  pitch: string;
+  appliedAt: string;
+  /** The brand marked this applicant; a note to TWINGS, never a selection. */
+  preferred: boolean;
+  postUrl: string | null;
+  views: number | null;
+  metricsSource: "self" | "admin" | "api" | null;
+}
+export interface ProjectApplicantCampaign {
+  id: string;
+  slug: string;
+  title: { en: string; ko: string };
+  status: string;
+  slots: number;
+  applicants: ProjectApplicant[];
+}
+function applicantHandle(url: string | null): { handle: string | null; platform: ProjectApplicant["platform"] } {
+  if (!url) return { handle: null, platform: null };
+  const u = new URL(url), host = u.hostname.toLowerCase().replace(/^www\.|^m\./, "");
+  const platform = host === "instagram.com" ? "instagram" : host === "tiktok.com" ? "tiktok" : host === "youtube.com" || host === "youtu.be" ? "youtube" : null;
+  const first = u.pathname.split("/").filter(Boolean)[0] ?? "";
+  const handle = platform && /^@?[\p{L}\p{N}._-]{1,50}$/u.test(first) ? first.replace(/^@/, "") : null;
+  return { handle, platform };
+}
+export async function loadProjectApplicants(
+  d: Deps,
+  v: Viewer,
+  projectId: string,
+): Promise<{ canPrefer: boolean; campaigns: ProjectApplicantCampaign[] } | null> {
+  if (!uuid.safeParse(projectId).success) return null;
+  const r = await run(d, v, async (sql, id) => {
+    const access = await projectAccess(sql, id, projectId);
+    const cs = (
+      await sql.query<Row>(
+        "select c.id,c.slug,c.title,c.status,c.slots from campaigns c join campaign_collaboration_links l on l.campaign_id=c.id where l.project_id=$1 order by c.created_at",
+        [projectId],
+      )
+    ).rows;
+    const campaigns: ProjectApplicantCampaign[] = [];
+    for (const c of cs) {
+      const apps = (
+        await sql.query<Row>(
+          "select id,status,sns_url,follower_count,pitch,created_at,brand_preferred_at,post_url,views_snapshot,metrics_source from campaign_applications where campaign_id=$1 and status not in ('withdrawn','expired') order by (status='applied'),created_at limit 500",
+          [c.id],
+        )
+      ).rows;
+      campaigns.push({
+        id: String(c.id),
+        slug: String(c.slug),
+        title: c.title as ProjectApplicantCampaign["title"],
+        status: String(c.status),
+        slots: Number(c.slots),
+        applicants: apps.map((a) => {
+          const profileUrl = participantProfileUrl(a.sns_url);
+          return {
+            id: String(a.id),
+            status: String(a.status),
+            ...applicantHandle(profileUrl),
+            followers: Number(a.follower_count),
+            followersSource: "self" as const,
+            profileUrl,
+            pitch: String(a.pitch),
+            appliedAt: stamp(a.created_at),
+            preferred: a.brand_preferred_at != null,
+            postUrl: selected.includes(String(a.status)) ? participantProfileUrl(a.post_url) : null,
+            views: a.views_snapshot == null ? null : Number(a.views_snapshot),
+            metricsSource: (a.metrics_source ?? null) as ProjectApplicant["metricsSource"],
+          };
+        }),
+      });
+    }
+    return {
+      canPrefer: access.role === "brand" && access.canWrite && access.p.status === "active",
+      campaigns,
+    };
+  });
+  return r.ok ? r : null;
+}
+/**
+ * The brand's "preferred" mark on an applicant still waiting for selection. Owners and editors of the
+ * linked project only; the TWINGS team selects and so never marks. Selection is untouched.
+ */
+export async function setApplicantPreference(
+  d: Deps,
+  v: Viewer,
+  input: unknown,
+): Promise<Outcome> {
+  const p = z
+    .object({ applicationId: uuid, preferred: z.boolean() })
+    .strict()
+    .safeParse(input);
+  if (!p.success) return { ok: false, code: "invalid" };
+  return run(d, v, async (sql, id) => {
+    const a = (
+      await sql.query<Row>(
+        "select a.id,a.status,a.campaign_id from campaign_applications a where a.id=$1",
+        [p.data.applicationId],
+      )
+    ).rows[0];
+    if (!a) throw new Denied("not_found");
+    const access = await campaignAccess(sql, id, String(a.campaign_id), true);
+    if (access.role !== "brand") throw new Denied("forbidden");
+    if (access.p.status !== "active") throw new Denied("not_open");
+    if (a.status !== "applied") throw new Denied("conflict");
+    await sql.query(
+      "update campaign_applications set brand_preferred_at=$2 where id=$1",
+      [a.id, p.data.preferred ? now(d) : null],
+    );
+    return { id: String(a.id) };
+  });
+}

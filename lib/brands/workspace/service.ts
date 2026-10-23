@@ -18,6 +18,7 @@ import {
   BrandExternalPostsSchema, BrandProjectCoverSchema, BRAND_COVER_MIMES,
   BrandPostPresentationSchema, BRAND_POST_HANDLE_PATTERN,
 } from './schemas';
+import { CampaignTermsSchema, briefColumnsFromTerms, kstToday } from './campaign-terms';
 import type {
   BrandOutcome, BrandFailureCode, BrandRole, BrandProjectSummary, BrandProjectDetail, BrandWorkspace,
   BrandContentVersion, BrandDecision, BrandMessage, BrandAttachment, BrandPost, BrandReport, BrandReportSnapshot,
@@ -136,6 +137,8 @@ function summary(row: Row): BrandProjectSummary {
     budgetTaxBasis: row.budget_tax_basis as BrandProjectSummary['budgetTaxBasis'], startsOn: day(row.starts_on), endsOn: day(row.ends_on),
     productionMode: row.production_mode as BrandProjectSummary['productionMode'], status: row.status as BrandProjectSummary['status'],
     revision: Number(row.revision), createdAt: stamp(row.created_at), updatedAt: stamp(row.updated_at),
+    // Briefs sent before the wizard (or before 0056) carry none; a stored value that no longer parses is dropped, never shown half.
+    campaignTerms: row.campaign_terms == null ? null : (CampaignTermsSchema.safeParse(row.campaign_terms).data ?? null),
     // Only ever this project's own attachment (composite key); the route re-authorizes every read.
     coverUrl: row.cover_attachment_id ? `/api/brand-workspace/attachments/${row.cover_attachment_id}` : null,
   };
@@ -327,14 +330,21 @@ async function createProject(deps: BrandWorkspaceDeps, viewer: Viewer, input: un
     const count = (await sql.query<{ n: number }>("select count(*)::int as n from brand_projects where organization_id=$1 and created_at>now()-interval '1 day'", [v.organizationId])).rows[0]!.n;
     if (count >= 20) throw new Denied('rate_limited');
     const id = randomUUID();
-    await sql.query(`insert into brand_projects(id,organization_id,title,objective,audience,budget_krw,budget_tax_basis,starts_on,ends_on,production_mode,reference_links,created_by,request_id,criteria)
-      values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,$12,$13,$14::jsonb)`, [id, v.organizationId, v.title, v.objective, v.audience, v.budgetKrw, v.budgetTaxBasis, v.startsOn, v.endsOn, v.productionMode, JSON.stringify(v.referenceLinks), userId, v.requestId, JSON.stringify(v.criteria)]);
+    // A wizard brief: the columns follow the validated terms, whatever else the client sent.
+    const c = v.campaignTerms ? { ...v, ...briefColumnsFromTerms(v.campaignTerms) } : v;
+    await sql.query(`insert into brand_projects(id,organization_id,title,objective,audience,budget_krw,budget_tax_basis,starts_on,ends_on,production_mode,reference_links,created_by,request_id,criteria${v.campaignTerms ? ',campaign_terms' : ''})
+      values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,$12,$13,$14::jsonb${v.campaignTerms ? ',$15::jsonb' : ''})`, [id, v.organizationId, v.title, v.objective, v.audience, c.budgetKrw, c.budgetTaxBasis, c.startsOn, c.endsOn, c.productionMode, JSON.stringify(v.referenceLinks), userId, v.requestId, JSON.stringify(c.criteria), ...(v.campaignTerms ? [JSON.stringify(v.campaignTerms)] : [])]);
     if(managed) await sql.query('update brand_projects set client_visible=false where id=$1',[id]);
     else await event(sql, { id, organization_id: v.organizationId }, 'project_requested', id);
     return { id };
   });
 }
-export const createBrandProject=(deps:BrandWorkspaceDeps,viewer:Viewer,input:unknown)=>createProject(deps,viewer,input,false);
+/** A wizard brief whose application deadline has already passed (Korea time) cannot be honoured. */
+export async function createBrandProject(deps: BrandWorkspaceDeps, viewer: Viewer, input: unknown, now = new Date()): Promise<BrandOutcome> {
+  const terms = CampaignTermsSchema.safeParse((input as { campaignTerms?: unknown } | null)?.campaignTerms);
+  if (terms.success && terms.data.schedule.applicationsCloseOn < kstToday(now)) return { ok: false, code: 'invalid', field: 'campaignTerms.schedule.applicationsCloseOn' };
+  return createProject(deps, viewer, input, false);
+}
 export const createStudioProject=(deps:BrandWorkspaceDeps,viewer:Viewer,input:unknown)=>createProject(deps,viewer,input,true);
 export async function activateBrandProject(deps: BrandWorkspaceDeps, viewer: Viewer, input: unknown): Promise<BrandOutcome> {
   return mutation(deps, viewer, BrandProjectStatusSchema, input, async (sql, userId, v) => {

@@ -382,3 +382,23 @@ PR #76의 `identity_selfies`를 그대로 확장한다(새 테이블 없음).
 | B1 마법사+타임라인 | 16.3 + 16.4, 0056/0140, 참여자·펀딩 탭 흡수, 문안 통합 | 없음(플래그는 그대로 off, 화면은 플래그 off에서도 브리프 모드로 동작) |
 | B2 인플루언서 자격·크리에이터 풀 | 16.5, 0057/0141, 수동 인증 관리자 오퍼레이션, 캠페인 탭 가시성(§6.2) | §13-4·5 대표 결정 |
 | B3 개방 | KAIPER 플래그 on, 위험 워커 활성, 라이브 결제 | 토스 라이브 키 |
+
+## 17. 인플루언서 자격·크리에이터 풀 (B2) — 대표 결정 반영 (2026-10-23)
+
+**결정(§13-4·5, 대표)**: 처음에는 **수동**으로 간다. 프로필 링크 + 팔로워 화면 캡처를 받고, **로컬 AI(Qwen/Gemma, 워크스테이션 gpu-arbiter `127.0.0.1:11434`)가 캡처에서 팔로워 수를 읽어 제안**하고 관리자가 확인한다. 캠페인 탭은 **일반 사용자에게도 거슬리지 않게 노출**한다(일반인 참여 캠페인을 원하는 기업이 있다). 자격 기준은 연동 계정 중 **한 계정이라도** 3,000 이상(합산 아님).
+
+### 17.1 자격 신청과 확인
+- `/account`의 "SNS 연결" 카드 → `/identity/social`(새 app 경로, `APP_PREFIXES` 등록): 플랫폼(instagram|tiktok|youtube)·프로필 URL(`canonicalPost`와 같은 정규화)·팔로워 화면 캡처 1장(JPEG/PNG ≤5MB, 서버에서 sharp 재인코딩·메타 제거, 비공개 버킷). 제출 즉시 상태 `submitted`.
+- 표 `social_accounts`(0057 core / 0141 glue): id, user_id, platform, handle, profile_url, follower_count int null, claimed_count int null(사용자 입력), evidence_key, status `submitted|verified|rejected|expired`, source `manual|api`, ai_count int null, ai_confidence numeric null, ai_model text null, reviewed_by, reviewed_at, measured_at, note, created_at. 유니크(user_id, platform). `profiles.influencer_since timestamptz`(최초 verified 시각, 자격 판정은 서버 함수 `isInfluencer(userId)` = verified 계정 중 follower_count ≥ 3000 존재).
+- **로컬 AI 보조**: 기존 `campaign-risk-worker` 패턴(앱이 작업을 내주고 워커가 비밀키로 claim/complete)을 재사용해 `social-verify-worker`(scripts/, 워크스테이션 실행)가 `submitted` 건의 캡처를 받아 Ollama 비전 모델(`qwen` 계열 우선, 없으면 `gemma`)에 "이 화면의 팔로워 수와 계정 핸들을 JSON으로"를 물어 `ai_count·ai_confidence·ai_model`을 기록한다. 워커 없이도 제출·관리자 확인은 동작한다(AI는 제안일 뿐, 확정은 관리자).
+- 관리자 `/admin/community`에 "SNS 확인" 큐: 캡처·링크·사용자 입력·AI 제안을 나란히, [확인(수치 입력)] [반려(사유)]. 오퍼레이션 `social.verify|reject`. 확인 시 `follower_count`·`measured_at`·`source=manual` 기록, `profiles.influencer_since` 갱신. 90일 지나면 `expired` 표시(자격은 유지, 재제출 안내).
+
+### 17.2 캠페인 탭 가시성
+- 캠페인 목록 `/{locale}/campaigns`는 공개(`audience='public'`만 캐시된 정적). 로그인 사용자용 `/campaigns`(app)는 뷰어별·무캐시: `public` + (인플루언서면 `influencers`) + (`campaign_targets`에 있으면 `invited`). 지원 가능 여부도 서버에서 같은 규칙(`loadApplyState`·`applyToCampaign`·`acceptInvitation`).
+- 일반 사용자 화면: 내비 "캠페인"은 유지(공개 캠페인이 있으니), 계정 페이지와 캠페인 목록 상단에 티저 한 줄 "인스타그램·틱톡을 연결하면 더 많은 캠페인이 열려요" + 연결 링크. 자격 있는 사용자에겐 "인플루언서 캠페인" 섹션이 위에.
+
+### 17.3 크리에이터 풀(브랜드)
+- `social_accounts.pool_consent_at`(풀 노출 동의, 사용자가 `/identity/social`에서 켬). 브랜드 `/brand/creators`(허용 목록 추가): 동의한 verified 인플루언서를 핸들·플랫폼·팔로워 구간(1천 단위 반올림)·대표 공개 작품으로 카드 노출, 검색·필터(플랫폼·팔로워 구간). 브랜드 동작은 "캠페인에 초대"뿐(`campaign_targets` 삽입 + 기존 초대 링크 발급을 계정 지정으로). 연락처·실명·정확한 수치 없음.
+
+### 17.4 단계
+B2-a 자격 신청·관리자 확인·로컬 AI 워커·탭 가시성(0057/0141) → B2-b 크리에이터 풀·지정 초대. 둘 다 플래그 `TWINGS_INFLUENCERS=on`으로 열고 기본 off.
