@@ -28,13 +28,14 @@ const TOKEN = /\{\{\s*([^{}]*?)\s*\}\}/g;
 
 /**
  * The engines a maker may pick. Every one has a known real-person path (`needsIdentity`: OpenAI takes
- * the photo's bytes, ModelArk takes only a verified-library asset). The GPT Image 2.5 pair is left
- * out until the organisation check passes (lib/images/engines.ts `defaultEngine`). R2's Kling
+ * the photo's bytes, ModelArk takes only a verified-library asset). GPT Image 2.5 Flare joined on
+ * 2026-10-24 after its real-selfie smoke (founder decision); Sunburst stays out until it is measured
+ * the same way (lib/images/engines.ts `IMAGE_ENGINES`). R2's Kling
  * (`kling-omni`) and Nano Banana (`nano-banana-2.1`) are wired (adapters, matrix, prices) but join
  * this list only once `npm run kling:smoke` / `npm run gemini:smoke` has shown what each does with
  * a real selfie — a founder decision after the smoke, not a code default (PLATFORM-2.0 §7.3).
  */
-export const MAKER_ENGINE_IDS = ['gpt-image-2', 'seedream-5.0-pro', 'seedream-5.0-lite', 'seedance-2.0', 'seedance-2.5'] as const satisfies readonly EngineId[];
+export const MAKER_ENGINE_IDS = ['gpt-image-2.5-flare', 'gpt-image-2', 'seedream-5.0-pro', 'seedream-5.0-lite', 'seedance-2.0', 'seedance-2.5'] as const satisfies readonly EngineId[];
 export type MakerEngineId = (typeof MAKER_ENGINE_IDS)[number];
 export function isMakerEngine(value: unknown): value is MakerEngineId {
   return typeof value === 'string' && (MAKER_ENGINE_IDS as readonly string[]).includes(value);

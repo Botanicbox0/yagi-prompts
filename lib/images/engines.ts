@@ -55,7 +55,7 @@
 import type { TemplateMedium } from '@/lib/prompts/schemas';
 
 /** Order is the admin picker's order: the recommended default first. */
-export const IMAGE_ENGINE_IDS = ['gpt-image-2', 'gpt-image-2.5-flare', 'gpt-image-2.5-sunburst', 'seedream-5.0-pro', 'seedream-5.0-lite', 'nano-banana-2.1'] as const;
+export const IMAGE_ENGINE_IDS = ['gpt-image-2.5-flare', 'gpt-image-2', 'gpt-image-2.5-sunburst', 'seedream-5.0-pro', 'seedream-5.0-lite', 'nano-banana-2.1'] as const;
 export type ImageEngineId = (typeof IMAGE_ENGINE_IDS)[number];
 
 export const VIDEO_ENGINE_IDS = ['seedance-2.0', 'seedance-2.5', 'kling-omni'] as const;
@@ -118,12 +118,13 @@ export function enginesForMedium(medium: TemplateMedium): readonly EngineId[] {
 }
 
 /**
- * Images: GPT Image 2 until the OpenAI organisation is verified — the 2.5 models answer 403
- * ("Your organization must be verified to use the model", smoke 2026-09-10) until the founder
- * completes Verify Organization; flip this to 'gpt-image-2.5-flare' once a smoke passes.
+ * Images: GPT Image 2.5 Flare (founder, 2026-10-24). The organisation check that used to answer 403
+ * passed: the 2026-10-24 smoke rendered a 1024×1280 xhigh image from a real selfie and kept the face
+ * (`npm run image:smoke -- --engine gpt-image-2.5-flare --photo …`). GPT Image 2 stays selectable
+ * for the rows that already name it.
  */
 export function defaultEngine(medium: TemplateMedium): EngineId {
-  return medium === 'image' ? 'gpt-image-2' : 'seedance-2.0';
+  return medium === 'image' ? 'gpt-image-2.5-flare' : 'seedance-2.0';
 }
 
 /** The chip text for an engine — the image table's label, or the video table's. */
@@ -248,10 +249,11 @@ export const IMAGE_ENGINES: Record<ImageEngineId, ImageEngine> = {
     model: 'gpt-image-2.5-flare',
     sizes: GPT_IMAGE_SIZES,
     quality: 'xhigh',
-    // UNMEASURED: the 2026-09-10 smoke was refused (organisation not verified). Estimate from the
-    // gpt-image-2 high figure scaled for a higher tier; replace with the smoke's usage once it runs.
-    usdPerRender: 0.35,
-    usdPerReference: 0.03,
+    // Measured 2026-10-24 (smoke, 1024×1280 xhigh): text-only $0.0813 (2,702 output tokens at $30/M +
+    // 46 text tokens), one reference selfie $0.0929 (1,450 image input tokens at $8/M ≈ $0.012).
+    // Cheaper than gpt-image-2 high despite the higher tier — the token count, not the tier, sets the bill.
+    usdPerRender: 0.082,
+    usdPerReference: 0.012,
     maxReferenceImages: 16,
   },
   'gpt-image-2.5-sunburst': {

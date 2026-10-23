@@ -72,7 +72,7 @@ describe('recipe v2 schema — refused', () => {
     ['the selfie as a maker file', mutate(single('image'), (r) => { r.slots.selfie = { kind: 'image', source: 'creator', asset: A1 }; }), 'selfie_missing'],
     ['a second customer input', mutate(single('image'), (r) => { r.slots.pet = selfie; r.steps[0].inputs = ['selfie', 'pet']; r.steps[0].prompt = '{{selfie}} with {{pet}}.'; }), 'user_slot'],
     ['an unknown engine', mutate(single('image'), (r) => { r.steps[0].engine = 'midjourney'; }), 'engine'],
-    ['a not-yet-verified engine (GPT Image 2.5)', mutate(single('image'), (r) => { r.steps[0].engine = 'gpt-image-2.5-flare'; }), 'engine'],
+    ['an unmeasured engine (GPT Image 2.5 Sunburst)', mutate(single('image'), (r) => { r.steps[0].engine = 'gpt-image-2.5-sunburst'; }), 'engine'],
     // R2: wired and priced, but outside the maker list until the real-person smoke has run (PLATFORM-2.0 §7.3).
     ['Nano Banana before its smoke', mutate(single('image'), (r) => { r.steps[0].engine = 'nano-banana-2.1'; }), 'engine'],
     ['Kling before its smoke', mutate(single('video'), (r) => { r.steps[0].engine = 'kling-omni'; }), 'engine'],

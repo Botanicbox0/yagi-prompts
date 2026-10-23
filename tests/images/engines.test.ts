@@ -34,9 +34,9 @@ function ratioOf(aspect: string): number {
 }
 
 describe('image engines (docs/TEMPLATES-IA.md §7)', () => {
-  it('names the two founder-chosen families, carries GPT Image 2.5, and defaults images to GPT Image 2 until the org is verified', () => {
-    expect(IMAGE_ENGINE_IDS).toEqual(['gpt-image-2', 'gpt-image-2.5-flare', 'gpt-image-2.5-sunburst', 'seedream-5.0-pro', 'seedream-5.0-lite', 'nano-banana-2.1']);
-    expect(defaultEngine('image')).toBe('gpt-image-2');
+  it('names the two founder-chosen families and defaults images to GPT Image 2.5 Flare (founder, 2026-10-24, after its real-selfie smoke)', () => {
+    expect(IMAGE_ENGINE_IDS).toEqual(['gpt-image-2.5-flare', 'gpt-image-2', 'gpt-image-2.5-sunburst', 'seedream-5.0-pro', 'seedream-5.0-lite', 'nano-banana-2.1']);
+    expect(defaultEngine('image')).toBe('gpt-image-2.5-flare');
     expect(defaultEngine('video')).toBe('seedance-2.0');
     expect(enginesForMedium('video')).toEqual(['seedance-2.0', 'seedance-2.5', 'kling-omni']);
     expect(isEngineId('kling-3.0')).toBe(false);
@@ -147,7 +147,8 @@ describe('image engines (docs/TEMPLATES-IA.md §7)', () => {
     expect(estimateImageUsd('seedream-5.0-lite', 0)).toBe(0.035);
     expect(estimateImageUsd('seedream-5.0-lite', 1)).toBe(0.035);
     expect(estimateImageUsd('gpt-image-2', 1)).toBe(0.24);
-    expect(estimateImageUsd('gpt-image-2.5-flare', 1)).toBeGreaterThan(estimateImageUsd('gpt-image-2', 1) * 0.5);
+    // Measured 2026-10-24: $0.082 a render + $0.012 for the selfie — below gpt-image-2 high, the token count sets the bill.
+    expect(estimateImageUsd('gpt-image-2.5-flare', 1)).toBe(0.094);
     expect(estimateImageUsd('gpt-image-2.5-sunburst', 1)).toBeGreaterThanOrEqual(estimateImageUsd('gpt-image-2.5-flare', 1));
     expect(IMAGE_ENGINES['gpt-image-2'].maxReferenceImages).toBe(16);
     expect(IMAGE_ENGINES['seedream-5.0-pro'].model).toBe('dola-seedream-5-0-pro-260628');
