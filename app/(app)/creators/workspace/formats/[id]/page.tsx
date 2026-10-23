@@ -8,8 +8,8 @@ import { getDictionary } from '@/lib/i18n/dictionaries';
 import { signInHref } from '@/lib/billing/links';
 import { IDENTITY_SELFIE_PATH } from '@/lib/identity/links';
 import { currentSelfie } from '@/lib/identity/selfie-service';
-import { ARK_MODELS, supportedResolutions } from '@/lib/ark/models';
 import { engineLabel, IMAGE_ASPECTS, isVideoEngine, VIDEO_ASPECTS } from '@/lib/images/engines';
+import { videoEngineSpec } from '@/lib/video/models';
 import { platformAccess } from '@/lib/creator-platform/runtime';
 import { approvedCreator } from '@/lib/creator-platform/service';
 import { CREATOR_WORKSPACE_PATH } from '@/lib/creator-platform/links';
@@ -56,7 +56,7 @@ export default async function RecipeEditorPage({ params, searchParams }: { param
   const formatId = id === 'new' ? randomUUID() : id;
   const revisionOf = typeof query.revise === 'string' && /^[0-9a-f-]{36}$/.test(query.revise) ? query.revise : undefined;
   const engines: EngineOption[] = MAKER_ENGINE_IDS.map((engine) => isVideoEngine(engine)
-    ? { id: engine, label: engineLabel(engine), kind: 'video', minDuration: ARK_MODELS[engine].minDurationSeconds, maxDuration: ARK_MODELS[engine].maxDurationSeconds, resolutions: supportedResolutions(engine).filter((r) => r === '720p' || r === '1080p') }
+    ? (({ minDurationSeconds, maxDurationSeconds, resolutions }) => ({ id: engine, label: engineLabel(engine), kind: 'video' as const, minDuration: minDurationSeconds, maxDuration: maxDurationSeconds, resolutions: resolutions.filter((r): r is '720p' | '1080p' => r === '720p' || r === '1080p') }))(videoEngineSpec(engine))
     : { id: engine, label: engineLabel(engine), kind: 'image' });
   const hasSelfie = !!await currentSelfie(sql, viewer.userId);
   return shell(draft?.status ?? 'new', <RecipeEditor

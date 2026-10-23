@@ -1,6 +1,6 @@
-import { ARK_MODELS, type ArkModelKey } from '@/lib/ark/models';
-import { quoteArkVideo } from '@/lib/ark/pricing';
+import { ARK_MODELS } from '@/lib/ark/models';
 import { estimateImageUsd, IMAGE_ENGINE_IDS, type ImageEngineId } from '@/lib/images/engines';
+import { quoteVideo, type VideoModelKey } from '@/lib/video/models';
 import type { CreatorResolution } from './resolution';
 
 /**
@@ -36,7 +36,7 @@ export const COST_ASSUMPTIONS = {
 } as const;
 
 export interface CostFloor {
-  model: ArkModelKey;
+  model: VideoModelKey;
   resolution: CreatorResolution;
   seconds: number;
   providerUsd: number;
@@ -55,8 +55,8 @@ export function roundUpToHundred(krw: number): number {
   return Math.max(100, Math.ceil(krw / 100) * 100);
 }
 
-export function costFloor(input: { model: ArkModelKey; resolution: CreatorResolution; seconds: number; aspect?: string }, assumptions = COST_ASSUMPTIONS): CostFloor | null {
-  const estimate = quoteArkVideo({ ...input, aspect: input.aspect ?? '16:9' });
+export function costFloor(input: { model: VideoModelKey; resolution: CreatorResolution; seconds: number; aspect?: string }, assumptions = COST_ASSUMPTIONS): CostFloor | null {
+  const estimate = quoteVideo({ ...input, aspect: input.aspect ?? '16:9' });
   if (!estimate) return null;
   const { krwPerUsd, vatRate, pgFeeRate, targetMargin } = assumptions;
   const providerKrw = estimate.providerUsd * krwPerUsd;

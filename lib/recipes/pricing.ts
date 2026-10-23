@@ -1,6 +1,5 @@
-import { quoteArkVideo } from '@/lib/ark/pricing';
 import { estimateImageUsd, isImageEngine, isVideoEngine } from '@/lib/images/engines';
-import { arkModelForVideo } from '@/lib/twings/resolution';
+import { quoteVideo, videoModelForEngine } from '@/lib/video/models';
 import { COST_ASSUMPTIONS, IMAGE_MIN_PRICE_KRW, roundUpToHundred } from '@/lib/twings/cost-model';
 import { outputSteps, type Recipe } from './schema';
 
@@ -44,8 +43,8 @@ export function stepCosts(recipe: Recipe): StepCost[] {
   return recipe.steps.map((step) => {
     if (step.kind === 'image' && isImageEngine(step.engine)) return { step: step.id, providerUsd: estimateImageUsd(step.engine, step.inputs.length) };
     if (step.kind === 'video' && isVideoEngine(step.engine)) {
-      const { model, seconds } = arkModelForVideo(step.engine, step.params.duration);
-      const quote = quoteArkVideo({ model, resolution: step.params.resolution, seconds, aspect: step.params.aspect });
+      const { model, seconds } = videoModelForEngine(step.engine, step.params.duration);
+      const quote = quoteVideo({ model, resolution: step.params.resolution, seconds, aspect: step.params.aspect });
       return { step: step.id, providerUsd: quote?.providerUsd ?? 0 };
     }
     return { step: step.id, providerUsd: 0 };

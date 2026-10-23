@@ -148,6 +148,8 @@ describe('image cost floor — one price per engine (founder, 2026-10-21)', () =
       'seedream-5.0-pro': 200,
       // The 5% floor is 100원; the founder's 200원 minimum per image lifts it (2026-10-21).
       'seedream-5.0-lite': 200,
+      // R2: ≈73원 at 2K with one reference — the same 200원 minimum applies (PLATFORM-2.0 §9.2).
+      'nano-banana-2.1': 200,
     });
   });
 

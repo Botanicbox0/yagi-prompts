@@ -73,6 +73,11 @@ describe('recipe v2 schema — refused', () => {
     ['a second customer input', mutate(single('image'), (r) => { r.slots.pet = selfie; r.steps[0].inputs = ['selfie', 'pet']; r.steps[0].prompt = '{{selfie}} with {{pet}}.'; }), 'user_slot'],
     ['an unknown engine', mutate(single('image'), (r) => { r.steps[0].engine = 'midjourney'; }), 'engine'],
     ['a not-yet-verified engine (GPT Image 2.5)', mutate(single('image'), (r) => { r.steps[0].engine = 'gpt-image-2.5-flare'; }), 'engine'],
+    // R2: wired and priced, but outside the maker list until the real-person smoke has run (PLATFORM-2.0 §7.3).
+    ['Nano Banana before its smoke', mutate(single('image'), (r) => { r.steps[0].engine = 'nano-banana-2.1'; }), 'engine'],
+    ['Kling before its smoke', mutate(single('video'), (r) => { r.steps[0].engine = 'kling-omni'; }), 'engine'],
+    ['a 4:3 frame Kling has no setting for', mutate(single('video'), (r) => { r.steps[0].engine = 'kling-omni'; r.steps[0].params.aspect = '4:3'; }), 'aspect'],
+    ['a 20-second film on Kling 3.0 Omni', mutate(single('video'), (r) => { r.steps[0].engine = 'kling-omni'; r.steps[0].params.duration = 20; }), 'duration'],
     ['a film engine on an image step', mutate(single('image'), (r) => { r.steps[0].engine = 'seedance-2.0'; }), 'engine_kind'],
     ['a token the step does not read', mutate(single('image'), (r) => { r.steps[0].prompt = '{{selfie}} beside {{scene}}.'; }), 'unknown_token'],
     ['an input the prompt never names', mutate(filmRecipe(), (r) => { r.steps[1].prompt = 'The person from {{sheet}} at dusk.'; }), 'unused_input'],

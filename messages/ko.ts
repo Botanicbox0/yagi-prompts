@@ -656,6 +656,7 @@ export const ko: Dictionary = {
       no_identity: '모든 결과물이 [내 사진]을 직접 또는 앞 단계를 거쳐 써야 해요.',
       duration: '이 엔진이 만들 수 없는 길이예요.',
       resolution: '이 엔진이 만들 수 없는 해상도예요.',
+      aspect: '이 엔진이 만들 수 없는 비율이에요.',
     },
     how: {
       heading: '만드는 법',
