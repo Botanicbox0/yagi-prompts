@@ -73,6 +73,8 @@ describe('dictionary completeness (§3.9)', () => {
       'howItReads.stepsIndex',
       'howItReads.blocksIndex',
       'howItReads.unlockIndex',
+      // The first-run sheet's "1 / 3" — digits and a slash read the same in both languages.
+      'firstRun.progress',
       // M6: the studio's own mark. "YAGI" is a name, and a transliteration ("야기") would read as
       // a different brand rather than a translation — the same reason `meta.siteName` is here.
       'featured.badge',

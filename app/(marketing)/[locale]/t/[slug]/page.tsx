@@ -13,7 +13,7 @@ import { getCampaignCatalog } from '@/lib/campaigns/public-catalog';
 import { campaignHref } from '@/lib/campaigns/links';
 import { isCampaignPublic } from '@/lib/campaigns/state';
 import { formatTemplatePrice, isForSale } from '@/lib/twings/products';
-import { aspectsForMedium, defaultAspect, engineLabel, resolveEngine } from '@/lib/images/engines';
+import { aspectsForMedium, defaultAspect, resolveEngine } from '@/lib/images/engines';
 import { signInHref } from '@/lib/billing/links';
 import { identityVerifyHref } from '@/lib/identity/links';
 import { templateMetadata, unresolvedTemplateMetadata } from '@/lib/seo/template-metadata';
@@ -38,6 +38,7 @@ import { templateSubscriptionQuote } from '@/lib/twings/subscription-plan';
 import { cachedSubscriptionAvailability } from '@/lib/creator-subscriptions/cached-availability';
 import { SubscriptionAvailabilityProvider } from '@/components/twings/subscription-availability';
 import { TemplateMakeAvailability, TemplateSubscriptionNote } from '@/components/twings/subscription-public-notices';
+import { cachedTypicalWaitMinutes } from '@/lib/twings/cached-typical-wait';
 
 /**
  * `/[locale]/t/[slug]` — one template, which is also where it is made (docs/TEMPLATES-IA.md §2).
@@ -48,6 +49,12 @@ import { TemplateMakeAvailability, TemplateSubscriptionNote } from '@/components
  * whose payment step is a per-viewer request, not per-viewer HTML.
  *
  * 404 for anything not published, for everyone — the catalogue projection is the filter.
+ *
+ * It is the DECISION screen (docs/PLATFORM-2.0.md §15.3-1): the example first, then one make card —
+ * price, length · aspect · resolution · "보통 N분", whether it can be bought now (`storefrontOpen()`,
+ * the same value the home hero and pricing read), the studio with its one CTA, then the AI limit and
+ * the refund sentence. No second heading, no link button to the card, no engine name. On a phone a
+ * sticky bar keeps price + CTA at the thumb until the card is on screen.
  */
 /** Must stay equal to CATALOG_TTL_SECONDS — Next requires a literal here (tests pin the pair). */
 export const revalidate = 3600;
@@ -89,6 +96,9 @@ export default async function TemplatePage({ params }: RouteParams) {
   const dict = getDictionary(locale);
   const [{ card, all }, availability, campaignCatalog] = await Promise.all([resolve(slug), cachedSubscriptionAvailability(), getCampaignCatalog()]);
   if (card === null) notFound();
+  // Built with the page and refreshed with it (tag `prompts`): the median of recent successful renders
+  // for this engine and length, or the engine default below ten (lib/twings/typical-wait.ts).
+  const waitMinutes = await cachedTypicalWaitMinutes({ engine: resolveEngine(card.engine, card.medium), medium: card.medium, seconds: card.medium === 'video' ? card.runtimeSeconds ?? null : null });
 
   const t = dict.templates;
   const labels = promptLabels(dict);
@@ -99,6 +109,16 @@ export default async function TemplatePage({ params }: RouteParams) {
   const makeAvailabilityCopy = { makeCta: t.makeCta, makeCtaClosed: t.makeCtaClosed, makeBody: t.makeBody, makeBodyClosed: t.makeBodyClosed, makeBodySubscription: t.makeBodySubscription, makeBodySubscriptionPaused: t.makeBodySubscriptionPaused };
   const ratio = card.poster?.w && card.poster.h ? `${card.poster.w} / ${card.poster.h}` : posterRatio(card.slug);
   const credit = card.source === 'yagi' ? labels.byYagi : card.authorHandle ? labels.byAuthor.replace('{handle}', card.authorHandle) : labels.byAnonymous;
+  const shopOpen = storefrontOpen();
+  const resolutions = isForSale(card) ? offeredResolutions(card) : [];
+  const facts: Array<[string, string]> = [
+    card.medium === 'video' && card.runtimeSeconds
+      ? [t.runtimeLabel, interpolate(dict.studio.runtimeLabel, { seconds: String(card.runtimeSeconds) })]
+      : [t.mediumLabel, dict.nav[card.medium]],
+    [t.aspectFact, card.aspectDefault ?? defaultAspect(card.medium)],
+    ...(resolutions.length > 0 ? [[t.resolutionFact, resolutions[0]!] as [string, string]] : []),
+    [t.waitLabel, interpolate(t.waitValue, { minutes: String(waitMinutes) })],
+  ];
 
   // The campaigns that ask for THIS template — the earn loop, one click from the make loop.
   const campaigns = campaignCatalog.campaigns.filter((c) => c.styleSlug === card.slug && isCampaignPublic(c.status));
@@ -133,133 +153,131 @@ export default async function TemplatePage({ params }: RouteParams) {
           </AdRail>
 
           <div className="band pt-28 lg:pt-32">
-            <a href={templatesHref(locale, card.medium)} className="font-mono text-[0.72rem] opacity-60">
+            <a href={templatesHref(locale, card.medium)} className="inline-flex min-h-11 items-center text-sm text-black/65">
               ← {interpolate(t.backTo, { medium: dict.nav[card.medium] })}
             </a>
 
-            <header className="mt-6 grid gap-10 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)] lg:items-start">
+            <header className="mt-6 grid gap-8 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)] lg:items-start lg:gap-10">
               <div>
                 <PromptDetailMedia
                   poster={card.poster}
                   video={card.video}
                   alt={labels.resultLabel}
                   ratio={ratio}
-                  fallback={<TypographicPoster title={card.title} slug={card.slug} kicker={card.modelLabels.join(' · ')} ratio={ratio} />}
+                  fallback={<TypographicPoster title={card.title} slug={card.slug} kicker={dict.nav[card.medium]} ratio={ratio} />}
                 />
               </div>
               <div>
-                <p className="flex flex-wrap items-center gap-x-3 gap-y-1 font-label text-eyebrow uppercase">
+                <p className="font-label text-eyebrow uppercase">
                   <span data-medium-chip className="text-accent">{dict.nav[card.medium]}</span>
-                  {/* The engine this template renders on — not the models the recipe was tried on. */}
-                  <span data-engine-chip className="opacity-60">{engineLabel(resolveEngine(card.engine, card.medium))}</span>
                 </p>
-                <h1 className="mt-5 font-display text-[clamp(2.2rem,5vw,4rem)] leading-[0.92] font-black uppercase">{title}</h1>
-                <p data-template-description className="mt-5 max-w-detail text-body opacity-70">{dict.meta.templateDescription}</p>
-                <p className="mt-4 font-label text-[0.7rem] tracking-[0.12em] uppercase opacity-60">{credit}</p>
-                {card.useCase.length > 0 && (
-                  <p className="mt-4 flex flex-wrap gap-1.5 font-mono text-[0.75rem] opacity-60">
-                    {card.useCase.map((value) => (
-                      <span key={value}>{useCaseLabels[value] ?? value}</span>
-                    ))}
-                  </p>
-                )}
+                <h1 className="mt-4 font-display text-[clamp(2rem,5vw,4rem)] leading-[0.92] font-black uppercase">{title}</h1>
+                <p className="mt-4 flex flex-wrap gap-x-1 gap-y-1 text-sm text-black/65">
+                  <span>{credit}</span>
+                  {card.useCase.map((value) => (
+                    <span key={value}>· {useCaseLabels[value] ?? value}</span>
+                  ))}
+                </p>
 
-                <dl data-template-facts className="mt-8 grid grid-cols-2 gap-px border border-hairline bg-hairline">
-                  <div className="bg-surface px-5 py-5">
-                    <dt className="font-label text-eyebrow uppercase opacity-60">{t.priceLabel}</dt>
-                    <dd className="mt-2 font-display text-[1.6rem] leading-none font-black">
-                      {isForSale(card) ? formatTemplatePrice(card, locale) : t.notForSale}
-                    </dd>
-                  </div>
-                  <div className="bg-surface px-5 py-5">
-                    <dt className="font-label text-eyebrow uppercase opacity-60">
-                      {card.medium === 'video' ? t.runtimeLabel : t.mediumLabel}
-                    </dt>
-                    <dd className="mt-2 font-display text-[1.6rem] leading-none font-black">
-                      {card.medium === 'video' && card.runtimeSeconds
-                        ? interpolate(dict.studio.runtimeLabel, { seconds: String(card.runtimeSeconds) })
-                        : dict.nav[card.medium]}
-                    </dd>
-                  </div>
-                </dl>
+                {style === null ? (
+                  <section data-template-closed className="mt-7 rounded-2xl border border-hairline p-5 sm:p-6">
+                    <p className="font-display text-[1.6rem] leading-none font-black">{t.notForSale}</p>
+                    <dl data-template-facts className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 border-t border-hairline pt-4">
+                      {facts.filter(([label]) => label !== t.waitLabel).map(([label, value]) => (
+                        <div key={label}><dt className="text-xs text-black/65">{label}</dt><dd className="mt-1 text-[0.95rem] font-semibold">{value}</dd></div>
+                      ))}
+                    </dl>
+                    <p className="mt-4 text-sm leading-relaxed text-black/75">{t.notForSaleBody}</p>
+                  </section>
+                ) : (
+                  // The one make card: price box, the studio, then the small print — nothing above it repeats it.
+                  <section id="make" data-template-make data-template-price-box className="mt-7 scroll-mt-24 rounded-2xl border border-hairline p-5 sm:p-6">
+                    <div className="flex items-baseline justify-between gap-4">
+                      <p data-template-price className="font-display text-[2rem] leading-none font-black">{style.price}</p>
+                      <p className="text-sm text-black/70">{t.priceLabel}</p>
+                    </div>
+                    <dl data-template-facts className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 border-y border-hairline py-4 sm:grid-cols-4">
+                      {facts.map(([label, value]) => (
+                        <div key={label} data-template-fact>
+                          <dt className="text-xs text-black/65">{label}</dt>
+                          <dd className="mt-1 text-[0.95rem] font-semibold">{value}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                    <p data-template-sale-state className="mt-4 text-sm leading-relaxed text-black/75">
+                      <TemplateMakeAvailability copy={makeAvailabilityCopy} oneTimeAvailable={shopOpen} subscriptionEligible={subscriptionQuote !== null} field="body" />
+                    </p>
+                    <TwingsStudio
+                      styles={[style]}
+                      initialStyleId={style.id}
+                      shopOpenHint={shopOpen}
+                      live={{
+                        endpoint: '/api/renders',
+                        accessEndpoint: '/api/renders/access',
+                        interestEndpoint: '/api/notify/interest',
+                        template: card.slug,
+                        locale,
+                        signinHref: signInHref(`${templateHref(locale, slug)}#make`, locale),
+                        identityHref: identityVerifyHref(`${templateHref(locale, slug)}#make`),
+                        selfie: dict.selfie,
+                        subscription: { copy: dict.creatorSubscription, editorCopy: dict.premiumEditor },
+                        labels: {
+                          badge: dict.renders.studio.badge,
+                          operatorBadge: dict.renders.studio.operatorBadge,
+                          freeCta: dict.renders.studio.freeCta,
+                          submitting: dict.renders.studio.submitting,
+                          identityNotice: dict.renders.studio.identityNotice,
+                          identityPending: dict.renders.studio.identityPending,
+                          identityCta: dict.renders.studio.identityCta,
+                          errors: dict.renders.studio.errors,
+                        },
+                      }}
+                      labels={{
+                        stepPhoto: dict.studio.stepPhoto,
+                        stepStyle: dict.studio.stepStyle,
+                        stepPay: dict.studio.stepPay,
+                        stepResult: dict.studio.stepResult,
+                        dropZone: dict.studio.dropZone,
+                        dropHint: dict.studio.dropHint,
+                        changePhoto: dict.studio.changePhoto,
+                        chooseStyle: dict.studio.chooseStyle,
+                        payCta: dict.studio.payCta,
+                        payNote: dict.studio.payNote,
+                        closedTitle: dict.studio.closedTitle,
+                        closedBody: dict.studio.closedBody,
+                        closedCta: dict.studio.closedCta,
+                        closedDone: dict.studio.closedDone,
+                        signedOutBody: dict.studio.signedOutBody,
+                        signedOutCta: dict.studio.signedOutCta,
+                        photoExamples: dict.studio.photoExamples,
+                        pending: dict.studio.pending,
+                        makeCta: t.makeCta,
+                        makeCtaClosed: t.makeCtaClosed,
+                        otherAspect: dict.studio.otherAspect,
+                        runtimeLabel: dict.studio.runtimeLabel,
+                        needPhoto: dict.studio.needPhoto,
+                        noStyles: dict.studio.noStyles,
+                        moreTemplates: dict.studio.moreTemplates,
+                        aspectLabel: dict.studio.aspectLabel,
+                        resolutionLabel: dict.studio.resolutionLabel,
+                        resolutionDefault: dict.studio.resolutionDefault,
+                        resolutionNote: dict.studio.resolutionNote,
+                      }}
+                    />
+                    <div data-template-trust className="mt-5 space-y-1.5 border-t border-hairline pt-4 text-sm leading-relaxed text-black/70">
+                      {/* Founder, 2026-09-11: what AI-made means is said before the money, not after the complaint. */}
+                      <p data-studio-ai-note>{t.aiLimit}</p>
+                      <p data-template-refund>{dict.renders.notCharged}</p>
+                    </div>
+                  </section>
+                )}
 
                 {subscriptionQuote && <TemplateSubscriptionNote copy={{ subscriptionTemplateNote: dict.pricing.subscriptionTemplateNote, subscriptionTemplateOpenNote: dict.pricing.subscriptionTemplateOpenNote, subscriptionTemplateCreatorNote: dict.pricing.subscriptionTemplateCreatorNote, subscriptionTemplatePausedNote: dict.pricing.subscriptionTemplatePausedNote, subscriptionDetailLink: dict.pricing.subscriptionDetailLink }} count={subscriptionQuote.maxPerMonth} premiumCount={templateSubscriptionQuote(card, 'premium')!.maxPerMonth} locale={locale} />}
 
-                {style === null ? (
-                  <p data-template-closed className="mt-6 max-w-detail text-body opacity-70">{t.notForSaleBody}</p>
-                ) : (
-                  <a href="#make" data-template-make-cta className="mt-6 inline-block bg-accent px-6 py-3 font-label text-label text-white uppercase">
-                    <TextSwap><TemplateMakeAvailability copy={makeAvailabilityCopy} oneTimeAvailable={storefrontOpen()} subscriptionEligible={subscriptionQuote !== null} field="cta" /> →</TextSwap>
-                  </a>
-                )}
+                {/* The definition, under the first screen (AGENTS.md §7 GEO): in the HTML, not in the way. */}
+                <p data-template-description className="mt-6 max-w-detail text-sm leading-relaxed text-black/65">{dict.meta.templateDescription}</p>
               </div>
             </header>
-
-            {/* The make loop, on the template's own page. */}
-            <section id="make" data-template-make className="mt-16 border-t border-hairline pt-10">
-              <p className="text-accent font-label text-eyebrow uppercase">{t.makeEyebrow}</p>
-              <h2 className="mt-4 font-display text-[clamp(1.6rem,3vw,2.4rem)] leading-[0.95] font-black uppercase">{t.makeHeading}</h2>
-              <p className="mt-4 max-w-detail text-body opacity-70"><TemplateMakeAvailability copy={makeAvailabilityCopy} oneTimeAvailable={storefrontOpen()} subscriptionEligible={subscriptionQuote !== null} field="body" /></p>
-              {style === null ? (
-                <p data-template-closed className="mt-8 border border-hairline p-6 text-body opacity-70">{t.notForSaleBody}</p>
-              ) : (
-                <TwingsStudio
-                  styles={[style]}
-                  initialStyleId={style.id}
-                  live={{
-                    endpoint: '/api/renders',
-                    accessEndpoint: '/api/renders/access',
-                    interestEndpoint: '/api/notify/interest',
-                    template: card.slug,
-                    locale,
-                    signinHref: signInHref(`${templateHref(locale, slug)}#make`, locale),
-                    identityHref: identityVerifyHref(`${templateHref(locale, slug)}#make`),
-                    selfie: dict.selfie,
-                    subscription: { copy: dict.creatorSubscription, editorCopy: dict.premiumEditor },
-                    labels: {
-                      badge: dict.renders.studio.badge,
-                      operatorBadge: dict.renders.studio.operatorBadge,
-                      freeCta: dict.renders.studio.freeCta,
-                      submitting: dict.renders.studio.submitting,
-                      identityNotice: dict.renders.studio.identityNotice,
-                      identityPending: dict.renders.studio.identityPending,
-                      identityCta: dict.renders.studio.identityCta,
-                      errors: dict.renders.studio.errors,
-                    },
-                  }}
-                  labels={{
-                    stepPhoto: dict.studio.stepPhoto,
-                    stepStyle: dict.studio.stepStyle,
-                    stepPay: dict.studio.stepPay,
-                    stepResult: dict.studio.stepResult,
-                    dropZone: dict.studio.dropZone,
-                    dropHint: dict.studio.dropHint,
-                    changePhoto: dict.studio.changePhoto,
-                    chooseStyle: dict.studio.chooseStyle,
-                    payCta: dict.studio.payCta,
-                    payNote: dict.studio.payNote,
-                    closedBadge: dict.studio.closedBadge,
-                    closedTitle: dict.studio.closedTitle,
-                    closedBody: dict.studio.closedBody,
-                    closedCta: dict.studio.closedCta,
-                    closedDone: dict.studio.closedDone,
-                    signedOutBadge: dict.studio.signedOutBadge,
-                    signedOutTitle: dict.studio.signedOutTitle,
-                    signedOutBody: dict.studio.signedOutBody,
-                    signedOutCta: dict.studio.signedOutCta,
-                    aiNote: dict.studio.aiNote,
-                    runtimeLabel: dict.studio.runtimeLabel,
-                    needPhoto: dict.studio.needPhoto,
-                    noStyles: dict.studio.noStyles,
-                    moreTemplates: dict.studio.moreTemplates,
-                    aspectLabel: dict.studio.aspectLabel,
-                    resolutionLabel: dict.studio.resolutionLabel,
-                    resolutionDefault: dict.studio.resolutionDefault,
-                    resolutionNote: dict.studio.resolutionNote,
-                  }}
-                />
-              )}
-            </section>
 
             {/* The earn loop: campaigns that ask for exactly this template. */}
             {campaigns.length > 0 && (
@@ -304,6 +322,8 @@ export default async function TemplatePage({ params }: RouteParams) {
       <FaqSection dict={dict} locale={locale} placement="template" path={`/${locale}/t/${slug}`} availability={availability} />
       </SubscriptionAvailabilityProvider>
       <MarketingFooter locale={locale} dict={dict} />
+      {/* Room for the phone's sticky make bar, so it never sits on the footer's last line. */}
+      {style !== null && <div aria-hidden="true" className="h-24 md:hidden" />}
     </>
   );
 }

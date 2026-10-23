@@ -18,16 +18,18 @@ export type SubscriptionComparisonCopy = Pick<Dictionary['pricing'],
   'subscriptionPeriod' | 'subscriptionTax' | 'subscriptionFilmCount' | 'subscriptionFilmLength' |
   'subscriptionEditingTitle' | 'subscriptionEditingStatus' | 'subscriptionMore' |
   'subscriptionBrowse' | 'subscriptionCountBasis' | 'subscriptionTitle' | 'subscriptionStatus' |
-  'subscriptionUnavailable' | 'subscriptionOpenTitle' | 'subscriptionOpenStatus' |
+  'subscriptionUnavailable' | 'subscriptionUnavailableSingleOpen' | 'subscriptionOpenTitle' | 'subscriptionOpenStatus' |
   'subscriptionOpenBody' | 'subscriptionPausedStatus' | 'subscriptionPausedBody' |
   'subscriptionStart' | 'subscriptionEditingOpenStatus' | 'subscriptionEditRequestLimit' | 'subscriptionEditCountNotice'>;
 
 /** Only display values cross this boundary. This comparison cannot enroll or authorize a render. */
-export function SubscriptionPlanComparison({ plans, copy, browseHref, initialAvailability }: {
+export function SubscriptionPlanComparison({ plans, copy, browseHref, initialAvailability, oneTimeAvailable = false }: {
   plans: PublicCreatorPlan[];
   copy: SubscriptionComparisonCopy;
   browseHref: string;
   initialAvailability?: PublicSubscriptionAvailability;
+  /** `storefrontOpen()`: while monthly plans are preparing, say single films can be bought now — not that generation is closed. */
+  oneTimeAvailable?: boolean;
 }) {
   const [seconds, setSeconds] = useState<FilmLength>(15);
   const availability = useSubscriptionAvailability(initialAvailability);
@@ -37,7 +39,7 @@ export function SubscriptionPlanComparison({ plans, copy, browseHref, initialAva
     <div className="mb-6 flex flex-wrap items-center gap-x-4 gap-y-2 border-y border-hairline py-3">
       <h2 className="text-sm font-semibold">{open ? copy.subscriptionOpenTitle : copy.subscriptionTitle}</h2>
       <span className="rounded-full border border-hairline px-3 py-1 text-xs">{open ? copy.subscriptionOpenStatus : paused ? copy.subscriptionPausedStatus : copy.subscriptionStatus}</span>
-      <p data-subscription-unavailable={open ? undefined : ''} data-generation-availability className="w-full text-xs leading-relaxed text-black/65 lg:w-auto">{open ? copy.subscriptionOpenBody : paused ? copy.subscriptionPausedBody : copy.subscriptionUnavailable}</p>
+      <p data-subscription-unavailable={open ? undefined : ''} data-generation-availability className="w-full text-xs leading-relaxed text-black/65 lg:w-auto">{open ? copy.subscriptionOpenBody : paused ? copy.subscriptionPausedBody : oneTimeAvailable ? copy.subscriptionUnavailableSingleOpen : copy.subscriptionUnavailable}</p>
     </div>
     <fieldset className="mb-5 flex min-w-0 flex-wrap items-center justify-between gap-4">
       <legend className="sr-only">{copy.subscriptionDurationLabel}</legend>
@@ -84,9 +86,19 @@ export function SubscriptionPlanComparison({ plans, copy, browseHref, initialAva
   </div>;
 }
 
-export function SubscriptionPricingText({ copy, field }: { copy: Pick<Dictionary['pricing'], 'lede' | 'subscriptionOpenLede' | 'filmsOpenBody' | 'filmsBody'>; field: 'lede' | 'single' }) {
+/**
+ * The pricing page's sale-state sentences. `oneTimeAvailable` is `storefrontOpen()` — the same value the
+ * home hero and the template page read — so "can I buy one film now?" has one answer site-wide.
+ */
+export function SubscriptionPricingText({ copy, field, oneTimeAvailable = false }: {
+  copy: Pick<Dictionary['pricing'], 'lede' | 'subscriptionOpenLede' | 'singleLede' | 'filmsOpenBody' | 'filmsBody' | 'singleOpenBody'>;
+  field: 'lede' | 'single';
+  oneTimeAvailable?: boolean;
+}) {
   const availability = useSubscriptionAvailability();
-  return <>{field === 'lede' ? availability.status === 'open' ? copy.subscriptionOpenLede : copy.lede : availability.status === 'open' ? copy.filmsOpenBody : copy.filmsBody}</>;
+  const monthlyOpen = availability.status === 'open';
+  if (field === 'lede') return <>{monthlyOpen ? copy.subscriptionOpenLede : oneTimeAvailable ? copy.singleLede : copy.lede}</>;
+  return <>{monthlyOpen ? copy.filmsOpenBody : oneTimeAvailable ? copy.singleOpenBody : copy.filmsBody}</>;
 }
 
 export function SubscriptionEditingPreview({ copy }: { copy: Pick<Dictionary['pricing'], 'subscriptionEditingStatus' | 'subscriptionEditingOpenStatus' | 'subscriptionEditingTitle' | 'subscriptionPromptEditingSoon' | 'subscriptionEditingOpenBody' | 'subscriptionEditingExample' | 'subscriptionEditingBoundary'> }) {

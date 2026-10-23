@@ -8,6 +8,7 @@ import { AdRail } from '@/components/ad/ad-rail';
 import { AdBanner, AdCard } from '@/components/ad/ad-card';
 import { TemplatesListing } from '@/components/templates/listing';
 import { FaqSection } from '@/lib/seo/faq-section';
+import { FirstRunSheet } from '@/components/onboarding/first-run-sheet';
 
 /**
  * `/[locale]/video` — the VIDEO tab (docs/TEMPLATES-IA.md §2). Static + tag `prompts` + the 1h TTL
@@ -62,6 +63,8 @@ export default async function VideoTemplatesPage({ params }: RouteParams) {
       </main>
       <FaqSection dict={dict} locale={locale} placement="template" path={`/${locale}/video`} />
       <MarketingFooter locale={locale} dict={dict} />
+      {/* docs/PLATFORM-2.0.md §3.2-1 — once, for a new account; the server markup is empty. */}
+      <FirstRunSheet copy={dict.firstRun} locale={locale} />
     </>
   );
 }

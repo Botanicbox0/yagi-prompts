@@ -53,6 +53,29 @@ until the video decodes, which costs LCP on the landing page.
 
 ---
 
+## 1b. Hero evidence — `heroEvidence()` (셀카 → 장면)
+
+**Where** `lib/content/slots.ts` → `components/audience/hero-evidence.tsx`, rendered by the home hero
+(`components/audience/creator-home.tsx`). docs/PLATFORM-2.0.md §15.3-2.
+
+**Now — not rendered in production.** Two pictures make the proof: a front-facing selfie and a still
+of the scene that same face went into. Both are required; with either one unset the hero keeps its
+earlier shape exactly (no empty frame, no layout shift). Which person may appear is a founder decision
+(PLATFORM-2.0 §15.5-16: the founder or an internal model with cleared rights).
+
+**Swap** upload the two images (4:5 crops read best; any public URL or a `public/` path) and set:
+
+```
+NEXT_PUBLIC_HERO_EVIDENCE_BEFORE=https://…/selfie.jpg
+NEXT_PUBLIC_HERO_EVIDENCE_AFTER=https://…/scene-still.jpg
+```
+
+then redeploy (the landing is static). Local QA fills the pair with the public AI-generated photo
+guide image and an existing template poster (`docs/qa/onboarding-make/README.md`) — a placeholder for
+the layout, not a real selfie → scene pair.
+
+---
+
 ## 2. Playbook hero images — the catalog cards
 
 **Where** `lib/content/asset-url.ts` → `components/landing/playbook-card.tsx`.
