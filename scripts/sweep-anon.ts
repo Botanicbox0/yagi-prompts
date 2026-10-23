@@ -7,6 +7,8 @@ import { DEFAULT_LOCAL_SNAPSHOT } from '@/lib/db/connect-shared';
 import { FIXTURE_SENTINELS } from './fixtures';
 import { HIDDEN_PROMPT_SLUGS, PROMPT_SENTINELS } from './prompt-fixtures';
 import { RUNTIME_MODE_ENV } from '@/lib/runtime-mode';
+import { KO_TERMS } from '@/messages/ko';
+import { EN_TERMS } from '@/messages/en';
 
 /**
  * M7: the sweep's oracle is the LOCAL snapshot (it opens `.pglite/catalog.tar.gz` directly), so the
@@ -1206,6 +1208,68 @@ async function sweepLandingTemplates(): Promise<void> {
   expectEqual('/library still works for anyone who has the URL', (await get('/library')).status, 307);
 }
 
+/**
+ * docs/PLATFORM-2.0.md §7.5·§14.1 — the header names (개인 | 브랜드), the two origin rails and the
+ * public maker page. The local snapshot carries published community fixtures (maker origin) and one
+ * maker who opted in (`scripts/maker-fixtures.ts`, `@jun`), so here both rails exist; production
+ * has no maker template yet, and the unit tests pin that the second rail and the chips then vanish.
+ */
+async function sweepMakers(): Promise<void> {
+  console.log('\n§14.1 names — the header audience switch');
+  for (const [locale, personal, brand] of [['ko', KO_TERMS.personal, '브랜드'], ['en', EN_TERMS.personal, 'Brands']] as const) {
+    const page = await get(`/${locale}`);
+    const side = (id: string) => new RegExp(`data-audience="${id}"[^>]*>([^<]*)</a>`).exec(page.body)?.[1] ?? null;
+    expectEqual(`${locale}: the switch's consumer side reads "${personal}"`, side('creator'), personal);
+    expectEqual(`${locale}: …and its brand side "${brand}"`, side('brand'), brand);
+  }
+
+  console.log(`\n/ko/video — ${KO_TERMS.studioCollection}, then ${KO_TERMS.makerCollection}`);
+  const video = await get('/ko/video');
+  const studioRail = video.body.indexOf('data-rail-origin="studio"');
+  const makerRail = video.body.indexOf('data-rail-origin="maker"');
+  if (studioRail > -1 && makerRail > studioRail) ok('the studio rail comes first, the maker rail second', `${studioRail} < ${makerRail}`);
+  else fail('the studio rail comes first, the maker rail second', `studio at ${studioRail}, maker at ${makerRail}`);
+  expectPresent('the origin chips', video.body, 'data-origin-filter');
+  expectPresent('…"전체 · 오리지널 · 메이커"', video.body, `>${KO_TERMS.maker}</button>`);
+  expectPresent('the maker rail is named', video.body, `>${KO_TERMS.makerCollection}</h2>`);
+  expectPresent('a public maker is credited by handle', video.body, `${KO_TERMS.creditPrefix} @jun`);
+  expectAbsent('no "작가" anywhere on the catalogue', video.body, '작가');
+  expectAbsent('no author account id reaches the page', video.body, 'f0000000-0000-4000-8000-000000000002');
+
+  console.log('\n/ko/t/[slug] — the maker block only where the maker opted in');
+  const makerTemplate = await get('/ko/t/cafe-window-timelapse');
+  expectEqual('renders 200', makerTemplate.status, 200);
+  expectPresent('the maker block', makerTemplate.body, 'data-template-maker="jun"');
+  expectPresent('…linking to the maker page', makerTemplate.body, 'href="/ko/makers/jun"');
+  expectPresent('the verified mark', makerTemplate.body, 'data-template-verified');
+  const legacy = await get('/ko/t/skate-park-golden-hour');
+  expectPresent('a handle without a maker page is a plain credit', legacy.body, `${KO_TERMS.creditPrefix} @hana`);
+  expectAbsent('…with no maker block', legacy.body, 'data-template-maker');
+  const studio = await get(`/ko/t/${GATED_PROMPT}`);
+  expectPresent('a studio template names the studio collection', studio.body, KO_TERMS.studioCollection);
+  expectAbsent('…and has no maker block', studio.body, 'data-template-maker');
+
+  console.log('\n/{locale}/makers/[handle] — a public maker page');
+  for (const locale of ['ko', 'en'] as const) {
+    const page = await get(`/${locale}/makers/jun`);
+    expectEqual(`${locale}: renders 200`, page.status, 200);
+    expectPresent(`${locale}: is the maker page`, page.body, 'data-maker-profile="jun"');
+    expectPresent(`${locale}: shows the maker's template`, page.body, 'data-prompt-card="cafe-window-timelapse"');
+    expectAbsent(`${locale}: and nobody else's`, page.body, 'data-prompt-card="skate-park-golden-hour"');
+    expectPresent(`${locale}: canonical`, page.body, `rel="canonical" href="http`);
+    expectPresent(`${locale}: hreflang`, page.body, 'hrefLang="ko"');
+    expectAbsent(`${locale}: indexable`, page.body, 'noindex');
+    expectAbsent(`${locale}: no account id`, page.body, 'f0000000-0000-4000-8000-000000000002');
+    expectAbsent(`${locale}: no email`, page.body, 'pro@playbook.test');
+  }
+  expectPresent('ko: the count line', (await get('/ko/makers/jun')).body, '템플릿 1편');
+  expectEqual('a handle with no maker page is a 404', (await get('/ko/makers/hana')).status, 404);
+  expectEqual('an unknown handle is a 404', (await get('/en/makers/nobody_here')).status, 404);
+  const sitemap = await get('/sitemap.xml');
+  expectPresent('the maker page is in the sitemap', sitemap.body, '/ko/makers/jun</loc>');
+  expectAbsent('…a handle without one is not', sitemap.body, '/makers/hana');
+}
+
 /** Public monthly outcomes, no per-template price table or account data. */
 async function sweepPricingTemplates(): Promise<void> {
   console.log('\n/en/pricing + /ko/pricing — monthly plan comparison, anonymous');
@@ -1633,6 +1697,7 @@ async function main(): Promise<void> {
   await sweepPromptMedia(prompts);
   await sweepLandingTemplates();
   await sweepPricingTemplates();
+  await sweepMakers();
 
 
   // --- docs/CAMPAIGNS.md: the campaigns surface --------------------------

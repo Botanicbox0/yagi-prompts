@@ -8,6 +8,7 @@ import { createLocalStorageDriver } from '@/lib/storage/local-driver';
 import { RUNTIME_MODE_ENV } from '@/lib/runtime-mode';
 import { seed, seedContests, seedEdgeFixtures } from './seed';
 import { seedBrandWorkspaceFixtures } from './brand-workspace-fixtures';
+import { seedMakerFixtures } from './maker-fixtures';
 
 /**
  * Hermetic by construction (M7). This script builds the OFFLINE database, so it pins the mode
@@ -79,6 +80,8 @@ async function main(): Promise<void> {
   // designed empty state against a real server.
   const contests = await seedContests(options);
   await seedBrandWorkspaceFixtures(sql, storage);
+  // PLATFORM-2.0 §7.5: one public maker (`/makers/jun`), local only.
+  await seedMakerFixtures(sql);
 
   const inventory =
     `${result.playbooks.length} core playbooks, ${edges.length} edge fixtures, ` +

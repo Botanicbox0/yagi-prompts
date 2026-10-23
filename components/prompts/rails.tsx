@@ -1,4 +1,4 @@
-import type { PromptCard } from '@/lib/prompts/catalog';
+import type { PromptCard, PromptOrigin } from '@/lib/prompts/catalog';
 import { PromptCardView } from './prompt-card';
 import { RevealGrid } from '@/components/motion/reveal-grid';
 import { railOrder } from './card-frame';
@@ -26,6 +26,7 @@ export function PromptRail({
   now,
   topClassName = 'mt-16 first:mt-0 lg:mt-24',
   hideHeading = false,
+  origin,
 }: {
   id: string;
   heading: string;
@@ -46,9 +47,11 @@ export function PromptRail({
   topClassName?: string;
   /** The catalog already has a visible page title and introduction. Keep its rail label accessible. */
   hideHeading?: boolean;
+  /** docs/PLATFORM-2.0.md §7.5 — which origin this rail holds; the origin chips hide rails by it. */
+  origin?: PromptOrigin;
 }) {
   return (
-    <section data-rail={id} className={topClassName}>
+    <section data-rail={id} data-rail-origin={origin} className={topClassName}>
       <div className={hideHeading ? 'sr-only' : 'flex flex-wrap items-baseline justify-between gap-x-8 gap-y-2 border-b border-hairline pb-4'}>
         {/* §5.2: rail headers are DISPLAY type, and the KO variant is a different string rather
             than the same one at a smaller size (globals.css does the 0.85× on top). */}

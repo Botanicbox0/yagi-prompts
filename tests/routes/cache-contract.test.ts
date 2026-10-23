@@ -41,6 +41,8 @@ describe('route cache modes (§3.4 / §4)', () => {
       ['app', '(marketing)', '[locale]', 'video', 'page.tsx'],
       ['app', '(marketing)', '[locale]', 'image', 'page.tsx'],
       ['app', '(marketing)', '[locale]', 't', '[slug]', 'page.tsx'],
+      // docs/PLATFORM-2.0.md §7.5 — a public maker page reads the same tagged catalogue.
+      ['app', '(marketing)', '[locale]', 'makers', '[handle]', 'page.tsx'],
     ]) {
       const source = read(...file);
       expect(source, file.join('/')).toContain(`export const revalidate = ${CATALOG_TTL_SECONDS}`);
@@ -78,6 +80,10 @@ describe('route cache modes (§3.4 / §4)', () => {
       [
         ['app', '(marketing)', '[locale]', 't', '[slug]', 'page.tsx'],
         ["from '@/lib/prompts/public-catalog'", "from '@/lib/campaigns/public-catalog'"],
+      ],
+      [
+        ['app', '(marketing)', '[locale]', 'makers', '[handle]', 'page.tsx'],
+        ["from '@/lib/prompts/public-catalog'"],
       ],
     ];
     for (const [file, imports] of expected) {

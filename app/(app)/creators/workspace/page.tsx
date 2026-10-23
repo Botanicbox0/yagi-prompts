@@ -13,6 +13,8 @@ import { AppHeader } from '@/components/app/app-header';
 import { FormatSubmitForm } from '@/components/creators/format-form';
 import { EarningsTable, FormatList, formatDate } from '@/components/creators/workspace';
 import { BUTTON, BUTTON_OUTLINE, PANEL } from '@/components/creators/styles';
+import { MakerProfilePanel } from '@/components/creators/maker-profile';
+import { loadMakerSettings } from '@/lib/makers/profile';
 
 /**
  * `/creators/workspace` — one screen per state: not applied, in review, declined, approved, revoked.
@@ -54,6 +56,7 @@ export default async function CreatorWorkspacePage({ searchParams }: { searchPar
     // Only the strings the island renders cross the RSC boundary.
     const formCopy = { formatName: c.formatName, medium: c.medium, video: c.video, image: c.image, example: c.example, recipe: c.recipe, rights: c.rights, busy: c.busy, submitFormat: c.submitFormat, error: c.error, errors: c.errors, formatNeedsScript: c.formatNeedsScript };
     const revising = typeof query.revise === 'string' && data.onboarding ? data.formats.find((f) => f.id === query.revise && f.status === 'rejected') : undefined;
+    const makerSettings = sql ? await loadMakerSettings(sql, viewer.userId) : null;
     return shell('approved', <>
       <p className="text-sm opacity-70">{interpolate(t.approvedLine, { date: formatDate(creator.registeredAt, locale), contract: creator.contractVersion })}</p>
       {application?.status === 'approved' ? note(application.decisionNote) : null}
@@ -63,6 +66,7 @@ export default async function CreatorWorkspacePage({ searchParams }: { searchPar
         {revising ? <a href={CREATOR_WORKSPACE_PATH} className="inline-flex min-h-11 items-center text-sm underline underline-offset-4">{t.cancelRevision}</a> : null}
         <FormatSubmitForm key={revising?.id ?? 'new'} copy={formCopy} revision={revising && { id: revising.id, title: revising.title, medium: revising.medium, exampleUrl: revising.exampleUrl }} />
       </section>
+      <MakerProfilePanel settings={makerSettings} dict={dict} locale={locale} saved={query.ok === 'profile'} error={typeof query.profile === 'string' ? query.profile : null} />
       {records}
     </>);
   }

@@ -5,6 +5,7 @@ import type { TemplateMedium } from '@/lib/prompts/schemas';
 import { TEMPLATE_LISTING_REST, templateRest } from '@/lib/prompts/links';
 import { localeAlternates } from './playbook-metadata';
 import { SITE_TWITTER_CARD, siteOgImage } from './og';
+import { makerRest } from '@/lib/makers/links';
 
 /**
  * docs/TEMPLATES-IA.md — the template surface's metadata: the two listings and every published
@@ -75,4 +76,35 @@ export function templatesListingMetadata(input: {
 /** Unknown, unpublished or archived — a page that must not be indexed. */
 export function unresolvedTemplateMetadata(siteName: string): Metadata {
   return { title: siteName, robots: { index: false, follow: false } };
+}
+
+/**
+ * docs/PLATFORM-2.0.md §7.5 — a public maker page. Indexable (the maker opted in), canonical per
+ * locale with reciprocal hreflang, and the newest template's poster as the share image.
+ */
+export function makerMetadata(input: {
+  handle: string;
+  locale: Locale;
+  title: string;
+  description: string;
+  siteName: string;
+  poster: string | null;
+}): Metadata {
+  const rest = makerRest(input.handle);
+  return {
+    title: input.title,
+    description: input.description,
+    alternates: { canonical: `/${input.locale}${rest}`, languages: localeAlternates(rest) },
+    openGraph: {
+      type: 'profile',
+      locale: input.locale === 'ko' ? 'ko_KR' : 'en_US',
+      url: `/${input.locale}${rest}`,
+      title: input.title,
+      description: input.description,
+      siteName: input.siteName,
+      username: input.handle,
+      images: [input.poster ? { url: input.poster } : siteOgImage(input.locale)],
+    },
+    twitter: { card: SITE_TWITTER_CARD },
+  };
 }

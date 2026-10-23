@@ -9,7 +9,7 @@ import { serializeJsonLd } from '@/lib/seo/json-ld';
 const origin = 'https://twings.example';
 const card: PromptCard = {
   id: 'template', slug: 'portrait', source: 'yagi', title: 'Portrait', titleKo: '인물 영상',
-  authorHandle: null, models: [], modelLabels: [], useCase: [], medium: 'video',
+  authorHandle: null, origin: 'studio', makerProfile: false, models: [], modelLabels: [], useCase: [], medium: 'video',
   priceCents: 400, priceKrw: 5900, price1080Cents: 0, price1080Krw: 0, runtimeSeconds: 15, engine: null, aspectDefault: null,
   poster: { source: 'public', src: '/poster.jpg', mime: 'image/jpeg' },
   video: { source: 'public', src: '/example.mp4', mime: 'video/mp4', duration_s: 8.5 },

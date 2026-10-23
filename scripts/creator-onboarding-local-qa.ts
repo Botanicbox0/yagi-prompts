@@ -38,9 +38,9 @@ const admin: Viewer = { tier: 'admin', userId: FIXTURE_USERS.admin.id, email: FI
 const viewer = (id: string): Viewer => ({ tier: 'free', userId: id, email: null, isAdmin: false, locale: 'ko' });
 const access = { applications: true }, platform = { community: false, creators: true, rewards: false };
 const application = () => ({
-  requestId: randomUUID(), displayName: 'TEST ONLY 포맷 작가', portfolioUrl: 'https://example.com/test-only-portfolio',
+  requestId: randomUUID(), displayName: 'TEST ONLY 템플릿 메이커', portfolioUrl: 'https://example.com/test-only-portfolio',
   samples: ['https://www.instagram.com/reel/TESTONLY01/'], mediums: ['video'], tools: 'TEST ONLY',
-  message: 'TEST ONLY · 로컬 브라우저 검증용 합성 지원서입니다. 실제 작가가 아닙니다.', rights: true, program: true,
+  message: 'TEST ONLY · 로컬 브라우저 검증용 합성 지원서입니다. 실제 메이커가 아닙니다.', rights: true, program: true,
 });
 const format = (title: string) => ({ action: 'format', requestId: randomUUID(), title, recipe: 'TEST ONLY · PRIVATE_RECIPE_CANARY local QA recipe, never rendered', example: 'https://www.instagram.com/reel/TESTONLY02/', medium: 'video', rights: true });
 
