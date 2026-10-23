@@ -59,18 +59,24 @@ export interface StudioLabels {
   payCta: string;
   payNote: string;
   /** The template page before payment is wired: no mock, a promise with a date attached (founder, 2026-09-11). */
-  closedBadge: string;
   closedTitle: string;
   closedBody: string;
   closedCta: string;
   closedDone: string;
-  /** The shop is open but nobody is signed in: offer the sale, not a waitlist. */
-  signedOutBadge?: string;
-  signedOutTitle?: string;
+  /**
+   * The shop is open but nobody is signed in: offer the sale, not a waitlist — three example photos,
+   * one line and one button (PLATFORM-2.0 §15.3-1; no drop zone before sign-in).
+   */
   signedOutBody?: string;
   signedOutCta?: string;
-  /** What AI-made means, said before the money changes hands (founder, 2026-09-11). */
-  aiNote: string;
+  photoExamples?: { front: string; bright: string; solo: string };
+  /** Said (to screen readers) while the access call has not answered; the skeleton shows the rest. */
+  pending: string;
+  /** The template page's one CTA and its closed twin, used by the phone's sticky bar. */
+  makeCta?: string;
+  makeCtaClosed?: string;
+  /** The aspect folds to the template's default; this opens the rest. */
+  otherAspect?: string;
   runtimeLabel: string;
   needPhoto: string;
   noStyles: string;
@@ -193,7 +199,7 @@ export function ResolutionPicker({
   const current = selected ?? options[0]!.id;
   return (
     <fieldset data-resolution-picker className="mt-5">
-      <legend className="font-label text-eyebrow uppercase opacity-60">{labels.resolutionLabel}</legend>
+      <legend className="text-sm text-black/65">{labels.resolutionLabel}</legend>
       <div className="mt-2 flex flex-wrap gap-2">
         {options.map((option, index) => (
           <button
@@ -203,8 +209,8 @@ export function ResolutionPicker({
             aria-pressed={option.id === current}
             onClick={() => onSelect(option.id)}
             className={[
-              'flex items-baseline gap-2 border px-3 py-1.5 font-label text-[0.68rem] tracking-[0.12em] uppercase transition-opacity',
-              option.id === current ? 'border-accent text-accent' : 'border-hairline opacity-60 hover:opacity-100',
+              'flex min-h-11 items-center gap-2 border px-3 font-label text-[0.72rem] tracking-[0.12em] uppercase transition-colors',
+              option.id === current ? 'border-accent text-accent' : 'border-hairline text-black/70 hover:text-black',
             ].join(' ')}
           >
             <span>{index === 0 && labels.resolutionDefault ? `${option.id} · ${labels.resolutionDefault}` : option.id}</span>
@@ -212,16 +218,28 @@ export function ResolutionPicker({
           </button>
         ))}
       </div>
-      {labels.resolutionNote && <p className="mt-2 font-mono text-[0.72rem] opacity-55">{labels.resolutionNote}</p>}
+      {labels.resolutionNote && <p className="mt-2 text-sm text-black/65">{labels.resolutionNote}</p>}
     </fieldset>
   );
 }
+
+/** What the access call settles; a test seam can hand it in so the server markup shows that state. */
+export interface StudioAccessSnapshot {
+  open: boolean;
+  live: boolean;
+  signedIn: boolean;
+}
+
+/** Where the phone's sticky CTA hands the focus: the first thing to press in the make card, in page order. */
+const MAKE_FOCUS = '[data-selfie-use], [data-selfie-camera], [data-selfie-choose], [data-pay-cta]:not(:disabled), [data-studio-signin], [data-studio-interest]:not(:disabled)';
 
 export function TwingsStudio({
   styles,
   labels,
   initialStyleId,
   live,
+  shopOpenHint = false,
+  initialAccess,
 }: {
   styles: StudioStyle[];
   labels: StudioLabels;
@@ -229,8 +247,17 @@ export function TwingsStudio({
   initialStyleId?: string;
   /** The live make loop; absent (tests, the catalogue shape) the studio is closed. */
   live?: StudioLive;
+  /**
+   * `storefrontOpen()` from the server: only what the sticky bar says before the access call answers
+   * ("내 사진으로 만들기" or "열리면 알림 받기"). Never opens anything by itself.
+   */
+  shopOpenHint?: boolean;
+  initialAccess?: StudioAccessSnapshot;
 }) {
   const single = styles.length === 1;
+  // docs/PLATFORM-2.0.md §3.1: the static page used to paint "closed" and flip once the access call
+  // answered. Until it answers (or fails — closed is still the fallback), a neutral skeleton.
+  const [accessKnown, setAccessKnown] = useState(initialAccess !== undefined || !live);
   const [phase, setPhase] = useState<Phase>('photo');
   // The saved photos are the photo (founder, 2026-10-22): `selfie` is the one the sheet offers (the
   // default), `chosenSelfie` the face this order uses once the person answers "이 얼굴로 만들까요?".
@@ -239,11 +266,12 @@ export function TwingsStudio({
   const [selfieJustSaved, setSelfieJustSaved] = useState(false);
   const [selfieEditing, setSelfieEditing] = useState(false);
   const photo = chosenSelfie?.imageUrl ?? null;
-  const [liveMode, setLiveMode] = useState(false);
+  const [liveMode, setLiveMode] = useState(initialAccess?.live ?? false);
   const [charge, setCharge] = useState(true);
-  const [signedIn, setSignedIn] = useState(false);
+  const [signedIn, setSignedIn] = useState(initialAccess?.signedIn ?? false);
   // The shop's own state, separate from this viewer's: see /api/renders/access.
-  const [shopOpen, setShopOpen] = useState(false);
+  const [shopOpen, setShopOpen] = useState(initialAccess?.open ?? false);
+  const [aspectOpen, setAspectOpen] = useState(false);
   const [interest, setInterest] = useState(false);
   const [interestBusy, setInterestBusy] = useState(false);
   const [identityRequired, setIdentityRequired] = useState(false);
@@ -266,6 +294,7 @@ export function TwingsStudio({
   const [usageExhausted, setUsageExhausted] = useState(false);
   const payRef = useRef<HTMLButtonElement>(null);
   const selfiePanelRef = useRef<HTMLDivElement>(null);
+  const studioRef = useRef<HTMLElement>(null);
   const submitGuard = useRef(createSubmitGuard());
   const subscriptionRequestId = useRef<string | null>(null);
   const selfieEditingRef = useRef(false);
@@ -311,6 +340,7 @@ export function TwingsStudio({
       .then((response) => (response.ok ? response.json() : { live: false }))
       .then((json: { open?: boolean; live?: boolean; charge?: boolean; identityRequired?: boolean; identity?: string; signedIn?: boolean; interest?: boolean; selfie?: SelfieView | null; subscription?: typeof subscription; subscriptionEligible?: boolean; editing?: boolean; subscriptionUsePercent?: number | null; editFields?: string[]; premiumEditBudget?: unknown }) => {
         if (cancelled || request !== latest) return;
+        setAccessKnown(true);
         setLiveMode(json.live === true);
         setShopOpen(json.open === true);
         setCharge(json.charge !== false);
@@ -341,7 +371,8 @@ export function TwingsStudio({
         if (editBudget) setEditRequestLimitReached(editBudget.remaining === 0);
       })
       .catch(() => {
-        /* closed is the fallback */
+        // Closed is the fallback — but a settled one: the skeleton must not wait forever.
+        if (!cancelled && request === latest) setAccessKnown(true);
       });
     };
     const onFocus = () => { void refresh(); };
@@ -525,52 +556,100 @@ export function TwingsStudio({
     );
   }
 
-  // Closed until the server says otherwise: the static HTML every visitor gets is this panel, and
-  // an operator's page swaps to the live loop the moment the access call answers.
-  // 토스 심사 체크리스트의 "판매 가능한 상품 1개 이상"은 로그인 전 화면에서 판정된다. 상점이 열려
-  // 있는데 이 방문자가 로그인하지 않았을 뿐이라면, 대기자 명단이 아니라 판매를 제안한다.
-  if (!liveMode && live && shopOpen && !signedIn && labels.signedOutCta) {
+  // The template page on a phone: price and the one CTA stay at the thumb until the card is in view.
+  const sticky = single && live && chosen ? (
+    <MakeStickyBar
+      price={monthly ? null : chosenPrice}
+      label={!accessKnown ? (shopOpenHint ? labels.makeCta : labels.makeCtaClosed) : liveMode ? labels.makeCta : shopOpen && !signedIn ? labels.signedOutCta : labels.makeCtaClosed}
+      studioRef={studioRef}
+      phaseKey={`${accessKnown}:${liveMode}:${shopOpen}:${signedIn}`}
+    />
+  ) : null;
+
+  // Before the access call answers: where the photo and the button will be, nothing more. Same
+  // footprint as the signed-out card (three 4:5 tiles, a line, a 48px button), so nothing jumps.
+  if (!accessKnown) {
     return (
-      <section data-twings-studio data-phase="signed-out" data-single={single ? 'true' : 'false'} data-live="false" data-shop-open="true" className="mt-10">
-        <p data-studio-signed-out className="inline-block border border-accent px-3 py-1.5 font-label text-[0.68rem] tracking-[0.12em] text-accent uppercase">
-          {labels.signedOutBadge ?? labels.closedBadge}
-        </p>
-        <div className="mt-6 max-w-detail border border-hairline p-6 sm:p-8">
-          <p className="font-display text-[clamp(1.4rem,2.6vw,2rem)] leading-[0.95] font-black uppercase">{labels.signedOutTitle ?? labels.closedTitle}</p>
-          <p className="mt-4 text-body opacity-70">{labels.signedOutBody ?? labels.closedBody}</p>
-          <p data-studio-ai-note className="mt-4 font-mono text-[0.72rem] leading-relaxed opacity-45">{labels.aiNote}</p>
-          <a
-            data-studio-signin
-            href={live.signinHref}
-            className="mt-7 inline-block border border-current px-6 py-3 font-label text-label uppercase transition-opacity hover:opacity-70"
-          >
-            {labels.signedOutCta} →
-          </a>
+      <section ref={studioRef} data-twings-studio data-phase="pending" data-single={single ? 'true' : 'false'} data-live="false" aria-busy="true" className="mt-5 scroll-mt-24">
+        <p role="status" className="sr-only">{labels.pending}</p>
+        <div data-studio-pending aria-hidden="true" className="flex flex-col gap-3">
+          <div className="grid grid-cols-3 gap-2">
+            {[0, 1, 2].map((index) => (
+              <div key={index} className="aspect-[4/5] animate-pulse rounded-xl bg-black/[0.06] motion-reduce:animate-none" />
+            ))}
+          </div>
+          <div className="h-4 w-3/4 animate-pulse rounded bg-black/[0.06] motion-reduce:animate-none" />
+          <div className="h-12 w-full animate-pulse rounded bg-black/[0.08] motion-reduce:animate-none" />
         </div>
+        {sticky}
       </section>
     );
   }
 
+  // 토스 심사 체크리스트의 "판매 가능한 상품 1개 이상"은 로그인 전 화면에서 판정된다. 상점이 열려
+  // 있는데 이 방문자가 로그인하지 않았을 뿐이라면, 대기자 명단이 아니라 판매를 제안한다 — 어떤 사진이
+  // 필요한지 먼저 보여주고(가이드 이미지 3장), 버튼은 하나.
+  if (!liveMode && live && shopOpen && !signedIn && labels.signedOutCta) {
+    const examples = labels.photoExamples
+      ? [
+          { id: 'front', src: '/images/portrait-guide/front-facing.webp', label: labels.photoExamples.front, crop: 'object-[50%_30%]' },
+          { id: 'bright', src: '/images/portrait-guide/clear-face.webp', label: labels.photoExamples.bright, crop: 'object-[50%_20%]' },
+          { id: 'solo', src: '/images/portrait-guide/front-facing.webp', label: labels.photoExamples.solo, crop: 'object-[50%_18%] scale-150' },
+        ]
+      : [];
+    return (
+      <section ref={studioRef} data-twings-studio data-phase="signed-out" data-single={single ? 'true' : 'false'} data-live="false" data-shop-open="true" className="mt-5 scroll-mt-24">
+        {examples.length > 0 && (
+          <ul data-studio-photo-examples className="grid grid-cols-3 gap-2">
+            {examples.map((example) => (
+              <li key={example.id} data-studio-photo-example={example.id}>
+                <figure>
+                  <div className="aspect-[4/5] overflow-hidden rounded-xl bg-black/5">
+                    {/* eslint-disable-next-line @next/next/no-img-element -- the public photo guide */}
+                    <img src={example.src} alt="" width={160} height={200} loading="lazy" className={`h-full w-full object-cover ${example.crop}`} />
+                  </div>
+                  <figcaption className="mt-1.5 flex items-center gap-1 text-sm">
+                    <span aria-hidden="true" className="text-accent">✓</span>{example.label}
+                  </figcaption>
+                </figure>
+              </li>
+            ))}
+          </ul>
+        )}
+        <p data-studio-signed-out className="mt-4 text-[0.95rem] leading-relaxed">{labels.signedOutBody}</p>
+        <a
+          data-studio-signin
+          data-make-cta="card"
+          href={live.signinHref}
+          className="mt-4 flex min-h-12 w-full items-center justify-center bg-accent px-5 font-label text-[0.85rem] tracking-[0.1em] text-white uppercase transition-opacity hover:opacity-85"
+        >
+          {labels.signedOutCta}
+        </a>
+        {sticky}
+      </section>
+    );
+  }
+
+  // Closed: generation is not open to this reader. One honest sentence pair and the one thing it can
+  // offer — an email the day it opens.
   if (!liveMode || !live) {
     return (
-      <section data-twings-studio data-phase="closed" data-single={single ? 'true' : 'false'} data-live="false" className="mt-10">
-        <p data-studio-closed className="inline-block border border-accent px-3 py-1.5 font-label text-[0.68rem] tracking-[0.12em] text-accent uppercase">
-          {labels.closedBadge}
-        </p>
-        <div className="mt-6 max-w-detail border border-hairline p-6 sm:p-8">
-          <p className="font-display text-[clamp(1.4rem,2.6vw,2rem)] leading-[0.95] font-black uppercase">{labels.closedTitle}</p>
-          <p className="mt-4 text-body opacity-70">{labels.closedBody}</p>
-          <p data-studio-ai-note className="mt-4 font-mono text-[0.72rem] leading-relaxed opacity-45">{labels.aiNote}</p>
-          <button
-            type="button"
-            data-studio-interest={interest ? 'done' : 'open'}
-            disabled={!live || interest || interestBusy}
-            onClick={() => void registerInterest()}
-            className="mt-7 inline-block border border-current px-6 py-3 font-label text-label uppercase transition-opacity hover:opacity-70 disabled:opacity-60"
-          >
-            {interest ? labels.closedDone : `${labels.closedCta} →`}
-          </button>
+      <section ref={studioRef} data-twings-studio data-phase="closed" data-single={single ? 'true' : 'false'} data-live="false" className="mt-5 scroll-mt-24">
+        <div data-studio-closed className="rounded-xl bg-black/[0.04] p-4">
+          <p className="text-[0.95rem] font-semibold">{labels.closedTitle}</p>
+          <p className="mt-1.5 text-sm leading-relaxed text-black/75">{labels.closedBody}</p>
         </div>
+        <button
+          type="button"
+          data-studio-interest={interest ? 'done' : 'open'}
+          data-make-cta="card"
+          disabled={!live || interest || interestBusy}
+          onClick={() => void registerInterest()}
+          className="mt-4 flex min-h-12 w-full items-center justify-center border border-current px-5 font-label text-[0.85rem] tracking-[0.1em] uppercase transition-opacity hover:opacity-70 disabled:opacity-60"
+        >
+          {interest ? labels.closedDone : labels.closedCta}
+        </button>
+        {sticky}
       </section>
     );
   }
@@ -586,7 +665,7 @@ export function TwingsStudio({
   })();
 
   return (
-    <section data-twings-studio data-phase={phase} data-single={single ? 'true' : 'false'} data-aspect={monthly ? undefined : aspect} data-resolution={monthly ? undefined : chosenResolution?.id ?? ''} data-live={liveMode ? 'true' : 'false'} data-live-charge={liveMode && charge && !monthly ? 'true' : 'false'} data-subscription-render={monthly ? 'true' : 'false'} className="mt-10">
+    <section data-twings-studio data-phase={phase} data-single={single ? 'true' : 'false'} data-aspect={monthly ? undefined : aspect} data-resolution={monthly ? undefined : chosenResolution?.id ?? ''} data-live={liveMode ? 'true' : 'false'} data-live-charge={liveMode && charge && !monthly ? 'true' : 'false'} data-subscription-render={monthly ? 'true' : 'false'} ref={studioRef} className="mt-5 scroll-mt-24">
       {/* The one honest label the whole screen hangs on: where the result goes, and whether a payment is taken. */}
       <p
         data-live-badge
@@ -595,25 +674,26 @@ export function TwingsStudio({
         {monthly && subscriptionCopy ? subscriptionCopy.studioBadge : charge ? live.labels.badge : live.labels.operatorBadge}
       </p>
 
-      <ol className="mt-6 flex flex-wrap gap-x-6 gap-y-2 font-label text-[0.68rem] tracking-[0.12em] uppercase">
+      <ol className="mt-4 flex flex-wrap gap-x-6 gap-y-2 font-label text-[0.72rem] tracking-[0.12em] uppercase">
         {steps.map((label, index) => (
           <li
             key={label}
             data-step={index}
             aria-current={index === stepIndex ? 'step' : undefined}
-            className={index <= stepIndex ? 'text-accent' : 'opacity-35'}
+            className={index <= stepIndex ? 'text-accent' : 'text-black/55'}
           >
             {index + 1}. {label}
           </li>
         ))}
       </ol>
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+      {/* The template page stacks photo over pay: the make card is one column wide (PLATFORM-2.0 §15.3-1). */}
+      <div className={single ? 'mt-5 flex flex-col gap-5' : 'mt-6 grid gap-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]'}>
         {/* The photo column: "이 얼굴로 만들까요?" over the saved photos, or the uploader when there is none. */}
-        <div ref={selfiePanelRef} data-selfie-panel data-selfie-present={selfie ? 'true' : 'false'} className="scroll-mt-6 border border-hairline p-5">
+        <div ref={selfiePanelRef} data-selfie-panel data-selfie-present={selfie ? 'true' : 'false'} className={single ? 'scroll-mt-24' : 'scroll-mt-6 border border-hairline p-5'}>
           <h3 className="text-sm font-semibold">{live.selfie?.panelTitle ?? labels.stepPhoto}</h3>
           {live.selfie ? (
-            <div className="mt-4">
+            <div className="mt-3">
               {selfie ? (
                 <SelfieSheet
                   key={`${selfieEpoch}:${selfie.id}`}
@@ -645,18 +725,8 @@ export function TwingsStudio({
         <div className="flex flex-col">
           {(phase === 'photo' || phase === 'style' || phase === 'pay') && (
             <>
-              {single && chosen ? (
-                // The template page: the choice is made, so the panel states it instead of asking.
-                <div data-chosen-style={chosen.id} className="flex items-baseline justify-between gap-4 border-b border-hairline pb-4">
-                  <span className="font-display text-[1.3rem] leading-[1] font-black uppercase">{chosen.title}</span>
-                  <span className="flex items-baseline gap-3 font-label text-[0.7rem] tracking-[0.12em] uppercase">
-                    {!monthly && <span className="text-accent">{chosenPrice}</span>}
-                    {chosen.runtime !== '0' && (
-                      <span className="opacity-45">{labels.runtimeLabel.replace('{seconds}', chosen.runtime)}</span>
-                    )}
-                  </span>
-                </div>
-              ) : (
+              {/* The template page: the choice is made, and the make card above states its price and facts. */}
+              {single && chosen ? null : (
                 <>
                   <p className="font-label text-label uppercase">{labels.chooseStyle}</p>
                   <div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -699,11 +769,19 @@ export function TwingsStudio({
                 </>
               )}
 
-              {/* The aspect: Instagram's feed (4:5) by default, the rest one press away. */}
+              {/* The aspect: the template's own by default, folded; the rest one press away ("다른 비율"). */}
               {!monthly && chosen && chosen.aspects.length > 1 && (
-                <fieldset data-aspect-picker className="mt-5">
-                  <legend className="font-label text-eyebrow uppercase opacity-60">{labels.aspectLabel}</legend>
-                  <div className="mt-2 flex flex-wrap gap-2">
+                <fieldset data-aspect-picker data-aspect-open={aspectOpen ? 'true' : 'false'} className="mt-1">
+                  <legend className="sr-only">{labels.aspectLabel}</legend>
+                  <div className="flex items-center justify-between gap-3 text-sm">
+                    <p><span aria-hidden="true" className="text-black/65">{labels.aspectLabel}</span> <strong data-aspect-current className="font-semibold">{chosen.aspects.find((option) => option.id === aspect)?.label ?? aspect}</strong></p>
+                    {labels.otherAspect && (
+                      <button type="button" data-aspect-toggle aria-expanded={aspectOpen} aria-controls="studio-aspect-options" onClick={() => setAspectOpen((value) => !value)} className="inline-flex min-h-11 shrink-0 items-center text-sm underline underline-offset-4">
+                        {labels.otherAspect}
+                      </button>
+                    )}
+                  </div>
+                  <div id="studio-aspect-options" hidden={Boolean(labels.otherAspect) && !aspectOpen} className="mt-2 flex flex-wrap gap-2">
                     {chosen.aspects.map((option) => (
                       <button
                         key={option.id}
@@ -712,8 +790,8 @@ export function TwingsStudio({
                         aria-pressed={option.id === aspect}
                         onClick={() => setAspect(option.id)}
                         className={[
-                          'border px-3 py-1.5 font-label text-[0.68rem] tracking-[0.12em] uppercase transition-opacity',
-                          option.id === aspect ? 'border-accent text-accent' : 'border-hairline opacity-60 hover:opacity-100',
+                          'inline-flex min-h-11 items-center border px-3 font-label text-[0.72rem] tracking-[0.12em] uppercase transition-colors',
+                          option.id === aspect ? 'border-accent text-accent' : 'border-hairline text-black/70 hover:text-black',
                         ].join(' ')}
                       >
                         {option.label}
@@ -774,7 +852,8 @@ export function TwingsStudio({
                   disabled={!chosenSelfie || selfieEditing || !chosen || submitting || (subscriptionAvailable && !ownFaceConsent) || (monthly && (edit.references.length > 0 && (!edit.referencesConsent || !edit.editText.trim())))}
                   aria-describedby={photo ? undefined : 'studio-cta-hint'}
                   onClick={() => void submitLive()}
-                  className="w-full border border-current px-5 py-4 font-label text-[0.95rem] tracking-[0.1em] text-accent uppercase transition-opacity hover:opacity-70 disabled:opacity-25"
+                  data-make-cta="card"
+                  className="flex min-h-12 w-full items-center justify-center bg-accent px-5 py-3 font-label text-[0.9rem] tracking-[0.1em] text-white uppercase transition-opacity hover:opacity-85 disabled:bg-black/10 disabled:text-black/55"
                 >
                   {submitting
                     ? live.labels.submitting
@@ -788,15 +867,14 @@ export function TwingsStudio({
                           ? labels.payCta.replace('{price}', chosenPrice)
                           : labels.payCta}
                 </button>
-                <p className="mt-3 text-xs leading-relaxed opacity-55">{monthly && subscriptionCopy ? subscriptionCopy.studioNote : labels.payNote}</p>
-                <p data-studio-ai-note className="mt-2 font-mono text-[0.72rem] leading-relaxed opacity-45">{labels.aiNote}</p>
+                <p className="mt-3 text-sm leading-relaxed text-black/70">{monthly && subscriptionCopy ? subscriptionCopy.studioNote : labels.payNote}</p>
                 {liveError && (
-                  <p data-live-error role="alert" className="mt-2 font-mono text-[0.72rem] text-accent">
+                  <p data-live-error role="alert" className="mt-2 text-sm text-accent">
                     {liveError}
                   </p>
                 )}
                 {!chosenSelfie && (
-                  <p id="studio-cta-hint" data-studio-hint className="mt-2 font-mono text-[0.72rem] text-accent">
+                  <p id="studio-cta-hint" data-studio-hint className="mt-2 text-sm text-accent">
                     {selfie ? live.selfie?.needChoice ?? labels.needPhoto : live.selfie?.needSelfie ?? labels.needPhoto}
                   </p>
                 )}
@@ -807,6 +885,61 @@ export function TwingsStudio({
           )}
         </div>
       </div>
+      {sticky}
     </section>
+  );
+}
+
+/**
+ * The phone's sticky make bar (docs/PLATFORM-2.0.md §3.2-2, §15.3-1): price and the one CTA at the
+ * thumb while the make card is off screen. Under 768px only, clear of the home indicator (`pb-safe`),
+ * and it declares `data-hide-tabs` so the installed app's bottom tabs step aside for it
+ * (components/app/bottom-tabs.tsx). It slides away while the studio (the card's photo and button
+ * area) is on screen, so it never covers the card's own buttons (the 2026-10-07 rule: nothing fixed
+ * over the pay button) yet still shows on a first screen that reaches only the price. Pressing it
+ * scrolls the studio into view and hands the focus to the first thing to press there.
+ */
+function MakeStickyBar({ price, label, studioRef, phaseKey }: { price: string | null; label: string | undefined; studioRef: React.RefObject<HTMLElement | null>; phaseKey: string }) {
+  const [cardInView, setCardInView] = useState(false);
+  // The studio element changes with the phase (skeleton → signed out / closed / live): `phaseKey`
+  // re-runs this after each commit, when the ref already points at the current one.
+  useEffect(() => {
+    const target = studioRef.current;
+    if (!target || typeof IntersectionObserver === 'undefined') return;
+    const observer = new IntersectionObserver(([entry]) => setCardInView(entry?.isIntersecting ?? false), { rootMargin: '0px 0px -72px 0px' });
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [studioRef, phaseKey]);
+
+  const go = (event: React.MouseEvent<HTMLAnchorElement>) => {
+    const area = studioRef.current;
+    if (!area) return;
+    event.preventDefault();
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    area.scrollIntoView({ block: 'start', behavior: reduced ? 'instant' : 'smooth' });
+    const target = area.querySelector<HTMLElement>(MAKE_FOCUS) ?? area;
+    target?.focus({ preventScroll: true });
+    if (window.location.hash !== '#make') window.history.replaceState(null, '', '#make');
+  };
+
+  if (!label) return null;
+  return (
+    <div
+      data-make-sticky
+      data-hide-tabs
+      data-make-sticky-state={cardInView ? 'away' : 'shown'}
+      aria-hidden={cardInView ? 'true' : undefined}
+      inert={cardInView ? true : undefined}
+      className={[
+        'fixed inset-x-0 bottom-0 z-40 border-t border-hairline bg-surface/95 px-4 pt-3 pb-safe backdrop-blur md:hidden',
+        'transition-transform duration-200 ease-out motion-reduce:transition-none',
+        cardInView ? 'translate-y-full' : 'translate-y-0',
+      ].join(' ')}
+    >
+      <div className="mx-auto flex max-w-xl items-center gap-4">
+        {price && <p data-make-sticky-price className="shrink-0 font-display text-[1.35rem] leading-none font-black">{price}</p>}
+        <a href="#make" data-make-cta="sticky" onClick={go} className="flex min-h-12 flex-1 items-center justify-center bg-accent px-4 font-label text-[0.85rem] tracking-[0.1em] text-white uppercase transition-opacity hover:opacity-85">{label}</a>
+      </div>
+    </div>
   );
 }

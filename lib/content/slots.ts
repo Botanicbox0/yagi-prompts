@@ -23,6 +23,23 @@ function slotValue(value: string | undefined): string | null {
   return trimmed && trimmed.length > 0 ? trimmed : null;
 }
 
+/**
+ * "셀카 → 장면" — the home hero's proof (docs/PLATFORM-2.0.md §15.3-2): a front-facing selfie and a
+ * still of the scene that same face went into. Two URLs, both required: half a pair is not proof,
+ * so with either one missing the hero renders as it always has. Which person may appear here is a
+ * founder decision (§15.5-16); until then production leaves both unset.
+ */
+export interface EvidencePair {
+  before: string;
+  after: string;
+}
+
+export function heroEvidence(env: Record<string, string | undefined> = process.env): EvidencePair | null {
+  const before = slotValue(env.NEXT_PUBLIC_HERO_EVIDENCE_BEFORE);
+  const after = slotValue(env.NEXT_PUBLIC_HERO_EVIDENCE_AFTER);
+  return before && after ? { before, after } : null;
+}
+
 export const HERO_REEL: MediaSlot = {
   src: slotValue(process.env.NEXT_PUBLIC_HERO_REEL_SRC),
   type: slotValue(process.env.NEXT_PUBLIC_HERO_REEL_TYPE) ?? 'video/mp4',

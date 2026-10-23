@@ -3,12 +3,20 @@ import type { Locale } from '@/lib/i18n/config';
 import type { PromptCard } from '@/lib/prompts/catalog';
 import { templateHref, templatesHref } from '@/lib/prompts/links';
 import { brandsHref, campaignsHref } from '@/lib/campaigns/links';
-import { RENDER_PIPELINE_PUBLIC } from '@/lib/flags';
+import { storefrontOpen } from '@/lib/auth/purchase-gate';
+import type { EvidencePair } from '@/lib/content/slots';
 import { CreatorPreview } from './creator-preview';
+import { HeroEvidence } from './hero-evidence';
 import { TypographicPoster } from '@/components/prompts/poster';
 import { CreatorAvailabilityNotice } from '@/components/twings/subscription-public-notices';
 
-export function CreatorHero({ dict, locale, featured }: { dict: Dictionary; locale: Locale; featured?: PromptCard }) {
+/**
+ * With a selfie → scene pair (the `heroEvidence()` content slot) the proof sits between the title
+ * and the one CTA and the definition moves under them — evidence first (PLATFORM-2.0 §15.4). Without
+ * one, the hero keeps its earlier shape exactly. The availability line follows `storefrontOpen()`,
+ * the same value the template page and pricing read, so the three never disagree.
+ */
+export function CreatorHero({ dict, locale, featured, evidence = null }: { dict: Dictionary; locale: Locale; featured?: PromptCard; evidence?: EvidencePair | null }) {
   const t = dict.creatorJourney;
   const title = featured && (locale === 'ko' ? featured.titleKo || featured.title : featured.title);
   const measured = [featured?.video, featured?.poster].find(media => media?.w && media?.h && media.w > 0 && media.h > 0);
@@ -17,17 +25,20 @@ export function CreatorHero({ dict, locale, featured }: { dict: Dictionary; loca
   const ratio = measured ? `${measured.w} / ${measured.h}` : '16 / 9';
   const [ratioWidth, ratioHeight] = ratio.split('/').map(Number);
   const portrait = (ratioWidth ?? 16) < (ratioHeight ?? 9);
-  return <section data-section data-theme="light" data-creator-hero className="section">
+  const definition = <p data-service-definition className={`${evidence === null ? 'mt-6 text-base' : 'mt-8 text-sm'} max-w-lg leading-relaxed text-black/65`}>{t.body}</p>;
+  return <section data-section data-theme="light" data-creator-hero data-hero-has-evidence={evidence === null ? undefined : ''} className="section">
     <div className="audience-shell grid items-center gap-10 pt-28 pb-12 lg:grid-cols-[0.9fr_1.1fr] lg:gap-16 lg:pt-36 lg:pb-20">
       <div>
         <p className="audience-eyebrow">{t.eyebrow}</p>
         <h1 className="audience-title mt-6 whitespace-pre-line">{t.title}</h1>
-        <p data-service-definition className="mt-6 max-w-lg text-base leading-relaxed opacity-65">{t.body}</p>
-        <div className="mt-8 flex flex-wrap items-center gap-5">
+        {evidence === null && definition}
+        <HeroEvidence pair={evidence} copy={t} />
+        <div className={`${evidence === null ? 'mt-8' : 'mt-5'} flex flex-wrap items-center gap-5`}>
           <a href={templatesHref(locale, 'video')} data-hero-video className="audience-button">{t.browse} ↗</a>
           <a href="#how-it-works" className="inline-flex min-h-11 items-center text-sm underline underline-offset-4">{t.how}</a>
         </div>
-        <p data-creator-availability className="mt-5 max-w-md text-xs leading-relaxed opacity-55"><CreatorAvailabilityNotice copy={{ ready: t.ready, preparing: t.preparing, subscriptionReady: t.subscriptionReady, subscriptionPaused: t.subscriptionPaused }} oneTimeAvailable={RENDER_PIPELINE_PUBLIC} /></p>
+        <p data-creator-availability className="mt-5 max-w-md text-xs leading-relaxed text-black/65"><CreatorAvailabilityNotice copy={{ ready: t.ready, preparing: t.preparing, subscriptionReady: t.subscriptionReady, subscriptionPaused: t.subscriptionPaused }} oneTimeAvailable={storefrontOpen()} /></p>
+        {evidence !== null && definition}
       </div>
       {featured && <article data-featured-template={featured.slug} data-media-host className={`relative min-w-0 w-full ${portrait ? 'max-w-xs justify-self-center' : ''}`}>
         <CreatorPreview poster={featured.poster} video={featured.video} title={title!} href={templateHref(locale, featured.slug)} ratio={ratio} labels={{ play: t.playPreview, pause: t.pausePreview }} fallback={<TypographicPoster title={title!} slug={featured.slug} kicker={featured.modelLabels.join(' · ')} ratio={ratio} />} />

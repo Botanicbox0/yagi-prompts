@@ -963,6 +963,8 @@ async function sweepTemplates(): Promise<void> {
     expectAbsent('no lock chips anywhere', page.body, 'data-lock-chip');
     expectAbsent('no image template on the video tab', page.body, `data-prompt-card="${IMAGE_TEMPLATE}"`);
     expectAbsent('no prompt submission door', page.body, '/prompts/submit');
+    // docs/PLATFORM-2.0.md §3.2-1: the first-run sheet is a client island — nothing of it in static HTML.
+    expectAbsent('the first-run sheet never reaches the static page', page.body, 'data-onboarding-sheet');
     for (const sentinel of PROMPT_SENTINELS) {
       expectAbsent(`NO prompt text on a card (${sentinel.token})`, page.body, sentinel.token);
     }
@@ -987,8 +989,21 @@ async function sweepTemplates(): Promise<void> {
   expectPresent('…names itself', detail.body, `data-template="${GATED_PROMPT}"`);
   expectPresent('…with the make section', detail.body, 'data-template-make');
   expectPresent('…and the one-style studio', detail.body, 'data-single="true"');
-  // Founder, 2026-09-11: no demo. The static page says payment opens soon and offers the email.
-  expectPresent('…and the studio is closed, not mocked', detail.body, 'data-studio-closed');
+  // Founder, 2026-09-11: no demo. PLATFORM-2.0 §3.2-2: the static page no longer paints "closed" and
+  // flips — it draws a neutral skeleton, and the per-viewer access call settles it in the browser.
+  expectPresent('…and the studio starts as a neutral skeleton', detail.body, 'data-studio-pending');
+  expectAbsent('…not painted closed before the access call', detail.body, 'data-studio-closed');
+  // §15.3-1 — the decision screen: one make card that is the price box, no second heading or link button.
+  expectPresent('…one make card that is the price box', detail.body, 'data-template-price-box');
+  expectAbsent('…no link button above the card', detail.body, 'data-template-make-cta');
+  expectPresent('…its facts', detail.body, 'data-template-fact');
+  expectPresent('…the AI limit inside the card', detail.body, 'data-studio-ai-note');
+  expectPresent('…the refund sentence inside the card', detail.body, 'data-template-refund');
+  expectAbsent('…no engine chip on the decision screen', detail.body, 'data-engine-chip');
+  expectPresent('…a phone sticky bar', detail.body, 'data-make-sticky');
+  if (/<div[^>]*data-make-sticky[^>]*data-hide-tabs/.test(detail.body)) ok('…that hides the installed app tabs', 'data-hide-tabs');
+  else fail('…sticky bar hides the app tabs', 'data-make-sticky must carry data-hide-tabs');
+  expectPresent('…whose one CTA goes to the make card', detail.body, 'href="#make"');
   expectAbsent('…no demo badge anywhere', detail.body, 'data-demo-badge');
   expectAbsent('…no placeholder ad', detail.body, 'YOUR AD HERE');
   expectPresent('…the house ad points at the brand form', detail.body, 'data-house-ad');
@@ -996,6 +1011,8 @@ async function sweepTemplates(): Promise<void> {
   const detailKo = await get(`/ko/t/${GATED_PROMPT}`);
   expectEqual('the Korean template page renders 200', detailKo.status, 200);
   expectPresent('…with the price in won', detailKo.body, '5,900원');
+  if (/완성까지<\/dt><dd[^>]*>보통 \d+분/.test(detailKo.body)) ok('…with the typical wait in minutes', '보통 N분');
+  else fail('…typical wait', 'expected "완성까지 · 보통 N분" in the make card');
   expectAbsent('…and never a dollar', detailKo.body, '>$4<');
   expectAbsent('…and NONE of its prompt text', detail.body, promptToken(GATED_PROMPT));
   expectAbsent('…no prompt block', detail.body, 'data-prompt-text');
@@ -1139,6 +1156,9 @@ async function sweepLandingTemplates(): Promise<void> {
   expectAbsent('nav no longer points at the studio', page.body, 'href="/en/studio"');
   expectAbsent('nav no longer points at contests', page.body, 'href="/en/contests"');
   expectPresent('the hero opens on the video door', page.body, 'data-hero-video');
+  // §15.3-2: the selfie → scene pair renders only with BOTH content-slot images; this build sets neither.
+  expectAbsent('no half evidence pair without the content slot', page.body, 'data-hero-evidence');
+  expectPresent('the hero sale-state line', page.body, 'data-creator-availability');
   expectAbsent('no placeholder ad on the landing', page.body, 'YOUR AD HERE');
   expectPresent('the creator home has a separate brand entry', page.body, 'data-brand-door');
   expectPresent('the brand entry leads to public services', page.body, 'href="/en/brands"');
@@ -1160,6 +1180,10 @@ async function sweepPricingTemplates(): Promise<void> {
     const page = await get(`/${locale}/pricing`);
     expectEqual(`/${locale}/pricing renders 200`, page.status, 200);
     expectPresent('…with the upcoming monthly plan', page.body, 'data-pricing-subscription="preparing"');
+    // §15.3-3: what is sold comes first — single films over the monthly teaser while monthly is preparing.
+    expectPresent('…single films first', page.body, 'data-pricing-order="single-first"');
+    expectAbsent('…no engine name on the price page', page.body, 'Seedance');
+    expectAbsent('…no engine label either', page.body, 'SEEDANCE');
     expectPresent('…with its Creator monthly won price', page.body, '24,900');
     expectPresent('…with its Premium monthly won price', page.body, '49,000');
     expectPresent('…with prompt editing honestly marked as planned', page.body, 'data-prompt-editing="planned"');
