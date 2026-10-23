@@ -9,6 +9,14 @@ vi.mock('@/lib/auth/dev-identity', () => ({ devIdentityUserId: () => null }));
 import { middleware } from '@/middleware';
 const req = (host: string, path: string, method = 'GET', origin?: string) => new NextRequest(`https://${host}${path}`, { method, headers: { host, ...(origin ? {origin} : {}) } });
 describe('brand host boundary', () => {
+  it('keeps the campaign wizard, its tabs and the former pages on the brand host (docs/PLATFORM-2.0.md §16.6)', () => {
+    const id = '22222222-2222-4222-8222-222222222222';
+    for (const path of ['/brand/projects/new', `/brand/projects/${id}`, `/brand/projects/${id}/participants`, `/brand/projects/${id}/participants/${id}`, `/brand/projects/${id}/funding`]) expect(brandRouteAllowed(path, 'GET'), path).toBe(true);
+    // The brief goes through the workspace API; the applicant preference through the collaboration API.
+    expect(brandRouteAllowed('/api/brand-workspace', 'POST')).toBe(true);
+    expect(brandRouteAllowed('/api/campaign-collaboration', 'POST')).toBe(true);
+    expect(brandRouteAllowed('/api/campaign-collaboration', 'DELETE')).toBe(false);
+  });
   it('routes settings and library through brand authentication and allows guarded support reads',async()=>{
     for(const path of ['/brand/settings','/brand/library']) {
       const r=await middleware(req('brand.twings.app',path));

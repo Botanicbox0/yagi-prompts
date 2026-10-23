@@ -3,12 +3,14 @@ import { ActionForm } from "@/components/brand-workspace/action-form";
 import { brandScope, membershipOf } from "@/components/brand-workspace/scope";
 import { BrandUnavailable } from "@/components/brand-workspace/brand-unavailable";
 import { scopedHref } from "@/lib/brands/workspace/selection";
+import { CampaignWizard, type WizardFormat } from "@/components/brand-workspace/campaign-wizard";
+import { loadPromptCatalog } from "@/lib/prompts/catalog";
 export default async function NewBrandProject({
   searchParams,
 }: {
   searchParams: Promise<{ organizationId?: string | string[] }>;
 }) {
-  const [{ organizationId }, { sql, viewer, verifiedEmail, b }] = await Promise.all([searchParams, brandContext()]);
+  const [{ organizationId }, { sql, viewer, verifiedEmail, b, locale }] = await Promise.all([searchParams, brandContext()]);
   if (!sql) return <p role="alert">{b.unavailable}</p>;
   const { selection, choice, choices } = await brandScope({ sql, verifiedEmail }, viewer, organizationId);
   if (selection.state === "unavailable") return <BrandUnavailable b={b} />;
@@ -18,13 +20,19 @@ export default async function NewBrandProject({
     (o) => o.role !== "viewer",
   );
   const back = scopedHref("/brand", choice);
+  // Step ① shows the public video formats as the catalogue does (docs/PLATFORM-2.0.md §16.3): media and title only.
+  // A catalogue that cannot be read leaves the brand-only production request, never a broken page.
+  const formats: WizardFormat[] = organizations.length === 0 ? [] : (await loadPromptCatalog(sql).catch(() => ({ video: [] as Awaited<ReturnType<typeof loadPromptCatalog>>["video"] }))).video.map((card) => ({
+    slug: card.slug, title: locale === "ko" && card.titleKo ? card.titleKo : card.title, source: card.source,
+    authorHandle: card.source === "community" ? card.authorHandle : null, poster: card.poster, video: card.video,
+  }));
   return (
     <div data-brand-new-project>
       <div className="bw-heading">
         <div>
           <a href={back}>← {b.back}</a>
-          <h1>{b.newProject}</h1>
-          <p>{b.emptyBody}</p>
+          <h1>{organizations.length ? b.wizard.title : b.newProject}</h1>
+          <p>{organizations.length ? b.wizard.intro : b.emptyBody}</p>
         </div>
       </div>
       {!choices.some((c) => c.role !== "guest") ? (
@@ -53,159 +61,7 @@ export default async function NewBrandProject({
           </a>
         </section>
       ) : (
-        <section className="bw-panel">
-          <ActionForm operation="project.create" b={b} submit={b.submitProject}>
-            <label>
-              {b.organization}
-              <select name="organizationId" required>
-                {organizations.map((o) => (
-                  <option value={o.id} key={o.id}>
-                    {o.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              {b.projectTitle}
-              <input name="title" required minLength={3} maxLength={120} />
-            </label>
-            <label>
-              {b.objective}
-              <textarea
-                name="objective"
-                required
-                minLength={3}
-                maxLength={2000}
-                rows={4}
-              />
-            </label>
-            <label>
-              {b.audience}
-              <textarea name="audience" maxLength={1000} rows={3} />
-            </label>
-            <div className="bw-grid">
-              <label>
-                {b.budget}
-                <input
-                  name="budgetKrw"
-                  type="number"
-                  min={0}
-                  max={1000000000000}
-                  step={1}
-                  inputMode="numeric"
-                />
-                <span className="bw-muted">{b.budgetHint}</span>
-              </label>
-              <label>
-                {b.taxBasis}
-                <select name="budgetTaxBasis">
-                  <option value="unspecified">{b.tax.unspecified}</option>
-                  <option value="included">{b.tax.included}</option>
-                  <option value="excluded">{b.tax.excluded}</option>
-                </select>
-              </label>
-            </div>
-            <div className="bw-grid">
-              <label>
-                {b.startsOn}
-                <input type="date" name="startsOn" />
-              </label>
-              <label>
-                {b.endsOn}
-                <input type="date" name="endsOn" />
-              </label>
-            </div>
-            <label>
-              {b.production}
-              <select name="productionMode">
-                <option value="creator">{b.productionModes.creator}</option>
-                <option value="studio">{b.productionModes.studio}</option>
-              </select>
-              <span className="bw-muted">
-                {b.creatorHint} {b.studioHint}
-              </span>
-            </label>
-            <details>
-              <summary>{b.criteria}</summary>
-              <p className="bw-note">{b.criteriaHint}</p>
-              <div className="bw-grid">
-                {(["instagram", "tiktok", "x", "youtube"] as const).map(
-                  (platform) => (
-                    <label className="bw-check" key={platform}>
-                      <input
-                        type="checkbox"
-                        name="platforms"
-                        value={platform}
-                      />
-                      {b.platforms[platform]}
-                    </label>
-                  ),
-                )}
-              </div>
-              <div className="bw-grid">
-                <label>
-                  {b.minFollowers}
-                  <input
-                    name="minFollowers"
-                    type="number"
-                    min={0}
-                    max={1000000000}
-                    step={1}
-                  />
-                </label>
-                <label>
-                  {b.maxFollowers}
-                  <input
-                    name="maxFollowers"
-                    type="number"
-                    min={0}
-                    max={1000000000}
-                    step={1}
-                  />
-                </label>
-              </div>
-              <div className="bw-grid">
-                <label>
-                  {b.primaryMetric}
-                  <select name="primaryMetric">
-                    <option value="views">{b.metricNames.views}</option>
-                    <option value="engagement">
-                      {b.metricNames.engagement}
-                    </option>
-                    <option value="content_count">
-                      {b.metricNames.content_count}
-                    </option>
-                  </select>
-                </label>
-                <label>
-                  {b.targetValue}
-                  <input name="targetValue" type="number" min={0} step={1} />
-                </label>
-              </div>
-            </details>
-            <div>
-              <h2>{b.references}</h2>
-              <p className="bw-muted">{b.referenceHint}</p>
-              {[0, 1, 2].map((i) => (
-                <div className="bw-grid" key={i} style={{ marginTop: 16 }}>
-                  <label>
-                    {b.referenceUrl}
-                    <input
-                      name="referenceUrl"
-                      type="url"
-                      maxLength={2048}
-                      placeholder="https://"
-                    />
-                  </label>
-                  <label>
-                    {b.referenceNote}
-                    <input name="referenceNote" maxLength={500} />
-                  </label>
-                </div>
-              ))}
-            </div>
-          </ActionForm>
-        </section>
+        <CampaignWizard b={b} locale={locale} organizations={organizations.map(({ id, name }) => ({ id, name }))} formats={formats} />
       )}
     </div>
   );

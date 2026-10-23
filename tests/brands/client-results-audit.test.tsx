@@ -45,12 +45,13 @@ describe.each(["ko", "en"] as const)("campaign results for the brand customer (%
     renderToStaticMarkup(<ProjectDetail project={{ ...base, ...p }} b={b} locale={locale} usage={u} />);
 
   it("gives every client role the same result tabs; only the commercial usage tab depends on membership", () => {
-    const all = ["performance", "brief", "review", "conversation", "reports", "files", "contracts", "usage"];
+    // Files sit with the conversation and usage with the contracts (docs/PLATFORM-2.0.md §16.4).
+    const all = ["performance", "brief", "review", "reports", "conversation", "contracts"];
     expect(tabs(render({ role: "owner" }, usage("owner")))).toEqual(all);
     expect(tabs(render({ role: "editor" }, usage("editor")))).toEqual(all);
     expect(tabs(render({ role: "viewer", canComment: false }, usage("viewer")))).toEqual(all);
     // A campaign-only guest: loadBrandUsage returns null, so no usage tab.
-    expect(tabs(render({ role: "viewer", canComment: false }, null))).toEqual(all.filter(t => t !== "usage"));
+    expect(tabs(render({ role: "viewer", canComment: false }, null))).toEqual(all);
   });
 
   it("never shows the customer the staff notice, the unshared marker or the raw post code as text", () => {

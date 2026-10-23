@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { isIP } from 'node:net';
+import { CampaignTermsSchema } from './campaign-terms';
 
 /** Link-only references: no crawling, oEmbed, server downloads or implied usage rights. */
 export function normalizeBrandHttpsUrl(raw: string): string | null {
@@ -36,6 +37,8 @@ export const BrandProjectSchema = z.object({
   criteria: BrandCriteriaSchema.default({ platforms: [], minFollowers: null, maxFollowers: null, primaryMetric: 'views', targetValue: null }),
   startsOn: date.nullable().default(null), endsOn: date.nullable().default(null),
   productionMode: z.enum(['creator', 'studio']), referenceLinks: z.array(BrandReferenceLinkSchema).max(10).default([]),
+  /** The wizard's request (docs/PLATFORM-2.0.md §16.3). When present, the server derives budget, dates and criteria from it. */
+  campaignTerms: CampaignTermsSchema.nullable().default(null),
 }).refine(v => !v.startsOn || !v.endsOn || v.endsOn >= v.startsOn, { path: ['endsOn'], message: 'End must follow start' });
 export const BrandProjectStatusSchema = z.object({ projectId: id, expectedRevision: z.number().int().nonnegative(), status: z.enum(['active', 'completed', 'cancelled']) });
 export const BrandContentSchema = z.object({

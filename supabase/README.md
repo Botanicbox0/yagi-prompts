@@ -70,4 +70,4 @@ operation for a superuser, and it is not something app code can do — that is t
 | 2026-10-23 | `0053_core_push_subscriptions_with_glue_0139` | 0053 + 0139 (`profiles.email` NOT NULL 해제 포함) | #80 |
 | 2026-10-23 | `0054_core_profile_onboarding` | 0054 | #82 |
 
-미적용: 0042~0044(월 구독·Premium 수정, 미출시), 0029/0115(옛 portrait 비교, 폐지 경로). 다음 번호: core 0055, glue 0140.
+미적용: 0042~0044(월 구독·Premium 수정, 미출시), 0029/0115(옛 portrait 비교, 폐지 경로), 0056+0140(브랜드 캠페인 마법사, B1 PR — 코드 배포 전 적용 필요). 다음 번호: core 0055(렌더 후속 예약)·0057, glue 0141.

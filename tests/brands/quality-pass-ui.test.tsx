@@ -144,12 +144,16 @@ describe('new brief page by role', () => {
     expect(page).not.toContain('name="name"');
   });
 
-  it('keeps the brief form for editors and owners', async () => {
+  it('opens the five-step campaign wizard for editors and owners', async () => {
     for (const key of ['editor', 'owner'] as const) {
       state.workspace = CASES[key]!;
       const page = await html(NewBrandProject(search()));
-      expect(page).toContain('name="organizationId"');
-      expect(page).toContain('name="referenceUrl"');
+      expect(page).toContain('data-campaign-wizard="format"');
+      for (const step of Object.values(b.wizard.steps)) expect(page).toContain(step);
+      expect(page).toContain('aria-current="step"');
+      // No public formats in this stub: the brand-only production request is still offered.
+      expect(page).toContain(b.wizard.format.noFormats);
+      expect(page).toContain('data-wizard-format="custom"');
     }
   });
 });
