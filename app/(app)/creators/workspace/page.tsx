@@ -11,7 +11,8 @@ import { loadCreatorWorkspace } from '@/lib/creator-platform/onboarding';
 import { CREATOR_APPLY_PATH, CREATOR_WORKSPACE_PATH, creatorProgramHref } from '@/lib/creator-platform/links';
 import { AppHeader } from '@/components/app/app-header';
 import { FormatSubmitForm } from '@/components/creators/format-form';
-import { EarningsTable, FormatList, formatDate } from '@/components/creators/workspace';
+import { EarningsTable, FormatList, formatDate, recipeEditorHref } from '@/components/creators/workspace';
+import { recipeSchemaReady } from '@/lib/recipes/repo';
 import { BUTTON, BUTTON_OUTLINE, PANEL } from '@/components/creators/styles';
 import { MakerProfilePanel } from '@/components/creators/maker-profile';
 import { loadMakerSettings } from '@/lib/makers/profile';
@@ -33,6 +34,9 @@ export default async function CreatorWorkspacePage({ searchParams }: { searchPar
   const dict = getDictionary(locale), t = dict.creatorProgram;
   const access = sql ? await platformAccess(sql) : null;
   const data = sql && access?.creators ? await loadCreatorWorkspace(sql, viewer, access) : null;
+  // docs/PLATFORM-2.0.md §7.4: with 0059 the submission is the recipe editor; before it, the older form.
+  // A failed probe means the older form, never a broken page.
+  const recipeEditor = !!sql && !!data && await recipeSchemaReady(sql).catch(() => false);
   const shell = (state: string, children: React.ReactNode) => <div data-section data-theme="light" className="section min-h-screen">
     <AppHeader locale={locale} dict={dict} rest={CREATOR_WORKSPACE_PATH} />
     <main id="main" data-creator-workspace data-creator-state={state} className="band py-12 lg:py-16">
@@ -47,7 +51,7 @@ export default async function CreatorWorkspacePage({ searchParams }: { searchPar
   const { application, creator } = data;
   const note = (text: string | null) => text ? <div className="rounded-xl bg-on-surface/5 p-4"><p className="text-xs font-medium opacity-60">{t.noteFromStudio}</p><p className="mt-2 whitespace-pre-wrap break-words text-sm leading-relaxed">{text}</p></div> : null;
   const records = <>
-    <section className={PANEL}><h2 className="text-xl font-semibold">{t.formatsHeading}</h2><FormatList formats={data.formats} dict={dict} locale={locale} canRevise={!!creator?.active && data.onboarding} /></section>
+    <section className={PANEL}><h2 className="text-xl font-semibold">{t.formatsHeading}</h2><FormatList formats={data.formats} dict={dict} locale={locale} canRevise={!!creator?.active && data.onboarding} recipeEditor={recipeEditor && !!creator?.active} /></section>
     <EarningsTable earnings={data.earnings} dict={dict} locale={locale} />
   </>;
 
@@ -64,7 +68,9 @@ export default async function CreatorWorkspacePage({ searchParams }: { searchPar
         <h2 className="text-xl font-semibold">{revising ? interpolate(t.revisionHeading, { title: revising.title }) : t.submitHeading}</h2>
         <p className="text-sm leading-relaxed opacity-70">{dict.community.formatHint}</p>
         {revising ? <a href={CREATOR_WORKSPACE_PATH} className="inline-flex min-h-11 items-center text-sm underline underline-offset-4">{t.cancelRevision}</a> : null}
-        <FormatSubmitForm key={revising?.id ?? 'new'} copy={formCopy} revision={revising && { id: revising.id, title: revising.title, medium: revising.medium, exampleUrl: revising.exampleUrl }} />
+        {recipeEditor
+          ? <a href={recipeEditorHref('new', revising?.id)} data-recipe-new className={BUTTON}>{dict.makerRecipe.newCta} →</a>
+          : <FormatSubmitForm key={revising?.id ?? 'new'} copy={formCopy} revision={revising && { id: revising.id, title: revising.title, medium: revising.medium, exampleUrl: revising.exampleUrl ?? '' }} />}
       </section>
       <MakerProfilePanel settings={makerSettings} dict={dict} locale={locale} saved={query.ok === 'profile'} error={typeof query.profile === 'string' ? query.profile : null} />
       {records}

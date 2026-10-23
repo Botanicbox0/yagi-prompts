@@ -73,8 +73,9 @@ export async function submitCreatorApplication(sql: SqlRunner, viewer: Viewer, r
 
 export type TemplateState = 'pending' | 'published' | 'rejected' | 'archived';
 export interface WorkspaceFormat {
-  id: string; title: string; medium: 'image' | 'video'; status: 'submitted' | 'accepted' | 'rejected';
-  exampleUrl: string; createdAt: string; reviewNote: string | null; reviewedAt: string | null; revisionOf: string | null;
+  /** `draft` exists only with 0059: a recipe (v2) the maker is still editing. */
+  id: string; title: string; medium: 'image' | 'video'; status: 'draft' | 'submitted' | 'accepted' | 'rejected';
+  exampleUrl: string | null; createdAt: string; reviewNote: string | null; reviewedAt: string | null; revisionOf: string | null;
   /** Public catalog state only. Internal moderation text, price and engine stay with the studio. */
   template: { state: TemplateState; slug: string | null } | null;
 }
@@ -108,7 +109,7 @@ export async function loadCreatorWorkspace(sql: SqlRunner, viewer: Viewer, acces
     : null;
   const creator = (await sql.query<{ active: boolean; contract_version: string; created_at: unknown }>('select active,contract_version,created_at from platform_creators where user_id=$1', [userId])).rows[0] ?? null;
   const feedback = access.onboarding ? 'f.review_note,f.reviewed_at,f.revision_of' : 'null::text review_note,null::timestamptz reviewed_at,null::uuid revision_of';
-  const formats = await sql.query<{ id: string; title: string; medium: 'image' | 'video'; status: WorkspaceFormat['status']; example_url: string; created_at: unknown; review_note: string | null; reviewed_at: unknown; revision_of: string | null; template_state: TemplateState | null; template_slug: string | null }>(
+  const formats = await sql.query<{ id: string; title: string; medium: 'image' | 'video'; status: WorkspaceFormat['status']; example_url: string | null; created_at: unknown; review_note: string | null; reviewed_at: unknown; revision_of: string | null; template_state: TemplateState | null; template_slug: string | null }>(
     `select f.id,f.title,f.medium,f.status,f.example_url,f.created_at,${feedback},
             p.status template_state,case when p.status='published' and p.audience='public' then p.slug end template_slug
        from platform_formats f left join prompt_items p on p.id=f.template_id

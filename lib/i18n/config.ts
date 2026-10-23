@@ -54,10 +54,11 @@ const CAMPAIGN_PARTICIPATION_PATTERN = /^\/campaigns\/participations\/[^/]+\/?$/
 const MY_CAMPAIGNS_PATTERN = /^\/campaigns\/(?:mine|open)\/?$/;
 
 /**
- * docs/CREATOR-PLATFORM.md — the format creator program: `/{locale}/creators` is public, and its two
- * login-gated leaves (application, workspace) are unprefixed app surface. Anchored like the campaigns.
+ * docs/CREATOR-PLATFORM.md — the format creator program: `/{locale}/creators` is public, and its
+ * login-gated leaves (application, workspace, the recipe editor `workspace/formats/{new|id}`) are
+ * unprefixed app surface. Anchored like the campaigns.
  */
-const CREATOR_PROGRAM_PATTERN = /^\/creators\/(?:apply|workspace)\/?$/;
+const CREATOR_PROGRAM_PATTERN = /^\/creators\/(?:apply|workspace(?:\/formats\/(?:new|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}))?)\/?$/;
 
 export function isCreatorProgramAppPath(pathname: string): boolean {
   return CREATOR_PROGRAM_PATTERN.test(pathname);

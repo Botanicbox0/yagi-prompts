@@ -46,9 +46,11 @@ export class RenderObjectNotFound extends Error {
 /**
  * Keys are `{uuid}/{name}.{ext}` by construction — or `social/{uuid}/evidence.jpg`, a follower
  * screenshot (docs/PLATFORM-2.0.md §17.1); anything else is refused before it touches a path.
+ * A name may carry digits, `-` and `_` after its first letter: a recipe step (`step-sheet`), a carousel
+ * frame (`result-2`) or a maker file (`ast_<hex>`) — still no dot, slash or traversal.
  */
 export function assertRenderKey(key: string): void {
-  if (!/^(?:social\/)?[0-9a-f-]{36}\/[a-z]+\.[a-z0-9]{2,5}$/i.test(key)) throw new Error(`illegal render key: ${key}`);
+  if (!/^(?:social\/)?[0-9a-f-]{36}\/[a-z][a-z0-9_-]{0,47}\.[a-z0-9]{2,5}$/i.test(key)) throw new Error(`illegal render key: ${key}`);
 }
 
 async function fileExists(path: string): Promise<boolean> {

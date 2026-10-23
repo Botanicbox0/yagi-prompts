@@ -40,6 +40,8 @@ import { cachedSubscriptionAvailability } from '@/lib/creator-subscriptions/cach
 import { SubscriptionAvailabilityProvider } from '@/components/twings/subscription-availability';
 import { TemplateMakeAvailability, TemplateSubscriptionNote } from '@/components/twings/subscription-public-notices';
 import { cachedTypicalWaitMinutes } from '@/lib/twings/cached-typical-wait';
+import { cachedPublicRecipe } from '@/lib/recipes/cached-public';
+import { HowItWasMade } from '@/components/recipes/how-it-was-made';
 
 /**
  * `/[locale]/t/[slug]` — one template, which is also where it is made (docs/TEMPLATES-IA.md §2).
@@ -100,6 +102,10 @@ export default async function TemplatePage({ params }: RouteParams) {
   // Built with the page and refreshed with it (tag `prompts`): the median of recent successful renders
   // for this engine and length, or the engine default below ten (lib/twings/typical-wait.ts).
   const waitMinutes = await cachedTypicalWaitMinutes({ engine: resolveEngine(card.engine, card.medium), medium: card.medium, seconds: card.medium === 'video' ? card.runtimeSeconds ?? null : null });
+  // A maker template only (docs/PLATFORM-2.0.md §7.3): what the maker chose to show, in the order they chose.
+  const mr = dict.makerRecipe;
+  const recipe = await cachedPublicRecipe(card.id, { selfie: mr.selfieLabel, reference: mr.referenceLabel, step: mr.stepResultLabel });
+  const howItWasMade = recipe ? <HowItWasMade recipe={recipe} copy={mr} /> : null;
 
   const t = dict.templates;
   const labels = promptLabels(dict);
@@ -160,6 +166,7 @@ export default async function TemplatePage({ params }: RouteParams) {
             <a href={templatesHref(locale, card.medium)} className="inline-flex min-h-11 items-center text-sm text-black/65">
               ← {interpolate(t.backTo, { medium: dict.nav[card.medium] })}
             </a>
+            {recipe?.presentation === 'story-first' ? howItWasMade : null}
 
             <header className="mt-6 grid gap-8 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)] lg:items-start lg:gap-10">
               <div>
@@ -294,6 +301,7 @@ export default async function TemplatePage({ params }: RouteParams) {
                 )}
               </div>
             </header>
+            {recipe?.presentation === 'make-first' ? howItWasMade : null}
 
             {/* The earn loop: campaigns that ask for exactly this template. */}
             {campaigns.length > 0 && (

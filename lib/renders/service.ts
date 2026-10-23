@@ -19,7 +19,7 @@ import { getTossGateway, type TossGateway } from '@/lib/billing/toss-gateway';
 import { addTossReport, billingErrorCode, emptyTossReport, logBilling, reconcileTossPayments, renderPaymentStatus, type TossReconcileReport } from '@/lib/billing/toss-service';
 import { DEFAULT_LOCALE, isLocale, type Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/dictionaries';
-import { aspectsForMedium, isEngineId, isImageAspect, isImageEngine, isVideoAspect, isVideoEngine, resolveEngine } from '@/lib/images/engines';
+import { aspectsForMedium, isEngineId, isImageAspect, isImageEngine, isOpenAiEngine, isVideoAspect, isVideoEngine, resolveEngine } from '@/lib/images/engines';
 import { loadPromptById, loadPromptBySlug, type PromptRow } from '@/lib/prompts/repo';
 import { isForSale } from '@/lib/twings/products';
 import { renderResolution, renderableResolution } from '@/lib/twings/resolution';
@@ -32,7 +32,11 @@ import { getPremiumEditBudget } from '@/lib/premium-editing/budget';
 import { deleteExpiredEditReferences, loadSubscriptionRender, subscriptionRenderSchemaReady, subscriptionUsageTrackingPresent } from '@/lib/premium-editing/repo';
 import { prepareSubscriptionPrompt } from '@/lib/premium-editing/service';
 import type { PremiumEditClient } from '@/lib/premium-editing/provider';
-import { RenderFailure, pollVideoRender, runImageRender, startVideoRender, videoModelFor, type EngineOutput, type RenderEngineDeps, type RenderFailureCode, type RenderPhoto } from './engines';
+import { RenderFailure, baseFailureCode, pollVideoRender, runImageRender, startVideoRender, videoModelFor, type EngineOutput, type RenderEngineDeps, type RenderFailureCode, type RenderPhoto } from './engines';
+import { ensureJobRecipe, ensureMakerSandbox, insertJobOutputs, insertJobRecipe, loadJobRecipe, loadTemplateRecipe, MAKER_SANDBOX_ID, MAKER_SANDBOX_SLUG, renderPurpose, saveStepRecord, type JobRecipe } from '@/lib/recipes/repo';
+import { recordedUsd, runRecipe, type RecipeResult } from '@/lib/recipes/execute';
+import { primaryStep, recipeNeedsIdentity, type Recipe } from '@/lib/recipes/schema';
+import { readMakerFile } from '@/lib/recipes/assets';
 import { fixedVideoReferenceUrls } from './template-references';
 import type { RenderNotifier } from './notify';
 import { buildRenderPrompt } from './prompt';
@@ -271,6 +275,8 @@ export async function createSubscriptionRenderJob(deps: RenderServiceDeps & { en
       if (!isForSale(template)) return { ok: false, code: 'not_for_sale' };
       const eligibility = subscriptionTemplateEligibility(template);
       if (!eligibility) return { ok: false, code: 'unsupported_template' };
+      // A paid edit rewrites one prompt; a maker recipe has several and is not offered for it.
+      if (await loadTemplateRecipe(sql, template.id)) return { ok: false, code: 'unsupported_template' };
       const { quote, scopes } = eligibility;
       const photo = input.selfieId ? await savedSelfiePhoto(sql, deps.store, viewer.userId!, input.selfieId) : input.photo ?? null;
       if (input.selfieId && !photo) return { ok: false, code: 'identity_required' };
@@ -338,8 +344,11 @@ async function createAuthorizedRender(deps: RenderServiceDeps, viewer: Viewer, i
   // (docs/TEMPLATES-IA.md §8.2) and the pass sends an asset reference instead. Asked to, the job
   // is HELD with its photo until the check completes — one upload, no second visit to the studio.
   const mode = deps.mode ?? assetLibraryMode();
+  // A recipe sends the face to ModelArk if ANY step does (an OpenAI result can still feed a Seedance film).
+  const recipe = await loadTemplateRecipe(deps.sql, template.id);
+  const viaLibrary = recipe ? mode === 'liveness' && recipeNeedsIdentity(recipe) : needsLiveness(engine, mode);
   // Only the liveness mode has a door to hold a job behind; the virtual library makes the group on the way.
-  const held = needsLiveness(engine, mode) && (await identityStatusFor(deps.sql, viewer.userId, mode)) !== 'active';
+  const held = viaLibrary && (await identityStatusFor(deps.sql, viewer.userId, mode)) !== 'active';
   if (held && !input.holdForIdentity) return { ok: false, code: 'identity_required' };
 
   const recent = await countRenderJobsSince(deps.sql, viewer.userId, new Date(now.getTime() - 24 * 60 * 60 * 1000));
@@ -363,6 +372,38 @@ async function createAuthorizedRender(deps: RenderServiceDeps, viewer: Viewer, i
     status: held ? 'held' : 'queued',
   });
   if (input.selfieId) await deps.sql.query('update render_jobs set identity_selfie_id=$2 where id=$1',[id,input.selfieId]);
+  return { ok: true, id, held };
+}
+
+/**
+ * A maker's test render or the studio's review render (docs/PLATFORM-2.0.md §7.4): the recipe runs
+ * through the same pass, face check and engine adapters as an order, but the job points at the
+ * internal sandbox template, carries its recipe snapshot, sends no email and has no share link.
+ * The caller has authorised the person, the format and the count; this only writes the job.
+ */
+export async function createRecipeSandboxRender(deps: RenderServiceDeps, input: {
+  userId: string; locale: string | null; formatId: string; purpose: 'maker_test' | 'studio_review';
+  recipe: Recipe; photo: { bytes: Uint8Array; mime: string }; selfieId?: string;
+}): Promise<{ ok: true; id: string; held: boolean } | { ok: false; code: 'bad_photo' | 'photo_too_large' }> {
+  if (!input.photo.bytes.byteLength || !isPhotoMime(input.photo.mime)) return { ok: false, code: 'bad_photo' };
+  if (input.photo.bytes.byteLength > MAX_PHOTO_BYTES) return { ok: false, code: 'photo_too_large' };
+  const templateId = await ensureMakerSandbox(deps.sql);
+  const mode = deps.mode ?? assetLibraryMode();
+  const held = mode === 'liveness' && recipeNeedsIdentity(input.recipe) && (await identityStatusFor(deps.sql, input.userId, mode)) !== 'active';
+  const primary = primaryStep(input.recipe);
+  const film = input.recipe.steps.find((step) => step.kind === 'video');
+  const id = randomUUID();
+  const inputKey = `${id}/input.${extensionFor(input.photo.mime)}`;
+  await deps.store.put(inputKey, input.photo.bytes, input.photo.mime);
+  await insertRenderJob(deps.sql, {
+    id, userId: input.userId, templateId, templateSlug: MAKER_SANDBOX_SLUG,
+    medium: primary.kind, engine: primary.engine, aspect: primary.params.aspect,
+    resolution: film?.kind === 'video' ? film.params.resolution : null,
+    locale: isLocale(input.locale) ? input.locale : DEFAULT_LOCALE,
+    inputKey, inputMime: input.photo.mime, status: held ? 'held' : 'queued',
+  });
+  await insertJobRecipe(deps.sql, { renderId: id, purpose: input.purpose, formatId: input.formatId, recipe: input.recipe });
+  if (input.selfieId) await deps.sql.query('update render_jobs set identity_selfie_id=$2 where id=$1', [id, input.selfieId]);
   return { ok: true, id, held };
 }
 
@@ -532,6 +573,11 @@ type Reference =
  */
 async function resolveReference(deps: RenderPassDeps, job: RenderJob, photo: RenderPhoto | null): Promise<Reference> {
   if (photo === null || !isEngineId(job.engine) || !needsIdentity(job.engine)) return { kind: 'bytes' };
+  return personAsset(deps, job, photo.bytes, job.inputKey);
+}
+
+/** Any image of the job's person (their photo, or a recipe step made from it) as a verified-library asset. */
+async function personAsset(deps: RenderPassDeps, job: RenderJob, bytes: Uint8Array, key: string | null): Promise<Reference> {
   const ideps = identityDeps(deps);
   let group;
   if (ideps.mode === 'virtual') {
@@ -546,8 +592,8 @@ async function resolveReference(deps: RenderPassDeps, job: RenderJob, photo: Ren
       return { kind: 'fail', failure: new RenderFailure('identity_required', 'the person has not verified their face', false) };
     }
   }
-  const photoUrl = job.inputKey === null ? null : await deps.store.url(job.inputKey, ASSET_URL_TTL_SECONDS);
-  const ensured = await ensureIdentityAsset(ideps, { group, photo: photo.bytes, photoUrl });
+  const photoUrl = key === null ? null : await deps.store.url(key, ASSET_URL_TTL_SECONDS);
+  const ensured = await ensureIdentityAsset(ideps, { group, photo: bytes, photoUrl });
   if (ensured.status === 'active') return { kind: 'asset', assetId: ensured.assetId };
   if (ensured.status === 'processing') return { kind: 'wait', assetId: ensured.assetId };
   const code: RenderFailureCode = ensured.reason === 'identity_required' || ensured.reason === 'identity_unavailable' ? ensured.reason : 'asset_failed';
@@ -615,6 +661,8 @@ async function executeClaimed(deps: RenderPassDeps, job: RenderJob, now: Date, r
     if (resumed.resumed) { handedOff.add(job.id); report.waiting += 1; return; }
     const template = await loadPromptById(deps.sql, job.templateId);
     if (template === null) throw new RenderFailure('engine_error', 'the template no longer exists', false);
+    const recipe = await jobRecipeFor(deps, job);
+    if (recipe) { await renderRecipe(deps, job, recipe, now, report, handedOff); return; }
     const photo = await readPhoto(deps.store, job);
     const reference = await resolveReference(deps, job, photo);
     if (reference.kind === 'fail') throw reference.failure;
@@ -642,7 +690,9 @@ async function pollAwaiting(deps: RenderPassDeps, job: RenderJob, now: Date, rep
   try {
     const template = await loadPromptById(deps.sql, job.templateId);
     const request = deps.subscriptionSchemaReady ? await loadSubscriptionRender(deps.sql, job.id) : null;
-    const { model, seconds } = videoModelFor(job.engine, request?.runtime_seconds ?? template?.runtimeSeconds ?? 5);
+    const recipe = await loadJobRecipe(deps.sql, job.id);
+    const film = recipe?.recipe ? primaryStep(recipe.recipe) : null;
+    const { model, seconds } = videoModelFor(job.engine, film?.kind === 'video' ? film.params.duration : request?.runtime_seconds ?? template?.runtimeSeconds ?? 5);
     const polled = await pollVideoRender(
       { taskId: job.providerTaskId, model, seconds, resolution: renderResolution(job.resolution), aspect: job.aspect, onProviderDone: () => markRenderFinishing(deps.sql, job.id, now) },
       deps.engines ?? {},
@@ -652,11 +702,16 @@ async function pollAwaiting(deps: RenderPassDeps, job: RenderJob, now: Date, rep
       return;
     }
     if (polled.status === 'succeeded') {
-      await finish(deps, job, polled.output, now);
+      if (recipe?.recipe && film) {
+        // The film is the recipe's last step: store it like any result, then book every step's cost.
+        const key = `${job.id}/step-${film.id.replace(/_/g, '-')}.${extensionFor(polled.output.mime)}`;
+        await deps.store.put(key, polled.output.bytes, polled.output.mime);
+        await finishRecipe(deps, job, [{ step: film.id, key, mime: polled.output.mime, bytes: polled.output.bytes.byteLength }], addCost(recordedUsd(recipe.state), polled.output.costUsd), polled.output, now);
+      } else await finish(deps, job, polled.output, now);
       report.succeeded += 1;
       return;
     }
-    await settleFailure(deps, job, polled.failure, now, report);
+    await settleFailure(deps, job, film ? new RenderFailure(polled.failure.code, `[${film.id}] ${polled.failure.message}`, polled.failure.retryable, film.id) : polled.failure, now, report);
   } catch (error) {
     await settleFailure(deps, job, error, now, report);
   }
@@ -669,6 +724,8 @@ async function pollAssetWait(deps: RenderPassDeps, job: RenderJob, assetId: stri
     if (status === 'Active') {
       const template = await loadPromptById(deps.sql, job.templateId);
       if (template === null) throw new RenderFailure('engine_error', 'the template no longer exists', false);
+      const recipe = await jobRecipeFor(deps, job);
+      if (recipe) { await renderRecipe(deps, job, recipe, now, report, new Set()); return; }
       const photo = await readPhoto(deps.store, job);
       await renderNow(deps, job, template, photo, assetId, now, report, new Set());
       return;
@@ -685,6 +742,95 @@ async function pollAssetWait(deps: RenderPassDeps, job: RenderJob, assetId: stri
 async function readPhoto(store: RenderStore, job: RenderJob): Promise<RenderPhoto | null> {
   if (job.inputKey === null || !isPhotoMime(job.inputMime)) return null;
   return { bytes: await store.read(job.inputKey), mime: job.inputMime };
+}
+
+// ---------------------------------------------------------------------------
+// recipe v2 (lib/recipes/*) — maker templates, test renders and review renders
+// ---------------------------------------------------------------------------
+
+function addCost(a: number | null, b: number | null): number | null {
+  return a === null && b === null ? null : Math.round(((a ?? 0) + (b ?? 0)) * 10000) / 10000;
+}
+
+/** The recipe this job runs: its snapshot (test/review jobs, a retry), else the template's, snapshotted now. */
+async function jobRecipeFor(deps: RenderPassDeps, job: RenderJob): Promise<JobRecipe | null> {
+  const recipe = job.templateId === MAKER_SANDBOX_ID ? await loadJobRecipe(deps.sql, job.id) : await ensureJobRecipe(deps.sql, job.id, job.templateId);
+  if (recipe === null && job.templateId === MAKER_SANDBOX_ID) throw new RenderFailure('engine_error', 'a sandbox job without its recipe', false);
+  if (recipe !== null && recipe.recipe === null) throw new RenderFailure('engine_error', 'the stored recipe no longer passes the recipe rules', false);
+  // A paid edit interprets one prompt; a recipe template is not offered for it (createSubscriptionRenderJob).
+  if (recipe !== null && deps.subscriptionSchemaReady && await loadSubscriptionRender(deps.sql, job.id)) throw new RenderFailure('edit_unavailable', 'recipe templates take no subscription edit', false);
+  return recipe;
+}
+
+async function renderRecipe(deps: RenderPassDeps, job: RenderJob, recipe: JobRecipe, now: Date, report: RenderPassReport, handedOff: Set<string>): Promise<void> {
+  const photo = await readPhoto(deps.store, job);
+  const run = await runRecipe({
+    jobId: job.id,
+    recipe: recipe.recipe!,
+    outputAspect: job.aspect,
+    state: recipe.state,
+    store: deps.store,
+    engines: deps.engines ?? {},
+    selfie: photo && job.inputKey ? { ...photo, key: job.inputKey } : null,
+    makerFile: (handle) => readMakerFile(deps.sql, deps.store, handle),
+    person: async ({ bytes, key }) => {
+      const reference = await personAsset(deps, job, bytes, key);
+      if (reference.kind === 'fail') throw reference.failure;
+      if (reference.kind === 'bytes') throw new RenderFailure('identity_unavailable', 'the face could not reach the verified library', false);
+      return reference;
+    },
+    saveStep: (stepId, record) => saveStepRecord(deps.sql, job.id, stepId, record),
+    ...(deps.callbackUrl ? { callbackUrl: deps.callbackUrl } : {}),
+  });
+  if (run.kind === 'wait') {
+    await markRenderWaitingForAsset(deps.sql, job.id, run.assetId);
+    handedOff.add(job.id);
+    report.waiting += 1;
+    return;
+  }
+  if (run.kind === 'handed') {
+    await markRenderRunningWithTask(deps.sql, job.id, { provider: 'modelark', taskId: run.taskId });
+    for (const assetId of new Set(run.assets)) await recordIdentityUse(deps.sql, { userId: job.userId, assetId, now });
+    handedOff.add(job.id);
+    report.waiting += 1;
+    return;
+  }
+  const first = run.results[0]!;
+  const provider = isOpenAiEngine(primaryStep(recipe.recipe!).engine) ? 'openai' : 'modelark';
+  await finishRecipe(deps, job, run.results, run.usd, { bytes: await deps.store.read(first.key), mime: first.mime, provider, costUsd: run.usd }, now);
+  for (const assetId of new Set(run.assets)) await recordIdentityUse(deps.sql, { userId: job.userId, assetId, now });
+  report.succeeded += 1;
+}
+
+/**
+ * A recipe job's results: the first is the job's one result (`result.{ext}`, so every one-result page
+ * works unchanged), every one is listed in render_job_outputs (a carousel's frames, in order).
+ */
+async function finishRecipe(deps: RenderPassDeps, job: RenderJob, results: RecipeResult[], usd: number | null, first: EngineOutput, now: Date): Promise<void> {
+  await markRenderFinishing(deps.sql, job.id, now);
+  const keys: string[] = [];
+  for (const [index, result] of results.entries()) {
+    const key = index === 0 ? `${job.id}/result.${extensionFor(result.mime)}` : `${job.id}/result-${index + 1}.${extensionFor(result.mime)}`;
+    const bytes = index === 0 ? first.bytes : await deps.store.read(result.key);
+    await deps.store.put(key, bytes, result.mime);
+    keys.push(key);
+  }
+  await deps.sql.transaction(async sql => {
+    await markRenderSucceeded(sql, job.id, {
+      resultKey: keys[0]!,
+      resultMime: results[0]!.mime,
+      resultBytes: first.bytes.byteLength,
+      provider: first.provider,
+      costUsd: usd,
+      shareToken: newShareToken(),
+      shareExpiresAt: shareExpiresAt(now),
+      finishedAt: now,
+    });
+    // Several steps are several provider calls: the sum stays an estimate until each has an invoice line.
+    await sql.query('update render_jobs set provider_completion_tokens=$2,cost_source=$3 where id=$1', [job.id, results.length === 1 && first.completionTokens ? first.completionTokens : null, usd === null ? null : 'estimate']);
+    await insertJobOutputs(sql, job.id, results.map((result, index) => ({ stepId: result.step, key: keys[index]!, mime: result.mime, bytes: result.bytes })));
+    if (deps.subscriptionSchemaReady) await settleSubscriptionUsage(sql, job.id, 'completed');
+  });
 }
 
 /**
@@ -718,14 +864,16 @@ async function settleFailure(deps: RenderPassDeps, job: RenderJob, error: unknow
   const failure = privateRequest ? new RenderFailure(rawFailure.code, rawFailure.code, rawFailure.retryable) : rawFailure;
   // Another worker owns the one paid interpretation; leave its lease/status intact.
   if (privateRequest && failure.code === 'edit_in_progress') { report.waiting += 1; return; }
-  report.errors.push(`${job.id}: ${failure.code} — ${failure.message}`);
+  // A recipe step failure is recorded as `code:step`; readers strip the step (`baseFailureCode`).
+  const code = failure.step ? `${failure.code}:${failure.step}` : failure.code;
+  report.errors.push(`${job.id}: ${code} — ${failure.message}`);
   if (failure.retryable && job.attempts < MAX_ATTEMPTS) {
-    await requeueRenderJob(deps.sql, job.id, { code: failure.code, message: failure.message });
+    await requeueRenderJob(deps.sql, job.id, { code, message: failure.message });
     report.requeued += 1;
     return;
   }
   await deps.sql.transaction(async sql => {
-    await markRenderFailed(sql, job.id, { code: failure.code, message: failure.message, finishedAt: now });
+    await markRenderFailed(sql, job.id, { code, message: failure.message, finishedAt: now });
     if (deps.subscriptionSchemaReady) await settleSubscriptionUsage(sql, job.id, 'failed');
   });
   report.failed += 1;
@@ -770,7 +918,7 @@ async function notifyFinished(deps: RenderPassDeps, now: Date, report: RenderPas
     return;
   }
   for (const job of due) {
-    if ((await deps.sql.query('select render_id from brand_production_reservations where render_id=$1',[job.id])).rows.length) {
+    if ((await deps.sql.query('select render_id from brand_production_reservations where render_id=$1',[job.id])).rows.length || await renderPurpose(deps.sql, job.id) !== 'customer') {
       await markRenderNotified(deps.sql,job.id,{status:'skipped',at:now,spendAttempt:false});
       continue;
     }
@@ -831,7 +979,7 @@ export function templateTitle(template: Pick<PromptRow, 'title' | 'titleKo'> | n
 /** The reader-facing explanation of a failure code, in their language. */
 export function failureReason(code: string | null, locale: Locale): string {
   const errors = getDictionary(locale).renders.error;
-  const key = (code ?? 'engine_error') as keyof typeof errors;
+  const key = (baseFailureCode(code) ?? 'engine_error') as keyof typeof errors;
   return errors[key] ?? errors.engine_error;
 }
 
@@ -873,10 +1021,13 @@ export async function loadSharedRender(sql: SqlRunner, id: string, token: string
   const job = await loadRenderJob(sql, id);
   if (job === null || job.status !== 'succeeded' || job.shareToken === null || !constantTimeEqual(job.shareToken, token)) return { status: 'not_found' };
   if ((await sql.query('select render_id from brand_production_reservations where render_id=$1',[id])).rows.length) return {status:'not_found'};
+  // A maker's test render or the studio's review render is never a public link.
+  if (job.templateId === MAKER_SANDBOX_ID) return { status: 'not_found' };
   const view = (await withTitles(sql, [job]))[0]!;
   return isShareExpired(job.shareExpiresAt, now) ? { status: 'expired', view } : { status: 'ok', view };
 }
 
 export async function listMyRenders(sql: SqlRunner, userId: string, limit = 50): Promise<RenderView[]> {
-  return withTitles(sql, await listRenderJobsForUser(sql, userId, limit));
+  // Test and review renders live in the maker editor and the review queue, not in "내 결과물".
+  return withTitles(sql, (await listRenderJobsForUser(sql, userId, limit)).filter((job) => job.templateId !== MAKER_SANDBOX_ID));
 }

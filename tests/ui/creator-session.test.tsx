@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { CreatorAccountView, type CreatorAccountLabels } from '@/components/nav/creator-account';
 import { observeCreatorSession, parseCreatorSession, type CreatorSession } from '@/lib/auth/observe-creator-session';
 
-const labels: CreatorAccountLabels = { signIn: '로그인', profile: '내 프로필', selfie: '내 사진', renders: '내 작품', campaigns: '내 캠페인', signOut: '로그아웃', menu: '계정 메뉴', fallbackName: '크리에이터' };
+const labels: CreatorAccountLabels = { signIn: '로그인', profile: '내 프로필', selfie: '내 사진', renders: '내 작품', campaigns: '내 캠페인', signOut: '로그아웃', menu: '계정 메뉴', fallbackName: '회원님' };
 const flush = async () => { for (let i = 0; i < 8; i++) await Promise.resolve(); };
 function fixture() {
   const window = new EventTarget();
