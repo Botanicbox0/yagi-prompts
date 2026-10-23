@@ -69,7 +69,11 @@ operation for a superuser, and it is not something app code can do — that is t
 | 2026-10-23 | `0051_core_creator_onboarding_with_glue_0138` | 0051 + 0138 | #79 |
 | 2026-10-23 | `0053_core_push_subscriptions_with_glue_0139` | 0053 + 0139 (`profiles.email` NOT NULL 해제 포함) | #80 |
 | 2026-10-23 | `0054_core_profile_onboarding` | 0054 | #82 |
+| 2026-10-23 | `0055_core_render_finishing` | 0055 (`render_jobs.finishing_at`, `poster_key`) | #87 |
 | 2026-10-23 | `0056_core_brand_campaign_terms_with_glue_0140` | 0056 + 0140 | #89 |
 | 2026-10-23 | `0057_core_social_accounts_with_glue_0141` | 0057 + 0141 | #90 |
+| 2026-10-23 | `0058_core_campaign_designated_invites` | 0058 (glue 없음) | #91 |
+| 2026-10-23 | `0059_core_maker_recipes` · `0142_glue_maker_recipes` | 0059 + 0142 (레시피 v2 표·컬럼, 브라우저 롤 차단) | #95 |
+| 2026-10-23 | `0060_core_maker_profiles` · `0143_glue_maker_profiles` | 0060 + 0143 (메이커 핸들·공개 프로필·트리거 2개) | #94 |
 
-미적용: 0042~0044(월 구독·Premium 수정, 미출시), 0029/0115(옛 portrait 비교, 폐지 경로), 0055(대기 마무리·공유 프레임, render-finish PR — 적용 순서 무관), 0058(크리에이터 풀 지정 초대 `invited_user_id`, B2-b PR — 없으면 풀은 보이지만 초대는 닫힘, glue 없음). 다음 번호: core 0059, glue 0142.
+미적용: 0042~0044(월 구독·Premium 수정, 미출시), 0029/0115(옛 portrait 비교, 폐지 경로). 다음 번호: core 0061, glue 0144.
