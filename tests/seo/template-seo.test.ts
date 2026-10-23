@@ -93,6 +93,8 @@ describe('template metadata (docs/TEMPLATES-IA.md SEO)', () => {
     title: 'Neon alley dolly',
     titleKo: '네온 골목 달리',
     authorHandle: null,
+    origin: 'studio',
+    makerProfile: false,
     source: 'yagi',
     models: ['seedance-2.5'],
     modelLabels: ['SEEDANCE 2.5'],

@@ -6,7 +6,7 @@ import { DEFAULT_LOCALE, isLocale, type Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/dictionaries';
 import { interpolate, localize } from '@/lib/i18n/format';
 import { getPromptCatalog } from '@/lib/prompts/public-catalog';
-import type { PromptCard } from '@/lib/prompts/catalog';
+import type { PromptCard, PublicMaker } from '@/lib/prompts/catalog';
 import { USE_CASES } from '@/lib/prompts/schemas';
 import { templateHref, templatesHref } from '@/lib/prompts/links';
 import { getCampaignCatalog } from '@/lib/campaigns/public-catalog';
@@ -30,6 +30,7 @@ import { TextSwap } from '@/components/ui/text-swap';
 import { PromptDetailMedia } from '@/components/prompts/detail-media';
 import { TypographicPoster, posterRatio } from '@/components/prompts/poster';
 import { RelatedPrompts } from '@/components/prompts/detail';
+import { makerProfileRest } from '@/components/prompts/card-frame';
 import { promptLabels, useCaseLabel } from '@/components/prompts/labels';
 import { campaignLabels } from '@/components/campaigns/labels';
 import { TwingsStudio, type StudioStyle } from '@/components/twings/studio';
@@ -70,10 +71,10 @@ function localeOf(raw: string): Locale {
 }
 
 /** One resolution per request, shared by `generateMetadata` and the render. */
-const resolve = cache(async (slug: string): Promise<{ card: PromptCard | null; all: PromptCard[] }> => {
+const resolve = cache(async (slug: string): Promise<{ card: PromptCard | null; all: PromptCard[]; makers: PublicMaker[] }> => {
   const catalog = await getPromptCatalog();
   const all = [...catalog.video, ...catalog.image];
-  return { card: all.find((item) => item.slug === slug) ?? null, all };
+  return { card: all.find((item) => item.slug === slug) ?? null, all, makers: catalog.makers ?? [] };
 });
 
 /** Up to four neighbours: same medium first, sharing a use case first, newest first (repo order). */
@@ -96,7 +97,7 @@ export default async function TemplatePage({ params }: RouteParams) {
   const { locale: raw, slug } = await params;
   const locale = localeOf(raw);
   const dict = getDictionary(locale);
-  const [{ card, all }, availability, campaignCatalog] = await Promise.all([resolve(slug), cachedSubscriptionAvailability(), getCampaignCatalog()]);
+  const [{ card, all, makers }, availability, campaignCatalog] = await Promise.all([resolve(slug), cachedSubscriptionAvailability(), getCampaignCatalog()]);
   if (card === null) notFound();
   // Built with the page and refreshed with it (tag `prompts`): the median of recent successful renders
   // for this engine and length, or the engine default below ten (lib/twings/typical-wait.ts).
@@ -114,7 +115,10 @@ export default async function TemplatePage({ params }: RouteParams) {
   const subscriptionQuote = isForSale(card) ? templateSubscriptionQuote(card) : null;
   const makeAvailabilityCopy = { makeCta: t.makeCta, makeCtaClosed: t.makeCtaClosed, makeBody: t.makeBody, makeBodyClosed: t.makeBodyClosed, makeBodySubscription: t.makeBodySubscription, makeBodySubscriptionPaused: t.makeBodySubscriptionPaused };
   const ratio = card.poster?.w && card.poster.h ? `${card.poster.w} / ${card.poster.h}` : posterRatio(card.slug);
-  const credit = card.source === 'yagi' ? labels.byYagi : card.authorHandle ? labels.byAuthor.replace('{handle}', card.authorHandle) : labels.byAnonymous;
+  // §7.5·§14.1: origin decides the credit (a maker's template is a `source='yagi'` row too).
+  const credit = card.origin !== 'maker' ? labels.byYagi : card.authorHandle ? labels.byAuthor.replace('{handle}', card.authorHandle) : labels.byAnonymous;
+  const makerRest = makerProfileRest(card);
+  const maker = makerRest ? makers.find((item) => item.handle === card.authorHandle) ?? null : null;
   const shopOpen = storefrontOpen();
   const resolutions = isForSale(card) ? offeredResolutions(card) : [];
   const facts: Array<[string, string]> = [
@@ -180,7 +184,9 @@ export default async function TemplatePage({ params }: RouteParams) {
                 </p>
                 <h1 className="mt-4 font-display text-[clamp(2rem,5vw,4rem)] leading-[0.92] font-black uppercase">{title}</h1>
                 <p className="mt-4 flex flex-wrap gap-x-1 gap-y-1 text-sm text-black/65">
-                  <span>{credit}</span>
+                  {makerRest ? <a data-template-credit href={`/${locale}${makerRest}`} className="underline underline-offset-4">{credit}</a> : <span data-template-credit>{credit}</span>}
+                  {/* Every public template passed studio review, studio and maker alike (§7.5). */}
+                  <span data-template-verified title={t.verifiedHint}>· {t.verified}</span>
                   {card.useCase.map((value) => (
                     <span key={value}>· {useCaseLabels[value] ?? value}</span>
                   ))}
@@ -283,6 +289,16 @@ export default async function TemplatePage({ params }: RouteParams) {
 
                 {/* The definition, under the first screen (AGENTS.md §7 GEO): in the HTML, not in the way. */}
                 <p data-template-description className="mt-6 max-w-detail text-sm leading-relaxed text-black/65">{dict.meta.templateDescription}</p>
+
+                {/* §7.5: the maker block — only for a maker who made their profile public. */}
+                {makerRest && card.authorHandle && (
+                  <aside data-template-maker={card.authorHandle} className="mt-8 rounded-2xl border border-hairline p-5">
+                    <p className="text-xs text-black/60">{t.makerBlockHeading}</p>
+                    <p className="mt-2 text-base font-semibold break-all">@{card.authorHandle}</p>
+                    {maker?.bio && <p className="mt-2 text-sm leading-relaxed whitespace-pre-line break-words text-black/70">{maker.bio}</p>}
+                    <a href={`/${locale}${makerRest}`} className="mt-4 inline-flex min-h-11 items-center text-sm font-medium underline underline-offset-4">{t.makerBlockCta} →</a>
+                  </aside>
+                )}
               </div>
             </header>
             {recipe?.presentation === 'make-first' ? howItWasMade : null}

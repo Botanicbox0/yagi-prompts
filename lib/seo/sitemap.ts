@@ -1,6 +1,7 @@
 import type { MetadataRoute } from 'next';
 import type { CatalogCard } from '@/lib/content/catalog';
-import type { PromptCard } from '@/lib/prompts/catalog';
+import type { PromptCard, PublicMaker } from '@/lib/prompts/catalog';
+import { makerRest } from '@/lib/makers/links';
 import { TEMPLATE_LISTING_REST, templateRest } from '@/lib/prompts/links';
 import { LEGAL_DOCS } from '@/lib/legal/documents';
 import { legalRest } from '@/lib/legal/links';
@@ -39,8 +40,13 @@ export interface SitemapInput {
    * sitemap by construction.
    */
   templates?: PromptCard[];
-  /** The format creator program page exists only while its public intake gate is open. */
+  /** The template maker program page exists only while its public intake gate is open. */
   includeCreatorProgram?: boolean;
+  /**
+   * docs/PLATFORM-2.0.md §7.5 — public maker pages. Only makers who opted in are in the catalogue at
+   * all; a page with no published template yet is thin, so it waits until there is one.
+   */
+  makers?: PublicMaker[];
   /** Real editorial dates only, keyed by locale-independent path. Omit when unknown. */
   pageModifiedAt?: Partial<Record<string, string>>;
 }
@@ -57,7 +63,7 @@ function absoluteAlternates(origin: string, rest: string): Record<string, string
 }
 
 export function buildSitemap(input: SitemapInput): MetadataRoute.Sitemap {
-  const { origin, cards, templates = [], pageModifiedAt = {}, includeCreatorProgram = false } = input;
+  const { origin, cards, templates = [], pageModifiedAt = {}, includeCreatorProgram = false, makers = [] } = input;
   const entries: MetadataRoute.Sitemap = [];
 
   const marketing: Array<{
@@ -109,6 +115,20 @@ export function buildSitemap(input: SitemapInput): MetadataRoute.Sitemap {
         ...modifiedDate(template.publishedAt),
         changeFrequency: 'monthly',
         priority: 0.7,
+        alternates: { languages: absoluteAlternates(origin, rest) },
+      });
+    }
+  }
+
+  for (const maker of makers) {
+    if (maker.templateCount === 0) continue;
+    const rest = makerRest(maker.handle);
+    for (const locale of LOCALES as readonly Locale[]) {
+      entries.push({
+        url: absolute(origin, `/${locale}${rest}`),
+        ...modifiedDate(maker.latestPublishedAt),
+        changeFrequency: 'weekly',
+        priority: 0.5,
         alternates: { languages: absoluteAlternates(origin, rest) },
       });
     }

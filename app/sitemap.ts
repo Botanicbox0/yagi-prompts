@@ -30,6 +30,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     origin: siteUrl(),
     cards: catalog.cards,
     templates: [...templates.video, ...templates.image],
+    makers: templates.makers ?? [],
     pageModifiedAt: { '/brands': '2026-10-08T00:00:00+09:00' },
     includeCreatorProgram: creatorProgramOpen(),
   });

@@ -1,11 +1,13 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { getDictionary } from '@/lib/i18n/dictionaries';
+import { KO_TERMS } from '@/messages/ko';
+import { EN_TERMS } from '@/messages/en';
 import type { PromptCard } from '@/lib/prompts/catalog';
 import { PROMPT_MODEL_LABEL, USE_CASES } from '@/lib/prompts/schemas';
 import { PromptCardView } from '@/components/prompts/prompt-card';
 import { CardPlaybackControl, shouldMountClip } from '@/components/prompts/card-media';
-import { CARD_RATIOS, cardAspect, cardAuthor, cardFrame, railOrder } from '@/components/prompts/card-frame';
+import { CARD_RATIOS, cardAspect, cardAuthor, cardFrame, makerProfileRest, railOrder } from '@/components/prompts/card-frame';
 import { pillClassName } from '@/components/prompts/pill';
 import { PromptRail } from '@/components/prompts/rails';
 import { UseCaseFilter } from '@/components/prompts/filter-chips';
@@ -29,6 +31,8 @@ function card(overrides: Partial<PromptCard> = {}): PromptCard {
     title: 'Neon alley dolly',
     titleKo: '네온 골목 달리',
     authorHandle: null,
+    origin: 'studio',
+    makerProfile: false,
     source: 'yagi',
     models: ['seedance-2.5'],
     modelLabels: [PROMPT_MODEL_LABEL],
@@ -129,17 +133,27 @@ describe('card content (§15.3-4·5)', () => {
   });
 });
 
-describe('creator credit (PLATFORM-2.0 §7.5: only creator formats say who made them)', () => {
-  it('stays silent on a studio format', () => {
+describe('maker credit (PLATFORM-2.0 §7.5·§14.1: only maker templates say who made them)', () => {
+  it('stays silent on a studio template', () => {
     expect(cardAuthor(card())).toBeNull();
     expect(markup(card())).not.toContain('data-card-author');
   });
 
-  it('credits @handle on a creator format, and says "creator format" when there is no handle', () => {
-    expect(cardAuthor(card({ source: 'community', authorHandle: 'hana' }))).toEqual({ handle: 'hana' });
-    expect(markup(card({ source: 'community', authorHandle: 'hana' }), 'ko')).toMatch(/data-card-author[^>]*>작가 @hana</);
-    expect(markup(card({ source: 'yagi', authorHandle: 'hana' }))).toContain('data-card-author');
-    expect(markup(card({ source: 'community', authorHandle: null }), 'ko')).toContain(dicts.ko.prompts.cardAuthorAnonymous);
+  it('credits "by @handle" on a maker template, and the maker label without a public handle', () => {
+    const maker = card({ origin: 'maker', source: 'community', authorHandle: 'hana' });
+    expect(cardAuthor(maker)).toEqual({ handle: 'hana' });
+    expect(markup(maker, 'ko')).toContain(`>${KO_TERMS.creditPrefix} @hana<`);
+    expect(markup(maker, 'en')).toContain(`>${EN_TERMS.creditPrefix} @hana<`);
+    // A maker template is a `source='yagi'` row with an author (0046): origin decides, not source.
+    expect(markup(card({ origin: 'maker', source: 'yagi', authorHandle: null }), 'ko')).toContain(dicts.ko.prompts.cardAuthorAnonymous);
+    expect(dicts.ko.prompts.cardAuthorAnonymous).toContain(KO_TERMS.maker);
+    expect(markup(card({ origin: 'studio', authorHandle: 'hana' }))).not.toContain('data-card-author');
+  });
+
+  it('links a profile only for a maker who opted in', () => {
+    expect(makerProfileRest(card({ origin: 'maker', authorHandle: 'hana', makerProfile: true }))).toBe('/makers/hana');
+    expect(makerProfileRest(card({ origin: 'maker', authorHandle: 'hana', makerProfile: false }))).toBeNull();
+    expect(makerProfileRest(card({ origin: 'studio', authorHandle: 'hana', makerProfile: true }))).toBeNull();
   });
 });
 
@@ -240,5 +254,43 @@ describe('catalog first screen (§15.3-5)', () => {
     );
     expect(html).not.toContain('<button');
     expect(html).toContain('9 templates');
+  });
+});
+
+describe('studio and maker collections (PLATFORM-2.0 §7.5·§14.1)', () => {
+  const listing = (cards: PromptCard[], locale: 'ko' | 'en' = 'ko') =>
+    renderToStaticMarkup(<TemplatesListing locale={locale} dict={dicts[locale]} medium="video" cards={cards} />);
+  const maker = (slug: string, handle: string | null = 'hana') =>
+    card({ slug, origin: 'maker', source: 'yagi', authorHandle: handle, makerProfile: handle !== null });
+
+  it('with no maker template, there is no maker rail, no origin chips and no rail heading change', () => {
+    const html = listing([card(), card({ slug: 'second' })]);
+    expect(html).not.toContain('data-rail-origin="maker"');
+    expect(html).not.toContain('data-origin-filter');
+    expect(html).not.toContain(dicts.ko.templates.makerRail);
+    expect(html).toContain('data-rail-origin="studio"');
+  });
+
+  it('puts the studio rail first and the maker rail second, with the "전체 · 오리지널 · 메이커" chips', () => {
+    const html = listing([card(), maker('maker-one')]);
+    const studio = html.indexOf('data-rail-origin="studio"');
+    const makers = html.indexOf('data-rail-origin="maker"');
+    expect(studio).toBeGreaterThan(-1);
+    expect(makers).toBeGreaterThan(studio);
+    expect(html.indexOf('data-prompt-card="neon-alley-dolly"')).toBeLessThan(makers);
+    expect(html.indexOf('data-prompt-card="maker-one"')).toBeGreaterThan(makers);
+    expect(html).toContain('data-origin-filter');
+    for (const label of [dicts.ko.templates.originAll, dicts.ko.templates.originStudio, dicts.ko.templates.originMaker]) expect(html).toContain(`>${label}<`);
+    expect([dicts.ko.templates.originAll, dicts.ko.templates.originStudio, dicts.ko.templates.originMaker]).toEqual(['전체', '오리지널', KO_TERMS.maker]);
+    expect(html).toContain(`>${dicts.ko.templates.studioRail}<`);
+    expect(html).toContain(`>${dicts.ko.templates.makerRail}<`);
+    expect([dicts.ko.templates.studioRail, dicts.ko.templates.makerRail]).toEqual([KO_TERMS.studioCollection, KO_TERMS.makerCollection]);
+    expect(listing([card(), maker('maker-one')], 'en')).toContain(`>${EN_TERMS.makerCollection}<`);
+  });
+
+  it('a maker-only catalogue still opens on its maker rail without an empty studio rail', () => {
+    const html = listing([maker('maker-one')]);
+    expect(html).toContain('data-rail-origin="maker"');
+    expect(html).not.toContain('data-rail-origin="studio"');
   });
 });

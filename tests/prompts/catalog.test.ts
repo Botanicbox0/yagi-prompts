@@ -33,9 +33,12 @@ describe('prompt catalog projection (§13.2)', () => {
       'featured',
       'id',
       'lock',
+      // docs/PLATFORM-2.0.md §7.5: whether a maker page exists — never the author's id.
+      'makerProfile',
       'medium',
       'modelLabels',
       'models',
+      'origin',
       'poster',
       // The 1080p price (0039) is public pricing, like the base price; 0 = not offered.
       'price1080Cents',

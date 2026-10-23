@@ -1,6 +1,7 @@
 import type { PromptCard } from '@/lib/prompts/catalog';
 import { badgeFor } from '@/lib/content/badges';
 import { DEFAULT_IMAGE_ASPECT, DEFAULT_VIDEO_ASPECT } from '@/lib/images/engines';
+import { makerRest } from '@/lib/makers/links';
 
 /**
  * Founder decision 2026-10-23 (docs/PLATFORM-2.0.md §15.5-15): a portrait template is a **4:5
@@ -38,13 +39,18 @@ export function cardFrame(card: Pick<PromptCard, 'poster' | 'video' | 'aspectDef
 }
 
 /**
- * docs/PLATFORM-2.0.md §7.5 — studio formats carry no byline (every one of them said "YAGI 제작",
- * which is no information); a creator's format names its creator. Kept as a code path while no
- * creator format is published yet.
+ * docs/PLATFORM-2.0.md §7.5·§14.1 — a studio template carries no byline (every one of them said
+ * "YAGI 제작", which is no information); a maker's template names its maker, or says "메이커 템플릿"
+ * while the maker keeps their profile private.
  */
-export function cardAuthor(card: Pick<PromptCard, 'source' | 'authorHandle'>): { handle: string | null } | null {
-  if (card.source === 'yagi' && !card.authorHandle) return null;
+export function cardAuthor(card: Pick<PromptCard, 'origin' | 'authorHandle'>): { handle: string | null } | null {
+  if (card.origin !== 'maker') return null;
   return { handle: card.authorHandle };
+}
+
+/** The maker page a credit links to — only for a maker who opted in. */
+export function makerProfileRest(card: Pick<PromptCard, 'origin' | 'authorHandle' | 'makerProfile'>): string | null {
+  return card.origin === 'maker' && card.makerProfile && card.authorHandle ? makerRest(card.authorHandle) : null;
 }
 
 /**
