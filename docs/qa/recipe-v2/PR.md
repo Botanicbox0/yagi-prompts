@@ -2,8 +2,9 @@
 
 docs/PLATFORM-2.0.md §7.3·7.4·§8.3, §18 R1. 플래그 `TWINGS_FORMAT_CREATORS`(기본 off) 뒤에서만 열린다.
 
-- 기능 커밋 `1e4a41e` (base `488f302`, main)
-- `git diff --stat main...HEAD`: 53 files, +3,606 / −46 (캡처 6장·QA 스크립트 포함)
+- 기능 커밋 `1e4a41e` → main(#94 R3, `327bdb5`) 병합 `1b2ac54`(자동 병합, 충돌 없음) → 호칭 정렬 `d8efb46`
+- `git diff --stat origin/main...HEAD`: 54 files, +3,665 / −46 (캡처 6장·QA 스크립트 포함)
+- #94 정렬: 새 `makerRecipe.*` 문안의 공급자 호칭은 `KO_TERMS`/`EN_TERMS`(`T.maker`·`T.makers`)를 쓴다("작가"·"format creator" 0건, #94 사전 테스트 통과). 템플릿 페이지는 #94의 크레딧 링크·메이커 블록을 그대로 두고, "만드는 법"은 make-first면 헤더(메이커 블록) 아래, story-first면 예시 위(§7.3 순서).
 
 ## 무엇이 바뀌나
 
@@ -21,11 +22,11 @@ docs/PLATFORM-2.0.md §7.3·7.4·§8.3, §18 R1. 플래그 `TWINGS_FORMAT_CREATO
 
 | 명령 | 결과 |
 | --- | --- |
-| `npm run db:local` | 스냅숏 재생성 ✓ |
+| `npm ci` → `npm run db:local` | 스냅숏 재생성 ✓ (main 병합 후) |
 | `npx tsc --noEmit` | ✓ |
-| `npx vitest run` | **322 파일 / 3,076 테스트 통과** (새 `tests/recipes/*` 8파일 67개: 스키마 허용 9·거부 33 + 보조 5, 파이프라인 6, 메이커 서버 5, 검수·수락·트리거·캐너리 4, 마이그레이션 2, 오퍼레이션 3, 편집기 2, 작업공간 링크 2) |
+| `npx vitest run` | **325 파일 / 3,107 테스트 통과** (main 병합 후; #94의 호칭·카탈로그 DTO 캐너리 포함) (새 `tests/recipes/*` 8파일 67개: 스키마 허용 9·거부 33 + 보조 5, 파이프라인 6, 메이커 서버 5, 검수·수락·트리거·캐너리 4, 마이그레이션 2, 오퍼레이션 3, 편집기 2, 작업공간 링크 2) |
 | `NEXT_PUBLIC_APP_URL=http://localhost:3017 npm run build:local` | ✓ |
-| `PORT=3017 npm run start:local` + `SWEEP_BASE_URL=http://localhost:3017 npm run sweep:anon` | **SWEEP PASSED — 1111/1111** |
+| `PORT=3017 npm run start:local` + `SWEEP_BASE_URL=http://localhost:3017 npm run sweep:anon` | **SWEEP PASSED — 1153/1153** (main 병합 후) |
 | 로컬 브라우저 QA | `scripts/recipe-v2-local-qa.ts`(합성 데이터, 클라우드 자격 미전달, 실제 생성 없음)로 시드 → 헤드리스 Chrome 캡처 |
 
 실제 유료 생성은 하지 않았다. 모든 엔진은 가짜(테스트) 또는 그려 낸 이미지(QA)다.
@@ -45,11 +46,8 @@ docs/PLATFORM-2.0.md §7.3·7.4·§8.3, §18 R1. 플래그 `TWINGS_FORMAT_CREATO
 - 템플릿 카드·페이지 크레딧은 아직 "YAGI 제작" — 메이커 크레딧·호칭 교체는 R3(catalog-makers).
 - 전체 페이지 HTML 캐너리는 컴포넌트·프로젝션·카탈로그 단위로 검증(로컬 스냅숏에 메이커 템플릿 픽스처를 넣으면 스윕 수치가 바뀌어 넣지 않음).
 
-## 클라우드 적용 필요
-1. `supabase/migrations/0059_core_maker_recipes.sql`
-2. `supabase/migrations/0142_glue_maker_recipes.sql`
-
-순서대로. 코드는 둘이 없어도 기존과 같이 동작한다(편집기 링크 대신 기존 제출 폼, 레시피 경로 비활성).
+## 클라우드 적용
+`0059_core_maker_recipes.sql`, `0142_glue_maker_recipes.sql` — 운영 DB 적용 완료(Director 보고, 2026-10-23).
 
 ## 대표 결정 필요
 - 로열티 범위 500~5,000원 · 기본 1,500원 · 메이커 테스트 렌더 3회 · 검수 렌더 3장 — 전부 §18 기본값 제안이며 §13-2에서 확정.
