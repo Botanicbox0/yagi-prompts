@@ -10,7 +10,7 @@
  *
  *   free   tiktok submitted (AI read 4,215 · handle match) + instagram declined → not an influencer: teaser
  *   pro    instagram confirmed 12,400 → influencer: "인플루언서 캠페인" section; youtube submitted, not read yet
- *   two recruiting campaigns: one `influencers`, one `public` (0056's columns stand in until B1 lands)
+ *   two recruiting campaigns: one `influencers`, one `public` (0056's `campaigns.audience`)
  *
  * One process at a time: PGlite holds a lock on the data directory, so stop this before `dev:*`.
  */
@@ -60,9 +60,6 @@ async function main() {
   const db = new PGlite({ dataDir: dbDir });
   await db.waitReady;
   try {
-    // 0056 (slice B1) stand-in, exactly its column and table, until that migration is on this branch.
-    await db.exec(`alter table campaigns add column if not exists audience text not null default 'public';
-      create table if not exists campaign_targets (campaign_id uuid not null references campaigns(id) on delete cascade, user_id uuid not null references profiles(id) on delete cascade, invited_by uuid references profiles(id) on delete set null, invited_at timestamptz not null default now(), primary key (campaign_id, user_id));`);
     for (const [slug, audience, en, ko] of [
       ['qa-influencer-reel', 'influencers', 'Night market reel (influencers)', '야시장 릴스 (인플루언서)'],
       ['qa-open-reel', 'public', 'Cafe morning reel', '카페 아침 릴스'],

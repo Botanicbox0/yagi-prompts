@@ -8,9 +8,6 @@ import { audienceAccess, campaignAccess, loadVisibleCampaigns } from '@/lib/infl
  * docs/PLATFORM-2.0.md §17.2 — one rule for the signed-in list, apply and acceptance:
  * public → everyone; influencers → a verified 3,000+ account (or a named target); invited → named
  * targets only. TWINGS_INFLUENCERS off → members see `public` only.
- *
- * `campaigns.audience` and `campaign_targets` arrive with 0056 (slice B1); until that file is on
- * this branch, the same DDL stands in here as a fixture.
  */
 const INFLUENCER = USER.buyer;
 const MEMBER = USER.other;
@@ -22,8 +19,6 @@ let h: BillingHarness;
 const ids: Record<string, string> = {};
 beforeAll(async () => {
   h = await billingDb();
-  await h.sql.query(`alter table campaigns add column if not exists audience text not null default 'public'`);
-  await h.sql.query(`create table if not exists campaign_targets (campaign_id uuid not null references campaigns(id) on delete cascade, user_id uuid not null references profiles(id) on delete cascade, invited_by uuid, invited_at timestamptz not null default now(), primary key (campaign_id, user_id));`);
   for (const id of [INFLUENCER, MEMBER, TARGET]) await seedProfile(h.sql, { id });
   for (const [slug, audience] of [['open-to-all', 'public'], ['for-influencers', 'influencers'], ['by-invitation', 'invited']] as const) {
     const { rows } = await h.sql.query<{ id: string }>(

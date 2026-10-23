@@ -20,7 +20,7 @@
 - 확인 후 90일이 지나면 화면에 "만료"로 보이고 새 캡처를 안내한다. 자격은 유지된다(§17.1). 다시 제출하면 `recheck_at`이 찍히고 `verified`는 그대로, 관리자 재확인 대기. 핸들이 바뀌면 새 계정으로 보고 `submitted`부터.
 - 저장된 `status='expired'`는 이후 재측정 작업용으로 남겨 두었다(이번 슬라이스에서 쓰지 않음). `isInfluencer`는 이 값을 세지 않는다.
 - 캠페인: `public` 모두 · `influencers` 인플루언서 또는 `campaign_targets` 대상 · `invited` 대상만(초대 링크 토큰 자체도 초대 증거). 이미 지원한 사람은 자격이 바뀌어도 자기 지원서를 계속 본다.
-- `campaigns.audience`·`campaign_targets`는 B1(0056)이 만든다. 이 브랜치 코드는 `to_jsonb`/`to_regclass`로 읽어서 0056이 없으면 "전부 public"으로 동작한다.
+- `campaigns.audience`·`campaign_targets`는 B1(0056, #89)의 것을 그대로 읽는다.
 
 ## 로컬 AI 워커 (워크스테이션)
 

@@ -11,8 +11,7 @@ import { influencersOpen, isInfluencer } from './rules';
  *   invited      only members named in campaign_targets (an invitation link is its own proof)
  *
  * With TWINGS_INFLUENCERS off only `public` exists for members. `campaigns.audience` and
- * `campaign_targets` come with 0056 (slice B1); read through `to_jsonb` / `to_regclass` so a
- * database without them is simply "everything is public".
+ * `campaign_targets` are 0056's (slice B1).
  */
 export type CampaignAudience = 'public' | 'influencers' | 'invited';
 export type AudienceAccess = 'ok' | 'influencer_required' | 'hidden';
@@ -30,17 +29,12 @@ export function audienceAccess(audience: CampaignAudience, viewer: { open: boole
   return 'hidden';
 }
 
-async function targetsReady(sql: SqlRunner): Promise<boolean> {
-  return (await sql.query<{ ready: boolean }>("select to_regclass('public.campaign_targets') is not null as ready")).rows[0]?.ready === true;
-}
-
 async function isTargeted(sql: SqlRunner, campaignId: string, userId: string): Promise<boolean> {
-  if (!(await targetsReady(sql))) return false;
   return (await sql.query('select 1 from campaign_targets where campaign_id=$1 and user_id=$2', [campaignId, userId])).rows.length > 0;
 }
 
 export async function campaignAudience(sql: SqlRunner, campaignId: string): Promise<CampaignAudience> {
-  const { rows } = await sql.query<{ audience: string | null }>("select to_jsonb(c)->>'audience' as audience from campaigns c where id=$1", [campaignId]);
+  const { rows } = await sql.query<{ audience: string | null }>('select audience from campaigns where id=$1', [campaignId]);
   return audienceOf(rows[0]?.audience);
 }
 
@@ -68,14 +62,13 @@ export interface VisibleCampaigns {
 export async function loadVisibleCampaigns(sql: SqlRunner, userId: string, env: Env = process.env): Promise<VisibleCampaigns> {
   const open = influencersOpen(env);
   const influencer = open ? await isInfluencer(sql, userId) : false;
-  const targets = open && (await targetsReady(sql));
   const { rows } = await sql.query<{ id: string; audience: string | null; targeted: boolean }>(
-    `select c.id, to_jsonb(c)->>'audience' as audience,
-            ${targets ? 'exists(select 1 from campaign_targets t where t.campaign_id=c.id and t.user_id=$1)' : 'false'} as targeted
+    `select c.id, c.audience,
+            exists(select 1 from campaign_targets t where t.campaign_id=c.id and t.user_id=$1) as targeted
        from campaigns c
       where c.status in ('recruiting','selecting','running')
       order by (c.status = 'recruiting') desc, c.applications_close_at asc nulls last, c.slug asc`,
-    targets ? [userId] : [],
+    [userId],
   );
   const visible = rows
     .map(r => ({ id: r.id, audience: audienceOf(r.audience), targeted: r.targeted === true }))

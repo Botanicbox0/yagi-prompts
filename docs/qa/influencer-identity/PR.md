@@ -36,10 +36,9 @@
 
 `docs/qa/influencer-identity/` — `01`~`12` (390px 신청·상태·폼·계정 카드·티저·인플루언서 목록·지원 거절, 1280px 상태·티저·관리자 큐·관리자 홈). 모든 캡처의 계정은 그려 낸 가짜(`*.local`).
 
-### 클라우드 적용 필요 (코드 배포 전, 대표 또는 Director)
+### 클라우드 적용
 
-1. **B1(#89)의 0056/0140 먼저**, 그다음 **0057_core_social_accounts.sql → 0141_glue_social_accounts.sql**.
-2. 0057 없이 배포해도 플래그가 off면 동작은 지금과 같다(모든 리더가 `to_regclass`로 확인 후 "unavailable"/빈 목록). 0056 없이도 가시성 코드는 "전부 public"으로 동작한다.
+0056/0140(#89)과 0057/0141 모두 **운영 적용 완료**(2026-10-23, `supabase/README.md` 원장에 행 추가, 다음 번호 core 0058 · glue 0142). 0057 리더는 여전히 `to_regclass`로 확인하므로 표가 없는 환경에서도 500 대신 "unavailable".
 
 ### 환경변수 (`.env.example`에 이름만)
 
@@ -47,12 +46,11 @@
 - `SOCIAL_VERIFY_WORKER_SECRET` — Vercel과 워크스테이션 양쪽, 32자 이상. 없으면 워커 라우트 404.
 - 워크스테이션 전용: `SOCIAL_VERIFY_API_ORIGIN`, `SOCIAL_VERIFY_WORKER_ID`, `OLLAMA_URL`(기본 `http://127.0.0.1:11434`), `SOCIAL_VERIFY_MODEL`(선택).
 
-### B1(#89)과의 병합 주의
+### main(B1 #89) 병합 뒤 재검증
 
-- 이 브랜치는 `campaigns.audience`·`campaign_targets`를 **만들지 않는다**. 테스트·로컬 QA에서는 0056과 같은 DDL을 픽스처로만 쓴다(`if not exists`라 B1 병합 뒤에도 무해).
-- 같은 파일을 만지는 곳: `tests/db/migrations.test.ts`(표 목록, 서로 다른 줄), `messages/{ko,en}.ts`(이 PR은 `selfie:` 바로 앞, B1은 1284행·2851행 근처), `messages/campaign-collaboration.ts`(이 PR은 `slots_full` 아래 한 키, B1은 몇 줄 아래 삭제), `lib/campaigns/collaboration/service.ts`(이 PR은 `acceptInvitation` 안, B1은 다른 함수 추가). 텍스트 충돌 가능성은 낮지만 병합 후 `npx vitest run` 한 번 더.
-- `supabase/README.md` "다음 번호" 줄은 B1이 고치므로 여기서는 건드리지 않았다. 병합 뒤 다음 번호는 core 0058, glue 0142.
-- 병합 순서: B1 → 이 PR 권장(0056이 먼저 운영에 있어야 B1 공개 목록이 안 깨짐).
+- `origin/main@234c155`을 병합(텍스트 충돌 없음). `collaboration/service.ts`·`messages/*`·`sweep-anon.ts`·`migrations.test.ts`는 양쪽 변경이 모두 남은 것을 확인.
+- 0056이 main에 있으므로 가시성 규칙은 `campaigns.audience`·`campaign_targets`를 그대로 읽는다(`to_jsonb`/`to_regclass` 우회 제거). 테스트·로컬 QA 픽스처의 0056 대역 DDL도 제거.
+- 재검증: `npm ci` → `db:local` OK → `tsc` 0 → `vitest` **309 files / 2,972 tests passed** → `build:local` OK → `start:local` 3015 + `sweep:anon` **SWEEP PASSED — 1104/1104**.
 
 ### 건너뛴 검사 · 남은 위험 · 대표 결정 대기
 

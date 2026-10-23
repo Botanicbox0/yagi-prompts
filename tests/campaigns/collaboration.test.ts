@@ -998,10 +998,6 @@ it("rejects unauthorized collaboration writes before acquiring campaign or membe
   expect(statements.some((q) => /for (share|update)/i.test(q))).toBe(false);
 });
 it("refuses an influencer campaign's invitation until the account holds a verified 3,000+ SNS account", async () => {
-  // 0056 (slice B1) adds `campaigns.audience`; the same DDL stands in until it is on this branch.
-  await sql.query(
-    "alter table campaigns add column if not exists audience text not null default 'public'",
-  );
   vi.stubEnv("TWINGS_INFLUENCERS", "on");
   try {
     const f = await fixture();
