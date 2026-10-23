@@ -96,6 +96,11 @@ export function sectionVisibility(choice: Pick<BrandWorkspaceChoice, 'role'> | n
   return { studio: choice.role !== 'guest', settings: choice.role !== 'guest', members: choice.role === 'owner' || choice.role === 'studio' };
 }
 
+/** The creator pool (docs/PLATFORM-2.0.md §17.3) is for the brand's owners and editors only. */
+export function poolVisible(choice: Pick<BrandWorkspaceChoice, 'role'> | null): boolean {
+  return choice?.role === 'owner' || choice?.role === 'editor';
+}
+
 /** Where switching to `choice` lands: the same section when that brand's role can open it, else home. */
 export function switchHref(pathname: string, choice: BrandWorkspaceChoice): string {
   const visible = sectionVisibility(choice);
@@ -104,6 +109,7 @@ export function switchHref(pathname: string, choice: BrandWorkspaceChoice): stri
     : pathname === '/brand/studio' && visible.studio ? '/brand/studio'
     : pathname === '/brand/settings' && visible.settings ? '/brand/settings'
     : pathname === '/brand/members' && visible.members ? '/brand/members'
+    : pathname === '/brand/creators' && poolVisible(choice) ? '/brand/creators'
     : '/brand';
   return scopedHref(section, choice);
 }

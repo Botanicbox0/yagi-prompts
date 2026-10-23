@@ -79,6 +79,10 @@ export async function POST(request: NextRequest) {
         return json({ ok: false, code: "invalid" }, 400);
       switch (body.operation) {
         case "invitation.create":
+          // Pool invitations go through /api/brand-creators, which mails the link and never echoes
+          // who was invited; this door issues the hand-shared links only.
+          if (body.input && typeof body.input === "object" && "socialAccountId" in body.input)
+            return json({ ok: false, code: "invalid" }, 400);
           result = await issueInvitation({ sql }, viewer, body.input);
           break;
         case "invitation.accept":

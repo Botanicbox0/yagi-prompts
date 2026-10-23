@@ -126,13 +126,32 @@ describe("campaign page", () => {
 const campaigns: ProjectApplicantCampaign[] = [{
   id: "33333333-3333-4333-8333-333333333333", slug: "autumn", title: { en: "Autumn", ko: "가을" }, status: "recruiting", slots: 5,
   applicants: [
-    { id: "a1", status: "applied", handle: "creator.a", platform: "instagram", followers: 4200, followersSource: "self", profileUrl: "https://www.instagram.com/creator.a/", pitch: "카페 리뷰를 올려요", appliedAt: "2026-10-23T00:00:00Z", preferred: true, postUrl: null, views: null, metricsSource: null },
-    { id: "a2", status: "posted", handle: "creator.b", platform: "tiktok", followers: 9100, followersSource: "self", profileUrl: "https://www.tiktok.com/@creator.b", pitch: "pitch", appliedAt: "2026-10-23T00:00:00Z", preferred: false, postUrl: "https://www.tiktok.com/@creator.b/video/1", views: 12000, metricsSource: "self" },
+    { id: "a1", status: "applied", handle: "creator.a", platform: "instagram", followers: 4200, followersSource: "self", profileUrl: "https://www.instagram.com/creator.a/", pitch: "카페 리뷰를 올려요", appliedAt: "2026-10-23T00:00:00Z", preferred: true, postUrl: null, views: null, metricsSource: null, invited: true },
+    { id: "a2", status: "posted", handle: "creator.b", platform: "tiktok", followers: 9100, followersSource: "self", profileUrl: "https://www.tiktok.com/@creator.b", pitch: "pitch", appliedAt: "2026-10-23T00:00:00Z", preferred: false, postUrl: "https://www.tiktok.com/@creator.b/video/1", views: 12000, metricsSource: "self", invited: false },
+  ],
+  invited: [
+    { id: "i1", handle: "creator.a", platform: "instagram", status: "accepted", invitedAt: "2026-10-22T00:00:00Z" },
+    { id: "i2", handle: "pool.waiting", platform: "tiktok", status: "pending", invitedAt: "2026-10-22T00:00:00Z" },
+    { id: "i3", handle: null, platform: null, status: "pending", invitedAt: "2026-10-22T00:00:00Z" },
   ],
 }];
 
 describe("applicants tab", () => {
   const render = (canPrefer: boolean) => renderToStaticMarkup(<CampaignApplicants view={{ canPrefer, campaigns }} invitations={[]} canInvite={false} b={b} locale="ko" projectId={project.id} />);
+
+  it("marks people invited from the creator pool (docs/PLATFORM-2.0.md §17.3)", () => {
+    const html = render(true);
+    expect(html).toContain('data-applicant-invited="true"');
+    expect((html.match(/data-applicant-invited=/g) ?? []).length).toBe(1);
+    expect(html).toContain("data-invited-creators");
+    expect(html).toContain('data-invited-state="pending"');
+    expect(html).toContain("@pool.waiting");
+    expect(html).toContain("초대됨 · 아직 지원 전");
+    expect(html).toContain("지금은 풀에 없는 크리에이터");
+    const pool = renderToStaticMarkup(<CampaignApplicants view={{ canPrefer: true, campaigns }} invitations={[]} canInvite b={b} locale="ko" projectId={project.id} poolHref="/brand/creators?organizationId=x" />);
+    expect(pool).toContain('href="/brand/creators?organizationId=x"');
+    expect(render(true)).not.toContain('href="/brand/creators');
+  });
 
   it("shows applied applicants with handle, followers and their source, profile and message", () => {
     const html = render(true);

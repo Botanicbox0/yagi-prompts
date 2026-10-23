@@ -120,6 +120,40 @@ async function seedCampaignWizardFixtures(deps: { sql: SqlRunner }, f: { owner: 
       [a.id, campaignId, a.status, a.pitch, `https://${a.host}/${a.handle}`, a.followers, posted ? new Date().toISOString() : null,
         posted ? 'https://www.instagram.com/p/LOCALFIXTUREPOST/' : null, posted ? 'instagram' : null, posted ? new Date().toISOString() : null, posted ? 15400 : null, posted ? 'self' : null]);
   }
+  await seedCreatorPoolFixtures(sql, { projectId: f.projectId, studioId: f.studioId, day });
+}
+
+/**
+ * The creator pool (docs/PLATFORM-2.0.md §17.3), local only: a recruiting invitation-only campaign on
+ * the active fixture project, and synthetic verified accounts that agreed to be shown to brands, so
+ * /brand/creators has cards and the invite dialog a campaign when `TWINGS_INFLUENCERS=on`. No handle
+ * or number here belongs to a real person.
+ */
+async function seedCreatorPoolFixtures(sql: SqlRunner, f: { projectId: string; studioId: string; day: (offset: number) => string }) {
+  const campaignId = 'bb000000-0000-4000-8000-0000000000c2';
+  await sql.query(`insert into campaigns (id, slug, status, title, summary, host_name, host_kind, platforms, deliverable, slots, applications_close_at, post_deadline_at, published_at, payout, audience)
+    values ($1, 'local-fixture-pool-campaign', 'recruiting', $2::jsonb, $2::jsonb, '[Local fixture] Sample brand', 'brand', '{instagram,tiktok,youtube}', 'reel', 4, $3, $4, now(),
+      '{"model":"flat","flatCents":150000,"currency":"KRW","holdDays":7}'::jsonb, 'invited') on conflict (id) do nothing`,
+    [campaignId, JSON.stringify({ en: '[Local fixture] Winter pop-up', ko: '[로컬 예시] 겨울 팝업 캠페인' }), `${f.day(10)}T23:59:00+09:00`, `${f.day(24)}T23:59:00+09:00`]);
+  await sql.query('insert into campaign_collaboration_links (campaign_id, project_id, created_by) values ($1, $2, $3) on conflict do nothing', [campaignId, f.projectId, f.studioId]);
+  if (!(await sql.query<{ ready: boolean }>("select to_regclass('public.social_accounts') is not null as ready")).rows[0]?.ready) return;
+  const pool = [
+    { n: 1, platform: 'instagram', handle: 'local.pool.cafe', followers: 3240 },
+    { n: 2, platform: 'tiktok', handle: 'local.pool.dance', followers: 12_800 },
+    { n: 3, platform: 'youtube', handle: 'local-pool-cooks', followers: 125_400 },
+    { n: 4, platform: 'instagram', handle: 'local.pool.beauty', followers: 58_499 },
+    { n: 5, platform: 'tiktok', handle: 'local.pool.travel', followers: 7_650 },
+    { n: 6, platform: 'instagram', handle: 'local.pool.hidden', followers: 40_000, hidden: true },
+  ];
+  for (const a of pool) {
+    const id = `bb000000-0000-4000-8000-0000000001${String(a.n).padStart(2, '0')}`;
+    await sql.query('insert into auth.users (id) values ($1) on conflict do nothing', [id]);
+    await sql.query("insert into profiles (id, email, locale, notif_updates) values ($1, $2, 'ko', true) on conflict (id) do nothing", [id, `pool${a.n}@fixture.invalid`]);
+    const url = a.platform === 'instagram' ? `https://www.instagram.com/${a.handle}/` : a.platform === 'tiktok' ? `https://www.tiktok.com/@${a.handle}` : `https://www.youtube.com/@${a.handle}`;
+    await sql.query(`insert into social_accounts (user_id, platform, handle, profile_url, follower_count, claimed_count, status, measured_at, pool_consent_at)
+      values ($1, $2, $3, $4, $5, $5, 'verified', now() - interval '3 days', $6) on conflict (user_id, platform) do nothing`,
+      [id, a.platform, a.handle, url, a.followers, a.hidden ? null : new Date().toISOString()]);
+  }
 }
 
 /**

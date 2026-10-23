@@ -377,12 +377,18 @@ async function sweepNotFound(privateKeys: string[], brandWorkspace: BrandWorkspa
     // The campaign wizard and the pages absorbed into the campaign tabs (docs/PLATFORM-2.0.md §16.6)
     // stay on the brand host: an anonymous visitor is asked to sign in and comes back to the same path.
     const project = '00000000-0000-4000-8000-000000000000';
-    for (const path of ['/brand/projects/new', `/brand/projects/${project}`, `/brand/projects/${project}/participants`, `/brand/projects/${project}/funding`]) {
+    for (const path of ['/brand/projects/new', `/brand/projects/${project}`, `/brand/projects/${project}/participants`, `/brand/projects/${project}/funding`, '/brand/creators']) {
       const page = await request(path, { headers: { host: 'brand.twings.app' } });
       const next = page.location ? new URL(page.location, BASE).searchParams.get('next') : null;
       expectEqual(`brand.twings.app${path}: asks to sign in and returns here`, page.status >= 300 && page.status < 400 && next === path, true);
       expectEqual(`brand.twings.app${path}: no private content or storage keys`, forbidden.some((value) => value.length > 0 && page.body.includes(value)), false);
     }
+    // docs/PLATFORM-2.0.md §17.3 — the pool's invite API stays on the brand host and refuses strangers.
+    const poolInvite = await request('/api/brand-creators', { method: 'POST', headers: { host: 'brand.twings.app', 'content-type': 'application/json' } });
+    expectOneOf('brand.twings.app /api/brand-creators: refuses anonymous (closed or sign-in)', poolInvite.status, [401, 404]);
+    expectPresent('brand.twings.app /api/brand-creators: private', poolInvite.cacheControl ?? '', 'no-store');
+    const poolRead = await request('/api/brand-creators', { headers: { host: 'brand.twings.app' } });
+    expectEqual('brand.twings.app /api/brand-creators: no reads', poolRead.status, 404);
   }
 }
 
@@ -1534,6 +1540,9 @@ async function sweepRenders(): Promise<void> {
     expectEqual(`SNS worker ${action} rejects unsigned requests`, worker.status, 404);
     expectPresent(`SNS worker ${action} refusal is private`, worker.cacheControl ?? '', 'no-store');
   }
+  const poolInvite = await request('/api/brand-creators', { method: 'POST', headers: { Origin: BASE, 'Content-Type': 'application/json' }, body: '{}' });
+  expectOneOf('creator pool invite refuses anonymous (closed or sign-in)', poolInvite.status, [401, 404]);
+  expectPresent('creator pool invite refusal is private', poolInvite.cacheControl ?? '', 'no-store');
   const openCampaigns = await request('/campaigns/open', { headers: { 'user-agent': CHROME_UA } });
   expectOneOf('signed-in campaign list redirects anonymous', openCampaigns.status, [302,303,307]);
   expectPresent('signed-in campaign list redirects to sign-in', openCampaigns.location ?? '', 'signin=1');
