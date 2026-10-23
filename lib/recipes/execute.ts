@@ -1,4 +1,5 @@
-import { isImageAspect, isImageEngine, isOpenAiEngine, isVideoAspect, isVideoEngine, type ImageAspect, type VideoAspect } from '@/lib/images/engines';
+import { isGoogleEngine, isImageAspect, isImageEngine, isOpenAiEngine, isVideoAspect, isVideoEngine, type ImageAspect, type VideoAspect } from '@/lib/images/engines';
+import type { RenderProvider } from '@/lib/renders/repo';
 import { RenderFailure, runImageRender, startVideoRender, type EngineOutput, type RenderEngineDeps, type RenderPhoto, type StepReference } from '@/lib/renders/engines';
 import { extensionFor, type RenderStore } from '@/lib/renders/store';
 import { assetReference } from '@/lib/identity/service';
@@ -14,11 +15,12 @@ import type { RecipeState, StepRecord } from './repo';
  *   · a film step is always last: it is handed to ModelArk and the pass's poll finishes the job;
  *   · references keep the step's `inputs` order — the same order `engineStepPrompt` numbers.
  *
- * How a reference reaches the engine: OpenAI takes bytes (photo, maker file, earlier result). ModelArk
- * takes the customer's face — the selfie OR an earlier result made from it — only as an `asset://`
- * from their verified group (`person()`), never as bytes; a maker file goes as a short-lived private
- * URL (or a data URL when the store serves none). Nothing here bypasses the face check: a face that
- * is still being compared parks the job (`wait`), a refused one fails it.
+ * How a reference reaches the engine: OpenAI, Gemini and Kling take bytes (photo, maker file, earlier
+ * result; `identityPath` = 'bytes'). ModelArk takes the customer's face — the selfie OR an earlier
+ * result made from it — only as an `asset://` from their verified group (`person()`), never as bytes;
+ * a maker file goes as a short-lived private URL (or a data URL when the store serves none). Nothing
+ * here bypasses the face check: a face that is still being compared parks the job (`wait`), a
+ * refused one fails it, and the bytes providers run their own moderation on what they receive.
  *
  * Every failure carries the step id, recorded on the row as `code:step`.
  */
@@ -47,7 +49,7 @@ export interface RecipeRunContext {
 export interface RecipeResult { step: string; key: string; mime: string; bytes: number }
 export type RecipeRun =
   | { kind: 'done'; results: RecipeResult[]; usd: number | null; assets: string[] }
-  | { kind: 'handed'; step: string; taskId: string; seconds: number; usd: number | null; assets: string[] }
+  | { kind: 'handed'; step: string; taskId: string; provider: RenderProvider; seconds: number; usd: number | null; assets: string[] }
   | { kind: 'wait'; assetId: string };
 
 const FILE_URL_TTL_SECONDS = 30 * 60;
@@ -100,7 +102,7 @@ export async function runRecipe(ctx: RecipeRunContext): Promise<RecipeRun> {
           } else references.push({ kind: 'bytes', bytes: input.bytes, mime: photoMime(input.mime) });
         }
         const aspect: ImageAspect = shown.has(step.id) && isImageAspect(ctx.outputAspect) ? ctx.outputAspect : step.params.aspect;
-        const lead = isOpenAiEngine(step.engine) && references.length > 1 ? 'The reference images are numbered in the order given: Image 1 is the first.\n\n' : '';
+        const lead = (isOpenAiEngine(step.engine) || isGoogleEngine(step.engine)) && references.length > 1 ? 'The reference images are numbered in the order given: Image 1 is the first.\n\n' : '';
         const output: EngineOutput = await runImageRender({ engine: step.engine, prompt: `${lead}${prompt}`, aspect, photo: null, assetId: null, references }, ctx.engines);
         const key = `${ctx.jobId}/step-${step.id.replace(/_/g, '-')}.${extensionFor(output.mime)}`;
         await ctx.store.put(key, output.bytes, output.mime);
@@ -114,11 +116,16 @@ export async function runRecipe(ctx: RecipeRunContext): Promise<RecipeRun> {
       if (!isVideoEngine(step.engine)) throw new RenderFailure('engine_error', `unknown video engine ${step.engine}`, false);
       const references: Array<{ type: 'image' | 'video'; url: string }> = [];
       for (const input of inputs) {
-        if (person.has(input.name)) {
+        if (person.has(input.name) && viaAsset) {
           const ref = await ctx.person({ bytes: input.bytes, key: input.key });
           if (ref.kind === 'wait') return { kind: 'wait', assetId: ref.assetId };
           assets.push(ref.assetId);
           references.push({ type: 'image', url: assetReference(ref.assetId) });
+          continue;
+        }
+        if (person.has(input.name)) {
+          // A bytes provider (Kling): the face goes as the bytes themselves, never a storage URL.
+          references.push({ type: 'image', url: dataUrl(input.bytes, input.mime) });
           continue;
         }
         const url = await ctx.store.url(input.key, FILE_URL_TTL_SECONDS);
@@ -132,7 +139,7 @@ export async function runRecipe(ctx: RecipeRunContext): Promise<RecipeRun> {
         engine: step.engine, prompt, aspect, seconds: step.params.duration, photo: null, assetId: null,
         references, resolution: step.params.resolution, ...(ctx.callbackUrl ? { callbackUrl: ctx.callbackUrl } : {}),
       }, ctx.engines);
-      return { kind: 'handed', step: step.id, taskId: started.taskId, seconds: started.seconds, usd, assets };
+      return { kind: 'handed', step: step.id, taskId: started.taskId, provider: started.provider, seconds: started.seconds, usd, assets };
     } catch (error) {
       throw tagged(error, step.id);
     }

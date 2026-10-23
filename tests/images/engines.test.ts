@@ -12,10 +12,12 @@ import {
   aspectsForMedium,
   defaultAspect,
   defaultEngine,
+  engineLabel,
   enginesForMedium,
   estimateImageUsd,
   imageSizeFor,
   isEngineId,
+  isGoogleEngine,
   isOpenAiEngine,
   sizeString,
 } from '@/lib/images/engines';
@@ -33,11 +35,14 @@ function ratioOf(aspect: string): number {
 
 describe('image engines (docs/TEMPLATES-IA.md §7)', () => {
   it('names the two founder-chosen families, carries GPT Image 2.5, and defaults images to GPT Image 2 until the org is verified', () => {
-    expect(IMAGE_ENGINE_IDS).toEqual(['gpt-image-2', 'gpt-image-2.5-flare', 'gpt-image-2.5-sunburst', 'seedream-5.0-pro', 'seedream-5.0-lite']);
+    expect(IMAGE_ENGINE_IDS).toEqual(['gpt-image-2', 'gpt-image-2.5-flare', 'gpt-image-2.5-sunburst', 'seedream-5.0-pro', 'seedream-5.0-lite', 'nano-banana-2.1']);
     expect(defaultEngine('image')).toBe('gpt-image-2');
     expect(defaultEngine('video')).toBe('seedance-2.0');
-    expect(enginesForMedium('video')).toEqual(['seedance-2.0', 'seedance-2.5']);
+    expect(enginesForMedium('video')).toEqual(['seedance-2.0', 'seedance-2.5', 'kling-omni']);
     expect(isEngineId('kling-3.0')).toBe(false);
+    expect(isEngineId('kling-omni')).toBe(true);
+    expect(engineLabel('kling-omni')).toBe('KLING OMNI');
+    expect(engineLabel('seedance-2.5')).toBe('SEEDANCE 2.5');
     expect(isOpenAiEngine('gpt-image-2.5-sunburst')).toBe(true);
     expect(isOpenAiEngine('seedream-5.0-pro')).toBe(false);
     for (const id of ['gpt-image-2.5-flare', 'gpt-image-2.5-sunburst', 'gpt-image-2'] as const) {
@@ -51,7 +56,21 @@ describe('image engines (docs/TEMPLATES-IA.md §7)', () => {
     for (const id of ['gpt-image-2.5-flare', 'gpt-image-2.5-sunburst'] as const) {
       expect(['high', 'xhigh', 'max']).toContain(IMAGE_ENGINES[id].quality);
     }
-    for (const id of ['seedream-5.0-pro', 'seedream-5.0-lite'] as const) expect(IMAGE_ENGINES[id].quality).toBeUndefined();
+    for (const id of ['seedream-5.0-pro', 'seedream-5.0-lite', 'nano-banana-2.1'] as const) expect(IMAGE_ENGINES[id].quality).toBeUndefined();
+  });
+
+  it('renders Nano Banana 2.1 at Gemini’s own 2K sizes and prices it at the 2K rate (PLATFORM-2.0 §9.2, R2)', () => {
+    const spec = IMAGE_ENGINES['nano-banana-2.1'];
+    expect(spec).toMatchObject({ provider: 'google', model: 'gemini-nano-banana-2.1', usdPerRender: 0.0504, maxReferenceImages: 14 });
+    expect(isGoogleEngine('nano-banana-2.1')).toBe(true);
+    expect(isGoogleEngine('gpt-image-2')).toBe(false);
+    expect(isOpenAiEngine('nano-banana-2.1')).toBe(false);
+    // The guide's table: 4:5 → 1856×2304, 9:16 → 1536×2752, 16:9 → 2752×1536, 3:4 → 1792×2400, 1:1 → 2048².
+    expect(sizeString(imageSizeFor('nano-banana-2.1', '4:5'))).toBe('1856x2304');
+    expect(sizeString(imageSizeFor('nano-banana-2.1', '9:16'))).toBe('1536x2752');
+    expect(sizeString(imageSizeFor('nano-banana-2.1', '1:1'))).toBe('2048x2048');
+    expect(estimateImageUsd('nano-banana-2.1', 1)).toBe(0.052);
+    expect(estimateImageUsd('nano-banana-2.1', 0)).toBe(0.05);
   });
 
   it('keeps the GPT Image 2.5 sizes inside the documented window (16-grid, 1:3–3:1, ≤3840 edge, 655,360–8,294,400 px)', () => {

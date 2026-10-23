@@ -648,6 +648,7 @@ export const en = {
       no_identity: 'Every result has to use [My photo], directly or through an earlier step.',
       duration: 'That length is outside what this engine can make.',
       resolution: 'This engine cannot make that resolution.',
+      aspect: 'This engine cannot make that aspect ratio.',
     },
     how: {
       heading: 'How it’s made',

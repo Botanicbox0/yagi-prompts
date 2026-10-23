@@ -3,7 +3,7 @@ import type { SqlRunner } from '@/lib/db/sql-runner';
 import type { Viewer } from '@/lib/auth/identity';
 import { ArkOpenApiError, arkQuotaFromEnv, parseLivenessCallback, withH5Language, type ArkAssetStatus, type ArkAssetsClient, type ArkH5Language, type ArkQuota } from '@/lib/ark/assets';
 import { hasCapacity } from '@/lib/ark/reclaim';
-import { IMAGE_ENGINES, isImageEngine, type EngineId } from '@/lib/images/engines';
+import { engineProvider, type EngineId } from '@/lib/images/engines';
 import { ASSET_LIBRARY_MODE } from '@/lib/flags';
 import { makeRoom } from './rotation';
 import {
@@ -71,8 +71,11 @@ export interface IdentityDeps {
 
 /** Engines whose provider refuses a real face in the bytes: the asset library is the only door. */
 export function needsIdentity(engine: EngineId): boolean {
-  if (isImageEngine(engine)) return IMAGE_ENGINES[engine].provider === 'modelark';
-  return true; // every video engine is ModelArk
+  // ModelArk (Seedream, Seedance) refuses a real face at input, so the person's photo reaches it only
+  // as a verified-library asset. OpenAI, Google Gemini and Kling take the photo's bytes — the
+  // provider's own moderation still runs on them (docs/PLATFORM-2.0.md §7.3 `needsIdentity` matrix;
+  // Kling's and Gemini's real-person behaviour is what their smoke scripts record).
+  return engineProvider(engine) === 'modelark';
 }
 
 /** Does this engine put the person through the camera check first? Only in liveness mode. */

@@ -1,7 +1,6 @@
 import { z } from 'zod';
-import { ARK_MODELS, supportedResolutions } from '@/lib/ark/models';
-import { IMAGE_ASPECTS, IMAGE_ENGINES, VIDEO_ASPECTS, isImageEngine, isVideoEngine, type EngineId } from '@/lib/images/engines';
-import { arkModelForVideo } from '@/lib/twings/resolution';
+import { IMAGE_ASPECTS, IMAGE_ENGINES, VIDEO_ASPECTS, engineProvider, isEngineId, isImageEngine, isVideoEngine, type EngineId } from '@/lib/images/engines';
+import { videoEngineSpec } from '@/lib/video/models';
 
 /**
  * Recipe v2 — a maker template as steps and slots (docs/PLATFORM-2.0.md §7.3).
@@ -30,8 +29,10 @@ const TOKEN = /\{\{\s*([^{}]*?)\s*\}\}/g;
 /**
  * The engines a maker may pick. Every one has a known real-person path (`needsIdentity`: OpenAI takes
  * the photo's bytes, ModelArk takes only a verified-library asset). The GPT Image 2.5 pair is left
- * out until the organisation check passes (lib/images/engines.ts `defaultEngine`); R2 adds Kling and
- * Nano Banana here only after their real-person smoke passes.
+ * out until the organisation check passes (lib/images/engines.ts `defaultEngine`). R2's Kling
+ * (`kling-omni`) and Nano Banana (`nano-banana-2.1`) are wired (adapters, matrix, prices) but join
+ * this list only once `npm run kling:smoke` / `npm run gemini:smoke` has shown what each does with
+ * a real selfie — a founder decision after the smoke, not a code default (PLATFORM-2.0 §7.3).
  */
 export const MAKER_ENGINE_IDS = ['gpt-image-2', 'seedream-5.0-pro', 'seedream-5.0-lite', 'seedance-2.0', 'seedance-2.5'] as const satisfies readonly EngineId[];
 export type MakerEngineId = (typeof MAKER_ENGINE_IDS)[number];
@@ -41,16 +42,18 @@ export function isMakerEngine(value: unknown): value is MakerEngineId {
 export function makerEnginesFor(kind: 'image' | 'video'): MakerEngineId[] {
   return MAKER_ENGINE_IDS.filter((id) => (kind === 'image' ? isImageEngine(id) : isVideoEngine(id)));
 }
-/** How a person reaches this engine: raw bytes (OpenAI) or a verified asset (ModelArk). */
-export function identityPath(engine: MakerEngineId): 'bytes' | 'asset' {
-  // The same rule as lib/identity/service.ts `needsIdentity` (pinned by a test), kept here because
-  // the editor imports this file into the browser and the identity service is server-only.
-  return isImageEngine(engine) && IMAGE_ENGINES[engine].provider === 'openai' ? 'bytes' : 'asset';
+/**
+ * How a person reaches this engine: raw bytes (OpenAI, Gemini, Kling) or a verified asset (ModelArk).
+ * The same rule as lib/identity/service.ts `needsIdentity` (pinned by a test), kept here because the
+ * editor imports this file into the browser and the identity service is server-only.
+ */
+export function identityPath(engine: EngineId): 'bytes' | 'asset' {
+  return engineProvider(engine) === 'modelark' ? 'asset' : 'bytes';
 }
 /** The most image references one request may carry on this engine (the recipe caps at six anyway). */
-export function maxImageInputs(engine: MakerEngineId): number {
+export function maxImageInputs(engine: EngineId): number {
   if (isImageEngine(engine)) return Math.min(MAX_STEP_INPUTS, IMAGE_ENGINES[engine].maxReferenceImages);
-  return MAX_STEP_INPUTS;
+  return Math.min(MAX_STEP_INPUTS, videoEngineSpec(engine).maxReferenceImages);
 }
 
 const Name = z.string().regex(NAME);
@@ -87,7 +90,7 @@ export type RecipeIssueCode =
   | 'selfie_missing' | 'user_slot' | 'name_clash' | 'duplicate_step' | 'unused_slot'
   | 'engine' | 'engine_kind' | 'unknown_input' | 'forward_input' | 'video_input' | 'too_many_inputs'
   | 'bad_token' | 'unknown_token' | 'unused_input' | 'raw_handle'
-  | 'step_layout' | 'output' | 'no_identity' | 'duration' | 'resolution';
+  | 'step_layout' | 'output' | 'no_identity' | 'duration' | 'resolution' | 'aspect';
 export interface RecipeIssue { code: RecipeIssueCode; step?: string; slot?: string }
 export type RecipeCheck = { ok: true; recipe: Recipe; medium: RecipeMedium } | { ok: false; issues: RecipeIssue[] };
 
@@ -169,7 +172,7 @@ export function parseRecipe(raw: unknown): RecipeCheck {
       } else if (recipe.steps.some((other, at) => other.id === input && at >= index)) issues.push({ code: 'forward_input', step: step.id });
       else issues.push({ code: 'unknown_input', step: step.id });
     }
-    if (isMakerEngine(step.engine) && images > maxImageInputs(step.engine)) issues.push({ code: 'too_many_inputs', step: step.id });
+    if (isEngineId(step.engine) && images > maxImageInputs(step.engine)) issues.push({ code: 'too_many_inputs', step: step.id });
 
     // Tokens: only the step's own inputs, each at least once; never an engine's own handle syntax.
     const tokens = promptTokens(step.prompt);
@@ -181,10 +184,11 @@ export function parseRecipe(raw: unknown): RecipeCheck {
     if (/@(image|video|audio)\s*\d/i.test(step.prompt)) issues.push({ code: 'raw_handle', step: step.id });
 
     if (step.kind === 'video' && isVideoEngine(step.engine)) {
-      const model = arkModelForVideo(step.engine, step.params.duration).model;
-      const spec = ARK_MODELS[step.engine === 'seedance-2.5' ? 'seedance-2.5' : 'seedance-2.0'];
+      // The engine's own range (a 2.0 step is not quietly moved to 2.5), the model's resolutions and frames.
+      const spec = videoEngineSpec(step.engine);
       if (step.params.duration < spec.minDurationSeconds || step.params.duration > spec.maxDurationSeconds) issues.push({ code: 'duration', step: step.id });
-      if (!supportedResolutions(model).includes(step.params.resolution)) issues.push({ code: 'resolution', step: step.id });
+      if (!spec.resolutions.includes(step.params.resolution)) issues.push({ code: 'resolution', step: step.id });
+      if (spec.aspects !== null && !spec.aspects.includes(step.params.aspect)) issues.push({ code: 'aspect', step: step.id });
     }
     seen.set(step.id, step);
   });

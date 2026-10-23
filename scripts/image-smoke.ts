@@ -8,6 +8,7 @@ import {
   estimateImageUsd,
   imageSizeFor,
   isImageAspect,
+  isGoogleEngine,
   isImageEngine,
   isOpenAiEngine,
   sizeString,
@@ -86,6 +87,11 @@ async function main(): Promise<number> {
   console.log(`size      : ${sizeString(imageSizeFor(engine, aspect))} (${aspect})`);
   console.log(`estimate  : ≈ $${estimateImageUsd(engine, references).toFixed(3)} for one image`);
   console.log(`reference : ${photoPath ?? '(none — text to image)'}`);
+
+  if (isGoogleEngine(engine)) {
+    console.error('the Gemini engine has its own real-person smoke: npm run gemini:smoke');
+    return 2;
+  }
 
   if (!isOpenAiEngine(engine)) {
     const config = seedreamConfigFromEnv();

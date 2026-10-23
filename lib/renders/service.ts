@@ -19,7 +19,7 @@ import { getTossGateway, type TossGateway } from '@/lib/billing/toss-gateway';
 import { addTossReport, billingErrorCode, emptyTossReport, logBilling, reconcileTossPayments, renderPaymentStatus, type TossReconcileReport } from '@/lib/billing/toss-service';
 import { DEFAULT_LOCALE, isLocale, type Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/dictionaries';
-import { aspectsForMedium, isEngineId, isImageAspect, isImageEngine, isOpenAiEngine, isVideoAspect, isVideoEngine, resolveEngine } from '@/lib/images/engines';
+import { aspectsForMedium, engineProvider, isEngineId, isImageAspect, isImageEngine, isVideoAspect, isVideoEngine, resolveEngine } from '@/lib/images/engines';
 import { loadPromptById, loadPromptBySlug, type PromptRow } from '@/lib/prompts/repo';
 import { isForSale } from '@/lib/twings/products';
 import { renderResolution, renderableResolution } from '@/lib/twings/resolution';
@@ -643,7 +643,7 @@ async function renderNow(
     deps.engines ?? {},
   );
   if (dispatch.campaign) await acknowledgeCampaignTask(deps.sql, job.id, started.taskId);
-  else await markRenderRunningWithTask(deps.sql, job.id, { provider: 'modelark', taskId: started.taskId });
+  else await markRenderRunningWithTask(deps.sql, job.id, { provider: started.provider, taskId: started.taskId });
   } catch (error) {
     if (!dispatch.campaign) throw error;
     // No blind repeat on a lost API response/DB acknowledgement. Marker keeps the live face asset
@@ -789,14 +789,15 @@ async function renderRecipe(deps: RenderPassDeps, job: RenderJob, recipe: JobRec
     return;
   }
   if (run.kind === 'handed') {
-    await markRenderRunningWithTask(deps.sql, job.id, { provider: 'modelark', taskId: run.taskId });
+    await markRenderRunningWithTask(deps.sql, job.id, { provider: run.provider, taskId: run.taskId });
     for (const assetId of new Set(run.assets)) await recordIdentityUse(deps.sql, { userId: job.userId, assetId, now });
     handedOff.add(job.id);
     report.waiting += 1;
     return;
   }
   const first = run.results[0]!;
-  const provider = isOpenAiEngine(primaryStep(recipe.recipe!).engine) ? 'openai' : 'modelark';
+  const primary = primaryStep(recipe.recipe!).engine;
+  const provider = isEngineId(primary) ? engineProvider(primary) : 'modelark';
   await finishRecipe(deps, job, run.results, run.usd, { bytes: await deps.store.read(first.key), mime: first.mime, provider, costUsd: run.usd }, now);
   for (const assetId of new Set(run.assets)) await recordIdentityUse(deps.sql, { userId: job.userId, assetId, now });
   report.succeeded += 1;

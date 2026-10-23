@@ -104,12 +104,15 @@ describe('the real-person identity', () => {
 
   const deps = (overrides: Partial<IdentityDeps> = {}): IdentityDeps => ({ sql: h.sql, assets: bank, siteUrl: SITE, now: NOW, mode: 'liveness', ...overrides });
 
-  it('names the engines that need it: everything on ModelArk, nothing on OpenAI', () => {
+  it('names the engines that need it: everything on ModelArk, nothing on OpenAI, Gemini or Kling', () => {
     expect(needsIdentity('seedance-2.0')).toBe(true);
     expect(needsIdentity('seedance-2.5')).toBe(true);
     expect(needsIdentity('seedream-5.0-pro')).toBe(true);
     expect(needsIdentity('gpt-image-2')).toBe(false);
     expect(needsIdentity('gpt-image-2.5-flare')).toBe(false);
+    // R2 (docs/PLATFORM-2.0.md §7.3 matrix): both take the photo itself; their own moderation decides.
+    expect(needsIdentity('nano-banana-2.1')).toBe(false);
+    expect(needsIdentity('kling-omni')).toBe(false);
   });
 
   it('opens a liveness session with our callback and the English page, and records it as pending', async () => {
