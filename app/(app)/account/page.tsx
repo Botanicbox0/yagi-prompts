@@ -27,6 +27,7 @@ import { CREATOR_WORKSPACE_PATH, creatorProgramOpen } from '@/lib/creator-platfo
 import { SubscriptionStatus } from '@/components/billing/subscription-status';
 import { getSubscriptionSummary } from '@/lib/creator-subscriptions/service';
 import type { SubscriptionSummary } from '@/lib/creator-subscriptions/types';
+import { NotifyChoice } from '@/components/notify/notify-choice';
 
 /**
  * `/account` — private creator profile, activity and email preferences.
@@ -208,6 +209,8 @@ export default async function AccountPage({
           ) : (
             <p className="mt-4 max-w-detail text-[0.9375rem] opacity-70">{copy.notifProOnly}</p>
           )}
+          {/* docs/PLATFORM-2.0.md §5.3 — the completion push for this device, and the install card. */}
+          {viewer?.userId && <NotifyChoice dict={dict} context="account" />}
         </div>
 
         {/* --- activity: the two loops (docs/TEMPLATES-IA.md) ------------------------------- */}

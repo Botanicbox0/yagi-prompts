@@ -18,6 +18,7 @@ import { AppHeader } from '@/components/app/app-header';
 import { AutoRefresh } from '@/components/renders/auto-refresh';
 import { ResultMedia } from '@/components/renders/result-media';
 import { TextSwap } from '@/components/ui/text-swap';
+import { NotifyChoice } from '@/components/notify/notify-choice';
 
 /**
  * `/renders/[id]` — the owner's result page. Queued or running: a calm wait that refreshes
@@ -131,6 +132,8 @@ export default async function RenderPage({ params, searchParams }: { params: Pro
             )}
           </section>
         )}
+
+        <NotifyChoice dict={dict} context="render" status={job.status} />
 
         {job.status === 'failed' && (
           <section data-render-failed className="mt-10 max-w-detail border-t border-hairline pt-8">

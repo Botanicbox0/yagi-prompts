@@ -2701,6 +2701,53 @@ export const ko: Dictionary = {
     invalidBody:
       '메일 앱에서 링크가 잘렸거나 만료된 링크일 수 있습니다. 계정 설정에서 직접 알림을 변경해 주세요.',
   },
+  /**
+   * docs/PLATFORM-2.0.md §5.2–§5.3 (2026-10-22) — the installed app: bottom tabs that exist only in
+   * standalone mode, the one-time install card, "완성되면 알려드릴까요?", and the push itself.
+   */
+  appShell: {
+    tabs: {
+      nav: '앱 메뉴',
+      formats: '포맷',
+      renders: '내 작품',
+      photo: '내 사진',
+      account: '계정',
+    },
+    shortcuts: {
+      formats: '영상 포맷 보기',
+      formatsShort: '포맷',
+      renders: '내 작품 보기',
+      rendersShort: '내 작품',
+    },
+    install: {
+      title: '홈 화면에 추가하면 완성 알림을 받을 수 있어요',
+      androidBody: '앱처럼 한 번에 열리고, 영상이 완성되면 이 휴대폰으로 알려드려요.',
+      androidAction: '홈 화면에 추가',
+      iosBody: 'Safari 아래쪽의 공유 버튼을 누르고 ‘홈 화면에 추가’를 고르세요. 추가한 앱에서 알림을 켤 수 있어요.',
+      dismiss: '다시 보지 않기',
+    },
+    notify: {
+      title: '완성되면 알려드릴까요?',
+      settingsTitle: '완성 알림',
+      lede: '영상은 몇 분 걸려요. 푸시 알림을 켜 두면 완성되는 순간 이 기기로 알려드려요.',
+      enable: '푸시 알림 켜기',
+      disable: '끄기',
+      busy: '설정하는 중…',
+      on: '이 기기로 완성 알림을 보내드려요.',
+      emailAlways: '이메일은 항상 보내드려요.',
+      unavailable: '이 환경에서는 푸시를 쓸 수 없어요.',
+      install: '아이폰은 홈 화면에 추가한 TWINGS에서만 알림을 받을 수 있어요.',
+      installAction: '추가하는 방법 보기',
+      denied: '알림이 차단돼 있어요. 브라우저 설정에서 TWINGS 알림을 허용해 주세요.',
+      error: '알림을 켜지 못했어요. 잠시 후 다시 시도해 주세요.',
+    },
+    push: {
+      readyTitle: '완성됐어요',
+      readyBody: '{template} 결과물이 준비됐어요. 눌러서 바로 확인하세요.',
+      failedTitle: '이번엔 완성하지 못했어요',
+      failedBody: '{template} 생성이 완료되지 않았어요. {reason}',
+    },
+  },
   admin: {
     brand: 'TWINGS 관리자',
     byline: 'by yagi workshop',

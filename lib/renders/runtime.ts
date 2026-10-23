@@ -16,7 +16,7 @@ export async function livePassDeps(sql: SqlRunner): Promise<RenderPassDeps> {
   return {
     sql,
     store: await getRenderStore(),
-    notifier: getRenderNotifier(),
+    notifier: getRenderNotifier(sql),
     siteUrl: origin,
     callbackUrl: `${origin}/api/renders/callback`,
     assets: liveAssetsClient(),
