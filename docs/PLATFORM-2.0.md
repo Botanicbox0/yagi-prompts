@@ -402,3 +402,5 @@ PR #76의 `identity_selfies`를 그대로 확장한다(새 테이블 없음).
 
 ### 17.4 단계
 B2-a 자격 신청·관리자 확인·로컬 AI 워커·탭 가시성(0057/0141) → B2-b 크리에이터 풀·지정 초대. 둘 다 플래그 `TWINGS_INFLUENCERS=on`으로 열고 기본 off.
+
+**B2-b 구현 메모 (2026-10-23)**: `/brand/creators`(소유자·편집자, 카드 = 핸들·플랫폼·1천 단위 반올림 구간·확인일, 핸들은 링크 없음), `/api/brand-creators` POST 하나. 초대 = `issueInvitation`+`socialAccountId` → `campaign_targets` 삽입 + `campaign_participant_invites.invited_user_id`(0058) 바인딩, 그 계정만 수락(`wrong_account`), 캠페인당 같은 사람 1회·살아 있는 초대 `min(슬롯×5, 50)`, 철회하면 대상에서도 빠진다. 초대 가능한 캠페인은 지원을 받는 `recruiting`만(`selecting`은 수락이 막혀 있어 제외). 알림은 `notif_updates` 켠 계정에만 초대 1건당 메일 1통(`notifyCampaignInvitation`). 공개 결과물 동의 저장소가 아직 없어 대표 작품 자리는 플랫폼 아이콘이다.

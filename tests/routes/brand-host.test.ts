@@ -17,6 +17,19 @@ describe('brand host boundary', () => {
     expect(brandRouteAllowed('/api/campaign-collaboration', 'POST')).toBe(true);
     expect(brandRouteAllowed('/api/campaign-collaboration', 'DELETE')).toBe(false);
   });
+  it('keeps the creator pool and its invitation API on the brand host (docs/PLATFORM-2.0.md §16.6, §17.3)', async () => {
+    expect(brandRouteAllowed('/brand/creators', 'GET')).toBe(true);
+    expect(brandRouteAllowed('/api/brand-creators', 'POST')).toBe(true);
+    expect(brandRouteAllowed('/api/brand-creators', 'GET')).toBe(false);
+    expect(brandRouteAllowed('/api/brand-creators', 'DELETE')).toBe(false);
+    expect(brandRouteAllowed('/brand/creatorsx', 'GET')).toBe(false);
+    expect(adminRouteAllowed('/brand/creators', 'GET')).toBe(false);
+    expect(authReturnPath('/brand/creators?platform=tiktok', 'brand.twings.app', '/')).toBe('/brand/creators?platform=tiktok');
+    const r = await middleware(req('brand.twings.app', '/brand/creators'));
+    expect(new URL(r.headers.get('location')!).searchParams.get('next')).toBe('/brand/creators');
+    expect((await middleware(req('brand.twings.app', '/api/brand-creators', 'POST', 'https://brand.twings.app'))).headers.get('x-middleware-next')).toBe('1');
+    expect((await middleware(req('admin.twings.app', '/api/brand-creators', 'POST', 'https://admin.twings.app'))).status).toBe(404);
+  });
   it('routes settings and library through brand authentication and allows guarded support reads',async()=>{
     for(const path of ['/brand/settings','/brand/library']) {
       const r=await middleware(req('brand.twings.app',path));

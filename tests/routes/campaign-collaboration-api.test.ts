@@ -82,6 +82,16 @@ it("keeps an issuing token inside a no-store response body without redirects", a
   expect(r.headers.get("location")).toBeNull();
   expect((await r.json()).token).toBe("sensitive-token");
 });
+it("leaves creator-pool invitations to /api/brand-creators (no invitee echo)", async () => {
+  const r = await POST(
+    request({
+      operation: "invitation.create",
+      input: { campaignId: "campaign", socialAccountId: "account" },
+    }),
+  );
+  expect(r.status).toBe(400);
+  expect(mocks.issue).not.toHaveBeenCalled();
+});
 it("passes auth-server verified email to invite acceptance only", async () => {
   await POST(
     request({ operation: "invitation.accept", input: { token: "token" } }),

@@ -57,7 +57,8 @@ export function isAdminPath(pathname: string): boolean {
 /** Public logo files share /brand, but are not authenticated workspace routes. */
 export function isBrandPath(pathname: string): boolean {
   // `usage`: the payment provider's return page for secondary usage (docs/SECONDARY-USAGE.md).
-  return pathname === '/brand' || /^\/brand\/(?:projects|members|invite|settings|library|studio|usage)(?:\/|$)/.test(pathname);
+  // `creators`: the creator pool (docs/PLATFORM-2.0.md §17.3).
+  return pathname === '/brand' || /^\/brand\/(?:projects|members|invite|settings|library|studio|usage|creators)(?:\/|$)/.test(pathname);
 }
 
 const AUTH_METHODS: Record<string, readonly string[]> = {
@@ -108,6 +109,8 @@ export function brandRouteAllowed(pathname: string, method: string): boolean {
   if (STUDIO_DEMO_FILES.has(pathname)) return read;
   if (pathname === '/api/brand-production') return method === 'POST';
   if (pathname === '/api/campaign-collaboration') return method === 'POST';
+  // The creator pool's one action, "invite to a campaign" (docs/PLATFORM-2.0.md §17.3).
+  if (pathname === '/api/brand-creators') return method === 'POST';
   if (pathname === '/api/campaign-funding') return read || method === 'POST';
   if (/^\/api\/campaign-collaboration\/files\/[a-f0-9-]+$/.test(pathname)) return read;
   if (/^\/api\/brand-production\/[a-f0-9-]+(?:\/media)?$/.test(pathname)) return read;

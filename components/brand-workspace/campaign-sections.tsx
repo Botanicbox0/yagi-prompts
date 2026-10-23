@@ -34,7 +34,7 @@ function Applicant({ a, b, locale, canPrefer, projectId }: { a: ProjectApplicant
   const name = a.handle ? `@${a.handle}` : a.platform ? PLATFORM_NAMES[a.platform] : t.profile;
   const waiting = a.status === "applied";
   return (
-    <li className="bw-applicant" data-applicant={a.status} data-applicant-preferred={a.preferred || undefined}>
+    <li className="bw-applicant" data-applicant={a.status} data-applicant-preferred={a.preferred || undefined} data-applicant-invited={a.invited || undefined}>
       <div className="bw-row">
         <div>
           <strong>{name}</strong>
@@ -43,7 +43,10 @@ function Applicant({ a, b, locale, canPrefer, projectId }: { a: ProjectApplicant
             {interpolate(t.followers, { count: a.followers.toLocaleString(locale) })} <span data-followers-source={a.followersSource}>({t.sources[a.followersSource]})</span>
           </p>
         </div>
-        <span className="bw-status" data-state={a.status}>{t.states[a.status as keyof typeof t.states] ?? a.status}</span>
+        <span className="bw-applicant-badges">
+          {a.invited && <span className="bw-badge" data-invited>{t.invitedBadge}</span>}
+          <span className="bw-status" data-state={a.status}>{t.states[a.status as keyof typeof t.states] ?? a.status}</span>
+        </span>
       </div>
       {a.profileUrl && <a href={a.profileUrl} target="_blank" rel="noopener noreferrer" className="bw-prose" title={b.external}>{t.profile} ↗</a>}
       {waiting && (
@@ -70,13 +73,15 @@ function Applicant({ a, b, locale, canPrefer, projectId }: { a: ProjectApplicant
  * the creator told us; the brand may mark a preference, never select (selection is TWINGS's).
  * `view === null` means the collaboration rollout is closed: the tab explains when it opens.
  */
-export function CampaignApplicants({ view, invitations, canInvite, b, locale, projectId }: {
+export function CampaignApplicants({ view, invitations, canInvite, b, locale, projectId, poolHref = null }: {
   view: { canPrefer: boolean; campaigns: ProjectApplicantCampaign[] } | null;
   invitations: CollaborationCampaign[];
   canInvite: boolean;
   b: BrandCopy;
   locale: string;
   projectId: string;
+  /** The creator pool, while it is open (docs/PLATFORM-2.0.md §17.3). */
+  poolHref?: string | null;
 }) {
   const t = b.applicants;
   return (
@@ -109,8 +114,28 @@ export function CampaignApplicants({ view, invitations, canInvite, b, locale, pr
                     <ul className="bw-applicant-list" data-applicants-joined>{joined.map((a) => <Applicant key={a.id} a={a} b={b} locale={locale} canPrefer={false} projectId={projectId} />)}</ul>
                   </>
                 )}
+                {c.invited.length > 0 && (
+                  <div className="bw-collab" data-invited-creators>
+                    <h4>{t.invitedTitle} · {c.invited.length}</h4>
+                    <ul className="bw-list">
+                      {c.invited.map((i) => (
+                        <li key={i.id} data-invited-state={i.status}>
+                          <p>
+                            <strong>{i.handle ? `@${i.handle}` : t.invitedHidden}</strong>
+                            {i.handle && i.platform && <span className="bw-muted"> · {PLATFORM_NAMES[i.platform]}</span>}
+                          </p>
+                          <p className="bw-muted">{t.invitedStates[i.status]} · <time dateTime={i.invitedAt}>{formatBrandTimestamp(i.invitedAt, locale)}</time></p>
+                          {i.status === "pending" && canInvite && (
+                            <CollaborationForm locale={locale} operation="invitation.revoke" hidden={{ invitationId: i.id }} label={t.revoke}>{null}</CollaborationForm>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
                 <div className="bw-collab" data-applicant-invitations>
                   <h4>{t.invitations}</h4>
+                  {canInvite && poolHref && <p><a className="bw-button" href={poolHref} data-invite-from-pool>{t.invitePool} →</a></p>}
                   {canInvite && <InvitationForm locale={locale} campaignId={c.id} />}
                   <ul className="bw-list">
                     {links.map((i) => (

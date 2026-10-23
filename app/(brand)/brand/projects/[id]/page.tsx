@@ -12,6 +12,9 @@ import { loadFundingProject } from "@/lib/campaigns/funding/service";
 import { fundingDeps, fundingRuntime } from "@/lib/campaigns/funding/runtime";
 import { open } from "@/lib/campaigns/funding/core";
 import { loadPromptBySlug } from "@/lib/prompts/repo";
+import { influencersOpen } from "@/lib/influencers/rules";
+import { poolVisible, scopedHref } from "@/lib/brands/workspace/selection";
+import { POOL_PATH } from "@/lib/brands/creator-pool";
 export default async function BrandProject({
   params,
   searchParams,
@@ -49,7 +52,8 @@ export default async function BrandProject({
       formatTitle={formatTitle}
       staffManageHref={project.role === "studio" && viewer.isAdmin ? adminProjectHref(project.id, brandHost) : null}
       applicants={member ? (
-        <CampaignApplicants view={applicants} invitations={collaboration?.campaigns ?? []} canInvite={Boolean(collaboration?.canInvite) && !viewer.isAdmin} b={b} locale={locale} projectId={id} />
+        <CampaignApplicants view={applicants} invitations={collaboration?.campaigns ?? []} canInvite={Boolean(collaboration?.canInvite) && !viewer.isAdmin} b={b} locale={locale} projectId={id}
+          poolHref={influencersOpen() && poolVisible(project) ? scopedHref(POOL_PATH, { id: project.organizationId }) : null} />
       ) : null}
       payments={member ? (
         <CampaignPayments view={funding} rollout={fundingRuntime().enabled} enabled={deps !== null && open(deps)} failed={Boolean(search.failed)} b={b} locale={locale} projectId={id} />

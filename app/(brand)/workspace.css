@@ -1103,3 +1103,49 @@ button.bw-wizard-step:hover { border-color:#0000ee; }
 .bw-payment-reward { border-top:1px solid #eee; margin-top:24px; padding-top:20px; }
 @media (prefers-reduced-motion:reduce) { .bw-wizard *, .bw-timeline *, .bw-format-card { transition:none !important; animation:none !important; scroll-behavior:auto !important; } }
 @media (max-width:620px) { .bw-terms-summary { grid-template-columns:minmax(0,1fr); } }
+/* Creator pool (docs/PLATFORM-2.0.md §17.3): the campaign card shape, a glyph instead of art. */
+.bw-creator-filters { display:flex; flex-wrap:wrap; align-items:flex-end; gap:12px; margin:0 0 16px; }
+.bw-creator-filters .bw-search { width:240px; min-height:44px; }
+.bw-creator-filters .bw-search input { height:44px; font-size:13px; }
+.bw-creator-filters label:not(.bw-search) { display:grid; gap:4px; font-size:11px; color:var(--color-workspace-muted); }
+.bw-creator-filters select { min-height:44px; min-width:120px; padding:0 10px; border:1px solid var(--color-workspace-line); border-radius:6px; background:var(--color-workspace-paper); color:var(--color-workspace-ink); font-size:13px; }
+.bw-creator-reset { min-height:44px; display:inline-flex; align-items:center; font-size:12px; }
+.bw-creator-count { font-size:12px; margin:0 0 14px; }
+.bw-creator-grid>li { min-width:0; }
+.bw-creator-card { height:100%; display:flex; flex-direction:column; }
+.bw-creator-card .bw-card-copy { flex:1; display:flex; flex-direction:column; padding-bottom:0; }
+.bw-creator-card .bw-card-copy h2 { margin-bottom:4px; }
+.bw-creator-card .bw-badge { margin-top:10px; align-self:flex-start; }
+.bw-creator-card footer { margin-top:auto; padding:10px 0 14px; flex-wrap:wrap; }
+.bw-creator-checked { font-size:11px; color:var(--color-workspace-muted); }
+.bw-creator-art { aspect-ratio:16/9; height:auto; display:flex; align-items:center; justify-content:center; color:#5d5f66; }
+.bw-creator-art svg { width:44px; height:44px; fill:none; stroke:currentColor; stroke-width:1.3; stroke-linecap:round; stroke-linejoin:round; }
+.bw-invite-dialog { position:fixed; inset:0; margin:auto; height:fit-content; width:min(480px,calc(100vw - 32px)); max-height:calc(100svh - 32px); padding:0; border:1px solid var(--color-workspace-line); border-radius:12px; background:var(--color-workspace-paper); color:var(--color-workspace-ink); box-shadow:0 16px 65px #1113; }
+.bw-invite-dialog::backdrop { background:#10142540; }
+.bw-invite-dialog form { display:grid; gap:14px; padding:20px; }
+.bw-invite-dialog header { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+.bw-invite-dialog header strong { font-size:16px; font-weight:600; overflow-wrap:anywhere; }
+.bw-invite-dialog p { margin:0; font-size:13px; line-height:1.6; }
+.bw-invite-close { min-width:44px; min-height:44px; font-size:22px; line-height:1; cursor:pointer; color:var(--color-workspace-muted); }
+.bw-invite-options { border:0; margin:0; padding:0; display:grid; gap:8px; min-width:0; }
+.bw-invite-options label { display:flex; gap:12px; align-items:flex-start; min-height:44px; padding:12px; border:1px solid var(--color-workspace-line); border-radius:8px; cursor:pointer; }
+.bw-invite-options label:has(input:checked) { border-color:#0000ee; }
+.bw-invite-options label[data-invite-blocked] { cursor:not-allowed; opacity:.6; }
+.bw-invite-options input { margin-top:3px; width:18px; height:18px; flex-shrink:0; }
+.bw-invite-options span { display:grid; gap:3px; min-width:0; overflow-wrap:anywhere; }
+.bw-invite-options strong { font-size:13px; font-weight:600; }
+.bw-invite-options small,.bw-invite-options em { font-size:11px; color:var(--color-workspace-muted); font-style:normal; }
+.bw-invite-status:empty { display:none; }
+.bw-invite-status[data-invite-status="error"] { color:#b42318; }
+.bw-invite-dialog footer { display:flex; justify-content:flex-end; gap:8px; flex-wrap:wrap; }
+.bw-applicant-badges { display:inline-flex; align-items:center; gap:6px; flex-wrap:wrap; justify-content:flex-end; }
+[data-invited-creators] li { display:grid; gap:4px; }
+[data-invite-from-pool] { margin:4px 0 8px; }
+@media(max-width:480px) {
+ .bw-creator-filters { display:grid; grid-template-columns:1fr 1fr; }
+ .bw-creator-filters .bw-search { grid-column:1/-1; width:100%; }
+ .bw-creator-filters select { min-width:0; width:100%; }
+ .bw-creator-filters .bw-button { grid-column:1/-1; }
+ .bw-invite-dialog footer .bw-button { flex:1; }
+ .bw-creator-art { aspect-ratio:3/1; }
+}

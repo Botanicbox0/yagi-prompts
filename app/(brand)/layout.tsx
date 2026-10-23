@@ -1,5 +1,6 @@
 import { WorkspaceHomeLink, WorkspaceSupport } from '@/components/brand-workspace/context-links';
 import { getViewer } from '@/lib/auth/viewer';
+import { influencersOpen } from '@/lib/influencers/rules';
 import { getVerifiedEmail } from '@/lib/auth/verified-email';
 import { getSqlRunner } from '@/lib/db/connect';
 import { loadBrandWorkspaceScope } from '@/lib/brands/workspace/service';
@@ -60,7 +61,7 @@ export default async function BrandLayout({
             {/* URL-derived: dynamic render resolves this on the server, the empty fallback never shows. */}
             <Suspense fallback={null}>
               {scope?<WorkspaceIdentity scope={scope} copy={b.identity} roles={b.roles}/>:<p className="bw-kicker">{b.title}</p>}
-              <WorkspaceNavigation home={b.home} members={b.members} settings={b.managed.settings} library={b.managed.library} studio={b.productionStudio.title} scope={scope}/>
+              <WorkspaceNavigation home={b.home} members={b.members} settings={b.managed.settings} library={b.managed.library} studio={b.productionStudio.title} creators={influencersOpen() ? b.creatorPool.nav : undefined} scope={scope}/>
             </Suspense>
             <div className="bw-sidebar-utilities">
               <WorkspaceLanguage locale={locale} label={d.nav.localeToggle} compact applyLabel={b.languageApply}/>
