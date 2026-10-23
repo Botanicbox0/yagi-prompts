@@ -1031,6 +1031,10 @@ async function sweepTemplates(): Promise<void> {
   expectAbsent('…no placeholder ad', detail.body, 'YOUR AD HERE');
   expectPresent('…the house ad points at the brand form', detail.body, 'data-house-ad');
   expectPresent('…and the price in dollars on the English page', detail.body, '>$4<');
+  // The related list is the catalogue's 4:5 grid: two across on a phone, four on a desktop.
+  if (/<ul[^>]*data-related-grid[^>]*class="[^"]*\bgrid-cols-2\b[^"]*\blg:grid-cols-4\b/.test(detail.body)) ok('…related templates in the two-column card grid', 'data-related-grid');
+  else fail('…related templates grid', 'expected data-related-grid with grid-cols-2 … lg:grid-cols-4');
+  expectPresent('…whose items are cards', detail.body, 'data-related-item');
   const detailKo = await get(`/ko/t/${GATED_PROMPT}`);
   expectEqual('the Korean template page renders 200', detailKo.status, 200);
   expectPresent('…with the price in won', detailKo.body, '5,900원');

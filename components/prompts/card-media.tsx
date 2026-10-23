@@ -13,6 +13,8 @@ import { observeCardArming } from '@/lib/media/card-arming';
  *     out (`lib/media/card-arming.ts`): iPhone Safari caps concurrent media decoders, and a rail
  *     that only ever arms starves the cards further down. Keyboard focus anywhere on the card arms
  *     it too — a focused card is on screen.
+ *   · However many cards fit on the screen, at most four clips play: the ones nearest its centre.
+ *     A card the reader pressed play on keeps its slot.
  *   · `prefers-reduced-motion` → never on its own. §5.3's reduced-motion rule is a kill switch, not
  *     a softening. The play button still works: pressing it is the reader's choice, not motion.
  *   · The stop button wins: a clip the reader stopped stays stopped, through scrolling away and
@@ -102,6 +104,8 @@ export function PromptCardMedia({
   const videoRef = useRef<HTMLVideoElement>(null);
   const [inView, setInView] = useState(false);
   const [intent, setIntent] = useState<PlaybackIntent>('auto');
+  const intentRef = useRef<PlaybackIntent>('auto');
+  intentRef.current = intent;
   const [autoplay, setAutoplay] = useState(false);
   const [hydrated, setHydrated] = useState(false);
   const [playing, setPlaying] = useState(false);
@@ -113,11 +117,11 @@ export function PromptCardMedia({
   }, []);
 
   // Arm on real visibility and release on the way out, so the page never holds more decoders
-  // than fit on screen. The observer stays live for the session.
+  // than the pool's four slots. The observer stays live for the session.
   useEffect(() => {
     const root = rootRef.current;
     if (!root || video === null || typeof IntersectionObserver === 'undefined') return;
-    return observeCardArming(root, setInView);
+    return observeCardArming(root, setInView, { pinned: () => intentRef.current === 'play' });
   }, [video]);
 
   // Keyboard focus anywhere on the card counts as being on screen.

@@ -55,6 +55,7 @@ import {
   requeueRenderJob,
   type RenderJob,
 } from './repo';
+import { markRenderFinishing } from './extras';
 import { constantTimeEqual, isRenderId, isShareExpired, isShareTokenShape, newShareToken, shareExpiresAt } from './share';
 import { extensionFor, type RenderStore } from './store';
 
@@ -642,7 +643,10 @@ async function pollAwaiting(deps: RenderPassDeps, job: RenderJob, now: Date, rep
     const template = await loadPromptById(deps.sql, job.templateId);
     const request = deps.subscriptionSchemaReady ? await loadSubscriptionRender(deps.sql, job.id) : null;
     const { model, seconds } = videoModelFor(job.engine, request?.runtime_seconds ?? template?.runtimeSeconds ?? 5);
-    const polled = await pollVideoRender({ taskId: job.providerTaskId, model, seconds, resolution: renderResolution(job.resolution), aspect: job.aspect }, deps.engines ?? {});
+    const polled = await pollVideoRender(
+      { taskId: job.providerTaskId, model, seconds, resolution: renderResolution(job.resolution), aspect: job.aspect, onProviderDone: () => markRenderFinishing(deps.sql, job.id, now) },
+      deps.engines ?? {},
+    );
     if (polled.status === 'pending') {
       report.waiting += 1;
       return;
@@ -683,7 +687,13 @@ async function readPhoto(store: RenderStore, job: RenderJob): Promise<RenderPhot
   return { bytes: await store.read(job.inputKey), mime: job.inputMime };
 }
 
+/**
+ * The provider's result becomes ours: copied into the private bucket, then one transaction marks it
+ * succeeded with its 3-day link. `finishing_at` goes in first (a film already recorded it the moment
+ * the provider said done, before the download), so the wait page can name the copy "마무리".
+ */
 async function finish(deps: RenderPassDeps, job: RenderJob, output: EngineOutput, now: Date): Promise<void> {
+  await markRenderFinishing(deps.sql, job.id, now);
   const resultKey = `${job.id}/result.${extensionFor(output.mime)}`;
   await deps.store.put(resultKey, output.bytes, output.mime);
   await deps.sql.transaction(async sql => {

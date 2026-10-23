@@ -464,9 +464,11 @@ export function RelatedPrompts({
       <h2 className="font-display text-[clamp(1.4rem,2.6vw,2rem)] leading-[0.95] font-black uppercase">
         {labels.relatedHeading}
       </h2>
-      <ul className="mt-8 grid gap-6 sm:grid-cols-2">
+      {/* The catalogue's own grid (rails.tsx): two 4:5 cards a row on a phone, four on a desktop.
+          No three-column step — the related list is four cards, and 3 + 1 leaves an orphan. */}
+      <ul data-related-grid className="mt-8 grid grid-cols-2 items-start gap-x-3 gap-y-6 sm:gap-x-4 lg:grid-cols-4">
         {cards.map((card) => (
-          <li key={card.slug}>
+          <li key={card.slug} data-related-item className="min-w-0">
             <PromptCardView
               card={card}
               locale={locale}

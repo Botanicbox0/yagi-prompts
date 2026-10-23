@@ -1916,7 +1916,9 @@ export const ko: Dictionary = {
       body: {
         check: '올린 사진을 확인하고 있어요.',
         make: '포맷에 맞춰 장면을 만들고 있어요. 가장 오래 걸리는 단계예요.',
+        finish: '영상이 나왔어요. 저장하고 공유 링크를 만드는 중이에요.',
       },
+      finishEta: '곧 이 화면에 나타나요.',
       eta: '보통 {minutes}분쯤 걸려요.',
       etaNote: '이 창을 닫아도 계속 만들어요.',
       browseTitle: '기다리는 동안 다른 포맷 보기',
