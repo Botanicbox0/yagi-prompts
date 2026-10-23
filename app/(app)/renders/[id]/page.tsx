@@ -13,11 +13,13 @@ import { runLiveRenderPass } from '@/lib/renders/runtime';
 import { failureReason, loadOwnRender } from '@/lib/renders/service';
 import { FEEDBACK_REASONS, loadRenderFeedback } from '@/lib/renders/feedback';
 import { estimateRenderMinutes } from '@/lib/renders/eta';
+import { loadRenderExtras } from '@/lib/renders/extras';
 import { submitFeedbackAction } from './actions';
 import { RENDERS_PATH, renderHref, renderMediaHref, shareHref } from '@/lib/renders/share';
 import { AppHeader } from '@/components/app/app-header';
 import { AutoRefresh } from '@/components/renders/auto-refresh';
 import { ResultMedia } from '@/components/renders/result-media';
+import { PosterCapture } from '@/components/renders/poster-capture';
 import { RenderStages } from '@/components/renders/render-stages';
 import { renderStage } from '@/components/renders/stage';
 import { WaitBrowse, pickWaitCards } from '@/components/renders/wait-browse';
@@ -59,7 +61,9 @@ export default async function RenderPage({ params, searchParams }: { params: Pro
   // "Not happy with the result?" — what they said before, and whether they just said it.
   const feedback = finished ? await loadRenderFeedback(sql, job.id) : null;
   const feedbackOutcome = typeof query.feedback === 'string' ? query.feedback : null;
-  const stage = pending || held ? renderStage(job) : null;
+  // 0055: when the provider's "done" was seen (the third stage) and whether the film has its frame.
+  const extras = pending || job.status === 'succeeded' ? await loadRenderExtras(sql, job.id) : null;
+  const stage = pending || held ? renderStage({ ...job, finishingAt: extras?.finishingAt ?? null }) : null;
   const [eta, catalog] = stage === null
     ? [null, null]
     : await Promise.all([
@@ -86,6 +90,8 @@ export default async function RenderPage({ params, searchParams }: { params: Pro
   const templateUrl = templateHref(locale, job.templateSlug);
   const shareUrl = job.shareToken && job.shareExpiresAt ? absoluteUrl(shareHref(job.id, job.shareToken)) : null;
   const ready = job.status === 'succeeded' && job.resultMime !== null;
+  // The share card's frame comes from the owner's browser (no ffmpeg on the server): once, quietly.
+  const captureFrame = ready && job.resultMime!.startsWith('video/') && shareUrl !== null && extras?.ready === true && extras.posterKey === null;
 
   return (
     <div data-section data-theme="light" className="section min-h-screen">
@@ -104,6 +110,7 @@ export default async function RenderPage({ params, searchParams }: { params: Pro
           <div className="mt-1 [--result-chrome:16.5rem] lg:flex lg:items-end lg:gap-10 lg:[--result-cap:40rem] lg:[--result-chrome:11.5rem]">
             <div className="lg:shrink-0">
               <ResultMedia src={mediaSrc} mime={job.resultMime!} aspect={job.aspect} alt={title} />
+              {captureFrame && <PosterCapture renderId={job.id} src={mediaSrc} />}
             </div>
             <section data-render-result className="mt-4 max-w-detail lg:mt-0 lg:min-w-0 lg:pb-1">
               {/* Three things to do with it, in the order people do them. One row from 360px up:

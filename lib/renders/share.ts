@@ -59,10 +59,12 @@ export function shareHref(id: string, token: string): string {
  * The bytes. `share` carries the token so an inbox (or the share page) can load the preview
  * without a session; `download` asks for `Content-Disposition: attachment`.
  */
-export function renderMediaHref(id: string, options: { share?: string; download?: boolean } = {}): string {
+/** `poster`: the film's captured frame (0055 `poster_key`) behind the same two doors, never a download. */
+export function renderMediaHref(id: string, options: { share?: string; download?: boolean; poster?: boolean } = {}): string {
   const query = new URLSearchParams();
   if (options.share) query.set('s', options.share);
-  if (options.download) query.set('download', '1');
+  if (options.poster) query.set('poster', '1');
+  else if (options.download) query.set('download', '1');
   const suffix = query.toString();
   return `${RENDER_MEDIA_REST}/${id}${suffix ? `?${suffix}` : ''}`;
 }
@@ -71,4 +73,17 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export function isRenderId(value: unknown): value is string {
   return typeof value === 'string' && UUID.test(value);
+}
+
+/**
+ * Which picture the share card (OG image) uses, best first: an image result is its own card; a
+ * film uses its captured frame once the owner's browser sent one (0055 `poster_key`); otherwise
+ * the template's poster — the closest honest frame there is.
+ */
+export type ShareImageSource = 'result' | 'frame' | 'template';
+
+export function shareImageSource(resultMime: string | null, posterKey: string | null): ShareImageSource {
+  if (resultMime?.startsWith('image/')) return 'result';
+  if (posterKey !== null && resultMime?.startsWith('video/')) return 'frame';
+  return 'template';
 }

@@ -52,9 +52,9 @@ export function RenderStages({ stage, minutes, dict }: { stage: RenderStage; min
         </ol>
       </div>
 
-      <p className="mt-6 text-body">{stage === 'check' ? w.body.check : w.body.make}</p>
+      <p className="mt-6 text-body">{w.body[stage]}</p>
       <p data-render-eta className="mt-2 text-body text-black/70">
-        {interpolate(w.eta, { minutes: String(minutes) })} {w.etaNote}
+        {stage === 'finish' ? w.finishEta : interpolate(w.eta, { minutes: String(minutes) })} {w.etaNote}
       </p>
     </section>
   );

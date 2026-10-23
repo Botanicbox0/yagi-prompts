@@ -8,7 +8,8 @@ import { signInHref } from '@/lib/billing/links';
 import { templateHref } from '@/lib/prompts/links';
 import { getPromptCatalog } from '@/lib/prompts/public-catalog';
 import { loadSharedRender, type RenderView } from '@/lib/renders/service';
-import { renderHref, renderMediaHref, shareHref } from '@/lib/renders/share';
+import { loadRenderExtras } from '@/lib/renders/extras';
+import { renderHref, renderMediaHref, shareHref, shareImageSource } from '@/lib/renders/share';
 import { absoluteUrl } from '@/lib/seo/site-url';
 import { siteOgImage } from '@/lib/seo/og';
 import { ResultMedia } from '@/components/renders/result-media';
@@ -23,8 +24,9 @@ import { TextSwap } from '@/components/ui/text-swap';
  * so and sends the owner to sign in — the render is still theirs on `/renders/{id}`.
  *
  * The share card (TEMPLATES-IA §12 "공유 카드": their frame + make yours): an image result is its
- * own OG image; a film uses the template's poster until a result frame can be extracted (that
- * needs ffmpeg on the server, not done yet). The page stays `noindex` — a capability URL must not
+ * own OG image; a film uses the frame its owner's browser captured on the result page (0055
+ * `poster_key`, served behind this same token), and the template's poster until there is one
+ * (`shareImageSource`). The page stays `noindex` — a capability URL must not
  * enter a search index — while chat apps still unfurl it from the OG tags.
  */
 export const dynamic = 'force-dynamic';
@@ -39,14 +41,15 @@ async function resolve(props: RouteProps) {
   if (sql === null) return null;
   const shared = await loadSharedRender(sql, id, token);
   if (shared.status === 'not_found') return null;
-  return { ...shared, dict: getDictionary(shared.view.job.locale), id, token };
+  const { posterKey } = shared.status === 'ok' ? await loadRenderExtras(sql, id) : { posterKey: null };
+  return { ...shared, dict: getDictionary(shared.view.job.locale), id, token, posterKey };
 }
 
 function titleOf(view: RenderView): string {
   return view.job.locale === 'ko' && view.templateTitleKo ? view.templateTitleKo : view.templateTitle;
 }
 
-/** The template's own poster — the closest honest frame for a film until results get one. */
+/** The template's own poster — the closest honest frame for a film whose owner has not sent one. */
 async function templatePoster(slug: string): Promise<string | null> {
   const catalog = await getPromptCatalog().catch(() => null);
   const card = catalog ? [...(catalog.video ?? []), ...(catalog.image ?? [])].find((item) => item.slug === slug) : undefined;
@@ -58,15 +61,18 @@ const NO_INDEX = { index: false, follow: false } as const;
 export async function generateMetadata(props: RouteProps): Promise<Metadata> {
   const resolved = await resolve(props);
   if (resolved === null) return { robots: NO_INDEX };
-  const { dict, view, id, token } = resolved;
+  const { dict, view, id, token, posterKey } = resolved;
   if (resolved.status !== 'ok') return { title: dict.renders.expiredTitle, robots: NO_INDEX };
 
   const { job } = view;
   const title = interpolate(dict.renders.shareCard.title, { template: titleOf(view) });
   const description = dict.renders.shareCard.description;
-  const image = job.resultMime?.startsWith('image/')
+  const source = shareImageSource(job.resultMime, posterKey);
+  const image = source === 'result'
     ? absoluteUrl(renderMediaHref(id, { share: token }))
-    : await templatePoster(job.templateSlug);
+    : source === 'frame'
+      ? absoluteUrl(renderMediaHref(id, { share: token, poster: true }))
+      : await templatePoster(job.templateSlug);
   const images = image ? [{ url: image, alt: title }] : [{ ...siteOgImage(job.locale), url: absoluteUrl(siteOgImage(job.locale).url) }];
 
   return {
@@ -89,7 +95,7 @@ export async function generateMetadata(props: RouteProps): Promise<Metadata> {
 export default async function SharedRenderPage(props: RouteProps) {
   const resolved = await resolve(props);
   if (resolved === null) notFound();
-  const { dict, view, id, token } = resolved;
+  const { dict, view, id, token, posterKey } = resolved;
   const r = dict.renders;
   const { job } = view;
   const locale = job.locale;
@@ -115,7 +121,7 @@ export default async function SharedRenderPage(props: RouteProps) {
         <section className="mt-4 [--result-chrome:12rem] lg:flex lg:items-end lg:gap-12 lg:[--result-cap:40rem] lg:[--result-chrome:9rem]">
           {/* The object first (§3.2-5), sized to the screen; on a desktop the words sit beside it. */}
           <div className="lg:shrink-0">
-            {job.resultMime && <ResultMedia src={renderMediaHref(job.id, { share: token })} mime={job.resultMime} aspect={job.aspect} alt={titleOf(view)} />}
+            {job.resultMime && <ResultMedia src={renderMediaHref(job.id, { share: token })} mime={job.resultMime} aspect={job.aspect} alt={titleOf(view)} poster={shareImageSource(job.resultMime, posterKey) === 'frame' ? renderMediaHref(job.id, { share: token, poster: true }) : null} />}
           </div>
 
           <div className="min-w-0 lg:max-w-detail lg:pb-1">

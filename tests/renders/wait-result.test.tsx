@@ -11,6 +11,7 @@ const state = vi.hoisted(() => ({
   job: null as Record<string, unknown> | null,
   shared: 'ok' as 'ok' | 'expired' | 'not_found',
   catalog: { video: [] as unknown[], image: [] as unknown[] },
+  extras: { finishingAt: null as string | null, posterKey: null as string | null, ready: true },
 }));
 
 const JOB_ID = '22222222-2222-4222-8222-222222222222';
@@ -40,6 +41,9 @@ vi.mock('@/lib/renders/feedback', () => ({
   submitRenderFeedback: async () => ({ ok: false, code: 'unavailable' }),
   notifyRenderFeedback: vi.fn(),
 }));
+vi.mock('@/lib/renders/extras', () => ({ loadRenderExtras: async () => state.extras }));
+// A client island that renders nothing; the marker says the page mounted it.
+vi.mock('@/components/renders/poster-capture', () => ({ PosterCapture: ({ renderId }: { renderId: string }) => <i data-poster-capture={renderId} /> }));
 vi.mock('@/lib/prompts/public-catalog', () => ({ getPromptCatalog: async () => ({ yagi: [], community: [], ...state.catalog }) }));
 
 import RenderPage from '@/app/(app)/renders/[id]/page';
@@ -49,6 +53,7 @@ import { renderStage, stageSteps } from '@/components/renders/stage';
 import { REFRESH_FAST_MS, REFRESH_SLOW_AFTER_MS, REFRESH_SLOW_MS, refreshDelay, startRefreshLoop } from '@/components/renders/refresh-schedule';
 import { pickWaitCards } from '@/components/renders/wait-browse';
 import { shareOrCopy } from '@/components/renders/share-result';
+import { shareImageSource } from '@/lib/renders/share';
 import { ETA_DEFAULT_SECONDS, ETA_MIN_SAMPLES, etaFromSamples, medianOf } from '@/lib/renders/eta';
 
 const ko = getDictionary('ko');
@@ -77,6 +82,7 @@ const sharedPage = async () => renderToStaticMarkup(await SharedRenderPage({ par
 beforeEach(() => {
   state.job = job();
   state.shared = 'ok';
+  state.extras = { finishingAt: null, posterKey: null, ready: true };
   state.catalog = { video: ['neon-alley-dolly', 'a', 'b', 'c', 'd', 'e'].map((slug) => catalogCard(slug)), image: [catalogCard('portrait', 'image')] };
 });
 
@@ -89,6 +95,27 @@ describe('wait stages (photo check → making → finishing)', () => {
     expect(renderStage({ status: 'running', providerTaskId: null })).toBe('make');
     expect(renderStage({ status: 'succeeded', providerTaskId: 'cgt-1' })).toBe('finish');
     expect(renderStage({ status: 'failed', providerTaskId: null })).toBeNull();
+  });
+
+  it('reads "finishing" once the pass recorded the provider’s done (0055 finishing_at)', () => {
+    const at = '2026-10-23T08:00:00.000Z';
+    expect(renderStage({ status: 'running', providerTaskId: 'cgt-1', finishingAt: at })).toBe('finish');
+    expect(renderStage({ status: 'running', providerTaskId: 'cgt-1', finishingAt: null })).toBe('make');
+    // Only a running job: a requeued or failed one is not finishing, whatever was recorded.
+    expect(renderStage({ status: 'queued', providerTaskId: null, finishingAt: at })).toBe('check');
+    expect(renderStage({ status: 'failed', providerTaskId: 'cgt-1', finishingAt: at })).toBeNull();
+  });
+
+  it('shows the third stage on the wait page, with "soon" instead of the minutes', async () => {
+    state.extras = { finishingAt: new Date().toISOString(), posterKey: null, ready: true };
+    const html = await renderPage();
+    expect(html).toContain('data-render-stage="finish"');
+    expect(html).toContain('data-stage-step="make" data-stage-state="done"');
+    expect(html).toContain('data-stage-step="finish" data-stage-state="current"');
+    expect(html).toContain(ko.renders.wait.body.finish);
+    expect(html).toContain(ko.renders.wait.finishEta);
+    expect(html).not.toContain('보통 4분쯤 걸려요');
+    expect(/<[^>]*role="progressbar"[^>]*>/.exec(html)?.[0]).toContain('aria-valuenow="3"');
   });
 
   it('marks earlier steps done, the current one current, later ones to do', () => {
@@ -260,6 +287,17 @@ describe('the result page (object first, then download · share · one more)', (
     expect(html).toMatch(/data-result-media="video"[^>]*style="[^"]*100svh/);
   });
 
+  it('captures the film’s frame once: only while it has none and the columns exist', async () => {
+    expect(await renderPage()).toContain(`data-poster-capture="${JOB_ID}"`);
+    state.extras = { finishingAt: null, posterKey: `${JOB_ID}/poster.jpg`, ready: true };
+    expect(await renderPage()).not.toContain('data-poster-capture');
+    state.extras = { finishingAt: null, posterKey: null, ready: false };
+    expect(await renderPage()).not.toContain('data-poster-capture');
+    state.extras = { finishingAt: null, posterKey: null, ready: true };
+    state.job = { ...state.job!, resultMime: 'image/png', medium: 'image' };
+    expect(await renderPage()).not.toContain('data-poster-capture');
+  });
+
   it('drops the share action when there is no link', async () => {
     state.job = { ...state.job!, shareToken: null, shareExpiresAt: null };
     const html = await renderPage();
@@ -304,10 +342,26 @@ describe('the share card on /r/{id}/{token} (§12: their frame + "make yours")',
     expect(m.robots).toEqual({ index: false, follow: false });
   });
 
-  it('a film uses the template poster until frames can be extracted', async () => {
+  it('a film uses the template poster until its owner’s browser sent a frame', async () => {
     state.job = { ...state.job!, resultMime: 'video/mp4', medium: 'video', aspect: '9:16' };
     const og = (await meta()).openGraph as { images: Array<{ url: string }> };
     expect(og.images[0]!.url).toBe('https://media.example.test/neon-alley-dolly.jpg');
+  });
+
+  it('a film with a captured frame uses it, behind the same token', async () => {
+    state.job = { ...state.job!, resultMime: 'video/mp4', medium: 'video', aspect: '9:16' };
+    state.extras = { finishingAt: null, posterKey: `${JOB_ID}/poster.jpg`, ready: true };
+    const og = (await meta()).openGraph as { images: Array<{ url: string }> };
+    expect(og.images[0]!.url).toBe(`https://twings.app/api/renders/media/${JOB_ID}?s=${TOKEN}&poster=1`);
+    expect(await sharedPage()).toContain(`poster="/api/renders/media/${JOB_ID}?s=${TOKEN}&amp;poster=1"`);
+  });
+
+  it('picks the card image: an image result, else the film’s frame, else the template', () => {
+    expect(shareImageSource('image/png', null)).toBe('result');
+    expect(shareImageSource('image/png', 'x/poster.jpg')).toBe('result');
+    expect(shareImageSource('video/mp4', 'x/poster.jpg')).toBe('frame');
+    expect(shareImageSource('video/mp4', null)).toBe('template');
+    expect(shareImageSource(null, 'x/poster.jpg')).toBe('template');
   });
 
   it('an expired or unknown link carries no card and stays out of the index', async () => {
