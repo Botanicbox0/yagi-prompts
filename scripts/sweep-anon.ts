@@ -1515,6 +1515,28 @@ async function sweepRenders(): Promise<void> {
     expectEqual(`selfie ${method} refuses cross-origin`, cross.status, 403);
     expectPresent(`selfie ${method} cross-origin response is private`, cross.cacheControl ?? '', 'no-store');
   }
+  // docs/PLATFORM-2.0.md §17 — linked SNS accounts: app surface, owner-only screenshots, a worker door shut without its secret.
+  const socialPage = await request('/identity/social', { headers: { 'user-agent': CHROME_UA } });
+  expectOneOf('SNS page redirects anonymous', socialPage.status, [302,303,307]);
+  expectPresent('SNS page redirects to sign-in', socialPage.location ?? '', 'signin=1');
+  const socialState = await request('/api/identity/social');
+  expectOneOf('SNS state refuses anonymous (closed or sign-in)', socialState.status, [401,404]);
+  expectPresent('SNS state response is private', socialState.cacheControl ?? '', 'no-store');
+  const socialCross = await fetch(`${BASE}/api/identity/social`, {method:'POST',headers:{origin:'https://evil.example'}});
+  expectOneOf('SNS submit refuses cross-origin (closed or forbidden)', socialCross.status, [403,404]);
+  const socialShot = await request('/api/identity/social/00000000-0000-4000-8000-000000000000/evidence');
+  expectEqual('SNS screenshot refuses anonymous', socialShot.status, 401);
+  expectPresent('SNS screenshot response is private', socialShot.cacheControl ?? '', 'no-store');
+  const socialAdminShot = await request('/api/admin/social/00000000-0000-4000-8000-000000000000/evidence');
+  expectEqual('SNS review screenshot hides from anonymous', socialAdminShot.status, 404);
+  for (const action of ['claim', 'complete', 'heartbeat', 'evidence']) {
+    const worker = await request(`/api/social-verify-worker/${action}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
+    expectEqual(`SNS worker ${action} rejects unsigned requests`, worker.status, 404);
+    expectPresent(`SNS worker ${action} refusal is private`, worker.cacheControl ?? '', 'no-store');
+  }
+  const openCampaigns = await request('/campaigns/open', { headers: { 'user-agent': CHROME_UA } });
+  expectOneOf('signed-in campaign list redirects anonymous', openCampaigns.status, [302,303,307]);
+  expectPresent('signed-in campaign list redirects to sign-in', openCampaigns.location ?? '', 'signin=1');
   const selfieOrder = await fetch(`${BASE}/api/billing/toss/orders`, {method:'POST',headers:{origin:BASE},body:new FormData()});
   expectEqual('toss order without a session refuses', selfieOrder.status, 401);
   expectEqual('the identity callback answers a bare hit with a redirect', callback.status, 303);

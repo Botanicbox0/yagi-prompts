@@ -102,6 +102,9 @@ describe('dictionary completeness (§3.9)', () => {
       // 2026-08-16 (founder: "twings로 그냥 하자"): the product is named TWINGS in both locales,
       // with no descriptor after it. A name is not a sentence, so there is nothing to translate.
       'studio.eyebrow',
+      // docs/PLATFORM-2.0.md §17 — "SNS" is the word Korean copy uses too, and the admin queue's empty cell is a dash.
+      'social.eyebrow',
+      'social.admin.none',
     ]);
 
     const untranslated = enLeaves

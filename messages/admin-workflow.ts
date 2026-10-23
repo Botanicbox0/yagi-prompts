@@ -76,6 +76,11 @@ export const adminWorkflowEn = {
       hint: "Review reported results and decide how to respond.",
       action: "Review feedback",
     },
+    socialAccounts: {
+      title: "Check linked SNS accounts",
+      hint: "Look at the follower screenshot and type the number that counts. The local AI's reading is only a suggestion.",
+      action: "Open SNS check",
+    },
     creatorApplications: {
       title: "Review format creator applications",
       hint: "Check the portfolio and example posts, then approve or decline. Approval does not publish any template.",
@@ -233,6 +238,11 @@ export const adminWorkflowKo: typeof adminWorkflowEn = {
       title: "생성 결과 문의를 확인하세요",
       hint: "접수된 결과물을 확인하고 대응 방법을 정합니다.",
       action: "결과 문의 확인하기",
+    },
+    socialAccounts: {
+      title: "SNS 연결 신청을 확인하세요",
+      hint: "팔로워 화면 캡처를 보고 인정할 숫자를 직접 입력합니다. 로컬 AI가 읽은 값은 참고만 해요.",
+      action: "SNS 확인 열기",
     },
     creatorApplications: {
       title: "포맷 작가 지원서를 검토하세요",

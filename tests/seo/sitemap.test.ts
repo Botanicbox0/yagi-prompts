@@ -151,6 +151,7 @@ describe('robots (§8 M5)', () => {
       '/campaigns/*/apply',
       '/campaigns/*/make',
       '/campaigns/mine',
+      '/campaigns/open',
       // docs/TEMPLATES-IA.md §8 — the owner's renders and the 3-day links.
       '/renders',
       '/r/',

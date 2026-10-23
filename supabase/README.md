@@ -70,5 +70,6 @@ operation for a superuser, and it is not something app code can do — that is t
 | 2026-10-23 | `0053_core_push_subscriptions_with_glue_0139` | 0053 + 0139 (`profiles.email` NOT NULL 해제 포함) | #80 |
 | 2026-10-23 | `0054_core_profile_onboarding` | 0054 | #82 |
 | 2026-10-23 | `0056_core_brand_campaign_terms_with_glue_0140` | 0056 + 0140 | #89 |
+| 2026-10-23 | `0057_core_social_accounts_with_glue_0141` | 0057 + 0141 | #90 |
 
-미적용: 0042~0044(월 구독·Premium 수정, 미출시), 0029/0115(옛 portrait 비교, 폐지 경로), 0055(대기 마무리·공유 프레임, render-finish PR — 적용 순서 무관). 다음 번호: core 0057, glue 0141.
+미적용: 0042~0044(월 구독·Premium 수정, 미출시), 0029/0115(옛 portrait 비교, 폐지 경로), 0055(대기 마무리·공유 프레임, render-finish PR — 적용 순서 무관). 다음 번호: core 0058, glue 0142.

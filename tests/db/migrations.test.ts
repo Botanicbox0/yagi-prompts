@@ -151,6 +151,10 @@ describe('migrations apply on a fresh database (PLAN §6)', () => {
       'render_feedback',
       // docs/TEMPLATES-IA.md §8 (2026-09-06) — the render queue: one row per make, from photo to link.
       'render_jobs',
+      // docs/PLATFORM-2.0.md §17.1 (2026-10-23) — linked SNS accounts, their write ledger, the local worker's heartbeat.
+      'social_account_writes',
+      'social_accounts',
+      'social_verify_workers',
       'steps',
       'stripe_events',
       'subscriptions',

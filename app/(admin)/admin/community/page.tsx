@@ -8,11 +8,17 @@ import { getLocaleFromHeaders } from '@/lib/i18n/server';
 import { platformReady } from '@/lib/creator-platform/service';
 import { loadApplicationQueue,loadFormatReviewNotes } from '@/lib/creator-platform/onboarding';
 import { AdminShell,OpForm,OutcomeBanner,INPUT,BUTTON_PRIMARY } from '@/components/admin/chrome';
+import { SocialQueue } from '@/components/admin/social-queue';
+import { loadSocialQueue } from '@/lib/influencers/admin';
+import { lastSocialWorker } from '@/lib/influencers/worker';
 export const dynamic='force-dynamic';
 export default async function PlatformAdminPage({searchParams}:{searchParams:Promise<Record<string,string|string[]|undefined>>}) {
  const [viewer,sql,locale,query]=await Promise.all([getViewer(),getSqlRunner(),getLocaleFromHeaders(),searchParams]);if(!viewer.isAdmin)notFound();
  const dict=getDictionary(locale),c=dict.community;
- const wrap=(children:ReactNode)=><AdminShell dict={dict.admin} locale={locale} active="community"><div className="space-y-6 p-5 sm:p-8"><h1 className="text-2xl font-semibold">{c.adminTitle}</h1><p className="text-sm opacity-65">{c.adminHint}</p><OutcomeBanner dict={dict.admin} ok={typeof query.ok==='string'?query.ok:undefined} err={typeof query.err==='string'?query.err:undefined}/>{children}</div></AdminShell>;
+ // docs/PLATFORM-2.0.md §17.1 — the SNS check sits first and works without the 0051 creator tables.
+ const [socialQueue,socialWorker]=sql?await Promise.all([loadSocialQueue(sql).catch(()=>null),lastSocialWorker(sql).catch(()=>null)]):[null,null];
+ const social=<SocialQueue copy={dict.social} locale={locale} queue={socialQueue} worker={socialWorker}/>;
+ const wrap=(children:ReactNode)=><AdminShell dict={dict.admin} locale={locale} active="community"><div className="space-y-6 p-5 sm:p-8"><h1 className="text-2xl font-semibold">{c.adminTitle}</h1><p className="text-sm opacity-65">{c.adminHint}</p><OutcomeBanner dict={dict.admin} ok={typeof query.ok==='string'?query.ok:undefined} err={typeof query.err==='string'?query.err:undefined}/>{social}{children}</div></AdminShell>;
  if(!sql||!await platformReady(sql))return wrap(<p>{c.unavailable}</p>);
  const [threads,messages,formats,ratings,claims,creators,offers,history]=await Promise.all([
   sql.query<{id:string;user_id:string}>('select id,user_id from platform_threads order by created_at desc limit 40'),

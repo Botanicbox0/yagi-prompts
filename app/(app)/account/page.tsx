@@ -28,6 +28,9 @@ import { SubscriptionStatus } from '@/components/billing/subscription-status';
 import { getSubscriptionSummary } from '@/lib/creator-subscriptions/service';
 import type { SubscriptionSummary } from '@/lib/creator-subscriptions/types';
 import { NotifyChoice } from '@/components/notify/notify-choice';
+import { influencersOpen, isInfluencer } from '@/lib/influencers/rules';
+import { listSocialAccounts, type SocialAccountView } from '@/lib/influencers/service';
+import { SocialAccountCard } from '@/components/identity/social-teaser';
 
 /**
  * `/account` — private creator profile, activity and email preferences.
@@ -100,6 +103,8 @@ export default async function AccountPage({
   let subscription: SubscriptionSummary | null = null;
   let subscriptionLoaded = false;
   let selfies: SelfieLibrary | null = null;
+  const socialOpen = influencersOpen();
+  let social: { influencer: boolean; items: SocialAccountView[] } | null = null;
   try {
     viewer = await getViewer();
     if (viewer.userId !== null) {
@@ -114,6 +119,13 @@ export default async function AccountPage({
         if (creator.status === 'fulfilled') profile = creator.value;
         if (monthly.status === 'fulfilled') { subscription = monthly.value; subscriptionLoaded = true; }
         if (face.status === 'fulfilled') selfies = face.value;
+        // docs/PLATFORM-2.0.md §17.1 — the SNS card, only while TWINGS_INFLUENCERS is on.
+        if (socialOpen) {
+          const userId = viewer.userId;
+          social = await Promise.all([listSocialAccounts(sql, userId), isInfluencer(sql, userId)])
+            .then(([items, influencer]) => ({ influencer, items }))
+            .catch(() => ({ influencer: false, items: [] }));
+        }
       }
     }
   } catch {
@@ -166,6 +178,7 @@ export default async function AccountPage({
             </div>
           </section>
         )}
+        {viewer?.userId && socialOpen && <SocialAccountCard copy={dict.social} influencer={social?.influencer ?? false} items={social?.items ?? []} />}
         {viewer?.userId && <SubscriptionStatus initial={subscription} copy={dict.creatorSubscription} locale={locale} unavailable={!subscriptionLoaded} />}
         <div className="mt-8 max-w-detail">
           <dl>
