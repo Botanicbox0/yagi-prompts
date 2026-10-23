@@ -234,7 +234,8 @@ PR #76의 `identity_selfies`를 그대로 확장한다(새 테이블 없음).
 
 | 모델 | 장당 | 원화 참고 | 참조 입력 | 비고 |
 | --- | --- | --- | --- | --- |
-| GPT Image 2.5 Sunburst / Flare (`gpt-image-2.5-sunburst`, `-flare`) | 토큰 과금(입력 $8·출력 $30/1M), 고정표 없음 — 실측 sunburst ≈ 882원, flare ≈ 532원(코드 원가표) | — | 편집 입력 최대 16장, `input_fidelity` 항상 high | 실인물 통과(실측) |
+| GPT Image 2.5 Flare (`gpt-image-2.5-flare`) | 토큰 과금(입력 $8·출력 $30/1M). **실측 2026-10-24** 1024×1280 xhigh: 텍스트만 $0.081, 셀카 참조 1장 $0.093(참조당 ≈ $0.012) | 5% 플로어 159원 → 최소가 200원 | 편집 입력 최대 16장, `input_fidelity` 항상 high | 실인물 통과·얼굴 유지(실측, 데모 셀카). 2026-10-24 메이커 허용·기본 이미지 엔진 |
+| GPT Image 2.5 Sunburst (`gpt-image-2.5-sunburst`) | 토큰 과금, 코드 원가표 $0.60(미측정) | — | 위와 같음 | 미측정 — 메이커 목록 밖 |
 | GPT Image 2 (`gpt-image-2`) | 1024² high $0.211 | ≈ 295원 | 16장 | 실인물 통과 |
 | Nano Banana Pro (`gemini-3-pro-image`) | $0.134 (1K/2K) · $0.24 (4K) | ≈ 188원 | 객체 ≤6 + 인물 ≤5 + 스타일 ≤3 | 실인물 정책 스모크 필요 |
 | Nano Banana 2 (`gemini-3.1-flash-image`) | $0.067 (1K) · $0.101 (2K) · $0.151 (4K) | ≈ 94 / 141원 | 객체 ≤10 + 인물 ≤4 | 위와 같음 |
