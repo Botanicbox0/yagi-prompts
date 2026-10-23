@@ -51,6 +51,8 @@ export const campaignCollaborationKo = {
     not_open: "현재 캠페인에서 신청이나 변경을 받지 않습니다.",
     not_selected: "선정 후 대화와 파일 공유를 이용할 수 있습니다.",
     slots_full: "모집 인원이 마감되었습니다.",
+    influencer_required:
+      "인플루언서 캠페인이에요. 팔로워 3,000명 이상인 계정을 연결하고 확인을 받으면 참여할 수 있어요.",
     conflict:
       "이미 처리되었거나 입력이 바뀌었습니다. 새로고침 후 상태를 확인해 주세요.",
     rate_limited: "요청이 많습니다. 잠시 후 다시 시도해 주세요.",
@@ -146,6 +148,8 @@ export const campaignCollaborationEn: typeof campaignCollaborationKo = {
       "This campaign is not currently accepting applications or changes.",
     not_selected: "Conversation and files open after selection.",
     slots_full: "All campaign places have been filled.",
+    influencer_required:
+      "This campaign is for influencers. Link an account with 3,000+ followers and, once it is confirmed, you can join.",
     conflict:
       "This request was already processed or its input changed. Refresh to check its status.",
     rate_limited: "Too many requests. Please try again shortly.",

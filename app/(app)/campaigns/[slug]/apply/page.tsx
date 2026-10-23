@@ -7,6 +7,7 @@ import { interpolate, localize } from '@/lib/i18n/format';
 import { formatCampaignDateTime } from '@/lib/campaigns/dates';
 import { signInHref } from '@/lib/billing/links';
 import { loadApplyState } from '@/lib/campaigns/service';
+import { SOCIAL_PATH } from '@/lib/influencers/rules';
 import { payoutSentence } from '@/lib/campaigns/copy';
 import { MY_CAMPAIGNS_PATH, campaignApplyPath, campaignHref } from '@/lib/campaigns/links';
 import { PITCH_MAX, URL_MAX, isApplyField, type ApplyField } from '@/lib/campaigns/schemas';
@@ -76,6 +77,8 @@ export default async function CampaignApplyPage({
         return c.errLocked;
       case 'invalid':
         return c.errInvalid;
+      case 'influencer_required':
+        return dict.social.applyBlockedBody;
       default:
         return null;
     }
@@ -146,6 +149,13 @@ export default async function CampaignApplyPage({
             <a href={MY_CAMPAIGNS_PATH} className="text-accent mt-6 inline-block font-label text-label uppercase">
               <TextSwap>{c.myCampaigns} →</TextSwap>
             </a>
+          </div>
+        ) : state.audienceBlock ? (
+          // docs/PLATFORM-2.0.md §17.2 — the terms stay readable; the form waits for a confirmed account.
+          <div data-apply-influencer-required className="mt-10 max-w-detail rounded-2xl border border-accent p-6">
+            <p className="text-base font-semibold">{dict.social.applyBlockedTitle}</p>
+            <p className="mt-2 text-body leading-relaxed opacity-70">{dict.social.applyBlockedBody}</p>
+            <a href={SOCIAL_PATH} className="mt-5 inline-flex min-h-12 items-center rounded-full bg-accent px-6 text-sm font-semibold text-white">{dict.social.applyBlockedCta} →</a>
           </div>
         ) : !canEdit ? (
           <p data-apply-closed className="mt-10 max-w-detail border border-hairline p-6 text-body opacity-70">

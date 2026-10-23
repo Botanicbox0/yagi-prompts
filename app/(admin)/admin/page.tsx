@@ -21,6 +21,7 @@ import { requireAdmin } from "@/lib/auth/viewer";
 import { loadStudioInbox } from "@/lib/brands/workspace/inbox";
 import { adminNextActions, campaignWorkCounts } from "@/lib/admin/workflow";
 import { loadRiskQueueSummary } from "@/lib/campaigns/risk/admin";
+import { countSocialQueue } from "@/lib/influencers/admin";
 import { countManualTossPayments } from "@/lib/billing/toss-service";
 import { platformReady } from "@/lib/creator-platform/service";
 import { creatorApplicationCount } from "@/lib/creator-platform/onboarding";
@@ -118,6 +119,7 @@ export default async function AdminHomePage() {
     risk,
     paymentsManual,
     creatorApplications,
+    socialAccounts,
   ] =
     sql === null
       ? ([
@@ -129,6 +131,7 @@ export default async function AdminHomePage() {
           0,
           [],
           null,
+          0,
           0,
           0,
         ] as const)
@@ -147,6 +150,8 @@ export default async function AdminHomePage() {
           platformReady(sql)
             .then((ready) => (ready ? creatorApplicationCount(sql) : 0))
             .catch(() => 0),
+          // docs/PLATFORM-2.0.md §17.1 — 0 before 0057; the SNS queue line then stays out.
+          countSocialQueue(sql).catch(() => 0),
         ]);
   const counts =
     sql === null
@@ -173,6 +178,7 @@ export default async function AdminHomePage() {
     templates: pending,
     risk: risk?.ready ? risk.open : 0,
     creatorApplications,
+    socialAccounts,
   });
 
   return (

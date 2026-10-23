@@ -160,6 +160,8 @@ export const DISALLOWED_PATHS = [
   '/campaigns/*/apply',
   '/campaigns/*/make',
   '/campaigns/mine',
+  // docs/PLATFORM-2.0.md §17.2 — the signed-in, per-viewer campaign list.
+  '/campaigns/open',
   // docs/TEMPLATES-IA.md §8 — the owner's renders and the 3-day links: never indexable.
   '/renders',
   '/r/',

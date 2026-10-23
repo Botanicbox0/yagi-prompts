@@ -8,6 +8,7 @@ import { enqueueCampaignRisk } from "@/lib/campaigns/risk/queue";
 import { toCampaign } from "@/lib/campaigns/repo";
 import { toCampaignCard } from "@/lib/campaigns/catalog";
 import type { CreatorCampaign } from "@/lib/campaigns/service";
+import { audienceOf, campaignAccess as audienceAccessFor } from "@/lib/influencers/visibility";
 
 type Row = Record<string, unknown>;
 export type CollaborationCode =
@@ -22,7 +23,8 @@ export type CollaborationCode =
   | "rate_limited"
   | "invitation_retry"
   | "application_ended"
-  | "slots_full";
+  | "slots_full"
+  | "influencer_required";
 export type Outcome<T = { id: string }> =
   ({ ok: true } & T) | { ok: false; code: CollaborationCode };
 export interface Deps {
@@ -515,6 +517,14 @@ export async function acceptInvitation(
       ["declined", "withdrawn", "expired"].includes(String(old.status))
     )
       throw new Denied("application_ended");
+    // docs/PLATFORM-2.0.md §17.2 — the link proves an invitation, not a qualification: an
+    // `influencers` campaign still needs a verified 3,000+ account (or a campaign_targets row).
+    if (
+      !old &&
+      audienceOf(c.audience) === "influencers" &&
+      (await audienceAccessFor(sql, String(c.id), id)) !== "ok"
+    )
+      throw new Denied("influencer_required");
     const held = (
       await sql.query<{ n: number }>(
         "select count(*)::int n from campaign_applications where campaign_id=$1 and status in ('selected','rejected','posted','verified','paid')",

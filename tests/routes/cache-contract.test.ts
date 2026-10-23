@@ -418,7 +418,7 @@ describe('prompts API contract (§13.2)', () => {
  */
 describe('campaigns route contract (docs/CAMPAIGNS.md §6)', () => {
   it('gates exactly /campaigns/{slug}/apply and /campaigns/mine at the edge', () => {
-    for (const path of ['/campaigns/seoul-94-reel/apply', '/campaigns/seoul-94-reel/apply/', '/campaigns/mine']) {
+    for (const path of ['/campaigns/seoul-94-reel/apply', '/campaigns/seoul-94-reel/apply/', '/campaigns/mine', '/campaigns/open']) {
       expect(isCampaignAppPath(path), path).toBe(true);
       expect(isAppPath(path), path).toBe(true);
     }
@@ -427,6 +427,8 @@ describe('campaigns route contract (docs/CAMPAIGNS.md §6)', () => {
       '/campaigns/seoul-94-reel',
       '/campaigns/seoul-94-reel/apply/extra',
       '/campaigns/mine/extra',
+      '/campaigns/open/extra',
+      '/ko/campaigns/open',
       '/en/campaigns',
       '/en/campaigns/seoul-94-reel',
       '/ko/campaigns/mine',
