@@ -117,6 +117,21 @@ describe('sitemap (§8 M5)', () => {
     expect(open.some((url) => url.includes('/creators/'))).toBe(false);
   });
 
+  it('lists public maker pages with reciprocal hreflang, once each maker has a published template (§7.5)', () => {
+    const makers = [
+      { handle: 'jun_01', bio: null, templateCount: 2, latestPublishedAt: '2026-10-20T00:00:00Z' },
+      { handle: 'quiet_maker', bio: 'bio', templateCount: 0, latestPublishedAt: null },
+    ];
+    const built = buildSitemap({ origin: ORIGIN, cards: [], makers });
+    const entry = built.find((item) => item.url === `${ORIGIN}/ko/makers/jun_01`);
+    expect(entry).toBeDefined();
+    expect(entry?.lastModified).toEqual(new Date('2026-10-20T00:00:00Z'));
+    expect(entry?.alternates?.languages).toEqual({ en: `${ORIGIN}/en/makers/jun_01`, ko: `${ORIGIN}/ko/makers/jun_01`, 'x-default': `${ORIGIN}/en/makers/jun_01` });
+    expect(built.some((item) => item.url === `${ORIGIN}/en/makers/jun_01`)).toBe(true);
+    expect(built.some((item) => item.url.includes('quiet_maker'))).toBe(false);
+    expect(urls.some((url) => url.includes('/makers/'))).toBe(false);
+  });
+
   it('never invents modification dates from the time of sitemap generation', () => {
     expect(entries.find((entry) => entry.url === `${ORIGIN}/en`)).not.toHaveProperty('lastModified');
     expect(entries.find((entry) => entry.url.endsWith('/en/p/voice-identity-setup'))).not.toHaveProperty('lastModified');

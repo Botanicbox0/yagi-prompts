@@ -194,3 +194,39 @@ describe('dictionary completeness (§3.9)', () => {
     }
   });
 });
+
+/**
+ * docs/PLATFORM-2.0.md §14.1 (founder 2026-10-24): one name per object. The consumer is "개인" on the
+ * header switch, a campaign participant is "크리에이터", a template supplier is "메이커" ("템플릿
+ * 메이커"), and "작가" — a word for authors of drawings and prose — is gone from the maker program.
+ */
+describe('§14.1 names: 개인 · 크리에이터 · 메이커', () => {
+  // "작가" stays legitimate only where it names an author of a drawing or a story.
+  const UNRELATED = /이모티콘 작가|웹툰 작가|웹소설 작가|그림 작가/;
+
+  it('leaves no "작가" in Korean copy outside unrelated contexts', () => {
+    const offenders = koLeaves.filter(([, value]) => value.includes('작가') && !UNRELATED.test(value));
+    expect(offenders).toEqual([]);
+  });
+
+  it('calls a template supplier a maker in English, not a format creator', () => {
+    const offenders = enLeaves.filter(([, value]) => /format creators?|creator format/i.test(value));
+    expect(offenders).toEqual([]);
+    expect(en.creatorProgram.metaTitle).toBe('Template maker program');
+    expect(ko.creatorProgram.metaTitle).toBe('템플릿 메이커 프로그램');
+    expect(ko.creatorProgram.workspaceTitle).toBe('메이커 공간');
+  });
+
+  it('labels the header switch "개인 | 브랜드" / "Personal | Brands", keeping 크리에이터 for campaigns', () => {
+    expect([ko.audience.personal, ko.audience.brand]).toEqual(['개인', '브랜드']);
+    expect([en.audience.personal, en.audience.brand]).toEqual(['Personal', 'Brands']);
+    expect(ko.audience.creator).toBe('크리에이터');
+  });
+
+  it('names the two catalogue rails and the maker credit', () => {
+    expect([ko.templates.studioRail, ko.templates.makerRail]).toEqual(['TWINGS 오리지널', '메이커 템플릿']);
+    expect(ko.prompts.cardAuthor).toBe('메이커 @{handle}');
+    expect(en.prompts.cardAuthor).toBe('by @{handle}');
+    expect(ko.templates.verified).toBe('검증됨');
+  });
+});

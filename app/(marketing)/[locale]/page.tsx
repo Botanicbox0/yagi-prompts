@@ -43,7 +43,11 @@ export default async function LandingPage({ params }: { params: Promise<{ locale
   const filterOptions = presentUseCases([...new Set(templates.video.flatMap(card => card.useCase))].sort()).map(value => [value, useCaseLabels[value]!] as [string, string]);
   const recruiting = campaigns.campaigns.filter(campaign => campaign.status === 'recruiting');
   const styles = new Map([...templates.video, ...templates.image].map(card => [card.slug, card]));
-  const featured = templates.video.find(card => card.video && card.poster) ?? templates.video[0];
+  // §7.5·§14.1: the home rails are TWINGS 오리지널; maker templates get their own rail after them, only when there are any.
+  const studioVideo = templates.video.filter(card => card.origin !== 'maker');
+  const studioImage = templates.image.filter(card => card.origin !== 'maker');
+  const makerCards = [...templates.video, ...templates.image].filter(card => card.origin === 'maker');
+  const featured = studioVideo.find(card => card.video && card.poster) ?? studioVideo[0] ?? templates.video[0];
   return <>
     <MarketingNav locale={locale} dict={dict} rest="/" />
     <SubscriptionAvailabilityProvider initialAvailability={availability}>
@@ -56,10 +60,11 @@ export default async function LandingPage({ params }: { params: Promise<{ locale
             <p className="mt-4 max-w-xl text-sm leading-relaxed opacity-60">{dict.creatorJourney.libraryBody}</p>
             {filterOptions.length > 0 && templates.video.length >= FILTER_MIN_TEMPLATES && <div className="mt-6"><UseCaseFilter options={filterOptions} labels={{ heading: dict.prompts.filterHeading, all: dict.prompts.filterAll, count: dict.prompts.filterCount, reset: dict.prompts.filterReset }} /></div>}
           </div>
-          <PromptRail id="video" heading={t.video.rail} lede={t.video.railLede} cards={templates.video} locale={locale} labels={labels} useCaseLabels={useCaseLabels} emptyLabel={t.video.emptyTitle} filteredEmptyLabel={dict.prompts.filterEmpty} topClassName="mt-0" />
+          <PromptRail id="video" origin="studio" heading={t.video.rail} lede={t.video.railLede} cards={studioVideo} locale={locale} labels={labels} useCaseLabels={useCaseLabels} emptyLabel={t.video.emptyTitle} filteredEmptyLabel={dict.prompts.filterEmpty} topClassName="mt-0" />
           <a href={templatesHref(locale,'video')} data-all-video className="mt-8 inline-flex min-h-11 items-center text-sm font-medium underline underline-offset-4">{t.allVideo} ↗</a>
-          {templates.image.length > 0 ? <PromptRail id="image" heading={t.image.rail} lede={t.image.railLede} cards={templates.image} locale={locale} labels={labels} useCaseLabels={useCaseLabels} emptyLabel={t.image.emptyTitle} filteredEmptyLabel={dict.prompts.filterEmpty} />
+          {studioImage.length > 0 ? <PromptRail id="image" origin="studio" heading={t.image.rail} lede={t.image.railLede} cards={studioImage} locale={locale} labels={labels} useCaseLabels={useCaseLabels} emptyLabel={t.image.emptyTitle} filteredEmptyLabel={dict.prompts.filterEmpty} />
             : <aside data-image-soon className="mt-10 flex flex-wrap items-center justify-between gap-4 border-t border-hairline pt-6"><p className="max-w-xl text-sm opacity-55">{t.imageSoonTitle}</p><a href={templatesHref(locale,'image')} className="text-sm underline underline-offset-4">{t.ctaImage} ↗</a></aside>}
+          {makerCards.length > 0 && <PromptRail id="makers" origin="maker" heading={t.makerRail} lede={t.makerRailLede} cards={makerCards} locale={locale} labels={labels} useCaseLabels={useCaseLabels} emptyLabel={t.makerRail} filteredEmptyLabel={dict.prompts.filterEmpty} />}
         </div>
       </section>
       <CreatorHowItWorks dict={dict} />

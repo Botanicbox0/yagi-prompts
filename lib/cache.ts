@@ -47,6 +47,16 @@ export function revalidatePrompts(): void {
 }
 
 /**
+ * docs/PLATFORM-2.0.md §7.5 — a maker turned their profile on or off, or changed handle. The credit
+ * on every card and template page moves with tag `prompts`; the maker's own page (old and new
+ * address) is named too so a turned-off profile stops answering at once.
+ */
+export function revalidateMakerProfile(handles: readonly string[]): void {
+  revalidatePrompts();
+  revalidateStaticSurfaces(['/video', '/image', ...handles.map((handle) => `/makers/${handle}`)]);
+}
+
+/**
  * PLAN §14.2 — the contests listing is `[static + tag 'contests']`.
  *
  * A third tag on the same reasoning as the second: publishing a contest, approving an entry and

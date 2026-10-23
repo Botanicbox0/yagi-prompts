@@ -34,6 +34,8 @@ function card(overrides: Partial<PromptCard> = {}): PromptCard {
     title: 'Neon alley dolly',
     titleKo: '네온 골목 달리',
     authorHandle: null,
+    origin: 'studio',
+    makerProfile: false,
     source: 'yagi',
     models: ['seedance-2.5'],
     modelLabels: [PROMPT_MODEL_LABEL],
@@ -99,9 +101,9 @@ describe('prompt card (§13.2)', () => {
     expect(closed).not.toContain('data-lock-chip');
   });
 
-  it('credits a community submitter by @handle, and falls back honestly', () => {
-    expect(cardMarkup(card({ source: 'community', authorHandle: 'hana' }))).toContain('by @hana');
-    expect(cardMarkup(card({ source: 'community', authorHandle: null }))).toContain(
+  it('credits a maker template by @handle, and falls back honestly', () => {
+    expect(cardMarkup(card({ origin: 'maker', source: 'community', authorHandle: 'hana' }))).toContain('by @hana');
+    expect(cardMarkup(card({ origin: 'maker', source: 'community', authorHandle: null }))).toContain(
       labels.cardAuthorAnonymous,
     );
   });
