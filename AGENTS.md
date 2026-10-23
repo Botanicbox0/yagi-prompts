@@ -17,6 +17,7 @@
 
 ## 1. 먼저 읽을 문서
 
+0. `docs/INDEX.md` — 문서 색인(무엇을 언제 읽는지). 그다음 `docs/PLATFORM-2.0.md` — 2026-10-22 이후 설계·단계·대표 결정 대기(§13)의 단일 원본.
 1. `docs/TEMPLATES-IA.md` — 제품 정보구조와 **§12 대표 결정 사항**(포지션, 로드맵, 과금, 자산 경로). 결정을 뒤집는 작업은 하지 않는다.
 2. `docs/CAMPAIGNS.md` — 캠페인 도메인(§1~§10), 브랜드 의뢰 폼(§11), 알림 메일(§12), 브랜드 랜딩(§13).
 3. `README.md` "Where things are" 표, `docs/SETUP.md`(환경), `docs/CONTENT-SLOTS.md`(미디어 슬롯).
@@ -37,13 +38,14 @@
 
 ```powershell
 npx tsc --noEmit
-npx vitest run                 # 100 파일 / 1,200개 이상. 하나라도 빨간색이면 끝난 게 아니다
+npx vitest run                 # 2026-10-23 기준 290+ 파일 / 2,800+ 테스트. 하나라도 빨간색이면 끝난 게 아니다
 npm run build:local            # 프로덕션 빌드(로컬 모드)
-npm run start:local            # 별도 터미널, 3000 포트
-npm run sweep:anon             # 익명 방문자 스윕 477+ 체크, "SWEEP PASSED"가 나와야 한다
+npm run start:local            # 별도 터미널, 3000 포트(다른 포트면 빌드·실행 모두 NEXT_PUBLIC_APP_URL=http://localhost:<port>, 스윕은 SWEEP_BASE_URL)
+npm run sweep:anon             # 익명 방문자 스윕 1,000+ 체크, "SWEEP PASSED"가 나와야 한다
 ```
 
 - 마이그레이션: `supabase/migrations/NNNN_core_*.sql`(스키마) + `NNNN_glue_*.sql`(RLS·권한). PGlite 스냅샷은 `npm run db:local`로 재생성. **클라우드 적용은 대표 또는 Director가 한다.** Executor는 SQL 파일과 "클라우드 적용 필요" 표시만 남긴다.
+- 이 PC에는 `gh`가 없다. PR 생성·체크 확인·병합은 `node scripts/gh-pr.mjs`(git 자격 증명 사용, 값 출력 없음)로 한다. worktree에서는 먼저 `npm ci`.
 - 보고 형식: `git rev-parse HEAD`, `git diff --stat`, 실행한 명령과 출력 요약, 건너뛴 검사, 남은 위험, 다음 행동. 프리뷰 URL이 있으면 함께.
 
 ## 4. 코드 규약
@@ -70,19 +72,23 @@ npm run sweep:anon             # 익명 방문자 스윕 477+ 체크, "SWEEP PAS
 
 **대표 결정 필요(임의 결정 금지)**: 가격·패키지 금액, 신규 템플릿 선정, 고객 사례에 공개할 브랜드명과 수치, 결제 수단·PG 변경, 약관 문구 변경, 외부 발송(메일·SNS) 문안 확정.
 
-## 6. 우선순위와 현재 상태 (2026-09-22)
+## 6. 우선순위와 현재 상태 (2026-10-23)
 
-| # | 작업 | 상태·메모 |
+설계·결정·단계의 단일 원본은 `docs/PLATFORM-2.0.md`다. 아래는 그 요약이며, 둘이 다르면 그 문서가 맞다. 작업 상태는 언제나 PR과 현재 코드로 다시 확인한다.
+
+| # | 영역 | 상태 (2026-10-23) |
 | --- | --- | --- |
-| 1 | **결제 연동(토스페이먼츠)** | 단건 결제 PR #2 병합 완료. 공개 생성 플래그는 닫힘. 테스트 키로 결제창 → 승인 API → 승인 시 `createRenderJob` → 실패 시 자동 환불. 결제 화면에 "생성 개시 후 청약철회 제한" 고지(환불정책 §2와 같은 문장). 라이브 키는 Vercel에서만 교체. Stripe 1회 결제는 해외용으로 유지(`lib/billing/*`). 개방은 코드가 아니라 Vercel 환경변수 `RENDER_PIPELINE_PUBLIC=on` + 라이브 키(운영은 `live_` 키일 때만 열림) — 순서는 `docs/qa/toss-checkout/README.md` "운영 개시". 개방 시점은 대표가 결정. **2026-10-21 토스 심사 통과·계약 진행 중** — 계약 조건(카드 수수료 3.74% 부가세 포함, 계좌이체 2.2%·최소 220원, 정산 거래일+4영업일·수수료 선취, 월 정산한도 1천만원·보증보험 1천만원, 임시 MID 2542)과 가격·마진 영향은 **`docs/TOSS-CONTRACT.md`가 원본**이다. 심사 중에는 `RENDER_PIPELINE_PUBLIC=review`(심사 계정만 결제)가 켜져 있다(`docs/qa/toss-checkout/PG-REVIEW-MODE.md`). |
-| 2 | **SEO·GEO** | metadata, sitemap, OG, JSON-LD, hreflang, `llms.txt`, 독립 FAQ가 구현되어 있다. §7은 유지·회귀 점검 기준이며 새 작업 전 실제 코드와 공개 페이지를 확인한다. |
-| 3 | **캠페인 탭 = 기업이 우리를 쓰는 방법 + 고객 사례** | §13 랜딩 위에 "활용 방식" 그리드와 고객 사례 모듈 추가. 사례 데이터는 정적 매니페스트(`lib/campaigns/case-studies.ts`)로 시작, 공개 항목은 대표 승인분만. 설계는 §8. |
-| 4 | **워딩 SOTA 패스** | 라우트별 모든 문자열을 표로 뽑아 어색함·설득력 기준으로 재작성. 방법은 §9. |
-| 5 | 로드맵 점검(§12) | 크리에이터 프로필, 캠페인 리포트, 공유 카드(OG=사용자 프레임+나도 만들기), 내 트윈 배지, 실패 신고 시 관리자 승인 무료 재생성, 결과물 피드(임계치 후), 템플릿 8~12편(대표). |
+| 1 | **결제(토스페이먼츠)** | 단건 결제(PR #2) + 하드닝(PR #78: 승인 거절 즉시 종결·다시 결제하기·종결 규칙·재시도 상한·웹훅·만료 사진 삭제, PR #84: 웹훅이 2차 활용·캠페인 펀딩 결제도 정리) 운영 반영. Vercel Production은 `RENDER_PIPELINE_PUBLIC=review`(심사 계정만 결제). 10/21 심사 통과, 10/22 전자결제 신청 접수·보증보험 신청. **라이브 키·상점 전용 위젯 키는 계약 완료 뒤 발급** — 지금 키는 문서 예제 키이고 로그에 `toss_docs_key` 경고가 찍힌다. 개발자센터 테스트 단계 웹훅 등록 완료(`https://twings.app/api/billing/toss/webhook`), 라이브 단계는 계약 뒤. 개방(`on`) 런북은 PLATFORM-2.0 §2.3, 계약 조건은 `docs/TOSS-CONTRACT.md`. |
+| 2 | **얼굴 사진** | 생성형 기준 사진 흐름 폐지. 정면 셀카를 `identity_selfies`에 저장(PR #76+#81, 0050/0137 운영 적용), 한도는 `IDENTITY_SELFIE_LIMIT`(기본 1, 약관 §5.3 문안 승인 뒤 10). 스튜디오는 "이 얼굴로 만들까요?" 시트로 묻는다. 설계 `docs/IDENTITY-SELFIE.md`, 옛 portrait 표는 읽기 전용. |
+| 3 | **첫 경험(Phase 1)** | PR #82·#83 운영 반영: 템플릿 페이지 = 결제 결정 화면(CTA 하나·가격 박스·sticky 바), 판매 상태 문장 한 소스(`storefrontOpen()`), 히어로 셀카→장면 증거(콘텐츠 슬롯 `NEXT_PUBLIC_HERO_EVIDENCE_BEFORE/AFTER`, 인물 미정이라 운영은 비움), 가입 직후 시작 시트(0054), 세로 템플릿 4:5 두 열 카드(대표 결정 2026-10-23), 대기 페이지 3단계·ETA, 결과 3동작, 공유 OG. 남은 후속: 마무리 단계 상태, 공유 프레임 캡처, 관련 템플릿 2열, 자동재생 상한(브랜치 `claude/render-finish-*`). |
+| 4 | **설치형 앱·알림** | PR #80 운영 반영: 설치형 PWA 셸(standalone 전용 하단 탭, safe-area, 설치 안내), 웹 푸시(`push_subscriptions`, 0053/0139, Vercel `WEB_PUSH_*` 3개 등록), 이메일은 항상. 스토어 앱은 인앱결제 수수료 때문에 보류(PLATFORM-2.0 §5.1). |
+| 5 | **포맷 작가(AI 크리에이티브)** | PR #54 플랫폼 테이블 + PR #79 지원·작업공간·정산 현황(0051/0138 적용) 운영 반영, 플래그 `TWINGS_COMMUNITY`·`TWINGS_FORMAT_CREATORS`·`TWINGS_CREATOR_APPLICATIONS`·`TWINGS_IMAGE_REWARDS` 전부 **off**. 표기는 "포맷 작가"(ko)/"creator"(en), §14. 레시피 v2(단계·슬롯·공개 선택·캐러셀)와 가산 로열티는 §7·§8 설계만 있고 미구현 — 대표 결정(§13-2) 대기. |
+| 6 | **인플루언서·캠페인·브랜드** | 미구현(Phase 3). 인플루언서 자격(연동 IG/TikTok 팔로워 3,000+)·캠페인 탭 가시성·brand.twings.app 캠페인 마법사 설계는 §6. KAIPER 셀프서비스 코드는 로컬 검증만. |
+| 7 | **관리자** | Phase 4(§10) 대기. 결제 "확인 필요" 카운트와 작가 지원 큐는 `/admin` 홈에 있다. |
 
-얼굴 기준 사진 PR #8과 0028/0114는 운영 반영됐다. 대표의 후속 결정은 최초 셀카로 Sunburst·Seedream 5.0 Pro 각각 1장 비교 후 선택, 둘 다 닮지 않으면 다른 셀카로 Sunburst 1장 추가 무료 생성이다. 기존 Sunburst 2회 규칙을 대체한다. `codex/portrait-comparison` PR #10에 구현했다. Seedream은 2026-09-22 대표가 새로 준 전용 프롬프트·공식 Base64 입력·1664×2496, Sunburst는 기존 프롬프트·1344×2016을 쓴다. Seedream에 Seedance용 `asset://`를 보내던 요청 형식 오류를 수정했으며 실제 API 200을 확인했다. 이것은 셀카 이용 제한이나 얼굴 보존 품질 검증을 의미하지 않는다. 새 0029/0115 클라우드 적용·공개는 별도 단계다. 상세는 `docs/IDENTITY-PORTRAIT.md`. 작업 상태는 PR과 현재 코드로 다시 확인한다.
+**대표 결정 대기**: PLATFORM-2.0 §13(작가 배분 모델, 정산, 인플루언서 기준, 캠페인 티저, 검수 기준, 가격 결정권, 엔진 순서, 약관 문안, 라이브 키 전환 시점)과 §15.5-16(히어로 증거 인물).
 
-**2026-10-22 대표 결정(위 생성 흐름을 대체):** 기준 사진 생성은 없앤다. 정면 셀카 한 장을 올려 저장하고 모든 주문에서 재사용한다(교체 가능). 로그인 후에는 계정 페이지가 아니라 영상 포맷 목록(보던 템플릿이 있으면 그 템플릿)으로 간다. 셀카 업로드 진입점은 템플릿 스튜디오 인라인·계정 첫 카드·헤더 계정 메뉴·`/identity/selfie`. 설계·테이블 결정은 `docs/IDENTITY-SELFIE.md`. 0050/0137 클라우드 적용 필요.
+**운영 적용된 마이그레이션 원장**은 `supabase/README.md` "운영 적용 이력"에 있다. 코드 배포 전에 적용해야 하는 파일이 있으면 PR 본문 "클라우드 적용 필요"에 쓴다.
 
 ## 7. SEO·GEO 체크리스트
 
