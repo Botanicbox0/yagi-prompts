@@ -336,3 +336,49 @@ PR #76의 `identity_selfies`를 그대로 확장한다(새 테이블 없음).
 ### 15.5 대표 결정 추가
 15. **카드 프레임** — **결정(2026-10-23, 대표)**: 세로 템플릿 카드는 **4:5 두 열**. 2026-08-14 "모든 카드 16:9" 결정은 **가로 템플릿에만** 남긴다. §15.3 순서대로 첫 경험 브랜치(§12 단계 1 `onboarding-flow`)에 합쳐 진행.
 16. **히어로 증거 인물**: 셀카→장면 2-up에 쓸 권리 정리된 인물(대표 본인 또는 내부 모델) 선정. 결정 전에는 사이트에 이미 공개된 AI 생성 가이드 인물로 자리만 잡는다.
+
+## 16. brand.twings.app 개편 설계 (2026-10-23)
+
+조사 기준: `app/(brand)/**`, `components/brand-workspace/**`, `lib/brands/workspace/*`, `lib/campaigns/{collaboration,funding}/*`, KAIPER 문서. **정정**: KAIPER 셀프서비스 코드(초대 링크·대화·파일·보상 제안·견적→결제·위험 검토)는 PR #55로 main에 있고 0045·0047~0049는 2026-10-15 운영 적용됐다. 닫혀 있는 것은 플래그다(`CAMPAIGN_COLLABORATION_PUBLIC`, `CAMPAIGN_FUNDING_PUBLIC`+`POLICY_READY`, `CAMPAIGN_PRODUCTION_PUBLIC`, `CAMPAIGN_RISK_*`). §1 표의 "로컬 검증만"은 이 절로 갱신한다.
+
+### 16.1 지금 브랜드가 할 수 있는 것 / 없는 것
+- 할 수 있다: 조직·구성원, 브리프 제출(`/brand/projects/new` 긴 폼 하나 → `brand_projects.requested`), 선정된 참여자만 보기(상태·프로필 URL), 1인용 초대 링크, TWINGS가 낸 견적 수락·결제, 리포트 읽기, 2차 활용 결제, 스튜디오 제작.
+- 없다: **캠페인 만들기**(포맷·보상·슬롯·기간·게시 조건은 관리자만), **지원자 보기**(`applied`는 숨김), **크리에이터 풀**(검증된 크리에이터 표가 없음, 팔로워는 자기 신고), 하나의 캠페인 타임라인(참여자·결제·리포트가 탭 밖 별도 페이지, `bw-*` 스타일 아닌 임시 Tailwind, 문안도 `messages/campaign-*.ts`에 흩어짐).
+
+### 16.2 설계 원칙
+- 브랜드는 **정하고 보고 지불**한다. 선정·검수·지급 확정은 계속 TWINGS가 한다(KAIPER 원칙 유지: 결제가 선정·검수·지급을 대신하지 않는다).
+- 캠페인 하나 = 화면 하나. 프로젝트 상세 탭에 **지원자·참여자·결제**를 합쳐 한 타임라인으로 보여준다(브리프 → 검토 → 모집 → 선정 → 제작·게시 → 리포트 → 정산).
+- 기존 서비스·컴포넌트 재사용: `createBrandProject`·`loadBrandProject`·`loadProjectCollaboration`·`issueInvitation`·`loadCampaignParticipation`(퍼널 수)·`campaignPerformance`·펀딩 `quote→accept→order→confirm`, `ActionForm`·`ConfirmStep`·`ProjectTabs`·`CampaignPerformance`·`ParticipantDetail`·`FundingActions`. 새로 쓰지 않는다.
+- Operate 모드. 브랜드 워크스페이스의 `bw-*` 토큰과 `brandWorkspace` 사전으로 통일한다.
+
+### 16.3 캠페인 마법사 (`/brand/projects/new` 교체)
+5단계, 각 단계가 저장되는 초안(`brand_projects` 확장 + `campaign_drafts` 없이 프로젝트 행에 jsonb `campaign_terms`):
+1. **포맷**: TWINGS 오리지널·작가 포맷(공개 템플릿) 또는 "브랜드 전용 제작 요청". 카드 2열 4:5 미리보기(§15 카드 재사용).
+2. **보상·예산**: 보상 방식(고정/조회수/혼합 — 기존 `payout` 모델), 1인 보상액 범위, 총 예산(부가세 기준 포함), 인원(슬롯).
+3. **대상**: 전체 인플루언서 / 조건(플랫폼·팔로워 최소·성별·지역) / 지정 크리에이터(풀에서 선택 — 16.5 전까지는 초대 링크 방식).
+4. **기간·게시 조건**: 모집 마감·게시 마감, 필수 해시태그·멘션·광고 표기(필수 고정)·금지 사항.
+5. **검토 요청**: 요약 한 화면 → "TWINGS 검토 요청". 상태 `requested`. 관리자는 기존 `/admin/campaigns`에서 `campaigns` 행을 만들고 `bindCollaboration`으로 연결(기존 경로). 마법사 값은 관리자 화면에 미리 채워진다.
+- 저장은 단계마다(이탈해도 유지), 모바일 가능하지만 데스크톱 우선.
+
+### 16.4 캠페인 타임라인 (프로젝트 상세 재구성)
+- 탭: 개요(타임라인·다음 행동) · 브리프 · **지원자/참여자** · **결제** · 리포트 · 파일·대화 · 계약·2차 활용. 참여자·펀딩 페이지는 탭으로 흡수(경로는 리다이렉트로 유지).
+- 지원자 보기: `applied`도 보인다 — 핸들·플랫폼·팔로워(출처 표시: 자기 신고/확인됨)·포트폴리오 링크·지원 메시지. 브랜드는 **"선호"** 표시만 할 수 있고(`brand_preferred_at`), 선정은 TWINGS. 선정 뒤에는 제작·게시·검수 상태와 게시물 링크·지표(출처 표시).
+- 결제 탭: 견적·수락·결제·영수증을 한 흐름으로(기존 `FundingActions` 재배치).
+- 퍼널 숫자(지원→선정→제작→게시→검수→지급)는 `loadCampaignParticipation`.
+
+### 16.5 크리에이터 풀 (§6.1 선행)
+- 전제: `social_accounts`(플랫폼·핸들·팔로워·측정 시각·출처 api|manual·토큰 암호화)와 `profiles.influencer_since`. API 연동 전에는 **수동 확인 경로**(프로필 링크 + 캡처 → 관리자 확인)만.
+- 풀 노출은 동의한 인플루언서만: 핸들·플랫폼·팔로워 구간·대표 작품(공개 결과물 동의분). 연락처·실명 없음. 브랜드는 "초대"만(기존 초대 링크를 계정 지정 초대로 확장).
+- 대표 결정 필요: 3,000 기준의 단일 계정 여부·수동 인증 허용(§13-4), 풀 노출 동의 문안(약관).
+
+### 16.6 데이터·경로
+- `brand_projects.campaign_terms jsonb`(마법사 1~4단계) + `campaigns.audience text`(`public|influencers|invited`) + `campaign_targets(campaign_id,user_id,invited_by,invited_at)` + `campaign_applications.brand_preferred_at`: 마이그레이션 **0056 core / 0140 glue**(0055는 렌더 후속이 쓴다). `social_accounts`는 16.5 때 0057/0141.
+- 공개 캠페인 목록은 `audience='public'`만, 로그인 캠페인 탭은 뷰어별·무캐시.
+- 브랜드 호스트 허용 목록(`lib/routing/surfaces.ts`): 새 상위 경로(`/brand/creators`)와 API(`/api/brand-creators`)는 `isBrandPath`·`brandRouteAllowed`에 추가.
+
+### 16.7 단계
+| 슬라이스 | 내용 | 전제 |
+| --- | --- | --- |
+| B1 마법사+타임라인 | 16.3 + 16.4, 0056/0140, 참여자·펀딩 탭 흡수, 문안 통합 | 없음(플래그는 그대로 off, 화면은 플래그 off에서도 브리프 모드로 동작) |
+| B2 인플루언서 자격·크리에이터 풀 | 16.5, 0057/0141, 수동 인증 관리자 오퍼레이션, 캠페인 탭 가시성(§6.2) | §13-4·5 대표 결정 |
+| B3 개방 | KAIPER 플래그 on, 위험 워커 활성, 라이브 결제 | 토스 라이브 키 |
