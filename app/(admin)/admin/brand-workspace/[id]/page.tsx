@@ -119,6 +119,11 @@ export default async function StudioBrandProject({
           <p className="bw-muted">
             <a href="#conversation">{b.studioCommentsLink} →</a>
           </p>
+          {p.campaignTerms && (
+            <p>
+              <a className="bw-button" data-campaign-from-brief href={`/admin/campaigns/new?project=${p.id}`}>{dict.admin.campaignFromBrief} →</a>
+            </p>
+          )}
         </div>
       </section>
       {p.status === "active" && (

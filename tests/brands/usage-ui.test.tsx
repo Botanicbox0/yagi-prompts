@@ -27,7 +27,9 @@ describe.each(["ko", "en"] as const)("secondary usage tab in %s", (locale) => {
       thumbnailUrl: '/api/brand-workspace/attachments/a0000000-0000-4000-8000-00000000000a' } }));
     const html = renderToStaticMarkup(<ProjectDetail project={project} b={b} locale={locale} usage={view} />);
     expect(html).toContain('data-usage-tab');
-    expect(html).toContain(`href="#usage"`);
+    // Secondary usage shares the contracts tab; its own fragment still opens that tab.
+    expect(html).toContain(`href="#contracts"`);
+    expect(html).toContain(b.tabs.contractsUsage);
     expect(html).toContain(`data-usage-cta="post:${f.postId}"`);
     expect(html).toContain(`value="post:${f.postId}"`);
     expect(html).toContain(c.intents.know_cost);
@@ -35,13 +37,14 @@ describe.each(["ko", "en"] as const)("secondary usage tab in %s", (locale) => {
     expect(html).toContain(c.notice);
     // Only the intent is required; hints, duration, timing and budget are not.
     expect(html).not.toMatch(/name="(hints|durationHint|timingText|budgetKrw)"[^>]*required/);
-    expect(tabFromHash(`#usage=post:${f.postId}`)).toBe("usage");
+    expect(tabFromHash(`#usage=post:${f.postId}`)).toBe("contracts");
   });
   it("hides the tab when there is no usage view (campaign guests)", async () => {
     const project = (await loadBrandProject({ sql: f.sql }, f.editor, f.projectId))!;
     const html = renderToStaticMarkup(<ProjectDetail project={project} b={b} locale={locale} usage={null} />);
     expect(html).not.toContain('data-usage-tab');
     expect(html).not.toContain('href="#usage"');
+    expect(html).not.toContain(b.tabs.contractsUsage);
     expect(html).not.toContain('data-usage-cta');
   });
   it("shows the final quote and its terms to the owner, never the creator amount or evidence", async () => {

@@ -154,7 +154,7 @@ export function FundingCheckout({
           amount: order.amountKrw,
         });
         if (!r.ok) throw Error();
-        window.location.assign(`/brand/projects/${projectId}/funding`);
+        window.location.assign(`/brand/projects/${projectId}#payments`);
       } else {
         const selected = await methods.current?.getSelectedPaymentMethod();
         if (!selected || !fundingWidgetMethodSupported(selected.code)) {
@@ -221,7 +221,7 @@ export function FundingReturn({
     } | null>(null),
     [busy, setBusy] = useState(false),
     parsed = useRef(false);
-  const href = `/brand/projects/${projectId}/funding`;
+  const href = `/brand/projects/${projectId}#payments`;
   useEffect(() => {
     if (parsed.current) return;
     parsed.current = true;

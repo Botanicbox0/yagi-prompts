@@ -10,3 +10,9 @@ export function studioIdentityHref(kind: 'selfie' | 'verify', locale: string, br
   const next = `/identity/${kind}?locale=${encodeURIComponent(locale)}`;
   return publicHref(`/auth/signin?next=${encodeURIComponent(next)}&locale=${encodeURIComponent(locale)}`, brandHost);
 }
+
+/** A campaign page opened on one of its tabs; the former participant and payment pages redirect here. */
+export function projectTabPath(projectId: string, tab: 'applicants' | 'payments', query?: Record<string, string>): string {
+  const search = query && Object.keys(query).length ? `?${new URLSearchParams(query)}` : '';
+  return `/brand/projects/${encodeURIComponent(projectId)}${search}#${tab}`;
+}

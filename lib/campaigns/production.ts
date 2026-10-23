@@ -156,18 +156,20 @@ export async function approveCampaignRetry(deps: Deps, viewer: Viewer, renderId:
 
 export interface CampaignParticipation {
   id: string; slug: string; title: { en: string; ko: string }; slots: number;
+  /** The campaign's own lifecycle state (drives the brand timeline); absent in older fixtures. */
+  status?: import('./schemas').CampaignStatus;
   applied: number; selected: number; generated: number; posted: number; verified: number; paid: number;
   posts: Array<{ id: string; url: string; status: string; renderId: string | null }>;
 }
 /** Internal projection, invoked ONLY after the caller authorized this brand project. No inputs/prompts/money. */
 export async function loadCampaignParticipation(sql: SqlRunner, projectId: string): Promise<CampaignParticipation[]> {
   if (!await campaignProductionSchemaReady(sql)) return [];
-  const rows = (await sql.query<Row>(`select c.id,c.slug,c.title,c.slots,
+  const rows = (await sql.query<Row>(`select c.id,c.slug,c.title,c.slots,c.status,
     count(a.id)::int as applied,count(a.id) filter(where a.status in ('selected','rejected','posted','verified','paid'))::int as selected,
     count(a.id) filter(where exists(select 1 from campaign_render_jobs l join render_jobs j on j.id=l.render_id where l.application_id=a.id and j.status='succeeded'))::int as generated,
     count(a.id) filter(where a.status in ('posted','verified','paid'))::int as posted,
     count(a.id) filter(where a.status in ('verified','paid'))::int as verified,count(a.id) filter(where a.status='paid')::int as paid
     from campaign_productions p join brand_production_contracts b on b.id=p.contract_id join campaigns c on c.id=p.campaign_id
     left join campaign_applications a on a.campaign_id=c.id where b.project_id=$1 group by c.id order by c.created_at`, [projectId])).rows;
-  return Promise.all(rows.map(async r => ({ id: String(r.id), slug: String(r.slug), title: r.title as CampaignParticipation['title'], slots: Number(r.slots), applied: Number(r.applied), selected: Number(r.selected), generated: Number(r.generated), posted: Number(r.posted), verified: Number(r.verified), paid: Number(r.paid), posts: (await sql.query<{ id: string; url: string; status: string; renderId: string | null }>(`select a.id,a.post_url as url,a.status,(select l.render_id from campaign_render_jobs l join render_jobs j on j.id=l.render_id where l.application_id=a.id and j.status='succeeded' order by l.created_at desc limit 1) as "renderId" from campaign_applications a where a.campaign_id=$1 and a.status in ('posted','verified','paid') and a.post_url is not null order by a.posted_at`, [r.id])).rows })));
+  return Promise.all(rows.map(async r => ({ id: String(r.id), slug: String(r.slug), title: r.title as CampaignParticipation['title'], slots: Number(r.slots), status: r.status as CampaignParticipation['status'], applied: Number(r.applied), selected: Number(r.selected), generated: Number(r.generated), posted: Number(r.posted), verified: Number(r.verified), paid: Number(r.paid), posts: (await sql.query<{ id: string; url: string; status: string; renderId: string | null }>(`select a.id,a.post_url as url,a.status,(select l.render_id from campaign_render_jobs l join render_jobs j on j.id=l.render_id where l.application_id=a.id and j.status='succeeded' order by l.created_at desc limit 1) as "renderId" from campaign_applications a where a.campaign_id=$1 and a.status in ('posted','verified','paid') and a.post_url is not null order by a.posted_at`, [r.id])).rows })));
 }

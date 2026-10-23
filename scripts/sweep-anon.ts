@@ -374,6 +374,15 @@ async function sweepNotFound(privateKeys: string[], brandWorkspace: BrandWorkspa
       expectEqual(`${host}${path}: no public fallback or private payload`, page.bytes.length, 0);
       expectEqual(`${host}${path}: no private content or storage keys`, forbidden.some((value) => value.length > 0 && page.body.includes(value)), false);
     }
+    // The campaign wizard and the pages absorbed into the campaign tabs (docs/PLATFORM-2.0.md §16.6)
+    // stay on the brand host: an anonymous visitor is asked to sign in and comes back to the same path.
+    const project = '00000000-0000-4000-8000-000000000000';
+    for (const path of ['/brand/projects/new', `/brand/projects/${project}`, `/brand/projects/${project}/participants`, `/brand/projects/${project}/funding`]) {
+      const page = await request(path, { headers: { host: 'brand.twings.app' } });
+      const next = page.location ? new URL(page.location, BASE).searchParams.get('next') : null;
+      expectEqual(`brand.twings.app${path}: asks to sign in and returns here`, page.status >= 300 && page.status < 400 && next === path, true);
+      expectEqual(`brand.twings.app${path}: no private content or storage keys`, forbidden.some((value) => value.length > 0 && page.body.includes(value)), false);
+    }
   }
 }
 

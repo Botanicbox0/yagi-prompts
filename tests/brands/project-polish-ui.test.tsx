@@ -92,7 +92,10 @@ describe("campaign page", () => {
 
   it("opens the tab a link's fragment names", () => {
     expect(tabFromHash("#review")).toBe("review");
-    expect(tabFromHash("#files")).toBe("files");
+    // Files share the conversation tab; usage shares the contracts tab.
+    expect(tabFromHash("#files")).toBe("conversation");
+    expect(tabFromHash("#usage")).toBe("contracts");
+    expect(tabFromHash("#applicants")).toBe("applicants");
     expect(tabFromHash("#main")).toBeNull();
     expect(tabFromHash("")).toBeNull();
   });
