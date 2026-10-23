@@ -7,6 +7,9 @@ import {
   reconcileTossWebhook,
   tossWebhookHint,
 } from '@/lib/billing/toss-service';
+import { reconcileBrandUsageWebhook } from '@/lib/brands/usage/payment';
+import { reconcileFundingWebhook } from '@/lib/campaigns/funding/payment';
+import { fundingRuntime } from '@/lib/campaigns/funding/runtime';
 
 /**
  * `POST /api/billing/toss/webhook` — 토스페이먼츠 웹훅 (docs/PLATFORM-2.0.md §2.2-5).
@@ -15,6 +18,11 @@ import {
  * that one order is read again at Toss with its own stored payment key and settled by the same
  * rules as the render pass. That is how a cancellation made in the merchant console reaches the
  * database, and why the endpoint needs no signature: a forged hint can only make us look again.
+ *
+ * The merchant account also takes secondary-usage and campaign-funding payments, and its console
+ * has one webhook URL. An order render billing does not know is looked for with the same hint, in
+ * the same environment, in `brand_usage_payments` and then `campaign_funding_payments`, and settled
+ * by that module's own rules. This route is where the three meet; none of the services knows another.
  *
  * Unknown orders and malformed bodies get an empty 200 — nothing to deliver again, and no oracle
  * for which orders exist. Only our own fault (no database, the provider unreachable for a known
@@ -45,7 +53,22 @@ export async function POST(request: Request) {
     const deps = await getTossContext();
     if (!deps) return empty(503);
     const outcome = await reconcileTossWebhook(deps, hint);
-    logBilling('info', 'toss_webhook', outcome.matched ? { matched: true, ...outcome.report } : { matched: false });
+    if (outcome.matched) {
+      logBilling('info', 'toss_webhook', { matched: true, ...outcome.report });
+      return empty(200);
+    }
+    const { sql, gateway } = deps;
+    const usage = await reconcileBrandUsageWebhook({ sql, gateway }, hint);
+    if (usage.matched) {
+      logBilling('info', 'toss_webhook', { matched: true, kind: 'brand_usage', status: usage.status });
+      return empty(200);
+    }
+    const funding = await reconcileFundingWebhook({ sql, gateway, ...fundingRuntime() }, hint);
+    logBilling(
+      'info',
+      'toss_webhook',
+      funding.matched ? { matched: true, kind: 'campaign_funding', status: funding.status } : { matched: false },
+    );
     return empty(200);
   } catch (error) {
     logBilling('error', 'toss_webhook_failed', { code: billingErrorCode(error) });

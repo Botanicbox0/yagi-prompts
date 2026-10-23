@@ -23,6 +23,7 @@ import {
   createFundingOrder,
   confirmFundingPayment,
   reconcileFunding,
+  reconcileFundingWebhook,
   refundFundingPayment,
   releaseUnpaidFundingOrder,
 } from "@/lib/campaigns/funding/payment";
@@ -1008,5 +1009,116 @@ describe("campaign funding boundary", () => {
         )
       ).rows[0]?.status,
     ).toBe("refunded");
+  });
+});
+
+describe("a cancellation in the Toss merchant console (the webhook hint)", () => {
+  const payment = async (id: string) =>
+    (
+      await sql.query(
+        "select status,refunded_at,refund_started_at from campaign_funding_payments where id=$1",
+        [id],
+      )
+    ).rows[0]!;
+  const caseStatus = async (id: string) =>
+    (
+      await sql.query("select status from campaign_funding_cases where id=$1", [
+        id,
+      ])
+    ).rows[0]?.status;
+  const providerSays = (id: string, status: string, balance: number) =>
+    provider.set(id, { ...snapshot(id, id), status, balance });
+  async function received() {
+    const f = await ordered();
+    expect(
+      await confirmFundingPayment(deps(), owner, {
+        orderId: f.order.id,
+        amount: 120000,
+        paymentKey: f.order.id,
+      }),
+    ).toMatchObject({ ok: true, state: "paid" });
+    return f;
+  }
+  it("is learned only from the hint: a receipt whose money went back becomes refunded, with no cancellation of ours", async () => {
+    const f = await received();
+    providerSays(f.order.id, "CANCELED", 0);
+    const before = cancels;
+    // The buyer's status read and the admin pass never read a receipt at the provider again.
+    await reconcileFunding({ ...deps(), now: new Date(+now + 120000) }, f.order.id);
+    expect((await payment(f.order.id)).status).toBe("paid");
+    expect(
+      await reconcileFundingWebhook(deps(), {
+        orderId: f.order.id,
+        paymentKey: "hint_key_never_read",
+      }),
+    ).toEqual({ matched: true, status: "refunded" });
+    expect(await payment(f.order.id)).toMatchObject({
+      status: "refunded",
+      refund_started_at: null,
+    });
+    expect((await payment(f.order.id)).refunded_at).not.toBeNull();
+    expect(await caseStatus(f.caseId)).toBe("refunded");
+    expect(
+      (
+        await sql.query(
+          "select actor_id from campaign_funding_events where case_id=$1 and kind='refunded'",
+          [f.caseId],
+        )
+      ).rows,
+    ).toEqual([{ actor_id: null }]);
+    expect(cancels).toBe(before);
+    // The same hint delivered again changes nothing.
+    expect(
+      await reconcileFundingWebhook(deps(), { orderId: f.order.id }),
+    ).toEqual({ matched: true, status: "refunded" });
+  });
+  it("a partial cancellation moves the receipt to review; canceling the rest settles it as refunded", async () => {
+    const f = await received();
+    providerSays(f.order.id, "PARTIAL_CANCELED", 20000);
+    expect(
+      await reconcileFundingWebhook(deps(), { paymentKey: f.order.id }),
+    ).toEqual({ matched: true, status: "review" });
+    expect(await caseStatus(f.caseId)).toBe("review");
+    providerSays(f.order.id, "CANCELED", 0);
+    expect(
+      await reconcileFundingWebhook(deps(), { paymentKey: f.order.id }),
+    ).toEqual({ matched: true, status: "refunded" });
+    expect(await caseStatus(f.caseId)).toBe("refunded");
+  });
+  it("finds the order by id or key in its own environment only; an unknown hint reads nothing", async () => {
+    const f = await received();
+    let reads = 0;
+    const counting: TossGateway = {
+      ...gateway,
+      async retrieve(key) {
+        reads++;
+        return gateway.retrieve(key);
+      },
+    };
+    const d = { ...deps(), gateway: counting };
+    for (const hint of [
+      {},
+      { orderId: "not-an-order" },
+      { orderId: randomUUID() },
+      { paymentKey: "unknown" },
+    ])
+      expect(await reconcileFundingWebhook(d, hint)).toEqual({ matched: false });
+    expect(
+      await reconcileFundingWebhook(
+        { ...d, gateway: { ...counting, kind: "test" } },
+        { orderId: f.order.id },
+      ),
+    ).toEqual({ matched: false });
+    expect(
+      await reconcileFundingWebhook(
+        { ...d, production: true },
+        { orderId: f.order.id },
+      ),
+    ).toEqual({ matched: false });
+    expect(reads).toBe(0);
+    expect(
+      await reconcileFundingWebhook(d, { paymentKey: f.order.id }),
+    ).toEqual({ matched: true, status: "paid" });
+    expect(reads).toBe(1);
   });
 });

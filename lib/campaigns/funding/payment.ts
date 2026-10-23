@@ -15,6 +15,7 @@ import {
   open,
   schemaReady,
   environmentMatches,
+  uuid,
   type FundingDeps,
   type Row,
   type Outcome,
@@ -351,7 +352,10 @@ export async function confirmFundingPayment(
   }
 }
 
-/** Retrieve-only recovery: an unknown approval or cancellation is never blindly repeated. */
+/**
+ * Retrieve-only recovery: an unknown approval or cancellation is never blindly repeated. A receipt is
+ * read at the provider again only on the webhook's hint (`reconcileFundingWebhook`).
+ */
 export async function reconcileFunding(deps: FundingDeps, paymentId?: string) {
   if (!(await schemaReady(deps.sql)) || !environmentMatches(deps))
     return { checked: 0 };
@@ -403,6 +407,95 @@ async function settleRefund(deps: FundingDeps, o: Row, p: TossPayment | null) {
     await event(sql, o.case_id, o.quote_id, "refunded", null);
     return true;
   });
+}
+
+/**
+ * A receipt the provider changed after payment: a cancellation in the merchant console, whole or in
+ * part (docs/PLATFORM-2.0.md §2.2-5), read with the order's OWN key under the same lease as every other
+ * step. Money that was received and went back in full is recorded as `refunded` — a receipt only
+ * (0049), so nothing else to undo and nothing to cancel again; a partial cancellation goes to `review`.
+ */
+async function settleAfterPayment(deps: FundingDeps, paymentId: string) {
+  const now = clock(deps),
+    token = randomUUID();
+  const o = (
+    await deps.sql.query(
+      "update campaign_funding_payments set lease_token=$2,lease_until=$3 where id=$1 and status in ('paid','review') and approved_at is not null and payment_key is not null and (lease_until is null or lease_until<=$4) returning *",
+      [paymentId, token, new Date(+now + LEASE), now],
+    )
+  ).rows[0];
+  if (!o) return;
+  const release = () =>
+    deps.sql.query(
+      "update campaign_funding_payments set lease_token=null,lease_until=null where id=$1 and lease_token=$2",
+      [o.id, token],
+    );
+  let p: TossPayment | null;
+  try {
+    p = await deps.gateway.retrieve(String(o.payment_key));
+  } catch (error) {
+    // Unknown, not unpaid: the webhook answers 503 and the provider delivers the hint again.
+    await release();
+    throw error;
+  }
+  const next = !p || !matches(p, o)
+    ? null
+    : p.status === "CANCELED" && p.balance === 0
+      ? "refunded"
+      : o.status === "paid" &&
+          !(p.status === "DONE" && p.balance === Number(o.amount_krw))
+        ? "review"
+        : null;
+  if (!next) {
+    await release();
+    return;
+  }
+  await deps.sql.transaction(async (sql) => {
+    await lockCase(sql, String(o.case_id));
+    const updated = (
+      await sql.query(
+        `update campaign_funding_payments set ${next === "refunded" ? "status='refunded',refunded_at=$3" : "status='review',failure_code='payment_review'"},lease_until=null,lease_token=null,updated_at=$3 where id=$1 and status in ('paid','review') and lease_token=$2 returning id`,
+        [o.id, token, clock(deps)],
+      )
+    ).rows[0];
+    if (!updated) return;
+    await sql.query("update campaign_funding_cases set status=$2 where id=$1", [
+      o.case_id,
+      next,
+    ]);
+    await event(sql, o.case_id, o.quote_id, next, null);
+  });
+}
+/**
+ * The Toss webhook's hint for this table (app/api/billing/toss/webhook): the body only names an order.
+ * That one order, in this environment, is read again with its OWN stored key — the receipt rule above,
+ * then the usual recovery — and an unknown order reads nothing.
+ */
+export async function reconcileFundingWebhook(
+  deps: FundingDeps,
+  hint: { orderId?: string; paymentKey?: string },
+): Promise<{ matched: false } | { matched: true; status: string }> {
+  if (!(await schemaReady(deps.sql)) || !environmentMatches(deps))
+    return { matched: false };
+  const find = async (column: "id" | "payment_key", value: string) =>
+    (
+      await deps.sql.query(
+        `select id from campaign_funding_payments where environment=$1 and ${column}=$2`,
+        [deps.gateway.kind, value],
+      )
+    ).rows[0];
+  let o = uuid(hint.orderId) ? await find("id", hint.orderId) : undefined;
+  if (!o && hint.paymentKey) o = await find("payment_key", hint.paymentKey);
+  if (!o) return { matched: false };
+  await settleAfterPayment(deps, String(o.id));
+  await reconcileFunding(deps, String(o.id));
+  const after = (
+    await deps.sql.query(
+      "select status from campaign_funding_payments where id=$1",
+      [o.id],
+    )
+  ).rows[0]!;
+  return { matched: true, status: String(after.status) };
 }
 const Refund = z
   .object({

@@ -434,6 +434,76 @@ describe("payment", () => {
   });
 });
 
+describe("a cancellation in the Toss merchant console (the webhook hint)", () => {
+  const paymentRow = async (id: string) => (await sql.query("select status,failure_code from brand_usage_payments where id=$1", [id])).rows[0]!;
+  async function lostConfirm(q: { caseId: string }) {
+    const order = await pay.createUsageOrder(payDeps(), owner, { caseId: q.caseId, requestId: randomUUID(), consent: true });
+    if (!order.ok) throw Error(order.code);
+    gateway.authorize(order.order.id, TOTAL);
+    gateway.loseConfirmResponse = true;
+    expect(await pay.confirmUsagePayment(payDeps(), owner, { orderId: order.order.id, paymentKey: gateway.keyFor(order.order.id), amount: TOTAL })).toMatchObject({ ok: false, code: "confirm_pending" });
+    return order.order.id;
+  }
+
+  it("is learned only from the hint, by reading the order's own key: review, top of the studio queue, and a refund that never cancels twice", async () => {
+    const r = await paid();
+    await gateway.cancel({ paymentKey: gateway.keyFor(r.orderId), reason: "console", idempotencyKey: "console" });
+    // The scheduled pass never reads a settled order at the provider again.
+    await pay.reconcileBrandUsagePayments({ ...payDeps(), now: new Date(now.getTime() + 120000) });
+    expect(await paymentRow(r.orderId)).toMatchObject({ status: "paid" });
+    expect(await pay.reconcileBrandUsageWebhook(payDeps(), { orderId: r.orderId, paymentKey: "hint_key_never_read" })).toEqual({ matched: true, status: "review" });
+    expect(await paymentRow(r.orderId)).toEqual({ status: "review", failure_code: "provider_canceled_after_paid" });
+    // The license ends only by the studio's decision, with its termination events; until then the case leads the queue.
+    expect(await caseRow(r.caseId)).toMatchObject({ status: "fulfilled", blocked_reason: "payment_canceled" });
+    expect((await u.loadBrandUsage(open(), owner, projectId))!.cases[0]!.payment).toMatchObject({ status: "review" });
+    expect(await pay.resolveUsageCase(payDeps(), studio, { caseId: r.caseId, action: "refund", reason: "Canceled in the Toss console" })).toMatchObject({ ok: true });
+    expect(gateway.cancelCalls).toBe(1);
+    expect(await paymentRow(r.orderId)).toMatchObject({ status: "refunded" });
+    expect(await caseRow(r.caseId)).toMatchObject({ status: "closed", close_reason: "refunded", blocked_reason: null });
+    const brand = (await u.loadBrandUsage(open(), owner, projectId))!.cases[0]!;
+    expect(brand.state).toBe("refunded");
+    expect(brand.grants.map((g) => g.state)).toEqual(["terminated"]);
+  });
+
+  it("a partial cancellation goes to review as well; a case still waiting for activation is blocked and never granted", async () => {
+    const q = await accepted();
+    const orderId = await lostConfirm(q);
+    // Approval recorded, activation not run yet: the step the scheduled pass resumes.
+    await sql.query("update brand_usage_payments set status='paid',approved_at=now(),lease_until=null where id=$1", [orderId]);
+    await sql.query("update brand_usage_cases set status='paid' where id=$1", [q.caseId]);
+    const retrieve = gateway.retrieve;
+    gateway.retrieve = async (key) => { const p = await retrieve(key); return p && { ...p, status: "PARTIAL_CANCELED", balance: TOTAL - 100000 }; };
+    expect(await pay.reconcileBrandUsageWebhook(payDeps(), { paymentKey: gateway.keyFor(orderId) })).toEqual({ matched: true, status: "review" });
+    expect(await paymentRow(orderId)).toEqual({ status: "review", failure_code: "provider_partial_canceled_after_paid" });
+    expect(await caseRow(q.caseId)).toMatchObject({ status: "blocked_after_payment", blocked_reason: "payment_canceled" });
+    await pay.reconcileBrandUsagePayments({ ...payDeps(), now: new Date(now.getTime() + 120000) });
+    expect(await count("brand_usage_grants")).toBe(0);
+    // The studio's refund returns what the provider still holds.
+    expect(await pay.resolveUsageCase(payDeps(), studio, { caseId: q.caseId, action: "refund", reason: "Partly canceled in the Toss console" })).toMatchObject({ ok: true });
+    expect(gateway.cancelCalls).toBe(1);
+    expect(await paymentRow(orderId)).toMatchObject({ status: "refunded" });
+  });
+
+  it("settles only the order it names, in this environment; an unknown or malformed hint reads nothing at the provider", async () => {
+    const a = await accepted();
+    const other = await quoted({ kind: "content_version", id: contentId }, { kind: "content_version" });
+    idOf(await u.acceptUsageQuote(open(), owner, { caseId: other.caseId, quoteId: other.quoteId, expectedRevision: await revisionOf(other.caseId), requestId: randomUUID(), confirmed: true }));
+    const [named, untouched] = [await lostConfirm(a), await lostConfirm(other)];
+    let reads = 0;
+    const retrieve = gateway.retrieve;
+    gateway.retrieve = async (key) => { reads += 1; return retrieve(key); };
+    const later = { ...payDeps(), now: new Date(now.getTime() + 120000) };
+    for (const hint of [{}, { orderId: "not-an-order" }, { orderId: randomUUID() }, { paymentKey: "unknown" }])
+      expect(await pay.reconcileBrandUsageWebhook(later, hint)).toEqual({ matched: false });
+    expect(await pay.reconcileBrandUsageWebhook({ ...later, gateway: { ...gateway, kind: "test" } }, { orderId: named })).toEqual({ matched: false });
+    expect(reads).toBe(0);
+    expect(await pay.reconcileBrandUsageWebhook(later, { orderId: named })).toEqual({ matched: true, status: "paid" });
+    expect(await caseRow(a.caseId)).toMatchObject({ status: "fulfilled" });
+    expect(await paymentRow(untouched)).toMatchObject({ status: "confirming" });
+    expect(gateway.confirmCalls).toBe(2);
+  });
+});
+
 describe("database guards", () => {
   it("quotes, consents and grants cannot be rewritten", async () => {
     const r = await paid();
