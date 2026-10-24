@@ -378,26 +378,42 @@ export const en = {
     "campaignCta": "Explore campaigns"
   },
   brandLanding: {
-    "moatEyebrow": "FROM PRODUCTION TO PUBLISHING",
-    "moat1Title": "AI ad production",
-    "moat1Body": "We build a film format around your product and message, ready for creators to star in.",
-    "moat2Title": "Creator participation",
-    "moat2Body": "We recruit creators for your brand and make the ads with their own faces.",
+    "moatEyebrow": "FROM PRODUCTION TO PUBLISHING · BUILT TO SCALE",
+    "moat1Title": "High-quality AI video format",
+    "moat1Body": "We design a dedicated AI ad format built around your product and story — turning a single selfie into consistent, studio-grade video.",
+    "moat2Title": "5,000+ creator matching",
+    "moat2Body": "We match creators across Korea and Japan with zero additional sourcing commission and produce each film with their own face and zero live shoots.",
     "moat3Title": "Publishing and reporting",
-    "moat3Body": "We review films and ad disclosures, manage publishing, and collect posts and verified results.",
+    "moat3Body": "We review every film and ad disclosure for Korean and Japanese regulations, manage channel publishing, and deliver verified post links and results.",
     "metaTitle": "Creator Campaigns for Brands",
-    "metaDescription": "AI ad production and creator campaigns across Korea and Japan, from recruitment to publishing and reporting. Explore simultaneous market launches and real Morphic work.",
+    "metaDescription": "Scalable AI video formats, 5,000+ creator campaigns across Korea and Japan, and high-end brand film production by YAGI WORKSHOP. Explore real Morphic results.",
     "marketsHeading": "Korea and Japan.\nOne campaign.",
-    "marketsBody": "Reach both markets simultaneously through our creator pools in Korea and Japan. We choose the message and creators for each market, then manage recruitment, publishing schedules, and reporting together.",
-    "eyebrow": "TWINGS FOR BRANDS",
+    "marketsBody": "Reach both markets simultaneously through our 5,000+ partnered creator pools in Korea and Japan with no additional sourcing commission. We match the right creators for each market and scale one format into dozens of local channel posts with zero live shoots.",
+    "eyebrow": "TWINGS FOR BRANDS · YAGI WORKSHOP",
     "title": "Brand ads\ncreators want\nto be part of.",
-    "body": "We produce AI ads starring real creators and manage publishing on their channels. One team handles production, recruitment, content review, and reporting.",
+    "body": "We design high-quality AI video formats finished from a single selfie, star real creators with licensed likenesses, and manage publishing on their channels across Korea and Japan.",
     "primaryCta": "Discuss your campaign",
     "secondaryCta": "See campaign results",
-    "definition": "TWINGS is a creator campaign studio that develops a branded video format, recruits creators to take part, and manages publishing across their channels.",
+    "definition": "TWINGS is an AI brand campaign and production studio operated by YAGI WORKSHOP Inc. We combine influencer likeness licensing, custom AI video formats, and a 5,000+ creator network across Korea and Japan to deliver scalable content distribution.",
+    "formula": {
+      "item1Title": "Influencer Likeness Licensing",
+      "item1Body": "Pre-cleared creator likenesses under enterprise security isolation",
+      "item2Title": "High-Quality AI Video Format",
+      "item2Body": "Custom cinema-grade formats completed from a single selfie",
+      "item3Title": "Scalable Content Distribution",
+      "item3Body": "Simultaneous publishing across Korea & Japan with 0 live shoots"
+    },
+    "scalePillars": {
+      "networkValue": "5,000+ Pool",
+      "networkLabel": "Partnered creator network across Korea and Japan with no additional sourcing commission",
+      "shootsValue": "0 Live Shoots",
+      "shootsLabel": "Consistent studio quality across every participating creator from a single selfie",
+      "complianceValue": "Enterprise Security",
+      "complianceLabel": "Zero AI model training guarantee · AES-256 encrypted isolation · KR/JP ad disclosure review"
+    },
     "reelEyebrow": "AI ADS × CREATORS",
     "reelHeading": "Your brand ad.\nTheir own face.",
-    "reelBody": "Turn one ad format into films starring different creators. We manage real channel posts that introduce your product or service.",
+    "reelBody": "One crafted format turns into dozens of creator films with consistent quality. Creators publish their own-face versions on their channels to put your brand in front of real audiences.",
     "formats": {
       "city": {
         "title": "City fashion film",
@@ -420,11 +436,11 @@ export const en = {
     },
     "typesEyebrow": "CREATIVE EXAMPLES",
     "typesHeading": "Ads we can make for you.",
-    "typesBody": "From product films to service experiences people want to try.",
+    "typesBody": "From hero product launch films to viral formats audiences want to recreate themselves.",
     "cases": {
       "morphic90s": {
         "eyebrow": "MORPHIC · AUGUST 2026 · 1990s INTERVIEW CAMPAIGN",
-        "body": "One selfie becomes a 1990s-style TV interview. Creators published their films and shared instructions with viewers in the comments. People outside the campaign began making their own versions.",
+        "body": "One selfie becomes a 1990s-style TV interview. After 9 initial seed videos launched, creators and viewers shared instructions in the comments — sparking 300+ organic recreations outside the campaign.",
         "films": [
           "1990s interview · published film 01",
           "1990s interview · published film 02"
@@ -435,31 +451,34 @@ export const en = {
         "note": "Public campaign-level totals from the August 2026 campaign. Views include repeat plays; conversion rates were not tracked separately.",
         "metrics": {
           "films": {
-            "label": "campaign films"
+            "label": "initial seed videos"
           },
           "views": {
-            "label": "total views"
+            "label": "campaign views"
           },
           "organic": {
-            "label": "derivative organic posts"
+            "label": "audience-made recreations"
           }
         }
       },
       "morphicSeptember": {
-        "eyebrow": "MORPHIC · SEPTEMBER 2026 FOLLOW-UP",
-        "body": "We ran Morphic's creator campaigns in Korea and Japan. TWINGS managed format production, recruitment, post review, and reporting.",
+        "eyebrow": "MORPHIC · SEPTEMBER 2026 · KOREA & JAPAN FOLLOW-UP",
+        "body": "Following the August breakout, we scaled Morphic's creator campaigns across Korea and Japan with zero live shoots. TWINGS handled format production, cross-border recruitment, post review, and reporting.",
         "note": "Production films from the September campaign. Follow the Instagram links to see posts from Korea and Japan.",
-        "postsHeading": "Original Instagram posts",
+        "postsHeading": "Original Instagram posts (Korea · Japan)",
         "films": [
           "Morphic September campaign film 01",
           "Morphic September campaign film 02"
         ]
       }
     },
-    "productionEyebrow": "Also by YAGI",
+    "productionEyebrow": "YAGI PRODUCTION",
     "productionHeading": "AI production.\nBrand ad films.",
-    "productionBody": "We plan and produce product ads and campaign films. You can commission a film without a creator campaign. Explore real work from YAGI, the studio behind TWINGS.",
+    "productionBody": "From imagination to brand campaigns beyond reality. Collaborating with Galeries Lafayette in France, The Hyundai in Korea, and leading fashion and beauty brands, YAGI produces standalone product ads and campaign films even without a creator campaign.",
+    "productionCollabs": "Collaborations with Galeries Lafayette (France) · The Hyundai (Korea) · Leading fashion & beauty brands",
     "productionDeckCta": "View the production portfolio",
+    "companyDeckCta": "View company introduction (Pitch)",
+    "companyDeckUrl": "https://pitch.com/v/yagi-workshop-introduction-en-higgsfield-kb35ht",
     "productionFilms": [
       "Paris campaign film · YAGI production"
     ],
@@ -468,7 +487,7 @@ export const en = {
     "pricingNote": "The estimate calculator is currently in Korean. You can use the English enquiry form here.",
     "inquiryEyebrow": "START A PROJECT",
     "inquiryHeading": "Let’s make\nyour brand ad.",
-    "inquiryBody": "Tell us about your brand and the film you want to make. We’ll get in touch by email.",
+    "inquiryBody": "Tell us about your brand and the film or campaign you want to build. Our directors will reply promptly by email.",
     "inquiryClose": "Close enquiry",
     "inquiryDialogTitle": "Video and campaign enquiry",
     "legacyBrandLink": "Looking to run a brand campaign?",
@@ -480,15 +499,15 @@ export const en = {
         "jp01": "Japan · published film 01",
         "jp02": "Japan · published film 02"
       },
-      "eyebrow": "CUSTOMER STORIES",
+      "eyebrow": "CUSTOMER STORIES · PROVEN AT SCALE",
       "title": "Creator campaigns\nwith Morphic.",
-      "summary": "A collaboration that started with 1990s interviews and continued with creator campaigns across Korea and Japan.",
+      "summary": "How 9 initial seed videos sparked 2M+ views and 300+ audience recreations, then scaled into follow-up campaigns across Korea and Japan.",
       "detailCta": "Read the Morphic story",
       "allCta": "Explore customer stories",
       "indexTitle": "Brand campaigns.\nMade with creators.",
       "indexBody": "Explore the actual films, published posts, and verified results.",
       "back": "Explore brand services",
-      "augustHeading": "A 1990s interview\npeople wanted to make.",
+      "augustHeading": "9 seed videos that\nsparked a trend.",
       "septemberHeading": "Creator campaigns\nacross Korea and Japan.",
       "metaTitle": "Morphic creator campaign case study",
       "metaDescription": "Explore real posts from Morphic’s 1990s interview campaign, August totals of 2M+ views and 300+ organic derivatives, and the September Korea and Japan follow-up.",
@@ -497,16 +516,16 @@ export const en = {
     },
     "examples": {
       "launch": {
-        "title": "Product ads",
-        "body": "Put your product at the centre of a scene and introduce it on creator channels."
+        "title": "Product & collection launches",
+        "body": "Put your hero product at the center of a cinematic scene and launch simultaneously across dozens of creator channels."
       },
       "app_platform": {
-        "title": "Apps and services",
-        "body": "Show what your service can do through results creators make themselves."
+        "title": "Viral formats for apps & platforms",
+        "body": "Drive organic reach and product adoption with a format audiences actively want to try and recreate."
       },
       "beauty_fashion": {
-        "title": "Beauty and fashion",
-        "body": "Bring your brand’s visual world to life with creators as the lead."
+        "title": "Beauty & fashion editorials",
+        "body": "Bring high-fashion visual worlds to life with real creators in the lead — without the uncanny valley."
       }
     }
   },
@@ -2284,7 +2303,7 @@ export const en = {
     body: 'The film engine will not take a real person’s photo as it is. To use your own face you verify it once with your camera; after that, every photo you upload is matched against the verified face.',
     steps: {
       camera: 'Use a phone or a device with a webcam.',
-      english: 'The check runs on a BytePlus page, in English.',
+      english: 'The check runs on an enterprise security partner page, in English.',
       minute: 'It takes about a minute, and you only do it once.',
     },
     start: 'Start verification',
@@ -2298,7 +2317,7 @@ export const en = {
     pendingBody: 'If you closed the check, reopen it and finish. You can also start over.',
     failedTitle: 'Verification did not complete',
     failedBody: 'Try again in front of the camera. Bright light and a straight-on face work best.',
-    privacy: 'The face check follows BytePlus’s real-person asset library rules, and your photo is used only to make your result.',
+    privacy: 'Face verification is encrypted under enterprise real-person asset security rules. Your photo is used only to generate your results and is never used to train AI models.',
     err: {
       unavailable: 'The identity service is not connected yet. The team is looking into it.',
       no_capacity: 'Verification is full right now. Try again in a little while.',
@@ -3127,67 +3146,67 @@ export const en = {
     eyebrow: 'Questions',
     title: 'Questions, answered',
     q1: 'Can I browse without an account?',
-    a1: 'Yes. Every template and every example result is public. You sign in only to make one with your own photo, so the result stays on your account.',
+    a1: 'Yes. Every template and example film is public. You only sign in when making a film with your own photo so the result stays in your account.',
     q2: 'What does it cost?',
-    a2: 'A single film costs the price shown on its template. Upcoming monthly plans are Creator at KRW 24,900 and Premium at KRW 49,000. At 720p and 15 seconds, they include up to four and eight films respectively. Use the pricing preview to compare different film lengths. Public checkout and subscription enrollment are not open yet.',
+    a2: 'Single films are priced individually on each template page. Upcoming monthly plans are Creator at KRW 24,900 (up to 4 films at 720p, 15s) and Premium at KRW 49,000 (up to 8 films). Compare different film lengths on the pricing page. Public checkout and subscriptions are opening soon.',
     q3: 'What happens to my photo?',
-    a3: "Upload photos of your own face only. Each photo passes the AI provider's (BytePlus) automated review and is registered to the one likeness asset group an account may hold, used only to make that account's results. Rendering runs on the AI engines we contract (BytePlus, OpenAI). Where a report or a warning sign appears we may ask for a camera check, and reports of a misused likeness are reviewed within 24 hours. Deleting your account deletes your photos and results with it. Article 5 of the terms and the privacy policy have the details.",
+    a3: "Upload photos of your own face only. Each photo passes the provider's automated review and is encrypted inside the single likeness asset group an account may hold, used solely to generate your results. Under our enterprise data protection agreements (DPA), uploaded photos and generated outputs are never used to train or fine-tune external AI models. If a report or anomaly occurs we may request a camera check, and reports of a misused likeness are reviewed within 24 hours. Deleting your account permanently deletes your photos and results with it. See Article 5 of the Terms and the Privacy Policy for full details.",
     q4: 'How long does it take?',
-    a4: 'A film usually takes 2-5 minutes; an image is faster. You can close the tab — we tell you when it lands.',
+    a4: 'A film usually finishes in 2–5 minutes, and images are even faster. You can close the tab while it renders — we notify you by email and web push when it is ready.',
     q5: 'What is a campaign?',
-    a5: "A paid project where a brand picks one template and commissions the same format from many creators. Creators apply; those selected make their own-face version with that template, post it on their channel, and are paid once the link is reviewed and the campaign's own holding period has passed. Each campaign page lists that period with the fee.",
+    a5: "A paid project where a brand commissions one dedicated AI video format across multiple creators. Selected creators make their own-face version, publish it on their channel, and receive their payout once the post link is verified and the campaign's holding period ends. Each campaign page lists the fee and holding period upfront.",
     q7: 'I run a brand. Can I open a campaign?',
-    a7: "Yes. Use the enquiry form on the Brands page to share your goals, total budget, preferred channels and references. The studio agrees the scope with you and manages production and recruitment. Ongoing campaigns, content and reports are available in your brand workspace.",
+    a7: "Yes. Share your goals, budget, target channels, and references through the enquiry form on the Brands page. Our directors will scope the format and manage production, creator matching, and publishing. You can track live posts and verified reports in your brand workspace.",
     q8: 'What if the result comes out wrong?',
-    a8: 'Because it is made with AI, details like hands, lettering and backgrounds may come out a little differently from the sample. The scene and the length follow the sample. If it does not play, or the face you uploaded is not in it, use "Something wrong with the film?" on the result page. The refund policy says how we handle it.',
+    a8: 'Scene structure and duration match the sample film, though AI generation can occasionally vary in fine details like fingers or background text. If a video fails to play or your uploaded face does not appear, click "Something wrong with the film?" on the result page and we will resolve it under our refund policy.',
     q6: 'Do you take production work?',
-    a6: "Yes. You can commission standalone video or filter production from YAGI. Choose production in the enquiry form on the Brands page and share your goals and references.",
+    a6: "Yes. You can commission standalone brand films or AI visual production directly from YAGI without running a creator campaign. Select production in the Brands enquiry form and share your brief.",
     q9: "How does a creator campaign work?",
-    a9: "We start by creating an AI video format built around your product and message, then recruit creators to participate. With each creator's consent, we produce videos featuring their faces. TWINGS then handles content and ad disclosure reviews, channel posting, creator payments, and performance reporting.",
+    a9: "We design a dedicated AI video format around your product and story, then match creators who fit your brand. With each creator's prior consent, we produce the films featuring their own faces and handle quality checks, ad disclosure compliance, channel publishing, creator payouts, and final reporting.",
     q10: "How is this different from a typical influencer ad?",
-    a10: "We create a video format that creators want to star in. Because the same concept can feature different creators' faces, multiple creators can join a single campaign. In Morphic's 90s interview campaign, people outside the campaign also started making their own content in the same format.",
+    a10: "We start by building an AI video format that creators and audiences genuinely want to star in. With zero live shoots, dozens of creators can publish consistent, studio-grade films starring their own faces at the same time. In Morphic's 1990s interview campaign, viewers outside the campaign immediately began recreating the format on their own.",
     q11: "Can I commission a film without a creator campaign?",
-    a11: "Yes. You can commission YAGI to plan and produce product ads, brand films, or campaign films without a creator campaign. Explore our production portfolio for past work, and tell us what you'd like to make through the enquiry form.",
+    a11: "Yes. You can commission YAGI for standalone product launch films, brand campaigns, and high-fashion AI visuals. Review our production portfolio and company introduction deck on the Brands page, then send us your brief.",
     q12: "How are campaign costs and schedules set?",
-    a12: "It depends on the number and length of videos, participating creators, publishing channels, usage rights, and your preferred timeline. Tell us about the videos and campaign you have in mind, and we'll provide an estimate and schedule after reviewing your needs.",
+    a12: "Pricing and timelines depend on format complexity, video length, creator count, target markets (Korea and Japan), and secondary ad usage rights. Share your target budget and schedule in the enquiry form and our directors will reply with a tailored proposal.",
     q13: "How do you report campaign results?",
-    a13: "We share view counts and engagement alongside the post links, and tell you when the data was collected. To measure conversions like purchases or sign-ups, a tracking method such as tracking links needs to be set up before the campaign begins.",
+    a13: "We deliver every published post link alongside verified view counts, reach, and engagement metrics stamped with the collection time. If you need conversion tracking for purchases or sign-ups, we set up UTM parameters or tracking links with you before launch.",
     q14: "Can my brand reuse creator films in its own ads?",
-    a14: "Yes. You can agree on usage rights before the campaign starts, or purchase a license for a particular video after the campaign ends. Channels, duration, paid advertising, and re-editing permissions are agreed with the creator.",
+    a14: "Yes. We can bundle secondary usage rights upfront before launch, or license standout creator films after the campaign wraps. Channels, duration, paid media whitelisting, and re-editing terms are cleared directly with each creator.",
     q15: "How do you handle likeness rights, personal data, and AI ad disclosures?",
-    a15: "Creators take part using their own likeness, with their consent. The AI model provider runs automated moderation before video generation, and our team checks the content and ad disclosures before publishing. We apply the required labels based on Korean advertising guidelines, Japan's stealth marketing regulations, and each platform's AI content policies. Face photos are processed only for video production, and only staff who need access for their work can view the materials. Our privacy policy lists processing partners and explains overseas processing, retention, and deletion. Likeness misuse reports are reviewed within 24 hours of receipt.",
+    a15: "Creators participate using their own likeness with explicit prior licensing and consent. All face photos and brand assets are protected under enterprise data protection agreements (DPA) with TLS 1.2+ in-transit and AES-256 at-rest encryption, processed strictly for campaign production, and never used to train external AI models. Before publishing, our team verifies every post against Korean FTC disclosure rules, Japan's stealth marketing regulations, and platform AI labeling policies. Processing partners, overseas processing, retention, and deletion rules are detailed in our Privacy Policy, and likeness misuse reports are reviewed within 24 hours.",
     q16: "Can you run creator campaigns in Korea and Japan at the same time?",
-    a16: "Yes. We can run campaigns simultaneously through our creator pools in Korea and Japan. We tailor the messaging and creators to each market and handle production, posting, and performance reporting. Our Morphic campaigns ran in both countries.",
+    a16: "Yes. Through our 5,000+ partnered creator pools in Korea and Japan, we run campaigns across both markets simultaneously with no additional sourcing commission. We localize the messaging, match creators for each country, and manage production, publishing, and reporting end to end — just as we did for Morphic across Korea and Japan.",
     q17: "Can I subscribe or generate videos right now?",
-    a17: "For now you can browse templates and example videos. Subscriptions, payments, and video generation are in preparation — we'll update this page when they're ready.",
+    a17: "Right now you can browse all public templates and sample films. Public checkout, monthly subscriptions, and video generation are in final preparation and will open on this page soon.",
     q18: "How many videos can I make per month?",
-    a18: "For 15-second videos, Creator is planned to include up to 4 and Premium up to 8. These are estimates for 720p portrait or widescreen video. The count changes with length, resolution, and aspect ratio. Compare lengths on the pricing page, or mix different lengths in one month.",
+    a18: "At 720p and 15 seconds, Creator includes up to 4 films per month and Premium includes up to 8. Usage scales with duration, resolution, and aspect ratio. You can compare lengths on the pricing page and mix different durations within your monthly allowance.",
     q19: "What does Premium add?",
-    a19: "More videos under the same conditions, plus a custom edit feature we're preparing alongside the plan — describe a change you want or add a reference image to adjust part of the video. The video's core structure and length stay the same, and what can be changed varies by template. Production prompts are not exposed or directly editable.",
+    a19: "Premium doubles your monthly allowance and adds guided custom edits — letting you describe a tweak or attach reference images to adjust part of a scene while preserving the template's core camera work and timing. Raw production prompts remain proprietary.",
     q20: "Does unused allowance roll over?",
-    a20: "We're preparing plans with a fresh allowance each month. Unused allowance won't carry over. If you only need a video once in a while, we're also preparing a one-off option without a monthly plan.",
+    a20: "Monthly allowances reset each billing cycle and unused volume does not roll over. If you only need an occasional film, you will also be able to purchase single templates one at a time without a subscription.",
     q21: "What happens when I use up my monthly allowance?",
-    a21: "We're preparing a way to pay for additional videos one at a time. Pricing will be shown on the relevant template page. We'll share full details before payments open.",
+    a21: "You will be able to purchase additional films individually at the price shown on each template page. Full details will be announced when public checkout opens.",
     q22: "Will the result look exactly like the example?",
-    a22: "Your face is placed into the same format as the example. Because this is AI-generated video, details like expressions or backgrounds may differ. For best results, use a well-lit, front-facing photo of yourself with eyes, nose, and mouth clearly visible.",
+    a22: "Your face is integrated into the exact camera direction and scene structure of the sample film. Because every video is generated with AI, subtle expressions or background details can vary slightly. Use a well-lit, front-facing photo with your eyes, nose, and mouth clearly visible for the best result.",
     subscriptionOpen: {
-      a1: 'Yes. Every template and every example result is public. You sign in only to make one with your own photo, so the result stays on your account.',
-      a2: 'A single video costs the price shown on its template. Monthly plans are Creator at KRW 24,900 and Premium at KRW 49,000. For 15-second 720p videos, the plans include up to four and eight respectively. Compare lengths and included features on the pricing page.',
-      a17: 'Yes. Choose an available monthly plan and register your payment card. Your monthly usage becomes available after the first payment is confirmed. You can also check the single-video option on each template.',
-      a18: 'At 15 seconds, Creator includes up to 4 videos and Premium up to 8. These estimates assume 720p portrait or widescreen video. The count varies by template length and format. You can mix different lengths within your monthly usage.',
-      a19: 'Premium includes more videos under the same conditions and small custom edits on supported templates. Describe a change and optionally add up to 3 reference images. The scenes, length, and your face stay the same. Larger changes may make the result less accurate.',
-      a20: 'Your monthly usage starts fresh each period. Unused usage does not carry over. You can stop renewal in your account and continue using the plan until the current period ends.',
-      a21: 'You can pay for another video individually, at the price shown on its template. Your next subscription period starts with fresh monthly usage.',
+      a1: 'Yes. Every template and example film is public. You only sign in when making a film with your own photo so the result stays in your account.',
+      a2: 'Single films are priced individually on each template. Monthly plans are Creator at KRW 24,900 (up to 4 films at 720p, 15s) and Premium at KRW 49,000 (up to 8 films). Compare lengths and included features on the pricing page.',
+      a17: 'Yes. Pick a monthly plan and register your payment card — your monthly allowance opens as soon as the first payment clears. Single-film checkout is also available on each template.',
+      a18: 'At 15 seconds and 720p, Creator includes up to 4 films per month and Premium up to 8. Usage scales by template length and format, and you can freely mix different lengths within your monthly allowance.',
+      a19: 'Premium includes double the monthly volume plus custom scene edits on supported templates. Describe a small change and attach up to 3 reference images while keeping the scene structure, timing, and your face intact. Larger changes may reduce accuracy.',
+      a20: 'Your monthly allowance resets each billing period and unused volume does not carry over. You can cancel auto-renewal anytime in your account and keep using your remaining allowance until the current period ends.',
+      a21: 'You can purchase additional films one at a time at the price shown on each template. Your monthly allowance resets when your next billing cycle begins.',
     },
     subscriptionCreatorOpen: {
-      a1: 'Yes. Every template and every example result is public. You sign in only to make one with your own photo, so the result stays on your account.',
-      a2: 'A single video costs the price shown on its template. Creator is available at KRW 24,900 per month, with up to four 15-second 720p videos. Premium at KRW 49,000, including custom edits, is still in preparation.',
-      a17: 'Creator is available. Register your payment card and start after your first payment is confirmed. Premium and its custom edit feature are still in preparation. Available single-video options are shown on the template pages.',
-      a19: 'Premium is being prepared with more monthly videos and small custom edits. It will be available only after the editing feature is verified. You can use Creator for the original versions of supported templates now.',
+      a1: 'Yes. Every template and example film is public. You only sign in when making a film with your own photo so the result stays in your account.',
+      a2: 'Single films are priced individually on each template. Creator is open at KRW 24,900 per month (up to four 15-second 720p films), while Premium at KRW 49,000 with custom edits is in final preparation.',
+      a17: 'Creator subscriptions are open now. Register your card to start as soon as your first payment clears. Premium and custom edits are still in preparation, and single-film options are shown on each template page.',
+      a19: 'We are preparing Premium with double the monthly volume and guided custom edits, opening as soon as edit quality verification completes. Today you can use Creator to make the original version of any supported template.',
     },
     subscriptionPaused: {
-      a2: 'Monthly prices are Creator at KRW 24,900 and Premium at KRW 49,000. New subscriptions are temporarily paused. Existing members can check their plan, usage, and payment dates in their account. Single-video pricing is shown on each template.',
-      a17: 'New subscriptions are temporarily paused. Existing members can check their plan and available usage in their account. Templates and example videos remain available to browse.',
+      a2: 'Monthly plans are Creator at KRW 24,900 and Premium at KRW 49,000, with new sign-ups temporarily paused. Current subscribers can manage their plan, usage, and billing dates in their account. Single-film pricing is shown on each template.',
+      a17: 'New subscription sign-ups are temporarily paused. Current subscribers can check and use their remaining allowance in their account, and all templates and sample films remain open to browse.',
     },
   },
   /** The legal surface's chrome — the documents' own text lives in lib/legal/documents.ts. */

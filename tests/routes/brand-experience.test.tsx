@@ -51,6 +51,11 @@ describe('the brand page shows the service before asking visitors to enquire', (
     expect(html).toContain('name="contactRole"');
     expect(html).toContain('data-production-films');
     expect(html).toContain('https://pitch.com/v/yagi-production-wokrs-vsrgfd');
+    expect(html).toContain('https://pitch.com/v/yagi-workshop_introduction-vbujun');
+    expect(html).toContain('data-brand-formula');
+    expect(html).toContain('data-brand-scale-pillars');
+    expect(html).toContain('data-production-collabs');
+    expect(html).toContain('data-company-deck');
     expect(html).toContain('포맷');
     expect(html).toContain('게시');
     expect(html).toContain('결과');
@@ -62,5 +67,6 @@ describe('the brand page shows the service before asking visitors to enquire', (
     expect(html).toContain('playsInline=""');
     expect(html).toContain('poster="/reel/brands/city-fashion.jpg"');
     expect(html).toContain('data-video-control');
+    expect(html).toContain('https://pitch.com/v/yagi-workshop-introduction-en-higgsfield-kb35ht');
   });
 });

@@ -59,6 +59,19 @@ export default async function BrandsPage({ params }: Props) {
             </div>
           </div>
           <p data-campaign-definition className="mt-14 max-w-3xl border-l border-blue pl-5 text-sm leading-relaxed text-white/62 lg:mt-20">{t.definition}</p>
+          <div data-brand-formula className="mt-10 grid gap-3 border-t border-white/12 pt-8 sm:grid-cols-3 sm:gap-4">
+            {[
+              { symbol: '01 · LICENSE', title: t.formula.item1Title, body: t.formula.item1Body },
+              { symbol: '02 · FORMAT', title: t.formula.item2Title, body: t.formula.item2Body },
+              { symbol: '03 · SCALE', title: t.formula.item3Title, body: t.formula.item3Body },
+            ].map((item) => (
+              <div key={item.symbol} className="rounded-xl border border-white/10 bg-white/[0.03] p-5">
+                <p className="font-mono text-[11px] tracking-widest text-brand-blue-light">{item.symbol}</p>
+                <p className="mt-2.5 text-base font-semibold tracking-tight text-white">{item.title}</p>
+                <p className="mt-1.5 text-xs leading-relaxed text-white/60">{item.body}</p>
+              </div>
+            ))}
+          </div>
         </div>
       </section>
 
@@ -78,6 +91,18 @@ export default async function BrandsPage({ params }: Props) {
           <ol className="mt-7 grid gap-8 sm:grid-cols-3 sm:gap-10">
             {[[t.moat1Title, t.moat1Body], [t.moat2Title, t.moat2Body], [t.moat3Title, t.moat3Body]].map(([heading, body], index) => <li key={heading} className="border-t border-black/15 pt-5"><span className="font-mono text-xs text-blue">0{index + 1}</span><h2 className="mt-4 text-xl font-semibold tracking-tight">{heading}</h2><p className="mt-3 max-w-sm text-sm leading-relaxed opacity-65">{body}</p></li>)}
           </ol>
+          <dl data-brand-scale-pillars className="mt-10 grid gap-4 rounded-2xl border border-black/10 bg-black/[0.02] p-6 sm:grid-cols-3 sm:gap-8 sm:p-8">
+            {[
+              { value: t.scalePillars.networkValue, label: t.scalePillars.networkLabel },
+              { value: t.scalePillars.shootsValue, label: t.scalePillars.shootsLabel },
+              { value: t.scalePillars.complianceValue, label: t.scalePillars.complianceLabel },
+            ].map((pillar) => (
+              <div key={pillar.value} className="border-l-2 border-blue pl-4">
+                <dt className="text-2xl font-semibold tracking-tight text-brand-ink sm:text-3xl">{pillar.value}</dt>
+                <dd className="mt-2 text-xs leading-relaxed opacity-70 sm:text-sm">{pillar.label}</dd>
+              </div>
+            ))}
+          </dl>
           <div data-brand-markets className="mt-12 grid gap-5 border-t border-black/15 pt-8 lg:grid-cols-[0.8fr_1.2fr] lg:items-end lg:gap-16">
             <h2 className="whitespace-pre-line text-[clamp(1.7rem,3.2vw,3rem)] font-semibold leading-tight tracking-tight">{t.marketsHeading}</h2>
             <p className="max-w-xl text-sm leading-relaxed opacity-65 lg:justify-self-end">{t.marketsBody}</p>
@@ -125,7 +150,11 @@ export default async function BrandsPage({ params }: Props) {
       <section data-section data-theme="dark" data-production-service className="section bg-brand-night text-white">
         <div className="audience-shell grid gap-10 py-16 lg:grid-cols-[0.7fr_1.3fr] lg:items-center lg:py-24">
           <div><p className="audience-eyebrow text-brand-blue-light">{t.productionEyebrow}</p><h2 className="mt-5 text-[clamp(2rem,4vw,4rem)] whitespace-pre-line font-semibold leading-tight tracking-tight">{t.productionHeading}</h2><p className="mt-5 max-w-md text-sm leading-relaxed text-white/65">{t.productionBody}</p>
-            <a href="https://pitch.com/v/yagi-production-wokrs-vsrgfd" target="_blank" rel="noopener noreferrer" data-production-deck className="mt-8 inline-flex min-h-12 items-center gap-6 rounded-full bg-blue px-6 text-sm font-semibold text-white">{t.productionDeckCta} ↗</a>
+            <p data-production-collabs className="mt-4 inline-block rounded-lg border border-white/12 bg-white/[0.04] px-3.5 py-2 text-xs font-medium text-white/80">{t.productionCollabs}</p>
+            <div className="mt-8 flex flex-wrap items-center gap-3">
+              <a href="https://pitch.com/v/yagi-production-wokrs-vsrgfd" target="_blank" rel="noopener noreferrer" data-production-deck className="inline-flex min-h-12 items-center gap-4 rounded-full bg-blue px-6 text-sm font-semibold text-white">{t.productionDeckCta} ↗</a>
+              <a href={t.companyDeckUrl} target="_blank" rel="noopener noreferrer" data-company-deck className="inline-flex min-h-12 items-center gap-3 rounded-full border border-white/25 bg-white/[0.04] px-5 text-sm font-medium text-white transition-colors hover:bg-white/10">{t.companyDeckCta} ↗</a>
+            </div>
             <div className="mt-6 flex flex-wrap gap-x-6 gap-y-2"><a data-inquiry-trigger href={`${brandsHref(locale)}?type=production#brands`} className="inline-flex min-h-11 items-center text-sm underline decoration-white/35 underline-offset-6">{t.productionCta} ↗</a><a href="https://pricing.yagiworkshop.xyz/" target="_blank" rel="noopener noreferrer" data-production-pricing className="inline-flex min-h-11 items-center text-sm underline decoration-white/35 underline-offset-6">{t.pricingCta} ↗</a></div><p className="mt-3 max-w-md text-xs leading-relaxed text-white/60">{t.pricingNote}</p>
           </div>
           <div data-production-films><MorphicFilmPair media={[{ id: 'production-paris', src: '/reel/brands/production-paris.mp4', poster: '/reel/brands/production-paris.jpg', width: 1280, height: 720 }]} labels={{ titles: t.productionFilms, play: t.media.play, pause: t.media.pause }} /></div>
