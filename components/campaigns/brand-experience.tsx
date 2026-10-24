@@ -7,7 +7,6 @@ import styles from './brand-experience.module.css';
 export interface FormatCopy {
   title: string;
   line: string;
-  detail?: string;
 }
 
 export interface HeroCinemaItem {
@@ -16,7 +15,6 @@ export interface HeroCinemaItem {
   poster: string;
   width: number;
   height: number;
-  tag: string;
   title: string;
 }
 
@@ -60,7 +58,7 @@ export function HeroCinemaGrid({ items }: { items: readonly HeroCinemaItem[] }) 
 
   return (
     <div ref={rootRef} data-hero-cinema-grid className={styles.heroCinemaGrid}>
-      {items.map((item, idx) => (
+      {items.map((item) => (
         <figure key={item.id} data-hero-cinema-cell={item.id} className={styles.heroCinemaCell}>
           <video
             src={item.src}
@@ -76,7 +74,6 @@ export function HeroCinemaGrid({ items }: { items: readonly HeroCinemaItem[] }) 
           />
           <div className={styles.heroCinemaShade} aria-hidden="true" />
           <figcaption className={styles.heroCinemaMeta}>
-            <span className={styles.heroCinemaIndex}>( 0{idx + 1} ) · {item.tag}</span>
             <strong className={styles.heroCinemaTitle}>{item.title}</strong>
           </figcaption>
         </figure>
@@ -217,15 +214,10 @@ export function BrandFormatExplorer({
           onPause={() => setPlaying(false)}
         />
         <div className={styles.formatShade} aria-hidden="true" />
-        <div className={styles.formatTopBar} aria-hidden="true">
-          <span>( 0{items.findIndex((item) => item.id === active.id) + 1} / 0{items.length} )</span>
-          <span>{caption.line}</span>
-        </div>
         <figcaption className={styles.formatCaption} aria-live="polite">
-          <span className={styles.formatIndex}>( 0{items.findIndex((item) => item.id === active.id) + 1} )</span>
           <span>
             <strong>{caption.title}</strong>
-            <small>{caption.detail ?? caption.line}</small>
+            <small>{caption.line}</small>
           </span>
         </figcaption>
         <button data-video-control type="button" onClick={toggle} aria-pressed={playing} aria-label={`${caption.title} · ${playing ? labels.pause : labels.play}`} className={styles.videoControl}>
@@ -253,9 +245,8 @@ export function BrandFormatExplorer({
             >
               <span className={styles.formatThumb}><img src={item.poster} alt="" width={item.width} height={item.height} loading={index === 0 ? 'eager' : 'lazy'} decoding="async" /></span>
               <span className={styles.formatTabCopy}>
-                <small>( 0{index + 1} ) · {itemCopy.line}</small>
                 <strong>{itemCopy.title}</strong>
-                {itemCopy.detail && <span className={styles.formatTabDetail}>{itemCopy.detail}</span>}
+                <span className={styles.formatTabDetail}>{itemCopy.line}</span>
               </span>
               <span className={styles.formatArrow} aria-hidden="true">↗</span>
             </button>

@@ -44,44 +44,40 @@ export default async function BrandsPage({ params }: Props) {
     <JsonLd id="campaign-service-structured-data" data={campaignServiceStructuredData({ origin: siteUrl(), path: brandsHref(locale), locale, name: t.metaTitle, description: t.metaDescription, serviceType: dict.seo.serviceType })} />
     <JsonLd id="brand-case-studies-structured-data" data={brandCaseStudiesStructuredData({ origin: siteUrl(), locale, cases: [{ id: 'morphic', name: t.stories.title, description: t.stories.summary, path: `/${locale}/brands/stories/morphic` }] })} />
 
-    <main id="main" data-brand-landing className="overflow-clip bg-white text-brand-ink">
+    <main id="main" data-brand-landing className="overflow-clip bg-white text-brand-ink [word-break:keep-all]">
       <section data-section data-theme="dark" data-campaign-hero className="section bg-brand-night text-white">
         <div className="audience-shell pb-12 pt-28 lg:pb-16 lg:pt-32">
-          <div className="flex flex-wrap items-center justify-between gap-4 border-b border-white/10 pb-4">
-            <p className="audience-eyebrow text-brand-blue-light">{t.eyebrow}</p>
-            <span className="font-mono text-[11px] tracking-[0.16em] text-white/45">( SEOUL · TOKYO · PARIS )</span>
-          </div>
-          <div className="mt-8 grid gap-10 lg:grid-cols-[0.94fr_1.06fr] lg:items-center lg:gap-12">
+          <p className="audience-eyebrow text-brand-blue-light">{t.eyebrow}</p>
+          <div className="mt-6 grid gap-10 lg:grid-cols-[0.94fr_1.06fr] lg:items-center lg:gap-12">
             <div>
-              <h1 className="audience-title max-w-[13ch] whitespace-pre-line text-[clamp(2.35rem,10vw,6.2rem)] leading-[0.95] tracking-[-0.06em] sm:text-[clamp(3.2rem,6.5vw,5.6rem)] lg:text-[clamp(3.6rem,4.7vw,5.1rem)]">{t.title}</h1>
-              <p className="mt-6 max-w-xl text-base leading-relaxed text-white/70 sm:text-lg">{t.body}</p>
+              <h1 className="audience-title max-w-[13ch] whitespace-pre-line text-balance text-[clamp(2.35rem,10vw,6.2rem)] leading-[0.96] tracking-[-0.055em] sm:text-[clamp(3.2rem,6.5vw,5.6rem)] lg:text-[clamp(3.6rem,4.7vw,5.1rem)]">{t.title}</h1>
+              <p className="mt-6 max-w-xl text-pretty text-base leading-[1.65] text-white/74 sm:text-lg">{t.body}</p>
               <div className="mt-8 flex flex-wrap items-center gap-5">
                 <a data-campaign-cta-brand data-inquiry-trigger href={brandEnquiryHref(locale)} className="inline-flex min-h-12 items-center rounded-full bg-blue px-6 text-sm font-semibold text-white transition-transform hover:-translate-y-0.5">{t.primaryCta} ↗</a>
                 <a href="#morphic-case" className="inline-flex min-h-11 items-center text-sm underline decoration-white/35 underline-offset-8">{t.secondaryCta}</a>
               </div>
-              <p data-campaign-definition className="mt-8 max-w-xl border-l border-white/20 pl-4 text-xs leading-relaxed text-white/52 sm:text-sm">{t.definition}</p>
+              <p data-campaign-definition className="mt-8 max-w-xl border-l border-white/20 pl-4 text-pretty text-xs leading-[1.6] text-white/56 sm:text-sm">{t.definition}</p>
             </div>
             <HeroCinemaGrid
               items={[
-                { id: 'paris', src: '/reel/brands/production-paris.mp4', poster: '/reel/brands/production-paris.jpg', width: 1280, height: 720, tag: t.heroCinema.parisTag, title: t.heroCinema.parisTitle },
-                { id: 'beauty', src: '/reel/campaigns/beauty-rose.mp4', poster: '/reel/campaigns/beauty-rose.jpg', width: 1280, height: 720, tag: t.heroCinema.beautyTag, title: t.heroCinema.beautyTitle },
-                { id: 'interview', src: '/reel/brands/morphic-august-01.mp4', poster: '/reel/brands/morphic-august-01.jpg', width: 720, height: 1280, tag: t.heroCinema.interviewTag, title: t.heroCinema.interviewTitle },
-                { id: 'creator', src: '/reel/campaigns/retro-phone-01.mp4', poster: '/reel/campaigns/retro-phone-01.jpg', width: 720, height: 1280, tag: t.heroCinema.creatorTag, title: t.heroCinema.creatorTitle },
+                { id: 'beauty', src: '/reel/campaigns/beauty-rose.mp4', poster: '/reel/campaigns/beauty-rose.jpg', width: 1280, height: 720, title: t.heroCinema.beautyTitle },
+                { id: 'interview', src: '/reel/campaigns/highteen.mp4', poster: '/reel/campaigns/highteen.jpg', width: 1280, height: 720, title: t.heroCinema.interviewTitle },
+                { id: 'paris', src: '/reel/brands/production-paris.mp4#t=2.2', poster: '/reel/brands/production-paris.jpg', width: 1280, height: 720, title: t.heroCinema.parisTitle },
+                { id: 'creator', src: '/reel/campaigns/retro-phone-01.mp4', poster: '/reel/campaigns/retro-phone-01.jpg', width: 720, height: 1280, title: t.heroCinema.creatorTitle },
               ]}
             />
           </div>
           <div data-brand-formula className="mt-10 grid gap-3 border-t border-white/12 pt-8 sm:grid-cols-3 sm:gap-4">
             {[
-              { symbol: '( 01 · SELFIE )', title: t.formula.item1Title, body: t.formula.item1Body, img: '/reel/studio-demo/reference-selfie.jpeg' },
-              { symbol: '( 02 · DIRECTED SCENE )', title: t.formula.item2Title, body: t.formula.item2Body, img: '/reel/studio-demo/designed-format.jpg' },
-              { symbol: '( 03 · CREATOR FEED )', title: t.formula.item3Title, body: t.formula.item3Body, img: '/reel/studio-demo/different-person.jpg' },
+              { title: t.formula.item1Title, body: t.formula.item1Body, img: '/reel/studio-demo/reference-selfie.jpeg' },
+              { title: t.formula.item2Title, body: t.formula.item2Body, img: '/reel/brands/city-fashion.jpg' },
+              { title: t.formula.item3Title, body: t.formula.item3Body, img: '/reel/studio-demo/different-person.jpg' },
             ].map((item) => (
-              <div key={item.symbol} className="flex items-center gap-4 rounded-xl border border-white/10 bg-white/[0.03] p-4">
-                <img src={item.img} alt="" width={72} height={90} loading="lazy" decoding="async" className="h-18 w-14 shrink-0 rounded-lg object-cover ring-1 ring-white/15" />
+              <div key={item.title} className="flex items-center gap-4 rounded-xl border border-white/10 bg-white/[0.03] p-4">
+                <img src={item.img} alt="" width={72} height={90} decoding="async" className="h-18 w-14 shrink-0 rounded-lg object-cover object-top ring-1 ring-white/15" />
                 <div className="min-w-0">
-                  <p className="font-mono text-[10px] tracking-[0.14em] text-brand-blue-light">{item.symbol}</p>
-                  <p className="mt-1 text-sm font-semibold tracking-tight text-white sm:text-base">{item.title}</p>
-                  <p className="mt-1 text-xs leading-relaxed text-white/58">{item.body}</p>
+                  <p className="text-sm font-semibold tracking-tight text-white sm:text-base">{item.title}</p>
+                  <p className="mt-1 text-pretty text-xs leading-[1.55] text-white/62">{item.body}</p>
                 </div>
               </div>
             ))}
@@ -93,40 +89,25 @@ export default async function BrandsPage({ params }: Props) {
         <div className="audience-shell py-14 lg:py-22">
           <div className="mb-8 grid gap-5 lg:grid-cols-[0.8fr_1.2fr] lg:items-end">
             <div><p className="audience-eyebrow">{t.reelEyebrow}</p><h2 className="audience-heading mt-4 max-w-xl">{t.reelHeading}</h2></div>
-            <p className="max-w-xl text-sm leading-relaxed opacity-65 lg:justify-self-end">{t.reelBody}</p>
+            <p className="max-w-xl text-pretty text-sm leading-[1.65] opacity-65 lg:justify-self-end">{t.reelBody}</p>
           </div>
           <BrandFormatExplorer items={CAMPAIGN_REEL} captions={t.formats} labels={t.media} />
 
           <div data-production-craft-strip className="mt-12 overflow-hidden rounded-2xl bg-brand-night p-7 text-white sm:p-10 lg:mt-16 lg:p-12">
-            <div className="flex flex-wrap items-center justify-between gap-4 border-b border-white/10 pb-5">
-              <p className="font-mono text-xs tracking-[0.14em] text-brand-blue-light">{t.craftStrip.eyebrow}</p>
-              <p className="text-xs text-white/55">{t.productionCollabs}</p>
-            </div>
-            <div className="mt-8 grid gap-10 lg:grid-cols-[1.08fr_0.92fr] lg:items-center lg:gap-14">
+            <div className="grid gap-8 lg:grid-cols-[0.95fr_1.05fr] lg:items-center lg:gap-14">
               <div>
-                <h3 className="whitespace-pre-line text-[clamp(1.65rem,3vw,2.65rem)] font-semibold leading-[1.12] tracking-tight text-white">{t.craftStrip.heading}</h3>
-                <p className="mt-4 max-w-2xl text-sm leading-relaxed text-white/68 sm:text-base">{t.craftStrip.body}</p>
-                <div className="mt-7 grid grid-cols-2 gap-3 sm:gap-4">
-                  <div className="overflow-hidden rounded-xl border border-white/10 bg-black">
-                    <img src="/reel/campaigns/beauty-rose.jpg" alt="" width={640} height={360} loading="lazy" decoding="async" className="aspect-[16/9] w-full object-cover" />
-                  </div>
-                  <div className="overflow-hidden rounded-xl border border-white/10 bg-black">
-                    <img src="/reel/campaigns/highteen.jpg" alt="" width={640} height={360} loading="lazy" decoding="async" className="aspect-[16/9] w-full object-cover" />
-                  </div>
-                </div>
+                <h3 className="whitespace-pre-line text-balance text-[clamp(1.6rem,3vw,2.6rem)] font-semibold leading-[1.18] tracking-[-0.035em] text-white">{t.craftStrip.heading}</h3>
+                <p className="mt-4 max-w-xl text-pretty text-sm leading-[1.68] text-white/70 sm:text-base">{t.craftStrip.body}</p>
               </div>
-              <dl className="divide-y divide-white/10 border-y border-white/10">
+              <dl className="divide-y divide-white/12 border-y border-white/12">
                 {[
-                  { index: '( 01 )', title: t.craftStrip.lightTitle, body: t.craftStrip.lightBody },
-                  { index: '( 02 )', title: t.craftStrip.scaleTitle, body: t.craftStrip.scaleBody },
-                  { index: '( 03 )', title: t.craftStrip.liveTitle, body: t.craftStrip.liveBody },
+                  { title: t.craftStrip.lightTitle, body: t.craftStrip.lightBody },
+                  { title: t.craftStrip.scaleTitle, body: t.craftStrip.scaleBody },
+                  { title: t.craftStrip.liveTitle, body: t.craftStrip.liveBody },
                 ].map((item) => (
-                  <div key={item.index} className="py-5 first:pt-4 last:pb-4">
-                    <dt className="flex items-baseline gap-3 text-base font-semibold tracking-tight text-white sm:text-lg">
-                      <span className="font-mono text-xs text-brand-blue-light">{item.index}</span>
-                      <span>{item.title}</span>
-                    </dt>
-                    <dd className="mt-2 pl-11 text-xs leading-relaxed text-white/62 sm:text-sm">{item.body}</dd>
+                  <div key={item.title} className="py-5 first:pt-4 last:pb-4">
+                    <dt className="text-base font-semibold tracking-[-0.025em] text-white sm:text-lg">{item.title}</dt>
+                    <dd className="mt-1.5 text-pretty text-xs leading-[1.6] text-white/64 sm:text-sm">{item.body}</dd>
                   </div>
                 ))}
               </dl>
@@ -139,24 +120,23 @@ export default async function BrandsPage({ params }: Props) {
         <div className="audience-shell py-14 lg:py-20">
           <p className="audience-eyebrow">{t.moatEyebrow}</p>
           <ol className="mt-7 grid gap-8 sm:grid-cols-3 sm:gap-10">
-            {[[t.moat1Title, t.moat1Body], [t.moat2Title, t.moat2Body], [t.moat3Title, t.moat3Body]].map(([heading, body], index) => <li key={heading} className="border-t border-black/15 pt-5"><span className="font-mono text-xs text-blue">0{index + 1}</span><h2 className="mt-4 text-xl font-semibold tracking-tight">{heading}</h2><p className="mt-3 max-w-sm text-sm leading-relaxed opacity-65">{body}</p></li>)}
+            {[[t.moat1Title, t.moat1Body], [t.moat2Title, t.moat2Body], [t.moat3Title, t.moat3Body]].map(([heading, body], index) => <li key={heading} className="border-t border-black/15 pt-5"><span className="font-mono text-xs text-blue">0{index + 1}</span><h2 className="mt-3 text-xl font-semibold tracking-[-0.025em]">{heading}</h2><p className="mt-2.5 max-w-sm text-pretty text-sm leading-[1.65] opacity-68">{body}</p></li>)}
           </ol>
           <div data-brand-markets className="mt-14 grid gap-5 border-t border-black/15 pt-10 lg:grid-cols-[0.8fr_1.2fr] lg:items-end lg:gap-16">
-            <h2 className="whitespace-pre-line text-[clamp(1.7rem,3.2vw,3rem)] font-semibold leading-tight tracking-tight">{t.marketsHeading}</h2>
-            <p className="max-w-xl text-sm leading-relaxed opacity-65 lg:justify-self-end">{t.marketsBody}</p>
+            <h2 className="whitespace-pre-line text-balance text-[clamp(1.7rem,3.2vw,3rem)] font-semibold leading-[1.18] tracking-[-0.035em]">{t.marketsHeading}</h2>
+            <p className="max-w-xl text-pretty text-sm leading-[1.65] opacity-68 lg:justify-self-end">{t.marketsBody}</p>
           </div>
-          <div className="mt-14 border-t border-black/15 pt-10">
-            <p className="font-mono text-xs font-medium tracking-[0.12em] uppercase text-blue">{t.scalePillars.eyebrow}</p>
-            <dl data-brand-scale-pillars className="mt-6 grid gap-6 sm:grid-cols-3 sm:gap-10">
+          <div className="mt-14 rounded-2xl border border-black/[0.08] bg-[#F7F7F5] p-7 sm:p-10">
+            <p className="audience-eyebrow text-blue">{t.scalePillars.eyebrow}</p>
+            <dl data-brand-scale-pillars className="mt-6 grid gap-7 sm:grid-cols-3 sm:gap-10">
               {[
-                { code: '( ZERO TRAINING )', value: t.scalePillars.networkValue, label: t.scalePillars.networkLabel },
-                { code: '( PRIVATE VAULT )', value: t.scalePillars.shootsValue, label: t.scalePillars.shootsLabel },
-                { code: '( FULL ERASURE )', value: t.scalePillars.complianceValue, label: t.scalePillars.complianceLabel },
+                { value: t.scalePillars.networkValue, label: t.scalePillars.networkLabel },
+                { value: t.scalePillars.shootsValue, label: t.scalePillars.shootsLabel },
+                { value: t.scalePillars.complianceValue, label: t.scalePillars.complianceLabel },
               ].map((pillar) => (
-                <div key={pillar.value} className="border-t border-black/10 pt-4">
-                  <span className="font-mono text-[11px] tracking-[0.14em] text-black/45">{pillar.code}</span>
-                  <dt className="mt-2 text-xl font-semibold tracking-tight text-brand-ink sm:text-2xl">{pillar.value}</dt>
-                  <dd className="mt-2 text-xs leading-relaxed opacity-70 sm:text-sm">{pillar.label}</dd>
+                <div key={pillar.value} className="border-t border-black/12 pt-5">
+                  <dt className="text-lg font-semibold leading-[1.3] tracking-[-0.03em] text-brand-ink sm:text-xl">{pillar.value}</dt>
+                  <dd className="mt-2.5 text-pretty text-sm leading-[1.65] text-brand-ink/70">{pillar.label}</dd>
                 </div>
               ))}
             </dl>

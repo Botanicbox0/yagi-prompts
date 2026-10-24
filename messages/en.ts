@@ -391,47 +391,42 @@ export const en = {
     "marketsBody": "Reach both markets simultaneously through our active creator pools in Korea and Japan. We collaborate directly with creators suited to each market and scale one master format into dozens of local channel posts with zero live shoots.",
     "eyebrow": "TWINGS FOR BRANDS · YAGI WORKSHOP",
     "title": "Brand ads\ncreators want\nto be part of.",
-    "body": "Not generic AI clips — directed brand films. We craft one cinema-grade format and scale it across dozens of real creators publishing on their own channels in Korea and Japan.",
+    "body": "A single master brand film directed by YAGI scales into dozens of real creator videos published simultaneously across Korea and Japan.",
     "primaryCta": "Discuss your campaign",
     "secondaryCta": "See campaign results",
     "definition": "TWINGS is a brand campaign and production studio operated by YAGI WORKSHOP Inc. We combine cinema-grade AI format direction, creator likeness licensing, and simultaneous channel publishing across Korea and Japan.",
     "heroCinema": {
-      "parisTag": "LUXURY CAMPAIGN · PARIS",
-      "parisTitle": "Galeries Lafayette × The Hyundai film",
-      "beautyTag": "TACTILE BEAUTY · MACRO",
-      "beautyTitle": "Rose gloss texture & lighting direction",
-      "interviewTag": "VIRAL FORMAT · 2M+ VIEWS",
-      "interviewTitle": "1990s street interview format",
-      "creatorTag": "LIVE CREATOR FEED · 9:16",
-      "creatorTitle": "Y2K creator channel release"
+      "parisTitle": "Galeries Lafayette × The Hyundai",
+      "beautyTitle": "Rose gloss beauty film",
+      "interviewTitle": "High-teen perfume campaign",
+      "creatorTitle": "Y2K creator feed"
     },
     "formula": {
       "item1Title": "One Creator Selfie",
-      "item1Body": "Pre-agreed creator likeness kept in an isolated personal vault",
+      "item1Body": "Pre-agreed creator likeness kept in an isolated encrypted space",
       "item2Title": "YAGI Master Direction",
-      "item2Body": "Bespoke scene directed for lighting, texture, and camera pace",
+      "item2Body": "Bespoke scene directed for lighting, texture, and camera movement",
       "item3Title": "Live Creator Feeds",
       "item3Body": "Published simultaneously across Korea & Japan with zero live shoots"
     },
     "craftStrip": {
-      "eyebrow": "( DIRECTION OVER GENERATION · YAGI CRAFT )",
-      "heading": "Most AI makes clips.\nWe direct brand films.",
-      "body": "A few lines of prompt text never built a brand. The YAGI directing team behind campaigns for Galeries Lafayette, The Hyundai, and leading fashion and beauty houses designs the lighting, skin and fabric textures, and editorial cut first — then scales that exact master scene across dozens of real creators.",
-      "lightTitle": "Commercial film craft",
-      "lightBody": "Real lens language, tactile product lighting, and natural motion directed without the uncanny valley.",
-      "scaleTitle": "Scale without the set",
-      "scaleBody": "Every participating creator film renders at the same master quality from a single selfie, with zero studio shoots.",
-      "liveTitle": "Active creator channels",
-      "liveBody": "Not a static directory — we produce alongside real creators in Korea and Japan who publish directly to their own audiences."
+      "heading": "Commercial film density,\npublished on dozens of feeds.",
+      "body": "The YAGI production team behind campaigns for Galeries Lafayette, The Hyundai, and fashion and beauty houses directs each format in-house. One master direction produces dozens of creator films simultaneously without studio rentals or multi-day shoots.",
+      "lightTitle": "Lighting, skin & product detail",
+      "lightBody": "Finished with real commercial lens language and tactile textures so every frame feels intentional.",
+      "scaleTitle": "Consistent quality from one selfie",
+      "scaleBody": "Each participating creator submits a single selfie while the master film's lighting and camera movement stay intact.",
+      "liveTitle": "Simultaneous Korea & Japan feeds",
+      "liveBody": "Active creators in both markets publish the finished films directly on their own channels for real reach."
     },
     "scalePillars": {
-      "eyebrow": "Uncompromising security for every face and brand asset",
-      "networkValue": "Zero AI Training",
-      "networkLabel": "Uploaded photos and brand films are never used to train or improve any external AI model.",
-      "shootsValue": "Isolated Personal Vault",
-      "shootsLabel": "Every creator's likeness is encrypted in a dedicated private space — never mixed or exposed.",
-      "complianceValue": "Complete Erasure",
-      "complianceLabel": "Used strictly for the approved campaign, and wiped completely — including backups — upon deletion."
+      "eyebrow": "Likeness & Brand Asset Protection",
+      "networkValue": "Never Used for AI Training",
+      "networkLabel": "Uploaded photos and campaign films are never used to train or improve any external AI model.",
+      "shootsValue": "Encrypted in Isolated Account Spaces",
+      "shootsLabel": "Each person's likeness stays in a dedicated encrypted space and is used only for the approved campaign.",
+      "complianceValue": "Permanent Deletion of Originals & Outputs",
+      "complianceLabel": "When a campaign ends or an account is deleted, source photos, outputs, and backups are permanently wiped."
     },
     "reelEyebrow": "AI ADS × CREATORS",
     "reelHeading": "Your brand ad.\nTheir own face.",
@@ -439,18 +434,15 @@ export const en = {
     "formats": {
       "city": {
         "title": "City fashion film",
-        "line": "Format study · 4:3",
-        "detail": "Directed with natural street shadows, fabric movement, and low-angle editorial pacing"
+        "line": "Natural street shadows and fabric movement in an editorial lookbook cut"
       },
       "y2k": {
         "title": "Y2K product film",
-        "line": "Format study · 9:16",
-        "detail": "Macro jewel reflections, tactile hand close-ups, and brisk vertical cuts built for social feeds"
+        "line": "Macro reflections and brisk vertical cuts built for social feeds"
       },
       "tea": {
         "title": "Editorial film",
-        "line": "Format study · 4:3",
-        "detail": "Surreal miniature scale and architectural art direction achieved without physical set builds"
+        "line": "Surreal scale and spatial direction achieved without physical sets"
       }
     },
     "media": {
@@ -525,7 +517,7 @@ export const en = {
         "jp01": "Japan · published film 01",
         "jp02": "Japan · published film 02"
       },
-      "eyebrow": "CUSTOMER STORIES · PROVEN AT SCALE",
+      "eyebrow": "CUSTOMER STORIES",
       "title": "Creator campaigns\nwith Morphic.",
       "summary": "How 9 initial seed videos sparked 2M+ views and 300+ audience recreations, then scaled into follow-up campaigns across Korea and Japan.",
       "detailCta": "Read the Morphic story",
