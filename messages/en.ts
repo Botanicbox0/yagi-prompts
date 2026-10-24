@@ -378,94 +378,94 @@ export const en = {
     "campaignCta": "Explore campaigns"
   },
   brandLanding: {
-    "moatEyebrow": "FROM DIRECTION TO LIVE FEEDS",
-    "moat1Title": "Directed film formats",
-    "moat1Body": "We design a dedicated brand film format built around your product and story — turning a single selfie into consistent, cinema-grade video.",
-    "moat2Title": "Co-creation with real creators",
-    "moat2Body": "We work directly with creators across Korea and Japan to produce each film starring their own face, with zero live shoots required.",
-    "moat3Title": "Publishing and reporting",
-    "moat3Body": "We review every film and ad disclosure for Korean and Japanese regulations, manage channel publishing, and deliver verified post links and results.",
+    "moatEyebrow": "HOW IT WORKS",
+    "moat1Title": "Bespoke format",
+    "moat1Body": "We create a custom ad format built around your product and brand.",
+    "moat2Title": "Creator films",
+    "moat2Body": "Each creator stars in the film with their own face — no live shoot needed.",
+    "moat3Title": "Korea & Japan publishing",
+    "moat3Body": "We review disclosures, publish across real creator channels, and deliver verified results.",
     "metaTitle": "Creator Campaigns for Brands",
-    "metaDescription": "Directed AI brand films and creator campaigns across Korea and Japan by YAGI WORKSHOP. Explore simultaneous market launches and real Morphic results.",
+    "metaDescription": "AI brand films and creator campaigns across Korea and Japan by YAGI. Explore simultaneous market launches and real Morphic results.",
     "marketsHeading": "Korea and Japan.\nOne campaign.",
-    "marketsBody": "Reach both markets simultaneously through our active creator pools in Korea and Japan. We collaborate directly with creators suited to each market and scale one master format into dozens of local channel posts with zero live shoots.",
-    "eyebrow": "TWINGS FOR BRANDS · YAGI WORKSHOP",
+    "marketsBody": "Run campaigns across Korea and Japan simultaneously with our active creator pools in both markets — no local shoots needed.",
+    "eyebrow": "TWINGS FOR BRANDS · YAGI",
     "title": "Brand ads\ncreators want\nto be part of.",
-    "body": "A single master brand film directed by YAGI scales into dozens of real creator videos published simultaneously across Korea and Japan.",
+    "body": "YAGI directs one film format. Dozens of creators star in it with their own faces and post it across Korea and Japan simultaneously.",
     "primaryCta": "Discuss your campaign",
     "secondaryCta": "See campaign results",
-    "definition": "TWINGS is a brand campaign and production studio operated by YAGI WORKSHOP Inc. We combine cinema-grade AI format direction, creator likeness licensing, and simultaneous channel publishing across Korea and Japan.",
+    "definition": "TWINGS is a brand campaign studio by YAGI.",
     "heroCinema": {
-      "parisTitle": "Galeries Lafayette × The Hyundai",
+      "parisTitle": "Galeries Lafayette Paris",
       "beautyTitle": "Rose gloss beauty film",
       "interviewTitle": "High-teen perfume campaign",
       "creatorTitle": "Y2K creator feed"
     },
     "formula": {
-      "item1Title": "One Creator Selfie",
-      "item1Body": "Pre-agreed creator likeness kept in an isolated encrypted space",
-      "item2Title": "YAGI Master Direction",
-      "item2Body": "Bespoke scene directed for lighting, texture, and camera movement",
-      "item3Title": "Live Creator Feeds",
-      "item3Body": "Published simultaneously across Korea & Japan with zero live shoots"
+      "item1Title": "One Selfie",
+      "item1Body": "Creator’s own verified photo",
+      "item2Title": "YAGI Direction",
+      "item2Body": "Bespoke brand format",
+      "item3Title": "Live Feeds",
+      "item3Body": "Posted across Korea & Japan"
     },
     "craftStrip": {
-      "heading": "Commercial film density,\npublished on dozens of feeds.",
-      "body": "The YAGI production team behind campaigns for Galeries Lafayette, The Hyundai, and fashion and beauty houses directs each format in-house. One master direction produces dozens of creator films simultaneously without studio rentals or multi-day shoots.",
-      "lightTitle": "Lighting, skin & product detail",
-      "lightBody": "Finished with real commercial lens language and tactile textures so every frame feels intentional.",
-      "scaleTitle": "Consistent quality from one selfie",
-      "scaleBody": "Each participating creator submits a single selfie while the master film's lighting and camera movement stay intact.",
-      "liveTitle": "Simultaneous Korea & Japan feeds",
-      "liveBody": "Active creators in both markets publish the finished films directly on their own channels for real reach."
+      "heading": "High-fashion brand films.\nNo studio shoot.",
+      "body": "YAGI — behind work for Galeries Lafayette and The Hyundai — directs every format in-house. Produce dozens of creator films at once without studio rentals or group shoots.",
+      "lightTitle": "Directed down to the detail",
+      "lightBody": "Lighting, skin texture, and product detail finished to commercial film standards.",
+      "scaleTitle": "Same quality from one selfie",
+      "scaleBody": "Every creator version keeps the exact lighting and camera movement of the original scene.",
+      "liveTitle": "Published in Korea & Japan",
+      "liveBody": "Creators in both markets post the finished films directly on their own channels."
     },
     "scalePillars": {
-      "eyebrow": "Likeness & Brand Asset Protection",
+      "eyebrow": "Likeness & Data Security",
       "networkValue": "Never Used for AI Training",
-      "networkLabel": "Uploaded photos and campaign films are never used to train or improve any external AI model.",
-      "shootsValue": "Encrypted in Isolated Account Spaces",
-      "shootsLabel": "Each person's likeness stays in a dedicated encrypted space and is used only for the approved campaign.",
-      "complianceValue": "Permanent Deletion of Originals & Outputs",
-      "complianceLabel": "When a campaign ends or an account is deleted, source photos, outputs, and backups are permanently wiped."
+      "networkLabel": "Photos and films are never used to train external AI models.",
+      "shootsValue": "Encrypted Per Account",
+      "shootsLabel": "Likeness data is isolated and used only for the approved campaign.",
+      "complianceValue": "Permanent Deletion",
+      "complianceLabel": "Source photos and outputs are permanently deleted when a campaign ends."
     },
     "reelEyebrow": "AI ADS × CREATORS",
     "reelHeading": "Your brand ad.\nTheir own face.",
-    "reelBody": "One master format directed by YAGI turns into dozens of creator films with consistent quality. Creators publish their own-face versions on their channels to put your brand in front of real audiences.",
+    "reelBody": "YAGI creates the ad format, and creators post their own-face versions directly to their channels.",
     "formats": {
       "city": {
         "title": "City fashion film",
-        "line": "Natural street shadows and fabric movement in an editorial lookbook cut"
+        "line": "Natural light and fabric texture in a fashion lookbook cut"
       },
       "y2k": {
         "title": "Y2K product film",
-        "line": "Macro reflections and brisk vertical cuts built for social feeds"
+        "line": "Product close-ups and brisk cuts built for social feeds"
       },
       "tea": {
         "title": "Editorial film",
-        "line": "Surreal scale and spatial direction achieved without physical sets"
+        "line": "Editorial mood and spatial scale without physical sets"
       }
     },
     "media": {
       "play": "Play",
       "pause": "Pause",
       "formatPicker": "Choose a format film",
-      "filmLabel": "FILM"
+      "filmLabel": "Film"
     },
-    "typesEyebrow": "CREATIVE EXAMPLES",
-    "typesHeading": "Ads we can make for you.",
-    "typesBody": "From hero product launch films to viral formats audiences want to recreate themselves.",
+    "typesEyebrow": "CAMPAIGN TYPES",
+    "typesHeading": "Built for these moments.",
+    "typesBody": "From product launches to viral formats and fashion films.",
     "cases": {
       "morphic90s": {
-        "eyebrow": "MORPHIC · AUGUST 2026 · 1990s INTERVIEW CAMPAIGN",
-        "body": "One selfie becomes a 1990s-style TV interview. After 9 initial seed videos launched, creators and viewers shared instructions in the comments — sparking 300+ organic recreations outside the campaign.",
+        "eyebrow": "MORPHIC · AUGUST 2026 · 1990s INTERVIEW",
+        "body": "One selfie becomes a 1990s TV interview. After 9 seed videos launched, viewers shared how-to comments and created 300+ organic versions.",
         "films": [
           "1990s interview · published film 01",
           "1990s interview · published film 02"
         ],
         "postCta": "View the Instagram post",
-        "filmNote": "Actual films published during the August 2026 campaign. Turn on sound after playing to hear the interview.",
+        "filmNote": "Published in August 2026. Turn on sound after playing to hear the interview.",
         "sourceCta": "See the 1990s interview format by YAGI",
-        "note": "Public campaign-level totals from the August 2026 campaign. Views include repeat plays; conversion rates were not tracked separately.",
+        "note": "Public campaign totals from August 2026.",
         "metrics": {
           "films": {
             "label": "initial seed videos"
@@ -479,9 +479,9 @@ export const en = {
         }
       },
       "morphicSeptember": {
-        "eyebrow": "MORPHIC · SEPTEMBER 2026 · KOREA & JAPAN FOLLOW-UP",
-        "body": "Following the August breakout, we scaled Morphic's creator campaigns across Korea and Japan with zero live shoots. TWINGS handled format production, cross-border recruitment, post review, and reporting.",
-        "note": "Production films from the September campaign. Follow the Instagram links to see posts from Korea and Japan.",
+        "eyebrow": "MORPHIC · SEPTEMBER 2026 · KOREA & JAPAN",
+        "body": "Following August, we ran a follow-up Morphic campaign across Korea and Japan — from format production to creator posts and reporting.",
+        "note": "September campaign films. Follow the Instagram links below to see posts from Korea and Japan.",
         "postsHeading": "Original Instagram posts (Korea · Japan)",
         "films": [
           "Morphic September campaign film 01",
@@ -491,21 +491,21 @@ export const en = {
     },
     "productionEyebrow": "YAGI PRODUCTION",
     "productionHeading": "AI production.\nBrand ad films.",
-    "productionBody": "From imagination to brand campaigns beyond reality. Collaborating with Galeries Lafayette in France, The Hyundai in Korea, and leading fashion and beauty brands, YAGI produces standalone product ads and campaign films even without a creator campaign.",
-    "productionCollabs": "Collaborations with Galeries Lafayette (France) · The Hyundai (Korea) · Leading fashion & beauty brands",
-    "productionDeckCta": "View the production portfolio",
-    "companyDeckCta": "View company introduction (Pitch)",
+    "productionBody": "Collaborating with Galeries Lafayette, The Hyundai, and fashion and beauty brands, YAGI also produces standalone brand films and visuals.",
+    "productionCollabs": "Galeries Lafayette · The Hyundai · Fashion & beauty brands",
+    "productionDeckCta": "View portfolio",
+    "companyDeckCta": "Company deck (Pitch)",
     "companyDeckUrl": "https://pitch.com/v/yagi-workshop-introduction-en-higgsfield-kb35ht",
     "productionFilms": [
-      "Paris campaign film · YAGI production",
-      "Rose gloss beauty film · YAGI production"
+      "Paris campaign film · YAGI",
+      "Rose gloss beauty film · YAGI"
     ],
-    "productionCta": "Discuss production in English",
+    "productionCta": "Discuss production",
     "pricingCta": "Production estimate · Korean",
-    "pricingNote": "The estimate calculator is currently in Korean. You can use the English enquiry form here.",
-    "inquiryEyebrow": "START A PROJECT",
+    "pricingNote": "Final pricing is confirmed after reviewing your scope.",
+    "inquiryEyebrow": "ENQUIRE",
     "inquiryHeading": "Let’s make\nyour brand ad.",
-    "inquiryBody": "Tell us about your brand and the film or campaign you want to build. Our directors will reply promptly by email.",
+    "inquiryBody": "Tell us about the campaign or film you have in mind. We’ll reply promptly.",
     "inquiryClose": "Close enquiry",
     "inquiryDialogTitle": "Video and campaign enquiry",
     "legacyBrandLink": "Looking to run a brand campaign?",
@@ -519,31 +519,31 @@ export const en = {
       },
       "eyebrow": "CUSTOMER STORIES",
       "title": "Creator campaigns\nwith Morphic.",
-      "summary": "How 9 initial seed videos sparked 2M+ views and 300+ audience recreations, then scaled into follow-up campaigns across Korea and Japan.",
+      "summary": "9 seed videos sparked 2M+ views and 300+ organic recreations, then scaled across Korea and Japan.",
       "detailCta": "Read the Morphic story",
       "allCta": "Explore customer stories",
       "indexTitle": "Brand campaigns.\nMade with creators.",
-      "indexBody": "Explore the actual films, published posts, and verified results.",
+      "indexBody": "Explore the actual films, published posts, and campaign results.",
       "back": "Explore brand services",
       "augustHeading": "9 seed videos that\nsparked a trend.",
       "septemberHeading": "Creator campaigns\nacross Korea and Japan.",
       "metaTitle": "Morphic creator campaign case study",
-      "metaDescription": "Explore real posts from Morphic’s 1990s interview campaign, August totals of 2M+ views and 300+ organic derivatives, and the September Korea and Japan follow-up.",
+      "metaDescription": "Explore real posts from Morphic’s 1990s interview campaign, 2M+ views, 300+ organic recreations, and the Korea and Japan follow-up.",
       "indexMetaTitle": "Brand campaign customer stories",
       "scope": "August 2026 campaign totals"
     },
     "examples": {
       "launch": {
         "title": "Product & collection launches",
-        "body": "Put your hero product at the center of a cinematic scene and launch simultaneously across dozens of creator channels."
+        "body": "Put your product at the center of a scene and launch across dozens of creator feeds at once."
       },
       "app_platform": {
-        "title": "Viral formats for apps & platforms",
-        "body": "Drive organic reach and product adoption with a format audiences actively want to try and recreate."
+        "title": "Viral formats for apps",
+        "body": "Formats people actively want to try and recreate on their own feeds."
       },
       "beauty_fashion": {
-        "title": "Beauty & fashion editorials",
-        "body": "Bring high-fashion visual worlds to life with real creators in the lead — without the uncanny valley."
+        "title": "Beauty & fashion films",
+        "body": "Editorial-grade visuals starring real creators."
       }
     }
   },

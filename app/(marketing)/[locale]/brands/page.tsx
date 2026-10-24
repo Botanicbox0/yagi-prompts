@@ -56,7 +56,6 @@ export default async function BrandsPage({ params }: Props) {
                 <a data-campaign-cta-brand data-inquiry-trigger href={brandEnquiryHref(locale)} className="inline-flex min-h-12 items-center rounded-full bg-blue px-6 text-sm font-semibold text-white transition-transform hover:-translate-y-0.5">{t.primaryCta} ↗</a>
                 <a href="#morphic-case" className="inline-flex min-h-11 items-center text-sm underline decoration-white/35 underline-offset-8">{t.secondaryCta}</a>
               </div>
-              <p data-campaign-definition className="mt-8 max-w-xl border-l border-white/20 pl-4 text-pretty text-xs leading-[1.6] text-white/56 sm:text-sm">{t.definition}</p>
             </div>
             <HeroCinemaGrid
               items={[
