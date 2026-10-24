@@ -82,6 +82,8 @@ export async function createAuthServerClient() {
 export async function getSessionUser() {
   if (!isAuthConfigured()) return null;
   try {
+    const cookieStore = await cookies();
+    if (cookieStore.getAll().length === 0) return null;
     const supabase = await createAuthServerClient();
     const {
       data: { user },

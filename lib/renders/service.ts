@@ -459,6 +459,8 @@ export interface RenderPassOptions {
   limit?: number;
   /** Run exactly this queued job (the request that enqueued it). */
   jobId?: string | null;
+  /** Poll only this specific running job (used by `/renders/[id]` page refresh to avoid O(N²) global polling). */
+  pollJobId?: string | null;
 }
 
 export async function runRenderPass(deps: RenderPassDeps, options: RenderPassOptions = {}): Promise<RenderPassReport> {
@@ -525,7 +527,10 @@ export async function runRenderPass(deps: RenderPassDeps, options: RenderPassOpt
   }
 
   // 3 — films the provider is still rendering (not the ones handed over a moment ago).
-  const awaiting = await listRenderJobsAwaitingProvider(deps.sql, 20);
+  const singlePollJob = options.pollJobId ? await loadRenderJob(deps.sql, options.pollJobId) : null;
+  const awaiting = options.pollJobId
+    ? (singlePollJob && singlePollJob.status === 'running' && singlePollJob.providerTaskId !== null ? [singlePollJob] : [])
+    : await listRenderJobsAwaitingProvider(deps.sql, 20);
   for (const job of awaiting) {
     if (handedOff.has(job.id)) continue;
     if (await privateJobBlocked(job)) continue;
@@ -1010,8 +1015,12 @@ export async function loadOwnRender(sql: SqlRunner, viewer: Viewer, id: string):
   if (viewer.userId === null || !isRenderId(id)) return null;
   const job = await loadRenderJob(sql, id);
   if (job === null || job.userId !== viewer.userId) return null;
-  if ((await sql.query('select render_id from brand_production_reservations where render_id=$1',[id])).rows.length) return null;
-  return (await withTitles(sql, [job]))[0] ?? null;
+  const [reserved, views] = await Promise.all([
+    sql.query('select render_id from brand_production_reservations where render_id=$1', [id]),
+    withTitles(sql, [job]),
+  ]);
+  if (reserved.rows.length) return null;
+  return views[0] ?? null;
 }
 
 export type SharedRender = { status: 'ok'; view: RenderView } | { status: 'expired'; view: RenderView } | { status: 'not_found' };
@@ -1021,10 +1030,14 @@ export async function loadSharedRender(sql: SqlRunner, id: string, token: string
   if (!isRenderId(id) || !isShareTokenShape(token)) return { status: 'not_found' };
   const job = await loadRenderJob(sql, id);
   if (job === null || job.status !== 'succeeded' || job.shareToken === null || !constantTimeEqual(job.shareToken, token)) return { status: 'not_found' };
-  if ((await sql.query('select render_id from brand_production_reservations where render_id=$1',[id])).rows.length) return {status:'not_found'};
   // A maker's test render or the studio's review render is never a public link.
   if (job.templateId === MAKER_SANDBOX_ID) return { status: 'not_found' };
-  const view = (await withTitles(sql, [job]))[0]!;
+  const [reserved, views] = await Promise.all([
+    sql.query('select render_id from brand_production_reservations where render_id=$1', [id]),
+    withTitles(sql, [job]),
+  ]);
+  if (reserved.rows.length) return { status: 'not_found' };
+  const view = views[0]!;
   return isShareExpired(job.shareExpiresAt, now) ? { status: 'expired', view } : { status: 'ok', view };
 }
 

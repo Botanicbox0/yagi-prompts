@@ -235,7 +235,8 @@ export async function markRenderSucceeded(sql: SqlRunner, id: string, args: Mark
   await sql.query(
     `update render_jobs
         set status = 'succeeded', result_key = $2, result_mime = $3, result_bytes = $4, provider = $5, cost_usd = $6,
-            share_token = $7, share_expires_at = $8::timestamptz, finished_at = $9::timestamptz,
+            share_token = coalesce(share_token, $7), share_expires_at = coalesce(share_expires_at, $8::timestamptz),
+            finished_at = coalesce(finished_at, $9::timestamptz),
             error_code = null, error_message = null
       where id = $1`,
     [id, args.resultKey, args.resultMime, args.resultBytes, args.provider, args.costUsd, args.shareToken, args.shareExpiresAt.toISOString(), args.finishedAt.toISOString()],

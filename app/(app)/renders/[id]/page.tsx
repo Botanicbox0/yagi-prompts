@@ -79,7 +79,7 @@ export default async function RenderPage({ params, searchParams }: { params: Pro
     const stranded = job.status === 'queued' && Date.now() - Date.parse(job.createdAt) > STRANDED_AFTER_MS;
     after(async () => {
       try {
-        await runLiveRenderPass(sql, stranded ? { jobId: job.id, limit: 1 } : { limit: 0 });
+        await runLiveRenderPass(sql, stranded ? { jobId: job.id, limit: 1, pollJobId: job.id } : { limit: 0, pollJobId: job.id });
       } catch (error) {
         console.error(`[renders] page pass failed for ${job.id}`, error);
       }

@@ -52,7 +52,14 @@ async function connectPostgres(connectionString: string): Promise<SqlRunner | nu
   try {
     const pg = await import('pg');
     const Pool = (pg as unknown as { default?: { Pool: typeof pg.Pool } }).default?.Pool ?? pg.Pool;
-    const pool = new Pool({ connectionString, max: 4 });
+    const max = Math.max(1, Math.min(10, Number(process.env.PG_POOL_MAX ?? '2') || 2));
+    const pool = new Pool({
+      connectionString,
+      max,
+      connectionTimeoutMillis: 5_000,
+      idleTimeoutMillis: 10_000,
+      allowExitOnIdle: true,
+    });
     // One shared implementation of the pinned-connection transaction (lib/db/sql-runner.ts).
     return makePooledRunner(pool as unknown as PoolLike);
   } catch (err) {
@@ -136,7 +143,11 @@ async function connect(): Promise<SqlRunner | null> {
 
 /** Memoised per server process; both drivers are expensive to open and safe to share. */
 export function getSqlRunner(): Promise<SqlRunner | null> {
-  cache.promise ??= connect();
+  cache.promise ??= connect().catch((err) => {
+    cache.promise = null;
+    console.warn(`[db] unexpected connect rejection: ${String(err)}`);
+    return null;
+  });
   return cache.promise;
 }
 

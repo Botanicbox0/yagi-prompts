@@ -241,12 +241,12 @@ export const adminWorkflowKo: typeof adminWorkflowEn = {
     },
     socialAccounts: {
       title: "SNS 연결 신청을 확인하세요",
-      hint: "팔로워 화면 캡처를 보고 인정할 숫자를 직접 입력합니다. 로컬 AI가 읽은 값은 참고만 해요.",
+      hint: "팔로워 화면 캡처를 보고 인정할 숫자를 직접 입력합니다. 로컬 AI가 읽은 값은 참고만 합니다.",
       action: "SNS 확인 열기",
     },
     creatorApplications: {
       title: "템플릿 메이커 지원서를 검토하세요",
-      hint: "포트폴리오와 예시 게시물을 확인한 뒤 승인 또는 반려합니다. 승인해도 템플릿이 공개되지는 않아요.",
+      hint: "포트폴리오와 예시 게시물을 확인한 뒤 승인 또는 반려합니다. 승인만으로 템플릿이 공개되지는 않습니다.",
       action: "지원서 검토하기",
     },
     templates: {

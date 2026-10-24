@@ -185,8 +185,17 @@ export async function loadPromptCatalog(
     a.localeCompare(b),
   );
 
+  const cardsByMaker = new Map<string, PromptCard[]>();
+  for (const card of cards) {
+    if (card.makerProfile && card.authorHandle) {
+      const list = cardsByMaker.get(card.authorHandle);
+      if (list) list.push(card);
+      else cardsByMaker.set(card.authorHandle, [card]);
+    }
+  }
+
   const makers = makerRows.map(({ handle, bio }): PublicMaker => {
-    const own = cards.filter((card) => card.makerProfile && card.authorHandle === handle);
+    const own = cardsByMaker.get(handle) ?? [];
     const dates = own.map((card) => card.publishedAt).filter((value): value is string => value !== null).sort();
     return { handle, bio, templateCount: own.length, latestPublishedAt: dates.at(-1) ?? null };
   });

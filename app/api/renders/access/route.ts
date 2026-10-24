@@ -59,9 +59,13 @@ export async function GET(request: Request): Promise<NextResponse> {
   if (viewer.userId !== null) {
     const sql = await getSqlRunner();
     if (sql !== null) {
-      try { const row = await currentSelfie(sql, viewer.userId); selfie = row ? selfieView(row) : null; } catch { /* Before the selfie migration lands the studio simply asks for one. */ }
-      interest = (await loadPreferences(sql, viewer.userId))?.newPlaybook === true;
-      const candidate = slug ? await loadPromptBySlug(sql, slug) : null;
+      const [selfieRow, prefs, candidate] = await Promise.all([
+        currentSelfie(sql, viewer.userId).catch(() => null),
+        loadPreferences(sql, viewer.userId),
+        slug ? loadPromptBySlug(sql, slug) : Promise.resolve(null),
+      ]);
+      selfie = selfieRow ? selfieView(selfieRow) : null;
+      interest = prefs?.newPlaybook === true;
       const template = candidate?.audience === 'brand' ? null : candidate;
       // A quote describes use; only a paid, owned, unexpired ledger grants access.
       try {
