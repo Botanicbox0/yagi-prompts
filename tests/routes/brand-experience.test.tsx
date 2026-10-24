@@ -53,9 +53,17 @@ describe('the brand page shows the service before asking visitors to enquire', (
     expect(html).toContain('https://pitch.com/v/yagi-production-wokrs-vsrgfd');
     expect(html).toContain('https://pitch.com/v/yagi-workshop_introduction-vbujun');
     expect(html).toContain('data-brand-formula');
+    expect(html).toContain('data-hero-cinema-grid');
+    expect(html).toContain('data-production-craft-strip');
     expect(html).toContain('data-brand-scale-pillars');
     expect(html).toContain('data-production-collabs');
     expect(html).toContain('data-company-deck');
+    expect(html).not.toContain('5,000+');
+    expect(html).not.toContain('파트너십');
+    expect(html).not.toContain('AES-256');
+    expect(html).not.toContain('TLS 1.2');
+    expect(html).toContain('AI 학습 절대 금지');
+    expect(html).toContain('1인 전용 금고 격리');
     expect(html).toContain('포맷');
     expect(html).toContain('게시');
     expect(html).toContain('결과');

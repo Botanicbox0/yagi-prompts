@@ -3,7 +3,7 @@ import { DEFAULT_LOCALE, isLocale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/dictionaries';
 import { MarketingNav, MarketingFooter } from '@/components/marketing/chrome';
 import { BrandInquiryDialog } from '@/components/campaigns/brand-inquiry-dialog';
-import { BrandFormatExplorer, MorphicFilmPair } from '@/components/campaigns/brand-experience';
+import { BrandFormatExplorer, HeroCinemaGrid, MorphicFilmPair } from '@/components/campaigns/brand-experience';
 import { CAMPAIGN_REEL } from '@/lib/campaigns/showreel';
 import { BrandCustomerStory } from '@/components/campaigns/brand-customer-story';
 import { brandsHref, brandEnquiryHref, BRAND_INQUIRY_ENDPOINT } from '@/lib/campaigns/links';
@@ -46,29 +46,43 @@ export default async function BrandsPage({ params }: Props) {
 
     <main id="main" data-brand-landing className="overflow-clip bg-white text-brand-ink">
       <section data-section data-theme="dark" data-campaign-hero className="section bg-brand-night text-white">
-        <div className="audience-shell pb-10 pt-28 lg:pb-16 lg:pt-36">
-          <p className="audience-eyebrow text-brand-blue-light">{t.eyebrow}</p>
-          <div className="mt-6 grid gap-8 lg:grid-cols-[1.18fr_0.82fr] lg:items-end lg:gap-16">
-            <h1 className="audience-title max-w-[13ch] whitespace-pre-line text-[clamp(2.35rem,11vw,7.5rem)] leading-[0.94] tracking-[-0.065em] sm:text-[clamp(3.3rem,7.4vw,7.5rem)] lg:text-[clamp(4.6rem,6.5vw,6rem)]">{t.title}</h1>
-            <div className="max-w-xl pb-2">
-              <p className="text-base leading-relaxed text-white/68 sm:text-lg">{t.body}</p>
+        <div className="audience-shell pb-12 pt-28 lg:pb-16 lg:pt-32">
+          <div className="flex flex-wrap items-center justify-between gap-4 border-b border-white/10 pb-4">
+            <p className="audience-eyebrow text-brand-blue-light">{t.eyebrow}</p>
+            <span className="font-mono text-[11px] tracking-[0.16em] text-white/45">( SEOUL · TOKYO · PARIS )</span>
+          </div>
+          <div className="mt-8 grid gap-10 lg:grid-cols-[0.94fr_1.06fr] lg:items-center lg:gap-12">
+            <div>
+              <h1 className="audience-title max-w-[13ch] whitespace-pre-line text-[clamp(2.35rem,10vw,6.2rem)] leading-[0.95] tracking-[-0.06em] sm:text-[clamp(3.2rem,6.5vw,5.6rem)] lg:text-[clamp(3.6rem,4.7vw,5.1rem)]">{t.title}</h1>
+              <p className="mt-6 max-w-xl text-base leading-relaxed text-white/70 sm:text-lg">{t.body}</p>
               <div className="mt-8 flex flex-wrap items-center gap-5">
                 <a data-campaign-cta-brand data-inquiry-trigger href={brandEnquiryHref(locale)} className="inline-flex min-h-12 items-center rounded-full bg-blue px-6 text-sm font-semibold text-white transition-transform hover:-translate-y-0.5">{t.primaryCta} ↗</a>
                 <a href="#morphic-case" className="inline-flex min-h-11 items-center text-sm underline decoration-white/35 underline-offset-8">{t.secondaryCta}</a>
               </div>
+              <p data-campaign-definition className="mt-8 max-w-xl border-l border-white/20 pl-4 text-xs leading-relaxed text-white/52 sm:text-sm">{t.definition}</p>
             </div>
+            <HeroCinemaGrid
+              items={[
+                { id: 'paris', src: '/reel/brands/production-paris.mp4', poster: '/reel/brands/production-paris.jpg', width: 1280, height: 720, tag: t.heroCinema.parisTag, title: t.heroCinema.parisTitle },
+                { id: 'beauty', src: '/reel/campaigns/beauty-rose.mp4', poster: '/reel/campaigns/beauty-rose.jpg', width: 1280, height: 720, tag: t.heroCinema.beautyTag, title: t.heroCinema.beautyTitle },
+                { id: 'interview', src: '/reel/brands/morphic-august-01.mp4', poster: '/reel/brands/morphic-august-01.jpg', width: 720, height: 1280, tag: t.heroCinema.interviewTag, title: t.heroCinema.interviewTitle },
+                { id: 'creator', src: '/reel/campaigns/retro-phone-01.mp4', poster: '/reel/campaigns/retro-phone-01.jpg', width: 720, height: 1280, tag: t.heroCinema.creatorTag, title: t.heroCinema.creatorTitle },
+              ]}
+            />
           </div>
-          <p data-campaign-definition className="mt-14 max-w-3xl border-l border-blue pl-5 text-sm leading-relaxed text-white/62 lg:mt-20">{t.definition}</p>
           <div data-brand-formula className="mt-10 grid gap-3 border-t border-white/12 pt-8 sm:grid-cols-3 sm:gap-4">
             {[
-              { symbol: '01 · LICENSE', title: t.formula.item1Title, body: t.formula.item1Body },
-              { symbol: '02 · FORMAT', title: t.formula.item2Title, body: t.formula.item2Body },
-              { symbol: '03 · SCALE', title: t.formula.item3Title, body: t.formula.item3Body },
+              { symbol: '( 01 · SELFIE )', title: t.formula.item1Title, body: t.formula.item1Body, img: '/reel/studio-demo/reference-selfie.jpeg' },
+              { symbol: '( 02 · DIRECTED SCENE )', title: t.formula.item2Title, body: t.formula.item2Body, img: '/reel/studio-demo/designed-format.jpg' },
+              { symbol: '( 03 · CREATOR FEED )', title: t.formula.item3Title, body: t.formula.item3Body, img: '/reel/studio-demo/different-person.jpg' },
             ].map((item) => (
-              <div key={item.symbol} className="rounded-xl border border-white/10 bg-white/[0.03] p-5">
-                <p className="font-mono text-[11px] tracking-widest text-brand-blue-light">{item.symbol}</p>
-                <p className="mt-2.5 text-base font-semibold tracking-tight text-white">{item.title}</p>
-                <p className="mt-1.5 text-xs leading-relaxed text-white/60">{item.body}</p>
+              <div key={item.symbol} className="flex items-center gap-4 rounded-xl border border-white/10 bg-white/[0.03] p-4">
+                <img src={item.img} alt="" width={72} height={90} loading="lazy" decoding="async" className="h-18 w-14 shrink-0 rounded-lg object-cover ring-1 ring-white/15" />
+                <div className="min-w-0">
+                  <p className="font-mono text-[10px] tracking-[0.14em] text-brand-blue-light">{item.symbol}</p>
+                  <p className="mt-1 text-sm font-semibold tracking-tight text-white sm:text-base">{item.title}</p>
+                  <p className="mt-1 text-xs leading-relaxed text-white/58">{item.body}</p>
+                </div>
               </div>
             ))}
           </div>
@@ -76,36 +90,76 @@ export default async function BrandsPage({ params }: Props) {
       </section>
 
       <section id="work" data-section data-theme="light" data-campaign-reel-section className="section scroll-mt-24 bg-white">
-        <div className="audience-shell py-12 lg:py-20">
+        <div className="audience-shell py-14 lg:py-22">
           <div className="mb-8 grid gap-5 lg:grid-cols-[0.8fr_1.2fr] lg:items-end">
             <div><p className="audience-eyebrow">{t.reelEyebrow}</p><h2 className="audience-heading mt-4 max-w-xl">{t.reelHeading}</h2></div>
-            <p className="max-w-xl text-sm leading-relaxed opacity-60 lg:justify-self-end">{t.reelBody}</p>
+            <p className="max-w-xl text-sm leading-relaxed opacity-65 lg:justify-self-end">{t.reelBody}</p>
           </div>
           <BrandFormatExplorer items={CAMPAIGN_REEL} captions={t.formats} labels={t.media} />
+
+          <div data-production-craft-strip className="mt-12 overflow-hidden rounded-2xl bg-brand-night p-7 text-white sm:p-10 lg:mt-16 lg:p-12">
+            <div className="flex flex-wrap items-center justify-between gap-4 border-b border-white/10 pb-5">
+              <p className="font-mono text-xs tracking-[0.14em] text-brand-blue-light">{t.craftStrip.eyebrow}</p>
+              <p className="text-xs text-white/55">{t.productionCollabs}</p>
+            </div>
+            <div className="mt-8 grid gap-10 lg:grid-cols-[1.08fr_0.92fr] lg:items-center lg:gap-14">
+              <div>
+                <h3 className="whitespace-pre-line text-[clamp(1.65rem,3vw,2.65rem)] font-semibold leading-[1.12] tracking-tight text-white">{t.craftStrip.heading}</h3>
+                <p className="mt-4 max-w-2xl text-sm leading-relaxed text-white/68 sm:text-base">{t.craftStrip.body}</p>
+                <div className="mt-7 grid grid-cols-2 gap-3 sm:gap-4">
+                  <div className="overflow-hidden rounded-xl border border-white/10 bg-black">
+                    <img src="/reel/campaigns/beauty-rose.jpg" alt="" width={640} height={360} loading="lazy" decoding="async" className="aspect-[16/9] w-full object-cover" />
+                  </div>
+                  <div className="overflow-hidden rounded-xl border border-white/10 bg-black">
+                    <img src="/reel/campaigns/highteen.jpg" alt="" width={640} height={360} loading="lazy" decoding="async" className="aspect-[16/9] w-full object-cover" />
+                  </div>
+                </div>
+              </div>
+              <dl className="divide-y divide-white/10 border-y border-white/10">
+                {[
+                  { index: '( 01 )', title: t.craftStrip.lightTitle, body: t.craftStrip.lightBody },
+                  { index: '( 02 )', title: t.craftStrip.scaleTitle, body: t.craftStrip.scaleBody },
+                  { index: '( 03 )', title: t.craftStrip.liveTitle, body: t.craftStrip.liveBody },
+                ].map((item) => (
+                  <div key={item.index} className="py-5 first:pt-4 last:pb-4">
+                    <dt className="flex items-baseline gap-3 text-base font-semibold tracking-tight text-white sm:text-lg">
+                      <span className="font-mono text-xs text-brand-blue-light">{item.index}</span>
+                      <span>{item.title}</span>
+                    </dt>
+                    <dd className="mt-2 pl-11 text-xs leading-relaxed text-white/62 sm:text-sm">{item.body}</dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
+          </div>
         </div>
       </section>
 
       <section id="process" data-section data-theme="light" data-campaign-principles data-campaign-process className="section scroll-mt-24 border-t border-black/10 bg-white">
-        <div className="audience-shell py-12 lg:py-16">
+        <div className="audience-shell py-14 lg:py-20">
           <p className="audience-eyebrow">{t.moatEyebrow}</p>
           <ol className="mt-7 grid gap-8 sm:grid-cols-3 sm:gap-10">
             {[[t.moat1Title, t.moat1Body], [t.moat2Title, t.moat2Body], [t.moat3Title, t.moat3Body]].map(([heading, body], index) => <li key={heading} className="border-t border-black/15 pt-5"><span className="font-mono text-xs text-blue">0{index + 1}</span><h2 className="mt-4 text-xl font-semibold tracking-tight">{heading}</h2><p className="mt-3 max-w-sm text-sm leading-relaxed opacity-65">{body}</p></li>)}
           </ol>
-          <dl data-brand-scale-pillars className="mt-10 grid gap-4 rounded-2xl border border-black/10 bg-black/[0.02] p-6 sm:grid-cols-3 sm:gap-8 sm:p-8">
-            {[
-              { value: t.scalePillars.networkValue, label: t.scalePillars.networkLabel },
-              { value: t.scalePillars.shootsValue, label: t.scalePillars.shootsLabel },
-              { value: t.scalePillars.complianceValue, label: t.scalePillars.complianceLabel },
-            ].map((pillar) => (
-              <div key={pillar.value} className="border-l-2 border-blue pl-4">
-                <dt className="text-2xl font-semibold tracking-tight text-brand-ink sm:text-3xl">{pillar.value}</dt>
-                <dd className="mt-2 text-xs leading-relaxed opacity-70 sm:text-sm">{pillar.label}</dd>
-              </div>
-            ))}
-          </dl>
-          <div data-brand-markets className="mt-12 grid gap-5 border-t border-black/15 pt-8 lg:grid-cols-[0.8fr_1.2fr] lg:items-end lg:gap-16">
+          <div data-brand-markets className="mt-14 grid gap-5 border-t border-black/15 pt-10 lg:grid-cols-[0.8fr_1.2fr] lg:items-end lg:gap-16">
             <h2 className="whitespace-pre-line text-[clamp(1.7rem,3.2vw,3rem)] font-semibold leading-tight tracking-tight">{t.marketsHeading}</h2>
             <p className="max-w-xl text-sm leading-relaxed opacity-65 lg:justify-self-end">{t.marketsBody}</p>
+          </div>
+          <div className="mt-14 border-t border-black/15 pt-10">
+            <p className="font-mono text-xs font-medium tracking-[0.12em] uppercase text-blue">{t.scalePillars.eyebrow}</p>
+            <dl data-brand-scale-pillars className="mt-6 grid gap-6 sm:grid-cols-3 sm:gap-10">
+              {[
+                { code: '( ZERO TRAINING )', value: t.scalePillars.networkValue, label: t.scalePillars.networkLabel },
+                { code: '( PRIVATE VAULT )', value: t.scalePillars.shootsValue, label: t.scalePillars.shootsLabel },
+                { code: '( FULL ERASURE )', value: t.scalePillars.complianceValue, label: t.scalePillars.complianceLabel },
+              ].map((pillar) => (
+                <div key={pillar.value} className="border-t border-black/10 pt-4">
+                  <span className="font-mono text-[11px] tracking-[0.14em] text-black/45">{pillar.code}</span>
+                  <dt className="mt-2 text-xl font-semibold tracking-tight text-brand-ink sm:text-2xl">{pillar.value}</dt>
+                  <dd className="mt-2 text-xs leading-relaxed opacity-70 sm:text-sm">{pillar.label}</dd>
+                </div>
+              ))}
+            </dl>
           </div>
         </div>
       </section>
@@ -157,7 +211,7 @@ export default async function BrandsPage({ params }: Props) {
             </div>
             <div className="mt-6 flex flex-wrap gap-x-6 gap-y-2"><a data-inquiry-trigger href={`${brandsHref(locale)}?type=production#brands`} className="inline-flex min-h-11 items-center text-sm underline decoration-white/35 underline-offset-6">{t.productionCta} ↗</a><a href="https://pricing.yagiworkshop.xyz/" target="_blank" rel="noopener noreferrer" data-production-pricing className="inline-flex min-h-11 items-center text-sm underline decoration-white/35 underline-offset-6">{t.pricingCta} ↗</a></div><p className="mt-3 max-w-md text-xs leading-relaxed text-white/60">{t.pricingNote}</p>
           </div>
-          <div data-production-films><MorphicFilmPair media={[{ id: 'production-paris', src: '/reel/brands/production-paris.mp4', poster: '/reel/brands/production-paris.jpg', width: 1280, height: 720 }]} labels={{ titles: t.productionFilms, play: t.media.play, pause: t.media.pause }} /></div>
+          <div data-production-films><MorphicFilmPair media={[{ id: 'production-paris', src: '/reel/brands/production-paris.mp4', poster: '/reel/brands/production-paris.jpg', width: 1280, height: 720 }, { id: 'production-beauty', src: '/reel/campaigns/beauty-rose.mp4', poster: '/reel/campaigns/beauty-rose.jpg', width: 1280, height: 720 }]} labels={{ titles: t.productionFilms, play: t.media.play, pause: t.media.pause }} /></div>
         </div>
       </section>
       <FaqSection dict={dict} locale={locale} placement="brand" path={brandsHref(locale)} />

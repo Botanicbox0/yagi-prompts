@@ -22,7 +22,7 @@ See https://twings.app/ko/pricing and https://twings.app/en/pricing.
 
 Use your own face and comply with the service's identity and likeness rules. Uploading a photo does not authorize using somebody else's likeness, impersonation, or rights violations. Account-bound identity assets and additional verification may apply. AI output may differ from an example and may contain errors; an example is not a promise of an identical result.
 
-Under TWINGS's enterprise data protection agreements (DPA), uploaded face photos, creator likenesses, and brand assets are processed using TLS 1.2+ in-transit and AES-256 at-rest encryption solely to generate the requested outputs, and are contractually prohibited from being used to train, fine-tune, or improve external AI models.
+Uploaded face photos, creator likenesses, and brand assets are kept in encrypted, isolated personal vaults solely to generate the approved outputs, are never used to train or improve external AI models, and are permanently erased including backups upon deletion.
 
 Privacy, retention, deletion, permitted use, and withdrawal rights are governed by the current policy pages. Reports about unauthorized likeness use and requests about personal data can be sent to the public contact address. Do not invent broader consent, a data-retention period, or a commercial license from this summary.
 
@@ -36,7 +36,7 @@ TWINGS operates brand creator campaigns through its studio. A brand briefs the s
 
 The brand service combines influencer likeness licensing, high-quality AI video format production completed from a single selfie (with zero live shoots), and scalable distribution on actual creator channels. One format can be used by multiple creators. Standalone AI brand ad and campaign film production is also offered through YAGI (whose production collaborations include Galeries Lafayette in France, The Hyundai in Korea, and leading fashion and beauty brands), without requiring a creator campaign. Content reuse depends on agreed creator rights; campaign costs and timelines depend on scope.
 
-Partnered creator pools of 5,000+ influencers in Korea and Japan support simultaneous campaigns in both markets with no additional sourcing commission, with messages and creators selected for each market. The brand FAQ explains likeness consent, provider moderation, human post review, advertising disclosures, and personal-data handling. This describes operating procedures, not a security certification or a guarantee of compliance in every jurisdiction.
+Active creator pools in Korea and Japan support simultaneous campaigns in both markets, with messages and creators co-creating and publishing directly on their own feeds for each market. The brand FAQ explains likeness consent, provider moderation, human post review, advertising disclosures, and personal-data handling. This describes operating procedures, not a security certification or a guarantee of compliance in every jurisdiction.
 
 Creator compensation and studio margin are not a public brand price list. Do not infer an individual creator's payment from a brand campaign budget. Campaign availability and participation conditions must be checked on the current campaign page. Do not describe follower counts, impressions, attributed conversions, or audience data as verified unless the report identifies the evidence and measurement source.
 

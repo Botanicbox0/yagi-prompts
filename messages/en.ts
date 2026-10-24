@@ -378,54 +378,79 @@ export const en = {
     "campaignCta": "Explore campaigns"
   },
   brandLanding: {
-    "moatEyebrow": "FROM PRODUCTION TO PUBLISHING · BUILT TO SCALE",
-    "moat1Title": "High-quality AI video format",
-    "moat1Body": "We design a dedicated AI ad format built around your product and story — turning a single selfie into consistent, studio-grade video.",
-    "moat2Title": "5,000+ creator matching",
-    "moat2Body": "We match creators across Korea and Japan with zero additional sourcing commission and produce each film with their own face and zero live shoots.",
+    "moatEyebrow": "FROM DIRECTION TO LIVE FEEDS",
+    "moat1Title": "Directed film formats",
+    "moat1Body": "We design a dedicated brand film format built around your product and story — turning a single selfie into consistent, cinema-grade video.",
+    "moat2Title": "Co-creation with real creators",
+    "moat2Body": "We work directly with creators across Korea and Japan to produce each film starring their own face, with zero live shoots required.",
     "moat3Title": "Publishing and reporting",
     "moat3Body": "We review every film and ad disclosure for Korean and Japanese regulations, manage channel publishing, and deliver verified post links and results.",
     "metaTitle": "Creator Campaigns for Brands",
-    "metaDescription": "Scalable AI video formats, 5,000+ creator campaigns across Korea and Japan, and high-end brand film production by YAGI WORKSHOP. Explore real Morphic results.",
+    "metaDescription": "Directed AI brand films and creator campaigns across Korea and Japan by YAGI WORKSHOP. Explore simultaneous market launches and real Morphic results.",
     "marketsHeading": "Korea and Japan.\nOne campaign.",
-    "marketsBody": "Reach both markets simultaneously through our 5,000+ partnered creator pools in Korea and Japan with no additional sourcing commission. We match the right creators for each market and scale one format into dozens of local channel posts with zero live shoots.",
+    "marketsBody": "Reach both markets simultaneously through our active creator pools in Korea and Japan. We collaborate directly with creators suited to each market and scale one master format into dozens of local channel posts with zero live shoots.",
     "eyebrow": "TWINGS FOR BRANDS · YAGI WORKSHOP",
     "title": "Brand ads\ncreators want\nto be part of.",
-    "body": "We design high-quality AI video formats finished from a single selfie, star real creators with licensed likenesses, and manage publishing on their channels across Korea and Japan.",
+    "body": "Not generic AI clips — directed brand films. We craft one cinema-grade format and scale it across dozens of real creators publishing on their own channels in Korea and Japan.",
     "primaryCta": "Discuss your campaign",
     "secondaryCta": "See campaign results",
-    "definition": "TWINGS is an AI brand campaign and production studio operated by YAGI WORKSHOP Inc. We combine influencer likeness licensing, custom AI video formats, and a 5,000+ creator network across Korea and Japan to deliver scalable content distribution.",
+    "definition": "TWINGS is a brand campaign and production studio operated by YAGI WORKSHOP Inc. We combine cinema-grade AI format direction, creator likeness licensing, and simultaneous channel publishing across Korea and Japan.",
+    "heroCinema": {
+      "parisTag": "LUXURY CAMPAIGN · PARIS",
+      "parisTitle": "Galeries Lafayette × The Hyundai film",
+      "beautyTag": "TACTILE BEAUTY · MACRO",
+      "beautyTitle": "Rose gloss texture & lighting direction",
+      "interviewTag": "VIRAL FORMAT · 2M+ VIEWS",
+      "interviewTitle": "1990s street interview format",
+      "creatorTag": "LIVE CREATOR FEED · 9:16",
+      "creatorTitle": "Y2K creator channel release"
+    },
     "formula": {
-      "item1Title": "Influencer Likeness Licensing",
-      "item1Body": "Pre-cleared creator likenesses under enterprise security isolation",
-      "item2Title": "High-Quality AI Video Format",
-      "item2Body": "Custom cinema-grade formats completed from a single selfie",
-      "item3Title": "Scalable Content Distribution",
-      "item3Body": "Simultaneous publishing across Korea & Japan with 0 live shoots"
+      "item1Title": "One Creator Selfie",
+      "item1Body": "Pre-agreed creator likeness kept in an isolated personal vault",
+      "item2Title": "YAGI Master Direction",
+      "item2Body": "Bespoke scene directed for lighting, texture, and camera pace",
+      "item3Title": "Live Creator Feeds",
+      "item3Body": "Published simultaneously across Korea & Japan with zero live shoots"
+    },
+    "craftStrip": {
+      "eyebrow": "( DIRECTION OVER GENERATION · YAGI CRAFT )",
+      "heading": "Most AI makes clips.\nWe direct brand films.",
+      "body": "A few lines of prompt text never built a brand. The YAGI directing team behind campaigns for Galeries Lafayette, The Hyundai, and leading fashion and beauty houses designs the lighting, skin and fabric textures, and editorial cut first — then scales that exact master scene across dozens of real creators.",
+      "lightTitle": "Commercial film craft",
+      "lightBody": "Real lens language, tactile product lighting, and natural motion directed without the uncanny valley.",
+      "scaleTitle": "Scale without the set",
+      "scaleBody": "Every participating creator film renders at the same master quality from a single selfie, with zero studio shoots.",
+      "liveTitle": "Active creator channels",
+      "liveBody": "Not a static directory — we produce alongside real creators in Korea and Japan who publish directly to their own audiences."
     },
     "scalePillars": {
-      "networkValue": "5,000+ Pool",
-      "networkLabel": "Partnered creator network across Korea and Japan with no additional sourcing commission",
-      "shootsValue": "0 Live Shoots",
-      "shootsLabel": "Consistent studio quality across every participating creator from a single selfie",
-      "complianceValue": "Enterprise Security",
-      "complianceLabel": "Zero AI model training guarantee · AES-256 encrypted isolation · KR/JP ad disclosure review"
+      "eyebrow": "Uncompromising security for every face and brand asset",
+      "networkValue": "Zero AI Training",
+      "networkLabel": "Uploaded photos and brand films are never used to train or improve any external AI model.",
+      "shootsValue": "Isolated Personal Vault",
+      "shootsLabel": "Every creator's likeness is encrypted in a dedicated private space — never mixed or exposed.",
+      "complianceValue": "Complete Erasure",
+      "complianceLabel": "Used strictly for the approved campaign, and wiped completely — including backups — upon deletion."
     },
     "reelEyebrow": "AI ADS × CREATORS",
     "reelHeading": "Your brand ad.\nTheir own face.",
-    "reelBody": "One crafted format turns into dozens of creator films with consistent quality. Creators publish their own-face versions on their channels to put your brand in front of real audiences.",
+    "reelBody": "One master format directed by YAGI turns into dozens of creator films with consistent quality. Creators publish their own-face versions on their channels to put your brand in front of real audiences.",
     "formats": {
       "city": {
         "title": "City fashion film",
-        "line": "Format study · 4:3"
+        "line": "Format study · 4:3",
+        "detail": "Directed with natural street shadows, fabric movement, and low-angle editorial pacing"
       },
       "y2k": {
         "title": "Y2K product film",
-        "line": "Format study · 9:16"
+        "line": "Format study · 9:16",
+        "detail": "Macro jewel reflections, tactile hand close-ups, and brisk vertical cuts built for social feeds"
       },
       "tea": {
         "title": "Editorial film",
-        "line": "Format study · 4:3"
+        "line": "Format study · 4:3",
+        "detail": "Surreal miniature scale and architectural art direction achieved without physical set builds"
       }
     },
     "media": {
@@ -480,7 +505,8 @@ export const en = {
     "companyDeckCta": "View company introduction (Pitch)",
     "companyDeckUrl": "https://pitch.com/v/yagi-workshop-introduction-en-higgsfield-kb35ht",
     "productionFilms": [
-      "Paris campaign film · YAGI production"
+      "Paris campaign film · YAGI production",
+      "Rose gloss beauty film · YAGI production"
     ],
     "productionCta": "Discuss production in English",
     "pricingCta": "Production estimate · Korean",
@@ -3150,7 +3176,7 @@ export const en = {
     q2: 'What does it cost?',
     a2: 'Single films are priced individually on each template page. Upcoming monthly plans are Creator at KRW 24,900 (up to 4 films at 720p, 15s) and Premium at KRW 49,000 (up to 8 films). Compare different film lengths on the pricing page. Public checkout and subscriptions are opening soon.',
     q3: 'What happens to my photo?',
-    a3: "Upload photos of your own face only. Each photo passes the provider's automated review and is encrypted inside the single likeness asset group an account may hold, used solely to generate your results. Under our enterprise data protection agreements (DPA), uploaded photos and generated outputs are never used to train or fine-tune external AI models. If a report or anomaly occurs we may request a camera check, and reports of a misused likeness are reviewed within 24 hours. Deleting your account permanently deletes your photos and results with it. See Article 5 of the Terms and the Privacy Policy for full details.",
+    a3: "Upload photos of your own face only. Each photo passes the provider's automated review and is encrypted inside the single likeness asset group an account may hold, used solely to generate your results. Uploaded photos and generated outputs are never used to train or improve any external AI model. If a report or anomaly occurs we may request a camera check, and reports of a misused likeness are reviewed within 24 hours. Deleting your account permanently deletes your photos and results with it. See Article 5 of the Terms and the Privacy Policy for full details.",
     q4: 'How long does it take?',
     a4: 'A film usually finishes in 2–5 minutes, and images are even faster. You can close the tab while it renders — we notify you by email and web push when it is ready.',
     q5: 'What is a campaign?',
@@ -3174,9 +3200,9 @@ export const en = {
     q14: "Can my brand reuse creator films in its own ads?",
     a14: "Yes. We can bundle secondary usage rights upfront before launch, or license standout creator films after the campaign wraps. Channels, duration, paid media whitelisting, and re-editing terms are cleared directly with each creator.",
     q15: "How do you handle likeness rights, personal data, and AI ad disclosures?",
-    a15: "Creators participate using their own likeness with explicit prior licensing and consent. All face photos and brand assets are protected under enterprise data protection agreements (DPA) with TLS 1.2+ in-transit and AES-256 at-rest encryption, processed strictly for campaign production, and never used to train external AI models. Before publishing, our team verifies every post against Korean FTC disclosure rules, Japan's stealth marketing regulations, and platform AI labeling policies. Processing partners, overseas processing, retention, and deletion rules are detailed in our Privacy Policy, and likeness misuse reports are reviewed within 24 hours.",
+    a15: "Creators participate using their own likeness with explicit prior licensing and consent. All face photos and brand assets are encrypted in isolated personal vaults, processed strictly for the approved campaign, and never used to train external AI models. Before publishing, our team verifies every post against Korean FTC disclosure rules, Japan's stealth marketing regulations, and platform AI labeling policies. Processing partners, overseas processing, retention, and deletion rules are detailed in our Privacy Policy, and likeness misuse reports are reviewed within 24 hours.",
     q16: "Can you run creator campaigns in Korea and Japan at the same time?",
-    a16: "Yes. Through our 5,000+ partnered creator pools in Korea and Japan, we run campaigns across both markets simultaneously with no additional sourcing commission. We localize the messaging, match creators for each country, and manage production, publishing, and reporting end to end — just as we did for Morphic across Korea and Japan.",
+    a16: "Yes. Through our active creator pools in Korea and Japan, we run campaigns across both markets simultaneously. We localize the messaging, collaborate with creators suited to each country, and manage production, publishing, and reporting end to end — just as we did for Morphic across Korea and Japan.",
     q17: "Can I subscribe or generate videos right now?",
     a17: "Right now you can browse all public templates and sample films. Public checkout, monthly subscriptions, and video generation are in final preparation and will open on this page soon.",
     q18: "How many videos can I make per month?",

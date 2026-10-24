@@ -7,6 +7,82 @@ import styles from './brand-experience.module.css';
 export interface FormatCopy {
   title: string;
   line: string;
+  detail?: string;
+}
+
+export interface HeroCinemaItem {
+  id: string;
+  src: string;
+  poster: string;
+  width: number;
+  height: number;
+  tag: string;
+  title: string;
+}
+
+export function HeroCinemaGrid({ items }: { items: readonly HeroCinemaItem[] }) {
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!root) return;
+    const motion = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const connection = connectionInformation();
+    const videos = Array.from(root.querySelectorAll<HTMLVideoElement>('video'));
+    let isVisible = false;
+
+    const sync = () => {
+      const allow = !reducedOrMetered() && isVisible && !document.hidden;
+      for (const v of videos) {
+        if (allow) void v.play().catch(() => undefined);
+        else v.pause();
+      }
+    };
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        isVisible = Boolean(entry?.isIntersecting && entry.intersectionRatio >= 0.15);
+        sync();
+      },
+      { threshold: [0, 0.15] },
+    );
+    observer.observe(root);
+    document.addEventListener('visibilitychange', sync);
+    motion.addEventListener('change', sync);
+    connection?.addEventListener('change', sync);
+    return () => {
+      observer.disconnect();
+      document.removeEventListener('visibilitychange', sync);
+      motion.removeEventListener('change', sync);
+      connection?.removeEventListener('change', sync);
+    };
+  }, []);
+
+  return (
+    <div ref={rootRef} data-hero-cinema-grid className={styles.heroCinemaGrid}>
+      {items.map((item, idx) => (
+        <figure key={item.id} data-hero-cinema-cell={item.id} className={styles.heroCinemaCell}>
+          <video
+            src={item.src}
+            poster={item.poster}
+            width={item.width}
+            height={item.height}
+            muted
+            loop
+            playsInline
+            preload="none"
+            aria-label={item.title}
+            className={styles.heroCinemaVideo}
+          />
+          <div className={styles.heroCinemaShade} aria-hidden="true" />
+          <figcaption className={styles.heroCinemaMeta}>
+            <span className={styles.heroCinemaIndex}>( 0{idx + 1} ) · {item.tag}</span>
+            <strong className={styles.heroCinemaTitle}>{item.title}</strong>
+          </figcaption>
+        </figure>
+      ))}
+    </div>
+  );
 }
 
 export interface MediaLabels {
@@ -141,9 +217,16 @@ export function BrandFormatExplorer({
           onPause={() => setPlaying(false)}
         />
         <div className={styles.formatShade} aria-hidden="true" />
+        <div className={styles.formatTopBar} aria-hidden="true">
+          <span>( 0{items.findIndex((item) => item.id === active.id) + 1} / 0{items.length} )</span>
+          <span>{caption.line}</span>
+        </div>
         <figcaption className={styles.formatCaption} aria-live="polite">
-          <span className={styles.formatIndex}>0{items.findIndex((item) => item.id === active.id) + 1}</span>
-          <span><strong>{caption.title}</strong><small>{caption.line}</small></span>
+          <span className={styles.formatIndex}>( 0{items.findIndex((item) => item.id === active.id) + 1} )</span>
+          <span>
+            <strong>{caption.title}</strong>
+            <small>{caption.detail ?? caption.line}</small>
+          </span>
         </figcaption>
         <button data-video-control type="button" onClick={toggle} aria-pressed={playing} aria-label={`${caption.title} · ${playing ? labels.pause : labels.play}`} className={styles.videoControl}>
           <span aria-hidden="true">{playing ? 'Ⅱ' : '▶'}</span>
@@ -154,6 +237,7 @@ export function BrandFormatExplorer({
       <div className={styles.formatPicker} role="tablist" aria-label={labels.formatPicker} onKeyDown={move}>
         {items.map((item, index) => {
           const selected = item.id === active.id;
+          const itemCopy = captions[item.id];
           return (
             <button
               id={`format-tab-${item.id}`}
@@ -168,7 +252,11 @@ export function BrandFormatExplorer({
               onClick={() => setActiveId(item.id)}
             >
               <span className={styles.formatThumb}><img src={item.poster} alt="" width={item.width} height={item.height} loading={index === 0 ? 'eager' : 'lazy'} decoding="async" /></span>
-              <span className={styles.formatTabCopy}><small>{labels.filmLabel} 0{index + 1}</small><strong>{captions[item.id].title}</strong></span>
+              <span className={styles.formatTabCopy}>
+                <small>( 0{index + 1} ) · {itemCopy.line}</small>
+                <strong>{itemCopy.title}</strong>
+                {itemCopy.detail && <span className={styles.formatTabDetail}>{itemCopy.detail}</span>}
+              </span>
               <span className={styles.formatArrow} aria-hidden="true">↗</span>
             </button>
           );
