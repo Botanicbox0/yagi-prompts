@@ -1037,7 +1037,7 @@ async function sweepTemplates(): Promise<void> {
   expectPresent('…whose one CTA goes to the make card', detail.body, 'href="#make"');
   expectAbsent('…no demo badge anywhere', detail.body, 'data-demo-badge');
   expectAbsent('…no placeholder ad', detail.body, 'YOUR AD HERE');
-  expectPresent('…the house ad points at the brand form', detail.body, 'data-house-ad');
+  expectAbsent('…no house ad rail', detail.body, 'data-house-ad');
   expectPresent('…and the price in dollars on the English page', detail.body, '>$4<');
   // The related list is the catalogue's 4:5 grid: two across on a phone, four on a desktop.
   if (/<ul[^>]*data-related-grid[^>]*class="[^"]*\bgrid-cols-2\b[^"]*\blg:grid-cols-4\b/.test(detail.body)) ok('…related templates in the two-column card grid', 'data-related-grid');
@@ -1191,8 +1191,8 @@ async function sweepLandingTemplates(): Promise<void> {
   expectAbsent('nav no longer points at the studio', page.body, 'href="/en/studio"');
   expectAbsent('nav no longer points at contests', page.body, 'href="/en/contests"');
   expectPresent('the hero opens on the video door', page.body, 'data-hero-video');
-  // §15.3-2: the selfie → scene pair renders only with BOTH content-slot images; this build sets neither.
-  expectAbsent('no half evidence pair without the content slot', page.body, 'data-hero-evidence');
+  // §15.3-2: the founder-approved default selfie → scene pair renders on the landing.
+  expectPresent('the selfie → scene evidence pair is on the landing', page.body, 'data-hero-evidence');
   expectPresent('the hero sale-state line', page.body, 'data-creator-availability');
   expectAbsent('no placeholder ad on the landing', page.body, 'YOUR AD HERE');
   expectPresent('the creator home has a separate brand entry', page.body, 'data-brand-door');

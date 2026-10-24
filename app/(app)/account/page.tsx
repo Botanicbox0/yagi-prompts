@@ -3,8 +3,7 @@ import { getSqlRunner } from '@/lib/db/connect';
 import { getLocaleFromHeaders } from '@/lib/i18n/server';
 import { getDictionary } from '@/lib/i18n/dictionaries';
 import { LocaleToggle } from '@/components/locale-toggle';
-import { siteLinks } from '@/components/marketing/chrome';
-import { TwingsLogo } from '@/components/brand/twings-mark';
+import { AppHeader } from '@/components/app/app-header';
 import { selfieLibrary, selfieLimit, type SelfieLibrary } from '@/lib/identity/selfie-service';
 import { IDENTITY_SELFIE_PATH } from '@/lib/identity/links';
 import { SelfieLibraryPanel } from '@/components/identity/selfie-grid';
@@ -15,7 +14,7 @@ import {
   PREFERENCES_OFF,
   type NotificationPreferences,
 } from '@/lib/notify/preferences';
-import { MY_CAMPAIGNS_PATH } from '@/lib/campaigns/links';
+import { campaignsHref, MY_CAMPAIGNS_PATH } from '@/lib/campaigns/links';
 import { templatesHref } from '@/lib/prompts/links';
 import { listMyRenders, type RenderView } from '@/lib/renders/service';
 import { RENDERS_PATH } from '@/lib/renders/share';
@@ -134,25 +133,7 @@ export default async function AccountPage({
 
   return (
     <div data-section data-theme="light" className="section min-h-screen">
-      <header className="border-b border-hairline">
-        <div className="mx-auto flex max-w-shell items-center justify-between px-gutter py-5">
-          <a href={`/${locale}`} className="flex items-center gap-2.5">
-            <TwingsLogo size={18} />
-          </a>
-          <div className="flex items-center gap-6">
-            {siteLinks(locale, dict).map((link, index) => (
-              <a
-                key={link.href}
-                href={link.href}
-                className={[index === 0 ? '' : 'hidden sm:inline', 'font-label text-eyebrow uppercase'].join(' ')}
-              >
-                {link.label}
-              </a>
-            ))}
-            <LocaleToggle current={locale} rest="/account" prefixed={false} />
-          </div>
-        </div>
-      </header>
+      <AppHeader locale={locale} dict={dict} rest="/account" />
 
       <main id="main" className="band py-16 lg:py-20">
         <p className="text-accent font-label text-eyebrow uppercase">{copy.eyebrow}</p>
@@ -179,6 +160,51 @@ export default async function AccountPage({
           </section>
         )}
         {viewer?.userId && socialOpen && <SocialAccountCard copy={dict.social} influencer={social?.influencer ?? false} items={social?.items ?? []} />}
+        {viewer?.userId && (
+          <section
+            data-creator-campaign-hub
+            aria-labelledby="account-campaign-hub-title"
+            className="mt-6 max-w-detail rounded-3xl border border-hairline bg-white p-5 sm:p-6"
+          >
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <h2 id="account-campaign-hub-title" className="text-base font-semibold">
+                {dict.campaigns.myCampaigns}
+              </h2>
+              <span className="font-mono text-xs opacity-60">{dict.nav.campaigns}</span>
+            </div>
+            <p className="mt-2 text-sm leading-relaxed opacity-75">
+              {dict.creatorJourney.campaignBody}
+            </p>
+            <div className="mt-4 flex flex-wrap items-center gap-3">
+              <a
+                href={MY_CAMPAIGNS_PATH}
+                className="inline-flex min-h-11 items-center rounded-full bg-on-surface px-5 py-2.5 text-sm font-semibold text-surface"
+              >
+                {dict.campaigns.myCampaigns} →
+              </a>
+              <a
+                href="/campaigns/open"
+                className="inline-flex min-h-11 items-center rounded-full border border-hairline px-5 py-2.5 text-sm font-medium"
+              >
+                {dict.campaigns.railRecruiting}
+              </a>
+              <a
+                href={campaignsHref(locale)}
+                className="inline-flex min-h-11 items-center px-2 text-sm underline underline-offset-4 opacity-80"
+              >
+                {dict.creatorJourney.campaignCta} ↗
+              </a>
+              {creatorProgramOpen() && (
+                <a
+                  href={CREATOR_WORKSPACE_PATH}
+                  className="inline-flex min-h-11 items-center rounded-full border border-hairline px-5 py-2.5 text-sm font-medium"
+                >
+                  {dict.creatorProgram.workspaceTitle} →
+                </a>
+              )}
+            </div>
+          </section>
+        )}
         {viewer?.userId && <SubscriptionStatus initial={subscription} copy={dict.creatorSubscription} locale={locale} unavailable={!subscriptionLoaded} />}
         <div className="mt-8 max-w-detail">
           <dl>

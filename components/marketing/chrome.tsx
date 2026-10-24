@@ -137,14 +137,3 @@ export function MarketingFooter({ locale, dict, audience = 'creator' }: { locale
     />
   );
 }
-
-/** The house ad (2026-09-11): the brand-campaign pitch, pointing at the enquiry form. */
-export function adLabels(dict: Dictionary, locale: Locale) {
-  return {
-    label: dict.ad.label,
-    headline: dict.ad.headline,
-    pitch: dict.ad.pitch,
-    cta: dict.ad.cta,
-    href: brandEnquiryHref(locale),
-  };
-}

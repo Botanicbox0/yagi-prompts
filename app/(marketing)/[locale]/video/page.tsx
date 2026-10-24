@@ -3,9 +3,7 @@ import { DEFAULT_LOCALE, isLocale, type Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/dictionaries';
 import { getPromptCatalog } from '@/lib/prompts/public-catalog';
 import { templatesListingMetadata } from '@/lib/seo/template-metadata';
-import { MarketingFooter, MarketingNav, adLabels } from '@/components/marketing/chrome';
-import { AdRail } from '@/components/ad/ad-rail';
-import { AdBanner, AdCard } from '@/components/ad/ad-card';
+import { MarketingFooter, MarketingNav } from '@/components/marketing/chrome';
 import { TemplatesListing } from '@/components/templates/listing';
 import { FaqSection } from '@/lib/seo/faq-section';
 import { FirstRunSheet } from '@/components/onboarding/first-run-sheet';
@@ -45,21 +43,12 @@ export default async function VideoTemplatesPage({ params }: RouteParams) {
   const locale = localeOf(raw);
   const dict = getDictionary(locale);
   const catalog = await getPromptCatalog();
-  const ads = adLabels(dict, locale);
 
   return (
     <>
       <MarketingNav locale={locale} dict={dict} rest="/video" initialTheme="light" />
       <main id="main" data-templates="video" data-section data-theme="light" className="section">
-        <div id="templates-rail-anchor" className="relative">
-          <AdRail anchorId="templates-rail-anchor">
-            <AdCard labels={ads} />
-          </AdRail>
-          <TemplatesListing locale={locale} dict={dict} medium="video" cards={catalog.video} />
-          <div className="band pb-24 rail:hidden">
-            <AdBanner labels={ads} />
-          </div>
-        </div>
+        <TemplatesListing locale={locale} dict={dict} medium="video" cards={catalog.video} />
       </main>
       <FaqSection dict={dict} locale={locale} placement="template" path={`/${locale}/video`} />
       <MarketingFooter locale={locale} dict={dict} />

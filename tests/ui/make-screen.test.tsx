@@ -26,13 +26,11 @@ vi.mock('@/lib/flags', () => ({
 vi.mock('@/lib/creator-subscriptions/cached-availability', () => ({ cachedSubscriptionAvailability: vi.fn(async () => state.availability) }));
 vi.mock('@/lib/prompts/public-catalog', () => ({ getPromptCatalog: async () => ({ video: [film], image: [] }) }));
 vi.mock('@/lib/campaigns/public-catalog', () => ({ getCampaignCatalog: async () => ({ campaigns: [] }) }));
-vi.mock('@/components/marketing/chrome', () => ({ MarketingNav: () => null, MarketingFooter: () => null, adLabels: () => ({}) }));
+vi.mock('@/components/marketing/chrome', () => ({ MarketingNav: () => null, MarketingFooter: () => null }));
 vi.mock('@/components/prompts/rails', () => ({ PromptRail: () => null }));
 vi.mock('@/components/prompts/detail', () => ({ RelatedPrompts: () => null }));
 vi.mock('@/components/prompts/detail-media', () => ({ PromptDetailMedia: () => null }));
 vi.mock('@/components/prompts/poster', () => ({ TypographicPoster: () => null, posterRatio: () => '16 / 9' }));
-vi.mock('@/components/ad/ad-rail', () => ({ AdRail: () => null }));
-vi.mock('@/components/ad/ad-card', () => ({ AdCard: () => null, AdBanner: () => null }));
 vi.mock('@/components/ui/text-swap', () => ({ TextSwap: ({ children }: { children: React.ReactNode }) => <>{children}</> }));
 vi.mock('@/lib/db/connect', () => ({ getSqlRunner: async () => null }));
 

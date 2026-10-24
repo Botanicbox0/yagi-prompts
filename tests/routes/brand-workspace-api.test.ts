@@ -195,8 +195,33 @@ describe("brand workspace API boundary", () => {
   it("HEAD also checks access and does not mint URLs or load large bytes", async () => {
     const response = await HEAD(read(), context);
     expect(response.status).toBe(200);
+    expect(response.headers.get("accept-ranges")).toBe("bytes");
     expect(mocks.signed).not.toHaveBeenCalled();
     expect(mocks.read).not.toHaveBeenCalled();
+  });
+  it("serves 206 Partial Content byte ranges for video scrubbing when local storage is used", async () => {
+    const bytes = new Uint8Array([10, 20, 30, 40, 50, 60, 70, 80, 90, 100]);
+    mocks.storage.mockResolvedValue({
+      servesSignedUrls: false,
+      read: mocks.read.mockResolvedValue(bytes),
+      putStaging: mocks.put,
+    });
+    mocks.access.mockResolvedValue({
+      key: "private-video",
+      mime: "video/mp4",
+      name: "cut-v1.mp4",
+      sizeBytes: bytes.length,
+    });
+    const ranged = new NextRequest(
+      `https://brand.twings.app/api/brand-workspace/attachments/${id}`,
+      { headers: { host: "brand.twings.app", range: "bytes=2-5" } },
+    );
+    const response = await GET(ranged, context);
+    expect(response.status).toBe(206);
+    expect(response.headers.get("accept-ranges")).toBe("bytes");
+    expect(response.headers.get("content-range")).toBe("bytes 2-5/10");
+    expect(response.headers.get("content-length")).toBe("4");
+    expect(Array.from(new Uint8Array(await response.arrayBuffer()))).toEqual([30, 40, 50, 60]);
   });
   it("fails closed when a cloud driver cannot sign instead of streaming through Vercel", async () => {
     mocks.signed.mockResolvedValue(null);

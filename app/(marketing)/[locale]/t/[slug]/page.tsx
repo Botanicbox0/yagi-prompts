@@ -23,9 +23,7 @@ import { FaqSection } from '@/lib/seo/faq-section';
 import { JsonLd } from '@/lib/seo/json-ld';
 import { siteUrl } from '@/lib/seo/site-url';
 import { templateStructuredData } from '@/lib/seo/structured-data';
-import { MarketingFooter, MarketingNav, adLabels } from '@/components/marketing/chrome';
-import { AdRail } from '@/components/ad/ad-rail';
-import { AdBanner, AdCard } from '@/components/ad/ad-card';
+import { MarketingFooter, MarketingNav } from '@/components/marketing/chrome';
 import { TextSwap } from '@/components/ui/text-swap';
 import { PromptDetailMedia } from '@/components/prompts/detail-media';
 import { TypographicPoster, posterRatio } from '@/components/prompts/poster';
@@ -109,7 +107,6 @@ export default async function TemplatePage({ params }: RouteParams) {
 
   const t = dict.templates;
   const labels = promptLabels(dict);
-  const ads = adLabels(dict, locale);
   const useCaseLabels = Object.fromEntries(USE_CASES.map((value) => [value, useCaseLabel(dict, value)]));
   const title = locale === 'ko' && card.titleKo ? card.titleKo : card.title;
   const subscriptionQuote = isForSale(card) ? templateSubscriptionQuote(card) : null;
@@ -157,12 +154,7 @@ export default async function TemplatePage({ params }: RouteParams) {
 
       <SubscriptionAvailabilityProvider initialAvailability={availability}>
       <main id="main" data-template={card.slug} data-medium={card.medium} data-section data-theme="light" className="section pb-24">
-        <div id="template-rail-anchor" className="relative">
-          <AdRail anchorId="template-rail-anchor">
-            <AdCard labels={ads} />
-          </AdRail>
-
-          <div className="band pt-28 lg:pt-32">
+        <div className="band pt-28 lg:pt-32">
             <a href={templatesHref(locale, card.medium)} className="inline-flex min-h-11 items-center text-sm text-black/65">
               ← {interpolate(t.backTo, { medium: dict.nav[card.medium] })}
             </a>
@@ -336,12 +328,7 @@ export default async function TemplatePage({ params }: RouteParams) {
               useCaseLabels={useCaseLabels}
               signinHref={signInHref(templateHref(locale, slug), locale)}
             />
-
-            <div className="mt-16 rail:hidden">
-              <AdBanner labels={ads} />
-            </div>
           </div>
-        </div>
       </main>
       <FaqSection dict={dict} locale={locale} placement="template" path={`/${locale}/t/${slug}`} availability={availability} />
       </SubscriptionAvailabilityProvider>

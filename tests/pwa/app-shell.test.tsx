@@ -64,6 +64,22 @@ describe('bottom tabs (standalone only)', () => {
     expect(items.find((t) => t.id === 'photo')).toMatchObject({ href: '/identity/selfie', current: true });
   });
 
+  it('supports the creator/influencer campaigns tab when campaignsHref is supplied', () => {
+    const items = bottomTabItems({
+      locale: 'ko',
+      pathname: '/campaigns/mine',
+      signedIn: true,
+      labels,
+      campaignsHref: '/campaigns/open',
+    });
+    expect(items.map((t) => t.id)).toEqual(['formats', 'campaigns', 'renders', 'account']);
+    expect(items.find((t) => t.id === 'campaigns')).toMatchObject({
+      href: '/campaigns/open',
+      label: '캠페인',
+      current: true,
+    });
+  });
+
   it('sends a signed-out reader’s "내 작품" to the sign-in door, coming back to their work', () => {
     const renders = bottomTabItems({ locale: 'ko', pathname: '/ko', signedIn: false, labels }).find((t) => t.id === 'renders')!;
     expect(renders.href).toBe('/auth/choose?next=%2Frenders&locale=ko');

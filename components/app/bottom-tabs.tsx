@@ -22,7 +22,7 @@ import { useStandaloneDisplay } from '@/components/pwa/display-mode';
 
 type Labels = Dictionary['appShell']['tabs'];
 
-export type BottomTabId = 'formats' | 'renders' | 'photo' | 'account';
+export type BottomTabId = 'formats' | 'campaigns' | 'renders' | 'photo' | 'account';
 
 export interface BottomTabItem {
   id: BottomTabId;
@@ -44,16 +44,30 @@ export function bottomTabItems({
   signedIn,
   labels,
   photoHref = PHOTO_HREF,
+  campaignsHref,
+  campaignsLabel,
 }: {
   locale: Locale;
   pathname: string | null;
   signedIn: boolean;
   labels: Labels;
   photoHref?: string;
+  campaignsHref?: string;
+  campaignsLabel?: string;
 }): BottomTabItem[] {
   const path = pathname ?? '';
   const items: BottomTabItem[] = [
     { id: 'formats', href: `/${locale}/video`, label: labels.formats, current: /^\/(?:en|ko)\/(?:video|image|t)(?:\/|$)/.test(path) },
+    ...(campaignsHref
+      ? [
+          {
+            id: 'campaigns' as const,
+            href: campaignsHref,
+            label: campaignsLabel ?? (locale === 'ko' ? '캠페인' : 'Campaigns'),
+            current: under(path, '/campaigns') || /^\/(?:en|ko)\/campaigns(?:\/|$)/.test(path),
+          },
+        ]
+      : []),
     // Signed out, "my work" is the sign-in door that comes back to it.
     { id: 'renders', href: signedIn ? RENDERS_HREF : chooseProviderHref(RENDERS_HREF, locale), label: labels.renders, current: under(path, RENDERS_HREF) },
     { id: 'photo', href: photoHref, label: labels.photo, current: photoHref !== ACCOUNT_HREF && under(path, photoHref) },
@@ -71,6 +85,13 @@ function TabIcon({ id }: { id: BottomTabId }) {
         <svg {...common}>
           <rect x="3.5" y="5" width="17" height="14" rx="3" />
           <path d="M10.25 9.5v5l4.25-2.5z" fill="currentColor" stroke="none" />
+        </svg>
+      );
+    case 'campaigns':
+      return (
+        <svg {...common}>
+          <path d="M4 11.5V6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v5.5a6 6 0 0 1-12 0Z" />
+          <path d="M8 17.5v2.5M16 17.5v2.5M5 20h14" />
         </svg>
       );
     case 'renders':

@@ -34,6 +34,16 @@ export interface EvidencePair {
   after: string;
 }
 
+/**
+ * Founder-approved default Selfie → Scene evidence pair (2026-10-24):
+ * Front-facing reference selfie → Y2K Pink Flip-Phone studio portrait of the same person,
+ * with zero creator handle or personal information in public paths (AGENTS.md §5).
+ */
+export const DEFAULT_HERO_EVIDENCE: EvidencePair = {
+  before: '/reel/studio-demo/reference-selfie.jpeg',
+  after: '/reel/campaigns/retro-phone-01.jpg',
+};
+
 export function heroEvidence(env: Record<string, string | undefined> = process.env): EvidencePair | null {
   const before = slotValue(env.NEXT_PUBLIC_HERO_EVIDENCE_BEFORE);
   const after = slotValue(env.NEXT_PUBLIC_HERO_EVIDENCE_AFTER);

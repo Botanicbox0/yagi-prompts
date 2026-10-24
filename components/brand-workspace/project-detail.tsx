@@ -21,6 +21,10 @@ import { campaignTimeline } from '@/lib/brands/workspace/timeline';
 import { CampaignTimelineView } from './campaign-sections';
 import { CampaignTermsSummary } from './campaign-terms-summary';
 import { SecondaryUsage } from './secondary-usage';
+import { AestheticEngine } from './aesthetic-engine';
+import { ReviewStage } from './review-stage';
+import { BriefConcierge } from './brief-concierge';
+import { HumanHandoff } from './human-handoff';
 import type { BrandUsageView } from "@/lib/brands/usage/types";
 import type { ReactNode } from "react";
 
@@ -147,7 +151,18 @@ export function ProjectDetail({
       <div className="bw-heading">
         <div>
           <a href={campaignListReturnPath(backHref, p.organizationId, studio)}>← {b.back}</a>
-          <p className="bw-kicker">{p.organizationName}</p>
+          <div className="ys-project-track-row">
+            <p className="bw-kicker">{p.organizationName}</p>
+            <span className="ys-track-pill" data-track={p.productionMode}>
+              {p.productionMode === "studio"
+                ? locale === "en"
+                  ? "YAGI PRODUCTION · Studio Film"
+                  : "YAGI PRODUCTION · 스튜디오 제작"
+                : locale === "en"
+                  ? "CREATOR CAMPAIGN · Creator Seeding"
+                  : "CREATOR CAMPAIGN · 인플루언서 게시"}
+            </span>
+          </div>
           <h1>{p.title}</h1>
           <p>
             {b.latestUpdate} {formatBrandTimestamp(p.updatedAt, locale)}
@@ -168,6 +183,12 @@ export function ProjectDetail({
           {next.href && <a className="bw-button" href={next.href}>{next.label} →</a>}
         </div>
       )}
+      <HumanHandoff
+        organizationId={p.organizationId}
+        projectId={p.id}
+        locale={locale}
+        refCount={Math.max(p.referenceLinks.length, 3)}
+      />
       <ProjectTabs b={b} pendingReviews={p.status === "active" ? p.contents.filter(c => c.version === newest.get(c.slotKey) && c.decision === "pending").length : 0} comments={p.messages.length} usage={usage !== null} campaign={applicants !== null}>
       <section id="performance" className="bw-panel">
         <CampaignTimelineView timeline={campaignTimeline(p)} b={b} />
@@ -278,10 +299,26 @@ export function ProjectDetail({
                 </ul>
               </>
             )}
+            <BriefConcierge
+              brandName={p.organizationName}
+              projectTitle={p.title}
+              objective={p.objective}
+              organizationId={p.organizationId}
+              projectId={p.id}
+              locale={locale}
+            />
+            <AestheticEngine locale={locale} referenceLinks={p.referenceLinks} />
           </section>
           <section id="review" className="bw-panel">
             <h2>{b.review}</h2>
             <p className="bw-muted">{b.approvalNotice}</p>
+            <ReviewStage
+              projectId={p.id}
+              contents={p.contents}
+              messages={p.messages}
+              decisions={p.decisions}
+              locale={locale}
+            />
             {p.contents.length === 0 ? (
               <p className="bw-note">{b.noContent}</p>
             ) : (

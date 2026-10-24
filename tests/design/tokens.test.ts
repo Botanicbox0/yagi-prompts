@@ -266,8 +266,6 @@ describe('design tokens (§5.1/§5.2/§4)', () => {
       'transform: scale(1.03)', // 6 · 1.03
       'translate3d(0, -2px, 0)', // 6 · −2px lift
       ".wipe[data-anim='circle']", // 2 · circular wipe
-      '.ad-rail-fixed', // 7 · rail, fixed variant
-      '.ad-rail-sticky', // 7 · rail, reduced-motion variant
       '.panel', // 1 · sticky scenes
     ]) {
       expect(globals, marker).toContain(marker);

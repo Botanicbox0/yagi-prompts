@@ -31,6 +31,7 @@ async function read(request: NextRequest, context: Context, head: boolean) {
     if (!file) return unavailable();
     const headers = {
       ...HEADERS,
+      "Accept-Ranges": "bytes",
       "Content-Type": file.mime,
       "Content-Disposition": `attachment; filename="download"; filename*=UTF-8''${encodeURIComponent(file.name)}`,
     };
@@ -49,6 +50,34 @@ async function read(request: NextRequest, context: Context, head: boolean) {
         : unavailable(503);
     }
     const bytes = new Uint8Array(await storage.read(STAGING_BUCKET, file.key));
+    const rangeHeader = request.headers.get("range");
+    if (rangeHeader && !file.contract) {
+      const match = /^bytes=(\d*)-(\d*)$/i.exec(rangeHeader.trim());
+      if (!match) {
+        return new NextResponse(null, {
+          status: 416,
+          headers: { ...headers, "Content-Range": `bytes */${bytes.length}` },
+        });
+      }
+      const total = bytes.length;
+      const start = match[1] ? Number.parseInt(match[1], 10) : 0;
+      const end = match[2] ? Math.min(Number.parseInt(match[2], 10), total - 1) : total - 1;
+      if (Number.isNaN(start) || Number.isNaN(end) || start > end || start >= total) {
+        return new NextResponse(null, {
+          status: 416,
+          headers: { ...headers, "Content-Range": `bytes */${total}` },
+        });
+      }
+      const slice = bytes.subarray(start, end + 1);
+      return new NextResponse(Buffer.from(slice), {
+        status: 206,
+        headers: {
+          ...headers,
+          "Content-Range": `bytes ${start}-${end}/${total}`,
+          "Content-Length": String(slice.byteLength),
+        },
+      });
+    }
     // Contracts keep authorization on the app route. Stream bounded chunks rather than a
     // buffered 20MB response (Vercel's buffered payload limit is smaller than the PDF limit).
     if (file.contract) {
