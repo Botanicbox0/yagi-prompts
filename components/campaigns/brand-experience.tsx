@@ -337,3 +337,314 @@ export function MorphicFilmPair({
     return title ? <CaseFilm key={item.id} media={item} title={title} play={labels.play} pause={labels.pause} post={labels.post} active={activeId === item.id} onActiveChange={setActiveId} /> : null;
   })}</div>;
 }
+
+export interface CraftStripCopy {
+  heading: string;
+  body: string;
+  lightTitle: string;
+  lightBody: string;
+  scaleTitle: string;
+  scaleBody: string;
+  liveTitle: string;
+  liveBody: string;
+}
+
+/**
+ * Interactive Studio Craft Stage (`data-production-craft-strip`) inspired by belgradearbor.rs
+ * interactive index navigation + almirakho.com editorial contact-sheet framing + leeholmes.uk
+ * "show the craft right beside the claim" persuasion architecture.
+ */
+export function BrandCraftShowcase({
+  copy,
+  locale,
+}: {
+  copy: CraftStripCopy;
+  locale: 'ko' | 'en';
+}) {
+  const [activeIndex, setActiveIndex] = useState<0 | 1 | 2>(0);
+  const ko = locale === 'ko';
+
+  const pillars = [
+    {
+      index: 0 as const,
+      code: '01',
+      tag: ko ? 'COMMERCIAL LIGHTING · SKIN · TEXTURE' : 'COMMERCIAL LIGHTING · SKIN · TEXTURE',
+      spec: ko ? 'GALERIES LAFAYETTE · THE HYUNDAI 기준 연출' : 'GALERIES LAFAYETTE · THE HYUNDAI GRADE',
+      title: copy.lightTitle,
+      body: copy.lightBody,
+      thumb: '/reel/brands/production-paris.jpg',
+    },
+    {
+      index: 1 as const,
+      code: '02',
+      tag: ko ? '1 SELFIE INPUT → MASTER SCENE LOCK' : '1 SELFIE INPUT → MASTER SCENE LOCK',
+      spec: ko ? '조명 · 카메라 무빙 · 색보정 100% 동일 유지' : '100% LOCKED LIGHTING & CAMERA MOTION',
+      title: copy.scaleTitle,
+      body: copy.scaleBody,
+      thumb: '/reel/studio-demo/fashion-scene.jpg',
+    },
+    {
+      index: 2 as const,
+      code: '03',
+      tag: ko ? 'KR · JP SIMULTANEOUS FEED ROLLOUT' : 'KR · JP SIMULTANEOUS FEED ROLLOUT',
+      spec: ko ? '서울 · 도쿄 크리에이터 피드 동시 업로드' : 'SEOUL · TOKYO LIVE CHANNEL PUBLISHING',
+      title: copy.liveTitle,
+      body: copy.liveBody,
+      thumb: '/reel/brands/y2k-flip-phone.jpg',
+    },
+  ] as const;
+
+  const current = pillars[activeIndex];
+
+  return (
+    <div data-production-craft-strip className={styles.craftShowcase}>
+      <div className={styles.craftTopBar}>
+        <span className={styles.craftTopTag}>YAGI STUDIO ARCHITECTURE // 0{activeIndex + 1} — 03</span>
+        <span className={styles.craftTopMeta}>
+          {ko ? 'PHYSICAL SET: 0 · STUDIO GRADE: 4K MASTER · MARKETS: KR / JP' : 'PHYSICAL SET: 0 · STUDIO GRADE: 4K MASTER · MARKETS: KR / JP'}
+        </span>
+      </div>
+
+      <div className={styles.craftGrid}>
+        <div className={styles.craftLeft}>
+          <div>
+            <p className={styles.craftKicker}>
+              {ko ? 'STUDIO DIRECTION × AI MEDIA SCALE' : 'STUDIO DIRECTION × AI MEDIA SCALE'}
+            </p>
+            <h3 className={styles.craftHeading}>{copy.heading}</h3>
+            <p className={styles.craftBody}>{copy.body}</p>
+          </div>
+
+          <dl className={styles.craftList} role="tablist" aria-label={copy.heading}>
+            {pillars.map((item) => {
+              const isSelected = activeIndex === item.index;
+              return (
+                <div
+                  key={item.code}
+                  role="tab"
+                  tabIndex={0}
+                  aria-selected={isSelected}
+                  data-craft-pillar={item.code}
+                  data-active={isSelected ? 'true' : 'false'}
+                  className={styles.craftRow}
+                  onMouseEnter={() => setActiveIndex(item.index)}
+                  onFocus={() => setActiveIndex(item.index)}
+                  onClick={() => setActiveIndex(item.index)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      setActiveIndex(item.index);
+                    }
+                  }}
+                >
+                  <div className={styles.craftRowHeader}>
+                    <span className={styles.craftRowIndex}>{item.code}</span>
+                    <span className={styles.craftRowTag}>{item.tag}</span>
+                    <span className={styles.craftRowArrow} aria-hidden="true">↗</span>
+                  </div>
+                  <dt className={styles.craftRowTitle}>{item.title}</dt>
+                  <dd className={styles.craftRowBody}>{item.body}</dd>
+                  <div className={styles.craftProgressTrack} aria-hidden="true">
+                    <span className={styles.craftProgressFill} />
+                  </div>
+                </div>
+              );
+            })}
+          </dl>
+        </div>
+
+        <div className={styles.craftRight} data-craft-stage={current.code}>
+          <div className={styles.craftStageFrame}>
+            <div className={styles.craftStageHud}>
+              <span className={styles.craftHudPill}>
+                <span className={styles.craftHudDot} aria-hidden="true" />
+                FRAME {current.code} // {current.tag}
+              </span>
+              <span className={styles.craftHudSpec}>{current.spec}</span>
+            </div>
+
+            {activeIndex === 0 && (
+              <div className={styles.craftStageCanvas}>
+                <div className={styles.craftPrimaryMedia}>
+                  <img
+                    src="/reel/brands/production-paris.jpg"
+                    alt=""
+                    width={1280}
+                    height={720}
+                    decoding="async"
+                    className={styles.craftStageImg}
+                  />
+                  <div className={styles.craftStageOverlay} aria-hidden="true" />
+                  <div className={styles.craftStageCaption}>
+                    <div>
+                      <span className={styles.craftMicroLabel}>
+                        {ko ? 'MASTER FILM DIRECTION' : 'MASTER FILM DIRECTION'}
+                      </span>
+                      <strong className={styles.craftCaptionTitle}>
+                        {ko ? '갤러리 라파예트 · 더현대 하이패션 연출 기준' : 'Galeries Lafayette & The Hyundai Commercial Direction'}
+                      </strong>
+                    </div>
+                    <div className={styles.craftSpecChips}>
+                      <span>OPTICAL LENS FLARE</span>
+                      <span>SKIN MICRO-TEXTURE</span>
+                      <span>FABRIC DRAPE</span>
+                    </div>
+                  </div>
+                </div>
+                <div className={styles.craftDetailPair}>
+                  <div className={styles.craftDetailCard}>
+                    <img src="/reel/campaigns/beauty-rose.jpg" alt="" width={640} height={360} loading="lazy" decoding="async" />
+                    <div>
+                      <span>01A · BEAUTY MACRO</span>
+                      <strong>{ko ? '수분감 · 피부 결 · 조명 반사 제어' : 'Specular Skin & Product Lighting'}</strong>
+                    </div>
+                  </div>
+                  <div className={styles.craftDetailCard}>
+                    <img src="/reel/brands/city-fashion.jpg" alt="" width={640} height={480} loading="lazy" decoding="async" />
+                    <div>
+                      <span>01B · EDITORIAL LOOK</span>
+                      <strong>{ko ? '로케이션 대관 없는 시네마틱 미장센' : 'Location-Grade Editorial Staging'}</strong>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeIndex === 1 && (
+              <div className={styles.craftStageCanvas}>
+                <div className={styles.craftCompareGrid}>
+                  <div className={styles.craftCompareBox}>
+                    <span className={styles.craftCompareBadge}>
+                      {ko ? 'INPUT · 크리에이터 셀카 1장' : 'INPUT · 1 CREATOR SELFIE'}
+                    </span>
+                    <img
+                      src="/reel/studio-demo/fashion-selfie.jpg"
+                      alt=""
+                      width={640}
+                      height={800}
+                      decoding="async"
+                      className={styles.craftCompareImg}
+                    />
+                    <p className={styles.craftCompareFoot}>
+                      {ko ? '오프라인 촬영 · 제품 배송 없음' : 'Zero Studio Shoot · Zero Product Shipping'}
+                    </p>
+                  </div>
+                  <div className={styles.craftCompareConnector} aria-hidden="true">
+                    <span>AI LOCK</span>
+                    <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M5 12h14M13 6l6 6-6 6" />
+                    </svg>
+                    <span>100%</span>
+                  </div>
+                  <div className={styles.craftCompareBox}>
+                    <span className={styles.craftCompareBadgeAccent}>
+                      {ko ? 'OUTPUT · 마스터 필름 속 주인공' : 'OUTPUT · STARRING IN MASTER FILM'}
+                    </span>
+                    <img
+                      src="/reel/studio-demo/fashion-scene.jpg"
+                      alt=""
+                      width={640}
+                      height={800}
+                      decoding="async"
+                      className={styles.craftCompareImg}
+                    />
+                    <p className={styles.craftCompareFoot}>
+                      {ko ? '마스터 조명 · 앵글 · 감도 100% 보존' : 'Exact Master Lighting, Lens & Grade Preserved'}
+                    </p>
+                  </div>
+                </div>
+                <div className={styles.craftDetailPair}>
+                  <div className={styles.craftDetailCard}>
+                    <img src="/reel/studio-demo/reference-selfie.jpeg" alt="" width={400} height={500} loading="lazy" decoding="async" />
+                    <div>
+                      <span>CREATOR B · SELFIE</span>
+                      <strong>{ko ? '누가 참여하든 동일한 연출 품질' : 'Consistent Across Every Creator'}</strong>
+                    </div>
+                  </div>
+                  <div className={styles.craftDetailCard}>
+                    <img src="/reel/studio-demo/different-person.jpg" alt="" width={400} height={500} loading="lazy" decoding="async" />
+                    <div>
+                      <span>CREATOR B · SCENE CUT</span>
+                      <strong>{ko ? '수십 명의 버전으로 즉시 복제·확장' : 'Instant Multi-Creator Replication'}</strong>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeIndex === 2 && (
+              <div className={styles.craftStageCanvas}>
+                <div className={styles.craftFeedMatrix}>
+                  {[
+                    {
+                      market: 'KR · SEOUL',
+                      channel: 'IG REELS · TIKTOK',
+                      img: '/reel/brands/y2k-flip-phone.jpg',
+                      title: ko ? 'Y2K 제품 쇼케이스 피드' : 'Y2K Product Feed Drop',
+                    },
+                    {
+                      market: 'JP · TOKYO',
+                      channel: 'IG REELS · X',
+                      img: '/reel/brands/morphic-september-01.jpg',
+                      title: ko ? '한·일 동시 캠페인 릴스' : 'KR·JP Simultaneous Reels',
+                    },
+                    {
+                      market: 'KR ·JP SYNC',
+                      channel: 'VERIFIED REPORT',
+                      img: '/reel/campaigns/beauty-rose.jpg',
+                      title: ko ? '뷰티·패션 오가닉 확산' : 'Beauty & Fashion Organic Reach',
+                    },
+                  ].map((card) => (
+                    <div key={card.market} className={styles.craftFeedCard}>
+                      <div className={styles.craftFeedMedia}>
+                        <img src={card.img} alt="" width={480} height={640} loading="lazy" decoding="async" />
+                        <span className={styles.craftFeedMarket}>{card.market}</span>
+                      </div>
+                      <div className={styles.craftFeedMeta}>
+                        <span>{card.channel}</span>
+                        <strong>{card.title}</strong>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className={styles.craftMetricsBar}>
+                  <div>
+                    <span>{ko ? 'PROVEN SEED FILMS' : 'PROVEN SEED FILMS'}</span>
+                    <strong>{ko ? '영상 9편' : '9 Seed Films'}</strong>
+                  </div>
+                  <div>
+                    <span>{ko ? 'CAMPAIGN REACH' : 'CAMPAIGN REACH'}</span>
+                    <strong>{ko ? '200만 뷰+' : '2M+ Views'}</strong>
+                  </div>
+                  <div>
+                    <span>{ko ? 'ORGANIC DERIVATIVES' : 'ORGANIC DERIVATIVES'}</span>
+                    <strong>{ko ? '파생 콘텐츠 300건+' : '300+ Organic Posts'}</strong>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className={styles.craftContactSheet} aria-label="Contact sheet">
+              {pillars.map((item) => (
+                <button
+                  key={item.code}
+                  type="button"
+                  onClick={() => setActiveIndex(item.index)}
+                  data-contact-thumb={item.code}
+                  data-active={activeIndex === item.index ? 'true' : 'false'}
+                  className={styles.craftContactThumb}
+                >
+                  <img src={item.thumb} alt="" width={160} height={100} loading="lazy" decoding="async" />
+                  <div>
+                    <span>FRAME {item.code}</span>
+                    <strong>{item.title}</strong>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

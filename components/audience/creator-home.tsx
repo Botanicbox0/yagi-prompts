@@ -27,24 +27,39 @@ export function CreatorHero({ dict, locale, featured, evidence = null }: { dict:
   const portrait = (ratioWidth ?? 16) < (ratioHeight ?? 9);
   const definition = <p data-service-definition className={`${evidence === null ? 'mt-6 text-base' : 'mt-8 text-sm'} max-w-lg leading-relaxed text-black/65`}>{t.body}</p>;
   return <section data-section data-theme="light" data-creator-hero data-hero-has-evidence={evidence === null ? undefined : ''} className="section">
-    <div className="audience-shell grid items-center gap-10 pt-28 pb-12 lg:grid-cols-[0.9fr_1.1fr] lg:gap-16 lg:pt-36 lg:pb-20">
-      <div>
+    <div className="audience-shell grid items-center gap-10 pt-28 pb-12 lg:grid-cols-[0.98fr_1.02fr] lg:gap-12 lg:pt-32 lg:pb-20">
+      <div className="flex flex-col justify-center">
         <p className="audience-eyebrow">{t.eyebrow}</p>
-        <h1 className="audience-title mt-6 whitespace-pre-line">{t.title}</h1>
+        <h1 className="audience-title mt-5 whitespace-pre-line">{t.title}</h1>
         {evidence === null && definition}
         <HeroEvidence pair={evidence} copy={t} />
-        <div className={`${evidence === null ? 'mt-8' : 'mt-5'} flex flex-wrap items-center gap-5`}>
+        <div className={`${evidence === null ? 'mt-8' : 'mt-6'} flex flex-wrap items-center gap-5`}>
           <a href={templatesHref(locale, 'video')} data-hero-video className="audience-button">{t.browse} ↗</a>
           <a href="#how-it-works" className="inline-flex min-h-11 items-center text-sm underline underline-offset-4">{t.how}</a>
         </div>
         <p data-creator-availability className="mt-5 max-w-md text-xs leading-relaxed text-black/65"><CreatorAvailabilityNotice copy={{ ready: t.ready, preparing: t.preparing, subscriptionReady: t.subscriptionReady, subscriptionPaused: t.subscriptionPaused }} oneTimeAvailable={storefrontOpen()} /></p>
         {evidence !== null && definition}
       </div>
-      {featured && <article data-featured-template={featured.slug} data-media-host className={`relative min-w-0 w-full ${portrait ? 'max-w-xs justify-self-center' : ''}`}>
-        <CreatorPreview poster={featured.poster} video={featured.video} title={title!} href={templateHref(locale, featured.slug)} ratio={ratio} labels={{ play: t.playPreview, pause: t.pausePreview }} fallback={<TypographicPoster title={title!} slug={featured.slug} kicker={featured.modelLabels.join(' · ')} ratio={ratio} />} />
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-2 text-xs">
-          <span className="opacity-50">{t.example}</span>
-          <a href={templateHref(locale, featured.slug)} className="font-medium">{title} ↗</a>
+      {featured && <article data-featured-template={featured.slug} data-media-host className={`relative min-w-0 w-full rounded-2xl border border-black/10 bg-[#0D0D0F] p-3.5 text-white shadow-[0_24px_60px_-20px_rgba(0,0,0,0.28)] sm:p-4 ${portrait ? 'max-w-sm justify-self-center' : ''}`}>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2 px-1 text-[11px]">
+          <span className="inline-flex items-center gap-2 font-mono tracking-[0.12em] text-white/75 uppercase">
+            <span className="size-2 rounded-full bg-[#ED1E1E]" aria-hidden="true" />
+            {t.example} · {ratio.replace(/\s+/g, '')}
+          </span>
+          {featured.modelLabels.length > 0 && (
+            <span className="rounded-full border border-white/15 bg-white/[0.06] px-2.5 py-0.5 font-mono text-[10px] text-white/75">
+              {featured.modelLabels.join(' · ')}
+            </span>
+          )}
+        </div>
+        <div className="overflow-hidden rounded-xl ring-1 ring-white/10">
+          <CreatorPreview poster={featured.poster} video={featured.video} title={title!} href={templateHref(locale, featured.slug)} ratio={ratio} labels={{ play: t.playPreview, pause: t.pausePreview }} fallback={<TypographicPoster title={title!} slug={featured.slug} kicker={featured.modelLabels.join(' · ')} ratio={ratio} />} />
+        </div>
+        <div className="mt-3.5 flex flex-wrap items-center justify-between gap-2 border-t border-white/10 px-1 pt-3 text-xs">
+          <span className="font-medium text-white/90">{title}</span>
+          <a href={templateHref(locale, featured.slug)} className="inline-flex items-center gap-1 rounded-full bg-white px-3 py-1 text-[11px] font-semibold text-black transition-opacity hover:opacity-90">
+            {title} ↗
+          </a>
         </div>
       </article>}
     </div>

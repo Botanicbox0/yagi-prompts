@@ -287,7 +287,579 @@
 
 @media (prefers-reduced-motion: reduce) {
   .formatTab,
-  .heroCinemaVideo { transition: none; }
+  .heroCinemaVideo,
+  .craftRow,
+  .craftStageImg,
+  .craftProgressFill { transition: none; }
   .formatTab:hover,
   .heroCinemaCell:hover .heroCinemaVideo { transform: none; }
+}
+
+/* ===========================================================================
+   Interactive Studio Craft Stage (`data-production-craft-strip`)
+   Inspired by belgradearbor.rs (interactive index + viewport stage),
+   almirakho.com (editorial contact sheet + high-fashion framing), and
+   leeholmes.uk (persuasive side-by-side craft proof).
+   =========================================================================== */
+
+.craftShowcase {
+  margin-top: 3.5rem;
+  border: 1px solid rgb(255 255 255 / 14%);
+  border-radius: 1.5rem;
+  background: #08080a;
+  color: var(--color-white);
+  overflow: hidden;
+}
+
+.craftTopBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  border-bottom: 1px solid rgb(255 255 255 / 12%);
+  background: rgb(255 255 255 / 2%);
+  padding: 0.85rem 1.75rem;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.12em;
+  color: rgb(255 255 255 / 56%);
+}
+
+.craftTopTag {
+  color: var(--color-brand-blue-light);
+  font-weight: 600;
+}
+
+.craftTopMeta {
+  color: rgb(255 255 255 / 46%);
+}
+
+.craftGrid {
+  display: grid;
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 1024px) {
+  .craftGrid {
+    grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.08fr);
+  }
+}
+
+.craftLeft {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 2rem 1.75rem;
+  border-bottom: 1px solid rgb(255 255 255 / 12%);
+}
+
+@media (min-width: 1024px) {
+  .craftLeft {
+    padding: 2.75rem 2.5rem;
+    border-bottom: 0;
+    border-right: 1px solid rgb(255 255 255 / 12%);
+  }
+}
+
+.craftKicker {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.14em;
+  color: var(--color-brand-blue-light);
+}
+
+.craftHeading {
+  margin-top: 0.75rem;
+  white-space: pre-line;
+  font-size: clamp(1.75rem, 3vw, 2.65rem);
+  font-weight: 650;
+  line-height: 1.14;
+  letter-spacing: -0.035em;
+  color: var(--color-white);
+  text-wrap: balance;
+}
+
+.craftBody {
+  margin-top: 1rem;
+  max-width: 44ch;
+  font-size: 0.92rem;
+  line-height: 1.68;
+  color: rgb(255 255 255 / 68%);
+}
+
+.craftList {
+  margin-top: 2rem;
+  border-top: 1px solid rgb(255 255 255 / 12%);
+}
+
+.craftRow {
+  position: relative;
+  cursor: pointer;
+  padding: 1.2rem 1rem;
+  border-bottom: 1px solid rgb(255 255 255 / 12%);
+  transition: background-color 220ms ease, padding-left 220ms ease;
+}
+
+.craftRow:hover {
+  background: rgb(255 255 255 / 3.5%);
+}
+
+.craftRow[data-active='true'] {
+  background: rgb(255 255 255 / 6%);
+  padding-left: 1.25rem;
+}
+
+.craftRowHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.1em;
+}
+
+.craftRowIndex {
+  color: var(--color-brand-blue-light);
+  font-weight: 600;
+}
+
+.craftRowTag {
+  flex: 1;
+  color: rgb(255 255 255 / 45%);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.craftRowArrow {
+  color: rgb(255 255 255 / 35%);
+  transition: transform 200ms ease, color 200ms ease;
+}
+
+.craftRow[data-active='true'] .craftRowArrow {
+  color: var(--color-brand-blue-light);
+  transform: translate(2px, -2px);
+}
+
+.craftRowTitle {
+  margin-top: 0.45rem;
+  font-size: 1.08rem;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  color: var(--color-white);
+}
+
+.craftRowBody {
+  margin-top: 0.35rem;
+  font-size: 0.84rem;
+  line-height: 1.6;
+  color: rgb(255 255 255 / 64%);
+}
+
+.craftProgressTrack {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 2px;
+  background: transparent;
+  overflow: hidden;
+}
+
+.craftProgressFill {
+  display: block;
+  height: 100%;
+  width: 100%;
+  background: var(--color-brand-blue-light);
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform 360ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.craftRow[data-active='true'] .craftProgressFill {
+  transform: scaleX(1);
+}
+
+.craftRight {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 1.5rem;
+  background: #0c0c10;
+}
+
+@media (min-width: 1024px) {
+  .craftRight {
+    padding: 2rem;
+  }
+}
+
+.craftStageFrame {
+  display: flex;
+  height: 100%;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.craftStageHud {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  border-bottom: 1px solid rgb(255 255 255 / 10%);
+  padding-bottom: 0.75rem;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+}
+
+.craftHudPill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: var(--color-white);
+  font-weight: 600;
+}
+
+.craftHudDot {
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 999px;
+  background: var(--color-brand-blue-light);
+}
+
+.craftHudSpec {
+  color: rgb(255 255 255 / 55%);
+}
+
+.craftStageCanvas {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.craftPrimaryMedia {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border-radius: 0.9rem;
+  border: 1px solid rgb(255 255 255 / 14%);
+  background: #050507;
+}
+
+.craftStageImg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 700ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.craftPrimaryMedia:hover .craftStageImg {
+  transform: scale(1.03);
+}
+
+.craftStageOverlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgb(0 0 0 / 5%) 0%, rgb(0 0 0 / 15%) 45%, rgb(0 0 0 / 84%) 100%);
+  pointer-events: none;
+}
+
+.craftStageCaption {
+  position: absolute;
+  inset: auto 1rem 1rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.craftMicroLabel {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 0.64rem;
+  letter-spacing: 0.12em;
+  color: var(--color-brand-blue-light);
+}
+
+.craftCaptionTitle {
+  display: block;
+  margin-top: 0.2rem;
+  font-size: 0.98rem;
+  font-weight: 600;
+  color: var(--color-white);
+}
+
+.craftSpecChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.craftSpecChips span {
+  border: 1px solid rgb(255 255 255 / 22%);
+  border-radius: 999px;
+  background: rgb(0 0 0 / 55%);
+  padding: 0.22rem 0.55rem;
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  letter-spacing: 0.08em;
+  color: rgb(255 255 255 / 86%);
+}
+
+.craftDetailPair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.craftDetailCard {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  border: 1px solid rgb(255 255 255 / 12%);
+  border-radius: 0.75rem;
+  background: rgb(255 255 255 / 3%);
+  padding: 0.6rem;
+}
+
+.craftDetailCard img {
+  width: 3.6rem;
+  height: 3.6rem;
+  flex-shrink: 0;
+  border-radius: 0.5rem;
+  object-fit: cover;
+  border: 1px solid rgb(255 255 255 / 15%);
+}
+
+.craftDetailCard span {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  letter-spacing: 0.1em;
+  color: var(--color-brand-blue-light);
+}
+
+.craftDetailCard strong {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: 1.35;
+  color: rgb(255 255 255 / 90%);
+}
+
+.craftCompareGrid {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.craftCompareBox {
+  position: relative;
+  overflow: hidden;
+  border-radius: 0.85rem;
+  border: 1px solid rgb(255 255 255 / 14%);
+  background: #060608;
+  padding: 0.55rem;
+}
+
+.craftCompareBadge,
+.craftCompareBadgeAccent {
+  display: inline-block;
+  margin-bottom: 0.45rem;
+  border-radius: 999px;
+  padding: 0.2rem 0.55rem;
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+}
+
+.craftCompareBadge {
+  border: 1px solid rgb(255 255 255 / 18%);
+  background: rgb(255 255 255 / 6%);
+  color: rgb(255 255 255 / 82%);
+}
+
+.craftCompareBadgeAccent {
+  border: 1px solid rgb(165 180 255 / 40%);
+  background: rgb(76 111 255 / 22%);
+  color: var(--color-brand-blue-light);
+}
+
+.craftCompareImg {
+  aspect-ratio: 4 / 5;
+  width: 100%;
+  border-radius: 0.55rem;
+  object-fit: cover;
+  object-position: 50% 22%;
+}
+
+.craftCompareFoot {
+  margin-top: 0.45rem;
+  font-size: 0.72rem;
+  color: rgb(255 255 255 / 68%);
+}
+
+.craftCompareConnector {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  letter-spacing: 0.1em;
+  color: var(--color-brand-blue-light);
+}
+
+.craftFeedMatrix {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.65rem;
+}
+
+.craftFeedCard {
+  overflow: hidden;
+  border-radius: 0.8rem;
+  border: 1px solid rgb(255 255 255 / 14%);
+  background: #060608;
+}
+
+.craftFeedMedia {
+  position: relative;
+  aspect-ratio: 4 / 5;
+  overflow: hidden;
+}
+
+.craftFeedMedia img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.craftFeedMarket {
+  position: absolute;
+  top: 0.5rem;
+  left: 0.5rem;
+  border-radius: 999px;
+  border: 1px solid rgb(255 255 255 / 24%);
+  background: rgb(0 0 0 / 68%);
+  padding: 0.18rem 0.5rem;
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: var(--color-white);
+}
+
+.craftFeedMeta {
+  padding: 0.55rem 0.65rem;
+}
+
+.craftFeedMeta span {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+  letter-spacing: 0.08em;
+  color: var(--color-brand-blue-light);
+}
+
+.craftFeedMeta strong {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-white);
+}
+
+.craftMetricsBar {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+  border: 1px solid rgb(255 255 255 / 12%);
+  border-radius: 0.75rem;
+  background: rgb(255 255 255 / 3%);
+  padding: 0.75rem 0.9rem;
+}
+
+.craftMetricsBar span {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+  letter-spacing: 0.08em;
+  color: rgb(255 255 255 / 50%);
+}
+
+.craftMetricsBar strong {
+  display: block;
+  margin-top: 0.2rem;
+  font-size: 0.92rem;
+  font-weight: 650;
+  color: var(--color-white);
+}
+
+.craftContactSheet {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.55rem;
+  border-top: 1px solid rgb(255 255 255 / 10%);
+  padding-top: 0.85rem;
+}
+
+.craftContactThumb {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  border: 1px solid rgb(255 255 255 / 12%);
+  border-radius: 0.65rem;
+  background: rgb(255 255 255 / 2%);
+  padding: 0.4rem 0.5rem;
+  text-align: left;
+  transition: border-color 180ms ease, background-color 180ms ease;
+}
+
+.craftContactThumb[data-active='true'] {
+  border-color: var(--color-brand-blue-light);
+  background: rgb(76 111 255 / 14%);
+}
+
+.craftContactThumb img {
+  width: 2.5rem;
+  height: 2rem;
+  flex-shrink: 0;
+  border-radius: 0.35rem;
+  object-fit: cover;
+}
+
+.craftContactThumb span {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 0.55rem;
+  letter-spacing: 0.1em;
+  color: rgb(255 255 255 / 50%);
+}
+
+.craftContactThumb strong {
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--color-white);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .craftDetailPair,
+  .craftFeedMatrix,
+  .craftContactSheet {
+    grid-template-columns: 1fr;
+  }
 }

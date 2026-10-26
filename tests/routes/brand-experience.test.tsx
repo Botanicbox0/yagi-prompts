@@ -55,6 +55,12 @@ describe('the brand page shows the service before asking visitors to enquire', (
     expect(html).toContain('data-brand-formula');
     expect(html).toContain('data-hero-cinema-grid');
     expect(html).toContain('data-production-craft-strip');
+    expect(html.match(/data-craft-pillar=/g)).toHaveLength(3);
+    expect(html).toContain('data-craft-stage="01"');
+    expect(html.match(/data-contact-thumb=/g)).toHaveLength(3);
+    expect(html).toContain('크리에이터로');
+    expect(html).toContain('무한 확장되는');
+    expect(html).toContain('브랜드 광고가 수십 개의 인플루언서 채널로 빠르게 확장됩니다.');
     expect(html).toContain('data-brand-scale-pillars');
     expect(html).toContain('data-production-collabs');
     expect(html).toContain('data-company-deck');

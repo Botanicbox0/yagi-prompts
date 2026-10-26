@@ -49,10 +49,10 @@ async function readPromptCatalog(): Promise<PromptCatalog> {
  * this plan, and the admin "Refresh caches" button revalidates `catalog`, not `prompts`. A bulk
  * price change made outside the admin form needs this bump too.
  */
-/** 2026-10-24 (`v5-maker-origin`): `PromptCard.origin`/`makerProfile` and `PromptCatalog.makers`. */
+/** 2026-10-26 (`v8-prom-queen-hero-restored`): `you-are-a-prom-queen` 16:9 featured hero & `city-fashion-montage` 4:3 dimensions. */
 export const getPromptCatalog = unstable_cache(
   readPromptCatalog,
-  ['prompt-catalog', 'v5-maker-origin', resolveRuntimeMode()],
+  ['prompt-catalog', 'v8-prom-queen-hero-restored', resolveRuntimeMode()],
   {
     tags: [PROMPTS_TAG],
     revalidate: CATALOG_TTL_SECONDS,

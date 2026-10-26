@@ -390,8 +390,8 @@ export const en = {
     "marketsHeading": "Korea and Japan.\nOne campaign.",
     "marketsBody": "Run campaigns across Korea and Japan simultaneously with our active creator pools in both markets — no local shoots needed.",
     "eyebrow": "TWINGS FOR BRANDS · YAGI",
-    "title": "Brand ads\ncreators want\nto be part of.",
-    "body": "YAGI directs one film format. Dozens of creators star in it with their own faces and post it across Korea and Japan simultaneously.",
+    "title": "Brand campaigns,\ninfinitely scaled\nthrough creators.",
+    "body": "Your brand film scales rapidly across dozens of influencer channels.\nFrom high-fashion craft to viral reach, experience AI-native social distribution.",
     "primaryCta": "Discuss your campaign",
     "secondaryCta": "See campaign results",
     "definition": "TWINGS is a brand campaign studio by YAGI.",
@@ -402,12 +402,12 @@ export const en = {
       "creatorTitle": "Y2K creator feed"
     },
     "formula": {
-      "item1Title": "One Selfie",
-      "item1Body": "Creator’s own verified photo",
-      "item2Title": "YAGI Direction",
-      "item2Body": "Bespoke brand format",
-      "item3Title": "Live Feeds",
-      "item3Body": "Posted across Korea & Japan"
+      "item1Title": "Master Brand Film",
+      "item1Body": "One bespoke ad format directed by YAGI for your product",
+      "item2Title": "Scaled Across Creators",
+      "item2Body": "Dozens of creator-starred cuts from a single selfie, zero shoots",
+      "item3Title": "Live in Korea & Japan",
+      "item3Body": "Simultaneous feed uploads across both markets with full analytics"
     },
     "craftStrip": {
       "heading": "High-fashion brand films.\nNo studio shoot.",

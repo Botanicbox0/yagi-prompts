@@ -3,7 +3,7 @@ import { DEFAULT_LOCALE, isLocale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/dictionaries';
 import { MarketingNav, MarketingFooter } from '@/components/marketing/chrome';
 import { BrandInquiryDialog } from '@/components/campaigns/brand-inquiry-dialog';
-import { BrandFormatExplorer, HeroCinemaGrid, MorphicFilmPair } from '@/components/campaigns/brand-experience';
+import { BrandFormatExplorer, BrandCraftShowcase, HeroCinemaGrid, MorphicFilmPair } from '@/components/campaigns/brand-experience';
 import { CAMPAIGN_REEL } from '@/lib/campaigns/showreel';
 import { BrandCustomerStory } from '@/components/campaigns/brand-customer-story';
 import { brandsHref, brandEnquiryHref, BRAND_INQUIRY_ENDPOINT } from '@/lib/campaigns/links';
@@ -51,7 +51,7 @@ export default async function BrandsPage({ params }: Props) {
           <div className="mt-6 grid gap-10 lg:grid-cols-[0.94fr_1.06fr] lg:items-center lg:gap-12">
             <div>
               <h1 className="audience-title max-w-[13ch] whitespace-pre-line text-balance text-[clamp(2.35rem,10vw,6.2rem)] leading-[0.96] tracking-[-0.055em] sm:text-[clamp(3.2rem,6.5vw,5.6rem)] lg:text-[clamp(3.6rem,4.7vw,5.1rem)]">{t.title}</h1>
-              <p className="mt-6 max-w-xl text-pretty text-base leading-[1.65] text-white/74 sm:text-lg">{t.body}</p>
+              <p className="mt-6 max-w-xl whitespace-pre-line text-pretty text-base leading-[1.68] text-white/78 sm:text-lg">{t.body}</p>
               <div className="mt-8 flex flex-wrap items-center gap-5">
                 <a data-campaign-cta-brand data-inquiry-trigger href={brandEnquiryHref(locale)} className="inline-flex min-h-12 items-center rounded-full bg-blue px-6 text-sm font-semibold text-white transition-transform hover:-translate-y-0.5">{t.primaryCta} ↗</a>
                 <a href="#morphic-case" className="inline-flex min-h-11 items-center text-sm underline decoration-white/35 underline-offset-8">{t.secondaryCta}</a>
@@ -62,24 +62,65 @@ export default async function BrandsPage({ params }: Props) {
                 { id: 'beauty', src: '/reel/campaigns/beauty-rose.mp4', poster: '/reel/campaigns/beauty-rose.jpg', width: 1280, height: 720, title: t.heroCinema.beautyTitle },
                 { id: 'interview', src: '/reel/campaigns/highteen.mp4', poster: '/reel/campaigns/highteen.jpg', width: 1280, height: 720, title: t.heroCinema.interviewTitle },
                 { id: 'paris', src: '/reel/brands/production-paris.mp4#t=2.2', poster: '/reel/brands/production-paris.jpg', width: 1280, height: 720, title: t.heroCinema.parisTitle },
-                { id: 'creator', src: '/reel/campaigns/retro-phone-01.mp4', poster: '/reel/campaigns/retro-phone-01.jpg', width: 720, height: 1280, title: t.heroCinema.creatorTitle },
+                { id: 'creator', src: '/reel/brands/y2k-flip-phone.mp4', poster: '/reel/brands/y2k-flip-phone.jpg', width: 720, height: 1280, title: t.heroCinema.creatorTitle },
               ]}
             />
           </div>
-          <div data-brand-formula className="mt-10 grid gap-3 border-t border-white/12 pt-8 sm:grid-cols-3 sm:gap-4">
-            {[
-              { title: t.formula.item1Title, body: t.formula.item1Body, img: '/reel/studio-demo/reference-selfie.jpeg' },
-              { title: t.formula.item2Title, body: t.formula.item2Body, img: '/reel/brands/city-fashion.jpg' },
-              { title: t.formula.item3Title, body: t.formula.item3Body, img: '/reel/studio-demo/different-person.jpg' },
-            ].map((item) => (
-              <div key={item.title} className="flex items-center gap-4 rounded-xl border border-white/10 bg-white/[0.03] p-4">
-                <img src={item.img} alt="" width={72} height={90} decoding="async" className="h-18 w-14 shrink-0 rounded-lg object-cover object-top ring-1 ring-white/15" />
+          <div data-brand-formula className="mt-12 grid gap-4 border-t border-white/14 pt-8 lg:grid-cols-3">
+            {/* Stage 01: Master Brand Film */}
+            <div className="group relative flex flex-col justify-between overflow-hidden rounded-2xl border border-white/14 bg-white/[0.03] p-5 transition-colors hover:border-white/28 hover:bg-white/[0.05]">
+              <div className="flex items-center justify-between gap-2 font-mono text-[11px] tracking-[0.12em] text-brand-blue-light">
+                <span>01 // MASTER FILM</span>
+                <span className="rounded-full border border-white/15 bg-white/[0.05] px-2.5 py-0.5 text-[10px] text-white/75">1 BESPOKE CUT</span>
+              </div>
+              <div className="mt-4 flex items-center gap-4">
+                <div className="relative h-20 w-28 shrink-0 overflow-hidden rounded-xl border border-white/15 bg-black">
+                  <img src="/reel/brands/production-paris.jpg" alt="" width={160} height={112} decoding="async" className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" />
+                  <span className="absolute bottom-1.5 left-1.5 rounded bg-black/75 px-1.5 py-0.5 font-mono text-[9px] tracking-wider text-white/90">YAGI 4K</span>
+                </div>
                 <div className="min-w-0">
-                  <p className="text-sm font-semibold tracking-tight text-white sm:text-base">{item.title}</p>
-                  <p className="mt-1 text-pretty text-xs leading-[1.55] text-white/62">{item.body}</p>
+                  <p className="text-base font-semibold tracking-tight text-white">{t.formula.item1Title}</p>
+                  <p className="mt-1.5 text-pretty text-xs leading-[1.6] text-white/66">{t.formula.item1Body}</p>
                 </div>
               </div>
-            ))}
+            </div>
+
+            {/* Stage 02: Infinite Creator Scale (Selfie -> Scene visual equation) */}
+            <div className="group relative flex flex-col justify-between overflow-hidden rounded-2xl border border-white/14 bg-white/[0.03] p-5 transition-colors hover:border-white/28 hover:bg-white/[0.05]">
+              <div className="flex items-center justify-between gap-2 font-mono text-[11px] tracking-[0.12em] text-brand-blue-light">
+                <span>02 // AI CREATOR EXPANSION</span>
+                <span className="rounded-full border border-brand-blue-light/35 bg-blue/20 px-2.5 py-0.5 text-[10px] text-brand-blue-light">1 SELFIE → N× CUTS</span>
+              </div>
+              <div className="mt-4 flex items-center gap-4">
+                <div className="flex shrink-0 items-center gap-1.5">
+                  <img src="/reel/studio-demo/fashion-selfie.jpg" alt="" width={64} height={80} decoding="async" className="h-20 w-14 rounded-xl object-cover object-top ring-1 ring-white/20" />
+                  <span aria-hidden="true" className="font-mono text-xs text-brand-blue-light">→</span>
+                  <img src="/reel/studio-demo/fashion-scene.jpg" alt="" width={64} height={80} decoding="async" className="h-20 w-14 rounded-xl object-cover object-top ring-1 ring-brand-blue-light/45" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-base font-semibold tracking-tight text-white">{t.formula.item2Title}</p>
+                  <p className="mt-1.5 text-pretty text-xs leading-[1.6] text-white/66">{t.formula.item2Body}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Stage 03: Simultaneous KR & JP Feed Rollout */}
+            <div className="group relative flex flex-col justify-between overflow-hidden rounded-2xl border border-white/14 bg-white/[0.03] p-5 transition-colors hover:border-white/28 hover:bg-white/[0.05]">
+              <div className="flex items-center justify-between gap-2 font-mono text-[11px] tracking-[0.12em] text-brand-blue-light">
+                <span>03 // LIVE FEED ROLLOUT</span>
+                <span className="rounded-full border border-white/15 bg-white/[0.05] px-2.5 py-0.5 text-[10px] text-white/75">KR · JP SYNC</span>
+              </div>
+              <div className="mt-4 flex items-center gap-4">
+                <div className="flex shrink-0 items-center -space-x-2.5">
+                  <img src="/reel/brands/y2k-flip-phone.jpg" alt="" width={64} height={80} decoding="async" className="h-20 w-14 rounded-xl object-cover object-top ring-2 ring-brand-night" />
+                  <img src="/reel/studio-demo/different-person.jpg" alt="" width={64} height={80} decoding="async" className="h-20 w-14 rounded-xl object-cover object-top ring-2 ring-brand-night" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-base font-semibold tracking-tight text-white">{t.formula.item3Title}</p>
+                  <p className="mt-1.5 text-pretty text-xs leading-[1.6] text-white/66">{t.formula.item3Body}</p>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -92,50 +133,153 @@ export default async function BrandsPage({ params }: Props) {
           </div>
           <BrandFormatExplorer items={CAMPAIGN_REEL} captions={t.formats} labels={t.media} />
 
-          <div data-production-craft-strip className="mt-12 overflow-hidden rounded-2xl bg-brand-night p-7 text-white sm:p-10 lg:mt-16 lg:p-12">
-            <div className="grid gap-8 lg:grid-cols-[0.95fr_1.05fr] lg:items-center lg:gap-14">
-              <div>
-                <h3 className="whitespace-pre-line text-balance text-[clamp(1.6rem,3vw,2.6rem)] font-semibold leading-[1.18] tracking-[-0.035em] text-white">{t.craftStrip.heading}</h3>
-                <p className="mt-4 max-w-xl text-pretty text-sm leading-[1.68] text-white/70 sm:text-base">{t.craftStrip.body}</p>
-              </div>
-              <dl className="divide-y divide-white/12 border-y border-white/12">
-                {[
-                  { title: t.craftStrip.lightTitle, body: t.craftStrip.lightBody },
-                  { title: t.craftStrip.scaleTitle, body: t.craftStrip.scaleBody },
-                  { title: t.craftStrip.liveTitle, body: t.craftStrip.liveBody },
-                ].map((item) => (
-                  <div key={item.title} className="py-5 first:pt-4 last:pb-4">
-                    <dt className="text-base font-semibold tracking-[-0.025em] text-white sm:text-lg">{item.title}</dt>
-                    <dd className="mt-1.5 text-pretty text-xs leading-[1.6] text-white/64 sm:text-sm">{item.body}</dd>
-                  </div>
-                ))}
-              </dl>
-            </div>
-          </div>
+          <BrandCraftShowcase copy={t.craftStrip} locale={locale} />
         </div>
       </section>
 
       <section id="process" data-section data-theme="light" data-campaign-principles data-campaign-process className="section scroll-mt-24 border-t border-black/10 bg-white">
-        <div className="audience-shell py-14 lg:py-20">
-          <p className="audience-eyebrow">{t.moatEyebrow}</p>
-          <ol className="mt-7 grid gap-8 sm:grid-cols-3 sm:gap-10">
-            {[[t.moat1Title, t.moat1Body], [t.moat2Title, t.moat2Body], [t.moat3Title, t.moat3Body]].map(([heading, body], index) => <li key={heading} className="border-t border-black/15 pt-5"><span className="font-mono text-xs text-blue">0{index + 1}</span><h2 className="mt-3 text-xl font-semibold tracking-[-0.025em]">{heading}</h2><p className="mt-2.5 max-w-sm text-pretty text-sm leading-[1.65] opacity-68">{body}</p></li>)}
-          </ol>
-          <div data-brand-markets className="mt-14 grid gap-5 border-t border-black/15 pt-10 lg:grid-cols-[0.8fr_1.2fr] lg:items-end lg:gap-16">
-            <h2 className="whitespace-pre-line text-balance text-[clamp(1.7rem,3.2vw,3rem)] font-semibold leading-[1.18] tracking-[-0.035em]">{t.marketsHeading}</h2>
-            <p className="max-w-xl text-pretty text-sm leading-[1.65] opacity-68 lg:justify-self-end">{t.marketsBody}</p>
+        <div className="audience-shell py-16 lg:py-24">
+          <div className="flex flex-wrap items-end justify-between gap-4 border-b border-black/12 pb-6">
+            <div>
+              <p className="audience-eyebrow">{t.moatEyebrow}</p>
+              <p className="mt-2 font-mono text-xs tracking-[0.1em] text-black/45">
+                {locale === 'ko' ? 'END-TO-END AI CAMPAIGN ARCHITECTURE // 01 → 03' : 'END-TO-END AI CAMPAIGN ARCHITECTURE // 01 → 03'}
+              </p>
+            </div>
+            <span className="rounded-full border border-black/12 bg-black/[0.03] px-3.5 py-1.5 font-mono text-[11px] tracking-[0.08em] text-black/70">
+              {locale === 'ko' ? 'OFFLINE SHOOTS: 0 · PRODUCT SHIPPING: 0' : 'OFFLINE SHOOTS: 0 · PRODUCT SHIPPING: 0'}
+            </span>
           </div>
-          <div className="mt-14 rounded-2xl border border-black/[0.08] bg-[#F7F7F5] p-7 sm:p-10">
-            <p className="audience-eyebrow text-blue">{t.scalePillars.eyebrow}</p>
+
+          <ol className="mt-8 grid gap-6 lg:grid-cols-3">
+            {[
+              {
+                index: '01',
+                code: 'STEP 01 // FORMAT DIRECTION',
+                deliverable: locale === 'ko' ? '마스터 필름 1편' : '1 Master Film',
+                heading: t.moat1Title,
+                body: t.moat1Body,
+                img: '/reel/brands/production-paris.jpg',
+                subImg: '/reel/campaigns/beauty-rose.jpg',
+                caption: locale === 'ko' ? 'YAGI 인하우스 아트디렉션 · 4K 마스터' : 'YAGI In-House Direction · 4K Master',
+              },
+              {
+                index: '02',
+                code: 'STEP 02 // CREATOR EXPANSION',
+                deliverable: locale === 'ko' ? '크리에이터 N편 생성' : 'N× Creator Cuts',
+                heading: t.moat2Title,
+                body: t.moat2Body,
+                img: '/reel/studio-demo/fashion-scene.jpg',
+                subImg: '/reel/studio-demo/fashion-selfie.jpg',
+                caption: locale === 'ko' ? '셀카 1장 → 동일 조명·무빙 무한 확장' : '1 Selfie → Identical Lighting & Camera',
+              },
+              {
+                index: '03',
+                code: 'STEP 03 // LIVE FEED & REPORT',
+                deliverable: locale === 'ko' ? '한·일 피드 게시 + 리포트' : 'KR·JP Posts + Report',
+                heading: t.moat3Title,
+                body: t.moat3Body,
+                img: '/reel/brands/morphic-september-01.jpg',
+                subImg: '/reel/brands/y2k-flip-phone.jpg',
+                caption: locale === 'ko' ? '실제 계정 업로드 링크 · 성과 대시보드' : 'Verified Live Post Links & Performance',
+              },
+            ].map((step) => (
+              <li
+                key={step.heading}
+                className="group flex flex-col justify-between overflow-hidden rounded-2xl border border-black/12 bg-[#FAFAFA] p-6 transition-all duration-300 hover:-translate-y-1 hover:border-black/30 hover:bg-white"
+              >
+                <div>
+                  <div className="flex items-center justify-between gap-2 border-b border-black/10 pb-4">
+                    <span className="font-mono text-xs font-semibold tracking-wider text-blue">{step.code}</span>
+                    <span className="rounded-full border border-black/12 bg-white px-2.5 py-0.5 font-mono text-[10px] font-medium text-black/75">
+                      {step.deliverable}
+                    </span>
+                  </div>
+                  <div className="relative mt-5 aspect-[16/10] overflow-hidden rounded-xl border border-black/10 bg-brand-night">
+                    <img
+                      src={step.img}
+                      alt=""
+                      width={640}
+                      height={400}
+                      loading="lazy"
+                      decoding="async"
+                      className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/10 to-transparent" aria-hidden="true" />
+                    <div className="absolute bottom-2.5 left-3 right-3 flex items-center justify-between gap-2">
+                      <span className="font-mono text-[10px] tracking-wider text-white/90">{step.caption}</span>
+                      <img
+                        src={step.subImg}
+                        alt=""
+                        width={48}
+                        height={48}
+                        loading="lazy"
+                        decoding="async"
+                        className="h-9 w-9 rounded-lg border border-white/30 object-cover"
+                      />
+                    </div>
+                  </div>
+                  <div className="mt-6 flex items-baseline gap-3">
+                    <span className="font-mono text-2xl font-semibold tracking-tighter text-blue">{step.index}</span>
+                    <h2 className="text-xl font-semibold tracking-[-0.025em] text-brand-ink">{step.heading}</h2>
+                  </div>
+                  <p className="mt-2.5 text-pretty text-sm leading-[1.68] text-brand-ink/72">{step.body}</p>
+                </div>
+              </li>
+            ))}
+          </ol>
+
+          <div data-brand-markets className="mt-14 overflow-hidden rounded-2xl border border-black/12 bg-[#F6F6F4] p-7 sm:p-10">
+            <div className="grid gap-8 lg:grid-cols-[0.9fr_1.1fr] lg:items-center lg:gap-12">
+              <div>
+                <p className="font-mono text-xs font-semibold tracking-[0.12em] text-blue">CROSS-BORDER DISPATCH // KR ↔ JP</p>
+                <h2 className="mt-3 whitespace-pre-line text-balance text-[clamp(1.75rem,3.2vw,2.85rem)] font-semibold leading-[1.14] tracking-[-0.035em]">{t.marketsHeading}</h2>
+                <p className="mt-4 max-w-xl text-pretty text-sm leading-[1.68] text-brand-ink/72 sm:text-base">{t.marketsBody}</p>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="rounded-xl border border-black/12 bg-white p-5">
+                  <div className="flex items-center justify-between font-mono text-xs text-black/55">
+                    <span className="font-semibold text-blue">KR // SEOUL</span>
+                    <span>ACTIVE POOL</span>
+                  </div>
+                  <p className="mt-3 text-base font-semibold tracking-tight text-brand-ink">
+                    {locale === 'ko' ? '한국 크리에이터 피드 동시 확산' : 'Korea Creator Feed Rollout'}
+                  </p>
+                  <p className="mt-1.5 text-xs leading-relaxed text-brand-ink/65">
+                    {locale === 'ko' ? 'Instagram Reels · TikTok · YouTube Shorts 동시 게시 및 표시광고 검수' : 'Simultaneous Instagram Reels, TikTok & Shorts publishing'}
+                  </p>
+                </div>
+                <div className="rounded-xl border border-black/12 bg-white p-5">
+                  <div className="flex items-center justify-between font-mono text-xs text-black/55">
+                    <span className="font-semibold text-blue">JP // TOKYO</span>
+                    <span>ACTIVE POOL</span>
+                  </div>
+                  <p className="mt-3 text-base font-semibold tracking-tight text-brand-ink">
+                    {locale === 'ko' ? '일본 크리에이터 피드 동시 확산' : 'Japan Creator Feed Rollout'}
+                  </p>
+                  <p className="mt-1.5 text-xs leading-relaxed text-brand-ink/65">
+                    {locale === 'ko' ? '별도 현지 로케이션 촬영 없이 일본 타깃 타임라인 동시 진입' : 'Direct Tokyo timeline entry with zero local production overhead'}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-8 overflow-hidden rounded-2xl border border-black/15 bg-brand-night p-7 text-white sm:p-10">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/12 pb-5">
+              <p className="audience-eyebrow text-brand-blue-light">{t.scalePillars.eyebrow}</p>
+              <span className="font-mono text-[11px] tracking-[0.12em] text-white/50">ENTERPRISE LIKENESS & DATA GOVERNANCE</span>
+            </div>
             <dl data-brand-scale-pillars className="mt-6 grid gap-7 sm:grid-cols-3 sm:gap-10">
               {[
-                { value: t.scalePillars.networkValue, label: t.scalePillars.networkLabel },
-                { value: t.scalePillars.shootsValue, label: t.scalePillars.shootsLabel },
-                { value: t.scalePillars.complianceValue, label: t.scalePillars.complianceLabel },
+                { code: '01 // ZERO AI TRAINING', value: t.scalePillars.networkValue, label: t.scalePillars.networkLabel },
+                { code: '02 // ISOLATED VAULT', value: t.scalePillars.shootsValue, label: t.scalePillars.shootsLabel },
+                { code: '03 // AUTO-PURGE', value: t.scalePillars.complianceValue, label: t.scalePillars.complianceLabel },
               ].map((pillar) => (
-                <div key={pillar.value} className="border-t border-black/12 pt-5">
-                  <dt className="text-lg font-semibold leading-[1.3] tracking-[-0.03em] text-brand-ink sm:text-xl">{pillar.value}</dt>
-                  <dd className="mt-2.5 text-pretty text-sm leading-[1.65] text-brand-ink/70">{pillar.label}</dd>
+                <div key={pillar.value} className="border-t border-white/14 pt-5 first:border-t-0 first:pt-0 sm:border-t sm:first:border-t sm:first:pt-5">
+                  <span className="font-mono text-[11px] tracking-[0.1em] text-brand-blue-light">{pillar.code}</span>
+                  <dt className="mt-2.5 text-lg font-semibold leading-[1.3] tracking-[-0.03em] text-white sm:text-xl">{pillar.value}</dt>
+                  <dd className="mt-2 text-pretty text-sm leading-[1.65] text-white/68">{pillar.label}</dd>
                 </div>
               ))}
             </dl>

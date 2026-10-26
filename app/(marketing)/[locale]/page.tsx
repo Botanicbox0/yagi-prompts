@@ -47,12 +47,12 @@ export default async function LandingPage({ params }: { params: Promise<{ locale
   const studioVideo = templates.video.filter(card => card.origin !== 'maker');
   const studioImage = templates.image.filter(card => card.origin !== 'maker');
   const makerCards = [...templates.video, ...templates.image].filter(card => card.origin === 'maker');
-  const featured = studioVideo.find(card => card.video && card.poster) ?? studioVideo[0] ?? templates.video[0];
+  const featured = studioVideo.find(card => card.slug === 'you-are-a-prom-queen') ?? studioVideo.find(card => card.video && card.poster) ?? studioVideo[0] ?? templates.video[0];
   return <>
     <MarketingNav locale={locale} dict={dict} rest="/" />
     <SubscriptionAvailabilityProvider initialAvailability={availability}>
     <main id="main" data-creator-home>
-      <CreatorHero locale={locale} dict={dict} featured={featured} evidence={heroEvidence() ?? DEFAULT_HERO_EVIDENCE} />
+      <CreatorHero locale={locale} dict={dict} featured={featured} evidence={{ ...DEFAULT_HERO_EVIDENCE, ...heroEvidence() }} />
       <section id="gallery" data-section data-theme="light" className="section">
         <div className="audience-shell pb-16 lg:pb-24">
           <div className="mb-8 border-t border-hairline pt-8">
