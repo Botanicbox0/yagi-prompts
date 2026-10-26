@@ -113,7 +113,7 @@ export function PromptCardMedia({
 
   useEffect(() => {
     setHydrated(true);
-    setAutoplay(!window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+    setAutoplay(true);
   }, []);
 
   // Arm on real visibility and release on the way out, so the page never holds more decoders
@@ -135,7 +135,16 @@ export function PromptCardMedia({
   }, [video]);
 
   useEffect(() => {
-    if (!armed) setPlaying(false);
+    if (!armed) {
+      setPlaying(false);
+      return;
+    }
+    const el = videoRef.current;
+    if (el) {
+      el.defaultMuted = true;
+      el.muted = true;
+      void el.play().catch(() => {});
+    }
   }, [armed]);
 
   const toggle = () => {
