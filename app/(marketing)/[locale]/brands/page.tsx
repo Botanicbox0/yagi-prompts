@@ -62,7 +62,7 @@ export default async function BrandsPage({ params }: Props) {
               items={[
                 { id: 'beauty', src: '/reel/campaigns/beauty-rose.mp4', poster: '/reel/campaigns/beauty-rose.jpg', width: 1280, height: 720, title: t.heroCinema.beautyTitle },
                 { id: 'interview', src: '/reel/campaigns/highteen.mp4', poster: '/reel/campaigns/highteen.jpg', width: 1280, height: 720, title: t.heroCinema.interviewTitle },
-                { id: 'paris', src: '/reel/brands/production-paris.mp4#t=2.2', poster: '/reel/brands/production-paris.jpg', width: 1280, height: 720, title: t.heroCinema.parisTitle },
+                { id: 'paris', src: '/reel/brands/production-paris.mp4', poster: '/reel/brands/production-paris.jpg', width: 1280, height: 720, title: t.heroCinema.parisTitle },
                 { id: 'creator', src: '/reel/brands/y2k-flip-phone.mp4', poster: '/reel/brands/y2k-flip-phone.jpg', width: 720, height: 1280, title: t.heroCinema.creatorTitle },
               ]}
             />

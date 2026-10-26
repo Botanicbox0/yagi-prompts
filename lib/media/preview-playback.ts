@@ -14,6 +14,8 @@ export function observePreviewPlayback(video: HTMLVideoElement, root: Element) {
       connection?.effectiveType !== 'slow-2g' && connection?.effectiveType !== '2g')
   );
   const play = () => {
+    video.defaultMuted = true;
+    video.muted = true;
     void video.play().then(() => {
       // A play request can finish after the visitor has scrolled away or paused it.
       if (!shouldPlay()) video.pause();

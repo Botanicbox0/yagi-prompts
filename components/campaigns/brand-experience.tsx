@@ -18,40 +18,45 @@ export interface HeroCinemaItem {
   title: string;
 }
 
+function playMutedVideo(v: HTMLVideoElement) {
+  v.defaultMuted = true;
+  v.muted = true;
+  void v.play().catch(() => undefined);
+}
+
 export function HeroCinemaGrid({ items }: { items: readonly HeroCinemaItem[] }) {
   const rootRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const root = rootRef.current;
     if (!root) return;
-    const motion = window.matchMedia('(prefers-reduced-motion: reduce)');
     const connection = connectionInformation();
     const videos = Array.from(root.querySelectorAll<HTMLVideoElement>('video'));
-    let isVisible = false;
+    let isVisible = true;
 
     const sync = () => {
       const allow = !reducedOrMetered() && isVisible && !document.hidden;
       for (const v of videos) {
-        if (allow) void v.play().catch(() => undefined);
+        if (allow) playMutedVideo(v);
         else v.pause();
       }
     };
 
+    sync();
+
     const observer = new IntersectionObserver(
       ([entry]) => {
-        isVisible = Boolean(entry?.isIntersecting && entry.intersectionRatio >= 0.15);
+        isVisible = Boolean(entry?.isIntersecting && entry.intersectionRatio >= 0.1);
         sync();
       },
-      { threshold: [0, 0.15] },
+      { threshold: [0, 0.1] },
     );
     observer.observe(root);
     document.addEventListener('visibilitychange', sync);
-    motion.addEventListener('change', sync);
     connection?.addEventListener('change', sync);
     return () => {
       observer.disconnect();
       document.removeEventListener('visibilitychange', sync);
-      motion.removeEventListener('change', sync);
       connection?.removeEventListener('change', sync);
     };
   }, []);
@@ -65,10 +70,11 @@ export function HeroCinemaGrid({ items }: { items: readonly HeroCinemaItem[] }) 
             poster={item.poster}
             width={item.width}
             height={item.height}
+            autoPlay
             muted
             loop
             playsInline
-            preload="none"
+            preload="metadata"
             aria-label={item.title}
             className={styles.heroCinemaVideo}
           />
@@ -99,15 +105,14 @@ function connectionInformation(): NetworkInformation | undefined {
 }
 
 function reducedOrMetered(): boolean {
-  const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const connection = connectionInformation();
   const slowConnection = connection?.effectiveType === 'slow-2g' || connection?.effectiveType === '2g';
-  return reduced || connection?.saveData === true || slowConnection;
+  return connection?.saveData === true || slowConnection;
 }
 
 /**
  * One active film, three visible choices. No film loads before the stage enters the viewport and
- * Save-Data / reduced-motion visitors stay on the poster until they press play.
+ * Save-Data visitors stay on the poster until they press play.
  */
 export function BrandFormatExplorer({
   items,
@@ -124,18 +129,17 @@ export function BrandFormatExplorer({
   const videoRef = useRef<HTMLVideoElement>(null);
   const visible = useRef(false);
   const userPaused = useRef(false);
-  const canAutoplay = useRef(false);
+  const canAutoplay = useRef(true);
   const active = items.find((item) => item.id === activeId) ?? items[0];
 
   useEffect(() => {
     const root = rootRef.current;
     if (!root) return;
-    const motion = window.matchMedia('(prefers-reduced-motion: reduce)');
     const connection = connectionInformation();
     const synchronize = () => {
       const video = videoRef.current;
       if (!video) return;
-      if (visible.current && canAutoplay.current && !userPaused.current && !document.hidden) void video.play().catch(() => undefined);
+      if (visible.current && canAutoplay.current && !userPaused.current && !document.hidden) playMutedVideo(video);
       else video.pause();
     };
     const updateAutoplay = () => {
@@ -144,17 +148,15 @@ export function BrandFormatExplorer({
     };
     updateAutoplay();
     const observer = new IntersectionObserver(([entry]) => {
-      visible.current = Boolean(entry?.isIntersecting && entry.intersectionRatio >= 0.45);
+      visible.current = Boolean(entry?.isIntersecting && entry.intersectionRatio >= 0.15);
       synchronize();
-    }, { threshold: [0, 0.45] });
+    }, { threshold: [0, 0.15] });
     observer.observe(root);
     document.addEventListener('visibilitychange', synchronize);
-    motion.addEventListener('change', updateAutoplay);
     connection?.addEventListener('change', updateAutoplay);
     return () => {
       observer.disconnect();
       document.removeEventListener('visibilitychange', synchronize);
-      motion.removeEventListener('change', updateAutoplay);
       connection?.removeEventListener('change', updateAutoplay);
     };
   }, []);
@@ -164,7 +166,7 @@ export function BrandFormatExplorer({
     if (!video) return;
     userPaused.current = false;
     setPlaying(false);
-    if (visible.current && canAutoplay.current && !document.hidden) void video.play().catch(() => undefined);
+    if (visible.current && canAutoplay.current && !document.hidden) playMutedVideo(video);
   }, [activeId]);
 
   if (!active) return null;
@@ -204,6 +206,7 @@ export function BrandFormatExplorer({
           poster={active.poster}
           width={active.width}
           height={active.height}
+          autoPlay
           muted
           loop
           playsInline
@@ -278,11 +281,8 @@ function CaseFilm({
 }) {
   const rootRef = useRef<HTMLElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const userPaused = useRef(false);
   const [playing, setPlaying] = useState(false);
-
-  useEffect(() => {
-    if (!active) videoRef.current?.pause();
-  }, [active]);
 
   useEffect(() => {
     const root = rootRef.current;
@@ -292,8 +292,12 @@ function CaseFilm({
       if (document.hidden) video.pause();
     };
     const observer = new IntersectionObserver(([entry]) => {
-      if (!entry?.isIntersecting) video.pause();
-    }, { threshold: 0.05 });
+      if (entry?.isIntersecting && entry.intersectionRatio >= 0.2 && !userPaused.current && !reducedOrMetered()) {
+        playMutedVideo(video);
+      } else if (!entry?.isIntersecting) {
+        video.pause();
+      }
+    }, { threshold: [0, 0.2] });
     observer.observe(root);
     document.addEventListener('visibilitychange', pauseWhenHidden);
     return () => {
@@ -306,9 +310,11 @@ function CaseFilm({
     const video = videoRef.current;
     if (!video) return;
     if (video.paused) {
+      userPaused.current = false;
       onActiveChange(media.id);
-      void video.play().catch(() => undefined);
+      playMutedVideo(video);
     } else {
+      userPaused.current = true;
       video.pause();
       onActiveChange(null);
     }
@@ -316,7 +322,7 @@ function CaseFilm({
 
   return (
     <div><figure ref={rootRef} className={styles.caseFilm} style={{ aspectRatio: `${media.width} / ${media.height}` }} data-case-film={media.id}>
-      <video ref={videoRef} src={media.src} poster={media.poster} width={media.width} height={media.height} muted controls playsInline preload="none" aria-label={title} onPlay={() => { setPlaying(true); onActiveChange(media.id); }} onPause={() => setPlaying(false)} />
+      <video ref={videoRef} src={media.src} poster={media.poster} width={media.width} height={media.height} autoPlay muted loop controls playsInline preload="none" aria-label={title} onPlay={() => { setPlaying(true); onActiveChange(media.id); }} onPause={() => setPlaying(false)} />
       <button data-video-control type="button" aria-pressed={playing} aria-label={`${title} · ${playing ? pause : play}`} onClick={toggle}>
         <span aria-hidden="true">{playing ? 'Ⅱ' : '▶'}</span><span>{playing ? pause : play}</span>
       </button>
@@ -354,7 +360,7 @@ type CraftIndex = 0 | 1 | 2;
 function syncStageVideos(root: HTMLElement, visible: boolean) {
   const allow = visible && !document.hidden && !reducedOrMetered();
   for (const video of Array.from(root.querySelectorAll<HTMLVideoElement>('video'))) {
-    if (allow) void video.play().catch(() => undefined);
+    if (allow) playMutedVideo(video);
     else video.pause();
   }
 }
@@ -362,7 +368,7 @@ function syncStageVideos(root: HTMLElement, visible: boolean) {
 /**
  * Split craft stage (`data-production-craft-strip`): a quiet 01 / 02 / 03 index on the left, one
  * edge-to-edge cinematic frame on the right. Hover, focus or a thumb press swaps the frame; stage
- * video only loads once it is on screen and stays on the poster for Save-Data / reduced-motion.
+ * video only loads once it is on screen and stays on the poster for Save-Data.
  */
 export function BrandCraftShowcase({
   copy,
@@ -386,21 +392,18 @@ export function BrandCraftShowcase({
   useEffect(() => {
     const stage = stageRef.current;
     if (!stage) return;
-    const motion = window.matchMedia('(prefers-reduced-motion: reduce)');
     const connection = connectionInformation();
     const sync = () => syncStageVideos(stage, visible.current);
     const observer = new IntersectionObserver(([entry]) => {
-      visible.current = Boolean(entry?.isIntersecting && entry.intersectionRatio >= 0.3);
+      visible.current = Boolean(entry?.isIntersecting && entry.intersectionRatio >= 0.15);
       sync();
-    }, { threshold: [0, 0.3] });
+    }, { threshold: [0, 0.15] });
     observer.observe(stage);
     document.addEventListener('visibilitychange', sync);
-    motion.addEventListener('change', sync);
     connection?.addEventListener('change', sync);
     return () => {
       observer.disconnect();
       document.removeEventListener('visibilitychange', sync);
-      motion.removeEventListener('change', sync);
       connection?.removeEventListener('change', sync);
     };
   }, []);
@@ -473,10 +476,11 @@ export function BrandCraftShowcase({
                   poster="/reel/brands/production-paris.jpg"
                   width={1280}
                   height={720}
+                  autoPlay
                   muted
                   loop
                   playsInline
-                  preload="none"
+                  preload="metadata"
                   aria-label={current.title}
                   className={styles.craftMedia}
                 />
@@ -501,10 +505,11 @@ export function BrandCraftShowcase({
                       poster="/reel/studio-demo/different-person.jpg"
                       width={720}
                       height={900}
+                      autoPlay
                       muted
                       loop
                       playsInline
-                      preload="none"
+                      preload="metadata"
                       aria-label={current.title}
                       className={`${styles.craftMedia} ${styles.craftMediaTop}`}
                     />
@@ -522,10 +527,11 @@ export function BrandCraftShowcase({
                       poster="/reel/brands/y2k-flip-phone.jpg"
                       width={720}
                       height={1280}
+                      autoPlay
                       muted
                       loop
                       playsInline
-                      preload="none"
+                      preload="metadata"
                       aria-label={current.title}
                       className={`${styles.craftMedia} ${styles.craftMediaTop}`}
                     />
