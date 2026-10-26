@@ -1,7 +1,19 @@
 import { createHash, randomUUID } from 'node:crypto';
 import type { SqlRunner } from '@/lib/db/sql-runner';
 
-export const DEFAULT_CONCIERGE_SLACK_CHANNEL = 'C0C7V2PB079'; // #sales-inbox
+/**
+ * Preferred dedicated Slack channel names for `brand.twings.app` live concierge inquiries.
+ * Separated from `#sales-inbox` so daily CRM briefings and live brand support chats never mix.
+ */
+export const PREFERRED_CONCIERGE_CHANNEL_NAMES = [
+  'twings-brand-concierge',
+  'brand-concierge',
+  'twings-brand-inbox',
+  'twings-brands',
+] as const;
+
+export const DEFAULT_CONCIERGE_SLACK_CHANNEL_NAME = PREFERRED_CONCIERGE_CHANNEL_NAMES[0];
+export const FALLBACK_CONCIERGE_SLACK_CHANNEL_ID = 'C0B74D4L6MN'; // #hermes-notifier (safe fallback until #twings-brand-concierge is created)
 
 export interface ConciergeOrganizationRef {
   id: string;
@@ -106,6 +118,7 @@ export function parseSlackConciergeReply(
 export interface ConciergeSlackConfig {
   enabled: boolean;
   token: string;
+  /** Explicit channel ID (`C...`) or `'auto'` to discover `#twings-brand-concierge`. */
   channelId: string;
 }
 
@@ -117,8 +130,150 @@ export function resolveConciergeSlackConfig(
   if (env.SLACK_BRAND_CONCIERGE_ENABLED === 'off') return null;
   const token = (env.SLACK_BRAND_CONCIERGE_BOT_TOKEN ?? env.SLACK_BOT_TOKEN)?.trim();
   if (!token || !token.startsWith('xoxb-')) return null;
-  const channelId = env.SLACK_BRAND_CONCIERGE_CHANNEL_ID?.trim() || DEFAULT_CONCIERGE_SLACK_CHANNEL;
+  const rawChannel = env.SLACK_BRAND_CONCIERGE_CHANNEL_ID?.trim();
+  const channelId = rawChannel && rawChannel.length > 0 ? rawChannel : 'auto';
   return { enabled: true, token, channelId };
+}
+
+interface ResolvedChannelTarget {
+  channelId: string;
+  channelName: string;
+  isMember: boolean;
+  isDedicated: boolean;
+  resolvedAt: number;
+}
+
+let cachedResolvedChannel: ResolvedChannelTarget | null = null;
+
+/**
+ * Resolves the dedicated `#twings-brand-concierge` channel ID automatically:
+ * 1. If `config.channelId` is already a specific Slack channel ID (`C...` / `G...`), uses it directly.
+ * 2. Otherwise queries `conversations.list` for any channel in `PREFERRED_CONCIERGE_CHANNEL_NAMES`
+ *    (`#twings-brand-concierge`, `#brand-concierge`, `#twings-brand-inbox`, `#twings-brands`).
+ * 3. If not found yet, attempts `conversations.create({ name: 'twings-brand-concierge' })` in case
+ *    the bot token has `channels:manage`.
+ * 4. If the channel exists as a public channel where `is_member === false`, attempts `conversations.join`.
+ */
+export async function resolveActiveConciergeChannel(
+  config: ConciergeSlackConfig,
+  fetcher: typeof fetch = fetch,
+): Promise<ResolvedChannelTarget> {
+  if (/^[CG][A-Z0-9]{8,}$/.test(config.channelId)) {
+    return {
+      channelId: config.channelId,
+      channelName: config.channelId,
+      isMember: true,
+      isDedicated: true,
+      resolvedAt: Date.now(),
+    };
+  }
+
+  const now = Date.now();
+  if (
+    cachedResolvedChannel &&
+    now - cachedResolvedChannel.resolvedAt < (cachedResolvedChannel.isDedicated ? 60_000 : 10_000)
+  ) {
+    return cachedResolvedChannel;
+  }
+
+  const desiredName =
+    config.channelId !== 'auto'
+      ? config.channelId.replace(/^#/, '').toLowerCase()
+      : DEFAULT_CONCIERGE_SLACK_CHANNEL_NAME;
+  const preferredNames = Array.from(
+    new Set([desiredName, ...PREFERRED_CONCIERGE_CHANNEL_NAMES]),
+  );
+
+  try {
+    const listResp = await fetcher(
+      'https://slack.com/api/conversations.list?types=public_channel,private_channel&exclude_archived=true&limit=200',
+      {
+        method: 'GET',
+        headers: { Authorization: `Bearer ${config.token}` },
+      },
+    );
+    if (listResp.ok) {
+      const listData = (await listResp.json()) as {
+        ok?: boolean;
+        channels?: Array<{
+          id?: string;
+          name?: string;
+          is_member?: boolean;
+          is_archived?: boolean;
+        }>;
+      };
+      const channels = (listData.channels ?? []).filter((ch) => !ch.is_archived && ch.id && ch.name);
+      for (const name of preferredNames) {
+        const found = channels.find((ch) => ch.name?.toLowerCase() === name);
+        if (found?.id) {
+          let isMember = found.is_member === true;
+          if (!isMember) {
+            try {
+              const joinResp = await fetcher('https://slack.com/api/conversations.join', {
+                method: 'POST',
+                headers: {
+                  Authorization: `Bearer ${config.token}`,
+                  'Content-Type': 'application/json; charset=utf-8',
+                },
+                body: JSON.stringify({ channel: found.id }),
+              });
+              if (joinResp.ok) {
+                const joinData = (await joinResp.json()) as { ok?: boolean };
+                if (joinData.ok) isMember = true;
+              }
+            } catch {
+              // Ignore if bot lacks channels:join; chat:write.public still works for outbound posts
+            }
+          }
+          cachedResolvedChannel = {
+            channelId: found.id,
+            channelName: found.name ?? name,
+            isMember,
+            isDedicated: true,
+            resolvedAt: now,
+          };
+          return cachedResolvedChannel;
+        }
+      }
+    }
+
+    // Attempt to create `#twings-brand-concierge` if the bot token has `channels:manage`
+    const createResp = await fetcher('https://slack.com/api/conversations.create', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${config.token}`,
+        'Content-Type': 'application/json; charset=utf-8',
+      },
+      body: JSON.stringify({ name: desiredName, is_private: false }),
+    });
+    if (createResp.ok) {
+      const createData = (await createResp.json()) as {
+        ok?: boolean;
+        channel?: { id?: string; name?: string };
+      };
+      if (createData.ok && createData.channel?.id) {
+        cachedResolvedChannel = {
+          channelId: createData.channel.id,
+          channelName: createData.channel.name ?? desiredName,
+          isMember: true,
+          isDedicated: true,
+          resolvedAt: now,
+        };
+        return cachedResolvedChannel;
+      }
+    }
+  } catch {
+    // Fall through to fallback channel
+  }
+
+  cachedResolvedChannel = {
+    channelId: FALLBACK_CONCIERGE_SLACK_CHANNEL_ID,
+    channelName: 'hermes-notifier',
+    isMember: true,
+    isDedicated: false,
+    resolvedAt: now,
+  };
+  return cachedResolvedChannel;
 }
 
 export function formatOutboundSlackInquiry(input: {
@@ -128,24 +283,36 @@ export function formatOutboundSlackInquiry(input: {
   senderRole: string;
   body: string;
   messageId: string;
+  needsBotInvite?: boolean;
+  needsDedicatedChannel?: boolean;
 }): string {
   const handle = brandSlackHandle(input.organizationName);
   const quotedBody = input.body
     .split(/\r?\n/)
     .map((line) => `> ${line}`)
     .join('\n');
-  return [
+  const lines = [
     `💬 *[brand.twings.app 실시간 문의]*`,
     `• *고객사:* *${input.organizationName}* (\`${handle}\`)`,
     `• *보낸 사람:* ${input.senderEmail} (${input.senderRole})`,
     `• *문의 내용:*`,
     quotedBody,
     `↩️ _답변 방법: 이 채널에 \`${handle} 답변내용\`을 입력하거나, 이 메시지의 *스레드(댓글)*로 답장하면 고객사 채팅창으로 즉시 전송됩니다._ \`[org:${input.organizationId}]\` \`[msg:${input.messageId}]\``,
-  ].join('\n');
+  ];
+  if (input.needsBotInvite) {
+    lines.push(
+      `⚠️ _양방향 답변 수신을 위해 이 채널 입력창에 \`/invite @hermes_notifier\`를 한 번 입력해 주세요._`,
+    );
+  } else if (input.needsDedicatedChannel) {
+    lines.push(
+      `💡 _전용 채널 분리 안내: Slack에서 \`#${DEFAULT_CONCIERGE_SLACK_CHANNEL_NAME}\` 채널을 만들고 \`/invite @hermes_notifier\`를 입력하면 다음 문의부터 자동으로 해당 채널로 분리됩니다._`,
+    );
+  }
+  return lines.join('\n');
 }
 
 /**
- * Sends a brand inquiry notification to the configured Slack channel.
+ * Sends a brand inquiry notification to the dedicated Slack channel (`#twings-brand-concierge`).
  * Best-effort with a strict timeout so the user's chat send never blocks or fails if Slack is slow.
  */
 export async function notifySlackBrandConcierge(
@@ -161,7 +328,7 @@ export async function notifySlackBrandConcierge(
     fetcher?: typeof fetch;
     timeoutMs?: number;
   },
-): Promise<{ sent: boolean; ts?: string }> {
+): Promise<{ sent: boolean; ts?: string; channelId?: string }> {
   const config = resolveConciergeSlackConfig(options?.env);
   if (!config) return { sent: false };
 
@@ -193,6 +360,9 @@ export async function notifySlackBrandConcierge(
         ? 'studio'
         : 'member';
 
+    const fetcher = options?.fetcher ?? fetch;
+    const target = await resolveActiveConciergeChannel(config, fetcher);
+
     const text = formatOutboundSlackInquiry({
       organizationId: input.organizationId,
       organizationName,
@@ -200,9 +370,10 @@ export async function notifySlackBrandConcierge(
       senderRole,
       body: input.body,
       messageId: input.messageId,
+      needsBotInvite: target.isDedicated && !target.isMember,
+      needsDedicatedChannel: !target.isDedicated,
     });
 
-    const fetcher = options?.fetcher ?? fetch;
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), options?.timeoutMs ?? 4500);
     try {
@@ -214,7 +385,7 @@ export async function notifySlackBrandConcierge(
           'Content-Type': 'application/json; charset=utf-8',
         },
         body: JSON.stringify({
-          channel: config.channelId,
+          channel: target.channelId,
           text,
           unfurl_links: false,
           unfurl_media: false,
@@ -222,7 +393,7 @@ export async function notifySlackBrandConcierge(
       });
       if (!response.ok) return { sent: false };
       const data = (await response.json()) as { ok?: boolean; ts?: string };
-      return { sent: data.ok === true, ts: data.ts };
+      return { sent: data.ok === true, ts: data.ts, channelId: target.channelId };
     } finally {
       clearTimeout(timer);
     }
@@ -249,126 +420,150 @@ export async function syncSlackConciergeReplies(
   const config = resolveConciergeSlackConfig(options?.env);
   if (!config) return 0;
 
-  const now = Date.now();
-  const last = lastSyncByChannel.get(config.channelId) ?? 0;
-  if (!options?.force && now - last < 2500) {
-    return 0;
-  }
-  lastSyncByChannel.set(config.channelId, now);
-
   try {
     const fetcher = options?.fetcher ?? fetch;
-    const headers = { Authorization: `Bearer ${config.token}` };
+    const target = await resolveActiveConciergeChannel(config, fetcher);
+    const activeChannelId = target.channelId;
 
-    const histResp = await fetcher(
-      `https://slack.com/api/conversations.history?channel=${encodeURIComponent(config.channelId)}&limit=35`,
-      { method: 'GET', headers },
-    );
-    if (!histResp.ok) return 0;
-    const histData = (await histResp.json()) as {
-      ok?: boolean;
-      messages?: Array<{
-        ts?: string;
-        text?: string;
-        bot_id?: string;
-        subtype?: string;
-        thread_ts?: string;
-        reply_count?: number;
-      }>;
-    };
-    if (!histData.ok || !Array.isArray(histData.messages)) return 0;
+    const now = Date.now();
+    const last = lastSyncByChannel.get(activeChannelId) ?? 0;
+    if (!options?.force && now - last < 2500) {
+      return 0;
+    }
+    lastSyncByChannel.set(activeChannelId, now);
 
     const orgRows = (
       await sql.query<{ id: string; name: string }>(
-        'select id, name from brand_organizations order by created_at desc',
+        'select id, name from brand_organizations order by created_at asc',
       )
-    ).rows.map((r) => ({ id: String(r.id), name: String(r.name) }));
-    if (!orgRows.length) return 0;
+    ).rows;
+    if (orgRows.length === 0) return 0;
+    const organizations: ConciergeOrganizationRef[] = orgRows.map((row) => ({
+      id: String(row.id),
+      name: String(row.name),
+    }));
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 4000);
+    let messages: Array<{
+      ts?: string;
+      text?: string;
+      subtype?: string;
+      reply_count?: number;
+      thread_ts?: string;
+    }> = [];
+    try {
+      const historyUrl = `https://slack.com/api/conversations.history?channel=${encodeURIComponent(
+        activeChannelId,
+      )}&limit=25`;
+      const response = await fetcher(historyUrl, {
+        method: 'GET',
+        signal: controller.signal,
+        headers: {
+          Authorization: `Bearer ${config.token}`,
+        },
+      });
+      if (!response.ok) return 0;
+      const payload = (await response.json()) as {
+        ok?: boolean;
+        messages?: typeof messages;
+      };
+      if (!payload.ok || !Array.isArray(payload.messages)) return 0;
+      messages = payload.messages;
+    } finally {
+      clearTimeout(timer);
+    }
 
     const candidates: Array<{ ts: string; organizationId: string; body: string }> = [];
 
-    // 1. Check top-level channel messages for `@<brand> ...` replies (chronological order: oldest first)
-    const ordered = [...histData.messages].reverse();
-    for (const msg of ordered) {
-      if (!msg.ts || !msg.text || msg.subtype) continue;
-      const parsed = parseSlackConciergeReply(msg.text, orgRows);
+    // 1. Check top-level messages (oldest first) for `@<brand>` prefix replies
+    const chronological = [...messages].reverse();
+    for (const msg of chronological) {
+      if (!msg.ts || !msg.text) continue;
+      if (msg.subtype && msg.subtype !== 'thread_broadcast') continue;
+      const parsed = parseSlackConciergeReply(msg.text, organizations, null);
       if (parsed && (!organizationId || parsed.organizationId === organizationId)) {
         candidates.push({ ts: msg.ts, ...parsed });
       }
     }
 
-    // 2. Check thread replies on recent inquiry messages that have `reply_count > 0`
-    const threadedParents = histData.messages.filter(
-      (m) =>
-        m.ts &&
-        m.text &&
-        (m.reply_count ?? 0) > 0 &&
-        m.text.includes('[org:') &&
-        (!organizationId || m.text.includes(`[org:${organizationId}]`)),
-    );
+    // 2. Check thread replies on recent inquiry messages carrying `[org:UUID]`
+    const threadParents = messages
+      .filter(
+        (m) =>
+          m.ts &&
+          m.text &&
+          m.text.includes('[org:') &&
+          typeof m.reply_count === 'number' &&
+          m.reply_count > 0,
+      )
+      .slice(0, 6);
 
-    for (const parent of threadedParents.slice(0, 5)) {
-      const repResp = await fetcher(
-        `https://slack.com/api/conversations.replies?channel=${encodeURIComponent(config.channelId)}&ts=${encodeURIComponent(parent.ts!)}&limit=20`,
-        { method: 'GET', headers },
-      );
-      if (!repResp.ok) continue;
-      const repData = (await repResp.json()) as {
-        ok?: boolean;
-        messages?: Array<{ ts?: string; text?: string; subtype?: string }>;
-      };
-      if (!repData.ok || !Array.isArray(repData.messages)) continue;
-      for (const reply of repData.messages) {
-        if (!reply.ts || reply.ts === parent.ts || !reply.text || reply.subtype) continue;
-        const parsed = parseSlackConciergeReply(reply.text, orgRows, parent.text);
-        if (parsed && (!organizationId || parsed.organizationId === organizationId)) {
-          candidates.push({ ts: reply.ts, ...parsed });
+    for (const parent of threadParents) {
+      if (!parent.ts || !parent.text) continue;
+      if (organizationId && !parent.text.toLowerCase().includes(`[org:${organizationId.toLowerCase()}]`)) {
+        continue;
+      }
+      try {
+        const repliesUrl = `https://slack.com/api/conversations.replies?channel=${encodeURIComponent(
+          activeChannelId,
+        )}&ts=${encodeURIComponent(parent.ts)}&limit=20`;
+        const replyRes = await fetcher(repliesUrl, {
+          method: 'GET',
+          headers: { Authorization: `Bearer ${config.token}` },
+        });
+        if (!replyRes.ok) continue;
+        const replyData = (await replyRes.json()) as {
+          ok?: boolean;
+          messages?: Array<{ ts?: string; text?: string; subtype?: string }>;
+        };
+        if (!replyData.ok || !Array.isArray(replyData.messages)) continue;
+        for (const reply of replyData.messages) {
+          if (!reply.ts || reply.ts === parent.ts || !reply.text) continue;
+          if (reply.subtype && reply.subtype !== 'thread_broadcast') continue;
+          const parsed = parseSlackConciergeReply(reply.text, organizations, parent.text);
+          if (parsed && (!organizationId || parsed.organizationId === organizationId)) {
+            candidates.push({ ts: reply.ts, ...parsed });
+          }
         }
+      } catch {
+        // Ignore single thread fetch failure
       }
     }
 
-    if (!candidates.length) return 0;
+    if (candidates.length === 0) return 0;
 
-    // Resolve a studio author user_id (first admin profile, or fallback to any member of the target org)
+    // Resolve a studio admin author_user_id to attribute the reply in `brand_support_messages`
     const adminRow = (
       await sql.query<{ id: string }>(
-        'select id from profiles where is_admin = true order by created_at asc limit 1',
+        'select id from profiles where is_admin=true order by created_at asc limit 1',
       )
     ).rows[0];
-
-    let inserted = 0;
-    for (const item of candidates) {
-      const requestId = deterministicSlackMessageUuid(config.channelId, item.ts);
-      const exists = (
-        await sql.query<{ id: string }>(
-          'select id from brand_support_messages where organization_id=$1 and request_id=$2 limit 1',
-          [item.organizationId, requestId],
-        )
+    let authorUserId = adminRow?.id ? String(adminRow.id) : null;
+    if (!authorUserId) {
+      const anyProfile = (
+        await sql.query<{ id: string }>('select id from profiles order by created_at asc limit 1')
       ).rows[0];
-      if (exists) continue;
-
-      let authorUserId = adminRow?.id ? String(adminRow.id) : null;
-      if (!authorUserId) {
-        const fallbackMember = (
-          await sql.query<{ user_id: string }>(
-            'select user_id from brand_memberships where organization_id=$1 limit 1',
-            [item.organizationId],
-          )
-        ).rows[0];
-        authorUserId = fallbackMember?.user_id ? String(fallbackMember.user_id) : null;
-      }
-      if (!authorUserId) continue;
-
-      await sql.query(
-        `insert into brand_support_messages(id, organization_id, body, author_role, created_by, request_id)
-         values ($1, $2, $3, 'studio', $4, $5)
-         on conflict (organization_id, created_by, request_id) do nothing`,
-        [randomUUID(), item.organizationId, item.body.slice(0, 4000), authorUserId, requestId],
-      );
-      inserted += 1;
+      authorUserId = anyProfile?.id ? String(anyProfile.id) : randomUUID();
     }
 
-    return inserted;
+    let insertedCount = 0;
+    for (const item of candidates) {
+      const messageUuid = deterministicSlackMessageUuid(activeChannelId, item.ts);
+      const slackTimestampIso = new Date(Number(item.ts.split('.')[0]) * 1000).toISOString();
+      const res = await sql.query<{ id: string }>(
+        `insert into brand_support_messages (id, organization_id, author_user_id, author_role, body, created_at)
+         values ($1, $2, $3, 'studio', $4, $5)
+         on conflict (id) do nothing
+         returning id`,
+        [messageUuid, item.organizationId, authorUserId, item.body.slice(0, 2000), slackTimestampIso],
+      );
+      if ((res.rowCount ?? res.rows.length) > 0) {
+        insertedCount += 1;
+      }
+    }
+
+    return insertedCount;
   } catch {
     return 0;
   }

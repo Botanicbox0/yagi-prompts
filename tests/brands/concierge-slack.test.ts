@@ -4,6 +4,7 @@ import {
   deterministicSlackMessageUuid,
   formatOutboundSlackInquiry,
   parseSlackConciergeReply,
+  resolveActiveConciergeChannel,
 } from '@/lib/brands/concierge-slack';
 
 const ORGS = [
@@ -86,5 +87,32 @@ describe('brand concierge ↔ Slack bridge', () => {
     expect(a).toBe(b);
     expect(a).not.toBe(c);
     expect(a).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-a[0-9a-f]{3}-[0-9a-f]{12}$/);
+  });
+
+  it('auto-discovers #twings-brand-concierge from Slack conversations.list instead of #sales-inbox', async () => {
+    const fakeFetcher: typeof fetch = async (url) => {
+      if (String(url).includes('conversations.list')) {
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            channels: [
+              { id: 'C0C7V2PB079', name: 'sales-inbox', is_member: true },
+              { id: 'C0TWINGSCON', name: 'twings-brand-concierge', is_member: true },
+            ],
+          }),
+          { status: 200 },
+        );
+      }
+      return new Response(JSON.stringify({ ok: false }), { status: 200 });
+    };
+
+    const resolved = await resolveActiveConciergeChannel(
+      { enabled: true, token: 'xoxb-test', channelId: 'twings-brand-concierge' },
+      fakeFetcher,
+    );
+    expect(resolved.channelId).toBe('C0TWINGSCON');
+    expect(resolved.channelName).toBe('twings-brand-concierge');
+    expect(resolved.isDedicated).toBe(true);
+    expect(resolved.isMember).toBe(true);
   });
 });
