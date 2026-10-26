@@ -70,8 +70,8 @@ export default async function BrandsPage({ params }: Props) {
             {/* Stage 01: Master Brand Film */}
             <div className="group relative flex flex-col justify-between overflow-hidden rounded-2xl border border-white/14 bg-white/[0.03] p-5 transition-colors hover:border-white/28 hover:bg-white/[0.05]">
               <div className="flex items-center justify-between gap-2 font-mono text-[11px] tracking-[0.12em] text-brand-blue-light">
-                <span>01 // MASTER FILM</span>
-                <span className="rounded-full border border-white/15 bg-white/[0.05] px-2.5 py-0.5 text-[10px] text-white/75">1 BESPOKE CUT</span>
+                <span className="whitespace-nowrap">01 // MASTER FILM</span>
+                <span className="shrink-0 whitespace-nowrap rounded-full border border-white/15 bg-white/[0.05] px-2.5 py-0.5 text-[10px] text-white/75">1 BESPOKE CUT</span>
               </div>
               <div className="mt-4 flex items-center gap-4">
                 <div className="relative h-20 w-28 shrink-0 overflow-hidden rounded-xl border border-white/15 bg-black">
@@ -88,14 +88,14 @@ export default async function BrandsPage({ params }: Props) {
             {/* Stage 02: Infinite Creator Scale (Selfie -> Scene visual equation) */}
             <div className="group relative flex flex-col justify-between overflow-hidden rounded-2xl border border-white/14 bg-white/[0.03] p-5 transition-colors hover:border-white/28 hover:bg-white/[0.05]">
               <div className="flex items-center justify-between gap-2 font-mono text-[11px] tracking-[0.12em] text-brand-blue-light">
-                <span>02 // AI CREATOR EXPANSION</span>
-                <span className="rounded-full border border-brand-blue-light/35 bg-blue/20 px-2.5 py-0.5 text-[10px] text-brand-blue-light">1 SELFIE → N× CUTS</span>
+                <span className="whitespace-nowrap">02 // CREATOR SCALE</span>
+                <span className="shrink-0 whitespace-nowrap rounded-full border border-brand-blue-light/35 bg-blue/20 px-2.5 py-0.5 text-[10px] text-brand-blue-light">1 SELFIE → N× CUTS</span>
               </div>
               <div className="mt-4 flex items-center gap-4">
                 <div className="flex shrink-0 items-center gap-1.5">
-                  <img src="/reel/studio-demo/fashion-selfie.jpg" alt="" width={64} height={80} decoding="async" className="h-20 w-14 rounded-xl object-cover object-top ring-1 ring-white/20" />
+                  <img src="/reel/studio-demo/reference-selfie.jpeg" alt="" width={64} height={80} decoding="async" className="h-20 w-14 rounded-xl object-cover object-top ring-1 ring-white/20" />
                   <span aria-hidden="true" className="font-mono text-xs text-brand-blue-light">→</span>
-                  <img src="/reel/studio-demo/fashion-scene.jpg" alt="" width={64} height={80} decoding="async" className="h-20 w-14 rounded-xl object-cover object-top ring-1 ring-brand-blue-light/45" />
+                  <img src="/reel/studio-demo/different-person.jpg" alt="" width={64} height={80} decoding="async" className="h-20 w-14 rounded-xl object-cover object-center ring-1 ring-brand-blue-light/45" />
                 </div>
                 <div className="min-w-0">
                   <p className="text-base font-semibold tracking-tight text-white">{t.formula.item2Title}</p>
@@ -107,13 +107,13 @@ export default async function BrandsPage({ params }: Props) {
             {/* Stage 03: Simultaneous KR & JP Feed Rollout */}
             <div className="group relative flex flex-col justify-between overflow-hidden rounded-2xl border border-white/14 bg-white/[0.03] p-5 transition-colors hover:border-white/28 hover:bg-white/[0.05]">
               <div className="flex items-center justify-between gap-2 font-mono text-[11px] tracking-[0.12em] text-brand-blue-light">
-                <span>03 // LIVE FEED ROLLOUT</span>
-                <span className="rounded-full border border-white/15 bg-white/[0.05] px-2.5 py-0.5 text-[10px] text-white/75">KR · JP SYNC</span>
+                <span className="whitespace-nowrap">03 // LIVE FEED ROLLOUT</span>
+                <span className="shrink-0 whitespace-nowrap rounded-full border border-white/15 bg-white/[0.05] px-2.5 py-0.5 text-[10px] text-white/75">KR · JP SYNC</span>
               </div>
               <div className="mt-4 flex items-center gap-4">
                 <div className="flex shrink-0 items-center -space-x-2.5">
                   <img src="/reel/brands/y2k-flip-phone.jpg" alt="" width={64} height={80} decoding="async" className="h-20 w-14 rounded-xl object-cover object-top ring-2 ring-brand-night" />
-                  <img src="/reel/studio-demo/different-person.jpg" alt="" width={64} height={80} decoding="async" className="h-20 w-14 rounded-xl object-cover object-top ring-2 ring-brand-night" />
+                  <img src="/reel/studio-demo/different-person.jpg" alt="" width={64} height={80} decoding="async" className="h-20 w-14 rounded-xl object-cover object-center ring-2 ring-brand-night" />
                 </div>
                 <div className="min-w-0">
                   <p className="text-base font-semibold tracking-tight text-white">{t.formula.item3Title}</p>
@@ -169,8 +169,8 @@ export default async function BrandsPage({ params }: Props) {
                 deliverable: locale === 'ko' ? '크리에이터 N편 생성' : 'N× Creator Cuts',
                 heading: t.moat2Title,
                 body: t.moat2Body,
-                img: '/reel/studio-demo/fashion-scene.jpg',
-                subImg: '/reel/studio-demo/fashion-selfie.jpg',
+                img: '/reel/studio-demo/different-person.jpg',
+                subImg: '/reel/studio-demo/reference-selfie.jpeg',
                 caption: locale === 'ko' ? '셀카 1장 → 동일 조명·무빙 무한 확장' : '1 Selfie → Identical Lighting & Camera',
               },
               {

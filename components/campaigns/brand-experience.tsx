@@ -381,7 +381,7 @@ export function BrandCraftShowcase({
       spec: ko ? '조명 · 카메라 무빙 · 색보정 100% 동일 유지' : '100% LOCKED LIGHTING & CAMERA MOTION',
       title: copy.scaleTitle,
       body: copy.scaleBody,
-      thumb: '/reel/studio-demo/fashion-scene.jpg',
+      thumb: '/reel/studio-demo/different-person.jpg',
     },
     {
       index: 2 as const,
@@ -518,7 +518,7 @@ export function BrandCraftShowcase({
                       {ko ? 'INPUT · 크리에이터 셀카 1장' : 'INPUT · 1 CREATOR SELFIE'}
                     </span>
                     <img
-                      src="/reel/studio-demo/fashion-selfie.jpg"
+                      src="/reel/studio-demo/reference-selfie.jpeg"
                       alt=""
                       width={640}
                       height={800}
@@ -541,7 +541,7 @@ export function BrandCraftShowcase({
                       {ko ? 'OUTPUT · 마스터 필름 속 주인공' : 'OUTPUT · STARRING IN MASTER FILM'}
                     </span>
                     <img
-                      src="/reel/studio-demo/fashion-scene.jpg"
+                      src="/reel/studio-demo/different-person.jpg"
                       alt=""
                       width={640}
                       height={800}
@@ -555,16 +555,16 @@ export function BrandCraftShowcase({
                 </div>
                 <div className={styles.craftDetailPair}>
                   <div className={styles.craftDetailCard}>
-                    <img src="/reel/studio-demo/reference-selfie.jpeg" alt="" width={400} height={500} loading="lazy" decoding="async" />
+                    <img src="/reel/campaigns/highteen.jpg" alt="" width={400} height={500} loading="lazy" decoding="async" />
                     <div>
-                      <span>CREATOR B · SELFIE</span>
+                      <span>FORMAT A · HIGHTEEN FILM</span>
                       <strong>{ko ? '누가 참여하든 동일한 연출 품질' : 'Consistent Across Every Creator'}</strong>
                     </div>
                   </div>
                   <div className={styles.craftDetailCard}>
-                    <img src="/reel/studio-demo/different-person.jpg" alt="" width={400} height={500} loading="lazy" decoding="async" />
+                    <img src="/reel/brands/y2k-flip-phone.jpg" alt="" width={400} height={500} loading="lazy" decoding="async" />
                     <div>
-                      <span>CREATOR B · SCENE CUT</span>
+                      <span>FORMAT B · Y2K FEED CUT</span>
                       <strong>{ko ? '수십 명의 버전으로 즉시 복제·확장' : 'Instant Multi-Creator Replication'}</strong>
                     </div>
                   </div>
