@@ -558,7 +558,7 @@ export async function syncSlackConciergeReplies(
          returning id`,
         [messageUuid, item.organizationId, authorUserId, item.body.slice(0, 2000), slackTimestampIso],
       );
-      if ((res.rowCount ?? res.rows.length) > 0) {
+      if (res.rows.length > 0) {
         insertedCount += 1;
       }
     }
