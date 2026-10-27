@@ -133,7 +133,6 @@ describe('route cache modes (§3.4 / §4)', () => {
       ...sourcesUnder('app', '(marketing)'),
       ...sourcesUnder('components', 'landing'),
       ...sourcesUnder('components', 'nav'),
-      ...sourcesUnder('components', 'ad'),
       ...sourcesUnder('components', 'ui'),
       ...sourcesUnder('components', 'marketing'),
       ...sourcesUnder('components', 'motion'),
