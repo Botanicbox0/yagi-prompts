@@ -1371,7 +1371,8 @@ async function sweepCampaigns(): Promise<void> {
     expectEqual(`/${locale}/brands/stories/morphic renders 200`, story.status, 200);
     expectEqual(`/${locale}/brands/stories/morphic keeps both campaigns`, (story.body.match(/data-case-study=/g) ?? []).length, 2);
     expectPresent(`/${locale}/brands/stories/morphic self-canonicals`, story.body, `rel="canonical" href="${BASE}/${locale}/brands/stories/morphic"`);
-    expectPresent(`/${locale}/brands/stories/morphic carries campaign limitations`, story.body, locale === 'ko' ? '전환율은 별도로 집계하지 않았습니다' : 'conversion');
+    // Founder, 2026-10-28: the old caveat sentence stays out (05bab0d); the totals still say what they count.
+    expectPresent(`/${locale}/brands/stories/morphic says what the totals count`, story.body, locale === 'ko' ? '2026년 8월 캠페인 누적 공개 집계입니다.' : 'Public campaign totals from August 2026.');
     expectPresent(`/${locale}/brands/stories/morphic offers only the founder's own format`, story.body, 'href="https://morphic.com/en/workflows/019feecc-c7ec-77bd-bc3a-2ddc1f680105/90s-korean-street-interview"');
     expectAbsent(`/${locale}/brands/stories/morphic removes the generic guide`, story.body, 'make-90s-street-style-interview-video');
     expectEqual(`/${locale}/brands/stories/morphic keeps four published September originals`, (story.body.match(/data-case-post="/g) ?? []).length, 4);
