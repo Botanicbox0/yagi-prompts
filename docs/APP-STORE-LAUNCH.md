@@ -56,3 +56,30 @@
   npx @capacitor/cli open ios
   # Xcode에서 Signing & Capabilities -> Associated Domains에 applinks:twings.app 추가 후 Archive -> App Store Connect 업로드
   ```
+
+---
+
+## 3. 스토어 제출 전 남은 것 (2026-10-27 점검)
+
+### 3.1 동반 앱 모드 — 연결 완료 (브랜치 `claude/store-companion`)
+2026-10-24에 `storeCheckoutPolicy()`는 만들어졌지만 화면·API 어디에서도 쓰이지 않아, 스토어 빌드에서도 가격과 결제 버튼이 보였다. 이번에 연결했다.
+- **판별**: 두 루트 레이아웃 `<head>`의 인라인 스크립트(`components/pwa/store-client-script.tsx`)가 첫 페인트 전에 `<html data-store="ios-store|android-store">`를 단다. Capacitor는 UA(`TwingsIOS/`·`TwingsAndroid/`), **TWA는 UA가 일반 Chrome이라** 시작 URL `?source=twa`(`mobile/twa-manifest.json`) 또는 `android-app://app.twings.client` 리퍼러로 알아보고 그 탭의 sessionStorage에 기억한다. 쿠키를 쓰지 않는 이유: TWA는 Chrome과 쿠키를 공유하므로, 쿠키로 하면 같은 사람이 Chrome에서 결제하지 못한다. 다른 앱(Gmail·Slack 등)의 `android-app://` 리퍼러는 무시한다.
+- **화면**: `app/globals.css`의 `html[data-store]` 규칙이 가격 박스·스튜디오·하단 만들기 바·구독 미리보기·요금제 본문·요금제 링크를 숨긴다. 대체 문구("웹에서 결제하세요")는 넣지 않는다 — 그 자체가 앱 밖 구매 유도(3.1.3(f))다. 하단 탭은 그대로 보인다(Capacitor 웹뷰도 설치형으로 취급).
+- **서버**: 단건 주문·다시 결제하기·구독 가입·구독 렌더가 `isStoreRequest()`로 `store_companion`(403)을 돌려준다. TWA는 페이지가 `x-twings-client` 헤더를 붙인다.
+- **유니버설 링크**: AASA에서 `/billing/*`·`/ko/pricing`·`/en/pricing`을 제외 — Safari에서 시작한 결제의 복귀가 앱으로 넘어가 세션을 잃는 일을 막는다.
+- 검증: `tests/pwa/store-companion.test.ts`, 스윕 `data-store-client-script`.
+
+### 3.2 코드로 더 필요한 것 (제출 차단)
+| 항목 | 왜 | 범위 |
+| --- | --- | --- |
+| **앱 안 계정 삭제** | Apple 5.1.1(v), Google Play 계정 삭제 정책(앱 안 경로 + 웹 URL 둘 다). 지금은 개인정보처리방침에 "탈퇴 요청 시 7일 안 삭제"만 있고 요청 화면이 없다. | `/account`에 삭제 요청 → 관리자 대기열 → `docs/RUNBOOK-deletion.md` 실행. 공개 URL 하나(로그인 없이 요청 방법 안내). 문안 대표 승인. |
+| **Sign in with Apple** (iOS만) | Apple 4.8: Google·Kakao 같은 제3자 로그인만 있으면 동등한 개인정보 보호 로그인을 같이 제공해야 한다. | Supabase Apple 공급자 + 로그인 화면 버튼. Apple Developer 계정 필요. |
+| **네이티브 푸시** (iOS만) | Capacitor의 WKWebView는 웹 푸시를 받지 못한다(웹 푸시는 홈 화면 PWA·Safari 전용). TWA는 Chrome이 알림을 대신 받아 지금 웹 푸시로 된다. | `@capacitor/push-notifications` + APNs 키 + 서버 `RenderNotifier`에 `apns` 채널. |
+
+### 3.3 대표 할 일 (계정·서명·심사)
+1. **Google Play Console 조직 계정**(1회 $25). 법인은 D-U-N-S 번호가 필요하고, 조직 계정은 개인 계정의 "테스터 12명·14일" 조건이 없다.
+2. **업로드 키 생성·보관** → Play 앱 서명 SHA-256을 Vercel `ANDROID_SHA256_CERT_FINGERPRINTS`에 넣고 재배포(`/.well-known/assetlinks.json` 검증). 키 파일과 비밀번호는 채팅·저장소에 넣지 않는다.
+3. Play 등록 정보: 개인정보처리방침 URL, **데이터 보안 양식**(얼굴 사진 수집·삭제 기간), 계정 삭제 URL(3.2), 콘텐츠 등급, 스크린샷. 내부 테스트 → 프로덕션.
+4. **iOS는 Android 다음.** Apple Developer 조직 계정(연 $99, D-U-N-S), 빌드할 Mac 또는 클라우드 빌드(Codemagic 등 — 이 PC는 Windows라 Xcode가 없다), 3.2의 iOS 두 항목, 심사 메모에 "앱 안 판매 없음, 웹 서비스의 무료 동반 앱(3.1.3(f))" 명시.
+
+**권장 순서**: 3.2 계정 삭제 → Play 계정·서명(대표) → TWA 빌드·내부 테스트 → Play 제출 → iOS 준비.
