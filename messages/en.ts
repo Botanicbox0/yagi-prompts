@@ -465,7 +465,7 @@ export const en = {
         "postCta": "View the Instagram post",
         "filmNote": "Published in August 2026. Turn on sound after playing to hear the interview.",
         "sourceCta": "See the 1990s interview format by YAGI",
-        "note": "Public campaign totals from August 2026.",
+        "note": "Public campaign totals from August 2026. Views include repeat plays; conversion rates were not tracked separately.",
         "metrics": {
           "films": {
             "label": "initial seed videos"
