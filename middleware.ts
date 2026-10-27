@@ -25,6 +25,7 @@ import {
   resolveLocale,
   splitLocale,
 } from '@/lib/i18n/config';
+import { TWA_SOURCE } from '@/lib/mobile/store-shell';
 
 /**
  * Edge middleware first checks the host/path boundary, including API/auth/static requests.
@@ -134,6 +135,8 @@ export async function middleware(request: NextRequest) {
       target.search = '';
       target.searchParams.set('signin', '1');
       target.searchParams.set('next', `${pathname}${search}`);
+      // A Play app shortcut opened signed out: the launch marker must reach the page that loads.
+      if (request.nextUrl.searchParams.get('source') === TWA_SOURCE) target.searchParams.set('source', TWA_SOURCE);
       return withCookies(NextResponse.redirect(target, { headers: privateHeaders }), response);
     }
     return response;

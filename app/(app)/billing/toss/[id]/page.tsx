@@ -9,6 +9,7 @@ import { formatKrw } from '@/lib/i18n/format';
 import { templateHref } from '@/lib/prompts/links';
 import { TossCheckout } from '../checkout';
 import { TossStatus } from '../status';
+import { StoreCheckoutNote, StoreShellGate } from '@/components/pwa/store-shell';
 
 export const dynamic = 'force-dynamic';
 export default async function TossOrderPage({
@@ -24,7 +25,9 @@ export default async function TossOrderPage({
   if (!deps) notFound();
   const o = await loadOwnTossOrder(deps.sql, viewer, (await params).id);
   if (!o) notFound();
-  const c = getDictionary(o.locale).billing.toss;
+  const dict = getDictionary(o.locale);
+  const c = dict.billing.toss;
+  const store = dict.appShell.store;
   const live = new Date(o.expires_at) > new Date();
   const open = purchaseOpenFor(viewer);
   // Only a pending order opens the provider window. A refusal at approval ends the order
@@ -82,16 +85,19 @@ export default async function TossOrderPage({
             </a>
           </div>
         ) : canPay ? (
-          <TossCheckout
-            id={o.id}
-            amount={o.amount_krw}
-            name={o.order_name}
-            customerKey={viewer.userId}
-            clientKey={config?.clientKey ?? null}
-            kind={deps.gateway.kind}
-            locale={o.locale}
-            copy={c}
-          />
+          // Inside the Google Play app the widget never loads (docs/PLATFORM-2.0.md §5.1).
+          <StoreShellGate fallback={<StoreCheckoutNote title={store.checkoutTitle} body={store.checkoutBody} />}>
+            <TossCheckout
+              id={o.id}
+              amount={o.amount_krw}
+              name={o.order_name}
+              customerKey={viewer.userId}
+              clientKey={config?.clientKey ?? null}
+              kind={deps.gateway.kind}
+              locale={o.locale}
+              copy={c}
+            />
+          </StoreShellGate>
         ) : (
           <TossStatus
             id={o.id}

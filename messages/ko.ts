@@ -3424,6 +3424,11 @@ export const ko: Dictionary = {
       failedTitle: '이번엔 완성하지 못했어요',
       failedBody: '{template} 생성이 완료되지 않았어요. {reason}',
     },
+    store: {
+      note: '앱에서는 구매할 수 없어요. 구매는 TWINGS 웹사이트에서 할 수 있어요.',
+      checkoutTitle: '앱에서는 결제할 수 없어요',
+      checkoutBody: '결제는 TWINGS 웹사이트에서 할 수 있어요. 만든 영상은 앱에서도 볼 수 있어요.',
+    },
   },
   admin: {
     brand: 'TWINGS 관리자',

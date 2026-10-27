@@ -1035,6 +1035,15 @@ async function sweepTemplates(): Promise<void> {
   if (/<div[^>]*data-make-sticky[^>]*data-hide-tabs/.test(detail.body)) ok('…that hides the installed app tabs', 'data-hide-tabs');
   else fail('…sticky bar hides the app tabs', 'data-make-sticky must carry data-hide-tabs');
   expectPresent('…whose one CTA goes to the make card', detail.body, 'href="#make"');
+  // docs/PLATFORM-2.0.md §5.1 (2026-10-28): the Google Play app sells nothing. The <head> script
+  // marks the app before first paint; the price, the studio and the refund line step aside for a
+  // text-only note. In this browser sweep none of it is set, so the page above is unchanged.
+  expectPresent('…the Play app marker script in the head', detail.body, 'data-store-shell');
+  if (/<div[^>]*data-store-hide[^>]*>\s*<[^>]*data-template-price/.test(detail.body)) ok('…the price steps aside in the Play app', 'data-store-hide');
+  else fail('…the price in the Play app', 'the price row must carry data-store-hide');
+  expectPresent('…the studio steps aside in the Play app', detail.body, '<div data-store-hide="true"><');
+  expectPresent('…for a text-only note', detail.body, 'data-store-note');
+  expectAbsent('…not set in a browser', detail.body, '<html data-store-shell');
   expectAbsent('…no demo badge anywhere', detail.body, 'data-demo-badge');
   expectAbsent('…no placeholder ad', detail.body, 'YOUR AD HERE');
   expectAbsent('…no house ad rail', detail.body, 'data-house-ad');
@@ -1132,6 +1141,14 @@ async function sweepTemplates(): Promise<void> {
   expectPresent('…and opens its link on a tap', worker.body, "self.addEventListener('notificationclick'");
   expectPresent('…keeping navigations network first', worker.body, "if (request.mode !== 'navigate') return;");
   expectEqual('the offline page is served at the root', (await get('/offline.html')).status, 200);
+  // The Google Play app (a TWA) proves the domain with Digital Asset Links. Until the Play app
+  // signing fingerprint is in the environment the list is empty, never a made-up key.
+  const assetLinks = await get('/.well-known/assetlinks.json');
+  expectEqual('/.well-known/assetlinks.json is served, unprefixed', assetLinks.status, 200);
+  expectPresent('…as JSON', assetLinks.contentType ?? '', 'application/json');
+  if (Array.isArray(JSON.parse(assetLinks.body))) ok('…a statement list', assetLinks.body.slice(0, 60));
+  else fail('…a statement list', 'expected a JSON array');
+  expectAbsent('…with no placeholder fingerprint', assetLinks.body, '00:00:00:00');
   const landing = await get('/en');
   expectPresent('the landing declares the manifest', landing.body, 'rel="manifest"');
   expectPresent('…runs edge to edge (safe areas padded in CSS)', landing.body, 'viewport-fit=cover');

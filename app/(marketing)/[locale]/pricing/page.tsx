@@ -102,6 +102,8 @@ export default async function PricingPage({ params }: { params: Promise<{ locale
   // Monthly plans: below as a "준비 중" teaser while preparing; first only when they are the open offer.
   const monthlyBlock = (
     <section id="monthly" className={`${singleFirst ? 'mt-10' : ''} scroll-mt-24`}>
+      {/* Google Play app only (PLATFORM-2.0 §5.1): the plan buttons step aside for one sentence. */}
+      <p data-store-note className="mb-5 text-sm leading-relaxed text-black/75">{dict.appShell.store.note}</p>
       <SubscriptionPlanComparison plans={plans} copy={comparisonCopy} browseHref={templatesHref(locale)} oneTimeAvailable={shopOpen} />
       <div className="mt-6 flex flex-wrap items-center gap-x-6 gap-y-3 text-sm">
         <p className="font-semibold">{p.subscriptionShared}</p>

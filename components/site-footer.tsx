@@ -63,7 +63,7 @@ export function SiteFooter({
               <TextSwap>{labels.hireCta}&nbsp;→</TextSwap>
             </a>
           <p className="mt-6 text-body opacity-70">{labels.hireLede}</p>
-          <a href={labels.crossDoor.href} className="mt-6 inline-flex min-h-11 items-center text-sm underline underline-offset-4 opacity-70 hover:opacity-100">{labels.crossDoor.label} →</a>
+          <a href={labels.crossDoor.href} data-store-hide className="mt-6 inline-flex min-h-11 items-center text-sm underline underline-offset-4 opacity-70 hover:opacity-100">{labels.crossDoor.label} →</a>
         </div>
 
         <div className="mt-20 grid gap-10 border-t border-hairline pt-10 sm:grid-cols-2 lg:grid-cols-[1fr_auto_auto]">

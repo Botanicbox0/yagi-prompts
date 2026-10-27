@@ -123,7 +123,7 @@ export function SiteNav({
 
   const signInHref = explicitSignInHref ?? `/auth/signin?next=${encodeURIComponent(signInNext)}&locale=${locale}`;
   const modeLinks = (
-    <div role="group" aria-label={audienceLabel} data-audience-switch className="flex shrink-0 items-center gap-0.5 rounded-full border border-hairline p-0.5 text-[0.6875rem] font-medium sm:text-xs">
+    <div role="group" aria-label={audienceLabel} data-audience-switch data-store-hide className="flex shrink-0 items-center gap-0.5 rounded-full border border-hairline p-0.5 text-[0.6875rem] font-medium sm:text-xs">
       {modes.map(mode => <a key={mode.id} href={mode.href} aria-current={mode.id === audience ? 'page' : undefined} data-audience={mode.id} className={`inline-flex min-h-10 items-center justify-center rounded-full px-2.5 transition-colors sm:px-3 ${mode.id === audience ? 'bg-black text-white' : 'hover:bg-black/5'}`}>{mode.label}</a>)}
     </div>
   );

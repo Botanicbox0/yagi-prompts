@@ -6,6 +6,7 @@ import { fontVariables } from '@/app/fonts';
 import { getDictionary } from '@/lib/i18n/dictionaries';
 import { getRequestLocale } from '@/lib/i18n/server';
 import { RegisterServiceWorker } from '@/components/pwa/register-sw';
+import { StoreShellScript } from '@/components/pwa/store-shell-script';
 import { requestSurface } from '@/lib/routing/request-surface';
 import { templatesHref } from '@/lib/prompts/links';
 import { AppErrorCopyProvider } from '@/components/app/error-copy';
@@ -50,8 +51,9 @@ export default async function AppRootLayout({ children }: { children: ReactNode 
   const { workspace } = await requestSurface();
   const { appError, appShell } = getDictionary(locale);
   return (
-    <html lang={locale} className={fontVariables} data-workspace-admin={workspace || undefined}>
+    <html lang={locale} className={fontVariables} data-workspace-admin={workspace || undefined} suppressHydrationWarning>
       <head>
+        {!workspace && <StoreShellScript />}
         {workspace && <link rel="stylesheet" href="/fonts/helvetica-neue/helvetica-neue.css" />}
         <link rel="stylesheet" href="/fonts/pretendard/pretendard-dynamic-subset.css" />
         <link rel="stylesheet" href="/fonts/pretendard/pretendard-hangul-mono.css" />

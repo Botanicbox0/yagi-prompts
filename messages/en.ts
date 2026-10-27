@@ -3454,6 +3454,12 @@ export const en = {
       failedTitle: 'This one did not finish',
       failedBody: 'Your {template} render did not finish. {reason}',
     },
+    /** docs/PLATFORM-2.0.md §5.1 (2026-10-28): the Google Play app sells nothing. Text only, no link. */
+    store: {
+      note: 'Purchases are not available in the app. You can buy on the TWINGS website.',
+      checkoutTitle: 'Payment is not available in the app',
+      checkoutBody: 'You can pay on the TWINGS website. Your finished videos show up in the app too.',
+    },
   },
   /**
    * PLAN §3.8 admin CMS. Bilingual like everything else (§3.9) even though only staff read it —

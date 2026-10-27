@@ -19,10 +19,6 @@ export const DEFAULT_APP_BUNDLE_ID = 'app.twings.client';
 export const DEFAULT_ANDROID_PACKAGE = 'app.twings.client';
 export const DEFAULT_APPLE_TEAM_ID = 'TEAMID0000';
 
-/** Default placeholder fingerprint when `ANDROID_SHA256_CERT_FINGERPRINTS` is not set yet. */
-export const PLACEHOLDER_SHA256_FINGERPRINT =
-  '00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00';
-
 const SHA256_PATTERN = /^(?:[0-9A-F]{2}:){31}[0-9A-F]{2}$/;
 
 export type StorePlatform = 'ios-store' | 'android-store' | 'pwa-standalone' | 'web';
@@ -52,20 +48,26 @@ export interface AppleAppSiteAssociation {
   };
 }
 
+/** `ANDROID_SHA256_CERT_FINGERPRINTS`, comma separated; anything not shaped like a SHA-256 drops out. */
 export function parseAndroidFingerprints(raw: string | undefined): string[] {
-  if (!raw) return [PLACEHOLDER_SHA256_FINGERPRINT];
-  const parsed = raw
+  if (!raw) return [];
+  return raw
     .split(',')
     .map((item) => item.trim().toUpperCase())
     .filter((item) => SHA256_PATTERN.test(item));
-  return parsed.length > 0 ? parsed : [PLACEHOLDER_SHA256_FINGERPRINT];
 }
 
+/**
+ * The statement list, or `[]` until Play Console's app signing fingerprint is in Vercel. An empty
+ * list is the honest answer: a made-up fingerprint verifies nothing either, and it reads as if a key
+ * had been registered.
+ */
 export function buildAndroidAssetLinks(
   env: Record<string, string | undefined> = process.env,
 ): AndroidAssetLinkStatement[] {
   const packageName = env.ANDROID_PACKAGE_NAME?.trim() || DEFAULT_ANDROID_PACKAGE;
   const fingerprints = parseAndroidFingerprints(env.ANDROID_SHA256_CERT_FINGERPRINTS);
+  if (fingerprints.length === 0) return [];
   return [
     {
       relation: [
@@ -116,8 +118,10 @@ export function buildAppleAppSiteAssociation(
 }
 
 /**
- * Detects whether the current viewer is inside the iOS App Store wrapper, Google Play TWA/Capacitor
- * wrapper, installed PWA standalone shell, or regular browser tab.
+ * Detects whether the current viewer is inside a Capacitor wrapper (which appends `TwingsIOS/` or
+ * `TwingsAndroid/` to the user agent), the installed PWA standalone shell, or a regular browser tab.
+ * The Google Play app is a Trusted Web Activity — Chrome itself, with Chrome's user agent — so it is
+ * recognised in the page instead: lib/mobile/store-shell.ts.
  */
 export function detectStorePlatform(input: {
   userAgent?: string | null;

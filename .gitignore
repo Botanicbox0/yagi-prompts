@@ -23,3 +23,11 @@ coverage/
 
 # Generated pinned MediaPipe runtime (prepared before build/dev)
 /public/vendor/face-1.1.0/
+
+# Google Play app (mobile/twa-manifest.json): the upload key and Bubblewrap build output stay out of git.
+*.jks
+*.keystore
+mobile/**/*.aab
+mobile/**/*.apk
+mobile/**/build/
+mobile/.gradle/

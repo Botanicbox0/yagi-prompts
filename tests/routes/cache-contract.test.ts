@@ -133,7 +133,7 @@ describe('route cache modes (§3.4 / §4)', () => {
       ...sourcesUnder('app', '(marketing)'),
       ...sourcesUnder('components', 'landing'),
       ...sourcesUnder('components', 'nav'),
-      ...sourcesUnder('components', 'ad'),
+      // components/ad left with the house ad rail (a2a30f6); scanning it failed on every fresh checkout.
       ...sourcesUnder('components', 'ui'),
       ...sourcesUnder('components', 'marketing'),
       ...sourcesUnder('components', 'motion'),

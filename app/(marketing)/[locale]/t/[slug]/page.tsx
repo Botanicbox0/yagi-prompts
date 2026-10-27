@@ -197,7 +197,7 @@ export default async function TemplatePage({ params }: RouteParams) {
                 ) : (
                   // The one make card: price box, the studio, then the small print — nothing above it repeats it.
                   <section id="make" data-template-make data-template-price-box className="mt-7 scroll-mt-24 rounded-2xl border border-hairline p-5 sm:p-6">
-                    <div className="flex items-baseline justify-between gap-4">
+                    <div data-store-hide className="flex items-baseline justify-between gap-4">
                       <p data-template-price className="font-display text-[2rem] leading-none font-black">{style.price}</p>
                       <p className="text-sm text-black/70">{t.priceLabel}</p>
                     </div>
@@ -209,70 +209,74 @@ export default async function TemplatePage({ params }: RouteParams) {
                         </div>
                       ))}
                     </dl>
-                    <p data-template-sale-state className="mt-4 text-sm leading-relaxed text-black/75">
+                    <p data-template-sale-state data-store-hide className="mt-4 text-sm leading-relaxed text-black/75">
                       <TemplateMakeAvailability copy={makeAvailabilityCopy} oneTimeAvailable={shopOpen} subscriptionEligible={subscriptionQuote !== null} field="body" />
                     </p>
-                    <TwingsStudio
-                      styles={[style]}
-                      initialStyleId={style.id}
-                      shopOpenHint={shopOpen}
-                      live={{
-                        endpoint: '/api/renders',
-                        accessEndpoint: '/api/renders/access',
-                        interestEndpoint: '/api/notify/interest',
-                        template: card.slug,
-                        locale,
-                        signinHref: signInHref(`${templateHref(locale, slug)}#make`, locale),
-                        identityHref: identityVerifyHref(`${templateHref(locale, slug)}#make`),
-                        selfie: dict.selfie,
-                        subscription: { copy: dict.creatorSubscription, editorCopy: dict.premiumEditor },
-                        labels: {
-                          badge: dict.renders.studio.badge,
-                          operatorBadge: dict.renders.studio.operatorBadge,
-                          freeCta: dict.renders.studio.freeCta,
-                          submitting: dict.renders.studio.submitting,
-                          identityNotice: dict.renders.studio.identityNotice,
-                          identityPending: dict.renders.studio.identityPending,
-                          identityCta: dict.renders.studio.identityCta,
-                          errors: dict.renders.studio.errors,
-                        },
-                      }}
-                      labels={{
-                        stepPhoto: dict.studio.stepPhoto,
-                        stepStyle: dict.studio.stepStyle,
-                        stepPay: dict.studio.stepPay,
-                        stepResult: dict.studio.stepResult,
-                        dropZone: dict.studio.dropZone,
-                        dropHint: dict.studio.dropHint,
-                        changePhoto: dict.studio.changePhoto,
-                        chooseStyle: dict.studio.chooseStyle,
-                        payCta: dict.studio.payCta,
-                        payNote: dict.studio.payNote,
-                        closedTitle: dict.studio.closedTitle,
-                        closedBody: dict.studio.closedBody,
-                        closedCta: dict.studio.closedCta,
-                        closedDone: dict.studio.closedDone,
-                        signedOutBody: dict.studio.signedOutBody,
-                        signedOutCta: dict.studio.signedOutCta,
-                        photoExamples: dict.studio.photoExamples,
-                        pending: dict.studio.pending,
-                        makeCta: t.makeCta,
-                        makeCtaClosed: t.makeCtaClosed,
-                        otherAspect: dict.studio.otherAspect,
-                        runtimeLabel: dict.studio.runtimeLabel,
-                        needPhoto: dict.studio.needPhoto,
-                        noStyles: dict.studio.noStyles,
-                        moreTemplates: dict.studio.moreTemplates,
-                        aspectLabel: dict.studio.aspectLabel,
-                        resolutionLabel: dict.studio.resolutionLabel,
-                        resolutionDefault: dict.studio.resolutionDefault,
-                        resolutionNote: dict.studio.resolutionNote,
-                      }}
-                    />
+                    {/* Google Play app only (PLATFORM-2.0 §5.1): the studio steps aside for one sentence, no link. */}
+                    <p data-store-note className="mt-4 text-sm leading-relaxed text-black/75">{dict.appShell.store.note}</p>
+                    <div data-store-hide>
+                      <TwingsStudio
+                        styles={[style]}
+                        initialStyleId={style.id}
+                        shopOpenHint={shopOpen}
+                        live={{
+                          endpoint: '/api/renders',
+                          accessEndpoint: '/api/renders/access',
+                          interestEndpoint: '/api/notify/interest',
+                          template: card.slug,
+                          locale,
+                          signinHref: signInHref(`${templateHref(locale, slug)}#make`, locale),
+                          identityHref: identityVerifyHref(`${templateHref(locale, slug)}#make`),
+                          selfie: dict.selfie,
+                          subscription: { copy: dict.creatorSubscription, editorCopy: dict.premiumEditor },
+                          labels: {
+                            badge: dict.renders.studio.badge,
+                            operatorBadge: dict.renders.studio.operatorBadge,
+                            freeCta: dict.renders.studio.freeCta,
+                            submitting: dict.renders.studio.submitting,
+                            identityNotice: dict.renders.studio.identityNotice,
+                            identityPending: dict.renders.studio.identityPending,
+                            identityCta: dict.renders.studio.identityCta,
+                            errors: dict.renders.studio.errors,
+                          },
+                        }}
+                        labels={{
+                          stepPhoto: dict.studio.stepPhoto,
+                          stepStyle: dict.studio.stepStyle,
+                          stepPay: dict.studio.stepPay,
+                          stepResult: dict.studio.stepResult,
+                          dropZone: dict.studio.dropZone,
+                          dropHint: dict.studio.dropHint,
+                          changePhoto: dict.studio.changePhoto,
+                          chooseStyle: dict.studio.chooseStyle,
+                          payCta: dict.studio.payCta,
+                          payNote: dict.studio.payNote,
+                          closedTitle: dict.studio.closedTitle,
+                          closedBody: dict.studio.closedBody,
+                          closedCta: dict.studio.closedCta,
+                          closedDone: dict.studio.closedDone,
+                          signedOutBody: dict.studio.signedOutBody,
+                          signedOutCta: dict.studio.signedOutCta,
+                          photoExamples: dict.studio.photoExamples,
+                          pending: dict.studio.pending,
+                          makeCta: t.makeCta,
+                          makeCtaClosed: t.makeCtaClosed,
+                          otherAspect: dict.studio.otherAspect,
+                          runtimeLabel: dict.studio.runtimeLabel,
+                          needPhoto: dict.studio.needPhoto,
+                          noStyles: dict.studio.noStyles,
+                          moreTemplates: dict.studio.moreTemplates,
+                          aspectLabel: dict.studio.aspectLabel,
+                          resolutionLabel: dict.studio.resolutionLabel,
+                          resolutionDefault: dict.studio.resolutionDefault,
+                          resolutionNote: dict.studio.resolutionNote,
+                        }}
+                      />
+                    </div>
                     <div data-template-trust className="mt-5 space-y-1.5 border-t border-hairline pt-4 text-sm leading-relaxed text-black/70">
                       {/* Founder, 2026-09-11: what AI-made means is said before the money, not after the complaint. */}
                       <p data-studio-ai-note>{t.aiLimit}</p>
-                      <p data-template-refund>{dict.renders.notCharged}</p>
+                      <p data-template-refund data-store-hide>{dict.renders.notCharged}</p>
                     </div>
                   </section>
                 )}
@@ -280,7 +284,7 @@ export default async function TemplatePage({ params }: RouteParams) {
                 {subscriptionQuote && <TemplateSubscriptionNote copy={{ subscriptionTemplateNote: dict.pricing.subscriptionTemplateNote, subscriptionTemplateOpenNote: dict.pricing.subscriptionTemplateOpenNote, subscriptionTemplateCreatorNote: dict.pricing.subscriptionTemplateCreatorNote, subscriptionTemplatePausedNote: dict.pricing.subscriptionTemplatePausedNote, subscriptionDetailLink: dict.pricing.subscriptionDetailLink }} count={subscriptionQuote.maxPerMonth} premiumCount={templateSubscriptionQuote(card, 'premium')!.maxPerMonth} locale={locale} />}
 
                 {/* The definition, under the first screen (AGENTS.md §7 GEO): in the HTML, not in the way. */}
-                <p data-template-description className="mt-6 max-w-detail text-sm leading-relaxed text-black/65">{dict.meta.templateDescription}</p>
+                <p data-template-description data-store-hide className="mt-6 max-w-detail text-sm leading-relaxed text-black/65">{dict.meta.templateDescription}</p>
 
                 {/* §7.5: the maker block — only for a maker who made their profile public. */}
                 {makerRest && card.authorHandle && (

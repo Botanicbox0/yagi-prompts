@@ -6,7 +6,6 @@ import {
   DEFAULT_APP_BUNDLE_ID,
   DEFAULT_APPLE_TEAM_ID,
   detectStorePlatform,
-  PLACEHOLDER_SHA256_FINGERPRINT,
   storeCheckoutPolicy,
 } from '@/lib/mobile/store-bridge';
 import { GET as getAssetLinks } from '@/app/.well-known/assetlinks.json/route';
@@ -15,12 +14,12 @@ import { adminRouteAllowed, brandRouteAllowed, bypassConsumerLocale } from '@/li
 
 describe('native store domain verification & companion checkout policy', () => {
   it('builds valid Android Digital Asset Links JSON and serves /.well-known/assetlinks.json', async () => {
-    const defaultLinks = buildAndroidAssetLinks({});
-    expect(defaultLinks).toHaveLength(1);
-    expect(defaultLinks[0]?.target.package_name).toBe(DEFAULT_ANDROID_PACKAGE);
-    expect(defaultLinks[0]?.target.sha256_cert_fingerprints).toEqual([PLACEHOLDER_SHA256_FINGERPRINT]);
+    // No fingerprint registered yet: an empty list, never a made-up key.
+    expect(buildAndroidAssetLinks({})).toEqual([]);
+    expect(buildAndroidAssetLinks({ ANDROID_SHA256_CERT_FINGERPRINTS: 'not-a-fingerprint' })).toEqual([]);
 
     const fp = 'AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99';
+    expect(buildAndroidAssetLinks({ ANDROID_SHA256_CERT_FINGERPRINTS: fp })[0]?.target.package_name).toBe(DEFAULT_ANDROID_PACKAGE);
     const customLinks = buildAndroidAssetLinks({
       ANDROID_PACKAGE_NAME: 'com.yagi.twings',
       ANDROID_SHA256_CERT_FINGERPRINTS: fp,
@@ -33,7 +32,7 @@ describe('native store domain verification & companion checkout policy', () => {
     expect(res.headers.get('content-type')).toContain('application/json');
     const json = await res.json();
     expect(Array.isArray(json)).toBe(true);
-    expect(json[0].relation).toContain('delegate_permission/common.handle_all_urls');
+    expect(customLinks[0]?.relation).toContain('delegate_permission/common.handle_all_urls');
   });
 
   it('builds valid iOS Universal Links JSON and serves /.well-known/apple-app-site-association', async () => {

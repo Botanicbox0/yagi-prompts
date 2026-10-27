@@ -77,7 +77,7 @@ export function SubscriptionPlanComparison({ plans, copy, browseHref, initialAva
           </div>}
           {premium && <a href="#customization" className="mt-1 inline-flex min-h-11 items-center self-start text-sm underline underline-offset-4">{copy.subscriptionMore}</a>}
           <div className="mt-auto pt-7">
-            <a href={planOpen ? `/billing/subscription?plan=${plan.id}` : browseHref} className={`flex min-h-12 w-full items-center justify-center gap-3 rounded-full px-5 text-sm font-semibold focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent ${premium ? 'bg-accent text-white' : 'bg-black text-white'}`}>{planOpen ? interpolate(copy.subscriptionStart, { plan: t.name }) : copy.subscriptionBrowse}<span aria-hidden="true">↗</span></a>
+            <a href={planOpen ? `/billing/subscription?plan=${plan.id}` : browseHref} data-store-hide={planOpen || undefined} className={`flex min-h-12 w-full items-center justify-center gap-3 rounded-full px-5 text-sm font-semibold focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent ${premium ? 'bg-accent text-white' : 'bg-black text-white'}`}>{planOpen ? interpolate(copy.subscriptionStart, { plan: t.name }) : copy.subscriptionBrowse}<span aria-hidden="true">↗</span></a>
           </div>
         </article>;
       })}

@@ -798,6 +798,29 @@ html[data-app-tabs] body:has([data-hide-tabs]) {
   padding-bottom: 0;
 }
 
+/* The Google Play app sells nothing (docs/PLATFORM-2.0.md §5.1, 2026-10-28). The `<head>` script
+   in lib/mobile/store-shell.ts sets `html[data-store-shell]` before first paint: purchase surfaces
+   (`data-store-hide`) step aside and the text-only note (`data-store-note`) steps in. In a browser
+   tab and the installed PWA neither attribute changes anything. Unlayered so no utility outranks it. */
+html[data-store-shell] [data-store-hide] {
+  display: none !important;
+}
+
+[data-store-note] {
+  display: none;
+}
+
+html[data-store-shell] [data-store-note] {
+  display: block;
+}
+
+/* The template card without its price row: the facts open the card, no divider above them. */
+html[data-store-shell] [data-store-hide] + [data-template-facts] {
+  margin-top: 0;
+  padding-top: 0;
+  border-top-width: 0;
+}
+
 /* A bottom-fixed CTA (the template make screen) pads itself clear of the home indicator:
    `class="fixed inset-x-0 bottom-0 pb-safe" data-hide-tabs`. */
 @utility pb-safe {

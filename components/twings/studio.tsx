@@ -8,6 +8,7 @@ import { SelfieUploader } from '@/components/identity/selfie-uploader';
 import { SelfieSheet, type SheetChoice } from '@/components/identity/selfie-sheet';
 import type { SelfieLibrary, SelfieView } from '@/lib/identity/selfie-service';
 import { PremiumEditor } from './premium-editor';
+import { useStoreShell } from '@/components/pwa/store-shell';
 import { shrinkPhoto } from '@/lib/images/client-photo';
 export { shrinkPhoto } from '@/lib/images/client-photo';
 import type { EditScope } from '@/lib/premium-editing/contract';
@@ -255,6 +256,7 @@ export function TwingsStudio({
   initialAccess?: StudioAccessSnapshot;
 }) {
   const single = styles.length === 1;
+  const storeShell = useStoreShell();
   // docs/PLATFORM-2.0.md §3.1: the static page used to paint "closed" and flip once the access call
   // answered. Until it answers (or fails — closed is still the fallback), a neutral skeleton.
   const [accessKnown, setAccessKnown] = useState(initialAccess !== undefined || !live);
@@ -557,7 +559,9 @@ export function TwingsStudio({
   }
 
   // The template page on a phone: price and the one CTA stay at the thumb until the card is in view.
-  const sticky = single && live && chosen ? (
+  // Not in the Google Play app (PLATFORM-2.0 §5.1): there the studio is hidden, and a hidden
+  // `data-hide-tabs` bar would still take the bottom tabs away. Until mount it renders as before.
+  const sticky = single && live && chosen && storeShell !== true ? (
     <MakeStickyBar
       price={monthly ? null : chosenPrice}
       label={!accessKnown ? (shopOpenHint ? labels.makeCta : labels.makeCtaClosed) : liveMode ? labels.makeCta : shopOpen && !signedIn ? labels.signedOutCta : labels.makeCtaClosed}

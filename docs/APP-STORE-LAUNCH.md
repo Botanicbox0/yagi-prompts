@@ -1,6 +1,6 @@
 # TWINGS 공개 전환(`RENDER_PIPELINE_PUBLIC=on`) 및 iOS App Store · Google Play 등록 런북
 
-> 기준일: 2026-10-24 · 관련 문서: `docs/PLATFORM-2.0.md` §2.3·§5, `docs/TOSS-CONTRACT.md`
+> 기준일: 2026-10-24(§1), 2026-10-28(§2) · 관련 문서: `docs/PLATFORM-2.0.md` §2.3·§5, `docs/TOSS-CONTRACT.md`
 
 ---
 
@@ -24,35 +24,42 @@
 
 ---
 
-## 2. Android (Google Play) & iOS (App Store) 스토어 등록 전략 및 빌드
+## 2. Google Play 앱 (1단계) — 구매 없는 TWA
 
-### 핵심 정책: 5% 플로어 마진 보호를 위한 Companion Studio 모드 (`lib/mobile/store-bridge.ts`)
-- 현재 TWINGS 단건 템플릿 가격(3,900원~11,700원)은 **원가 마진 5%** 로 설계되어 있어, 앱스토어·구글플레이 인앱결제 수수료(15~30%) 또는 한국 제3자 결제 수수료(26% + PG 3.4%)를 적용하면 건당 −10%~−25% 역마진이 발생하며, 웹 PG(토스)를 스토어 앱 WebView 안에서 그대로 열면 **Apple 지침 3.1.1 및 Google Play 결제 정책 위반으로 심사 반려**됩니다.
-- 따라서 스토어 배포 바이너리(`TwingsIOS/1.0`, `TwingsAndroid/1.0`)는 `storeCheckoutPolicy()`를 통해 **Companion Studio & Creator App 모드**로 동작합니다:
-  1. **포맷 탐색 및 프리뷰**: 전체 비디오·이미지·메이커 컬렉션 탐색
-  2. **내 얼굴 셀카 카메라 촬영 및 보관함 관리**: `/identity/selfie` (최대 10장)
-  3. **실시간 완성 푸시 알림 & 내 작품 다운로드·SNS 공유**: `/renders` 및 `/renders/[id]`
-  4. **인플루언서·크리에이터 캠페인 지원 및 성과 리포트**: `/campaigns` (참여자 무료·보상 수령 구조이므로 인앱결제 대상 아님)
+> 대표 결정 2026-10-28: **Android는 Google Play에 구매 없는 앱(TWA)으로, iPhone은 PWA 유지.** App Store는 앱 안 결제(IAP) 가격을 정한 뒤에 다시 판단한다(`docs/PLATFORM-2.0.md` §5.1, §13-1).
 
-### 도메인 소유권 자동 검증 라우트 (구현 완료)
-- **Android Digital Asset Links**: `https://twings.app/.well-known/assetlinks.json` (`app/.well-known/assetlinks.json/route.ts`)
-  - Vercel 환경변수: `ANDROID_PACKAGE_NAME` (기본값 `app.twings.client`), `ANDROID_SHA256_CERT_FINGERPRINTS` (Play Console 앱 서명 SHA-256 지문, 콤마 구분)
-- **iOS Universal Links / Associated Domains**: `https://twings.app/.well-known/apple-app-site-association` (`app/.well-known/apple-app-site-association/route.ts`)
-  - Vercel 환경변수: `APPLE_TEAM_ID` (Apple Developer Team ID 10자리), `IOS_BUNDLE_ID` (기본값 `app.twings.client`)
+### 왜 구매 없는 앱인가 (2026-10-28 공식 문서 확인)
+- Google Play 결제 정책: Play로 배포한 앱에서 디지털 상품을 팔면 Play 결제를 써야 하고 TWA도 예외가 아니다. 수수료는 15%(연 첫 100만 달러), 한국 대체 결제는 Play 결제와 **병행할 때만** 쓸 수 있고 4%p 낮다(15%→11%). 5% 마진 구조에서는 성립하지 않는다.
+- 예외는 **소비 전용(consumption-only) 앱**: 앱 안에서 디지털이든 실물이든 어떤 상품도 살 수 없으면 허용된다. 링크 없이 "웹사이트에서 구매할 수 있어요" 같은 문장은 쓸 수 있다. 앱 밖(메일·SNS) 안내는 자유. 출처: https://support.google.com/googleplay/android-developer/answer/10281818
+- iPhone: Apple 3.1.3(b)는 웹에서 산 상품을 앱에서 쓰게 하려면 같은 상품을 IAP로도 팔아야 한다고 정한다(예외는 3.1.3(a) Reader 앱). 그래서 App Store는 IAP 가격 결정이 먼저다. 한국 외부 결제는 26%라 소규모 사업자 IAP(15%)보다 비싸다.
 
-### 빌드 명령어
-- **Google Play Store (AAB 생성 — Bubblewrap TWA)**:
-  ```powershell
-  npx @bubblewrap/cli init --manifest https://twings.app/manifest.webmanifest --directory ./mobile/android-twa
-  # 또는 이미 구성된 mobile/twa-manifest.json 사용:
-  cd mobile
-  npx @bubblewrap/cli build
-  # 생성된 app-release-bundle.aab 파일을 Google Play Console에 업로드
-  ```
-- **iOS App Store & Android (Capacitor 네이티브 브리지)**:
-  ```powershell
-  # mobile/capacitor.config.json 기준 Xcode / Android Studio 프로젝트 생성
-  npx @capacitor/cli add ios
-  npx @capacitor/cli open ios
-  # Xcode에서 Signing & Capabilities -> Associated Domains에 applinks:twings.app 추가 후 Archive -> App Store Connect 업로드
-  ```
+### 앱 안에서 바뀌는 것 (`lib/mobile/store-shell.ts`)
+- **판별**: TWA는 Chrome 그 자체라 User-Agent·헤더로 알 수 없고, 쿠키·localStorage는 사용자의 일반 Chrome과 공유된다(거기 표시하면 브라우저 결제까지 숨는다). 그래서 앱만의 신호로 판별한다 — 실행 URL의 `?source=twa`(`mobile/twa-manifest.json`의 `startUrl`과 바로가기), Chrome이 앱 실행에 주는 `android-app://<패키지>/` referrer, 그리고 탭 단위 sessionStorage. `<head>`의 차단 스크립트가 첫 페인트 전에 `<html data-store-shell="android">`를 붙인다.
+- **숨김**(`data-store-hide`): 템플릿 페이지의 가격·판매 상태 문장·스튜디오(결제 버튼, 하단 고정 바)·환불 문장, 요금표의 구독 시작 버튼, 헤더 '개인 | 브랜드' 전환과 푸터의 브랜드 링크(브랜드 결제로 이어지는 입구).
+- **안내**(`data-store-note`, 사전 `appShell.store`): "앱에서는 구매할 수 없어요. 구매는 TWINGS 웹사이트에서 할 수 있어요." 링크 없음.
+- **결제 페이지**(`/billing/toss/[id]`, `/billing/subscription`, `/billing/subscription/[id]`): 앱 안에서는 결제 위젯을 아예 불러오지 않고 안내 두 문장만 보인다(`StoreShellGate`).
+- **그대로인 것**: 포맷 탐색, 내 작품(`/renders`), 내 사진, 계정, 캠페인, 완성 푸시(TWA 알림 위임 `enableNotifications: true`), 설치형 하단 탭.
+- 로그인하지 않은 채 바로가기(`/renders?source=twa`)로 열면 middleware가 로그인 화면 URL에도 `source=twa`를 붙인다.
+- **기기에서 확인할 것**: 다른 앱의 링크(App Links)로 앱이 바로 열릴 때 referrer가 실제로 `android-app://app.twings.client/`인지. 공식 문서에 없는 동작이라, 아니면 그렇게 열린 첫 화면에서는 판별이 안 된다.
+
+### 도메인 검증
+- `https://twings.app/.well-known/assetlinks.json` (`app/.well-known/assetlinks.json/route.ts`). Vercel 환경변수 `ANDROID_SHA256_CERT_FINGERPRINTS` = Play Console → 앱 무결성의 **앱 서명 키** SHA-256(업로드 키와 다르다, 콤마로 여러 개), `ANDROID_PACKAGE_NAME`(기본 `app.twings.client`). 지문이 없으면 빈 목록 `[]`을 돌려준다.
+- 검증이 실패하면 앱은 주소창이 보이는 Custom Tab으로 열린다.
+- **패키지 이름은 출시 뒤 바꿀 수 없다.** `app.twings.client`로 갈지 첫 업로드 전에 대표가 확인한다.
+- iOS용 `/.well-known/apple-app-site-association`은 자리만 있다(App Store는 보류).
+
+### 빌드 (Bubblewrap, 아직 실행 전)
+```powershell
+cd mobile
+npx @bubblewrap/cli update   # twa-manifest.json으로 Android 프로젝트를 만들거나 갱신
+npx @bubblewrap/cli build    # JDK·Android SDK가 없으면 설치를 묻고, 업로드 키 비밀번호를 묻는다
+```
+- 업로드 키 `mobile/android-upload-keystore.jks`와 빌드 산출물은 git에 넣지 않는다(`.gitignore`). 키와 비밀번호는 대표가 따로 보관한다.
+- 산출물 `app-release-bundle.aab`를 Play Console에 올리면 Play App Signing이 앱 서명 키를 만든다. 그 SHA-256을 Vercel에 넣고 재배포한다.
+
+### Play Console 등록 순서 (대표)
+1. 조직 계정 인증: D&B 기록 정정 → DUNS 확인 → 사업자등록증 → 웹사이트(Search Console에 twings.app) → 전화 인증. 조직 계정은 개인 계정의 테스터 모집 요건이 없다.
+2. 앱 만들기: 이름 TWINGS, 기본 언어 한국어, 앱, 무료.
+3. 스토어 등록정보: 짧은 설명·자세한 설명, 앱 아이콘, 그래픽 이미지, 휴대전화 스크린샷(규격은 Play Console 화면 안내대로).
+4. 앱 콘텐츠: 개인정보처리방침 `https://twings.app/ko/legal/privacy`, 데이터 보안 양식(이메일·얼굴 사진·결제는 웹), 콘텐츠 등급 설문, 타겟 연령(약관의 이용 연령과 같게), 광고 없음.
+5. 내부 테스트 트랙에서 기기 확인(위 "기기에서 확인할 것" 포함) → 프로덕션 심사 제출.
