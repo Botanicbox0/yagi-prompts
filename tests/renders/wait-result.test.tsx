@@ -12,6 +12,7 @@ const state = vi.hoisted(() => ({
   shared: 'ok' as 'ok' | 'expired' | 'not_found',
   catalog: { video: [] as unknown[], image: [] as unknown[] },
   extras: { finishingAt: null as string | null, posterKey: null as string | null, ready: true },
+  frames: [] as Array<{ frame: number; view: string; download: string; filename: string }>,
 }));
 
 const JOB_ID = '22222222-2222-4222-8222-222222222222';
@@ -42,6 +43,7 @@ vi.mock('@/lib/renders/feedback', () => ({
   notifyRenderFeedback: vi.fn(),
 }));
 vi.mock('@/lib/renders/extras', () => ({ loadRenderExtras: async () => state.extras }));
+vi.mock('@/lib/renders/frames', () => ({ loadRenderFrames: async () => state.frames }));
 // A client island that renders nothing; the marker says the page mounted it.
 vi.mock('@/components/renders/poster-capture', () => ({ PosterCapture: ({ renderId }: { renderId: string }) => <i data-poster-capture={renderId} /> }));
 vi.mock('@/lib/prompts/public-catalog', () => ({ getPromptCatalog: async () => ({ yagi: [], community: [], ...state.catalog }) }));
@@ -83,6 +85,7 @@ beforeEach(() => {
   state.job = job();
   state.shared = 'ok';
   state.extras = { finishingAt: null, posterKey: null, ready: true };
+  state.frames = [];
   state.catalog = { video: ['neon-alley-dolly', 'a', 'b', 'c', 'd', 'e'].map((slug) => catalogCard(slug)), image: [catalogCard('portrait', 'image')] };
 });
 
@@ -317,6 +320,60 @@ describe('the result page (object first, then download · share · one more)', (
     expect(await shareOrCopy({ share: async () => { throw abort; } }, url, 'T')).toBe('cancelled');
     expect(await shareOrCopy({ clipboard: { writeText: async () => { throw new Error('denied'); } } }, url, 'T')).toBe('failed');
     expect(await shareOrCopy({}, url, 'T')).toBe('failed');
+  });
+});
+
+describe('a set of pictures (an image recipe with several frames)', () => {
+  const frames = (share?: string) =>
+    [1, 2, 3, 4, 5].map((frame) => {
+      const s = share ? `s=${share}&` : '';
+      return { frame, view: `/api/renders/media/${JOB_ID}?${s}frame=${frame}`, download: `/api/renders/media/${JOB_ID}?${s}frame=${frame}&download=1`, filename: `twings-bridal-${JOB_ID.slice(0, 8)}-${frame}.jpg` };
+    });
+  beforeEach(() => {
+    state.job = job({
+      status: 'succeeded', resultMime: 'image/jpeg', medium: 'image', aspect: '3:4', templateSlug: 'bridal', shareToken: TOKEN,
+      shareExpiresAt: new Date(Date.now() + 86_400_000).toISOString(), finishedAt: new Date().toISOString(),
+    });
+  });
+
+  it('shows every picture in order on the result page, each with its own save, and "save all" first', async () => {
+    state.frames = frames();
+    const html = await renderPage();
+    expect(html).toContain('data-result-frames="5"');
+    expect(html).not.toContain('data-result-media');
+    const order = [1, 2, 3, 4, 5].map((n) => html.indexOf(`data-result-frame="${n}"`));
+    expect(order.every((i) => i > -1)).toBe(true);
+    expect(order).toEqual([...order].sort((a, b) => a - b));
+    expect(html).toContain(`src="/api/renders/media/${JOB_ID}?frame=5"`);
+    expect(html).toContain(`href="/api/renders/media/${JOB_ID}?frame=3&amp;download=1"`);
+    expect(html).toContain(`download="twings-bridal-${JOB_ID.slice(0, 8)}-3.jpg"`);
+    expect(html).toContain('5장 모두 저장');
+    expect(html).toContain('data-save-frames="5"');
+    expect(html).toContain('사진 5장 · 3:4');
+    expect(html).toContain('옆으로 넘기면 5장을 모두 볼 수 있어요.');
+    // Still three actions, in the same order, under the pictures.
+    const actions = html.slice(html.indexOf('data-result-actions'));
+    expect(['download', 'share', 'again'].map((a) => actions.indexOf(`data-result-action="${a}"`)).every((i) => i > -1)).toBe(true);
+    expect(html.indexOf('data-result-frames')).toBeLessThan(html.indexOf('<h1'));
+  });
+
+  it('keeps one result exactly as before', async () => {
+    const html = await renderPage();
+    expect(html).toContain('data-result-media="image"');
+    expect(html).not.toContain('data-result-frames');
+    expect(html).not.toContain('data-save-frames');
+  });
+
+  it('opens every picture behind the 3-day token on the share page; the card is the first', async () => {
+    state.frames = frames(TOKEN);
+    const html = await sharedPage();
+    expect(html).toContain('data-result-frames="5"');
+    expect(html).toContain(`src="/api/renders/media/${JOB_ID}?s=${TOKEN}&amp;frame=4"`);
+    expect(html).toContain('data-save-frames="5"');
+    expect(html).toContain('사진 5장');
+    const og = (await sharedMetadata({ params: Promise.resolve({ id: JOB_ID, token: TOKEN }) })).openGraph as { images: Array<{ url: string }> };
+    expect(og.images[0]!.url).toContain(`/api/renders/media/${JOB_ID}?s=${TOKEN}`);
+    expect(og.images[0]!.url).not.toContain('frame=');
   });
 });
 

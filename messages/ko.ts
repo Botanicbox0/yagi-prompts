@@ -2376,6 +2376,14 @@ export const ko: Dictionary = {
     shareCopied: '링크를 복사했어요.',
     shareFailed: '복사하지 못했어요. 아래 링크를 길게 눌러 복사해 주세요.',
     oneMore: '같은 얼굴로 하나 더',
+    /** 세트 템플릿(이미지 여러 장)의 결과 — 결과·공유 페이지와 완성 메일 (2026-10-28). */
+    frames: {
+      saveAll: '{n}장 모두 저장',
+      saveOne: '{i}번째 사진 저장',
+      position: '{n}장 중 {i}번째',
+      hint: '옆으로 넘기면 {n}장을 모두 볼 수 있어요.',
+      count: '사진 {n}장',
+    },
     shareCard: {
       title: '내 얼굴로 만든 {template}',
       description: '정면 셀카 한 장이면 나도 이 장면의 주인공이 돼요.',

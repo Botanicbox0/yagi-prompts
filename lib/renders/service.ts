@@ -60,6 +60,7 @@ import {
   type RenderJob,
 } from './repo';
 import { markRenderFinishing } from './extras';
+import { loadRenderFrames } from './frames';
 import { constantTimeEqual, isRenderId, isShareExpired, isShareTokenShape, newShareToken, shareExpiresAt } from './share';
 import { extensionFor, type RenderStore } from './store';
 
@@ -945,6 +946,8 @@ async function notifyFinished(deps: RenderPassDeps, now: Date, report: RenderPas
       templateTitle: templateTitle(template, locale, job.templateSlug),
       recipient: { email: recipient.email, locale },
       failureReason: job.status === 'failed' ? [failureReason(job.errorCode, locale), payment === 'refunded' ? getDictionary(locale).billing.toss.refunded : null].filter(Boolean).join(' ') : null,
+      // A set's every picture, behind the same 3-day token as the link the message carries.
+      frames: job.shareToken ? await loadRenderFrames(deps.sql, job, job.shareToken) : [],
       siteUrl: deps.siteUrl,
       siteName: deps.siteName ?? getDictionary(locale).meta.siteName,
     });

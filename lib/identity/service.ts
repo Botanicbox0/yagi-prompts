@@ -3,7 +3,7 @@ import type { SqlRunner } from '@/lib/db/sql-runner';
 import type { Viewer } from '@/lib/auth/identity';
 import { ArkOpenApiError, arkQuotaFromEnv, parseLivenessCallback, withH5Language, type ArkAssetStatus, type ArkAssetsClient, type ArkH5Language, type ArkQuota } from '@/lib/ark/assets';
 import { hasCapacity } from '@/lib/ark/reclaim';
-import { engineProvider, type EngineId } from '@/lib/images/engines';
+import { engineProvider, isVideoEngine, type EngineId } from '@/lib/images/engines';
 import { ASSET_LIBRARY_MODE } from '@/lib/flags';
 import { makeRoom } from './rotation';
 import {
@@ -35,8 +35,8 @@ import {
  *      with the verified face and, asynchronously, makes it an ASSET (Processing → Active | Failed).
  *   3. render — the film task references `asset://{id}`; never the bytes.
  *
- * Which engines need this: everything on ModelArk (Seedance films, Seedream images). OpenAI's
- * GPT Image models take the photo itself. `needsIdentity` is the one place that rule lives.
+ * Which engines need this: ModelArk's films (Seedance). Seedream images, OpenAI's GPT Image models,
+ * Gemini and Kling take the photo itself. `needsIdentity` is the one place that rule lives.
  *
  * The bank's client is injected (tests use a fake; a deployment without AK/SK gets `null` and says
  * so), and the free tier's cap is checked BEFORE a session opens, so a person is told "잠시 후"
@@ -71,11 +71,13 @@ export interface IdentityDeps {
 
 /** Engines whose provider refuses a real face in the bytes: the asset library is the only door. */
 export function needsIdentity(engine: EngineId): boolean {
-  // ModelArk (Seedream, Seedance) refuses a real face at input, so the person's photo reaches it only
-  // as a verified-library asset. OpenAI, Google Gemini and Kling take the photo's bytes — the
-  // provider's own moderation still runs on them (docs/PLATFORM-2.0.md §7.3 `needsIdentity` matrix;
-  // Kling's and Gemini's real-person behaviour is what their smoke scripts record).
-  return engineProvider(engine) === 'modelark';
+  // Seedance refuses a real face at input, so the person's photo reaches it only as a verified-library
+  // asset. Seedream's image API takes URLs or base64 and refuses `asset://` as an invalid URL (live
+  // Pro API, 2026-09-22), so a Seedream image takes the bytes like OpenAI, Google Gemini and Kling —
+  // the provider's own moderation still runs on them, and a face it refuses fails as `face_policy`
+  // (docs/PLATFORM-2.0.md §7.3 `needsIdentity` matrix; `npm run image:smoke -- --photo` records what
+  // Seedream does with a real selfie, as the Kling and Gemini smokes do for theirs).
+  return engineProvider(engine) === 'modelark' && isVideoEngine(engine);
 }
 
 /** Does this engine put the person through the camera check first? Only in liveness mode. */

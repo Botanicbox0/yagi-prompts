@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
@@ -18,7 +18,8 @@ function sourcesUnder(...parts: string[]): string[] {
       else if (/\.tsx?$/.test(entry)) out.push(full);
     }
   };
-  walk(base);
+  // A folder git does not carry (an emptied `components/ad`) is absent in a fresh checkout: nothing to scan.
+  if (existsSync(base)) walk(base);
   return out;
 }
 

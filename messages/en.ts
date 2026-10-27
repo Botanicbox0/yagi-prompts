@@ -2389,6 +2389,14 @@ export const en = {
     shareCopied: 'Link copied.',
     shareFailed: 'Could not copy. Press and hold the link below to copy it.',
     oneMore: 'Make another with this face',
+    /** A set template's result (several pictures): the result and share pages and the email (2026-10-28). */
+    frames: {
+      saveAll: 'Save all {n}',
+      saveOne: 'Save photo {i}',
+      position: 'photo {i} of {n}',
+      hint: 'Swipe to see all {n} photos.',
+      count: '{n} photos',
+    },
     shareCard: {
       title: 'Made with my face: {template}',
       description: 'One front-facing selfie and you are in this scene too.',

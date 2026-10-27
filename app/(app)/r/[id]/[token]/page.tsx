@@ -9,10 +9,13 @@ import { templateHref } from '@/lib/prompts/links';
 import { getPromptCatalog } from '@/lib/prompts/public-catalog';
 import { loadSharedRender, type RenderView } from '@/lib/renders/service';
 import { loadRenderExtras } from '@/lib/renders/extras';
+import { loadRenderFrames } from '@/lib/renders/frames';
 import { renderHref, renderMediaHref, shareHref, shareImageSource } from '@/lib/renders/share';
 import { absoluteUrl } from '@/lib/seo/site-url';
 import { siteOgImage } from '@/lib/seo/og';
 import { ResultMedia } from '@/components/renders/result-media';
+import { ResultFrames } from '@/components/renders/result-frames';
+import { SaveFrames } from '@/components/renders/save-frames';
 import { TextSwap } from '@/components/ui/text-swap';
 
 /**
@@ -26,7 +29,8 @@ import { TextSwap } from '@/components/ui/text-swap';
  * The share card (TEMPLATES-IA §12 "공유 카드": their frame + make yours): an image result is its
  * own OG image; a film uses the frame its owner's browser captured on the result page (0055
  * `poster_key`, served behind this same token), and the template's poster until there is one
- * (`shareImageSource`). The page stays `noindex` — a capability URL must not
+ * (`shareImageSource`). A set shows every picture behind the same token (lib/renders/frames.ts); its
+ * card is the first. The page stays `noindex` — a capability URL must not
  * enter a search index — while chat apps still unfurl it from the OG tags.
  */
 export const dynamic = 'force-dynamic';
@@ -42,7 +46,8 @@ async function resolve(props: RouteProps) {
   const shared = await loadSharedRender(sql, id, token);
   if (shared.status === 'not_found') return null;
   const { posterKey } = shared.status === 'ok' ? await loadRenderExtras(sql, id) : { posterKey: null };
-  return { ...shared, dict: getDictionary(shared.view.job.locale), id, token, posterKey };
+  const frames = shared.status === 'ok' ? await loadRenderFrames(sql, shared.view.job, token) : [];
+  return { ...shared, dict: getDictionary(shared.view.job.locale), id, token, posterKey, frames };
 }
 
 function titleOf(view: RenderView): string {
@@ -95,11 +100,12 @@ export async function generateMetadata(props: RouteProps): Promise<Metadata> {
 export default async function SharedRenderPage(props: RouteProps) {
   const resolved = await resolve(props);
   if (resolved === null) notFound();
-  const { dict, view, id, token, posterKey } = resolved;
+  const { dict, view, id, token, posterKey, frames } = resolved;
   const r = dict.renders;
   const { job } = view;
   const locale = job.locale;
   const templateUrl = templateHref(locale, job.templateSlug);
+  const set = frames.length > 1;
 
   return (
     <main data-shared-render={job.id} data-share-status={resolved.status} className="mx-auto min-h-svh w-full max-w-shell px-gutter py-6 lg:py-10">
@@ -118,24 +124,29 @@ export default async function SharedRenderPage(props: RouteProps) {
           </a>
         </section>
       ) : (
-        <section className="mt-4 [--result-chrome:12rem] lg:flex lg:items-end lg:gap-12 lg:[--result-cap:40rem] lg:[--result-chrome:9rem]">
+        <section className={set ? 'mt-4 [--result-chrome:14rem] lg:[--result-chrome:15rem]' : 'mt-4 [--result-chrome:12rem] lg:flex lg:items-end lg:gap-12 lg:[--result-cap:40rem] lg:[--result-chrome:9rem]'}>
           {/* The object first (§3.2-5), sized to the screen; on a desktop the words sit beside it. */}
-          <div className="lg:shrink-0">
-            {job.resultMime && <ResultMedia src={renderMediaHref(job.id, { share: token })} mime={job.resultMime} aspect={job.aspect} alt={titleOf(view)} poster={shareImageSource(job.resultMime, posterKey) === 'frame' ? renderMediaHref(job.id, { share: token, poster: true }) : null} />}
+          <div className={set ? undefined : 'lg:shrink-0'}>
+            {set && <ResultFrames frames={frames} aspect={job.aspect} alt={titleOf(view)} labels={r.frames} />}
+            {!set && job.resultMime && <ResultMedia src={renderMediaHref(job.id, { share: token })} mime={job.resultMime} aspect={job.aspect} alt={titleOf(view)} poster={shareImageSource(job.resultMime, posterKey) === 'frame' ? renderMediaHref(job.id, { share: token, poster: true }) : null} />}
           </div>
 
-          <div className="min-w-0 lg:max-w-detail lg:pb-1">
+          <div className={set ? 'min-w-0' : 'min-w-0 lg:max-w-detail lg:pb-1'}>
             <h1 className="mt-6 max-w-[40rem] text-[clamp(1.4rem,3.2vw,2.2rem)] leading-tight font-black break-keep">
               {interpolate(r.shareCard.title, { template: titleOf(view) })}
             </h1>
             <p className="mt-2 font-mono text-[0.78rem] text-black/70">
-              {dict.nav[job.medium]} · {job.aspect} · {formatDate(job.finishedAt ?? job.createdAt, locale) ?? ''}
+              {set ? interpolate(r.frames.count, { n: frames.length }) : dict.nav[job.medium]} · {job.aspect} · {formatDate(job.finishedAt ?? job.createdAt, locale) ?? ''}
             </p>
 
             <div className="mt-5 flex flex-wrap items-center gap-x-6 gap-y-3">
-              <a href={renderMediaHref(job.id, { share: token, download: true })} data-render-download className="inline-flex min-h-11 items-center text-sm underline underline-offset-4">
-                {r.download} ↓
-              </a>
+              {set ? (
+                <SaveFrames frames={frames} label={interpolate(r.frames.saveAll, { n: frames.length })} className="inline-flex min-h-11 items-center text-sm underline underline-offset-4" />
+              ) : (
+                <a href={renderMediaHref(job.id, { share: token, download: true })} data-render-download className="inline-flex min-h-11 items-center text-sm underline underline-offset-4">
+                  {r.download} ↓
+                </a>
+              )}
             </div>
             {job.shareExpiresAt && (
               <p className="mt-3 max-w-detail font-mono text-[0.75rem] opacity-70">

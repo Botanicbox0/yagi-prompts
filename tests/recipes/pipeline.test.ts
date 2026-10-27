@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { ArkAsset, ArkAssetsClient } from '@/lib/ark/assets';
 import type { ArkClient, ArkTask, CreateVideoTaskInput } from '@/lib/ark/client';
 import { OpenAiImageError, type GptImageResult, type OpenAiImageClient } from '@/lib/images/openai';
+import { SeedreamError, type SeedreamClient, type SeedreamGenerateInput } from '@/lib/images/seedream';
 import { insertPrompt } from '@/lib/prompts/repo';
 import { loadRenderJob } from '@/lib/renders/repo';
 import { createRecipeSandboxRender, createRenderJob, failureReason, listMyRenders, loadSharedRender, runRenderPass, type RenderPassDeps } from '@/lib/renders/service';
@@ -151,6 +152,37 @@ describe('recipe v2 in the render pass', () => {
     const outputs = await listJobOutputs(h.sql, created.id);
     expect(outputs.map((o) => o.key)).toEqual([`${created.id}/result.jpg`, `${created.id}/result-2.jpg`, `${created.id}/result-3.jpg`]);
     expect(Array.from(await store.read(outputs[2]!.key))).toEqual(Array.from(imageBytes(3)));
+  });
+
+  it('sends the selfie itself to Seedream as base64 — no asset group, no asset:// — and keeps every frame', async () => {
+    const { slug } = await recipeTemplate({
+      ...carousel(3),
+      steps: carousel(3).steps.map((step) => ({ ...step, engine: 'seedream-5.0-pro', params: { aspect: '3:4' } })),
+    });
+    const created = await createRenderJob({ sql: h.sql, store, mode: 'virtual' }, ADMIN_VIEWER, { templateSlug: slug, aspect: '3:4', photo: PHOTO, locale: 'ko' });
+    if (!created.ok) throw new Error(created.code);
+    const sent: SeedreamGenerateInput[] = [];
+    const seedream = { async generate(input: SeedreamGenerateInput) { sent.push(input); return { model: 'seedream', images: [{ url: null, b64: Buffer.from(imageBytes(sent.length)).toString('base64'), size: '1776x2368', outputFormat: 'jpeg' }], usage: null }; } } as SeedreamClient;
+    const assets = fakeAssets();
+
+    expect(await runRenderPass(deps({ seedream }, { assets }), { jobId: created.id })).toMatchObject({ succeeded: 1, failed: 0 });
+    expect(sent).toHaveLength(3);
+    const selfie = `data:image/jpeg;base64,${Buffer.from(PHOTO.bytes).toString('base64')}`;
+    for (const input of sent) expect(input.references).toEqual([selfie]);
+    expect(assets.created).toBe(0);
+    expect((await h.sql.query('select 1 from identity_groups')).rows).toHaveLength(0);
+    expect((await listJobOutputs(h.sql, created.id)).map((o) => o.key)).toEqual([`${created.id}/result.jpg`, `${created.id}/result-2.jpg`, `${created.id}/result-3.jpg`]);
+  });
+
+  it('fails a face Seedream refuses as the face policy, on the step it refused', async () => {
+    const { slug } = await recipeTemplate({ ...carousel(2), steps: carousel(2).steps.map((step) => ({ ...step, engine: 'seedream-5.0-pro', params: { aspect: '3:4' } })) });
+    const created = await createRenderJob({ sql: h.sql, store, mode: 'virtual' }, ADMIN_VIEWER, { templateSlug: slug, aspect: '3:4', photo: PHOTO, locale: 'ko' });
+    if (!created.ok) throw new Error(created.code);
+    const seedream = { async generate() { throw new SeedreamError('The request failed because the input image may contain real person.', 400, 'InputImageSensitiveContentDetected.PrivacyInformation', 'req-1'); } } as unknown as SeedreamClient;
+    expect(await runRenderPass(deps({ seedream }), { jobId: created.id })).toMatchObject({ succeeded: 0, failed: 1 });
+    const job = (await loadRenderJob(h.sql, created.id))!;
+    expect(job).toMatchObject({ status: 'failed', errorCode: 'face_policy:f1' });
+    expect(failureReason(job.errorCode, 'ko')).toBe(failureReason('face_policy', 'ko'));
   });
 
   it('names the failing step in the code, and the reader still gets the plain reason', async () => {

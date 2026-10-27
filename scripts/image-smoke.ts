@@ -17,7 +17,8 @@ import {
   type ImageEngineId,
 } from '@/lib/images/engines';
 import { OpenAiImageError, createOpenAiImageClient, openAiConfigFromEnv, toEditForm, toGenerationBody } from '@/lib/images/openai';
-import { SeedreamError, createSeedreamClient, seedreamConfigFromEnv, toSeedreamBody } from '@/lib/images/seedream';
+import { SeedreamError, createSeedreamClient, seedreamConfigFromEnv, toSeedreamBody, type SeedreamGenerateInput } from '@/lib/images/seedream';
+import { SELFIE_SLOT, engineStepPrompt, parseRecipe } from '@/lib/recipes/schema';
 
 /**
  * `npm run image:smoke` — one live image render per engine, the cheapest call that proves the
@@ -25,13 +26,21 @@ import { SeedreamError, createSeedreamClient, seedreamConfigFromEnv, toSeedreamB
  * ≈ $0.2–0.3 on GPT Image 2 at the mandatory `high` quality), says so first, does ONE image.
  *
  * `--dry` prints the request and exits without calling anything. `--photo <path>` sends a
- * reference photo: on GPT Image 2 that is the edits endpoint (the visitor's-face path); on
- * Seedream a real face is refused by policy, so pass an `asset://` id or a non-face image there.
+ * reference photo the way a customer's selfie travels: on GPT Image the edits endpoint, on Seedream
+ * the photo's own bytes as a base64 data URL (its API refuses `asset://`). This is the real-selfie
+ * smoke for Seedream: whether its moderation lets the person's face through
+ * (`InputImageSensitiveContentDetected` = no) and whether the face survives is what decides if a
+ * Seedream face template may go on sale. Use only a photo of someone who agreed to it — your own.
+ *
+ * `--manifest <twings_templates_manifest.json> --frame <n>` takes the prompt of the manifest's Nth
+ * frame and sends exactly what the recipe path sends for it (`engineStepPrompt`: the manifest text,
+ * then the standard identity line), so one paid image measures the template as sold.
  *
  * Reads `.env.local` first, like `ark-smoke.ts`. Keys are never printed.
  *
  * Usage:
  *   npm run image:smoke -- --engine seedream-5.0-pro --ratio 4:5
+ *   npm run image:smoke -- --engine seedream-5.0-pro --ratio 3:4 --photo ./tmp/me.jpg --manifest <manifest.json> --frame 2
  *   npm run image:smoke -- --engine gpt-image-2.5-flare --ratio 4:5 --photo ./tmp/me.jpg
  *   npm run image:smoke -- --engine gpt-image-2.5-sunburst --ratio 4:5 --photo ./tmp/me.jpg --quality max   # measure a tier
  *   npm run image:smoke -- --engine gpt-image-2 --dry
@@ -57,6 +66,31 @@ function mimeOf(path: string): 'image/png' | 'image/jpeg' | 'image/webp' {
   return 'image/jpeg';
 }
 
+/**
+ * The prompt the render pass sends for a manifest frame: the manifest names the customer's photo
+ * "Image 1", the recipe stores it as `{{selfie}}`, and `engineStepPrompt` turns it back and adds the
+ * identity line — run through the same code so the smoke cannot drift from the product.
+ */
+async function manifestPrompt(path: string, frame: number, engine: ImageEngineId, aspect: ImageAspect): Promise<string> {
+  const raw: unknown = JSON.parse(await readFile(resolve(path), 'utf8'));
+  const entries = Array.isArray(raw) ? raw : [];
+  const entry = entries[frame - 1] as { prompt?: unknown } | undefined;
+  if (typeof entry?.prompt !== 'string') throw new Error(`the manifest has no frame ${frame} (it has ${entries.length})`);
+  const checked = parseRecipe({
+    version: 2,
+    slots: { [SELFIE_SLOT]: { kind: 'image', source: 'user', required: true } },
+    steps: [{ id: 'shot', kind: 'image', engine, inputs: [SELFIE_SLOT], prompt: entry.prompt.replace(/\bImage 1\b/g, `{{${SELFIE_SLOT}}}`), params: { aspect } }],
+    output: { from: 'shot' },
+  });
+  if (!checked.ok) throw new Error(`frame ${frame} is not a recipe step: ${JSON.stringify(checked.issues)}`);
+  return engineStepPrompt(checked.recipe, checked.recipe.steps[0]!);
+}
+
+/** A request body fit to print: a base64 photo becomes its size, never the bytes. */
+function printable(body: unknown): string {
+  return JSON.stringify(body, (_key, value) => (typeof value === 'string' && value.startsWith('data:') ? `<${value.slice(5, value.indexOf(';'))} base64, ${value.length} chars>` : value), 2);
+}
+
 async function main(): Promise<number> {
   const dry = flag('dry') !== null;
   const engineArg = flag('engine') ?? 'seedream-5.0-pro';
@@ -78,7 +112,13 @@ async function main(): Promise<number> {
     return 2;
   }
   const aspect: ImageAspect = ratioArg;
-  const prompt = flag('prompt') || DEFAULT_PROMPT;
+  const manifestPath = flag('manifest');
+  const frame = Number(flag('frame') ?? '1');
+  if (manifestPath !== null && (!Number.isInteger(frame) || frame < 1)) {
+    console.error('--frame is the manifest frame number, from 1');
+    return 2;
+  }
+  const prompt = manifestPath ? await manifestPrompt(manifestPath, frame, engine, aspect) : flag('prompt') || DEFAULT_PROMPT;
   const photoPath = flag('photo');
   const references = photoPath ? 1 : 0;
   const spec = IMAGE_ENGINES[engine];
@@ -87,6 +127,7 @@ async function main(): Promise<number> {
   console.log(`size      : ${sizeString(imageSizeFor(engine, aspect))} (${aspect})`);
   console.log(`estimate  : ≈ $${estimateImageUsd(engine, references).toFixed(3)} for one image`);
   console.log(`reference : ${photoPath ?? '(none — text to image)'}`);
+  if (manifestPath) console.log(`prompt    : manifest frame ${frame}, as the recipe path sends it (${prompt.length} chars)`);
 
   if (isGoogleEngine(engine)) {
     console.error('the Gemini engine has its own real-person smoke: npm run gemini:smoke');
@@ -96,36 +137,33 @@ async function main(): Promise<number> {
   if (!isOpenAiEngine(engine)) {
     const config = seedreamConfigFromEnv();
     console.log(`ARK_API_KEY: ${config ? 'present' : 'MISSING'}`);
-    const body = toSeedreamBody({ engine, prompt, aspect, references: photoPath ? [photoPath] : [] });
+    // The render pass's request, field for field: the photo's bytes as a data URL, a JPEG back as base64.
+    const references = photoPath ? [`data:${mimeOf(photoPath)};base64,${(await readFile(resolve(photoPath))).toString('base64')}`] : [];
+    const request: SeedreamGenerateInput = { engine, prompt, aspect, references, outputFormat: 'jpeg', responseFormat: 'b64_json' };
     if (dry || !config) {
-      console.log(JSON.stringify(body, null, 2));
+      console.log(printable(toSeedreamBody(request)));
       return config ? 0 : 1;
     }
     const client = createSeedreamClient(config);
     const started = Date.now();
     try {
-      const result = await client.generate({
-        engine,
-        prompt,
-        aspect,
-        references: photoPath ? [photoPath] : [],
-        outputFormat: 'jpeg',
-      });
+      const result = await client.generate(request);
       const image = result.images[0];
       console.log(`done in ${((Date.now() - started) / 1000).toFixed(1)}s · size ${image?.size ?? '?'} · usage ${JSON.stringify(result.usage)}`);
-      if (image?.url) {
-        const bytes = new Uint8Array(await (await fetch(image.url)).arrayBuffer());
-        const out = resolve(`tmp/image-smoke-${engine}-${aspect.replace(':', 'x')}-${Date.now()}.jpg`);
+      const bytes = image?.b64 ? new Uint8Array(Buffer.from(image.b64, 'base64')) : image?.url ? new Uint8Array(await (await fetch(image.url)).arrayBuffer()) : null;
+      if (bytes) {
+        const out = resolve(`tmp/image-smoke-${engine}-${aspect.replace(':', 'x')}${manifestPath ? `-frame${frame}` : ''}-${Date.now()}.jpg`);
         await mkdir(resolve('tmp'), { recursive: true });
         await writeFile(out, bytes);
         console.log(`saved     : ${out} (${bytes.length} bytes)`);
+        if (photoPath) console.log('→ the face went through: compare it with the photo before anything goes on sale');
       }
       return 0;
     } catch (error) {
       if (error instanceof SeedreamError) {
         console.error(`Seedream refused: ${error.code ?? error.status} — ${error.message}`);
         if (error.accessProblem) console.error('→ console: Model activation + API keys › edit permission (tick the Seedream models)');
-        if (error.inputRejected) console.error('→ the reference contains a real face: use the asset library (asset://…)');
+        if (error.inputRejected) console.error('→ Seedream\'s moderation refused the face in the photo: a customer selfie cannot reach this engine, so its face templates stay off sale');
         return 1;
       }
       throw error;

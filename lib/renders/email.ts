@@ -16,7 +16,8 @@ import type { TemplateMedium } from '@/lib/prompts/schemas';
  * purpose: an inbox is a neutral place and the result image is the only colour that matters.
  *
  * What the message carries: the template's name, the aspect, the expiry date, the link and — for
- * an image — the result itself as a preview. Never the prompt, never a storage key; the preview
+ * an image — the result itself as a preview (a set: the first picture large, the rest as a row of
+ * thumbnails, all through the same link). Never the prompt, never a storage key; the preview
  * rides the render gateway with the share token, so it dies with the link.
  */
 
@@ -25,6 +26,8 @@ export interface RenderEmailLinks {
   primaryUrl: string;
   /** Absolute preview, image renders only; films have no frame to show. */
   previewUrl: string | null;
+  /** A set's other pictures (2…N), absolute, in order — shown small under the preview. */
+  morePreviewUrls?: readonly string[];
   templateUrl: string;
   rendersUrl: string;
   /** The owner's result page, at the feedback form (2026-09-11): where "not happy?" goes. */
@@ -41,6 +44,8 @@ export interface RenderEmailInput {
   expiresAt: Date | null;
   /** The localized explanation — failed only. */
   reason: string | null;
+  /** How many pictures a set made (2+); absent or 1 for one result. */
+  frames?: number;
   links: RenderEmailLinks;
   siteName: string;
 }
@@ -70,7 +75,8 @@ export function renderResultEmail(input: RenderEmailInput): RenderedEmail {
     : interpolate(copy.failedBody, { template, reason: input.reason ?? '' }).replace(/\s{2,}/g, ' ');
   const cta = ready ? copy.readyCta : copy.failedCta;
   const ctaUrl = ready ? input.links.primaryUrl : input.links.templateUrl;
-  const meta = [template, dict.nav[input.medium], input.aspect].filter(Boolean).join(' · ');
+  const kind = input.frames && input.frames > 1 ? interpolate(dict.renders.frames.count, { n: input.frames }) : dict.nav[input.medium];
+  const meta = [template, kind, input.aspect].filter(Boolean).join(' · ');
 
   return {
     subject,
@@ -100,7 +106,7 @@ function html(parts: Parts & { preheader: string; ready: boolean }): string {
         <a href="${escapeHtml(links.primaryUrl)}" style="display:block;text-decoration:none;">
           <img src="${escapeHtml(links.previewUrl)}" alt="" width="456" style="display:block;width:100%;max-width:456px;height:auto;border-radius:14px;border:1px solid ${HAIRLINE};" />
         </a>
-      </td></tr>`
+      </td></tr>${thumbnails(links)}`
       : '';
 
   return `<!-- ${escapeHtml(preheader)} -->
@@ -152,6 +158,25 @@ ${preview}
     </table>
   </td></tr>
 </table>`;
+}
+
+/** A set's other pictures as one row of equal cells under the preview, each opening the same link. */
+function thumbnails(links: RenderEmailLinks): string {
+  const urls = links.morePreviewUrls ?? [];
+  if (urls.length === 0) return '';
+  const GAP = 8;
+  const cell = Math.floor((456 - GAP * (urls.length - 1)) / urls.length);
+  const cells = urls
+    .map(
+      (url, index) => `<td width="${cell}" style="padding:0 ${index === urls.length - 1 ? 0 : GAP}px 0 0;vertical-align:top;">
+            <a href="${escapeHtml(links.primaryUrl)}" style="display:block;text-decoration:none;"><img src="${escapeHtml(url)}" alt="" width="${cell}" style="display:block;width:100%;max-width:${cell}px;height:auto;border-radius:8px;border:1px solid ${HAIRLINE};" /></a>
+          </td>`,
+    )
+    .join('');
+  return `
+      <tr><td style="padding:${GAP}px 32px 0 32px;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>${cells}</tr></table>
+      </td></tr>`;
 }
 
 function text(parts: Parts): string {

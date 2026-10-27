@@ -27,8 +27,8 @@ export const ASSET_HANDLE = /^ast_[0-9a-f]{32}$/;
 const TOKEN = /\{\{\s*([^{}]*?)\s*\}\}/g;
 
 /**
- * The engines a maker may pick. Every one has a known real-person path (`needsIdentity`: OpenAI takes
- * the photo's bytes, ModelArk takes only a verified-library asset). GPT Image 2.5 Flare joined on
+ * The engines a maker may pick. Every one has a known real-person path (`needsIdentity`: OpenAI and
+ * Seedream take the photo's bytes, Seedance takes only a verified-library asset). GPT Image 2.5 Flare joined on
  * 2026-10-24 after its real-selfie smoke (founder decision); Sunburst stays out until it is measured
  * the same way (lib/images/engines.ts `IMAGE_ENGINES`). R2's Kling
  * (`kling-omni`) and Nano Banana (`nano-banana-2.1`) are wired (adapters, matrix, prices) but join
@@ -44,12 +44,13 @@ export function makerEnginesFor(kind: 'image' | 'video'): MakerEngineId[] {
   return MAKER_ENGINE_IDS.filter((id) => (kind === 'image' ? isImageEngine(id) : isVideoEngine(id)));
 }
 /**
- * How a person reaches this engine: raw bytes (OpenAI, Gemini, Kling) or a verified asset (ModelArk).
- * The same rule as lib/identity/service.ts `needsIdentity` (pinned by a test), kept here because the
- * editor imports this file into the browser and the identity service is server-only.
+ * How a person reaches this engine: raw bytes (OpenAI, Gemini, Kling, Seedream) or a verified asset
+ * (Seedance, ModelArk's films). The same rule as lib/identity/service.ts `needsIdentity` (pinned by a
+ * test), kept here because the editor imports this file into the browser and the identity service is
+ * server-only.
  */
 export function identityPath(engine: EngineId): 'bytes' | 'asset' {
-  return engineProvider(engine) === 'modelark' ? 'asset' : 'bytes';
+  return engineProvider(engine) === 'modelark' && isVideoEngine(engine) ? 'asset' : 'bytes';
 }
 /** The most image references one request may carry on this engine (the recipe caps at six anyway). */
 export function maxImageInputs(engine: EngineId): number {

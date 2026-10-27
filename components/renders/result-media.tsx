@@ -9,9 +9,9 @@
  * column — or at `--result-cap` where the page lays the object out beside its actions and a
  * percentage would have nothing definite to resolve against. A wide object simply takes the cap.
  */
-const DEFAULT_CHROME = '12rem';
+export const DEFAULT_CHROME = '12rem';
 
-function ratioOf(aspect: string): { css: string; w: number; h: number } {
+export function ratioOf(aspect: string): { css: string; w: number; h: number } {
   const match = /^(\d+):(\d+)$/.exec(aspect);
   const w = match ? Number(match[1]) : 4;
   const h = match ? Number(match[2]) : 5;

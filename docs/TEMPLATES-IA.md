@@ -121,7 +121,7 @@
 프로덕션 첫 영상 실렌더(2026-09-09, 90년대 서울 인터뷰)가 ModelArk의 "input image may contain real person"으로 거부됐다. 요청은 정상이었고 정책이 막은 것이다. BytePlus가 정한 유일한 정식 경로는 실인물 자산 라이브러리이며, 이제 제품에 붙어 있다.
 
 - **흐름**: ① `/identity/verify`에서 "인증 시작하기" → 서버가 `CreateVisualValidateSession`(콜백 = `/api/identity/callback`)으로 세션을 열고 사람을 BytePlus H5 라이브니스 페이지(`lng=en`, 한국어 없음)로 보낸다 → ② 은행이 콜백으로 `bytedToken`·`resultCode`를 돌려주면 서버가 `GetVisualValidateResult`로 **그룹 ID**를 받아 `identity_groups`에 `active`로 기록한다(사람당 한 번) → ③ 렌더 패스가 사진을 sha256으로 식별해 `CreateAsset`(사진은 서명 URL로 전달)으로 그 그룹의 **자산**으로 등록하고, 은행이 대조를 끝낼 때까지(`Processing`) 작업을 `provider_task_id = asset:<id>`로 세워 둔 뒤 `Active`가 되면 영상 태스크를 `asset://<id>` 참조로 만든다. 바이트는 절대 보내지 않는다. `Failed`면 `asset_failed`, 24시간 넘게 `Processing`이면 같은 코드로 실패.
-- **어디에 필요한가**: ModelArk 엔진 전부(Seedance 영상, Seedream 이미지). OpenAI GPT Image는 사진 자체를 받으므로 불필요(`needsIdentity`). 인큐 시점에 `identity_required`로 거절하고 스튜디오가 인증 페이지로 보낸다(`/api/renders/access`가 템플릿별 필요 여부와 상태를 알려준다).
+- **어디에 필요한가**: ModelArk 영상(Seedance). (2026-10-28 정정: Seedream 이미지는 `asset://`를 거절하므로 사진을 Base64로 직접 받고 제공사 검수가 판단한다 — PLATFORM-2.0 §18.1.) 과거 기록: ModelArk 엔진 전부(Seedance 영상, Seedream 이미지). OpenAI GPT Image는 사진 자체를 받으므로 불필요(`needsIdentity`). 인큐 시점에 `identity_required`로 거절하고 스튜디오가 인증 페이지로 보낸다(`/api/renders/access`가 템플릿별 필요 여부와 상태를 알려준다).
 - **정원**: 무료 등급 50명/50자산. 세션을 열기 전에 우리 장부(`identity_groups`·`identity_assets`)로 `hasCapacity`를 확인해 "잠시 후"로 안내한다. 슬롯 회수(`lib/ark/reclaim.ts`)를 일일 tick에 붙이는 일은 다음 차례.
 - **환경 변수**: Vercel에 `ARK_ACCESS_KEY`·`ARK_SECRET_KEY`(AK/SK, OpenAPI 서명)가 있어야 한다. 없으면 `/api/renders/tick`의 `config.arkAssets`가 false이고 인증 페이지는 `unavailable`을 말한다.
 - **운영자**: @yagiworkshop.xyz 관리자는 결제 없이 실제 생성한다(`/api/renders/access`의 `charge:false`, 배지 "운영자 테스트 · 결제 없음"). 결제가 붙어도 이 규칙은 유지한다.

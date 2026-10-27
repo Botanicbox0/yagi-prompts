@@ -15,9 +15,9 @@ import type { RecipeState, StepRecord } from './repo';
  *   · a film step is always last: it is handed to ModelArk and the pass's poll finishes the job;
  *   · references keep the step's `inputs` order — the same order `engineStepPrompt` numbers.
  *
- * How a reference reaches the engine: OpenAI, Gemini and Kling take bytes (photo, maker file, earlier
- * result; `identityPath` = 'bytes'). ModelArk takes the customer's face — the selfie OR an earlier
- * result made from it — only as an `asset://` from their verified group (`person()`), never as bytes;
+ * How a reference reaches the engine: OpenAI, Gemini, Kling and Seedream take bytes (photo, maker file,
+ * earlier result; `identityPath` = 'bytes'). Seedance takes the customer's face — the selfie OR an
+ * earlier result made from it — only as an `asset://` from their verified group (`person()`), never as bytes;
  * a maker file goes as a short-lived private URL (or a data URL when the store serves none). Nothing
  * here bypasses the face check: a face that is still being compared parks the job (`wait`), a
  * refused one fails it, and the bytes providers run their own moderation on what they receive.

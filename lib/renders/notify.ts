@@ -7,6 +7,7 @@ import { createWebPushSender, pushConfigFromEnv, sendPushToUser, type PushFanout
 import { getMailer } from '@/lib/notify/service';
 import { templateHref } from '@/lib/prompts/links';
 import { renderResultEmail } from './email';
+import type { RenderFrame } from './frames';
 import type { RenderJob } from './repo';
 import { RENDERS_PATH, renderHref, renderMediaHref, shareHref } from './share';
 
@@ -32,6 +33,8 @@ export interface RenderNotifyInput {
   recipient: { email: string | null; locale: Locale };
   /** Localized explanation for a failed render, or null. */
   failureReason: string | null;
+  /** A finished set's pictures in order (lib/renders/frames.ts); empty for one result. */
+  frames?: readonly RenderFrame[];
   siteUrl: string;
   siteName: string;
 }
@@ -58,6 +61,7 @@ export function createEmailRenderNotifier(mailer: Mailer): RenderNotifier {
       const origin = input.siteUrl.replace(/\/+$/, '');
       const ready = job.status === 'succeeded' && job.shareToken !== null;
       const shareUrl = ready ? `${origin}${shareHref(job.id, job.shareToken!)}` : `${origin}${RENDERS_PATH}`;
+      const frames = ready ? (input.frames ?? []) : [];
       const email = renderResultEmail({
         kind: ready ? 'ready' : 'failed',
         locale: input.recipient.locale,
@@ -66,9 +70,11 @@ export function createEmailRenderNotifier(mailer: Mailer): RenderNotifier {
         aspect: job.aspect,
         expiresAt: ready && job.shareExpiresAt ? new Date(job.shareExpiresAt) : null,
         reason: input.failureReason,
+        ...(frames.length > 1 ? { frames: frames.length } : {}),
         links: {
           primaryUrl: shareUrl,
           previewUrl: ready && job.medium === 'image' ? `${origin}${renderMediaHref(job.id, { share: job.shareToken! })}` : null,
+          morePreviewUrls: frames.slice(1).map((frame) => `${origin}${frame.view}`),
           templateUrl: `${origin}${templateHref(input.recipient.locale, job.templateSlug)}`,
           rendersUrl: `${origin}${RENDERS_PATH}`,
           feedbackUrl: `${origin}${renderHref(job.id)}#feedback`,
