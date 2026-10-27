@@ -272,7 +272,7 @@ export async function publishPromptMedia(
   const report: PromptCopyReport = { copied: 0, alreadyPresent: 0 };
   const next: PromptMedia = {};
 
-  for (const [kind, ref] of mediaEntries(media)) {
+  const publish = async (ref: AssetRef): Promise<AssetRef> => {
     const toKey = publishedKeyFor(ref.sha256, ref.staging_key);
     const outcome = await storage.copy({
       fromKey: ref.staging_key,
@@ -282,11 +282,21 @@ export async function publishPromptMedia(
     if (outcome === 'copied') report.copied += 1;
     else report.alreadyPresent += 1;
 
-    next[kind] = AssetRefSchema.parse({
+    return AssetRefSchema.parse({
       ...ref,
       published_key: toKey,
       bucket: 'public-content',
     });
+  };
+
+  for (const [kind, ref] of mediaEntries(media)) {
+    next[kind] = await publish(ref);
+  }
+  // A set's example frames ride along, in order — an `/admin` edit must never drop them.
+  if (media.gallery) {
+    const gallery: AssetRef[] = [];
+    for (const ref of media.gallery) gallery.push(await publish(ref));
+    next.gallery = gallery;
   }
 
   return { media: next, report };

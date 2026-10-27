@@ -2206,6 +2206,8 @@ export const en = {
     priceLabel: 'Per render',
     runtimeLabel: 'Runtime',
     mediumLabel: 'Output',
+    setOutput: '{n} images',
+    setTitle: 'All {n} shots, from one order',
     notForSale: "Coming soon",
     notForSaleBody: "Generation is not available for this template yet. You can browse its sample results.",
     makeCta: 'Make it with your photo',

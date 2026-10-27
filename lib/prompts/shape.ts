@@ -1,6 +1,6 @@
 import type { AssetRef } from '@/lib/content/schemas';
 import { canView, type Tier, type Visibility } from '@/lib/content/visibility';
-import { promptMediaPath, promptMediaRef } from './links';
+import { promptGalleryRef, promptMediaPath, promptMediaRef } from './links';
 import { parsePromptMedia, type MediaKind, type PromptSource, type TemplateMedium } from './schemas';
 
 /**
@@ -168,6 +168,7 @@ export function shapePromptMedia(
   poster: ShapedPromptMedia | null;
   video: ShapedPromptMedia | null;
   audio: ShapedPromptMedia | null;
+  gallery: ShapedPromptMedia[];
 } {
   const opts: MediaUrlOptions = {
     publicUrl: options.publicUrl ?? (() => null),
@@ -176,10 +177,14 @@ export function shapePromptMedia(
   const parsed = parsePromptMedia(media);
   const shape = (kind: MediaKind, ref: AssetRef | undefined) =>
     ref === undefined ? null : shapeAsset(ref, promptMediaRef(id, kind), opts);
+  const gallery = (parsed.gallery ?? [])
+    .map((ref, index) => shapeAsset(ref, promptGalleryRef(id, index + 1), opts))
+    .filter((frame): frame is ShapedPromptMedia => frame !== null);
   return {
     poster: shape('poster', parsed.poster),
     video: shape('video', parsed.video),
     audio: shape('audio', parsed.audio),
+    gallery,
   };
 }
 
