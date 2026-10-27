@@ -689,7 +689,7 @@ export const en = {
     },
     how: {
       heading: 'How it’s made',
-      lede: `The ${T.maker} chose to share this recipe. Here, one selfie is enough: TWINGS runs the same steps for you.`,
+      lede: 'All you need is one photo of your face and the prompt below. Just copy, paste, and create.',
       step: 'Step {n} · {kind}',
       copy: 'Copy',
       copied: 'Copied',

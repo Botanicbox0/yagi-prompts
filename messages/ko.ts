@@ -697,7 +697,7 @@ export const ko: Dictionary = {
     },
     how: {
       heading: '만드는 법',
-      lede: `${T.maker}가 공개한 레시피예요. 여기서는 셀카 한 장이면 TWINGS가 같은 단계를 대신 돌립니다.`,
+      lede: '내 얼굴 사진 한 장과 아래 프롬프트만으로 충분합니다. 그대로 복사해서 사용해 보세요.',
       step: '{n}단계 · {kind}',
       copy: '복사',
       copied: '복사했어요',
