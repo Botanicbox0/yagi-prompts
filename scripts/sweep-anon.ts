@@ -1,3 +1,4 @@
+import { createECDH, randomBytes } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { request as httpRequest } from 'node:http';
 import { resolve } from 'node:path';
@@ -6,6 +7,8 @@ import { DEFAULT_LOCAL_SNAPSHOT } from '@/lib/db/connect-shared';
 import { FIXTURE_SENTINELS } from './fixtures';
 import { HIDDEN_PROMPT_SLUGS, PROMPT_SENTINELS } from './prompt-fixtures';
 import { RUNTIME_MODE_ENV } from '@/lib/runtime-mode';
+import { KO_TERMS } from '@/messages/ko';
+import { EN_TERMS } from '@/messages/en';
 
 /**
  * M7: the sweep's oracle is the LOCAL snapshot (it opens `.pglite/catalog.tar.gz` directly), so the
@@ -373,6 +376,21 @@ async function sweepNotFound(privateKeys: string[], brandWorkspace: BrandWorkspa
       expectEqual(`${host}${path}: no public fallback or private payload`, page.bytes.length, 0);
       expectEqual(`${host}${path}: no private content or storage keys`, forbidden.some((value) => value.length > 0 && page.body.includes(value)), false);
     }
+    // The campaign wizard and the pages absorbed into the campaign tabs (docs/PLATFORM-2.0.md §16.6)
+    // stay on the brand host: an anonymous visitor is asked to sign in and comes back to the same path.
+    const project = '00000000-0000-4000-8000-000000000000';
+    for (const path of ['/brand/projects/new', `/brand/projects/${project}`, `/brand/projects/${project}/participants`, `/brand/projects/${project}/funding`, '/brand/creators']) {
+      const page = await request(path, { headers: { host: 'brand.twings.app' } });
+      const next = page.location ? new URL(page.location, BASE).searchParams.get('next') : null;
+      expectEqual(`brand.twings.app${path}: asks to sign in and returns here`, page.status >= 300 && page.status < 400 && next === path, true);
+      expectEqual(`brand.twings.app${path}: no private content or storage keys`, forbidden.some((value) => value.length > 0 && page.body.includes(value)), false);
+    }
+    // docs/PLATFORM-2.0.md §17.3 — the pool's invite API stays on the brand host and refuses strangers.
+    const poolInvite = await request('/api/brand-creators', { method: 'POST', headers: { host: 'brand.twings.app', 'content-type': 'application/json' } });
+    expectOneOf('brand.twings.app /api/brand-creators: refuses anonymous (closed or sign-in)', poolInvite.status, [401, 404]);
+    expectPresent('brand.twings.app /api/brand-creators: private', poolInvite.cacheControl ?? '', 'no-store');
+    const poolRead = await request('/api/brand-creators', { headers: { host: 'brand.twings.app' } });
+    expectEqual('brand.twings.app /api/brand-creators: no reads', poolRead.status, 404);
   }
 }
 
@@ -468,6 +486,29 @@ async function sweepMoney(): Promise<void> {
   const tossPage = await get(`/billing/toss/${tossOrderId}`);
   expectOneOf('Toss checkout page redirects anon', tossPage.status, [302, 307, 308]);
   expectAbsent('Toss checkout HTML stays behind sign-in', tossPage.body, 'data-toss-checkout');
+
+  // docs/PLATFORM-2.0.md §2.2: 다시 결제하기 is the owner's alone; the webhook is a hint, never an oracle;
+  // a return from the provider with no session keeps its approval parameters through sign-in.
+  const retry = await request(`/api/billing/toss/orders/${tossOrderId}/retry`, { method: 'POST', headers: { Origin: BASE } });
+  expectEqual('Toss retry refuses anonymous re-ordering', retry.status, 401);
+  expectEqual('Toss retry is never cached', retry.cacheControl, 'private, no-store');
+  const hint = await postJson('/api/billing/toss/webhook', {
+    eventType: 'PAYMENT_STATUS_CHANGED',
+    data: { orderId: tossOrderId, paymentKey: 'sweep_probe', status: 'CANCELED' },
+  });
+  expectEqual('Toss webhook answers an unknown order with 200', hint.status, 200);
+  expectEqual('…and an empty body', hint.body, '');
+  expectEqual('Toss webhook is never cached', hint.cacheControl, 'private, no-store');
+  const malformed = await request('/api/billing/toss/webhook', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{' });
+  expectEqual('Toss webhook answers a malformed body with 200', malformed.status, 200);
+  expectEqual('…and an empty body', malformed.body, '');
+  expectEqual('GET on the Toss webhook is 405', (await get('/api/billing/toss/webhook')).status, 405);
+  const back = await get(`/billing/toss/return?locale=ko&paymentKey=sweep_probe&orderId=${tossOrderId}&amount=1000`);
+  expectOneOf('Toss return without a session goes to sign-in', back.status, [302, 307, 308]);
+  const resume = new URL(back.location ?? '/', BASE).searchParams.get('next') ?? '';
+  expectPresent('…keeping the approval parameters in next', resume, `/billing/toss/return?`);
+  expectPresent('…the payment key included', resume, 'paymentKey=sweep_probe');
+  expectPresent('…and the order', resume, `orderId=${tossOrderId}`);
 
   // New recurring entry points do not inherit the legacy anonymous or retired paths.
   for (const path of ['/api/creator-subscriptions', '/api/creator-subscriptions/confirm', '/api/creator-subscriptions/renders',
@@ -934,11 +975,27 @@ async function sweepTemplates(): Promise<void> {
     // `>$4<` — the price as rendered text; a bare `$4` also matches React Flight's `"$4:props…"` references.
     expectAbsent('…not even the number', page.body, locale === 'ko' ? '5,900원' : '>$4<');
     expectPresent('cards link to template pages', page.body, `href="/${locale}/t/${GATED_PROMPT}"`);
-    expectPresent('the model chip', page.body, 'SEEDANCE 2.5');
+    // PLATFORM-2.0 §15.3-4 (founder 2026-10-23): portrait templates are 4:5 cards, 16:9 is for
+    // landscape ones; the card names length and shape, never the engine, and is one link.
+    expectPresent('portrait templates sit in 4:5 cards', page.body, 'data-frame="portrait"');
+    expectPresent('…landscape ones keep 16:9', page.body, 'data-frame="landscape"');
+    expectPresent('…with a length chip', page.body, 'data-card-duration');
+    expectPresent('…and a ratio chip', page.body, 'data-card-aspect');
+    expectAbsent('…and no engine chip', page.body, 'data-model-chip');
+    expectAbsent('…and no "view template" button', page.body, 'data-card-detail');
     expectPresent('the use-case filter', page.body, 'data-use-case-filter');
+    // §15.3-5: the GEO definition is still in the HTML, under the grid rather than above it.
+    {
+      const definition = page.body.indexOf('data-service-definition');
+      const lastCard = page.body.lastIndexOf('data-prompt-card=');
+      if (definition > lastCard && lastCard > -1) ok('the service definition follows the grid', `${definition} > ${lastCard}`);
+      else fail('the service definition follows the grid', `definition at ${definition}, last card at ${lastCard}`);
+    }
     expectAbsent('no lock chips anywhere', page.body, 'data-lock-chip');
     expectAbsent('no image template on the video tab', page.body, `data-prompt-card="${IMAGE_TEMPLATE}"`);
     expectAbsent('no prompt submission door', page.body, '/prompts/submit');
+    // docs/PLATFORM-2.0.md §3.2-1: the first-run sheet is a client island — nothing of it in static HTML.
+    expectAbsent('the first-run sheet never reaches the static page', page.body, 'data-onboarding-sheet');
     for (const sentinel of PROMPT_SENTINELS) {
       expectAbsent(`NO prompt text on a card (${sentinel.token})`, page.body, sentinel.token);
     }
@@ -963,15 +1020,34 @@ async function sweepTemplates(): Promise<void> {
   expectPresent('…names itself', detail.body, `data-template="${GATED_PROMPT}"`);
   expectPresent('…with the make section', detail.body, 'data-template-make');
   expectPresent('…and the one-style studio', detail.body, 'data-single="true"');
-  // Founder, 2026-09-11: no demo. The static page says payment opens soon and offers the email.
-  expectPresent('…and the studio is closed, not mocked', detail.body, 'data-studio-closed');
+  // Founder, 2026-09-11: no demo. PLATFORM-2.0 §3.2-2: the static page no longer paints "closed" and
+  // flips — it draws a neutral skeleton, and the per-viewer access call settles it in the browser.
+  expectPresent('…and the studio starts as a neutral skeleton', detail.body, 'data-studio-pending');
+  expectAbsent('…not painted closed before the access call', detail.body, 'data-studio-closed');
+  // §15.3-1 — the decision screen: one make card that is the price box, no second heading or link button.
+  expectPresent('…one make card that is the price box', detail.body, 'data-template-price-box');
+  expectAbsent('…no link button above the card', detail.body, 'data-template-make-cta');
+  expectPresent('…its facts', detail.body, 'data-template-fact');
+  expectPresent('…the AI limit inside the card', detail.body, 'data-studio-ai-note');
+  expectPresent('…the refund sentence inside the card', detail.body, 'data-template-refund');
+  expectAbsent('…no engine chip on the decision screen', detail.body, 'data-engine-chip');
+  expectPresent('…a phone sticky bar', detail.body, 'data-make-sticky');
+  if (/<div[^>]*data-make-sticky[^>]*data-hide-tabs/.test(detail.body)) ok('…that hides the installed app tabs', 'data-hide-tabs');
+  else fail('…sticky bar hides the app tabs', 'data-make-sticky must carry data-hide-tabs');
+  expectPresent('…whose one CTA goes to the make card', detail.body, 'href="#make"');
   expectAbsent('…no demo badge anywhere', detail.body, 'data-demo-badge');
   expectAbsent('…no placeholder ad', detail.body, 'YOUR AD HERE');
-  expectPresent('…the house ad points at the brand form', detail.body, 'data-house-ad');
+  expectAbsent('…no house ad rail', detail.body, 'data-house-ad');
   expectPresent('…and the price in dollars on the English page', detail.body, '>$4<');
+  // The related list is the catalogue's 4:5 grid: two across on a phone, four on a desktop.
+  if (/<ul[^>]*data-related-grid[^>]*class="[^"]*\bgrid-cols-2\b[^"]*\blg:grid-cols-4\b/.test(detail.body)) ok('…related templates in the two-column card grid', 'data-related-grid');
+  else fail('…related templates grid', 'expected data-related-grid with grid-cols-2 … lg:grid-cols-4');
+  expectPresent('…whose items are cards', detail.body, 'data-related-item');
   const detailKo = await get(`/ko/t/${GATED_PROMPT}`);
   expectEqual('the Korean template page renders 200', detailKo.status, 200);
   expectPresent('…with the price in won', detailKo.body, '5,900원');
+  if (/완성까지<\/dt><dd[^>]*>보통 \d+분/.test(detailKo.body)) ok('…with the typical wait in minutes', '보통 N분');
+  else fail('…typical wait', 'expected "완성까지 · 보통 N분" in the make card');
   expectAbsent('…and never a dollar', detailKo.body, '>$4<');
   expectAbsent('…and NONE of its prompt text', detail.body, promptToken(GATED_PROMPT));
   expectAbsent('…no prompt block', detail.body, 'data-prompt-text');
@@ -1038,9 +1114,33 @@ async function sweepTemplates(): Promise<void> {
   expectEqual('the manifest is served at the root', manifest.status, 200);
   expectPresent('…and names the app', manifest.body, '"TWINGS"');
   expectPresent('…in standalone display', manifest.body, '"standalone"');
-  expectEqual('the service worker is served at the root', (await get('/sw.js')).status, 200);
+  // docs/PLATFORM-2.0.md §5.2 — the installed app's manifest, in the site's own white.
+  expectPresent('…splash and status bar in the site’s white', manifest.body, '"theme_color":"#ffffff"');
+  expectPresent('…white background', manifest.body, '"background_color":"#ffffff"');
+  expectPresent('…starting on the formats in the reader’s locale', manifest.body, '"start_url":"/video?source=pwa"');
+  expectPresent('…with the fixed app id', manifest.body, '"id":"/"');
+  expectPresent('…maskable icons', manifest.body, '"purpose":"maskable"');
+  expectPresent('…and the two shortcuts', manifest.body, '"shortcuts"');
+  for (const icon of ['/icons/icon-192.png', '/icons/icon-512.png', '/icons/maskable-192.png', '/icons/maskable-512.png', '/icons/badge-96.png']) {
+    const served = await get(icon);
+    expectEqual(`${icon} is served`, served.status, 200);
+    expectPresent(`${icon} is a PNG`, served.contentType ?? '', 'image/png');
+  }
+  const worker = await get('/sw.js');
+  expectEqual('the service worker is served at the root', worker.status, 200);
+  expectPresent('…and shows the completion push', worker.body, "self.addEventListener('push'");
+  expectPresent('…and opens its link on a tap', worker.body, "self.addEventListener('notificationclick'");
+  expectPresent('…keeping navigations network first', worker.body, "if (request.mode !== 'navigate') return;");
   expectEqual('the offline page is served at the root', (await get('/offline.html')).status, 200);
-  expectPresent('the landing declares the manifest', (await get('/en')).body, 'rel="manifest"');
+  const landing = await get('/en');
+  expectPresent('the landing declares the manifest', landing.body, 'rel="manifest"');
+  expectPresent('…runs edge to edge (safe areas padded in CSS)', landing.body, 'viewport-fit=cover');
+  // A white page under the iOS `default` bar (dark text on white); black-translucent would hide it.
+  expectPresent('…under the default iOS status bar', landing.body, 'name="apple-mobile-web-app-status-bar-style" content="default"');
+  expectPresent('…with the white browser chrome', landing.body, 'name="theme-color" content="#ffffff"');
+  // 2026-10-07: no bottom-fixed UI in the mobile browser — the tabs exist only after the page
+  // finds itself installed, never in server HTML.
+  expectAbsent('…and never ships the bottom tabs in its HTML', landing.body, 'data-bottom-tabs');
 }
 
 /** The prompt site's URLs 308 onto the template site's; the copy door answers 410. */
@@ -1091,6 +1191,9 @@ async function sweepLandingTemplates(): Promise<void> {
   expectAbsent('nav no longer points at the studio', page.body, 'href="/en/studio"');
   expectAbsent('nav no longer points at contests', page.body, 'href="/en/contests"');
   expectPresent('the hero opens on the video door', page.body, 'data-hero-video');
+  // §15.3-2: the founder-approved default selfie → scene pair renders on the landing.
+  expectPresent('the selfie → scene evidence pair is on the landing', page.body, 'data-hero-evidence');
+  expectPresent('the hero sale-state line', page.body, 'data-creator-availability');
   expectAbsent('no placeholder ad on the landing', page.body, 'YOUR AD HERE');
   expectPresent('the creator home has a separate brand entry', page.body, 'data-brand-door');
   expectPresent('the brand entry leads to public services', page.body, 'href="/en/brands"');
@@ -1105,6 +1208,68 @@ async function sweepLandingTemplates(): Promise<void> {
   expectEqual('/library still works for anyone who has the URL', (await get('/library')).status, 307);
 }
 
+/**
+ * docs/PLATFORM-2.0.md §7.5·§14.1 — the header names (개인 | 브랜드), the two origin rails and the
+ * public maker page. The local snapshot carries published community fixtures (maker origin) and one
+ * maker who opted in (`scripts/maker-fixtures.ts`, `@jun`), so here both rails exist; production
+ * has no maker template yet, and the unit tests pin that the second rail and the chips then vanish.
+ */
+async function sweepMakers(): Promise<void> {
+  console.log('\n§14.1 names — the header audience switch');
+  for (const [locale, personal, brand] of [['ko', KO_TERMS.personal, '브랜드'], ['en', EN_TERMS.personal, 'Brands']] as const) {
+    const page = await get(`/${locale}`);
+    const side = (id: string) => new RegExp(`data-audience="${id}"[^>]*>([^<]*)</a>`).exec(page.body)?.[1] ?? null;
+    expectEqual(`${locale}: the switch's consumer side reads "${personal}"`, side('creator'), personal);
+    expectEqual(`${locale}: …and its brand side "${brand}"`, side('brand'), brand);
+  }
+
+  console.log(`\n/ko/video — ${KO_TERMS.studioCollection}, then ${KO_TERMS.makerCollection}`);
+  const video = await get('/ko/video');
+  const studioRail = video.body.indexOf('data-rail-origin="studio"');
+  const makerRail = video.body.indexOf('data-rail-origin="maker"');
+  if (studioRail > -1 && makerRail > studioRail) ok('the studio rail comes first, the maker rail second', `${studioRail} < ${makerRail}`);
+  else fail('the studio rail comes first, the maker rail second', `studio at ${studioRail}, maker at ${makerRail}`);
+  expectPresent('the origin chips', video.body, 'data-origin-filter');
+  expectPresent('…"전체 · 오리지널 · 메이커"', video.body, `>${KO_TERMS.maker}</button>`);
+  expectPresent('the maker rail is named', video.body, `>${KO_TERMS.makerCollection}</h2>`);
+  expectPresent('a public maker is credited by handle', video.body, `${KO_TERMS.creditPrefix} @jun`);
+  expectAbsent('no "작가" anywhere on the catalogue', video.body, '작가');
+  expectAbsent('no author account id reaches the page', video.body, 'f0000000-0000-4000-8000-000000000002');
+
+  console.log('\n/ko/t/[slug] — the maker block only where the maker opted in');
+  const makerTemplate = await get('/ko/t/cafe-window-timelapse');
+  expectEqual('renders 200', makerTemplate.status, 200);
+  expectPresent('the maker block', makerTemplate.body, 'data-template-maker="jun"');
+  expectPresent('…linking to the maker page', makerTemplate.body, 'href="/ko/makers/jun"');
+  expectPresent('the verified mark', makerTemplate.body, 'data-template-verified');
+  const legacy = await get('/ko/t/skate-park-golden-hour');
+  expectPresent('a handle without a maker page is a plain credit', legacy.body, `${KO_TERMS.creditPrefix} @hana`);
+  expectAbsent('…with no maker block', legacy.body, 'data-template-maker');
+  const studio = await get(`/ko/t/${GATED_PROMPT}`);
+  expectPresent('a studio template names the studio collection', studio.body, KO_TERMS.studioCollection);
+  expectAbsent('…and has no maker block', studio.body, 'data-template-maker');
+
+  console.log('\n/{locale}/makers/[handle] — a public maker page');
+  for (const locale of ['ko', 'en'] as const) {
+    const page = await get(`/${locale}/makers/jun`);
+    expectEqual(`${locale}: renders 200`, page.status, 200);
+    expectPresent(`${locale}: is the maker page`, page.body, 'data-maker-profile="jun"');
+    expectPresent(`${locale}: shows the maker's template`, page.body, 'data-prompt-card="cafe-window-timelapse"');
+    expectAbsent(`${locale}: and nobody else's`, page.body, 'data-prompt-card="skate-park-golden-hour"');
+    expectPresent(`${locale}: canonical`, page.body, `rel="canonical" href="http`);
+    expectPresent(`${locale}: hreflang`, page.body, 'hrefLang="ko"');
+    expectAbsent(`${locale}: indexable`, page.body, 'noindex');
+    expectAbsent(`${locale}: no account id`, page.body, 'f0000000-0000-4000-8000-000000000002');
+    expectAbsent(`${locale}: no email`, page.body, 'pro@playbook.test');
+  }
+  expectPresent('ko: the count line', (await get('/ko/makers/jun')).body, '템플릿 1편');
+  expectEqual('a handle with no maker page is a 404', (await get('/ko/makers/hana')).status, 404);
+  expectEqual('an unknown handle is a 404', (await get('/en/makers/nobody_here')).status, 404);
+  const sitemap = await get('/sitemap.xml');
+  expectPresent('the maker page is in the sitemap', sitemap.body, '/ko/makers/jun</loc>');
+  expectAbsent('…a handle without one is not', sitemap.body, '/makers/hana');
+}
+
 /** Public monthly outcomes, no per-template price table or account data. */
 async function sweepPricingTemplates(): Promise<void> {
   console.log('\n/en/pricing + /ko/pricing — monthly plan comparison, anonymous');
@@ -1112,6 +1277,10 @@ async function sweepPricingTemplates(): Promise<void> {
     const page = await get(`/${locale}/pricing`);
     expectEqual(`/${locale}/pricing renders 200`, page.status, 200);
     expectPresent('…with the upcoming monthly plan', page.body, 'data-pricing-subscription="preparing"');
+    // §15.3-3: what is sold comes first — single films over the monthly teaser while monthly is preparing.
+    expectPresent('…single films first', page.body, 'data-pricing-order="single-first"');
+    expectAbsent('…no engine name on the price page', page.body, 'Seedance');
+    expectAbsent('…no engine label either', page.body, 'SEEDANCE');
     expectPresent('…with its Creator monthly won price', page.body, '24,900');
     expectPresent('…with its Premium monthly won price', page.body, '49,000');
     expectPresent('…with prompt editing honestly marked as planned', page.body, 'data-prompt-editing="planned"');
@@ -1339,6 +1508,17 @@ async function sweepRenders(): Promise<void> {
 
   const enqueue = await fetch(`${BASE}/api/renders`, { method: 'POST', redirect: 'manual' });
   expectEqual('enqueue refuses anon', enqueue.status, 401);
+  // docs/PLATFORM-2.0.md §5.3 — a device's push subscription needs a session, even from our own page.
+  // A well-formed body, so the 401 shows the session check comes first. The browser keys are made
+  // here, never written as literals (the secret scan reads long base64url strings as leaked keys).
+  const browserKey = createECDH('prime256v1');
+  browserKey.generateKeys();
+  const subscription = { endpoint: 'https://fcm.googleapis.com/fcm/send/sweep', keys: { p256dh: browserKey.getPublicKey().toString('base64url'), auth: randomBytes(16).toString('base64url') } };
+  const pushOn = await request('/api/notify/push', { method: 'POST', headers: { Origin: BASE, 'Content-Type': 'application/json' }, body: JSON.stringify(subscription) });
+  expectEqual('push subscription refuses anon', pushOn.status, 401);
+  expectPresent('…privately', pushOn.cacheControl ?? '', 'no-store');
+  const pushOff = await request('/api/notify/push', { method: 'DELETE', headers: { Origin: BASE, 'Content-Type': 'application/json' }, body: JSON.stringify({ endpoint: subscription.endpoint }) });
+  expectEqual('push unsubscribe refuses anon', pushOff.status, 401);
   const campaignEnqueue = await fetch(`${BASE}/api/campaign-production`, { method: 'POST', redirect: 'manual', headers: { Origin: BASE } });
   expectEqual('campaign production refuses anon', campaignEnqueue.status, 401);
   expectPresent('campaign production refusal is private', campaignEnqueue.headers.get('cache-control') ?? '', 'no-store');
@@ -1381,15 +1561,57 @@ async function sweepRenders(): Promise<void> {
   if (verify.location?.includes('signin=1')) ok('…to sign-in', verify.location);
   else fail('/identity/verify redirect target', `expected the sign-in redirect, got ${verify.location}`);
   const callback = await request('/api/identity/callback');
-  const portrait = await request('/identity/portrait', { headers: { 'user-agent': CHROME_UA } });
-  expectOneOf('portrait page redirects anonymous', portrait.status, [302,303,307]);
-  const portraitState = await request('/api/identity/portrait');
-  expectEqual('portrait state refuses anonymous', portraitState.status, 401);
-  expectPresent('portrait response is private', portraitState.cacheControl ?? '', 'no-store');
-  const portraitImage = await request('/api/identity/portrait/00000000-0000-4000-8000-000000000000/image');
-  expectEqual('portrait image refuses anonymous', portraitImage.status, 401);
-  const portraitCreate = await fetch(`${BASE}/api/identity/portrait`, {method:'POST',headers:{origin:BASE}});
-  expectEqual('portrait creation refuses anonymous', portraitCreate.status, 401);
+  // docs/IDENTITY-SELFIE.md — the one photo is app surface; its bytes and state are owner-only.
+  const selfiePage = await request('/identity/selfie', { headers: { 'user-agent': CHROME_UA } });
+  expectOneOf('selfie page redirects anonymous', selfiePage.status, [302,303,307]);
+  expectPresent('selfie page redirects to sign-in', selfiePage.location ?? '', 'signin=1');
+  const selfieState = await request('/api/identity/selfie');
+  expectEqual('selfie state refuses anonymous', selfieState.status, 401);
+  expectPresent('selfie response is private', selfieState.cacheControl ?? '', 'no-store');
+  const selfieImage = await request('/api/identity/selfie/00000000-0000-4000-8000-000000000000/image');
+  expectEqual('selfie image refuses anonymous', selfieImage.status, 401);
+  expectPresent('selfie image response is private', selfieImage.cacheControl ?? '', 'no-store');
+  const selfieCreate = await fetch(`${BASE}/api/identity/selfie`, {method:'POST',headers:{origin:BASE}});
+  expectEqual('selfie upload refuses anonymous', selfieCreate.status, 401);
+  const selfieCross = await fetch(`${BASE}/api/identity/selfie`, {method:'POST',headers:{origin:'https://evil.example'}});
+  expectEqual('selfie upload refuses cross-origin', selfieCross.status, 403);
+  // docs/IDENTITY-SELFIE.md §4 — "make default", the note and soft delete are owner-only, same-origin writes.
+  for (const method of ['PATCH', 'DELETE'] as const) {
+    const body = JSON.stringify(method === 'PATCH' ? {id:'00000000-0000-4000-8000-000000000000',isDefault:true} : {id:'00000000-0000-4000-8000-000000000000'});
+    const anonymous = await request('/api/identity/selfie', {method,headers:{origin:BASE,'content-type':'application/json'},body});
+    expectEqual(`selfie ${method} refuses anonymous`, anonymous.status, 401);
+    expectPresent(`selfie ${method} response is private`, anonymous.cacheControl ?? '', 'no-store');
+    const cross = await request('/api/identity/selfie', {method,headers:{origin:'https://evil.example','content-type':'application/json'},body});
+    expectEqual(`selfie ${method} refuses cross-origin`, cross.status, 403);
+    expectPresent(`selfie ${method} cross-origin response is private`, cross.cacheControl ?? '', 'no-store');
+  }
+  // docs/PLATFORM-2.0.md §17 — linked SNS accounts: app surface, owner-only screenshots, a worker door shut without its secret.
+  const socialPage = await request('/identity/social', { headers: { 'user-agent': CHROME_UA } });
+  expectOneOf('SNS page redirects anonymous', socialPage.status, [302,303,307]);
+  expectPresent('SNS page redirects to sign-in', socialPage.location ?? '', 'signin=1');
+  const socialState = await request('/api/identity/social');
+  expectOneOf('SNS state refuses anonymous (closed or sign-in)', socialState.status, [401,404]);
+  expectPresent('SNS state response is private', socialState.cacheControl ?? '', 'no-store');
+  const socialCross = await fetch(`${BASE}/api/identity/social`, {method:'POST',headers:{origin:'https://evil.example'}});
+  expectOneOf('SNS submit refuses cross-origin (closed or forbidden)', socialCross.status, [403,404]);
+  const socialShot = await request('/api/identity/social/00000000-0000-4000-8000-000000000000/evidence');
+  expectEqual('SNS screenshot refuses anonymous', socialShot.status, 401);
+  expectPresent('SNS screenshot response is private', socialShot.cacheControl ?? '', 'no-store');
+  const socialAdminShot = await request('/api/admin/social/00000000-0000-4000-8000-000000000000/evidence');
+  expectEqual('SNS review screenshot hides from anonymous', socialAdminShot.status, 404);
+  for (const action of ['claim', 'complete', 'heartbeat', 'evidence']) {
+    const worker = await request(`/api/social-verify-worker/${action}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
+    expectEqual(`SNS worker ${action} rejects unsigned requests`, worker.status, 404);
+    expectPresent(`SNS worker ${action} refusal is private`, worker.cacheControl ?? '', 'no-store');
+  }
+  const poolInvite = await request('/api/brand-creators', { method: 'POST', headers: { Origin: BASE, 'Content-Type': 'application/json' }, body: '{}' });
+  expectOneOf('creator pool invite refuses anonymous (closed or sign-in)', poolInvite.status, [401, 404]);
+  expectPresent('creator pool invite refusal is private', poolInvite.cacheControl ?? '', 'no-store');
+  const openCampaigns = await request('/campaigns/open', { headers: { 'user-agent': CHROME_UA } });
+  expectOneOf('signed-in campaign list redirects anonymous', openCampaigns.status, [302,303,307]);
+  expectPresent('signed-in campaign list redirects to sign-in', openCampaigns.location ?? '', 'signin=1');
+  const selfieOrder = await fetch(`${BASE}/api/billing/toss/orders`, {method:'POST',headers:{origin:BASE},body:new FormData()});
+  expectEqual('toss order without a session refuses', selfieOrder.status, 401);
   expectEqual('the identity callback answers a bare hit with a redirect', callback.status, 303);
   expectPresent('…to the verify page, result unknown', callback.location ?? '', '/identity/verify?result=unknown');
 
@@ -1400,6 +1622,32 @@ async function sweepRenders(): Promise<void> {
   expectPresent('community response is private', communityState.cacheControl ?? '', 'no-store');
   const communityCreate = await fetch(`${BASE}/api/community`, {method:'POST',headers:{origin:BASE,'content-type':'application/json'},body:'{}'});
   expectEqual('community mutation refuses anonymous', communityCreate.status, 401);
+  // docs/CREATOR-PLATFORM.md — the format creator program. The two leaves are login-gated app
+  // surface; the public page exists only while BOTH gates were on at build (same shell as start:local).
+  for (const leaf of ['/creators/apply', '/creators/workspace']) {
+    const gated = await request(leaf, { headers: { 'user-agent': CHROME_UA } });
+    expectOneOf(`${leaf} redirects anonymous`, gated.status, [302, 303, 307]);
+    expectPresent(`${leaf} → sign-in`, gated.location ?? '', 'signin=1');
+    expectPresent(`${leaf} refusal is private`, gated.cacheControl ?? '', 'no-store');
+    expectPresent(`${leaf} refusal is noindex`, gated.robotsTag ?? '', 'noindex');
+  }
+  const programBare = await request('/creators', { headers: { 'accept-language': 'ko' } });
+  expectEqual('/creators is a public page: 308 to its locale', programBare.status, 308);
+  expectPresent('…to /ko/creators', programBare.location ?? '', '/ko/creators');
+  const programOpen = process.env.TWINGS_FORMAT_CREATORS === 'on' && process.env.TWINGS_CREATOR_APPLICATIONS === 'on';
+  console.log(`  (format creator program gate in this shell: ${programOpen ? 'open' : 'closed'})`);
+  for (const locale of ['ko', 'en']) {
+    const program = await request(`/${locale}/creators`);
+    if (!programOpen) { expectEqual(`/${locale}/creators is absent while intake is closed`, program.status, 404); continue; }
+    expectEqual(`/${locale}/creators renders`, program.status, 200);
+    expectPresent(`/${locale}/creators program marker`, program.body, 'data-creator-program');
+    expectPresent(`/${locale}/creators steps marker`, program.body, 'data-creator-steps');
+    expectAbsent(`/${locale}/creators carries no recipe canary`, program.body, 'PRIVATE_RECIPE');
+    for (const sentinel of PROMPT_SENTINELS.filter((s) => !s.publicToAnon)) expectAbsent(`/${locale}/creators omits ${sentinel.slug} prompt`, program.body, sentinel.token);
+  }
+  const revision = await fetch(`${BASE}/api/community`, {method:'POST',headers:{origin:BASE,'content-type':'application/json'},body:JSON.stringify({action:'format',requestId:ID,revisionOf:ID})});
+  expectEqual('format revision refuses anonymous', revision.status, 401);
+
   const evidence = await request(`/api/admin/community/${ID}/media`);
   expectEqual('reward evidence conceals existence from anonymous', evidence.status, 404);
   expectPresent('reward evidence response is private', evidence.cacheControl ?? '', 'no-store');
@@ -1449,6 +1697,7 @@ async function main(): Promise<void> {
   await sweepPromptMedia(prompts);
   await sweepLandingTemplates();
   await sweepPricingTemplates();
+  await sweepMakers();
 
 
   // --- docs/CAMPAIGNS.md: the campaigns surface --------------------------

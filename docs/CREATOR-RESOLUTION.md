@@ -76,7 +76,8 @@ An image's cost is its engine's, so the floor follows the template's engine (`im
 one reference photo, the same 5% formula. Per-image costs are the official ones where a page
 publishes them (re-read 2026-10-21): Seedream 5.0 Pro $0.09 at 2K with the first reference free,
 Lite $0.035 with free references, gpt-image-2 high $0.211 at 1024². OpenAI publishes only token
-rates for the two 2.5 models, so sunburst is a measured figure and flare an estimate.
+rates for the two 2.5 models, so both are smoke measurements: sunburst from the 2026-09 run, flare
+from the 2026-10-24 run ($0.082 a 1024×1280 xhigh render + $0.012 for the selfie = $0.094).
 No image is proposed below **200원** (`IMAGE_MIN_PRICE_KRW`, founder 2026-10-21).
 
 | Engine | Cost | Floor |
@@ -84,7 +85,7 @@ No image is proposed below **200원** (`IMAGE_MIN_PRICE_KRW`, founder 2026-10-21
 | Seedream 5.0 Lite | 49원 | 200원 (5% 하한 100원 → 이미지 최소가 200원) |
 | Seedream 5.0 Pro | 126원 | 200원 |
 | GPT Image 2 | 336원 | 500원 |
-| GPT Image 2.5 Flare | 532원 | 700원 |
+| GPT Image 2.5 Flare | 132원 | 200원 (5% 하한 159원 → 이미지 최소가 200원) |
 | GPT Image 2.5 Sunburst | 882원 | 1,100원 |
 The founder authorized existing priced 720p templates to use this minimum-price rule.
 Unpriced templates stay unpriced. USD display prices use the same exchange rate, rounded up to a cent.

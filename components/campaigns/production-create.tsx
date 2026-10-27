@@ -2,9 +2,9 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import type { Dictionary } from '@/lib/i18n/dictionaries';
 import { shrinkPhoto } from '@/lib/images/client-photo';
-import { PortraitPhotoGuide } from '@/components/identity/portrait-photo-guide';
+import { SelfiePhotoGuide } from '@/components/identity/selfie-photo-guide';
 type Copy = Dictionary['campaigns']['production'];
-export function CampaignCreate({ applicationId, locale, copy, photoGuide }: { applicationId: string; locale: string; copy: Copy; photoGuide: Dictionary['portrait'] }) {
+export function CampaignCreate({ applicationId, locale, copy, photoGuide }: { applicationId: string; locale: string; copy: Copy; photoGuide: Dictionary['selfie'] }) {
   const [photo, setPhoto] = useState<File | null>(null), [preview, setPreview] = useState<string | null>(null), [busy, setBusy] = useState(false), [error, setError] = useState('');
   const pending = useRef<{ file: File; id: string; blob: Blob | null } | null>(null), inFlight = useRef(false);
   useEffect(() => { if (!photo) { setPreview(null); return; } const url = URL.createObjectURL(photo); setPreview(url); return () => URL.revokeObjectURL(url); }, [photo]);
@@ -32,7 +32,7 @@ export function CampaignCreate({ applicationId, locale, copy, photoGuide }: { ap
       <label className="block"><span className="block font-medium">{copy.photo}</span><input name="photo" type="file" accept="image/jpeg,image/png,image/webp" required onChange={e => { setPhoto(e.target.files?.[0] ?? null); pending.current = null; setError(''); }} className="mt-3 block w-full min-w-0 rounded-xl border border-hairline p-4 text-sm" /></label>
       {preview && <img src={preview} alt={copy.photo} className="max-h-64 max-w-full rounded-xl object-contain" />}
       <p className="text-sm leading-relaxed opacity-70">{copy.photoHint}</p>
-      <details className="rounded-xl border border-hairline p-4"><summary className="cursor-pointer text-sm font-medium">{copy.guideTitle}</summary><PortraitPhotoGuide copy={photoGuide} /></details>
+      <details className="rounded-xl border border-hairline p-4"><summary className="cursor-pointer text-sm font-medium">{copy.guideTitle}</summary><SelfiePhotoGuide copy={photoGuide} /></details>
       <label className="flex items-start gap-3 text-sm leading-relaxed"><input name="ownFace" type="checkbox" required className="mt-1 size-4 shrink-0" /><span>{copy.ownFace}</span></label>
       <p className="text-sm leading-relaxed opacity-60">{copy.imperfect}</p>
       {error && <p role="alert" className="text-accent text-sm leading-relaxed">{error}</p>}

@@ -41,22 +41,49 @@
  * Why 4:5 is the default: Instagram's feed has been a 4:5 grid since 2025, so a 4:5 render fills a
  * phone without a crop — the founder's "인스타그램에 올리기 좋은 비율" (2026-09-06). 9:16 is for
  * stories and reels covers, 1:1 for the old square, 16:9 for a landscape share.
+ *
+ * R2 (docs/PLATFORM-2.0.md §7.3, §9, §18, 2026-10-24) adds two providers for maker recipes:
+ *   · Google Gemini "Nano Banana 2.1" (`gemini-nano-banana-2.1`, lib/images/gemini.ts): official 2K
+ *     pixel table per aspect (ai.google.dev image-generation guide, read 2026-10-24), $0.0504 per
+ *     2K image, up to 10 object + 4 character references.
+ *   · Kling (lib/kling/*): a video engine whose model is configuration (3.0 Omni today, 4.0 when
+ *     it opens) — see `VIDEO_ENGINES` below.
+ * Neither is in the maker list (lib/recipes/schema.ts `MAKER_ENGINE_IDS`) until its real-person
+ * smoke has run; the admin picker for studio templates sees them at once.
  */
 
 import type { TemplateMedium } from '@/lib/prompts/schemas';
 
 /** Order is the admin picker's order: the recommended default first. */
-export const IMAGE_ENGINE_IDS = ['gpt-image-2', 'gpt-image-2.5-flare', 'gpt-image-2.5-sunburst', 'seedream-5.0-pro', 'seedream-5.0-lite'] as const;
+export const IMAGE_ENGINE_IDS = ['gpt-image-2.5-flare', 'gpt-image-2', 'gpt-image-2.5-sunburst', 'seedream-5.0-pro', 'seedream-5.0-lite', 'nano-banana-2.1'] as const;
 export type ImageEngineId = (typeof IMAGE_ENGINE_IDS)[number];
 
-export const VIDEO_ENGINE_IDS = ['seedance-2.0', 'seedance-2.5'] as const;
+export const VIDEO_ENGINE_IDS = ['seedance-2.0', 'seedance-2.5', 'kling-omni'] as const;
 export type VideoEngineId = (typeof VIDEO_ENGINE_IDS)[number];
 
 export type EngineId = ImageEngineId | VideoEngineId;
 
-/** The OpenAI half of the image table; the Seedream half is the rest. */
+/** Who answers the call — the value stored on render_jobs.provider (migration 0061). */
+export type EngineProvider = 'openai' | 'modelark' | 'google' | 'kling';
+
+/** The OpenAI third of the image table, the Google engine, and the Seedream rest. */
 export type OpenAiEngineId = 'gpt-image-2.5-flare' | 'gpt-image-2.5-sunburst' | 'gpt-image-2';
-export type SeedreamEngineId = Exclude<ImageEngineId, OpenAiEngineId>;
+export type GoogleEngineId = 'nano-banana-2.1';
+export type SeedreamEngineId = Exclude<ImageEngineId, OpenAiEngineId | GoogleEngineId>;
+
+export interface VideoEngine {
+  id: VideoEngineId;
+  label: string;
+  provider: 'modelark' | 'kling';
+}
+
+/** The video engines by name. ModelArk's model table is lib/ark/models.ts; Kling's is lib/kling/models.ts. */
+export const VIDEO_ENGINES: Record<VideoEngineId, VideoEngine> = {
+  'seedance-2.0': { id: 'seedance-2.0', label: 'SEEDANCE 2.0', provider: 'modelark' },
+  'seedance-2.5': { id: 'seedance-2.5', label: 'SEEDANCE 2.5', provider: 'modelark' },
+  // The label names no version on purpose: which Kling model answers is `KLING_VIDEO_MODEL`.
+  'kling-omni': { id: 'kling-omni', label: 'KLING OMNI', provider: 'kling' },
+};
 
 /** The `quality` vocabulary of the OpenAI images API (2.5 added xhigh · max · auto). */
 export type GptImageQuality = 'low' | 'medium' | 'high' | 'xhigh' | 'max' | 'auto';
@@ -73,6 +100,17 @@ export function isEngineId(value: unknown): value is EngineId {
 export function isOpenAiEngine(value: unknown): value is OpenAiEngineId {
   return isImageEngine(value) && IMAGE_ENGINES[value].provider === 'openai';
 }
+export function isGoogleEngine(value: unknown): value is GoogleEngineId {
+  return isImageEngine(value) && IMAGE_ENGINES[value].provider === 'google';
+}
+export function isKlingEngine(value: unknown): value is 'kling-omni' {
+  return isVideoEngine(value) && VIDEO_ENGINES[value].provider === 'kling';
+}
+
+/** The provider behind an engine — the one rule `needsIdentity` and the job row read. */
+export function engineProvider(id: EngineId): EngineProvider {
+  return isImageEngine(id) ? IMAGE_ENGINES[id].provider : VIDEO_ENGINES[id].provider;
+}
 
 /** The engines a template of this medium may name, first = default for a new template. */
 export function enginesForMedium(medium: TemplateMedium): readonly EngineId[] {
@@ -80,18 +118,18 @@ export function enginesForMedium(medium: TemplateMedium): readonly EngineId[] {
 }
 
 /**
- * Images: GPT Image 2 until the OpenAI organisation is verified — the 2.5 models answer 403
- * ("Your organization must be verified to use the model", smoke 2026-09-10) until the founder
- * completes Verify Organization; flip this to 'gpt-image-2.5-flare' once a smoke passes.
+ * Images: GPT Image 2.5 Flare (founder, 2026-10-24). The organisation check that used to answer 403
+ * passed: the 2026-10-24 smoke rendered a 1024×1280 xhigh image from a real selfie and kept the face
+ * (`npm run image:smoke -- --engine gpt-image-2.5-flare --photo …`). GPT Image 2 stays selectable
+ * for the rows that already name it.
  */
 export function defaultEngine(medium: TemplateMedium): EngineId {
-  return medium === 'image' ? 'gpt-image-2' : 'seedance-2.0';
+  return medium === 'image' ? 'gpt-image-2.5-flare' : 'seedance-2.0';
 }
 
-/** The chip text for an engine — the image table's label, or the Seedance version spelled the same way. */
+/** The chip text for an engine — the image table's label, or the video table's. */
 export function engineLabel(id: EngineId): string {
-  if (isImageEngine(id)) return IMAGE_ENGINES[id].label;
-  return id === 'seedance-2.5' ? 'SEEDANCE 2.5' : 'SEEDANCE 2.0';
+  return isImageEngine(id) ? IMAGE_ENGINES[id].label : VIDEO_ENGINES[id].label;
 }
 
 /** A row's engine, or its medium's default when none was chosen (or an unknown id was stored). */
@@ -142,7 +180,7 @@ export interface ImageSize {
 export interface ImageEngine {
   id: ImageEngineId;
   label: string;
-  provider: 'modelark' | 'openai';
+  provider: 'modelark' | 'openai' | 'google';
   /** The wire model id. */
   model: string;
   /** Pixel size per aspect — every entry is valid on that engine by construction (tests pin it). */
@@ -178,6 +216,19 @@ const SEEDREAM_PRO_2K: Record<ImageAspect, ImageSize> = {
 const SEEDREAM_2K = SEEDREAM_PRO_2K;
 
 /**
+ * Gemini's own 2K pixel sizes per aspect (image-generation guide, "Aspect ratios and image sizes"
+ * table for Nano Banana 2.1, read 2026-10-24). The API takes `aspect_ratio` + `image_size`, not
+ * `WxH`; this table is what those two words resolve to, so the floor and the result page know.
+ */
+const NANO_BANANA_2K: Record<ImageAspect, ImageSize> = {
+  '4:5': { width: 1856, height: 2304 },
+  '1:1': { width: 2048, height: 2048 },
+  '9:16': { width: 1536, height: 2752 },
+  '3:4': { width: 1792, height: 2400 },
+  '16:9': { width: 2752, height: 1536 },
+};
+
+/**
  * The OpenAI sizes — multiples of 16, sized like the 1024-class the price examples use. Shared by
  * gpt-image-2 and both 2.5 models (every entry sits inside 2.5's 655,360 … 8,294,400-pixel window
  * and under gpt-image-2's 3840×2160 ceiling).
@@ -198,10 +249,11 @@ export const IMAGE_ENGINES: Record<ImageEngineId, ImageEngine> = {
     model: 'gpt-image-2.5-flare',
     sizes: GPT_IMAGE_SIZES,
     quality: 'xhigh',
-    // UNMEASURED: the 2026-09-10 smoke was refused (organisation not verified). Estimate from the
-    // gpt-image-2 high figure scaled for a higher tier; replace with the smoke's usage once it runs.
-    usdPerRender: 0.35,
-    usdPerReference: 0.03,
+    // Measured 2026-10-24 (smoke, 1024×1280 xhigh): text-only $0.0813 (2,702 output tokens at $30/M +
+    // 46 text tokens), one reference selfie $0.0929 (1,450 image input tokens at $8/M ≈ $0.012).
+    // Cheaper than gpt-image-2 high despite the higher tier — the token count, not the tier, sets the bill.
+    usdPerRender: 0.082,
+    usdPerReference: 0.012,
     maxReferenceImages: 16,
   },
   'gpt-image-2.5-sunburst': {
@@ -250,6 +302,20 @@ export const IMAGE_ENGINES: Record<ImageEngineId, ImageEngine> = {
     usdPerRender: 0.035,
     usdPerReference: 0,
     maxReferenceImages: 10,
+  },
+  'nano-banana-2.1': {
+    id: 'nano-banana-2.1',
+    label: 'NANO BANANA 2.1',
+    provider: 'google',
+    model: 'gemini-nano-banana-2.1',
+    sizes: NANO_BANANA_2K,
+    // Official (Gemini API pricing, 2026-10-24): $0.0336 per 1K image, $0.0504 per 2K, $0.113 per
+    // 4K; we render 2K. Image input is $1.50 per million tokens and a reference is ≈1,120 tokens,
+    // so ≈$0.0017 each — rounded up. `gemini.ts` books the exact usage when the API reports it.
+    usdPerRender: 0.0504,
+    usdPerReference: 0.002,
+    // 10 object references + 4 character references (the guide's table for Nano Banana 2.1).
+    maxReferenceImages: 14,
   },
 };
 

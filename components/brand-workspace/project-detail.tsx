@@ -17,7 +17,14 @@ import { StaffNotice } from './staff-notice';
 import { campaignListReturnPath } from '@/lib/brands/workspace/navigation';
 import { CreatorCampaignProgress } from './creator-campaign';
 import { projectNextAction } from './next-action';
+import { campaignTimeline } from '@/lib/brands/workspace/timeline';
+import { CampaignTimelineView } from './campaign-sections';
+import { CampaignTermsSummary } from './campaign-terms-summary';
 import { SecondaryUsage } from './secondary-usage';
+import { AestheticEngine } from './aesthetic-engine';
+import { ReviewStage } from './review-stage';
+import { BriefConcierge } from './brief-concierge';
+import { HumanHandoff } from './human-handoff';
 import type { BrandUsageView } from "@/lib/brands/usage/types";
 import type { ReactNode } from "react";
 
@@ -96,7 +103,9 @@ export function ProjectDetail({
   studioReply,
   staffManageHref = null,
   usage = null,
-  campaignActions,
+  applicants = null,
+  payments = null,
+  formatTitle = null,
 }: {
   project: BrandProjectDetail;
   b: BrandCopy;
@@ -110,8 +119,14 @@ export function ProjectDetail({
   staffManageHref?: string | null;
   /** Secondary usage (docs/SECONDARY-USAGE.md): null hides the tab (campaign guests, or not loaded). */
   usage?: BrandUsageView | null;
-  /** Feature-ready project actions, loaded only after the caller has authorized this project. */
-  campaignActions?: ReactNode;
+  /**
+   * The applicants and payment tabs (docs/PLATFORM-2.0.md §16.4), rendered by the customer page for
+   * brand members only, after it authorized this project. null: no such tabs (guests, the admin view).
+   */
+  applicants?: ReactNode;
+  payments?: ReactNode;
+  /** The requested template's title, looked up by the page; null shows the slug. */
+  formatTitle?: string | null;
 }) {
   // `role: "studio"` outside /admin is the TWINGS team's read-only view: it is not the customer's seat.
   const staffView = !studio && p.role === "studio";
@@ -136,7 +151,18 @@ export function ProjectDetail({
       <div className="bw-heading">
         <div>
           <a href={campaignListReturnPath(backHref, p.organizationId, studio)}>← {b.back}</a>
-          <p className="bw-kicker">{p.organizationName}</p>
+          <div className="ys-project-track-row">
+            <p className="bw-kicker">{p.organizationName}</p>
+            <span className="ys-track-pill" data-track={p.productionMode}>
+              {p.productionMode === "studio"
+                ? locale === "en"
+                  ? "YAGI PRODUCTION · Studio Film"
+                  : "YAGI PRODUCTION · 스튜디오 제작"
+                : locale === "en"
+                  ? "CREATOR CAMPAIGN · Creator Seeding"
+                  : "CREATOR CAMPAIGN · 인플루언서 게시"}
+            </span>
+          </div>
           <h1>{p.title}</h1>
           <p>
             {b.latestUpdate} {formatBrandTimestamp(p.updatedAt, locale)}
@@ -148,7 +174,6 @@ export function ProjectDetail({
       </div>
       </div>
       {staffView && <StaffNotice b={b} manageHref={staffManageHref} />}
-      {campaignActions}
       {staffView && p.clientVisible === false && <p className="bw-note" data-project-unshared>{b.managed.prepared}</p>}
       {p.status === "requested" && <p className="bw-note">{b.requestedNext}</p>}
       {/* Above the tabs, so it is seen whichever tab is open; its link switches to that tab. */}
@@ -158,15 +183,30 @@ export function ProjectDetail({
           {next.href && <a className="bw-button" href={next.href}>{next.label} →</a>}
         </div>
       )}
-      <ProjectTabs b={b} pendingReviews={p.status === "active" ? p.contents.filter(c => c.version === newest.get(c.slotKey) && c.decision === "pending").length : 0} comments={p.messages.length} usage={usage !== null}>
+      <HumanHandoff
+        organizationId={p.organizationId}
+        projectId={p.id}
+        locale={locale}
+        refCount={Math.max(p.referenceLinks.length, 3)}
+      />
+      <ProjectTabs b={b} pendingReviews={p.status === "active" ? p.contents.filter(c => c.version === newest.get(c.slotKey) && c.decision === "pending").length : 0} comments={p.messages.length} usage={usage !== null} campaign={applicants !== null}>
       <section id="performance" className="bw-panel">
+        <CampaignTimelineView timeline={campaignTimeline(p)} b={b} />
         <CampaignPerformance project={p} b={b} locale={locale} showUnready={studio} usageCta={Boolean(usage?.eligible.some((s) => s.kind === "post"))}/>
         <CreatorCampaignProgress participation={p.participation ?? []} copy={b.creatorCampaign} locale={locale} />
       </section>
+      {applicants}
+      {payments}
       <div className="bw-grid-wide">
         <div>
           <section id="brief" className="bw-panel">
             <h2>{b.overview}</h2>
+            {p.campaignTerms && (
+              <>
+                <h3>{b.timeline.terms}</h3>
+                <CampaignTermsSummary t={b.wizard} b={b} locale={locale} title={p.title} objective={p.objective} terms={p.campaignTerms} formatTitle={formatTitle} />
+              </>
+            )}
             <h3>{b.objective}</h3>
             <p className="bw-prose">{p.objective}</p>
             <dl className="bw-meta">
@@ -201,6 +241,8 @@ export function ProjectDetail({
                 <dd>{b.productionModes[p.productionMode]}</dd>
               </div>
             </dl>
+            {/* A wizard brief states platforms and followers in its terms above; the old criteria block would repeat them. */}
+            {!p.campaignTerms && (<>
             <h3>{b.criteria}</h3>
             <p className="bw-muted">{b.criteriaHint}</p>
             <dl className="bw-meta">
@@ -235,6 +277,7 @@ export function ProjectDetail({
                 </dd>
               </div>
             </dl>
+            </>)}
             {p.referenceLinks.length > 0 && (
               <>
                 <h3>{b.references}</h3>
@@ -256,10 +299,26 @@ export function ProjectDetail({
                 </ul>
               </>
             )}
+            <BriefConcierge
+              brandName={p.organizationName}
+              projectTitle={p.title}
+              objective={p.objective}
+              organizationId={p.organizationId}
+              projectId={p.id}
+              locale={locale}
+            />
+            <AestheticEngine locale={locale} referenceLinks={p.referenceLinks} />
           </section>
           <section id="review" className="bw-panel">
             <h2>{b.review}</h2>
             <p className="bw-muted">{b.approvalNotice}</p>
+            <ReviewStage
+              projectId={p.id}
+              contents={p.contents}
+              messages={p.messages}
+              decisions={p.decisions}
+              locale={locale}
+            />
             {p.contents.length === 0 ? (
               <p className="bw-note">{b.noContent}</p>
             ) : (

@@ -10,6 +10,7 @@ import type { Dictionary } from '@/lib/i18n/dictionaries';
 import { localizedPath, type Locale } from '@/lib/i18n/config';
 import type { SectionTheme } from '@/lib/motion/geometry';
 import { audienceNavigation, type Audience } from '@/lib/navigation/audience';
+import { creatorProgramHref, creatorProgramOpen } from '@/lib/creator-platform/links';
 
 /**
  * §14.2 — "Nav: Prompts · Contests · Pricing". One list, built once, used by the bar and the
@@ -75,6 +76,7 @@ export function MarketingNav({
       accountLabels={{
         signIn: dict.auth.signIn,
         profile: dict.creatorProfile.profileLink,
+        selfie: dict.nav.mySelfie,
         renders: dict.renders.title,
         campaigns: dict.campaigns.myCampaigns,
         signOut: dict.account.signOut,
@@ -106,7 +108,8 @@ export function MarketingFooter({ locale, dict, audience = 'creator' }: { locale
   return (
     <SiteFooter
       locale={locale}
-      links={brand ? [...navigation.links, navigation.primary] : siteLinks(locale, dict)}
+      // The format creator program is a footer door only, and only while its public intake is open.
+      links={brand ? [...navigation.links, navigation.primary] : [...siteLinks(locale, dict), ...(creatorProgramOpen() ? [{ href: creatorProgramHref(locale), label: dict.creatorProgram.footerLink }] : [])]}
       /* 전자상거래법 §21 and every payment provider's merchant review: the legal documents must be
          reachable from anywhere on the site, so they live in the footer rather than on a page a
          reviewer has to be told about. */
@@ -133,15 +136,4 @@ export function MarketingFooter({ locale, dict, audience = 'creator' }: { locale
       }}
     />
   );
-}
-
-/** The house ad (2026-09-11): the brand-campaign pitch, pointing at the enquiry form. */
-export function adLabels(dict: Dictionary, locale: Locale) {
-  return {
-    label: dict.ad.label,
-    headline: dict.ad.headline,
-    pitch: dict.ad.pitch,
-    cta: dict.ad.cta,
-    href: brandEnquiryHref(locale),
-  };
 }

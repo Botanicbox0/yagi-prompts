@@ -15,6 +15,12 @@ export interface PromptLabels {
   lockChip: string;
   /** The card's one control: go to the page where the prompt lives (2026-08-15). */
   cardDetail: string;
+  /** §15.3-4 (2026-10-23) — the card's length chip, its creator credit and its play/stop control. */
+  cardSeconds: string;
+  cardAuthor: string;
+  cardAuthorAnonymous: string;
+  cardPlay: string;
+  cardPause: string;
   /** The Higgsfield handoff (2026-08-15) — copy the prompt, open the tool. */
   runCta: string;
   runCopied: string;
@@ -68,6 +74,12 @@ export function promptLabels(dict: Dictionary): PromptLabels {
     byAnonymous: dict.prompts.byAnonymous,
     lockChip: dict.prompts.lockChip,
     cardDetail: dict.prompts.cardDetail,
+    cardSeconds: dict.prompts.cardSeconds,
+    cardAuthor: dict.prompts.cardAuthor,
+    cardAuthorAnonymous: dict.prompts.cardAuthorAnonymous,
+    // The same words the landing's preview control uses — one name for one action.
+    cardPlay: dict.creatorJourney.playPreview,
+    cardPause: dict.creatorJourney.pausePreview,
     runCta: dict.prompts.runCta,
     runCopied: dict.prompts.runCopied,
     runFailed: dict.prompts.runFailed,

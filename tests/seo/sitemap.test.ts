@@ -109,6 +109,29 @@ describe('sitemap (§8 M5)', () => {
     expect(empty.every((entry) => entry.url.startsWith(ORIGIN))).toBe(true);
   });
 
+  it('lists the format creator program only while its public intake gate is open', () => {
+    expect(urls.some((url) => url.includes('/creators'))).toBe(false);
+    const open = buildSitemap({ origin: ORIGIN, cards: [], includeCreatorProgram: true }).map((entry) => entry.url);
+    expect(open).toContain(`${ORIGIN}/en/creators`);
+    expect(open).toContain(`${ORIGIN}/ko/creators`);
+    expect(open.some((url) => url.includes('/creators/'))).toBe(false);
+  });
+
+  it('lists public maker pages with reciprocal hreflang, once each maker has a published template (§7.5)', () => {
+    const makers = [
+      { handle: 'jun_01', bio: null, templateCount: 2, latestPublishedAt: '2026-10-20T00:00:00Z' },
+      { handle: 'quiet_maker', bio: 'bio', templateCount: 0, latestPublishedAt: null },
+    ];
+    const built = buildSitemap({ origin: ORIGIN, cards: [], makers });
+    const entry = built.find((item) => item.url === `${ORIGIN}/ko/makers/jun_01`);
+    expect(entry).toBeDefined();
+    expect(entry?.lastModified).toEqual(new Date('2026-10-20T00:00:00Z'));
+    expect(entry?.alternates?.languages).toEqual({ en: `${ORIGIN}/en/makers/jun_01`, ko: `${ORIGIN}/ko/makers/jun_01`, 'x-default': `${ORIGIN}/en/makers/jun_01` });
+    expect(built.some((item) => item.url === `${ORIGIN}/en/makers/jun_01`)).toBe(true);
+    expect(built.some((item) => item.url.includes('quiet_maker'))).toBe(false);
+    expect(urls.some((url) => url.includes('/makers/'))).toBe(false);
+  });
+
   it('never invents modification dates from the time of sitemap generation', () => {
     expect(entries.find((entry) => entry.url === `${ORIGIN}/en`)).not.toHaveProperty('lastModified');
     expect(entries.find((entry) => entry.url.endsWith('/en/p/voice-identity-setup'))).not.toHaveProperty('lastModified');
@@ -143,10 +166,14 @@ describe('robots (§8 M5)', () => {
       '/campaigns/*/apply',
       '/campaigns/*/make',
       '/campaigns/mine',
+      '/campaigns/open',
       // docs/TEMPLATES-IA.md §8 — the owner's renders and the 3-day links.
       '/renders',
       '/r/',
       '/identity',
+      // The format creator application and workspace; the program page stays public.
+      '/creators/apply',
+      '/creators/workspace',
     ]);
   });
 

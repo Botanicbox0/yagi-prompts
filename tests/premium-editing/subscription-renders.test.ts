@@ -48,7 +48,7 @@ describe('subscription render authorization and private preparation', () => {
     await paid('creator');
     expect(await createSubscriptionRenderJob({ ...deps(), environment: 'live' }, viewer, request())).toMatchObject({ ok: false, code: 'subscription_required' });
     expect(await createSubscriptionRenderJob(deps(), viewer, { ...request(), editText: '셔츠를 파란색으로' })).toMatchObject({ ok: false, code: 'premium_required' });
-    expect(await createSubscriptionRenderJob(deps(), viewer, { ...request(), portraitId: randomUUID() })).toMatchObject({ ok: false, code: 'identity_required' });
+    expect(await createSubscriptionRenderJob(deps(), viewer, { ...request(), selfieId: randomUUID() })).toMatchObject({ ok: false, code: 'identity_required' });
     expect(await createSubscriptionRenderJob(deps(), viewer, { ...request(), photo: null })).toMatchObject({ ok: false, code: 'bad_photo' });
     expect(await createSubscriptionRenderJob(deps(), viewer, { ...request(), templateSlug: 'static-portrait-window-light' })).toMatchObject({ ok: false, code: 'unsupported_template' });
     expect((await h.sql.query('select * from creator_subscription_usage')).rows).toHaveLength(0);

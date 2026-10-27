@@ -57,7 +57,8 @@ export function isAdminPath(pathname: string): boolean {
 /** Public logo files share /brand, but are not authenticated workspace routes. */
 export function isBrandPath(pathname: string): boolean {
   // `usage`: the payment provider's return page for secondary usage (docs/SECONDARY-USAGE.md).
-  return pathname === '/brand' || /^\/brand\/(?:projects|members|invite|settings|library|studio|usage)(?:\/|$)/.test(pathname);
+  // `creators`: the creator pool (docs/PLATFORM-2.0.md §17.3).
+  return pathname === '/brand' || /^\/brand\/(?:projects|members|invite|settings|library|studio|usage|creators)(?:\/|$)/.test(pathname);
 }
 
 const AUTH_METHODS: Record<string, readonly string[]> = {
@@ -88,7 +89,18 @@ export function adminRouteAllowed(pathname: string, method: string): boolean {
   if (!read) return false;
   if (pathname.startsWith('/_next/static/')) return true;
   if (/^\/fonts\/[a-zA-Z0-9_./-]+\.(?:css|woff2?)$/.test(pathname)) return true;
-  return ['/favicon.ico', '/icon.png', '/apple-icon.png', '/brand/twings.svg', '/brand/twings-mark-black.png', '/brand/twings-mark-white.png', '/brand/twings-mark-mask.png'].includes(pathname);
+  return [
+    '/favicon.ico',
+    '/icon.png',
+    '/apple-icon.png',
+    '/brand/twings.svg',
+    '/brand/twings-mark-black.png',
+    '/brand/twings-mark-white.png',
+    '/brand/twings-mark-mask.png',
+    '/brand/yagi-mark-black.png',
+    '/brand/yagi-mark-white.png',
+    '/brand/yagi-mark-mask.png',
+  ].includes(pathname);
 }
 
 /**
@@ -108,6 +120,8 @@ export function brandRouteAllowed(pathname: string, method: string): boolean {
   if (STUDIO_DEMO_FILES.has(pathname)) return read;
   if (pathname === '/api/brand-production') return method === 'POST';
   if (pathname === '/api/campaign-collaboration') return method === 'POST';
+  // The creator pool's one action, "invite to a campaign" (docs/PLATFORM-2.0.md §17.3).
+  if (pathname === '/api/brand-creators') return method === 'POST';
   if (pathname === '/api/campaign-funding') return read || method === 'POST';
   if (/^\/api\/campaign-collaboration\/files\/[a-f0-9-]+$/.test(pathname)) return read;
   if (/^\/api\/brand-production\/[a-f0-9-]+(?:\/media)?$/.test(pathname)) return read;
@@ -125,6 +139,7 @@ export function bypassConsumerLocale(pathname: string): boolean {
   if (pathname === '/workers/photo-advice-v1.js' || pathname === '/models/face-landmarker-float16-v1.task' ||
     /^\/vendor\/face-1\.1\.0\/(?:vision_bundle\.js|wasm\/vision_wasm_(?:nosimd_)?internal\.(?:js|wasm))$/.test(pathname)) return true;
   if (pathname === '/llms.txt' || pathname === '/llms-full.txt') return true;
+  if (pathname === '/.well-known/assetlinks.json' || pathname === '/.well-known/apple-app-site-association') return true;
   return /^\/(?:_next\/static|_next\/image|favicon\.ico|sitemap\.xml|robots\.txt|sw\.js|offline\.html|manifest\.webmanifest|fonts\/|\.storage\/|api\/|auth\/|r\/)/.test(pathname)
     || /\.(?:svg|png|jpg|jpeg|gif|webp|mp4|webm|woff2?)$/.test(pathname);
 }

@@ -25,9 +25,9 @@ export async function updateSession(
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !anonKey) {
-    // Placeholder-env development (no Supabase project yet, PLAN §11): treat everyone as anon
-    // rather than crashing every request.
+  if (!url || !anonKey || request.cookies.getAll().length === 0) {
+    // Placeholder-env development (no Supabase project yet, PLAN §11) or anonymous request with
+    // zero cookies: treat as anon without round-tripping to the auth server on every public page.
     return { response, user: null };
   }
 

@@ -259,6 +259,13 @@ to the browser):
 | `RESEND_API_KEY` | server | with `NOTIFY_FROM_EMAIL`, or the worker sends nothing |
 | `NOTIFY_FROM_EMAIL` | server | e.g. `YAGI PROMPTS <prompts@your-domain>` |
 | `OPENAI_API_KEY` / `ARK_API_KEY` | server | the render engines (docs/TEMPLATES-IA.md §7–8); a missing key fails a job with `no_engine_key`, never a 500 |
+| `KLING_API_KEY` | server | Kling official API key (console → API Keys), sent as `Authorization: Bearer`. Missing → a `kling-omni` job fails `no_engine_key`. Check it with `npm run kling:smoke -- --dry` (prints presence as a boolean, never the value). |
+| `KLING_VIDEO_MODEL` | server | optional. Which Kling model `kling-omni` renders on: `kling-3.0-omni` (default, open today) or `kling-4.0` (opens 2026-10-28). Switching needs no code change (lib/kling/models.ts). |
+| `KLING_VIDEO_MODEL_ID` | server | optional. Overrides the create endpoint's path segment (`/omni-video/{id}`) if the 4.0 string published on release differs from the preview docs. |
+| `KLING_BASE_URL` | server | optional; default `https://api-singapore.klingai.com` |
+| `GEMINI_API_KEY` | server | Google AI Studio key for the Nano Banana image engine (`x-goog-api-key`). Missing → a `nano-banana-2.1` job fails `no_engine_key`. Check with `npm run gemini:smoke -- --dry`. |
+| `GEMINI_IMAGE_MODEL` | server | optional. Overrides the wire model id (default `gemini-nano-banana-2.1`) for a newer Nano Banana release. |
+| `GEMINI_BASE_URL` | server | optional; default `https://generativelanguage.googleapis.com/v1beta` (the Interactions API) |
 | `CRON_SECRET` | server | optional; any long random string. Vercel sends it as the bearer token on `/api/renders/tick`; without it the tick is open but idempotent |
 
 Do **not** set `STORAGE_DRIVER`, `PLAYBOOK_LOCAL_DB`, `PLAYBOOK_LOCAL_DB_DIR` or

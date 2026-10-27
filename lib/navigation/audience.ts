@@ -17,7 +17,7 @@ export function audienceNavigation(locale: Locale, dict: Dictionary, rest: strin
   return {
     audience,
     modes: [
-      { id: 'creator' as const, href: `/${locale}`, label: t.creator },
+      { id: 'creator' as const, href: `/${locale}`, label: t.personal },
       { id: 'brand' as const, href: brandsHref(locale), label: t.brand },
     ],
     links: audience === 'brand' ? [

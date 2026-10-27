@@ -6,6 +6,8 @@ vi.mock('@/lib/prompts/public-catalog', () => ({ getPromptCatalog: async () => (
 vi.mock('@/components/marketing/chrome', () => ({ MarketingNav: () => null, MarketingFooter: () => null }));
 vi.mock('@/components/campaigns/brand-experience', () => ({
   BrandFormatExplorer: () => <div data-brand-format-explorer />,
+  BrandCraftShowcase: () => <div data-production-craft-strip />,
+  HeroCinemaGrid: () => <div data-hero-cinema-grid />,
   MorphicFilmPair: () => <div data-morphic-film-pair />,
 }));
 vi.mock('@/lib/seo/faq-section', () => ({ FaqSection: () => null }));

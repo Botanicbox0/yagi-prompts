@@ -11,7 +11,8 @@ import type { TemplateMedium } from '@/lib/prompts/schemas';
 /** `held` = stored and waiting behind the person's face check (0020); released to `queued` by the identity callback. */
 export type RenderStatus = 'held' | 'queued' | 'running' | 'succeeded' | 'failed';
 export type NotifyStatus = 'pending' | 'sent' | 'skipped' | 'failed';
-export type RenderProvider = 'openai' | 'modelark';
+/** Who rendered (or is rendering) the job — the CHECK on render_jobs.provider (0017, widened in 0061). */
+export type RenderProvider = 'openai' | 'modelark' | 'kling' | 'google';
 
 export interface RenderJob {
   id: string;
@@ -234,7 +235,8 @@ export async function markRenderSucceeded(sql: SqlRunner, id: string, args: Mark
   await sql.query(
     `update render_jobs
         set status = 'succeeded', result_key = $2, result_mime = $3, result_bytes = $4, provider = $5, cost_usd = $6,
-            share_token = $7, share_expires_at = $8::timestamptz, finished_at = $9::timestamptz,
+            share_token = coalesce(share_token, $7), share_expires_at = coalesce(share_expires_at, $8::timestamptz),
+            finished_at = coalesce(finished_at, $9::timestamptz),
             error_code = null, error_message = null
       where id = $1`,
     [id, args.resultKey, args.resultMime, args.resultBytes, args.provider, args.costUsd, args.shareToken, args.shareExpiresAt.toISOString(), args.finishedAt.toISOString()],

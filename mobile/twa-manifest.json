@@ -1,0 +1,61 @@
+{
+  "packageId": "app.twings.client",
+  "host": "twings.app",
+  "name": "TWINGS",
+  "launcherName": "TWINGS",
+  "display": "standalone",
+  "themeColor": "#FFFFFF",
+  "themeColorDark": "#0A0A0A",
+  "navigationColor": "#FFFFFF",
+  "navigationColorDark": "#0A0A0A",
+  "navigationDividerColor": "#E8E8EB",
+  "navigationDividerColorDark": "#26262B",
+  "backgroundColor": "#FFFFFF",
+  "enableNotifications": true,
+  "startUrl": "/video?source=pwa",
+  "iconUrl": "https://twings.app/icons/icon-512.png",
+  "maskableIconUrl": "https://twings.app/icons/maskable-512.png",
+  "monochromeIconUrl": "https://twings.app/icons/badge-96.png",
+  "splashScreenFadeOutDuration": 300,
+  "signingKey": {
+    "path": "./android-upload-keystore.jks",
+    "alias": "twings-upload"
+  },
+  "appVersionName": "1.0.0",
+  "appVersionCode": 1,
+  "shortcuts": [
+    {
+      "name": "포맷 둘러보기",
+      "shortName": "포맷",
+      "url": "https://twings.app/video?source=pwa",
+      "chosenIconUrl": "https://twings.app/icons/icon-192.png"
+    },
+    {
+      "name": "내 작품",
+      "shortName": "내 작품",
+      "url": "https://twings.app/renders",
+      "chosenIconUrl": "https://twings.app/icons/icon-192.png"
+    }
+  ],
+  "generatorApp": "bubblewrap-cli",
+  "webManifestUrl": "https://twings.app/manifest.webmanifest",
+  "fallbackType": "customtabs",
+  "features": {
+    "locationDelegation": {
+      "enabled": false
+    },
+    "playBilling": {
+      "enabled": false
+    }
+  },
+  "alphaDependencies": {
+    "enabled": false
+  },
+  "enableSiteSettingsShortcut": true,
+  "isChromeOSOnly": false,
+  "isMetaQuest": false,
+  "fullScopeUrl": "https://twings.app/",
+  "minSdkVersion": 24,
+  "orientation": "portrait",
+  "fingerprints": []
+}

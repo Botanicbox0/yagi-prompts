@@ -212,7 +212,7 @@ export default async function ChooseProviderPage(props: RouteProps) {
           {languageLinks}
         </div>
 
-        {!admin && !brandEntry && <a href={`/auth/review?locale=${locale}`} data-auth-review className="mt-6 text-xs underline opacity-70">{dict.auth.review.entryLink}</a>}
+        {!admin && !brandEntry && <a href={`/auth/review?locale=${locale}&next=${encodeURIComponent(next)}`} data-auth-review className="mt-6 text-xs underline opacity-70">{dict.auth.review.entryLink}</a>}
 
         {!backReturnsHere && (
           <a href={consumerBack} data-auth-back className="mt-10 font-label text-eyebrow uppercase opacity-70 hover:opacity-100">

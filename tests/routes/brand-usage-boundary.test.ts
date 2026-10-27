@@ -17,7 +17,6 @@ vi.mock('@/lib/auth/dev-identity', () => ({ devIdentityUserId: () => null }));
 vi.mock('@/lib/auth/viewer', () => ({ getViewer: mocks.viewer }));
 vi.mock('@/lib/db/connect', () => ({ getSqlRunner: mocks.sql }));
 vi.mock('@/lib/renders/runtime', () => ({ runLiveRenderPass: mocks.renderPass, formatPassReport: () => 'ok' }));
-vi.mock('@/lib/identity/portrait-runtime', () => ({ portraitDeps: async () => null }));
 vi.mock('@/lib/brands/usage/payment', async (original) => ({ ...(await original<object>()), reconcileBrandUsagePayments: mocks.reconcile }));
 vi.mock('next/server', async (original) => ({ ...(await original<object>()), after: () => undefined }));
 import { middleware } from '@/middleware';
@@ -26,6 +25,9 @@ import { POST as workspace } from '@/app/api/brand-workspace/route';
 import { GET as tick } from '@/app/api/renders/tick/route';
 
 const req = (host: string, path: string, method = 'GET', origin?: string) => new NextRequest(`https://${host}${path}`, { method, headers: { host, ...(origin ? { origin } : {}) } });
+// Code only: comments may name what the module deliberately does not do.
+const code = (file: string) => readFileSync(file, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '').replace(/\s\/\/ .*$/gm, '');
+const filesIn = (dir: string) => readdirSync(join(process.cwd(), dir)).map((f) => join(process.cwd(), dir, f));
 const post = (path: string, origin: string, body: unknown = { operation: 'order.create', input: {} }) => new NextRequest(`https://brand.twings.app${path}`, {
   method: 'POST', headers: { host: 'brand.twings.app', origin, 'sec-fetch-site': origin === 'https://brand.twings.app' ? 'same-origin' : 'cross-site', 'content-type': 'application/json' }, body: JSON.stringify(body) });
 
@@ -60,13 +62,18 @@ describe('brand usage edge boundary', () => {
     vi.unstubAllEnvs();
   });
   it('usage code never touches render billing, the render queue or the public render flag', () => {
-    const root = join(process.cwd(), 'lib/brands/usage');
-    const files = [...readdirSync(root).map((f) => join(root, f)), join(process.cwd(), 'app/api/brand-workspace/usage/route.ts')];
-    for (const file of files) {
-      // Code only: comments may name what the module deliberately does not do.
-      const source = readFileSync(file, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '').replace(/\s\/\/ .*$/gm, '');
-      expect(source, file).not.toMatch(/billing_payments|RENDER_PIPELINE_PUBLIC|createRenderJob|@\/lib\/renders|toss-service/);
-    }
+    for (const file of [...filesIn('lib/brands/usage'), join(process.cwd(), 'app/api/brand-workspace/usage/route.ts')])
+      expect(code(file), file).not.toMatch(/billing_payments|RENDER_PIPELINE_PUBLIC|createRenderJob|@\/lib\/renders|toss-service/);
+  });
+  it('the Toss webhook route is the one place the three payment tables meet: it calls each module, none calls another', () => {
+    for (const file of filesIn('lib/billing'))
+      expect(code(file), file).not.toMatch(/@\/lib\/brands\/usage|@\/lib\/campaigns\/funding|brand_usage_payments|campaign_funding_payments/);
+    for (const file of filesIn('lib/brands/usage')) expect(code(file), file).not.toMatch(/@\/lib\/campaigns\/funding|campaign_funding_payments/);
+    for (const file of filesIn('lib/campaigns/funding'))
+      expect(code(file), file).not.toMatch(/billing_payments|toss-service|@\/lib\/renders|@\/lib\/brands\/usage|brand_usage_payments/);
+    const route = code(join(process.cwd(), 'app/api/billing/toss/webhook/route.ts'));
+    expect(route).toMatch(/from '@\/lib\/brands\/usage\/payment'/);
+    expect(route).toMatch(/from '@\/lib\/campaigns\/funding\/payment'/);
   });
   it('keeps render recovery available to the shared cron credential and rejects unauthenticated calls once installed', async () => {
     vi.stubEnv('CRON_SECRET', 'fixture-shared-cron-secret');

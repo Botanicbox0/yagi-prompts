@@ -21,6 +21,7 @@ export function ActionForm({
   confirm,
   tone = "primary",
   successNotice,
+  onSuccess,
 }: {
   operation: string;
   fixed?: Record<string, unknown>;
@@ -35,6 +36,8 @@ export function ActionForm({
   tone?: ButtonTone;
   /** Replaces the generic "Saved." after a successful send. */
   successNotice?: string;
+  /** Runs once after a successful send, before any navigation (the campaign wizard clears its draft). */
+  onSuccess?: () => void;
 }) {
   const router = useRouter();
   const [ready,setReady]=useState(false);
@@ -183,6 +186,7 @@ export function ActionForm({
       }
       setNotice(successNotice ?? b.saved);
       request.current = null;
+      onSuccess?.();
       if (operation === "invitation.create" && result.token)
         setInviteUrl(
           `${location.origin}/brand/invite#token=${encodeURIComponent(result.token)}`,

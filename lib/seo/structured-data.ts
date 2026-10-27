@@ -143,6 +143,7 @@ export function campaignServiceStructuredData(input: {
     name: input.name,
     description: input.description,
     serviceType: input.serviceType,
+    areaServed: ['KR', 'JP'],
     provider: organization,
     // A campaign is a service opportunity, not an Event or a purchasable creator. No creator
     // fee, invented campaign price, rating, or promised reach is emitted.

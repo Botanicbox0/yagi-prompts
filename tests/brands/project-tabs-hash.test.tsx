@@ -50,14 +50,14 @@ describe("campaign tab fragments", () => {
     expect(hooks.set).not.toHaveBeenCalledWith("usage");
   });
 
-  it("keeps an authorized #usage=post:<id> deep link on the usage tab", () => {
+  it("keeps an authorized #usage=post:<id> deep link on the contracts and usage tab", () => {
     const { html, navigate } = mount(true, "#usage=post:00000000-0000-4000-8000-000000000001");
-    expect(html).toContain('href="#usage"');
-    expect(hooks.set).toHaveBeenLastCalledWith("usage");
+    expect(html).toContain('href="#contracts"');
+    expect(hooks.set).toHaveBeenLastCalledWith("contracts");
     navigate("#review");
     expect(hooks.set).toHaveBeenLastCalledWith("review");
     navigate("#usage=content_version:00000000-0000-4000-8000-000000000002");
-    expect(hooks.set).toHaveBeenLastCalledWith("usage");
+    expect(hooks.set).toHaveBeenLastCalledWith("contracts");
     expect(scrolled).toEqual(["usage", "usage"]);
   });
 
@@ -85,9 +85,13 @@ describe("campaign tab fragments", () => {
   });
 
   it("resolves fragments against the viewer's tabs", () => {
-    const guest = ["performance", "brief", "review", "conversation", "reports", "files", "contracts"] as const;
-    expect(tabForViewer("#usage", guest)).toBe("performance");
-    expect(tabForViewer("#usage=post:x", [...guest, "usage"])).toBe("usage");
+    const guest = ["performance", "brief", "review", "reports", "conversation", "contracts"] as const;
+    expect(tabForViewer("#usage", guest, false)).toBe("performance");
+    expect(tabForViewer("#usage=post:x", guest, true)).toBe("contracts");
+    expect(tabForViewer("#files", guest)).toBe("conversation");
+    // A guest has no applicants or payment tab: those fragments open the overview.
+    expect(tabForViewer("#applicants", guest)).toBe("performance");
+    expect(tabForViewer("#payments", [...guest, "applicants", "payments"])).toBe("payments");
     expect(tabForViewer("#nope", guest)).toBeNull();
   });
 });

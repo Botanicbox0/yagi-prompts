@@ -5,10 +5,10 @@ import { platformReady } from '@/lib/creator-platform/service';
 import { reserveCampaignProduction, type CampaignProductionCode } from '@/lib/campaigns/production';
 import { campaignProductReferences, campaignRenderReferenceUrls } from '@/lib/campaigns/production-references';
 import { claimCampaignDispatch, acknowledgeCampaignTask, resumeCampaignDispatch, CAMPAIGN_DISPATCH_PREFIX } from '@/lib/campaigns/production-dispatch';
-import { cleanPortraitInput } from '@/lib/identity/portrait-images';
+import { cleanSelfie } from '@/lib/identity/selfie-images';
 import type { StorageDriver } from '@/lib/storage';
 import { reserveProduction } from '@/lib/brands/production/service';
-import { selectedPortraitPhoto } from '@/lib/identity/portrait-service';
+import { savedSelfiePhoto } from '@/lib/identity/selfie-service';
 import type { SqlRunner } from '@/lib/db/sql-runner';
 import type { Viewer } from '@/lib/auth/identity';
 import type { ArkAssetsClient } from '@/lib/ark/assets';
@@ -16,10 +16,10 @@ import { releaseAfterUse, releaseAfterUseEnabled } from '@/lib/identity/rotation
 import { ASSET_WAIT_HOURS, assetLibraryMode, ensureIdentityAsset, ensureVirtualGroup, identityStatusFor, loadIdentityGroup, needsIdentity, needsLiveness, pollIdentityAsset, recordIdentityUse, type AssetLibraryMode, type IdentityDeps } from '@/lib/identity/service';
 import { purchaseOpenFor } from '@/lib/auth/purchase-gate';
 import { getTossGateway, type TossGateway } from '@/lib/billing/toss-gateway';
-import { reconcileTossPayments, renderPaymentStatus } from '@/lib/billing/toss-service';
+import { addTossReport, billingErrorCode, emptyTossReport, logBilling, reconcileTossPayments, renderPaymentStatus, type TossReconcileReport } from '@/lib/billing/toss-service';
 import { DEFAULT_LOCALE, isLocale, type Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/dictionaries';
-import { aspectsForMedium, isEngineId, isImageAspect, isImageEngine, isVideoAspect, isVideoEngine, resolveEngine } from '@/lib/images/engines';
+import { aspectsForMedium, engineProvider, isEngineId, isImageAspect, isImageEngine, isVideoAspect, isVideoEngine, resolveEngine } from '@/lib/images/engines';
 import { loadPromptById, loadPromptBySlug, type PromptRow } from '@/lib/prompts/repo';
 import { isForSale } from '@/lib/twings/products';
 import { renderResolution, renderableResolution } from '@/lib/twings/resolution';
@@ -32,7 +32,11 @@ import { getPremiumEditBudget } from '@/lib/premium-editing/budget';
 import { deleteExpiredEditReferences, loadSubscriptionRender, subscriptionRenderSchemaReady, subscriptionUsageTrackingPresent } from '@/lib/premium-editing/repo';
 import { prepareSubscriptionPrompt } from '@/lib/premium-editing/service';
 import type { PremiumEditClient } from '@/lib/premium-editing/provider';
-import { RenderFailure, pollVideoRender, runImageRender, startVideoRender, videoModelFor, type EngineOutput, type RenderEngineDeps, type RenderFailureCode, type RenderPhoto } from './engines';
+import { RenderFailure, baseFailureCode, pollVideoRender, runImageRender, startVideoRender, videoModelFor, type EngineOutput, type RenderEngineDeps, type RenderFailureCode, type RenderPhoto } from './engines';
+import { ensureJobRecipe, ensureMakerSandbox, insertJobOutputs, insertJobRecipe, loadJobRecipe, loadTemplateRecipe, MAKER_SANDBOX_ID, MAKER_SANDBOX_SLUG, renderPurpose, saveStepRecord, type JobRecipe } from '@/lib/recipes/repo';
+import { recordedUsd, runRecipe, type RecipeResult } from '@/lib/recipes/execute';
+import { primaryStep, recipeNeedsIdentity, type Recipe } from '@/lib/recipes/schema';
+import { readMakerFile } from '@/lib/recipes/assets';
 import { fixedVideoReferenceUrls } from './template-references';
 import type { RenderNotifier } from './notify';
 import { buildRenderPrompt } from './prompt';
@@ -55,6 +59,7 @@ import {
   requeueRenderJob,
   type RenderJob,
 } from './repo';
+import { markRenderFinishing } from './extras';
 import { constantTimeEqual, isRenderId, isShareExpired, isShareTokenShape, newShareToken, shareExpiresAt } from './share';
 import { extensionFor, type RenderStore } from './store';
 
@@ -104,30 +109,30 @@ export interface RenderServiceDeps {
 
 export interface CreateCampaignRenderInput {
   applicationId: string; requestId: string; ownFaceConsent: boolean;
-  portraitId?: string; photo?: { bytes: Uint8Array; mime: string } | null; locale: string | null;
+  selfieId?: string; photo?: { bytes: Uint8Array; mime: string } | null; locale: string | null;
 }
 /** Selected campaign participation pays for production; no consumer plan or admin impersonation. */
 export async function createCampaignRenderJob(deps: RenderServiceDeps & { referenceStorage?: Pick<StorageDriver, 'read'> }, viewer: Viewer, input: CreateCampaignRenderInput): Promise<CreateRenderOutcome | { ok: false; code: CampaignProductionCode | 'consent_required' }> {
   if (!viewer.userId) return { ok: false, code: 'sign_in_required' };
   if (input.ownFaceConsent !== true) return { ok: false, code: 'consent_required' };
-  if (Object.keys(input).some(key => !['applicationId', 'requestId', 'ownFaceConsent', 'portraitId', 'photo', 'locale'].includes(key))) return { ok: false, code: 'invalid' };
-  if (!SUBSCRIPTION_UUID.test(input.applicationId) || !SUBSCRIPTION_UUID.test(input.requestId) || input.portraitId && (!SUBSCRIPTION_UUID.test(input.portraitId) || input.photo)) return { ok: false, code: 'invalid' };
+  if (Object.keys(input).some(key => !['applicationId', 'requestId', 'ownFaceConsent', 'selfieId', 'photo', 'locale'].includes(key))) return { ok: false, code: 'invalid' };
+  if (!SUBSCRIPTION_UUID.test(input.applicationId) || !SUBSCRIPTION_UUID.test(input.requestId) || input.selfieId && (!SUBSCRIPTION_UUID.test(input.selfieId) || input.photo)) return { ok: false, code: 'invalid' };
   let photo = input.photo ?? null;
-  if (!input.portraitId) {
+  if (!input.selfieId) {
     if (!photo || photo.bytes.byteLength > 3_000_000) return { ok: false, code: photo ? 'photo_too_large' : 'bad_photo' };
-    try { photo = { bytes: await cleanPortraitInput(photo.bytes, photo.mime), mime: 'image/png' }; }
+    try { photo = { bytes: (await cleanSelfie(photo.bytes, photo.mime)).bytes, mime: 'image/png' }; }
     catch { return { ok: false, code: 'bad_photo' }; }
   }
-  const fingerprint = createHash('sha256').update(JSON.stringify([input.applicationId, input.portraitId ?? null, input.portraitId ? null : createHash('sha256').update(photo!.bytes).digest('hex')])).digest('hex');
+  const fingerprint = createHash('sha256').update(JSON.stringify([input.applicationId, input.selfieId ?? null, input.selfieId ? null : createHash('sha256').update(photo!.bytes).digest('hex')])).digest('hex');
   const writtenKeys: string[] = [];
   try {
     const result = await reserveCampaignProduction(deps, viewer, { applicationId: input.applicationId, requestId: input.requestId, fingerprint }, async (sql, template, ids) => {
-      const ownPhoto = input.portraitId ? await selectedPortraitPhoto(sql, deps.store, viewer.userId!, input.portraitId) : photo;
+      const ownPhoto = input.selfieId ? await savedSelfiePhoto(sql, deps.store, viewer.userId!, input.selfieId) : photo;
       if (!ownPhoto) return { ok: false as const, code: 'identity_required' as const };
       const references = await campaignProductReferences(sql, template.id, ids, deps.referenceStorage);
       const id = randomUUID();
       writtenKeys.push(`${id}/input.${extensionFor(ownPhoto.mime)}`);
-      const created = await createAuthorizedRender({ ...deps, sql }, viewer, { templateSlug: template.slug, aspect: template.aspectDefault ?? '9:16', resolution: '720p', photo: ownPhoto, portraitId: input.portraitId, locale: input.locale, holdForIdentity: true }, id, template);
+      const created = await createAuthorizedRender({ ...deps, sql }, viewer, { templateSlug: template.slug, aspect: template.aspectDefault ?? '9:16', resolution: '720p', photo: ownPhoto, selfieId: input.selfieId, locale: input.locale, holdForIdentity: true }, id, template);
       if (!created.ok) return created;
       const referenceKeys: string[] = [];
       for (const [index, reference] of references.entries()) {
@@ -174,8 +179,8 @@ export interface CreateRenderInput {
   holdForIdentity?: boolean;
   /** Server-only payment proof. The public render endpoint never accepts this field. */
   paymentOrderId?: string;
-  /** Server-resolved lineage, never trusted as a caller-supplied storage key. */
-  portraitId?: string;
+  /** Server-resolved lineage (the saved selfie this job copied), never a caller-supplied storage key. */
+  selfieId?: string;
   /**
    * '720p' | '1080p'; empty = 720p. Only an operator's free render reads this from a request. A paid
    * render takes it from the ORDER row (below) — whatever the caller passed is overwritten.
@@ -190,29 +195,29 @@ export async function createRenderJob(deps: RenderServiceDeps, viewer: Viewer, i
   if (!input.paymentOrderId) return { ok: false, code: 'not_open' };
   return deps.sql.transaction(async (sql) => {
     const { rows } = await sql.query<{
-      status: string; template_slug: string; aspect: string; render_ref: string; render_id: string | null; identity_portrait_id: string | null; resolution: string | null;
-    }>("select status,template_slug,aspect,render_ref,render_id,identity_portrait_id,resolution from billing_payments where id=$1 and user_id=$2 and payment_type='NORMAL' for update", [input.paymentOrderId, viewer.userId]);
+      status: string; template_slug: string; aspect: string; render_ref: string; render_id: string | null; identity_selfie_id: string | null; resolution: string | null;
+    }>("select status,template_slug,aspect,render_ref,render_id,identity_selfie_id,resolution from billing_payments where id=$1 and user_id=$2 and payment_type='NORMAL' for update", [input.paymentOrderId, viewer.userId]);
     const payment = rows[0];
     if (!payment || payment.status !== 'paid' || payment.template_slug !== input.templateSlug || payment.aspect !== input.aspect) return { ok: false, code: 'not_open' };
     if (payment.render_id) {
       const job = await loadRenderJob(sql, payment.render_id);
       return job ? { ok: true, id: job.id, held: job.status === 'held' } : { ok: false, code: 'not_found' };
     }
-    const result = await createAuthorizedRender({ ...deps, sql }, viewer, {...input,portraitId:payment.identity_portrait_id??undefined,resolution:payment.resolution}, payment.render_ref);
+    const result = await createAuthorizedRender({ ...deps, sql }, viewer, {...input,selfieId:payment.identity_selfie_id??undefined,resolution:payment.resolution}, payment.render_ref);
     if (result.ok) await sql.query('update billing_payments set render_id=$2,fulfilled_at=$3,lease_until=null where id=$1', [input.paymentOrderId, result.id, deps.now ?? new Date()]);
     return result;
   });
 }
 
 /** Separate contract authorization; never impersonates an admin or accepts client storage keys. */
-export async function createBrandRenderJob(deps: RenderServiceDeps, viewer: Viewer, input: {contractId:string;templateId:string;requestId:string;portraitId:string;ownFaceConfirmed:boolean;locale:string|null}) {
+export async function createBrandRenderJob(deps: RenderServiceDeps, viewer: Viewer, input: {contractId:string;templateId:string;requestId:string;selfieId:string;ownFaceConfirmed:boolean;locale:string|null}) {
   if (!viewer.userId) return {ok:false as const,code:'sign_in_required' as const};
   if (!input.ownFaceConfirmed) return {ok:false as const,code:'consent_required' as const};
-  const fingerprint=createHash('sha256').update(JSON.stringify([input.contractId,input.templateId,input.portraitId])).digest('hex');
+  const fingerprint=createHash('sha256').update(JSON.stringify([input.contractId,input.templateId,input.selfieId])).digest('hex');
   return reserveProduction(deps,viewer,{...input,fingerprint},async(sql,template)=>{
-    const photo=await selectedPortraitPhoto(sql,deps.store,viewer.userId!,input.portraitId);
+    const photo=await savedSelfiePhoto(sql,deps.store,viewer.userId!,input.selfieId);
     if(!photo)return {ok:false as const,code:'identity_required' as const};
-    return createAuthorizedRender({...deps,sql},viewer,{templateSlug:template.slug,aspect:template.aspectDefault??'9:16',photo,locale:input.locale,portraitId:input.portraitId,resolution:null},undefined,template);
+    return createAuthorizedRender({...deps,sql},viewer,{templateSlug:template.slug,aspect:template.aspectDefault??'9:16',photo,locale:input.locale,selfieId:input.selfieId,resolution:null},undefined,template);
   });
 }
 
@@ -220,7 +225,7 @@ export interface CreateSubscriptionRenderInput {
   requestId: string;
   templateSlug: string;
   ownFaceConsent: boolean;
-  portraitId?: string;
+  selfieId?: string;
   photo?: { bytes: Uint8Array; mime: string } | null;
   locale: string | null;
   editText?: string;
@@ -238,7 +243,7 @@ const SUBSCRIPTION_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a
 export async function createSubscriptionRenderJob(deps: RenderServiceDeps & { environment: BillingEnvironment }, viewer: Viewer, input: CreateSubscriptionRenderInput): Promise<CreateSubscriptionRenderOutcome> {
   if (!viewer.userId) return { ok: false, code: 'sign_in_required' };
   if (input.ownFaceConsent !== true) return { ok: false, code: 'consent_required' };
-  const allowedKeys = ['requestId', 'templateSlug', 'ownFaceConsent', 'portraitId', 'photo', 'locale', 'editText', 'references', 'referencesConsent'];
+  const allowedKeys = ['requestId', 'templateSlug', 'ownFaceConsent', 'selfieId', 'photo', 'locale', 'editText', 'references', 'referencesConsent'];
   if (!SUBSCRIPTION_UUID.test(input.requestId) || typeof input.templateSlug !== 'string' || !['test', 'live'].includes(deps.environment) || Object.keys(input).some(key => !allowedKeys.includes(key)) || (input.editText !== undefined && typeof input.editText !== 'string') || (input.references !== undefined && !Array.isArray(input.references))) return { ok: false, code: 'bad_request' };
   const references = input.references ?? [];
   const wantsEdit = !!input.editText?.trim() || references.length > 0;
@@ -249,9 +254,9 @@ export async function createSubscriptionRenderJob(deps: RenderServiceDeps & { en
   if (totalBytes >= MAX_SUBSCRIPTION_BODY_BYTES) return { ok: false, code: 'references_too_large' };
   const cleaned = await cleanEditReferences(references);
   if (!cleaned.ok) return cleaned;
-  const fingerprint = createHash('sha256').update(JSON.stringify([input.templateSlug, input.portraitId ?? null,
-    input.portraitId ? null : input.photo ? createHash('sha256').update(input.photo.bytes).digest('hex') : null,
-    input.portraitId ? null : input.photo?.mime ?? null, text?.ok ? text.text : null,
+  const fingerprint = createHash('sha256').update(JSON.stringify([input.templateSlug, input.selfieId ?? null,
+    input.selfieId ? null : input.photo ? createHash('sha256').update(input.photo.bytes).digest('hex') : null,
+    input.selfieId ? null : input.photo?.mime ?? null, text?.ok ? text.text : null,
     cleaned.references.map(reference => createHash('sha256').update(reference.bytes).digest('hex'))])).digest('hex');
   const now = deps.now ?? new Date();
   const writtenKeys: string[] = [];
@@ -270,9 +275,11 @@ export async function createSubscriptionRenderJob(deps: RenderServiceDeps & { en
       if (!isForSale(template)) return { ok: false, code: 'not_for_sale' };
       const eligibility = subscriptionTemplateEligibility(template);
       if (!eligibility) return { ok: false, code: 'unsupported_template' };
+      // A paid edit rewrites one prompt; a maker recipe has several and is not offered for it.
+      if (await loadTemplateRecipe(sql, template.id)) return { ok: false, code: 'unsupported_template' };
       const { quote, scopes } = eligibility;
-      const photo = input.portraitId ? await selectedPortraitPhoto(sql, deps.store, viewer.userId!, input.portraitId) : input.photo ?? null;
-      if (input.portraitId && !photo) return { ok: false, code: 'identity_required' };
+      const photo = input.selfieId ? await savedSelfiePhoto(sql, deps.store, viewer.userId!, input.selfieId) : input.photo ?? null;
+      if (input.selfieId && !photo) return { ok: false, code: 'identity_required' };
       const id = randomUUID();
       const reservation = await reserveSubscriptionUsage(sql, { userId: viewer.userId!, renderRef: id, units: quote.units, environment: deps.environment, now, premium: wantsEdit });
       if (!reservation.ok) return { ok: false, code: reservation.code === 'premium_required' ? 'premium_required' : reservation.code === 'insufficient_allowance' ? 'usage_exhausted' : 'subscription_required' };
@@ -282,7 +289,7 @@ export async function createSubscriptionRenderJob(deps: RenderServiceDeps & { en
         if (!budget.remaining) throw new SubscriptionEnqueueAbort('edit_request_limit');
       }
       if (photo) writtenKeys.push(`${id}/input.${extensionFor(photo.mime)}`);
-      const result = await createAuthorizedRender({ ...deps, sql }, viewer, { templateSlug: template.slug, aspect: template.aspectDefault ?? '9:16', photo, portraitId: input.portraitId, locale: input.locale, resolution: '720p', holdForIdentity: true }, id);
+      const result = await createAuthorizedRender({ ...deps, sql }, viewer, { templateSlug: template.slug, aspect: template.aspectDefault ?? '9:16', photo, selfieId: input.selfieId, locale: input.locale, resolution: '720p', holdForIdentity: true }, id);
       if (!result.ok) throw new SubscriptionEnqueueAbort(result.code);
       const referenceKeys: string[] = [];
       for (const [index, reference] of cleaned.references.entries()) {
@@ -304,15 +311,15 @@ export async function createSubscriptionRenderJob(deps: RenderServiceDeps & { en
 }
 
 /** Server-authorized image reward only. All likeness/provider safeguards remain in the common path. */
-export async function createRewardImageJob(deps:RenderServiceDeps,viewer:Viewer,input:{requestId:string;offerId:string;portraitId:string}) {
+export async function createRewardImageJob(deps:RenderServiceDeps,viewer:Viewer,input:{requestId:string;offerId:string;selfieId:string}) {
   demand(viewer.userId,'sign_in_required');
-  demand([input.requestId,input.offerId,input.portraitId].every(v=>SUBSCRIPTION_UUID.test(v)));
+  demand([input.requestId,input.offerId,input.selfieId].every(v=>SUBSCRIPTION_UUID.test(v)));
   return reserveRewardImage(deps.sql,viewer,input,async(sql,templateId)=>{
     const template=await loadPromptById(sql,templateId);
     demand(template?.medium==='image'&&template.audience==='public','not_eligible');
-    const photo=await selectedPortraitPhoto(sql,deps.store,viewer.userId!,input.portraitId);
+    const photo=await savedSelfiePhoto(sql,deps.store,viewer.userId!,input.selfieId);
     demand(photo,'identity_required');
-    return createAuthorizedRender({...deps,sql},viewer,{templateSlug:template.slug,aspect:template.aspectDefault??'4:5',photo,portraitId:input.portraitId,locale:viewer.locale,holdForIdentity:true},undefined,template);
+    return createAuthorizedRender({...deps,sql},viewer,{templateSlug:template.slug,aspect:template.aspectDefault??'4:5',photo,selfieId:input.selfieId,locale:viewer.locale,holdForIdentity:true},undefined,template);
   });
 }
 
@@ -337,8 +344,11 @@ async function createAuthorizedRender(deps: RenderServiceDeps, viewer: Viewer, i
   // (docs/TEMPLATES-IA.md §8.2) and the pass sends an asset reference instead. Asked to, the job
   // is HELD with its photo until the check completes — one upload, no second visit to the studio.
   const mode = deps.mode ?? assetLibraryMode();
+  // A recipe sends the face to ModelArk if ANY step does (an OpenAI result can still feed a Seedance film).
+  const recipe = await loadTemplateRecipe(deps.sql, template.id);
+  const viaLibrary = recipe ? mode === 'liveness' && recipeNeedsIdentity(recipe) : needsLiveness(engine, mode);
   // Only the liveness mode has a door to hold a job behind; the virtual library makes the group on the way.
-  const held = needsLiveness(engine, mode) && (await identityStatusFor(deps.sql, viewer.userId, mode)) !== 'active';
+  const held = viaLibrary && (await identityStatusFor(deps.sql, viewer.userId, mode)) !== 'active';
   if (held && !input.holdForIdentity) return { ok: false, code: 'identity_required' };
 
   const recent = await countRenderJobsSince(deps.sql, viewer.userId, new Date(now.getTime() - 24 * 60 * 60 * 1000));
@@ -361,7 +371,39 @@ async function createAuthorizedRender(deps: RenderServiceDeps, viewer: Viewer, i
     inputMime: input.photo.mime,
     status: held ? 'held' : 'queued',
   });
-  if (input.portraitId) await deps.sql.query('update render_jobs set identity_portrait_id=$2 where id=$1',[id,input.portraitId]);
+  if (input.selfieId) await deps.sql.query('update render_jobs set identity_selfie_id=$2 where id=$1',[id,input.selfieId]);
+  return { ok: true, id, held };
+}
+
+/**
+ * A maker's test render or the studio's review render (docs/PLATFORM-2.0.md §7.4): the recipe runs
+ * through the same pass, face check and engine adapters as an order, but the job points at the
+ * internal sandbox template, carries its recipe snapshot, sends no email and has no share link.
+ * The caller has authorised the person, the format and the count; this only writes the job.
+ */
+export async function createRecipeSandboxRender(deps: RenderServiceDeps, input: {
+  userId: string; locale: string | null; formatId: string; purpose: 'maker_test' | 'studio_review';
+  recipe: Recipe; photo: { bytes: Uint8Array; mime: string }; selfieId?: string;
+}): Promise<{ ok: true; id: string; held: boolean } | { ok: false; code: 'bad_photo' | 'photo_too_large' }> {
+  if (!input.photo.bytes.byteLength || !isPhotoMime(input.photo.mime)) return { ok: false, code: 'bad_photo' };
+  if (input.photo.bytes.byteLength > MAX_PHOTO_BYTES) return { ok: false, code: 'photo_too_large' };
+  const templateId = await ensureMakerSandbox(deps.sql);
+  const mode = deps.mode ?? assetLibraryMode();
+  const held = mode === 'liveness' && recipeNeedsIdentity(input.recipe) && (await identityStatusFor(deps.sql, input.userId, mode)) !== 'active';
+  const primary = primaryStep(input.recipe);
+  const film = input.recipe.steps.find((step) => step.kind === 'video');
+  const id = randomUUID();
+  const inputKey = `${id}/input.${extensionFor(input.photo.mime)}`;
+  await deps.store.put(inputKey, input.photo.bytes, input.photo.mime);
+  await insertRenderJob(deps.sql, {
+    id, userId: input.userId, templateId, templateSlug: MAKER_SANDBOX_SLUG,
+    medium: primary.kind, engine: primary.engine, aspect: primary.params.aspect,
+    resolution: film?.kind === 'video' ? film.params.resolution : null,
+    locale: isLocale(input.locale) ? input.locale : DEFAULT_LOCALE,
+    inputKey, inputMime: input.photo.mime, status: held ? 'held' : 'queued',
+  });
+  await insertJobRecipe(deps.sql, { renderId: id, purpose: input.purpose, formatId: input.formatId, recipe: input.recipe });
+  if (input.selfieId) await deps.sql.query('update render_jobs set identity_selfie_id=$2 where id=$1', [id, input.selfieId]);
   return { ok: true, id, held };
 }
 
@@ -407,6 +449,8 @@ export interface RenderPassReport {
   notifier: string;
   /** AIGC people whose face was deleted at the bank after their last render (release after use). */
   released: number;
+  /** What the Toss reconcile settled this pass (docs/PLATFORM-2.0.md §2.2-4). */
+  payments: TossReconcileReport;
   errors: string[];
 }
 
@@ -415,6 +459,8 @@ export interface RenderPassOptions {
   limit?: number;
   /** Run exactly this queued job (the request that enqueued it). */
   jobId?: string | null;
+  /** Poll only this specific running job (used by `/renders/[id]` page refresh to avoid O(N²) global polling). */
+  pollJobId?: string | null;
 }
 
 export async function runRenderPass(deps: RenderPassDeps, options: RenderPassOptions = {}): Promise<RenderPassReport> {
@@ -434,12 +480,25 @@ export async function runRenderPass(deps: RenderPassDeps, options: RenderPassOpt
     notifyPending: 0,
     notifier: deps.notifier === null ? 'unconfigured' : `${deps.notifier.channel}:${deps.notifier.kind}`,
     released: 0,
+    payments: emptyTossReport(),
     errors: [],
   };
 
-  const gateway = deps.tossGateway === undefined ? getTossGateway() : deps.tossGateway;
+  // Payments never stop renders (docs/PLATFORM-2.0.md §2.2-3): a broken key configuration or a
+  // provider outage is one structured log line — no key value — and the queue below still runs.
+  let gateway: TossGateway | null = null;
+  try {
+    gateway = deps.tossGateway === undefined ? getTossGateway() : deps.tossGateway;
+  } catch (error) {
+    logBilling('error', 'toss_gateway_unavailable', { code: billingErrorCode(error) });
+  }
   const settlePayments = async () => {
-    if (gateway) await reconcileTossPayments({ ...deps, gateway, createRender: createRenderJob });
+    if (!gateway) return;
+    try {
+      addTossReport(report.payments, await reconcileTossPayments({ ...deps, gateway, createRender: createRenderJob }));
+    } catch (error) {
+      logBilling('error', 'toss_reconcile_failed', { code: billingErrorCode(error) });
+    }
   };
   // Recover approved orders before claiming, and refunds before sending the failure notice.
   await settlePayments();
@@ -468,7 +527,10 @@ export async function runRenderPass(deps: RenderPassDeps, options: RenderPassOpt
   }
 
   // 3 — films the provider is still rendering (not the ones handed over a moment ago).
-  const awaiting = await listRenderJobsAwaitingProvider(deps.sql, 20);
+  const singlePollJob = options.pollJobId ? await loadRenderJob(deps.sql, options.pollJobId) : null;
+  const awaiting = options.pollJobId
+    ? (singlePollJob && singlePollJob.status === 'running' && singlePollJob.providerTaskId !== null ? [singlePollJob] : [])
+    : await listRenderJobsAwaitingProvider(deps.sql, 20);
   for (const job of awaiting) {
     if (handedOff.has(job.id)) continue;
     if (await privateJobBlocked(job)) continue;
@@ -516,6 +578,11 @@ type Reference =
  */
 async function resolveReference(deps: RenderPassDeps, job: RenderJob, photo: RenderPhoto | null): Promise<Reference> {
   if (photo === null || !isEngineId(job.engine) || !needsIdentity(job.engine)) return { kind: 'bytes' };
+  return personAsset(deps, job, photo.bytes, job.inputKey);
+}
+
+/** Any image of the job's person (their photo, or a recipe step made from it) as a verified-library asset. */
+async function personAsset(deps: RenderPassDeps, job: RenderJob, bytes: Uint8Array, key: string | null): Promise<Reference> {
   const ideps = identityDeps(deps);
   let group;
   if (ideps.mode === 'virtual') {
@@ -530,8 +597,8 @@ async function resolveReference(deps: RenderPassDeps, job: RenderJob, photo: Ren
       return { kind: 'fail', failure: new RenderFailure('identity_required', 'the person has not verified their face', false) };
     }
   }
-  const photoUrl = job.inputKey === null ? null : await deps.store.url(job.inputKey, ASSET_URL_TTL_SECONDS);
-  const ensured = await ensureIdentityAsset(ideps, { group, photo: photo.bytes, photoUrl });
+  const photoUrl = key === null ? null : await deps.store.url(key, ASSET_URL_TTL_SECONDS);
+  const ensured = await ensureIdentityAsset(ideps, { group, photo: bytes, photoUrl });
   if (ensured.status === 'active') return { kind: 'asset', assetId: ensured.assetId };
   if (ensured.status === 'processing') return { kind: 'wait', assetId: ensured.assetId };
   const code: RenderFailureCode = ensured.reason === 'identity_required' || ensured.reason === 'identity_unavailable' ? ensured.reason : 'asset_failed';
@@ -581,7 +648,7 @@ async function renderNow(
     deps.engines ?? {},
   );
   if (dispatch.campaign) await acknowledgeCampaignTask(deps.sql, job.id, started.taskId);
-  else await markRenderRunningWithTask(deps.sql, job.id, { provider: 'modelark', taskId: started.taskId });
+  else await markRenderRunningWithTask(deps.sql, job.id, { provider: started.provider, taskId: started.taskId });
   } catch (error) {
     if (!dispatch.campaign) throw error;
     // No blind repeat on a lost API response/DB acknowledgement. Marker keeps the live face asset
@@ -599,6 +666,8 @@ async function executeClaimed(deps: RenderPassDeps, job: RenderJob, now: Date, r
     if (resumed.resumed) { handedOff.add(job.id); report.waiting += 1; return; }
     const template = await loadPromptById(deps.sql, job.templateId);
     if (template === null) throw new RenderFailure('engine_error', 'the template no longer exists', false);
+    const recipe = await jobRecipeFor(deps, job);
+    if (recipe) { await renderRecipe(deps, job, recipe, now, report, handedOff); return; }
     const photo = await readPhoto(deps.store, job);
     const reference = await resolveReference(deps, job, photo);
     if (reference.kind === 'fail') throw reference.failure;
@@ -626,18 +695,28 @@ async function pollAwaiting(deps: RenderPassDeps, job: RenderJob, now: Date, rep
   try {
     const template = await loadPromptById(deps.sql, job.templateId);
     const request = deps.subscriptionSchemaReady ? await loadSubscriptionRender(deps.sql, job.id) : null;
-    const { model, seconds } = videoModelFor(job.engine, request?.runtime_seconds ?? template?.runtimeSeconds ?? 5);
-    const polled = await pollVideoRender({ taskId: job.providerTaskId, model, seconds, resolution: renderResolution(job.resolution), aspect: job.aspect }, deps.engines ?? {});
+    const recipe = await loadJobRecipe(deps.sql, job.id);
+    const film = recipe?.recipe ? primaryStep(recipe.recipe) : null;
+    const { model, seconds } = videoModelFor(job.engine, film?.kind === 'video' ? film.params.duration : request?.runtime_seconds ?? template?.runtimeSeconds ?? 5);
+    const polled = await pollVideoRender(
+      { taskId: job.providerTaskId, model, seconds, resolution: renderResolution(job.resolution), aspect: job.aspect, onProviderDone: () => markRenderFinishing(deps.sql, job.id, now) },
+      deps.engines ?? {},
+    );
     if (polled.status === 'pending') {
       report.waiting += 1;
       return;
     }
     if (polled.status === 'succeeded') {
-      await finish(deps, job, polled.output, now);
+      if (recipe?.recipe && film) {
+        // The film is the recipe's last step: store it like any result, then book every step's cost.
+        const key = `${job.id}/step-${film.id.replace(/_/g, '-')}.${extensionFor(polled.output.mime)}`;
+        await deps.store.put(key, polled.output.bytes, polled.output.mime);
+        await finishRecipe(deps, job, [{ step: film.id, key, mime: polled.output.mime, bytes: polled.output.bytes.byteLength }], addCost(recordedUsd(recipe.state), polled.output.costUsd), polled.output, now);
+      } else await finish(deps, job, polled.output, now);
       report.succeeded += 1;
       return;
     }
-    await settleFailure(deps, job, polled.failure, now, report);
+    await settleFailure(deps, job, film ? new RenderFailure(polled.failure.code, `[${film.id}] ${polled.failure.message}`, polled.failure.retryable, film.id) : polled.failure, now, report);
   } catch (error) {
     await settleFailure(deps, job, error, now, report);
   }
@@ -650,6 +729,8 @@ async function pollAssetWait(deps: RenderPassDeps, job: RenderJob, assetId: stri
     if (status === 'Active') {
       const template = await loadPromptById(deps.sql, job.templateId);
       if (template === null) throw new RenderFailure('engine_error', 'the template no longer exists', false);
+      const recipe = await jobRecipeFor(deps, job);
+      if (recipe) { await renderRecipe(deps, job, recipe, now, report, new Set()); return; }
       const photo = await readPhoto(deps.store, job);
       await renderNow(deps, job, template, photo, assetId, now, report, new Set());
       return;
@@ -668,7 +749,103 @@ async function readPhoto(store: RenderStore, job: RenderJob): Promise<RenderPhot
   return { bytes: await store.read(job.inputKey), mime: job.inputMime };
 }
 
+// ---------------------------------------------------------------------------
+// recipe v2 (lib/recipes/*) — maker templates, test renders and review renders
+// ---------------------------------------------------------------------------
+
+function addCost(a: number | null, b: number | null): number | null {
+  return a === null && b === null ? null : Math.round(((a ?? 0) + (b ?? 0)) * 10000) / 10000;
+}
+
+/** The recipe this job runs: its snapshot (test/review jobs, a retry), else the template's, snapshotted now. */
+async function jobRecipeFor(deps: RenderPassDeps, job: RenderJob): Promise<JobRecipe | null> {
+  const recipe = job.templateId === MAKER_SANDBOX_ID ? await loadJobRecipe(deps.sql, job.id) : await ensureJobRecipe(deps.sql, job.id, job.templateId);
+  if (recipe === null && job.templateId === MAKER_SANDBOX_ID) throw new RenderFailure('engine_error', 'a sandbox job without its recipe', false);
+  if (recipe !== null && recipe.recipe === null) throw new RenderFailure('engine_error', 'the stored recipe no longer passes the recipe rules', false);
+  // A paid edit interprets one prompt; a recipe template is not offered for it (createSubscriptionRenderJob).
+  if (recipe !== null && deps.subscriptionSchemaReady && await loadSubscriptionRender(deps.sql, job.id)) throw new RenderFailure('edit_unavailable', 'recipe templates take no subscription edit', false);
+  return recipe;
+}
+
+async function renderRecipe(deps: RenderPassDeps, job: RenderJob, recipe: JobRecipe, now: Date, report: RenderPassReport, handedOff: Set<string>): Promise<void> {
+  const photo = await readPhoto(deps.store, job);
+  const run = await runRecipe({
+    jobId: job.id,
+    recipe: recipe.recipe!,
+    outputAspect: job.aspect,
+    state: recipe.state,
+    store: deps.store,
+    engines: deps.engines ?? {},
+    selfie: photo && job.inputKey ? { ...photo, key: job.inputKey } : null,
+    makerFile: (handle) => readMakerFile(deps.sql, deps.store, handle),
+    person: async ({ bytes, key }) => {
+      const reference = await personAsset(deps, job, bytes, key);
+      if (reference.kind === 'fail') throw reference.failure;
+      if (reference.kind === 'bytes') throw new RenderFailure('identity_unavailable', 'the face could not reach the verified library', false);
+      return reference;
+    },
+    saveStep: (stepId, record) => saveStepRecord(deps.sql, job.id, stepId, record),
+    ...(deps.callbackUrl ? { callbackUrl: deps.callbackUrl } : {}),
+  });
+  if (run.kind === 'wait') {
+    await markRenderWaitingForAsset(deps.sql, job.id, run.assetId);
+    handedOff.add(job.id);
+    report.waiting += 1;
+    return;
+  }
+  if (run.kind === 'handed') {
+    await markRenderRunningWithTask(deps.sql, job.id, { provider: run.provider, taskId: run.taskId });
+    for (const assetId of new Set(run.assets)) await recordIdentityUse(deps.sql, { userId: job.userId, assetId, now });
+    handedOff.add(job.id);
+    report.waiting += 1;
+    return;
+  }
+  const first = run.results[0]!;
+  const primary = primaryStep(recipe.recipe!).engine;
+  const provider = isEngineId(primary) ? engineProvider(primary) : 'modelark';
+  await finishRecipe(deps, job, run.results, run.usd, { bytes: await deps.store.read(first.key), mime: first.mime, provider, costUsd: run.usd }, now);
+  for (const assetId of new Set(run.assets)) await recordIdentityUse(deps.sql, { userId: job.userId, assetId, now });
+  report.succeeded += 1;
+}
+
+/**
+ * A recipe job's results: the first is the job's one result (`result.{ext}`, so every one-result page
+ * works unchanged), every one is listed in render_job_outputs (a carousel's frames, in order).
+ */
+async function finishRecipe(deps: RenderPassDeps, job: RenderJob, results: RecipeResult[], usd: number | null, first: EngineOutput, now: Date): Promise<void> {
+  await markRenderFinishing(deps.sql, job.id, now);
+  const keys: string[] = [];
+  for (const [index, result] of results.entries()) {
+    const key = index === 0 ? `${job.id}/result.${extensionFor(result.mime)}` : `${job.id}/result-${index + 1}.${extensionFor(result.mime)}`;
+    const bytes = index === 0 ? first.bytes : await deps.store.read(result.key);
+    await deps.store.put(key, bytes, result.mime);
+    keys.push(key);
+  }
+  await deps.sql.transaction(async sql => {
+    await markRenderSucceeded(sql, job.id, {
+      resultKey: keys[0]!,
+      resultMime: results[0]!.mime,
+      resultBytes: first.bytes.byteLength,
+      provider: first.provider,
+      costUsd: usd,
+      shareToken: newShareToken(),
+      shareExpiresAt: shareExpiresAt(now),
+      finishedAt: now,
+    });
+    // Several steps are several provider calls: the sum stays an estimate until each has an invoice line.
+    await sql.query('update render_jobs set provider_completion_tokens=$2,cost_source=$3 where id=$1', [job.id, results.length === 1 && first.completionTokens ? first.completionTokens : null, usd === null ? null : 'estimate']);
+    await insertJobOutputs(sql, job.id, results.map((result, index) => ({ stepId: result.step, key: keys[index]!, mime: result.mime, bytes: result.bytes })));
+    if (deps.subscriptionSchemaReady) await settleSubscriptionUsage(sql, job.id, 'completed');
+  });
+}
+
+/**
+ * The provider's result becomes ours: copied into the private bucket, then one transaction marks it
+ * succeeded with its 3-day link. `finishing_at` goes in first (a film already recorded it the moment
+ * the provider said done, before the download), so the wait page can name the copy "마무리".
+ */
 async function finish(deps: RenderPassDeps, job: RenderJob, output: EngineOutput, now: Date): Promise<void> {
+  await markRenderFinishing(deps.sql, job.id, now);
   const resultKey = `${job.id}/result.${extensionFor(output.mime)}`;
   await deps.store.put(resultKey, output.bytes, output.mime);
   await deps.sql.transaction(async sql => {
@@ -693,14 +870,16 @@ async function settleFailure(deps: RenderPassDeps, job: RenderJob, error: unknow
   const failure = privateRequest ? new RenderFailure(rawFailure.code, rawFailure.code, rawFailure.retryable) : rawFailure;
   // Another worker owns the one paid interpretation; leave its lease/status intact.
   if (privateRequest && failure.code === 'edit_in_progress') { report.waiting += 1; return; }
-  report.errors.push(`${job.id}: ${failure.code} — ${failure.message}`);
+  // A recipe step failure is recorded as `code:step`; readers strip the step (`baseFailureCode`).
+  const code = failure.step ? `${failure.code}:${failure.step}` : failure.code;
+  report.errors.push(`${job.id}: ${code} — ${failure.message}`);
   if (failure.retryable && job.attempts < MAX_ATTEMPTS) {
-    await requeueRenderJob(deps.sql, job.id, { code: failure.code, message: failure.message });
+    await requeueRenderJob(deps.sql, job.id, { code, message: failure.message });
     report.requeued += 1;
     return;
   }
   await deps.sql.transaction(async sql => {
-    await markRenderFailed(sql, job.id, { code: failure.code, message: failure.message, finishedAt: now });
+    await markRenderFailed(sql, job.id, { code, message: failure.message, finishedAt: now });
     if (deps.subscriptionSchemaReady) await settleSubscriptionUsage(sql, job.id, 'failed');
   });
   report.failed += 1;
@@ -745,7 +924,7 @@ async function notifyFinished(deps: RenderPassDeps, now: Date, report: RenderPas
     return;
   }
   for (const job of due) {
-    if ((await deps.sql.query('select render_id from brand_production_reservations where render_id=$1',[job.id])).rows.length) {
+    if ((await deps.sql.query('select render_id from brand_production_reservations where render_id=$1',[job.id])).rows.length || await renderPurpose(deps.sql, job.id) !== 'customer') {
       await markRenderNotified(deps.sql,job.id,{status:'skipped',at:now,spendAttempt:false});
       continue;
     }
@@ -806,7 +985,7 @@ export function templateTitle(template: Pick<PromptRow, 'title' | 'titleKo'> | n
 /** The reader-facing explanation of a failure code, in their language. */
 export function failureReason(code: string | null, locale: Locale): string {
   const errors = getDictionary(locale).renders.error;
-  const key = (code ?? 'engine_error') as keyof typeof errors;
+  const key = (baseFailureCode(code) ?? 'engine_error') as keyof typeof errors;
   return errors[key] ?? errors.engine_error;
 }
 
@@ -836,8 +1015,12 @@ export async function loadOwnRender(sql: SqlRunner, viewer: Viewer, id: string):
   if (viewer.userId === null || !isRenderId(id)) return null;
   const job = await loadRenderJob(sql, id);
   if (job === null || job.userId !== viewer.userId) return null;
-  if ((await sql.query('select render_id from brand_production_reservations where render_id=$1',[id])).rows.length) return null;
-  return (await withTitles(sql, [job]))[0] ?? null;
+  const [reserved, views] = await Promise.all([
+    sql.query('select render_id from brand_production_reservations where render_id=$1', [id]),
+    withTitles(sql, [job]),
+  ]);
+  if (reserved.rows.length) return null;
+  return views[0] ?? null;
 }
 
 export type SharedRender = { status: 'ok'; view: RenderView } | { status: 'expired'; view: RenderView } | { status: 'not_found' };
@@ -847,11 +1030,18 @@ export async function loadSharedRender(sql: SqlRunner, id: string, token: string
   if (!isRenderId(id) || !isShareTokenShape(token)) return { status: 'not_found' };
   const job = await loadRenderJob(sql, id);
   if (job === null || job.status !== 'succeeded' || job.shareToken === null || !constantTimeEqual(job.shareToken, token)) return { status: 'not_found' };
-  if ((await sql.query('select render_id from brand_production_reservations where render_id=$1',[id])).rows.length) return {status:'not_found'};
-  const view = (await withTitles(sql, [job]))[0]!;
+  // A maker's test render or the studio's review render is never a public link.
+  if (job.templateId === MAKER_SANDBOX_ID) return { status: 'not_found' };
+  const [reserved, views] = await Promise.all([
+    sql.query('select render_id from brand_production_reservations where render_id=$1', [id]),
+    withTitles(sql, [job]),
+  ]);
+  if (reserved.rows.length) return { status: 'not_found' };
+  const view = views[0]!;
   return isShareExpired(job.shareExpiresAt, now) ? { status: 'expired', view } : { status: 'ok', view };
 }
 
 export async function listMyRenders(sql: SqlRunner, userId: string, limit = 50): Promise<RenderView[]> {
-  return withTitles(sql, await listRenderJobsForUser(sql, userId, limit));
+  // Test and review renders live in the maker editor and the review queue, not in "내 결과물".
+  return withTitles(sql, (await listRenderJobsForUser(sql, userId, limit)).filter((job) => job.templateId !== MAKER_SANDBOX_ID));
 }

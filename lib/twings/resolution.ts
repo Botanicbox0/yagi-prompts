@@ -1,5 +1,5 @@
-import { ARK_MODELS, supportedResolutions, type ArkModelKey } from '@/lib/ark/models';
 import type { PromptCard } from '@/lib/prompts/catalog';
+import { arkModelForVideo, videoModelForEngine, videoResolutions } from '@/lib/video/models';
 import { formatKrw, formatPrice, krwPrice } from './products';
 
 /**
@@ -30,24 +30,16 @@ export function renderResolution(stored: string | null | undefined): CreatorReso
   return isCreatorResolution(stored) ? stored : DEFAULT_CREATOR_RESOLUTION;
 }
 
-/**
- * Which ModelArk model a video engine id renders on for a runtime. Seedance 2.0 stops at 15 seconds
- * per task, so a longer template moves to 2.5 (one task) — the same rule `startVideoRender` applies.
- */
-export function arkModelForVideo(engine: string | null, seconds: number): { model: ArkModelKey; seconds: number } {
-  const wanted: ArkModelKey = engine === 'seedance-2.5' ? 'seedance-2.5' : 'seedance-2.0';
-  const model: ArkModelKey = seconds > ARK_MODELS[wanted].maxDurationSeconds ? 'seedance-2.5' : wanted;
-  const spec = ARK_MODELS[model];
-  return { model, seconds: Math.min(spec.maxDurationSeconds, Math.max(spec.minDurationSeconds, Math.round(seconds))) };
-}
+/** The model rule lives in lib/video/models.ts now (it covers Kling too); re-exported for its old callers. */
+export { arkModelForVideo };
 
 type ResolutionPriced = Pick<PromptCard, 'medium' | 'engine' | 'runtimeSeconds' | 'priceCents' | 'priceKrw' | 'price1080Cents' | 'price1080Krw'>;
 
 /** The resolutions this template sells, 720p first. Images sell none (their size is the engine's). */
 export function offeredResolutions(template: ResolutionPriced): CreatorResolution[] {
   if (template.medium !== 'video' || template.priceCents <= 0) return [];
-  const { model } = arkModelForVideo(template.engine, template.runtimeSeconds ?? 5);
-  const hd = supportedResolutions(model).includes('1080p') && template.price1080Cents > 0 && template.price1080Krw > 0;
+  const { model } = videoModelForEngine(template.engine, template.runtimeSeconds ?? 5);
+  const hd = videoResolutions(model).includes('1080p') && template.price1080Cents > 0 && template.price1080Krw > 0;
   return hd ? ['720p', '1080p'] : ['720p'];
 }
 
@@ -79,8 +71,8 @@ export function renderableResolution(template: Pick<PromptCard, 'medium' | 'engi
   if (template.medium !== 'video') return raw === '' ? { ok: true, resolution: null } : { ok: false };
   if (raw === '') return { ok: true, resolution: DEFAULT_CREATOR_RESOLUTION };
   if (!isCreatorResolution(raw)) return { ok: false };
-  const { model } = arkModelForVideo(template.engine, template.runtimeSeconds ?? 5);
-  return supportedResolutions(model).includes(raw) ? { ok: true, resolution: raw } : { ok: false };
+  const { model } = videoModelForEngine(template.engine, template.runtimeSeconds ?? 5);
+  return videoResolutions(model).includes(raw) ? { ok: true, resolution: raw } : { ok: false };
 }
 
 /**

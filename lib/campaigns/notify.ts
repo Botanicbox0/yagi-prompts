@@ -10,7 +10,8 @@ import { sheet, sheetText } from '@/lib/notify/sheet';
 import { campaignLabels } from '@/components/campaigns/labels';
 import { payoutHeadline } from './copy';
 import { MY_CAMPAIGNS_PATH, campaignHref, campaignsHref } from './links';
-import type { ApplicationRow, CampaignRow } from './repo';
+import { loadCampaignsByIds, type ApplicationRow, type CampaignRow } from './repo';
+import { unsubscribePath } from '@/lib/notify/unsubscribe';
 import { formatWon } from './state';
 
 /**
@@ -122,6 +123,50 @@ export async function notifyApplicationStatus(
       // The version is the moderation form's concurrency token: one transition, one mail.
       idempotencyKey: `application:${args.app.id}:${args.status}:${args.app.version}`,
       unsubscribeUrl: `${origin}/account`,
+    })
+    .catch((error: unknown): SendOutcome => ({ ok: false, retryable: false, error: error instanceof Error ? error.message : String(error) }));
+}
+
+/**
+ * A brand invited this person from the creator pool (docs/PLATFORM-2.0.md §17.3). One mail per
+ * invitation, only to people with campaign mail on (`notif_updates`, the same switch as
+ * recruiting announcements, with its one-click unsubscribe). The button is the invitation link
+ * itself, which only this account can accept. Sent after the brand's response, never on it.
+ */
+export async function notifyCampaignInvitation(
+  deps: CampaignMailDeps,
+  args: { campaignId: string; userId: string; invitationId: string; token: string },
+): Promise<SendOutcome | null> {
+  if (deps.mailer === null) return null;
+  const { rows } = await deps.sql.query<{ email: string | null; locale: string | null; notif_updates: boolean }>(
+    'select email, locale, notif_updates from profiles where id = $1',
+    [args.userId],
+  );
+  const person = rows[0];
+  if (!person || person.notif_updates !== true || !person.email?.includes('@')) return null;
+  const [campaign] = await loadCampaignsByIds(deps.sql, [args.campaignId]);
+  if (!campaign) return null;
+  const locale: Locale = isLocale(person.locale) ? person.locale : DEFAULT_LOCALE;
+  const c = getDictionary(locale).campaigns.email;
+  const origin = deps.siteUrl.replace(/\/+$/, '');
+  const facts = campaignFacts(campaign, locale);
+  const vars = { title: facts.title, host: campaign.hostName, applyBy: facts.applyBy, payout: facts.payout };
+  const unsubscribeUrl = `${origin}${unsubscribePath({ userId: args.userId, toggle: 'notif_updates' })}`;
+  const sheetArgs = {
+    title: c.invitedTitle,
+    paragraphs: [interpolate(c.invitedBody, vars)],
+    button: { label: c.invitedCta, url: `${origin}/campaigns/${encodeURIComponent(campaign.slug)}/join#token=${args.token}` },
+    note: { text: c.unsubscribeLine, link: { label: c.unsubscribeCta, url: unsubscribeUrl } },
+    footer: footer(locale),
+  };
+  return deps.mailer
+    .send({
+      to: person.email,
+      subject: interpolate(c.invitedSubject, vars),
+      html: sheet(sheetArgs),
+      text: sheetText(sheetArgs),
+      idempotencyKey: `campaign-invitation:${args.invitationId}`,
+      unsubscribeUrl,
     })
     .catch((error: unknown): SendOutcome => ({ ok: false, retryable: false, error: error instanceof Error ? error.message : String(error) }));
 }

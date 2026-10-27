@@ -12,7 +12,7 @@ export function NotFoundPanel({ locale }: { locale: Locale }) {
   const copy = getDictionary(locale);
   return (
     <section lang={locale} data-not-found={locale}>
-      <h1 className="font-display text-[clamp(2rem,4.5vw,3.5rem)] leading-[0.92] font-black whitespace-pre-line uppercase">
+      <h1 className={`font-display text-[clamp(2rem,4.5vw,3.5rem)] font-black whitespace-pre-line uppercase ${locale === 'ko' ? 'leading-[1.18] tracking-[-0.02em] break-keep' : 'leading-[0.92]'}`}>
         {copy.notFound.title}
       </h1>
       <p className="mt-6 max-w-detail text-body opacity-70">{copy.notFound.body}</p>

@@ -223,11 +223,14 @@ function toApplication(raw: RawApplication): ApplicationRow {
 // campaigns — reads
 // ---------------------------------------------------------------------------
 
-/** The public listing: recruiting first, soonest application deadline first. */
+/**
+ * The public listing: recruiting first, soonest application deadline first. Only `audience = 'public'`
+ * campaigns (0056): one shown only to influencers or to invited accounts never reaches this cached page.
+ */
 export async function loadPublicCampaigns(sql: SqlRunner): Promise<CampaignRow[]> {
   const { rows } = await sql.query<RawCampaign>(
     `select ${CAMPAIGN_COLUMNS} from campaigns
-      where status in ('recruiting','selecting','running')
+      where status in ('recruiting','selecting','running') and audience = 'public'
       order by (status = 'recruiting') desc, applications_close_at asc nulls last, slug asc`,
   );
   return rows.map(toCampaign);

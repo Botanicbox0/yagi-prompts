@@ -9,6 +9,7 @@ import { type SectionTheme } from '@/lib/motion/geometry';
 import type { Audience } from '@/lib/navigation/audience';
 import { isPublicNavCurrent } from '@/lib/navigation/public-state';
 import { CreatorAccountView, useCreatorSession, type CreatorAccountLabels } from './creator-account';
+import { IDENTITY_SELFIE_PATH } from '@/lib/identity/links';
 
 /**
  * The fixed 64px audience navigation stays white so both public experiences have one stable door.
@@ -251,6 +252,7 @@ export function SiteNav({
                 </a>
               </li>
               {audience === 'creator' && creatorSession.signedIn && accountLabels && <>
+                <li><a href={IDENTITY_SELFIE_PATH} data-creator-selfie onClick={() => setOpen(false)} className="inline-flex min-h-11 items-center text-lg font-medium">{accountLabels.selfie}</a></li>
                 <li><a href="/renders" onClick={() => setOpen(false)} className="inline-flex min-h-11 items-center text-lg font-medium">{accountLabels.renders}</a></li>
                 <li><a href="/campaigns/mine" onClick={() => setOpen(false)} className="inline-flex min-h-11 items-center text-lg font-medium">{accountLabels.campaigns}</a></li>
                 <li><form method="post" action="/auth/signout"><button type="submit" className="min-h-11 text-sm opacity-60">{accountLabels.signOut}</button></form></li>

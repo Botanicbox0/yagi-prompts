@@ -9,6 +9,7 @@ import { OpenAiImageError } from '@/lib/images/openai';
 import { createFakeMailer, type FakeMailer } from '@/lib/notify/mailer-fake';
 import { createEmailRenderNotifier, renderIdempotencyKey, type RenderNotifier } from '@/lib/renders/notify';
 import { loadRenderJob } from '@/lib/renders/repo';
+import { loadRenderExtras } from '@/lib/renders/extras';
 import {
   MAX_ATTEMPTS,
   RENDER_JOBS_PER_DAY,
@@ -487,6 +488,64 @@ describe('the render queue', () => {
     // A film has no frame to preview; the email carries the link and nothing else from the gateway.
     expect(mailer.sent[0]!.html).not.toContain('/api/renders/media/');
     expect(mailer.sent[0]!.html).toContain(`/r/${created.id}/${job.shareToken}`);
+  });
+
+  it('records finishing_at once the provider is done and before the copy, keeping the job running', async () => {
+    const created = await enqueue();
+    if (!created.ok) throw new Error(created.code);
+    const seen: Array<{ status: string; finishing_at: Date | null }> = [];
+    const watching: RenderStore = {
+      ...store,
+      async put(key, bytes, mime) {
+        if (key.endsWith('/result.jpg')) seen.push((await h.sql.query<{ status: string; finishing_at: Date | null }>('select status, finishing_at from render_jobs where id = $1', [created.id])).rows[0]!);
+        return store.put(key, bytes, mime);
+      },
+    };
+    await runRenderPass(deps({ openai: fakeOpenAi(async () => okImage()) }, { store: watching }), { jobId: created.id });
+    expect(seen).toEqual([{ status: 'running', finishing_at: NOW }]);
+    const after = await loadRenderExtras(h.sql, created.id);
+    expect(after).toEqual({ finishingAt: NOW.toISOString(), posterKey: null, ready: true });
+    expect((await loadRenderJob(h.sql, created.id))!.status).toBe('succeeded');
+  });
+
+  it('marks a film finishing before its download, and only once across passes', async () => {
+    await h.sql.query(`insert into identity_groups (user_id, status, group_id, verified_at) values ($1, 'active', 'grp-1', now())`, [ADMIN_VIEWER.userId]);
+    const created = await enqueue(VIDEO_TEMPLATE, '9:16');
+    if (!created.ok) throw new Error(created.code);
+    const assets = fakeAssets({ status: 'Active', created: 0 });
+    const bankStore = { ...store, url: async () => 'https://store.test/photo.jpg' };
+    let state: ArkTask = task('queued');
+    const ark: ArkClient = { async createVideoTask() { return { id: 'cgt-1' }; }, async getVideoTask() { return state; } };
+    const atDownload: Array<string | null> = [];
+    let failDownload = true;
+    const doFetch: typeof fetch = async () => {
+      atDownload.push((await loadRenderExtras(h.sql, created.id)).finishingAt);
+      if (failDownload) throw new TypeError('fetch failed');
+      return new Response(VIDEO_BYTES, { status: 200, headers: { 'content-type': 'video/mp4' } });
+    };
+    await runRenderPass(deps({ ark, fetch: doFetch }, { assets, store: bankStore }), { jobId: created.id });
+    expect((await loadRenderExtras(h.sql, created.id)).finishingAt).toBeNull();
+
+    state = task('succeeded', 'https://ark.example/out.mp4');
+    // The download fails once: the job stays running and already reads "마무리".
+    await runRenderPass(deps({ ark, fetch: doFetch }, { assets, store: bankStore }), { limit: 0 });
+    expect((await loadRenderJob(h.sql, created.id))!.status).toBe('running');
+    expect(atDownload).toEqual([NOW.toISOString()]);
+
+    failDownload = false;
+    const later = new Date(NOW.getTime() + 60_000);
+    await runRenderPass(deps({ ark, fetch: doFetch }, { assets, store: bankStore, now: later }), { limit: 0 });
+    expect((await loadRenderJob(h.sql, created.id))!.status).toBe('succeeded');
+    expect((await loadRenderExtras(h.sql, created.id)).finishingAt).toBe(NOW.toISOString());
+  });
+
+  it('a database without 0055 still finishes the render (the mark is one log line)', async () => {
+    const created = await enqueue();
+    if (!created.ok) throw new Error(created.code);
+    await h.sql.query('alter table render_jobs drop column finishing_at, drop column poster_key');
+    const report = await runRenderPass(deps({ openai: fakeOpenAi(async () => okImage()) }), { jobId: created.id });
+    expect(report).toMatchObject({ succeeded: 1, errors: [] });
+    expect(await loadRenderExtras(h.sql, created.id)).toEqual({ finishingAt: null, posterKey: null, ready: false });
   });
 
   it('opens the 3-day link only with its exact token, closes it after three days, and keeps the owner’s page private', async () => {

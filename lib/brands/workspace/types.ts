@@ -19,6 +19,8 @@ export interface BrandProjectSummary {
   criteria: BrandCriteria;
   startsOn: string | null; endsOn: string | null; productionMode: ProductionMode;
   status: BrandProjectStatus; revision: number; createdAt: string; updatedAt: string;
+  /** What the brand asked for in the campaign wizard; null for older briefs (docs/PLATFORM-2.0.md §16.3). */
+  campaignTerms?: import('./campaign-terms').CampaignTerms | null;
 }
 export interface BrandHomeContent {
   id: string; title: string; version: number; decision: BrandContentVersion['decision'];

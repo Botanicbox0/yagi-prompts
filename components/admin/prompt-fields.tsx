@@ -3,7 +3,7 @@ import { IMAGE_ASPECTS, IMAGE_ENGINES, IMAGE_ENGINE_IDS, VIDEO_ASPECTS, VIDEO_EN
 import { formatDate, interpolate } from '@/lib/i18n/format';
 import { formatKrw, suggestedKrw } from '@/lib/twings/products';
 import { costFloor, imageCostFloor } from '@/lib/twings/cost-model';
-import { arkModelForVideo } from '@/lib/twings/resolution';
+import { videoModelForEngine } from '@/lib/video/models';
 import { PROMPT_TEXT_MAX, PROMPT_TEXT_MIN, TEMPLATE_MEDIA } from '@/lib/prompts/schemas';
 import { promptHref } from '@/lib/prompts/links';
 import { visibilityLabel, visibilityOptions } from '@/components/admin/labels';
@@ -152,7 +152,7 @@ function CostFloorNote({ row, dict }: { row: PromptRow | null; dict: Dict }) {
     );
   }
   if (row.medium !== 'video' || !row.runtimeSeconds) return null;
-  const { model, seconds } = arkModelForVideo(row.engine, row.runtimeSeconds);
+  const { model, seconds } = videoModelForEngine(row.engine, row.runtimeSeconds);
   const p720 = costFloor({ model, resolution: '720p', seconds, aspect: row.aspectDefault ?? '9:16' });
   const p1080 = costFloor({ model, resolution: '1080p', seconds, aspect: row.aspectDefault ?? '9:16' });
   if (!p720 || !p1080) return null;

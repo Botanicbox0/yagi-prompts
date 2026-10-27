@@ -46,11 +46,23 @@ export const APP_PREFIXES = [
  * docs/CAMPAIGNS.md §6 — the campaigns surface has the same shape as contests: `/{locale}/campaigns`
  * and `/{locale}/campaigns/{slug}` are public marketing pages, and two unprefixed leaves are
  * login-gated app surface — the apply form (slug in the middle, like the contest entry) and the
- * creator's own `/campaigns/mine`. Anchored at both ends for the same reason as the contest pattern.
+ * creator's own `/campaigns/mine` — and `/campaigns/open`, the signed-in list shaped per viewer
+ * (docs/PLATFORM-2.0.md §17.2). Anchored at both ends for the same reason as the contest pattern.
  */
 const CAMPAIGN_APPLY_PATTERN = /^\/campaigns\/[^/]+\/(?:apply|make|join)\/?$/;
 const CAMPAIGN_PARTICIPATION_PATTERN = /^\/campaigns\/participations\/[^/]+\/?$/;
-const MY_CAMPAIGNS_PATTERN = /^\/campaigns\/mine\/?$/;
+const MY_CAMPAIGNS_PATTERN = /^\/campaigns\/(?:mine|open)\/?$/;
+
+/**
+ * docs/CREATOR-PLATFORM.md — the format creator program: `/{locale}/creators` is public, and its
+ * login-gated leaves (application, workspace, the recipe editor `workspace/formats/{new|id}`) are
+ * unprefixed app surface. Anchored like the campaigns.
+ */
+const CREATOR_PROGRAM_PATTERN = /^\/creators\/(?:apply|workspace(?:\/formats\/(?:new|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}))?)\/?$/;
+
+export function isCreatorProgramAppPath(pathname: string): boolean {
+  return CREATOR_PROGRAM_PATTERN.test(pathname);
+}
 
 export function isCampaignAppPath(pathname: string): boolean {
   return CAMPAIGN_APPLY_PATTERN.test(pathname) || CAMPAIGN_PARTICIPATION_PATTERN.test(pathname) || MY_CAMPAIGNS_PATTERN.test(pathname);
@@ -59,7 +71,8 @@ export function isCampaignAppPath(pathname: string): boolean {
 export function isAppPath(pathname: string): boolean {
   return (
     APP_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`)) ||
-    isCampaignAppPath(pathname)
+    isCampaignAppPath(pathname) ||
+    isCreatorProgramAppPath(pathname)
   );
 }
 

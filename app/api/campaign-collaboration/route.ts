@@ -10,6 +10,7 @@ import {
   acceptInvitation,
   revokeInvitation,
   sendParticipantMessage,
+  setApplicantPreference,
   storeParticipantFile,
 } from "@/lib/campaigns/collaboration/service";
 export const dynamic = "force-dynamic";
@@ -78,6 +79,10 @@ export async function POST(request: NextRequest) {
         return json({ ok: false, code: "invalid" }, 400);
       switch (body.operation) {
         case "invitation.create":
+          // Pool invitations go through /api/brand-creators, which mails the link and never echoes
+          // who was invited; this door issues the hand-shared links only.
+          if (body.input && typeof body.input === "object" && "socialAccountId" in body.input)
+            return json({ ok: false, code: "invalid" }, 400);
           result = await issueInvitation({ sql }, viewer, body.input);
           break;
         case "invitation.accept":
@@ -92,6 +97,9 @@ export async function POST(request: NextRequest) {
           break;
         case "message.send":
           result = await sendParticipantMessage({ sql }, viewer, body.input);
+          break;
+        case "applicant.prefer":
+          result = await setApplicantPreference({ sql }, viewer, body.input);
           break;
         default:
           return json({ ok: false, code: "invalid" }, 400);

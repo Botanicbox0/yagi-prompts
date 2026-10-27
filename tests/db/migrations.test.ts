@@ -89,6 +89,7 @@ describe('migrations apply on a fresh database (PLAN §6)', () => {
       'campaign_risk_reviews',
       'campaign_risk_slack_outbox',
       'campaign_risk_workers',
+      'campaign_targets',
       'campaigns',
       // §14.1 (M9) — the contests pivot's three new tables. Atomic like `prompt_items`: no
       // revisions, no manifest, no constraint triggers. `contest_entry_writes` is the append-only
@@ -115,14 +116,18 @@ describe('migrations apply on a fresh database (PLAN §6)', () => {
       // docs/TEMPLATES-IA.md §8.2 (2026-09-10) — the real-person identity: one group per person, one asset per photo.
       'identity_assets',
       'identity_groups',
+      // docs/IDENTITY-SELFIE.md (2026-10-22) — the generated-portrait tables stay for paid lineage; `identity_selfies` is the one photo.
       'identity_portrait_attempts',
       'identity_portrait_selections',
+      'identity_selfies',
       'notification_deliveries',
       'notification_jobs',
       'platform_audit',
       'platform_claims',
+      'platform_creator_applications',
       'platform_creators',
       'platform_credit_ledger',
+      'platform_format_assets',
       'platform_formats',
       'platform_image_offers',
       'platform_messages',
@@ -141,10 +146,18 @@ describe('migrations apply on a fresh database (PLAN §6)', () => {
       'prompt_items',
       'prompt_unlocks',
       'publish_assets',
+      // docs/PLATFORM-2.0.md §5.3 (2026-10-22) — one row per device that said yes to the completion push.
+      'push_subscriptions',
       // 2026-09-11 — the owner's complaint about a result, one per render, worked from the admin inbox.
       'render_feedback',
       // docs/TEMPLATES-IA.md §8 (2026-09-06) — the render queue: one row per make, from photo to link.
+      'render_job_outputs',
+      'render_job_recipes',
       'render_jobs',
+      // docs/PLATFORM-2.0.md §17.1 (2026-10-23) — linked SNS accounts, their write ledger, the local worker's heartbeat.
+      'social_account_writes',
+      'social_accounts',
+      'social_verify_workers',
       'steps',
       'stripe_events',
       'subscriptions',

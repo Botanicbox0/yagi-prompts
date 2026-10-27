@@ -76,9 +76,84 @@ export async function seedBrandWorkspaceFixtures(sql: SqlRunner, storage: Storag
   }
   await seedUsageFixtures(deps, { owner, studio, projectId: project.id, contractId: sharedContractId, value });
   const production=value(await createProductionContract(deps,studio,{organizationId:org.id,projectId:project.id,title:'[Local fixture] Production agreement',startsAt:'2026-01-01T00:00:00Z',endsAt:'2099-01-01T00:00:00Z',limit:3,requestId:randomUUID()}));
-  value(await createProductionTemplate(deps,studio,{contractId:production.id,title:'[Local fixture] Portrait film',titleKo:'[로컬 예시] 인물 영상',promptText:'Local QA template only. Use the verified identity reference for a studio portrait film.',seconds:5,aspect:'9:16',previewAttachmentId:attachment.id,requestId:randomUUID()}));
+  const template=value(await createProductionTemplate(deps,studio,{contractId:production.id,title:'[Local fixture] Portrait film',titleKo:'[로컬 예시] 인물 영상',promptText:'Local QA template only. Use the verified identity reference for a studio portrait film.',seconds:5,aspect:'9:16',previewAttachmentId:attachment.id,requestId:randomUUID()}));
   value(await sendBrandSupport(deps,studio,{organizationId:org.id,body:'[Local fixture] Welcome. You can ask the studio about your workspace here.',requestId:randomUUID()}));
+  await seedCampaignWizardFixtures(deps, { owner, orgId: org.id, projectId: project.id, studioId: studio.userId!, contractId: production.id, templateId: template.id, value });
+}
 
+/**
+ * The campaign wizard and timeline (docs/PLATFORM-2.0.md §16.3–16.4), local only: one brief sent from
+ * the wizard (`requested`, with `campaign_terms`), and an invitation-only campaign linked to the active
+ * fixture project with synthetic applicants, so the applicants tab has something to show when
+ * `CAMPAIGN_COLLABORATION_PUBLIC=on`. `invited` keeps it off the public campaign list. No handle,
+ * follower count or message here belongs to a real person.
+ */
+async function seedCampaignWizardFixtures(deps: { sql: SqlRunner }, f: { owner: Viewer; orgId: string; projectId: string; studioId: string; contractId: string; templateId: string; value: <T extends { ok: boolean }>(r: T) => Extract<T, { ok: true }> }) {
+  const { sql } = deps;
+  const day = (offset: number) => new Date(Date.now() + 9 * 3600000 + offset * 86400000).toISOString().slice(0, 10);
+  f.value(await createBrandProject(deps, f.owner, { organizationId: f.orgId, requestId: 'bb000000-0000-4000-8000-000000000004',
+    title: '[로컬 예시] 가을 신제품 캠페인', objective: '로컬 확인용 요청입니다. 실제 브랜드 캠페인이 아니에요.', audience: '',
+    budgetKrw: null, budgetTaxBasis: 'unspecified', startsOn: null, endsOn: null, productionMode: 'creator', referenceLinks: [],
+    campaignTerms: { version: 1, format: { kind: 'custom', note: '[로컬 예시] 브랜드 전용 포맷을 요청합니다.' },
+      reward: { model: 'hybrid', rewardMinKrw: 100000, rewardMaxKrw: 300000, perThousandViewsKrw: 2000, totalBudgetKrw: 3000000, taxBasis: 'excluded', slots: 10 },
+      audience: { mode: 'criteria', platforms: ['instagram', 'tiktok'], minFollowers: 3000, gender: 'any', regions: ['서울'] },
+      schedule: { applicationsCloseOn: day(14), postDeadlineOn: day(28), hashtags: ['로컬예시'], mentions: [], disclosure: true, prohibited: '[로컬 예시] 경쟁사 제품 노출 금지' } } }));
+  const campaignId = 'bb000000-0000-4000-8000-0000000000c1';
+  await sql.query(`insert into campaigns (id, slug, status, title, summary, host_name, host_kind, platforms, deliverable, slots, applications_close_at, post_deadline_at, published_at, payout, audience)
+    values ($1, 'local-fixture-invited-campaign', 'selecting', $2::jsonb, $2::jsonb, '[Local fixture] Sample brand', 'brand', '{instagram,tiktok}', 'reel', 3, $3, $4, now(),
+      '{"model":"flat","flatCents":100000,"currency":"KRW","holdDays":7}'::jsonb, 'invited') on conflict (id) do nothing`,
+    [campaignId, JSON.stringify({ en: '[Local fixture] Invited campaign', ko: '[로컬 예시] 초대 캠페인' }), `${day(-2)}T23:59:00+09:00`, `${day(20)}T23:59:00+09:00`]);
+  await sql.query('insert into campaign_collaboration_links (campaign_id, project_id, created_by) values ($1, $2, $3) on conflict do nothing', [campaignId, f.projectId, f.studioId]);
+  // The production link is what the brand timeline and funnel read (loadCampaignParticipation); left disabled.
+  await sql.query('insert into campaign_productions (campaign_id, contract_id, template_id, updated_by) values ($1, $2, $3, $4) on conflict do nothing', [campaignId, f.contractId, f.templateId, f.studioId]);
+  const applicants = [
+    { id: 'bb000000-0000-4000-8000-0000000000a1', handle: 'local.fixture.one', host: 'www.instagram.com', followers: 4200, status: 'applied', pitch: '[로컬 예시] 카페와 뷰티 리뷰를 주 3회 올려요.' },
+    { id: 'bb000000-0000-4000-8000-0000000000a2', handle: '@local.fixture.two', host: 'www.tiktok.com', followers: 12800, status: 'applied', pitch: '[로컬 예시] 숏폼 메이크업 튜토리얼을 만들어요.' },
+    { id: 'bb000000-0000-4000-8000-0000000000a3', handle: 'local.fixture.three', host: 'www.instagram.com', followers: 8900, status: 'posted', pitch: '[로컬 예시] 선정 후 게시까지 마친 예시예요.' },
+  ];
+  for (const a of applicants) {
+    await sql.query('insert into auth.users (id) values ($1) on conflict do nothing', [a.id]);
+    await sql.query("insert into profiles (id, email, locale) values ($1, $2, 'ko') on conflict (id) do nothing", [a.id, `${a.id.slice(-2)}@fixture.invalid`]);
+    const posted = a.status === 'posted';
+    await sql.query(`insert into campaign_applications (id, campaign_id, creator_id, status, pitch, sns_url, follower_count, selected_at, post_url, post_platform, posted_at, views_snapshot, metrics_source)
+      values ($1, $2, $1, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) on conflict do nothing`,
+      [a.id, campaignId, a.status, a.pitch, `https://${a.host}/${a.handle}`, a.followers, posted ? new Date().toISOString() : null,
+        posted ? 'https://www.instagram.com/p/LOCALFIXTUREPOST/' : null, posted ? 'instagram' : null, posted ? new Date().toISOString() : null, posted ? 15400 : null, posted ? 'self' : null]);
+  }
+  await seedCreatorPoolFixtures(sql, { projectId: f.projectId, studioId: f.studioId, day });
+}
+
+/**
+ * The creator pool (docs/PLATFORM-2.0.md §17.3), local only: a recruiting invitation-only campaign on
+ * the active fixture project, and synthetic verified accounts that agreed to be shown to brands, so
+ * /brand/creators has cards and the invite dialog a campaign when `TWINGS_INFLUENCERS=on`. No handle
+ * or number here belongs to a real person.
+ */
+async function seedCreatorPoolFixtures(sql: SqlRunner, f: { projectId: string; studioId: string; day: (offset: number) => string }) {
+  const campaignId = 'bb000000-0000-4000-8000-0000000000c2';
+  await sql.query(`insert into campaigns (id, slug, status, title, summary, host_name, host_kind, platforms, deliverable, slots, applications_close_at, post_deadline_at, published_at, payout, audience)
+    values ($1, 'local-fixture-pool-campaign', 'recruiting', $2::jsonb, $2::jsonb, '[Local fixture] Sample brand', 'brand', '{instagram,tiktok,youtube}', 'reel', 4, $3, $4, now(),
+      '{"model":"flat","flatCents":150000,"currency":"KRW","holdDays":7}'::jsonb, 'invited') on conflict (id) do nothing`,
+    [campaignId, JSON.stringify({ en: '[Local fixture] Winter pop-up', ko: '[로컬 예시] 겨울 팝업 캠페인' }), `${f.day(10)}T23:59:00+09:00`, `${f.day(24)}T23:59:00+09:00`]);
+  await sql.query('insert into campaign_collaboration_links (campaign_id, project_id, created_by) values ($1, $2, $3) on conflict do nothing', [campaignId, f.projectId, f.studioId]);
+  if (!(await sql.query<{ ready: boolean }>("select to_regclass('public.social_accounts') is not null as ready")).rows[0]?.ready) return;
+  const pool = [
+    { n: 1, platform: 'instagram', handle: 'local.pool.cafe', followers: 3240 },
+    { n: 2, platform: 'tiktok', handle: 'local.pool.dance', followers: 12_800 },
+    { n: 3, platform: 'youtube', handle: 'local-pool-cooks', followers: 125_400 },
+    { n: 4, platform: 'instagram', handle: 'local.pool.beauty', followers: 58_499 },
+    { n: 5, platform: 'tiktok', handle: 'local.pool.travel', followers: 7_650 },
+    { n: 6, platform: 'instagram', handle: 'local.pool.hidden', followers: 40_000, hidden: true },
+  ];
+  for (const a of pool) {
+    const id = `bb000000-0000-4000-8000-0000000001${String(a.n).padStart(2, '0')}`;
+    await sql.query('insert into auth.users (id) values ($1) on conflict do nothing', [id]);
+    await sql.query("insert into profiles (id, email, locale, notif_updates) values ($1, $2, 'ko', true) on conflict (id) do nothing", [id, `pool${a.n}@fixture.invalid`]);
+    const url = a.platform === 'instagram' ? `https://www.instagram.com/${a.handle}/` : a.platform === 'tiktok' ? `https://www.tiktok.com/@${a.handle}` : `https://www.youtube.com/@${a.handle}`;
+    await sql.query(`insert into social_accounts (user_id, platform, handle, profile_url, follower_count, claimed_count, status, measured_at, pool_consent_at)
+      values ($1, $2, $3, $4, $5, $5, 'verified', now() - interval '3 days', $6) on conflict (user_id, platform) do nothing`,
+      [id, a.platform, a.handle, url, a.followers, a.hidden ? null : new Date().toISOString()]);
+  }
 }
 
 /**

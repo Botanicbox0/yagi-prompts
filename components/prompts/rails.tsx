@@ -1,11 +1,17 @@
-import type { PromptCard } from '@/lib/prompts/catalog';
+import type { PromptCard, PromptOrigin } from '@/lib/prompts/catalog';
 import { PromptCardView } from './prompt-card';
 import { RevealGrid } from '@/components/motion/reveal-grid';
+import { railOrder } from './card-frame';
 import type { PromptLabels } from './labels';
 
 /**
  * Fixed-ratio cards share grid rows. A wrapped title grows its row rather than shifting all
  * subsequent cards in one column, and visual order stays the same as catalog and keyboard order.
+ *
+ * docs/PLATFORM-2.0.md §15.3-4 (founder 2026-10-23): two columns from the narrowest phone, three
+ * on a tablet, four on a desktop — the 4:5 card is sized for that. NEW cards lead the rail; the
+ * rest keep the catalog's featured → newest order. A landscape card keeps one column and its
+ * 16:9 frame (no dense packing: it would reorder the grid against the keyboard).
  */
 export function PromptRail({
   id,
@@ -20,6 +26,7 @@ export function PromptRail({
   now,
   topClassName = 'mt-16 first:mt-0 lg:mt-24',
   hideHeading = false,
+  origin,
 }: {
   id: string;
   heading: string;
@@ -40,9 +47,11 @@ export function PromptRail({
   topClassName?: string;
   /** The catalog already has a visible page title and introduction. Keep its rail label accessible. */
   hideHeading?: boolean;
+  /** docs/PLATFORM-2.0.md §7.5 — which origin this rail holds; the origin chips hide rails by it. */
+  origin?: PromptOrigin;
 }) {
   return (
-    <section data-rail={id} className={topClassName}>
+    <section data-rail={id} data-rail-origin={origin} className={topClassName}>
       <div className={hideHeading ? 'sr-only' : 'flex flex-wrap items-baseline justify-between gap-x-8 gap-y-2 border-b border-hairline pb-4'}>
         {/* §5.2: rail headers are DISPLAY type, and the KO variant is a different string rather
             than the same one at a smaller size (globals.css does the 0.85× on top). */}
@@ -59,8 +68,8 @@ export function PromptRail({
         <p className="mt-8 font-mono text-code opacity-60">{emptyLabel}</p>
       ) : (
         <>
-          <RevealGrid className={`${hideHeading ? '' : 'mt-8 '}grid gap-6 sm:grid-cols-2 lg:grid-cols-3`}>
-            {cards.map((card) => (
+          <RevealGrid className={`${hideHeading ? '' : 'mt-8 '}grid grid-cols-2 items-start gap-x-3 gap-y-6 sm:gap-x-4 md:grid-cols-3 lg:grid-cols-4`}>
+            {railOrder(cards, now).map((card) => (
               <li
                 key={card.slug}
                 data-prompt-item

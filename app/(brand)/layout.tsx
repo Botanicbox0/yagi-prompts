@@ -1,5 +1,6 @@
 import { WorkspaceHomeLink, WorkspaceSupport } from '@/components/brand-workspace/context-links';
 import { getViewer } from '@/lib/auth/viewer';
+import { influencersOpen } from '@/lib/influencers/rules';
 import { getVerifiedEmail } from '@/lib/auth/verified-email';
 import { getSqlRunner } from '@/lib/db/connect';
 import { loadBrandWorkspaceScope } from '@/lib/brands/workspace/service';
@@ -13,6 +14,7 @@ import { Suspense, type ReactNode } from "react";
 import type { Metadata } from "next";
 import { fontVariables } from "@/app/fonts";
 import { TwingsLogo } from "@/components/brand/twings-mark";
+import { YagiStudioLockup } from "@/components/brand/yagi-mark";
 import { getRequestLocale } from "@/lib/i18n/server";
 import { getDictionary } from "@/lib/i18n/dictionaries";
 export const dynamic = "force-dynamic";
@@ -55,12 +57,12 @@ export default async function BrandLayout({
         <div className="bw-shell">
           <aside className="bw-sidebar">
             <Suspense fallback={null}>
-              {scope ? <WorkspaceHomeLink scope={scope}><TwingsLogo size={22} /><span>{d.admin.byline}</span></WorkspaceHomeLink> : <a href="/brand" className="bw-lockup"><TwingsLogo size={22} /><span>{d.admin.byline}</span></a>}
+              {scope ? <WorkspaceHomeLink scope={scope}><YagiStudioLockup size={22} /></WorkspaceHomeLink> : <a href="/brand" className="bw-lockup"><YagiStudioLockup size={22} /></a>}
             </Suspense>
             {/* URL-derived: dynamic render resolves this on the server, the empty fallback never shows. */}
             <Suspense fallback={null}>
               {scope?<WorkspaceIdentity scope={scope} copy={b.identity} roles={b.roles}/>:<p className="bw-kicker">{b.title}</p>}
-              <WorkspaceNavigation home={b.home} members={b.members} settings={b.managed.settings} library={b.managed.library} studio={b.productionStudio.title} scope={scope}/>
+              <WorkspaceNavigation home={b.home} members={b.members} settings={b.managed.settings} library={b.managed.library} studio={b.productionStudio.title} creators={influencersOpen() ? b.creatorPool.nav : undefined} scope={scope}/>
             </Suspense>
             <div className="bw-sidebar-utilities">
               <WorkspaceLanguage locale={locale} label={d.nav.localeToggle} compact applyLabel={b.languageApply}/>
@@ -70,6 +72,10 @@ export default async function BrandLayout({
                   <span>{b.signOut}</span>
                 </button>
               </form>
+              <div className="ys-powered-by" aria-label="Powered by TWINGS">
+                <span>Powered by</span>
+                <TwingsLogo size={16} />
+              </div>
             </div>
           </aside>
           <div className="bw-body">

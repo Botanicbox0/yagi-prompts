@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { en } from '@/messages/en';
-import { ko } from '@/messages/ko';
+import { EN_TERMS, en } from '@/messages/en';
+import { KO_TERMS, ko } from '@/messages/ko';
+import { fundingCopy } from '@/messages/campaign-funding';
+import { collaborationCopy } from '@/messages/campaign-collaboration';
 
 /**
  * PLAN §3.9 — "both locales required", "manual bilingual authoring in v1".
@@ -73,6 +75,8 @@ describe('dictionary completeness (§3.9)', () => {
       'howItReads.stepsIndex',
       'howItReads.blocksIndex',
       'howItReads.unlockIndex',
+      // The first-run sheet's "1 / 3" — digits and a slash read the same in both languages.
+      'firstRun.progress',
       // M6: the studio's own mark. "YAGI" is a name, and a transliteration ("야기") would read as
       // a different brand rather than a translation — the same reason `meta.siteName` is here.
       'featured.badge',
@@ -98,6 +102,12 @@ describe('dictionary completeness (§3.9)', () => {
       // 2026-08-16 (founder: "twings로 그냥 하자"): the product is named TWINGS in both locales,
       // with no descriptor after it. A name is not a sentence, so there is nothing to translate.
       'studio.eyebrow',
+      // docs/PLATFORM-2.0.md §17 — "SNS" is the word Korean copy uses too, and the admin queue's empty cell is a dash.
+      'social.eyebrow',
+      'social.admin.none',
+      // PLATFORM-2.0 §14.1 (2026-10-24): the credit is "by @handle" in Korean too — the local idiom.
+      'prompts.byAuthor',
+      'prompts.cardAuthor',
     ]);
 
     const untranslated = enLeaves
@@ -161,5 +171,77 @@ describe('dictionary completeness (§3.9)', () => {
       expect(enMap.has(key), `en.${key}`).toBe(true);
       expect(koMap.has(key), `ko.${key}`).toBe(true);
     }
+  });
+
+  it('keeps the brand campaign page copy in brandWorkspace, not in the campaign modules (docs/PLATFORM-2.0.md §16.4)', () => {
+    for (const key of [
+      'brandWorkspace.wizard.steps.review',
+      'brandWorkspace.wizard.schedule.disclosureFixed',
+      'brandWorkspace.timeline.stages.settlement',
+      'brandWorkspace.applicants.closed',
+      'brandWorkspace.applicants.sources.self',
+      'brandWorkspace.applicants.preferHint',
+      'brandWorkspace.payments.closed',
+      'brandWorkspace.payments.buyer',
+      'brandWorkspace.paymentStates.paid',
+      'brandWorkspace.tabs.applicants',
+    ]) {
+      expect(enMap.has(key), key).toBe(true);
+      expect(koMap.has(key), key).toBe(true);
+    }
+    // Moved, not copied: the brand-page-only strings left the shared campaign copy.
+    for (const locale of ['en', 'ko'] as const) {
+      const funding = fundingCopy(locale) as Record<string, unknown>, collaboration = collaborationCopy(locale) as Record<string, unknown>;
+      for (const key of ['buyer', 'receipt', 'noReceipt']) expect(funding[key], key).toBeUndefined();
+      for (const key of ['participants', 'none', 'invitations']) expect(collaboration[key], key).toBeUndefined();
+    }
+  });
+});
+
+/**
+ * docs/PLATFORM-2.0.md §14.1 (founder 2026-10-24): one name per object, each spelled ONCE in the
+ * dictionary's terms object (`KO_TERMS` / `EN_TERMS`) and composed everywhere else. These tests read
+ * the term values instead of repeating them, so a rename edits the terms only.
+ */
+describe('§14.1 names: one term object per locale', () => {
+  // "작가" stays legitimate only where it names an author of a drawing or a story.
+  const UNRELATED = /이모티콘 작가|웹툰 작가|웹소설 작가|그림 작가/;
+
+  it('leaves no "작가" in Korean copy outside unrelated contexts', () => {
+    const offenders = koLeaves.filter(([, value]) => value.includes('작가') && !UNRELATED.test(value));
+    expect(offenders).toEqual([]);
+  });
+
+  it('calls a template supplier a maker in English, not a format creator', () => {
+    const offenders = enLeaves.filter(([, value]) => /format creators?|creator format/i.test(value));
+    expect(offenders).toEqual([]);
+  });
+
+  it('composes the program, studio, rails, chips and credits from the terms', () => {
+    for (const [dict, terms] of [[ko, KO_TERMS], [en, EN_TERMS]] as const) {
+      expect(dict.creatorProgram.metaTitle).toBe(terms.makerProgram);
+      expect(dict.creatorProgram.footerLink).toBe(terms.makerProgram);
+      expect(dict.creatorProgram.workspaceTitle).toBe(terms.makerStudio);
+      expect(dict.templates.studioRail).toBe(terms.studioCollection);
+      expect(dict.templates.makerRail).toBe(terms.makerCollection);
+      expect(dict.brandWorkspace.wizard.format.creators).toBe(terms.makerCollection);
+      expect(dict.prompts.cardAuthor).toBe(`${terms.creditPrefix} @{handle}`);
+      expect(dict.prompts.byAuthor).toBe(`${terms.creditPrefix} @{handle}`);
+      expect(dict.audience.personal).toBe(terms.personal);
+    }
+    expect(ko.templates.originMaker).toBe(KO_TERMS.maker);
+    expect(ko.creatorProgram.approvedLine.startsWith(KO_TERMS.makerFull)).toBe(true);
+    expect(ko.creatorProgram.applyTitle.startsWith(KO_TERMS.maker)).toBe(true);
+    // The values fixed on 2026-10-24 — the one place a test spells them out.
+    expect(KO_TERMS).toMatchObject({ maker: '메이커', makerFull: '템플릿 메이커', makerProgram: '메이커 프로그램', makerStudio: '메이커 스튜디오', studioCollection: 'TWINGS 오리지널', makerCollection: '메이커 컬렉션', creditPrefix: 'by', personal: '개인' });
+    expect(EN_TERMS).toMatchObject({ makerProgram: 'Maker Program', makerStudio: 'Maker Studio', makerCollection: 'Maker Collection', creditPrefix: 'by', personal: 'Personal' });
+  });
+
+  it('keeps 크리에이터 for campaign participants and the personal label for the header switch only', () => {
+    expect(ko.audience.creator).toBe('크리에이터');
+    // Users are "나/내" in sentences and "회원님" when addressed — the switch label is the only bare "개인".
+    expect(koLeaves.filter(([, value]) => value === KO_TERMS.personal).map(([key]) => key)).toEqual(['audience.personal']);
+    expect(koLeaves.filter(([, value]) => /유저님|개인님/.test(value))).toEqual([]);
+    expect(ko.creatorProfile.fallbackName).toBe('회원님');
   });
 });

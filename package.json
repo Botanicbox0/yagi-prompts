@@ -22,6 +22,7 @@
     "test:watch": "vitest",
     "check": "npm run typecheck && npm run test",
     "fonts": "node scripts/copy-fonts.mjs",
+    "pwa:icons": "node scripts/pwa-icons.mjs",
     "seed": "tsx scripts/seed-cli.ts",
     "db:local": "tsx scripts/db-local.ts",
     "sweep:anon": "tsx scripts/sweep-anon.ts",
@@ -32,6 +33,8 @@
     "ark:assets:smoke": "tsx scripts/ark-assets-smoke.ts",
     "ark:virtual:smoke": "tsx scripts/ark-virtual-smoke.ts",
     "image:smoke": "tsx scripts/image-smoke.ts",
+    "kling:smoke": "tsx scripts/kling-smoke.ts",
+    "gemini:smoke": "tsx scripts/gemini-smoke.ts",
     "subscription:readiness": "tsx scripts/subscription-readiness.ts",
     "predev": "node scripts/prepare-face-assets.mjs",
     "prebuild": "node scripts/prepare-face-assets.mjs",
@@ -54,6 +57,7 @@
     "server-only": "0.0.1",
     "sharp": "0.35.5",
     "stripe": "22.5.0",
+    "web-push": "3.6.7",
     "zod": "4.4.3"
   },
   "devDependencies": {

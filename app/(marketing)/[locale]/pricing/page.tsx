@@ -13,13 +13,16 @@ import { SubscriptionAvailabilityProvider } from '@/components/twings/subscripti
 import { CreatorPreview } from '@/components/audience/creator-preview';
 import { formatKrw } from '@/lib/twings/products';
 import { cachedSubscriptionAvailability } from '@/lib/creator-subscriptions/cached-availability';
+import { storefrontOpen } from '@/lib/auth/purchase-gate';
 
 /**
  * Single purchases plus the upcoming Creator and Premium subscription designs.
  * No enrollment or billing authorization until the separate launch requirements are met.
  *
- * Static, like the landing. Monthly outcomes come first; individual purchase prices belong on
- * template details. The comparison receives display counts only, never an account allowance.
+ * Static, like the landing. What is actually sold comes first (docs/PLATFORM-2.0.md §15.3-3): single
+ * films while `storefrontOpen()`, with the monthly plans below as a "준비 중" teaser — and the monthly
+ * comparison first only when it is the one that is open. Individual prices stay on the template pages.
+ * The comparison receives display counts only, never an account allowance.
  */
 /** Must stay equal to CATALOG_TTL_SECONDS — Next requires a literal here (tests pin the pair). */
 export const revalidate = 3600;
@@ -74,14 +77,42 @@ export default async function PricingPage({ params }: { params: Promise<{ locale
     subscriptionEditingStatus: p.subscriptionEditingStatus, subscriptionMore: p.subscriptionMore,
     subscriptionBrowse: p.subscriptionBrowse, subscriptionCountBasis: p.subscriptionCountBasis,
     subscriptionTitle: p.subscriptionTitle, subscriptionStatus: p.subscriptionStatus,
-    subscriptionUnavailable: p.subscriptionUnavailable, subscriptionOpenTitle: p.subscriptionOpenTitle,
+    subscriptionUnavailable: p.subscriptionUnavailable, subscriptionUnavailableSingleOpen: p.subscriptionUnavailableSingleOpen, subscriptionOpenTitle: p.subscriptionOpenTitle,
     subscriptionOpenStatus: p.subscriptionOpenStatus, subscriptionOpenBody: p.subscriptionOpenBody,
     subscriptionPausedStatus: p.subscriptionPausedStatus, subscriptionPausedBody: p.subscriptionPausedBody,
     subscriptionStart: p.subscriptionStart, subscriptionEditingOpenStatus: p.subscriptionEditingOpenStatus,
     subscriptionEditRequestLimit: p.subscriptionEditRequestLimit, subscriptionEditCountNotice: p.subscriptionEditCountNotice,
   };
-  const textCopy = { lede: p.lede, subscriptionOpenLede: p.subscriptionOpenLede, filmsBody: p.filmsBody, filmsOpenBody: p.filmsOpenBody };
+  const textCopy = { lede: p.lede, subscriptionOpenLede: p.subscriptionOpenLede, singleLede: p.singleLede, filmsBody: p.filmsBody, filmsOpenBody: p.filmsOpenBody, singleOpenBody: p.singleOpenBody };
+  const shopOpen = storefrontOpen();
+  const singleFirst = shopOpen || availability.status !== 'open';
   const editingCopy = { subscriptionEditingStatus: p.subscriptionEditingStatus, subscriptionEditingOpenStatus: p.subscriptionEditingOpenStatus, subscriptionEditingTitle: p.subscriptionEditingTitle, subscriptionPromptEditingSoon: p.subscriptionPromptEditingSoon, subscriptionEditingOpenBody: p.subscriptionEditingOpenBody, subscriptionEditingExample: p.subscriptionEditingExample, subscriptionEditingBoundary: p.subscriptionEditingBoundary };
+
+  // Single films: what a reader can buy today when the storefront is open — a card on top, then.
+  const singleBlock = (
+    <aside data-pricing-films data-pricing-films-open={shopOpen ? 'true' : 'false'} className={singleFirst ? 'rounded-2xl border border-hairline p-6 sm:p-8' : 'mt-9 flex flex-wrap items-center justify-between gap-5'}>
+      <div className="max-w-2xl">
+        <h2 className={singleFirst ? 'text-xl font-semibold sm:text-2xl' : 'text-lg font-semibold'}>{singleFirst ? p.singleTitle : p.filmsTitle}</h2>
+        <p className="mt-2 text-sm leading-relaxed text-black/65"><SubscriptionPricingText copy={textCopy} field="single" oneTimeAvailable={shopOpen} /></p>
+        {singleFirst && shopOpen && <p data-pricing-refund className="mt-2 text-sm leading-relaxed text-black/65">{dict.renders.notCharged}</p>}
+      </div>
+      <a href={templatesHref(locale)} className={singleFirst ? 'mt-5 inline-flex min-h-12 items-center gap-3 rounded-full bg-black px-6 text-sm font-semibold text-white focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent' : 'inline-flex min-h-12 items-center gap-3 text-sm font-medium underline underline-offset-4'}>{p.filmsCta}<span aria-hidden="true">↗</span></a>
+    </aside>
+  );
+  // Monthly plans: below as a "준비 중" teaser while preparing; first only when they are the open offer.
+  const monthlyBlock = (
+    <section id="monthly" className={`${singleFirst ? 'mt-10' : ''} scroll-mt-24`}>
+      <SubscriptionPlanComparison plans={plans} copy={comparisonCopy} browseHref={templatesHref(locale)} oneTimeAvailable={shopOpen} />
+      <div className="mt-6 flex flex-wrap items-center gap-x-6 gap-y-3 text-sm">
+        <p className="font-semibold">{p.subscriptionShared}</p>
+        {[p.subscriptionFeatureFace, p.subscriptionFeatureVideo].map(feature => <p key={feature}><span aria-hidden="true" className="mr-2 text-accent">✓</span>{feature}</p>)}
+      </div>
+      <details className="group mt-6 border-y border-hairline py-1">
+        <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-4 text-sm font-medium [&::-webkit-details-marker]:hidden">{p.subscriptionMixedLabel}<span aria-hidden="true" className="text-accent group-open:hidden">+</span><span aria-hidden="true" className="hidden text-accent group-open:block">−</span></summary>
+        <p className="max-w-3xl pb-5 text-sm leading-relaxed text-black/65">{p.subscriptionMixed}</p>
+      </details>
+    </section>
+  );
 
   return (
     <>
@@ -93,24 +124,13 @@ export default async function PricingPage({ params }: { params: Promise<{ locale
           <div className="audience-shell pt-24 pb-14 lg:pt-28 lg:pb-20">
             <header className="max-w-3xl">
               <p className="audience-eyebrow">{p.eyebrow}</p>
-              <h1 className="mt-4 font-display text-[clamp(2rem,3.5vw,3rem)] leading-[1.12] font-bold tracking-tight">{p.line1}<br />{p.line2}</h1>
-              <p data-service-definition className="mt-3 max-w-2xl text-sm leading-relaxed text-black/65"><SubscriptionPricingText copy={textCopy} field="lede" /></p>
+              <h1 className="mt-4 font-display text-[clamp(2rem,3.5vw,3rem)] leading-[1.12] font-bold tracking-tight">{p.line1}<br />{shopOpen && availability.status !== 'open' ? p.singleLine2 : p.line2}</h1>
+              <p data-service-definition className="mt-3 max-w-2xl text-sm leading-relaxed text-black/65"><SubscriptionPricingText copy={textCopy} field="lede" oneTimeAvailable={shopOpen} /></p>
             </header>
-            <section id="monthly" className="mt-6 scroll-mt-24">
-              <SubscriptionPlanComparison plans={plans} copy={comparisonCopy} browseHref={templatesHref(locale)} />
-              <div className="mt-6 flex flex-wrap items-center gap-x-6 gap-y-3 text-sm">
-                <p className="font-semibold">{p.subscriptionShared}</p>
-                {[p.subscriptionFeatureFace, p.subscriptionFeatureVideo].map(feature => <p key={feature}><span aria-hidden="true" className="mr-2 text-accent">✓</span>{feature}</p>)}
-              </div>
-              <details className="group mt-6 border-y border-hairline py-1">
-                <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-4 text-sm font-medium [&::-webkit-details-marker]:hidden">{p.subscriptionMixedLabel}<span aria-hidden="true" className="text-accent group-open:hidden">+</span><span aria-hidden="true" className="hidden text-accent group-open:block">−</span></summary>
-                <p className="max-w-3xl pb-5 text-sm leading-relaxed text-black/65">{p.subscriptionMixed}</p>
-              </details>
-            </section>
-            <aside data-pricing-films className="mt-9 flex flex-wrap items-center justify-between gap-5">
-              <div className="max-w-2xl"><h2 className="text-lg font-semibold">{p.filmsTitle}</h2><p className="mt-2 text-sm leading-relaxed text-black/65"><SubscriptionPricingText copy={textCopy} field="single" /></p></div>
-              <a href={templatesHref(locale)} className="inline-flex min-h-12 items-center gap-3 text-sm font-medium underline underline-offset-4">{p.filmsCta}<span aria-hidden="true">↗</span></a>
-            </aside>
+            {/* Reading order is selling order: what can be bought first (docs/PLATFORM-2.0.md §15.3-3). */}
+            <div data-pricing-order={singleFirst ? 'single-first' : 'monthly-first'} className="mt-6">
+              {singleFirst ? <>{singleBlock}{monthlyBlock}</> : <>{monthlyBlock}{singleBlock}</>}
+            </div>
           </div>
         </section>
 

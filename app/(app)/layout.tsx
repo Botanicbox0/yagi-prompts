@@ -9,6 +9,7 @@ import { RegisterServiceWorker } from '@/components/pwa/register-sw';
 import { requestSurface } from '@/lib/routing/request-surface';
 import { templatesHref } from '@/lib/prompts/links';
 import { AppErrorCopyProvider } from '@/components/app/error-copy';
+import { BottomTabs } from '@/components/app/bottom-tabs';
 
 /**
  * Root layout for the authenticated app surface (§4: `/library`, `/account`, `/billing/*`).
@@ -17,8 +18,12 @@ import { AppErrorCopyProvider } from '@/components/app/error-copy';
  */
 export const dynamic = 'force-dynamic';
 
-/** F6 — same browser-chrome color as the marketing tree: separate root, same product. */
-export const viewport: Viewport = { themeColor: '#ffffff' };
+/**
+ * F6 — same browser-chrome color as the marketing tree: separate root, same product. `viewport-fit:
+ * cover` (docs/PLATFORM-2.0.md §5.2) hands the installed app the whole screen; app/globals.css pads
+ * the page by the safe areas.
+ */
+export const viewport: Viewport = { themeColor: '#ffffff', viewportFit: 'cover' };
 
 /**
  * A separate root layout means nothing is inherited from the marketing group — including the
@@ -43,7 +48,7 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function AppRootLayout({ children }: { children: ReactNode }) {
   const locale = await getRequestLocale();
   const { workspace } = await requestSurface();
-  const { appError } = getDictionary(locale);
+  const { appError, appShell } = getDictionary(locale);
   return (
     <html lang={locale} className={fontVariables} data-workspace-admin={workspace || undefined}>
       <head>
@@ -56,6 +61,7 @@ export default async function AppRootLayout({ children }: { children: ReactNode 
           {children}
         </AppErrorCopyProvider>
         {!workspace && <RegisterServiceWorker />}
+        {!workspace && <BottomTabs locale={locale} labels={appShell.tabs} />}
       </body>
     </html>
   );

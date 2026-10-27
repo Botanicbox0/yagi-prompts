@@ -1,5 +1,6 @@
 import type { Dictionary } from '@/lib/i18n/dictionaries';
 import type { CampaignRow } from '@/lib/campaigns/repo';
+import type { CampaignPrefill } from '@/lib/brands/workspace/campaign-terms';
 import {
   CAMPAIGN_PLATFORMS,
   DELIVERABLES,
@@ -19,17 +20,22 @@ import { Field, INPUT, LABEL, LocalePair } from '@/components/admin/chrome';
  */
 export function CampaignFields({
   row,
+  prefill = null,
   dict,
   styleSlugs,
 }: {
   row: CampaignRow | null;
+  /** "New campaign" from a brand's wizard request (docs/PLATFORM-2.0.md §16.3): starting values only. */
+  prefill?: CampaignPrefill | null;
   dict: Dictionary;
   /** Published studio styles, for the format picker's datalist. */
   styleSlugs: string[];
 }) {
   const a = dict.admin;
   const labels = campaignLabels(dict);
-  const payout = row?.payout ?? null;
+  // An existing row always wins; a brand request only fills a new form.
+  const src = row ?? prefill;
+  const payout = src?.payout ?? null;
   return (
     <>
       <div className="grid gap-3 sm:grid-cols-2">
@@ -37,7 +43,7 @@ export function CampaignFields({
           <input type="text" name="slug" required defaultValue={row?.slug ?? ''} className={INPUT} />
         </Field>
         <Field label={a.fieldStyleSlug} hint={a.styleSlugHint}>
-          <input type="text" name="styleSlug" list="campaign-style-slugs" defaultValue={row?.styleSlug ?? ''} className={INPUT} />
+          <input type="text" name="styleSlug" list="campaign-style-slugs" defaultValue={src?.styleSlug ?? ''} className={INPUT} />
           <datalist id="campaign-style-slugs">
             {styleSlugs.map((slug) => (
               <option key={slug} value={slug} />
@@ -45,7 +51,7 @@ export function CampaignFields({
           </datalist>
         </Field>
         <Field label={a.fieldHostName}>
-          <input type="text" name="hostName" required defaultValue={row?.hostName ?? ''} className={INPUT} />
+          <input type="text" name="hostName" required defaultValue={src?.hostName ?? ''} className={INPUT} />
         </Field>
         <Field label={a.fieldHostKind} hint={a.hostKindHint}>
           <select name="hostKind" defaultValue={row?.hostKind ?? 'brand'} className={INPUT}>
@@ -60,13 +66,13 @@ export function CampaignFields({
           <input type="url" name="hostUrl" placeholder="https://" defaultValue={row?.hostUrl ?? ''} className={INPUT} />
         </Field>
         <Field label={a.fieldBudget} hint={a.budgetHint}>
-          <input type="number" name="budgetCents" min={0} step={1} defaultValue={row?.budgetCents ?? ''} className={INPUT} />
+          <input type="number" name="budgetCents" min={0} step={1} defaultValue={src?.budgetCents ?? ''} className={INPUT} />
         </Field>
       </div>
 
-      <LocalePair label={a.fieldCampaignTitle} name="title" value={row?.title ?? null} multiline rows={2} />
-      <LocalePair label={a.fieldCampaignSummary} name="summary" value={row?.summary ?? null} multiline />
-      <LocalePair label={a.fieldCampaignBrief} name="brief" value={row?.brief ?? null} hint={a.campaignBriefHint} multiline rows={8} />
+      <LocalePair label={a.fieldCampaignTitle} name="title" value={src?.title ?? null} multiline rows={2} />
+      <LocalePair label={a.fieldCampaignSummary} name="summary" value={src?.summary ?? null} multiline />
+      <LocalePair label={a.fieldCampaignBrief} name="brief" value={src?.brief ?? null} hint={a.campaignBriefHint} multiline rows={8} />
 
       {/* The deliverable: where, what, how many, by when. */}
       <div className="grid gap-3 sm:grid-cols-2">
@@ -79,7 +85,7 @@ export function CampaignFields({
                   type="checkbox"
                   name="platforms"
                   value={platform}
-                  defaultChecked={row ? row.platforms.includes(platform) : platform === 'instagram'}
+                  defaultChecked={src ? src.platforms.includes(platform) : platform === 'instagram'}
                 />
                 {labels.platform[platform]}
               </label>
@@ -96,14 +102,14 @@ export function CampaignFields({
           </select>
         </Field>
         <Field label={a.fieldSlots} hint={a.slotsHint}>
-          <input type="number" name="slots" required min={1} max={SLOTS_MAX} step={1} defaultValue={row?.slots ?? 5} className={INPUT} />
+          <input type="number" name="slots" required min={1} max={SLOTS_MAX} step={1} defaultValue={src?.slots ?? 5} className={INPUT} />
         </Field>
         <div />
         <Field label={a.fieldApplicationsCloseAt} hint={a.campaignDatesHint}>
-          <input type="datetime-local" name="applicationsCloseAt" defaultValue={toKstDateTimeLocal(row?.applicationsCloseAt)} className={INPUT} />
+          <input type="datetime-local" name="applicationsCloseAt" defaultValue={toKstDateTimeLocal(src?.applicationsCloseAt)} className={INPUT} />
         </Field>
         <Field label={a.fieldPostDeadlineAt}>
-          <input type="datetime-local" name="postDeadlineAt" defaultValue={toKstDateTimeLocal(row?.postDeadlineAt)} className={INPUT} />
+          <input type="datetime-local" name="postDeadlineAt" defaultValue={toKstDateTimeLocal(src?.postDeadlineAt)} className={INPUT} />
         </Field>
       </div>
 
@@ -140,13 +146,13 @@ export function CampaignFields({
       {/* What the post must carry. */}
       <div className="grid gap-3 border-t border-hairline pt-4 sm:grid-cols-2">
         <Field label={a.fieldHashtags} hint={a.requirementsHint}>
-          <input type="text" name="hashtags" defaultValue={row?.requirements.hashtags.join(' ') ?? ''} placeholder="#twings #광고" className={INPUT} />
+          <input type="text" name="hashtags" defaultValue={src?.requirements.hashtags.join(' ') ?? ''} placeholder="#twings #광고" className={INPUT} />
         </Field>
         <Field label={a.fieldMentions}>
-          <input type="text" name="mentions" defaultValue={row?.requirements.mentions.join(' ') ?? ''} placeholder="@twings.app" className={INPUT} />
+          <input type="text" name="mentions" defaultValue={src?.requirements.mentions.join(' ') ?? ''} placeholder="@twings.app" className={INPUT} />
         </Field>
         <label className="flex items-center gap-2 font-mono text-code sm:col-span-2">
-          <input type="checkbox" name="disclosure" defaultChecked={row ? row.requirements.disclosure : true} />
+          <input type="checkbox" name="disclosure" defaultChecked={src ? src.requirements.disclosure : true} />
           {a.fieldDisclosure}
         </label>
       </div>

@@ -25,7 +25,7 @@ export default async function FundingOrder({
     <section className="mx-auto max-w-3xl px-5 py-10" data-campaign-funding>
       <a
         className="text-sm text-accent underline"
-        href={`/brand/projects/${id}/funding`}
+        href={`/brand/projects/${id}#payments`}
       >
         {t.back}
       </a>

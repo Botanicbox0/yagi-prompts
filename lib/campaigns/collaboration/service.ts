@@ -8,6 +8,9 @@ import { enqueueCampaignRisk } from "@/lib/campaigns/risk/queue";
 import { toCampaign } from "@/lib/campaigns/repo";
 import { toCampaignCard } from "@/lib/campaigns/catalog";
 import type { CreatorCampaign } from "@/lib/campaigns/service";
+import { audienceOf, campaignAccess as audienceAccessFor } from "@/lib/influencers/visibility";
+import { influencersOpen } from "@/lib/influencers/rules";
+import { designatedInvitesReady, inviteCap, POOL_MEMBER_SQL } from "@/lib/brands/creator-pool";
 
 type Row = Record<string, unknown>;
 export type CollaborationCode =
@@ -22,7 +25,10 @@ export type CollaborationCode =
   | "rate_limited"
   | "invitation_retry"
   | "application_ended"
-  | "slots_full";
+  | "slots_full"
+  | "influencer_required"
+  | "invite_limit"
+  | "wrong_account";
 export type Outcome<T = { id: string }> =
   ({ ok: true } & T) | { ok: false; code: CollaborationCode };
 export interface Deps {
@@ -318,31 +324,44 @@ export async function bindCollaboration(
     return { id: p.data.campaignId };
   });
 }
+/**
+ * A one-person invitation link. With `socialAccountId` (the creator pool, docs/PLATFORM-2.0.md
+ * §17.3) it is a designated invitation: that pool member is added to campaign_targets and the link
+ * is bound to their account (`invited_user_id`), so only they can accept it. Owners and editors
+ * only, once per person per campaign, at most `inviteCap(slots)` live ones per campaign. `invitee`
+ * is for the caller's mail and never goes back to the browser.
+ */
 export async function issueInvitation(
   d: Deps,
   v: Viewer,
   input: unknown,
-): Promise<Outcome<{ id: string; token: string; slug: string }>> {
+): Promise<Outcome<{ id: string; token: string; slug: string; invitee?: string }>> {
   const p = z
     .object({
       campaignId: uuid,
       requestId: uuid,
       email: z.string().trim().email().max(254).optional(),
+      socialAccountId: uuid.optional(),
     })
     .strict()
+    .refine((x) => !(x.email && x.socialAccountId))
     .safeParse(input);
   if (!p.success) return { ok: false, code: "invalid" };
+  const designated = p.data.socialAccountId;
+  if (designated && (!influencersOpen() || !(await designatedInvitesReady(d.sql))))
+    return { ok: false, code: "unavailable" };
   return run(d, v, async (sql, id) => {
     await campaignAccess(sql, id, p.data.campaignId, true, false);
     await sql.query("select id from campaigns where id=$1 for update", [
       p.data.campaignId,
     ]);
-    const { c, p: project } = await campaignAccess(
-      sql,
-      id,
-      p.data.campaignId,
-      true,
-    );
+    const {
+      c,
+      p: project,
+      role,
+    } = await campaignAccess(sql, id, p.data.campaignId, true);
+    // The TWINGS team runs campaigns; inviting from the pool is the brand's own act.
+    if (designated && role !== "brand") throw new Denied("forbidden");
     if (
       project.status !== "active" ||
       c.status !== "recruiting" ||
@@ -350,16 +369,26 @@ export async function issueInvitation(
       +now(d) >= +new Date(String(c.applications_close_at))
     )
       throw new Denied("not_open");
+    const member = designated
+      ? (
+          await sql.query<{ user_id: string }>(
+            `select s.user_id from social_accounts s where s.id=$1 and ${POOL_MEMBER_SQL}`,
+            [designated],
+          )
+        ).rows[0]
+      : undefined;
+    if (designated && !member) throw new Denied("not_found");
     const previous = (
       await sql.query<Row>(
-        "select id,campaign_id,email,accepted_at,revoked_at from campaign_participant_invites where created_by=$1 and request_id=$2",
+        "select * from campaign_participant_invites where created_by=$1 and request_id=$2",
         [id, p.data.requestId],
       )
     ).rows[0];
     if (previous) {
       const same =
         previous.campaign_id === p.data.campaignId &&
-        (previous.email ?? null) === (p.data.email?.toLowerCase() ?? null);
+        (previous.email ?? null) === (p.data.email?.toLowerCase() ?? null) &&
+        (previous.invited_user_id ?? null) === (member?.user_id ?? null);
       throw new Denied(
         same && !previous.accepted_at && !previous.revoked_at
           ? "invitation_retry"
@@ -373,6 +402,20 @@ export async function issueInvitation(
       )
     ).rows[0]!.n;
     if (n >= 100) throw new Denied("rate_limited");
+    if (member) {
+      const live = (
+        await sql.query<{ n: number }>(
+          "select count(*)::int n from campaign_participant_invites where campaign_id=$1 and invited_user_id is not null and revoked_at is null",
+          [c.id],
+        )
+      ).rows[0]!.n;
+      if (live >= inviteCap(Number(c.slots))) throw new Denied("invite_limit");
+      // The primary key refuses a second invitation of the same person (→ conflict).
+      await sql.query(
+        "insert into campaign_targets(campaign_id,user_id,invited_by,invited_at) values($1,$2,$3,$4)",
+        [c.id, member.user_id, id, now(d)],
+      );
+    }
     const invitationId = randomUUID(),
       token = randomBytes(32).toString("base64url"),
       expires = new Date(
@@ -382,7 +425,9 @@ export async function issueInvitation(
         ),
       );
     await sql.query(
-      "insert into campaign_participant_invites(id,campaign_id,token_hash,email,created_by,request_id,expires_at) values($1,$2,$3,$4,$5,$6,$7)",
+      member
+        ? "insert into campaign_participant_invites(id,campaign_id,token_hash,email,created_by,request_id,expires_at,invited_user_id) values($1,$2,$3,$4,$5,$6,$7,$8)"
+        : "insert into campaign_participant_invites(id,campaign_id,token_hash,email,created_by,request_id,expires_at) values($1,$2,$3,$4,$5,$6,$7)",
       [
         invitationId,
         c.id,
@@ -391,9 +436,15 @@ export async function issueInvitation(
         id,
         p.data.requestId,
         expires,
+        ...(member ? [member.user_id] : []),
       ],
     );
-    return { id: invitationId, token, slug: String(c.slug) };
+    return {
+      id: invitationId,
+      token,
+      slug: String(c.slug),
+      ...(member ? { invitee: member.user_id } : {}),
+    };
   });
 }
 export async function revokeInvitation(
@@ -418,7 +469,7 @@ export async function revokeInvitation(
     await campaignAccess(sql, id, String(r.campaign_id), true);
     const current = (
       await sql.query<Row>(
-        "select accepted_at from campaign_participant_invites where id=$1 for update",
+        "select * from campaign_participant_invites where id=$1 for update",
         [p.data.invitationId],
       )
     ).rows[0];
@@ -427,6 +478,12 @@ export async function revokeInvitation(
       "update campaign_participant_invites set revoked_at=coalesce(revoked_at,$2) where id=$1",
       [p.data.invitationId, now(d)],
     );
+    // A designated invitation also named the person on the campaign; take that back too.
+    if (current?.invited_user_id)
+      await sql.query(
+        "delete from campaign_targets where campaign_id=$1 and user_id=$2",
+        [r.campaign_id, current.invited_user_id],
+      );
     return { id: p.data.invitationId };
   });
 }
@@ -473,6 +530,9 @@ export async function acceptInvitation(
       throw new Denied("not_found");
     if (invite.accepted_by && invite.accepted_by !== id)
       throw new Denied("not_found");
+    // A pool invitation names its account: another signed-in person cannot use the link.
+    if (invite.invited_user_id && invite.invited_user_id !== id)
+      throw new Denied("wrong_account");
     if (invite.email && d.verifiedEmail?.toLowerCase() !== invite.email)
       throw new Denied("forbidden");
     const fingerprint = digest(
@@ -515,6 +575,14 @@ export async function acceptInvitation(
       ["declined", "withdrawn", "expired"].includes(String(old.status))
     )
       throw new Denied("application_ended");
+    // docs/PLATFORM-2.0.md §17.2 — the link proves an invitation, not a qualification: an
+    // `influencers` campaign still needs a verified 3,000+ account (or a campaign_targets row).
+    if (
+      !old &&
+      audienceOf(c.audience) === "influencers" &&
+      (await audienceAccessFor(sql, String(c.id), id)) !== "ok"
+    )
+      throw new Denied("influencer_required");
     const held = (
       await sql.query<{ n: number }>(
         "select count(*)::int n from campaign_applications where campaign_id=$1 and status in ('selected','rejected','posted','verified','paid')",
@@ -973,7 +1041,7 @@ export async function loadProjectCollaboration(
     for (const c of cs) {
       const invites = (
         await sql.query<Row>(
-          "select id,expires_at,revoked_at,accepted_at from campaign_participant_invites where campaign_id=$1 order by created_at desc limit 100",
+          "select i.id,i.expires_at,i.revoked_at,i.accepted_at from campaign_participant_invites i where i.campaign_id=$1 and to_jsonb(i)->>'invited_user_id' is null order by i.created_at desc limit 100",
           [c.id],
         )
       ).rows;
@@ -1011,4 +1079,171 @@ export async function loadProjectCollaboration(
     };
   });
   return r.ok ? r : null;
+}
+
+/**
+ * The brand's view of who applied (docs/PLATFORM-2.0.md §16.4). Every application to a campaign
+ * linked to this project, `applied` included: handle, platform, follower count with where it came
+ * from, profile link and the application message. Never the creator's account id, email or name.
+ * Follower counts are what the creator typed (`self`) until account verification exists (§16.5).
+ */
+export interface ProjectApplicant {
+  id: string;
+  status: string;
+  handle: string | null;
+  platform: "instagram" | "tiktok" | "youtube" | null;
+  followers: number;
+  followersSource: "self" | "verified";
+  profileUrl: string | null;
+  pitch: string;
+  appliedAt: string;
+  /** The brand marked this applicant; a note to TWINGS, never a selection. */
+  preferred: boolean;
+  postUrl: string | null;
+  views: number | null;
+  metricsSource: "self" | "admin" | "api" | null;
+  /** Came through a creator-pool invitation (docs/PLATFORM-2.0.md §17.3). */
+  invited: boolean;
+}
+/**
+ * A person this brand invited from the creator pool. The handle comes from the pool card and is
+ * shown only while that account is still in the pool; otherwise just the state.
+ */
+export interface ProjectInvitedCreator {
+  id: string;
+  handle: string | null;
+  platform: "instagram" | "tiktok" | "youtube" | null;
+  status: "pending" | "accepted" | "revoked" | "expired";
+  invitedAt: string;
+}
+export interface ProjectApplicantCampaign {
+  id: string;
+  slug: string;
+  title: { en: string; ko: string };
+  status: string;
+  slots: number;
+  applicants: ProjectApplicant[];
+  invited: ProjectInvitedCreator[];
+}
+function applicantHandle(url: string | null): { handle: string | null; platform: ProjectApplicant["platform"] } {
+  if (!url) return { handle: null, platform: null };
+  const u = new URL(url), host = u.hostname.toLowerCase().replace(/^www\.|^m\./, "");
+  const platform = host === "instagram.com" ? "instagram" : host === "tiktok.com" ? "tiktok" : host === "youtube.com" || host === "youtu.be" ? "youtube" : null;
+  const first = u.pathname.split("/").filter(Boolean)[0] ?? "";
+  const handle = platform && /^@?[\p{L}\p{N}._-]{1,50}$/u.test(first) ? first.replace(/^@/, "") : null;
+  return { handle, platform };
+}
+export async function loadProjectApplicants(
+  d: Deps,
+  v: Viewer,
+  projectId: string,
+): Promise<{ canPrefer: boolean; campaigns: ProjectApplicantCampaign[] } | null> {
+  if (!uuid.safeParse(projectId).success) return null;
+  const r = await run(d, v, async (sql, id) => {
+    const access = await projectAccess(sql, id, projectId);
+    const cs = (
+      await sql.query<Row>(
+        "select c.id,c.slug,c.title,c.status,c.slots from campaigns c join campaign_collaboration_links l on l.campaign_id=c.id where l.project_id=$1 order by c.created_at",
+        [projectId],
+      )
+    ).rows;
+    const campaigns: ProjectApplicantCampaign[] = [];
+    const designated = await designatedInvitesReady(sql);
+    for (const c of cs) {
+      const apps = (
+        await sql.query<Row>(
+          "select a.id,a.status,a.sns_url,a.follower_count,a.pitch,a.created_at,a.brand_preferred_at,a.post_url,a.views_snapshot,a.metrics_source,exists(select 1 from campaign_targets t where t.campaign_id=a.campaign_id and t.user_id=a.creator_id and t.invited_by is not null) as invited from campaign_applications a where a.campaign_id=$1 and a.status not in ('withdrawn','expired') order by (a.status='applied'),a.created_at limit 500",
+          [c.id],
+        )
+      ).rows;
+      const invites = designated
+        ? (
+            await sql.query<Row>(
+              `select i.id,i.created_at,i.expires_at,i.revoked_at,i.accepted_at,s.handle,s.platform
+                 from campaign_participant_invites i
+                 left join lateral (select s.handle,s.platform from social_accounts s where s.user_id=i.invited_user_id and ${POOL_MEMBER_SQL} order by s.follower_count desc limit 1) s on true
+                where i.campaign_id=$1 and i.invited_user_id is not null
+                order by i.created_at desc limit 100`,
+              [c.id],
+            )
+          ).rows
+        : [];
+      campaigns.push({
+        id: String(c.id),
+        slug: String(c.slug),
+        title: c.title as ProjectApplicantCampaign["title"],
+        status: String(c.status),
+        slots: Number(c.slots),
+        applicants: apps.map((a) => {
+          const profileUrl = participantProfileUrl(a.sns_url);
+          return {
+            id: String(a.id),
+            status: String(a.status),
+            ...applicantHandle(profileUrl),
+            followers: Number(a.follower_count),
+            followersSource: "self" as const,
+            profileUrl,
+            pitch: String(a.pitch),
+            appliedAt: stamp(a.created_at),
+            preferred: a.brand_preferred_at != null,
+            postUrl: selected.includes(String(a.status)) ? participantProfileUrl(a.post_url) : null,
+            views: a.views_snapshot == null ? null : Number(a.views_snapshot),
+            metricsSource: (a.metrics_source ?? null) as ProjectApplicant["metricsSource"],
+            invited: a.invited === true,
+          };
+        }),
+        invited: invites.map((i) => ({
+          id: String(i.id),
+          handle: i.handle ? String(i.handle) : null,
+          platform: (i.platform ?? null) as ProjectInvitedCreator["platform"],
+          status: i.revoked_at
+            ? "revoked"
+            : i.accepted_at
+              ? "accepted"
+              : +new Date(String(i.expires_at)) <= +now(d)
+                ? "expired"
+                : "pending",
+          invitedAt: stamp(i.created_at),
+        })),
+      });
+    }
+    return {
+      canPrefer: access.role === "brand" && access.canWrite && access.p.status === "active",
+      campaigns,
+    };
+  });
+  return r.ok ? r : null;
+}
+/**
+ * The brand's "preferred" mark on an applicant still waiting for selection. Owners and editors of the
+ * linked project only; the TWINGS team selects and so never marks. Selection is untouched.
+ */
+export async function setApplicantPreference(
+  d: Deps,
+  v: Viewer,
+  input: unknown,
+): Promise<Outcome> {
+  const p = z
+    .object({ applicationId: uuid, preferred: z.boolean() })
+    .strict()
+    .safeParse(input);
+  if (!p.success) return { ok: false, code: "invalid" };
+  return run(d, v, async (sql, id) => {
+    const a = (
+      await sql.query<Row>(
+        "select a.id,a.status,a.campaign_id from campaign_applications a where a.id=$1",
+        [p.data.applicationId],
+      )
+    ).rows[0];
+    if (!a) throw new Denied("not_found");
+    const access = await campaignAccess(sql, id, String(a.campaign_id), true);
+    if (access.role !== "brand") throw new Denied("forbidden");
+    if (access.p.status !== "active") throw new Denied("not_open");
+    if (a.status !== "applied") throw new Denied("conflict");
+    await sql.query(
+      "update campaign_applications set brand_preferred_at=$2 where id=$1",
+      [a.id, p.data.preferred ? now(d) : null],
+    );
+    return { id: String(a.id) };
+  });
 }

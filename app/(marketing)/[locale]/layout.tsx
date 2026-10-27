@@ -5,6 +5,7 @@ import { fontVariables } from '@/app/fonts';
 import { ScrollProvider } from '@/components/motion/scroll-provider';
 import { Notice } from '@/components/marketing/notice';
 import { RegisterServiceWorker } from '@/components/pwa/register-sw';
+import { BottomTabs } from '@/components/app/bottom-tabs';
 import { noticeLabels } from '@/components/marketing/notice-codes';
 import { LOCALES, isLocale, DEFAULT_LOCALE, type Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/dictionaries';
@@ -25,8 +26,12 @@ export function generateStaticParams(): Array<{ locale: Locale }> {
   return LOCALES.map((locale) => ({ locale }));
 }
 
-/** F6 — the browser chrome color. White: §5.1's base surface, and what the nav sits on. */
-export const viewport: Viewport = { themeColor: '#ffffff' };
+/**
+ * F6 — the browser chrome color. White: §5.1's base surface, and what the nav sits on — in a tab and
+ * in the installed app alike. `viewport-fit: cover` (docs/PLATFORM-2.0.md §5.2) hands the installed
+ * app the whole screen; app/globals.css pads the page by the safe areas.
+ */
+export const viewport: Viewport = { themeColor: '#ffffff', viewportFit: 'cover' };
 
 /** Anything that is not `en` or `ko` is a 404, not a dynamic render. */
 export const dynamicParams = false;
@@ -95,6 +100,8 @@ export default async function MarketingRootLayout({
           {children}
         </ScrollProvider>
         <RegisterServiceWorker />
+        {/* Standalone only — renders nothing in a browser tab or in this static HTML. */}
+        <BottomTabs locale={locale} labels={dict.appShell.tabs} />
       </body>
     </html>
   );

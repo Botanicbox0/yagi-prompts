@@ -34,6 +34,8 @@ function card(overrides: Partial<PromptCard> = {}): PromptCard {
     title: 'Neon alley dolly',
     titleKo: '네온 골목 달리',
     authorHandle: null,
+    origin: 'studio',
+    makerProfile: false,
     source: 'yagi',
     models: ['seedance-2.5'],
     modelLabels: [PROMPT_MODEL_LABEL],
@@ -69,12 +71,14 @@ const cardMarkup = (data: PromptCard, locale = 'en') =>
   );
 
 describe('prompt card (§13.2)', () => {
-  it('renders media, credit, model chip and title — and no prompt text of any kind', () => {
+  // PLATFORM-2.0 §15.3-4 (2026-10-23): the engine chip and the studio byline left the card;
+  // tests/ui/catalog-cards.test.tsx owns what the card carries now.
+  it('renders media and title — and no prompt text of any kind', () => {
     const html = cardMarkup(card());
     expect(html).toContain('data-prompt-card="neon-alley-dolly"');
-    expect(html).toContain(PROMPT_MODEL_LABEL);
+    expect(html).not.toContain(PROMPT_MODEL_LABEL);
     expect(html).toContain('Neon alley dolly');
-    expect(html).toContain(labels.byYagi);
+    expect(html).not.toContain(labels.byYagi);
     expect(html).not.toContain(SENTINEL);
     // There is no field the card could even read it from.
     expect(Object.hasOwn(card(), 'text')).toBe(false);
@@ -97,10 +101,10 @@ describe('prompt card (§13.2)', () => {
     expect(closed).not.toContain('data-lock-chip');
   });
 
-  it('credits a community submitter by @handle, and falls back honestly', () => {
-    expect(cardMarkup(card({ source: 'community', authorHandle: 'hana' }))).toContain('by @hana');
-    expect(cardMarkup(card({ source: 'community', authorHandle: null }))).toContain(
-      labels.byAnonymous,
+  it('credits a maker template by @handle, and falls back honestly', () => {
+    expect(cardMarkup(card({ origin: 'maker', source: 'community', authorHandle: 'hana' }))).toContain('by @hana');
+    expect(cardMarkup(card({ origin: 'maker', source: 'community', authorHandle: null }))).toContain(
+      labels.cardAuthorAnonymous,
     );
   });
 
@@ -119,21 +123,22 @@ describe('prompt card (§13.2)', () => {
   /**
    * The card's one control is "자세히 보기" (founder direction, 2026-08-15): copy left the card, so
    * the only way to obtain a prompt is the page that explains, funds and hands it off. The card
-   * therefore carries NO prompt-bearing control at all, and its second anchor must sit above the
-   * title's stretched `::after` rather than nested inside it.
+   * therefore carries NO prompt-bearing control at all. (2026-10-23: the button itself went too;
+   * the title's stretched `::after` makes the whole card the one link.)
    */
   it('sends the reader to the page instead of handing over the prompt', () => {
     const html = cardMarkup(card());
     expect(html).toContain('<article');
     expect(html).toContain('after:absolute');
-    expect(html).toContain('data-card-detail="neon-alley-dolly"');
+    // Since 2026-10-23 (PLATFORM-2.0 §15.3-4) the "자세히 보기" button is gone: the whole card is the link.
+    expect(html).not.toContain('data-card-detail');
     expect(html).toContain('href="/en/t/neon-alley-dolly"');
-    expect(html).toContain(dict.prompts.cardDetail);
+    expect(html).not.toContain(dict.prompts.cardDetail);
     // The copy endpoint is not reachable from the wall any more.
     expect(html).not.toContain('data-copy-prompt=');
-    // A nested anchor would be invalid; the detail link is a SIBLING lifted by z-index.
+    // A nested anchor would be invalid, and there is only the one.
     expect(html).not.toMatch(/<a[^>]*>(?:(?!<\/a>)[\s\S])*<a/);
-    expect(html).toContain('relative z-10');
+    expect(html.match(/<a\s/g)).toHaveLength(1);
   });
 
   it('carries no media element when there is nothing published to show', () => {

@@ -231,7 +231,8 @@ describe('pages scoped to the selected brand', () => {
 
   it('a new brief goes to the selected brand only, and only when its role may send one', async () => {
     const owned = await html(NewBrandProject(search(A)));
-    expect(owned).toContain(`<option value="${A}"`);
+    // The wizard sends the brief to the selected brand only (one membership: no picker).
+    expect(owned).toContain(`data-wizard-organization="${A}"`);
     expect(owned).not.toContain(`value="${B}"`);
     expect(await html(NewBrandProject(search(B)))).toContain(b.access.viewerCannotRequest);
     expect(await html(NewBrandProject(search(G)))).toContain(b.access.sharedOnly);

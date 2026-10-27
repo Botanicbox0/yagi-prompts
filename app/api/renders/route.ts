@@ -7,6 +7,7 @@ import { createRenderJob, type CreateRenderFailure } from '@/lib/renders/service
 import { renderHref } from '@/lib/renders/share';
 import { identityVerifyHref } from '@/lib/identity/links';
 import { getRenderStore } from '@/lib/renders/store';
+import { savedSelfiePhoto } from '@/lib/identity/selfie-service';
 
 /**
  * `POST /api/renders` — the studio hands over the photo, the template and the aspect; the
@@ -17,8 +18,9 @@ import { getRenderStore } from '@/lib/renders/store';
  * the function's own time budget. An image finishes there (a minute or two); a film is handed to
  * ModelArk and finished by a later pass (callback, result-page poll or cron).
  *
- * The photo arrives already downscaled by the studio (≤1600px JPEG): Vercel refuses request
- * bodies above ~4.5MB before any of this code runs, so the size discipline lives in the browser.
+ * The photo is the viewer's saved selfie (`selfieId`, docs/IDENTITY-SELFIE.md); an operator's
+ * tooling may still post a `photo` file directly. Vercel refuses request bodies above ~4.5MB
+ * before any of this code runs, so the size discipline lives in the browser.
  */
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
@@ -60,11 +62,16 @@ export async function POST(request: Request): Promise<NextResponse> {
   }
   const photo = form.get('photo');
   const rawLocale = form.get('locale');
+  const store = await getRenderStore();
+  const selfieId = String(form.get('selfieId') ?? '');
+  const saved = !(photo instanceof File) && selfieId ? await savedSelfiePhoto(sql, store, viewer.userId, selfieId) : null;
+  if (selfieId && !saved && !(photo instanceof File)) return json({ ok: false, code: 'selfie_required' }, 400);
 
-  const outcome = await createRenderJob({ sql, store: await getRenderStore() }, viewer, {
+  const outcome = await createRenderJob({ sql, store }, viewer, {
     templateSlug: String(form.get('template') ?? ''),
     aspect: String(form.get('aspect') ?? ''),
-    photo: photo instanceof File ? { bytes: new Uint8Array(await photo.arrayBuffer()), mime: photo.type } : null,
+    photo: saved ?? (photo instanceof File ? { bytes: new Uint8Array(await photo.arrayBuffer()), mime: photo.type } : null),
+    selfieId: saved ? selfieId : undefined,
     locale: typeof rawLocale === 'string' && isLocale(rawLocale) ? rawLocale : null,
     holdForIdentity: form.get('hold') === '1',
     // Read only on an operator's free render; a paid render takes the order's own value.

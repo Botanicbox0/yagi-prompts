@@ -21,6 +21,10 @@ import { requireAdmin } from "@/lib/auth/viewer";
 import { loadStudioInbox } from "@/lib/brands/workspace/inbox";
 import { adminNextActions, campaignWorkCounts } from "@/lib/admin/workflow";
 import { loadRiskQueueSummary } from "@/lib/campaigns/risk/admin";
+import { countSocialQueue } from "@/lib/influencers/admin";
+import { countManualTossPayments } from "@/lib/billing/toss-service";
+import { platformReady } from "@/lib/creator-platform/service";
+import { creatorApplicationCount } from "@/lib/creator-platform/onboarding";
 
 /**
  * `/admin` — the dashboard (founder, 2026-09-11). The old front door was the playbook list, a
@@ -113,6 +117,9 @@ export default async function AdminHomePage() {
     feedback,
     inbox,
     risk,
+    paymentsManual,
+    creatorApplications,
+    socialAccounts,
   ] =
     sql === null
       ? ([
@@ -124,6 +131,9 @@ export default async function AdminHomePage() {
           0,
           [],
           null,
+          0,
+          0,
+          0,
         ] as const)
       : await Promise.all([
           loadAllCampaigns(sql),
@@ -134,6 +144,14 @@ export default async function AdminHomePage() {
           countRenderFeedback(sql, "new"),
           loadStudioInbox({ sql }, viewer),
           loadRiskQueueSummary(sql, viewer, now),
+          // docs/PLATFORM-2.0.md §2.2-4: refunds and renders automation handed to an operator.
+          countManualTossPayments(sql),
+          // 0 when 0046/0051 are absent; the queue then stays out of the list instead of failing the page.
+          platformReady(sql)
+            .then((ready) => (ready ? creatorApplicationCount(sql) : 0))
+            .catch(() => 0),
+          // docs/PLATFORM-2.0.md §17.1 — 0 before 0057; the SNS queue line then stays out.
+          countSocialQueue(sql).catch(() => 0),
         ]);
   const counts =
     sql === null
@@ -159,6 +177,8 @@ export default async function AdminHomePage() {
     feedback,
     templates: pending,
     risk: risk?.ready ? risk.open : 0,
+    creatorApplications,
+    socialAccounts,
   });
 
   return (
@@ -334,22 +354,28 @@ export default async function AdminHomePage() {
                 count={published}
               />
             </Card>
-            <Card title={a.dashRenders} href={null}>
+            <Card title={a.dashRenders} href={`${ADMIN_INQUIRIES_PATH}?kind=feedback`}>
               <Stat
-                href={null}
+                href={`${ADMIN_INQUIRIES_PATH}?kind=feedback`}
                 label={a.dashRendersWeek}
                 count={renders.recent}
               />
               <Stat
-                href={null}
+                href={`${ADMIN_INQUIRIES_PATH}?kind=feedback&status=new`}
                 label={a.dashRendersFailed}
                 count={renders.failed}
                 hot
               />
               <Stat
-                href={null}
+                href="/admin/community#claims"
                 label={a.dashRendersHeld}
                 count={renders.held}
+              />
+              <Stat
+                href={`${ADMIN_INQUIRIES_PATH}?kind=feedback&status=new`}
+                label={a.dashPaymentsManual}
+                count={paymentsManual}
+                hot
               />
               <Stat
                 href={`${ADMIN_INQUIRIES_PATH}?kind=feedback&status=new`}

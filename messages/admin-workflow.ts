@@ -76,6 +76,16 @@ export const adminWorkflowEn = {
       hint: "Review reported results and decide how to respond.",
       action: "Review feedback",
     },
+    socialAccounts: {
+      title: "Check linked SNS accounts",
+      hint: "Look at the follower screenshot and type the number that counts. The local AI's reading is only a suggestion.",
+      action: "Open SNS check",
+    },
+    creatorApplications: {
+      title: "Review template maker applications",
+      hint: "Check the portfolio and example posts, then approve or decline. Approval does not publish any template.",
+      action: "Review applications",
+    },
     templates: {
       title: "Review submitted templates",
       hint: "Check content and publication requirements.",
@@ -228,6 +238,16 @@ export const adminWorkflowKo: typeof adminWorkflowEn = {
       title: "생성 결과 문의를 확인하세요",
       hint: "접수된 결과물을 확인하고 대응 방법을 정합니다.",
       action: "결과 문의 확인하기",
+    },
+    socialAccounts: {
+      title: "SNS 연결 신청을 확인하세요",
+      hint: "팔로워 화면 캡처를 보고 인정할 숫자를 직접 입력합니다. 로컬 AI가 읽은 값은 참고만 합니다.",
+      action: "SNS 확인 열기",
+    },
+    creatorApplications: {
+      title: "템플릿 메이커 지원서를 검토하세요",
+      hint: "포트폴리오와 예시 게시물을 확인한 뒤 승인 또는 반려합니다. 승인만으로 템플릿이 공개되지는 않습니다.",
+      action: "지원서 검토하기",
     },
     templates: {
       title: "제출된 템플릿을 검토하세요",

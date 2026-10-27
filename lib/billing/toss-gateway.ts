@@ -1,3 +1,4 @@
+import { tossKeyKind } from "@/lib/flags";
 import { createFakeTossGateway } from "./toss-fake";
 
 /** Narrow payment snapshots shared by normal checkout and a future billing-key adapter. */
@@ -28,15 +29,28 @@ export interface TossGateway {
   }): Promise<TossPayment>;
 }
 
-/** Do not propagate provider messages, bodies, request headers, or URLs into logs. */
+/**
+ * Do not propagate provider messages, bodies, request headers, or URLs into logs. `providerCode` is
+ * the provider's error enum (`REJECT_CARD_COMPANY`, `UNAUTHORIZED_KEY`, …) and nothing else: it tells
+ * a card refusal from our own key fault in one log line, and carries no customer or key value.
+ */
 export class TossError extends Error {
   constructor(
     public readonly code: string,
     public readonly retryable = true,
+    public readonly providerCode?: string,
   ) {
     super("Payment provider request could not be completed");
     this.name = "TossError";
   }
+}
+
+/** The enum shape only; a message, a body fragment or markup never passes. */
+function providerCodeOf(body: unknown): string | undefined {
+  const code = (body as Record<string, unknown> | null)?.code;
+  return typeof code === "string" && /^[A-Z][A-Z0-9_]{1,63}$/.test(code)
+    ? code
+    : undefined;
 }
 
 export interface TossConfig {
@@ -50,14 +64,10 @@ export function tossConfigFromEnv(
   const clientKey = env.TOSS_CLIENT_KEY?.trim();
   const secretKey = env.TOSS_SECRET_KEY?.trim();
   if (!clientKey && !secretKey) return null;
-  const kind = clientKey?.startsWith("test_gck_")
-    ? "test"
-    : clientKey?.startsWith("live_gck_")
-      ? "live"
-      : null;
-  if (!kind || !secretKey?.startsWith(`${kind}_gsk_`))
-    throw new TossError("INVALID_CONFIGURATION", false);
-  return { clientKey: clientKey!, secretKey, kind };
+  // The same rule `RENDER_PIPELINE_PUBLIC` opens by (lib/flags.ts), so the two never disagree.
+  const kind = tossKeyKind(env);
+  if (!kind) throw new TossError("INVALID_CONFIGURATION", false);
+  return { clientKey: clientKey!, secretKey: secretKey!, kind };
 }
 
 function snapshot(body: unknown): TossPayment {
@@ -121,11 +131,19 @@ export function createTossGateway(
       throw new TossError("NETWORK_ERROR");
     }
     if (method === "GET" && response.status === 404) return null;
-    if (!response.ok)
+    if (!response.ok) {
+      let refusal: unknown = null;
+      try {
+        refusal = await response.json();
+      } catch {
+        /* no enum to name; the status still says what kind of refusal it was */
+      }
       throw new TossError(
         `HTTP_${response.status}`,
         response.status >= 500 || response.status === 429,
+        providerCodeOf(refusal),
       );
+    }
     let payload: unknown;
     try {
       payload = await response.json();

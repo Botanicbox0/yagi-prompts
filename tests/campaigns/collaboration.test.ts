@@ -997,3 +997,37 @@ it("rejects unauthorized collaboration writes before acquiring campaign or membe
   ).toMatchObject({ ok: false, code: "forbidden" });
   expect(statements.some((q) => /for (share|update)/i.test(q))).toBe(false);
 });
+it("refuses an influencer campaign's invitation until the account holds a verified 3,000+ SNS account", async () => {
+  vi.stubEnv("TWINGS_INFLUENCERS", "on");
+  try {
+    const f = await fixture();
+    await sql.query("update campaigns set audience='influencers' where id=$1", [
+      f.campaign,
+    ]);
+    const r = await issueInvitation({ sql, now }, brand, {
+      campaignId: f.campaign,
+      requestId: randomUUID(),
+    });
+    if (!r.ok) throw Error(r.code);
+    // A fresh account: the earlier cases in this file spend the creator's daily application budget.
+    const freshId = randomUUID();
+    await seedProfile(sql, { id: freshId });
+    const accept = () =>
+      acceptInvitation({ sql, now }, viewer(freshId), {
+        token: r.token,
+        slug: f.slug,
+        ...apply,
+      });
+    expect(await accept()).toMatchObject({
+      ok: false,
+      code: "influencer_required",
+    });
+    await sql.query(
+      "insert into social_accounts(user_id,platform,handle,profile_url,status,follower_count,measured_at) values($1,'instagram','hana','https://www.instagram.com/hana/','verified',3000,now()) on conflict (user_id,platform) do update set status='verified',follower_count=3000,measured_at=now()",
+      [freshId],
+    );
+    expect(await accept()).toMatchObject({ ok: true });
+  } finally {
+    vi.unstubAllEnvs();
+  }
+});

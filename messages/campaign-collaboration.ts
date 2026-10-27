@@ -48,9 +48,15 @@ export const campaignCollaborationKo = {
     not_found:
       "초대가 만료되었거나 접근 권한이 없습니다. 새 참여 링크를 요청해 주세요.",
     forbidden: "초대받은 이메일로 인증한 계정인지 확인해 주세요.",
+    wrong_account:
+      "이 초대는 다른 TWINGS 계정에 보낸 거예요. 초대 메일을 받은 계정으로 로그인해 주세요.",
+    invite_limit:
+      "이 캠페인은 초대 한도(모집 인원의 5배, 최대 50명)에 닿았습니다.",
     not_open: "현재 캠페인에서 신청이나 변경을 받지 않습니다.",
     not_selected: "선정 후 대화와 파일 공유를 이용할 수 있습니다.",
     slots_full: "모집 인원이 마감되었습니다.",
+    influencer_required:
+      "인플루언서 캠페인이에요. 팔로워 3,000명 이상인 계정을 연결하고 확인을 받으면 참여할 수 있어요.",
     conflict:
       "이미 처리되었거나 입력이 바뀌었습니다. 새로고침 후 상태를 확인해 주세요.",
     rate_limited: "요청이 많습니다. 잠시 후 다시 시도해 주세요.",
@@ -58,10 +64,7 @@ export const campaignCollaborationKo = {
     unavailable: "참여 공간을 준비하고 있습니다. 잠시 후 다시 확인해 주세요.",
     sign_in_required: "로그인 후 다시 시도해 주세요.",
   },
-  participants: "참여 현황",
-  none: "아직 참여자가 없습니다.",
   open: "참여 공간 열기",
-  invitations: "초대 현황",
   make: "캠페인 영상 만들기",
   mine: "내 캠페인 · 게시 링크 제출",
   post: "제출된 게시 링크 · 검수 상태 확인 필요",
@@ -142,10 +145,16 @@ export const campaignCollaborationEn: typeof campaignCollaborationKo = {
       "The invitation expired or access is unavailable. Ask for a new invitation link.",
     forbidden:
       "Check that your account has verified the invited email address.",
+    wrong_account:
+      "This invitation was sent to another TWINGS account. Sign in with the account that received the invitation email.",
+    invite_limit:
+      "This campaign reached its invitation limit (five per slot, at most 50).",
     not_open:
       "This campaign is not currently accepting applications or changes.",
     not_selected: "Conversation and files open after selection.",
     slots_full: "All campaign places have been filled.",
+    influencer_required:
+      "This campaign is for influencers. Link an account with 3,000+ followers and, once it is confirmed, you can join.",
     conflict:
       "This request was already processed or its input changed. Refresh to check its status.",
     rate_limited: "Too many requests. Please try again shortly.",
@@ -154,10 +163,7 @@ export const campaignCollaborationEn: typeof campaignCollaborationKo = {
       "The participant workspace is being prepared. Please check again later.",
     sign_in_required: "Sign in and try again.",
   },
-  participants: "Participation",
-  none: "No participants yet.",
   open: "Open participant workspace",
-  invitations: "Invitations",
   make: "Make campaign video",
   mine: "My campaigns · submit post link",
   post: "Submitted post · review status must be checked",

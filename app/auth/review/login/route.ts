@@ -5,7 +5,7 @@ import { createAuthServerClient, isAuthConfigured, supabaseAnonKey, supabaseUrl 
 import { createDataClient } from '@/lib/supabase/data-client';
 import { allowReviewLogin } from '@/lib/auth/review-login-limit';
 import { LOCALE_COOKIE, LOCALE_COOKIE_MAX_AGE, isLocale } from '@/lib/i18n/config';
-import { resolveRequestUrl, resolveSurface, sameOriginMutation } from '@/lib/routing/surfaces';
+import { authReturnPath, resolveRequestUrl, resolveSurface, sameOriginMutation } from '@/lib/routing/surfaces';
 
 export const dynamic = 'force-dynamic';
 function privateResponse(response: NextResponse): NextResponse {
@@ -33,6 +33,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   body += decoder.decode();
   const form = new URLSearchParams(body);
   const locale = isLocale(form.get('locale')) ? form.get('locale')! : 'ko';
+  // Founder 2026-10-22: a login lands on the video formats (or the template the reviewer came from), never on the account page.
+  const next = authReturnPath(form.get('next'), url.hostname, `/${locale}/video`);
   let success = false;
   const clientAddress = process.env.VERCEL === '1' ? request.headers.get('x-vercel-forwarded-for') ?? 'unknown' : 'unknown';
   if (isAuthConfigured() && allowReviewLogin(clientAddress, form.get('email') ?? '')) {
@@ -56,7 +58,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     // Revoke only the newly minted session if a later check failed.
     if (!success) { try { await isolated.auth.signOut({ scope: 'local' }); } catch { /* no tokens are exposed */ } }
   }
-  const response = privateResponse(NextResponse.redirect(new URL(success ? '/account' : `/auth/review?locale=${locale}&error=invalid`, url.origin), { status: 303 }));
+  const response = privateResponse(NextResponse.redirect(new URL(success ? next : `/auth/review?locale=${locale}&error=invalid${form.get('next') ? `&next=${encodeURIComponent(next)}` : ''}`, url.origin), { status: 303 }));
   response.cookies.set(LOCALE_COOKIE, locale, { path: '/', sameSite: 'lax', maxAge: LOCALE_COOKIE_MAX_AGE });
   return response;
 }

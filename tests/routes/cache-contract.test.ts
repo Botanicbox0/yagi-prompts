@@ -3,7 +3,7 @@ import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { CATALOG_TAG, CATALOG_TTL_SECONDS } from '@/lib/cache';
-import { isAppPath, isCampaignAppPath, isPlaybookDetailPath } from '@/lib/i18n/config';
+import { isAppPath, isCampaignAppPath, isCreatorProgramAppPath, isPlaybookDetailPath } from '@/lib/i18n/config';
 
 const ROOT = fileURLToPath(new URL('../..', import.meta.url));
 const read = (...parts: string[]) => readFileSync(join(ROOT, ...parts), 'utf8');
@@ -41,6 +41,8 @@ describe('route cache modes (§3.4 / §4)', () => {
       ['app', '(marketing)', '[locale]', 'video', 'page.tsx'],
       ['app', '(marketing)', '[locale]', 'image', 'page.tsx'],
       ['app', '(marketing)', '[locale]', 't', '[slug]', 'page.tsx'],
+      // docs/PLATFORM-2.0.md §7.5 — a public maker page reads the same tagged catalogue.
+      ['app', '(marketing)', '[locale]', 'makers', '[handle]', 'page.tsx'],
     ]) {
       const source = read(...file);
       expect(source, file.join('/')).toContain(`export const revalidate = ${CATALOG_TTL_SECONDS}`);
@@ -78,6 +80,10 @@ describe('route cache modes (§3.4 / §4)', () => {
       [
         ['app', '(marketing)', '[locale]', 't', '[slug]', 'page.tsx'],
         ["from '@/lib/prompts/public-catalog'", "from '@/lib/campaigns/public-catalog'"],
+      ],
+      [
+        ['app', '(marketing)', '[locale]', 'makers', '[handle]', 'page.tsx'],
+        ["from '@/lib/prompts/public-catalog'"],
       ],
     ];
     for (const [file, imports] of expected) {
@@ -418,7 +424,7 @@ describe('prompts API contract (§13.2)', () => {
  */
 describe('campaigns route contract (docs/CAMPAIGNS.md §6)', () => {
   it('gates exactly /campaigns/{slug}/apply and /campaigns/mine at the edge', () => {
-    for (const path of ['/campaigns/seoul-94-reel/apply', '/campaigns/seoul-94-reel/apply/', '/campaigns/mine']) {
+    for (const path of ['/campaigns/seoul-94-reel/apply', '/campaigns/seoul-94-reel/apply/', '/campaigns/mine', '/campaigns/open']) {
       expect(isCampaignAppPath(path), path).toBe(true);
       expect(isAppPath(path), path).toBe(true);
     }
@@ -427,6 +433,8 @@ describe('campaigns route contract (docs/CAMPAIGNS.md §6)', () => {
       '/campaigns/seoul-94-reel',
       '/campaigns/seoul-94-reel/apply/extra',
       '/campaigns/mine/extra',
+      '/campaigns/open/extra',
+      '/ko/campaigns/open',
       '/en/campaigns',
       '/en/campaigns/seoul-94-reel',
       '/ko/campaigns/mine',
@@ -464,6 +472,45 @@ describe('campaigns route contract (docs/CAMPAIGNS.md §6)', () => {
     // Ownership is decided in the service by creator id, never by a field.
     expect(actions.includes("form, 'creatorId'")).toBe(false);
     expect(actions.includes("form, 'status'")).toBe(false);
+  });
+});
+
+/**
+ * docs/CREATOR-PLATFORM.md — the format creator program: a public `/{locale}/creators` page and two
+ * unprefixed login-gated leaves. Without the edge pattern both leaves would 308 into a locale 404.
+ */
+describe('format creator program route contract', () => {
+  it('gates exactly /creators/apply and /creators/workspace at the edge', () => {
+    for (const path of ['/creators/apply', '/creators/apply/', '/creators/workspace', '/creators/workspace/', '/creators/workspace/formats/new', '/creators/workspace/formats/11111111-1111-4111-8111-111111111111']) {
+      expect(isCreatorProgramAppPath(path), path).toBe(true);
+      expect(isAppPath(path), path).toBe(true);
+    }
+    for (const path of ['/creators', '/creators/', '/ko/creators', '/en/creators/apply', '/creators/workspace/extra', '/creators/applyx', '/creators/workspace/formats/other', '/creators/workspace/formats/']) {
+      expect(isCreatorProgramAppPath(path), path).toBe(false);
+      expect(isAppPath(path), path).toBe(false);
+    }
+  });
+
+  it('routes an application through one server action that resolves the viewer and its own gates', () => {
+    const action = read('app', '(app)', 'creators', 'apply', 'actions.ts');
+    expect(action).toContain("'use server'");
+    expect(action).toContain('getViewer');
+    expect(action).toContain('platformAccess');
+    expect(action).toContain('submitCreatorApplication');
+    // One boundary, two entry points: the hydrated call and the native POST before hydration/without JS.
+    expect(action.match(/export async function \w+/g)).toEqual(['export async function submitApplicationAction', 'export async function submitApplicationForm']);
+    expect(action.match(/submitCreatorApplication\(/g)).toHaveLength(1);
+    for (const forbidden of ['userId:', 'status:', 'isAdmin:', 'decision']) expect(action.includes(forbidden), forbidden).toBe(false);
+  });
+
+  it('keeps the application and workspace private and dynamic, the program page static', () => {
+    for (const leaf of ['apply', 'workspace']) {
+      expect(read('app', '(app)', 'creators', leaf, 'page.tsx')).toContain("export const dynamic = 'force-dynamic'");
+    }
+    const program = read('app', '(marketing)', '[locale]', 'creators', 'page.tsx');
+    expect(program).toContain('export const revalidate = 3600');
+    expect(program).toContain('creatorProgramOpen');
+    expect(program).toContain('notFound');
   });
 });
 

@@ -7,6 +7,8 @@ import { TextSwap } from '@/components/ui/text-swap';
 import { PromptRail } from '@/components/prompts/rails';
 import { UseCaseFilter } from '@/components/prompts/filter-chips';
 import { promptLabels, presentUseCases, useCaseLabel } from '@/components/prompts/labels';
+import { pillClassName } from '@/components/prompts/pill';
+import { OriginFilter } from './origin-filter';
 
 /**
  * docs/TEMPLATES-IA.md §2 — one listing, two tabs. `/video` and `/image` render this with their
@@ -15,6 +17,13 @@ import { promptLabels, presentUseCases, useCaseLabel } from '@/components/prompt
  * Nothing on this surface varies by viewer (no gated text anywhere any more), so the whole thing is
  * cached HTML shared by everyone — the same cache posture the prompts gallery had, for a simpler
  * reason. The use-case filter is client-side over the DOM, exactly as before.
+ *
+ * First screen (docs/PLATFORM-2.0.md §15.3-5): title → medium pills → use-case pills (only when
+ * there is a choice) and the count → the cards. The service definition follows the grid.
+ *
+ * §7.5·§14.1: the cards split by origin — "TWINGS 오리지널" first, then "메이커 템플릿" — with the
+ * "전체 · 오리지널 · 메이커" chips. With no maker template (today's catalogue) neither the second
+ * rail, the chips nor the rail headings appear, and the page reads exactly as before.
  */
 export function MediumTabs({ locale, dict, active }: { locale: Locale; dict: Dictionary; active: TemplateMedium }) {
   return (
@@ -25,10 +34,7 @@ export function MediumTabs({ locale, dict, active }: { locale: Locale; dict: Dic
           href={templatesHref(locale, medium)}
           data-medium-tab={medium}
           aria-current={medium === active ? 'page' : undefined}
-          className={[
-            'inline-block border px-4 py-2 font-label text-label uppercase',
-            medium === active ? 'border-accent bg-accent text-white' : 'border-current',
-          ].join(' ')}
+          className={pillClassName(medium === active)}
         >
           {dict.nav[medium]}
         </a>
@@ -54,16 +60,23 @@ export function TemplatesListing({
   const present = presentUseCases([...new Set(cards.flatMap((card) => card.useCase))].sort());
   const filterOptions = present.map((value) => [value, useCaseLabels[value]!] as [string, string]);
   const other: TemplateMedium = medium === 'video' ? 'image' : 'video';
+  const studio = cards.filter((card) => card.origin !== 'maker');
+  const makers = cards.filter((card) => card.origin === 'maker');
+  const split = makers.length > 0;
+  const tt = dict.templates;
+  const railProps = { locale, labels, useCaseLabels, emptyLabel: t.emptyTitle, filteredEmptyLabel: dict.prompts.filterEmpty };
 
   return (
     <div data-template-catalog={medium} className="band pt-24 pb-20 lg:pt-28">
       <h1 className="font-display text-[clamp(2.25rem,5vw,4rem)] leading-tight font-black tracking-tight">{t.rail}</h1>
-      <p data-service-definition className="mt-4 max-w-2xl text-base leading-relaxed text-black/60">{dict.seo.definition}</p>
 
-      <div className="mt-7 space-y-5 border-t border-hairline pt-5">
+      <div className="mt-5 space-y-4">
         <MediumTabs locale={locale} dict={dict} active={medium} />
+        {split && studio.length > 0 && (
+          <OriginFilter labels={{ heading: tt.originHeading, all: tt.originAll, studio: tt.originStudio, maker: tt.originMaker }} />
+        )}
         {filterOptions.length > 0 && (
-          <UseCaseFilter options={filterOptions} labels={{ heading: dict.prompts.filterHeading, all: dict.prompts.filterAll, count: dict.prompts.filterCount, reset: dict.prompts.filterReset }} />
+          <UseCaseFilter options={filterOptions} total={cards.length} labels={{ heading: dict.prompts.filterHeading, all: dict.prompts.filterAll, count: dict.prompts.filterCount, reset: dict.prompts.filterReset }} />
         )}
       </div>
 
@@ -76,20 +89,36 @@ export function TemplatesListing({
           </a>
         </div>
       ) : (
-        <PromptRail
-          id={medium}
-          heading={t.rail}
-          lede={t.railLede}
-          cards={cards}
-          locale={locale}
-          labels={labels}
-          useCaseLabels={useCaseLabels}
-          emptyLabel={t.emptyTitle}
-          filteredEmptyLabel={dict.prompts.filterEmpty}
-          hideHeading
-          topClassName="mt-6"
-        />
+        <>
+          {studio.length > 0 && (
+            <PromptRail
+              id={medium}
+              origin="studio"
+              heading={split ? tt.studioRail : t.rail}
+              lede={split ? tt.studioRailLede : t.railLede}
+              cards={studio}
+              {...railProps}
+              hideHeading={!split}
+              topClassName={split ? 'mt-10' : 'mt-4'}
+            />
+          )}
+          {split && (
+            <PromptRail
+              id={`${medium}-makers`}
+              origin="maker"
+              heading={tt.makerRail}
+              lede={tt.makerRailLede}
+              cards={makers}
+              {...railProps}
+              topClassName={studio.length > 0 ? 'mt-16 lg:mt-20' : 'mt-10'}
+            />
+          )}
+        </>
       )}
+
+      {/* §15.3-5: the GEO definition ("TWINGS는 …") stays in the HTML for search and llms.txt
+          readers, but under the grid — the first screen is the formats themselves. */}
+      <p data-service-definition className="mt-16 max-w-2xl border-t border-hairline pt-6 text-sm leading-relaxed text-black/60">{dict.seo.definition}</p>
     </div>
   );
 }

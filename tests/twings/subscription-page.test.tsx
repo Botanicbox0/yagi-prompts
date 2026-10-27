@@ -8,7 +8,7 @@ const film = vi.hoisted(() => ({
   aspectDefault: '4:3', priceCents: 1000, priceKrw: 14900, price1080Cents: 0, price1080Krw: 0,
   source: 'yagi', authorHandle: null, models: [], modelLabels: [], useCase: [], poster: null, video: null, lock: null, featured: false, publishedAt: null,
 }));
-vi.mock('@/lib/prompts/public-catalog', () => ({ getPromptCatalog: async () => ({ video: [film as PromptCard], image: [] }) }));
+vi.mock('@/lib/prompts/public-catalog', () => ({ getPromptCatalog: async () => ({ video: [{ origin: 'studio', makerProfile: false, ...film } as PromptCard], image: [] }) }));
 vi.mock('@/lib/creator-subscriptions/cached-availability', () => ({ cachedSubscriptionAvailability: async () => ({
   status: 'preparing', version: 'creator-monthly-2026-10-09-v1',
   plans: { creator: { status: 'preparing' }, premium: { status: 'preparing' } }, editing: 'preparing', premiumEditRequestsPerPeriod: null,

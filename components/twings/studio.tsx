@@ -4,7 +4,9 @@ import { useEffect, useRef, useState } from 'react';
 import { createSubmitGuard } from './submit-guard';
 import type { Dictionary } from '@/lib/i18n/dictionaries';
 import { formatCount, interpolate } from '@/lib/i18n/format';
-import { PortraitPhotoGuide } from '@/components/identity/portrait-photo-guide';
+import { SelfieUploader } from '@/components/identity/selfie-uploader';
+import { SelfieSheet, type SheetChoice } from '@/components/identity/selfie-sheet';
+import type { SelfieLibrary, SelfieView } from '@/lib/identity/selfie-service';
 import { PremiumEditor } from './premium-editor';
 import { shrinkPhoto } from '@/lib/images/client-photo';
 export { shrinkPhoto } from '@/lib/images/client-photo';
@@ -57,18 +59,24 @@ export interface StudioLabels {
   payCta: string;
   payNote: string;
   /** The template page before payment is wired: no mock, a promise with a date attached (founder, 2026-09-11). */
-  closedBadge: string;
   closedTitle: string;
   closedBody: string;
   closedCta: string;
   closedDone: string;
-  /** The shop is open but nobody is signed in: offer the sale, not a waitlist. */
-  signedOutBadge?: string;
-  signedOutTitle?: string;
+  /**
+   * The shop is open but nobody is signed in: offer the sale, not a waitlist — three example photos,
+   * one line and one button (PLATFORM-2.0 §15.3-1; no drop zone before sign-in).
+   */
   signedOutBody?: string;
   signedOutCta?: string;
-  /** What AI-made means, said before the money changes hands (founder, 2026-09-11). */
-  aiNote: string;
+  photoExamples?: { front: string; bright: string; solo: string };
+  /** Said (to screen readers) while the access call has not answered; the skeleton shows the rest. */
+  pending: string;
+  /** The template page's one CTA and its closed twin, used by the phone's sticky bar. */
+  makeCta?: string;
+  makeCtaClosed?: string;
+  /** The aspect folds to the template's default; this opens the rest. */
+  otherAspect?: string;
   runtimeLabel: string;
   needPhoto: string;
   noStyles: string;
@@ -97,8 +105,8 @@ export interface StudioLive {
   signinHref: string;
   /** Where an `identity_required` answer sends them: the one-time face check (docs §8.2). */
   identityHref: string;
-  portrait?: { manage: string; change: string; useSaved: string };
-  photoGuide?: Dictionary['portrait'];
+  /** The one photo, uploaded inline and reused by every order (docs/IDENTITY-SELFIE.md). */
+  selfie?: Dictionary['selfie'];
   subscription?: { copy: Dictionary['creatorSubscription']; editorCopy: Dictionary['premiumEditor'] };
   labels: {
     badge: string;
@@ -117,7 +125,7 @@ type Phase = 'photo' | 'style' | 'pay';
 
 /** A monthly request never carries a raw prompt or client-selected output format. */
 export function buildSubscriptionRenderForm(input: {
-  requestId: string; template: string; locale: string; portraitId?: string | null; photo?: Blob | null;
+  requestId: string; template: string; locale: string; selfieId?: string | null; photo?: Blob | null;
   editText: string; references: Blob[]; referencesConsent: boolean;
 }) {
   const form = new FormData();
@@ -125,7 +133,7 @@ export function buildSubscriptionRenderForm(input: {
   form.set('template', input.template);
   form.set('locale', input.locale);
   form.set('ownFaceConsent', '1');
-  if (input.portraitId) form.set('portraitId', input.portraitId);
+  if (input.selfieId) form.set('selfieId', input.selfieId);
   else if (input.photo) form.set('photo', input.photo, input.photo.type === 'image/png' ? 'photo.png' : 'photo.jpg');
   if (input.editText.trim()) form.set('editText', input.editText.trim());
   if (input.references.length && input.referencesConsent) {
@@ -191,7 +199,7 @@ export function ResolutionPicker({
   const current = selected ?? options[0]!.id;
   return (
     <fieldset data-resolution-picker className="mt-5">
-      <legend className="font-label text-eyebrow uppercase opacity-60">{labels.resolutionLabel}</legend>
+      <legend className="text-sm text-black/65">{labels.resolutionLabel}</legend>
       <div className="mt-2 flex flex-wrap gap-2">
         {options.map((option, index) => (
           <button
@@ -201,8 +209,8 @@ export function ResolutionPicker({
             aria-pressed={option.id === current}
             onClick={() => onSelect(option.id)}
             className={[
-              'flex items-baseline gap-2 border px-3 py-1.5 font-label text-[0.68rem] tracking-[0.12em] uppercase transition-opacity',
-              option.id === current ? 'border-accent text-accent' : 'border-hairline opacity-60 hover:opacity-100',
+              'flex min-h-11 items-center gap-2 border px-3 font-label text-[0.72rem] tracking-[0.12em] uppercase transition-colors',
+              option.id === current ? 'border-accent text-accent' : 'border-hairline text-black/70 hover:text-black',
             ].join(' ')}
           >
             <span>{index === 0 && labels.resolutionDefault ? `${option.id} · ${labels.resolutionDefault}` : option.id}</span>
@@ -210,16 +218,28 @@ export function ResolutionPicker({
           </button>
         ))}
       </div>
-      {labels.resolutionNote && <p className="mt-2 font-mono text-[0.72rem] opacity-55">{labels.resolutionNote}</p>}
+      {labels.resolutionNote && <p className="mt-2 text-sm text-black/65">{labels.resolutionNote}</p>}
     </fieldset>
   );
 }
+
+/** What the access call settles; a test seam can hand it in so the server markup shows that state. */
+export interface StudioAccessSnapshot {
+  open: boolean;
+  live: boolean;
+  signedIn: boolean;
+}
+
+/** Where the phone's sticky CTA hands the focus: the first thing to press in the make card, in page order. */
+const MAKE_FOCUS = '[data-selfie-use], [data-selfie-camera], [data-selfie-choose], [data-pay-cta]:not(:disabled), [data-studio-signin], [data-studio-interest]:not(:disabled)';
 
 export function TwingsStudio({
   styles,
   labels,
   initialStyleId,
   live,
+  shopOpenHint = false,
+  initialAccess,
 }: {
   styles: StudioStyle[];
   labels: StudioLabels;
@@ -227,18 +247,31 @@ export function TwingsStudio({
   initialStyleId?: string;
   /** The live make loop; absent (tests, the catalogue shape) the studio is closed. */
   live?: StudioLive;
+  /**
+   * `storefrontOpen()` from the server: only what the sticky bar says before the access call answers
+   * ("내 사진으로 만들기" or "열리면 알림 받기"). Never opens anything by itself.
+   */
+  shopOpenHint?: boolean;
+  initialAccess?: StudioAccessSnapshot;
 }) {
   const single = styles.length === 1;
+  // docs/PLATFORM-2.0.md §3.1: the static page used to paint "closed" and flip once the access call
+  // answered. Until it answers (or fails — closed is still the fallback), a neutral skeleton.
+  const [accessKnown, setAccessKnown] = useState(initialAccess !== undefined || !live);
   const [phase, setPhase] = useState<Phase>('photo');
-  const [photo, setPhoto] = useState<string | null>(null);
-  const [photoFile, setPhotoFile] = useState<File | null>(null);
-  const [savedPortrait, setSavedPortrait] = useState<string | null>(null);
-  const [portraitRequired, setPortraitRequired] = useState(false);
-  const [liveMode, setLiveMode] = useState(false);
+  // The saved photos are the photo (founder, 2026-10-22): `selfie` is the one the sheet offers (the
+  // default), `chosenSelfie` the face this order uses once the person answers "이 얼굴로 만들까요?".
+  const [selfie, setSelfie] = useState<SelfieView | null>(null);
+  const [chosenSelfie, setChosenSelfie] = useState<SelfieView | null>(null);
+  const [selfieJustSaved, setSelfieJustSaved] = useState(false);
+  const [selfieEditing, setSelfieEditing] = useState(false);
+  const photo = chosenSelfie?.imageUrl ?? null;
+  const [liveMode, setLiveMode] = useState(initialAccess?.live ?? false);
   const [charge, setCharge] = useState(true);
-  const [signedIn, setSignedIn] = useState(false);
+  const [signedIn, setSignedIn] = useState(initialAccess?.signedIn ?? false);
   // The shop's own state, separate from this viewer's: see /api/renders/access.
-  const [shopOpen, setShopOpen] = useState(false);
+  const [shopOpen, setShopOpen] = useState(initialAccess?.open ?? false);
+  const [aspectOpen, setAspectOpen] = useState(false);
   const [interest, setInterest] = useState(false);
   const [interestBusy, setInterestBusy] = useState(false);
   const [identityRequired, setIdentityRequired] = useState(false);
@@ -259,11 +292,15 @@ export function TwingsStudio({
   const [edit, setEdit] = useState({ editText: '', references: [] as File[], referencesConsent: false });
   const [paymentMode, setPaymentMode] = useState<'monthly' | 'single'>('monthly');
   const [usageExhausted, setUsageExhausted] = useState(false);
-  const fileRef = useRef<HTMLInputElement>(null);
+  const payRef = useRef<HTMLButtonElement>(null);
+  const selfiePanelRef = useRef<HTMLDivElement>(null);
+  const studioRef = useRef<HTMLElement>(null);
   const submitGuard = useRef(createSubmitGuard());
   const subscriptionRequestId = useRef<string | null>(null);
-  const hasManualPhoto = useRef(false);
-  const previousPortraitId = useRef<string | null>(null);
+  const selfieEditingRef = useRef(false);
+  const previousSelfieId = useRef<string | null>(null);
+  // Bumped only when the access call reports a selfie this screen did not save itself (another tab).
+  const [selfieEpoch, setSelfieEpoch] = useState(0);
 
   const chosen = styles.find((item) => item.id === styleId) ?? styles[0] ?? null;
   // The price the button names: the chosen resolution's, else the style's base price.
@@ -290,13 +327,6 @@ export function TwingsStudio({
     subscriptionRequestId.current = null;
   }, [live?.template, initialStyleId, subscription?.id, subscription?.periodStart, subscription?.planId, subscription?.hasAccess, subscriptionEligible]);
 
-  useEffect(
-    () => () => {
-      if (photo) URL.revokeObjectURL(photo);
-    },
-    [photo],
-  );
-
   // Static page, per-viewer answer: ask once whether this reader renders for real, whether a
   // payment is taken, and whether this template needs their verified face first.
   const accessUrl = live ? `${live.accessEndpoint}?template=${encodeURIComponent(live.template)}` : null;
@@ -308,22 +338,27 @@ export function TwingsStudio({
       const request = ++latest;
       return fetch(accessUrl, { cache: 'no-store', credentials: 'same-origin' })
       .then((response) => (response.ok ? response.json() : { live: false }))
-      .then((json: { open?: boolean; live?: boolean; charge?: boolean; identityRequired?: boolean; identity?: string; signedIn?: boolean; interest?: boolean; portraitEnabled?: boolean; portraitId?: string | null; subscription?: typeof subscription; subscriptionEligible?: boolean; editing?: boolean; subscriptionUsePercent?: number | null; editFields?: string[]; premiumEditBudget?: unknown }) => {
+      .then((json: { open?: boolean; live?: boolean; charge?: boolean; identityRequired?: boolean; identity?: string; signedIn?: boolean; interest?: boolean; selfie?: SelfieView | null; subscription?: typeof subscription; subscriptionEligible?: boolean; editing?: boolean; subscriptionUsePercent?: number | null; editFields?: string[]; premiumEditBudget?: unknown }) => {
         if (cancelled || request !== latest) return;
+        setAccessKnown(true);
         setLiveMode(json.live === true);
         setShopOpen(json.open === true);
         setCharge(json.charge !== false);
         setIdentityRequired(json.identityRequired === true);
         setIdentity(typeof json.identity === 'string' ? json.identity : 'not_needed');
         setSignedIn(json.signedIn === true);
-        setPortraitRequired(json.portraitEnabled === true);
-        if (!hasManualPhoto.current && (json.portraitId ?? null) !== previousPortraitId.current) {
-          previousPortraitId.current = json.portraitId ?? null;
+        // While the person is choosing a photo, a refresh must not yank the panel out from under them.
+        // A different default (changed in another tab) asks the question again.
+        const nextSelfie = json.selfie ?? null;
+        if (!selfieEditingRef.current && (nextSelfie?.id ?? null) !== previousSelfieId.current) {
+          previousSelfieId.current = nextSelfie?.id ?? null;
           subscriptionRequestId.current = null;
           setOwnFaceConsent(false);
-          setSavedPortrait(json.portraitId ?? null);
-          setPhoto(json.portraitId ? `/api/identity/portrait/${json.portraitId}/image` : null);
-          setPhase(json.portraitId ? single ? 'pay' : 'style' : 'photo');
+          setSelfie(nextSelfie);
+          setChosenSelfie(null);
+          setSelfieJustSaved(false);
+          setSelfieEpoch(epoch => epoch + 1);
+          setPhase('photo');
         }
         setInterest(json.interest === true);
         setSubscription(json.subscription ?? null);
@@ -336,7 +371,8 @@ export function TwingsStudio({
         if (editBudget) setEditRequestLimitReached(editBudget.remaining === 0);
       })
       .catch(() => {
-        /* closed is the fallback */
+        // Closed is the fallback — but a settled one: the skeleton must not wait forever.
+        if (!cancelled && request === latest) setAccessKnown(true);
       });
     };
     const onFocus = () => { void refresh(); };
@@ -352,23 +388,57 @@ export function TwingsStudio({
 
   const identityBlocked = liveMode && identityRequired && identity !== 'active';
 
-  const takePhoto = (file: File | null | undefined) => {
-    if (submitting || !file || !file.type.startsWith('image/')) return;
-    hasManualPhoto.current = true;
-    setSavedPortrait(null);
-    setOwnFaceConsent(false);
-    subscriptionRequestId.current = null;
-    setPhotoFile(file);
+  // The face for this order is settled (answered, picked, or just uploaded) and the pay button is
+  // next: on a phone it sits below the photo, so bring it into view and hand it the focus.
+  const settleSelfie = (face: SelfieView, offered: SelfieView | null, justSaved: boolean) => {
+    selfieEditingRef.current = false;
+    setSelfieEditing(false);
+    if (face.id !== chosenSelfie?.id) { subscriptionRequestId.current = null; setOwnFaceConsent(false); }
+    if (offered) { previousSelfieId.current = offered.id; setSelfie(offered); }
+    setChosenSelfie(face);
+    setSelfieJustSaved(justSaved);
     setLiveError(null);
-    setPhoto((current) => {
-      if (current) URL.revokeObjectURL(current);
-      return URL.createObjectURL(file);
+    setPhase(current => current === 'photo' ? single ? 'pay' : 'style' : current);
+    requestAnimationFrame(() => {
+      payRef.current?.scrollIntoView({ block: 'center', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' });
+      payRef.current?.focus({ preventScroll: true });
     });
-    setPhase(single ? 'pay' : 'style');
+  };
+  // The first photo, uploaded right here: this order's face, no question asked (and the default, unless another tab got there first).
+  const onSelfieSaved = (saved: SelfieView, _replaced: boolean, library: SelfieLibrary | null) =>
+    settleSelfie(saved, library?.items.find(item => item.id === library.defaultId) ?? saved, true);
+  // "이 얼굴로 만들까요?" answered: the offered face, another saved one, or a new one from the sheet.
+  // A new upload may have replaced the default; the library (or the photo itself) says what to offer next.
+  const onSelfieChosen = (face: SelfieView, how: SheetChoice, library: SelfieLibrary | null) => {
+    const offered = library?.items.find(item => item.id === library.defaultId) ?? (face.isDefault ? face : null);
+    settleSelfie(face, offered, how === 'upload');
+  };
+  // The sheet's chooser and the first upload report here; the pay button waits while they are open.
+  const onSelfieEditing = (editing: boolean) => {
+    selfieEditingRef.current = editing;
+    setSelfieEditing(editing);
+  };
+  // The chosen photo is gone (deleted or replaced in another tab): ask again with what is saved now.
+  const reloadSelfies = async (): Promise<SelfieView | null> => {
+    previousSelfieId.current = null;
+    setChosenSelfie(null);
+    setSelfieJustSaved(false);
+    setPhase('photo');
+    let next: SelfieView | null = null;
+    try {
+      const response = await fetch('/api/identity/selfie', { cache: 'no-store', credentials: 'same-origin' });
+      const data = (await response.json()) as Partial<SelfieLibrary> & { ok?: boolean };
+      if (response.ok && data.ok === true && Array.isArray(data.items)) next = data.items.find(item => item.id === data.defaultId) ?? data.items[0] ?? null;
+    } catch { /* no library: the uploader asks for a first photo */ }
+    previousSelfieId.current = next?.id ?? null;
+    setSelfie(next);
+    setSelfieEpoch(epoch => epoch + 1);
+    requestAnimationFrame(() => selfiePanelRef.current?.scrollIntoView({ block: 'start', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' }));
+    return next;
   };
 
   const submitLive = async () => {
-    if (!live || (!photoFile && !savedPortrait) || !chosen) return;
+    if (!live || !chosenSelfie || !chosen) return;
     if (subscriptionAvailable && !ownFaceConsent) return;
     if (monthly && (edit.editText.trim() || edit.references.length) && !editorOpen) {
       setLiveError((editorAvailable ? editBudgetExhausted ? subscriptionCopy?.premiumEditLimitReached : subscriptionCopy?.premiumEditBudgetUnavailable : subscriptionCopy?.studioEditUnavailable) ?? live.labels.errors.generic ?? null);
@@ -388,21 +458,19 @@ export function TwingsStudio({
       let form: FormData;
       if (monthly) {
         const requestId = subscriptionRequestId.current ??= crypto.randomUUID();
-        const image = !savedPortrait && photoFile ? await shrinkPhoto(photoFile, 1_200_000) : null;
         const references = await Promise.all(edit.references.map(file => shrinkPhoto(file, 700_000)));
-        if ((image?.size ?? 0) + references.reduce((sum, file) => sum + file.size, 0) > 3_700_000) {
+        if (references.reduce((sum, file) => sum + file.size, 0) > 3_700_000) {
           setLiveError(subscriptionCopy?.studioReferenceLarge ?? live.labels.errors.generic ?? null);
           return;
         }
-        form = buildSubscriptionRenderForm({ requestId, template: live.template, locale: live.locale, portraitId: savedPortrait, photo: image, editText: edit.editText, references, referencesConsent: edit.referencesConsent });
+        form = buildSubscriptionRenderForm({ requestId, template: live.template, locale: live.locale, selfieId: chosenSelfie.id, editText: edit.editText, references, referencesConsent: edit.referencesConsent });
       } else {
         form = new FormData();
         form.set('template', live.template);
         form.set('aspect', aspect);
         if (chosenResolution) form.set('resolution', chosenResolution.id);
         form.set('locale', live.locale);
-        if (savedPortrait) form.set('portraitId', savedPortrait);
-        else if (photoFile) { const blob = await shrinkPhoto(photoFile); form.set('photo', blob, blob.type === 'image/png' ? 'photo.png' : 'photo.jpg'); }
+        form.set('selfieId', chosenSelfie.id);
       }
       // Behind the face check: hold the job with its photo and go verify — the callback starts it.
       if (identityBlocked && !monthly) form.set('hold', '1');
@@ -423,6 +491,12 @@ export function TwingsStudio({
       }
       if (json.code === 'identity_required') {
         go(live.identityHref);
+        return;
+      }
+      // The chosen photo was deleted or replaced elsewhere: ask again right here, keeping the order's choices.
+      if (json.code === 'selfie_required') {
+        const remaining = await reloadSelfies();
+        setLiveError((remaining ? live.selfie?.libraryChanged : undefined) ?? live.labels.errors.selfie_required ?? live.labels.errors.generic ?? 'error');
         return;
       }
       if (monthly && ['insufficient_usage', 'usage_exhausted'].includes(json.code ?? '')) setUsageExhausted(true);
@@ -482,53 +556,100 @@ export function TwingsStudio({
     );
   }
 
-  // Closed until the server says otherwise: the static HTML every visitor gets is this panel, and
-  // an operator's page swaps to the live loop the moment the access call answers.
-  // 토스 심사 체크리스트의 "판매 가능한 상품 1개 이상"은 로그인 전 화면에서 판정된다. 상점이 열려
-  // 있는데 이 방문자가 로그인하지 않았을 뿐이라면, 대기자 명단이 아니라 판매를 제안한다.
-  if (!liveMode && live && shopOpen && !signedIn && labels.signedOutCta) {
+  // The template page on a phone: price and the one CTA stay at the thumb until the card is in view.
+  const sticky = single && live && chosen ? (
+    <MakeStickyBar
+      price={monthly ? null : chosenPrice}
+      label={!accessKnown ? (shopOpenHint ? labels.makeCta : labels.makeCtaClosed) : liveMode ? labels.makeCta : shopOpen && !signedIn ? labels.signedOutCta : labels.makeCtaClosed}
+      studioRef={studioRef}
+      phaseKey={`${accessKnown}:${liveMode}:${shopOpen}:${signedIn}`}
+    />
+  ) : null;
+
+  // Before the access call answers: where the photo and the button will be, nothing more. Same
+  // footprint as the signed-out card (three 4:5 tiles, a line, a 48px button), so nothing jumps.
+  if (!accessKnown) {
     return (
-      <section data-twings-studio data-phase="signed-out" data-single={single ? 'true' : 'false'} data-live="false" data-shop-open="true" className="mt-10">
-        <p data-studio-signed-out className="inline-block border border-accent px-3 py-1.5 font-label text-[0.68rem] tracking-[0.12em] text-accent uppercase">
-          {labels.signedOutBadge ?? labels.closedBadge}
-        </p>
-        <div className="mt-6 max-w-detail border border-hairline p-6 sm:p-8">
-          <p className="font-display text-[clamp(1.4rem,2.6vw,2rem)] leading-[0.95] font-black uppercase">{labels.signedOutTitle ?? labels.closedTitle}</p>
-          <p className="mt-4 text-body opacity-70">{labels.signedOutBody ?? labels.closedBody}</p>
-          <p data-studio-ai-note className="mt-4 font-mono text-[0.72rem] leading-relaxed opacity-45">{labels.aiNote}</p>
-          <a
-            data-studio-signin
-            href={live.signinHref}
-            className="mt-7 inline-block border border-current px-6 py-3 font-label text-label uppercase transition-opacity hover:opacity-70"
-          >
-            {labels.signedOutCta} →
-          </a>
+      <section ref={studioRef} data-twings-studio data-phase="pending" data-single={single ? 'true' : 'false'} data-live="false" aria-busy="true" className="mt-5 scroll-mt-24">
+        <p role="status" className="sr-only">{labels.pending}</p>
+        <div data-studio-pending aria-hidden="true" className="flex flex-col gap-3">
+          <div className="grid grid-cols-3 gap-2">
+            {[0, 1, 2].map((index) => (
+              <div key={index} className="aspect-[4/5] animate-pulse rounded-xl bg-black/[0.06] motion-reduce:animate-none" />
+            ))}
+          </div>
+          <div className="h-4 w-3/4 animate-pulse rounded bg-black/[0.06] motion-reduce:animate-none" />
+          <div className="h-12 w-full animate-pulse rounded bg-black/[0.08] motion-reduce:animate-none" />
         </div>
+        {sticky}
       </section>
     );
   }
 
+  // 토스 심사 체크리스트의 "판매 가능한 상품 1개 이상"은 로그인 전 화면에서 판정된다. 상점이 열려
+  // 있는데 이 방문자가 로그인하지 않았을 뿐이라면, 대기자 명단이 아니라 판매를 제안한다 — 어떤 사진이
+  // 필요한지 먼저 보여주고(가이드 이미지 3장), 버튼은 하나.
+  if (!liveMode && live && shopOpen && !signedIn && labels.signedOutCta) {
+    const examples = labels.photoExamples
+      ? [
+          { id: 'front', src: '/images/portrait-guide/front-facing.webp', label: labels.photoExamples.front, crop: 'object-[50%_30%]' },
+          { id: 'bright', src: '/images/portrait-guide/clear-face.webp', label: labels.photoExamples.bright, crop: 'object-[50%_20%]' },
+          { id: 'solo', src: '/images/portrait-guide/front-facing.webp', label: labels.photoExamples.solo, crop: 'object-[50%_18%] scale-150' },
+        ]
+      : [];
+    return (
+      <section ref={studioRef} data-twings-studio data-phase="signed-out" data-single={single ? 'true' : 'false'} data-live="false" data-shop-open="true" className="mt-5 scroll-mt-24">
+        {examples.length > 0 && (
+          <ul data-studio-photo-examples className="grid grid-cols-3 gap-2">
+            {examples.map((example) => (
+              <li key={example.id} data-studio-photo-example={example.id}>
+                <figure>
+                  <div className="aspect-[4/5] overflow-hidden rounded-xl bg-black/5">
+                    {/* eslint-disable-next-line @next/next/no-img-element -- the public photo guide */}
+                    <img src={example.src} alt="" width={160} height={200} loading="lazy" className={`h-full w-full object-cover ${example.crop}`} />
+                  </div>
+                  <figcaption className="mt-1.5 flex items-center gap-1 text-sm">
+                    <span aria-hidden="true" className="text-accent">✓</span>{example.label}
+                  </figcaption>
+                </figure>
+              </li>
+            ))}
+          </ul>
+        )}
+        <p data-studio-signed-out className="mt-4 text-[0.95rem] leading-relaxed">{labels.signedOutBody}</p>
+        <a
+          data-studio-signin
+          data-make-cta="card"
+          href={live.signinHref}
+          className="mt-4 flex min-h-12 w-full items-center justify-center bg-accent px-5 font-label text-[0.85rem] tracking-[0.1em] text-white uppercase transition-opacity hover:opacity-85"
+        >
+          {labels.signedOutCta}
+        </a>
+        {sticky}
+      </section>
+    );
+  }
+
+  // Closed: generation is not open to this reader. One honest sentence pair and the one thing it can
+  // offer — an email the day it opens.
   if (!liveMode || !live) {
     return (
-      <section data-twings-studio data-phase="closed" data-single={single ? 'true' : 'false'} data-live="false" className="mt-10">
-        <p data-studio-closed className="inline-block border border-accent px-3 py-1.5 font-label text-[0.68rem] tracking-[0.12em] text-accent uppercase">
-          {labels.closedBadge}
-        </p>
-        <div className="mt-6 max-w-detail border border-hairline p-6 sm:p-8">
-          <p className="font-display text-[clamp(1.4rem,2.6vw,2rem)] leading-[0.95] font-black uppercase">{labels.closedTitle}</p>
-          <p className="mt-4 text-body opacity-70">{labels.closedBody}</p>
-          {portraitRequired && live?.portrait && <a className="mt-5 inline-block underline" href={`/identity/portrait?next=${encodeURIComponent(`/${live.locale}/t/${live.template}#make`)}`}>{live.portrait.manage}</a>}
-          <p data-studio-ai-note className="mt-4 font-mono text-[0.72rem] leading-relaxed opacity-45">{labels.aiNote}</p>
-          <button
-            type="button"
-            data-studio-interest={interest ? 'done' : 'open'}
-            disabled={!live || interest || interestBusy}
-            onClick={() => void registerInterest()}
-            className="mt-7 inline-block border border-current px-6 py-3 font-label text-label uppercase transition-opacity hover:opacity-70 disabled:opacity-60"
-          >
-            {interest ? labels.closedDone : `${labels.closedCta} →`}
-          </button>
+      <section ref={studioRef} data-twings-studio data-phase="closed" data-single={single ? 'true' : 'false'} data-live="false" className="mt-5 scroll-mt-24">
+        <div data-studio-closed className="rounded-xl bg-black/[0.04] p-4">
+          <p className="text-[0.95rem] font-semibold">{labels.closedTitle}</p>
+          <p className="mt-1.5 text-sm leading-relaxed text-black/75">{labels.closedBody}</p>
         </div>
+        <button
+          type="button"
+          data-studio-interest={interest ? 'done' : 'open'}
+          data-make-cta="card"
+          disabled={!live || interest || interestBusy}
+          onClick={() => void registerInterest()}
+          className="mt-4 flex min-h-12 w-full items-center justify-center border border-current px-5 font-label text-[0.85rem] tracking-[0.1em] uppercase transition-opacity hover:opacity-70 disabled:opacity-60"
+        >
+          {interest ? labels.closedDone : labels.closedCta}
+        </button>
+        {sticky}
       </section>
     );
   }
@@ -544,7 +665,7 @@ export function TwingsStudio({
   })();
 
   return (
-    <section data-twings-studio data-phase={phase} data-single={single ? 'true' : 'false'} data-aspect={monthly ? undefined : aspect} data-resolution={monthly ? undefined : chosenResolution?.id ?? ''} data-live={liveMode ? 'true' : 'false'} data-live-charge={liveMode && charge && !monthly ? 'true' : 'false'} data-subscription-render={monthly ? 'true' : 'false'} className="mt-10">
+    <section data-twings-studio data-phase={phase} data-single={single ? 'true' : 'false'} data-aspect={monthly ? undefined : aspect} data-resolution={monthly ? undefined : chosenResolution?.id ?? ''} data-live={liveMode ? 'true' : 'false'} data-live-charge={liveMode && charge && !monthly ? 'true' : 'false'} data-subscription-render={monthly ? 'true' : 'false'} ref={studioRef} className="mt-5 scroll-mt-24">
       {/* The one honest label the whole screen hangs on: where the result goes, and whether a payment is taken. */}
       <p
         data-live-badge
@@ -553,86 +674,59 @@ export function TwingsStudio({
         {monthly && subscriptionCopy ? subscriptionCopy.studioBadge : charge ? live.labels.badge : live.labels.operatorBadge}
       </p>
 
-      <ol className="mt-6 flex flex-wrap gap-x-6 gap-y-2 font-label text-[0.68rem] tracking-[0.12em] uppercase">
+      <ol className="mt-4 flex flex-wrap gap-x-6 gap-y-2 font-label text-[0.72rem] tracking-[0.12em] uppercase">
         {steps.map((label, index) => (
           <li
             key={label}
             data-step={index}
             aria-current={index === stepIndex ? 'step' : undefined}
-            className={index <= stepIndex ? 'text-accent' : 'opacity-35'}
+            className={index <= stepIndex ? 'text-accent' : 'text-black/55'}
           >
             {index + 1}. {label}
           </li>
         ))}
       </ol>
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-        {portraitRequired && live.portrait ? <div className="border border-hairline p-5">
-          {savedPortrait ? <img src={`/api/identity/portrait/${savedPortrait}/image`} alt={live.portrait.useSaved} className="mx-auto aspect-[2/3] max-h-96 w-full object-contain"/> : <p>{live.portrait.manage}</p>}
-          <a className="mt-5 inline-block underline" href={`/identity/portrait?next=${encodeURIComponent(`/${live.locale}/t/${live.template}#make`)}`}>{savedPortrait?live.portrait.change:live.portrait.manage}</a>
-        </div> : <div className="border border-hairline">
-          <div data-studio-photo-guide className="border-b border-hairline p-5">
-            {subscriptionCopy && <h3 className="text-sm font-semibold">{subscriptionCopy.studioPhotoTitle}</h3>}
-            <p className="mt-2 text-sm leading-relaxed opacity-75">{subscriptionCopy?.studioPhotoGuidance ?? labels.dropHint}</p>
-            {live.photoGuide && <PortraitPhotoGuide copy={live.photoGuide} />}
-          </div>
-          <label
-            htmlFor="studio-photo"
-            className="flex aspect-[3/4] cursor-pointer items-center justify-center overflow-hidden bg-black focus-within:outline focus-within:outline-2 focus-within:outline-accent"
-            onDragOver={(event) => event.preventDefault()}
-            onDrop={(event) => {
-              event.preventDefault();
-              takePhoto(event.dataTransfer.files?.[0]);
-            }}
-          >
-            {photo ? (
-              // eslint-disable-next-line @next/next/no-img-element -- a local object URL
-              <img src={photo} alt="" className="h-full w-full object-cover" />
-            ) : (
-              <div className="px-6 text-center text-white/70">
-                <p className="font-label text-label uppercase">{labels.dropZone}</p>
-                <p className="mt-2 font-mono text-[0.72rem] text-white/45">{labels.dropHint}</p>
-              </div>
-            )}
-          </label>
-          <input
-            ref={fileRef}
-            id="studio-photo"
-            type="file"
-            accept="image/*"
-            disabled={submitting}
-            aria-label={labels.dropZone}
-            className="sr-only"
-            onChange={(event) => takePhoto(event.currentTarget.files?.[0])}
-          />
-          {photo && (
-            <button
-              type="button"
-              disabled={submitting}
-              onClick={() => fileRef.current?.click()}
-              className="w-full border-t border-hairline px-4 py-3 font-label text-eyebrow uppercase transition-opacity hover:opacity-70"
-            >
-              {labels.changePhoto}
-            </button>
+      {/* The template page stacks photo over pay: the make card is one column wide (PLATFORM-2.0 §15.3-1). */}
+      <div className={single ? 'mt-5 flex flex-col gap-5' : 'mt-6 grid gap-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]'}>
+        {/* The photo column: "이 얼굴로 만들까요?" over the saved photos, or the uploader when there is none. */}
+        <div ref={selfiePanelRef} data-selfie-panel data-selfie-present={selfie ? 'true' : 'false'} className={single ? 'scroll-mt-24' : 'scroll-mt-6 border border-hairline p-5'}>
+          <h3 className="text-sm font-semibold">{live.selfie?.panelTitle ?? labels.stepPhoto}</h3>
+          {live.selfie ? (
+            <div className="mt-3">
+              {selfie ? (
+                <SelfieSheet
+                  key={`${selfieEpoch}:${selfie.id}`}
+                  copy={live.selfie}
+                  locale={live.locale}
+                  suggested={selfie}
+                  chosen={chosenSelfie}
+                  justSaved={selfieJustSaved}
+                  signinHref={live.signinHref}
+                  onChoose={onSelfieChosen}
+                  onEditingChange={onSelfieEditing}
+                />
+              ) : (
+                <SelfieUploader
+                  key={selfieEpoch}
+                  copy={live.selfie}
+                  locale={live.locale}
+                  initial={null}
+                  signinHref={live.signinHref}
+                  onSaved={onSelfieSaved}
+                  onEditingChange={onSelfieEditing}
+                />
+              )}
+            </div>
+          ) : (
+            <p className="mt-4 text-sm leading-relaxed opacity-70">{labels.dropHint}</p>
           )}
         </div>
-
-        }
         <div className="flex flex-col">
           {(phase === 'photo' || phase === 'style' || phase === 'pay') && (
             <>
-              {single && chosen ? (
-                // The template page: the choice is made, so the panel states it instead of asking.
-                <div data-chosen-style={chosen.id} className="flex items-baseline justify-between gap-4 border-b border-hairline pb-4">
-                  <span className="font-display text-[1.3rem] leading-[1] font-black uppercase">{chosen.title}</span>
-                  <span className="flex items-baseline gap-3 font-label text-[0.7rem] tracking-[0.12em] uppercase">
-                    {!monthly && <span className="text-accent">{chosenPrice}</span>}
-                    {chosen.runtime !== '0' && (
-                      <span className="opacity-45">{labels.runtimeLabel.replace('{seconds}', chosen.runtime)}</span>
-                    )}
-                  </span>
-                </div>
-              ) : (
+              {/* The template page: the choice is made, and the make card above states its price and facts. */}
+              {single && chosen ? null : (
                 <>
                   <p className="font-label text-label uppercase">{labels.chooseStyle}</p>
                   <div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -675,11 +769,19 @@ export function TwingsStudio({
                 </>
               )}
 
-              {/* The aspect: Instagram's feed (4:5) by default, the rest one press away. */}
+              {/* The aspect: the template's own by default, folded; the rest one press away ("다른 비율"). */}
               {!monthly && chosen && chosen.aspects.length > 1 && (
-                <fieldset data-aspect-picker className="mt-5">
-                  <legend className="font-label text-eyebrow uppercase opacity-60">{labels.aspectLabel}</legend>
-                  <div className="mt-2 flex flex-wrap gap-2">
+                <fieldset data-aspect-picker data-aspect-open={aspectOpen ? 'true' : 'false'} className="mt-1">
+                  <legend className="sr-only">{labels.aspectLabel}</legend>
+                  <div className="flex items-center justify-between gap-3 text-sm">
+                    <p><span aria-hidden="true" className="text-black/65">{labels.aspectLabel}</span> <strong data-aspect-current className="font-semibold">{chosen.aspects.find((option) => option.id === aspect)?.label ?? aspect}</strong></p>
+                    {labels.otherAspect && (
+                      <button type="button" data-aspect-toggle aria-expanded={aspectOpen} aria-controls="studio-aspect-options" onClick={() => setAspectOpen((value) => !value)} className="inline-flex min-h-11 shrink-0 items-center text-sm underline underline-offset-4">
+                        {labels.otherAspect}
+                      </button>
+                    )}
+                  </div>
+                  <div id="studio-aspect-options" hidden={Boolean(labels.otherAspect) && !aspectOpen} className="mt-2 flex flex-wrap gap-2">
                     {chosen.aspects.map((option) => (
                       <button
                         key={option.id}
@@ -688,8 +790,8 @@ export function TwingsStudio({
                         aria-pressed={option.id === aspect}
                         onClick={() => setAspect(option.id)}
                         className={[
-                          'border px-3 py-1.5 font-label text-[0.68rem] tracking-[0.12em] uppercase transition-opacity',
-                          option.id === aspect ? 'border-accent text-accent' : 'border-hairline opacity-60 hover:opacity-100',
+                          'inline-flex min-h-11 items-center border px-3 font-label text-[0.72rem] tracking-[0.12em] uppercase transition-colors',
+                          option.id === aspect ? 'border-accent text-accent' : 'border-hairline text-black/70 hover:text-black',
                         ].join(' ')}
                       >
                         {option.label}
@@ -744,16 +846,14 @@ export function TwingsStudio({
                   </p>
                 )}
                 <button
+                  ref={payRef}
                   type="button"
                   data-pay-cta
-                  disabled={!photo || !chosen || submitting || (subscriptionAvailable && !ownFaceConsent) || (monthly && (edit.references.length > 0 && (!edit.referencesConsent || !edit.editText.trim())))}
+                  disabled={!chosenSelfie || selfieEditing || !chosen || submitting || (subscriptionAvailable && !ownFaceConsent) || (monthly && (edit.references.length > 0 && (!edit.referencesConsent || !edit.editText.trim())))}
                   aria-describedby={photo ? undefined : 'studio-cta-hint'}
-                  onClick={() => {
-                    // With a photo the press stores it and goes to the check (held job); without one, just the check.
-                    if (identityBlocked && !photoFile) window.location.assign(live.identityHref);
-                    else void submitLive();
-                  }}
-                  className="w-full border border-current px-5 py-4 font-label text-[0.95rem] tracking-[0.1em] text-accent uppercase transition-opacity hover:opacity-70 disabled:opacity-25"
+                  onClick={() => void submitLive()}
+                  data-make-cta="card"
+                  className="flex min-h-12 w-full items-center justify-center bg-accent px-5 py-3 font-label text-[0.9rem] tracking-[0.1em] text-white uppercase transition-opacity hover:opacity-85 disabled:bg-black/10 disabled:text-black/55"
                 >
                   {submitting
                     ? live.labels.submitting
@@ -767,16 +867,15 @@ export function TwingsStudio({
                           ? labels.payCta.replace('{price}', chosenPrice)
                           : labels.payCta}
                 </button>
-                <p className="mt-3 text-xs leading-relaxed opacity-55">{monthly && subscriptionCopy ? subscriptionCopy.studioNote : labels.payNote}</p>
-                <p data-studio-ai-note className="mt-2 font-mono text-[0.72rem] leading-relaxed opacity-45">{labels.aiNote}</p>
+                <p className="mt-3 text-sm leading-relaxed text-black/70">{monthly && subscriptionCopy ? subscriptionCopy.studioNote : labels.payNote}</p>
                 {liveError && (
-                  <p data-live-error role="alert" className="mt-2 font-mono text-[0.72rem] text-accent">
+                  <p data-live-error role="alert" className="mt-2 text-sm text-accent">
                     {liveError}
                   </p>
                 )}
-                {!photo && (
-                  <p id="studio-cta-hint" data-studio-hint className="mt-2 font-mono text-[0.72rem] text-accent">
-                    {labels.needPhoto}
+                {!chosenSelfie && (
+                  <p id="studio-cta-hint" data-studio-hint className="mt-2 text-sm text-accent">
+                    {selfie ? live.selfie?.needChoice ?? labels.needPhoto : live.selfie?.needSelfie ?? labels.needPhoto}
                   </p>
                 )}
                 {subscriptionAvailable && photo && !ownFaceConsent && subscriptionCopy && <p className="mt-2 text-xs text-accent">{subscriptionCopy.studioConsentHint}</p>}
@@ -786,6 +885,61 @@ export function TwingsStudio({
           )}
         </div>
       </div>
+      {sticky}
     </section>
+  );
+}
+
+/**
+ * The phone's sticky make bar (docs/PLATFORM-2.0.md §3.2-2, §15.3-1): price and the one CTA at the
+ * thumb while the make card is off screen. Under 768px only, clear of the home indicator (`pb-safe`),
+ * and it declares `data-hide-tabs` so the installed app's bottom tabs step aside for it
+ * (components/app/bottom-tabs.tsx). It slides away while the studio (the card's photo and button
+ * area) is on screen, so it never covers the card's own buttons (the 2026-10-07 rule: nothing fixed
+ * over the pay button) yet still shows on a first screen that reaches only the price. Pressing it
+ * scrolls the studio into view and hands the focus to the first thing to press there.
+ */
+function MakeStickyBar({ price, label, studioRef, phaseKey }: { price: string | null; label: string | undefined; studioRef: React.RefObject<HTMLElement | null>; phaseKey: string }) {
+  const [cardInView, setCardInView] = useState(false);
+  // The studio element changes with the phase (skeleton → signed out / closed / live): `phaseKey`
+  // re-runs this after each commit, when the ref already points at the current one.
+  useEffect(() => {
+    const target = studioRef.current;
+    if (!target || typeof IntersectionObserver === 'undefined') return;
+    const observer = new IntersectionObserver(([entry]) => setCardInView(entry?.isIntersecting ?? false), { rootMargin: '0px 0px -72px 0px' });
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [studioRef, phaseKey]);
+
+  const go = (event: React.MouseEvent<HTMLAnchorElement>) => {
+    const area = studioRef.current;
+    if (!area) return;
+    event.preventDefault();
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    area.scrollIntoView({ block: 'start', behavior: reduced ? 'instant' : 'smooth' });
+    const target = area.querySelector<HTMLElement>(MAKE_FOCUS) ?? area;
+    target?.focus({ preventScroll: true });
+    if (window.location.hash !== '#make') window.history.replaceState(null, '', '#make');
+  };
+
+  if (!label) return null;
+  return (
+    <div
+      data-make-sticky
+      data-hide-tabs
+      data-make-sticky-state={cardInView ? 'away' : 'shown'}
+      aria-hidden={cardInView ? 'true' : undefined}
+      inert={cardInView ? true : undefined}
+      className={[
+        'fixed inset-x-0 bottom-0 z-40 border-t border-hairline bg-surface/95 px-4 pt-3 pb-safe backdrop-blur md:hidden',
+        'transition-transform duration-200 ease-out motion-reduce:transition-none',
+        cardInView ? 'translate-y-full' : 'translate-y-0',
+      ].join(' ')}
+    >
+      <div className="mx-auto flex max-w-xl items-center gap-4">
+        {price && <p data-make-sticky-price className="shrink-0 font-display text-[1.35rem] leading-none font-black">{price}</p>}
+        <a href="#make" data-make-cta="sticky" onClick={go} className="flex min-h-12 flex-1 items-center justify-center bg-accent px-4 font-label text-[0.85rem] tracking-[0.1em] text-white uppercase transition-opacity hover:opacity-85">{label}</a>
+      </div>
+    </div>
   );
 }

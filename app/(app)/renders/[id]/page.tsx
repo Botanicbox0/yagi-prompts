@@ -6,29 +6,43 @@ import { getLocaleFromHeaders } from '@/lib/i18n/server';
 import { absoluteUrl } from '@/lib/seo/site-url';
 import { getDictionary } from '@/lib/i18n/dictionaries';
 import { formatDate, interpolate } from '@/lib/i18n/format';
-import { templateHref } from '@/lib/prompts/links';
+import { templateHref, templatesHref } from '@/lib/prompts/links';
+import { getPromptCatalog } from '@/lib/prompts/public-catalog';
 import { identityVerifyHref } from '@/lib/identity/links';
 import { runLiveRenderPass } from '@/lib/renders/runtime';
 import { failureReason, loadOwnRender } from '@/lib/renders/service';
+import { baseFailureCode } from '@/lib/renders/engines';
 import { FEEDBACK_REASONS, loadRenderFeedback } from '@/lib/renders/feedback';
-import { ASSET_TASK_PREFIX } from '@/lib/renders/repo';
+import { estimateRenderMinutes } from '@/lib/renders/eta';
+import { loadRenderExtras } from '@/lib/renders/extras';
 import { submitFeedbackAction } from './actions';
 import { RENDERS_PATH, renderHref, renderMediaHref, shareHref } from '@/lib/renders/share';
 import { AppHeader } from '@/components/app/app-header';
 import { AutoRefresh } from '@/components/renders/auto-refresh';
 import { ResultMedia } from '@/components/renders/result-media';
+import { PosterCapture } from '@/components/renders/poster-capture';
+import { RenderStages } from '@/components/renders/render-stages';
+import { renderStage } from '@/components/renders/stage';
+import { WaitBrowse, pickWaitCards } from '@/components/renders/wait-browse';
+import { ShareResult } from '@/components/renders/share-result';
 import { TextSwap } from '@/components/ui/text-swap';
+import { NotifyChoice } from '@/components/notify/notify-choice';
 
 /**
- * `/renders/[id]` — the owner's result page. Queued or running: a calm wait that refreshes
- * itself and nudges the queue (a film waiting on the provider is polled here, so a reader who
- * keeps the page open sees it finish without any cron). Finished: the object, a download, the
- * template to make another. Failed: why, in their language, and the way back.
+ * `/renders/[id]` — the owner's result page. Queued or running: three named stages with a
+ * measured estimate, a page that refreshes itself and nudges the queue (a film waiting on the
+ * provider is polled here, so a reader who keeps the page open sees it finish without any cron),
+ * and other formats to look at meanwhile. Finished: the object first, then download · share ·
+ * one more (docs/PLATFORM-2.0.md §3.2-4·5). Failed: why, in their language, the refund, the way back.
  */
 export const dynamic = 'force-dynamic';
 
 /** A job still queued this long after it was created was not picked up by the enqueue request. */
 const STRANDED_AFTER_MS = 45_000;
+
+const ACTION_BASE = 'inline-flex min-h-11 items-center justify-center rounded-full px-4 py-1 text-center text-sm leading-tight font-semibold break-keep';
+const ACTION_PRIMARY = `${ACTION_BASE} bg-accent text-white`;
+const ACTION_SECONDARY = `${ACTION_BASE} border border-black/80`;
 
 export default async function RenderPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams?: Promise<Record<string, string | string[] | undefined>> }) {
   const { id } = await params;
@@ -48,7 +62,15 @@ export default async function RenderPage({ params, searchParams }: { params: Pro
   // "Not happy with the result?" — what they said before, and whether they just said it.
   const feedback = finished ? await loadRenderFeedback(sql, job.id) : null;
   const feedbackOutcome = typeof query.feedback === 'string' ? query.feedback : null;
-  const matching = job.status === 'running' && job.providerTaskId !== null && job.providerTaskId.startsWith(ASSET_TASK_PREFIX);
+  // 0055: when the provider's "done" was seen (the third stage) and whether the film has its frame.
+  const extras = pending || job.status === 'succeeded' ? await loadRenderExtras(sql, job.id) : null;
+  const stage = pending || held ? renderStage({ ...job, finishingAt: extras?.finishingAt ?? null }) : null;
+  const [eta, catalog] = stage === null
+    ? [null, null]
+    : await Promise.all([
+        estimateRenderMinutes(sql, { engine: job.engine, templateId: job.templateId, medium: job.medium }),
+        getPromptCatalog().catch(() => null),
+      ]);
 
   if (pending) {
     // The page is the tick when nothing else is: a film waiting on the provider gets polled, and
@@ -57,7 +79,7 @@ export default async function RenderPage({ params, searchParams }: { params: Pro
     const stranded = job.status === 'queued' && Date.now() - Date.parse(job.createdAt) > STRANDED_AFTER_MS;
     after(async () => {
       try {
-        await runLiveRenderPass(sql, stranded ? { jobId: job.id, limit: 1 } : { limit: 0 });
+        await runLiveRenderPass(sql, stranded ? { jobId: job.id, limit: 1, pollJobId: job.id } : { limit: 0, pollJobId: job.id });
       } catch (error) {
         console.error(`[renders] page pass failed for ${job.id}`, error);
       }
@@ -67,21 +89,73 @@ export default async function RenderPage({ params, searchParams }: { params: Pro
   const mediaSrc = renderMediaHref(job.id);
   const downloadSrc = renderMediaHref(job.id, { download: true });
   const templateUrl = templateHref(locale, job.templateSlug);
+  const shareUrl = job.shareToken && job.shareExpiresAt ? absoluteUrl(shareHref(job.id, job.shareToken)) : null;
+  const ready = job.status === 'succeeded' && job.resultMime !== null;
+  // The share card's frame comes from the owner's browser (no ffmpeg on the server): once, quietly.
+  const captureFrame = ready && job.resultMime!.startsWith('video/') && shareUrl !== null && extras?.ready === true && extras.posterKey === null;
 
   return (
     <div data-section data-theme="light" className="section min-h-screen">
       <AppHeader locale={locale} dict={dict} rest={`${RENDERS_PATH}/${job.id}`} />
-      {(pending || held) && <AutoRefresh />}
+      {(pending || held) && <AutoRefresh since={job.createdAt} />}
 
-      <main id="main" data-render={job.id} data-status={job.status} className="band py-16 lg:py-20">
-        <a href={RENDERS_PATH} className="font-mono text-[0.72rem] opacity-60">
+      <main id="main" data-render={job.id} data-status={job.status} className={`band ${ready ? 'pt-2 pb-16 lg:pt-6 lg:pb-20' : 'py-16 lg:py-20'}`}>
+        <a href={RENDERS_PATH} className="inline-flex min-h-11 items-center font-mono text-[0.72rem] text-black/70">
           ← {r.title}
         </a>
-        <p className="text-accent mt-6 font-label text-eyebrow uppercase">{r.detailEyebrow}</p>
-        <h1 className="mt-4 font-display text-[clamp(2rem,4.5vw,3.4rem)] leading-[0.95] font-black uppercase">{title}</h1>
-        <p className="mt-4 font-mono text-[0.78rem] opacity-60">
-          {dict.nav[job.medium]} · {job.aspect} · {formatDate(job.createdAt, locale) ?? ''}
-        </p>
+
+        {/* §3.2-5: the object first, sized so a portrait film and the row of actions share the
+            first screen (`--result-chrome` is what sits above the film, plus the row on a phone).
+            On a desktop the actions sit beside the film, at its foot. */}
+        {ready && (
+          <div className="mt-1 [--result-chrome:16.5rem] lg:flex lg:items-end lg:gap-10 lg:[--result-cap:40rem] lg:[--result-chrome:11.5rem]">
+            <div className="lg:shrink-0">
+              <ResultMedia src={mediaSrc} mime={job.resultMime!} aspect={job.aspect} alt={title} />
+              {captureFrame && <PosterCapture renderId={job.id} src={mediaSrc} />}
+            </div>
+            <section data-render-result className="mt-4 max-w-detail lg:mt-0 lg:min-w-0 lg:pb-1">
+              {/* Three things to do with it, in the order people do them. One row from 360px up:
+                  the last action takes what is left and may wrap its words. */}
+              <div data-result-actions className="grid grid-cols-[auto_auto_minmax(0,1fr)] items-stretch gap-2 sm:flex sm:flex-wrap sm:items-center sm:gap-3">
+                <a href={downloadSrc} data-result-action="download" data-render-download className={ACTION_PRIMARY}>
+                  {r.download} ↓
+                </a>
+                {shareUrl && (
+                  <ShareResult
+                    url={shareUrl}
+                    title={title}
+                    className={ACTION_SECONDARY}
+                    labels={{ share: r.share, copied: r.shareCopied, failed: r.shareFailed }}
+                  />
+                )}
+                <a href={templatesHref(locale, 'video')} data-result-action="again" className={ACTION_SECONDARY}>
+                  {r.oneMore}
+                </a>
+              </div>
+              <h1 className="mt-6 text-[1.35rem] leading-tight font-bold break-keep">{title}</h1>
+              <p className="mt-1 font-mono text-[0.75rem] text-black/70">
+                {dict.nav[job.medium]} · {job.aspect} · {formatDate(job.finishedAt ?? job.createdAt, locale) ?? ''}
+              </p>
+              {job.shareExpiresAt && shareUrl && (
+                <p className="mt-3 font-mono text-[0.75rem] opacity-70">
+                  {interpolate(r.shareNote, { date: formatDate(job.shareExpiresAt, locale) ?? '' })}
+                </p>
+              )}
+            </section>
+          </div>
+        )}
+
+        {!ready && (
+          <>
+            <p className="text-accent mt-6 font-label text-eyebrow uppercase">{r.detailEyebrow}</p>
+            <h1 className="mt-4 font-display text-[clamp(2rem,4.5vw,3.4rem)] leading-[0.95] font-black uppercase">{title}</h1>
+            <p className="mt-4 font-mono text-[0.78rem] opacity-60">
+              {dict.nav[job.medium]} · {job.aspect} · {formatDate(job.createdAt, locale) ?? ''}
+            </p>
+          </>
+        )}
+
+        {stage !== null && eta !== null && <RenderStages stage={stage} minutes={eta.minutes} dict={dict} />}
 
         {held && (
           <section data-render-held className="mt-10 max-w-detail border-t border-hairline pt-8">
@@ -93,52 +167,16 @@ export default async function RenderPage({ params, searchParams }: { params: Pro
           </section>
         )}
 
-        {pending && (
-          <section data-render-waiting className="mt-10 max-w-detail border-t border-hairline pt-8">
-            <p className="font-display text-[clamp(1.4rem,2.6vw,2rem)] leading-[0.95] font-black uppercase">{r.waitingTitle}</p>
-            <div className="mt-6 h-1 w-full max-w-md overflow-hidden bg-hairline" role="progressbar" aria-busy="true" aria-label={r.progressLabel}>
-              <div className="h-full w-1/3 animate-pulse bg-accent" />
-            </div>
-            <p className="mt-6 text-body opacity-70">{matching ? r.stageMatching : r.waitingBody}</p>
-            <p className="mt-3 font-mono text-[0.75rem] opacity-70">{r.status[job.status]}</p>
-          </section>
-        )}
-
-        {job.status === 'succeeded' && job.resultMime && (
-          <section data-render-result className="mt-10">
-            <div className="max-w-[40rem] border border-hairline">
-              <ResultMedia src={mediaSrc} mime={job.resultMime} aspect={job.aspect} />
-            </div>
-            <div className="mt-6 flex flex-wrap items-center gap-x-6 gap-y-3">
-              <a href={downloadSrc} data-render-download className="inline-block bg-accent px-6 py-3 font-label text-label text-white uppercase">
-                <TextSwap>{r.download} ↓</TextSwap>
-              </a>
-              <a href={`${templateUrl}#make`} className="text-accent font-label text-eyebrow uppercase">
-                <TextSwap>{r.makeAgain} →</TextSwap>
-              </a>
-            </div>
-            {job.shareToken && job.shareExpiresAt && (
-              <div className="mt-8 max-w-detail">
-                <p className="font-label text-eyebrow uppercase opacity-60">{r.shareLinkLabel}</p>
-                {/* `select-all`: one press selects the whole address — the copy this field exists for. */}
-                <p data-share-link className="mt-2 border border-hairline p-3 font-mono text-[0.78rem] break-all select-all">
-                  {absoluteUrl(shareHref(job.id, job.shareToken))}
-                </p>
-                <p className="mt-3 font-mono text-[0.75rem] opacity-70">
-                  {interpolate(r.shareNote, { date: formatDate(job.shareExpiresAt, locale) ?? '' })}
-                </p>
-              </div>
-            )}
-          </section>
-        )}
+        <NotifyChoice dict={dict} context="render" status={job.status} />
 
         {job.status === 'failed' && (
           <section data-render-failed className="mt-10 max-w-detail border-t border-hairline pt-8">
             <p className="font-display text-[clamp(1.4rem,2.6vw,2rem)] leading-[0.95] font-black uppercase">{r.failedTitle}</p>
-            <p className="mt-5 text-body opacity-70">{failureReason(job.errorCode, locale)}</p>
-            <p className="mt-2 font-mono text-[0.75rem] opacity-70">{r.notCharged}</p>
+            <p className="mt-5 text-body">{failureReason(job.errorCode, locale)}</p>
+            {/* The refund is the sentence a reader looks for first after a failure: full ink, framed. */}
+            <p data-render-refund className="mt-4 border-l-2 border-accent pl-3 text-body">{r.notCharged}</p>
             <div className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-3">
-              {(job.errorCode === 'identity_required' || job.errorCode === 'face_policy') && (
+              {(baseFailureCode(job.errorCode) === 'identity_required' || baseFailureCode(job.errorCode) === 'face_policy') && (
                 <a href={identityVerifyHref(`${templateUrl}#make`)} data-identity-door className="inline-block bg-accent px-6 py-3 font-label text-label text-white uppercase">
                   <TextSwap>{dict.identity.start} →</TextSwap>
                 </a>
@@ -148,6 +186,10 @@ export default async function RenderPage({ params, searchParams }: { params: Pro
               </a>
             </div>
           </section>
+        )}
+
+        {stage !== null && catalog !== null && (
+          <WaitBrowse cards={pickWaitCards(catalog, { medium: job.medium, exclude: job.templateSlug })} locale={locale} dict={dict} />
         )}
 
         {/* Founder, 2026-09-11: the complaint has a place to go, on the page it is about. */}

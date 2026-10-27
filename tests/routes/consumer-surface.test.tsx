@@ -147,7 +147,8 @@ describe('P2-10 and P3: the result page', () => {
     expect(ok).not.toMatch(/opacity-45/);
     state.status = 'failed';
     const failed = await renderResult();
-    expect(failed).toMatch(/<p class="[^"]*opacity-70[^"]*">생성이 최종 실패하면/);
+    // PLATFORM-2.0 §3.2-4 (2026-10-23): the refund sentence is now full ink in its own frame.
+    expect(failed).toMatch(/<p data-render-refund="true" class="(?![^"]*opacity-)[^"]*">생성이 최종 실패하면/);
   });
 });
 
@@ -209,16 +210,18 @@ describe('P2-14: the unsubscribe page names the mail that was switched off', () 
   });
 });
 
-describe('P2-16: FAQ a3 carries the terms §5.3 elements', () => {
+describe('P2-16: FAQ a3 carries the terms §5.3 elements and zero-training enterprise security', () => {
   it('ko', () => {
-    for (const phrase of ['본인 얼굴', '인물 자산 그룹', '자동 검수', 'BytePlus', '카메라 본인 인증', '24시간', '계정을 삭제하면']) {
+    for (const phrase of ['본인 얼굴', '인물 자산 그룹', '자동 검수', '암호화', '학습', '카메라 본인 인증', '24시간', '계정을 삭제하면']) {
       expect(ko.faq.a3).toContain(phrase);
     }
+    expect(ko.faq.a3).not.toContain('BytePlus');
   });
   it('en', () => {
-    for (const phrase of ['your own face', 'likeness asset group', 'automated review', 'BytePlus', 'camera check', '24 hours', 'Deleting your account']) {
+    for (const phrase of ['your own face', 'likeness asset group', 'automated review', 'encrypted', 'train', 'camera check', '24 hours', 'Deleting your account']) {
       expect(en.faq.a3).toContain(phrase);
     }
+    expect(en.faq.a3).not.toContain('BytePlus');
   });
 });
 

@@ -30,6 +30,7 @@ import { toCampaignCard, type CampaignCard } from './catalog';
 import { loadProfileSnsUrl, saveProfileSnsUrl } from '@/lib/contests/repo';
 import { loadCreatorProduction, loadCreatorProductions, type CreatorProduction } from './production';
 import { normalizeBrandPostUrl } from '@/lib/brands/workspace/schemas';
+import { campaignAccess } from '@/lib/influencers/visibility';
 
 /** A creator receives their participation terms, never the brand's internal budget row. */
 export type CreatorCampaign = CampaignCard & Pick<CampaignRow, 'payout'>;
@@ -57,6 +58,8 @@ export type ApplyFailure =
   | { code: 'not_open' }
   | { code: 'slots_full' }
   | { code: 'locked' }
+  /** docs/PLATFORM-2.0.md §17.2 — an `influencers` campaign and a member without a verified 3,000+ account. */
+  | { code: 'influencer_required' }
   | { code: 'invalid'; detail: string; field?: ApplyField }
   | { code: 'rate_limited' };
 
@@ -76,6 +79,12 @@ export interface ApplyState {
   open: boolean;
   slotsLeft: number;
   snsPrefill: string | null;
+  /**
+   * `influencer_required` when the campaign is for influencers and this viewer does not qualify
+   * yet: the page shows the terms and the way to link an account instead of the form. A campaign
+   * the viewer may not see at all (`invited`, not on the list) is not found (null).
+   */
+  audienceBlock: 'influencer_required' | null;
 }
 
 /** The apply page's state: a public campaign, the viewer's own row if any, and whether the door is open. */
@@ -83,6 +92,9 @@ export async function loadApplyState(deps: CampaignServiceDeps, slug: string, us
   const campaign = await loadCampaignBySlug(deps.sql, slug);
   if (campaign === null || !isCampaignPublic(campaign.status)) return null;
   const existing = userId === null ? null : await loadApplication(deps.sql, campaign.id, userId);
+  // Someone already on the campaign keeps it, whatever happened to their status since (§6.1).
+  const access = existing === null ? await campaignAccess(deps.sql, campaign.id, userId) : 'ok';
+  if (access === 'hidden') return null;
   const snsPrefill = userId === null ? null : existing?.snsUrl ?? await loadProfileSnsUrl(deps.sql, userId);
   const counts = await loadCampaignCounts(deps.sql, [campaign.id]);
   const taken = counts.get(campaign.id)?.slotsTaken ?? 0;
@@ -92,6 +104,7 @@ export async function loadApplyState(deps: CampaignServiceDeps, slug: string, us
     open: acceptsApplications(campaign, deps.now ?? Date.now()),
     slotsLeft: Math.max(0, campaign.slots - taken),
     snsPrefill,
+    audienceBlock: access === 'influencer_required' ? 'influencer_required' : null,
   };
 }
 
@@ -123,6 +136,7 @@ export async function applyToCampaign(
 
   const state = await loadApplyState(deps, slug, userId);
   if (state === null) return { ok: false, code: 'not_found' };
+  if (state.audienceBlock) return { ok: false, code: state.audienceBlock };
   if (!state.open) return { ok: false, code: 'not_open' };
   // A creator who already holds a slot cannot rewrite their pitch; a fresh applicant needs a slot.
   if (state.existing !== null && state.existing.status !== 'applied') return { ok: false, code: 'locked' };

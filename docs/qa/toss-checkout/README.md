@@ -10,7 +10,38 @@
 4. Redeploy(환경변수는 재배포해야 반영된다).
 5. 확인: 일반 계정으로 템플릿 페이지 → 결제 버튼이 보이는지, 실제 카드로 소액 템플릿 1건 결제 → 렌더 시작 → 토스 상점관리자에서 승인 확인 → 필요하면 관리자 화면에서 취소.
 
-안전장치: 운영(`VERCEL_ENV=production`)에서는 `on`이어도 **두 키가 모두 `live_`로 시작할 때만** 열린다. 테스트 키가 남아 있으면 계속 닫혀 있다(돈을 받지 않고 영상을 내주는 사고 방지). 프리뷰·로컬은 테스트 키로도 열 수 있다(QA용). 닫을 때는 `RENDER_PIPELINE_PUBLIC`을 지우고 재배포 — 이미 결제된 주문의 생성·환불은 계속 처리된다.
+안전장치: 운영(`VERCEL_ENV=production`)에서는 `on`이어도 **두 키가 결제위젯 라이브 키 쌍(`live_gck_`/`live_gsk_`)일 때만** 열린다. 게이트웨이와 같은 규칙(`lib/flags.ts tossKeyKind`)이라 API 키 쌍(`live_ck_`/`live_sk_`)으로는 열리지 않는다. 테스트 키가 남아 있으면 계속 닫혀 있다(돈을 받지 않고 영상을 내주는 사고 방지). `review`는 반대로 **테스트 위젯 키 쌍일 때만** 열리고, 라이브 키나 잘못된 키면 닫힌 채 오류 로그 한 줄(`render_pipeline_closed`, 키 값 없음)을 남긴다. 문서 예제 키(`_docs_`)는 경고 로그만 남긴다. 프리뷰·로컬은 테스트 키로도 열 수 있다(QA용). 닫을 때는 `RENDER_PIPELINE_PUBLIC`을 지우고 재배포 — 이미 결제된 주문의 생성·환불은 계속 처리된다.
+
+## 결제 실패·종결 상태 (2026-10-22, docs/PLATFORM-2.0.md §2.2)
+
+모든 주문은 이름 있는 상태로 끝난다. `billing_payments.failure_code`가 사유이고, 주문 페이지(`/billing/toss/{id}`)가 그 사유를 문장으로 보여준다.
+
+| 상황 | 주문 상태 | 화면 |
+| --- | --- | --- |
+| 카드사·결제수단이 승인 거절(토스 4xx) | `failed(declined)` 즉시 | 사유 + **다시 결제하기** |
+| 네트워크·5xx·타임아웃 | `confirming` 유지 | 확인 중 — 리콘사일이 주문번호로 다시 읽는다 |
+| 승인 시점에 가격이 바뀜 | `failed(price_changed)` | "가격이 바뀌어 주문을 다시 만들어야 해요" + 템플릿 링크 |
+| 승인 시점에 판매가 닫힘 | `failed(not_open)` | 닫힘 안내 |
+| 승인 시점에 세션 없음(401) | `pending` 유지 | 승인 파라미터를 `next`에 담아 로그인 → 같은 복귀 페이지에서 승인 계속 |
+| 토스 `CANCELED` | 우리가 `paid`였으면 `refunded`, 아니면 `failed(canceled)` | |
+| 토스 `ABORTED`·`EXPIRED`·모르는 키(404) | `failed(aborted / expired / unknown_payment)` | |
+| 부분 취소(잔액 남음) | `refund_pending(partial_balance)` | 자동 환불하지 않고 관리자 대기 |
+| 입금 대기 | `expires_at`까지 `confirming`, 지나면 `failed(expired)` | |
+| 결제 없이 주문 시간(30분) 경과 | `failed(expired)` + 입력 사진 삭제 | 템플릿에서 다시 시작 |
+| 환불 10회 실패 | `refund_pending(refund_manual)` | 담당자 처리 안내, 실패 메일 1회 |
+| 생성 시작 10회 실패 | `paid(fulfil_manual)` | 담당자 처리 안내 |
+
+- **다시 결제하기**: `POST /api/billing/toss/orders/{id}/retry`. 같은 사용자·템플릿·옵션·저장 사진으로 새 `pending` 주문을 만든다. 원 주문은 `failed`로 남고 `retried_by`로 새 주문을 가리킨다(두 번 눌러도 같은 주문). 하루 주문 한도(20건)가 그대로 적용된다.
+- **재시도 상한**: 환불은 처음 3번은 다음 패스에서 바로, 그 뒤 1분부터 1시간까지 늘려 가며 다시 시도한다. 생성 시작은 1분부터 늘린다. 각 10회 뒤 `*_manual`로 멈추고 `/admin` 대시보드 "결제 확인 필요"에 센다. 실패 메일은 환불이 확인됐을 때 또는 상한에 닿았을 때 정확히 한 번 나간다.
+- **패스**: 렌더 패스·크론이 한 번에 최대 50건을 정리하고, 패스 로그 한 줄에 `payments confirmed · refunded · failed · manual`을 적는다. 키 설정이 잘못돼도 렌더는 계속되고 `[billing] {"event":"toss_gateway_unavailable",…}` 한 줄만 남긴다(키 값 없음). 상태 폴링(`GET /api/billing/toss/orders/{id}`)은 그 주문 1건만 정리한다.
+- **동의 시각**: `consent_at`은 비어 있을 때만 기록한다. 결제창을 다시 열거나 승인해도 처음 동의한 시각이 남는다.
+- **웹훅** `POST /api/billing/toss/webhook`: 본문은 힌트일 뿐이다(`orderId`/`paymentKey`/`status`). 주문을 찾으면 그 주문 1건만 토스에서 **우리가 저장한 결제 키로** 다시 읽어 위 규칙대로 정리한다. 상점관리자에서 취소한 결제가 `refunded`가 되는 경로다. 템플릿 주문이 아니면 같은 힌트·같은 환경으로 브랜드 2차 활용(`brand_usage_payments`), 캠페인 펀딩(`campaign_funding_payments`) 순서로 찾아 그 모듈 규칙으로 정리한다. 2차 활용은 결제 후 취소(전액·부분)를 `review`로 돌리고 이용 허가는 건드리지 않는다. 케이스가 스튜디오 문의함 맨 위에 오르고, 관리자 환불(`brandUsage.resolve`)이 종료 이벤트를 남기며 마무리한다(이미 돌려준 돈은 다시 취소하지 않는다). 펀딩은 영수증이라 전액 취소면 `refunded`, 부분 취소면 `review`다. 모르는 주문·잘못된 본문은 빈 200, 같은 발신지 분당 30건(전체 120건)을 넘으면 빈 429, 우리 쪽 장애(DB·토스 조회 실패)는 빈 503(토스가 다시 보낸다). GET은 405. 본문 내용은 로그에 남기지 않는다.
+
+**클라우드 적용 필요(코드 배포 전에):** `supabase/migrations/0052_core_billing_failure.sql` — `refund_attempts`·`fulfil_attempts`·`input_deleted_at`·`retried_by` 컬럼과 인덱스 2개. 이 마이그레이션 없이 배포하면 주문 생성·승인은 되지만 리콘사일·다시 결제하기가 실패한다(렌더는 계속된다).
+
+**대표 할 일 — 웹훅 URL 등록:** 토스페이먼츠 상점관리자(개발자센터) → 웹훅 → 웹훅 등록에서 URL `https://twings.app/api/billing/toss/webhook`, 이벤트 `PAYMENT_STATUS_CHANGED`(결제 상태 변경)를 등록한다. 라이브 키로 바꾼 뒤에도 같은 URL이 라이브 환경에 등록돼 있는지 확인한다. 등록 전에는 상점관리자에서 직접 취소한 결제를 DB가 알지 못한다.
+
+검증(2026-10-22, 로컬): `npx tsc --noEmit` 통과 → `npx vitest run` **270 파일 / 2,620 테스트 통과**(기준선 269 / 2,559). 새 테스트를 수정 전 코드에 돌리면 43개 실패·라우트 테스트 파일 로드 실패였다. → `npm run db:local`(0052 포함) → `npm run build:local` 통과 → `npm run start:local`(포트 3001) → `npm run sweep:anon` **SWEEP PASSED — 992/992**(웹훅·다시 결제하기·세션 없는 복귀 체크 12개 추가). 포트를 바꿔 띄울 때는 빌드와 서버 모두 `NEXT_PUBLIC_APP_URL=http://localhost:3001`을 줘야 canonical·hreflang 체크가 맞는다. 실제 토스 테스트 키 카드 승인·취소는 이번에 다시 하지 않았다(가짜 게이트웨이와 스크립트된 토스 응답으로 검증).
 
 ## 2026-09-20 최신 main 통합 검증
 

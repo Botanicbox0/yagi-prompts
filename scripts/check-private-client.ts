@@ -3,7 +3,7 @@ import { resolve,dirname,relative,extname } from 'node:path';
 import ts from 'typescript';
 
 const root=process.cwd();
-const privateModules=new Set(['lib/identity/portrait-contract.ts','lib/identity/portrait-provider.ts','lib/renders/prompt.ts','lib/premium-editing/provider.ts','lib/creator-platform/admin.ts','lib/creator-platform/rewards.ts','lib/creator-platform/service.ts']);
+const privateModules=new Set(['lib/renders/prompt.ts','lib/premium-editing/provider.ts','lib/creator-platform/admin.ts','lib/creator-platform/rewards.ts','lib/creator-platform/service.ts','lib/creator-platform/onboarding.ts']);
 async function files(dir:string):Promise<string[]> {
  try {const entries=await readdir(dir,{withFileTypes:true});return (await Promise.all(entries.map(e=>e.isDirectory()?files(resolve(dir,e.name)):Promise.resolve([resolve(dir,e.name)])))).flat();}catch{return [];}
 }
@@ -44,8 +44,8 @@ if(process.argv.includes('--built')) {
  const built=await files(resolve(root,'.next/static'));
  if(!built.length)throw Error('Build missing: run build:local before --built');
  const secrets:string[]=[];
- const contract=await source(resolve(root,'lib/identity/portrait-contract.ts'));
- contract.forEachChild(n=>{if(ts.isVariableStatement(n))for(const d of n.declarationList.declarations)if(ts.isIdentifier(d.name)&&d.name.text.endsWith('PROMPT')&&d.initializer&&(ts.isStringLiteral(d.initializer)||ts.isNoSubstitutionTemplateLiteral(d.initializer)))secrets.push(d.initializer.text.slice(0,100));});
+ const contract=await source(resolve(root,'lib/renders/prompt.ts'));
+ contract.forEachChild(n=>{if(ts.isVariableStatement(n))for(const d of n.declarationList.declarations)if(ts.isIdentifier(d.name)&&d.name.text.startsWith('IDENTITY_LOCK_')&&d.initializer&&(ts.isStringLiteral(d.initializer)||ts.isNoSubstitutionTemplateLiteral(d.initializer)))secrets.push(d.initializer.text.slice(0,100));});
  if(!secrets.length)throw Error('Private prompt canaries missing: update the scanner for the new prompt definition');
  for(const path of built) {
   if(extname(path)==='.map')problems.push(`public source map: ${relative(root,path)}`);

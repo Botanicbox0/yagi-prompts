@@ -1,5 +1,5 @@
 'use client';
-import type { ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { scopedHref, selectedChoice, type BrandWorkspaceScope } from '@/lib/brands/workspace/selection';
 import { useWorkspaceSelection } from './identity';
 import { SupportDrawer } from './support';
@@ -12,9 +12,15 @@ export function WorkspaceHomeLink({ scope, children }: { scope: BrandWorkspaceSc
 }
 
 export function WorkspaceSupport({ scope, b, locale }: { scope: BrandWorkspaceScope; b: BrandCopy; locale: string }) {
+  const [clientReady, setClientReady] = useState(false);
+  useEffect(() => {
+    setClientReady(true);
+  }, []);
   const choice = selectedChoice(useWorkspaceSelection(scope).selection);
-  // The support thread is the customer's own line to the studio; the TWINGS team answers it from /admin.
-  if (!choice || choice.role === 'guest' || choice.role === 'studio') return null;
+  // Keep SSR static markup empty for guest/studio (staff-switcher-ui contract), while enabling the live
+  // floating concierge widget on the client for studio/admin users testing or messaging on brand.twings.app.
+  if (!choice || choice.role === 'guest' || (choice.role === 'studio' && !clientReady)) return null;
+  const effectiveRole = choice.role === 'studio' ? 'owner' : choice.role;
   // Remount on brand change: an open thread or unsent message must not carry into another brand.
-  return <SupportDrawer key={choice.id} organizations={[{ id: choice.id, name: choice.name, role: choice.role }]} b={b} locale={locale} />;
+  return <SupportDrawer key={choice.id} organizations={[{ id: choice.id, name: choice.name, role: effectiveRole }]} b={b} locale={locale} />;
 }

@@ -31,6 +31,8 @@ export interface AdminQueueCounts {
   feedback: number;
   templates: number;
   risk?: number;
+  creatorApplications?: number;
+  socialAccounts?: number;
 }
 export type AdminTaskKey = keyof AdminQueueCounts;
 const QUEUES: Array<{ key: AdminTaskKey; href: string }> = [
@@ -42,6 +44,8 @@ const QUEUES: Array<{ key: AdminTaskKey; href: string }> = [
   { key: "inquiries", href: "/admin/inquiries?kind=brand&status=new" },
   { key: "feedback", href: "/admin/inquiries?kind=feedback&status=new" },
   { key: "templates", href: "/admin/prompts?tab=pending" },
+  { key: "creatorApplications", href: "/admin/community#applications" },
+  { key: "socialAccounts", href: "/admin/community#social" },
 ];
 
 /** Read-only links: no mutation, inferred approval, or invented zero for unavailable data. */

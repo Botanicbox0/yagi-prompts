@@ -7,8 +7,9 @@ import { ResolutionPicker, TwingsStudio, type StudioLabels, type StudioLive, typ
  * The studio as MARKUP — the first render, before any interaction. What it says to someone who
  * has not uploaded anything yet is the whole first impression, and it is static HTML.
  *
- * Founder, 2026-09-11: there is no demo any more. The page every visitor gets is CLOSED — payment
- * opens soon, leave your email — and only a viewer the access call admits sees the make loop.
+ * Founder, 2026-09-11: there is no demo any more. The static page every visitor gets is a neutral
+ * skeleton (docs/PLATFORM-2.0.md §3.2-2); the access call then settles it — closed (payment opens
+ * soon, leave your email), signed out (sign in to make it), or the make loop for a viewer it admits.
  */
 
 const dict = getDictionary('en');
@@ -23,17 +24,16 @@ const labels: StudioLabels = {
   chooseStyle: dict.studio.chooseStyle,
   payCta: dict.studio.payCta,
   payNote: dict.studio.payNote,
-  closedBadge: dict.studio.closedBadge,
   closedTitle: dict.studio.closedTitle,
   closedBody: dict.studio.closedBody,
   closedCta: dict.studio.closedCta,
   closedDone: dict.studio.closedDone,
-  aiNote: dict.studio.aiNote,
   runtimeLabel: dict.studio.runtimeLabel,
   needPhoto: dict.studio.needPhoto,
   noStyles: dict.studio.noStyles,
   moreTemplates: dict.studio.moreTemplates,
   aspectLabel: dict.studio.aspectLabel,
+  pending: dict.studio.pending,
 };
 
 const live: StudioLive = {
@@ -74,19 +74,41 @@ const styles: StudioStyle[] = [
   },
 ];
 
-describe('the studio as every visitor first sees it — closed, never mocked', () => {
+describe('the studio as every visitor first sees it — a neutral skeleton, never a guess', () => {
   const html = renderToStaticMarkup(<TwingsStudio styles={styles} labels={labels} initialStyleId="seoul-90s" live={live} />);
 
-  it('says payment opens soon and offers the one thing it can: an email that day', () => {
+  // docs/PLATFORM-2.0.md §3.1: the static page used to paint "closed" and then flip once the access
+  // call answered. Until it answers, the studio draws only where the photo and the button will be.
+  it('draws photo and button placeholders, busy, with a spoken status', () => {
+    expect(html).toContain('data-phase="pending"');
+    expect(html).toContain('data-studio-pending');
+    expect(html).toContain('aria-busy="true"');
+    expect(html).toContain(dict.studio.pending);
+  });
+
+  it('commits to nothing before the answer: not closed, not signed out, no pay button', () => {
+    expect(html).not.toContain('data-studio-closed');
+    expect(html).not.toContain('data-studio-signed-out');
+    expect(html).not.toContain('data-pay-cta');
+    expect(html).not.toContain('data-demo-badge');
+    expect(html).not.toContain('progressbar');
+  });
+
+  it('still names the shape the page chose, so the sweep can find the one-style studio', () => {
+    expect(html).toContain('data-single="true"');
+  });
+});
+
+describe('the studio once the access call says the shop is closed', () => {
+  const html = renderToStaticMarkup(<TwingsStudio styles={styles} labels={labels} initialStyleId="seoul-90s" live={live} initialAccess={{ open: false, live: false, signedIn: false }} />);
+
+  it('says generation opens soon and offers the one thing it can: an email that day', () => {
     expect(html).toContain('data-phase="closed"');
     expect(html).toContain('data-studio-closed');
     expect(html).toContain(dict.studio.closedTitle);
     expect(html).toContain(dict.studio.closedBody);
     expect(html).toMatch(/data-studio-interest="open"/);
     expect(html).toContain(dict.studio.closedCta);
-    // Founder, 2026-09-11: AI-made is said before the money, not after the complaint.
-    expect(html).toContain('data-studio-ai-note');
-    expect(html).toContain(dict.studio.aiNote);
   });
 
   it('carries no demo, no fake progress and no sleeping pay button', () => {
@@ -95,9 +117,21 @@ describe('the studio as every visitor first sees it — closed, never mocked', (
     expect(html).not.toContain('progressbar');
     expect(html).not.toContain('Demo');
   });
+});
 
-  it('still names the shape the page chose, so the sweep can find the one-style studio', () => {
-    expect(html).toContain('data-single="true"');
+describe('the studio for a signed-out reader while the shop is open', () => {
+  const html = renderToStaticMarkup(<TwingsStudio styles={styles} labels={{ ...labels, signedOutBody: dict.studio.signedOutBody, signedOutCta: dict.studio.signedOutCta, photoExamples: dict.studio.photoExamples }} initialStyleId="seoul-90s" live={live} initialAccess={{ open: true, live: false, signedIn: false }} />);
+
+  it('shows three photo examples, one line and one sign-in button — no black drop zone, no second title', () => {
+    expect(html).toContain('data-phase="signed-out"');
+    expect(html.match(/data-studio-photo-example=/g)).toHaveLength(3);
+    for (const example of Object.values(dict.studio.photoExamples)) expect(html).toContain(example);
+    expect(html).toContain('/images/portrait-guide/');
+    expect(html).toContain(dict.studio.signedOutBody);
+    expect(html.match(/data-studio-signin/g)).toHaveLength(1);
+    expect(html).toContain(`href="${live.signinHref}"`);
+    expect(html).not.toContain('data-selfie-uploader');
+    expect(html).not.toContain('Put your face in this scene.');
   });
 });
 
@@ -148,7 +182,7 @@ describe('the resolution choice (docs/CREATOR-RESOLUTION.md)', () => {
 
   it('shows no choice for a template that sells only 720p, and none on the closed page', () => {
     expect(renderToStaticMarkup(<ResolutionPicker options={[options[0]!]} selected={null} onSelect={() => {}} labels={{}} />)).toBe('');
-    const closed = renderToStaticMarkup(<TwingsStudio styles={[{ ...styles[0]!, resolutions: options }]} labels={labels} initialStyleId="seoul-90s" live={live} />);
+    const closed = renderToStaticMarkup(<TwingsStudio styles={[{ ...styles[0]!, resolutions: options }]} labels={labels} initialStyleId="seoul-90s" live={live} initialAccess={{ open: false, live: false, signedIn: false }} />);
     expect(closed).not.toContain('data-resolution-picker');
   });
 });

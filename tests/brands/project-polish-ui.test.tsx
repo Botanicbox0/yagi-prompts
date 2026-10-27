@@ -14,6 +14,8 @@ vi.mock("next/navigation", () => ({
 }));
 import { ProjectDetail } from "@/components/brand-workspace/project-detail";
 import { DecisionFields } from "@/components/brand-workspace/decision-fields";
+import { YagiStudioLockup } from "@/components/brand/yagi-mark";
+import { ServiceGuide } from "@/components/brand-workspace/service-guide";
 import { tabFromHash } from "@/components/brand-workspace/project-tabs";
 import { CampaignList } from "@/components/brand-workspace/campaign-list";
 import { uploadStopNotice } from "@/components/brand-workspace/upload";
@@ -92,7 +94,10 @@ describe("campaign page", () => {
 
   it("opens the tab a link's fragment names", () => {
     expect(tabFromHash("#review")).toBe("review");
-    expect(tabFromHash("#files")).toBe("files");
+    // Files share the conversation tab; usage shares the contracts tab.
+    expect(tabFromHash("#files")).toBe("conversation");
+    expect(tabFromHash("#usage")).toBe("contracts");
+    expect(tabFromHash("#applicants")).toBe("applicants");
     expect(tabFromHash("#main")).toBeNull();
     expect(tabFromHash("")).toBeNull();
   });
@@ -105,6 +110,35 @@ describe("campaign page", () => {
     const changes = renderToStaticMarkup(<DecisionFields b={b} initial="changes_requested" />);
     expect(changes).not.toContain(b.approveConfirm);
     expect(changes).not.toContain('name="confirmed"');
+  });
+
+  it("renders the YAGI STUDIO lockup, Aesthetic Brief Engine (#brief), and Frame.io Review Stage (#review) while keeping campaign tracking intact", () => {
+    const b = getDictionary("ko").brandWorkspace;
+    const lockup = renderToStaticMarkup(<YagiStudioLockup size={22} subtitle="by YAGI" />);
+    expect(lockup).toContain("data-yagi-studio-lockup");
+    expect(lockup).toContain("data-yagi-mark");
+    expect(lockup).toContain("YAGI");
+    expect(lockup).toContain("STUDIO");
+
+    const html = renderToStaticMarkup(<ProjectDetail project={project} b={b} locale="ko" />);
+    expect(html).toContain("data-aesthetic-engine");
+    expect(html).toContain("data-brief-intake");
+    expect(html).toContain("data-handoff");
+    expect(html).toContain('data-track="creator"');
+    expect(html).toContain('data-mood-dna="atelier-editorial"');
+    expect(html).toContain("data-review-stage");
+    expect(html).toContain("data-stakeholder-share-bar");
+    expect(html).toContain('id="performance"');
+    expect(html).toContain('id="reports"');
+    expect(html).toContain('id="contracts"');
+
+    const studioProjectHtml = renderToStaticMarkup(<ProjectDetail project={{ ...project, productionMode: "studio" }} b={b} locale="ko" />);
+    expect(studioProjectHtml).toContain('data-track="studio"');
+
+    const guideHtml = renderToStaticMarkup(<ServiceGuide kind="studio" b={b} />);
+    expect(guideHtml).toContain("data-track-cards");
+    expect(guideHtml).toContain("YAGI PRODUCTION");
+    expect(guideHtml).toContain("CREATOR CAMPAIGN");
   });
 });
 

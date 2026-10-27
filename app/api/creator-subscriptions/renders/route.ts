@@ -12,7 +12,7 @@ import { identityVerifyHref } from '@/lib/identity/links';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
-const FIELDS = new Set(['requestId', 'template', 'locale', 'ownFaceConsent', 'portraitId', 'photo', 'editText', 'references', 'referencesConsent']);
+const FIELDS = new Set(['requestId', 'template', 'locale', 'ownFaceConsent', 'selfieId', 'photo', 'editText', 'references', 'referencesConsent']);
 
 export async function POST(request: Request) {
   if (!isSameOrigin(request)) return subscriptionFailure('forbidden');
@@ -39,11 +39,11 @@ export async function POST(request: Request) {
     if (rawEdit !== null && typeof rawEdit !== 'string') return subscriptionFailure('bad_edit');
     const editText = typeof rawEdit === 'string' ? rawEdit : undefined;
     if ((editText?.trim() || rawReferences.length) && !await premiumEditingOperational(deps.sql, deps.environment)) return subscriptionFailure('editing_unavailable');
-    const portrait = form.get('portraitId');
+    const selfie = form.get('selfieId');
     const outcome = await createSubscriptionRenderJob({ sql: deps.sql, environment: deps.environment, store: await getRenderStore() }, viewer, {
       requestId: String(form.get('requestId') ?? ''), templateSlug: String(form.get('template') ?? ''),
       ownFaceConsent: true, locale: String(form.get('locale') ?? ''),
-      portraitId: typeof portrait === 'string' && portrait ? portrait : undefined,
+      selfieId: typeof selfie === 'string' && selfie ? selfie : undefined,
       photo: photos instanceof File ? { bytes: new Uint8Array(await photos.arrayBuffer()), mime: photos.type } : null,
       editText, references: await Promise.all(rawReferences.map(async reference => ({ bytes: new Uint8Array(await (reference as File).arrayBuffer()), mime: (reference as File).type }))),
       referencesConsent: form.get('referencesConsent') === '1',

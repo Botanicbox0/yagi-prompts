@@ -46,7 +46,7 @@ export function CreatorPreview({
         key={video.src}
         ref={videoRef}
         className="absolute inset-0 h-full w-full object-contain"
-        muted loop playsInline preload="none" aria-hidden="true" tabIndex={-1}
+        autoPlay muted loop playsInline preload="none" aria-hidden="true" tabIndex={-1}
         onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)}
       ><source src={video.src} type={video.mime} /></video>}
     </a>

@@ -14,6 +14,7 @@ import { renderHref } from '@/lib/renders/share';
 import { applicationStep, formatWon } from '@/lib/campaigns/state';
 import { URL_MAX } from '@/lib/campaigns/schemas';
 import { AppHeader } from '@/components/app/app-header';
+import { OPEN_CAMPAIGNS_PATH } from '@/lib/influencers/rules';
 import { campaignLabels } from '@/components/campaigns/labels';
 import { TextSwap } from '@/components/ui/text-swap';
 import { reportViewsAction, submitPostAction } from './actions';
@@ -76,6 +77,7 @@ export default async function MyCampaignsPage({ searchParams }: { searchParams?:
         <p className="text-accent font-label text-eyebrow uppercase">{c.eyebrow}</p>
         <h1 className="mt-4 font-display text-title font-black uppercase">{c.mineTitle}</h1>
         <p className="mt-6 max-w-detail text-body opacity-70">{c.mineLede}</p>
+        <a href={OPEN_CAMPAIGNS_PATH} data-open-campaigns-link className="mt-4 inline-flex min-h-11 items-center text-sm font-medium underline underline-offset-4">{dict.social.browse} →</a>
 
         {notice && (
           <p role="status" data-mine-notice={ok ?? err} className={`mt-6 max-w-detail border px-4 py-3 text-[0.95rem] ${err ? 'text-accent border-accent' : 'border-hairline'}`}>

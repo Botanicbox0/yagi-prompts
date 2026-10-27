@@ -1,8 +1,10 @@
 # TWINGS
 
-> TWINGS is a service by YAGI WORKSHOP Inc. (야기워크숍 주식회사) for AI video and image templates featuring a user's own face and studio-managed brand creator campaigns.
+> TWINGS is a service by YAGI WORKSHOP Inc. (야기워크숍 주식회사) for AI video and image templates featuring a user's own face and studio-managed brand creator campaigns across Korea and Japan.
 
 Public template examples can be browsed without an account. The current pricing and FAQ pages state which generation features and monthly plans are available. A published example or listed price alone does not prove checkout is open. Do not describe social integrations or native mobile apps as available unless the current public product confirms them.
+
+Uploaded face photos and brand campaign assets are kept in isolated, encrypted private vaults solely to generate requested outputs, are never used to train external AI models, and are permanently wiped upon deletion.
 
 ## Public pages
 
@@ -10,8 +12,8 @@ Public template examples can be browsed without an account. The current pricing 
 - [한국어 소개](https://twings.app/ko): 서비스 소개.
 - [Video templates](https://twings.app/en/video): Published video examples.
 - [Image templates](https://twings.app/en/image): Published image examples.
-- [For brands](https://twings.app/en/brands): Creator campaign formats, the public Morphic case studies, process and enquiry form.
-- [브랜드 서비스](https://twings.app/ko/brands): 크리에이터 캠페인 포맷, Morphic 공개 사례, 진행 방식과 상담 폼.
+- [For brands](https://twings.app/en/brands): YAGI-directed creator campaign formats, active Korea/Japan creator co-creation, the public Morphic case studies, standalone YAGI production, process and enquiry form.
+- [브랜드 서비스](https://twings.app/ko/brands): YAGI 디렉팅 크리에이터 캠페인 포맷, 한·일 실제 크리에이터 공동 제작, Morphic 공개 사례, YAGI 단독 프로덕션, 진행 방식과 상담 폼.
 - [Customer stories](https://twings.app/en/brands/stories): Real campaign films and verified results, grouped by customer.
 - [고객 사례](https://twings.app/ko/brands/stories): 고객별 실제 제작 영상과 확인된 캠페인 성과.
 - [Morphic campaign story](https://twings.app/en/brands/stories/morphic): August 1990s interview results and the separate September Korea-and-Japan follow-up.

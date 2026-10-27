@@ -23,6 +23,10 @@ import {
   acceptUsageQuote,
 } from "@/lib/brands/usage/service";
 import { usagePaymentsOpen } from "@/lib/brands/usage/runtime";
+import {
+  notifySlackBrandConcierge,
+  syncSlackConciergeReplies,
+} from "@/lib/brands/concierge-slack";
 export const dynamic = "force-dynamic";
 const HEADERS = {
   "Cache-Control": "private, no-store",
@@ -68,7 +72,16 @@ export async function POST(request: NextRequest) {
       case "organization.logo.remove":
         result = await removeBrandOrganizationLogo({ sql }, viewer, input); break;
       case "support.send":
-        result = await sendBrandSupport({sql},viewer,input,"client"); break;
+        result = await sendBrandSupport({sql},viewer,input,"client");
+        if (result.ok && typeof input.organizationId === "string" && typeof input.body === "string") {
+          await notifySlackBrandConcierge(sql, {
+            organizationId: input.organizationId,
+            userId: viewer.userId,
+            body: input.body,
+            messageId: String((result as { id?: string }).id ?? ""),
+          });
+        }
+        break;
       case "organization.create":
         result = await createBrandOrganization({ sql }, viewer, input);
         break;
@@ -159,6 +172,10 @@ export async function POST(request: NextRequest) {
 export async function GET(request:NextRequest) {
  const [viewer,sql]=await Promise.all([getViewer(),getSqlRunner()]);
  if(!sql||!viewer.userId)return json({ok:false},404);
- const messages=await loadBrandSupport({sql,verifiedEmail:await getVerifiedEmail(viewer.userId)},viewer,request.nextUrl.searchParams.get('organizationId')??'');
+ const organizationId = request.nextUrl.searchParams.get('organizationId') ?? '';
+ if (organizationId) {
+  await syncSlackConciergeReplies(sql, organizationId);
+ }
+ const messages=await loadBrandSupport({sql,verifiedEmail:await getVerifiedEmail(viewer.userId)},viewer,organizationId);
  return messages?json({ok:true,messages}):json({ok:false},404);
 }
