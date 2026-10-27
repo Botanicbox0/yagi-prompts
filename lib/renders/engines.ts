@@ -17,7 +17,8 @@ import type { RenderProvider } from './repo';
  * quirk translated into ONE failure vocabulary the row, the page and the email can speak.
  *
  *   image   synchronous: the GPT Image family (the visitor's photo rides the edits endpoint), Seedream
- *           5.0 (photo as a base64 data URL; a real face is refused by policy — `face_policy`),
+ *           5.0 (photo as a base64 data URL — never `asset://`, which its API refuses; a face its
+ *           moderation refuses is `face_policy`),
  *           Gemini Nano Banana (photo as an inline image block, lib/images/gemini.ts)
  *   film    asynchronous: ModelArk or Kling creates a task, the pass polls it, the finished URL
  *           is copied into our storage at once (ModelArk's lives 24h — `ARK_VIDEO_URL_TTL_HOURS`;
@@ -182,11 +183,11 @@ export interface ImageRenderInput {
   prompt: string;
   aspect: ImageAspect;
   photo: RenderPhoto | null;
-  /** ModelArk: the person's photo as a verified-library asset; when set, the bytes are never sent. */
+  /** Kept for the input's shape only: no image engine reads a ModelArk asset (Seedream refuses `asset://`). */
   assetId?: string | null;
   /**
    * A recipe step's references, in prompt order ("Image 1", "Image 2", …), replacing photo/assetId.
-   * OpenAI and Gemini take bytes only; Seedream takes bytes (sent as a data URL) or a URL (`asset://`, https).
+   * OpenAI and Gemini take bytes only; Seedream takes bytes (sent as a data URL) or an https URL.
    */
   references?: readonly StepReference[];
 }
@@ -231,6 +232,11 @@ export async function runImageRender(input: ImageRenderInput, deps: RenderEngine
       return { bytes, mime: result.mime, provider: 'google', costUsd: result.usd, costSource: 'estimate' };
     }
 
+    // Seedream's image API answers `asset://` with "invalid url" (2026-09-22): refused here, before a
+    // paid call, so a stale path fails as a wiring error instead of as the customer's photo.
+    if (input.assetId || input.references?.some((reference) => reference.kind === 'url' && reference.url.startsWith('asset://'))) {
+      throw new RenderFailure('engine_error', 'Seedream takes the photo itself, not a ModelArk asset', false);
+    }
     const client = deps.seedream === undefined ? seedreamClientFromEnv() : deps.seedream;
     if (client === null) throw new RenderFailure('no_engine_key', 'ARK_API_KEY is not set', false);
     const engine = input.engine;
@@ -240,7 +246,7 @@ export async function runImageRender(input: ImageRenderInput, deps: RenderEngine
       aspect: input.aspect,
       references: input.references
         ? input.references.map((reference) => (reference.kind === 'url' ? reference.url : dataUrl(reference)))
-        : input.assetId ? [assetReference(input.assetId)] : input.photo ? [dataUrl(input.photo)] : [],
+        : input.photo ? [dataUrl(input.photo)] : [],
       outputFormat: 'jpeg',
       responseFormat: 'b64_json',
     });

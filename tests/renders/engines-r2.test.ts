@@ -32,13 +32,14 @@ const task = (status: KlingTask['status'], videoUrl: string | null = null, extra
 const doFetch: typeof fetch = async () => new Response(VIDEO, { status: 200, headers: { 'content-type': 'video/mp4' } });
 
 describe('the real-person matrix (needsIdentity · identityPath)', () => {
-  it('sends the photo as bytes to OpenAI, Gemini and Kling, and only as a verified asset to ModelArk — one rule, two readers', () => {
+  it('sends the photo as bytes to OpenAI, Gemini, Kling and Seedream, and only as a verified asset to Seedance — one rule, two readers', () => {
     const all: EngineId[] = [...IMAGE_ENGINE_IDS, ...VIDEO_ENGINE_IDS];
     for (const engine of all) expect(identityPath(engine) === 'asset', engine).toBe(needsIdentity(engine));
     expect(needsIdentity('nano-banana-2.1')).toBe(false);
     expect(needsIdentity('kling-omni')).toBe(false);
     expect(needsIdentity('seedance-2.5')).toBe(true);
-    expect(needsIdentity('seedream-5.0-lite')).toBe(true);
+    expect(needsIdentity('seedream-5.0-lite')).toBe(false);
+    expect(identityPath('seedream-5.0-pro')).toBe('bytes');
     expect(engineProvider('nano-banana-2.1')).toBe('google');
     expect(engineProvider('kling-omni')).toBe('kling');
   });

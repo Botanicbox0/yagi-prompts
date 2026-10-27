@@ -104,10 +104,12 @@ describe('the real-person identity', () => {
 
   const deps = (overrides: Partial<IdentityDeps> = {}): IdentityDeps => ({ sql: h.sql, assets: bank, siteUrl: SITE, now: NOW, mode: 'liveness', ...overrides });
 
-  it('names the engines that need it: everything on ModelArk, nothing on OpenAI, Gemini or Kling', () => {
+  it('names the engines that need it: ModelArk films only, nothing on Seedream, OpenAI, Gemini or Kling', () => {
     expect(needsIdentity('seedance-2.0')).toBe(true);
     expect(needsIdentity('seedance-2.5')).toBe(true);
-    expect(needsIdentity('seedream-5.0-pro')).toBe(true);
+    // Seedream's image API refuses `asset://` (2026-09-22): the photo goes as bytes, its moderation decides.
+    expect(needsIdentity('seedream-5.0-pro')).toBe(false);
+    expect(needsIdentity('seedream-5.0-lite')).toBe(false);
     expect(needsIdentity('gpt-image-2')).toBe(false);
     expect(needsIdentity('gpt-image-2.5-flare')).toBe(false);
     // R2 (docs/PLATFORM-2.0.md §7.3 matrix): both take the photo itself; their own moderation decides.

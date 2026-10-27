@@ -37,6 +37,26 @@ describe('the completion email', () => {
     expect(email.text).toContain('정적 인물, 창문 광');
   });
 
+  it('shows a set: the first picture large, the others in one row, all opening the same link', () => {
+    const more = [2, 3, 4, 5].map((n) => `${LINKS.previewUrl}&frame=${n}`);
+    const email = renderResultEmail({
+      kind: 'ready', locale: 'ko', templateTitle: '웨딩 화보 5컷', medium: 'image', aspect: '3:4',
+      expiresAt: new Date('2026-10-31T12:00:00.000Z'), reason: null, frames: 5,
+      links: { ...LINKS, morePreviewUrls: more }, siteName: 'TWINGS',
+    });
+    expect(email.html).toContain(`<img src="${LINKS.previewUrl}"`);
+    const positions = more.map((url) => email.html.indexOf(`<img src="${url.replace(/&/g, '&amp;')}"`));
+    expect(positions.every((i) => i > email.html.indexOf(`<img src="${LINKS.previewUrl}"`))).toBe(true);
+    expect(positions).toEqual([...positions].sort((a, b) => a - b));
+    expect(email.html).toContain('width="108"');
+    expect(email.html).toContain('웨딩 화보 5컷 · 사진 5장 · 3:4');
+    expect(email.text).toContain('사진 5장');
+    // One result: no row.
+    const single = renderResultEmail({ kind: 'ready', locale: 'ko', templateTitle: 'T', medium: 'image', aspect: '4:5', expiresAt: null, reason: null, links: LINKS, siteName: 'TWINGS' });
+    expect(single.html).not.toContain('width="108"');
+    expect(single.html).toContain('T · 이미지 · 4:5');
+  });
+
   it('explains a failure in the reader’s language and points back at the template', () => {
     const email = renderResultEmail({
       kind: 'failed',

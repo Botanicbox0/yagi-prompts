@@ -12,6 +12,7 @@ const state = vi.hoisted(() => ({
   shared: 'ok' as 'ok' | 'expired' | 'not_found',
   catalog: { video: [] as unknown[], image: [] as unknown[] },
   extras: { finishingAt: null as string | null, posterKey: null as string | null, ready: true },
+  frames: [] as Array<{ frame: number; view: string; download: string; filename: string }>,
 }));
 
 const JOB_ID = '22222222-2222-4222-8222-222222222222';
@@ -42,6 +43,7 @@ vi.mock('@/lib/renders/feedback', () => ({
   notifyRenderFeedback: vi.fn(),
 }));
 vi.mock('@/lib/renders/extras', () => ({ loadRenderExtras: async () => state.extras }));
+vi.mock('@/lib/renders/frames', () => ({ loadRenderFrames: async () => state.frames }));
 // A client island that renders nothing; the marker says the page mounted it.
 vi.mock('@/components/renders/poster-capture', () => ({ PosterCapture: ({ renderId }: { renderId: string }) => <i data-poster-capture={renderId} /> }));
 vi.mock('@/lib/prompts/public-catalog', () => ({ getPromptCatalog: async () => ({ yagi: [], community: [], ...state.catalog }) }));
@@ -53,6 +55,7 @@ import { renderStage, stageSteps } from '@/components/renders/stage';
 import { REFRESH_FAST_MS, REFRESH_SLOW_AFTER_MS, REFRESH_SLOW_MS, refreshDelay, startRefreshLoop } from '@/components/renders/refresh-schedule';
 import { pickWaitCards } from '@/components/renders/wait-browse';
 import { shareOrCopy } from '@/components/renders/share-result';
+import { saveAll, type SaveDeps } from '@/components/renders/save-frames';
 import { shareImageSource } from '@/lib/renders/share';
 import { ETA_DEFAULT_SECONDS, ETA_MIN_SAMPLES, etaFromSamples, medianOf } from '@/lib/renders/eta';
 
@@ -83,6 +86,7 @@ beforeEach(() => {
   state.job = job();
   state.shared = 'ok';
   state.extras = { finishingAt: null, posterKey: null, ready: true };
+  state.frames = [];
   state.catalog = { video: ['neon-alley-dolly', 'a', 'b', 'c', 'd', 'e'].map((slug) => catalogCard(slug)), image: [catalogCard('portrait', 'image')] };
 });
 
@@ -317,6 +321,114 @@ describe('the result page (object first, then download · share · one more)', (
     expect(await shareOrCopy({ share: async () => { throw abort; } }, url, 'T')).toBe('cancelled');
     expect(await shareOrCopy({ clipboard: { writeText: async () => { throw new Error('denied'); } } }, url, 'T')).toBe('failed');
     expect(await shareOrCopy({}, url, 'T')).toBe('failed');
+  });
+});
+
+describe('a set of pictures (an image recipe with several frames)', () => {
+  const frames = (share?: string) =>
+    [1, 2, 3, 4, 5].map((frame) => {
+      const s = share ? `s=${share}&` : '';
+      return { frame, view: `/api/renders/media/${JOB_ID}?${s}frame=${frame}`, download: `/api/renders/media/${JOB_ID}?${s}frame=${frame}&download=1`, filename: `twings-bridal-${JOB_ID.slice(0, 8)}-${frame}.jpg` };
+    });
+  beforeEach(() => {
+    state.job = job({
+      status: 'succeeded', resultMime: 'image/jpeg', medium: 'image', aspect: '3:4', templateSlug: 'bridal', shareToken: TOKEN,
+      shareExpiresAt: new Date(Date.now() + 86_400_000).toISOString(), finishedAt: new Date().toISOString(),
+    });
+  });
+
+  it('shows every picture in order on the result page, each with its own save, and "save all" first', async () => {
+    state.frames = frames();
+    const html = await renderPage();
+    expect(html).toContain('data-result-frames="5"');
+    expect(html).not.toContain('data-result-media');
+    const order = [1, 2, 3, 4, 5].map((n) => html.indexOf(`data-result-frame="${n}"`));
+    expect(order.every((i) => i > -1)).toBe(true);
+    expect(order).toEqual([...order].sort((a, b) => a - b));
+    expect(html).toContain(`src="/api/renders/media/${JOB_ID}?frame=5"`);
+    expect(html).toContain(`href="/api/renders/media/${JOB_ID}?frame=3&amp;download=1"`);
+    expect(html).toContain(`download="twings-bridal-${JOB_ID.slice(0, 8)}-3.jpg"`);
+    expect(html).toContain('5장 모두 저장');
+    expect(html).toContain('data-save-frames="5"');
+    expect(html).toContain('사진 5장 · 3:4');
+    expect(html).toContain('옆으로 넘기면 5장을 모두 볼 수 있어요.');
+    // Still three actions, in the same order, under the pictures.
+    const actions = html.slice(html.indexOf('data-result-actions'));
+    expect(['download', 'share', 'again'].map((a) => actions.indexOf(`data-result-action="${a}"`)).every((i) => i > -1)).toBe(true);
+    expect(html.indexOf('data-result-frames')).toBeLessThan(html.indexOf('<h1'));
+  });
+
+  it('keeps one result exactly as before', async () => {
+    const html = await renderPage();
+    expect(html).toContain('data-result-media="image"');
+    expect(html).not.toContain('data-result-frames');
+    expect(html).not.toContain('data-save-frames');
+  });
+
+  it('opens every picture behind the 3-day token on the share page; the card is the first', async () => {
+    state.frames = frames(TOKEN);
+    const html = await sharedPage();
+    expect(html).toContain('data-result-frames="5"');
+    expect(html).toContain(`src="/api/renders/media/${JOB_ID}?s=${TOKEN}&amp;frame=4"`);
+    expect(html).toContain('data-save-frames="5"');
+    expect(html).toContain('사진 5장');
+    const og = (await sharedMetadata({ params: Promise.resolve({ id: JOB_ID, token: TOKEN }) })).openGraph as { images: Array<{ url: string }> };
+    expect(og.images[0]!.url).toContain(`/api/renders/media/${JOB_ID}?s=${TOKEN}`);
+    expect(og.images[0]!.url).not.toContain('frame=');
+  });
+});
+
+describe('"save all" for a set (no fetch before the tap; the share sheet on phones, downloads elsewhere)', () => {
+  const FRAMES = [1, 2, 3].map((frame) => ({ frame, view: `/v/${frame}`, download: `/d/${frame}`, filename: `f-${frame}.jpg` }));
+  const named = (name: string) => Object.assign(new Error(name), { name });
+  function deps(overrides: Partial<SaveDeps> = {}) {
+    const log = { fetched: 0, forgot: 0, shared: 0, downloads: [] as string[] };
+    const files = [new File(['x'], 'f-1.jpg')];
+    const d: SaveDeps = {
+      sharesFiles: true,
+      files: async () => { log.fetched += 1; return files; },
+      forget: () => { log.forgot += 1; },
+      canShare: () => true,
+      share: async () => { log.shared += 1; },
+      download: (frame) => { log.downloads.push(frame.download); },
+      wait: async () => {},
+      retried: false,
+      ...overrides,
+    };
+    return { d, log };
+  }
+
+  it('hands every picture to the share sheet on a phone, and downloads nothing', async () => {
+    const { d, log } = deps();
+    expect(await saveAll(FRAMES, d)).toBe('shared');
+    expect(log).toMatchObject({ fetched: 1, shared: 1, downloads: [] });
+  });
+
+  it('downloads each picture in order where there is no share sheet, without fetching first', async () => {
+    const { d, log } = deps({ sharesFiles: false });
+    expect(await saveAll(FRAMES, d)).toBe('downloaded');
+    expect(log.fetched).toBe(0);
+    expect(log.downloads).toEqual(['/d/1', '/d/2', '/d/3']);
+  });
+
+  it('keeps the fetched pictures and asks for one more tap when the sheet came too late for the gesture', async () => {
+    const { d, log } = deps({ share: async () => { throw named('NotAllowedError'); } });
+    expect(await saveAll(FRAMES, d)).toBe('tap-again');
+    expect(log).toMatchObject({ forgot: 0, downloads: [] });
+    // A second refusal is not the timing: download instead of asking forever.
+    const again = deps({ share: async () => { throw named('NotAllowedError'); }, retried: true });
+    expect(await saveAll(FRAMES, again.d)).toBe('downloaded');
+    expect(again.log.downloads).toHaveLength(3);
+  });
+
+  it('treats closing the sheet as a choice, and a failed fetch as a reason to download', async () => {
+    const closed = deps({ share: async () => { throw named('AbortError'); } });
+    expect(await saveAll(FRAMES, closed.d)).toBe('cancelled');
+    expect(closed.log.downloads).toEqual([]);
+    const refused = deps({ files: async () => { throw new TypeError('Failed to fetch'); } });
+    expect(await saveAll(FRAMES, refused.d)).toBe('downloaded');
+    expect(refused.log).toMatchObject({ forgot: 1 });
+    expect(refused.log.downloads).toHaveLength(3);
   });
 });
 

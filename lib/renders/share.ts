@@ -60,13 +60,24 @@ export function shareHref(id: string, token: string): string {
  * without a session; `download` asks for `Content-Disposition: attachment`.
  */
 /** `poster`: the film's captured frame (0055 `poster_key`) behind the same two doors, never a download. */
-export function renderMediaHref(id: string, options: { share?: string; download?: boolean; poster?: boolean } = {}): string {
+/** `frame`: a set's Nth picture (1 = the job's own result), behind the same two doors (`renderFrameParam`). */
+export function renderMediaHref(id: string, options: { share?: string; download?: boolean; poster?: boolean; frame?: number } = {}): string {
   const query = new URLSearchParams();
   if (options.share) query.set('s', options.share);
+  if (options.frame !== undefined) query.set('frame', String(options.frame));
   if (options.poster) query.set('poster', '1');
   else if (options.download) query.set('download', '1');
   const suffix = query.toString();
   return `${RENDER_MEDIA_REST}/${id}${suffix ? `?${suffix}` : ''}`;
+}
+
+/**
+ * `?frame=` read back: absent = the result (null), 1–6 = that picture of a set (a recipe makes at most
+ * six, lib/recipes/schema.ts), anything else = refused (`'invalid'`) before a row is read.
+ */
+export function renderFrameParam(value: string | null): number | null | 'invalid' {
+  if (value === null) return null;
+  return /^[1-6]$/.test(value) ? Number(value) : 'invalid';
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

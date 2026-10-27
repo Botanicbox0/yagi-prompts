@@ -15,11 +15,14 @@ import { baseFailureCode } from '@/lib/renders/engines';
 import { FEEDBACK_REASONS, loadRenderFeedback } from '@/lib/renders/feedback';
 import { estimateRenderMinutes } from '@/lib/renders/eta';
 import { loadRenderExtras } from '@/lib/renders/extras';
+import { loadRenderFrames } from '@/lib/renders/frames';
 import { submitFeedbackAction } from './actions';
 import { RENDERS_PATH, renderHref, renderMediaHref, shareHref } from '@/lib/renders/share';
 import { AppHeader } from '@/components/app/app-header';
 import { AutoRefresh } from '@/components/renders/auto-refresh';
 import { ResultMedia } from '@/components/renders/result-media';
+import { ResultFrames } from '@/components/renders/result-frames';
+import { SaveFrames } from '@/components/renders/save-frames';
 import { PosterCapture } from '@/components/renders/poster-capture';
 import { RenderStages } from '@/components/renders/render-stages';
 import { renderStage } from '@/components/renders/stage';
@@ -33,7 +36,8 @@ import { NotifyChoice } from '@/components/notify/notify-choice';
  * measured estimate, a page that refreshes itself and nudges the queue (a film waiting on the
  * provider is polled here, so a reader who keeps the page open sees it finish without any cron),
  * and other formats to look at meanwhile. Finished: the object first, then download · share ·
- * one more (docs/PLATFORM-2.0.md §3.2-4·5). Failed: why, in their language, the refund, the way back.
+ * one more (docs/PLATFORM-2.0.md §3.2-4·5) — a set's every picture in a strip, with "save all".
+ * Failed: why, in their language, the refund, the way back.
  */
 export const dynamic = 'force-dynamic';
 
@@ -91,6 +95,9 @@ export default async function RenderPage({ params, searchParams }: { params: Pro
   const templateUrl = templateHref(locale, job.templateSlug);
   const shareUrl = job.shareToken && job.shareExpiresAt ? absoluteUrl(shareHref(job.id, job.shareToken)) : null;
   const ready = job.status === 'succeeded' && job.resultMime !== null;
+  // A set (an image recipe with several pictures) shows them all; one result is shown as before.
+  const frames = ready ? await loadRenderFrames(sql, job) : [];
+  const set = frames.length > 1;
   // The share card's frame comes from the owner's browser (no ffmpeg on the server): once, quietly.
   const captureFrame = ready && job.resultMime!.startsWith('video/') && shareUrl !== null && extras?.ready === true && extras.posterKey === null;
 
@@ -108,18 +115,32 @@ export default async function RenderPage({ params, searchParams }: { params: Pro
             first screen (`--result-chrome` is what sits above the film, plus the row on a phone).
             On a desktop the actions sit beside the film, at its foot. */}
         {ready && (
-          <div className="mt-1 [--result-chrome:16.5rem] lg:flex lg:items-end lg:gap-10 lg:[--result-cap:40rem] lg:[--result-chrome:11.5rem]">
-            <div className="lg:shrink-0">
-              <ResultMedia src={mediaSrc} mime={job.resultMime!} aspect={job.aspect} alt={title} />
+          <div
+            className={
+              set
+                ? 'mt-1 [--result-chrome:17.5rem] lg:[--result-chrome:18.5rem]'
+                : 'mt-1 [--result-chrome:16.5rem] lg:flex lg:items-end lg:gap-10 lg:[--result-cap:40rem] lg:[--result-chrome:11.5rem]'
+            }
+          >
+            <div className={set ? undefined : 'lg:shrink-0'}>
+              {set ? (
+                <ResultFrames frames={frames} aspect={job.aspect} alt={title} labels={r.frames} />
+              ) : (
+                <ResultMedia src={mediaSrc} mime={job.resultMime!} aspect={job.aspect} alt={title} />
+              )}
               {captureFrame && <PosterCapture renderId={job.id} src={mediaSrc} />}
             </div>
-            <section data-render-result className="mt-4 max-w-detail lg:mt-0 lg:min-w-0 lg:pb-1">
+            <section data-render-result className={set ? 'mt-4 max-w-detail' : 'mt-4 max-w-detail lg:mt-0 lg:min-w-0 lg:pb-1'}>
               {/* Three things to do with it, in the order people do them. One row from 360px up:
                   the last action takes what is left and may wrap its words. */}
               <div data-result-actions className="grid grid-cols-[auto_auto_minmax(0,1fr)] items-stretch gap-2 sm:flex sm:flex-wrap sm:items-center sm:gap-3">
-                <a href={downloadSrc} data-result-action="download" data-render-download className={ACTION_PRIMARY}>
-                  {r.download} ↓
-                </a>
+                {set ? (
+                  <SaveFrames frames={frames} label={interpolate(r.frames.saveAll, { n: frames.length })} againLabel={r.frames.saveAgain} className={ACTION_PRIMARY} />
+                ) : (
+                  <a href={downloadSrc} data-result-action="download" data-render-download className={ACTION_PRIMARY}>
+                    {r.download} ↓
+                  </a>
+                )}
                 {shareUrl && (
                   <ShareResult
                     url={shareUrl}
@@ -134,7 +155,7 @@ export default async function RenderPage({ params, searchParams }: { params: Pro
               </div>
               <h1 className="mt-6 text-[1.35rem] leading-tight font-bold break-keep">{title}</h1>
               <p className="mt-1 font-mono text-[0.75rem] text-black/70">
-                {dict.nav[job.medium]} · {job.aspect} · {formatDate(job.finishedAt ?? job.createdAt, locale) ?? ''}
+                {set ? interpolate(r.frames.count, { n: frames.length }) : dict.nav[job.medium]} · {job.aspect} · {formatDate(job.finishedAt ?? job.createdAt, locale) ?? ''}
               </p>
               {job.shareExpiresAt && shareUrl && (
                 <p className="mt-3 font-mono text-[0.75rem] opacity-70">
