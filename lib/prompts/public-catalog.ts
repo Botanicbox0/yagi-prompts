@@ -50,9 +50,10 @@ async function readPromptCatalog(): Promise<PromptCatalog> {
  * price change made outside the admin form needs this bump too.
  */
 /** 2026-10-26 (`v8-prom-queen-hero-restored`): `you-are-a-prom-queen` 16:9 featured hero & `city-fashion-montage` 4:3 dimensions. */
+/** 2026-10-27 (`v9-set-gallery`): `PromptCard.gallery`, a set template's example frames. */
 export const getPromptCatalog = unstable_cache(
   readPromptCatalog,
-  ['prompt-catalog', 'v8-prom-queen-hero-restored', resolveRuntimeMode()],
+  ['prompt-catalog', 'v9-set-gallery', resolveRuntimeMode()],
   {
     tags: [PROMPTS_TAG],
     revalidate: CATALOG_TTL_SECONDS,

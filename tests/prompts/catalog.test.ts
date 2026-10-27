@@ -31,6 +31,8 @@ describe('prompt catalog projection (§13.2)', () => {
       'authorHandle',
       'engine',
       'featured',
+      // A set template's public example frames (2026-10-27); [] for every other card.
+      'gallery',
       'id',
       'lock',
       // docs/PLATFORM-2.0.md §7.5: whether a maker page exists — never the author's id.

@@ -57,6 +57,11 @@ export interface PromptCard {
   poster: ShapedPromptMedia | null;
   video: ShapedPromptMedia | null;
   /**
+   * A set template's example frames in set order (lib/prompts/schemas.ts `gallery`); empty otherwise.
+   * Optional so a card built anywhere but `toPromptCard` (a test double) still renders.
+   */
+  gallery?: ShapedPromptMedia[];
+  /**
    * WHICH gate the text sits behind — not merely THAT one exists (founder report, 2026-08-15:
    * "90s interview는 free인데 왜 cookie 요구?").
    *
@@ -134,7 +139,7 @@ export function toPromptCard(
   options: PromptCatalogOptions = {},
   makerHandles: ReadonlyMap<string, string> = new Map(),
 ): PromptCard {
-  const { poster, video } = shapePromptMedia(row.id, row.media, {
+  const { poster, video, gallery } = shapePromptMedia(row.id, row.media, {
     publicUrl: options.publicUrl ?? publicContentUrl,
   });
   const origin = promptOrigin(row);
@@ -161,6 +166,7 @@ export function toPromptCard(
     aspectDefault: row.aspectDefault,
     poster,
     video,
+    gallery,
     lock: promptLock(row.textVisibility),
     featured: row.featured,
     publishedAt: row.publishedAt,

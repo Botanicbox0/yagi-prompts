@@ -2193,6 +2193,8 @@ export const ko: Dictionary = {
     priceLabel: '1회 결제',
     runtimeLabel: '길이',
     mediumLabel: '결과물',
+    setOutput: '이미지 {n}장',
+    setTitle: '한 번에 받는 {n}컷',
     notForSale: "준비 중",
     notForSaleBody: "이 템플릿은 아직 생성할 수 없습니다. 예시 결과물을 먼저 살펴보세요.",
     makeCta: '내 사진으로 만들기',

@@ -118,10 +118,13 @@ export default async function TemplatePage({ params }: RouteParams) {
   const maker = makerRest ? makers.find((item) => item.handle === card.authorHandle) ?? null : null;
   const shopOpen = storefrontOpen();
   const resolutions = isForSale(card) ? offeredResolutions(card) : [];
+  // A set template (2026-10-27): one order, one example per frame it makes.
+  const gallery = card.gallery ?? [];
+  const setSize = gallery.length > 1 ? gallery.length : null;
   const facts: Array<[string, string]> = [
     card.medium === 'video' && card.runtimeSeconds
       ? [t.runtimeLabel, interpolate(dict.studio.runtimeLabel, { seconds: String(card.runtimeSeconds) })]
-      : [t.mediumLabel, dict.nav[card.medium]],
+      : [t.mediumLabel, setSize ? interpolate(t.setOutput, { n: String(setSize) }) : dict.nav[card.medium]],
     [t.aspectFact, card.aspectDefault ?? defaultAspect(card.medium)],
     ...(resolutions.length > 0 ? [[t.resolutionFact, resolutions[0]!] as [string, string]] : []),
     [t.waitLabel, interpolate(t.waitValue, { minutes: String(waitMinutes) })],
@@ -293,6 +296,29 @@ export default async function TemplatePage({ params }: RouteParams) {
                 )}
               </div>
             </header>
+
+            {/* A set template: every frame one order makes, in set order — the poster above is one of them. */}
+            {setSize && (
+              <section data-template-gallery={setSize} className="mt-14 border-t border-hairline pt-10">
+                <h2 className="font-display text-[clamp(1.4rem,2.6vw,2rem)] leading-[0.95] font-black uppercase">{interpolate(t.setTitle, { n: String(setSize) })}</h2>
+                <ul className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+                  {gallery.map((frame, index) => (
+                    <li key={frame.src} data-template-gallery-frame={index + 1} className="overflow-hidden rounded-2xl bg-black">
+                      {/* eslint-disable-next-line @next/next/no-img-element -- public bucket object, no loader */}
+                      <img
+                        src={frame.src}
+                        alt={`${title} ${index + 1}/${setSize}`}
+                        {...(frame.w ? { width: frame.w } : {})}
+                        {...(frame.h ? { height: frame.h } : {})}
+                        loading="lazy"
+                        decoding="async"
+                        className="h-auto w-full"
+                      />
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
             {recipe?.presentation === 'make-first' ? howItWasMade : null}
 
             {/* The earn loop: campaigns that ask for exactly this template. */}

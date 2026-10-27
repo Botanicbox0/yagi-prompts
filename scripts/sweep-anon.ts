@@ -1068,6 +1068,12 @@ async function sweepTemplates(): Promise<void> {
   const imageDetail = await get(`/en/t/${IMAGE_TEMPLATE}`);
   expectEqual('an image template renders 200', imageDetail.status, 200);
   expectPresent('…as an image', imageDetail.body, 'data-medium="image"');
+  // A set template (2026-10-27): every frame one order makes, on the page and never on the card.
+  expectPresent('…a set shows all its frames', imageDetail.body, 'data-template-gallery="2"');
+  expectPresent('…the last of them included', imageDetail.body, 'data-template-gallery-frame="2"');
+  expectPresent('…and says how many images it makes', imageDetail.body, '2 images');
+  expectAbsent('…the image tab carries no set frames', image.body, 'data-template-gallery');
+  expectAbsent('…a single template has no set section', detail.body, 'data-template-gallery');
 
   for (const slug of HIDDEN_PROMPT_SLUGS) {
     expectEqual(`${slug} 404s`, (await get(`/en/t/${slug}`)).status, 404);

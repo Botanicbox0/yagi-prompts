@@ -559,12 +559,7 @@ export async function seedPrompts(opts: SeedOptions): Promise<PromptSeedResult[]
     }
 
     const media: PromptMedia = {};
-    for (const [kind, spec] of [
-      ['poster', fixture.poster],
-      ['video', fixture.video],
-      ['audio', fixture.audio],
-    ] as const) {
-      if (!spec) continue;
+    const stage = async (spec: AssetSpec): Promise<AssetRef> => {
       const bytes = placeholderBytes(spec);
       const key = `content/prompt/${fixture.id}/${randomUUID()}.${spec.ext}`;
       await storage.putStaging(key, bytes, spec.mime);
@@ -576,7 +571,19 @@ export async function seedPrompts(opts: SeedOptions): Promise<PromptSeedResult[]
       if (spec.w !== undefined) ref.w = spec.w;
       if (spec.h !== undefined) ref.h = spec.h;
       if (spec.duration_s !== undefined) ref.duration_s = spec.duration_s;
-      media[kind] = AssetRefSchema.parse(ref);
+      return AssetRefSchema.parse(ref);
+    };
+    for (const [kind, spec] of [
+      ['poster', fixture.poster],
+      ['video', fixture.video],
+      ['audio', fixture.audio],
+    ] as const) {
+      if (spec) media[kind] = await stage(spec);
+    }
+    if (fixture.gallery) {
+      const gallery: AssetRef[] = [];
+      for (const spec of fixture.gallery) gallery.push(await stage(spec));
+      media.gallery = gallery;
     }
 
     const published = fixture.status === 'published';

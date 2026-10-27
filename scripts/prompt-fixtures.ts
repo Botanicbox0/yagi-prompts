@@ -44,6 +44,8 @@ export interface PromptFixture {
   video?: AssetSpec;
   /** The audio result (founder 2026-08-13) — public and downloadable on the detail page. */
   audio?: AssetSpec;
+  /** A set template's example frames (2026-10-27) — the template page's set section. */
+  gallery?: AssetSpec[];
   rejectReason?: string;
   /** Published items are ordered by this offset (days ago) so NEW badges are deterministic. */
   publishedDaysAgo?: number;
@@ -211,6 +213,8 @@ const YAGI: PromptFixture[] = [
     useCase: ['cinematic'],
     featured: false,
     poster: png('prompt-window-portrait', 1080, 1350),
+    // The one fixture shaped like a set, so the sweep reads the set section against a real server.
+    gallery: [png('prompt-window-portrait-frame-1', 1080, 1350), png('prompt-window-portrait-frame-2', 1080, 1350)],
     publishedDaysAgo: 15,
   },
   {
