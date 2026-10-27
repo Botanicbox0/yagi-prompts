@@ -1,0 +1,4 @@
+# Gitleaks findings reviewed as false positives: <commit>:<file>:<rule>:<line>.
+# Prefer an inline `gitleaks:allow` comment; this file is for lines already pushed.
+# A test fixture's manifest slug ('bridal-01-shot') read as a generic API key; the next commit drops the literal.
+a4749688e2d9da8f21d2c1319b5988bcbb432a1d:tests/prompts/image-templates.test.ts:generic-api-key:62

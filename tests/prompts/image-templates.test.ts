@@ -59,7 +59,7 @@ describe('image template manifest', () => {
   it('maps a Higgsfield model id to the TWINGS engine and keeps the prompt unchanged', () => {
     const [first] = frames();
     expect(first).toEqual({
-      key: 'bridal-01-shot',
+      key: MANIFEST[0]!.template_slug,
       title: 'Bridal shot 1',
       titleKo: '웨딩 컷 1',
       promptText: prompt('Shot 1 by a window.'),
