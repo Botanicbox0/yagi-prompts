@@ -149,8 +149,12 @@
 
 ## 계약 후 할 일
 
-- 정식 MID와 라이브 키가 나오면 Vercel `TOSS_CLIENT_KEY`·`TOSS_SECRET_KEY`를 교체한다. 키 교체 시점에
-  `RENDER_PIPELINE_PUBLIC=review`가 켜져 있으면 심사 계정 결제가 **실제로 청구**된다
-  ([PG-REVIEW-MODE.md](qa/toss-checkout/PG-REVIEW-MODE.md)).
-- 공개 판매 전환(`on`) 시점은 대표가 정한다.
-- 이 문서의 임시 MID와 잘린 홈페이지 주소를 정식 값으로 고친다.
+- **키 종류와 모드는 짝으로 바꾼다**(`lib/flags.ts` `renderPipelineMode`, PLATFORM-2.0 §2.2-3). 운영에서 `review`는
+  **테스트 위젯 키 쌍**(`test_gck_`/`test_gsk_`), `on`은 **라이브 위젯 키 쌍**(`live_gck_`/`live_gsk_`)만 받는다. 짝이 안 맞으면
+  결제 경로가 닫히고(`render_pipeline_closed` 로그) 청구는 일어나지 않는다. 예전 문서의 "review에 라이브 키를 넣으면 실제 청구"는
+  이 규칙 이전 이야기다.
+  1. 지금(심사 중): 상점 전용 **테스트** 위젯 키 쌍으로 문서 예제 키를 교체한다. `toss_docs_key` 경고가 사라지고 심사 결제가
+     이 상점 거래로 남는다. `review` 그대로.
+  2. 공개 판매(`on`) 날: **라이브** 위젯 키 쌍과 `RENDER_PIPELINE_PUBLIC=on`을 같은 배포에서 바꾼다(런북 PLATFORM-2.0 §2.3).
+     시점은 대표가 정한다.
+- 카드사 심사 완료 확인은 담당 매니저 회신 스레드(대표 개인 Gmail)로 받는다.
