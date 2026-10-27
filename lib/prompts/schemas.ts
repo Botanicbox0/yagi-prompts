@@ -46,6 +46,7 @@ export const PROMPT_MODELS = [
   { id: 'higgsfield', label: 'HIGGSFIELD' },
   { id: 'nano-banana-2', label: 'NANO BANANA 2' },
   { id: 'gpt-image-2', label: 'GPT IMAGE 2' },
+  { id: 'seedream-5.0-pro', label: 'SEEDREAM 5.0 PRO' },
 ] as const;
 
 export type PromptModelId = (typeof PROMPT_MODELS)[number]['id'];
@@ -231,11 +232,18 @@ export const USE_CASE_MAX = 3;
  * belongs (it is an editorial standard, not a data-integrity one). `audio` (founder direction,
  * 2026-08-13) is the result of a music/voice prompt — public like the poster and the clip, and
  * additionally offered as a plain DOWNLOAD on the detail page.
+ *
+ * `gallery` (2026-10-27, the five-shot bridal set): a SET template's example frames, one per frame it
+ * makes, in set order. Public like the poster, shown on the template page only — never on a card,
+ * and never a form field: it arrives with the set (lib/prompts/image-templates.ts) and every later
+ * `/admin` edit carries it through `publishPromptMedia` unchanged.
  */
+export const PROMPT_GALLERY_MAX = 6;
 export const PromptMediaSchema = z.object({
   video: AssetRefSchema.optional(),
   poster: AssetRefSchema.optional(),
   audio: AssetRefSchema.optional(),
+  gallery: z.array(AssetRefSchema).min(1).max(PROMPT_GALLERY_MAX).optional(),
 });
 export type PromptMedia = z.infer<typeof PromptMediaSchema>;
 

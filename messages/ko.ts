@@ -697,7 +697,7 @@ export const ko: Dictionary = {
     },
     how: {
       heading: '만드는 법',
-      lede: `${T.maker}가 공개한 레시피예요. 여기서는 셀카 한 장이면 TWINGS가 같은 단계를 대신 돌립니다.`,
+      lede: '내 얼굴 사진 한 장과 아래 프롬프트만으로 충분합니다. 그대로 복사해서 사용해 보세요.',
       step: '{n}단계 · {kind}',
       copy: '복사',
       copied: '복사했어요',
@@ -2193,6 +2193,8 @@ export const ko: Dictionary = {
     priceLabel: '1회 결제',
     runtimeLabel: '길이',
     mediumLabel: '결과물',
+    setOutput: '이미지 {n}장',
+    setTitle: '한 번에 받는 {n}컷',
     notForSale: "준비 중",
     notForSaleBody: "이 템플릿은 아직 생성할 수 없습니다. 예시 결과물을 먼저 살펴보세요.",
     makeCta: '내 사진으로 만들기',

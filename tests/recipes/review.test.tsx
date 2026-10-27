@@ -131,4 +131,24 @@ describe('studio review and acceptance of a maker recipe', () => {
     expect(html).not.toMatch(/ast_[0-9a-f]{32}\.(jpg|png)/);
     expect(await makerFileObject(h.sql, viewerOf('anon'), file.id)).toMatchObject({ publicCache: true });
   });
+
+  it('shows a studio original’s prompts only when the studio disclosed them, and never its files', async () => {
+    const id = randomUUID();
+    const recipe = {
+      version: 2,
+      slots: { selfie: { kind: 'image', source: 'user', required: true }, prop: { kind: 'image', source: 'creator', asset: 'ast_0123456789abcdef0123456789abcdef' } },
+      steps: [{ id: 'step1', kind: 'image', engine: 'gpt-image-2', inputs: ['selfie', 'prop'], prompt: `${CANARY}: {{selfie}} through a lens holding {{prop}}.`, params: { aspect: '4:5' } }],
+      output: { from: 'step1' },
+    };
+    await h.sql.query(`insert into prompt_items(id,slug,source,status,published_at,models,title,title_ko,prompt_text,text_visibility,use_case,featured,medium,price_cents,price_krw,audience,recipe,disclosure,presentation)
+      values($1,$2,'yagi','published',now(),'{gpt-image-2}','Lens portal','렌즈 포털','Studio original.','hidden','{}',false,'image',0,0,'public',$3::jsonb,'{"prompts":false,"assets":true}'::jsonb,'make-first')`, [id, `lens-${id.slice(0, 8)}`, JSON.stringify(recipe)]);
+    expect(await loadPublicRecipe(h.sql, id, labels)).toBeNull();
+    await h.sql.query(`update prompt_items set disclosure='{"prompts":true,"assets":true}'::jsonb where id=$1`, [id]);
+    const view = (await loadPublicRecipe(h.sql, id, labels))!;
+    expect(view).toEqual({ presentation: 'make-first', steps: [{ n: 1, kind: 'image', prompt: `${CANARY}: [My photo] through a lens holding [Reference 1].` }], files: null });
+    expect(renderToStaticMarkup(HowItWasMade({ recipe: view, copy: en.makerRecipe })!)).not.toMatch(/ast_[0-9a-f]{32}/);
+    // An unpublished original stays closed.
+    await h.sql.query("update prompt_items set status='archived' where id=$1", [id]);
+    expect(await loadPublicRecipe(h.sql, id, labels)).toBeNull();
+  });
 });

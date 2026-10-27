@@ -1,5 +1,5 @@
 import type { Locale } from '@/lib/i18n/config';
-import { MEDIA_KINDS, type MediaKind, type TemplateMedium } from './schemas';
+import { MEDIA_KINDS, PROMPT_GALLERY_MAX, type MediaKind, type TemplateMedium } from './schemas';
 
 /**
  * Every path the template surface uses, spelled once (docs/TEMPLATES-IA.md §2).
@@ -65,10 +65,12 @@ export function promptMediaRef(id: string, kind: MediaKind): string {
   return `${id}:${kind}`;
 }
 
-export interface ParsedPromptMediaRef {
-  id: string;
-  kind: MediaKind;
+/** A set's Nth example frame, 1-based (`media.gallery`, 2026-10-27): `{promptId}:gallery-{n}`. */
+export function promptGalleryRef(id: string, frame: number): string {
+  return `${id}:gallery-${frame}`;
 }
+
+export type ParsedPromptMediaRef = { id: string; kind: MediaKind } | { id: string; kind: 'gallery'; frame: number };
 
 /** `null` for anything malformed — the caller answers 404, never a guess. */
 export function parsePromptMediaRef(raw: string): ParsedPromptMediaRef | null {
@@ -78,6 +80,11 @@ export function parsePromptMediaRef(raw: string): ParsedPromptMediaRef | null {
   const id = ref.slice(0, at);
   const kind = ref.slice(at + 1);
   if (id.length === 0 || id.includes('/') || id.includes(':')) return null;
+  const gallery = /^gallery-([1-9]\d?)$/.exec(kind);
+  if (gallery) {
+    const frame = Number(gallery[1]);
+    return frame <= PROMPT_GALLERY_MAX ? { id, kind: 'gallery', frame } : null;
+  }
   if (!(MEDIA_KINDS as readonly string[]).includes(kind)) return null;
   return { id, kind: kind as MediaKind };
 }

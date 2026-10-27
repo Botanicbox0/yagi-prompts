@@ -10,7 +10,9 @@ import { displayStepPrompt, parseRecipe } from './schema';
  * `disclosure.prompts` off there is no prompt text in the object at all (not an empty string, not
  * a hidden field), with `disclosure.assets` off there are no file handles. The template page renders
  * exactly this object, so neither its HTML nor its RSC payload can carry what the maker kept private
- * (tests/recipes/public-canary.test.ts). Studio originals answer null.
+ * (tests/recipes/review.test.tsx). A studio original (`source='yagi'`, no accepted format) answers
+ * only when the studio itself turned `disclosure.prompts` on, and never with files: studio-held
+ * references stay private. Every other studio original answers null.
  */
 
 export interface PublicRecipeStep { n: number; kind: 'image' | 'video'; prompt: string }
@@ -23,17 +25,20 @@ export interface PublicRecipeLabels { selfie: string; reference: string; step: s
 
 export async function loadPublicRecipe(sql: SqlRunner, templateId: string, labels: PublicRecipeLabels): Promise<PublicRecipe | null> {
   if (!await recipeSchemaReady(sql)) return null;
-  const { rows } = await sql.query<{ recipe: unknown; disclosure: unknown; presentation: string }>(`select p.recipe,p.disclosure,p.presentation from prompt_items p
-    join platform_formats f on f.template_id=p.id and f.status='accepted'
-    where p.id=$1 and p.status='published' and p.audience='public' and p.recipe is not null`, [templateId]);
+  const { rows } = await sql.query<{ recipe: unknown; disclosure: unknown; presentation: string; maker: boolean }>(`select p.recipe,p.disclosure,p.presentation,(f.id is not null) as maker from prompt_items p
+    left join platform_formats f on f.template_id=p.id and f.status='accepted'
+    where p.id=$1 and p.status='published' and p.audience='public' and p.recipe is not null
+      and (f.id is not null or p.source='yagi')
+    limit 1`, [templateId]);
   const row = rows[0];
   if (!row) return null;
   const checked = parseRecipe(row.recipe);
   if (!checked.ok) return null;
   const disclosure = parseDisclosure(row.disclosure);
+  if (!row.maker && !disclosure.prompts) return null;
   const recipe = checked.recipe;
   let files: PublicRecipe['files'] = null;
-  if (disclosure.assets) {
+  if (row.maker && disclosure.assets) {
     const handles = Object.values(recipe.slots).flatMap((slot) => (slot.source === 'creator' ? [{ handle: slot.asset, kind: slot.kind }] : []));
     files = handles.map(({ handle, kind }) => ({ href: `/api/makers/files/${handle}`, kind }));
   }
