@@ -23,6 +23,8 @@ describe('migrations apply on a fresh database (PLAN §6)', () => {
         where table_schema = 'public' and table_type = 'BASE TABLE' order by table_name`,
     );
     expect(rows.map((r) => r.table_name)).toEqual([
+      // docs/APP-STORE-LAUNCH.md §3.2 (2026-10-27) — the in-app deletion request and its 7-day record.
+      'account_deletion_requests',
       'billing_payments',
       'blocks',
       'brand_attachments',

@@ -357,6 +357,7 @@ export function AdminShell({
   const entries = [
     ["home", "/admin", dict.navHome],
     ["risk", "/admin/risk", workflow.riskNav],
+    ["accountDeletions", "/admin/account-deletions", workflow.accountDeletionsNav],
     ["funding", "/admin/funding", workflow.fundingNav],
     [
       "brandWorkspace",

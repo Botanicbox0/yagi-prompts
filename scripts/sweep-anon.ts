@@ -720,6 +720,40 @@ async function sweepDetailMetadata(): Promise<void> {
   }
 }
 
+/**
+ * docs/APP-STORE-LAUNCH.md §3.2 — the account deletion surface. The public how-to page is the Google
+ * Play listing's "account deletion URL": it must answer 200 to a stranger, be indexable and listed,
+ * and lead to the in-app request, which (like the admin queue) stays behind the login wall.
+ */
+async function sweepAccountDeletion(): Promise<void> {
+  console.log('\n/{locale}/delete-account — deletion without signing in (APP-STORE-LAUNCH §3.2)');
+  const sitemap = await get('/sitemap.xml');
+  for (const locale of ['ko', 'en']) {
+    const path = `/${locale}/delete-account`;
+    const page = await get(path);
+    expectEqual(`${path} renders 200 anonymously`, page.status, 200);
+    expectPresent(`${path} page marker`, page.body, 'data-account-deletion-page');
+    expectPresent(`${path} says how to request in the app`, page.body, 'data-deletion-steps');
+    expectPresent(`${path} links the in-app request`, page.body, 'href="/account/delete"');
+    expectPresent(`${path} offers the mail request`, page.body, 'mailto:hello@yagiworkshop.xyz');
+    expectPresent(`${path} lists what is deleted and kept`, page.body, 'data-deletion-facts');
+    expectPresent(`${path} links the privacy policy`, page.body, `href="/${locale}/legal/privacy"`);
+    expectPresent(`${path} canonical`, page.body, `${path}"`);
+    expectAbsent(`${path} is indexable`, page.body, 'noindex');
+    expectPresent(`sitemap lists ${path}`, sitemap.body, `<loc>${BASE}${path}</loc>`);
+  }
+  const bare = await get('/delete-account');
+  expectOneOf('/delete-account picks a locale', bare.status, [307, 308]);
+  const confirm = await get('/account/delete');
+  expectOneOf('/account/delete redirects anon', confirm.status, [302, 303, 307, 308]);
+  if (confirm.location && !confirm.location.startsWith('/account') && !confirm.location.includes('/account/delete?'))
+    ok('…away from the confirmation step', confirm.location);
+  else fail('/account/delete redirect target', `unexpected location ${confirm.location}`);
+  expectOneOf('/admin/account-deletions refuses anon', (await get('/admin/account-deletions')).status, [302, 303, 307, 308, 404]);
+  const mark = await postForm('/admin/do', { _op: 'account.deletion.complete', id: '00000000-0000-4000-8000-000000000000' });
+  expectEqual('anonymous deletion mark is refused', mark.status >= 400 || (mark.status >= 300 && !(mark.location ?? '').includes('ok=')), true);
+}
+
 /** M5 — the unsubscribe endpoint, which is reachable with NO session by design (§3.5). */
 async function sweepUnsubscribe(): Promise<void> {
   console.log('\n/api/notify/unsubscribe — signed-token only, no session (M5)');
@@ -1682,6 +1716,7 @@ async function main(): Promise<void> {
   await sweepStructuredData();
   await sweepDetailMetadata();
   await sweepUnsubscribe();
+  await sweepAccountDeletion();
   const creatorSession = await get('/api/account/session');
   expectEqual('creator session endpoint is reachable anonymously', creatorSession.status, 200);
   expectEqual('creator session reveals no identity to an anonymous visitor', creatorSession.body, '{"signedIn":false}');

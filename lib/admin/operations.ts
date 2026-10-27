@@ -2,6 +2,7 @@ import { BRAND_PRODUCTION_OPERATIONS } from './brand-production-operations';
 import { PLATFORM_OPERATIONS } from './platform-operations';
 import { CAMPAIGN_RISK_OPERATIONS } from './campaign-risk-operations';
 import { SOCIAL_OPERATIONS } from './social-operations';
+import { ACCOUNT_DELETION_OPERATIONS } from './account-deletion-operations';
 import { CAMPAIGN_COLLABORATION_OPERATIONS } from './campaign-collaboration-operations';
 import { CAMPAIGN_FUNDING_OPERATIONS } from './campaign-funding-operations';
 import { randomUUID } from 'node:crypto';
@@ -750,6 +751,8 @@ export const ADMIN_OPERATIONS = {
   ...CAMPAIGN_FUNDING_OPERATIONS,
   // docs/PLATFORM-2.0.md §17.1 — the influencer SNS check.
   ...SOCIAL_OPERATIONS,
+  // docs/APP-STORE-LAUNCH.md §3.2 — the account deletion queue.
+  ...ACCOUNT_DELETION_OPERATIONS,
 };
 
 export type AdminOperationName = keyof typeof ADMIN_OPERATIONS;

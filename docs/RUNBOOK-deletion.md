@@ -1,11 +1,19 @@
 # Runbook — account deletion
 
-**Applies to**: a deletion request arriving at `hello@yagiworkshop.xyz` from the "Request deletion"
-link on `/account` (PLAN §3.7 — v1 deletion is an honest *request* flow; self-serve deletion is a
-post-launch item).
+**Applies to** (2026-10-27, docs/APP-STORE-LAUNCH.md §3.2):
 
-**Commitment we make on that page**: *"we cancel the subscription, delete the account and confirm
-within 7 days."* The clock starts when the mail arrives, not when you start work.
+- a request in **`/admin/account-deletions`**, sent from the in-app confirmation step
+  `/account/delete` (Apple 5.1.1(v), Google Play). The row carries the address to confirm to and a
+  `due_at` seven days after the request; or
+- a mail to `hello@yagiworkshop.xyz`, the fallback the public page `/{locale}/delete-account` (the
+  Play listing's "account deletion URL") offers to someone who cannot sign in. A mail request has no
+  row: work it from the thread.
+
+Deletion stays manual — this checklist is the procedure; the queue only records where it stands.
+
+**Commitment** (privacy policy §3 and the confirmation step): *the account is deleted within 7 days
+of the request and the address it was registered with is told.* The clock starts at the request
+(`requested_at`, or the mail's arrival), not when you start work.
 
 **Who runs this**: anyone with Stripe dashboard access and the Supabase service role. It is a
 checklist, not a script — every step is a deliberate, verified action.
@@ -17,7 +25,9 @@ checklist, not a script — every step is a deliberate, verified action.
 - [ ] The request came **from the account's own email address**. If it did not, reply asking them to
       send it from that address. Do not accept an address change and a deletion in the same thread.
 - [ ] Copy the address into this checklist and work from it. Everything below keys off it.
-- [ ] Note the request timestamp. `confirmed_by` = request + 7 days.
+- [ ] Note the request timestamp. `confirmed_by` = request + 7 days (the queue shows it as `due_at`).
+- [ ] In `/admin/account-deletions`, press **처리 시작 / Start** on the request. From here the member can
+      no longer withdraw it in the app; if they ask by mail, **요청 닫기 / Close request** with the reason.
 
 ```sql
 -- The one lookup the rest of the runbook uses. Run it in the Supabase SQL editor.
@@ -113,6 +123,9 @@ id is gone, and deleting them would silently rewrite conversion history.
 > cannot delete it.
 
 - [ ] Record the date in the request thread. That is the audit trail.
+- [ ] Queue requests: press **완료 표시 / Mark done**. It is refused while the profile still exists
+      (step 2 empties the row's `user_id`), and it erases the stored address — so send the
+      confirmation above first. The closed row keeps only its id, the dates and who closed it.
 
 ---
 
@@ -133,3 +146,23 @@ id is gone, and deleting them would silently rewrite conversion history.
 - **Deleting storage objects.** v1 ships no delete path for published objects (§6 write-once
   posture) and no reader ever uploads one.
 - **Deleting `stripe_events`.** They are the payment ledger; see the confirmation wording above.
+
+## Known gaps — 2026-10-27, Director/대표 확인 필요
+
+Found while adding the in-app request (docs/APP-STORE-LAUNCH.md §3.2). The steps above predate
+TWINGS' current schema; these are not fixed here because each one changes what is deleted or kept.
+
+- **Payments are Toss, not Stripe.** Step 1 still reads Stripe. `billing_payments.user_id` is
+  `on delete set null`, so Toss payment rows survive the account (the privacy policy keeps payment
+  records 5 years). Check for `confirming`/`refund_pending` orders before step 2.
+- **`creator_subscriptions.user_id` has no `on delete` action.** Any row (any status) makes step 2
+  fail. The table is not applied in the cloud yet (0042, unreleased); fix the FK before it is.
+- **Campaign records vs the policy.** `campaign_applications.creator_id` cascades, so step 2 deletes
+  campaign participation rows, while the privacy policy says campaign records are kept 5 years after
+  settlement. Decide which is right before the first creator with a settled payout asks.
+- **Stored files are not cascaded.** Rows go, objects in the private `renders` bucket stay: results
+  (`render_jobs.result_key`, `poster_key`), order photos (`billing_payments.input_key`) and SNS
+  screenshots (`social_accounts.evidence_key`), besides the selfies step 2 already lists.
+- **Likeness assets at the provider.** The privacy policy promises to request deletion of the asset
+  groups registered with the engine provider; this runbook has no step for it yet (the ARK client in
+  `lib/ark/assets.ts` and the reclaim pass in `lib/ark/reclaim.ts` already delete groups).

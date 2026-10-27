@@ -25,6 +25,7 @@ import { countSocialQueue } from "@/lib/influencers/admin";
 import { countManualTossPayments } from "@/lib/billing/toss-service";
 import { platformReady } from "@/lib/creator-platform/service";
 import { creatorApplicationCount } from "@/lib/creator-platform/onboarding";
+import { countDeletionQueue } from "@/lib/account/deletion";
 
 /**
  * `/admin` — the dashboard (founder, 2026-09-11). The old front door was the playbook list, a
@@ -120,6 +121,7 @@ export default async function AdminHomePage() {
     paymentsManual,
     creatorApplications,
     socialAccounts,
+    accountDeletions,
   ] =
     sql === null
       ? ([
@@ -131,6 +133,7 @@ export default async function AdminHomePage() {
           0,
           [],
           null,
+          0,
           0,
           0,
           0,
@@ -152,6 +155,8 @@ export default async function AdminHomePage() {
             .catch(() => 0),
           // docs/PLATFORM-2.0.md §17.1 — 0 before 0057; the SNS queue line then stays out.
           countSocialQueue(sql).catch(() => 0),
+          // docs/APP-STORE-LAUNCH.md §3.2 — 0 before 0064; the deletion line then stays out.
+          countDeletionQueue(sql).catch(() => 0),
         ]);
   const counts =
     sql === null
@@ -179,6 +184,7 @@ export default async function AdminHomePage() {
     risk: risk?.ready ? risk.open : 0,
     creatorApplications,
     socialAccounts,
+    accountDeletions,
   });
 
   return (

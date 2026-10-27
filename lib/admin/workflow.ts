@@ -1,7 +1,7 @@
 import type { CampaignCounts } from "@/lib/campaigns/repo";
 
 export const ADMIN_NAV_GROUPS = [
-  { key: "operations", items: ["home", "inquiries", "risk"] },
+  { key: "operations", items: ["home", "inquiries", "risk", "accountDeletions"] },
   { key: "campaigns", items: ["brandWorkspace", "campaigns", "funding"] },
   { key: "content", items: ["prompts", "community"] },
   { key: "system", items: ["subscriptions", "playbooks", "policy"] },
@@ -11,6 +11,8 @@ export const ADMIN_NAV_PATHS = {
   home: "/admin",
   inquiries: "/admin/inquiries",
   risk: "/admin/risk",
+  // docs/APP-STORE-LAUNCH.md §3.2 — in-app deletion requests, worked through docs/RUNBOOK-deletion.md.
+  accountDeletions: "/admin/account-deletions",
   funding: "/admin/funding",
   brandWorkspace: "/admin/brand-workspace",
   campaigns: "/admin/campaigns",
@@ -33,9 +35,12 @@ export interface AdminQueueCounts {
   risk?: number;
   creatorApplications?: number;
   socialAccounts?: number;
+  accountDeletions?: number;
 }
 export type AdminTaskKey = keyof AdminQueueCounts;
 const QUEUES: Array<{ key: AdminTaskKey; href: string }> = [
+  // First: the privacy policy promises deletion within 7 days of the request.
+  { key: "accountDeletions", href: ADMIN_NAV_PATHS.accountDeletions },
   { key: "risk", href: "/admin/risk" },
   { key: "posts", href: "/admin/campaigns" },
   { key: "applicants", href: "/admin/campaigns" },

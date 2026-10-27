@@ -3,6 +3,7 @@ export const adminWorkflowEn = {
   skip: "Skip to content",
   riskNav: "Risk review",
   fundingNav: "Quotes & receipts",
+  accountDeletionsNav: "Account deletions",
   groups: {
     operations: "Daily operations",
     campaigns: "Brands & campaigns",
@@ -23,6 +24,8 @@ export const adminWorkflowEn = {
     policy: "Inspect access and publication rules.",
     risk: "Review signals in conversations. Signals do not impose sanctions.",
     funding: "Issue exact quotes, reconcile receipts and review full refunds.",
+    accountDeletions:
+      "Work deletion requests through the runbook within 7 days and mark each one done.",
   },
   nextHeading: "What needs your attention",
   nextHint:
@@ -75,6 +78,11 @@ export const adminWorkflowEn = {
       title: "Check generation feedback",
       hint: "Review reported results and decide how to respond.",
       action: "Review feedback",
+    },
+    accountDeletions: {
+      title: "Process account deletion requests",
+      hint: "The privacy policy promises deletion within 7 days of the request. Follow the runbook, then mark it done.",
+      action: "Open deletion requests",
     },
     socialAccounts: {
       title: "Check linked SNS accounts",
@@ -167,6 +175,7 @@ export const adminWorkflowKo: typeof adminWorkflowEn = {
   skip: "본문으로 건너뛰기",
   riskNav: "위험 신호 검토",
   fundingNav: "견적·입금 기록",
+  accountDeletionsNav: "계정 삭제 요청",
   groups: {
     operations: "오늘의 운영",
     campaigns: "브랜드·캠페인",
@@ -186,6 +195,7 @@ export const adminWorkflowKo: typeof adminWorkflowEn = {
     policy: "접근 권한과 게시 규칙을 확인합니다.",
     risk: "대화의 위험 신호를 검토합니다. 신호만으로 제재하지 않습니다.",
     funding: "합의된 견적을 발행하고 입금 기록과 전액 환불을 확인합니다.",
+    accountDeletions: "삭제 요청을 런북대로 7일 안에 처리하고 완료를 표시합니다.",
   },
   nextHeading: "지금 확인할 일",
   nextHint:
@@ -238,6 +248,11 @@ export const adminWorkflowKo: typeof adminWorkflowEn = {
       title: "생성 결과 문의를 확인하세요",
       hint: "접수된 결과물을 확인하고 대응 방법을 정합니다.",
       action: "결과 문의 확인하기",
+    },
+    accountDeletions: {
+      title: "계정 삭제 요청을 처리하세요",
+      hint: "개인정보처리방침은 요청 후 7일 안에 삭제한다고 약속합니다. 런북대로 처리한 뒤 완료를 표시하세요.",
+      action: "삭제 요청 열기",
     },
     socialAccounts: {
       title: "SNS 연결 신청을 확인하세요",
