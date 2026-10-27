@@ -8,7 +8,7 @@ export function subscriptionJson(body: unknown, status = 200) {
 }
 export function subscriptionFailure(code: string) {
   const status = code === 'sign_in_required' ? 401 : code === 'not_found' ? 404 :
-    ['not_open','forbidden','subscription_required','premium_required'].includes(code) ? 403 :
+    ['not_open','forbidden','subscription_required','premium_required','store_companion'].includes(code) ? 403 :
     ['unavailable'].includes(code) ? 503 : code === 'rate_limited' ? 429 :
     code.endsWith('_pending') ? 202 : ['usage_exhausted','subscription_exists','conflict','already_processed'].includes(code) ? 409 : 400;
   return subscriptionJson({ok:false,code},status);

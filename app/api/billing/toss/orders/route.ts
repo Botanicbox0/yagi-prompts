@@ -8,6 +8,7 @@ import {
 import { createTossOrder } from '@/lib/billing/toss-service';
 import { canStartRender } from '@/lib/renders/service';
 import { savedSelfiePhoto } from '@/lib/identity/selfie-service';
+import { isStoreRequest } from '@/lib/mobile/store-bridge';
 
 /**
  * `POST /api/billing/toss/orders` — an order for one template, paid with the saved selfie.
@@ -22,6 +23,9 @@ export async function POST(request: Request) {
     NextResponse.json(body, { status, headers: TOSS_HEADERS });
   if (!isSameOrigin(request))
     return json({ ok: false, code: 'forbidden' }, 403);
+  // The App Store / Google Play app sells nothing (lib/mobile/store-bridge.ts).
+  if (isStoreRequest(request.headers))
+    return json({ ok: false, code: 'store_companion' }, 403);
   const viewer = await getViewer();
   if (!viewer.userId) return json({ ok: false, code: 'sign_in_required' }, 401);
   if (!canStartRender(viewer))

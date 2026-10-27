@@ -5,6 +5,7 @@ import { fontVariables } from '@/app/fonts';
 import { ScrollProvider } from '@/components/motion/scroll-provider';
 import { Notice } from '@/components/marketing/notice';
 import { RegisterServiceWorker } from '@/components/pwa/register-sw';
+import { StoreClientScript } from '@/components/pwa/store-client-script';
 import { BottomTabs } from '@/components/app/bottom-tabs';
 import { noticeLabels } from '@/components/marketing/notice-codes';
 import { LOCALES, isLocale, DEFAULT_LOCALE, type Locale } from '@/lib/i18n/config';
@@ -82,8 +83,9 @@ export default async function MarketingRootLayout({
   const dict = getDictionary(locale);
 
   return (
-    <html lang={locale} className={fontVariables}>
+    <html lang={locale} className={fontVariables} suppressHydrationWarning>
       <head>
+        <StoreClientScript />
         {/* Pretendard ships Korean as a 92-slice unicode-range dynamic subset; it cannot go
             through next/font/local, so it is linked as self-hosted vendor CSS (§5.2). */}
         <link rel="stylesheet" href="/fonts/pretendard/pretendard-dynamic-subset.css" />

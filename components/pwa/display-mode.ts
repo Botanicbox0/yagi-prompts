@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { storeClientHeaderValue } from '@/lib/mobile/store-bridge';
 import { DISPLAY_MODE_OVERRIDE_KEY } from './shell';
 
 export { DISPLAY_MODE_OVERRIDE_KEY };
@@ -13,10 +14,14 @@ export interface DisplayEnv {
   matchMedia?: (query: string) => { matches: boolean };
   navigator?: { standalone?: boolean };
   storage?: { getItem(key: string): string | null } | null;
+  /** A store binary (`<html data-store>`, lib/mobile/store-bridge.ts) — a Capacitor web view is
+   * the installed app even though its display-mode query answers "browser". */
+  store?: boolean;
 }
 
-/** The display-mode query, iOS's legacy `navigator.standalone`, or the documented QA flag. */
+/** The display-mode query, iOS's legacy `navigator.standalone`, a store binary, or the documented QA flag. */
 export function isStandaloneDisplay(env: DisplayEnv): boolean {
+  if (env.store) return true;
   try {
     if (env.storage?.getItem(DISPLAY_MODE_OVERRIDE_KEY) === 'standalone') return true;
   } catch {
@@ -41,7 +46,20 @@ export function browserDisplayEnv(): DisplayEnv {
     matchMedia: typeof window.matchMedia === 'function' ? (query) => window.matchMedia(query) : undefined,
     navigator: window.navigator as Navigator & { standalone?: boolean },
     storage,
+    store: storeClientHeaderValue(document.documentElement) !== null,
   };
+}
+
+/**
+ * null until mounted, then which store binary this page runs in (`'ios-store' | 'android-store'`),
+ * or false in a browser tab or an installed PWA — those pay on the web as usual.
+ */
+export function useStoreClient(): string | false | null {
+  const [store, setStore] = useState<string | false | null>(null);
+  useEffect(() => {
+    setStore(storeClientHeaderValue(document.documentElement) ?? false);
+  }, []);
+  return store;
 }
 
 /**

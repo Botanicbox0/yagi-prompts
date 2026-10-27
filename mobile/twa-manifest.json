@@ -12,7 +12,7 @@
   "navigationDividerColorDark": "#26262B",
   "backgroundColor": "#FFFFFF",
   "enableNotifications": true,
-  "startUrl": "/video?source=pwa",
+  "startUrl": "/video?source=twa",
   "iconUrl": "https://twings.app/icons/icon-512.png",
   "maskableIconUrl": "https://twings.app/icons/maskable-512.png",
   "monochromeIconUrl": "https://twings.app/icons/badge-96.png",
@@ -27,13 +27,13 @@
     {
       "name": "포맷 둘러보기",
       "shortName": "포맷",
-      "url": "https://twings.app/video?source=pwa",
+      "url": "https://twings.app/video?source=twa",
       "chosenIconUrl": "https://twings.app/icons/icon-192.png"
     },
     {
       "name": "내 작품",
       "shortName": "내 작품",
-      "url": "https://twings.app/renders",
+      "url": "https://twings.app/renders?source=twa",
       "chosenIconUrl": "https://twings.app/icons/icon-192.png"
     }
   ],

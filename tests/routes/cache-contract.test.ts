@@ -133,7 +133,7 @@ describe('route cache modes (§3.4 / §4)', () => {
       ...sourcesUnder('app', '(marketing)'),
       ...sourcesUnder('components', 'landing'),
       ...sourcesUnder('components', 'nav'),
-      ...sourcesUnder('components', 'ad'),
+      // components/ad was removed with the AdRail (a2a30f6); listing it failed every clean checkout.
       ...sourcesUnder('components', 'ui'),
       ...sourcesUnder('components', 'marketing'),
       ...sourcesUnder('components', 'motion'),

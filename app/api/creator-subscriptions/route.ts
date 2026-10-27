@@ -5,10 +5,12 @@ import { mayEnrollSubscription } from '@/lib/creator-subscriptions/access';
 import { isSubscriptionPlan } from '@/lib/creator-subscriptions/plans';
 import { beginSubscription } from '@/lib/creator-subscriptions/service';
 import { readSubscriptionJson, subscriptionFailure, subscriptionJson } from '@/lib/creator-subscriptions/http';
+import { isStoreRequest } from '@/lib/mobile/store-bridge';
 
 export const dynamic='force-dynamic';
 export async function POST(request: Request) {
   if (!isSameOrigin(request)) return subscriptionFailure('forbidden');
+  if (isStoreRequest(request.headers)) return subscriptionFailure('store_companion');
   const viewer=await getViewer(); if (!viewer.userId) return subscriptionFailure('sign_in_required');
   const input=await readSubscriptionJson(request);
   if (!input || !isSubscriptionPlan(input.planId)) return subscriptionFailure('bad_request');

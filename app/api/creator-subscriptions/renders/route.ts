@@ -9,6 +9,7 @@ import { getRenderStore } from '@/lib/renders/store';
 import { runLiveRenderPass } from '@/lib/renders/runtime';
 import { renderHref } from '@/lib/renders/share';
 import { identityVerifyHref } from '@/lib/identity/links';
+import { isStoreRequest } from '@/lib/mobile/store-bridge';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
@@ -16,6 +17,7 @@ const FIELDS = new Set(['requestId', 'template', 'locale', 'ownFaceConsent', 'se
 
 export async function POST(request: Request) {
   if (!isSameOrigin(request)) return subscriptionFailure('forbidden');
+  if (isStoreRequest(request.headers)) return subscriptionFailure('store_companion');
   const viewer = await getViewer();
   if (!viewer.userId) return subscriptionFailure('sign_in_required');
   try {

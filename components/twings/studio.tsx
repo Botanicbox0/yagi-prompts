@@ -11,6 +11,8 @@ import { PremiumEditor } from './premium-editor';
 import { shrinkPhoto } from '@/lib/images/client-photo';
 export { shrinkPhoto } from '@/lib/images/client-photo';
 import type { EditScope } from '@/lib/premium-editing/contract';
+import { useStoreClient } from '@/components/pwa/display-mode';
+import { STORE_CLIENT_HEADER, storeClientHeaderValue } from '@/lib/mobile/store-bridge';
 
 /**
  * TWINGS — the make loop, as a four-step demo (founder, 2026-08-16: "사진만 넣으면 완성도 높은
@@ -474,7 +476,9 @@ export function TwingsStudio({
       }
       // Behind the face check: hold the job with its photo and go verify — the callback starts it.
       if (identityBlocked && !monthly) form.set('hold', '1');
-      const response = await fetch(monthly ? '/api/creator-subscriptions/renders' : charge ? '/api/billing/toss/orders' : live.endpoint, { method: 'POST', body: form, credentials: 'same-origin' });
+      // A store binary's TWA has Chrome's own user agent; the header is how the server knows it.
+      const store = storeClientHeaderValue(document.documentElement);
+      const response = await fetch(monthly ? '/api/creator-subscriptions/renders' : charge ? '/api/billing/toss/orders' : live.endpoint, { method: 'POST', body: form, credentials: 'same-origin', headers: store ? { [STORE_CLIENT_HEADER]: store } : undefined });
       const json = (await response.json().catch(() => ({}))) as { ok?: boolean; href?: string; code?: string; held?: boolean; verifyHref?: string };
       if (response.ok && json.ok === true && json.held === true) {
         go(typeof json.verifyHref === 'string' ? json.verifyHref : live.identityHref);
@@ -922,7 +926,10 @@ function MakeStickyBar({ price, label, studioRef, phaseKey }: { price: string | 
     if (window.location.hash !== '#make') window.history.replaceState(null, '', '#make');
   };
 
-  if (!label) return null;
+  // A store binary sells nothing (lib/mobile/store-bridge.ts): CSS hides the bar from first paint,
+  // and dropping it here also drops its `data-hide-tabs`, so the app's bottom tabs come back.
+  const store = useStoreClient();
+  if (!label || store) return null;
   return (
     <div
       data-make-sticky

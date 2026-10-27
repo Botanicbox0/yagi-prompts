@@ -15,9 +15,38 @@
  *    completion push notifications, render gallery/download/share, and creator campaigns.
  */
 
+/**
+ * How a store binary tells the site what it is (docs/APP-STORE-LAUNCH.md §2):
+ * - Capacitor (iOS/Android) appends `TwingsIOS/1.0` / `TwingsAndroid/1.0` to the user agent
+ *   (mobile/capacitor.config.json), so the server and the page can both read it.
+ * - A Trusted Web Activity runs in Chrome with Chrome's own user agent and SHARES Chrome's cookies, so
+ *   it is recognised by its start URL (`?source=twa`, mobile/twa-manifest.json) or its own
+ *   `android-app://app.twings.client` referrer and remembered in sessionStorage — per tab, so the
+ *   same person's ordinary Chrome tab stays a normal web page that can pay. Only OUR package counts:
+ *   Gmail, Slack and other apps open links in Custom Tabs with their own `android-app://` referrer,
+ *   and those visitors must still be able to buy.
+ * The page mirrors the answer onto `<html data-store>`; app/globals.css hides every purchase surface
+ * under it, and API calls carry it as the `x-twings-client` header.
+ */
+export const STORE_CLIENT_KEY = 'twings:store-client';
+export const STORE_CLIENT_HEADER = 'x-twings-client';
+export const TWA_SOURCE = 'twa';
+
 export const DEFAULT_APP_BUNDLE_ID = 'app.twings.client';
 export const DEFAULT_ANDROID_PACKAGE = 'app.twings.client';
 export const DEFAULT_APPLE_TEAM_ID = 'TEAMID0000';
+
+/**
+ * Runs inline in `<head>` before first paint (both root layouts), so a static template page never
+ * flashes its price or make button inside a store binary. Kept dependency-free and wrapped in
+ * try/catch: blocked storage must not break the page, only the TWA memory.
+ */
+export const STORE_CLIENT_SCRIPT = `(function(){var d=document.documentElement,u=navigator.userAgent||'',v=null,k=${JSON.stringify(STORE_CLIENT_KEY)};
+if(/TwingsIOS\\//i.test(u))v='ios-store';else if(/TwingsAndroid\\//i.test(u))v='android-store';
+else{try{v=sessionStorage.getItem(k)}catch(e){}
+if(v!=='android-store'){var q=null;try{q=new URLSearchParams(location.search).get('source')}catch(e){}
+if(q===${JSON.stringify(TWA_SOURCE)}||(document.referrer||'').indexOf(${JSON.stringify(`android-app://${DEFAULT_ANDROID_PACKAGE}`)})===0)v='android-store';else v=null}}
+if(v){d.setAttribute('data-store',v);d.setAttribute('data-standalone','');try{sessionStorage.setItem(k,v)}catch(e){}}})();`;
 
 /** Default placeholder fingerprint when `ANDROID_SHA256_CERT_FINGERPRINTS` is not set yet. */
 export const PLACEHOLDER_SHA256_FINGERPRINT =
@@ -93,6 +122,11 @@ export function buildAppleAppSiteAssociation(
         {
           appIDs: [appId],
           components: [
+            // Excludes first: the first matching component wins. Payment returns and the price page
+            // must stay in the browser that started them — the app sells nothing (3.1.3(f)).
+            { '/': '/billing/*', exclude: true, comment: 'Web checkout returns stay in the browser' },
+            { '/': '/ko/pricing', exclude: true, comment: 'Prices are web-only' },
+            { '/': '/en/pricing', exclude: true, comment: 'Prices are web-only' },
             { '/': '/admin/*', exclude: true, comment: 'Admin console stays in browser' },
             { '/': '/brand/*', exclude: true, comment: 'Brand workspace stays on brand.twings.app' },
             { '/': '/api/*', exclude: true, comment: 'API endpoints' },
@@ -145,6 +179,22 @@ export interface StoreCheckoutPolicy {
    * users manage selfies, push notifications, finished renders, and creator campaigns in-app.
    */
   mode: 'direct' | 'companion';
+}
+
+/**
+ * Whether a request comes from a store binary — the server half of the companion rule. Every route
+ * that starts a charge (single order, subscription enrolment, subscription render) refuses these, so
+ * a hidden button that something still reaches cannot open checkout inside the app.
+ */
+export function isStoreRequest(headers: Pick<Headers, 'get'>): boolean {
+  const platform = detectStorePlatform({ userAgent: headers.get('user-agent'), clientHeader: headers.get(STORE_CLIENT_HEADER) });
+  return !storeCheckoutPolicy(platform).allowWebPgCheckout;
+}
+
+/** The header value a page in a store binary sends with its API calls (`<html data-store>`), or null. */
+export function storeClientHeaderValue(root: { getAttribute(name: string): string | null } | null | undefined): string | null {
+  const value = root?.getAttribute('data-store') ?? null;
+  return value === 'ios-store' || value === 'android-store' ? value : null;
 }
 
 export function storeCheckoutPolicy(platform: StorePlatform): StoreCheckoutPolicy {

@@ -7,6 +7,7 @@ import {
   TOSS_HEADERS,
 } from '@/lib/billing/toss-runtime';
 import { retryTossOrder } from '@/lib/billing/toss-service';
+import { isStoreRequest } from '@/lib/mobile/store-bridge';
 
 export const dynamic = 'force-dynamic';
 type Context = { params: Promise<{ id: string }> };
@@ -28,6 +29,7 @@ const STATUS: Record<string, number> = {
  */
 export async function POST(request: Request, { params }: Context) {
   if (!isSameOrigin(request)) return json({ ok: false, code: 'forbidden' }, 403);
+  if (isStoreRequest(request.headers)) return json({ ok: false, code: 'store_companion' }, 403);
   const viewer = await getViewer();
   if (!viewer.userId) return json({ ok: false, code: 'sign_in_required' }, 401);
   if (!purchaseOpenFor(viewer)) return json({ ok: false, code: 'not_open' }, 403);

@@ -1028,6 +1028,8 @@ async function sweepTemplates(): Promise<void> {
   expectPresent('…one make card that is the price box', detail.body, 'data-template-price-box');
   expectAbsent('…no link button above the card', detail.body, 'data-template-make-cta');
   expectPresent('…its facts', detail.body, 'data-template-fact');
+  // docs/APP-STORE-LAUNCH.md §2: the store-binary marker runs inline in <head>, before the price paints.
+  expectPresent('…the store-binary marker in its head (no price in the store apps)', detail.body, 'data-store-client-script');
   expectPresent('…the AI limit inside the card', detail.body, 'data-studio-ai-note');
   expectPresent('…the refund sentence inside the card', detail.body, 'data-template-refund');
   expectAbsent('…no engine chip on the decision screen', detail.body, 'data-engine-chip');
