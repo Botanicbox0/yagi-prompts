@@ -2,7 +2,7 @@ import { PublicLink } from '@/components/admin/public-link';
 import { IMAGE_ASPECTS, IMAGE_ENGINES, IMAGE_ENGINE_IDS, VIDEO_ASPECTS, VIDEO_ENGINE_IDS, isImageEngine, resolveEngine } from '@/lib/images/engines';
 import { formatDate, interpolate } from '@/lib/i18n/format';
 import { formatKrw, suggestedKrw } from '@/lib/twings/products';
-import { costFloor, imageCostFloor } from '@/lib/twings/cost-model';
+import { bandPosition, costFloor, imageCostFloor, marginBand } from '@/lib/twings/cost-model';
 import { videoModelForEngine } from '@/lib/video/models';
 import { PROMPT_TEXT_MAX, PROMPT_TEXT_MIN, TEMPLATE_MEDIA } from '@/lib/prompts/schemas';
 import { promptHref } from '@/lib/prompts/links';
@@ -131,8 +131,9 @@ export function StagedMedia({ row, dict }: { row: PromptRow; dict: Dict }) {
  * a field the author discovers only after publishing.
  */
 /**
- * The cost floor under this template's prices (lib/twings/cost-model.ts), shown next to the price
- * fields so a price is never set blind. A proposal only: it writes nothing and blocks nothing.
+ * The cost floor under this template's prices (lib/twings/cost-model.ts) — for Seedance 2.5 the whole
+ * 5~7% band — shown next to the price fields so a price is never set blind. A proposal only: it
+ * writes nothing and blocks nothing.
  */
 function CostFloorNote({ row, dict }: { row: PromptRow | null; dict: Dict }) {
   if (!row) return null;
@@ -153,8 +154,22 @@ function CostFloorNote({ row, dict }: { row: PromptRow | null; dict: Dict }) {
   }
   if (row.medium !== 'video' || !row.runtimeSeconds) return null;
   const { model, seconds } = videoModelForEngine(row.engine, row.runtimeSeconds);
-  const p720 = costFloor({ model, resolution: '720p', seconds, aspect: row.aspectDefault ?? '9:16' });
-  const p1080 = costFloor({ model, resolution: '1080p', seconds, aspect: row.aspectDefault ?? '9:16' });
+  const aspect = row.aspectDefault ?? '9:16';
+  // Seedance 2.5 sells inside a 5~7% band (founder, 2026-10-27); other models keep the floor only.
+  const b720 = marginBand({ model, resolution: '720p', seconds, aspect });
+  const b1080 = marginBand({ model, resolution: '1080p', seconds, aspect });
+  if (b720 && b1080) {
+    const positions = [row.priceKrw > 0 ? bandPosition(row.priceKrw, b720) : 'inside', row.price1080Krw > 0 ? bandPosition(row.price1080Krw, b1080) : 'inside'];
+    return (
+      <p data-cost-floor={`${b720.lowKrw}/${b1080.lowKrw}`} data-margin-band={`${b720.lowKrw}-${b720.highKrw}/${b1080.lowKrw}-${b1080.highKrw}`} className="font-mono text-[0.72rem] opacity-70">
+        {interpolate(a.templateMarginBand, { low720: formatKrw(b720.lowKrw), high720: formatKrw(b720.highKrw), low1080: formatKrw(b1080.lowKrw), high1080: formatKrw(b1080.highKrw) })}
+        {positions.includes('below') ? ` ${a.templateBelowFloor}` : ''}
+        {positions.includes('above') ? ` ${a.templateAboveBand}` : ''}
+      </p>
+    );
+  }
+  const p720 = costFloor({ model, resolution: '720p', seconds, aspect });
+  const p1080 = costFloor({ model, resolution: '1080p', seconds, aspect });
   if (!p720 || !p1080) return null;
   const below = (row.priceKrw > 0 && row.priceKrw < p720.proposedKrw) || (row.price1080Krw > 0 && row.price1080Krw < p1080.proposedKrw);
   return (

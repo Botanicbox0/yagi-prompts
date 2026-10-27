@@ -52,23 +52,46 @@ the per-token rate but add the input duration and minimums; creator renders send
 ## 3. Minimum-price policy
 
 `lib/ark/pricing.ts` quotes exact tokens. `lib/twings/cost-model.ts` applies 1,400원/USD,
-VAT 10% inside the price, and a provisional PG fee of 3.3% of the charged amount.
+VAT 10% inside the price, and the **contract PG fee of 3.4%** of the charged amount (card 3.74%
+VAT-inclusive, VAT deducted — `docs/TOSS-CONTRACT.md`; the provisional 3.3% was replaced on 2026-10-27).
 The target is 5% of revenue excluding VAT after API and PG costs, not a 5% cost markup:
 
-`price = API_KRW / ((1 - 0.05) / 1.10 - 0.033)`, rounded up to the next **100원**.
+`price = API_KRW / ((1 - 0.05) / 1.10 - 0.034)`, rounded up to the next **100원**.
 
 There is **no remake allowance, arbitrary direct-cost allocation, or FX buffer**.
-The actual PG contract must be checked before opening checkout.
 
 | Model · resolution | 10s | 14s | 15s | 30s |
 | --- | --- | --- | --- | --- |
 | Seedance 2.0 · 720p | 2,600원 | 3,600원 | 3,900원 | (2.5) |
 | Seedance 2.0 · 1080p | 6,400원 | 8,900원 | 9,500원 | (2.5) |
-| Seedance 2.5 · 720p | 3,900원 | 5,500원 | 5,900원 | 11,700원 |
+| Seedance 2.5 · 720p | 4,000원 | 5,500원 | 5,900원 | 11,800원 |
 | Seedance 2.5 · 1080p | 9,600원 | 13,500원 | 14,400원 | 28,800원 |
 
 This table uses 16:9. The admin editor calculates the template's actual aspect ratio; 4:3 is ~0.6%
-more pixels than 16:9, which rarely moves the price past a 100-won step.
+more pixels than 16:9, which rarely moves the price past a 100-won step. At 3.3% the 2.5 · 720p
+10s and 30s floors were 3,900원 and 11,700원; both land just under 5% at the contract rate.
+
+### Seedance 2.5: a 5~7% band (founder, 2026-10-27)
+
+Seedance 2.5 films sell at a **5~7%** margin — the floor above and a 7% ceiling, same arithmetic
+(`marginBand`, `SEEDANCE_25_MARGIN_CEILING`). The admin editor shows the band next to the price fields
+and flags a price outside it; it blocks nothing (prices stay the founder's). A maker template on 2.5 is
+**accepted** only inside the band plus the maker's royalty R (`price_above_band`), because R is the
+maker's money, not margin. Other models and images keep the floor only — an image's 200원 minimum
+alone can exceed 7%.
+
+| Seedance 2.5 · 720p | Band (5~7%) |
+| --- | --- |
+| 10s · 9:16 | 4,000원 only (no 100-won price fits; 7.3%) |
+| 13s · 9:16 | 5,100원 only |
+| 14s · 4:3 | 5,500 ~ 5,600원 |
+| 15s · 9:16 / 16:9 | 5,900원 only |
+| 15s · 4:3 | 5,900 ~ 6,000원 |
+| 28s · 9:16 | 11,000 ~ 11,100원 |
+| 30s · 16:9 | 11,800 ~ 11,900원 |
+
+A short film's band can hold no whole-100 price (10s 9:16 is 3,900.1~3,987.5원); then the floor's own
+price is the band — the cheapest price that clears 5%, never a higher one.
 
 ### Image templates
 

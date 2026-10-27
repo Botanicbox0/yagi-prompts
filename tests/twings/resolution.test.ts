@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { costFloor, costTable, IMAGE_MIN_PRICE_KRW, imageCostFloor, imageCostTable, roundUpToHundred } from '@/lib/twings/cost-model';
+import { bandPosition, costFloor, costTable, IMAGE_MIN_PRICE_KRW, imageCostFloor, imageCostTable, marginBand, marginRate, roundUpToHundred } from '@/lib/twings/cost-model';
+import { quoteVideo } from '@/lib/video/models';
 import {
   arkModelForVideo,
   chargeKrwFor,
@@ -99,14 +100,55 @@ describe('the cost floor under a creator price (a proposal, not a price)', () =>
 
   // Founder decision 2026-10-21: the template floor targets 5%, down from 10%. The subscription
   // allowance keeps 10% of its own (SUBSCRIPTION_TARGET_MARGIN) and is asserted separately.
+  // 2026-10-27: measured at the contract PG rate, 3.4% (docs/TOSS-CONTRACT.md).
   it('meets a 5% revenue margin after VAT and PG, with no cost markup or overhead allocation', () => {
     const floor = costFloor({ model: 'seedance-2.5', resolution: '720p', seconds: 15 })!;
     const revenue = floor.proposedKrw / 1.1;
-    const variable = floor.providerUsd * 1400 + 0.033 * floor.proposedKrw;
+    const variable = floor.providerUsd * 1400 + 0.034 * floor.proposedKrw;
     expect((revenue - variable) / revenue).toBeGreaterThanOrEqual(0.05);
     const lowerRevenue = (floor.proposedKrw - 100) / 1.1;
-    const lowerVariable = floor.providerUsd * 1400 + 0.033 * (floor.proposedKrw - 100);
+    const lowerVariable = floor.providerUsd * 1400 + 0.034 * (floor.proposedKrw - 100);
     expect((lowerRevenue - lowerVariable) / lowerRevenue).toBeLessThan(0.05);
+  });
+
+  // Founder decision 2026-10-27: Seedance 2.5 films sell at 5~7%.
+  it('bands every Seedance 2.5 price between 5% and 7%, except where no whole-100 price fits', () => {
+    for (const resolution of ['720p', '1080p'] as const) {
+      for (const aspect of ['9:16', '16:9', '4:3']) {
+        for (let seconds = 4; seconds <= 30; seconds++) {
+          const band = marginBand({ model: 'seedance-2.5', resolution, seconds, aspect })!;
+          const cost = quoteVideo({ model: 'seedance-2.5', resolution, seconds, aspect })!.providerUsd * 1400;
+          const label = `${resolution} ${seconds}s ${aspect}`;
+          expect(band.lowKrw % 100, label).toBe(0);
+          expect(band.highKrw % 100, label).toBe(0);
+          expect(marginRate(band.lowKrw, cost), label).toBeGreaterThanOrEqual(0.05);
+          expect(marginRate(band.lowKrw - 100, cost), label).toBeLessThan(0.05);
+          if (band.highKrw > band.lowKrw) expect(marginRate(band.highKrw, cost), label).toBeLessThanOrEqual(0.07);
+          // The top is the highest 100-won price at or under 7% — or, when none clears 5%, the floor itself.
+          expect(marginRate(band.highKrw + 100, cost), label).toBeGreaterThan(0.07);
+        }
+      }
+    }
+    expect(marginBand({ model: 'seedance-2.5', resolution: '720p', seconds: 10, aspect: '9:16' })).toEqual({ lowKrw: 4000, highKrw: 4000 });
+    expect(marginBand({ model: 'seedance-2.5', resolution: '720p', seconds: 15, aspect: '4:3' })).toEqual({ lowKrw: 5900, highKrw: 6000 });
+    expect(marginBand({ model: 'seedance-2.5', resolution: '720p', seconds: 30, aspect: '16:9' })).toEqual({ lowKrw: 11800, highKrw: 11900 });
+    expect(marginBand({ model: 'seedance-2.0', resolution: '720p', seconds: 15, aspect: '16:9' })).toBeNull();
+  });
+
+  it('places the live Seedance 2.5 prices of 2026-10-27 against their bands', () => {
+    const live: Array<[string, number, string, number, ReturnType<typeof bandPosition>]> = [
+      ['dollhouse-fashion-salon', 12, '4:3', 4800, 'inside'],
+      ['pink-signal-flip-phone', 13, '9:16', 5100, 'inside'],
+      ['giant-daydream', 14, '4:3', 5500, 'inside'],
+      ['star-in-a-virtual-beauty-ad', 15, '16:9', 5900, 'inside'],
+      ['memory-film', 15, '4:3', 5900, 'inside'],
+      ['summer-peach-photoshoot', 28, '9:16', 11000, 'inside'],
+      // 4.997% — 0.3원 a sale under 5%; the band's floor is 11,800원 (founder decision pending).
+      ['you-are-a-prom-queen', 30, '16:9', 11700, 'below'],
+    ];
+    for (const [slug, seconds, aspect, price, position] of live) {
+      expect(bandPosition(price, marginBand({ model: 'seedance-2.5', resolution: '720p', seconds, aspect })!), slug).toBe(position);
+    }
   });
 
   it('accounts for the real output aspect ratio instead of adding a blanket contingency', () => {
@@ -114,7 +156,7 @@ describe('the cost floor under a creator price (a proposal, not a price)', () =>
     const portrait = costFloor({ model: 'seedance-2.5', resolution: '720p', seconds: 15, aspect: '9:16' })!;
     expect(wide.providerUsd).toBeCloseTo(3.4886480625, 8);
     expect(wide.providerUsd).toBeGreaterThan(portrait.providerUsd);
-    expect(costFloor({ model: 'seedance-2.5', resolution: '720p', seconds: 30 })!.proposedKrw).toBe(11700);
+    expect(costFloor({ model: 'seedance-2.5', resolution: '720p', seconds: 30 })!.proposedKrw).toBe(11800);
   });
 
   it('proposes these floors (the table in docs/CREATOR-RESOLUTION.md)', () => {
@@ -126,10 +168,10 @@ describe('the cost floor under a creator price (a proposal, not a price)', () =>
       'seedance-2.0 1080p 10s': 6400,
       'seedance-2.0 1080p 14s': 8900,
       'seedance-2.0 1080p 15s': 9500,
-      'seedance-2.5 720p 10s': 3900,
+      'seedance-2.5 720p 10s': 4000,
       'seedance-2.5 720p 14s': 5500,
       'seedance-2.5 720p 15s': 5900,
-      'seedance-2.5 720p 30s': 11700,
+      'seedance-2.5 720p 30s': 11800,
       'seedance-2.5 1080p 10s': 9600,
       'seedance-2.5 1080p 14s': 13500,
       'seedance-2.5 1080p 15s': 14400,
@@ -162,11 +204,11 @@ describe('image cost floor — one price per engine (founder, 2026-10-21)', () =
   it('meets the 5% revenue margin and no more than a 100-won rounding above it', () => {
     for (const row of imageCostTable()) {
       const revenue = row.proposedKrw / 1.1;
-      const margin = (revenue - row.providerKrw - 0.033 * row.proposedKrw) / revenue;
+      const margin = (revenue - row.providerKrw - 0.034 * row.proposedKrw) / revenue;
       expect(margin, row.engine).toBeGreaterThanOrEqual(0.05);
       if (row.proposedKrw > IMAGE_MIN_PRICE_KRW) {
         const lower = (row.proposedKrw - 100) / 1.1;
-        expect((lower - row.providerKrw - 0.033 * (row.proposedKrw - 100)) / lower, row.engine).toBeLessThan(0.05);
+        expect((lower - row.providerKrw - 0.034 * (row.proposedKrw - 100)) / lower, row.engine).toBeLessThan(0.05);
       }
     }
   });

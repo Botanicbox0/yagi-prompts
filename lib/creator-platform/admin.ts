@@ -140,6 +140,8 @@ async function acceptRecipe(tx:SqlRunner,templateId:string,row:{user_id:string;t
  const recipe=checked.recipe,primary=primaryStep(recipe),film=recipe.steps.find(step=>step.kind==='video');
  demand(priceKrw!==undefined,'price_required');
  const quote=quoteRecipe(recipe,row.v2.royalty_krw??0);demand(priceKrw>=quote.floorKrw,'price_below_floor');
+ // Seedance 2.5 films sell inside 5~7% (founder, 2026-10-27): the band's top plus the maker's R.
+ demand(quote.ceilingKrw===null||priceKrw<=quote.ceilingKrw,'price_above_band');
  await insertPrompt(tx,{id:templateId,slug:`format-${templateId}`,source:'yagi',authorId:row.user_id,authorHandle:null,status:'pending',models:[primary.engine],title:row.title,titleKo:row.v2.title_ko??null,promptText:legacyPromptText(recipe),textVisibility:'hidden',media:null,useCase:[],featured:false,
   medium:primary.kind,engine:primary.engine,aspectDefault:primary.params.aspect,runtimeSeconds:film?.kind==='video'?film.params.duration:null,priceKrw,priceCents:centsForKrw(priceKrw)});
  await tx.query('update prompt_items set recipe=$2::jsonb,disclosure=$3::jsonb,presentation=$4 where id=$1',[templateId,JSON.stringify(recipe),JSON.stringify(parseDisclosure(row.v2.disclosure)),parsePresentation(row.v2.presentation)]);

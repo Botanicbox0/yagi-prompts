@@ -21,19 +21,66 @@ import type { CreatorResolution } from './resolution';
  * What 5% costs, stated once so nobody re-derives it: the free-remake promise published in the FAQ
  * ("얼굴이 제대로 반영되지 않으면 7일 안에 무상으로 다시 만들거나 환불") is paid out of this margin,
  * and the break-even remake rate halves from ~12% to ~6%. One remake in sixteen sales erases the
- * profit on that template. The PG rate is also still a provisional 3.3%, not a signed one.
+ * profit on that template.
  *
- * This figure drives TEMPLATE prices only. The subscription allowance keeps its own 10% target in
- * `subscription-plan.ts` — moving it here would silently hand every Creator subscriber 35 more
- * units a month against an already-approved 604-unit contract.
+ * 2026-10-27: the PG rate is the CONTRACT rate, 3.4% — card 3.74% VAT-inclusive, whose VAT a
+ * for-profit corporation deducts (docs/TOSS-CONTRACT.md, the source for every money number). The
+ * provisional 3.3% understated it, so a floor that cleared 5% on paper could land under it.
+ *
+ * This figure drives TEMPLATE prices only. The subscription allowance keeps its own 10% target and
+ * its own pinned assumptions in `subscription-plan.ts` — the approved 604-unit contract must not
+ * move when a template constant does.
  */
 
 export const COST_ASSUMPTIONS = {
   krwPerUsd: 1400,
   vatRate: 0.1,
-  pgFeeRate: 0.033,
+  pgFeeRate: 0.034,
   targetMargin: 0.05,
 } as const;
+
+/**
+ * Founder decision, 2026-10-27: Seedance 2.5 video templates sell at a **5~7%** revenue margin — the
+ * 5% floor above and a 7% ceiling, so a price never drifts back to the 40~75% markups of early
+ * October. Same arithmetic as the floor: after VAT and the contract PG rate, one successful render,
+ * no remake reserve.
+ *
+ * The 100-won grid forces one exception. A short film's band can hold no whole-100 price — a
+ * 10-second 9:16 film's is 3,900.1~3,987.5원 — and there the floor's own price (4,000원, 7.3%) is the
+ * band: the cheapest price that clears 5%, never a higher one.
+ *
+ * Only TWINGS's price is banded. A maker template's royalty R sits on top of the floor
+ * (lib/recipes/pricing.ts) and is the maker's money, not margin.
+ */
+export const SEEDANCE_25_MARGIN_CEILING = 0.07;
+
+/** Revenue margin after VAT, PG and the provider cost, as a share of revenue excluding VAT. */
+export function marginRate(priceKrw: number, providerKrw: number, assumptions = COST_ASSUMPTIONS): number {
+  const revenue = priceKrw / (1 + assumptions.vatRate);
+  return (revenue - priceKrw * assumptions.pgFeeRate - providerKrw) / revenue;
+}
+
+export interface MarginBand {
+  /** The floor's price: the lowest whole-100 price at or above 5%. */
+  lowKrw: number;
+  /** The highest whole-100 price at or under 7% — never below `lowKrw` (see above). */
+  highKrw: number;
+}
+
+/** The 5~7% band for a Seedance 2.5 film, or null for every other model (they keep the floor only). */
+export function marginBand(input: { model: VideoModelKey; resolution: CreatorResolution; seconds: number; aspect?: string }, assumptions = COST_ASSUMPTIONS): MarginBand | null {
+  if (input.model !== 'seedance-2.5') return null;
+  const floor = costFloor(input, assumptions);
+  if (!floor) return null;
+  const { krwPerUsd, vatRate, pgFeeRate } = assumptions;
+  const ceilingKrw = floor.providerUsd * krwPerUsd / ((1 - SEEDANCE_25_MARGIN_CEILING) / (1 + vatRate) - pgFeeRate);
+  return { lowKrw: floor.proposedKrw, highKrw: Math.max(floor.proposedKrw, Math.floor(ceilingKrw / 100) * 100) };
+}
+
+/** Where a price sits against its band. */
+export function bandPosition(priceKrw: number, band: MarginBand): 'below' | 'inside' | 'above' {
+  return priceKrw < band.lowKrw ? 'below' : priceKrw > band.highKrw ? 'above' : 'inside';
+}
 
 export interface CostFloor {
   model: VideoModelKey;

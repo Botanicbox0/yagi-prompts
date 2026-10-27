@@ -1,6 +1,6 @@
 import { estimateImageUsd, isImageEngine, isVideoEngine } from '@/lib/images/engines';
 import { quoteVideo, videoModelForEngine } from '@/lib/video/models';
-import { COST_ASSUMPTIONS, IMAGE_MIN_PRICE_KRW, roundUpToHundred } from '@/lib/twings/cost-model';
+import { COST_ASSUMPTIONS, IMAGE_MIN_PRICE_KRW, roundUpToHundred, SEEDANCE_25_MARGIN_CEILING } from '@/lib/twings/cost-model';
 import { outputSteps, type Recipe } from './schema';
 
 /**
@@ -8,6 +8,10 @@ import { outputSteps, type Recipe } from './schema';
  * step at the template target margin (lib/twings/cost-model.ts, 5%) plus the maker's royalty R.
  * Settlement is untouched — marginSplit still gives 80% of the margin to the maker, so R's 80% is
  * theirs. A PROPOSAL only: the studio confirms the price at review (AGENTS.md §5).
+ *
+ * A film that renders on Seedance 2.5 is also capped (founder, 2026-10-27: 5~7%): the studio may
+ * accept anything from the floor up to the band's top PLUS R, never more — the cap is on TWINGS's
+ * part of the price, and the royalty stays the maker's.
  *
  * A carousel frame is priced like an image template (at least 200원 a frame); an intermediate step
  * (a character sheet) adds its provider cost to the step that uses it rather than its own minimum.
@@ -32,11 +36,22 @@ export interface RecipeQuote {
   royaltyKrw: number;
   proposedKrw: number;
   proposedCents: number;
+  /** The highest price the studio may accept — the 5~7% band's top plus R — for a Seedance 2.5 film; null otherwise. */
+  ceilingKrw: number | null;
+}
+
+function priceAt(usd: number, margin: number): number {
+  const { krwPerUsd, vatRate, pgFeeRate } = COST_ASSUMPTIONS;
+  return usd * krwPerUsd / ((1 - margin) / (1 + vatRate) - pgFeeRate);
 }
 
 function floorFor(usd: number): number {
-  const { krwPerUsd, vatRate, pgFeeRate, targetMargin } = COST_ASSUMPTIONS;
-  return usd * krwPerUsd / ((1 - targetMargin) / (1 + vatRate) - pgFeeRate);
+  return priceAt(usd, COST_ASSUMPTIONS.targetMargin);
+}
+
+/** Whether any film step renders on Seedance 2.5 (a 2.0 step over 15 seconds moves to 2.5, as it renders). */
+function rendersOnSeedance25(recipe: Recipe): boolean {
+  return recipe.steps.some((step) => step.kind === 'video' && isVideoEngine(step.engine) && videoModelForEngine(step.engine, step.params.duration).model === 'seedance-2.5');
 }
 
 export function stepCosts(recipe: Recipe): StepCost[] {
@@ -66,6 +81,10 @@ export function quoteRecipe(recipe: Recipe, royaltyKrw: number): RecipeQuote {
       ? roundUpToHundred(floorFor(providerUsd))
       : Math.max(IMAGE_MIN_PRICE_KRW, roundUpToHundred(floorFor(providerUsd)));
   const proposedKrw = floorKrw + royaltyKrw;
+  // Whole-100 top of the band, never under the floor (a short film's band can hold no 100-won price).
+  const ceilingKrw = !carousel && rendersOnSeedance25(recipe)
+    ? Math.max(floorKrw, Math.floor(priceAt(providerUsd, SEEDANCE_25_MARGIN_CEILING) / 100) * 100) + royaltyKrw
+    : null;
   return {
     steps,
     providerUsd,
@@ -74,6 +93,7 @@ export function quoteRecipe(recipe: Recipe, royaltyKrw: number): RecipeQuote {
     royaltyKrw,
     proposedKrw,
     proposedCents: Math.ceil(proposedKrw / COST_ASSUMPTIONS.krwPerUsd * 100),
+    ceilingKrw,
   };
 }
 

@@ -49,8 +49,9 @@ export function RecipeReviewPanel({ entry, copy, mediums, reason, note, submitte
 
     {submitted ? <OpForm op="platform.manage" back="/admin/community" className="space-y-3 rounded-xl border border-hairline p-4">
       <input type="hidden" name="action" value="format" /><input type="hidden" name="id" value={entry.id} />
-      <label className="block text-sm">{r.price}<input className={`${INPUT} mt-1 min-h-10`} name="priceKrw" type="number" step="100" min={entry.quote?.floorKrw ?? 100} defaultValue={entry.quote?.proposedKrw ?? ''} /></label>
+      <label className="block text-sm">{r.price}<input className={`${INPUT} mt-1 min-h-10`} name="priceKrw" type="number" step="100" min={entry.quote?.floorKrw ?? 100} max={entry.quote?.ceilingKrw ?? undefined} defaultValue={entry.quote?.proposedKrw ?? ''} /></label>
       {entry.quote ? <p className="text-xs opacity-70">{interpolate(r.priceHint, { floor: won(entry.quote.floorKrw), royalty: won(entry.quote.royaltyKrw), proposed: won(entry.quote.proposedKrw) })}</p> : null}
+      {entry.quote?.ceilingKrw ? <p data-recipe-price-ceiling={entry.quote.ceilingKrw} className="text-xs opacity-70">{interpolate(r.priceCeiling, { ceiling: won(entry.quote.ceilingKrw) })}</p> : null}
       {note}
       {reason}
       <div className="flex flex-wrap gap-3"><button className={`${BUTTON_PRIMARY} min-h-10`} name="accept" value="true" disabled={!entry.valid}>{acceptLabel}</button><button className={`${BUTTON_PRIMARY} min-h-10`} name="accept" value="false">{rejectLabel}</button></div>

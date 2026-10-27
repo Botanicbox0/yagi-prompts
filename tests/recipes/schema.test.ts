@@ -160,4 +160,19 @@ describe('maker price proposal (§8.3)', () => {
     expect(three.floorKrw).toBeGreaterThanOrEqual(3 * 200);
     expect(three.proposedCents).toBe(Math.ceil(three.proposedKrw / 1400 * 100));
   });
+
+  // Founder, 2026-10-27: Seedance 2.5 films sell at 5~7%. The cap is on TWINGS's part; R rides on top.
+  it('caps a Seedance 2.5 film at the 7% band top plus the royalty, and leaves images and 2.0 uncapped', () => {
+    const film = quoteRecipe((parseRecipe(filmRecipe()) as { ok: true; recipe: Recipe }).recipe, 1500);
+    expect(film.ceilingKrw).not.toBeNull();
+    expect(film.ceilingKrw! % 100).toBe(0);
+    expect(film.ceilingKrw).toBeGreaterThanOrEqual(film.proposedKrw);
+    const base = film.ceilingKrw! - 1500;
+    const margin = (price: number) => (price / 1.1 - 0.034 * price - film.providerUsd * 1400) / (price / 1.1);
+    if (base > film.floorKrw) expect(margin(base)).toBeLessThanOrEqual(0.07);
+    expect(margin(base + 100)).toBeGreaterThan(0.07);
+    expect(quoteRecipe((parseRecipe(single('image')) as { ok: true; recipe: Recipe }).recipe, 1500).ceilingKrw).toBeNull();
+    expect(quoteRecipe((parseRecipe(single('video')) as { ok: true; recipe: Recipe }).recipe, 1500).ceilingKrw).toBeNull();
+    expect(quoteRecipe((parseRecipe(carousel(3)) as { ok: true; recipe: Recipe }).recipe, 500).ceilingKrw).toBeNull();
+  });
 });
