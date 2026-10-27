@@ -45,7 +45,7 @@
 ### 도메인 검증
 - `https://twings.app/.well-known/assetlinks.json` (`app/.well-known/assetlinks.json/route.ts`). Vercel 환경변수 `ANDROID_SHA256_CERT_FINGERPRINTS` = Play Console → 앱 무결성의 **앱 서명 키** SHA-256(업로드 키와 다르다, 콤마로 여러 개), `ANDROID_PACKAGE_NAME`(기본 `app.twings.client`). 지문이 없으면 빈 목록 `[]`을 돌려준다.
 - 검증이 실패하면 앱은 주소창이 보이는 Custom Tab으로 열린다.
-- **패키지 이름은 출시 뒤 바꿀 수 없다.** `app.twings.client`로 갈지 첫 업로드 전에 대표가 확인한다.
+- **패키지 이름 `app.twings.client` — 대표 확정 2026-10-28.** 첫 업로드(내부 테스트 포함) 순간 고정되고, 설치가 한 번이라도 생기면 누구도 다시 쓸 수 없다. Android 개발자 인증에 따라 Play Console에서 서명 키 공개 인증서와 함께 패키지 이름을 등록한다.
 - iOS용 `/.well-known/apple-app-site-association`은 자리만 있다(App Store는 보류).
 
 ### 빌드 (Bubblewrap, 아직 실행 전)
