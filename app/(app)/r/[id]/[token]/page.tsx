@@ -141,7 +141,7 @@ export default async function SharedRenderPage(props: RouteProps) {
 
             <div className="mt-5 flex flex-wrap items-center gap-x-6 gap-y-3">
               {set ? (
-                <SaveFrames frames={frames} label={interpolate(r.frames.saveAll, { n: frames.length })} className="inline-flex min-h-11 items-center text-sm underline underline-offset-4" />
+                <SaveFrames frames={frames} label={interpolate(r.frames.saveAll, { n: frames.length })} againLabel={r.frames.saveAgain} className="inline-flex min-h-11 items-center text-sm underline underline-offset-4" />
               ) : (
                 <a href={renderMediaHref(job.id, { share: token, download: true })} data-render-download className="inline-flex min-h-11 items-center text-sm underline underline-offset-4">
                   {r.download} ↓

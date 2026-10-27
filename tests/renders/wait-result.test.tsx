@@ -55,6 +55,7 @@ import { renderStage, stageSteps } from '@/components/renders/stage';
 import { REFRESH_FAST_MS, REFRESH_SLOW_AFTER_MS, REFRESH_SLOW_MS, refreshDelay, startRefreshLoop } from '@/components/renders/refresh-schedule';
 import { pickWaitCards } from '@/components/renders/wait-browse';
 import { shareOrCopy } from '@/components/renders/share-result';
+import { saveAll, type SaveDeps } from '@/components/renders/save-frames';
 import { shareImageSource } from '@/lib/renders/share';
 import { ETA_DEFAULT_SECONDS, ETA_MIN_SAMPLES, etaFromSamples, medianOf } from '@/lib/renders/eta';
 
@@ -374,6 +375,60 @@ describe('a set of pictures (an image recipe with several frames)', () => {
     const og = (await sharedMetadata({ params: Promise.resolve({ id: JOB_ID, token: TOKEN }) })).openGraph as { images: Array<{ url: string }> };
     expect(og.images[0]!.url).toContain(`/api/renders/media/${JOB_ID}?s=${TOKEN}`);
     expect(og.images[0]!.url).not.toContain('frame=');
+  });
+});
+
+describe('"save all" for a set (no fetch before the tap; the share sheet on phones, downloads elsewhere)', () => {
+  const FRAMES = [1, 2, 3].map((frame) => ({ frame, view: `/v/${frame}`, download: `/d/${frame}`, filename: `f-${frame}.jpg` }));
+  const named = (name: string) => Object.assign(new Error(name), { name });
+  function deps(overrides: Partial<SaveDeps> = {}) {
+    const log = { fetched: 0, forgot: 0, shared: 0, downloads: [] as string[] };
+    const files = [new File(['x'], 'f-1.jpg')];
+    const d: SaveDeps = {
+      sharesFiles: true,
+      files: async () => { log.fetched += 1; return files; },
+      forget: () => { log.forgot += 1; },
+      canShare: () => true,
+      share: async () => { log.shared += 1; },
+      download: (frame) => { log.downloads.push(frame.download); },
+      wait: async () => {},
+      retried: false,
+      ...overrides,
+    };
+    return { d, log };
+  }
+
+  it('hands every picture to the share sheet on a phone, and downloads nothing', async () => {
+    const { d, log } = deps();
+    expect(await saveAll(FRAMES, d)).toBe('shared');
+    expect(log).toMatchObject({ fetched: 1, shared: 1, downloads: [] });
+  });
+
+  it('downloads each picture in order where there is no share sheet, without fetching first', async () => {
+    const { d, log } = deps({ sharesFiles: false });
+    expect(await saveAll(FRAMES, d)).toBe('downloaded');
+    expect(log.fetched).toBe(0);
+    expect(log.downloads).toEqual(['/d/1', '/d/2', '/d/3']);
+  });
+
+  it('keeps the fetched pictures and asks for one more tap when the sheet came too late for the gesture', async () => {
+    const { d, log } = deps({ share: async () => { throw named('NotAllowedError'); } });
+    expect(await saveAll(FRAMES, d)).toBe('tap-again');
+    expect(log).toMatchObject({ forgot: 0, downloads: [] });
+    // A second refusal is not the timing: download instead of asking forever.
+    const again = deps({ share: async () => { throw named('NotAllowedError'); }, retried: true });
+    expect(await saveAll(FRAMES, again.d)).toBe('downloaded');
+    expect(again.log.downloads).toHaveLength(3);
+  });
+
+  it('treats closing the sheet as a choice, and a failed fetch as a reason to download', async () => {
+    const closed = deps({ share: async () => { throw named('AbortError'); } });
+    expect(await saveAll(FRAMES, closed.d)).toBe('cancelled');
+    expect(closed.log.downloads).toEqual([]);
+    const refused = deps({ files: async () => { throw new TypeError('Failed to fetch'); } });
+    expect(await saveAll(FRAMES, refused.d)).toBe('downloaded');
+    expect(refused.log).toMatchObject({ forgot: 1 });
+    expect(refused.log.downloads).toHaveLength(3);
   });
 });
 

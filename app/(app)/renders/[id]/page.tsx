@@ -135,7 +135,7 @@ export default async function RenderPage({ params, searchParams }: { params: Pro
                   the last action takes what is left and may wrap its words. */}
               <div data-result-actions className="grid grid-cols-[auto_auto_minmax(0,1fr)] items-stretch gap-2 sm:flex sm:flex-wrap sm:items-center sm:gap-3">
                 {set ? (
-                  <SaveFrames frames={frames} label={interpolate(r.frames.saveAll, { n: frames.length })} className={ACTION_PRIMARY} />
+                  <SaveFrames frames={frames} label={interpolate(r.frames.saveAll, { n: frames.length })} againLabel={r.frames.saveAgain} className={ACTION_PRIMARY} />
                 ) : (
                   <a href={downloadSrc} data-result-action="download" data-render-download className={ACTION_PRIMARY}>
                     {r.download} ↓

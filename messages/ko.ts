@@ -2379,6 +2379,7 @@ export const ko: Dictionary = {
     /** 세트 템플릿(이미지 여러 장)의 결과 — 결과·공유 페이지와 완성 메일 (2026-10-28). */
     frames: {
       saveAll: '{n}장 모두 저장',
+      saveAgain: '한 번 더 눌러 저장',
       saveOne: '{i}번째 사진 저장',
       position: '{n}장 중 {i}번째',
       hint: '옆으로 넘기면 {n}장을 모두 볼 수 있어요.',

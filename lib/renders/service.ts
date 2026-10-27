@@ -733,7 +733,8 @@ async function pollAssetWait(deps: RenderPassDeps, job: RenderJob, assetId: stri
       const recipe = await jobRecipeFor(deps, job);
       if (recipe) { await renderRecipe(deps, job, recipe, now, report, new Set()); return; }
       const photo = await readPhoto(deps.store, job);
-      await renderNow(deps, job, template, photo, assetId, now, report, new Set());
+      // A job parked on an asset before its engine took bytes (Seedream, 2026-10-28) finishes on the photo.
+      await renderNow(deps, job, template, photo, isEngineId(job.engine) && needsIdentity(job.engine) ? assetId : null, now, report, new Set());
       return;
     }
     if (status === 'Failed') throw new RenderFailure('asset_failed', 'the bank could not match the photo to the verified face', false);

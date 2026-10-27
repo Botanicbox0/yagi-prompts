@@ -2392,6 +2392,7 @@ export const en = {
     /** A set template's result (several pictures): the result and share pages and the email (2026-10-28). */
     frames: {
       saveAll: 'Save all {n}',
+      saveAgain: 'Tap again to save',
       saveOne: 'Save photo {i}',
       position: 'photo {i} of {n}',
       hint: 'Swipe to see all {n} photos.',

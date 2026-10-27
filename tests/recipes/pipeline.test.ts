@@ -174,6 +174,22 @@ describe('recipe v2 in the render pass', () => {
     expect((await listJobOutputs(h.sql, created.id)).map((o) => o.key)).toEqual([`${created.id}/result.jpg`, `${created.id}/result-2.jpg`, `${created.id}/result-3.jpg`]);
   });
 
+  it('finishes a Seedream job parked on an asset before the bytes path on the photo itself', async () => {
+    const id = randomUUID(), slug = `single-${id.slice(0, 8)}`;
+    await insertPrompt(h.sql, { id, slug, source: 'yagi', authorId: null, authorHandle: null, status: 'published', publishedAt: 'now', models: ['seedream-5.0-pro'], title: 'Single Seedream', titleKo: null, promptText: 'A bride by a tall window, matte natural skin.', textVisibility: 'hidden', media: null, useCase: [], featured: false, medium: 'image', engine: 'seedream-5.0-pro', aspectDefault: '3:4', runtimeSeconds: null, priceCents: 349, priceKrw: 4900 });
+    const created = await createRenderJob({ sql: h.sql, store, mode: 'virtual' }, ADMIN_VIEWER, { templateSlug: slug, aspect: '3:4', photo: PHOTO, locale: 'ko' });
+    if (!created.ok) throw new Error(created.code);
+    // What the old path left behind: claimed, waiting on the bank's comparison of the photo.
+    await h.sql.query("update render_jobs set status='running', attempts=1, claimed_at=$2, provider='modelark', provider_task_id='asset:asset-old' where id=$1", [created.id, NOW]);
+    const sent: SeedreamGenerateInput[] = [];
+    const seedream = { async generate(input: SeedreamGenerateInput) { sent.push(input); return { model: 'seedream', images: [{ url: null, b64: Buffer.from(imageBytes(1)).toString('base64'), size: '1776x2368', outputFormat: 'jpeg' }], usage: null }; } } as SeedreamClient;
+
+    expect((await runRenderPass(deps({ seedream }, { assets: fakeAssets() }), { limit: 0 })).succeeded).toBe(1);
+    expect(sent).toHaveLength(1);
+    expect(sent[0]!.references).toEqual([`data:image/jpeg;base64,${Buffer.from(PHOTO.bytes).toString('base64')}`]);
+    expect((await loadRenderJob(h.sql, created.id))!.status).toBe('succeeded');
+  });
+
   it('fails a face Seedream refuses as the face policy, on the step it refused', async () => {
     const { slug } = await recipeTemplate({ ...carousel(2), steps: carousel(2).steps.map((step) => ({ ...step, engine: 'seedream-5.0-pro', params: { aspect: '3:4' } })) });
     const created = await createRenderJob({ sql: h.sql, store, mode: 'virtual' }, ADMIN_VIEWER, { templateSlug: slug, aspect: '3:4', photo: PHOTO, locale: 'ko' });
