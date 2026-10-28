@@ -1,10 +1,13 @@
 /**
  * PLATFORM-2.0 §20 — the brand landing's studio chapters: remember → find → make, then the live
  * "spread" chapter that the page keeps from the campaign service. Server-rendered so every line is in
- * the initial HTML; only the stage and the tab demo hydrate.
+ * the initial HTML. Titles use the site's line reveal and card groups its stagger (PLAN §5.3-4),
+ * both armed only on the client and dropped under reduced motion.
  */
 import type { Dictionary } from '@/lib/i18n/dictionaries';
 import { brandEnquiryHref } from '@/lib/campaigns/links';
+import { Reveal } from '@/components/motion/reveal';
+import { RevealGrid } from '@/components/motion/reveal-grid';
 import { StudioHeroStage, StudioPipeline } from './studio-interactive';
 import styles from './studio.module.css';
 
@@ -36,7 +39,7 @@ export function StudioHero({ copy, locale }: { copy: StudioCopy; locale: Locale 
       <div className="audience-shell">
         <div className={styles.heroCopy}>
           <p className={styles.eyebrow}>{copy.heroEyebrow}</p>
-          <h1 className={`${styles.title} ${styles.heroTitle}`}>{copy.heroTitle}</h1>
+          <Reveal as="h1" immediate lines={copy.heroTitle.split('\n')} className={`${styles.title} ${styles.heroTitle}`} lineClassName="block" />
           <p className={`${styles.lede} ${styles.heroBody}`}>{copy.heroBody}</p>
           <div className={styles.heroActions}>
             <a data-campaign-cta-brand data-inquiry-trigger="hero" href={brandEnquiryHref(locale)} className={styles.primary}>{copy.heroCta} <span aria-hidden="true">↗</span></a>
@@ -57,22 +60,22 @@ export function StudioSplit({ copy }: { copy: StudioCopy }) {
         <div className={styles.split}>
           <div className={styles.sectionHead}>
             <p className={styles.eyebrow}>{copy.splitEyebrow}</p>
-            <h2 className={`${styles.title} ${styles.sectionTitle}`}>{copy.splitTitle}</h2>
+            <Reveal lines={copy.splitTitle.split('\n')} className={`${styles.title} ${styles.sectionTitle}`} lineClassName="block" />
             <p className={`${styles.lede} ${styles.sectionBody}`}>{copy.splitBody}</p>
           </div>
-          <ol className={styles.tools}>
+          <RevealGrid itemSelector="[data-split-tool]" stagger={0.09}><ol className={styles.tools}>
             {copy.splitTools.map((tool, index) => (
-              <li key={tool.label} className={styles.tool}>
+              <li key={tool.label} data-split-tool className={styles.tool}>
                 <span aria-hidden="true" className={styles.toolIndex}>0{index + 1}</span>
                 <p><span className={styles.toolLabel}>{tool.label}</span><span className={styles.toolWhere}>{tool.where}</span></p>
                 <p className={styles.toolLoss}>{tool.loss}</p>
               </li>
             ))}
-          </ol>
+          </ol></RevealGrid>
         </div>
         <div data-studio-flow className={styles.flow}>
           <p className={styles.flowTitle}>{copy.flowTitle}</p>
-          <ol className={styles.flowSteps}>
+          <RevealGrid itemSelector="[data-flow-step]"><ol className={styles.flowSteps}>
             {copy.flow.map((step, index) => {
               const live = index === copy.flow.length - 1;
               return (
@@ -85,7 +88,7 @@ export function StudioSplit({ copy }: { copy: StudioCopy }) {
                 </li>
               );
             })}
-          </ol>
+          </ol></RevealGrid>
         </div>
       </div>
     </section>
@@ -98,7 +101,7 @@ export function StudioPipelineSection({ copy }: { copy: StudioCopy }) {
       <div className="audience-shell">
         <div className={styles.sectionHead}>
           <p className={styles.eyebrow}>{copy.pipelineEyebrow}</p>
-          <h2 className={`${styles.title} ${styles.sectionTitle}`}>{copy.pipelineTitle}</h2>
+          <Reveal lines={copy.pipelineTitle.split('\n')} className={`${styles.title} ${styles.sectionTitle}`} lineClassName="block" />
           <p className={`${styles.lede} ${styles.sectionBody}`}>{copy.pipelineBody}</p>
           <div><EarlyAccess copy={copy} /></div>
         </div>
@@ -114,11 +117,11 @@ export function StudioMemory({ copy }: { copy: StudioCopy }) {
       <div className="audience-shell">
         <div className={styles.sectionHead}>
           <p className={styles.eyebrow}>{copy.memoryEyebrow}</p>
-          <h2 className={`${styles.title} ${styles.sectionTitle}`}>{copy.memoryTitle}</h2>
+          <Reveal lines={copy.memoryTitle.split('\n')} className={`${styles.title} ${styles.sectionTitle}`} lineClassName="block" />
           <p className={`${styles.lede} ${styles.sectionBody}`}>{copy.memoryBody}</p>
           <div><EarlyAccess copy={copy} /></div>
         </div>
-        <ul className={styles.bento}>
+        <RevealGrid itemSelector="[data-memory-layer]" stagger={0.08}><ul className={styles.bento}>
           {copy.memory.map((layer, index) => {
             const id = MEMORY_IDS[index];
             return (
@@ -139,7 +142,7 @@ export function StudioMemory({ copy }: { copy: StudioCopy }) {
             </li>
             );
           })}
-        </ul>
+        </ul></RevealGrid>
       </div>
     </section>
   );
@@ -151,7 +154,7 @@ export function StudioContrast({ copy }: { copy: StudioCopy }) {
       <div className="audience-shell">
         <div className={styles.sectionHead}>
           <p className={styles.eyebrow}>{copy.contrastEyebrow}</p>
-          <h2 className={`${styles.title} ${styles.sectionTitle}`}>{copy.contrastTitle}</h2>
+          <Reveal lines={copy.contrastTitle.split('\n')} className={`${styles.title} ${styles.sectionTitle}`} lineClassName="block" />
         </div>
         <div className={styles.contrast}>
           <div className={styles.contrastCard}>

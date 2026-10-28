@@ -394,7 +394,7 @@ export const ko: Dictionary = {
     "moat3Title": "한·일 게시와 결과 리포트",
     "moat3Body": "표시광고 문구 검수 후 실제 채널에 올리고 게시 링크와 성과를 전달합니다.",
     "metaTitle": "올인원 마케팅 에셋 스튜디오",
-    "metaDescription": "소비재 브랜드를 위한 TWINGS 올인원 마케팅 에셋 스튜디오. 에셋 정리와 검색, 브랜드다운 생성, 실제 크리에이터 확산까지 한곳에서. Morphic 실제 성과를 확인하세요.",
+    "metaDescription": "소비재 브랜드를 위한 TWINGS 올인원 마케팅 에셋 스튜디오. 에셋 정리와 검색, 브랜드다운 생성, 실제 크리에이터 확산까지 한곳에서. Morphic의 실제 성과를 확인해 보세요.",
     "marketsHeading": "한국과 일본,\n동시에 진행합니다.",
     "marketsBody": "한국과 일본에서 활동 중인 크리에이터 풀과 함께 두 시장의 캠페인을 동시에 운영합니다. 별도 현지 촬영 없이 한 번에 양국 피드로 확산합니다.",
     "eyebrow": "브랜드를 위한 TWINGS · YAGI",
@@ -405,7 +405,7 @@ export const ko: Dictionary = {
     "definition": "YAGI가 운영하는 브랜드 크리에이터 캠페인 스튜디오입니다.",
     "studio": {
       "heroEyebrow": "브랜드를 위한 올인원 마케팅 에셋 스튜디오",
-      "heroTitle": "브랜드 에셋에서\n실제 사람의 피드까지.",
+      "heroTitle": "브랜드 에셋에서\n실제 크리에이터의 피드까지.",
       "heroBody": "흩어진 에셋을 모아 정리하고, 말로 찾고, 브랜드답게 새로 만들어 실제 크리에이터의 피드까지 보냅니다. 첫 파일부터 마지막 게시물까지 한 스튜디오에서 이어집니다.",
       "heroCta": "데모 신청하기",
       "heroSecondary": "운영 중인 캠페인 보기",
@@ -455,19 +455,19 @@ export const ko: Dictionary = {
       "flowTitle": "TWINGS에서는 한 줄로 이어집니다.",
       "flow": [
         {
-          "step": "기억한다",
+          "step": "기억",
           "body": "브랜드 규칙, 캠페인 무드, 내 작업 습관"
         },
         {
-          "step": "찾는다",
+          "step": "검색",
           "body": "올리는 순간 태깅, 말로 검색"
         },
         {
-          "step": "만든다",
+          "step": "생성",
           "body": "우리 에셋에서 출발한 새 컷"
         },
         {
-          "step": "퍼뜨린다",
+          "step": "확산",
           "body": "실제 얼굴, 크리에이터 피드, 스튜디오 제작"
         }
       ],
@@ -523,7 +523,7 @@ export const ko: Dictionary = {
       ],
       "memoryEyebrow": "브랜드 메모리",
       "memoryTitle": "브랜드는 한 번만 설명하세요.\n나머지는 스튜디오가 기억합니다.",
-      "memoryBody": "규칙은 세 층으로 쌓입니다. 캠페인 규칙은 브랜드 규칙 위에 더해질 뿐, 브랜드 규칙을 바꾸지는 못합니다.",
+      "memoryBody": "규칙은 브랜드·캠페인·개인, 세 단계로 나뉩니다. 캠페인 규칙은 브랜드 규칙 위에 더해질 뿐, 브랜드 규칙을 바꾸지는 못합니다.",
       "memory": [
         {
           "title": "브랜드",
@@ -553,7 +553,7 @@ export const ko: Dictionary = {
           ]
         }
       ],
-      "spreadEyebrow": "퍼뜨린다 · 지금 운영 중",
+      "spreadEyebrow": "확산 · 지금 운영 중",
       "contrastEyebrow": "워크스페이스",
       "contrastTitle": "브랜드 팀에 필요한 건 다 있고,\n툴 사이를 오가는 일은 없습니다.",
       "contrastHaveLabel": "지금 워크스페이스에 있는 것",

@@ -1,12 +1,15 @@
 'use client';
 
 /**
- * PLATFORM-2.0 §20 — the two moving pieces of the brand landing. Both render their full content on
- * the server; JavaScript only drives the scroll-linked gather and the tab rotation, and both stop
- * under prefers-reduced-motion.
+ * PLATFORM-2.0 §20 — the moving pieces of the brand landing. Everything renders on the server;
+ * JavaScript only drives the gather (GSAP ScrollTrigger through the site's Lenis proxy, PLAN §5.4),
+ * the WebGL aura and the tab rotation. All three stop under prefers-reduced-motion.
  */
 import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react';
+import gsap from 'gsap';
+import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import type { Dictionary } from '@/lib/i18n/dictionaries';
+import { useIsomorphicLayoutEffect } from '@/components/motion/use-isomorphic-layout-effect';
 import styles from './studio.module.css';
 
 type StudioCopy = Dictionary['brandLanding']['studio'];
@@ -43,39 +46,133 @@ function prefersReducedMotion(): boolean {
   return typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 }
 
-export function StudioHeroStage({ copy }: { copy: StudioCopy }) {
-  const stageRef = useRef<HTMLDivElement>(null);
+/**
+ * The hero glow as a fragment shader: three soft brand-colored fields drifting slowly, a little grain.
+ * Plain WebGL, no library. The CSS radial stays underneath as the fallback and is hidden only once a
+ * context exists. Renders one still frame under reduced motion and stops while off screen or hidden.
+ */
+const AURA_VERTEX = 'attribute vec2 p;void main(){gl_Position=vec4(p,0.,1.);}';
+const AURA_FRAGMENT = `precision mediump float;
+uniform vec2 r;uniform float t;
+float f(vec2 u,vec2 c,float s){return smoothstep(s,0.,length(u-c));}
+void main(){
+  vec2 u=gl_FragCoord.xy/r;float a=r.x/r.y;u.x*=a;float m=a*.5;float k=t*.12;
+  float b1=f(u,vec2(m+.16*sin(k*1.3),.56+.08*cos(k*1.1)),.62)*.62;
+  float b2=f(u,vec2(m+.30*cos(k*.9+1.),.46+.10*sin(k*1.4+2.)),.48)*.48;
+  float b3=f(u,vec2(m+.24*sin(k*.7+4.),.52+.12*cos(k*.8+3.)),.52)*.42;
+  float s=b1+b2+b3;
+  vec3 c=(vec3(.93,.12,.12)*b1+vec3(1.,.55,.66)*b2+vec3(1.,.78,.70)*b3)/max(s,.001);
+  float g=fract(sin(dot(gl_FragCoord.xy,vec2(12.9898,78.233)))*43758.5453)-.5;
+  float al=clamp(s*.5+g*.02,0.,1.);
+  gl_FragColor=vec4(c*al,al);
+}`;
+
+function StudioAura({ onReady }: { onReady: () => void }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
-    const stage = stageRef.current;
-    if (!stage) return;
-    if (prefersReducedMotion()) {
-      stage.style.setProperty('--p', '1');
-      return;
-    }
+    const canvas = canvasRef.current;
+    const gl = canvas?.getContext('webgl', { alpha: true, antialias: false, premultipliedAlpha: true, powerPreference: 'low-power' });
+    if (!canvas || !gl) return;
+    const compile = (type: number, source: string) => {
+      const shader = gl.createShader(type)!;
+      gl.shaderSource(shader, source);
+      gl.compileShader(shader);
+      return gl.getShaderParameter(shader, gl.COMPILE_STATUS) ? shader : null;
+    };
+    const vertex = compile(gl.VERTEX_SHADER, AURA_VERTEX);
+    const fragment = compile(gl.FRAGMENT_SHADER, AURA_FRAGMENT);
+    if (!vertex || !fragment) return;
+    const program = gl.createProgram()!;
+    gl.attachShader(program, vertex);
+    gl.attachShader(program, fragment);
+    gl.linkProgram(program);
+    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) return;
+    gl.useProgram(program);
+    gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+    const position = gl.getAttribLocation(program, 'p');
+    gl.enableVertexAttribArray(position);
+    gl.vertexAttribPointer(position, 2, gl.FLOAT, false, 0, 0);
+    const resolution = gl.getUniformLocation(program, 'r');
+    const time = gl.getUniformLocation(program, 't');
+
+    // The aura is blurred anyway: half resolution is invisible and a quarter of the fill cost.
+    const resize = () => {
+      const scale = Math.min(window.devicePixelRatio || 1, 1.5) * 0.5;
+      canvas.width = Math.max(1, Math.round(canvas.clientWidth * scale));
+      canvas.height = Math.max(1, Math.round(canvas.clientHeight * scale));
+      gl.viewport(0, 0, canvas.width, canvas.height);
+      gl.uniform2f(resolution, canvas.width, canvas.height);
+    };
+    const draw = (seconds: number) => {
+      gl.uniform1f(time, seconds);
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    };
+
+    resize();
+    draw(0);
+    onReady();
+    if (prefersReducedMotion()) return;
+
     let frame = 0;
-    const update = () => {
-      frame = 0;
-      // Gathered after a little over half a screen of scrolling, whatever the stage's position.
-      const progress = Math.min(1, Math.max(0, window.scrollY / (window.innerHeight * 0.55)));
-      stage.style.setProperty('--p', progress.toFixed(3));
+    let visible = false;
+    const start = performance.now();
+    const loop = (now: number) => {
+      draw((now - start) / 1000);
+      frame = requestAnimationFrame(loop);
     };
-    const schedule = () => {
-      if (!frame) frame = requestAnimationFrame(update);
+    const sync = () => {
+      const run = visible && !document.hidden;
+      if (run && !frame) frame = requestAnimationFrame(loop);
+      if (!run && frame) {
+        cancelAnimationFrame(frame);
+        frame = 0;
+      }
     };
-    update();
-    window.addEventListener('scroll', schedule, { passive: true });
-    window.addEventListener('resize', schedule);
+    const observer = new IntersectionObserver(([entry]) => {
+      visible = Boolean(entry?.isIntersecting);
+      sync();
+    });
+    observer.observe(canvas);
+    document.addEventListener('visibilitychange', sync);
+    window.addEventListener('resize', resize);
     return () => {
       if (frame) cancelAnimationFrame(frame);
-      window.removeEventListener('scroll', schedule);
-      window.removeEventListener('resize', schedule);
+      observer.disconnect();
+      document.removeEventListener('visibilitychange', sync);
+      window.removeEventListener('resize', resize);
     };
+  }, [onReady]);
+
+  return <canvas ref={canvasRef} aria-hidden="true" className={styles.auraCanvas} />;
+}
+
+export function StudioHeroStage({ copy }: { copy: StudioCopy }) {
+  const stageRef = useRef<HTMLDivElement>(null);
+  const [webgl, setWebgl] = useState(false);
+  const markReady = useRef(() => setWebgl(true)).current;
+
+  useIsomorphicLayoutEffect(() => {
+    const stage = stageRef.current;
+    if (!stage) return;
+    gsap.registerPlugin(ScrollTrigger);
+    const mm = gsap.matchMedia();
+    // The tiles gather over the first ~55% of a screen of scrolling, scrubbed through Lenis.
+    mm.add('(prefers-reduced-motion: no-preference)', () => {
+      gsap.fromTo(stage, { '--p': 0 }, {
+        '--p': 1,
+        ease: 'none',
+        scrollTrigger: { trigger: document.documentElement, start: 0, end: () => window.innerHeight * 0.55, scrub: 0.6 },
+      });
+    });
+    return () => mm.revert();
   }, []);
 
   return (
-    <div ref={stageRef} data-studio-stage className={styles.stage}>
+    <div ref={stageRef} data-studio-stage data-webgl={webgl ? 'on' : undefined} className={styles.stage}>
       <div aria-hidden="true" className={styles.aura} />
+      <StudioAura onReady={markReady} />
       <div className={styles.window} role="img" aria-label={`${copy.stage.window} — ${copy.example}`}>
         <div className={styles.windowBar}>
           <span aria-hidden="true" className={styles.lights}><span /><span /><span /></span>

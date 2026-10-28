@@ -386,7 +386,7 @@ export const en = {
     "moat3Title": "Korea & Japan publishing",
     "moat3Body": "We review disclosures, publish across real creator channels, and deliver verified results.",
     "metaTitle": "All-in-one Marketing Asset Studio",
-    "metaDescription": "TWINGS is the all-in-one marketing asset studio for consumer brands: organize, search and make on-brand assets, then spread them through real creators. See the live Morphic results.",
+    "metaDescription": "TWINGS is the all-in-one marketing asset studio for consumer brands: organize, search and generate on-brand assets, then take them to real creators’ feeds.",
     "marketsHeading": "Korea and Japan.\nOne campaign.",
     "marketsBody": "Run campaigns across Korea and Japan simultaneously with our active creator pools in both markets — no local shoots needed.",
     "eyebrow": "TWINGS FOR BRANDS · YAGI",
@@ -397,14 +397,14 @@ export const en = {
     "definition": "TWINGS is a brand campaign studio by YAGI.",
     "studio": {
       "heroEyebrow": "Your all-in-one marketing asset studio",
-      "heroTitle": "From brand assets\nto real people’s feeds.",
-      "heroBody": "Gather scattered assets in one place, find them by describing them, make new ones that stay on brand, and spread them through real people’s faces. First file to final feed, in one studio.",
+      "heroTitle": "From brand assets\nto creator feeds.",
+      "heroBody": "Bring scattered assets into one library, find them by describing them, make new ones that stay on brand, and get them into real creators’ feeds. First file to final post, in one studio.",
       "heroCta": "Book a demo",
       "heroSecondary": "See live campaigns",
       "earlyAccess": "Early access",
       "live": "Live",
       "example": "Example screen",
-      "earlyNote": "Organizing, search and generation open first as early access. Campaigns with real creators are running today.",
+      "earlyNote": "Organizing, search and generation open in early access. Creator campaigns are live today.",
       "stage": {
         "window": "Brand library",
         "search": "Every cut with pink in it",
@@ -424,9 +424,9 @@ export const en = {
           "Street look · city"
         ]
       },
-      "splitEyebrow": "The problem",
+      "splitEyebrow": "The friction",
       "splitTitle": "Every time you switch tools,\nyou explain the brand again.",
-      "splitBody": "Files live in a drive, images come from a generation tool, and the final cut is assembled in a design tool. The logo spec and this campaign’s mood get carried across by hand each time, and the tone slips somewhere in between.",
+      "splitBody": "Files sit in drives, images come from generation tools, and final cuts get assembled in design software. Brand specs and campaign moods are carried across by hand, and the tone drifts on the way.",
       "splitTools": [
         {
           "label": "Organize",
@@ -444,7 +444,7 @@ export const en = {
           "loss": "Export, re-upload, repeat"
         }
       ],
-      "flowTitle": "In TWINGS it runs as one line.",
+      "flowTitle": "TWINGS runs it as one workflow.",
       "flow": [
         {
           "step": "Remember",
@@ -452,20 +452,20 @@ export const en = {
         },
         {
           "step": "Find",
-          "body": "Tagged on upload, found by description"
+          "body": "Auto-tagged on upload, found by description"
         },
         {
           "step": "Make",
-          "body": "New cuts that start from your own assets"
+          "body": "New assets that start from your own library"
         },
         {
-          "step": "Spread",
-          "body": "Real faces, creator feeds, studio production"
+          "step": "Amplify",
+          "body": "Real creators’ feeds and studio production"
         }
       ],
       "pipelineEyebrow": "Organize · search · generate",
-      "pipelineTitle": "Just upload.\nThe studio does the sorting.",
-      "pipelineBody": "Every asset is read as it lands: objects, color, light, framing and mood. When you need it, ask the way you would ask a colleague.",
+      "pipelineTitle": "Just upload.\nThe studio handles the rest.",
+      "pipelineBody": "Every asset is read on upload: objects, color, light, framing and mood. Then find what you need by describing it.",
       "tabs": [
         {
           "label": "Auto-tag",
@@ -474,13 +474,13 @@ export const en = {
         },
         {
           "label": "Search by describing",
-          "title": "Describe it and it comes back",
+          "title": "Describe it, find it",
           "body": "Search by what is in the picture, not by what somebody named the file."
         },
         {
           "label": "Make on brand",
-          "title": "New cuts that keep the rules",
-          "body": "Variations start from your own assets and pass your brand rules before you see them."
+          "title": "New variations, still on brand",
+          "body": "Variations start from your own assets and are checked against your brand rules before you see them."
         }
       ],
       "tagGroups": {
@@ -503,9 +503,9 @@ export const en = {
       "searchResult": "3 found",
       "makePrompt": "Autumn mood, keep the logo clear space",
       "makeChecks": [
-        "Logo clear space kept",
+        "Logo clear space maintained",
         "No banned colors",
-        "Matches the campaign mood"
+        "Campaign mood matched"
       ],
       "makeVariants": [
         "Original",
@@ -515,7 +515,7 @@ export const en = {
       ],
       "memoryEyebrow": "Brand memory",
       "memoryTitle": "Explain the brand once.\nThe studio remembers the rest.",
-      "memoryBody": "Rules stack in three layers. A campaign can add to the brand’s rules but never loosen them.",
+      "memoryBody": "Rules come in three layers. Campaign rules add to the brand’s core without overriding it.",
       "memory": [
         {
           "title": "Brand",
@@ -545,7 +545,7 @@ export const en = {
           ]
         }
       ],
-      "spreadEyebrow": "Spread · live today",
+      "spreadEyebrow": "Amplify · live today",
       "contrastEyebrow": "The workspace",
       "contrastTitle": "Everything a brand team needs.\nNone of the tool juggling.",
       "contrastHaveLabel": "In the workspace today",
@@ -561,7 +561,7 @@ export const en = {
         "Paying for three tools",
         "Exporting and re-uploading files",
         "Explaining it all again in each tool",
-        "Pulling a drifted tone back"
+        "Correcting brand drift"
       ]
     },
     "heroCinema": {
