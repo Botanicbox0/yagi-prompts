@@ -2,6 +2,7 @@ import { z } from 'zod';
 import type { SqlRunner } from '@/lib/db/sql-runner';
 import type { Viewer } from '@/lib/auth/identity';
 import type { RenderStore } from '@/lib/renders/store';
+import type { StorageDriver } from '@/lib/storage';
 import { demand, PlatformError } from '@/lib/creator-platform/contract';
 import { approvedCreator, lockUser } from '@/lib/creator-platform/service';
 import { canonicalPost } from '@/lib/creator-platform/social';
@@ -11,6 +12,7 @@ import { listMakerFiles, storeMakerFile, deleteMakerFiles, type MakerAsset } fro
 import { isRoyalty, quoteRecipe, ROYALTY_DEFAULT_KRW } from './pricing';
 import { parseDisclosure, parsePresentation, recipeSchemaReady, type Disclosure, type Presentation } from './repo';
 import { MAX_RECIPE_BYTES, parseRecipe, recipeMedium, type Recipe, type RecipeIssue, type RecipeMedium } from './schema';
+import { selfPublishFormat, selfPublishOpen } from './self-publish';
 
 /**
  * The maker editor's server half (`/creators/workspace/formats/new`, docs/PLATFORM-2.0.md §7.4).
@@ -48,6 +50,8 @@ export const MakerSaveInput = z.object({
 export const MakerActionInput = z.discriminatedUnion('action', [
   MakerSaveInput,
   z.object({ action: z.literal('submit'), id: z.uuid(), rights: z.literal(true) }).strict(),
+  // §20.6: the creative publishes it themself — no studio review, the machine checks instead.
+  z.object({ action: z.literal('publish'), id: z.uuid(), rights: z.literal(true) }).strict(),
   z.object({ action: z.literal('test'), id: z.uuid(), selfieId: z.uuid().optional() }).strict(),
   z.object({ action: z.literal('deleteFile'), id: z.uuid(), file: z.string().regex(/^ast_[0-9a-f]{32}$/) }).strict(),
 ]);
@@ -92,7 +96,7 @@ async function checkedRecipe(sql: SqlRunner, row: DraftRow): Promise<{ recipe: R
   return { recipe: checked.recipe, medium: checked.medium };
 }
 
-export async function makerAction(deps: { sql: SqlRunner; store: RenderStore }, viewer: Viewer, raw: unknown, access: MakerAccess): Promise<{ id: string; renderId?: string }> {
+export async function makerAction(deps: { sql: SqlRunner; store: RenderStore; storage?: StorageDriver }, viewer: Viewer, raw: unknown, access: MakerAccess): Promise<{ id: string; renderId?: string; templateId?: string; slug?: string; priceKrw?: number }> {
   const parsed = MakerActionInput.safeParse(raw);
   demand(parsed.success, 'invalid');
   const input = parsed.data;
@@ -147,6 +151,23 @@ export async function makerAction(deps: { sql: SqlRunner; store: RenderStore }, 
       demand(row.example_url || files.some((file) => file.role === 'example'), 'example_required');
       await tx.query("update platform_formats set status='submitted',medium=$2,rights_at=now(),updated_at=now() where id=$1", [row.id, medium === 'video' ? 'video' : 'image']);
       return { id: input.id };
+    });
+  }
+
+  if (input.action === 'publish') {
+    demand(selfPublishOpen(), 'not_open');
+    const storage = deps.storage;
+    demand(storage, 'unavailable');
+    return deps.sql.transaction(async (tx) => {
+      const row = await ownFormat(tx, userId, input.id, true);
+      // Publishing twice answers with the template it already made.
+      if (row.status === 'accepted') {
+        const { rows } = await tx.query<{ template_id: string; slug: string }>('select f.template_id,p.slug from platform_formats f join prompt_items p on p.id=f.template_id where f.id=$1', [row.id]);
+        return { id: row.id, templateId: rows[0]?.template_id, slug: rows[0]?.slug };
+      }
+      demand(row.status === 'draft' || row.status === 'submitted', 'conflict');
+      const { recipe } = await checkedRecipe(tx, row);
+      return selfPublishFormat(tx, { store: deps.store, storage }, userId, row, recipe);
     });
   }
 

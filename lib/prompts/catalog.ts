@@ -5,6 +5,8 @@ import { loadPublishedPrompts, type PromptRow } from './repo';
 import { PROMPT_MODEL_LABEL, promptModelLabel, type PromptSource, type TemplateMedium } from './schemas';
 import { promptLock, type PromptLock } from './lock';
 import { loadPublicMakerRows } from '@/lib/makers/profile';
+import { makerAvatarSrc } from '@/lib/makers/links';
+import type { MakerLink } from '@/lib/makers/fields';
 
 /**
  * PLAN §13.2 — the public card projection: "cards carry NO prompt text".
@@ -88,10 +90,23 @@ export interface PromptTotals {
   modelLabel: string;
 }
 
-/** A maker who opted in (0060): handle and bio only — never the account behind them. */
+/**
+ * A creative who opted in (0060, 0065): what they chose to show — never the account behind them.
+ * `avatar` is a gateway address (`/api/makers/media/avatar-{handle}?v=`), never a storage key.
+ */
 export interface PublicMaker {
   handle: string;
   bio: string | null;
+  displayName: string | null;
+  headline: string | null;
+  /** ISO 3166-1 alpha-2 where they work, and an optional city. */
+  country: string | null;
+  city: string | null;
+  links: MakerLink[];
+  publicEmail: string | null;
+  tools: string[];
+  openToBrands: boolean;
+  avatar: string | null;
   templateCount: number;
   /** The newest published template's date, for the sitemap's `lastmod`; null with none. */
   latestPublishedAt: string | null;
@@ -200,10 +215,15 @@ export async function loadPromptCatalog(
     }
   }
 
-  const makers = makerRows.map(({ handle, bio }): PublicMaker => {
-    const own = cardsByMaker.get(handle) ?? [];
+  const makers = makerRows.map((row): PublicMaker => {
+    const own = cardsByMaker.get(row.handle) ?? [];
     const dates = own.map((card) => card.publishedAt).filter((value): value is string => value !== null).sort();
-    return { handle, bio, templateCount: own.length, latestPublishedAt: dates.at(-1) ?? null };
+    return {
+      handle: row.handle, bio: row.bio, displayName: row.displayName, headline: row.headline, country: row.country, city: row.city,
+      links: row.links, publicEmail: row.publicEmail, tools: row.tools, openToBrands: row.openToBrands,
+      avatar: row.avatarVersion ? makerAvatarSrc(row.handle, row.avatarVersion) : null,
+      templateCount: own.length, latestPublishedAt: dates.at(-1) ?? null,
+    };
   });
 
   return {

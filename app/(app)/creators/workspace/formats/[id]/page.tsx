@@ -18,6 +18,7 @@ import { recipeSchemaReady } from '@/lib/recipes/repo';
 import { MAKER_ENGINE_IDS } from '@/lib/recipes/schema';
 import { AppHeader } from '@/components/app/app-header';
 import { RecipeEditor, type EngineOption } from '@/components/recipes/recipe-editor';
+import { selfPublishOpen } from '@/lib/recipes/self-publish';
 
 /**
  * `/creators/workspace/formats/{new|id}` — the maker recipe editor (docs/PLATFORM-2.0.md §7.4).
@@ -69,6 +70,7 @@ export default async function RecipeEditorPage({ params, searchParams }: { param
     selfieHref={IDENTITY_SELFIE_PATH}
     workspaceHref={CREATOR_WORKSPACE_PATH}
     testLimit={MAKER_TEST_RENDERS}
+    selfPublish={selfPublishOpen()}
     revisionOf={revisionOf}
     locale={locale}
   />);

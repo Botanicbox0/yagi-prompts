@@ -51,9 +51,10 @@ async function readPromptCatalog(): Promise<PromptCatalog> {
  */
 /** 2026-10-26 (`v8-prom-queen-hero-restored`): `you-are-a-prom-queen` 16:9 featured hero & `city-fashion-montage` 4:3 dimensions. */
 /** 2026-10-27 (`v9-set-gallery`): `PromptCard.gallery`, a set template's example frames. */
+/** 2026-10-28 (`v10-creative-media`): `PublicMaker` carries the 0065 profile (name, place, links, avatar…); the avatar address is `/creative-media/…`. */
 export const getPromptCatalog = unstable_cache(
   readPromptCatalog,
-  ['prompt-catalog', 'v9-set-gallery', resolveRuntimeMode()],
+  ['prompt-catalog', 'v10-creative-media', resolveRuntimeMode()],
   {
     tags: [PROMPTS_TAG],
     revalidate: CATALOG_TTL_SECONDS,

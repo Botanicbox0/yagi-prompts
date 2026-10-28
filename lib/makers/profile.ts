@@ -1,9 +1,13 @@
 import type { SqlRunner } from '@/lib/db/sql-runner';
+import {
+  CITY_MAX, DISPLAY_NAME_MAX, HEADLINE_MAX, countryOf, emailOf, lineOf, linksOf, storedLinks, toolsOf, type MakerLink,
+} from './fields';
 
 /**
- * docs/PLATFORM-2.0.md §7.5·§14.1 — a template maker's public identity: a handle, a short bio and an
- * explicit opt-in (0060). The handle is the ONLY thing about a maker that reaches a public page;
- * `user_id`, email and contract terms never leave this module's private reads.
+ * docs/PLATFORM-2.0.md §7.5·§14.1·§20 — an AI creative's public identity: a handle, a short bio and
+ * an explicit opt-in (0060), and since 0065 a name, a one-line headline, where they work, their
+ * links, an optional public email, their tools, whether they take brand work and an avatar. All of it
+ * reaches a public page only while `public_profile` is on; `user_id` and the account email never do.
  *
  * `prompt_items.author_handle` follows the opt-in in the database itself (0060's triggers), so this
  * module only writes `platform_creators` and the catalogue only reads the column.
@@ -13,9 +17,11 @@ export const MAKER_HANDLE_PATTERN = /^[a-z0-9_]{3,20}$/;
 export const MAKER_BIO_MAX = 200;
 
 /** Names that would read as the studio speaking. Not a moderation list — just no impersonation. */
-const RESERVED_HANDLES = new Set(['admin', 'administrator', 'twings', 'yagi', 'yagiworkshop', 'studio', 'official', 'support', 'help', 'staff', 'makers', 'maker']);
+const RESERVED_HANDLES = new Set(['admin', 'administrator', 'twings', 'yagi', 'yagiworkshop', 'studio', 'official', 'support', 'help', 'staff', 'makers', 'maker', 'creative', 'creatives']);
 
-export type MakerProfileErrorCode = 'invalid_handle' | 'reserved_handle' | 'invalid_bio' | 'handle_required' | 'handle_taken' | 'not_maker' | 'unavailable';
+export type MakerProfileErrorCode =
+  | 'invalid_handle' | 'reserved_handle' | 'invalid_bio' | 'handle_required' | 'handle_taken' | 'not_maker' | 'unavailable'
+  | 'invalid_name' | 'invalid_headline' | 'invalid_country' | 'invalid_city' | 'invalid_links' | 'invalid_email' | 'invalid_tools';
 
 export class MakerProfileError extends Error {
   constructor(readonly code: MakerProfileErrorCode) {
@@ -54,32 +60,97 @@ export async function makerProfilesReady(sql: SqlRunner): Promise<boolean> {
   return rows[0]?.ready === true;
 }
 
+/** 0065 — the full creative profile, works, recipe opens and access tokens. Probed, never assumed. */
+export async function creativeProfilesReady(sql: SqlRunner): Promise<boolean> {
+  const { rows } = await sql.query<{ ready: boolean }>(
+    `select (select count(*) from pg_attribute where attrelid = to_regclass('public.platform_creators')
+               and attname in ('display_name', 'links', 'avatar_key') and not attisdropped) = 3
+            and to_regclass('public.maker_works') is not null and to_regclass('public.maker_tokens') is not null
+            and to_regclass('public.recipe_unlocks') is not null as ready`,
+  );
+  return rows[0]?.ready === true;
+}
+
 export interface MakerSettings {
   handle: string | null;
   bio: string | null;
   publicProfile: boolean;
+  displayName: string | null;
+  headline: string | null;
+  country: string | null;
+  city: string | null;
+  links: MakerLink[];
+  publicEmail: string | null;
+  tools: string[];
+  openToBrands: boolean;
+  /** The avatar's cache key (hex), or null with none. The storage key itself never leaves the server. */
+  avatarVersion: string | null;
+  /** False until 0065 is applied: the studio then offers only handle, bio and the opt-in. */
+  extended: boolean;
+}
+
+interface SettingsRow {
+  handle: string | null; bio: string | null; public_profile: boolean;
+  display_name?: string | null; headline?: string | null; country?: string | null; city?: string | null; links?: unknown;
+  public_email?: string | null; tools?: string[] | null; open_to_brands?: boolean; avatar_key?: string | null;
+}
+
+const BASE_COLUMNS = 'handle, bio, public_profile';
+const EXTENDED_COLUMNS = `${BASE_COLUMNS}, display_name, headline, country, city, links, public_email, tools, open_to_brands, avatar_key`;
+
+/** `{uuid}/avatar_<hex>.jpg` → `<hex>`: a public cache key that says nothing about the account. */
+export function avatarVersionOf(key: string | null | undefined): string | null {
+  const match = key ? /\/avatar_([0-9a-f]{16,32})\.[a-z0-9]{2,5}$/.exec(key) : null;
+  return match ? match[1]! : null;
+}
+
+function toSettings(row: SettingsRow, extended: boolean): MakerSettings {
+  return {
+    handle: row.handle,
+    bio: row.bio,
+    publicProfile: row.public_profile,
+    displayName: row.display_name ?? null,
+    headline: row.headline ?? null,
+    country: row.country ?? null,
+    city: row.city ?? null,
+    links: storedLinks(row.links),
+    publicEmail: row.public_email ?? null,
+    tools: Array.isArray(row.tools) ? row.tools : [],
+    openToBrands: row.open_to_brands === true,
+    avatarVersion: avatarVersionOf(row.avatar_key),
+    extended,
+  };
 }
 
 /** The maker's own settings. Null when the account is not an active maker (or 0060 is missing). */
 export async function loadMakerSettings(sql: SqlRunner, userId: string): Promise<MakerSettings | null> {
   if (!(await makerProfilesReady(sql))) return null;
-  const { rows } = await sql.query<{ handle: string | null; bio: string | null; public_profile: boolean }>(
-    'select handle, bio, public_profile from platform_creators where user_id = $1 and active',
+  const extended = await creativeProfilesReady(sql);
+  const { rows } = await sql.query<SettingsRow>(
+    `select ${extended ? EXTENDED_COLUMNS : BASE_COLUMNS} from platform_creators where user_id = $1 and active`,
     [userId],
   );
   const row = rows[0];
-  return row ? { handle: row.handle, bio: row.bio, publicProfile: row.public_profile } : null;
+  return row ? toSettings(row, extended) : null;
+}
+
+export interface MakerProfileInput {
+  handle?: unknown; bio?: unknown; publicProfile?: unknown;
+  displayName?: unknown; headline?: unknown; country?: unknown; city?: unknown; links?: unknown;
+  publicEmail?: unknown; tools?: unknown; openToBrands?: unknown;
+}
+
+function must<T>(value: T | false, code: MakerProfileErrorCode): T {
+  if (value === false) throw new MakerProfileError(code);
+  return value;
 }
 
 /**
  * Every field re-validated here; the caller supplies only a server-verified user id. Turning the
- * profile on needs a handle; turning it off keeps the handle reserved for the maker.
+ * profile on needs a handle; turning it off keeps the handle reserved for the maker. Fields 0065
+ * adds are written only once 0065 exists, and are otherwise ignored rather than refused.
  */
-export async function saveMakerProfile(
-  sql: SqlRunner,
-  userId: string,
-  input: { handle?: unknown; bio?: unknown; publicProfile?: unknown },
-): Promise<MakerSettings> {
+export async function saveMakerProfile(sql: SqlRunner, userId: string, input: MakerProfileInput): Promise<MakerSettings> {
   if (!(await makerProfilesReady(sql))) throw new MakerProfileError('unavailable');
   const rawHandle = typeof input.handle === 'string' ? input.handle.trim() : '';
   const handle = rawHandle === '' ? null : makerHandleOf(rawHandle);
@@ -90,20 +161,40 @@ export async function saveMakerProfile(
   const publicProfile = input.publicProfile === true;
   if (publicProfile && handle === null) throw new MakerProfileError('handle_required');
 
+  const extended = await creativeProfilesReady(sql);
+  const more = extended ? {
+    displayName: must(lineOf(input.displayName, DISPLAY_NAME_MAX), 'invalid_name'),
+    headline: must(lineOf(input.headline, HEADLINE_MAX), 'invalid_headline'),
+    country: must(countryOf(input.country), 'invalid_country'),
+    city: must(lineOf(input.city, CITY_MAX), 'invalid_city'),
+    links: must(linksOf(input.links), 'invalid_links'),
+    publicEmail: must(emailOf(input.publicEmail), 'invalid_email'),
+    tools: must(toolsOf(input.tools), 'invalid_tools'),
+    openToBrands: input.openToBrands === true,
+  } : null;
+
   const taken = handle === null ? [] : (await sql.query<{ user_id: string }>(
     'select user_id from platform_creators where handle = $1 and user_id <> $2', [handle, userId],
   )).rows;
   if (taken.length > 0) throw new MakerProfileError('handle_taken');
 
   try {
-    const { rows } = await sql.query<{ handle: string | null; bio: string | null; public_profile: boolean }>(
-      `update platform_creators set handle = $2, bio = $3, public_profile = $4
-        where user_id = $1 and active returning handle, bio, public_profile`,
-      [userId, handle, bio.bio, publicProfile],
-    );
+    const { rows } = more
+      ? await sql.query<SettingsRow>(
+        `update platform_creators set handle = $2, bio = $3, public_profile = $4, display_name = $5, headline = $6, country = $7,
+                city = $8, links = $9::jsonb, public_email = $10, tools = $11::text[], open_to_brands = $12, profile_updated_at = now()
+          where user_id = $1 and active returning ${EXTENDED_COLUMNS}`,
+        [userId, handle, bio.bio, publicProfile, more.displayName, more.headline, more.country, more.city,
+          JSON.stringify(more.links), more.publicEmail, more.tools, more.openToBrands],
+      )
+      : await sql.query<SettingsRow>(
+        `update platform_creators set handle = $2, bio = $3, public_profile = $4
+          where user_id = $1 and active returning ${BASE_COLUMNS}`,
+        [userId, handle, bio.bio, publicProfile],
+      );
     const row = rows[0];
     if (!row) throw new MakerProfileError('not_maker');
-    return { handle: row.handle, bio: row.bio, publicProfile: row.public_profile };
+    return toSettings(row, extended);
   } catch (error) {
     // Two makers racing for one handle: the unique index decides, and the loser hears "taken".
     if (error instanceof MakerProfileError) throw error;
@@ -112,18 +203,55 @@ export async function saveMakerProfile(
   }
 }
 
+/** A partial change (the MCP tool): every field not named keeps its saved value. */
+export async function patchMakerProfile(sql: SqlRunner, userId: string, patch: MakerProfileInput): Promise<MakerSettings> {
+  const current = await loadMakerSettings(sql, userId);
+  if (!current) throw new MakerProfileError('not_maker');
+  const pick = <K extends keyof MakerProfileInput>(key: K, saved: unknown) => (Object.hasOwn(patch, key) && patch[key] !== undefined ? patch[key] : saved);
+  return saveMakerProfile(sql, userId, {
+    handle: pick('handle', current.handle ?? ''),
+    bio: pick('bio', current.bio),
+    publicProfile: pick('publicProfile', current.publicProfile),
+    displayName: pick('displayName', current.displayName),
+    headline: pick('headline', current.headline),
+    country: pick('country', current.country),
+    city: pick('city', current.city),
+    links: pick('links', current.links),
+    publicEmail: pick('publicEmail', current.publicEmail),
+    tools: pick('tools', current.tools),
+    openToBrands: pick('openToBrands', current.openToBrands),
+  });
+}
+
 /** Internal shape for the catalogue loader. `userId` is a join key and is dropped before any DTO. */
 export interface PublicMakerRow {
   userId: string;
   handle: string;
   bio: string | null;
+  displayName: string | null;
+  headline: string | null;
+  country: string | null;
+  city: string | null;
+  links: MakerLink[];
+  publicEmail: string | null;
+  tools: string[];
+  openToBrands: boolean;
+  avatarVersion: string | null;
 }
 
 export async function loadPublicMakerRows(sql: SqlRunner): Promise<PublicMakerRow[]> {
   if (!(await makerProfilesReady(sql))) return [];
-  const { rows } = await sql.query<{ user_id: string; handle: string; bio: string | null }>(
-    `select user_id, handle, bio from platform_creators
+  const extended = await creativeProfilesReady(sql);
+  const { rows } = await sql.query<SettingsRow & { user_id: string; handle: string }>(
+    `select user_id, ${extended ? EXTENDED_COLUMNS : BASE_COLUMNS} from platform_creators
       where active and public_profile and handle is not null order by handle`,
   );
-  return rows.map((row) => ({ userId: row.user_id, handle: row.handle, bio: row.bio }));
+  return rows.map((row) => {
+    const settings = toSettings(row, extended);
+    return {
+      userId: row.user_id, handle: row.handle, bio: settings.bio, displayName: settings.displayName, headline: settings.headline,
+      country: settings.country, city: settings.city, links: settings.links, publicEmail: settings.publicEmail, tools: settings.tools,
+      openToBrands: settings.openToBrands, avatarVersion: settings.avatarVersion,
+    };
+  });
 }

@@ -38,8 +38,9 @@ import { cachedSubscriptionAvailability } from '@/lib/creator-subscriptions/cach
 import { SubscriptionAvailabilityProvider } from '@/components/twings/subscription-availability';
 import { TemplateMakeAvailability } from '@/components/twings/subscription-public-notices';
 import { cachedTypicalWaitMinutes } from '@/lib/twings/cached-typical-wait';
-import { cachedPublicRecipe } from '@/lib/recipes/cached-public';
-import { HowItWasMade } from '@/components/recipes/how-it-was-made';
+import { cachedRecipeOutline } from '@/lib/recipes/cached-public';
+import { RecipePanel } from '@/components/recipes/recipe-panel';
+import { CreativeAvatar, placeOf } from '@/components/makers/identity';
 
 /**
  * `/[locale]/t/[slug]` — one template, which is also where it is made (docs/TEMPLATES-IA.md §2).
@@ -100,10 +101,10 @@ export default async function TemplatePage({ params }: RouteParams) {
   // Built with the page and refreshed with it (tag `prompts`): the median of recent successful renders
   // for this engine and length, or the engine default below ten (lib/twings/typical-wait.ts).
   const waitMinutes = await cachedTypicalWaitMinutes({ engine: resolveEngine(card.engine, card.medium), medium: card.medium, seconds: card.medium === 'video' ? card.runtimeSeconds ?? null : null });
-  // A maker template only (docs/PLATFORM-2.0.md §7.3): what the maker chose to show, in the order they chose.
+  // docs/PLATFORM-2.0.md §7.3·§20.3: what the creative chose to show, in the order they chose — the
+  // outline here for everyone, the prompts/tips/files from /api/recipes for signed-in members only.
   const mr = dict.makerRecipe;
-  const recipe = await cachedPublicRecipe(card.id, { selfie: mr.selfieLabel, reference: mr.referenceLabel, step: mr.stepResultLabel });
-  const howItWasMade = recipe ? <HowItWasMade recipe={recipe} copy={mr} /> : null;
+  const recipe = await cachedRecipeOutline(card.id);
 
   const t = dict.templates;
   const labels = promptLabels(dict);
@@ -116,6 +117,8 @@ export default async function TemplatePage({ params }: RouteParams) {
   const credit = card.origin !== 'maker' ? labels.byYagi : card.authorHandle ? labels.byAuthor.replace('{handle}', card.authorHandle) : labels.byAnonymous;
   const makerRest = makerProfileRest(card);
   const maker = makerRest ? makers.find((item) => item.handle === card.authorHandle) ?? null : null;
+  // §20: the creative's other templates — their catalogue, one click from the one being read.
+  const moreFromMaker = maker ? all.filter((item) => item.slug !== card.slug && item.makerProfile && item.authorHandle === maker.handle).slice(0, 4) : [];
   const shopOpen = storefrontOpen();
   const resolutions = isForSale(card) ? offeredResolutions(card) : [];
   // A set template (2026-10-27): one order, one example per frame it makes.
@@ -149,6 +152,20 @@ export default async function TemplatePage({ params }: RouteParams) {
         resolutions: offeredResolutions(card).map((id) => ({ id, price: formatResolutionPrice(card, id, locale) })),
       }
     : null;
+
+  const howItWasMade = recipe ? (
+    <RecipePanel
+      templateId={card.id}
+      locale={locale}
+      outline={recipe}
+      signInHref={signInHref(`${templateHref(locale, slug)}#recipe`, locale)}
+      makeHref={style !== null ? '#make' : null}
+      copy={{
+        ...mr.how, stepImage: mr.stepImage, stepVideo: mr.stepVideo, selfieLabel: mr.selfieLabel, referenceLabel: mr.referenceLabel, stepResultLabel: mr.stepResultLabel,
+        credit: maker ? labels.byAuthor.replace('{handle}', maker.handle) : null,
+      }}
+    />
+  ) : null;
 
   const mediaAspect = card.aspectDefault ?? defaultAspect(card.medium);
   const photoGuideExamples = [
@@ -344,13 +361,26 @@ export default async function TemplatePage({ params }: RouteParams) {
                 {/* The definition, under the first screen (AGENTS.md §7 GEO): in the HTML, not in the way. */}
                 <p data-template-description className="mt-6 max-w-detail text-sm leading-relaxed text-black/65">{dict.meta.templateDescription}</p>
 
-                {/* §7.5: the maker block — only for a maker who made their profile public. */}
+                {/* §7.5·§20: the creative card — only for a creative who made their profile public. */}
                 {makerRest && card.authorHandle && (
                   <aside data-template-maker={card.authorHandle} className="mt-8 rounded-2xl border border-hairline p-5">
                     <p className="text-xs text-black/60">{t.makerBlockHeading}</p>
-                    <p className="mt-2 text-base font-semibold break-all">@{card.authorHandle}</p>
-                    {maker?.bio && <p className="mt-2 text-sm leading-relaxed whitespace-pre-line break-words text-black/70">{maker.bio}</p>}
-                    <a href={`/${locale}${makerRest}`} className="mt-4 inline-flex min-h-11 items-center text-sm font-medium underline underline-offset-4">{t.makerBlockCta} →</a>
+                    <a href={`/${locale}${makerRest}`} className="group mt-3 flex items-center gap-3.5">
+                      <CreativeAvatar handle={card.authorHandle} name={maker?.displayName ?? null} src={maker?.avatar ?? null} size={52} />
+                      <span className="min-w-0">
+                        <span className="block truncate text-base font-semibold group-hover:underline">{maker?.displayName ?? `@${card.authorHandle}`}</span>
+                        <span className="block truncate font-mono text-xs text-black/55">
+                          {[maker?.displayName ? `@${card.authorHandle}` : null, maker ? placeOf(maker.country, maker.city, locale) : null].filter(Boolean).join(' · ')}
+                        </span>
+                      </span>
+                    </a>
+                    {(maker?.headline ?? maker?.bio) && <p className="mt-3 text-sm leading-relaxed whitespace-pre-line break-words text-black/70">{maker?.headline ?? maker?.bio}</p>}
+                    {maker?.openToBrands && (
+                      <p className="mt-3 inline-flex items-center gap-2 rounded-full bg-black/[0.05] px-3 py-1 text-xs text-black/75">
+                        <span aria-hidden="true" className="size-1.5 rounded-full bg-emerald-500" />{dict.makers.openToBrands}
+                      </p>
+                    )}
+                    <a href={`/${locale}${makerRest}`} className="mt-3 flex min-h-11 items-center text-sm font-medium underline underline-offset-4">{t.makerBlockCta} →</a>
                   </aside>
                 )}
               </div>
@@ -405,9 +435,21 @@ export default async function TemplatePage({ params }: RouteParams) {
               </section>
             )}
 
+            {maker && moreFromMaker.length > 0 && (
+              <div data-template-more-from={maker.handle}>
+                <RelatedPrompts
+                  cards={moreFromMaker}
+                  locale={locale}
+                  labels={{ ...labels, relatedHeading: interpolate(t.moreFrom, { handle: maker.handle }) }}
+                  useCaseLabels={useCaseLabels}
+                  signinHref={signInHref(templateHref(locale, slug), locale)}
+                />
+              </div>
+            )}
+
             {await TemplateRatings({templateId:card.id,copy:dict.community})}
             <RelatedPrompts
-              cards={related(card, all)}
+              cards={related(card, all).filter((item) => !moreFromMaker.includes(item))}
               locale={locale}
               labels={{ ...labels, relatedHeading: t.relatedHeading }}
               useCaseLabels={useCaseLabels}

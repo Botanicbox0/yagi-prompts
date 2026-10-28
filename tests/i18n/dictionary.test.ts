@@ -232,9 +232,12 @@ describe('§14.1 names: one term object per locale', () => {
     expect(ko.templates.originMaker).toBe(KO_TERMS.maker);
     expect(ko.creatorProgram.approvedLine.startsWith(KO_TERMS.makerFull)).toBe(true);
     expect(ko.creatorProgram.applyTitle.startsWith(KO_TERMS.maker)).toBe(true);
-    // The values fixed on 2026-10-24 — the one place a test spells them out.
-    expect(KO_TERMS).toMatchObject({ maker: '메이커', makerFull: '템플릿 메이커', makerProgram: '메이커 프로그램', makerStudio: '메이커 스튜디오', studioCollection: 'TWINGS 오리지널', makerCollection: '메이커 컬렉션', creditPrefix: 'by', personal: '개인' });
-    expect(EN_TERMS).toMatchObject({ makerProgram: 'Maker Program', makerStudio: 'Maker Studio', makerCollection: 'Maker Collection', creditPrefix: 'by', personal: 'Personal' });
+    // The values fixed on 2026-10-28 (founder: "메이커" → "AI 크리에이티브", PLATFORM-2.0 §20.1) — the one place a test spells them out.
+    expect(KO_TERMS).toMatchObject({ maker: 'AI 크리에이티브', makerFull: 'AI 크리에이티브', makerProgram: 'AI 크리에이티브 프로그램', makerStudio: '크리에이티브 스튜디오', studioCollection: 'TWINGS 오리지널', makerCollection: 'AI 크리에이티브 컬렉션', creditPrefix: 'by', personal: '개인' });
+    expect(EN_TERMS).toMatchObject({ maker: 'AI creative', makerProgram: 'AI Creative Program', makerStudio: 'Creative Studio', makerCollection: 'By AI Creatives', creditPrefix: 'by', personal: 'Personal' });
+    // "메이커" is gone from every Korean value; "an" stands before the English term wherever an article is needed.
+    expect(koLeaves.filter(([, value]) => value.includes('메이커')).map(([key]) => key)).toEqual([]);
+    expect(Object.values(EN_TERMS).some((value) => /maker/i.test(value))).toBe(false);
   });
 
   it('keeps 크리에이터 for campaign participants and the personal label for the header switch only', () => {

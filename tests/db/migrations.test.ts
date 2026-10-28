@@ -120,6 +120,9 @@ describe('migrations apply on a fresh database (PLAN §6)', () => {
       'identity_portrait_attempts',
       'identity_portrait_selections',
       'identity_selfies',
+      // docs/PLATFORM-2.0.md §20 (2026-10-28) — an AI creative's agent tokens and representative works.
+      'maker_tokens',
+      'maker_works',
       'notification_deliveries',
       'notification_jobs',
       'platform_audit',
@@ -148,6 +151,8 @@ describe('migrations apply on a fresh database (PLAN §6)', () => {
       'publish_assets',
       // docs/PLATFORM-2.0.md §5.3 (2026-10-22) — one row per device that said yes to the completion push.
       'push_subscriptions',
+      // §20.3 — one row per (template, member) who opened a full recipe.
+      'recipe_unlocks',
       // 2026-09-11 — the owner's complaint about a result, one per render, worked from the admin inbox.
       'render_feedback',
       // docs/TEMPLATES-IA.md §8 (2026-09-06) — the render queue: one row per make, from photo to link.

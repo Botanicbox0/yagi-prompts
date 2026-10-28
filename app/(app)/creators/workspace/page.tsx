@@ -15,7 +15,13 @@ import { EarningsTable, FormatList, formatDate, recipeEditorHref } from '@/compo
 import { recipeSchemaReady } from '@/lib/recipes/repo';
 import { BUTTON, BUTTON_OUTLINE, PANEL } from '@/components/creators/styles';
 import { MakerProfilePanel } from '@/components/creators/maker-profile';
+import { McpConnect, WorksManager } from '@/components/creators/creative-studio';
 import { loadMakerSettings } from '@/lib/makers/profile';
+import { listMakerWorks } from '@/lib/makers/works';
+import { listMakerTokens } from '@/lib/makers/tokens';
+import { makerStats } from '@/lib/makers/stats';
+import { requestSurface } from '@/lib/routing/request-surface';
+import { siteUrl } from '@/lib/seo/site-url';
 
 /**
  * `/creators/workspace` — one screen per state: not applied, in review, declined, approved, revoked.
@@ -61,6 +67,14 @@ export default async function CreatorWorkspacePage({ searchParams }: { searchPar
     const formCopy = { formatName: c.formatName, medium: c.medium, video: c.video, image: c.image, example: c.example, recipe: c.recipe, rights: c.rights, busy: c.busy, submitFormat: c.submitFormat, error: c.error, errors: c.errors, formatNeedsScript: c.formatNeedsScript };
     const revising = typeof query.revise === 'string' && data.onboarding ? data.formats.find((f) => f.id === query.revise && f.status === 'rejected') : undefined;
     const makerSettings = sql ? await loadMakerSettings(sql, viewer.userId) : null;
+    // docs/PLATFORM-2.0.md §20: works, agent tokens and recipe opens exist once 0065 is applied.
+    const extended = !!sql && !!makerSettings?.extended;
+    const [works, tokens, stats] = extended && sql
+      ? await Promise.all([listMakerWorks(sql, viewer.userId), listMakerTokens(sql, viewer.userId), makerStats(sql, viewer.userId)])
+      : [[], [], []];
+    // The agent setup shows this host's address (a preview deploy shows its own); outside a request, the site's.
+    const origin = extended ? (await requestSurface().then((surface) => surface.origin).catch(() => null)) ?? siteUrl() : siteUrl();
+    const p = t;
     return shell('approved', <>
       <p className="text-sm opacity-70">{interpolate(t.approvedLine, { date: formatDate(creator.registeredAt, locale), contract: creator.contractVersion })}</p>
       {application?.status === 'approved' ? note(application.decisionNote) : null}
@@ -73,6 +87,32 @@ export default async function CreatorWorkspacePage({ searchParams }: { searchPar
           : <FormatSubmitForm key={revising?.id ?? 'new'} copy={formCopy} revision={revising && { id: revising.id, title: revising.title, medium: revising.medium, exampleUrl: revising.exampleUrl ?? '' }} />}
       </section>
       <MakerProfilePanel settings={makerSettings} dict={dict} locale={locale} saved={query.ok === 'profile'} error={typeof query.profile === 'string' ? query.profile : null} />
+      {extended && <>
+        <section id="works" data-creative-works-panel className={`scroll-mt-24 ${PANEL}`}>
+          <h2 className="text-xl font-semibold">{p.works.heading}</h2>
+          <p className="text-sm leading-relaxed opacity-70">{p.works.lede}</p>
+          <WorksManager initial={works.map((work) => ({ id: work.id, kind: work.kind, title: work.title, caption: work.caption, linkUrl: work.linkUrl }))} copy={p.works} />
+        </section>
+        <section id="stats" data-creative-stats className={`scroll-mt-24 ${PANEL}`}>
+          <h2 className="text-xl font-semibold">{p.stats.heading}</h2>
+          <p className="text-sm leading-relaxed opacity-70">{p.stats.lede}</p>
+          {stats.length === 0 ? <p className="text-sm opacity-60">{p.stats.empty}</p> : (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[28rem] text-left text-sm">
+                <thead className="text-xs opacity-60"><tr><th className="py-2 font-medium">{p.stats.colTemplate}</th><th className="py-2 text-right font-medium">{p.stats.colMembers}</th><th className="py-2 text-right font-medium">{p.stats.col7d}</th><th className="py-2 text-right font-medium">{p.stats.colOpens}</th></tr></thead>
+                <tbody className="divide-y divide-hairline">{stats.map((row) => (
+                  <tr key={row.slug}><td className="py-2.5"><a href={`/${locale}/t/${row.slug}`} className="underline-offset-4 hover:underline">{row.title}</a></td><td className="py-2.5 text-right font-mono">{row.members}</td><td className="py-2.5 text-right font-mono">{row.members7d}</td><td className="py-2.5 text-right font-mono">{row.opens}</td></tr>
+                ))}</tbody>
+              </table>
+            </div>
+          )}
+        </section>
+        <section id="connect" data-creative-connect className={`scroll-mt-24 ${PANEL}`}>
+          <h2 className="text-xl font-semibold">{p.connect.heading}</h2>
+          <p className="text-sm leading-relaxed opacity-70">{p.connect.lede}</p>
+          <McpConnect initial={tokens} endpoint={`${origin}/api/mcp`} locale={locale} copy={p.connect} />
+        </section>
+      </>}
       {records}
     </>);
   }

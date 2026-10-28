@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } f
 import type { Dictionary } from '@/messages/en';
 import { interpolate } from '@/lib/i18n/format';
 import { isRoyalty, quoteRecipe, ROYALTY_MAX_KRW, ROYALTY_MIN_KRW, ROYALTY_STEP_KRW } from '@/lib/recipes/pricing';
-import { exportRecipe, parseRecipe, recipeMedium, SELFIE_SLOT, type Recipe, type RecipeIssue } from '@/lib/recipes/schema';
+import { exportRecipe, INTRO_MAX, NOTE_MAX, OUTRO_MAX, parseRecipe, recipeMedium, SELFIE_SLOT, type Recipe, type RecipeIssue } from '@/lib/recipes/schema';
 import { BUTTON, BUTTON_OUTLINE, FIELD, HINT, PANEL } from '@/components/creators/styles';
 
 /**
@@ -24,15 +24,19 @@ export interface EditorDraft {
   disclosure: { prompts: boolean; assets: boolean }; presentation: 'make-first' | 'story-first'; royaltyKrw: number; testRendersUsed: number;
   files: EditorFile[]; tests: EditorTest[]; revisionOf: string | null;
 }
-interface StepState { kind: 'image' | 'video'; engine: string; text: string; aspect: string; duration: number; resolution: '720p' | '1080p' }
+interface StepState { kind: 'image' | 'video'; engine: string; text: string; aspect: string; duration: number; resolution: '720p' | '1080p'; note?: string }
+/** docs/PLATFORM-2.0.md §20.3 — what the creative writes around the prompts (display only). */
+export interface RecipeNotes { intro: string; outro: string }
 
 const ACTIONS = '/api/makers/formats';
 const PENDING = new Set(['held', 'queued', 'running']);
 const escape = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-export function RecipeEditor({ copy, formatId, draft, engines, aspects, hasSelfie, selfieHref, workspaceHref, testLimit, revisionOf, locale }: {
+export function RecipeEditor({ copy, formatId, draft, engines, aspects, hasSelfie, selfieHref, workspaceHref, testLimit, revisionOf, locale, selfPublish = false }: {
   copy: Copy; formatId: string; draft: EditorDraft | null; engines: EngineOption[]; aspects: { image: string[]; video: string[] };
   hasSelfie: boolean; selfieHref: string; workspaceHref: string; testLimit: number; revisionOf?: string; locale: string;
+  /** docs/PLATFORM-2.0.md §20.6 — the creative publishes it themself (no studio review in between). */
+  selfPublish?: boolean;
 }) {
   const imageEngines = engines.filter((e) => e.kind === 'image'), videoEngines = engines.filter((e) => e.kind === 'video');
   const label = useMemo(() => ({
@@ -53,6 +57,7 @@ export function RecipeEditor({ copy, formatId, draft, engines, aspects, hasSelfi
   const [initial] = useState(() => fromRecipe(draft?.recipe, draft?.files ?? [], label));
   const [medium, setMedium] = useState<EditorMedium>(initial?.medium ?? 'video');
   const [steps, setSteps] = useState<StepState[]>(initial?.steps ?? [newStep('video')]);
+  const [notes, setNotes] = useState<RecipeNotes>(initial?.notes ?? { intro: '', outro: '' });
   const [title, setTitle] = useState(draft?.title ?? '');
   const [titleKo, setTitleKo] = useState(draft?.titleKo ?? '');
   const [example, setExample] = useState(draft?.exampleUrl ?? '');
@@ -63,14 +68,14 @@ export function RecipeEditor({ copy, formatId, draft, engines, aspects, hasSelfi
   const [status, setStatus] = useState<EditorDraft['status'] | null>(draft?.status ?? null);
   const [tests, setTests] = useState<EditorTest[]>(draft?.tests ?? []);
   const [used, setUsed] = useState(draft?.testRendersUsed ?? 0);
-  const [busy, setBusy] = useState<null | 'save' | 'upload' | 'test' | 'submit'>(null);
+  const [busy, setBusy] = useState<null | 'save' | 'upload' | 'test' | 'submit' | 'publish'>(null);
   const [notice, setNotice] = useState<{ tone: 'ok' | 'error'; text: string } | null>(initial?.missingFile ? { tone: 'error', text: copy.importMissingFile } : null);
   const [ready, setReady] = useState(false);
   const textareas = useRef<Array<HTMLTextAreaElement | null>>([]);
   useEffect(() => setReady(true), []);
   const editable = status === null || status === 'draft';
 
-  const recipe = useMemo(() => toRecipe(steps, medium, references, label), [steps, medium, references, label]);
+  const recipe = useMemo(() => toRecipe(steps, medium, references, label, notes), [steps, medium, references, label, notes]);
   const checked = useMemo(() => parseRecipe(recipe), [recipe]);
   const quote = checked.ok && isRoyalty(royalty) ? quoteRecipe(checked.recipe, royalty) : null;
   const won = (n: number) => interpolate(copy.royaltyValue, { amount: n.toLocaleString(locale === 'ko' ? 'ko-KR' : 'en-US') });
@@ -139,6 +144,13 @@ export function RecipeEditor({ copy, formatId, draft, engines, aspects, hasSelfi
       if (await post({ action: 'test', id: formatId })) await refreshTests();
     });
   }
+  async function publish() {
+    await run('publish', async () => {
+      if (!await save(true)) return;
+      const result = await post({ action: 'publish', id: formatId, rights: true });
+      if (result && typeof result.slug === 'string') window.location.assign(`/${locale}/t/${result.slug}`);
+    });
+  }
   async function submit() {
     await run('submit', async () => {
       if (!await save(true)) return;
@@ -157,7 +169,7 @@ export function RecipeEditor({ copy, formatId, draft, engines, aspects, hasSelfi
     if (!file || file.size > 24_000) { if (file) setNotice({ tone: 'error', text: copy.importFailed }); return; }
     const loaded = fromRecipe(await file.text(), files, label);
     if (!loaded) { setNotice({ tone: 'error', text: copy.importFailed }); return; }
-    setMedium(loaded.medium); setSteps(loaded.steps);
+    setMedium(loaded.medium); setSteps(loaded.steps); setNotes(loaded.notes);
     setNotice(loaded.missingFile ? { tone: 'error', text: copy.importMissingFile } : null);
   }
 
@@ -262,6 +274,10 @@ export function RecipeEditor({ copy, formatId, draft, engines, aspects, hasSelfi
                 <textarea ref={(node) => { textareas.current[index] = node; }} value={step.text} onChange={(e) => update(index, { text: e.target.value })} rows={6} maxLength={4000} aria-label={`${interpolate(copy.stepLabel, { n: String(index + 1) })} ${copy.prompt}`} className={FIELD} autoComplete="off" spellCheck={false} />
                 <span className={HINT}>{copy.promptHint}</span>
               </div>
+              <label className="block text-sm" data-recipe-step-note={index + 1}>{copy.note}
+                <textarea value={step.note ?? ''} onChange={(e) => update(index, { note: e.target.value })} rows={2} maxLength={NOTE_MAX} className={FIELD} />
+                <span className={HINT}>{copy.noteHint}</span>
+              </label>
             </div>;
           })}
           {medium === 'video' && !steps.some((s) => s.kind === 'image') ? <button type="button" onClick={() => setSteps((current) => [newStep('image'), ...current])} className={BUTTON_OUTLINE}>{copy.addImageStep}</button> : null}
@@ -282,6 +298,14 @@ export function RecipeEditor({ copy, formatId, draft, engines, aspects, hasSelfi
             <label className="flex items-center gap-3 text-sm"><input type="checkbox" checked={disclosure.assets} onChange={(e) => setDisclosure({ ...disclosure, assets: e.target.checked })} />{copy.disclosureAssets}</label>
             <span className={HINT}>{copy.disclosureHint}</span>
           </fieldset>
+          <label className="block text-sm" data-recipe-intro-field>{copy.intro}
+            <textarea value={notes.intro} onChange={(e) => setNotes({ ...notes, intro: e.target.value })} rows={3} maxLength={INTRO_MAX} className={FIELD} />
+            <span className={HINT}>{copy.introHint}</span>
+          </label>
+          <label className="block text-sm" data-recipe-outro-field>{copy.outro}
+            <textarea value={notes.outro} onChange={(e) => setNotes({ ...notes, outro: e.target.value })} rows={2} maxLength={OUTRO_MAX} className={FIELD} />
+            <span className={HINT}>{copy.outroHint}</span>
+          </label>
           <fieldset className="space-y-2"><legend className="text-sm">{copy.presentation}</legend>
             {(['make-first', 'story-first'] as const).map((p) => <label key={p} className="flex items-center gap-3 text-sm"><input type="radio" name="presentation" checked={presentation === p} onChange={() => setPresentation(p)} />{p === 'make-first' ? copy.makeFirst : copy.storyFirst}</label>)}
           </fieldset>
@@ -307,8 +331,11 @@ export function RecipeEditor({ copy, formatId, draft, engines, aspects, hasSelfi
         <label className="flex items-start gap-3 text-sm leading-relaxed"><input type="checkbox" checked={rights} onChange={(e) => setRights(e.target.checked)} className="mt-1" disabled={!ready} />{copy.rights}</label>
         <div className="flex flex-wrap gap-3">
           <button type="button" disabled={!ready || !!busy} onClick={() => void run('save', () => save())} className={BUTTON_OUTLINE}>{busy === 'save' ? copy.saving : copy.save}</button>
-          <button type="button" data-recipe-submit disabled={!ready || !!busy || !rights || !checked.ok} onClick={() => void submit()} className={BUTTON}>{busy === 'submit' ? copy.submitting : copy.submit}</button>
+          {selfPublish
+            ? <button type="button" data-recipe-publish disabled={!ready || !!busy || !rights || !checked.ok || !exampleFile || !tests.some((t) => t.status === 'succeeded')} onClick={() => void publish()} className={BUTTON}>{busy === 'publish' ? copy.publishing : copy.publish}</button>
+            : <button type="button" data-recipe-submit disabled={!ready || !!busy || !rights || !checked.ok} onClick={() => void submit()} className={BUTTON}>{busy === 'submit' ? copy.submitting : copy.submit}</button>}
         </div>
+        {selfPublish ? <p className={HINT}>{copy.publishHint}</p> : null}
       </section> : null}
     </div>
 
@@ -344,7 +371,7 @@ function FileThumb({ file, alt, large = false }: { file: EditorFile; alt: string
 type Labels = { selfie: string; reference: (n: number) => string; step: (n: number) => string };
 
 /** Editor state → the §7.3 recipe. Inputs are the references a prompt mentions, in order of first mention. */
-export function toRecipe(steps: StepState[], medium: EditorMedium, references: EditorFile[], label: Labels): Recipe {
+export function toRecipe(steps: StepState[], medium: EditorMedium, references: EditorFile[], label: Labels, notes?: RecipeNotes): Recipe {
   const pairs: Array<[string, string]> = [[label.selfie, SELFIE_SLOT], ...references.map((_, i) => [label.reference(i + 1), `ref${i + 1}`] as [string, string])];
   let images = 0;
   steps.forEach((step, i) => { if (step.kind === 'image') pairs.push([label.step(++images), `step${i + 1}`]); });
@@ -360,16 +387,19 @@ export function toRecipe(steps: StepState[], medium: EditorMedium, references: E
       return `{{${name}}}`;
     });
     const params = step.kind === 'image' ? { aspect: step.aspect } : { aspect: step.aspect, duration: step.duration, resolution: step.resolution };
-    return { id: `step${i + 1}`, kind: step.kind, engine: step.engine, inputs, prompt, params };
+    const note = step.note?.trim();
+    return { id: `step${i + 1}`, kind: step.kind, engine: step.engine, inputs, prompt, ...(note ? { note } : {}), params };
   });
   const slots: Record<string, unknown> = { [SELFIE_SLOT]: { kind: 'image', source: 'user', required: true } };
   references.forEach((file, i) => { if (used.has(`ref${i + 1}`)) slots[`ref${i + 1}`] = { kind: file.kind, source: 'creator', asset: file.id }; });
   const output = medium === 'carousel' ? { frames: built.map((s) => s.id) } : { from: built[built.length - 1]?.id ?? 'step1' };
-  return { version: 2, slots, steps: built, output } as unknown as Recipe;
+  const intro = notes?.intro.trim(), outro = notes?.outro.trim();
+  const written = intro || outro ? { notes: { ...(intro ? { intro } : {}), ...(outro ? { outro } : {}) } } : {};
+  return { version: 2, slots, steps: built, output, ...written } as unknown as Recipe;
 }
 
 /** A stored or imported recipe → editor state, naming each maker file by its place in this draft's files. */
-export function fromRecipe(raw: unknown, files: EditorFile[], label: Labels): { medium: EditorMedium; steps: StepState[]; missingFile: boolean } | null {
+export function fromRecipe(raw: unknown, files: EditorFile[], label: Labels): { medium: EditorMedium; steps: StepState[]; missingFile: boolean; notes: RecipeNotes } | null {
   if (raw === null || raw === undefined) return null;
   const checked = parseRecipe(raw);
   // A draft may be saved mid-edit; read what parses and let the checks list say the rest.
@@ -381,7 +411,7 @@ export function fromRecipe(raw: unknown, files: EditorFile[], label: Labels): { 
   let images = 0;
   recipe.steps.forEach((step) => { if (step.kind === 'image') imageIndex.set(step.id, ++images); });
   const steps = recipe.steps.map((step) => ({
-    kind: step.kind, engine: step.engine,
+    kind: step.kind, engine: step.engine, note: typeof step.note === 'string' ? step.note : '',
     aspect: step.params.aspect, duration: step.kind === 'video' ? step.params.duration : 10, resolution: step.kind === 'video' ? step.params.resolution : '720p' as const,
     text: step.prompt.replace(/\{\{\s*([a-z][a-z0-9_]*)\s*\}\}/g, (_m, name: string) => {
       if (name === SELFIE_SLOT) return label.selfie;
@@ -395,7 +425,8 @@ export function fromRecipe(raw: unknown, files: EditorFile[], label: Labels): { 
       return n ? label.step(n) : `[?]`;
     }),
   }));
-  return { medium: checked.ok ? recipeMedium(recipe) : 'frames' in recipe.output ? 'carousel' : recipe.steps.some((s) => s.kind === 'video') ? 'video' : 'image', steps, missingFile };
+  const notes = { intro: typeof recipe.notes?.intro === 'string' ? recipe.notes.intro : '', outro: typeof recipe.notes?.outro === 'string' ? recipe.notes.outro : '' };
+  return { medium: checked.ok ? recipeMedium(recipe) : 'frames' in recipe.output ? 'carousel' : recipe.steps.some((s) => s.kind === 'video') ? 'video' : 'image', steps, missingFile, notes };
 }
 
 function lenient(raw: unknown): Recipe | null {

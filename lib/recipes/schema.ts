@@ -63,12 +63,22 @@ const UserSlot = z.object({ kind: z.literal('image'), source: z.literal('user'),
 const CreatorSlot = z.object({ kind: z.enum(['image', 'video']), source: z.literal('creator'), asset: z.string().regex(ASSET_HANDLE) }).strict();
 const Slot = z.discriminatedUnion('source', [UserSlot, CreatorSlot]);
 const Prompt = z.string().trim().min(10).max(4000);
+/**
+ * docs/PLATFORM-2.0.md §20.3 — what the creative says around the prompts, the way a tutorial post
+ * does (an intro, a tip under a step, "post yours and tag me"). Display only: no engine ever reads
+ * it, and it is shown exactly where the prompts are (members only, and only when disclosed).
+ */
+export const NOTE_MAX = 800;
+export const INTRO_MAX = 1200;
+export const OUTRO_MAX = 600;
+const Note = z.string().trim().max(NOTE_MAX).optional();
+const Notes = z.object({ intro: z.string().trim().max(INTRO_MAX).optional(), outro: z.string().trim().max(OUTRO_MAX).optional() }).strict();
 const ImageStep = z.object({
-  id: Name, kind: z.literal('image'), engine: z.string().max(40), inputs: z.array(Name).min(1).max(MAX_STEP_INPUTS), prompt: Prompt,
+  id: Name, kind: z.literal('image'), engine: z.string().max(40), inputs: z.array(Name).min(1).max(MAX_STEP_INPUTS), prompt: Prompt, note: Note,
   params: z.object({ aspect: z.enum(IMAGE_ASPECTS) }).strict(),
 }).strict();
 const VideoStep = z.object({
-  id: Name, kind: z.literal('video'), engine: z.string().max(40), inputs: z.array(Name).min(1).max(MAX_STEP_INPUTS), prompt: Prompt,
+  id: Name, kind: z.literal('video'), engine: z.string().max(40), inputs: z.array(Name).min(1).max(MAX_STEP_INPUTS), prompt: Prompt, note: Note,
   params: z.object({ aspect: z.enum(VIDEO_ASPECTS), duration: z.number().int(), resolution: z.enum(['720p', '1080p']) }).strict(),
 }).strict();
 const Step = z.discriminatedUnion('kind', [ImageStep, VideoStep]);
@@ -78,6 +88,7 @@ const RecipeShape = z.object({
   slots: z.record(Name, Slot),
   steps: z.array(Step).min(1).max(MAX_RECIPE_STEPS),
   output: Output,
+  notes: Notes.optional(),
 }).strict();
 
 export type RecipeSlot = z.infer<typeof Slot>;
@@ -262,7 +273,7 @@ export function displayStepPrompt(recipe: Recipe, step: RecipeStep, labels: { se
 
 /** A recipe the way an import/export file holds it: the schema, nothing else, stable key order. */
 export function exportRecipe(recipe: Recipe): string {
-  return JSON.stringify({ version: recipe.version, slots: recipe.slots, steps: recipe.steps, output: recipe.output }, null, 2);
+  return JSON.stringify({ version: recipe.version, slots: recipe.slots, steps: recipe.steps, output: recipe.output, ...(recipe.notes ? { notes: recipe.notes } : {}) }, null, 2);
 }
 
 /** The single-prompt fallback stored in prompt_text (legacy readers), in the catalogue's `@imageN` dialect. */
