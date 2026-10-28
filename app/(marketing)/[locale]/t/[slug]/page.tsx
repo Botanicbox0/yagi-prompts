@@ -212,15 +212,14 @@ export default async function TemplatePage({ params }: RouteParams) {
                         fallback={<TypographicPoster title={card.title} slug={card.slug} kicker={dict.nav[card.medium]} ratio={ratio} />}
                       />
                     </div>
-                    {card.poster && (
-                      <TransformStrip
-                        lead={galleryLabels.transformVideo}
-                        selfieLabel={dict.creatorJourney.evidenceSelfie}
-                        makeHref={style !== null ? '#make' : null}
-                        poster={card.poster}
-                        aspect={mediaAspect}
-                      />
-                    )}
+                    {/* A film with no poster still gets the promise, without the result tile. */}
+                    <TransformStrip
+                      lead={galleryLabels.transformVideo}
+                      selfieLabel={dict.creatorJourney.evidenceSelfie}
+                      makeHref={style !== null ? '#make' : null}
+                      poster={card.poster}
+                      aspect={mediaAspect}
+                    />
                   </>
                 )}
               </div>

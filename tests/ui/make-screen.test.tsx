@@ -127,8 +127,13 @@ describe('the template page as a decision screen', () => {
       expect(card).not.toContain('data-studio-photo-examples');
       expect(html.indexOf('data-template-photo-guide')).toBeGreaterThan(html.indexOf('data-template-sale-state'));
       expect(html).toContain('data-studio-photo-examples');
-      expect(visible(html)).toContain(dict.creatorJourney.evidenceSelfie);
-      expect(visible(html)).toContain(dict.creatorJourney.evidenceScene);
+      // The core promise sits under the stage: my selfie → this scene, the selfie tile leading to the make card.
+      const strip = html.slice(html.indexOf('data-template-transform'));
+      expect(visible(strip)).toContain(dict.templates.gallery.transformVideo);
+      expect(visible(strip)).toContain(dict.creatorJourney.evidenceSelfie);
+      expect(strip).toContain('data-selfie-tile="empty"');
+      expect(strip).toContain('href="#make"');
+      expect(html.indexOf('data-template-transform')).toBeLessThan(html.indexOf('id="make"'));
     });
 
     it(`keeps the definition paragraph in the page HTML, after the make card (${locale})`, async () => {
