@@ -4,7 +4,7 @@ import { getDictionary } from '@/lib/i18n/dictionaries';
 import { MarketingNav, MarketingFooter } from '@/components/marketing/chrome';
 import { BrandInquiryDialog } from '@/components/campaigns/brand-inquiry-dialog';
 import { BrandFormatExplorer, BrandCraftShowcase, HeroCinemaGrid, MorphicFilmPair } from '@/components/campaigns/brand-experience';
-import { StudioContrast, StudioHero, StudioMemory, StudioMoods, StudioPipelineSection, StudioSplit } from '@/components/brand-studio/studio-sections';
+import { StudioFeed, StudioHero, StudioMemory, StudioMoods, StudioPipelineSection, StudioVtoSection } from '@/components/brand-studio/studio-sections';
 import { CAMPAIGN_REEL } from '@/lib/campaigns/showreel';
 import { BrandCustomerStory } from '@/components/campaigns/brand-customer-story';
 import { brandsHref, brandEnquiryHref, BRAND_INQUIRY_ENDPOINT } from '@/lib/campaigns/links';
@@ -48,10 +48,10 @@ export default async function BrandsPage({ params }: Props) {
 
     <main id="main" data-brand-landing className="overflow-clip bg-white text-[#141414] [word-break:keep-all]">
       <StudioHero copy={t.studio} locale={locale} />
-      <StudioSplit copy={t.studio} />
       <StudioMoods copy={t.studio} />
       <StudioPipelineSection copy={t.studio} />
       <StudioMemory copy={t.studio} />
+      <StudioVtoSection copy={t.studio} />
 
       <section id="spread" data-section data-theme="light" data-studio-spread className="section scroll-mt-20 bg-white">
         <div className="audience-shell pb-6 pt-4 lg:pb-10">
@@ -97,6 +97,7 @@ export default async function BrandsPage({ params }: Props) {
                 </div>
               ))}
             </div>
+            <StudioFeed copy={t.studio} />
           </div>
         </div>
       </section>
@@ -210,8 +211,6 @@ export default async function BrandsPage({ params }: Props) {
           </div>
         </div>
       </section>
-
-      <StudioContrast copy={t.studio} />
 
       <section id="brands" data-section data-theme="light" data-brands className="section scroll-mt-24 border-y border-black/10 bg-[#F5F5F6]">
         <div className="audience-shell grid gap-12 py-20 lg:grid-cols-[0.75fr_1.25fr] lg:gap-20 lg:py-28">

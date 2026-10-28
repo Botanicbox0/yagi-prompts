@@ -1,14 +1,14 @@
 /**
- * PLATFORM-2.0 §20 — the brand landing's studio chapters: remember → find → make, then the live
- * "spread" chapter that the page keeps from the campaign service. Server-rendered so every line is in
- * the initial HTML. Titles use the site's line reveal and card groups its stagger (PLAN §5.3-4),
- * both armed only on the client and dropped under reduced motion.
+ * PLATFORM-2.0 §20 — the brand landing's studio chapters: sort → search & generate → memory → try-on
+ * (beta), then the live "spread" chapter the page keeps from the campaign service. Server-rendered so
+ * every line is in the initial HTML. Titles use the site's line reveal and card groups its stagger
+ * (PLAN §5.3-4), both armed only on the client and dropped under reduced motion.
  */
 import type { Dictionary } from '@/lib/i18n/dictionaries';
 import { brandEnquiryHref } from '@/lib/campaigns/links';
 import { Reveal } from '@/components/motion/reveal';
 import { RevealGrid } from '@/components/motion/reveal-grid';
-import { StudioHeroStage, StudioMoodClusters, StudioPipeline } from './studio-interactive';
+import { StudioHeroStage, StudioMoodClusters, StudioPipeline, StudioVto } from './studio-interactive';
 import styles from './studio.module.css';
 
 type StudioCopy = Dictionary['brandLanding']['studio'];
@@ -25,13 +25,26 @@ const MEMORY_RATIOS = [
 ] as const;
 /** Layer order matches `copy.memory`: brand → campaign → person. */
 const MEMORY_IDS = ['org', 'project', 'me'] as const;
+/** What the loop feeds back: three posted cuts from the example feed. */
+const LOOP_THUMBS = ['/reel/studio/feed-cafe.webp', '/reel/studio/feed-taxi.webp', '/reel/studio/feed-street.webp'] as const;
+/** The same bottle in eight fictional creators' posts (labelled on the page as examples). */
+const FEED = ['feed-mirror', 'feed-wrist', 'feed-cafe', 'feed-taxi', 'feed-bed', 'feed-street', 'feed-desk', 'feed-gym'] as const;
 
-function EarlyAccess({ copy }: { copy: StudioCopy }) {
-  return <span data-early-access className={styles.chip}><span aria-hidden="true" className={`${styles.dot} ${styles.dotMuted}`} />{copy.earlyAccess}</span>;
+function Tag({ kind, children }: { kind: 'early' | 'beta' | 'live'; children: string }) {
+  return <span data-early-access={kind === 'live' ? undefined : kind} className={`${styles.statusTag} ${kind === 'live' ? styles.statusTagLive : ''}`}>{children}</span>;
 }
 
-function Live({ copy }: { copy: StudioCopy }) {
-  return <span className={`${styles.chip} ${styles.chipLive}`}><span aria-hidden="true" className={styles.dot} />{copy.live}</span>;
+/** One head for every chapter: index + status on one line, the title, and the body set beside it. */
+function Head({ eyebrow, status, title, body }: { eyebrow: string; status?: React.ReactNode; title: string; body: string }) {
+  return (
+    <div className={styles.head}>
+      <div>
+        <p className={styles.eyebrow}>{eyebrow}{status}</p>
+        <Reveal lines={title.split('\n')} className={`${styles.title} ${styles.sectionTitle}`} lineClassName="block" />
+      </div>
+      <p className={`${styles.lede} ${styles.sectionBody}`}>{body}</p>
+    </div>
+  );
 }
 
 export function StudioHero({ copy, locale }: { copy: StudioCopy; locale: Locale }) {
@@ -46,7 +59,7 @@ export function StudioHero({ copy, locale }: { copy: StudioCopy; locale: Locale 
             <a data-campaign-cta-brand data-inquiry-trigger="hero" href={brandEnquiryHref(locale)} className={styles.primary}>{copy.heroCta} <span aria-hidden="true">↗</span></a>
             <a href="#spread" className={styles.secondary}>{copy.heroSecondary} <span aria-hidden="true">›</span></a>
           </div>
-          <p className={styles.heroNote}>{copy.earlyNote}</p>
+          <p className={styles.heroNote}><Tag kind="early">{copy.earlyAccess}</Tag>{copy.earlyNote}</p>
         </div>
         <StudioHeroStage copy={copy} />
       </div>
@@ -54,58 +67,11 @@ export function StudioHero({ copy, locale }: { copy: StudioCopy; locale: Locale 
   );
 }
 
-export function StudioSplit({ copy }: { copy: StudioCopy }) {
-  return (
-    <section data-section data-theme="light" data-studio-split className={`section ${styles.root} ${styles.section}`}>
-      <div className="audience-shell">
-        <div className={styles.split}>
-          <div className={styles.sectionHead}>
-            <p className={styles.eyebrow}>{copy.splitEyebrow}</p>
-            <Reveal lines={copy.splitTitle.split('\n')} className={`${styles.title} ${styles.sectionTitle}`} lineClassName="block" />
-            <p className={`${styles.lede} ${styles.sectionBody}`}>{copy.splitBody}</p>
-          </div>
-          <RevealGrid itemSelector="[data-split-tool]" stagger={0.09}><ol className={styles.tools}>
-            {copy.splitTools.map((tool, index) => (
-              <li key={tool.label} data-split-tool className={styles.tool}>
-                <span aria-hidden="true" className={styles.toolIndex}>0{index + 1}</span>
-                <p><span className={styles.toolLabel}>{tool.label}</span><span className={styles.toolWhere}>{tool.where}</span></p>
-                <p className={styles.toolLoss}>{tool.loss}</p>
-              </li>
-            ))}
-          </ol></RevealGrid>
-        </div>
-        <div data-studio-flow className={styles.flow}>
-          <p className={styles.flowTitle}>{copy.flowTitle}</p>
-          <RevealGrid itemSelector="[data-flow-step]"><ol className={styles.flowSteps}>
-            {copy.flow.map((step, index) => {
-              const live = index === copy.flow.length - 1;
-              return (
-                <li key={step.step} data-flow-step={live ? 'live' : 'early'} className={`${styles.flowStep} ${live ? styles.flowStepLive : ''}`}>
-                  <div className={styles.flowStepHead}>
-                    <span className={styles.flowStepName}>{step.step}</span>
-                    {live ? <Live copy={copy} /> : <EarlyAccess copy={copy} />}
-                  </div>
-                  <p className={styles.flowStepBody}>{step.body}</p>
-                </li>
-              );
-            })}
-          </ol></RevealGrid>
-        </div>
-      </div>
-    </section>
-  );
-}
-
 export function StudioMoods({ copy }: { copy: StudioCopy }) {
   return (
-    <section id="moods" data-section data-theme="light" data-studio-moods className={`section scroll-mt-24 ${styles.root} ${styles.section}`} style={{ paddingTop: 0 }}>
+    <section id="moods" data-section data-theme="light" data-studio-moods className={`section scroll-mt-24 ${styles.root} ${styles.section}`}>
       <div className="audience-shell">
-        <div className={styles.sectionHead}>
-          <p className={styles.eyebrow}>{copy.moods.eyebrow}</p>
-          <Reveal lines={copy.moods.title.split('\n')} className={`${styles.title} ${styles.sectionTitle}`} lineClassName="block" />
-          <p className={`${styles.lede} ${styles.sectionBody}`}>{copy.moods.body}</p>
-          <div><EarlyAccess copy={copy} /></div>
-        </div>
+        <Head eyebrow={copy.moods.eyebrow} status={<Tag kind="early">{copy.earlyAccess}</Tag>} title={copy.moods.title} body={copy.moods.body} />
         <StudioMoodClusters copy={copy} />
       </div>
     </section>
@@ -114,14 +80,9 @@ export function StudioMoods({ copy }: { copy: StudioCopy }) {
 
 export function StudioPipelineSection({ copy }: { copy: StudioCopy }) {
   return (
-    <section id="studio" data-section data-theme="light" className={`section scroll-mt-24 ${styles.root} ${styles.section}`} style={{ paddingTop: 0 }}>
+    <section id="studio" data-section data-theme="light" className={`section scroll-mt-24 ${styles.root} ${styles.section}`}>
       <div className="audience-shell">
-        <div className={styles.sectionHead}>
-          <p className={styles.eyebrow}>{copy.pipelineEyebrow}</p>
-          <Reveal lines={copy.pipelineTitle.split('\n')} className={`${styles.title} ${styles.sectionTitle}`} lineClassName="block" />
-          <p className={`${styles.lede} ${styles.sectionBody}`}>{copy.pipelineBody}</p>
-          <div><EarlyAccess copy={copy} /></div>
-        </div>
+        <Head eyebrow={copy.pipelineEyebrow} status={<Tag kind="early">{copy.earlyAccess}</Tag>} title={copy.pipelineTitle} body={copy.pipelineBody} />
         <StudioPipeline copy={copy} />
       </div>
     </section>
@@ -130,64 +91,71 @@ export function StudioPipelineSection({ copy }: { copy: StudioCopy }) {
 
 export function StudioMemory({ copy }: { copy: StudioCopy }) {
   return (
-    <section data-section data-theme="light" data-brand-memory className={`section ${styles.root} ${styles.section}`} style={{ paddingTop: 0 }}>
+    <section data-section data-theme="light" data-brand-memory className={`section ${styles.root} ${styles.section}`}>
       <div className="audience-shell">
-        <div className={styles.sectionHead}>
-          <p className={styles.eyebrow}>{copy.memoryEyebrow}</p>
-          <Reveal lines={copy.memoryTitle.split('\n')} className={`${styles.title} ${styles.sectionTitle}`} lineClassName="block" />
-          <p className={`${styles.lede} ${styles.sectionBody}`}>{copy.memoryBody}</p>
-          <div><EarlyAccess copy={copy} /></div>
-        </div>
+        <Head eyebrow={copy.memoryEyebrow} status={<Tag kind="early">{copy.earlyAccess}</Tag>} title={copy.memoryTitle} body={copy.memoryBody} />
         <RevealGrid itemSelector="[data-memory-layer]" stagger={0.08}><ul className={styles.bento}>
           {copy.memory.map((layer, index) => {
             const id = MEMORY_IDS[index];
             return (
-            <li key={id} data-memory-layer={id} className={styles.memCard}>
-              <div>
-                <p className={styles.memLayer}><span>0{index + 1}</span></p>
-                <h3 className={styles.memTitle} style={{ marginTop: 14 }}>{layer.title}</h3>
-                <p className={styles.memBody}>{layer.body}</p>
-              </div>
-              <div aria-hidden="true" className={styles.memVisual}>
-                {id === 'org' && MEMORY_SWATCHES.map((hex) => <span key={hex} className={styles.memSwatch} style={{ background: hex }} />)}
-                {id === 'project' && MEMORY_THUMBS.map((src) => <span key={src} className={styles.memThumb}><img src={src} alt="" width={120} height={160} loading="lazy" decoding="async" /></span>)}
-                {id === 'me' && MEMORY_RATIOS.map((ratio) => <span key={ratio.label} className={`${styles.memRatio} ${ratio.preferred ? styles.memRatioOn : ''}`}><span className={styles.memRatioBox} style={{ aspectRatio: ratio.box }} />{ratio.label}</span>)}
-              </div>
-              <ul className={styles.memItems}>
-                {layer.items.map((item) => <li key={item} className={styles.memItem}><span aria-hidden="true" className={styles.dot} />{item}</li>)}
-              </ul>
-            </li>
+              <li key={id} data-memory-layer={id} className={styles.memCard}>
+                <div>
+                  <p className={styles.memLayer}><span>0{index + 1}</span></p>
+                  <h3 className={styles.memTitle} style={{ marginTop: 14 }}>{layer.title}</h3>
+                  <p className={styles.memBody}>{layer.body}</p>
+                </div>
+                <div aria-hidden="true" className={styles.memVisual}>
+                  {id === 'org' && MEMORY_SWATCHES.map((hex) => <span key={hex} className={styles.memSwatch} style={{ background: hex }} />)}
+                  {id === 'project' && MEMORY_THUMBS.map((src) => <span key={src} className={styles.memThumb}><img src={src} alt="" width={120} height={160} loading="lazy" decoding="async" /></span>)}
+                  {id === 'me' && MEMORY_RATIOS.map((ratio) => <span key={ratio.label} className={`${styles.memRatio} ${ratio.preferred ? styles.memRatioOn : ''}`}><span className={styles.memRatioBox} style={{ aspectRatio: ratio.box }} />{ratio.label}</span>)}
+                </div>
+                <ul className={styles.memItems}>
+                  {layer.items.map((item) => <li key={item} className={styles.memItem}><span aria-hidden="true" className={styles.dot} />{item}</li>)}
+                </ul>
+              </li>
             );
           })}
         </ul></RevealGrid>
+        {/* The loop back from posting (PLATFORM-2.0 §20.3): results feed the next campaign's memory. */}
+        <div data-memory-loop className={styles.loop}>
+          <span aria-hidden="true" className={styles.loopThumbs}>{LOOP_THUMBS.map((src) => <img key={src} src={src} alt="" width={64} height={114} loading="lazy" decoding="async" />)}</span>
+          <p><strong>{copy.memoryLoop.label}</strong> {copy.memoryLoop.body}</p>
+          <span aria-hidden="true" className={styles.loopArrow}>↺</span>
+        </div>
       </div>
     </section>
   );
 }
 
-export function StudioContrast({ copy }: { copy: StudioCopy }) {
+export function StudioVtoSection({ copy }: { copy: StudioCopy }) {
   return (
-    <section data-section data-theme="light" data-studio-contrast className={`section ${styles.root} ${styles.section}`}>
+    <section id="try-on" data-section data-theme="light" data-studio-vto className={`section scroll-mt-24 ${styles.root} ${styles.section}`}>
       <div className="audience-shell">
-        <div className={styles.sectionHead}>
-          <p className={styles.eyebrow}>{copy.contrastEyebrow}</p>
-          <Reveal lines={copy.contrastTitle.split('\n')} className={`${styles.title} ${styles.sectionTitle}`} lineClassName="block" />
-        </div>
-        <div className={styles.contrast}>
-          <div className={styles.contrastCard}>
-            <p className={styles.contrastLabel}>{copy.contrastHaveLabel}</p>
-            <ul className={styles.contrastList}>
-              {copy.contrastHave.map((item) => <li key={item} className={styles.contrastItem}><span aria-hidden="true" className={styles.tick}>✓</span>{item}</li>)}
-            </ul>
-          </div>
-          <div className={`${styles.contrastCard} ${styles.contrastCardSkip}`}>
-            <p className={styles.contrastLabel}>{copy.contrastSkipLabel}</p>
-            <ul className={styles.contrastList}>
-              {copy.contrastSkip.map((item) => <li key={item} className={`${styles.contrastItem} ${styles.contrastItemSkip}`}><span aria-hidden="true" className={styles.cross}>×</span>{item}</li>)}
-            </ul>
-          </div>
-        </div>
+        <Head eyebrow={copy.vto.eyebrow} status={<Tag kind="beta">{copy.beta}</Tag>} title={copy.vto.title} body={copy.vto.body} />
+        <StudioVto copy={copy} />
       </div>
     </section>
+  );
+}
+
+/** The same bottle in eight feeds: a slow marquee (paused on hover, still under reduced motion). */
+export function StudioFeed({ copy }: { copy: StudioCopy }) {
+  const items = [...FEED, ...FEED];
+  return (
+    <div data-studio-feed className={`${styles.root} ${styles.feed}`}>
+      <div className={styles.feedHead}>
+        <p className={styles.feedTitle}>{copy.spreadFeed.title}</p>
+        <p className={styles.feedNote}>{copy.spreadFeed.note}</p>
+      </div>
+      <div className={styles.feedTrack}>
+        <ul className={styles.feedRow}>
+          {items.map((name, index) => (
+            <li key={`${name}-${index}`} data-feed-post={index < FEED.length ? name : undefined} aria-hidden={index >= FEED.length ? 'true' : undefined} className={styles.feedPost}>
+              <img src={`/reel/studio/${name}.webp`} alt="" width={270} height={480} loading="lazy" decoding="async" />
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
   );
 }

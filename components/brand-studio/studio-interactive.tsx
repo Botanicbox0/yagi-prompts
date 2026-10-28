@@ -24,12 +24,12 @@ const studio = (name: string) => `/reel/studio/${name}.webp`;
 
 /** Six frames from the library, each with the offset it floats at before the studio gathers it. */
 const HERO_TILES = [
-  { src: studio('amber-yagi'), file: 'amber_light_01.png', dx: -165, dy: -30, rot: -8, sc: 1.06 },
-  { src: studio('smoke-1'), file: 'agarwood_smoke.png', dx: 45, dy: -58, rot: 6, sc: 0.96 },
-  { src: studio('red-yagi'), file: 'red_object_01.png', dx: 172, dy: -26, rot: 9, sc: 1.04 },
-  { src: studio('botanic-1'), file: 'botanical_leaf.png', dx: -182, dy: 42, rot: 7, sc: 0.98 },
-  { src: studio('flora-yagi'), file: 'night_florals.png', dx: -30, dy: 92, rot: -5, sc: 1.02 },
-  { src: studio('cream-yagi'), file: 'cream_driftwood.png', dx: 178, dy: 58, rot: -9, sc: 1 },
+  { src: studio('amber-yagi-2'), file: 'FW26_amber_014.png', bg: '#302517', dx: -165, dy: -30, rot: -8, sc: 1.06 },
+  { src: studio('smoke-1'), file: 'agarwood_smoke_03.png', bg: '#755D4B', dx: 45, dy: -58, rot: 6, sc: 0.96 },
+  { src: studio('red-yagi-3'), file: 'red_object_drip.png', bg: '#560305', dx: 172, dy: -26, rot: 9, sc: 1.04 },
+  { src: studio('botanic-1'), file: 'oak_leaf_study.png', bg: '#E3E3E2', dx: -182, dy: 42, rot: 7, sc: 0.98 },
+  { src: studio('flora-yagi-2'), file: 'jasmine_night_02.png', bg: '#0D0D09', dx: -30, dy: 92, rot: -5, sc: 1.02 },
+  { src: studio('cream-yagi-2'), file: 'cream_base_macro.png', bg: '#BFB7B2', dx: 178, dy: 58, rot: -9, sc: 1 },
 ] as const;
 
 /** The search demo: three frames that really show smoke, three that do not. */
@@ -45,21 +45,21 @@ const SEARCH_CELLS = [
 /** Dominant colors measured from amber-yagi.webp (median-cut quantize), not invented. */
 const SWATCHES = ['#5D3B27', '#D0AA98', '#141C0D'] as const;
 /** Same bottle, regenerated per mood: the packshot, then three moods from the library. */
-const VARIANTS = [studio('bottle'), studio('flora-yagi'), studio('red-yagi'), studio('botanic-yagi')] as const;
+const VARIANTS = [studio('bottle'), studio('flora-yagi-2'), studio('red-yagi-2'), studio('botanic-yagi-2')] as const;
 
 /**
  * Mood clusters for the auto-sorting demo. Palettes are measured from each cluster's files
  * (median-cut quantize over every frame), and each cluster leads with its YAGI product shot.
  */
 export const MOOD_LIBRARY = [
-  { id: 'amber', product: 'amber-yagi', tiles: ['amber-1', 'amber-2'], palette: ['#513E2A', '#302517', '#181A11'] },
-  { id: 'drape', product: 'drape-yagi', tiles: ['drape-2'], palette: ['#DBCCDA', '#7A5F50', '#462812'] },
-  { id: 'smoke', product: 'smoke-yagi', tiles: ['smoke-1', 'smoke-2', 'smoke-3', 'smoke-4'], palette: ['#8F745F', '#755D4B', '#674D3A'] },
-  { id: 'cream', product: 'cream-yagi', tiles: ['cream-1', 'cream-2', 'cream-3', 'cream-4'], palette: ['#D8D3D3', '#BFB7B2', '#332216'] },
-  { id: 'flora', product: 'flora-yagi', tiles: ['flora-1', 'flora-2', 'flora-3', 'flora-4'], palette: ['#D8D6D3', '#0D0D09', '#050403'] },
-  { id: 'botanic', product: 'botanic-yagi', tiles: ['botanic-1', 'botanic-2', 'botanic-3', 'botanic-4', 'botanic-5', 'botanic-6'], palette: ['#F5F3F5', '#E3E3E2', '#43372E'] },
-  { id: 'mono', product: 'mono-yagi', tiles: ['mono-1', 'mono-2', 'mono-3', 'mono-4', 'mono-5'], palette: ['#B8B6B7', '#99989A', '#1C1E1C'] },
-  { id: 'red', product: 'red-yagi', tiles: ['red-2', 'red-3'], palette: ['#6E0E10', '#560305', '#2A0203'] },
+  { id: 'amber', product: 'amber-yagi-2', tiles: ['amber-yagi-3', 'amber-1', 'amber-yagi', 'amber-2'], palette: ['#513E2A', '#302517', '#181A11'] },
+  { id: 'drape', product: 'drape-yagi-2', tiles: ['drape-yagi-3', 'drape-2', 'drape-yagi'], palette: ['#DBCCDA', '#7A5F50', '#462812'] },
+  { id: 'smoke', product: 'smoke-yagi-2', tiles: ['smoke-1', 'smoke-yagi-3', 'smoke-2', 'smoke-yagi', 'smoke-3', 'smoke-4'], palette: ['#8F745F', '#755D4B', '#674D3A'] },
+  { id: 'cream', product: 'cream-yagi-2', tiles: ['cream-1', 'cream-yagi', 'cream-2', 'cream-3', 'cream-4'], palette: ['#D8D3D3', '#BFB7B2', '#332216'] },
+  { id: 'flora', product: 'flora-yagi-2', tiles: ['flora-1', 'flora-2', 'flora-yagi', 'flora-3', 'flora-4'], palette: ['#D8D6D3', '#0D0D09', '#050403'] },
+  { id: 'botanic', product: 'botanic-yagi-2', tiles: ['botanic-1', 'botanic-2', 'botanic-yagi', 'botanic-3', 'botanic-4', 'botanic-5', 'botanic-6'], palette: ['#F5F3F5', '#E3E3E2', '#43372E'] },
+  { id: 'mono', product: 'mono-yagi-2', tiles: ['mono-1', 'mono-yagi', 'mono-2', 'mono-3', 'mono-4', 'mono-5'], palette: ['#B8B6B7', '#99989A', '#1C1E1C'] },
+  { id: 'red', product: 'red-yagi-2', tiles: ['red-yagi-3', 'red-2', 'red-yagi', 'red-3'], palette: ['#6E0E10', '#560305', '#2A0203'] },
 ] as const;
 const ROTATE_MS = 6000;
 /** Panel order matches `copy.tabs`; ids are markup, not copy. */
@@ -82,9 +82,9 @@ void main(){
   vec2 u=gl_FragCoord.xy/r;float a=r.x/r.y;u.x*=a;float m=a*.5;float k=t*.12;
   float b1=f(u,vec2(m+.16*sin(k*1.3),.56+.08*cos(k*1.1)),.62)*.62;
   float b2=f(u,vec2(m+.30*cos(k*.9+1.),.46+.10*sin(k*1.4+2.)),.48)*.48;
-  float b3=f(u,vec2(m+.24*sin(k*.7+4.),.52+.12*cos(k*.8+3.)),.52)*.42;
+  float b3=f(u,vec2(m+.24*sin(k*.7+4.),.52+.12*cos(k*.8+3.)),.36)*.22;
   float s=b1+b2+b3;
-  vec3 c=(vec3(.93,.12,.12)*b1+vec3(1.,.55,.66)*b2+vec3(1.,.78,.70)*b3)/max(s,.001);
+  vec3 c=(vec3(.82,.52,.26)*b1+vec3(.86,.72,.80)*b2+vec3(.93,.12,.12)*b3)/max(s,.001);
   float g=fract(sin(dot(gl_FragCoord.xy,vec2(12.9898,78.233)))*43758.5453)-.5;
   float al=clamp(s*.5+g*.02,0.,1.);
   gl_FragColor=vec4(c*al,al);
@@ -219,8 +219,9 @@ export function StudioHeroStage({ copy }: { copy: StudioCopy }) {
             {HERO_TILES.map((tile, index) => (
               <div key={tile.src} className={styles.slot}>
                 <div className={styles.tile} style={{ '--dx': tile.dx, '--dy': tile.dy, '--rot': tile.rot, '--sc': tile.sc } as Vars}>
-                  <div className={styles.tileMedia}>
-                    <img src={tile.src} alt="" width={320} height={240} loading={index < 3 ? 'eager' : 'lazy'} decoding="async" />
+                  <div className={styles.tileMedia} style={{ background: tile.bg }}>
+                    {/* Above the fold: every hero frame loads eagerly, on its measured colour while it does. */}
+                    <img src={tile.src} alt="" width={320} height={240} loading="eager" fetchPriority={index < 3 ? 'high' : 'auto'} decoding="async" />
                   </div>
                   <span className={styles.tag}>{copy.stage.tags[index]}</span>
                   <span className={styles.file}>{tile.file}</span>
@@ -554,6 +555,97 @@ export function StudioMoodClusters({ copy }: { copy: StudioCopy }) {
         })}
       </ul>
       <p className={styles.moodNote}>{t.note}</p>
+    </div>
+  );
+}
+
+/**
+ * Try-on (beta), PLATFORM-2.0 §20.8. Lookbook is the Americano shape (fixed cuts on white); free mode
+ * relaxes scene, pose and ratio while the garment and the virtual model stay locked. Both panels ship in
+ * the initial HTML; only the visible one changes.
+ */
+const VTO_LOOK = ['vto-look-front', 'vto-look-upper', 'vto-look-side'] as const;
+const VTO_FREE = [
+  { name: 'vto-free-amber', ratio: '3 / 4' },
+  { name: 'vto-free-alley', ratio: '9 / 16' },
+  { name: 'vto-free-mirror', ratio: '9 / 16' },
+  { name: 'vto-free-sofa', ratio: '3 / 4' },
+  { name: 'vto-free-drape', ratio: '3 / 4' },
+] as const;
+const VTO_MODES = ['lookbook', 'free'] as const;
+
+export function StudioVto({ copy }: { copy: StudioCopy }) {
+  const t = copy.vto;
+  const [mode, setMode] = useState(0);
+  const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const onKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+    event.preventDefault();
+    const next = mode === 0 ? 1 : 0;
+    setMode(next);
+    tabRefs.current[next]?.focus();
+  };
+
+  return (
+    <div data-vto className={styles.vto}>
+      <aside className={styles.vtoInput}>
+        <figure className={styles.vtoGarment}>
+          <img src={studio('vto-garment')} alt="" width={480} height={480} loading="lazy" decoding="async" />
+          <figcaption><span>{t.garmentNote}</span>{t.garment}</figcaption>
+        </figure>
+        <div className={styles.vtoLists}>
+          <div>
+            <p className={styles.vtoListLabel}>{t.lockLabel}</p>
+            <ul>{t.locks.map((item) => <li key={item}><span aria-hidden="true" className={styles.vtoLockMark} />{item}</li>)}</ul>
+          </div>
+          <div data-active={mode === 1 ? 'true' : 'false'} className={styles.vtoFrees}>
+            <p className={styles.vtoListLabel}>{t.freeLabel}</p>
+            <ul>{t.frees.map((item) => <li key={item}><span aria-hidden="true" className={styles.vtoFreeMark} />{item}</li>)}</ul>
+          </div>
+        </div>
+      </aside>
+
+      <div className={styles.vtoStage}>
+        <div role="tablist" aria-label={t.eyebrow} className={styles.vtoModes}>
+          {t.modes.map((item, index) => (
+            <button
+              key={VTO_MODES[index]}
+              ref={(node) => { tabRefs.current[index] = node; }}
+              type="button"
+              role="tab"
+              id={`vto-tab-${VTO_MODES[index]}`}
+              aria-controls={`vto-panel-${VTO_MODES[index]}`}
+              aria-selected={mode === index}
+              tabIndex={mode === index ? 0 : -1}
+              data-vto-mode={VTO_MODES[index]}
+              className={styles.vtoMode}
+              onClick={() => setMode(index)}
+              onKeyDown={onKeyDown}
+            >
+              <span className={styles.vtoModeLabel}>{item.label}{index === 1 && <em>{copy.beta}</em>}</span>
+              <span className={styles.vtoModeBody}>{item.body}</span>
+            </button>
+          ))}
+        </div>
+
+        <div role="tabpanel" id="vto-panel-lookbook" aria-labelledby="vto-tab-lookbook" hidden={mode !== 0} data-vto-panel="lookbook" className={styles.vtoLook}>
+          {VTO_LOOK.map((name, index) => (
+            <figure key={name} className={styles.appear} style={{ '--i': index } as Vars}>
+              <img src={studio(name)} alt="" width={420} height={560} loading="lazy" decoding="async" />
+              <figcaption>{t.lookbookCuts[index]}</figcaption>
+            </figure>
+          ))}
+        </div>
+        <div role="tabpanel" id="vto-panel-free" aria-labelledby="vto-tab-free" hidden={mode !== 1} data-vto-panel="free" className={styles.vtoFree}>
+          {VTO_FREE.map((cut, index) => (
+            <figure key={cut.name} className={styles.appear} style={{ '--i': index, aspectRatio: cut.ratio } as Vars}>
+              <img src={studio(cut.name)} alt="" width={420} height={560} loading="lazy" decoding="async" />
+              <figcaption>{t.freeCuts[index]}</figcaption>
+            </figure>
+          ))}
+        </div>
+        <p className={styles.vtoNote}>{t.note}</p>
+      </div>
     </div>
   );
 }

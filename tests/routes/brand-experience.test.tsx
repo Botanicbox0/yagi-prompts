@@ -58,9 +58,10 @@ describe('the brand page shows the service before asking visitors to enquire', (
     expect(html.match(/data-craft-pillar=/g)).toHaveLength(3);
     expect(html).toContain('data-craft-stage="01"');
     expect(html.match(/data-contact-thumb=/g)).toHaveLength(3);
-    expect(html).toContain('크리에이터로');
-    expect(html).toContain('무한 확장되는');
-    expect(html).toContain('브랜드 광고가 수십 개의 인플루언서 채널로 빠르게 확장됩니다.');
+    // 2026-10-29 wording pass: the spread chapter says what happens, without "무한 확장" hype.
+    expect(html).toContain('광고 한 편을');
+    expect(html).toContain('크리에이터마다 자기 얼굴이 나오는 버전');
+    expect(html).not.toContain('무한 확장되는');
     expect(html).toContain('data-brand-scale-pillars');
     expect(html).toContain('data-production-collabs');
     expect(html).toContain('data-company-deck');
@@ -89,17 +90,16 @@ describe('the brand page shows the service before asking visitors to enquire', (
     it(`opens ${locale} on the asset studio and is honest about what is early access`, async () => {
       const html = renderToStaticMarkup(await BrandsPage({ params: Promise.resolve({ locale }) }));
       const ko = locale === 'ko';
-      expect(html).toContain(ko ? '브랜드를 위한 올인원 마케팅 에셋 스튜디오' : 'Your all-in-one marketing asset studio');
-      for (const marker of ['data-studio-hero', 'data-studio-stage', 'data-studio-split', 'data-studio-flow', 'data-studio-pipeline', 'data-brand-memory', 'data-studio-spread', 'data-studio-contrast']) {
+      expect(html).toContain(ko ? 'TWINGS 브랜드 에셋 스튜디오' : 'TWINGS brand asset studio');
+      for (const marker of ['data-studio-hero', 'data-studio-stage', 'data-studio-moods', 'data-studio-pipeline', 'data-brand-memory', 'data-memory-loop', 'data-studio-vto', 'data-studio-spread', 'data-studio-feed']) {
         expect(html).toContain(marker);
       }
       // The hero leads; the campaign service (cases, approved figures) is still on the page below it.
       expect(html.indexOf('data-studio-hero')).toBeLessThan(html.indexOf('data-campaign-proof'));
       expect(html.indexOf('data-studio-spread')).toBeLessThan(html.indexOf('id="morphic-case"'));
       // Not built yet → labelled. The live step is the campaign service.
-      expect(html.match(/data-early-access=/g)?.length).toBeGreaterThanOrEqual(3);
-      expect(html.match(/data-flow-step="early"/g)).toHaveLength(3);
-      expect(html.match(/data-flow-step="live"/g)).toHaveLength(1);
+      expect(html.match(/data-early-access="early"/g)?.length).toBeGreaterThanOrEqual(4);
+      expect(html.match(/data-early-access="beta"/g)).toHaveLength(1);
       expect(html).toContain(ko ? '예시 화면' : 'Example screen');
       // Every demo panel ships in the initial HTML; only one is visible at a time.
       expect(html.match(/data-studio-panel=/g)).toHaveLength(3);
@@ -110,7 +110,14 @@ describe('the brand page shows the service before asking visitors to enquire', (
       // Mood clusters: "all" plus eight moods, every library frame in the initial HTML.
       expect(html).toContain('data-mood-clusters');
       expect(html.match(/data-mood-chip=/g)).toHaveLength(9);
-      expect(html.match(/data-mood-tile=/g)).toHaveLength(36);
+      expect(html.match(/data-mood-tile=/g)).toHaveLength(48);
+      // Try-on (beta): both modes ship in the HTML, the model is labelled as virtual.
+      expect(html.match(/data-vto-panel=/g)).toHaveLength(2);
+      expect(html).toMatch(/hidden="" data-vto-panel="free"/);
+      expect(html).toContain(ko ? '모델은 가상 인물입니다' : 'The model is a virtual person');
+      // The creator feed is eight example posts (duplicated once for the marquee) and says so.
+      expect(html.match(/data-feed-post=/g)).toHaveLength(8);
+      expect(html).toContain(ko ? '가상 인물' : 'virtual people');
       // The example library is a client campaign: its brand name and packaging never appear.
       expect(html).not.toMatch(/L['’]?H\.?A\.?S/i);
       // No competitor names, no credit or price promises before the founder sets them (§20.7).

@@ -390,23 +390,23 @@ export const en = {
     "marketsHeading": "Korea and Japan.\nOne campaign.",
     "marketsBody": "Run campaigns across Korea and Japan simultaneously with our active creator pools in both markets — no local shoots needed.",
     "eyebrow": "TWINGS FOR BRANDS · YAGI",
-    "title": "Brand campaigns,\ninfinitely scaled\nthrough creators.",
-    "body": "Your brand film scales rapidly across dozens of influencer channels.\nFrom high-fashion craft to viral reach, experience AI-native social distribution.",
+    "title": "One ad,\nmany faces",
+    "body": "YAGI makes one ad format, and each creator gets a version with their own face in it. Creators in Korea and Japan post the finished films on their own feeds.",
     "primaryCta": "Discuss your campaign",
     "secondaryCta": "See campaign results",
     "definition": "TWINGS is a brand campaign studio by YAGI.",
     "studio": {
       "moods": {
-        "eyebrow": "Aesthetic auto-sorting",
-        "title": "Hundreds of scattered cuts,\nsorted by mood.",
-        "body": "Light, color, texture and atmosphere are read and similar cuts grouped together. Pick a mood and the product shot made for it comes forward.",
+        "eyebrow": "01 Sort",
+        "title": "48 mixed cuts, eight moods",
+        "body": "Cuts with similar light and color sit in the same group. Tap a mood and the same bottle, shot in that mood, comes to the front.",
         "all": "All",
-        "product": "Product shot made for this mood",
+        "product": "Product shot for this mood",
         "light": "Light",
         "color": "Color",
         "mood": "Mood",
         "count": "cuts",
-        "note": "Example: part of a fragrance campaign library YAGI produced. Product shots are the same bottle, regenerated for each mood.",
+        "note": "Example screen, built from part of a fragrance campaign library YAGI produced.",
         "names": [
           "Amber light",
           "Rose drape",
@@ -421,130 +421,92 @@ export const en = {
           {
             "light": "Color gels · backlit streaks",
             "color": "Cobalt · amber",
-            "mood": "Cinematic, warm night"
+            "mood": "Cinematic night"
           },
           {
             "light": "Soft diffused",
             "color": "Rose · lilac",
-            "mood": "Quiet, romantic"
+            "mood": "Stillness"
           },
           {
             "light": "Low side light",
             "color": "Taupe · cinnamon",
-            "mood": "Smoky, resinous"
+            "mood": "Smoke, resin"
           },
           {
-            "light": "High-key · soft",
+            "light": "High-key",
             "color": "Ivory · walnut",
-            "mood": "Dewy, tactile"
+            "mood": "Texture you can touch"
           },
           {
             "light": "Narrow spot",
             "color": "Black · cream",
-            "mood": "Sensual, white floral"
+            "mood": "White florals"
           },
           {
             "light": "High-key · long shadows",
             "color": "Grey · sepia",
-            "mood": "Dry, specimen-like"
+            "mood": "Dried specimens"
           },
           {
-            "light": "Backlit · monochrome",
+            "light": "Backlit · black and white",
             "color": "Greyscale",
-            "mood": "Movement, minimal"
+            "mood": "Movement"
           },
           {
             "light": "Direct flash",
             "color": "Cherry · crimson",
-            "mood": "Juicy, pop"
+            "mood": "Juice"
           }
         ]
       },
-      "heroEyebrow": "Your all-in-one marketing asset studio",
-      "heroTitle": "From brand assets\nto creator feeds.",
-      "heroBody": "Bring scattered assets into one library, find them by describing them, make new ones that stay on brand, and get them into real creators’ feeds. First file to final post, in one studio.",
+      "heroEyebrow": "TWINGS brand asset studio",
+      "heroTitle": "Your next campaign\nstarts in the library",
+      "heroBody": "The work that bounced between a drive and a design tool happens on one screen. Finished cuts go out on real creators’ own feeds.",
       "heroCta": "Book a demo",
-      "heroSecondary": "See live campaigns",
+      "heroSecondary": "Live campaigns",
       "earlyAccess": "Early access",
       "live": "Live",
+      "beta": "Beta",
       "example": "Example screen",
-      "earlyNote": "Organizing, search and generation open in early access. Creator campaigns are live today.",
+      "earlyNote": "Creator campaigns run today. Everything else is in early access.",
       "stage": {
-        "window": "Brand library",
-        "search": "Every cut with smoke in it",
-        "memory": "Brand memory",
+        "window": "Yagi 2026 F/W library",
+        "search": "cuts with smoke",
+        "memory": "Brand rules",
         "rules": [
           "Yagi signature on the front only",
-          "Walnut wood cap",
+          "Walnut cap",
           "Keep the amber juice color"
         ],
-        "drop": "Drop assets here",
+        "drop": "Drop files here",
         "tags": [
-          "Amber light · product",
+          "Amber light",
           "Wood & smoke",
-          "Red object · product",
-          "Botanical study",
-          "Night florals · product",
-          "Cream & grain · product"
+          "Red object",
+          "Botanical",
+          "Night florals",
+          "Cream & grain"
         ]
       },
-      "splitEyebrow": "The friction",
-      "splitTitle": "Every time you switch tools,\nyou explain the brand again.",
-      "splitBody": "Files sit in drives, images come from generation tools, and final cuts get assembled in design software. Brand specs and campaign moods are carried across by hand, and the tone drifts on the way.",
-      "splitTools": [
+      "pipelineEyebrow": "02 Search · generate",
+      "pipelineTitle": "Find it without the file name",
+      "pipelineBody": "Uploads get color codes, light direction, even the mood word your team would use. Type a scene; if no cut matches, generate one from the product photos already in the library.",
+      "tabs": [
         {
-          "label": "Organize",
-          "where": "Drive folders",
-          "loss": "final_REAL_v3.jpg"
+          "label": "Tags",
+          "title": "Tagged on upload",
+          "body": "Down to the mood words your team actually uses."
+        },
+        {
+          "label": "Search",
+          "title": "Search in sentences",
+          "body": "By what’s in the picture, not by what the file is called."
         },
         {
           "label": "Generate",
-          "where": "Generation tools",
-          "loss": "A slightly different red every time"
-        },
-        {
-          "label": "Assemble",
-          "where": "Design tools",
-          "loss": "Export, re-upload, repeat"
-        }
-      ],
-      "flowTitle": "TWINGS runs it as one workflow.",
-      "flow": [
-        {
-          "step": "Remember",
-          "body": "Brand rules, campaign mood, how you work"
-        },
-        {
-          "step": "Find",
-          "body": "Auto-tagged on upload, found by description"
-        },
-        {
-          "step": "Make",
-          "body": "New assets that start from your own library"
-        },
-        {
-          "step": "Amplify",
-          "body": "Real creators’ feeds and studio production"
-        }
-      ],
-      "pipelineEyebrow": "Organize · search · generate",
-      "pipelineTitle": "Just upload.\nThe studio handles the rest.",
-      "pipelineBody": "Every asset is read on upload: objects, color, light, framing and mood. Then find what you need by describing it.",
-      "tabs": [
-        {
-          "label": "Auto-tag",
-          "title": "Sorted the moment it lands",
-          "body": "Objects, color codes, light direction, framing, and the mood words your team actually uses."
-        },
-        {
-          "label": "Search by describing",
-          "title": "Describe it, find it",
-          "body": "Search by what is in the picture, not by what somebody named the file."
-        },
-        {
-          "label": "Make on brand",
-          "title": "New variations, still on brand",
-          "body": "Variations start from your own assets and are checked against your brand rules before you see them."
+          "title": "Same bottle, new mood",
+          "body": "Generation starts from your product photos. Results are checked against your brand rules before they appear."
         }
       ],
       "tagGroups": {
@@ -561,13 +523,13 @@ export const en = {
         "mood": [
           "Cinematic",
           "Amber",
-          "Warm night"
+          "Night"
         ]
       },
-      "searchResult": "3 found",
-      "makePrompt": "Same bottle, new moods",
+      "searchResult": "3 cuts",
+      "makePrompt": "Same bottle, just change the mood",
       "makeChecks": [
-        "Yagi signature kept",
+        "Yagi signature intact",
         "Bottle and cap unchanged",
         "Mood matched"
       ],
@@ -577,22 +539,22 @@ export const en = {
         "Red object",
         "Botanical"
       ],
-      "memoryEyebrow": "Brand memory",
-      "memoryTitle": "Explain the brand once.\nThe studio remembers the rest.",
-      "memoryBody": "Rules come in three layers. Campaign rules add to the brand’s core without overriding it.",
+      "memoryEyebrow": "03 Memory",
+      "memoryTitle": "Set it once",
+      "memoryBody": "Brand rules come first, then campaign, then personal. A campaign rule never overrides a brand rule.",
       "memory": [
         {
           "title": "Brand",
-          "body": "Logo, type, palette, and the things that must never change.",
+          "body": "Logo, palette, voice. Fixed across every campaign.",
           "items": [
             "Signature clear space 1×",
             "Walnut caps only",
-            "Never tilt the label"
+            "No exclamation marks"
           ]
         },
         {
           "title": "Campaign",
-          "body": "Moodboard, audience, key lines, and what was decided last week.",
+          "body": "Moodboard and key line, scoped to one campaign.",
           "items": [
             "Professionals in their early 30s",
             "“The scent that stays after work”",
@@ -601,32 +563,65 @@ export const en = {
         },
         {
           "title": "You",
-          "body": "The ratios, layouts and feedback you keep coming back to.",
+          "body": "The ratios and framing you pick, the notes you leave.",
           "items": [
             "Product on the left third",
-            "Slightly warmer skin tones",
+            "Slightly warmer skin",
             "Short captions"
           ]
         }
       ],
-      "spreadEyebrow": "Amplify · live today",
-      "contrastEyebrow": "The workspace",
-      "contrastTitle": "Everything a brand team needs.\nNone of the tool juggling.",
-      "contrastHaveLabel": "In the workspace today",
-      "contrastHave": [
-        "Member and guest permissions",
-        "Review and approval on every cut",
-        "Usage rights on record",
-        "Creator shortlists to compare",
-        "Campaign performance reports"
-      ],
-      "contrastSkipLabel": "What you can stop doing",
-      "contrastSkip": [
-        "Paying for three tools",
-        "Exporting and re-uploading files",
-        "Explaining it all again in each tool",
-        "Correcting brand drift"
-      ]
+      "memoryLoop": {
+        "label": "After posting",
+        "body": "When a campaign ends, its best-performing cuts and lines are saved to the next campaign’s memory."
+      },
+      "vto": {
+        "eyebrow": "04 Try-on",
+        "title": "Try on anywhere",
+        "body": "Upload one garment photo and pick a virtual model. Lookbook mode keeps fixed framing on white. Free mode lets you choose the scene, pose and ratio.",
+        "modes": [
+          {
+            "label": "Lookbook",
+            "body": "Set framing on white. For product pages."
+          },
+          {
+            "label": "Free",
+            "body": "Scene, pose and ratio are yours. For feeds and ads."
+          }
+        ],
+        "garment": "Yagi suede overshirt",
+        "garmentNote": "Uploaded photo",
+        "lockLabel": "Kept exactly",
+        "locks": [
+          "Color, material and details, unchanged",
+          "The model’s face and build",
+          "No back view unless you upload one"
+        ],
+        "freeLabel": "Yours to change",
+        "frees": [
+          "Scene and mood",
+          "Pose and framing",
+          "Ratio 9:16 · 4:5 · 3:4"
+        ],
+        "lookbookCuts": [
+          "Front, full length",
+          "Upper body",
+          "45° side"
+        ],
+        "freeCuts": [
+          "Amber light",
+          "Autumn alley",
+          "Mirror selfie",
+          "Black-and-white sofa",
+          "Rose drape"
+        ],
+        "note": "Example screen. The model is a virtual person."
+      },
+      "spreadEyebrow": "05 Spread · live",
+      "spreadFeed": {
+        "title": "The same bottle on eight feeds",
+        "note": "Example screen with virtual people. Real campaigns are made with creators who consent to the use of their own face."
+      }
     },
     "heroCinema": {
       "parisTitle": "Galeries Lafayette Paris",
