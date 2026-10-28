@@ -60,6 +60,10 @@ npx -y @bubblewrap/cli@1.27.0 build                         # 키 저장소·키
 ```
 - 산출물: `app-release-bundle.aab`(Play Console 업로드용), `app-release-signed.apk`(기기 직접 설치 확인용). git에 넣지 않는다.
 - **이 PC의 JDK·SDK**: Bubblewrap 1.27의 첫 실행 자동 설치는 Windows(Node 24)에서 JDK 소스 압축을 풀다 오류 없이 꺼진다. 그래서 Temurin JDK 17.0.11+9 x64(공식 sha256 확인)와 Android command-line tools 6609375를 `~/.bubblewrap/jdk`, `~/.bubblewrap/android_sdk`에 직접 풀고 `~/.bubblewrap/config.json`에 경로를 적었다. `npx @bubblewrap/cli doctor`로 확인한다. Android SDK 약관 동의는 첫 빌드에서 대표가 했다.
+- **첫 빌드 결과(2026-10-28)**: `app-release-bundle.aab` 1.2MB, `app-release-signed.apk` 1.1MB. `apksigner verify` 통과(v2·v3 서명), `jarsigner -verify` 통과. 패키지 `app.twings.client`, 1.0.0(코드 1), 앱 이름 TWINGS.
+- **업로드 키 인증서 SHA-256**(공개 정보, 비밀값 아님): `53:6B:11:B0:26:4D:95:96:5B:AF:5C:11:9E:F1:A5:6D:78:78:35:2A:E1:83:FC:BB:45:AC:45:AE:3E:05:06:D5`. Play Console이 패키지 이름 등록·업로드 키 확인에 묻는 값이다. 앱 서명 키 SHA-256(Play App Signing이 만든다)과는 다르다.
+- **이 PC의 터미널에서 빌드할 때**: Claude 앱 터미널은 `NoDefaultCurrentDirectoryInExePath=1`이 켜져 있어 Bubblewrap이 `gradlew.bat`을 못 찾는다(`'gradlew.bat'은(는) 내부 또는 외부 명령…이 아닙니다`). 그 탭에서만 `$env:NoDefaultCurrentDirectoryInExePath = ''`로 끄고 `build`를 실행한다.
+- **기기에서 미리 확인하기**(Play 업로드 전): 안드로이드 폰에 `app-release-signed.apk`를 설치하면 바로 열어 볼 수 있다. assetlinks에 이 업로드 키 지문이 없으면 주소창이 보이는 Custom Tab으로 열린다. 주소창 없는 앱 화면까지 확인하려면 PR #105 병합 뒤 Vercel `ANDROID_SHA256_CERT_FINGERPRINTS`에 위 업로드 키 지문을 넣고 재배포한다(나중에 앱 서명 키 지문을 콤마로 더한다).
 - 생성된 프로젝트: targetSdk 36, minSdk 24, androidbrowserhelper 2.7.4. Google의 target API 기준은 매년(보통 8월 말) 오르므로 그때 Bubblewrap 최신판으로 `update` → `build`를 다시 한다.
 - `.aab`를 Play Console에 올리면 Play App Signing이 앱 서명 키를 만든다. 그 SHA-256을 Vercel `ANDROID_SHA256_CERT_FINGERPRINTS`에 넣고 재배포한다. 업로드 키를 잃어버리면 Play Console 앱 무결성에서 업로드 키 재설정을 요청한다.
 
