@@ -36,7 +36,7 @@ import { formatResolutionPrice, offeredResolutions } from '@/lib/twings/resoluti
 import { templateSubscriptionQuote } from '@/lib/twings/subscription-plan';
 import { cachedSubscriptionAvailability } from '@/lib/creator-subscriptions/cached-availability';
 import { SubscriptionAvailabilityProvider } from '@/components/twings/subscription-availability';
-import { TemplateMakeAvailability, TemplateSubscriptionNote } from '@/components/twings/subscription-public-notices';
+import { TemplateMakeAvailability } from '@/components/twings/subscription-public-notices';
 import { cachedTypicalWaitMinutes } from '@/lib/twings/cached-typical-wait';
 import { cachedPublicRecipe } from '@/lib/recipes/cached-public';
 import { HowItWasMade } from '@/components/recipes/how-it-was-made';
@@ -150,6 +150,13 @@ export default async function TemplatePage({ params }: RouteParams) {
       }
     : null;
 
+  const mediaAspect = card.aspectDefault ?? defaultAspect(card.medium);
+  const photoGuideExamples = [
+    { id: 'front', src: '/images/portrait-guide/front-facing.webp', label: dict.studio.photoExamples.front, crop: 'object-[50%_30%]' },
+    { id: 'bright', src: '/images/portrait-guide/clear-face.webp', label: dict.studio.photoExamples.bright, crop: 'object-[50%_20%]' },
+    { id: 'solo', src: '/images/portrait-guide/front-facing.webp', label: dict.studio.photoExamples.solo, crop: 'object-[50%_18%] scale-150' },
+  ];
+
   return (
     <>
       <MarketingNav locale={locale} dict={dict} rest={`/t/${slug}`} initialTheme="light" />
@@ -157,19 +164,26 @@ export default async function TemplatePage({ params }: RouteParams) {
 
       <SubscriptionAvailabilityProvider initialAvailability={availability}>
       <main id="main" data-template={card.slug} data-medium={card.medium} data-section data-theme="light" className="section pb-24">
-        <div className="band pt-28 lg:pt-32">
-            <a href={templatesHref(locale, card.medium)} className="inline-flex min-h-11 items-center text-sm text-black/65">
+        <div className="band pt-24 lg:pt-32">
+            <a href={templatesHref(locale, card.medium)} className="inline-flex min-h-11 items-center text-sm text-black/65 transition-colors hover:text-black">
               ← {interpolate(t.backTo, { medium: dict.nav[card.medium] })}
             </a>
             {recipe?.presentation === 'story-first' ? howItWasMade : null}
 
-            <header className="mt-6 grid gap-8 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)] lg:items-start lg:gap-10">
-              <div>
+            <header className="mt-4 grid gap-7 lg:mt-6 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,0.85fr)] lg:items-start lg:gap-12">
+              <div className="-mx-[var(--spacing-gutter)] sm:mx-0 lg:sticky lg:top-24">
                 <PromptDetailMedia
                   poster={card.poster}
                   video={card.video}
                   alt={labels.resultLabel}
                   ratio={ratio}
+                  aspect={mediaAspect}
+                  controls={{
+                    play: dict.campaigns.landing.reelPlay,
+                    pause: dict.campaigns.landing.reelPause,
+                    unmute: dict.campaigns.landing.reelUnmute,
+                    mute: dict.campaigns.landing.reelMute,
+                  }}
                   fallback={<TypographicPoster title={card.title} slug={card.slug} kicker={dict.nav[card.medium]} ratio={ratio} />}
                 />
               </div>
@@ -177,110 +191,155 @@ export default async function TemplatePage({ params }: RouteParams) {
                 <p className="font-label text-eyebrow uppercase">
                   <span data-medium-chip className="text-accent">{dict.nav[card.medium]}</span>
                 </p>
-                <h1 className="mt-4 font-display text-[clamp(2rem,5vw,4rem)] leading-[0.92] font-black uppercase">{title}</h1>
-                <p className="mt-4 flex flex-wrap gap-x-1 gap-y-1 text-sm text-black/65">
-                  {makerRest ? <a data-template-credit href={`/${locale}${makerRest}`} className="underline underline-offset-4">{credit}</a> : <span data-template-credit>{credit}</span>}
+                <h1 className="mt-2 font-display text-[clamp(1.75rem,3vw,2.5rem)] leading-[1.12] font-black tracking-[-0.025em] break-keep uppercase">{title}</h1>
+                <div className="mt-3 flex flex-wrap items-center gap-1.5 text-xs">
+                  {makerRest ? (
+                    <a data-template-credit href={`/${locale}${makerRest}`} className="inline-flex items-center rounded-full border border-hairline bg-surface px-2.5 py-1 font-medium text-black/80 underline-offset-4 hover:underline">
+                      {credit}
+                    </a>
+                  ) : (
+                    <span data-template-credit className="inline-flex items-center rounded-full border border-hairline bg-surface px-2.5 py-1 font-medium text-black/80">
+                      {credit}
+                    </span>
+                  )}
                   {/* Every public template passed studio review, studio and maker alike (§7.5). */}
-                  <span data-template-verified title={t.verifiedHint}>· {t.verified}</span>
+                  <span data-template-verified title={t.verifiedHint} className="inline-flex items-center rounded-full border border-hairline bg-surface px-2.5 py-1 font-medium text-black/75">
+                    {t.verified}
+                  </span>
                   {card.useCase.map((value) => (
-                    <span key={value}>· {useCaseLabels[value] ?? value}</span>
+                    <span key={value} className="inline-flex items-center rounded-full border border-hairline px-2.5 py-1 text-black/65">
+                      {useCaseLabels[value] ?? value}
+                    </span>
                   ))}
-                </p>
+                </div>
 
                 {style === null ? (
-                  <section data-template-closed className="mt-7 rounded-2xl border border-hairline p-5 sm:p-6">
-                    <p className="font-display text-[1.6rem] leading-none font-black">{t.notForSale}</p>
-                    <dl data-template-facts className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 border-t border-hairline pt-4">
-                      {facts.filter(([label]) => label !== t.waitLabel).map(([label, value]) => (
-                        <div key={label}><dt className="text-xs text-black/65">{label}</dt><dd className="mt-1 text-[0.95rem] font-semibold">{value}</dd></div>
-                      ))}
-                    </dl>
-                    <p className="mt-4 text-sm leading-relaxed text-black/75">{t.notForSaleBody}</p>
-                  </section>
+                  <>
+                    <section data-template-closed className="mt-6 rounded-2xl border border-hairline p-5 sm:p-6">
+                      <p className="font-display text-[1.5rem] leading-none font-black">{t.notForSale}</p>
+                      <dl data-template-facts className="mt-2.5 flex flex-wrap items-center gap-y-1 text-xs text-black/65">
+                        {facts.filter(([label]) => label !== t.waitLabel).map(([label, value], idx) => (
+                          <div key={label} data-template-fact className="inline-flex items-center">
+                            {idx > 0 && <span aria-hidden="true" className="mx-1.5 text-black/30">·</span>}
+                            <dt className="sr-only">{label}</dt>
+                            <dd className="inline font-medium text-black/80">{value}</dd>
+                          </div>
+                        ))}
+                      </dl>
+                      <p className="mt-3 text-sm leading-relaxed text-black/75">{t.notForSaleBody}</p>
+                    </section>
+                  </>
                 ) : (
-                  // The one make card: price box, the studio, then the small print — nothing above it repeats it.
-                  <section id="make" data-template-make data-template-price-box className="mt-7 scroll-mt-24 rounded-2xl border border-hairline p-5 sm:p-6">
-                    <div className="flex items-baseline justify-between gap-4">
-                      <p data-template-price className="font-display text-[2rem] leading-none font-black">{style.price}</p>
-                      <p className="text-sm text-black/70">{t.priceLabel}</p>
-                    </div>
-                    <dl data-template-facts className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 border-y border-hairline py-4 sm:grid-cols-4">
-                      {facts.map(([label, value]) => (
-                        <div key={label} data-template-fact>
-                          <dt className="text-xs text-black/65">{label}</dt>
-                          <dd className="mt-1 text-[0.95rem] font-semibold">{value}</dd>
-                        </div>
-                      ))}
-                    </dl>
-                    <p data-template-sale-state className="mt-4 text-sm leading-relaxed text-black/75">
+                  <>
+                    {/* The one make card: price, quiet one-line specs, one CTA, and refund/AI note. */}
+                    <section id="make" data-template-make data-template-price-box className="mt-6 scroll-mt-24 rounded-2xl border border-hairline p-5 sm:p-6">
+                      <div className="flex items-baseline justify-between gap-4">
+                        <p data-template-price className="font-display text-[2rem] leading-none font-black">{style.price}</p>
+                        <span className="rounded-full bg-surface px-2.5 py-1 text-xs font-medium text-black/75">{t.priceLabel}</span>
+                      </div>
+                      <dl data-template-facts className="mt-2.5 flex flex-wrap items-center gap-y-1 text-xs text-black/65">
+                        {facts.map(([label, value], idx) => (
+                          <div key={label} data-template-fact className="inline-flex items-center">
+                            {idx > 0 && <span aria-hidden="true" className="mx-1.5 text-black/30">·</span>}
+                            <dt className={label === t.waitLabel ? 'mr-1 inline' : 'sr-only'}>{label}</dt>
+                            <dd className="inline font-medium text-black/80">{value}</dd>
+                          </div>
+                        ))}
+                      </dl>
+                      <TwingsStudio
+                        styles={[style]}
+                        initialStyleId={style.id}
+                        shopOpenHint={shopOpen}
+                        live={{
+                          endpoint: '/api/renders',
+                          accessEndpoint: '/api/renders/access',
+                          interestEndpoint: '/api/notify/interest',
+                          template: card.slug,
+                          locale,
+                          signinHref: signInHref(`${templateHref(locale, slug)}#make`, locale),
+                          identityHref: identityVerifyHref(`${templateHref(locale, slug)}#make`),
+                          selfie: dict.selfie,
+                          subscription: { copy: dict.creatorSubscription, editorCopy: dict.premiumEditor },
+                          labels: {
+                            badge: dict.renders.studio.badge,
+                            operatorBadge: dict.renders.studio.operatorBadge,
+                            freeCta: dict.renders.studio.freeCta,
+                            submitting: dict.renders.studio.submitting,
+                            identityNotice: dict.renders.studio.identityNotice,
+                            identityPending: dict.renders.studio.identityPending,
+                            identityCta: dict.renders.studio.identityCta,
+                            errors: dict.renders.studio.errors,
+                          },
+                        }}
+                        labels={{
+                          stepPhoto: dict.studio.stepPhoto,
+                          stepStyle: dict.studio.stepStyle,
+                          stepPay: dict.studio.stepPay,
+                          stepResult: dict.studio.stepResult,
+                          dropZone: dict.studio.dropZone,
+                          dropHint: dict.studio.dropHint,
+                          changePhoto: dict.studio.changePhoto,
+                          chooseStyle: dict.studio.chooseStyle,
+                          payCta: dict.studio.payCta,
+                          payNote: dict.studio.payNote,
+                          closedTitle: dict.studio.closedTitle,
+                          closedBody: dict.studio.closedBody,
+                          closedCta: dict.studio.closedCta,
+                          closedDone: dict.studio.closedDone,
+                          signedOutCta: dict.studio.signedOutCta,
+                          pending: dict.studio.pending,
+                          makeCta: t.makeCta,
+                          makeCtaClosed: t.makeCtaClosed,
+                          otherAspect: dict.studio.otherAspect,
+                          runtimeLabel: dict.studio.runtimeLabel,
+                          needPhoto: dict.studio.needPhoto,
+                          noStyles: dict.studio.noStyles,
+                          moreTemplates: dict.studio.moreTemplates,
+                          aspectLabel: dict.studio.aspectLabel,
+                          resolutionLabel: dict.studio.resolutionLabel,
+                          resolutionDefault: dict.studio.resolutionDefault,
+                          resolutionNote: dict.studio.resolutionNote,
+                        }}
+                      />
+                      <div data-template-trust className="mt-4 space-y-1 border-t border-hairline pt-3.5 text-xs leading-relaxed text-black/65">
+                        <p data-template-refund className="font-medium text-black/80">{dict.renders.notCharged}</p>
+                        {/* Founder, 2026-09-11: what AI-made means is said before the money, not after the complaint. */}
+                        <p data-studio-ai-note>{t.aiLimit}</p>
+                      </div>
+                    </section>
+
+                    <p data-template-sale-state className="mt-3 text-xs leading-relaxed text-black/60">
                       <TemplateMakeAvailability copy={makeAvailabilityCopy} oneTimeAvailable={shopOpen} subscriptionEligible={subscriptionQuote !== null} field="body" />
                     </p>
-                    <TwingsStudio
-                      styles={[style]}
-                      initialStyleId={style.id}
-                      shopOpenHint={shopOpen}
-                      live={{
-                        endpoint: '/api/renders',
-                        accessEndpoint: '/api/renders/access',
-                        interestEndpoint: '/api/notify/interest',
-                        template: card.slug,
-                        locale,
-                        signinHref: signInHref(`${templateHref(locale, slug)}#make`, locale),
-                        identityHref: identityVerifyHref(`${templateHref(locale, slug)}#make`),
-                        selfie: dict.selfie,
-                        subscription: { copy: dict.creatorSubscription, editorCopy: dict.premiumEditor },
-                        labels: {
-                          badge: dict.renders.studio.badge,
-                          operatorBadge: dict.renders.studio.operatorBadge,
-                          freeCta: dict.renders.studio.freeCta,
-                          submitting: dict.renders.studio.submitting,
-                          identityNotice: dict.renders.studio.identityNotice,
-                          identityPending: dict.renders.studio.identityPending,
-                          identityCta: dict.renders.studio.identityCta,
-                          errors: dict.renders.studio.errors,
-                        },
-                      }}
-                      labels={{
-                        stepPhoto: dict.studio.stepPhoto,
-                        stepStyle: dict.studio.stepStyle,
-                        stepPay: dict.studio.stepPay,
-                        stepResult: dict.studio.stepResult,
-                        dropZone: dict.studio.dropZone,
-                        dropHint: dict.studio.dropHint,
-                        changePhoto: dict.studio.changePhoto,
-                        chooseStyle: dict.studio.chooseStyle,
-                        payCta: dict.studio.payCta,
-                        payNote: dict.studio.payNote,
-                        closedTitle: dict.studio.closedTitle,
-                        closedBody: dict.studio.closedBody,
-                        closedCta: dict.studio.closedCta,
-                        closedDone: dict.studio.closedDone,
-                        signedOutBody: dict.studio.signedOutBody,
-                        signedOutCta: dict.studio.signedOutCta,
-                        photoExamples: dict.studio.photoExamples,
-                        pending: dict.studio.pending,
-                        makeCta: t.makeCta,
-                        makeCtaClosed: t.makeCtaClosed,
-                        otherAspect: dict.studio.otherAspect,
-                        runtimeLabel: dict.studio.runtimeLabel,
-                        needPhoto: dict.studio.needPhoto,
-                        noStyles: dict.studio.noStyles,
-                        moreTemplates: dict.studio.moreTemplates,
-                        aspectLabel: dict.studio.aspectLabel,
-                        resolutionLabel: dict.studio.resolutionLabel,
-                        resolutionDefault: dict.studio.resolutionDefault,
-                        resolutionNote: dict.studio.resolutionNote,
-                      }}
-                    />
-                    <div data-template-trust className="mt-5 space-y-1.5 border-t border-hairline pt-4 text-sm leading-relaxed text-black/70">
-                      {/* Founder, 2026-09-11: what AI-made means is said before the money, not after the complaint. */}
-                      <p data-studio-ai-note>{t.aiLimit}</p>
-                      <p data-template-refund>{dict.renders.notCharged}</p>
-                    </div>
-                  </section>
-                )}
 
-                {subscriptionQuote && <TemplateSubscriptionNote copy={{ subscriptionTemplateNote: dict.pricing.subscriptionTemplateNote, subscriptionTemplateOpenNote: dict.pricing.subscriptionTemplateOpenNote, subscriptionTemplateCreatorNote: dict.pricing.subscriptionTemplateCreatorNote, subscriptionTemplatePausedNote: dict.pricing.subscriptionTemplatePausedNote, subscriptionDetailLink: dict.pricing.subscriptionDetailLink }} count={subscriptionQuote.maxPerMonth} premiumCount={templateSubscriptionQuote(card, 'premium')!.maxPerMonth} locale={locale} />}
+                    <section data-template-photo-guide className="mt-5 rounded-2xl border border-hairline bg-surface p-4 sm:p-5">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <h2 className="text-xs font-semibold text-black/85">{dict.selfie.goodExamples}</h2>
+                        <div className="inline-flex items-center gap-1.5 text-xs font-medium text-black/75">
+                          <span className="rounded-full border border-hairline bg-paper px-2.5 py-0.5">{dict.creatorJourney.evidenceSelfie}</span>
+                          <span aria-hidden="true" className="text-accent">→</span>
+                          <span className="rounded-full border border-hairline bg-paper px-2.5 py-0.5">{dict.creatorJourney.evidenceScene}</span>
+                        </div>
+                      </div>
+                      <p className="mt-2 text-xs leading-relaxed text-black/70">{dict.studio.signedOutBody}</p>
+                      <ul data-studio-photo-examples className="mt-3 grid grid-cols-3 gap-2.5">
+                        {photoGuideExamples.map((example) => (
+                          <li key={example.id} data-studio-photo-example={example.id}>
+                            <figure>
+                              <div className="aspect-[4/5] overflow-hidden rounded-xl bg-black/5">
+                                {/* eslint-disable-next-line @next/next/no-img-element -- the public photo guide */}
+                                <img src={example.src} alt="" width={160} height={200} loading="lazy" className={`h-full w-full object-cover ${example.crop}`} />
+                              </div>
+                              <figcaption className="mt-1.5 flex items-center gap-1 text-xs font-medium text-black/80">
+                                <span aria-hidden="true" className="text-accent">✓</span>{example.label}
+                              </figcaption>
+                            </figure>
+                          </li>
+                        ))}
+                      </ul>
+                    </section>
+                  </>
+                )}
 
                 {/* The definition, under the first screen (AGENTS.md §7 GEO): in the HTML, not in the way. */}
                 <p data-template-description className="mt-6 max-w-detail text-sm leading-relaxed text-black/65">{dict.meta.templateDescription}</p>

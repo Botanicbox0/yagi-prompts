@@ -58,17 +58,17 @@ describe('public subscription SSR state', () => {
     }
     expect(landing.replaceAll('&#x27;', "'")).toContain(copy.creatorJourney.subscriptionReady);
     expect(template.replaceAll('&#x27;', "'")).toContain(copy.templates.makeBodySubscription);
-    expect(template).toContain('data-template-subscription="creator"');
+    expect(template).not.toContain('data-template-subscription');
     expect(template.replaceAll('&#x27;', "'")).not.toContain(copy.templates.makeBodyClosed);
     expect(template.replaceAll('&#x27;', "'")).not.toContain(copy.pricing.subscriptionTemplateNote.replace('{count}', '4').replace('{premiumCount}', '8'));
   });
-  it('shows the opened Premium estimate and keeps its FAQ in the same state', async () => {
+  it('keeps the opened subscription FAQ state without repeating the monthly plan line on the template page', async () => {
     const copy = getDictionary('ko');
     state.availability = { ...state.availability, status: 'open', plans: { creator: { status: 'open' }, premium: { status: 'open' } }, editing: 'open', premiumEditRequestsPerPeriod: 30 };
     const html = renderToStaticMarkup(await TemplatePage({ params: Promise.resolve({ locale: 'ko', slug: film.slug }) }));
-    expect(html).toContain('data-template-subscription="premium"');
+    expect(html).not.toContain('data-template-subscription');
     expect(answers(html)).toContain(copy.faq.subscriptionOpen.a2);
-    expect(html).toContain(copy.pricing.subscriptionTemplateOpenNote.replace('{count}', '4').replace('{premiumCount}', '8'));
+    expect(html).toContain(copy.templates.makeBodySubscription);
   });
   it('shows a pause without promising new enrollment or calling it a preparation state', async () => {
     const copy = getDictionary('ko');
@@ -77,7 +77,7 @@ describe('public subscription SSR state', () => {
     const template = renderToStaticMarkup(await TemplatePage({ params: Promise.resolve({ locale: 'ko', slug: film.slug }) }));
     expect(landing).toContain(copy.creatorJourney.subscriptionPaused);
     expect(template).toContain(copy.templates.makeBodySubscriptionPaused);
-    expect(template).toContain('data-template-subscription="paused"');
+    expect(template).not.toContain('data-template-subscription');
     expect(answers(landing)).toContain(copy.faq.subscriptionPaused.a2);
     expect(answers(template)).toContain(copy.faq.subscriptionPaused.a2);
   });

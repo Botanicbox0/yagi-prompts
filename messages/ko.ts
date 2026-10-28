@@ -2199,7 +2199,7 @@ export const ko: Dictionary = {
     notForSaleBody: "이 템플릿은 아직 생성할 수 없습니다. 예시 결과물을 먼저 살펴보세요.",
     makeCta: '내 사진으로 만들기',
     makeCtaClosed: '열리면 알림 받기',
-    makeBody: '지금은 한 편씩 결제해 바로 만들 수 있습니다. 월 구독은 준비 중입니다.',
+    makeBody: '지금은 한 편씩 결제해 바로 만들 수 있습니다.',
     makeBodyClosed: '영상 생성은 공개 준비 중입니다. 열리면 사진 한 장으로 만들 수 있고, 결제는 한 편당 한 번입니다.',
     aspectFact: '비율',
     resolutionFact: '해상도',

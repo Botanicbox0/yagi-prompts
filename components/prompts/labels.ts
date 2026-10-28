@@ -40,6 +40,8 @@ export interface PromptLabels {
   backToGallery: string;
   submitCta: string;
   resultLabel: string;
+  /** The hero video's play/pause and sound controls (the reel's approved words). */
+  mediaControls: { play: string; pause: string; unmute: string; mute: string };
   posterAlt: string;
   playHint: string;
   audioLabel: string;
@@ -96,6 +98,12 @@ export function promptLabels(dict: Dictionary): PromptLabels {
     backToGallery: dict.prompts.backToGallery,
     submitCta: dict.prompts.submitCta,
     resultLabel: dict.prompts.resultLabel,
+    mediaControls: {
+      play: dict.campaigns.landing.reelPlay,
+      pause: dict.campaigns.landing.reelPause,
+      unmute: dict.campaigns.landing.reelUnmute,
+      mute: dict.campaigns.landing.reelMute,
+    },
     posterAlt: dict.prompts.posterAlt,
     playHint: dict.prompts.playHint,
     audioLabel: dict.prompts.audioLabel,

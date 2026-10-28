@@ -2212,7 +2212,7 @@ export const en = {
     notForSaleBody: "Generation is not available for this template yet. You can browse its sample results.",
     makeCta: 'Make it with your photo',
     makeCtaClosed: 'Get notified when it opens',
-    makeBody: 'You can make one now: pay per film. A monthly plan is in preparation.',
+    makeBody: 'You can make one now: pay per film.',
     makeBodyClosed: 'Generation is not open to the public yet. When it opens, one photo is enough, with one payment per film.',
     aspectFact: 'Aspect',
     resolutionFact: 'Resolution',

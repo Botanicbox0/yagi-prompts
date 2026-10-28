@@ -89,6 +89,7 @@ export function PromptHeader({
         video={prompt.video}
         alt={labels.resultLabel}
         ratio={ratio}
+        controls={labels.mediaControls}
         fallback={
           <TypographicPoster
             title={prompt.title}
