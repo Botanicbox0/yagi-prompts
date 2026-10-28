@@ -2195,6 +2195,18 @@ export const ko: Dictionary = {
     mediumLabel: '결과물',
     setOutput: '이미지 {n}장',
     setTitle: '한 번에 받는 {n}컷',
+    /** The template stage (gallery, viewer) and its "my selfie → result" strip. */
+    gallery: {
+      prev: '이전 사진',
+      next: '다음 사진',
+      open: '크게 보기',
+      close: '닫기',
+      zoomIn: '확대',
+      zoomOut: '축소',
+      transformSet: '셀카 한 장이면 이 {n}컷이 나와요',
+      transformImage: '셀카 한 장이면 이 사진의 주인공이 돼요',
+      transformVideo: '셀카 한 장이면 이 장면의 주인공이 돼요',
+    },
     notForSale: "준비 중",
     notForSaleBody: "이 템플릿은 아직 생성할 수 없습니다. 예시 결과물을 먼저 살펴보세요.",
     makeCta: '내 사진으로 만들기',

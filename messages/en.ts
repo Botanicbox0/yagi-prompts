@@ -2208,6 +2208,18 @@ export const en = {
     mediumLabel: 'Output',
     setOutput: '{n} images',
     setTitle: 'All {n} shots, from one order',
+    /** The template stage (gallery, viewer) and its "my selfie → result" strip. */
+    gallery: {
+      prev: 'Previous photo',
+      next: 'Next photo',
+      open: 'View larger',
+      close: 'Close',
+      zoomIn: 'Zoom in',
+      zoomOut: 'Zoom out',
+      transformSet: 'One selfie makes these {n} shots',
+      transformImage: 'One selfie puts you in this photo',
+      transformVideo: 'One selfie puts you in this scene',
+    },
     notForSale: "Coming soon",
     notForSaleBody: "Generation is not available for this template yet. You can browse its sample results.",
     makeCta: 'Make it with your photo',

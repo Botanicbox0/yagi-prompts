@@ -11,6 +11,7 @@ import { PremiumEditor } from './premium-editor';
 import { shrinkPhoto } from '@/lib/images/client-photo';
 export { shrinkPhoto } from '@/lib/images/client-photo';
 import type { EditScope } from '@/lib/premium-editing/contract';
+import { publishViewerSelfie } from '@/lib/twings/viewer-selfie';
 
 /**
  * TWINGS — the make loop, as a four-step demo (founder, 2026-08-16: "사진만 넣으면 완성도 높은
@@ -347,6 +348,8 @@ export function TwingsStudio({
         setIdentityRequired(json.identityRequired === true);
         setIdentity(typeof json.identity === 'string' ? json.identity : 'not_needed');
         setSignedIn(json.signedIn === true);
+        // The template page's "my selfie → these results" strip shows the reader's own photo.
+        publishViewerSelfie(json.signedIn === true ? (json.selfie?.imageUrl ?? null) : null);
         // While the person is choosing a photo, a refresh must not yank the panel out from under them.
         // A different default (changed in another tab) asks the question again.
         const nextSelfie = json.selfie ?? null;

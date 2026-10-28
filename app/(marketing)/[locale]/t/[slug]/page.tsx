@@ -26,6 +26,7 @@ import { templateStructuredData } from '@/lib/seo/structured-data';
 import { MarketingFooter, MarketingNav } from '@/components/marketing/chrome';
 import { TextSwap } from '@/components/ui/text-swap';
 import { PromptDetailMedia } from '@/components/prompts/detail-media';
+import { TemplateGallery, TransformStrip } from '@/components/prompts/template-gallery';
 import { TypographicPoster, posterRatio } from '@/components/prompts/poster';
 import { RelatedPrompts } from '@/components/prompts/detail';
 import { makerProfileRest } from '@/components/prompts/card-frame';
@@ -151,6 +152,11 @@ export default async function TemplatePage({ params }: RouteParams) {
     : null;
 
   const mediaAspect = card.aspectDefault ?? defaultAspect(card.medium);
+  // Pictures get the interactive stage (swipe, viewer, zoom); a film keeps its player. A set opens
+  // on its poster frame — the founder's pick, the same published object as that frame.
+  const galleryLabels = t.gallery;
+  const stageFrames = card.medium === 'image' ? (setSize ? gallery : card.poster ? [card.poster] : null) : null;
+  const stageStart = setSize && card.poster ? Math.max(0, gallery.findIndex((frame) => frame.src === card.poster!.src)) : 0;
   const photoGuideExamples = [
     { id: 'front', src: '/images/portrait-guide/front-facing.webp', label: dict.studio.photoExamples.front, crop: 'object-[50%_30%]' },
     { id: 'bright', src: '/images/portrait-guide/clear-face.webp', label: dict.studio.photoExamples.bright, crop: 'object-[50%_20%]' },
@@ -164,30 +170,61 @@ export default async function TemplatePage({ params }: RouteParams) {
 
       <SubscriptionAvailabilityProvider initialAvailability={availability}>
       <main id="main" data-template={card.slug} data-medium={card.medium} data-section data-theme="light" className="section pb-24">
-        <div className="band pt-24 lg:pt-32">
+        {/* The page's own centred shell. `.band` keeps a 300px ad rail free at 1440+, which this
+            page never has — that empty rail is what pushed everything left (founder, 2026-10-28). */}
+        <div data-template-shell className="mx-auto w-full max-w-[calc(var(--container-audience)+2*var(--spacing-gutter))] px-[var(--spacing-gutter)] pt-24">
             <a href={templatesHref(locale, card.medium)} className="inline-flex min-h-11 items-center text-sm text-black/65 transition-colors hover:text-black">
               ← {interpolate(t.backTo, { medium: dict.nav[card.medium] })}
             </a>
-            {recipe?.presentation === 'story-first' ? howItWasMade : null}
 
-            <header className="mt-4 grid gap-7 lg:mt-6 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,0.85fr)] lg:items-start lg:gap-12">
-              <div className="-mx-[var(--spacing-gutter)] sm:mx-0 lg:sticky lg:top-24">
-                <PromptDetailMedia
-                  poster={card.poster}
-                  video={card.video}
-                  alt={labels.resultLabel}
-                  ratio={ratio}
-                  aspect={mediaAspect}
-                  controls={{
-                    play: dict.campaigns.landing.reelPlay,
-                    pause: dict.campaigns.landing.reelPause,
-                    unmute: dict.campaigns.landing.reelUnmute,
-                    mute: dict.campaigns.landing.reelMute,
-                  }}
-                  fallback={<TypographicPoster title={card.title} slug={card.slug} kicker={dict.nav[card.medium]} ratio={ratio} />}
-                />
+            <header className="mt-3 grid gap-7 lg:grid-cols-[minmax(0,1fr)_minmax(22rem,25rem)] lg:items-start lg:gap-12 xl:grid-cols-[minmax(0,1fr)_26rem] xl:gap-16">
+              <div className="min-w-0">
+                {stageFrames ? (
+                  <TemplateGallery
+                    frames={stageFrames}
+                    initialIndex={stageStart}
+                    setSize={setSize}
+                    title={title}
+                    aspect={mediaAspect}
+                    makeHref={style !== null ? '#make' : null}
+                    labels={{
+                      ...galleryLabels,
+                      lead: setSize ? galleryLabels.transformSet : galleryLabels.transformImage,
+                      position: dict.renders.frames.position,
+                      selfie: dict.creatorJourney.evidenceSelfie,
+                    }}
+                  />
+                ) : (
+                  <>
+                    <div className="-mx-[var(--spacing-gutter)] sm:mx-0">
+                      <PromptDetailMedia
+                        poster={card.poster}
+                        video={card.video}
+                        alt={labels.resultLabel}
+                        ratio={ratio}
+                        aspect={mediaAspect}
+                        controls={{
+                          play: dict.campaigns.landing.reelPlay,
+                          pause: dict.campaigns.landing.reelPause,
+                          unmute: dict.campaigns.landing.reelUnmute,
+                          mute: dict.campaigns.landing.reelMute,
+                        }}
+                        fallback={<TypographicPoster title={card.title} slug={card.slug} kicker={dict.nav[card.medium]} ratio={ratio} />}
+                      />
+                    </div>
+                    {card.poster && (
+                      <TransformStrip
+                        lead={galleryLabels.transformVideo}
+                        selfieLabel={dict.creatorJourney.evidenceSelfie}
+                        makeHref={style !== null ? '#make' : null}
+                        poster={card.poster}
+                        aspect={mediaAspect}
+                      />
+                    )}
+                  </>
+                )}
               </div>
-              <div>
+              <div className="min-w-0">
                 <p className="font-label text-eyebrow uppercase">
                   <span data-medium-chip className="text-accent">{dict.nav[card.medium]}</span>
                 </p>
@@ -313,14 +350,7 @@ export default async function TemplatePage({ params }: RouteParams) {
                     </p>
 
                     <section data-template-photo-guide className="mt-5 rounded-2xl border border-hairline bg-surface p-4 sm:p-5">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <h2 className="text-xs font-semibold text-black/85">{dict.selfie.goodExamples}</h2>
-                        <div className="inline-flex items-center gap-1.5 text-xs font-medium text-black/75">
-                          <span className="rounded-full border border-hairline bg-paper px-2.5 py-0.5">{dict.creatorJourney.evidenceSelfie}</span>
-                          <span aria-hidden="true" className="text-accent">→</span>
-                          <span className="rounded-full border border-hairline bg-paper px-2.5 py-0.5">{dict.creatorJourney.evidenceScene}</span>
-                        </div>
-                      </div>
+                      <h2 className="text-xs font-semibold text-black/85">{dict.selfie.goodExamples}</h2>
                       <p className="mt-2 text-xs leading-relaxed text-black/70">{dict.studio.signedOutBody}</p>
                       <ul data-studio-photo-examples className="mt-3 grid grid-cols-3 gap-2.5">
                         {photoGuideExamples.map((example) => (
@@ -356,29 +386,9 @@ export default async function TemplatePage({ params }: RouteParams) {
               </div>
             </header>
 
-            {/* A set template: every frame one order makes, in set order — the poster above is one of them. */}
-            {setSize && (
-              <section data-template-gallery={setSize} className="mt-14 border-t border-hairline pt-10">
-                <h2 className="font-display text-[clamp(1.4rem,2.6vw,2rem)] leading-[0.95] font-black uppercase">{interpolate(t.setTitle, { n: String(setSize) })}</h2>
-                <ul className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-                  {gallery.map((frame, index) => (
-                    <li key={frame.src} data-template-gallery-frame={index + 1} className="overflow-hidden rounded-2xl bg-black">
-                      {/* eslint-disable-next-line @next/next/no-img-element -- public bucket object, no loader */}
-                      <img
-                        src={frame.src}
-                        alt={`${title} ${index + 1}/${setSize}`}
-                        {...(frame.w ? { width: frame.w } : {})}
-                        {...(frame.h ? { height: frame.h } : {})}
-                        loading="lazy"
-                        decoding="async"
-                        className="h-auto w-full"
-                      />
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            )}
-            {recipe?.presentation === 'make-first' ? howItWasMade : null}
+            {/* The recipe follows the result, never ahead of it (founder, 2026-10-28). A maker's
+                'story-first' still puts it right under the stage; 'make-first' after the campaigns. */}
+            {recipe?.presentation === 'story-first' && <div data-template-recipe="story-first" className="mt-16 border-t border-hairline pt-10">{howItWasMade}</div>}
 
             {/* The earn loop: campaigns that ask for exactly this template. */}
             {campaigns.length > 0 && (
@@ -404,6 +414,7 @@ export default async function TemplatePage({ params }: RouteParams) {
                 </ul>
               </section>
             )}
+            {recipe?.presentation === 'make-first' && <div data-template-recipe="make-first" className="mt-16 border-t border-hairline pt-10">{howItWasMade}</div>}
 
             {await TemplateRatings({templateId:card.id,copy:dict.community})}
             <RelatedPrompts
