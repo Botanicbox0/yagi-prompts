@@ -15,6 +15,8 @@ import {
   BRAND_LOGO_MAX_BYTES,
 } from "@/lib/brands/workspace/service";
 import type { BrandOutcome } from "@/lib/brands/workspace/types";
+import { importShortlist, removeShortlistCandidate, setShortlistShared } from "@/lib/brands/shortlist/service";
+import { SHORTLIST_IMPORT_MAX_BODY } from "@/lib/brands/shortlist/schema";
 import type { AdminOperation } from "./operations";
 import { fail, ok, type AdminContext } from "./context";
 import * as f from "./form";
@@ -228,7 +230,52 @@ const logoUpload: AdminOperation<Input> = {
     return { ok: true, value: { organizationId: f.str(form, "organizationId"), requestId: f.str(form, "requestId"), expectedRevision: Number(f.str(form, "expectedRevision")), file } };
   },
 };
+/**
+ * Creator shortlist (docs/BRAND-SHORTLIST.md). The import file is the same JSON contract the import
+ * worker sends and goes through the same validation; it always lands on the campaign whose page the
+ * form was sent from. Sharing and removal take one candidate, or every candidate when none is named.
+ */
+const shortlistTo = (projectId: unknown) => `/admin/brand-workspace/${String(projectId)}#shortlist-admin`;
+const shortlistImportOperation: AdminOperation<Input> = {
+  parse(form) {
+    const file = f.file(form, "file");
+    if (!file) return { ok: false, detail: "file: choose a .json file" };
+    if (file.size > SHORTLIST_IMPORT_MAX_BODY) return { ok: false, detail: "file: 4 MB at most" };
+    return { ok: true, value: { projectId: f.str(form, "projectId"), file } };
+  },
+  async run(ctx, input) {
+    let body: unknown;
+    try { body = JSON.parse(await (input.file as File).text()); }
+    catch { return fail("invalid", "file: not valid JSON"); }
+    if (!body || typeof body !== "object" || Array.isArray(body)) return fail("invalid", "file: expected an object with candidates");
+    const result = await importShortlist({ sql: ctx.sql, storage: ctx.storage }, { kind: "studio", viewer: ctx.viewer }, { ...body, projectId: input.projectId });
+    if (!result.ok) return result.code === "invalid" ? fail("invalid", result.field ? `invalid: ${result.field}` : "invalid") : brandFailure(result.code);
+    return ok("saved", { to: shortlistTo(input.projectId) });
+  },
+};
+const shortlistShareOperation: AdminOperation<Input> = {
+  parse(form) {
+    const candidateId = f.str(form, "candidateId");
+    return { ok: true, value: { projectId: f.str(form, "projectId"), ...(candidateId ? { candidateId } : {}), shared: f.str(form, "shared") === "true" } };
+  },
+  async run(ctx, input) {
+    const result = await setShortlistShared({ sql: ctx.sql }, ctx.viewer, input);
+    return result.ok ? ok("saved", { to: shortlistTo(input.projectId) }) : brandFailure(result.code);
+  },
+};
+const shortlistRemoveOperation: AdminOperation<Input> = {
+  parse(form) {
+    return { ok: true, value: { projectId: f.str(form, "projectId"), candidateId: f.str(form, "candidateId") } };
+  },
+  async run(ctx, input) {
+    const result = await removeShortlistCandidate({ sql: ctx.sql }, ctx.viewer, input);
+    return result.ok ? ok("saved", { to: shortlistTo(input.projectId) }) : brandFailure(result.code);
+  },
+};
 export const BRAND_WORKSPACE_OPERATIONS = {
+  "brandWorkspace.shortlistImport": shortlistImportOperation,
+  "brandWorkspace.shortlistShare": shortlistShareOperation,
+  "brandWorkspace.shortlistRemove": shortlistRemoveOperation,
  'brandWorkspace.logo': logoUpload,
  'brandWorkspace.logoRemove': managedOperation((ctx,v)=>removeBrandOrganizationLogo(ctx,ctx.viewer,v),'home'),
  'brandWorkspace.cover': managedOperation((ctx,v)=>setBrandProjectCover(ctx,ctx.viewer,v)),

@@ -105,6 +105,8 @@ export function ProjectDetail({
   usage = null,
   applicants = null,
   payments = null,
+  shortlist = null,
+  shortlistCount = 0,
   formatTitle = null,
 }: {
   project: BrandProjectDetail;
@@ -125,6 +127,9 @@ export function ProjectDetail({
    */
   applicants?: ReactNode;
   payments?: ReactNode;
+  /** The creator shortlist (docs/BRAND-SHORTLIST.md) and how many shared candidates it holds; 0 hides the tab. */
+  shortlist?: ReactNode;
+  shortlistCount?: number;
   /** The requested template's title, looked up by the page; null shows the slug. */
   formatTitle?: string | null;
 }) {
@@ -189,12 +194,13 @@ export function ProjectDetail({
         locale={locale}
         refCount={Math.max(p.referenceLinks.length, 3)}
       />
-      <ProjectTabs b={b} pendingReviews={p.status === "active" ? p.contents.filter(c => c.version === newest.get(c.slotKey) && c.decision === "pending").length : 0} comments={p.messages.length} usage={usage !== null} campaign={applicants !== null}>
+      <ProjectTabs b={b} pendingReviews={p.status === "active" ? p.contents.filter(c => c.version === newest.get(c.slotKey) && c.decision === "pending").length : 0} comments={p.messages.length} usage={usage !== null} campaign={applicants !== null} shortlist={shortlist ? shortlistCount : 0}>
       <section id="performance" className="bw-panel">
         <CampaignTimelineView timeline={campaignTimeline(p)} b={b} />
         <CampaignPerformance project={p} b={b} locale={locale} showUnready={studio} usageCta={Boolean(usage?.eligible.some((s) => s.kind === "post"))}/>
         <CreatorCampaignProgress participation={p.participation ?? []} copy={b.creatorCampaign} locale={locale} />
       </section>
+      {shortlist}
       {applicants}
       {payments}
       <div className="bw-grid-wide">

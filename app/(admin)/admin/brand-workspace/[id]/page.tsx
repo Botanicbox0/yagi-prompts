@@ -16,6 +16,9 @@ import { BrandUpload } from "@/components/brand-workspace/upload";
 import { CollectionConsole } from "@/components/brand-workspace/collection-console";
 import { PostPresentationAdmin } from "@/components/brand-workspace/post-presentation-admin";
 import { postShortId } from "@/lib/brands/workspace/performance";
+import { loadStudioShortlist } from "@/lib/brands/shortlist/service";
+import { ShortlistAdmin } from "@/components/brand-workspace/shortlist-admin";
+import { CampaignShortlist } from "@/components/brand-workspace/shortlist";
 import type { ReactNode } from "react";
 export const dynamic = "force-dynamic";
 export default async function StudioBrandProject({
@@ -41,6 +44,9 @@ export default async function StudioBrandProject({
   const formBack = `/admin/brand-workspace/${id}?${new URLSearchParams({ returnTo: listReturn })}`;
   const refusals = brandRefusals(dict.admin);
   const covers = p.attachments.filter((a) => ["image/jpeg", "image/png", "image/webp"].includes(a.mime));
+  // The client's view of the shortlist (shared candidates only) sits in the campaign preview below.
+  const shortlist = await loadStudioShortlist({ sql }, viewer, id);
+  const sharedShortlist = shortlist?.candidates.filter((c) => c.shared) ?? [];
   const Form = ({
     op,
     submit,
@@ -82,7 +88,10 @@ export default async function StudioBrandProject({
           <label>{b.managed.scope}<select name="access" defaultValue="comment"><option value="comment">{b.managed.scopeProjectComment}</option><option value="read">{b.managed.scopeProject}</option><option value="brand">{b.managed.scopeBrand}</option></select><span className="bw-muted">{b.managed.scopeCommentHint}</span></label><input type="hidden" name="role" value="viewer"/>
         </ManagedForm> : <p className="bw-note" data-invite-hidden-campaign>{dict.admin.inviteHiddenCampaign} <a href={`/admin/brand-workspace/organizations/${p.organizationId}`}>{b.managed.access} →</a></p>}</details>
       </section>
-      <ProjectDetail backHref={listReturn} project={p} b={b} locale={locale} studio studioReply={
+      <ProjectDetail backHref={listReturn} project={p} b={b} locale={locale} studio
+        shortlistCount={sharedShortlist.length}
+        shortlist={sharedShortlist.length > 0 ? <CampaignShortlist candidates={sharedShortlist} canPick={false} copy={b.shortlist} locale={locale} /> : null}
+        studioReply={
         <Form op="brandWorkspace.message" submit={b.sendComment}>
           <label>
             {b.studioMessage}
@@ -94,6 +103,7 @@ export default async function StudioBrandProject({
         <h2>{b.files}</h2>
         <BrandUpload projectId={id} b={b} studio />
       </section>
+      <ShortlistAdmin projectId={p.id} view={shortlist} back={`${formBack}#shortlist-admin`} copy={b.shortlistAdmin} locale={locale} />
       <section className="bw-panel" data-cover-settings>
         <h2>{b.cover.title}</h2>
         <p className="bw-muted">{b.cover.hint}</p>

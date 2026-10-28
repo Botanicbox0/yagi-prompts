@@ -9,6 +9,7 @@ import type { BrandCopy } from "./action-form";
 const ids = [
   "performance",
   "brief",
+  "shortlist",
   "review",
   "applicants",
   "payments",
@@ -48,6 +49,7 @@ export function ProjectTabs({
   pendingReviews = 0,
   usage = false,
   campaign = false,
+  shortlist = 0,
 }: {
   b: BrandCopy;
   children: ReactNode;
@@ -58,12 +60,15 @@ export function ProjectTabs({
   usage?: boolean;
   /** Applicants and payment: brand members only, on the customer's page (never guests, never the admin view). */
   campaign?: boolean;
+  /** Shared shortlist candidates (docs/BRAND-SHORTLIST.md); the tab exists only when there is at least one. */
+  shortlist?: number;
 }) {
   const navigation = useRef<HTMLElement>(null);
   const [active, setActive] = useState<string>("performance");
-  const available = ids.filter((id) => campaign || (id !== "applicants" && id !== "payments"));
+  const has = (id: ProjectTab) => (campaign || (id !== "applicants" && id !== "payments")) && (shortlist > 0 || id !== "shortlist");
+  const available = ids.filter(has);
   useEffect(() => {
-    const allowed = ids.filter((id) => campaign || (id !== "applicants" && id !== "payments"));
+    const allowed = ids.filter((id) => (campaign || (id !== "applicants" && id !== "payments")) && (shortlist > 0 || id !== "shortlist"));
     const read = () => {
       const id = tabForViewer(location.hash, allowed, usage);
       if (id) {
@@ -88,10 +93,11 @@ export function ProjectTabs({
     };
     window.addEventListener("hashchange", change);
     return () => window.removeEventListener("hashchange", change);
-  }, [usage, campaign]);
+  }, [usage, campaign, shortlist]);
   const labels: Record<ProjectTab, string> = {
     performance: b.tabs.overview,
     brief: b.tabs.brief,
+    shortlist: b.tabs.shortlist,
     review: b.review,
     applicants: b.tabs.applicants,
     payments: b.tabs.payments,
@@ -111,6 +117,7 @@ export function ProjectTabs({
           >
             {labels[id]}
             {id === "review" && pendingReviews > 0 && <span className="bw-tab-count" data-review-count={pendingReviews}>{pendingReviews}</span>}
+            {id === "shortlist" && <span className="bw-tab-count" data-shortlist-count={shortlist}>{shortlist}</span>}
             {id === "conversation" && comments > 0 && (
               <span className="bw-tab-count" data-comment-count={comments}>{comments}</span>
             )}
