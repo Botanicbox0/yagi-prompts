@@ -7,15 +7,16 @@ import type { PromptCard } from '@/lib/prompts/catalog';
 import { PROMPT_MODEL_LABEL, USE_CASES } from '@/lib/prompts/schemas';
 import { PromptCardView } from '@/components/prompts/prompt-card';
 import { CardPlaybackControl, shouldMountClip } from '@/components/prompts/card-media';
-import { CARD_RATIO, cardAspect, cardAuthor, makerProfileRest, railOrder } from '@/components/prompts/card-frame';
+import { CARD_GRID_GAP, CARD_RATIO, WIDE_HEIGHT, cardAspect, cardAuthor, cardFrame, makerProfileRest, pairCards, railOrder, type CardFrame } from '@/components/prompts/card-frame';
 import { PromptRail } from '@/components/prompts/rails';
 import { MediumTabs, TemplatesListing } from '@/components/templates/listing';
 import { promptLabels, useCaseLabel } from '@/components/prompts/labels';
 
 /**
- * docs/PLATFORM-2.0.md §15.3-4·5 and §15.6 (founder 2026-10-28): every template sits in the same
- * 4:5 card, two columns on a phone and four from a tablet up, and the card says what the reader
- * gets (title · length · ratio · NEW) — not which engine made it or who at the studio did.
+ * docs/PLATFORM-2.0.md §15.3-4·5 and §15.6 (founder 2026-10-28): portrait and square templates sit
+ * in a 4:5 card, wide ones in a two-column tile of the same height, two columns on a phone and four
+ * from a tablet up, and the card says what the reader gets (title · length · ratio · NEW) — not
+ * which engine made it or who at the studio did.
  */
 
 const NOW = new Date('2026-10-23T00:00:00.000Z');
@@ -52,20 +53,21 @@ function card(overrides: Partial<PromptCard> = {}): PromptCard {
   };
 }
 
-function markup(data: PromptCard, locale: 'en' | 'ko' = 'en') {
+function markup(data: PromptCard, locale: 'en' | 'ko' = 'en', frame?: CardFrame) {
   const dict = dicts[locale];
   return renderToStaticMarkup(
     <PromptCardView
       card={data}
       locale={locale}
       labels={promptLabels(dict)}
+      {...(frame ? { frame } : {})}
       useCaseLabels={Object.fromEntries(USE_CASES.map((v) => [v, useCaseLabel(dict, v)]))}
       now={NOW}
     />,
   );
 }
 
-describe('card frame (founder 2026-10-28: one 4:5 frame for every card)', () => {
+describe('card frame (founder 2026-10-28: 4:5 cards, wide templates as a two-column tile)', () => {
   const still = (w: number, h: number) => ({ source: 'route' as const, src: '/p', mime: 'image/png', w, h });
   const shapes = {
     '9:16': card(),
@@ -75,20 +77,51 @@ describe('card frame (founder 2026-10-28: one 4:5 frame for every card)', () => 
     'no still': card({ poster: null, video: null, aspectDefault: '16:9' }),
   };
 
-  it('gives tall, square and wide templates the same 4:5 window', () => {
+  it('makes anything wider than tall a wide tile, and portrait or square a 4:5 card', () => {
+    for (const aspect of ['16:9', '4:3', '3:2', '21:9']) expect(cardFrame(card({ aspectDefault: aspect })), aspect).toBe('wide');
+    for (const aspect of ['9:16', '1:1', '4:5', '3:4']) expect(cardFrame(card({ aspectDefault: aspect })), aspect).toBe('portrait');
+    // No aspect on the template: the medium's default (9:16 video, 4:5 image), both portrait.
+    expect(cardFrame(card({ aspectDefault: null }))).toBe('portrait');
+    expect(cardFrame(card({ aspectDefault: null, medium: 'image' }))).toBe('portrait');
+  });
+
+  it('gives portrait and square templates the 4:5 window', () => {
     expect(CARD_RATIO).toBe('4 / 5');
-    for (const [shape, data] of Object.entries(shapes)) {
-      const html = markup(data);
+    for (const shape of ['9:16', '1:1'] as const) {
+      const html = markup(shapes[shape], 'en', cardFrame(shapes[shape]));
       expect(html, shape).toContain(`aspect-ratio:${CARD_RATIO}`);
       expect(html, shape).toContain('data-frame="portrait"');
-      expect(html, shape).not.toContain('data-frame="landscape"');
-      expect(html, shape).not.toContain('16 / 9');
+      expect(html, shape).not.toContain('@container');
     }
   });
 
+  it('gives a wide template a tile exactly as tall as the 4:5 card beside it, never a 16:9 strip', () => {
+    for (const shape of ['16:9', '4:3', 'no still'] as const) {
+      const html = markup(shapes[shape], 'en', 'wide');
+      expect(html, shape).toContain('data-frame="wide"');
+      expect(html, shape).toContain('@container');
+      expect(html, shape).toContain(`height:${WIDE_HEIGHT}`);
+      expect(html, shape).not.toContain(`aspect-ratio:${CARD_RATIO}`);
+      expect(html, shape).not.toContain('16 / 9');
+      expect(html, shape).not.toContain('data-frame="landscape"');
+    }
+    // A column is (tile − gap) / 2 and 4:5 makes it 1.25 tall: (tile − gap) × 0.625.
+    expect(WIDE_HEIGHT).toBe('calc((100cqi - var(--card-gap, 1rem)) * 0.625)');
+    // The gap it subtracts is the grid's own: gap-x-3 on a phone, gap-x-4 from sm.
+    expect(CARD_GRID_GAP).toContain('gap-x-(--card-gap)');
+    expect(CARD_GRID_GAP).toContain('[--card-gap:0.75rem]');
+    expect(CARD_GRID_GAP).toContain('sm:[--card-gap:1rem]');
+  });
+
+  it('stays a 4:5 card where no grid gives it two columns', () => {
+    const html = markup(shapes['16:9']);
+    expect(html).toContain('data-frame="portrait"');
+    expect(html).toContain(`aspect-ratio:${CARD_RATIO}`);
+  });
+
   it('crops to fill instead of letterboxing, a little above centre so heads stay in', () => {
-    for (const data of [shapes['9:16'], shapes['16:9'], shapes['4:3']]) {
-      const html = markup(data);
+    for (const [data, frame] of [[shapes['9:16'], 'portrait'], [shapes['16:9'], 'wide'], [shapes['4:3'], 'wide']] as const) {
+      const html = markup(data, 'en', frame);
       expect(html).toContain('object-cover');
       expect(html).toContain('object-[50%_35%]');
       expect(html).not.toContain('object-contain');
@@ -191,11 +224,87 @@ describe('card playback (viewport autoplay with a visible stop control)', () => 
 });
 
 describe('rails: NEW first, two columns on a phone, four from a tablet', () => {
-  const old = (slug: string) => card({ slug, publishedAt: '2026-01-01T00:00:00.000Z' });
+  const OLD = '2026-01-01T00:00:00.000Z';
+  const old = (slug: string) => card({ slug, publishedAt: OLD });
+  const wide = (slug: string, overrides: Partial<PromptCard> = {}) => card({ slug, aspectDefault: '16:9', ...overrides });
+  const slugs = (cards: PromptCard[]) => cards.map((c) => c.slug);
+  /** Cards whose tile would start on an odd cell, filling the grid in order — each one a hole. */
+  const holes = (cards: PromptCard[]) => {
+    let cell = 0;
+    const out: string[] = [];
+    for (const c of cards) {
+      if (cardFrame(c) === 'wide') {
+        if (cell % 2 === 1) out.push(c.slug);
+        cell += 2;
+      } else cell += 1;
+    }
+    return out;
+  };
 
   it('moves NEW cards to the front and keeps the catalog order inside each group', () => {
     const ordered = railOrder([old('a'), card({ slug: 'n1' }), old('b'), card({ slug: 'n2' })], NOW);
     expect(ordered.map((c) => c.slug)).toEqual(['n1', 'n2', 'a', 'b']);
+  });
+
+  it('leaves all-wide and all-single rails in catalog order', () => {
+    expect(slugs(pairCards([wide('w1'), wide('w2'), wide('w3')]))).toEqual(['w1', 'w2', 'w3']);
+    expect(slugs(pairCards([card({ slug: 's1' }), card({ slug: 's2' }), card({ slug: 's3' })]))).toEqual(['s1', 's2', 's3']);
+  });
+
+  it('pulls the next single forward beside an unpaired one, so no tile starts mid-pair', () => {
+    const mixed = [card({ slug: 's1' }), wide('w1'), card({ slug: 's2' }), wide('w2'), card({ slug: 's3' })];
+    expect(holes(mixed)).toEqual(['w1']);
+    const paired = pairCards(mixed);
+    expect(slugs(paired)).toEqual(['s1', 's2', 'w1', 'w2', 's3']);
+    expect(holes(paired)).toEqual([]);
+  });
+
+  it('sends an odd single with no partner to the very end, past any tiles after it', () => {
+    const odd = [card({ slug: 's1' }), card({ slug: 's2' }), card({ slug: 's3' }), wide('w1'), wide('w2')];
+    expect(slugs(pairCards(odd))).toEqual(['s1', 's2', 'w1', 'w2', 's3']);
+  });
+
+  it('never leaves a hole, loses or reorders nothing, for every rail of up to eight cards', () => {
+    const only = (prefix: string, list: PromptCard[]) => slugs(list).filter((s) => s.startsWith(prefix));
+    for (let length = 0; length <= 8; length += 1) {
+      for (let mask = 0; mask < 2 ** length; mask += 1) {
+        const rail = Array.from({ length }, (_, i) => ((mask >> i) & 1 ? wide(`w${i}`) : card({ slug: `s${i}` })));
+        const out = pairCards(rail);
+        expect(holes(out), slugs(rail).join()).toEqual([]);
+        expect([...slugs(out)].sort()).toEqual([...slugs(rail)].sort());
+        // Tiles keep their order among themselves, singles theirs.
+        expect(only('w', out)).toEqual(only('w', rail));
+        expect(only('s', out)).toEqual(only('s', rail));
+        // A single may sit alone on a row only as the very last card.
+        const singles = out.filter((c) => cardFrame(c) === 'portrait').length;
+        if (singles % 2 === 1) expect(cardFrame(out.at(-1)!)).toBe('portrait');
+      }
+    }
+  });
+
+  it('keeps every NEW card ahead of every older one while pairing', () => {
+    // An odd NEW single waits at the end of the NEW group for the first older single.
+    const ordered = railOrder([old('a'), card({ slug: 'n1' }), wide('n2'), wide('b', { publishedAt: OLD }), old('c')], NOW);
+    expect(slugs(ordered)).toEqual(['n2', 'n1', 'a', 'b', 'c']);
+    expect(holes(ordered)).toEqual([]);
+    // Two NEW singles pair with each other; older tiles and singles follow, paired among themselves.
+    const even = railOrder([wide('b', { publishedAt: OLD }), card({ slug: 'n1' }), old('a'), card({ slug: 'n2' })], NOW);
+    expect(slugs(even)).toEqual(['n1', 'n2', 'b', 'a']);
+    // With no older single to pair with, the lone NEW single is the very last card.
+    const lone = railOrder([card({ slug: 'n1' }), wide('n2'), wide('b', { publishedAt: OLD })], NOW);
+    expect(slugs(lone)).toEqual(['n2', 'b', 'n1']);
+    expect(holes(lone)).toEqual([]);
+  });
+
+  it('spans a wide tile over two columns in the rail and reads the gap from the grid', () => {
+    const html = renderToStaticMarkup(
+      <PromptRail id="video" heading="Video" lede="" cards={[card({ slug: 's1' }), wide('w1'), card({ slug: 's2' })]} locale="en" labels={promptLabels(dicts.en)} emptyLabel="" now={NOW} />,
+    );
+    expect(html).toContain(CARD_GRID_GAP);
+    expect(html).toMatch(/<li[^>]*class="col-span-2 min-w-0"[^>]*><article data-prompt-card="w1"[^>]*data-frame="wide"/);
+    expect(html).toMatch(/<li[^>]*class="min-w-0"[^>]*><article data-prompt-card="s1"[^>]*data-frame="portrait"/);
+    // s2 was pulled forward beside s1, so the tile starts a fresh pair.
+    expect(html.indexOf('data-prompt-card="s2"')).toBeLessThan(html.indexOf('data-prompt-card="w1"'));
   });
 
   it('renders that order in a 2 → 4 column grid that never scrolls sideways', () => {

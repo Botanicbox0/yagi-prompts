@@ -14,6 +14,7 @@ import { PromptCopyButton } from './copy-button';
 import { PromptRunButton } from './run-button';
 import { PromptDetailMedia } from './detail-media';
 import { PromptCardView } from './prompt-card';
+import { CARD_GRID_GAP, cardFrame, pairCards } from './card-frame';
 import { TypographicPoster, posterRatio } from './poster';
 import type { PromptLabels } from './labels';
 
@@ -465,19 +466,24 @@ export function RelatedPrompts({
       <h2 className="font-display text-[clamp(1.4rem,2.6vw,2rem)] leading-[0.95] font-black uppercase">
         {labels.relatedHeading}
       </h2>
-      {/* The catalogue's own grid (rails.tsx): two 4:5 cards a row on a phone, four on a desktop.
-          No three-column step — the related list is four cards, and 3 + 1 leaves an orphan. */}
-      <ul data-related-grid className="mt-8 grid grid-cols-2 items-start gap-x-3 gap-y-6 sm:gap-x-4 lg:grid-cols-4">
-        {cards.map((card) => (
-          <li key={card.slug} data-related-item className="min-w-0">
-            <PromptCardView
-              card={card}
-              locale={locale}
-              labels={labels}
-              useCaseLabels={useCaseLabels}
-            />
-          </li>
-        ))}
+      {/* The catalogue's own grid (rails.tsx): two 4:5 cards a row on a phone, four on a desktop,
+          a wide template as a two-column tile. No three-column step — the related list is four
+          cards, 3 + 1 leaves an orphan, and a tile would leave holes. */}
+      <ul data-related-grid className={`mt-8 grid grid-cols-2 items-start gap-y-6 ${CARD_GRID_GAP} lg:grid-cols-4`}>
+        {pairCards(cards).map((card) => {
+          const frame = cardFrame(card);
+          return (
+            <li key={card.slug} data-related-item className={frame === 'wide' ? 'col-span-2 min-w-0' : 'min-w-0'}>
+              <PromptCardView
+                card={card}
+                locale={locale}
+                labels={labels}
+                frame={frame}
+                useCaseLabels={useCaseLabels}
+              />
+            </li>
+          );
+        })}
       </ul>
     </section>
   );

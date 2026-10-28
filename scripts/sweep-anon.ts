@@ -975,16 +975,34 @@ async function sweepTemplates(): Promise<void> {
     // `>$4<` — the price as rendered text; a bare `$4` also matches React Flight's `"$4:props…"` references.
     expectAbsent('…not even the number', page.body, locale === 'ko' ? '5,900원' : '>$4<');
     expectPresent('cards link to template pages', page.body, `href="/${locale}/t/${GATED_PROMPT}"`);
-    // PLATFORM-2.0 §15.6 (founder 2026-10-28): every template, tall or wide, sits in the same 4:5
-    // card; the card names length and shape, never the engine, and is one link.
+    // PLATFORM-2.0 §15.6 (founder 2026-10-28): a portrait or square template is a 4:5 card, a wide
+    // one a two-column tile as tall as the card beside it, and no tile starts mid-pair (that would
+    // leave a hole). The card names length and shape, never the engine, and is one link.
     {
-      const cards = page.body.split('data-prompt-card="').length - 1;
-      const framed = page.body.split('data-frame="portrait"').length - 1;
-      const windows = page.body.split('aspect-ratio:4 / 5').length - 1;
-      if (cards > 0 && framed === cards && windows >= cards) ok('every card is the one 4:5 frame', `${cards} cards, ${framed} framed, ${windows} 4:5 windows`);
-      else fail('every card is the one 4:5 frame', `${cards} cards, ${framed} framed, ${windows} 4:5 windows`);
+      let cards = 0, tiles = 0;
+      const wrong: string[] = [];
+      for (const rail of page.body.split('data-rail="').slice(1)) {
+        let cell = 0;
+        // A boolean `data-*` prop renders as ="true" from the app and ="" from renderToStaticMarkup.
+        for (const item of rail.split(/data-prompt-item="[^"]*" /).slice(1)) {
+          const slug = /data-prompt-card="([^"]+)"/.exec(item)?.[1] ?? '?';
+          const shape = /data-card-aspect="[^"]*"[^>]*>(\d+):(\d+)</.exec(item);
+          const wide = shape ? Number(shape[1]) > Number(shape[2]) : false;
+          const tile = /^class="col-span-2 /.test(item) && item.includes('data-frame="wide"') && item.includes('height:calc((100cqi - var(--card-gap');
+          const card = /^class="min-w-0"/.test(item) && item.includes('data-frame="portrait"') && /<div[^>]*card__media[^>]*style="aspect-ratio:4 \/ 5"/.test(item);
+          if (wide ? !tile : !card) wrong.push(`${slug} (${shape ? `${shape[1]}:${shape[2]}` : 'no chip'})`);
+          if (wide && cell % 2 === 1) wrong.push(`${slug} starts mid-pair`);
+          cell += wide ? 2 : 1;
+          cards += 1;
+          tiles += wide ? 1 : 0;
+        }
+      }
+      if (cards > 0 && wrong.length === 0) ok('portrait cards are 4:5, wide ones two-column tiles, no holes', `${cards} cards, ${tiles} tiles`);
+      else fail('portrait cards are 4:5, wide ones two-column tiles, no holes', wrong.join(', ') || 'no cards');
+      if (tiles > 0) ok('…the snapshot has a wide tile to check', `${tiles}`);
+      else fail('…the snapshot has a wide tile to check', 'no 16:9 or 4:3 template on the page');
     }
-    expectAbsent('…no card keeps a 16:9 frame', page.body, 'data-frame="landscape"');
+    expectAbsent('…no card keeps the old 16:9 frame', page.body, 'data-frame="landscape"');
     expectAbsent('…or letterboxes its example', page.body, 'aspect-ratio:16 / 9');
     expectPresent('…a wide template still says so on its ratio chip', page.body, '>16:9</span>');
     expectPresent('…with a length chip', page.body, 'data-card-duration');

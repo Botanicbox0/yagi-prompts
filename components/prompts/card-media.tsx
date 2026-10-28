@@ -32,7 +32,8 @@ import { observeCardArming } from '@/lib/media/card-arming';
 
 /**
  * A crop that keeps heads: a 9:16 clip in a 4:5 window loses its top and bottom, and portrait
- * subjects sit above the middle. Wide media crops sideways, where the 35% does nothing.
+ * subjects sit above the middle. A 16:9 clip in the wide tile crops sideways, where the 35% does
+ * nothing; a 4:3 one loses a little top and bottom, a little more of the bottom.
  */
 const COVER = 'object-cover object-[50%_35%]';
 
@@ -90,6 +91,7 @@ export function PromptCardMedia({
   fallback,
   alt,
   ratio,
+  height,
   fit = 'contain',
   controlLabels,
   className,
@@ -100,7 +102,9 @@ export function PromptCardMedia({
   fallback: ReactNode;
   alt: string;
   ratio: string;
-  /** `cover` crops to fill (the 4:5 catalogue card); `contain` letterboxes. */
+  /** A fixed height instead of `ratio` — the catalogue's wide tile (`WIDE_HEIGHT`). */
+  height?: string;
+  /** `cover` crops to fill (the catalogue card and tile); `contain` letterboxes. */
   fit?: 'cover' | 'contain';
   /** Without labels there is no control — the clip is decoration only. */
   controlLabels?: { play: string; pause: string };
@@ -170,7 +174,7 @@ export function PromptCardMedia({
         ref={rootRef}
         data-armed={armed ? 'true' : 'false'}
         className={['card__media relative overflow-hidden bg-black', className].filter(Boolean).join(' ')}
-        style={{ aspectRatio: ratio }}
+        style={height ? { height } : { aspectRatio: ratio }}
       >
         {poster ? (
           // eslint-disable-next-line @next/next/no-img-element -- public bucket object, no loader

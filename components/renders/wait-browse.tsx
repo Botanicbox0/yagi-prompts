@@ -4,11 +4,13 @@ import type { PromptCard, PromptCatalog } from '@/lib/prompts/catalog';
 import type { TemplateMedium } from '@/lib/prompts/schemas';
 import { templatesHref } from '@/lib/prompts/links';
 import { PromptCardView } from '@/components/prompts/prompt-card';
+import { CARD_GRID_GAP, cardFrame, pairCards } from '@/components/prompts/card-frame';
 import { promptLabels } from '@/components/prompts/labels';
 
 /**
  * docs/PLATFORM-2.0.md §3.2-4 — "기다리는 동안 다른 포맷 보기". A few minutes is long enough to
- * choose the next one; the same 4:5 cards as the catalog, so a clip plays here too.
+ * choose the next one; the same cards and grid as the catalog (4:5, wide templates as a two-column
+ * tile), so a clip plays here too.
  */
 export const WAIT_BROWSE_LIMIT = 4;
 
@@ -34,12 +36,15 @@ export function WaitBrowse({ cards, locale, dict }: { cards: PromptCard[]; local
           {w.browseAll} ↗
         </a>
       </div>
-      <ul className="mt-5 grid grid-cols-2 items-start gap-x-3 gap-y-6 sm:gap-x-4 lg:grid-cols-4">
-        {cards.map((card) => (
-          <li key={card.slug} className="min-w-0">
-            <PromptCardView card={card} locale={locale} labels={labels} />
-          </li>
-        ))}
+      <ul className={`mt-5 grid grid-cols-2 items-start gap-y-6 ${CARD_GRID_GAP} lg:grid-cols-4`}>
+        {pairCards(cards).map((card) => {
+          const frame = cardFrame(card);
+          return (
+            <li key={card.slug} className={frame === 'wide' ? 'col-span-2 min-w-0' : 'min-w-0'}>
+              <PromptCardView card={card} locale={locale} labels={labels} frame={frame} />
+            </li>
+          );
+        })}
       </ul>
     </section>
   );

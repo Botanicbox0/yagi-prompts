@@ -1,18 +1,19 @@
 import type { PromptCard, PromptOrigin } from '@/lib/prompts/catalog';
 import { PromptCardView } from './prompt-card';
 import { RevealGrid } from '@/components/motion/reveal-grid';
-import { railOrder } from './card-frame';
+import { CARD_GRID_GAP, cardFrame, railOrder } from './card-frame';
 import type { PromptLabels } from './labels';
 
 /**
  * Fixed-ratio cards share grid rows. A wrapped title grows its row rather than shifting all
  * subsequent cards in one column, and visual order stays the same as catalog and keyboard order.
  *
- * docs/PLATFORM-2.0.md §15.6 (founder 2026-10-28): every card is the same 4:5 frame, two columns
- * on a phone and four from a tablet up — no three-column step, so a rail that fills a desktop row
- * also fills phone rows. NEW cards lead the rail; the rest keep the catalog's featured → newest
- * order. The use-case and origin chips that filtered this grid are gone (§15.6), so every card is
- * always in the HTML and always visible.
+ * docs/PLATFORM-2.0.md §15.6 (founder 2026-10-28): portrait and square templates are 4:5 cards,
+ * wide ones a two-column tile of the same height. Two columns on a phone and four from a tablet
+ * up — no three-column step, where a tile would leave holes; `railOrder` pairs the single cards so
+ * every tile starts on a whole pair. NEW cards lead the rail; the rest keep the catalog's
+ * featured → newest order. The use-case and origin chips that filtered this grid are gone
+ * (§15.6), so every card is always in the HTML and always visible.
  */
 export function PromptRail({
   id,
@@ -68,12 +69,15 @@ export function PromptRail({
       {cards.length === 0 ? (
         <p className="mt-8 font-mono text-code opacity-60">{emptyLabel}</p>
       ) : (
-        <RevealGrid className={`${hideHeading ? '' : 'mt-8 '}grid grid-cols-2 items-start gap-x-3 gap-y-6 sm:gap-x-4 md:grid-cols-4 md:gap-y-8`}>
-          {railOrder(cards, now).map((card) => (
-            <li key={card.slug} data-prompt-item className="min-w-0">
-              <PromptCardView card={card} locale={locale} labels={labels} {...(now === undefined ? {} : { now })} />
-            </li>
-          ))}
+        <RevealGrid className={`${hideHeading ? '' : 'mt-8 '}grid grid-cols-2 items-start gap-y-6 ${CARD_GRID_GAP} md:grid-cols-4 md:gap-y-8`}>
+          {railOrder(cards, now).map((card) => {
+            const frame = cardFrame(card);
+            return (
+              <li key={card.slug} data-prompt-item className={frame === 'wide' ? 'col-span-2 min-w-0' : 'min-w-0'}>
+                <PromptCardView card={card} locale={locale} labels={labels} frame={frame} {...(now === undefined ? {} : { now })} />
+              </li>
+            );
+          })}
         </RevealGrid>
       )}
     </section>
