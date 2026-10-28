@@ -385,8 +385,8 @@ export const en = {
     "moat2Body": "Each creator stars in the film with their own face — no live shoot needed.",
     "moat3Title": "Korea & Japan publishing",
     "moat3Body": "We review disclosures, publish across real creator channels, and deliver verified results.",
-    "metaTitle": "Creator Campaigns for Brands",
-    "metaDescription": "AI brand films and creator campaigns across Korea and Japan by YAGI. Explore simultaneous market launches and real Morphic results.",
+    "metaTitle": "All-in-one Marketing Asset Studio",
+    "metaDescription": "TWINGS is the all-in-one marketing asset studio for consumer brands: organize, search and make on-brand assets, then spread them through real creators. See the live Morphic results.",
     "marketsHeading": "Korea and Japan.\nOne campaign.",
     "marketsBody": "Run campaigns across Korea and Japan simultaneously with our active creator pools in both markets — no local shoots needed.",
     "eyebrow": "TWINGS FOR BRANDS · YAGI",
@@ -395,6 +395,175 @@ export const en = {
     "primaryCta": "Discuss your campaign",
     "secondaryCta": "See campaign results",
     "definition": "TWINGS is a brand campaign studio by YAGI.",
+    "studio": {
+      "heroEyebrow": "Your all-in-one marketing asset studio",
+      "heroTitle": "From brand assets\nto real people’s feeds.",
+      "heroBody": "Gather scattered assets in one place, find them by describing them, make new ones that stay on brand, and spread them through real people’s faces. First file to final feed, in one studio.",
+      "heroCta": "Book a demo",
+      "heroSecondary": "See live campaigns",
+      "earlyAccess": "Early access",
+      "live": "Live",
+      "example": "Example screen",
+      "earlyNote": "Organizing, search and generation open first as early access. Campaigns with real creators are running today.",
+      "stage": {
+        "window": "Brand library",
+        "search": "Every cut with pink in it",
+        "memory": "Brand memory",
+        "rules": [
+          "Logo clear space 1×",
+          "Key red #ED1E1E",
+          "Never tilt the logo"
+        ],
+        "drop": "Drop assets here",
+        "tags": [
+          "Lip gloss · macro",
+          "Flip phone · Y2K",
+          "Paris · film",
+          "Editorial · white room",
+          "Locker · high-teen",
+          "Street look · city"
+        ]
+      },
+      "splitEyebrow": "The problem",
+      "splitTitle": "Every time you switch tools,\nyou explain the brand again.",
+      "splitBody": "Files live in a drive, images come from a generation tool, and the final cut is assembled in a design tool. The logo spec and this campaign’s mood get carried across by hand each time, and the tone slips somewhere in between.",
+      "splitTools": [
+        {
+          "label": "Organize",
+          "where": "Drive folders",
+          "loss": "final_REAL_v3.jpg"
+        },
+        {
+          "label": "Generate",
+          "where": "Generation tools",
+          "loss": "A slightly different red every time"
+        },
+        {
+          "label": "Assemble",
+          "where": "Design tools",
+          "loss": "Export, re-upload, repeat"
+        }
+      ],
+      "flowTitle": "In TWINGS it runs as one line.",
+      "flow": [
+        {
+          "step": "Remember",
+          "body": "Brand rules, campaign mood, how you work"
+        },
+        {
+          "step": "Find",
+          "body": "Tagged on upload, found by description"
+        },
+        {
+          "step": "Make",
+          "body": "New cuts that start from your own assets"
+        },
+        {
+          "step": "Spread",
+          "body": "Real faces, creator feeds, studio production"
+        }
+      ],
+      "pipelineEyebrow": "Organize · search · generate",
+      "pipelineTitle": "Just upload.\nThe studio does the sorting.",
+      "pipelineBody": "Every asset is read as it lands: objects, color, light, framing and mood. When you need it, ask the way you would ask a colleague.",
+      "tabs": [
+        {
+          "label": "Auto-tag",
+          "title": "Sorted the moment it lands",
+          "body": "Objects, color codes, light direction, framing, and the mood words your team actually uses."
+        },
+        {
+          "label": "Search by describing",
+          "title": "Describe it and it comes back",
+          "body": "Search by what is in the picture, not by what somebody named the file."
+        },
+        {
+          "label": "Make on brand",
+          "title": "New cuts that keep the rules",
+          "body": "Variations start from your own assets and pass your brand rules before you see them."
+        }
+      ],
+      "tagGroups": {
+        "object": "Object",
+        "color": "Color",
+        "light": "Light",
+        "framing": "Framing",
+        "mood": "Mood"
+      },
+      "tagValues": {
+        "object": "Lip gloss · glass tube",
+        "light": "Soft backlight",
+        "framing": "Macro close-up",
+        "mood": [
+          "Glossy",
+          "Soft pink",
+          "Clean beauty"
+        ]
+      },
+      "searchResult": "3 found",
+      "makePrompt": "Autumn mood, keep the logo clear space",
+      "makeChecks": [
+        "Logo clear space kept",
+        "No banned colors",
+        "Matches the campaign mood"
+      ],
+      "makeVariants": [
+        "Original",
+        "Autumn",
+        "Night",
+        "Studio white"
+      ],
+      "memoryEyebrow": "Brand memory",
+      "memoryTitle": "Explain the brand once.\nThe studio remembers the rest.",
+      "memoryBody": "Rules stack in three layers. A campaign can add to the brand’s rules but never loosen them.",
+      "memory": [
+        {
+          "title": "Brand",
+          "body": "Logo, type, palette, and the things that must never change.",
+          "items": [
+            "Logo clear space 1×",
+            "Typeface: Pretendard Variable",
+            "Never tilt the logo"
+          ]
+        },
+        {
+          "title": "Campaign",
+          "body": "Moodboard, audience, key lines, and what was decided last week.",
+          "items": [
+            "Office workers in their late 20s",
+            "“A glow that lasts the commute home”",
+            "Vertical 4:5 first"
+          ]
+        },
+        {
+          "title": "You",
+          "body": "The ratios, layouts and feedback you keep coming back to.",
+          "items": [
+            "Product on the left third",
+            "Slightly warmer skin tones",
+            "Short captions"
+          ]
+        }
+      ],
+      "spreadEyebrow": "Spread · live today",
+      "contrastEyebrow": "The workspace",
+      "contrastTitle": "Everything a brand team needs.\nNone of the tool juggling.",
+      "contrastHaveLabel": "In the workspace today",
+      "contrastHave": [
+        "Member and guest permissions",
+        "Review and approval on every cut",
+        "Usage rights on record",
+        "Creator shortlists to compare",
+        "Campaign performance reports"
+      ],
+      "contrastSkipLabel": "What you can stop doing",
+      "contrastSkip": [
+        "Paying for three tools",
+        "Exporting and re-uploading files",
+        "Explaining it all again in each tool",
+        "Pulling a drifted tone back"
+      ]
+    },
     "heroCinema": {
       "parisTitle": "Galeries Lafayette Paris",
       "beautyTitle": "Rose gloss beauty film",

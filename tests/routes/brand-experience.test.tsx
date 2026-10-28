@@ -83,4 +83,33 @@ describe('the brand page shows the service before asking visitors to enquire', (
     expect(html).toContain('data-video-control');
     expect(html).toContain('https://pitch.com/v/yagi-workshop-introduction-en-higgsfield-kb35ht');
   });
+
+  // PLATFORM-2.0 §20: the asset studio leads, the live campaign service follows as "spread".
+  for (const locale of ['ko', 'en'] as const) {
+    it(`opens ${locale} on the asset studio and is honest about what is early access`, async () => {
+      const html = renderToStaticMarkup(await BrandsPage({ params: Promise.resolve({ locale }) }));
+      const ko = locale === 'ko';
+      expect(html).toContain(ko ? '브랜드를 위한 올인원 마케팅 에셋 스튜디오' : 'Your all-in-one marketing asset studio');
+      for (const marker of ['data-studio-hero', 'data-studio-stage', 'data-studio-split', 'data-studio-flow', 'data-studio-pipeline', 'data-brand-memory', 'data-studio-spread', 'data-studio-contrast']) {
+        expect(html).toContain(marker);
+      }
+      // The hero leads; the campaign service (cases, approved figures) is still on the page below it.
+      expect(html.indexOf('data-studio-hero')).toBeLessThan(html.indexOf('data-campaign-proof'));
+      expect(html.indexOf('data-studio-spread')).toBeLessThan(html.indexOf('id="morphic-case"'));
+      // Not built yet → labelled. The live step is the campaign service.
+      expect(html.match(/data-early-access=/g)?.length).toBeGreaterThanOrEqual(3);
+      expect(html.match(/data-flow-step="early"/g)).toHaveLength(3);
+      expect(html.match(/data-flow-step="live"/g)).toHaveLength(1);
+      expect(html).toContain(ko ? '예시 화면' : 'Example screen');
+      // Every demo panel ships in the initial HTML; only one is visible at a time.
+      expect(html.match(/data-studio-panel=/g)).toHaveLength(3);
+      expect(html.match(/hidden="" data-studio-panel=/g)).toHaveLength(2);
+      expect(html.match(/data-memory-layer=/g)).toHaveLength(3);
+      // The pink search only marks stills that carry pink.
+      expect(html.match(/data-search-hit="true"/g)).toHaveLength(3);
+      // No competitor names, no credit or price promises before the founder sets them (§20.7).
+      expect(html).not.toMatch(/Dropbox|Midjourney|Runway|Figma|Photoshop|Playbook/);
+      expect(html).not.toMatch(/credits?\b|크레딧/i);
+    });
+  }
 });
