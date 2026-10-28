@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { getDictionary } from '@/lib/i18n/dictionaries';
+import { PromptDetailMedia } from '@/components/prompts/detail-media';
 import { ResolutionPicker, TwingsStudio, type StudioLabels, type StudioLive, type StudioStyle } from '@/components/twings/studio';
 
 /**
@@ -184,5 +185,56 @@ describe('the resolution choice (docs/CREATOR-RESOLUTION.md)', () => {
     expect(renderToStaticMarkup(<ResolutionPicker options={[options[0]!]} selected={null} onSelect={() => {}} labels={{}} />)).toBe('');
     const closed = renderToStaticMarkup(<TwingsStudio styles={[{ ...styles[0]!, resolutions: options }]} labels={labels} initialStyleId="seoul-90s" live={live} initialAccess={{ open: false, live: false, signedIn: false }} />);
     expect(closed).not.toContain('data-resolution-picker');
+  });
+});
+
+describe('PromptDetailMedia hero video', () => {
+  const controls = { play: '재생', pause: '일시정지', unmute: '소리 켜기', mute: '소리 끄기' };
+
+  it('renders poster-first muted loop with preload=none, no native controls, and its own two controls', () => {
+    const html = renderToStaticMarkup(
+      <PromptDetailMedia
+        poster={{ src: '/poster.jpg', mime: 'image/jpeg', w: 1280, h: 720 }}
+        video={{ src: '/clip.mp4', mime: 'video/mp4', w: 1280, h: 720 }}
+        alt="Result"
+        aspect="16:9"
+        controls={controls}
+        fallback={null}
+      />,
+    );
+    expect(html).toContain('preload="none"');
+    expect(html).toContain('muted=""');
+    expect(html).toContain('loop=""');
+    expect(html).toContain('playsInline=""');
+    expect(html).not.toContain('controls=');
+    expect(html).toContain('data-detail-sound="muted"');
+    expect(html).toContain('소리 켜기');
+  });
+
+  it('can always be paused or played (WCAG 2.2.2), labelled from the dictionary', () => {
+    const html = renderToStaticMarkup(
+      <PromptDetailMedia
+        poster={{ src: '/poster.jpg', mime: 'image/jpeg' }}
+        video={{ src: '/clip.mp4', mime: 'video/mp4' }}
+        alt="Result"
+        aspect="9:16"
+        controls={{ play: 'Play', pause: 'Pause', unmute: 'Sound on', mute: 'Sound off' }}
+        fallback={null}
+      />,
+    );
+    // Nothing plays before the client arms it, so the server offers the play control.
+    expect(html).toContain('data-detail-playback="paused"');
+    expect(html).toContain('aria-label="Play"');
+    expect(html).toContain('Sound on');
+    expect(html).not.toMatch(/[가-힣]/);
+  });
+
+  it('shows the poster alone when there is no clip, with no controls', () => {
+    const html = renderToStaticMarkup(
+      <PromptDetailMedia poster={{ src: '/poster.jpg', mime: 'image/jpeg' }} video={null} alt="Result" aspect="16:9" controls={controls} fallback={null} />,
+    );
+    expect(html).toContain('/poster.jpg');
+    expect(html).not.toContain('data-detail-playback');
+    expect(html).not.toContain('data-detail-sound');
   });
 });

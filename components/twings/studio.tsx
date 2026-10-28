@@ -566,19 +566,23 @@ export function TwingsStudio({
     />
   ) : null;
 
-  // Before the access call answers: where the photo and the button will be, nothing more. Same
-  // footprint as the signed-out card (three 4:5 tiles, a line, a 48px button), so nothing jumps.
+  // Before the access call answers: where the photo and the button will be, nothing more. Matches
+  // the footprint of the signed-out state (compact button when photo examples live outside, or full).
   if (!accessKnown) {
     return (
-      <section ref={studioRef} data-twings-studio data-phase="pending" data-single={single ? 'true' : 'false'} data-live="false" aria-busy="true" className="mt-5 scroll-mt-24">
+      <section ref={studioRef} data-twings-studio data-phase="pending" data-single={single ? 'true' : 'false'} data-live="false" aria-busy="true" className="mt-4 scroll-mt-24">
         <p role="status" className="sr-only">{labels.pending}</p>
         <div data-studio-pending aria-hidden="true" className="flex flex-col gap-3">
-          <div className="grid grid-cols-3 gap-2">
-            {[0, 1, 2].map((index) => (
-              <div key={index} className="aspect-[4/5] animate-pulse rounded-xl bg-black/[0.06] motion-reduce:animate-none" />
-            ))}
-          </div>
-          <div className="h-4 w-3/4 animate-pulse rounded bg-black/[0.06] motion-reduce:animate-none" />
+          {labels.photoExamples && (
+            <div className="grid grid-cols-3 gap-2">
+              {[0, 1, 2].map((index) => (
+                <div key={index} className="aspect-[4/5] animate-pulse rounded-xl bg-black/[0.06] motion-reduce:animate-none" />
+              ))}
+            </div>
+          )}
+          {labels.signedOutBody && (
+            <div className="h-4 w-3/4 animate-pulse rounded bg-black/[0.06] motion-reduce:animate-none" />
+          )}
           <div className="h-12 w-full animate-pulse rounded bg-black/[0.08] motion-reduce:animate-none" />
         </div>
         {sticky}
@@ -587,8 +591,7 @@ export function TwingsStudio({
   }
 
   // 토스 심사 체크리스트의 "판매 가능한 상품 1개 이상"은 로그인 전 화면에서 판정된다. 상점이 열려
-  // 있는데 이 방문자가 로그인하지 않았을 뿐이라면, 대기자 명단이 아니라 판매를 제안한다 — 어떤 사진이
-  // 필요한지 먼저 보여주고(가이드 이미지 3장), 버튼은 하나.
+  // 있는데 이 방문자가 로그인하지 않았을 뿐이라면, 대기자 명단이 아니라 판매를 제안한다.
   if (!liveMode && live && shopOpen && !signedIn && labels.signedOutCta) {
     const examples = labels.photoExamples
       ? [
@@ -597,8 +600,9 @@ export function TwingsStudio({
           { id: 'solo', src: '/images/portrait-guide/front-facing.webp', label: labels.photoExamples.solo, crop: 'object-[50%_18%] scale-150' },
         ]
       : [];
+    const hasAboveCta = examples.length > 0 || Boolean(labels.signedOutBody);
     return (
-      <section ref={studioRef} data-twings-studio data-phase="signed-out" data-single={single ? 'true' : 'false'} data-live="false" data-shop-open="true" className="mt-5 scroll-mt-24">
+      <section ref={studioRef} data-twings-studio data-phase="signed-out" data-single={single ? 'true' : 'false'} data-live="false" data-shop-open="true" className="mt-4 scroll-mt-24">
         {examples.length > 0 && (
           <ul data-studio-photo-examples className="grid grid-cols-3 gap-2">
             {examples.map((example) => (
@@ -616,12 +620,14 @@ export function TwingsStudio({
             ))}
           </ul>
         )}
-        <p data-studio-signed-out className="mt-4 text-[0.95rem] leading-relaxed">{labels.signedOutBody}</p>
+        {labels.signedOutBody && (
+          <p data-studio-signed-out className={`${examples.length > 0 ? 'mt-4 ' : ''}text-[0.95rem] leading-relaxed`}>{labels.signedOutBody}</p>
+        )}
         <a
           data-studio-signin
           data-make-cta="card"
           href={live.signinHref}
-          className="mt-4 flex min-h-12 w-full items-center justify-center bg-accent px-5 font-label text-[0.85rem] tracking-[0.1em] text-white uppercase transition-opacity hover:opacity-85"
+          className={`${hasAboveCta ? 'mt-4 ' : ''}flex min-h-12 w-full items-center justify-center bg-accent px-5 font-label text-[0.85rem] tracking-[0.1em] text-white uppercase transition-opacity hover:opacity-85`}
         >
           {labels.signedOutCta}
         </a>

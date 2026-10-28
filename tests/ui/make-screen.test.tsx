@@ -119,6 +119,25 @@ describe('the template page as a decision screen', () => {
       const pricing = renderToStaticMarkup(await PricingPage({ params: Promise.resolve({ locale }) }));
       expect(visible(pricing).toLowerCase()).not.toContain('seedance');
     });
+
+    it(`moves the selfie guide and core promise outside the price box (${locale})`, async () => {
+      state.mode = 'review';
+      const html = renderToStaticMarkup(await TemplatePage({ params: Promise.resolve({ locale, slug: film.slug }) }));
+      const card = html.slice(html.indexOf('id="make"'), html.indexOf('data-template-sale-state'));
+      expect(card).not.toContain('data-studio-photo-examples');
+      expect(html.indexOf('data-template-photo-guide')).toBeGreaterThan(html.indexOf('data-template-sale-state'));
+      expect(html).toContain('data-studio-photo-examples');
+      expect(visible(html)).toContain(dict.creatorJourney.evidenceSelfie);
+      expect(visible(html)).toContain(dict.creatorJourney.evidenceScene);
+    });
+
+    it(`keeps the definition paragraph in the page HTML, after the make card (${locale})`, async () => {
+      // AGENTS.md §7 GEO: the "what this is" sentence is real text under the first screen.
+      state.mode = 'review';
+      const html = renderToStaticMarkup(await TemplatePage({ params: Promise.resolve({ locale, slug: film.slug }) }));
+      expect(visible(html)).toContain(dict.meta.templateDescription);
+      expect(html.indexOf('data-template-description')).toBeGreaterThan(html.indexOf('data-template-photo-guide'));
+    });
   }
 });
 
