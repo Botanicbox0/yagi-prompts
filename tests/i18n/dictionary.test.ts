@@ -229,6 +229,7 @@ describe('§14.1 names: one term object per locale', () => {
       expect(dict.prompts.byAuthor).toBe(`${terms.creditPrefix} @{handle}`);
       expect(dict.audience.personal).toBe(terms.personal);
     }
+    expect(ko.templates.originMaker).toBe(KO_TERMS.maker);
     expect(ko.creatorProgram.approvedLine.startsWith(KO_TERMS.makerFull)).toBe(true);
     expect(ko.creatorProgram.applyTitle.startsWith(KO_TERMS.maker)).toBe(true);
     // The values fixed on 2026-10-24 — the one place a test spells them out.

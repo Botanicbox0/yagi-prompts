@@ -37,9 +37,9 @@
 - `components/templates/listing.tsx`: 글자 탭(`MediumTabs`)만 남겼다. 지운 파일: `components/prompts/filter-chips.tsx`, `components/templates/origin-filter.tsx`, `components/prompts/pill.ts`.
 - `app/(marketing)/[locale]/page.tsx`: 홈 갤러리의 용도 칩도 뺐다(같은 컴포넌트, 템플릿 6편 이상일 때 나오던 줄).
 - `lib/navigation/public-state.ts`: `?useCase=` 읽기·쓰기(`readUseCase`·`useCaseHref`)를 지웠다. `/brands`의 `?useCase=`는 별개 코드라 그대로다.
-- 사전(`messages/ko.ts`·`en.ts`): 쓰지 않게 된 `prompts.filterHeading·filterAll·filterCount·filterReset`과 `templates.originHeading·originAll·originStudio·originMaker`를 지웠다. `KO_TERMS`·`EN_TERMS`는 건드리지 않았다.
+- 사전(`messages/ko.ts`·`en.ts`): 쓰지 않게 된 `prompts.filterHeading·filterAll·filterCount·filterReset`을 지웠다. 출처 칩 문구 `templates.originHeading·originAll·originStudio·originMaker`도 이제 쓰이지 않지만 일부러 남겼다(아래 #111 참고). `KO_TERMS`·`EN_TERMS`는 건드리지 않았다.
 - `scripts/sweep-anon.ts`: `/{locale}/video`에서 카드 수 = `data-frame="portrait"` 수 ≤ `aspect-ratio:4 / 5` 수인지, `data-frame="landscape"`·16:9 틀이 없는지, 넓은 템플릿의 비율 칩 `16:9`가 남는지, 칩 마커(`data-use-case-filter`·`data-origin-filter`·`aria-pressed`)가 없는지, 열린 탭에 `aria-current="page"`가 있는지 확인한다. 메이커 절에서는 "출처 칩 있음"을 "출처 칩 없음"으로 바꿨다.
-- 테스트: `tests/ui/catalog-cards.test.tsx`(틀·탭·칩 부재), `tests/ui/prompts.test.tsx`(레일에 필터 상태 없음), `tests/navigation/public-state.test.ts`, `tests/i18n/dictionary.test.ts`(지운 키 한 줄).
+- 테스트: `tests/ui/catalog-cards.test.tsx`(틀·탭·칩 부재), `tests/ui/prompts.test.tsx`(레일에 필터 상태 없음), `tests/navigation/public-state.test.ts`.
 
 ### 검증 (AGENTS.md §3)
 - `npx tsc --noEmit` — 통과(출력 없음)
@@ -50,8 +50,8 @@
 
 ### PR #111(`claude/creative-profile`)과의 관계
 - `KO_TERMS`·`EN_TERMS`와 스윕의 메이커 프로필 절은 건드리지 않았다. `PLATFORM-2.0.md`는 §7.5·§14.2 표·§15에만 손대고 새 절은 §15.6에 넣었다(#111은 끝에 §20을 붙인다).
-- 두 브랜치를 `git merge-tree`로 시험 병합했을 때 충돌이 없다.
-- #111이 먼저 들어가든 나중에 들어가든 메이커 페이지는 `filteredEmptyLabel={dict.prompts.filterEmpty}`를 계속 넘기고, 그 prop은 이제 쓰이지 않는다. 두 PR이 다 들어간 뒤 그 한 줄과 `prompts.filterEmpty` 키를 지우면 된다(후속).
+- 두 브랜치를 `git merge-tree`로 시험 병합했을 때 충돌이 없다. 처음에는 `templates.origin*` 네 줄을 지웠는데, #111이 바로 윗줄(`makerRailLede`)을 고쳐서 사전 두 파일에 충돌이 났다. 그래서 그 네 줄은 그대로 두었다.
+- 후속(두 PR이 다 들어간 뒤 한 커밋): 사전의 `templates.origin*` 네 키와 `prompts.filterEmpty`, `tests/i18n/dictionary.test.ts`의 `originMaker` 한 줄, 메이커 페이지의 `filteredEmptyLabel={dict.prompts.filterEmpty}` 한 줄을 지운다. 지금은 모두 쓰이지 않는다.
 
 ### 남은 것·위험
 - 레일 마지막 줄에 한 장만 남는 경우는 그리드가 아니라 템플릿 수가 정한다(지금 운영 오리지널 영상 9편 → 4·4·1, 메이커 1편). 몇 편을 올릴지는 템플릿 선정과 같은 대표 결정이다.
