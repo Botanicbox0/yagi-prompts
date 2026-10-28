@@ -48,14 +48,20 @@
 - **패키지 이름 `app.twings.client` — 대표 확정 2026-10-28.** 첫 업로드(내부 테스트 포함) 순간 고정되고, 설치가 한 번이라도 생기면 누구도 다시 쓸 수 없다. Android 개발자 인증에 따라 Play Console에서 서명 키 공개 인증서와 함께 패키지 이름을 등록한다.
 - iOS용 `/.well-known/apple-app-site-association`은 자리만 있다(App Store는 보류).
 
-### 빌드 (Bubblewrap, 아직 실행 전)
+### 빌드 (Bubblewrap 1.27.0, 첫 빌드 2026-10-28)
+- **빌드 폴더는 `D:\dev\twings-android`**(git·worktree 밖). 업로드 키 `android-upload-keystore.jks`(별칭 `twings-upload`, RSA 2048, 10,000일)가 여기 있다. worktree는 정리될 때 지워지므로 키를 저장소나 worktree에 두지 않는다. 키 파일과 비밀번호는 대표가 따로 백업·보관한다.
+- 설정의 원본은 저장소 `mobile/twa-manifest.json`이다. 빌드 전에 빌드 폴더로 복사하고, Bubblewrap이 올린 버전(`appVersion`·`appVersionCode`)은 저장소 파일에 다시 반영한다. 버전 이름 필드는 `appVersion`이다(`appVersionName`은 읽지 않아 빈 값이 된다 — 테스트로 고정).
+
 ```powershell
-cd mobile
-npx @bubblewrap/cli update   # twa-manifest.json으로 Android 프로젝트를 만들거나 갱신
-npx @bubblewrap/cli build    # JDK·Android SDK가 없으면 설치를 묻고, 업로드 키 비밀번호를 묻는다
+Copy-Item mobile\twa-manifest.json D:\dev\twings-android\twa-manifest.json -Force
+Set-Location D:\dev\twings-android
+npx -y @bubblewrap/cli@1.27.0 update --skipVersionUpgrade   # 첫 빌드만. 이후 업데이트는 --skipVersionUpgrade 없이(버전 코드 +1)
+npx -y @bubblewrap/cli@1.27.0 build                         # 키 저장소·키 비밀번호를 묻는다(같은 값)
 ```
-- 업로드 키 `mobile/android-upload-keystore.jks`와 빌드 산출물은 git에 넣지 않는다(`.gitignore`). 키와 비밀번호는 대표가 따로 보관한다.
-- 산출물 `app-release-bundle.aab`를 Play Console에 올리면 Play App Signing이 앱 서명 키를 만든다. 그 SHA-256을 Vercel에 넣고 재배포한다.
+- 산출물: `app-release-bundle.aab`(Play Console 업로드용), `app-release-signed.apk`(기기 직접 설치 확인용). git에 넣지 않는다.
+- **이 PC의 JDK·SDK**: Bubblewrap 1.27의 첫 실행 자동 설치는 Windows(Node 24)에서 JDK 소스 압축을 풀다 오류 없이 꺼진다. 그래서 Temurin JDK 17.0.11+9 x64(공식 sha256 확인)와 Android command-line tools 6609375를 `~/.bubblewrap/jdk`, `~/.bubblewrap/android_sdk`에 직접 풀고 `~/.bubblewrap/config.json`에 경로를 적었다. `npx @bubblewrap/cli doctor`로 확인한다. Android SDK 약관 동의는 첫 빌드에서 대표가 했다.
+- 생성된 프로젝트: targetSdk 36, minSdk 24, androidbrowserhelper 2.7.4. Google의 target API 기준은 매년(보통 8월 말) 오르므로 그때 Bubblewrap 최신판으로 `update` → `build`를 다시 한다.
+- `.aab`를 Play Console에 올리면 Play App Signing이 앱 서명 키를 만든다. 그 SHA-256을 Vercel `ANDROID_SHA256_CERT_FINGERPRINTS`에 넣고 재배포한다. 업로드 키를 잃어버리면 Play Console 앱 무결성에서 업로드 키 재설정을 요청한다.
 
 ### Play Console 등록 순서 (대표)
 1. 조직 계정 인증: D&B 기록 정정 → DUNS 확인 → 사업자등록증 → 웹사이트(Search Console에 twings.app) → 전화 인증. 조직 계정은 개인 계정의 테스터 모집 요건이 없다.
