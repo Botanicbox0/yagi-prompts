@@ -429,14 +429,15 @@ export function TemplateGallery({
           ))}
         </div>
 
-        <div className="absolute inset-x-0 top-0 flex items-center justify-between px-4 py-3 sm:px-6">
-          <span className="text-sm font-medium text-white/85 tabular-nums">{multi ? `${viewerIndex + 1} / ${n}` : ''}</span>
+        {/* A zoomed picture runs under the bar, so the bar carries its own shade. */}
+        <div className="pointer-events-none absolute inset-x-0 top-0 flex items-center justify-between bg-gradient-to-b from-black/70 to-transparent px-4 pt-3 pb-8 sm:px-6">
+          <span className="text-sm font-medium text-white tabular-nums">{multi ? `${viewerIndex + 1} / ${n}` : ''}</span>
           <button
             ref={closeRef}
             type="button"
             onClick={closeViewer}
             aria-label={labels.close}
-            className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/20 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+            className="pointer-events-auto inline-flex h-11 w-11 items-center justify-center rounded-full bg-black/55 text-white backdrop-blur-md transition-colors hover:bg-black/75 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
           >
             <svg aria-hidden="true" viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round">
               <path d="m5 5 10 10M15 5 5 15" />
@@ -451,7 +452,7 @@ export function TemplateGallery({
               onClick={() => viewerGo(viewerIndex - 1)}
               disabled={viewerIndex === 0}
               aria-label={labels.prev}
-              className="absolute top-1/2 left-4 hidden h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 text-white transition-[background-color,opacity] hover:bg-white/20 disabled:pointer-events-none disabled:opacity-0 sm:flex"
+              className="absolute top-1/2 left-4 hidden h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full bg-black/55 text-white backdrop-blur-md transition-[background-color,opacity] hover:bg-black/75 disabled:pointer-events-none disabled:opacity-0 sm:flex"
             >
               <Chevron direction="left" />
             </button>
@@ -460,7 +461,7 @@ export function TemplateGallery({
               onClick={() => viewerGo(viewerIndex + 1)}
               disabled={viewerIndex === n - 1}
               aria-label={labels.next}
-              className="absolute top-1/2 right-4 hidden h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 text-white transition-[background-color,opacity] hover:bg-white/20 disabled:pointer-events-none disabled:opacity-0 sm:flex"
+              className="absolute top-1/2 right-4 hidden h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full bg-black/55 text-white backdrop-blur-md transition-[background-color,opacity] hover:bg-black/75 disabled:pointer-events-none disabled:opacity-0 sm:flex"
             >
               <Chevron direction="right" />
             </button>
