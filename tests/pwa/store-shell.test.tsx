@@ -136,6 +136,12 @@ describe('the Play app’s launch URLs', () => {
     expect(twa.enableNotifications).toBe(true);
   });
 
+  it('names the version the way Bubblewrap reads it', () => {
+    // Bubblewrap reads `appVersion`; `appVersionName` is ignored and builds an empty versionName.
+    expect(twa).toMatchObject({ appVersion: expect.stringMatching(/^\d+\.\d+\.\d+$/), appVersionCode: expect.any(Number) });
+    expect(twa).not.toHaveProperty('appVersionName');
+  });
+
   it('keeps the marker when a signed-out shortcut is sent to sign in', async () => {
     const request = (path: string) => new NextRequest(`https://twings.app${path}`, { headers: { host: 'twings.app' } });
     const fromApp = new URL((await middleware(request('/renders?source=twa'))).headers.get('location')!);

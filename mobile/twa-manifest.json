@@ -21,7 +21,7 @@
     "path": "./android-upload-keystore.jks",
     "alias": "twings-upload"
   },
-  "appVersionName": "1.0.0",
+  "appVersion": "1.0.0",
   "appVersionCode": 1,
   "shortcuts": [
     {
