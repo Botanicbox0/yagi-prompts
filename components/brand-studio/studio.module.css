@@ -94,12 +94,12 @@
 .heroActions { margin-top: 32px; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 12px 24px; }
 .heroNote { margin-top: 18px; display: inline-flex; align-items: center; gap: 8px; font-size: 12px; color: var(--st-muted); }
 
-.stage {
-  --p: 0;
+/* Eight bottles, one per mood, on a tilted ring. Front is lower, larger and sharp; the loop sets transform. */
+.orbitStage {
   position: relative;
-  margin: clamp(8px, 2vw, 24px) auto 0;
-  width: min(1120px, 100%);
-  padding: clamp(40px, 6vw, 80px) 0 clamp(48px, 6vw, 80px);
+  margin: clamp(12px, 2vw, 28px) auto 0;
+  width: min(1180px, 100%);
+  height: clamp(280px, 34vw, 460px);
 }
 .aura {
   position: absolute;
@@ -120,106 +120,55 @@
   transition: opacity 900ms ease;
   pointer-events: none;
 }
-.stage[data-webgl='on'] .auraCanvas { opacity: 1; }
-.stage[data-webgl='on'] .aura { opacity: 0; }
-.window {
-  position: relative;
-  z-index: 1;
-  margin: 0 auto;
-  width: min(880px, 92%);
-  border-radius: 18px;
-  border: 1px solid var(--st-glass-line);
-  background: var(--st-glass);
-  backdrop-filter: blur(16px) saturate(140%);
-  -webkit-backdrop-filter: blur(16px) saturate(140%);
-  box-shadow: var(--st-shadow);
-  text-align: left;
-}
-.windowBar { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-bottom: 1px solid var(--st-glass-line); }
-.lights { display: flex; gap: 6px; }
-.lights span { width: 9px; height: 9px; border-radius: 999px; background: rgb(10 10 10 / 0.12); }
-.windowTitle { font-size: 12px; font-weight: 600; color: var(--st-ink); white-space: nowrap; }
-.search {
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-  max-width: 60%;
-  height: 30px;
-  padding: 0 12px;
-  border-radius: 999px;
-  background: #fff;
-  border: 1px solid var(--st-line);
-  font-size: 12px;
-  color: var(--st-body);
-}
-.searchText { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-.caret { width: 1px; height: 14px; background: var(--st-red); animation: caret 1s steps(1) infinite; }
-@keyframes caret { 50% { opacity: 0; } }
-
-.windowBody { display: grid; grid-template-columns: 188px 1fr; }
-.rail { padding: 16px 14px; border-right: 1px solid var(--st-glass-line); }
-.railTitle { font-size: 11px; font-weight: 600; letter-spacing: 0.02em; color: var(--st-muted); }
-.rules { margin-top: 10px; display: grid; gap: 6px; }
-.rule { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--st-ink); }
-.slots { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; padding: 16px; }
-.slot { position: relative; aspect-ratio: 4 / 3; border-radius: 10px; outline: 1px dashed rgb(10 10 10 / calc(0.14 * (1 - var(--p)))); }
-
-.tile {
-  position: absolute;
-  inset: 0;
-  transform:
-    translate(calc(var(--dx) * var(--spread, 1) * (1 - var(--p)) * 1%), calc(var(--dy) * var(--spread, 1) * (1 - var(--p)) * 1%))
-    rotate(calc(var(--rot) * (1 - var(--p)) * 1deg))
-    scale(calc(1 + (var(--sc) - 1) * (1 - var(--p))));
-  will-change: transform;
-}
-.tileMedia { position: absolute; inset: 0; overflow: hidden; border-radius: 10px; box-shadow: 0 10px 30px -12px rgb(16 24 40 / 0.35); background: var(--st-card); }
-.tileMedia img { width: 100%; height: 100%; object-fit: cover; }
-.file {
+.orbitStage[data-webgl='on'] .auraCanvas { opacity: 1; }
+.orbitStage[data-webgl='on'] .aura { opacity: 0; }
+/* Taller than the stage and anchored to its top, so the ring centre sits low and the bottles fill the stage. */
+.orbit { position: absolute; inset: 0 0 -24%; }
+.orbitTrack {
   position: absolute;
   left: 50%;
-  top: calc(100% + 6px);
-  transform: translateX(-50%);
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 3px 8px;
-  border-radius: 6px;
-  background: rgb(255 255 255 / 0.9);
-  border: 1px solid var(--st-glass-line);
-  font-family: var(--font-mono);
-  font-size: 10px;
-  color: var(--st-body);
-  white-space: nowrap;
-  opacity: calc(1 - var(--p) * 1.6);
+  top: 50%;
+  width: 80%;
+  height: 40%;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  border: 1px solid rgb(10 10 10 / 0.07);
+  background: radial-gradient(closest-side, rgb(255 255 255 / 0.55), rgb(255 255 255 / 0));
 }
-.tag {
+.orbitBottle {
   position: absolute;
-  left: 6px;
-  bottom: 6px;
-  max-width: calc(100% - 12px);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  padding: 3px 7px;
-  border-radius: 6px;
-  background: rgb(255 255 255 / 0.88);
-  backdrop-filter: blur(6px);
-  font-size: 10px;
+  left: 50%;
+  top: 50%;
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  transform-origin: 50% 100%;
+  will-change: transform;
+  text-decoration: none;
+  border-radius: 12px;
+}
+.orbitBottle img {
+  display: block;
+  width: auto;
+  height: clamp(112px, 15vw, 210px);
+  filter: drop-shadow(0 22px 22px rgb(16 24 40 / 0.16));
+  transition: transform 420ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.orbitBottle:hover img, .orbitBottle:focus-visible img { transform: translateY(-8px); }
+.orbitBottle:focus-visible { outline: 2px solid var(--st-red); outline-offset: 6px; }
+.orbitLabel {
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.82);
+  border: 1px solid var(--st-glass-line);
+  backdrop-filter: blur(8px);
+  font-size: 11px;
   font-weight: 600;
   color: var(--st-ink);
-  opacity: calc((var(--p) - 0.7) * 3.4);
+  white-space: nowrap;
 }
-.drop {
-  position: absolute;
-  inset: auto 0 -34px;
-  text-align: center;
-  font-size: 11px;
-  color: var(--st-muted);
-  opacity: calc(1 - var(--p) * 2);
-}
+.caret { width: 1px; height: 14px; background: var(--st-red); animation: caret 1s steps(1) infinite; }
+@keyframes caret { 50% { opacity: 0; } }
 
 /* ---------- Sections ---------- */
 .section { padding: clamp(72px, 9vw, 120px) 0; }
@@ -329,20 +278,24 @@
 
 /* ---------- Mood clusters (aesthetic auto-sorting) ---------- */
 .moods { margin-top: 44px; display: grid; gap: 16px; }
-.moodChips { display: flex; flex-wrap: wrap; gap: 8px; }
-.moodChip {
-  display: inline-flex; align-items: center; gap: 8px; min-height: 36px; padding: 0 14px;
-  border-radius: 999px; border: 1px solid var(--st-line); background: #fff;
-  font-size: 13px; font-weight: 600; letter-spacing: -0.01em; color: var(--st-ink); cursor: pointer; white-space: nowrap; flex: none;
-  transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease;
+.folders { display: grid; grid-template-columns: repeat(9, minmax(0, 1fr)); gap: 6px; }
+.folder, .folderAll {
+  display: grid; justify-items: center; align-content: start; gap: 4px; min-width: 0; padding: 12px 6px 10px;
+  border-radius: 16px; border: 1px solid transparent; background: transparent; cursor: pointer;
+  transition: background-color 180ms ease, border-color 180ms ease;
 }
-.moodChip:hover { border-color: rgb(10 10 10 / 0.24); }
-.moodChip[aria-pressed='true'] { background: var(--st-ink); border-color: var(--st-ink); color: #fff; }
-.moodChip[aria-pressed='true'] .moodCount { color: rgb(255 255 255 / 0.6); }
-.moodCount { font-family: var(--font-mono); font-size: 11px; font-weight: 500; color: var(--st-muted); }
-.moodDots { display: inline-flex; }
-.moodDots span { width: 10px; height: 10px; border-radius: 999px; margin-left: -3px; box-shadow: 0 0 0 1.5px #fff; }
-.moodDots span:first-child { margin-left: 0; }
+.folder img { width: 100%; max-width: 84px; aspect-ratio: 1; object-fit: contain; filter: drop-shadow(0 10px 12px rgb(16 24 40 / 0.14)); transition: transform 320ms cubic-bezier(0.2, 0.7, 0.2, 1); }
+.folder:hover img { transform: translateY(-4px) rotate(-3deg); }
+.folder[aria-pressed='true'], .folderAll[aria-pressed='true'] { background: var(--st-card); border-color: var(--st-line); }
+.folder[aria-pressed='true'] img { transform: translateY(-4px) scale(1.06); }
+.folder:focus-visible, .folderAll:focus-visible { outline: 2px solid var(--st-red); outline-offset: 2px; }
+.folderAllStack { position: relative; width: 100%; max-width: 84px; aspect-ratio: 1; }
+.folderAllStack img { position: absolute; inset: 14% 10%; width: 80%; height: 72%; object-fit: contain; filter: drop-shadow(0 8px 10px rgb(16 24 40 / 0.12)); }
+.folderAllStack img:nth-child(1) { transform: translate(-14%, -8%) rotate(-10deg); }
+.folderAllStack img:nth-child(2) { transform: translate(12%, -4%) rotate(8deg); }
+.folderAllStack img:nth-child(3) { transform: translate(0, 10%); }
+.folderName { font-size: 13px; font-weight: 600; letter-spacing: -0.01em; color: var(--st-ink); white-space: nowrap; }
+.folderCount { font-family: var(--font-mono); font-size: 11px; color: var(--st-muted); }
 .moodInfo {
   display: flex; flex-wrap: wrap; align-items: center; gap: 12px 28px; min-height: 0; overflow: hidden;
   padding: 0 18px; border-radius: 16px; background: var(--st-glass); border: 1px solid transparent;
@@ -379,7 +332,8 @@
 @media (max-width: 767px) {
   .moodGrid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
   .moodPalette { margin-left: 0; }
-  .moodChips { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin-inline: -16px; padding-inline: 16px; }
+  .folders { display: flex; overflow-x: auto; scrollbar-width: none; margin-inline: -16px; padding-inline: 16px; }
+  .folder, .folderAll { flex: none; width: 76px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .moodTile, .moodInfo { transition: none; }
@@ -388,18 +342,12 @@
 
 /* ---------- Mobile ---------- */
 @media (max-width: 767px) {
-  .windowBody { grid-template-columns: 1fr; }
-  .rail { border-right: 0; border-bottom: 1px solid var(--st-glass-line); }
-  .rules { grid-auto-flow: column; overflow: hidden; }
-  .slots { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; padding: 12px; }
-  .search { max-width: 52%; }
-  .stage { --spread: 0.45; }
-  .file { display: none; }
   .variants { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .orbitLabel { display: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .stage { --p: 1 !important; }
+  .orbitBottle img, .folder img { transition: none; }
   .caret, .progress span, .appear { animation: none; }
   .cell { transition: none; }
 }

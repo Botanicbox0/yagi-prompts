@@ -8,7 +8,7 @@ import type { Dictionary } from '@/lib/i18n/dictionaries';
 import { brandEnquiryHref } from '@/lib/campaigns/links';
 import { Reveal } from '@/components/motion/reveal';
 import { RevealGrid } from '@/components/motion/reveal-grid';
-import { StudioHeroStage, StudioMoodClusters, StudioPipeline, StudioVto } from './studio-interactive';
+import { StudioHeroOrbit, StudioMoodClusters, StudioPipeline, StudioVto } from './studio-interactive';
 import styles from './studio.module.css';
 
 type StudioCopy = Dictionary['brandLanding']['studio'];
@@ -61,7 +61,7 @@ export function StudioHero({ copy, locale }: { copy: StudioCopy; locale: Locale 
           </div>
           <p className={styles.heroNote}><Tag kind="early">{copy.earlyAccess}</Tag>{copy.earlyNote}</p>
         </div>
-        <StudioHeroStage copy={copy} />
+        <StudioHeroOrbit copy={copy} />
       </div>
     </section>
   );

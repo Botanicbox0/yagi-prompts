@@ -22,44 +22,35 @@ type Vars = CSSProperties & Record<`--${string}`, string | number>;
  */
 const studio = (name: string) => `/reel/studio/${name}.webp`;
 
-/** Six frames from the library, each with the offset it floats at before the studio gathers it. */
-const HERO_TILES = [
-  { src: studio('amber-yagi-2'), file: 'FW26_amber_014.png', bg: '#302517', dx: -165, dy: -30, rot: -8, sc: 1.06 },
-  { src: studio('smoke-1'), file: 'agarwood_smoke_03.png', bg: '#755D4B', dx: 45, dy: -58, rot: 6, sc: 0.96 },
-  { src: studio('red-yagi-3'), file: 'red_object_drip.png', bg: '#560305', dx: 172, dy: -26, rot: 9, sc: 1.04 },
-  { src: studio('botanic-1'), file: 'oak_leaf_study.png', bg: '#E3E3E2', dx: -182, dy: 42, rot: 7, sc: 0.98 },
-  { src: studio('flora-yagi-2'), file: 'jasmine_night_02.png', bg: '#0D0D09', dx: -30, dy: 92, rot: -5, sc: 1.02 },
-  { src: studio('cream-yagi-2'), file: 'cream_base_macro.png', bg: '#BFB7B2', dx: 178, dy: 58, rot: -9, sc: 1 },
-] as const;
-
 /** The search demo: three frames that really show smoke, three that do not. */
 const SEARCH_CELLS = [
-  { src: studio('smoke-yagi'), hit: true },
+  { src: studio('p-smoke-1'), hit: true },
   { src: studio('cream-1'), hit: false },
   { src: studio('smoke-1'), hit: true },
   { src: studio('flora-1'), hit: false },
-  { src: studio('smoke-2'), hit: true },
+  { src: studio('p-smoke-2'), hit: true },
   { src: studio('red-2'), hit: false },
 ] as const;
 
-/** Dominant colors measured from amber-yagi.webp (median-cut quantize), not invented. */
-const SWATCHES = ['#5D3B27', '#D0AA98', '#141C0D'] as const;
-/** Same bottle, regenerated per mood: the packshot, then three moods from the library. */
-const VARIANTS = [studio('bottle'), studio('flora-yagi-2'), studio('red-yagi-2'), studio('botanic-yagi-2')] as const;
+/** Dominant colors measured from p-amber-1.webp (median-cut quantize), not invented. */
+const SWATCHES = ['#5E3819', '#854C20', '#CFA161'] as const;
+/** One bottle, regenerated in other moods: the cut-out, then three moods. */
+const VARIANTS = [studio('bottle-amber'), studio('x-drape'), studio('x-botanic'), studio('x-mono')] as const;
 
 /**
- * Mood clusters for the auto-sorting demo. Palettes are measured from each cluster's files
- * (median-cut quantize over every frame), and each cluster leads with its YAGI product shot.
+ * Mood clusters for the auto-sorting demo. Every mood has its own bottle (one family, eight forms),
+ * its own textured folder, two product shots and the library frames that share its mood. Palettes are
+ * measured from each cluster's files (median-cut quantize over every frame).
  */
 export const MOOD_LIBRARY = [
-  { id: 'amber', product: 'amber-yagi-2', tiles: ['amber-yagi-3', 'amber-1', 'amber-yagi', 'amber-2'], palette: ['#513E2A', '#302517', '#181A11'] },
-  { id: 'drape', product: 'drape-yagi-2', tiles: ['drape-yagi-3', 'drape-2', 'drape-yagi'], palette: ['#DBCCDA', '#7A5F50', '#462812'] },
-  { id: 'smoke', product: 'smoke-yagi-2', tiles: ['smoke-1', 'smoke-yagi-3', 'smoke-2', 'smoke-yagi', 'smoke-3', 'smoke-4'], palette: ['#8F745F', '#755D4B', '#674D3A'] },
-  { id: 'cream', product: 'cream-yagi-2', tiles: ['cream-1', 'cream-yagi', 'cream-2', 'cream-3', 'cream-4'], palette: ['#D8D3D3', '#BFB7B2', '#332216'] },
-  { id: 'flora', product: 'flora-yagi-2', tiles: ['flora-1', 'flora-2', 'flora-yagi', 'flora-3', 'flora-4'], palette: ['#D8D6D3', '#0D0D09', '#050403'] },
-  { id: 'botanic', product: 'botanic-yagi-2', tiles: ['botanic-1', 'botanic-2', 'botanic-yagi', 'botanic-3', 'botanic-4', 'botanic-5', 'botanic-6'], palette: ['#F5F3F5', '#E3E3E2', '#43372E'] },
-  { id: 'mono', product: 'mono-yagi-2', tiles: ['mono-1', 'mono-yagi', 'mono-2', 'mono-3', 'mono-4', 'mono-5'], palette: ['#B8B6B7', '#99989A', '#1C1E1C'] },
-  { id: 'red', product: 'red-yagi-2', tiles: ['red-yagi-3', 'red-2', 'red-yagi', 'red-3'], palette: ['#6E0E10', '#560305', '#2A0203'] },
+  { id: 'amber', product: 'p-amber-1', tiles: ['p-amber-2'], palette: ['#5F391B', '#CC9E62', '#7D3007'], folder: 'folder-amber', bottle: 'bottle-amber' },
+  { id: 'drape', product: 'p-drape-1', tiles: ['p-drape-2'], palette: ['#C28A83', '#D6B1AB', '#E0CCC7'], folder: 'folder-drape', bottle: 'bottle-drape' },
+  { id: 'smoke', product: 'p-smoke-1', tiles: ['smoke-1', 'p-smoke-2', 'smoke-2', 'smoke-3', 'smoke-4'], palette: ['#856B58', '#6D5947', '#130E08'], folder: 'folder-smoke', bottle: 'bottle-smoke' },
+  { id: 'cream', product: 'p-cream-1', tiles: ['cream-1', 'p-cream-2', 'cream-2', 'cream-3', 'cream-4'], palette: ['#D5CFCB', '#5D3D2A', '#E5E1DE'], folder: 'folder-cream', bottle: 'bottle-cream' },
+  { id: 'flora', product: 'p-flora-1', tiles: ['flora-1', 'p-flora-2', 'flora-2', 'flora-3', 'flora-4'], palette: ['#090907', '#DCD7D0', '#E9E6E4'], folder: 'folder-flora', bottle: 'bottle-flora' },
+  { id: 'botanic', product: 'p-botanic-1', tiles: ['botanic-1', 'botanic-2', 'p-botanic-2', 'botanic-3', 'botanic-4', 'botanic-5', 'botanic-6'], palette: ['#EAE9E9', '#B3B0A5', '#DCDBDA'], folder: 'folder-botanic', bottle: 'bottle-botanic' },
+  { id: 'mono', product: 'p-mono-1', tiles: ['mono-1', 'p-mono-2', 'mono-2', 'mono-3', 'mono-4', 'mono-5'], palette: ['#AFAEAE', '#6E6F6E', '#1E201E'], folder: 'folder-mono', bottle: 'bottle-mono' },
+  { id: 'red', product: 'p-red-1', tiles: ['red-2', 'p-red-2', 'red-3'], palette: ['#DED2C0', '#570304', '#240302'], folder: 'folder-red', bottle: 'bottle-red' },
 ] as const;
 const ROTATE_MS = 6000;
 /** Panel order matches `copy.tabs`; ids are markup, not copy. */
@@ -171,66 +162,100 @@ function StudioAura({ onReady }: { onReady: () => void }) {
   return <canvas ref={canvasRef} aria-hidden="true" className={styles.auraCanvas} />;
 }
 
-export function StudioHeroStage({ copy }: { copy: StudioCopy }) {
-  const stageRef = useRef<HTMLDivElement>(null);
+const ORBIT_PERIOD_S = 64;
+
+/** Where a bottle sits on the ring for a given angle: front is lower, larger, sharper. */
+function orbitStyle(index: number, count: number, angle: number, rx: number, ry: number): CSSProperties {
+  const a = angle + (index / count) * Math.PI * 2;
+  const x = Math.sin(a);
+  const z = Math.cos(a);
+  const scale = 0.58 + (z + 1) * 0.23;
+  return {
+    transform: `translate(-50%, -100%) translate(${(x * rx).toFixed(1)}px, ${(z * ry).toFixed(1)}px) scale(${scale.toFixed(3)})`,
+    zIndex: Math.round((z + 1) * 10),
+    opacity: (0.5 + (z + 1) * 0.25).toFixed(3),
+    filter: z < -0.2 ? `blur(${((-z - 0.2) * 2.2).toFixed(2)}px)` : 'none',
+  };
+}
+
+export function StudioHeroOrbit({ copy }: { copy: StudioCopy }) {
+  const ringRef = useRef<HTMLDivElement>(null);
   const [webgl, setWebgl] = useState(false);
   const markReady = useRef(() => setWebgl(true)).current;
+  const count = MOOD_LIBRARY.length;
 
-  useIsomorphicLayoutEffect(() => {
-    const stage = stageRef.current;
-    if (!stage) return;
-    gsap.registerPlugin(ScrollTrigger);
-    const mm = gsap.matchMedia();
-    // The tiles gather over the first ~55% of a screen of scrolling, scrubbed through Lenis.
-    mm.add('(prefers-reduced-motion: no-preference)', () => {
-      gsap.fromTo(stage, { '--p': 0 }, {
-        '--p': 1,
-        ease: 'none',
-        scrollTrigger: { trigger: document.documentElement, start: 0, end: () => window.innerHeight * 0.55, scrub: 0.6 },
-      });
-    });
-    return () => mm.revert();
-  }, []);
+  useEffect(() => {
+    const ring = ringRef.current;
+    if (!ring) return;
+    const items = Array.from(ring.querySelectorAll<HTMLElement>('[data-orbit-bottle]'));
+    let angle = 0;
+    let last = performance.now();
+    let frame = 0;
+    let hovered = false;
+    let visible = true;
+    const place = () => {
+      const rx = ring.clientWidth * 0.4;
+      const ry = ring.clientHeight * 0.2;
+      items.forEach((el, i) => Object.assign(el.style, orbitStyle(i, count, angle, rx, ry)));
+    };
+    place();
+    if (prefersReducedMotion()) {
+      window.addEventListener('resize', place);
+      return () => window.removeEventListener('resize', place);
+    }
+    const loop = (now: number) => {
+      const dt = Math.min(0.05, (now - last) / 1000);
+      last = now;
+      if (!hovered) angle -= (dt / ORBIT_PERIOD_S) * Math.PI * 2;
+      place();
+      frame = requestAnimationFrame(loop);
+    };
+    const sync = () => {
+      const run = visible && !document.hidden;
+      if (run && !frame) { last = performance.now(); frame = requestAnimationFrame(loop); }
+      if (!run && frame) { cancelAnimationFrame(frame); frame = 0; }
+    };
+    const enter = () => { hovered = true; };
+    const leave = () => { hovered = false; };
+    ring.addEventListener('pointerenter', enter);
+    ring.addEventListener('pointerleave', leave);
+    ring.addEventListener('focusin', enter);
+    ring.addEventListener('focusout', leave);
+    const observer = new IntersectionObserver(([entry]) => { visible = Boolean(entry?.isIntersecting); sync(); });
+    observer.observe(ring);
+    document.addEventListener('visibilitychange', sync);
+    window.addEventListener('resize', place);
+    return () => {
+      if (frame) cancelAnimationFrame(frame);
+      observer.disconnect();
+      ring.removeEventListener('pointerenter', enter);
+      ring.removeEventListener('pointerleave', leave);
+      ring.removeEventListener('focusin', enter);
+      ring.removeEventListener('focusout', leave);
+      document.removeEventListener('visibilitychange', sync);
+      window.removeEventListener('resize', place);
+    };
+  }, [count]);
 
   return (
-    <div ref={stageRef} data-studio-stage data-webgl={webgl ? 'on' : undefined} className={styles.stage}>
+    <div data-studio-orbit data-webgl={webgl ? 'on' : undefined} className={styles.orbitStage}>
       <div aria-hidden="true" className={styles.aura} />
       <StudioAura onReady={markReady} />
-      <div className={styles.window} role="img" aria-label={`${copy.stage.window} — ${copy.example}`}>
-        <div className={styles.windowBar}>
-          <span aria-hidden="true" className={styles.lights}><span /><span /><span /></span>
-          <span className={styles.windowTitle}>{copy.stage.window}</span>
-          <span className={styles.search}>
-            <svg aria-hidden="true" width="12" height="12" viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="5" stroke="currentColor" strokeWidth="1.6" /><path d="m11 11 3.5 3.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" /></svg>
-            <span className={styles.searchText}>{copy.stage.search}</span>
-            <span aria-hidden="true" className={styles.caret} />
-          </span>
-        </div>
-        <div className={styles.windowBody}>
-          <div className={styles.rail}>
-            <p className={styles.railTitle}>{copy.stage.memory}</p>
-            <ul className={styles.rules}>
-              {copy.stage.rules.map((rule) => (
-                <li key={rule} className={styles.rule}><span aria-hidden="true" className={styles.dot} />{rule}</li>
-              ))}
-            </ul>
-          </div>
-          <div className={styles.slots}>
-            {HERO_TILES.map((tile, index) => (
-              <div key={tile.src} className={styles.slot}>
-                <div className={styles.tile} style={{ '--dx': tile.dx, '--dy': tile.dy, '--rot': tile.rot, '--sc': tile.sc } as Vars}>
-                  <div className={styles.tileMedia} style={{ background: tile.bg }}>
-                    {/* Above the fold: every hero frame loads eagerly, on its measured colour while it does. */}
-                    <img src={tile.src} alt="" width={320} height={240} loading="eager" fetchPriority={index < 3 ? 'high' : 'auto'} decoding="async" />
-                  </div>
-                  <span className={styles.tag}>{copy.stage.tags[index]}</span>
-                  <span className={styles.file}>{tile.file}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-        <p aria-hidden="true" className={styles.drop}>{copy.stage.drop}</p>
+      <div ref={ringRef} className={styles.orbit} aria-label={copy.moods.eyebrow}>
+        <span aria-hidden="true" className={styles.orbitTrack} />
+        {MOOD_LIBRARY.map((mood, index) => (
+          <a
+            key={mood.id}
+            href={`#mood-${mood.id}`}
+            data-orbit-bottle={mood.id}
+            className={styles.orbitBottle}
+            // Server render: the ring at rest, so nothing jumps when the loop starts.
+            style={orbitStyle(index, count, 0, 440, 70)}
+          >
+            <img src={studio(mood.bottle)} alt="" width={260} height={325} loading="eager" fetchPriority={index < 3 ? 'high' : 'auto'} decoding="async" />
+            <span className={styles.orbitLabel}>{copy.moods.names[index]}</span>
+          </a>
+        ))}
       </div>
     </div>
   );
@@ -340,7 +365,7 @@ function TagPanel({ copy }: { copy: StudioCopy }) {
   return (
     <div className={styles.tagPanel}>
       <div className={styles.tagImage}>
-        <img src={studio('amber-yagi')} alt="" width={600} height={804} loading="lazy" decoding="async" />
+        <img src={studio('p-amber-1')} alt="" width={600} height={750} loading="lazy" decoding="async" />
         <span aria-hidden="true" className={`${styles.box} ${styles.appear}`} style={{ left: '20%', top: '22%', width: '56%', height: '56%', '--i': 1 } as Vars}>
           <span className={styles.boxLabel}>{values.object}</span>
         </span>
@@ -460,8 +485,11 @@ export function StudioMoodClusters({ copy }: { copy: StudioCopy }) {
   const [sorted, setSorted] = useState(false);
   const [focus, setFocus] = useState<number | null>(null);
   const order = sorted ? groupedOrder(focus) : MIXED_ORDER;
+  // Read by the delayed auto-sort, so a folder opened first (a hero bottle, a click) is not reset to "all".
+  const sortedRef = useRef(false);
 
   const change = (nextSorted: boolean, nextFocus: number | null) => {
+    sortedRef.current = nextSorted;
     const grid = gridRef.current;
     if (grid && !prefersReducedMotion()) {
       gsap.registerPlugin(Flip);
@@ -491,7 +519,7 @@ export function StudioMoodClusters({ copy }: { copy: StudioCopy }) {
     const observer = new IntersectionObserver(([entry]) => {
       if (!entry?.isIntersecting) return;
       observer.disconnect();
-      timer = window.setTimeout(() => change(true, null), 650);
+      timer = window.setTimeout(() => { if (!sortedRef.current) change(true, null); }, 650);
     }, { rootMargin: '0px 0px -35% 0px' });
     observer.observe(grid);
     return () => {
@@ -500,20 +528,34 @@ export function StudioMoodClusters({ copy }: { copy: StudioCopy }) {
     };
   }, []);
 
+  // A bottle in the hero links to #mood-<id>: open that folder on arrival and on later clicks.
+  useEffect(() => {
+    const open = () => {
+      const match = window.location.hash.match(/^#mood-([a-z]+)$/);
+      const index = match ? MOOD_LIBRARY.findIndex((mood) => mood.id === match[1]) : -1;
+      if (index >= 0) change(true, index);
+    };
+    open();
+    window.addEventListener('hashchange', open);
+    return () => window.removeEventListener('hashchange', open);
+  }, []);
+
   const focused = focus === null ? null : MOOD_LIBRARY[focus]!;
   const firstOfMood = new Set<string>(MOOD_LIBRARY.map((mood) => mood.product));
 
   return (
     <div data-mood-clusters data-sorted={sorted ? 'true' : 'false'} className={styles.moods}>
-      <div role="toolbar" aria-label={t.eyebrow} className={styles.moodChips}>
-        <button type="button" aria-pressed={sorted && focus === null} data-mood-chip="all" className={styles.moodChip} onClick={() => change(true, null)}>
-          {t.all}<span className={styles.moodCount}>{MOOD_TILES.length}</span>
+      <div role="toolbar" aria-label={t.eyebrow} className={styles.folders}>
+        <button type="button" aria-pressed={sorted && focus === null} data-mood-chip="all" className={styles.folderAll} onClick={() => change(true, null)}>
+          <span className={styles.folderAllStack} aria-hidden="true">{MOOD_LIBRARY.slice(0, 3).map((mood) => <img key={mood.id} src={studio(mood.folder)} alt="" width={60} height={60} loading="lazy" decoding="async" />)}</span>
+          <span className={styles.folderName}>{t.all}</span>
+          <span className={styles.folderCount}>{MOOD_TILES.length}</span>
         </button>
         {MOOD_LIBRARY.map((mood, index) => (
-          <button key={mood.id} type="button" aria-pressed={focus === index} data-mood-chip={mood.id} className={styles.moodChip} onClick={() => change(true, focus === index ? null : index)}>
-            <span aria-hidden="true" className={styles.moodDots}>{mood.palette.map((hex) => <span key={hex} style={{ background: hex }} />)}</span>
-            {t.names[index]}
-            <span className={styles.moodCount}>{mood.tiles.length + 1}</span>
+          <button key={mood.id} id={`mood-${mood.id}`} type="button" aria-pressed={focus === index} data-mood-chip={mood.id} className={`${styles.folder} scroll-mt-28`} onClick={() => change(true, focus === index ? null : index)}>
+            <img src={studio(mood.folder)} alt="" width={120} height={120} loading="lazy" decoding="async" />
+            <span className={styles.folderName}>{t.names[index]}</span>
+            <span className={styles.folderCount}>{mood.tiles.length + 1}</span>
           </button>
         ))}
       </div>

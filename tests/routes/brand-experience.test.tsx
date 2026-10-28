@@ -91,7 +91,7 @@ describe('the brand page shows the service before asking visitors to enquire', (
       const html = renderToStaticMarkup(await BrandsPage({ params: Promise.resolve({ locale }) }));
       const ko = locale === 'ko';
       expect(html).toContain(ko ? 'TWINGS 브랜드 에셋 스튜디오' : 'TWINGS brand asset studio');
-      for (const marker of ['data-studio-hero', 'data-studio-stage', 'data-studio-moods', 'data-studio-pipeline', 'data-brand-memory', 'data-memory-loop', 'data-studio-vto', 'data-studio-spread', 'data-studio-feed']) {
+      for (const marker of ['data-studio-hero', 'data-studio-orbit', 'data-studio-moods', 'data-studio-pipeline', 'data-brand-memory', 'data-memory-loop', 'data-studio-vto', 'data-studio-spread', 'data-studio-feed']) {
         expect(html).toContain(marker);
       }
       // The hero leads; the campaign service (cases, approved figures) is still on the page below it.
@@ -110,7 +110,10 @@ describe('the brand page shows the service before asking visitors to enquire', (
       // Mood clusters: "all" plus eight moods, every library frame in the initial HTML.
       expect(html).toContain('data-mood-clusters');
       expect(html.match(/data-mood-chip=/g)).toHaveLength(9);
-      expect(html.match(/data-mood-tile=/g)).toHaveLength(48);
+      expect(html.match(/data-mood-tile=/g)).toHaveLength(41);
+      // Hero: one bottle per mood on the ring, each opening its folder below.
+      expect(html.match(/data-orbit-bottle=/g)).toHaveLength(8);
+      expect(html.match(/href="#mood-[a-z]+" data-orbit-bottle/g)).toHaveLength(8);
       // Try-on (beta): both modes ship in the HTML, the model is labelled as virtual.
       expect(html.match(/data-vto-panel=/g)).toHaveLength(2);
       expect(html).toMatch(/hidden="" data-vto-panel="free"/);

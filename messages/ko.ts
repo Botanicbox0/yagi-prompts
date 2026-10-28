@@ -406,8 +406,8 @@ export const ko: Dictionary = {
     "studio": {
       "moods": {
         "eyebrow": "01 분류",
-        "title": "섞여 있던 48컷이 8개 무드로",
-        "body": "빛과 색감이 비슷한 컷끼리 묶습니다. 무드를 누르면 같은 병을 그 무드로 찍은 컷이 맨 앞에 옵니다.",
+        "title": "섞여 있던 41컷이 8개 무드로",
+        "body": "빛과 색감이 비슷한 컷끼리 묶습니다. 폴더를 열면 그 무드에 맞춰 만든 병과 제품 컷이 맨 앞에 옵니다.",
         "all": "전체",
         "product": "이 무드로 찍은 제품 컷",
         "light": "빛",
@@ -427,23 +427,23 @@ export const ko: Dictionary = {
         ],
         "tags": [
           {
-            "light": "컬러 젤 · 역광 줄무늬",
-            "color": "코발트 · 앰버",
-            "mood": "시네마틱한 밤"
+            "light": "낮은 골든 측광",
+            "color": "앰버 · 브라스",
+            "mood": "유리 너머 온기"
           },
           {
             "light": "부드러운 확산광",
-            "color": "로즈 · 라일락",
+            "color": "블러시 · 로즈",
             "mood": "고요함"
           },
           {
             "light": "낮은 측광",
-            "color": "토프 · 시나몬",
+            "color": "토프 · 차콜",
             "mood": "연기, 레진"
           },
           {
             "light": "하이키",
-            "color": "아이보리 · 월넛",
+            "color": "아이보리 · 트래버틴",
             "mood": "손끝에 닿는 질감"
           },
           {
@@ -453,7 +453,7 @@ export const ko: Dictionary = {
           },
           {
             "light": "하이키 · 긴 그림자",
-            "color": "그레이 · 세피아",
+            "color": "세이지 · 그레이",
             "mood": "마른 표본"
           },
           {
@@ -479,23 +479,7 @@ export const ko: Dictionary = {
       "example": "예시 화면",
       "earlyNote": "크리에이터 캠페인은 지금 진행할 수 있습니다. 나머지 기능은 얼리 액세스입니다.",
       "stage": {
-        "window": "Yagi 2026 F/W 라이브러리",
-        "search": "연기 나는 컷",
-        "memory": "브랜드 규칙",
-        "rules": [
-          "Yagi 서명은 정면에만",
-          "캡은 월넛 원목",
-          "앰버 주스 색 유지"
-        ],
-        "drop": "여기에 끌어다 놓기",
-        "tags": [
-          "앰버 라이트",
-          "우드 & 스모크",
-          "레드 오브제",
-          "보태니컬",
-          "나이트 플로럴",
-          "크림 & 그레인"
-        ]
+        "search": "연기 나는 컷"
       },
       "pipelineEyebrow": "02 검색 · 생성",
       "pipelineTitle": "파일명을 몰라도 찾습니다",
@@ -525,13 +509,13 @@ export const ko: Dictionary = {
         "mood": "무드"
       },
       "tagValues": {
-        "object": "향수병 · 월넛 캡",
-        "light": "컬러 젤 · 역광 줄무늬",
-        "framing": "로우 앵글 · 클로즈업",
+        "object": "향수병 · 브라스 캡",
+        "light": "낮은 골든 측광",
+        "framing": "리브 유리 너머 · 사선",
         "mood": [
-          "시네마틱",
+          "따뜻함",
           "앰버",
-          "밤"
+          "저녁"
         ]
       },
       "searchResult": "3컷",
@@ -543,9 +527,9 @@ export const ko: Dictionary = {
       ],
       "makeVariants": [
         "원본",
-        "나이트 플로럴",
-        "레드 오브제",
-        "보태니컬"
+        "로즈 드레이프",
+        "보태니컬",
+        "모노 실루엣"
       ],
       "memoryEyebrow": "03 기억",
       "memoryTitle": "규칙은 한 번만 적습니다",
@@ -556,7 +540,7 @@ export const ko: Dictionary = {
           "body": "로고와 팔레트, 말투. 바뀌면 안 되는 것들.",
           "items": [
             "Yagi 서명 여백 1배",
-            "캡은 월넛 원목만",
+            "서명은 병 정면에만",
             "문장 끝 느낌표 금지"
           ]
         },

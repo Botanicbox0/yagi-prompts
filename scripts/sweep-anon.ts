@@ -1330,6 +1330,12 @@ async function sweepCampaigns(): Promise<void> {
     for (const marker of ['data-campaign-hero', 'data-campaign-reel', 'data-campaign-principles', 'data-campaign-proof', 'data-brands', 'data-case-study', 'data-customer-story', 'data-audience-switch']) {
       expectPresent(`/${locale}/brands carries ${marker}`, brand.body, marker);
     }
+    for (const marker of ['data-studio-hero', 'data-studio-orbit', 'data-mood-clusters', 'data-studio-pipeline', 'data-studio-vto', 'data-studio-feed']) {
+      expectPresent(`/${locale}/brands asset studio carries ${marker}`, brand.body, marker);
+    }
+    expectEqual(`/${locale}/brands orbit holds one bottle per mood`, (brand.body.match(/data-orbit-bottle=/g) ?? []).length, 8);
+    expectEqual(`/${locale}/brands mood library ships all 41 frames`, (brand.body.match(/data-mood-tile=/g) ?? []).length, 41);
+    expectEqual(`/${locale}/brands never shows the retired client-packaging frames`, (brand.body.match(/reel\/studio\/[a-z]+-yagi/g) ?? []).length, 0);
     expectEqual(`/${locale}/brands offers three format films`, (brand.body.match(/data-format-select=/g) ?? []).length, 3);
     expectEqual(`/${locale}/brands shows three service examples`, (brand.body.match(/data-service-example=/g) ?? []).length, 3);
     expectAbsent(`/${locale}/brands has no hidden service tabs`, brand.body, 'data-use-case-select');

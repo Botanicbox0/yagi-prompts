@@ -398,8 +398,8 @@ export const en = {
     "studio": {
       "moods": {
         "eyebrow": "01 Sort",
-        "title": "48 mixed cuts, eight moods",
-        "body": "Cuts with similar light and color sit in the same group. Tap a mood and the same bottle, shot in that mood, comes to the front.",
+        "title": "41 mixed cuts, eight moods",
+        "body": "Cuts with similar light and color sit in the same group. Open a folder and the bottle made for that mood, with its product shots, comes to the front.",
         "all": "All",
         "product": "Product shot for this mood",
         "light": "Light",
@@ -419,23 +419,23 @@ export const en = {
         ],
         "tags": [
           {
-            "light": "Color gels · backlit streaks",
-            "color": "Cobalt · amber",
-            "mood": "Cinematic night"
+            "light": "Low golden side light",
+            "color": "Amber · brass",
+            "mood": "Warmth through glass"
           },
           {
             "light": "Soft diffused",
-            "color": "Rose · lilac",
+            "color": "Blush · rose",
             "mood": "Stillness"
           },
           {
             "light": "Low side light",
-            "color": "Taupe · cinnamon",
+            "color": "Taupe · charcoal",
             "mood": "Smoke, resin"
           },
           {
             "light": "High-key",
-            "color": "Ivory · walnut",
+            "color": "Ivory · travertine",
             "mood": "Texture you can touch"
           },
           {
@@ -445,7 +445,7 @@ export const en = {
           },
           {
             "light": "High-key · long shadows",
-            "color": "Grey · sepia",
+            "color": "Sage · grey",
             "mood": "Dried specimens"
           },
           {
@@ -471,23 +471,7 @@ export const en = {
       "example": "Example screen",
       "earlyNote": "Creator campaigns run today. Everything else is in early access.",
       "stage": {
-        "window": "Yagi 2026 F/W library",
-        "search": "cuts with smoke",
-        "memory": "Brand rules",
-        "rules": [
-          "Yagi signature on the front only",
-          "Walnut cap",
-          "Keep the amber juice color"
-        ],
-        "drop": "Drop files here",
-        "tags": [
-          "Amber light",
-          "Wood & smoke",
-          "Red object",
-          "Botanical",
-          "Night florals",
-          "Cream & grain"
-        ]
+        "search": "cuts with smoke"
       },
       "pipelineEyebrow": "02 Search · generate",
       "pipelineTitle": "Find it without the file name",
@@ -517,13 +501,13 @@ export const en = {
         "mood": "Mood"
       },
       "tagValues": {
-        "object": "Fragrance bottle · walnut cap",
-        "light": "Color gels · backlit streaks",
-        "framing": "Low angle · close-up",
+        "object": "Fragrance bottle · brass cap",
+        "light": "Low golden side light",
+        "framing": "Through ribbed glass · tilted",
         "mood": [
-          "Cinematic",
+          "Warm",
           "Amber",
-          "Night"
+          "Evening"
         ]
       },
       "searchResult": "3 cuts",
@@ -535,9 +519,9 @@ export const en = {
       ],
       "makeVariants": [
         "Original",
-        "Night florals",
-        "Red object",
-        "Botanical"
+        "Rose drape",
+        "Botanical",
+        "Mono silhouette"
       ],
       "memoryEyebrow": "03 Memory",
       "memoryTitle": "Set it once",
@@ -548,7 +532,7 @@ export const en = {
           "body": "Logo, palette, voice. Fixed across every campaign.",
           "items": [
             "Signature clear space 1×",
-            "Walnut caps only",
+            "Signature on the front only",
             "No exclamation marks"
           ]
         },
