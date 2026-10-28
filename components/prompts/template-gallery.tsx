@@ -166,6 +166,8 @@ export function TemplateGallery({
   const [index, setIndex] = useState(start);
   const [viewerIndex, setViewerIndex] = useState(start);
   const [zoom, setZoom] = useState<{ on: boolean; x: number; y: number }>({ on: false, x: 50, y: 50 });
+  const [viewerOpen, setViewerOpen] = useState(false);
+  const closeRef = useRef<HTMLButtonElement | null>(null);
   const trackRef = useRef<HTMLDivElement | null>(null);
   const viewerTrackRef = useRef<HTMLDivElement | null>(null);
   const dialogRef = useRef<HTMLDialogElement | null>(null);
@@ -200,14 +202,19 @@ export function TemplateGallery({
     setViewerIndex(at);
     setZoom({ on: false, x: 50, y: 50 });
     if (!dialog.open) dialog.showModal();
+    setViewerOpen(true);
     document.documentElement.style.overflow = 'hidden';
-    requestAnimationFrame(() => scrollTrack(viewerTrackRef.current, at, false));
+    requestAnimationFrame(() => {
+      scrollTrack(viewerTrackRef.current, at, false);
+      closeRef.current?.focus();
+    });
   };
 
   const closeViewer = () => dialogRef.current?.close();
 
   // The dialog closes by the button, Esc or the backdrop; every road lands here.
   const onViewerClose = () => {
+    setViewerOpen(false);
     document.documentElement.style.overflow = '';
     setZoom({ on: false, x: 50, y: 50 });
     scrollTrack(trackRef.current, viewerIndex, false);
@@ -223,10 +230,19 @@ export function TemplateGallery({
     scrollTrack(viewerTrackRef.current, next, true);
   };
 
-  const onViewerKey = (event: KeyboardEvent<HTMLDialogElement>) => {
-    if (event.key === 'ArrowRight') { event.preventDefault(); viewerGo(viewerIndex + 1); }
-    if (event.key === 'ArrowLeft') { event.preventDefault(); viewerGo(viewerIndex - 1); }
-  };
+  // ← / → step the viewer wherever focus sits while it is open (Esc is the dialog's own).
+  useEffect(() => {
+    if (!viewerOpen || n < 2) return;
+    const onKey = (event: globalThis.KeyboardEvent) => {
+      if (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft') return;
+      event.preventDefault();
+      const next = Math.min(Math.max(viewerIndex + (event.key === 'ArrowRight' ? 1 : -1), 0), n - 1);
+      setZoom({ on: false, x: 50, y: 50 });
+      scrollTrack(viewerTrackRef.current, next, true);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [viewerOpen, viewerIndex, n, scrollTrack]);
 
   const originOf = (event: { clientX: number; clientY: number; currentTarget: Element }) => {
     const rect = event.currentTarget.getBoundingClientRect();
@@ -368,7 +384,6 @@ export function TemplateGallery({
         ref={dialogRef}
         aria-label={title}
         onClose={onViewerClose}
-        onKeyDown={onViewerKey}
         onClick={(event) => {
           if (event.target === event.currentTarget) closeViewer();
         }}
@@ -417,6 +432,7 @@ export function TemplateGallery({
         <div className="absolute inset-x-0 top-0 flex items-center justify-between px-4 py-3 sm:px-6">
           <span className="text-sm font-medium text-white/85 tabular-nums">{multi ? `${viewerIndex + 1} / ${n}` : ''}</span>
           <button
+            ref={closeRef}
             type="button"
             onClick={closeViewer}
             aria-label={labels.close}
