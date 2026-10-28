@@ -2,11 +2,10 @@
  * Landing media slots — every image the marketing pages show from `public/`, by name, so the founder
  * can replace one from `/admin/landing-media` without a deploy (2026-10-29: "wix처럼 편하게 수정").
  *
- * A slot is one file wherever it appears: replacing `studio/smoke-1` changes the mood library tile,
- * the search demo cell and the memory thumbnail together, the way the file did. The default is the
- * file in `public/`; an override is a row in `landing_media` pointing at a `public-content` object
- * (lib/content/landing-media-server.ts). Videos and their posters are not slots: a new poster over an
- * old film would show one thing and play another.
+ * A slot is one file wherever it appears. The default is the file in `public/`; an override is a row
+ * in `landing_media` pointing at a `public-content` object (lib/content/landing-media-server.ts).
+ * Videos and their posters are not slots: a new poster over an old film would show one thing and
+ * play another.
  *
  * This module is imported by client components, so it holds data and pure lookups only.
  */
@@ -14,17 +13,15 @@ import type { EvidencePair } from './slots';
 
 export type LandingMediaPage = 'brands' | 'home';
 export type LandingMediaGroup =
-  | 'heroBottles'
-  | 'moodFolders'
-  | 'moodLibrary'
-  | 'pipeline'
+  | 'hero'
+  | 'contrast'
+  | 'range'
+  | 'scenes'
   | 'vto'
-  | 'feed'
-  | 'service'
   | 'homeHero';
 
 export interface LandingMediaSlot {
-  /** `<area>/<file name without extension>`, e.g. `studio/p-amber-1`. */
+  /** `<area>/<file name without extension>`, e.g. `landing/hero-shot`. */
   key: string;
   page: LandingMediaPage;
   group: LandingMediaGroup;
@@ -34,8 +31,8 @@ export interface LandingMediaSlot {
   ratio: string;
   /** Longest useful width on the page; uploads are scaled down to it, never up. */
   width: number;
-  /** Cut-outs (bottles, folders) keep their transparency. */
-  alpha?: boolean;
+  /** Cut-outs keep their transparency. */
+  alpha?: true;
 }
 
 /** Override URLs by slot key; a slot that is absent shows its default. */
@@ -43,42 +40,34 @@ export type LandingMedia = Readonly<Record<string, string>>;
 
 export const NO_LANDING_MEDIA: LandingMedia = Object.freeze({});
 
-const MOODS = ['amber', 'drape', 'smoke', 'cream', 'flora', 'botanic', 'mono', 'red'] as const;
-const LIBRARY = [
-  'smoke-1', 'smoke-2', 'smoke-3', 'smoke-4',
-  'cream-1', 'cream-2', 'cream-3', 'cream-4',
-  'flora-1', 'flora-2', 'flora-3', 'flora-4',
-  'botanic-1', 'botanic-2', 'botanic-3', 'botanic-4', 'botanic-5', 'botanic-6',
-  'mono-1', 'mono-2', 'mono-3', 'mono-4', 'mono-5',
-  'red-2', 'red-3',
-] as const;
-const FEED = ['feed-mirror', 'feed-wrist', 'feed-cafe', 'feed-taxi', 'feed-bed', 'feed-street', 'feed-desk', 'feed-gym'] as const;
+/** The demo product family, in page order (components/brand-studio/landing-sections.tsx). */
+export const LANDING_PRODUCTS = ['parfum', 'blush', 'oil', 'compact', 'lipoil', 'serum', 'mist', 'balm'] as const;
 
-function studio(name: string, group: LandingMediaGroup, ratio: string, width: number, alpha?: true): LandingMediaSlot {
-  return { key: `studio/${name}`, page: 'brands', group, src: `/reel/studio/${name}.webp`, ratio, width, ...(alpha ? { alpha } : {}) };
+function landing(name: string, group: LandingMediaGroup, ratio: string, width: number): LandingMediaSlot {
+  return { key: `landing/${name}`, page: 'brands', group, src: `/reel/landing/${name}.webp`, ratio, width };
+}
+function studio(name: string, ratio: string): LandingMediaSlot {
+  return { key: `studio/${name}`, page: 'brands', group: 'vto', src: `/reel/studio/${name}.webp`, ratio, width: 720 };
 }
 
 export const LANDING_MEDIA_SLOTS: readonly LandingMediaSlot[] = [
   // Brand landing, in page order.
-  ...MOODS.map((mood) => studio(`bottle-${mood}`, 'heroBottles', 'free', 520, true)),
-  ...MOODS.map((mood) => studio(`folder-${mood}`, 'moodFolders', '1:1', 240, true)),
-  ...MOODS.flatMap((mood) => [studio(`p-${mood}-1`, 'moodLibrary', '4:5', 1200), studio(`p-${mood}-2`, 'moodLibrary', '4:5', 900)]),
-  ...LIBRARY.map((name) => studio(name, 'moodLibrary', '4:5', 900)),
-  ...['x-drape', 'x-botanic', 'x-mono'].map((name) => studio(name, 'pipeline', '4:5', 720)),
-  studio('vto-garment', 'vto', '1:1', 720),
-  ...['vto-look-front', 'vto-look-upper', 'vto-look-side'].map((name) => studio(name, 'vto', '3:4', 720)),
-  studio('vto-free-amber', 'vto', '3:4', 720),
-  studio('vto-free-alley', 'vto', '9:16', 720),
-  studio('vto-free-mirror', 'vto', '9:16', 720),
-  studio('vto-free-sofa', 'vto', '3:4', 720),
-  studio('vto-free-drape', 'vto', '3:4', 720),
-  ...FEED.map((name) => studio(name, 'feed', '9:16', 540)),
-  // The campaign service half of /brands: formula, moat and service-example pictures (not film posters).
-  { key: 'brands/production-paris', page: 'brands', group: 'service', src: '/reel/brands/production-paris.jpg', ratio: '16:9', width: 1280 },
-  { key: 'brands/y2k-flip-phone', page: 'brands', group: 'service', src: '/reel/brands/y2k-flip-phone.jpg', ratio: '9:16', width: 720 },
-  { key: 'brands/morphic-september-01', page: 'brands', group: 'service', src: '/reel/brands/morphic-september-01.jpg', ratio: '4:3', width: 960 },
-  { key: 'brands/city-fashion', page: 'brands', group: 'service', src: '/reel/brands/city-fashion.jpg', ratio: '4:3', width: 1280 },
-  // Shared by both landings: the selfie → scene pair (home hero, brand formula and moat).
+  landing('hero-input', 'hero', '1:1', 900),
+  landing('hero-shot', 'hero', '4:5', 900),
+  landing('hero-texture', 'hero', '4:5', 900),
+  landing('hero-hand', 'hero', '4:5', 900),
+  landing('hero-model', 'hero', '4:5', 720),
+  ...['logo', 'skin', 'light'].flatMap((pair) => [landing(`c-${pair}-raw`, 'contrast', '1:1', 640), landing(`c-${pair}-ours`, 'contrast', '1:1', 640)]),
+  ...LANDING_PRODUCTS.map((key) => landing(`pk-${key}`, 'range', '4:5', 720)),
+  ...LANDING_PRODUCTS.map((key) => landing(`sc-${key}`, 'scenes', '4:5', 900)),
+  studio('vto-garment', '1:1'),
+  ...['vto-look-front', 'vto-look-upper', 'vto-look-side'].map((name) => studio(name, '3:4')),
+  studio('vto-free-amber', '3:4'),
+  studio('vto-free-alley', '9:16'),
+  studio('vto-free-mirror', '9:16'),
+  studio('vto-free-sofa', '3:4'),
+  studio('vto-free-drape', '3:4'),
+  // The home hero's selfie → scene pair.
   { key: 'studio-demo/reference-selfie', page: 'home', group: 'homeHero', src: '/reel/studio-demo/reference-selfie.jpeg', ratio: '4:5', width: 960 },
   { key: 'studio-demo/different-person', page: 'home', group: 'homeHero', src: '/reel/studio-demo/different-person.jpg', ratio: '4:3', width: 1664 },
 ];
@@ -100,7 +89,10 @@ export function mediaSrc(media: LandingMedia | undefined, key: string): string {
   return media?.[key] ?? slot.src;
 }
 
-/** Shorthand for the studio components, which name files rather than slot keys. */
+/** Shorthand for the landing and try-on components, which name files rather than slot keys. */
+export function landingSrc(media: LandingMedia | undefined, name: string): string {
+  return mediaSrc(media, `landing/${name}`);
+}
 export function studioSrc(media: LandingMedia | undefined, name: string): string {
   return mediaSrc(media, `studio/${name}`);
 }

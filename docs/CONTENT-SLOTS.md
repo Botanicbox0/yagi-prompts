@@ -9,9 +9,10 @@ placeholder. Filling one is a config or CMS change, never a code change.
 ## 0. Landing images — `/admin/landing-media` (2026-10-29)
 
 **Where** `lib/content/landing-media.ts` (slot registry) → `lib/content/landing-media-server.ts`
-(`getLandingMedia()`, cached with tag `landing-media`, 1h TTL) → the brand landing
-(`components/brand-studio/*`, formula/moat/service pictures in `app/(marketing)/[locale]/brands/page.tsx`)
-and the home hero's selfie → scene pair (`evidenceWithMedia`).
+(`getLandingMedia()`, cached with tag `landing-media`, 1h TTL) → the brand landing v5
+(`components/brand-studio/landing-sections.tsx`: hero stills, the three comparison pairs, the eight
+packshots and eight scenes; `studio-vto.tsx`: the try-on cuts) and the home hero's selfie → scene pair
+(`evidenceWithMedia`). 38 slots on 2026-10-29.
 
 **Replace** open `admin.twings.app/admin/landing-media` (nav: 콘텐츠 관리 → 랜딩 이미지). Tiles follow
 the landing's order. Drop an image on a tile or click it: the browser scales it to the slot's width,
@@ -20,12 +21,11 @@ stores it content-addressed in `public-content`, upserts `landing_media` and ref
 and the tag. **기본으로** (`landingMedia.reset`) deletes the row; the file in `public/` shows again.
 
 **Rules**
-- One slot is one file wherever it appears (e.g. `studio/smoke-1` is the mood tile, a search cell and
-  a memory thumbnail).
+- One slot is one file wherever it appears.
 - Videos and their posters are not slots: a new poster over an old film would show one thing and
   play another. Replacing the home hero's scene still drops its film for the same reason.
 - A new landing image is a new registry line, and `tests/content/landing-media.test.ts` fails until
-  every `public/reel/studio/*.webp` has a slot.
+  every `public/reel/landing/*.webp` and `public/reel/studio/*.webp` has a slot.
 - Before migrations 0067/0147 reach a database, the landings read "no overrides" and the admin
   says so instead of saving.
 
