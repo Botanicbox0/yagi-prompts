@@ -419,9 +419,9 @@ export const en = {
         ],
         "tags": [
           {
-            "light": "Low golden side light",
-            "color": "Amber · brass",
-            "mood": "Warmth through glass"
+            "light": "Color gels · backlit streaks",
+            "color": "Cobalt · amber",
+            "mood": "Cinematic night"
           },
           {
             "light": "Soft diffused",
@@ -439,7 +439,7 @@ export const en = {
             "mood": "Texture you can touch"
           },
           {
-            "light": "Narrow spot",
+            "light": "Rim light",
             "color": "Black · cream",
             "mood": "White florals"
           },
@@ -449,12 +449,12 @@ export const en = {
             "mood": "Dried specimens"
           },
           {
-            "light": "Backlit · black and white",
+            "light": "Black and white · film grain",
             "color": "Greyscale",
             "mood": "Movement"
           },
           {
-            "light": "Direct flash",
+            "light": "Soft window light",
             "color": "Cherry · crimson",
             "mood": "Juice"
           }
@@ -502,12 +502,12 @@ export const en = {
       },
       "tagValues": {
         "object": "Fragrance bottle · brass cap",
-        "light": "Low golden side light",
-        "framing": "Through ribbed glass · tilted",
+        "light": "Color gels · backlit streaks",
+        "framing": "Low angle · reflection",
         "mood": [
-          "Warm",
+          "Cinematic",
           "Amber",
-          "Evening"
+          "Night"
         ]
       },
       "searchResult": "3 cuts",

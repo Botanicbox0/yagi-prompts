@@ -427,9 +427,9 @@ export const ko: Dictionary = {
         ],
         "tags": [
           {
-            "light": "낮은 골든 측광",
-            "color": "앰버 · 브라스",
-            "mood": "유리 너머 온기"
+            "light": "컬러 젤 · 역광 줄무늬",
+            "color": "코발트 · 앰버",
+            "mood": "시네마틱한 밤"
           },
           {
             "light": "부드러운 확산광",
@@ -447,7 +447,7 @@ export const ko: Dictionary = {
             "mood": "손끝에 닿는 질감"
           },
           {
-            "light": "좁은 스포트",
+            "light": "림 라이트",
             "color": "블랙 · 크림",
             "mood": "화이트 플로럴"
           },
@@ -457,12 +457,12 @@ export const ko: Dictionary = {
             "mood": "마른 표본"
           },
           {
-            "light": "역광 · 흑백",
+            "light": "흑백 · 필름 입자",
             "color": "그레이 스케일",
             "mood": "움직임"
           },
           {
-            "light": "직광 플래시",
+            "light": "부드러운 창광",
             "color": "체리 · 크림슨",
             "mood": "과즙"
           }
@@ -510,12 +510,12 @@ export const ko: Dictionary = {
       },
       "tagValues": {
         "object": "향수병 · 브라스 캡",
-        "light": "낮은 골든 측광",
-        "framing": "리브 유리 너머 · 사선",
+        "light": "컬러 젤 · 역광 줄무늬",
+        "framing": "로우 앵글 · 반사",
         "mood": [
-          "따뜻함",
+          "시네마틱",
           "앰버",
-          "저녁"
+          "밤"
         ]
       },
       "searchResult": "3컷",

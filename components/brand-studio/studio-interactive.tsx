@@ -28,12 +28,12 @@ const SEARCH_CELLS = [
   { src: studio('cream-1'), hit: false },
   { src: studio('smoke-1'), hit: true },
   { src: studio('flora-1'), hit: false },
-  { src: studio('p-smoke-2'), hit: true },
+  { src: studio('smoke-2'), hit: true },
   { src: studio('red-2'), hit: false },
 ] as const;
 
 /** Dominant colors measured from p-amber-1.webp (median-cut quantize), not invented. */
-const SWATCHES = ['#5E3819', '#854C20', '#CFA161'] as const;
+const SWATCHES = ['#060F07', '#51240D', '#274586'] as const;
 /** One bottle, regenerated in other moods: the cut-out, then three moods. */
 const VARIANTS = [studio('bottle-amber'), studio('x-drape'), studio('x-botanic'), studio('x-mono')] as const;
 
@@ -43,14 +43,14 @@ const VARIANTS = [studio('bottle-amber'), studio('x-drape'), studio('x-botanic')
  * measured from each cluster's files (median-cut quantize over every frame).
  */
 export const MOOD_LIBRARY = [
-  { id: 'amber', product: 'p-amber-1', tiles: ['p-amber-2'], palette: ['#5F391B', '#CC9E62', '#7D3007'], folder: 'folder-amber', bottle: 'bottle-amber' },
-  { id: 'drape', product: 'p-drape-1', tiles: ['p-drape-2'], palette: ['#C28A83', '#D6B1AB', '#E0CCC7'], folder: 'folder-drape', bottle: 'bottle-drape' },
-  { id: 'smoke', product: 'p-smoke-1', tiles: ['smoke-1', 'p-smoke-2', 'smoke-2', 'smoke-3', 'smoke-4'], palette: ['#856B58', '#6D5947', '#130E08'], folder: 'folder-smoke', bottle: 'bottle-smoke' },
-  { id: 'cream', product: 'p-cream-1', tiles: ['cream-1', 'p-cream-2', 'cream-2', 'cream-3', 'cream-4'], palette: ['#D5CFCB', '#5D3D2A', '#E5E1DE'], folder: 'folder-cream', bottle: 'bottle-cream' },
-  { id: 'flora', product: 'p-flora-1', tiles: ['flora-1', 'p-flora-2', 'flora-2', 'flora-3', 'flora-4'], palette: ['#090907', '#DCD7D0', '#E9E6E4'], folder: 'folder-flora', bottle: 'bottle-flora' },
-  { id: 'botanic', product: 'p-botanic-1', tiles: ['botanic-1', 'botanic-2', 'p-botanic-2', 'botanic-3', 'botanic-4', 'botanic-5', 'botanic-6'], palette: ['#EAE9E9', '#B3B0A5', '#DCDBDA'], folder: 'folder-botanic', bottle: 'bottle-botanic' },
-  { id: 'mono', product: 'p-mono-1', tiles: ['mono-1', 'p-mono-2', 'mono-2', 'mono-3', 'mono-4', 'mono-5'], palette: ['#AFAEAE', '#6E6F6E', '#1E201E'], folder: 'folder-mono', bottle: 'bottle-mono' },
-  { id: 'red', product: 'p-red-1', tiles: ['red-2', 'p-red-2', 'red-3'], palette: ['#DED2C0', '#570304', '#240302'], folder: 'folder-red', bottle: 'bottle-red' },
+  { id: 'amber', product: 'p-amber-1', tiles: ['p-amber-2'], palette: ['#412212', '#9E5E3B', '#D4BCAF'], folder: 'folder-amber', bottle: 'bottle-amber' },
+  { id: 'drape', product: 'p-drape-1', tiles: ['p-drape-2'], palette: ['#E0D3D4', '#191914', '#BB8F8F'], folder: 'folder-drape', bottle: 'bottle-drape' },
+  { id: 'smoke', product: 'p-smoke-1', tiles: ['smoke-1', 'p-smoke-2', 'smoke-2', 'smoke-3', 'smoke-4'], palette: ['#89705D', '#6F523F', '#0F0D08'], folder: 'folder-smoke', bottle: 'bottle-smoke' },
+  { id: 'cream', product: 'p-cream-1', tiles: ['cream-1', 'p-cream-2', 'cream-2', 'cream-3', 'cream-4'], palette: ['#CCC9C5', '#69503A', '#453021'], folder: 'folder-cream', bottle: 'bottle-cream' },
+  { id: 'flora', product: 'p-flora-1', tiles: ['flora-1', 'p-flora-2', 'flora-2', 'flora-3', 'flora-4'], palette: ['#0A0D08', '#EBEAEA', '#B7B1A3'], folder: 'folder-flora', bottle: 'bottle-flora' },
+  { id: 'botanic', product: 'p-botanic-1', tiles: ['botanic-1', 'botanic-2', 'p-botanic-2', 'botanic-3', 'botanic-4', 'botanic-5', 'botanic-6'], palette: ['#E3E0E1', '#251710', '#5F5648'], folder: 'folder-botanic', bottle: 'bottle-botanic' },
+  { id: 'mono', product: 'p-mono-1', tiles: ['mono-1', 'p-mono-2', 'mono-2', 'mono-3', 'mono-4', 'mono-5'], palette: ['#BAB8B9', '#ABAAAB', '#7E7E7F'], folder: 'folder-mono', bottle: 'bottle-mono' },
+  { id: 'red', product: 'p-red-1', tiles: ['red-2', 'p-red-2', 'red-3'], palette: ['#EDECE4', '#380305', '#81060B'], folder: 'folder-red', bottle: 'bottle-red' },
 ] as const;
 const ROTATE_MS = 6000;
 /** Panel order matches `copy.tabs`; ids are markup, not copy. */
