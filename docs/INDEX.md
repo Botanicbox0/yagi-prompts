@@ -44,6 +44,7 @@
 | `CAMPAIGNS.md` | 캠페인 도메인·상태 머신·브랜드 의뢰 폼·알림·랜딩. |
 | `AUDIENCE-RENOVATION.md` | 크리에이터/브랜드 진입 분리(2026-10-07)와 모바일 헤더 규칙. |
 | `plans/KAIPER-*.md` | 브랜드 셀프서비스(초대 링크→인플루언서→TWINGS 선정) 설계·검증. Phase 3의 출발점. |
+| `BRAND-SHORTLIST.md` | 캠페인 크리에이터 후보 공유(가져오기 계약·고객에게 안 가는 항목·선호 표시). |
 | `BRAND-*.md`, `CAMPAIGN-REPORTING.md`, `WORKSPACE-HOST-ROUTING.md` | brand.twings.app 워크스페이스·호스트 라우팅·리포트·게시물 수집·인증. 해당 화면을 만질 때만. |
 
 ## 앱·SEO·운영

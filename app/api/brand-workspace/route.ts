@@ -23,6 +23,7 @@ import {
   acceptUsageQuote,
 } from "@/lib/brands/usage/service";
 import { usagePaymentsOpen } from "@/lib/brands/usage/runtime";
+import { pickShortlistCandidate } from "@/lib/brands/shortlist/service";
 import {
   notifySlackBrandConcierge,
   syncSlackConciergeReplies,
@@ -119,6 +120,9 @@ export async function POST(request: NextRequest) {
         result = await acceptUsageQuote({ sql, paymentsOpen: usagePaymentsOpen() }, viewer, input); break;
       case "member.revoke":
         result = await revokeBrandMember({ sql }, viewer, input);
+        break;
+      case "shortlist.pick":
+        result = await pickShortlistCandidate({ sql }, viewer, input);
         break;
       case "attachment.reserve": {
         const reserved = await reserveBrandAttachment({ sql }, viewer, input);

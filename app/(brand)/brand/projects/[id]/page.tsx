@@ -15,6 +15,8 @@ import { loadPromptBySlug } from "@/lib/prompts/repo";
 import { influencersOpen } from "@/lib/influencers/rules";
 import { poolVisible, scopedHref } from "@/lib/brands/workspace/selection";
 import { POOL_PATH } from "@/lib/brands/creator-pool";
+import { loadBrandShortlist } from "@/lib/brands/shortlist/service";
+import { CampaignShortlist } from "@/components/brand-workspace/shortlist";
 export default async function BrandProject({
   params,
   searchParams,
@@ -32,11 +34,13 @@ export default async function BrandProject({
   if (!project) notFound();
   // Applicants and payment are the brand's own matters: no such tabs for campaign-only guests or the TWINGS view.
   const member = project.role === "owner" || project.role === "editor" || project.role === "viewer";
-  const [usage, collaboration, applicants, funding] = await Promise.all([
+  // The shortlist is for everyone who can see the campaign, guests included: comparing candidates is why they were invited.
+  const [usage, collaboration, applicants, funding, shortlist] = await Promise.all([
     loadBrandUsage({ sql, verifiedEmail, paymentsOpen: usagePaymentsOpen() }, viewer, id),
     member ? loadProjectCollaboration({ sql }, viewer, id) : Promise.resolve(null),
     member ? loadProjectApplicants({ sql }, viewer, id) : Promise.resolve(null),
     member ? loadFundingProject({ sql }, viewer, id) : Promise.resolve(null),
+    loadBrandShortlist({ sql, verifiedEmail }, viewer, id),
   ]);
   const deps = member ? fundingDeps(sql) : null;
   const requested = project.campaignTerms?.format.kind === "template" ? await loadPromptBySlug(sql, project.campaignTerms.format.slug).catch(() => null) : null;
@@ -51,6 +55,10 @@ export default async function BrandProject({
       usage={usage}
       formatTitle={formatTitle}
       staffManageHref={project.role === "studio" && viewer.isAdmin ? adminProjectHref(project.id, brandHost) : null}
+      shortlistCount={shortlist?.candidates.length ?? 0}
+      shortlist={shortlist && shortlist.candidates.length > 0 ? (
+        <CampaignShortlist candidates={shortlist.candidates} canPick={shortlist.canPick} copy={b.shortlist} locale={locale} />
+      ) : null}
       applicants={member ? (
         <CampaignApplicants view={applicants} invitations={collaboration?.campaigns ?? []} canInvite={Boolean(collaboration?.canInvite) && !viewer.isAdmin} b={b} locale={locale} projectId={id}
           poolHref={influencersOpen() && poolVisible(project) ? scopedHref(POOL_PATH, { id: project.organizationId }) : null} />

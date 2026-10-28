@@ -86,6 +86,8 @@ export function adminRouteAllowed(pathname: string, method: string): boolean {
   if (/^\/api\/brand-workspace\/attachments\/[^/]+$/.test(pathname)) return read;
   // Organization logos: the handler rechecks the studio role before any byte leaves storage.
   if (/^\/api\/brand-workspace\/organizations\/[^/]+\/logo$/.test(pathname)) return read;
+  // Shortlist pictures (docs/BRAND-SHORTLIST.md): the handler rechecks the studio role or the campaign seat.
+  if (/^\/api\/brand-workspace\/shortlist\/[a-f0-9-]+\/avatar$/.test(pathname)) return read;
   if (!read) return false;
   if (pathname.startsWith('/_next/static/')) return true;
   if (/^\/fonts\/[a-zA-Z0-9_./-]+\.(?:css|woff2?)$/.test(pathname)) return true;
@@ -130,6 +132,7 @@ export function brandRouteAllowed(pathname: string, method: string): boolean {
   if (pathname === '/api/brand-workspace/usage') return read || method === 'POST';
   if (/^\/api\/brand-workspace\/attachments\/[^/]+$/.test(pathname)) return read || method === 'POST';
   if (/^\/api\/brand-workspace\/organizations\/[^/]+\/logo$/.test(pathname)) return read || method === 'POST';
+  if (/^\/api\/brand-workspace\/shortlist\/[a-f0-9-]+\/avatar$/.test(pathname)) return read;
   return read && !pathname.startsWith('/api/') && !isAdminPath(pathname) && adminRouteAllowed(pathname, method);
 }
 
