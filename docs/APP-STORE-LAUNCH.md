@@ -24,14 +24,15 @@
 
 ---
 
-## 2. Google Play 앱 (1단계) — 구매 없는 TWA
+## 2. Google Play 앱 — 내부 테스트 전용 TWA
 
-> 대표 결정 2026-10-28: **Android는 Google Play에 구매 없는 앱(TWA)으로, iPhone은 PWA 유지.** App Store는 앱 안 결제(IAP) 가격을 정한 뒤에 다시 판단한다(`docs/PLATFORM-2.0.md` §5.1, §13-1).
+> 대표 결정 2026-10-28: **TWA는 Play 내부 테스트 트랙 전용이다. 프로덕션·공개 테스트로 출시하지 않는다.** 본 앱은 스토어 구독이 들어간 Capacitor 앱이다(`docs/PLATFORM-2.0.md` §19.7). 패키지 이름 `app.twings.client`와 업로드 키는 그 앱이 이어 쓰고, 이 절의 스토어 셸(앱 안 웹 화면에서 토스 결제·가격 숨김)도 그대로 재사용한다.
+> (같은 날 처음 정한 "Android는 구매 없는 TWA로 공개, iPhone은 PWA 유지"는 앱 결제·구독제 결정 §19로 대체됐다. 구독제에서 구매 없는 앱은 막다른 길이다.)
 
-### 왜 구매 없는 앱인가 (2026-10-28 공식 문서 확인)
-- Google Play 결제 정책: Play로 배포한 앱에서 디지털 상품을 팔면 Play 결제를 써야 하고 TWA도 예외가 아니다. 수수료는 15%(연 첫 100만 달러), 한국 대체 결제는 Play 결제와 **병행할 때만** 쓸 수 있고 4%p 낮다(15%→11%). 5% 마진 구조에서는 성립하지 않는다.
-- 예외는 **소비 전용(consumption-only) 앱**: 앱 안에서 디지털이든 실물이든 어떤 상품도 살 수 없으면 허용된다. 링크 없이 "웹사이트에서 구매할 수 있어요" 같은 문장은 쓸 수 있다. 앱 밖(메일·SNS) 안내는 자유. 출처: https://support.google.com/googleplay/android-developer/answer/10281818
-- iPhone: Apple 3.1.3(b)는 웹에서 산 상품을 앱에서 쓰게 하려면 같은 상품을 IAP로도 팔아야 한다고 정한다(예외는 3.1.3(a) Reader 앱). 그래서 App Store는 IAP 가격 결정이 먼저다. 한국 외부 결제는 26%라 소규모 사업자 IAP(15%)보다 비싸다.
+### 왜 TWA 안에서는 아무것도 팔지 않나 (2026-10-28 공식 문서 확인)
+- Google Play 결제 정책: Play로 배포한 앱에서 디지털 상품을 팔면 Play 결제를 써야 하고 TWA도 예외가 아니다. 수수료는 15%(연 첫 100만 달러), 한국 대체 결제는 Play 결제와 **병행할 때만** 쓸 수 있고 4%p 낮다(15%→11%). TWA에는 Play 결제를 붙이지 않으므로(스토어 구독은 §19.7의 Capacitor 앱에서) 앱 안에서는 팔지 않는다.
+- **소비 전용(consumption-only) 앱**: 앱 안에서 디지털이든 실물이든 어떤 상품도 살 수 없으면 허용된다. 링크 없이 "웹사이트에서 구매할 수 있어요" 같은 문장은 쓸 수 있다. 앱 밖(메일·SNS) 안내는 자유. 출처: https://support.google.com/googleplay/android-developer/answer/10281818
+- iPhone: Apple 3.1.3(b)는 웹에서 산 상품을 앱에서 쓰게 하려면 같은 상품을 IAP로도 팔아야 한다고 정한다(예외는 3.1.3(a) Reader 앱). 한국 외부 결제는 26%라 소규모 사업자 IAP(15%)보다 비싸다. App Store도 §19.7의 Capacitor 앱(스토어 구독)으로 간다.
 
 ### 앱 안에서 바뀌는 것 (`lib/mobile/store-shell.ts`)
 - **판별**: TWA는 Chrome 그 자체라 User-Agent·헤더로 알 수 없고, 쿠키·localStorage는 사용자의 일반 Chrome과 공유된다(거기 표시하면 브라우저 결제까지 숨는다). 그래서 앱만의 신호로 판별한다 — 실행 URL의 `?source=twa`(`mobile/twa-manifest.json`의 `startUrl`과 바로가기), Chrome이 앱 실행에 주는 `android-app://<패키지>/` referrer, 그리고 탭 단위 sessionStorage. `<head>`의 차단 스크립트가 첫 페인트 전에 `<html data-store-shell="android">`를 붙인다.
@@ -72,4 +73,4 @@ npx -y @bubblewrap/cli@1.27.0 build                         # 키 저장소·키
 2. 앱 만들기: 이름 TWINGS, 기본 언어 한국어, 앱, 무료.
 3. 스토어 등록정보: 짧은 설명·자세한 설명, 앱 아이콘, 그래픽 이미지, 휴대전화 스크린샷(규격은 Play Console 화면 안내대로).
 4. 앱 콘텐츠: 개인정보처리방침 `https://twings.app/ko/legal/privacy`, 데이터 보안 양식(이메일·얼굴 사진·결제는 웹), 콘텐츠 등급 설문, 타겟 연령(약관의 이용 연령과 같게), 광고 없음.
-5. 내부 테스트 트랙에서 기기 확인(위 "기기에서 확인할 것" 포함) → 프로덕션 심사 제출.
+5. **내부 테스트 트랙에만** 올려 기기 확인(위 "기기에서 확인할 것" 포함). 프로덕션·공개 테스트 출시는 하지 않는다(§19.7). 같은 패키지 이름으로 다음 Capacitor 앱을 올린다.

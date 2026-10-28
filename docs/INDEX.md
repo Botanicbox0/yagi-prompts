@@ -50,7 +50,7 @@
 | 문서 | 읽는 때 |
 | --- | --- |
 | `qa/app-shell/README.md` | 설치형 셸·푸시 검증과 운영 전제(VAPID 키). |
-| `APP-STORE-LAUNCH.md` | 공개 전환(§1)과 Google Play 구매 없는 TWA 앱(§2): 앱 안 판별·숨김 규칙, assetlinks, 빌드, Play Console 등록 순서. |
+| `APP-STORE-LAUNCH.md` | 공개 전환(§1)과 Google Play 내부 테스트 전용 TWA(§2): 앱 안 판별·숨김 규칙(다음 Capacitor 앱도 재사용), assetlinks, 빌드·업로드 키, Play Console 등록 순서. 본 앱 방향은 PLATFORM-2.0 §19.7. |
 | `SEO-GEO.md` | 구조화 데이터·사이트맵·llms.txt 점검 기준. |
 | `SERVER-HANDOFF.md`, `WORKSPACE.md` | 워크스테이션·worktree 사용 규칙. |
 | `VERSIONS.md` | 버전 고정 이유. |
