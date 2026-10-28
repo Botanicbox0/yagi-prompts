@@ -5,7 +5,7 @@ import { ActionForm } from "./action-form";
 import { CampaignTermsSummary, PLATFORM_NAMES } from "./campaign-terms-summary";
 import { PromptCardMedia, type CardMediaSource } from "@/components/prompts/card-media";
 import { TypographicPoster } from "@/components/prompts/poster";
-import { CARD_RATIOS } from "@/components/prompts/card-frame";
+import { CARD_RATIO } from "@/components/prompts/card-frame";
 import { formatKrw, interpolate } from "@/lib/i18n/format";
 import { CAMPAIGN_PLATFORMS, PAYOUT_MODELS } from "@/lib/campaigns/schemas";
 import {
@@ -269,8 +269,8 @@ function FormatStep({ t, draft, errors, update, part, patch, formats, organizati
                 return (
                   <label key={f.slug} className="bw-format-card" data-wizard-format={f.slug} data-selected={checked || undefined}>
                     <input type="radio" name="format" value={f.slug} aria-label={f.title} checked={checked} onChange={() => patchFormat({ kind: "template", slug: f.slug, source: f.source })} />
-                    <PromptCardMedia poster={f.poster} video={f.video} alt={f.title} ratio={CARD_RATIOS.portrait} fit="cover"
-                      fallback={<TypographicPoster title={f.title} slug={f.slug} kicker="" ratio={CARD_RATIOS.portrait} />} />
+                    <PromptCardMedia poster={f.poster} video={f.video} alt={f.title} ratio={CARD_RATIO} fit="cover"
+                      fallback={<TypographicPoster title={f.title} slug={f.slug} kicker="" ratio={CARD_RATIO} />} />
                     <span className="bw-format-title">{f.title}</span>
                     {f.authorHandle && <span className="bw-muted">@{f.authorHandle}</span>}
                     {checked && <span className="bw-format-selected">{t.format.selected}</span>}

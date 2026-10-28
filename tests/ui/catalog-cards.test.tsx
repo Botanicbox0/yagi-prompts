@@ -7,17 +7,15 @@ import type { PromptCard } from '@/lib/prompts/catalog';
 import { PROMPT_MODEL_LABEL, USE_CASES } from '@/lib/prompts/schemas';
 import { PromptCardView } from '@/components/prompts/prompt-card';
 import { CardPlaybackControl, shouldMountClip } from '@/components/prompts/card-media';
-import { CARD_RATIOS, cardAspect, cardAuthor, cardFrame, makerProfileRest, railOrder } from '@/components/prompts/card-frame';
-import { pillClassName } from '@/components/prompts/pill';
+import { CARD_RATIO, cardAspect, cardAuthor, makerProfileRest, railOrder } from '@/components/prompts/card-frame';
 import { PromptRail } from '@/components/prompts/rails';
-import { UseCaseFilter } from '@/components/prompts/filter-chips';
 import { MediumTabs, TemplatesListing } from '@/components/templates/listing';
 import { promptLabels, useCaseLabel } from '@/components/prompts/labels';
 
 /**
- * docs/PLATFORM-2.0.md §15.3-4·5 and the founder's 2026-10-23 decision: a portrait template is a
- * 4:5 card in two columns, 16:9 is for landscape templates only, and the card says what the
- * reader gets (title · length · ratio · NEW) — not which engine made it or who at the studio did.
+ * docs/PLATFORM-2.0.md §15.3-4·5 and §15.6 (founder 2026-10-28): every template sits in the same
+ * 4:5 card, two columns on a phone and four from a tablet up, and the card says what the reader
+ * gets (title · length · ratio · NEW) — not which engine made it or who at the studio did.
  */
 
 const NOW = new Date('2026-10-23T00:00:00.000Z');
@@ -67,31 +65,40 @@ function markup(data: PromptCard, locale: 'en' | 'ko' = 'en') {
   );
 }
 
-describe('card frame (founder 2026-10-23: portrait → 4:5, landscape → 16:9)', () => {
-  it('frames a portrait or square example at 4:5 and a wide one at 16:9', () => {
-    expect(cardFrame(card())).toBe('portrait');
-    expect(cardFrame(card({ poster: { source: 'route', src: '/p', mime: 'image/png', w: 1080, h: 1080 } }))).toBe('portrait');
-    expect(cardFrame(card({ poster: { source: 'route', src: '/p', mime: 'image/png', w: 1600, h: 900 } }))).toBe('landscape');
-    expect(cardFrame(card({ poster: { source: 'route', src: '/p', mime: 'image/png', w: 1440, h: 1080 } }))).toBe('landscape');
+describe('card frame (founder 2026-10-28: one 4:5 frame for every card)', () => {
+  const still = (w: number, h: number) => ({ source: 'route' as const, src: '/p', mime: 'image/png', w, h });
+  const shapes = {
+    '9:16': card(),
+    '1:1': card({ poster: still(1080, 1080), aspectDefault: '1:1' }),
+    '16:9': card({ poster: still(1600, 900), aspectDefault: '16:9' }),
+    '4:3': card({ poster: still(1440, 1080), aspectDefault: '4:3' }),
+    'no still': card({ poster: null, video: null, aspectDefault: '16:9' }),
+  };
+
+  it('gives tall, square and wide templates the same 4:5 window', () => {
+    expect(CARD_RATIO).toBe('4 / 5');
+    for (const [shape, data] of Object.entries(shapes)) {
+      const html = markup(data);
+      expect(html, shape).toContain(`aspect-ratio:${CARD_RATIO}`);
+      expect(html, shape).toContain('data-frame="portrait"');
+      expect(html, shape).not.toContain('data-frame="landscape"');
+      expect(html, shape).not.toContain('16 / 9');
+    }
   });
 
-  it('trusts the measured example over the generation default, then the default, then the medium', () => {
-    // The example is what sits in the frame; aspectDefault is what the studio opens with.
-    expect(cardFrame(card({ aspectDefault: '16:9' }))).toBe('portrait');
-    expect(cardFrame(card({ poster: null, video: null, aspectDefault: '16:9' }))).toBe('landscape');
-    expect(cardFrame(card({ poster: null, video: null, aspectDefault: null }))).toBe('portrait');
-    expect(cardFrame(card({ poster: null, video: null, aspectDefault: null, medium: 'image' }))).toBe('portrait');
+  it('crops to fill instead of letterboxing, a little above centre so heads stay in', () => {
+    for (const data of [shapes['9:16'], shapes['16:9'], shapes['4:3']]) {
+      const html = markup(data);
+      expect(html).toContain('object-cover');
+      expect(html).toContain('object-[50%_35%]');
+      expect(html).not.toContain('object-contain');
+    }
   });
 
-  it('renders the chosen ratio and crops a portrait clip to fill it', () => {
-    const tall = markup(card());
-    expect(tall).toContain(`aspect-ratio:${CARD_RATIOS.portrait}`);
-    expect(tall).toContain('data-frame="portrait"');
-    expect(tall).toContain('object-cover');
-    const wide = markup(card({ poster: { source: 'route', src: '/p', mime: 'image/png', w: 1600, h: 900 }, aspectDefault: '16:9' }));
-    expect(wide).toContain(`aspect-ratio:${CARD_RATIOS.landscape}`);
-    expect(wide).toContain('data-frame="landscape"');
-    expect(CARD_RATIOS).toEqual({ portrait: '4 / 5', landscape: '16 / 9' });
+  it('still tells the buyer the real output shape on the ratio chip', () => {
+    expect(markup(shapes['16:9'])).toMatch(/data-card-aspect[^>]*>16:9</);
+    expect(markup(shapes['4:3'])).toMatch(/data-card-aspect[^>]*>4:3</);
+    expect(markup(shapes['9:16'])).toMatch(/data-card-aspect[^>]*>9:16</);
   });
 });
 
@@ -183,7 +190,7 @@ describe('card playback (viewport autoplay with a visible stop control)', () => 
   });
 });
 
-describe('rails: NEW first, two columns on a phone', () => {
+describe('rails: NEW first, two columns on a phone, four from a tablet', () => {
   const old = (slug: string) => card({ slug, publishedAt: '2026-01-01T00:00:00.000Z' });
 
   it('moves NEW cards to the front and keeps the catalog order inside each group', () => {
@@ -191,7 +198,7 @@ describe('rails: NEW first, two columns on a phone', () => {
     expect(ordered.map((c) => c.slug)).toEqual(['n1', 'n2', 'a', 'b']);
   });
 
-  it('renders that order in a two-column grid that never scrolls sideways', () => {
+  it('renders that order in a 2 → 4 column grid that never scrolls sideways', () => {
     const dict = dicts.en;
     const html = renderToStaticMarkup(
       <PromptRail
@@ -201,15 +208,15 @@ describe('rails: NEW first, two columns on a phone', () => {
         cards={[old('a'), card({ slug: 'n1' })]}
         locale="en"
         labels={promptLabels(dict)}
-        useCaseLabels={{}}
         emptyLabel=""
-        filteredEmptyLabel=""
         now={NOW}
       />,
     );
     expect(html.indexOf('data-prompt-card="n1"')).toBeLessThan(html.indexOf('data-prompt-card="a"'));
     expect(html).toContain('grid-cols-2');
-    expect(html).toContain('lg:grid-cols-4');
+    expect(html).toContain('md:grid-cols-4');
+    // No three-column step: a rail that fills a desktop row of four fills two phone rows too.
+    expect(html).not.toContain('grid-cols-3');
     expect(html).toMatch(/<li[^>]*class="[^"]*min-w-0/);
   });
 });
@@ -226,34 +233,28 @@ describe('catalog first screen (§15.3-5)', () => {
     expect(definition).toBeGreaterThan(html.lastIndexOf('data-prompt-card='));
   });
 
-  it('hides the chip row when every template shares one use case, and keeps the count line', () => {
-    const one = listing([card(), card({ slug: 'second' })]);
-    expect(one).not.toContain('role="group"');
-    expect(one).toContain('2개 템플릿');
-    const two = listing([card(), card({ slug: 'second', useCase: ['mv'] })]);
-    expect(two).toContain('role="group"');
-    expect(two).toContain('2개 템플릿');
+  it('has no chip rows — however many use cases and origins the cards span (founder 2026-10-28)', () => {
+    const maker = card({ slug: 'maker-one', origin: 'maker', source: 'yagi', authorHandle: 'hana', makerProfile: true, useCase: ['ugc'] });
+    const html = listing([card(), card({ slug: 'second', useCase: ['mv'] }), maker]);
+    for (const marker of ['data-use-case-filter', 'data-origin-filter', 'data-filter-count', 'data-use-case=', 'aria-pressed', 'role="group"']) {
+      expect(html, marker).not.toContain(marker);
+    }
+    expect(html).toContain('data-medium-tabs');
+    // Every card ships visible: nothing on this page hides one any more.
+    expect(html).not.toMatch(/<(li|section)[^>]*\shidden/);
   });
 
-  it('draws the medium segment and the use-case chips as the same pill', () => {
-    expect(pillClassName(true)).toContain('rounded-full');
-    expect(pillClassName(true)).not.toBe(pillClassName(false));
+  it('draws the medium switch as two text tabs on a hairline, not a pair of pills', () => {
     const tabs = renderToStaticMarkup(<MediumTabs locale="ko" dict={dicts.ko} active="video" />);
-    expect(tabs).toContain(`class="${pillClassName(true)}"`);
-    expect(tabs).toContain(`class="${pillClassName(false)}"`);
-    const chips = renderToStaticMarkup(
-      <UseCaseFilter options={[['cinematic', 'Cinematic'], ['mv', 'MV']]} total={2} labels={{ heading: 'Use', all: 'All', count: '{count} templates', reset: 'Reset' }} />,
-    );
-    expect(chips).toContain(pillClassName(true));
-    expect(chips).toContain(pillClassName(false));
-  });
-
-  it('a single option renders the count but no chips', () => {
-    const html = renderToStaticMarkup(
-      <UseCaseFilter options={[['cinematic', 'Cinematic']]} total={9} labels={{ heading: 'Use', all: 'All', count: '{count} templates', reset: 'Reset' }} />,
-    );
-    expect(html).not.toContain('<button');
-    expect(html).toContain('9 templates');
+    expect(tabs).toMatch(/<nav[^>]*aria-label="결과물 종류"/);
+    expect(tabs).toMatch(/data-medium-tab="video"[^>]*aria-current="page"/);
+    expect(tabs).not.toMatch(/data-medium-tab="image"[^>]*aria-current/);
+    expect(tabs).toContain('border-b border-hairline');
+    expect(tabs).toContain('border-black text-black');
+    expect(tabs).not.toContain('rounded-full');
+    expect(tabs).not.toContain('bg-accent');
+    expect(tabs).toContain(`>${dicts.ko.nav.video}<`);
+    expect(tabs).toContain(`>${dicts.ko.nav.image}<`);
   });
 });
 
@@ -263,7 +264,7 @@ describe('studio and maker collections (PLATFORM-2.0 §7.5·§14.1)', () => {
   const maker = (slug: string, handle: string | null = 'hana') =>
     card({ slug, origin: 'maker', source: 'yagi', authorHandle: handle, makerProfile: handle !== null });
 
-  it('with no maker template, there is no maker rail, no origin chips and no rail heading change', () => {
+  it('with no maker template, there is no maker rail and no rail heading change', () => {
     const html = listing([card(), card({ slug: 'second' })]);
     expect(html).not.toContain('data-rail-origin="maker"');
     expect(html).not.toContain('data-origin-filter');
@@ -271,7 +272,7 @@ describe('studio and maker collections (PLATFORM-2.0 §7.5·§14.1)', () => {
     expect(html).toContain('data-rail-origin="studio"');
   });
 
-  it('puts the studio rail first and the maker rail second, with the "전체 · 오리지널 · 메이커" chips', () => {
+  it('puts the studio rail first and the maker rail second, with no origin chips over them', () => {
     const html = listing([card(), maker('maker-one')]);
     const studio = html.indexOf('data-rail-origin="studio"');
     const makers = html.indexOf('data-rail-origin="maker"');
@@ -279,9 +280,9 @@ describe('studio and maker collections (PLATFORM-2.0 §7.5·§14.1)', () => {
     expect(makers).toBeGreaterThan(studio);
     expect(html.indexOf('data-prompt-card="neon-alley-dolly"')).toBeLessThan(makers);
     expect(html.indexOf('data-prompt-card="maker-one"')).toBeGreaterThan(makers);
-    expect(html).toContain('data-origin-filter');
-    for (const label of [dicts.ko.templates.originAll, dicts.ko.templates.originStudio, dicts.ko.templates.originMaker]) expect(html).toContain(`>${label}<`);
-    expect([dicts.ko.templates.originAll, dicts.ko.templates.originStudio, dicts.ko.templates.originMaker]).toEqual(['전체', '오리지널', KO_TERMS.maker]);
+    // §15.6: the rails' own headings say where a template comes from; the chips are gone.
+    expect(html).not.toContain('data-origin-filter');
+    expect(html).not.toContain('<button');
     expect(html).toContain(`>${dicts.ko.templates.studioRail}<`);
     expect(html).toContain(`>${dicts.ko.templates.makerRail}<`);
     expect([dicts.ko.templates.studioRail, dicts.ko.templates.makerRail]).toEqual([KO_TERMS.studioCollection, KO_TERMS.makerCollection]);

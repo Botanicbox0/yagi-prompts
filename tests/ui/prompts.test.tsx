@@ -10,7 +10,7 @@ import { CreatorHero } from '@/components/audience/creator-home';
 import { PromptRail } from '@/components/prompts/rails';
 import { TypographicPoster, POSTER_RATIOS, posterRatio } from '@/components/prompts/poster';
 import { PromptBody, PromptHeader, SubmitStrip } from '@/components/prompts/detail';
-import { promptLabels, presentUseCases, useCaseLabel } from '@/components/prompts/labels';
+import { promptLabels, useCaseLabel } from '@/components/prompts/labels';
 import type { ShapedPrompt } from '@/lib/prompts/shape';
 import type { UnlockPanel } from '@/lib/cookies/wallet';
 
@@ -228,19 +228,15 @@ describe('rails (§13.2)', () => {
         cards={cards}
         locale="en"
         labels={labels}
-        useCaseLabels={useCaseLabels}
         emptyLabel={dict.prompts.emptyYagi}
-        filteredEmptyLabel={dict.prompts.filterEmpty}
       />,
     );
 
-  it('renders the display-type header and tags each item with its use cases', () => {
+  it('renders the display-type header and the cards in catalog order', () => {
     const html = rail([card(), card({ slug: 'second', useCase: ['mv', 'vlog'] })]);
     expect(html).toContain('ORIGINAL PROMPTS BY YAGI');
     expect(html).toContain('data-rail="yagi"');
-    expect(html).toContain('data-use-case="cinematic"');
-    expect(html).toContain('data-use-case="mv vlog"');
-    // Filtering and keyboard navigation use the same order as the visible grid.
+    // Keyboard navigation uses the same order as the visible grid.
     expect(html.indexOf('data-prompt-card="neon-alley-dolly"')).toBeLessThan(html.indexOf('data-prompt-card="second"'));
   });
 
@@ -248,15 +244,11 @@ describe('rails (§13.2)', () => {
     expect(rail([])).toContain(dict.prompts.emptyYagi);
   });
 
-  it('ships the filtered-empty line hidden, so JS-off readers never see it', () => {
-    const html = rail([card()]);
-    expect(html).toContain('data-rail-filtered-empty');
-    expect(html).toMatch(/data-rail-filtered-empty[^>]*hidden/);
-  });
-
-  it('offers only the use cases that are present', () => {
-    expect(presentUseCases(['mv', 'cinematic'])).toEqual(['cinematic', 'mv']);
-    expect(presentUseCases(['not-a-use-case'])).toEqual([]);
+  it('carries no filter state: no use-case tags, no filtered-empty line (§15.6, chips removed)', () => {
+    const html = rail([card(), card({ slug: 'second', useCase: ['mv', 'vlog'] })]);
+    expect(html).not.toContain('data-use-case');
+    expect(html).not.toContain('data-rail-filtered-empty');
+    expect(html).not.toMatch(/<li[^>]*\shidden/);
   });
 });
 

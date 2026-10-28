@@ -30,6 +30,12 @@ import { observeCardArming } from '@/lib/media/card-arming';
  * underneath the overlay.
  */
 
+/**
+ * A crop that keeps heads: a 9:16 clip in a 4:5 window loses its top and bottom, and portrait
+ * subjects sit above the middle. Wide media crops sideways, where the 35% does nothing.
+ */
+const COVER = 'object-cover object-[50%_35%]';
+
 /** The arming host is an ancestor of media AND its link. Hero previews opt in without counting as catalog cards. */
 export const HOVER_HOST = '[data-prompt-card], [data-media-host]';
 
@@ -94,7 +100,7 @@ export function PromptCardMedia({
   fallback: ReactNode;
   alt: string;
   ratio: string;
-  /** `cover` crops to fill (the 4:5 portrait card); `contain` letterboxes (the 16:9 card). */
+  /** `cover` crops to fill (the 4:5 catalogue card); `contain` letterboxes. */
   fit?: 'cover' | 'contain';
   /** Without labels there is no control — the clip is decoration only. */
   controlLabels?: { play: string; pause: string };
@@ -175,7 +181,7 @@ export function PromptCardMedia({
             {...(poster.h ? { height: poster.h } : {})}
             loading="lazy"
             decoding="async"
-            className={`h-full w-full ${fit === 'cover' ? 'object-cover' : 'object-contain'}`}
+            className={`h-full w-full ${fit === 'cover' ? COVER : 'object-contain'}`}
           />
         ) : (
           fallback
@@ -184,7 +190,7 @@ export function PromptCardMedia({
         {armed && (
           <video
             ref={videoRef}
-            className={`absolute inset-0 h-full w-full ${fit === 'cover' ? 'object-cover' : 'object-contain'}`}
+            className={`absolute inset-0 h-full w-full ${fit === 'cover' ? COVER : 'object-contain'}`}
             autoPlay
             muted
             loop

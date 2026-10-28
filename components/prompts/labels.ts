@@ -1,5 +1,4 @@
 import type { Dictionary } from '@/lib/i18n/dictionaries';
-import { USE_CASES } from '@/lib/prompts/schemas';
 
 /**
  * The dictionary → props seam for the prompts surface (§13, §3.9).
@@ -136,10 +135,4 @@ export function promptLabels(dict: Dictionary): PromptLabels {
 
 export function useCaseLabel(dict: Dictionary, key: string): string {
   return (dict.useCase as Record<string, string>)[key] ?? key;
-}
-
-/** The chips the filter rail renders, in vocabulary order, restricted to what is actually present. */
-export function presentUseCases(available: readonly string[]): string[] {
-  const set = new Set(available);
-  return USE_CASES.filter((value) => set.has(value));
 }

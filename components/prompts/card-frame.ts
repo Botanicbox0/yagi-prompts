@@ -4,16 +4,12 @@ import { DEFAULT_IMAGE_ASPECT, DEFAULT_VIDEO_ASPECT } from '@/lib/images/engines
 import { makerRest } from '@/lib/makers/links';
 
 /**
- * Founder decision 2026-10-23 (docs/PLATFORM-2.0.md §15.5-15): a portrait template is a **4:5
- * card in two columns**; the 2026-08-14 "every card 16:9" rule survives for landscape templates
- * only. The 16:9 window letterboxed a 9:16 result into half a screen of black — the card now
- * crops a portrait clip to 4:5 instead, the way every short-form template wall does.
+ * Founder decision 2026-10-28 (docs/PLATFORM-2.0.md §15.6): **every card is the same 4:5 frame**.
+ * The 2026-10-23 split (4:5 for portrait templates, 16:9 for landscape ones) left a 16:9 or 4:3
+ * template a short strip next to a tall 9:16 card, and the strip lost. One frame gives every
+ * template the same weight; the ratio chip still tells the buyer the output's real shape.
  */
-export const CARD_RATIOS = { portrait: '4 / 5', landscape: '16 / 9' } as const;
-export type CardFrame = keyof typeof CARD_RATIOS;
-
-/** Wider than 6:5 reads as landscape; square and 4:5 sit happily in the portrait frame. */
-const LANDSCAPE_FROM = 1.2;
+export const CARD_RATIO = '4 / 5';
 
 function parseAspect(value: string | null): number | null {
   const match = value ? /^(\d+):(\d+)$/.exec(value) : null;
@@ -26,16 +22,6 @@ function parseAspect(value: string | null): number | null {
 export function cardAspect(card: Pick<PromptCard, 'aspectDefault' | 'medium'>): string {
   if (card.aspectDefault && parseAspect(card.aspectDefault) !== null) return card.aspectDefault;
   return card.medium === 'image' ? DEFAULT_IMAGE_ASPECT : DEFAULT_VIDEO_ASPECT;
-}
-
-/**
- * The frame follows the example that sits in it (a complete measured pair, the same rule the
- * creator hero uses), then the template's opening aspect, then the medium's default.
- */
-export function cardFrame(card: Pick<PromptCard, 'poster' | 'video' | 'aspectDefault' | 'medium'>): CardFrame {
-  const measured = [card.video, card.poster].find((media) => media?.w && media?.h && media.w > 0 && media.h > 0);
-  const ratio = measured ? measured.w! / measured.h! : parseAspect(cardAspect(card));
-  return ratio !== null && ratio >= LANDSCAPE_FROM ? 'landscape' : 'portrait';
 }
 
 /**

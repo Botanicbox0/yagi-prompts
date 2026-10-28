@@ -1,14 +1,11 @@
 import type { Locale } from '@/lib/i18n/config';
 import type { Dictionary } from '@/lib/i18n/dictionaries';
 import type { PromptCard } from '@/lib/prompts/catalog';
-import { TEMPLATE_MEDIA, USE_CASES, type TemplateMedium } from '@/lib/prompts/schemas';
+import { TEMPLATE_MEDIA, type TemplateMedium } from '@/lib/prompts/schemas';
 import { templatesHref } from '@/lib/prompts/links';
 import { TextSwap } from '@/components/ui/text-swap';
 import { PromptRail } from '@/components/prompts/rails';
-import { UseCaseFilter } from '@/components/prompts/filter-chips';
-import { promptLabels, presentUseCases, useCaseLabel } from '@/components/prompts/labels';
-import { pillClassName } from '@/components/prompts/pill';
-import { OriginFilter } from './origin-filter';
+import { promptLabels } from '@/components/prompts/labels';
 
 /**
  * docs/TEMPLATES-IA.md §2 — one listing, two tabs. `/video` and `/image` render this with their
@@ -16,29 +13,35 @@ import { OriginFilter } from './origin-filter';
  *
  * Nothing on this surface varies by viewer (no gated text anywhere any more), so the whole thing is
  * cached HTML shared by everyone — the same cache posture the prompts gallery had, for a simpler
- * reason. The use-case filter is client-side over the DOM, exactly as before.
+ * reason.
  *
- * First screen (docs/PLATFORM-2.0.md §15.3-5): title → medium pills → use-case pills (only when
- * there is a choice) and the count → the cards. The service definition follows the grid.
+ * First screen (docs/PLATFORM-2.0.md §15.6, founder 2026-10-28): title → the medium tabs → the
+ * cards. The use-case chips and the "전체 · 오리지널 · 메이커" chips are gone: the founder judged that
+ * they added nothing, and the rails already say where a template comes from. The service
+ * definition follows the grid.
  *
- * §7.5·§14.1: the cards split by origin — "TWINGS 오리지널" first, then "메이커 템플릿" — with the
- * "전체 · 오리지널 · 메이커" chips. With no maker template (today's catalogue) neither the second
- * rail, the chips nor the rail headings appear, and the page reads exactly as before.
+ * §7.5·§14.1: the cards split by origin — "TWINGS 오리지널" first, then the maker collection. With
+ * no maker template neither the second rail nor the rail headings appear.
  */
 export function MediumTabs({ locale, dict, active }: { locale: Locale; dict: Dictionary; active: TemplateMedium }) {
+  // Text tabs on a hairline, like the site nav's current-page underline — not a pair of buttons.
+  // The active tab's 2px rule sits on the hairline (`-mb-px`); the other reads at 4.5:1 or better.
   return (
-    <nav aria-label={dict.templates.tabsLabel} data-medium-tabs className="flex gap-2">
-      {TEMPLATE_MEDIA.map((medium) => (
-        <a
-          key={medium}
-          href={templatesHref(locale, medium)}
-          data-medium-tab={medium}
-          aria-current={medium === active ? 'page' : undefined}
-          className={pillClassName(medium === active)}
-        >
-          {dict.nav[medium]}
-        </a>
-      ))}
+    <nav aria-label={dict.templates.tabsLabel} data-medium-tabs className="flex gap-7 border-b border-hairline">
+      {TEMPLATE_MEDIA.map((medium) => {
+        const on = medium === active;
+        return (
+          <a
+            key={medium}
+            href={templatesHref(locale, medium)}
+            data-medium-tab={medium}
+            aria-current={on ? 'page' : undefined}
+            className={`-mb-px inline-flex min-h-11 items-center border-b-2 text-[0.95rem] font-semibold transition-colors duration-200 ${on ? 'border-black text-black' : 'border-transparent text-black/55 hover:text-black'}`}
+          >
+            {dict.nav[medium]}
+          </a>
+        );
+      })}
     </nav>
   );
 }
@@ -56,28 +59,19 @@ export function TemplatesListing({
 }) {
   const t = dict.templates[medium];
   const labels = promptLabels(dict);
-  const useCaseLabels = Object.fromEntries(USE_CASES.map((value) => [value, useCaseLabel(dict, value)]));
-  const present = presentUseCases([...new Set(cards.flatMap((card) => card.useCase))].sort());
-  const filterOptions = present.map((value) => [value, useCaseLabels[value]!] as [string, string]);
   const other: TemplateMedium = medium === 'video' ? 'image' : 'video';
   const studio = cards.filter((card) => card.origin !== 'maker');
   const makers = cards.filter((card) => card.origin === 'maker');
   const split = makers.length > 0;
   const tt = dict.templates;
-  const railProps = { locale, labels, useCaseLabels, emptyLabel: t.emptyTitle, filteredEmptyLabel: dict.prompts.filterEmpty };
+  const railProps = { locale, labels, emptyLabel: t.emptyTitle };
 
   return (
     <div data-template-catalog={medium} className="band pt-24 pb-20 lg:pt-28">
       <h1 className="font-display text-[clamp(2.25rem,5vw,4rem)] leading-tight font-black tracking-tight">{t.rail}</h1>
 
-      <div className="mt-5 space-y-4">
+      <div className="mt-6">
         <MediumTabs locale={locale} dict={dict} active={medium} />
-        {split && studio.length > 0 && (
-          <OriginFilter labels={{ heading: tt.originHeading, all: tt.originAll, studio: tt.originStudio, maker: tt.originMaker }} />
-        )}
-        {filterOptions.length > 0 && (
-          <UseCaseFilter options={filterOptions} total={cards.length} labels={{ heading: dict.prompts.filterHeading, all: dict.prompts.filterAll, count: dict.prompts.filterCount, reset: dict.prompts.filterReset }} />
-        )}
       </div>
 
       {cards.length === 0 ? (
@@ -99,7 +93,7 @@ export function TemplatesListing({
               cards={studio}
               {...railProps}
               hideHeading={!split}
-              topClassName={split ? 'mt-10' : 'mt-4'}
+              topClassName={split ? 'mt-10' : 'mt-8'}
             />
           )}
           {split && (

@@ -975,15 +975,27 @@ async function sweepTemplates(): Promise<void> {
     // `>$4<` — the price as rendered text; a bare `$4` also matches React Flight's `"$4:props…"` references.
     expectAbsent('…not even the number', page.body, locale === 'ko' ? '5,900원' : '>$4<');
     expectPresent('cards link to template pages', page.body, `href="/${locale}/t/${GATED_PROMPT}"`);
-    // PLATFORM-2.0 §15.3-4 (founder 2026-10-23): portrait templates are 4:5 cards, 16:9 is for
-    // landscape ones; the card names length and shape, never the engine, and is one link.
-    expectPresent('portrait templates sit in 4:5 cards', page.body, 'data-frame="portrait"');
-    expectPresent('…landscape ones keep 16:9', page.body, 'data-frame="landscape"');
+    // PLATFORM-2.0 §15.6 (founder 2026-10-28): every template, tall or wide, sits in the same 4:5
+    // card; the card names length and shape, never the engine, and is one link.
+    {
+      const cards = page.body.split('data-prompt-card="').length - 1;
+      const framed = page.body.split('data-frame="portrait"').length - 1;
+      const windows = page.body.split('aspect-ratio:4 / 5').length - 1;
+      if (cards > 0 && framed === cards && windows >= cards) ok('every card is the one 4:5 frame', `${cards} cards, ${framed} framed, ${windows} 4:5 windows`);
+      else fail('every card is the one 4:5 frame', `${cards} cards, ${framed} framed, ${windows} 4:5 windows`);
+    }
+    expectAbsent('…no card keeps a 16:9 frame', page.body, 'data-frame="landscape"');
+    expectAbsent('…or letterboxes its example', page.body, 'aspect-ratio:16 / 9');
+    expectPresent('…a wide template still says so on its ratio chip', page.body, '>16:9</span>');
     expectPresent('…with a length chip', page.body, 'data-card-duration');
     expectPresent('…and a ratio chip', page.body, 'data-card-aspect');
     expectAbsent('…and no engine chip', page.body, 'data-model-chip');
     expectAbsent('…and no "view template" button', page.body, 'data-card-detail');
-    expectPresent('the use-case filter', page.body, 'data-use-case-filter');
+    // §15.6: the medium tabs are the only control above the grid — no use-case or origin chips.
+    expectPresent('the medium tabs mark the open one', page.body, 'data-medium-tab="video" aria-current="page"');
+    expectAbsent('no use-case chips', page.body, 'data-use-case-filter');
+    expectAbsent('no origin chips', page.body, 'data-origin-filter');
+    expectAbsent('no pressed-chip state anywhere', page.body, 'aria-pressed');
     // §15.3-5: the GEO definition is still in the HTML, under the grid rather than above it.
     {
       const definition = page.body.indexOf('data-service-definition');
@@ -1218,7 +1230,7 @@ async function sweepLandingTemplates(): Promise<void> {
  * docs/PLATFORM-2.0.md §7.5·§14.1 — the header names (개인 | 브랜드), the two origin rails and the
  * public maker page. The local snapshot carries published community fixtures (maker origin) and one
  * maker who opted in (`scripts/maker-fixtures.ts`, `@jun`), so here both rails exist; production
- * has no maker template yet, and the unit tests pin that the second rail and the chips then vanish.
+ * has no maker template yet, and the unit tests pin that the second rail then vanishes.
  */
 async function sweepMakers(): Promise<void> {
   console.log('\n§14.1 names — the header audience switch');
@@ -1235,8 +1247,7 @@ async function sweepMakers(): Promise<void> {
   const makerRail = video.body.indexOf('data-rail-origin="maker"');
   if (studioRail > -1 && makerRail > studioRail) ok('the studio rail comes first, the maker rail second', `${studioRail} < ${makerRail}`);
   else fail('the studio rail comes first, the maker rail second', `studio at ${studioRail}, maker at ${makerRail}`);
-  expectPresent('the origin chips', video.body, 'data-origin-filter');
-  expectPresent('…"전체 · 오리지널 · 메이커"', video.body, `>${KO_TERMS.maker}</button>`);
+  expectAbsent('the rails need no origin chips (§15.6)', video.body, 'data-origin-filter');
   expectPresent('the maker rail is named', video.body, `>${KO_TERMS.makerCollection}</h2>`);
   expectPresent('a public maker is credited by handle', video.body, `${KO_TERMS.creditPrefix} @jun`);
   expectAbsent('no "작가" anywhere on the catalogue', video.body, '작가');
