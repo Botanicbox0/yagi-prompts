@@ -396,6 +396,70 @@ export const en = {
     "secondaryCta": "See campaign results",
     "definition": "TWINGS is a brand campaign studio by YAGI.",
     "studio": {
+      "moods": {
+        "eyebrow": "Aesthetic auto-sorting",
+        "title": "Hundreds of scattered cuts,\nsorted by mood.",
+        "body": "Light, color, texture and atmosphere are read and similar cuts grouped together. Pick a mood and the product shot made for it comes forward.",
+        "all": "All",
+        "product": "Product shot made for this mood",
+        "light": "Light",
+        "color": "Color",
+        "mood": "Mood",
+        "count": "cuts",
+        "note": "Example: part of a fragrance campaign library YAGI produced. Product shots are the same bottle, regenerated for each mood.",
+        "names": [
+          "Amber light",
+          "Rose drape",
+          "Wood & smoke",
+          "Cream & grain",
+          "Night florals",
+          "Botanical study",
+          "Mono silhouette",
+          "Red object"
+        ],
+        "tags": [
+          {
+            "light": "Color gels · backlit streaks",
+            "color": "Cobalt · amber",
+            "mood": "Cinematic, warm night"
+          },
+          {
+            "light": "Soft diffused",
+            "color": "Rose · lilac",
+            "mood": "Quiet, romantic"
+          },
+          {
+            "light": "Low side light",
+            "color": "Taupe · cinnamon",
+            "mood": "Smoky, resinous"
+          },
+          {
+            "light": "High-key · soft",
+            "color": "Ivory · walnut",
+            "mood": "Dewy, tactile"
+          },
+          {
+            "light": "Narrow spot",
+            "color": "Black · cream",
+            "mood": "Sensual, white floral"
+          },
+          {
+            "light": "High-key · long shadows",
+            "color": "Grey · sepia",
+            "mood": "Dry, specimen-like"
+          },
+          {
+            "light": "Backlit · monochrome",
+            "color": "Greyscale",
+            "mood": "Movement, minimal"
+          },
+          {
+            "light": "Direct flash",
+            "color": "Cherry · crimson",
+            "mood": "Juicy, pop"
+          }
+        ]
+      },
       "heroEyebrow": "Your all-in-one marketing asset studio",
       "heroTitle": "From brand assets\nto creator feeds.",
       "heroBody": "Bring scattered assets into one library, find them by describing them, make new ones that stay on brand, and get them into real creators’ feeds. First file to final post, in one studio.",
@@ -407,21 +471,21 @@ export const en = {
       "earlyNote": "Organizing, search and generation open in early access. Creator campaigns are live today.",
       "stage": {
         "window": "Brand library",
-        "search": "Every cut with pink in it",
+        "search": "Every cut with smoke in it",
         "memory": "Brand memory",
         "rules": [
-          "Logo clear space 1×",
-          "Key red #ED1E1E",
-          "Never tilt the logo"
+          "Yagi signature on the front only",
+          "Walnut wood cap",
+          "Keep the amber juice color"
         ],
         "drop": "Drop assets here",
         "tags": [
-          "Lip gloss · macro",
-          "Flip phone · Y2K",
-          "Paris · film",
-          "Editorial · white room",
-          "Locker · high-teen",
-          "Street look · city"
+          "Amber light · product",
+          "Wood & smoke",
+          "Red object · product",
+          "Botanical study",
+          "Night florals · product",
+          "Cream & grain · product"
         ]
       },
       "splitEyebrow": "The friction",
@@ -491,27 +555,27 @@ export const en = {
         "mood": "Mood"
       },
       "tagValues": {
-        "object": "Lip gloss · glass tube",
-        "light": "Soft backlight",
-        "framing": "Macro close-up",
+        "object": "Fragrance bottle · walnut cap",
+        "light": "Color gels · backlit streaks",
+        "framing": "Low angle · close-up",
         "mood": [
-          "Glossy",
-          "Soft pink",
-          "Clean beauty"
+          "Cinematic",
+          "Amber",
+          "Warm night"
         ]
       },
       "searchResult": "3 found",
-      "makePrompt": "Autumn mood, keep the logo clear space",
+      "makePrompt": "Same bottle, new moods",
       "makeChecks": [
-        "Logo clear space maintained",
-        "No banned colors",
-        "Campaign mood matched"
+        "Yagi signature kept",
+        "Bottle and cap unchanged",
+        "Mood matched"
       ],
       "makeVariants": [
         "Original",
-        "Autumn",
-        "Night",
-        "Studio white"
+        "Night florals",
+        "Red object",
+        "Botanical"
       ],
       "memoryEyebrow": "Brand memory",
       "memoryTitle": "Explain the brand once.\nThe studio remembers the rest.",
@@ -521,17 +585,17 @@ export const en = {
           "title": "Brand",
           "body": "Logo, type, palette, and the things that must never change.",
           "items": [
-            "Logo clear space 1×",
-            "Typeface: Pretendard Variable",
-            "Never tilt the logo"
+            "Signature clear space 1×",
+            "Walnut caps only",
+            "Never tilt the label"
           ]
         },
         {
           "title": "Campaign",
           "body": "Moodboard, audience, key lines, and what was decided last week.",
           "items": [
-            "Office workers in their late 20s",
-            "“A glow that lasts the commute home”",
+            "Professionals in their early 30s",
+            "“The scent that stays after work”",
             "Vertical 4:5 first"
           ]
         },

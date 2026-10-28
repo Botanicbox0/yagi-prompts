@@ -105,8 +105,14 @@ describe('the brand page shows the service before asking visitors to enquire', (
       expect(html.match(/data-studio-panel=/g)).toHaveLength(3);
       expect(html.match(/hidden="" data-studio-panel=/g)).toHaveLength(2);
       expect(html.match(/data-memory-layer=/g)).toHaveLength(3);
-      // The pink search only marks stills that carry pink.
+      // The smoke search only marks frames that show smoke.
       expect(html.match(/data-search-hit="true"/g)).toHaveLength(3);
+      // Mood clusters: "all" plus eight moods, every library frame in the initial HTML.
+      expect(html).toContain('data-mood-clusters');
+      expect(html.match(/data-mood-chip=/g)).toHaveLength(9);
+      expect(html.match(/data-mood-tile=/g)).toHaveLength(36);
+      // The example library is a client campaign: its brand name and packaging never appear.
+      expect(html).not.toMatch(/L['’]?H\.?A\.?S/i);
       // No competitor names, no credit or price promises before the founder sets them (§20.7).
       expect(html).not.toMatch(/Dropbox|Midjourney|Runway|Figma|Photoshop|Playbook/);
       expect(html).not.toMatch(/credits?\b|크레딧/i);

@@ -7,6 +7,7 @@
  */
 import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react';
 import gsap from 'gsap';
+import { Flip } from 'gsap/Flip';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import type { Dictionary } from '@/lib/i18n/dictionaries';
 import { useIsomorphicLayoutEffect } from '@/components/motion/use-isomorphic-layout-effect';
@@ -15,29 +16,51 @@ import styles from './studio.module.css';
 type StudioCopy = Dictionary['brandLanding']['studio'];
 type Vars = CSSProperties & Record<`--${string}`, string | number>;
 
-/** Six real campaign stills, each with the offset it floats at before the studio gathers it. */
+/**
+ * The example library: a fragrance campaign YAGI produced, with its product shots regenerated around
+ * an original YAGI bottle (the client's packaging never appears). Files live in /reel/studio/.
+ */
+const studio = (name: string) => `/reel/studio/${name}.webp`;
+
+/** Six frames from the library, each with the offset it floats at before the studio gathers it. */
 const HERO_TILES = [
-  { src: '/reel/campaigns/beauty-rose.jpg', file: 'lipgloss_macro.jpg', dx: -165, dy: -30, rot: -8, sc: 1.06 },
-  { src: '/reel/brands/y2k-flip-phone.jpg', file: 'y2k_flipphone.mp4', dx: 45, dy: -58, rot: 6, sc: 0.96 },
-  { src: '/reel/brands/production-paris.jpg', file: 'paris_film.mov', dx: 172, dy: -26, rot: 9, sc: 1.04 },
-  { src: '/reel/brands/tea-editorial.jpg', file: 'editorial_room.jpg', dx: -182, dy: 42, rot: 7, sc: 0.98 },
-  { src: '/reel/studio-demo/designed-format.jpg', file: 'highteen_locker.jpg', dx: -30, dy: 92, rot: -5, sc: 1.02 },
-  { src: '/reel/brands/city-fashion.jpg', file: 'city_look.jpg', dx: 178, dy: 58, rot: -9, sc: 1 },
+  { src: studio('amber-yagi'), file: 'amber_light_01.png', dx: -165, dy: -30, rot: -8, sc: 1.06 },
+  { src: studio('smoke-1'), file: 'agarwood_smoke.png', dx: 45, dy: -58, rot: 6, sc: 0.96 },
+  { src: studio('red-yagi'), file: 'red_object_01.png', dx: 172, dy: -26, rot: 9, sc: 1.04 },
+  { src: studio('botanic-1'), file: 'botanical_leaf.png', dx: -182, dy: 42, rot: 7, sc: 0.98 },
+  { src: studio('flora-yagi'), file: 'night_florals.png', dx: -30, dy: 92, rot: -5, sc: 1.02 },
+  { src: studio('cream-yagi'), file: 'cream_driftwood.png', dx: 178, dy: 58, rot: -9, sc: 1 },
 ] as const;
 
-/** The search demo: three stills that really carry pink, three that do not. */
+/** The search demo: three frames that really show smoke, three that do not. */
 const SEARCH_CELLS = [
-  { src: '/reel/campaigns/beauty-rose.jpg', hit: true },
-  { src: '/reel/brands/tea-editorial.jpg', hit: false },
-  { src: '/reel/campaigns/retro-phone-01.jpg', hit: true },
-  { src: '/reel/brands/city-fashion.jpg', hit: false },
-  { src: '/reel/brands/y2k-flip-phone.jpg', hit: true },
-  { src: '/reel/brands/production-paris.jpg', hit: false },
+  { src: studio('smoke-yagi'), hit: true },
+  { src: studio('cream-1'), hit: false },
+  { src: studio('smoke-1'), hit: true },
+  { src: studio('flora-1'), hit: false },
+  { src: studio('smoke-2'), hit: true },
+  { src: studio('red-2'), hit: false },
 ] as const;
 
-/** Dominant colors measured from beauty-rose.jpg (4-color quantize), not invented. */
-const SWATCHES = ['#D69E9F', '#C25359', '#EDC6BE', '#D47E82'] as const;
-const VARIANT_CLASSES = [styles.v1, styles.v2, styles.v3, styles.v4] as const;
+/** Dominant colors measured from amber-yagi.webp (median-cut quantize), not invented. */
+const SWATCHES = ['#5D3B27', '#D0AA98', '#141C0D'] as const;
+/** Same bottle, regenerated per mood: the packshot, then three moods from the library. */
+const VARIANTS = [studio('bottle'), studio('flora-yagi'), studio('red-yagi'), studio('botanic-yagi')] as const;
+
+/**
+ * Mood clusters for the auto-sorting demo. Palettes are measured from each cluster's files
+ * (median-cut quantize over every frame), and each cluster leads with its YAGI product shot.
+ */
+export const MOOD_LIBRARY = [
+  { id: 'amber', product: 'amber-yagi', tiles: ['amber-1', 'amber-2'], palette: ['#513E2A', '#302517', '#181A11'] },
+  { id: 'drape', product: 'drape-yagi', tiles: ['drape-2'], palette: ['#DBCCDA', '#7A5F50', '#462812'] },
+  { id: 'smoke', product: 'smoke-yagi', tiles: ['smoke-1', 'smoke-2', 'smoke-3', 'smoke-4'], palette: ['#8F745F', '#755D4B', '#674D3A'] },
+  { id: 'cream', product: 'cream-yagi', tiles: ['cream-1', 'cream-2', 'cream-3', 'cream-4'], palette: ['#D8D3D3', '#BFB7B2', '#332216'] },
+  { id: 'flora', product: 'flora-yagi', tiles: ['flora-1', 'flora-2', 'flora-3', 'flora-4'], palette: ['#D8D6D3', '#0D0D09', '#050403'] },
+  { id: 'botanic', product: 'botanic-yagi', tiles: ['botanic-1', 'botanic-2', 'botanic-3', 'botanic-4', 'botanic-5', 'botanic-6'], palette: ['#F5F3F5', '#E3E3E2', '#43372E'] },
+  { id: 'mono', product: 'mono-yagi', tiles: ['mono-1', 'mono-2', 'mono-3', 'mono-4', 'mono-5'], palette: ['#B8B6B7', '#99989A', '#1C1E1C'] },
+  { id: 'red', product: 'red-yagi', tiles: ['red-2', 'red-3'], palette: ['#6E0E10', '#560305', '#2A0203'] },
+] as const;
 const ROTATE_MS = 6000;
 /** Panel order matches `copy.tabs`; ids are markup, not copy. */
 const TAB_IDS = ['tag', 'search', 'make'] as const;
@@ -316,8 +339,8 @@ function TagPanel({ copy }: { copy: StudioCopy }) {
   return (
     <div className={styles.tagPanel}>
       <div className={styles.tagImage}>
-        <img src="/reel/campaigns/beauty-rose.jpg" alt="" width={640} height={400} loading="lazy" decoding="async" />
-        <span aria-hidden="true" className={`${styles.box} ${styles.appear}`} style={{ left: '4%', top: '16%', width: '86%', height: '58%', '--i': 1 } as Vars}>
+        <img src={studio('amber-yagi')} alt="" width={600} height={804} loading="lazy" decoding="async" />
+        <span aria-hidden="true" className={`${styles.box} ${styles.appear}`} style={{ left: '20%', top: '22%', width: '56%', height: '56%', '--i': 1 } as Vars}>
           <span className={styles.boxLabel}>{values.object}</span>
         </span>
       </div>
@@ -383,8 +406,8 @@ function MakePanel({ copy }: { copy: StudioCopy }) {
       </div>
       <ul className={styles.variants}>
         {copy.makeVariants.map((label, index) => (
-          <li key={label} className={`${styles.variant} ${styles.appear} ${VARIANT_CLASSES[index] ?? ''}`} style={{ '--i': index } as Vars}>
-            <div className={styles.variantMedia}><img src="/reel/campaigns/beauty-rose.jpg" alt="" width={240} height={300} loading="lazy" decoding="async" /></div>
+          <li key={label} className={`${styles.variant} ${styles.appear}`} style={{ '--i': index } as Vars}>
+            <div className={styles.variantMedia}><img src={VARIANTS[index]} alt="" width={240} height={300} loading="lazy" decoding="async" /></div>
             <span className={styles.variantLabel}>{label}</span>
           </li>
         ))}
@@ -394,6 +417,143 @@ function MakePanel({ copy }: { copy: StudioCopy }) {
           <li key={check} className={`${styles.check} ${styles.appear}`} style={{ '--i': index + 4 } as Vars}><span aria-hidden="true" className={styles.checkMark}>✓</span>{check}</li>
         ))}
       </ul>
+    </div>
+  );
+}
+
+type MoodTile = { key: string; mood: number; product: boolean };
+
+/** Every frame once, in library order: each cluster's product shot first, then its frames. */
+const MOOD_TILES: MoodTile[] = MOOD_LIBRARY.flatMap((mood, index) => [
+  { key: mood.product, mood: index, product: true },
+  ...mood.tiles.map((tile) => ({ key: tile, mood: index, product: false })),
+]);
+
+/** "Before": the same frames dealt out as an unsorted upload. Fixed, so server and client agree. */
+const MIXED_ORDER: MoodTile[] = (() => {
+  const tiles = [...MOOD_TILES];
+  let seed = 7;
+  for (let i = tiles.length - 1; i > 0; i--) {
+    seed = (seed * 9301 + 49297) % 233280;
+    const j = Math.floor((seed / 233280) * (i + 1));
+    [tiles[i], tiles[j]] = [tiles[j]!, tiles[i]!];
+  }
+  return tiles;
+})();
+
+function groupedOrder(focus: number | null): MoodTile[] {
+  if (focus === null) return MOOD_TILES;
+  return [...MOOD_TILES.filter((tile) => tile.mood === focus), ...MOOD_TILES.filter((tile) => tile.mood !== focus)];
+}
+
+/**
+ * The aesthetic auto-sorting demo (PLATFORM-2.0 §20.3 "찾는다"): an unsorted pile of library frames
+ * sorts itself into mood clusters when it scrolls into view (GSAP Flip), and choosing a mood brings its
+ * tags, measured palette and the product shot made for it to the front. Under reduced motion the
+ * frames simply sit in their clusters.
+ */
+export function StudioMoodClusters({ copy }: { copy: StudioCopy }) {
+  const t = copy.moods;
+  const gridRef = useRef<HTMLUListElement>(null);
+  const flipState = useRef<Flip.FlipState | null>(null);
+  const [sorted, setSorted] = useState(false);
+  const [focus, setFocus] = useState<number | null>(null);
+  const order = sorted ? groupedOrder(focus) : MIXED_ORDER;
+
+  const change = (nextSorted: boolean, nextFocus: number | null) => {
+    const grid = gridRef.current;
+    if (grid && !prefersReducedMotion()) {
+      gsap.registerPlugin(Flip);
+      flipState.current = Flip.getState(grid.querySelectorAll('[data-mood-tile]'));
+    }
+    setSorted(nextSorted);
+    setFocus(nextFocus);
+  };
+
+  useIsomorphicLayoutEffect(() => {
+    const state = flipState.current;
+    if (!state) return;
+    flipState.current = null;
+    // Tiles stay in flow (transform-only), so the grid keeps its height while they travel.
+    Flip.from(state, { duration: 0.8, ease: 'power3.inOut', stagger: 0.012 });
+  }, [sorted, focus]);
+
+  // Sort itself once, when the top of the pile reaches the upper two thirds of the screen (tall on phones).
+  useEffect(() => {
+    const grid = gridRef.current;
+    if (!grid) return;
+    if (prefersReducedMotion()) {
+      setSorted(true);
+      return;
+    }
+    let timer = 0;
+    const observer = new IntersectionObserver(([entry]) => {
+      if (!entry?.isIntersecting) return;
+      observer.disconnect();
+      timer = window.setTimeout(() => change(true, null), 650);
+    }, { rootMargin: '0px 0px -35% 0px' });
+    observer.observe(grid);
+    return () => {
+      observer.disconnect();
+      window.clearTimeout(timer);
+    };
+  }, []);
+
+  const focused = focus === null ? null : MOOD_LIBRARY[focus]!;
+  const firstOfMood = new Set<string>(MOOD_LIBRARY.map((mood) => mood.product));
+
+  return (
+    <div data-mood-clusters data-sorted={sorted ? 'true' : 'false'} className={styles.moods}>
+      <div role="toolbar" aria-label={t.eyebrow} className={styles.moodChips}>
+        <button type="button" aria-pressed={sorted && focus === null} data-mood-chip="all" className={styles.moodChip} onClick={() => change(true, null)}>
+          {t.all}<span className={styles.moodCount}>{MOOD_TILES.length}</span>
+        </button>
+        {MOOD_LIBRARY.map((mood, index) => (
+          <button key={mood.id} type="button" aria-pressed={focus === index} data-mood-chip={mood.id} className={styles.moodChip} onClick={() => change(true, focus === index ? null : index)}>
+            <span aria-hidden="true" className={styles.moodDots}>{mood.palette.map((hex) => <span key={hex} style={{ background: hex }} />)}</span>
+            {t.names[index]}
+            <span className={styles.moodCount}>{mood.tiles.length + 1}</span>
+          </button>
+        ))}
+      </div>
+
+      <div aria-live="polite" className={styles.moodInfo} data-open={focused ? 'true' : 'false'}>
+        {focused && focus !== null && (
+          <>
+            <p className={styles.moodInfoName}>{t.names[focus]}</p>
+            <dl className={styles.moodInfoTags}>
+              <div><dt>{t.light}</dt><dd>{t.tags[focus]!.light}</dd></div>
+              <div><dt>{t.color}</dt><dd>{t.tags[focus]!.color}</dd></div>
+              <div><dt>{t.mood}</dt><dd>{t.tags[focus]!.mood}</dd></div>
+            </dl>
+            <span aria-hidden="true" className={styles.moodPalette}>{focused.palette.map((hex) => <span key={hex} style={{ background: hex }}><em>{hex}</em></span>)}</span>
+          </>
+        )}
+      </div>
+
+      <ul ref={gridRef} className={styles.moodGrid}>
+        {order.map((tile) => {
+          const mood = MOOD_LIBRARY[tile.mood]!;
+          const feature = focus === tile.mood && tile.product;
+          const dim = focus !== null && focus !== tile.mood;
+          return (
+            <li
+              key={tile.key}
+              data-mood-tile={mood.id}
+              data-flip-id={tile.key}
+              data-dim={dim ? 'true' : undefined}
+              className={`${styles.moodTile} ${feature ? styles.moodFeature : ''}`}
+            >
+              <img src={studio(tile.key)} alt="" width={360} height={450} loading="lazy" decoding="async" />
+              {sorted && focus === null && firstOfMood.has(tile.key) && (
+                <span className={styles.moodBadge}><span aria-hidden="true" style={{ background: mood.palette[0] }} />{t.names[tile.mood]}</span>
+              )}
+              {feature && <span className={styles.moodProduct}>{t.product}</span>}
+            </li>
+          );
+        })}
+      </ul>
+      <p className={styles.moodNote}>{t.note}</p>
     </div>
   );
 }

@@ -4,7 +4,7 @@ import { getDictionary } from '@/lib/i18n/dictionaries';
 import { MarketingNav, MarketingFooter } from '@/components/marketing/chrome';
 import { BrandInquiryDialog } from '@/components/campaigns/brand-inquiry-dialog';
 import { BrandFormatExplorer, BrandCraftShowcase, HeroCinemaGrid, MorphicFilmPair } from '@/components/campaigns/brand-experience';
-import { StudioContrast, StudioHero, StudioMemory, StudioPipelineSection, StudioSplit } from '@/components/brand-studio/studio-sections';
+import { StudioContrast, StudioHero, StudioMemory, StudioMoods, StudioPipelineSection, StudioSplit } from '@/components/brand-studio/studio-sections';
 import { CAMPAIGN_REEL } from '@/lib/campaigns/showreel';
 import { BrandCustomerStory } from '@/components/campaigns/brand-customer-story';
 import { brandsHref, brandEnquiryHref, BRAND_INQUIRY_ENDPOINT } from '@/lib/campaigns/links';
@@ -49,6 +49,7 @@ export default async function BrandsPage({ params }: Props) {
     <main id="main" data-brand-landing className="overflow-clip bg-white text-[#141414] [word-break:keep-all]">
       <StudioHero copy={t.studio} locale={locale} />
       <StudioSplit copy={t.studio} />
+      <StudioMoods copy={t.studio} />
       <StudioPipelineSection copy={t.studio} />
       <StudioMemory copy={t.studio} />
 

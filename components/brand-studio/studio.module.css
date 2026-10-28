@@ -304,7 +304,7 @@
 
 .tagPanel { display: grid; gap: 16px; padding: 16px; }
 @media (min-width: 640px) { .tagPanel { grid-template-columns: 1.15fr 1fr; } }
-.tagImage { position: relative; aspect-ratio: 16 / 10; border-radius: 10px; overflow: hidden; }
+.tagImage { position: relative; aspect-ratio: 4 / 5; max-height: 420px; border-radius: 10px; overflow: hidden; }
 .tagImage img { width: 100%; height: 100%; object-fit: cover; }
 .box { position: absolute; border: 1.5px solid var(--st-red); border-radius: 6px; box-shadow: 0 0 0 9999px rgb(0 0 0 / 0.04); }
 .boxLabel { position: absolute; left: -1.5px; top: -22px; padding: 2px 6px; border-radius: 5px; background: var(--st-red); color: #fff; font-size: 10px; font-weight: 600; white-space: nowrap; }
@@ -334,10 +334,6 @@
 .variantMedia { aspect-ratio: 4 / 5; border-radius: 10px; overflow: hidden; }
 .variantMedia img { width: 100%; height: 100%; object-fit: cover; }
 .variantLabel { font-size: 11px; font-weight: 600; color: var(--st-body); }
-.v1 img { filter: none; }
-.v2 img { filter: sepia(0.45) saturate(1.25) hue-rotate(-14deg) contrast(1.05); }
-.v3 img { filter: brightness(0.62) saturate(1.3) hue-rotate(-22deg) contrast(1.15); }
-.v4 img { filter: brightness(1.12) saturate(0.55) contrast(0.96); }
 .checks { display: flex; flex-wrap: wrap; gap: 8px; }
 .check { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 500; color: var(--st-ink); }
 .checkMark { display: grid; place-items: center; width: 16px; height: 16px; border-radius: 999px; background: var(--st-red); color: #fff; font-size: 10px; }
@@ -371,6 +367,65 @@
 .contrastItemSkip { color: var(--st-muted); text-decoration: line-through; text-decoration-color: rgb(10 10 10 / 0.25); }
 .tick { display: grid; place-items: center; width: 20px; height: 20px; border-radius: 999px; background: var(--st-ink); color: #fff; font-size: 11px; flex: none; }
 .cross { display: grid; place-items: center; width: 20px; height: 20px; border-radius: 999px; border: 1px solid var(--st-line); color: var(--st-muted); font-size: 11px; flex: none; }
+
+/* ---------- Mood clusters (aesthetic auto-sorting) ---------- */
+.moods { margin-top: 44px; display: grid; gap: 16px; }
+.moodChips { display: flex; flex-wrap: wrap; gap: 8px; }
+.moodChip {
+  display: inline-flex; align-items: center; gap: 8px; min-height: 36px; padding: 0 14px;
+  border-radius: 999px; border: 1px solid var(--st-line); background: #fff;
+  font-size: 13px; font-weight: 600; letter-spacing: -0.01em; color: var(--st-ink); cursor: pointer; white-space: nowrap; flex: none;
+  transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease;
+}
+.moodChip:hover { border-color: rgb(10 10 10 / 0.24); }
+.moodChip[aria-pressed='true'] { background: var(--st-ink); border-color: var(--st-ink); color: #fff; }
+.moodChip[aria-pressed='true'] .moodCount { color: rgb(255 255 255 / 0.6); }
+.moodCount { font-family: var(--font-mono); font-size: 11px; font-weight: 500; color: var(--st-muted); }
+.moodDots { display: inline-flex; }
+.moodDots span { width: 10px; height: 10px; border-radius: 999px; margin-left: -3px; box-shadow: 0 0 0 1.5px #fff; }
+.moodDots span:first-child { margin-left: 0; }
+.moodInfo {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 12px 28px; min-height: 0; overflow: hidden;
+  padding: 0 18px; border-radius: 16px; background: var(--st-glass); border: 1px solid transparent;
+  backdrop-filter: blur(16px); max-height: 0; opacity: 0;
+  transition: max-height 420ms ease, opacity 300ms ease, padding 300ms ease, border-color 300ms ease;
+}
+.moodInfo[data-open='true'] { max-height: 160px; opacity: 1; padding: 14px 18px; border-color: var(--st-glass-line); box-shadow: var(--st-shadow); }
+.moodInfoName { font-size: 18px; font-weight: 650; letter-spacing: -0.03em; }
+.moodInfoTags { display: flex; flex-wrap: wrap; gap: 6px 20px; font-size: 13px; }
+.moodInfoTags div { display: flex; gap: 8px; }
+.moodInfoTags dt { color: var(--st-muted); font-weight: 500; }
+.moodInfoTags dd { color: var(--st-ink); font-weight: 600; }
+.moodPalette { display: inline-flex; margin-left: auto; overflow: hidden; border-radius: 10px; border: 1px solid var(--st-glass-line); }
+.moodPalette span { display: grid; place-items: end start; width: 64px; height: 40px; padding: 4px 6px; }
+.moodPalette em { font-style: normal; font-family: var(--font-mono); font-size: 9px; color: #fff; mix-blend-mode: difference; }
+.moodGrid { position: relative; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); grid-auto-flow: dense; gap: 8px; }
+@media (min-width: 1100px) { .moodGrid { grid-template-columns: repeat(9, minmax(0, 1fr)); } }
+.moodTile { position: relative; aspect-ratio: 4 / 5; overflow: hidden; border-radius: 10px; background: var(--st-card); transition: opacity 420ms ease, filter 420ms ease; }
+.moodTile img { width: 100%; height: 100%; object-fit: cover; }
+.moodTile[data-dim='true'] { opacity: 0.22; filter: grayscale(0.6); }
+.moodFeature { grid-column: span 2; grid-row: span 2; box-shadow: 0 24px 60px -24px rgb(16 24 40 / 0.45); }
+.moodBadge {
+  position: absolute; left: 6px; top: 6px; display: inline-flex; align-items: center; gap: 5px; max-width: calc(100% - 12px);
+  padding: 3px 7px; border-radius: 6px; background: rgb(255 255 255 / 0.88); backdrop-filter: blur(6px);
+  font-size: 10px; font-weight: 650; color: var(--st-ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  animation: appear 420ms ease both;
+}
+.moodBadge span { width: 7px; height: 7px; border-radius: 999px; flex: none; }
+.moodProduct {
+  position: absolute; left: 10px; bottom: 10px; padding: 4px 9px; border-radius: 999px;
+  background: var(--st-red); color: #fff; font-size: 11px; font-weight: 650; animation: appear 420ms ease both;
+}
+.moodNote { font-size: 12px; color: var(--st-muted); }
+@media (max-width: 767px) {
+  .moodGrid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+  .moodPalette { margin-left: 0; }
+  .moodChips { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin-inline: -16px; padding-inline: 16px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .moodTile, .moodInfo { transition: none; }
+  .moodBadge, .moodProduct { animation: none; }
+}
 
 /* ---------- Mobile ---------- */
 @media (max-width: 767px) {

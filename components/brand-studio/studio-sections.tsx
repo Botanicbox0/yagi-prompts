@@ -8,14 +8,15 @@ import type { Dictionary } from '@/lib/i18n/dictionaries';
 import { brandEnquiryHref } from '@/lib/campaigns/links';
 import { Reveal } from '@/components/motion/reveal';
 import { RevealGrid } from '@/components/motion/reveal-grid';
-import { StudioHeroStage, StudioPipeline } from './studio-interactive';
+import { StudioHeroStage, StudioMoodClusters, StudioPipeline } from './studio-interactive';
 import styles from './studio.module.css';
 
 type StudioCopy = Dictionary['brandLanding']['studio'];
 type Locale = 'ko' | 'en';
 
-const MEMORY_SWATCHES = ['#ED1E1E', '#141414', '#F5F5F6', '#FAD204'] as const;
-const MEMORY_THUMBS = ['/reel/brands/tea-editorial.jpg', '/reel/campaigns/beauty-rose.jpg', '/reel/brands/city-fashion.jpg'] as const;
+/** The example brand's palette, measured from its library: walnut, skin-lit amber, smoked glass, rose. */
+const MEMORY_SWATCHES = ['#5D3B27', '#D0AA98', '#141C0D', '#DBCCDA'] as const;
+const MEMORY_THUMBS = ['/reel/studio/smoke-1.webp', '/reel/studio/flora-1.webp', '/reel/studio/cream-1.webp'] as const;
 /** The personal layer's picture: the ratio this person keeps choosing (matches "4:5 first" in the copy). */
 const MEMORY_RATIOS = [
   { label: '4:5', box: '4 / 5', preferred: true },
@@ -90,6 +91,22 @@ export function StudioSplit({ copy }: { copy: StudioCopy }) {
             })}
           </ol></RevealGrid>
         </div>
+      </div>
+    </section>
+  );
+}
+
+export function StudioMoods({ copy }: { copy: StudioCopy }) {
+  return (
+    <section id="moods" data-section data-theme="light" data-studio-moods className={`section scroll-mt-24 ${styles.root} ${styles.section}`} style={{ paddingTop: 0 }}>
+      <div className="audience-shell">
+        <div className={styles.sectionHead}>
+          <p className={styles.eyebrow}>{copy.moods.eyebrow}</p>
+          <Reveal lines={copy.moods.title.split('\n')} className={`${styles.title} ${styles.sectionTitle}`} lineClassName="block" />
+          <p className={`${styles.lede} ${styles.sectionBody}`}>{copy.moods.body}</p>
+          <div><EarlyAccess copy={copy} /></div>
+        </div>
+        <StudioMoodClusters copy={copy} />
       </div>
     </section>
   );
