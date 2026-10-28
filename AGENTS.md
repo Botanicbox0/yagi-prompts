@@ -55,6 +55,7 @@ npm run sweep:anon             # 익명 방문자 스윕 1,000+ 체크, "SWEEP P
 - 문안은 전부 `messages/ko.ts`·`messages/en.ts` 사전에 둔다. 하드코딩 금지. `tests/i18n/dictionary.test.ts`가 키 누락과 "영어를 한국어 칸에 복사"를 잡는다.
 - 화면 검증용 마커는 `data-*` 속성(`data-campaign-hero`, `data-brands` 등). 스윕(`scripts/sweep-anon.ts`)이 이 마커로 페이지를 확인한다. 섹션을 바꾸면 스윕도 같이 고친다.
 - 관리자 동작은 `lib/admin/operations.ts` 레지스트리에 등록된 오퍼레이션으로만 한다(`/admin/do`).
+- **Google Play 앱(TWA)은 구매 없는 앱이다.** 결제·구매로 이어지는 요소(가격, 결제·구독 버튼, 결제 링크, 브랜드 결제 입구)에는 `data-store-hide`를 붙이고, 결제 위젯을 띄우는 페이지는 `StoreShellGate`로 감싼다. 앱 안에서 하나라도 보이면 Play 결제 정책 위반이다. 새 결제 진입점을 만들면 `tests/pwa/store-shell.test.tsx`나 스윕에 확인을 추가한다. 판별 방식과 숨김 목록은 `docs/APP-STORE-LAUNCH.md` §2.
 - 테스트는 vitest. 새 기능은 실패하는 테스트 → 구현 → 통과 순서로. 기존 통과 테스트를 깨뜨리지 않는다.
 - 렌더 파이프라인(`lib/renders/*`)과 인물 자산(`lib/identity/*`, `lib/ark/*`)은 안전 장치다. **얼굴 검증·제공사 검수를 우회하는 코드는 어떤 이유로도 쓰지 않는다.**
 
