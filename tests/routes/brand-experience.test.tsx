@@ -35,8 +35,9 @@ describe('the brand page shows the service before asking visitors to enquire', (
     expect(html.match(/data-hero-output=/g)).toHaveLength(5);
     expect(html).toContain('브랜드는 그대로');
     // Why not generic AI: three real same-product pairs, no competitor named.
-    expect(html.match(/data-contrast-pair/g)).toHaveLength(3);
-    expect(html.match(/data-contrast-pillar/g)).toHaveLength(3);
+    expect(html.match(/data-contrast-pair=/g)).toHaveLength(3);
+    expect(html).toContain('data-brand-markets');
+    expect(html.match(/data-contrast-pillar=/g)).toHaveLength(3);
     expect(html).toContain('절대 규칙');
     // Asset studio: one brand kit, eight products, every scene and clip in the initial HTML.
     expect(html).toContain('data-brand-kit');

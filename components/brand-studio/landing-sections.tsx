@@ -222,7 +222,10 @@ export function LandingCampaign({ copy, trust, children }: { copy: Copy; trust: 
   return (
     <section id="campaign" data-section data-theme="light" data-campaign-scale className={`scroll-mt-20 ${styles.section} ${styles.surface}`}>
       <div className="audience-shell">
-        <Head eyebrow={c.eyebrow} status={<span data-early-access="live" className={styles.statusTag}>{c.live}</span>} title={c.title} body={c.body} />
+        {/* The body names the two markets the campaign runs in at once (Korea and Japan). */}
+        <div data-brand-markets>
+          <Head eyebrow={c.eyebrow} status={<span data-early-access="live" className={styles.statusTag}>{c.live}</span>} title={c.title} body={c.body} />
+        </div>
         <ul data-studio-feed className={styles.mosaic}>
           {MOSAIC.map((item) => (
             <li key={item.id} data-feed-post={item.id}>

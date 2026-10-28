@@ -1335,7 +1335,7 @@ async function sweepCampaigns(): Promise<void> {
       expectPresent(`/${locale}/brands carries ${marker}`, brand.body, marker);
     }
     expectEqual(`/${locale}/brands hero shows five outputs of one product`, (brand.body.match(/data-hero-output=/g) ?? []).length, 5);
-    expectEqual(`/${locale}/brands compares three same-product pairs`, (brand.body.match(/data-contrast-pair/g) ?? []).length, 3);
+    expectEqual(`/${locale}/brands compares three same-product pairs`, (brand.body.match(/data-contrast-pair=/g) ?? []).length, 3);
     expectEqual(`/${locale}/brands shows the eight-product range`, (brand.body.match(/data-range-product=/g) ?? []).length, 8);
     expectEqual(`/${locale}/brands ships every scene in the HTML`, (brand.body.match(/data-asset-scene=/g) ?? []).length, 8);
     expectEqual(`/${locale}/brands ships every clip in the HTML`, (brand.body.match(/data-asset-clip=/g) ?? []).length, 4);
