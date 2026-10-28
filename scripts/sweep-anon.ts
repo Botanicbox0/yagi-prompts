@@ -1327,17 +1327,23 @@ async function sweepCampaigns(): Promise<void> {
     expectPresent(`/${locale}/campaigns preserves old brand bookmarks`, listing.body, 'data-legacy-brand-entry');
     const brand = await get(`/${locale}/brands`);
     expectEqual(`/${locale}/brands renders 200`, brand.status, 200);
-    for (const marker of ['data-campaign-hero', 'data-campaign-reel', 'data-campaign-principles', 'data-campaign-proof', 'data-brands', 'data-case-study', 'data-customer-story', 'data-audience-switch']) {
+    for (const marker of ['data-campaign-hero', 'data-campaign-proof', 'data-brands', 'data-case-study', 'data-customer-story', 'data-audience-switch', 'data-brand-scale-pillars']) {
       expectPresent(`/${locale}/brands carries ${marker}`, brand.body, marker);
     }
-    for (const marker of ['data-studio-hero', 'data-studio-orbit', 'data-mood-clusters', 'data-studio-pipeline', 'data-studio-vto', 'data-studio-feed']) {
-      expectPresent(`/${locale}/brands asset studio carries ${marker}`, brand.body, marker);
+    // 2026-10-29 landing: one locked product, why-not-generic, asset studio, creator campaign, production.
+    for (const marker of ['data-studio-hero', 'data-hero-lock', 'data-studio-contrast', 'data-studio-assets', 'data-brand-kit', 'data-studio-vto', 'data-campaign-scale', 'data-studio-feed', 'data-production-service']) {
+      expectPresent(`/${locale}/brands carries ${marker}`, brand.body, marker);
     }
-    expectEqual(`/${locale}/brands orbit holds one bottle per mood`, (brand.body.match(/data-orbit-bottle=/g) ?? []).length, 8);
-    expectEqual(`/${locale}/brands mood library ships all 41 frames`, (brand.body.match(/data-mood-tile=/g) ?? []).length, 41);
+    expectEqual(`/${locale}/brands hero shows five outputs of one product`, (brand.body.match(/data-hero-output=/g) ?? []).length, 5);
+    expectEqual(`/${locale}/brands compares three same-product pairs`, (brand.body.match(/data-contrast-pair/g) ?? []).length, 3);
+    expectEqual(`/${locale}/brands shows the eight-product range`, (brand.body.match(/data-range-product=/g) ?? []).length, 8);
+    expectEqual(`/${locale}/brands ships every scene in the HTML`, (brand.body.match(/data-asset-scene=/g) ?? []).length, 8);
+    expectEqual(`/${locale}/brands ships every clip in the HTML`, (brand.body.match(/data-asset-clip=/g) ?? []).length, 4);
+    for (const gone of ['data-studio-orbit', 'data-mood-tile', 'data-format-select', 'data-service-example']) {
+      expectAbsent(`/${locale}/brands retired ${gone}`, brand.body, gone);
+    }
     expectEqual(`/${locale}/brands never shows the retired client-packaging frames`, (brand.body.match(/reel\/studio\/[a-z]+-yagi/g) ?? []).length, 0);
-    expectEqual(`/${locale}/brands offers three format films`, (brand.body.match(/data-format-select=/g) ?? []).length, 3);
-    expectEqual(`/${locale}/brands shows three service examples`, (brand.body.match(/data-service-example=/g) ?? []).length, 3);
+    expectEqual(`/${locale}/brands uses no YAGI red`, (brand.body.match(/ed1e1e/gi) ?? []).length, 0);
     expectAbsent(`/${locale}/brands has no hidden service tabs`, brand.body, 'data-use-case-select');
     expectAbsent(`/${locale}/brands has no misplaced workspace card`, brand.body, 'data-brand-workspace-entry');
     expectEqual(`/${locale}/brands groups campaigns into one customer story`, (brand.body.match(/data-customer-story=/g) ?? []).length, 1);

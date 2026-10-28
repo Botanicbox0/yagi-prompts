@@ -378,6 +378,130 @@ export const en = {
     "campaignCta": "Explore campaigns"
   },
   brandLanding: {
+    "landing": {
+      "hero": {
+        "eyebrow": "TWINGS brand studio",
+        "title": "Your brand, unchanged.\nProduct shots to video ads",
+        "body": "One product photo becomes product shots and video ads with your logo and colours intact. Dozens of creators then remake the ad with their own faces.",
+        "cta": "Book a demo",
+        "secondary": "See campaign results",
+        "input": "1 uploaded photo",
+        "lock": "Logo · colour · wording locked",
+        "outputs": [
+          "Product shot",
+          "Texture close-up",
+          "In hand",
+          "Model shot",
+          "15-second video ad"
+        ],
+        "image": "Image",
+        "video": "Video",
+        "proof": "Morphic creator campaign",
+        "proofFigures": "9 films · 2M+ views · 300+ organic posts",
+        "note": "Real output of the TWINGS template “Virtual beauty ad”. The model is a virtual person.",
+        "inputAlt": "YAGI lip gloss product photo, closed and open"
+      },
+      "contrast": {
+        "eyebrow": "AI that understands media",
+        "title": "Plug AI in as-is,\nand you get this",
+        "body": "Same product, same generation engine, real output. On the left it was generated as-is; on the right, light and material were set and the rules checked.",
+        "raw": "Generated as-is",
+        "ours": "TWINGS",
+        "pairs": [
+          {
+            "label": "Logo",
+            "raw": "The mark turned into a letter y",
+            "ours": "Back to the real mark after the rule check"
+          },
+          {
+            "label": "People",
+            "raw": "Smooth, plastic skin",
+            "ours": "Skin with pores and stray hairs"
+          },
+          {
+            "label": "Light",
+            "raw": "One-line prompt, a stock wooden table",
+            "ours": "Light direction, lens and material set per shot"
+          }
+        ],
+        "pillars": [
+          {
+            "title": "Light and material",
+            "body": "Light direction, lens and surface material are set per shot."
+          },
+          {
+            "title": "Brand memory",
+            "body": "Logo, palette and past campaigns stay on file for each brand."
+          },
+          {
+            "title": "Hard rules",
+            "body": "Logo shape, claims wording and model consent are checked on every output."
+          }
+        ]
+      },
+      "assets": {
+        "eyebrow": "Asset studio",
+        "title": "One brand,\neight products",
+        "body": "Eight products made with the same mark and the same rules. Product and try-on shots turn straight into video.",
+        "kitTitle": "Brand kit",
+        "kitMark": "Mark",
+        "kitPalette": "Palette",
+        "kitRules": "Hard rules",
+        "rules": [
+          "Mark front and centre, fixed size",
+          "Colours from the palette only",
+          "No efficacy or medical claims",
+          "Only consented faces"
+        ],
+        "range": "One brand, eight products",
+        "products": [
+          "Eau de parfum",
+          "Cream blush",
+          "Perfume oil",
+          "Solid perfume",
+          "Lip oil",
+          "Serum",
+          "Body mist",
+          "Lip & cheek balm"
+        ],
+        "tabs": [
+          "Product shots",
+          "Try-on",
+          "Video"
+        ],
+        "tabNotes": [
+          "Packshots moved into mood scenes. The logo is checked again in every scene.",
+          "One garment photo and a virtual model make lookbook and editorial cuts.",
+          "Clips come straight from the finished shots."
+        ],
+        "clipLabels": [
+          "Product shot → 5-second clip",
+          "Product shot → 5-second clip",
+          "Product shot → 5-second clip",
+          "15-second video ad"
+        ],
+        "note": "Example screen. Products and models are fictional.",
+        "early": "Early access"
+      },
+      "campaign": {
+        "eyebrow": "Creator campaigns",
+        "title": "One ad,\ndozens of faces",
+        "body": "YAGI makes one ad format, and each creator gets a version with their own face to post on their own channel. Korea and Japan launch together.",
+        "sameFormat": "Same format · different face",
+        "virtual": "Virtual person example",
+        "note": "Some examples use virtual people. Real campaigns only use creators who have verified and consented.",
+        "live": "Live"
+      },
+      "production": {
+        "eyebrow": "YAGI production",
+        "title": "Want the whole film made for you?",
+        "body": "YAGI has worked with fashion and beauty brands. You can commission a brand film, or visuals alone."
+      },
+      "closing": {
+        "title": "Start with one product photo",
+        "body": "Tell us the asset or campaign you need."
+      }
+    },
     "moatEyebrow": "HOW IT WORKS",
     "moat1Title": "Bespoke format",
     "moat1Body": "We create a custom ad format built around your product and brand.",
@@ -396,169 +520,7 @@ export const en = {
     "secondaryCta": "See campaign results",
     "definition": "TWINGS is a brand campaign studio by YAGI.",
     "studio": {
-      "moods": {
-        "eyebrow": "01 Sort",
-        "title": "41 mixed cuts, eight moods",
-        "body": "Cuts with similar light and color sit in the same group. Open a folder and the bottle made for that mood, with its product shots, comes to the front.",
-        "all": "All",
-        "product": "Product shot for this mood",
-        "light": "Light",
-        "color": "Color",
-        "mood": "Mood",
-        "count": "cuts",
-        "note": "Example screen, built from part of a fragrance campaign library YAGI produced.",
-        "names": [
-          "Amber light",
-          "Rose drape",
-          "Wood & smoke",
-          "Cream & grain",
-          "Night florals",
-          "Botanical study",
-          "Mono silhouette",
-          "Red object"
-        ],
-        "tags": [
-          {
-            "light": "Color gels · backlit streaks",
-            "color": "Cobalt · amber",
-            "mood": "Cinematic night"
-          },
-          {
-            "light": "Soft diffused",
-            "color": "Blush · rose",
-            "mood": "Stillness"
-          },
-          {
-            "light": "Low side light",
-            "color": "Taupe · charcoal",
-            "mood": "Smoke, resin"
-          },
-          {
-            "light": "High-key",
-            "color": "Ivory · travertine",
-            "mood": "Texture you can touch"
-          },
-          {
-            "light": "Rim light",
-            "color": "Black · cream",
-            "mood": "White florals"
-          },
-          {
-            "light": "High-key · long shadows",
-            "color": "Sage · grey",
-            "mood": "Dried specimens"
-          },
-          {
-            "light": "Black and white · film grain",
-            "color": "Greyscale",
-            "mood": "Movement"
-          },
-          {
-            "light": "Soft window light",
-            "color": "Cherry · crimson",
-            "mood": "Juice"
-          }
-        ]
-      },
-      "heroEyebrow": "TWINGS brand asset studio",
-      "heroTitle": "Your next campaign\nstarts in the library",
-      "heroBody": "The work that bounced between a drive and a design tool happens on one screen. Finished cuts go out on real creators’ own feeds.",
-      "heroCta": "Book a demo",
-      "heroSecondary": "Live campaigns",
-      "earlyAccess": "Early access",
-      "live": "Live",
       "beta": "Beta",
-      "example": "Example screen",
-      "earlyNote": "Creator campaigns run today. Everything else is in early access.",
-      "stage": {
-        "search": "cuts with smoke"
-      },
-      "pipelineEyebrow": "02 Search · generate",
-      "pipelineTitle": "Find it without the file name",
-      "pipelineBody": "Uploads get color codes, light direction, even the mood word your team would use. Type a scene; if no cut matches, generate one from the product photos already in the library.",
-      "tabs": [
-        {
-          "label": "Tags",
-          "title": "Tagged on upload",
-          "body": "Down to the mood words your team actually uses."
-        },
-        {
-          "label": "Search",
-          "title": "Search in sentences",
-          "body": "By what’s in the picture, not by what the file is called."
-        },
-        {
-          "label": "Generate",
-          "title": "Same bottle, new mood",
-          "body": "Generation starts from your product photos. Results are checked against your brand rules before they appear."
-        }
-      ],
-      "tagGroups": {
-        "object": "Object",
-        "color": "Color",
-        "light": "Light",
-        "framing": "Framing",
-        "mood": "Mood"
-      },
-      "tagValues": {
-        "object": "Fragrance bottle · brass cap",
-        "light": "Color gels · backlit streaks",
-        "framing": "Low angle · reflection",
-        "mood": [
-          "Cinematic",
-          "Amber",
-          "Night"
-        ]
-      },
-      "searchResult": "3 cuts",
-      "makePrompt": "Same bottle, just change the mood",
-      "makeChecks": [
-        "Yagi signature intact",
-        "Bottle and cap unchanged",
-        "Mood matched"
-      ],
-      "makeVariants": [
-        "Original",
-        "Rose drape",
-        "Botanical",
-        "Mono silhouette"
-      ],
-      "memoryEyebrow": "03 Memory",
-      "memoryTitle": "Set it once",
-      "memoryBody": "Brand rules come first, then campaign, then personal. A campaign rule never overrides a brand rule.",
-      "memory": [
-        {
-          "title": "Brand",
-          "body": "Logo, palette, voice. Fixed across every campaign.",
-          "items": [
-            "Signature clear space 1×",
-            "Signature on the front only",
-            "No exclamation marks"
-          ]
-        },
-        {
-          "title": "Campaign",
-          "body": "Moodboard and key line, scoped to one campaign.",
-          "items": [
-            "Professionals in their early 30s",
-            "“The scent that stays after work”",
-            "Vertical 4:5 first"
-          ]
-        },
-        {
-          "title": "You",
-          "body": "The ratios and framing you pick, the notes you leave.",
-          "items": [
-            "Product on the left third",
-            "Slightly warmer skin",
-            "Short captions"
-          ]
-        }
-      ],
-      "memoryLoop": {
-        "label": "After posting",
-        "body": "When a campaign ends, its best-performing cuts and lines are saved to the next campaign’s memory."
-      },
       "vto": {
         "eyebrow": "04 Try-on",
         "title": "Try on anywhere",
@@ -600,11 +562,6 @@ export const en = {
           "Rose drape"
         ],
         "note": "Example screen. The model is a virtual person."
-      },
-      "spreadEyebrow": "05 Spread · live",
-      "spreadFeed": {
-        "title": "The same bottle on eight feeds",
-        "note": "Example screen with virtual people. Real campaigns are made with creators who consent to the use of their own face."
       }
     },
     "heroCinema": {
