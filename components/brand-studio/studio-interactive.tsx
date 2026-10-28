@@ -10,6 +10,7 @@ import gsap from 'gsap';
 import { Flip } from 'gsap/Flip';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import type { Dictionary } from '@/lib/i18n/dictionaries';
+import { studioSrc, type LandingMedia } from '@/lib/content/landing-media';
 import { useIsomorphicLayoutEffect } from '@/components/motion/use-isomorphic-layout-effect';
 import styles from './studio.module.css';
 
@@ -18,24 +19,26 @@ type Vars = CSSProperties & Record<`--${string}`, string | number>;
 
 /**
  * The example library: a fragrance campaign YAGI produced, with its product shots regenerated around
- * an original YAGI bottle (the client's packaging never appears). Files live in /reel/studio/.
+ * an original YAGI bottle (the client's packaging never appears). Files live in /reel/studio/ and
+ * every one is a landing media slot (lib/content/landing-media.ts): the constants below name files,
+ * and `studioSrc(media, name)` turns a name into the override the admin set or the file itself.
  */
-const studio = (name: string) => `/reel/studio/${name}.webp`;
+type Media = { media?: LandingMedia };
 
 /** The search demo: three frames that really show smoke, three that do not. */
 const SEARCH_CELLS = [
-  { src: studio('p-smoke-1'), hit: true },
-  { src: studio('cream-1'), hit: false },
-  { src: studio('smoke-1'), hit: true },
-  { src: studio('flora-1'), hit: false },
-  { src: studio('smoke-2'), hit: true },
-  { src: studio('red-2'), hit: false },
+  { name: 'p-smoke-1', hit: true },
+  { name: 'cream-1', hit: false },
+  { name: 'smoke-1', hit: true },
+  { name: 'flora-1', hit: false },
+  { name: 'smoke-2', hit: true },
+  { name: 'red-2', hit: false },
 ] as const;
 
 /** Dominant colors measured from p-amber-1.webp (median-cut quantize), not invented. */
 const SWATCHES = ['#060F07', '#51240D', '#274586'] as const;
 /** One bottle, regenerated in other moods: the cut-out, then three moods. */
-const VARIANTS = [studio('bottle-amber'), studio('x-drape'), studio('x-botanic'), studio('x-mono')] as const;
+const VARIANTS = ['bottle-amber', 'x-drape', 'x-botanic', 'x-mono'] as const;
 
 /**
  * Mood clusters for the auto-sorting demo. Every mood has its own bottle (one family, eight forms),
@@ -178,7 +181,7 @@ function orbitStyle(index: number, count: number, angle: number, rx: number, ry:
   };
 }
 
-export function StudioHeroOrbit({ copy }: { copy: StudioCopy }) {
+export function StudioHeroOrbit({ copy, media }: { copy: StudioCopy } & Media) {
   const ringRef = useRef<HTMLDivElement>(null);
   const [webgl, setWebgl] = useState(false);
   const markReady = useRef(() => setWebgl(true)).current;
@@ -252,7 +255,7 @@ export function StudioHeroOrbit({ copy }: { copy: StudioCopy }) {
             // Server render: the ring at rest, so nothing jumps when the loop starts.
             style={orbitStyle(index, count, 0, 440, 70)}
           >
-            <img src={studio(mood.bottle)} alt="" width={260} height={325} loading="eager" fetchPriority={index < 3 ? 'high' : 'auto'} decoding="async" />
+            <img src={studioSrc(media, mood.bottle)} alt="" width={260} height={325} loading="eager" fetchPriority={index < 3 ? 'high' : 'auto'} decoding="async" />
             <span className={styles.orbitLabel}>{copy.moods.names[index]}</span>
           </a>
         ))}
@@ -261,7 +264,7 @@ export function StudioHeroOrbit({ copy }: { copy: StudioCopy }) {
   );
 }
 
-export function StudioPipeline({ copy }: { copy: StudioCopy }) {
+export function StudioPipeline({ copy, media }: { copy: StudioCopy } & Media) {
   const [active, setActive] = useState(0);
   const [auto, setAuto] = useState(true);
   const [inView, setInView] = useState(false);
@@ -348,9 +351,9 @@ export function StudioPipeline({ copy }: { copy: StudioCopy }) {
                 <span className={styles.panelTitle}>{tab.title}</span>
                 <span className={styles.example}>{copy.example}</span>
               </div>
-              {id === 'tag' && <TagPanel copy={copy} />}
-              {id === 'search' && <SearchPanel copy={copy} />}
-              {id === 'make' && <MakePanel copy={copy} />}
+              {id === 'tag' && <TagPanel copy={copy} media={media} />}
+              {id === 'search' && <SearchPanel copy={copy} media={media} />}
+              {id === 'make' && <MakePanel copy={copy} media={media} />}
             </div>
           );
         })}
@@ -359,13 +362,13 @@ export function StudioPipeline({ copy }: { copy: StudioCopy }) {
   );
 }
 
-function TagPanel({ copy }: { copy: StudioCopy }) {
+function TagPanel({ copy, media }: { copy: StudioCopy } & Media) {
   const groups = copy.tagGroups;
   const values = copy.tagValues;
   return (
     <div className={styles.tagPanel}>
       <div className={styles.tagImage}>
-        <img src={studio('p-amber-1')} alt="" width={600} height={750} loading="lazy" decoding="async" />
+        <img src={studioSrc(media, 'p-amber-1')} alt="" width={600} height={750} loading="lazy" decoding="async" />
         <span aria-hidden="true" className={`${styles.box} ${styles.appear}`} style={{ left: '20%', top: '22%', width: '56%', height: '56%', '--i': 1 } as Vars}>
           <span className={styles.boxLabel}>{values.object}</span>
         </span>
@@ -402,7 +405,7 @@ function TagPanel({ copy }: { copy: StudioCopy }) {
   );
 }
 
-function SearchPanel({ copy }: { copy: StudioCopy }) {
+function SearchPanel({ copy, media }: { copy: StudioCopy } & Media) {
   return (
     <div className={styles.searchPanel}>
       <div className={styles.searchBar}>
@@ -413,8 +416,8 @@ function SearchPanel({ copy }: { copy: StudioCopy }) {
       </div>
       <ul className={styles.grid}>
         {SEARCH_CELLS.map((cell, index) => (
-          <li key={cell.src} data-search-hit={cell.hit ? 'true' : 'false'} className={`${styles.cell} ${styles.appear} ${cell.hit ? styles.cellHit : styles.cellMiss}`} style={{ '--i': index } as Vars}>
-            <img src={cell.src} alt="" width={240} height={240} loading="lazy" decoding="async" />
+          <li key={cell.name} data-search-hit={cell.hit ? 'true' : 'false'} className={`${styles.cell} ${styles.appear} ${cell.hit ? styles.cellHit : styles.cellMiss}`} style={{ '--i': index } as Vars}>
+            <img src={studioSrc(media, cell.name)} alt="" width={240} height={240} loading="lazy" decoding="async" />
             {cell.hit && <span aria-hidden="true" className={styles.hitMark}>✓</span>}
           </li>
         ))}
@@ -423,7 +426,7 @@ function SearchPanel({ copy }: { copy: StudioCopy }) {
   );
 }
 
-function MakePanel({ copy }: { copy: StudioCopy }) {
+function MakePanel({ copy, media }: { copy: StudioCopy } & Media) {
   return (
     <div className={styles.makePanel}>
       <div className={styles.prompt}>
@@ -433,7 +436,7 @@ function MakePanel({ copy }: { copy: StudioCopy }) {
       <ul className={styles.variants}>
         {copy.makeVariants.map((label, index) => (
           <li key={label} className={`${styles.variant} ${styles.appear}`} style={{ '--i': index } as Vars}>
-            <div className={styles.variantMedia}><img src={VARIANTS[index]} alt="" width={240} height={300} loading="lazy" decoding="async" /></div>
+            <div className={styles.variantMedia}><img src={studioSrc(media, VARIANTS[index]!)} alt="" width={240} height={300} loading="lazy" decoding="async" /></div>
             <span className={styles.variantLabel}>{label}</span>
           </li>
         ))}
@@ -478,7 +481,7 @@ function groupedOrder(focus: number | null): MoodTile[] {
  * tags, measured palette and the product shot made for it to the front. Under reduced motion the
  * frames simply sit in their clusters.
  */
-export function StudioMoodClusters({ copy }: { copy: StudioCopy }) {
+export function StudioMoodClusters({ copy, media }: { copy: StudioCopy } & Media) {
   const t = copy.moods;
   const gridRef = useRef<HTMLUListElement>(null);
   const flipState = useRef<Flip.FlipState | null>(null);
@@ -547,13 +550,13 @@ export function StudioMoodClusters({ copy }: { copy: StudioCopy }) {
     <div data-mood-clusters data-sorted={sorted ? 'true' : 'false'} className={styles.moods}>
       <div role="toolbar" aria-label={t.eyebrow} className={styles.folders}>
         <button type="button" aria-pressed={sorted && focus === null} data-mood-chip="all" className={styles.folderAll} onClick={() => change(true, null)}>
-          <span className={styles.folderAllStack} aria-hidden="true">{MOOD_LIBRARY.slice(0, 3).map((mood) => <img key={mood.id} src={studio(mood.folder)} alt="" width={60} height={60} loading="lazy" decoding="async" />)}</span>
+          <span className={styles.folderAllStack} aria-hidden="true">{MOOD_LIBRARY.slice(0, 3).map((mood) => <img key={mood.id} src={studioSrc(media, mood.folder)} alt="" width={60} height={60} loading="lazy" decoding="async" />)}</span>
           <span className={styles.folderName}>{t.all}</span>
           <span className={styles.folderCount}>{MOOD_TILES.length}</span>
         </button>
         {MOOD_LIBRARY.map((mood, index) => (
           <button key={mood.id} id={`mood-${mood.id}`} type="button" aria-pressed={focus === index} data-mood-chip={mood.id} className={`${styles.folder} scroll-mt-28`} onClick={() => change(true, focus === index ? null : index)}>
-            <img src={studio(mood.folder)} alt="" width={120} height={120} loading="lazy" decoding="async" />
+            <img src={studioSrc(media, mood.folder)} alt="" width={120} height={120} loading="lazy" decoding="async" />
             <span className={styles.folderName}>{t.names[index]}</span>
             <span className={styles.folderCount}>{mood.tiles.length + 1}</span>
           </button>
@@ -587,7 +590,7 @@ export function StudioMoodClusters({ copy }: { copy: StudioCopy }) {
               data-dim={dim ? 'true' : undefined}
               className={`${styles.moodTile} ${feature ? styles.moodFeature : ''}`}
             >
-              <img src={studio(tile.key)} alt="" width={360} height={450} loading="lazy" decoding="async" />
+              <img src={studioSrc(media, tile.key)} alt="" width={360} height={450} loading="lazy" decoding="async" />
               {sorted && focus === null && firstOfMood.has(tile.key) && (
                 <span className={styles.moodBadge}><span aria-hidden="true" style={{ background: mood.palette[0] }} />{t.names[tile.mood]}</span>
               )}
@@ -616,7 +619,7 @@ const VTO_FREE = [
 ] as const;
 const VTO_MODES = ['lookbook', 'free'] as const;
 
-export function StudioVto({ copy }: { copy: StudioCopy }) {
+export function StudioVto({ copy, media }: { copy: StudioCopy } & Media) {
   const t = copy.vto;
   const [mode, setMode] = useState(0);
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
@@ -632,7 +635,7 @@ export function StudioVto({ copy }: { copy: StudioCopy }) {
     <div data-vto className={styles.vto}>
       <aside className={styles.vtoInput}>
         <figure className={styles.vtoGarment}>
-          <img src={studio('vto-garment')} alt="" width={480} height={480} loading="lazy" decoding="async" />
+          <img src={studioSrc(media, 'vto-garment')} alt="" width={480} height={480} loading="lazy" decoding="async" />
           <figcaption><span>{t.garmentNote}</span>{t.garment}</figcaption>
         </figure>
         <div className={styles.vtoLists}>
@@ -673,7 +676,7 @@ export function StudioVto({ copy }: { copy: StudioCopy }) {
         <div role="tabpanel" id="vto-panel-lookbook" aria-labelledby="vto-tab-lookbook" hidden={mode !== 0} data-vto-panel="lookbook" className={styles.vtoLook}>
           {VTO_LOOK.map((name, index) => (
             <figure key={name} className={styles.appear} style={{ '--i': index } as Vars}>
-              <img src={studio(name)} alt="" width={420} height={560} loading="lazy" decoding="async" />
+              <img src={studioSrc(media, name)} alt="" width={420} height={560} loading="lazy" decoding="async" />
               <figcaption>{t.lookbookCuts[index]}</figcaption>
             </figure>
           ))}
@@ -681,7 +684,7 @@ export function StudioVto({ copy }: { copy: StudioCopy }) {
         <div role="tabpanel" id="vto-panel-free" aria-labelledby="vto-tab-free" hidden={mode !== 1} data-vto-panel="free" className={styles.vtoFree}>
           {VTO_FREE.map((cut, index) => (
             <figure key={cut.name} className={styles.appear} style={{ '--i': index, aspectRatio: cut.ratio } as Vars}>
-              <img src={studio(cut.name)} alt="" width={420} height={560} loading="lazy" decoding="async" />
+              <img src={studioSrc(media, cut.name)} alt="" width={420} height={560} loading="lazy" decoding="async" />
               <figcaption>{t.freeCuts[index]}</figcaption>
             </figure>
           ))}

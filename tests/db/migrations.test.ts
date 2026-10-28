@@ -121,6 +121,8 @@ describe('migrations apply on a fresh database (PLAN §6)', () => {
       'identity_portrait_attempts',
       'identity_portrait_selections',
       'identity_selfies',
+      // 2026-10-29 — replaced landing images (lib/content/landing-media.ts), one row per slot.
+      'landing_media',
       'notification_deliveries',
       'notification_jobs',
       'platform_audit',

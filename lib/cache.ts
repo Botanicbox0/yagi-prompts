@@ -83,6 +83,17 @@ export function revalidateCampaigns(): void {
   revalidateStaticSurfaces(['/campaigns']);
 }
 
+/**
+ * Landing media slots (lib/content/landing-media.ts, `/admin/landing-media`): a replaced or reset
+ * image refreshes the two landings that render slots, on the same tag-and-path terms as the others.
+ */
+export const LANDING_MEDIA_TAG = 'landing-media';
+
+export function revalidateLandingMedia(): void {
+  revalidateTag(LANDING_MEDIA_TAG);
+  revalidateStaticSurfaces(['', '/brands']);
+}
+
 export function revalidateSubscriptions(): void {
   revalidateTag('creator-subscription-status');
   revalidateStaticSurfaces(['', '/pricing', '/faq', '/legal/terms', '/legal/refund', '/legal/privacy']);

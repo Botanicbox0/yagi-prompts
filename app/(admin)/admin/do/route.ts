@@ -1,6 +1,6 @@
 import { after, NextResponse, type NextRequest } from 'next/server';
 import { requireAdmin } from '@/lib/auth/viewer';
-import { revalidateCampaigns, revalidateCatalog, revalidateContests, revalidatePrompts } from '@/lib/cache';
+import { revalidateCampaigns, revalidateCatalog, revalidateContests, revalidateLandingMedia, revalidatePrompts } from '@/lib/cache';
 import { getSqlRunner } from '@/lib/db/connect';
 import { getStorage } from '@/lib/storage';
 import { getMailer } from '@/lib/notify/service';
@@ -104,6 +104,7 @@ async function execute(name: string, form: FormData): Promise<AdminOutcome> {
     revalidatePrompts,
     revalidateContests,
     revalidateCampaigns,
+    revalidateLandingMedia,
     mail: { mailer: getMailer(), siteUrl: siteUrl() },
     // After the redirect, never on the request path; a failure is logged, never a 500 for the operator.
     defer: (task) =>

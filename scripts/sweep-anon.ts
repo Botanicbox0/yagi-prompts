@@ -525,6 +525,17 @@ async function sweepMoney(): Promise<void> {
   expectPresent('Offline availability stays preparing', availability.body, '"status":"preparing"');
   for (const field of ['billingKey', 'customerKey', 'monthlyUnits', 'implementationSha', 'evidenceDigest', 'configurationDigest'])
     expectAbsent(`Public availability excludes ${field}`, availability.body, field);
+  // lib/content/landing-media.ts — the replace screen is admin-only, and the image route answers only
+  // for a slot that really has an override (none in the snapshot), never for a path it was handed.
+  {
+    const editor = await get('/admin/landing-media');
+    expectOneOf('/admin/landing-media requires sign-in', editor.status, [302, 307, 308, 404]);
+    expectAbsent('/admin/landing-media shows no tiles anonymously', editor.body, 'data-landing-slot');
+    for (const path of ['/api/landing-media/studio/p-amber-1', '/api/landing-media/studio/nope', '/api/landing-media/..%2F.env']) {
+      const media = await get(path);
+      expectEqual(`${path} is a 404 without an override`, media.status, 404);
+    }
+  }
   for (const path of ['/billing/subscription', '/admin/subscriptions']) {
     const page = await get(path);
     expectOneOf(`${path} requires sign-in`, page.status, [302, 307, 308]);
@@ -1336,6 +1347,8 @@ async function sweepCampaigns(): Promise<void> {
     expectEqual(`/${locale}/brands orbit holds one bottle per mood`, (brand.body.match(/data-orbit-bottle=/g) ?? []).length, 8);
     expectEqual(`/${locale}/brands mood library ships all 41 frames`, (brand.body.match(/data-mood-tile=/g) ?? []).length, 41);
     expectEqual(`/${locale}/brands never shows the retired client-packaging frames`, (brand.body.match(/reel\/studio\/[a-z]+-yagi/g) ?? []).length, 0);
+    // Landing media slots: with no override every studio image is its file in /reel/studio/.
+    expectEqual(`/${locale}/brands shows studio files when nothing is replaced`, (brand.body.match(/\/api\/landing-media\//g) ?? []).length, 0);
     expectEqual(`/${locale}/brands offers three format films`, (brand.body.match(/data-format-select=/g) ?? []).length, 3);
     expectEqual(`/${locale}/brands shows three service examples`, (brand.body.match(/data-service-example=/g) ?? []).length, 3);
     expectAbsent(`/${locale}/brands has no hidden service tabs`, brand.body, 'data-use-case-select');

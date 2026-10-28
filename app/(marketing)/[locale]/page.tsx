@@ -18,6 +18,8 @@ import { CreatorHero, CreatorHowItWorks, CreatorCampaignDoor, BrandDoor } from '
 import { cachedSubscriptionAvailability } from '@/lib/creator-subscriptions/cached-availability';
 import { SubscriptionAvailabilityProvider } from '@/components/twings/subscription-availability';
 import { DEFAULT_HERO_EVIDENCE, heroEvidence } from '@/lib/content/slots';
+import { evidenceWithMedia } from '@/lib/content/landing-media';
+import { getLandingMedia } from '@/lib/content/landing-media-server';
 export const revalidate = 3600;
 const FILTER_MIN_TEMPLATES = 6;
 export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
@@ -37,7 +39,7 @@ export default async function LandingPage({ params }: { params: Promise<{ locale
   const { locale: raw } = await params;
   const locale: Locale = isLocale(raw) ? raw : DEFAULT_LOCALE;
   const dict = getDictionary(locale), t = dict.templates;
-  const [templates, campaigns, availability] = await Promise.all([getPromptCatalog(), getCampaignCatalog(), cachedSubscriptionAvailability()]);
+  const [templates, campaigns, availability, media] = await Promise.all([getPromptCatalog(), getCampaignCatalog(), cachedSubscriptionAvailability(), getLandingMedia()]);
   const labels = promptLabels(dict);
   const useCaseLabels = Object.fromEntries(USE_CASES.map(value => [value, useCaseLabel(dict, value)]));
   const filterOptions = presentUseCases([...new Set(templates.video.flatMap(card => card.useCase))].sort()).map(value => [value, useCaseLabels[value]!] as [string, string]);
@@ -52,7 +54,7 @@ export default async function LandingPage({ params }: { params: Promise<{ locale
     <MarketingNav locale={locale} dict={dict} rest="/" />
     <SubscriptionAvailabilityProvider initialAvailability={availability}>
     <main id="main" data-creator-home>
-      <CreatorHero locale={locale} dict={dict} featured={featured} evidence={{ ...DEFAULT_HERO_EVIDENCE, ...heroEvidence() }} />
+      <CreatorHero locale={locale} dict={dict} featured={featured} evidence={evidenceWithMedia({ ...DEFAULT_HERO_EVIDENCE, ...heroEvidence() }, media)} />
       <section id="gallery" data-section data-theme="light" className="section">
         <div className="audience-shell pb-16 lg:pb-24">
           <div className="mb-8 border-t border-hairline pt-8">

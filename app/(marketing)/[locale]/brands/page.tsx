@@ -15,6 +15,8 @@ import { JsonLd } from '@/lib/seo/json-ld';
 import { brandCaseStudiesStructuredData, campaignServiceStructuredData } from '@/lib/seo/structured-data';
 import { siteUrl } from '@/lib/seo/site-url';
 import { FaqSection } from '@/lib/seo/faq-section';
+import { mediaSrc } from '@/lib/content/landing-media';
+import { getLandingMedia } from '@/lib/content/landing-media-server';
 
 /** Public service discovery stays static. Membership and approvals stay on brand.twings.app. */
 export const revalidate = 3600;
@@ -41,17 +43,20 @@ export default async function BrandsPage({ params }: Props) {
   const dict = getDictionary(locale);
   const t = dict.brandLanding;
   const ko = locale === 'ko';
+  // Images the founder replaced in /admin/landing-media; every other slot shows its file.
+  const media = await getLandingMedia();
+  const m = (key: string) => mediaSrc(media, key);
   return <>
     <MarketingNav locale={locale} dict={dict} rest="/brands" />
     <JsonLd id="campaign-service-structured-data" data={campaignServiceStructuredData({ origin: siteUrl(), path: brandsHref(locale), locale, name: t.metaTitle, description: t.metaDescription, serviceType: dict.seo.serviceType })} />
     <JsonLd id="brand-case-studies-structured-data" data={brandCaseStudiesStructuredData({ origin: siteUrl(), locale, cases: [{ id: 'morphic', name: t.stories.title, description: t.stories.summary, path: `/${locale}/brands/stories/morphic` }] })} />
 
     <main id="main" data-brand-landing className="overflow-clip bg-white text-[#141414] [word-break:keep-all]">
-      <StudioHero copy={t.studio} locale={locale} />
-      <StudioMoods copy={t.studio} />
-      <StudioPipelineSection copy={t.studio} />
-      <StudioMemory copy={t.studio} />
-      <StudioVtoSection copy={t.studio} />
+      <StudioHero copy={t.studio} locale={locale} media={media} />
+      <StudioMoods copy={t.studio} media={media} />
+      <StudioPipelineSection copy={t.studio} media={media} />
+      <StudioMemory copy={t.studio} media={media} />
+      <StudioVtoSection copy={t.studio} media={media} />
 
       <section id="spread" data-section data-theme="light" data-studio-spread className="section scroll-mt-20 bg-white">
         <div className="audience-shell pb-6 pt-4 lg:pb-10">
@@ -77,9 +82,9 @@ export default async function BrandsPage({ params }: Props) {
             </div>
             <div data-brand-formula className="mt-14 grid gap-10 border-t border-black/[0.08] pt-8 lg:grid-cols-3 lg:gap-10">
               {[
-                { index: '01', title: t.formula.item1Title, body: t.formula.item1Body, images: ['/reel/brands/production-paris.jpg'] },
-                { index: '02', title: t.formula.item2Title, body: t.formula.item2Body, images: ['/reel/studio-demo/reference-selfie.jpeg', '/reel/studio-demo/different-person.jpg'] },
-                { index: '03', title: t.formula.item3Title, body: t.formula.item3Body, images: ['/reel/brands/y2k-flip-phone.jpg', '/reel/brands/morphic-september-01.jpg'] },
+                { index: '01', title: t.formula.item1Title, body: t.formula.item1Body, images: [m('brands/production-paris')] },
+                { index: '02', title: t.formula.item2Title, body: t.formula.item2Body, images: [m('studio-demo/reference-selfie'), m('studio-demo/different-person')] },
+                { index: '03', title: t.formula.item3Title, body: t.formula.item3Body, images: [m('brands/y2k-flip-phone'), m('brands/morphic-september-01')] },
               ].map((item) => (
                 <div key={item.index} className="group">
                   <span className="font-mono text-[11px] tracking-[0.14em] text-[#8B90A0]">{item.index}</span>
@@ -97,7 +102,7 @@ export default async function BrandsPage({ params }: Props) {
                 </div>
               ))}
             </div>
-            <StudioFeed copy={t.studio} />
+            <StudioFeed copy={t.studio} media={media} />
           </div>
         </div>
       </section>
@@ -120,9 +125,9 @@ export default async function BrandsPage({ params }: Props) {
 
           <ol className="mt-10 grid gap-14 lg:grid-cols-3 lg:gap-10">
             {[
-              { index: '01', heading: t.moat1Title, body: t.moat1Body, img: '/reel/brands/production-paris.jpg', position: 'object-center' },
-              { index: '02', heading: t.moat2Title, body: t.moat2Body, img: '/reel/studio-demo/different-person.jpg', position: 'object-[50%_22%]' },
-              { index: '03', heading: t.moat3Title, body: t.moat3Body, img: '/reel/brands/morphic-september-01.jpg', position: 'object-center' },
+              { index: '01', heading: t.moat1Title, body: t.moat1Body, img: m('brands/production-paris'), position: 'object-center' },
+              { index: '02', heading: t.moat2Title, body: t.moat2Body, img: m('studio-demo/different-person'), position: 'object-[50%_22%]' },
+              { index: '03', heading: t.moat3Title, body: t.moat3Body, img: m('brands/morphic-september-01'), position: 'object-center' },
             ].map((step) => (
               <li key={step.index} className="group border-t border-black/12 pt-6">
                 <span className="font-mono text-xs text-black/40">{step.index}</span>
@@ -199,9 +204,9 @@ export default async function BrandsPage({ params }: Props) {
             {(['launch', 'app_platform', 'beauty_fashion'] as const).map((id) => {
               const example = t.examples[id];
               const image = {
-                launch: { src: '/reel/brands/y2k-flip-phone.jpg', width: 720, height: 1280 },
-                app_platform: { src: '/reel/brands/morphic-september-01.jpg', width: 960, height: 720 },
-                beauty_fashion: { src: '/reel/brands/city-fashion.jpg', width: 1280, height: 960 },
+                launch: { src: m('brands/y2k-flip-phone'), width: 720, height: 1280 },
+                app_platform: { src: m('brands/morphic-september-01'), width: 960, height: 720 },
+                beauty_fashion: { src: m('brands/city-fashion'), width: 1280, height: 960 },
               }[id];
               return <a key={id} data-service-example={id} data-inquiry-trigger href={`${brandsHref(locale)}?useCase=${id}#brands`} className="group block focus-visible:outline-1 focus-visible:outline-offset-4 focus-visible:outline-black">
                 <div className="aspect-[4/3] overflow-hidden bg-black/[0.05]"><img src={image.src} alt="" width={image.width} height={image.height} loading="lazy" decoding="async" className="h-full w-full object-cover transition-transform duration-700 motion-safe:group-hover:scale-[1.03]" /></div>

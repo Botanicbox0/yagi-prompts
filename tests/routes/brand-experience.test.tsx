@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 vi.mock('@/lib/prompts/public-catalog', () => ({ getPromptCatalog: async () => ({ video: [] }) }));
 vi.mock('@/components/marketing/chrome', () => ({ MarketingNav: () => null, MarketingFooter: () => null }));
 vi.mock('@/lib/seo/faq-section', () => ({ FaqSection: () => null }));
+vi.mock('@/lib/content/landing-media-server', () => ({ getLandingMedia: async () => ({}) }));
 import BrandsPage from '@/app/(marketing)/[locale]/brands/page';
 
 describe('the brand page shows the service before asking visitors to enquire', () => {
