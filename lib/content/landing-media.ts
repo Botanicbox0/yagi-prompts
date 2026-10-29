@@ -35,8 +35,8 @@ export interface LandingMediaSlot {
   alpha?: true;
 }
 
-/** Stills tied to a film: the 15-second ad's product shot shows the lip gloss the ad plays. */
-export const FILM_BOUND_STILLS: readonly string[] = ['landing/ad-product'];
+/** Stills tied to a film: each ad's product shot shows the bottle or tube that ad plays. */
+export const FILM_BOUND_STILLS: readonly string[] = ['landing/highteen-product', 'landing/beauty-ad-product'];
 
 /** Override URLs by slot key; a slot that is absent shows its default. */
 export type LandingMedia = Readonly<Record<string, string>>;

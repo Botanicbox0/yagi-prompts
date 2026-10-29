@@ -25,7 +25,8 @@ and the tag. **기본으로** (`landingMedia.reset`) deletes the row; the file i
 - Videos and their posters are not slots: a new poster over an old film would show one thing and
   play another. Replacing the home hero's scene still drops its film for the same reason.
 - A still that sits next to a film and shows its product is not a slot either (`FILM_BOUND_STILLS`).
-  Today that is `landing/ad-product`, the lip gloss shot next to the 15-second ad.
+  Today those are `landing/highteen-product` (the heart perfume next to the 20-second perfume ad)
+  and `landing/beauty-ad-product` (the lip gloss next to the 15-second ad).
 - A new landing image is a new registry line, and `tests/content/landing-media.test.ts` fails until
   every `public/reel/landing/*.webp` and `public/reel/studio/*.webp` has a slot.
 - Before migrations 0067/0147 reach a database, the landings read "no overrides" and the admin
