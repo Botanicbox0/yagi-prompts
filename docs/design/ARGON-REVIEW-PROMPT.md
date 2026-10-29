@@ -6,8 +6,10 @@
 너는 TWINGS for Brands 랜딩(/ko/brands, /en/brands)의 미감 디렉터이자 프론트엔드 디자이너다. Awwwards SOTD 수준의 감도를 목표로, 지금 만든 v7을 분석하고 직접 개선해라. 결과물은 PR 하나다.
 
 ## 0. 작업 위치와 규칙
-- 저장소: D:\dev\.worktrees\twings\brand-shortlist (Windows). 브랜치 claude/brand-asset-studio(PR #115)에서 새 브랜치 codex/brand-landing-v7-polish를 만들어 작업한다. PR은 claude/brand-asset-studio로 연다. main에 직접 push하지 않는다.
-- 배포 금지: 이 랜딩은 대표 최종 승인 전까지 main에 병합하거나 배포하지 않는다.
+- 저장소: GitHub Botanicbox0/yagi-prompts. v7은 2026-10-30에 main으로 운영 배포됐다(PR #115·#116).
+- 작업 공간: `git worktree add D:\dev\.worktrees\twings\landing-v7-polish -b codex/brand-landing-v7-polish origin/main`으로 새로 만들고, 그 폴더에서 먼저 `npm ci`를 한다. D:\dev\twings 본 폴더와 다른 세션의 작업 공간은 건드리지 않는다.
+- PR은 main으로 연다. main에 직접 push하지 않는다. 병합은 대표 또는 Director가 한다. main에 들어가면 곧바로 twings.app에 배포된다.
+- 이 PC에는 gh가 없다. PR은 `node scripts/gh-pr.mjs create …`로 연다. GitHub Actions가 결제 문제로 돌지 않을 수 있으니, 아래 로컬 검증 결과를 PR 본문에 적는다.
 - 먼저 읽을 것(순서대로):
   1. AGENTS.md (특히 §3 검증 루프, §5 문안·브랜드 규칙, §11)
   2. docs/design/TASTE.md — 대표가 좋다·싫다고 한 것. 반드시 지킨다.
@@ -44,7 +46,7 @@
 5. 개선은 화면마다 기법 3~4개 원칙 안에서 한다. 새로 넣을 후보: 섹션 경계의 겹침 전환(다음 장면이 아래에서 덮기), 히어로 축소 아웃(scroll-driven, @supports 가드), 크리에이터 피드의 스케일 월(기울어진 타일이 큰 제목 위로 흐름), 결과물 탭의 자동 진행 바. 무거운 효과는 데스크톱 + 모션 허용에서만.
 
 ## 3. 결과물
-- PR 하나(codex/brand-landing-v7-polish → claude/brand-asset-studio). 본문에:
+- PR 하나(codex/brand-landing-v7-polish → main). 운영 중인 페이지이므로 병합 전 프리뷰 URL 캡처를 함께 둔다. 본문에:
   - 채점표(전/후), 화면별 전후 캡처 경로, 고른 기법과 이유
   - 바꾼 파일 목록, 건드리지 않은 규칙 확인
 - 검증(전부 통과해야 완료):
