@@ -36,7 +36,6 @@ export const en = {
     pages: { brands: 'Brand landing', home: 'Personal landing' },
     open: 'Open page',
     groups: {
-      hero: 'Hero · locked product and outputs',
       contrast: 'Generated as-is vs TWINGS',
       range: 'Eight-product packshots',
       scenes: 'Mood scenes',
@@ -411,71 +410,74 @@ export const en = {
     "landing": {
       "hero": {
         "eyebrow": "TWINGS brand studio",
-        "title": "Your brand, unchanged.\nProduct shots to video ads",
-        "body": "One product photo becomes product shots and video ads with your logo and colours intact. Dozens of creators then remake the ad with their own faces.",
+        "title": "One product photo gives you\nproduct shots and video ads",
+        "body": "Your logo and colours stay exactly as they are. Dozens of creators then remake the finished ad with their own faces and post it on their channels.",
         "cta": "Book a demo",
         "secondary": "See campaign results",
-        "input": "1 uploaded photo",
-        "lock": "Logo · colour · wording locked",
-        "outputs": [
-          "Product shot",
-          "Texture close-up",
-          "In hand",
-          "Model shot",
-          "15-second video ad"
+        "filmLabel": "One lip gloss photo becoming product shots, a video ad and creator videos",
+        "doors": [
+          {
+            "title": "Asset studio",
+            "body": "Product shots, try-on shots and video ads."
+          },
+          {
+            "title": "Creator campaigns",
+            "body": "Creators post the ad on their channels, with their own faces."
+          },
+          {
+            "title": "Production",
+            "body": "Commission an ad film from YAGI."
+          }
         ],
-        "image": "Image",
-        "video": "Video",
         "proof": "Morphic creator campaign",
         "proofFigures": "9 films · 2M+ views · 300+ organic posts",
-        "note": "Real output of the TWINGS template “Virtual beauty ad”. The model is a virtual person.",
-        "inputAlt": "YAGI lip gloss product photo, closed and open"
+        "note": "The ad in the film is real output of the TWINGS template “Virtual beauty ad”. The model is a virtual person."
       },
       "contrast": {
         "eyebrow": "AI that understands media",
-        "title": "Plug AI in as-is,\nand you get this",
-        "body": "Same product, same generation engine, real output. On the left it was generated as-is; on the right, light and material were set and the rules checked.",
-        "raw": "Generated as-is",
+        "title": "Plain AI generation\nmisses your brand’s details",
+        "body": "Same product, same engine, real output. The left used default settings; the right had its light and material set first, then went through the brand rules.",
+        "raw": "Default generation",
         "ours": "TWINGS",
         "pairs": [
           {
             "label": "Logo",
             "raw": "The mark turned into a letter y",
-            "ours": "Back to the real mark after the rule check"
+            "ours": "The rule check restored the real mark"
           },
           {
-            "label": "People",
-            "raw": "Smooth, plastic skin",
-            "ours": "Skin with pores and stray hairs"
+            "label": "Skin",
+            "raw": "Skin as smooth as plastic",
+            "ours": "Real skin texture, with pores and stray hairs"
           },
           {
             "label": "Light",
-            "raw": "One-line prompt, a stock wooden table",
+            "raw": "A one-line prompt gave a stock wooden table",
             "ours": "Light direction, lens and material set per shot"
           }
         ],
         "pillars": [
           {
             "title": "Light and material",
-            "body": "Light direction, lens and surface material are set per shot."
+            "body": "Where the light comes from, and what the glass and skin are made of, is set before each shot."
           },
           {
             "title": "Brand memory",
-            "body": "Logo, palette and past campaigns stay on file for each brand."
+            "body": "Logo, palette and past campaign shots are saved per brand and used in the next job."
           },
           {
             "title": "Hard rules",
-            "body": "Logo shape, claims wording and model consent are checked on every output."
+            "body": "Rules that must not change, such as logo shape, claims wording and model consent, are checked on every output."
           }
         ]
       },
       "assets": {
         "eyebrow": "Asset studio",
-        "title": "One brand,\neight products",
-        "body": "Eight products made with the same mark and the same rules. Product and try-on shots turn straight into video.",
+        "title": "Eight products,\nmade by the same rules",
+        "body": "Every product carries the same mark and the same cap. Product and try-on shots made here turn straight into video.",
         "kitTitle": "Brand kit",
-        "kitMark": "Mark",
-        "kitPalette": "Palette",
+        "kitMark": "Logo mark",
+        "kitPalette": "Colour palette",
         "kitRules": "Hard rules",
         "rules": [
           "Mark front and centre, fixed size",
@@ -483,7 +485,6 @@ export const en = {
           "No efficacy or medical claims",
           "Only consented faces"
         ],
-        "range": "One brand, eight products",
         "products": [
           "Eau de parfum",
           "Cream blush",
@@ -495,19 +496,21 @@ export const en = {
           "Lip & cheek balm"
         ],
         "tabs": [
-          "Product shots",
+          "Eight products",
+          "Scenes",
           "Try-on",
           "Video"
         ],
         "tabNotes": [
-          "Packshots moved into mood scenes. The logo is checked again in every scene.",
+          "Eight products with the same mark and cap.",
+          "The products were swapped into original YAGI campaign frames. The logo is checked again in every scene.",
           "One garment photo and a virtual model make lookbook and editorial cuts.",
           "Clips come straight from the finished shots."
         ],
         "clipLabels": [
-          "Product shot → 5-second clip",
-          "Product shot → 5-second clip",
-          "Product shot → 5-second clip",
+          "5-second clip from a product shot",
+          "5-second clip from a product shot",
+          "5-second clip from a product shot",
           "15-second video ad"
         ],
         "note": "Example screen. Products and models are fictional.",
@@ -515,21 +518,20 @@ export const en = {
       },
       "campaign": {
         "eyebrow": "Creator campaigns",
-        "title": "One ad,\ndozens of faces",
-        "body": "YAGI makes one ad format, and each creator gets a version with their own face to post on their own channel. Korea and Japan launch together.",
-        "sameFormat": "Same format · different face",
+        "title": "One ad,\npromoted by dozens of creators",
+        "body": "YAGI makes one ad format, and each creator gets a version with their own face. Creators in Korea and Japan post it on their own channels.",
         "virtual": "Virtual person example",
-        "note": "Some examples use virtual people. Real campaigns only use creators who have verified and consented.",
+        "note": "All of these use virtual people. Real campaigns only use creators who have verified and consented. Real posts are in the Morphic case below.",
         "live": "Live"
       },
       "production": {
         "eyebrow": "YAGI production",
-        "title": "Want the whole film made for you?",
-        "body": "YAGI has worked with fashion and beauty brands. You can commission a brand film, or visuals alone."
+        "title": "Or commission\njust the brand film",
+        "body": "YAGI has made ad films and visuals for fashion and beauty brands. Check the portfolio and an estimate first."
       },
       "closing": {
-        "title": "Start with one product photo",
-        "body": "Tell us the asset or campaign you need."
+        "title": "Need assets?\nJust tell us",
+        "body": "Send a product photo with the shots or campaign you have in mind. We check it and reply by email."
       }
     },
     "moatEyebrow": "HOW IT WORKS",
@@ -539,8 +541,8 @@ export const en = {
     "moat2Body": "Each creator stars in the film with their own face — no live shoot needed.",
     "moat3Title": "Korea & Japan publishing",
     "moat3Body": "We review disclosures, publish across real creator channels, and deliver verified results.",
-    "metaTitle": "All-in-one Marketing Asset Studio",
-    "metaDescription": "TWINGS is the all-in-one marketing asset studio for consumer brands: organize, search and generate on-brand assets, then take them to real creators’ feeds.",
+    "metaTitle": "Marketing asset studio for consumer brands",
+    "metaDescription": "TWINGS is a marketing asset studio for consumer brands. One product photo becomes product shots and video ads with your logo and colours intact, and creator campaigns take them further. See the Morphic campaign results.",
     "marketsHeading": "Korea and Japan.\nOne campaign.",
     "marketsBody": "Run campaigns across Korea and Japan simultaneously with our active creator pools in both markets — no local shoots needed.",
     "eyebrow": "TWINGS FOR BRANDS · YAGI",
@@ -553,15 +555,15 @@ export const en = {
       "beta": "Beta",
       "vto": {
         "eyebrow": "04 Try-on",
-        "title": "Try on anywhere",
-        "body": "Upload one garment photo and pick a virtual model. Lookbook mode keeps fixed framing on white. Free mode lets you choose the scene, pose and ratio.",
+        "title": "One garment photo,\nmany scenes",
+        "body": "Lookbook mode keeps fixed framing on white. Free mode changes the scene, pose and ratio as you go.",
         "modes": [
           {
             "label": "Lookbook",
             "body": "Set framing on white. For product pages."
           },
           {
-            "label": "Free",
+            "label": "Free mode",
             "body": "Scene, pose and ratio are yours. For feeds and ads."
           }
         ],
@@ -691,9 +693,9 @@ export const en = {
     "productionEyebrow": "YAGI PRODUCTION",
     "productionHeading": "AI production.\nBrand ad films.",
     "productionBody": "Collaborating with Galeries Lafayette, The Hyundai, and fashion and beauty brands, YAGI also produces standalone brand films and visuals.",
-    "productionCollabs": "Galeries Lafayette · The Hyundai · Fashion & beauty brands",
+    "productionCollabs": "Worked with: Galeries Lafayette, The Hyundai",
     "productionDeckCta": "View portfolio",
-    "companyDeckCta": "Company deck (Pitch)",
+    "companyDeckCta": "Company deck",
     "companyDeckUrl": "https://pitch.com/v/yagi-workshop-introduction-en-higgsfield-kb35ht",
     "productionFilms": [
       "Paris campaign film · YAGI",
@@ -701,10 +703,10 @@ export const en = {
     ],
     "productionCta": "Discuss production",
     "pricingCta": "Production estimate · Korean",
-    "pricingNote": "Final pricing is confirmed after reviewing your scope.",
+    "pricingNote": "We share the final price after reviewing your scope.",
     "inquiryEyebrow": "ENQUIRE",
     "inquiryHeading": "Let’s make\nyour brand ad.",
-    "inquiryBody": "Tell us about the campaign or film you have in mind. We’ll reply promptly.",
+    "inquiryBody": "Tell us about the campaign or film you have in mind. We reply by email.",
     "inquiryClose": "Close enquiry",
     "inquiryDialogTitle": "Video and campaign enquiry",
     "legacyBrandLink": "Looking to run a brand campaign?",

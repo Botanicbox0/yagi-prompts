@@ -9,10 +9,10 @@ placeholder. Filling one is a config or CMS change, never a code change.
 ## 0. Landing images — `/admin/landing-media` (2026-10-29)
 
 **Where** `lib/content/landing-media.ts` (slot registry) → `lib/content/landing-media-server.ts`
-(`getLandingMedia()`, cached with tag `landing-media`, 1h TTL) → the brand landing v5
-(`components/brand-studio/landing-sections.tsx`: hero stills, the three comparison pairs, the eight
-packshots and eight scenes; `studio-vto.tsx`: the try-on cuts) and the home hero's selfie → scene pair
-(`evidenceWithMedia`). 38 slots on 2026-10-29.
+(`getLandingMedia()`, cached with tag `landing-media`, 1h TTL) → the brand landing v6
+(`components/brand-studio/landing-sections.tsx`: the three comparison pairs, the eight packshots and
+eight scenes; the hero is a film now, and films are not slots; `studio-vto.tsx`: the try-on cuts) and the home hero's selfie → scene pair
+(`evidenceWithMedia`). 33 slots on 2026-10-29 (v6: the five hero stills went into the hero film).
 
 **Replace** open `admin.twings.app/admin/landing-media` (nav: 콘텐츠 관리 → 랜딩 이미지). Tiles follow
 the landing's order. Drop an image on a tile or click it: the browser scales it to the slot's width,

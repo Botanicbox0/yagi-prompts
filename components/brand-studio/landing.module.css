@@ -51,9 +51,10 @@
   text-wrap: pretty;
 }
 .note { font-size: 12px; line-height: 1.6; color: var(--lp-muted); }
-.head { display: grid; gap: 18px; max-width: 46rem; }
-.headSplit { display: grid; gap: 18px 64px; align-items: end; }
-@media (min-width: 1024px) { .headSplit { grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr); } }
+/* Section heads are full sentences now (2026-10-29 wording review), so the title gets the full width and the body sits under it. */
+.head { display: grid; gap: 18px; max-width: 64rem; }
+.headSplit { display: grid; gap: 18px; }
+.headSplit > .body { max-width: 40rem; }
 
 /* ---------- Actions: one blue pill per screen, one quiet text link beside it ---------- */
 .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 22px; }
@@ -123,53 +124,25 @@
 }
 .tileLabel em { font-style: normal; font-weight: 500; color: var(--lp-muted); }
 
-/* ---------- Hero: one locked product, a living grid of what it became ---------- */
+/* ---------- Hero: the promise, the film of one product becoming everything, three doors ---------- */
 .hero { padding: clamp(96px, 9vw, 128px) 0 clamp(56px, 7vw, 96px); }
 .heroCopy { display: grid; justify-items: center; gap: 22px; text-align: center; }
 .heroCopy .body { max-width: 37rem; }
-.heroGrid {
-  margin-top: clamp(40px, 5vw, 60px);
-  display: grid;
-  gap: 10px;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-.heroLock {
-  grid-column: 1 / -1;
-  display: grid;
-  grid-template-rows: minmax(0, 1fr) auto;
-  gap: 10px;
-  padding: 10px;
-  border-radius: var(--lp-radius);
-  border: 1px solid var(--lp-line);
-  background: var(--lp-paper);
-}
-.heroLock .tile { aspect-ratio: 4 / 3; background: #f1f1f2; }
-.heroLock .tile img { object-fit: contain; }
-.lockMeta { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; padding: 2px 6px 4px; font-size: 13px; font-weight: 650; letter-spacing: -0.01em; }
-.lockMeta > span:last-child { display: inline-flex; align-items: center; gap: 7px; color: var(--lp-muted); font-weight: 500; white-space: nowrap; }
-.heroOut { aspect-ratio: 4 / 5; opacity: 0; transform: translateY(14px); animation: rise 700ms cubic-bezier(0.2, 0.7, 0.2, 1) forwards; animation-delay: calc(240ms + var(--i, 0) * 140ms); }
-.heroVideo { grid-column: 1 / -1; aspect-ratio: 16 / 9; }
+.heroFilm { margin: clamp(40px, 5vw, 60px) auto 0; max-width: 1120px; display: grid; gap: 10px; opacity: 0; transform: translateY(14px); animation: rise 800ms cubic-bezier(0.2, 0.7, 0.2, 1) 160ms forwards; }
+.heroFilm .tile { aspect-ratio: 16 / 9; background: var(--lp-paper); border: 1px solid var(--lp-line); }
+.heroFilm figcaption { text-align: center; }
 @keyframes rise { to { opacity: 1; transform: none; } }
-@media (min-width: 900px) {
-  /* Left: two stills. Centre, two rows tall: the photo that was uploaded. Right: the ad, then two more stills. */
-  .heroGrid {
-    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.15fr) minmax(0, 0.9fr) minmax(0, 0.9fr);
-    grid-template-rows: repeat(2, clamp(190px, 17vw, 260px));
-    grid-template-areas:
-      'shot lock video video'
-      'tex  lock hand  model';
-  }
-  .heroLock { grid-column: auto; grid-area: lock; }
-  .heroLock .tile { aspect-ratio: auto; min-height: 0; }
-  .heroOut { aspect-ratio: auto; }
-  .heroVideo { grid-column: auto; grid-area: video; }
-  .heroOut[data-area='shot'] { grid-area: shot; }
-  .heroOut[data-area='hand'] { grid-area: hand; }
-  .heroOut[data-area='tex'] { grid-area: tex; }
-  .heroOut[data-area='model'] { grid-area: model; }
-}
+.doors { margin: clamp(32px, 4vw, 48px) auto 0; max-width: 1120px; display: grid; gap: 0; border-top: 1px solid var(--lp-line); }
+@media (min-width: 760px) { .doors { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.door { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 16px; padding: 20px 4px; border-bottom: 1px solid var(--lp-line); color: inherit; text-decoration: none; }
+@media (min-width: 760px) { .door { padding: 22px 24px 22px 0; border-bottom: 0; } li + li .door { padding-left: 24px; border-left: 1px solid var(--lp-line); } }
+.door strong { font-size: 16px; font-weight: 650; letter-spacing: -0.02em; }
+.door span { grid-column: 1; font-size: 14px; line-height: 1.6; color: var(--lp-body); }
+.door i { grid-column: 2; grid-row: 1; font-style: normal; color: var(--lp-muted); transition: transform 160ms ease, color 160ms ease; }
+.door:hover i { color: var(--lp-ink); transform: translateX(3px); }
+.door:focus-visible { outline: 2px solid var(--lp-blue); outline-offset: 2px; }
 .heroProof {
-  margin-top: 22px;
+  margin-top: 28px;
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
@@ -179,7 +152,6 @@
   color: var(--lp-muted);
 }
 .heroProof strong { color: var(--lp-ink); font-weight: 650; }
-.heroNote { margin-top: 8px; text-align: center; }
 
 /* ---------- Contrast: the same product, generated as-is vs designed ---------- */
 .pairs { margin-top: 48px; display: grid; gap: 16px; }
@@ -213,8 +185,6 @@
 .rules { display: grid; gap: 6px; }
 .rules li { display: flex; align-items: center; gap: 8px; padding: 9px 12px; border-radius: 10px; background: var(--lp-surface); font-size: 13px; font-weight: 500; }
 .rules li::before { content: ''; width: 6px; height: 6px; border-radius: 999px; background: var(--lp-ink); flex: none; }
-.range { display: grid; gap: 10px; }
-.rangeHead { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; font-size: 13px; font-weight: 600; }
 .rangeRow { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
 @media (min-width: 640px) { .rangeRow { grid-template-columns: repeat(8, minmax(0, 1fr)); } }
 .rangeItem { display: grid; gap: 6px; }
@@ -259,11 +229,12 @@
 
 /* ---------- Production + closing ---------- */
 .production { display: grid; gap: 28px; align-items: center; }
-@media (min-width: 1024px) { .production { grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr); gap: 56px; } }
+@media (min-width: 1024px) { .production { grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr); gap: 56px; } .production .h2 { font-size: clamp(1.7rem, 2.6vw, 2.3rem); } }
 .closing { display: grid; gap: 22px; justify-items: start; }
 @media (min-width: 1024px) { .closing { grid-template-columns: minmax(0, 1fr) auto; align-items: end; } }
 
 @media (prefers-reduced-motion: reduce) {
-  .heroOut { animation: none; opacity: 1; transform: none; }
+  .heroFilm { animation: none; opacity: 1; transform: none; }
+  .door i { transition: none; }
   .cta, .tab { transition: none; }
 }

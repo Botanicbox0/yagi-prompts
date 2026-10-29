@@ -42,8 +42,8 @@ describe('the approved Morphic evidence actually rendered to visitors', () => {
     const metadata = await generateMetadata({ params: Promise.resolve({ locale: 'ko' }) });
     const html = renderToStaticMarkup(await BrandsPage({ params: Promise.resolve({ locale: 'ko' }) }));
     // PLATFORM-2.0 §20 (2026-10-28): the brand side is the marketing asset studio.
-    expect(metadata.title).toBe('올인원 마케팅 에셋 스튜디오');
-    expect(metadata.openGraph).toMatchObject({ siteName: 'TWINGS', title: '올인원 마케팅 에셋 스튜디오' });
+    expect(metadata.title).toBe('소비재 브랜드를 위한 마케팅 에셋 스튜디오');
+    expect(metadata.openGraph).toMatchObject({ siteName: 'TWINGS', title: '소비재 브랜드를 위한 마케팅 에셋 스튜디오' });
     expect(html).toContain('id="brand-case-studies-structured-data"');
     expect(html).not.toContain('morphic.com/resources/how-to/make-90s-street-style-interview-video');
     expect(html).toContain('href="https://www.instagram.com/p/Dd0VQJaz8h-/"');

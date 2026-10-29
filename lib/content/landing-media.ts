@@ -13,7 +13,6 @@ import type { EvidencePair } from './slots';
 
 export type LandingMediaPage = 'brands' | 'home';
 export type LandingMediaGroup =
-  | 'hero'
   | 'contrast'
   | 'range'
   | 'scenes'
@@ -21,7 +20,7 @@ export type LandingMediaGroup =
   | 'homeHero';
 
 export interface LandingMediaSlot {
-  /** `<area>/<file name without extension>`, e.g. `landing/hero-shot`. */
+  /** `<area>/<file name without extension>`, e.g. `landing/sc-balm`. */
   key: string;
   page: LandingMediaPage;
   group: LandingMediaGroup;
@@ -52,11 +51,6 @@ function studio(name: string, ratio: string): LandingMediaSlot {
 
 export const LANDING_MEDIA_SLOTS: readonly LandingMediaSlot[] = [
   // Brand landing, in page order.
-  landing('hero-input', 'hero', '1:1', 900),
-  landing('hero-shot', 'hero', '4:5', 900),
-  landing('hero-texture', 'hero', '4:5', 900),
-  landing('hero-hand', 'hero', '4:5', 900),
-  landing('hero-model', 'hero', '4:5', 720),
   ...['logo', 'skin', 'light'].flatMap((pair) => [landing(`c-${pair}-raw`, 'contrast', '1:1', 640), landing(`c-${pair}-ours`, 'contrast', '1:1', 640)]),
   ...LANDING_PRODUCTS.map((key) => landing(`pk-${key}`, 'range', '4:5', 720)),
   ...LANDING_PRODUCTS.map((key) => landing(`sc-${key}`, 'scenes', '4:5', 900)),

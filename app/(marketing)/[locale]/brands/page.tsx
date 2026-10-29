@@ -49,7 +49,7 @@ export default async function BrandsPage({ params }: Props) {
     <JsonLd id="brand-case-studies-structured-data" data={brandCaseStudiesStructuredData({ origin: siteUrl(), locale, cases: [{ id: 'morphic', name: t.stories.title, description: t.stories.summary, path: `/${locale}/brands/stories/morphic` }] })} />
 
     <main id="main" data-brand-landing className={`overflow-clip [word-break:keep-all] ${landing.page}`}>
-      <LandingHero copy={t.landing} locale={locale} media={media} />
+      <LandingHero copy={t.landing} locale={locale} />
       <LandingContrast copy={t.landing} media={media} />
       <LandingAssets copy={t.landing} studio={t.studio} media={media} />
       <LandingCampaign copy={t.landing} trust={t.scalePillars}>
