@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { MakeLauncherView } from '@/components/templates/make-launcher';
 import { MakeSheet } from '@/components/templates/make-sheet';
 import { ReferenceFiles, downloadHref } from '@/components/recipes/reference-files';
+import { HowItWasMade } from '@/components/recipes/how-it-was-made';
 import { en, type Dictionary } from '@/messages/en';
 import { ko } from '@/messages/ko';
 
@@ -35,6 +36,33 @@ describe('the make launcher', () => {
     expect(live).not.toContain(ko.templates.subscribeCta);
     const closed = renderToStaticMarkup(<MakeLauncherView credits={25} signinHref={signin} labels={labels(ko)} access={{ signedIn: true, live: false }} />);
     expect(closed).toContain(ko.templates.makeCtaClosed);
+  });
+
+  it('opens with its lead (the selfie promise) and keeps the phone bar down until the box goes by', () => {
+    const html = renderToStaticMarkup(
+      <MakeLauncherView credits={25} signinHref={signin} labels={labels(en)} access={{ signedIn: true, live: true }} lead={<p>ONE_SELFIE</p>} stickyAfter />,
+    );
+    expect(html.indexOf('data-make-lead')).toBeLessThan(html.indexOf('data-template-credits'));
+    expect(html).toContain('ONE_SELFIE');
+    expect(html).toMatch(/<div[^>]*data-make-sticky[^>]*data-make-sticky-state="away"/);
+  });
+});
+
+describe('how it was made, in the column', () => {
+  const long = { presentation: 'story-first' as const, steps: [{ n: 1, kind: 'video' as const, prompt: `[My photo] ${'Shot detail. '.repeat(80)}` }], files: null };
+
+  it('folds a long prompt behind one tap, with the copy button still on top', () => {
+    const html = renderToStaticMarkup(<HowItWasMade recipe={long} copy={ko.makerRecipe} compact />);
+    expect(html).toContain('data-recipe-prompt="folded"');
+    expect(html).toContain('data-recipe-expand');
+    expect(html).toContain(ko.makerRecipe.how.expand);
+    expect(html).toContain(ko.makerRecipe.how.copy);
+  });
+
+  it('leaves the full-width section unfolded', () => {
+    const html = renderToStaticMarkup(<HowItWasMade recipe={long} copy={ko.makerRecipe} />);
+    expect(html).not.toContain('data-recipe-prompt="folded"');
+    expect(html).not.toContain('data-recipe-expand');
   });
 });
 

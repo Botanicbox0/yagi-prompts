@@ -703,6 +703,8 @@ export const en = {
       prevFile: 'Previous file',
       nextFile: 'Next file',
       fileCount: '{n} of {total}',
+      expand: 'Show the whole prompt',
+      collapse: 'Show less',
       gateTitle: 'Sign up for free to unlock the full recipe',
       gateBody: 'Create a free TWINGS account to view and copy the complete step-by-step prompt, sound guide, and reference files.',
       gateCta: 'Sign up / Sign in to view recipe →',
