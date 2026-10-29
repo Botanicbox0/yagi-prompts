@@ -18,7 +18,10 @@ const film = vi.hoisted(() => ({
   source: 'yagi', origin: 'maker', authorHandle: 'yunseolfromseoul', makerProfile: true, recipeOpen: true, models: [], modelLabels: [], useCase: [],
   poster: null, video: null, lock: null, featured: false, publishedAt: null,
 }));
-const makers = vi.hoisted(() => [{ handle: 'yunseolfromseoul', bio: '서울의 AI 크리에이티브.', bioEn: 'Seoul-based AI creative.', templateCount: 1, openRecipeCount: 1, latestPublishedAt: null }]);
+const makers = vi.hoisted(() => [{
+  handle: 'yunseolfromseoul', bio: '서울의 AI 크리에이티브.', bioEn: 'Seoul-based AI creative.', displayName: 'Yunseol', headline: 'HEADLINE_STAYS_ON_PROFILE', country: 'KR', city: 'CITY_STAYS_ON_PROFILE',
+  links: [], publicEmail: null, tools: [], openToBrands: true, avatar: null, cover: null, templateCount: 1, openRecipeCount: 1, latestPublishedAt: null,
+}]);
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/flags', () => ({ RENDER_PIPELINE_MODE: 'off', RENDER_PIPELINE_PUBLIC: false }));
 vi.mock('@/lib/creator-subscriptions/cached-availability', () => ({
@@ -60,11 +63,27 @@ describe('a story-first template with a public recipe', () => {
     expect(html).toContain('id="recipe"');
   });
 
-  it('shows the maker block in the page language', async () => {
-    expect(await page('en')).toContain('Seoul-based AI creative.');
-    const korean = await page('ko');
-    expect(korean).toContain('서울의 AI 크리에이티브.');
-    expect(korean).toContain(ko.makerRecipe.how.gateCta);
+  // Founder 2026-10-30: "그 maker가 만든거라는 명시와 제작자 프로필 볼 수 있게 정도 간단하게".
+  it('credits the creative in one line under the title — who made it and the way to their profile, nothing more', async () => {
+    for (const [locale, dict] of [['en', en], ['ko', ko]] as const) {
+      const html = await page(locale);
+      const row = html.indexOf('data-template-maker="yunseolfromseoul"');
+      expect(row).toBeGreaterThan(html.indexOf('<h1'));
+      expect(row).toBeLessThan(html.indexOf('data-template-recipe="story-first"'));
+      expect(html.split('data-template-maker=').length - 1).toBe(1);
+      expect(html.split('data-template-credit').length - 1).toBe(1);
+      const line = html.slice(row, html.indexOf('</a>', row));
+      expect(line).toContain(dict.templates.makerBlockHeading);
+      expect(line).toContain('Yunseol');
+      expect(line).toContain('@yunseolfromseoul');
+      expect(line).toContain(dict.templates.makerBlockCta);
+      expect(html).toContain(`href="/${locale}/makers/yunseolfromseoul"`);
+      // The bio, headline, place and the brand chip live on the profile page, not here.
+      for (const profileOnly of ['Seoul-based AI creative.', '서울의 AI 크리에이티브.', 'HEADLINE_STAYS_ON_PROFILE', 'CITY_STAYS_ON_PROFILE', dict.makers.openToBrands]) {
+        expect(html).not.toContain(profileOnly);
+      }
+    }
+    expect(await page('ko')).toContain(ko.makerRecipe.how.gateCta);
   });
 
   it("keeps the members' prompt out of the page: only the gate's teaser is in the HTML", async () => {

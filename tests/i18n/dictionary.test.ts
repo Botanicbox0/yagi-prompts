@@ -217,19 +217,20 @@ describe('§14.1 names: one term object per locale', () => {
     expect(offenders).toEqual([]);
   });
 
-  it('composes the program, studio, rails, chips and credits from the terms', () => {
+  it('composes the program, studio, credits and the creative line from the terms', () => {
     for (const [dict, terms] of [[ko, KO_TERMS], [en, EN_TERMS]] as const) {
       expect(dict.creatorProgram.metaTitle).toBe(terms.makerProgram);
       expect(dict.creatorProgram.footerLink).toBe(terms.makerProgram);
       expect(dict.creatorProgram.workspaceTitle).toBe(terms.makerStudio);
-      expect(dict.templates.studioRail).toBe(terms.studioCollection);
-      expect(dict.templates.makerRail).toBe(terms.makerCollection);
+      expect(dict.prompts.byYagi.startsWith(terms.studioCollection.replace(/s$/, ''))).toBe(true);
       expect(dict.brandWorkspace.wizard.format.creators).toBe(terms.makerCollection);
       expect(dict.prompts.cardAuthor).toBe(`${terms.creditPrefix} @{handle}`);
       expect(dict.prompts.byAuthor).toBe(`${terms.creditPrefix} @{handle}`);
       expect(dict.audience.personal).toBe(terms.personal);
     }
-    expect(ko.templates.originMaker).toBe(KO_TERMS.maker);
+    // One feed since 2026-10-30 (§7.5): no origin rails or chips left to name.
+    for (const dict of [ko, en]) for (const gone of ['studioRail', 'studioRailLede', 'makerRail', 'makerRailLede', 'originHeading', 'originAll', 'originStudio', 'originMaker']) expect(dict.templates).not.toHaveProperty(gone);
+    expect(ko.templates.makerBlockHeading.endsWith(KO_TERMS.maker)).toBe(true);
     expect(ko.creatorProgram.approvedLine.startsWith(KO_TERMS.makerFull)).toBe(true);
     expect(ko.creatorProgram.applyTitle.startsWith(KO_TERMS.maker)).toBe(true);
     // The values fixed on 2026-10-28 (founder: "메이커" → "AI 크리에이티브", PLATFORM-2.0 §20.1) — the one place a test spells them out.

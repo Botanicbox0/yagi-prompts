@@ -213,7 +213,6 @@ export default async function MakerPage({ params }: RouteParams) {
           ) : (
             <PromptRail
               id="maker"
-              origin="maker"
               heading={t.templatesHeading}
               lede=""
               cards={cards}

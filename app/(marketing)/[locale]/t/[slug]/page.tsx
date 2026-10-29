@@ -45,8 +45,7 @@ import { RecipeActions } from '@/components/recipes/recipe-actions';
 import { MakeLauncher } from '@/components/templates/make-launcher';
 import { MakeSheet } from '@/components/templates/make-sheet';
 import { templateCredits } from '@/lib/twings/credits';
-import { makerBioFor } from '@/lib/makers/profile';
-import { CreativeAvatar, placeOf } from '@/components/makers/identity';
+import { CreativeAvatar } from '@/components/makers/identity';
 
 /**
  * `/[locale]/t/[slug]` — one template, which is also where it is made (docs/TEMPLATES-IA.md §2).
@@ -256,12 +255,23 @@ export default async function TemplatePage({ params }: RouteParams) {
                   <span data-medium-chip className="text-accent">{dict.nav[card.medium]}</span>
                 </p>
                 <h1 className="mt-2 font-display text-[clamp(1.75rem,3vw,2.5rem)] leading-[1.12] font-black tracking-[-0.025em] break-keep uppercase">{title}</h1>
+                {/* §7.5 (founder 2026-10-30): a creative's template says who made it and opens their
+                    profile — one line under the title, nothing more. Bio, place and links live on the profile. */}
+                {makerRest && card.authorHandle && (
+                  <a data-template-maker={card.authorHandle} data-template-credit href={`/${locale}${makerRest}`} className="group mt-3 flex max-w-md min-h-11 items-center gap-3">
+                    <CreativeAvatar handle={card.authorHandle} name={maker?.displayName ?? null} src={maker?.avatar ?? null} size={36} eager />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-xs text-black/55">{t.makerBlockHeading}</span>
+                      <span className="block truncate text-sm font-semibold group-hover:underline">
+                        {maker?.displayName ?? `@${card.authorHandle}`}
+                        {maker?.displayName && <span className="ml-1.5 font-normal text-black/55">@{card.authorHandle}</span>}
+                      </span>
+                    </span>
+                    <span className="shrink-0 text-xs font-medium text-black/70 group-hover:text-black">{t.makerBlockCta} →</span>
+                  </a>
+                )}
                 <div className="mt-3 flex flex-wrap items-center gap-1.5 text-xs">
-                  {makerRest ? (
-                    <a data-template-credit href={`/${locale}${makerRest}`} className="inline-flex items-center rounded-full border border-hairline bg-surface px-2.5 py-1 font-medium text-black/80 underline-offset-4 hover:underline">
-                      {credit}
-                    </a>
-                  ) : (
+                  {!makerRest && (
                     <span data-template-credit className="inline-flex items-center rounded-full border border-hairline bg-surface px-2.5 py-1 font-medium text-black/80">
                       {credit}
                     </span>
@@ -433,29 +443,6 @@ export default async function TemplatePage({ params }: RouteParams) {
 
                 {/* The definition, under the first screen (AGENTS.md §7 GEO): in the HTML, not in the way. */}
                 <p data-template-description className="mt-6 max-w-detail text-sm leading-relaxed text-black/65">{dict.meta.templateDescription}</p>
-
-                {/* §7.5·§20: the creative card — only for a creative who made their profile public. */}
-                {makerRest && card.authorHandle && (
-                  <aside data-template-maker={card.authorHandle} className="mt-8 rounded-2xl border border-hairline p-5">
-                    <p className="text-xs text-black/60">{t.makerBlockHeading}</p>
-                    <a href={`/${locale}${makerRest}`} className="group mt-3 flex items-center gap-3.5">
-                      <CreativeAvatar handle={card.authorHandle} name={maker?.displayName ?? null} src={maker?.avatar ?? null} size={52} />
-                      <span className="min-w-0">
-                        <span className="block truncate text-base font-semibold group-hover:underline">{maker?.displayName ?? `@${card.authorHandle}`}</span>
-                        <span className="block truncate font-mono text-xs text-black/55">
-                          {[maker?.displayName ? `@${card.authorHandle}` : null, maker ? placeOf(maker.country, maker.city, locale) : null].filter(Boolean).join(' · ')}
-                        </span>
-                      </span>
-                    </a>
-                    {maker && (maker.headline ?? makerBioFor(maker, locale)) && <p className="mt-3 text-sm leading-relaxed whitespace-pre-line break-words text-black/70">{maker.headline ?? makerBioFor(maker, locale)}</p>}
-                    {maker?.openToBrands && (
-                      <p className="mt-3 inline-flex items-center gap-2 rounded-full bg-black/[0.05] px-3 py-1 text-xs text-black/75">
-                        <span aria-hidden="true" className="size-1.5 rounded-full bg-emerald-500" />{dict.makers.openToBrands}
-                      </p>
-                    )}
-                    <a href={`/${locale}${makerRest}`} className="mt-3 flex min-h-11 items-center text-sm font-medium underline underline-offset-4">{t.makerBlockCta} →</a>
-                  </aside>
-                )}
               </div>
             </header>
 
