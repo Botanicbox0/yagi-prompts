@@ -10,6 +10,9 @@ describe('the brand page shows the service before asking visitors to enquire', (
   for (const locale of ['ko', 'en'] as const) {
     it(`keeps ${locale} case visitors on real posts instead of a Morphic workflow`, async () => {
       const html = renderToStaticMarkup(await BrandsPage({ params: Promise.resolve({ locale }) }));
+      // The landing's one blue sits on a wrapper around the whole page, nav and footer included.
+      expect(html.indexOf('<div data-brand-accent')).toBeGreaterThan(-1);
+      expect(html.indexOf('<div data-brand-accent')).toBeLessThan(html.indexOf('id="main"'));
       expect(html).not.toMatch(/href="https:\/\/morphic\.com\//);
       expect(html).not.toContain('make-90s-street-style-interview-video');
       expect(html).toContain('href="https://www.instagram.com/p/DcXjygPg8fE/"');
