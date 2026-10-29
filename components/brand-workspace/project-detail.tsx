@@ -25,8 +25,14 @@ import { AestheticEngine } from './aesthetic-engine';
 import { ReviewStage } from './review-stage';
 import { BriefConcierge } from './brief-concierge';
 import { HumanHandoff } from './human-handoff';
+import { AmbientBleed } from './ambient-bleed';
 import type { BrandUsageView } from "@/lib/brands/usage/types";
 import type { ReactNode } from "react";
+
+/** With a cover, its main colour glows softly behind the masthead (brand host only, see workspace.css). */
+function Masthead({ cover, children }: { cover: boolean; children: ReactNode }) {
+  return cover ? <AmbientBleed className="bw-project-masthead">{children}</AmbientBleed> : <div>{children}</div>;
+}
 
 export function PostTable({
   posts,
@@ -108,6 +114,7 @@ export function ProjectDetail({
   shortlist = null,
   shortlistCount = 0,
   formatTitle = null,
+  staffTools = null,
 }: {
   project: BrandProjectDetail;
   b: BrandCopy;
@@ -132,6 +139,8 @@ export function ProjectDetail({
   shortlistCount?: number;
   /** The requested template's title, looked up by the page; null shows the slug. */
   formatTitle?: string | null;
+  /** DB admins in the TWINGS team view only: the studio's own panels for this campaign (the shortlist). */
+  staffTools?: ReactNode;
 }) {
   // `role: "studio"` outside /admin is the TWINGS team's read-only view: it is not the customer's seat.
   const staffView = !studio && p.role === "studio";
@@ -147,7 +156,7 @@ export function ProjectDetail({
   const next = projectNextAction(p, studio ? "studio" : writable ? "approver" : "reader", b);
   return (
     <div data-brand-project={p.id}>
-      <div className={p.coverUrl ? "bw-project-masthead" : undefined}>
+      <Masthead cover={Boolean(p.coverUrl)}>
       {p.coverUrl && (
         <div className="bw-project-cover" data-project-cover>
           <img src={p.coverUrl} alt={`${b.cover.alt}: ${p.title}`} />
@@ -177,9 +186,10 @@ export function ProjectDetail({
           {b.status[p.status]}
         </span>
       </div>
-      </div>
+      </Masthead>
       {staffView && <StaffNotice b={b} manageHref={staffManageHref} />}
       {staffView && p.clientVisible === false && <p className="bw-note" data-project-unshared>{b.managed.prepared}</p>}
+      {staffView && staffTools}
       {p.status === "requested" && <p className="bw-note">{b.requestedNext}</p>}
       {/* Above the tabs, so it is seen whichever tab is open; its link switches to that tab. */}
       {next && (

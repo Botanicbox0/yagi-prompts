@@ -141,6 +141,8 @@ export type AdminErrorCode =
    */
   | 'brandConflict'
   | 'collaborationRateLimited'
+  /** The brand host's studio door: this admin's action budget for the window is spent (lib/admin/brand-host-audit.ts). */
+  | 'studioRateLimited'
   | 'brandNotActive'
   | 'brandConsentRequired'
   | 'brandNotShared'

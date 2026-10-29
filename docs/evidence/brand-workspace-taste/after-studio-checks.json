@@ -1,0 +1,85 @@
+{
+ "projectPath": "found",
+ "report": [
+  {
+   "name": "triage",
+   "locale": "ko",
+   "width": 1440,
+   "overflow": 0,
+   "cut": 0,
+   "title": "브랜드 워크스페이스",
+   "broken": 0,
+   "errors": []
+  },
+  {
+   "name": "studio-home",
+   "locale": "ko",
+   "width": 1440,
+   "overflow": 0,
+   "cut": 0,
+   "title": "브랜드 워크스페이스",
+   "broken": 0,
+   "errors": []
+  },
+  {
+   "name": "triage",
+   "locale": "ko",
+   "width": 390,
+   "overflow": 0,
+   "cut": 0,
+   "title": "브랜드 워크스페이스",
+   "broken": 0,
+   "errors": []
+  },
+  {
+   "name": "studio-home",
+   "locale": "ko",
+   "width": 390,
+   "overflow": 0,
+   "cut": 0,
+   "title": "브랜드 워크스페이스",
+   "broken": 0,
+   "errors": []
+  },
+  {
+   "name": "triage",
+   "locale": "en",
+   "width": 1440,
+   "overflow": 0,
+   "cut": 0,
+   "title": "Brand workspace",
+   "broken": 0,
+   "errors": []
+  },
+  {
+   "name": "studio-home",
+   "locale": "en",
+   "width": 1440,
+   "overflow": 0,
+   "cut": 0,
+   "title": "Brand workspace",
+   "broken": 0,
+   "errors": []
+  },
+  {
+   "name": "triage",
+   "locale": "en",
+   "width": 390,
+   "overflow": 0,
+   "cut": 0,
+   "title": "Brand workspace",
+   "broken": 0,
+   "errors": []
+  },
+  {
+   "name": "studio-home",
+   "locale": "en",
+   "width": 390,
+   "overflow": 0,
+   "cut": 0,
+   "title": "Brand workspace",
+   "broken": 0,
+   "errors": []
+  }
+ ]
+}

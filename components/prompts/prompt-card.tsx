@@ -9,7 +9,8 @@ import type { PromptLabels } from './labels';
 /**
  * PLAN §13.2, revised by docs/PLATFORM-2.0.md §15.3-4 — the gallery card. Media first, then the
  * title, and only what helps the reader choose: how long, what shape, whether it is new, and — for
- * a creator's format — whose it is.
+ * an AI creative's template — whose it is. Since the feed mixes both origins (§7.5, 2026-10-30)
+ * that quiet `by @handle` line is the only thing that tells the two apart.
  *
  * What it carries is exactly the public projection (`lib/prompts/catalog.ts`). **No prompt text**,
  * no price (founder 2026-09-07: the template page names it), and since 2026-10-23 no engine name:
@@ -48,6 +49,7 @@ export function PromptCardView({
   return (
     <article
       data-prompt-card={card.slug}
+      data-card-origin={card.origin}
       data-source={card.source}
       data-medium={card.medium}
       data-frame={frame}
@@ -71,6 +73,16 @@ export function PromptCardView({
             className="pointer-events-none absolute top-2 left-2 rounded-full bg-accent px-2 py-1 text-[0.6875rem] leading-none font-semibold text-white"
           >
             {labels.badgeNew}
+          </span>
+        )}
+
+        {/* The template page shows this one's prompt (2026-10-29): the reason a creative's follower clicks. */}
+        {card.recipeOpen && (
+          <span
+            data-card-recipe
+            className="pointer-events-none absolute top-2 right-2 rounded-full bg-white px-2 py-1 text-[0.6875rem] leading-none font-semibold text-black"
+          >
+            {labels.cardRecipe}
           </span>
         )}
 

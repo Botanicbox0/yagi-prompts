@@ -1,4 +1,4 @@
-import type { ShortlistMetrics } from './schema';
+import type { ShortlistCriteria, ShortlistCriteriaKey, ShortlistMetrics } from './schema';
 
 /**
  * How the shortlist reads its figures (docs/BRAND-SHORTLIST.md). Browser-safe: no server imports.
@@ -49,4 +49,57 @@ export function sortShortlist<T extends { handle: string; metrics: ShortlistMetr
     }
     return a.handle.localeCompare(b.handle);
   });
+}
+
+/** The triage ranges, in the order the studio's list shows them (the same keys as `SHORTLIST_CRITERIA_KEYS`). */
+export const SHORTLIST_DIMENSIONS = ['followers', 'views', 'engagement', 'adShare'] as const satisfies readonly ShortlistCriteriaKey[];
+/** Rates are compared in percent; counts on a log scale where a histogram is drawn. */
+export const shortlistIsRate = (key: ShortlistCriteriaKey) => key === 'engagement' || key === 'adShare';
+/** The figure each triage range reads: followers, median views, the higher engagement rate, sponsored share. */
+export function shortlistDimension(metrics: ShortlistMetrics, key: ShortlistCriteriaKey): number | null {
+  if (key === 'followers') return metrics.followers ?? null;
+  if (key === 'views') return metrics.viewsMedian90d ?? null;
+  if (key === 'engagement') return shortlistSortValue(metrics, 'engagement');
+  return metrics.adShare ?? null;
+}
+
+export type ShortlistFit = 'in' | 'out' | 'unknown';
+/**
+ * Where a candidate stands against the ranges: outside any one → `out`; inside all → `in`; a range
+ * whose figure is missing → `unknown`, which the studio decides by hand. No ranges → null.
+ */
+export function shortlistFit(metrics: ShortlistMetrics, criteria: ShortlistCriteria | null | undefined): ShortlistFit | null {
+  const ranges = Object.entries(criteria ?? {}).filter(([, r]) => r && (r.min != null || r.max != null)) as Array<[ShortlistCriteriaKey, { min?: number | null; max?: number | null }]>;
+  if (ranges.length === 0) return null;
+  let unknown = false;
+  for (const [key, r] of ranges) {
+    const value = shortlistDimension(metrics, key);
+    if (value == null) { unknown = true; continue; }
+    if ((r.min != null && value < r.min) || (r.max != null && value > r.max)) return 'out';
+  }
+  return unknown ? 'unknown' : 'in';
+}
+
+export function shortlistMedian(values: readonly number[]): number | null {
+  if (values.length === 0) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = sorted.length >> 1;
+  return sorted.length % 2 ? sorted[mid]! : (sorted[mid - 1]! + sorted[mid]!) / 2;
+}
+
+export type ShortlistTag = 'views' | 'organic' | 'engagement' | 'steady';
+/**
+ * Up to three plain labels a brand can check against the figures on the same card: median views at
+ * 60 % of followers or more, engagement 1.3 times the shortlist's median or more, sponsored share
+ * 15 % or less, 10 or more posts of one kind in 30 days.
+ */
+export function shortlistTags(metrics: ShortlistMetrics, medianEngagement: number | null): ShortlistTag[] {
+  const tags: ShortlistTag[] = [];
+  const { followers, viewsMedian90d, adShare, feedPosts30d, reelsPosts30d } = metrics;
+  if (followers && viewsMedian90d != null && viewsMedian90d >= followers * 0.6) tags.push('views');
+  const engagement = shortlistSortValue(metrics, 'engagement');
+  if (engagement != null && medianEngagement && engagement >= medianEngagement * 1.3) tags.push('engagement');
+  if (adShare != null && adShare <= 15) tags.push('organic');
+  if (Math.max(feedPosts30d ?? 0, reelsPosts30d ?? 0) >= 10) tags.push('steady');
+  return tags.slice(0, 3);
 }

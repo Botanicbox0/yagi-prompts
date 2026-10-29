@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * Try-on (beta) demo for the brand landing (docs/PLATFORM-2.0.md §20.8): the lookbook mode keeps the
+ * Try-on (beta) demo for the brand landing (docs/PLATFORM-2.0.md §21.8): the lookbook mode keeps the
  * Americano cut set, the free mode opens scene, pose and ratio. Files live in /reel/studio/.
  */
 import { useRef, useState, type CSSProperties, type KeyboardEvent } from 'react';

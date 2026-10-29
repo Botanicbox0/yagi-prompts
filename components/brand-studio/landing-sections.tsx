@@ -10,7 +10,7 @@ import styles from './landing.module.css';
  * The brand landing, v6 (2026-10-29 founder review, after riverflow and magnific): the promise, a film of
  * one product becoming everything, and three doors (studio, campaign, production). Then why it is not
  * generic AI → asset studio → creator campaign → production → closing. Every picture is a real output
- * (docs/PLATFORM-2.0.md §20.11).
+ * (docs/PLATFORM-2.0.md §21.11).
  */
 
 type Copy = Dictionary['brandLanding']['landing'];

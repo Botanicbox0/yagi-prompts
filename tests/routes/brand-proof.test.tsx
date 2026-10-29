@@ -40,7 +40,7 @@ describe('the approved Morphic evidence actually rendered to visitors', () => {
   it('wires the public cases into page metadata and structured data without duplicating the site name', async () => {
     const metadata = await generateMetadata({ params: Promise.resolve({ locale: 'ko' }) });
     const html = renderToStaticMarkup(await BrandsPage({ params: Promise.resolve({ locale: 'ko' }) }));
-    // PLATFORM-2.0 §20 (2026-10-28): the brand side is the marketing asset studio.
+    // PLATFORM-2.0 §21 (2026-10-28): the brand side is the marketing asset studio.
     expect(metadata.title).toBe('소비재 브랜드를 위한 마케팅 에셋 스튜디오');
     expect(metadata.openGraph).toMatchObject({ siteName: 'TWINGS', title: '소비재 브랜드를 위한 마케팅 에셋 스튜디오' });
     expect(html).toContain('id="brand-case-studies-structured-data"');

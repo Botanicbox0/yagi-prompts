@@ -7,7 +7,7 @@ import type { PromptCard } from '@/lib/prompts/catalog';
 import { PROMPT_MODEL_LABEL, USE_CASES } from '@/lib/prompts/schemas';
 import { PromptCardView } from '@/components/prompts/prompt-card';
 import { CardPlaybackControl, shouldMountClip } from '@/components/prompts/card-media';
-import { CARD_RATIOS, cardAspect, cardAuthor, cardFrame, makerProfileRest, railOrder } from '@/components/prompts/card-frame';
+import { CARD_RATIOS, ORIGIN_RUN_MAX, cardAspect, cardAuthor, cardFrame, makerProfileRest, railOrder } from '@/components/prompts/card-frame';
 import { pillClassName } from '@/components/prompts/pill';
 import { PromptRail } from '@/components/prompts/rails';
 import { UseCaseFilter } from '@/components/prompts/filter-chips';
@@ -137,6 +137,7 @@ describe('maker credit (PLATFORM-2.0 §7.5·§14.1: only maker templates say who
   it('stays silent on a studio template', () => {
     expect(cardAuthor(card())).toBeNull();
     expect(markup(card())).not.toContain('data-card-author');
+    expect(markup(card())).toContain('data-card-origin="studio"');
   });
 
   it('credits "by @handle" on a maker template, and the maker label without a public handle', () => {
@@ -257,40 +258,86 @@ describe('catalog first screen (§15.3-5)', () => {
   });
 });
 
-describe('studio and maker collections (PLATFORM-2.0 §7.5·§14.1)', () => {
+/**
+ * Founder 2026-10-30 (PLATFORM-2.0 §7.5): originals and AI creatives' templates in ONE feed. One
+ * ranking (NEW → featured → newest); inside it, never more than ORIGIN_RUN_MAX cards of one origin
+ * in a row while the other origin still has cards. A creative's card says whose it is — nothing else.
+ */
+describe('one mixed feed (founder 2026-10-30)', () => {
+  const OLD = '2026-01-01T00:00:00.000Z';
+  const studio = (slug: string, publishedAt = OLD) => card({ slug, publishedAt, featured: false });
+  const maker = (slug: string, publishedAt = OLD, handle: string | null = 'hana') =>
+    card({ slug, publishedAt, featured: false, origin: 'maker', source: 'yagi', authorHandle: handle, makerProfile: handle !== null });
+  const slugs = (cards: PromptCard[]) => railOrder(cards, NOW).map((c) => c.slug);
+  const longestRun = (ordered: PromptCard[]) => {
+    let longest = 0, run = 0, last: string | null = null;
+    for (const c of ordered) { run = c.origin === last ? run + 1 : 1; last = c.origin; longest = Math.max(longest, run); }
+    return longest;
+  };
+
+  it('keeps the ranking when the two origins already alternate', () => {
+    expect(slugs([studio('s1'), maker('m1'), studio('s2'), maker('m2')])).toEqual(['s1', 'm1', 's2', 'm2']);
+  });
+
+  it('breaks a run of one origin after three cards, keeping each origin in its own order', () => {
+    const ranked = [studio('s1'), studio('s2'), studio('s3'), studio('s4'), studio('s5'), maker('m1'), maker('m2')];
+    expect(ORIGIN_RUN_MAX).toBe(3);
+    expect(slugs(ranked)).toEqual(['s1', 's2', 's3', 'm1', 's4', 's5', 'm2']);
+    // …and the same rule the other way round, when the creatives lead.
+    expect(slugs([maker('m1'), maker('m2'), maker('m3'), maker('m4'), studio('s1')])).toEqual(['m1', 'm2', 'm3', 's1', 'm4']);
+  });
+
+  it('still leads with NEW cards, from either origin', () => {
+    expect(slugs([studio('s1'), studio('s2'), maker('m-new', '2026-10-20T00:00:00.000Z')])[0]).toBe('m-new');
+    expect(slugs([maker('m1'), studio('s-new', '2026-10-20T00:00:00.000Z')])).toEqual(['s-new', 'm1']);
+  });
+
+  it('never lets one origin clump while the other still has cards', () => {
+    for (const [s, m] of [[12, 1], [12, 3], [3, 12], [7, 7], [20, 5]] as const) {
+      const cards = [...Array.from({ length: s }, (_, i) => studio(`s${i}`)), ...Array.from({ length: m }, (_, i) => maker(`m${i}`))];
+      const ordered = railOrder(cards, NOW);
+      expect(ordered).toHaveLength(s + m);
+      expect(new Set(ordered.map((c) => c.slug)).size).toBe(s + m);
+      // The tail may run long only once one origin is used up.
+      const origins = ordered.map((c) => c.origin);
+      const firstExhausted = Math.min(origins.lastIndexOf('studio'), origins.lastIndexOf('maker'));
+      expect(longestRun(ordered.slice(0, firstExhausted + 1))).toBeLessThanOrEqual(ORIGIN_RUN_MAX);
+    }
+  });
+
+  it('leaves a single-origin list exactly as before (NEW first, then catalog order)', () => {
+    expect(slugs([studio('a'), studio('n1', '2026-10-20T00:00:00.000Z'), studio('b')])).toEqual(['n1', 'a', 'b']);
+  });
+
   const listing = (cards: PromptCard[], locale: 'ko' | 'en' = 'ko') =>
     renderToStaticMarkup(<TemplatesListing locale={locale} dict={dicts[locale]} medium="video" cards={cards} />);
-  const maker = (slug: string, handle: string | null = 'hana') =>
-    card({ slug, origin: 'maker', source: 'yagi', authorHandle: handle, makerProfile: handle !== null });
 
-  it('with no maker template, there is no maker rail, no origin chips and no rail heading change', () => {
-    const html = listing([card(), card({ slug: 'second' })]);
-    expect(html).not.toContain('data-rail-origin="maker"');
+  it('draws one grid with both origins in it — no origin rails, chips or collection headings', () => {
+    const html = listing([studio('s1'), studio('s2'), studio('s3'), studio('s4'), maker('m1')]);
+    expect(html.match(/data-rail="/g)).toHaveLength(1);
+    expect(html).not.toContain('data-rail-origin');
     expect(html).not.toContain('data-origin-filter');
-    expect(html).not.toContain(dicts.ko.templates.makerRail);
-    expect(html).toContain('data-rail-origin="studio"');
+    expect(html).not.toContain(`>${KO_TERMS.studioCollection}<`);
+    expect(html).not.toContain(`>${KO_TERMS.makerCollection}<`);
+    expect(listing([studio('s1'), maker('m1')], 'en')).not.toContain(`>${EN_TERMS.makerCollection}<`);
+    // The creative's card sits inside the originals, at the fourth place at the latest.
+    const order = [...html.matchAll(/data-prompt-card="([^"]+)"/g)].map((match) => match[1]);
+    expect(order).toEqual(['s1', 's2', 's3', 'm1', 's4']);
+    // One count over everything.
+    expect(html).toContain('5개 템플릿');
   });
 
-  it('puts the studio rail first and the maker rail second, with the "전체 · 오리지널 · 메이커" chips', () => {
-    const html = listing([card(), maker('maker-one')]);
-    const studio = html.indexOf('data-rail-origin="studio"');
-    const makers = html.indexOf('data-rail-origin="maker"');
-    expect(studio).toBeGreaterThan(-1);
-    expect(makers).toBeGreaterThan(studio);
-    expect(html.indexOf('data-prompt-card="neon-alley-dolly"')).toBeLessThan(makers);
-    expect(html.indexOf('data-prompt-card="maker-one"')).toBeGreaterThan(makers);
-    expect(html).toContain('data-origin-filter');
-    for (const label of [dicts.ko.templates.originAll, dicts.ko.templates.originStudio, dicts.ko.templates.originMaker]) expect(html).toContain(`>${label}<`);
-    expect([dicts.ko.templates.originAll, dicts.ko.templates.originStudio, dicts.ko.templates.originMaker]).toEqual(['전체', '오리지널', KO_TERMS.maker]);
-    expect(html).toContain(`>${dicts.ko.templates.studioRail}<`);
-    expect(html).toContain(`>${dicts.ko.templates.makerRail}<`);
-    expect([dicts.ko.templates.studioRail, dicts.ko.templates.makerRail]).toEqual([KO_TERMS.studioCollection, KO_TERMS.makerCollection]);
-    expect(listing([card(), maker('maker-one')], 'en')).toContain(`>${EN_TERMS.makerCollection}<`);
+  it('marks each card with its origin and credits only the creative', () => {
+    const html = listing([studio('s1'), maker('m1')]);
+    expect(html).toContain('data-card-origin="studio"');
+    expect(html).toContain('data-card-origin="maker"');
+    expect(html.match(/data-card-author/g)).toHaveLength(1);
+    expect(html).toContain(`>${KO_TERMS.creditPrefix} @hana<`);
   });
 
-  it('a maker-only catalogue still opens on its maker rail without an empty studio rail', () => {
-    const html = listing([maker('maker-one')]);
-    expect(html).toContain('data-rail-origin="maker"');
-    expect(html).not.toContain('data-rail-origin="studio"');
+  it('a creatives-only catalogue is the same single grid', () => {
+    const html = listing([maker('m1'), maker('m2')]);
+    expect(html.match(/data-rail="/g)).toHaveLength(1);
+    expect(html).not.toContain('data-rail-origin');
   });
 });

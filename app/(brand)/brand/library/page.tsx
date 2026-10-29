@@ -25,7 +25,10 @@ export default async function ContentLibrary({
     <div data-brand-library>
       <div className="bw-heading">
         <div>
-          <h1>{b.managed.library}</h1>
+          <div className="bw-title">
+            <h1>{b.managed.library}</h1>
+            {contents.length > 0 && <span className="bw-count-chip" data-library-total>{contents.length}</span>}
+          </div>
           <p>{b.managed.libraryHint}</p>
         </div>
       </div>

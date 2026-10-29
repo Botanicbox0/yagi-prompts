@@ -120,7 +120,7 @@ describe('the brand page shows the service before asking visitors to enquire', (
       expect(html).toContain(ko ? '200만' : '2M+');
       // The example library is a client campaign: its brand name and packaging never appear.
       expect(html).not.toMatch(/L['’]?H\.?A\.?S/i);
-      // No competitor names, no credit or price promises before the founder sets them (§20.7).
+      // No competitor names, no credit or price promises before the founder sets them (§21.7).
       expect(html).not.toMatch(/Dropbox|Midjourney|Runway|Figma|Photoshop|Playbook|Typeface|Higgsfield|Nano Banana|Seedream/);
       expect(html).not.toMatch(/credits?\b|크레딧/i);
     });

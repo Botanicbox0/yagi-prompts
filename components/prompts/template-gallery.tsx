@@ -124,9 +124,9 @@ export function StripArrow() {
 }
 
 /** A film's version of the strip: my selfie → the scene I lead. The poster stands for the result. */
-export function TransformStrip({ lead, selfieLabel, makeHref, poster, aspect }: { lead: string; selfieLabel: string; makeHref?: string | null; poster: GalleryFrame | null; aspect: string }) {
+export function TransformStrip({ lead, selfieLabel, makeHref, poster, aspect, className = 'mt-4 sm:mt-5' }: { lead: string; selfieLabel: string; makeHref?: string | null; poster: GalleryFrame | null; aspect: string; className?: string }) {
   return (
-    <div data-template-transform className="mt-4 flex flex-col gap-2.5 sm:mt-5">
+    <div data-template-transform className={`flex flex-col gap-2.5 ${className}`}>
       <p className="text-sm font-semibold tracking-[-0.01em] text-black/85">{lead}</p>
       <div className="flex items-end gap-2.5">
         <SelfieTile label={selfieLabel} href={makeHref} />

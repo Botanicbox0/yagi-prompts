@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { after, NextResponse } from 'next/server';
 import { getViewer } from '@/lib/auth/viewer';
 import { storefrontOpen } from '@/lib/auth/purchase-gate';
 import { getSqlRunner } from '@/lib/db/connect';
@@ -16,6 +16,8 @@ import { subscriptionTemplateEligibility } from '@/lib/premium-editing/eligibili
 import type { SubscriptionSummary } from '@/lib/creator-subscriptions/types';
 import type { EditScope } from '@/lib/premium-editing/contract';
 import { getPremiumEditBudget, type PremiumEditBudget } from '@/lib/premium-editing/budget';
+import { getDictionary } from '@/lib/i18n/dictionaries';
+import { loadPublicRecipe, recordRecipeOpen, type PublicRecipe } from '@/lib/recipes/public';
 
 /**
  * `GET /api/renders/access?template=slug` — what THIS viewer's make button should do on THIS
@@ -29,6 +31,7 @@ import { getPremiumEditBudget, type PremiumEditBudget } from '@/lib/premium-edit
  *   identityRequired  does the template's engine need a verified face (ModelArk) — docs §8.2
  *   identity          where this viewer stands on that: none · pending · active · failed · not_needed
  *   selfie            the saved photo every order reuses (docs/IDENTITY-SELFIE.md), or null to upload inline
+ *   recipe            the full "만드는 법" for a signed-in member — the one recipe gate (§20.3); null otherwise
  *
  * A viewer who forges any of this only reaches the refusals the enqueue route already carries.
  */
@@ -56,6 +59,9 @@ export async function GET(request: Request): Promise<NextResponse> {
   let editing = false;
   let editFields: EditScope[] = [];
   let premiumEditBudget: PremiumEditBudget | null = null;
+  let recipe: PublicRecipe | null = null;
+  const localeParam = new URL(request.url).searchParams.get('locale');
+  const locale = localeParam === 'ko' ? 'ko' : 'en';
   if (viewer.userId !== null) {
     const sql = await getSqlRunner();
     if (sql !== null) {
@@ -67,6 +73,17 @@ export async function GET(request: Request): Promise<NextResponse> {
       selfie = selfieRow ? selfieView(selfieRow) : null;
       interest = prefs?.newPlaybook === true;
       const template = candidate?.audience === 'brand' ? null : candidate;
+      if (template !== null) {
+        const mr = getDictionary(locale).makerRecipe;
+        recipe = await loadPublicRecipe(sql, template.id, {
+          selfie: mr.selfieLabel,
+          reference: mr.referenceLabel,
+          step: mr.stepResultLabel,
+        }).catch(() => null);
+        // §20.3: the creative's studio counts members who opened the recipe — (template, member) once a minute.
+        const userId = viewer.userId;
+        if (recipe) after(() => recordRecipeOpen(sql, template.id, userId));
+      }
       // A quote describes use; only a paid, owned, unexpired ledger grants access.
       try {
         const environment = billingConfigFromEnv()?.kind ?? 'live';
@@ -92,5 +109,5 @@ export async function GET(request: Request): Promise<NextResponse> {
     }
   }
 
-  return NextResponse.json({ open: storefrontOpen(), live, charge: canStartRender(viewer) && !viewer.isAdmin, identityRequired, identity, signedIn, interest, selfie, subscription, subscriptionEligible, subscriptionUsePercent, editing, editFields, premiumEditBudget }, { headers: HEADERS });
+  return NextResponse.json({ open: storefrontOpen(), live, charge: canStartRender(viewer) && !viewer.isAdmin, identityRequired, identity, signedIn, interest, selfie, subscription, subscriptionEligible, subscriptionUsePercent, editing, editFields, premiumEditBudget, recipe }, { headers: HEADERS });
 }
