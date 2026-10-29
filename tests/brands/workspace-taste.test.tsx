@@ -21,9 +21,11 @@ const adminTokens = block("html[data-workspace-admin]");
 const rules = css.replace(brandTokens, "").replace(adminTokens, "");
 
 describe("brand workspace taste", () => {
-  it("defines the brand host on the TWINGS blue, with red only as a low-chroma danger state", () => {
-    expect(brandTokens).toContain("--ys-accent: #0000ee;");
+  it("defines the brand host on one key colour token, with red only as a low-chroma danger state", () => {
+    expect(brandTokens).toMatch(/--ys-accent: #[0-9a-f]{6};/);
     expect(brandTokens).toContain("--color-blue: var(--ys-accent);");
+    // The key colour may change: every other blue derives from --ys-accent, none is written out.
+    expect(rules + brandTokens.replace(/--ys-accent: #[0-9a-f]{6};/, "")).not.toMatch(/#0000ee|rgba\(0, 0, 238/i);
     expect(brandTokens).toContain("--ys-red: var(--ys-danger);");
     expect(brandTokens).not.toMatch(/#ed1e1e|#dc2626/i);
   });

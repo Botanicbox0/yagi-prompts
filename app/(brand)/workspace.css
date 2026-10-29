@@ -33,9 +33,11 @@ html[data-brand-workspace] {
   --ys-ink-hover: #2c2c31;
   --ys-ink-secondary: #55555f;
   --ys-ink-muted: #6e6e78;
-  --ys-accent: #0000ee;
-  --ys-accent-soft: rgba(0, 0, 238, 0.06);
-  --ys-accent-line: rgba(0, 0, 238, 0.32);
+  /* The one key colour. Everything blue on the brand host derives from this value, so a future
+     main key colour is a one-line change (대표 2026-10-29: a soft ultramarine that sits with white). */
+  --ys-accent: #4355e8;
+  --ys-accent-soft: color-mix(in srgb, var(--ys-accent) 7%, transparent);
+  --ys-accent-line: color-mix(in srgb, var(--ys-accent) 32%, transparent);
   --ys-select: var(--ys-ink);
   --ys-select-soft: rgba(17, 17, 20, 0.04);
   --ys-focus: var(--ys-accent);
@@ -60,7 +62,7 @@ html[data-brand-workspace] {
   --ys-gold-soft: rgba(161, 92, 7, 0.09);
   --ys-emerald: #177245;
   --ys-emerald-soft: rgba(23, 114, 69, 0.09);
-  --ys-sky: #0000ee;
+  --ys-sky: var(--ys-accent);
 
   /* Daylight: several faint layers instead of one dark shadow, plus a double ring (hairline outside,
      white rim inside). */
@@ -3161,7 +3163,7 @@ button.bw-wizard-step:hover { border-color:var(--ys-ink); }
    rule it restyles and wins only by coming later; /admin (which also loads this file) is untouched.
    Per screen, three or four techniques at most:
    · shell: gallery passepartout frame, daylight shadow, double ring, concentric radius
-   · boards (home, library, creators): passepartout media cards, dark glass chips, cursor spotlight, tabular numerals
+   · boards (home, library, creators): passepartout media cards, dark glass chips, cursor spotlight, tabular numerals; no right-hand activity rail (대표 2026-10-29)
    · campaign: ambient colour bleed, morphing tab indicator, tabular numerals, double-ring panels
    · shortlist / triage: floating glass island + spring, milky popovers, recessed range wells, tabular numerals
    · studio: alabaster/white layering, passepartout viewer, ambient colour bleed, recessed wells
@@ -3173,8 +3175,8 @@ html[data-brand-workspace] {
   --ys-sidebar-w: 248px;
 }
 :where([data-brand-workspace]) .bw-body { overflow-x: clip; }
-:where([data-brand-workspace]) ::selection { background: rgba(0, 0, 238, 0.14); }
-html[data-brand-workspace] { scrollbar-width: thin; scrollbar-color: rgba(17, 17, 20, 0.22) transparent; -webkit-tap-highlight-color: rgba(0, 0, 238, 0.08); }
+:where([data-brand-workspace]) ::selection { background: color-mix(in srgb, var(--ys-accent) 16%, transparent); }
+html[data-brand-workspace] { accent-color: var(--ys-accent); scrollbar-width: thin; scrollbar-color: rgba(17, 17, 20, 0.22) transparent; -webkit-tap-highlight-color: color-mix(in srgb, var(--ys-accent) 10%, transparent); }
 /* A floating island at the bottom never hides the element keyboard focus scrolls to. */
 html[data-brand-workspace]:has(.bw-shortlist-tray, .bw-triage-bulk) { scroll-padding-bottom: 104px; }
 :where([data-brand-workspace]) :is(a, button, summary, label, select) { touch-action: manipulation; }
@@ -3428,7 +3430,7 @@ html[data-brand-workspace]::view-transition-group(bw-tab-indicator) { animation-
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 0 0 1px rgba(255, 255, 255, 0.05);
 }
 :where([data-brand-workspace]) .bw-campaign-art > .bw-status::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: rgba(255, 255, 255, 0.55); }
-:where([data-brand-workspace]) .bw-campaign-art > .bw-status[data-state=active]::before { background: #8f9bff; }
+:where([data-brand-workspace]) .bw-campaign-art > .bw-status[data-state=active]::before { background: color-mix(in srgb, var(--ys-accent) 45%, white); }
 :where([data-brand-workspace]) .bw-campaign-art > .bw-status[data-state=requested]::before { background: #f4c066; }
 :where([data-brand-workspace]) .bw-campaign-art > .bw-status[data-state=completed]::before { background: #6fd39c; }
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
@@ -3442,46 +3444,6 @@ html[data-brand-workspace]::view-transition-group(bw-tab-indicator) { animation-
 :where([data-brand-workspace]) .bw-service-disclosure,
 :where([data-brand-workspace]) .bw-team-footer { border-color: var(--ys-hairline); }
 
-/* Activity rail: on a wide screen the latest versions sit to the right of the board, as in a media
-   library's activity column. */
-@media (min-width: 1360px) {
-  :where([data-brand-workspace]) [data-campaign-queue]:has(> [data-home-recent]) {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 300px;
-    grid-template-areas: 'attention rail' 'board rail';
-    grid-template-rows: auto 1fr;
-    column-gap: 40px;
-    align-items: start;
-  }
-  :where([data-brand-workspace]) [data-campaign-queue] > .bw-attention { grid-area: attention; }
-  :where([data-brand-workspace]) [data-campaign-queue] > .bw-campaign-section { grid-area: board; }
-  :where([data-brand-workspace]) [data-campaign-queue] > .bw-campaign-section .bw-campaign-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  :where([data-brand-workspace]) [data-campaign-queue] > [data-home-recent] {
-    grid-area: rail;
-    position: sticky;
-    top: 36px;
-    margin: 0;
-    padding: 4px 0 0 28px;
-    box-shadow: -1px 0 0 var(--ys-hairline);
-  }
-  :where([data-brand-workspace]) [data-home-recent] .bw-content-grid { grid-template-columns: 1fr; gap: 6px; }
-  :where([data-brand-workspace]) [data-home-recent] .bw-content-card {
-    display: grid;
-    grid-template-columns: 64px minmax(0, 1fr);
-    gap: 14px;
-    align-items: center;
-    padding: 8px;
-    margin: 0 -8px;
-    border-radius: 14px;
-    transition: background-color var(--ys-dur) var(--ys-ease);
-  }
-  :where([data-brand-workspace]) [data-home-recent] .bw-content-card:hover { background: var(--ys-subtle-bg); }
-  :where([data-brand-workspace]) [data-home-recent] .bw-content-card > .bw-cover { width: 64px; border-radius: 10px; }
-  :where([data-brand-workspace]) [data-home-recent] .bw-content-card > div:last-child { padding: 0; }
-  :where([data-brand-workspace]) [data-home-recent] .bw-content-card h3 { margin: 6px 0 2px; }
-  :where([data-brand-workspace]) [data-home-recent] .bw-media-kind { display: none; }
-}
-
 /* Cursor spotlight: a faint blue light under the card's mat and text, never over the picture.
    Driven by one delegated pointermove (components/brand-workspace/spotlight.tsx). */
 @media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
@@ -3492,7 +3454,7 @@ html[data-brand-workspace]::view-transition-group(bw-tab-indicator) { animation-
     z-index: -1;
     border-radius: inherit;
     pointer-events: none;
-    background: radial-gradient(420px circle at var(--mouse-x, -999px) var(--mouse-y, -999px), rgba(0, 0, 238, 0.065), rgba(0, 0, 238, 0.02) 35%, transparent 62%);
+    background: radial-gradient(420px circle at var(--mouse-x, -999px) var(--mouse-y, -999px), color-mix(in srgb, var(--ys-accent) 8%, transparent), color-mix(in srgb, var(--ys-accent) 3%, transparent) 35%, transparent 62%);
     opacity: 0;
     transition: opacity 320ms var(--ys-ease);
   }

@@ -7,7 +7,10 @@
   "bulkIsland_whiteText_overWhite": 11.69,
   "inkMuted_onWhite": 5.04,
   "inkMuted_onAlabaster": 4.78,
-  "accent_onWhite": 9.4,
+  "accent_onWhite": 5.67,
+  "accent_onAlabaster": 5.38,
+  "accent_onAccentSoft": 5.13,
+  "white_onAccent": 5.67,
   "danger_onWhite": 6.6,
   "gold_onGoldSoft": 4.59,
   "emerald_onEmeraldSoft": 5.22
@@ -23,17 +26,17 @@
   "indicatorIn": "#review",
   "spotlight": {
    "x": "60px",
-   "y": "344px",
+   "y": "336px",
    "opacity": "1"
   }
  },
  "keyboard": [
-  "a.bw-skip-link solid rgb(0, 0, 238) 2px",
-  "a.bw-lockup solid rgb(0, 0, 238) 2px",
-  "a solid rgb(0, 0, 238) 2px",
-  "a solid rgb(0, 0, 238) 2px",
-  "a solid rgb(0, 0, 238) 2px",
-  "a solid rgb(0, 0, 238) 2px"
+  "a.bw-skip-link solid rgb(67, 85, 232) 2px",
+  "a.bw-lockup solid rgb(67, 85, 232) 2px",
+  "a solid rgb(67, 85, 232) 2px",
+  "a solid rgb(67, 85, 232) 2px",
+  "a solid rgb(67, 85, 232) 2px",
+  "a solid rgb(67, 85, 232) 2px"
  ],
  "blur": {
   "home": 5,
