@@ -8,7 +8,8 @@ import type { BrandFailureCode, BrandOutcome } from '@/lib/brands/workspace/type
 import { brandLogoMime, brandProjectSeat } from '@/lib/brands/workspace/service';
 import {
   SHORTLIST_AVATAR_MAX_BYTES, SHORTLIST_CRITERIA_KEYS, SHORTLIST_METRIC_KEYS, ShortlistCriteriaSaveSchema, ShortlistImportSchema,
-  ShortlistPickSchema, ShortlistRemoveSchema, ShortlistShareSchema, ShortlistTriageSchema, type ShortlistCriteria, type ShortlistMetrics,
+  ShortlistChooseSchema, ShortlistPickSchema, ShortlistRemoveSchema, ShortlistShareSchema, ShortlistTriageSchema, type ShortlistChoice,
+  type ShortlistCriteria, type ShortlistMetrics,
 } from './schema';
 
 /**
@@ -32,6 +33,10 @@ export interface ShortlistCandidate {
   metrics: ShortlistMetrics;
   measuredOn: string | null;
   picked: boolean;
+  /** The brand set this candidate aside on its own page; still shown there under "제외". */
+  passed: boolean;
+  /** The creator's booking for this campaign is confirmed ("섭외 확정"). */
+  confirmed: boolean;
 }
 /** Waiting until the studio shares or excludes it; an excluded candidate stays so a re-import cannot revive it. */
 export type ShortlistState = 'waiting' | 'shared' | 'excluded';
@@ -57,7 +62,7 @@ const day = (v: unknown): string | null => v == null ? null : stamp(v).slice(0, 
 /** 0066 not applied yet: the campaign page shows no shortlist instead of failing. */
 const missingTable = (error: unknown) => (error as { code?: string }).code === '42P01';
 
-const COLUMNS = 'id,handle,display_name,category,metrics,measured_on,avatar_key,avatar_sha256,avatar_tone,shared_at,excluded_at,picked_at,created_at,updated_at';
+const COLUMNS = 'id,handle,display_name,category,metrics,measured_on,avatar_key,avatar_sha256,avatar_tone,shared_at,excluded_at,picked_at,passed_at,confirmed_at,created_at,updated_at';
 const ORDER = "order by nullif(metrics->>'followers','')::numeric desc nulls last, handle";
 
 export const shortlistAvatarPath = (id: string, sha256: string) => `/api/brand-workspace/shortlist/${id}/avatar?v=${sha256.slice(0, 12)}`;
@@ -79,6 +84,7 @@ function candidate(row: Row): ShortlistCandidate {
     avatarUrl: row.avatar_key ? shortlistAvatarPath(String(row.id), String(row.avatar_sha256)) : null,
     avatarTone: row.avatar_key && typeof row.avatar_tone === 'string' && TONE.test(row.avatar_tone) ? row.avatar_tone : null,
     metrics: metricsOf(row.metrics), measuredOn: day(row.measured_on), picked: row.picked_at != null,
+    passed: row.passed_at != null, confirmed: row.confirmed_at != null,
   };
 }
 function studioCandidate(row: Row): StudioShortlistCandidate {
@@ -145,7 +151,8 @@ async function avatarImage(dataUrl: string): Promise<{ bytes: Buffer; tone: stri
 /**
  * Add or refresh candidates by handle. A refresh replaces the figures (and their day) when new ones
  * are sent, keeps a known name/category/picture when the new reading has none, and never touches
- * whether a candidate is shared, excluded or picked. New candidates wait until the studio shares them.
+ * whether a candidate is shared, excluded, picked or passed. `confirmed` sets or clears the booking
+ * (absent leaves it). New candidates wait until the studio shares them, booked or not.
  */
 export async function importShortlist(
   deps: { sql: SqlRunner; storage?: Pick<StorageDriver, 'putStaging'> },
@@ -187,15 +194,17 @@ export async function importShortlist(
             metrics=case when $4 then $5::jsonb else metrics end,
             measured_on=case when $4 then $6::date else measured_on end,
             avatar_key=coalesce($7,avatar_key), avatar_mime=case when $7::text is null then avatar_mime else 'image/webp' end,
-            avatar_size=coalesce($8,avatar_size), avatar_sha256=coalesce($9,avatar_sha256), avatar_tone=coalesce($10,avatar_tone), updated_at=now()
+            avatar_size=coalesce($8,avatar_size), avatar_sha256=coalesce($9,avatar_sha256), avatar_tone=coalesce($10,avatar_tone),
+            confirmed_at=case when $11::boolean is null then confirmed_at when $11 then coalesce(confirmed_at,now()) end, updated_at=now()
           where id=$1`,
-          [id, c.displayName ?? null, c.category ?? null, fresh, JSON.stringify(metrics), v.measuredOn ?? null, avatar?.key ?? null, avatar?.size ?? null, avatar?.sha256 ?? null, avatar?.tone ?? null]);
+          [id, c.displayName ?? null, c.category ?? null, fresh, JSON.stringify(metrics), v.measuredOn ?? null, avatar?.key ?? null, avatar?.size ?? null, avatar?.sha256 ?? null, avatar?.tone ?? null,
+            c.confirmed ?? null]);
         updated++;
       } else {
-        await sql.query(`insert into brand_shortlist_candidates(id,project_id,platform,handle,display_name,category,metrics,measured_on,avatar_key,avatar_mime,avatar_size,avatar_sha256,avatar_tone)
-          values($1,$2,$3,$4,$5,$6,$7::jsonb,$8::date,$9,$10,$11,$12,$13)`,
+        await sql.query(`insert into brand_shortlist_candidates(id,project_id,platform,handle,display_name,category,metrics,measured_on,avatar_key,avatar_mime,avatar_size,avatar_sha256,avatar_tone,confirmed_at)
+          values($1,$2,$3,$4,$5,$6,$7::jsonb,$8::date,$9,$10,$11,$12,$13,case when $14 then now() end)`,
           [id, v.projectId, c.platform, c.handle, c.displayName ?? null, c.category ?? null, JSON.stringify(metrics), fresh ? v.measuredOn ?? null : null,
-            avatar?.key ?? null, avatar ? 'image/webp' : null, avatar?.size ?? null, avatar?.sha256 ?? null, avatar?.tone ?? null]);
+            avatar?.key ?? null, avatar ? 'image/webp' : null, avatar?.size ?? null, avatar?.sha256 ?? null, avatar?.tone ?? null, c.confirmed === true]);
         added++;
       }
     }
@@ -345,9 +354,45 @@ export async function pickShortlistCandidate(deps: { sql: SqlRunner; verifiedEma
     if (!seat) throw new Denied('not_found');
     if (seat.role === 'studio' || !seat.canComment) throw new Denied('forbidden');
     if (seat.status === 'cancelled') throw new Denied('not_active');
-    if (v.picked) await sql.query('update brand_shortlist_candidates set picked_at=coalesce(picked_at,now()),picked_by=case when picked_at is null then $2 else picked_by end where id=$1', [v.candidateId, viewer.userId]);
+    if (v.picked) await sql.query(`update brand_shortlist_candidates set picked_at=coalesce(picked_at,now()),picked_by=case when picked_at is null then $2 else picked_by end,
+        passed_at=null,passed_by=null where id=$1`, [v.candidateId, viewer.userId]);
     else await sql.query('update brand_shortlist_candidates set picked_at=null,picked_by=null where id=$1', [v.candidateId]);
     return { id: v.candidateId, picked: v.picked };
+  });
+}
+
+/**
+ * The brand's sorting of many shared candidates at once: prefer, set aside, or clear either mark.
+ * Same seats as the preference mark. Every ID must be a shared candidate of one campaign the viewer
+ * can see, or nothing changes (`not_found`). Marking keeps the first marker; a candidate is never
+ * preferred and set aside at once.
+ */
+export async function chooseShortlistCandidates(
+  deps: { sql: SqlRunner; verifiedEmail?: string }, viewer: Viewer, input: unknown,
+): Promise<BrandOutcome<{ id: string; choice: ShortlistChoice; changed: number }>> {
+  const parsed = ShortlistChooseSchema.safeParse(input);
+  if (!parsed.success) return invalid(parsed.error);
+  const v = parsed.data;
+  if (!uuid(viewer.userId)) return fail('sign_in_required');
+  return run(deps.sql, async sql => {
+    const rows = (await sql.query('select id,project_id from brand_shortlist_candidates where id=any($1::uuid[]) and shared_at is not null for update', [v.candidateIds])).rows;
+    const projects = new Set(rows.map(r => String(r.project_id)));
+    if (rows.length !== v.candidateIds.length || projects.size !== 1) throw new Denied('not_found');
+    const [projectId] = projects;
+    const seat = await brandProjectSeat(sql, viewer.userId!, projectId!, deps.verifiedEmail);
+    if (!seat) throw new Denied('not_found');
+    if (seat.role === 'studio' || !seat.canComment) throw new Denied('forbidden');
+    if (seat.status === 'cancelled') throw new Denied('not_active');
+    const changed = (await sql.query(v.choice === 'picked'
+      ? `update brand_shortlist_candidates set picked_at=now(),picked_by=$2,passed_at=null,passed_by=null
+          where id=any($1::uuid[]) and picked_at is null returning id`
+      : v.choice === 'passed'
+        ? `update brand_shortlist_candidates set passed_at=now(),passed_by=$2,picked_at=null,picked_by=null
+            where id=any($1::uuid[]) and passed_at is null returning id`
+        : `update brand_shortlist_candidates set picked_at=null,picked_by=null,passed_at=null,passed_by=null
+            where id=any($1::uuid[]) and (picked_at is not null or passed_at is not null) returning id`,
+    v.choice === 'none' ? [v.candidateIds] : [v.candidateIds, viewer.userId])).rows.length;
+    return { id: projectId!, choice: v.choice, changed };
   });
 }
 
