@@ -51,11 +51,12 @@ describe('public subscription SSR state', () => {
     const template = renderToStaticMarkup(await TemplatePage({ params: Promise.resolve({ locale, slug: film.slug }) }));
     for (const html of [landing, template]) {
       expect(answers(html)).toContain(copy.faq.subscriptionCreatorOpen.a1);
-      expect(answers(html)).toContain(copy.faq.subscriptionCreatorOpen.a2);
       expect(answers(html).some(answer => answer.includes(copy.seo.generationClosed))).toBe(false);
-      const prose = html.replaceAll('&#x27;', "'");
-      expect(prose).toContain(copy.faq.subscriptionCreatorOpen.a2);
     }
+    expect(answers(landing)).toContain(copy.faq.subscriptionCreatorOpen.a2);
+    expect(landing.replaceAll('&#x27;', "'")).toContain(copy.faq.subscriptionCreatorOpen.a2);
+    // A template page names no won or dollar price (founder, 2026-10-29): no pricing answer there.
+    expect(answers(template)).not.toContain(copy.faq.subscriptionCreatorOpen.a2);
     expect(landing.replaceAll('&#x27;', "'")).toContain(copy.creatorJourney.subscriptionReady);
     expect(template.replaceAll('&#x27;', "'")).toContain(copy.templates.makeBodySubscription);
     expect(template).not.toContain('data-template-subscription');
@@ -67,7 +68,7 @@ describe('public subscription SSR state', () => {
     state.availability = { ...state.availability, status: 'open', plans: { creator: { status: 'open' }, premium: { status: 'open' } }, editing: 'open', premiumEditRequestsPerPeriod: 30 };
     const html = renderToStaticMarkup(await TemplatePage({ params: Promise.resolve({ locale: 'ko', slug: film.slug }) }));
     expect(html).not.toContain('data-template-subscription');
-    expect(answers(html)).toContain(copy.faq.subscriptionOpen.a2);
+    expect(answers(html)).not.toContain(copy.faq.subscriptionOpen.a2);
     expect(html).toContain(copy.templates.makeBodySubscription);
   });
   it('shows a pause without promising new enrollment or calling it a preparation state', async () => {
@@ -79,7 +80,7 @@ describe('public subscription SSR state', () => {
     expect(template).toContain(copy.templates.makeBodySubscriptionPaused);
     expect(template).not.toContain('data-template-subscription');
     expect(answers(landing)).toContain(copy.faq.subscriptionPaused.a2);
-    expect(answers(template)).toContain(copy.faq.subscriptionPaused.a2);
+    expect(answers(template)).not.toContain(copy.faq.subscriptionPaused.a2);
   });
   it('uses independent terms approval while enrollment remains preparing', async () => {
     const copy = getDictionary('ko').creatorSubscription;

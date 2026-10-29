@@ -1028,8 +1028,10 @@ async function sweepTemplates(): Promise<void> {
   // flips — it draws a neutral skeleton, and the per-viewer access call settles it in the browser.
   expectPresent('…and the studio starts as a neutral skeleton', detail.body, 'data-studio-pending');
   expectAbsent('…not painted closed before the access call', detail.body, 'data-studio-closed');
-  // §15.3-1 — the decision screen: one make card that is the price box, no second heading or link button.
-  expectPresent('…one make card that is the price box', detail.body, 'data-template-price-box');
+  // §15.3-1, revised 2026-10-29 (founder): a short make box on the page, the make card in a sheet.
+  expectPresent('…a make box on the page', detail.body, 'data-template-make-launcher');
+  expectPresent('…the make card in a sheet', detail.body, 'data-make-sheet');
+  expectAbsent('…no price box', detail.body, 'data-template-price-box');
   expectAbsent('…no link button above the card', detail.body, 'data-template-make-cta');
   expectPresent('…its facts', detail.body, 'data-template-fact');
   expectPresent('…the AI limit inside the card', detail.body, 'data-studio-ai-note');
@@ -1038,18 +1040,23 @@ async function sweepTemplates(): Promise<void> {
   expectPresent('…a phone sticky bar', detail.body, 'data-make-sticky');
   if (/<div[^>]*data-make-sticky[^>]*data-hide-tabs/.test(detail.body)) ok('…that hides the installed app tabs', 'data-hide-tabs');
   else fail('…sticky bar hides the app tabs', 'data-make-sticky must carry data-hide-tabs');
-  expectPresent('…whose one CTA goes to the make card', detail.body, 'href="#make"');
+  expectPresent('…and the selfie strip still opens the make card', detail.body, 'href="#make"');
   expectAbsent('…no demo badge anywhere', detail.body, 'data-demo-badge');
   expectAbsent('…no placeholder ad', detail.body, 'YOUR AD HERE');
   expectAbsent('…no house ad rail', detail.body, 'data-house-ad');
-  expectPresent('…and the price in dollars on the English page', detail.body, '>$4<');
+  // Founder, 2026-10-29: a template page names no won or dollar price — a visitor is asked to subscribe.
+  const shown = (html: string) => html.replace(/<script[\s\S]*?<\/script>/g, '');
+  expectAbsent('…no dollar price on the English page', shown(detail.body), '>$4<');
+  expectPresent('…"Subscribe to make it here" instead', detail.body, 'Subscribe to make it here');
+  expectAbsent('…no Offer price in the structured data', detail.body, 'priceCurrency');
   // The related list is the catalogue's 4:5 grid: two across on a phone, four on a desktop.
   if (/<ul[^>]*data-related-grid[^>]*class="[^"]*\bgrid-cols-2\b[^"]*\blg:grid-cols-4\b/.test(detail.body)) ok('…related templates in the two-column card grid', 'data-related-grid');
   else fail('…related templates grid', 'expected data-related-grid with grid-cols-2 … lg:grid-cols-4');
   expectPresent('…whose items are cards', detail.body, 'data-related-item');
   const detailKo = await get(`/ko/t/${GATED_PROMPT}`);
   expectEqual('the Korean template page renders 200', detailKo.status, 200);
-  expectPresent('…with the price in won', detailKo.body, '5,900원');
+  expectAbsent('…with no won price either', shown(detailKo.body), '5,900원');
+  expectPresent('…"구독하고 여기서 만들기" instead', detailKo.body, '구독하고 여기서 만들기');
   if (/완성까지<\/dt><dd[^>]*>보통 \d+분/.test(detailKo.body)) ok('…with the typical wait in minutes', '보통 N분');
   else fail('…typical wait', 'expected "완성까지 · 보통 N분" in the make card');
   expectAbsent('…and never a dollar', detailKo.body, '>$4<');
