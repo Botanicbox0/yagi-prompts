@@ -5,7 +5,8 @@
  * A slot is one file wherever it appears. The default is the file in `public/`; an override is a row
  * in `landing_media` pointing at a `public-content` object (lib/content/landing-media-server.ts).
  * Videos and their posters are not slots: a new poster over an old film would show one thing and
- * play another.
+ * play another. For the same reason the 15-second ad's product shot (`landing/ad-product`) is not a
+ * slot either: it shows the lip gloss the ad plays.
  *
  * This module is imported by client components, so it holds data and pure lookups only.
  */
