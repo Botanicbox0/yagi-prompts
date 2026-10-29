@@ -108,14 +108,20 @@ describe("the campaign page in the TWINGS team view", () => {
     createdAt: "2026-10-29T00:00:00Z", updatedAt: "2026-10-29T00:00:00Z", role: "studio", canComment: false, referenceLinks: [],
     contents: [], decisions: [], messages: [], attachments: [], posts: [], contracts: [], contractUploads: [], reports: [],
   } as BrandProjectDetail;
-  const tools = <ShortlistAdmin projectId={B} view={{ candidates: [] } as never} back={`/brand/projects/${B}#shortlist-admin`} copy={b.shortlistAdmin} locale="ko" brandHost />;
+  const candidate = { id: A, handle: "fixture.creator", displayName: null, category: null, metrics: { followers: 12000 }, shared: false, picked: false, measuredOn: "2026-10-27" };
+  const tools = <ShortlistAdmin projectId={B} view={{ candidates: [candidate] } as never} back={`/brand/projects/${B}#shortlist-admin`} copy={b.shortlistAdmin} locale="ko" brandHost />;
 
   it("shows the shortlist panel with the import campaign ID, posting to the brand host's door", () => {
     const page = renderToStaticMarkup(<ProjectDetail project={project} b={b} locale="ko" staffTools={tools} />);
     expect(page).toContain(`data-shortlist-project-id="true">${B}</code>`);
     expect(page).toContain(b.shortlistAdmin.projectId);
     const panel = page.slice(page.indexOf("data-shortlist-admin"));
-    expect([...panel.matchAll(/<form[^>]*\saction="([^"]+)"/g)].map((m) => m[1])).toEqual(["/api/brand-workspace/studio"]);
+    // Sharing only (all + one candidate); file import and removal are on the admin screen.
+    expect([...panel.matchAll(/<form[^>]*\saction="([^"]+)"/g)].map((m) => m[1])).toEqual(["/api/brand-workspace/studio", "/api/brand-workspace/studio"]);
+    expect(panel).not.toContain("brandWorkspace.shortlistImport");
+    expect(panel).not.toContain("brandWorkspace.shortlistRemove");
+    expect(panel).not.toContain('type="file"');
+    expect(panel).toContain(b.shortlistAdmin.adminOnly);
     expect(page).not.toContain('action="/admin/do"');
     // Above the tabs, right under the team-view notice and the "not shared yet" line.
     expect(page.indexOf("data-project-unshared")).toBeLessThan(page.indexOf("data-shortlist-admin"));

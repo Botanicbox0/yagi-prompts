@@ -14,13 +14,19 @@ export const BRAND_HOST_STUDIO_OPERATIONS = [
   'brandWorkspace.organization',
   'brandWorkspace.createProject',
   'brandWorkspace.status',
-  'brandWorkspace.shortlistImport',
+  // Candidate file import and removal stay on admin.twings.app: the import worker has its own
+  // secret-only route, and removal is destructive. Sharing is the one shortlist move this host needs.
   'brandWorkspace.shortlistShare',
-  'brandWorkspace.shortlistRemove',
 ] as const satisfies readonly AdminOperationName[];
 export type BrandHostStudioOperation = (typeof BRAND_HOST_STUDIO_OPERATIONS)[number];
 
 export const BRAND_STUDIO_ACTION_PATH = '/api/brand-workspace/studio';
+/**
+ * Every JSON call to the door carries this header with the value "1". A cross-site `<form>` cannot
+ * send a custom header, and a cross-site `fetch` with one needs a CORS preflight this route never
+ * answers. JS-free forms (which cannot set it) are held to the exact Origin + Sec-Fetch-Site check.
+ */
+export const STUDIO_REQUEST_HEADER = 'x-twings-studio';
 
 export function isBrandHostStudioOperation(name: string): name is BrandHostStudioOperation {
   return (BRAND_HOST_STUDIO_OPERATIONS as readonly string[]).includes(name);

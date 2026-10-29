@@ -1282,6 +1282,7 @@ export const en = {
       rateLimited: 'Too many requests. Please try again shortly.',
       adminInvalid: 'This couldn’t be saved. Check the required fields and formats.',
       adminDenied: 'This action isn’t available or the item no longer exists. Refresh to see the current state.',
+      studioRateLimited: 'Too many changes in a short time. Try again in 10 minutes.',
     },
     studioPrep: {
       cta: 'New campaign',
@@ -1826,6 +1827,7 @@ export const en = {
       projectId: 'Campaign ID for imports',
       file: 'Candidate file (.json)',
       import: 'Import',
+      adminOnly: 'Importing a candidate file and removing candidates happen on the admin screen. The import job sends to the campaign ID above.',
       summary: '{total} total · {shared} shared · {hidden} waiting · {picked} preferred by client',
       shareAll: 'Share all waiting candidates',
       hideAll: 'Hide all',
@@ -3733,6 +3735,7 @@ export const en = {
     inviteHiddenCampaign: 'This campaign is not shared with the client yet. Campaign-only invitations open once it is shared. For brand-wide access, invite from the brand access page.',
     errBrandConflict: 'The campaign changed in the meantime, or that change is not possible from its current status. Refresh to see where it stands.',
     errCollaborationRateLimited: 'Too many requests. Try again shortly.',
+    errStudioRateLimited: 'Too many changes in a short time. Try again in 10 minutes.',
     errBrandNotActive: 'Only an active campaign accepts this. Move the campaign to active first.',
     errBrandConsentRequired: 'A campaign produced by TWINGS needs the creator-consent box ticked before content can be added.',
     errBrandNotShared: 'A campaign the client cannot see yet cannot take campaign-only invitations. Share the campaign first, or invite to the whole brand.',

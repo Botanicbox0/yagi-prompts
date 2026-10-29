@@ -27,7 +27,7 @@ vi.mock("@/lib/storage", () => ({ STAGING_BUCKET: "content", getStorage: async (
 import * as s from "@/lib/brands/workspace/service";
 import * as sl from "@/lib/brands/shortlist/service";
 import { ADMIN_OPERATIONS } from "@/lib/admin/operations";
-import { BRAND_HOST_STUDIO_OPERATIONS, brandHostDestination, brandHostOutcomeUrl } from "@/lib/admin/brand-host-studio";
+import { BRAND_HOST_STUDIO_OPERATIONS, brandHostDestination, brandHostOutcomeUrl, STUDIO_REQUEST_HEADER } from "@/lib/admin/brand-host-studio";
 import { POST } from "@/app/api/brand-workspace/studio/route";
 
 const HOST = "brand.twings.app";
@@ -46,7 +46,7 @@ function post(fields: Record<string, string | File>, { json = true, origin = `ht
   const sameSite = origin === `https://${HOST}`;
   return POST(new NextRequest(`https://${HOST}/api/brand-workspace/studio`, {
     method: "POST", body,
-    headers: { host: HOST, origin, "sec-fetch-site": sameSite ? "same-origin" : "cross-site", ...(json ? { accept: "application/json" } : {}) },
+    headers: { host: HOST, origin, "sec-fetch-site": sameSite ? "same-origin" : "cross-site", ...(json ? { accept: "application/json", [STUDIO_REQUEST_HEADER]: "1" } : {}) },
   }));
 }
 const campaign = (organizationId: string, requestId = randomUUID()) => ({
@@ -159,12 +159,12 @@ describe("preparing a campaign from brand.twings.app", () => {
     expect((await move("cancelled", 2)).status).toBe(404);
   });
 
-  it("imports a shortlist from the campaign page and returns to its panel, candidates still hidden", async () => {
+  it("shares imported candidates from the campaign page; the file import itself is not on this host", async () => {
     const project = (await (await post(campaign(brandA))).json()).to.split("/").pop();
     const file = new File([JSON.stringify({ measuredOn: "2026-10-27", candidates: [{ handle: "fixture.creator", metrics: { followers: 12000 } }] })], "shortlist.json", { type: "application/json" });
-    const response = await post({ _op: "brandWorkspace.shortlistImport", _back: `/brand/projects/${project}#shortlist-admin`, projectId: project, file }, { json: false });
-    expect(response.status).toBe(303);
-    expect(response.headers.get("location")).toBe(`https://${HOST}/brand/projects/${project}?ok=saved#shortlist-admin`);
+    expect((await post({ _op: "brandWorkspace.shortlistImport", _back: `/brand/projects/${project}#shortlist-admin`, projectId: project, file }, { json: false })).status).toBe(404);
+    // Candidates arrive through the import worker's own route (or the admin screen).
+    await sl.importShortlist({ sql, storage: { putStaging: async () => {} } }, { kind: "studio", viewer: admin }, { projectId: project, measuredOn: "2026-10-27", candidates: [{ handle: "fixture.creator", metrics: { followers: 12000 } }] });
     expect((await sl.loadStudioShortlist({ sql }, admin, project))?.candidates.map((c) => [c.handle, c.shared])).toEqual([["fixture.creator", false]]);
     const share = await post({ _op: "brandWorkspace.shortlistShare", _back: `/brand/projects/${project}#shortlist-admin`, projectId: project, shared: "true" }, { json: false });
     expect(share.headers.get("location")).toBe(`https://${HOST}/brand/projects/${project}?ok=saved#shortlist-admin`);

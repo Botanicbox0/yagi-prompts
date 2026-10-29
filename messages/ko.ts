@@ -1291,6 +1291,7 @@ export const ko: Dictionary = {
       rateLimited: '요청이 많습니다. 잠시 후 다시 시도해 주세요.',
       adminInvalid: '저장하지 못했습니다. 필수 항목과 입력 형식을 확인해 주세요.',
       adminDenied: '이 작업을 할 수 없거나 대상을 찾을 수 없습니다. 새로고침해 현재 상태를 확인해 주세요.',
+      studioRateLimited: '짧은 시간에 너무 많이 바꿨어요. 10분 뒤에 다시 해 주세요.',
     },
     studioPrep: {
       cta: '새 캠페인 만들기',
@@ -1835,6 +1836,7 @@ export const ko: Dictionary = {
       projectId: '가져오기용 캠페인 ID',
       file: '후보 파일 (.json)',
       import: '가져오기',
+      adminOnly: '후보 파일 가져오기와 후보 삭제는 관리자 화면에서 해요. 가져오기 작업은 위 캠페인 ID로 보내면 됩니다.',
       summary: '전체 {total} · 공개 {shared} · 대기 {hidden} · 고객 선호 {picked}',
       shareAll: '대기 중인 후보 모두 공개',
       hideAll: '모두 숨기기',
@@ -3699,6 +3701,7 @@ export const ko: Dictionary = {
     inviteHiddenCampaign: '이 캠페인은 아직 고객에게 공개하지 않았습니다. 캠페인만 보는 초대는 공개한 뒤에 보낼 수 있습니다. 브랜드 전체 초대는 브랜드 권한 화면에서 보내세요.',
     errBrandConflict: '캠페인이 그사이 바뀌었거나, 지금 상태에서는 할 수 없는 변경입니다. 새로고침해 현재 상태를 확인해 주세요.',
     errCollaborationRateLimited: '요청이 많습니다. 잠시 후 다시 시도해 주세요.',
+    errStudioRateLimited: '짧은 시간에 너무 많이 바꿨어요. 10분 뒤에 다시 해 주세요.',
     errBrandNotActive: '진행 중인 캠페인에서만 할 수 있습니다. 먼저 캠페인을 진행 상태로 바꿔 주세요.',
     errBrandConsentRequired: 'TWINGS 제작 캠페인은 크리에이터 동의 확인에 체크해야 올릴 수 있습니다.',
     errBrandNotShared: '고객에게 공개하지 않은 캠페인에는 캠페인만 보는 초대를 보낼 수 없습니다. 캠페인을 먼저 공개하거나 브랜드 전체 초대를 쓰세요.',

@@ -8,7 +8,7 @@ import { shortlistCount, shortlistDay } from "@/lib/brands/shortlist/format";
 /**
  * The studio's side of the creator shortlist (docs/BRAND-SHORTLIST.md): import a candidate file,
  * share or hide candidates, remove one, and see which ones the client marked. The campaign ID shown
- * here is what the import worker sends as `projectId`.
+ * here is what the import worker sends as `projectId`. On the brand host only sharing is offered.
  */
 export function ShortlistAdmin({ projectId, view, back, copy, locale, brandHost = false }: {
   projectId: string;
@@ -32,14 +32,17 @@ export function ShortlistAdmin({ projectId, view, back, copy, locale, brandHost 
       <p>
         {copy.projectId}: <code data-shortlist-project-id>{projectId}</code>
       </p>
-      <Form op="brandWorkspace.shortlistImport" back={back} className="bw-form">
-        {hiddenIds("projectId", projectId)}
-        <label>
-          {copy.file}
-          <input type="file" name="file" accept="application/json,.json" required />
-        </label>
-        <button className="bw-button bw-primary" type="submit">{copy.import}</button>
-      </Form>
+      {/* File import and removal are not on the brand host's studio door (lib/admin/brand-host-studio.ts). */}
+      {brandHost ? <p className="bw-note" data-shortlist-admin-elsewhere>{copy.adminOnly}</p> : (
+        <OpForm op="brandWorkspace.shortlistImport" back={back} className="bw-form">
+          {hiddenIds("projectId", projectId)}
+          <label>
+            {copy.file}
+            <input type="file" name="file" accept="application/json,.json" required />
+          </label>
+          <button className="bw-button bw-primary" type="submit">{copy.import}</button>
+        </OpForm>
+      )}
       {list.length === 0 ? (
         <p className="bw-note">{copy.none}</p>
       ) : (
@@ -84,15 +87,17 @@ export function ShortlistAdmin({ projectId, view, back, copy, locale, brandHost 
                           {hiddenIds("shared", String(!c.shared))}
                           <button className="bw-button" type="submit">{c.shared ? copy.hide : copy.share}</button>
                         </Form>
-                        <details>
-                          <summary>{copy.remove}</summary>
-                          <Form op="brandWorkspace.shortlistRemove" back={back}>
-                            {hiddenIds("projectId", projectId)}
-                            {hiddenIds("candidateId", c.id)}
-                            <ConfirmCheck label={copy.removeConfirm} />
-                            <button className="bw-button bw-danger" type="submit">{copy.remove}</button>
-                          </Form>
-                        </details>
+                        {!brandHost && (
+                          <details>
+                            <summary>{copy.remove}</summary>
+                            <OpForm op="brandWorkspace.shortlistRemove" back={back}>
+                              {hiddenIds("projectId", projectId)}
+                              {hiddenIds("candidateId", c.id)}
+                              <ConfirmCheck label={copy.removeConfirm} />
+                              <button className="bw-button bw-danger" type="submit">{copy.remove}</button>
+                            </OpForm>
+                          </details>
+                        )}
                       </div>
                     </td>
                   </tr>
