@@ -1423,7 +1423,7 @@ async function sweepCampaigns(): Promise<void> {
     expectPresent(`/${locale}/campaigns preserves old brand bookmarks`, listing.body, 'data-legacy-brand-entry');
     const brand = await get(`/${locale}/brands`);
     expectEqual(`/${locale}/brands renders 200`, brand.status, 200);
-    for (const marker of ['data-campaign-hero', 'data-campaign-proof', 'data-brands', 'data-case-study', 'data-customer-story', 'data-audience-switch']) {
+    for (const marker of ['data-campaign-hero', 'data-campaign-proof', 'data-brands', 'data-morphic-card', 'data-audience-switch']) {
       expectPresent(`/${locale}/brands carries ${marker}`, brand.body, marker);
     }
     // 2026-10-30 landing v7: the brand's own AI media engine. Hero film, compare, fixed vs changing layer,
@@ -1451,11 +1451,10 @@ async function sweepCampaigns(): Promise<void> {
     expectEqual(`/${locale}/brands uses no YAGI red`, (brand.body.match(/ed1e1e/gi) ?? []).length, 0);
     expectAbsent(`/${locale}/brands has no hidden service tabs`, brand.body, 'data-use-case-select');
     expectAbsent(`/${locale}/brands has no misplaced workspace card`, brand.body, 'data-brand-workspace-entry');
-    expectEqual(`/${locale}/brands groups campaigns into one customer story`, (brand.body.match(/data-customer-story=/g) ?? []).length, 1);
-    expectEqual(`/${locale}/brands carries two distinct Morphic cases`, (brand.body.match(/data-case-study=/g) ?? []).length, 2);
+    // 2026-10-30: the Morphic case is one compact card on the landing; the full story lives on its own page.
+    expectAbsent(`/${locale}/brands no longer embeds the customer story`, brand.body, 'data-customer-story=');
     expectPresent(`/${locale}/brands names the founder-approved client`, brand.body, 'Morphic');
-    expectPresent(`/${locale}/brands carries the 90s case`, brand.body, 'data-case-study="morphic-90s-interview"');
-    expectPresent(`/${locale}/brands carries the September follow-up`, brand.body, 'data-case-study="morphic-september-kr-jp"');
+    expectPresent(`/${locale}/brands links the Morphic story page`, brand.body, `href="/${locale}/brands/stories/morphic"`);
     expectPresent(`/${locale}/brands keeps video poster-first`, brand.body, 'preload="none"');
     expectAbsent(`/${locale}/brands exposes no creator handle in campaign media URLs`, brand.body.toLowerCase(), '/reel/brands/@');
     if (locale === 'ko') {
@@ -1468,15 +1467,8 @@ async function sweepCampaigns(): Promise<void> {
     expectPresent(`/${locale}/brands progressive inquiry form`, brand.body, 'data-brand-inquiry="form"');
     expectPresent(`/${locale}/brands accessible inquiry dialog`, brand.body, 'data-brand-inquiry-dialog');
     expectPresent(`/${locale}/brands role field`, brand.body, 'name="contactRole"');
-    expectEqual(`/${locale}/brands shows real August film links`, (brand.body.match(/href="https:\/\/www.instagram.com\/p\/(?:DcXjygPg8fE|DcShoikJklw)\/"/g) ?? []).length, 2);
     expectAbsent(`/${locale}/brands does not send case visitors to Morphic`, brand.body, 'href="https://morphic.com/');
     expectAbsent(`/${locale}/brands removes the generic Morphic guide`, brand.body, 'make-90s-street-style-interview-video');
-    expectEqual(`/${locale}/brands shows four September originals`, (brand.body.match(/data-case-post="/g) ?? []).length, 4);
-    expectEqual(`/${locale}/brands shows two Korea originals`, (brand.body.match(/data-post-market="KR"/g) ?? []).length, 2);
-    expectEqual(`/${locale}/brands shows two Japan originals`, (brand.body.match(/data-post-market="JP"/g) ?? []).length, 2);
-    for (const code of ['DdqhUUvRUik', 'DdqirU_yjr-', 'Dd1CiCDSlix', 'Dd0VQJaz8h-']) {
-      expectPresent(`/${locale}/brands links the published September original ${code}`, brand.body, `href="https://www.instagram.com/p/${code}/"`);
-    }
     expectPresent(`/${locale}/brands shows the production film`, brand.body, 'data-production-films');
     expectPresent(`/${locale}/brands links the production portfolio`, brand.body, 'https://pitch.com/v/yagi-production-wokrs-vsrgfd');
     expectAbsent(`/${locale}/brands uses no green brand accent`, brand.body, 'brand-lime');
@@ -1487,6 +1479,10 @@ async function sweepCampaigns(): Promise<void> {
     const story = await get(`/${locale}/brands/stories/morphic`);
     expectEqual(`/${locale}/brands/stories/morphic renders 200`, story.status, 200);
     expectEqual(`/${locale}/brands/stories/morphic keeps both campaigns`, (story.body.match(/data-case-study=/g) ?? []).length, 2);
+    expectEqual(`/${locale}/brands/stories/morphic shows real August film links`, (story.body.match(/href="https:\/\/www.instagram.com\/p\/(?:DcXjygPg8fE|DcShoikJklw)\/"/g) ?? []).length >= 2, true);
+    for (const code of ['DdqhUUvRUik', 'DdqirU_yjr-', 'Dd1CiCDSlix', 'Dd0VQJaz8h-']) {
+      expectPresent(`/${locale}/brands/stories/morphic links the published September original ${code}`, story.body, `href="https://www.instagram.com/p/${code}/"`);
+    }
     expectPresent(`/${locale}/brands/stories/morphic self-canonicals`, story.body, `rel="canonical" href="${BASE}/${locale}/brands/stories/morphic"`);
     // Founder, 2026-10-28: the old caveat sentence stays out (05bab0d); the totals still say what they count.
     expectPresent(`/${locale}/brands/stories/morphic says what the totals count`, story.body, locale === 'ko' ? '2026년 8월 캠페인 누적 공개 집계입니다.' : 'Public campaign totals from August 2026.');

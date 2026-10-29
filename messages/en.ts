@@ -721,7 +721,27 @@ export const en = {
         "title": "Each creator posts the ad with their own face",
         "body": "YAGI builds the ad format. Each creator gets a version with their own face and posts it on their own channel, in Korea and Japan.",
         "consent": "Creators take part only after agreeing to the use of their own face.",
-        "virtual": "Fictional example"
+        "virtual": "Fictional example",
+        "proof": {
+          "eyebrow": "Customer story",
+          "title": "Creator campaigns with Morphic",
+          "figures": [
+            {
+              "value": "9",
+              "label": "films"
+            },
+            {
+              "value": "2M+",
+              "label": "views"
+            },
+            {
+              "value": "300+",
+              "label": "derived organic posts"
+            }
+          ],
+          "note": "Public totals from the August 2026 campaign.",
+          "cta": "Read the story"
+        }
       },
       "production": {
         "eyebrow": "Production",
@@ -737,9 +757,15 @@ export const en = {
           "Send jobs from your team’s own AI agent"
         ],
         "films": [
-          "Fashion film (example)",
-          "Editorial film (example)"
+          "Tutu, through the lens",
+          "A daydream bigger than the room",
+          "Afternoon in the tank",
+          "Tea room"
         ],
+        "reelNote": "Example films by YAGI Production. Everyone in them is fictional.",
+        "reel": "Example brand films",
+        "prev": "Previous film",
+        "next2": "Next film",
         "decks": "See the portfolio",
         "company": "Company deck",
         "talk": "Talk to production"
