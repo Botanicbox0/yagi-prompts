@@ -36,8 +36,8 @@
 
 - 대상: `profiles.is_admin = true`이고 그 브랜드의 멤버가 아닌 계정(운영자 보기, `studio` 역할). 도메인만 있는 열람자는 그대로 읽기 전용이다. 관리자가 실제 멤버인 브랜드에서는 고객 의뢰 마법사가 그대로 나온다.
 - 화면: `/brand` 머리에 **새 캠페인 만들기**, `/brand/projects/new`에 고객사 선택(지금 고른 브랜드가 기본값)·캠페인 이름·목표·총예산(선택) 폼과 **새 고객사 등록**. 만든 캠페인은 `/admin/brand-workspace`의 "캠페인 준비"와 같다: `production_mode = creator`, 고객에게 공개 전(`client_visible = false`), 상태 `requested`, 관리자에게 멤버십은 생기지 않는다. 고객에게 공개·담당자 초대는 지금처럼 관리자 화면에서 한다.
-- 캠페인 페이지(`/brand/projects/{id}`): 운영자 안내 바로 아래에 **크리에이터 후보 관리**(가져오기용 캠페인 ID, JSON 가져오기, 공개·숨기기·삭제). 결과는 패널 안에 표시된다.
-- 경로: `POST /api/brand-workspace/studio`(`app/api/brand-workspace/studio/route.ts`). `/admin/do`와 같은 순서로 `requireAdmin()`(아니면 본문 없는 404) → 같은 출처 확인 → 허용 목록(`lib/admin/brand-host-studio.ts`: `brandWorkspace.organization`, `brandWorkspace.createProject`, `brandWorkspace.shortlistImport`, `brandWorkspace.shortlistShare`, `brandWorkspace.shortlistRemove`) → 레지스트리 오퍼레이션을 `dispatchAdmin`으로 실행. 목록 밖 이름은 404다. 돌아가는 곳은 brand 캠페인 페이지와 새 캠페인 페이지뿐이다. `/admin/do` 자체는 brand 호스트에서 계속 막혀 있다.
+- 캠페인 페이지(`/brand/projects/{id}`): 운영자 안내 바로 아래에 **진행 상태**(요청 → 캠페인 시작/종료, 진행 중 → 캠페인 완료/종료, 완료·종료는 확인 상자 필수, 되돌릴 수 없음)와 **크리에이터 후보 관리**(가져오기용 캠페인 ID, JSON 가져오기, 공개·숨기기·삭제). 결과는 그 묶음 맨 위에 표시된다. 진행 상태 추가는 2026-10-29 대표 요청("완료처리를 여기서 할 수 없는 게 불편하다").
+- 경로: `POST /api/brand-workspace/studio`(`app/api/brand-workspace/studio/route.ts`). `/admin/do`와 같은 순서로 `requireAdmin()`(아니면 본문 없는 404) → 같은 출처 확인 → 허용 목록(`lib/admin/brand-host-studio.ts`: `brandWorkspace.organization`, `brandWorkspace.createProject`, `brandWorkspace.status`, `brandWorkspace.shortlistImport`, `brandWorkspace.shortlistShare`, `brandWorkspace.shortlistRemove`) → 레지스트리 오퍼레이션을 `dispatchAdmin`으로 실행. 목록 밖 이름은 404다. 돌아가는 곳은 brand 캠페인 페이지와 새 캠페인 페이지뿐이다. `/admin/do` 자체는 brand 호스트에서 계속 막혀 있다.
 - 테스트: `tests/brands/studio-prep.test.ts`(PGlite + 실제 라우트·디스패처), `tests/brands/studio-prep-ui.test.tsx`, `tests/routes/brand-host.test.ts`. 스윕은 익명 POST가 본문 없는 404인지 확인한다.
 
 ## 무엇이 닫혀 있는가 (쓰기)

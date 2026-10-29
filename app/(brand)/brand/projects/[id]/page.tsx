@@ -19,6 +19,7 @@ import { loadBrandShortlist, loadStudioShortlist } from "@/lib/brands/shortlist/
 import { CampaignShortlist } from "@/components/brand-workspace/shortlist";
 import { ShortlistAdmin } from "@/components/brand-workspace/shortlist-admin";
 import { OutcomeBanner } from "@/components/admin/chrome";
+import { BrandStatusForms } from "@/components/admin/brand-status";
 export default async function BrandProject({
   params,
   searchParams,
@@ -61,10 +62,18 @@ export default async function BrandProject({
       formatTitle={formatTitle}
       staffManageHref={project.role === "studio" && viewer.isAdmin ? adminProjectHref(project.id, brandHost) : null}
       staffTools={studioTools ? (
-        <ShortlistAdmin projectId={project.id} view={studioShortlist} back={`/brand/projects/${project.id}#shortlist-admin`}
-          copy={b.shortlistAdmin} locale={locale} brandHost
-          notice={<OutcomeBanner dict={dict.admin} ok={typeof search.ok === "string" ? search.ok : undefined}
-            err={typeof search.err === "string" ? search.err : undefined} detail={typeof search.detail === "string" ? search.detail : undefined} />} />
+        // Every form here returns to #studio-tools, so the outcome banner is in view after the post.
+        <div id="studio-tools" data-studio-tools>
+          <OutcomeBanner dict={dict.admin} ok={typeof search.ok === "string" ? search.ok : undefined}
+            err={typeof search.err === "string" ? search.err : undefined} detail={typeof search.detail === "string" ? search.detail : undefined} />
+          <section className="bw-panel" data-studio-status={project.status}>
+            <h2>{b.projectStatus}</h2>
+            <BrandStatusForms brandHost back={`/brand/projects/${project.id}#studio-tools`} projectId={project.id} status={project.status}
+              revision={project.revision} b={b} admin={dict.admin} />
+          </section>
+          <ShortlistAdmin projectId={project.id} view={studioShortlist} back={`/brand/projects/${project.id}#studio-tools`}
+            copy={b.shortlistAdmin} locale={locale} brandHost />
+        </div>
       ) : null}
       shortlistCount={shortlist?.candidates.length ?? 0}
       shortlist={shortlist && shortlist.candidates.length > 0 ? (

@@ -137,6 +137,28 @@ describe("preparing a campaign from brand.twings.app", () => {
     expect(Number((await sql.query("select count(*)::int as n from brand_memberships where organization_id=$1", [org[0]!.id])).rows[0]!.n)).toBe(0);
   });
 
+  it("starts and completes a campaign from its page, the same moves the admin screen allows", async () => {
+    const project = (await (await post(campaign(brandA))).json()).to.split("/").pop();
+    const back = `/brand/projects/${project}#studio-tools`;
+    const move = (status: string, expectedRevision: number) =>
+      post({ _op: "brandWorkspace.status", _back: back, projectId: project, expectedRevision: String(expectedRevision), status }, { json: false });
+    const state = async () => (await sql.query("select status, revision from brand_projects where id=$1", [project])).rows[0];
+    // A requested campaign cannot jump straight to completed.
+    expect((await move("completed", 0)).headers.get("location")).toBe(`https://${HOST}/brand/projects/${project}?err=brandConflict&detail=conflict#studio-tools`);
+    expect(await state()).toEqual({ status: "requested", revision: 0 });
+    expect((await move("active", 0)).headers.get("location")).toBe(`https://${HOST}/brand/projects/${project}?ok=saved#studio-tools`);
+    // A stale page (old revision) is refused instead of overwriting.
+    expect((await move("completed", 0)).headers.get("location")).toContain("err=brandConflict");
+    expect((await move("completed", 1)).headers.get("location")).toBe(`https://${HOST}/brand/projects/${project}?ok=saved#studio-tools`);
+    expect(await state()).toEqual({ status: "completed", revision: 2 });
+    expect((await sql.query("select count(*)::int as n from brand_workspace_events where project_id=$1 and kind='project_status_changed'", [project])).rows[0]).toEqual({ n: 2 });
+    // Completed is final.
+    expect((await move("active", 2)).headers.get("location")).toContain("err=brandConflict");
+    // Nobody but a DB admin moves it.
+    route.viewer = owner;
+    expect((await move("cancelled", 2)).status).toBe(404);
+  });
+
   it("imports a shortlist from the campaign page and returns to its panel, candidates still hidden", async () => {
     const project = (await (await post(campaign(brandA))).json()).to.split("/").pop();
     const file = new File([JSON.stringify({ measuredOn: "2026-10-27", candidates: [{ handle: "fixture.creator", metrics: { followers: 12000 } }] })], "shortlist.json", { type: "application/json" });

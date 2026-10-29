@@ -37,6 +37,7 @@ import BrandHome from "@/app/(brand)/brand/page";
 import NewBrandProject from "@/app/(brand)/brand/projects/new/page";
 import { ProjectDetail } from "@/components/brand-workspace/project-detail";
 import { ShortlistAdmin } from "@/components/brand-workspace/shortlist-admin";
+import { BrandStatusForms } from "@/components/admin/brand-status";
 import { getDictionary } from "@/lib/i18n/dictionaries";
 
 const b = getDictionary("ko").brandWorkspace;
@@ -124,5 +125,21 @@ describe("the campaign page in the TWINGS team view", () => {
   it("never renders the studio panel on a customer's own seat", () => {
     const page = renderToStaticMarkup(<ProjectDetail project={{ ...project, role: "owner" }} b={b} locale="ko" staffTools={tools} />);
     expect(page).not.toContain("data-shortlist-admin");
+  });
+
+  it("offers completion from the campaign page, posting to the brand host's door with a confirmation box", () => {
+    const admin = getDictionary("ko").admin;
+    const status = (brandHost: boolean) => renderToStaticMarkup(
+      <BrandStatusForms brandHost={brandHost} back={`/brand/projects/${B}#studio-tools`} projectId={B} status="active" revision={3} b={b} admin={admin} />);
+    const page = status(true);
+    expect(page).toContain('data-brand-status-moves="completed cancelled"');
+    expect([...page.matchAll(/<form[^>]*\saction="([^"]+)"/g)].map((m) => m[1])).toEqual(["/api/brand-workspace/studio", "/api/brand-workspace/studio"]);
+    expect(page).toContain(`name="_back" value="/brand/projects/${B}#studio-tools"`);
+    expect(page).toContain('name="status" value="completed"');
+    expect(page).toContain(admin.confirmBrandComplete);
+    expect(page).toContain(b.complete);
+    // The admin screen keeps its own door.
+    expect(status(false)).toContain('action="/admin/do"');
+    expect(status(false)).not.toContain("/api/brand-workspace/studio");
   });
 });

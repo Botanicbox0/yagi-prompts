@@ -5,14 +5,15 @@ import type { AdminOperationName } from './operations';
 /**
  * The studio's campaign preparation on brand.twings.app (docs/BRAND-STAFF-ACCESS.md "운영자 캠페인 준비").
  *
- * The brand host refuses `/admin/do`, so a DB admin looking at a customer's brand had no way to open a
- * campaign there. This list is the whole brand-host door: the SAME registered operations, run by the
- * same `dispatchAdmin` after the same `requireAdmin()`. Any other name is a 404 at the door, so the
- * brand host never becomes a second copy of the admin surface.
+ * The brand host refuses `/admin/do`, so a DB admin looking at a customer's brand had no way to open,
+ * start or finish a campaign there. This list is the whole brand-host door: the SAME registered
+ * operations, run by the same `dispatchAdmin` after the same `requireAdmin()`. Any other name is a
+ * 404 at the door, so the brand host never becomes a second copy of the admin surface.
  */
 export const BRAND_HOST_STUDIO_OPERATIONS = [
   'brandWorkspace.organization',
   'brandWorkspace.createProject',
+  'brandWorkspace.status',
   'brandWorkspace.shortlistImport',
   'brandWorkspace.shortlistShare',
   'brandWorkspace.shortlistRemove',

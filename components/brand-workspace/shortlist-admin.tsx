@@ -1,4 +1,3 @@
-import type { ReactNode } from "react";
 import { ConfirmCheck, OpForm } from "@/components/admin/chrome";
 import { StudioForm } from "./studio-form";
 import type { Dictionary } from "@/lib/i18n/dictionaries";
@@ -11,7 +10,7 @@ import { shortlistCount, shortlistDay } from "@/lib/brands/shortlist/format";
  * share or hide candidates, remove one, and see which ones the client marked. The campaign ID shown
  * here is what the import worker sends as `projectId`.
  */
-export function ShortlistAdmin({ projectId, view, back, copy, locale, brandHost = false, notice }: {
+export function ShortlistAdmin({ projectId, view, back, copy, locale, brandHost = false }: {
   projectId: string;
   view: StudioShortlistView | null;
   back: string;
@@ -19,8 +18,6 @@ export function ShortlistAdmin({ projectId, view, back, copy, locale, brandHost 
   locale: string;
   /** On brand.twings.app the forms post to the brand host's studio door; `/admin/do` everywhere else. */
   brandHost?: boolean;
-  /** The last action's outcome, where the page has no banner of its own (the brand host). */
-  notice?: ReactNode;
 }) {
   const list = view?.candidates ?? [];
   const shared = list.filter((c) => c.shared).length;
@@ -31,7 +28,6 @@ export function ShortlistAdmin({ projectId, view, back, copy, locale, brandHost 
   return (
     <section id="shortlist-admin" className="bw-panel" data-shortlist-admin={list.length}>
       <h2>{copy.title}</h2>
-      {notice}
       <p className="bw-muted">{copy.hint}</p>
       <p>
         {copy.projectId}: <code data-shortlist-project-id>{projectId}</code>
