@@ -169,10 +169,18 @@ export function LandingAssets({ copy, studio, media }: { copy: Copy; studio: Stu
             <figcaption className={styles.tileLabel}>{a.clipLabels[index]}</figcaption>
           </figure>
         ))}
-        <figure data-asset-clip="ad" className={`${styles.tile} ${styles.clipWide}`}>
-          <LoopVideo src={L('beauty-ad', 'mp4')} poster={L('beauty-ad', 'jpg')} label={a.clipLabels[3]!} />
-          <figcaption className={styles.tileLabel}>{a.clipLabels[3]}</figcaption>
-        </figure>
+        {/* The ad sits next to the product shot it was made from (the same YAGI lip gloss), so the step reads as one. */}
+        <div data-asset-ad className={styles.adPair}>
+          <figure data-asset-ad-still className={`${styles.tile} ${styles.adStill}`}>
+            <img src={L('ad-product')} alt="" width={900} height={1200} loading="lazy" decoding="async" />
+            <figcaption className={styles.tileLabel}>{a.adStill}</figcaption>
+          </figure>
+          <span aria-hidden="true" className={styles.adArrow}>→</span>
+          <figure data-asset-clip="ad" className={styles.tile}>
+            <LoopVideo src={L('beauty-ad', 'mp4')} poster={L('beauty-ad', 'jpg')} label={a.clipLabels[3]!} />
+            <figcaption className={styles.tileLabel}>{a.clipLabels[3]}</figcaption>
+          </figure>
+        </div>
       </div>
     </Fragment>
   );

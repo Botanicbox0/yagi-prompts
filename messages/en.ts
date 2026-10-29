@@ -508,11 +508,12 @@ export const en = {
           "Clips come straight from the finished shots."
         ],
         "clipLabels": [
-          "5-second clip from a product shot",
-          "5-second clip from a product shot",
-          "5-second clip from a product shot",
-          "15-second video ad"
+          "5-second clip",
+          "5-second clip",
+          "5-second clip",
+          "15-second ad, same product"
         ],
+        "adStill": "Product shot",
         "note": "Example screen. Products and models are fictional.",
         "early": "Early access"
       },
