@@ -702,6 +702,9 @@ export const ko: Dictionary = {
       copy: '복사',
       copied: '복사했어요',
       assets: '참조 자산',
+      gateTitle: '무료 가입하고 전체 제작법·프롬프트 보기',
+      gateBody: 'TWINGS에 로그인하면 전체 프롬프트와 사운드·BGM 가이드, 참조 자산을 바로 확인하고 복사할 수 있어요.',
+      gateCta: '로그인 / 무료 가입하고 제작법 보기 →',
     },
     review: {
       heading: '레시피 검수',

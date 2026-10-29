@@ -694,6 +694,9 @@ export const en = {
       copy: 'Copy',
       copied: 'Copied',
       assets: 'Reference files',
+      gateTitle: 'Sign up for free to unlock the full recipe',
+      gateBody: 'Create a free TWINGS account to view and copy the complete step-by-step prompt, sound guide, and reference files.',
+      gateCta: 'Sign up / Sign in to view recipe →',
     },
     review: {
       heading: 'Recipe review',
