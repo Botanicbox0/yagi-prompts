@@ -51,11 +51,15 @@ describe('the brand page shows the service before asking visitors to enquire', (
     expect(html).toContain('data-brand-kit');
     expect(html.match(/data-range-product=/g)).toHaveLength(8);
     expect(html.match(/data-asset-scene=/g)).toHaveLength(8);
-    expect(html.match(/data-asset-clip=/g)).toHaveLength(4);
-    // The 15-second ad sits right after the product shot it was made from.
-    expect(html).toContain('src="/reel/landing/ad-product.webp"');
-    expect(html.indexOf('data-asset-ad-still')).toBeLessThan(html.indexOf('data-asset-clip="ad"'));
-    expect(html).toContain('같은 제품으로 만든 15초 광고');
+    expect(html.match(/data-asset-clip=/g)).toHaveLength(5);
+    // Each ad sits right after the product shot it shows: the heart perfume, then the lip gloss.
+    expect(html.match(/data-asset-ad-still=/g)).toHaveLength(2);
+    for (const [still, clip] of [['highteen-product', 'highteen'], ['beauty-ad-product', 'ad']]) {
+      expect(html.indexOf(`src="/reel/landing/${still}.webp"`)).toBeGreaterThan(-1);
+      expect(html.indexOf(`src="/reel/landing/${still}.webp"`)).toBeLessThan(html.indexOf(`data-asset-clip="${clip}"`));
+    }
+    expect(html.indexOf('data-asset-clip="highteen"')).toBeLessThan(html.indexOf('data-asset-clip="ad"'));
+    expect(html).toContain('같은 향수로 만든 20초 광고');
     expect(html.match(/data-asset-panel=/g)).toHaveLength(4);
     expect(html.match(/hidden="" data-asset-panel=/g)).toHaveLength(3);
     expect(html.indexOf('data-asset-panel="0"')).toBeLessThan(html.indexOf('data-range-product='));

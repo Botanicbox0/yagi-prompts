@@ -1351,9 +1351,10 @@ async function sweepCampaigns(): Promise<void> {
     expectEqual(`/${locale}/brands compares three same-product pairs`, (brand.body.match(/data-contrast-pair=/g) ?? []).length, 3);
     expectEqual(`/${locale}/brands shows the eight-product range`, (brand.body.match(/data-range-product=/g) ?? []).length, 8);
     expectEqual(`/${locale}/brands ships every scene in the HTML`, (brand.body.match(/data-asset-scene=/g) ?? []).length, 8);
-    expectEqual(`/${locale}/brands ships every clip in the HTML`, (brand.body.match(/data-asset-clip=/g) ?? []).length, 4);
-    expectPresent(`/${locale}/brands pairs the ad with its product shot`, brand.body, 'data-asset-ad-still');
-    expectPresent(`/${locale}/brands ships the ad's product shot`, brand.body, '/reel/landing/ad-product.webp');
+    expectEqual(`/${locale}/brands ships every clip in the HTML`, (brand.body.match(/data-asset-clip=/g) ?? []).length, 5);
+    expectEqual(`/${locale}/brands pairs each ad with its product shot`, (brand.body.match(/data-asset-ad-still=/g) ?? []).length, 2);
+    expectPresent(`/${locale}/brands ships the perfume ad's product shot`, brand.body, '/reel/landing/highteen-product.webp');
+    expectPresent(`/${locale}/brands ships the lip gloss ad's product shot`, brand.body, '/reel/landing/beauty-ad-product.webp');
     for (const gone of ['data-studio-orbit', 'data-mood-tile', 'data-format-select', 'data-service-example']) {
       expectAbsent(`/${locale}/brands retired ${gone}`, brand.body, gone);
     }
