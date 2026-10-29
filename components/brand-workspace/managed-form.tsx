@@ -44,6 +44,7 @@ export function ManagedForm({
   confirm,
   tone = "primary",
   messages,
+  action = "/admin/do",
 }: {
   op: AdminOperationName;
   b: BrandCopy;
@@ -54,6 +55,8 @@ export function ManagedForm({
   tone?: ButtonTone;
   /** Admin-dictionary sentences for specific refusal codes (e.g. `brandNotShared`), from the page. */
   messages?: Partial<Record<string, string>>;
+  /** The brand host's studio door (lib/admin/brand-host-studio.ts); it answers with brand-host destinations. */
+  action?: string;
 }) {
   const router = useRouter(),
     request = useRef<{fingerprint:string;id:string} | null>(null),
@@ -79,7 +82,7 @@ export function ManagedForm({
     setError("");
     setLink("");
     try {
-      const response = await fetch("/admin/do", {
+      const response = await fetch(action, {
         method: "POST",
         headers: { Accept: "application/json" },
         body: data,
@@ -96,7 +99,7 @@ export function ManagedForm({
         );
       } else if (
         typeof result.to === "string" &&
-        result.to.startsWith("/admin/")
+        (result.to.startsWith("/admin/") || result.to === "/brand" || result.to.startsWith("/brand/"))
       ) {
         if (result.to === location.pathname) {
           router.refresh();
@@ -123,7 +126,7 @@ export function ManagedForm({
   return (
     <form
       method="post"
-      action="/admin/do"
+      action={action}
       className="bw-form"
       onSubmit={send}
       aria-busy={busy}

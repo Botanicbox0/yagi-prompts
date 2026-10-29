@@ -15,8 +15,10 @@ import { loadPromptBySlug } from "@/lib/prompts/repo";
 import { influencersOpen } from "@/lib/influencers/rules";
 import { poolVisible, scopedHref } from "@/lib/brands/workspace/selection";
 import { POOL_PATH } from "@/lib/brands/creator-pool";
-import { loadBrandShortlist } from "@/lib/brands/shortlist/service";
+import { loadBrandShortlist, loadStudioShortlist } from "@/lib/brands/shortlist/service";
 import { CampaignShortlist } from "@/components/brand-workspace/shortlist";
+import { ShortlistAdmin } from "@/components/brand-workspace/shortlist-admin";
+import { OutcomeBanner } from "@/components/admin/chrome";
 export default async function BrandProject({
   params,
   searchParams,
@@ -24,7 +26,7 @@ export default async function BrandProject({
   params: Promise<{ id: string }>;
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const [{ id }, { sql, viewer, verifiedEmail, brandHost, b, locale }, search] = await Promise.all([
+  const [{ id }, { sql, viewer, verifiedEmail, brandHost, b, dict, locale }, search] = await Promise.all([
     params,
     brandContext(),
     searchParams ?? Promise.resolve({} as Record<string, string | string[] | undefined>),
@@ -34,13 +36,16 @@ export default async function BrandProject({
   if (!project) notFound();
   // Applicants and payment are the brand's own matters: no such tabs for campaign-only guests or the TWINGS view.
   const member = project.role === "owner" || project.role === "editor" || project.role === "viewer";
+  // A DB admin in the TWINGS team view manages the shortlist here too (docs/BRAND-STAFF-ACCESS.md).
+  const studioTools = project.role === "studio" && viewer.isAdmin;
   // The shortlist is for everyone who can see the campaign, guests included: comparing candidates is why they were invited.
-  const [usage, collaboration, applicants, funding, shortlist] = await Promise.all([
+  const [usage, collaboration, applicants, funding, shortlist, studioShortlist] = await Promise.all([
     loadBrandUsage({ sql, verifiedEmail, paymentsOpen: usagePaymentsOpen() }, viewer, id),
     member ? loadProjectCollaboration({ sql }, viewer, id) : Promise.resolve(null),
     member ? loadProjectApplicants({ sql }, viewer, id) : Promise.resolve(null),
     member ? loadFundingProject({ sql }, viewer, id) : Promise.resolve(null),
     loadBrandShortlist({ sql, verifiedEmail }, viewer, id),
+    studioTools ? loadStudioShortlist({ sql }, viewer, id) : Promise.resolve(null),
   ]);
   const deps = member ? fundingDeps(sql) : null;
   const requested = project.campaignTerms?.format.kind === "template" ? await loadPromptBySlug(sql, project.campaignTerms.format.slug).catch(() => null) : null;
@@ -55,6 +60,12 @@ export default async function BrandProject({
       usage={usage}
       formatTitle={formatTitle}
       staffManageHref={project.role === "studio" && viewer.isAdmin ? adminProjectHref(project.id, brandHost) : null}
+      staffTools={studioTools ? (
+        <ShortlistAdmin projectId={project.id} view={studioShortlist} back={`/brand/projects/${project.id}#shortlist-admin`}
+          copy={b.shortlistAdmin} locale={locale} brandHost
+          notice={<OutcomeBanner dict={dict.admin} ok={typeof search.ok === "string" ? search.ok : undefined}
+            err={typeof search.err === "string" ? search.err : undefined} detail={typeof search.detail === "string" ? search.detail : undefined} />} />
+      ) : null}
       shortlistCount={shortlist?.candidates.length ?? 0}
       shortlist={shortlist && shortlist.candidates.length > 0 ? (
         <CampaignShortlist candidates={shortlist.candidates} canPick={shortlist.canPick} copy={b.shortlist} locale={locale} />
