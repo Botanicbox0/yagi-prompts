@@ -3,16 +3,17 @@
  * TWINGS blue appears only where you can act: the CTA, links, focus and one live dot
  * (research: color-system study, ≤5% of the page, never on or inside a photo).
  * The blue is one knob, `--lp-blue` on `.accent`, and every shade on this page and in the try-on
- * demo is mixed from it. Since 2026-10-29 it is the brand side's soft ultramarine, the same value as
- * brand.twings.app's `--ys-accent` (docs/design/TOOLBOX.md §0; founder: "Match it"). The key colour may
- * change again, so this is the only place the hex is written.
+ * demo is mixed from it. Since 2026-10-29 evening it is a French blue taken from the founder's two
+ * reference photos (a cornflower shirt on white, a powder-blue backdrop): the shirt's hue and
+ * saturation (h214, s0.56), deepened only until white text reads 4.65:1. Its light tints sit close to
+ * the photos' sky blues. The key colour may change again, so this is the only place the hex is written.
  */
 
 /* Wraps the whole /brands page, nav and footer included, without a box of its own. The shared nav,
    enquiry form and FAQ read the site tokens, so on this page those point at the landing blue too. */
 .accent {
   display: contents;
-  --lp-blue: #4355e8;
+  --lp-blue: #3875c5;
   --color-blue: var(--lp-blue);
   --accent: var(--lp-blue);
 }
