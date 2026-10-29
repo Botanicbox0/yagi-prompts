@@ -105,6 +105,24 @@ describe("audit trail", () => {
     expect(details).toMatchObject({ host: HOST, projectId: project, shared: "true" });
   });
 
+  it("sorts candidates through the door and records how many moved, never which ones", async () => {
+    const project = String((await (await post(campaign())).json()).to).split("/").pop()!;
+    await sl.importShortlist({ sql, storage: { putStaging: async () => {} } }, { kind: "studio", viewer: admin }, { projectId: project, candidates: [{ handle: "fixture.a" }, { handle: "fixture.b" }, { handle: "fixture.c" }] });
+    const id = async (handle: string) => String((await sql.query("select id from brand_shortlist_candidates where handle=$1", [handle])).rows[0]!.id);
+    const [a, b, c] = [await id("fixture.a"), await id("fixture.b"), await id("fixture.c")];
+    const body = new FormData();
+    for (const [key, value] of [["_op", "brandWorkspace.shortlistTriage"], ["_back", `/brand/projects/${project}#studio-tools`], ["projectId", project], ["share", a], ["exclude", b], ["exclude", c]]) body.append(key!, value!);
+    const response = await POST(new NextRequest(`${ORIGIN}/api/brand-workspace/studio`, { method: "POST", body, headers: { host: HOST, origin: ORIGIN, "sec-fetch-site": "same-origin", accept: "application/json", [STUDIO_REQUEST_HEADER]: "1" } }));
+    expect(response.status).toBe(200);
+    expect((await sl.loadStudioShortlist({ sql }, admin, project))!.candidates.map((x) => [x.handle, x.state])).toEqual([["fixture.a", "shared"], ["fixture.b", "excluded"], ["fixture.c", "excluded"]]);
+    const details = (await sql.query<{ details: Record<string, unknown> }>("select details from platform_audit where action='brandHostStudio.brandWorkspace.shortlistTriage' and details->>'state'='attempt'")).rows[0]!.details;
+    expect(details).toMatchObject({ projectId: project, triage: { share: 1, exclude: 2, wait: 0 } });
+    expect(JSON.stringify(details)).not.toContain(b);
+    // The campaign's saved ranges go through the same door.
+    expect((await post({ _op: "brandWorkspace.shortlistCriteria", _back: `/brand/projects/${project}`, projectId: project, criteria: JSON.stringify({ followers: { min: 1000 } }) })).status).toBe(200);
+    expect((await sl.loadStudioShortlist({ sql }, admin, project))!.criteria).toEqual({ followers: { min: 1000 } });
+  });
+
   it("records a refused action with its code", async () => {
     const response = await post({ ...campaign(), title: "" });
     expect(response.status).toBe(400);

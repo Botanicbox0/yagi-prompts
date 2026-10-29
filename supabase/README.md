@@ -79,4 +79,4 @@ operation for a superuser, and it is not something app code can do — that is t
 | 2026-10-28 | `0066_core_brand_shortlist` · `0146_glue_brand_shortlist` | 0066 + 0146 (캠페인 크리에이터 후보 표, 서버 롤 전용) | #113 |
 | 2026-10-28 | `0062_core_render_jobs_scale_indexes` | 0062 (`render_jobs` 인덱스 2개, 10/25 커밋 `36f1347` 뒤 누락돼 있던 것) | #114 |
 
-미적용: 0042~0044(월 구독·Premium 수정, 미출시), 0029/0115(옛 portrait 비교, 폐지 경로). 0063(prom-queen 비율)은 원장에 없지만 운영 데이터에는 이미 반영돼 있다. 0064/0065·0144/0145는 열린 브랜치가 쓰는 번호. 다음 번호: core 0067, glue 0147.
+미적용: 0042~0044(월 구독·Premium 수정, 미출시), 0029/0115(옛 portrait 비교, 폐지 경로). 0063(prom-queen 비율)은 원장에 없지만 운영 데이터에는 이미 반영돼 있다. 0064/0065·0144/0145는 열린 브랜치가 쓰는 번호. 0067/0147은 랜딩 브랜치(보류), 0068/0148은 후보 선별 브랜치 `codex/shortlist-triage`. 다음 번호: core 0069, glue 0149.

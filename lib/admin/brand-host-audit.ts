@@ -36,8 +36,22 @@ export function studioAuditSubject(form: FormData, actorId: string) {
     ...(id(form, 'attachmentId') ? { attachmentId: id(form, 'attachmentId') } : {}),
     ...(flag(form, 'shared', ['true', 'false']) ? { shared: flag(form, 'shared', ['true', 'false']) } : {}),
     ...(flag(form, 'status', ['active', 'completed', 'cancelled']) ? { status: flag(form, 'status', ['active', 'completed', 'cancelled']) } : {}),
+    ...triageCounts(form),
   };
   return { entityId: projectId ?? organizationId ?? actorId, details };
+}
+
+/** How many candidates a triage call names per move (IDs themselves stay out of the audit row). */
+function triageCounts(form: FormData) {
+  const count = (name: string) => form.getAll(name).filter(v => typeof v === 'string' && UUID.test(v.trim())).length;
+  const moves = { share: count('share'), exclude: count('exclude'), wait: count('wait') };
+  type Move = keyof typeof moves;
+  // Same reading as the operation: a row's own button wins over the selection.
+  const [oneAction, oneId] = (typeof form.get('one') === 'string' ? String(form.get('one')) : '').split(':');
+  const action = flag(form, 'action', ['share', 'exclude', 'wait']) as Move | undefined;
+  if (oneAction && oneId) { if (oneAction in moves && UUID.test(oneId)) moves[oneAction as Move] += 1; }
+  else if (action) moves[action] += count('candidateId');
+  return moves.share + moves.exclude + moves.wait ? { triage: moves } : {};
 }
 
 export async function studioBudgetSpent(sql: SqlRunner, actorId: string): Promise<boolean> {

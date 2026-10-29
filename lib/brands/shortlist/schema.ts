@@ -80,9 +80,46 @@ export type ShortlistImportInput = z.output<typeof ShortlistImportSchema>;
 
 export const ShortlistShareSchema = z.object({
   projectId: z.uuid(),
-  /** One candidate, or every candidate of the campaign that is still hidden when absent. */
+  /** One candidate, or every waiting candidate of the campaign when absent (excluded ones stay out). */
   candidateId: z.uuid().nullable().optional(),
   shared: z.boolean(),
 }).strict();
 export const ShortlistRemoveSchema = z.object({ projectId: z.uuid(), candidateId: z.uuid() }).strict();
 export const ShortlistPickSchema = z.object({ candidateId: z.uuid(), picked: z.boolean() }).strict();
+
+/**
+ * The studio's triage (docs/BRAND-SHORTLIST.md "선별"): move candidates between waiting, shared and
+ * excluded in one call. A row's button, a selection, and the "inside / outside the ranges" split all
+ * arrive as these three lists.
+ */
+export const SHORTLIST_TRIAGE_MAX = 500;
+const candidateIds = z.array(z.uuid()).max(SHORTLIST_TRIAGE_MAX).default([]);
+export const ShortlistTriageSchema = z.object({
+  projectId: z.uuid(),
+  share: candidateIds,
+  exclude: candidateIds,
+  wait: candidateIds,
+}).strict()
+  .refine(v => v.share.length + v.exclude.length + v.wait.length > 0, 'empty')
+  .refine(v => v.share.length + v.exclude.length + v.wait.length <= SHORTLIST_TRIAGE_MAX, 'too_many')
+  .refine(v => new Set([...v.share, ...v.exclude, ...v.wait]).size === v.share.length + v.exclude.length + v.wait.length, 'overlap');
+
+/**
+ * The ranges the studio filters by, which a campaign may keep as its criteria. Rates in percent as
+ * shown (`1.5` means 1.5 %). Nothing is shared or excluded by criteria on their own.
+ */
+export const SHORTLIST_CRITERIA_KEYS = ['followers', 'views', 'engagement', 'adShare'] as const;
+export type ShortlistCriteriaKey = typeof SHORTLIST_CRITERIA_KEYS[number];
+const bound = z.number().finite().min(0).max(2_000_000_000).nullable().optional();
+const RangeSchema = z.object({ min: bound, max: bound }).strict()
+  .refine(r => r.min != null || r.max != null, 'empty')
+  .refine(r => r.min == null || r.max == null || r.min <= r.max, 'range');
+export const ShortlistCriteriaSchema = z.object({
+  followers: RangeSchema.optional(),
+  views: RangeSchema.optional(),
+  engagement: RangeSchema.optional(),
+  adShare: RangeSchema.optional(),
+}).strict();
+export type ShortlistRange = { min?: number | null; max?: number | null };
+export type ShortlistCriteria = Partial<Record<ShortlistCriteriaKey, ShortlistRange>>;
+export const ShortlistCriteriaSaveSchema = z.object({ projectId: z.uuid(), criteria: ShortlistCriteriaSchema.nullable() }).strict();

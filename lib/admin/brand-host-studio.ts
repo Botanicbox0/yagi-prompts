@@ -18,8 +18,11 @@ export const BRAND_HOST_STUDIO_OPERATIONS = [
   // reserve, real bytes on complete); this only points the campaign at one of its finished images.
   'brandWorkspace.cover',
   // Candidate file import and removal stay on admin.twings.app: the import worker has its own
-  // secret-only route, and removal is destructive. Sharing is the one shortlist move this host needs.
+  // secret-only route, and removal is destructive. Sharing, triage (share / exclude / back to waiting,
+  // every move reversible) and the campaign's saved ranges are what this host needs.
   'brandWorkspace.shortlistShare',
+  'brandWorkspace.shortlistTriage',
+  'brandWorkspace.shortlistCriteria',
 ] as const satisfies readonly AdminOperationName[];
 export type BrandHostStudioOperation = (typeof BRAND_HOST_STUDIO_OPERATIONS)[number];
 

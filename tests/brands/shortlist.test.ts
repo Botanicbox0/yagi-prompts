@@ -162,6 +162,79 @@ describe("what can never reach the brand", () => {
   });
 });
 
+describe("triage", () => {
+  const states = async () => (await sl.loadStudioShortlist({ sql }, studio, projectId))!.candidates.map(c => [c.handle, c.state]);
+  const triage = (input: Record<string, unknown>) => sl.triageShortlist({ sql }, studio, { projectId, ...input });
+
+  it("keeps an excluded candidate off the brand's page, out of 'share all' and out after a re-import", async () => {
+    await studioImport([candidate("fixture_keep", 3000), candidate("fixture_out", 2000)]);
+    const out = await candidateId("fixture_out");
+    expect(await triage({ exclude: [out] })).toEqual({ ok: true, id: projectId, changed: 1 });
+    expect(await shareAll()).toMatchObject({ ok: true, changed: 1 });
+    expect(await shared(owner)).toEqual(["fixture_keep"]);
+    // The import worker sends the same handle again: figures refresh, the exclusion stays.
+    expect(await studioImport([candidate("fixture_out", 2500)])).toMatchObject({ added: 0, updated: 1 });
+    expect(await states()).toEqual([["fixture_keep", "shared"], ["fixture_out", "excluded"]]);
+    expect((await sl.loadStudioShortlist({ sql }, studio, projectId))!.candidates[1]!.metrics.followers).toBe(2500);
+    expect((await sql.query("select excluded_by from brand_shortlist_candidates where id=$1", [out])).rows[0]!.excluded_by).toBe(ids.studio);
+    // Sharing that one candidate brings it back.
+    expect(await sl.setShortlistShared({ sql }, studio, { projectId, candidateId: out, shared: true })).toMatchObject({ ok: true, changed: 1 });
+    expect(await shared(owner)).toEqual(["fixture_keep", "fixture_out"]);
+  });
+
+  it("moves many candidates in one call, and nothing when one ID is not this campaign's", async () => {
+    await studioImport([candidate("fixture_a", 400), candidate("fixture_b", 300), candidate("fixture_c", 200), candidate("fixture_d", 100)]);
+    const [a, b, c, d] = await Promise.all(["fixture_a", "fixture_b", "fixture_c", "fixture_d"].map(candidateId));
+    expect(await triage({ share: [a, b], exclude: [c] })).toMatchObject({ ok: true, changed: 3 });
+    expect(await states()).toEqual([["fixture_a", "shared"], ["fixture_b", "shared"], ["fixture_c", "excluded"], ["fixture_d", "waiting"]]);
+    // Moving to where a candidate already is changes nothing; back to waiting clears both marks.
+    expect(await triage({ share: [a], wait: [b, c] })).toMatchObject({ ok: true, changed: 2 });
+    expect(await states()).toEqual([["fixture_a", "shared"], ["fixture_b", "waiting"], ["fixture_c", "waiting"], ["fixture_d", "waiting"]]);
+    // Another campaign's candidate in the list: refused whole.
+    const other = idOf(await s.createStudioProject({ sql }, studio, { organizationId: orgId, title: "Other campaign", objective: "Find creators", budgetKrw: null, productionMode: "creator", requestId: randomUUID() }));
+    await sl.importShortlist({ sql, storage }, { kind: "studio", viewer: studio }, { projectId: other, candidates: [candidate("fixture_elsewhere", 1)] });
+    expect(await triage({ exclude: [d, await candidateId("fixture_elsewhere")] })).toEqual({ ok: false, code: "not_found" });
+    expect((await states()).at(-1)).toEqual(["fixture_d", "waiting"]);
+    // The same ID in two lists, an empty call, a non-ID and a non-studio caller are refused.
+    expect(await triage({ share: [d], exclude: [d] })).toMatchObject({ ok: false, code: "invalid" });
+    expect(await triage({})).toMatchObject({ ok: false, code: "invalid" });
+    expect(await triage({ share: ["fixture_d"] })).toMatchObject({ ok: false, code: "invalid" });
+    expect(await sl.triageShortlist({ sql }, owner, { projectId, share: [d] })).toEqual({ ok: false, code: "forbidden" });
+    // The database refuses a candidate that is both shared and excluded.
+    await expect(sql.query("update brand_shortlist_candidates set shared_at=now(), excluded_at=now() where id=$1", [d])).rejects.toThrow();
+  });
+
+  it("keeps the campaign's ranges as criteria, only ranges, and clears them", async () => {
+    expect((await sl.loadStudioShortlist({ sql }, studio, projectId))!.criteria).toBeNull();
+    const save = (criteria: unknown) => sl.saveShortlistCriteria({ sql }, studio, { projectId, criteria });
+    expect(await save({ followers: { min: 1000, max: 50000 }, engagement: { min: 1.5, max: null } })).toEqual({ ok: true, id: projectId });
+    expect((await sl.loadStudioShortlist({ sql }, studio, projectId))!.criteria).toEqual({ followers: { min: 1000, max: 50000 }, engagement: { min: 1.5 } });
+    for (const bad of [{ fee: { max: 100000 } }, { followers: { min: 10, max: 1 } }, { followers: {} }, { followers: { min: -1 } }, { followers: { min: 1, note: "x" } }])
+      expect(await save(bad)).toMatchObject({ ok: false, code: "invalid" });
+    expect(await sl.saveShortlistCriteria({ sql }, owner, { projectId, criteria: null })).toEqual({ ok: false, code: "forbidden" });
+    expect(await sl.saveShortlistCriteria({ sql }, studio, { projectId: randomUUID(), criteria: null })).toEqual({ ok: false, code: "not_found" });
+    expect(await save(null)).toMatchObject({ ok: true });
+    expect((await sl.loadStudioShortlist({ sql }, studio, projectId))!.criteria).toBeNull();
+    await expect(sql.query(`update brand_projects set shortlist_criteria='{"priceKrw":{"max":1}}'::jsonb where id=$1`, [projectId])).rejects.toThrow();
+  });
+
+  it("stores the picture large enough for the card portrait, with its dominant colour", async () => {
+    const png = await sharp({ create: { width: 320, height: 320, channels: 3, background: "#3366cc" } }).png().toBuffer();
+    await studioImport([candidate("fixture_tone", 5, { avatar: `data:image/png;base64,${png.toString("base64")}` })]);
+    const [c] = (await sl.loadStudioShortlist({ sql }, studio, projectId))!.candidates;
+    expect(c!.avatarTone).toMatch(/^#[0-9a-f]{6}$/);
+    const [r, g, b] = [1, 3, 5].map(i => parseInt(c!.avatarTone!.slice(i, i + 2), 16));
+    expect(b).toBeGreaterThan(r! + 60);
+    expect(g).toBeLessThan(b!);
+    expect(puts[0]!.size).toBeGreaterThan(0);
+    const stored = await sql.query("select avatar_tone from brand_shortlist_candidates where id=$1", [c!.id]);
+    expect(stored.rows[0]!.avatar_tone).toBe(c!.avatarTone);
+    // No picture, no colour.
+    await studioImport([candidate("fixture_plain", 1)]);
+    expect((await sl.loadStudioShortlist({ sql }, studio, projectId))!.candidates.find(x => x.handle === "fixture_plain")!.avatarTone).toBeNull();
+  });
+});
+
 describe("the brand's preference", () => {
   beforeEach(async () => {
     await studioImport([candidate("fixture_pick", 100), candidate("fixture_hidden", 50)]);
