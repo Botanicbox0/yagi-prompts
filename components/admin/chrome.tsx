@@ -233,6 +233,7 @@ const ERROR_KEYS = {
   metricsRequired: "errMetricsRequired",
   brandConflict: "errBrandConflict",
   collaborationRateLimited: "errCollaborationRateLimited",
+  studioRateLimited: "errStudioRateLimited",
   brandNotActive: "errBrandNotActive",
   brandConsentRequired: "errBrandConsentRequired",
   brandNotShared: "errBrandNotShared",

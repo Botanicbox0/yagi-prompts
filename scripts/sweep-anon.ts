@@ -6,6 +6,7 @@ import { PGlite } from '@electric-sql/pglite';
 import { DEFAULT_LOCAL_SNAPSHOT } from '@/lib/db/connect-shared';
 import { FIXTURE_SENTINELS } from './fixtures';
 import { HIDDEN_PROMPT_SLUGS, PROMPT_SENTINELS } from './prompt-fixtures';
+import { LOCAL_MAKER, LOCAL_RECIPE_CANARY, LOCAL_RECIPE_SLUG } from './maker-fixtures';
 import { RUNTIME_MODE_ENV } from '@/lib/runtime-mode';
 import { KO_TERMS } from '@/messages/ko';
 import { EN_TERMS } from '@/messages/en';
@@ -92,6 +93,8 @@ interface Fetched {
   robotsTag: string | null;
   /** For the `?download=1` probes — the header that makes a browser SAVE instead of play. */
   contentDisposition: string | null;
+  /** The workspace pages' nonce policy (lib/security/workspace-csp.ts). */
+  csp: string | null;
   body: string;
   bytes: Uint8Array;
 }
@@ -117,6 +120,7 @@ async function request(path: string, init?: RequestInit): Promise<Fetched> {
             status: response.statusCode ?? 0, location: header('location'),
             cacheControl: header('cache-control'), contentType: header('content-type'),
             robotsTag: header('x-robots-tag'), contentDisposition: header('content-disposition'),
+            csp: header('content-security-policy'),
             body: bytes.toString('utf8'), bytes,
           });
         });
@@ -135,6 +139,7 @@ async function request(path: string, init?: RequestInit): Promise<Fetched> {
     contentType: response.headers.get('content-type'),
     robotsTag: response.headers.get('x-robots-tag'),
     contentDisposition: response.headers.get('content-disposition'),
+    csp: response.headers.get('content-security-policy'),
     body: new TextDecoder().decode(bytes),
     bytes,
   };
@@ -1035,8 +1040,10 @@ async function sweepTemplates(): Promise<void> {
   // flips — it draws a neutral skeleton, and the per-viewer access call settles it in the browser.
   expectPresent('…and the studio starts as a neutral skeleton', detail.body, 'data-studio-pending');
   expectAbsent('…not painted closed before the access call', detail.body, 'data-studio-closed');
-  // §15.3-1 — the decision screen: one make card that is the price box, no second heading or link button.
-  expectPresent('…one make card that is the price box', detail.body, 'data-template-price-box');
+  // §15.3-1, revised 2026-10-29 (founder): a short make box on the page, the make card in a sheet.
+  expectPresent('…a make box on the page', detail.body, 'data-template-make-launcher');
+  expectPresent('…the make card in a sheet', detail.body, 'data-make-sheet');
+  expectAbsent('…no price box', detail.body, 'data-template-price-box');
   expectAbsent('…no link button above the card', detail.body, 'data-template-make-cta');
   expectPresent('…its facts', detail.body, 'data-template-fact');
   expectPresent('…the AI limit inside the card', detail.body, 'data-studio-ai-note');
@@ -1045,18 +1052,23 @@ async function sweepTemplates(): Promise<void> {
   expectPresent('…a phone sticky bar', detail.body, 'data-make-sticky');
   if (/<div[^>]*data-make-sticky[^>]*data-hide-tabs/.test(detail.body)) ok('…that hides the installed app tabs', 'data-hide-tabs');
   else fail('…sticky bar hides the app tabs', 'data-make-sticky must carry data-hide-tabs');
-  expectPresent('…whose one CTA goes to the make card', detail.body, 'href="#make"');
+  expectPresent('…and the selfie strip still opens the make card', detail.body, 'href="#make"');
   expectAbsent('…no demo badge anywhere', detail.body, 'data-demo-badge');
   expectAbsent('…no placeholder ad', detail.body, 'YOUR AD HERE');
   expectAbsent('…no house ad rail', detail.body, 'data-house-ad');
-  expectPresent('…and the price in dollars on the English page', detail.body, '>$4<');
+  // Founder, 2026-10-29: a template page names no won or dollar price — a visitor is asked to subscribe.
+  const shown = (html: string) => html.replace(/<script[\s\S]*?<\/script>/g, '');
+  expectAbsent('…no dollar price on the English page', shown(detail.body), '>$4<');
+  expectPresent('…"Subscribe to make it here" instead', detail.body, 'Subscribe to make it here');
+  expectAbsent('…no Offer price in the structured data', detail.body, 'priceCurrency');
   // The related list is the catalogue's 4:5 grid: two across on a phone, four on a desktop.
   if (/<ul[^>]*data-related-grid[^>]*class="[^"]*\bgrid-cols-2\b[^"]*\blg:grid-cols-4\b/.test(detail.body)) ok('…related templates in the two-column card grid', 'data-related-grid');
   else fail('…related templates grid', 'expected data-related-grid with grid-cols-2 … lg:grid-cols-4');
   expectPresent('…whose items are cards', detail.body, 'data-related-item');
   const detailKo = await get(`/ko/t/${GATED_PROMPT}`);
   expectEqual('the Korean template page renders 200', detailKo.status, 200);
-  expectPresent('…with the price in won', detailKo.body, '5,900원');
+  expectAbsent('…with no won price either', shown(detailKo.body), '5,900원');
+  expectPresent('…"구독하고 여기서 만들기" instead', detailKo.body, '구독하고 여기서 만들기');
   if (/완성까지<\/dt><dd[^>]*>보통 \d+분/.test(detailKo.body)) ok('…with the typical wait in minutes', '보통 N분');
   else fail('…typical wait', 'expected "완성까지 · 보통 N분" in the make card');
   expectAbsent('…and never a dollar', detailKo.body, '>$4<');
@@ -1240,25 +1252,43 @@ async function sweepMakers(): Promise<void> {
     expectEqual(`${locale}: …and its brand side "${brand}"`, side('brand'), brand);
   }
 
-  console.log(`\n/ko/video — ${KO_TERMS.studioCollection}, then ${KO_TERMS.makerCollection}`);
+  // §7.5 (founder 2026-10-30): one feed — originals and AI creatives mixed, no origin rails or chips.
+  console.log(`\n/ko/video — ${KO_TERMS.studioCollection} and ${KO_TERMS.maker} templates in one grid`);
   const video = await get('/ko/video');
-  const studioRail = video.body.indexOf('data-rail-origin="studio"');
-  const makerRail = video.body.indexOf('data-rail-origin="maker"');
-  if (studioRail > -1 && makerRail > studioRail) ok('the studio rail comes first, the maker rail second', `${studioRail} < ${makerRail}`);
-  else fail('the studio rail comes first, the maker rail second', `studio at ${studioRail}, maker at ${makerRail}`);
-  expectPresent('the origin chips', video.body, 'data-origin-filter');
-  expectPresent('…"전체 · 오리지널 · 메이커"', video.body, `>${KO_TERMS.maker}</button>`);
-  expectPresent('the maker rail is named', video.body, `>${KO_TERMS.makerCollection}</h2>`);
-  expectPresent('a public maker is credited by handle', video.body, `${KO_TERMS.creditPrefix} @jun`);
+  expectEqual('one grid on the listing', video.body.split('data-rail="').length - 1, 1);
+  expectAbsent('…no origin rails', video.body, 'data-rail-origin');
+  expectAbsent('…no origin chips', video.body, 'data-origin-filter');
+  expectAbsent('…no collection headings', video.body, `>${KO_TERMS.makerCollection}</h2>`);
+  const origins = [...video.body.matchAll(/data-card-origin="(studio|maker)"/g)].map((match) => match[1]!);
+  expectEqual('both origins in that grid', [...new Set(origins)].sort().join(','), 'maker,studio');
+  // While both still have cards, one origin never holds more than three places in a row.
+  const mixedUntil = Math.min(origins.lastIndexOf('studio'), origins.lastIndexOf('maker'));
+  let longest = 0;
+  for (let i = 0, run = 0; i <= mixedUntil; i++) { run = i > 0 && origins[i] === origins[i - 1] ? run + 1 : 1; longest = Math.max(longest, run); }
+  if (longest <= 3) ok('…mixed, never more than three of one origin in a row', origins.join(' '));
+  else fail('…mixed, never more than three of one origin in a row', origins.join(' '));
+  expectPresent('a public creative is credited by handle', video.body, `${KO_TERMS.creditPrefix} @jun`);
   expectAbsent('no "작가" anywhere on the catalogue', video.body, '작가');
   expectAbsent('no author account id reaches the page', video.body, 'f0000000-0000-4000-8000-000000000002');
+  const home = await get('/ko');
+  expectAbsent('the home page has no separate creatives rail', home.body, 'data-rail="makers"');
+  const homeVideo = home.body.slice(home.body.indexOf('data-rail="video"'), home.body.indexOf('data-all-video'));
+  expectPresent('…its video rail carries the creatives\' templates', homeVideo, 'data-card-origin="maker"');
 
-  console.log('\n/ko/t/[slug] — the maker block only where the maker opted in');
+  console.log('\n/ko/t/[slug] — one creator line, only where the creative opted in');
   const makerTemplate = await get('/ko/t/cafe-window-timelapse');
   expectEqual('renders 200', makerTemplate.status, 200);
-  expectPresent('the maker block', makerTemplate.body, 'data-template-maker="jun"');
-  expectPresent('…linking to the maker page', makerTemplate.body, 'href="/ko/makers/jun"');
+  expectPresent('the creator line', makerTemplate.body, 'data-template-maker="jun"');
+  expectEqual('…once', makerTemplate.body.split('data-template-maker=').length - 1, 1);
+  const line = makerTemplate.body.indexOf('data-template-maker="jun"');
+  if (line > makerTemplate.body.indexOf('<h1') && line < makerTemplate.body.indexOf('data-template-description')) ok('…right under the title');
+  else fail('…right under the title', `line at ${line}`);
+  expectPresent('…linking to the creative\'s profile', makerTemplate.body, 'href="/ko/makers/jun"');
   expectPresent('the verified mark', makerTemplate.body, 'data-template-verified');
+  // 2026-10-29: the copy-or-make fork and the recipe pill follow a public prompt, never the credit.
+  expectAbsent('no copy-or-make fork without a public prompt', makerTemplate.body, 'data-template-recipe-actions');
+  // Locally one card has a public prompt: the studio recipe the maker fixtures disclose (LOCAL_RECIPE_SLUG).
+  expectEqual('…and the catalogue\'s recipe pill only on that one card', video.body.split('data-card-recipe="true"').length - 1, 1);
   const legacy = await get('/ko/t/skate-park-golden-hour');
   expectPresent('a handle without a maker page is a plain credit', legacy.body, `${KO_TERMS.creditPrefix} @hana`);
   expectAbsent('…with no maker block', legacy.body, 'data-template-maker');
@@ -1278,8 +1308,74 @@ async function sweepMakers(): Promise<void> {
     expectAbsent(`${locale}: indexable`, page.body, 'noindex');
     expectAbsent(`${locale}: no account id`, page.body, 'f0000000-0000-4000-8000-000000000002');
     expectAbsent(`${locale}: no email`, page.body, 'pro@playbook.test');
+    expectAbsent(`${locale}: no recipe claim without an open recipe`, page.body, 'data-maker-recipe-hub');
   }
   expectPresent('ko: the count line', (await get('/ko/makers/jun')).body, '템플릿 1편');
+
+  // §20 — the creative's identity, works and doors (local fixture `@jun`, every value marked TEST).
+  console.log('\n/{locale}/makers/jun — the AI creative page (§20)');
+  const creative = await get('/ko/makers/jun');
+  expectPresent('the creative name', creative.body, LOCAL_MAKER.displayName);
+  expectPresent('the headline', creative.body, 'data-creative-headline');
+  expectPresent('where they work', creative.body, 'data-creative-place');
+  expectPresent('…in Korean', creative.body, '대한민국');
+  expectPresent('open to brand work', creative.body, 'data-creative-open');
+  expectPresent('their tools', creative.body, 'data-creative-tools');
+  expectPresent('their links', creative.body, 'data-creative-link="website"');
+  expectPresent('their works', creative.body, 'data-creative-works="3"');
+  expectPresent('…served from the cacheable media path', creative.body, '/creative-media/wrk_');
+  expectPresent('an avatar', creative.body, '/creative-media/avatar-jun-');
+  expectPresent('a cover banner (0071)', creative.body, 'data-creative-cover="photo"');
+  const coverPath = /\/creative-media\/cover-jun-[0-9a-f]{16,32}\.jpg/.exec(creative.body)?.[0];
+  const cover = coverPath ? await get(coverPath) : null;
+  expectEqual('…which streams', cover?.status, 200);
+  expectEqual('…as an image', cover?.contentType, 'image/jpeg');
+  expectPresent('…publicly cacheable', cover?.cacheControl ?? '', 'public');
+  expectEqual('no "my cover" for an anonymous reader', (await get('/api/makers/media/cover-me')).status, 404);
+  expectPresent('the email sits behind a button', creative.body, 'data-creative-email="hidden"');
+  expectAbsent('…and never as text', creative.body, LOCAL_MAKER.publicEmail);
+  expectAbsent('…or as a mailto', creative.body, `mailto:${LOCAL_MAKER.publicEmail}`);
+  expectPresent('ProfilePage structured data', creative.body, '"@type":"ProfilePage"');
+  expectPresent('the share button', creative.body, 'data-creative-share');
+  const workPath = /\/creative-media\/wrk_[0-9a-f]{32}\.jpg/.exec(creative.body)?.[0];
+  const work = workPath ? await get(workPath) : null;
+  expectEqual('a public work streams', work?.status, 200);
+  expectEqual('…as an image', work?.contentType, 'image/jpeg');
+  expectPresent('…publicly cacheable', work?.cacheControl ?? '', 'public');
+  expectEqual('an unknown work is a 404', (await get(`/creative-media/wrk_${'0'.repeat(32)}.jpg`)).status, 404);
+  expectEqual('a malformed media name is a 404', (await get('/creative-media/..%2F..%2Fsecret.jpg')).status, 404);
+  expectEqual('the studio preview path stays private', (await get(`/api/makers/media/wrk_${'0'.repeat(32)}`)).status, 404);
+  expectEqual('no "my avatar" for an anonymous reader', (await get('/api/makers/media/avatar-me')).status, 404);
+
+  console.log('\n/@handle — the short link');
+  const short = await request('/@jun', { headers: { 'accept-language': 'en-US,en;q=0.9' } });
+  expectEqual('/@jun redirects', short.status, 307);
+  expectEqual('…to the creative page', short.location?.replace(/^https?:\/\/[^/]+/, ''), '/en/makers/jun');
+  const shortKo = await request('/ko/@jun');
+  expectEqual('/ko/@jun keeps the language', shortKo.location?.replace(/^https?:\/\/[^/]+/, ''), '/ko/makers/jun');
+
+  console.log('\n/{locale}/t/[slug] — the recipe opens for members only (§20.3)');
+  const recipePage = await get(`/en/t/${LOCAL_RECIPE_SLUG}`);
+  expectEqual('renders 200', recipePage.status, 200);
+  expectPresent('the recipe section', recipePage.body, 'data-recipe-how');
+  expectPresent('…with the creative\'s intro', recipePage.body, 'data-recipe-intro');
+  expectPresent('…behind the members\' gate', recipePage.body, 'data-recipe-gate');
+  expectPresent('…with the opening of step 1', recipePage.body, 'TEST ONLY · the person in');
+  expectAbsent('…and never the rest of the prompt', recipePage.body, LOCAL_RECIPE_CANARY);
+  expectAbsent('…nor a step tip', recipePage.body, 'TEST tip:');
+  expectAbsent('…nor the closing line', recipePage.body, '태그해 주세요');
+  const anonRecipe = await get(`/api/renders/access?template=${LOCAL_RECIPE_SLUG}&locale=en`);
+  expectEqual('the access answer renders 200', anonRecipe.status, 200);
+  expectPresent('…with no recipe for a visitor', anonRecipe.body, '"recipe":null');
+  expectAbsent('…and no prompt', anonRecipe.body, LOCAL_RECIPE_CANARY);
+  expectPresent('…never cached publicly', anonRecipe.cacheControl ?? '', 'no-store');
+
+  console.log('\n/api/mcp — the creative agent door');
+  const mcp = await request('/api/mcp', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', params: {} }) });
+  expectEqual('needs a creative token', mcp.status, 401);
+  const forged = await request('/api/mcp', { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer twk_${'a'.repeat(40)}` }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }) });
+  expectEqual('…and refuses an unknown one', forged.status, 401);
+  expectEqual('GET is not a session stream', (await get('/api/mcp')).status, 405);
   expectEqual('a handle with no maker page is a 404', (await get('/ko/makers/hana')).status, 404);
   expectEqual('an unknown handle is a 404', (await get('/en/makers/nobody_here')).status, 404);
   const sitemap = await get('/sitemap.xml');
@@ -1338,23 +1434,27 @@ async function sweepCampaigns(): Promise<void> {
     expectPresent(`/${locale}/campaigns preserves old brand bookmarks`, listing.body, 'data-legacy-brand-entry');
     const brand = await get(`/${locale}/brands`);
     expectEqual(`/${locale}/brands renders 200`, brand.status, 200);
-    for (const marker of ['data-campaign-hero', 'data-campaign-proof', 'data-brands', 'data-case-study', 'data-customer-story', 'data-audience-switch', 'data-brand-scale-pillars']) {
+    for (const marker of ['data-campaign-hero', 'data-campaign-proof', 'data-brands', 'data-case-study', 'data-customer-story', 'data-audience-switch']) {
       expectPresent(`/${locale}/brands carries ${marker}`, brand.body, marker);
     }
-    // 2026-10-29 landing v6: hero film + three doors, why-not-generic, asset studio, creator campaign, production.
-    for (const marker of ['data-studio-hero', 'data-hero-film', 'data-hero-doors', 'data-studio-contrast', 'data-studio-assets', 'data-brand-kit', 'data-studio-vto', 'data-campaign-scale', 'data-studio-feed', 'data-production-service']) {
+    // 2026-10-30 landing v7: the brand's own AI media engine. Hero film, compare, fixed vs changing layer,
+    // three chapters, six-step workflow, the work, creator campaign, production + what comes next, blue closing.
+    for (const marker of ['data-v7-hero', 'data-hero-film', 'data-hero-doors', 'data-v7-problem', 'data-v7-first', 'data-v7-engine', 'data-v7-workflow', 'data-v7-work', 'data-studio-assets', 'data-studio-vto', 'data-v7-campaign', 'data-campaign-scale', 'data-studio-feed', 'data-v7-production', 'data-production-service', 'data-v7-next', 'data-v7-closing']) {
       expectPresent(`/${locale}/brands carries ${marker}`, brand.body, marker);
     }
-    expectPresent(`/${locale}/brands hero plays its own-language film`, brand.body, `/reel/landing/hero-${locale}.mp4`);
+    expectPresent(`/${locale}/brands hero plays the blue-world film`, brand.body, '/reel/landing/v7/hero.mp4');
     expectEqual(`/${locale}/brands hero opens three doors`, (brand.body.match(/data-hero-door=/g) ?? []).length, 3);
-    expectAbsent(`/${locale}/brands retired the hero still bento`, brand.body, 'data-hero-output');
     expectEqual(`/${locale}/brands compares three same-product pairs`, (brand.body.match(/data-contrast-pair=/g) ?? []).length, 3);
+    expectEqual(`/${locale}/brands offers three changes on the engine`, (brand.body.match(/data-engine-change=/g) ?? []).length, 3);
+    expectEqual(`/${locale}/brands shows six workflow steps`, (brand.body.match(/data-workflow-step=/g) ?? []).length, 6);
     expectEqual(`/${locale}/brands shows the eight-product range`, (brand.body.match(/data-range-product=/g) ?? []).length, 8);
     expectEqual(`/${locale}/brands ships every scene in the HTML`, (brand.body.match(/data-asset-scene=/g) ?? []).length, 8);
     expectEqual(`/${locale}/brands ships every clip in the HTML`, (brand.body.match(/data-asset-clip=/g) ?? []).length, 5);
     expectEqual(`/${locale}/brands pairs each ad with its product shot`, (brand.body.match(/data-asset-ad-still=/g) ?? []).length, 2);
     expectPresent(`/${locale}/brands ships the perfume ad's product shot`, brand.body, '/reel/landing/highteen-product.webp');
     expectPresent(`/${locale}/brands ships the lip gloss ad's product shot`, brand.body, '/reel/landing/beauty-ad-product.webp');
+    expectAbsent(`/${locale}/brands links no price estimate`, brand.body, 'pricing.yagiworkshop.xyz');
+    expectAbsent(`/${locale}/brands makes no data-destruction promise`, brand.body, locale === 'ko' ? '즉시 파기' : 'deleted right after');
     for (const gone of ['data-studio-orbit', 'data-mood-tile', 'data-format-select', 'data-service-example']) {
       expectAbsent(`/${locale}/brands retired ${gone}`, brand.body, gone);
     }
@@ -1510,6 +1610,26 @@ async function sweepBrandWorkspace(fixtures: BrandWorkspaceProbe[]): Promise<voi
   expectEqual('brand usage order refuses anonymous access before validation', usageOrder.status, 401);
   expectEqual('brand usage order refusal is private no-store', usageOrder.cacheControl, 'private, no-store');
   noPrivateBytes('brand usage order', usageOrder);
+  // The studio's campaign preparation door (docs/BRAND-STAFF-ACCESS.md): admins only, and it does not confirm it exists.
+  const studioForm = new FormData();
+  studioForm.set('_op', 'brandWorkspace.createProject');
+  const studioPrep = await request('/api/brand-workspace/studio', { method: 'POST', headers: { origin: base.origin }, body: studioForm });
+  expectEqual('brand studio door answers anonymous posts with a bare 404', studioPrep.status, 404);
+  expectEqual('brand studio door 404 has no body', studioPrep.body, '');
+  expectEqual('brand studio door refusal is private no-store', studioPrep.cacheControl, 'private, no-store');
+  // The workspace pages' nonce CSP, end to end: the page that opens without a session must carry the
+  // policy, and Next.js must have stamped its nonce on every script it rendered.
+  const invite = await get('/brand/invite');
+  expectEqual('/brand/invite renders for anonymous visitors', invite.status, 200);
+  const nonce = invite.csp?.match(/'nonce-([A-Za-z0-9+/=]+)'/)?.[1];
+  const policy = invite.csp ?? '';
+  if (nonce && policy.includes("'strict-dynamic'") && policy.includes("object-src 'none'") && policy.includes("base-uri 'none'")
+    && policy.includes("frame-ancestors 'none'") && policy.includes("form-action 'self'") && !policy.includes('unsafe-eval'))
+    ok('workspace page sends the strict nonce CSP');
+  else fail('workspace page sends the strict nonce CSP', policy || 'no Content-Security-Policy header');
+  const scripts = [...invite.body.matchAll(/<script\b[^>]*>/g)].map((m) => m[0]);
+  expectEqual('workspace page has scripts to stamp', scripts.length > 0, true);
+  expectEqual('every script on a workspace page carries the nonce', scripts.filter((tag) => !nonce || !tag.includes(`nonce="${nonce}"`)).length, 0);
 }
 
 /** docs/TEMPLATES-IA.md §8 — the render queue: gated where it must be, open where the token says. */

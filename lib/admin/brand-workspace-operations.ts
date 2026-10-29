@@ -15,7 +15,7 @@ import {
   BRAND_LOGO_MAX_BYTES,
 } from "@/lib/brands/workspace/service";
 import type { BrandOutcome } from "@/lib/brands/workspace/types";
-import { importShortlist, removeShortlistCandidate, setShortlistShared } from "@/lib/brands/shortlist/service";
+import { importShortlist, removeShortlistCandidate, saveShortlistCriteria, setShortlistShared, triageShortlist } from "@/lib/brands/shortlist/service";
 import { SHORTLIST_IMPORT_MAX_BODY } from "@/lib/brands/shortlist/schema";
 import type { AdminOperation } from "./operations";
 import { fail, ok, type AdminContext } from "./context";
@@ -263,6 +263,48 @@ const shortlistShareOperation: AdminOperation<Input> = {
     return result.ok ? ok("saved", { to: shortlistTo(input.projectId) }) : brandFailure(result.code);
   },
 };
+/**
+ * The triage list's one door. A row's own button sends `one` = "share:<id>"; the selection bar sends
+ * `action` with every checked `candidateId`; the split sheet sends `share` / `exclude` lists directly.
+ */
+const TRIAGE_ACTIONS = ["share", "exclude", "wait"] as const;
+const strings = (form: FormData, name: string) =>
+  form.getAll(name).filter((v): v is string => typeof v === "string").map((v) => v.trim()).filter(Boolean);
+const shortlistTriageOperation: AdminOperation<Input> = {
+  parse(form) {
+    const lists: Record<(typeof TRIAGE_ACTIONS)[number], string[]> = { share: strings(form, "share"), exclude: strings(form, "exclude"), wait: strings(form, "wait") };
+    const [oneAction, oneId] = f.str(form, "one").split(":");
+    const action = f.str(form, "action");
+    if (oneAction && oneId) {
+      if (!(TRIAGE_ACTIONS as readonly string[]).includes(oneAction)) return { ok: false, detail: "one: unknown action" };
+      lists[oneAction as keyof typeof lists].push(oneId);
+    } else if (action) {
+      if (!(TRIAGE_ACTIONS as readonly string[]).includes(action)) return { ok: false, detail: "action: unknown action" };
+      lists[action as keyof typeof lists].push(...strings(form, "candidateId"));
+    }
+    return { ok: true, value: { projectId: f.str(form, "projectId"), ...lists } };
+  },
+  async run(ctx, input) {
+    const result = await triageShortlist({ sql: ctx.sql }, ctx.viewer, input);
+    return result.ok ? ok("saved", { to: shortlistTo(input.projectId) }) : brandFailure(result.code);
+  },
+};
+const shortlistCriteriaOperation: AdminOperation<Input> = {
+  parse(form) {
+    const raw = f.str(form, "criteria");
+    if (raw.length > 2000) return { ok: false, detail: "criteria: too long" };
+    let criteria: unknown = null;
+    if (raw) {
+      try { criteria = JSON.parse(raw); }
+      catch { return { ok: false, detail: "criteria: not valid JSON" }; }
+    }
+    return { ok: true, value: { projectId: f.str(form, "projectId"), criteria } };
+  },
+  async run(ctx, input) {
+    const result = await saveShortlistCriteria({ sql: ctx.sql }, ctx.viewer, input);
+    return result.ok ? ok("saved", { to: shortlistTo(input.projectId) }) : brandFailure(result.code);
+  },
+};
 const shortlistRemoveOperation: AdminOperation<Input> = {
   parse(form) {
     return { ok: true, value: { projectId: f.str(form, "projectId"), candidateId: f.str(form, "candidateId") } };
@@ -276,6 +318,8 @@ export const BRAND_WORKSPACE_OPERATIONS = {
   "brandWorkspace.shortlistImport": shortlistImportOperation,
   "brandWorkspace.shortlistShare": shortlistShareOperation,
   "brandWorkspace.shortlistRemove": shortlistRemoveOperation,
+  "brandWorkspace.shortlistTriage": shortlistTriageOperation,
+  "brandWorkspace.shortlistCriteria": shortlistCriteriaOperation,
  'brandWorkspace.logo': logoUpload,
  'brandWorkspace.logoRemove': managedOperation((ctx,v)=>removeBrandOrganizationLogo(ctx,ctx.viewer,v),'home'),
  'brandWorkspace.cover': managedOperation((ctx,v)=>setBrandProjectCover(ctx,ctx.viewer,v)),

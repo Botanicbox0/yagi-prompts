@@ -17,14 +17,19 @@ import { adminWorkflowKo } from './admin-workflow';
  * 와/과, 로/으로)가 붙은 문장을 함께 확인한다. 사용자는 역할로 부르지 않는다 — 문장은 "나/내",
  * 부를 때는 "회원님". `personal`은 헤더 전환 스위치 라벨에만 쓴다.
  */
-const MAKER = '메이커';
+/**
+ * 2026-10-28 대표 결정(docs/PLATFORM-2.0.md §20.1): 템플릿 공급자는 "메이커"가 아니라 "AI 크리에이티브".
+ * 디자인·감도로 일하는 사람들이 스스로를 부르는 말이고, 캠페인 참여자 "크리에이터"와는 "AI"가 붙어
+ * 구분된다. 받침 없는 말이라 조사는 "메이커" 때와 같다. 코드·DB 식별자(maker, platform_creators)는 그대로.
+ */
+const MAKER = 'AI 크리에이티브';
 export const KO_TERMS = {
   /** 템플릿 공급자, 짧은 말 */
   maker: MAKER,
   /** 역할을 설명하는 자리의 정식 명칭 */
-  makerFull: `템플릿 ${MAKER}`,
+  makerFull: MAKER,
   makerProgram: `${MAKER} 프로그램`,
-  makerStudio: `${MAKER} 스튜디오`,
+  makerStudio: '크리에이티브 스튜디오',
   /** 카탈로그 묶음 */
   studioCollection: 'TWINGS 오리지널',
   makerCollection: `${MAKER} 컬렉션`,
@@ -107,7 +112,7 @@ export const ko: Dictionary = {
   "selfieLink": "내 사진 올리기",
   "claimEmpty": "아직 확인을 요청한 게시물이 없어요.",
   "formatTitle": "내 포맷 제출하기",
-  "formatHint": `승인된 ${T.makerFull}를 위한 공간입니다. 레시피는 공개되지 않으며, 스튜디오 검수 후 템플릿 판매를 준비합니다.`,
+  "formatHint": `승인된 ${T.makerFull}를 위한 공간입니다. 레시피는 내가 공개를 고르지 않는 한 비공개예요. 내 사진으로 한 테스트 렌더가 성공하면 템플릿을 직접 공개할 수 있어요.`,
   "formatName": "포맷 이름",
   "recipe": "비공개 제작 레시피",
   "example": "예시 게시물 링크",
@@ -215,22 +220,73 @@ export const ko: Dictionary = {
   makers: {
     eyebrow: `${T.makerFull}`,
     metaTitle: `@{handle} · ${T.makerFull}`,
-    metaDescription: '@{handle}의 TWINGS 템플릿 {count}편. 모두 스튜디오 검수를 거쳤습니다.',
+    metaDescription: '@{handle}의 TWINGS 템플릿 {count}편. 모두 공개 전에 테스트 렌더를 거쳤습니다.',
     templateCount: '템플릿 {count}편',
-    templatesHeading: '공개한 템플릿',
+    templatesHeading: '템플릿',
     empty: '아직 공개한 템플릿이 없습니다.',
     browse: '모든 템플릿 보기',
+    worksHeading: '대표 작업',
+    aboutHeading: '소개',
+    basedIn: '{place}에서 작업',
+    toolsHeading: '작업 도구',
+    linksHeading: '링크',
+    openToBrands: '브랜드 협업 가능',
+    contact: '연락하기',
+    showEmail: '이메일 보기',
+    copyEmail: '이메일 복사',
+    copied: '복사했어요',
+    share: '프로필 링크 복사',
+    shared: '링크를 복사했어요',
+    statTemplates: '템플릿',
+    statWorks: '대표 작업',
+    viewOriginal: '원본 게시물 보기',
+    close: '닫기',
+    previous: '이전',
+    next: '다음',
+    workLabel: '{count}개 중 {n}번째 작업',
+    jsonLdRole: 'AI 크리에이티브',
+    recipeBadge: '레시피 공개',
+    recipeCount: '공개한 레시피 {count}편',
+    recipeLine: '@{handle}의 공식 레시피 페이지입니다. 템플릿을 열면 프롬프트를 복사하거나, 셀카 한 장으로 같은 영상을 만들 수 있어요.',
   },
   creatorProgram: {
     "profile": {
       "heading": "공개 프로필",
-      "lede": `프로필을 공개하면 템플릿 카드와 템플릿 페이지에 "${T.creditPrefix} @핸들"이 표시되고, 핸들·소개·공개 템플릿을 모은 ${T.maker} 페이지가 생깁니다. 끄면 이 표시가 모두 사라집니다.`,
+      "lede": `프로필을 공개하면 템플릿 카드와 템플릿 페이지에 "${T.creditPrefix} @핸들"이 표시되고, 나를 소개하는 정보·링크·대표 작업·공개 템플릿을 모은 프로필 페이지가 생겨요. 끄면 이 표시가 모두 사라집니다.`,
       "handleLabel": "핸들",
-      "handleHint": `영문 소문자·숫자·밑줄 3~20자. ${T.maker} 페이지 주소가 됩니다.`,
+      "handleHint": "영문 소문자·숫자·밑줄 3~20자. 프로필 주소가 됩니다: twings.app/@핸들",
       "bioLabel": "소개",
       "bioHint": "200자 이내. 비워 둬도 됩니다.",
+      "displayNameLabel": "이름",
+      "displayNameHint": "활동하는 이름. 40자 이내.",
+      "headlineLabel": "한 줄 소개",
+      "headlineHint": "80자 이내. 예: 패션 필름을 만드는 AI 디렉터",
+      "countryLabel": "작업하는 나라",
+      "countryNone": "표시 안 함",
+      "cityLabel": "도시",
+      "cityHint": "비워 둬도 됩니다.",
+      "linksLabel": "링크",
+      "linksHint": "최대 6개. Instagram, TikTok, YouTube, X, Threads, Higgsfield, Behance, 개인 사이트 주소를 넣으면 자동으로 인식해요.",
+      "emailLabel": "공개 이메일",
+      "emailHint": "프로필에 “이메일 보기” 버튼으로 표시돼요. 계정 이메일과 달라도 괜찮아요. 비워 두면 공개되지 않아요.",
+      "toolsLabel": "작업 도구",
+      "toolsHint": "쉼표로 구분해 최대 8개. 예: Seedance 2.5, Midjourney, ComfyUI",
+      "openToBrandsLabel": "브랜드 협업 문의 받기",
+      "openToBrandsHint": "프로필에 표시돼요. 브랜드가 크리에이티브를 찾을 때 참고해요.",
+      "avatarLabel": "프로필 사진",
+      "avatarHint": "정사각형으로 잘려요. JPG·PNG·WebP, 4MB 이내.",
+      "avatarUpload": "사진 올리기",
+      "avatarRemove": "사진 지우기",
+      "coverLabel": "배경 사진",
+      "coverHint": "프로필 맨 위에 넓게 깔려요. 가로로 긴 사진이 잘 어울리고, 2:1 비율로 잘려요. JPG·PNG·WebP, 4MB 이내.",
+      "coverUpload": "배경 사진 올리기",
+      "coverReplace": "배경 사진 바꾸기",
+      "coverRemove": "배경 사진 지우기",
+      "shortLink": "짧은 주소",
       "publicLabel": "프로필 공개",
-      "publicHint": "핸들과 소개만 공개됩니다. 이름·연락처·계약 조건은 공개되지 않습니다.",
+      "publicHint": "켜면 소개 내용과 대표 작업, 공개 템플릿이 프로필에 보여요. 계정 이메일과 계약 조건은 공개되지 않아요.",
+      "basicsHeading": "나를 소개하기",
+      "contactHeading": "연락 가능한 곳",
       "save": "저장",
       "saved": "프로필을 저장했어요.",
       "view": `내 ${T.maker} 페이지 보기`,
@@ -241,10 +297,77 @@ export const ko: Dictionary = {
         "handle_taken": `이미 다른 ${T.maker}가 쓰는 핸들이에요.`,
         "handle_required": "프로필을 공개하려면 핸들이 필요해요.",
         "invalid_bio": "소개는 200자 이내로 적어 주세요.",
+        "invalid_name": "이름은 한 줄, 40자 이내로 적어 주세요.",
+        "invalid_headline": "한 줄 소개는 80자 이내로 적어 주세요.",
+        "invalid_country": "목록에서 나라를 골라 주세요.",
+        "invalid_city": "도시는 40자 이내로 적어 주세요.",
+        "invalid_links": "https 링크를 최대 6개까지 적어 주세요.",
+        "invalid_email": "이메일 주소를 확인해 주세요.",
+        "invalid_tools": "작업 도구는 8개까지, 각 32자 이내로 적어 주세요.",
         "not_maker": `승인된 ${T.maker}만 프로필을 설정할 수 있어요.`,
         "unavailable": "지금은 저장할 수 없어요. 잠시 뒤 다시 시도해 주세요.",
         "sign_in_required": "로그인한 뒤 다시 시도해 주세요."
       }
+    },
+    "works": {
+      "heading": "대표 작업",
+      "lede": "내 감도를 보여 줄 작업을 최대 12개 올려 주세요. 프로필 상단에 이 순서대로 보여요.",
+      "hint": "JPG·PNG·WebP 이미지 또는 MP4·MOV 영상, 4MB 이내. 이미지의 위치·카메라 정보는 지워져요.",
+      "upload": "작업 올리기",
+      "uploading": "올리는 중…",
+      "count": "{n}/12개",
+      "empty": "아직 올린 작업이 없어요.",
+      "titleLabel": "제목",
+      "captionLabel": "설명",
+      "linkLabel": "원본 게시물 링크",
+      "save": "저장",
+      "saved": "저장했어요",
+      "remove": "지우기",
+      "moveUp": "앞으로",
+      "moveDown": "뒤로",
+      "errors": {
+        "too_large": "4MB를 넘는 파일이에요.",
+        "bad_file": "JPG·PNG·WebP·MP4·MOV 파일만 올릴 수 있어요.",
+        "limit_reached": "이미 12개(또는 40MB)를 올렸어요. 하나를 지우고 올려 주세요.",
+        "invalid": "제목 80자, 설명 280자, 링크는 https 주소인지 확인해 주세요.",
+        "not_open": "아직 프로그램이 열리지 않았어요.",
+        "forbidden": "승인된 AI 크리에이티브만 작업을 올릴 수 있어요.",
+        "unavailable": "처리하지 못했어요. 잠시 뒤 다시 시도해 주세요."
+      }
+    },
+    "connect": {
+      "heading": "AI 에이전트로 올리기 (MCP)",
+      "lede": "Claude Code, Cursor, Codex에 TWINGS를 연결해 보세요. “방금 Higgsfield에서 만든 이미지로 TWINGS 템플릿 만들어 줘”라고 말하면 에이전트가 레시피 가이드를 읽고 초안 저장부터 소스 파일·대표 작업 업로드, 테스트 렌더, 공개까지 처리해요.",
+      "nameLabel": "토큰 이름",
+      "namePlaceholder": "예: 내 노트북 Claude",
+      "create": "토큰 만들기",
+      "creating": "만드는 중…",
+      "created": "이 토큰은 지금 한 번만 보여요. 바로 복사해 두세요.",
+      "copy": "복사",
+      "copied": "복사했어요",
+      "revoke": "폐기",
+      "empty": "아직 만든 토큰이 없어요.",
+      "lastUsed": "마지막 사용 {date}",
+      "neverUsed": "사용 기록 없음",
+      "limit": "최대 5개까지 만들 수 있어요.",
+      "setupHeading": "연결하기",
+      "endpoint": "서버 주소",
+      "tools": "에이전트가 할 수 있는 일: 레시피 가이드 읽기 · 초안 저장 · 소스 파일과 대표 작업 올리기(링크 또는 파일) · 테스트 렌더 · 공개 · 프로필 수정 · 통계 보기",
+      "errors": {
+        "invalid": "토큰 이름을 40자 이내로 적어 주세요.",
+        "limit_reached": "토큰은 5개까지예요. 하나를 폐기하고 만들어 주세요.",
+        "not_found": "이미 없는 토큰이에요.",
+        "unavailable": "처리하지 못했어요. 잠시 뒤 다시 시도해 주세요."
+      }
+    },
+    "stats": {
+      "heading": "레시피를 연 회원",
+      "lede": "레시피의 프롬프트는 로그인한 회원에게만 열려요. 몇 명이 열었는지만 보이고, 누가 열었는지는 보이지 않아요.",
+      "colTemplate": "템플릿",
+      "colMembers": "회원",
+      "col7d": "최근 7일",
+      "colOpens": "열람",
+      "empty": "템플릿이 공개되면 여기에 숫자가 나와요."
     },
     "metaTitle": `${T.makerProgram}`,
     "metaDescription": `직접 만든 AI 영상·이미지 포맷을 제출하세요. 스튜디오 검수를 거쳐 TWINGS 템플릿이 되면 배분 대상 이익의 80%가 ${T.maker} 몫입니다.`,
@@ -415,6 +538,260 @@ export const ko: Dictionary = {
     "campaignCta": "참여할 캠페인 보기"
   },
   brandLanding: {
+    "v7": {
+      "hero": {
+        "eyebrow": "브랜드를 위한 TWINGS",
+        "title": "브랜드만의\nAI 미디어 엔진",
+        "body": "브랜드가 정한 미감과 YAGI가 글로벌 캠페인에서 다듬은 제작 원칙은 고정합니다. 유행과 채널에 따라 바뀌는 부분만 새로 만듭니다.",
+        "cta": "데모 신청하기",
+        "secondary": "작업 보기",
+        "filmLabel": "TWINGS로 만든 브랜드 영상",
+        "doors": [
+          {
+            "title": "에셋 스튜디오",
+            "body": "제품 컷과 광고 영상"
+          },
+          {
+            "title": "크리에이터 캠페인",
+            "body": "크리에이터가 각자 얼굴로 올리는 광고"
+          },
+          {
+            "title": "프로덕션",
+            "body": "YAGI가 만드는 브랜드 필름"
+          }
+        ]
+      },
+      "problem": {
+        "eyebrow": "비슷해 보이는 이유",
+        "title": "AI로 만든 광고가 서로 닮아 갑니다",
+        "body": "AI는 요청에 적힌 것만 압니다. 로고 위치나 빛의 방향을 적지 않으면 짐작으로 채웁니다.",
+        "raw": "기본 생성",
+        "hint": "비교할 항목",
+        "slider": "두 컷을 나누는 위치",
+        "caption": "같은 제품, 같은 요청으로 만든 두 컷입니다",
+        "pairs": [
+          {
+            "chip": "로고",
+            "note": "기본 생성에서는 마크가 글자 Y로 바뀌었습니다. 오른쪽은 규칙 검사에서 원래 마크로 되돌렸습니다.",
+            "raw": "기본 생성: 마크가 글자 Y로 바뀐 컷",
+            "ours": "TWINGS: 원래 마크가 남은 컷"
+          },
+          {
+            "chip": "피부",
+            "note": "모공과 잔머리를 지우지 않았습니다.",
+            "raw": "기본 생성: 플라스틱처럼 매끈한 피부",
+            "ours": "TWINGS: 모공과 잔머리가 남은 피부"
+          },
+          {
+            "chip": "빛",
+            "note": "왼쪽 위 창가 빛 하나로 맞췄습니다. 기본 생성에는 흔한 나무 테이블이 깔려 있습니다.",
+            "raw": "기본 생성: 흔한 나무 테이블 위의 병",
+            "ours": "TWINGS: 창가 빛 하나로 찍은 병"
+          }
+        ]
+      },
+      "first": {
+        "eyebrow": "어떻게 다른가",
+        "title": "고정하는 것과 바꾸는 것을 나눕니다",
+        "body": "브랜드는 경우의 수가 많습니다. 바뀌면 안 되는 것을 먼저 고정해 두면, 유행이 바뀌어도 결과물은 같은 브랜드로 보입니다.",
+        "engine": {
+          "fixed": "고정",
+          "fixedItems": [
+            "팔레트와 빛",
+            "절대 규칙",
+            "모델별 프롬프트 원칙",
+            "승인한 컷"
+          ],
+          "changes": "바뀌는 것",
+          "changeItems": [
+            "겨울 시즌",
+            "릴스 9:16",
+            "상세페이지 4:5"
+          ],
+          "output": "엔진이 만든 결과물",
+          "note": "바뀌는 것을 눌러 보세요. 고정한 것은 그대로 남습니다."
+        },
+        "layerTitle": "고정 층은 이렇게 만듭니다",
+        "studio": "지금은 YAGI 스튜디오가 이 순서로 직접 만듭니다. 플랫폼에서 직접 쓸 수 있도록 하나씩 준비하고 있습니다.",
+        "chapters": [
+          {
+            "label": "절대 규칙",
+            "title": "바뀌면 안 되는 것부터 정합니다",
+            "body": "브랜드 자료와 웹사이트 주소에서 규칙 초안을 뽑습니다. 팀이 고친 뒤 확정합니다.",
+            "status": "스튜디오에서 운영 중"
+          },
+          {
+            "label": "브랜드 메모리",
+            "title": "승인한 컷이 다음 작업의 기준이 됩니다",
+            "body": "고른 컷과 고친 부분이 브랜드에 남습니다. 새 요청은 그 기록에서 출발합니다.",
+            "status": "곧"
+          },
+          {
+            "label": "한 줄 지시",
+            "title": "한 줄이면 됩니다",
+            "body": "‘겨울 아침, 창가 빛’ 한 줄이 렌즈와 색 값까지 채운 촬영 지시서로 바뀝니다.",
+            "status": "곧"
+          }
+        ],
+        "kit": {
+          "reading": "웹사이트와 브랜드 자료를 읽는 중",
+          "mark": "마크",
+          "palette": "팔레트",
+          "type": "서체",
+          "typeValue": "Pretendard · 굵게, 좁은 자간",
+          "rules": "절대 규칙",
+          "ruleItems": [
+            "로고는 정면, 고정 크기",
+            "팔레트 밖의 색 금지",
+            "효능·치료 표현 금지",
+            "동의한 얼굴만"
+          ],
+          "draft": "초안 · 팀 확인 전",
+          "example": "예시: 가상 브랜드 YAGI"
+        },
+        "memory": {
+          "title": "YAGI 브랜드 메모리",
+          "approved": "승인",
+          "notes": [
+            "로고 8% 작게",
+            "그림자 더 길게",
+            "피부 보정 없음",
+            "병은 화면 오른쪽 3분의 1"
+          ],
+          "look": "저장한 색 보정",
+          "campaigns": [
+            "캠페인 1",
+            "캠페인 2",
+            "캠페인 3"
+          ]
+        },
+        "direction": {
+          "prompt": "겨울 아침, 창가 빛",
+          "brief": "촬영 지시서",
+          "spec": [
+            "85mm 렌즈",
+            "눈높이",
+            "왼쪽 위 창가 빛",
+            "그림자 #3A4A5E",
+            "하이라이트 #EEF3F8"
+          ],
+          "outputs": "이 지시서로 만든 세 컷",
+          "clip": "지시서로 만든 컷의 5초 영상"
+        }
+      },
+      "workflow": {
+        "eyebrow": "안에 든 것",
+        "title": "실제 캠페인의 작업 순서입니다",
+        "body": "YAGI가 캠페인마다 밟는 단계입니다.",
+        "track": "작업 순서",
+        "prev": "이전 단계",
+        "next": "다음 단계",
+        "steps": [
+          {
+            "title": "레퍼런스 분석",
+            "body": "좋은 컷의 렌즈와 빛을 숫자로 적습니다."
+          },
+          {
+            "title": "모델 고르기",
+            "body": "컷마다 잘 맞는 모델이 다릅니다. 모델마다 문장도 다르게 씁니다."
+          },
+          {
+            "title": "검수",
+            "body": "로고가 그대로인지, 손과 피부가 자연스러운지 컷마다 봅니다."
+          },
+          {
+            "title": "부분 수정",
+            "body": "로고가 흐려진 곳이나 어색한 피부처럼 작은 부분만 골라 다시 그립니다."
+          },
+          {
+            "title": "영상으로",
+            "body": "확정한 컷을 5초 영상으로 만듭니다."
+          },
+          {
+            "title": "마감",
+            "body": "색을 맞추고 채널마다 맞는 비율로 내보냅니다."
+          }
+        ],
+        "analysis": [
+          "렌즈",
+          "빛",
+          "그림자",
+          "하이라이트"
+        ],
+        "modelA": "모델 A",
+        "modelB": "모델 B",
+        "modelNote": "같은 요청, 다른 모델",
+        "checks": [
+          "마크",
+          "손가락",
+          "피부 결"
+        ],
+        "pass": "통과",
+        "fix": "이 부분만 다시 그립니다"
+      },
+      "work": {
+        "eyebrow": "결과물",
+        "title": "제품 8종을 하나의 규칙으로 만들었습니다",
+        "early": "얼리 액세스",
+        "tabs": [
+          "제품 컷",
+          "장면",
+          "착용",
+          "광고 영상"
+        ],
+        "notes": [
+          "같은 마크와 캡을 쓴 제품 8종입니다.",
+          "YAGI 캠페인 원본 컷에서 제품만 바꿨습니다.",
+          "옷 사진 한 장과 가상 모델로 룩북과 화보를 만듭니다.",
+          "광고마다 그 광고에 나온 제품 컷을 옆에 두었습니다."
+        ],
+        "adStill": "제품 컷",
+        "adLabels": [
+          "같은 향수로 만든 20초 광고",
+          "같은 립글로스로 만든 15초 광고"
+        ],
+        "clipLabel": "5초 영상",
+        "note": "예시 화면입니다. 제품과 모델은 모두 가상입니다."
+      },
+      "campaign": {
+        "eyebrow": "크리에이터 캠페인",
+        "live": "진행 중",
+        "title": "크리에이터가 각자 얼굴로 올리는 광고",
+        "body": "YAGI가 광고 포맷을 만들면 크리에이터마다 본인 얼굴이 들어간 버전이 나옵니다. 한국과 일본의 크리에이터가 각자 채널에 올립니다.",
+        "consent": "크리에이터는 본인 얼굴 사용에 동의한 뒤 참여합니다.",
+        "virtual": "가상 인물 예시"
+      },
+      "production": {
+        "eyebrow": "프로덕션",
+        "title": "브랜드 필름은 YAGI가 직접 만듭니다",
+        "body": "광고 필름이 필요하면 기획부터 납품까지 YAGI 프로덕션이 맡습니다.",
+        "nextTitle": "곧 열립니다",
+        "soon": "곧",
+        "next": [
+          "웹사이트로 절대 규칙 초안 만들기",
+          "로고·옷 디테일·피부 부분 수정",
+          "레퍼런스에 맞춘 색 보정과 브랜드 룩 저장",
+          "4K 업스케일과 사운드 마감",
+          "우리 팀 AI 에이전트로 작업 요청"
+        ],
+        "films": [
+          "패션 필름 예시",
+          "에디토리얼 필름 예시"
+        ],
+        "decks": "포트폴리오 보기",
+        "company": "회사 소개서 보기",
+        "talk": "제작 상담하기"
+      },
+      "closing": {
+        "eyebrow": "브랜드에 맞는 AI 미디어로 가는 지름길",
+        "title": "이제 흔한 AI 이미지는\n만들지 않아도 됩니다",
+        "body": "데모에서 브랜드 자료를 넣고 차이를 직접 보세요.",
+        "cta": "데모 신청하기",
+        "filmLabel": "파란 셔츠를 입은 가상 모델이 YAGI 바디 미스트를 든 5초 영상"
+      },
+      "metaTitle": "브랜드만의 AI 미디어 엔진",
+      "metaDescription": "TWINGS for Brands는 브랜드만의 AI 미디어 엔진입니다. 브랜드가 정한 미감과 YAGI가 글로벌 캠페인에서 다듬은 제작 원칙을 고정하고, 유행과 채널에 맞춰 제품 에셋과 광고 영상을 만듭니다."
+    },
     "landing": {
       "hero": {
         "eyebrow": "TWINGS 브랜드 스튜디오",
@@ -764,7 +1141,7 @@ export const ko: Dictionary = {
   makerRecipe: {
     metaTitle: '새 템플릿 등록',
     editTitle: '템플릿 편집',
-    lede: '단계마다 엔진과 프롬프트를 정하고, 내 사진으로 테스트한 뒤 검수에 보내세요. 고객은 셀카 한 장만 넣습니다.',
+    lede: '단계마다 엔진과 프롬프트를 정하고, 내 사진으로 테스트한 뒤 바로 공개하세요. 고객은 셀카 한 장만 넣습니다.',
     back: '작업공간으로',
     newCta: '새 템플릿 등록',
     continueDraft: '이어서 편집',
@@ -808,9 +1185,15 @@ export const ko: Dictionary = {
     exampleUpload: '예시 파일 올리기',
     exampleUploaded: '올린 예시 파일',
     disclosure: '템플릿 페이지에 공개할 것',
-    disclosurePrompts: '단계별 프롬프트',
-    disclosureAssets: '참조 자산',
-    disclosureHint: '공개해도 판매에는 차이가 없어요. 둘 다 끄면 레시피는 스튜디오만 봅니다.',
+    disclosurePrompts: '프롬프트와 단계별 팁 (로그인한 회원에게)',
+    disclosureAssets: '참조 파일 (보기·내려받기)',
+    disclosureHint: '도입 글과 1단계 프롬프트 앞부분은 누구나 볼 수 있어요. 프롬프트 전문, 팁, 파일은 무료 로그인 후 공개돼요. 공개해도 판매에는 차이가 없고, 모두 끄면 스튜디오에서만 확인할 수 있어요.',
+    intro: '도입 글',
+    introHint: '“만드는 법” 상단에 누구나 볼 수 있게 표시돼요. 무엇을 어떻게 만드는지 짧게 적어 주세요.',
+    note: '이 단계 팁',
+    noteHint: '프롬프트 아래에, 로그인한 회원에게만 보여요.',
+    outro: '마무리 글',
+    outroHint: '예: 만든 결과를 올릴 때 @내핸들을 태그해 주세요. 마음에 드는 건 리포스트할게요.',
     presentation: '페이지 순서',
     makeFirst: '예시 → 만들기 → 만드는 법',
     storyFirst: '만드는 법 → 예시 → 만들기',
@@ -856,6 +1239,9 @@ export const ko: Dictionary = {
     rights: '예시와 참조 자산은 제가 직접 만들었거나 쓸 권리가 있고, TWINGS가 이 템플릿에 쓰는 것에 동의합니다.',
     submit: '검수에 보내기',
     submitting: '보내는 중…',
+    publish: '바로 공개하기',
+    publishing: '공개하는 중…',
+    publishHint: '공개하려면 레시피 검사 통과, 예시 파일, 내 사진으로 한 테스트 렌더 1회 성공이 필요해요. 가격은 원가 기준가에 내 로열티를 더해 자동으로 정해져요. 규칙에 어긋나는 템플릿은 스튜디오가 내릴 수 있어요.',
     readOnly: '검수에 보낸 템플릿은 고칠 수 없어요. 반려되면 고쳐서 다시 보낼 수 있습니다.',
     errors: {
       invalid: '다시 확인할 칸이 있어요.',
@@ -866,6 +1252,8 @@ export const ko: Dictionary = {
       rate_limited: '오늘은 새 템플릿을 더 만들 수 없어요. 내일 다시 시도해 주세요.',
       bad_example: '게시물 링크를 확인해 주세요. 인스타그램·틱톡·X 게시물 주소만 받아요.',
       example_required: '예시를 넣어 주세요. 게시물 링크나 올린 파일 중 하나면 돼요.',
+      example_file_required: '예시 파일을 올려 주세요. 템플릿 카드에 쓰여요.',
+      test_required: '먼저 내 사진으로 테스트 렌더를 한 번 해 주세요. 성공해야 공개할 수 있어요.',
       too_large: '파일이 4MB를 넘어요.',
       bad_file: 'JPG·PNG·WebP 이미지나 MP4·MOV 영상만 올릴 수 있어요.',
       limit_reached: '참조 자산은 템플릿당 6개, 합쳐서 20MB까지예요.',
@@ -907,6 +1295,28 @@ export const ko: Dictionary = {
       copy: '복사',
       copied: '복사했어요',
       assets: '참조 자산',
+      download: '다운로드',
+      viewFile: '크게 보기',
+      closeFile: '닫기',
+      prevFile: '이전 파일',
+      nextFile: '다음 파일',
+      fileCount: '{total}개 중 {n}번째',
+      expand: '프롬프트 전체 펼치기',
+      collapse: '접기',
+      gateTitle: '무료 가입하고 전체 제작법·프롬프트 보기',
+      gateBody: 'TWINGS에 로그인하면 전체 프롬프트와 사운드·BGM 가이드, 참조 자산을 바로 확인하고 복사할 수 있어요.',
+      gateCta: '로그인 / 무료 가입하고 제작법 보기 →',
+    },
+    actions: {
+      label: '레시피 공개',
+      body: '이 영상에 쓴 프롬프트를 그대로 공개했어요. 무료 회원이면 바로 복사할 수 있고, 셀카 한 장으로 만들 수도 있어요.',
+      bodyClosed: '이 영상에 쓴 프롬프트를 그대로 공개했어요. 무료 회원이면 바로 복사할 수 있어요. 셀카 한 장으로 만드는 기능은 곧 열립니다.',
+      copy: '프롬프트 복사',
+      full: '프롬프트 전문 보기',
+      copySignedOut: '무료 가입하고 프롬프트 복사',
+      preview: '레시피 미리 보기',
+      make: '셀카 한 장으로 만들기',
+      makeClosed: '셀카로 만들기 · 오픈 알림',
     },
     review: {
       heading: '레시피 검수',
@@ -1496,6 +1906,30 @@ export const ko: Dictionary = {
       rateLimited: '요청이 많습니다. 잠시 후 다시 시도해 주세요.',
       adminInvalid: '저장하지 못했습니다. 필수 항목과 입력 형식을 확인해 주세요.',
       adminDenied: '이 작업을 할 수 없거나 대상을 찾을 수 없습니다. 새로고침해 현재 상태를 확인해 주세요.',
+      studioRateLimited: '짧은 시간에 너무 많이 바꿨어요. 10분 뒤에 다시 해 주세요.',
+    },
+    studioPrep: {
+      cta: '새 캠페인 만들기',
+      title: '새 캠페인 만들기',
+      intro: '고객사를 고르고 캠페인 이름과 목표를 적으면 바로 만들어집니다. 고객에게 공개하기 전까지는 고객 화면에 보이지 않아요.',
+      brand: '고객사',
+      brandHint: '목록에 없는 고객사는 아래에서 먼저 등록하세요.',
+      objective: '캠페인 목표',
+      budget: '총예산 (원, 선택)',
+      cover: '대표 이미지 (선택)',
+      coverHint: 'JPEG·PNG·WebP, 15MB까지. 캠페인 목록과 캠페인 화면 맨 위에 보이고, 고객 파일 목록에는 나오지 않아요.',
+      coverBad: '15MB 이하의 JPEG·PNG·WebP 이미지를 골라 주세요.',
+      coverFailed: '캠페인은 만들었지만 대표 이미지를 올리지 못했어요. 여기서 다시 올려 주세요.',
+      coverUploading: '이미지 올리는 중…',
+      coverFile: '이미지 파일',
+      coverAdd: '대표 이미지 올리기',
+      coverReplace: '대표 이미지 바꾸기',
+      coverDone: '대표 이미지를 바꿨어요.',
+      submit: '캠페인 만들기',
+      next: '만들고 나면 캠페인 화면에서 크리에이터 후보 관리와 가져오기용 캠페인 ID를 바로 볼 수 있어요.',
+      newBrand: '새 고객사 등록',
+      newBrandHint: '브랜드 공간만 만들어집니다. 고객사 담당자 초대는 관리자 화면에서 따로 해요.',
+      noBrands: '아직 등록된 고객사가 없어요. 먼저 고객사를 등록하세요.',
     },
     managed: {
       "supportLoading": "문의 내역을 불러오는 중…",
@@ -1994,20 +2428,39 @@ export const ko: Dictionary = {
     tabs: { overview: '개요', brief: '브리프', shortlist: '크리에이터 후보', applicants: '지원자', payments: '결제', filesConversation: '파일·대화', contractsUsage: '계약·2차 활용' },
     shortlist: {
       title: '크리에이터 후보',
-      intro: 'TWINGS가 이 캠페인에 맞춰 추린 크리에이터예요. 함께하고 싶은 크리에이터를 선호로 표시해 주세요. 섭외는 TWINGS가 일정을 맞춘 뒤 확정해서 알려 드려요.',
+      intro: 'TWINGS가 이 캠페인에 맞춰 추린 크리에이터예요. 함께하고 싶은 크리에이터는 선호로, 아닌 크리에이터는 제외로 표시해 주세요. 섭외는 TWINGS가 일정을 맞춰 확정하고, 확정되면 "섭외 확정"으로 바뀌어요.',
       count: '{count}명',
       measuredOn: '지표 기준 {date}',
       basis: '인스타그램 공개 게시물 기준',
       sortLabel: '정렬',
       sorts: { followers: '팔로워 순', views: '조회수 순', engagement: '참여율 순' },
-      showPicked: '선호만 보기 {count}',
-      showAll: '전체 보기',
-      nonePicked: '아직 선호로 표시한 크리에이터가 없어요.',
+      tabsLabel: '후보 묶음',
+      tabs: { open: '후보', picked: '선호', passed: '제외', confirmed: '섭외 확정' },
+      empty: {
+        open: '남은 후보가 없어요. 제외한 크리에이터는 제외 탭에서 되돌릴 수 있어요.',
+        picked: '아직 선호로 표시한 크리에이터가 없어요.',
+        passed: '제외한 크리에이터가 없어요.',
+        confirmed: '아직 섭외가 확정된 크리에이터가 없어요.',
+      },
+      viewLabel: '보기 방식',
+      views: { cards: '카드로 보기', list: '리스트로 보기' },
+      selectAll: '보이는 {count}명 모두 선택',
+      select: '@{handle} 선택',
+      selected: '{count}명 선택',
+      clearSelection: '선택 해제',
+      actions: { picked: '선호로 표시', passed: '제외', none: '표시 지우기', restore: '후보로 되돌리기' },
+      done: {
+        picked: '{count}명을 선호로 표시했어요.',
+        passed: '{count}명을 제외했어요.',
+        none: '{count}명의 표시를 지웠어요.',
+      },
+      undo: '되돌리기',
+      undone: '되돌렸어요.',
       followers: '팔로워',
       posts: '게시물',
       following: '팔로우',
       profile: '@{handle} 인스타그램 프로필 (새 창)',
-      columns: { kind: '구분', perMonth: '30일 게시', engagement: '평균 참여', rate: '참여율', reactions: '좋아요 · 댓글' },
+      columns: { kind: '구분', perMonth: '30일 게시', engagement: '평균 참여', rate: '참여율', reactions: '좋아요 · 댓글', creator: '크리에이터', marks: '선호 · 제외' },
       rows: { feed: '피드', ads: '광고', reels: '릴스' },
       viewsMedian: '90일 중간 조회수',
       viewsMax: '90일 최대 조회수',
@@ -2016,9 +2469,29 @@ export const ko: Dictionary = {
       prefer: '선호로 표시',
       unprefer: '선호 표시 지우기',
       preferred: '선호',
+      pass: '제외',
+      unpass: '제외 취소',
+      passed: '제외',
+      confirmed: '섭외 확정',
       working: '저장하는 중…',
       failed: '저장하지 못했어요. 다시 눌러 주세요.',
-      readOnly: '선호 표시는 캠페인 담당자와 코멘트 권한이 있는 분만 할 수 있어요.',
+      readOnly: '선호·제외 표시는 캠페인 담당자와 코멘트 권한이 있는 분만 할 수 있어요. 고른 후보 비교는 누구나 할 수 있어요.',
+      engagement: '참여율',
+      noFigure: '측정 전',
+      tags: { views: '조회수 강세', engagement: '반응 좋음', organic: '광고 비중 낮음', steady: '꾸준한 업로드' },
+      tagHints: {
+        views: '90일 중간 조회수가 팔로워의 60% 이상이에요.',
+        engagement: '참여율이 이 후보들 중앙값의 1.3배 이상이에요.',
+        organic: '광고 비중이 15% 이하예요.',
+        steady: '30일 동안 피드나 릴스를 10개 이상 올렸어요.',
+      },
+      relative: '이 후보들 중앙값 대비',
+      relativeRows: { views: '조회수', engagement: '참여율', followers: '팔로워' },
+      details: '지표 자세히',
+      compareOpen: '{count}명 비교하기',
+      compareTitle: '후보 비교',
+      compareHint: '굵은 값이 이 중에서 가장 높은 값이에요. 광고 비중은 낮은 값을 굵게 표시해요.',
+      close: '닫기',
     },
     shortlistAdmin: {
       title: '크리에이터 후보 관리',
@@ -2026,16 +2499,91 @@ export const ko: Dictionary = {
       projectId: '가져오기용 캠페인 ID',
       file: '후보 파일 (.json)',
       import: '가져오기',
-      summary: '전체 {total} · 공개 {shared} · 대기 {hidden} · 고객 선호 {picked}',
+      adminOnly: '후보 파일 가져오기와 후보 삭제는 관리자 화면에서 해요. 가져오기 작업은 위 캠페인 ID로 보내면 됩니다.',
+      summary: '전체 {total} · 공개 {shared} · 대기 {hidden} · 제외 {excluded} · 고객 선호 {picked} · 고객 제외 {passed} · 섭외 확정 {confirmed}',
       shareAll: '대기 중인 후보 모두 공개',
-      hideAll: '모두 숨기기',
+      hideAll: '공개한 후보 모두 대기로',
       share: '공개',
       hide: '숨기기',
       remove: '삭제',
-      removeConfirm: '이 후보를 캠페인에서 지웁니다. 고객의 선호 표시도 함께 지워져요.',
-      states: { shared: '공개 중', hidden: '대기', picked: '고객 선호' },
+      removeConfirm: '이 후보를 캠페인에서 지웁니다. 고객의 선호 표시도 함께 지워져요. 다음 가져오기 때 다시 대기로 들어오니, 다시 보지 않을 후보는 제외하세요.',
+      removeTitle: '후보 영구 삭제',
+      states: { shared: '공개 중', hidden: '대기', excluded: '제외', picked: '고객 선호', passed: '고객 제외', confirmed: '섭외 확정' },
       none: '아직 가져온 후보가 없어요.',
       updated: '갱신 {date}',
+      triage: {
+        tabs: { all: '전체', waiting: '대기', shared: '공개', excluded: '제외', picked: '고객 선호', passed: '고객 제외', confirmed: '섭외 확정' },
+        tabsLabel: '후보 상태',
+        search: '핸들 검색',
+        dims: { followers: '팔로워', views: '90일 중간 조회수', engagement: '참여율', adShare: '광고 비중' },
+        filtersLabel: '지표 범위',
+        rangeHint: '막대는 지금 후보들의 분포예요.',
+        rangeMissing: '이 지표가 없는 {count}명은 범위를 정하면 목록에서 빠져요.',
+        min: '최소',
+        max: '최대',
+        matching: '{count}명 해당',
+        reset: '초기화',
+        clearFilter: '{label} 범위 해제',
+        clearAll: '필터 모두 해제',
+        unknown: '측정 전',
+        columns: { candidate: '후보', state: '상태', actions: '처리' },
+        sortBy: '{label} 순으로 정렬',
+        selectAll: '보이는 후보 모두 선택',
+        select: '@{handle} 선택',
+        allSelected: '이 목록의 {count}명을 모두 골랐어요.',
+        selected: '{count}명 선택',
+        clearSelection: '선택 해제',
+        actions: { share: '공개', exclude: '제외', wait: '대기로' },
+        isNew: '새로 들어옴',
+        fit: { in: '기준 안', out: '기준 밖', unknown: '판단 보류' },
+        criteria: {
+          saved: '캠페인 기준',
+          savedHint: '대기 중인 후보에 기준 안·밖을 표시해요. 자동으로 공개하거나 제외하지는 않아요.',
+          none: '캠페인 기준이 없어요. 필터를 고른 뒤 기준으로 저장하면 새로 들어오는 후보에 기준 안·밖이 표시돼요.',
+          save: '지금 필터를 캠페인 기준으로 저장',
+          replace: '지금 필터로 기준 바꾸기',
+          load: '기준을 필터로 불러오기',
+          clear: '기준 지우기',
+          savedDone: '캠페인 기준을 저장했어요.',
+          clearedDone: '캠페인 기준을 지웠어요.',
+        },
+        split: {
+          open: '필터로 한 번에 정리',
+          title: '필터로 한 번에 정리',
+          scope: '대기 중인 {count}명만 다뤄요. 이미 공개했거나 제외한 후보는 그대로 둡니다.',
+          rule: '기준: {summary}',
+          needRule: '먼저 필터를 고르거나 캠페인 기준을 저장해 주세요.',
+          inside: '기준 안 · 공개',
+          outside: '기준 밖',
+          outsideAction: '기준 밖 후보 처리',
+          outsideExclude: '제외',
+          outsideKeep: '대기로 둠',
+          unknown: '지표가 없어 판단 보류 · 대기로 둠',
+          people: '{count}명',
+          none: '없음',
+          note: '고객에게는 공개한 후보만 보여요.',
+          cancel: '취소',
+          run: '{share}명 공개하고 {exclude}명 제외',
+          runShare: '{share}명 공개',
+          runExclude: '{exclude}명 제외',
+        },
+        empty: '조건에 맞는 후보가 없어요. 필터를 넓혀 보세요.',
+        done: {
+          share: '{count}명을 공개했어요.',
+          exclude: '{count}명을 제외했어요.',
+          wait: '{count}명을 대기로 돌렸어요.',
+          split: '{share}명 공개, {exclude}명 제외했어요.',
+        },
+        undo: '되돌리기',
+        undone: '되돌렸어요.',
+        failed: '저장하지 못했어요. 새로고침한 뒤 다시 해 주세요.',
+        rateLimited: '짧은 시간에 너무 많이 저장했어요. 몇 분 뒤 다시 해 주세요.',
+        keys: '단축키 J·K 이동 · X 선택 · S 공개 · E 제외 · W 대기로 · Z 되돌리기 · / 검색',
+        picked: '고객이 선호로 표시한 후보',
+        passed: '고객이 제외로 표시한 후보. 고객 화면에는 제외 탭에 남아 있어요.',
+        confirmed: '섭외가 확정된 크리에이터',
+        working: '저장하는 중…',
+      },
     },
     applicants: {
       title: '지원자와 참여자',
@@ -2175,7 +2723,7 @@ export const ko: Dictionary = {
     videoDescription: "스튜디오가 설계한 AI 영상 템플릿의 예시와 길이, 비율을 살펴보고 내 얼굴로 만들 장면을 골라보세요.",
     imageTitle: '이미지 템플릿',
     imageDescription: "프로필부터 포스터, 룩북까지. 스튜디오가 설계한 AI 이미지 템플릿에서 원하는 분위기를 찾아보세요.",
-    templateDescription: '이 템플릿에 얼굴 사진 한 장을 올려 같은 장면을 내 얼굴로 만드세요. 한 편 가격은 템플릿에서, 월 구독은 요금 페이지에서 확인할 수 있습니다.',
+    templateDescription: '이 템플릿에 얼굴 사진 한 장을 올려 같은 장면을 내 얼굴로 만드세요. 구독하면 이 페이지에서 바로 만들 수 있습니다.',
     pricingTitle: "이용 요금",
     pricingDescription:
       '내 얼굴로 만드는 AI 영상. 크리에이터 월 24,900원, 프리미엄 월 49,000원 구독을 준비 중입니다. 영상 길이별 예상 편수와 맞춤 수정 기능을 비교하세요.',
@@ -2385,6 +2933,7 @@ export const ko: Dictionary = {
     cardSeconds: '{seconds}초',
     cardAuthor: `${T.creditPrefix} @{handle}`,
     cardAuthorAnonymous: `${T.maker} 템플릿`,
+    cardRecipe: '레시피 공개',
     /** 생성은 Higgsfield에서 (2026-08-15) — 프롬프트를 복사해 새 탭으로 넘긴다. */
     runCta: 'Higgsfield에서 만들기 ↗',
     runCopied: '복사됨 — 새 탭에 붙여넣으세요',
@@ -2461,6 +3010,8 @@ export const ko: Dictionary = {
     notForSaleBody: "이 템플릿은 아직 생성할 수 없습니다. 예시 결과물을 먼저 살펴보세요.",
     makeCta: '내 사진으로 만들기',
     makeCtaClosed: '열리면 알림 받기',
+    subscribeCta: '구독하고 여기서 만들기',
+    credits: '{n}크레딧',
     makeBody: '지금은 한 편씩 결제해 바로 만들 수 있습니다.',
     makeBodyClosed: '영상 생성은 공개 준비 중입니다. 열리면 사진 한 장으로 만들 수 있고, 결제는 한 편당 한 번입니다.',
     aspectFact: '비율',
@@ -2475,19 +3026,12 @@ export const ko: Dictionary = {
     ctaVideo: '영상 템플릿 보기',
     ctaImage: '이미지 템플릿 보기',
     allVideo: '모든 영상 템플릿',
-    // PLATFORM-2.0 §7.5·§14.1 — 만든 곳으로 나눈 레일과 칩. 메이커 템플릿이 없으면 레일·칩 모두 나오지 않는다.
-    studioRail: T.studioCollection,
-    studioRailLede: '스튜디오가 직접 만든 템플릿입니다.',
-    makerRail: T.makerCollection,
-    makerRailLede: `${T.makerFull}가 만들고 스튜디오 검수를 거친 템플릿입니다.`,
-    originHeading: '만든 곳',
-    originAll: '전체',
-    originStudio: '오리지널',
-    originMaker: `${T.maker}`,
     verified: '검증됨',
     verifiedHint: '스튜디오 검수를 통과한 템플릿입니다.',
+    // PLATFORM-2.0 §7.5(대표 2026-10-30): 크리에이티브 템플릿 제목 아래 한 줄 — 누가 만들었는지와 프로필.
     makerBlockHeading: `이 템플릿을 만든 ${T.maker}`,
-    makerBlockCta: `${T.maker} 프로필 보기`,
+    makerBlockCta: '프로필 보기',
+    moreFrom: '@{handle}의 다른 템플릿',
     aspects: {
       '4:5': '4:5 · 인스타 피드',
       '1:1': '1:1 · 정사각',
@@ -3890,6 +4434,7 @@ export const ko: Dictionary = {
     inviteHiddenCampaign: '이 캠페인은 아직 고객에게 공개하지 않았습니다. 캠페인만 보는 초대는 공개한 뒤에 보낼 수 있습니다. 브랜드 전체 초대는 브랜드 권한 화면에서 보내세요.',
     errBrandConflict: '캠페인이 그사이 바뀌었거나, 지금 상태에서는 할 수 없는 변경입니다. 새로고침해 현재 상태를 확인해 주세요.',
     errCollaborationRateLimited: '요청이 많습니다. 잠시 후 다시 시도해 주세요.',
+    errStudioRateLimited: '짧은 시간에 너무 많이 바꿨어요. 10분 뒤에 다시 해 주세요.',
     errBrandNotActive: '진행 중인 캠페인에서만 할 수 있습니다. 먼저 캠페인을 진행 상태로 바꿔 주세요.',
     errBrandConsentRequired: 'TWINGS 제작 캠페인은 크리에이터 동의 확인에 체크해야 올릴 수 있습니다.',
     errBrandNotShared: '고객에게 공개하지 않은 캠페인에는 캠페인만 보는 초대를 보낼 수 없습니다. 캠페인을 먼저 공개하거나 브랜드 전체 초대를 쓰세요.',

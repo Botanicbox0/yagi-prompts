@@ -4,22 +4,26 @@ import { adminWorkflowEn } from './admin-workflow';
  * docs/PLATFORM-2.0.md §14.1 — the names live in this one object (founder decision 2026-10-24). Every
  * other string is composed from it, so a rename edits these values only. Users get no role name:
  * sentences say "my/your", and `personal` is the header switch label only.
+ *
+ * 2026-10-28 (§20.1, founder): the template supplier is an "AI creative", no longer a "maker" — the
+ * word the people who sell here use for themselves. "AI" keeps it apart from campaign "creators".
+ * It starts with a vowel sound: write "an" before it. Code and database names stay `maker`.
  */
-const MAKER = 'maker';
-const MAKERS = 'makers';
+const MAKER = 'AI creative';
+const MAKERS = 'AI creatives';
 const cap = (value: string): string => value.charAt(0).toUpperCase() + value.slice(1);
 export const EN_TERMS = {
   /** The template supplier, short form. */
   maker: MAKER,
   makers: MAKERS,
   /** The formal name, where the role is described. */
-  makerFull: `template ${MAKER}`,
-  makersFull: `template ${MAKERS}`,
-  makerProgram: `${cap(MAKER)} Program`,
-  makerStudio: `${cap(MAKER)} Studio`,
+  makerFull: MAKER,
+  makersFull: MAKERS,
+  makerProgram: 'AI Creative Program',
+  makerStudio: 'Creative Studio',
   /** Catalogue collections. */
   studioCollection: 'TWINGS Originals',
-  makerCollection: `${cap(MAKER)} Collection`,
+  makerCollection: 'By AI Creatives',
   /** The credit prefix on cards and template pages: "by @handle". */
   creditPrefix: 'by',
   /** The consumer side of the header switch (a service label only). */
@@ -99,7 +103,7 @@ export const en = {
   "selfieLink": "Upload my photo",
   "claimEmpty": "No posts submitted yet.",
   "formatTitle": "Submit your format",
-  "formatHint": `Available to approved ${T.makersFull}. Your recipe stays private. The studio checks the format before any template goes on sale.`,
+  "formatHint": `Available to approved ${T.makersFull}. Your recipe stays private unless you choose to show it. Once a test render with your own photo succeeds, you publish the template yourself.`,
   "formatName": "Format title",
   "recipe": "Private recipe",
   "example": "Example post link",
@@ -207,22 +211,73 @@ export const en = {
   makers: {
     eyebrow: `${cap(T.makerFull)}`,
     metaTitle: `@{handle} · ${cap(T.makerFull)}`,
-    metaDescription: 'TWINGS templates by @{handle} ({count} in all), each reviewed by the studio.',
+    metaDescription: 'TWINGS templates by @{handle} ({count} in all), each test-rendered before it went live.',
     templateCount: 'Templates: {count}',
-    templatesHeading: 'Published templates',
+    templatesHeading: 'Templates',
     empty: 'No published templates yet.',
     browse: 'Browse all templates',
+    worksHeading: 'Selected work',
+    aboutHeading: 'About',
+    basedIn: 'Based in {place}',
+    toolsHeading: 'Works with',
+    linksHeading: 'Elsewhere',
+    openToBrands: 'Open to brand work',
+    contact: 'Contact',
+    showEmail: 'Show email',
+    copyEmail: 'Copy email',
+    copied: 'Copied',
+    share: 'Copy profile link',
+    shared: 'Link copied',
+    statTemplates: 'Templates',
+    statWorks: 'Works',
+    viewOriginal: 'View original post',
+    close: 'Close',
+    previous: 'Previous',
+    next: 'Next',
+    workLabel: 'Work {n} of {count}',
+    jsonLdRole: 'AI creative',
+    recipeBadge: 'Recipes shared',
+    recipeCount: 'Open recipes: {count}',
+    recipeLine: "@{handle}'s official recipe page. Open a template to copy its prompt, or make the same video with one selfie.",
   },
   creatorProgram: {
     "profile": {
       "heading": "Public profile",
-      "lede": `With a public profile, your template cards and template pages say "${T.creditPrefix} @handle", and a ${T.maker} page collects your handle, bio and published templates. Turn it off and all of that disappears.`,
+      "lede": `With a public profile, your template cards and template pages say "${T.creditPrefix} @handle", and your page collects who you are, your links, your works and your published templates. Turn it off and all of that disappears.`,
       "handleLabel": "Handle",
-      "handleHint": `3–20 lowercase letters, digits or underscores. It becomes your ${T.maker} page address.`,
+      "handleHint": "3–20 lowercase letters, digits or underscores. It becomes your page address: twings.app/@handle.",
       "bioLabel": "Bio",
       "bioHint": "Up to 200 characters. Optional.",
+      "displayNameLabel": "Name",
+      "displayNameHint": "The name you work under. Up to 40 characters.",
+      "headlineLabel": "Headline",
+      "headlineHint": "One line, up to 80 characters — e.g. AI director making fashion films.",
+      "countryLabel": "Where you work",
+      "countryNone": "Not shown",
+      "cityLabel": "City",
+      "cityHint": "Optional.",
+      "linksLabel": "Links",
+      "linksHint": "Up to 6: Instagram, TikTok, YouTube, X, Threads, Higgsfield, Behance or your site. Paste the address; we recognise the platform.",
+      "emailLabel": "Public email",
+      "emailHint": "Shown behind a “Show email” button on your page. It can differ from your account email. Leave it empty to keep it private.",
+      "toolsLabel": "Tools",
+      "toolsHint": "Comma separated, up to 8 — e.g. Seedance 2.5, Midjourney, ComfyUI.",
+      "openToBrandsLabel": "Open to brand work",
+      "openToBrandsHint": "Shown on your page. We also use it when brands ask us for creatives.",
+      "avatarLabel": "Profile photo",
+      "avatarHint": "Cropped square. JPG, PNG or WebP, up to 4 MB.",
+      "avatarUpload": "Upload a photo",
+      "avatarRemove": "Remove photo",
+      "coverLabel": "Cover image",
+      "coverHint": "Runs wide across the top of your page. Landscape pictures work best; it is cropped to 2:1. JPG, PNG or WebP, up to 4 MB.",
+      "coverUpload": "Upload a cover",
+      "coverReplace": "Replace cover",
+      "coverRemove": "Remove cover",
+      "shortLink": "Short link",
       "publicLabel": "Public profile",
-      "publicHint": "Only your handle and bio are public. Your name, contact details and agreement terms are not.",
+      "publicHint": "When on, everything above plus your works and published templates appears on your page. Your account email and agreement terms never do.",
+      "basicsHeading": "Who you are",
+      "contactHeading": "Where to find you",
       "save": "Save",
       "saved": "Profile saved.",
       "view": `View my ${T.maker} page`,
@@ -233,16 +288,83 @@ export const en = {
         "handle_taken": `Another ${T.maker} already uses that handle.`,
         "handle_required": "A public profile needs a handle.",
         "invalid_bio": "Keep your bio to 200 characters.",
+        "invalid_name": "Keep your name to 40 characters on one line.",
+        "invalid_headline": "Keep your headline to 80 characters on one line.",
+        "invalid_country": "Choose a country from the list.",
+        "invalid_city": "Keep the city to 40 characters.",
+        "invalid_links": "Use up to 6 https links.",
+        "invalid_email": "Check the email address.",
+        "invalid_tools": "Use up to 8 tools, 32 characters each.",
         "not_maker": `Only approved ${T.makers} can set up a profile.`,
         "unavailable": "We could not save right now. Please try again shortly.",
         "sign_in_required": "Please sign in and try again."
       }
     },
+    "works": {
+      "heading": "Selected work",
+      "lede": "Up to 12 pieces that show your eye. They open your page, in this order.",
+      "hint": "JPG, PNG or WebP images, or MP4/MOV films, up to 4 MB each. Location and camera data are removed from images.",
+      "upload": "Add work",
+      "uploading": "Uploading…",
+      "count": "{n}/12",
+      "empty": "No works yet.",
+      "titleLabel": "Title",
+      "captionLabel": "Caption",
+      "linkLabel": "Original post link",
+      "save": "Save",
+      "saved": "Saved",
+      "remove": "Remove",
+      "moveUp": "Move earlier",
+      "moveDown": "Move later",
+      "errors": {
+        "too_large": "That file is over 4 MB.",
+        "bad_file": "Use a JPG, PNG, WebP, MP4 or MOV file.",
+        "limit_reached": "You already have 12 works (or 40 MB). Remove one first.",
+        "invalid": "Check the title (80), caption (280) and link (https).",
+        "not_open": "The program is not open yet.",
+        "forbidden": "Only approved creatives can add works.",
+        "unavailable": "That did not work. Please try again shortly."
+      }
+    },
+    "connect": {
+      "heading": "Upload from your AI agent (MCP)",
+      "lede": "Connect TWINGS to Claude Code, Cursor or Codex and say things like “turn the Higgsfield still I just made into a TWINGS template”. Your agent can read the recipe guide, save drafts, upload source files and works, run a test render and publish.",
+      "nameLabel": "Token name",
+      "namePlaceholder": "e.g. Claude on my laptop",
+      "create": "Create token",
+      "creating": "Creating…",
+      "created": "Copy this token now — it is shown only once.",
+      "copy": "Copy",
+      "copied": "Copied",
+      "revoke": "Revoke",
+      "empty": "No tokens yet.",
+      "lastUsed": "Last used {date}",
+      "neverUsed": "Never used",
+      "limit": "Up to 5 tokens.",
+      "setupHeading": "Connect",
+      "endpoint": "Server address",
+      "tools": "What your agent can do: read the recipe guide · save a draft · upload source files and works (a link or a file) · test render · publish · edit your profile · see your stats.",
+      "errors": {
+        "invalid": "Give the token a name (up to 40 characters).",
+        "limit_reached": "You already have 5 tokens. Revoke one first.",
+        "not_found": "That token no longer exists.",
+        "unavailable": "That did not work. Please try again shortly."
+      }
+    },
+    "stats": {
+      "heading": "Who opened your recipes",
+      "lede": "A recipe's prompts open to signed-in members only. You see how many — never who.",
+      "colTemplate": "Template",
+      "colMembers": "Members",
+      "col7d": "Last 7 days",
+      "colOpens": "Opens",
+      "empty": "Numbers appear once a template of yours is published."
+    },
     "metaTitle": `${T.makerProgram}`,
     "metaDescription": `Submit an AI video or image format you made. After studio review it can become a TWINGS template, and ${T.makers} receive 80% of the distributable margin.`,
     "title": "Turn the format you made\ninto a TWINGS template",
     "body": "We are looking for people who design trend formats with AI. Your recipe stays private, the studio reviews every format, and the margin from sales is shared with you.",
-    "cta": `Apply as ${cap(T.maker)}`,
+    "cta": `Apply as an ${T.maker}`,
     "workspaceLink": `Already applied? Open ${T.makerStudio}`,
     "footerLink": T.makerProgram,
     "definition": `The ${T.makerProgram} lets people who design AI video and image formats submit them to TWINGS. After studio review a format can become a template, and ${T.makers} receive a share of the margin from its sales. It is separate from creator campaigns and from the Creator subscription.`,
@@ -267,7 +389,7 @@ export const en = {
     "rulesBody": "You need the rights required to submit your format and example posts and to let TWINGS use them. The studio reviews rights and content before accepting a format. People who use the template are still bound by the TWINGS photo rules: their own face only, one identity asset group per account, automated provider review and camera verification when required.",
     "distinction": "This program is separate from creator campaigns and from the Creator subscription.",
     "unavailable": `${cap(T.makerFull)} applications are not open yet.`,
-    "applyTitle": `Apply as ${cap(T.maker)}`,
+    "applyTitle": `Apply as an ${T.maker}`,
     "applyLede": `Tell the studio about your work. The result will appear in ${T.makerStudio}.`,
     "fieldName": `${cap(T.maker)} name`,
     "fieldNameHint": "Saved with this application only; your profile name does not change.",
@@ -334,7 +456,7 @@ export const en = {
     "errors": {
       "not_open": `${cap(T.makerFull)} applications are not open yet.`,
       "already_open": "Your application is already being reviewed.",
-      "already_creator": `You are already a ${T.makerFull}. Submit formats in ${T.makerStudio}.`,
+      "already_creator": `You are already an ${T.makerFull}. Submit formats in ${T.makerStudio}.`,
       "rate_limited": "You can send one application a day. Please try again later.",
       "invalid": "Please check the highlighted field.",
       "forbidden": "Studio accounts cannot apply.",
@@ -407,6 +529,260 @@ export const en = {
     "campaignCta": "Explore campaigns"
   },
   brandLanding: {
+    "v7": {
+      "hero": {
+        "eyebrow": "TWINGS for Brands",
+        "title": "Your brand’s own\nAI media engine",
+        "body": "Your brand’s taste and the production rules YAGI refined on global campaigns stay fixed. Only the parts that change with trends and channels get remade.",
+        "cta": "Book a demo",
+        "secondary": "See the work",
+        "filmLabel": "Brand films made with TWINGS",
+        "doors": [
+          {
+            "title": "Asset studio",
+            "body": "Product shots and video ads"
+          },
+          {
+            "title": "Creator campaigns",
+            "body": "Ads creators post with their own faces"
+          },
+          {
+            "title": "Production",
+            "body": "Brand films by YAGI"
+          }
+        ]
+      },
+      "problem": {
+        "eyebrow": "Why it all looks the same",
+        "title": "AI ads are starting to look alike",
+        "body": "AI only knows what the prompt says. Leave out where the logo sits or where the light comes from, and it fills the gap with a guess.",
+        "raw": "Plain generation",
+        "hint": "What to compare",
+        "slider": "Where the two shots split",
+        "caption": "Same product, same request",
+        "pairs": [
+          {
+            "chip": "Logo",
+            "note": "In the plain version the mark became a letter Y. On the right, the rule check put the real mark back.",
+            "raw": "Plain generation: the mark became a letter Y",
+            "ours": "TWINGS: the real mark kept"
+          },
+          {
+            "chip": "Skin",
+            "note": "Pores and stray hairs stay.",
+            "raw": "Plain generation: skin as smooth as plastic",
+            "ours": "TWINGS: skin with pores and stray hairs"
+          },
+          {
+            "chip": "Light",
+            "note": "One window light, from the upper left. The plain version came back with a stock wooden table.",
+            "raw": "Plain generation: a bottle on a stock wooden table",
+            "ours": "TWINGS: a bottle shot in one window light"
+          }
+        ]
+      },
+      "first": {
+        "eyebrow": "What's different",
+        "title": "What stays fixed, and what changes",
+        "body": "A brand has endless combinations. Lock what must not change first, and the work still looks like you when the trend moves on.",
+        "engine": {
+          "fixed": "Fixed",
+          "fixedItems": [
+            "Palette and light",
+            "Hardlines",
+            "Prompt rules for each model",
+            "Approved shots"
+          ],
+          "changes": "Changes",
+          "changeItems": [
+            "Winter season",
+            "Reels 9:16",
+            "Product page 4:5"
+          ],
+          "output": "What the engine made",
+          "note": "Tap a change. The fixed layer stays put."
+        },
+        "layerTitle": "How the fixed layer is built",
+        "studio": "Today the YAGI studio runs these steps by hand. We are building them into the platform, one at a time.",
+        "chapters": [
+          {
+            "label": "Hardlines",
+            "title": "First, what must never change",
+            "body": "We draft the rules from your brand files and website. Your team edits them and signs off.",
+            "status": "Run by the studio"
+          },
+          {
+            "label": "Brand memory",
+            "title": "Approved shots become the baseline for the next job",
+            "body": "Picks and fixes stay with the brand. Every new request starts from that record.",
+            "status": "Coming"
+          },
+          {
+            "label": "One-line direction",
+            "title": "One line is enough",
+            "body": "“Winter morning, window light” becomes a full shot brief, down to lens and colour values.",
+            "status": "Coming"
+          }
+        ],
+        "kit": {
+          "reading": "Reading the website and brand files",
+          "mark": "Mark",
+          "palette": "Palette",
+          "type": "Type",
+          "typeValue": "Pretendard · bold, tight tracking",
+          "rules": "Hardlines",
+          "ruleItems": [
+            "Logo front-on, fixed size",
+            "No colours outside the palette",
+            "No efficacy or medical claims",
+            "Consented faces only"
+          ],
+          "draft": "Draft · awaiting team review",
+          "example": "Example: YAGI, a fictional brand"
+        },
+        "memory": {
+          "title": "YAGI brand memory",
+          "approved": "Approved",
+          "notes": [
+            "Logo 8% smaller",
+            "Longer shadow",
+            "No skin smoothing",
+            "Bottle on the right third"
+          ],
+          "look": "Saved colour look",
+          "campaigns": [
+            "Campaign 1",
+            "Campaign 2",
+            "Campaign 3"
+          ]
+        },
+        "direction": {
+          "prompt": "winter morning, window light",
+          "brief": "Shot brief",
+          "spec": [
+            "85mm lens",
+            "eye level",
+            "window light, upper left",
+            "shadow #3A4A5E",
+            "highlight #EEF3F8"
+          ],
+          "outputs": "Three shots from this brief",
+          "clip": "A five-second clip of a shot from the brief"
+        }
+      },
+      "workflow": {
+        "eyebrow": "What's inside",
+        "title": "The workflow from real campaigns",
+        "body": "These are the steps YAGI takes on every campaign.",
+        "track": "Workflow steps",
+        "prev": "Previous step",
+        "next": "Next step",
+        "steps": [
+          {
+            "title": "Read the reference",
+            "body": "A great shot’s lens and light, written down as numbers."
+          },
+          {
+            "title": "Pick the model",
+            "body": "Each shot suits a different model. The prompt changes to match."
+          },
+          {
+            "title": "Check",
+            "body": "Every shot: is the logo intact, do hands and skin look real?"
+          },
+          {
+            "title": "Fix in place",
+            "body": "Only small spots are redrawn, like a blurred logo or skin that reads as AI."
+          },
+          {
+            "title": "Animate",
+            "body": "Approved shots become five-second clips."
+          },
+          {
+            "title": "Finish",
+            "body": "Match the colour, then export in the ratio each channel needs."
+          }
+        ],
+        "analysis": [
+          "Lens",
+          "Light",
+          "Shadow",
+          "Highlight"
+        ],
+        "modelA": "Model A",
+        "modelB": "Model B",
+        "modelNote": "Same request, different models",
+        "checks": [
+          "Mark",
+          "Fingers",
+          "Skin texture"
+        ],
+        "pass": "Pass",
+        "fix": "Only this spot is redrawn"
+      },
+      "work": {
+        "eyebrow": "The work",
+        "title": "Eight products, one set of rules",
+        "early": "Early access",
+        "tabs": [
+          "Product shots",
+          "Scenes",
+          "Try-on",
+          "Video ads"
+        ],
+        "notes": [
+          "Eight products sharing one mark and one cap.",
+          "Original YAGI campaign frames with only the product swapped.",
+          "Lookbook and editorial shots from one garment photo and a virtual model.",
+          "Each ad sits next to a shot of the product it shows."
+        ],
+        "adStill": "Product shot",
+        "adLabels": [
+          "20-second ad, same perfume",
+          "15-second ad, same lip gloss"
+        ],
+        "clipLabel": "5-second clip",
+        "note": "Example screens. Products and models are fictional."
+      },
+      "campaign": {
+        "eyebrow": "Creator campaigns",
+        "live": "Live",
+        "title": "Each creator posts the ad with their own face",
+        "body": "YAGI builds the ad format. Each creator gets a version with their own face and posts it on their own channel, in Korea and Japan.",
+        "consent": "Creators take part only after agreeing to the use of their own face.",
+        "virtual": "Fictional example"
+      },
+      "production": {
+        "eyebrow": "Production",
+        "title": "Brand films, made by YAGI",
+        "body": "Need a brand film? YAGI Production takes it from concept to delivery.",
+        "nextTitle": "Coming next",
+        "soon": "Coming",
+        "next": [
+          "Draft hardlines from your website",
+          "Fix logos, garment details and skin in place",
+          "Colour grading matched to a reference, saved as your look",
+          "4K upscaling and sound finishing",
+          "Send jobs from your team’s own AI agent"
+        ],
+        "films": [
+          "Fashion film (example)",
+          "Editorial film (example)"
+        ],
+        "decks": "See the portfolio",
+        "company": "Company deck",
+        "talk": "Talk to production"
+      },
+      "closing": {
+        "eyebrow": "Your shortcut to on-brand AI media",
+        "title": "No more\ngeneric AI images",
+        "body": "Bring your brand files to the demo and see the difference.",
+        "cta": "Book a demo",
+        "filmLabel": "Five-second clip of a fictional model in a blue shirt holding the YAGI body mist"
+      },
+      "metaTitle": "Your brand’s own AI media engine",
+      "metaDescription": "TWINGS for Brands is your brand’s own AI media engine. It locks your taste and the production rules YAGI refined on global campaigns, then makes product assets and video ads for each trend and channel."
+    },
     "landing": {
       "hero": {
         "eyebrow": "TWINGS brand studio",
@@ -756,7 +1132,7 @@ export const en = {
   makerRecipe: {
     metaTitle: 'New template',
     editTitle: 'Edit template',
-    lede: 'Choose an engine and a prompt for each step, test it with your own photo, then send it for review. Customers only add one selfie.',
+    lede: 'Choose an engine and a prompt for each step, test it with your own photo, then publish it. Customers only add one selfie.',
     back: 'Back to workspace',
     newCta: 'Add a new template',
     continueDraft: 'Continue editing',
@@ -800,9 +1176,15 @@ export const en = {
     exampleUpload: 'Upload the example',
     exampleUploaded: 'Uploaded example',
     disclosure: 'Show on the template page',
-    disclosurePrompts: 'Prompts for each step',
-    disclosureAssets: 'Reference files',
-    disclosureHint: 'Showing them does not change sales. With both off, only the studio sees your recipe.',
+    disclosurePrompts: 'Prompts and tips, to signed-in members',
+    disclosureAssets: 'Reference files, to view and download',
+    disclosureHint: 'Anyone sees your intro and the opening lines of step 1; the full prompts, tips and files open after a free sign-in. Showing them does not change sales. With both off, only the studio sees your recipe.',
+    intro: 'Intro',
+    introHint: 'Shown to everyone above the outline. Say what this makes and how, in a few lines.',
+    note: 'Tip for this step',
+    noteHint: 'Shown under the prompt, to signed-in members.',
+    outro: 'Closing line',
+    outroHint: 'For example: post yours and tag @yourhandle — I repost my favourites.',
     presentation: 'Page order',
     makeFirst: 'Example → Make → How it’s made',
     storyFirst: 'How it’s made → Example → Make',
@@ -848,6 +1230,9 @@ export const en = {
     rights: 'I made the example and the reference files myself or hold the rights to them, and I agree to TWINGS using them for this template.',
     submit: 'Send for review',
     submitting: 'Sending…',
+    publish: 'Publish now',
+    publishing: 'Publishing…',
+    publishHint: 'Publishing needs a passing recipe, an uploaded example file and one successful test render with your own photo. The price is set for you: the cost floor plus your royalty. The studio can take a template down if it breaks the rules.',
     readOnly: 'A template sent for review can no longer be edited. If it is not accepted, you can revise it and send it again.',
     errors: {
       invalid: 'Some fields need another look.',
@@ -858,6 +1243,8 @@ export const en = {
       rate_limited: 'You cannot start more templates today. Try again tomorrow.',
       bad_example: 'Check the post link. Instagram, TikTok and X post addresses are accepted.',
       example_required: 'Add an example: a post link or an uploaded file.',
+      example_file_required: 'Upload the example file — it becomes the template card.',
+      test_required: 'Run one test render with your own photo first. It has to succeed before you can publish.',
       too_large: 'The file is over 4 MB.',
       bad_file: 'Upload a JPG, PNG or WebP image, or an MP4 or MOV video.',
       limit_reached: 'Up to 6 reference files and 20 MB per template.',
@@ -899,6 +1286,28 @@ export const en = {
       copy: 'Copy',
       copied: 'Copied',
       assets: 'Reference files',
+      download: 'Download',
+      viewFile: 'View larger',
+      closeFile: 'Close',
+      prevFile: 'Previous file',
+      nextFile: 'Next file',
+      fileCount: '{n} of {total}',
+      expand: 'Show the whole prompt',
+      collapse: 'Show less',
+      gateTitle: 'Sign up for free to unlock the full recipe',
+      gateBody: 'Create a free TWINGS account to view and copy the complete step-by-step prompt, sound guide, and reference files.',
+      gateCta: 'Sign up / Sign in to view recipe →',
+    },
+    actions: {
+      label: 'Recipe shared',
+      body: 'The exact prompt behind this video is shared here. Free members copy it in one tap, or make their own with one selfie.',
+      bodyClosed: 'The exact prompt behind this video is shared here. Free members copy it in one tap. Making it with one selfie opens soon.',
+      copy: 'Copy the prompt',
+      full: 'Read the full prompt',
+      copySignedOut: 'Sign up free to copy the prompt',
+      preview: 'Preview the recipe',
+      make: 'Make it with one selfie',
+      makeClosed: 'Make it with a selfie · get notified',
     },
     review: {
       heading: 'Recipe review',
@@ -1487,6 +1896,30 @@ export const en = {
       rateLimited: 'Too many requests. Please try again shortly.',
       adminInvalid: 'This couldn’t be saved. Check the required fields and formats.',
       adminDenied: 'This action isn’t available or the item no longer exists. Refresh to see the current state.',
+      studioRateLimited: 'Too many changes in a short time. Try again in 10 minutes.',
+    },
+    studioPrep: {
+      cta: 'New campaign',
+      title: 'New campaign',
+      intro: 'Pick the client, name the campaign and state its goal. It stays hidden from the client until you share it.',
+      brand: 'Client brand',
+      brandHint: 'Client not listed? Add it below first.',
+      objective: 'Campaign goal',
+      budget: 'Total budget (KRW, optional)',
+      cover: 'Cover image (optional)',
+      coverHint: 'JPEG, PNG or WebP, up to 15 MB. Shown on the campaign list and at the top of the campaign page, never in the client’s file list.',
+      coverBad: 'Choose a JPEG, PNG or WebP image of 15 MB or less.',
+      coverFailed: 'The campaign was created, but its cover image did not upload. Upload it again here.',
+      coverUploading: 'Uploading image…',
+      coverFile: 'Image file',
+      coverAdd: 'Upload cover image',
+      coverReplace: 'Replace cover image',
+      coverDone: 'Cover image updated.',
+      submit: 'Create campaign',
+      next: 'Once it exists, its page shows creator shortlist management and the campaign ID for imports.',
+      newBrand: 'Add a client brand',
+      newBrandHint: 'This creates the brand workspace only. Invite the client’s team from the admin screen.',
+      noBrands: 'No client brands yet. Add one first.',
     },
     managed: {
       "supportLoading": "Loading conversation…",
@@ -1985,20 +2418,39 @@ export const en = {
     tabs: { overview: 'Overview', brief: 'Brief', shortlist: 'Creator shortlist', applicants: 'Applicants', payments: 'Payment', filesConversation: 'Files and messages', contractsUsage: 'Contracts and reuse' },
     shortlist: {
       title: 'Creator shortlist',
-      intro: 'TWINGS picked these creators for this campaign. Mark the ones you want to work with. TWINGS confirms each booking once the schedule is set.',
+      intro: 'TWINGS picked these creators for this campaign. Mark the ones you want to work with as preferred and set aside the rest. TWINGS confirms each booking once the schedule is set, and the card then says "Booked".',
       count: '{count}',
       measuredOn: 'Figures as of {date}',
       basis: 'Based on public Instagram posts',
       sortLabel: 'Sort',
       sorts: { followers: 'Followers', views: 'Views', engagement: 'Engagement' },
-      showPicked: 'Preferred only {count}',
-      showAll: 'Show all',
-      nonePicked: 'You have not marked anyone as preferred yet.',
+      tabsLabel: 'Shortlist groups',
+      tabs: { open: 'Candidates', picked: 'Preferred', passed: 'Set aside', confirmed: 'Booked' },
+      empty: {
+        open: 'No candidates left. You can bring back anyone you set aside from the Set aside tab.',
+        picked: 'You have not marked anyone as preferred yet.',
+        passed: 'You have not set anyone aside.',
+        confirmed: 'No bookings are confirmed yet.',
+      },
+      viewLabel: 'Layout',
+      views: { cards: 'Show as cards', list: 'Show as a list' },
+      selectAll: 'Select all {count} shown',
+      select: 'Select @{handle}',
+      selected: '{count} selected',
+      clearSelection: 'Clear selection',
+      actions: { picked: 'Mark as preferred', passed: 'Set aside', none: 'Clear marks', restore: 'Back to candidates' },
+      done: {
+        picked: 'Marked {count} as preferred.',
+        passed: 'Set {count} aside.',
+        none: 'Cleared marks on {count}.',
+      },
+      undo: 'Undo',
+      undone: 'Undone.',
       followers: 'Followers',
       posts: 'Posts',
       following: 'Following',
       profile: '@{handle} on Instagram (opens in a new tab)',
-      columns: { kind: 'Type', perMonth: 'Posts / 30 days', engagement: 'Avg. engagement', rate: 'Rate', reactions: 'Likes · comments' },
+      columns: { kind: 'Type', perMonth: 'Posts / 30 days', engagement: 'Avg. engagement', rate: 'Rate', reactions: 'Likes · comments', creator: 'Creator', marks: 'Preferred · set aside' },
       rows: { feed: 'Feed', ads: 'Sponsored', reels: 'Reels' },
       viewsMedian: 'Median views, 90 days',
       viewsMax: 'Top views, 90 days',
@@ -2007,9 +2459,29 @@ export const en = {
       prefer: 'Mark as preferred',
       unprefer: 'Remove preference',
       preferred: 'Preferred',
+      pass: 'Set aside',
+      unpass: 'Bring back',
+      passed: 'Set aside',
+      confirmed: 'Booked',
       working: 'Saving…',
       failed: 'Could not save. Please try again.',
-      readOnly: 'Campaign contacts with comment access can mark preferences.',
+      readOnly: 'Campaign contacts with comment access can mark preferences. Anyone can compare selected candidates.',
+      engagement: 'Engagement',
+      noFigure: 'Not measured',
+      tags: { views: 'Strong views', engagement: 'High engagement', organic: 'Few sponsored posts', steady: 'Posts often' },
+      tagHints: {
+        views: 'Median 90-day views are at least 60% of followers.',
+        engagement: 'Engagement is at least 1.3 times the median of this shortlist.',
+        organic: 'Sponsored share is 15% or less.',
+        steady: 'Posted 10 or more feed posts or Reels in 30 days.',
+      },
+      relative: 'Against this shortlist’s median',
+      relativeRows: { views: 'Views', engagement: 'Engagement', followers: 'Followers' },
+      details: 'All figures',
+      compareOpen: 'Compare {count}',
+      compareTitle: 'Compare candidates',
+      compareHint: 'Bold marks the highest value among them. For sponsored share, the lowest is bold.',
+      close: 'Close',
     },
     shortlistAdmin: {
       title: 'Creator shortlist',
@@ -2017,16 +2489,91 @@ export const en = {
       projectId: 'Campaign ID for imports',
       file: 'Candidate file (.json)',
       import: 'Import',
-      summary: '{total} total · {shared} shared · {hidden} waiting · {picked} preferred by client',
+      adminOnly: 'Importing a candidate file and removing candidates happen on the admin screen. The import job sends to the campaign ID above.',
+      summary: '{total} total · {shared} shared · {hidden} waiting · {excluded} excluded · {picked} preferred by client · {passed} set aside by client · {confirmed} booked',
       shareAll: 'Share all waiting candidates',
-      hideAll: 'Hide all',
+      hideAll: 'Move all shared back to waiting',
       share: 'Share',
       hide: 'Hide',
       remove: 'Remove',
-      removeConfirm: 'Removes this candidate from the campaign, including the client’s preference.',
-      states: { shared: 'Shared', hidden: 'Waiting', picked: 'Client preferred' },
+      removeConfirm: 'Removes this candidate from the campaign, including the client’s preference. The next import adds them back as waiting, so exclude anyone you never want to see again.',
+      removeTitle: 'Remove for good',
+      states: { shared: 'Shared', hidden: 'Waiting', excluded: 'Excluded', picked: 'Client preferred', passed: 'Client set aside', confirmed: 'Booked' },
       none: 'No candidates imported yet.',
       updated: 'Updated {date}',
+      triage: {
+        tabs: { all: 'All', waiting: 'Waiting', shared: 'Shared', excluded: 'Excluded', picked: 'Client preferred', passed: 'Client set aside', confirmed: 'Booked' },
+        tabsLabel: 'Candidate status',
+        search: 'Search handles',
+        dims: { followers: 'Followers', views: 'Median views, 90 days', engagement: 'Engagement', adShare: 'Sponsored share' },
+        filtersLabel: 'Figure ranges',
+        rangeHint: 'Bars show how the current candidates are spread.',
+        rangeMissing: '{count} without this figure drop out of the list once you set a range.',
+        min: 'Min',
+        max: 'Max',
+        matching: '{count} match',
+        reset: 'Reset',
+        clearFilter: 'Clear the {label} range',
+        clearAll: 'Clear all filters',
+        unknown: 'Not measured',
+        columns: { candidate: 'Candidate', state: 'Status', actions: 'Move' },
+        sortBy: 'Sort by {label}',
+        selectAll: 'Select every candidate shown',
+        select: 'Select @{handle}',
+        allSelected: 'All {count} in this list are selected.',
+        selected: '{count} selected',
+        clearSelection: 'Clear selection',
+        actions: { share: 'Share', exclude: 'Exclude', wait: 'Back to waiting' },
+        isNew: 'New',
+        fit: { in: 'Inside criteria', out: 'Outside criteria', unknown: 'Needs a look' },
+        criteria: {
+          saved: 'Campaign criteria',
+          savedHint: 'Waiting candidates are marked inside or outside. Nothing is shared or excluded automatically.',
+          none: 'No campaign criteria yet. Pick filters and save them as criteria to mark new candidates inside or outside.',
+          save: 'Save these filters as campaign criteria',
+          replace: 'Replace criteria with these filters',
+          load: 'Load criteria as filters',
+          clear: 'Clear criteria',
+          savedDone: 'Campaign criteria saved.',
+          clearedDone: 'Campaign criteria cleared.',
+        },
+        split: {
+          open: 'Sort out by filters',
+          title: 'Sort out by filters',
+          scope: 'Only the {count} waiting candidates are touched. Shared and excluded candidates stay as they are.',
+          rule: 'Rule: {summary}',
+          needRule: 'Pick filters or save campaign criteria first.',
+          inside: 'Inside · share',
+          outside: 'Outside',
+          outsideAction: 'What to do with candidates outside',
+          outsideExclude: 'Exclude',
+          outsideKeep: 'Keep waiting',
+          unknown: 'Missing figures · keep waiting',
+          people: '{count}',
+          none: 'None',
+          note: 'The client sees shared candidates only.',
+          cancel: 'Cancel',
+          run: 'Share {share}, exclude {exclude}',
+          runShare: 'Share {share}',
+          runExclude: 'Exclude {exclude}',
+        },
+        empty: 'No candidates match. Try wider ranges.',
+        done: {
+          share: 'Shared {count}.',
+          exclude: 'Excluded {count}.',
+          wait: 'Moved {count} back to waiting.',
+          split: 'Shared {share}, excluded {exclude}.',
+        },
+        undo: 'Undo',
+        undone: 'Undone.',
+        failed: 'Could not save. Reload the page and try again.',
+        rateLimited: 'Too many saves in a short time. Try again in a few minutes.',
+        keys: 'Keys J·K move · X select · S share · E exclude · W waiting · Z undo · / search',
+        picked: 'The client marked this candidate as preferred',
+        passed: 'The client set this candidate aside. It stays in their Set aside tab.',
+        confirmed: 'Booking confirmed',
+        working: 'Saving…',
+      },
     },
     applicants: {
       title: 'Applicants and participants',
@@ -2166,7 +2713,7 @@ export const en = {
     videoDescription: "Explore studio-made AI video templates, compare sample results, lengths and aspect ratios, and find a scene for your own face.",
     imageTitle: 'Image templates',
     imageDescription: "Find your look in studio-made AI image templates, from portraits to posters and lookbooks.",
-    templateDescription: 'Make this scene with your own face using one photo. Find the single-video price on the template and compare monthly plans on the pricing page.',
+    templateDescription: 'Make this scene with your own face using one photo. Subscribe, and you make it right here on this page.',
     pricingTitle: 'Pricing',
     pricingDescription:
       'AI videos starring you. Creator at KRW 24,900/month and Premium at KRW 49,000/month are in preparation. Compare video counts by length and planned custom edits.',
@@ -2393,6 +2940,7 @@ export const en = {
     cardSeconds: '{seconds}s',
     cardAuthor: `${T.creditPrefix} @{handle}`,
     cardAuthorAnonymous: `${cap(T.maker)} template`,
+    cardRecipe: 'Recipe shared',
     /** The handoff (2026-08-15) — copy the prompt, open the tool that runs it. */
     runCta: 'Make it on Higgsfield ↗',
     runCopied: 'Copied — paste it in the new tab',
@@ -2474,6 +3022,8 @@ export const en = {
     notForSaleBody: "Generation is not available for this template yet. You can browse its sample results.",
     makeCta: 'Make it with your photo',
     makeCtaClosed: 'Get notified when it opens',
+    subscribeCta: 'Subscribe to make it here',
+    credits: '{n} credits',
     makeBody: 'You can make one now: pay per film.',
     makeBodyClosed: 'Generation is not open to the public yet. When it opens, one photo is enough, with one payment per film.',
     aspectFact: 'Aspect',
@@ -2488,19 +3038,12 @@ export const en = {
     ctaVideo: 'See video templates',
     ctaImage: 'See image templates',
     allVideo: 'All video templates',
-    // PLATFORM-2.0 §7.5·§14.1 — rails and chips by who made the template. No maker template, no rail and no chips.
-    studioRail: T.studioCollection,
-    studioRailLede: 'Templates made by the studio.',
-    makerRail: T.makerCollection,
-    makerRailLede: `Made by ${T.makersFull} and reviewed by the studio.`,
-    originHeading: 'Made by',
-    originAll: 'All',
-    originStudio: 'Originals',
-    originMaker: `${cap(T.makers)}`,
     verified: 'Verified',
     verifiedHint: 'This template passed studio review.',
+    // PLATFORM-2.0 §7.5 (founder 2026-10-30): one line under a creative template's title — who made it, and their profile.
     makerBlockHeading: `The ${T.maker} behind this template`,
-    makerBlockCta: `See ${T.maker} profile`,
+    makerBlockCta: 'View profile',
+    moreFrom: 'More from @{handle}',
     aspects: {
       '4:5': '4:5 · Instagram feed',
       '1:1': '1:1 · Square',
@@ -3924,6 +4467,7 @@ export const en = {
     inviteHiddenCampaign: 'This campaign is not shared with the client yet. Campaign-only invitations open once it is shared. For brand-wide access, invite from the brand access page.',
     errBrandConflict: 'The campaign changed in the meantime, or that change is not possible from its current status. Refresh to see where it stands.',
     errCollaborationRateLimited: 'Too many requests. Try again shortly.',
+    errStudioRateLimited: 'Too many changes in a short time. Try again in 10 minutes.',
     errBrandNotActive: 'Only an active campaign accepts this. Move the campaign to active first.',
     errBrandConsentRequired: 'A campaign produced by TWINGS needs the creator-consent box ticked before content can be added.',
     errBrandNotShared: 'A campaign the client cannot see yet cannot take campaign-only invitations. Share the campaign first, or invite to the whole brand.',

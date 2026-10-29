@@ -9,6 +9,9 @@ import { loadMakerDraft, makerAction, RecipeRejected } from '@/lib/recipes/maker
 import { MAX_RECIPE_BYTES } from '@/lib/recipes/schema';
 import { getRenderStore } from '@/lib/renders/store';
 import { runLiveRenderPass } from '@/lib/renders/runtime';
+import { getStorage } from '@/lib/storage';
+import { revalidateMakerProfile } from '@/lib/cache';
+import { loadMakerSettings } from '@/lib/makers/profile';
 
 /**
  * `POST /api/makers/formats` — the recipe editor's JSON actions (lib/recipes/maker.ts): save a draft,
@@ -51,7 +54,12 @@ export async function POST(request: Request) {
     const sql = await getSqlRunner();
     if (!sql) return json({ code: 'unavailable' }, 503);
     const access = await platformAccess(sql);
-    const result = await makerAction({ sql, store: await getRenderStore() }, viewer, raw, { creators: access.creators });
+    const result = await makerAction({ sql, store: await getRenderStore(), storage: await getStorage() }, viewer, raw, { creators: access.creators });
+    // §20.6: a self-published template is live now — the catalogue, the rails and the creative page move with it.
+    if (result.templateId) {
+      const handle = (await loadMakerSettings(sql, viewer.userId).catch(() => null))?.handle;
+      revalidateMakerProfile(handle ? [handle] : []);
+    }
     if (result.renderId) {
       const renderId = result.renderId;
       after(async () => { try { await runLiveRenderPass(sql, { jobId: renderId, limit: 1 }); } catch { /* The queued test render stays recoverable by the next pass. */ } });

@@ -45,6 +45,17 @@ describe('brand host boundary', () => {
     expect(response.headers.get('x-robots-tag')).toBe('noindex, nofollow');
     expect((await middleware(req('brand.twings.app', '/brand/members'))).headers.get('location')).toContain('/auth/choose');
   });
+  it('opens the studio campaign preparation door on the brand host for same-origin POSTs only (docs/BRAND-STAFF-ACCESS.md)', async () => {
+    expect(brandRouteAllowed('/api/brand-workspace/studio', 'POST')).toBe(true);
+    for (const method of ['GET', 'HEAD', 'PUT', 'DELETE']) expect(brandRouteAllowed('/api/brand-workspace/studio', method)).toBe(false);
+    expect(brandRouteAllowed('/api/brand-workspace/studio/extra', 'POST')).toBe(false);
+    // `/admin/do` itself stays closed on the brand host.
+    expect(brandRouteAllowed('/admin/do', 'POST')).toBe(false);
+    expect((await middleware(req('brand.twings.app','/admin/do','POST','https://brand.twings.app'))).status).toBe(404);
+    expect((await middleware(req('brand.twings.app','/api/brand-workspace/studio','POST','https://brand.twings.app'))).headers.get('x-middleware-next')).toBe('1');
+    expect((await middleware(req('brand.twings.app','/api/brand-workspace/studio','POST','https://twings.app'))).status).toBe(404);
+    expect((await middleware(req('brand.twings.app','/api/brand-workspace/studio'))).status).toBe(404);
+  });
   it('allows only the guarded studio upload transport on the admin host', async () => {
     expect((await middleware(req('admin.twings.app','/api/admin/brand-workspace','POST','https://admin.twings.app'))).headers.get('x-middleware-next')).toBe('1');
     expect((await middleware(req('admin.twings.app','/api/admin/brand-workspace','GET'))).status).toBe(404);

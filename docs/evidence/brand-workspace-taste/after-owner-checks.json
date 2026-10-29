@@ -1,0 +1,565 @@
+{
+ "projectPath": "found",
+ "report": [
+  {
+   "name": "home",
+   "locale": "ko",
+   "width": 1440,
+   "overflow": 0,
+   "cut": 0,
+   "title": "브랜드 워크스페이스",
+   "broken": 0,
+   "errors": []
+  },
+  {
+   "name": "campaign",
+   "locale": "ko",
+   "width": 1440,
+   "overflow": 0,
+   "cut": 0,
+   "title": "브랜드 워크스페이스",
+   "broken": 0,
+   "errors": []
+  },
+  {
+   "name": "campaign-review",
+   "locale": "ko",
+   "width": 1440,
+   "overflow": 0,
+   "cut": 0,
+   "title": "브랜드 워크스페이스",
+   "broken": 0,
+   "errors": []
+  },
+  {
+   "name": "participants",
+   "locale": "ko",
+   "width": 1440,
+   "overflow": 0,
+   "cut": 0,
+   "title": "브랜드 워크스페이스",
+   "broken": 0,
+   "errors": []
+  },
+  {
+   "name": "report",
+   "locale": "ko",
+   "width": 1440,
+   "overflow": 0,
+   "cut": 0,
+   "title": "브랜드 워크스페이스",
+   "broken": 0,
+   "errors": []
+  },
+  {
+   "name": "shortlist",
+   "locale": "ko",
+   "width": 1440,
+   "overflow": 0,
+   "cut": 0,
+   "title": "브랜드 워크스페이스",
+   "broken": 0,
+   "errors": []
+  },
+  {
+   "name": "studio",
+   "locale": "ko",
+   "width": 1440,
+   "overflow": 0,
+   "cut": 0,
+   "title": "브랜드 워크스페이스",
+   "broken": 0,
+   "errors": []
+  },
+  {
+   "name": "studio-detail",
+   "locale": "ko",
+   "width": 1440,
+   "overflow": 0,
+   "cut": 0,
+   "title": "브랜드 워크스페이스",
+   "broken": 0,
+   "errors": []
+  },
+  {
+   "name": "library",
+   "locale": "ko",
+   "width": 1440,
+   "overflow": 0,
+   "cut": 0,
+   "title": "브랜드 워크스페이스",
+   "broken": 0,
+   "errors": []
+  },
+  {
+   "name": "creators",
+   "locale": "ko",
+   "width": 1440,
+   "overflow": 0,
+   "cut": 0,
+   "title": "브랜드 워크스페이스",
+   "broken": 0,
+   "errors": []
+  },
+  {
+   "name": "members",
+   "locale": "ko",
+   "width": 1440,
+   "overflow": 0,
+   "cut": 0,
+   "title": "브랜드 워크스페이스",
+   "broken": 0,
+   "errors": []
+  },
+  {
+   "name": "settings",
+   "locale": "ko",
+   "width": 1440,
+   "overflow": 0,
+   "cut": 0,
+   "title": "브랜드 워크스페이스",
+   "broken": 0,
+   "errors": []
+  },
+  {
+   "name": "new-campaign",
+   "locale": "ko",
+   "width": 1440,
+   "overflow": 0,
+   "cut": 0,
+   "title": "브랜드 워크스페이스",
+   "broken": 0,
+   "errors": []
+  },
+  {
+   "name": "login",
+   "locale": "ko",
+   "width": 1440,
+   "overflow": 0,
+   "cut": 0,
+   "title": "로그인 또는 회원가입 · TWINGS",
+   "broken": 0,
+   "errors": []
+  },
+  {
+   "name": "home",
+   "locale": "ko",
+   "width": 390,
+   "overflow": 0,
+   "cut": 0,
+   "title": "브랜드 워크스페이스",
+   "broken": 0,
+   "errors": []
+  },
+  {
+   "name": "campaign",
+   "locale": "ko",
+   "width": 390,
+   "overflow": 0,
+   "cut": 0,
+   "title": "브랜드 워크스페이스",
+   "broken": 0,
+   "errors": []
+  },
+  {
+   "name": "campaign-review",
+   "locale": "ko",
+   "width": 390,
+   "overflow": 0,
+   "cut": 0,
+   "title": "브랜드 워크스페이스",
+   "broken": 0,
+   "errors": []
+  },
+  {
+   "name": "participants",
+   "locale": "ko",
+   "width": 390,
+   "overflow": 0,
+   "cut": 0,
+   "title": "브랜드 워크스페이스",
+   "broken": 0,
+   "errors": []
+  },
+  {
+   "name": "report",
+   "locale": "ko",
+   "width": 390,
+   "overflow": 0,
+   "cut": 0,
+   "title": "브랜드 워크스페이스",
+   "broken": 0,
+   "errors": []
+  },
+  {
+   "name": "shortlist",
+   "locale": "ko",
+   "width": 390,
+   "overflow": 0,
+   "cut": 0,
+   "title": "브랜드 워크스페이스",
+   "broken": 0,
+   "errors": []
+  },
+  {
+   "name": "studio",
+   "locale": "ko",
+   "width": 390,
+   "overflow": 0,
+   "cut": 0,
+   "title": "브랜드 워크스페이스",
+   "broken": 0,
+   "errors": []
+  },
+  {
+   "name": "studio-detail",
+   "locale": "ko",
+   "width": 390,
+   "overflow": 0,
+   "cut": 0,
+   "title": "브랜드 워크스페이스",
+   "broken": 0,
+   "errors": []
+  },
+  {
+   "name": "library",
+   "locale": "ko",
+   "width": 390,
+   "overflow": 0,
+   "cut": 0,
+   "title": "브랜드 워크스페이스",
+   "broken": 0,
+   "errors": []
+  },
+  {
+   "name": "creators",
+   "locale": "ko",
+   "width": 390,
+   "overflow": 0,
+   "cut": 0,
+   "title": "브랜드 워크스페이스",
+   "broken": 0,
+   "errors": []
+  },
+  {
+   "name": "members",
+   "locale": "ko",
+   "width": 390,
+   "overflow": 0,
+   "cut": 0,
+   "title": "브랜드 워크스페이스",
+   "broken": 0,
+   "errors": []
+  },
+  {
+   "name": "settings",
+   "locale": "ko",
+   "width": 390,
+   "overflow": 0,
+   "cut": 0,
+   "title": "브랜드 워크스페이스",
+   "broken": 0,
+   "errors": []
+  },
+  {
+   "name": "new-campaign",
+   "locale": "ko",
+   "width": 390,
+   "overflow": 0,
+   "cut": 0,
+   "title": "브랜드 워크스페이스",
+   "broken": 0,
+   "errors": []
+  },
+  {
+   "name": "login",
+   "locale": "ko",
+   "width": 390,
+   "overflow": 0,
+   "cut": 0,
+   "title": "로그인 또는 회원가입 · TWINGS",
+   "broken": 0,
+   "errors": []
+  },
+  {
+   "name": "home",
+   "locale": "en",
+   "width": 1440,
+   "overflow": 0,
+   "cut": 0,
+   "title": "Brand workspace",
+   "broken": 0,
+   "errors": []
+  },
+  {
+   "name": "campaign",
+   "locale": "en",
+   "width": 1440,
+   "overflow": 0,
+   "cut": 0,
+   "title": "Brand workspace",
+   "broken": 0,
+   "errors": []
+  },
+  {
+   "name": "campaign-review",
+   "locale": "en",
+   "width": 1440,
+   "overflow": 0,
+   "cut": 0,
+   "title": "Brand workspace",
+   "broken": 0,
+   "errors": []
+  },
+  {
+   "name": "participants",
+   "locale": "en",
+   "width": 1440,
+   "overflow": 0,
+   "cut": 0,
+   "title": "Brand workspace",
+   "broken": 0,
+   "errors": []
+  },
+  {
+   "name": "report",
+   "locale": "en",
+   "width": 1440,
+   "overflow": 0,
+   "cut": 0,
+   "title": "Brand workspace",
+   "broken": 0,
+   "errors": []
+  },
+  {
+   "name": "shortlist",
+   "locale": "en",
+   "width": 1440,
+   "overflow": 0,
+   "cut": 0,
+   "title": "Brand workspace",
+   "broken": 0,
+   "errors": []
+  },
+  {
+   "name": "studio",
+   "locale": "en",
+   "width": 1440,
+   "overflow": 0,
+   "cut": 0,
+   "title": "Brand workspace",
+   "broken": 0,
+   "errors": []
+  },
+  {
+   "name": "studio-detail",
+   "locale": "en",
+   "width": 1440,
+   "overflow": 0,
+   "cut": 0,
+   "title": "Brand workspace",
+   "broken": 0,
+   "errors": []
+  },
+  {
+   "name": "library",
+   "locale": "en",
+   "width": 1440,
+   "overflow": 0,
+   "cut": 0,
+   "title": "Brand workspace",
+   "broken": 0,
+   "errors": []
+  },
+  {
+   "name": "creators",
+   "locale": "en",
+   "width": 1440,
+   "overflow": 0,
+   "cut": 0,
+   "title": "Brand workspace",
+   "broken": 0,
+   "errors": []
+  },
+  {
+   "name": "members",
+   "locale": "en",
+   "width": 1440,
+   "overflow": 0,
+   "cut": 0,
+   "title": "Brand workspace",
+   "broken": 0,
+   "errors": []
+  },
+  {
+   "name": "settings",
+   "locale": "en",
+   "width": 1440,
+   "overflow": 0,
+   "cut": 0,
+   "title": "Brand workspace",
+   "broken": 0,
+   "errors": []
+  },
+  {
+   "name": "new-campaign",
+   "locale": "en",
+   "width": 1440,
+   "overflow": 0,
+   "cut": 0,
+   "title": "Brand workspace",
+   "broken": 0,
+   "errors": []
+  },
+  {
+   "name": "login",
+   "locale": "en",
+   "width": 1440,
+   "overflow": 0,
+   "cut": 0,
+   "title": "Log in or sign up · TWINGS",
+   "broken": 0,
+   "errors": []
+  },
+  {
+   "name": "home",
+   "locale": "en",
+   "width": 390,
+   "overflow": 0,
+   "cut": 0,
+   "title": "Brand workspace",
+   "broken": 0,
+   "errors": []
+  },
+  {
+   "name": "campaign",
+   "locale": "en",
+   "width": 390,
+   "overflow": 0,
+   "cut": 0,
+   "title": "Brand workspace",
+   "broken": 0,
+   "errors": []
+  },
+  {
+   "name": "campaign-review",
+   "locale": "en",
+   "width": 390,
+   "overflow": 0,
+   "cut": 0,
+   "title": "Brand workspace",
+   "broken": 0,
+   "errors": []
+  },
+  {
+   "name": "participants",
+   "locale": "en",
+   "width": 390,
+   "overflow": 0,
+   "cut": 0,
+   "title": "Brand workspace",
+   "broken": 0,
+   "errors": []
+  },
+  {
+   "name": "report",
+   "locale": "en",
+   "width": 390,
+   "overflow": 0,
+   "cut": 0,
+   "title": "Brand workspace",
+   "broken": 0,
+   "errors": []
+  },
+  {
+   "name": "shortlist",
+   "locale": "en",
+   "width": 390,
+   "overflow": 0,
+   "cut": 0,
+   "title": "Brand workspace",
+   "broken": 0,
+   "errors": []
+  },
+  {
+   "name": "studio",
+   "locale": "en",
+   "width": 390,
+   "overflow": 0,
+   "cut": 0,
+   "title": "Brand workspace",
+   "broken": 0,
+   "errors": []
+  },
+  {
+   "name": "studio-detail",
+   "locale": "en",
+   "width": 390,
+   "overflow": 0,
+   "cut": 0,
+   "title": "Brand workspace",
+   "broken": 0,
+   "errors": []
+  },
+  {
+   "name": "library",
+   "locale": "en",
+   "width": 390,
+   "overflow": 0,
+   "cut": 0,
+   "title": "Brand workspace",
+   "broken": 0,
+   "errors": []
+  },
+  {
+   "name": "creators",
+   "locale": "en",
+   "width": 390,
+   "overflow": 0,
+   "cut": 0,
+   "title": "Brand workspace",
+   "broken": 0,
+   "errors": []
+  },
+  {
+   "name": "members",
+   "locale": "en",
+   "width": 390,
+   "overflow": 0,
+   "cut": 0,
+   "title": "Brand workspace",
+   "broken": 0,
+   "errors": []
+  },
+  {
+   "name": "settings",
+   "locale": "en",
+   "width": 390,
+   "overflow": 0,
+   "cut": 0,
+   "title": "Brand workspace",
+   "broken": 0,
+   "errors": []
+  },
+  {
+   "name": "new-campaign",
+   "locale": "en",
+   "width": 390,
+   "overflow": 0,
+   "cut": 0,
+   "title": "Brand workspace",
+   "broken": 0,
+   "errors": []
+  },
+  {
+   "name": "login",
+   "locale": "en",
+   "width": 390,
+   "overflow": 0,
+   "cut": 0,
+   "title": "Log in or sign up · TWINGS",
+   "broken": 0,
+   "errors": []
+  }
+ ]
+}

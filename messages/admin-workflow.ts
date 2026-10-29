@@ -83,7 +83,7 @@ export const adminWorkflowEn = {
       action: "Open SNS check",
     },
     creatorApplications: {
-      title: "Review template maker applications",
+      title: "Review AI creative applications",
       hint: "Check the portfolio and example posts, then approve or decline. Approval does not publish any template.",
       action: "Review applications",
     },
@@ -247,7 +247,7 @@ export const adminWorkflowKo: typeof adminWorkflowEn = {
       action: "SNS 확인 열기",
     },
     creatorApplications: {
-      title: "템플릿 메이커 지원서를 검토하세요",
+      title: "AI 크리에이티브 지원서를 검토하세요",
       hint: "포트폴리오와 예시 게시물을 확인한 뒤 승인 또는 반려합니다. 승인만으로 템플릿이 공개되지는 않습니다.",
       action: "지원서 검토하기",
     },

@@ -28,7 +28,8 @@ export function YagiMark({ className }: { className?: string }) {
 
 /**
  * YAGI STUDIO header lockup for `brand.twings.app`:
- * Organic YW mark + "YAGI" + "STUDIO" badge + YAGI Red (`#ED1E1E`) live indicator dot.
+ * Organic YW mark + "YAGI" + "STUDIO" badge. No red indicator: TWINGS screens never use the YAGI v1.2
+ * red (docs/design/TASTE.md).
  */
 export function YagiStudioLockup({
   size = 22,
@@ -50,7 +51,6 @@ export function YagiStudioLockup({
         <span className="ys-brand-wordmark">
           <strong>YAGI</strong>
           <span className="ys-brand-studio-tag">STUDIO</span>
-          <span className="ys-brand-live-dot" aria-hidden="true" />
         </span>
       </span>
       {subtitle && <span className="ys-brand-subtitle">{subtitle}</span>}

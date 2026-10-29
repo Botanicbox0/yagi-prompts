@@ -58,6 +58,8 @@ export const ShortlistCandidateSchema = z.object({
   /** A small profile picture as a data URL; re-encoded server-side, never stored as a link. */
   avatar: AvatarSchema.nullable().optional(),
   metrics: ShortlistMetricsSchema.default({}),
+  /** The creator's booking for this campaign is confirmed (`false` takes it back); absent leaves it as it is. */
+  confirmed: z.boolean().optional(),
 }).strict();
 export type ShortlistCandidateInput = z.output<typeof ShortlistCandidateSchema>;
 
@@ -80,9 +82,58 @@ export type ShortlistImportInput = z.output<typeof ShortlistImportSchema>;
 
 export const ShortlistShareSchema = z.object({
   projectId: z.uuid(),
-  /** One candidate, or every candidate of the campaign that is still hidden when absent. */
+  /** One candidate, or every waiting candidate of the campaign when absent (excluded ones stay out). */
   candidateId: z.uuid().nullable().optional(),
   shared: z.boolean(),
 }).strict();
 export const ShortlistRemoveSchema = z.object({ projectId: z.uuid(), candidateId: z.uuid() }).strict();
 export const ShortlistPickSchema = z.object({ candidateId: z.uuid(), picked: z.boolean() }).strict();
+
+/**
+ * The brand's own sorting of shared candidates: prefer, set aside, or clear the mark, for one or many
+ * at once (a selection on its page). Every ID must be a shared candidate of the same campaign.
+ */
+export const SHORTLIST_CHOICES = ['picked', 'passed', 'none'] as const;
+export type ShortlistChoice = typeof SHORTLIST_CHOICES[number];
+export const SHORTLIST_CHOOSE_MAX = 200;
+export const ShortlistChooseSchema = z.object({
+  candidateIds: z.array(z.uuid()).min(1).max(SHORTLIST_CHOOSE_MAX).refine(list => new Set(list).size === list.length, 'duplicate'),
+  choice: z.enum(SHORTLIST_CHOICES),
+}).strict();
+
+/**
+ * The studio's triage (docs/BRAND-SHORTLIST.md "선별"): move candidates between waiting, shared and
+ * excluded in one call. A row's button, a selection, and the "inside / outside the ranges" split all
+ * arrive as these three lists.
+ */
+export const SHORTLIST_TRIAGE_MAX = 500;
+const candidateIds = z.array(z.uuid()).max(SHORTLIST_TRIAGE_MAX).default([]);
+export const ShortlistTriageSchema = z.object({
+  projectId: z.uuid(),
+  share: candidateIds,
+  exclude: candidateIds,
+  wait: candidateIds,
+}).strict()
+  .refine(v => v.share.length + v.exclude.length + v.wait.length > 0, 'empty')
+  .refine(v => v.share.length + v.exclude.length + v.wait.length <= SHORTLIST_TRIAGE_MAX, 'too_many')
+  .refine(v => new Set([...v.share, ...v.exclude, ...v.wait]).size === v.share.length + v.exclude.length + v.wait.length, 'overlap');
+
+/**
+ * The ranges the studio filters by, which a campaign may keep as its criteria. Rates in percent as
+ * shown (`1.5` means 1.5 %). Nothing is shared or excluded by criteria on their own.
+ */
+export const SHORTLIST_CRITERIA_KEYS = ['followers', 'views', 'engagement', 'adShare'] as const;
+export type ShortlistCriteriaKey = typeof SHORTLIST_CRITERIA_KEYS[number];
+const bound = z.number().finite().min(0).max(2_000_000_000).nullable().optional();
+const RangeSchema = z.object({ min: bound, max: bound }).strict()
+  .refine(r => r.min != null || r.max != null, 'empty')
+  .refine(r => r.min == null || r.max == null || r.min <= r.max, 'range');
+export const ShortlistCriteriaSchema = z.object({
+  followers: RangeSchema.optional(),
+  views: RangeSchema.optional(),
+  engagement: RangeSchema.optional(),
+  adShare: RangeSchema.optional(),
+}).strict();
+export type ShortlistRange = { min?: number | null; max?: number | null };
+export type ShortlistCriteria = Partial<Record<ShortlistCriteriaKey, ShortlistRange>>;
+export const ShortlistCriteriaSaveSchema = z.object({ projectId: z.uuid(), criteria: ShortlistCriteriaSchema.nullable() }).strict();

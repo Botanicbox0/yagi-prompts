@@ -43,7 +43,7 @@ export type LandingMedia = Readonly<Record<string, string>>;
 
 export const NO_LANDING_MEDIA: LandingMedia = Object.freeze({});
 
-/** The demo product family, in page order (components/brand-studio/landing-sections.tsx). */
+/** The demo product family, in page order (components/brand-studio/v7.tsx). */
 export const LANDING_PRODUCTS = ['parfum', 'blush', 'oil', 'compact', 'lipoil', 'serum', 'mist', 'balm'] as const;
 
 function landing(name: string, group: LandingMediaGroup, ratio: string, width: number): LandingMediaSlot {

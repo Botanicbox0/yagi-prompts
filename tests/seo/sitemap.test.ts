@@ -119,8 +119,8 @@ describe('sitemap (§8 M5)', () => {
 
   it('lists public maker pages with reciprocal hreflang, once each maker has a published template (§7.5)', () => {
     const makers = [
-      { handle: 'jun_01', bio: null, templateCount: 2, latestPublishedAt: '2026-10-20T00:00:00Z' },
-      { handle: 'quiet_maker', bio: 'bio', templateCount: 0, latestPublishedAt: null },
+      { handle: 'jun_01', bio: null, displayName: null, headline: null, country: null, city: null, links: [], publicEmail: null, tools: [], openToBrands: false, avatar: null, cover: null, templateCount: 2, latestPublishedAt: '2026-10-20T00:00:00Z' },
+      { handle: 'quiet_maker', bio: 'bio', displayName: null, headline: null, country: null, city: null, links: [], publicEmail: null, tools: [], openToBrands: false, avatar: null, cover: null, templateCount: 0, latestPublishedAt: null },
     ];
     const built = buildSitemap({ origin: ORIGIN, cards: [], makers });
     const entry = built.find((item) => item.url === `${ORIGIN}/ko/makers/jun_01`);

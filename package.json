@@ -34,6 +34,7 @@
     "ark:virtual:smoke": "tsx scripts/ark-virtual-smoke.ts",
     "image:smoke": "tsx scripts/image-smoke.ts",
     "templates:import": "tsx scripts/import-image-templates.ts",
+    "templates:film": "tsx scripts/import-maker-film.ts",
     "kling:smoke": "tsx scripts/kling-smoke.ts",
     "gemini:smoke": "tsx scripts/gemini-smoke.ts",
     "subscription:readiness": "tsx scripts/subscription-readiness.ts",
