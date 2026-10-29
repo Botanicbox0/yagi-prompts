@@ -209,7 +209,7 @@
 .door:hover i { transform: translateY(3px); }
 
 /* Everything after the hero slides over it. */
-.over { position: relative; z-index: 1; background: var(--id-canvas); border-radius: 28px 28px 0 0; box-shadow: 0 -24px 60px -40px rgb(14 16 19 / 0.25); }
+.over { position: relative; z-index: 1; background: var(--id-canvas); border-radius: 28px 28px 0 0; box-shadow: 0 -1px 0 var(--id-line), 0 -24px 60px -40px rgb(14 16 19 / 0.25); }
 
 /* ---------- Compare ---------- */
 .compareCol { width: 100%; }
@@ -586,3 +586,12 @@
 /* The shared FAQ block below the landing takes the landing's type scale (it keeps its own markup elsewhere). */
 .page :global([data-faq-catalog]) h2 { font-family: var(--id-sans); font-size: clamp(2rem, 3.9vw, 3.75rem); font-weight: 560; letter-spacing: -0.045em; line-height: 1.06; text-transform: none; }
 .page :global([data-faq-catalog]) { background: var(--id-canvas); }
+
+/* As the page slides over the pinned hero, the film eases back a little: the Daylight hand-off. Scroll-driven
+   where the browser supports it; elsewhere and under reduced motion the hero simply stays put. */
+@supports (animation-timeline: scroll()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .heroFrame { animation: heroAway linear both; animation-timeline: scroll(root); animation-range: 0 100svh; }
+    @keyframes heroAway { to { transform: scale(0.94); filter: brightness(0.97) saturate(0.95); } }
+  }
+}
