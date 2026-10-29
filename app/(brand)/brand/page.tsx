@@ -28,7 +28,10 @@ export default async function BrandHome({
     <div data-brand-home>
       <div className="bw-heading">
         <div>
-          <h1>{b.dashboard.title}</h1>
+          <div className="bw-title">
+            <h1>{b.dashboard.title}</h1>
+            {workspace.projects.length > 0 && <span className="bw-count-chip" data-campaign-total>{workspace.projects.length}</span>}
+          </div>
           <p>{b.dashboard.subtitle}</p>
         </div>
         {workspace.projects.length > 0 && access.canRequest && <a href={newProject} className="bw-button bw-primary">{b.newProject}</a>}

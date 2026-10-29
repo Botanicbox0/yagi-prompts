@@ -25,8 +25,14 @@ import { AestheticEngine } from './aesthetic-engine';
 import { ReviewStage } from './review-stage';
 import { BriefConcierge } from './brief-concierge';
 import { HumanHandoff } from './human-handoff';
+import { AmbientBleed } from './ambient-bleed';
 import type { BrandUsageView } from "@/lib/brands/usage/types";
 import type { ReactNode } from "react";
+
+/** With a cover, its main colour glows softly behind the masthead (brand host only, see workspace.css). */
+function Masthead({ cover, children }: { cover: boolean; children: ReactNode }) {
+  return cover ? <AmbientBleed className="bw-project-masthead">{children}</AmbientBleed> : <div>{children}</div>;
+}
 
 export function PostTable({
   posts,
@@ -150,7 +156,7 @@ export function ProjectDetail({
   const next = projectNextAction(p, studio ? "studio" : writable ? "approver" : "reader", b);
   return (
     <div data-brand-project={p.id}>
-      <div className={p.coverUrl ? "bw-project-masthead" : undefined}>
+      <Masthead cover={Boolean(p.coverUrl)}>
       {p.coverUrl && (
         <div className="bw-project-cover" data-project-cover>
           <img src={p.coverUrl} alt={`${b.cover.alt}: ${p.title}`} />
@@ -180,7 +186,7 @@ export function ProjectDetail({
           {b.status[p.status]}
         </span>
       </div>
-      </div>
+      </Masthead>
       {staffView && <StaffNotice b={b} manageHref={staffManageHref} />}
       {staffView && p.clientVisible === false && <p className="bw-note" data-project-unshared>{b.managed.prepared}</p>}
       {staffView && staffTools}
