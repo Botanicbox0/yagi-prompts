@@ -1,23 +1,29 @@
 # 크리에이터 후보 공유 (Brand shortlist)
 
 2026-10-28 · 브랜치 `claude/brand-shortlist` · 마이그레이션 0066/0146 (운영 적용됨)
-2026-10-29 · 선별(대기·공개·제외, 범위 필터, 캠페인 기준)과 새 카드 · 브랜치 `codex/shortlist-triage` · 마이그레이션 0068/0148 (**클라우드 적용 필요, 코드보다 먼저**)
+2026-10-29 · 선별(대기·공개·제외, 범위 필터, 캠페인 기준)과 새 카드 · 브랜치 `codex/shortlist-triage` · 마이그레이션 0068/0148 (운영 적용됨)
+2026-10-29 · 고객의 일괄 선별(선호·제외·되돌리기, 보이는 후보 모두 선택), 카드/리스트 보기, 섭외 확정 표시 · 브랜치 `codex/shortlist-choice` · 마이그레이션 0070 (**클라우드 적용 필요, 코드보다 먼저**)
 
-인플루언서 협업 캠페인에서 스튜디오가 추린 크리에이터 후보를 고객(브랜드 담당자)에게 보여 주고, 고객이 함께하고 싶은 후보를 **선호로 표시**하게 하는 기능이다. 섭외 확정은 TWINGS가 한다(지원자 탭의 선호 표시와 같은 원칙).
+인플루언서 협업 캠페인에서 스튜디오가 추린 크리에이터 후보를 고객(브랜드 담당자)에게 보여 주고, 고객이 함께하고 싶은 후보는 **선호**, 아닌 후보는 **제외**로 직접 골라내게 하는 기능이다. 섭외 확정은 TWINGS가 하고, 확정되면 카드에 **섭외 확정**이 붙는다(지원자 탭의 선호 표시와 같은 원칙).
 
 ## 고객이 보는 것
 
 - 위치: brand.twings.app 캠페인 화면의 **크리에이터 후보** 탭. 공개된 후보가 1명 이상일 때만 탭이 생긴다.
 - 볼 수 있는 사람: 그 캠페인을 볼 수 있는 모든 사람(브랜드 멤버, 캠페인 게스트, TWINGS 팀의 읽기 화면).
-- 선호 표시: 브랜드 owner/editor, "열람과 코멘트"로 초대된 캠페인 게스트. 조직 viewer·열람 전용 게스트·TWINGS 팀 화면은 표시할 수 없다.
+- 선호·제외 표시: 브랜드 owner/editor, "열람과 코멘트"로 초대된 캠페인 게스트. 조직 viewer·열람 전용 게스트·TWINGS 팀 화면은 표시할 수 없다(선택과 비교는 누구나).
+- 탭: **후보**(제외하지 않은 모두, 기본) · **선호** · **제외** · **섭외 확정**(확정된 사람이 있을 때만), 각각 인원. 제외한 후보는 후보 탭에서 빠져 제외 탭으로 간다. 제외 탭에서 "후보로 되돌리기".
+- 선택: 카드 왼쪽 위 체크(리스트는 줄 체크), **보이는 n명 모두 선택**. 탭이 숨긴 후보는 선택에서 자동으로 빠진다. 선택하면 아래 막대에서 선호로 표시 / 제외 / 표시 지우기, 2~4명이면 **비교하기**. 그래서 "몇 명 제외 → 남은 후보 모두 선택 → 선호"가 세 번의 클릭이다.
+- 바꾼 직후 알림의 **되돌리기**로 바로 전 상태로 돌린다.
+- 한 후보에 선호와 제외가 동시에 붙지 않는다(DB가 막는다). 하트를 누르면 제외가 풀리고, ✕를 누르면 선호가 풀린다.
+- 보기 방식: 오른쪽 위 아이콘 두 개로 **카드**(기본)와 **리스트**를 바꾼다. 리스트는 한 줄에 후보 한 명, 팔로워 · 90일 중간 조회수 · 참여율 · 광고 비중, 머리를 누르면 그 지표로 정렬. 고른 보기는 그 브라우저에 기억한다.
 - 카드 한 장 = 후보 한 명. 위에서부터:
-  - 4:3 초상 영역: 프로필 사진(크게)과, 사진의 대표색(`avatar_tone`)으로 칠한 배경. 오른쪽 위 하트가 선호 표시.
-  - 사실 라벨 최대 3개. 같은 카드의 숫자로 확인할 수 있는 규칙만 쓴다(`shortlistTags`): 조회수 강세(90일 중간 조회수 ≥ 팔로워의 60%), 반응 좋음(참여율 ≥ 이 후보들 중앙값의 1.3배), 광고 비중 낮음(≤ 15%), 꾸준한 업로드(30일 피드나 릴스 ≥ 10개). 마우스를 올리면 규칙이 보인다.
-  - 이름, `@핸들`(인스타그램 프로필 링크), 카테고리.
+  - 4:3 초상 영역: 프로필 사진(크게)과, 사진의 대표색(`avatar_tone`)으로 칠한 배경. 왼쪽 위 선택 체크, 오른쪽 위 ✕(제외)와 하트(선호), 아래쪽 사실 라벨.
+  - 사실 라벨 최대 4개. 같은 카드의 숫자로 확인할 수 있는 규칙만 쓴다(`shortlistTags`): 조회수 강세(90일 중간 조회수 ≥ 팔로워의 60%), 반응 좋음(참여율 ≥ 이 후보들 중앙값의 1.3배), 광고 비중 낮음(≤ 15%), 꾸준한 업로드(30일 피드나 릴스 ≥ 10개). 마우스를 올리면 규칙이 보인다.
+  - 이름, `@핸들`(인스타그램 프로필 링크), 카테고리, 표시(섭외 확정 · 선호 · 제외).
   - 큰 숫자 3개: 팔로워 · 90일 중간 조회수 · 참여율(피드·릴스 중 높은 값).
   - "이 후보들 중앙값 대비": 조회수·참여율·팔로워 막대, 가운데 눈금이 중앙값, `+32%`처럼 차이. 공개 후보가 3명 이상일 때만.
   - **지표 자세히**(접힘): 아래 표 전체.
-- 비교: 카드의 "비교"를 4명까지 골라 한 표로 본다. 각 줄에서 가장 높은 값이 굵게(광고 비중은 가장 낮은 값).
+- 비교: 2~4명을 선택하고 아래 막대의 **비교하기**. 한 표로 보고, 각 줄에서 가장 높은 값이 굵게(광고 비중은 가장 낮은 값).
 
 | 묶음 | 항목 |
 | --- | --- |
@@ -27,7 +33,7 @@
 | 릴스 | 30일 평균 릴스 수 · 평균 참여 · 참여율 · 평균 좋아요 · 평균 댓글 |
 | 조회수 | 90일 중간 조회수 · 90일 최대 조회수 |
 
-- 정렬: **팔로워 많은 순(기본)** / 조회수 순(90일 중간) / 참여율 순(피드·릴스 중 높은 값). "선호만 보기" 필터.
+- 정렬: **팔로워 많은 순(기본)** / 조회수 순(90일 중간) / 참여율 순(피드·릴스 중 높은 값).
 - 모르는 값은 `—`. 0으로 채우지 않는다.
 
 ## 절대 고객에게 가지 않는 것
@@ -41,7 +47,8 @@
 1. 관리자 캠페인 화면(`/admin/brand-workspace/{id}`) 또는 brand.twings.app 캠페인 화면(DB 관리자의 운영자 보기)의 **크리에이터 후보 관리**에서 캠페인 ID를 확인한다. 새 고객 캠페인은 brand.twings.app `/brand` → **새 캠페인 만들기**에서 바로 만들 수 있다([BRAND-STAFF-ACCESS.md](BRAND-STAFF-ACCESS.md) "운영자 캠페인 준비").
 2. 후보를 넣는다: JSON 파일 업로드, 또는 가져오기 워커가 `POST /api/brand-shortlist-worker/import`.
 3. 새 후보는 **대기** 상태(고객에게 안 보임). 아래 **선별**로 공개하거나 제외한다.
-4. 고객이 선호로 표시하면 관리 표에 "고객 선호"가 붙는다. 섭외 뒤 결과는 기존 캠페인 흐름(게시물·리포트)으로 이어진다.
+4. 고객이 선호·제외로 표시하면 관리 표에 "고객 선호"·"고객 제외"가 붙고 같은 이름의 탭으로 모아 볼 수 있다. 고객 제외는 스튜디오의 제외와 다르다: 고객 화면의 제외 탭에 남고, 고객이 되돌릴 수 있다.
+5. 섭외가 확정되면 가져오기가 `confirmed: true`를 보내 "섭외 확정"이 붙는다(관리 표에도 탭). 확정돼도 공개는 사람이 한다. 섭외 뒤 결과는 기존 캠페인 흐름(게시물·리포트)으로 이어진다.
 
 같은 핸들을 다시 보내면 갱신이다: 지표가 있으면 지표 묶음과 기준일을 통째로 바꾸고, 새로 안 보낸 이름·카테고리·사진은 그대로 둔다. 공개·제외 여부와 고객의 선호 표시는 건드리지 않는다. 그래서 **다시 보지 않을 후보는 삭제가 아니라 제외**한다: 삭제한 핸들은 다음 가져오기 때 대기로 다시 들어온다.
 
@@ -72,6 +79,7 @@
       "displayName": "표시 이름",
       "category": "뷰티·패션",
       "avatar": "data:image/jpeg;base64,...",
+      "confirmed": false,
       "metrics": {
         "followers": 67000, "following": 164, "posts": 562,
         "feedPosts30d": 18, "feedEngagement": 343, "feedEngagementRate": 0.5, "feedLikes": 330, "feedComments": 13,
@@ -88,6 +96,7 @@
 - `displayName` ≤ 60자, `category` ≤ 40자, 둘 다 선택.
 - `avatar`: 선택. PNG/JPEG/WebP data URL, 원본 300 KB 이하. 선언한 형식과 실제 바이트가 다르면 거절.
 - `metrics`: 전부 선택. 정수(팔로워·팔로우·게시물·조회수), 평균(소수 1자리까지), 비율(%, 0~100, `0.5`는 0.5 %). 모르면 빼거나 `null`.
+- `confirmed`: 선택. 이 캠페인 섭외가 확정됐으면 `true`, 확정이 취소됐으면 `false`. 빼면 지금 표시를 그대로 둔다. 지표 없이 `{ "handle": "…", "confirmed": false }`만 보내도 된다(지표는 그대로).
 - `measuredOn`: 지표를 읽은 날(한국 시간), `YYYY-MM-DD`.
 - 한 요청에 후보 최대 30명, 본문 4 MB 이하. 더 많으면 나눠 보낸다.
 
@@ -115,19 +124,20 @@ Content-Type: application/json
 | 무엇 | 어디 |
 | --- | --- |
 | 스키마·거절 규칙 | `lib/brands/shortlist/schema.ts` |
-| 가져오기·공개·선별·캠페인 기준·선호·사진 권한 | `lib/brands/shortlist/service.ts` |
+| 가져오기·공개·선별·캠페인 기준·선호·고객 선별·사진 권한 | `lib/brands/shortlist/service.ts` (`chooseShortlistCandidates`) |
 | 범위 판정·라벨·중앙값 | `lib/brands/shortlist/format.ts` (`shortlistFit`, `shortlistTags`, `shortlistMedian`) |
 | 워커 경로 | `lib/brands/shortlist/http.ts`, `app/api/brand-shortlist-worker/import/route.ts` |
 | 고객 화면 | `components/brand-workspace/shortlist.tsx`, 캠페인 페이지 `app/(brand)/brand/projects/[id]/page.tsx` |
 | 관리자 화면 | `components/brand-workspace/shortlist-admin.tsx`, 선별 `components/brand-workspace/shortlist-triage.tsx`, 오퍼레이션 `brandWorkspace.shortlist{Import,Share,Triage,Criteria,Remove}` |
-| 선호 표시 API | `/api/brand-workspace` `shortlist.pick` |
+| 고객 선별 API | `/api/brand-workspace` `shortlist.choose`(여러 명: 선호·제외·지우기), `shortlist.pick`(하트 하나, 예전 호환) |
 | 테스트 | `tests/brands/shortlist.test.ts`, `tests/brands/shortlist-ui.test.tsx`, 스튜디오 문 `tests/brands/studio-door-hardening.test.ts` |
 
 ## 마이그레이션
 
 1. `0066_core_brand_shortlist.sql` — `brand_shortlist_candidates`(지표 키 제한, 핸들·사진 모양 검사). 운영 적용됨.
 2. `0146_glue_brand_shortlist.sql` — RLS 강제, 브라우저 키 권한 없음, service_role만. 운영 적용됨.
-3. `0068_core_brand_shortlist_triage.sql` — `excluded_at`/`excluded_by`, `avatar_tone`, `brand_projects.shortlist_criteria`(범위 키 4개만). **클라우드 적용 필요, 선별 코드 배포 전에.** 적용 전에 코드가 나가면 후보 화면이 새 열을 못 읽어 비고, 가져오기 워커가 `avatar_tone`을 못 써서 실패한다.
-4. `0148_glue_brand_shortlist_triage.sql` — `brand_projects.shortlist_criteria` 갱신 권한(service_role). 0068과 함께.
+3. `0068_core_brand_shortlist_triage.sql` — `excluded_at`/`excluded_by`, `avatar_tone`, `brand_projects.shortlist_criteria`(범위 키 4개만). 운영 적용됨.
+4. `0148_glue_brand_shortlist_triage.sql` — `brand_projects.shortlist_criteria` 갱신 권한(service_role). 0068과 함께. 운영 적용됨.
+5. `0070_core_brand_shortlist_choice.sql` — `passed_at`/`passed_by`(고객 제외), `confirmed_at`(섭외 확정), "선호이면서 제외" 금지. glue 없음(0146의 표 전체 권한이 새 열도 덮는다). **클라우드 적용 필요, 코드 배포 전에**: 적용 전에 코드가 나가면 후보 화면이 새 열을 못 읽고, 가져오기가 `confirmed_at`을 못 쓴다.
 
 0066 적용 전에도 배포는 안전했다: 표가 없으면 후보 탭이 생기지 않고, 관리자 패널은 "아직 가져온 후보가 없어요"를 보이며, 가져오기는 `storage_unavailable`로 끝난다.

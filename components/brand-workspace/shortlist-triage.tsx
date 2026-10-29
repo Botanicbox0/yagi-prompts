@@ -10,7 +10,7 @@ import {
 } from "@/lib/brands/shortlist/format";
 
 type Copy = Dictionary["brandWorkspace"]["shortlistAdmin"];
-type Tab = "all" | ShortlistState | "picked";
+type Tab = "all" | ShortlistState | "picked" | "passed" | "confirmed";
 type Move = "share" | "exclude" | "wait";
 type Moves = Partial<Record<Move, string[]>>;
 const TARGET: Record<Move, ShortlistState> = { share: "shared", exclude: "excluded", wait: "waiting" };
@@ -72,10 +72,12 @@ export function ShortlistTriage({ projectId, candidates, criteria, newSince, doo
   const isNew = (c: StudioShortlistCandidate) => stateOf(c) === "waiting" && Date.parse(c.createdAt) > since;
 
   const counts = useMemo(() => {
-    const n = { all: candidates.length, waiting: 0, shared: 0, excluded: 0, picked: 0 };
+    const n = { all: candidates.length, waiting: 0, shared: 0, excluded: 0, picked: 0, passed: 0, confirmed: 0 };
     for (const c of candidates) {
       n[stateOf(c)]++;
       if (c.picked && stateOf(c) === "shared") n.picked++;
+      if (c.passed && stateOf(c) === "shared") n.passed++;
+      if (c.confirmed) n.confirmed++;
     }
     return n;
   }, [candidates, stateOf]);
@@ -84,7 +86,9 @@ export function ShortlistTriage({ projectId, candidates, criteria, newSince, doo
     const q = query.trim().replace(/^@/, "").toLowerCase();
     const rows = candidates.filter((c) => {
       const state = stateOf(c);
-      if (tab === "picked" ? !(c.picked && state === "shared") : tab !== "all" && state !== tab) return false;
+      const inTab = tab === "all" ? true : tab === "confirmed" ? c.confirmed
+        : tab === "picked" || tab === "passed" ? c[tab] && state === "shared" : state === tab;
+      if (!inTab) return false;
       if (q && !c.handle.includes(q) && !(c.displayName ?? "").toLowerCase().includes(q)) return false;
       return !hasFilters || shortlistFit(c.metrics, filters) === "in";
     });
@@ -235,8 +239,9 @@ export function ShortlistTriage({ projectId, candidates, criteria, newSince, doo
 
   const tabs: Array<[Tab, string, number]> = [
     ["all", t.tabs.all, counts.all], ["waiting", t.tabs.waiting, counts.waiting], ["shared", t.tabs.shared, counts.shared],
-    ["excluded", t.tabs.excluded, counts.excluded], ["picked", t.tabs.picked, counts.picked],
+    ["excluded", t.tabs.excluded, counts.excluded], ["picked", t.tabs.picked, counts.picked], ["passed", t.tabs.passed, counts.passed],
   ];
+  if (counts.confirmed > 0) tabs.push(["confirmed", t.tabs.confirmed, counts.confirmed]);
   const actionsFor = (state: ShortlistState): Move[] => (["share", "exclude", "wait"] as Move[]).filter((m) => TARGET[m] !== state);
 
   return (
@@ -339,7 +344,9 @@ export function ShortlistTriage({ projectId, candidates, criteria, newSince, doo
                           <div className="bw-triage-marks">
                             {isNew(c) && <span className="bw-triage-mark" data-mark="new">{t.isNew}</span>}
                             {fit && <span className="bw-triage-mark" data-mark={`fit-${fit}`} data-triage-fit={fit}>{t.fit[fit]}</span>}
+                            {c.confirmed && <span className="bw-shortlist-badge" data-tone="booked" title={t.confirmed} data-triage-confirmed>{copy.states.confirmed}</span>}
                             {c.picked && <span className="bw-shortlist-badge" title={t.picked}>{copy.states.picked}</span>}
+                            {c.passed && <span className="bw-shortlist-badge" data-tone="muted" title={t.passed} data-triage-passed>{copy.states.passed}</span>}
                           </div>
                         </div>
                       </div>

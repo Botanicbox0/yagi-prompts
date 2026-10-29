@@ -15,7 +15,7 @@ import { shortlistWorkerAuthorized } from "@/lib/brands/shortlist/http";
 /** The brand's shortlist card, KO and EN. Fixture handles and figures only. */
 const one: ShortlistCandidate = {
   id: "00000000-0000-4000-8000-000000000001", platform: "instagram", handle: "fixture.one", displayName: "Fixture One", category: "뷰티",
-  avatarUrl: "/api/brand-workspace/shortlist/00000000-0000-4000-8000-000000000001/avatar?v=abcdefabcdef", avatarTone: "#3366cc", measuredOn: "2026-10-27", picked: true,
+  avatarUrl: "/api/brand-workspace/shortlist/00000000-0000-4000-8000-000000000001/avatar?v=abcdefabcdef", avatarTone: "#3366cc", measuredOn: "2026-10-27", picked: true, passed: false, confirmed: false,
   metrics: { followers: 67000, following: 164, posts: 562, feedPosts30d: 18, feedEngagement: 343, feedEngagementRate: 0.5, feedLikes: 330, feedComments: 13,
     adPosts30d: 9.3, adShare: 53, adEngagement: 290, adEngagementRate: 0.4, adLikes: 279, adComments: 12,
     reelsPosts30d: 20, reelsEngagement: 266, reelsEngagementRate: 0.4, reelsLikes: 261, reelsComments: 4.2, viewsMedian90d: 10000, viewsMax90d: 39000 },
@@ -41,7 +41,8 @@ describe("campaign shortlist", () => {
     expect(html).toContain('data-shortlist-picked="true"');
     expect(html).toContain('data-shortlist-pick="on"');
     expect(html).toContain('data-shortlist-pick="off"');
-    expect(html).toContain("선호만 보기 1");
+    expect(html).toMatch(/data-shortlist-tab="picked">선호(<!-- -->)? <b>1<\/b>/);
+    expect(html).toMatch(/data-shortlist-tab="open">후보(<!-- -->)? <b>2<\/b>/);
     // A candidate with only a follower count shows no empty table rows.
     const two = html.slice(html.indexOf('data-shortlist-candidate="fixture_two"'));
     expect(two).not.toContain("data-shortlist-row");
@@ -60,7 +61,7 @@ describe("campaign shortlist", () => {
     expect(card).toContain('data-shortlist-tag="organic"');
     expect(card).toContain("조회수 강세");
     expect(card).toContain('title="광고 비중이 15% 이하예요."');
-    expect(html).toContain('data-shortlist-compare="fixture.one"');
+    expect(html).toContain('data-shortlist-select="fixture.one"');
     // Two candidates are not enough for a median.
     expect(renderToStaticMarkup(<CampaignShortlist candidates={[one, bare]} canPick copy={getDictionary("ko").brandWorkspace.shortlist} locale="ko" />)).not.toContain("중앙값 대비");
   });
@@ -77,6 +78,52 @@ describe("campaign shortlist", () => {
     for (const locale of ["ko", "en"] as const) {
       const html = renderToStaticMarkup(<CampaignShortlist candidates={[one, bare]} canPick copy={getDictionary(locale).brandWorkspace.shortlist} locale={locale} />);
       expect(html).not.toMatch(/₩|\d\s*원|단가|\bfees?\b|\bprice|brand\s*azine|브랜더진|페널티|penalty/i);
+    }
+  });
+
+  it("moves set-aside candidates to their own tab and shows confirmed bookings", () => {
+    const passed = { ...third, picked: false, passed: true };
+    const booked = { ...one, confirmed: true };
+    const html = renderToStaticMarkup(<CampaignShortlist candidates={[booked, bare, passed]} canPick copy={getDictionary("ko").brandWorkspace.shortlist} locale="ko" />);
+    // The main tab leaves the set-aside card out; the counts say where everyone is.
+    expect(html).not.toContain('data-shortlist-candidate="fixture_three"');
+    expect(html).toMatch(/data-shortlist-tab="open">후보(<!-- -->)? <b>2<\/b>/);
+    expect(html).toMatch(/data-shortlist-tab="passed">제외(<!-- -->)? <b>1<\/b>/);
+    expect(html).toMatch(/data-shortlist-tab="confirmed">섭외 확정(<!-- -->)? <b>1<\/b>/);
+    const card = html.slice(html.indexOf('data-shortlist-candidate="fixture.one"'));
+    expect(card).toContain('data-shortlist-confirmed="true"');
+    expect(card).toContain('data-shortlist-pass="off"');
+    // Everyone on screen can be selected at once; cards and list are both offered, cards first.
+    expect(html).toContain("보이는 2명 모두 선택");
+    expect(html).toMatch(/aria-pressed="true"[^>]*data-shortlist-view-button="cards"/);
+    expect(html).toMatch(/aria-pressed="false"[^>]*data-shortlist-view-button="list"/);
+    // No booking yet means no booked tab.
+    expect(renderToStaticMarkup(<CampaignShortlist candidates={[one, bare]} canPick copy={getDictionary("ko").brandWorkspace.shortlist} locale="ko" />)).not.toContain('data-shortlist-tab="confirmed"');
+  });
+
+  it("lays the same candidates out as a sortable list with the same controls", () => {
+    const html = renderToStaticMarkup(<CampaignShortlist candidates={[bare, one, third]} canPick copy={getDictionary("en").brandWorkspace.shortlist} locale="en" defaultView="list" />);
+    expect(html).toContain('data-shortlist-view="list"');
+    expect(html).toContain('data-shortlist-list="3"');
+    expect(html).not.toContain("data-shortlist-candidate=");
+    const order = ["fixture.one", "fixture_three", "fixture_two"].map((h) => html.indexOf(`data-shortlist-row-candidate="${h}"`));
+    expect(order.every((n) => n > 0)).toBe(true);
+    expect(order).toEqual([...order].sort((a, b) => a - b));
+    expect(html).toMatch(/aria-sort="descending"><button[^>]*data-shortlist-sort-head="followers"/);
+    expect(html).toContain('data-shortlist-select="fixture_two"');
+    expect(html).toContain('data-shortlist-pick="on"');
+    expect(html).toContain('data-shortlist-pass="off"');
+    expect(html).toContain("67K");
+    expect(html).toContain("53%");
+  });
+
+  it("lets a read-only viewer select and compare but not mark", () => {
+    for (const defaultView of ["cards", "list"] as const) {
+      const html = renderToStaticMarkup(<CampaignShortlist candidates={[one, bare]} canPick={false} copy={getDictionary("ko").brandWorkspace.shortlist} locale="ko" defaultView={defaultView} />);
+      expect(html).not.toContain("data-shortlist-pick=");
+      expect(html).not.toContain("data-shortlist-pass=");
+      expect(html).toContain('data-shortlist-select="fixture.one"');
+      expect(html).toContain("고른 후보 비교는 누구나 할 수 있어요.");
     }
   });
 
@@ -129,6 +176,20 @@ describe("campaign shortlist", () => {
     expect(html).toMatch(new RegExp(`<button type="submit" value="share:${bare.id}"[^>]*name="one"`));
     expect(html).toMatch(new RegExp(`<button type="submit" value="wait:${third.id}"[^>]*name="one"`));
     expect(html).not.toContain(`value="exclude:${third.id}"`);
+  });
+
+  it("shows the studio what the client set aside and who is booked", () => {
+    const at = (c: ShortlistCandidate, state: StudioShortlistCandidate["state"]): StudioShortlistCandidate =>
+      ({ ...c, state, shared: state === "shared", pickedAt: null, createdAt: "2026-10-01T00:00:00.000Z", updatedAt: "2026-10-01T00:00:00.000Z" });
+    const door: TriageDoor = { path: "/admin/do", headers: {}, opField: "_op", backField: "_back", back: "/admin/brand-workspace/x#shortlist-admin", triageOp: "brandWorkspace.shortlistTriage", criteriaOp: "brandWorkspace.shortlistCriteria" };
+    const list = [at({ ...one, picked: false, passed: true, confirmed: true }, "shared"), at(bare, "waiting")];
+    const html = renderToStaticMarkup(<ShortlistTriage projectId="00000000-0000-4000-8000-0000000000aa" candidates={list} criteria={null}
+      newSince="2026-10-28T12:00:00.000Z" door={door} copy={getDictionary("ko").brandWorkspace.shortlistAdmin} locale="ko" />);
+    expect(html).toMatch(/data-triage-tab="passed">고객 제외(<!-- -->)? <b>1<\/b>/);
+    expect(html).toMatch(/data-triage-tab="confirmed">섭외 확정(<!-- -->)? <b>1<\/b>/);
+    const row = html.slice(html.indexOf('data-triage-row="fixture.one"'));
+    expect(row).toContain('data-triage-passed="true"');
+    expect(row).toContain('data-triage-confirmed="true"');
   });
 
   it("reads a row's button, a selection or the split lists into one triage call", () => {

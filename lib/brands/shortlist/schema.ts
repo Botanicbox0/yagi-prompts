@@ -58,6 +58,8 @@ export const ShortlistCandidateSchema = z.object({
   /** A small profile picture as a data URL; re-encoded server-side, never stored as a link. */
   avatar: AvatarSchema.nullable().optional(),
   metrics: ShortlistMetricsSchema.default({}),
+  /** The creator's booking for this campaign is confirmed (`false` takes it back); absent leaves it as it is. */
+  confirmed: z.boolean().optional(),
 }).strict();
 export type ShortlistCandidateInput = z.output<typeof ShortlistCandidateSchema>;
 
@@ -86,6 +88,18 @@ export const ShortlistShareSchema = z.object({
 }).strict();
 export const ShortlistRemoveSchema = z.object({ projectId: z.uuid(), candidateId: z.uuid() }).strict();
 export const ShortlistPickSchema = z.object({ candidateId: z.uuid(), picked: z.boolean() }).strict();
+
+/**
+ * The brand's own sorting of shared candidates: prefer, set aside, or clear the mark, for one or many
+ * at once (a selection on its page). Every ID must be a shared candidate of the same campaign.
+ */
+export const SHORTLIST_CHOICES = ['picked', 'passed', 'none'] as const;
+export type ShortlistChoice = typeof SHORTLIST_CHOICES[number];
+export const SHORTLIST_CHOOSE_MAX = 200;
+export const ShortlistChooseSchema = z.object({
+  candidateIds: z.array(z.uuid()).min(1).max(SHORTLIST_CHOOSE_MAX).refine(list => new Set(list).size === list.length, 'duplicate'),
+  choice: z.enum(SHORTLIST_CHOICES),
+}).strict();
 
 /**
  * The studio's triage (docs/BRAND-SHORTLIST.md "선별"): move candidates between waiting, shared and
