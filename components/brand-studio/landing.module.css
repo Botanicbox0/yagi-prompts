@@ -213,7 +213,26 @@
 .scenes .tile { aspect-ratio: 4 / 5; }
 .clips { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .clips .tile { aspect-ratio: 3 / 4; }
-.clipWide { grid-column: 1 / -1; aspect-ratio: 16 / 9 !important; }
+/* Product shot → the ad made from it. The still's column is 0.4219 of the video's, so at the video's 16:9 height it is exactly 3:4. */
+.adPair { position: relative; grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 0.4219fr) minmax(0, 1fr); gap: 8px; }
+.adPair > .tile { aspect-ratio: 16 / 9; }
+.adPair > .adStill { aspect-ratio: auto; height: 100%; }
+.adArrow {
+  position: absolute;
+  top: 50%;
+  left: calc((100% - 8px) * 0.2967 + 4px);
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  background: var(--lp-paper);
+  border: 1px solid var(--lp-line);
+  font-size: 14px;
+  color: var(--lp-ink);
+  transform: translate(-50%, -50%);
+}
 
 /* ---------- Creator campaign ---------- */
 .mosaic { margin-top: 32px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
