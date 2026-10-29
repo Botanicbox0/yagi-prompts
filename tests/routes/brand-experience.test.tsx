@@ -6,11 +6,13 @@ vi.mock('@/components/marketing/chrome', () => ({ MarketingNav: () => null, Mark
 vi.mock('@/lib/seo/faq-section', () => ({ FaqSection: () => null }));
 import BrandsPage from '@/app/(marketing)/[locale]/brands/page';
 
+const render = async (locale: 'ko' | 'en') => renderToStaticMarkup(await BrandsPage({ params: Promise.resolve({ locale }) }));
+
 describe('the brand page shows the service before asking visitors to enquire', () => {
   for (const locale of ['ko', 'en'] as const) {
     it(`keeps ${locale} case visitors on real posts instead of a Morphic workflow`, async () => {
-      const html = renderToStaticMarkup(await BrandsPage({ params: Promise.resolve({ locale }) }));
-      // The landing's one blue sits on a wrapper around the whole page, nav and footer included.
+      const html = await render(locale);
+      // The identity wrapper sits around the whole page, nav and footer included.
       expect(html.indexOf('<div data-brand-accent')).toBeGreaterThan(-1);
       expect(html.indexOf('<div data-brand-accent')).toBeLessThan(html.indexOf('id="main"'));
       expect(html).not.toMatch(/href="https:\/\/morphic\.com\//);
@@ -22,107 +24,98 @@ describe('the brand page shows the service before asking visitors to enquire', (
       expect(html.match(/data-case-post="/g)).toHaveLength(4);
       expect(html.match(/data-post-market="KR"/g)).toHaveLength(2);
       expect(html.match(/data-post-market="JP"/g)).toHaveLength(2);
-      // Internal workspace details are evidence sources, never visitor destinations.
       expect(html).not.toMatch(/href="https:\/\/brand\.twings\.app\/brand\/projects\//);
     });
   }
 
-  // 2026-10-29 founder reviews: one promise, a hero film instead of stills, three doors, both proofs, no red.
-  it('leads with the hero film and three doors, then proves the asset studio and the creator campaign', async () => {
-    const html = renderToStaticMarkup(await BrandsPage({ params: Promise.resolve({ locale: 'ko' }) }));
-    const order = ['data-studio-hero', 'data-studio-contrast', 'data-studio-assets', 'data-campaign-scale', 'data-production-service', 'data-brands'];
+  // 2026-10-30 founder brief: the brand's own AI media engine. Fixed layer vs what changes, the real workflow,
+  // the work, creator scale, production and what comes next, one blue closing.
+  it('runs hero → problem → engine → workflow → work → campaign → production → closing', async () => {
+    const html = await render('ko');
+    const order = ['data-v7-hero=', 'data-v7-problem=', 'data-v7-first=', 'data-v7-workflow=', 'data-v7-work=', 'data-v7-campaign=', 'data-v7-production=', 'data-v7-closing='];
     for (const marker of order) expect(html).toContain(marker);
     for (let i = 1; i < order.length; i++) expect(html.indexOf(order[i - 1]!)).toBeLessThan(html.indexOf(order[i]!));
-    // Hero: one film (per locale) of one product becoming shots, an ad and creator versions; no still bento.
+    expect(html).toContain('브랜드만의');
+    expect(html).toContain('AI 미디어 엔진');
+    // Hero: one inset film, three doors to sections that exist.
     expect(html).toContain('data-hero-film');
-    expect(html).toContain('src="/reel/landing/hero-ko.mp4"');
-    expect(html).toContain('poster="/reel/landing/hero-ko.jpg"');
-    for (const gone of ['data-hero-lock', 'data-hero-output', 'data-hero-grid']) expect(html).not.toContain(gone);
-    // Three doors, each to a section that exists on the page.
+    expect(html).toContain('src="/reel/landing/v7/hero.mp4"');
+    expect(html).toContain('poster="/reel/landing/v7/hero.jpg"');
     expect(html.match(/data-hero-door=/g)).toHaveLength(3);
-    for (const id of ['assets', 'campaign', 'production']) {
+    for (const id of ['work', 'campaign', 'production']) {
       expect(html).toContain(`data-hero-door="${id}"`);
       expect(html).toContain(`id="${id}"`);
     }
-    // Why not generic AI: three real same-product pairs, no competitor named.
+    // Why it all looks the same: three real same-product pairs in a wipe compare.
     expect(html.match(/data-contrast-pair=/g)).toHaveLength(3);
-    expect(html).toContain('data-brand-markets');
-    expect(html.match(/data-contrast-pillar=/g)).toHaveLength(3);
-    expect(html).toContain('절대 규칙');
-    // Asset studio: one brand kit; the eight products, scenes, try-on and clips are tabs, all in the initial HTML.
-    expect(html).toContain('data-brand-kit');
+    expect(html.match(/data-contrast-source=/g)).toHaveLength(3);
+    // The engine: a fixed layer, three changes, then how the fixed layer is built in three chapters.
+    expect(html).toContain('data-v7-engine');
+    expect(html.match(/data-engine-change=/g)).toHaveLength(3);
+    expect(html.match(/data-chapter="/g)).toHaveLength(3);
+    expect(html).toContain('data-hard-rules');
+    for (const stage of ['kit', 'memory', 'direction']) expect(html).toContain(`data-stage="${stage}"`);
+    // The workflow: six steps on one rail.
+    expect(html.match(/data-workflow-step=/g)).toHaveLength(6);
+    // The work: eight products, eight scenes, try-on, then 5-second clips and the two ads beside their products.
     expect(html.match(/data-range-product=/g)).toHaveLength(8);
     expect(html.match(/data-asset-scene=/g)).toHaveLength(8);
-    expect(html.match(/data-asset-clip=/g)).toHaveLength(5);
-    // Each ad sits right after the product shot it shows: the heart perfume, then the lip gloss.
+    expect(html.match(/data-asset-panel=/g)).toHaveLength(4);
+    expect(html.match(/hidden="" data-asset-panel=/g)).toHaveLength(3);
     expect(html.match(/data-asset-ad-still=/g)).toHaveLength(2);
     for (const [still, clip] of [['highteen-product', 'highteen'], ['beauty-ad-product', 'ad']]) {
       expect(html.indexOf(`src="/reel/landing/${still}.webp"`)).toBeGreaterThan(-1);
       expect(html.indexOf(`src="/reel/landing/${still}.webp"`)).toBeLessThan(html.indexOf(`data-asset-clip="${clip}"`));
     }
-    expect(html.indexOf('data-asset-clip="highteen"')).toBeLessThan(html.indexOf('data-asset-clip="ad"'));
+    expect(html.match(/data-asset-clip=/g)).toHaveLength(5);
     expect(html).toContain('같은 향수로 만든 20초 광고');
-    expect(html.match(/data-asset-panel=/g)).toHaveLength(4);
-    expect(html.match(/hidden="" data-asset-panel=/g)).toHaveLength(3);
-    expect(html.indexOf('data-asset-panel="0"')).toBeLessThan(html.indexOf('data-range-product='));
-    // Creator campaign: the mosaic, the likeness and data promises, then the Morphic case.
+    // Creator campaign: the feed, the consent line, then the Morphic case.
     expect(html.match(/data-feed-post=/g)).toHaveLength(4);
-    expect(html).toContain('data-brand-scale-pillars');
-    expect(html).toContain('AI 학습에 쓰지 않습니다');
-    expect(html).toContain('계정마다 독립된 공간에 암호화해 보관합니다');
+    expect(html).toContain('본인 얼굴 사용에 동의한 뒤 참여합니다');
     expect(html.indexOf('data-campaign-scale')).toBeLessThan(html.indexOf('id="morphic-case"'));
     expect(html).toContain('/ko/brands/stories/morphic');
-    expect(html).toContain('광고 한 편으로');
-    // Production stays a quiet third offer, with its decks and collaborators.
+    // Production: films, decks, and what comes next, each item labelled.
     expect(html).toContain('data-production-films');
-    expect(html).toContain('data-production-collabs');
-    expect(html).toContain('data-company-deck');
     expect(html).toContain('https://pitch.com/v/yagi-production-wokrs-vsrgfd');
     expect(html).toContain('https://pitch.com/v/yagi-workshop_introduction-vbujun');
-    // The enquiry form keeps its fields and its Lenis escape.
+    expect(html.match(/data-v7-next[\s\S]*?<\/aside>/)?.[0].match(/data-status="soon"/g)).toHaveLength(5);
+    // The closing is the enquiry anchor, and the form keeps its fields and its Lenis escape.
+    expect(html).toMatch(/<section id="brands" data-v7-closing="true" data-brands="true"/);
     expect(html).toMatch(/<dialog[^>]*data-brand-inquiry-dialog[^>]*data-lenis-prevent/);
     expect(html).toContain('name="contactRole"');
-    // Retired: the bottle orbit, the 41-frame mood wall, the five-tab service sprawl, YAGI red.
-    for (const gone of ['data-studio-orbit', 'data-mood-tile', 'data-format-select', 'data-service-example', 'data-hero-cinema-grid']) expect(html).not.toContain(gone);
-    expect(html).not.toMatch(/ED1E1E|237,\s*30,\s*30/i);
-    expect(html).not.toContain('빠르게 회신드립니다.</p></div><div');
   });
 
   it('keeps videos cheap and controllable before interaction', async () => {
-    const html = renderToStaticMarkup(await BrandsPage({ params: Promise.resolve({ locale: 'en' }) }));
-    expect(html.match(/preload="none"/g)?.length).toBeGreaterThanOrEqual(6);
+    const html = await render('en');
+    expect(html.match(/preload="none"/g)?.length).toBeGreaterThanOrEqual(8);
     expect(html).toContain('playsInline=""');
     expect(html).toContain('poster="/reel/landing/beauty-ad.jpg"');
-    expect(html).toContain('poster="/reel/landing/hero-en.jpg"');
-    expect(html).toContain('data-video-control');
-    // The landing's own loops start only when on screen (LoopVideo), never from the markup.
+    expect(html).toContain('poster="/reel/landing/v7/hero.jpg"');
+    // The landing's own loops start only when on screen (Film), never from the markup.
     expect(html).not.toMatch(/<video[^>]*data-loop-video[^>]*autoPlay|<video[^>]*autoPlay[^>]*data-loop-video/);
   });
 
   for (const locale of ['ko', 'en'] as const) {
-    it(`is honest in ${locale} about what is live, beta and early access`, async () => {
-      const html = renderToStaticMarkup(await BrandsPage({ params: Promise.resolve({ locale }) }));
+    it(`is honest in ${locale}: labels, approved figures, no promises the policy does not make`, async () => {
+      const html = await render(locale);
       const ko = locale === 'ko';
-      expect(html).toContain(ko ? 'TWINGS 브랜드 스튜디오' : 'TWINGS brand studio');
-      expect(html).toContain('data-campaign-hero');
-      expect(html).toContain('data-campaign-proof');
-      expect(html.match(/data-early-access="early"/g)).toHaveLength(1);
-      expect(html.match(/data-early-access="beta"/g)).toHaveLength(1);
-      expect(html.match(/data-early-access="live"/g)).toHaveLength(1);
-      expect(html).toContain(ko ? '예시 화면' : 'Example screen');
-      // Every picture of a person is labelled: the film's model, the try-on model, the creator examples.
-      expect(html).toContain(ko ? '모델은 가상 인물입니다' : 'The model is a virtual person');
-      expect(html).toContain(ko ? '가상 인물 예시' : 'Virtual person example');
-      // Try-on (beta): both modes ship in the HTML.
-      expect(html.match(/data-vto-panel=/g)).toHaveLength(2);
-      expect(html).toMatch(/hidden="" data-vto-panel="free"/);
-      // Only approved figures, pinned to the named case.
+      // Unbuilt platform features carry their labels; the campaign service is live.
+      expect(html).toContain(ko ? '얼리 액세스' : 'Early access');
+      expect(html).toContain(ko ? '진행 중' : 'Live');
+      expect(html).toContain(ko ? '지금은 YAGI 스튜디오가 이 순서로 직접 만듭니다' : 'Today the YAGI studio runs these steps by hand');
+      expect(html).toContain(ko ? '예시 화면입니다' : 'Example screens');
+      expect(html).toContain(ko ? '가상 인물 예시' : 'Fictional example');
       expect(html).toContain(ko ? '200만' : '2M+');
-      // The example library is a client campaign: its brand name and packaging never appear.
+      // Data-handling promises the privacy policy does not make, and an unapproved headcount (2026-10-30 fact check).
+      for (const gone of ['AI 학습에 쓰지 않습니다', '즉시 파기', '암호화해 보관', '수십 명', 'not used for AI training', 'dozens of creators']) expect(html).not.toContain(gone);
+      // No pricing, no client names beyond the public Morphic case, no client packaging.
+      expect(html).not.toContain('pricing.yagiworkshop.xyz');
+      expect(html).not.toMatch(/Lafayette|라파예트|더현대|HYUNDAI/i);
       expect(html).not.toMatch(/L['’]?H\.?A\.?S/i);
-      // No competitor names, no credit or price promises before the founder sets them (§21.7).
-      expect(html).not.toMatch(/Dropbox|Midjourney|Runway|Figma|Photoshop|Playbook|Typeface|Higgsfield|Nano Banana|Seedream/);
+      // No competitor or engine names, no credit promises, no YAGI red.
+      expect(html).not.toMatch(/Dropbox|Midjourney|Runway|Photoshop|Playbook|Typeface|Higgsfield|Nano Banana|Seedream|Seedance|Kling|GPT Image/);
       expect(html).not.toMatch(/credits?\b|크레딧/i);
+      expect(html).not.toMatch(/ED1E1E|237,\s*30,\s*30/i);
     });
   }
 });

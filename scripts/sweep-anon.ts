@@ -1423,23 +1423,27 @@ async function sweepCampaigns(): Promise<void> {
     expectPresent(`/${locale}/campaigns preserves old brand bookmarks`, listing.body, 'data-legacy-brand-entry');
     const brand = await get(`/${locale}/brands`);
     expectEqual(`/${locale}/brands renders 200`, brand.status, 200);
-    for (const marker of ['data-campaign-hero', 'data-campaign-proof', 'data-brands', 'data-case-study', 'data-customer-story', 'data-audience-switch', 'data-brand-scale-pillars']) {
+    for (const marker of ['data-campaign-hero', 'data-campaign-proof', 'data-brands', 'data-case-study', 'data-customer-story', 'data-audience-switch']) {
       expectPresent(`/${locale}/brands carries ${marker}`, brand.body, marker);
     }
-    // 2026-10-29 landing v6: hero film + three doors, why-not-generic, asset studio, creator campaign, production.
-    for (const marker of ['data-studio-hero', 'data-hero-film', 'data-hero-doors', 'data-studio-contrast', 'data-studio-assets', 'data-brand-kit', 'data-studio-vto', 'data-campaign-scale', 'data-studio-feed', 'data-production-service']) {
+    // 2026-10-30 landing v7: the brand's own AI media engine. Hero film, compare, fixed vs changing layer,
+    // three chapters, six-step workflow, the work, creator campaign, production + what comes next, blue closing.
+    for (const marker of ['data-v7-hero', 'data-hero-film', 'data-hero-doors', 'data-v7-problem', 'data-v7-first', 'data-v7-engine', 'data-v7-workflow', 'data-v7-work', 'data-studio-assets', 'data-studio-vto', 'data-v7-campaign', 'data-campaign-scale', 'data-studio-feed', 'data-v7-production', 'data-production-service', 'data-v7-next', 'data-v7-closing']) {
       expectPresent(`/${locale}/brands carries ${marker}`, brand.body, marker);
     }
-    expectPresent(`/${locale}/brands hero plays its own-language film`, brand.body, `/reel/landing/hero-${locale}.mp4`);
+    expectPresent(`/${locale}/brands hero plays the blue-world film`, brand.body, '/reel/landing/v7/hero.mp4');
     expectEqual(`/${locale}/brands hero opens three doors`, (brand.body.match(/data-hero-door=/g) ?? []).length, 3);
-    expectAbsent(`/${locale}/brands retired the hero still bento`, brand.body, 'data-hero-output');
     expectEqual(`/${locale}/brands compares three same-product pairs`, (brand.body.match(/data-contrast-pair=/g) ?? []).length, 3);
+    expectEqual(`/${locale}/brands offers three changes on the engine`, (brand.body.match(/data-engine-change=/g) ?? []).length, 3);
+    expectEqual(`/${locale}/brands shows six workflow steps`, (brand.body.match(/data-workflow-step=/g) ?? []).length, 6);
     expectEqual(`/${locale}/brands shows the eight-product range`, (brand.body.match(/data-range-product=/g) ?? []).length, 8);
     expectEqual(`/${locale}/brands ships every scene in the HTML`, (brand.body.match(/data-asset-scene=/g) ?? []).length, 8);
     expectEqual(`/${locale}/brands ships every clip in the HTML`, (brand.body.match(/data-asset-clip=/g) ?? []).length, 5);
     expectEqual(`/${locale}/brands pairs each ad with its product shot`, (brand.body.match(/data-asset-ad-still=/g) ?? []).length, 2);
     expectPresent(`/${locale}/brands ships the perfume ad's product shot`, brand.body, '/reel/landing/highteen-product.webp');
     expectPresent(`/${locale}/brands ships the lip gloss ad's product shot`, brand.body, '/reel/landing/beauty-ad-product.webp');
+    expectAbsent(`/${locale}/brands links no price estimate`, brand.body, 'pricing.yagiworkshop.xyz');
+    expectAbsent(`/${locale}/brands makes no data-destruction promise`, brand.body, locale === 'ko' ? '즉시 파기' : 'deleted right after');
     for (const gone of ['data-studio-orbit', 'data-mood-tile', 'data-format-select', 'data-service-example']) {
       expectAbsent(`/${locale}/brands retired ${gone}`, brand.body, gone);
     }
