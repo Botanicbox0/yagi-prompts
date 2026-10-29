@@ -1241,24 +1241,38 @@ async function sweepMakers(): Promise<void> {
     expectEqual(`${locale}: …and its brand side "${brand}"`, side('brand'), brand);
   }
 
-  console.log(`\n/ko/video — ${KO_TERMS.studioCollection}, then ${KO_TERMS.makerCollection}`);
+  // §7.5 (founder 2026-10-30): one feed — originals and AI creatives mixed, no origin rails or chips.
+  console.log(`\n/ko/video — ${KO_TERMS.studioCollection} and ${KO_TERMS.maker} templates in one grid`);
   const video = await get('/ko/video');
-  const studioRail = video.body.indexOf('data-rail-origin="studio"');
-  const makerRail = video.body.indexOf('data-rail-origin="maker"');
-  if (studioRail > -1 && makerRail > studioRail) ok('the studio rail comes first, the maker rail second', `${studioRail} < ${makerRail}`);
-  else fail('the studio rail comes first, the maker rail second', `studio at ${studioRail}, maker at ${makerRail}`);
-  expectPresent('the origin chips', video.body, 'data-origin-filter');
-  expectPresent('…"전체 · 오리지널 · 메이커"', video.body, `>${KO_TERMS.maker}</button>`);
-  expectPresent('the maker rail is named', video.body, `>${KO_TERMS.makerCollection}</h2>`);
-  expectPresent('a public maker is credited by handle', video.body, `${KO_TERMS.creditPrefix} @jun`);
+  expectEqual('one grid on the listing', video.body.split('data-rail="').length - 1, 1);
+  expectAbsent('…no origin rails', video.body, 'data-rail-origin');
+  expectAbsent('…no origin chips', video.body, 'data-origin-filter');
+  expectAbsent('…no collection headings', video.body, `>${KO_TERMS.makerCollection}</h2>`);
+  const origins = [...video.body.matchAll(/data-card-origin="(studio|maker)"/g)].map((match) => match[1]!);
+  expectEqual('both origins in that grid', [...new Set(origins)].sort().join(','), 'maker,studio');
+  // While both still have cards, one origin never holds more than three places in a row.
+  const mixedUntil = Math.min(origins.lastIndexOf('studio'), origins.lastIndexOf('maker'));
+  let longest = 0;
+  for (let i = 0, run = 0; i <= mixedUntil; i++) { run = i > 0 && origins[i] === origins[i - 1] ? run + 1 : 1; longest = Math.max(longest, run); }
+  if (longest <= 3) ok('…mixed, never more than three of one origin in a row', origins.join(' '));
+  else fail('…mixed, never more than three of one origin in a row', origins.join(' '));
+  expectPresent('a public creative is credited by handle', video.body, `${KO_TERMS.creditPrefix} @jun`);
   expectAbsent('no "작가" anywhere on the catalogue', video.body, '작가');
   expectAbsent('no author account id reaches the page', video.body, 'f0000000-0000-4000-8000-000000000002');
+  const home = await get('/ko');
+  expectAbsent('the home page has no separate creatives rail', home.body, 'data-rail="makers"');
+  const homeVideo = home.body.slice(home.body.indexOf('data-rail="video"'), home.body.indexOf('data-all-video'));
+  expectPresent('…its video rail carries the creatives\' templates', homeVideo, 'data-card-origin="maker"');
 
-  console.log('\n/ko/t/[slug] — the maker block only where the maker opted in');
+  console.log('\n/ko/t/[slug] — one creator line, only where the creative opted in');
   const makerTemplate = await get('/ko/t/cafe-window-timelapse');
   expectEqual('renders 200', makerTemplate.status, 200);
-  expectPresent('the maker block', makerTemplate.body, 'data-template-maker="jun"');
-  expectPresent('…linking to the maker page', makerTemplate.body, 'href="/ko/makers/jun"');
+  expectPresent('the creator line', makerTemplate.body, 'data-template-maker="jun"');
+  expectEqual('…once', makerTemplate.body.split('data-template-maker=').length - 1, 1);
+  const line = makerTemplate.body.indexOf('data-template-maker="jun"');
+  if (line > makerTemplate.body.indexOf('<h1') && line < makerTemplate.body.indexOf('data-template-description')) ok('…right under the title');
+  else fail('…right under the title', `line at ${line}`);
+  expectPresent('…linking to the creative\'s profile', makerTemplate.body, 'href="/ko/makers/jun"');
   expectPresent('the verified mark', makerTemplate.body, 'data-template-verified');
   // 2026-10-29: the copy-or-make fork and the recipe pill follow a public prompt, never the credit.
   expectAbsent('no copy-or-make fork without a public prompt', makerTemplate.body, 'data-template-recipe-actions');

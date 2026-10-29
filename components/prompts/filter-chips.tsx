@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { readUseCase, useCaseHref } from '@/lib/navigation/public-state';
 import { pillClassName } from './pill';
-import { CATALOG_FILTER_EVENT } from '@/components/templates/origin-filter';
 
 /**
  * PLAN §13.2 — the use-case filter, done WITHOUT taking the page dynamic.
@@ -57,10 +56,7 @@ export function UseCaseFilter({
       const values = (item.dataset.useCase ?? '').split(/\s+/).filter(Boolean);
       item.hidden = active !== null && !values.includes(active);
     }
-    // The origin chips (§7.5) hide whole rails; a card in a hidden rail is not on screen either.
-    const recount = () => setCount(Array.from(items).filter(item => !item.hidden && !item.closest('[data-rail][hidden]')).length);
-    recount();
-    window.addEventListener(CATALOG_FILTER_EVENT, recount);
+    setCount(Array.from(items).filter(item => !item.hidden).length);
 
     // Each rail owns its own "nothing here" line, so a filter that empties one rail says so
     // instead of leaving a headline over a void.
@@ -69,7 +65,7 @@ export function UseCaseFilter({
       const empty = rail.querySelector<HTMLElement>('[data-rail-filtered-empty]');
       if (empty) empty.hidden = visible > 0;
     }
-    return () => { window.removeEventListener(CATALOG_FILTER_EVENT, recount); for (const item of items) item.hidden = false; };
+    return () => { for (const item of items) item.hidden = false; };
   }, [active, valuesKey]);
 
   useEffect(() => {

@@ -2579,19 +2579,11 @@ export const en = {
     ctaVideo: 'See video templates',
     ctaImage: 'See image templates',
     allVideo: 'All video templates',
-    // PLATFORM-2.0 §7.5·§14.1 — rails and chips by who made the template. No maker template, no rail and no chips.
-    studioRail: T.studioCollection,
-    studioRailLede: 'Templates made by the studio.',
-    makerRail: T.makerCollection,
-    makerRailLede: `Made and published by ${T.makersFull}.`,
-    originHeading: 'Made by',
-    originAll: 'All',
-    originStudio: 'Originals',
-    originMaker: `${cap(T.makers)}`,
     verified: 'Verified',
     verifiedHint: 'This template passed studio review.',
+    // PLATFORM-2.0 §7.5 (founder 2026-10-30): one line under a creative template's title — who made it, and their profile.
     makerBlockHeading: `The ${T.maker} behind this template`,
-    makerBlockCta: 'See full profile',
+    makerBlockCta: 'View profile',
     moreFrom: 'More from @{handle}',
     aspects: {
       '4:5': '4:5 · Instagram feed',

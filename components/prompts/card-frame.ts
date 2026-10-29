@@ -54,10 +54,37 @@ export function makerProfileRest(card: Pick<PromptCard, 'origin' | 'authorHandle
 }
 
 /**
- * NEW first, then the catalog's own order (featured → newest, `lib/prompts/repo.ts`). A stable
- * partition, so keyboard and visual order stay the catalog's inside each group.
+ * Founder 2026-10-30 (docs/PLATFORM-2.0.md §7.5): originals and AI creatives' templates share one
+ * feed. Inside the ranking, one origin never takes more than this many places in a row while the
+ * other still has cards — on a four-column desktop every row then holds both, on a phone every two.
  */
-export function railOrder<T extends Pick<PromptCard, 'publishedAt'>>(cards: readonly T[], now?: Date | number): T[] {
+export const ORIGIN_RUN_MAX = 3;
+
+/**
+ * One ranking for the whole feed: NEW first, then the catalog's own order (featured → newest,
+ * `lib/prompts/repo.ts`), then the origin rule above. The merge always takes the better-ranked of
+ * the two origins' next cards unless that origin has just had ORIGIN_RUN_MAX places, so each origin
+ * keeps its own order and a list from one origin comes out exactly as ranked.
+ */
+export function railOrder<T extends Pick<PromptCard, 'publishedAt'> & Partial<Pick<PromptCard, 'origin'>>>(cards: readonly T[], now?: Date | number): T[] {
   const isNew = (card: T) => badgeFor({ firstPublishedAt: card.publishedAt, updatedAt: null, ...(now === undefined ? {} : { now }) }) === 'new';
-  return [...cards.filter(isNew), ...cards.filter((card) => !isNew(card))];
+  const ranked = [...cards.filter(isNew), ...cards.filter((card) => !isNew(card))];
+  // Ranks ride along so the merge compares places, not dates again.
+  const queues: [Array<[T, number]>, Array<[T, number]>] = [[], []];
+  ranked.forEach((card, index) => queues[card.origin === 'maker' ? 1 : 0].push([card, index]));
+  const heads: [number, number] = [0, 0];
+  const out: T[] = [];
+  let runSide: 0 | 1 | null = null, run = 0;
+  while (out.length < ranked.length) {
+    const next = (side: 0 | 1) => queues[side][heads[side]];
+    const studio = next(0), maker = next(1);
+    let side: 0 | 1 = maker === undefined || (studio !== undefined && studio[1] < maker[1]) ? 0 : 1;
+    const other: 0 | 1 = side === 0 ? 1 : 0;
+    if (side === runSide && run >= ORIGIN_RUN_MAX && next(other) !== undefined) side = other;
+    out.push(next(side)![0]);
+    heads[side] += 1;
+    run = side === runSide ? run + 1 : 1;
+    runSide = side;
+  }
+  return out;
 }

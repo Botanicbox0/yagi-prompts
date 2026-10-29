@@ -8,7 +8,6 @@ import { PromptRail } from '@/components/prompts/rails';
 import { UseCaseFilter } from '@/components/prompts/filter-chips';
 import { promptLabels, presentUseCases, useCaseLabel } from '@/components/prompts/labels';
 import { pillClassName } from '@/components/prompts/pill';
-import { OriginFilter } from './origin-filter';
 
 /**
  * docs/TEMPLATES-IA.md §2 — one listing, two tabs. `/video` and `/image` render this with their
@@ -21,9 +20,9 @@ import { OriginFilter } from './origin-filter';
  * First screen (docs/PLATFORM-2.0.md §15.3-5): title → medium pills → use-case pills (only when
  * there is a choice) and the count → the cards. The service definition follows the grid.
  *
- * §7.5·§14.1: the cards split by origin — "TWINGS 오리지널" first, then "메이커 템플릿" — with the
- * "전체 · 오리지널 · 메이커" chips. With no maker template (today's catalogue) neither the second
- * rail, the chips nor the rail headings appear, and the page reads exactly as before.
+ * §7.5 (founder 2026-10-30): ONE grid. TWINGS originals and AI creatives' templates are ranked
+ * together and mixed by `railOrder`; a creative's card says `by @handle` and nothing else marks
+ * the difference. No origin rails, no origin chips — a reader picks a format, not who made it.
  */
 export function MediumTabs({ locale, dict, active }: { locale: Locale; dict: Dictionary; active: TemplateMedium }) {
   return (
@@ -60,11 +59,6 @@ export function TemplatesListing({
   const present = presentUseCases([...new Set(cards.flatMap((card) => card.useCase))].sort());
   const filterOptions = present.map((value) => [value, useCaseLabels[value]!] as [string, string]);
   const other: TemplateMedium = medium === 'video' ? 'image' : 'video';
-  const studio = cards.filter((card) => card.origin !== 'maker');
-  const makers = cards.filter((card) => card.origin === 'maker');
-  const split = makers.length > 0;
-  const tt = dict.templates;
-  const railProps = { locale, labels, useCaseLabels, emptyLabel: t.emptyTitle, filteredEmptyLabel: dict.prompts.filterEmpty };
 
   return (
     <div data-template-catalog={medium} className="band pt-24 pb-20 lg:pt-28">
@@ -72,9 +66,6 @@ export function TemplatesListing({
 
       <div className="mt-5 space-y-4">
         <MediumTabs locale={locale} dict={dict} active={medium} />
-        {split && studio.length > 0 && (
-          <OriginFilter labels={{ heading: tt.originHeading, all: tt.originAll, studio: tt.originStudio, maker: tt.originMaker }} />
-        )}
         {filterOptions.length > 0 && (
           <UseCaseFilter options={filterOptions} total={cards.length} labels={{ heading: dict.prompts.filterHeading, all: dict.prompts.filterAll, count: dict.prompts.filterCount, reset: dict.prompts.filterReset }} />
         )}
@@ -89,31 +80,19 @@ export function TemplatesListing({
           </a>
         </div>
       ) : (
-        <>
-          {studio.length > 0 && (
-            <PromptRail
-              id={medium}
-              origin="studio"
-              heading={split ? tt.studioRail : t.rail}
-              lede={split ? tt.studioRailLede : t.railLede}
-              cards={studio}
-              {...railProps}
-              hideHeading={!split}
-              topClassName={split ? 'mt-10' : 'mt-4'}
-            />
-          )}
-          {split && (
-            <PromptRail
-              id={`${medium}-makers`}
-              origin="maker"
-              heading={tt.makerRail}
-              lede={tt.makerRailLede}
-              cards={makers}
-              {...railProps}
-              topClassName={studio.length > 0 ? 'mt-16 lg:mt-20' : 'mt-10'}
-            />
-          )}
-        </>
+        <PromptRail
+          id={medium}
+          heading={t.rail}
+          lede={t.railLede}
+          cards={cards}
+          locale={locale}
+          labels={labels}
+          useCaseLabels={useCaseLabels}
+          emptyLabel={t.emptyTitle}
+          filteredEmptyLabel={dict.prompts.filterEmpty}
+          hideHeading
+          topClassName="mt-4"
+        />
       )}
 
       {/* §15.3-5: the GEO definition ("TWINGS는 …") stays in the HTML for search and llms.txt

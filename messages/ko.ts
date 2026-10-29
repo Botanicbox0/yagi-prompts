@@ -2567,19 +2567,11 @@ export const ko: Dictionary = {
     ctaVideo: '영상 템플릿 보기',
     ctaImage: '이미지 템플릿 보기',
     allVideo: '모든 영상 템플릿',
-    // PLATFORM-2.0 §7.5·§14.1 — 만든 곳으로 나눈 레일과 칩. 메이커 템플릿이 없으면 레일·칩 모두 나오지 않는다.
-    studioRail: T.studioCollection,
-    studioRailLede: '스튜디오가 직접 만든 템플릿입니다.',
-    makerRail: T.makerCollection,
-    makerRailLede: `${T.makerFull}가 직접 만들고 공개한 템플릿입니다.`,
-    originHeading: '만든 곳',
-    originAll: '전체',
-    originStudio: '오리지널',
-    originMaker: `${T.maker}`,
     verified: '검증됨',
     verifiedHint: '스튜디오 검수를 통과한 템플릿입니다.',
+    // PLATFORM-2.0 §7.5(대표 2026-10-30): 크리에이티브 템플릿 제목 아래 한 줄 — 누가 만들었는지와 프로필.
     makerBlockHeading: `이 템플릿을 만든 ${T.maker}`,
-    makerBlockCta: '프로필 전체 보기',
+    makerBlockCta: '프로필 보기',
     moreFrom: '@{handle}의 다른 템플릿',
     aspects: {
       '4:5': '4:5 · 인스타 피드',
