@@ -30,7 +30,7 @@
 
 ## 스튜디오 흐름
 
-1. 관리자 캠페인 화면(`/admin/brand-workspace/{id}`)의 **크리에이터 후보 관리**에서 캠페인 ID를 확인한다.
+1. 관리자 캠페인 화면(`/admin/brand-workspace/{id}`) 또는 brand.twings.app 캠페인 화면(DB 관리자의 운영자 보기)의 **크리에이터 후보 관리**에서 캠페인 ID를 확인한다. 새 고객 캠페인은 brand.twings.app `/brand` → **새 캠페인 만들기**에서 바로 만들 수 있다([BRAND-STAFF-ACCESS.md](BRAND-STAFF-ACCESS.md) "운영자 캠페인 준비").
 2. 후보를 넣는다: JSON 파일 업로드, 또는 가져오기 워커가 `POST /api/brand-shortlist-worker/import`.
 3. 새 후보는 **대기** 상태(고객에게 안 보임). 확인 뒤 "대기 중인 후보 모두 공개" 또는 한 명씩 공개.
 4. 고객이 선호로 표시하면 관리 표에 "고객 선호"가 붙는다. 섭외 뒤 결과는 기존 캠페인 흐름(게시물·리포트)으로 이어진다.

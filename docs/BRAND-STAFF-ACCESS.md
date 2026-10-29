@@ -28,13 +28,24 @@
 - 지원 메시지: `GET /api/brand-workspace?organizationId=` 읽기는 허용. 고객용 지원 서랍(보내기 폼)은 운영자 보기에서 띄우지 않는다. 답장은 기존 `/admin` 문의함에서 한다.
 - 셀프 스튜디오: 계약·남은 횟수·템플릿·생성 이력·결과 읽기. 생성 버튼은 비활성, 본인 얼굴 준비 안내는 숨긴다.
 
-모든 운영자 화면 위에 "TWINGS 운영자로 보는 중" 안내가 있다. `is_admin` 계정에는 기존 관리자 화면(`/admin/brand-workspace/organizations/{id}`, `/admin/brand-workspace/{projectId}`) 링크가 붙는다. 그 화면은 스스로 권한을 확인하며, 새 관리자 변경 경로는 추가하지 않았다.
+모든 운영자 화면 위에 "TWINGS 운영자로 보는 중" 안내가 있다. `is_admin` 계정에는 기존 관리자 화면(`/admin/brand-workspace/organizations/{id}`, `/admin/brand-workspace/{projectId}`) 링크가 붙는다. 그 화면은 스스로 권한을 확인한다. brand 호스트에서 열린 변경은 아래 "운영자 캠페인 준비" 하나뿐이다.
+
+## 운영자 캠페인 준비 (DB 관리자만, 2026-10-29)
+
+대표 요청: brand.twings.app 캠페인 운영 화면에서 관리자가 새 고객 캠페인을 만들고, 곧바로 그 캠페인의 크리에이터 후보 관리와 가져오기용 캠페인 ID를 쓸 수 있어야 한다. 그전에는 운영자 보기가 읽기 전용이고 brand 호스트가 `/admin/do`를 막아서, 캠페인을 만들 길이 admin.twings.app의 접힌 "캠페인 준비" 폼밖에 없었다.
+
+- 대상: `profiles.is_admin = true`이고 그 브랜드의 멤버가 아닌 계정(운영자 보기, `studio` 역할). 도메인만 있는 열람자는 그대로 읽기 전용이다. 관리자가 실제 멤버인 브랜드에서는 고객 의뢰 마법사가 그대로 나온다.
+- 화면: `/brand` 머리에 **새 캠페인 만들기**, `/brand/projects/new`에 고객사 선택(지금 고른 브랜드가 기본값)·캠페인 이름·목표·총예산(선택) 폼과 **새 고객사 등록**. 만든 캠페인은 `/admin/brand-workspace`의 "캠페인 준비"와 같다: `production_mode = creator`, 고객에게 공개 전(`client_visible = false`), 상태 `requested`, 관리자에게 멤버십은 생기지 않는다. 고객에게 공개·담당자 초대는 지금처럼 관리자 화면에서 한다.
+- 캠페인 페이지(`/brand/projects/{id}`): 운영자 안내 바로 아래에 **크리에이터 후보 관리**(가져오기용 캠페인 ID, JSON 가져오기, 공개·숨기기·삭제). 결과는 패널 안에 표시된다.
+- 경로: `POST /api/brand-workspace/studio`(`app/api/brand-workspace/studio/route.ts`). `/admin/do`와 같은 순서로 `requireAdmin()`(아니면 본문 없는 404) → 같은 출처 확인 → 허용 목록(`lib/admin/brand-host-studio.ts`: `brandWorkspace.organization`, `brandWorkspace.createProject`, `brandWorkspace.shortlistImport`, `brandWorkspace.shortlistShare`, `brandWorkspace.shortlistRemove`) → 레지스트리 오퍼레이션을 `dispatchAdmin`으로 실행. 목록 밖 이름은 404다. 돌아가는 곳은 brand 캠페인 페이지와 새 캠페인 페이지뿐이다. `/admin/do` 자체는 brand 호스트에서 계속 막혀 있다.
+- 테스트: `tests/brands/studio-prep.test.ts`(PGlite + 실제 라우트·디스패처), `tests/brands/studio-prep-ui.test.tsx`, `tests/routes/brand-host.test.ts`. 스윕은 익명 POST가 본문 없는 404인지 확인한다.
 
 ## 무엇이 닫혀 있는가 (쓰기)
 
 운영자 보기는 고객 좌석이 아니다. 아래는 모두 기존 권한 검사 그대로이며 `hasStaffReadAccess`를 참조하지 않는다.
 
 - 고객 동작(승인·수정 요청, 파일 올리기, 캠페인 의뢰, 브랜드 설정 수정, 로고 변경, 초대·해제, 지원 메시지, 셀프 스튜디오 생성·횟수 차감): 멤버십이 없으면 거부. `is_admin`도 고객으로 승인·의뢰·생성할 수 없다.
+- 예외는 위 "운영자 캠페인 준비" 하나다. 고객 의뢰가 아니라 스튜디오 준비(`createStudioProject`)이고, `is_admin`만 쓸 수 있다.
 - 기존 스튜디오 동작(댓글·첨부·설정·로고 등 `is_admin` 경로): 변경 없음. 스튜디오 댓글은 계속 `author_role = 'studio'`로 남는다.
 - 도메인만 있는 운영자(`is_admin` 아님)는 `/admin`, 스튜디오 전용 로더, 관리자 오퍼레이션을 쓸 수 없다.
 - 운영자가 어떤 브랜드의 실제 멤버이면 그 브랜드에서는 멤버 역할과 멤버 화면(공개된 캠페인만)을 그대로 쓴다.

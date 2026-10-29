@@ -128,6 +128,8 @@ export function brandRouteAllowed(pathname: string, method: string): boolean {
   if (/^\/api\/campaign-collaboration\/files\/[a-f0-9-]+$/.test(pathname)) return read;
   if (/^\/api\/brand-production\/[a-f0-9-]+(?:\/media)?$/.test(pathname)) return read;
   if (pathname === '/api/brand-workspace') return read || method === 'POST';
+  // The studio's campaign preparation (docs/BRAND-STAFF-ACCESS.md): the handler is admin-only and allowlisted.
+  if (pathname === '/api/brand-workspace/studio') return method === 'POST';
   // Secondary-usage payment (docs/SECONDARY-USAGE.md): create/confirm by POST, status by GET.
   if (pathname === '/api/brand-workspace/usage') return read || method === 'POST';
   if (/^\/api\/brand-workspace\/attachments\/[^/]+$/.test(pathname)) return read || method === 'POST';

@@ -1480,6 +1480,13 @@ async function sweepBrandWorkspace(fixtures: BrandWorkspaceProbe[]): Promise<voi
   expectEqual('brand usage order refuses anonymous access before validation', usageOrder.status, 401);
   expectEqual('brand usage order refusal is private no-store', usageOrder.cacheControl, 'private, no-store');
   noPrivateBytes('brand usage order', usageOrder);
+  // The studio's campaign preparation door (docs/BRAND-STAFF-ACCESS.md): admins only, and it does not confirm it exists.
+  const studioForm = new FormData();
+  studioForm.set('_op', 'brandWorkspace.createProject');
+  const studioPrep = await request('/api/brand-workspace/studio', { method: 'POST', headers: { origin: base.origin }, body: studioForm });
+  expectEqual('brand studio door answers anonymous posts with a bare 404', studioPrep.status, 404);
+  expectEqual('brand studio door 404 has no body', studioPrep.body, '');
+  expectEqual('brand studio door refusal is private no-store', studioPrep.cacheControl, 'private, no-store');
 }
 
 /** docs/TEMPLATES-IA.md §8 — the render queue: gated where it must be, open where the token says. */
