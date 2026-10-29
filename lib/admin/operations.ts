@@ -295,7 +295,10 @@ const refreshCaches: AdminOperation<Record<string, never>> = {
   async run(ctx) {
     // §3.1 "An idempotent 'Refresh caches' button exists in /admin" — the same call the publish
     // flow makes, for when an invalidation was lost and the hourly TTL floor has not run yet.
+    // The template catalogue too (2026-10-29): a template written by a script (`templates:import`,
+    // `templates:film`) otherwise waits out the hour, and the plan has no tag purge.
     ctx.revalidate?.();
+    ctx.revalidatePrompts?.();
     return ok('cachesRefreshed');
   },
 };

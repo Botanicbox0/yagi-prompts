@@ -198,10 +198,12 @@ describe('list-level actions (§3.8)', () => {
     expect(rows[0]?.status).toBe('draft');
   });
 
-  it('refreshes the catalog cache idempotently (§3.1)', async () => {
+  it('refreshes the catalog and template caches idempotently (§3.1)', async () => {
     expect(harness.revalidated).toBe(0);
+    const prompts = harness.promptsRevalidated;
     expectOk(await harness.run('caches.refresh', {}));
     expectOk(await harness.run('caches.refresh', {}));
     expect(harness.revalidated).toBe(2);
+    expect(harness.promptsRevalidated - prompts).toBe(2);
   });
 });
