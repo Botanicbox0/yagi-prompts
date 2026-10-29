@@ -5,8 +5,8 @@
  * A slot is one file wherever it appears. The default is the file in `public/`; an override is a row
  * in `landing_media` pointing at a `public-content` object (lib/content/landing-media-server.ts).
  * Videos and their posters are not slots: a new poster over an old film would show one thing and
- * play another. For the same reason the 15-second ad's product shot (`landing/ad-product`) is not a
- * slot either: it shows the lip gloss the ad plays.
+ * play another. For the same reason a still that stands next to a film and shows its product is not a
+ * slot either (FILM_BOUND_STILLS).
  *
  * This module is imported by client components, so it holds data and pure lookups only.
  */
@@ -34,6 +34,9 @@ export interface LandingMediaSlot {
   /** Cut-outs keep their transparency. */
   alpha?: true;
 }
+
+/** Stills tied to a film: the 15-second ad's product shot shows the lip gloss the ad plays. */
+export const FILM_BOUND_STILLS: readonly string[] = ['landing/ad-product'];
 
 /** Override URLs by slot key; a slot that is absent shows its default. */
 export type LandingMedia = Readonly<Record<string, string>>;

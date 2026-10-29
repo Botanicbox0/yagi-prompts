@@ -1,7 +1,7 @@
 import { existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { LANDING_MEDIA_SLOTS, NO_LANDING_MEDIA, evidenceWithMedia, landingMediaSlot, landingSrc, mediaSrc, studioSrc } from '@/lib/content/landing-media';
+import { FILM_BOUND_STILLS, LANDING_MEDIA_SLOTS, NO_LANDING_MEDIA, evidenceWithMedia, landingMediaSlot, landingSrc, mediaSrc, studioSrc } from '@/lib/content/landing-media';
 import { DEFAULT_HERO_EVIDENCE } from '@/lib/content/slots';
 
 /** The slot registry is the contract between the landings and /admin/landing-media. */
@@ -20,8 +20,14 @@ describe('landing media slots', () => {
     for (const area of ['landing', 'studio']) {
       const files = readdirSync(join(process.cwd(), 'public', 'reel', area)).filter((file) => file.endsWith('.webp'));
       expect(files.length).toBeGreaterThan(0);
-      for (const file of files) expect(landingMediaSlot(`${area}/${file.replace(/\.webp$/, '')}`), file).toBeDefined();
+      for (const file of files) {
+        const key = `${area}/${file.replace(/\.webp$/, '')}`;
+        // A still that shows a film's product moves with the film, never on its own.
+        if (FILM_BOUND_STILLS.includes(key)) expect(landingMediaSlot(key), file).toBeUndefined();
+        else expect(landingMediaSlot(key), file).toBeDefined();
+      }
     }
+    for (const key of FILM_BOUND_STILLS) expect(existsSync(join(process.cwd(), 'public', 'reel', `${key}.webp`)), key).toBe(true);
   });
 
   it('resolves an override, else the file, and refuses names it does not know', () => {
