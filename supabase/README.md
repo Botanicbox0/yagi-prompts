@@ -81,5 +81,6 @@ operation for a superuser, and it is not something app code can do — that is t
 | 2026-10-29 | `0068_core_brand_shortlist_triage` · `0148_glue_brand_shortlist_triage` | 0068 + 0148 (후보 선별: 제외 표시·사진 주색·캠페인 기준 범위, `shortlist_criteria` 서버 롤 update) | #121 |
 | 2026-10-29 | `0069_core_maker_bio_en` | 0069 (`platform_creators.bio_en`, `/en` 메이커 소개. glue 없음 — 0131 거부 자세 상속) | #125 |
 | 2026-10-29 | `0070_core_brand_shortlist_choice` | 0070 (고객 선별: `passed_at/by` 제외 표시, `confirmed_at` 섭외 확정, 선호·제외 동시 금지 제약. glue 없음) | #126 |
+| 2026-10-30 | `0065_core_creative_profiles` · `0145_glue_creative_profiles` · `0071_core_creative_cover` | 0065 + 0145 (`platform_creators` 프로필 칸 10개, `maker_works`·`recipe_unlocks`·`maker_tokens` 서버 롤 전용, RLS 강제) + 0071 (`platform_creators.cover_key`, glue 없음) | #111 |
 
-미적용: 0042~0044(월 구독·Premium 수정, 미출시), 0029/0115(옛 portrait 비교, 폐지 경로). 0063(prom-queen 비율)은 원장에 없지만 운영 데이터에는 이미 반영돼 있다. 0064/0065·0144/0145는 열린 브랜치가 쓰는 번호. 0067/0147은 랜딩 브랜치(보류). 0071(크리에이티브 배경 사진)은 `claude/creative-profile`(#111)이 쓴다. 다음 번호: core 0072, glue 0149.
+미적용: 0042~0044(월 구독·Premium 수정, 미출시), 0029/0115(옛 portrait 비교, 폐지 경로). 0063(prom-queen 비율)은 원장에 없지만 운영 데이터에는 이미 반영돼 있다. 0064·0144는 열린 브랜치가 쓰는 번호. 0067/0147은 랜딩 브랜치(보류). 다음 번호: core 0072, glue 0149.
