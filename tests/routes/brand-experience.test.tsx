@@ -11,20 +11,18 @@ const render = async (locale: 'ko' | 'en') => renderToStaticMarkup(await BrandsP
 
 describe('the brand page shows the service before asking visitors to enquire', () => {
   for (const locale of ['ko', 'en'] as const) {
-    it(`keeps ${locale} case visitors on real posts instead of a Morphic workflow`, async () => {
+    it(`shows the ${locale} Morphic case as one compact card that opens the story page`, async () => {
       const html = await render(locale);
       // The identity wrapper sits around the whole page, nav and footer included.
       expect(html.indexOf('<div data-brand-accent')).toBeGreaterThan(-1);
       expect(html.indexOf('<div data-brand-accent')).toBeLessThan(html.indexOf('id="main"'));
+      // 2026-10-30 founder: the Morphic example no longer needs to be large on the landing.
+      expect(html).toContain('data-morphic-card');
+      expect(html).toContain(`href="/${locale}/brands/stories/morphic"`);
+      for (const figure of locale === 'ko' ? ['9편', '200만+', '300건+'] : ['2M+', '300+']) expect(html).toContain(figure);
+      expect(html).not.toContain('data-customer-story');
+      expect(html).not.toContain('data-case-post=');
       expect(html).not.toMatch(/href="https:\/\/morphic\.com\//);
-      expect(html).not.toContain('make-90s-street-style-interview-video');
-      expect(html).toContain('href="https://www.instagram.com/p/DcXjygPg8fE/"');
-      for (const code of ['DdqhUUvRUik', 'DdqirU_yjr-', 'Dd1CiCDSlix', 'Dd0VQJaz8h-']) {
-        expect(html).toContain(`href="https://www.instagram.com/p/${code}/"`);
-      }
-      expect(html.match(/data-case-post="/g)).toHaveLength(4);
-      expect(html.match(/data-post-market="KR"/g)).toHaveLength(2);
-      expect(html.match(/data-post-market="JP"/g)).toHaveLength(2);
       expect(html).not.toMatch(/href="https:\/\/brand\.twings\.app\/brand\/projects\//);
     });
   }

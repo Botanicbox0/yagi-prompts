@@ -1,9 +1,9 @@
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import type { Dictionary } from '@/lib/i18n/dictionaries';
 import type { Locale } from '@/lib/i18n/config';
 import { brandEnquiryHref } from '@/lib/campaigns/links';
 import { landingSrc, type LandingMedia } from '@/lib/content/landing-media';
-import { Compare, ChapterScene, EngineSwitch, Film, PinnedTrack, Reveal, Tabs, TypeLine } from './v7-client';
+import { Compare, ChapterScene, EngineSwitch, Film, PinnedTrack, Reveal, Tabs, Track, TypeLine } from './v7-client';
 import { StudioVto } from './studio-vto';
 import s from './v7.module.css';
 
@@ -35,6 +35,13 @@ const DEMO_SITE = 'yagi.example';
 const RATIOS = ['9:16', '4:5', '16:9'] as const;
 /** Product shots turned into 5-second clips (the work tab's first row of video). */
 const CLIPS = ['parfum', 'mist', 'oil'] as const;
+/** YAGI Production's own films (fictional casts), each at its own ratio. No client work: its posters carry real names. */
+const FILMS = [
+  { id: 'tutu', src: V('film-tutu', 'mp4'), poster: V('film-tutu', 'jpg'), ratio: '16 / 9' },
+  { id: 'daydream', src: V('film-daydream', 'mp4'), poster: V('film-daydream', 'jpg'), ratio: '4 / 3' },
+  { id: 'aquarium', src: V('film-aquarium', 'mp4'), poster: V('film-aquarium', 'jpg'), ratio: '4 / 3' },
+  { id: 'tea', src: '/reel/brands/tea-editorial.mp4', poster: V('film-tea', 'jpg'), ratio: '16 / 9' },
+] as const;
 /** Creator-style posts made with fictional people, warm and cool in turn (the real Morphic case follows below). */
 const FEED = [
   { id: 'peach', src: '/reel/landing/yunseol-peach' },
@@ -396,8 +403,9 @@ export function V7Work({ copy, studio, media }: { copy: Copy; studio: StudioCopy
   );
 }
 
-export function V7Campaign({ copy, proof, children }: { copy: Copy; proof: string; children: ReactNode }) {
+export function V7Campaign({ copy, locale }: { copy: Copy; locale: Locale }) {
   const c = copy.campaign;
+  const proof = c.proof;
   return (
     <section id="campaign" data-v7-campaign data-section data-theme="light" data-campaign-scale className={`${s.section} ${s.canvas} scroll-mt-20`}>
       <div className={s.shell}>
@@ -420,8 +428,18 @@ export function V7Campaign({ copy, proof, children }: { copy: Copy; proof: strin
             </li>
           ))}
         </ul>
-        <p data-hero-proof className={`${s.proof} ${s.mono}`}>{proof}</p>
-        <div className="mt-16">{children}</div>
+        {/* The real case, in one card: the approved figures and a door to the full story page. */}
+        <Reveal className={`${s.proofCard} scroll-mt-20`} data-campaign-proof data-morphic-card>
+          <div id="morphic-case" className={s.proofHead}>
+            <Eyebrow>{proof.eyebrow}</Eyebrow>
+            <h3 className={s.h3}>{proof.title}</h3>
+            <p className={s.note}>{proof.note}</p>
+          </div>
+          <ul className={s.figures}>
+            {proof.figures.map((figure) => <li key={figure.label}><b>{figure.value}</b><span>{figure.label}</span></li>)}
+          </ul>
+          <a href={`/${locale}/brands/stories/morphic`} className={s.ghost}>{proof.cta} ↗</a>
+        </Reveal>
       </div>
     </section>
   );
@@ -431,21 +449,30 @@ export function V7Production({ copy, actions }: { copy: Copy; actions: ReactNode
   const p = copy.production;
   return (
     <section id="production" data-v7-production data-section data-theme="light" data-production-service className={`${s.section} scroll-mt-20`}>
-      <div className={`${s.shell} ${s.productionGrid}`}>
-        <Reveal className={s.head}>
-          <Eyebrow>{p.eyebrow}</Eyebrow>
-          <h2 className={s.h2}>{p.title}</h2>
-          <p className={s.lead}>{p.body}</p>
-          {actions}
+      <div className={s.shell}>
+        <Reveal className={`${s.head} ${s.headRow}`}>
+          <div>
+            <Eyebrow>{p.eyebrow}</Eyebrow>
+            <h2 className={s.h2}>{p.title}</h2>
+          </div>
+          <div className={s.headAside}>
+            <p className={s.lead}>{p.body}</p>
+            {actions}
+          </div>
         </Reveal>
-        <div data-production-films className={s.films}>
-          {p.films.map((film, index) => (
-            <figure key={film} className={s.filmCard}>
-              <Film src={index === 0 ? V('film-aquarium', 'mp4') : '/reel/brands/tea-editorial.mp4'} poster={index === 0 ? V('film-aquarium', 'jpg') : V('film-tea', 'jpg')} label={film} />
-              <figcaption className={s.tag}>{film}</figcaption>
+      </div>
+      <div data-production-films className={s.reel}>
+        <Track label={p.reel} prev={p.prev} next={p.next2} className={s.shellBleed}>
+          {FILMS.map((film, index) => (
+            <figure key={film.id} data-track-item data-production-film={film.id} className={s.reelCard} style={{ '--ar': film.ratio } as CSSProperties}>
+              <Film src={film.src} poster={film.poster} label={p.films[index]!} />
+              <figcaption className={s.tag}>{p.films[index]}</figcaption>
             </figure>
           ))}
-        </div>
+        </Track>
+      </div>
+      <div className={s.shell}>
+        <p className={`${s.note} mt-4`}>{p.reelNote}</p>
         <aside data-v7-next className={s.next}>
           <p className={s.nextTitle}>{p.nextTitle}</p>
           <ul>{p.next.map((item, index) => <li key={item}><span className={s.mono}>{String(index + 1).padStart(2, '0')}</span>{item}<span data-status="soon" className={s.status}>{p.soon}</span></li>)}</ul>

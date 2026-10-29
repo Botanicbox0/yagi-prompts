@@ -7,7 +7,6 @@ import { V7BrandFirst, V7Campaign, V7Closing, V7Hero, V7Problem, V7Production, V
 import { DemoDock } from '@/components/brand-studio/v7-client';
 import { getLandingMedia } from '@/lib/content/landing-media-server';
 import v7 from '@/components/brand-studio/v7.module.css';
-import { BrandCustomerStory } from '@/components/campaigns/brand-customer-story';
 import { brandEnquiryHref, brandsHref, BRAND_INQUIRY_ENDPOINT } from '@/lib/campaigns/links';
 import { legalDocument } from '@/lib/legal/documents';
 import { legalHref } from '@/lib/legal/links';
@@ -58,16 +57,7 @@ export default async function BrandsPage({ params }: Props) {
         <V7BrandFirst copy={c} media={media} />
         <V7Workflow copy={c} />
         <V7Work copy={c} studio={t.studio} media={media} />
-        <V7Campaign copy={c} proof={t.landing.hero.proofFigures}>
-          <div id="morphic-case" data-campaign-proof className="scroll-mt-20">
-            <div className="mb-8 flex flex-wrap items-end justify-between gap-6">
-              <div className="grid gap-3"><p className={v7.eyebrow}><span className={v7.eyebrowMark} aria-hidden="true" />{t.stories.eyebrow}</p><h3 className={v7.h3}>{t.stories.title}</h3></div>
-              <a href={`/${locale}/brands/stories`} className={v7.link}>{t.stories.allCta} ↗</a>
-            </div>
-            {/* The story card is dark and inherits its type colour. */}
-            <div className="text-white"><BrandCustomerStory dict={dict} locale={locale} /></div>
-          </div>
-        </V7Campaign>
+        <V7Campaign copy={c} locale={locale} />
         <V7Production
           copy={c}
           actions={
