@@ -38,6 +38,14 @@ describe("brand workspace taste", () => {
     expect(bare.map((m) => rules.slice(m.index - 30, m.index + 20))).toEqual([]);
   });
 
+  it("keeps right-hand rails off the brand host: no activity rail, no conversation dock beside a tab", () => {
+    expect(css).not.toContain("[data-home-recent] .bw-content-grid");
+    for (const tab of ["review", "brief"]) {
+      expect(css).toContain(`:where([data-brand-workspace]) .bw-project-sections[data-project-tab='${tab}'] #conversation`);
+    }
+    expect(css).toContain("[data-project-tab='brief'] #conversation { display: none; }");
+  });
+
   it("draws the YAGI STUDIO lockup without the red live dot", () => {
     const lockup = renderToStaticMarkup(<YagiStudioLockup size={22} />);
     expect(lockup).toContain("data-yagi-studio-lockup");

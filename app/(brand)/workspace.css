@@ -3479,6 +3479,17 @@ html[data-brand-workspace]::view-transition-group(bw-tab-indicator) { animation-
   transition: opacity 900ms var(--ys-ease);
 }
 :where([data-brand-workspace]) .bw-bleed[data-bleed]::before { opacity: 0.15; }
+/* No right-hand conversation dock on the review and brief tabs (대표 2026-10-29: no right rails on
+   workspace screens). The tab shows only its own work; the conversation keeps its own tab. /admin
+   keeps the dock. */
+@media (min-width: 1024px) {
+  :where([data-brand-workspace]) .bw-project-sections[data-project-tab='review'] .bw-grid-wide,
+  :where([data-brand-workspace]) .bw-project-sections[data-project-tab='brief'] .bw-grid-wide,
+  :where([data-brand-workspace]) .bw-project-sections[data-project-tab='review'] .bw-grid-wide > div,
+  :where([data-brand-workspace]) .bw-project-sections[data-project-tab='brief'] .bw-grid-wide > div { display: contents; }
+  :where([data-brand-workspace]) .bw-project-sections[data-project-tab='review'] #conversation,
+  :where([data-brand-workspace]) .bw-project-sections[data-project-tab='brief'] #conversation { display: none; }
+}
 :where([data-brand-workspace]) .bw-project-cover { border: 0; border-radius: var(--ys-r-card); box-shadow: var(--ys-ring), var(--ys-shadow-2); }
 :where([data-brand-workspace]) .bw-project-cover img { object-fit: cover; }
 :where([data-brand-workspace]) .ys-kicker-badge,
