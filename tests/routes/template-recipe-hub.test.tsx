@@ -5,9 +5,10 @@ import { en } from '@/messages/en';
 import { ko } from '@/messages/ko';
 
 /**
- * `/[locale]/t/[slug]` for a creative's template with a public recipe (2026-10-29): the copy-or-make
- * fork sits under the title, ahead of the make card, both lead somewhere real (`#recipe`, `#make`),
- * and the maker block speaks the page's language.
+ * `/[locale]/t/[slug]` for a creative's template with a public recipe (2026-10-29). Story-first: the
+ * result, then how it was made, then "one selfie" with the make box — no cost ahead of the recipe.
+ * Make-first: the copy-or-make fork sits under the title, ahead of the make card, both lead somewhere
+ * real (`#recipe`, `#make`). The maker block speaks the page's language.
  */
 
 const state = vi.hoisted(() => ({ recipe: null as PublicRecipe | null }));
@@ -40,8 +41,40 @@ beforeEach(() => {
   state.recipe = { presentation: 'story-first', intro: null, outro: null, steps: [{ n: 1, kind: 'video', engine: 'SEEDANCE 2.5', inputs: [{ kind: 'selfie' }], prompt: `[My photo] among goldfish. ${'Shot detail. '.repeat(30)}MEMBERS_ONLY_TAIL`, note: null }], files: null };
 });
 
-describe('a template with a public recipe', () => {
-  it('puts copy-or-make under the title, before the make card, and anchors the recipe', async () => {
+describe('a story-first template with a public recipe', () => {
+  it('reads result → how it was made → one selfie with the make box', async () => {
+    const html = await page('en');
+    const recipe = html.indexOf('data-template-recipe="story-first"');
+    const launcher = html.indexOf('data-template-make-launcher');
+    const strip = html.indexOf('data-template-transform');
+    expect(recipe).toBeGreaterThan(html.indexOf('data-template-credit'));
+    expect(html.indexOf('data-recipe-how')).toBeGreaterThan(recipe);
+    expect(launcher).toBeGreaterThan(html.indexOf('data-recipe-how'));
+    // The selfie promise left the stage: it opens the make box, under the recipe.
+    expect(html.split('data-template-transform').length - 1).toBe(1);
+    expect(strip).toBeGreaterThan(launcher);
+    expect(strip).toBeLessThan(html.indexOf('id="make"'));
+    expect(html.slice(launcher, strip)).toContain('data-make-lead');
+    // The recipe is right there, so no fork pointing down to it.
+    expect(html).not.toContain('data-template-recipe-actions');
+    expect(html).toContain('id="recipe"');
+  });
+
+  it('shows the maker block in the page language', async () => {
+    expect(await page('en')).toContain('Seoul-based AI creative.');
+    const korean = await page('ko');
+    expect(korean).toContain('서울의 AI 크리에이티브.');
+    expect(korean).toContain(ko.makerRecipe.how.gateCta);
+  });
+
+  it("keeps the members' prompt out of the page: only the gate's teaser is in the HTML", async () => {
+    const html = await page('en');
+    expect(html).not.toContain('MEMBERS_ONLY_TAIL');
+    expect(html).toContain('data-recipe-gate');
+  });
+
+  it('keeps the make-first order: the fork under the title, the strip under the stage, the recipe later', async () => {
+    state.recipe = { ...state.recipe!, presentation: 'make-first' };
     const html = await page('en');
     const actions = html.indexOf('data-template-recipe-actions');
     expect(actions).toBeGreaterThan(html.indexOf('data-template-credit'));
@@ -49,21 +82,10 @@ describe('a template with a public recipe', () => {
     expect(html).toContain('data-recipe-signin');
     expect(html).toContain('data-recipe-make');
     expect(html).toContain(en.makerRecipe.actions.makeClosed);
-    expect(html).toContain('id="recipe"');
-    expect(html).toContain('data-template-recipe="story-first"');
-  });
-
-  it('shows the maker block in the page language', async () => {
-    expect(await page('en')).toContain('Seoul-based AI creative.');
-    const korean = await page('ko');
-    expect(korean).toContain('서울의 AI 크리에이티브.');
-    expect(korean).toContain(ko.makerRecipe.actions.copySignedOut);
-  });
-
-  it("keeps the members' prompt out of the page: only the gate's teaser is in the HTML", async () => {
-    const html = await page('en');
-    expect(html).not.toContain('MEMBERS_ONLY_TAIL');
-    expect(html).toContain('data-recipe-gate');
+    expect(html).toContain(en.makerRecipe.actions.copySignedOut);
+    expect(html.indexOf('data-template-transform')).toBeLessThan(html.indexOf('data-template-make-launcher'));
+    expect(html).not.toContain('data-make-lead');
+    expect(html.indexOf('data-template-recipe="make-first"')).toBeGreaterThan(html.indexOf('id="make"'));
   });
 
   it('has no fork without a public prompt', async () => {

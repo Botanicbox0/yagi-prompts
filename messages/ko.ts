@@ -842,6 +842,8 @@ export const ko: Dictionary = {
       prevFile: '이전 파일',
       nextFile: '다음 파일',
       fileCount: '{total}개 중 {n}번째',
+      expand: '프롬프트 전체 펼치기',
+      collapse: '접기',
       gateTitle: '무료 가입하고 전체 제작법·프롬프트 보기',
       gateBody: 'TWINGS에 로그인하면 전체 프롬프트와 사운드·BGM 가이드, 참조 자산을 바로 확인하고 복사할 수 있어요.',
       gateCta: '로그인 / 무료 가입하고 제작법 보기 →',
