@@ -5,6 +5,7 @@ import { MarketingNav, MarketingFooter } from '@/components/marketing/chrome';
 import { BrandInquiryDialog } from '@/components/campaigns/brand-inquiry-dialog';
 import { V7BrandFirst, V7Campaign, V7Closing, V7Hero, V7Problem, V7Production, V7Work, V7Workflow } from '@/components/brand-studio/v7';
 import { DemoDock } from '@/components/brand-studio/v7-client';
+import { getLandingMedia } from '@/lib/content/landing-media-server';
 import v7 from '@/components/brand-studio/v7.module.css';
 import { brandEnquiryHref, brandsHref, BRAND_INQUIRY_ENDPOINT } from '@/lib/campaigns/links';
 import { legalDocument } from '@/lib/legal/documents';
@@ -41,6 +42,8 @@ export default async function BrandsPage({ params }: Props) {
   const t = dict.brandLanding;
   const c = t.v7;
   const enquiry = brandEnquiryHref(locale);
+  // Images the founder replaced in /admin/landing-media; every other slot shows its file.
+  const media = await getLandingMedia();
   // The wrapper carries the identity (display: contents), so the nav, form and footer share the one blue.
   return <div data-brand-accent className={v7.identity}>
     <MarketingNav locale={locale} dict={dict} rest="/brands" />
@@ -50,10 +53,10 @@ export default async function BrandsPage({ params }: Props) {
     <main id="main" data-brand-landing className={`overflow-clip [word-break:keep-all] ${v7.page}`}>
       <V7Hero copy={c} locale={locale} />
       <div className={v7.over}>
-        <V7Problem copy={c} />
-        <V7BrandFirst copy={c} />
+        <V7Problem copy={c} media={media} />
+        <V7BrandFirst copy={c} media={media} />
         <V7Workflow copy={c} />
-        <V7Work copy={c} studio={t.studio} />
+        <V7Work copy={c} studio={t.studio} media={media} />
         <V7Campaign copy={c} locale={locale} />
         <V7Production
           copy={c}

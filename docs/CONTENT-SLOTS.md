@@ -6,6 +6,34 @@ placeholder. Filling one is a config or CMS change, never a code change.
 
 ---
 
+## 0. Landing images — `/admin/landing-media` (2026-10-29)
+
+**Where** `lib/content/landing-media.ts` (slot registry) → `lib/content/landing-media-server.ts`
+(`getLandingMedia()`, cached with tag `landing-media`, 1h TTL) → the brand landing v6
+(`components/brand-studio/landing-sections.tsx`: the three comparison pairs, the eight packshots and
+eight scenes; the hero is a film now, and films are not slots; `studio-vto.tsx`: the try-on cuts) and the home hero's selfie → scene pair
+(`evidenceWithMedia`). 33 slots on 2026-10-29 (v6: the five hero stills went into the hero film).
+
+**Replace** open `admin.twings.app/admin/landing-media` (nav: 콘텐츠 관리 → 랜딩 이미지). Tiles follow
+the landing's order. Drop an image on a tile or click it: the browser scales it to the slot's width,
+`landingMedia.replace` re-encodes it to WebP (oriented, never enlarged, cut-outs keep transparency),
+stores it content-addressed in `public-content`, upserts `landing_media` and refreshes `/`, `/brands`
+and the tag. **기본으로** (`landingMedia.reset`) deletes the row; the file in `public/` shows again.
+
+**Rules**
+- One slot is one file wherever it appears.
+- Videos and their posters are not slots: a new poster over an old film would show one thing and
+  play another. Replacing the home hero's scene still drops its film for the same reason.
+- A still that sits next to a film and shows its product is not a slot either (`FILM_BOUND_STILLS`).
+  Today those are `landing/highteen-product` (the heart perfume next to the 20-second perfume ad)
+  and `landing/beauty-ad-product` (the lip gloss next to the 15-second ad).
+- A new landing image is a new registry line, and `tests/content/landing-media.test.ts` fails until
+  every `public/reel/landing/*.webp` and `public/reel/studio/*.webp` has a slot.
+- Before migrations 0067/0147 reach a database, the landings read "no overrides" and the admin
+  says so instead of saving.
+
+---
+
 ## Template registration
 
 Use `/admin/prompts/new`. New template addresses are derived from the English title; operators do

@@ -6,11 +6,11 @@
  */
 import { useRef, useState, type CSSProperties, type KeyboardEvent } from 'react';
 import type { Dictionary } from '@/lib/i18n/dictionaries';
+import { studioSrc, type LandingMedia } from '@/lib/content/landing-media';
 import styles from './studio-vto.module.css';
 
 type StudioCopy = Dictionary['brandLanding']['studio'];
 type Vars = CSSProperties & Record<`--${string}`, string | number>;
-const studio = (name: string) => `/reel/studio/${name}.webp`;
 
 const VTO_LOOK = ['vto-look-front', 'vto-look-upper', 'vto-look-side'] as const;
 const VTO_FREE = [
@@ -22,7 +22,7 @@ const VTO_FREE = [
 ] as const;
 const VTO_MODES = ['lookbook', 'free'] as const;
 
-export function StudioVto({ copy }: { copy: StudioCopy }) {
+export function StudioVto({ copy, media }: { copy: StudioCopy; media?: LandingMedia }) {
   const t = copy.vto;
   const [mode, setMode] = useState(0);
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
@@ -38,7 +38,7 @@ export function StudioVto({ copy }: { copy: StudioCopy }) {
     <div data-vto className={styles.vto}>
       <aside className={styles.vtoInput}>
         <figure className={styles.vtoGarment}>
-          <img src={studio('vto-garment')} alt="" width={480} height={480} loading="lazy" decoding="async" />
+          <img src={studioSrc(media, 'vto-garment')} alt="" width={480} height={480} loading="lazy" decoding="async" />
           <figcaption><span>{t.garmentNote}</span>{t.garment}</figcaption>
         </figure>
         <div className={styles.vtoLists}>
@@ -79,7 +79,7 @@ export function StudioVto({ copy }: { copy: StudioCopy }) {
         <div role="tabpanel" id="vto-panel-lookbook" aria-labelledby="vto-tab-lookbook" hidden={mode !== 0} data-vto-panel="lookbook" className={styles.vtoLook}>
           {VTO_LOOK.map((name, index) => (
             <figure key={name} className={styles.appear} style={{ '--i': index } as Vars}>
-              <img src={studio(name)} alt="" width={420} height={560} loading="lazy" decoding="async" />
+              <img src={studioSrc(media, name)} alt="" width={420} height={560} loading="lazy" decoding="async" />
               <figcaption>{t.lookbookCuts[index]}</figcaption>
             </figure>
           ))}
@@ -87,7 +87,7 @@ export function StudioVto({ copy }: { copy: StudioCopy }) {
         <div role="tabpanel" id="vto-panel-free" aria-labelledby="vto-tab-free" hidden={mode !== 1} data-vto-panel="free" className={styles.vtoFree}>
           {VTO_FREE.map((cut, index) => (
             <figure key={cut.name} className={styles.appear} style={{ '--i': index, aspectRatio: cut.ratio } as Vars}>
-              <img src={studio(cut.name)} alt="" width={420} height={560} loading="lazy" decoding="async" />
+              <img src={studioSrc(media, cut.name)} alt="" width={420} height={560} loading="lazy" decoding="async" />
               <figcaption>{t.freeCuts[index]}</figcaption>
             </figure>
           ))}

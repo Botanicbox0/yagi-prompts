@@ -11,6 +11,7 @@ vi.mock('@/components/campaigns/brand-experience', () => ({
   MorphicFilmPair: () => <div data-morphic-film-pair />,
 }));
 vi.mock('@/lib/seo/faq-section', () => ({ FaqSection: () => null }));
+vi.mock('@/lib/content/landing-media-server', () => ({ getLandingMedia: async () => ({}) }));
 import BrandsPage, { generateMetadata } from '@/app/(marketing)/[locale]/brands/page';
 import StoryPage from '@/app/(marketing)/[locale]/brands/stories/[slug]/page';
 

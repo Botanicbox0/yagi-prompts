@@ -4,7 +4,7 @@ import { NextRequest } from 'next/server';
 const handlers = vi.hoisted(() => ({ requireAdmin: vi.fn(), dispatchAdmin: vi.fn() }));
 vi.mock('@/lib/auth/viewer', () => ({ requireAdmin: handlers.requireAdmin }));
 vi.mock('@/lib/admin/dispatch', () => ({ dispatchAdmin: handlers.dispatchAdmin, outcomeUrl: () => '/admin/prompts?ok=updated' }));
-vi.mock('@/lib/cache', () => ({ revalidateCampaigns: vi.fn(), revalidateCatalog: vi.fn(), revalidateContests: vi.fn(), revalidatePrompts: vi.fn() }));
+vi.mock('@/lib/cache', () => ({ revalidateCampaigns: vi.fn(), revalidateCatalog: vi.fn(), revalidateContests: vi.fn(), revalidateLandingMedia: vi.fn(), revalidatePrompts: vi.fn() }));
 vi.mock('@/lib/db/connect', () => ({ getSqlRunner: async () => ({}) }));
 vi.mock('@/lib/storage', () => ({ getStorage: async () => ({}) }));
 vi.mock('@/lib/notify/service', () => ({ getMailer: () => ({}) }));

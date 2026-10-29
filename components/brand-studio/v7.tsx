@@ -2,6 +2,7 @@ import type { CSSProperties, ReactNode } from 'react';
 import type { Dictionary } from '@/lib/i18n/dictionaries';
 import type { Locale } from '@/lib/i18n/config';
 import { brandEnquiryHref } from '@/lib/campaigns/links';
+import { landingSrc, type LandingMedia } from '@/lib/content/landing-media';
 import { Compare, ChapterScene, EngineSwitch, Film, PinnedTrack, Reveal, Tabs, Track, TypeLine } from './v7-client';
 import { StudioVto } from './studio-vto';
 import s from './v7.module.css';
@@ -17,6 +18,8 @@ import s from './v7.module.css';
 
 type Copy = Dictionary['brandLanding']['v7'];
 type StudioCopy = Dictionary['brandLanding']['studio'];
+/** Images the founder replaced in /admin/landing-media (#116); a slot that is absent shows its file. */
+type Media = { media?: LandingMedia };
 
 /** v7 media lives in /reel/landing/v7/; the product family and pairs stay where v5/v6 put them. */
 const V = (name: string, ext = 'webp') => `/reel/landing/v7/${name}.${ext}`;
@@ -89,12 +92,12 @@ export function V7Hero({ copy, locale }: { copy: Copy; locale: Locale }) {
   );
 }
 
-export function V7Problem({ copy }: { copy: Copy }) {
+export function V7Problem({ copy, media }: { copy: Copy } & Media) {
   const p = copy.problem;
   const pairs = PAIRS.map((id, index) => ({
     id,
-    raw: L(`c-${id}-raw`),
-    ours: L(`c-${id}-ours`),
+    raw: landingSrc(media, `c-${id}-raw`),
+    ours: landingSrc(media, `c-${id}-ours`),
     chip: p.pairs[index]!.chip,
     note: p.pairs[index]!.note,
     alt: [p.pairs[index]!.raw, p.pairs[index]!.ours] as [string, string],
@@ -150,9 +153,9 @@ function KitStage({ copy }: { copy: Copy }) {
   );
 }
 
-function MemoryStage({ copy }: { copy: Copy }) {
+function MemoryStage({ copy, media }: { copy: Copy } & Media) {
   const m = copy.first.memory;
-  const shots = [V('dir-1'), L('sc-mist'), V('beauty'), L('sc-serum'), V('dir-3'), L('sc-parfum')];
+  const shots = [V('dir-1'), landingSrc(media, 'sc-mist'), V('beauty'), landingSrc(media, 'sc-serum'), V('dir-3'), landingSrc(media, 'sc-parfum')];
   return (
     <div className={s.card} data-stage="memory">
       <div className={s.cardHead}>
@@ -195,7 +198,7 @@ function DirectionStage({ copy }: { copy: Copy }) {
   );
 }
 
-export function V7BrandFirst({ copy }: { copy: Copy }) {
+export function V7BrandFirst({ copy, media }: { copy: Copy } & Media) {
   const f = copy.first;
   const chapters = f.chapters.map((chapter, index) => (
     <div key={chapter.label} data-chapter={index} className={s.chapter}>
@@ -209,7 +212,7 @@ export function V7BrandFirst({ copy }: { copy: Copy }) {
       <p className={s.body}>{chapter.body}</p>
     </div>
   ));
-  const stages = [<KitStage key="kit" copy={copy} />, <MemoryStage key="memory" copy={copy} />, <DirectionStage key="direction" copy={copy} />];
+  const stages = [<KitStage key="kit" copy={copy} />, <MemoryStage key="memory" copy={copy} media={media} />, <DirectionStage key="direction" copy={copy} />];
   const e = f.engine;
   const outputs = [
     { ratio: '3 / 4', media: <img src={V('dir-1')} alt="" width={900} height={1200} loading="lazy" decoding="async" /> },
@@ -323,7 +326,7 @@ export function V7Workflow({ copy }: { copy: Copy }) {
   );
 }
 
-export function V7Work({ copy, studio }: { copy: Copy; studio: StudioCopy }) {
+export function V7Work({ copy, studio, media }: { copy: Copy; studio: StudioCopy } & Media) {
   const w = copy.work;
   const range = (
     <div key="range">
@@ -331,7 +334,7 @@ export function V7Work({ copy, studio }: { copy: Copy; studio: StudioCopy }) {
       <ul data-product-range className={s.range}>
         {PRODUCTS.map((key) => (
           <li key={key} data-range-product={key} className={s.rangeItem}>
-            <img src={L(`pk-${key}`)} alt="" width={720} height={900} loading="lazy" decoding="async" />
+            <img src={landingSrc(media, `pk-${key}`)} alt="" width={720} height={900} loading="lazy" decoding="async" />
           </li>
         ))}
       </ul>
@@ -343,7 +346,7 @@ export function V7Work({ copy, studio }: { copy: Copy; studio: StudioCopy }) {
       <ul className={s.scenes}>
         {PRODUCTS.map((key) => (
           <li key={key} data-asset-scene={key} className={s.sceneTile}>
-            <img src={L(`sc-${key}`)} alt="" width={900} height={1125} loading="lazy" decoding="async" />
+            <img src={landingSrc(media, `sc-${key}`)} alt="" width={900} height={1125} loading="lazy" decoding="async" />
           </li>
         ))}
       </ul>
@@ -352,7 +355,7 @@ export function V7Work({ copy, studio }: { copy: Copy; studio: StudioCopy }) {
   const tryOn = (
     <div key="try-on" data-studio-vto>
       <p className={s.note}>{w.notes[2]}</p>
-      <StudioVto copy={studio} />
+      <StudioVto copy={studio} media={media} />
     </div>
   );
   const ads = (
