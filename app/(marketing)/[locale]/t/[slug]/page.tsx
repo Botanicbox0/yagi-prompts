@@ -17,7 +17,6 @@ import { aspectsForMedium, defaultAspect, resolveEngine } from '@/lib/images/eng
 import { signInHref } from '@/lib/billing/links';
 import { identityVerifyHref } from '@/lib/identity/links';
 import { templateMetadata, unresolvedTemplateMetadata } from '@/lib/seo/template-metadata';
-import { RENDER_PIPELINE_PUBLIC } from '@/lib/flags';
 import { storefrontOpen } from '@/lib/auth/purchase-gate';
 import { FaqSection } from '@/lib/seo/faq-section';
 import { JsonLd } from '@/lib/seo/json-ld';
@@ -26,6 +25,7 @@ import { templateStructuredData } from '@/lib/seo/structured-data';
 import { MarketingFooter, MarketingNav } from '@/components/marketing/chrome';
 import { TextSwap } from '@/components/ui/text-swap';
 import { PromptDetailMedia } from '@/components/prompts/detail-media';
+import { TemplateGallery, TransformStrip } from '@/components/prompts/template-gallery';
 import { TypographicPoster, posterRatio } from '@/components/prompts/poster';
 import { RelatedPrompts } from '@/components/prompts/detail';
 import { makerProfileRest } from '@/components/prompts/card-frame';
@@ -38,8 +38,14 @@ import { cachedSubscriptionAvailability } from '@/lib/creator-subscriptions/cach
 import { SubscriptionAvailabilityProvider } from '@/components/twings/subscription-availability';
 import { TemplateMakeAvailability } from '@/components/twings/subscription-public-notices';
 import { cachedTypicalWaitMinutes } from '@/lib/twings/cached-typical-wait';
-import { cachedRecipeOutline } from '@/lib/recipes/cached-public';
-import { RecipePanel } from '@/components/recipes/recipe-panel';
+import { cachedPublicRecipe } from '@/lib/recipes/cached-public';
+import { recipeTeaser } from '@/lib/recipes/public';
+import { HowItWasMade } from '@/components/recipes/how-it-was-made';
+import { RecipeActions } from '@/components/recipes/recipe-actions';
+import { MakeLauncher } from '@/components/templates/make-launcher';
+import { MakeSheet } from '@/components/templates/make-sheet';
+import { templateCredits } from '@/lib/twings/credits';
+import { makerBioFor } from '@/lib/makers/profile';
 import { CreativeAvatar, placeOf } from '@/components/makers/identity';
 
 /**
@@ -101,10 +107,22 @@ export default async function TemplatePage({ params }: RouteParams) {
   // Built with the page and refreshed with it (tag `prompts`): the median of recent successful renders
   // for this engine and length, or the engine default below ten (lib/twings/typical-wait.ts).
   const waitMinutes = await cachedTypicalWaitMinutes({ engine: resolveEngine(card.engine, card.medium), medium: card.medium, seconds: card.medium === 'video' ? card.runtimeSeconds ?? null : null });
-  // docs/PLATFORM-2.0.md §7.3·§20.3: what the creative chose to show, in the order they chose — the
-  // outline here for everyone, the prompts/tips/files from /api/recipes for signed-in members only.
+  // A maker template only (docs/PLATFORM-2.0.md §7.3·§20.3): what the maker chose to show, in the order they chose.
+  // One gate: the static HTML carries the teaser (the intro, the opening of step 1 and its BGM line); a
+  // signed-in member gets the rest — every prompt, the tips, the files — from /api/renders/access.
   const mr = dict.makerRecipe;
-  const recipe = await cachedRecipeOutline(card.id);
+  const recipe = await cachedPublicRecipe(card.id, { selfie: mr.selfieLabel, reference: mr.referenceLabel, step: mr.stepResultLabel });
+  const teaserRecipe = recipe ? recipeTeaser(recipe) : null;
+  const howItWasMade = teaserRecipe ? (
+    <HowItWasMade
+      recipe={teaserRecipe}
+      copy={mr}
+      gate={{
+        accessEndpoint: `/api/renders/access?template=${encodeURIComponent(card.slug)}&locale=${locale}`,
+        signinHref: signInHref(`${templateHref(locale, slug)}#how`, locale),
+      }}
+    />
+  ) : null;
 
   const t = dict.templates;
   const labels = promptLabels(dict);
@@ -153,21 +171,12 @@ export default async function TemplatePage({ params }: RouteParams) {
       }
     : null;
 
-  const howItWasMade = recipe ? (
-    <RecipePanel
-      templateId={card.id}
-      locale={locale}
-      outline={recipe}
-      signInHref={signInHref(`${templateHref(locale, slug)}#recipe`, locale)}
-      makeHref={style !== null ? '#make' : null}
-      copy={{
-        ...mr.how, stepImage: mr.stepImage, stepVideo: mr.stepVideo, selfieLabel: mr.selfieLabel, referenceLabel: mr.referenceLabel, stepResultLabel: mr.stepResultLabel,
-        credit: maker ? labels.byAuthor.replace('{handle}', maker.handle) : null,
-      }}
-    />
-  ) : null;
-
   const mediaAspect = card.aspectDefault ?? defaultAspect(card.medium);
+  // Pictures get the interactive stage (swipe, viewer, zoom); a film keeps its player. A set opens
+  // on its poster frame — the founder's pick, the same published object as that frame.
+  const galleryLabels = t.gallery;
+  const stageFrames = card.medium === 'image' ? (setSize ? gallery : card.poster ? [card.poster] : null) : null;
+  const stageStart = setSize && card.poster ? Math.max(0, gallery.findIndex((frame) => frame.src === card.poster!.src)) : 0;
   const photoGuideExamples = [
     { id: 'front', src: '/images/portrait-guide/front-facing.webp', label: dict.studio.photoExamples.front, crop: 'object-[50%_30%]' },
     { id: 'bright', src: '/images/portrait-guide/clear-face.webp', label: dict.studio.photoExamples.bright, crop: 'object-[50%_20%]' },
@@ -177,34 +186,65 @@ export default async function TemplatePage({ params }: RouteParams) {
   return (
     <>
       <MarketingNav locale={locale} dict={dict} rest={`/t/${slug}`} initialTheme="light" />
-      <JsonLd id="template-structured-data" data={templateStructuredData({ origin: siteUrl(), locale, card, description: dict.meta.templateDescription, publicSalesEnabled: RENDER_PIPELINE_PUBLIC })} />
+      {/* No Offer: a template page names no won or dollar price (founder, 2026-10-29 — credits). */}
+      <JsonLd id="template-structured-data" data={templateStructuredData({ origin: siteUrl(), locale, card, description: dict.meta.templateDescription, publicSalesEnabled: false })} />
 
       <SubscriptionAvailabilityProvider initialAvailability={availability}>
       <main id="main" data-template={card.slug} data-medium={card.medium} data-section data-theme="light" className="section pb-24">
-        <div className="band pt-24 lg:pt-32">
+        {/* The page's own centred shell. `.band` keeps a 300px ad rail free at 1440+, which this
+            page never has — that empty rail is what pushed everything left (founder, 2026-10-28). */}
+        <div data-template-shell className="mx-auto w-full max-w-[calc(var(--container-audience)+2*var(--spacing-gutter))] px-[var(--spacing-gutter)] pt-24">
             <a href={templatesHref(locale, card.medium)} className="inline-flex min-h-11 items-center text-sm text-black/65 transition-colors hover:text-black">
               ← {interpolate(t.backTo, { medium: dict.nav[card.medium] })}
             </a>
-            {recipe?.presentation === 'story-first' ? howItWasMade : null}
 
-            <header className="mt-4 grid gap-7 lg:mt-6 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,0.85fr)] lg:items-start lg:gap-12">
-              <div className="-mx-[var(--spacing-gutter)] sm:mx-0 lg:sticky lg:top-24">
-                <PromptDetailMedia
-                  poster={card.poster}
-                  video={card.video}
-                  alt={labels.resultLabel}
-                  ratio={ratio}
-                  aspect={mediaAspect}
-                  controls={{
-                    play: dict.campaigns.landing.reelPlay,
-                    pause: dict.campaigns.landing.reelPause,
-                    unmute: dict.campaigns.landing.reelUnmute,
-                    mute: dict.campaigns.landing.reelMute,
-                  }}
-                  fallback={<TypographicPoster title={card.title} slug={card.slug} kicker={dict.nav[card.medium]} ratio={ratio} />}
-                />
+            <header className="mt-3 grid gap-7 lg:grid-cols-[minmax(0,1fr)_minmax(22rem,25rem)] lg:items-start lg:gap-12 xl:grid-cols-[minmax(0,1fr)_26rem] xl:gap-16">
+              <div className="min-w-0">
+                {stageFrames ? (
+                  <TemplateGallery
+                    frames={stageFrames}
+                    initialIndex={stageStart}
+                    setSize={setSize}
+                    title={title}
+                    aspect={mediaAspect}
+                    makeHref={style !== null ? '#make' : null}
+                    labels={{
+                      ...galleryLabels,
+                      lead: setSize ? galleryLabels.transformSet : galleryLabels.transformImage,
+                      position: dict.renders.frames.position,
+                      selfie: dict.creatorJourney.evidenceSelfie,
+                    }}
+                  />
+                ) : (
+                  <>
+                    <div className="-mx-[var(--spacing-gutter)] sm:mx-0">
+                      <PromptDetailMedia
+                        poster={card.poster}
+                        video={card.video}
+                        alt={labels.resultLabel}
+                        ratio={ratio}
+                        aspect={mediaAspect}
+                        controls={{
+                          play: dict.campaigns.landing.reelPlay,
+                          pause: dict.campaigns.landing.reelPause,
+                          unmute: dict.campaigns.landing.reelUnmute,
+                          mute: dict.campaigns.landing.reelMute,
+                        }}
+                        fallback={<TypographicPoster title={card.title} slug={card.slug} kicker={dict.nav[card.medium]} ratio={ratio} />}
+                      />
+                    </div>
+                    {/* A film with no poster still gets the promise, without the result tile. */}
+                    <TransformStrip
+                      lead={galleryLabels.transformVideo}
+                      selfieLabel={dict.creatorJourney.evidenceSelfie}
+                      makeHref={style !== null ? '#make' : null}
+                      poster={card.poster}
+                      aspect={mediaAspect}
+                    />
+                  </>
+                )}
               </div>
-              <div>
+              <div className="min-w-0">
                 <p className="font-label text-eyebrow uppercase">
                   <span data-medium-chip className="text-accent">{dict.nav[card.medium]}</span>
                 </p>
@@ -230,6 +270,19 @@ export default async function TemplatePage({ params }: RouteParams) {
                   ))}
                 </div>
 
+                {/* A public recipe: copy the prompt or make it, both one tap from the title (2026-10-29).
+                    Only the step count goes down: the full prompt stays behind the members' gate. */}
+                {recipe?.steps?.length ? (
+                  <RecipeActions
+                    steps={recipe.steps.length}
+                    labels={{ ...mr.actions, copied: mr.how.copied }}
+                    makeHref={style !== null ? '#make' : null}
+                    shopOpen={shopOpen}
+                    accessEndpoint={`/api/renders/access?template=${encodeURIComponent(card.slug)}&locale=${locale}`}
+                    signinHref={signInHref(`${templateHref(locale, slug)}#how`, locale)}
+                  />
+                ) : null}
+
                 {style === null ? (
                   <>
                     <section data-template-closed className="mt-6 rounded-2xl border border-hairline p-5 sm:p-6">
@@ -248,13 +301,14 @@ export default async function TemplatePage({ params }: RouteParams) {
                   </>
                 ) : (
                   <>
-                    {/* The one make card: price, quiet one-line specs, one CTA, and refund/AI note. */}
-                    <section id="make" data-template-make data-template-price-box className="mt-6 scroll-mt-24 rounded-2xl border border-hairline p-5 sm:p-6">
-                      <div className="flex items-baseline justify-between gap-4">
-                        <p data-template-price className="font-display text-[2rem] leading-none font-black">{style.price}</p>
-                        <span className="rounded-full bg-surface px-2.5 py-1 text-xs font-medium text-black/75">{t.priceLabel}</span>
-                      </div>
-                      <dl data-template-facts className="mt-2.5 flex flex-wrap items-center gap-y-1 text-xs text-black/65">
+                    {/* The make box (founder, 2026-10-29): credits for a member, "Subscribe to make it here" for a
+                        visitor — no won, no dollar on the page. The make card itself is the sheet below. */}
+                    <MakeLauncher
+                      credits={templateCredits(card)}
+                      signinHref={signInHref(`${templateHref(locale, slug)}#make`, locale)}
+                      labels={{ subscribeCta: t.subscribeCta, credits: t.credits, makeCta: t.makeCta, makeCtaClosed: t.makeCtaClosed }}
+                    >
+                      <dl data-template-facts className="flex flex-wrap items-center gap-y-1 text-xs text-black/65">
                         {facts.map(([label, value], idx) => (
                           <div key={label} data-template-fact className="inline-flex items-center">
                             {idx > 0 && <span aria-hidden="true" className="mx-1.5 text-black/30">·</span>}
@@ -263,98 +317,96 @@ export default async function TemplatePage({ params }: RouteParams) {
                           </div>
                         ))}
                       </dl>
-                      <TwingsStudio
-                        styles={[style]}
-                        initialStyleId={style.id}
-                        shopOpenHint={shopOpen}
-                        live={{
-                          endpoint: '/api/renders',
-                          accessEndpoint: '/api/renders/access',
-                          interestEndpoint: '/api/notify/interest',
-                          template: card.slug,
-                          locale,
-                          signinHref: signInHref(`${templateHref(locale, slug)}#make`, locale),
-                          identityHref: identityVerifyHref(`${templateHref(locale, slug)}#make`),
-                          selfie: dict.selfie,
-                          subscription: { copy: dict.creatorSubscription, editorCopy: dict.premiumEditor },
-                          labels: {
-                            badge: dict.renders.studio.badge,
-                            operatorBadge: dict.renders.studio.operatorBadge,
-                            freeCta: dict.renders.studio.freeCta,
-                            submitting: dict.renders.studio.submitting,
-                            identityNotice: dict.renders.studio.identityNotice,
-                            identityPending: dict.renders.studio.identityPending,
-                            identityCta: dict.renders.studio.identityCta,
-                            errors: dict.renders.studio.errors,
-                          },
-                        }}
-                        labels={{
-                          stepPhoto: dict.studio.stepPhoto,
-                          stepStyle: dict.studio.stepStyle,
-                          stepPay: dict.studio.stepPay,
-                          stepResult: dict.studio.stepResult,
-                          dropZone: dict.studio.dropZone,
-                          dropHint: dict.studio.dropHint,
-                          changePhoto: dict.studio.changePhoto,
-                          chooseStyle: dict.studio.chooseStyle,
-                          payCta: dict.studio.payCta,
-                          payNote: dict.studio.payNote,
-                          closedTitle: dict.studio.closedTitle,
-                          closedBody: dict.studio.closedBody,
-                          closedCta: dict.studio.closedCta,
-                          closedDone: dict.studio.closedDone,
-                          signedOutCta: dict.studio.signedOutCta,
-                          pending: dict.studio.pending,
-                          makeCta: t.makeCta,
-                          makeCtaClosed: t.makeCtaClosed,
-                          otherAspect: dict.studio.otherAspect,
-                          runtimeLabel: dict.studio.runtimeLabel,
-                          needPhoto: dict.studio.needPhoto,
-                          noStyles: dict.studio.noStyles,
-                          moreTemplates: dict.studio.moreTemplates,
-                          aspectLabel: dict.studio.aspectLabel,
-                          resolutionLabel: dict.studio.resolutionLabel,
-                          resolutionDefault: dict.studio.resolutionDefault,
-                          resolutionNote: dict.studio.resolutionNote,
-                        }}
-                      />
-                      <div data-template-trust className="mt-4 space-y-1 border-t border-hairline pt-3.5 text-xs leading-relaxed text-black/65">
-                        <p data-template-refund className="font-medium text-black/80">{dict.renders.notCharged}</p>
-                        {/* Founder, 2026-09-11: what AI-made means is said before the money, not after the complaint. */}
-                        <p data-studio-ai-note>{t.aiLimit}</p>
-                      </div>
-                    </section>
+                    </MakeLauncher>
 
-                    <p data-template-sale-state className="mt-3 text-xs leading-relaxed text-black/60">
-                      <TemplateMakeAvailability copy={makeAvailabilityCopy} oneTimeAvailable={shopOpen} subscriptionEligible={subscriptionQuote !== null} field="body" />
-                    </p>
-
-                    <section data-template-photo-guide className="mt-5 rounded-2xl border border-hairline bg-surface p-4 sm:p-5">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <h2 className="text-xs font-semibold text-black/85">{dict.selfie.goodExamples}</h2>
-                        <div className="inline-flex items-center gap-1.5 text-xs font-medium text-black/75">
-                          <span className="rounded-full border border-hairline bg-paper px-2.5 py-0.5">{dict.creatorJourney.evidenceSelfie}</span>
-                          <span aria-hidden="true" className="text-accent">→</span>
-                          <span className="rounded-full border border-hairline bg-paper px-2.5 py-0.5">{dict.creatorJourney.evidenceScene}</span>
+                    {/* The make card as a sheet: studio, refund and AI notes, the photo guide. Every `#make` opens it. */}
+                    <MakeSheet title={title} closeLabel={t.gallery.close}>
+                      <section id="make" data-template-make className="scroll-mt-24">
+                        <TwingsStudio
+                          styles={[style]}
+                          initialStyleId={style.id}
+                          shopOpenHint={shopOpen}
+                          stickyBar={false}
+                          live={{
+                            endpoint: '/api/renders',
+                            accessEndpoint: '/api/renders/access',
+                            interestEndpoint: '/api/notify/interest',
+                            template: card.slug,
+                            locale,
+                            signinHref: signInHref(`${templateHref(locale, slug)}#make`, locale),
+                            identityHref: identityVerifyHref(`${templateHref(locale, slug)}#make`),
+                            selfie: dict.selfie,
+                            subscription: { copy: dict.creatorSubscription, editorCopy: dict.premiumEditor },
+                            labels: {
+                              badge: dict.renders.studio.badge,
+                              operatorBadge: dict.renders.studio.operatorBadge,
+                              freeCta: dict.renders.studio.freeCta,
+                              submitting: dict.renders.studio.submitting,
+                              identityNotice: dict.renders.studio.identityNotice,
+                              identityPending: dict.renders.studio.identityPending,
+                              identityCta: dict.renders.studio.identityCta,
+                              errors: dict.renders.studio.errors,
+                            },
+                          }}
+                          labels={{
+                            stepPhoto: dict.studio.stepPhoto,
+                            stepStyle: dict.studio.stepStyle,
+                            stepPay: dict.studio.stepPay,
+                            stepResult: dict.studio.stepResult,
+                            dropZone: dict.studio.dropZone,
+                            dropHint: dict.studio.dropHint,
+                            changePhoto: dict.studio.changePhoto,
+                            chooseStyle: dict.studio.chooseStyle,
+                            payCta: dict.studio.payCta,
+                            payNote: dict.studio.payNote,
+                            closedTitle: dict.studio.closedTitle,
+                            closedBody: dict.studio.closedBody,
+                            closedCta: dict.studio.closedCta,
+                            closedDone: dict.studio.closedDone,
+                            signedOutCta: t.subscribeCta,
+                            pending: dict.studio.pending,
+                            makeCta: t.makeCta,
+                            makeCtaClosed: t.makeCtaClosed,
+                            otherAspect: dict.studio.otherAspect,
+                            runtimeLabel: dict.studio.runtimeLabel,
+                            needPhoto: dict.studio.needPhoto,
+                            noStyles: dict.studio.noStyles,
+                            moreTemplates: dict.studio.moreTemplates,
+                            aspectLabel: dict.studio.aspectLabel,
+                            resolutionLabel: dict.studio.resolutionLabel,
+                            resolutionDefault: dict.studio.resolutionDefault,
+                            resolutionNote: dict.studio.resolutionNote,
+                          }}
+                        />
+                        <div data-template-trust className="mt-4 space-y-1 border-t border-hairline pt-3.5 text-xs leading-relaxed text-black/65">
+                          <p data-template-refund className="font-medium text-black/80">{dict.renders.notCharged}</p>
+                          {/* Founder, 2026-09-11: what AI-made means is said before the money, not after the complaint. */}
+                          <p data-studio-ai-note>{t.aiLimit}</p>
                         </div>
-                      </div>
-                      <p className="mt-2 text-xs leading-relaxed text-black/70">{dict.studio.signedOutBody}</p>
-                      <ul data-studio-photo-examples className="mt-3 grid grid-cols-3 gap-2.5">
-                        {photoGuideExamples.map((example) => (
-                          <li key={example.id} data-studio-photo-example={example.id}>
-                            <figure>
-                              <div className="aspect-[4/5] overflow-hidden rounded-xl bg-black/5">
-                                {/* eslint-disable-next-line @next/next/no-img-element -- the public photo guide */}
-                                <img src={example.src} alt="" width={160} height={200} loading="lazy" className={`h-full w-full object-cover ${example.crop}`} />
-                              </div>
-                              <figcaption className="mt-1.5 flex items-center gap-1 text-xs font-medium text-black/80">
-                                <span aria-hidden="true" className="text-accent">✓</span>{example.label}
-                              </figcaption>
-                            </figure>
-                          </li>
-                        ))}
-                      </ul>
-                    </section>
+                        <p data-template-sale-state className="mt-3 text-xs leading-relaxed text-black/60">
+                          <TemplateMakeAvailability copy={makeAvailabilityCopy} oneTimeAvailable={shopOpen} subscriptionEligible={subscriptionQuote !== null} field="body" />
+                        </p>
+                        <section data-template-photo-guide className="mt-5 rounded-2xl border border-hairline bg-surface p-4 sm:p-5">
+                          <h2 className="text-xs font-semibold text-black/85">{dict.selfie.goodExamples}</h2>
+                          <p className="mt-2 text-xs leading-relaxed text-black/70">{dict.studio.signedOutBody}</p>
+                          <ul data-studio-photo-examples className="mt-3 grid grid-cols-3 gap-2.5">
+                            {photoGuideExamples.map((example) => (
+                              <li key={example.id} data-studio-photo-example={example.id}>
+                                <figure>
+                                  <div className="aspect-[4/5] overflow-hidden rounded-xl bg-black/5">
+                                    {/* eslint-disable-next-line @next/next/no-img-element -- the public photo guide */}
+                                    <img src={example.src} alt="" width={160} height={200} loading="lazy" className={`h-full w-full object-cover ${example.crop}`} />
+                                  </div>
+                                  <figcaption className="mt-1.5 flex items-center gap-1 text-xs font-medium text-black/80">
+                                    <span aria-hidden="true" className="text-accent">✓</span>{example.label}
+                                  </figcaption>
+                                </figure>
+                              </li>
+                            ))}
+                          </ul>
+                        </section>
+                      </section>
+                    </MakeSheet>
                   </>
                 )}
 
@@ -374,7 +426,7 @@ export default async function TemplatePage({ params }: RouteParams) {
                         </span>
                       </span>
                     </a>
-                    {(maker?.headline ?? maker?.bio) && <p className="mt-3 text-sm leading-relaxed whitespace-pre-line break-words text-black/70">{maker?.headline ?? maker?.bio}</p>}
+                    {maker && (maker.headline ?? makerBioFor(maker, locale)) && <p className="mt-3 text-sm leading-relaxed whitespace-pre-line break-words text-black/70">{maker.headline ?? makerBioFor(maker, locale)}</p>}
                     {maker?.openToBrands && (
                       <p className="mt-3 inline-flex items-center gap-2 rounded-full bg-black/[0.05] px-3 py-1 text-xs text-black/75">
                         <span aria-hidden="true" className="size-1.5 rounded-full bg-emerald-500" />{dict.makers.openToBrands}
@@ -386,29 +438,10 @@ export default async function TemplatePage({ params }: RouteParams) {
               </div>
             </header>
 
-            {/* A set template: every frame one order makes, in set order — the poster above is one of them. */}
-            {setSize && (
-              <section data-template-gallery={setSize} className="mt-14 border-t border-hairline pt-10">
-                <h2 className="font-display text-[clamp(1.4rem,2.6vw,2rem)] leading-[0.95] font-black uppercase">{interpolate(t.setTitle, { n: String(setSize) })}</h2>
-                <ul className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-                  {gallery.map((frame, index) => (
-                    <li key={frame.src} data-template-gallery-frame={index + 1} className="overflow-hidden rounded-2xl bg-black">
-                      {/* eslint-disable-next-line @next/next/no-img-element -- public bucket object, no loader */}
-                      <img
-                        src={frame.src}
-                        alt={`${title} ${index + 1}/${setSize}`}
-                        {...(frame.w ? { width: frame.w } : {})}
-                        {...(frame.h ? { height: frame.h } : {})}
-                        loading="lazy"
-                        decoding="async"
-                        className="h-auto w-full"
-                      />
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            )}
-            {recipe?.presentation === 'make-first' ? howItWasMade : null}
+            {/* The recipe follows the result, never ahead of it (founder, 2026-10-28). A maker's
+                'story-first' still puts it right under the stage; 'make-first' after the campaigns.
+                "만드는 법" draws its own rule and spacing; the wrapper only anchors `#recipe`. */}
+            {recipe?.presentation === 'story-first' && <div id="recipe" data-template-recipe="story-first" className="scroll-mt-24">{howItWasMade}</div>}
 
             {/* The earn loop: campaigns that ask for exactly this template. */}
             {campaigns.length > 0 && (
@@ -434,6 +467,7 @@ export default async function TemplatePage({ params }: RouteParams) {
                 </ul>
               </section>
             )}
+            {recipe?.presentation === 'make-first' && <div id="recipe" data-template-recipe="make-first" className="scroll-mt-24">{howItWasMade}</div>}
 
             {maker && moreFromMaker.length > 0 && (
               <div data-template-more-from={maker.handle}>

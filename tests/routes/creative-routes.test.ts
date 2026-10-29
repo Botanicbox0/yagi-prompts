@@ -3,11 +3,12 @@ import { NextRequest, NextResponse } from 'next/server';
 
 /**
  * docs/PLATFORM-2.0.md §20 — the public doors of the AI creative system: `twings.app/@handle` opens
- * the creative's page in the reader's language; a template's full recipe needs a signed-in member;
+ * the creative's page in the reader's language; a template's full recipe comes only to a signed-in
+ * member, from the one gate the template page asks (`/api/renders/access`), and counts as an open;
  * the MCP endpoint needs a creative token and refuses a foreign browser origin.
  */
 
-const state = vi.hoisted(() => ({ userId: null as string | null, token: null as string | null }));
+const state = vi.hoisted(() => ({ userId: null as string | null, token: null as string | null, opens: [] as string[] }));
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/supabase/middleware', () => ({
   updateSession: async (_r: NextRequest, headers: Headers) => ({ user: null, response: NextResponse.next({ request: { headers } }) }),
@@ -18,19 +19,30 @@ vi.mock('@/lib/auth/viewer', () => ({ getViewer: async () => ({ tier: state.user
 vi.mock('@/lib/db/connect', () => ({ getSqlRunner: async () => ({ query: async () => ({ rows: [] }) }) }));
 vi.mock('@/lib/recipes/public', () => ({
   loadPublicRecipe: async () => ({ presentation: 'make-first', intro: null, outro: null, steps: [{ n: 1, kind: 'image', engine: 'GPT IMAGE 2', inputs: [], prompt: 'MEMBER ONLY', note: null }], files: null }),
-  recordRecipeOpen: async () => undefined,
+  recordRecipeOpen: async (_sql: unknown, templateId: string, userId: string) => { state.opens.push(`${templateId}:${userId}`); },
 }));
+vi.mock('@/lib/prompts/repo', () => ({ loadPromptBySlug: async (_sql: unknown, slug: string) => (slug === 'neon-alley' ? { id: ID, audience: 'public', engine: 'gpt-image-2', medium: 'image' } : null) }));
+vi.mock('@/lib/notify/preferences', () => ({ loadPreferences: async () => null }));
+vi.mock('@/lib/identity/selfie-service', () => ({ currentSelfie: async () => null, selfieView: () => null }));
+vi.mock('@/lib/identity/service', () => ({ assetLibraryMode: () => 'virtual', identityStatusFor: async () => 'not_needed', needsLiveness: () => false }));
+vi.mock('@/lib/renders/service', () => ({ canStartRender: () => false }));
+vi.mock('@/lib/creator-subscriptions/gateway', () => ({ billingConfigFromEnv: () => ({ kind: 'test' }) }));
+vi.mock('@/lib/creator-subscriptions/access', () => ({ subscriptionQaAllowed: () => false }));
+vi.mock('@/lib/creator-subscriptions/repo', () => ({ getSubscriptionSummary: async () => null, getSubscriptionUsePercent: async () => null }));
+vi.mock('@/lib/creator-subscriptions/runtime', () => ({ premiumEditingOperational: async () => false }));
+vi.mock('@/lib/premium-editing/eligibility', () => ({ subscriptionTemplateEligibility: () => null }));
+vi.mock('@/lib/premium-editing/budget', () => ({ getPremiumEditBudget: async () => null }));
 vi.mock('@/lib/makers/tokens', () => ({ resolveMakerToken: async (_sql: unknown, auth: string | null) => (auth === `Bearer ${state.token}` ? 'creative-id' : null) }));
 vi.mock('@/lib/mcp/server', () => ({ handleMcp: async (_deps: unknown, body: { id?: number; method?: string }) => (body.method?.startsWith('notifications/') ? null : { jsonrpc: '2.0', id: body.id ?? null, result: {} }) }));
 vi.mock('@/lib/renders/store', () => ({ getRenderStore: async () => ({}) }));
 vi.mock('@/lib/renders/runtime', () => ({ runLiveRenderPass: async () => undefined }));
-vi.mock('next/server', async (original) => ({ ...(await original<typeof import('next/server')>()), after: () => undefined }));
+vi.mock('next/server', async (original) => ({ ...(await original<typeof import('next/server')>()), after: (task: () => unknown) => { void task(); } }));
 
 import { middleware } from '@/middleware';
-import { GET as recipeGET } from '@/app/api/recipes/[id]/route';
+import { GET as accessGET } from '@/app/api/renders/access/route';
 import { GET as mcpGET, POST as mcpPOST } from '@/app/api/mcp/route';
 
-const ID = '7a000000-0000-4000-8000-000000000065';
+const ID = vi.hoisted(() => '7a000000-0000-4000-8000-000000000065');
 const page = (path: string, headers: Record<string, string> = {}) => new NextRequest(`https://twings.app${path}`, { headers: { host: 'twings.app', ...headers } });
 
 describe('creative short link', () => {
@@ -47,17 +59,24 @@ describe('creative short link', () => {
 });
 
 describe('member-only recipe', () => {
-  it('answers 401 to an anonymous reader and the full recipe to a member, never cached publicly', async () => {
+  const access = () => accessGET(new Request('https://twings.app/api/renders/access?template=neon-alley&locale=en'));
+
+  it('answers no recipe to an anonymous reader and the full recipe to a member, never cached publicly', async () => {
     state.userId = null;
-    const anon = await recipeGET(new Request(`https://twings.app/api/recipes/${ID}?locale=en`), { params: Promise.resolve({ id: ID }) });
-    expect(anon.status).toBe(401);
-    expect(await anon.text()).not.toContain('MEMBER ONLY');
+    state.opens = [];
+    const anon = await access();
+    expect(anon.status).toBe(200);
+    expect(anon.headers.get('cache-control')).toBe('private, no-store');
+    const anonBody = await anon.json();
+    expect(anonBody).toMatchObject({ signedIn: false, recipe: null });
+    expect(JSON.stringify(anonBody)).not.toContain('MEMBER ONLY');
+    expect(state.opens).toEqual([]);
     state.userId = 'f0000000-0000-4000-8000-000000000001';
-    const member = await recipeGET(new Request(`https://twings.app/api/recipes/${ID}?locale=en`), { params: Promise.resolve({ id: ID }) });
-    expect(member.status).toBe(200);
+    const member = await access();
     expect(member.headers.get('cache-control')).toBe('private, no-store');
     expect((await member.json()).recipe.steps[0].prompt).toBe('MEMBER ONLY');
-    expect((await recipeGET(new Request('https://twings.app/api/recipes/nope'), { params: Promise.resolve({ id: 'nope' }) })).status).toBe(404);
+    // The creative's studio counts the open — once per (template, member).
+    expect(state.opens).toEqual([`${ID}:f0000000-0000-4000-8000-000000000001`]);
   });
 });
 

@@ -24,12 +24,13 @@ export const LOCAL_MAKER = {
 } as const;
 
 export const LOCAL_RECIPE_SLUG = 'neon-alley-dolly';
+/** Past step 1's public opening (lib/recipes/public.ts TEASER_CHARS), so only a member ever reads it. */
 export const LOCAL_RECIPE_CANARY = 'LOCAL_RECIPE_CANARY_members_only';
 const LOCAL_RECIPE = {
   version: 2,
   slots: { selfie: { kind: 'image', source: 'user', required: true } },
   steps: [
-    { id: 'still', kind: 'image', engine: 'gpt-image-2', inputs: ['selfie'], prompt: `${LOCAL_RECIPE_CANARY}: the person in {{selfie}} under neon signs in a wet alley, 35mm look.`, note: 'TEST tip: a front-facing selfie keeps the likeness.', params: { aspect: '9:16' } },
+    { id: 'still', kind: 'image', engine: 'gpt-image-2', inputs: ['selfie'], prompt: `TEST ONLY · the person in {{selfie}} under neon signs in a wet alley at night, 35mm look, rain beading on the lens, magenta and cyan signage mirrored in puddles, steam rising behind them. ${LOCAL_RECIPE_CANARY}: keep the likeness.`, note: 'TEST tip: a front-facing selfie keeps the likeness.', params: { aspect: '9:16' } },
     { id: 'film', kind: 'video', engine: 'seedance-2.5', inputs: ['still'], prompt: `${LOCAL_RECIPE_CANARY}: a slow dolly in on the person in {{still}} as the neon flickers. One take.`, params: { aspect: '9:16', duration: 10, resolution: '720p' } },
   ],
   output: { from: 'film' },

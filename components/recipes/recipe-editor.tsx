@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } f
 import type { Dictionary } from '@/messages/en';
 import { interpolate } from '@/lib/i18n/format';
 import { isRoyalty, quoteRecipe, ROYALTY_MAX_KRW, ROYALTY_MIN_KRW, ROYALTY_STEP_KRW } from '@/lib/recipes/pricing';
-import { exportRecipe, INTRO_MAX, NOTE_MAX, OUTRO_MAX, parseRecipe, recipeMedium, SELFIE_SLOT, type Recipe, type RecipeIssue } from '@/lib/recipes/schema';
+import { exportRecipe, INTRO_MAX, MAX_STEP_PROMPT_CHARS, NOTE_MAX, OUTRO_MAX, parseRecipe, recipeMedium, SELFIE_SLOT, type Recipe, type RecipeIssue } from '@/lib/recipes/schema';
 import { BUTTON, BUTTON_OUTLINE, FIELD, HINT, PANEL } from '@/components/creators/styles';
 
 /**
@@ -271,7 +271,7 @@ export function RecipeEditor({ copy, formatId, draft, engines, aspects, hasSelfi
                   {[label.selfie, ...references.map((_, i) => label.reference(i + 1)), ...steps.slice(0, index).filter((s) => s.kind === 'image').map((_, i) => label.step(i + 1))].map((token) =>
                     <button key={token} type="button" data-insert-token={token} onClick={() => insert(index, token)} className="inline-flex min-h-9 items-center rounded-full border border-hairline px-3 text-xs">{token}</button>)}
                 </div>
-                <textarea ref={(node) => { textareas.current[index] = node; }} value={step.text} onChange={(e) => update(index, { text: e.target.value })} rows={6} maxLength={4000} aria-label={`${interpolate(copy.stepLabel, { n: String(index + 1) })} ${copy.prompt}`} className={FIELD} autoComplete="off" spellCheck={false} />
+                <textarea ref={(node) => { textareas.current[index] = node; }} value={step.text} onChange={(e) => update(index, { text: e.target.value })} rows={6} maxLength={MAX_STEP_PROMPT_CHARS} aria-label={`${interpolate(copy.stepLabel, { n: String(index + 1) })} ${copy.prompt}`} className={FIELD} autoComplete="off" spellCheck={false} />
                 <span className={HINT}>{copy.promptHint}</span>
               </div>
               <label className="block text-sm" data-recipe-step-note={index + 1}>{copy.note}

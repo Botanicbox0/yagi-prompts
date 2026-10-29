@@ -9,7 +9,7 @@ import { administerPlatform } from '@/lib/creator-platform/admin';
 import { saveSelfie } from '@/lib/identity/selfie-service';
 import { makerAction, uploadMakerFile } from '@/lib/recipes/maker';
 import { quoteRecipe } from '@/lib/recipes/pricing';
-import { loadPublicRecipe, recipeOutline } from '@/lib/recipes/public';
+import { loadPublicRecipe, recipeTeaser } from '@/lib/recipes/public';
 import { parseRecipe } from '@/lib/recipes/schema';
 import { selfPublishSlug } from '@/lib/recipes/self-publish';
 import { saveMakerProfile } from '@/lib/makers/profile';
@@ -91,9 +91,9 @@ describe('self-publish (§20.6)', () => {
     expect(card.poster?.src).toMatch(/^https:\/\/cdn\.test\/[0-9a-f]{64}\.jpg$/);
     expect(catalog.community.filter((item) => item.authorHandle === 'soft_light').map((item) => item.slug)).toContain(published.slug);
 
-    // The recipe travelled with it: the outline is public, the prompts stay for members.
-    const outline = recipeOutline((await loadPublicRecipe(h.sql, published.templateId!, { selfie: 'My photo', reference: 'Reference {n}', step: 'Step {n} result' }))!);
-    expect(outline).toMatchObject({ intro: 'One still from one selfie.', steps: [{ n: 1, kind: 'image' }] });
+    // The recipe travelled with it: the teaser is public, the full prompts stay for members.
+    const teaser = recipeTeaser((await loadPublicRecipe(h.sql, published.templateId!, { selfie: 'My photo', reference: 'Reference {n}', step: 'Step {n} result' }))!);
+    expect(teaser).toMatchObject({ intro: 'One still from one selfie.', steps: [{ n: 1, kind: 'image' }] });
 
     // Twice is the same template, and the format is frozen like an accepted one.
     expect(await publish()).toMatchObject({ templateId: published.templateId, slug: published.slug });

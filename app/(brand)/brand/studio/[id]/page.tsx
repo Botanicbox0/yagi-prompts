@@ -1,6 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { brandContext } from "@/components/brand-workspace/context";
 import { ProductionResult } from "@/components/brand-workspace/production-result";
+import { AmbientBleed } from "@/components/brand-workspace/ambient-bleed";
 import { loadProductionOutput } from "@/lib/brands/production/service";
 export default async function BrandProductionResult({
   params,
@@ -32,12 +33,14 @@ export default async function BrandProductionResult({
           <h1>{locale === "ko" ? job.titleKo : job.title}</h1>
         </div>
       </div>
-      <ProductionResult
-        id={id}
-        initialStatus={job.status}
-        released={job.released}
-        t={b.productionStudio}
-      />
+      <AmbientBleed>
+        <ProductionResult
+          id={id}
+          initialStatus={job.status}
+          released={job.released}
+          t={b.productionStudio}
+        />
+      </AmbientBleed>
     </div>
   );
 }

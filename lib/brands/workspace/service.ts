@@ -20,7 +20,7 @@ import {
 } from './schemas';
 import { CampaignTermsSchema, briefColumnsFromTerms, kstToday } from './campaign-terms';
 import type {
-  BrandOutcome, BrandFailureCode, BrandRole, BrandProjectSummary, BrandProjectDetail, BrandWorkspace,
+  BrandOutcome, BrandFailureCode, BrandRole, BrandProjectStatus, BrandProjectSummary, BrandProjectDetail, BrandWorkspace,
   BrandContentVersion, BrandDecision, BrandMessage, BrandAttachment, BrandPost, BrandReport, BrandReportSnapshot,
   BrandMembers, BrandMetricsBatchResult, BrandExternalPostsResult, BrandPostPresentation,
 } from './types';
@@ -306,6 +306,19 @@ export async function canReadBrandProject(deps: BrandWorkspaceDeps, viewer: View
   if (!uuid(viewer.userId) || !uuid(id)) return false;
   try { return await deps.sql.transaction(async sql => { await readableProject(sql, viewer.userId!, id, deps.verifiedEmail); return true; }); }
   catch (error) { if (error instanceof Denied) return false; throw error; }
+}
+/**
+ * The seat this viewer has on a campaign, for modules beside this file (lib/brands/shortlist): the
+ * customer's own access first, else the TWINGS team's read view (`role: 'studio'`, never commenting).
+ * Runs inside the caller's transaction; null where the campaign is not theirs to see.
+ */
+export interface BrandProjectSeat { organizationId: string; role: BrandRole | 'studio'; canComment: boolean; status: BrandProjectStatus }
+export async function brandProjectSeat(sql: SqlRunner, userId: string, id: string, verifiedEmail?: string): Promise<BrandProjectSeat | null> {
+  if (!uuid(userId) || !uuid(id)) return null;
+  try {
+    const row = await readableProject(sql, userId, id, verifiedEmail);
+    return { organizationId: String(row.organization_id), role: row.member_role as BrandRole | 'studio', canComment: row.can_comment === true, status: row.status as BrandProjectStatus };
+  } catch (error) { if (error instanceof Denied) return null; throw error; }
 }
 
 export async function createBrandOrganization(deps: BrandWorkspaceDeps, viewer: Viewer, input: unknown): Promise<BrandOutcome> {

@@ -91,7 +91,9 @@ describe('single FAQ catalog', () => {
     const dict = getDictionary('ko');
     const closed = faqItems(dict, 'template', false);
     expect(closed.find(item => item.id === 'browsing')?.a).toContain(dict.seo.generationClosed);
-    expect(closed.find(item => item.id === 'pricing')?.a).toContain(dict.seo.generationClosed);
+    expect(faqItems(dict, 'landing', false).find(item => item.id === 'pricing')?.a).toContain(dict.seo.generationClosed);
+    // A template page names no won or dollar price (founder, 2026-10-29), so its FAQ has no pricing answer.
+    expect(closed.find(item => item.id === 'pricing')).toBeUndefined();
     expect(faqItems(dict, 'template', true).find(item => item.id === 'browsing')?.a).not.toContain(dict.seo.generationClosed);
   });
   it('has unique identities, all required categories, and matching localized content', () => {

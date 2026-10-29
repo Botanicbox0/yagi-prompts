@@ -48,6 +48,8 @@ describe('prompt catalog projection (§13.2)', () => {
       'priceCents',
       'priceKrw',
       'publishedAt',
+      // 2026-10-29: whether the page shows the recipe's prompt — a flag, never the text.
+      'recipeOpen',
       'runtimeSeconds',
       'slug',
       'source',

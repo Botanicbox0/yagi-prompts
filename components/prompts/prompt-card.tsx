@@ -74,6 +74,16 @@ export function PromptCardView({
           </span>
         )}
 
+        {/* The template page shows this one's prompt (2026-10-29): the reason a creative's follower clicks. */}
+        {card.recipeOpen && (
+          <span
+            data-card-recipe
+            className="pointer-events-none absolute top-2 right-2 rounded-full bg-white px-2 py-1 text-[0.6875rem] leading-none font-semibold text-black"
+          >
+            {labels.cardRecipe}
+          </span>
+        )}
+
         {/* Length and shape, where a thumbnail's duration usually sits. Solid black under white
             text keeps 4.5:1 over any frame of any clip. */}
         <span className="pointer-events-none absolute bottom-2 left-2 flex gap-1 text-[0.6875rem] leading-none font-medium text-white">

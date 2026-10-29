@@ -123,4 +123,20 @@ describe('maker profile route', () => {
     state.makers = [];
     expect((await generateMetadata(params('jun_01'))).robots).toEqual({ index: false, follow: false });
   });
+
+  it('speaks English on /en with the English bio, and names itself the recipe page while a recipe is open', async () => {
+    state.makers = [maker({ bio: 'AI 영상 템플릿을 만듭니다.', bioEn: 'I make AI video templates.', templateCount: 1, openRecipeCount: 1, latestPublishedAt: null })];
+    state.video = [card('maker-golden-hour', { recipeOpen: true })];
+    const html = renderToStaticMarkup(await MakerPage(params('jun_01', 'en')));
+    expect(html).toContain('I make AI video templates.');
+    expect(html).not.toContain('AI 영상 템플릿을 만듭니다.');
+    expect(html).toContain('data-maker-recipe-hub');
+    expect(html).toContain('data-card-recipe');
+    expect((await generateMetadata(params('jun_01', 'en'))).description).toBe('I make AI video templates.');
+    // The Korean page keeps the bio the maker wrote first.
+    expect(renderToStaticMarkup(await MakerPage(params('jun_01', 'ko')))).toContain('AI 영상 템플릿을 만듭니다.');
+    // No open recipe, no recipe claim.
+    state.makers = [{ ...state.makers[0]!, openRecipeCount: 0 }];
+    expect(await outcome('jun_01')).not.toContain('data-maker-recipe-hub');
+  });
 });

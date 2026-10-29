@@ -93,6 +93,8 @@ interface Fetched {
   robotsTag: string | null;
   /** For the `?download=1` probes — the header that makes a browser SAVE instead of play. */
   contentDisposition: string | null;
+  /** The workspace pages' nonce policy (lib/security/workspace-csp.ts). */
+  csp: string | null;
   body: string;
   bytes: Uint8Array;
 }
@@ -118,6 +120,7 @@ async function request(path: string, init?: RequestInit): Promise<Fetched> {
             status: response.statusCode ?? 0, location: header('location'),
             cacheControl: header('cache-control'), contentType: header('content-type'),
             robotsTag: header('x-robots-tag'), contentDisposition: header('content-disposition'),
+            csp: header('content-security-policy'),
             body: bytes.toString('utf8'), bytes,
           });
         });
@@ -136,6 +139,7 @@ async function request(path: string, init?: RequestInit): Promise<Fetched> {
     contentType: response.headers.get('content-type'),
     robotsTag: response.headers.get('x-robots-tag'),
     contentDisposition: response.headers.get('content-disposition'),
+    csp: response.headers.get('content-security-policy'),
     body: new TextDecoder().decode(bytes),
     bytes,
   };
@@ -1025,8 +1029,10 @@ async function sweepTemplates(): Promise<void> {
   // flips — it draws a neutral skeleton, and the per-viewer access call settles it in the browser.
   expectPresent('…and the studio starts as a neutral skeleton', detail.body, 'data-studio-pending');
   expectAbsent('…not painted closed before the access call', detail.body, 'data-studio-closed');
-  // §15.3-1 — the decision screen: one make card that is the price box, no second heading or link button.
-  expectPresent('…one make card that is the price box', detail.body, 'data-template-price-box');
+  // §15.3-1, revised 2026-10-29 (founder): a short make box on the page, the make card in a sheet.
+  expectPresent('…a make box on the page', detail.body, 'data-template-make-launcher');
+  expectPresent('…the make card in a sheet', detail.body, 'data-make-sheet');
+  expectAbsent('…no price box', detail.body, 'data-template-price-box');
   expectAbsent('…no link button above the card', detail.body, 'data-template-make-cta');
   expectPresent('…its facts', detail.body, 'data-template-fact');
   expectPresent('…the AI limit inside the card', detail.body, 'data-studio-ai-note');
@@ -1035,18 +1041,23 @@ async function sweepTemplates(): Promise<void> {
   expectPresent('…a phone sticky bar', detail.body, 'data-make-sticky');
   if (/<div[^>]*data-make-sticky[^>]*data-hide-tabs/.test(detail.body)) ok('…that hides the installed app tabs', 'data-hide-tabs');
   else fail('…sticky bar hides the app tabs', 'data-make-sticky must carry data-hide-tabs');
-  expectPresent('…whose one CTA goes to the make card', detail.body, 'href="#make"');
+  expectPresent('…and the selfie strip still opens the make card', detail.body, 'href="#make"');
   expectAbsent('…no demo badge anywhere', detail.body, 'data-demo-badge');
   expectAbsent('…no placeholder ad', detail.body, 'YOUR AD HERE');
   expectAbsent('…no house ad rail', detail.body, 'data-house-ad');
-  expectPresent('…and the price in dollars on the English page', detail.body, '>$4<');
+  // Founder, 2026-10-29: a template page names no won or dollar price — a visitor is asked to subscribe.
+  const shown = (html: string) => html.replace(/<script[\s\S]*?<\/script>/g, '');
+  expectAbsent('…no dollar price on the English page', shown(detail.body), '>$4<');
+  expectPresent('…"Subscribe to make it here" instead', detail.body, 'Subscribe to make it here');
+  expectAbsent('…no Offer price in the structured data', detail.body, 'priceCurrency');
   // The related list is the catalogue's 4:5 grid: two across on a phone, four on a desktop.
   if (/<ul[^>]*data-related-grid[^>]*class="[^"]*\bgrid-cols-2\b[^"]*\blg:grid-cols-4\b/.test(detail.body)) ok('…related templates in the two-column card grid', 'data-related-grid');
   else fail('…related templates grid', 'expected data-related-grid with grid-cols-2 … lg:grid-cols-4');
   expectPresent('…whose items are cards', detail.body, 'data-related-item');
   const detailKo = await get(`/ko/t/${GATED_PROMPT}`);
   expectEqual('the Korean template page renders 200', detailKo.status, 200);
-  expectPresent('…with the price in won', detailKo.body, '5,900원');
+  expectAbsent('…with no won price either', shown(detailKo.body), '5,900원');
+  expectPresent('…"구독하고 여기서 만들기" instead', detailKo.body, '구독하고 여기서 만들기');
   if (/완성까지<\/dt><dd[^>]*>보통 \d+분/.test(detailKo.body)) ok('…with the typical wait in minutes', '보통 N분');
   else fail('…typical wait', 'expected "완성까지 · 보통 N분" in the make card');
   expectAbsent('…and never a dollar', detailKo.body, '>$4<');
@@ -1249,6 +1260,9 @@ async function sweepMakers(): Promise<void> {
   expectPresent('the maker block', makerTemplate.body, 'data-template-maker="jun"');
   expectPresent('…linking to the maker page', makerTemplate.body, 'href="/ko/makers/jun"');
   expectPresent('the verified mark', makerTemplate.body, 'data-template-verified');
+  // 2026-10-29: the copy-or-make fork and the recipe pill follow a public prompt, never the credit.
+  expectAbsent('no copy-or-make fork without a public prompt', makerTemplate.body, 'data-template-recipe-actions');
+  expectAbsent('…and no recipe pill on the catalogue', video.body, 'data-card-recipe');
   const legacy = await get('/ko/t/skate-park-golden-hour');
   expectPresent('a handle without a maker page is a plain credit', legacy.body, `${KO_TERMS.creditPrefix} @hana`);
   expectAbsent('…with no maker block', legacy.body, 'data-template-maker');
@@ -1268,6 +1282,7 @@ async function sweepMakers(): Promise<void> {
     expectAbsent(`${locale}: indexable`, page.body, 'noindex');
     expectAbsent(`${locale}: no account id`, page.body, 'f0000000-0000-4000-8000-000000000002');
     expectAbsent(`${locale}: no email`, page.body, 'pro@playbook.test');
+    expectAbsent(`${locale}: no recipe claim without an open recipe`, page.body, 'data-maker-recipe-hub');
   }
   expectPresent('ko: the count line', (await get('/ko/makers/jun')).body, '템플릿 1편');
 
@@ -1311,18 +1326,16 @@ async function sweepMakers(): Promise<void> {
   expectEqual('renders 200', recipePage.status, 200);
   expectPresent('the recipe section', recipePage.body, 'data-recipe-how');
   expectPresent('…with the creative\'s intro', recipePage.body, 'data-recipe-intro');
-  expectPresent('…the steps drawn locked', recipePage.body, 'data-recipe-locked-lines');
-  expectAbsent('…and never the prompt text', recipePage.body, LOCAL_RECIPE_CANARY);
+  expectPresent('…behind the members\' gate', recipePage.body, 'data-recipe-gate');
+  expectPresent('…with the opening of step 1', recipePage.body, 'TEST ONLY · the person in');
+  expectAbsent('…and never the rest of the prompt', recipePage.body, LOCAL_RECIPE_CANARY);
   expectAbsent('…nor a step tip', recipePage.body, 'TEST tip:');
-  const templateId = /"\/api\/recipes\/([0-9a-f-]{36})/.exec(recipePage.body)?.[1] ?? /templateId\\?":\\?"([0-9a-f-]{36})/.exec(recipePage.body)?.[1];
-  if (templateId) {
-    const anonRecipe = await get(`/api/recipes/${templateId}?locale=en`);
-    expectEqual('the full recipe needs a sign-in', anonRecipe.status, 401);
-    expectAbsent('…and a 401 carries no prompt', anonRecipe.body, LOCAL_RECIPE_CANARY);
-    expectPresent('…never cached publicly', anonRecipe.cacheControl ?? '', 'no-store');
-  } else {
-    fail('the recipe section names its template', 'no template id in the page');
-  }
+  expectAbsent('…nor the closing line', recipePage.body, '태그해 주세요');
+  const anonRecipe = await get(`/api/renders/access?template=${LOCAL_RECIPE_SLUG}&locale=en`);
+  expectEqual('the access answer renders 200', anonRecipe.status, 200);
+  expectPresent('…with no recipe for a visitor', anonRecipe.body, '"recipe":null');
+  expectAbsent('…and no prompt', anonRecipe.body, LOCAL_RECIPE_CANARY);
+  expectPresent('…never cached publicly', anonRecipe.cacheControl ?? '', 'no-store');
 
   console.log('\n/api/mcp — the creative agent door');
   const mcp = await request('/api/mcp', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', params: {} }) });
@@ -1541,6 +1554,26 @@ async function sweepBrandWorkspace(fixtures: BrandWorkspaceProbe[]): Promise<voi
   expectEqual('brand usage order refuses anonymous access before validation', usageOrder.status, 401);
   expectEqual('brand usage order refusal is private no-store', usageOrder.cacheControl, 'private, no-store');
   noPrivateBytes('brand usage order', usageOrder);
+  // The studio's campaign preparation door (docs/BRAND-STAFF-ACCESS.md): admins only, and it does not confirm it exists.
+  const studioForm = new FormData();
+  studioForm.set('_op', 'brandWorkspace.createProject');
+  const studioPrep = await request('/api/brand-workspace/studio', { method: 'POST', headers: { origin: base.origin }, body: studioForm });
+  expectEqual('brand studio door answers anonymous posts with a bare 404', studioPrep.status, 404);
+  expectEqual('brand studio door 404 has no body', studioPrep.body, '');
+  expectEqual('brand studio door refusal is private no-store', studioPrep.cacheControl, 'private, no-store');
+  // The workspace pages' nonce CSP, end to end: the page that opens without a session must carry the
+  // policy, and Next.js must have stamped its nonce on every script it rendered.
+  const invite = await get('/brand/invite');
+  expectEqual('/brand/invite renders for anonymous visitors', invite.status, 200);
+  const nonce = invite.csp?.match(/'nonce-([A-Za-z0-9+/=]+)'/)?.[1];
+  const policy = invite.csp ?? '';
+  if (nonce && policy.includes("'strict-dynamic'") && policy.includes("object-src 'none'") && policy.includes("base-uri 'none'")
+    && policy.includes("frame-ancestors 'none'") && policy.includes("form-action 'self'") && !policy.includes('unsafe-eval'))
+    ok('workspace page sends the strict nonce CSP');
+  else fail('workspace page sends the strict nonce CSP', policy || 'no Content-Security-Policy header');
+  const scripts = [...invite.body.matchAll(/<script\b[^>]*>/g)].map((m) => m[0]);
+  expectEqual('workspace page has scripts to stamp', scripts.length > 0, true);
+  expectEqual('every script on a workspace page carries the nonce', scripts.filter((tag) => !nonce || !tag.includes(`nonce="${nonce}"`)).length, 0);
 }
 
 /** docs/TEMPLATES-IA.md §8 — the render queue: gated where it must be, open where the token says. */

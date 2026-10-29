@@ -11,12 +11,12 @@ import { loadCreatorWorkspace } from '@/lib/creator-platform/onboarding';
 import { makerAction, uploadMakerFile } from '@/lib/recipes/maker';
 import { loadReviewEntries, startReviewRenders, REVIEW_RENDERS } from '@/lib/recipes/review';
 import { loadJobRecipe, loadTemplateRecipe } from '@/lib/recipes/repo';
-import { loadPublicRecipe, recipeOutline, type RecipeOutline } from '@/lib/recipes/public';
+import { loadPublicRecipe, recipeTeaser, TEASER_CHARS, type PublicRecipe } from '@/lib/recipes/public';
 import { makerFileObject } from '@/lib/recipes/media';
 import { loadPromptCatalog } from '@/lib/prompts/catalog';
 import { loadPromptById } from '@/lib/prompts/repo';
 import { createLocalRenderStore, type RenderStore } from '@/lib/renders/store';
-import { RecipePanel } from '@/components/recipes/recipe-panel';
+import { HowItWasMade } from '@/components/recipes/how-it-was-made';
 import { en } from '@/messages/en';
 import { ADMIN_VIEWER, viewerOf } from '@/tests/helpers/admin';
 import { promptHarness, type PromptHarness } from '@/tests/helpers/prompts';
@@ -25,19 +25,24 @@ import sharp from 'sharp';
 /**
  * The studio review (platform.review), the acceptance that copies a recipe onto a pending template,
  * the trigger that freezes it, and the public canary: a recipe the maker kept private never reaches
- * the catalogue DTO, the public projection, or the HTML rendered from it.
+ * the catalogue DTO, the public projection, or the HTML rendered from it — and a disclosed one reaches
+ * the static page only as its teaser (the intro and the opening of step 1).
  */
 
 const maker = viewerOf('free'), open = { creators: true };
 const CANARY = 'RECIPE_CANARY_7f3a_never_public';
+/** Longer than the teaser, so everything after it — the canary included — is members-only. */
+const OPENING = 'Open on a slow push-in. '.repeat(7);
 const png = (side = 320) => sharp({ create: { width: side, height: side, channels: 3, background: { r: 30, g: 90, b: 200 } } }).png().toBuffer().then((b) => new Uint8Array(b));
 const labels = { selfie: 'My photo', reference: 'Reference {n}', step: 'Step {n} result' };
 const mr = en.makerRecipe;
-/** The template page's recipe section as anyone receives it in the HTML: the outline, before the member fetch. */
-const panelHtml = (outline: RecipeOutline) => renderToStaticMarkup(
-  <RecipePanel templateId={randomUUID()} locale="en" outline={outline} signInHref="/auth/signin" makeHref="#make"
-    copy={{ ...mr.how, stepImage: mr.stepImage, stepVideo: mr.stepVideo, selfieLabel: mr.selfieLabel, referenceLabel: mr.referenceLabel, stepResultLabel: mr.stepResultLabel, credit: null }} />,
+/** The template page's recipe section as anyone receives it in the HTML: the teaser, before the member fetch. */
+const panelHtml = (teaser: PublicRecipe) => renderToStaticMarkup(
+  <HowItWasMade recipe={teaser} copy={mr} gate={{ accessEndpoint: '/api/renders/access?template=x&locale=en', signinHref: '/auth/signin' }} />,
 );
+/** What a signed-in member sees once the access endpoint answered with the full projection. */
+const memberHtml = (recipe: PublicRecipe) => renderToStaticMarkup(<HowItWasMade recipe={recipe} copy={mr} />);
+const teaserOpening = `${OPENING.slice(0, TEASER_CHARS).trim()}…`;
 
 describe('studio review and acceptance of a maker recipe', () => {
   let h: PromptHarness, root: string, store: RenderStore;
@@ -57,7 +62,7 @@ describe('studio review and acceptance of a maker recipe', () => {
     const recipe = {
       version: 2,
       slots: { selfie: { kind: 'image', source: 'user', required: true }, prop: { kind: 'image', source: 'creator', asset: file.id } },
-      steps: [{ id: 'step1', kind: 'image', engine: 'gpt-image-2', inputs: ['selfie', 'prop'], prompt: `${CANARY}: {{selfie}} in a neon diner holding {{prop}}.`, params: { aspect: '4:5' } }],
+      steps: [{ id: 'step1', kind: 'image', engine: 'gpt-image-2', inputs: ['selfie', 'prop'], prompt: `${OPENING}${CANARY}: {{selfie}} in a neon diner holding {{prop}}.`, params: { aspect: '4:5' } }],
       output: { from: 'step1' },
     };
     await makerAction(deps, maker, { ...base, recipe }, open);
@@ -114,8 +119,8 @@ describe('studio review and acceptance of a maker recipe', () => {
     const view = await loadPublicRecipe(h.sql, accepted.id, labels);
     expect(view).toEqual({ presentation: 'story-first', intro: null, outro: null, steps: null, files: null });
     expect(JSON.stringify(view)).not.toContain(CANARY);
-    // Nothing disclosed → no outline → the template page has no recipe section at all.
-    expect(recipeOutline(view!)).toBeNull();
+    // Nothing disclosed → no teaser → the template page has no recipe section at all.
+    expect(recipeTeaser(view!)).toBeNull();
     // Undisclosed files stay private even once the template is published — to a signed-in member too.
     expect(await makerFileObject(h.sql, viewerOf('anon'), file.id)).toBeNull();
     expect(await makerFileObject(h.sql, viewerOf('pro'), file.id)).toBeNull();
@@ -129,18 +134,18 @@ describe('studio review and acceptance of a maker recipe', () => {
     const accepted = await administerPlatform(h.sql, ADMIN_VIEWER, { action: 'format', id, accept: true, priceKrw: 4900, reason: 'Reviewed recipe' });
     expect(await loadPublicRecipe(h.sql, accepted.id, labels)).toBeNull();
     await h.sql.query("update prompt_items set status='published',published_at=now() where id=$1", [accepted.id]);
-    // The member projection (/api/recipes/{id}): prompts in reader form, inputs, files with a download address.
+    // The member projection (/api/renders/access): prompts in reader form, inputs, files with a download address.
     const view = (await loadPublicRecipe(h.sql, accepted.id, labels))!;
-    expect(view.steps).toEqual([{ n: 1, kind: 'image', engine: 'GPT IMAGE 2', inputs: [{ kind: 'selfie' }, { kind: 'reference', n: 1 }], prompt: `${CANARY}: [My photo] in a neon diner holding [Reference 1].`, note: null }]);
+    expect(view.steps).toEqual([{ n: 1, kind: 'image', engine: 'GPT IMAGE 2', inputs: [{ kind: 'selfie' }, { kind: 'reference', n: 1 }], prompt: `${OPENING}${CANARY}: [My photo] in a neon diner holding [Reference 1].`, note: null }]);
     expect(view.files).toEqual([{ n: 1, kind: 'image', href: `/api/makers/files/${file.id}`, download: `/api/makers/files/${file.id}?download=1` }]);
-    // The public layer (the static page): the steps' shape, never their text, never a file address.
-    const outline = recipeOutline(view)!;
-    expect(outline).toEqual({ presentation: 'story-first', intro: null, steps: [{ n: 1, kind: 'image', engine: 'GPT IMAGE 2', inputs: [{ kind: 'selfie' }, { kind: 'reference', n: 1 }] }], files: [{ kind: 'image' }] });
-    expect(JSON.stringify(outline)).not.toContain(CANARY);
-    const html = panelHtml(outline);
+    // The public layer (the static page): the opening of step 1, never the rest, never a file address.
+    const teaser = recipeTeaser(view)!;
+    expect(teaser).toEqual({ presentation: 'story-first', intro: null, outro: null, steps: [{ n: 1, kind: 'image', engine: 'GPT IMAGE 2', inputs: [{ kind: 'selfie' }, { kind: 'reference', n: 1 }], prompt: teaserOpening, note: null }], files: null });
+    expect(JSON.stringify(teaser)).not.toContain(CANARY);
+    const html = panelHtml(teaser);
     expect(html).toContain('data-recipe-how');
-    expect(html).toContain('My photo');
-    expect(html).toContain('data-recipe-locked-lines');
+    expect(html).toContain('data-recipe-gate');
+    expect(html).toContain(teaserOpening);
     expect(html).not.toContain(CANARY);
     expect(html).not.toContain('{{');
     expect(html).not.toMatch(/ast_[0-9a-f]{32}/);
@@ -154,7 +159,7 @@ describe('studio review and acceptance of a maker recipe', () => {
     const recipe = {
       version: 2,
       slots: { selfie: { kind: 'image', source: 'user', required: true }, prop: { kind: 'image', source: 'creator', asset: 'ast_0123456789abcdef0123456789abcdef' } },
-      steps: [{ id: 'step1', kind: 'image', engine: 'gpt-image-2', inputs: ['selfie', 'prop'], prompt: `${CANARY}: {{selfie}} through a lens holding {{prop}}.`, params: { aspect: '4:5' } }],
+      steps: [{ id: 'step1', kind: 'image', engine: 'gpt-image-2', inputs: ['selfie', 'prop'], prompt: `${OPENING}${CANARY}: {{selfie}} through a lens holding {{prop}}.`, params: { aspect: '4:5' } }],
       output: { from: 'step1' },
     };
     await h.sql.query(`insert into prompt_items(id,slug,source,status,published_at,models,title,title_ko,prompt_text,text_visibility,use_case,featured,medium,price_cents,price_krw,audience,recipe,disclosure,presentation)
@@ -162,8 +167,8 @@ describe('studio review and acceptance of a maker recipe', () => {
     expect(await loadPublicRecipe(h.sql, id, labels)).toBeNull();
     await h.sql.query(`update prompt_items set disclosure='{"prompts":true,"assets":true}'::jsonb where id=$1`, [id]);
     const view = (await loadPublicRecipe(h.sql, id, labels))!;
-    expect(view).toEqual({ presentation: 'make-first', intro: null, outro: null, steps: [{ n: 1, kind: 'image', engine: 'GPT IMAGE 2', inputs: [{ kind: 'selfie' }, { kind: 'reference', n: 1 }], prompt: `${CANARY}: [My photo] through a lens holding [Reference 1].`, note: null }], files: null });
-    const html = panelHtml(recipeOutline(view)!);
+    expect(view).toEqual({ presentation: 'make-first', intro: null, outro: null, steps: [{ n: 1, kind: 'image', engine: 'GPT IMAGE 2', inputs: [{ kind: 'selfie' }, { kind: 'reference', n: 1 }], prompt: `${OPENING}${CANARY}: [My photo] through a lens holding [Reference 1].`, note: null }], files: null });
+    const html = panelHtml(recipeTeaser(view)!);
     expect(html).not.toMatch(/ast_[0-9a-f]{32}/);
     expect(html).not.toContain(CANARY);
     // An unpublished original stays closed.
@@ -176,7 +181,7 @@ describe('studio review and acceptance of a maker recipe', () => {
     const recipe = {
       version: 2,
       slots: { selfie: { kind: 'image', source: 'user', required: true } },
-      steps: [{ id: 'step1', kind: 'image', engine: 'gpt-image-2', inputs: ['selfie'], prompt: `${CANARY}: {{selfie}} on a train at dusk.`, note: 'TIP_CANARY use a front-facing selfie', params: { aspect: '4:5' } }],
+      steps: [{ id: 'step1', kind: 'image', engine: 'gpt-image-2', inputs: ['selfie'], prompt: `${OPENING}${CANARY}: {{selfie}} on a train at dusk.`, note: 'TIP_CANARY use a front-facing selfie', params: { aspect: '4:5' } }],
       output: { from: 'step1' },
       notes: { intro: 'Three steps, all copy and paste.', outro: 'OUTRO_CANARY post yours and tag me' },
     };
@@ -184,13 +189,30 @@ describe('studio review and acceptance of a maker recipe', () => {
       values($1,$2,'yagi','published',now(),'{gpt-image-2}','Train','기차','Studio original.','hidden','{}',false,'image',0,0,'public',$3::jsonb,'{"prompts":true,"assets":false}'::jsonb,'make-first')`, [id, `train-${id.slice(0, 8)}`, JSON.stringify(recipe)]);
     const view = (await loadPublicRecipe(h.sql, id, labels))!;
     expect(view).toMatchObject({ intro: 'Three steps, all copy and paste.', outro: 'OUTRO_CANARY post yours and tag me', steps: [{ note: 'TIP_CANARY use a front-facing selfie' }] });
-    const outline = recipeOutline(view)!;
-    expect(outline.intro).toBe('Three steps, all copy and paste.');
-    const html = panelHtml(outline);
+    const teaser = recipeTeaser(view)!;
+    expect(teaser.intro).toBe('Three steps, all copy and paste.');
+    const html = panelHtml(teaser);
     expect(html).toContain('Three steps, all copy and paste.');
     for (const secret of [CANARY, 'TIP_CANARY', 'OUTRO_CANARY']) {
-      expect(JSON.stringify(outline)).not.toContain(secret);
+      expect(JSON.stringify(teaser)).not.toContain(secret);
       expect(html).not.toContain(secret);
     }
+    // The member's view carries all three, under the step and after the files.
+    const member = memberHtml(view);
+    for (const shown of ['Three steps, all copy and paste.', CANARY, 'TIP_CANARY', 'OUTRO_CANARY']) expect(member).toContain(shown);
+  });
+
+  it('keeps the [BGM …] line of step 1 in the teaser, and nothing of later steps', () => {
+    const step = (n: number, prompt: string) => ({ n, kind: 'video' as const, engine: 'SEEDANCE 2.5', inputs: [{ kind: 'selfie' as const }], prompt, note: `tip ${n}` });
+    const full: PublicRecipe = {
+      presentation: 'make-first', intro: null, outro: 'bye',
+      steps: [step(1, `${OPENING}SECRET_MIDDLE [BGM: lo-fi 92bpm, vinyl crackle]`), step(2, 'STEP_TWO_SECRET prompt text')],
+      files: [{ n: 1, kind: 'image', href: '/api/makers/files/ast_0123456789abcdef0123456789abcdef', download: '/api/makers/files/ast_0123456789abcdef0123456789abcdef?download=1' }],
+    };
+    const teaser = recipeTeaser(full)!;
+    expect(teaser.steps).toHaveLength(1);
+    expect(teaser.steps![0]!.prompt).toBe(`${teaserOpening}\n\n[BGM: lo-fi 92bpm, vinyl crackle]`);
+    expect(teaser).toMatchObject({ outro: null, files: null, steps: [{ note: null }] });
+    for (const secret of ['SECRET_MIDDLE', 'STEP_TWO_SECRET', 'tip 1', 'ast_']) expect(JSON.stringify(teaser)).not.toContain(secret);
   });
 });

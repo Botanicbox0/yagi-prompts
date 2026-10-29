@@ -8,7 +8,7 @@ import { getPromptCatalog } from '@/lib/prompts/public-catalog';
 import type { PromptCard, PublicMaker } from '@/lib/prompts/catalog';
 import { USE_CASES } from '@/lib/prompts/schemas';
 import { templatesHref } from '@/lib/prompts/links';
-import { makerHandleOf } from '@/lib/makers/profile';
+import { makerBioFor, makerHandleOf } from '@/lib/makers/profile';
 import { makerHref, makerShortPath, makerWorkSrc } from '@/lib/makers/links';
 import { cachedPublicWorks } from '@/lib/makers/cached-public';
 import { countryName } from '@/lib/makers/fields';
@@ -21,6 +21,7 @@ import { promptLabels, useCaseLabel } from '@/components/prompts/labels';
 import { CreativeAvatar, CreativeLinks, placeOf } from '@/components/makers/identity';
 import { RevealEmail, ShareProfile } from '@/components/makers/islands';
 import { WorksGallery } from '@/components/makers/works-gallery';
+import { MakerRecipeHub } from '@/components/makers/recipe-hub';
 
 /**
  * `/[locale]/makers/[handle]` — an AI creative's public page (docs/PLATFORM-2.0.md §7.5·§20).
@@ -72,7 +73,7 @@ export async function generateMetadata({ params }: RouteParams): Promise<Metadat
     handle,
     locale,
     title: name ? `${name} (@${handle}) · ${dict.makers.eyebrow}` : interpolate(dict.makers.metaTitle, values),
-    description: found.maker.headline ?? found.maker.bio ?? interpolate(dict.makers.metaDescription, values),
+    description: found.maker.headline ?? makerBioFor(found.maker, locale) ?? interpolate(dict.makers.metaDescription, values),
     siteName: dict.meta.siteName,
     poster: found.maker.avatar ?? found.cards.find((card) => card.poster)?.poster?.src ?? null,
   });
@@ -91,7 +92,7 @@ function profileStructuredData(origin: string, locale: Locale, maker: PublicMake
       alternateName: `@${maker.handle}`,
       identifier: maker.handle,
       jobTitle: maker.headline ?? role,
-      ...(maker.bio ? { description: maker.bio } : {}),
+      ...(makerBioFor(maker, locale) ? { description: makerBioFor(maker, locale) } : {}),
       ...(maker.avatar ? { image: `${origin}${maker.avatar}` } : {}),
       ...(maker.country ? { homeLocation: { '@type': 'Place', name: [maker.city, countryName(maker.country, locale)].filter(Boolean).join(', '), address: { '@type': 'PostalAddress', addressCountry: maker.country, ...(maker.city ? { addressLocality: maker.city } : {}) } } } : {}),
       ...(maker.links.length ? { sameAs: maker.links.map((link) => link.url) } : {}),
@@ -120,6 +121,7 @@ export default async function MakerPage({ params }: RouteParams) {
   const origin = siteUrl();
   const shortUrl = `${origin}${makerShortPath(maker.handle)}`;
   const name = maker.displayName ?? `@${maker.handle}`;
+  const bio = makerBioFor(maker, locale);
 
   return (
     <>
@@ -157,10 +159,10 @@ export default async function MakerPage({ params }: RouteParams) {
             </div>
           </header>
 
-          {(maker.bio || maker.tools.length > 0 || maker.links.length > 0) && (
+          {(bio || maker.tools.length > 0 || maker.links.length > 0) && (
             <section data-creative-about aria-label={t.aboutHeading} className="mt-12 grid gap-8 border-t border-hairline pt-8 md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
-              {maker.bio
-                ? <p data-maker-bio className="max-w-2xl text-base leading-relaxed whitespace-pre-line break-words text-black/75">{maker.bio}</p>
+              {bio
+                ? <p data-maker-bio className="max-w-2xl text-base leading-relaxed whitespace-pre-line break-words text-black/75">{bio}</p>
                 : <span />}
               <div className="space-y-6">
                 {maker.tools.length > 0 && (
@@ -180,6 +182,8 @@ export default async function MakerPage({ params }: RouteParams) {
               </div>
             </section>
           )}
+
+          <MakerRecipeHub handle={maker.handle} openRecipes={maker.openRecipeCount ?? 0} copy={t} />
 
           {works.length > 0 && (
             <section data-creative-works-section className="mt-14">

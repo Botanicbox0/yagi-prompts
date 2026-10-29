@@ -28,10 +28,15 @@ export default async function BrandHome({
     <div data-brand-home>
       <div className="bw-heading">
         <div>
-          <h1>{b.dashboard.title}</h1>
+          <div className="bw-title">
+            <h1>{b.dashboard.title}</h1>
+            {workspace.projects.length > 0 && <span className="bw-count-chip" data-campaign-total>{workspace.projects.length}</span>}
+          </div>
           <p>{b.dashboard.subtitle}</p>
         </div>
         {workspace.projects.length > 0 && access.canRequest && <a href={newProject} className="bw-button bw-primary">{b.newProject}</a>}
+        {/* DB admins prepare campaigns as the studio (docs/BRAND-STAFF-ACCESS.md); team-domain readers do not. */}
+        {access.staff && viewer.isAdmin && <a href={newProject} className="bw-button bw-primary" data-studio-prep-link>{b.studioPrep.cta}</a>}
       </div>
       {access.staff && choice && <StaffNotice b={b} manageHref={viewer.isAdmin ? adminOrganizationHref(choice.id, brandHost) : null} />}
       {workspace.projects.length === 0 && <ServiceGuide kind="campaign" b={b} showOther={!access.projectScopedOnly} organizationId={choice?.id} />}

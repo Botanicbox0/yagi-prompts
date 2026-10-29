@@ -25,6 +25,7 @@ import {
   resolveLocale,
   splitLocale,
 } from '@/lib/i18n/config';
+import { createNonce, needsWorkspaceCsp, NONCE_HEADER, workspaceCsp } from '@/lib/security/workspace-csp';
 
 /**
  * Edge middleware first checks the host/path boundary, including API/auth/static requests.
@@ -95,6 +96,21 @@ export async function middleware(request: NextRequest) {
   // Overwrite client-supplied context. Server components may use these for same-host auth links.
   requestHeaders.set(SURFACE_HEADER, surface);
   requestHeaders.set(REQUEST_ORIGIN_HEADER, requestUrl.origin);
+  // Workspace pages get a strict nonce CSP (lib/security/workspace-csp.ts). Next.js reads the nonce
+  // from the request's CSP header, so one the browser sent is never passed through.
+  requestHeaders.delete('content-security-policy');
+  requestHeaders.delete('content-security-policy-report-only');
+  requestHeaders.delete(NONCE_HEADER);
+  const nonce = needsWorkspaceCsp(surface, pathname) ? createNonce() : null;
+  const csp = nonce ? workspaceCsp(nonce) : null;
+  if (nonce && csp) {
+    requestHeaders.set('content-security-policy', csp);
+    requestHeaders.set(NONCE_HEADER, nonce);
+  }
+  const secured = <T extends NextResponse>(response: T): T => {
+    if (csp) response.headers.set('Content-Security-Policy', csp);
+    return response;
+  };
 
   // No locale/session work for OAuth exchanges, APIs, public render tokens or asset bytes.
   // Unlike the old matcher exclusion, this cannot bypass the workspace host policy above.
@@ -105,7 +121,7 @@ export async function middleware(request: NextRequest) {
       response.cookies.set(LOCALE_COOKIE, explicitLocale, { path: '/', maxAge: LOCALE_COOKIE_MAX_AGE, sameSite: 'lax' });
     }
     if (surface === 'admin' || surface === 'brand') for (const [key, value] of Object.entries(privateHeaders)) response.headers.set(key, value);
-    return response;
+    return secured(response);
   }
 
   const { response, user } = await updateSession(request, requestHeaders);
@@ -136,7 +152,7 @@ export async function middleware(request: NextRequest) {
       target.searchParams.set('next', `${pathname}${search}`);
       return withCookies(NextResponse.redirect(target, { headers: privateHeaders }), response);
     }
-    return response;
+    return secured(response);
   }
 
   // docs/PLATFORM-2.0.md §20 — `twings.app/@handle` (a bio link, a DM) opens the creative's page in

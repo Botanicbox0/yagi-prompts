@@ -11,6 +11,8 @@ import { PremiumEditor } from './premium-editor';
 import { shrinkPhoto } from '@/lib/images/client-photo';
 export { shrinkPhoto } from '@/lib/images/client-photo';
 import type { EditScope } from '@/lib/premium-editing/contract';
+import { publishViewerSelfie } from '@/lib/twings/viewer-selfie';
+import { publishViewerAccess } from '@/lib/twings/viewer-access';
 
 /**
  * TWINGS — the make loop, as a four-step demo (founder, 2026-08-16: "사진만 넣으면 완성도 높은
@@ -240,6 +242,7 @@ export function TwingsStudio({
   live,
   shopOpenHint = false,
   initialAccess,
+  stickyBar = true,
 }: {
   styles: StudioStyle[];
   labels: StudioLabels;
@@ -253,6 +256,8 @@ export function TwingsStudio({
    */
   shopOpenHint?: boolean;
   initialAccess?: StudioAccessSnapshot;
+  /** The phone's own sticky make bar. Off where the studio sits in a sheet with its own launcher. */
+  stickyBar?: boolean;
 }) {
   const single = styles.length === 1;
   // docs/PLATFORM-2.0.md §3.1: the static page used to paint "closed" and flip once the access call
@@ -347,6 +352,10 @@ export function TwingsStudio({
         setIdentityRequired(json.identityRequired === true);
         setIdentity(typeof json.identity === 'string' ? json.identity : 'not_needed');
         setSignedIn(json.signedIn === true);
+        // The template page's "my selfie → these results" strip shows the reader's own photo.
+        publishViewerSelfie(json.signedIn === true ? (json.selfie?.imageUrl ?? null) : null);
+        // …and its make launcher, outside the sheet, says credits or "subscribe" from this.
+        publishViewerAccess({ signedIn: json.signedIn === true, live: json.live === true });
         // While the person is choosing a photo, a refresh must not yank the panel out from under them.
         // A different default (changed in another tab) asks the question again.
         const nextSelfie = json.selfie ?? null;
@@ -557,7 +566,7 @@ export function TwingsStudio({
   }
 
   // The template page on a phone: price and the one CTA stay at the thumb until the card is in view.
-  const sticky = single && live && chosen ? (
+  const sticky = stickyBar && single && live && chosen ? (
     <MakeStickyBar
       price={monthly ? null : chosenPrice}
       label={!accessKnown ? (shopOpenHint ? labels.makeCta : labels.makeCtaClosed) : liveMode ? labels.makeCta : shopOpen && !signedIn ? labels.signedOutCta : labels.makeCtaClosed}

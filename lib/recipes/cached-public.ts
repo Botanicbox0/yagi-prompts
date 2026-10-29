@@ -2,28 +2,26 @@ import 'server-only';
 import { unstable_cache } from 'next/cache';
 import { getSqlRunner } from '@/lib/db/connect';
 import { resolveRuntimeMode } from '@/lib/runtime-mode';
-import { loadPublicRecipe, recipeOutline, type RecipeOutline } from './public';
+import { loadPublicRecipe, type PublicRecipe, type PublicRecipeLabels } from './public';
 
 /**
- * The template page is static (tag `prompts`, 1h TTL); its recipe OUTLINE is cached with it, so a
- * studio publish that refreshes the page refreshes this too. Only the outline is ever returned —
- * and so only the outline is ever stored: the prompts, notes and file addresses stay behind
- * `/api/recipes/{id}`, which needs a signed-in member (docs/PLATFORM-2.0.md §20.3). The outline
- * carries no localized text, so one entry serves both languages.
+ * The template page is static (tag `prompts`, 1h TTL); its "만드는 법" projection is cached with it, so
+ * a studio publish that refreshes the page refreshes this too. Keyed by locale (the labels differ).
+ * The page renders only `recipeTeaser` of it; the rest goes to members through /api/renders/access.
+ * `v3` (2026-10-29): the projection carries the creative's notes and each file's download address.
  */
 const cached = unstable_cache(
-  async (templateId: string): Promise<RecipeOutline | null> => {
+  async (templateId: string, selfie: string, reference: string, step: string): Promise<PublicRecipe | null> => {
     const sql = await getSqlRunner();
-    const full = sql ? await loadPublicRecipe(sql, templateId, { selfie: '', reference: '', step: '' }) : null;
-    return full ? recipeOutline(full) : null;
+    return sql ? loadPublicRecipe(sql, templateId, { selfie, reference, step }) : null;
   },
-  ['recipe-outline-v1', resolveRuntimeMode()],
+  ['public-recipe-v3', resolveRuntimeMode()],
   { tags: ['prompts'], revalidate: 3600 },
 );
 
-export async function cachedRecipeOutline(templateId: string): Promise<RecipeOutline | null> {
+export async function cachedPublicRecipe(templateId: string, labels: PublicRecipeLabels): Promise<PublicRecipe | null> {
   try {
-    return await cached(templateId);
+    return await cached(templateId, labels.selfie, labels.reference, labels.step);
   } catch {
     // No cache outside a Next request, or a read that failed: show nothing rather than guess.
     return null;

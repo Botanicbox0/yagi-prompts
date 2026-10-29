@@ -14,7 +14,8 @@ export const FAQ_CATALOG: ReadonlyArray<{
   placements: readonly FaqPlacement[];
 }> = [
   { id: 'browsing', category: 'usage', number: 1, placements: ['landing', 'template'] },
-  { id: 'pricing', category: 'payment', number: 2, placements: ['landing', 'template'] },
+  // Not on template pages (founder, 2026-10-29): they name no won or dollar price, only credits.
+  { id: 'pricing', category: 'payment', number: 2, placements: ['landing'] },
   { id: 'photos', category: 'rights', number: 3, placements: ['landing', 'template', 'campaign'] },
   { id: 'generation-time', category: 'usage', number: 4, placements: ['landing', 'template'] },
   { id: 'result-issues', category: 'payment', number: 8, placements: ['landing', 'template'] },

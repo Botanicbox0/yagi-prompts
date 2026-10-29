@@ -6,12 +6,13 @@ import { SELFIE_SLOT, creatorSlotNames, displayStepPrompt, parseRecipe, type Rec
 /**
  * What a template's page may show of its recipe (docs/PLATFORM-2.0.md §7.3·§20.3), in two layers:
  *
- *   outline   anyone, in the static page: the order the creative chose, their intro, how many steps
- *             and which engines, what each step takes in, how many source files. NO prompt text, NO
- *             step notes, NO file address — `recipeOutline` builds it field by field from the full
- *             projection, so a field added there cannot leak here by accident.
- *   full      a signed-in member only (`/api/recipes/{id}`): the prompts in reader form, the notes,
- *             and — only when the creative chose so — the source files with a download address.
+ *   teaser    anyone, in the static page: the order the creative chose, their intro and the opening
+ *             of step 1 (its first {@link TEASER_CHARS} characters and the `[BGM …]` line). NO other
+ *             prompt text, NO step note, NO closing line, NO file address — `recipeTeaser` builds it
+ *             field by field from the full projection, so a field added there cannot leak here.
+ *   full      a signed-in member only (`/api/renders/access`, the one gate): the prompts in reader
+ *             form, the notes and — only when the creative chose so — the source files with a
+ *             download address.
  *
  * Both exist only when the creative disclosed something. With `disclosure.prompts` off there is no
  * prompt text in either object at all; with `disclosure.assets` off there are no files. A studio
@@ -30,16 +31,6 @@ export interface PublicRecipe {
   files: PublicRecipeFile[] | null;
 }
 export interface PublicRecipeLabels { selfie: string; reference: string; step: string }
-
-export interface RecipeOutlineStep { n: number; kind: 'image' | 'video'; engine: string; inputs: RecipeInput[] }
-export interface RecipeOutline {
-  presentation: Presentation;
-  intro: string | null;
-  /** Null when the prompts are private; the steps' shape otherwise — never their text. */
-  steps: RecipeOutlineStep[] | null;
-  /** How many source files a member can open and download, by kind; null when none are shown. */
-  files: Array<{ kind: 'image' | 'video' }> | null;
-}
 
 function inputsOf(recipe: Recipe, inputs: readonly string[]): RecipeInput[] {
   const creators = creatorSlotNames(recipe);
@@ -85,17 +76,28 @@ export async function loadPublicRecipe(sql: SqlRunner, templateId: string, label
   };
 }
 
+/** How much of step 1's prompt the static page shows (the members' gate, 2026-10-29). */
+export const TEASER_CHARS = 150;
+
+function teaserPrompt(prompt: string): string {
+  const bgm = prompt.indexOf('[BGM');
+  return `${prompt.slice(0, TEASER_CHARS).trim()}…${bgm >= 0 ? `\n\n${prompt.slice(bgm).trim()}` : ''}`;
+}
+
 /** The public layer of a full projection — built by naming every field, never by spreading. */
-export function recipeOutline(recipe: PublicRecipe): RecipeOutline | null {
+export function recipeTeaser(recipe: PublicRecipe): PublicRecipe | null {
   if (!recipe.steps && !recipe.files?.length) return null;
+  const first = recipe.steps?.[0] ?? null;
   return {
     presentation: recipe.presentation,
     intro: recipe.intro,
-    steps: recipe.steps ? recipe.steps.map((step) => ({
-      n: step.n, kind: step.kind, engine: step.engine,
-      inputs: step.inputs.map((input): RecipeInput => (input.kind === 'selfie' ? { kind: 'selfie' } : { kind: input.kind, n: input.n })),
-    })) : null,
-    files: recipe.files?.length ? recipe.files.map((file) => ({ kind: file.kind })) : null,
+    outro: null,
+    steps: first ? [{
+      n: first.n, kind: first.kind, engine: first.engine,
+      inputs: first.inputs.map((input): RecipeInput => (input.kind === 'selfie' ? { kind: 'selfie' } : { kind: input.kind, n: input.n })),
+      prompt: teaserPrompt(first.prompt), note: null,
+    }] : null,
+    files: null,
   };
 }
 

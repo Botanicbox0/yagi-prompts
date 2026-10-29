@@ -10,14 +10,17 @@ import { WorkspaceLanguage } from '@/components/brand-workspace/language';
 import { WorkspaceNavigation } from '@/components/brand-workspace/navigation';
 import { WorkspaceIdentity } from '@/components/brand-workspace/identity';
 import { BrandErrorCopyProvider } from '@/components/brand-workspace/error-copy';
+import { WorkspaceSpotlight } from '@/components/brand-workspace/spotlight';
 import { Suspense, type ReactNode } from "react";
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { fontVariables } from "@/app/fonts";
 import { TwingsLogo } from "@/components/brand/twings-mark";
 import { YagiStudioLockup } from "@/components/brand/yagi-mark";
 import { getRequestLocale } from "@/lib/i18n/server";
 import { getDictionary } from "@/lib/i18n/dictionaries";
 export const dynamic = "force-dynamic";
+/** Mobile browser chrome matches the alabaster canvas around the workspace frame. */
+export const viewport: Viewport = { themeColor: "#f8f9fa" };
 export async function generateMetadata(): Promise<Metadata> {
   const d = getDictionary(await getRequestLocale());
   return {
@@ -85,6 +88,7 @@ export default async function BrandLayout({
           </div>
         </div>
         {scope&&<Suspense fallback={null}><WorkspaceSupport scope={scope} b={b} locale={locale}/></Suspense>}
+        <WorkspaceSpotlight />
       </body>
     </html>
   );

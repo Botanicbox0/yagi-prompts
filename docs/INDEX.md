@@ -10,6 +10,8 @@
 | `TEMPLATES-IA.md` | 정보구조와 §12의 포지션·과금·자산 경로 결정. 뒤집지 않는다. |
 | `../lib/legal/documents.ts` | 약관·환불·개인정보. 절차를 설명하는 문구는 여기와 같아야 한다. |
 | `SETUP.md` | 환경변수·로컬 모드·배포 전제. |
+| `design/TASTE.md` | UI를 만들거나 고치기 전. 대표가 좋다·싫다고 한 화면 판정의 원장. 새 판정은 같은 PR에서 한 줄 추가. |
+| `design/TOOLBOX.md` | UI 작업 전. 화이트 모드 고정값(블루 `#0000EE` 하나, 레드 금지)과 화면 목적별로 3–4개만 고르는 기법 목록. |
 | `CONTENT-SLOTS.md` | 히어로 릴·증거 2-up 같은 미디어 슬롯(환경변수) 규칙. |
 
 ## 결제
@@ -44,6 +46,7 @@
 | `CAMPAIGNS.md` | 캠페인 도메인·상태 머신·브랜드 의뢰 폼·알림·랜딩. |
 | `AUDIENCE-RENOVATION.md` | 크리에이터/브랜드 진입 분리(2026-10-07)와 모바일 헤더 규칙. |
 | `plans/KAIPER-*.md` | 브랜드 셀프서비스(초대 링크→인플루언서→TWINGS 선정) 설계·검증. Phase 3의 출발점. |
+| `BRAND-SHORTLIST.md` | 캠페인 크리에이터 후보 공유(가져오기 계약·고객에게 안 가는 항목·선호 표시). |
 | `BRAND-*.md`, `CAMPAIGN-REPORTING.md`, `WORKSPACE-HOST-ROUTING.md` | brand.twings.app 워크스페이스·호스트 라우팅·리포트·게시물 수집·인증. 해당 화면을 만질 때만. |
 
 ## 앱·SEO·운영

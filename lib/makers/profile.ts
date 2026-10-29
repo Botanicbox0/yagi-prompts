@@ -228,6 +228,8 @@ export interface PublicMakerRow {
   userId: string;
   handle: string;
   bio: string | null;
+  /** The English bio (0069) for `/en` pages; null without one or before 0069. */
+  bioEn: string | null;
   displayName: string | null;
   headline: string | null;
   country: string | null;
@@ -242,16 +244,22 @@ export interface PublicMakerRow {
 export async function loadPublicMakerRows(sql: SqlRunner): Promise<PublicMakerRow[]> {
   if (!(await makerProfilesReady(sql))) return [];
   const extended = await creativeProfilesReady(sql);
-  const { rows } = await sql.query<SettingsRow & { user_id: string; handle: string }>(
-    `select user_id, ${extended ? EXTENDED_COLUMNS : BASE_COLUMNS} from platform_creators
+  // to_jsonb: 0069 is applied separately, so `bio_en` is read without naming it.
+  const { rows } = await sql.query<SettingsRow & { user_id: string; handle: string; bio_en: string | null }>(
+    `select user_id, ${extended ? EXTENDED_COLUMNS : BASE_COLUMNS}, to_jsonb(c.*)->>'bio_en' as bio_en from platform_creators c
       where active and public_profile and handle is not null order by handle`,
   );
   return rows.map((row) => {
     const settings = toSettings(row, extended);
     return {
-      userId: row.user_id, handle: row.handle, bio: settings.bio, displayName: settings.displayName, headline: settings.headline,
+      userId: row.user_id, handle: row.handle, bio: settings.bio, bioEn: row.bio_en ?? null, displayName: settings.displayName, headline: settings.headline,
       country: settings.country, city: settings.city, links: settings.links, publicEmail: settings.publicEmail, tools: settings.tools,
       openToBrands: settings.openToBrands, avatarVersion: settings.avatarVersion,
     };
   });
+}
+
+/** The bio a page in `locale` shows: the English one on `/en` when the maker wrote it, else the bio. */
+export function makerBioFor(maker: { bio: string | null; bioEn?: string | null }, locale: string): string | null {
+  return (locale === 'en' ? maker.bioEn : null) ?? maker.bio;
 }
