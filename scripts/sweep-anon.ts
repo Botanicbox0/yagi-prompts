@@ -6,6 +6,7 @@ import { PGlite } from '@electric-sql/pglite';
 import { DEFAULT_LOCAL_SNAPSHOT } from '@/lib/db/connect-shared';
 import { FIXTURE_SENTINELS } from './fixtures';
 import { HIDDEN_PROMPT_SLUGS, PROMPT_SENTINELS } from './prompt-fixtures';
+import { LOCAL_MAKER, LOCAL_RECIPE_CANARY, LOCAL_RECIPE_SLUG } from './maker-fixtures';
 import { RUNTIME_MODE_ENV } from '@/lib/runtime-mode';
 import { KO_TERMS } from '@/messages/ko';
 import { EN_TERMS } from '@/messages/en';
@@ -1261,7 +1262,8 @@ async function sweepMakers(): Promise<void> {
   expectPresent('the verified mark', makerTemplate.body, 'data-template-verified');
   // 2026-10-29: the copy-or-make fork and the recipe pill follow a public prompt, never the credit.
   expectAbsent('no copy-or-make fork without a public prompt', makerTemplate.body, 'data-template-recipe-actions');
-  expectAbsent('…and no recipe pill on the catalogue', video.body, 'data-card-recipe');
+  // Locally one card has a public prompt: the studio recipe the maker fixtures disclose (LOCAL_RECIPE_SLUG).
+  expectEqual('…and the catalogue\'s recipe pill only on that one card', video.body.split('data-card-recipe="true"').length - 1, 1);
   const legacy = await get('/ko/t/skate-park-golden-hour');
   expectPresent('a handle without a maker page is a plain credit', legacy.body, `${KO_TERMS.creditPrefix} @hana`);
   expectAbsent('…with no maker block', legacy.body, 'data-template-maker');
@@ -1284,6 +1286,71 @@ async function sweepMakers(): Promise<void> {
     expectAbsent(`${locale}: no recipe claim without an open recipe`, page.body, 'data-maker-recipe-hub');
   }
   expectPresent('ko: the count line', (await get('/ko/makers/jun')).body, '템플릿 1편');
+
+  // §20 — the creative's identity, works and doors (local fixture `@jun`, every value marked TEST).
+  console.log('\n/{locale}/makers/jun — the AI creative page (§20)');
+  const creative = await get('/ko/makers/jun');
+  expectPresent('the creative name', creative.body, LOCAL_MAKER.displayName);
+  expectPresent('the headline', creative.body, 'data-creative-headline');
+  expectPresent('where they work', creative.body, 'data-creative-place');
+  expectPresent('…in Korean', creative.body, '대한민국');
+  expectPresent('open to brand work', creative.body, 'data-creative-open');
+  expectPresent('their tools', creative.body, 'data-creative-tools');
+  expectPresent('their links', creative.body, 'data-creative-link="website"');
+  expectPresent('their works', creative.body, 'data-creative-works="3"');
+  expectPresent('…served from the cacheable media path', creative.body, '/creative-media/wrk_');
+  expectPresent('an avatar', creative.body, '/creative-media/avatar-jun-');
+  expectPresent('a cover banner (0071)', creative.body, 'data-creative-cover="photo"');
+  const coverPath = /\/creative-media\/cover-jun-[0-9a-f]{16,32}\.jpg/.exec(creative.body)?.[0];
+  const cover = coverPath ? await get(coverPath) : null;
+  expectEqual('…which streams', cover?.status, 200);
+  expectEqual('…as an image', cover?.contentType, 'image/jpeg');
+  expectPresent('…publicly cacheable', cover?.cacheControl ?? '', 'public');
+  expectEqual('no "my cover" for an anonymous reader', (await get('/api/makers/media/cover-me')).status, 404);
+  expectPresent('the email sits behind a button', creative.body, 'data-creative-email="hidden"');
+  expectAbsent('…and never as text', creative.body, LOCAL_MAKER.publicEmail);
+  expectAbsent('…or as a mailto', creative.body, `mailto:${LOCAL_MAKER.publicEmail}`);
+  expectPresent('ProfilePage structured data', creative.body, '"@type":"ProfilePage"');
+  expectPresent('the share button', creative.body, 'data-creative-share');
+  const workPath = /\/creative-media\/wrk_[0-9a-f]{32}\.jpg/.exec(creative.body)?.[0];
+  const work = workPath ? await get(workPath) : null;
+  expectEqual('a public work streams', work?.status, 200);
+  expectEqual('…as an image', work?.contentType, 'image/jpeg');
+  expectPresent('…publicly cacheable', work?.cacheControl ?? '', 'public');
+  expectEqual('an unknown work is a 404', (await get(`/creative-media/wrk_${'0'.repeat(32)}.jpg`)).status, 404);
+  expectEqual('a malformed media name is a 404', (await get('/creative-media/..%2F..%2Fsecret.jpg')).status, 404);
+  expectEqual('the studio preview path stays private', (await get(`/api/makers/media/wrk_${'0'.repeat(32)}`)).status, 404);
+  expectEqual('no "my avatar" for an anonymous reader', (await get('/api/makers/media/avatar-me')).status, 404);
+
+  console.log('\n/@handle — the short link');
+  const short = await request('/@jun', { headers: { 'accept-language': 'en-US,en;q=0.9' } });
+  expectEqual('/@jun redirects', short.status, 307);
+  expectEqual('…to the creative page', short.location?.replace(/^https?:\/\/[^/]+/, ''), '/en/makers/jun');
+  const shortKo = await request('/ko/@jun');
+  expectEqual('/ko/@jun keeps the language', shortKo.location?.replace(/^https?:\/\/[^/]+/, ''), '/ko/makers/jun');
+
+  console.log('\n/{locale}/t/[slug] — the recipe opens for members only (§20.3)');
+  const recipePage = await get(`/en/t/${LOCAL_RECIPE_SLUG}`);
+  expectEqual('renders 200', recipePage.status, 200);
+  expectPresent('the recipe section', recipePage.body, 'data-recipe-how');
+  expectPresent('…with the creative\'s intro', recipePage.body, 'data-recipe-intro');
+  expectPresent('…behind the members\' gate', recipePage.body, 'data-recipe-gate');
+  expectPresent('…with the opening of step 1', recipePage.body, 'TEST ONLY · the person in');
+  expectAbsent('…and never the rest of the prompt', recipePage.body, LOCAL_RECIPE_CANARY);
+  expectAbsent('…nor a step tip', recipePage.body, 'TEST tip:');
+  expectAbsent('…nor the closing line', recipePage.body, '태그해 주세요');
+  const anonRecipe = await get(`/api/renders/access?template=${LOCAL_RECIPE_SLUG}&locale=en`);
+  expectEqual('the access answer renders 200', anonRecipe.status, 200);
+  expectPresent('…with no recipe for a visitor', anonRecipe.body, '"recipe":null');
+  expectAbsent('…and no prompt', anonRecipe.body, LOCAL_RECIPE_CANARY);
+  expectPresent('…never cached publicly', anonRecipe.cacheControl ?? '', 'no-store');
+
+  console.log('\n/api/mcp — the creative agent door');
+  const mcp = await request('/api/mcp', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', params: {} }) });
+  expectEqual('needs a creative token', mcp.status, 401);
+  const forged = await request('/api/mcp', { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer twk_${'a'.repeat(40)}` }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }) });
+  expectEqual('…and refuses an unknown one', forged.status, 401);
+  expectEqual('GET is not a session stream', (await get('/api/mcp')).status, 405);
   expectEqual('a handle with no maker page is a 404', (await get('/ko/makers/hana')).status, 404);
   expectEqual('an unknown handle is a 404', (await get('/en/makers/nobody_here')).status, 404);
   const sitemap = await get('/sitemap.xml');

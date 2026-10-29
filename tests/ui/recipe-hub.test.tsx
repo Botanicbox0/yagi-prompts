@@ -15,8 +15,8 @@ import { ko } from '@/messages/ko';
  * surface claims an open recipe the template page would not show, or carries the members' prompt.
  */
 
-const step = (n: number, prompt: string) => ({ n, kind: 'video' as const, prompt });
-const recipe = (steps: PublicRecipe['steps']): PublicRecipe => ({ presentation: 'story-first', steps, files: null });
+const step = (n: number, prompt: string) => ({ n, kind: 'video' as const, engine: 'SEEDANCE 2.5', inputs: [], prompt, note: null });
+const recipe = (steps: PublicRecipe['steps']): PublicRecipe => ({ presentation: 'story-first', intro: null, outro: null, steps, files: null });
 const base = { signinHref: '/ko/signin?next=%2Fko%2Ft%2Fgoldfish%23how', makeHref: '#make', shopOpen: true };
 const enLabels = { ...en.makerRecipe.actions, copied: en.makerRecipe.how.copied };
 const koLabels = { ...ko.makerRecipe.actions, copied: ko.makerRecipe.how.copied };

@@ -5,6 +5,8 @@ import { loadPublishedPrompts, type PromptRow } from './repo';
 import { PROMPT_MODEL_LABEL, promptModelLabel, type PromptSource, type TemplateMedium } from './schemas';
 import { promptLock, type PromptLock } from './lock';
 import { loadPublicMakerRows } from '@/lib/makers/profile';
+import { makerAvatarSrc, makerCoverSrc } from '@/lib/makers/links';
+import type { MakerLink } from '@/lib/makers/fields';
 import { recipeSchemaReady } from '@/lib/recipes/repo';
 
 /**
@@ -94,12 +96,27 @@ export interface PromptTotals {
   modelLabel: string;
 }
 
-/** A maker who opted in (0060): handle and bio only — never the account behind them. */
+/**
+ * A creative who opted in (0060, 0065): what they chose to show — never the account behind them.
+ * `avatar` and `cover` are gateway addresses (`/creative-media/{avatar|cover}-{handle}-{v}.jpg`), never storage keys.
+ */
 export interface PublicMaker {
   handle: string;
   bio: string | null;
   /** The English bio (0069); pages pick with `makerBioFor`. Optional so older test doubles still type. */
   bioEn?: string | null;
+  displayName: string | null;
+  headline: string | null;
+  /** ISO 3166-1 alpha-2 where they work, and an optional city. */
+  country: string | null;
+  city: string | null;
+  links: MakerLink[];
+  publicEmail: string | null;
+  tools: string[];
+  openToBrands: boolean;
+  avatar: string | null;
+  /** The profile banner (0071); null with none. */
+  cover: string | null;
   templateCount: number;
   /** How many of their published templates show the recipe's prompts. Optional like `bioEn`. */
   openRecipeCount?: number;
@@ -229,11 +246,15 @@ export async function loadPromptCatalog(
     }
   }
 
-  const makers = makerRows.map(({ handle, bio, bioEn }): PublicMaker => {
-    const own = cardsByMaker.get(handle) ?? [];
+  const makers = makerRows.map((row): PublicMaker => {
+    const own = cardsByMaker.get(row.handle) ?? [];
     const dates = own.map((card) => card.publishedAt).filter((value): value is string => value !== null).sort();
     return {
-      handle, bio, bioEn, templateCount: own.length, openRecipeCount: own.filter((card) => card.recipeOpen).length,
+      handle: row.handle, bio: row.bio, bioEn: row.bioEn, displayName: row.displayName, headline: row.headline, country: row.country, city: row.city,
+      links: row.links, publicEmail: row.publicEmail, tools: row.tools, openToBrands: row.openToBrands,
+      avatar: row.avatarVersion ? makerAvatarSrc(row.handle, row.avatarVersion) : null,
+      cover: row.coverVersion ? makerCoverSrc(row.handle, row.coverVersion) : null,
+      templateCount: own.length, openRecipeCount: own.filter((card) => card.recipeOpen).length,
       latestPublishedAt: dates.at(-1) ?? null,
     };
   });

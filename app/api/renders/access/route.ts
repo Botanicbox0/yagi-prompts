@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { after, NextResponse } from 'next/server';
 import { getViewer } from '@/lib/auth/viewer';
 import { storefrontOpen } from '@/lib/auth/purchase-gate';
 import { getSqlRunner } from '@/lib/db/connect';
@@ -17,7 +17,7 @@ import type { SubscriptionSummary } from '@/lib/creator-subscriptions/types';
 import type { EditScope } from '@/lib/premium-editing/contract';
 import { getPremiumEditBudget, type PremiumEditBudget } from '@/lib/premium-editing/budget';
 import { getDictionary } from '@/lib/i18n/dictionaries';
-import { loadPublicRecipe, type PublicRecipe } from '@/lib/recipes/public';
+import { loadPublicRecipe, recordRecipeOpen, type PublicRecipe } from '@/lib/recipes/public';
 
 /**
  * `GET /api/renders/access?template=slug` — what THIS viewer's make button should do on THIS
@@ -31,6 +31,7 @@ import { loadPublicRecipe, type PublicRecipe } from '@/lib/recipes/public';
  *   identityRequired  does the template's engine need a verified face (ModelArk) — docs §8.2
  *   identity          where this viewer stands on that: none · pending · active · failed · not_needed
  *   selfie            the saved photo every order reuses (docs/IDENTITY-SELFIE.md), or null to upload inline
+ *   recipe            the full "만드는 법" for a signed-in member — the one recipe gate (§20.3); null otherwise
  *
  * A viewer who forges any of this only reaches the refusals the enqueue route already carries.
  */
@@ -79,6 +80,9 @@ export async function GET(request: Request): Promise<NextResponse> {
           reference: mr.referenceLabel,
           step: mr.stepResultLabel,
         }).catch(() => null);
+        // §20.3: the creative's studio counts members who opened the recipe — (template, member) once a minute.
+        const userId = viewer.userId;
+        if (recipe) after(() => recordRecipeOpen(sql, template.id, userId));
       }
       // A quote describes use; only a paid, owned, unexpired ledger grants access.
       try {

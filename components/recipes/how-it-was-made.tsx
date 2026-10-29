@@ -18,8 +18,15 @@ const FOLD_CHARS = 600;
 /** The two layouts: its own section under the stage, or the column beside it (story-first, 2026-10-29). */
 function layout(compact: boolean) {
   return compact
-    ? { section: 'mt-7 border-t border-hairline pt-6', heading: 'font-display text-[1.35rem] leading-none font-black uppercase', list: 'mt-4 space-y-4', step: 'rounded-2xl border border-hairline p-4', gate: 'mt-4 rounded-2xl border border-hairline bg-surface p-4' }
-    : { section: 'mt-16 border-t border-hairline pt-10', heading: 'font-display text-[clamp(1.4rem,2.6vw,2rem)] leading-[0.95] font-black uppercase', list: 'mt-6 space-y-5', step: 'rounded-2xl border border-hairline p-5', gate: 'mt-6 rounded-2xl border border-hairline bg-surface p-5 sm:p-6' };
+    ? { section: 'mt-7 border-t border-hairline pt-6', heading: 'font-display text-[1.35rem] leading-none font-black uppercase', list: 'mt-4 space-y-4', step: 'rounded-2xl border border-hairline p-4', gate: 'mt-4 rounded-2xl border border-hairline bg-surface p-4', intro: 'text-sm', note: 'mt-3', outro: 'mt-4' }
+    : { section: 'mt-16 border-t border-hairline pt-10', heading: 'font-display text-[clamp(1.4rem,2.6vw,2rem)] leading-[0.95] font-black uppercase', list: 'mt-6 space-y-5', step: 'rounded-2xl border border-hairline p-5', gate: 'mt-6 rounded-2xl border border-hairline bg-surface p-5 sm:p-6', intro: 'text-[0.95rem]', note: 'mt-4', outro: 'mt-6' };
+}
+
+/** The creative's intro (§20.3, public) in place of the generic lede, when they wrote one. */
+function Lede({ intro, copy, compact }: { intro: string | null; copy: Dictionary['makerRecipe']; compact: boolean }) {
+  return intro
+    ? <p data-recipe-intro className={`mt-3 max-w-detail leading-relaxed whitespace-pre-line text-black/80 ${layout(compact).intro}`}>{intro}</p>
+    : <p className="mt-3 max-w-detail text-sm leading-relaxed text-black/70">{copy.how.lede}</p>;
 }
 
 function StepPrompt({ text, fold, copy }: { text: string; fold: boolean; copy: Dictionary['makerRecipe']['how'] }) {
@@ -59,6 +66,7 @@ function UnlockedRecipeBody({ recipe, copy, compact = false }: { recipe: PublicR
                 <CopyPrompt text={step.prompt} label={h.copy} done={h.copied} />
               </div>
               <StepPrompt text={step.prompt} fold={compact} copy={h} />
+              {step.note ? <p data-recipe-note className={`${css.note} rounded-xl bg-black/[0.035] px-4 py-3 text-sm leading-relaxed whitespace-pre-line text-black/80`}>{step.note}</p> : null}
             </li>
           ))}
         </ol>
@@ -69,6 +77,7 @@ function UnlockedRecipeBody({ recipe, copy, compact = false }: { recipe: PublicR
           <ReferenceFiles files={recipe.files} copy={copy} />
         </div>
       ) : null}
+      {recipe.outro ? <p data-recipe-outro className={`${css.outro} max-w-detail text-sm leading-relaxed whitespace-pre-line text-black/75`}>{recipe.outro}</p> : null}
     </>
   );
 }
@@ -114,7 +123,7 @@ function GatedHowItWasMade({
       className={css.section}
     >
       <h2 className={css.heading}>{h.heading}</h2>
-      <p className="mt-3 max-w-detail text-sm leading-relaxed text-black/70">{h.lede}</p>
+      <Lede intro={active.intro} copy={copy} compact={compact} />
       {isLocked ? (
         <div data-recipe-gate className={css.gate}>
           {teaser.steps?.[0] ? (
@@ -154,9 +163,11 @@ function GatedHowItWasMade({
 }
 
 /**
- * "만드는 법" on a maker template's page (docs/PLATFORM-2.0.md §7.3) — the steps' prompts with
- * `[내 사진]` in place of the customer's photo, and the maker's reference files, each only when the
- * maker chose to show it. Renders nothing when neither was chosen: no heading, no empty section.
+ * "만드는 법" on a maker template's page (docs/PLATFORM-2.0.md §7.3·§20.3) — the steps' prompts with
+ * `[내 사진]` in place of the customer's photo, the creative's tips, and their reference files, each
+ * only when the creative chose to show it. Renders nothing when neither was chosen: no heading, no
+ * empty section. With `gate`, `recipe` is the teaser (lib/recipes/public.ts `recipeTeaser`) and the
+ * rest arrives from the access endpoint for a signed-in member — the page's only recipe gate.
  * `compact` is the column beside the stage (a story-first template, 2026-10-29): tighter, and a long
  * prompt folds so the make box under it stays a short scroll away.
  */
@@ -178,7 +189,7 @@ export function HowItWasMade({
   return (
     <section data-recipe-how data-presentation={recipe.presentation} className={css.section}>
       <h2 className={css.heading}>{h.heading}</h2>
-      <p className="mt-3 max-w-detail text-sm leading-relaxed text-black/70">{h.lede}</p>
+      <Lede intro={recipe.intro} copy={copy} compact={compact} />
       <UnlockedRecipeBody recipe={recipe} copy={copy} compact={compact} />
     </section>
   );

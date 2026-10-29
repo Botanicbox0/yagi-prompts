@@ -53,9 +53,10 @@ async function readPromptCatalog(): Promise<PromptCatalog> {
 /** 2026-10-27 (`v9-set-gallery`): `PromptCard.gallery`, a set template's example frames. */
 /** 2026-10-29 (`v10-fashion-show-arrival`): `@yunseolfromseoul` maker profile & `fashion-show-arrival` template. */
 /** 2026-10-29 (`v11-recipe-hub`): `PromptCard.recipeOpen`, `PublicMaker.bioEn`/`openRecipeCount`. */
+/** 2026-10-29 (`v12-creative-cover`): `PublicMaker` carries the 0065 profile (name, place, links, avatar…) and the 0071 cover; both addresses are `/creative-media/…`. */
 export const getPromptCatalog = unstable_cache(
   readPromptCatalog,
-  ['prompt-catalog', 'v11-recipe-hub', resolveRuntimeMode()],
+  ['prompt-catalog', 'v12-creative-cover', resolveRuntimeMode()],
   {
     tags: [PROMPTS_TAG],
     revalidate: CATALOG_TTL_SECONDS,

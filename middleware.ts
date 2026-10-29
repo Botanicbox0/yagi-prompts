@@ -155,6 +155,15 @@ export async function middleware(request: NextRequest) {
     return secured(response);
   }
 
+  // docs/PLATFORM-2.0.md §20 — `twings.app/@handle` (a bio link, a DM) opens the creative's page in
+  // the reader's language. Temporary on purpose: the language is the reader's, not the address's.
+  const short = /^\/(?:@|%40)([A-Za-z0-9_]{3,20})\/?$/.exec(rest);
+  if (short && ['GET', 'HEAD'].includes(request.method)) {
+    const target = new URL(requestUrl);
+    target.pathname = localizedPath(locale, `/makers/${short[1]!.toLowerCase()}`);
+    return withCookies(NextResponse.redirect(target, 307), response);
+  }
+
   // --- public surface: locale-prefixed, 308 on the unprefixed form --------
   if (urlLocale === null) {
     const target = new URL(requestUrl);

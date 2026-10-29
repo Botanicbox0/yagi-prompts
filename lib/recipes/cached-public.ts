@@ -7,6 +7,7 @@ import { loadPublicRecipe, type PublicRecipe, type PublicRecipeLabels } from './
 /**
  * The template page is static (tag `prompts`, 1h TTL); its "만드는 법" projection is cached with it, so
  * a studio publish that refreshes the page refreshes this too. Keyed by locale (the labels differ).
+ * The page renders only `recipeTeaser` of it; the rest goes to members through /api/renders/access.
  */
 const cached = unstable_cache(
   async (templateId: string, selfie: string, reference: string, step: string): Promise<PublicRecipe | null> => {
@@ -15,7 +16,9 @@ const cached = unstable_cache(
   },
   // v3 (2026-10-30): a step prompt may run to 8,000 characters; v2 entries made under the 4,000 cap
   // hold `null` for a longer recipe and would outlive the deploy that raised it.
-  ['public-recipe-v3', resolveRuntimeMode()],
+  // v4 (2026-10-30, #111): the projection carries the creative's notes (intro, step tips, outro) and each
+  // file's number and download address — a v3 entry has none of them.
+  ['public-recipe-v4', resolveRuntimeMode()],
   { tags: ['prompts'], revalidate: 3600 },
 );
 

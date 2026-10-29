@@ -49,7 +49,16 @@ describe('the make launcher', () => {
 });
 
 describe('how it was made, in the column', () => {
-  const long = { presentation: 'story-first' as const, steps: [{ n: 1, kind: 'video' as const, prompt: `[My photo] ${'Shot detail. '.repeat(80)}` }], files: null };
+  const long = { presentation: 'story-first' as const, intro: null, outro: null, steps: [{ n: 1, kind: 'video' as const, engine: 'SEEDANCE 2.5', inputs: [], prompt: `[My photo] ${'Shot detail. '.repeat(80)}`, note: null }], files: null };
+
+  it("keeps the creative's intro, the step tip under its prompt and the closing line, at the column's size", () => {
+    const html = renderToStaticMarkup(<HowItWasMade recipe={{ ...long, intro: 'INTRO_LINE', outro: 'OUTRO_LINE', steps: [{ ...long.steps[0]!, note: 'TIP_LINE' }] }} copy={ko.makerRecipe} compact />);
+    expect(/<p[^>]*data-recipe-intro[^>]*>/.exec(html)![0]).toContain('text-sm');
+    expect(html.indexOf('INTRO_LINE')).toBeLessThan(html.indexOf('data-recipe-prompt'));
+    expect(html.indexOf('data-recipe-expand')).toBeLessThan(html.indexOf('TIP_LINE'));
+    expect(html.indexOf('TIP_LINE')).toBeLessThan(html.indexOf('OUTRO_LINE'));
+    expect(html).not.toContain(ko.makerRecipe.how.lede);
+  });
 
   it('folds a long prompt behind one tap, with the copy button still on top', () => {
     const html = renderToStaticMarkup(<HowItWasMade recipe={long} copy={ko.makerRecipe} compact />);
@@ -78,8 +87,8 @@ describe('the make sheet', () => {
 
 describe('reference files', () => {
   const files = [
-    { href: '/api/makers/files/ast_0123456789abcdef0123456789abcdef', kind: 'image' as const },
-    { href: '/api/makers/files/ast_fedcba9876543210fedcba9876543210', kind: 'video' as const },
+    { n: 1, href: '/api/makers/files/ast_0123456789abcdef0123456789abcdef', download: '/api/makers/files/ast_0123456789abcdef0123456789abcdef?download=1', kind: 'image' as const },
+    { n: 2, href: '/api/makers/files/ast_fedcba9876543210fedcba9876543210', download: '/api/makers/files/ast_fedcba9876543210fedcba9876543210?download=1', kind: 'video' as const },
   ];
 
   it('opens each file in a viewer and offers a download of each', () => {

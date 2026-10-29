@@ -9,9 +9,10 @@ import { parseDisclosure, recipeSchemaReady } from './repo';
  *
  *   a test or review render's Nth result   the job's owner; a studio review also any admin.
  *                                          A maker's test render is the maker's alone.
- *   a maker file                           its owner and the studio — or anyone, once the template
- *                                          is published AND the maker chose to show their files
- *                                          (`disclosure.assets`), and only reference files.
+ *   a maker file                           its owner and the studio — or any signed-in member, once
+ *                                          the template is published AND the maker chose to show
+ *                                          their files (`disclosure.assets`), and only reference
+ *                                          files. Never an anonymous reader (§20.3).
  */
 
 export interface MediaObject { key: string; mime: string; publicCache: boolean }
@@ -33,7 +34,9 @@ export async function makerFileObject(sql: SqlRunner, viewer: Viewer, handle: st
     from platform_format_assets a join platform_formats f on f.id=a.format_id left join prompt_items p on p.id=f.template_id and f.status='accepted' where a.id=$1`, [handle]);
   const row = rows[0];
   if (!row) return null;
-  if (viewer.userId && (row.user_id === viewer.userId || viewer.isAdmin)) return { key: row.storage_key, mime: row.mime, publicCache: false };
+  if (!viewer.userId) return null;
+  if (row.user_id === viewer.userId || viewer.isAdmin) return { key: row.storage_key, mime: row.mime, publicCache: false };
+  // §20.3: a disclosed source file is part of the full recipe, so it opens for signed-in members only.
   const disclosed = row.role === 'reference' && row.template_status === 'published' && row.audience === 'public' && parseDisclosure(row.disclosure).assets;
-  return disclosed ? { key: row.storage_key, mime: row.mime, publicCache: true } : null;
+  return disclosed ? { key: row.storage_key, mime: row.mime, publicCache: false } : null;
 }

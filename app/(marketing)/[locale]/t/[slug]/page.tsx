@@ -39,12 +39,14 @@ import { SubscriptionAvailabilityProvider } from '@/components/twings/subscripti
 import { TemplateMakeAvailability } from '@/components/twings/subscription-public-notices';
 import { cachedTypicalWaitMinutes } from '@/lib/twings/cached-typical-wait';
 import { cachedPublicRecipe } from '@/lib/recipes/cached-public';
+import { recipeTeaser } from '@/lib/recipes/public';
 import { HowItWasMade } from '@/components/recipes/how-it-was-made';
 import { RecipeActions } from '@/components/recipes/recipe-actions';
 import { MakeLauncher } from '@/components/templates/make-launcher';
 import { MakeSheet } from '@/components/templates/make-sheet';
 import { templateCredits } from '@/lib/twings/credits';
 import { makerBioFor } from '@/lib/makers/profile';
+import { CreativeAvatar, placeOf } from '@/components/makers/identity';
 
 /**
  * `/[locale]/t/[slug]` — one template, which is also where it is made (docs/TEMPLATES-IA.md §2).
@@ -105,24 +107,12 @@ export default async function TemplatePage({ params }: RouteParams) {
   // Built with the page and refreshed with it (tag `prompts`): the median of recent successful renders
   // for this engine and length, or the engine default below ten (lib/twings/typical-wait.ts).
   const waitMinutes = await cachedTypicalWaitMinutes({ engine: resolveEngine(card.engine, card.medium), medium: card.medium, seconds: card.medium === 'video' ? card.runtimeSeconds ?? null : null });
-  // A maker template only (docs/PLATFORM-2.0.md §7.3): what the maker chose to show, in the order they chose.
-  // Gated behind TWINGS sign-in so visitors sign up to unlock the full prompt & reference files, while static HTML carries only a short teaser + BGM note.
+  // A maker template only (docs/PLATFORM-2.0.md §7.3·§20.3): what the maker chose to show, in the order they chose.
+  // One gate: the static HTML carries the teaser (the intro, the opening of step 1 and its BGM line); a
+  // signed-in member gets the rest — every prompt, the tips, the files — from /api/renders/access.
   const mr = dict.makerRecipe;
   const recipe = await cachedPublicRecipe(card.id, { selfie: mr.selfieLabel, reference: mr.referenceLabel, step: mr.stepResultLabel });
-  const teaserRecipe = recipe
-    ? {
-        presentation: recipe.presentation,
-        steps: recipe.steps
-          ? recipe.steps.slice(0, 1).map((s) => {
-              const bgmIdx = s.prompt.indexOf('[BGM');
-              const bgmNote = bgmIdx >= 0 ? `\n\n${s.prompt.slice(bgmIdx).trim()}` : '';
-              const head = s.prompt.slice(0, 150).trim();
-              return { n: s.n, kind: s.kind, prompt: `${head}…${bgmNote}` };
-            })
-          : null,
-        files: null,
-      }
-    : null;
+  const teaserRecipe = recipe ? recipeTeaser(recipe) : null;
   // Story-first (founder, 2026-10-29): the result, then how it was made, then "one selfie and it's
   // you" with the make box — the recipe sits in the column under the title, ahead of any cost.
   const recipeFirst = teaserRecipe?.presentation === 'story-first' && Boolean(teaserRecipe.steps);
@@ -149,6 +139,8 @@ export default async function TemplatePage({ params }: RouteParams) {
   const credit = card.origin !== 'maker' ? labels.byYagi : card.authorHandle ? labels.byAuthor.replace('{handle}', card.authorHandle) : labels.byAnonymous;
   const makerRest = makerProfileRest(card);
   const maker = makerRest ? makers.find((item) => item.handle === card.authorHandle) ?? null : null;
+  // §20: the creative's other templates — their catalogue, one click from the one being read.
+  const moreFromMaker = maker ? all.filter((item) => item.slug !== card.slug && item.makerProfile && item.authorHandle === maker.handle).slice(0, 4) : [];
   const shopOpen = storefrontOpen();
   const resolutions = isForSale(card) ? offeredResolutions(card) : [];
   // A set template (2026-10-27): one order, one example per frame it makes.
@@ -442,13 +434,26 @@ export default async function TemplatePage({ params }: RouteParams) {
                 {/* The definition, under the first screen (AGENTS.md §7 GEO): in the HTML, not in the way. */}
                 <p data-template-description className="mt-6 max-w-detail text-sm leading-relaxed text-black/65">{dict.meta.templateDescription}</p>
 
-                {/* §7.5: the maker block — only for a maker who made their profile public. */}
+                {/* §7.5·§20: the creative card — only for a creative who made their profile public. */}
                 {makerRest && card.authorHandle && (
                   <aside data-template-maker={card.authorHandle} className="mt-8 rounded-2xl border border-hairline p-5">
                     <p className="text-xs text-black/60">{t.makerBlockHeading}</p>
-                    <p className="mt-2 text-base font-semibold break-all">@{card.authorHandle}</p>
-                    {maker && makerBioFor(maker, locale) && <p className="mt-2 text-sm leading-relaxed whitespace-pre-line break-words text-black/70">{makerBioFor(maker, locale)}</p>}
-                    <a href={`/${locale}${makerRest}`} className="mt-4 inline-flex min-h-11 items-center text-sm font-medium underline underline-offset-4">{t.makerBlockCta} →</a>
+                    <a href={`/${locale}${makerRest}`} className="group mt-3 flex items-center gap-3.5">
+                      <CreativeAvatar handle={card.authorHandle} name={maker?.displayName ?? null} src={maker?.avatar ?? null} size={52} />
+                      <span className="min-w-0">
+                        <span className="block truncate text-base font-semibold group-hover:underline">{maker?.displayName ?? `@${card.authorHandle}`}</span>
+                        <span className="block truncate font-mono text-xs text-black/55">
+                          {[maker?.displayName ? `@${card.authorHandle}` : null, maker ? placeOf(maker.country, maker.city, locale) : null].filter(Boolean).join(' · ')}
+                        </span>
+                      </span>
+                    </a>
+                    {maker && (maker.headline ?? makerBioFor(maker, locale)) && <p className="mt-3 text-sm leading-relaxed whitespace-pre-line break-words text-black/70">{maker.headline ?? makerBioFor(maker, locale)}</p>}
+                    {maker?.openToBrands && (
+                      <p className="mt-3 inline-flex items-center gap-2 rounded-full bg-black/[0.05] px-3 py-1 text-xs text-black/75">
+                        <span aria-hidden="true" className="size-1.5 rounded-full bg-emerald-500" />{dict.makers.openToBrands}
+                      </p>
+                    )}
+                    <a href={`/${locale}${makerRest}`} className="mt-3 flex min-h-11 items-center text-sm font-medium underline underline-offset-4">{t.makerBlockCta} →</a>
                   </aside>
                 )}
               </div>
@@ -484,9 +489,21 @@ export default async function TemplatePage({ params }: RouteParams) {
             )}
             {recipe?.presentation === 'make-first' && <div id="recipe" data-template-recipe="make-first" className="scroll-mt-24">{howItWasMade}</div>}
 
+            {maker && moreFromMaker.length > 0 && (
+              <div data-template-more-from={maker.handle}>
+                <RelatedPrompts
+                  cards={moreFromMaker}
+                  locale={locale}
+                  labels={{ ...labels, relatedHeading: interpolate(t.moreFrom, { handle: maker.handle }) }}
+                  useCaseLabels={useCaseLabels}
+                  signinHref={signInHref(templateHref(locale, slug), locale)}
+                />
+              </div>
+            )}
+
             {await TemplateRatings({templateId:card.id,copy:dict.community})}
             <RelatedPrompts
-              cards={related(card, all)}
+              cards={related(card, all).filter((item) => !moreFromMaker.includes(item))}
               locale={locale}
               labels={{ ...labels, relatedHeading: t.relatedHeading }}
               useCaseLabels={useCaseLabels}

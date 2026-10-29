@@ -123,7 +123,7 @@ describe('the English bio (0069)', () => {
       await harness.sql.query('alter table platform_creators drop column bio_en');
       await harness.sql.query(`insert into platform_creators(user_id, active, contract_version) values ($1, true, 'test')`, [FIXTURE_USERS.pro.id]);
       await saveMakerProfile(harness.sql, FIXTURE_USERS.pro.id, { handle: 'jun', bio: '소개', publicProfile: true });
-      expect(await loadPublicMakerRows(harness.sql)).toEqual([{ userId: FIXTURE_USERS.pro.id, handle: 'jun', bio: '소개', bioEn: null }]);
+      expect(await loadPublicMakerRows(harness.sql)).toEqual([expect.objectContaining({ userId: FIXTURE_USERS.pro.id, handle: 'jun', bio: '소개', bioEn: null })]);
     } finally {
       await harness.close();
     }

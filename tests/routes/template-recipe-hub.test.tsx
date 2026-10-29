@@ -38,7 +38,7 @@ import TemplatePage from '@/app/(marketing)/[locale]/t/[slug]/page';
 const page = async (locale: 'ko' | 'en') => renderToStaticMarkup(await TemplatePage({ params: Promise.resolve({ locale, slug: film.slug }) }));
 
 beforeEach(() => {
-  state.recipe = { presentation: 'story-first', steps: [{ n: 1, kind: 'video', prompt: `[My photo] among goldfish. ${'Shot detail. '.repeat(30)}MEMBERS_ONLY_TAIL` }], files: null };
+  state.recipe = { presentation: 'story-first', intro: null, outro: null, steps: [{ n: 1, kind: 'video', engine: 'SEEDANCE 2.5', inputs: [{ kind: 'selfie' }], prompt: `[My photo] among goldfish. ${'Shot detail. '.repeat(30)}MEMBERS_ONLY_TAIL`, note: null }], files: null };
 });
 
 describe('a story-first template with a public recipe', () => {

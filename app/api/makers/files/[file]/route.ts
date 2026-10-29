@@ -5,14 +5,15 @@ import { makerFileObject } from '@/lib/recipes/media';
 import { getRenderStore } from '@/lib/renders/store';
 
 /**
- * `GET /api/makers/files/{ast_…}` — a maker's file: to its owner and the studio, or to anyone once the
- * template is published with the maker's "show my files" choice (lib/recipes/media.ts). The disclosed
- * case is the only cacheable one, and it is still served from here, never by a public bucket URL.
+ * `GET /api/makers/files/{ast_…}[?download=1]` — a creative's source file: to its owner and the
+ * studio, or to any signed-in member once the template is published with the creative's "show my
+ * files" choice (lib/recipes/media.ts, docs/PLATFORM-2.0.md §20.3). Never cached outside the
+ * member's browser and never a public bucket URL; `download=1` names the file and asks the browser
+ * to save it instead of showing it.
  */
 export const dynamic = 'force-dynamic';
 const EXTENSION: Record<string, string> = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'video/mp4': 'mp4', 'video/quicktime': 'mov' };
 const PRIVATE = { 'Cache-Control': 'private, no-store', 'X-Robots-Tag': 'noindex, nofollow', 'X-Content-Type-Options': 'nosniff' };
-const PUBLIC = { 'Cache-Control': 'public, max-age=300, s-maxage=3600', 'X-Content-Type-Options': 'nosniff' };
 
 export async function GET(request: Request, { params }: { params: Promise<{ file: string }> }) {
   const { file } = await params;
@@ -23,15 +24,16 @@ export async function GET(request: Request, { params }: { params: Promise<{ file
     if (!sql) return new NextResponse(null, { status: 503, headers: PRIVATE });
     const object = await makerFileObject(sql, viewer, file);
     if (!object) return new NextResponse(null, { status: 404, headers: PRIVATE });
-    const headers = object.publicCache ? PUBLIC : PRIVATE;
+    const name = `twings-${file.slice(4, 12)}.${EXTENSION[object.mime] ?? 'bin'}`;
     const store = await getRenderStore();
-    // A disclosed file streams from here so its address never changes; a private one may redirect briefly
-    // (not for a download, which must carry its own Content-Disposition).
-    if (!object.publicCache && !download) {
+    // To look at, a short-lived signed address; to save, the bytes from here under their own name
+    // (main's download test pins this: an attachment never depends on the bucket honouring a name).
+    if (!download) {
       const signed = await store.url(object.key, 60);
-      if (signed) return new NextResponse(null, { status: 302, headers: { ...headers, Location: signed } });
+      if (signed) return new NextResponse(null, { status: 302, headers: { ...PRIVATE, Location: signed } });
     }
-    const disposition: Record<string, string> = download ? { 'Content-Disposition': `attachment; filename="twings-${file.slice(4, 12)}.${EXTENSION[object.mime] ?? 'bin'}"` } : {};
-    return new NextResponse(new Uint8Array(await store.read(object.key)), { headers: { ...headers, ...disposition, 'Content-Type': object.mime } });
+    return new NextResponse(new Uint8Array(await store.read(object.key)), {
+      headers: { ...PRIVATE, 'Content-Type': object.mime, ...(download ? { 'Content-Disposition': `attachment; filename="${name}"` } : {}) },
+    });
   } catch { return new NextResponse(null, { status: 503, headers: PRIVATE }); }
 }
