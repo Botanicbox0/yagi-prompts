@@ -1,4 +1,4 @@
-/* Try-on (beta) demo. Neutral chrome; the one accent is TWINGS blue (brand landing v5, 2026-10-29). */
+/* Try-on (beta) demo. Neutral chrome; the one accent is the landing's `--lp-blue` (brand landing v5, 2026-10-29). */
 .vto {
   --st-ink: #111111;
   --st-body: #4a4c55;
@@ -7,8 +7,8 @@
   --st-card: #f7f7f8;
   --st-glass: rgb(255 255 255 / 0.72);
   --st-glass-line: rgb(10 10 10 / 0.08);
-  --st-accent: #0000ee;
-  --st-accent-soft: #eeeeff;
+  --st-accent: var(--lp-blue, var(--color-blue));
+  --st-accent-soft: color-mix(in srgb, var(--st-accent) 7%, white);
   --st-shadow: 0 1px 2px rgb(16 24 40 / 0.04), 0 24px 60px -24px rgb(16 24 40 / 0.18);
   color: var(--st-ink);
 }
@@ -32,7 +32,7 @@
 .vtoLists li { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; line-height: 1.5; color: var(--st-ink); }
 .vtoListLabel { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--st-muted); }
 .vtoFrees { transition: background-color 300ms ease, box-shadow 300ms ease; }
-.vtoFrees[data-active='true'] { background: #fff; box-shadow: 0 0 0 1px rgb(237 30 30 / 0.28), 0 0 0 5px var(--st-accent-soft); }
+.vtoFrees[data-active='true'] { background: #fff; box-shadow: 0 0 0 1px color-mix(in srgb, var(--st-accent) 28%, transparent), 0 0 0 5px var(--st-accent-soft); }
 .vtoLockMark { flex: none; width: 7px; height: 7px; margin-top: 6px; border-radius: 2px; background: var(--st-ink); }
 .vtoFreeMark { flex: none; width: 7px; height: 7px; margin-top: 6px; border-radius: 999px; border: 1.5px solid var(--st-accent); }
 .vtoStage { display: grid; gap: 12px; }

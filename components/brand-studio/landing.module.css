@@ -1,7 +1,10 @@
 /*
  * Brand landing v5 (2026-10-29). White chrome, ink type, the photographs carry the colour, and the
- * TWINGS blue (#0000EE) appears only where you can act: the CTA, links, focus and one live dot
+ * TWINGS blue appears only where you can act: the CTA, links, focus and one live dot
  * (research: color-system study, ≤5% of the page, never on or inside a photo).
+ * The blue is one knob, `--lp-blue`. It follows the site's key colour (`--color-blue` in
+ * app/globals.css), and every shade on this page and in the try-on demo is mixed from it. The founder
+ * is changing the key colour (2026-10-29), so never write the hex here.
  */
 .page {
   --lp-paper: #ffffff;
@@ -11,9 +14,9 @@
   --lp-ink: #111111;
   --lp-body: #4a4c55;
   --lp-muted: #6b6d75;
-  --lp-blue: #0000ee;
-  --lp-blue-hover: #0000c4;
-  --lp-blue-pressed: #00009e;
+  --lp-blue: var(--color-blue);
+  --lp-blue-hover: color-mix(in srgb, var(--lp-blue) 82%, black);
+  --lp-blue-pressed: color-mix(in srgb, var(--lp-blue) 66%, black);
   --lp-radius: 16px;
   --lp-radius-media: 12px;
   color: var(--lp-ink);
