@@ -14,6 +14,9 @@ export const BRAND_HOST_STUDIO_OPERATIONS = [
   'brandWorkspace.organization',
   'brandWorkspace.createProject',
   'brandWorkspace.status',
+  // The campaign cover: the image arrives through the attachment path (type and size checked on
+  // reserve, real bytes on complete); this only points the campaign at one of its finished images.
+  'brandWorkspace.cover',
   // Candidate file import and removal stay on admin.twings.app: the import worker has its own
   // secret-only route, and removal is destructive. Sharing is the one shortlist move this host needs.
   'brandWorkspace.shortlistShare',

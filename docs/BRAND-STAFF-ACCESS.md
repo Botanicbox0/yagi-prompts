@@ -35,10 +35,11 @@
 대표 요청: brand.twings.app 캠페인 운영 화면에서 관리자가 새 고객 캠페인을 만들고, 곧바로 그 캠페인의 크리에이터 후보 관리와 가져오기용 캠페인 ID를 쓸 수 있어야 한다. 그전에는 운영자 보기가 읽기 전용이고 brand 호스트가 `/admin/do`를 막아서, 캠페인을 만들 길이 admin.twings.app의 접힌 "캠페인 준비" 폼밖에 없었다.
 
 - 대상: `profiles.is_admin = true`이고 그 브랜드의 멤버가 아닌 계정(운영자 보기, `studio` 역할). 도메인만 있는 열람자는 그대로 읽기 전용이다. 관리자가 실제 멤버인 브랜드에서는 고객 의뢰 마법사가 그대로 나온다.
-- 화면: `/brand` 머리에 **새 캠페인 만들기**, `/brand/projects/new`에 고객사 선택(지금 고른 브랜드가 기본값)·캠페인 이름·목표·총예산(선택) 폼과 **새 고객사 등록**. 만든 캠페인은 `/admin/brand-workspace`의 "캠페인 준비"와 같다: `production_mode = creator`, 고객에게 공개 전(`client_visible = false`), 상태 `requested`, 관리자에게 멤버십은 생기지 않는다. 고객에게 공개·담당자 초대는 지금처럼 관리자 화면에서 한다.
+- 화면: `/brand` 머리에 **새 캠페인 만들기**, `/brand/projects/new`에 고객사 선택(지금 고른 브랜드가 기본값)·캠페인 이름·목표·총예산(선택)·**대표 이미지(선택)** 폼과 **새 고객사 등록**. 만든 캠페인은 `/admin/brand-workspace`의 "캠페인 준비"와 같다: `production_mode = creator`, 고객에게 공개 전(`client_visible = false`), 상태 `requested`, 관리자에게 멤버십은 생기지 않는다. 고객에게 공개·담당자 초대는 지금처럼 관리자 화면에서 한다.
 - 캠페인 페이지(`/brand/projects/{id}`): 운영자 안내 바로 아래에 **진행 상태**(요청 → 캠페인 시작/종료, 진행 중 → 캠페인 완료/종료, 완료·종료는 확인 상자 필수, 되돌릴 수 없음)와 **크리에이터 후보 관리**(가져오기용 캠페인 ID, 공개·숨기기. 후보 파일 가져오기·삭제는 관리자 화면에서). 결과는 그 묶음 맨 위에 표시된다. 진행 상태 추가는 2026-10-29 대표 요청("완료처리를 여기서 할 수 없는 게 불편하다").
-- 경로: `POST /api/brand-workspace/studio`(`app/api/brand-workspace/studio/route.ts`). 허용 목록(`lib/admin/brand-host-studio.ts`)은 `brandWorkspace.organization`, `brandWorkspace.createProject`, `brandWorkspace.status`, `brandWorkspace.shortlistShare` 넷. 목록 밖 이름은 404다. 돌아가는 곳은 brand 캠페인 페이지와 새 캠페인 페이지뿐이다. `/admin/do` 자체는 brand 호스트에서 계속 막혀 있다. 검사 순서는 아래 "보안".
-- 테스트: `tests/brands/studio-prep.test.ts`(PGlite + 실제 라우트·디스패처), `tests/brands/studio-door-hardening.test.ts`, `tests/brands/studio-prep-ui.test.tsx`, `tests/routes/brand-host.test.ts`, `tests/security/workspace-csp.test.ts`. 스윕은 익명 POST가 본문 없는 404인지, 작업공간 페이지의 CSP와 모든 `<script>`의 nonce를 확인한다.
+- 대표 이미지(2026-10-29 대표 요청): JPEG·PNG·WebP 1장, 15 MiB까지. 바이트는 스튜디오 문을 지나지 않는다(서버리스 본문 한도). 기존 첨부 경로로 올린다: `/api/brand-workspace` `attachment.reserve`(선언한 형식·크기 검사) → 바이트를 비공개 저장소로 직접(로컬은 첨부 바이트 경로) → `attachment.complete`(서버가 실제 바이트의 형식·크기를 다시 확인하고 맞지 않으면 준비 상태로 바꾸지 않는다) → 스튜디오 문 `brandWorkspace.cover`(그 캠페인의 준비된 이미지만, 현재 revision일 때만). 캠페인을 먼저 만들고 이미지가 실패하면 캠페인 페이지가 "다시 올려 주세요" 안내와 함께 열린다. 이미 만든 캠페인은 캠페인 페이지의 **캠페인 대표 이미지**에서 올리거나 바꾼다. TWINGS 팀이 올린 현재 대표 이미지는 고객 파일 목록에 나오지 않는다(`detail()`의 첨부 필터). 대표 이미지를 바꾸면 이전 이미지는 더 이상 대표가 아니어서 고객 파일 목록에 보인다. 관리자 화면에서 바꿀 때도 같고, 막으려면 첨부에 "대표 이미지" 표시를 두는 마이그레이션이 필요하다(후속 제안).
+- 경로: `POST /api/brand-workspace/studio`(`app/api/brand-workspace/studio/route.ts`). 허용 목록(`lib/admin/brand-host-studio.ts`)은 `brandWorkspace.organization`, `brandWorkspace.createProject`, `brandWorkspace.status`, `brandWorkspace.cover`, `brandWorkspace.shortlistShare` 다섯. 목록 밖 이름은 404다. 돌아가는 곳은 brand 캠페인 페이지와 새 캠페인 페이지뿐이다. `/admin/do` 자체는 brand 호스트에서 계속 막혀 있다. 검사 순서는 아래 "보안".
+- 테스트: `tests/brands/studio-prep.test.ts`(PGlite + 실제 라우트·디스패처), `tests/brands/studio-door-hardening.test.ts`, `tests/brands/studio-cover.test.ts`, `tests/brands/studio-cover-client.test.ts`, `tests/brands/studio-prep-ui.test.tsx`, `tests/routes/brand-host.test.ts`, `tests/security/workspace-csp.test.ts`. 스윕은 익명 POST가 본문 없는 404인지, 작업공간 페이지의 CSP와 모든 `<script>`의 nonce를 확인한다.
 
 ## 보안 (2026-10-29, 대표 요청 "보안 이슈 없게 빡세게 막을 수 없나?")
 
@@ -62,7 +63,7 @@
 - 실시간 알림(예: 후보 공개·캠페인 완료 시 운영 Slack)은 새 발송 문안이 필요해 **대표 결정**으로 남겼다.
 
 **남는 위험 (솔직하게)**
-- CSP는 XSS의 실행을 막는 층이지 0으로 만드는 보증이 아니다. 우리 코드가 신뢰한 스크립트(Next.js 번들, Toss SDK 같은 외부 SDK)가 오염되거나 nonce가 붙는 경로로 주입이 생기면, 그 스크립트는 관리자 세션으로 허용된 4개 동작을 한도 안에서 할 수 있다. 같은 이유로 admin.twings.app의 `/admin/do`(전체 관리자 권한)도 CSP가 1차 방어선이다.
+- CSP는 XSS의 실행을 막는 층이지 0으로 만드는 보증이 아니다. 우리 코드가 신뢰한 스크립트(Next.js 번들, Toss SDK 같은 외부 SDK)가 오염되거나 nonce가 붙는 경로로 주입이 생기면, 그 스크립트는 관리자 세션으로 허용된 5개 동작을 한도 안에서 할 수 있다. 같은 이유로 admin.twings.app의 `/admin/do`(전체 관리자 권한)도 CSP가 1차 방어선이다.
 - 한도(10분 30건)는 피해 속도를 늦출 뿐 0으로 만들지 않는다. 감사 기록은 사후 확인용이며 실시간 차단은 아니다.
 - `/admin/do`의 요청 검사는 이번에 바꾸지 않았다(기존 `sameOrigin`: Sec-Fetch-Site 또는 Origin 중 하나). 같은 엄격 검사를 거기에도 걸지는 별도 판단이다.
 

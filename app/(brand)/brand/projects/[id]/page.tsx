@@ -20,6 +20,7 @@ import { CampaignShortlist } from "@/components/brand-workspace/shortlist";
 import { ShortlistAdmin } from "@/components/brand-workspace/shortlist-admin";
 import { OutcomeBanner } from "@/components/admin/chrome";
 import { BrandStatusForms } from "@/components/admin/brand-status";
+import { StudioCoverForm } from "@/components/brand-workspace/studio-cover-forms";
 export default async function BrandProject({
   params,
   searchParams,
@@ -70,6 +71,12 @@ export default async function BrandProject({
             <h2>{b.projectStatus}</h2>
             <BrandStatusForms brandHost back={`/brand/projects/${project.id}#studio-tools`} projectId={project.id} status={project.status}
               revision={project.revision} b={b} admin={dict.admin} />
+          </section>
+          <section className="bw-panel" data-studio-cover={project.coverUrl ? "set" : "none"}>
+            <h2>{b.cover.title}</h2>
+            {search.cover === "failed" && <p role="alert" className="bw-error" data-studio-cover-failed>{b.studioPrep.coverFailed}</p>}
+            <p className="bw-muted">{b.studioPrep.coverHint}</p>
+            <StudioCoverForm b={b} projectId={project.id} revision={project.revision} hasCover={Boolean(project.coverUrl)} />
           </section>
           <ShortlistAdmin projectId={project.id} view={studioShortlist} back={`/brand/projects/${project.id}#studio-tools`}
             copy={b.shortlistAdmin} locale={locale} brandHost />

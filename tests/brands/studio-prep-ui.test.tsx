@@ -38,6 +38,7 @@ import NewBrandProject from "@/app/(brand)/brand/projects/new/page";
 import { ProjectDetail } from "@/components/brand-workspace/project-detail";
 import { ShortlistAdmin } from "@/components/brand-workspace/shortlist-admin";
 import { BrandStatusForms } from "@/components/admin/brand-status";
+import { StudioCoverForm } from "@/components/brand-workspace/studio-cover-forms";
 import { getDictionary } from "@/lib/i18n/dictionaries";
 
 const b = getDictionary("ko").brandWorkspace;
@@ -56,6 +57,13 @@ describe("the new-campaign page", () => {
     expect(page).toContain(`<option value="${B}" selected="">Fixture brand B</option>`);
     expect(page).toContain(`<option value="${A}">Fixture brand A</option>`);
     expect(page).toContain(b.studioPrep.next);
+    // One optional cover image, images only; the bytes never go through the form post.
+    expect(page).toContain("data-studio-campaign-form");
+    const coverInput = page.match(/<input[^>]*name="cover"[^>]*>/)?.[0] ?? "";
+    expect(coverInput).toContain('type="file"');
+    expect(coverInput).toContain('accept="image/jpeg,image/png,image/webp"');
+    expect(coverInput).not.toContain("required");
+    expect(page).toContain(b.studioPrep.coverHint);
     expect(page).toContain("data-studio-prep-new-brand");
     expect(page).not.toContain("data-brand-new-project-read-only");
     expect(page).not.toContain("data-campaign-wizard");
@@ -131,6 +139,15 @@ describe("the campaign page in the TWINGS team view", () => {
   it("never renders the studio panel on a customer's own seat", () => {
     const page = renderToStaticMarkup(<ProjectDetail project={{ ...project, role: "owner" }} b={b} locale="ko" staffTools={tools} />);
     expect(page).not.toContain("data-shortlist-admin");
+  });
+
+  it("offers to upload or replace the cover, images only", () => {
+    const add = renderToStaticMarkup(<StudioCoverForm b={b} projectId={B} revision={0} hasCover={false} />);
+    expect(add).toContain(b.studioPrep.coverAdd);
+    const input = add.match(/<input[^>]*name="cover"[^>]*>/)?.[0] ?? "";
+    expect(input).toContain('accept="image/jpeg,image/png,image/webp"');
+    expect(input).toContain('required=""');
+    expect(renderToStaticMarkup(<StudioCoverForm b={b} projectId={B} revision={3} hasCover />)).toContain(b.studioPrep.coverReplace);
   });
 
   it("offers completion from the campaign page, posting to the brand host's door with a confirmation box", () => {
