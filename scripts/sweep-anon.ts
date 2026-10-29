@@ -92,6 +92,8 @@ interface Fetched {
   robotsTag: string | null;
   /** For the `?download=1` probes — the header that makes a browser SAVE instead of play. */
   contentDisposition: string | null;
+  /** The workspace pages' nonce policy (lib/security/workspace-csp.ts). */
+  csp: string | null;
   body: string;
   bytes: Uint8Array;
 }
@@ -117,6 +119,7 @@ async function request(path: string, init?: RequestInit): Promise<Fetched> {
             status: response.statusCode ?? 0, location: header('location'),
             cacheControl: header('cache-control'), contentType: header('content-type'),
             robotsTag: header('x-robots-tag'), contentDisposition: header('content-disposition'),
+            csp: header('content-security-policy'),
             body: bytes.toString('utf8'), bytes,
           });
         });
@@ -135,6 +138,7 @@ async function request(path: string, init?: RequestInit): Promise<Fetched> {
     contentType: response.headers.get('content-type'),
     robotsTag: response.headers.get('x-robots-tag'),
     contentDisposition: response.headers.get('content-disposition'),
+    csp: response.headers.get('content-security-policy'),
     body: new TextDecoder().decode(bytes),
     bytes,
   };
@@ -1487,6 +1491,19 @@ async function sweepBrandWorkspace(fixtures: BrandWorkspaceProbe[]): Promise<voi
   expectEqual('brand studio door answers anonymous posts with a bare 404', studioPrep.status, 404);
   expectEqual('brand studio door 404 has no body', studioPrep.body, '');
   expectEqual('brand studio door refusal is private no-store', studioPrep.cacheControl, 'private, no-store');
+  // The workspace pages' nonce CSP, end to end: the page that opens without a session must carry the
+  // policy, and Next.js must have stamped its nonce on every script it rendered.
+  const invite = await get('/brand/invite');
+  expectEqual('/brand/invite renders for anonymous visitors', invite.status, 200);
+  const nonce = invite.csp?.match(/'nonce-([A-Za-z0-9+/=]+)'/)?.[1];
+  const policy = invite.csp ?? '';
+  if (nonce && policy.includes("'strict-dynamic'") && policy.includes("object-src 'none'") && policy.includes("base-uri 'none'")
+    && policy.includes("frame-ancestors 'none'") && policy.includes("form-action 'self'") && !policy.includes('unsafe-eval'))
+    ok('workspace page sends the strict nonce CSP');
+  else fail('workspace page sends the strict nonce CSP', policy || 'no Content-Security-Policy header');
+  const scripts = [...invite.body.matchAll(/<script\b[^>]*>/g)].map((m) => m[0]);
+  expectEqual('workspace page has scripts to stamp', scripts.length > 0, true);
+  expectEqual('every script on a workspace page carries the nonce', scripts.filter((tag) => !nonce || !tag.includes(`nonce="${nonce}"`)).length, 0);
 }
 
 /** docs/TEMPLATES-IA.md §8 — the render queue: gated where it must be, open where the token says. */

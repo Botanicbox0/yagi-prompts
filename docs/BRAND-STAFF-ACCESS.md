@@ -36,9 +36,35 @@
 
 - 대상: `profiles.is_admin = true`이고 그 브랜드의 멤버가 아닌 계정(운영자 보기, `studio` 역할). 도메인만 있는 열람자는 그대로 읽기 전용이다. 관리자가 실제 멤버인 브랜드에서는 고객 의뢰 마법사가 그대로 나온다.
 - 화면: `/brand` 머리에 **새 캠페인 만들기**, `/brand/projects/new`에 고객사 선택(지금 고른 브랜드가 기본값)·캠페인 이름·목표·총예산(선택) 폼과 **새 고객사 등록**. 만든 캠페인은 `/admin/brand-workspace`의 "캠페인 준비"와 같다: `production_mode = creator`, 고객에게 공개 전(`client_visible = false`), 상태 `requested`, 관리자에게 멤버십은 생기지 않는다. 고객에게 공개·담당자 초대는 지금처럼 관리자 화면에서 한다.
-- 캠페인 페이지(`/brand/projects/{id}`): 운영자 안내 바로 아래에 **진행 상태**(요청 → 캠페인 시작/종료, 진행 중 → 캠페인 완료/종료, 완료·종료는 확인 상자 필수, 되돌릴 수 없음)와 **크리에이터 후보 관리**(가져오기용 캠페인 ID, JSON 가져오기, 공개·숨기기·삭제). 결과는 그 묶음 맨 위에 표시된다. 진행 상태 추가는 2026-10-29 대표 요청("완료처리를 여기서 할 수 없는 게 불편하다").
-- 경로: `POST /api/brand-workspace/studio`(`app/api/brand-workspace/studio/route.ts`). `/admin/do`와 같은 순서로 `requireAdmin()`(아니면 본문 없는 404) → 같은 출처 확인 → 허용 목록(`lib/admin/brand-host-studio.ts`: `brandWorkspace.organization`, `brandWorkspace.createProject`, `brandWorkspace.status`, `brandWorkspace.shortlistImport`, `brandWorkspace.shortlistShare`, `brandWorkspace.shortlistRemove`) → 레지스트리 오퍼레이션을 `dispatchAdmin`으로 실행. 목록 밖 이름은 404다. 돌아가는 곳은 brand 캠페인 페이지와 새 캠페인 페이지뿐이다. `/admin/do` 자체는 brand 호스트에서 계속 막혀 있다.
-- 테스트: `tests/brands/studio-prep.test.ts`(PGlite + 실제 라우트·디스패처), `tests/brands/studio-prep-ui.test.tsx`, `tests/routes/brand-host.test.ts`. 스윕은 익명 POST가 본문 없는 404인지 확인한다.
+- 캠페인 페이지(`/brand/projects/{id}`): 운영자 안내 바로 아래에 **진행 상태**(요청 → 캠페인 시작/종료, 진행 중 → 캠페인 완료/종료, 완료·종료는 확인 상자 필수, 되돌릴 수 없음)와 **크리에이터 후보 관리**(가져오기용 캠페인 ID, 공개·숨기기. 후보 파일 가져오기·삭제는 관리자 화면에서). 결과는 그 묶음 맨 위에 표시된다. 진행 상태 추가는 2026-10-29 대표 요청("완료처리를 여기서 할 수 없는 게 불편하다").
+- 경로: `POST /api/brand-workspace/studio`(`app/api/brand-workspace/studio/route.ts`). 허용 목록(`lib/admin/brand-host-studio.ts`)은 `brandWorkspace.organization`, `brandWorkspace.createProject`, `brandWorkspace.status`, `brandWorkspace.shortlistShare` 넷. 목록 밖 이름은 404다. 돌아가는 곳은 brand 캠페인 페이지와 새 캠페인 페이지뿐이다. `/admin/do` 자체는 brand 호스트에서 계속 막혀 있다. 검사 순서는 아래 "보안".
+- 테스트: `tests/brands/studio-prep.test.ts`(PGlite + 실제 라우트·디스패처), `tests/brands/studio-door-hardening.test.ts`, `tests/brands/studio-prep-ui.test.tsx`, `tests/routes/brand-host.test.ts`, `tests/security/workspace-csp.test.ts`. 스윕은 익명 POST가 본문 없는 404인지, 작업공간 페이지의 CSP와 모든 `<script>`의 nonce를 확인한다.
+
+## 보안 (2026-10-29, 대표 요청 "보안 이슈 없게 빡세게 막을 수 없나?")
+
+위협: 이 경로와 `/admin/do`는 관리자 세션 쿠키로 움직인다. brand·admin 호스트 페이지에 남의 스크립트(XSS)가 들어오면 그 스크립트가 관리자의 브라우저에서 같은 출처 요청을 보낼 수 있다. 막는 층과 남는 위험은 아래와 같다.
+
+**1. 남의 스크립트가 실행되지 않게 (CSP, `lib/security/workspace-csp.ts`, `middleware.ts`)**
+- 대상: brand.twings.app·admin.twings.app의 모든 응답, 그리고 어느 호스트든 `/brand`·`/admin` 경로(로컬·프리뷰 포함).
+- `script-src 'nonce-…' 'strict-dynamic'`: 요청마다 새 nonce. Next.js가 요청의 CSP 헤더에서 nonce를 읽어 자기 스크립트에 붙인다. 브라우저가 보낸 CSP·nonce 헤더는 버린다. 개발 서버만 `'unsafe-eval'`(빠른 새로고침). 인라인 이벤트 핸들러·주입된 `<script>`·`javascript:` 주소는 실행되지 않는다.
+- `object-src 'none'`, `base-uri 'none'`, `frame-ancestors 'none'`(이 호스트들을 남의 iframe에 넣을 수 없다. 자기 자신도 넣지 않는다), `form-action 'self'`(로그인은 링크라 OAuth 흐름에 영향 없음).
+- 넣지 않은 것: `connect-src`·`img-src`·`frame-src` 허용 목록, Trusted Types. 위 위협(같은 출처 관리자 요청)을 막지 못하고, 목록이 틀리면 운영의 서명 업로드·저장 미디어·결제 위젯이 조용히 깨지는데 로컬 모드로는 확인할 수 없다. 운영에서 위반 보고를 받아 실제 출처를 본 뒤 붙이는 것이 다음 단계다.
+- 정적 페이지(전역 404)는 nonce를 받을 수 없어 이 호스트들에서 스크립트 없이 보인다. 내용은 그대로 보인다.
+
+**2. 경로 자체 (`app/api/brand-workspace/studio/route.ts`)** — 실패는 모두 본문 없는 404
+- `requireAdmin()` → `Origin`이 이 출처와 정확히 같고 `Sec-Fetch-Site: same-origin`, 둘 다 있어야 한다(공용 미들웨어 검사는 둘 중 하나가 없어도 통과시킨다) → 허용 목록 → JSON 호출은 `x-twings-studio: 1` 헤더 필수(다른 사이트의 폼은 이 헤더를 보낼 수 없다) → 본문 64 KB 이하.
+- 허용 목록에서 후보 파일 가져오기(4 MB 파일 업로드, 가져오기 작업은 비밀값 전용 경로를 쓴다)와 후보 삭제(되돌릴 수 없음)를 뺐다. 둘 다 admin.twings.app에 그대로 있다.
+- 관리자별 한도: 10분에 30건(`lib/admin/brand-host-audit.ts`). 넘으면 429 `studioRateLimited`, 동작도 기록도 하지 않는다.
+
+**3. 탐지 (`platform_audit`, 0046 운영 적용됨, 수정·삭제 불가 트리거)**
+- 동작마다 실행 전 `attempt` 행(이 행을 못 쓰면 동작하지 않는다)과 실행 뒤 `result` 행(성공 여부·코드). `action = brandHostStudio.<오퍼레이션>`, 누가(`actor_id`), 무엇에(`entity_id` = 캠페인 또는 브랜드), 언제, 어느 호스트, 그리고 고정값(공개 여부, 바꾼 상태)만 남긴다. 캠페인 이름 같은 자유 문장은 남기지 않는다.
+- 조회 예: `select created_at, actor_id, action, entity_id, details from platform_audit where action like 'brandHostStudio.%' order by created_at desc;`
+- 실시간 알림(예: 후보 공개·캠페인 완료 시 운영 Slack)은 새 발송 문안이 필요해 **대표 결정**으로 남겼다.
+
+**남는 위험 (솔직하게)**
+- CSP는 XSS의 실행을 막는 층이지 0으로 만드는 보증이 아니다. 우리 코드가 신뢰한 스크립트(Next.js 번들, Toss SDK 같은 외부 SDK)가 오염되거나 nonce가 붙는 경로로 주입이 생기면, 그 스크립트는 관리자 세션으로 허용된 4개 동작을 한도 안에서 할 수 있다. 같은 이유로 admin.twings.app의 `/admin/do`(전체 관리자 권한)도 CSP가 1차 방어선이다.
+- 한도(10분 30건)는 피해 속도를 늦출 뿐 0으로 만들지 않는다. 감사 기록은 사후 확인용이며 실시간 차단은 아니다.
+- `/admin/do`의 요청 검사는 이번에 바꾸지 않았다(기존 `sameOrigin`: Sec-Fetch-Site 또는 Origin 중 하나). 같은 엄격 검사를 거기에도 걸지는 별도 판단이다.
 
 ## 무엇이 닫혀 있는가 (쓰기)
 

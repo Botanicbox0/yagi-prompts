@@ -9,6 +9,7 @@ import {
 } from "react";
 import { useRouter } from "next/navigation";
 import type { AdminOperationName } from "@/lib/admin/operations";
+import { BRAND_STUDIO_ACTION_PATH, STUDIO_REQUEST_HEADER } from "@/lib/admin/brand-host-studio";
 import type { BrandCopy } from "./action-form";
 import { ConfirmStep, toneClass, useConfirmStep, type ButtonTone, type ConfirmCopy } from "./confirm-step";
 
@@ -32,6 +33,7 @@ export function managedErrorMessage(b: BrandCopy, code: string | null, messages:
   if (code === "staleReview" || code === "brandConflict") return b.conflict;
   if (code === "invalid" || code === "brandNotActive" || code === "brandConsentRequired" || code === "brandNotShared") return b.errors.adminInvalid;
   if (code === "forbidden" || code === "notFound") return b.errors.adminDenied;
+  if (code === "studioRateLimited") return b.errors.studioRateLimited;
   return b.error;
 }
 
@@ -84,7 +86,8 @@ export function ManagedForm({
     try {
       const response = await fetch(action, {
         method: "POST",
-        headers: { Accept: "application/json" },
+        // The brand host's studio door also wants its own header (lib/admin/brand-host-studio.ts).
+        headers: { Accept: "application/json", ...(action === BRAND_STUDIO_ACTION_PATH ? { [STUDIO_REQUEST_HEADER]: "1" } : {}) },
         body: data,
       });
       // A lost admin session answers 404 with no body; that is a refusal, not a network error.
