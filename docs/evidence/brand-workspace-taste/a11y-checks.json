@@ -7,10 +7,11 @@
   "bulkIsland_whiteText_overWhite": 11.69,
   "inkMuted_onWhite": 5.04,
   "inkMuted_onAlabaster": 4.78,
-  "accent_onWhite": 5.67,
-  "accent_onAlabaster": 5.38,
-  "accent_onAccentSoft": 5.13,
-  "white_onAccent": 5.67,
+  "accent_fill_whiteText": 4.65,
+  "accentText_onWhite": 6.05,
+  "accentText_onAlabaster": 5.74,
+  "accentText_onAccentSoft": 5.53,
+  "accentRing_onWhite": 4.65,
   "danger_onWhite": 6.6,
   "gold_onGoldSoft": 4.59,
   "emerald_onEmeraldSoft": 5.22
@@ -31,12 +32,12 @@
   }
  },
  "keyboard": [
-  "a.bw-skip-link solid rgb(67, 85, 232) 2px",
-  "a.bw-lockup solid rgb(67, 85, 232) 2px",
-  "a solid rgb(67, 85, 232) 2px",
-  "a solid rgb(67, 85, 232) 2px",
-  "a solid rgb(67, 85, 232) 2px",
-  "a solid rgb(67, 85, 232) 2px"
+  "a.bw-skip-link solid rgb(56, 117, 197) 2px",
+  "a.bw-lockup solid color(srgb 0.186667 0.39 0.656667) 2px",
+  "a solid color(srgb 0.186667 0.39 0.656667) 2px",
+  "a solid color(srgb 0.186667 0.39 0.656667) 2px",
+  "a solid color(srgb 0.186667 0.39 0.656667) 2px",
+  "a solid color(srgb 0.186667 0.39 0.656667) 2px"
  ],
  "blur": {
   "home": 5,
