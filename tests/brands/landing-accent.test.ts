@@ -20,7 +20,11 @@ describe('brand landing accent', () => {
     expect(blue).toMatch(/^#[0-9a-f]{6}$/);
     expect(landing.match(/--lp-blue\s*:/g)).toHaveLength(1);
     expect(accentRule).toMatch(/--color-blue\s*:\s*var\(--lp-blue\)\s*;/);
-    expect(accentRule).toMatch(/--accent\s*:\s*var\(--lp-blue\)\s*;/);
+    // Blue text takes the deeper text shade; fills keep the blue itself.
+    expect(accentRule).toMatch(/--lp-blue-text\s*:\s*color-mix\(in srgb,\s*var\(--lp-blue\)\s*85%,\s*#000\)\s*;/);
+    expect(accentRule).toMatch(/--accent\s*:\s*var\(--lp-blue-text\)\s*;/);
+    // Light sections re-declare --accent from --color-blue in globals.css, so they are pointed back.
+    expect(landing).toMatch(/\.accent\s+:global\(\[data-theme='light'\]\)\s*\{\s*--accent\s*:\s*var\(--lp-blue-text\)\s*;\s*\}/);
     expect(accentRule).toMatch(/display\s*:\s*contents/);
     expect(vto).toMatch(/--st-accent\s*:\s*var\(--lp-blue/);
   });
@@ -40,6 +44,14 @@ describe('brand landing accent', () => {
       const [r, g, b] = [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255).map((c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
       return 0.2126 * r! + 0.7152 * g! + 0.0722 * b!;
     };
-    expect(1.05 / (lum(blue) + 0.05)).toBeGreaterThanOrEqual(4.5);
+    const ratio = (a: string, b: string) => (Math.max(lum(a), lum(b)) + 0.05) / (Math.min(lum(a), lum(b)) + 0.05);
+    const hex = (rgb: number[]) => '#' + rgb.map((v) => Math.round(v).toString(16).padStart(2, '0')).join('');
+    const rgb = (h: string) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+    // White CTA text on the blue fill.
+    expect(ratio(blue, '#ffffff')).toBeGreaterThanOrEqual(4.5);
+    // Blue text (85% blue + 15% black) on white, the grey surface and the 7% blue tint.
+    const text = hex(rgb(blue).map((v) => v * 0.85));
+    const tint = hex(rgb(blue).map((v) => v * 0.07 + 255 * 0.93));
+    for (const ground of ['#ffffff', '#f7f7f8', '#f8f9fa', tint]) expect(ratio(text, ground), ground).toBeGreaterThanOrEqual(4.5);
   });
 });
