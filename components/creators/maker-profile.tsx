@@ -5,14 +5,15 @@ import { MAKER_BIO_MAX } from '@/lib/makers/profile';
 import { CITY_MAX, COUNTRY_CODES, DISPLAY_NAME_MAX, EMAIL_MAX, HEADLINE_MAX, MAKER_LINKS_MAX, countryName } from '@/lib/makers/fields';
 import { makerHref, makerShortPath } from '@/lib/makers/links';
 import { saveMakerProfileForm } from '@/app/(app)/creators/workspace/profile-actions';
-import { AvatarUpload } from './creative-studio';
+import { AvatarUpload, CoverUpload } from './creative-studio';
 import { BUTTON, FIELD, HINT, PANEL } from './styles';
 
 /**
  * docs/PLATFORM-2.0.md §7.5·§20 — the creative's public profile settings in the studio. A
- * server-rendered form posting to a server action: works without JavaScript (the avatar alone is an
- * island, since a file needs one). `null` settings means 0060 is not applied yet, and the panel says
- * so; `extended: false` means 0065 is not, and the panel offers only handle, bio and the opt-in.
+ * server-rendered form posting to a server action: works without JavaScript (the cover and the avatar
+ * are islands, since a file needs one). `null` settings means 0060 is not applied yet, and the panel
+ * says so; `extended: false` means 0065 is not, and the panel offers only handle, bio and the opt-in;
+ * `coverReady: false` means 0071 is not, and there is no cover control.
  */
 export function MakerProfilePanel({
   settings,
@@ -47,6 +48,14 @@ export function MakerProfilePanel({
       {settings === null ? <p role="status" className="text-sm">{t.unavailable}</p> : <>
         {saved && <p role="status" className="rounded-xl border border-hairline p-3 text-sm">{t.saved}</p>}
         {message && <p role="alert" data-maker-profile-error={error} className="rounded-xl border border-accent p-3 text-sm">{message}</p>}
+
+        {settings.extended && settings.coverReady && (
+          <CoverUpload
+            handle={settings.handle}
+            version={settings.coverVersion}
+            copy={{ label: t.coverLabel, hint: t.coverHint, upload: t.coverUpload, replace: t.coverReplace, remove: t.coverRemove, errors: dict.creatorProgram.works.errors }}
+          />
+        )}
 
         {settings.extended && (
           <AvatarUpload

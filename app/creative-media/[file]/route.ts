@@ -5,8 +5,8 @@ import { makerMediaObject } from '@/lib/makers/works';
 import { getRenderStore } from '@/lib/renders/store';
 
 /**
- * `GET /creative-media/{wrk_….jpg | avatar-{handle}-{version}.jpg}` — an AI creative's work or
- * avatar on their public pages (lib/makers/works.ts, docs/PLATFORM-2.0.md §20.2).
+ * `GET /creative-media/{wrk_….jpg | avatar-{handle}-{version}.jpg | cover-{handle}-{version}.jpg}` — an
+ * AI creative's work, avatar or cover on their public pages (lib/makers/works.ts, docs/PLATFORM-2.0.md §20.2).
  *
  * Outside `/api` on purpose: next.config pins every `/api/*` answer to `private, no-store`, and a
  * portfolio of twelve works re-downloaded on every visit is exactly what a creative's page must
@@ -17,7 +17,7 @@ import { getRenderStore } from '@/lib/renders/store';
 export const dynamic = 'force-dynamic';
 const PRIVATE = { 'Cache-Control': 'private, no-store', 'X-Robots-Tag': 'noindex, nofollow', 'X-Content-Type-Options': 'nosniff' };
 const PUBLIC = { 'Cache-Control': 'public, max-age=3600, s-maxage=86400, stale-while-revalidate=604800', 'X-Content-Type-Options': 'nosniff' };
-const FILE = /^(?:(wrk_[0-9a-f]{32})\.(?:jpg|png|webp|mp4|mov)|avatar-([a-z0-9_]{3,20})-[0-9a-f]{16,32}\.jpg)$/;
+const FILE = /^(?:(wrk_[0-9a-f]{32})\.(?:jpg|png|webp|mp4|mov)|(avatar|cover)-([a-z0-9_]{3,20})-[0-9a-f]{16,32}\.jpg)$/;
 
 /** Safari plays a film only from a server that answers byte ranges; one range is all it asks for. */
 function ranged(request: Request, bytes: Uint8Array<ArrayBuffer>, base: Record<string, string>): NextResponse {
@@ -35,7 +35,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ file
   const { file } = await params;
   const match = FILE.exec(file);
   if (!match) return new NextResponse(null, { status: 404, headers: PRIVATE });
-  const id = match[1] ?? `avatar-${match[2]}`;
+  const id = match[1] ?? `${match[2]}-${match[3]}`;
   try {
     const sql = await getSqlRunner();
     if (!sql) return new NextResponse(null, { status: 503, headers: PRIVATE });

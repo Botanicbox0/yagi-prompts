@@ -31,7 +31,7 @@ const card = (slug: string, overrides: Partial<PromptCard> = {}): PromptCard => 
 /** A public creative with only what 0060 knew; tests add the 0065 fields they need. */
 const maker = (overrides: Partial<PublicMaker> = {}): PublicMaker => ({
   handle: 'jun_01', bio: null, displayName: null, headline: null, country: null, city: null, links: [], publicEmail: null, tools: [],
-  openToBrands: false, avatar: null, templateCount: 1, latestPublishedAt: null, ...overrides,
+  openToBrands: false, avatar: null, cover: null, templateCount: 1, latestPublishedAt: null, ...overrides,
 });
 
 const params = (handle: string, locale = 'ko') => ({ params: Promise.resolve({ locale, handle }) });
@@ -105,6 +105,36 @@ describe('maker profile route', () => {
     const ld = JSON.parse(/<script id="creative-structured-data" type="application\/ld\+json">(.*?)<\/script>/.exec(html)![1]!);
     expect(ld).toMatchObject({ '@type': 'ProfilePage', mainEntity: { '@type': 'Person', name: 'Jun Park', alternateName: '@jun_01', sameAs: ['https://www.instagram.com/jun.films/', 'https://jun.studio/'] } });
     expect(JSON.stringify(ld)).not.toContain('hello@jun.studio');
+  });
+
+  it('opens like a profile: the cover banner, the photo over its lower edge, then who, where, links and bio — then recipes, templates, works', async () => {
+    state.makers = [maker({
+      displayName: 'Jun Park', headline: 'AI director making fashion films', country: 'KR', city: 'Seoul', bio: 'AI 영상 템플릿을 만듭니다.',
+      links: [{ kind: 'instagram', url: 'https://www.instagram.com/jun.films/' }], openRecipeCount: 1,
+      avatar: '/creative-media/avatar-jun_01-abcdef0123456789.jpg', cover: '/creative-media/cover-jun_01-0123456789abcdef.jpg',
+    })];
+    state.video = [card('maker-golden-hour', { recipeOpen: true })];
+    state.works = [{ id: `wrk_${'b'.repeat(32)}`, kind: 'image', mime: 'image/jpeg', width: 1200, height: 1500, title: 'Neon diner', caption: null, linkUrl: null, position: 0 }];
+    const html = await outcome('jun_01');
+    expect(html).toContain('data-creative-cover="photo"');
+    expect(html).toContain('src="/creative-media/cover-jun_01-0123456789abcdef.jpg"');
+    // The banner is decoration: the name below it is the page's heading, so the picture has no text.
+    expect(/<img[^>]*cover-jun_01[^>]*>/.exec(html)![0]).toContain('alt=""');
+    const at = (marker: string) => {
+      const index = html.indexOf(marker);
+      expect(index, marker).toBeGreaterThan(-1);
+      return index;
+    };
+    const order = ['data-creative-cover=', 'data-creative-avatar="photo"', '<h1', 'data-creative-headline', 'data-creative-place', 'data-creative-links', 'data-maker-bio', 'data-maker-recipe-hub', 'data-card-recipe', `data-creative-work="wrk_${'b'.repeat(32)}"`];
+    for (let i = 1; i < order.length; i += 1) expect(at(order[i - 1]!), `${order[i - 1]} before ${order[i]}`).toBeLessThan(at(order[i]!));
+  });
+
+  it('keeps the banner shape with a quiet fill when the creative has no cover', async () => {
+    state.makers = [maker({ displayName: 'Jun Park' })];
+    const html = await outcome('jun_01');
+    expect(html).toContain('data-creative-cover="none"');
+    expect(html).not.toContain('/creative-media/cover-');
+    expect(html.indexOf('data-creative-cover=')).toBeLessThan(html.indexOf('data-creative-avatar='));
   });
 
   it('sends "@handle" and capitals to the one canonical address', async () => {

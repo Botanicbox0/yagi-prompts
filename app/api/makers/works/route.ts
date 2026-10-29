@@ -9,17 +9,18 @@ import { loadMakerSettings } from '@/lib/makers/profile';
 import { MAKER_FILE_MAX_BYTES } from '@/lib/recipes/assets';
 import { getRenderStore } from '@/lib/renders/store';
 import {
-  WorkError, deleteMakerAvatar, deleteMakerWork, listMakerWorks, reorderMakerWorks, storeMakerAvatar, storeMakerWork, updateMakerWork,
+  WorkError, deleteMakerAvatar, deleteMakerCover, deleteMakerWork, listMakerWorks, reorderMakerWorks, storeMakerAvatar, storeMakerCover, storeMakerWork, updateMakerWork,
 } from '@/lib/makers/works';
 
 /**
- * `/api/makers/works` — the studio's works and avatar (docs/PLATFORM-2.0.md §20.2).
+ * `/api/makers/works` — the studio's works, avatar and cover (docs/PLATFORM-2.0.md §20.2).
  *
  *   POST ?kind=work[&title=&caption=&link=]   one work as the raw request body (4 MB, type from the bytes)
  *   POST ?kind=avatar                          the avatar, cropped square
+ *   POST ?kind=cover                           the profile banner, cropped 2:1 (0071)
  *   PATCH  {id,title,caption,link}             a work's text
  *   PATCH  {order:[ids]}                       the creative's order
- *   DELETE ?id=wrk_… | ?kind=avatar
+ *   DELETE ?id=wrk_… | ?kind=avatar | ?kind=cover
  *
  * Same-origin, signed-in, an active creative with the program open. Answers carry ids and codes —
  * never a storage key. A public profile's pages refresh on every change.
@@ -71,6 +72,11 @@ export async function POST(request: Request) {
       await refresh(g.sql, g.userId);
       return json({ ok: true, avatarVersion: version }, 201);
     }
+    if (query.get('kind') === 'cover') {
+      const version = await storeMakerCover(g.sql, store, g.userId, bytes);
+      await refresh(g.sql, g.userId);
+      return json({ ok: true, coverVersion: version }, 201);
+    }
     const { work, unchanged } = await storeMakerWork(g.sql, store, { userId: g.userId, bytes, title: query.get('title') ?? undefined, caption: query.get('caption') ?? undefined, link: query.get('link') ?? undefined });
     await refresh(g.sql, g.userId);
     return json({ ok: true, work, unchanged }, unchanged ? 200 : 201);
@@ -104,6 +110,7 @@ export async function DELETE(request: Request) {
   try {
     const store = await getRenderStore();
     if (query.get('kind') === 'avatar') await deleteMakerAvatar(g.sql, store, g.userId);
+    else if (query.get('kind') === 'cover') await deleteMakerCover(g.sql, store, g.userId);
     else await deleteMakerWork(g.sql, store, g.userId, query.get('id') ?? '');
     await refresh(g.sql, g.userId);
     return json({ ok: true });

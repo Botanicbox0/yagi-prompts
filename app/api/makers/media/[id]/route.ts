@@ -5,8 +5,8 @@ import { makerMediaObject } from '@/lib/makers/works';
 import { getRenderStore } from '@/lib/renders/store';
 
 /**
- * `GET /api/makers/media/{wrk_…|avatar-{handle}|avatar-me}` — an AI creative's representative work
- * or avatar (lib/makers/works.ts, docs/PLATFORM-2.0.md §20). Public and cacheable while the profile
+ * `GET /api/makers/media/{wrk_…|avatar-{handle}|avatar-me|cover-{handle}|cover-me}` — an AI creative's
+ * representative work, avatar or cover (lib/makers/works.ts, docs/PLATFORM-2.0.md §20). Public and cacheable while the profile
  * is public; the creative's own studio preview otherwise. Streamed from here so the address never
  * changes and the bucket stays private — a version query (`?v=`) moves the cache when it changes.
  */
@@ -28,7 +28,7 @@ function ranged(request: Request, bytes: Uint8Array<ArrayBuffer>, base: Record<s
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  if (!/^(wrk_[0-9a-f]{32}|avatar-[a-z0-9_]{3,20}|avatar-me)$/.test(id)) return new NextResponse(null, { status: 404, headers: PRIVATE });
+  if (!/^(wrk_[0-9a-f]{32}|(?:avatar|cover)-(?:[a-z0-9_]{3,20}|me))$/.test(id)) return new NextResponse(null, { status: 404, headers: PRIVATE });
   try {
     const sql = await getSqlRunner();
     if (!sql) return new NextResponse(null, { status: 503, headers: PRIVATE });

@@ -4,8 +4,8 @@ import { useRef, useState } from 'react';
 import { BUTTON, BUTTON_OUTLINE, FIELD, HINT } from './styles';
 
 /**
- * docs/PLATFORM-2.0.md §20 — the Creative Studio's three islands: the avatar, the selected works and
- * the agent (MCP) tokens. Each talks to one same-origin JSON route (/api/makers/works,
+ * docs/PLATFORM-2.0.md §20 — the Creative Studio's islands: the cover, the avatar, the selected works
+ * and the agent (MCP) tokens. Each talks to one same-origin JSON route (/api/makers/works,
  * /api/makers/tokens); the server re-checks the creative on every call, and answers carry ids and
  * codes only. Files go up as the raw body, as the recipe editor's do (4 MB, type from the bytes).
  */
@@ -61,6 +61,51 @@ export function AvatarUpload({ handle, version, name, copy }: {
         {error && <p role="alert" className="text-sm text-accent">{error}</p>}
         <input ref={input} type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ''; if (file) void upload(file); }} />
       </div>
+    </div>
+  );
+}
+
+/**
+ * The profile banner (0071), previewed at the public page's desktop shape (3:1). Upload, replace and
+ * remove go to the same route as the avatar; the server crops to 2:1 and strips the metadata.
+ */
+export function CoverUpload({ handle, version, copy }: {
+  handle: string | null; version: string | null;
+  copy: { label: string; hint: string; upload: string; replace: string; remove: string; errors: Errors };
+}) {
+  const [current, setCurrent] = useState(version);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const input = useRef<HTMLInputElement>(null);
+  const src = current ? (handle ? `/api/makers/media/cover-${handle}?v=${current}` : `/api/makers/media/cover-me?v=${current}`) : null;
+
+  async function upload(file: File) {
+    setBusy(true); setError(null);
+    const result = await call<{ coverVersion: string }>('/api/makers/works?kind=cover', { method: 'POST', body: file, headers: { 'Content-Type': file.type || 'application/octet-stream' } });
+    setBusy(false);
+    if (result.ok) setCurrent(result.body.coverVersion); else setError(errorText(copy.errors, result.code));
+  }
+  async function remove() {
+    setBusy(true); setError(null);
+    const result = await call('/api/makers/works?kind=cover', { method: 'DELETE' });
+    setBusy(false);
+    if (result.ok) setCurrent(null); else setError(errorText(copy.errors, result.code));
+  }
+
+  return (
+    <div data-creative-cover-upload className="space-y-3">
+      <p className="text-sm font-medium">{copy.label}</p>
+      <div aria-busy={busy} className="relative aspect-[3/1] overflow-hidden rounded-2xl border border-hairline bg-on-surface/[0.04]">
+        {/* eslint-disable-next-line @next/next/no-img-element -- the creative's own cover through the gateway */}
+        {src && <img src={src} alt="" className="h-full w-full object-cover" />}
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <button type="button" disabled={busy} onClick={() => input.current?.click()} className={`${BUTTON_OUTLINE} min-h-10 px-4 py-2`}>{current ? copy.replace : copy.upload}</button>
+        {current && <button type="button" disabled={busy} onClick={remove} className="inline-flex min-h-10 items-center px-2 text-sm underline underline-offset-4 disabled:opacity-40">{copy.remove}</button>}
+      </div>
+      <span className={HINT}>{copy.hint}</span>
+      {error && <p role="alert" className="text-sm text-accent">{error}</p>}
+      <input ref={input} type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ''; if (file) void upload(file); }} />
     </div>
   );
 }

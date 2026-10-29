@@ -1,7 +1,7 @@
 import sharp from 'sharp';
 import type { SqlRunner } from '@/lib/db/sql-runner';
 import { saveMakerProfile } from '@/lib/makers/profile';
-import { listMakerWorks, storeMakerAvatar, storeMakerWork } from '@/lib/makers/works';
+import { listMakerWorks, storeMakerAvatar, storeMakerCover, storeMakerWork } from '@/lib/makers/works';
 import { createLocalRenderStore } from '@/lib/renders/store';
 import { FIXTURE_USERS } from './fixtures';
 
@@ -65,7 +65,8 @@ export async function seedMakerFixtures(sql: SqlRunner): Promise<void> {
   );
   if (!settings.extended) return;
   const store = createLocalRenderStore();
-  if (!settings.avatarVersion) await storeMakerAvatar(sql, store, LOCAL_MAKER.userId, new Uint8Array(await swatch(600, 600, [237, 30, 30], [250, 210, 4])));
+  if (!settings.avatarVersion) await storeMakerAvatar(sql, store, LOCAL_MAKER.userId, new Uint8Array(await swatch(600, 600, [24, 24, 28], [56, 117, 197])));
+  if (settings.coverReady && !settings.coverVersion) await storeMakerCover(sql, store, LOCAL_MAKER.userId, new Uint8Array(await swatch(1800, 900, [56, 117, 197], [232, 238, 246])));
   if ((await listMakerWorks(sql, LOCAL_MAKER.userId)).length === 0) {
     const works: Array<[number, number, [number, number, number], [number, number, number], string]> = [
       [960, 1200, [20, 20, 28], [92, 54, 255], 'TEST · Neon diner'],

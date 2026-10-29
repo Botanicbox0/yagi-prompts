@@ -9,7 +9,8 @@ vi.mock('next/cache', () => ({ revalidatePath: () => undefined, revalidateTag: (
 import { administerPlatform } from '@/lib/creator-platform/admin';
 import { creativeProfilesReady, loadMakerSettings, patchMakerProfile, saveMakerProfile } from '@/lib/makers/profile';
 import {
-  WorkError, deleteMakerAvatar, deleteMakerWork, listMakerWorks, listPublicWorks, makerMediaObject, reorderMakerWorks, storeMakerAvatar, storeMakerWork, updateMakerWork,
+  COVER_HEIGHT, COVER_WIDTH, WorkError, deleteMakerAvatar, deleteMakerCover, deleteMakerWork, listMakerWorks, listPublicWorks, makerMediaObject, reorderMakerWorks,
+  storeMakerAvatar, storeMakerCover, storeMakerWork, updateMakerWork,
 } from '@/lib/makers/works';
 import { createMakerToken, listMakerTokens, resolveMakerToken, revokeMakerToken, MAKER_TOKENS_MAX } from '@/lib/makers/tokens';
 import { recordRecipeOpen } from '@/lib/recipes/public';
@@ -22,7 +23,7 @@ import { FIXTURE_USERS } from '../../scripts/fixtures';
 
 /**
  * docs/PLATFORM-2.0.md §20 — the creative profile (0065) against real Postgres: the extended fields,
- * the works and avatar with their visibility rule, the agent tokens, recipe opens, and the MCP
+ * the works, avatar and cover (0071) with their visibility rule, the agent tokens, recipe opens, and the MCP
  * server that wraps all of it for a creative's own agent.
  */
 
@@ -122,6 +123,53 @@ describe('AI creative studio (0065)', () => {
     expect(await makerMediaObject(h.sql, null, 'avatar-me')).toBeNull();
     await deleteMakerAvatar(h.sql, store, CREATIVE.userId!);
     expect(await makerMediaObject(h.sql, null, 'avatar-jun_films')).toBeNull();
+  });
+
+  it('crops the cover 2:1 without metadata, replaces it, and serves it by handle while public (0071)', async () => {
+    await saveMakerProfile(h.sql, CREATIVE.userId!, { handle: 'jun_films', publicProfile: true });
+    expect(await loadMakerSettings(h.sql, CREATIVE.userId!)).toMatchObject({ coverVersion: null, coverReady: true });
+    expect(await code(storeMakerCover(h.sql, store, CREATIVE.userId!, new TextEncoder().encode('not an image')))).toBe('bad_file');
+
+    const version = await storeMakerCover(h.sql, store, CREATIVE.userId!, await jpeg(3000, 900));
+    expect((await loadMakerSettings(h.sql, CREATIVE.userId!))!.coverVersion).toBe(version);
+    const object = (await makerMediaObject(h.sql, null, 'cover-jun_films'))!;
+    expect(object).toMatchObject({ mime: 'image/jpeg', publicCache: true });
+    const bytes = await store.read(object.key);
+    expect(await sharp(bytes).metadata()).toMatchObject({ width: COVER_WIDTH, height: COVER_HEIGHT, format: 'jpeg' });
+    expect(Buffer.from(bytes).includes('GPS-CANARY')).toBe(false);
+    // The avatar and the cover are two objects: one never answers for the other.
+    expect(await makerMediaObject(h.sql, null, 'avatar-jun_films')).toBeNull();
+
+    // A portrait picture becomes the same banner; the old object is gone and the address moves.
+    const next = await storeMakerCover(h.sql, store, CREATIVE.userId!, await jpeg(640, 800));
+    expect(next).not.toBe(version);
+    await expect(store.read(object.key)).rejects.toThrow();
+    const catalog = await loadPromptCatalog(h.sql, { publicUrl: () => null });
+    expect(catalog.makers[0]!.cover).toBe(`/creative-media/cover-jun_films-${next}.jpg`);
+    expect(JSON.stringify(catalog)).not.toContain('cover_key');
+
+    // The creative's own preview before the profile is public; never anyone else's.
+    expect(await makerMediaObject(h.sql, CREATIVE.userId!, 'cover-me')).toMatchObject({ publicCache: false });
+    expect(await makerMediaObject(h.sql, null, 'cover-me')).toBeNull();
+    await saveMakerProfile(h.sql, CREATIVE.userId!, { handle: 'jun_films', publicProfile: false });
+    expect(await makerMediaObject(h.sql, null, 'cover-jun_films')).toBeNull();
+    expect(await makerMediaObject(h.sql, OTHER.id, 'cover-jun_films')).toBeNull();
+    expect(await makerMediaObject(h.sql, CREATIVE.userId!, 'cover-jun_films')).toMatchObject({ publicCache: false });
+
+    await deleteMakerCover(h.sql, store, CREATIVE.userId!);
+    expect((await loadMakerSettings(h.sql, CREATIVE.userId!))!.coverVersion).toBeNull();
+    expect(await makerMediaObject(h.sql, CREATIVE.userId!, 'cover-me')).toBeNull();
+  });
+
+  it('keeps answering on a database without 0071: no cover, no cover control, no cover upload', async () => {
+    await h.sql.query('alter table platform_creators drop column cover_key');
+    const saved = await saveMakerProfile(h.sql, CREATIVE.userId!, { handle: 'jun_films', publicProfile: true, displayName: 'Jun Park' });
+    expect(saved).toMatchObject({ displayName: 'Jun Park', coverVersion: null, coverReady: false });
+    expect(await code(storeMakerCover(h.sql, store, CREATIVE.userId!, await jpeg(3000, 900)))).toBe('unavailable');
+    await deleteMakerCover(h.sql, store, CREATIVE.userId!);
+    expect(await makerMediaObject(h.sql, CREATIVE.userId!, 'cover-me')).toBeNull();
+    expect(await makerMediaObject(h.sql, null, 'cover-jun_films')).toBeNull();
+    expect((await loadPromptCatalog(h.sql, { publicUrl: () => null })).makers).toEqual([expect.objectContaining({ handle: 'jun_films', displayName: 'Jun Park', cover: null })]);
   });
 
   it('issues tokens shown once, resolves them by hash, and stops them on revoke or a revoked creative', async () => {

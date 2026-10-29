@@ -4,19 +4,20 @@ import type { SqlRunner } from '@/lib/db/sql-runner';
 import { extensionFor, type RenderStore } from '@/lib/renders/store';
 import { sniffMakerFile, MAKER_FILE_MAX_BYTES, type MakerFileMime } from '@/lib/recipes/assets';
 import { lineOf, linkOf } from './fields';
-import { creativeProfilesReady } from './profile';
+import { creativeCoverReady, creativeProfilesReady } from './profile';
 
 /**
- * docs/PLATFORM-2.0.md §20 — an AI creative's representative works and avatar (0065). Same storage
+ * docs/PLATFORM-2.0.md §20 — an AI creative's representative works, avatar (0065) and cover (0071). Same storage
  * rules as a recipe's reference files (lib/recipes/assets.ts), because the same people upload them:
  *
  *   · 4 MB a file (under what a Vercel function accepts), twelve works and 40 MB a creative;
  *   · the type is the BYTES' type, never the client's header: JPEG/PNG/WebP, MP4/MOV;
  *   · images are decoded and re-encoded — orientation applied, every metadata byte (GPS included)
  *     dropped — so what is served is never what the camera wrote;
- *   · keys are `{userId}/wrk_<hex>.{ext}` and `{userId}/avatar_<hex>.jpg` in the PRIVATE renders
- *     bucket. A key never leaves the server: pages address a work by its `wrk_` id and an avatar by
- *     the creative's handle, and /api/makers/media serves them only while the profile is public.
+ *   · keys are `{userId}/wrk_<hex>.{ext}`, `{userId}/avatar_<hex>.jpg` and `{userId}/cover_<hex>.jpg`
+ *     in the PRIVATE renders bucket. A key never leaves the server: pages address a work by its
+ *     `wrk_` id and an avatar or cover by the creative's handle, and /creative-media (or the studio's
+ *     /api/makers/media) serves them only while the profile is public.
  */
 
 export const MAKER_WORKS_MAX = 12;
@@ -26,6 +27,9 @@ export const WORK_CAPTION_MAX = 280;
 export const WORK_ID = /^wrk_[0-9a-f]{32}$/;
 const IMAGE_MAX_SIDE = 2400;
 const AVATAR_SIDE = 512;
+/** The cover is stored 2:1 — the phone's banner whole; the desktop's 3:1 banner shows its middle band. */
+export const COVER_WIDTH = 1800;
+export const COVER_HEIGHT = 900;
 
 export interface MakerWork {
   id: string;
@@ -184,6 +188,46 @@ export async function storeMakerAvatar(sql: SqlRunner, store: RenderStore, userI
   return version;
 }
 
+/**
+ * The profile banner (0071): any JPEG/PNG/WebP, cropped to 2:1 around what draws the eye, re-encoded
+ * without metadata; replaces the previous one. Returns the new cache version.
+ */
+export async function storeMakerCover(sql: SqlRunner, store: RenderStore, userId: string, bytes: Uint8Array): Promise<string> {
+  await ready(sql);
+  if (!(await creativeCoverReady(sql))) throw new WorkError('unavailable');
+  if (!bytes.byteLength || bytes.byteLength > MAKER_FILE_MAX_BYTES) throw new WorkError('too_large');
+  const sniffed = sniffMakerFile(bytes);
+  if (!sniffed?.startsWith('image/')) throw new WorkError('bad_file');
+  let out: Buffer;
+  try {
+    const image = sharp(bytes, { limitInputPixels: 60_000_000, failOn: 'warning' });
+    const meta = await image.metadata();
+    if (!['png', 'jpeg', 'webp'].includes(meta.format ?? '') || (meta.pages ?? 1) > 1) throw new Error('bad_file');
+    out = await image.rotate().resize(COVER_WIDTH, COVER_HEIGHT, { fit: 'cover', position: 'attention' }).flatten({ background: '#ffffff' }).jpeg({ quality: 84, mozjpeg: true }).toBuffer();
+  } catch { throw new WorkError('bad_file'); }
+  const version = randomBytes(8).toString('hex');
+  const key = `${userId}/cover_${version}.jpg`;
+  await store.put(key, new Uint8Array(out), 'image/jpeg');
+  const { rows } = await sql.query<{ old: string | null }>(
+    `update platform_creators c set cover_key=$2, profile_updated_at=now() from (select cover_key old from platform_creators where user_id=$1 and active for update) prev
+      where c.user_id=$1 and c.active returning prev.old`, [userId, key]);
+  if (!rows[0]) {
+    try { await store.delete?.(key); } catch { /* never referenced */ }
+    throw new WorkError('not_found');
+  }
+  if (rows[0].old) { try { await store.delete?.(rows[0].old); } catch { /* replaced; harmless */ } }
+  return version;
+}
+
+export async function deleteMakerCover(sql: SqlRunner, store: RenderStore, userId: string): Promise<void> {
+  await ready(sql);
+  if (!(await creativeCoverReady(sql))) return;
+  const { rows } = await sql.query<{ old: string | null }>(
+    `update platform_creators c set cover_key=null from (select cover_key old from platform_creators where user_id=$1 and active for update) prev
+      where c.user_id=$1 and c.active returning prev.old`, [userId]);
+  if (rows[0]?.old) { try { await store.delete?.(rows[0].old); } catch { /* harmless */ } }
+}
+
 export async function deleteMakerAvatar(sql: SqlRunner, store: RenderStore, userId: string): Promise<void> {
   await ready(sql);
   const { rows } = await sql.query<{ old: string | null }>(
@@ -195,8 +239,8 @@ export async function deleteMakerAvatar(sql: SqlRunner, store: RenderStore, user
 export interface MakerMediaObject { key: string; mime: string; publicCache: boolean }
 
 /**
- * Who may see a creative's avatar or work: anyone while the profile is public (cacheable), and the
- * creative themself always (their studio preview). Everything else is not found.
+ * Who may see a creative's avatar, cover or work: anyone while the profile is public (cacheable), and
+ * the creative themself always (their studio preview). Everything else is not found.
  */
 export async function makerMediaObject(sql: SqlRunner, viewerId: string | null, id: string): Promise<MakerMediaObject | null> {
   if (!(await creativeProfilesReady(sql))) return null;
@@ -208,21 +252,21 @@ export async function makerMediaObject(sql: SqlRunner, viewerId: string | null, 
     if (row.visible) return { key: row.storage_key, mime: row.mime, publicCache: true };
     return viewerId === row.user_id ? { key: row.storage_key, mime: row.mime, publicCache: false } : null;
   }
-  // The creative's own avatar before they have a handle: never cached, never anyone else's.
-  if (id === 'avatar-me') {
+  const picture = /^(avatar|cover)-(?:(me)|([a-z0-9_]{3,20}))$/.exec(id);
+  if (!picture) return null;
+  // The cover (0071) is read through to_jsonb, so a database without the column has none.
+  const column = picture[1] === 'cover' ? "to_jsonb(c.*)->>'cover_key'" : 'c.avatar_key';
+  // The creative's own picture before they have a handle: never cached, never anyone else's.
+  if (picture[2]) {
     if (!viewerId) return null;
-    const { rows } = await sql.query<{ avatar_key: string | null }>('select avatar_key from platform_creators where user_id=$1 and active', [viewerId]);
-    return rows[0]?.avatar_key ? { key: rows[0].avatar_key, mime: 'image/jpeg', publicCache: false } : null;
+    const { rows } = await sql.query<{ key: string | null }>(`select ${column} as key from platform_creators c where c.user_id=$1 and c.active`, [viewerId]);
+    return rows[0]?.key ? { key: rows[0].key, mime: 'image/jpeg', publicCache: false } : null;
   }
-  const avatar = /^avatar-([a-z0-9_]{3,20})$/.exec(id);
-  if (avatar) {
-    const { rows } = await sql.query<{ user_id: string; avatar_key: string | null; visible: boolean }>(
-      'select user_id,avatar_key,(active and public_profile) visible from platform_creators where handle=$1', [avatar[1]]);
-    const row = rows[0];
-    if (!row?.avatar_key) return null;
-    if (row.visible) return { key: row.avatar_key, mime: 'image/jpeg', publicCache: true };
-    return viewerId === row.user_id ? { key: row.avatar_key, mime: 'image/jpeg', publicCache: false } : null;
-  }
-  return null;
+  const { rows } = await sql.query<{ user_id: string; key: string | null; visible: boolean }>(
+    `select c.user_id, ${column} as key, (c.active and c.public_profile) visible from platform_creators c where c.handle=$1`, [picture[3]]);
+  const row = rows[0];
+  if (!row?.key) return null;
+  if (row.visible) return { key: row.key, mime: 'image/jpeg', publicCache: true };
+  return viewerId === row.user_id ? { key: row.key, mime: 'image/jpeg', publicCache: false } : null;
 }
 

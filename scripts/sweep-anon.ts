@@ -1262,7 +1262,8 @@ async function sweepMakers(): Promise<void> {
   expectPresent('the verified mark', makerTemplate.body, 'data-template-verified');
   // 2026-10-29: the copy-or-make fork and the recipe pill follow a public prompt, never the credit.
   expectAbsent('no copy-or-make fork without a public prompt', makerTemplate.body, 'data-template-recipe-actions');
-  expectAbsent('…and no recipe pill on the catalogue', video.body, 'data-card-recipe');
+  // Locally one card has a public prompt: the studio recipe the maker fixtures disclose (LOCAL_RECIPE_SLUG).
+  expectEqual('…and the catalogue\'s recipe pill only on that one card', video.body.split('data-card-recipe="true"').length - 1, 1);
   const legacy = await get('/ko/t/skate-park-golden-hour');
   expectPresent('a handle without a maker page is a plain credit', legacy.body, `${KO_TERMS.creditPrefix} @hana`);
   expectAbsent('…with no maker block', legacy.body, 'data-template-maker');
@@ -1299,6 +1300,13 @@ async function sweepMakers(): Promise<void> {
   expectPresent('their works', creative.body, 'data-creative-works="3"');
   expectPresent('…served from the cacheable media path', creative.body, '/creative-media/wrk_');
   expectPresent('an avatar', creative.body, '/creative-media/avatar-jun-');
+  expectPresent('a cover banner (0071)', creative.body, 'data-creative-cover="photo"');
+  const coverPath = /\/creative-media\/cover-jun-[0-9a-f]{16,32}\.jpg/.exec(creative.body)?.[0];
+  const cover = coverPath ? await get(coverPath) : null;
+  expectEqual('…which streams', cover?.status, 200);
+  expectEqual('…as an image', cover?.contentType, 'image/jpeg');
+  expectPresent('…publicly cacheable', cover?.cacheControl ?? '', 'public');
+  expectEqual('no "my cover" for an anonymous reader', (await get('/api/makers/media/cover-me')).status, 404);
   expectPresent('the email sits behind a button', creative.body, 'data-creative-email="hidden"');
   expectAbsent('…and never as text', creative.body, LOCAL_MAKER.publicEmail);
   expectAbsent('…or as a mailto', creative.body, `mailto:${LOCAL_MAKER.publicEmail}`);

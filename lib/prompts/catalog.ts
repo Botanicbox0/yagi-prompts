@@ -5,7 +5,7 @@ import { loadPublishedPrompts, type PromptRow } from './repo';
 import { PROMPT_MODEL_LABEL, promptModelLabel, type PromptSource, type TemplateMedium } from './schemas';
 import { promptLock, type PromptLock } from './lock';
 import { loadPublicMakerRows } from '@/lib/makers/profile';
-import { makerAvatarSrc } from '@/lib/makers/links';
+import { makerAvatarSrc, makerCoverSrc } from '@/lib/makers/links';
 import type { MakerLink } from '@/lib/makers/fields';
 import { recipeSchemaReady } from '@/lib/recipes/repo';
 
@@ -98,7 +98,7 @@ export interface PromptTotals {
 
 /**
  * A creative who opted in (0060, 0065): what they chose to show — never the account behind them.
- * `avatar` is a gateway address (`/api/makers/media/avatar-{handle}?v=`), never a storage key.
+ * `avatar` and `cover` are gateway addresses (`/creative-media/{avatar|cover}-{handle}-{v}.jpg`), never storage keys.
  */
 export interface PublicMaker {
   handle: string;
@@ -115,6 +115,8 @@ export interface PublicMaker {
   tools: string[];
   openToBrands: boolean;
   avatar: string | null;
+  /** The profile banner (0071); null with none. */
+  cover: string | null;
   templateCount: number;
   /** How many of their published templates show the recipe's prompts. Optional like `bioEn`. */
   openRecipeCount?: number;
@@ -251,6 +253,7 @@ export async function loadPromptCatalog(
       handle: row.handle, bio: row.bio, bioEn: row.bioEn, displayName: row.displayName, headline: row.headline, country: row.country, city: row.city,
       links: row.links, publicEmail: row.publicEmail, tools: row.tools, openToBrands: row.openToBrands,
       avatar: row.avatarVersion ? makerAvatarSrc(row.handle, row.avatarVersion) : null,
+      cover: row.coverVersion ? makerCoverSrc(row.handle, row.coverVersion) : null,
       templateCount: own.length, openRecipeCount: own.filter((card) => card.recipeOpen).length,
       latestPublishedAt: dates.at(-1) ?? null,
     };

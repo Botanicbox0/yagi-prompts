@@ -31,6 +31,11 @@ export function makerAvatarSrc(handle: string, version: string): string {
   return `/creative-media/avatar-${handle}-${version}.jpg`;
 }
 
+/** The cover (0071) works like the avatar: a new picture is a new address. */
+export function makerCoverSrc(handle: string, version: string): string {
+  return `/creative-media/cover-${handle}-${version}.jpg`;
+}
+
 /** The studio's own previews (private while the profile is off): never cached outside the creative's tab. */
 export function makerStudioMediaSrc(id: string): string {
   return `/api/makers/media/${id}`;

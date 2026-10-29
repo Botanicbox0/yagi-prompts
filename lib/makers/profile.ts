@@ -6,8 +6,9 @@ import {
 /**
  * docs/PLATFORM-2.0.md §7.5·§14.1·§20 — an AI creative's public identity: a handle, a short bio and
  * an explicit opt-in (0060), and since 0065 a name, a one-line headline, where they work, their
- * links, an optional public email, their tools, whether they take brand work and an avatar. All of it
- * reaches a public page only while `public_profile` is on; `user_id` and the account email never do.
+ * links, an optional public email, their tools, whether they take brand work and an avatar, and since
+ * 0071 a cover image. All of it reaches a public page only while `public_profile` is on; `user_id` and
+ * the account email never do.
  *
  * `prompt_items.author_handle` follows the opt-in in the database itself (0060's triggers), so this
  * module only writes `platform_creators` and the catalogue only reads the column.
@@ -60,6 +61,15 @@ export async function makerProfilesReady(sql: SqlRunner): Promise<boolean> {
   return rows[0]?.ready === true;
 }
 
+/** 0071 — the cover image. Readers see the column through `to_jsonb`; only a write needs this probe. */
+export async function creativeCoverReady(sql: SqlRunner): Promise<boolean> {
+  const { rows } = await sql.query<{ ready: boolean }>(
+    `select exists (select 1 from pg_attribute where attrelid = to_regclass('public.platform_creators')
+               and attname = 'cover_key' and not attisdropped) as ready`,
+  );
+  return rows[0]?.ready === true;
+}
+
 /** 0065 — the full creative profile, works, recipe opens and access tokens. Probed, never assumed. */
 export async function creativeProfilesReady(sql: SqlRunner): Promise<boolean> {
   const { rows } = await sql.query<{ ready: boolean }>(
@@ -85,6 +95,10 @@ export interface MakerSettings {
   openToBrands: boolean;
   /** The avatar's cache key (hex), or null with none. The storage key itself never leaves the server. */
   avatarVersion: string | null;
+  /** The cover's cache key (hex), or null with none (0071). */
+  coverVersion: string | null;
+  /** False until 0071 is applied: the studio then offers no cover. */
+  coverReady: boolean;
   /** False until 0065 is applied: the studio then offers only handle, bio and the opt-in. */
   extended: boolean;
 }
@@ -93,14 +107,23 @@ interface SettingsRow {
   handle: string | null; bio: string | null; public_profile: boolean;
   display_name?: string | null; headline?: string | null; country?: string | null; city?: string | null; links?: unknown;
   public_email?: string | null; tools?: string[] | null; open_to_brands?: boolean; avatar_key?: string | null;
+  cover_key?: string | null; cover_ready?: boolean;
 }
 
 const BASE_COLUMNS = 'handle, bio, public_profile';
-const EXTENDED_COLUMNS = `${BASE_COLUMNS}, display_name, headline, country, city, links, public_email, tools, open_to_brands, avatar_key`;
+// 0071's cover through to_jsonb (the table is aliased `c`): no probe, and a database without the column reads "no cover".
+const EXTENDED_COLUMNS = `${BASE_COLUMNS}, display_name, headline, country, city, links, public_email, tools, open_to_brands, avatar_key,
+  to_jsonb(c.*)->>'cover_key' as cover_key, (to_jsonb(c.*) -> 'cover_key') is not null as cover_ready`;
 
 /** `{uuid}/avatar_<hex>.jpg` → `<hex>`: a public cache key that says nothing about the account. */
 export function avatarVersionOf(key: string | null | undefined): string | null {
   const match = key ? /\/avatar_([0-9a-f]{16,32})\.[a-z0-9]{2,5}$/.exec(key) : null;
+  return match ? match[1]! : null;
+}
+
+/** `{uuid}/cover_<hex>.jpg` → `<hex>`, like the avatar's. */
+export function coverVersionOf(key: string | null | undefined): string | null {
+  const match = key ? /\/cover_([0-9a-f]{16,32})\.jpg$/.exec(key) : null;
   return match ? match[1]! : null;
 }
 
@@ -118,6 +141,8 @@ function toSettings(row: SettingsRow, extended: boolean): MakerSettings {
     tools: Array.isArray(row.tools) ? row.tools : [],
     openToBrands: row.open_to_brands === true,
     avatarVersion: avatarVersionOf(row.avatar_key),
+    coverVersion: coverVersionOf(row.cover_key),
+    coverReady: row.cover_ready === true,
     extended,
   };
 }
@@ -127,7 +152,7 @@ export async function loadMakerSettings(sql: SqlRunner, userId: string): Promise
   if (!(await makerProfilesReady(sql))) return null;
   const extended = await creativeProfilesReady(sql);
   const { rows } = await sql.query<SettingsRow>(
-    `select ${extended ? EXTENDED_COLUMNS : BASE_COLUMNS} from platform_creators where user_id = $1 and active`,
+    `select ${extended ? EXTENDED_COLUMNS : BASE_COLUMNS} from platform_creators c where user_id = $1 and active`,
     [userId],
   );
   const row = rows[0];
@@ -181,7 +206,7 @@ export async function saveMakerProfile(sql: SqlRunner, userId: string, input: Ma
   try {
     const { rows } = more
       ? await sql.query<SettingsRow>(
-        `update platform_creators set handle = $2, bio = $3, public_profile = $4, display_name = $5, headline = $6, country = $7,
+        `update platform_creators c set handle = $2, bio = $3, public_profile = $4, display_name = $5, headline = $6, country = $7,
                 city = $8, links = $9::jsonb, public_email = $10, tools = $11::text[], open_to_brands = $12, profile_updated_at = now()
           where user_id = $1 and active returning ${EXTENDED_COLUMNS}`,
         [userId, handle, bio.bio, publicProfile, more.displayName, more.headline, more.country, more.city,
@@ -239,6 +264,7 @@ export interface PublicMakerRow {
   tools: string[];
   openToBrands: boolean;
   avatarVersion: string | null;
+  coverVersion: string | null;
 }
 
 export async function loadPublicMakerRows(sql: SqlRunner): Promise<PublicMakerRow[]> {
@@ -254,7 +280,7 @@ export async function loadPublicMakerRows(sql: SqlRunner): Promise<PublicMakerRo
     return {
       userId: row.user_id, handle: row.handle, bio: settings.bio, bioEn: row.bio_en ?? null, displayName: settings.displayName, headline: settings.headline,
       country: settings.country, city: settings.city, links: settings.links, publicEmail: settings.publicEmail, tools: settings.tools,
-      openToBrands: settings.openToBrands, avatarVersion: settings.avatarVersion,
+      openToBrands: settings.openToBrands, avatarVersion: settings.avatarVersion, coverVersion: settings.coverVersion,
     };
   });
 }
