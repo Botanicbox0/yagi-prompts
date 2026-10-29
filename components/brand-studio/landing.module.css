@@ -10,13 +10,20 @@
  */
 
 /* Wraps the whole /brands page, nav and footer included, without a box of its own. The shared nav,
-   enquiry form and FAQ read the site tokens, so on this page those point at the landing blue too. */
+   enquiry form and FAQ read the site tokens, so on this page those point at the landing blue too.
+   Fills, rings and the CTA use --lp-blue (white text 4.65:1). Blue text uses --lp-blue-text, the same
+   hue 15% deeper (#3063A7: 6.05:1 on white, 5.5:1+ on grey and tinted surfaces), the split
+   brand.twings.app uses (TOOLBOX §0, --ys-accent-text). `--accent` is the site's text accent. */
 .accent {
   display: contents;
   --lp-blue: #3875c5;
+  --lp-blue-text: color-mix(in srgb, var(--lp-blue) 85%, #000);
   --color-blue: var(--lp-blue);
-  --accent: var(--lp-blue);
+  --accent: var(--lp-blue-text);
 }
+/* globals.css re-declares `--accent: var(--color-blue)` on every light section (and the header), so
+   those take the text shade here too. Dark sections keep their own lighter accent. */
+.accent :global([data-theme='light']) { --accent: var(--lp-blue-text); }
 
 .page {
   --lp-paper: #ffffff;
