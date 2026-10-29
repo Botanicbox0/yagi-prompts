@@ -5,6 +5,7 @@ import type { Dictionary } from '@/messages/en';
 import { interpolate } from '@/lib/i18n/format';
 import type { PublicRecipe } from '@/lib/recipes/public';
 import { CopyPrompt } from './copy-prompt';
+import { ReferenceFiles } from './reference-files';
 
 export interface RecipeGateProps {
   accessEndpoint: string;
@@ -36,30 +37,7 @@ function UnlockedRecipeBody({ recipe, copy }: { recipe: PublicRecipe; copy: Dict
       {recipe.files?.length ? (
         <div className="mt-6">
           <p className="text-sm font-semibold">{h.assets}</p>
-          <ul data-recipe-how-files className="mt-3 flex flex-wrap gap-3">
-            {recipe.files.map((file, i) => (
-              <li key={file.href}>
-                {file.kind === 'image' ? (
-                  <img
-                    src={file.href}
-                    alt={interpolate(copy.referenceLabel, { n: String(i + 1) })}
-                    loading="lazy"
-                    className="h-28 w-28 rounded-xl border border-hairline object-cover"
-                  />
-                ) : (
-                  <video
-                    src={file.href}
-                    aria-label={interpolate(copy.referenceLabel, { n: String(i + 1) })}
-                    muted
-                    playsInline
-                    preload="none"
-                    controls
-                    className="h-28 w-28 rounded-xl border border-hairline object-cover"
-                  />
-                )}
-              </li>
-            ))}
-          </ul>
+          <ReferenceFiles files={recipe.files} copy={copy} />
         </div>
       ) : null}
     </>

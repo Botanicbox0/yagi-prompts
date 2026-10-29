@@ -20,6 +20,12 @@ export const RECIPE_VERSION = 2;
 export const MAX_RECIPE_STEPS = 6;
 export const MAX_STEP_INPUTS = 6;
 export const MAX_RECIPE_BYTES = 24_000;
+/**
+ * One step's prompt. 8,000 characters since 2026-10-29: a creative's published Seedance 2.5 film
+ * prompt runs ~7,900 (timed shots, look, audio, exclusions), and the recipe page promises the exact
+ * prompt behind the post — a shortened copy would not be that.
+ */
+export const MAX_STEP_PROMPT_CHARS = 8000;
 export const SELFIE_SLOT = 'selfie';
 
 const NAME = /^[a-z][a-z0-9_]{0,23}$/;
@@ -62,7 +68,7 @@ const Name = z.string().regex(NAME);
 const UserSlot = z.object({ kind: z.literal('image'), source: z.literal('user'), required: z.literal(true) }).strict();
 const CreatorSlot = z.object({ kind: z.enum(['image', 'video']), source: z.literal('creator'), asset: z.string().regex(ASSET_HANDLE) }).strict();
 const Slot = z.discriminatedUnion('source', [UserSlot, CreatorSlot]);
-const Prompt = z.string().trim().min(10).max(4000);
+const Prompt = z.string().trim().min(10).max(MAX_STEP_PROMPT_CHARS);
 const ImageStep = z.object({
   id: Name, kind: z.literal('image'), engine: z.string().max(40), inputs: z.array(Name).min(1).max(MAX_STEP_INPUTS), prompt: Prompt,
   params: z.object({ aspect: z.enum(IMAGE_ASPECTS) }).strict(),

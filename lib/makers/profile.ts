@@ -117,13 +117,21 @@ export interface PublicMakerRow {
   userId: string;
   handle: string;
   bio: string | null;
+  /** The English bio (0069) for `/en` pages; null without one or before 0069. */
+  bioEn: string | null;
 }
 
 export async function loadPublicMakerRows(sql: SqlRunner): Promise<PublicMakerRow[]> {
   if (!(await makerProfilesReady(sql))) return [];
-  const { rows } = await sql.query<{ user_id: string; handle: string; bio: string | null }>(
-    `select user_id, handle, bio from platform_creators
+  // to_jsonb: 0069 is applied separately, so `bio_en` is read without naming it.
+  const { rows } = await sql.query<{ user_id: string; handle: string; bio: string | null; bio_en: string | null }>(
+    `select user_id, handle, bio, to_jsonb(c.*)->>'bio_en' as bio_en from platform_creators c
       where active and public_profile and handle is not null order by handle`,
   );
-  return rows.map((row) => ({ userId: row.user_id, handle: row.handle, bio: row.bio }));
+  return rows.map((row) => ({ userId: row.user_id, handle: row.handle, bio: row.bio, bioEn: row.bio_en ?? null }));
+}
+
+/** The bio a page in `locale` shows: the English one on `/en` when the maker wrote it, else the bio. */
+export function makerBioFor(maker: { bio: string | null; bioEn?: string | null }, locale: string): string | null {
+  return (locale === 'en' ? maker.bioEn : null) ?? maker.bio;
 }

@@ -8,12 +8,13 @@ import { getPromptCatalog } from '@/lib/prompts/public-catalog';
 import type { PromptCard, PublicMaker } from '@/lib/prompts/catalog';
 import { USE_CASES } from '@/lib/prompts/schemas';
 import { templatesHref } from '@/lib/prompts/links';
-import { makerHandleOf } from '@/lib/makers/profile';
+import { makerBioFor, makerHandleOf } from '@/lib/makers/profile';
 import { makerHref } from '@/lib/makers/links';
 import { makerMetadata, unresolvedTemplateMetadata } from '@/lib/seo/template-metadata';
 import { MarketingFooter, MarketingNav } from '@/components/marketing/chrome';
 import { PromptRail } from '@/components/prompts/rails';
 import { promptLabels, useCaseLabel } from '@/components/prompts/labels';
+import { MakerRecipeHub } from '@/components/makers/recipe-hub';
 
 /**
  * `/[locale]/makers/[handle]` — a template maker's public page (docs/PLATFORM-2.0.md §7.5).
@@ -62,7 +63,7 @@ export async function generateMetadata({ params }: RouteParams): Promise<Metadat
     handle,
     locale,
     title: interpolate(dict.makers.metaTitle, values),
-    description: found.maker.bio ?? interpolate(dict.makers.metaDescription, values),
+    description: makerBioFor(found.maker, locale) ?? interpolate(dict.makers.metaDescription, values),
     siteName: dict.meta.siteName,
     poster: found.cards.find((card) => card.poster)?.poster?.src ?? null,
   });
@@ -82,6 +83,7 @@ export default async function MakerPage({ params }: RouteParams) {
   const labels = promptLabels(dict);
   const useCaseLabels = Object.fromEntries(USE_CASES.map((value) => [value, useCaseLabel(dict, value)]));
   const { maker, cards } = found;
+  const bio = makerBioFor(maker, locale);
 
   return (
     <>
@@ -90,10 +92,11 @@ export default async function MakerPage({ params }: RouteParams) {
         <div className="band pt-24 pb-20 lg:pt-28">
           <p className="text-accent font-label text-eyebrow uppercase">{t.eyebrow}</p>
           <h1 className="mt-4 font-display text-[clamp(2.25rem,5vw,4rem)] leading-tight font-black tracking-tight break-all">@{maker.handle}</h1>
-          {maker.bio && <p data-maker-bio className="mt-5 max-w-2xl text-base leading-relaxed whitespace-pre-line break-words text-black/75">{maker.bio}</p>}
+          {bio && <p data-maker-bio className="mt-5 max-w-2xl text-base leading-relaxed whitespace-pre-line break-words text-black/75">{bio}</p>}
           <p data-maker-count className="mt-5 text-sm text-black/60">
             {interpolate(t.templateCount, { count: String(maker.templateCount) })} · {dict.templates.verified}
           </p>
+          <MakerRecipeHub handle={maker.handle} openRecipes={maker.openRecipeCount ?? 0} copy={t} />
 
           {cards.length === 0 ? (
             <p data-maker-empty className="mt-14 border-t border-hairline pt-8 text-sm text-black/60">{t.empty}</p>
