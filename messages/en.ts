@@ -481,10 +481,13 @@ export const en = {
         "clipLabels": [
           "5-second clip",
           "5-second clip",
-          "5-second clip",
-          "15-second ad, same product"
+          "5-second clip"
         ],
         "adStill": "Product shot",
+        "adLabels": [
+          "20-second ad, same perfume",
+          "15-second ad, same lip gloss"
+        ],
         "note": "Example screen. Products and models are fictional.",
         "early": "Early access"
       },

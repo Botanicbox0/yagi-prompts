@@ -119,6 +119,11 @@ export function LandingContrast({ copy }: { copy: Copy }) {
 }
 
 const CLIPS = ['parfum', 'mist', 'oil'] as const;
+/** Each ad film sits next to the product shot it shows (the same bottle, the same tube), so product → film reads as one step. */
+const ADS = [
+  { id: 'highteen', still: L('highteen-product'), film: '/reel/campaigns/highteen.mp4', poster: '/reel/campaigns/highteen.jpg' },
+  { id: 'ad', still: L('beauty-ad-product'), film: L('beauty-ad', 'mp4'), poster: L('beauty-ad', 'jpg') },
+] as const;
 
 export function LandingAssets({ copy, studio }: { copy: Copy; studio: StudioCopy }) {
   const a = copy.assets;
@@ -164,18 +169,19 @@ export function LandingAssets({ copy, studio }: { copy: Copy; studio: StudioCopy
             <figcaption className={styles.tileLabel}>{a.clipLabels[index]}</figcaption>
           </figure>
         ))}
-        {/* The ad sits next to the product shot it was made from (the same YAGI lip gloss), so the step reads as one. */}
-        <div data-asset-ad className={styles.adPair}>
-          <figure data-asset-ad-still className={`${styles.tile} ${styles.adStill}`}>
-            <img src={L('ad-product')} alt="" width={900} height={1200} loading="lazy" decoding="async" />
-            <figcaption className={styles.tileLabel}>{a.adStill}</figcaption>
-          </figure>
-          <span aria-hidden="true" className={styles.adArrow}>→</span>
-          <figure data-asset-clip="ad" className={styles.tile}>
-            <LoopVideo src={L('beauty-ad', 'mp4')} poster={L('beauty-ad', 'jpg')} label={a.clipLabels[3]!} />
-            <figcaption className={styles.tileLabel}>{a.clipLabels[3]}</figcaption>
-          </figure>
-        </div>
+        {ADS.map((ad, index) => (
+          <div key={ad.id} data-asset-ad={ad.id} className={styles.adPair}>
+            <figure data-asset-ad-still className={`${styles.tile} ${styles.adStill}`}>
+              <img src={ad.still} alt="" width={900} height={1200} loading="lazy" decoding="async" />
+              <figcaption className={styles.tileLabel}>{a.adStill}</figcaption>
+            </figure>
+            <span aria-hidden="true" className={styles.adArrow}>→</span>
+            <figure data-asset-clip={ad.id} className={styles.tile}>
+              <LoopVideo src={ad.film} poster={ad.poster} label={a.adLabels[index]!} />
+              <figcaption className={styles.tileLabel}>{a.adLabels[index]}</figcaption>
+            </figure>
+          </div>
+        ))}
       </div>
     </Fragment>
   );
