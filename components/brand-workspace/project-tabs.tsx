@@ -1,6 +1,18 @@
 "use client";
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { flushSync } from "react-dom";
 import type { BrandCopy } from "./action-form";
+/**
+ * On brand.twings.app the white tab pill glides to the chosen tab (View Transitions; the page itself
+ * swaps instantly). Without the API, with reduced motion, or in /admin, the tab just switches.
+ */
+function switchTab(update: () => void) {
+  const glide = typeof document !== "undefined" && "startViewTransition" in document
+    && document.documentElement.hasAttribute("data-brand-workspace")
+    && !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (!glide) return update();
+  document.startViewTransition(() => flushSync(update));
+}
 /**
  * One campaign, one screen (docs/PLATFORM-2.0.md §16.4). The tab ids are also the section ids, so
  * every existing link (`#review`, `#reports`, `#performance`) keeps working. Two sections share a
@@ -113,8 +125,9 @@ export function ProjectTabs({
             key={id}
             href={`#${id}`}
             aria-current={id === active ? "page" : undefined}
-            onClick={(event) => { setActive(id); event.currentTarget.scrollIntoView({ block: "nearest", inline: "nearest" }); }}
+            onClick={(event) => { const tab = event.currentTarget; if (id !== active) switchTab(() => setActive(id)); tab.scrollIntoView({ block: "nearest", inline: "nearest" }); }}
           >
+            {id === active && <span className="bw-tab-indicator" aria-hidden="true" />}
             {labels[id]}
             {id === "review" && pendingReviews > 0 && <span className="bw-tab-count" data-review-count={pendingReviews}>{pendingReviews}</span>}
             {id === "shortlist" && <span className="bw-tab-count" data-shortlist-count={shortlist}>{shortlist}</span>}
