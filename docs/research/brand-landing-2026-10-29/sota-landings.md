@@ -85,3 +85,22 @@ What the current live /ko/brands page shows: 10.5 screens and about eight black/
 3. **"Brand DNA → outputs".** A brand kit card (logo, palette, product) streams on-brand outputs, as Pomelli and Photoroom do. It is clear, but it is the category's default and says nothing about creators, so the moat would not show.
 
 Sources: the home or enterprise pages of every site above, plus linear.app, stripe.com, krea.ai, weavy.ai (craft only) and twings.app/ko/brands. Pomelli: [Search Engine Journal](https://www.searchenginejournal.com/google-labs-deepmind-launch-pomelli-ai-marketing-tool/559569/), [TechRadar](https://www.techradar.com/pro/google-has-a-new-experimental-gemini-ai-tool-to-help-your-smb-scale-marketing-fast).
+
+## 추가 분석 (2026-10-29 오전): riverflow.ai, magnific.com
+
+대표가 "논리 구조가 나쁘지 않다"(riverflow), "기능이 많아도 잘 정돈해서 전달한다"(magnific)고 짚은 두 곳이다. 비주얼이 아니라 순서와 묶는 방식을 본다.
+
+**riverflow.ai**
+- 순서: 입력창 히어로("무엇을 만들까요?") → 브랜드 실적 한 줄 → "한 플랫폼, 모든 워크플로" 카드 8개(카탈로그 가져오기, 브랜드 설정, 촬영, 광고, 영상, 일괄 편집, 에이전트, 레이어 편집) → 채널 로고 → 워크플로 상세 → 워크플로 탭 → **"빠르다고 흔해지지 않는다"**(제품 디테일 유지, 브랜드 규칙 유지, 편집, 내보내기 전 검토 + 원본 대 생성 비교) → 수치 → 후기 → 요금 → FAQ.
+- 배울 점: 입력(제품·브랜드) → 출력(워크플로) → 보증(흔한 AI가 아님) 순서가 분명하다. 보증 섹션이 우리 "미디어를 이해하는 AI"와 같은 자리다. 카드는 제목 + 한 문장이다.
+
+**magnific.com**
+- 순서: 전면 영상 히어로 + 한 줄 약속 + 로고 → "시작점을 고르세요"(제품군 탭) → 엔드투엔드 제작 → 모델 마키 → "작게 시작해 키우기" → 도구 탭(Featured/Image/Video/Audio/3D) → 활용처 4개(광고, 제품 컷, 브랜드 캠페인, 필름) → 자체 제작물(Originals) → 팀 요금 → 기업 기능 → 후기 → FAQ.
+- 배울 점: 도구가 30개여도 사용자는 한 번에 한 층만 본다. 시작점 → 도구(매체별 탭) → 활용처 → 제작물 순서로 묶는다. 제작물(Originals)은 맨 뒤에서 품질 증거로 쓴다. 히어로는 정지 이미지가 아니라 영상이다.
+
+**TWINGS 랜딩 v6에 반영한 것**
+1. 히어로를 영상 한 편으로 바꿨다. 제품 사진 한 장이 들어가서, 마크·색·빛을 읽고 고정한 뒤, 제품 컷 → 광고 영상 → 여러 얼굴의 크리에이터 버전으로 나오는 과정을 18초 루프로 보여 준다.
+2. 영상 아래에 문 세 개(에셋 스튜디오, 크리에이터 캠페인, 프로덕션)를 둔다. riverflow의 카드와 magnific의 시작점처럼 첫 화면에서 서비스 셋이 다 보인다.
+3. 비교 섹션은 riverflow의 "흔해지지 않는다" 자리에 그대로 둔다(같은 제품, 같은 엔진의 실제 결과).
+4. 에셋 스튜디오는 magnific처럼 매체별 탭 하나로 묶는다(제품 8종 / 장면 / 착용 / 영상). 늘 펼쳐 있던 제품 줄을 첫 탭으로 넣어 길이를 줄였다.
+5. 프로덕션은 magnific의 Originals처럼 뒤에서 품질 증거 역할을 한다.

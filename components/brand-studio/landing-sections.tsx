@@ -1,4 +1,4 @@
-import { Fragment, type CSSProperties, type ReactNode } from 'react';
+import { Fragment, type ReactNode } from 'react';
 import type { Dictionary } from '@/lib/i18n/dictionaries';
 import type { Locale } from '@/lib/i18n/config';
 import { brandEnquiryHref } from '@/lib/campaigns/links';
@@ -7,14 +7,14 @@ import { StudioVto } from './studio-vto';
 import styles from './landing.module.css';
 
 /**
- * The brand landing, v5 (2026-10-29 founder review): one promise, two proofs, a quiet third offer.
- * Hero → why it is not generic AI → asset studio → creator campaign → production → closing. The
- * imagery is the colour; every picture on the page is a real output (docs/PLATFORM-2.0.md §20.11).
+ * The brand landing, v6 (2026-10-29 founder review, after riverflow and magnific): the promise, a film of
+ * one product becoming everything, and three doors (studio, campaign, production). Then why it is not
+ * generic AI → asset studio → creator campaign → production → closing. Every picture is a real output
+ * (docs/PLATFORM-2.0.md §20.11).
  */
 
 type Copy = Dictionary['brandLanding']['landing'];
 type StudioCopy = Dictionary['brandLanding']['studio'];
-type Vars = CSSProperties & Record<`--${string}`, string | number>;
 
 /** Landing media lives in /reel/landing/; campaign films stay where the case pages already use them. */
 const L = (name: string, ext = 'webp') => `/reel/landing/${name}.${ext}`;
@@ -36,14 +36,11 @@ function Head({ eyebrow, title, body, status }: { eyebrow: string; title: string
   );
 }
 
+/** The hero's three doors, in the order the copy names them; each is a section id on this page. */
+const DOORS = ['assets', 'campaign', 'production'] as const;
+
 export function LandingHero({ copy, locale }: { copy: Copy; locale: Locale }) {
   const h = copy.hero;
-  const outputs = [
-    { area: 'shot', src: L('hero-shot'), label: h.outputs[0] },
-    { area: 'tex', src: L('hero-texture'), label: h.outputs[1] },
-    { area: 'hand', src: L('hero-hand'), label: h.outputs[2] },
-    { area: 'model', src: L('hero-model'), label: h.outputs[3] },
-  ] as const;
   return (
     <section data-section data-theme="light" data-campaign-hero data-studio-hero className={styles.hero}>
       <div className="audience-shell">
@@ -57,30 +54,26 @@ export function LandingHero({ copy, locale }: { copy: Copy; locale: Locale }) {
           </div>
         </div>
 
-        {/* The moat in one frame: the uploaded photo stays fixed while everything around it is made from it. */}
-        <div data-hero-grid className={styles.heroGrid}>
-          <figure data-hero-lock className={styles.heroLock}>
-            <div className={styles.tile}>
-              <img src={L('hero-input')} alt={h.inputAlt} width={900} height={900} fetchPriority="high" decoding="async" />
-            </div>
-            <figcaption className={styles.lockMeta}>
-              <span>{h.input}</span>
-              <span><span aria-hidden="true" className={styles.liveDot} />{h.lock}</span>
-            </figcaption>
-          </figure>
-          {outputs.map((output, index) => (
-            <figure key={output.area} data-hero-output={output.area} data-area={output.area} className={`${styles.tile} ${styles.heroOut}`} style={{ '--i': index } as Vars}>
-              <img src={output.src} alt="" width={900} height={1125} decoding="async" />
-              <figcaption className={styles.tileLabel}>{output.label} <em>{h.image}</em></figcaption>
-            </figure>
+        {/* The moat as a film: one product photo, the brand read and locked, the shots, the ad, the faces. */}
+        <figure data-hero-film className={styles.heroFilm}>
+          <div className={styles.tile}>
+            <LoopVideo src={L(`hero-${locale}`, 'mp4')} poster={L(`hero-${locale}`, 'jpg')} label={h.filmLabel} />
+          </div>
+          <figcaption className={styles.note}>{h.note}</figcaption>
+        </figure>
+
+        <ul data-hero-doors className={styles.doors}>
+          {h.doors.map((door, index) => (
+            <li key={DOORS[index]} data-hero-door={DOORS[index]}>
+              <a href={`#${DOORS[index]}`} className={styles.door}>
+                <strong>{door.title}</strong>
+                <span>{door.body}</span>
+                <i aria-hidden="true">↓</i>
+              </a>
+            </li>
           ))}
-          <figure data-hero-output="video" className={`${styles.tile} ${styles.heroOut} ${styles.heroVideo}`} style={{ '--i': outputs.length } as Vars}>
-            <LoopVideo src={L('beauty-ad', 'mp4')} poster={L('beauty-ad', 'jpg')} label={h.outputs[4]} />
-            <figcaption className={styles.tileLabel}>{h.outputs[4]} <em>{h.video}</em></figcaption>
-          </figure>
-        </div>
+        </ul>
         <p data-hero-proof className={styles.heroProof}><strong>{h.proof}</strong><span>{h.proofFigures}</span></p>
-        <p className={`${styles.note} ${styles.heroNote}`}>{h.note}</p>
       </div>
     </section>
   );
@@ -129,9 +122,22 @@ const CLIPS = ['parfum', 'mist', 'oil'] as const;
 
 export function LandingAssets({ copy, studio }: { copy: Copy; studio: StudioCopy }) {
   const a = copy.assets;
+  const range = (
+    <Fragment key="range">
+      <p className={styles.panelNote}>{a.tabNotes[0]}</p>
+      <ul data-product-range className={styles.rangeRow}>
+        {PRODUCTS.map((key, index) => (
+          <li key={key} data-range-product={key} className={styles.rangeItem}>
+            <div className={styles.tile}><img src={L(`pk-${key}`)} alt={a.products[index]} width={720} height={900} loading="lazy" decoding="async" /></div>
+            <span>{a.products[index]}</span>
+          </li>
+        ))}
+      </ul>
+    </Fragment>
+  );
   const scenes = (
     <Fragment key="scenes">
-      <p className={styles.panelNote}>{a.tabNotes[0]}</p>
+      <p className={styles.panelNote}>{a.tabNotes[1]}</p>
       <ul className={styles.scenes}>
         {PRODUCTS.map((key, index) => (
           <li key={key} data-asset-scene={key} className={styles.tile}>
@@ -144,13 +150,13 @@ export function LandingAssets({ copy, studio }: { copy: Copy; studio: StudioCopy
   );
   const tryOn = (
     <div key="try-on" data-studio-vto>
-      <p className={styles.panelNote}><span data-early-access="beta" className={`${styles.statusTag} mr-2`}>{studio.beta}</span>{a.tabNotes[1]}</p>
+      <p className={styles.panelNote}><span data-early-access="beta" className={`${styles.statusTag} mr-2`}>{studio.beta}</span>{a.tabNotes[2]}</p>
       <StudioVto copy={studio} />
     </div>
   );
   const video = (
     <Fragment key="video">
-      <p className={styles.panelNote}>{a.tabNotes[2]}</p>
+      <p className={styles.panelNote}>{a.tabNotes[3]}</p>
       <div className={styles.clips}>
         {CLIPS.map((key, index) => (
           <figure key={key} data-asset-clip={key} className={styles.tile}>
@@ -186,18 +192,7 @@ export function LandingAssets({ copy, studio }: { copy: Copy; studio: StudioCopy
             </div>
           </aside>
           <div className={styles.panel}>
-            <div data-product-range className={styles.range}>
-              <p className={styles.rangeHead}><span>{a.range}</span></p>
-              <ul className={styles.rangeRow}>
-                {PRODUCTS.map((key, index) => (
-                  <li key={key} data-range-product={key} className={styles.rangeItem}>
-                    <div className={styles.tile}><img src={L(`pk-${key}`)} alt={a.products[index]} width={720} height={900} loading="lazy" decoding="async" /></div>
-                    <span>{a.products[index]}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <AssetTabs labels={a.tabs} panels={[scenes, tryOn, video]} />
+            <AssetTabs labels={a.tabs} panels={[range, scenes, tryOn, video]} />
             <p className={styles.note}>{a.note}</p>
           </div>
         </div>
@@ -206,12 +201,12 @@ export function LandingAssets({ copy, studio }: { copy: Copy; studio: StudioCopy
   );
 }
 
-/** Two formats, each shown with two faces, plus two more creator-style posts. */
+/** Creator-style posts made with virtual people; real campaign posts follow in the Morphic case below. */
 const MOSAIC = [
-  { id: 'retro-01', src: '/reel/campaigns/retro-phone-01', pair: true },
-  { id: 'retro-02', src: '/reel/campaigns/retro-phone-02', pair: true },
-  { id: 'peach', src: '/reel/landing/yunseol-peach', pair: false },
-  { id: 'y2k', src: '/reel/brands/y2k-flip-phone', pair: false },
+  { id: 'retro-01', src: '/reel/campaigns/retro-phone-01' },
+  { id: 'retro-02', src: '/reel/campaigns/retro-phone-02' },
+  { id: 'peach', src: '/reel/landing/yunseol-peach' },
+  { id: 'y2k', src: '/reel/brands/y2k-flip-phone' },
 ] as const;
 
 type Trust = Dictionary['brandLanding']['scalePillars'];
@@ -230,8 +225,8 @@ export function LandingCampaign({ copy, trust, children }: { copy: Copy; trust: 
           {MOSAIC.map((item) => (
             <li key={item.id} data-feed-post={item.id}>
               <div className={styles.tile}>
-                <LoopVideo src={`${item.src}.mp4`} poster={`${item.src}.jpg`} label={item.pair ? c.sameFormat : c.virtual} />
-                <span className={styles.tileLabel}>{item.pair ? c.sameFormat : c.virtual}</span>
+                <LoopVideo src={`${item.src}.mp4`} poster={`${item.src}.jpg`} label={c.virtual} />
+                <span className={styles.tileLabel}>{c.virtual}</span>
               </div>
             </li>
           ))}
@@ -255,7 +250,7 @@ export function LandingCampaign({ copy, trust, children }: { copy: Copy; trust: 
 export function LandingProduction({ copy, films, actions }: { copy: Copy; films: ReactNode; actions: ReactNode }) {
   const p = copy.production;
   return (
-    <section data-section data-theme="light" data-production-service className={styles.sectionTight}>
+    <section id="production" data-section data-theme="light" data-production-service className={`scroll-mt-20 ${styles.sectionTight}`}>
       <div className={`audience-shell ${styles.production}`}>
         <div className="grid gap-5">
           <p className={styles.eyebrow}>{p.eyebrow}</p>

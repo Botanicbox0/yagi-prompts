@@ -24,36 +24,44 @@ describe('the brand page shows the service before asking visitors to enquire', (
     });
   }
 
-  // 2026-10-29 founder review: one promise, both proofs on one page, ≤6 sections, no red buttons.
-  it('leads with one locked product and proves the asset studio and the creator campaign below it', async () => {
+  // 2026-10-29 founder reviews: one promise, a hero film instead of stills, three doors, both proofs, no red.
+  it('leads with the hero film and three doors, then proves the asset studio and the creator campaign', async () => {
     const html = renderToStaticMarkup(await BrandsPage({ params: Promise.resolve({ locale: 'ko' }) }));
     const order = ['data-studio-hero', 'data-studio-contrast', 'data-studio-assets', 'data-campaign-scale', 'data-production-service', 'data-brands'];
     for (const marker of order) expect(html).toContain(marker);
     for (let i = 1; i < order.length; i++) expect(html.indexOf(order[i - 1]!)).toBeLessThan(html.indexOf(order[i]!));
-    // Hero: the uploaded photo stays fixed; four stills and the ad film were made from it.
-    expect(html).toContain('data-hero-lock');
-    expect(html.match(/data-hero-output=/g)).toHaveLength(5);
-    expect(html).toContain('브랜드는 그대로');
+    // Hero: one film (per locale) of one product becoming shots, an ad and creator versions; no still bento.
+    expect(html).toContain('data-hero-film');
+    expect(html).toContain('src="/reel/landing/hero-ko.mp4"');
+    expect(html).toContain('poster="/reel/landing/hero-ko.jpg"');
+    for (const gone of ['data-hero-lock', 'data-hero-output', 'data-hero-grid']) expect(html).not.toContain(gone);
+    // Three doors, each to a section that exists on the page.
+    expect(html.match(/data-hero-door=/g)).toHaveLength(3);
+    for (const id of ['assets', 'campaign', 'production']) {
+      expect(html).toContain(`data-hero-door="${id}"`);
+      expect(html).toContain(`id="${id}"`);
+    }
     // Why not generic AI: three real same-product pairs, no competitor named.
     expect(html.match(/data-contrast-pair=/g)).toHaveLength(3);
     expect(html).toContain('data-brand-markets');
     expect(html.match(/data-contrast-pillar=/g)).toHaveLength(3);
     expect(html).toContain('절대 규칙');
-    // Asset studio: one brand kit, eight products, every scene and clip in the initial HTML.
+    // Asset studio: one brand kit; the eight products, scenes, try-on and clips are tabs, all in the initial HTML.
     expect(html).toContain('data-brand-kit');
     expect(html.match(/data-range-product=/g)).toHaveLength(8);
     expect(html.match(/data-asset-scene=/g)).toHaveLength(8);
     expect(html.match(/data-asset-clip=/g)).toHaveLength(4);
-    expect(html.match(/data-asset-panel=/g)).toHaveLength(3);
-    expect(html.match(/hidden="" data-asset-panel=/g)).toHaveLength(2);
+    expect(html.match(/data-asset-panel=/g)).toHaveLength(4);
+    expect(html.match(/hidden="" data-asset-panel=/g)).toHaveLength(3);
+    expect(html.indexOf('data-asset-panel="0"')).toBeLessThan(html.indexOf('data-range-product='));
     // Creator campaign: the mosaic, the likeness and data promises, then the Morphic case.
     expect(html.match(/data-feed-post=/g)).toHaveLength(4);
     expect(html).toContain('data-brand-scale-pillars');
-    expect(html).toContain('AI 학습에 절대 쓰지 않습니다');
-    expect(html).toContain('계정마다 독립된 공간에 암호화 보관');
+    expect(html).toContain('AI 학습에 쓰지 않습니다');
+    expect(html).toContain('계정마다 독립된 공간에 암호화해 보관합니다');
     expect(html.indexOf('data-campaign-scale')).toBeLessThan(html.indexOf('id="morphic-case"'));
     expect(html).toContain('/ko/brands/stories/morphic');
-    expect(html).toContain('광고 한 편을');
+    expect(html).toContain('광고 한 편으로');
     // Production stays a quiet third offer, with its decks and collaborators.
     expect(html).toContain('data-production-films');
     expect(html).toContain('data-production-collabs');
@@ -74,6 +82,7 @@ describe('the brand page shows the service before asking visitors to enquire', (
     expect(html.match(/preload="none"/g)?.length).toBeGreaterThanOrEqual(6);
     expect(html).toContain('playsInline=""');
     expect(html).toContain('poster="/reel/landing/beauty-ad.jpg"');
+    expect(html).toContain('poster="/reel/landing/hero-en.jpg"');
     expect(html).toContain('data-video-control');
     // The landing's own loops start only when on screen (LoopVideo), never from the markup.
     expect(html).not.toMatch(/<video[^>]*data-loop-video[^>]*autoPlay|<video[^>]*autoPlay[^>]*data-loop-video/);
@@ -90,7 +99,7 @@ describe('the brand page shows the service before asking visitors to enquire', (
       expect(html.match(/data-early-access="beta"/g)).toHaveLength(1);
       expect(html.match(/data-early-access="live"/g)).toHaveLength(1);
       expect(html).toContain(ko ? '예시 화면' : 'Example screen');
-      // Every picture of a person is labelled: the hero model, the try-on model, the creator examples.
+      // Every picture of a person is labelled: the film's model, the try-on model, the creator examples.
       expect(html).toContain(ko ? '모델은 가상 인물입니다' : 'The model is a virtual person');
       expect(html).toContain(ko ? '가상 인물 예시' : 'Virtual person example');
       // Try-on (beta): both modes ship in the HTML.

@@ -1330,11 +1330,13 @@ async function sweepCampaigns(): Promise<void> {
     for (const marker of ['data-campaign-hero', 'data-campaign-proof', 'data-brands', 'data-case-study', 'data-customer-story', 'data-audience-switch', 'data-brand-scale-pillars']) {
       expectPresent(`/${locale}/brands carries ${marker}`, brand.body, marker);
     }
-    // 2026-10-29 landing: one locked product, why-not-generic, asset studio, creator campaign, production.
-    for (const marker of ['data-studio-hero', 'data-hero-lock', 'data-studio-contrast', 'data-studio-assets', 'data-brand-kit', 'data-studio-vto', 'data-campaign-scale', 'data-studio-feed', 'data-production-service']) {
+    // 2026-10-29 landing v6: hero film + three doors, why-not-generic, asset studio, creator campaign, production.
+    for (const marker of ['data-studio-hero', 'data-hero-film', 'data-hero-doors', 'data-studio-contrast', 'data-studio-assets', 'data-brand-kit', 'data-studio-vto', 'data-campaign-scale', 'data-studio-feed', 'data-production-service']) {
       expectPresent(`/${locale}/brands carries ${marker}`, brand.body, marker);
     }
-    expectEqual(`/${locale}/brands hero shows five outputs of one product`, (brand.body.match(/data-hero-output=/g) ?? []).length, 5);
+    expectPresent(`/${locale}/brands hero plays its own-language film`, brand.body, `/reel/landing/hero-${locale}.mp4`);
+    expectEqual(`/${locale}/brands hero opens three doors`, (brand.body.match(/data-hero-door=/g) ?? []).length, 3);
+    expectAbsent(`/${locale}/brands retired the hero still bento`, brand.body, 'data-hero-output');
     expectEqual(`/${locale}/brands compares three same-product pairs`, (brand.body.match(/data-contrast-pair=/g) ?? []).length, 3);
     expectEqual(`/${locale}/brands shows the eight-product range`, (brand.body.match(/data-range-product=/g) ?? []).length, 8);
     expectEqual(`/${locale}/brands ships every scene in the HTML`, (brand.body.match(/data-asset-scene=/g) ?? []).length, 8);
