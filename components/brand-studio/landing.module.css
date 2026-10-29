@@ -2,10 +2,21 @@
  * Brand landing v5 (2026-10-29). White chrome, ink type, the photographs carry the colour, and the
  * TWINGS blue appears only where you can act: the CTA, links, focus and one live dot
  * (research: color-system study, ≤5% of the page, never on or inside a photo).
- * The blue is one knob, `--lp-blue`. It follows the site's key colour (`--color-blue` in
- * app/globals.css), and every shade on this page and in the try-on demo is mixed from it. The founder
- * is changing the key colour (2026-10-29), so never write the hex here.
+ * The blue is one knob, `--lp-blue` on `.accent`, and every shade on this page and in the try-on
+ * demo is mixed from it. Since 2026-10-29 it is the brand side's soft ultramarine, the same value as
+ * brand.twings.app's `--ys-accent` (docs/design/TOOLBOX.md §0; founder: "Match it"). The key colour may
+ * change again, so this is the only place the hex is written.
  */
+
+/* Wraps the whole /brands page, nav and footer included, without a box of its own. The shared nav,
+   enquiry form and FAQ read the site tokens, so on this page those point at the landing blue too. */
+.accent {
+  display: contents;
+  --lp-blue: #4355e8;
+  --color-blue: var(--lp-blue);
+  --accent: var(--lp-blue);
+}
+
 .page {
   --lp-paper: #ffffff;
   --lp-surface: #f7f7f8;
@@ -14,7 +25,6 @@
   --lp-ink: #111111;
   --lp-body: #4a4c55;
   --lp-muted: #6b6d75;
-  --lp-blue: var(--color-blue);
   --lp-blue-hover: color-mix(in srgb, var(--lp-blue) 82%, black);
   --lp-blue-pressed: color-mix(in srgb, var(--lp-blue) 66%, black);
   --lp-radius: 16px;

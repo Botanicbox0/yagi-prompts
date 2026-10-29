@@ -43,7 +43,9 @@ export default async function BrandsPage({ params }: Props) {
   const t = dict.brandLanding;
   // Images the founder replaced in /admin/landing-media; every other slot shows its file.
   const media = await getLandingMedia();
-  return <>
+  // The wrapper only carries the landing's one blue (display: contents), so the nav and footer match it.
+  return <div data-brand-accent className={landing.accent}>
+
     <MarketingNav locale={locale} dict={dict} rest="/brands" />
     <JsonLd id="campaign-service-structured-data" data={campaignServiceStructuredData({ origin: siteUrl(), path: brandsHref(locale), locale, name: t.metaTitle, description: t.metaDescription, serviceType: dict.seo.serviceType })} />
     <JsonLd id="brand-case-studies-structured-data" data={brandCaseStudiesStructuredData({ origin: siteUrl(), locale, cases: [{ id: 'morphic', name: t.stories.title, description: t.stories.summary, path: `/${locale}/brands/stories/morphic` }] })} />
@@ -85,5 +87,5 @@ export default async function BrandsPage({ params }: Props) {
       <aside data-creator-door className="audience-shell flex flex-wrap items-center justify-between gap-6 border-t border-hairline py-10"><div><h2 className="text-lg font-semibold">{dict.audience.creatorDoor}</h2><p className="mt-2 max-w-xl text-sm text-black/55">{dict.audience.creatorDoorBody}</p></div><a href={`/${locale}`} className="text-sm font-medium underline underline-offset-4">{dict.audience.creatorDoorCta} ↗</a></aside>
     </main>
     <MarketingFooter locale={locale} dict={dict} audience="brand" />
-  </>;
+  </div>;
 }
