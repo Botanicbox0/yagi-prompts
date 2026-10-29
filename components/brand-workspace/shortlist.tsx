@@ -3,41 +3,72 @@ import { useEffect, useRef, useState, type CSSProperties } from "react";
 import type { Dictionary } from "@/lib/i18n/dictionaries";
 import { interpolate } from "@/lib/i18n/format";
 import type { ShortlistCandidate } from "@/lib/brands/shortlist/service";
-import type { ShortlistMetrics } from "@/lib/brands/shortlist/schema";
+import type { ShortlistChoice, ShortlistMetrics } from "@/lib/brands/shortlist/schema";
 import {
   SHORTLIST_SORTS, SHORTLIST_UNKNOWN, shortlistAverage, shortlistCount, shortlistDay, shortlistMedian, shortlistPercent, shortlistSortValue,
   shortlistTags, sortShortlist, type ShortlistSort,
 } from "@/lib/brands/shortlist/format";
 
 type Copy = Dictionary["brandWorkspace"]["shortlist"];
+type Tab = "open" | "picked" | "passed" | "confirmed";
+type View = "cards" | "list";
+type Undo = Array<[ShortlistChoice, string[]]>;
 const COMPARE_MAX = 4;
 /** Medians mean something from three candidates on; below that the cards leave the comparison out. */
 const MEDIAN_FROM = 3;
+const VIEW_KEY = "twings.shortlist.view";
 type Medians = { views: number | null; engagement: number | null; followers: number | null };
+const choiceOf = (c: ShortlistCandidate): ShortlistChoice => (c.picked ? "picked" : c.passed ? "passed" : "none");
 
 /**
- * The campaign's creator shortlist (docs/BRAND-SHORTLIST.md): one card per shared candidate. A
- * portrait washed in the picture's own colour, three headline figures, where each sits against this
- * shortlist's median, plain labels the brand can check against the figures, and every figure behind
- * "all figures". Sort (followers first by default), "preferred only", compare up to four, and the
- * brand's one control, the preference mark. No fee, note or recruiting detail exists in what this receives.
+ * The campaign's creator shortlist (docs/BRAND-SHORTLIST.md): every shared candidate as a card or a
+ * list row. A portrait washed in the picture's own colour, three headline figures, where each sits
+ * against this shortlist's median, plain labels the brand can check against the figures, and every
+ * figure behind "all figures". The brand sorts the list itself: prefer, set aside or clear, one at a
+ * time or for a selection ("all on screen" included), with undo. Set-aside candidates leave the main
+ * tab for their own; a confirmed booking shows as "섭외 확정". Two to four selected compare side by
+ * side. No fee, note or recruiting detail exists in what this receives.
  */
-export function CampaignShortlist({ candidates, canPick, copy, locale }: {
+export function CampaignShortlist({ candidates, canPick, copy, locale, defaultView = "cards" }: {
   candidates: ShortlistCandidate[];
   canPick: boolean;
   copy: Copy;
   locale: string;
+  /** The layout before this browser's saved choice is read. */
+  defaultView?: View;
 }) {
   const [sort, setSort] = useState<ShortlistSort>("followers");
-  const [onlyPicked, setOnlyPicked] = useState(false);
-  const [picked, setPicked] = useState(() => new Set(candidates.filter((c) => c.picked).map((c) => c.id)));
-  const [busy, setBusy] = useState<string | null>(null);
-  const [failed, setFailed] = useState<string | null>(null);
-  const [compare, setCompare] = useState<string[]>([]);
+  const [tab, setTab] = useState<Tab>("open");
+  const [view, setView] = useState<View>(defaultView);
+  const [choices, setChoices] = useState(() => new Map(candidates.map((c) => [c.id, choiceOf(c)])));
+  const [selected, setSelected] = useState<Set<string>>(() => new Set());
+  const [busy, setBusy] = useState(false);
+  const [toast, setToast] = useState<{ message: string; undo?: Undo } | null>(null);
   const [comparing, setComparing] = useState(false);
+  useEffect(() => { setChoices(new Map(candidates.map((c) => [c.id, choiceOf(c)]))); }, [candidates]);
+  // The layout is a per-browser preference; the page renders cards until it is read.
+  useEffect(() => {
+    try { const stored = localStorage.getItem(VIEW_KEY); if (stored === "cards" || stored === "list") setView(stored); } catch { /* private mode */ }
+  }, []);
+  const pickView = (next: View) => {
+    setView(next);
+    try { localStorage.setItem(VIEW_KEY, next); } catch { /* private mode */ }
+  };
+
+  const choice = (c: ShortlistCandidate) => choices.get(c.id) ?? "none";
   const days = [...new Set(candidates.map((c) => c.measuredOn).filter((d): d is string => d !== null))].sort();
   const measured = days.at(-1) ?? null;
-  const shown = sortShortlist(onlyPicked ? candidates.filter((c) => picked.has(c.id)) : candidates, sort);
+  const counts = { open: 0, picked: 0, passed: 0, confirmed: 0 };
+  for (const c of candidates) {
+    const mark = choice(c);
+    if (mark !== "passed") counts.open++;
+    if (mark === "picked") counts.picked++;
+    if (mark === "passed") counts.passed++;
+    if (c.confirmed) counts.confirmed++;
+  }
+  const inTab = (c: ShortlistCandidate) =>
+    tab === "open" ? choice(c) !== "passed" : tab === "confirmed" ? c.confirmed : choice(c) === tab;
+  const shown = sortShortlist(candidates.filter(inTab), sort);
   const known = (pick: (m: ShortlistMetrics) => number | null | undefined) =>
     candidates.map((c) => pick(c.metrics)).filter((v): v is number => v != null);
   const medians: Medians | null = candidates.length >= MEDIAN_FROM ? {
@@ -46,37 +77,82 @@ export function CampaignShortlist({ candidates, canPick, copy, locale }: {
     followers: shortlistMedian(known((m) => m.followers)),
   } : null;
 
-  async function toggle(id: string) {
-    if (busy) return;
-    const next = !picked.has(id);
-    setBusy(id);
-    setFailed(null);
+  // A selection only ever holds cards on screen, so an action never touches one a tab hid.
+  const shownKey = shown.map((c) => c.id).join();
+  useEffect(() => {
+    const ids = new Set(shownKey ? shownKey.split(",") : []);
+    setSelected((current) => {
+      const next = new Set([...current].filter((id) => ids.has(id)));
+      return next.size === current.size ? current : next;
+    });
+  }, [shownKey]);
+  useEffect(() => {
+    if (!toast) return;
+    const timer = setTimeout(() => setToast(null), 7000);
+    return () => clearTimeout(timer);
+  }, [toast]);
+
+  async function send(ids: string[], next: ShortlistChoice): Promise<boolean> {
     try {
       const response = await fetch("/api/brand-workspace", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ operation: "shortlist.pick", input: { candidateId: id, picked: next } }),
+        body: JSON.stringify({ operation: "shortlist.choose", input: { candidateIds: ids, choice: next } }),
       });
-      const result = await response.json();
-      if (!response.ok || !result.ok) throw Error(String(result.code));
-      setPicked((current) => {
-        const copy = new Set(current);
-        if (next) copy.add(id);
-        else copy.delete(id);
-        return copy;
-      });
+      const result = await response.json().catch(() => null);
+      return response.ok && result?.ok === true;
     } catch {
-      setFailed(id);
-    } finally {
-      setBusy(null);
+      return false;
     }
   }
-  const toggleCompare = (id: string) =>
-    setCompare((current) => (current.includes(id) ? current.filter((x) => x !== id) : current.length < COMPARE_MAX ? [...current, id] : current));
-  const compared = compare.map((id) => candidates.find((c) => c.id === id)).filter((c): c is ShortlistCandidate => c !== undefined);
+
+  /** Apply one or more marks; the toast offers to put back what was there before. */
+  async function apply(moves: Undo, message: string, undoable = true) {
+    const ids = moves.flatMap(([, list]) => list);
+    if (busy || ids.length === 0) return;
+    const before = new Map(ids.map((id) => [id, choices.get(id) ?? "none"] as const));
+    setBusy(true);
+    const saved: Undo = [];
+    for (const [next, list] of moves) {
+      if (!list.length) continue;
+      if (!(await send(list, next))) break;
+      saved.push([next, list]);
+    }
+    setBusy(false);
+    // Whatever the server took is shown, even when a later step failed.
+    setChoices((current) => {
+      const map = new Map(current);
+      for (const [next, list] of saved) for (const id of list) map.set(id, next);
+      return map;
+    });
+    if (saved.length < moves.filter(([, list]) => list.length).length) return setToast({ message: copy.failed });
+    setSelected(new Set());
+    const inverse = new Map<ShortlistChoice, string[]>();
+    for (const [id, was] of before) inverse.set(was, [...(inverse.get(was) ?? []), id]);
+    setToast({ message, undo: undoable ? [...inverse] : undefined });
+  }
+  const mark = (ids: string[], next: ShortlistChoice) => apply([[next, ids]], interpolate(copy.done[next], { count: ids.length }));
+  const toggleOne = (c: ShortlistCandidate, target: "picked" | "passed") => mark([c.id], choice(c) === target ? "none" : target);
+
+  const toggleSelect = (id: string) => setSelected((current) => {
+    const next = new Set(current);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    return next;
+  });
+  const allSelected = shown.length > 0 && shown.every((c) => selected.has(c.id));
+  const selectAll = () => setSelected(allSelected ? new Set() : new Set(shown.map((c) => c.id)));
+  const chosen = shown.filter((c) => selected.has(c.id));
+  const compared = chosen.slice(0, COMPARE_MAX);
+  const tabs: Array<[Tab, number]> = [["open", counts.open], ["picked", counts.picked], ["passed", counts.passed]];
+  if (counts.confirmed > 0) tabs.push(["confirmed", counts.confirmed]);
+  const cardProps = (c: ShortlistCandidate) => ({
+    candidate: c, choice: choice(c), canPick, busy, selected: selected.has(c.id),
+    onSelect: () => toggleSelect(c.id), onPick: () => toggleOne(c, "picked"), onPass: () => toggleOne(c, "passed"), copy, locale,
+  });
 
   return (
-    <section id="shortlist" className="bw-panel bw-shortlist" data-brand-shortlist={candidates.length}>
+    <section id="shortlist" className="bw-panel bw-shortlist" data-brand-shortlist={candidates.length} data-shortlist-view={view}>
       <header className="bw-shortlist-head">
         <div>
           <h2>{copy.title} <span className="bw-shortlist-count">{interpolate(copy.count, { count: candidates.length })}</span></h2>
@@ -87,54 +163,206 @@ export function CampaignShortlist({ candidates, canPick, copy, locale }: {
         </p>
       </header>
       <div className="bw-shortlist-tools bw-no-print">
-        <div className="bw-shortlist-sorts" role="group" aria-label={copy.sortLabel}>
-          {SHORTLIST_SORTS.map((key) => (
-            <button key={key} type="button" aria-pressed={sort === key} onClick={() => setSort(key)} data-shortlist-sort={key}>
-              {copy.sorts[key]}
+        <div className="bw-shortlist-sorts" role="group" aria-label={copy.tabsLabel}>
+          {tabs.map(([key, count]) => (
+            <button key={key} type="button" aria-pressed={tab === key} onClick={() => setTab(key)} data-shortlist-tab={key}>
+              {copy.tabs[key]} <b>{count}</b>
             </button>
           ))}
         </div>
-        <button type="button" className="bw-shortlist-filter" aria-pressed={onlyPicked} onClick={() => setOnlyPicked((v) => !v)} data-shortlist-filter={onlyPicked ? "picked" : "all"}>
-          {onlyPicked ? copy.showAll : interpolate(copy.showPicked, { count: picked.size })}
-        </button>
+        <div className="bw-shortlist-tools-end">
+          <div className="bw-shortlist-sorts" role="group" aria-label={copy.sortLabel}>
+            {SHORTLIST_SORTS.map((key) => (
+              <button key={key} type="button" aria-pressed={sort === key} onClick={() => setSort(key)} data-shortlist-sort={key}>
+                {copy.sorts[key]}
+              </button>
+            ))}
+          </div>
+          <div className="bw-shortlist-views" role="group" aria-label={copy.viewLabel}>
+            {(["cards", "list"] as const).map((key) => (
+              <button key={key} type="button" aria-pressed={view === key} aria-label={copy.views[key]} title={copy.views[key]} onClick={() => pickView(key)} data-shortlist-view-button={key}>
+                {key === "cards" ? <GridIcon /> : <ListIcon />}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
       {!canPick && <p className="bw-note bw-no-print">{copy.readOnly}</p>}
-      {shown.length === 0 ? (
-        <p className="bw-empty" data-shortlist-empty>{copy.nonePicked}</p>
-      ) : (
-        <ol className="bw-shortlist-grid">
-          {shown.map((c) => (
-            <ShortlistCard
-              key={c.id}
-              candidate={c}
-              medians={medians}
-              picked={picked.has(c.id)}
-              canPick={canPick}
-              busy={busy === c.id}
-              failed={failed === c.id}
-              onToggle={() => toggle(c.id)}
-              compared={compare.includes(c.id)}
-              compareFull={compare.length >= COMPARE_MAX}
-              onCompare={() => toggleCompare(c.id)}
-              copy={copy}
-              locale={locale}
-            />
-          ))}
-        </ol>
+      {shown.length > 0 && view === "cards" && (
+        <label className="bw-shortlist-select-all bw-no-print">
+          <input type="checkbox" checked={allSelected} onChange={selectAll} data-shortlist-select-all />
+          {interpolate(copy.selectAll, { count: shown.length })}
+        </label>
       )}
-      {compared.length > 0 && (
-        <div className="bw-shortlist-tray bw-no-print" role="region" aria-label={copy.compareTitle} data-shortlist-tray={compared.length}>
-          <ul>
-            {compared.map((c) => <li key={c.id}><Portrait candidate={c} size={24} />@{c.handle}</li>)}
-          </ul>
-          <button type="button" className="bw-button bw-primary" disabled={compared.length < 2} onClick={() => setComparing(true)} data-shortlist-compare-open>
-            {interpolate(copy.compareOpen, { count: compared.length })}
-          </button>
-          <button type="button" className="bw-button" onClick={() => setCompare([])}>{copy.compareClear}</button>
+      {shown.length === 0 ? (
+        <p className="bw-empty" data-shortlist-empty={tab}>{copy.empty[tab]}</p>
+      ) : view === "cards" ? (
+        <ol className="bw-shortlist-grid">
+          {shown.map((c) => <ShortlistCard key={c.id} {...cardProps(c)} medians={medians} />)}
+        </ol>
+      ) : (
+        <ShortlistList candidates={shown} rowProps={cardProps} allSelected={allSelected} onSelectAll={selectAll} sort={sort} onSort={setSort} canPick={canPick} copy={copy} locale={locale} />
+      )}
+      {chosen.length > 0 && (
+        <div className="bw-triage-bulk bw-shortlist-bulk bw-no-print" role="region" aria-label={interpolate(copy.selected, { count: chosen.length })} data-shortlist-bulk={chosen.length}>
+          <span>{interpolate(copy.selected, { count: chosen.length })}</span>
+          {canPick && chosen.some((c) => choice(c) !== "picked") && (
+            <button type="button" className="bw-button bw-primary" disabled={busy} onClick={() => mark(chosen.map((c) => c.id), "picked")} data-shortlist-bulk-mark="picked">{copy.actions.picked}</button>
+          )}
+          {canPick && chosen.some((c) => choice(c) !== "passed") && (
+            <button type="button" className="bw-button" disabled={busy} onClick={() => mark(chosen.map((c) => c.id), "passed")} data-shortlist-bulk-mark="passed">{copy.actions.passed}</button>
+          )}
+          {canPick && chosen.some((c) => choice(c) !== "none") && (
+            <button type="button" className="bw-button" disabled={busy} onClick={() => mark(chosen.map((c) => c.id), "none")} data-shortlist-bulk-mark="none">
+              {tab === "passed" ? copy.actions.restore : copy.actions.none}
+            </button>
+          )}
+          {chosen.length > 1 && chosen.length <= COMPARE_MAX && (
+            <button type="button" className="bw-button" onClick={() => setComparing(true)} data-shortlist-compare-open>
+              {interpolate(copy.compareOpen, { count: chosen.length })}
+            </button>
+          )}
+          <button type="button" className="bw-triage-link" onClick={() => setSelected(new Set())}>{copy.clearSelection}</button>
         </div>
       )}
       {comparing && compared.length > 1 && <CompareSheet candidates={compared} copy={copy} locale={locale} onClose={() => setComparing(false)} />}
+      {toast && (
+        <div className="bw-triage-toast bw-no-print" role="status" data-shortlist-toast>
+          <span>{toast.message}</span>
+          {toast.undo && <button type="button" className="bw-button" disabled={busy} onClick={() => apply(toast.undo!, copy.undone, false)}>{copy.undo}</button>}
+        </div>
+      )}
     </section>
+  );
+}
+
+type ItemProps = {
+  candidate: ShortlistCandidate;
+  choice: ShortlistChoice;
+  canPick: boolean;
+  busy: boolean;
+  selected: boolean;
+  onSelect: () => void;
+  onPick: () => void;
+  onPass: () => void;
+  copy: Copy;
+  locale: string;
+};
+
+function GridIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
+      <rect x="2.5" y="2.5" width="5" height="5" rx="1.4" /><rect x="10.5" y="2.5" width="5" height="5" rx="1.4" />
+      <rect x="2.5" y="10.5" width="5" height="5" rx="1.4" /><rect x="10.5" y="10.5" width="5" height="5" rx="1.4" />
+    </svg>
+  );
+}
+function ListIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" aria-hidden="true">
+      <path d="M6.5 4.5h9M6.5 9h9M6.5 13.5h9" /><path d="M2.75 4.5h.01M2.75 9h.01M2.75 13.5h.01" strokeWidth="2.2" />
+    </svg>
+  );
+}
+
+/** The marks a card or row carries next to the name: preferred, set aside, booked. */
+function Badges({ choice, confirmed, copy }: { choice: ShortlistChoice; confirmed: boolean; copy: Copy }) {
+  return (
+    <>
+      {confirmed && <span className="bw-shortlist-badge" data-tone="booked" data-shortlist-confirmed>{copy.confirmed}</span>}
+      {choice === "picked" && <span className="bw-shortlist-badge" data-shortlist-picked>{copy.preferred}</span>}
+      {choice === "passed" && <span className="bw-shortlist-badge" data-tone="muted" data-shortlist-passed>{copy.passed}</span>}
+    </>
+  );
+}
+
+/** ✕ and ♥: each toggles its own mark; pressing one clears the other. */
+function Marks({ candidate: c, choice, busy, onPick, onPass, copy }: Pick<ItemProps, "candidate" | "choice" | "busy" | "onPick" | "onPass" | "copy">) {
+  const pickLabel = choice === "picked" ? copy.unprefer : copy.prefer;
+  const passLabel = choice === "passed" ? copy.unpass : copy.pass;
+  return (
+    <div className="bw-shortlist-marks bw-no-print">
+      <button type="button" className="bw-shortlist-pass" aria-pressed={choice === "passed"} aria-label={busy ? copy.working : `${passLabel} · @${c.handle}`} title={passLabel} disabled={busy} onClick={onPass} data-shortlist-pass={choice === "passed" ? "on" : "off"}>
+        <span aria-hidden="true">✕</span>
+      </button>
+      <button type="button" className="bw-shortlist-pick" aria-pressed={choice === "picked"} aria-label={busy ? copy.working : `${pickLabel} · @${c.handle}`} title={pickLabel} disabled={busy} onClick={onPick} data-shortlist-pick={choice === "picked" ? "on" : "off"}>
+        <span aria-hidden="true">{choice === "picked" ? "♥" : "♡"}</span>
+      </button>
+    </div>
+  );
+}
+
+function Select({ handle, selected, onSelect, copy }: { handle: string; selected: boolean; onSelect: () => void; copy: Copy }) {
+  return (
+    <label className="bw-shortlist-select bw-no-print">
+      <input type="checkbox" checked={selected} onChange={onSelect} aria-label={interpolate(copy.select, { handle })} data-shortlist-select={handle} />
+    </label>
+  );
+}
+
+/** The list layout: one row per candidate with the four figures the triage reads, sortable by its headers. */
+function ShortlistList({ candidates, rowProps, allSelected, onSelectAll, sort, onSort, canPick, copy, locale }: {
+  candidates: ShortlistCandidate[];
+  rowProps: (c: ShortlistCandidate) => ItemProps;
+  allSelected: boolean;
+  onSelectAll: () => void;
+  sort: ShortlistSort;
+  onSort: (sort: ShortlistSort) => void;
+  canPick: boolean;
+  copy: Copy;
+  locale: string;
+}) {
+  const head = (key: ShortlistSort, label: string) => (
+    <th scope="col" aria-sort={sort === key ? "descending" : "none"}>
+      <button type="button" onClick={() => onSort(key)} data-shortlist-sort-head={key}>{label}{sort === key ? " ↓" : ""}</button>
+    </th>
+  );
+  return (
+    <div className="bw-table-scroll">
+      <table className="bw-shortlist-list" data-shortlist-list={candidates.length}>
+        <thead>
+          <tr>
+            <th scope="col" className="bw-shortlist-list-check bw-no-print">
+              <input type="checkbox" checked={allSelected} onChange={onSelectAll} aria-label={interpolate(copy.selectAll, { count: candidates.length })} data-shortlist-select-all />
+            </th>
+            <th scope="col">{copy.columns.creator}</th>
+            {head("followers", copy.followers)}
+            {head("views", copy.viewsMedian)}
+            {head("engagement", copy.engagement)}
+            <th scope="col">{copy.adShare}</th>
+            {canPick && <th scope="col" className="bw-no-print"><span className="bw-sr-only">{copy.columns.marks}</span></th>}
+          </tr>
+        </thead>
+        <tbody>
+          {candidates.map((c) => {
+            const p = rowProps(c);
+            const engagement = shortlistSortValue(c.metrics, "engagement");
+            return (
+              <tr key={c.id} data-shortlist-row-candidate={c.handle} data-choice={p.choice} data-selected={p.selected ? "true" : undefined}>
+                <td className="bw-shortlist-list-check bw-no-print">
+                  <input type="checkbox" checked={p.selected} onChange={p.onSelect} aria-label={interpolate(copy.select, { handle: c.handle })} data-shortlist-select={c.handle} />
+                </td>
+                <td>
+                  <div className="bw-shortlist-list-who">
+                    <Portrait candidate={c} size={36} />
+                    <div>
+                      <a href={`https://www.instagram.com/${c.handle}/`} target="_blank" rel="noopener noreferrer" aria-label={interpolate(copy.profile, { handle: c.handle })}>@{c.handle}</a>
+                      {(c.displayName || c.category) && <span className="bw-muted">{[c.displayName, c.category].filter(Boolean).join(" · ")}</span>}
+                    </div>
+                    <span className="bw-shortlist-list-badges"><Badges choice={p.choice} confirmed={c.confirmed} copy={copy} /></span>
+                  </div>
+                </td>
+                <td className="bw-shortlist-list-num">{shortlistCount(c.metrics.followers, locale)}</td>
+                <td className="bw-shortlist-list-num">{shortlistCount(c.metrics.viewsMedian90d, locale)}</td>
+                <td className="bw-shortlist-list-num">{engagement == null ? SHORTLIST_UNKNOWN : shortlistPercent(engagement, locale)}</td>
+                <td className="bw-shortlist-list-num">{shortlistPercent(c.metrics.adShare, locale)}</td>
+                {canPick && <td className="bw-no-print"><Marks {...p} /></td>}
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
@@ -162,20 +390,7 @@ function Relative({ label, value, median, empty }: { label: string; value: numbe
   );
 }
 
-function ShortlistCard({ candidate: c, medians, picked, canPick, busy, failed, onToggle, compared, compareFull, onCompare, copy, locale }: {
-  candidate: ShortlistCandidate;
-  medians: Medians | null;
-  picked: boolean;
-  canPick: boolean;
-  busy: boolean;
-  failed: boolean;
-  onToggle: () => void;
-  compared: boolean;
-  compareFull: boolean;
-  onCompare: () => void;
-  copy: Copy;
-  locale: string;
-}) {
+function ShortlistCard({ candidate: c, choice, canPick, busy, selected, onSelect, onPick, onPass, medians, copy, locale }: ItemProps & { medians: Medians | null }) {
   const m = c.metrics;
   const engagement = shortlistSortValue(m, "engagement");
   const tags = shortlistTags(m, medians?.engagement ?? null);
@@ -193,30 +408,25 @@ function ShortlistCard({ candidate: c, medians, picked, canPick, busy, failed, o
   ] as const).filter(([, value]) => value !== null);
   const profile = `https://www.instagram.com/${c.handle}/`;
   const tone = c.avatarTone ? ({ "--bw-tone": c.avatarTone } as CSSProperties) : undefined;
-  const pickLabel = picked ? copy.unprefer : copy.prefer;
   return (
-    <li className="bw-shortlist-card" data-shortlist-candidate={c.handle} data-picked={picked ? "true" : undefined} data-toned={c.avatarTone ? "true" : undefined} style={tone}>
+    <li
+      className="bw-shortlist-card"
+      data-shortlist-candidate={c.handle}
+      data-picked={choice === "picked" ? "true" : undefined}
+      data-passed={choice === "passed" ? "true" : undefined}
+      data-selected={selected ? "true" : undefined}
+      data-toned={c.avatarTone ? "true" : undefined}
+      style={tone}
+    >
       <div className="bw-shortlist-portrait">
+        <Select handle={c.handle} selected={selected} onSelect={onSelect} copy={copy} />
+        <Portrait candidate={c} size={144} />
         {tags.length > 0 && (
           <ul className="bw-shortlist-tags">
             {tags.map((tag) => <li key={tag} title={copy.tagHints[tag]} data-shortlist-tag={tag}>{copy.tags[tag]}</li>)}
           </ul>
         )}
-        <Portrait candidate={c} size={144} />
-        {canPick && (
-          <button
-            type="button"
-            className="bw-shortlist-pick bw-no-print"
-            aria-pressed={picked}
-            aria-label={busy ? copy.working : `${pickLabel} · @${c.handle}`}
-            title={pickLabel}
-            disabled={busy}
-            onClick={onToggle}
-            data-shortlist-pick={picked ? "on" : "off"}
-          >
-            <span aria-hidden="true">{picked ? "♥" : "♡"}</span>
-          </button>
-        )}
+        {canPick && <Marks candidate={c} choice={choice} busy={busy} onPick={onPick} onPass={onPass} copy={copy} />}
       </div>
       <div className="bw-shortlist-body">
         <div className="bw-shortlist-who">
@@ -227,7 +437,7 @@ function ShortlistCard({ candidate: c, medians, picked, canPick, busy, failed, o
                 @{c.handle} <span aria-hidden="true">↗</span>
               </a>
             )}
-            {picked && <span className="bw-shortlist-badge" data-shortlist-picked>{copy.preferred}</span>}
+            <Badges choice={choice} confirmed={c.confirmed} copy={copy} />
           </strong>
           {c.displayName && (
             <a href={profile} target="_blank" rel="noopener noreferrer" aria-label={interpolate(copy.profile, { handle: c.handle })}>
@@ -291,12 +501,7 @@ function ShortlistCard({ candidate: c, medians, picked, canPick, busy, failed, o
           <span className="bw-muted">
             {copy.posts} {shortlistCount(m.posts, locale)} · {copy.following} {shortlistCount(m.following, locale)}
           </span>
-          <label className="bw-shortlist-compare bw-no-print" title={!compared && compareFull ? copy.compareFull : undefined}>
-            <input type="checkbox" checked={compared} disabled={!compared && compareFull} onChange={onCompare} data-shortlist-compare={c.handle} />
-            {copy.compare}
-          </label>
         </div>
-        {failed && <p role="alert" className="bw-error">{copy.failed}</p>}
       </div>
     </li>
   );
