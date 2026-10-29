@@ -505,7 +505,7 @@ export const ko: Dictionary = {
       },
       "production": {
         "eyebrow": "YAGI 제작",
-        "title": "브랜드 필름 제작만\nYAGI에 따로 의뢰하실 수 있습니다",
+        "title": "브랜드 필름만\n따로 의뢰할 수도 있습니다",
         "body": "YAGI는 패션·뷰티 브랜드의 광고 필름과 비주얼을 만들어 왔습니다. 포트폴리오와 예상 견적을 먼저 확인해 보세요."
       },
       "closing": {

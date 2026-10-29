@@ -497,7 +497,7 @@ export const en = {
       },
       "production": {
         "eyebrow": "YAGI production",
-        "title": "Commission\njust the brand film from YAGI",
+        "title": "Or commission\njust the brand film",
         "body": "YAGI has made ad films and visuals for fashion and beauty brands. Check the portfolio and an estimate first."
       },
       "closing": {

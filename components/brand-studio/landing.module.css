@@ -51,9 +51,10 @@
   text-wrap: pretty;
 }
 .note { font-size: 12px; line-height: 1.6; color: var(--lp-muted); }
-.head { display: grid; gap: 18px; max-width: 46rem; }
-.headSplit { display: grid; gap: 18px 64px; align-items: end; }
-@media (min-width: 1024px) { .headSplit { grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr); } }
+/* Section heads are full sentences now (2026-10-29 wording review), so the title gets the full width and the body sits under it. */
+.head { display: grid; gap: 18px; max-width: 64rem; }
+.headSplit { display: grid; gap: 18px; }
+.headSplit > .body { max-width: 40rem; }
 
 /* ---------- Actions: one blue pill per screen, one quiet text link beside it ---------- */
 .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 22px; }
@@ -128,7 +129,7 @@
 .heroCopy { display: grid; justify-items: center; gap: 22px; text-align: center; }
 .heroCopy .body { max-width: 37rem; }
 .heroFilm { margin: clamp(40px, 5vw, 60px) auto 0; max-width: 1120px; display: grid; gap: 10px; opacity: 0; transform: translateY(14px); animation: rise 800ms cubic-bezier(0.2, 0.7, 0.2, 1) 160ms forwards; }
-.heroFilm .tile { aspect-ratio: 16 / 9; background: var(--lp-paper); box-shadow: inset 0 0 0 1px var(--lp-line); }
+.heroFilm .tile { aspect-ratio: 16 / 9; background: var(--lp-paper); border: 1px solid var(--lp-line); }
 .heroFilm figcaption { text-align: center; }
 @keyframes rise { to { opacity: 1; transform: none; } }
 .doors { margin: clamp(32px, 4vw, 48px) auto 0; max-width: 1120px; display: grid; gap: 0; border-top: 1px solid var(--lp-line); }
@@ -228,7 +229,7 @@
 
 /* ---------- Production + closing ---------- */
 .production { display: grid; gap: 28px; align-items: center; }
-@media (min-width: 1024px) { .production { grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr); gap: 56px; } }
+@media (min-width: 1024px) { .production { grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr); gap: 56px; } .production .h2 { font-size: clamp(1.7rem, 2.6vw, 2.3rem); } }
 .closing { display: grid; gap: 22px; justify-items: start; }
 @media (min-width: 1024px) { .closing { grid-template-columns: minmax(0, 1fr) auto; align-items: end; } }
 
