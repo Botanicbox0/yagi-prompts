@@ -33,6 +33,7 @@ export function studioAuditSubject(form: FormData, actorId: string) {
     ...(projectId ? { projectId } : {}),
     ...(organizationId ? { organizationId } : {}),
     ...(id(form, 'candidateId') ? { candidateId: id(form, 'candidateId') } : {}),
+    ...(id(form, 'attachmentId') ? { attachmentId: id(form, 'attachmentId') } : {}),
     ...(flag(form, 'shared', ['true', 'false']) ? { shared: flag(form, 'shared', ['true', 'false']) } : {}),
     ...(flag(form, 'status', ['active', 'completed', 'cancelled']) ? { status: flag(form, 'status', ['active', 'completed', 'cancelled']) } : {}),
   };
