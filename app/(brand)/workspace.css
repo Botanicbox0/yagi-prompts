@@ -34,10 +34,14 @@ html[data-brand-workspace] {
   --ys-ink-secondary: #55555f;
   --ys-ink-muted: #6e6e78;
   /* The one key colour. Everything blue on the brand host derives from this value, so a future
-     main key colour is a one-line change (대표 2026-10-29: a soft ultramarine that sits with white). */
-  --ys-accent: #4355e8;
+     main key colour is a one-line change. 대표 2026-10-29: "우리의 블루" is the cornflower blue of his
+     reference photos, kept at a lightness where white text on it passes AA. */
+  --ys-accent: #3875c5;
   --ys-accent-soft: color-mix(in srgb, var(--ys-accent) 7%, transparent);
   --ys-accent-line: color-mix(in srgb, var(--ys-accent) 32%, transparent);
+  /* Blue as small text (links, chips, badges): the same hue, darker, so it passes AA on white, the
+     alabaster and its own 7% tint. Fills, rings and focus keep --ys-accent. */
+  --ys-accent-text: color-mix(in srgb, var(--ys-accent) 85%, #000);
   --ys-select: var(--ys-ink);
   --ys-select-soft: rgba(17, 17, 20, 0.04);
   --ys-focus: var(--ys-accent);
@@ -62,7 +66,7 @@ html[data-brand-workspace] {
   --ys-gold-soft: rgba(161, 92, 7, 0.09);
   --ys-emerald: #177245;
   --ys-emerald-soft: rgba(23, 114, 69, 0.09);
-  --ys-sky: var(--ys-accent);
+  --ys-sky: var(--ys-accent-text);
 
   /* Daylight: several faint layers instead of one dark shadow, plus a double ring (hairline outside,
      white rim inside). */
@@ -97,7 +101,7 @@ html[data-brand-workspace] {
   --color-workspace-ink: var(--ys-ink);
   --color-workspace-muted: var(--ys-ink-secondary);
   --color-workspace-line: var(--ys-line);
-  --color-blue: var(--ys-accent);
+  --color-blue: var(--ys-accent-text);
   --bw-line: var(--ys-line);
 
   font-synthesis: none;
@@ -352,7 +356,7 @@ html[data-workspace-admin] {
   text-underline-offset: 4px;
 }
 .bw-main a:not(.bw-button):hover {
-  color: var(--ys-accent, var(--ys-red));
+  color: var(--ys-accent-text, var(--ys-red));
 }
 .bw-panel {
   background: var(--ys-surface);
@@ -535,7 +539,7 @@ html[data-workspace-admin] {
 .bw-status[data-state="active"] {
   background: var(--ys-accent-soft, var(--ys-red-soft));
   border-color: color-mix(in srgb, var(--ys-accent, var(--ys-red)) 30%, transparent);
-  color: var(--ys-accent, var(--ys-red));
+  color: var(--ys-accent-text, var(--ys-red));
 }
 .bw-status[data-state="pending"],
 .bw-status[data-state="changes_requested"] {
@@ -622,7 +626,7 @@ html[data-workspace-admin] {
   margin-bottom: 10px;
 }
 .bw-message[data-author="studio"] strong {
-  color: var(--ys-accent, var(--ys-red));
+  color: var(--ys-accent-text, var(--ys-red));
 }
 .bw-stats {
   display: grid;
@@ -1017,7 +1021,7 @@ html[data-workspace-admin] {
 .bw-brand-list a>span:last-child { margin-left:auto; font-size:12px; color:var(--ys-ink-secondary); }
 .bw-brand-avatar { width:36px;height:36px;border-radius:9px;background:var(--ys-raised);border:1px solid var(--ys-line-strong);display:grid;place-items:center;font-size:17px; }
 .bw-settings-panel { max-width:780px; margin-top:24px; }
-.bw-private-label { display:inline-block; margin-left:10px; color:var(--ys-accent, var(--ys-red))!important; }
+.bw-private-label { display:inline-block; margin-left:10px; color:var(--ys-accent-text, var(--ys-red))!important; }
 .bw-featured-campaign { display:grid;grid-template-columns:minmax(220px,.85fr) minmax(0,1fr);background:var(--ys-surface);border:1px solid var(--ys-line);border-radius:14px;overflow:hidden;margin-bottom:26px; }
 .bw-featured-art { display:block; min-height:285px; background:var(--ys-media-bg); overflow:hidden; }
 .bw-featured-art>*,.bw-featured-art img,.bw-featured-art video { width:100%;height:100%;min-height:285px;max-height:355px;object-fit:cover; }
@@ -1295,7 +1299,7 @@ li:first-child>.bw-identity-group{border-top:0;margin-top:0;padding-top:4px}
 .bw-studio-process h3 { font-size:15px; font-weight:600; letter-spacing:-.01em; margin:6px 0 6px; }
 .bw-studio-process p { margin:0; font-size:13px; line-height:1.7; color:var(--ys-ink-secondary); }
 .bw-studio-step-number { font-size:11px; letter-spacing:.04em; color:var(--ys-ink-muted); font-family:var(--ys-mono); font-variant-numeric:tabular-nums; }
-.bw-studio-step-state { display:inline-block; margin-top:10px; font-size:11px; font-weight:600; color:var(--ys-accent, var(--ys-gold)); }
+.bw-studio-step-state { display:inline-block; margin-top:10px; font-size:11px; font-weight:600; color:var(--ys-accent-text, var(--ys-gold)); }
 .bw-studio-process li[data-state=done] .bw-studio-step-state { color:var(--ys-ink-secondary); }
 .bw-studio-showcase { margin:0 0 36px; }
 .bw-studio-showcase-intro p { margin:0 0 18px; max-width:680px; color:var(--ys-ink-secondary); line-height:1.7; }
@@ -1604,7 +1608,7 @@ button.bw-wizard-step:hover { border-color:var(--ys-ink); }
 }
 .ys-tc-label {
   font-size: 10px;
-  color: var(--ys-accent, var(--ys-red));
+  color: var(--ys-accent-text, var(--ys-red));
   font-weight: 700;
 }
 .ys-tc-sep {
@@ -1721,7 +1725,7 @@ button.bw-wizard-step:hover { border-color:var(--ys-ink); }
   border-radius: 6px;
   border: 1px solid color-mix(in srgb, var(--ys-accent, var(--ys-red)) 40%, transparent);
   background: var(--ys-accent-soft, var(--ys-red-soft));
-  color: var(--ys-accent, var(--ys-red));
+  color: var(--ys-accent-text, var(--ys-red));
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
@@ -2105,7 +2109,7 @@ button.bw-wizard-step:hover { border-color:var(--ys-ink); }
 }
 .ys-track-pill[data-track="creator"] {
   background: var(--ys-accent-soft, var(--ys-red-soft));
-  color: var(--ys-accent, var(--ys-red));
+  color: var(--ys-accent-text, var(--ys-red));
   border-color: color-mix(in srgb, var(--ys-accent, var(--ys-red)) 30%, transparent);
 }
 
@@ -3013,16 +3017,16 @@ button.bw-wizard-step:hover { border-color:var(--ys-ink); }
 .bw-shortlist-tags { position:absolute; top:10px; left:10px; right:56px; display:flex; flex-wrap:wrap; gap:4px; margin:0; padding:0; list-style:none; }
 .bw-shortlist-tags li { padding:3px 8px; border-radius:999px; background:rgba(255,255,255,0.82); backdrop-filter:blur(6px); color:var(--ys-ink); font-size:11px; font-weight:600; white-space:nowrap; }
 .bw-shortlist-pick { position:absolute; top:10px; right:10px; width:40px; height:40px; display:grid; place-items:center; border:0; border-radius:999px; background:rgba(255,255,255,0.88); color:var(--ys-ink); font-size:20px; line-height:1; cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,0.12); }
-.bw-shortlist-pick:hover:not(:disabled) { color:var(--ys-accent, var(--ys-red)); }
+.bw-shortlist-pick:hover:not(:disabled) { color:var(--ys-accent-text, var(--ys-red)); }
 .bw-shortlist-pick[aria-pressed='true'] { background:var(--ys-accent, var(--ys-red)); color:#fff; }
 .bw-shortlist-pick:disabled { opacity:0.6; cursor:wait; }
 .bw-shortlist-body { display:flex; flex-direction:column; gap:14px; flex:1; padding:16px 18px 18px; }
 .bw-shortlist-who { display:grid; gap:1px; min-width:0; }
 .bw-shortlist-who strong { font-size:16px; display:flex; align-items:center; gap:6px; min-width:0; overflow-wrap:anywhere; }
 .bw-shortlist-who a { font-size:13px; color:var(--ys-ink-secondary); text-decoration:none; overflow-wrap:anywhere; }
-.bw-shortlist-who a:hover { color:var(--ys-accent, var(--ys-red)); }
+.bw-shortlist-who a:hover { color:var(--ys-accent-text, var(--ys-red)); }
 .bw-shortlist-who .bw-muted { font-size:12px; }
-.bw-shortlist-badge { display:inline-block; padding:1px 7px; border-radius:999px; background:var(--ys-accent-soft, var(--ys-red-soft)); color:var(--ys-accent, var(--ys-red)); font-size:11px; font-weight:600; white-space:nowrap; }
+.bw-shortlist-badge { display:inline-block; padding:1px 7px; border-radius:999px; background:var(--ys-accent-soft, var(--ys-red-soft)); color:var(--ys-accent-text, var(--ys-red)); font-size:11px; font-weight:600; white-space:nowrap; }
 .bw-shortlist-headline { display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:8px; margin:0; }
 .bw-shortlist-headline > div { min-width:0; }
 .bw-shortlist-headline dt { font-size:11px; color:var(--ys-ink-muted); line-height:1.3; }
@@ -3108,11 +3112,11 @@ button.bw-wizard-step:hover { border-color:var(--ys-ink); }
 .bw-triage-check input { width:16px; height:16px; }
 .bw-triage-who { display:flex; align-items:center; gap:10px; min-width:170px; }
 .bw-triage-who a { color:var(--ys-ink); font-weight:600; text-decoration:none; }
-.bw-triage-who a:hover { color:var(--ys-accent, var(--ys-red)); }
+.bw-triage-who a:hover { color:var(--ys-accent-text, var(--ys-red)); }
 .bw-triage-avatar { flex:none; border-radius:999px; object-fit:cover; background:var(--ys-media-bg); display:grid; place-items:center; font-size:12px; font-weight:600; color:#fff; }
 .bw-triage-marks { display:flex; flex-wrap:wrap; gap:4px; margin-top:2px; }
 .bw-triage-mark { padding:1px 6px; border-radius:999px; font-size:10.5px; font-weight:600; white-space:nowrap; background:var(--ys-raised); color:var(--ys-ink-secondary); }
-.bw-triage-mark[data-mark='new'] { background:var(--ys-accent-soft, var(--ys-red-soft)); color:var(--ys-accent, var(--ys-red)); }
+.bw-triage-mark[data-mark='new'] { background:var(--ys-accent-soft, var(--ys-red-soft)); color:var(--ys-accent-text, var(--ys-red)); }
 .bw-triage-mark[data-mark='fit-in'] { background:var(--ys-emerald-soft); color:var(--ys-emerald); }
 .bw-triage-mark[data-mark='fit-unknown'] { background:var(--ys-gold-soft); color:var(--ys-gold); }
 .bw-triage-metric { min-width:96px; font-variant-numeric:tabular-nums; }
@@ -3479,6 +3483,17 @@ html[data-brand-workspace]::view-transition-group(bw-tab-indicator) { animation-
   transition: opacity 900ms var(--ys-ease);
 }
 :where([data-brand-workspace]) .bw-bleed[data-bleed]::before { opacity: 0.15; }
+/* No right-hand conversation dock on the review and brief tabs (대표 2026-10-29: no right rails on
+   workspace screens). The tab shows only its own work; the conversation keeps its own tab. /admin
+   keeps the dock. */
+@media (min-width: 1024px) {
+  :where([data-brand-workspace]) .bw-project-sections[data-project-tab='review'] .bw-grid-wide,
+  :where([data-brand-workspace]) .bw-project-sections[data-project-tab='brief'] .bw-grid-wide,
+  :where([data-brand-workspace]) .bw-project-sections[data-project-tab='review'] .bw-grid-wide > div,
+  :where([data-brand-workspace]) .bw-project-sections[data-project-tab='brief'] .bw-grid-wide > div { display: contents; }
+  :where([data-brand-workspace]) .bw-project-sections[data-project-tab='review'] #conversation,
+  :where([data-brand-workspace]) .bw-project-sections[data-project-tab='brief'] #conversation { display: none; }
+}
 :where([data-brand-workspace]) .bw-project-cover { border: 0; border-radius: var(--ys-r-card); box-shadow: var(--ys-ring), var(--ys-shadow-2); }
 :where([data-brand-workspace]) .bw-project-cover img { object-fit: cover; }
 :where([data-brand-workspace]) .ys-kicker-badge,
