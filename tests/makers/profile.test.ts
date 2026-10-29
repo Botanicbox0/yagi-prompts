@@ -144,7 +144,7 @@ describe('maker profile against Postgres', () => {
     // The maker's own legacy community prompt (fixture `cafe-window-timelapse`) is theirs too: one
     // public identity per person, so it carries the maker handle instead of its old submission handle.
     expect(catalog.video.find((item) => item.slug === 'cafe-window-timelapse')).toMatchObject({ origin: 'maker', authorHandle: 'jun_01', makerProfile: true });
-    expect(catalog.makers).toEqual([{ handle: 'jun_01', bio: 'AI 영상 템플릿을 만듭니다.', templateCount: 2, latestPublishedAt: catalog.makers[0]!.latestPublishedAt }]);
+    expect(catalog.makers).toEqual([{ handle: 'jun_01', bio: 'AI 영상 템플릿을 만듭니다.', bioEn: null, templateCount: 2, openRecipeCount: 0, latestPublishedAt: catalog.makers[0]!.latestPublishedAt }]);
     expect(catalog.makers[0]!.latestPublishedAt).toBe(card.publishedAt);
 
     // The canary: nothing that identifies the account behind the handle leaves the loader.
@@ -152,7 +152,7 @@ describe('maker profile against Postgres', () => {
     for (const secret of [MAKER.id, MAKER.email, 'authorId', 'author_id', 'userId', 'user_id', 'contract', 'PRIVATE RECIPE']) {
       expect(serialised.includes(secret), secret).toBe(false);
     }
-    for (const maker of catalog.makers) expect(Object.keys(maker).sort()).toEqual(['bio', 'handle', 'latestPublishedAt', 'templateCount']);
+    for (const maker of catalog.makers) expect(Object.keys(maker).sort()).toEqual(['bio', 'bioEn', 'handle', 'latestPublishedAt', 'openRecipeCount', 'templateCount']);
   });
 
   it('keeps handles unique across makers', async () => {

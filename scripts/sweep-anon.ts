@@ -1252,6 +1252,9 @@ async function sweepMakers(): Promise<void> {
   expectPresent('the maker block', makerTemplate.body, 'data-template-maker="jun"');
   expectPresent('…linking to the maker page', makerTemplate.body, 'href="/ko/makers/jun"');
   expectPresent('the verified mark', makerTemplate.body, 'data-template-verified');
+  // 2026-10-29: the copy-or-make fork and the recipe pill follow a public prompt, never the credit.
+  expectAbsent('no copy-or-make fork without a public prompt', makerTemplate.body, 'data-template-recipe-actions');
+  expectAbsent('…and no recipe pill on the catalogue', video.body, 'data-card-recipe');
   const legacy = await get('/ko/t/skate-park-golden-hour');
   expectPresent('a handle without a maker page is a plain credit', legacy.body, `${KO_TERMS.creditPrefix} @hana`);
   expectAbsent('…with no maker block', legacy.body, 'data-template-maker');
@@ -1271,6 +1274,7 @@ async function sweepMakers(): Promise<void> {
     expectAbsent(`${locale}: indexable`, page.body, 'noindex');
     expectAbsent(`${locale}: no account id`, page.body, 'f0000000-0000-4000-8000-000000000002');
     expectAbsent(`${locale}: no email`, page.body, 'pro@playbook.test');
+    expectAbsent(`${locale}: no recipe claim without an open recipe`, page.body, 'data-maker-recipe-hub');
   }
   expectPresent('ko: the count line', (await get('/ko/makers/jun')).body, '템플릿 1편');
   expectEqual('a handle with no maker page is a 404', (await get('/ko/makers/hana')).status, 404);

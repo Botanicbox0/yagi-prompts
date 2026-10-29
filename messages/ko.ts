@@ -191,6 +191,9 @@ export const ko: Dictionary = {
     templatesHeading: '공개한 템플릿',
     empty: '아직 공개한 템플릿이 없습니다.',
     browse: '모든 템플릿 보기',
+    recipeBadge: '레시피 공개',
+    recipeCount: '공개한 레시피 {count}편',
+    recipeLine: '@{handle}의 공식 레시피 페이지입니다. 템플릿을 열면 프롬프트를 복사하거나, 셀카 한 장으로 같은 영상을 만들 수 있어요.',
   },
   creatorProgram: {
     "profile": {
@@ -702,6 +705,15 @@ export const ko: Dictionary = {
       copy: '복사',
       copied: '복사했어요',
       assets: '참조 자산',
+    },
+    actions: {
+      label: '레시피 공개',
+      body: '이 영상에 쓴 프롬프트가 그대로 공개돼 있어요. 복사해서 바로 쓰거나, 셀카 한 장으로 만들어 보세요.',
+      bodyClosed: '이 영상에 쓴 프롬프트가 그대로 공개돼 있어요. 복사해서 바로 써 보세요. 셀카 한 장으로 만드는 기능은 곧 열립니다.',
+      copy: '프롬프트 복사',
+      full: '프롬프트 전문 보기',
+      make: '셀카 한 장으로 만들기',
+      makeClosed: '셀카로 만들기 · 오픈 알림',
     },
     review: {
       heading: '레시피 검수',
@@ -2296,6 +2308,7 @@ export const ko: Dictionary = {
     cardSeconds: '{seconds}초',
     cardAuthor: `${T.creditPrefix} @{handle}`,
     cardAuthorAnonymous: `${T.maker} 템플릿`,
+    cardRecipe: '레시피 공개',
     /** 생성은 Higgsfield에서 (2026-08-15) — 프롬프트를 복사해 새 탭으로 넘긴다. */
     runCta: 'Higgsfield에서 만들기 ↗',
     runCopied: '복사됨 — 새 탭에 붙여넣으세요',

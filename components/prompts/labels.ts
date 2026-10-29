@@ -19,6 +19,8 @@ export interface PromptLabels {
   cardSeconds: string;
   cardAuthor: string;
   cardAuthorAnonymous: string;
+  /** The card's "the prompt is public" pill (`PromptCard.recipeOpen`). */
+  cardRecipe: string;
   cardPlay: string;
   cardPause: string;
   /** The Higgsfield handoff (2026-08-15) — copy the prompt, open the tool. */
@@ -79,6 +81,7 @@ export function promptLabels(dict: Dictionary): PromptLabels {
     cardSeconds: dict.prompts.cardSeconds,
     cardAuthor: dict.prompts.cardAuthor,
     cardAuthorAnonymous: dict.prompts.cardAuthorAnonymous,
+    cardRecipe: dict.prompts.cardRecipe,
     // The same words the landing's preview control uses — one name for one action.
     cardPlay: dict.creatorJourney.playPreview,
     cardPause: dict.creatorJourney.pausePreview,

@@ -5,6 +5,7 @@ import { loadPublishedPrompts, type PromptRow } from './repo';
 import { PROMPT_MODEL_LABEL, promptModelLabel, type PromptSource, type TemplateMedium } from './schemas';
 import { promptLock, type PromptLock } from './lock';
 import { loadPublicMakerRows } from '@/lib/makers/profile';
+import { recipeSchemaReady } from '@/lib/recipes/repo';
 
 /**
  * PLAN §13.2 — the public card projection: "cards carry NO prompt text".
@@ -77,6 +78,11 @@ export interface PromptCard {
   lock: PromptLock;
   featured: boolean;
   publishedAt: string | null;
+  /**
+   * The template page shows the recipe's prompts (docs/PLATFORM-2.0.md §7.3: `disclosure.prompts`
+   * on). A flag only — the text itself stays with `lib/recipes/public.ts`. Optional like `gallery`.
+   */
+  recipeOpen?: boolean;
 }
 
 export interface PromptTotals {
@@ -92,7 +98,11 @@ export interface PromptTotals {
 export interface PublicMaker {
   handle: string;
   bio: string | null;
+  /** The English bio (0069); pages pick with `makerBioFor`. Optional so older test doubles still type. */
+  bioEn?: string | null;
   templateCount: number;
+  /** How many of their published templates show the recipe's prompts. Optional like `bioEn`. */
+  openRecipeCount?: number;
   /** The newest published template's date, for the sitemap's `lastmod`; null with none. */
   latestPublishedAt: string | null;
 }
@@ -138,6 +148,7 @@ export function toPromptCard(
   row: PromptRow,
   options: PromptCatalogOptions = {},
   makerHandles: ReadonlyMap<string, string> = new Map(),
+  openRecipes: ReadonlySet<string> = new Set(),
 ): PromptCard {
   const { poster, video, gallery } = shapePromptMedia(row.id, row.media, {
     publicUrl: options.publicUrl ?? publicContentUrl,
@@ -170,7 +181,24 @@ export function toPromptCard(
     lock: promptLock(row.textVisibility),
     featured: row.featured,
     publishedAt: row.publishedAt,
+    recipeOpen: openRecipes.has(row.id),
   };
+}
+
+/**
+ * The published templates whose page shows the recipe's prompts — the same rule as
+ * `loadPublicRecipe` (a maker's accepted format, or a studio original the studio opened), in one
+ * query for the whole catalogue. Empty before 0059.
+ */
+async function loadOpenRecipeIds(sql: SqlRunner): Promise<Set<string>> {
+  if (!(await recipeSchemaReady(sql))) return new Set();
+  const { rows } = await sql.query<{ id: string }>(
+    `select p.id from prompt_items p
+      where p.status = 'published' and p.audience = 'public' and p.recipe is not null
+        and (p.disclosure->>'prompts')::boolean
+        and (p.source::text = 'yagi' or exists (select 1 from platform_formats f where f.template_id = p.id and f.status = 'accepted'))`,
+  );
+  return new Set(rows.map((row) => row.id));
 }
 
 export async function loadPromptCatalog(
@@ -179,8 +207,9 @@ export async function loadPromptCatalog(
 ): Promise<PromptCatalog> {
   const rows = await loadPublishedPrompts(sql);
   const makerRows = await loadPublicMakerRows(sql);
+  const openRecipes = await loadOpenRecipeIds(sql);
   const makerHandles = new Map(makerRows.map((maker) => [maker.userId, maker.handle]));
-  const cards = rows.map((row) => toPromptCard(row, options, makerHandles));
+  const cards = rows.map((row) => toPromptCard(row, options, makerHandles, openRecipes));
 
   // The two rails are by ORIGIN: a maker's template is a `source='yagi'` row too (0046).
   const yagi = cards.filter((card) => card.origin === 'studio');
@@ -200,10 +229,13 @@ export async function loadPromptCatalog(
     }
   }
 
-  const makers = makerRows.map(({ handle, bio }): PublicMaker => {
+  const makers = makerRows.map(({ handle, bio, bioEn }): PublicMaker => {
     const own = cardsByMaker.get(handle) ?? [];
     const dates = own.map((card) => card.publishedAt).filter((value): value is string => value !== null).sort();
-    return { handle, bio, templateCount: own.length, latestPublishedAt: dates.at(-1) ?? null };
+    return {
+      handle, bio, bioEn, templateCount: own.length, openRecipeCount: own.filter((card) => card.recipeOpen).length,
+      latestPublishedAt: dates.at(-1) ?? null,
+    };
   });
 
   return {

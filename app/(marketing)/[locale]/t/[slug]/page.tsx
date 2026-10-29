@@ -41,6 +41,8 @@ import { TemplateMakeAvailability } from '@/components/twings/subscription-publi
 import { cachedTypicalWaitMinutes } from '@/lib/twings/cached-typical-wait';
 import { cachedPublicRecipe } from '@/lib/recipes/cached-public';
 import { HowItWasMade } from '@/components/recipes/how-it-was-made';
+import { RecipeActions } from '@/components/recipes/recipe-actions';
+import { makerBioFor } from '@/lib/makers/profile';
 
 /**
  * `/[locale]/t/[slug]` — one template, which is also where it is made (docs/TEMPLATES-IA.md §2).
@@ -249,6 +251,9 @@ export default async function TemplatePage({ params }: RouteParams) {
                   ))}
                 </div>
 
+                {/* A public recipe: copy the prompt or make it, both one tap from the title (2026-10-29). */}
+                {recipe && <RecipeActions recipe={recipe} copy={mr} makeHref={style !== null ? '#make' : null} shopOpen={shopOpen} />}
+
                 {style === null ? (
                   <>
                     <section data-template-closed className="mt-6 rounded-2xl border border-hairline p-5 sm:p-6">
@@ -378,7 +383,7 @@ export default async function TemplatePage({ params }: RouteParams) {
                   <aside data-template-maker={card.authorHandle} className="mt-8 rounded-2xl border border-hairline p-5">
                     <p className="text-xs text-black/60">{t.makerBlockHeading}</p>
                     <p className="mt-2 text-base font-semibold break-all">@{card.authorHandle}</p>
-                    {maker?.bio && <p className="mt-2 text-sm leading-relaxed whitespace-pre-line break-words text-black/70">{maker.bio}</p>}
+                    {maker && makerBioFor(maker, locale) && <p className="mt-2 text-sm leading-relaxed whitespace-pre-line break-words text-black/70">{makerBioFor(maker, locale)}</p>}
                     <a href={`/${locale}${makerRest}`} className="mt-4 inline-flex min-h-11 items-center text-sm font-medium underline underline-offset-4">{t.makerBlockCta} →</a>
                   </aside>
                 )}
@@ -387,7 +392,7 @@ export default async function TemplatePage({ params }: RouteParams) {
 
             {/* The recipe follows the result, never ahead of it (founder, 2026-10-28). A maker's
                 'story-first' still puts it right under the stage; 'make-first' after the campaigns. */}
-            {recipe?.presentation === 'story-first' && <div data-template-recipe="story-first" className="mt-16 border-t border-hairline pt-10">{howItWasMade}</div>}
+            {recipe?.presentation === 'story-first' && <div id="recipe" data-template-recipe="story-first" className="mt-16 scroll-mt-24 border-t border-hairline pt-10">{howItWasMade}</div>}
 
             {/* The earn loop: campaigns that ask for exactly this template. */}
             {campaigns.length > 0 && (
@@ -413,7 +418,7 @@ export default async function TemplatePage({ params }: RouteParams) {
                 </ul>
               </section>
             )}
-            {recipe?.presentation === 'make-first' && <div data-template-recipe="make-first" className="mt-16 border-t border-hairline pt-10">{howItWasMade}</div>}
+            {recipe?.presentation === 'make-first' && <div id="recipe" data-template-recipe="make-first" className="mt-16 scroll-mt-24 border-t border-hairline pt-10">{howItWasMade}</div>}
 
             {await TemplateRatings({templateId:card.id,copy:dict.community})}
             <RelatedPrompts

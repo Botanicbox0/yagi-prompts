@@ -183,6 +183,9 @@ export const en = {
     templatesHeading: 'Published templates',
     empty: 'No published templates yet.',
     browse: 'Browse all templates',
+    recipeBadge: 'Recipes shared',
+    recipeCount: 'Open recipes: {count}',
+    recipeLine: "@{handle}'s official recipe page. Open a template to copy its prompt, or make the same video with one selfie.",
   },
   creatorProgram: {
     "profile": {
@@ -694,6 +697,15 @@ export const en = {
       copy: 'Copy',
       copied: 'Copied',
       assets: 'Reference files',
+    },
+    actions: {
+      label: 'Recipe shared',
+      body: 'The exact prompt behind this video is open. Copy it as it is, or make your own with one selfie.',
+      bodyClosed: 'The exact prompt behind this video is open. Copy it as it is. Making it with one selfie opens soon.',
+      copy: 'Copy the prompt',
+      full: 'Read the full prompt',
+      make: 'Make it with one selfie',
+      makeClosed: 'Make it with a selfie · get notified',
     },
     review: {
       heading: 'Recipe review',
@@ -2304,6 +2316,7 @@ export const en = {
     cardSeconds: '{seconds}s',
     cardAuthor: `${T.creditPrefix} @{handle}`,
     cardAuthorAnonymous: `${cap(T.maker)} template`,
+    cardRecipe: 'Recipe shared',
     /** The handoff (2026-08-15) — copy the prompt, open the tool that runs it. */
     runCta: 'Make it on Higgsfield ↗',
     runCopied: 'Copied — paste it in the new tab',
