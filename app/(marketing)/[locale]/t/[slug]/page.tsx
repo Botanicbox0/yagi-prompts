@@ -123,10 +123,14 @@ export default async function TemplatePage({ params }: RouteParams) {
         files: null,
       }
     : null;
+  // Story-first (founder, 2026-10-29): the result, then how it was made, then "one selfie and it's
+  // you" with the make box — the recipe sits in the column under the title, ahead of any cost.
+  const recipeFirst = teaserRecipe?.presentation === 'story-first' && Boolean(teaserRecipe.steps);
   const howItWasMade = teaserRecipe ? (
     <HowItWasMade
       recipe={teaserRecipe}
       copy={mr}
+      compact={recipeFirst}
       gate={{
         accessEndpoint: `/api/renders/access?template=${encodeURIComponent(card.slug)}&locale=${locale}`,
         signinHref: signInHref(`${templateHref(locale, slug)}#how`, locale),
@@ -241,14 +245,17 @@ export default async function TemplatePage({ params }: RouteParams) {
                         fallback={<TypographicPoster title={card.title} slug={card.slug} kicker={dict.nav[card.medium]} ratio={ratio} />}
                       />
                     </div>
-                    {/* A film with no poster still gets the promise, without the result tile. */}
-                    <TransformStrip
-                      lead={galleryLabels.transformVideo}
-                      selfieLabel={dict.creatorJourney.evidenceSelfie}
-                      makeHref={style !== null ? '#make' : null}
-                      poster={card.poster}
-                      aspect={mediaAspect}
-                    />
+                    {/* A film with no poster still gets the promise, without the result tile. Story-first
+                        moves it under the recipe, into the make box. */}
+                    {!recipeFirst && (
+                      <TransformStrip
+                        lead={galleryLabels.transformVideo}
+                        selfieLabel={dict.creatorJourney.evidenceSelfie}
+                        makeHref={style !== null ? '#make' : null}
+                        poster={card.poster}
+                        aspect={mediaAspect}
+                      />
+                    )}
                   </>
                 )}
               </div>
@@ -278,9 +285,12 @@ export default async function TemplatePage({ params }: RouteParams) {
                   ))}
                 </div>
 
-                {/* A public recipe: copy the prompt or make it, both one tap from the title (2026-10-29).
-                    Only the step count goes down: the full prompt stays behind the members' gate. */}
-                {recipe?.steps?.length ? (
+                {/* Story-first: the recipe itself, right under the title — before the make box and any cost. */}
+                {recipeFirst && <div id="recipe" data-template-recipe="story-first" className="scroll-mt-24">{howItWasMade}</div>}
+
+                {/* Make-first, with a public recipe: copy the prompt or make it, both one tap from the title
+                    (2026-10-29). Only the step count goes down: the full prompt stays behind the members' gate. */}
+                {!recipeFirst && recipe?.steps?.length ? (
                   <RecipeActions
                     steps={recipe.steps.length}
                     labels={{ ...mr.actions, copied: mr.how.copied }}
@@ -315,6 +325,17 @@ export default async function TemplatePage({ params }: RouteParams) {
                       credits={templateCredits(card)}
                       signinHref={signInHref(`${templateHref(locale, slug)}#make`, locale)}
                       labels={{ subscribeCta: t.subscribeCta, credits: t.credits, makeCta: t.makeCta, makeCtaClosed: t.makeCtaClosed }}
+                      stickyAfter={recipeFirst}
+                      lead={recipeFirst && !stageFrames ? (
+                        <TransformStrip
+                          lead={galleryLabels.transformVideo}
+                          selfieLabel={dict.creatorJourney.evidenceSelfie}
+                          makeHref="#make"
+                          poster={card.poster}
+                          aspect={mediaAspect}
+                          className=""
+                        />
+                      ) : undefined}
                     >
                       <dl data-template-facts className="flex flex-wrap items-center gap-y-1 text-xs text-black/65">
                         {facts.map(([label, value], idx) => (
@@ -434,9 +455,8 @@ export default async function TemplatePage({ params }: RouteParams) {
             </header>
 
             {/* The recipe follows the result, never ahead of it (founder, 2026-10-28). A maker's
-                'story-first' still puts it right under the stage; 'make-first' after the campaigns.
+                'story-first' sits in the column above (2026-10-29); 'make-first' after the campaigns.
                 "만드는 법" draws its own rule and spacing; the wrapper only anchors `#recipe`. */}
-            {recipe?.presentation === 'story-first' && <div id="recipe" data-template-recipe="story-first" className="scroll-mt-24">{howItWasMade}</div>}
 
             {/* The earn loop: campaigns that ask for exactly this template. */}
             {campaigns.length > 0 && (

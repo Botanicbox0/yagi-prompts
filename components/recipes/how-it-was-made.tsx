@@ -12,14 +12,43 @@ export interface RecipeGateProps {
   signinHref: string;
 }
 
-function UnlockedRecipeBody({ recipe, copy }: { recipe: PublicRecipe; copy: Dictionary['makerRecipe'] }) {
+/** A long prompt in the template page's column starts folded: the copy button already holds all of it. */
+const FOLD_CHARS = 600;
+
+/** The two layouts: its own section under the stage, or the column beside it (story-first, 2026-10-29). */
+function layout(compact: boolean) {
+  return compact
+    ? { section: 'mt-7 border-t border-hairline pt-6', heading: 'font-display text-[1.35rem] leading-none font-black uppercase', list: 'mt-4 space-y-4', step: 'rounded-2xl border border-hairline p-4', gate: 'mt-4 rounded-2xl border border-hairline bg-surface p-4' }
+    : { section: 'mt-16 border-t border-hairline pt-10', heading: 'font-display text-[clamp(1.4rem,2.6vw,2rem)] leading-[0.95] font-black uppercase', list: 'mt-6 space-y-5', step: 'rounded-2xl border border-hairline p-5', gate: 'mt-6 rounded-2xl border border-hairline bg-surface p-5 sm:p-6' };
+}
+
+function StepPrompt({ text, fold, copy }: { text: string; fold: boolean; copy: Dictionary['makerRecipe']['how'] }) {
+  const [open, setOpen] = useState(false);
+  const folded = fold && text.length > FOLD_CHARS && !open;
+  return (
+    <>
+      <div className="relative mt-3">
+        <p data-recipe-prompt={folded ? 'folded' : undefined} className={`whitespace-pre-wrap break-words text-sm leading-relaxed text-black/80 ${folded ? 'max-h-56 overflow-hidden' : ''}`}>{text}</p>
+        {folded && <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-white to-transparent" />}
+      </div>
+      {fold && text.length > FOLD_CHARS && (
+        <button type="button" data-recipe-expand aria-expanded={open} onClick={() => setOpen((value) => !value)} className="mt-2 inline-flex min-h-11 items-center text-sm font-medium underline underline-offset-4">
+          {open ? copy.collapse : copy.expand}
+        </button>
+      )}
+    </>
+  );
+}
+
+function UnlockedRecipeBody({ recipe, copy, compact = false }: { recipe: PublicRecipe; copy: Dictionary['makerRecipe']; compact?: boolean }) {
   const h = copy.how;
+  const css = layout(compact);
   return (
     <>
       {recipe.steps ? (
-        <ol className="mt-6 space-y-5">
+        <ol className={css.list}>
           {recipe.steps.map((step) => (
-            <li key={step.n} data-recipe-how-step={step.n} className="rounded-2xl border border-hairline p-5">
+            <li key={step.n} data-recipe-how-step={step.n} className={css.step}>
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <p className="text-sm font-semibold">
                   {interpolate(h.step, {
@@ -29,7 +58,7 @@ function UnlockedRecipeBody({ recipe, copy }: { recipe: PublicRecipe; copy: Dict
                 </p>
                 <CopyPrompt text={step.prompt} label={h.copy} done={h.copied} />
               </div>
-              <p className="mt-3 whitespace-pre-wrap break-words text-sm leading-relaxed text-black/80">{step.prompt}</p>
+              <StepPrompt text={step.prompt} fold={compact} copy={h} />
             </li>
           ))}
         </ol>
@@ -48,10 +77,12 @@ function GatedHowItWasMade({
   teaser,
   copy,
   gate,
+  compact,
 }: {
   teaser: PublicRecipe;
   copy: Dictionary['makerRecipe'];
   gate: RecipeGateProps;
+  compact: boolean;
 }) {
   const [unlockedRecipe, setUnlockedRecipe] = useState<PublicRecipe | null>(null);
 
@@ -72,6 +103,7 @@ function GatedHowItWasMade({
   const active = unlockedRecipe ?? teaser;
   const h = copy.how;
   const isLocked = !unlockedRecipe;
+  const css = layout(compact);
 
   return (
     <section
@@ -79,12 +111,12 @@ function GatedHowItWasMade({
       data-recipe-how
       data-recipe-locked={isLocked ? 'true' : undefined}
       data-presentation={active.presentation}
-      className="mt-16 border-t border-hairline pt-10"
+      className={css.section}
     >
-      <h2 className="font-display text-[clamp(1.4rem,2.6vw,2rem)] leading-[0.95] font-black uppercase">{h.heading}</h2>
+      <h2 className={css.heading}>{h.heading}</h2>
       <p className="mt-3 max-w-detail text-sm leading-relaxed text-black/70">{h.lede}</p>
       {isLocked ? (
-        <div data-recipe-gate className="mt-6 rounded-2xl border border-hairline bg-surface p-5 sm:p-6">
+        <div data-recipe-gate className={css.gate}>
           {teaser.steps?.[0] ? (
             <div className="mb-5 rounded-xl border border-hairline bg-white/70 p-4">
               <p className="text-xs font-semibold text-black/65">
@@ -115,7 +147,7 @@ function GatedHowItWasMade({
           </a>
         </div>
       ) : (
-        <UnlockedRecipeBody recipe={active} copy={copy} />
+        <UnlockedRecipeBody recipe={active} copy={copy} compact={compact} />
       )}
     </section>
   );
@@ -125,24 +157,29 @@ function GatedHowItWasMade({
  * "만드는 법" on a maker template's page (docs/PLATFORM-2.0.md §7.3) — the steps' prompts with
  * `[내 사진]` in place of the customer's photo, and the maker's reference files, each only when the
  * maker chose to show it. Renders nothing when neither was chosen: no heading, no empty section.
+ * `compact` is the column beside the stage (a story-first template, 2026-10-29): tighter, and a long
+ * prompt folds so the make box under it stays a short scroll away.
  */
 export function HowItWasMade({
   recipe,
   copy,
   gate,
+  compact = false,
 }: {
   recipe: PublicRecipe;
   copy: Dictionary['makerRecipe'];
   gate?: RecipeGateProps;
+  compact?: boolean;
 }) {
   if (!recipe.steps && !recipe.files?.length) return null;
-  if (gate) return <GatedHowItWasMade teaser={recipe} copy={copy} gate={gate} />;
+  if (gate) return <GatedHowItWasMade teaser={recipe} copy={copy} gate={gate} compact={compact} />;
   const h = copy.how;
+  const css = layout(compact);
   return (
-    <section data-recipe-how data-presentation={recipe.presentation} className="mt-16 border-t border-hairline pt-10">
-      <h2 className="font-display text-[clamp(1.4rem,2.6vw,2rem)] leading-[0.95] font-black uppercase">{h.heading}</h2>
+    <section data-recipe-how data-presentation={recipe.presentation} className={css.section}>
+      <h2 className={css.heading}>{h.heading}</h2>
       <p className="mt-3 max-w-detail text-sm leading-relaxed text-black/70">{h.lede}</p>
-      <UnlockedRecipeBody recipe={recipe} copy={copy} />
+      <UnlockedRecipeBody recipe={recipe} copy={copy} compact={compact} />
     </section>
   );
 }

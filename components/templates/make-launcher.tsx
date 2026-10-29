@@ -15,7 +15,16 @@ export interface MakeLauncherLabels {
 
 const CTA = 'flex min-h-12 w-full items-center justify-center bg-accent px-5 font-label text-[0.85rem] tracking-[0.1em] text-white uppercase transition-opacity hover:opacity-85';
 
-interface MakeLauncherProps { credits: number | null; signinHref: string; labels: MakeLauncherLabels; children?: ReactNode }
+interface MakeLauncherProps {
+  credits: number | null;
+  signinHref: string;
+  labels: MakeLauncherLabels;
+  children?: ReactNode;
+  /** Above the cost: on a story-first template, "my selfie → this scene" after the recipe. */
+  lead?: ReactNode;
+  /** The phone bar waits until the reader has scrolled past the box, not while it is still ahead. */
+  stickyAfter?: boolean;
+}
 
 /**
  * The template page's make box (founder, 2026-10-29: "가격을 토큰 베이스로", the make panel as a
@@ -26,7 +35,8 @@ interface MakeLauncherProps { credits: number | null; signinHref: string; labels
  * (lib/twings/viewer-access.ts) — no second request.
  *
  * On a phone the same CTA stays at the thumb while the box is off screen: under 768px, clear of the
- * home indicator, and `data-hide-tabs` so the installed app's tabs step aside.
+ * home indicator, and `data-hide-tabs` so the installed app's tabs step aside. With `stickyAfter`
+ * (the box follows the recipe) it waits until the box has gone by: the recipe is read first.
  */
 export function MakeLauncher(props: MakeLauncherProps) {
   const access = useSyncExternalStore(subscribeViewerAccess, viewerAccessSnapshot, serverViewerAccess);
@@ -34,16 +44,20 @@ export function MakeLauncher(props: MakeLauncherProps) {
 }
 
 /** The launcher for a known (or not yet known: `null`) reader. */
-export function MakeLauncherView({ credits, signinHref, labels, children, access }: MakeLauncherProps & { access: ViewerAccess | null }) {
+export function MakeLauncherView({ credits, signinHref, labels, children, lead, stickyAfter = false, access }: MakeLauncherProps & { access: ViewerAccess | null }) {
   const boxRef = useRef<HTMLElement>(null);
-  const [boxInView, setBoxInView] = useState(true);
+  const [box, setBox] = useState<'in' | 'ahead' | 'passed'>('in');
   useEffect(() => {
     const target = boxRef.current;
     if (!target || typeof IntersectionObserver === 'undefined') return;
-    const observer = new IntersectionObserver(([entry]) => setBoxInView(entry?.isIntersecting ?? false));
+    const observer = new IntersectionObserver(([entry]) => {
+      if (!entry) return;
+      setBox(entry.isIntersecting ? 'in' : entry.boundingClientRect.top < 0 ? 'passed' : 'ahead');
+    });
     observer.observe(target);
     return () => observer.disconnect();
   }, []);
+  const boxInView = box === 'in' || (stickyAfter && box === 'ahead');
 
   const signedIn = access?.signedIn === true;
   const cost = signedIn && credits !== null ? interpolate(labels.credits, { n: String(credits) }) : null;
@@ -54,6 +68,7 @@ export function MakeLauncherView({ credits, signinHref, labels, children, access
   return (
     <>
       <section ref={boxRef} data-template-make-launcher data-viewer={access === null ? 'unknown' : signedIn ? 'member' : 'visitor'} className="mt-6 rounded-2xl border border-hairline p-5 sm:p-6">
+        {lead && <div data-make-lead className="mb-5">{lead}</div>}
         {cost && <p data-template-credits className="font-display text-[2rem] leading-none font-black">{cost}</p>}
         <div className={cost ? 'mt-2.5' : ''}>{children}</div>
         <div className="mt-4">{cta('launcher')}</div>

@@ -13,7 +13,9 @@ const cached = unstable_cache(
     const sql = await getSqlRunner();
     return sql ? loadPublicRecipe(sql, templateId, { selfie, reference, step }) : null;
   },
-  ['public-recipe-v2', resolveRuntimeMode()],
+  // v3 (2026-10-30): a step prompt may run to 8,000 characters; v2 entries made under the 4,000 cap
+  // hold `null` for a longer recipe and would outlive the deploy that raised it.
+  ['public-recipe-v3', resolveRuntimeMode()],
   { tags: ['prompts'], revalidate: 3600 },
 );
 
