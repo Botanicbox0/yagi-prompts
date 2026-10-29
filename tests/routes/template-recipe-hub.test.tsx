@@ -37,7 +37,7 @@ import TemplatePage from '@/app/(marketing)/[locale]/t/[slug]/page';
 const page = async (locale: 'ko' | 'en') => renderToStaticMarkup(await TemplatePage({ params: Promise.resolve({ locale, slug: film.slug }) }));
 
 beforeEach(() => {
-  state.recipe = { presentation: 'story-first', steps: [{ n: 1, kind: 'video', prompt: '[My photo] among goldfish.' }], files: null };
+  state.recipe = { presentation: 'story-first', steps: [{ n: 1, kind: 'video', prompt: `[My photo] among goldfish. ${'Shot detail. '.repeat(30)}MEMBERS_ONLY_TAIL` }], files: null };
 });
 
 describe('a template with a public recipe', () => {
@@ -46,7 +46,7 @@ describe('a template with a public recipe', () => {
     const actions = html.indexOf('data-template-recipe-actions');
     expect(actions).toBeGreaterThan(html.indexOf('data-template-credit'));
     expect(actions).toBeLessThan(html.indexOf('id="make"'));
-    expect(html).toContain('data-recipe-copy');
+    expect(html).toContain('data-recipe-signin');
     expect(html).toContain('data-recipe-make');
     expect(html).toContain(en.makerRecipe.actions.makeClosed);
     expect(html).toContain('id="recipe"');
@@ -57,7 +57,13 @@ describe('a template with a public recipe', () => {
     expect(await page('en')).toContain('Seoul-based AI creative.');
     const korean = await page('ko');
     expect(korean).toContain('서울의 AI 크리에이티브.');
-    expect(korean).toContain(ko.makerRecipe.actions.copy);
+    expect(korean).toContain(ko.makerRecipe.actions.copySignedOut);
+  });
+
+  it("keeps the members' prompt out of the page: only the gate's teaser is in the HTML", async () => {
+    const html = await page('en');
+    expect(html).not.toContain('MEMBERS_ONLY_TAIL');
+    expect(html).toContain('data-recipe-gate');
   });
 
   it('has no fork without a public prompt', async () => {

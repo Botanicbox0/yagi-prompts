@@ -104,9 +104,33 @@ export default async function TemplatePage({ params }: RouteParams) {
   // for this engine and length, or the engine default below ten (lib/twings/typical-wait.ts).
   const waitMinutes = await cachedTypicalWaitMinutes({ engine: resolveEngine(card.engine, card.medium), medium: card.medium, seconds: card.medium === 'video' ? card.runtimeSeconds ?? null : null });
   // A maker template only (docs/PLATFORM-2.0.md §7.3): what the maker chose to show, in the order they chose.
+  // Gated behind TWINGS sign-in so visitors sign up to unlock the full prompt & reference files, while static HTML carries only a short teaser + BGM note.
   const mr = dict.makerRecipe;
   const recipe = await cachedPublicRecipe(card.id, { selfie: mr.selfieLabel, reference: mr.referenceLabel, step: mr.stepResultLabel });
-  const howItWasMade = recipe ? <HowItWasMade recipe={recipe} copy={mr} /> : null;
+  const teaserRecipe = recipe
+    ? {
+        presentation: recipe.presentation,
+        steps: recipe.steps
+          ? recipe.steps.slice(0, 1).map((s) => {
+              const bgmIdx = s.prompt.indexOf('[BGM');
+              const bgmNote = bgmIdx >= 0 ? `\n\n${s.prompt.slice(bgmIdx).trim()}` : '';
+              const head = s.prompt.slice(0, 150).trim();
+              return { n: s.n, kind: s.kind, prompt: `${head}…${bgmNote}` };
+            })
+          : null,
+        files: null,
+      }
+    : null;
+  const howItWasMade = teaserRecipe ? (
+    <HowItWasMade
+      recipe={teaserRecipe}
+      copy={mr}
+      gate={{
+        accessEndpoint: `/api/renders/access?template=${encodeURIComponent(card.slug)}&locale=${locale}`,
+        signinHref: signInHref(`${templateHref(locale, slug)}#how`, locale),
+      }}
+    />
+  ) : null;
 
   const t = dict.templates;
   const labels = promptLabels(dict);
@@ -251,8 +275,18 @@ export default async function TemplatePage({ params }: RouteParams) {
                   ))}
                 </div>
 
-                {/* A public recipe: copy the prompt or make it, both one tap from the title (2026-10-29). */}
-                {recipe && <RecipeActions recipe={recipe} copy={mr} makeHref={style !== null ? '#make' : null} shopOpen={shopOpen} />}
+                {/* A public recipe: copy the prompt or make it, both one tap from the title (2026-10-29).
+                    Only the step count goes down: the full prompt stays behind the members' gate. */}
+                {recipe?.steps?.length ? (
+                  <RecipeActions
+                    steps={recipe.steps.length}
+                    labels={{ ...mr.actions, copied: mr.how.copied }}
+                    makeHref={style !== null ? '#make' : null}
+                    shopOpen={shopOpen}
+                    accessEndpoint={`/api/renders/access?template=${encodeURIComponent(card.slug)}&locale=${locale}`}
+                    signinHref={signInHref(`${templateHref(locale, slug)}#how`, locale)}
+                  />
+                ) : null}
 
                 {style === null ? (
                   <>

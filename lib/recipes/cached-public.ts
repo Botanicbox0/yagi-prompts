@@ -13,7 +13,7 @@ const cached = unstable_cache(
     const sql = await getSqlRunner();
     return sql ? loadPublicRecipe(sql, templateId, { selfie, reference, step }) : null;
   },
-  ['public-recipe-v1', resolveRuntimeMode()],
+  ['public-recipe-v2', resolveRuntimeMode()],
   { tags: ['prompts'], revalidate: 3600 },
 );
 

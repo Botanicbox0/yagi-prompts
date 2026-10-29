@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { PromptCard } from '@/lib/prompts/catalog';
 import type { PublicRecipe } from '@/lib/recipes/public';
-import { RecipeActions } from '@/components/recipes/recipe-actions';
+import { RecipeActions, RecipeActionsView } from '@/components/recipes/recipe-actions';
 import { MakerRecipeHub } from '@/components/makers/recipe-hub';
 import { PromptCardView } from '@/components/prompts/prompt-card';
 import { promptLabels } from '@/components/prompts/labels';
@@ -11,39 +11,47 @@ import { ko } from '@/messages/ko';
 
 /**
  * The creative's recipe hub (2026-10-29): a follower from the post sees, on the first screen, that the
- * prompt is public and can copy it or make the video — and no surface claims an open recipe the
- * template page would not show.
+ * prompt is public and can copy it (members) or sign up for it (visitors) or make the video — and no
+ * surface claims an open recipe the template page would not show, or carries the members' prompt.
  */
 
 const step = (n: number, prompt: string) => ({ n, kind: 'video' as const, prompt });
 const recipe = (steps: PublicRecipe['steps']): PublicRecipe => ({ presentation: 'story-first', steps, files: null });
+const base = { signinHref: '/ko/signin?next=%2Fko%2Ft%2Fgoldfish%23how', makeHref: '#make', shopOpen: true };
+const enLabels = { ...en.makerRecipe.actions, copied: en.makerRecipe.how.copied };
+const koLabels = { ...ko.makerRecipe.actions, copied: ko.makerRecipe.how.copied };
 
 describe('the template page recipe actions', () => {
-  it('copies a one-step prompt in one tap and sends the make button to the make card', () => {
-    const html = renderToStaticMarkup(<RecipeActions recipe={recipe([step(1, '[My photo] among goldfish.')])} copy={en.makerRecipe} makeHref="#make" shopOpen />);
+  it('gives a visitor one tap to the free sign-up and never carries the prompt in the HTML', () => {
+    const html = renderToStaticMarkup(<RecipeActions steps={1} labels={enLabels} accessEndpoint="/api/renders/access?template=goldfish&locale=en" {...base} />);
     expect(html).toContain('data-template-recipe-actions');
-    expect(html).toContain('data-recipe-copy');
-    expect(html).toContain(en.makerRecipe.actions.copy);
+    expect(html).toContain('data-recipe-signin');
+    expect(html).toContain(en.makerRecipe.actions.copySignedOut);
+    expect(html).toContain(`href="${base.signinHref}"`);
+    expect(html).not.toContain('data-recipe-copy');
     expect(html).toContain('href="#make"');
     expect(html).toContain(en.makerRecipe.actions.make);
-    expect(html).toContain(en.makerRecipe.actions.body);
-    expect(html).toContain('href="#recipe"');
+    expect(html).toContain(`${en.makerRecipe.actions.preview} ↓`);
   });
 
-  it('says making opens soon while the shop is closed, and drops the make button when not for sale', () => {
-    const closed = renderToStaticMarkup(<RecipeActions recipe={recipe([step(1, '[내 사진]과 금붕어.')])} copy={ko.makerRecipe} makeHref="#make" shopOpen={false} />);
+  it("copies a member's one-step prompt in one tap, and jumps to the recipe when there are several steps", () => {
+    const one = renderToStaticMarkup(<RecipeActionsView steps={1} labels={enLabels} {...base} unlocked={recipe([step(1, '[My photo] among goldfish.')])} />);
+    expect(one).toContain('data-recipe-copy');
+    expect(one).toContain(en.makerRecipe.actions.copy);
+    expect(one).not.toContain('data-recipe-signin');
+    const many = renderToStaticMarkup(<RecipeActionsView steps={2} labels={enLabels} {...base} unlocked={recipe([step(1, 'a [My photo] sheet'), step(2, 'a film of [Step 1 result]')])} />);
+    expect(many).not.toContain('data-recipe-copy');
+    expect(many).toContain(en.makerRecipe.actions.full);
+  });
+
+  it('says making opens soon while the shop is closed, drops the make button when not for sale, and is absent without prompts', () => {
+    const closed = renderToStaticMarkup(<RecipeActionsView steps={1} labels={koLabels} {...base} shopOpen={false} unlocked={null} />);
     expect(closed).toContain(ko.makerRecipe.actions.makeClosed);
     expect(closed).toContain(ko.makerRecipe.actions.bodyClosed);
-    const unsold = renderToStaticMarkup(<RecipeActions recipe={recipe([step(1, '[내 사진]과 금붕어.')])} copy={ko.makerRecipe} makeHref={null} shopOpen />);
+    const unsold = renderToStaticMarkup(<RecipeActionsView steps={1} labels={koLabels} {...base} makeHref={null} unlocked={null} />);
     expect(unsold).not.toContain('data-recipe-make');
     expect(unsold).toContain(ko.makerRecipe.actions.bodyClosed);
-  });
-
-  it('jumps to the full recipe instead of copying when there are several steps, and is absent without prompts', () => {
-    const many = renderToStaticMarkup(<RecipeActions recipe={recipe([step(1, 'a [My photo] sheet'), step(2, 'a film of [Step 1 result]')])} copy={en.makerRecipe} makeHref="#make" shopOpen />);
-    expect(many).not.toContain('data-recipe-copy');
-    expect(many).toContain('data-recipe-jump');
-    expect(renderToStaticMarkup(<RecipeActions recipe={recipe(null)} copy={en.makerRecipe} makeHref="#make" shopOpen />)).toBe('');
+    expect(renderToStaticMarkup(<RecipeActionsView steps={0} labels={koLabels} {...base} unlocked={null} />)).toBe('');
   });
 });
 
