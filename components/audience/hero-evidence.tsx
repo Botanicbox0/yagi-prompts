@@ -20,7 +20,7 @@ export function HeroEvidence({
   return (
     <figure
       data-hero-evidence
-      className="mt-7 w-full max-w-[34rem] rounded-2xl border border-black/10 bg-[#FAF9F6] p-3.5 shadow-[0_14px_38px_-18px_rgba(0,0,0,0.1)] sm:p-4"
+      className="mt-7 w-full max-w-[34rem] rounded-2xl border border-black/[0.08] bg-white/70 p-3.5 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_24px_60px_-24px_rgba(16,24,40,0.18)] backdrop-blur-xl sm:p-4"
     >
       <div className="mb-3 flex items-center justify-between gap-2 border-b border-black/[0.07] pb-2.5">
         <span className="inline-flex items-center gap-1.5 font-mono text-[10px] font-semibold tracking-[0.14em] text-black/55 uppercase">

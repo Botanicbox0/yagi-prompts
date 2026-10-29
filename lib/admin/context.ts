@@ -43,6 +43,8 @@ export interface AdminContext {
   revalidateContests?: () => void;
   /** `revalidateTag('campaigns')` (docs/CAMPAIGNS.md), injected on the same terms as the other three. */
   revalidateCampaigns?: () => void;
+  /** `revalidateTag('landing-media')` + the two landings (lib/cache.ts), injected on the same terms. */
+  revalidateLandingMedia?: () => void;
   /**
    * Mail (2026-09-13): the configured mailer and the public origin, injected so the operations
    * layer never reads env. Absent in older tests → the operation simply sends nothing.

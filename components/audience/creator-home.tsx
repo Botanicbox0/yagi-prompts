@@ -26,7 +26,9 @@ export function CreatorHero({ dict, locale, featured, evidence = null }: { dict:
   const [ratioWidth, ratioHeight] = ratio.split('/').map(Number);
   const portrait = (ratioWidth ?? 16) < (ratioHeight ?? 9);
   const definition = <p data-service-definition className={`${evidence === null ? 'mt-6 text-base' : 'mt-8 text-sm'} max-w-lg leading-relaxed text-black/65`}>{t.body}</p>;
-  return <section data-section data-theme="light" data-creator-hero data-hero-has-evidence={evidence === null ? undefined : ''} className="section">
+  return <section data-section data-theme="light" data-creator-hero data-hero-has-evidence={evidence === null ? undefined : ''} className="section relative isolate">
+    {/* PLATFORM-2.0 §20.4: the side's one signal color, only as a soft glow behind the product. */}
+    <div aria-hidden="true" className="pointer-events-none absolute inset-y-0 right-0 -z-10 hidden w-[58%] bg-[radial-gradient(closest-side,rgba(0,0,238,0.13),rgba(130,150,255,0.07)_55%,transparent_78%)] blur-2xl lg:block" />
     <div className="audience-shell grid items-center gap-10 pt-28 pb-12 lg:grid-cols-[0.98fr_1.02fr] lg:gap-12 lg:pt-32 lg:pb-20">
       <div className="flex flex-col justify-center">
         <p className="audience-eyebrow">{t.eyebrow}</p>

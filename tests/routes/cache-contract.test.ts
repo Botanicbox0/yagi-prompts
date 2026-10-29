@@ -202,6 +202,9 @@ describe('route cache modes (§3.4 / §4)', () => {
       ['app', '(admin)', 'admin', 'campaigns', 'page.tsx'],
       ['app', '(admin)', 'admin', 'campaigns', 'new', 'page.tsx'],
       ['app', '(admin)', 'admin', 'campaigns', '[id]', 'page.tsx'],
+      // lib/content/landing-media.ts — the replace screen and the local-mode image route.
+      ['app', '(admin)', 'admin', 'landing-media', 'page.tsx'],
+      ['app', 'api', 'landing-media', '[...slot]', 'route.ts'],
     ]) {
       expect(read(...file), file.join('/')).toMatch(/export const dynamic\s*=\s*(['"])force-dynamic\1/);
     }

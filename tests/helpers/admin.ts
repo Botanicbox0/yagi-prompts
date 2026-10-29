@@ -32,6 +32,7 @@ export interface AdminHarness {
   contestsRevalidated: number;
   /** docs/CAMPAIGNS.md — the fourth tag. */
   campaignsRevalidated: number;
+  landingMediaRevalidated: number;
   /** 2026-09-13 — every mail an operation sent through `ctx.mail`, and the deferred tasks that sent them. */
   mailer: FakeMailer;
   deferred: Array<Promise<void>>;
@@ -106,6 +107,7 @@ export async function adminHarness(): Promise<AdminHarness> {
     promptsRevalidated: 0,
     contestsRevalidated: 0,
     campaignsRevalidated: 0,
+    landingMediaRevalidated: 0,
     mailer: createFakeMailer(),
     deferred: [],
     async flush() {
@@ -127,6 +129,9 @@ export async function adminHarness(): Promise<AdminHarness> {
         },
         revalidateCampaigns: () => {
           harness.campaignsRevalidated += 1;
+        },
+        revalidateLandingMedia: () => {
+          harness.landingMediaRevalidated += 1;
         },
         mail: { mailer: harness.mailer, siteUrl: 'https://twings.test' },
         defer: (task) => {

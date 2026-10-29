@@ -3,7 +3,7 @@ import type { CampaignCounts } from "@/lib/campaigns/repo";
 export const ADMIN_NAV_GROUPS = [
   { key: "operations", items: ["home", "inquiries", "risk"] },
   { key: "campaigns", items: ["brandWorkspace", "campaigns", "funding"] },
-  { key: "content", items: ["prompts", "community"] },
+  { key: "content", items: ["prompts", "community", "landingMedia"] },
   { key: "system", items: ["subscriptions", "playbooks", "policy"] },
 ] as const;
 
@@ -16,6 +16,7 @@ export const ADMIN_NAV_PATHS = {
   campaigns: "/admin/campaigns",
   prompts: "/admin/prompts",
   community: "/admin/community",
+  landingMedia: "/admin/landing-media",
   subscriptions: "/admin/subscriptions",
   playbooks: "/admin/playbooks",
   policy: "/admin/policy",

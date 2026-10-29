@@ -121,6 +121,8 @@ describe('migrations apply on a fresh database (PLAN §6)', () => {
       'identity_portrait_attempts',
       'identity_portrait_selections',
       'identity_selfies',
+      // 2026-10-29 — replaced landing images (lib/content/landing-media.ts), one row per slot.
+      'landing_media',
       // docs/PLATFORM-2.0.md §20 (2026-10-28) — an AI creative's agent tokens and representative works.
       'maker_tokens',
       'maker_works',

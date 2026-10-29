@@ -108,6 +108,8 @@ describe('dictionary completeness (§3.9)', () => {
       // PLATFORM-2.0 §14.1 (2026-10-24): the credit is "by @handle" in Korean too — the local idiom.
       'prompts.byAuthor',
       'prompts.cardAuthor',
+      // 2026-10-29 brand landing: the right-hand column of each comparison is labelled with the product name.
+      'brandLanding.landing.contrast.ours',
     ]);
 
     const untranslated = enLeaves

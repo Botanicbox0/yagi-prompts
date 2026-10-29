@@ -336,6 +336,8 @@ export function AdminShell({
         ? "/admin/risk"
         : active === "community"
           ? "/admin/community"
+          : active === "landingMedia"
+            ? "/admin/landing-media"
           : active === "subscriptions"
             ? "/admin/subscriptions"
             : active === "brandWorkspace"
@@ -368,6 +370,7 @@ export function AdminShell({
     ["campaigns", "/admin/campaigns", dict.navCampaigns],
     ["inquiries", "/admin/inquiries", dict.navInquiries],
     ["community", "/admin/community", dictionary.community.adminTitle],
+    ["landingMedia", "/admin/landing-media", dictionary.landingMedia.nav],
     ["subscriptions", "/admin/subscriptions", dictionary.creatorLaunch.nav],
     ["playbooks", "/admin/playbooks", dict.navPlaybooks],
     ["policy", "/admin/policy", dict.navPolicy],

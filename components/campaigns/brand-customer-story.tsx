@@ -20,9 +20,9 @@ export function BrandCustomerStory({ dict, locale, detail = false }: { dict: Dic
             <Heading className="whitespace-pre-line text-[clamp(2rem,4vw,3.8rem)] font-semibold leading-[1.06] tracking-[-0.055em]">{index === 0 ? t.stories.augustHeading : t.stories.septemberHeading}</Heading>
             <p className="mt-6 max-w-xl text-sm leading-relaxed text-white/65">{copy.body}</p>
             {campaign.metrics.length > 0 && <>
-              <dl className="mt-8 grid grid-cols-3 gap-3 border-y border-white/15 py-6">
-                {campaign.metrics.map(metric => <div key={metric.id} data-case-metric={metric.id}>
-                  <dd className="whitespace-nowrap text-[clamp(1.25rem,3.5vw,3rem)] font-semibold leading-none tracking-[-0.05em]">{formatCampaignMetric(metric, locale)}</dd>
+              <dl className="mt-8 grid grid-cols-3 gap-5 border-y border-white/15 py-6">
+                {campaign.metrics.map(metric => <div key={metric.id} data-case-metric={metric.id} className="min-w-0">
+                  <dd className="whitespace-nowrap text-[clamp(1.25rem,2.4vw,2.5rem)] font-semibold leading-none tracking-[-0.05em]">{formatCampaignMetric(metric, locale)}</dd>
                   <dt className="mt-3 text-xs leading-relaxed text-white/60">{t.cases.morphic90s.metrics[metric.id].label}</dt>
                 </div>)}
               </dl>
