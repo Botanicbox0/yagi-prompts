@@ -60,4 +60,23 @@ describe("brand workspace taste", () => {
     expect(html.match(/bw-tab-indicator/g)).toHaveLength(1);
     expect(html).toMatch(/aria-current="page"><span class="bw-tab-indicator" aria-hidden="true"><\/span>/);
   });
+
+  it("keeps white text on the blue accent badge and removes legacy gold literals from workspace.css", () => {
+    expect(css).not.toMatch(/#fad204|#f3d174|#9a361f/i);
+    expect(brandTokens).toContain("--ys-on-accent: #ffffff;");
+    expect(adminTokens).toContain("--ys-on-accent: #ffffff;");
+    expect(adminTokens).toContain("--ys-select: var(--ys-accent);");
+    expect(adminTokens).toContain("--ys-focus: var(--ys-accent);");
+    expect(adminTokens).toContain("--ys-strong: var(--ys-ink);");
+    expect(adminTokens).toContain("--ys-bubble: var(--ys-ink);");
+  });
+
+  it("folds studio preparation tools on the brand host behind a collapsible drawer when previewing a shared campaign", () => {
+    const brandProjectPage = readFileSync(
+      join(process.cwd(), "app", "(brand)", "brand", "projects", "[id]", "page.tsx"),
+      "utf8",
+    );
+    expect(brandProjectPage).toContain("data-studio-tools-drawer");
+    expect(css).toContain(".bw-studio-tools-drawer");
+  });
 });

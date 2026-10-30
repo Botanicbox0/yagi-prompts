@@ -67,19 +67,31 @@ export default async function BrandProject({
         <div id="studio-tools" data-studio-tools>
           <OutcomeBanner dict={dict.admin} ok={typeof search.ok === "string" ? search.ok : undefined}
             err={typeof search.err === "string" ? search.err : undefined} detail={typeof search.detail === "string" ? search.detail : undefined} />
-          <section className="bw-panel" data-studio-status={project.status}>
-            <h2>{b.projectStatus}</h2>
-            <BrandStatusForms brandHost back={`/brand/projects/${project.id}#studio-tools`} projectId={project.id} status={project.status}
-              revision={project.revision} b={b} admin={dict.admin} />
-          </section>
-          <section className="bw-panel" data-studio-cover={project.coverUrl ? "set" : "none"}>
-            <h2>{b.cover.title}</h2>
-            {search.cover === "failed" && <p role="alert" className="bw-error" data-studio-cover-failed>{b.studioPrep.coverFailed}</p>}
-            <p className="bw-muted">{b.studioPrep.coverHint}</p>
-            <StudioCoverForm b={b} projectId={project.id} revision={project.revision} hasCover={Boolean(project.coverUrl)} />
-          </section>
-          <ShortlistAdmin projectId={project.id} view={studioShortlist} back={`/brand/projects/${project.id}#studio-tools`}
-            copy={b.shortlistAdmin} locale={locale} brandHost />
+          <details
+            className="bw-panel bw-studio-tools-drawer"
+            data-studio-tools-drawer
+            open={Boolean(search.ok || search.err || search.cover === "failed" || project.clientVisible === false)}
+          >
+            <summary className="bw-studio-tools-summary">
+              <span>{b.access.staffTitle} · {b.projectStatus} / {b.cover.title} / {b.shortlistAdmin.title}</span>
+              <span className="bw-muted">{b.status[project.status]}</span>
+            </summary>
+            <div className="bw-studio-tools-body">
+              <section className="bw-panel" data-studio-status={project.status}>
+                <h2>{b.projectStatus}</h2>
+                <BrandStatusForms brandHost back={`/brand/projects/${project.id}#studio-tools`} projectId={project.id} status={project.status}
+                  revision={project.revision} b={b} admin={dict.admin} />
+              </section>
+              <section className="bw-panel" data-studio-cover={project.coverUrl ? "set" : "none"}>
+                <h2>{b.cover.title}</h2>
+                {search.cover === "failed" && <p role="alert" className="bw-error" data-studio-cover-failed>{b.studioPrep.coverFailed}</p>}
+                <p className="bw-muted">{b.studioPrep.coverHint}</p>
+                <StudioCoverForm b={b} projectId={project.id} revision={project.revision} hasCover={Boolean(project.coverUrl)} />
+              </section>
+              <ShortlistAdmin projectId={project.id} view={studioShortlist} back={`/brand/projects/${project.id}#studio-tools`}
+                copy={b.shortlistAdmin} locale={locale} brandHost />
+            </div>
+          </details>
         </div>
       ) : null}
       shortlistCount={shortlist?.candidates.length ?? 0}
