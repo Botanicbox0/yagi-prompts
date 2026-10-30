@@ -36,6 +36,7 @@
     "templates:import": "tsx scripts/import-image-templates.ts",
     "templates:film": "tsx scripts/import-maker-film.ts",
     "kling:smoke": "tsx scripts/kling-smoke.ts",
+    "sunra:smoke": "tsx scripts/sunra-smoke.ts",
     "gemini:smoke": "tsx scripts/gemini-smoke.ts",
     "subscription:readiness": "tsx scripts/subscription-readiness.ts",
     "predev": "node scripts/prepare-face-assets.mjs",

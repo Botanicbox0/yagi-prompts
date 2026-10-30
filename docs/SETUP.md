@@ -260,6 +260,7 @@ to the browser):
 | `NOTIFY_FROM_EMAIL` | server | e.g. `YAGI PROMPTS <prompts@your-domain>` |
 | `OPENAI_API_KEY` / `ARK_API_KEY` | server | the render engines (docs/TEMPLATES-IA.md §7–8); a missing key fails a job with `no_engine_key`, never a 500 |
 | `KLING_API_KEY` | server | Kling official API key (console → API Keys), sent as `Authorization: Bearer`. Missing → a `kling-omni` job fails `no_engine_key`. Check it with `npm run kling:smoke -- --dry` (prints presence as a boolean, never the value). |
+| `SUNRA_API_KEY` / `SUNRA_VIDEO_BACKUP` | server | Sunra manual backup, off unless the flag is exactly `on`; person-free Seedance jobs only (docs/SUNRA-PROVIDER.md). Check presence with `npm run sunra:smoke -- --dry`. |
 | `KLING_VIDEO_MODEL` | server | optional. Which Kling model `kling-omni` renders on: `kling-3.0-omni` (default, open today) or `kling-4.0` (opens 2026-10-28). Switching needs no code change (lib/kling/models.ts). |
 | `KLING_VIDEO_MODEL_ID` | server | optional. Overrides the create endpoint's path segment (`/omni-video/{id}`) if the 4.0 string published on release differs from the preview docs. |
 | `KLING_BASE_URL` | server | optional; default `https://api-singapore.klingai.com` |

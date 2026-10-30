@@ -31,6 +31,7 @@
 | `IDENTITY-PORTRAIT.md`, `IDENTITY-PORTRAIT-QA.md` | 과거 생성형 기준 사진(읽기 전용 표). 새 작업에서 되살리지 않는다. |
 | `BEAUTY-TEMPLATE.md` | 템플릿별 참조 이미지가 하드코딩된 예(레시피 v2가 대체할 것). |
 | `RUNBOOK-deletion.md` | 계정·사진 삭제 절차. |
+| `SUNRA-PROVIDER.md` | Sunra AI 백업 어댑터 범위, 현재 제공사와의 가격 비교, 데이터·인물 정책, 대표 결정 항목. |
 
 ## 메이커(템플릿 메이커)·커뮤니티
 | 문서 | 읽는 때 |

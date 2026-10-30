@@ -6,6 +6,7 @@ import { SeedreamError, createSeedreamClient, seedreamConfigFromEnv, type Seedre
 import { GeminiImageError, createGeminiImageClient, geminiConfigFromEnv, type GeminiImageClient } from '@/lib/images/gemini';
 import { KlingError, createKlingClient, isKlingTerminal, klingConfigFromEnv, type KlingClient } from '@/lib/kling/client';
 import type { KlingAspect, KlingResolution } from '@/lib/kling/models';
+import { SunraError, createSunraClient, fromSunraTaskId, isSunraTerminal, sunraBackupEnabled, sunraConfigFromEnv, sunraVideoEndpoint, toSunraTaskId, type SunraClient } from '@/lib/sunra/client';
 import { assetReference } from '@/lib/identity/service';
 import { quoteArkVideo } from '@/lib/ark/pricing';
 import { DEFAULT_CREATOR_RESOLUTION, type CreatorResolution } from '@/lib/twings/resolution';
@@ -86,6 +87,9 @@ export interface RenderEngineDeps {
   gemini?: GeminiImageClient | null;
   ark?: ArkClient | null;
   kling?: KlingClient | null;
+  sunra?: SunraClient | null;
+  /** Overrides `SUNRA_VIDEO_BACKUP` in tests. */
+  sunraBackup?: boolean;
   /** Downloads the provider's result URL (ModelArk and Kling films, Seedream `url` answers). */
   fetch?: typeof fetch;
 }
@@ -137,6 +141,13 @@ function toFailure(error: unknown): RenderFailure {
     if (error.accessProblem) return new RenderFailure('engine_access', error.message, false);
     if (error.code === 'kling_network') return new RenderFailure('network', error.message, true);
     if (error.code === 'kling_malformed_task') return new RenderFailure('bad_output', error.message, false);
+    return new RenderFailure('engine_error', error.message, error.retryable);
+  }
+  if (error instanceof SunraError) {
+    if (error.moderated) return new RenderFailure('moderated', error.message, false);
+    if (error.accessProblem) return new RenderFailure('engine_access', error.message, false);
+    if (error.code === 'sunra_network') return new RenderFailure('network', error.message, true);
+    if (error.code === 'sunra_malformed_task') return new RenderFailure('bad_output', error.message, false);
     return new RenderFailure('engine_error', error.message, error.retryable);
   }
   if (error instanceof SeedreamError) {
@@ -324,6 +335,7 @@ export interface StartedVideo {
 
 export async function startVideoRender(input: VideoRenderInput, deps: RenderEngineDeps = {}): Promise<StartedVideo> {
   if (isKlingEngine(input.engine)) return startKlingRender(input, deps);
+  if (sunraBackupApplies(input, deps)) return startSunraRender(input, deps);
   const client = deps.ark === undefined ? arkClientFromEnv() : deps.ark;
   if (client === null) throw new RenderFailure('no_engine_key', 'ARK_API_KEY is not set', false);
   const { model, seconds } = videoModelFor(input.engine, input.seconds);
@@ -387,6 +399,30 @@ async function startKlingRender(input: VideoRenderInput, deps: RenderEngineDeps)
   }
 }
 
+/**
+ * The manual Sunra backup: only a job that carries no image at all. Anything with a photo, a
+ * verified asset or a reference stays on its provider and its identity checks, flag or no flag.
+ * A refusal here fails the job; nothing switches provider by itself.
+ */
+function sunraBackupApplies(input: VideoRenderInput, deps: RenderEngineDeps): boolean {
+  if (!(deps.sunraBackup ?? sunraBackupEnabled())) return false;
+  return !input.photo && !input.assetId && !input.references?.length && !input.fixedReferenceUrls?.length;
+}
+
+async function startSunraRender(input: VideoRenderInput, deps: RenderEngineDeps): Promise<StartedVideo> {
+  const client = deps.sunra === undefined ? sunraClientFromEnv() : deps.sunra;
+  if (client === null) throw new RenderFailure('no_engine_key', 'SUNRA_API_KEY is not set', false);
+  const { model, seconds } = videoModelFor(input.engine, input.seconds);
+  const endpoint = sunraVideoEndpoint(model);
+  if (endpoint === null) throw new RenderFailure('engine_error', `Sunra backup does not render ${model}`, false);
+  try {
+    const { id } = await client.submit(endpoint, { prompt: input.prompt, resolution: input.resolution ?? VIDEO_RESOLUTION, ratio: input.aspect, duration: seconds, generate_audio: true });
+    return { taskId: toSunraTaskId(id), model, seconds, provider: 'sunra' };
+  } catch (error) {
+    throw toFailure(error);
+  }
+}
+
 export type VideoPoll =
   | { status: 'pending' }
   | { status: 'succeeded'; output: EngineOutput }
@@ -397,6 +433,8 @@ export async function pollVideoRender(args: {
   /** Called once the provider reports success, before the film is downloaded (the wait's "마무리"). Must not throw. */
   onProviderDone?: () => Promise<void>;
 }, deps: RenderEngineDeps = {}): Promise<VideoPoll> {
+  const sunraTaskId = fromSunraTaskId(args.taskId);
+  if (sunraTaskId !== null) return pollSunraRender({ ...args, taskId: sunraTaskId }, deps);
   if (isKlingModel(args.model)) return pollKlingRender({ ...args, model: args.model }, deps);
   const client = deps.ark === undefined ? arkClientFromEnv() : deps.ark;
   if (client === null) return { status: 'failed', failure: new RenderFailure('no_engine_key', 'ARK_API_KEY is not set', false) };
@@ -470,6 +508,44 @@ async function pollKlingRender(args: {
     const failure = toFailure(error);
     return failure.retryable ? { status: 'pending' } : { status: 'failed', failure };
   }
+}
+
+async function pollSunraRender(args: {
+  taskId: string; model: VideoModelKey; seconds: number; resolution?: CreatorResolution | '480p'; aspect?: string; onProviderDone?: () => Promise<void>;
+}, deps: RenderEngineDeps): Promise<VideoPoll> {
+  const client = deps.sunra === undefined ? sunraClientFromEnv() : deps.sunra;
+  if (client === null) return { status: 'failed', failure: new RenderFailure('no_engine_key', 'SUNRA_API_KEY is not set', false) };
+  let task;
+  try {
+    task = await client.getTask(args.taskId);
+  } catch (error) {
+    const failure = toFailure(error);
+    return failure.retryable ? { status: 'pending' } : { status: 'failed', failure };
+  }
+  if (!isSunraTerminal(task.status)) return { status: 'pending' };
+  if (task.status !== 'COMPLETED' || task.success === false || !task.url) {
+    const message = task.errorMessage ?? `the task ended ${task.status}`;
+    const failure = task.errorCode === 'unsafe_content'
+      ? new RenderFailure('moderated', message, false)
+      : new RenderFailure('engine_error', message, task.errorRetryable === true);
+    return { status: 'failed', failure };
+  }
+  await args.onProviderDone?.();
+  try {
+    const downloaded = await download(task.url, deps.fetch ?? globalThis.fetch, 'video/mp4');
+    const resolution = args.resolution ?? VIDEO_RESOLUTION;
+    const quote = resolution === '720p' || resolution === '1080p' ? quoteVideo({ model: args.model, resolution, seconds: args.seconds, aspect: args.aspect ?? '9:16' }) : null;
+    const costUsd = task.billedUsd ?? quote?.providerUsd ?? null;
+    return { status: 'succeeded', output: { ...downloaded, provider: 'sunra', costUsd, costSource: costUsd === null ? undefined : task.billedUsd === null ? 'estimate' : 'provider_usage', completionTokens: null } };
+  } catch (error) {
+    const failure = toFailure(error);
+    return failure.retryable ? { status: 'pending' } : { status: 'failed', failure };
+  }
+}
+
+function sunraClientFromEnv(): SunraClient | null {
+  const config = sunraConfigFromEnv();
+  return config === null ? null : createSunraClient(config);
 }
 
 function arkClientFromEnv(): ArkClient | null {

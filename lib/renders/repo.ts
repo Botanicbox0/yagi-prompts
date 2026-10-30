@@ -12,7 +12,7 @@ import type { TemplateMedium } from '@/lib/prompts/schemas';
 export type RenderStatus = 'held' | 'queued' | 'running' | 'succeeded' | 'failed';
 export type NotifyStatus = 'pending' | 'sent' | 'skipped' | 'failed';
 /** Who rendered (or is rendering) the job — the CHECK on render_jobs.provider (0017, widened in 0061). */
-export type RenderProvider = 'openai' | 'modelark' | 'kling' | 'google';
+export type RenderProvider = 'openai' | 'modelark' | 'kling' | 'google' | 'sunra';
 
 export interface RenderJob {
   id: string;
