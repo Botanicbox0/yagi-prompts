@@ -1062,7 +1062,7 @@ async function sweepTemplates(): Promise<void> {
   expectPresent('…"Subscribe to make it here" instead', detail.body, 'Subscribe to make it here');
   expectAbsent('…no Offer price in the structured data', detail.body, 'priceCurrency');
   // The related list uses the same justified film rows as the catalogue.
-  if (/<ul[^>]*data-related-grid[^>]*class="[^"]*\bgrid-cols-2\b[^"]*\blg:grid-cols-4\b/.test(detail.body)) ok('…related templates in film rows', 'data-related-grid');
+  if (/<ul[^>]*data-related-grid[^>]*class="[^"]*\bfilm-rows\b/.test(detail.body)) ok('…related templates in film rows', 'data-related-grid');
   else fail('…related templates grid', 'expected data-related-grid with film-rows');
   expectPresent('…whose items are cards', detail.body, 'data-related-item');
   const detailKo = await get(`/ko/t/${GATED_PROMPT}`);
