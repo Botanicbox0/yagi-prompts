@@ -197,7 +197,7 @@ html:lang(ko) {
 .audience-shell { width: calc(100% - var(--spacing-gutter) * 2); max-width: var(--container-audience); margin-inline: auto; }
 /* Justified film rows: a card's width grows in proportion to its ratio, so a row shares one height
    and fills the width without cropping anything. The filler stops the last row from stretching. */
-.film-rows { --film-row-h: clamp(15rem, 24vw, 30rem); display: flex; flex-wrap: wrap; align-items: flex-start; gap: 1.75rem 0.75rem; }
+.film-rows { --film-row-h: clamp(9rem, 24vw, 30rem); display: flex; flex-wrap: wrap; align-items: flex-start; gap: 1.75rem 0.75rem; }
 .film-rows > li { flex: var(--r, 0.8) 1 calc(var(--r, 0.8) * var(--film-row-h)); min-width: 0; max-width: 100%; }
 .film-rows::after { content: ''; flex-grow: 9999; }
 .audience-title { font-size: var(--text-audience-title); font-weight: 540; line-height: 1.02; letter-spacing: -0.052em; text-wrap: balance; }
