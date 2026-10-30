@@ -142,11 +142,11 @@ export function PromptDetailMedia({
   // Portrait: a stage as tall as the screen allows, the clip centred in it at its own ratio — the
   // same stage the picture gallery uses, so films and pictures read as one family.
   const outerClass = portrait
-    ? 'flex h-[min(calc(100svh-7rem),40rem)] w-full items-center justify-center rounded-[18px] bg-sky p-4 sm:p-6 lg:h-[min(calc(100svh-9rem),46rem)] lg:p-8'
+    ? 'flex h-[min(calc(100svh-7rem),40rem)] w-full items-center justify-center bg-sky p-4 sm:rounded-[18px] sm:p-6 lg:h-[min(calc(100svh-9rem),46rem)] lg:p-8'
     : 'w-full';
   const stageClass = portrait
     ? `relative h-full w-auto max-w-full overflow-hidden rounded-[18px] bg-sky ${ratioClass}`
-    : `relative w-full overflow-hidden rounded-[18px] bg-sky ${ratioClass}`;
+    : `relative w-full overflow-hidden bg-sky sm:rounded-[18px] ${ratioClass}`;
 
   // Both handlers touch the element inside the tap itself: iOS only lets a gesture start sound.
   const togglePlayback = () => {
