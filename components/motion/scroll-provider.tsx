@@ -62,6 +62,8 @@ export function ScrollProvider({ children }: { children: ReactNode }) {
         duration: 1.05,
         smoothWheel: true,
         syncTouch: false,
+        // A modal scrolls itself. Founder 2026-10-31: the make sheet stayed put while the page moved.
+        prevent: (node) => node.closest('dialog, [role="dialog"]') !== null,
       });
       lenisRef.current = lenis;
 
