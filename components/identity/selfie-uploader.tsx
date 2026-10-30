@@ -204,11 +204,11 @@ export function SelfieUploader({ copy, locale, initial, onSaved, onEditingChange
           <p className="max-w-[26ch] text-sm leading-relaxed opacity-75">{copy.dropHint}</p>
           <div className="flex w-full max-w-xs flex-col gap-2 sm:flex-row">
             {canCapture ? (
-              <button type="button" data-selfie-camera disabled={busy} onClick={event => { event.stopPropagation(); cameraRef.current?.click(); }} className="inline-flex min-h-12 flex-1 items-center justify-center gap-2 bg-accent px-4 font-label text-eyebrow text-white uppercase transition-opacity hover:opacity-85 disabled:opacity-40">
+              <button type="button" data-selfie-camera disabled={busy} onClick={event => { event.stopPropagation(); cameraRef.current?.click(); }} className="inline-flex rounded-full min-h-12 flex-1 items-center justify-center gap-2 bg-accent px-4 font-label text-eyebrow text-white uppercase transition-opacity hover:opacity-85 disabled:opacity-40">
                 <CameraIcon />{copy.takePhoto}
               </button>
             ) : null}
-            <button type="button" data-selfie-choose disabled={busy} onClick={event => { event.stopPropagation(); fileRef.current?.click(); }} className={['inline-flex min-h-12 flex-1 items-center justify-center gap-2 px-4 font-label text-eyebrow uppercase transition-opacity disabled:opacity-40', canCapture ? 'border border-current hover:opacity-70' : 'bg-accent text-white hover:opacity-85'].join(' ')}>
+            <button type="button" data-selfie-choose disabled={busy} onClick={event => { event.stopPropagation(); fileRef.current?.click(); }} className={['inline-flex rounded-full min-h-12 flex-1 items-center justify-center gap-2 px-4 font-label text-eyebrow uppercase transition-opacity disabled:opacity-40', canCapture ? 'border border-current hover:opacity-70' : 'bg-accent text-white hover:opacity-85'].join(' ')}>
               <ImageIcon />{copy.choosePhoto}
             </button>
           </div>
@@ -235,7 +235,7 @@ export function SelfieUploader({ copy, locale, initial, onSaved, onEditingChange
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
-        <button type="button" data-selfie-save disabled={!file || busy} onClick={() => void save()} className="inline-flex min-h-12 flex-1 items-center justify-center gap-2 bg-accent px-5 font-label text-[0.8rem] tracking-[0.1em] text-white uppercase transition-opacity hover:opacity-85 disabled:opacity-30 sm:flex-none">
+        <button type="button" data-selfie-save disabled={!file || busy} onClick={() => void save()} className="inline-flex rounded-full min-h-12 flex-1 items-center justify-center gap-2 bg-accent px-5 font-label text-[0.8rem] tracking-[0.1em] text-white uppercase transition-opacity hover:opacity-85 disabled:opacity-30 sm:flex-none">
           {busy ? <><Spinner />{copy.saving}</> : copy.save}
         </button>
         {selfie ? (

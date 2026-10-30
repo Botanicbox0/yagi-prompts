@@ -35,6 +35,12 @@ describe('design tokens (§5.1/§5.2/§4)', () => {
     expect(globals).not.toContain('tailwind.config');
   });
 
+  it('lets a modal scroll itself instead of the page behind it', () => {
+    const provider = readFileSync(fileURLToPath(new URL('../../components/motion/scroll-provider.tsx', import.meta.url)), 'utf8');
+    expect(provider).toContain(`node.closest('dialog, [role="dialog"]')`);
+    expect(globals).toContain(`dialog, [role='dialog'] { overscroll-behavior: contain; }`);
+  });
+
   it('is two inks plus one accent — the identity French blue', () => {
     expect(globals).toContain('--color-black: #000000');
     expect(globals).toContain('--color-white: #ffffff');
