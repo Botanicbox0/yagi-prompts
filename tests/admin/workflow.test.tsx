@@ -116,6 +116,62 @@ describe("admin task queues", () => {
       }),
     ).toEqual([]);
   });
+  it("orders queues by severity and longest wait time, and deep-links campaign tasks when a target campaign exists", () => {
+    const now = new Date("2026-10-31T00:00:00Z");
+    const actions = adminNextActions(
+      {
+        posts: 2,
+        applicants: 3,
+        payouts: 0,
+        studio: 1,
+        inquiries: 0,
+        feedback: 0,
+        templates: 1,
+        paymentsManual: 1,
+        rendersFailed: 2,
+        funding: 1,
+        brandUsage: 1,
+        formatsSubmitted: 1,
+        contestEntries: 2,
+      },
+      {
+        now,
+        locale: "ko",
+        firstPostCampaignId: "camp-posts-1",
+        firstApplicantCampaignId: "camp-apps-2",
+        oldestAt: {
+          paymentsManual: "2026-10-30T22:00:00Z", // 2h wait
+          rendersFailed: "2026-10-30T18:00:00Z", // 6h wait -> older critical item comes first
+          applicants: "2026-10-29T00:00:00Z", // 2d wait -> older high item comes before posts (1h wait)
+          posts: "2026-10-30T23:00:00Z", // 1h wait
+        },
+      },
+    );
+    expect(actions.slice(0, 4).map((a) => [a.key, a.severity])).toEqual([
+      ["rendersFailed", "critical"],
+      ["paymentsManual", "critical"],
+      ["applicants", "high"],
+      ["posts", "high"],
+    ]);
+    expect(actions.find((a) => a.key === "posts")?.href).toBe(
+      "/admin/campaigns/camp-posts-1#posts",
+    );
+    expect(actions.find((a) => a.key === "applicants")?.href).toBe(
+      "/admin/campaigns/camp-apps-2#applications",
+    );
+    expect(actions.find((a) => a.key === "rendersFailed")?.waitLabel).toContain(
+      "6시간",
+    );
+    expect(actions.find((a) => a.key === "applicants")?.waitLabel).toContain(
+      "2일",
+    );
+  });
+  it("includes contests in content navigation and places playbooks at the end of system", () => {
+    const contentGroup = ADMIN_NAV_GROUPS.find((g) => g.key === "content");
+    const systemGroup = ADMIN_NAV_GROUPS.find((g) => g.key === "system");
+    expect(contentGroup?.items).toContain("contests");
+    expect(systemGroup?.items[systemGroup.items.length - 1]).toBe("playbooks");
+  });
   it.each(["ko", "en"] as const)(
     "exposes every retained navigation route with an explanation in %s",
     async (locale) => {

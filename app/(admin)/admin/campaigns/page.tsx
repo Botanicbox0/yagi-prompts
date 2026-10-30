@@ -40,6 +40,7 @@ export default async function AdminCampaignsPage({ searchParams }: { searchParam
   const [locale, params, sql] = await Promise.all([getLocaleFromHeaders(), searchParams, getSqlRunner()]);
   const dict = getDictionary(locale);
   const a = dict.admin;
+  const w = dict.adminWorkflow;
   const now = new Date();
 
   const rows: CampaignRow[] = sql === null ? [] : await loadAllCampaigns(sql);
@@ -148,8 +149,8 @@ export default async function AdminCampaignsPage({ searchParams }: { searchParam
                           {row.postDeadlineAt ? ` · ${interpolate(dict.campaigns.postBy, { date: formatCampaignDateTime(row.postDeadlineAt, locale) ?? '' })}` : ''}
                         </p>
                       </div>
-                      <div className="flex items-center gap-3">
-                        <span data-campaign-counts className="font-mono text-[0.72rem] opacity-70">
+                      <div className="flex flex-wrap items-center gap-3">
+                        <span data-campaign-counts className="font-mono text-[0.72rem] tabular-nums opacity-70">
                           {interpolate(a.campaignCounts, {
                             applied: String(c.applied),
                             selected: String(c.slotsTaken),
@@ -159,7 +160,24 @@ export default async function AdminCampaignsPage({ searchParams }: { searchParam
                             paid: String(c.paid),
                           })}
                         </span>
-                        {c.applied > 0 && <span className="text-accent font-label text-[0.62rem] tracking-[0.1em] uppercase">{interpolate(a.campaignPending, { count: String(c.applied) })}</span>}
+                        {c.applied > 0 && (
+                          <a
+                            href={`${adminCampaignPath(row.id)}#applications`}
+                            data-campaign-pending-applicants
+                            className="text-accent font-label text-[0.62rem] tracking-[0.1em] uppercase underline-offset-4 hover:underline"
+                          >
+                            {interpolate(a.campaignPending, { count: String(c.applied) })} →
+                          </a>
+                        )}
+                        {c.posted > 0 && (
+                          <a
+                            href={`${adminCampaignPath(row.id)}#posts`}
+                            data-campaign-pending-posts
+                            className="text-accent font-label text-[0.62rem] tracking-[0.1em] uppercase underline-offset-4 hover:underline"
+                          >
+                            {w.tasks.posts.action} ({c.posted}) →
+                          </a>
+                        )}
                         {(row.status === 'recruiting' || row.status === 'selecting' || row.status === 'running') && (
                           <PublicLink href={campaignHref(locale, row.slug)} className={BUTTON}>
                             {a.open}

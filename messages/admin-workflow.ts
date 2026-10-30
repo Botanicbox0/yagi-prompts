@@ -18,12 +18,18 @@ export const adminWorkflowEn = {
     inquiries: "Review new brand requests and generation feedback.",
     prompts: "Register templates and manage their publication.",
     community: "Review creator posts and reports.",
+    contests: "Manage film contests, moderate entries and assign placements.",
     landingMedia: "Replace landing images in place, or put the originals back.",
     subscriptions: "Manage creator launch notifications.",
     playbooks: "Manage existing editorial collections.",
     policy: "Inspect access and publication rules.",
     risk: "Review signals in conversations. Signals do not impose sanctions.",
     funding: "Issue exact quotes, reconcile receipts and review full refunds.",
+  },
+  severity: {
+    critical: "Critical",
+    high: "Today",
+    normal: "Normal",
   },
   nextHeading: "What needs your attention",
   nextHint:
@@ -42,10 +48,25 @@ export const adminWorkflowEn = {
     "The local analysis worker has no recent heartbeat. Check the analysis queue.",
   riskDead: "{count} conversations could not be analysed after retries.",
   tasks: {
+    paymentsManual: {
+      title: "Resolve manual payment or refund cases",
+      hint: "Automatic refund or render recovery reached its retry limit. Check the Toss receipt and reconcile.",
+      action: "Check payments",
+    },
+    rendersFailed: {
+      title: "Inspect failed or held renders",
+      hint: "Check provider failure reasons or held outputs before retrying or refunding.",
+      action: "Inspect renders",
+    },
     risk: {
       title: "Review conversation signals",
       hint: "Read the evidence and record a human review. Signals do not impose sanctions.",
       action: "Open risk review",
+    },
+    subscriptionReviews: {
+      title: "Review failed subscription renewals",
+      hint: "Recurring charges exhausted automatic retries and need manual billing review.",
+      action: "Open subscriptions",
     },
     posts: {
       title: "Review submitted posts",
@@ -77,6 +98,16 @@ export const adminWorkflowEn = {
       hint: "Review reported results and decide how to respond.",
       action: "Review feedback",
     },
+    funding: {
+      title: "Review campaign quotes and receipts",
+      hint: "Check proposed reward budgets or incoming payment receipts waiting for confirmation.",
+      action: "Open quotes & receipts",
+    },
+    brandUsage: {
+      title: "Process secondary usage requests",
+      hint: "Issue quotes, verify participant consent or grant license periods for brand deliverables.",
+      action: "Open usage queue",
+    },
     socialAccounts: {
       title: "Check linked SNS accounts",
       hint: "Look at the follower screenshot and type the number that counts. The local AI's reading is only a suggestion.",
@@ -87,10 +118,20 @@ export const adminWorkflowEn = {
       hint: "Check the portfolio and example posts, then approve or decline. Approval does not publish any template.",
       action: "Review applications",
     },
+    formatsSubmitted: {
+      title: "Review submitted AI creative recipes",
+      hint: "Run the 3-face test render and check steps before creating a draft template.",
+      action: "Review recipes",
+    },
     templates: {
       title: "Review submitted templates",
       hint: "Check content and publication requirements.",
       action: "Review templates",
+    },
+    contestEntries: {
+      title: "Moderate submitted contest entries",
+      hint: "Watch submitted films against the contest brief and approve or reject.",
+      action: "Review entries",
     },
   },
   startHeading: "Setting up a brand campaign",
@@ -182,12 +223,18 @@ export const adminWorkflowKo: typeof adminWorkflowEn = {
     inquiries: "새 브랜드 의뢰와 생성 결과 문의를 확인합니다.",
     prompts: "템플릿을 등록하고 게시 상태를 관리합니다.",
     community: "크리에이터 게시물과 신고를 검토합니다.",
+    contests: "공모전을 열고 출품작 검수와 수상작 배치를 관리합니다.",
     landingMedia: "랜딩 이미지를 그 자리에서 바꾸거나 원래대로 되돌립니다.",
     subscriptions: "크리에이터 출시 알림 신청을 관리합니다.",
     playbooks: "기존 에디토리얼 모음을 관리합니다.",
     policy: "접근 권한과 게시 규칙을 확인합니다.",
     risk: "대화의 위험 신호를 검토합니다. 신호만으로 제재하지 않습니다.",
     funding: "합의된 견적을 발행하고 입금 기록과 전액 환불을 확인합니다.",
+  },
+  severity: {
+    critical: "긴급",
+    high: "오늘 처리",
+    normal: "일반",
   },
   nextHeading: "지금 확인할 일",
   nextHint:
@@ -206,10 +253,25 @@ export const adminWorkflowKo: typeof adminWorkflowEn = {
     "로컬 분석 워커의 최근 접속 신호가 없습니다. 분석 대기 목록을 확인하세요.",
   riskDead: "재시도 후에도 분석하지 못한 대화가 {count}건 있습니다.",
   tasks: {
+    paymentsManual: {
+      title: "수동 확인이 필요한 결제·환불 건을 처리하세요",
+      hint: "자동 환불이나 렌더 복구가 재시도 한도에 도달했습니다. 토스 영수증과 상태를 확인하세요.",
+      action: "결제 확인하기",
+    },
+    rendersFailed: {
+      title: "실패하거나 보류된 렌더를 확인하세요",
+      hint: "제공사 실패 사유나 보류 사유를 확인한 뒤 재시도 또는 환불 여부를 정합니다.",
+      action: "렌더 확인하기",
+    },
     risk: {
       title: "대화의 위험 신호를 검토하세요",
       hint: "근거를 읽고 사람이 검토 결과를 기록합니다. 신호만으로 제재하지 않습니다.",
       action: "위험 신호 검토하기",
+    },
+    subscriptionReviews: {
+      title: "정기결제 갱신 실패 건을 확인하세요",
+      hint: "자동 재시도가 끝난 구독 결제 건을 확인합니다.",
+      action: "구독 상태 보기",
     },
     posts: {
       title: "제출된 게시물을 검수하세요",
@@ -241,6 +303,16 @@ export const adminWorkflowKo: typeof adminWorkflowEn = {
       hint: "접수된 결과물을 확인하고 대응 방법을 정합니다.",
       action: "결과 문의 확인하기",
     },
+    funding: {
+      title: "캠페인 견적과 입금 기록을 확인하세요",
+      hint: "제안된 보상 예산이나 입금 확인 대기 건을 검토합니다.",
+      action: "견적·입금 열기",
+    },
+    brandUsage: {
+      title: "2차 활용 요청을 처리하세요",
+      hint: "브랜드 산출물의 견적 발행, 참여자 동의 확인, 사용 기간 승인을 진행합니다.",
+      action: "2차 활용 열기",
+    },
     socialAccounts: {
       title: "SNS 연결 신청을 확인하세요",
       hint: "팔로워 화면 캡처를 보고 인정할 숫자를 직접 입력합니다. 로컬 AI가 읽은 값은 참고만 합니다.",
@@ -251,10 +323,20 @@ export const adminWorkflowKo: typeof adminWorkflowEn = {
       hint: "포트폴리오와 예시 게시물을 확인한 뒤 승인 또는 반려합니다. 승인만으로 템플릿이 공개되지는 않습니다.",
       action: "지원서 검토하기",
     },
+    formatsSubmitted: {
+      title: "제출된 AI 크리에이티브 레시피를 검수하세요",
+      hint: "3인 테스트 렌더와 단계 구성을 확인한 뒤 초안 템플릿을 만듭니다.",
+      action: "레시피 검수하기",
+    },
     templates: {
       title: "제출된 템플릿을 검토하세요",
       hint: "콘텐츠와 게시에 필요한 항목을 확인합니다.",
       action: "템플릿 검토하기",
+    },
+    contestEntries: {
+      title: "제출된 공모전 출품작을 검수하세요",
+      hint: "브리프에 맞게 제출된 영상을 확인하고 승인 또는 반려합니다.",
+      action: "출품작 검수하기",
     },
   },
   startHeading: "브랜드 캠페인을 처음 운영한다면",
