@@ -67,7 +67,7 @@ function markup(data: PromptCard, locale: 'en' | 'ko' = 'en') {
   );
 }
 
-describe('card frame (founder 2026-10-31: every card keeps its film's own ratio)', () => {
+describe('card frame (founder 2026-10-31: every card keeps the original ratio)', () => {
   it('frames a portrait or square example at 4:5 and a wide one at 16:9', () => {
     expect(cardFrame(card())).toBe('portrait');
     expect(cardFrame(card({ poster: { source: 'route', src: '/p', mime: 'image/png', w: 1080, h: 1080 } }))).toBe('portrait');

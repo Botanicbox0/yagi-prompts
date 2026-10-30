@@ -57,7 +57,7 @@ describe('maker profile route', () => {
     expect(revalidate).toBe(3600);
   });
 
-  it("renders a public maker's handle, bio, count and only their templates in the 2-column grid", async () => {
+  it("renders a public maker's handle, bio, count and only their templates in film rows", async () => {
     const html = await outcome('jun_01');
     expect(html).toContain('data-maker-profile="jun_01"');
     expect(html).toContain('@jun_01');
@@ -66,7 +66,7 @@ describe('maker profile route', () => {
     expect(html).toContain('data-prompt-card="maker-golden-hour"');
     expect(html).not.toContain('data-prompt-card="someone-else"');
     expect(html).not.toContain('data-prompt-card="studio-one"');
-    expect(html).toContain('grid-cols-2');
+    expect(html).toContain('film-rows');
     expect(html).toContain('data-frame="portrait"');
   });
 
