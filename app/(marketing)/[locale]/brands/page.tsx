@@ -3,7 +3,7 @@ import { DEFAULT_LOCALE, isLocale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/dictionaries';
 import { MarketingNav, MarketingFooter } from '@/components/marketing/chrome';
 import { BrandInquiryDialog } from '@/components/campaigns/brand-inquiry-dialog';
-import { V7BrandFirst, V7Campaign, V7Closing, V7Hero, V7Problem, V7Production, V7Work, V7Workflow } from '@/components/brand-studio/v7';
+import { V7BrandFirst, V7Campaign, V7Closing, V7Finish, V7Hero, V7Production, V7Remix, V7Work } from '@/components/brand-studio/v7';
 import { DemoDock } from '@/components/brand-studio/v7-client';
 import { getLandingMedia } from '@/lib/content/landing-media-server';
 import v7 from '@/components/brand-studio/v7.module.css';
@@ -53,10 +53,10 @@ export default async function BrandsPage({ params }: Props) {
     <main id="main" data-brand-landing className={`overflow-clip [word-break:keep-all] ${v7.page}`}>
       <V7Hero copy={c} locale={locale} />
       <div className={v7.over}>
-        <V7Problem copy={c} media={media} />
         <V7BrandFirst copy={c} media={media} />
-        <V7Workflow copy={c} />
+        <V7Remix copy={c} />
         <V7Work copy={c} studio={t.studio} media={media} />
+        <V7Finish copy={c} media={media} />
         <V7Campaign copy={c} locale={locale} />
         <V7Production
           copy={c}
@@ -75,7 +75,7 @@ export default async function BrandsPage({ params }: Props) {
         <aside data-creator-door className="audience-shell flex flex-wrap items-center justify-between gap-6 border-t border-hairline py-10"><div><h2 className="text-lg font-semibold">{dict.audience.creatorDoor}</h2><p className="mt-2 max-w-xl text-sm text-black/55">{dict.audience.creatorDoorBody}</p></div><a href={`/${locale}`} className="text-sm font-medium underline underline-offset-4">{dict.audience.creatorDoorCta} ↗</a></aside>
       </div>
     </main>
-    <DemoDock label={c.hero.eyebrow} cta={c.hero.cta} href={enquiry} />
+    <DemoDock label={c.metaTitle} cta={c.hero.cta} href={enquiry} />
     <MarketingFooter locale={locale} dict={dict} audience="brand" />
   </div>;
 }

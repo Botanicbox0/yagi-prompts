@@ -12,13 +12,13 @@ import styles from './studio-vto.module.css';
 type StudioCopy = Dictionary['brandLanding']['studio'];
 type Vars = CSSProperties & Record<`--${string}`, string | number>;
 
-const VTO_LOOK = ['vto-look-front', 'vto-look-upper', 'vto-look-side'] as const;
+const VTO_LOOK = ['vto-set-front', 'vto-set-upper', 'vto-set-side'] as const;
 const VTO_FREE = [
-  { name: 'vto-free-amber', ratio: '3 / 4' },
-  { name: 'vto-free-alley', ratio: '9 / 16' },
-  { name: 'vto-free-mirror', ratio: '9 / 16' },
-  { name: 'vto-free-sofa', ratio: '3 / 4' },
-  { name: 'vto-free-drape', ratio: '3 / 4' },
+  { name: 'vto-free-amber', ratio: '2 / 3' },
+  { name: 'vto-free-alley', ratio: '2 / 3' },
+  { name: 'vto-free-mirror', ratio: '3 / 4' },
+  { name: 'vto-free-sofa', ratio: '9 / 16' },
+  { name: 'vto-free-drape', ratio: '1 / 1' },
 ] as const;
 const VTO_MODES = ['lookbook', 'free'] as const;
 
@@ -79,7 +79,7 @@ export function StudioVto({ copy, media }: { copy: StudioCopy; media?: LandingMe
         <div role="tabpanel" id="vto-panel-lookbook" aria-labelledby="vto-tab-lookbook" hidden={mode !== 0} data-vto-panel="lookbook" className={styles.vtoLook}>
           {VTO_LOOK.map((name, index) => (
             <figure key={name} className={styles.appear} style={{ '--i': index } as Vars}>
-              <img src={studioSrc(media, name)} alt="" width={420} height={560} loading="lazy" decoding="async" />
+              <img src={studioSrc(media, name)} alt="" width={900} height={1200} loading="lazy" decoding="async" />
               <figcaption>{t.lookbookCuts[index]}</figcaption>
             </figure>
           ))}

@@ -14,11 +14,11 @@
   1. AGENTS.md (특히 §3 검증 루프, §5 문안·브랜드 규칙, §11)
   2. docs/design/TASTE.md — 대표가 좋다·싫다고 한 것. 반드시 지킨다.
   3. docs/design/TOOLBOX.md §0, §1-1 — 화면마다 기법 3~4개만. 빨강 금지. 블루 하나.
-  4. lib/design/identity.ts — 디자인 아이덴티티의 원본. 색·서체·모션·이미지 색 대역·하드라인. 값을 바꾸면 components/brand-studio/v7.module.css의 .identity도 같이 바꾸고 tests/design/identity.test.ts가 통과해야 한다.
+  4. docs/design/IDENTITY.md — 고정된 디자인 아이덴티티(색, 사진·영상 만드는 법, 모델 역할). 값은 lib/design/identity.ts가 원본이다. 색·서체·모션·이미지 색 대역·하드라인. 값을 바꾸면 components/brand-studio/v7.module.css의 .identity도 같이 바꾸고 tests/design/identity.test.ts가 통과해야 한다.
   5. docs/BRAND-ENGINE.md — 이 페이지가 파는 것(브랜드만의 AI 미디어 엔진: 고정 층 + 바뀌는 것).
   6. docs/research/brand-landing-2026-10-30/reference-teardown.md — daylightcomputer.com 등 레퍼런스 해부(스크린샷 경로 포함).
   7. docs/wording/brand-landing-2026-10-29.md, docs/wording/brand-landing-2026-10-30.md — 문구 원칙과 검토 기록.
-- 코드: components/brand-studio/v7.tsx(서버 섹션), v7-client.tsx(클라이언트 섬: Reveal, Film, Compare, ChapterScene, PinnedTrack, EngineSwitch, Tabs, DemoDock), v7.module.css, app/(marketing)/[locale]/brands/page.tsx. 문구는 messages/ko.ts·en.ts의 brandLanding.v7(하드코딩 금지).
+- 코드: components/brand-studio/v7.tsx(서버 섹션), v7-client.tsx(클라이언트 섬: Reveal, Film, HeroFilm, Compare, ChapterScene, Remix, Tabs, DemoDock), v7.module.css, app/(marketing)/[locale]/brands/page.tsx. 문구는 messages/ko.ts·en.ts의 brandLanding.v7(하드코딩 금지).
 - 미디어: public/reel/landing/v7/ (히어로·지시서 컷·블루 월드 영상). 새 이미지를 만들 때 GPT Image는 쓰지 않는다. 인물은 가상 인물만. Pinterest·서드파티 이미지는 참고만, 공개·모델 입력 금지. YAGI 마크가 보이면 정확해야 한다(좌우 반전 금지).
 
 ## 1. 절대 지킬 것 (어기면 반려)
@@ -36,10 +36,10 @@
 3. 같은 해상도로 reference-teardown.md의 daylightcomputer.com 캡처와 나란히 비교한다(색이 아니라 밀도·리듬·전환·타이포 스케일·인터랙션 감도).
 4. 아래 기준으로 0~5점 채점하고, 3점 이하를 고친다.
    - 첫 화면(히어로): 범주가 3초 안에 읽히는가, 영상과 글이 겹치지 않는가, 문 세 개가 보이는가
-   - 위계와 리듬: 섹션마다 한 장면 한 메시지인가, 여백이 일정한 리듬인가, 너무 긴가(현재 약 16 뷰포트)
+   - 위계와 리듬: 섹션마다 한 장면 한 메시지인가, 여백이 일정한 리듬인가, 너무 긴가(현재 약 13 뷰포트)
    - 색: 사진들이 195–225° 쿨 대역에 모이는가, 따뜻한 사진이 화면당 하나를 넘지 않는가, 블루가 행동 지점에만 있는가
    - 타이포: 디스플레이 540/−0.052em이 한국어·영어 모두 아름다운가, 줄바꿈이 어색한 곳(특히 EN 히어로·마무리)
-   - 인터랙션: 비교 끌기, 엔진 전환(비율 형태 변화), 고정 장면 3장 전환, 고정 가로 레일, 데모 버튼이 손맛 있게 반응하는가(스프링, 지연, 끊김)
+   - 인터랙션: 리믹스(문장을 누르면 결과 영상으로 바뀜), 부분 수정 비교 끌기, 고정 장면 3장 전환, 패션 룩 슬라이더, 데모 버튼이 손맛 있게 반응하는가(스프링, 지연, 끊김)
    - 모바일: 고정이 풀린 상태의 순서와 밀도, 손가락 조작, 가로 넘침 0
    - 문구: AI처럼 읽히는 문장(대비 공식, 셋 나열, 명사형 제목, 번역투)
    - 접근성: 대비, 포커스 링, 키보드(←/→), 스크린 리더 라벨

@@ -1,7 +1,7 @@
 # TWINGS 디자인 엔지니어링 툴박스
 
 > 원문은 대표가 2026-10-29에 준 "Design Engineering Repertoire & Contextual Judgment Guidelines"다. 이 파일은 그것을 TWINGS 코드 사실에 맞춰 정리한 것이다.
-> 취향 판정(좋다/싫다)의 기록은 `docs/design/TASTE.md`에 있다. 이 파일은 "무엇을 꺼내 쓸 수 있는가", TASTE.md는 "대표가 무엇을 좋아하고 싫어했는가"를 적는다.
+> 색, 서체, 사진·영상 만드는 법의 고정 원본은 `docs/design/IDENTITY.md`다. 취향 판정(좋다/싫다)의 기록은 `docs/design/TASTE.md`에 있다. 이 파일은 "무엇을 꺼내 쓸 수 있는가", TASTE.md는 "대표가 무엇을 좋아하고 싫어했는가"를 적는다.
 
 ## 0. 고정값
 

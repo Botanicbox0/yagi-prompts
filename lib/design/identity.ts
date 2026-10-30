@@ -5,6 +5,7 @@
  * and tests/design/identity.test.ts fails when the two drift, when a pair loses contrast, or when red comes
  * back. Change a value here first; the guard tells you which stylesheet to follow.
  *
+ * The human and AI-readable version is docs/design/IDENTITY.md; the guard fails if that file loses a value.
  * Sources: docs/design/TOOLBOX.md §0 (white mode, one blue, no red), docs/design/TASTE.md (founder verdicts),
  * the founder's reference photos for the blue (2026-10-29), docs/wording/brand-landing-2026-10-30.md (voice).
  */
@@ -58,6 +59,27 @@ export const MOTION = {
 } as const;
 
 export const SHAPE = { radiusMedia: '18px', radiusCard: '24px', radiusPill: '999px' } as const;
+
+/** The blue world photographs and films live in (founder 2026-10-30). Skin and lips stay warm; nothing else does. */
+export const WORLD = {
+  ice: '#f3f7fa',
+  mist: '#d0dbe7',
+  powder: '#dce8f5',
+  steel: '#b4c3d7',
+  french: COLOUR.accent,
+  deep: '#2e5f9f',
+  navy: '#16233f',
+  shadow: '#14171c',
+} as const;
+
+/** Which model does what. Fixed from the founder's Americano results; see docs/design/IDENTITY.md §6-1. */
+export const MODEL_ROLES = {
+  editorial: 'text2image_soul_v2',
+  referenceExact: 'seedream_v5_pro',
+  faceAndEdit: 'nano_banana_pro',
+  film: 'seedance_2_5',
+  swap: 'hf_mult_replace_object',
+} as const;
 
 /** How photographs sit on the page, so the page owns one hue the way the accent does. */
 export const IMAGERY = {
