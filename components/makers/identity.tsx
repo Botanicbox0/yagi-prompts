@@ -7,22 +7,13 @@ import { countryName, linkLabel } from '@/lib/makers/fields';
  * state, no script — the two interactive bits (email, share) are islands in ./islands.tsx.
  */
 
-/** A deterministic two-tone wash from the handle, so a creative without a photo still has a face. */
-function washOf(handle: string): string {
-  let hash = 0;
-  for (const char of handle) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
-  const a = hash % 360;
-  const b = (a + 40 + (hash >> 9) % 80) % 360;
-  return `linear-gradient(135deg, hsl(${a} 62% 58%), hsl(${b} 70% 34%))`;
-}
-
 export function CreativeAvatar({ handle, name, src, size = 96, className = '', eager = false }: { handle: string; name: string | null; src: string | null; size?: number; className?: string; eager?: boolean }) {
   const initial = [...(name ?? handle).trim()][0]?.toUpperCase() ?? '@';
   return (
     <span
       data-creative-avatar={src ? 'photo' : 'monogram'}
       className={`relative inline-flex shrink-0 items-center justify-center overflow-hidden rounded-full ring-1 ring-black/10 ${className}`}
-      style={{ width: size, height: size, ...(src ? {} : { background: washOf(handle) }) }}
+      style={{ width: size, height: size, ...(src ? {} : { background: 'var(--color-blue)' }) }}
     >
       {src
         // eslint-disable-next-line @next/next/no-img-element -- gateway-served, already square and small
