@@ -193,7 +193,7 @@ describe('rails: NEW first, two columns on a phone', () => {
     expect(ordered.map((c) => c.slug)).toEqual(['n1', 'n2', 'a', 'b']);
   });
 
-  it('renders that order in a two-column grid that never scrolls sideways', () => {
+  it('renders that order in film rows that never scroll sideways', () => {
     const dict = dicts.en;
     const html = renderToStaticMarkup(
       <PromptRail
@@ -210,8 +210,7 @@ describe('rails: NEW first, two columns on a phone', () => {
       />,
     );
     expect(html.indexOf('data-prompt-card="n1"')).toBeLessThan(html.indexOf('data-prompt-card="a"'));
-    expect(html).toContain('grid-cols-2');
-    expect(html).toContain('lg:grid-cols-4');
+    expect(html).toContain('film-rows');
     expect(html).toMatch(/<li[^>]*class="[^"]*min-w-0/);
   });
 });
