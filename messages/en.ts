@@ -2764,6 +2764,7 @@ export const en = {
     chooseLegal: 'By continuing, you agree to the {terms} and {privacy}.',
     chooseBack: 'Back',
     brandEntry: {
+      inviteTitle: 'Log in to accept your invitation',
       more: 'See TWINGS for Brands',
       play: 'Play film',
       pause: 'Pause film',

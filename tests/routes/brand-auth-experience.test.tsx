@@ -15,14 +15,20 @@ describe('brand login experience', () => {
     context.surface = 'brand';
     const html = await page();
     expect(html).toContain('data-brand-auth');
-    expect(html).toContain('data-brand-auth-film');
+    expect(html).toContain('data-brand-auth-stage');
     expect(html).toContain('AI 미디어 엔진');
     expect(html).toContain('next=%2Fbrand');
     expect(html).toContain('https://twings.app/ko/legal/terms');
-    // The landing's own hero film, from the host that serves public media; playback starts in the island.
-    expect(html).toContain('https://twings.app/reel/landing/v7/hero.mp4');
-    expect(html).toContain('poster="https://twings.app/reel/landing/v7/hero.jpg"');
+    // Public media of the landing's demo brand, from the host that serves it; playback starts in the island.
+    expect(html).toContain('https://twings.app/reel/landing/cut-flower.webp');
+    expect(html).toContain('https://twings.app/reel/landing/v7/dir-clip.mp4');
     expect(html).not.toContain('autoPlay=');
+    // Clearly a demo brand, not a client: the kit carries the example label.
+    expect(html).toContain('data-brand-auth-kit');
+    // A login stays calm: not the landing's fast-cut dark hero again.
+    expect(html).not.toContain('v7/hero');
+    // The act is the page's heading; the category line beside it is not.
+    expect(html.match(/<h1[^>]*>[^<]*/)?.[0]).toContain('로그인 또는 회원가입');
     // One message: the old agency pitch and its pink carousel stay gone.
     expect(html).not.toContain('목표와 예산');
     expect(html).not.toContain('public-content/');
@@ -60,10 +66,16 @@ describe('brand login experience', () => {
   it('renders English copy and usable non-JavaScript login links with a static initial showcase', async () => {
     const html = await page({ next: '/brand', locale: 'en' });
     expect(html).toContain('Your brand');
-    expect(html).toContain('data-brand-auth-film');
+    expect(html).toContain('data-brand-auth-stage');
     expect(html).toContain('data-brand-auth-pause');
     expect(html).toContain('href="/auth/signin?provider=google');
     expect(html).not.toContain('목표와 예산');
+  });
+  it('tells invited readers which account to use', async () => {
+    const invited = await page({ next: '/brand/invite' });
+    expect(invited).toContain('초대받은 이메일 계정으로 로그인해 주세요');
+    expect(invited.match(/<h1[^>]*>[^<]*/)?.[0]).toContain('초대를 수락하려면');
+    expect(await page({ next: '/brand' })).not.toContain('초대받은 이메일 계정으로');
   });
   it('keeps the consumer and admin doors as they were', async () => {
     for (const surface of ['consumer', 'admin']) {

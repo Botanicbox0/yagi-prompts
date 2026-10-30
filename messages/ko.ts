@@ -2774,6 +2774,7 @@ export const ko: Dictionary = {
     chooseLegal: '계속하면 {terms}과 {privacy}에 동의하는 것으로 봅니다.',
     chooseBack: '돌아가기',
     brandEntry: {
+      inviteTitle: '초대를 수락하려면 로그인해 주세요',
       more: '브랜드 서비스 둘러보기',
       play: '영상 재생',
       pause: '영상 멈추기',

@@ -8,14 +8,14 @@ import { legalDocument } from '@/lib/legal/documents';
 import { legalHref } from '@/lib/legal/links';
 import { authReturnPath, isAdminPath, isBrandPath } from '@/lib/routing/surfaces';
 import { publicHref, requestSurface } from '@/lib/routing/request-surface';
-import { BrandEntryFilm } from '@/components/auth/brand-entry-film';
+import { BrandEntryStage } from '@/components/auth/brand-entry-stage';
 import styles from '@/components/auth/brand-entry.module.css';
 
 /**
  * `/auth/choose?next=…&locale=…` — the sign-in door (docs/TEMPLATES-IA.md §8).
  *
  * Provider links, consent and copy render on the server, without a session read. Brand entry
- * sets the door beside the /brands hero film; consumer/admin entry stays compact. The (app) layout supplies noindex and force-dynamic; middleware owns locale/host.
+ * sets the door beside the demo brand's world from /brands; consumer/admin entry stays compact. The (app) layout supplies noindex and force-dynamic; middleware owns locale/host.
  *
  * Both buttons follow their owner's brand rules: Google's is white with the four-colour "G", the
  * #747775 border and the name in mixed case (never "GOOGLE", so no `uppercase` here); Kakao's is
@@ -141,11 +141,12 @@ export default async function ChooseProviderPage(props: RouteProps) {
   if (brandEntry) {
     const copy = dict.auth.brandEntry;
     const hero = dict.brandLanding.v7.hero;
+    const invited = nextPath === '/brand/invite';
     return (
       <main data-auth-choose data-brand-auth className={styles.page}>
         <div className={styles.layout}>
-          <BrandEntryFilm title={hero.title} filmLabel={hero.filmLabel} playLabel={copy.play} pauseLabel={copy.pause}
-            assetOrigin={admin ? 'https://twings.app' : ''} />
+          <BrandEntryStage title={hero.title} exampleLabel={dict.brandLanding.v7.first.kit.example} playLabel={copy.play} pauseLabel={copy.pause}
+            assetOrigin={admin ? 'https://twings.app' : ''} compact={invited} />
           <div className={styles.card}>
             <header className={styles.header}>
               <a href={publicHref(`/${locale}`, admin)} className={styles.logo}>
@@ -155,8 +156,8 @@ export default async function ChooseProviderPage(props: RouteProps) {
               <nav data-auth-language className={styles.languages}>{languageLinks}</nav>
             </header>
             <section className={styles.login} aria-labelledby="brand-auth-title">
-              <h2 id="brand-auth-title">{dict.auth.chooseTitle}</h2>
-              <p className={styles.loginHint}>{dict.auth.chooseLede}</p>
+              <h1 id="brand-auth-title">{invited ? copy.inviteTitle : dict.auth.chooseTitle}</h1>
+              <p className={styles.loginHint}>{invited ? dict.brandWorkspace.inviteLogin : dict.auth.chooseLede}</p>
               {authError}
               <div className={styles.providers}>{providers}</div>
               <p data-auth-legal className={styles.legal}>{legal}</p>
