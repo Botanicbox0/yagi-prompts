@@ -9,6 +9,7 @@ import { legalHref } from '@/lib/legal/links';
 import { authReturnPath, isAdminPath, isBrandPath } from '@/lib/routing/surfaces';
 import { publicHref, requestSurface } from '@/lib/routing/request-surface';
 import { BrandShowcase } from '@/components/auth/brand-showcase';
+import { CarryReturnTab } from '@/components/auth/carry-return-tab';
 import styles from '@/components/auth/brand-entry.module.css';
 
 /**
@@ -143,6 +144,7 @@ export default async function ChooseProviderPage(props: RouteProps) {
     const copy = dict.auth.brandEntry;
     return (
       <main data-auth-choose data-brand-auth className={styles.page}>
+        <CarryReturnTab />
         {/* Local/preview brand links get the same licensed type as the dedicated brand host. */}
         {!admin && <link rel="stylesheet" href="/fonts/helvetica-neue/helvetica-neue.css" />}
         <div className={styles.layout}>
