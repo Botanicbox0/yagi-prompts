@@ -2,18 +2,17 @@ import type { CSSProperties, ReactNode } from 'react';
 import type { Dictionary } from '@/lib/i18n/dictionaries';
 import type { Locale } from '@/lib/i18n/config';
 import { brandEnquiryHref } from '@/lib/campaigns/links';
-import { landingSrc, type LandingMedia } from '@/lib/content/landing-media';
-import { Compare, ChapterScene, EngineSwitch, Film, PinnedTrack, Reveal, Tabs, Track, TypeLine } from './v7-client';
+import { LANDING_CUTS, landingSrc, studioSrc, type LandingMedia } from '@/lib/content/landing-media';
+import { Compare, ChapterScene, Film, HeroFilm, Remix, Reveal, Tabs, Track, TypeLine, type RemixFormat } from './v7-client';
 import { StudioVto } from './studio-vto';
 import s from './v7.module.css';
 
 /**
- * Brand landing v7 (2026-10-30 founder brief): "the creative platform that starts from your brand".
- * A studio that makes AI campaigns for global brands turned its working method into a platform, so the page
- * runs problem → brand first (hardlines, memory, one-line direction) → the real workflow → the work →
- * creator scale → production and what comes next. Screens fill the viewport, long runs go sideways
- * (tracks) or pin (the chapter scene), and every picture is a real output (docs/PLATFORM-2.0.md §21).
- * Colour, type and motion come from lib/design/identity.ts via the `.identity` wrapper.
+ * Brand landing (founder feedback round, 2026-10-30): the brand's own AI media engine. It learns the brand,
+ * anyone can direct it at an expert's level, and great formats remix into the brand. Each screen says one
+ * thing: hero film → learns your brand → remix → what you get → local fixes → creators → production. Every
+ * picture and film is a real output in the blue world of docs/design/IDENTITY.md; the old problem screen and
+ * the six-step workflow rail are gone because they did not explain the service.
  */
 
 type Copy = Dictionary['brandLanding']['v7'];
@@ -25,18 +24,36 @@ type Media = { media?: LandingMedia };
 const V = (name: string, ext = 'webp') => `/reel/landing/v7/${name}.${ext}`;
 const L = (name: string, ext = 'webp') => `/reel/landing/${name}.${ext}`;
 
-const PRODUCTS = ['parfum', 'blush', 'oil', 'compact', 'lipoil', 'serum', 'mist', 'balm'] as const;
-const PAIRS = ['logo', 'skin', 'light'] as const;
-/** YAGI's demo palette in the blue-world campaign: frost, sky, powder, slate, ink. */
-const YAGI_PALETTE = ['#f4f6f8', '#dfe8f2', '#a9c4de', '#3a4a5e', '#0e1013'] as const;
+const PAIRS = ['logo', 'garment', 'skin'] as const;
+/** YAGI's demo palette: the blue world from lib/design/identity.ts, as a brand kit would hold it. */
+const YAGI_PALETTE = ['#f3f7fa', '#d0dbe7', '#3875c5', '#2e5f9f', '#16233f'] as const;
 const DOORS = ['work', 'campaign', 'production'] as const;
 /** The fictional demo brand's site in the hardline chapter (an example domain, never a real one). */
 const DEMO_SITE = 'yagi.example';
-const RATIOS = ['9:16', '4:5', '16:9'] as const;
-/** Product shots turned into 5-second clips (the work tab's first row of video). */
-const CLIPS = ['parfum', 'mist', 'oil'] as const;
-/** YAGI Production's own films (fictional casts), each at its own ratio. No client work: its posters carry real names. */
+/** One quiet spec line over the hero film, following its cuts. Spec sheet language, the same in both locales. */
+const HERO_CUES = [
+  { at: 0, text: 'Cast 01 / French Blue Muslin / 180mm' },
+  { at: 0.63, text: 'Look 02 / White Flare / 85mm' },
+  { at: 1.42, text: 'Detail / Crystal Embroidery / Macro' },
+  { at: 1.96, text: 'Look 03 / Washed Denim / 85mm' },
+  { at: 2.58, text: 'Prop / Keys + Silver Nails / Macro' },
+  { at: 3.12, text: 'Split / Face + Boombox' },
+  { at: 4.41, text: 'Look 01 / Black Denim / 50mm' },
+  { at: 5.12, text: 'Look 03 / Fur Hat / 135mm' },
+  { at: 5.58, text: 'Cast / Group of Four / 50mm' },
+  { at: 6.25, text: 'Detail / White Denim / 100mm' },
+  { at: 6.83, text: 'Look 04 / Platinum + Fur / 85mm' },
+  { at: 7.25, text: 'Look 02 / Zip Top / 85mm' },
+  { at: 7.75, text: 'Set / Sculpture / 85mm' },
+  { at: 8.25, text: 'Look 02 / Full Length / 85mm' },
+  { at: 8.96, text: 'Cast 01 / Hand to Lens / 50mm' },
+  { at: 9.59, text: 'Look 02 / Light Falling / 85mm' },
+  { at: 10.59, text: 'Prop / Boombox + Bangles / 85mm' },
+  { at: 11.51, text: 'Cast 01 / Final Frame / 135mm' },
+] as const;
+/** YAGI Production's own films, each at its own ratio. No client work: its posters carry real names. */
 const FILMS = [
+  { id: 'runway', src: V('film-runway', 'mp4'), poster: V('film-runway', 'jpg'), ratio: '9 / 16' },
   { id: 'tutu', src: V('film-tutu', 'mp4'), poster: V('film-tutu', 'jpg'), ratio: '16 / 9' },
   { id: 'daydream', src: V('film-daydream', 'mp4'), poster: V('film-daydream', 'jpg'), ratio: '4 / 3' },
   { id: 'aquarium', src: V('film-aquarium', 'mp4'), poster: V('film-aquarium', 'jpg'), ratio: '4 / 3' },
@@ -46,8 +63,28 @@ const FILMS = [
 const FEED = [
   { id: 'peach', src: '/reel/landing/yunseol-peach' },
   { id: 'retro-01', src: '/reel/campaigns/retro-phone-01' },
-  { id: 'blue', src: '/reel/landing/v7/beauty' },
+  { id: 'blue', src: '/reel/landing/v7/feed-blue' },
   { id: 'y2k', src: '/reel/brands/y2k-flip-phone' },
+] as const;
+/** The fashion looks, in page order. `studio` marks the founder's own picks from /admin/landing-media. */
+const LOOKS = [
+  { id: 'look-coat' },
+  { id: 'vto-look-upper', studio: true },
+  { id: 'look-drape' },
+  { id: 'look-street' },
+  { id: 'vto-look-side', studio: true },
+  { id: 'look-knit' },
+  { id: 'look-carpet' },
+  { id: 'vto-look-front', studio: true },
+  { id: 'look-sculpt' },
+] as const;
+/**
+ * The two ads and what each one features. The fashion film is the hero film, so no extra bytes. The pink perfume
+ * ad is the founder's original and the page's one warm counterpoint (docs/design/IDENTITY.md §2).
+ */
+const ADS = [
+  { id: 'fashion', still: L('ad-denim'), film: V('hero', 'mp4'), poster: V('hero', 'jpg') },
+  { id: 'perfume', still: L('highteen-product'), film: '/reel/campaigns/highteen.mp4', poster: '/reel/campaigns/highteen.jpg' },
 ] as const;
 
 function Eyebrow({ children, status, tone = 'soon' }: { children: ReactNode; status?: string; tone?: 'soon' | 'live' }) {
@@ -65,10 +102,9 @@ export function V7Hero({ copy, locale }: { copy: Copy; locale: Locale }) {
   return (
     <section data-v7-hero data-campaign-hero data-section data-theme="light" className={s.hero}>
       <div className={s.heroFrame} data-hero-film>
-        <Film className={s.heroFilm} src={V('hero', 'mp4')} poster={V('hero', 'jpg')} label={h.filmLabel} eager />
+        <HeroFilm className={s.heroFilm} specClassName={s.heroSpec} src={V('hero', 'mp4')} srcSmall={V('hero-720', 'mp4')} srcLarge={V('hero-2160', 'mp4')} poster={V('hero', 'jpg')} label={h.filmLabel} cues={HERO_CUES} />
         <div className={s.heroScrim} aria-hidden="true" />
         <div className={s.heroCopy}>
-          <Eyebrow>{h.eyebrow}</Eyebrow>
           <h1 className={s.display}>{h.title}</h1>
           <p className={s.lead}>{h.body}</p>
           <div className={s.actions}>
@@ -78,7 +114,7 @@ export function V7Hero({ copy, locale }: { copy: Copy; locale: Locale }) {
         </div>
         <span className={s.crosshairs} aria-hidden="true" />
       </div>
-      <nav aria-label={h.eyebrow} data-hero-doors className={s.doors}>
+      <nav aria-label={h.doorsLabel} data-hero-doors className={s.doors}>
         {h.doors.map((door, index) => (
           <a key={DOORS[index]} href={`#${DOORS[index]}`} data-hero-door={DOORS[index]} className={s.door}>
             <span className={s.mono}>{String(index + 1).padStart(2, '0')}</span>
@@ -88,33 +124,6 @@ export function V7Hero({ copy, locale }: { copy: Copy; locale: Locale }) {
           </a>
         ))}
       </nav>
-    </section>
-  );
-}
-
-export function V7Problem({ copy, media }: { copy: Copy } & Media) {
-  const p = copy.problem;
-  const pairs = PAIRS.map((id, index) => ({
-    id,
-    raw: landingSrc(media, `c-${id}-raw`),
-    ours: landingSrc(media, `c-${id}-ours`),
-    chip: p.pairs[index]!.chip,
-    note: p.pairs[index]!.note,
-    alt: [p.pairs[index]!.raw, p.pairs[index]!.ours] as [string, string],
-  }));
-  return (
-    <section data-v7-problem data-section data-theme="light" className={s.section}>
-      <div className={`${s.shell} ${s.split}`}>
-        <Reveal className={s.head}>
-          <Eyebrow>{p.eyebrow}</Eyebrow>
-          <h2 className={s.h2}>{p.title}</h2>
-          <p className={s.lead}>{p.body}</p>
-          <p className={`${s.note} ${s.mono}`}>{p.caption}</p>
-        </Reveal>
-        <Reveal className={s.compareCol} data-contrast>
-          <Compare pairs={pairs} labels={{ raw: p.raw, ours: 'TWINGS', hint: p.hint, slider: p.slider }} />
-        </Reveal>
-      </div>
     </section>
   );
 }
@@ -155,7 +164,7 @@ function KitStage({ copy }: { copy: Copy }) {
 
 function MemoryStage({ copy, media }: { copy: Copy } & Media) {
   const m = copy.first.memory;
-  const shots = [V('dir-1'), landingSrc(media, 'sc-mist'), V('beauty'), landingSrc(media, 'sc-serum'), V('dir-3'), landingSrc(media, 'sc-parfum')];
+  const shots = LANDING_CUTS.map((key) => landingSrc(media, `cut-${key}`));
   return (
     <div className={s.card} data-stage="memory">
       <div className={s.cardHead}>
@@ -179,7 +188,7 @@ function MemoryStage({ copy, media }: { copy: Copy } & Media) {
   );
 }
 
-function DirectionStage({ copy }: { copy: Copy }) {
+function DirectionStage({ copy, media }: { copy: Copy } & Media) {
   const d = copy.first.direction;
   return (
     <div className={s.card} data-stage="direction">
@@ -189,9 +198,9 @@ function DirectionStage({ copy }: { copy: Copy }) {
         <ul className={s.spec}>{d.spec.map((item) => <li key={item} className={s.mono}>{item}</li>)}</ul>
       </div>
       <ul className={s.outputs} aria-label={d.outputs}>
-        <li><img src={V('dir-1')} alt="" width={600} height={800} loading="lazy" decoding="async" /></li>
-        <li><Film src={V('dir-2', 'mp4')} poster={V('dir-2', 'jpg')} label={d.clip} /></li>
-        <li><img src={V('dir-3')} alt="" width={600} height={800} loading="lazy" decoding="async" /></li>
+        <li><img src={landingSrc(media, 'cut-sphere')} alt="" width={600} height={800} loading="lazy" decoding="async" /></li>
+        <li><Film src={V('dir-clip', 'mp4')} poster={V('dir-clip', 'jpg')} label={d.clip} /></li>
+        <li><img src={landingSrc(media, 'cut-beads')} alt="" width={600} height={800} loading="lazy" decoding="async" /></li>
       </ul>
       <p className={s.cardFoot}><span>{d.outputs}</span></p>
     </div>
@@ -212,13 +221,7 @@ export function V7BrandFirst({ copy, media }: { copy: Copy } & Media) {
       <p className={s.body}>{chapter.body}</p>
     </div>
   ));
-  const stages = [<KitStage key="kit" copy={copy} />, <MemoryStage key="memory" copy={copy} media={media} />, <DirectionStage key="direction" copy={copy} />];
-  const e = f.engine;
-  const outputs = [
-    { ratio: '3 / 4', media: <img src={V('dir-1')} alt="" width={900} height={1200} loading="lazy" decoding="async" /> },
-    { ratio: '9 / 16', media: <Film src={V('beauty', 'mp4')} poster={V('beauty', 'jpg')} label={copy.closing.filmLabel} /> },
-    { ratio: '4 / 5', media: <img src={V('dir-3')} alt="" width={900} height={1200} loading="lazy" decoding="async" /> },
-  ];
+  const stages = [<KitStage key="kit" copy={copy} />, <MemoryStage key="memory" copy={copy} media={media} />, <DirectionStage key="direction" copy={copy} media={media} />];
   return (
     <section id="how" data-v7-first data-section data-theme="light" className={`${s.section} ${s.sky}`}>
       <div className={s.shell}>
@@ -226,127 +229,75 @@ export function V7BrandFirst({ copy, media }: { copy: Copy } & Media) {
           <Eyebrow>{f.eyebrow}</Eyebrow>
           <h2 className={s.h2}>{f.title}</h2>
           <p className={s.lead}>{f.body}</p>
-        </Reveal>
-        <Reveal>
-          <EngineSwitch fixed={e.fixed} fixedItems={e.fixedItems} changes={e.changes} changeItems={e.changeItems} output={e.output} note={e.note} outputs={outputs} />
-        </Reveal>
-        <div className={s.layerHead}>
-          <h3 className={s.h3}>{f.layerTitle}</h3>
           <p className={s.note}>{f.studio}</p>
-        </div>
+        </Reveal>
         <ChapterScene chapters={chapters} stages={stages} />
       </div>
     </section>
   );
 }
 
-function StepArtifact({ index, copy }: { index: number; copy: Copy }) {
-  const w = copy.workflow;
-  if (index === 0) {
-    const spec = ['85mm · f/4', '↘ 10시 방향'.replace('10시 방향', w.analysis[1]!), '#3A4A5E', '#EEF3F8'];
-    return (
-      <div className={s.artifact}>
-        <img src={V('dir-1')} alt="" width={600} height={800} loading="lazy" decoding="async" />
-        <span className={s.lightRay} aria-hidden="true" />
-        <ul className={s.readout}>{w.analysis.map((label, i) => <li key={label}><span>{label}</span><b className={s.mono}>{spec[i]}</b></li>)}</ul>
-      </div>
-    );
-  }
-  if (index === 1) {
-    return (
-      <div className={`${s.artifact} ${s.artifactPair}`}>
-        <figure><img src={V('model-a')} alt="" width={400} height={533} loading="lazy" decoding="async" /><figcaption className={s.mono}>{w.modelA}</figcaption></figure>
-        <figure><img src={V('model-b')} alt="" width={400} height={533} loading="lazy" decoding="async" /><figcaption className={s.mono}>{w.modelB}</figcaption></figure>
-        <p className={`${s.artifactNote} ${s.mono}`}>{w.modelNote}</p>
-      </div>
-    );
-  }
-  if (index === 2) {
-    return (
-      <div className={s.artifact}>
-        <img src={V('check')} alt="" width={600} height={800} loading="lazy" decoding="async" />
-        <span className={s.checkBox} aria-hidden="true" />
-        <ul className={s.checks}>{w.checks.map((label) => <li key={label}><span>{label}</span><b>{w.pass}</b></li>)}</ul>
-      </div>
-    );
-  }
-  if (index === 3) {
-    return (
-      <div className={s.artifact}>
-        <img src={V('check')} alt="" width={600} height={800} loading="lazy" decoding="async" />
-        <span className={s.brush} aria-hidden="true" />
-        <span className={`${s.artifactNote} ${s.mono}`}>{w.fix}</span>
-      </div>
-    );
-  }
-  if (index === 4) {
-    return (
-      <div className={s.artifact}>
-        <Film src={V('dir-2', 'mp4')} poster={V('dir-2', 'jpg')} label={copy.first.direction.clip} />
-        <span className={`${s.badge} ${s.mono}`}>00:05</span>
-      </div>
-    );
-  }
+export function V7Remix({ copy }: { copy: Copy }) {
+  const r = copy.remix;
+  const [runway, beauty] = r.formats;
+  const formats: RemixFormat[] = [
+    {
+      id: 'runway',
+      title: runway!.title,
+      ratio: 9 / 16,
+      src: V('rx-runway-orig', 'mp4'),
+      poster: V('rx-runway-orig', 'jpg'),
+      edits: ['coat', 'model', 'set'].map((id, index) => ({ id, ...runway!.edits[index]!, src: V(`rx-runway-${id}`, 'mp4'), poster: V(`rx-runway-${id}`, 'jpg') })),
+    },
+    {
+      id: 'beauty',
+      title: beauty!.title,
+      ratio: 16 / 9,
+      src: V('rx-beauty-orig', 'mp4'),
+      poster: V('rx-beauty-orig', 'jpg'),
+      edits: ['product', 'world'].map((id, index) => ({ id, ...beauty!.edits[index]!, src: V(`rx-beauty-${id}`, 'mp4'), poster: V(`rx-beauty-${id}`, 'jpg') })),
+    },
+  ];
   return (
-    <div className={s.artifact}>
-      <img src={V('dir-3')} alt="" width={600} height={800} loading="lazy" decoding="async" />
-      <span className={s.ratios} aria-hidden="true">{RATIOS.map((ratio) => <i key={ratio} data-ratio={ratio}><em className={s.mono}>{ratio}</em></i>)}</span>
-    </div>
-  );
-}
-
-export function V7Workflow({ copy }: { copy: Copy }) {
-  const w = copy.workflow;
-  const header = (
-    <div className={s.shell}>
-      <Reveal className={`${s.head} ${s.headRow}`}>
-        <div>
-          <Eyebrow>{w.eyebrow}</Eyebrow>
-          <h2 className={s.h2}>{w.title}</h2>
-        </div>
-        <p className={s.lead}>{w.body}</p>
-      </Reveal>
-    </div>
-  );
-  return (
-    <section data-v7-workflow data-section data-theme="light" className={`${s.section} ${s.workflow}`}>
-      <PinnedTrack label={w.track} prev={w.prev} next={w.next} header={header}>
-        {w.steps.map((step, index) => (
-          <article key={step.title} data-track-item data-workflow-step={index} className={s.step}>
-            <StepArtifact index={index} copy={copy} />
-            <div className={s.stepText}>
-              <span className={s.mono}>{String(index + 1).padStart(2, '0')}</span>
-              <h3 className={s.h4}>{step.title}</h3>
-              <p className={s.body}>{step.body}</p>
-            </div>
-          </article>
-        ))}
-      </PinnedTrack>
+    <section id="remix" data-v7-remix data-section data-theme="light" className={`${s.section} scroll-mt-20`}>
+      <div className={s.shell}>
+        <Reveal className={`${s.head} ${s.headRow}`}>
+          <div>
+            <Eyebrow status={r.early}>{r.eyebrow}</Eyebrow>
+            <h2 className={s.h2}>{r.title}</h2>
+          </div>
+          <div className={s.headAside}>
+            <p className={s.lead}>{r.body}</p>
+            <p className={s.note}>{r.note}</p>
+          </div>
+        </Reveal>
+        <Remix formats={formats} labels={{ original: r.original, composer: r.composer, hint: r.hint, working: r.working, formatsLabel: r.formatsLabel }} />
+      </div>
     </section>
   );
 }
 
 export function V7Work({ copy, studio, media }: { copy: Copy; studio: StudioCopy } & Media) {
   const w = copy.work;
-  const range = (
-    <div key="range">
+  const looks = (
+    <div key="looks">
       <p className={s.note}>{w.notes[0]}</p>
-      <ul data-product-range className={s.range}>
-        {PRODUCTS.map((key) => (
-          <li key={key} data-range-product={key} className={s.rangeItem}>
-            <img src={landingSrc(media, `pk-${key}`)} alt="" width={720} height={900} loading="lazy" decoding="async" />
+      <ul data-asset-looks className={s.looks}>
+        {LOOKS.map((look) => (
+          <li key={look.id} data-asset-look={look.id}>
+            <img src={'studio' in look ? studioSrc(media, look.id) : landingSrc(media, look.id)} alt="" width={1000} height={1500} loading="lazy" decoding="async" />
           </li>
         ))}
       </ul>
     </div>
   );
-  const scenes = (
-    <div key="scenes">
+  const cuts = (
+    <div key="cuts">
       <p className={s.note}>{w.notes[1]}</p>
-      <ul className={s.scenes}>
-        {PRODUCTS.map((key) => (
-          <li key={key} data-asset-scene={key} className={s.sceneTile}>
-            <img src={landingSrc(media, `sc-${key}`)} alt="" width={900} height={1125} loading="lazy" decoding="async" />
+      <ul data-asset-cuts className={s.cuts}>
+        {LANDING_CUTS.map((key) => (
+          <li key={key} data-asset-cut={key}>
+            <img src={landingSrc(media, `cut-${key}`)} alt="" width={1000} height={1333} loading="lazy" decoding="async" />
           </li>
         ))}
       </ul>
@@ -361,23 +312,12 @@ export function V7Work({ copy, studio, media }: { copy: Copy; studio: StudioCopy
   const ads = (
     <div key="ads">
       <p className={s.note}>{w.notes[3]}</p>
-      <ul className={s.clips}>
-        {CLIPS.map((key) => (
-          <li key={key} data-asset-clip={key} className={s.clip}>
-            <Film src={L(`clip-${key}`, 'mp4')} poster={L(`sc-${key}`)} label={w.clipLabel} />
-            <span className={s.tag}>{w.clipLabel}</span>
-          </li>
-        ))}
-      </ul>
       <div className={s.ads}>
-        {[
-          { id: 'highteen', still: L('highteen-product'), film: '/reel/campaigns/highteen.mp4', poster: '/reel/campaigns/highteen.jpg' },
-          { id: 'ad', still: L('beauty-ad-product'), film: L('beauty-ad', 'mp4'), poster: L('beauty-ad', 'jpg') },
-        ].map((ad, index) => (
+        {ADS.map((ad, index) => (
           <div key={ad.id} data-asset-ad={ad.id} className={s.adPair}>
             <figure data-asset-ad-still className={s.adStill}>
               <img src={ad.still} alt="" width={900} height={1200} loading="lazy" decoding="async" />
-              <figcaption className={s.tag}>{w.adStill}</figcaption>
+              <figcaption className={s.tag}>{index === 0 ? w.adStill : w.adStill2}</figcaption>
             </figure>
             <span aria-hidden="true" className={s.adArrow}>→</span>
             <figure data-asset-clip={ad.id} className={s.adFilm}>
@@ -396,8 +336,34 @@ export function V7Work({ copy, studio, media }: { copy: Copy; studio: StudioCopy
           <Eyebrow status={w.early}>{w.eyebrow}</Eyebrow>
           <h2 className={s.h2}>{w.title}</h2>
         </Reveal>
-        <Tabs name="work" labels={w.tabs} panels={[range, scenes, tryOn, ads]} />
+        <Tabs name="work" labels={w.tabs} panels={[looks, cuts, tryOn, ads]} />
         <p className={`${s.note} mt-6`}>{w.note}</p>
+      </div>
+    </section>
+  );
+}
+
+export function V7Finish({ copy, media }: { copy: Copy } & Media) {
+  const f = copy.finish;
+  const pairs = PAIRS.map((id, index) => ({
+    id,
+    raw: landingSrc(media, `c-${id}-raw`),
+    ours: landingSrc(media, `c-${id}-ours`),
+    chip: f.pairs[index]!.chip,
+    note: f.pairs[index]!.note,
+    alt: [f.pairs[index]!.raw, f.pairs[index]!.ours] as [string, string],
+  }));
+  return (
+    <section data-v7-finish data-section data-theme="light" className={`${s.section} ${s.sky}`}>
+      <div className={`${s.shell} ${s.split}`}>
+        <Reveal className={s.head}>
+          <Eyebrow status={f.soon}>{f.eyebrow}</Eyebrow>
+          <h2 className={s.h2}>{f.title}</h2>
+          <p className={s.lead}>{f.body}</p>
+        </Reveal>
+        <Reveal className={s.compareCol} data-contrast>
+          <Compare pairs={pairs} labels={{ raw: f.raw, ours: f.ours, hint: f.hint, slider: f.slider }} />
+        </Reveal>
       </div>
     </section>
   );
@@ -496,7 +462,7 @@ export function V7Closing({ copy, locale, children }: { copy: Copy; locale: Loca
           </div>
         </div>
         <figure className={s.closingMedia}>
-          <Film src={V('beauty', 'mp4')} poster={V('beauty', 'jpg')} label={c.filmLabel} />
+          <Film src={V('closing', 'mp4')} poster={V('closing', 'jpg')} label={c.filmLabel} />
         </figure>
       </div>
       {children}

@@ -57,6 +57,7 @@ npm run sweep:anon             # 익명 방문자 스윕 1,000+ 체크, "SWEEP P
 - 관리자 동작은 `lib/admin/operations.ts` 레지스트리에 등록된 오퍼레이션으로만 한다(`/admin/do`).
 - 테스트는 vitest. 새 기능은 실패하는 테스트 → 구현 → 통과 순서로. 기존 통과 테스트를 깨뜨리지 않는다.
 - 렌더 파이프라인(`lib/renders/*`)과 인물 자산(`lib/identity/*`, `lib/ark/*`)은 안전 장치다. **얼굴 검증·제공사 검수를 우회하는 코드는 어떤 이유로도 쓰지 않는다.**
+- **UI를 만들거나 이미지·영상을 생성하기 전에 `docs/design/IDENTITY.md`를 먼저 읽는다.** TWINGS의 색, 서체, 컴포넌트, 사진과 영상 만드는 법, 모델 역할의 고정 원본이다(대표 결정 2026-10-30). 값은 `lib/design/identity.ts`, 위반은 `tests/design/identity.test.ts`가 막는다.
 - UI 작업 전 `docs/design/TASTE.md`와 `docs/design/TOOLBOX.md`를 읽는다. 대표가 화면에 대해 좋다·싫다고 한 것은 같은 PR에서 TASTE.md에 추가한다. TWINGS 화면은 전역 YAGI v1.2 레드를 쓰지 않는다.
 
 ## 5. 문안·브랜드 규칙 (어기면 리뷰에서 반려)

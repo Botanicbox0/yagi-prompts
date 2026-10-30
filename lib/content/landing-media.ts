@@ -15,8 +15,8 @@ import type { EvidencePair } from './slots';
 export type LandingMediaPage = 'brands' | 'home';
 export type LandingMediaGroup =
   | 'contrast'
-  | 'range'
-  | 'scenes'
+  | 'looks'
+  | 'cuts'
   | 'vto'
   | 'homeHero';
 
@@ -36,15 +36,16 @@ export interface LandingMediaSlot {
 }
 
 /** Stills tied to a film: each ad's product shot shows the bottle or tube that ad plays. */
-export const FILM_BOUND_STILLS: readonly string[] = ['landing/highteen-product', 'landing/beauty-ad-product'];
+export const FILM_BOUND_STILLS: readonly string[] = ['landing/ad-denim', 'landing/highteen-product'];
 
 /** Override URLs by slot key; a slot that is absent shows its default. */
 export type LandingMedia = Readonly<Record<string, string>>;
 
 export const NO_LANDING_MEDIA: LandingMedia = Object.freeze({});
 
-/** The demo product family, in page order (components/brand-studio/v7.tsx). */
-export const LANDING_PRODUCTS = ['parfum', 'blush', 'oil', 'compact', 'lipoil', 'serum', 'mist', 'balm'] as const;
+/** The fashion looks and beauty shots, in page order (components/brand-studio/v7.tsx). */
+export const LANDING_LOOKS = ['coat', 'drape', 'street', 'carpet', 'knit', 'sculpt'] as const;
+export const LANDING_CUTS = ['flower', 'shelf', 'sphere', 'gel', 'ribbon', 'beads'] as const;
 
 function landing(name: string, group: LandingMediaGroup, ratio: string, width: number): LandingMediaSlot {
   return { key: `landing/${name}`, page: 'brands', group, src: `/reel/landing/${name}.webp`, ratio, width };
@@ -55,16 +56,18 @@ function studio(name: string, ratio: string): LandingMediaSlot {
 
 export const LANDING_MEDIA_SLOTS: readonly LandingMediaSlot[] = [
   // Brand landing, in page order.
-  ...['logo', 'skin', 'light'].flatMap((pair) => [landing(`c-${pair}-raw`, 'contrast', '1:1', 640), landing(`c-${pair}-ours`, 'contrast', '1:1', 640)]),
-  ...LANDING_PRODUCTS.map((key) => landing(`pk-${key}`, 'range', '4:5', 720)),
-  ...LANDING_PRODUCTS.map((key) => landing(`sc-${key}`, 'scenes', '4:5', 900)),
+  ...LANDING_LOOKS.map((key) => landing(`look-${key}`, 'looks', '2:3', 1000)),
+  ...LANDING_CUTS.map((key) => landing(`cut-${key}`, 'cuts', '3:4', 1000)),
+  ...['logo', 'garment', 'skin'].flatMap((pair) => [landing(`c-${pair}-raw`, 'contrast', '1:1', 1000), landing(`c-${pair}-ours`, 'contrast', '1:1', 1000)]),
   studio('vto-garment', '1:1'),
-  ...['vto-look-front', 'vto-look-upper', 'vto-look-side'].map((name) => studio(name, '3:4')),
-  studio('vto-free-amber', '3:4'),
-  studio('vto-free-alley', '9:16'),
-  studio('vto-free-mirror', '9:16'),
-  studio('vto-free-sofa', '3:4'),
-  studio('vto-free-drape', '3:4'),
+  ...['vto-set-front', 'vto-set-upper', 'vto-set-side'].map((name) => studio(name, '3:4')),
+  // The founder's own picks (2026-10-30), shown in the fashion looks gallery.
+  ...['vto-look-upper', 'vto-look-side', 'vto-look-front'].map((name) => studio(name, '3:4')),
+  studio('vto-free-amber', '2:3'),
+  studio('vto-free-alley', '2:3'),
+  studio('vto-free-mirror', '3:4'),
+  studio('vto-free-sofa', '9:16'),
+  studio('vto-free-drape', '1:1'),
   // The home hero's selfie → scene pair.
   { key: 'studio-demo/reference-selfie', page: 'home', group: 'homeHero', src: '/reel/studio-demo/reference-selfie.jpeg', ratio: '4:5', width: 960 },
   { key: 'studio-demo/different-person', page: 'home', group: 'homeHero', src: '/reel/studio-demo/different-person.jpg', ratio: '4:3', width: 1664 },

@@ -231,77 +231,6 @@ export function Track({ children, label, prev, next, className }: { children: Re
   );
 }
 
-/**
- * The workflow rail. On wide screens with motion allowed, vertical scroll drives it sideways while it is
- * pinned (one screen tall plus the rail's overflow). Elsewhere it is the plain snap track with buttons.
- * The same DOM serves both, so nothing shifts when the island wakes up.
- */
-export function PinnedTrack({ children, label, prev, next, header }: { children: ReactNode; label: string; prev: string; next: string; header?: ReactNode }) {
-  const outer = useRef<HTMLDivElement>(null);
-  const rail = useRef<HTMLDivElement>(null);
-  const [pinned, setPinned] = useState(false);
-  useEffect(() => {
-    const query = window.matchMedia('(min-width: 1024px) and (prefers-reduced-motion: no-preference)');
-    const sync = () => setPinned(query.matches);
-    sync();
-    query.addEventListener('change', sync);
-    return () => query.removeEventListener('change', sync);
-  }, []);
-  useEffect(() => {
-    const box = outer.current;
-    const strip = rail.current;
-    if (!pinned || !box || !strip) return;
-    let distance = 0;
-    let frame = 0;
-    const measure = () => {
-      const pad = parseFloat(getComputedStyle(strip).paddingRight) || 0;
-      distance = Math.max(0, strip.scrollWidth - window.innerWidth + pad);
-      box.style.height = `${window.innerHeight + distance}px`;
-    };
-    const paint = () => {
-      frame = 0;
-      const top = box.getBoundingClientRect().top;
-      const progress = distance ? Math.min(1, Math.max(0, -top / distance)) : 0;
-      strip.style.transform = `translate3d(${(-progress * distance).toFixed(1)}px, 0, 0)`;
-      box.style.setProperty('--progress', progress.toFixed(4));
-    };
-    const onScroll = () => { if (!frame) frame = requestAnimationFrame(paint); };
-    const onResize = () => { measure(); paint(); };
-    measure();
-    paint();
-    window.addEventListener('scroll', onScroll, { passive: true });
-    window.addEventListener('resize', onResize);
-    return () => {
-      window.removeEventListener('scroll', onScroll);
-      window.removeEventListener('resize', onResize);
-      if (frame) cancelAnimationFrame(frame);
-      box.style.height = '';
-      strip.style.transform = '';
-    };
-  }, [pinned]);
-  const step = (direction: 1 | -1) => {
-    const node = rail.current;
-    if (!node) return;
-    const card = node.querySelector<HTMLElement>('[data-track-item]');
-    node.scrollBy({ left: direction * (card ? card.getBoundingClientRect().width + 16 : node.clientWidth * 0.8), behavior: reducedMotion() ? 'auto' : 'smooth' });
-  };
-  return (
-    <div ref={outer} className={styles.pinOuter} data-pinned={pinned ? 'true' : undefined}>
-      <div className={styles.pinSticky}>
-        {header}
-        <div className={styles.trackButtons}>
-          <button type="button" className={styles.round} onClick={() => step(-1)} aria-label={prev}>←</button>
-          <button type="button" className={styles.round} onClick={() => step(1)} aria-label={next}>→</button>
-        </div>
-        <div ref={rail} className={`${styles.pinRail} ${styles.shellBleed}`} role="region" aria-label={label} tabIndex={0} data-track>
-          {children}
-        </div>
-        <div className={`${styles.pinBar} ${styles.shellBleed}`} aria-hidden="true"><i /></div>
-      </div>
-    </div>
-  );
-}
-
 /** A small "Book a demo" pill that floats in after the hero and steps aside for the closing screen. */
 export function DemoDock({ label, cta, href }: { label: string; cta: string; href: string }) {
   const [shown, setShown] = useState(false);
@@ -327,46 +256,201 @@ export function DemoDock({ label, cta, href }: { label: string; cta: string; hre
 }
 
 /**
- * The engine band: the fixed layer (taste, hardlines, prompt rules, approved shots) stays locked while
- * the changing layer (season, channel, format) swaps the output. The frame morphs to each ratio.
+ * The hero film in three sizes: phones get 720p, large high-density screens get 4K, everyone else 1080p. A browser that
+ * ignores `media` on a source takes the first one, the small file. One quiet spec line follows the cuts.
  */
-export function EngineSwitch({ fixed, fixedItems, changes, changeItems, output, note, outputs }: {
-  fixed: string;
-  fixedItems: readonly string[];
-  changes: string;
-  changeItems: readonly string[];
-  output: string;
-  note: string;
-  outputs: ReadonlyArray<{ ratio: string; media: ReactNode }>;
+export function HeroFilm({ src, srcSmall, srcLarge, poster, label, cues, className, specClassName }: {
+  src: string;
+  srcSmall: string;
+  srcLarge: string;
+  poster: string;
+  label: string;
+  cues: ReadonlyArray<{ at: number; text: string }>;
+  className?: string;
+  specClassName?: string;
 }) {
-  const [active, setActive] = useState(0);
+  const ref = useRef<HTMLVideoElement>(null);
+  const [cue, setCue] = useState(0);
+  useEffect(() => {
+    const video = ref.current;
+    if (!video || reducedMotion()) return;
+    const observer = new IntersectionObserver(([entry]) => {
+      if (entry?.isIntersecting) void video.play().catch(() => {});
+      else video.pause();
+    });
+    observer.observe(video);
+    const onTime = () => {
+      let next = 0;
+      cues.forEach((item, index) => { if (video.currentTime >= item.at) next = index; });
+      setCue(next);
+    };
+    video.addEventListener('timeupdate', onTime);
+    return () => { observer.disconnect(); video.removeEventListener('timeupdate', onTime); };
+  }, [cues]);
   return (
-    <div data-v7-engine className={styles.engine}>
-      <div className={styles.engineCol}>
-        <p className={styles.engineLabel}><span className={styles.lock} aria-hidden="true" />{fixed}</p>
-        <ul className={styles.fixedList}>{fixedItems.map((item) => <li key={item}>{item}</li>)}</ul>
-      </div>
-      <span className={styles.enginePlus} aria-hidden="true">+</span>
-      <div className={styles.engineCol}>
-        <p className={styles.engineLabel}><span className={styles.dial} aria-hidden="true" />{changes}</p>
-        <div role="radiogroup" aria-label={changes} className={styles.changeList}>
-          {changeItems.map((item, index) => (
-            <button key={item} type="button" role="radio" aria-checked={index === active} className={styles.change} onClick={() => setActive(index)} data-engine-change={index}>
-              {item}
-            </button>
+    <>
+      <video ref={ref} className={className} poster={poster} muted loop playsInline preload="metadata" aria-label={label} data-loop-video>
+        <source src={srcSmall} media="(max-width: 767px)" type="video/mp4" />
+        <source src={srcLarge} media="(min-width: 1700px) and (min-resolution: 1.5dppx), (min-width: 2400px)" type="video/mp4" />
+        <source src={src} type="video/mp4" />
+      </video>
+      <p className={specClassName} aria-hidden="true" data-hero-spec><span key={cue}>{cues[cue]?.text}</span></p>
+    </>
+  );
+}
+
+export type RemixEdit = { id: string; prompt: string; done: string; src: string; poster: string };
+export type RemixFormat = { id: string; title: string; ratio: number; src: string; poster: string; edits: readonly RemixEdit[] };
+
+/**
+ * The remix studio: pick a format, say what to change, and the real edited film replaces the original in
+ * place. It runs through the edits on its own while on screen until the visitor takes over. Every result
+ * is a file the engine really made; only the typing is staged.
+ */
+export function Remix({ formats, labels }: {
+  formats: readonly RemixFormat[];
+  labels: { original: string; composer: string; hint: string; working: string; formatsLabel: string };
+}) {
+  const [format, setFormat] = useState(0);
+  const [edit, setEdit] = useState(-1);
+  const [phase, setPhase] = useState<'idle' | 'typing' | 'working'>('idle');
+  const [typing, setTyping] = useState('');
+  const [typed, setTyped] = useState(0);
+  const [visible, setVisible] = useState(false);
+  const touched = useRef(false);
+  const root = useRef<HTMLDivElement>(null);
+  const films = useRef<Array<HTMLVideoElement | null>>([]);
+  const originalFilm = useRef<HTMLVideoElement>(null);
+  const timers = useRef<Array<ReturnType<typeof setTimeout>>>([]);
+  const current = formats[format]!;
+
+  const clearTimers = useCallback(() => {
+    for (const timer of timers.current) { clearTimeout(timer); clearInterval(timer); }
+    timers.current = [];
+  }, []);
+
+  const run = useCallback((formatIndex: number, editIndex: number) => {
+    clearTimers();
+    const prompt = formats[formatIndex]?.edits[editIndex]?.prompt;
+    if (!prompt || reducedMotion()) { setEdit(editIndex); setPhase('idle'); setTyping(''); return; }
+    setTyping(prompt);
+    setTyped(0);
+    setPhase('typing');
+    const step = setInterval(() => {
+      setTyped((count) => {
+        if (count < prompt.length) return count + 1;
+        clearInterval(step);
+        setPhase('working');
+        timers.current.push(setTimeout(() => { setEdit(editIndex); setPhase('idle'); setTyping(''); }, 800));
+        return count;
+      });
+    }, 34);
+    timers.current.push(step);
+  }, [clearTimers, formats]);
+
+  useEffect(() => clearTimers, [clearTimers]);
+
+  useEffect(() => {
+    const node = root.current;
+    if (!node) return;
+    const observer = new IntersectionObserver(([entry]) => setVisible(Boolean(entry?.isIntersecting)), { threshold: 0.35 });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+
+  // Only the film on show plays; the rest wait at their first frame and load nothing until they are needed.
+  useEffect(() => {
+    films.current.forEach((video, index) => {
+      if (!video) return;
+      if (index === edit + 1 && visible && !reducedMotion()) {
+        video.preload = 'auto';
+        void video.play().catch(() => {});
+      } else {
+        video.pause();
+        if (index !== edit + 1) video.currentTime = 0;
+      }
+    });
+  }, [edit, format, visible]);
+
+  // The original plays beside an edit, so the change reads at a glance.
+  useEffect(() => {
+    const video = originalFilm.current;
+    if (!video) return;
+    if (edit >= 0 && visible && !reducedMotion()) void video.play().catch(() => {});
+    else video.pause();
+  }, [edit, format, visible]);
+
+  // Walks through the edits until the visitor picks one.
+  useEffect(() => {
+    if (!visible || touched.current || phase !== 'idle' || reducedMotion()) return;
+    const timer = setTimeout(() => {
+      const next = edit + 1;
+      if (next < current.edits.length) run(format, next);
+      else { setFormat((format + 1) % formats.length); setEdit(-1); }
+    }, edit < 0 ? 2200 : 6500);
+    return () => clearTimeout(timer);
+  }, [visible, phase, edit, format, current.edits.length, formats.length, run]);
+
+  const choose = (index: number) => { touched.current = true; run(format, index); };
+  const chooseFormat = (index: number) => { touched.current = true; clearTimers(); setFormat(index); setEdit(-1); setPhase('idle'); setTyping(''); };
+  const shown = edit >= 0 ? current.edits[edit] : undefined;
+
+  return (
+    <div ref={root} className={styles.remix} data-remix>
+      <div className={styles.remixPanel}>
+        <div role="tablist" aria-label={labels.formatsLabel} className={styles.chips}>
+          {formats.map((item, index) => (
+            <button key={item.id} type="button" role="tab" aria-selected={index === format} className={styles.chip} data-remix-format={item.id} onClick={() => chooseFormat(index)}>{item.title}</button>
           ))}
         </div>
-        <p className={styles.note}>{note}</p>
-      </div>
-      <span className={styles.enginePlus} aria-hidden="true">=</span>
-      <figure className={styles.engineOut} aria-label={output}>
-        <div className={styles.engineFrame} style={{ '--ratio': outputs[active]?.ratio ?? '3 / 4' } as CSSProperties}>
-          {outputs.map((item, index) => (
-            <div key={index} className={styles.engineMedia} data-active={index === active ? 'true' : undefined}>{item.media}</div>
-          ))}
+        <div className={styles.remixChat} aria-live="polite">
+          {shown ? (
+            <>
+              <p className={styles.remixSaid}>{shown.prompt}</p>
+              <p className={styles.remixDone}><span aria-hidden="true">✓</span>{shown.done}</p>
+            </>
+          ) : <p className={styles.remixHint}>{labels.hint}</p>}
         </div>
-        <figcaption className={styles.note}>{output}</figcaption>
+        <ul className={styles.remixEdits}>
+          {current.edits.map((item, index) => (
+            <li key={item.id}>
+              <button type="button" className={styles.remixEdit} data-remix-edit={item.id} aria-pressed={index === edit} onClick={() => choose(index)}>{item.prompt}</button>
+            </li>
+          ))}
+        </ul>
+        <div className={styles.composer} aria-hidden="true">
+          <span data-empty={phase === 'idle' ? 'true' : undefined}>{phase === 'idle' ? labels.composer : typing.slice(0, typed)}</span>
+          {phase === 'typing' ? <i className={styles.caret} /> : null}
+          <b className={styles.composerSend} data-busy={phase === 'working' ? 'true' : undefined}>↑</b>
+        </div>
+      </div>
+      <div className={styles.remixMedia}>
+      {current.ratio < 1 ? (
+        <figure className={styles.remixOriginal} data-shown={edit >= 0 ? 'true' : undefined} style={{ '--arn': current.ratio } as CSSProperties}>
+          <video ref={originalFilm} src={current.src} poster={current.poster} muted loop playsInline preload="none" aria-hidden="true" data-loop-video />
+          <figcaption className={styles.tag}>{labels.original}</figcaption>
+        </figure>
+      ) : null}
+      <figure className={styles.remixStage} style={{ '--arn': current.ratio } as CSSProperties} data-working={phase === 'working' ? 'true' : undefined}>
+        {[{ id: 'original', src: current.src, poster: current.poster }, ...current.edits].map((item, index) => (
+          <video
+            key={`${current.id}-${item.id}`}
+            ref={(node) => { films.current[index] = node; }}
+            className={styles.remixFilm}
+            data-active={index === edit + 1 ? 'true' : undefined}
+            src={item.src}
+            poster={item.poster}
+            muted
+            loop
+            playsInline
+            preload="none"
+            aria-hidden={index === edit + 1 ? undefined : true}
+            data-loop-video
+          />
+        ))}
+        <figcaption className={styles.tag}>{phase === 'working' ? labels.working : shown ? shown.prompt : labels.original}</figcaption>
       </figure>
+      </div>
     </div>
   );
 }

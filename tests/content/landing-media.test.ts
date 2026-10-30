@@ -31,13 +31,14 @@ describe('landing media slots', () => {
   });
 
   it('resolves an override, else the file, and refuses names it does not know', () => {
-    const media = { 'landing/sc-balm': 'https://cdn.example/balm.webp' };
-    expect(mediaSrc(media, 'landing/sc-balm')).toBe('https://cdn.example/balm.webp');
-    expect(landingSrc(media, 'pk-balm')).toBe('/reel/landing/pk-balm.webp');
+    const media = { 'landing/cut-gel': 'https://cdn.example/gel.webp' };
+    expect(mediaSrc(media, 'landing/cut-gel')).toBe('https://cdn.example/gel.webp');
+    expect(landingSrc(media, 'look-coat')).toBe('/reel/landing/look-coat.webp');
     expect(studioSrc(NO_LANDING_MEDIA, 'vto-garment')).toBe('/reel/studio/vto-garment.webp');
-    // Retired files are not slots any more: the orbit bottles and the old mood library.
+    // Retired files are not slots any more: the orbit bottles, the old mood library and the warm product set.
     expect(() => studioSrc(media, 'bottle-red')).toThrow(/unknown landing media slot/);
     expect(() => landingSrc(media, 'amber-yagi')).toThrow(/unknown landing media slot/);
+    expect(() => landingSrc(media, 'pk-parfum')).toThrow(/unknown landing media slot/);
   });
 
   it('keeps the hero film only while its still is the original', () => {

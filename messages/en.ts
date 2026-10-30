@@ -41,8 +41,8 @@ export const en = {
     open: 'Open page',
     groups: {
       contrast: 'Generated as-is vs TWINGS',
-      range: 'Eight-product packshots',
-      scenes: 'Mood scenes',
+      looks: 'Fashion looks',
+      cuts: 'Beauty shots',
       vto: 'Try-on (VTO)',
       homeHero: 'Selfie → scene (personal landing)',
     },
@@ -531,12 +531,11 @@ export const en = {
   brandLanding: {
     "v7": {
       "hero": {
-        "eyebrow": "TWINGS for Brands",
         "title": "Your brand’s own\nAI media engine",
-        "body": "Your brand’s taste and the production rules YAGI refined on global campaigns stay fixed. Only the parts that change with trends and channels get remade.",
+        "body": "It already knows your brand, so anyone on your team can create expert-level images and films.",
         "cta": "Book a demo",
         "secondary": "See the work",
-        "filmLabel": "Brand films made with TWINGS",
+        "filmLabel": "A fashion editorial film shot in a French-blue studio",
         "doors": [
           {
             "title": "Asset studio",
@@ -550,77 +549,31 @@ export const en = {
             "title": "Production",
             "body": "Brand films by YAGI"
           }
-        ]
-      },
-      "problem": {
-        "eyebrow": "Why it all looks the same",
-        "title": "AI ads are starting to look alike",
-        "body": "AI only knows what the prompt says. Leave out where the logo sits or where the light comes from, and it fills the gap with a guess.",
-        "raw": "Plain generation",
-        "hint": "What to compare",
-        "slider": "Where the two shots split",
-        "caption": "Same product, same request",
-        "pairs": [
-          {
-            "chip": "Logo",
-            "note": "In the plain version the mark became a letter Y. On the right, the rule check put the real mark back.",
-            "raw": "Plain generation: the mark became a letter Y",
-            "ours": "TWINGS: the real mark kept"
-          },
-          {
-            "chip": "Skin",
-            "note": "Pores and stray hairs stay.",
-            "raw": "Plain generation: skin as smooth as plastic",
-            "ours": "TWINGS: skin with pores and stray hairs"
-          },
-          {
-            "chip": "Light",
-            "note": "One window light, from the upper left. The plain version came back with a stock wooden table.",
-            "raw": "Plain generation: a bottle on a stock wooden table",
-            "ours": "TWINGS: a bottle shot in one window light"
-          }
-        ]
+        ],
+        "doorsLabel": "Explore the service"
       },
       "first": {
-        "eyebrow": "What's different",
-        "title": "What stays fixed, and what changes",
-        "body": "A brand has endless combinations. Lock what must not change first, and the work still looks like you when the trend moves on.",
-        "engine": {
-          "fixed": "Fixed",
-          "fixedItems": [
-            "Palette and light",
-            "Hardlines",
-            "Prompt rules for each model",
-            "Approved shots"
-          ],
-          "changes": "Changes",
-          "changeItems": [
-            "Winter season",
-            "Reels 9:16",
-            "Product page 4:5"
-          ],
-          "output": "What the engine made",
-          "note": "Tap a change. The fixed layer stays put."
-        },
-        "layerTitle": "How the fixed layer is built",
-        "studio": "Today the YAGI studio runs these steps by hand. We are building them into the platform, one at a time.",
+        "eyebrow": "Brand understanding",
+        "title": "It learns your brand first",
+        "body": "Add your website, product photos and past campaigns. It learns your colours, lighting and what to avoid, and it remembers the shots you approve.",
+        "studio": "Today the YAGI studio runs this for you. We are opening each step on the platform one at a time.",
         "chapters": [
           {
-            "label": "Hardlines",
-            "title": "First, what must never change",
-            "body": "We draft the rules from your brand files and website. Your team edits them and signs off.",
-            "status": "Run by the studio"
+            "label": "Brand rules",
+            "title": "Add your materials and get the rules",
+            "body": "It drafts rules from your website address and brand files. Your team edits them and signs off.",
+            "status": "Running in the studio"
           },
           {
             "label": "Brand memory",
-            "title": "Approved shots become the baseline for the next job",
-            "body": "Picks and fixes stay with the brand. Every new request starts from that record.",
+            "title": "It remembers what you approved",
+            "body": "The shots you pick and the fixes you make stay with the brand. The next request starts from there.",
             "status": "Coming"
           },
           {
             "label": "One-line direction",
-            "title": "One line is enough",
-            "body": "“Winter morning, window light” becomes a full shot brief, down to lens and colour values.",
+            "title": "One line becomes an expert’s brief",
+            "body": "Write “next to a glass sphere, on the blue set” and it turns into a shot brief with the lens, light and colour values filled in.",
             "status": "Coming"
           }
         ],
@@ -644,11 +597,11 @@ export const en = {
           "title": "YAGI brand memory",
           "approved": "Approved",
           "notes": [
-            "Logo 8% smaller",
-            "Longer shadow",
-            "No skin smoothing",
-            "Bottle on the right third"
-          ],
+          "Logo 8% smaller",
+          "Longer shadow",
+          "Softer reflections",
+          "Bottle on the right third"
+        ],
           "look": "Saved colour look",
           "campaigns": [
             "Campaign 1",
@@ -657,92 +610,42 @@ export const en = {
           ]
         },
         "direction": {
-          "prompt": "winter morning, window light",
+          "prompt": "Next to a glass sphere, on the blue set",
           "brief": "Shot brief",
           "spec": [
             "85mm lens",
-            "eye level",
-            "window light, upper left",
-            "shadow #3A4A5E",
-            "highlight #EEF3F8"
+            "Low camera",
+            "Light pooling on the floor",
+            "Set #3875C5",
+            "Highlights #F3F7FA"
           ],
           "outputs": "Three shots from this brief",
-          "clip": "A five-second clip of a shot from the brief"
+          "clip": "A film from the brief"
         }
-      },
-      "workflow": {
-        "eyebrow": "What's inside",
-        "title": "The workflow from real campaigns",
-        "body": "These are the steps YAGI takes on every campaign.",
-        "track": "Workflow steps",
-        "prev": "Previous step",
-        "next": "Next step",
-        "steps": [
-          {
-            "title": "Read the reference",
-            "body": "A great shot’s lens and light, written down as numbers."
-          },
-          {
-            "title": "Pick the model",
-            "body": "Each shot suits a different model. The prompt changes to match."
-          },
-          {
-            "title": "Check",
-            "body": "Every shot: is the logo intact, do hands and skin look real?"
-          },
-          {
-            "title": "Fix in place",
-            "body": "Only small spots are redrawn, like a blurred logo or skin that reads as AI."
-          },
-          {
-            "title": "Animate",
-            "body": "Approved shots become five-second clips."
-          },
-          {
-            "title": "Finish",
-            "body": "Match the colour, then export in the ratio each channel needs."
-          }
-        ],
-        "analysis": [
-          "Lens",
-          "Light",
-          "Shadow",
-          "Highlight"
-        ],
-        "modelA": "Model A",
-        "modelB": "Model B",
-        "modelNote": "Same request, different models",
-        "checks": [
-          "Mark",
-          "Fingers",
-          "Skin texture"
-        ],
-        "pass": "Pass",
-        "fix": "Only this spot is redrawn"
       },
       "work": {
         "eyebrow": "The work",
-        "title": "Eight products, one set of rules",
+        "title": "What you get",
         "early": "Early access",
         "tabs": [
-          "Product shots",
-          "Scenes",
+          "Fashion looks",
+          "Beauty shots",
           "Try-on",
-          "Video ads"
+          "Ad films"
         ],
         "notes": [
-          "Eight products sharing one mark and one cap.",
-          "Original YAGI campaign frames with only the product swapped.",
-          "Lookbook and editorial shots from one garment photo and a virtual model.",
-          "Each ad sits next to a shot of the product it shows."
+          "One world across the looks, like a season’s lookbook.",
+          "One perfume, shot differently in each scene. The mark stays the same.",
+          "One garment photo and a fictional model become a lookbook and an editorial.",
+          "Each ad sits next to the product or outfit it features."
         ],
-        "adStill": "Product shot",
+        "adStill": "Outfit detail",
         "adLabels": [
-          "20-second ad, same perfume",
-          "15-second ad, same lip gloss"
+          "A 12-second fashion film with the same outfit",
+          "A 20-second ad with the same perfume"
         ],
-        "clipLabel": "5-second clip",
-        "note": "Example screens. Products and models are fictional."
+        "note": "Example screens. Products and models are fictional.",
+        "adStill2": "Product shot"
       },
       "campaign": {
         "eyebrow": "Creator campaigns",
@@ -786,12 +689,13 @@ export const en = {
           "Send jobs from your team’s own AI agent"
         ],
         "films": [
+          "Red carpet",
           "Tutu, through the lens",
           "A daydream bigger than the room",
           "Afternoon in the tank",
           "Tea room"
         ],
-        "reelNote": "Example films by YAGI Production. Everyone in them is fictional.",
+        "reelNote": "Example films by YAGI Production.",
         "reel": "Example brand films",
         "prev": "Previous film",
         "next2": "Next film",
@@ -802,12 +706,86 @@ export const en = {
       "closing": {
         "eyebrow": "Your shortcut to on-brand AI media",
         "title": "No more\ngeneric AI images",
-        "body": "Bring your brand files to the demo and see the difference.",
+        "body": "Bring your brand files to a demo and see the results.",
         "cta": "Book a demo",
-        "filmLabel": "Five-second clip of a fictional model in a blue shirt holding the YAGI body mist"
+        "filmLabel": "The YAGI heart perfume on a blue set"
       },
       "metaTitle": "Your brand’s own AI media engine",
-      "metaDescription": "TWINGS for Brands is your brand’s own AI media engine. It locks your taste and the production rules YAGI refined on global campaigns, then makes product assets and video ads for each trend and channel."
+      "metaDescription": "TWINGS for Brands is your brand’s own AI media engine. It already knows your brand, so anyone on your team can create expert-level images and films, and remix great formats into your brand.",
+      "remix": {
+        "eyebrow": "Remix",
+        "early": "Early access",
+        "title": "Turn a great format into your brand",
+        "body": "New, well-made formats keep arriving on TWINGS. Swap just the person or the product, or rewrite the story too.",
+        "note": "These results are real edits made with this engine. For now the YAGI studio runs it for you.",
+        "original": "Original",
+        "composer": "Say what you want to change",
+        "hint": "Tap a line to try it",
+        "working": "Working",
+        "formatsLabel": "Formats",
+        "formats": [
+          {
+            "title": "Fashion show",
+            "edits": [
+              {
+                "prompt": "Change the coat to our season’s look",
+                "done": "The walk and the camera stayed. Only the outfit changed."
+              },
+              {
+                "prompt": "Change the model",
+                "done": "Same outfit, same walk. Only the person changed."
+              },
+              {
+                "prompt": "Make the set our blue",
+                "done": "The person and the camera stayed. Only the set changed colour."
+              }
+            ]
+          },
+          {
+            "title": "Beauty campaign",
+            "edits": [
+              {
+                "prompt": "Change the product to our perfume",
+                "done": "The scenes stayed. Only the product changed."
+              },
+              {
+                "prompt": "Now shoot it again in a blue world",
+                "done": "Same structure, with a new world and a new product."
+              }
+            ]
+          }
+        ]
+      },
+      "finish": {
+        "eyebrow": "Local fixes",
+        "soon": "Coming",
+        "title": "Paint only what needs fixing",
+        "body": "Redraw just the blurred logo or the skin that looks like AI. Everything else stays as it was.",
+        "raw": "First shot",
+        "ours": "Fixed",
+        "hint": "What to fix",
+        "slider": "Position of the divider between the two shots",
+        "pairs": [
+          {
+            "chip": "Logo",
+            "note": "Only the blurred mark was painted and redrawn.",
+            "raw": "First shot: a perfume with a soft mark",
+            "ours": "Fixed: a perfume with a sharp mark"
+          },
+          {
+            "chip": "Garment detail",
+            "note": "Only the buckle and ribbon were redrawn. The rest of the fur is untouched.",
+            "raw": "First shot: a smudged buckle",
+            "ours": "Fixed: a clean buckle"
+          },
+          {
+            "chip": "Skin",
+            "note": "Pores and stray hairs came back. Her features did not change.",
+            "raw": "First shot: over-smooth skin",
+            "ours": "Fixed: skin with real texture"
+          }
+        ]
+      }
     },
     "landing": {
       "hero": {
@@ -973,7 +951,7 @@ export const en = {
             "body": "Scene, pose and ratio are yours. For feeds and ads."
           }
         ],
-        "garment": "Yagi suede overshirt",
+        "garment": "Blue tweed jacket",
         "garmentNote": "Uploaded photo",
         "lockLabel": "Kept exactly",
         "locks": [
@@ -993,11 +971,11 @@ export const en = {
           "45° side"
         ],
         "freeCuts": [
-          "Amber light",
-          "Autumn alley",
-          "Mirror selfie",
-          "Black-and-white sofa",
-          "Rose drape"
+          "Moss-green studio",
+          "Dark panelled room",
+          "Crosswalk snap",
+          "Backyard goal",
+          "High-key white"
         ],
         "note": "Example screen. The model is a virtual person."
       }

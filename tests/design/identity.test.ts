@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { ACCENT_MIX, COLOUR, CONTRAST_PAIRS, HARDLINES, IMAGERY, MOTION, TYPE, contrast, mixAccent } from '@/lib/design/identity';
+import { ACCENT_MIX, COLOUR, CONTRAST_PAIRS, HARDLINES, IMAGERY, MODEL_ROLES, MOTION, TYPE, WORLD, contrast, mixAccent } from '@/lib/design/identity';
 
 /**
  * TWINGS design identity as code (lib/design/identity.ts). The landing stylesheet copies the values into
@@ -12,6 +12,8 @@ const vto = readFileSync(join(process.cwd(), 'components', 'brand-studio', 'stud
 const rule = css.match(/\.identity\s*\{([^}]*)\}/)?.[1] ?? '';
 const token = (name: string) => rule.match(new RegExp(`--id-${name}\s*:\s*([^;]+);`))?.[1]?.trim();
 const kebab = (key: string) => key.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`);
+const doc = readFileSync(join(process.cwd(), 'docs', 'design', 'IDENTITY.md'), 'utf8');
+const agents = readFileSync(join(process.cwd(), 'AGENTS.md'), 'utf8');
 
 describe('TWINGS design identity', () => {
   it('copies every colour role into the landing stylesheet, unchanged', () => {
@@ -43,6 +45,15 @@ describe('TWINGS design identity', () => {
   it('keeps every pair the page relies on readable', () => {
     for (const pair of CONTRAST_PAIRS) expect(contrast(pair.fg, pair.bg), pair.use).toBeGreaterThanOrEqual(pair.min);
     expect(mixAccent(85, '#000000')).toBe('#3063a7');
+  });
+
+  // 2026-10-30 founder: another AI must be able to read how TWINGS looks and how to generate for it.
+  it('keeps the written identity in step with the code, and points every agent at it', () => {
+    for (const hex of [...Object.values(COLOUR), ...Object.values(WORLD)]) expect(doc.toLowerCase(), hex).toContain(hex);
+    for (const model of Object.values(MODEL_ROLES)) expect(doc, model).toContain(model);
+    expect(doc).toContain(String(TYPE.display.weight));
+    expect(doc).toContain('COLOUR AUTHORITY');
+    expect(agents).toContain('docs/design/IDENTITY.md');
   });
 
   it('carries type, motion and the imagery band the stylesheet uses', () => {
