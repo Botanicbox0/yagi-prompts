@@ -3,6 +3,7 @@ import { PLATFORM_OPERATIONS } from './platform-operations';
 import { CAMPAIGN_RISK_OPERATIONS } from './campaign-risk-operations';
 import { SOCIAL_OPERATIONS } from './social-operations';
 import { LANDING_MEDIA_OPERATIONS } from './landing-media-operations';
+import { RENDER_OPERATIONS } from './render-operations';
 import { CAMPAIGN_COLLABORATION_OPERATIONS } from './campaign-collaboration-operations';
 import { CAMPAIGN_FUNDING_OPERATIONS } from './campaign-funding-operations';
 import { randomUUID } from 'node:crypto';
@@ -756,6 +757,8 @@ export const ADMIN_OPERATIONS = {
   ...SOCIAL_OPERATIONS,
   // lib/content/landing-media.ts — replace a landing image or put the default back.
   ...LANDING_MEDIA_OPERATIONS,
+  // docs/PLATFORM-2.0.md §10 — render board retry, notification resend, and payment reconciliation.
+  ...RENDER_OPERATIONS,
 };
 
 export type AdminOperationName = keyof typeof ADMIN_OPERATIONS;

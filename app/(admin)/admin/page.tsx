@@ -522,26 +522,26 @@ export default async function AdminHomePage() {
             </Card>
             <Card
               title={a.dashRenders}
-              href={`${ADMIN_INQUIRIES_PATH}?kind=feedback`}
+              href="/admin/renders"
             >
               <Stat
-                href={`${ADMIN_INQUIRIES_PATH}?kind=feedback`}
+                href="/admin/renders"
                 label={a.dashRendersWeek}
                 count={renders.recent}
               />
               <Stat
-                href={`${ADMIN_INQUIRIES_PATH}?kind=feedback&status=new`}
+                href="/admin/renders?status=failed"
                 label={a.dashRendersFailed}
                 count={renders.failed}
                 hot
               />
               <Stat
-                href="/admin/community#claims"
+                href="/admin/renders?status=held"
                 label={a.dashRendersHeld}
                 count={renders.held}
               />
               <Stat
-                href={`${ADMIN_INQUIRIES_PATH}?kind=feedback&status=new`}
+                href="/admin/renders?tab=payments"
                 label={a.dashPaymentsManual}
                 count={paymentsManual}
                 hot

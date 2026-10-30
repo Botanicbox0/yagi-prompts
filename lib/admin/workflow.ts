@@ -1,14 +1,15 @@
 import type { CampaignCounts } from "@/lib/campaigns/repo";
 
 export const ADMIN_NAV_GROUPS = [
-  { key: "operations", items: ["home", "inquiries", "risk"] },
+  { key: "operations", items: ["home", "renders", "inquiries", "risk"] },
   { key: "campaigns", items: ["brandWorkspace", "campaigns", "funding"] },
   { key: "content", items: ["prompts", "community", "contests", "landingMedia"] },
-  { key: "system", items: ["subscriptions", "policy", "playbooks"] },
+  { key: "system", items: ["users", "subscriptions", "policy", "playbooks"] },
 ] as const;
 
 export const ADMIN_NAV_PATHS = {
   home: "/admin",
+  renders: "/admin/renders",
   inquiries: "/admin/inquiries",
   risk: "/admin/risk",
   funding: "/admin/funding",
@@ -18,6 +19,7 @@ export const ADMIN_NAV_PATHS = {
   community: "/admin/community",
   contests: "/admin/contests",
   landingMedia: "/admin/landing-media",
+  users: "/admin/users",
   subscriptions: "/admin/subscriptions",
   policy: "/admin/policy",
   playbooks: "/admin/playbooks",
@@ -63,12 +65,12 @@ const QUEUES: ReadonlyArray<{
   // Critical: money, failed paid renders, conversation risk, and billing review holds
   {
     key: "paymentsManual",
-    href: "/admin/inquiries?kind=feedback&status=new",
+    href: "/admin/renders?tab=payments",
     severity: "critical",
   },
   {
     key: "rendersFailed",
-    href: "/admin/inquiries?kind=feedback&status=new",
+    href: "/admin/renders?status=failed",
     severity: "critical",
   },
   { key: "risk", href: "/admin/risk", severity: "critical" },

@@ -435,7 +435,11 @@ export function AdminShell({
   const refreshBack =
     active === "funding"
       ? "/admin/funding"
-      : active === "risk"
+      : active === "renders"
+        ? "/admin/renders"
+        : active === "users"
+          ? "/admin/users"
+          : active === "risk"
         ? "/admin/risk"
         : active === "community"
           ? "/admin/community"
@@ -462,6 +466,7 @@ export function AdminShell({
   const workflow = dictionary.adminWorkflow;
   const entries = [
     ["home", "/admin", dict.navHome],
+    ["renders", "/admin/renders", workflow.rendersNav],
     ["risk", "/admin/risk", workflow.riskNav],
     ["funding", "/admin/funding", workflow.fundingNav],
     [
@@ -475,6 +480,7 @@ export function AdminShell({
     ["community", "/admin/community", dictionary.community.adminTitle],
     ["contests", "/admin/contests", dict.navContests],
     ["landingMedia", "/admin/landing-media", dictionary.landingMedia.nav],
+    ["users", "/admin/users", workflow.usersNav],
     ["subscriptions", "/admin/subscriptions", dictionary.creatorLaunch.nav],
     ["playbooks", "/admin/playbooks", dict.navPlaybooks],
     ["policy", "/admin/policy", dict.navPolicy],
