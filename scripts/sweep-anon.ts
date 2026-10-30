@@ -829,7 +829,7 @@ async function sweepWebViewSignin(): Promise<void> {
     const brandChooser = await request(`/auth/choose?next=%2Fbrand&locale=${locale}`);
     expectEqual(`brand chooser ${locale} renders`, brandChooser.status, 200);
     expectPresent(`brand chooser ${locale} explains the service`, brandChooser.body, 'data-brand-auth');
-    expectPresent(`brand chooser ${locale} includes the showcase`, brandChooser.body, 'data-brand-auth-showcase');
+    expectPresent(`brand chooser ${locale} shows the film`, brandChooser.body, 'data-brand-auth-film');
     expectPresent(`brand chooser ${locale} keeps login`, brandChooser.body, 'data-auth-provider="google"');
     expectPresent(`brand chooser ${locale} keeps consent`, brandChooser.body, 'data-auth-legal');
   }
