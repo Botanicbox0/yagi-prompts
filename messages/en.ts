@@ -4024,7 +4024,7 @@ export const en = {
     q9: "How does a creator campaign work?",
     a9: "We design a dedicated AI video format around your product and story, then match creators who fit your brand. With each creator's prior consent, we produce the films featuring their own faces and handle quality checks, ad disclosure compliance, channel publishing, creator payouts, and final reporting.",
     q10: "How is this different from a typical influencer ad?",
-    a10: "We start by building an AI video format that creators and audiences genuinely want to star in. With zero live shoots, dozens of creators can publish consistent, studio-grade films starring their own faces at the same time. In Morphic's 1990s interview campaign, viewers outside the campaign immediately began recreating the format on their own.",
+    a10: "We start by building an AI video format that creators and audiences genuinely want to star in. With zero live shoots, many creators can publish consistent, studio-grade films starring their own faces at the same time. In Morphic's 1990s interview campaign, viewers outside the campaign immediately began recreating the format on their own.",
     q11: "Can I commission a film without a creator campaign?",
     a11: "Yes. You can commission YAGI for standalone product launch films, brand campaigns, and high-fashion AI visuals. Review our production portfolio and company introduction deck on the Brands page, then send us your brief.",
     q12: "How are campaign costs and schedules set?",

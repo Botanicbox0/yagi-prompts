@@ -6,6 +6,8 @@ vi.mock('@/components/marketing/chrome', () => ({ MarketingNav: () => null, Mark
 vi.mock('@/lib/seo/faq-section', () => ({ FaqSection: () => null }));
 vi.mock('@/lib/content/landing-media-server', () => ({ getLandingMedia: async () => ({}) }));
 import BrandsPage from '@/app/(marketing)/[locale]/brands/page';
+import { en } from '@/messages/en';
+import { ko } from '@/messages/ko';
 
 const render = async (locale: 'ko' | 'en') => renderToStaticMarkup(await BrandsPage({ params: Promise.resolve({ locale }) }));
 
@@ -117,4 +119,10 @@ describe('the brand page shows the service before asking visitors to enquire', (
       expect(html).not.toMatch(/ED1E1E|237,\s*30,\s*30/i);
     });
   }
+
+  // The FAQ is rendered on this page and on /faq; it was mocked out above, so its text is checked at the source.
+  it('keeps the unapproved headcount out of the FAQ answers', () => {
+    expect(Object.values(ko.faq).join(' ')).not.toContain('수십 명');
+    expect(Object.values(en.faq).join(' ')).not.toMatch(/dozens of/i);
+  });
 });
