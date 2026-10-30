@@ -1061,9 +1061,9 @@ async function sweepTemplates(): Promise<void> {
   expectAbsent('…no dollar price on the English page', shown(detail.body), '>$4<');
   expectPresent('…"Subscribe to make it here" instead', detail.body, 'Subscribe to make it here');
   expectAbsent('…no Offer price in the structured data', detail.body, 'priceCurrency');
-  // The related list is the catalogue's 4:5 grid: two across on a phone, four on a desktop.
-  if (/<ul[^>]*data-related-grid[^>]*class="[^"]*\bgrid-cols-2\b[^"]*\blg:grid-cols-4\b/.test(detail.body)) ok('…related templates in the two-column card grid', 'data-related-grid');
-  else fail('…related templates grid', 'expected data-related-grid with grid-cols-2 … lg:grid-cols-4');
+  // The related list uses the same justified film rows as the catalogue.
+  if (/<ul[^>]*data-related-grid[^>]*class="[^"]*\bgrid-cols-2\b[^"]*\blg:grid-cols-4\b/.test(detail.body)) ok('…related templates in film rows', 'data-related-grid');
+  else fail('…related templates grid', 'expected data-related-grid with film-rows');
   expectPresent('…whose items are cards', detail.body, 'data-related-item');
   const detailKo = await get(`/ko/t/${GATED_PROMPT}`);
   expectEqual('the Korean template page renders 200', detailKo.status, 200);

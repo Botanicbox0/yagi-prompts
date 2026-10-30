@@ -211,7 +211,7 @@ describe('rails: NEW first, two columns on a phone', () => {
     );
     expect(html.indexOf('data-prompt-card="n1"')).toBeLessThan(html.indexOf('data-prompt-card="a"'));
     expect(html).toContain('film-rows');
-    expect(html).toMatch(/<li[^>]*class="[^"]*min-w-0/);
+    expect(html).toMatch(/<li[^>]*style="--r:/);
   });
 });
 
