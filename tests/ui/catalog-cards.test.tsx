@@ -7,7 +7,7 @@ import type { PromptCard } from '@/lib/prompts/catalog';
 import { PROMPT_MODEL_LABEL, USE_CASES } from '@/lib/prompts/schemas';
 import { PromptCardView } from '@/components/prompts/prompt-card';
 import { CardPlaybackControl, shouldMountClip } from '@/components/prompts/card-media';
-import { CARD_RATIOS, ORIGIN_RUN_MAX, cardAspect, cardAuthor, cardFrame, makerProfileRest, railOrder } from '@/components/prompts/card-frame';
+import { CARD_RATIOS, cardRatio, ORIGIN_RUN_MAX, cardAspect, cardAuthor, cardFrame, makerProfileRest, railOrder } from '@/components/prompts/card-frame';
 import { pillClassName } from '@/components/prompts/pill';
 import { PromptRail } from '@/components/prompts/rails';
 import { UseCaseFilter } from '@/components/prompts/filter-chips';
@@ -67,7 +67,7 @@ function markup(data: PromptCard, locale: 'en' | 'ko' = 'en') {
   );
 }
 
-describe('card frame (founder 2026-10-31: every card the same 4:5 window)', () => {
+describe('card frame (founder 2026-10-31: every card keeps its film's own ratio)', () => {
   it('frames a portrait or square example at 4:5 and a wide one at 16:9', () => {
     expect(cardFrame(card())).toBe('portrait');
     expect(cardFrame(card({ poster: { source: 'route', src: '/p', mime: 'image/png', w: 1080, h: 1080 } }))).toBe('portrait');
@@ -85,13 +85,14 @@ describe('card frame (founder 2026-10-31: every card the same 4:5 window)', () =
 
   it('renders the chosen ratio and crops a portrait clip to fill it', () => {
     const tall = markup(card());
-    expect(tall).toContain(`aspect-ratio:${CARD_RATIOS.portrait}`);
+    expect(tall).toContain(`aspect-ratio:${cardRatio(card())}`);
     expect(tall).toContain('data-frame="portrait"');
     expect(tall).toContain('object-cover');
     const wide = markup(card({ poster: { source: 'route', src: '/p', mime: 'image/png', w: 1600, h: 900 }, aspectDefault: '16:9' }));
-    expect(wide).toContain(`aspect-ratio:${CARD_RATIOS.landscape}`);
+    expect(wide).toContain(`aspect-ratio:${16 / 9}`);
     expect(wide).toContain('data-frame="landscape"');
-    expect(CARD_RATIOS).toEqual({ portrait: '4 / 5', landscape: '4 / 5' });
+    expect(CARD_RATIOS).toEqual({ portrait: '4 / 5', landscape: '16 / 9' });
+    expect(cardRatio(card({ poster: { source: 'route', src: '/p', mime: 'image/png', w: 1600, h: 900 } }))).toBeCloseTo(16 / 9);
   });
 });
 

@@ -1451,8 +1451,9 @@ async function sweepCampaigns(): Promise<void> {
     expectEqual(`/${locale}/brands shows six beauty shots`, (brand.body.match(/data-asset-cut=/g) ?? []).length, 6);
     expectEqual(`/${locale}/brands ships every ad in the HTML`, (brand.body.match(/data-asset-clip=/g) ?? []).length, 2);
     expectEqual(`/${locale}/brands pairs each ad with what it features`, (brand.body.match(/data-asset-ad-still=/g) ?? []).length, 2);
-    expectPresent(`/${locale}/brands ships the perfume ad's product shot`, brand.body, '/reel/landing/ad-heart.webp');
-    expectPresent(`/${locale}/brands ships the runway's outfit`, brand.body, '/reel/landing/ad-coat.webp');
+    expectPresent(`/${locale}/brands ships the perfume ad's product shot`, brand.body, '/reel/landing/highteen-product.webp');
+    expectPresent(`/${locale}/brands ships the fashion film's outfit detail`, brand.body, '/reel/landing/ad-denim.webp');
+    expectPresent(`/${locale}/brands offers the 4K hero to large screens`, brand.body, '/reel/landing/v7/hero-2160.mp4');
     for (const gone of ['data-v7-problem', 'data-v7-engine', 'data-v7-workflow']) expectAbsent(`/${locale}/brands retired ${gone}`, brand.body, gone);
     expectAbsent(`/${locale}/brands links no price estimate`, brand.body, 'pricing.yagiworkshop.xyz');
     expectAbsent(`/${locale}/brands makes no data-destruction promise`, brand.body, locale === 'ko' ? '즉시 파기' : 'deleted right after');

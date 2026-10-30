@@ -3,7 +3,7 @@ import { templateHref } from '@/lib/prompts/links';
 import { badgeFor } from '@/lib/content/badges';
 import { PromptCardMedia } from './card-media';
 import { TypographicPoster } from './poster';
-import { CARD_RATIOS, cardAspect, cardAuthor, cardFrame } from './card-frame';
+import { cardAspect, cardAuthor, cardFrame, cardRatio } from './card-frame';
 import type { PromptLabels } from './labels';
 
 /**
@@ -36,7 +36,7 @@ export function PromptCardView({
 }) {
   const title = locale === 'ko' && card.titleKo ? card.titleKo : card.title;
   const frame = cardFrame(card);
-  const ratio = CARD_RATIOS[frame];
+  const ratio = String(cardRatio(card));
   const author = cardAuthor(card);
   const seconds = card.medium === 'video' && card.runtimeSeconds && card.runtimeSeconds > 0 ? card.runtimeSeconds : null;
 
