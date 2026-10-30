@@ -6,6 +6,7 @@ vi.mock('next/headers', () => ({
   cookies: async () => ({ get: () => undefined }),
 }));
 import ChooseProviderPage from '@/app/(app)/auth/choose/page';
+import OpenInBrowserPage from '@/app/(app)/auth/open-in-browser/page';
 const page = async (params: Record<string, string> = {}) => renderToStaticMarkup(await ChooseProviderPage({ searchParams: Promise.resolve({ locale: 'ko', ...params }) }));
 
 describe('brand login experience', () => {
@@ -14,15 +15,24 @@ describe('brand login experience', () => {
     context.surface = 'brand';
     const html = await page();
     expect(html).toContain('data-brand-auth');
-    expect(html).toContain('data-brand-auth-showcase');
-    expect(html).toContain('목표와 예산');
+    expect(html).toContain('data-brand-auth-stage');
+    expect(html).toContain('AI 미디어 엔진');
     expect(html).toContain('next=%2Fbrand');
     expect(html).toContain('https://twings.app/ko/legal/terms');
-    expect(html).toContain('public-content/363fcfa1538c10fc5022cee15cf91c72271f3c0bbc254b68fea9842dd79d6c56.mp4');
-    expect(html).toContain('width="1440" height="1080"');
-    expect(html).toContain('poster=');
-    expect(html).toContain('controls=');
+    // Public media of the landing's demo brand, from the host that serves it; playback starts in the island.
+    expect(html).toContain('https://twings.app/reel/landing/cut-flower.webp');
+    expect(html).toContain('https://twings.app/reel/landing/v7/dir-clip.mp4');
     expect(html).not.toContain('autoPlay=');
+    // Clearly a demo brand, not a client: the kit carries the example label.
+    expect(html).toContain('data-brand-auth-kit');
+    // A login stays calm: not the landing's fast-cut dark hero again.
+    expect(html).not.toContain('v7/hero');
+    // The act is the page's heading; the category line beside it is not.
+    expect(html.match(/<h1[^>]*>[^<]*/)?.[0]).toContain('로그인 또는 회원가입');
+    // One message: the old agency pitch and its pink carousel stay gone.
+    expect(html).not.toContain('목표와 예산');
+    expect(html).not.toContain('public-content/');
+    expect(html).not.toContain('helvetica-neue');
   });
   it('keeps invitation return paths, OAuth errors, legal consent and both providers in server HTML', async () => {
     const html = await page({ next: '/brand/invite?token=example', error: 'oauth' });
@@ -55,11 +65,38 @@ describe('brand login experience', () => {
   });
   it('renders English copy and usable non-JavaScript login links with a static initial showcase', async () => {
     const html = await page({ next: '/brand', locale: 'en' });
-    expect(html).toContain('Content for your brand.');
-    expect(html).toContain('data-brand-auth-showcase');
-    expect(html).toContain('aria-pressed="true"');
-    expect(html).toContain('aria-live="polite"');
+    expect(html).toContain('Your brand');
+    expect(html).toContain('data-brand-auth-stage');
+    expect(html).toContain('data-brand-auth-pause');
     expect(html).toContain('href="/auth/signin?provider=google');
     expect(html).not.toContain('목표와 예산');
+  });
+  it('tells invited readers which account to use', async () => {
+    const invited = await page({ next: '/brand/invite' });
+    expect(invited).toContain('초대받은 이메일 계정으로 로그인해 주세요');
+    expect(invited.match(/<h1[^>]*>[^<]*/)?.[0]).toContain('초대를 수락하려면');
+    expect(await page({ next: '/brand' })).not.toContain('초대받은 이메일 계정으로');
+  });
+  it('keeps the consumer and admin doors as they were', async () => {
+    for (const surface of ['consumer', 'admin']) {
+      context.surface = surface;
+      const html = await page({ next: surface === 'admin' ? '/admin' : '/ko/video' });
+      expect(html).not.toContain('data-brand-auth');
+      expect(html).toContain('rounded-[4px]');
+      expect(html).toContain('data-auth-provider="kakao"');
+    }
+  });
+  it('gives only brand readers the brand open-in-browser card, with the same copy and address', async () => {
+    const webview = async (next: string) => renderToStaticMarkup(await OpenInBrowserPage({ searchParams: Promise.resolve({ locale: 'ko', next }) }));
+    const brand = await webview('/brand');
+    expect(brand).toContain('data-webview-interstitial');
+    expect(brand).toContain('data-brand-auth');
+    expect(brand).toContain('기본 브라우저에서 열어 주세요.');
+    expect(brand).toContain('data-webview-next');
+    const consumer = await webview('/ko/video');
+    expect(consumer).toContain('data-webview-interstitial');
+    expect(consumer).not.toContain('data-brand-auth');
+    context.surface = 'admin';
+    expect(await webview('/brand')).not.toContain('data-brand-auth');
   });
 });

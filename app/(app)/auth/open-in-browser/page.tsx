@@ -1,11 +1,12 @@
 import type { Metadata } from 'next';
-import { TwingsMark } from '@/components/brand/twings-mark';
+import { TwingsLogo, TwingsMark } from '@/components/brand/twings-mark';
 import { absoluteUrl } from '@/lib/seo/site-url';
 import { DEFAULT_LOCALE, isLocale, type Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/dictionaries';
-import { authReturnPath } from '@/lib/routing/surfaces';
+import { authReturnPath, isBrandPath } from '@/lib/routing/surfaces';
 import { requestSurface } from '@/lib/routing/request-surface';
 import { BrowserAddress } from '@/components/brand-workspace/browser-address';
+import styles from '@/components/auth/brand-entry.module.css';
 
 /**
  * `/auth/open-in-browser?next=…&locale=…` — design review F1.
@@ -40,7 +41,8 @@ async function resolve(props: RouteProps) {
   const locale: Locale = isLocale(rawLocale) ? rawLocale : DEFAULT_LOCALE;
   const { admin, brand, origin } = await requestSurface();
   const next = authReturnPath(first(params.next), admin ? 'admin.twings.app' : brand ? 'brand.twings.app' : '', '/');
-  return { dict: getDictionary(locale), next, origin };
+  const brandEntry = !admin && (brand || isBrandPath(new URL(next, 'https://path.invalid').pathname));
+  return { dict: getDictionary(locale), next, origin, brandEntry };
 }
 
 export async function generateMetadata(props: RouteProps): Promise<Metadata> {
@@ -49,7 +51,24 @@ export async function generateMetadata(props: RouteProps): Promise<Metadata> {
 }
 
 export default async function OpenInBrowserPage(props: RouteProps) {
-  const { dict, next, origin } = await resolve(props);
+  const { dict, next, origin, brandEntry } = await resolve(props);
+  const target = origin ? new URL(next, origin).href : absoluteUrl(next);
+
+  if (brandEntry) {
+    return (
+      <main data-webview-interstitial data-brand-auth className={styles.page}>
+        <div className={styles.webview}>
+          <TwingsLogo size={22} />
+          <p className={styles.webviewEyebrow}>{dict.auth.webviewEyebrow}</p>
+          <h1>{dict.auth.webviewTitle}</h1>
+          <p className={styles.webviewBody}>{dict.auth.webviewBody}</p>
+          <p className={styles.webviewLabel}>{dict.auth.webviewUrlLabel}</p>
+          <div className={styles.address}><BrowserAddress target={target} /></div>
+          <p className={styles.webviewHint}>{dict.auth.webviewMenuHint}</p>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main
@@ -75,7 +94,7 @@ export default async function OpenInBrowserPage(props: RouteProps) {
         {dict.auth.webviewUrlLabel}
       </p>
       {/* `select-all`: one long-press selects the WHOLE address — the copy this page exists for. */}
-      <BrowserAddress target={origin ? new URL(next, origin).href : absoluteUrl(next)} />
+      <BrowserAddress target={target} />
 
       <p className="mt-6 font-mono text-[0.72rem] leading-relaxed opacity-45">
         {dict.auth.webviewMenuHint}
