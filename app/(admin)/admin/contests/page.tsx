@@ -26,6 +26,7 @@ import {
 } from '@/lib/contests/links';
 import { adminMediaPath, contestAdminRef } from '@/lib/media/admin-authorize';
 import {
+  AdminFold,
   AdminShell,
   BUTTON,
   BUTTON_PRIMARY,
@@ -451,17 +452,7 @@ function ContestEditor({
 
         <StagedMedia row={row} dict={dict} />
 
-        <OpForm op="contest.update" back={ADMIN_CONTESTS_PATH} className="flex flex-col gap-4">
-          <input type="hidden" name="id" value={row.id} />
-          <ContestFields row={row} dict={dict} />
-          <div>
-            <button type="submit" className={BUTTON_PRIMARY}>
-              {a.saveContest}
-            </button>
-          </div>
-        </OpForm>
-
-        <section className="border-t border-hairline pt-5">
+        <section id="entries" className="border-t border-hairline pt-5">
           <h3 className="font-label text-eyebrow uppercase">
             {a.entriesHeading} ({entries.length})
           </h3>
@@ -480,6 +471,18 @@ function ContestEditor({
             </ul>
           )}
         </section>
+
+        <AdminFold summary={a.saveContest} defaultOpen={row.status === 'draft'}>
+          <OpForm op="contest.update" back={ADMIN_CONTESTS_PATH} className="flex flex-col gap-4">
+            <input type="hidden" name="id" value={row.id} />
+            <ContestFields row={row} dict={dict} />
+            <div>
+              <button type="submit" className={BUTTON_PRIMARY}>
+                {a.saveContest}
+              </button>
+            </div>
+          </OpForm>
+        </AdminFold>
       </div>
     </Panel>
   );
@@ -554,7 +557,7 @@ export default async function AdminContestsPage({
         })
       )}
 
-      <Panel title={a.newContestHeading}>
+      <AdminFold summary={a.newContestHeading} defaultOpen={rows.length === 0}>
         <p className="mb-4 max-w-detail font-mono text-[0.75rem] opacity-55">{a.newContestLede}</p>
         <OpForm op="contest.create" back={ADMIN_CONTESTS_PATH} className="flex flex-col gap-4">
           <ContestFields row={null} dict={dict} />
@@ -564,7 +567,7 @@ export default async function AdminContestsPage({
             </button>
           </div>
         </OpForm>
-      </Panel>
+      </AdminFold>
     </AdminShell>
   );
 }

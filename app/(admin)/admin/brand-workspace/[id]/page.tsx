@@ -8,7 +8,14 @@ import { getSqlRunner } from "@/lib/db/connect";
 import { getLocaleFromHeaders } from "@/lib/i18n/server";
 import { getDictionary } from "@/lib/i18n/dictionaries";
 import { loadStudioProject } from "@/lib/brands/workspace/service";
-import { AdminShell, ConfirmCheck, OpForm, OutcomeBanner } from "@/components/admin/chrome";
+import {
+  AdminFold,
+  AdminSectionNav,
+  AdminShell,
+  ConfirmCheck,
+  OpForm,
+  OutcomeBanner,
+} from "@/components/admin/chrome";
 import { BrandStatusForms, brandRefusals } from "@/components/admin/brand-status";
 import type { AdminOperationName } from "@/lib/admin/operations";
 import { ProjectDetail } from "@/components/brand-workspace/project-detail";
@@ -76,6 +83,16 @@ export default async function StudioBrandProject({
         err={typeof search.err === "string" ? search.err : undefined}
         detail={typeof search.detail === "string" ? search.detail : undefined}
       />
+      <AdminSectionNav
+        ariaLabel={p.title}
+        items={[
+          { id: "studio-actions", label: b.studioTitle },
+          { id: "conversation", label: b.comments, count: p.messages.length },
+          { id: "shortlist-admin", label: b.shortlistAdmin.title, count: shortlist?.candidates.length ?? 0 },
+          { id: "studio-files", label: b.files, count: p.attachments.length },
+          { id: "cover-settings", label: b.cover.title },
+        ]}
+      />
       <section className="bw-panel bw-sharing" data-managed-sharing>
         <div><strong>{p.clientVisible?b.managed.visible:b.managed.prepared}</strong><p className="bw-muted">{b.managed.visibilityHint}</p></div>
         <ManagedForm op="brandWorkspace.visibility" b={b} messages={refusals} submit={p.clientVisible?b.managed.hide:b.managed.publish} tone={p.clientVisible?"danger":"primary"} confirm={p.clientVisible?{prompt:b.confirm.hide,action:b.confirm.hideAction}:{prompt:b.confirm.publish,action:b.confirm.publishAction}}><input type="hidden" name="projectId" value={p.id}/><input type="hidden" name="expectedRevision" value={p.revision}/><input type="hidden" name="visible" value={String(!p.clientVisible)}/></ManagedForm>
@@ -99,26 +116,27 @@ export default async function StudioBrandProject({
           </label>
         </Form>
       } />
-      <section className="bw-panel">
+      <section id="studio-files" className="bw-panel">
         <h2>{b.files}</h2>
         <BrandUpload projectId={id} b={b} studio />
       </section>
       <ShortlistAdmin projectId={p.id} view={shortlist} back={`${formBack}#shortlist-admin`} copy={b.shortlistAdmin} locale={locale} />
-      <section className="bw-panel" data-cover-settings>
-        <h2>{b.cover.title}</h2>
-        <p className="bw-muted">{b.cover.hint}</p>
-        {covers.length === 0 ? <p className="bw-note">{b.cover.empty}</p> : (
-          <ManagedForm op="brandWorkspace.cover" b={b} messages={refusals} submit={b.cover.save}>
-            <input type="hidden" name="projectId" value={p.id}/>
-            <input type="hidden" name="expectedRevision" value={p.revision}/>
-            <fieldset className="bw-cover-options">
-              <legend className="sr-only">{b.cover.title}</legend>
-              {covers.map(a => <label key={a.id}><input type="radio" name="attachmentId" value={a.id} defaultChecked={p.coverUrl?.endsWith(a.id)}/><img src={`/api/brand-workspace/attachments/${a.id}`} alt={a.name}/><span className="bw-prose">{a.name}</span></label>)}
-              <label><input type="radio" name="attachmentId" value="" defaultChecked={!p.coverUrl}/>{b.cover.none}</label>
-            </fieldset>
-          </ManagedForm>
-        )}
-      </section>
+      <AdminFold id="cover-settings" summary={b.cover.title}>
+        <section data-cover-settings>
+          <p className="bw-muted">{b.cover.hint}</p>
+          {covers.length === 0 ? <p className="bw-note">{b.cover.empty}</p> : (
+            <ManagedForm op="brandWorkspace.cover" b={b} messages={refusals} submit={b.cover.save}>
+              <input type="hidden" name="projectId" value={p.id}/>
+              <input type="hidden" name="expectedRevision" value={p.revision}/>
+              <fieldset className="bw-cover-options">
+                <legend className="sr-only">{b.cover.title}</legend>
+                {covers.map(a => <label key={a.id}><input type="radio" name="attachmentId" value={a.id} defaultChecked={p.coverUrl?.endsWith(a.id)}/><img src={`/api/brand-workspace/attachments/${a.id}`} alt={a.name}/><span className="bw-prose">{a.name}</span></label>)}
+                <label><input type="radio" name="attachmentId" value="" defaultChecked={!p.coverUrl}/>{b.cover.none}</label>
+              </fieldset>
+            </ManagedForm>
+          )}
+        </section>
+      </AdminFold>
       <section id="studio-actions" className="bw-panel">
         <h2>{b.studioTitle}</h2>
         <div className="bw-grid">

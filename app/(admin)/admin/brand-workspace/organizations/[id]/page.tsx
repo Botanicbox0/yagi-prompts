@@ -45,6 +45,16 @@ export default async function StudioOrganization({
           <h1>{org.name}</h1>
           <p>{c.access}</p>
         </div>
+        <details className="bw-contract-add" data-org-rename>
+          <summary>{b.organization}</summary>
+          <ManagedForm op="brandWorkspace.settings" b={b} submit={b.save}>
+            <input type="hidden" name="organizationId" value={id} />
+            <label>
+              {b.organization}
+              <input name="name" defaultValue={org.name} minLength={2} maxLength={100} required />
+            </label>
+          </ManagedForm>
+        </details>
       </div>
       {/* The brand's own logo, before or without any campaign. Same inspected, private path as owners use. */}
       <section className="bw-panel bw-logo-section" data-brand-logo>

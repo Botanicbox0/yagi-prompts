@@ -3,6 +3,7 @@ import {
   OpForm,
   Field,
   INPUT,
+  BUTTON,
   BUTTON_PRIMARY,
   Panel,
 } from "@/components/admin/chrome";
@@ -21,9 +22,18 @@ export async function CollaborationBinding({
 }) {
   const t = collaborationCopy(locale),
     [sql, viewer] = await Promise.all([getSqlRunner(), getViewer()]);
-  const state = sql
-    ? await loadCollaborationBindingOptions({ sql }, viewer, campaignId)
-    : null;
+  const [state, pendingInvites] = sql
+    ? await Promise.all([
+        loadCollaborationBindingOptions({ sql }, viewer, campaignId),
+        sql
+          .query<{ id: string; invited_email: string | null }>(
+            "select id, invited_email from campaign_participant_invites where campaign_id=$1 and revoked_at is null and accepted_at is null order by created_at desc limit 20",
+            [campaignId],
+          )
+          .then((r) => r.rows)
+          .catch(() => [] as Array<{ id: string; invited_email: string | null }>),
+      ])
+    : [null, []];
   if (!state) return null;
   return (
     <Panel title={t.bind}>
@@ -60,6 +70,27 @@ export async function CollaborationBinding({
         </OpForm>
       ) : (
         <p className="text-sm">{t.unavailable}</p>
+      )}
+      {pendingInvites.length > 0 && (
+        <ul className="mt-4 divide-y divide-hairline border-t border-hairline pt-3 font-mono text-xs">
+          {pendingInvites.map((inv) => (
+            <li
+              key={inv.id}
+              className="flex flex-wrap items-center justify-between gap-2 py-2"
+            >
+              <span>{inv.invited_email ?? inv.id.slice(0, 8)}</span>
+              <OpForm
+                op="campaignCollaboration.revoke"
+                back={`/admin/campaigns/${campaignId}`}
+              >
+                <input type="hidden" name="invitationId" value={inv.id} />
+                <button type="submit" className={BUTTON}>
+                  {t.revoke}
+                </button>
+              </OpForm>
+            </li>
+          ))}
+        </ul>
       )}
     </Panel>
   );

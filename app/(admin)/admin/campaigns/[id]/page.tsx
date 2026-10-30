@@ -34,6 +34,8 @@ import {
 } from "@/lib/campaigns/links";
 import { loadPublishedPrompts } from "@/lib/prompts/repo";
 import {
+  AdminFold,
+  AdminSectionNav,
   AdminShell,
   BUTTON,
   BUTTON_PRIMARY,
@@ -430,6 +432,27 @@ export default async function AdminCampaignPage({
         stages={campaignWorkflow(row, applications, production)}
         copy={dict.adminWorkflow}
       />
+      <AdminSectionNav
+        ariaLabel={localize(row.title, locale)}
+        items={[
+          {
+            id: "applications",
+            label: a.queueApplicants,
+            count: applicants.length,
+          },
+          { id: "posts", label: a.queuePosts, count: posts.length },
+          {
+            id: "campaign-payments",
+            label: a.queueHold,
+            count: holds.length,
+          },
+          {
+            id: "campaign-production",
+            label: dict.adminWorkflow.stages.production.title,
+          },
+          { id: "campaign-editor", label: a.editorHeading },
+        ]}
+      />
       <CollaborationBinding campaignId={row.id} locale={locale} />
       {linked.size > 0 && (
         <Panel title={collaborationCopy(locale).conversation}>
@@ -510,36 +533,29 @@ export default async function AdminCampaignPage({
         </p>
       </Panel>
 
-      {/* Work waiting, in the order it arrives. */}
-      <div id="campaign-production">
-        <CampaignProductionAdmin
-          campaignId={row.id}
-          data={production}
-          back={back}
-          copy={c.production}
-          locale={locale}
-        />
-      </div>
-      <div id="campaign-applicants">
-        <Panel title={`${a.queueApplicants} (${applicants.length})`}>
-          {applicants.length === 0 ? (
-            <p className="font-mono text-code opacity-60">
-              {a.campaignQueueEmpty}
-            </p>
-          ) : (
-            <ul className="flex flex-col gap-3">
-              {applicants.map((app) => (
-                <ApplicantRow
-                  key={app.id}
-                  app={app}
-                  back={back}
-                  dict={dict}
-                  slotsLeft={slotsLeft}
-                />
-              ))}
-            </ul>
-          )}
-        </Panel>
+      {/* Work waiting, in the order the reviewer acts on it: applicants -> posts -> payouts -> production -> folded editor. */}
+      <div id="applications" className="scroll-mt-16">
+        <div id="campaign-applicants">
+          <Panel title={`${a.queueApplicants} (${applicants.length})`}>
+            {applicants.length === 0 ? (
+              <p className="font-mono text-code opacity-60">
+                {a.campaignQueueEmpty}
+              </p>
+            ) : (
+              <ul className="flex flex-col gap-3">
+                {applicants.map((app) => (
+                  <ApplicantRow
+                    key={app.id}
+                    app={app}
+                    back={back}
+                    dict={dict}
+                    slotsLeft={slotsLeft}
+                  />
+                ))}
+              </ul>
+            )}
+          </Panel>
+        </div>
       </div>
 
       {awaitingPost.length > 0 && (
@@ -563,30 +579,32 @@ export default async function AdminCampaignPage({
         </Panel>
       )}
 
-      <div id="campaign-posts">
-        <Panel title={`${a.queuePosts} (${posts.length})`}>
-          {posts.length === 0 ? (
-            <p className="font-mono text-code opacity-60">
-              {a.campaignQueueEmpty}
-            </p>
-          ) : (
-            <ul className="flex flex-col gap-3">
-              {posts.map((app) => (
-                <PostRow
-                  key={app.id}
-                  app={app}
-                  campaign={row}
-                  back={back}
-                  dict={dict}
-                  locale={locale}
-                />
-              ))}
-            </ul>
-          )}
-        </Panel>
+      <div id="posts" className="scroll-mt-16">
+        <div id="campaign-posts">
+          <Panel title={`${a.queuePosts} (${posts.length})`}>
+            {posts.length === 0 ? (
+              <p className="font-mono text-code opacity-60">
+                {a.campaignQueueEmpty}
+              </p>
+            ) : (
+              <ul className="flex flex-col gap-3">
+                {posts.map((app) => (
+                  <PostRow
+                    key={app.id}
+                    app={app}
+                    campaign={row}
+                    back={back}
+                    dict={dict}
+                    locale={locale}
+                  />
+                ))}
+              </ul>
+            )}
+          </Panel>
+        </div>
       </div>
 
-      <div id="campaign-payments">
+      <div id="campaign-payments" className="scroll-mt-16">
         <Panel title={`${a.queueHold} (${holds.length})`}>
           {holds.length === 0 ? (
             <p className="font-mono text-code opacity-60">
@@ -607,6 +625,16 @@ export default async function AdminCampaignPage({
             </ul>
           )}
         </Panel>
+      </div>
+
+      <div id="campaign-production" className="scroll-mt-16">
+        <CampaignProductionAdmin
+          campaignId={row.id}
+          data={production}
+          back={back}
+          copy={c.production}
+          locale={locale}
+        />
       </div>
 
       {history.length > 0 && (
@@ -642,27 +670,29 @@ export default async function AdminCampaignPage({
         </details>
       )}
 
-      <div id="campaign-editor">
-        <Panel title={a.editorHeading}>
-          <OpForm
-            op="campaign.update"
-            back={back}
-            className="flex flex-col gap-5"
-          >
-            <input type="hidden" name="id" value={row.id} />
-            <CampaignFields
-              row={row}
-              dict={dict}
-              styleSlugs={prompts.map((prompt) => prompt.slug)}
-            />
-            <div>
-              <button type="submit" className={BUTTON_PRIMARY}>
-                {a.saveCampaign}
-              </button>
-            </div>
-          </OpForm>
-        </Panel>
-      </div>
+      <AdminFold
+        id="campaign-editor"
+        summary={a.editorHeading}
+        defaultOpen={row.status === "draft" && blockers.length > 0}
+      >
+        <OpForm
+          op="campaign.update"
+          back={back}
+          className="flex flex-col gap-5"
+        >
+          <input type="hidden" name="id" value={row.id} />
+          <CampaignFields
+            row={row}
+            dict={dict}
+            styleSlugs={prompts.map((prompt) => prompt.slug)}
+          />
+          <div>
+            <button type="submit" className={BUTTON_PRIMARY}>
+              {a.saveCampaign}
+            </button>
+          </div>
+        </OpForm>
+      </AdminFold>
     </AdminShell>
   );
 }

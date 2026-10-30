@@ -198,12 +198,14 @@ export function ProjectDetail({
           {next.href && <a className="bw-button" href={next.href}>{next.label} →</a>}
         </div>
       )}
-      <HumanHandoff
-        organizationId={p.organizationId}
-        projectId={p.id}
-        locale={locale}
-        refCount={Math.max(p.referenceLinks.length, 3)}
-      />
+      {!studio && (
+        <HumanHandoff
+          organizationId={p.organizationId}
+          projectId={p.id}
+          locale={locale}
+          refCount={Math.max(p.referenceLinks.length, 3)}
+        />
+      )}
       <ProjectTabs b={b} pendingReviews={p.status === "active" ? p.contents.filter(c => c.version === newest.get(c.slotKey) && c.decision === "pending").length : 0} comments={p.messages.length} usage={usage !== null} campaign={applicants !== null} shortlist={shortlist ? shortlistCount : 0}>
       <section id="performance" className="bw-panel">
         <CampaignTimelineView timeline={campaignTimeline(p)} b={b} />
