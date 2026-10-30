@@ -44,6 +44,7 @@ describe('the brand page shows the service before asking visitors to enquire', (
     expect(html).toContain('data-hero-film');
     expect(html).toContain('src="/reel/landing/v7/hero.mp4"');
     expect(html).toContain('src="/reel/landing/v7/hero-720.mp4"');
+    expect(html).toContain('src="/reel/landing/v7/hero-2160.mp4"');
     expect(html).toContain('poster="/reel/landing/v7/hero.jpg"');
     expect(html).toContain('data-hero-spec');
     expect(html.match(/data-hero-door=/g)).toHaveLength(3);
@@ -68,12 +69,14 @@ describe('the brand page shows the service before asking visitors to enquire', (
     // Try-on: the lookbook is one garment, shot three ways; the founder's picks stay in the looks and free mode.
     for (const cut of ['vto-garment', 'vto-set-front', 'vto-set-upper', 'vto-set-side', 'vto-free-amber', 'vto-look-upper']) expect(html).toContain(`/reel/studio/${cut}.webp`);
     expect(html.match(/data-asset-ad-still=/g)).toHaveLength(2);
-    for (const [still, clip] of [['ad-heart', 'perfume'], ['ad-coat', 'runway']]) {
+    for (const [still, clip] of [['ad-denim', 'fashion'], ['highteen-product', 'perfume']]) {
       expect(html.indexOf(`src="/reel/landing/${still}.webp"`)).toBeGreaterThan(-1);
       expect(html.indexOf(`src="/reel/landing/${still}.webp"`)).toBeLessThan(html.indexOf(`data-asset-clip="${clip}"`));
     }
     expect(html.match(/data-asset-clip=/g)).toHaveLength(2);
-    expect(html).toContain('같은 향수로 만든 15초 광고');
+    expect(html).toContain('같은 향수로 만든 20초 광고');
+    // 2026-10-30 founder: the pink-makeup lead does not fit the blue world; none of her footage or stills stay.
+    for (const gone of ['film-beauty', 'film-runway-blue', 'cut-face', 'cut-recline']) expect(html).not.toContain(gone);
     // Local fixes: three real before/after pairs in a wipe compare.
     expect(html.match(/data-contrast-pair=/g)).toHaveLength(3);
     expect(html.match(/data-contrast-source=/g)).toHaveLength(3);
@@ -97,7 +100,7 @@ describe('the brand page shows the service before asking visitors to enquire', (
     const html = await render('en');
     expect(html.match(/preload="none"/g)?.length).toBeGreaterThanOrEqual(8);
     expect(html).toContain('playsInline=""');
-    expect(html).toContain('poster="/reel/landing/v7/film-beauty.jpg"');
+    expect(html).toContain('poster="/reel/campaigns/highteen.jpg"');
     expect(html).toContain('poster="/reel/landing/v7/hero.jpg"');
     // The landing's own loops start only when on screen (Film), never from the markup.
     expect(html).not.toMatch(/<video[^>]*data-loop-video[^>]*autoPlay|<video[^>]*autoPlay[^>]*data-loop-video/);

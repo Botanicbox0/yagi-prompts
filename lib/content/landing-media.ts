@@ -36,7 +36,7 @@ export interface LandingMediaSlot {
 }
 
 /** Stills tied to a film: each ad's product shot shows the bottle or tube that ad plays. */
-export const FILM_BOUND_STILLS: readonly string[] = ['landing/ad-heart', 'landing/ad-coat'];
+export const FILM_BOUND_STILLS: readonly string[] = ['landing/ad-denim', 'landing/highteen-product'];
 
 /** Override URLs by slot key; a slot that is absent shows its default. */
 export type LandingMedia = Readonly<Record<string, string>>;
@@ -45,7 +45,7 @@ export const NO_LANDING_MEDIA: LandingMedia = Object.freeze({});
 
 /** The fashion looks and beauty shots, in page order (components/brand-studio/v7.tsx). */
 export const LANDING_LOOKS = ['coat', 'drape', 'street', 'carpet', 'knit', 'sculpt'] as const;
-export const LANDING_CUTS = ['flower', 'face', 'sphere', 'gel', 'recline', 'beads'] as const;
+export const LANDING_CUTS = ['flower', 'shelf', 'sphere', 'gel', 'ribbon', 'beads'] as const;
 
 function landing(name: string, group: LandingMediaGroup, ratio: string, width: number): LandingMediaSlot {
   return { key: `landing/${name}`, page: 'brands', group, src: `/reel/landing/${name}.webp`, ratio, width };

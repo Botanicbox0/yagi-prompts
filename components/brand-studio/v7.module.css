@@ -512,7 +512,7 @@
 .heroSpec span { display: block; animation: specIn var(--id-base, 520ms) var(--id-spring) both; }
 @keyframes specIn { from { opacity: 0; transform: translateY(5px); } }
 @media (max-width: 759px) {
-  .heroFilm { object-position: 50% 30%; }
+  .heroFilm { object-position: 45% 30%; }
   .heroScrim { background: linear-gradient(0deg, rgb(14 28 52 / 0.86) 0%, rgb(14 28 52 / 0.56) 38%, rgb(14 28 52 / 0) 66%); }
   .heroSpec { display: none; }
 }

@@ -255,10 +255,14 @@ export function DemoDock({ label, cta, href }: { label: string; cta: string; hre
   );
 }
 
-/** The hero film: a phone-sized file on phones, and one quiet spec line that follows the cuts. */
-export function HeroFilm({ src, srcSmall, poster, label, cues, className, specClassName }: {
+/**
+ * The hero film in three sizes: phones get 720p, large high-density screens get 4K, everyone else 1080p. A browser that
+ * ignores `media` on a source takes the first one, the small file. One quiet spec line follows the cuts.
+ */
+export function HeroFilm({ src, srcSmall, srcLarge, poster, label, cues, className, specClassName }: {
   src: string;
   srcSmall: string;
+  srcLarge: string;
   poster: string;
   label: string;
   cues: ReadonlyArray<{ at: number; text: string }>;
@@ -287,6 +291,7 @@ export function HeroFilm({ src, srcSmall, poster, label, cues, className, specCl
     <>
       <video ref={ref} className={className} poster={poster} muted loop playsInline preload="metadata" aria-label={label} data-loop-video>
         <source src={srcSmall} media="(max-width: 767px)" type="video/mp4" />
+        <source src={srcLarge} media="(min-width: 1700px) and (min-resolution: 1.5dppx), (min-width: 2400px)" type="video/mp4" />
         <source src={src} type="video/mp4" />
       </video>
       <p className={specClassName} aria-hidden="true" data-hero-spec><span key={cue}>{cues[cue]?.text}</span></p>

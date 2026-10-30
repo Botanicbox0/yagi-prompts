@@ -535,7 +535,7 @@ export const en = {
         "body": "It already knows your brand, so anyone on your team can create expert-level images and films.",
         "cta": "Book a demo",
         "secondary": "See the work",
-        "filmLabel": "A YAGI perfume film and a runway film shot in a French-blue world",
+        "filmLabel": "A fashion editorial film shot in a French-blue studio",
         "doors": [
           {
             "title": "Asset studio",
@@ -597,11 +597,11 @@ export const en = {
           "title": "YAGI brand memory",
           "approved": "Approved",
           "notes": [
-            "Logo 8% smaller",
-            "Longer shadow",
-            "No skin smoothing",
-            "Bottle on the right third"
-          ],
+          "Logo 8% smaller",
+          "Longer shadow",
+          "Softer reflections",
+          "Bottle on the right third"
+        ],
           "look": "Saved colour look",
           "campaigns": [
             "Campaign 1",
@@ -639,13 +639,13 @@ export const en = {
           "One garment photo and a fictional model become a lookbook and an editorial.",
           "Each ad sits next to the product or outfit it features."
         ],
-        "adStill": "Product shot",
+        "adStill": "Outfit detail",
         "adLabels": [
-          "A 15-second ad with the same perfume",
-          "A 15-second runway with the same coat"
+          "A 12-second fashion film with the same outfit",
+          "A 20-second ad with the same perfume"
         ],
         "note": "Example screens. Products and models are fictional.",
-        "adStill2": "Outfit"
+        "adStill2": "Product shot"
       },
       "campaign": {
         "eyebrow": "Creator campaigns",

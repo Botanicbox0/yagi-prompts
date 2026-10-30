@@ -32,19 +32,24 @@ const DOORS = ['work', 'campaign', 'production'] as const;
 const DEMO_SITE = 'yagi.example';
 /** One quiet spec line over the hero film, following its cuts. Spec sheet language, the same in both locales. */
 const HERO_CUES = [
-  { at: 0.0, text: 'Brand YAGI / Look French Blue / 85mm' },
-  { at: 1.88, text: 'Macro / Mark locked' },
-  { at: 2.5, text: 'Look Ice Coat / Navy Ribbon / 180mm' },
-  { at: 3.45, text: 'Catwalk / Blue Lacquer / 135mm' },
-  { at: 4.32, text: 'Set White Ranunculus' },
-  { at: 4.81, text: 'Set Glass Sphere / Low Camera' },
-  { at: 5.97, text: 'Hall / 35mm Crane' },
-  { at: 7.17, text: 'Catwalk / 105mm Tracking' },
-  { at: 8.6, text: 'Product Heart Flacon / 85mm' },
-  { at: 9.59, text: 'Set Clear Gel / Top Down' },
-  { at: 10.33, text: 'Look Ice Coat / Finale' },
-  { at: 11.93, text: 'Set Blue Glass Beads' },
-  { at: 12.59, text: 'YAGI Heart / Final Frame' },
+  { at: 0, text: 'Cast 01 / French Blue Muslin / 180mm' },
+  { at: 0.63, text: 'Look 02 / White Flare / 85mm' },
+  { at: 1.42, text: 'Detail / Crystal Embroidery / Macro' },
+  { at: 1.96, text: 'Look 03 / Washed Denim / 85mm' },
+  { at: 2.58, text: 'Prop / Keys + Silver Nails / Macro' },
+  { at: 3.12, text: 'Split / Face + Boombox' },
+  { at: 4.41, text: 'Look 01 / Black Denim / 50mm' },
+  { at: 5.12, text: 'Look 03 / Fur Hat / 135mm' },
+  { at: 5.58, text: 'Cast / Group of Four / 50mm' },
+  { at: 6.25, text: 'Detail / White Denim / 100mm' },
+  { at: 6.83, text: 'Look 04 / Platinum + Fur / 85mm' },
+  { at: 7.25, text: 'Look 02 / Zip Top / 85mm' },
+  { at: 7.75, text: 'Set / Sculpture / 85mm' },
+  { at: 8.25, text: 'Look 02 / Full Length / 85mm' },
+  { at: 8.96, text: 'Cast 01 / Hand to Lens / 50mm' },
+  { at: 9.59, text: 'Look 02 / Light Falling / 85mm' },
+  { at: 10.59, text: 'Prop / Boombox + Bangles / 85mm' },
+  { at: 11.51, text: 'Cast 01 / Final Frame / 135mm' },
 ] as const;
 /** YAGI Production's own films, each at its own ratio. No client work: its posters carry real names. */
 const FILMS = [
@@ -73,10 +78,13 @@ const LOOKS = [
   { id: 'vto-look-front', studio: true },
   { id: 'look-sculpt' },
 ] as const;
-/** The two ads and what each one features. */
+/**
+ * The two ads and what each one features. The fashion film is the hero film, so no extra bytes. The pink perfume
+ * ad is the founder's original and the page's one warm counterpoint (docs/design/IDENTITY.md §2).
+ */
 const ADS = [
-  { id: 'perfume', still: L('ad-heart'), film: V('film-beauty', 'mp4'), poster: V('film-beauty', 'jpg') },
-  { id: 'runway', still: L('ad-coat'), film: V('film-runway-blue', 'mp4'), poster: V('film-runway-blue', 'jpg') },
+  { id: 'fashion', still: L('ad-denim'), film: V('hero', 'mp4'), poster: V('hero', 'jpg') },
+  { id: 'perfume', still: L('highteen-product'), film: '/reel/campaigns/highteen.mp4', poster: '/reel/campaigns/highteen.jpg' },
 ] as const;
 
 function Eyebrow({ children, status, tone = 'soon' }: { children: ReactNode; status?: string; tone?: 'soon' | 'live' }) {
@@ -94,7 +102,7 @@ export function V7Hero({ copy, locale }: { copy: Copy; locale: Locale }) {
   return (
     <section data-v7-hero data-campaign-hero data-section data-theme="light" className={s.hero}>
       <div className={s.heroFrame} data-hero-film>
-        <HeroFilm className={s.heroFilm} specClassName={s.heroSpec} src={V('hero', 'mp4')} srcSmall={V('hero-720', 'mp4')} poster={V('hero', 'jpg')} label={h.filmLabel} cues={HERO_CUES} />
+        <HeroFilm className={s.heroFilm} specClassName={s.heroSpec} src={V('hero', 'mp4')} srcSmall={V('hero-720', 'mp4')} srcLarge={V('hero-2160', 'mp4')} poster={V('hero', 'jpg')} label={h.filmLabel} cues={HERO_CUES} />
         <div className={s.heroScrim} aria-hidden="true" />
         <div className={s.heroCopy}>
           <h1 className={s.display}>{h.title}</h1>
