@@ -241,12 +241,9 @@ describe("the brand's preference", () => {
     await sl.setShortlistShared({ sql }, studio, { projectId, candidateId: await candidateId("fixture_pick"), shared: true });
   });
 
-  it("lets owners and commenting guests mark a shared candidate, and nobody else", async () => {
+  it("lets everyone invited to the brand or campaign and the TWINGS admins mark a shared candidate, and nobody else", async () => {
     const id = await candidateId("fixture_pick");
-    expect((await sl.loadBrandShortlist({ sql }, owner, projectId))!.canPick).toBe(true);
-    expect((await sl.loadBrandShortlist({ sql }, guest, projectId))!.canPick).toBe(true);
-    expect((await sl.loadBrandShortlist({ sql }, reader, projectId))!.canPick).toBe(false);
-    expect((await sl.loadBrandShortlist({ sql }, orgViewer, projectId))!.canPick).toBe(false);
+    for (const who of [owner, guest, reader, orgViewer, studio]) expect((await sl.loadBrandShortlist({ sql }, who, projectId))!.canPick).toBe(true);
     expect(await sl.pickShortlistCandidate({ sql }, guest, { candidateId: id, picked: true })).toEqual({ ok: true, id, picked: true });
     expect((await sl.loadBrandShortlist({ sql }, owner, projectId))!.candidates[0]!.picked).toBe(true);
     // Marking again keeps the first mark; unmarking clears it.
@@ -254,9 +251,20 @@ describe("the brand's preference", () => {
     expect((await sql.query("select picked_by from brand_shortlist_candidates where id=$1", [id])).rows[0]!.picked_by).toBe(ids.guest);
     expect(await sl.pickShortlistCandidate({ sql }, owner, { candidateId: id, picked: false })).toMatchObject({ ok: true, picked: false });
     expect((await sl.loadStudioShortlist({ sql }, studio, projectId))!.candidates.find(c => c.handle === "fixture_pick")).toMatchObject({ picked: false, pickedAt: null });
-    expect(await sl.pickShortlistCandidate({ sql }, reader, { candidateId: id, picked: true })).toEqual({ ok: false, code: "forbidden" });
-    expect(await sl.pickShortlistCandidate({ sql }, orgViewer, { candidateId: id, picked: true })).toEqual({ ok: false, code: "forbidden" });
+    for (const who of [reader, orgViewer, studio]) {
+      expect(await sl.pickShortlistCandidate({ sql }, who, { candidateId: id, picked: true })).toEqual({ ok: true, id, picked: true });
+      expect(await sl.chooseShortlistCandidates({ sql }, who, { candidateIds: [id], choice: "passed" })).toMatchObject({ ok: true, choice: "passed" });
+      expect(await sl.chooseShortlistCandidates({ sql }, who, { candidateIds: [id], choice: "none" })).toMatchObject({ ok: true, choice: "none" });
+    }
     expect(await sl.pickShortlistCandidate({ sql }, outsider, { candidateId: id, picked: true })).toEqual({ ok: false, code: "not_found" });
+  });
+
+  it("keeps the email-only staff read view read-only: marking takes the admin right", async () => {
+    const id = await candidateId("fixture_pick");
+    const deps = { sql, verifiedEmail: "someone@yagiworkshop.xyz" };
+    expect((await sl.loadBrandShortlist(deps, outsider, projectId))!.canPick).toBe(false);
+    expect(await sl.pickShortlistCandidate(deps, outsider, { candidateId: id, picked: true })).toEqual({ ok: false, code: "forbidden" });
+    expect(await sl.chooseShortlistCandidates(deps, outsider, { candidateIds: [id], choice: "picked" })).toEqual({ ok: false, code: "forbidden" });
   });
 
   it("treats a hidden candidate as not there", async () => {
@@ -292,8 +300,7 @@ describe("the brand's own sorting", () => {
     expect((await sl.loadStudioShortlist({ sql }, studio, projectId))!.candidates.find(x => x.handle === "fixture_c")).toMatchObject({ passed: true, picked: false, state: "shared" });
   });
 
-  it("lets only commenting seats sort, and only shared candidates of one campaign", async () => {
-    for (const who of [reader, orgViewer]) expect(await sl.chooseShortlistCandidates({ sql }, who, { candidateIds: [a], choice: "passed" })).toEqual({ ok: false, code: "forbidden" });
+  it("lets only seats on this campaign sort, and only shared candidates of one campaign", async () => {
     expect(await sl.chooseShortlistCandidates({ sql }, outsider, { candidateIds: [a], choice: "passed" })).toEqual({ ok: false, code: "not_found" });
     // One hidden or unknown ID and nothing changes.
     expect(await sl.chooseShortlistCandidates({ sql }, owner, { candidateIds: [a, hidden], choice: "picked" })).toEqual({ ok: false, code: "not_found" });

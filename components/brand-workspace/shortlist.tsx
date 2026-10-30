@@ -8,8 +8,9 @@ import {
   SHORTLIST_SORTS, SHORTLIST_UNKNOWN, shortlistAverage, shortlistCount, shortlistDay, shortlistMedian, shortlistPercent, shortlistSortValue,
   shortlistTags, sortShortlist, type ShortlistSort,
 } from "@/lib/brands/shortlist/format";
+import { SHORTLIST_EXPORT_FILE, shortlistSheet } from "@/lib/brands/shortlist/export";
 
-type Copy = Dictionary["brandWorkspace"]["shortlist"];
+type Copy =Dictionary["brandWorkspace"]["shortlist"];
 type Tab = "open" | "picked" | "passed" | "confirmed";
 type View = "cards" | "list";
 type Undo = Array<[ShortlistChoice, string[]]>;
@@ -133,6 +134,15 @@ export function CampaignShortlist({ candidates, canPick, copy, locale, defaultVi
   }
   const mark = (ids: string[], next: ShortlistChoice) => apply([[next, ids]], interpolate(copy.done[next], { count: ids.length }));
   const toggleOne = (c: ShortlistCandidate, target: "picked" | "passed") => mark([c.id], choice(c) === target ? "none" : target);
+  // Everyone on the shortlist in the order on screen, whichever tab is open. The writer loads on the first click.
+  async function exportSheet() {
+    try {
+      const { default: writeExcelFile } = await import("write-excel-file/browser");
+      await writeExcelFile(shortlistSheet(sortShortlist(candidates, sort), choices, copy)).toFile(SHORTLIST_EXPORT_FILE);
+    } catch {
+      setToast({ message: copy.exportFailed });
+    }
+  }
 
   const toggleSelect = (id: string) => setSelected((current) => {
     const next = new Set(current);
@@ -171,6 +181,7 @@ export function CampaignShortlist({ candidates, canPick, copy, locale, defaultVi
           ))}
         </div>
         <div className="bw-shortlist-tools-end">
+          <button type="button" className="bw-button" onClick={exportSheet} data-shortlist-export>{copy.export}</button>
           <div className="bw-shortlist-sorts" role="group" aria-label={copy.sortLabel}>
             {SHORTLIST_SORTS.map((key) => (
               <button key={key} type="button" aria-pressed={sort === key} onClick={() => setSort(key)} data-shortlist-sort={key}>

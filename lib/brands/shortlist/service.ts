@@ -94,6 +94,11 @@ function studioCandidate(row: Row): StudioShortlistCandidate {
     createdAt: stamp(row.created_at), updatedAt: stamp(row.updated_at),
   };
 }
+/**
+ * Marking is open to everyone who was invited and to the DB admins (founder, 2026-10-30). An email-only
+ * staff seat stays a read view: the admin right is the DB's, and no mutation reads the staff check.
+ */
+const canMark = (seat: { role: string }, viewer: Viewer) => seat.role !== 'studio' || viewer.isAdmin;
 const TONE = /^#[0-9a-f]{6}$/;
 /** Saved criteria as stored; anything that no longer parses reads as none rather than failing the page. */
 function criteriaOf(value: unknown): ShortlistCriteria | null {
@@ -221,7 +226,7 @@ export async function loadBrandShortlist(deps: { sql: SqlRunner; verifiedEmail?:
       const seat = await brandProjectSeat(sql, viewer.userId!, projectId, deps.verifiedEmail);
       if (!seat) return null;
       const rows = (await sql.query(`select ${COLUMNS} from brand_shortlist_candidates where project_id=$1 and shared_at is not null ${ORDER}`, [projectId])).rows;
-      return { candidates: rows.map(candidate), canPick: seat.role !== 'studio' && seat.canComment && seat.status !== 'cancelled' };
+      return { candidates: rows.map(candidate), canPick: canMark(seat, viewer) && seat.status !== 'cancelled' };
     });
   } catch (error) {
     if (missingTable(error)) return null;
@@ -338,9 +343,9 @@ export async function removeShortlistCandidate(deps: { sql: SqlRunner }, viewer:
 }
 
 /**
- * The brand's one control: mark or unmark a shared candidate as preferred. Owners, editors and
- * campaign guests invited to comment may; organization viewers, read-only guests and the TWINGS
- * team's view may not. A candidate the brand cannot see is `not_found`.
+ * The brand's one control: mark or unmark a shared candidate as preferred. Everyone invited to the
+ * brand or the campaign may, whatever their role, and so may the TWINGS admins (`canMark`). A candidate
+ * the brand cannot see is `not_found`.
  */
 export async function pickShortlistCandidate(deps: { sql: SqlRunner; verifiedEmail?: string }, viewer: Viewer, input: unknown): Promise<BrandOutcome<{ id: string; picked: boolean }>> {
   const parsed = ShortlistPickSchema.safeParse(input);
@@ -352,7 +357,7 @@ export async function pickShortlistCandidate(deps: { sql: SqlRunner; verifiedEma
     if (!row || row.shared_at == null) throw new Denied('not_found');
     const seat = await brandProjectSeat(sql, viewer.userId!, String(row.project_id), deps.verifiedEmail);
     if (!seat) throw new Denied('not_found');
-    if (seat.role === 'studio' || !seat.canComment) throw new Denied('forbidden');
+    if (!canMark(seat, viewer)) throw new Denied('forbidden');
     if (seat.status === 'cancelled') throw new Denied('not_active');
     if (v.picked) await sql.query(`update brand_shortlist_candidates set picked_at=coalesce(picked_at,now()),picked_by=case when picked_at is null then $2 else picked_by end,
         passed_at=null,passed_by=null where id=$1`, [v.candidateId, viewer.userId]);
@@ -381,7 +386,7 @@ export async function chooseShortlistCandidates(
     const [projectId] = projects;
     const seat = await brandProjectSeat(sql, viewer.userId!, projectId!, deps.verifiedEmail);
     if (!seat) throw new Denied('not_found');
-    if (seat.role === 'studio' || !seat.canComment) throw new Denied('forbidden');
+    if (!canMark(seat, viewer)) throw new Denied('forbidden');
     if (seat.status === 'cancelled') throw new Denied('not_active');
     const changed = (await sql.query(v.choice === 'picked'
       ? `update brand_shortlist_candidates set picked_at=now(),picked_by=$2,passed_at=null,passed_by=null
