@@ -8,6 +8,8 @@ import { makerRest } from '@/lib/makers/links';
  * card in two columns**; the 2026-08-14 "every card 16:9" rule survives for landscape templates
  * only. The 16:9 window letterboxed a 9:16 result into half a screen of black — the card now
  * crops a portrait clip to 4:5 instead, the way every short-form template wall does.
+ *
+ * The catalog no longer uses these windows (see `cardRatio`); the campaign wizard's format picker does.
  */
 export const CARD_RATIOS = { portrait: '4 / 5', landscape: '16 / 9' } as const;
 export type CardFrame = keyof typeof CARD_RATIOS;
@@ -36,6 +38,17 @@ export function cardFrame(card: Pick<PromptCard, 'poster' | 'video' | 'aspectDef
   const measured = [card.video, card.poster].find((media) => media?.w && media?.h && media.w > 0 && media.h > 0);
   const ratio = measured ? measured.w! / measured.h! : parseAspect(cardAspect(card));
   return ratio !== null && ratio >= LANDSCAPE_FROM ? 'landscape' : 'portrait';
+}
+
+/**
+ * Founder 2026-10-31: films come in every shape and none of them should be cut to fit. A catalog
+ * card takes the example's own ratio and `.film-rows` (globals.css) lines the cards up in rows of
+ * one height that fill the width, so the page stays tidy with no crop and no letterbox.
+ * Same evidence order as `cardFrame`: the measured example, then the template's opening aspect.
+ */
+export function cardRatio(card: Pick<PromptCard, 'poster' | 'video' | 'aspectDefault' | 'medium'>): number {
+  const measured = [card.video, card.poster].find((media) => media?.w && media?.h && media.w > 0 && media.h > 0);
+  return measured ? measured.w! / measured.h! : parseAspect(cardAspect(card)) ?? 4 / 5;
 }
 
 /**

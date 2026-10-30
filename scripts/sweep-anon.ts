@@ -1061,9 +1061,9 @@ async function sweepTemplates(): Promise<void> {
   expectAbsent('…no dollar price on the English page', shown(detail.body), '>$4<');
   expectPresent('…"Subscribe to make it here" instead', detail.body, 'Subscribe to make it here');
   expectAbsent('…no Offer price in the structured data', detail.body, 'priceCurrency');
-  // The related list is the catalogue's 4:5 grid: two across on a phone, four on a desktop.
-  if (/<ul[^>]*data-related-grid[^>]*class="[^"]*\bgrid-cols-2\b[^"]*\blg:grid-cols-4\b/.test(detail.body)) ok('…related templates in the two-column card grid', 'data-related-grid');
-  else fail('…related templates grid', 'expected data-related-grid with grid-cols-2 … lg:grid-cols-4');
+  // The related list uses the same justified film rows as the catalogue.
+  if (/<ul[^>]*data-related-grid[^>]*class="[^"]*\bfilm-rows\b/.test(detail.body)) ok('…related templates in film rows', 'data-related-grid');
+  else fail('…related templates grid', 'expected data-related-grid with film-rows');
   expectPresent('…whose items are cards', detail.body, 'data-related-item');
   const detailKo = await get(`/ko/t/${GATED_PROMPT}`);
   expectEqual('the Korean template page renders 200', detailKo.status, 200);
@@ -1227,7 +1227,7 @@ async function sweepLandingTemplates(): Promise<void> {
   expectPresent('the creator home has a separate brand entry', page.body, 'data-brand-door');
   expectPresent('the brand entry leads to public services', page.body, 'href="/en/brands"');
   expectPresent('the video rail is template cards', page.body, 'data-prompt-card=');
-  expectPresent('the model is on the page', page.body, 'SEEDANCE 2.5');
+  expectAbsent('no engine name on the landing (IDENTITY §7)', page.body, 'SEEDANCE 2.5');
   expectAbsent('the library is denavigated', page.body, 'href="/library"');
   for (const sentinel of PROMPT_SENTINELS) {
     expectAbsent(`no prompt text on the landing (${sentinel.token})`, page.body, sentinel.token);

@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { COLOUR } from '@/lib/design/identity';
 
 const globals = readFileSync(fileURLToPath(new URL('../../app/globals.css', import.meta.url)), 'utf8');
 
@@ -34,10 +35,11 @@ describe('design tokens (§5.1/§5.2/§4)', () => {
     expect(globals).not.toContain('tailwind.config');
   });
 
-  it('is two inks plus one accent — the classic hyperlink blue', () => {
+  it('is two inks plus one accent — the identity French blue', () => {
     expect(globals).toContain('--color-black: #000000');
     expect(globals).toContain('--color-white: #ffffff');
-    expect(globals).toContain('--color-blue: #0000ee');
+    expect(globals).toContain(`--color-blue: ${COLOUR.accent}`);
+    expect(globals).toContain(`--color-sky: ${COLOUR.sky}`);
     expect(globals).toContain('--color-line-light: rgba(0, 0, 0, 0.12)');
     expect(globals).toContain('--color-line-dark: rgba(255, 255, 255, 0.16)');
     // anti-slop: no gradients, no glass, no coloured shadows
@@ -263,8 +265,7 @@ describe('design tokens (§5.1/§5.2/§4)', () => {
       'animation: playbook-marquee 40s linear infinite', // 5 · 40s loop
       '.marquee:hover .marquee__track', // 5 · pause on hover
       '.card:hover .card__media > *', // 6 · media zoom
-      'transform: scale(1.03)', // 6 · 1.03
-      'translate3d(0, -2px, 0)', // 6 · −2px lift
+      'transform: scale(1.015)', // 6 · 1.015, no lift (founder 2026-10-31: quieter cards)
       ".wipe[data-anim='circle']", // 2 · circular wipe
       '.panel', // 1 · sticky scenes
     ]) {

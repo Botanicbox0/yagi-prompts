@@ -36,16 +36,16 @@ export function CreatorPreview({
     };
   }, [video?.src]);
 
-  return <div ref={rootRef} data-creator-preview className="card__media relative overflow-hidden rounded-2xl bg-black" style={{ aspectRatio: ratio }}>
+  return <div ref={rootRef} data-creator-preview className="card__media relative overflow-hidden rounded-[18px] bg-sky" style={{ aspectRatio: ratio }}>
     <a href={href} aria-label={title} className="block h-full w-full">
       {poster ? (
         // eslint-disable-next-line @next/next/no-img-element -- public catalog media; the hero is the LCP image
-        <img src={poster.src} alt={title} width={poster.w} height={poster.h} loading={priority ? 'eager' : 'lazy'} fetchPriority={priority ? 'high' : 'auto'} decoding="async" className="absolute inset-0 h-full w-full object-contain" />
+        <img src={poster.src} alt={title} width={poster.w} height={poster.h} loading={priority ? 'eager' : 'lazy'} fetchPriority={priority ? 'high' : 'auto'} decoding="async" className="absolute inset-0 h-full w-full object-cover" />
       ) : fallback}
       {video && <video
         key={video.src}
         ref={videoRef}
-        className="absolute inset-0 h-full w-full object-contain"
+        className="absolute inset-0 h-full w-full object-cover"
         autoPlay muted loop playsInline preload="none" aria-hidden="true" tabIndex={-1}
         onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)}
       ><source src={video.src} type={video.mime} /></video>}
@@ -54,7 +54,7 @@ export function CreatorPreview({
       type="button" data-creator-preview-control
       onClick={() => playbackRef.current?.toggle()}
       aria-label={playing ? labels.pause : labels.play}
-      className="absolute right-3 bottom-3 z-10 inline-flex min-h-11 min-w-11 items-center justify-center gap-2 rounded-full bg-black px-4 text-xs font-medium text-white"
+      className="absolute right-3 bottom-3 z-10 inline-flex min-h-9 min-w-9 items-center justify-center gap-2 rounded-full bg-black/45 px-3 text-xs font-medium text-white backdrop-blur-md"
     ><span aria-hidden="true">{playing ? 'Ⅱ' : '▶'}</span><span>{playing ? labels.pause : labels.play}</span></button>}
   </div>;
 }

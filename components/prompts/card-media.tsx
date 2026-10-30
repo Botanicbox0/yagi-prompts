@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { observeCardArming } from '@/lib/media/card-arming';
+import { observeCardArming, rebalanceCardArming } from '@/lib/media/card-arming';
 
 /**
  * PLAN §13.2, revised by docs/PLATFORM-2.0.md §15.2 — "뷰포트 진입 자동재생" with a visible stop.
@@ -13,8 +13,8 @@ import { observeCardArming } from '@/lib/media/card-arming';
  *     out (`lib/media/card-arming.ts`): iPhone Safari caps concurrent media decoders, and a rail
  *     that only ever arms starves the cards further down. Keyboard focus anywhere on the card arms
  *     it too — a focused card is on screen.
- *   · However many cards fit on the screen, at most four clips play: the ones nearest its centre.
- *     A card the reader pressed play on keeps its slot.
+ *   · However many cards fit on the screen, at most two clips play: the ones nearest its centre.
+ *     A card the reader pressed play on, or is pointing at, takes a slot first.
  *   · `prefers-reduced-motion` → never on its own. §5.3's reduced-motion rule is a kill switch, not
  *     a softening. The play button still works: pressing it is the reader's choice, not motion.
  *   · The stop button wins: a clip the reader stopped stays stopped, through scrolling away and
@@ -65,9 +65,9 @@ export function CardPlaybackControl({
       data-card-control={playing ? 'pause' : 'play'}
       aria-label={playing ? labels.pause : labels.play}
       onClick={onToggle}
-      className="absolute right-1 bottom-1 z-10 inline-flex min-h-11 min-w-11 items-center justify-center rounded-full"
+      className="absolute right-1 bottom-1 z-10 inline-flex min-h-11 min-w-11 items-center justify-center rounded-full transition-opacity duration-200 group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:hover)]:opacity-0"
     >
-      <span aria-hidden className="flex h-8 w-8 items-center justify-center rounded-full bg-black/80 text-white">
+      <span aria-hidden className="flex h-7 w-7 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur-md">
         {playing ? (
           <svg viewBox="0 0 12 12" className="h-3 w-3" fill="currentColor"><rect x="2" y="1.5" width="3" height="9" rx="0.5" /><rect x="7" y="1.5" width="3" height="9" rx="0.5" /></svg>
         ) : (
@@ -106,6 +106,7 @@ export function PromptCardMedia({
   const [intent, setIntent] = useState<PlaybackIntent>('auto');
   const intentRef = useRef<PlaybackIntent>('auto');
   intentRef.current = intent;
+  const pointingRef = useRef(false);
   const [autoplay, setAutoplay] = useState(false);
   const [hydrated, setHydrated] = useState(false);
   const [playing, setPlaying] = useState(false);
@@ -121,7 +122,7 @@ export function PromptCardMedia({
   useEffect(() => {
     const root = rootRef.current;
     if (!root || video === null || typeof IntersectionObserver === 'undefined') return;
-    return observeCardArming(root, setInView, { pinned: () => intentRef.current === 'play' });
+    return observeCardArming(root, setInView, { pinned: () => intentRef.current === 'play' || pointingRef.current });
   }, [video]);
 
   // Keyboard focus anywhere on the card counts as being on screen.
@@ -130,8 +131,21 @@ export function PromptCardMedia({
     if (!root || video === null) return;
     const host = root.closest<HTMLElement>(HOVER_HOST) ?? root;
     const focus = () => setInView(true);
+    // A mouse pointing at a card is asking for that clip, so it takes a slot from the pool.
+    const point = (on: boolean) => (event: PointerEvent) => {
+      if (event.pointerType !== 'mouse') return;
+      pointingRef.current = on;
+      rebalanceCardArming();
+    };
+    const enter = point(true), leave = point(false);
     host.addEventListener('focusin', focus);
-    return () => host.removeEventListener('focusin', focus);
+    host.addEventListener('pointerenter', enter);
+    host.addEventListener('pointerleave', leave);
+    return () => {
+      host.removeEventListener('focusin', focus);
+      host.removeEventListener('pointerenter', enter);
+      host.removeEventListener('pointerleave', leave);
+    };
   }, [video]);
 
   useEffect(() => {
@@ -163,7 +177,7 @@ export function PromptCardMedia({
       <div
         ref={rootRef}
         data-armed={armed ? 'true' : 'false'}
-        className={['card__media relative overflow-hidden bg-black', className].filter(Boolean).join(' ')}
+        className={['card__media relative overflow-hidden bg-sky', className].filter(Boolean).join(' ')}
         style={{ aspectRatio: ratio }}
       >
         {poster ? (
@@ -184,7 +198,9 @@ export function PromptCardMedia({
         {armed && (
           <video
             ref={videoRef}
+            // The clip fades up over its poster once a frame exists, so a card never blinks.
             className={`absolute inset-0 h-full w-full ${fit === 'cover' ? 'object-cover' : 'object-contain'}`}
+            style={{ opacity: playing ? 1 : 0, transition: 'opacity 520ms var(--ease-out-quint), transform var(--duration-hover) var(--ease-out-quint)' }}
             autoPlay
             muted
             loop

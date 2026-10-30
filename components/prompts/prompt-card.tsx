@@ -3,7 +3,7 @@ import { templateHref } from '@/lib/prompts/links';
 import { badgeFor } from '@/lib/content/badges';
 import { PromptCardMedia } from './card-media';
 import { TypographicPoster } from './poster';
-import { CARD_RATIOS, cardAspect, cardAuthor, cardFrame } from './card-frame';
+import { cardAspect, cardAuthor, cardFrame, cardRatio } from './card-frame';
 import type { PromptLabels } from './labels';
 
 /**
@@ -36,7 +36,7 @@ export function PromptCardView({
 }) {
   const title = locale === 'ko' && card.titleKo ? card.titleKo : card.title;
   const frame = cardFrame(card);
-  const ratio = CARD_RATIOS[frame];
+  const ratio = String(cardRatio(card));
   const author = cardAuthor(card);
   const seconds = card.medium === 'video' && card.runtimeSeconds && card.runtimeSeconds > 0 ? card.runtimeSeconds : null;
 
@@ -55,14 +55,13 @@ export function PromptCardView({
       data-frame={frame}
       className="card group relative flex min-w-0 flex-col"
     >
-      <div className="relative shrink-0 overflow-hidden rounded-lg bg-black">
+      <div className="relative shrink-0 overflow-hidden rounded-[18px] bg-sky">
         <PromptCardMedia
           poster={card.poster}
           video={card.video}
           alt={title}
           ratio={ratio}
-          // A portrait clip fills its 4:5 window; a wide one keeps the reference letterbox.
-          fit={frame === 'portrait' ? 'cover' : 'contain'}
+          fit="cover"
           controlLabels={{ play: labels.cardPlay, pause: labels.cardPause }}
           fallback={<TypographicPoster title={card.title} slug={card.slug} kicker="" ratio={ratio} />}
         />
@@ -70,46 +69,29 @@ export function PromptCardView({
         {badge === 'new' && (
           <span
             data-badge="new"
-            className="pointer-events-none absolute top-2 left-2 rounded-full bg-accent px-2 py-1 text-[0.6875rem] leading-none font-semibold text-white"
+            className="pointer-events-none absolute top-2.5 left-2.5 rounded-full bg-black/45 px-2.5 py-1 text-[0.6875rem] leading-none font-medium text-white backdrop-blur-md"
           >
             {labels.badgeNew}
           </span>
         )}
-
-        {/* The template page shows this one's prompt (2026-10-29): the reason a creative's follower clicks. */}
-        {card.recipeOpen && (
-          <span
-            data-card-recipe
-            className="pointer-events-none absolute top-2 right-2 rounded-full bg-white px-2 py-1 text-[0.6875rem] leading-none font-semibold text-black"
-          >
-            {labels.cardRecipe}
-          </span>
-        )}
-
-        {/* Length and shape, where a thumbnail's duration usually sits. Solid black under white
-            text keeps 4.5:1 over any frame of any clip. */}
-        <span className="pointer-events-none absolute bottom-2 left-2 flex gap-1 text-[0.6875rem] leading-none font-medium text-white">
-          {seconds !== null && (
-            <span data-card-duration className="rounded-full bg-black/80 px-2 py-1">
-              {labels.cardSeconds.replace('{seconds}', String(seconds))}
-            </span>
-          )}
-          <span data-card-aspect className="rounded-full bg-black/80 px-2 py-1">
-            {cardAspect(card)}
-          </span>
-        </span>
       </div>
 
-      <h3 className="mt-2.5 line-clamp-2 text-[0.95rem] leading-snug font-semibold break-keep">
+      <h3 className="mt-3 line-clamp-2 text-[0.95rem] leading-snug font-medium tracking-[-0.01em] break-keep">
         <a
           href={templateHref(locale, card.slug)}
-          className="rounded-lg outline-none after:absolute after:inset-0 after:rounded-lg after:content-[''] focus-visible:after:outline-2 focus-visible:after:outline-offset-2 focus-visible:after:outline-[var(--color-blue)]"
+          className="rounded-[18px] outline-none after:absolute after:inset-0 after:rounded-[18px] after:content-[''] focus-visible:after:outline-2 focus-visible:after:outline-offset-2 focus-visible:after:outline-[var(--color-blue)]"
         >
           {title}
         </a>
       </h3>
+      {/* Length, shape and the open recipe sit under the title: the picture stays clean. */}
+      <p className="mt-1 flex flex-wrap gap-x-1.5 text-xs text-[#676b75] tabular-nums">
+        {seconds !== null && <span data-card-duration>{labels.cardSeconds.replace('{seconds}', String(seconds))}</span>}
+        <span data-card-aspect>{cardAspect(card)}</span>
+        {card.recipeOpen && <span data-card-recipe>{labels.cardRecipe}</span>}
+      </p>
       {author && (
-        <p data-card-author className="mt-1 truncate text-xs text-black/60">
+        <p data-card-author className="mt-0.5 truncate text-xs text-[#676b75]">
           {author.handle ? labels.cardAuthor.replace('{handle}', author.handle) : labels.cardAuthorAnonymous}
         </p>
       )}

@@ -7,7 +7,7 @@ import type { PromptCard } from '@/lib/prompts/catalog';
 import { PROMPT_MODEL_LABEL, USE_CASES } from '@/lib/prompts/schemas';
 import { PromptCardView } from '@/components/prompts/prompt-card';
 import { CardPlaybackControl, shouldMountClip } from '@/components/prompts/card-media';
-import { CARD_RATIOS, ORIGIN_RUN_MAX, cardAspect, cardAuthor, cardFrame, makerProfileRest, railOrder } from '@/components/prompts/card-frame';
+import { CARD_RATIOS, cardRatio, ORIGIN_RUN_MAX, cardAspect, cardAuthor, cardFrame, makerProfileRest, railOrder } from '@/components/prompts/card-frame';
 import { pillClassName } from '@/components/prompts/pill';
 import { PromptRail } from '@/components/prompts/rails';
 import { UseCaseFilter } from '@/components/prompts/filter-chips';
@@ -67,7 +67,7 @@ function markup(data: PromptCard, locale: 'en' | 'ko' = 'en') {
   );
 }
 
-describe('card frame (founder 2026-10-23: portrait → 4:5, landscape → 16:9)', () => {
+describe('card frame (founder 2026-10-31: every card keeps the original ratio)', () => {
   it('frames a portrait or square example at 4:5 and a wide one at 16:9', () => {
     expect(cardFrame(card())).toBe('portrait');
     expect(cardFrame(card({ poster: { source: 'route', src: '/p', mime: 'image/png', w: 1080, h: 1080 } }))).toBe('portrait');
@@ -85,13 +85,14 @@ describe('card frame (founder 2026-10-23: portrait → 4:5, landscape → 16:9)'
 
   it('renders the chosen ratio and crops a portrait clip to fill it', () => {
     const tall = markup(card());
-    expect(tall).toContain(`aspect-ratio:${CARD_RATIOS.portrait}`);
+    expect(tall).toContain(`aspect-ratio:${cardRatio(card())}`);
     expect(tall).toContain('data-frame="portrait"');
     expect(tall).toContain('object-cover');
     const wide = markup(card({ poster: { source: 'route', src: '/p', mime: 'image/png', w: 1600, h: 900 }, aspectDefault: '16:9' }));
-    expect(wide).toContain(`aspect-ratio:${CARD_RATIOS.landscape}`);
+    expect(wide).toContain(`aspect-ratio:${16 / 9}`);
     expect(wide).toContain('data-frame="landscape"');
     expect(CARD_RATIOS).toEqual({ portrait: '4 / 5', landscape: '16 / 9' });
+    expect(cardRatio(card({ poster: { source: 'route', src: '/p', mime: 'image/png', w: 1600, h: 900 } }))).toBeCloseTo(16 / 9);
   });
 });
 
@@ -192,7 +193,7 @@ describe('rails: NEW first, two columns on a phone', () => {
     expect(ordered.map((c) => c.slug)).toEqual(['n1', 'n2', 'a', 'b']);
   });
 
-  it('renders that order in a two-column grid that never scrolls sideways', () => {
+  it('renders that order in film rows that never scroll sideways', () => {
     const dict = dicts.en;
     const html = renderToStaticMarkup(
       <PromptRail
@@ -209,9 +210,8 @@ describe('rails: NEW first, two columns on a phone', () => {
       />,
     );
     expect(html.indexOf('data-prompt-card="n1"')).toBeLessThan(html.indexOf('data-prompt-card="a"'));
-    expect(html).toContain('grid-cols-2');
-    expect(html).toContain('lg:grid-cols-4');
-    expect(html).toMatch(/<li[^>]*class="[^"]*min-w-0/);
+    expect(html).toContain('film-rows');
+    expect(html).toMatch(/<li[^>]*style="--r:/);
   });
 });
 

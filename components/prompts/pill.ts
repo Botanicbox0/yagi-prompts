@@ -7,5 +7,5 @@ const BASE =
   'inline-flex min-h-11 shrink-0 items-center rounded-full border px-4 py-2 text-xs font-medium whitespace-nowrap transition-colors duration-200';
 
 export function pillClassName(on: boolean): string {
-  return `${BASE} ${on ? 'border-accent bg-accent text-white' : 'border-hairline hover:border-black/40'}`;
+  return `${BASE} ${on ? 'border-transparent bg-black text-white' : 'border-hairline hover:border-black/40'}`;
 }

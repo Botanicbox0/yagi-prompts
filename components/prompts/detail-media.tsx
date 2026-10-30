@@ -27,8 +27,8 @@ export interface DetailMediaControls {
  * - Two small controls: play/pause and sound. A looping clip up to 30 seconds long must be
  *   stoppable (WCAG 2.2.2), and `prefers-reduced-motion` does not autoplay but keeps the play
  *   button, so the example stays one tap away instead of out of reach.
- * - Portrait clips (`9:16`, `4:5`, `3:4`) fill a phone edge to edge and sit in a studio frame on
- *   desktop; landscape clips keep their own ratio.
+ * - Portrait clips (`9:16`, `4:5`, `3:4`) stand whole on a sky-toned stage at every width, never
+ *   cropped; landscape clips keep their own ratio. The card crops, the template page does not.
  */
 
 function isPortraitAspect(aspect?: string | null): boolean {
@@ -38,7 +38,7 @@ function isPortraitAspect(aspect?: string | null): boolean {
 function frameAspectClass(aspect?: string | null): string {
   switch (aspect) {
     case '9:16':
-      return 'aspect-[4/5] sm:aspect-[9/16]';
+      return 'aspect-[9/16]';
     case '3:4':
       return 'aspect-[3/4]';
     case '4:5':
@@ -56,7 +56,7 @@ function frameAspectClass(aspect?: string | null): string {
 type PlaybackIntent = 'auto' | 'paused' | 'playing';
 
 const CONTROL =
-  'inline-flex min-h-9 items-center gap-1.5 rounded-full border border-white/15 bg-black/70 px-3 py-1.5 text-xs font-medium text-white backdrop-blur-md transition-colors hover:bg-black/85 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white';
+  'inline-flex min-h-9 items-center gap-1.5 rounded-full bg-black/45 px-3 py-1.5 text-xs font-medium text-white backdrop-blur-md transition-colors hover:bg-black/60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white';
 
 export function PromptDetailMedia({
   poster,
@@ -142,11 +142,11 @@ export function PromptDetailMedia({
   // Portrait: a stage as tall as the screen allows, the clip centred in it at its own ratio — the
   // same stage the picture gallery uses, so films and pictures read as one family.
   const outerClass = portrait
-    ? 'w-full sm:flex sm:h-[min(calc(100svh-11rem),40rem)] sm:items-center sm:justify-center sm:rounded-2xl sm:bg-black/[0.035] sm:p-6 lg:h-[min(calc(100svh-9rem),46rem)] lg:p-8'
+    ? 'flex h-[min(calc(100svh-7rem),40rem)] w-full items-center justify-center rounded-[18px] bg-sky p-4 sm:p-6 lg:h-[min(calc(100svh-9rem),46rem)] lg:p-8'
     : 'w-full';
   const stageClass = portrait
-    ? `relative w-full overflow-hidden bg-black ${ratioClass} sm:h-full sm:w-auto sm:max-w-full sm:rounded-xl sm:shadow-[0_24px_48px_-24px_rgba(0,0,0,0.45)]`
-    : `relative w-full overflow-hidden bg-black ${ratioClass} sm:rounded-2xl`;
+    ? `relative h-full w-auto max-w-full overflow-hidden rounded-[18px] bg-sky ${ratioClass}`
+    : `relative w-full overflow-hidden rounded-[18px] bg-sky ${ratioClass}`;
 
   // Both handlers touch the element inside the tap itself: iOS only lets a gesture start sound.
   const togglePlayback = () => {

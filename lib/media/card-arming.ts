@@ -23,7 +23,7 @@ export const CARD_ARM_RATIO = 0.6;
 /** Mostly gone: give the decoder back before the next card needs one. */
 export const CARD_RELEASE_RATIO = 0.25;
 /** At most this many card clips decode at once, however many cards fit on the screen. */
-export const MAX_PLAYING_CARDS = 4;
+export const MAX_PLAYING_CARDS = 2;
 
 export interface ArmingCandidate {
   /** Distance from the card's centre to the viewport's centre, in px. */
@@ -122,6 +122,11 @@ export function createArmingPool(max = MAX_PLAYING_CARDS): ArmingPool {
 
 /** The one pool every catalog card on the page shares. */
 const pagePool = createArmingPool();
+
+/** Re-rank after something `pinned` reads has changed (the pointer moved onto a card). */
+export function rebalanceCardArming() {
+  pagePool.rebalance();
+}
 
 export function observeCardArming(
   root: Element,

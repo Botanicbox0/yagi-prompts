@@ -1,3 +1,5 @@
+import type { CSSProperties } from 'react';
+import { cardRatio } from './card-frame';
 import { SIGNUP_COOKIES } from '@/lib/cookies/wallet';
 import type { PromptCard } from '@/lib/prompts/catalog';
 import type { ShapedPrompt } from '@/lib/prompts/shape';
@@ -467,9 +469,9 @@ export function RelatedPrompts({
       </h2>
       {/* The catalogue's own grid (rails.tsx): two 4:5 cards a row on a phone, four on a desktop.
           No three-column step — the related list is four cards, and 3 + 1 leaves an orphan. */}
-      <ul data-related-grid className="mt-8 grid grid-cols-2 items-start gap-x-3 gap-y-6 sm:gap-x-4 lg:grid-cols-4">
+      <ul data-related-grid className="mt-8 film-rows">
         {cards.map((card) => (
-          <li key={card.slug} data-related-item className="min-w-0">
+          <li key={card.slug} data-related-item style={{ '--r': cardRatio(card) } as CSSProperties}>
             <PromptCardView
               card={card}
               locale={locale}
