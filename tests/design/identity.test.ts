@@ -13,6 +13,9 @@ const rule = css.match(/\.identity\s*\{([^}]*)\}/)?.[1] ?? '';
 const token = (name: string) => rule.match(new RegExp(`--id-${name}\s*:\s*([^;]+);`))?.[1]?.trim();
 const kebab = (key: string) => key.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`);
 const doc = readFileSync(join(process.cwd(), 'docs', 'design', 'IDENTITY.md'), 'utf8');
+const platformDoc = readFileSync(join(process.cwd(), 'docs', 'PLATFORM-2.0.md'), 'utf8');
+const adminCss = readFileSync(join(process.cwd(), 'app', '(admin)', 'workspace.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+const brandWorkspaceCss = readFileSync(join(process.cwd(), 'app', '(brand)', 'workspace.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
 const agents = readFileSync(join(process.cwd(), 'AGENTS.md'), 'utf8');
 
 describe('TWINGS design identity', () => {
@@ -63,5 +66,21 @@ describe('TWINGS design identity', () => {
     expect(token('mono')).toBe(TYPE.mono);
     expect(IMAGERY.ownedHue[0]).toBeLessThan(IMAGERY.ownedHue[1]);
     expect(HARDLINES.length).toBeGreaterThanOrEqual(5);
+  });
+
+  it('aligns PLATFORM-2.0 §21.4 and admin/brand workspace stylesheets with IDENTITY.md (#3875C5)', () => {
+    const section214 = platformDoc.slice(platformDoc.indexOf('### 21.4'), platformDoc.indexOf('- **랜딩 v5 구성**'));
+    expect(section214).toContain('#3875C5');
+    expect(section214).not.toContain('#0000EE');
+    expect(section214).not.toContain('#1414B8');
+
+    expect(adminCss.toLowerCase()).toContain(COLOUR.accent);
+    expect(adminCss).not.toMatch(/#0000ee|rgba\(\s*0[\s,]+0[\s,]+238/i);
+    expect(adminCss).not.toMatch(/\.text-accent\s*\{[^}]*#dc2626/i);
+
+    const adminBlockStart = brandWorkspaceCss.indexOf('html[data-workspace-admin]');
+    const adminBlock = brandWorkspaceCss.slice(adminBlockStart, brandWorkspaceCss.indexOf('}', adminBlockStart) + 1);
+    expect(adminBlock.toLowerCase()).toContain(COLOUR.accent);
+    expect(adminBlock).not.toMatch(/#0000ee|#dc2626/i);
   });
 });

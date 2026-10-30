@@ -181,6 +181,109 @@ export function Panel({
   );
 }
 
+export type AdminBadgeTone = "neutral" | "accent" | "success" | "warning" | "danger";
+
+export function AdminBadge({
+  tone = "neutral",
+  children,
+}: {
+  tone?: AdminBadgeTone;
+  children: ReactNode;
+}) {
+  return (
+    <span className="admin-badge" data-admin-badge={tone}>
+      {children}
+    </span>
+  );
+}
+
+export function AdminSectionNav({
+  ariaLabel,
+  items,
+}: {
+  ariaLabel: string;
+  items: ReadonlyArray<{
+    id: string;
+    label: string;
+    count?: number;
+    tone?: AdminBadgeTone;
+  }>;
+}) {
+  return (
+    <nav className="admin-section-nav" aria-label={ariaLabel} data-admin-section-nav>
+      {items.map((item) => (
+        <a key={item.id} href={`#${item.id}`}>
+          <span>{item.label}</span>
+          {typeof item.count === "number" && (
+            <AdminBadge tone={item.tone ?? (item.count > 0 ? "accent" : "neutral")}>
+              {item.count}
+            </AdminBadge>
+          )}
+        </a>
+      ))}
+    </nav>
+  );
+}
+
+export function AdminFilterBar({
+  ariaLabel,
+  items,
+  trailing,
+}: {
+  ariaLabel: string;
+  items: ReadonlyArray<{
+    href: string;
+    label: string;
+    count?: number;
+    active?: boolean;
+  }>;
+  trailing?: ReactNode;
+}) {
+  return (
+    <div className="admin-filter-bar" data-admin-filter-bar>
+      <nav className="admin-filter-pills" aria-label={ariaLabel}>
+        {items.map((item) => (
+          <a
+            key={item.href}
+            href={item.href}
+            aria-current={item.active ? "page" : undefined}
+          >
+            <span>{item.label}</span>
+            {typeof item.count === "number" && (
+              <span className="tabular-nums opacity-75">{item.count}</span>
+            )}
+          </a>
+        ))}
+      </nav>
+      {trailing && <div className="flex flex-wrap items-center gap-2">{trailing}</div>}
+    </div>
+  );
+}
+
+export function AdminFold({
+  id,
+  summary,
+  badge,
+  defaultOpen = false,
+  children,
+}: {
+  id?: string;
+  summary: string;
+  badge?: string;
+  defaultOpen?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <details id={id} className="admin-fold" open={defaultOpen} data-admin-fold>
+      <summary>
+        <span>{summary}</span>
+        {badge && <AdminBadge tone="neutral">{badge}</AdminBadge>}
+      </summary>
+      <div className="admin-fold-body">{children}</div>
+    </details>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // outcome banner
 // ---------------------------------------------------------------------------

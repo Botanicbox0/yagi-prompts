@@ -133,20 +133,31 @@ html[data-workspace-admin] {
   --ys-ink: #151515;
   --ys-ink-secondary: #52525b;
   --ys-ink-muted: #71717a;
-  --ys-red: #dc2626;
-  --ys-red-soft: rgba(220, 38, 38, 0.08);
+  --ys-accent: #3875c5;
+  --ys-accent-hover: color-mix(in srgb, var(--ys-accent) 90%, #000);
+  --ys-accent-text: color-mix(in srgb, var(--ys-accent) 85%, #000);
+  --ys-accent-tint: color-mix(in srgb, var(--ys-accent) 8%, #fff);
+  --ys-accent-line: color-mix(in srgb, var(--ys-accent) 28%, #fff);
+  --ys-danger: #c23b2a;
+  --ys-danger-soft: rgba(194, 59, 42, 0.08);
+  --ys-danger-border: rgba(194, 59, 42, 0.28);
+  --ys-red: var(--ys-danger);
+  --ys-red-hover: #a63021;
+  --ys-red-soft: var(--ys-danger-soft);
+  --ys-red-border: var(--ys-danger-border);
   --ys-gold: #b45309;
   --ys-gold-soft: rgba(180, 83, 9, 0.1);
   --ys-emerald: #15803d;
   --ys-emerald-soft: rgba(21, 128, 61, 0.1);
-  --ys-sky: #0369a1;
+  --ys-sky: var(--ys-accent-text);
   --ys-hover: #ebebee;
   --color-workspace-canvas: #ffffff;
   --color-workspace-paper: #ffffff;
   --color-workspace-ink: #151515;
   --color-workspace-muted: #52525b;
   --color-workspace-line: #e4e4e7;
-  --color-blue: #0000ee;
+  --color-blue: var(--ys-accent);
+  --accent: var(--ys-accent);
   --bw-line: #e4e4e7;
 }
 [data-brand-workspace] body {
