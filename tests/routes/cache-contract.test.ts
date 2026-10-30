@@ -569,9 +569,9 @@ describe('notification surface (§3.5, M5)', () => {
     expect(route).toContain("'Cache-Control': 'private, no-store'");
     expect(route).toContain("'X-Robots-Tag': 'noindex, nofollow'");
     expect(route).toContain('verifyUnsubscribeToken');
-    // GET only: a mail client follows links, not forms.
+    // GET for the link in the mail, POST for the client's own control (RFC 8058, List-Unsubscribe-Post).
     expect(route).toContain('export async function GET');
-    expect(route).not.toContain('export async function POST');
+    expect(route).toContain('export async function POST');
   });
 });
 

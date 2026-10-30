@@ -3,11 +3,11 @@ import { getDictionary } from '@/lib/i18n/dictionaries';
 import { interpolate } from '@/lib/i18n/format';
 import { BUSINESS } from '@/lib/legal/documents';
 import { companyName } from '@/lib/notify/company-line';
+import { sheet } from '@/lib/notify/sheet';
 
 /**
  * The two messages an enquiry sends (2026-09-11): the studio's alert with everything the brand
- * typed, and the brand's receipt in their own language. Same sheet as the render mail
- * (lib/renders/email.ts): white card on light grey, one black button, grey meta. No tracking.
+ * typed, and the brand's receipt in their own language. On the shared sheet. No tracking.
  */
 
 export interface EmailBody {
@@ -38,32 +38,6 @@ function formatLabel(copy: BrandCopy, slug: string | null): string {
   if (slug === 'new') return copy.templateNew;
   if (slug === 'undecided' || slug === null) return copy.templateUndecided;
   return slug;
-}
-
-function escapeHtml(value: string): string {
-  return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
-
-function sheet(args: { title: string; paragraphs: string[]; rows?: Array<[string, string]>; button?: { label: string; url: string } | null; footer: string }): string {
-  const rows = (args.rows ?? [])
-    .map(
-      ([k, v]) =>
-        `<tr><td style="padding:6px 12px 6px 0;color:#71717a;font-size:13px;vertical-align:top;white-space:nowrap">${escapeHtml(k)}</td><td style="padding:6px 0;font-size:14px;color:#18181b;white-space:pre-wrap">${escapeHtml(v)}</td></tr>`,
-    )
-    .join('');
-  const button = args.button
-    ? `<p style="margin:28px 0 0"><a href="${escapeHtml(args.button.url)}" style="display:inline-block;background:#111;color:#fff;text-decoration:none;border-radius:999px;padding:12px 22px;font-size:14px;font-weight:600">${escapeHtml(args.button.label)}</a></p>`
-    : '';
-  return [
-    '<!doctype html><html><body style="margin:0;padding:32px 16px;background:#f4f4f5;font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,\'Pretendard\',sans-serif;color:#18181b">',
-    '<div style="max-width:560px;margin:0 auto;background:#fff;border-radius:16px;padding:36px 32px">',
-    `<h1 style="margin:0 0 16px;font-size:20px;line-height:1.3">${escapeHtml(args.title)}</h1>`,
-    ...args.paragraphs.map((p) => `<p style="margin:0 0 12px;font-size:15px;line-height:1.6">${escapeHtml(p)}</p>`),
-    rows ? `<table style="border-collapse:collapse;margin-top:16px">${rows}</table>` : '',
-    button,
-    `<p style="margin:32px 0 0;font-size:12px;color:#a1a1aa;line-height:1.5">${escapeHtml(args.footer)}</p>`,
-    '</div></body></html>',
-  ].join('');
 }
 
 export function brandInquiryEmails(args: { inquiry: BrandInquiry; siteName: string; siteUrl: string; adminUrl: string }): { studio: EmailBody; brand: EmailBody } {
@@ -104,6 +78,7 @@ export function brandInquiryEmails(args: { inquiry: BrandInquiry; siteName: stri
   const brand: EmailBody = {
     subject: interpolate(r.subject, { site: siteName }),
     html: sheet({
+      locale,
       title: r.title,
       paragraphs: [received, r.reply],
       rows: [

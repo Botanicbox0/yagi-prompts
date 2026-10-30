@@ -3,6 +3,7 @@ import type { SqlRunner } from '@/lib/db/sql-runner';
 import type { Viewer } from '@/lib/auth/identity';
 import type { Mailer, SendOutcome } from '@/lib/notify/mailer';
 import { BUSINESS } from '@/lib/legal/documents';
+import { sheet } from '@/lib/notify/sheet';
 import { loadOwnRender } from './service';
 
 /**
@@ -177,10 +178,6 @@ export interface NotifyFeedbackDeps {
   studioEmail?: string;
 }
 
-function escapeHtml(value: string): string {
-  return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
-
 /** The studio's alert. Plain and complete: who, which result, what reason, their words, where to act. */
 export async function notifyRenderFeedback(
   deps: NotifyFeedbackDeps,
@@ -198,17 +195,13 @@ export async function notifyRenderFeedback(
     ['Message', feedback.message ?? '—'],
   ];
   const text = [`Result feedback — ${context.templateTitle}`, '', ...lines.map(([k, v]) => `${k}: ${v}`), '', `Inbox: ${inbox}`].join('\n');
-  const html = [
-    '<!doctype html><html><body style="margin:0;padding:32px 16px;background:#f4f4f5;font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,sans-serif;color:#18181b">',
-    '<div style="max-width:560px;margin:0 auto;background:#fff;border-radius:16px;padding:36px 32px">',
-    `<h1 style="margin:0 0 16px;font-size:20px">결과물 피드백 — ${escapeHtml(context.templateTitle)}</h1>`,
-    '<table style="border-collapse:collapse">',
-    ...lines.map(([k, v]) => `<tr><td style="padding:6px 12px 6px 0;color:#71717a;font-size:13px;vertical-align:top">${escapeHtml(k)}</td><td style="padding:6px 0;font-size:14px;white-space:pre-wrap">${escapeHtml(v)}</td></tr>`),
-    '</table>',
-    `<p style="margin:28px 0 0"><a href="${escapeHtml(inbox)}" style="display:inline-block;background:#111;color:#fff;text-decoration:none;border-radius:999px;padding:12px 22px;font-size:14px;font-weight:600">문의함에서 열기</a></p>`,
-    `<p style="margin:32px 0 0;font-size:12px;color:#a1a1aa">${escapeHtml(deps.siteName)} · render feedback ${escapeHtml(feedback.id)}</p>`,
-    '</div></body></html>',
-  ].join('');
+  const html = sheet({
+    title: `결과물 피드백 — ${context.templateTitle}`,
+    paragraphs: [],
+    rows: lines,
+    button: { label: '문의함에서 열기', url: inbox },
+    footer: `${deps.siteName} · render feedback ${feedback.id}`,
+  });
   return deps.mailer
     .send({
       to: deps.studioEmail ?? BUSINESS.email,

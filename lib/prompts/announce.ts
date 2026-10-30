@@ -32,6 +32,7 @@ export async function announceTemplate(deps: { sql: SqlRunner; mailer: Mailer | 
         );
         const vars = { title, price, medium: dict.nav[row.medium] };
         const args = {
+          locale,
           title: t.title,
           paragraphs: [interpolate(t.body, vars)],
           button: { label: t.cta, url: `${origin}${templateHref(locale, row.slug)}` },

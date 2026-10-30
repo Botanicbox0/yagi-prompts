@@ -73,6 +73,7 @@ export async function announceCampaignRecruiting(deps: CampaignMailDeps, campaig
           button: { label: c.recruitingCta, url: `${origin}${campaignHref(locale, campaign.slug)}` },
           note: { text: c.unsubscribeLine, link: { label: c.unsubscribeCta, url: unsubscribeUrl } },
           footer: footer(locale),
+          locale,
         };
         return { subject: interpolate(c.recruitingSubject, vars), html: sheet(args), text: sheetText(args) };
       },
@@ -113,6 +114,7 @@ export async function notifyApplicationStatus(
     button: { label: c.statusCta[args.status], url: args.status === 'declined' ? `${origin}${campaignsHref(locale)}` : mine },
     note: { text: c.transactionalLine, link: { label: c.accountCta, url: `${origin}/account` } },
     footer: footer(locale),
+    locale,
   };
   return deps.mailer
     .send({
@@ -158,6 +160,7 @@ export async function notifyCampaignInvitation(
     button: { label: c.invitedCta, url: `${origin}/campaigns/${encodeURIComponent(campaign.slug)}/join#token=${args.token}` },
     note: { text: c.unsubscribeLine, link: { label: c.unsubscribeCta, url: unsubscribeUrl } },
     footer: footer(locale),
+    locale,
   };
   return deps.mailer
     .send({

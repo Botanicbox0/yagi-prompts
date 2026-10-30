@@ -35,6 +35,18 @@ function page(html: string, status: 200 | 400): NextResponse {
 }
 
 export async function GET(request: Request): Promise<NextResponse> {
+  return unsubscribe(request);
+}
+
+/**
+ * RFC 8058: the mail client's own unsubscribe control POSTs to the List-Unsubscribe URL
+ * (lib/notify/mailer-live.ts promises it in the header). Same token, same one-way write.
+ */
+export async function POST(request: Request): Promise<NextResponse> {
+  return unsubscribe(request);
+}
+
+async function unsubscribe(request: Request): Promise<NextResponse> {
   // Only used for the REFUSAL page — a valid token gives us the profile's own locale, which is the
   // language the email was written in and therefore the right one to answer in.
   const headerLocale = request.headers.get(LOCALE_HEADER);

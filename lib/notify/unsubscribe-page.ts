@@ -1,6 +1,6 @@
 import { getDictionary } from '@/lib/i18n/dictionaries';
 import type { Locale } from '@/lib/i18n/config';
-import { escapeHtml } from './templates';
+import { EMAIL_COLOUR, EMAIL_FONT, escapeHtml } from './layout';
 import type { NotifyToggle } from './kinds';
 
 /**
@@ -9,7 +9,7 @@ import type { NotifyToggle } from './kinds';
  * It is a hand-written document rather than a React route because of where it is reached FROM: a
  * mail client, with no session, possibly on a phone, possibly weeks later. It must render with no
  * JavaScript, no fonts to load and no data to fetch — and it must never look like an error when it
- * worked. So: one file, inline CSS in the §5.1 two-inks language, and a sentence that says what
+ * worked. So: one file, inline CSS in the mail's own colours (lib/notify/layout.ts), and a sentence that says what
  * just happened and how to undo it.
  *
  * Bilingual by the PROFILE's locale (the same signal the email used), not by Accept-Language: the
@@ -21,11 +21,10 @@ export interface UnsubscribePageInput {
   toggle: NotifyToggle;
 }
 
-const SHELL_STYLE =
-  'margin:0;background:#FFFFFF;color:#000000;font-family:-apple-system,BlinkMacSystemFont,' +
-  "'Segoe UI','Apple SD Gothic Neo','Malgun Gothic',Roboto,Helvetica,Arial,sans-serif;";
-const MONO = "ui-monospace,SFMono-Regular,'SF Mono',Menlo,Consolas,monospace";
-const BLUE = '#0000EE';
+const C = EMAIL_COLOUR;
+const SHELL_STYLE = `margin:0;background:${C.canvas};color:${C.ink};font-family:${EMAIL_FONT};`;
+const LINKS = 'margin:0;font-size:14px;line-height:2;';
+const HEADING = 'margin:0 0 16px 0;font-size:30px;line-height:1.2;font-weight:600;letter-spacing:-0.03em;';
 
 function shell(locale: Locale, title: string, body: string): string {
   // Same brand token as the nav and the emails — the dictionary, never a literal.
@@ -40,7 +39,7 @@ function shell(locale: Locale, title: string, body: string): string {
 </head>
 <body style="${SHELL_STYLE}">
 <main style="max-width:34rem;margin:0 auto;padding:14vh 24px 24px;">
-  <p style="margin:0 0 40px 0;font-family:${MONO};font-size:11px;letter-spacing:0.12em;text-transform:uppercase;">${siteName}</p>
+  <p style="margin:0 0 40px 0;font-size:14px;font-weight:600;letter-spacing:0.08em;">${siteName}</p>
   ${body}
 </main>
 </body>
@@ -55,16 +54,16 @@ export function renderUnsubscribed(input: UnsubscribePageInput): string {
   return shell(
     input.locale,
     copy.title,
-    `<h1 style="margin:0 0 20px 0;font-size:34px;line-height:1.05;font-weight:800;text-transform:uppercase;">${escapeHtml(
+    `<h1 style="${HEADING}">${escapeHtml(
       copy.title,
     )}</h1>
-  <p style="margin:0 0 12px 0;font-size:16px;line-height:1.6;">${escapeHtml(done)}</p>
-  <p style="margin:0 0 32px 0;font-size:16px;line-height:1.6;opacity:0.65;">${escapeHtml(
+  <p style="margin:0 0 12px 0;font-size:16px;line-height:1.6;color:${C.body};">${escapeHtml(done)}</p>
+  <p style="margin:0 0 32px 0;font-size:16px;line-height:1.6;color:${C.muted};">${escapeHtml(
     copy.reversible,
   )}</p>
-  <p style="margin:0;font-family:${MONO};font-size:12px;line-height:2;">
-    <a href="/account" style="color:${BLUE};">${escapeHtml(copy.manage)} &rarr;</a><br>
-    <a href="/${input.locale}" style="color:#000000;opacity:0.55;text-decoration:none;">${escapeHtml(
+  <p style="${LINKS}">
+    <a href="/account" style="color:${C.accentText};">${escapeHtml(copy.manage)} &rarr;</a><br>
+    <a href="/${input.locale}" style="color:${C.muted};text-decoration:none;">${escapeHtml(
       copy.home,
     )}</a>
   </p>`,
@@ -79,15 +78,15 @@ export function renderUnsubscribeInvalid(locale: Locale): string {
   return shell(
     locale,
     copy.invalidTitle,
-    `<h1 style="margin:0 0 20px 0;font-size:34px;line-height:1.05;font-weight:800;text-transform:uppercase;">${escapeHtml(
+    `<h1 style="${HEADING}">${escapeHtml(
       copy.invalidTitle,
     )}</h1>
-  <p style="margin:0 0 32px 0;font-size:16px;line-height:1.6;opacity:0.75;">${escapeHtml(
+  <p style="margin:0 0 32px 0;font-size:16px;line-height:1.6;color:${C.body};">${escapeHtml(
     copy.invalidBody,
   )}</p>
-  <p style="margin:0;font-family:${MONO};font-size:12px;line-height:2;">
-    <a href="/account" style="color:${BLUE};">${escapeHtml(copy.manage)} &rarr;</a><br>
-    <a href="/${locale}" style="color:#000000;opacity:0.55;text-decoration:none;">${escapeHtml(
+  <p style="${LINKS}">
+    <a href="/account" style="color:${C.accentText};">${escapeHtml(copy.manage)} &rarr;</a><br>
+    <a href="/${locale}" style="color:${C.muted};text-decoration:none;">${escapeHtml(
       copy.home,
     )}</a>
   </p>`,
