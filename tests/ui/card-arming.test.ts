@@ -88,7 +88,7 @@ function cardAt(offsetY: number): Element {
   return { getBoundingClientRect: () => ({ left: 540, width: 200, top: 400 + offsetY - 125, height: 250 }) } as unknown as Element;
 }
 
-describe('the desktop cap (at most four clips on screen at once)', () => {
+describe('the pool cap (the page runs two; these pin four to exercise the ranking)', () => {
   beforeEach(() => {
     vi.stubGlobal('window', {
       innerWidth: 1280,
@@ -103,11 +103,11 @@ describe('the desktop cap (at most four clips on screen at once)', () => {
   it('ranks pinned cards first, then the ones nearest the centre', () => {
     expect([...pickArmed([{ distance: 50, pinned: false }, { distance: 10, pinned: false }, { distance: 900, pinned: true }], 2)].sort()).toEqual([1, 2]);
     expect(pickArmed([], 4).size).toBe(0);
-    expect(MAX_PLAYING_CARDS).toBe(4);
+    expect(MAX_PLAYING_CARDS).toBe(2);
   });
 
   it('plays only the four nearest the centre when six are visible', () => {
-    const pool = createArmingPool();
+    const pool = createArmingPool(4);
     const offsets = [300, -20, 500, 40, -260, 120];
     const cards = offsets.map((offset) => {
       const setArmed = vi.fn();
@@ -122,7 +122,7 @@ describe('the desktop cap (at most four clips on screen at once)', () => {
   });
 
   it('hands a slot on when a playing card scrolls away, and keeps a card the reader pressed play on', () => {
-    const pool = createArmingPool();
+    const pool = createArmingPool(4);
     let pinned = false;
     const far = vi.fn();
     const cards = [-20, 40, 120, -200].map((offset) => {
@@ -146,7 +146,7 @@ describe('the desktop cap (at most four clips on screen at once)', () => {
   });
 
   it('gives the slot back when a card unmounts', () => {
-    const pool = createArmingPool();
+    const pool = createArmingPool(4);
     const stops: Array<() => void> = [];
     const cards = [0, 10, 20, 30, 40].map((offset) => {
       const setArmed = vi.fn();

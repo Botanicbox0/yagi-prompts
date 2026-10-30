@@ -1227,7 +1227,7 @@ async function sweepLandingTemplates(): Promise<void> {
   expectPresent('the creator home has a separate brand entry', page.body, 'data-brand-door');
   expectPresent('the brand entry leads to public services', page.body, 'href="/en/brands"');
   expectPresent('the video rail is template cards', page.body, 'data-prompt-card=');
-  expectPresent('the model is on the page', page.body, 'SEEDANCE 2.5');
+  expectAbsent('no engine name on the landing (IDENTITY §7)', page.body, 'SEEDANCE 2.5');
   expectAbsent('the library is denavigated', page.body, 'href="/library"');
   for (const sentinel of PROMPT_SENTINELS) {
     expectAbsent(`no prompt text on the landing (${sentinel.token})`, page.body, sentinel.token);

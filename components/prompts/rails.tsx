@@ -11,7 +11,7 @@ import type { PromptLabels } from './labels';
  * docs/PLATFORM-2.0.md §15.3-4 (founder 2026-10-23): two columns from the narrowest phone, three
  * on a tablet, four on a desktop — the 4:5 card is sized for that. The order is `railOrder`: NEW
  * first, then featured → newest, originals and AI creatives mixed (§7.5). A landscape card keeps
- * one column and its 16:9 frame (no dense packing: it would reorder the grid against the keyboard).
+ * one column (no dense packing: it would reorder the grid against the keyboard).
  */
 export function PromptRail({
   id,
@@ -65,7 +65,7 @@ export function PromptRail({
         <p className="mt-8 font-mono text-code opacity-60">{emptyLabel}</p>
       ) : (
         <>
-          <RevealGrid className={`${hideHeading ? '' : 'mt-8 '}grid grid-cols-2 items-start gap-x-3 gap-y-6 sm:gap-x-4 md:grid-cols-3 lg:grid-cols-4`}>
+          <RevealGrid className={`${hideHeading ? '' : 'mt-8 '}grid grid-cols-2 items-start gap-x-3 gap-y-7 sm:gap-x-4 md:grid-cols-3 lg:grid-cols-4 lg:gap-y-10`}>
             {railOrder(cards, now).map((card) => (
               <li
                 key={card.slug}

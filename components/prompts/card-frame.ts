@@ -8,8 +8,12 @@ import { makerRest } from '@/lib/makers/links';
  * card in two columns**; the 2026-08-14 "every card 16:9" rule survives for landscape templates
  * only. The 16:9 window letterboxed a 9:16 result into half a screen of black — the card now
  * crops a portrait clip to 4:5 instead, the way every short-form template wall does.
+ *
+ * Founder 2026-10-31 ("영상 디스플레이 방식이 구리다, 정갈하게"): two heights in one grid left holes
+ * and black pillars, so every card is now the same 4:5 window, centre-cropped. `CardFrame` still
+ * names the example's own shape; the template page shows the film uncropped.
  */
-export const CARD_RATIOS = { portrait: '4 / 5', landscape: '16 / 9' } as const;
+export const CARD_RATIOS = { portrait: '4 / 5', landscape: '4 / 5' } as const;
 export type CardFrame = keyof typeof CARD_RATIOS;
 
 /** Wider than 6:5 reads as landscape; square and 4:5 sit happily in the portrait frame. */

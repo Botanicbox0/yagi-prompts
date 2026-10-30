@@ -67,7 +67,7 @@ function markup(data: PromptCard, locale: 'en' | 'ko' = 'en') {
   );
 }
 
-describe('card frame (founder 2026-10-23: portrait → 4:5, landscape → 16:9)', () => {
+describe('card frame (founder 2026-10-31: every card the same 4:5 window)', () => {
   it('frames a portrait or square example at 4:5 and a wide one at 16:9', () => {
     expect(cardFrame(card())).toBe('portrait');
     expect(cardFrame(card({ poster: { source: 'route', src: '/p', mime: 'image/png', w: 1080, h: 1080 } }))).toBe('portrait');
@@ -91,7 +91,7 @@ describe('card frame (founder 2026-10-23: portrait → 4:5, landscape → 16:9)'
     const wide = markup(card({ poster: { source: 'route', src: '/p', mime: 'image/png', w: 1600, h: 900 }, aspectDefault: '16:9' }));
     expect(wide).toContain(`aspect-ratio:${CARD_RATIOS.landscape}`);
     expect(wide).toContain('data-frame="landscape"');
-    expect(CARD_RATIOS).toEqual({ portrait: '4 / 5', landscape: '16 / 9' });
+    expect(CARD_RATIOS).toEqual({ portrait: '4 / 5', landscape: '4 / 5' });
   });
 });
 

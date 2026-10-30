@@ -636,7 +636,7 @@ export function TwingsStudio({
           data-studio-signin
           data-make-cta="card"
           href={live.signinHref}
-          className={`${hasAboveCta ? 'mt-4 ' : ''}flex min-h-12 w-full items-center justify-center bg-accent px-5 font-label text-[0.85rem] tracking-[0.1em] text-white uppercase transition-opacity hover:opacity-85`}
+          className={`${hasAboveCta ? 'mt-4 ' : ''}flex min-h-12 w-full items-center justify-center rounded-full bg-accent px-5 font-label text-[0.85rem] tracking-[0.1em] text-white uppercase transition-opacity hover:opacity-85`}
         >
           {labels.signedOutCta}
         </a>
@@ -868,7 +868,7 @@ export function TwingsStudio({
                   aria-describedby={photo ? undefined : 'studio-cta-hint'}
                   onClick={() => void submitLive()}
                   data-make-cta="card"
-                  className="flex min-h-12 w-full items-center justify-center bg-accent px-5 py-3 font-label text-[0.9rem] tracking-[0.1em] text-white uppercase transition-opacity hover:opacity-85 disabled:bg-black/10 disabled:text-black/55"
+                  className="flex min-h-12 w-full items-center justify-center rounded-full bg-accent px-5 py-3 font-label text-[0.9rem] tracking-[0.1em] text-white uppercase transition-opacity hover:opacity-85 disabled:bg-black/10 disabled:text-black/55"
                 >
                   {submitting
                     ? live.labels.submitting
@@ -953,7 +953,7 @@ function MakeStickyBar({ price, label, studioRef, phaseKey }: { price: string | 
     >
       <div className="mx-auto flex max-w-xl items-center gap-4">
         {price && <p data-make-sticky-price className="shrink-0 font-display text-[1.35rem] leading-none font-black">{price}</p>}
-        <a href="#make" data-make-cta="sticky" onClick={go} className="flex min-h-12 flex-1 items-center justify-center bg-accent px-4 font-label text-[0.85rem] tracking-[0.1em] text-white uppercase transition-opacity hover:opacity-85">{label}</a>
+        <a href="#make" data-make-cta="sticky" onClick={go} className="flex min-h-12 flex-1 items-center justify-center rounded-full bg-accent px-4 font-label text-[0.85rem] tracking-[0.1em] text-white uppercase transition-opacity hover:opacity-85">{label}</a>
       </div>
     </div>
   );

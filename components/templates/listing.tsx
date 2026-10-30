@@ -61,8 +61,8 @@ export function TemplatesListing({
   const other: TemplateMedium = medium === 'video' ? 'image' : 'video';
 
   return (
-    <div data-template-catalog={medium} className="band pt-24 pb-20 lg:pt-28">
-      <h1 className="font-display text-[clamp(2.25rem,5vw,4rem)] leading-tight font-black tracking-tight">{t.rail}</h1>
+    <div data-template-catalog={medium} className="audience-shell pt-24 pb-20 lg:pt-28">
+      <h1 className="audience-title">{t.rail}</h1>
 
       <div className="mt-5 space-y-4">
         <MediumTabs locale={locale} dict={dict} active={medium} />

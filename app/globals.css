@@ -13,7 +13,8 @@
   /* --- §5.1 palette ------------------------------------------------------ */
   --color-black: #000000;
   --color-white: #ffffff;
-  --color-blue: #0000ee;
+  --color-blue: #3875c5; /* COLOUR.accent, lib/design/identity.ts */
+  --color-sky: #e8eff7; /* COLOUR.sky: the quiet ground behind media */
   --color-workspace-canvas: #f7f7f8;
   --color-workspace-paper: #ffffff;
   --color-workspace-ink: #202126;
@@ -100,8 +101,8 @@
    =========================================================================== */
 
 :root {
-  --stack-display: var(--font-big-shoulders), 'Arial Narrow', 'Helvetica Neue', Arial, sans-serif;
-  --stack-label: var(--font-anton-sc), 'Arial Narrow', Impact, sans-serif;
+  --stack-display: 'Pretendard Variable', Pretendard, 'Apple SD Gothic Neo', 'Malgun Gothic', system-ui, sans-serif;
+  --stack-label: 'Pretendard Variable', Pretendard, 'Apple SD Gothic Neo', 'Malgun Gothic', system-ui, sans-serif;
   /* Satoshi landed 2026-08-13 (founder-supplied Fontshare files, ITF-FFL in LICENSES). */
   --stack-body: var(--font-satoshi), 'Pretendard Variable', ui-sans-serif, system-ui,
     -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
@@ -194,11 +195,17 @@ html:lang(ko) {
 
 /* Audience pages use the full content width, with no advertising rail reservation. */
 .audience-shell { width: calc(100% - var(--spacing-gutter) * 2); max-width: var(--container-audience); margin-inline: auto; }
-.audience-title { font-size: var(--text-audience-title); font-weight: 650; line-height: 1.08; letter-spacing: -0.045em; text-wrap: balance; }
-.audience-heading { font-size: var(--text-audience-heading); font-weight: 600; line-height: 1.2; letter-spacing: -0.035em; text-wrap: balance; }
+.audience-title { font-size: var(--text-audience-title); font-weight: 540; line-height: 1.02; letter-spacing: -0.052em; text-wrap: balance; }
+.audience-heading { font-size: var(--text-audience-heading); font-weight: 560; line-height: 1.06; letter-spacing: -0.045em; text-wrap: balance; }
 .audience-eyebrow { font-size: 0.72rem; font-weight: 500; letter-spacing: 0.04em; opacity: 0.55; }
-.audience-button { display: inline-flex; min-height: 3rem; align-items: center; justify-content: center; border-radius: 999px; background: var(--color-black); color: var(--color-white); padding: 0.75rem 1.5rem; font-size: 0.875rem; font-weight: 500; }
-.audience-button:hover { opacity: 0.8; }
+.audience-button { display: inline-flex; min-height: 3rem; align-items: center; justify-content: center; border-radius: 999px; background: var(--color-blue); color: var(--color-white); padding: 0.75rem 1.5rem; font-size: 0.875rem; font-weight: 500; transition: background-color 240ms var(--ease-out-quint); }
+.audience-button:hover { background: color-mix(in srgb, var(--color-blue) 82%, #000000); }
+
+/* docs/design/IDENTITY.md §3 on the personal side: the old poster display (900, uppercase) and label
+   (wide-tracked caps) slots now carry the identity's heading and a quiet label. The specificity beats
+   the `font-black`, `uppercase` and `tracking-*` utilities every call site still spells out. */
+html .font-display { font-weight: 560; letter-spacing: -0.045em; line-height: 1.06; text-transform: none; }
+html .font-label { font-weight: 560; letter-spacing: -0.01em; text-transform: none; }
 
 /* ===========================================================================
    M1 — the eight moves of §5.3, and the §4 layout band they live in.
@@ -592,11 +599,6 @@ html:lang(ko) {
     transition: transform var(--duration-hover) var(--ease-out-quint);
   }
 
-  .card:hover,
-  .card:focus-within {
-    transform: translate3d(0, -2px, 0);
-  }
-
   .card__media {
     overflow: hidden;
   }
@@ -607,7 +609,7 @@ html:lang(ko) {
 
   .card:hover .card__media > *,
   .card:focus-within .card__media > * {
-    transform: scale(1.03);
+    transform: scale(1.015);
   }
 
   /* --- §5.3-2 circular wipe ----------------------------------------------
