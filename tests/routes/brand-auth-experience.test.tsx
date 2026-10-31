@@ -25,6 +25,8 @@ describe('brand login experience', () => {
     expect(html).not.toContain('autoPlay=');
     // Clearly a demo brand, not a client: the kit carries the example label.
     expect(html).toContain('data-brand-auth-kit');
+    expect(html).toContain('YAGI 데모 브랜드');
+    expect(html).not.toContain('가상 브랜드');
     // A login stays calm: not the landing's fast-cut dark hero again.
     expect(html).not.toContain('v7/hero');
     // The act is the page's heading; the category line beside it is not.
