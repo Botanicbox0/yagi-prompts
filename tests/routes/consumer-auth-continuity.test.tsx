@@ -31,7 +31,9 @@ describe('consumer chooser back link', () => {
   });
 
   it('the consent line is no longer faded to 50%', async () => {
-    expect(await chooser({ next: '/ko/video' })).toMatch(/data-auth-legal="[^"]*" class="[^"]*opacity-70/);
+    const consent = /data-auth-legal="[^"]*" class="([^"]*)"/.exec(await chooser({ next: '/ko/video' }))?.[1] ?? '';
+    expect(consent).toContain('legal');
+    expect(consent).not.toContain('opacity');
   });
 });
 

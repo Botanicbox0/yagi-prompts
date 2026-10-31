@@ -78,7 +78,7 @@
 | 레퍼런스를 정확히 지키는 전신·소재 | Seedream 5.0 Pro (`seedream_v5_pro`, 2k) | 포즈, 키, 비율, 옷을 레퍼런스대로 지킨다. 소재와 피부 질감에 강하다 |
 | 얼굴 클로즈업, 3/4·프로필, 레퍼런스 여러 장 조합, 색 바꾸기, 로고 수정 | Nano Banana Pro (`nano_banana_pro`, 2k) | 얼굴 기하와 수정에 강하다. Seedream은 고개를 돌리면 얼굴이 커지는 경향이 있다(실측 +4.5~6.7%) |
 | 영상 | Seedance 2.5 (`seedance_2_5`, `omni_reference`) | 720p로 만들고 올린다 |
-| 영상 속 인물·옷 교체 | Genjutsu (`hf_mult_replace_object`) | 움직임을 유지한 채 대상만 바꾼다. 컷이 많은 영상의 작은 제품은 빠뜨리는 컷이 생긴다 |
+| 영상 속 인물·옷 교체 | Genjutsu (`hf_mult_replace_object`), 또는 Morphic의 Seedance 2.5 `edit_video` + 참고 이미지 | 움직임을 유지한 채 대상만 바꾼다. 컷이 많은 영상의 작은 제품은 빠뜨리는 컷이 생긴다. Seedance `edit_video`는 옷 교체와 인물 추가까지 480p 드래프트에서 잘 나왔다(2026-11-01) |
 | 영상 속 제품 교체, 세트 색 바꾸기 | Seedance 2.5 `video_edit` + 제품 이미지 | 말로 고치면 컷마다 고르게 바뀐다. 제품 교체는 Genjutsu보다 낫다(2026-10-30 비교) |
 | 업스케일 | 로컬 SeedVR2(ComfyUI) 또는 Topaz Video | 원본 720p 영상과 사진을 1080p 이상으로 올린다 |
 
@@ -162,6 +162,10 @@ HEX VALUES: ["#f3f7fa", "#e3ebf3", "#d0dbe7", "#bbcadd", "#a5b4cb", "#8e9ab2", "
 | `heart-blue.webp` | 기준 제품. 하트 향수, 프렌치 블루, 은색 캡, 아이스 화이트 리본 |
 | `coat-ivory.webp` | 기준 의상. 아이보리 코트, 네이비 포인트 |
 | `chosen-*.webp` | 대표가 2026-10-30에 직접 고른 패션 컷 8장. 사진의 감도 기준 |
+
+**로고:** 평소에는 잉크색이고, 개인 로그인 화면에서는 프렌치 블루(`#3875C5`)로 쓴다. 블루 버전 파일은 `public/brand/twings-logo-blue.svg`(토끼 + 글자)와 `twings-mark-blue.svg`·`.png`(토끼)다. 프렌치 블루 밖의 색은 입히지 않는다.
+
+**의상 단독 이미지:** Americano의 정리 방식을 따른다. 입은 사진을 Nano Banana Pro에 넣고 "사람은 보이지 않는 마네킹, 옷은 그대로, 흰 배경의 정면 고스트 마네킹 컷"이라고 쓴다. 영상 속 옷을 바꿀 때 참고 이미지로 쓴다(`D:\dev\Video-Creator\projects\2026-11-01-twings-runway-remix`).
 
 **기준 영상:** `D:\dev\Video-Creator\projects\2026-10-30-twings-fashion-reverse`의 패션 필름(4K 마스터 `seedance_2160p_16x9_v2_french-blue.mp4`, 프롬프트 `prompt_v2_higgsfield.txt`). 대표가 "아주 좋다"고 한 영상이자 `/brands` 히어로다. 영상의 감도는 이 필름과 나란히 놓고 판단한다.
 

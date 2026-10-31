@@ -732,12 +732,13 @@ export const ko: Dictionary = {
         "hint": "문장을 눌러 보세요",
         "working": "만드는 중",
         "formatsLabel": "포맷",
+        "attached": "첨부한 참고 이미지",
         "formats": [
           {
             "title": "런웨이",
             "edits": [
               {
-                "prompt": "코트를 우리 시즌 룩으로 바꿔 줘",
+                "prompt": "옷을 우리 시즌 룩으로 바꿔 줘",
                 "done": "걸음과 카메라는 그대로 두고 옷만 바꿨습니다."
               },
               {
@@ -747,6 +748,10 @@ export const ko: Dictionary = {
               {
                 "prompt": "세트를 우리 블루로 바꿔 줘",
                 "done": "인물과 카메라는 그대로 두고 세트 색만 바꿨습니다."
+              },
+              {
+                "prompt": "이 모델이 옆에서 함께 걷게 해 줘",
+                "done": "같은 무대에 인물을 더해 이야기를 바꿨습니다."
               }
             ]
           },

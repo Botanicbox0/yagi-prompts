@@ -299,7 +299,7 @@ export function HeroFilm({ src, srcSmall, srcLarge, poster, label, cues, classNa
   );
 }
 
-export type RemixEdit = { id: string; prompt: string; done: string; src: string; poster: string };
+export type RemixEdit = { id: string; prompt: string; done: string; src: string; poster: string; attachment?: string };
 export type RemixFormat = { id: string; title: string; ratio: number; src: string; poster: string; edits: readonly RemixEdit[] };
 
 /**
@@ -309,13 +309,14 @@ export type RemixFormat = { id: string; title: string; ratio: number; src: strin
  */
 export function Remix({ formats, labels }: {
   formats: readonly RemixFormat[];
-  labels: { original: string; composer: string; hint: string; working: string; formatsLabel: string };
+  labels: { original: string; composer: string; hint: string; working: string; formatsLabel: string; attached: string };
 }) {
   const [format, setFormat] = useState(0);
   const [edit, setEdit] = useState(-1);
   const [phase, setPhase] = useState<'idle' | 'typing' | 'working'>('idle');
   const [typing, setTyping] = useState('');
   const [typed, setTyped] = useState(0);
+  const [pending, setPending] = useState<string | undefined>();
   const [visible, setVisible] = useState(false);
   const touched = useRef(false);
   const root = useRef<HTMLDivElement>(null);
@@ -331,21 +332,28 @@ export function Remix({ formats, labels }: {
 
   const run = useCallback((formatIndex: number, editIndex: number) => {
     clearTimers();
-    const prompt = formats[formatIndex]?.edits[editIndex]?.prompt;
-    if (!prompt || reducedMotion()) { setEdit(editIndex); setPhase('idle'); setTyping(''); return; }
+    const item = formats[formatIndex]?.edits[editIndex];
+    const prompt = item?.prompt;
+    if (!prompt || reducedMotion()) { setEdit(editIndex); setPhase('idle'); setTyping(''); setPending(undefined); return; }
     setTyping(prompt);
     setTyped(0);
+    setPending(item.attachment);
     setPhase('typing');
-    const step = setInterval(() => {
-      setTyped((count) => {
-        if (count < prompt.length) return count + 1;
-        clearInterval(step);
-        setPhase('working');
-        timers.current.push(setTimeout(() => { setEdit(editIndex); setPhase('idle'); setTyping(''); }, 800));
-        return count;
-      });
-    }, 34);
-    timers.current.push(step);
+    const type = () => {
+      const step = setInterval(() => {
+        setTyped((count) => {
+          if (count < prompt.length) return count + 1;
+          clearInterval(step);
+          setPhase('working');
+          timers.current.push(setTimeout(() => { setEdit(editIndex); setPhase('idle'); setTyping(''); setPending(undefined); }, 800));
+          return count;
+        });
+      }, 34);
+      timers.current.push(step);
+    };
+    // A picture lands in the composer first, and the sentence is written about it.
+    if (item.attachment) timers.current.push(setTimeout(type, 520));
+    else type();
   }, [clearTimers, formats]);
 
   useEffect(() => clearTimers, [clearTimers]);
@@ -392,7 +400,7 @@ export function Remix({ formats, labels }: {
   }, [visible, phase, edit, format, current.edits.length, formats.length, run]);
 
   const choose = (index: number) => { touched.current = true; run(format, index); };
-  const chooseFormat = (index: number) => { touched.current = true; clearTimers(); setFormat(index); setEdit(-1); setPhase('idle'); setTyping(''); };
+  const chooseFormat = (index: number) => { touched.current = true; clearTimers(); setFormat(index); setEdit(-1); setPhase('idle'); setTyping(''); setPending(undefined); };
   const shown = edit >= 0 ? current.edits[edit] : undefined;
 
   return (
@@ -406,6 +414,7 @@ export function Remix({ formats, labels }: {
         <div className={styles.remixChat} aria-live="polite">
           {shown ? (
             <>
+              {shown.attachment ? <img key={shown.attachment} className={styles.remixAttached} src={shown.attachment} alt={labels.attached} width={240} height={320} decoding="async" /> : null}
               <p className={styles.remixSaid}>{shown.prompt}</p>
               <p className={styles.remixDone}><span aria-hidden="true">✓</span>{shown.done}</p>
             </>
@@ -414,11 +423,15 @@ export function Remix({ formats, labels }: {
         <ul className={styles.remixEdits}>
           {current.edits.map((item, index) => (
             <li key={item.id}>
-              <button type="button" className={styles.remixEdit} data-remix-edit={item.id} aria-pressed={index === edit} onClick={() => choose(index)}>{item.prompt}</button>
+              <button type="button" className={styles.remixEdit} data-remix-edit={item.id} aria-pressed={index === edit} onClick={() => choose(index)}>
+                {item.attachment ? <img className={styles.remixEditThumb} src={item.attachment} alt="" width={30} height={40} loading="lazy" decoding="async" /> : null}
+                {item.prompt}
+              </button>
             </li>
           ))}
         </ul>
         <div className={styles.composer} aria-hidden="true">
+          {pending && phase !== 'idle' ? <img className={styles.composerAttach} src={pending} alt="" width={30} height={40} decoding="async" /> : null}
           <span data-empty={phase === 'idle' ? 'true' : undefined}>{phase === 'idle' ? labels.composer : typing.slice(0, typed)}</span>
           {phase === 'typing' ? <i className={styles.caret} /> : null}
           <b className={styles.composerSend} data-busy={phase === 'working' ? 'true' : undefined}>↑</b>
