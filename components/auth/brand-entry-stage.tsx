@@ -6,31 +6,21 @@ import styles from './brand-entry.module.css';
 /** The landing's demo brand (components/brand-studio/v7.tsx): one palette through look, film and product. */
 const PALETTE = ['#f3f7fa', '#d0dbe7', '#3875c5', '#2e5f9f', '#16233f'] as const;
 const WALL = [
-  { image: 'look-coat.webp' },
+  { image: 'look-feather.webp' },
   { image: 'v7/feed-blue.jpg', film: 'v7/feed-blue.mp4' },
   { image: 'cut-flower.webp' },
   { image: 'v7/dir-clip.jpg', film: 'v7/dir-clip.mp4' },
 ] as const;
 
 /**
- * What a brand gets, beside the sign-in door. Auth stays server-rendered; this island only plays the two
- * short films, and only while they are on screen. They stay on their posters under prefers-reduced-motion,
- * and the reader can pause them.
+ * Plays a sign-in wall's short films only while they are on screen. They stay on their posters under
+ * prefers-reduced-motion, and the reader can pause them.
  */
-export function BrandEntryStage({ title, exampleLabel, playLabel, pauseLabel, assetOrigin, compact }: {
-  title: string;
-  exampleLabel: string;
-  playLabel: string;
-  pauseLabel: string;
-  assetOrigin: string;
-  /** Invited teammates already know why they are here: phones go straight to the door. */
-  compact: boolean;
-}) {
+export function useFilmWall() {
   const wall = useRef<HTMLDivElement>(null);
   const wanted = useRef(false);
   const onScreen = useRef(new Set<HTMLVideoElement>());
   const [playing, setPlaying] = useState(false);
-  const src = (name: string) => `${assetOrigin}/reel/landing/${name}`;
 
   const toggle = (play: boolean) => {
     wanted.current = play;
@@ -63,6 +53,37 @@ export function BrandEntryStage({ title, exampleLabel, playLabel, pauseLabel, as
     return () => observer.disconnect();
   }, []);
 
+  return { wall, playing, toggle };
+}
+
+export function FilmPauseButton({ playing, playLabel, pauseLabel, onToggle, marker }: {
+  playing: boolean;
+  playLabel: string;
+  pauseLabel: string;
+  onToggle: (play: boolean) => void;
+  marker: Record<`data-${string}`, boolean>;
+}) {
+  return (
+    <button type="button" {...marker} className={styles.pause} aria-label={playing ? pauseLabel : playLabel} onClick={() => onToggle(!playing)}>
+      {playing ? <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M7 5v10M13 5v10" stroke="currentColor" strokeWidth="2" /></svg>
+        : <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m7 4 9 6-9 6Z" fill="currentColor" /></svg>}
+    </button>
+  );
+}
+
+/** What a brand gets, beside the sign-in door. Auth stays server-rendered; this island only plays the two short films. */
+export function BrandEntryStage({ title, exampleLabel, playLabel, pauseLabel, assetOrigin, compact }: {
+  title: string;
+  exampleLabel: string;
+  playLabel: string;
+  pauseLabel: string;
+  assetOrigin: string;
+  /** Invited teammates already know why they are here: phones go straight to the door. */
+  compact: boolean;
+}) {
+  const { wall, playing, toggle } = useFilmWall();
+  const src = (name: string) => `${assetOrigin}/reel/landing/${name}`;
+
   return (
     <section data-brand-auth-stage data-compact={compact || undefined} className={styles.stage}>
       <div className={styles.stageHead}>
@@ -74,11 +95,7 @@ export function BrandEntryStage({ title, exampleLabel, playLabel, pauseLabel, as
           {exampleLabel}
         </p>
       </div>
-      <button type="button" data-brand-auth-pause className={styles.pause} aria-label={playing ? pauseLabel : playLabel}
-        onClick={() => toggle(!playing)}>
-        {playing ? <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M7 5v10M13 5v10" stroke="currentColor" strokeWidth="2" /></svg>
-          : <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m7 4 9 6-9 6Z" fill="currentColor" /></svg>}
-      </button>
+      <FilmPauseButton playing={playing} playLabel={playLabel} pauseLabel={pauseLabel} onToggle={toggle} marker={{ 'data-brand-auth-pause': true }} />
       <div ref={wall} className={styles.wall} aria-hidden="true">
         {WALL.map((item, index) => (
           <div key={item.image} className={styles.tile} style={{ '--i': index } as CSSProperties}>

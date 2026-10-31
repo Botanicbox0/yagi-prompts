@@ -37,8 +37,8 @@ describe('landingMedia.replace', () => {
   });
 
   it('never enlarges, keeps transparency and replaces an earlier override in place', async () => {
-    expectOk(await harness.run('landingMedia.replace', { slot: 'landing/look-coat', file: await png(300, 400, true) }));
-    expectOk(await harness.run('landingMedia.replace', { slot: 'landing/look-coat', file: await png(260, 380, true) }));
+    expectOk(await harness.run('landingMedia.replace', { slot: 'landing/look-feather', file: await png(300, 400, true) }));
+    expectOk(await harness.run('landingMedia.replace', { slot: 'landing/look-feather', file: await png(260, 380, true) }));
     const rows = await loadLandingMediaRows(runner(harness.db));
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({ width: 260, height: 380 });

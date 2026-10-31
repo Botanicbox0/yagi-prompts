@@ -9,13 +9,15 @@ import { legalHref } from '@/lib/legal/links';
 import { authReturnPath, isAdminPath, isBrandPath } from '@/lib/routing/surfaces';
 import { publicHref, requestSurface } from '@/lib/routing/request-surface';
 import { BrandEntryStage } from '@/components/auth/brand-entry-stage';
+import { PersonalEntryStage } from '@/components/auth/personal-entry-stage';
 import styles from '@/components/auth/brand-entry.module.css';
 
 /**
  * `/auth/choose?next=…&locale=…` — the sign-in door (docs/TEMPLATES-IA.md §8).
  *
  * Provider links, consent and copy render on the server, without a session read. Brand entry
- * sets the door beside the demo brand's world from /brands; consumer/admin entry stays compact. The (app) layout supplies noindex and force-dynamic; middleware owns locale/host.
+ * sets the door beside the demo brand's world from /brands, personal entry beside three leads from
+ * one film; admin entry stays compact. The (app) layout supplies noindex and force-dynamic; middleware owns locale/host.
  *
  * Both buttons follow their owner's brand rules: Google's is white with the four-colour "G", the
  * #747775 border and the name in mixed case (never "GOOGLE", so no `uppercase` here); Kakao's is
@@ -172,21 +174,42 @@ export default async function ChooseProviderPage(props: RouteProps) {
     );
   }
 
+  if (!admin) {
+    const hero = dict.creatorJourney;
+    return (
+      <main data-auth-choose data-personal-auth className={styles.page}>
+        <div className={styles.layout}>
+          <PersonalEntryStage title={hero.title} playLabel={hero.playPreview} pauseLabel={hero.pausePreview} />
+          <div className={styles.card}>
+            <header className={styles.header}>
+              <a href={`/${locale}`} className={`${styles.logo} ${styles.logoBlue}`}>
+                <TwingsLogo size={22} />
+              </a>
+              <nav data-auth-language className={styles.languages}>{languageLinks}</nav>
+            </header>
+            <section className={styles.login} aria-labelledby="personal-auth-title">
+              <h1 id="personal-auth-title">{dict.auth.chooseTitle}</h1>
+              <p className={styles.loginHint}>{dict.auth.chooseLede}</p>
+              {authError}
+              <div className={styles.providers}>{providers}</div>
+              <p data-auth-legal className={styles.legal}>{legal}</p>
+            </section>
+            <footer className={styles.footer}>
+              <a href={consumerBack} data-auth-back>← {dict.auth.chooseBack}</a>
+              <a href={`/auth/review?locale=${locale}&next=${encodeURIComponent(next)}`} data-auth-review className={styles.footerQuiet}>{dict.auth.review.entryLink}</a>
+            </footer>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
   return (
     <main data-auth-choose className="mx-auto flex min-h-svh w-full max-w-shell flex-col items-center justify-center px-gutter py-16">
       <div className="flex w-full max-w-[22rem] flex-col items-center text-center">
-        <a href={publicHref(`/${locale}`, admin)} className={admin ? 'workspace-brand workspace-auth-brand' : 'inline-flex items-center gap-2.5'}>
-          {admin ? (
-            <>
-              <TwingsLogo size={22} />
-              <span className="workspace-brand-byline">{dict.admin.byline}</span>
-            </>
-          ) : (
-            <>
-              <TwingsMark className="h-7" />
-              <span className="font-display text-[1.05rem] leading-none font-black tracking-[0.02em] uppercase">{dict.meta.siteName}</span>
-            </>
-          )}
+        <a href={publicHref(`/${locale}`, admin)} className="workspace-brand workspace-auth-brand">
+          <TwingsLogo size={22} />
+          <span className="workspace-brand-byline">{dict.admin.byline}</span>
         </a>
 
         <h1 className="mt-12 font-display text-[1.75rem] leading-tight font-black uppercase">{dict.auth.chooseTitle}</h1>
@@ -205,8 +228,6 @@ export default async function ChooseProviderPage(props: RouteProps) {
         <div data-auth-language className="mt-6 flex gap-4 text-sm">
           {languageLinks}
         </div>
-
-        {!admin && !brandEntry && <a href={`/auth/review?locale=${locale}&next=${encodeURIComponent(next)}`} data-auth-review className="mt-6 text-xs underline opacity-70">{dict.auth.review.entryLink}</a>}
 
         {!backReturnsHere && (
           <a href={consumerBack} data-auth-back className="mt-10 font-label text-eyebrow uppercase opacity-70 hover:opacity-100">

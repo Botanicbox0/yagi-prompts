@@ -68,7 +68,7 @@ const FEED = [
 ] as const;
 /** The fashion looks, in page order. `studio` marks the founder's own picks from /admin/landing-media. */
 const LOOKS = [
-  { id: 'look-coat' },
+  { id: 'look-feather' },
   { id: 'vto-look-upper', studio: true },
   { id: 'look-drape' },
   { id: 'look-street' },
@@ -237,6 +237,14 @@ export function V7BrandFirst({ copy, media }: { copy: Copy } & Media) {
   );
 }
 
+/** The runway's edits, in dictionary order. Two start from a picture the visitor "attached". */
+const RUNWAY_EDITS: ReadonlyArray<{ id: string; attach?: string }> = [
+  { id: 'outfit', attach: 'rx-attach-look' },
+  { id: 'model' },
+  { id: 'set' },
+  { id: 'duo', attach: 'rx-attach-model' },
+];
+
 export function V7Remix({ copy }: { copy: Copy }) {
   const r = copy.remix;
   const [runway, beauty] = r.formats;
@@ -247,7 +255,13 @@ export function V7Remix({ copy }: { copy: Copy }) {
       ratio: 9 / 16,
       src: V('rx-runway-orig', 'mp4'),
       poster: V('rx-runway-orig', 'jpg'),
-      edits: ['coat', 'model', 'set'].map((id, index) => ({ id, ...runway!.edits[index]!, src: V(`rx-runway-${id}`, 'mp4'), poster: V(`rx-runway-${id}`, 'jpg') })),
+      edits: RUNWAY_EDITS.map(({ id, attach }, index) => ({
+        id,
+        ...runway!.edits[index]!,
+        src: V(`rx-runway-${id}`, 'mp4'),
+        poster: V(`rx-runway-${id}`, 'jpg'),
+        ...(attach ? { attachment: V(attach, 'webp') } : {}),
+      })),
     },
     {
       id: 'beauty',
@@ -271,7 +285,7 @@ export function V7Remix({ copy }: { copy: Copy }) {
             <p className={s.note}>{r.note}</p>
           </div>
         </Reveal>
-        <Remix formats={formats} labels={{ original: r.original, composer: r.composer, hint: r.hint, working: r.working, formatsLabel: r.formatsLabel }} />
+        <Remix formats={formats} labels={{ original: r.original, composer: r.composer, hint: r.hint, working: r.working, formatsLabel: r.formatsLabel, attached: r.attached }} />
       </div>
     </section>
   );
