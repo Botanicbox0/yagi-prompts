@@ -58,6 +58,7 @@ export const LANDING_MEDIA_SLOTS: readonly LandingMediaSlot[] = [
   // Brand landing, in page order.
   ...LANDING_LOOKS.map((key) => landing(`look-${key}`, 'looks', '2:3', 1000)),
   ...LANDING_CUTS.map((key) => landing(`cut-${key}`, 'cuts', '3:4', 1000)),
+  landing('c-wide', 'contrast', '3:4', 1000),
   ...['logo', 'garment', 'skin'].flatMap((pair) => [landing(`c-${pair}-raw`, 'contrast', '1:1', 1000), landing(`c-${pair}-ours`, 'contrast', '1:1', 1000)]),
   studio('vto-garment', '1:1'),
   ...['vto-set-front', 'vto-set-upper', 'vto-set-side'].map((name) => studio(name, '3:4')),

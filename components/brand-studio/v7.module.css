@@ -97,8 +97,6 @@
 .headRow { display: grid; gap: 22px; }
 @media (min-width: 960px) { .headRow { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); align-items: end; gap: 48px; } }
 .headAside { display: grid; gap: 12px; }
-.split { display: grid; gap: 48px; }
-@media (min-width: 1024px) { .split { grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); align-items: center; gap: 72px; } }
 .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 6px; }
 
 .cta {
@@ -211,15 +209,30 @@
 .over { position: relative; z-index: 1; background: var(--id-canvas); border-radius: 28px 28px 0 0; box-shadow: 0 -1px 0 var(--id-line), 0 -24px 60px -40px rgb(14 16 19 / 0.25); }
 
 /* ---------- Compare ---------- */
-.compareCol { width: 100%; }
-.compare { display: grid; gap: 18px; }
+/* A local fix: the panel says what was asked, the wide shot shows where, the zoom shows what changed. */
+.fix { display: grid; gap: clamp(20px, 3vw, 36px); align-items: start; margin-top: clamp(28px, 4vw, 56px); }
+@media (min-width: 960px) { .fix { grid-template-columns: minmax(300px, 380px) minmax(0, 1fr); align-items: stretch; } }
+.fixPanel { display: flex; flex-direction: column; gap: 14px; padding: 18px; border: 1px solid var(--id-line); border-radius: var(--id-radius-card); background: var(--id-paper); }
+.fixAttachments { display: flex; align-self: flex-end; gap: 8px; animation: attachIn 420ms var(--id-spring) both; }
+.fixAttachments li { display: grid; justify-items: end; gap: 5px; }
+.fixAttachments img { width: clamp(72px, 7vw, 92px); aspect-ratio: 1; object-fit: contain; border: 1px solid var(--id-line); border-radius: 12px; background: var(--id-paper); }
+.fixAttachments span { color: var(--id-muted); font-family: var(--id-mono); font-size: 11px; }
+/* Same height side by side: 3:4 beside 1:1 at 3fr and 4fr. */
+.fixStage { position: relative; display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 4fr); gap: clamp(10px, 1.2vw, 16px); min-width: 0; align-self: center; }
+.fixWide { position: relative; overflow: hidden; border-radius: var(--id-radius-card); background: var(--id-sky); }
+.fixWide img { display: block; width: 100%; height: auto; }
+.fixBox {
+  position: absolute;
+  border: 1.5px solid #ffffff;
+  border-radius: 4px;
+  box-shadow: 0 0 0 1.5px var(--id-accent), 0 0 0 100vmax rgb(14 16 19 / 0.14);
+  transition: left 520ms var(--id-spring), top 520ms var(--id-spring);
+}
 .compareFrame {
   position: relative;
   overflow: hidden;
   aspect-ratio: 1;
   width: 100%;
-  max-width: 720px;
-  justify-self: end;
   border-radius: var(--id-radius-card);
   background: var(--id-paper);
   box-shadow: 0 1px 2px rgb(14 16 19 / 0.04), 0 30px 80px -40px rgb(28 52 88 / 0.35);
@@ -231,9 +244,10 @@
 .compareRaw { position: absolute; inset: 0; clip-path: inset(0 calc(100% - var(--split, 50%)) 0 0); }
 .compareHandle { position: absolute; top: 0; bottom: 0; left: var(--split, 50%); width: 0; pointer-events: none; }
 .compareHandle::before { content: ''; position: absolute; top: 0; bottom: 0; left: -0.5px; width: 1px; background: rgb(255 255 255 / 0.9); box-shadow: 0 0 0 0.5px rgb(14 16 19 / 0.12); }
+/* Low in the frame: the middle is where the fix is. */
 .compareHandle i {
   position: absolute;
-  top: 50%;
+  top: 86%;
   left: -22px;
   width: 44px;
   height: 44px;
@@ -250,9 +264,14 @@
 .compareRange { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: ew-resize; }
 .compareRange:focus-visible + * { outline: none; }
 .compareFrame:has(.compareRange:focus-visible) { outline: 2px solid var(--id-accent); outline-offset: 4px; }
-.compareBar { display: grid; gap: 10px; justify-items: end; max-width: 720px; justify-self: end; width: 100%; }
-.compareNote { min-height: 2.6em; font-size: 14px; line-height: 1.55; color: var(--id-body); text-align: right; }
-@media (max-width: 1023px) { .compareFrame, .compareBar { justify-self: stretch; } .compareBar { justify-items: start; } .compareNote { text-align: left; } }
+/* Phones: the zoom fills the width and the wide shot sits in its corner, so the slider stays big. */
+@media (max-width: 639px) {
+  .fix > .fixStage { order: -1; }
+  .fixStage { display: block; }
+  .fixWide { position: absolute; z-index: 1; left: 10px; bottom: 10px; width: 30%; border: 2px solid #ffffff; border-radius: 12px; pointer-events: none; }
+  .fixWide .tag { display: none; }
+}
+@media (min-width: 640px) and (max-width: 959px) { .fix > .fixStage { order: -1; } }
 
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .chip {
@@ -589,5 +608,6 @@
 @media (prefers-reduced-motion: reduce) {
   .heroSpec span, .composerSend[data-busy] { animation: none; }
   .remixFilm, .remixEdit, .remixOriginal { transition: none; }
-  .remixAttached, .composerAttach { animation: none; }
+  .remixAttached, .composerAttach, .fixAttachments { animation: none; }
+  .fixBox { transition: none; }
 }

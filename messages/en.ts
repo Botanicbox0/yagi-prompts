@@ -764,27 +764,33 @@ export const en = {
       "finish": {
         "eyebrow": "Local fixes",
         "soon": "Coming",
-        "title": "Paint only what needs fixing",
-        "body": "Redraw just the blurred logo or the skin that looks like AI. Everything else stays as it was.",
+        "title": "Box only what needs fixing",
+        "body": "A logo or a face that sits small in a wide shot blurs because it has too few pixels. Box that part, redraw it, and blend it back with soft edges. Everything outside the box stays as it was.",
         "raw": "First shot",
         "ours": "Fixed",
         "hint": "What to fix",
         "slider": "Position of the divider between the two shots",
+        "wide": "Full shot",
+        "wideAlt": "Full shot: a model holding a perfume in a blue studio",
+        "image": "@Image",
         "pairs": [
           {
             "chip": "Logo",
-            "note": "Only the blurred mark was painted and redrawn.",
-            "raw": "First shot: a perfume with a soft mark",
-            "ours": "Fixed: a perfume with a sharp mark"
+            "prompt": "Keep the background texture and every element of @Image1, and blend the logo from @Image2 into the glass in the same direction",
+            "note": "Only the logo inside the box was redrawn, then blended back with soft edges.",
+            "raw": "First shot: a perfume with a blurred logo",
+            "ours": "Fixed: a perfume with a sharp logo"
           },
           {
             "chip": "Garment detail",
-            "note": "Only the buckle and ribbon were redrawn. The rest of the fur is untouched.",
-            "raw": "First shot: a smudged buckle",
-            "ours": "Fixed: a clean buckle"
+            "prompt": "Keep the outline in @Image1 and bring back the texture of the feathers and knit",
+            "note": "Only the texture inside the box was redrawn. The outline of the feathers stays.",
+            "raw": "First shot: smudged feathers",
+            "ours": "Fixed: feathers with real texture"
           },
           {
             "chip": "Skin",
+            "prompt": "Keep the face in @Image1 and bring back the skin texture and stray hairs",
             "note": "Pores and stray hairs came back. Her features did not change.",
             "raw": "First shot: over-smooth skin",
             "ours": "Fixed: skin with real texture"

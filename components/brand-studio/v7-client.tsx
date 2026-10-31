@@ -48,10 +48,25 @@ export function Film({ src, poster, label, className, eager = false }: { src: st
   return <video ref={ref} className={className} src={src} poster={poster} muted loop playsInline preload={eager ? 'metadata' : 'none'} aria-label={label} data-loop-video />;
 }
 
-/** Same product, same request: drag (or use the arrow keys / slider) to wipe between the two shots. */
-export function Compare({ pairs, labels }: {
-  pairs: ReadonlyArray<{ id: string; raw: string; ours: string; chip: string; note: string; alt: [string, string] }>;
-  labels: { raw: string; ours: string; hint: string; slider: string };
+/**
+ * A local fix: one wide shot with a box on it, and the boxed region zoomed beside it. Drag (or use the arrow keys /
+ * slider) to wipe between the first shot and the fix. The box is why it works: a small region gets a whole canvas of
+ * pixels of its own, and everything outside the box stays as it was.
+ */
+export function Compare({ wide, pairs, labels }: {
+  wide: string;
+  pairs: ReadonlyArray<{
+    id: string;
+    raw: string;
+    ours: string;
+    chip: string;
+    prompt: string;
+    note: string;
+    alt: [string, string];
+    box: { left: number; top: number; width: number; height: number };
+    attachments: readonly string[];
+  }>;
+  labels: { raw: string; ours: string; hint: string; slider: string; wide: string; wideAlt: string; image: string };
 }) {
   const [index, setIndex] = useState(0);
   const [split, setSplit] = useState(50);
@@ -66,35 +81,10 @@ export function Compare({ pairs, labels }: {
   const onMove = (event: PointerEvent<HTMLDivElement>) => { if (dragging.current) fromPointer(event.clientX); };
   const onUp = () => { dragging.current = false; };
   const pair = pairs[index]!;
+  const box = { left: `${pair.box.left * 100}%`, top: `${pair.box.top * 100}%`, width: `${pair.box.width * 100}%`, height: `${pair.box.height * 100}%` };
   return (
-    <div data-v7-compare-ui className={styles.compare}>
-      <div
-        ref={frame}
-        className={styles.compareFrame}
-        style={{ '--split': `${split}%` } as CSSProperties}
-        onPointerDown={onDown}
-        onPointerMove={onMove}
-        onPointerUp={onUp}
-        onPointerCancel={onUp}
-      >
-        <img className={styles.compareImg} src={pair.ours} alt={pair.alt[1]} width={640} height={640} decoding="async" />
-        <div className={styles.compareRaw} aria-hidden="false">
-          <img className={styles.compareImg} src={pair.raw} alt={pair.alt[0]} width={640} height={640} decoding="async" />
-        </div>
-        <span className={`${styles.compareTag} ${styles.compareTagRaw}`}>{labels.raw}</span>
-        <span className={`${styles.compareTag} ${styles.compareTagOurs}`}>{labels.ours}</span>
-        <span className={styles.compareHandle} aria-hidden="true"><i /></span>
-        <input
-          className={styles.compareRange}
-          type="range"
-          min={4}
-          max={96}
-          value={Math.round(split)}
-          onChange={(event) => setSplit(Number(event.target.value))}
-          aria-label={labels.slider}
-        />
-      </div>
-      <div className={styles.compareBar}>
+    <div data-v7-compare-ui className={styles.fix}>
+      <div className={styles.fixPanel}>
         <div role="tablist" aria-label={labels.hint} className={styles.chips}>
           {pairs.map((item, i) => (
             <button
@@ -110,7 +100,51 @@ export function Compare({ pairs, labels }: {
             </button>
           ))}
         </div>
-        <p className={styles.compareNote} aria-live="polite">{pair.note}</p>
+        <div className={styles.remixChat} aria-live="polite">
+          <ul key={pair.id} className={styles.fixAttachments}>
+            {pair.attachments.map((src, i) => (
+              <li key={src}>
+                <img src={src} alt="" width={120} height={120} decoding="async" />
+                <span>{`${labels.image}${i + 1}`}</span>
+              </li>
+            ))}
+          </ul>
+          <p className={styles.remixSaid}>{pair.prompt}</p>
+          <p className={styles.remixDone}><span aria-hidden="true">✓</span>{pair.note}</p>
+        </div>
+      </div>
+      <div className={styles.fixStage}>
+        <figure className={styles.fixWide}>
+          <img src={wide} alt={labels.wideAlt} width={1000} height={1332} loading="lazy" decoding="async" />
+          <span data-fix-box={pair.id} className={styles.fixBox} style={box} aria-hidden="true" />
+          <figcaption className={styles.tag}>{labels.wide}</figcaption>
+        </figure>
+        <div
+          ref={frame}
+          className={styles.compareFrame}
+          style={{ '--split': `${split}%` } as CSSProperties}
+          onPointerDown={onDown}
+          onPointerMove={onMove}
+          onPointerUp={onUp}
+          onPointerCancel={onUp}
+        >
+          <img className={styles.compareImg} src={pair.ours} alt={pair.alt[1]} width={1000} height={1000} decoding="async" />
+          <div className={styles.compareRaw} aria-hidden="false">
+            <img className={styles.compareImg} src={pair.raw} alt={pair.alt[0]} width={1000} height={1000} decoding="async" />
+          </div>
+          <span className={`${styles.compareTag} ${styles.compareTagRaw}`}>{labels.raw}</span>
+          <span className={`${styles.compareTag} ${styles.compareTagOurs}`}>{labels.ours}</span>
+          <span className={styles.compareHandle} aria-hidden="true"><i /></span>
+          <input
+            className={styles.compareRange}
+            type="range"
+            min={4}
+            max={96}
+            value={Math.round(split)}
+            onChange={(event) => setSplit(Number(event.target.value))}
+            aria-label={labels.slider}
+          />
+        </div>
       </div>
       {/* Every pair stays in the markup for crawlers and no-JS readers; only the active one is drawn above. */}
       <ul hidden>{pairs.map((item) => <li key={item.id} data-contrast-source={item.id}><img src={item.raw} alt={item.alt[0]} /><img src={item.ours} alt={item.alt[1]} /></li>)}</ul>

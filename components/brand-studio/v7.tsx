@@ -25,6 +25,12 @@ const V = (name: string, ext = 'webp') => `/reel/landing/v7/${name}.${ext}`;
 const L = (name: string, ext = 'webp') => `/reel/landing/${name}.${ext}`;
 
 const PAIRS = ['logo', 'garment', 'skin'] as const;
+/**
+ * The boxes on the wide shot (c-wide), in its pixels: 1332 x 1774 as generated. The zoomed pairs (c-*-raw, c-*-ours)
+ * are these regions, so replacing c-wide in /admin/landing-media means moving the boxes too.
+ */
+const FIX_SHOT = { width: 1332, height: 1774 };
+const FIX_BOXES = { logo: [576, 544, 180, 180], garment: [470, 620, 180, 180], skin: [576, 170, 180, 180] } as const;
 /** YAGI's demo palette: the blue world from lib/design/identity.ts, as a brand kit would hold it. */
 const YAGI_PALETTE = ['#f3f7fa', '#d0dbe7', '#3875c5', '#2e5f9f', '#16233f'] as const;
 const DOORS = ['work', 'campaign', 'production'] as const;
@@ -359,24 +365,35 @@ export function V7Work({ copy, studio, media }: { copy: Copy; studio: StudioCopy
 
 export function V7Finish({ copy, media }: { copy: Copy } & Media) {
   const f = copy.finish;
-  const pairs = PAIRS.map((id, index) => ({
-    id,
-    raw: landingSrc(media, `c-${id}-raw`),
-    ours: landingSrc(media, `c-${id}-ours`),
-    chip: f.pairs[index]!.chip,
-    note: f.pairs[index]!.note,
-    alt: [f.pairs[index]!.raw, f.pairs[index]!.ours] as [string, string],
-  }));
+  const pairs = PAIRS.map((id, index) => {
+    const [x, y, width, height] = FIX_BOXES[id];
+    const raw = landingSrc(media, `c-${id}-raw`);
+    return {
+      id,
+      raw,
+      ours: landingSrc(media, `c-${id}-ours`),
+      chip: f.pairs[index]!.chip,
+      prompt: f.pairs[index]!.prompt,
+      note: f.pairs[index]!.note,
+      alt: [f.pairs[index]!.raw, f.pairs[index]!.ours] as [string, string],
+      box: { left: x / FIX_SHOT.width, top: y / FIX_SHOT.height, width: width / FIX_SHOT.width, height: height / FIX_SHOT.height },
+      attachments: id === 'logo' ? [raw, '/brand/yagi-mark-black.png'] : [raw],
+    };
+  });
   return (
     <section data-v7-finish data-section data-theme="light" className={`${s.section} ${s.sky}`}>
-      <div className={`${s.shell} ${s.split}`}>
-        <Reveal className={s.head}>
-          <Eyebrow status={f.soon}>{f.eyebrow}</Eyebrow>
-          <h2 className={s.h2}>{f.title}</h2>
-          <p className={s.lead}>{f.body}</p>
+      <div className={s.shell}>
+        <Reveal className={`${s.head} ${s.headRow}`}>
+          <div>
+            <Eyebrow status={f.soon}>{f.eyebrow}</Eyebrow>
+            <h2 className={s.h2}>{f.title}</h2>
+          </div>
+          <div className={s.headAside}>
+            <p className={s.lead}>{f.body}</p>
+          </div>
         </Reveal>
-        <Reveal className={s.compareCol} data-contrast>
-          <Compare pairs={pairs} labels={{ raw: f.raw, ours: f.ours, hint: f.hint, slider: f.slider }} />
+        <Reveal data-contrast>
+          <Compare wide={landingSrc(media, 'c-wide')} pairs={pairs} labels={{ raw: f.raw, ours: f.ours, hint: f.hint, slider: f.slider, wide: f.wide, wideAlt: f.wideAlt, image: f.image }} />
         </Reveal>
       </div>
     </section>
