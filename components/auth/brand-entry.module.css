@@ -86,7 +86,8 @@
 .footer { display: flex; justify-content: space-between; align-items: center; gap: 16px; font-size: 13px; color: var(--id-body); }
 .footer a { display: inline-flex; align-items: center; gap: 4px; min-height: 44px; }
 .footer a:hover { color: var(--id-accent-text); }
-.footerQuiet { color: var(--id-muted); font-size: 12px; }
+/* The review account's door: quiet, but it has to read as a link for the payment reviewer. */
+.footerQuiet { color: var(--id-muted); font-size: 12px; text-decoration: underline; text-underline-offset: 3px; }
 
 /* ---------- Open in browser: one job, one card ---------- */
 .webview {
