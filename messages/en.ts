@@ -591,7 +591,7 @@ export const en = {
             "Consented faces only"
           ],
           "draft": "Draft · awaiting team review",
-          "example": "Example: YAGI, a fictional brand"
+          "example": "Example: YAGI demo brand"
         },
         "memory": {
           "title": "YAGI brand memory",
