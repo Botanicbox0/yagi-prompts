@@ -741,8 +741,8 @@ export const en = {
                 "done": "The person and the camera stayed. Only the set changed colour."
               },
               {
-                "prompt": "Have this model walk beside her",
-                "done": "A second person joins the same runway, and the story changes."
+                "prompt": "Tie her hair up, add this model beside her",
+                "done": "Her hair is tied up and a second person joins the same runway. The story changes."
               }
             ]
           },
