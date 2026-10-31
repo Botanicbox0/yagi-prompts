@@ -524,10 +524,16 @@
 .remixChat { display: flex; flex: 1; flex-direction: column; justify-content: flex-end; gap: 10px; min-height: 132px; }
 .remixHint { color: var(--id-muted); font-size: 14px; }
 .remixSaid { align-self: flex-end; max-width: 92%; padding: 10px 14px; border-radius: 16px 16px 4px 16px; background: var(--id-accent); color: #fff; font-size: 14.5px; line-height: 1.45; }
+.remixAttached { align-self: flex-end; width: clamp(92px, 9vw, 124px); aspect-ratio: 3 / 4; object-fit: cover; border: 1px solid var(--id-line); border-radius: 14px; background: var(--id-paper); animation: attachIn 420ms var(--id-spring) both; }
+@keyframes attachIn { from { opacity: 0; transform: translateY(8px) scale(0.96); } to { opacity: 1; transform: none; } }
+.remixEditThumb { flex: none; width: 24px; height: 32px; object-fit: cover; border: 1px solid var(--id-line); border-radius: 6px; background: var(--id-paper); }
 .remixDone { display: flex; gap: 8px; color: var(--id-body); font-size: 13.5px; line-height: 1.5; }
 .remixDone span { color: var(--id-accent-text); font-weight: 700; }
 .remixEdits { display: grid; gap: 8px; }
 .remixEdit {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   width: 100%;
   padding: 11px 14px;
   border: 1px solid var(--id-line);
@@ -546,6 +552,7 @@
 .composer { display: flex; align-items: center; gap: 8px; min-height: 48px; padding: 7px 7px 7px 16px; border: 1px solid var(--id-line-strong); border-radius: 999px; background: var(--id-paper); color: var(--id-ink); font-size: 14px; }
 .composer > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .composer > span[data-empty] { color: var(--id-muted); }
+.composerAttach { flex: none; width: 26px; height: 34px; margin-left: -6px; object-fit: cover; border: 1px solid var(--id-line); border-radius: 7px; background: var(--id-paper); animation: attachIn 360ms var(--id-spring) both; }
 .composerSend { display: grid; flex: none; place-items: center; width: 34px; height: 34px; margin-left: auto; border-radius: 999px; background: var(--id-accent); color: #fff; font-weight: 600; }
 .composerSend[data-busy] { animation: sendBusy 800ms ease-in-out infinite alternate; }
 @keyframes sendBusy { to { opacity: 0.45; } }
@@ -582,4 +589,5 @@
 @media (prefers-reduced-motion: reduce) {
   .heroSpec span, .composerSend[data-busy] { animation: none; }
   .remixFilm, .remixEdit, .remixOriginal { transition: none; }
+  .remixAttached, .composerAttach { animation: none; }
 }

@@ -30,7 +30,8 @@ vi.mock('@/lib/auth/viewer', () => ({ getViewer: async () => ({ userId: null, em
 import { GET } from '@/app/api/renders/media/[id]/route';
 
 const PHOTO = { bytes: new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01]), mime: 'image/jpeg' };
-const NOW = new Date(Date.now() - 60_000);
+// The media route reads the real clock, so a fixed date here would expire the share link once the TTL passes.
+const NOW = new Date();
 const frameBytes = (n: number) => new Uint8Array([0xff, 0xd8, 0xff, 0xdb, n, n, n]);
 
 function fakeOpenAi(): OpenAiImageClient {

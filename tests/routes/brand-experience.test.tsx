@@ -59,8 +59,9 @@ describe('the brand page shows the service before asking visitors to enquire', (
     // Remix: two formats, the runway's three real edits on show first, each with its own film.
     expect(html).toContain('data-remix');
     expect(html.match(/data-remix-format=/g)).toHaveLength(2);
-    expect(html.match(/data-remix-edit=/g)).toHaveLength(3);
-    for (const film of ['orig', 'coat', 'model', 'set']) expect(html).toContain(`src="/reel/landing/v7/rx-runway-${film}.mp4"`);
+    expect(html.match(/data-remix-edit=/g)).toHaveLength(4);
+    for (const picture of ['look', 'model']) expect(html).toContain(`/reel/landing/v7/rx-attach-${picture}.webp`);
+    for (const film of ['orig', 'outfit', 'model', 'set', 'duo']) expect(html).toContain(`src="/reel/landing/v7/rx-runway-${film}.mp4"`);
     // The work: fashion looks, beauty shots, try-on, then the two ads beside what they feature.
     expect(html.match(/data-asset-look=/g)).toHaveLength(9);
     expect(html.match(/data-asset-cut=/g)).toHaveLength(6);

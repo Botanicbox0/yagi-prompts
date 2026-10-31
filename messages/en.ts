@@ -723,13 +723,14 @@ export const en = {
         "hint": "Tap a line to try it",
         "working": "Working",
         "formatsLabel": "Formats",
+        "attached": "Attached reference image",
         "formats": [
           {
             "title": "Fashion show",
             "edits": [
               {
-                "prompt": "Change the coat to our season’s look",
-                "done": "The walk and the camera stayed. Only the outfit changed."
+                "prompt": "Change the outfit to our season look",
+                "done": "The walk and the camera stay; only the clothes change."
               },
               {
                 "prompt": "Change the model",
@@ -738,6 +739,10 @@ export const en = {
               {
                 "prompt": "Make the set our blue",
                 "done": "The person and the camera stayed. Only the set changed colour."
+              },
+              {
+                "prompt": "Tie her hair up, add this model beside her",
+                "done": "Her hair is tied up and a second person joins the same runway. The story changes."
               }
             ]
           },

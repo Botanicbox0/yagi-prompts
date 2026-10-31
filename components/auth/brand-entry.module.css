@@ -1,6 +1,6 @@
 /*
- * The brand sign-in door. Values copy lib/design/identity.ts, like components/brand-studio/v7.module.css.
- * Techniques (docs/design/TOOLBOX.md, four): gallery wall of one brand's media, blur-to-sharp reveal,
+ * The sign-in doors, brand and personal. Values copy lib/design/identity.ts, like components/brand-studio/v7.module.css.
+ * Techniques (docs/design/TOOLBOX.md, four): gallery wall of media, blur-to-sharp reveal,
  * double-ring card with concentric radius, the spring on press. Dark glass only on the media chips.
  */
 .page {
@@ -24,6 +24,7 @@
   font-synthesis: none;
   letter-spacing: -0.01em;
 }
+.page ::selection { background: color-mix(in srgb, var(--id-accent) 22%, var(--id-paper)); }
 .page a:focus-visible, .page button:focus-visible {
   outline: 2px solid var(--id-accent);
   outline-offset: 3px;
@@ -44,6 +45,10 @@
 .tile img, .tile video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .tile:nth-child(1) img { object-position: 50% 30%; }
 .tile:nth-child(4) video { object-position: 50% 62%; }
+/* The personal wall: three people at the same height, in one film's world. */
+.faces { grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: minmax(0, 1fr); }
+.faces .tile:nth-child(-n+2) { grid-row: auto; }
+.faces .tile video { object-position: 50% 28%; }
 .pause { position: absolute; z-index: 1; top: clamp(14px, 1.8vw, 26px); right: clamp(14px, 1.4vw, 22px); display: grid; place-items: center; width: 36px; height: 36px; border: 1px solid rgb(14 16 19 / 0.16); border-radius: 999px; color: var(--id-body); cursor: pointer; }
 .pause::after { content: ''; position: absolute; inset: -4px; }
 .pause svg { width: 14px; height: 14px; }
@@ -62,6 +67,8 @@
 }
 .header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
 .logo { display: flex; flex-direction: column; gap: 7px; }
+/* On the personal door the rabbit and the word wear the blue. Both draw with currentColor. */
+.logoBlue { color: var(--id-accent); }
 .byline { margin-left: 50px; font-size: 9px; letter-spacing: .04em; color: var(--id-muted); }
 .languages { display: flex; gap: 4px; margin-top: -10px; font-size: 12px; }
 .languages a { min-width: 36px; min-height: 44px; display: grid; place-items: center; color: var(--id-muted); }
@@ -79,6 +86,8 @@
 .footer { display: flex; justify-content: space-between; align-items: center; gap: 16px; font-size: 13px; color: var(--id-body); }
 .footer a { display: inline-flex; align-items: center; gap: 4px; min-height: 44px; }
 .footer a:hover { color: var(--id-accent-text); }
+/* The review account's door: quiet, but it has to read as a link for the payment reviewer. */
+.footerQuiet { color: var(--id-muted); font-size: 12px; text-decoration: underline; text-underline-offset: 3px; }
 
 /* ---------- Open in browser: one job, one card ---------- */
 .webview {
@@ -111,6 +120,7 @@
   .tile:nth-child(4) { display: none; }
   .tile:nth-child(-n+2) { grid-row: auto; }
   .tile:nth-child(1) img { object-position: 50% 22%; }
+  .faces .tile video { object-position: 50% 24%; }
   .pause { top: 10px; right: 10px; }
   .card { padding: 20px 20px 8px; }
   .login { max-width: 440px; padding: 28px 0 20px; }
