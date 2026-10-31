@@ -1453,7 +1453,7 @@ async function sweepCampaigns(): Promise<void> {
     expectEqual(`/${locale}/brands shows the runway's four real edits`, (brand.body.match(/data-remix-edit=/g) ?? []).length, 4);
     expectPresent(`/${locale}/brands remix starts from an attached look`, brand.body, '/reel/landing/v7/rx-attach-look.webp');
     expectEqual(`/${locale}/brands shows nine fashion looks`, (brand.body.match(/data-asset-look=/g) ?? []).length, 9);
-    expectEqual(`/${locale}/brands shows six beauty shots`, (brand.body.match(/data-asset-cut=/g) ?? []).length, 6);
+    expectEqual(`/${locale}/brands shows seven beauty shots`, (brand.body.match(/data-asset-cut=/g) ?? []).length, 7);
     expectEqual(`/${locale}/brands ships every ad in the HTML`, (brand.body.match(/data-asset-clip=/g) ?? []).length, 2);
     expectEqual(`/${locale}/brands pairs each ad with what it features`, (brand.body.match(/data-asset-ad-still=/g) ?? []).length, 2);
     expectPresent(`/${locale}/brands ships the perfume ad's product shot`, brand.body, '/reel/landing/highteen-product.webp');

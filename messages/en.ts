@@ -635,7 +635,7 @@ export const en = {
         ],
         "notes": [
           "One world across the looks, like a season’s lookbook.",
-          "One perfume, shot differently in each scene. The mark stays the same.",
+          "The same perfume, in use on skin and as product shots. The mark stays as it is.",
           "One garment photo and a fictional model become a lookbook and an editorial.",
           "Each ad sits next to the product or outfit it features."
         ],
@@ -747,15 +747,15 @@ export const en = {
             ]
           },
           {
-            "title": "Beauty campaign",
+            "title": "Perfume ad",
             "edits": [
               {
                 "prompt": "Change the product to our perfume",
-                "done": "The scenes stayed. Only the product changed."
+                "done": "The scenes and people stay; only the bottle changes."
               },
               {
-                "prompt": "Now shoot it again in a blue world",
-                "done": "Same structure, with a new world and a new product."
+                "prompt": "Now reshoot it in a blue world",
+                "done": "The same structure, with a new world and product."
               }
             ]
           }
@@ -771,7 +771,7 @@ export const en = {
         "hint": "What to fix",
         "slider": "Position of the divider between the two shots",
         "wide": "Full shot",
-        "wideAlt": "Full shot: a model holding a perfume in a blue studio",
+        "wideAlt": "Full shot: a model spraying perfume on her neck in a blue studio",
         "image": "@Image",
         "pairs": [
           {
@@ -783,10 +783,10 @@ export const en = {
           },
           {
             "chip": "Garment detail",
-            "prompt": "Keep the outline in @Image1 and bring back the texture of the feathers and knit",
-            "note": "Only the texture inside the box was redrawn. The outline of the feathers stays.",
-            "raw": "First shot: smudged feathers",
-            "ours": "Fixed: feathers with real texture"
+            "prompt": "Keep the folds in @Image1 and bring back the texture of the silk",
+            "note": "Only the texture inside the box was redrawn. The folds stay where they are.",
+            "raw": "First shot: blotchy silk",
+            "ours": "Fixed: silk with real texture"
           },
           {
             "chip": "Skin",

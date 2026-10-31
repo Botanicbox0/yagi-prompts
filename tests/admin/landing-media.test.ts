@@ -31,7 +31,7 @@ describe('landingMedia.replace', () => {
     // The page resolves the slot to the override; local mode serves it from the same-origin route.
     const media = landingMediaMap([row!], '');
     expect(mediaSrc(media, 'landing/cut-flower')).toBe(`/api/landing-media/landing/cut-flower?v=${row!.objectKey.slice(0, 12)}`);
-    expect(mediaSrc(media, 'landing/cut-gel')).toBe('/reel/landing/cut-gel.webp');
+    expect(mediaSrc(media, 'landing/cut-neck')).toBe('/reel/landing/cut-neck.webp');
     // On a Supabase project the page links the public bucket directly.
     expect(landingMediaMap([row!], 'https://abc.supabase.co')['landing/cut-flower']).toBe(`https://abc.supabase.co/storage/v1/object/public/public-content/${row!.objectKey}`);
   });

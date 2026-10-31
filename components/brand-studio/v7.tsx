@@ -30,7 +30,7 @@ const PAIRS = ['logo', 'garment', 'skin'] as const;
  * are these regions, so replacing c-wide in /admin/landing-media means moving the boxes too.
  */
 const FIX_SHOT = { width: 1332, height: 1774 };
-const FIX_BOXES = { logo: [576, 544, 180, 180], garment: [470, 620, 180, 180], skin: [576, 170, 180, 180] } as const;
+const FIX_BOXES = { logo: [470, 380, 150, 150], garment: [590, 720, 200, 200], skin: [590, 190, 220, 220] } as const;
 /** YAGI's demo palette: the blue world from lib/design/identity.ts, as a brand kit would hold it. */
 const YAGI_PALETTE = ['#f3f7fa', '#d0dbe7', '#3875c5', '#2e5f9f', '#16233f'] as const;
 const DOORS = ['work', 'campaign', 'production'] as const;
@@ -275,7 +275,13 @@ export function V7Remix({ copy }: { copy: Copy }) {
       ratio: 16 / 9,
       src: V('rx-beauty-orig', 'mp4'),
       poster: V('rx-beauty-orig', 'jpg'),
-      edits: ['product', 'world'].map((id, index) => ({ id, ...beauty!.edits[index]!, src: V(`rx-beauty-${id}`, 'mp4'), poster: V(`rx-beauty-${id}`, 'jpg') })),
+      edits: ['product', 'world'].map((id, index) => ({
+        id,
+        ...beauty!.edits[index]!,
+        src: V(`rx-beauty-${id}`, 'mp4'),
+        poster: V(`rx-beauty-${id}`, 'jpg'),
+        attachment: V('rx-attach-bottle', 'webp'),
+      })),
     },
   ];
   return (
