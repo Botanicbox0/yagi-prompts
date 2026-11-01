@@ -17,6 +17,15 @@ const labels = (dict: Dictionary) => ({ subscribeCta: dict.templates.subscribeCt
 const signin = '/en/signin?next=%2Fen%2Ft%2Fgoldfish%23make';
 
 describe('the make launcher', () => {
+  it('shows the price to every reader and no credits while a price is given', () => {
+    for (const access of [null, { signedIn: false, live: false }, { signedIn: true, live: true }]) {
+      const html = renderToStaticMarkup(<MakeLauncherView credits={25} price={{ value: '6,900원', label: '1회 결제' }} signinHref={signin} labels={labels(ko)} access={access} />);
+      expect(html).toContain('data-template-price');
+      expect(html).toContain('6,900원');
+      expect(html).not.toContain('크레딧');
+    }
+  });
+
   it('asks a visitor to subscribe, one tap to the sign-up that returns to the sheet, with no cost shown', () => {
     for (const access of [null, { signedIn: false, live: false }]) {
       const html = renderToStaticMarkup(<MakeLauncherView credits={25} signinHref={signin} labels={labels(en)} access={access} />);

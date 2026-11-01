@@ -56,6 +56,16 @@ beforeEach(() => {
 });
 
 describe('the template page as a decision screen', () => {
+  it('goes back to credits and "subscribe" with no won price once subscriptions open', async () => {
+    state.mode = 'review';
+    state.availability = { ...state.availability, status: 'open', plans: { creator: { status: 'open' }, premium: { status: 'open' } } };
+    const dict = getDictionary('ko');
+    const html = renderToStaticMarkup(await TemplatePage({ params: Promise.resolve({ locale: 'ko', slug: film.slug }) }));
+    expect(html).not.toContain('data-template-price');
+    expect(visible(html)).toContain(dict.templates.subscribeCta);
+    expect(visible(html)).toContain(dict.meta.templateDescription);
+  });
+
   for (const locale of ['ko', 'en'] as const) {
     const dict = getDictionary(locale);
 
@@ -68,18 +78,18 @@ describe('the template page as a decision screen', () => {
       expect(count(html, 'id="make"')).toBe(1);
       // The make card lives in the sheet (founder 2026-10-29), so the right column stays short.
       expect(html).toMatch(/<dialog[^>]*data-make-sheet[\s\S]*id="make"/);
-      // Before anyone knows who reads: the launcher and its phone bar, both "Subscribe to make it here".
+      // Before anyone knows who reads: the launcher and its phone bar, both the plain make CTA while subscriptions are closed.
       expect(count(html, 'data-make-cta=')).toBe(2);
-      expect(count(text, dict.templates.subscribeCta)).toBe(2);
+      expect(count(text, dict.templates.subscribeCta)).toBe(0);
+      expect(html).not.toContain('data-template-credits');
     });
 
-    it(`names no won or dollar price, and keeps the facts in the launcher and the notes in the sheet (${locale})`, async () => {
+    it(`shows the single-purchase price the terms promise, and keeps the facts in the launcher and the notes in the sheet (${locale})`, async () => {
       state.mode = 'review';
       const html = renderToStaticMarkup(await TemplatePage({ params: Promise.resolve({ locale, slug: film.slug }) }));
       const text = visible(html);
-      expect(text).not.toContain('6,900원');
-      expect(text).not.toContain('$4');
-      expect(html).not.toContain('data-template-price');
+      expect(text).toContain(locale === 'ko' ? '6,900원' : '$4');
+      expect(html).toContain('data-template-price');
       expect(html).not.toContain('priceCurrency');
       const launcher = visible(html.slice(html.indexOf('data-template-make-launcher'), html.indexOf('data-make-sheet')));
       expect(launcher).toContain(dict.studio.runtimeLabel.replace('{seconds}', '15'));
@@ -109,8 +119,8 @@ describe('the template page as a decision screen', () => {
       expect(bar).toContain('md:hidden');
       expect(bar).toContain('pb-safe');
       expect(bar).toContain('data-make-cta="sticky"');
-      expect(prose(bar)).toContain(dict.templates.subscribeCta);
-      expect(prose(bar)).not.toContain(locale === 'ko' ? '6,900원' : '$4');
+      expect(prose(bar)).not.toContain(dict.templates.subscribeCta);
+      expect(prose(bar)).toContain(locale === 'ko' ? '6,900원' : '$4');
     });
 
     it(`keeps the engine name off the consumer page (${locale})`, async () => {
@@ -142,7 +152,7 @@ describe('the template page as a decision screen', () => {
       // AGENTS.md §7 GEO: the "what this is" sentence is real text under the first screen.
       state.mode = 'review';
       const html = renderToStaticMarkup(await TemplatePage({ params: Promise.resolve({ locale, slug: film.slug }) }));
-      expect(visible(html)).toContain(dict.meta.templateDescription);
+      expect(visible(html)).toContain(dict.meta.templateDescriptionSingle);
       expect(html.indexOf('data-template-description')).toBeGreaterThan(html.indexOf('data-template-photo-guide'));
     });
   }
@@ -159,7 +169,7 @@ describe('one sale-state source: storefrontOpen() decides all three sentences', 
       expect(visible(landing)).not.toContain(dict.creatorJourney.ready);
       expect(visible(template)).toContain(dict.templates.makeBodyClosed);
       expect(visible(template)).not.toContain(dict.templates.makeBody);
-      expect(visible(template.slice(template.indexOf('data-make-sticky')))).toContain(dict.templates.subscribeCta);
+      expect(visible(template.slice(template.indexOf('data-make-sticky')))).not.toContain(dict.templates.subscribeCta);
       expect(visible(pricing)).toContain(dict.pricing.filmsBody);
       expect(visible(pricing)).toContain(dict.pricing.subscriptionUnavailable);
       expect(visible(pricing)).not.toContain(dict.pricing.singleOpenBody);
