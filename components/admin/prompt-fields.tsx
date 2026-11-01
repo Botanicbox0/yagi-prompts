@@ -46,6 +46,8 @@ export function mediaDropLabels(a: Dictionary['admin']): MediaDropLabels {
     frameScrub: a.mediaFrameScrub,
     framePick: a.mediaFramePick,
     framePicked: a.mediaFramePicked,
+    frameLoading: a.mediaFrameLoading,
+    frameUnavailable: a.mediaFrameUnavailable,
     posterZone: a.mediaPosterZone,
     posterPicked: a.mediaPosterPicked,
     posterHint: a.mediaPosterHint,

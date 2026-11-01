@@ -1,3 +1,4 @@
+import { canonicalMime } from '@/lib/admin/direct-upload';
 import { createHash, randomUUID } from 'node:crypto';
 import { AssetRefSchema, type AssetRef } from '@/lib/content/schemas';
 import { extensionFor } from '@/lib/admin/assets';
@@ -95,7 +96,7 @@ export interface UploadCheckInput {
  * WebM — would be a stricter rule than the plan asks for, dressed up as the same one.
  */
 export function checkUpload(input: UploadCheckInput): UploadRejection | null {
-  const mime = input.mime.split(';')[0]!.trim().toLowerCase();
+  const mime = canonicalMime(input.mime).split(';')[0]!.trim().toLowerCase();
   const allowed: readonly string[] =
     input.kind === 'video'
       ? ALLOWED_VIDEO_MIMES
@@ -220,7 +221,7 @@ export async function stagePromptUpload(
   upload: File,
 ): Promise<StageResult> {
   const bytes = new Uint8Array(await upload.arrayBuffer());
-  const mime = upload.type && upload.type.length > 0 ? upload.type : 'application/octet-stream';
+  const mime = upload.type && upload.type.length > 0 ? canonicalMime(upload.type) : 'application/octet-stream';
   // m4a is ISO-BMFF too — the same mvhd walk answers, so the duration rides the ref for the UI.
   const durationSeconds =
     kind === 'video'

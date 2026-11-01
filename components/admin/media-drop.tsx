@@ -33,6 +33,8 @@ export interface MediaDropLabels extends UploadFailureLabels {
   frameScrub: string;
   framePick: string;
   framePicked: string;
+  frameLoading: string;
+  frameUnavailable: string;
   posterZone: string;
   posterPicked: string;
   posterHint: string;
@@ -159,6 +161,8 @@ export function MediaDrop({
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [videoLabel, setVideoLabel] = useState<string | null>(null);
   const [duration, setDuration] = useState(0);
+  const [existingVideoUrl, setExistingVideoUrl] = useState<string | null>(null);
+  const [frameState, setFrameState] = useState<'loading' | 'ready' | 'unavailable'>('loading');
   const [posterUrl, setPosterUrl] = useState<string | null>(null);
   const [posterLabel, setPosterLabel] = useState<string | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
@@ -219,6 +223,33 @@ export function MediaDrop({
     form.addEventListener('submit', onSubmit);
     return () => form.removeEventListener('submit', onSubmit);
   }, [labels.blockedUploading, labels.blockedFailed]);
+
+  /**
+   * The row's clip is held as a blob while the panel is open (staff report, 2026-11-01: the frame
+   * picker did nothing). The signed storage URL behind the admin media route lives 60 seconds, so a
+   * scrub after that had nothing to seek on, and a canvas drawn from another origin cannot be read.
+   */
+  useEffect(() => {
+    if (!existingVideoSrc) return;
+    const abort = new AbortController();
+    let url: string | null = null;
+    void fetch(existingVideoSrc, { signal: abort.signal })
+      .then((response) => {
+        if (!response.ok) throw new Error(`clip_${response.status}`);
+        return response.blob();
+      })
+      .then((blob) => {
+        url = URL.createObjectURL(blob);
+        setExistingVideoUrl(url);
+      })
+      .catch(() => {
+        if (!abort.signal.aborted) setFrameState('unavailable');
+      });
+    return () => {
+      abort.abort();
+      if (url) URL.revokeObjectURL(url);
+    };
+  }, [existingVideoSrc]);
 
   const PLAIN_INPUT =
     'w-full border border-hairline bg-transparent px-2.5 py-1.5 font-mono text-code outline-none focus:border-accent';
@@ -305,6 +336,7 @@ export function MediaDrop({
     setVideoLabel(`${file.name} · ${(file.size / (1024 * 1024)).toFixed(1)}MB`);
     setVideoUrl(URL.createObjectURL(file));
     setDuration(0);
+    setFrameState('loading');
     void upload('video', file, videoInputRef.current);
   };
 
@@ -362,6 +394,8 @@ export function MediaDrop({
       active ? 'border-accent text-accent' : 'border-hairline opacity-70 hover:opacity-100',
     ].join(' ');
 
+  const previewSrc = videoUrl ?? existingVideoUrl;
+
   return (
     <div ref={rootRef} data-media-drop className="flex flex-col gap-4">
       {blocked && (
@@ -408,18 +442,28 @@ export function MediaDrop({
         <div className="border border-hairline p-3">
           <video
             ref={previewRef}
-            src={videoUrl ?? existingVideoSrc}
+            {...(previewSrc ? { src: previewSrc } : {})}
             muted
             playsInline
-            preload="metadata"
+            preload="auto"
             className="max-h-64 w-full bg-black object-contain"
             onLoadedMetadata={(e) => setDuration(e.currentTarget.duration || 0)}
+            onLoadedData={() => setFrameState('ready')}
+            // A codec this browser cannot decode (HEVC .mov on Windows) has no frame to pick.
+            onError={() => setFrameState('unavailable')}
           />
+          {frameState !== 'ready' && (
+            <p data-frame-state={frameState} className="mt-2 font-mono text-[0.68rem] opacity-70">
+              {frameState === 'loading' ? labels.frameLoading : labels.frameUnavailable}
+            </p>
+          )}
           <div className="mt-3 flex flex-wrap items-center gap-3">
             <label className="flex flex-1 items-center gap-2 font-mono text-[0.7rem] opacity-70">
               {labels.frameScrub}
               <input
+                key={previewSrc}
                 type="range"
+                disabled={frameState !== 'ready'}
                 min={0}
                 max={Math.max(duration, 0.01)}
                 step={0.04}
@@ -434,8 +478,9 @@ export function MediaDrop({
             </label>
             <button
               type="button"
+              disabled={frameState !== 'ready'}
               onClick={captureFrame}
-              className="border border-current px-3 py-1.5 font-label text-[0.68rem] tracking-[0.1em] uppercase"
+              className="border border-current px-3 py-1.5 font-label text-[0.68rem] tracking-[0.1em] uppercase disabled:opacity-40"
             >
               {labels.framePick}
             </button>

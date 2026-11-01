@@ -51,4 +51,13 @@ describe('MediaDrop (admin media enhancement)', () => {
     expect(html).toContain('name="audio"');
     expect(html).toContain('accept="audio/*"');
   });
+
+  it('holds the frame picker with a visible state until the row clip can be decoded', () => {
+    const html = renderToStaticMarkup(
+      <MediaDrop videoName="video" posterName="poster" labels={labelsOf()} existingVideoSrc="/api/admin/media/x" />,
+    );
+    expect(html).toContain('data-frame-state="loading"');
+    expect(html).toContain(labelsOf().frameLoading);
+    expect(html).toMatch(/<button[^>]*disabled/);
+  });
 });
