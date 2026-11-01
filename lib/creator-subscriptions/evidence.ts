@@ -5,6 +5,7 @@ import { SUBSCRIPTION_TERMS_VERSION } from './legal';
 import { subscriptionLegalDocument } from './legal-projection';
 import { LEGAL_DOCS } from '@/lib/legal/documents';
 import { configuredPremiumEditLimit } from '@/lib/premium-editing/budget';
+import { isSubscriptionSchemaError, subscriptionTablesExist } from './repo';
 
 export function currentImplementationSha(env: Record<string, string | undefined> = process.env): string | null {
   const sha = env.VERCEL_GIT_COMMIT_SHA?.trim();
@@ -29,8 +30,13 @@ export function premiumConfigurationDigest(env: Record<string, string | undefine
 export async function subscriptionTermsApproved(sql: SqlRunner | null): Promise<boolean> {
   if (!sql) return false;
   try {
+    if (!await subscriptionTablesExist(sql, 'creator_subscription_launch_evidence')) return false;
     return (await sql.query<{ approved: boolean }>(`select exists(select 1 from creator_subscription_launch_evidence
       where environment='live' and step='terms' and passed=true and plan_version=$1 and terms_version=$2 and evidence_digest=$3) as approved`,
       [SUBSCRIPTION_PLAN_VERSION, SUBSCRIPTION_TERMS_VERSION, subscriptionTermsDigest()])).rows[0]?.approved === true;
-  } catch { return false; }
+  } catch (err) {
+    // An outage is not an answer. Rejecting keeps it out of unstable_cache (lib/db/read-policy.ts).
+    if (isSubscriptionSchemaError(err)) return false;
+    throw err;
+  }
 }

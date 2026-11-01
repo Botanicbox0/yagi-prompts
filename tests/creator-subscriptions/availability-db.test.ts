@@ -5,7 +5,8 @@ import type { SqlRunner } from '@/lib/db/sql-runner';
 import { getCreatorSubscriptionAvailability, SUBSCRIPTION_RELEASE_VERSION, SUBSCRIPTION_REQUIRED_STEPS } from '@/lib/creator-subscriptions/availability';
 import { SUBSCRIPTION_PLAN_VERSION } from '@/lib/creator-subscriptions/plans';
 import { SUBSCRIPTION_TERMS_VERSION } from '@/lib/creator-subscriptions/legal';
-import { launchConfigurationDigest, premiumConfigurationDigest, subscriptionTermsDigest } from '@/lib/creator-subscriptions/evidence';
+import { launchConfigurationDigest, premiumConfigurationDigest, subscriptionTermsApproved, subscriptionTermsDigest } from '@/lib/creator-subscriptions/evidence';
+import { subscriptionSchemaReady } from '@/lib/creator-subscriptions/repo';
 vi.mock('server-only',()=>({}));
 vi.mock('@/lib/db/connect',()=>({getSqlRunner:vi.fn()}));
 import { subscriptionLiveQaReady } from '@/lib/creator-subscriptions/runtime';
@@ -117,5 +118,18 @@ describe('public availability through real Postgres schemas, roles and evidence'
     }
     await sql.query("update creator_subscription_launch_evidence set evidence_digest=repeat('c',64) where step='terms'");
     expect(await subscriptionLiveQaReady(sql,env)).toBe(false);
+  });
+  it('approves terms only for the exact recorded live evidence, on the real migrated schema',async()=>{
+    expect(await subscriptionSchemaReady(sql)).toBe(true);
+    expect(await subscriptionTermsApproved(sql)).toBe(true);
+    for(const mutation of ["update creator_subscription_launch_evidence set passed=false where step='terms'",
+      "update creator_subscription_launch_evidence set evidence_digest=repeat('c',64) where step='terms'",
+      "update creator_subscription_launch_evidence set terms_version='older' where step='terms'",
+      "delete from creator_subscription_launch_evidence where step='terms'"]){
+      await db.exec(`begin;${mutation};`);
+      expect(await subscriptionTermsApproved(sql)).toBe(false);
+      await db.exec('rollback');
+    }
+    expect(await subscriptionTermsApproved(sql)).toBe(true);
   });
 });
