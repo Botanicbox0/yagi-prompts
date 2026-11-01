@@ -151,8 +151,9 @@ async function avatarImage(dataUrl: string): Promise<{ bytes: Buffer; tone: stri
 /**
  * Add or refresh candidates by handle. A refresh replaces the figures (and their day) when new ones
  * are sent, keeps a known name/category/picture when the new reading has none, and never touches
- * whether a candidate is shared, excluded, picked or passed. `confirmed` sets or clears the booking
- * (absent leaves it). New candidates wait until the studio shares them, booked or not.
+ * whether a candidate is excluded, picked or passed. `confirmed` sets or clears the booking (absent
+ * leaves it). A new booking also shares the candidate unless the studio excluded it; everyone else
+ * waits until the studio shares them, and a booked candidate the studio hides later stays hidden.
  */
 export async function importShortlist(
   deps: { sql: SqlRunner; storage?: Pick<StorageDriver, 'putStaging'> },
@@ -195,14 +196,15 @@ export async function importShortlist(
             measured_on=case when $4 then $6::date else measured_on end,
             avatar_key=coalesce($7,avatar_key), avatar_mime=case when $7::text is null then avatar_mime else 'image/webp' end,
             avatar_size=coalesce($8,avatar_size), avatar_sha256=coalesce($9,avatar_sha256), avatar_tone=coalesce($10,avatar_tone),
+            shared_at=case when $11 and confirmed_at is null and excluded_at is null then coalesce(shared_at,now()) else shared_at end,
             confirmed_at=case when $11::boolean is null then confirmed_at when $11 then coalesce(confirmed_at,now()) end, updated_at=now()
           where id=$1`,
           [id, c.displayName ?? null, c.category ?? null, fresh, JSON.stringify(metrics), v.measuredOn ?? null, avatar?.key ?? null, avatar?.size ?? null, avatar?.sha256 ?? null, avatar?.tone ?? null,
             c.confirmed ?? null]);
         updated++;
       } else {
-        await sql.query(`insert into brand_shortlist_candidates(id,project_id,platform,handle,display_name,category,metrics,measured_on,avatar_key,avatar_mime,avatar_size,avatar_sha256,avatar_tone,confirmed_at)
-          values($1,$2,$3,$4,$5,$6,$7::jsonb,$8::date,$9,$10,$11,$12,$13,case when $14 then now() end)`,
+        await sql.query(`insert into brand_shortlist_candidates(id,project_id,platform,handle,display_name,category,metrics,measured_on,avatar_key,avatar_mime,avatar_size,avatar_sha256,avatar_tone,confirmed_at,shared_at)
+          values($1,$2,$3,$4,$5,$6,$7::jsonb,$8::date,$9,$10,$11,$12,$13,case when $14 then now() end,case when $14 then now() end)`,
           [id, v.projectId, c.platform, c.handle, c.displayName ?? null, c.category ?? null, JSON.stringify(metrics), fresh ? v.measuredOn ?? null : null,
             avatar?.key ?? null, avatar ? 'image/webp' : null, avatar?.size ?? null, avatar?.sha256 ?? null, avatar?.tone ?? null, c.confirmed === true]);
         added++;
