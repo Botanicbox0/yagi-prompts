@@ -8,9 +8,25 @@ export async function loadSubscription(sql: SqlRunner, id: string, lock = false)
   if (!UUID.test(id)) return null;
   return (await sql.query<SubscriptionRow>(`select * from creator_subscriptions where id=$1${lock ? ' for update' : ''}`, [id])).rows[0] ?? null;
 }
+/** Postgres resolves names while parsing, so a statement cannot guard itself, and pg-pool discards
+ * the connection of any statement that fails. Ask the catalog first: it answers instead of failing.
+ */
+export async function subscriptionTablesExist(sql: SqlRunner, ...tables: string[]): Promise<boolean> {
+  const { rows } = await sql.query<{ present: boolean }>(`select bool_and(to_regclass('public.'||needed.name) is not null) as present
+    from unnest($1::text[]) needed(name)`, [tables]);
+  return rows[0]?.present === true;
+}
+/** SQLSTATE class 42: Postgres read the statement and this schema cannot serve it (missing column,
+ * missing role, no privilege). A pool timeout or dropped connection says nothing about the schema.
+ */
+export function isSubscriptionSchemaError(err: unknown): boolean {
+  const code = (err as { code?: unknown } | null)?.code;
+  return typeof code === 'string' && code.startsWith('42');
+}
 /** Small read-only probe: core columns + enabled RLS + browser privilege revocation. */
 export async function subscriptionSchemaReady(sql: SqlRunner): Promise<boolean> {
   try {
+    if (!await subscriptionTablesExist(sql, 'creator_subscriptions', 'creator_subscription_periods', 'creator_subscription_usage', 'creator_subscription_key_cleanup')) return false;
     await sql.query(`select s.billing_key_ciphertext,s.premium_edit_limit,p.reserved_units,u.render_ref from creator_subscriptions s
       left join creator_subscription_periods p on p.subscription_id=s.id
       left join creator_subscription_usage u on u.period_id=p.id where false`);
@@ -27,11 +43,16 @@ export async function subscriptionSchemaReady(sql: SqlRunner): Promise<boolean> 
       from pg_class c join pg_namespace n on n.oid=c.relnamespace
       where n.nspname='public' and c.relname in ('creator_subscriptions','creator_subscription_periods','creator_subscription_usage','creator_subscription_key_cleanup')`);
     return rows[0]?.ready === true;
-  } catch { return false; }
+  } catch (err) {
+    if (isSubscriptionSchemaError(err)) return false;
+    throw err;
+  }
 }
 export async function getSubscriptionSummary(sql: SqlRunner, userId: string,
   options: { environment?: BillingEnvironment; now?: Date; subscriptionId?: string } = {}): Promise<SubscriptionSummary | null> {
   if (!UUID.test(userId) || (options.subscriptionId !== undefined && !UUID.test(options.subscriptionId))) return null;
+  // Rejects, not null: /account and /api/renders/access treat a failed read differently from no subscription.
+  if (!await subscriptionTablesExist(sql, 'creator_subscriptions')) throw new Error('subscription_tables_missing');
   const { rows } = await sql.query<SubscriptionRow>(`select * from creator_subscriptions where user_id=$1 and environment=$2
     and ($3::uuid is null or id=$3)
     order by case when status not in ('ended','refunded') then 0 else 1 end, created_at desc limit 1`, [userId, options.environment ?? 'live',options.subscriptionId ?? null]);

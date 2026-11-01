@@ -32,6 +32,7 @@ vi.mock('@/components/playbook/markdown', () => ({ Markdown: () => null }));
 import LandingPage from '@/app/(marketing)/[locale]/page';
 import TemplatePage from '@/app/(marketing)/[locale]/t/[slug]/page';
 import SubscriptionTermsPage from '@/app/(app)/billing/subscription/terms/page';
+import { subscriptionTermsApproved } from '@/lib/creator-subscriptions/evidence';
 
 function answers(html: string): string[] {
   const source = html.match(/<script id="faq-structured-data" type="application\/ld\+json">([\s\S]*?)<\/script>/)?.[1];
@@ -92,5 +93,12 @@ describe('public subscription SSR state', () => {
     const draft = renderToStaticMarkup(await SubscriptionTermsPage());
     expect(draft).toContain('data-subscription-terms-status="draft"');
     expect(draft).toContain(copy.termsDraft);
+  });
+  it('keeps the terms page up with the draft notice when the database cannot answer', async () => {
+    const copy = getDictionary('ko').creatorSubscription;
+    vi.mocked(subscriptionTermsApproved).mockRejectedValueOnce(new Error('timeout exceeded when trying to connect'));
+    const html = renderToStaticMarkup(await SubscriptionTermsPage());
+    expect(html).toContain('data-subscription-terms-status="draft"');
+    expect(html).toContain(copy.termsDraft);
   });
 });
