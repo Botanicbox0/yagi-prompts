@@ -765,9 +765,9 @@ export const en = {
         "eyebrow": "Local fixes",
         "soon": "Coming",
         "title": "Box only what needs fixing",
-        "body": "A logo or a face that sits small in a wide shot blurs because it has too few pixels. Box that part, redraw it, and blend it back with soft edges. Everything outside the box stays as it was.",
-        "raw": "First shot",
-        "ours": "Fixed",
+        "body": "The framing and light are right, but the logo came out wrong. Generate again and that shot is gone. Box the wrong part and point to the original registered to your brand, and only what is inside gets redrawn. Not one pixel outside the box changes.",
+        "raw": "Before",
+        "ours": "After",
         "hint": "What to fix",
         "slider": "Position of the divider between the two shots",
         "wide": "Full shot",
@@ -775,27 +775,27 @@ export const en = {
         "pairs": [
           {
             "chip": "Logo",
-            "prompt": "Keep the glass texture and every element of @Image1, and etch the logo from @Image2 into the glass at the same size and direction",
-            "note": "Only the logo inside the box was redrawn, then blended back with soft edges.",
-            "raw": "First shot: a perfume with a blurred logo",
-            "ours": "Fixed: a perfume with a sharp logo",
+            "prompt": "Keep the glass texture and light in @Image1, and replace only the wrong logo with @Image2",
+            "note": "Only the wrong logo was replaced with the brand's original. The framing and light stay.",
+            "raw": "Before: a perfume bottle with a torn, malformed logo",
+            "ours": "After: a perfume bottle etched with the brand's logo",
             "wideAlt": "Full shot: a perfume bottle small on a bed by a window"
           },
           {
             "chip": "Product detail",
-            "prompt": "Keep the shape and light in @Image1, bring back the texture of the bottle and cap, and match the logo to @Image2",
-            "note": "Only the bottle inside the box was redrawn. The satin and shadows stay.",
-            "raw": "First shot: a bottle with smeared texture",
-            "ours": "Fixed: a bottle with real texture",
+            "prompt": "Keep the satin and light in @Image1, and replace only the bottle with the real product in @Image2",
+            "note": "Only the bottle was replaced with the real product. The satin and water bowl stay.",
+            "raw": "Before: a bottle with a melted cap and a warped body",
+            "ours": "After: a bottle back in the real product's shape",
             "wideAlt": "Full shot: a perfume bottle and iced water on blue satin"
           },
           {
-            "chip": "Skin",
-            "prompt": "Keep the face in @Image1 and bring back the skin texture and stray hairs",
-            "note": "Texture and stray hairs came back across the whole face. Her features did not change.",
-            "raw": "First shot: over-smooth skin",
-            "ours": "Fixed: skin with real texture",
-            "wideAlt": "Full shot: a model with both arms raised"
+            "chip": "Face",
+            "prompt": "Keep the head angle, expression and background in @Image1, and blend in only the skin from @Image2",
+            "note": "Only the broken skin and eyes were redrawn. The angle, expression and background stay.",
+            "raw": "Before: a face with uneven eyes and blotchy skin",
+            "ours": "After: the same angle and expression with natural skin",
+            "wideAlt": "Full shot: a model in a polka-dot outfit sitting by a pale wall"
           }
         ]
       }

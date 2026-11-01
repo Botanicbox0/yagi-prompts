@@ -48,9 +48,14 @@ export function Film({ src, poster, label, className, eager = false }: { src: st
   return <video ref={ref} className={className} src={src} poster={poster} muted loop playsInline preload={eager ? 'metadata' : 'none'} aria-label={label} data-loop-video />;
 }
 
+/** "@이미지2" stays on one line: a break right after the @ reads as a typo. */
+function mentions(text: string) {
+  return text.split(/(@\S+)/).map((part, index) => (part.startsWith('@') ? <span key={index} className={styles.mention}>{part}</span> : part));
+}
+
 /**
  * A local fix: one wide shot with a box on it, and the boxed region zoomed beside it. Drag (or use the arrow keys /
- * slider) to wipe between the first shot and the fix. The box is why it works: a small region gets a whole canvas of
+ * slider) to wipe between the broken shot and the fix. The box is why it works: a small region gets a whole canvas of
  * pixels of its own, and everything outside the box stays as it was.
  */
 export function Compare({ pairs, labels }: {
@@ -110,7 +115,7 @@ export function Compare({ pairs, labels }: {
               </li>
             ))}
           </ul>
-          <p className={styles.remixSaid}>{pair.prompt}</p>
+          <p className={styles.remixSaid}>{mentions(pair.prompt)}</p>
           <p className={styles.remixDone}><span aria-hidden="true">✓</span>{pair.note}</p>
         </div>
       </div>

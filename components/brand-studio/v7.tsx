@@ -35,7 +35,7 @@ const PAIRS = ['logo', 'garment', 'skin'] as const;
  * pair (c-*-raw, c-*-ours) is that region, so replacing a wide shot in /admin/landing-media means moving its box too.
  */
 const FIX_SHOT = { width: 1536, height: 2048 };
-const FIX_BOXES = { logo: [628, 1140, 220, 220], garment: [320, 810, 640, 640], skin: [600, 255, 300, 300] } as const;
+const FIX_BOXES = { logo: [628, 1140, 220, 220], garment: [320, 810, 640, 640], skin: [360, 138, 471, 471] } as const;
 /** YAGI's demo palette: the blue world from lib/design/identity.ts, as a brand kit would hold it. */
 const YAGI_PALETTE = ['#f3f7fa', '#d0dbe7', '#3875c5', '#2e5f9f', '#16233f'] as const;
 const DOORS = ['work', 'campaign', 'production'] as const;
@@ -389,7 +389,7 @@ export function V7Finish({ copy, media }: { copy: Copy } & Media) {
       wide: landingSrc(media, `c-${id}-wide`),
       wideAlt: f.pairs[index]!.wideAlt,
       box: { left: x / FIX_SHOT.width, top: y / FIX_SHOT.height, width: width / FIX_SHOT.width, height: height / FIX_SHOT.height },
-      attachments: id === 'logo' ? [raw, '/brand/yagi-mark-black.png'] : [raw],
+      attachments: [raw, id === 'logo' ? '/brand/yagi-mark-black.png' : landingSrc(media, `c-${id}-ref`)],
     };
   });
   return (
