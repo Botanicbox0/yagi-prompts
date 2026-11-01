@@ -52,6 +52,9 @@ export function mediaDropLabels(a: Dictionary['admin']): MediaDropLabels {
     posterZone: a.mediaPosterZone,
     posterPicked: a.mediaPosterPicked,
     posterHint: a.mediaPosterHint,
+    cropHeading: a.mediaCropHeading,
+    cropHint: a.mediaCropHint,
+    cropPosition: a.mediaCropPosition,
     audioHeading: a.fieldPromptAudio,
     audioZone: a.mediaAudioZone,
     audioSaved: a.mediaAudioSaved,
@@ -416,6 +419,7 @@ export function PromptFields({ row, dict }: { row: PromptRow | null; dict: Dict 
           {...(row && existing.poster
             ? { existingPosterSrc: adminMediaPath(promptAdminRef(row.id, 'poster')) }
             : {})}
+          {...(row && existing.posterFocus ? { existingPosterFocus: existing.posterFocus } : {})}
           {...(row && existing.audio
             ? { existingAudioSrc: adminMediaPath(promptAdminRef(row.id, 'audio')) }
             : {})}
@@ -461,14 +465,9 @@ export function PromptCard({
     >
       <a href={href} className="block border-b border-hairline bg-black" aria-hidden={poster === null}>
         {poster ? (
-          <AdminPosterFrame
-            src={poster}
-            {...(media.poster?.w ? { w: media.poster.w } : {})}
-            {...(media.poster?.h ? { h: media.poster.h } : {})}
-            aspect={row.aspectDefault}
-          />
+          <AdminPosterFrame src={poster} focus={media.posterFocus} />
         ) : (
-          <div className="flex aspect-video items-center justify-center overflow-hidden">
+          <div className="flex aspect-square items-center justify-center overflow-hidden">
             <span className="px-4 text-center font-mono text-[0.7rem] break-all text-white/45">
               {row.slug || row.id.slice(0, 8)}
             </span>
