@@ -5,7 +5,7 @@ import {
   type PoolLike,
   type SqlRunner,
 } from './sql-runner';
-import { LOCAL_DB_DIR_ENV } from './connect-shared';
+import { LOCAL_DB_DIR_ENV, pgPoolSettings } from './connect-shared';
 import { RUNTIME_MODE_ENV, selectDbDriver } from '@/lib/runtime-mode';
 
 /**
@@ -52,14 +52,7 @@ async function connectPostgres(connectionString: string): Promise<SqlRunner | nu
   try {
     const pg = await import('pg');
     const Pool = (pg as unknown as { default?: { Pool: typeof pg.Pool } }).default?.Pool ?? pg.Pool;
-    const max = Math.max(1, Math.min(10, Number(process.env.PG_POOL_MAX ?? '2') || 2));
-    const pool = new Pool({
-      connectionString,
-      max,
-      connectionTimeoutMillis: 5_000,
-      idleTimeoutMillis: 10_000,
-      allowExitOnIdle: true,
-    });
+    const pool = new Pool({ connectionString, ...pgPoolSettings(process.env) });
     // One shared implementation of the pinned-connection transaction (lib/db/sql-runner.ts).
     return makePooledRunner(pool as unknown as PoolLike);
   } catch (err) {
