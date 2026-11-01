@@ -17,6 +17,8 @@ const CTA = 'flex min-h-12 w-full items-center justify-center rounded-full bg-ac
 
 interface MakeLauncherProps {
   credits: number | null;
+  /** The single-purchase price, shown to everyone until subscriptions open (the terms promise it here). */
+  price?: { value: string; label: string } | null;
   signinHref: string;
   labels: MakeLauncherLabels;
   children?: ReactNode;
@@ -27,7 +29,9 @@ interface MakeLauncherProps {
 }
 
 /**
- * The template page's make box (founder, 2026-10-29: "가격을 토큰 베이스로", the make panel as a
+ * The template page's make box. Until subscriptions open it shows the single-purchase price and a plain
+ * make CTA, because the terms promise that price here and Toss review forbids credits on the web (§19.2).
+ * After that (founder, 2026-10-29: "가격을 토큰 베이스로", the make panel as a
  * pop-up). No won, no dollar: a signed-out reader sees "Subscribe to make it here", one tap to the
  * free sign-up that comes back to the make sheet; a signed-in reader sees what the template costs in
  * credits and opens the sheet (`#make`, components/templates/make-sheet.tsx). The facts arrive from
@@ -44,7 +48,7 @@ export function MakeLauncher(props: MakeLauncherProps) {
 }
 
 /** The launcher for a known (or not yet known: `null`) reader. */
-export function MakeLauncherView({ credits, signinHref, labels, children, lead, stickyAfter = false, access }: MakeLauncherProps & { access: ViewerAccess | null }) {
+export function MakeLauncherView({ credits, price = null, signinHref, labels, children, lead, stickyAfter = false, access }: MakeLauncherProps & { access: ViewerAccess | null }) {
   const boxRef = useRef<HTMLElement>(null);
   const [box, setBox] = useState<'in' | 'ahead' | 'passed'>('in');
   useEffect(() => {
@@ -60,7 +64,7 @@ export function MakeLauncherView({ credits, signinHref, labels, children, lead, 
   const boxInView = box === 'in' || (stickyAfter && box === 'ahead');
 
   const signedIn = access?.signedIn === true;
-  const cost = signedIn && credits !== null ? interpolate(labels.credits, { n: String(credits) }) : null;
+  const cost = !price && signedIn && credits !== null ? interpolate(labels.credits, { n: String(credits) }) : null;
   const cta = (where: 'launcher' | 'sticky') => signedIn
     ? <a href="#make" data-make-cta={where} className={CTA}>{access?.live ? labels.makeCta : labels.makeCtaClosed}</a>
     : <a href={signinHref} data-make-cta={where} data-make-subscribe className={CTA}>{labels.subscribeCta}</a>;
@@ -70,7 +74,13 @@ export function MakeLauncherView({ credits, signinHref, labels, children, lead, 
       <section ref={boxRef} data-template-make-launcher data-viewer={access === null ? 'unknown' : signedIn ? 'member' : 'visitor'} className="mt-6 rounded-2xl border border-hairline p-5 sm:p-6">
         {lead && <div data-make-lead className="mb-5">{lead}</div>}
         {cost && <p data-template-credits className="font-display text-[2rem] leading-none font-black">{cost}</p>}
-        <div className={cost ? 'mt-2.5' : ''}>{children}</div>
+        {price && (
+          <div className="flex flex-wrap items-center gap-2.5">
+            <p data-template-price className="font-display text-[2rem] leading-none font-black">{price.value}</p>
+            <span className="rounded-full bg-surface px-2.5 py-1 text-xs font-medium text-black/75">{price.label}</span>
+          </div>
+        )}
+        <div className={cost || price ? 'mt-2.5' : ''}>{children}</div>
         <div className="mt-4">{cta('launcher')}</div>
       </section>
       <div
@@ -87,6 +97,7 @@ export function MakeLauncherView({ credits, signinHref, labels, children, lead, 
       >
         <div className="mx-auto flex max-w-xl items-center gap-4">
           {cost && <p data-make-sticky-credits className="shrink-0 font-display text-[1.2rem] leading-none font-black">{cost}</p>}
+          {price && <p data-make-sticky-price className="shrink-0 font-display text-[1.2rem] leading-none font-black">{price.value}</p>}
           <div className="flex-1">{cta('sticky')}</div>
         </div>
       </div>

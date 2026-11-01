@@ -2738,6 +2738,7 @@ export const ko: Dictionary = {
     imageTitle: '이미지 템플릿',
     imageDescription: "프로필부터 포스터, 룩북까지. 스튜디오가 설계한 AI 이미지 템플릿에서 원하는 분위기를 찾아보세요.",
     templateDescription: '이 템플릿에 얼굴 사진 한 장을 올려 같은 장면을 내 얼굴로 만드세요. 구독하면 이 페이지에서 바로 만들 수 있습니다.',
+    templateDescriptionSingle: '이 템플릿에 얼굴 사진 한 장을 올려 같은 장면을 내 얼굴로 만드세요. 한 편 가격은 템플릿에서, 월 구독은 요금 페이지에서 확인할 수 있습니다.',
     pricingTitle: "이용 요금",
     pricingDescription:
       '내 얼굴로 만드는 AI 영상. 크리에이터 월 24,900원, 프리미엄 월 49,000원 구독을 준비 중입니다. 영상 길이별 예상 편수와 맞춤 수정 기능을 비교하세요.',

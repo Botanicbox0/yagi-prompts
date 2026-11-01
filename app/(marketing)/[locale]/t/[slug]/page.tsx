@@ -88,13 +88,19 @@ function related(card: PromptCard, all: PromptCard[]): PromptCard[] {
   return [...others.filter(shares), ...others.filter((item) => !shares(item))].slice(0, 4);
 }
 
+/** The terms say a single purchase's price is on the template page, so credits and "subscribe" wait until subscriptions open (docs/PLATFORM-2.0.md §19.2). */
+function templateDescription(dict: ReturnType<typeof getDictionary>, subscriptionOpen: boolean): string {
+  return subscriptionOpen ? dict.meta.templateDescription : dict.meta.templateDescriptionSingle;
+}
+
 export async function generateMetadata({ params }: RouteParams): Promise<Metadata> {
   const { locale: raw, slug } = await params;
   const locale = localeOf(raw);
   const dict = getDictionary(locale);
   const { card } = await resolve(slug);
   if (card === null) return unresolvedTemplateMetadata(dict.meta.siteName);
-  return templateMetadata({ card, locale, description: dict.meta.templateDescription, siteName: dict.meta.siteName });
+  const availability = await cachedSubscriptionAvailability();
+  return templateMetadata({ card, locale, description: templateDescription(dict, availability.status === 'open'), siteName: dict.meta.siteName });
 }
 
 export default async function TemplatePage({ params }: RouteParams) {
@@ -141,6 +147,8 @@ export default async function TemplatePage({ params }: RouteParams) {
   // §20: the creative's other templates — their catalogue, one click from the one being read.
   const moreFromMaker = maker ? all.filter((item) => item.slug !== card.slug && item.makerProfile && item.authorHandle === maker.handle).slice(0, 4) : [];
   const shopOpen = storefrontOpen();
+  const subscriptionOpen = availability.status === 'open';
+  const description = templateDescription(dict, subscriptionOpen);
   const resolutions = isForSale(card) ? offeredResolutions(card) : [];
   // A set template (2026-10-27): one order, one example per frame it makes.
   const gallery = card.gallery ?? [];
@@ -190,7 +198,7 @@ export default async function TemplatePage({ params }: RouteParams) {
     <>
       <MarketingNav locale={locale} dict={dict} rest={`/t/${slug}`} initialTheme="light" />
       {/* No Offer: a template page names no won or dollar price (founder, 2026-10-29 — credits). */}
-      <JsonLd id="template-structured-data" data={templateStructuredData({ origin: siteUrl(), locale, card, description: dict.meta.templateDescription, publicSalesEnabled: false })} />
+      <JsonLd id="template-structured-data" data={templateStructuredData({ origin: siteUrl(), locale, card, description, publicSalesEnabled: false })} />
 
       <SubscriptionAvailabilityProvider initialAvailability={availability}>
       <main id="main" data-template={card.slug} data-medium={card.medium} data-section data-theme="light" className="section pb-24">
@@ -321,12 +329,13 @@ export default async function TemplatePage({ params }: RouteParams) {
                   </>
                 ) : (
                   <>
-                    {/* The make box (founder, 2026-10-29): credits for a member, "Subscribe to make it here" for a
-                        visitor — no won, no dollar on the page. The make card itself is the sheet below. */}
+                    {/* The make box (founder, 2026-10-29): once subscriptions open, credits for a member and "Subscribe to make it here" for a
+                        visitor. Until then the single-purchase price the terms promise. The make card itself is the sheet below. */}
                     <MakeLauncher
-                      credits={templateCredits(card)}
+                      credits={subscriptionOpen ? templateCredits(card) : null}
+                      price={!subscriptionOpen && shopOpen ? { value: style.price, label: t.priceLabel } : null}
                       signinHref={signInHref(`${templateHref(locale, slug)}#make`, locale)}
-                      labels={{ subscribeCta: t.subscribeCta, credits: t.credits, makeCta: t.makeCta, makeCtaClosed: t.makeCtaClosed }}
+                      labels={{ subscribeCta: subscriptionOpen ? t.subscribeCta : t.makeCta, credits: t.credits, makeCta: t.makeCta, makeCtaClosed: t.makeCtaClosed }}
                       stickyAfter={recipeFirst}
                       lead={recipeFirst && !stageFrames ? (
                         <TransformStrip
@@ -394,7 +403,7 @@ export default async function TemplatePage({ params }: RouteParams) {
                             closedBody: dict.studio.closedBody,
                             closedCta: dict.studio.closedCta,
                             closedDone: dict.studio.closedDone,
-                            signedOutCta: t.subscribeCta,
+                            signedOutCta: subscriptionOpen ? t.subscribeCta : t.makeCta,
                             pending: dict.studio.pending,
                             makeCta: t.makeCta,
                             makeCtaClosed: t.makeCtaClosed,
@@ -442,7 +451,7 @@ export default async function TemplatePage({ params }: RouteParams) {
                 )}
 
                 {/* The definition, under the first screen (AGENTS.md §7 GEO): in the HTML, not in the way. */}
-                <p data-template-description className="mt-6 max-w-detail text-sm leading-relaxed text-black/65">{dict.meta.templateDescription}</p>
+                <p data-template-description className="mt-6 max-w-detail text-sm leading-relaxed text-black/65">{description}</p>
               </div>
             </header>
 

@@ -1058,10 +1058,11 @@ async function sweepTemplates(): Promise<void> {
   expectAbsent('…no demo badge anywhere', detail.body, 'data-demo-badge');
   expectAbsent('…no placeholder ad', detail.body, 'YOUR AD HERE');
   expectAbsent('…no house ad rail', detail.body, 'data-house-ad');
-  // Founder, 2026-10-29: a template page names no won or dollar price — a visitor is asked to subscribe.
+  // The terms promise the single-purchase price on the template page; credits and "subscribe" wait for subscriptions (§19.2).
   const shown = (html: string) => html.replace(/<script[\s\S]*?<\/script>/g, '');
-  expectAbsent('…no dollar price on the English page', shown(detail.body), '>$4<');
-  expectPresent('…"Subscribe to make it here" instead', detail.body, 'Subscribe to make it here');
+  expectPresent('…the single-purchase price on the English page', shown(detail.body), 'data-template-price');
+  expectAbsent('…no "Subscribe to make it here" while subscriptions are closed', detail.body, 'Subscribe to make it here');
+  expectAbsent('…and no credits', shown(detail.body), 'data-template-credits');
   expectAbsent('…no Offer price in the structured data', detail.body, 'priceCurrency');
   // The related list uses the same justified film rows as the catalogue.
   if (/<ul[^>]*data-related-grid[^>]*class="[^"]*\bfilm-rows\b/.test(detail.body)) ok('…related templates in film rows', 'data-related-grid');
@@ -1069,8 +1070,8 @@ async function sweepTemplates(): Promise<void> {
   expectPresent('…whose items are cards', detail.body, 'data-related-item');
   const detailKo = await get(`/ko/t/${GATED_PROMPT}`);
   expectEqual('the Korean template page renders 200', detailKo.status, 200);
-  expectAbsent('…with no won price either', shown(detailKo.body), '5,900원');
-  expectPresent('…"구독하고 여기서 만들기" instead', detailKo.body, '구독하고 여기서 만들기');
+  expectPresent('…with the won price', shown(detailKo.body), 'data-template-price');
+  expectAbsent('…no "구독하고 여기서 만들기" while subscriptions are closed', detailKo.body, '구독하고 여기서 만들기');
   if (/완성까지<\/dt><dd[^>]*>보통 \d+분/.test(detailKo.body)) ok('…with the typical wait in minutes', '보통 N분');
   else fail('…typical wait', 'expected "완성까지 · 보통 N분" in the make card');
   expectAbsent('…and never a dollar', detailKo.body, '>$4<');

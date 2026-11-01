@@ -2728,6 +2728,7 @@ export const en = {
     imageTitle: 'Image templates',
     imageDescription: "Find your look in studio-made AI image templates, from portraits to posters and lookbooks.",
     templateDescription: 'Make this scene with your own face using one photo. Subscribe, and you make it right here on this page.',
+    templateDescriptionSingle: 'Make this scene with your own face using one photo. Find the single-video price on the template and compare monthly plans on the pricing page.',
     pricingTitle: 'Pricing',
     pricingDescription:
       'AI videos starring you. Creator at KRW 24,900/month and Premium at KRW 49,000/month are in preparation. Compare video counts by length and planned custom edits.',
