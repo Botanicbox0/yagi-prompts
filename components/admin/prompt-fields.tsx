@@ -53,6 +53,9 @@ export function mediaDropLabels(a: Dictionary['admin']): MediaDropLabels {
     posterHint: a.mediaPosterHint,
     audioHeading: a.fieldPromptAudio,
     audioZone: a.mediaAudioZone,
+    audioSaved: a.mediaAudioSaved,
+    audioLoading: a.mediaAudioLoading,
+    audioUnavailable: a.mediaAudioUnavailable,
     uploading: a.mediaUploading,
     uploaded: a.mediaUploaded,
     uploadFailed: a.mediaUploadFailed,
@@ -95,7 +98,7 @@ export function UseCaseChecks({ dict, selected }: { dict: Dict; selected: readon
 export function StagedMedia({ row, dict }: { row: PromptRow; dict: Dict }) {
   const media = parsePromptMedia(row.media);
   const a = dict.admin;
-  if (!media.poster && !media.video) {
+  if (!media.poster && !media.video && !media.audio) {
     return <p className="font-mono text-[0.72rem] opacity-50">{a.noMedia}</p>;
   }
   return (
@@ -118,6 +121,15 @@ export function StagedMedia({ row, dict }: { row: PromptRow; dict: Dict }) {
           src={adminMediaPath(promptAdminRef(row.id, 'poster'))}
           alt=""
           className="w-full max-w-sm border border-hairline"
+        />
+      )}
+      {media.audio && (
+        // `none`: the path redirects to a 60-second URL, so it is only asked for on play.
+        <audio
+          src={adminMediaPath(promptAdminRef(row.id, 'audio'))}
+          controls
+          preload="none"
+          className="w-full max-w-sm"
         />
       )}
     </div>
@@ -402,6 +414,9 @@ export function PromptFields({ row, dict }: { row: PromptRow | null; dict: Dict 
             : {})}
           {...(row && existing.poster
             ? { existingPosterSrc: adminMediaPath(promptAdminRef(row.id, 'poster')) }
+            : {})}
+          {...(row && existing.audio
+            ? { existingAudioSrc: adminMediaPath(promptAdminRef(row.id, 'audio')) }
             : {})}
         />
       </Field>

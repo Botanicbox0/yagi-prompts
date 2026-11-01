@@ -40,6 +40,9 @@ export interface MediaDropLabels extends UploadFailureLabels {
   posterHint: string;
   audioHeading: string;
   audioZone: string;
+  audioSaved: string;
+  audioLoading: string;
+  audioUnavailable: string;
   /** Direct-upload status (2026-08-15). `{percent}` is interpolated. */
   uploading: string;
   uploaded: string;
@@ -137,6 +140,7 @@ export function MediaDrop({
   audioName,
   existingVideoSrc,
   existingPosterSrc,
+  existingAudioSrc,
 }: {
   labels: MediaDropLabels;
   videoName: string;
@@ -152,6 +156,8 @@ export function MediaDrop({
   existingVideoSrc?: string;
   /** The poster this row already has — shown so the panel says what it is about to replace. */
   existingPosterSrc?: string;
+  /** The audio this row already has, so a save can be checked by ear (staff report, 2026-11-02). */
+  existingAudioSrc?: string;
 }) {
   const videoInputRef = useRef<HTMLInputElement>(null);
   const posterInputRef = useRef<HTMLInputElement>(null);
@@ -167,6 +173,8 @@ export function MediaDrop({
   const [posterLabel, setPosterLabel] = useState<string | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [audioLabel, setAudioLabel] = useState<string | null>(null);
+  const [existingAudioUrl, setExistingAudioUrl] = useState<string | null>(null);
+  const [existingAudioFailed, setExistingAudioFailed] = useState(false);
   const [dragging, setDragging] = useState<'video' | 'poster' | 'audio' | null>(null);
 
   /** Per-slot upload progress, and the receipt each finished upload leaves in the form. */
@@ -250,6 +258,29 @@ export function MediaDrop({
       if (url) URL.revokeObjectURL(url);
     };
   }, [existingVideoSrc]);
+
+  /** The row's audio, held as a blob for the same reason: pressing play can come after the 60 seconds. */
+  useEffect(() => {
+    if (!existingAudioSrc) return;
+    const abort = new AbortController();
+    let url: string | null = null;
+    void fetch(existingAudioSrc, { signal: abort.signal })
+      .then((response) => {
+        if (!response.ok) throw new Error(`audio_${response.status}`);
+        return response.blob();
+      })
+      .then((blob) => {
+        url = URL.createObjectURL(blob);
+        setExistingAudioUrl(url);
+      })
+      .catch(() => {
+        if (!abort.signal.aborted) setExistingAudioFailed(true);
+      });
+    return () => {
+      abort.abort();
+      if (url) URL.revokeObjectURL(url);
+    };
+  }, [existingAudioSrc]);
 
   const PLAIN_INPUT =
     'w-full border border-hairline bg-transparent px-2.5 py-1.5 font-mono text-code outline-none focus:border-accent';
@@ -538,6 +569,22 @@ export function MediaDrop({
       {audioName && (
         <div>
           <p className="font-label text-eyebrow uppercase opacity-60">{labels.audioHeading}</p>
+          {/* What the row has now. A newly picked file takes over, with its own player in the zone. */}
+          {existingAudioSrc && !audioUrl && (
+            <div
+              data-audio-existing={existingAudioUrl ? 'ready' : existingAudioFailed ? 'unavailable' : 'loading'}
+              className="mt-1.5 border border-hairline p-3"
+            >
+              <p className="font-mono text-[0.72rem]">{labels.audioSaved}</p>
+              {existingAudioUrl ? (
+                <audio controls preload="metadata" src={existingAudioUrl} className="mt-2 w-full max-w-80" />
+              ) : (
+                <p className="mt-2 font-mono text-[0.68rem] opacity-70">
+                  {existingAudioFailed ? labels.audioUnavailable : labels.audioLoading}
+                </p>
+              )}
+            </div>
+          )}
           {enhanced && (
             <div
               className={`mt-1.5 ${zone(dragging === 'audio')}`}
