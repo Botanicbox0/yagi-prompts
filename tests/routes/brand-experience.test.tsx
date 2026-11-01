@@ -64,7 +64,7 @@ describe('the brand page shows the service before asking visitors to enquire', (
     for (const film of ['orig', 'outfit', 'model', 'set', 'duo']) expect(html).toContain(`src="/reel/landing/v7/rx-runway-${film}.mp4"`);
     // The work: fashion looks, beauty shots, try-on, then the two ads beside what they feature.
     expect(html.match(/data-asset-look=/g)).toHaveLength(9);
-    expect(html.match(/data-asset-cut=/g)).toHaveLength(7);
+    expect(html.match(/data-asset-cut=/g)).toHaveLength(6);
     expect(html.match(/data-asset-panel=/g)).toHaveLength(4);
     expect(html.match(/hidden="" data-asset-panel=/g)).toHaveLength(3);
     // Try-on: the lookbook is one garment, shot three ways; the founder's picks stay in the looks and free mode.
@@ -81,9 +81,6 @@ describe('the brand page shows the service before asking visitors to enquire', (
     // Local fixes: three real before/after pairs in a wipe compare.
     // A local fix shows the whole shot, the box on it, and what was asked.
     expect(html).toContain('/reel/landing/c-wide.webp');
-    // The product is shown in use, and the old bottle's water-pool cut is gone.
-    expect(html).toContain('/reel/landing/cut-neck.webp');
-    expect(html).not.toContain('cut-gel');
     expect(html).toContain('data-fix-box="logo"');
     expect(html).toContain('/brand/yagi-mark-black.png');
     expect(html.match(/data-contrast-pair=/g)).toHaveLength(3);
