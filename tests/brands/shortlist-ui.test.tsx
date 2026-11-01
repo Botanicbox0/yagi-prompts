@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("@/lib/db/connect", () => ({ getSqlRunner: async () => null }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh() {} }) }));
 import { renderToStaticMarkup } from "react-dom/server";
-import { CampaignShortlist } from "@/components/brand-workspace/shortlist";
+import { CampaignShortlist, CandidateSheet } from "@/components/brand-workspace/shortlist";
 import { ShortlistTriage, type TriageDoor } from "@/components/brand-workspace/shortlist-triage";
 import { ADMIN_OPERATIONS } from "@/lib/admin/operations";
 import { ProjectTabs } from "@/components/brand-workspace/project-tabs";
@@ -23,8 +23,13 @@ const one: ShortlistCandidate = {
 const bare: ShortlistCandidate = { ...one, id: "00000000-0000-4000-8000-000000000002", handle: "fixture_two", displayName: null, category: null, avatarUrl: null, avatarTone: null, picked: false, metrics: { followers: 9042 } };
 const third: ShortlistCandidate = { ...bare, id: "00000000-0000-4000-8000-000000000003", handle: "fixture_three", metrics: { followers: 30000, viewsMedian90d: 25000, feedEngagementRate: 3.2, adShare: 5, reelsPosts30d: 14 } };
 
+const sheet = (candidate: ShortlistCandidate, extra: { canPick?: boolean; medians?: { views: number | null; engagement: number | null; followers: number | null } | null } = {}) => renderToStaticMarkup(
+  <CandidateSheet candidate={candidate} choice={candidate.picked ? "picked" : "none"} canPick={extra.canPick ?? true} busy={false} medians={extra.medians ?? null} position="1 / 3"
+    onPick={() => {}} onPass={() => {}} onClose={() => {}} onStep={() => {}} copy={getDictionary("ko").brandWorkspace.shortlist} locale="ko" />,
+);
+
 describe("campaign shortlist", () => {
-  it("shows identity, the figures table and the facts in Korean, with the brand's mark", () => {
+  it("shows identity, three figures and the brand's mark on the card, and everything else in its sheet", () => {
     const html = renderToStaticMarkup(<CampaignShortlist candidates={[bare, one]} canPick copy={getDictionary("ko").brandWorkspace.shortlist} locale="ko" />);
     expect(html).toContain('data-brand-shortlist="2"');
     expect(html).toContain("지표 기준 10월 27일");
@@ -32,10 +37,18 @@ describe("campaign shortlist", () => {
     expect(html.indexOf('data-shortlist-candidate="fixture.one"')).toBeLessThan(html.indexOf('data-shortlist-candidate="fixture_two"'));
     expect(html).toContain("6.7만");
     expect(html).toContain("9,042");
-    expect(html).toContain("3.9만");
-    expect(html).toContain("9.3");
-    expect(html).toContain("261 · 4.2");
-    expect(html).toContain("53%");
+    expect(html).toContain('data-shortlist-open="fixture.one"');
+    // Every other figure waits in the sheet, so a card stays one glance.
+    expect(html).not.toContain("data-shortlist-row");
+    expect(html).not.toContain("261 · 4.2");
+    const full = sheet(one);
+    expect(full).toContain("3.9만");
+    expect(full).toContain("9.3");
+    expect(full).toContain("261 · 4.2");
+    expect(full).toContain("53%");
+    expect(full).toContain('data-shortlist-row="reels"');
+    expect(full).toContain('data-shortlist-sheet-mark="picked"');
+    expect(full).toContain('href="https://www.instagram.com/fixture.one/"');
     expect(html).toContain('href="https://www.instagram.com/fixture.one/"');
     expect(html).toContain('rel="noopener noreferrer"');
     expect(html).toContain('data-shortlist-picked="true"');
@@ -45,25 +58,30 @@ describe("campaign shortlist", () => {
     expect(html).toMatch(/data-shortlist-tab="open">후보(<!-- -->)? <b>2<\/b>/);
     // A candidate with only a follower count shows no empty table rows.
     const two = html.slice(html.indexOf('data-shortlist-candidate="fixture_two"'));
-    expect(two).not.toContain("data-shortlist-row");
-    expect(two).toContain("지표를 정리하고 있어요.");
+    expect(sheet(bare)).not.toContain("data-shortlist-row");
+    expect(sheet(bare)).toContain("지표를 정리하고 있어요.");
     // Initial instead of a picture when none was imported.
     expect(two).toContain(">F</span>");
   });
 
-  it("washes the card in the picture's colour and compares against the shortlist median from three candidates on", () => {
+  it("tints the card with the picture's colour, labels it, and compares against the median in the sheet from three candidates on", () => {
     const html = renderToStaticMarkup(<CampaignShortlist candidates={[one, bare, third]} canPick copy={getDictionary("ko").brandWorkspace.shortlist} locale="ko" />);
     expect(html).toContain("--bw-tone:#3366cc");
-    expect(html).toContain("이 후보들 중앙값 대비");
-    expect(html).toContain('data-shortlist-rel="above"');
+    expect(html).not.toContain("이 후보들 중앙값 대비");
+    const full = sheet(one, { medians: { views: 5000, engagement: 1, followers: 30000 } });
+    expect(full).toContain("이 후보들 중앙값 대비");
+    expect(full).toContain('data-shortlist-rel="above"');
+    expect(sheet(one)).not.toContain("중앙값 대비");
     const card = html.slice(html.indexOf('data-shortlist-candidate="fixture_three"'));
     expect(card).toContain('data-shortlist-tag="views"');
-    expect(card).toContain('data-shortlist-tag="organic"');
     expect(card).toContain("조회수 강세");
-    expect(card).toContain('title="광고 비중이 15% 이하예요."');
+    expect(card).toContain('title="90일 중간 조회수가 팔로워의 60% 이상이에요."');
+    // A card keeps two labels; the sheet lists them all with their rules.
+    expect(card.match(/data-shortlist-tag=/g)?.length).toBeLessThanOrEqual(2);
+    const thirdSheet = sheet(third);
+    expect(thirdSheet).toContain('data-shortlist-tag="organic"');
+    expect(thirdSheet).toContain("광고 비중이 15% 이하예요.");
     expect(html).toContain('data-shortlist-select="fixture.one"');
-    // Two candidates are not enough for a median.
-    expect(renderToStaticMarkup(<CampaignShortlist candidates={[one, bare]} canPick copy={getDictionary("ko").brandWorkspace.shortlist} locale="ko" />)).not.toContain("중앙값 대비");
   });
 
   it("never shows a pick control to a read-only viewer, and says why", () => {
@@ -123,8 +141,26 @@ describe("campaign shortlist", () => {
       expect(html).not.toContain("data-shortlist-pick=");
       expect(html).not.toContain("data-shortlist-pass=");
       expect(html).toContain('data-shortlist-select="fixture.one"');
+      expect(html).toContain("fixture.one 비교에 담기");
+      // Selecting everyone could never lead to a comparison of four, so it is not offered.
+      expect(html).not.toContain("data-shortlist-select-all");
       expect(html).toContain("고른 후보 비교는 누구나 할 수 있어요.");
     }
+    expect(sheet(one, { canPick: false })).not.toContain("data-shortlist-sheet-mark");
+  });
+
+  it("tells the TWINGS team this is the client's view and links to where they manage it", () => {
+    const html = renderToStaticMarkup(<CampaignShortlist candidates={[one]} canPick={false} manageHref="#studio-tools" copy={getDictionary("ko").brandWorkspace.shortlist} locale="ko" />);
+    expect(html).toContain("data-shortlist-studio-note");
+    expect(html).toContain('href="#studio-tools"');
+    expect(html).not.toContain("고른 후보 비교는 누구나 할 수 있어요.");
+  });
+
+  it("offers search only when the list is long enough to need it", () => {
+    const many = Array.from({ length: 8 }, (_, i) => ({ ...bare, id: `00000000-0000-4000-8000-00000000010${i}`, handle: `fixture_${i}` }));
+    const render = (list: ShortlistCandidate[]) => renderToStaticMarkup(<CampaignShortlist candidates={list} canPick copy={getDictionary("ko").brandWorkspace.shortlist} locale="ko" />);
+    expect(render(many)).toContain("data-shortlist-search");
+    expect(render(many.slice(0, 7))).not.toContain("data-shortlist-search");
   });
 
   it("sorts by views and engagement with unknown figures last", () => {
