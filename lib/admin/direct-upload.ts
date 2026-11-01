@@ -42,7 +42,7 @@ export function uploadFailureText(reason: UploadFailure, labels: UploadFailureLa
 /**
  * Only types the server allowlist accepts (lib/prompts/media.ts). A browser that reports no type for a
  * file (some Windows setups do for .mov) would otherwise send `application/octet-stream` and be
- * refused as `bad_type` for a perfectly good clip. A type the browser DID report is never replaced.
+ * refused as `bad_type` for a perfectly good clip. A type the browser DID report is only ever replaced by its canonical name.
  */
 const MIME_BY_EXTENSION: Record<string, string> = {
   mp4: 'video/mp4',
@@ -61,8 +61,33 @@ const MIME_BY_EXTENSION: Record<string, string> = {
   flac: 'audio/flac',
 };
 
+/**
+ * Names browsers report for formats the allowlist already takes (staff report, 2026-11-01: audio
+ * would not attach). Chrome on Windows calls an .m4a `audio/x-m4a`, and the type comes from the
+ * machine's registry, so the same file can arrive under any of these.
+ */
+const AUDIO_MIME_ALIASES: Record<string, string> = {
+  'audio/mp3': 'audio/mpeg',
+  'audio/mpeg3': 'audio/mpeg',
+  'audio/x-mp3': 'audio/mpeg',
+  'audio/x-mpeg': 'audio/mpeg',
+  'audio/x-mpeg-3': 'audio/mpeg',
+  'audio/m4a': 'audio/mp4',
+  'audio/x-m4a': 'audio/mp4',
+  'audio/x-aac': 'audio/aac',
+  'audio/vnd.dlna.adts': 'audio/aac',
+  'audio/x-flac': 'audio/flac',
+  'audio/wave': 'audio/wav',
+  'audio/vnd.wave': 'audio/wav',
+};
+
+export function canonicalMime(mime: string): string {
+  const type = mime.split(';')[0]!.trim().toLowerCase();
+  return AUDIO_MIME_ALIASES[type] ?? mime;
+}
+
 export function uploadMime(filename: string, browserType: string): string {
-  if (browserType) return browserType;
+  if (browserType) return canonicalMime(browserType);
   const extension = /\.([A-Za-z0-9]{1,8})$/.exec(filename.trim())?.[1]?.toLowerCase();
   return (extension && MIME_BY_EXTENSION[extension]) || 'application/octet-stream';
 }

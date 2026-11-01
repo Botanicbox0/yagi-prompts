@@ -4761,6 +4761,8 @@ export const ko: Dictionary = {
     mediaVideoZone: '결과 영상을 끌어다 놓거나 클릭해서 선택하세요',
     mediaVideoReplace: '다시 끌어다 놓으면 교체됩니다',
     mediaFrameScrub: '프레임',
+    mediaFrameLoading: '영상을 불러오는 중입니다.',
+    mediaFrameUnavailable: '이 브라우저에서 영상을 열 수 없어 프레임을 고를 수 없습니다. 포스터 이미지를 직접 올려 주세요.',
     mediaFramePick: '이 프레임을 포스터로',
     mediaFramePicked: '{time}초 프레임이 포스터로 선택됨',
     mediaPosterZone: '포스터 이미지를 끌어다 놓거나 클릭해서 선택하세요',

@@ -4797,6 +4797,8 @@ export const en = {
     mediaVideoZone: 'Drop the result clip here, or click to pick',
     mediaVideoReplace: 'Drop again to replace',
     mediaFrameScrub: 'Frame',
+    mediaFrameLoading: 'Loading the clip.',
+    mediaFrameUnavailable: 'This browser cannot open the clip, so no frame can be picked. Upload a poster image instead.',
     mediaFramePick: 'Use this frame as the poster',
     mediaFramePicked: 'Frame at {time}s set as the poster',
     mediaPosterZone: 'Drop a poster image here, or click to pick',
