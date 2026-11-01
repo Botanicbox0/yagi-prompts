@@ -2,13 +2,13 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("@/lib/db/connect", () => ({ getSqlRunner: async () => null }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh() {} }) }));
 import { renderToStaticMarkup } from "react-dom/server";
-import { CampaignShortlist, CandidateSheet } from "@/components/brand-workspace/shortlist";
+import { CampaignShortlist, CandidateSheet, shortlistSheet } from "@/components/brand-workspace/shortlist";
 import { ShortlistTriage, type TriageDoor } from "@/components/brand-workspace/shortlist-triage";
 import { ADMIN_OPERATIONS } from "@/lib/admin/operations";
 import { ProjectTabs } from "@/components/brand-workspace/project-tabs";
 import { getDictionary } from "@/lib/i18n/dictionaries";
 import type { ShortlistCandidate, StudioShortlistCandidate } from "@/lib/brands/shortlist/service";
-import { shortlistCount, shortlistFit, shortlistMedian, shortlistTags, sortShortlist } from "@/lib/brands/shortlist/format";
+import { shortlistCount, shortlistCsv, shortlistFit, shortlistMedian, shortlistTags, sortShortlist } from "@/lib/brands/shortlist/format";
 import { brandRouteAllowed, adminRouteAllowed } from "@/lib/routing/surfaces";
 import { shortlistWorkerAuthorized } from "@/lib/brands/shortlist/http";
 
@@ -154,6 +154,26 @@ describe("campaign shortlist", () => {
     expect(html).toContain("data-shortlist-studio-note");
     expect(html).toContain('href="#studio-tools"');
     expect(html).not.toContain("고른 후보 비교는 누구나 할 수 있어요.");
+  });
+
+  it("saves a sheet Excel reads as plain data, with only what the cards show", () => {
+    const copy = getDictionary("ko").brandWorkspace.shortlist;
+    const csv = shortlistSheet([{ ...one, confirmed: true }, { ...bare, displayName: "=SUM(A1)" }], () => "none", copy);
+    expect(csv.startsWith("\uFEFF핸들,이름,")).toBe(true);
+    const [, first, second] = csv.trim().split("\r\n");
+    expect(first).toContain("fixture.one,Fixture One,뷰티,https://www.instagram.com/fixture.one/,섭외 확정,67000,10000,39000,");
+    expect(second).toContain("fixture_two,'=SUM(A1),");
+    expect(csv).not.toMatch(/단가|비용|fee/i);
+    expect(shortlistCsv(["a"], [['he said "hi", ok'], [null], ["@x"]])).toBe('\uFEFFa\r\n"he said ""hi"", ok"\r\n\r\n\'@x\r\n');
+  });
+
+  it("offers the list menu to everyone, and sending to TWINGS is a choice made from inside it", () => {
+    const copy = getDictionary("ko").brandWorkspace.shortlist;
+    for (const canPick of [true, false]) {
+      const html = renderToStaticMarkup(<CampaignShortlist candidates={[one]} canPick={canPick} projectId="00000000-0000-4000-8000-000000000009" copy={copy} locale="ko" />);
+      expect(html).toContain('data-shortlist-list-menu="shown"');
+      expect(html).not.toContain("data-shortlist-list-action");
+    }
   });
 
   it("offers search only when the list is long enough to need it", () => {

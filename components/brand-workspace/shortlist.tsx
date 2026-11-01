@@ -5,7 +5,7 @@ import { interpolate } from "@/lib/i18n/format";
 import type { ShortlistCandidate } from "@/lib/brands/shortlist/service";
 import type { ShortlistChoice, ShortlistMetrics } from "@/lib/brands/shortlist/schema";
 import {
-  SHORTLIST_SORTS, SHORTLIST_UNKNOWN, shortlistAverage, shortlistCount, shortlistDay, shortlistMedian, shortlistPercent, shortlistSortValue,
+  SHORTLIST_SORTS, SHORTLIST_UNKNOWN, shortlistAverage, shortlistCount, shortlistCsv, shortlistDay, shortlistMedian, shortlistPercent, shortlistSortValue,
   shortlistTags, sortShortlist, type ShortlistSort,
 } from "@/lib/brands/shortlist/format";
 
@@ -31,10 +31,11 @@ const choiceOf = (c: ShortlistCandidate): ShortlistChoice => (c.picked ? "picked
  * prefer, set aside or clear, one at a time or for a selection ("all on screen" included), with undo.
  * Set-aside candidates leave the main tab for their own; a confirmed booking shows as "섭외 확정".
  * Two to four selected compare side by side, and the bar says what a selection can do next. A viewer
- * who cannot mark selects for comparing only. No fee, note or recruiting detail exists in what this
- * receives.
+ * who cannot mark selects for comparing only. The list menu copies the handles, saves a sheet, or sends
+ * the names to TWINGS as a campaign message, for the selection or for everyone on screen. No fee, note
+ * or recruiting detail exists in what this receives.
  */
-export function CampaignShortlist({ candidates, canPick, copy, locale, defaultView = "cards", manageHref }: {
+export function CampaignShortlist({ candidates, canPick, copy, locale, defaultView = "cards", manageHref, projectId }: {
   candidates: ShortlistCandidate[];
   canPick: boolean;
   copy: Copy;
@@ -43,6 +44,8 @@ export function CampaignShortlist({ candidates, canPick, copy, locale, defaultVi
   defaultView?: View;
   /** The TWINGS team's view: this is what the client sees, and where the team manages it instead. */
   manageHref?: string;
+  /** Where a list sent to TWINGS goes; without it the menu only copies and saves. */
+  projectId?: string;
 }) {
   const [sort, setSort] = useState<ShortlistSort>("followers");
   const [tab, setTab] = useState<Tab>("open");
@@ -54,6 +57,7 @@ export function CampaignShortlist({ candidates, canPick, copy, locale, defaultVi
   const [comparing, setComparing] = useState(false);
   const [query, setQuery] = useState("");
   const [openId, setOpenId] = useState<string | null>(null);
+  const [sending, setSending] = useState<ShortlistCandidate[] | null>(null);
   useEffect(() => { setChoices(new Map(candidates.map((c) => [c.id, choiceOf(c)]))); }, [candidates]);
   // The layout is a per-browser preference; the page renders cards until it is read.
   useEffect(() => {
@@ -146,6 +150,28 @@ export function CampaignShortlist({ candidates, canPick, copy, locale, defaultVi
   const mark = (ids: string[], next: ShortlistChoice) => apply([[next, ids]], interpolate(copy.done[next], { count: ids.length }));
   const toggleOne = (c: ShortlistCandidate, target: "picked" | "passed") => mark([c.id], choice(c) === target ? "none" : target);
 
+  async function copyHandles(people: ShortlistCandidate[]) {
+    try {
+      await navigator.clipboard.writeText(people.map((c) => `@${c.handle}`).join("\n"));
+      setToast({ message: interpolate(copy.list.copied, { count: people.length }) });
+    } catch {
+      setToast({ message: copy.list.copyFailed });
+    }
+  }
+  function saveSheet(people: ShortlistCandidate[]) {
+    const url = URL.createObjectURL(new Blob([shortlistSheet(people, choice, copy)], { type: "text/csv;charset=utf-8" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${copy.list.fileName}-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+    setToast({ message: interpolate(copy.list.saved, { count: people.length }) });
+  }
+  const canSend = canPick && !manageHref && Boolean(projectId);
+  const listMenu = (people: ShortlistCandidate[], up: boolean) => (
+    <ListMenu people={people} up={up} canSend={canSend} copy={copy} onCopy={copyHandles} onSave={saveSheet} onSend={setSending} />
+  );
+
   const toggleSelect = (id: string) => setSelected((current) => {
     const next = new Set(current);
     if (next.has(id)) next.delete(id);
@@ -214,6 +240,7 @@ export function CampaignShortlist({ candidates, canPick, copy, locale, defaultVi
               </button>
             ))}
           </div>
+          {shown.length > 0 && listMenu(shown, false)}
         </div>
       </div>
       {shown.length > 0 && view === "cards" && canPick && (
@@ -259,6 +286,7 @@ export function CampaignShortlist({ candidates, canPick, copy, locale, defaultVi
               {chosen.length === 1 ? copy.compareNeedOne : interpolate(copy.compareTooMany, { max: COMPARE_MAX })}
             </small>
           )}
+          {listMenu(chosen, true)}
           <button type="button" className="bw-triage-link" onClick={() => setSelected(new Set())}>{copy.clearSelection}</button>
         </div>
       )}
@@ -267,6 +295,10 @@ export function CampaignShortlist({ candidates, canPick, copy, locale, defaultVi
           position={openedIndex >= 0 ? `${openedIndex + 1} / ${shown.length}` : null}
           onPick={() => toggleOne(opened, "picked")} onPass={() => toggleOne(opened, "passed")} onClose={() => setOpenId(null)}
           onStep={shown.length > 1 ? step : null} />
+      )}
+      {sending && projectId && (
+        <SendSheet people={sending} projectId={projectId} copy={copy} onClose={() => setSending(null)}
+          onSent={() => { setToast({ message: interpolate(copy.list.sent, { count: sending.length }) }); setSending(null); setSelected(new Set()); }} />
       )}
       {comparing && compared.length > 1 && <CompareSheet candidates={compared} copy={copy} locale={locale} onClose={() => setComparing(false)} />}
       {toast && (
@@ -481,7 +513,7 @@ function useSheet(onClose: () => void, onStep?: ((by: 1 | -1) => void) | null) {
       if (event.key === "Escape") return handlers.current.onClose();
       if (event.key === "ArrowLeft" || event.key === "ArrowRight") return handlers.current.onStep?.(event.key === "ArrowLeft" ? -1 : 1);
       if (event.key !== "Tab" || !root.current) return;
-      const stops = [...root.current.querySelectorAll<HTMLElement>("a[href], button:not(:disabled)")];
+      const stops = [...root.current.querySelectorAll<HTMLElement>("a[href], button:not(:disabled), textarea")];
       const edge = stops[event.shiftKey ? 0 : stops.length - 1];
       if (edge && document.activeElement === edge) {
         event.preventDefault();
@@ -684,6 +716,104 @@ export function CandidateSheet({ candidate: c, choice, canPick, busy, medians, p
           )}
         </div>
         <button type="button" className="bw-shortlist-sheet-close" aria-label={copy.close} title={copy.close} onClick={onClose} data-sheet-close><CrossIcon /></button>
+      </div>
+    </div>
+  );
+}
+
+/** The sheet behind "save to Excel": raw figures so they sort, and only what the cards already show. */
+export function shortlistSheet(people: readonly ShortlistCandidate[], choice: (c: ShortlistCandidate) => ShortlistChoice, copy: Copy): string {
+  const columns = [copy.list.columns.handle, copy.list.columns.name, copy.list.columns.category, copy.list.columns.profile, copy.list.columns.state,
+    copy.followers, copy.viewsMedian, copy.viewsMax, copy.engagement, copy.adShare, copy.list.columns.measuredOn];
+  const state = (c: ShortlistCandidate) => {
+    const mark = choice(c);
+    return [c.confirmed && copy.confirmed, mark === "picked" && copy.preferred, mark === "passed" && copy.passed].filter(Boolean).join(" · ");
+  };
+  return shortlistCsv(columns, people.map((c) => [
+    c.handle, c.displayName, c.category, `https://www.instagram.com/${c.handle}/`, state(c),
+    c.metrics.followers, c.metrics.viewsMedian90d, c.metrics.viewsMax90d, shortlistSortValue(c.metrics, "engagement"), c.metrics.adShare, c.measuredOn,
+  ]));
+}
+
+/** What to do with a list of people: the selection in the bar, everyone on screen in the toolbar. */
+function ListMenu({ people, up, canSend, copy, onCopy, onSave, onSend }: {
+  people: ShortlistCandidate[];
+  up: boolean;
+  canSend: boolean;
+  copy: Copy;
+  onCopy: (people: ShortlistCandidate[]) => void;
+  onSave: (people: ShortlistCandidate[]) => void;
+  onSend: (people: ShortlistCandidate[]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const root = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const away = (event: MouseEvent) => { if (!root.current?.contains(event.target as Node)) setOpen(false); };
+    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") setOpen(false); };
+    document.addEventListener("mousedown", away);
+    document.addEventListener("keydown", onKey);
+    return () => { document.removeEventListener("mousedown", away); document.removeEventListener("keydown", onKey); };
+  }, [open]);
+  const run = (action: (people: ShortlistCandidate[]) => void) => () => { setOpen(false); action(people); };
+  return (
+    <div ref={root} className="bw-shortlist-menu" data-up={up ? "true" : undefined} data-shortlist-list-menu={up ? "selection" : "shown"}>
+      <button type="button" className={up ? "bw-button" : "bw-shortlist-menu-open"} aria-expanded={open} aria-haspopup="menu" onClick={() => setOpen(!open)}>{copy.list.menu}</button>
+      {open && (
+        <div className="bw-shortlist-menu-pop" role="menu" aria-label={copy.list.menu}>
+          <p>{interpolate(up ? copy.selected : copy.list.scopeShown, { count: people.length })}</p>
+          <button type="button" role="menuitem" onClick={run(onCopy)} data-shortlist-list-action="copy">{copy.list.copy}</button>
+          <button type="button" role="menuitem" onClick={run(onSave)} data-shortlist-list-action="save">{copy.list.save}</button>
+          {canSend && <button type="button" role="menuitem" onClick={run(onSend)} data-shortlist-list-action="send">{copy.list.send}</button>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** A list sent to TWINGS is a campaign message, so it stays in the conversation for both sides. */
+function SendSheet({ people, projectId, copy, onClose, onSent }: { people: ShortlistCandidate[]; projectId: string; copy: Copy; onClose: () => void; onSent: () => void }) {
+  const root = useSheet(onClose);
+  const [lead, setLead] = useState(copy.list.sendLead);
+  const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const requestId = useRef<string | null>(null);
+  async function send() {
+    setBusy(true);
+    setFailed(false);
+    requestId.current ??= crypto.randomUUID();
+    const body = [lead.trim(), people.map((c) => `@${c.handle}`).join("\n")].filter(Boolean).join("\n\n");
+    try {
+      const response = await fetch("/api/brand-workspace", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ operation: "message.send", input: { projectId, requestId: requestId.current, body } }),
+      });
+      const result = await response.json().catch(() => null);
+      if (response.ok && result?.ok === true) return onSent();
+      setFailed(true);
+    } catch {
+      setFailed(true);
+    }
+    setBusy(false);
+  }
+  return (
+    <div className="bw-triage-sheet-bg bw-no-print" onMouseDown={(e) => { if (e.target === e.currentTarget && !busy) onClose(); }}>
+      <div ref={root} className="bw-triage-sheet bw-shortlist-send" role="dialog" aria-modal="true" aria-labelledby="shortlist-send-title" data-shortlist-send-sheet={people.length}>
+        <h3 id="shortlist-send-title">{copy.list.sendTitle}</h3>
+        <p className="bw-muted">{copy.list.sendHint}</p>
+        <label className="bw-shortlist-send-lead">
+          <span>{copy.list.sendLabel}</span>
+          <textarea value={lead} maxLength={300} rows={2} onChange={(e) => setLead(e.target.value)} />
+        </label>
+        <ul className="bw-triage-faces">
+          {people.map((c) => <li key={c.id}><Portrait candidate={c} size={24} />@{c.handle}</li>)}
+        </ul>
+        {failed && <p role="alert" className="bw-error">{copy.list.sendFailed}</p>}
+        <div className="bw-triage-sheet-foot">
+          <button type="button" className="bw-button" onClick={onClose} disabled={busy} data-sheet-close>{copy.close}</button>
+          <button type="button" className="bw-button bw-primary" onClick={send} disabled={busy} data-shortlist-send>{interpolate(copy.list.sendButton, { count: people.length })}</button>
+        </div>
       </div>
     </div>
   );

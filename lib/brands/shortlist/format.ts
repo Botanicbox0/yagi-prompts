@@ -29,6 +29,20 @@ export function shortlistDay(day: string, locale: string): string {
   return new Intl.DateTimeFormat(tag(locale), { month: locale === 'ko' ? 'long' : 'short', day: 'numeric', timeZone: 'UTC' }).format(date);
 }
 
+/**
+ * A comma-separated sheet Excel opens with Korean intact (the byte order mark) and as plain data: text
+ * that Excel would read as a formula starts with an apostrophe. Figures stay raw numbers so they sort.
+ */
+export function shortlistCsv(columns: readonly string[], rows: ReadonlyArray<ReadonlyArray<string | number | null | undefined>>): string {
+  const cell = (value: string | number | null | undefined) => {
+    if (value == null) return '';
+    if (typeof value === 'number') return String(value);
+    const text = /^[=+\-@\t\r]/.test(value) ? `'${value}` : value;
+    return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+  };
+  return `\uFEFF${[columns, ...rows].map((row) => row.map(cell).join(',')).join('\r\n')}\r\n`;
+}
+
 export type ShortlistSort = 'followers' | 'views' | 'engagement';
 export const SHORTLIST_SORTS: readonly ShortlistSort[] = ['followers', 'views', 'engagement'];
 /** The figure each sort compares; the higher of feed and Reels rates for engagement. */
