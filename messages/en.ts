@@ -573,7 +573,7 @@ export const en = {
           {
             "label": "One-line direction",
             "title": "One line becomes an expert’s brief",
-            "body": "Write “next to a glass sphere, on the blue set” and it turns into a shot brief with the lens, light and colour values filled in.",
+            "body": "Write “on glass beads, in an ice-blue set” and it turns into a shot brief with the lens, light and colour values filled in.",
             "status": "Coming"
           }
         ],
@@ -610,17 +610,16 @@ export const en = {
           ]
         },
         "direction": {
-          "prompt": "Next to a glass sphere, on the blue set",
+          "prompt": "On glass beads, in an ice-blue set",
           "brief": "Shot brief",
           "spec": [
-            "85mm lens",
-            "Low camera",
-            "Light pooling on the floor",
-            "Set #3875C5",
-            "Highlights #F3F7FA"
+            "100mm lens",
+            "Looking straight down",
+            "Glass beads and white ribbon",
+            "Liquid #3875C5",
+            "Backdrop #F3F7FA"
           ],
-          "outputs": "Three shots from this brief",
-          "clip": "A film from the brief"
+          "outputs": "Three shots from this brief"
         }
       },
       "work": {
@@ -708,7 +707,7 @@ export const en = {
         "title": "No more\ngeneric AI images",
         "body": "Bring your brand files to a demo and see the results.",
         "cta": "Book a demo",
-        "filmLabel": "The YAGI heart perfume on a blue set"
+        "filmLabel": "A model holding the YAGI heart perfume in both hands"
       },
       "metaTitle": "Your brand’s own AI media engine",
       "metaDescription": "TWINGS for Brands is your brand’s own AI media engine. It already knows your brand, so anyone on your team can create expert-level images and films, and remix great formats into your brand.",
@@ -764,27 +763,33 @@ export const en = {
       "finish": {
         "eyebrow": "Local fixes",
         "soon": "Coming",
-        "title": "Paint only what needs fixing",
-        "body": "Redraw just the blurred logo or the skin that looks like AI. Everything else stays as it was.",
+        "title": "Box only what needs fixing",
+        "body": "A logo or a face that sits small in a wide shot blurs because it has too few pixels. Box that part, redraw it, and blend it back with soft edges. Everything outside the box stays as it was.",
         "raw": "First shot",
         "ours": "Fixed",
         "hint": "What to fix",
         "slider": "Position of the divider between the two shots",
+        "wide": "Full shot",
+        "wideAlt": "Full shot: a model holding a perfume in both hands on a blue set",
+        "image": "@Image",
         "pairs": [
           {
             "chip": "Logo",
-            "note": "Only the blurred mark was painted and redrawn.",
-            "raw": "First shot: a perfume with a soft mark",
-            "ours": "Fixed: a perfume with a sharp mark"
+            "prompt": "Keep the background texture and every element of @Image1, and blend the logo from @Image2 into the glass in the same direction",
+            "note": "Only the logo inside the box was redrawn, then blended back with soft edges.",
+            "raw": "First shot: a perfume with a blurred logo",
+            "ours": "Fixed: a perfume with a sharp logo"
           },
           {
-            "chip": "Garment detail",
-            "note": "Only the buckle and ribbon were redrawn. The rest of the fur is untouched.",
-            "raw": "First shot: a smudged buckle",
-            "ours": "Fixed: a clean buckle"
+            "chip": "Product detail",
+            "prompt": "Keep the shape in @Image1 and bring back the detail of the cap and ribbon",
+            "note": "Only the cap and ribbon inside the box were redrawn. The bottle keeps its shape.",
+            "raw": "First shot: a smeared cap and ribbon",
+            "ours": "Fixed: a crisp cap and ribbon"
           },
           {
             "chip": "Skin",
+            "prompt": "Keep the face in @Image1 and bring back the skin texture and stray hairs",
             "note": "Pores and stray hairs came back. Her features did not change.",
             "raw": "First shot: over-smooth skin",
             "ours": "Fixed: skin with real texture"

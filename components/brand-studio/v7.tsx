@@ -24,7 +24,18 @@ type Media = { media?: LandingMedia };
 const V = (name: string, ext = 'webp') => `/reel/landing/v7/${name}.${ext}`;
 const L = (name: string, ext = 'webp') => `/reel/landing/${name}.${ext}`;
 
+/**
+ * The beauty cuts are 16:9 frames the founder passed (2026-11-01). Where a slot shows them at 3:4, this keeps the
+ * bottle in the crop.
+ */
+const CUT_FOCUS: Record<(typeof LANDING_CUTS)[number], string> = { cheek: '77% 50%', hands: '52% 50%', scent: '95% 50%', pump: '21% 50%', beads: '50% 50%', mark: '31% 50%' };
 const PAIRS = ['logo', 'garment', 'skin'] as const;
+/**
+ * The boxes on the wide shot (c-wide), in its pixels: 1429 x 1072, a 4:3 crop of the passed frame. The zoomed pairs (c-*-raw, c-*-ours)
+ * are these regions, so replacing c-wide in /admin/landing-media means moving the boxes too.
+ */
+const FIX_SHOT = { width: 1429, height: 1072 };
+const FIX_BOXES = { logo: [230, 530, 220, 220], garment: [210, 400, 260, 260], skin: [410, 180, 400, 400] } as const;
 /** YAGI's demo palette: the blue world from lib/design/identity.ts, as a brand kit would hold it. */
 const YAGI_PALETTE = ['#f3f7fa', '#d0dbe7', '#3875c5', '#2e5f9f', '#16233f'] as const;
 const DOORS = ['work', 'campaign', 'production'] as const;
@@ -164,7 +175,6 @@ function KitStage({ copy }: { copy: Copy }) {
 
 function MemoryStage({ copy, media }: { copy: Copy } & Media) {
   const m = copy.first.memory;
-  const shots = LANDING_CUTS.map((key) => landingSrc(media, `cut-${key}`));
   return (
     <div className={s.card} data-stage="memory">
       <div className={s.cardHead}>
@@ -172,9 +182,9 @@ function MemoryStage({ copy, media }: { copy: Copy } & Media) {
         <span className={s.campaigns}>{m.campaigns.map((c, i) => <span key={c} data-current={i === m.campaigns.length - 1 ? 'true' : undefined}>{c}</span>)}</span>
       </div>
       <ul className={s.memoryGrid}>
-        {shots.map((src, index) => (
-          <li key={src} className={s.memoryShot}>
-            <img src={src} alt="" width={300} height={400} loading="lazy" decoding="async" />
+        {LANDING_CUTS.map((key, index) => (
+          <li key={key} className={s.memoryShot}>
+            <img src={landingSrc(media, `cut-${key}`)} alt="" width={1440} height={804} style={{ objectPosition: CUT_FOCUS[key] }} loading="lazy" decoding="async" />
             <span className={s.approved}>✓ {m.approved}</span>
             {m.notes[index] ? <span className={`${s.memoryNote} ${s.mono}`}>{m.notes[index]}</span> : null}
           </li>
@@ -198,9 +208,9 @@ function DirectionStage({ copy, media }: { copy: Copy } & Media) {
         <ul className={s.spec}>{d.spec.map((item) => <li key={item} className={s.mono}>{item}</li>)}</ul>
       </div>
       <ul className={s.outputs} aria-label={d.outputs}>
-        <li><img src={landingSrc(media, 'cut-sphere')} alt="" width={600} height={800} loading="lazy" decoding="async" /></li>
-        <li><Film src={V('dir-clip', 'mp4')} poster={V('dir-clip', 'jpg')} label={d.clip} /></li>
-        <li><img src={landingSrc(media, 'cut-beads')} alt="" width={600} height={800} loading="lazy" decoding="async" /></li>
+        {(['beads', 'pump', 'mark'] as const).map((key) => (
+          <li key={key}><img src={landingSrc(media, `cut-${key}`)} alt="" width={1440} height={804} style={{ objectPosition: CUT_FOCUS[key] }} loading="lazy" decoding="async" /></li>
+        ))}
       </ul>
       <p className={s.cardFoot}><span>{d.outputs}</span></p>
     </div>
@@ -311,7 +321,7 @@ export function V7Work({ copy, studio, media }: { copy: Copy; studio: StudioCopy
       <ul data-asset-cuts className={s.cuts}>
         {LANDING_CUTS.map((key) => (
           <li key={key} data-asset-cut={key}>
-            <img src={landingSrc(media, `cut-${key}`)} alt="" width={1000} height={1333} loading="lazy" decoding="async" />
+            <img src={landingSrc(media, `cut-${key}`)} alt="" width={1440} height={804} loading="lazy" decoding="async" />
           </li>
         ))}
       </ul>
@@ -359,24 +369,35 @@ export function V7Work({ copy, studio, media }: { copy: Copy; studio: StudioCopy
 
 export function V7Finish({ copy, media }: { copy: Copy } & Media) {
   const f = copy.finish;
-  const pairs = PAIRS.map((id, index) => ({
-    id,
-    raw: landingSrc(media, `c-${id}-raw`),
-    ours: landingSrc(media, `c-${id}-ours`),
-    chip: f.pairs[index]!.chip,
-    note: f.pairs[index]!.note,
-    alt: [f.pairs[index]!.raw, f.pairs[index]!.ours] as [string, string],
-  }));
+  const pairs = PAIRS.map((id, index) => {
+    const [x, y, width, height] = FIX_BOXES[id];
+    const raw = landingSrc(media, `c-${id}-raw`);
+    return {
+      id,
+      raw,
+      ours: landingSrc(media, `c-${id}-ours`),
+      chip: f.pairs[index]!.chip,
+      prompt: f.pairs[index]!.prompt,
+      note: f.pairs[index]!.note,
+      alt: [f.pairs[index]!.raw, f.pairs[index]!.ours] as [string, string],
+      box: { left: x / FIX_SHOT.width, top: y / FIX_SHOT.height, width: width / FIX_SHOT.width, height: height / FIX_SHOT.height },
+      attachments: id === 'logo' ? [raw, '/brand/yagi-mark-black.png'] : [raw],
+    };
+  });
   return (
     <section data-v7-finish data-section data-theme="light" className={`${s.section} ${s.sky}`}>
-      <div className={`${s.shell} ${s.split}`}>
-        <Reveal className={s.head}>
-          <Eyebrow status={f.soon}>{f.eyebrow}</Eyebrow>
-          <h2 className={s.h2}>{f.title}</h2>
-          <p className={s.lead}>{f.body}</p>
+      <div className={s.shell}>
+        <Reveal className={`${s.head} ${s.headRow}`}>
+          <div>
+            <Eyebrow status={f.soon}>{f.eyebrow}</Eyebrow>
+            <h2 className={s.h2}>{f.title}</h2>
+          </div>
+          <div className={s.headAside}>
+            <p className={s.lead}>{f.body}</p>
+          </div>
         </Reveal>
-        <Reveal className={s.compareCol} data-contrast>
-          <Compare pairs={pairs} labels={{ raw: f.raw, ours: f.ours, hint: f.hint, slider: f.slider }} />
+        <Reveal data-contrast>
+          <Compare wide={landingSrc(media, 'c-wide')} pairs={pairs} labels={{ raw: f.raw, ours: f.ours, hint: f.hint, slider: f.slider, wide: f.wide, wideAlt: f.wideAlt, image: f.image }} />
         </Reveal>
       </div>
     </section>
@@ -462,7 +483,7 @@ export function V7Production({ copy, actions }: { copy: Copy; actions: ReactNode
   );
 }
 
-export function V7Closing({ copy, locale, children }: { copy: Copy; locale: Locale; children?: ReactNode }) {
+export function V7Closing({ copy, locale, media, children }: { copy: Copy; locale: Locale; children?: ReactNode } & Media) {
   const c = copy.closing;
   return (
     <section id="brands" data-v7-closing data-brands data-section data-theme="dark" className={`${s.closing} scroll-mt-24`}>
@@ -476,7 +497,7 @@ export function V7Closing({ copy, locale, children }: { copy: Copy; locale: Loca
           </div>
         </div>
         <figure className={s.closingMedia}>
-          <Film src={V('closing', 'mp4')} poster={V('closing', 'jpg')} label={c.filmLabel} />
+          <img src={landingSrc(media, 'cut-hands')} alt={c.filmLabel} width={1440} height={804} style={{ objectPosition: CUT_FOCUS.hands }} loading="lazy" decoding="async" />
         </figure>
       </div>
       {children}
