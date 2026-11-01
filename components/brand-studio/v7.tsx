@@ -2,7 +2,7 @@ import type { CSSProperties, ReactNode } from 'react';
 import type { Dictionary } from '@/lib/i18n/dictionaries';
 import type { Locale } from '@/lib/i18n/config';
 import { brandEnquiryHref } from '@/lib/campaigns/links';
-import { LANDING_CUTS, landingSrc, studioSrc, type LandingMedia } from '@/lib/content/landing-media';
+import { LANDING_CUTS, LANDING_GRID, landingSrc, studioSrc, type LandingMedia } from '@/lib/content/landing-media';
 import { Compare, ChapterScene, Film, HeroFilm, Remix, Reveal, Tabs, Track, TypeLine, type RemixFormat } from './v7-client';
 import { StudioVto } from './studio-vto';
 import s from './v7.module.css';
@@ -31,11 +31,11 @@ const L = (name: string, ext = 'webp') => `/reel/landing/${name}.${ext}`;
 const CUT_FOCUS: Record<(typeof LANDING_CUTS)[number], string> = { cheek: '77% 50%', hands: '52% 50%', scent: '95% 50%', pump: '21% 50%', beads: '50% 50%', mark: '31% 50%' };
 const PAIRS = ['logo', 'garment', 'skin'] as const;
 /**
- * The boxes on the wide shot (c-wide), in its pixels: 1429 x 1072, a 4:3 crop of the passed frame. The zoomed pairs (c-*-raw, c-*-ours)
- * are these regions, so replacing c-wide in /admin/landing-media means moving the boxes too.
+ * Each local fix has its own wide shot (c-*-wide), 1536 x 2048 as generated. The box is in those pixels and the zoomed
+ * pair (c-*-raw, c-*-ours) is that region, so replacing a wide shot in /admin/landing-media means moving its box too.
  */
-const FIX_SHOT = { width: 1429, height: 1072 };
-const FIX_BOXES = { logo: [230, 530, 220, 220], garment: [210, 400, 260, 260], skin: [410, 180, 400, 400] } as const;
+const FIX_SHOT = { width: 1536, height: 2048 };
+const FIX_BOXES = { logo: [628, 1140, 220, 220], garment: [320, 810, 640, 640], skin: [600, 255, 300, 300] } as const;
 /** YAGI's demo palette: the blue world from lib/design/identity.ts, as a brand kit would hold it. */
 const YAGI_PALETTE = ['#f3f7fa', '#d0dbe7', '#3875c5', '#2e5f9f', '#16233f'] as const;
 const DOORS = ['work', 'campaign', 'production'] as const;
@@ -113,7 +113,7 @@ export function V7Hero({ copy, locale }: { copy: Copy; locale: Locale }) {
   return (
     <section data-v7-hero data-campaign-hero data-section data-theme="light" className={s.hero}>
       <div className={s.heroFrame} data-hero-film>
-        <HeroFilm className={s.heroFilm} specClassName={s.heroSpec} src={V('hero', 'mp4')} srcSmall={V('hero-720', 'mp4')} srcLarge={V('hero-2160', 'mp4')} poster={V('hero', 'jpg')} label={h.filmLabel} cues={HERO_CUES} />
+        <HeroFilm className={s.heroFilm} specClassName={s.heroSpec} src={V('hero', 'mp4')} srcSmall={V('hero-phone', 'mp4')} srcLarge={V('hero-2160', 'mp4')} poster={V('hero', 'jpg')} posterSmall={V('hero-phone', 'jpg')} label={h.filmLabel} cues={HERO_CUES} />
         <div className={s.heroScrim} aria-hidden="true" />
         <div className={s.heroCopy}>
           <h1 className={s.display}>{h.title}</h1>
@@ -279,7 +279,13 @@ export function V7Remix({ copy }: { copy: Copy }) {
       ratio: 16 / 9,
       src: V('rx-beauty-orig', 'mp4'),
       poster: V('rx-beauty-orig', 'jpg'),
-      edits: ['product', 'world'].map((id, index) => ({ id, ...beauty!.edits[index]!, src: V(`rx-beauty-${id}`, 'mp4'), poster: V(`rx-beauty-${id}`, 'jpg') })),
+      edits: ['product', 'world'].map((id, index) => ({
+        id,
+        ...beauty!.edits[index]!,
+        src: V(`rx-beauty-${id}`, 'mp4'),
+        poster: V(`rx-beauty-${id}`, 'jpg'),
+        ...(id === 'product' ? { attachment: V('rx-attach-edition', 'webp') } : {}),
+      })),
     },
   ];
   return (
@@ -380,6 +386,8 @@ export function V7Finish({ copy, media }: { copy: Copy } & Media) {
       prompt: f.pairs[index]!.prompt,
       note: f.pairs[index]!.note,
       alt: [f.pairs[index]!.raw, f.pairs[index]!.ours] as [string, string],
+      wide: landingSrc(media, `c-${id}-wide`),
+      wideAlt: f.pairs[index]!.wideAlt,
       box: { left: x / FIX_SHOT.width, top: y / FIX_SHOT.height, width: width / FIX_SHOT.width, height: height / FIX_SHOT.height },
       attachments: id === 'logo' ? [raw, '/brand/yagi-mark-black.png'] : [raw],
     };
@@ -397,7 +405,7 @@ export function V7Finish({ copy, media }: { copy: Copy } & Media) {
           </div>
         </Reveal>
         <Reveal data-contrast>
-          <Compare wide={landingSrc(media, 'c-wide')} pairs={pairs} labels={{ raw: f.raw, ours: f.ours, hint: f.hint, slider: f.slider, wide: f.wide, wideAlt: f.wideAlt, image: f.image }} />
+          <Compare pairs={pairs} labels={{ raw: f.raw, ours: f.ours, hint: f.hint, slider: f.slider, wide: f.wide, image: f.image }} />
         </Reveal>
       </div>
     </section>
@@ -496,9 +504,11 @@ export function V7Closing({ copy, locale, media, children }: { copy: Copy; local
             <a data-inquiry-trigger href={brandEnquiryHref(locale)} className={s.cta}>{c.cta}</a>
           </div>
         </div>
-        <figure className={s.closingMedia}>
-          <img src={landingSrc(media, 'cut-hands')} alt={c.filmLabel} width={1440} height={804} style={{ objectPosition: CUT_FOCUS.hands }} loading="lazy" decoding="async" />
-        </figure>
+        <ul data-closing-grid className={s.closingGrid} aria-label={c.gridLabel}>
+          {LANDING_GRID.map((n) => (
+            <li key={n}><img src={landingSrc(media, `grid-${n}`)} alt="" width={720} height={720} loading="lazy" decoding="async" /></li>
+          ))}
+        </ul>
       </div>
       {children}
     </section>

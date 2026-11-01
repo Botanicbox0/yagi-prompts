@@ -43,9 +43,11 @@ describe('the brand page shows the service before asking visitors to enquire', (
     // Hero: one inset film (a smaller file on phones), a quiet spec line, three doors to sections that exist.
     expect(html).toContain('data-hero-film');
     expect(html).toContain('src="/reel/landing/v7/hero.mp4"');
-    expect(html).toContain('src="/reel/landing/v7/hero-720.mp4"');
+    expect(html).toContain('src="/reel/landing/v7/hero-phone.mp4"');
     expect(html).toContain('src="/reel/landing/v7/hero-2160.mp4"');
-    expect(html).toContain('poster="/reel/landing/v7/hero.jpg"');
+    // The still behind the film: phones get the first frame of their own cut.
+    expect(html).toContain('src="/reel/landing/v7/hero.jpg"');
+    expect(html).toContain('srcSet="/reel/landing/v7/hero-phone.jpg"');
     expect(html).toContain('data-hero-spec');
     expect(html.match(/data-hero-door=/g)).toHaveLength(3);
     for (const id of ['work', 'campaign', 'production']) {
@@ -80,7 +82,10 @@ describe('the brand page shows the service before asking visitors to enquire', (
     for (const gone of ['film-beauty', 'film-runway-blue', 'cut-face', 'cut-recline']) expect(html).not.toContain(gone);
     // Local fixes: three real before/after pairs in a wipe compare.
     // A local fix shows the whole shot, the box on it, and what was asked.
-    expect(html).toContain('/reel/landing/c-wide.webp');
+    // Each local fix shows its own wide shot; the closing line sits beside nine squares.
+    for (const pair of ['logo', 'garment', 'skin']) expect(html).toContain(`/reel/landing/c-${pair}-wide.webp`);
+    expect(html).toContain('data-closing-grid');
+    for (const n of [1, 2, 3, 4, 5, 6, 7, 8, 9]) expect(html).toContain(`/reel/landing/grid-${n}.webp`);
     // 2026-11-01: only the frames the founder passed; the old cuts and short films are gone.
     for (const cut of ['cheek', 'hands', 'scent', 'pump', 'beads', 'mark']) expect(html).toContain(`/reel/landing/cut-${cut}.webp`);
     for (const gone of ['cut-flower', 'cut-sphere', 'cut-gel', 'v7/dir-clip', 'v7/closing']) expect(html).not.toContain(gone);
