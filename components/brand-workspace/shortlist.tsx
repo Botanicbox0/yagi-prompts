@@ -33,9 +33,10 @@ const choiceOf = (c: ShortlistCandidate): ShortlistChoice => (c.picked ? "picked
  * Two to four selected compare side by side, and the bar says what a selection can do next. A viewer
  * who cannot mark selects for comparing only. The list menu copies the handles, saves a sheet, or sends
  * the names to TWINGS as a campaign message, for the selection or for everyone on screen. No fee, note
- * or recruiting detail exists in what this receives.
+ * or recruiting detail exists in what this receives. The TWINGS team can switch to what the client sees:
+ * the same controls, working on this page only. Nothing is sent, and the server would refuse it anyway.
  */
-export function CampaignShortlist({ candidates, canPick, copy, locale, defaultView = "cards", manageHref, projectId }: {
+export function CampaignShortlist({ candidates, canPick: seatCanPick, copy, locale, defaultView = "cards", manageHref, projectId, canPreview = false, defaultPreview = false }: {
   candidates: ShortlistCandidate[];
   canPick: boolean;
   copy: Copy;
@@ -46,7 +47,12 @@ export function CampaignShortlist({ candidates, canPick, copy, locale, defaultVi
   manageHref?: string;
   /** Where a list sent to TWINGS goes; without it the menu only copies and saves. */
   projectId?: string;
+  /** The TWINGS team's read view, which offers the client's view as a preview. */
+  canPreview?: boolean;
+  defaultPreview?: boolean;
 }) {
+  const [preview, setPreview] = useState(defaultPreview && canPreview);
+  const canPick = seatCanPick || preview;
   const [sort, setSort] = useState<ShortlistSort>("followers");
   const [tab, setTab] = useState<Tab>("open");
   const [view, setView] = useState<View>(defaultView);
@@ -109,6 +115,7 @@ export function CampaignShortlist({ candidates, canPick, copy, locale, defaultVi
   }, [toast]);
 
   async function send(ids: string[], next: ShortlistChoice): Promise<boolean> {
+    if (preview) return true;
     try {
       const response = await fetch("/api/brand-workspace", {
         method: "POST",
@@ -147,7 +154,13 @@ export function CampaignShortlist({ candidates, canPick, copy, locale, defaultVi
     for (const [id, was] of before) inverse.set(was, [...(inverse.get(was) ?? []), id]);
     setToast({ message, undo: undoable ? [...inverse] : undefined });
   }
-  const mark = (ids: string[], next: ShortlistChoice) => apply([[next, ids]], interpolate(copy.done[next], { count: ids.length }));
+  const mark = (ids: string[], next: ShortlistChoice) => apply([[next, ids]], preview ? copy.preview.notSaved : interpolate(copy.done[next], { count: ids.length }));
+  const togglePreview = () => {
+    setPreview(!preview);
+    setChoices(new Map(candidates.map((c) => [c.id, choiceOf(c)])));
+    setSelected(new Set());
+    setToast(null);
+  };
   const toggleOne = (c: ShortlistCandidate, target: "picked" | "passed") => mark([c.id], choice(c) === target ? "none" : target);
 
   async function copyHandles(people: ShortlistCandidate[]) {
@@ -167,7 +180,7 @@ export function CampaignShortlist({ candidates, canPick, copy, locale, defaultVi
     URL.revokeObjectURL(url);
     setToast({ message: interpolate(copy.list.saved, { count: people.length }) });
   }
-  const canSend = canPick && !manageHref && Boolean(projectId);
+  const canSend = canPick && (preview || !canPreview) && Boolean(projectId);
   const listMenu = (people: ShortlistCandidate[], up: boolean) => (
     <ListMenu people={people} up={up} canSend={canSend} copy={copy} onCopy={copyHandles} onSave={saveSheet} onSend={setSending} />
   );
@@ -210,10 +223,11 @@ export function CampaignShortlist({ candidates, canPick, copy, locale, defaultVi
           {measured ? `${interpolate(copy.measuredOn, { date: shortlistDay(measured, locale) })} · ` : ""}{copy.basis}
         </p>
       </header>
-      {manageHref ? (
-        <p className="bw-note bw-shortlist-note bw-no-print" data-shortlist-studio-note>
-          {copy.studioNote} <a href={manageHref}>{copy.studioManage}</a>
-        </p>
+      {canPreview ? (
+        <div className="bw-note bw-shortlist-note bw-shortlist-team bw-no-print" data-shortlist-studio-note data-shortlist-preview={preview ? "on" : "off"}>
+          <span>{preview ? copy.preview.note : copy.studioNote} {!preview && manageHref && <a href={manageHref}>{copy.studioManage}</a>}</span>
+          <button type="button" className="bw-button" onClick={togglePreview} data-shortlist-preview-toggle>{preview ? copy.preview.close : copy.preview.open}</button>
+        </div>
       ) : !canPick && <p className="bw-note bw-shortlist-note bw-no-print">{copy.readOnly}</p>}
       <div className="bw-shortlist-tools bw-no-print">
         <div className="bw-shortlist-sorts" role="group" aria-label={copy.tabsLabel}>
@@ -297,8 +311,8 @@ export function CampaignShortlist({ candidates, canPick, copy, locale, defaultVi
           onStep={shown.length > 1 ? step : null} />
       )}
       {sending && projectId && (
-        <SendSheet people={sending} projectId={projectId} copy={copy} onClose={() => setSending(null)}
-          onSent={() => { setToast({ message: interpolate(copy.list.sent, { count: sending.length }) }); setSending(null); setSelected(new Set()); }} />
+        <SendSheet people={sending} projectId={projectId} preview={preview} copy={copy} onClose={() => setSending(null)}
+          onSent={() => { setToast({ message: preview ? copy.preview.notSaved : interpolate(copy.list.sent, { count: sending.length }) }); setSending(null); setSelected(new Set()); }} />
       )}
       {comparing && compared.length > 1 && <CompareSheet candidates={compared} copy={copy} locale={locale} onClose={() => setComparing(false)} />}
       {toast && (
@@ -772,13 +786,14 @@ function ListMenu({ people, up, canSend, copy, onCopy, onSave, onSend }: {
 }
 
 /** A list sent to TWINGS is a campaign message, so it stays in the conversation for both sides. */
-function SendSheet({ people, projectId, copy, onClose, onSent }: { people: ShortlistCandidate[]; projectId: string; copy: Copy; onClose: () => void; onSent: () => void }) {
+function SendSheet({ people, projectId, preview, copy, onClose, onSent }: { people: ShortlistCandidate[]; projectId: string; preview: boolean; copy: Copy; onClose: () => void; onSent: () => void }) {
   const root = useSheet(onClose);
   const [lead, setLead] = useState(copy.list.sendLead);
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
   const requestId = useRef<string | null>(null);
   async function send() {
+    if (preview) return onSent();
     setBusy(true);
     setFailed(false);
     requestId.current ??= crypto.randomUUID();

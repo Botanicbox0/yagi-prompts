@@ -311,6 +311,21 @@ describe("the brand's own sorting", () => {
   });
 });
 
+describe("campaigns that share every new candidate", () => {
+  it("shares new candidates on import when asked, and leaves the studio's later decisions alone", async () => {
+    expect(await studioImport([candidate("fixture_new", 10)], { shareNew: true })).toMatchObject({ ok: true, added: 1 });
+    expect(await shared(owner)).toEqual(["fixture_new"]);
+    // A candidate the studio hid or excluded stays that way when the next import refreshes it.
+    expect(await sl.setShortlistShared({ sql }, studio, { projectId, candidateId: await candidateId("fixture_new"), shared: false })).toMatchObject({ ok: true, changed: 1 });
+    expect(await studioImport([candidate("fixture_new", 11)], { shareNew: true })).toMatchObject({ ok: true, updated: 1 });
+    expect(await shared(owner)).toEqual([]);
+    // Without the flag a new candidate waits, as it always has.
+    await studioImport([candidate("fixture_other", 20)]);
+    expect(await shared(owner)).toEqual([]);
+    expect(await studioImport([candidate("fixture_other", 20)], { shareNew: "yes" })).toMatchObject({ ok: false, code: "invalid" });
+  });
+});
+
 describe("confirmed bookings", () => {
   const booked = async (handle: string) => (await sl.loadStudioShortlist({ sql }, studio, projectId))!.candidates.find(x => x.handle === handle)!.confirmed;
 
