@@ -84,7 +84,8 @@ export default async function BrandProject({
       ) : null}
       shortlistCount={shortlist?.candidates.length ?? 0}
       shortlist={shortlist && shortlist.candidates.length > 0 ? (
-        <CampaignShortlist candidates={shortlist.candidates} canPick={shortlist.canPick} copy={b.shortlist} locale={locale} />
+        <CampaignShortlist candidates={shortlist.candidates} canPick={shortlist.canPick} copy={b.shortlist} locale={locale}
+          manageHref={studioTools ? "#studio-tools" : undefined} />
       ) : null}
       applicants={member ? (
         <CampaignApplicants view={applicants} invitations={collaboration?.campaigns ?? []} canInvite={Boolean(collaboration?.canInvite) && !viewer.isAdmin} b={b} locale={locale} projectId={id}
