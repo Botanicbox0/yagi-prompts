@@ -22,6 +22,7 @@ import {
 } from '@/lib/prompts/schemas';
 import { Field, INPUT, LABEL, OpForm } from '@/components/admin/chrome';
 import { MediaDrop, type MediaDropLabels } from '@/components/admin/media-drop';
+import { AdminPosterFrame } from '@/components/admin/poster-frame';
 import { useCaseLabel } from '@/components/prompts/labels';
 
 /**
@@ -459,16 +460,20 @@ export function PromptCard({
       className="flex flex-col border border-hairline"
     >
       <a href={href} className="block border-b border-hairline bg-black" aria-hidden={poster === null}>
-        <div className="flex aspect-video items-center justify-center overflow-hidden">
-          {poster ? (
-            // eslint-disable-next-line @next/next/no-img-element -- staging object behind the gate
-            <img src={poster} alt="" className="h-full w-full object-contain" />
-          ) : (
+        {poster ? (
+          <AdminPosterFrame
+            src={poster}
+            {...(media.poster?.w ? { w: media.poster.w } : {})}
+            {...(media.poster?.h ? { h: media.poster.h } : {})}
+            aspect={row.aspectDefault}
+          />
+        ) : (
+          <div className="flex aspect-video items-center justify-center overflow-hidden">
             <span className="px-4 text-center font-mono text-[0.7rem] break-all text-white/45">
               {row.slug || row.id.slice(0, 8)}
             </span>
-          )}
-        </div>
+          </div>
+        )}
       </a>
 
       <div className="flex flex-1 flex-col gap-2 p-3">
