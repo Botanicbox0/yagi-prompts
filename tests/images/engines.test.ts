@@ -35,7 +35,7 @@ function ratioOf(aspect: string): number {
 
 describe('image engines (docs/TEMPLATES-IA.md §7)', () => {
   it('names the two founder-chosen families and defaults images to GPT Image 2.5 Flare (founder, 2026-10-24, after its real-selfie smoke)', () => {
-    expect(IMAGE_ENGINE_IDS).toEqual(['gpt-image-2.5-flare', 'gpt-image-2', 'gpt-image-2.5-sunburst', 'seedream-5.0-pro', 'seedream-5.0-lite', 'nano-banana-2.1']);
+    expect(IMAGE_ENGINE_IDS).toEqual(['gpt-image-2.5-flare', 'gpt-image-2', 'gpt-image-2.5-sunburst', 'seedream-5.0-pro', 'seedream-5.0-lite', 'nano-banana-2.1', 'nano-banana-pro']);
     expect(defaultEngine('image')).toBe('gpt-image-2.5-flare');
     expect(defaultEngine('video')).toBe('seedance-2.0');
     expect(enginesForMedium('video')).toEqual(['seedance-2.0', 'seedance-2.5', 'kling-omni']);

@@ -2,7 +2,7 @@ import { getDictionary } from '@/lib/i18n/dictionaries';
 import { getLocaleFromHeaders } from '@/lib/i18n/server';
 import { interpolate } from '@/lib/i18n/format';
 import { USE_CASE_MAX, USE_CASE_MIN } from '@/lib/prompts/schemas';
-import { ADMIN_PROMPTS_PATH, ADMIN_PROMPT_NEW_PATH } from '@/lib/prompts/links';
+import { ADMIN_PROMPTS_PATH, ADMIN_PROMPT_NEW_PATH, ADMIN_PROMPT_NEW_SET_PATH } from '@/lib/prompts/links';
 import { AdminShell, BUTTON_PRIMARY, OpForm, OutcomeBanner, Panel } from '@/components/admin/chrome';
 import { PromptFields } from '@/components/admin/prompt-fields';
 import { PromptCreateFeedback } from '@/components/admin/prompt-create-feedback';
@@ -65,6 +65,12 @@ export default async function AdminPromptNewPage({ searchParams }: { searchParam
         {a.authorHeading}
       </h1>
       <p className="mt-3 max-w-detail font-mono text-[0.75rem] opacity-55">{a.authorLede}</p>
+      <p className="mt-2 max-w-detail font-mono text-[0.75rem]">
+        {a.setLinkHint}{' '}
+        <a href={ADMIN_PROMPT_NEW_SET_PATH} data-image-set-link className="text-accent underline">
+          {a.setLink} →
+        </a>
+      </p>
 
       <OutcomeBanner
         dict={a}

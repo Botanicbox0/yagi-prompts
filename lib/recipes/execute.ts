@@ -3,7 +3,7 @@ import type { RenderProvider } from '@/lib/renders/repo';
 import { RenderFailure, runImageRender, startVideoRender, type EngineOutput, type RenderEngineDeps, type RenderPhoto, type StepReference } from '@/lib/renders/engines';
 import { extensionFor, type RenderStore } from '@/lib/renders/store';
 import { assetReference } from '@/lib/identity/service';
-import { engineStepPrompt, identityPath, isMakerEngine, outputSteps, personInputs, SELFIE_SLOT, type Recipe, type RecipeStep } from './schema';
+import { engineStepPrompt, identityPath, isMakerEngine, isStudioRecipeEngine, outputSteps, personInputs, SELFIE_SLOT, type Recipe, type RecipeStep } from './schema';
 import type { RecipeState, StepRecord } from './repo';
 
 /**
@@ -85,7 +85,7 @@ export async function runRecipe(ctx: RecipeRunContext): Promise<RecipeRun> {
   for (const step of recipe.steps) {
     if (records[step.id]) continue;
     try {
-      if (!isMakerEngine(step.engine)) throw new RenderFailure('engine_error', `engine ${step.engine} is not a maker engine`, false);
+      if (!isMakerEngine(step.engine) && !isStudioRecipeEngine(step.engine)) throw new RenderFailure('engine_error', `engine ${step.engine} is not a recipe engine`, false);
       const inputs = await gather(ctx, step, records);
       const viaAsset = identityPath(step.engine) === 'asset';
       const prompt = engineStepPrompt(recipe, step);

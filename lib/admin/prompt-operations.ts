@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { checkUpload, publishPromptMedia, stagePromptUpload } from '@/lib/prompts/media';
-import { AssetRefSchema } from '@/lib/content/schemas';
+import { AssetRefSchema, type AssetRef } from '@/lib/content/schemas';
 import { STAGING_BUCKET } from '@/lib/storage';
 import {
   approvePrompt,
@@ -19,10 +19,15 @@ import {
   AuthoringSchema,
   DEFAULT_PROMPT_MODEL,
   EditSchema,
+  IMAGE_SET_FRAMES_MAX,
+  IMAGE_SET_FRAMES_MIN,
   MEDIA_KINDS,
+  PROMPT_TEXT_MIN,
+  PROMPT_TITLE_MAX,
   RejectionSchema,
   TEMPLATE_MEDIA,
   USE_CASES,
+  USE_CASE_MAX,
   effectiveTextVisibility,
   normalizeHandle,
   parsePromptMedia,
@@ -30,9 +35,10 @@ import {
   slugify,
   type PromptMedia,
 } from '@/lib/prompts/schemas';
-import { ADMIN_PROMPTS_PATH } from '@/lib/prompts/links';
+import { ADMIN_PROMPTS_PATH, adminPromptPath } from '@/lib/prompts/links';
 import { announceTemplate, markPromptAnnounced } from '@/lib/prompts/announce';
-import { aspectsForMedium, enginesForMedium } from '@/lib/images/engines';
+import { buildImageTemplateSet, writeImageTemplateSet } from '@/lib/prompts/image-templates';
+import { aspectsForMedium, enginesForMedium, imageFitsAspect, isImageAspect, isImageEngine, type ImageAspect, type ImageEngineId } from '@/lib/images/engines';
 import { fail, ok, type AdminContext, type AdminOutcome } from './context';
 import * as f from './form';
 import type { AdminOperation, ParseResult } from './operations';
@@ -267,6 +273,90 @@ const createPrompt: AdminOperation<{ input: z.infer<typeof AuthoringSchema>; for
   },
 };
 
+// ---------------------------------------------------------------------------
+// a studio image set (2026-11-01): the form version of `npm run templates:import`
+// ---------------------------------------------------------------------------
+
+const ImageSetForm = z.object({
+  title: z.string().min(3).max(PROMPT_TITLE_MAX),
+  titleKo: z.string().min(1).max(PROMPT_TITLE_MAX),
+  engine: z.string().refine(isImageEngine, 'not an image engine'),
+  aspect: z.string().refine(isImageAspect, 'not an image aspect'),
+  prompts: z.array(z.string().min(PROMPT_TEXT_MIN)).min(IMAGE_SET_FRAMES_MIN).max(IMAGE_SET_FRAMES_MAX),
+  thumbnail: z.number().int().min(0),
+  useCase: z.array(z.string()).max(USE_CASE_MAX),
+});
+
+/** `frame{i}Size` is `WIDTHxHEIGHT`, measured in the browser when it encoded the image. */
+function frameSize(form: FormData, index: number): { w: number; h: number } | null {
+  const match = /^(\d{1,5})x(\d{1,5})$/.exec(f.str(form, `frame${index}Size`));
+  return match ? { w: Number(match[1]), h: Number(match[2]) } : null;
+}
+
+/** One frame's image: a direct-upload receipt, or the file itself where there is no signing service. */
+async function stageFrame(ctx: AdminContext, id: string, form: FormData, index: number): Promise<{ ok: true; ref: AssetRef } | { ok: false; detail: string }> {
+  const label = `frame ${index + 1}`;
+  const size = frameSize(form, index);
+  if (size === null) return { ok: false, detail: `${label}: no image` };
+  const receipt = parseStagedUpload(f.str(form, `frame${index}Ref`));
+  if (receipt !== null) {
+    if (!(await ctx.storage.exists(STAGING_BUCKET, receipt.key))) return { ok: false, detail: `${label}: upload_missing` };
+    const rejection = checkUpload({ kind: 'poster', mime: receipt.mime, sizeBytes: receipt.size, durationSeconds: null });
+    if (rejection !== null) return { ok: false, detail: `${label}: ${rejection}` };
+    return { ok: true, ref: AssetRefSchema.parse({ staging_key: receipt.key, sha256: receipt.sha256, mime: receipt.mime, ...size }) };
+  }
+  const file = f.file(form, `frame${index}`);
+  if (file === null) return { ok: false, detail: `${label}: no image` };
+  const staged = await stagePromptUpload(ctx.storage, id, 'poster', file);
+  if (!staged.ok) return { ok: false, detail: `${label}: ${staged.reason}` };
+  return { ok: true, ref: { ...staged.value.ref, ...size } };
+}
+
+const createImageSet: AdminOperation<{ input: z.infer<typeof ImageSetForm>; form: FormData }> = {
+  parse(form) {
+    const count = f.optionalInt(form, 'frameCount') ?? 0;
+    const base = parsed(ImageSetForm, {
+      title: f.str(form, 'title'),
+      titleKo: f.str(form, 'titleKo'),
+      engine: f.str(form, 'engine'),
+      aspect: f.str(form, 'aspect'),
+      // Capped before the loop: the schema refuses too many, this only stops a silly form early.
+      prompts: Array.from({ length: Math.min(Math.max(count, 0), IMAGE_SET_FRAMES_MAX + 1) }, (_, index) => f.text(form, `frame${index}Prompt`)),
+      thumbnail: f.optionalInt(form, 'thumbnail') ?? 0,
+      useCase: chips(form, 'useCase'),
+    });
+    if (!base.ok) return base;
+    return { ok: true, value: { input: base.value, form } };
+  },
+  async run(ctx, { input, form }) {
+    const engine = input.engine as ImageEngineId;
+    const aspect = input.aspect as ImageAspect;
+    if (input.thumbnail >= input.prompts.length) return fail('invalid', 'thumbnail: not one of the frames');
+    const fileName = (index: number) => `frame-${index}`;
+    const frames = input.prompts.map((promptText, index) => ({
+      key: `shot${index + 1}`, title: input.title, titleKo: input.titleKo, promptText, engine, aspect, fileName: fileName(index),
+    }));
+    const slug = await freeSlug(ctx.sql, slugify(input.title, `set-${randomUUID().slice(0, 8)}`));
+    const built = buildImageTemplateSet({ slug, title_en: input.title, title_ko: input.titleKo, thumbnail: fileName(input.thumbnail) }, frames);
+    if (!built.ok) return fail('invalid', built.errors.slice(0, 4).join('; '));
+
+    const id = randomUUID();
+    const staged = new Map<string, AssetRef>();
+    for (let index = 0; index < frames.length; index += 1) {
+      const size = frameSize(form, index);
+      if (size !== null && !imageFitsAspect(size.w, size.h, aspect)) return fail('invalid', `frame ${index + 1}: ${size.w}x${size.h} is not ${aspect}`);
+      const frame = await stageFrame(ctx, id, form, index);
+      if (!frame.ok) return fail('upload', frame.detail);
+      staged.set(fileName(index), frame.ref);
+    }
+
+    await writeImageTemplateSet({ sql: ctx.sql, storage: ctx.storage }, id, built.set, staged, { useCase: input.useCase });
+    ctx.revalidatePrompts?.();
+    // The template page's price fields are the next stop: a set is not for sale until priced.
+    return ok('published', { detail: slug, to: adminPromptPath(id) });
+  },
+};
+
 /** The first of `base`, `base-2` … `base-9` that no prompt row holds yet. */
 async function freeSlug(sql: AdminContext['sql'], base: string): Promise<string> {
   const { rows } = await sql.query<{ slug: string }>(
@@ -467,6 +557,7 @@ const announce: AdminOperation<z.infer<typeof Announce>> = {
 export const PROMPT_OPERATIONS = {
   'prompt.announce': announce,
   'prompt.create': createPrompt,
+  'prompt.createSet': createImageSet,
   'prompt.approve': approve,
   'prompt.reject': reject,
   'prompt.update': editPrompt,

@@ -74,7 +74,7 @@ function firstFile(items: DataTransfer | null, kind: 'video' | 'image' | 'audio'
  * no signing service (the local driver) → the file posts inline, upload fails → the file is left in
  * the input and the operation refuses it the way it always did.
  */
-const STAGING_URL_PATH = '/api/admin/staging-url';
+export const STAGING_URL_PATH = '/api/admin/staging-url';
 
 /**
  * The gateway's own ceiling, minus headroom for the rest of the form.
@@ -94,13 +94,13 @@ type UploadState =
   | { phase: 'failed'; reason: UploadFailure };
 
 /** A failure whose reason is already known, as opposed to anything else that throws. */
-class UploadRefused extends Error {
+export class UploadRefused extends Error {
   constructor(readonly reason: UploadFailure) {
     super(`upload_${reason}`);
   }
 }
 
-async function sha256Hex(file: File): Promise<string> {
+export async function sha256Hex(file: File): Promise<string> {
   const digest = await crypto.subtle.digest('SHA-256', await file.arrayBuffer());
   return Array.from(new Uint8Array(digest))
     .map((byte) => byte.toString(16).padStart(2, '0'))
@@ -108,7 +108,7 @@ async function sha256Hex(file: File): Promise<string> {
 }
 
 /** XHR rather than fetch: only XHR reports upload progress, and a 57MB PUT needs a number. */
-function put(url: string, file: File, mime: string, onProgress: (percent: number) => void): Promise<void> {
+export function put(url: string, file: File, mime: string, onProgress: (percent: number) => void): Promise<void> {
   return new Promise((resolve, reject) => {
     const request = new XMLHttpRequest();
     request.open('PUT', url);

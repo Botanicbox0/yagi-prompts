@@ -22,6 +22,7 @@ export const TEMPLATE_REST = '/t';
 
 export const ADMIN_PROMPTS_PATH = '/admin/prompts';
 export const ADMIN_PROMPT_NEW_PATH = `${ADMIN_PROMPTS_PATH}/new`;
+export const ADMIN_PROMPT_NEW_SET_PATH = `${ADMIN_PROMPT_NEW_PATH}/set`;
 
 /** Retired (2026-09-05): redirected to the video catalogue by `next.config.ts`. Kept for the redirect table. */
 export const PROMPT_SUBMIT_PATH = '/prompts/submit';

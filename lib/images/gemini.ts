@@ -97,10 +97,13 @@ export class GeminiImageError extends Error {
 
 /** Published image-input rate (USD per million tokens, Nano Banana 2.1, pricing page 2026-10-24). */
 export const GEMINI_IMAGE_INPUT_USD_PER_M = 1.5;
+/** Nano Banana Pro's input rate is its own. */
+export const GEMINI_PRO_INPUT_USD_PER_M = 2;
 
 export function geminiImageUsd(engine: GoogleEngineId, usage: { inputTokens: number } | null): number {
   const spec = IMAGE_ENGINES[engine];
-  const inputs = usage ? (usage.inputTokens * GEMINI_IMAGE_INPUT_USD_PER_M) / 1_000_000 : 0;
+  const rate = engine === 'nano-banana-pro' ? GEMINI_PRO_INPUT_USD_PER_M : GEMINI_IMAGE_INPUT_USD_PER_M;
+  const inputs = usage ? (usage.inputTokens * rate) / 1_000_000 : 0;
   return Math.round((spec.usdPerRender + inputs) * 10_000) / 10_000;
 }
 
@@ -147,10 +150,12 @@ export function createGeminiImageClient(config: GeminiConfig, fetchImpl: typeof 
     model: config.model,
     async generate(input: GeminiImageInput): Promise<GeminiImageResult> {
       const engine = input.engine ?? DEFAULT_GOOGLE_ENGINE;
+      // `GEMINI_IMAGE_MODEL` moves the default engine; a named engine like Pro keeps its own model.
+      const model = engine === DEFAULT_GOOGLE_ENGINE ? config.model : IMAGE_ENGINES[engine].model;
       const response = await fetchImpl(`${config.baseUrl}/interactions`, {
         method: 'POST',
         headers: { 'content-type': 'application/json', 'x-goog-api-key': config.apiKey },
-        body: JSON.stringify(toGeminiBody(input, config.model)),
+        body: JSON.stringify(toGeminiBody(input, model)),
       });
       const text = await response.text();
       let parsed: RawInteraction = {};

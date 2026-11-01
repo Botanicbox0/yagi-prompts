@@ -55,7 +55,7 @@
 import type { TemplateMedium } from '@/lib/prompts/schemas';
 
 /** Order is the admin picker's order: the recommended default first. */
-export const IMAGE_ENGINE_IDS = ['gpt-image-2.5-flare', 'gpt-image-2', 'gpt-image-2.5-sunburst', 'seedream-5.0-pro', 'seedream-5.0-lite', 'nano-banana-2.1'] as const;
+export const IMAGE_ENGINE_IDS = ['gpt-image-2.5-flare', 'gpt-image-2', 'gpt-image-2.5-sunburst', 'seedream-5.0-pro', 'seedream-5.0-lite', 'nano-banana-2.1', 'nano-banana-pro'] as const;
 export type ImageEngineId = (typeof IMAGE_ENGINE_IDS)[number];
 
 export const VIDEO_ENGINE_IDS = ['seedance-2.0', 'seedance-2.5', 'kling-omni'] as const;
@@ -68,7 +68,7 @@ export type EngineProvider = 'openai' | 'modelark' | 'google' | 'kling';
 
 /** The OpenAI third of the image table, the Google engine, and the Seedream rest. */
 export type OpenAiEngineId = 'gpt-image-2.5-flare' | 'gpt-image-2.5-sunburst' | 'gpt-image-2';
-export type GoogleEngineId = 'nano-banana-2.1';
+export type GoogleEngineId = 'nano-banana-2.1' | 'nano-banana-pro';
 export type SeedreamEngineId = Exclude<ImageEngineId, OpenAiEngineId | GoogleEngineId>;
 
 export interface VideoEngine {
@@ -317,7 +317,27 @@ export const IMAGE_ENGINES: Record<ImageEngineId, ImageEngine> = {
     // 10 object references + 4 character references (the guide's table for Nano Banana 2.1).
     maxReferenceImages: 14,
   },
+  // Studio templates only (lib/recipes/schema.ts `STUDIO_RECIPE_ENGINE_IDS`; founder, 2026-11-01).
+  'nano-banana-pro': {
+    id: 'nano-banana-pro',
+    label: 'NANO BANANA PRO',
+    provider: 'google',
+    model: 'gemini-3-pro-image',
+    // Same 2K pixel table as 2.1. Official: $0.134 per 1K/2K image (docs/PLATFORM-2.0.md §9.2).
+    sizes: NANO_BANANA_2K,
+    usdPerRender: 0.134,
+    usdPerReference: 0.002,
+    // 6 object + 5 character + 3 style references.
+    maxReferenceImages: 14,
+  },
 };
+
+/** An image further than this from a set's aspect is the wrong file. */
+export const ASPECT_TOLERANCE = 0.02;
+export function imageFitsAspect(width: number, height: number, aspect: ImageAspect): boolean {
+  const [w, h] = aspect.split(':').map(Number) as [number, number];
+  return Math.abs(width / height - w / h) / (w / h) <= ASPECT_TOLERANCE;
+}
 
 export function imageSizeFor(engine: ImageEngineId, aspect: ImageAspect): ImageSize {
   return IMAGE_ENGINES[engine].sizes[aspect];

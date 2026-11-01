@@ -46,6 +46,15 @@ export type MakerEngineId = (typeof MAKER_ENGINE_IDS)[number];
 export function isMakerEngine(value: unknown): value is MakerEngineId {
   return typeof value === 'string' && (MAKER_ENGINE_IDS as readonly string[]).includes(value);
 }
+/**
+ * Engines only the studio's own recipes may name (founder, 2026-11-01: the image-set form needs Nano
+ * Banana Pro). A maker's save and publish still parse strictly; `parseRecipe(raw, { studio: true })`
+ * is for the paths that read a recipe the admin wrote.
+ */
+export const STUDIO_RECIPE_ENGINE_IDS = ['nano-banana-pro'] as const satisfies readonly EngineId[];
+export function isStudioRecipeEngine(value: unknown): value is (typeof STUDIO_RECIPE_ENGINE_IDS)[number] {
+  return typeof value === 'string' && (STUDIO_RECIPE_ENGINE_IDS as readonly string[]).includes(value);
+}
 export function makerEnginesFor(kind: 'image' | 'video'): MakerEngineId[] {
   return MAKER_ENGINE_IDS.filter((id) => (kind === 'image' ? isImageEngine(id) : isVideoEngine(id)));
 }
@@ -152,7 +161,7 @@ export function recipeNeedsIdentity(recipe: Recipe): boolean {
   return recipe.steps.some((step) => isMakerEngine(step.engine) && identityPath(step.engine) === 'asset' && step.inputs.some((input) => person.has(input)));
 }
 
-export function parseRecipe(raw: unknown): RecipeCheck {
+export function parseRecipe(raw: unknown, options: { studio?: boolean } = {}): RecipeCheck {
   if (typeof raw === 'string') {
     if (Buffer.byteLength(raw, 'utf8') > MAX_RECIPE_BYTES) return { ok: false, issues: [{ code: 'too_large' }] };
     try { raw = JSON.parse(raw); } catch { return { ok: false, issues: [{ code: 'shape' }] }; }
@@ -173,7 +182,7 @@ export function parseRecipe(raw: unknown): RecipeCheck {
   recipe.steps.forEach((step, index) => {
     if (recipe.slots[step.id]) issues.push({ code: 'name_clash', step: step.id });
     if (seen.has(step.id)) issues.push({ code: 'duplicate_step', step: step.id });
-    if (!isMakerEngine(step.engine)) issues.push({ code: 'engine', step: step.id });
+    if (!isMakerEngine(step.engine) && !(options.studio && isStudioRecipeEngine(step.engine))) issues.push({ code: 'engine', step: step.id });
     else if (step.kind === 'image' ? !isImageEngine(step.engine) : !isVideoEngine(step.engine)) issues.push({ code: 'engine_kind', step: step.id });
     if (new Set(step.inputs).size !== step.inputs.length) issues.push({ code: 'unknown_input', step: step.id });
     let images = 0;

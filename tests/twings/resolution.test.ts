@@ -151,6 +151,8 @@ describe('image cost floor — one price per engine (founder, 2026-10-21)', () =
       'seedream-5.0-lite': 200,
       // R2: ≈73원 at 2K with one reference — the same 200원 minimum applies (PLATFORM-2.0 §9.2).
       'nano-banana-2.1': 200,
+      // Studio sets only: $0.136 with one reference at the 5% rule.
+      'nano-banana-pro': 300,
     });
   });
 
