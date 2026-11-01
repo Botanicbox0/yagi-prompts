@@ -2,7 +2,7 @@ import type { Viewer } from '@/lib/auth/identity';
 import type { SqlRunner } from '@/lib/db/sql-runner';
 import { parseMediaRef } from '@/lib/content/media-ref';
 import { AssetRefSchema, safeParseBlock, type AssetRef, type BlockKind } from '@/lib/content/schemas';
-import { parsePromptMedia } from '@/lib/prompts/schemas';
+import { MEDIA_KINDS, parsePromptMedia, type MediaKind } from '@/lib/prompts/schemas';
 import { parseContestMedia } from '@/lib/contests/schemas';
 import { CONTEST_MEDIA_KINDS, type ContestMediaKind } from '@/lib/contests/links';
 import { STAGING_BUCKET } from '@/lib/storage';
@@ -35,25 +35,25 @@ export const ADMIN_TOKEN_PREFIX = 'admin:';
 /**
  * §13.2/F — prompt refs, namespaced so they cannot collide with a block id or `{revisionId}:hero`.
  *
- * `prompt:{promptId}:{poster|video}`. Moderation without watching the clip is not moderation, and
- * a submission's media sits in PRIVATE staging until it is approved — so this is the only path
+ * `prompt:{promptId}:{poster|video|audio}`. Moderation without watching the clip is not moderation,
+ * and a submission's media sits in PRIVATE staging until it is approved — so this is the only path
  * that can show it, and it is admin-only for exactly as long as the item is unpublished.
  */
 export const PROMPT_REF_PREFIX = 'prompt:';
 
-export function promptAdminRef(id: string, kind: 'poster' | 'video'): string {
+export function promptAdminRef(id: string, kind: MediaKind): string {
   return `${PROMPT_REF_PREFIX}${id}:${kind}`;
 }
 
-function parsePromptRef(raw: string): { id: string; kind: 'poster' | 'video' } | null {
+function parsePromptRef(raw: string): { id: string; kind: MediaKind } | null {
   if (!raw.startsWith(PROMPT_REF_PREFIX)) return null;
   const rest = raw.slice(PROMPT_REF_PREFIX.length);
   const at = rest.lastIndexOf(':');
   if (at <= 0) return null;
   const id = rest.slice(0, at);
   const kind = rest.slice(at + 1);
-  if (kind !== 'poster' && kind !== 'video') return null;
-  return { id, kind };
+  if (!(MEDIA_KINDS as readonly string[]).includes(kind)) return null;
+  return { id, kind: kind as MediaKind };
 }
 
 /**

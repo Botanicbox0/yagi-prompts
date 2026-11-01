@@ -4843,6 +4843,9 @@ export const en = {
     mediaPosterHint: 'Pick a frame from the clip, or upload an image of your own.',
     fieldPromptAudio: 'Attached audio file',
     mediaAudioZone: 'Drop an audio file here, or click to pick',
+    mediaAudioSaved: 'Saved audio. Upload a new file to replace it.',
+    mediaAudioLoading: 'Loading the audio.',
+    mediaAudioUnavailable: 'The saved audio could not be loaded. Refresh the page.',
     /** Direct-to-storage upload (2026-08-15) — Vercel refuses a request body over 4.5MB. */
     mediaUploading: 'Uploading… {percent}%',
     mediaUploaded: 'Uploaded — press save to apply it.',
