@@ -540,11 +540,11 @@
 .remixPanel { display: flex; flex-direction: column; gap: 14px; padding: 18px; border: 1px solid var(--id-line); border-radius: var(--id-radius-card); background: var(--id-paper); }
 .remixChat { display: flex; flex: 1; flex-direction: column; justify-content: flex-end; gap: 10px; min-height: 132px; }
 .remixHint { color: var(--id-muted); font-size: 14px; }
-.remixSaid { align-self: flex-end; max-width: 92%; padding: 10px 14px; border-radius: 16px 16px 4px 16px; background: var(--id-accent); color: #fff; font-size: 14.5px; line-height: 1.45; }
+.remixSaid { align-self: flex-end; max-width: 92%; padding: 10px 14px; border-radius: 16px 16px 4px 16px; background: var(--id-accent); color: #fff; font-size: 14.5px; line-height: 1.45; word-break: keep-all; }
 .remixAttached { align-self: flex-end; width: clamp(92px, 9vw, 124px); aspect-ratio: 3 / 4; object-fit: cover; border: 1px solid var(--id-line); border-radius: 14px; background: var(--id-paper); animation: attachIn 420ms var(--id-spring) both; }
 @keyframes attachIn { from { opacity: 0; transform: translateY(8px) scale(0.96); } to { opacity: 1; transform: none; } }
 .remixEditThumb { flex: none; width: 24px; height: 32px; object-fit: cover; border: 1px solid var(--id-line); border-radius: 6px; background: var(--id-paper); }
-.remixDone { display: flex; gap: 8px; color: var(--id-body); font-size: 13.5px; line-height: 1.5; }
+.remixDone { display: flex; gap: 8px; color: var(--id-body); font-size: 13.5px; line-height: 1.5; word-break: keep-all; }
 .remixDone span { color: var(--id-accent-text); font-weight: 700; }
 .remixEdits { display: grid; gap: 8px; }
 .remixEdit {

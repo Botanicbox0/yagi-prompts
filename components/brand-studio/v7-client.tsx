@@ -50,7 +50,7 @@ export function Film({ src, poster, label, className, eager = false }: { src: st
 
 /**
  * A local fix: one wide shot with a box on it, and the boxed region zoomed beside it. Drag (or use the arrow keys /
- * slider) to wipe between the first shot and the fix. The box is why it works: a small region gets a whole canvas of
+ * slider) to wipe between the broken shot and the fix. The box is why it works: a small region gets a whole canvas of
  * pixels of its own, and everything outside the box stays as it was.
  */
 export function Compare({ pairs, labels }: {
