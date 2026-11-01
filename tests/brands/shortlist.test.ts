@@ -318,8 +318,6 @@ describe("confirmed bookings", () => {
     await studioImport([candidate("fixture_booked", 10, { confirmed: true }), candidate("fixture_open", 20, { confirmed: false })]);
     expect(await booked("fixture_booked")).toBe(true);
     expect(await booked("fixture_open")).toBe(false);
-    // Booked or not, a new candidate still waits for the studio to share it.
-    expect(await shared(owner)).toEqual([]);
     await shareAll();
     expect((await sl.loadBrandShortlist({ sql }, owner, projectId))!.candidates.map(x => [x.handle, x.confirmed])).toEqual([["fixture_open", false], ["fixture_booked", true]]);
     const first = (await sql.query("select confirmed_at from brand_shortlist_candidates where handle='fixture_booked'")).rows[0]!.confirmed_at;
@@ -329,5 +327,26 @@ describe("confirmed bookings", () => {
     await studioImport([candidate("fixture_booked", 13, { confirmed: false })]);
     expect(await booked("fixture_booked")).toBe(false);
     expect(await studioImport([candidate("fixture_booked", 13, { confirmed: "yes" })])).toMatchObject({ ok: false, code: "invalid" });
+  });
+
+  it("shares a candidate when the booking arrives, and everyone else still waits for the studio", async () => {
+    await studioImport([candidate("fixture_booked", 10, { confirmed: true }), candidate("fixture_open", 20, { confirmed: false }), candidate("fixture_plain", 30)]);
+    expect(await shared(owner)).toEqual(["fixture_booked"]);
+    await studioImport([candidate("fixture_open", 21, { confirmed: true })]);
+    expect(await shared(owner)).toEqual(["fixture_open", "fixture_booked"]);
+    // Taking the booking back drops the mark, not the card.
+    await studioImport([candidate("fixture_open", 22, { confirmed: false })]);
+    expect(await shared(owner)).toEqual(["fixture_open", "fixture_booked"]);
+    expect(await booked("fixture_open")).toBe(false);
+  });
+
+  it("leaves the studio's decision alone: an excluded candidate stays out, a hidden one stays hidden on refresh", async () => {
+    await studioImport([candidate("fixture_out", 10), candidate("fixture_hidden", 20, { confirmed: true })]);
+    expect(await sl.triageShortlist({ sql }, studio, { projectId, exclude: [await candidateId("fixture_out")] })).toMatchObject({ ok: true });
+    await studioImport([candidate("fixture_out", 11, { confirmed: true })]);
+    expect(await booked("fixture_out")).toBe(true);
+    expect(await sl.setShortlistShared({ sql }, studio, { projectId, candidateId: await candidateId("fixture_hidden"), shared: false })).toMatchObject({ ok: true, changed: 1 });
+    await studioImport([candidate("fixture_hidden", 21, { confirmed: true })]);
+    expect(await shared(owner)).toEqual([]);
   });
 });
