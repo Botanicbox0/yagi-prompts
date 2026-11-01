@@ -600,7 +600,7 @@ export const ko: Dictionary = {
             "동의한 얼굴만"
           ],
           "draft": "초안 · 팀 확인 전",
-          "example": "예시: 가상 브랜드 YAGI"
+          "example": "예시: YAGI 데모 브랜드"
         },
         "memory": {
           "title": "YAGI 브랜드 메모리",
