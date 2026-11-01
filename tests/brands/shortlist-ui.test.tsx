@@ -150,10 +150,22 @@ describe("campaign shortlist", () => {
   });
 
   it("tells the TWINGS team this is the client's view and links to where they manage it", () => {
-    const html = renderToStaticMarkup(<CampaignShortlist candidates={[one]} canPick={false} manageHref="#studio-tools" copy={getDictionary("ko").brandWorkspace.shortlist} locale="ko" />);
+    const copy = getDictionary("ko").brandWorkspace.shortlist;
+    const html = renderToStaticMarkup(<CampaignShortlist candidates={[one]} canPick={false} canPreview manageHref="#studio-tools" copy={copy} locale="ko" />);
     expect(html).toContain("data-shortlist-studio-note");
     expect(html).toContain('href="#studio-tools"');
+    expect(html).toContain('data-shortlist-preview="off"');
+    expect(html).not.toContain("data-shortlist-pick=");
     expect(html).not.toContain("고른 후보 비교는 누구나 할 수 있어요.");
+    // The preview shows the client's controls and says nothing is saved.
+    const preview = renderToStaticMarkup(<CampaignShortlist candidates={[one]} canPick={false} canPreview defaultPreview manageHref="#studio-tools" copy={copy} locale="ko" />);
+    expect(preview).toContain('data-shortlist-preview="on"');
+    expect(preview).toContain('data-shortlist-pick="on"');
+    expect(preview).toContain(copy.preview.note);
+    // Nobody else can ask for it.
+    const client = renderToStaticMarkup(<CampaignShortlist candidates={[one]} canPick={false} defaultPreview copy={copy} locale="ko" />);
+    expect(client).not.toContain("data-shortlist-pick=");
+    expect(client).not.toContain("data-shortlist-preview-toggle");
   });
 
   it("saves a sheet Excel reads as plain data, with only what the cards show", () => {

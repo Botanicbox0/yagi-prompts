@@ -152,8 +152,9 @@ async function avatarImage(dataUrl: string): Promise<{ bytes: Buffer; tone: stri
  * Add or refresh candidates by handle. A refresh replaces the figures (and their day) when new ones
  * are sent, keeps a known name/category/picture when the new reading has none, and never touches
  * whether a candidate is excluded, picked or passed. `confirmed` sets or clears the booking (absent
- * leaves it). A new booking also shares the candidate unless the studio excluded it; everyone else
- * waits until the studio shares them, and a booked candidate the studio hides later stays hidden.
+ * leaves it). A new booking also shares the candidate unless the studio excluded it, and `shareNew`
+ * shares every candidate new to the campaign; everyone else waits until the studio shares them, and a
+ * candidate the studio hides later stays hidden.
  */
 export async function importShortlist(
   deps: { sql: SqlRunner; storage?: Pick<StorageDriver, 'putStaging'> },
@@ -204,9 +205,9 @@ export async function importShortlist(
         updated++;
       } else {
         await sql.query(`insert into brand_shortlist_candidates(id,project_id,platform,handle,display_name,category,metrics,measured_on,avatar_key,avatar_mime,avatar_size,avatar_sha256,avatar_tone,confirmed_at,shared_at)
-          values($1,$2,$3,$4,$5,$6,$7::jsonb,$8::date,$9,$10,$11,$12,$13,case when $14 then now() end,case when $14 then now() end)`,
+          values($1,$2,$3,$4,$5,$6,$7::jsonb,$8::date,$9,$10,$11,$12,$13,case when $14 then now() end,case when $14 or $15 then now() end)`,
           [id, v.projectId, c.platform, c.handle, c.displayName ?? null, c.category ?? null, JSON.stringify(metrics), fresh ? v.measuredOn ?? null : null,
-            avatar?.key ?? null, avatar ? 'image/webp' : null, avatar?.size ?? null, avatar?.sha256 ?? null, avatar?.tone ?? null, c.confirmed === true]);
+            avatar?.key ?? null, avatar ? 'image/webp' : null, avatar?.size ?? null, avatar?.sha256 ?? null, avatar?.tone ?? null, c.confirmed === true, v.shareNew === true]);
         added++;
       }
     }

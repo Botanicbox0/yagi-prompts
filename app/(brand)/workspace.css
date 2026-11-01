@@ -2999,6 +2999,8 @@ button.bw-wizard-step:hover { border-color:var(--ys-ink); }
 .bw-shortlist-count { display:inline-block; margin-left:6px; padding:2px 9px; border-radius:999px; background:var(--ys-raised); font-size:13px; font-weight:500; color:var(--ys-ink-secondary); font-variant-numeric:tabular-nums; vertical-align:middle; }
 .bw-shortlist-note { margin:0 0 14px; }
 .bw-shortlist-note a { color:var(--ys-accent-text); font-weight:600; white-space:nowrap; }
+.bw-shortlist-team { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px 16px; }
+.bw-shortlist-team[data-shortlist-preview='on'] { background:var(--ys-accent-soft); color:var(--ys-accent-text); }
 .bw-shortlist-tools { display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:10px; margin-bottom:14px; }
 .bw-shortlist-sorts, .bw-triage-tabs { display:inline-flex; flex-wrap:wrap; padding:3px; gap:2px; border:1px solid var(--ys-line); border-radius:999px; background:var(--ys-subtle-bg); }
 .bw-shortlist-sorts button, .bw-triage-tabs button { min-height:36px; padding:0 14px; border:0; border-radius:999px; background:transparent; color:var(--ys-ink-secondary); font:inherit; font-size:13px; cursor:pointer; }

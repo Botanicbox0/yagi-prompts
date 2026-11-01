@@ -75,6 +75,8 @@ export const ShortlistImportSchema = z.object({
   projectId: z.uuid(),
   /** The day the figures were read (Korea time), shown as "지표 기준". */
   measuredOn: isoDay.nullable().optional(),
+  /** Candidates new to this campaign are shared at once instead of waiting. Refreshes never change sharing. */
+  shareNew: z.boolean().optional(),
   candidates: z.array(ShortlistCandidateSchema).min(1).max(SHORTLIST_IMPORT_MAX)
     .refine(list => new Set(list.map(c => c.handle)).size === list.length, 'duplicate handle'),
 }).strict();
