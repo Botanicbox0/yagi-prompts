@@ -252,11 +252,11 @@ export function SelfieSheet({ copy, locale, suggested, chosen, onChoose, onEditi
             ) : (
               <div className="grid gap-2 sm:grid-cols-2">
                 {canCapture ? (
-                  <button type="button" data-selfie-add="camera" onClick={() => cameraRef.current?.click()} className="inline-flex rounded-full min-h-12 items-center justify-center gap-2 bg-accent px-4 font-label text-eyebrow text-white uppercase transition-opacity hover:opacity-85">
+                  <button type="button" data-selfie-add="camera" onClick={() => cameraRef.current?.click()} className="inline-flex rounded-full min-h-12 items-center justify-center gap-2 bg-accent px-4 font-label text-eyebrow text-white uppercase transition-colors hover:bg-[color-mix(in_srgb,var(--accent)_82%,#000000)] active:bg-[color-mix(in_srgb,var(--accent)_66%,#000000)]">
                     <CameraIcon />{copy.takeNew}
                   </button>
                 ) : null}
-                <button type="button" data-selfie-add="file" onClick={() => fileRef.current?.click()} className={['inline-flex rounded-full min-h-12 items-center justify-center gap-2 px-4 font-label text-eyebrow uppercase transition-opacity', canCapture ? 'border border-current hover:opacity-70' : 'bg-accent text-white hover:opacity-85 sm:col-span-2'].join(' ')}>
+                <button type="button" data-selfie-add="file" onClick={() => fileRef.current?.click()} className={['inline-flex rounded-full min-h-12 items-center justify-center gap-2 px-4 font-label text-eyebrow uppercase transition-colors', canCapture ? 'border border-current hover:opacity-70' : 'bg-accent text-white hover:bg-[color-mix(in_srgb,var(--accent)_82%,#000000)] active:bg-[color-mix(in_srgb,var(--accent)_66%,#000000)] sm:col-span-2'].join(' ')}>
                   <ImageIcon />{copy.uploadNew}
                 </button>
               </div>
@@ -311,7 +311,7 @@ export function SelfieSheet({ copy, locale, suggested, chosen, onChoose, onEditi
             {detail ? <p className="mt-1 text-xs opacity-60">{detail}</p> : null}
           </div>
           <div className="flex flex-col gap-2">
-            <button type="button" data-selfie-use onClick={() => choose(face, 'confirm', libraryRef.current)} className="inline-flex rounded-full min-h-12 w-full items-center justify-center bg-accent px-5 font-label text-[0.8rem] tracking-[0.1em] text-white uppercase transition-opacity hover:opacity-85">{copy.useThisPhoto}</button>
+            <button type="button" data-selfie-use onClick={() => choose(face, 'confirm', libraryRef.current)} className="inline-flex rounded-full min-h-12 w-full items-center justify-center bg-accent px-5 font-label text-[0.8rem] tracking-[0.1em] text-white uppercase transition-colors hover:bg-[color-mix(in_srgb,var(--accent)_82%,#000000)] active:bg-[color-mix(in_srgb,var(--accent)_66%,#000000)]">{copy.useThisPhoto}</button>
             <button ref={otherRef} type="button" data-selfie-other onClick={openChooser} className="inline-flex rounded-full min-h-11 w-full items-center justify-center border border-current px-5 font-label text-eyebrow uppercase transition-opacity hover:opacity-70">{copy.otherPhotos}</button>
           </div>
         </section>

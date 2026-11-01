@@ -150,7 +150,7 @@ function GatedHowItWasMade({
           <a
             data-recipe-gate-cta
             href={gate.signinHref}
-            className="mt-4 inline-flex min-h-11 items-center rounded-full bg-black px-5 py-2.5 text-xs font-semibold tracking-wide text-white transition-opacity hover:opacity-85"
+            className="mt-4 inline-flex min-h-11 items-center rounded-full bg-accent px-5 py-2.5 text-xs font-semibold tracking-wide text-white transition-colors hover:bg-[color-mix(in_srgb,var(--accent)_82%,#000000)] active:bg-[color-mix(in_srgb,var(--accent)_66%,#000000)]"
           >
             {h.gateCta}
           </a>

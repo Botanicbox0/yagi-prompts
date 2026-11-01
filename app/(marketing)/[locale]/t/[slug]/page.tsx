@@ -277,7 +277,7 @@ export default async function TemplatePage({ params }: RouteParams) {
                     </span>
                   )}
                   {/* Every public template passed studio review, studio and maker alike (§7.5). */}
-                  <span data-template-verified title={t.verifiedHint} className="inline-flex items-center rounded-full border border-hairline bg-surface px-2.5 py-1 font-medium text-black/75">
+                  <span data-template-verified title={t.verifiedHint} className="inline-flex items-center rounded-full border border-accent/25 bg-[color-mix(in_srgb,var(--accent)_9%,#ffffff)] px-2.5 py-1 font-medium text-[color-mix(in_srgb,var(--accent)_85%,#000000)]">
                     {t.verified}
                   </span>
                   {card.useCase.map((value) => (
@@ -417,7 +417,7 @@ export default async function TemplatePage({ params }: RouteParams) {
                         <p data-template-sale-state className="mt-3 text-xs leading-relaxed text-black/60">
                           <TemplateMakeAvailability copy={makeAvailabilityCopy} oneTimeAvailable={shopOpen} subscriptionEligible={subscriptionQuote !== null} field="body" />
                         </p>
-                        <section data-template-photo-guide className="mt-5 rounded-2xl border border-hairline bg-surface p-4 sm:p-5">
+                        <section data-template-photo-guide className="mt-5 rounded-2xl border border-hairline bg-sky/45 p-4 sm:p-5">
                           <h2 className="text-xs font-semibold text-black/85">{dict.selfie.goodExamples}</h2>
                           <p className="mt-2 text-xs leading-relaxed text-black/70">{dict.studio.signedOutBody}</p>
                           <ul data-studio-photo-examples className="mt-3 grid grid-cols-3 gap-2.5">

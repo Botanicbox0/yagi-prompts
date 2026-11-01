@@ -129,6 +129,8 @@ describe('the template page as a decision screen', () => {
       expect(card).not.toContain('data-studio-photo-examples');
       expect(html.indexOf('data-template-photo-guide')).toBeGreaterThan(html.indexOf('data-template-sale-state'));
       expect(html).toContain('data-studio-photo-examples');
+      expect(visible(html)).toContain(dict.selfie.goodExamples);
+      if (locale === 'ko') expect(visible(html)).toContain('이런 사진을 넣어주세요!');
       // The core promise sits under the stage: my selfie → this scene, the selfie tile leading to the make card.
       const strip = html.slice(html.indexOf('data-template-transform'));
       expect(visible(strip)).toContain(dict.templates.gallery.transformVideo);

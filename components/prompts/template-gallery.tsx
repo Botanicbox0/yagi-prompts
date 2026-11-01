@@ -77,7 +77,7 @@ function ExpandIcon() {
 /** One person, head and shoulders — the empty selfie slot, drawn in the same stroke as the arrows. */
 function SelfieOutline() {
   return (
-    <svg aria-hidden="true" viewBox="0 0 40 52" className="h-8 w-7 text-black/35" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+    <svg aria-hidden="true" viewBox="0 0 40 52" className="h-8 w-7 text-[color-mix(in_srgb,var(--accent)_85%,#000000)]" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
       <circle cx="20" cy="18" r="8.5" />
       <path d="M5.5 47c1.4-9.3 7.2-14.5 14.5-14.5S33.1 37.7 34.5 47" />
     </svg>
@@ -96,7 +96,7 @@ export function SelfieTile({ label, href, className = '' }: { label: string; hre
   const tile = (
     <span
       data-selfie-tile={selfie ? 'mine' : 'empty'}
-      className={`flex aspect-[3/4] items-center justify-center overflow-hidden rounded-xl ${selfie ? 'ring-2 ring-accent ring-offset-2 ring-offset-white' : 'border border-dashed border-black/25 bg-white'} ${className}`}
+      className={`flex aspect-[3/4] items-center justify-center overflow-hidden rounded-xl ${selfie ? 'ring-2 ring-accent ring-offset-2 ring-offset-white' : 'border border-dashed border-accent/35 bg-sky/50'} ${className}`}
     >
       {face}
     </span>

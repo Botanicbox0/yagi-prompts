@@ -13,7 +13,7 @@ export interface MakeLauncherLabels {
   makeCtaClosed: string;
 }
 
-const CTA = 'flex min-h-12 w-full items-center justify-center rounded-full bg-accent px-5 font-label text-[0.85rem] tracking-[0.1em] text-white uppercase transition-opacity hover:opacity-85';
+const CTA = 'flex min-h-12 w-full items-center justify-center rounded-full bg-accent px-5 font-label text-[0.85rem] tracking-[0.1em] text-white uppercase transition-colors hover:bg-[color-mix(in_srgb,var(--accent)_82%,#000000)] active:bg-[color-mix(in_srgb,var(--accent)_66%,#000000)]';
 
 interface MakeLauncherProps {
   credits: number | null;

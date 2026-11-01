@@ -19,8 +19,8 @@ export interface RecipeActionsProps {
   signinHref: string;
 }
 
-const PRIMARY = 'inline-flex min-h-11 items-center justify-center rounded-full bg-black px-4 text-sm font-semibold text-white';
-const SECONDARY = 'inline-flex min-h-11 items-center justify-center rounded-full border border-black/80 px-4 text-sm font-semibold';
+const PRIMARY = 'inline-flex min-h-11 items-center justify-center rounded-full bg-accent px-4 text-sm font-semibold text-white transition-colors hover:bg-[color-mix(in_srgb,var(--accent)_82%,#000000)] active:bg-[color-mix(in_srgb,var(--accent)_66%,#000000)]';
+const SECONDARY = 'inline-flex min-h-11 items-center justify-center rounded-full border border-hairline bg-surface px-4 text-sm font-semibold transition-colors hover:border-black/40';
 
 /**
  * The template page's first-screen fork for a template whose recipe is public (2026-10-29, founder):

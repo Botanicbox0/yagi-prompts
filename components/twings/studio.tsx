@@ -636,7 +636,7 @@ export function TwingsStudio({
           data-studio-signin
           data-make-cta="card"
           href={live.signinHref}
-          className={`${hasAboveCta ? 'mt-4 ' : ''}flex min-h-12 w-full items-center justify-center rounded-full bg-accent px-5 font-label text-[0.85rem] tracking-[0.1em] text-white uppercase transition-opacity hover:opacity-85`}
+          className={`${hasAboveCta ? 'mt-4 ' : ''}flex min-h-12 w-full items-center justify-center rounded-full bg-accent px-5 font-label text-[0.85rem] tracking-[0.1em] text-white uppercase transition-colors hover:bg-[color-mix(in_srgb,var(--accent)_82%,#000000)] active:bg-[color-mix(in_srgb,var(--accent)_66%,#000000)]`}
         >
           {labels.signedOutCta}
         </a>
@@ -660,7 +660,7 @@ export function TwingsStudio({
           data-make-cta="card"
           disabled={!live || interest || interestBusy}
           onClick={() => void registerInterest()}
-          className="mt-4 flex min-h-12 w-full items-center justify-center border border-current px-5 font-label text-[0.85rem] tracking-[0.1em] uppercase transition-opacity hover:opacity-70 disabled:opacity-60"
+          className="mt-4 flex min-h-12 w-full items-center justify-center rounded-full border border-current px-5 font-label text-[0.85rem] tracking-[0.1em] uppercase transition-opacity hover:opacity-70 disabled:opacity-60"
         >
           {interest ? labels.closedDone : labels.closedCta}
         </button>
@@ -684,7 +684,7 @@ export function TwingsStudio({
       {/* The one honest label the whole screen hangs on: where the result goes, and whether a payment is taken. */}
       <p
         data-live-badge
-        className="inline-block border border-accent px-3 py-1.5 font-label text-[0.68rem] tracking-[0.12em] text-accent uppercase"
+        className="inline-block rounded-full border border-accent/30 bg-[color-mix(in_srgb,var(--accent)_9%,#ffffff)] px-3 py-1 font-label text-[0.68rem] tracking-[0.12em] text-[color-mix(in_srgb,var(--accent)_85%,#000000)] uppercase"
       >
         {monthly && subscriptionCopy ? subscriptionCopy.studioBadge : charge ? live.labels.badge : live.labels.operatorBadge}
       </p>
@@ -868,7 +868,7 @@ export function TwingsStudio({
                   aria-describedby={photo ? undefined : 'studio-cta-hint'}
                   onClick={() => void submitLive()}
                   data-make-cta="card"
-                  className="flex min-h-12 w-full items-center justify-center rounded-full bg-accent px-5 py-3 font-label text-[0.9rem] tracking-[0.1em] text-white uppercase transition-opacity hover:opacity-85 disabled:bg-black/10 disabled:text-black/55"
+                  className="flex min-h-12 w-full items-center justify-center rounded-full bg-accent px-5 py-3 font-label text-[0.9rem] tracking-[0.1em] text-white uppercase transition-colors hover:bg-[color-mix(in_srgb,var(--accent)_82%,#000000)] active:bg-[color-mix(in_srgb,var(--accent)_66%,#000000)] disabled:bg-black/10 disabled:text-black/55"
                 >
                   {submitting
                     ? live.labels.submitting
@@ -953,7 +953,7 @@ function MakeStickyBar({ price, label, studioRef, phaseKey }: { price: string | 
     >
       <div className="mx-auto flex max-w-xl items-center gap-4">
         {price && <p data-make-sticky-price className="shrink-0 font-display text-[1.35rem] leading-none font-black">{price}</p>}
-        <a href="#make" data-make-cta="sticky" onClick={go} className="flex min-h-12 flex-1 items-center justify-center rounded-full bg-accent px-4 font-label text-[0.85rem] tracking-[0.1em] text-white uppercase transition-opacity hover:opacity-85">{label}</a>
+        <a href="#make" data-make-cta="sticky" onClick={go} className="flex min-h-12 flex-1 items-center justify-center rounded-full bg-accent px-4 font-label text-[0.85rem] tracking-[0.1em] text-white uppercase transition-colors hover:bg-[color-mix(in_srgb,var(--accent)_82%,#000000)] active:bg-[color-mix(in_srgb,var(--accent)_66%,#000000)]">{label}</a>
       </div>
     </div>
   );

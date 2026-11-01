@@ -1480,7 +1480,7 @@ export const ko: Dictionary = {
     anotherPhoto: '다른 사진으로',
     previewAlt: '올릴 사진 미리보기',
     guideSummary: '어떤 사진이 잘 나오나요?',
-    goodExamples: '이런 사진이 좋아요',
+    goodExamples: '이런 사진을 넣어주세요!',
     avoidExamples: '이런 사진은 피해주세요',
     exampleClear: '얼굴이 잘 보이는 사진',
     exampleFront: '카메라를 정면으로 바라본 사진',
