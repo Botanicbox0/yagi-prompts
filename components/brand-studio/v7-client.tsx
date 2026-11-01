@@ -53,8 +53,7 @@ export function Film({ src, poster, label, className, eager = false }: { src: st
  * slider) to wipe between the first shot and the fix. The box is why it works: a small region gets a whole canvas of
  * pixels of its own, and everything outside the box stays as it was.
  */
-export function Compare({ wide, pairs, labels }: {
-  wide: string;
+export function Compare({ pairs, labels }: {
   pairs: ReadonlyArray<{
     id: string;
     raw: string;
@@ -65,8 +64,10 @@ export function Compare({ wide, pairs, labels }: {
     alt: [string, string];
     box: { left: number; top: number; width: number; height: number };
     attachments: readonly string[];
+    wide: string;
+    wideAlt: string;
   }>;
-  labels: { raw: string; ours: string; hint: string; slider: string; wide: string; wideAlt: string; image: string };
+  labels: { raw: string; ours: string; hint: string; slider: string; wide: string; image: string };
 }) {
   const [index, setIndex] = useState(0);
   const [split, setSplit] = useState(50);
@@ -115,7 +116,7 @@ export function Compare({ wide, pairs, labels }: {
       </div>
       <div className={styles.fixStage}>
         <figure className={styles.fixWide}>
-          <img src={wide} alt={labels.wideAlt} width={1200} height={900} loading="lazy" decoding="async" />
+          <img key={pair.id} src={pair.wide} alt={pair.wideAlt} width={1200} height={1600} decoding="async" />
           <span data-fix-box={pair.id} className={styles.fixBox} style={box} aria-hidden="true" />
           <figcaption className={styles.tag}>{labels.wide}</figcaption>
         </figure>
@@ -147,7 +148,7 @@ export function Compare({ wide, pairs, labels }: {
         </div>
       </div>
       {/* Every pair stays in the markup for crawlers and no-JS readers; only the active one is drawn above. */}
-      <ul hidden>{pairs.map((item) => <li key={item.id} data-contrast-source={item.id}><img src={item.raw} alt={item.alt[0]} /><img src={item.ours} alt={item.alt[1]} /></li>)}</ul>
+      <ul hidden>{pairs.map((item) => <li key={item.id} data-contrast-source={item.id}><img src={item.wide} alt={item.wideAlt} /><img src={item.raw} alt={item.alt[0]} /><img src={item.ours} alt={item.alt[1]} /></li>)}</ul>
     </div>
   );
 }
@@ -290,14 +291,17 @@ export function DemoDock({ label, cta, href }: { label: string; cta: string; hre
 }
 
 /**
- * The hero film in three sizes: phones get 720p, large high-density screens get 4K, everyone else 1080p. A browser that
- * ignores `media` on a source takes the first one, the small file. One quiet spec line follows the cuts.
+ * The hero film in three sizes: phones get their own 9:16 cut at 720p, large high-density screens get 4K, everyone else
+ * 1080p. A browser that ignores `media` on a source takes the first one, the small file. `poster` on a video has no media
+ * query, so the still behind it is a picture: phones wait on the first frame of their own cut, not a zoomed 16:9 frame.
+ * One quiet spec line follows the cuts on larger screens.
  */
-export function HeroFilm({ src, srcSmall, srcLarge, poster, label, cues, className, specClassName }: {
+export function HeroFilm({ src, srcSmall, srcLarge, poster, posterSmall, label, cues, className, specClassName }: {
   src: string;
   srcSmall: string;
   srcLarge: string;
   poster: string;
+  posterSmall: string;
   label: string;
   cues: ReadonlyArray<{ at: number; text: string }>;
   className?: string;
@@ -323,8 +327,12 @@ export function HeroFilm({ src, srcSmall, srcLarge, poster, label, cues, classNa
   }, [cues]);
   return (
     <>
-      <video ref={ref} className={className} poster={poster} muted loop playsInline preload="metadata" aria-label={label} data-loop-video>
-        <source src={srcSmall} media="(max-width: 767px)" type="video/mp4" />
+      <picture>
+        <source srcSet={posterSmall} media="(max-width: 759px)" />
+        <img className={className} src={poster} alt="" fetchPriority="high" decoding="async" />
+      </picture>
+      <video ref={ref} className={className} muted loop playsInline preload="metadata" aria-label={label} data-loop-video>
+        <source src={srcSmall} media="(max-width: 759px)" type="video/mp4" />
         <source src={srcLarge} media="(min-width: 1700px) and (min-resolution: 1.5dppx), (min-width: 2400px)" type="video/mp4" />
         <source src={src} type="video/mp4" />
       </video>

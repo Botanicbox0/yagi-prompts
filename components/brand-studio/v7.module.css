@@ -168,7 +168,6 @@
 .heroCopy .lead { max-width: 30rem; color: var(--id-body); }
 @media (max-width: 759px) {
   .heroFrame { height: 82svh; }
-  .heroFilm { object-position: 76% 50%; }
   .heroScrim { background: linear-gradient(0deg, rgb(246 247 249 / 0.96) 0%, rgb(246 247 249 / 0.78) 42%, rgb(246 247 249 / 0) 72%); }
 }
 /* Hairline crosshairs at the frame corners: the page reads like a production sheet. */
@@ -217,8 +216,8 @@
 .fixAttachments li { display: grid; justify-items: end; gap: 5px; }
 .fixAttachments img { width: clamp(72px, 7vw, 92px); aspect-ratio: 1; object-fit: contain; border: 1px solid var(--id-line); border-radius: 12px; background: var(--id-paper); }
 .fixAttachments span { color: var(--id-muted); font-family: var(--id-mono); font-size: 11px; }
-/* Same height side by side: 4:3 beside 1:1 at 4fr and 3fr. */
-.fixStage { position: relative; display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 3fr); gap: clamp(10px, 1.2vw, 16px); min-width: 0; align-self: center; }
+/* Same height side by side: 3:4 beside 1:1 at 3fr and 4fr. */
+.fixStage { position: relative; display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 4fr); gap: clamp(10px, 1.2vw, 16px); min-width: 0; align-self: center; }
 .fixWide { position: relative; overflow: hidden; border-radius: var(--id-radius-card); background: var(--id-sky); }
 .fixWide img { display: block; width: 100%; height: auto; }
 .fixBox {
@@ -268,7 +267,7 @@
 @media (max-width: 639px) {
   .fix > .fixStage { order: -1; }
   .fixStage { display: block; }
-  .fixWide { position: absolute; z-index: 1; left: 10px; bottom: 10px; width: 38%; border: 2px solid #ffffff; border-radius: 12px; pointer-events: none; }
+  .fixWide { position: absolute; z-index: 1; left: 10px; bottom: 10px; width: 28%; border: 2px solid #ffffff; border-radius: 12px; pointer-events: none; }
   .fixWide .tag { display: none; }
 }
 @media (min-width: 640px) and (max-width: 959px) { .fix > .fixStage { order: -1; } }
@@ -414,25 +413,24 @@
   overflow: hidden;
   display: grid;
   gap: 32px;
-  min-height: min(100svh, 980px);
-  padding: clamp(28px, 5vw, 80px);
+  padding: clamp(28px, 4.4vw, 72px);
   border-radius: var(--id-radius-card);
   color: #ffffff;
-  background:
-    radial-gradient(120% 80% at 85% 10%, color-mix(in srgb, var(--id-accent) 70%, #ffffff) 0%, transparent 55%),
-    var(--id-accent);
+  /* The pictures carry the colour; the ground is the deep end of their blue. */
+  background: color-mix(in srgb, var(--id-accent) 24%, #070b14);
   isolation: isolate;
 }
-@media (min-width: 960px) { .closingFrame { grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); align-items: end; } }
+@media (min-width: 960px) { .closingFrame { grid-template-columns: minmax(0, 1fr) minmax(0, 1.04fr); align-items: center; gap: clamp(32px, 4vw, 72px); } }
 .closingCopy { display: grid; gap: 22px; align-content: end; }
 .closingCopy .eyebrow { color: rgb(255 255 255 / 0.86); }
 .closingCopy .eyebrowMark { background: #ffffff; }
-.closingCopy .display { font-size: clamp(2.4rem, 4.9vw, 5.2rem); }
+.closingCopy .display { font-size: clamp(2.2rem, 3.9vw, 4.4rem); }
 .closingCopy .lead { color: rgb(255 255 255 / 0.92); }
 .closingCopy .cta { color: var(--id-accent-text); background: #ffffff; }
 .closingCopy .cta:hover { background: var(--id-accent-tint); }
-.closingMedia { position: relative; overflow: hidden; aspect-ratio: 3 / 4; max-height: 76svh; justify-self: end; width: min(100%, 440px); border-radius: var(--id-radius-media); box-shadow: 0 40px 90px -40px rgb(10 24 48 / 0.6); }
-.closingMedia img { width: 100%; height: 100%; object-fit: cover; }
+.closingGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: clamp(6px, 0.6vw, 10px); }
+.closingGrid li { overflow: hidden; aspect-ratio: 1; border-radius: 12px; background: rgb(255 255 255 / 0.06); }
+.closingGrid img { width: 100%; height: 100%; object-fit: cover; }
 
 /* ---------- Floating demo pill ---------- */
 .dock {
@@ -531,7 +529,7 @@
 .heroSpec span { display: block; animation: specIn var(--id-base, 520ms) var(--id-spring) both; }
 @keyframes specIn { from { opacity: 0; transform: translateY(5px); } }
 @media (max-width: 759px) {
-  .heroFilm { object-position: 45% 30%; }
+  .heroFilm { object-position: 50% 50%; }
   .heroScrim { background: linear-gradient(0deg, rgb(14 28 52 / 0.86) 0%, rgb(14 28 52 / 0.56) 38%, rgb(14 28 52 / 0) 66%); }
   .heroSpec { display: none; }
 }

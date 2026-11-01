@@ -1446,8 +1446,10 @@ async function sweepCampaigns(): Promise<void> {
     }
     expectPresent(`/${locale}/brands hero plays the blue-world film`, brand.body, '/reel/landing/v7/hero.mp4');
     expectEqual(`/${locale}/brands hero opens three doors`, (brand.body.match(/data-hero-door=/g) ?? []).length, 3);
-    expectPresent(`/${locale}/brands shows the wide shot behind the local fixes`, brand.body, '/reel/landing/c-wide.webp');
+    expectPresent(`/${locale}/brands shows the wide shot behind the local fixes`, brand.body, '/reel/landing/c-logo-wide.webp');
     expectPresent(`/${locale}/brands boxes the region it fixes`, brand.body, 'data-fix-box=');
+    expectPresent(`/${locale}/brands closes beside nine images`, brand.body, 'data-closing-grid');
+    expectPresent(`/${locale}/brands gives phones the 9:16 hero`, brand.body, '/reel/landing/v7/hero-phone.mp4');
     expectEqual(`/${locale}/brands shows three real local fixes`, (brand.body.match(/data-contrast-pair=/g) ?? []).length, 3);
     expectEqual(`/${locale}/brands offers two remix formats`, (brand.body.match(/data-remix-format=/g) ?? []).length, 2);
     expectEqual(`/${locale}/brands shows the runway's four real edits`, (brand.body.match(/data-remix-edit=/g) ?? []).length, 4);

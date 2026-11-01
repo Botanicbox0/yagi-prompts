@@ -40,7 +40,8 @@ export const en = {
     pages: { brands: 'Brand landing', home: 'Personal landing' },
     open: 'Open page',
     groups: {
-      contrast: 'Generated as-is vs TWINGS',
+      contrast: 'Local fixes',
+      closing: 'Closing grid',
       looks: 'Fashion looks',
       cuts: 'Beauty shots',
       vto: 'Try-on (VTO)',
@@ -707,7 +708,7 @@ export const en = {
         "title": "No more\ngeneric AI images",
         "body": "Bring your brand files to a demo and see the results.",
         "cta": "Book a demo",
-        "filmLabel": "A model holding the YAGI heart perfume in both hands"
+        "gridLabel": "Nine images made by YAGI Studio"
       },
       "metaTitle": "Your brand’s own AI media engine",
       "metaDescription": "TWINGS for Brands is your brand’s own AI media engine. It already knows your brand, so anyone on your team can create expert-level images and films, and remix great formats into your brand.",
@@ -746,15 +747,15 @@ export const en = {
             ]
           },
           {
-            "title": "Beauty campaign",
+            "title": "Perfume ad",
             "edits": [
               {
-                "prompt": "Change the product to our perfume",
-                "done": "The scenes stayed. Only the product changed."
+                "prompt": "Change this perfume to the blue edition",
+                "done": "The set and people stay; only the colour of the perfume changes."
               },
               {
-                "prompt": "Now shoot it again in a blue world",
-                "done": "Same structure, with a new world and a new product."
+                "prompt": "Now reshoot it in a blue world",
+                "done": "The framing and people stay; the world takes on the new colour."
               }
             ]
           }
@@ -770,29 +771,31 @@ export const en = {
         "hint": "What to fix",
         "slider": "Position of the divider between the two shots",
         "wide": "Full shot",
-        "wideAlt": "Full shot: a model holding a perfume in both hands on a blue set",
         "image": "@Image",
         "pairs": [
           {
             "chip": "Logo",
-            "prompt": "Keep the background texture and every element of @Image1, and blend the logo from @Image2 into the glass in the same direction",
+            "prompt": "Keep the glass texture and every element of @Image1, and etch the logo from @Image2 into the glass at the same size and direction",
             "note": "Only the logo inside the box was redrawn, then blended back with soft edges.",
             "raw": "First shot: a perfume with a blurred logo",
-            "ours": "Fixed: a perfume with a sharp logo"
+            "ours": "Fixed: a perfume with a sharp logo",
+            "wideAlt": "Full shot: a perfume bottle small on a bed by a window"
           },
           {
             "chip": "Product detail",
-            "prompt": "Keep the shape in @Image1 and bring back the detail of the cap and ribbon",
-            "note": "Only the cap and ribbon inside the box were redrawn. The bottle keeps its shape.",
-            "raw": "First shot: a smeared cap and ribbon",
-            "ours": "Fixed: a crisp cap and ribbon"
+            "prompt": "Keep the shape and light in @Image1, bring back the texture of the bottle and cap, and match the logo to @Image2",
+            "note": "Only the bottle inside the box was redrawn. The satin and shadows stay.",
+            "raw": "First shot: a bottle with smeared texture",
+            "ours": "Fixed: a bottle with real texture",
+            "wideAlt": "Full shot: a perfume bottle and iced water on blue satin"
           },
           {
             "chip": "Skin",
             "prompt": "Keep the face in @Image1 and bring back the skin texture and stray hairs",
-            "note": "Pores and stray hairs came back. Her features did not change.",
+            "note": "Texture and stray hairs came back across the whole face. Her features did not change.",
             "raw": "First shot: over-smooth skin",
-            "ours": "Fixed: skin with real texture"
+            "ours": "Fixed: skin with real texture",
+            "wideAlt": "Full shot: a model with both arms raised"
           }
         ]
       }
