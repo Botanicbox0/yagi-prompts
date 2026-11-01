@@ -626,6 +626,12 @@ B2-a 자격 신청·관리자 확인·로컬 AI 워커·탭 가시성(0057/0141)
 - **클라우드 적용 필요:** `0065_core_creative_profiles.sql` + `0145_glue_creative_profiles.sql`, 그다음 `0071_core_creative_cover.sql`(glue 없음 — 0131 거부 자세 상속)(대표 또는 Director, 코드 배포 전). 없어도 코드는 이전처럼 동작한다(프로브·`to_jsonb`).
 - **대표 결정 필요:** ① 개인정보처리방침에 "크리에이티브가 고른 프로필 항목(이름·나라·도시·링크·공개 이메일·작업물) 공개" 문구 추가(§18.1 남은 항목과 합침). ② `TWINGS_FORMAT_CREATORS`를 켜 첫 크리에이티브를 받을 시점. ③ 레시피를 로그인 뒤로 옮기면 `lens-portal-tutu` DM 퍼널도 로그인을 거친다 — IG 캡션·DM 문안을 "로그인하면 바로 볼 수 있어요"로 맞출지.
 
+### 20.8 어드민 이미지 세트 등록 (2026-11-01)
+- 이미지 세트는 CLI(`templates:import`)로만 등록돼 운영자가 올릴 형식이 없었다. `/admin/prompts/new/set`(`prompt.createSet`)이 같은 빌더·기록 함수를 쓴다. 컷 2~6개, 이미지 일괄 드롭, `{ file_name, prompt }` 목록 JSON으로 프롬프트 자동 채움, 가격 0원으로 게시 뒤 편집 화면에서 가격을 넣는다.
+- 세트 프롬프트는 고객 사진을 `Image 1`로만 부른다. 컷별 참조 이미지는 아직 못 넣는다.
+- Nano Banana Pro(`nano-banana-pro`, `gemini-3-pro-image`, 2K $0.134)는 어드민 엔진·모델 목록과 스튜디오 세트에만 열렸다. 메이커 허용 목록(`MAKER_ENGINE_IDS`)과 MCP에는 넣지 않았다.
+- **확인 필요:** 2026-11-01 스모크가 HTTP 402(Gemini 선불 크레딧 소진)로 끝나 실제 이미지 출력은 미확인이다. 크레딧을 채운 뒤 `npm run gemini:smoke -- --engine nano-banana-pro`로 확인하기 전에는 Pro 세트에 가격을 넣지 않는다.
+
 ## 21. 브랜드 쪽 — 올인원 마케팅 에셋 스튜디오 (대표 결정 2026-10-28)
 
 ### 21.1 결정

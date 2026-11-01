@@ -31,7 +31,7 @@ export async function loadTemplateRecipe(sql: SqlRunner, templateId: string): Pr
   const { rows } = await sql.query<{ recipe: unknown }>(`select to_jsonb(p.*)->'recipe' as recipe from prompt_items p where p.id=$1`, [templateId]);
   const raw = rows[0]?.recipe;
   if (raw === null || raw === undefined) return null;
-  const checked = parseRecipe(raw);
+  const checked = parseRecipe(raw, { studio: true });
   return checked.ok ? checked.recipe : null;
 }
 
@@ -41,7 +41,7 @@ export async function loadJobRecipe(sql: SqlRunner, renderId: string): Promise<J
     'select render_id,purpose,format_id,recipe,state from render_job_recipes where render_id=$1', [renderId]);
   const row = rows[0];
   if (!row) return null;
-  const checked = parseRecipe(row.recipe);
+  const checked = parseRecipe(row.recipe, { studio: true });
   return { renderId: row.render_id, purpose: row.purpose, formatId: row.format_id, recipe: checked.ok ? checked.recipe : null, state: row.state ?? {} };
 }
 

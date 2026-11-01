@@ -551,7 +551,8 @@ describe('admin prompts screen contract (§3.8 / §13.2)', () => {
   const create = read('app', '(admin)', 'admin', 'prompts', 'new', 'page.tsx');
   const item = read('app', '(admin)', 'admin', 'prompts', '[id]', 'page.tsx');
   const fields = read('components', 'admin', 'prompt-fields.tsx');
-  const screens = { board, create, item };
+  const createSet = read('app', '(admin)', 'admin', 'prompts', 'new', 'set', 'page.tsx');
+  const screens = { board, create, createSet, item };
   const surface = Object.values(screens).join('\n');
 
   it('is dynamic and posts through OpForm only', () => {

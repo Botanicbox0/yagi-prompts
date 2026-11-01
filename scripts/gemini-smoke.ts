@@ -1,7 +1,7 @@
 import { config as loadEnv } from 'dotenv';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import { DEFAULT_IMAGE_ASPECT, IMAGE_ENGINES, estimateImageUsd, imageSizeFor, isImageAspect, sizeString, type ImageAspect } from '@/lib/images/engines';
+import { DEFAULT_IMAGE_ASPECT, IMAGE_ENGINES, estimateImageUsd, imageSizeFor, isImageAspect, sizeString, type GoogleEngineId, type ImageAspect } from '@/lib/images/engines';
 import { GeminiImageError, createGeminiImageClient, geminiConfigFromEnv, toGeminiBody } from '@/lib/images/gemini';
 import { looksLikeFaceRefusal } from '@/lib/renders/engines';
 
@@ -33,7 +33,8 @@ function flag(name: string): string | null {
   return argv[index + 1] ?? '';
 }
 
-const ENGINE = 'nano-banana-2.1' as const;
+/** `--engine nano-banana-pro` for the Pro model (≈ $0.14 for one image). */
+const ENGINE: GoogleEngineId = process.argv.includes('nano-banana-pro') ? 'nano-banana-pro' : 'nano-banana-2.1';
 /** A licensed demo selfie the studio reel already ships; pass `--photo` for your own. */
 const DEFAULT_PHOTO = 'public/reel/studio-demo/reference-selfie.jpeg';
 const DEFAULT_PROMPT =
@@ -48,7 +49,7 @@ function mimeOf(path: string): 'image/png' | 'image/jpeg' | 'image/webp' {
 }
 
 interface SmokeRecord {
-  engine: typeof ENGINE;
+  engine: GoogleEngineId;
   model: string;
   realPersonInput: true;
   photo: string;
@@ -92,18 +93,19 @@ async function main(): Promise<number> {
   const estimate = estimateImageUsd(ENGINE, 1);
 
   console.log(`GEMINI_API_KEY present: ${config !== null}`);
-  console.log(`engine    : ${spec.label} (${config?.model ?? spec.model}) via Interactions API`);
+  console.log(`engine    : ${spec.label} (${ENGINE === 'nano-banana-2.1' ? config?.model ?? spec.model : spec.model}) via Interactions API`);
   console.log(`size      : ${size} (${aspect}, 2K)`);
   console.log(`photo     : ${photoPath} (sent as the first image — a real person, on purpose)`);
   console.log(`estimate  : ≈ $${estimate.toFixed(4)} for one image`);
 
-  const base = { engine: ENGINE, model: config?.model ?? spec.model, realPersonInput: true as const, photo: photoPath, aspect, size, estimatedUsd: estimate, at: new Date().toISOString() };
+  const model = ENGINE === 'nano-banana-2.1' ? config?.model ?? spec.model : spec.model;
+  const base = { engine: ENGINE, model, realPersonInput: true as const, photo: photoPath, aspect, size, estimatedUsd: estimate, at: new Date().toISOString() };
   const empty = { looksLikeFaceRefusal: null, status: null, interactionStatus: null, code: null, message: null, interactionId: null, savedTo: null, usage: null, usd: null, elapsedSeconds: null };
 
   const photo = { bytes: new Uint8Array(await readFile(resolve(photoPath))), mime: mimeOf(photoPath) };
   const input = { engine: ENGINE, prompt, aspect, references: [photo] };
   if (dry) {
-    const body = toGeminiBody(input, config?.model ?? spec.model);
+    const body = toGeminiBody(input, model);
     const shown = { ...body, input: (body.input as Array<Record<string, unknown>>).map((item) => (typeof item.data === 'string' ? { ...item, data: `<base64 ${item.data.length} chars>` } : item)) };
     console.log('--dry: not calling. Request body:');
     console.log(JSON.stringify(shown, null, 2));

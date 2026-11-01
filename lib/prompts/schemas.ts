@@ -44,6 +44,7 @@ export const PROMPT_MODELS = [
   { id: 'sora-2', label: 'SORA 2' },
   { id: 'veo-3', label: 'VEO 3' },
   { id: 'higgsfield', label: 'HIGGSFIELD' },
+  { id: 'nano-banana-pro', label: 'NANO BANANA PRO' },
   { id: 'nano-banana-2', label: 'NANO BANANA 2' },
   { id: 'gpt-image-2', label: 'GPT IMAGE 2' },
   { id: 'seedream-5.0-pro', label: 'SEEDREAM 5.0 PRO' },
@@ -239,6 +240,21 @@ export const USE_CASE_MAX = 3;
  * `/admin` edit carries it through `publishPromptMedia` unchanged.
  */
 export const PROMPT_GALLERY_MAX = 6;
+
+/** A set's frames: a recipe caps at six steps, the gallery at six images. */
+export const IMAGE_SET_FRAMES_MIN = 2;
+export const IMAGE_SET_FRAMES_MAX = PROMPT_GALLERY_MAX;
+const SET_PHOTO = /\bImage 1\b/;
+const SET_OTHER_REFERENCE = /\b(?:Image [2-9]\d*|Image 1\d+|Video \d+|Audio \d+)\b/;
+export type SetPromptIssue = 'no_photo' | 'other_reference' | 'braces';
+/** What a set frame's prompt may say about references: the buyer's photo as "Image 1", nothing else. */
+export function setPromptIssue(prompt: string): SetPromptIssue | null {
+  if (!SET_PHOTO.test(prompt)) return 'no_photo';
+  if (SET_OTHER_REFERENCE.test(prompt)) return 'other_reference';
+  if (/\{\{|\}\}/.test(prompt)) return 'braces';
+  return null;
+}
+
 export const PromptMediaSchema = z.object({
   video: AssetRefSchema.optional(),
   poster: AssetRefSchema.optional(),

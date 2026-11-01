@@ -4,11 +4,11 @@ import type { SqlRunner } from '@/lib/db/sql-runner';
 import { AssetRefSchema, type AssetRef } from '@/lib/content/schemas';
 import { IMAGE_ENGINES, isImageAspect, type ImageAspect, type ImageEngineId } from '@/lib/images/engines';
 import { loadTemplateRecipe, recipeSchemaReady } from '@/lib/recipes/repo';
-import { engineStepPrompt, isMakerEngine, legacyPromptText, MAX_RECIPE_STEPS, parseRecipe, SELFIE_SLOT, type Recipe } from '@/lib/recipes/schema';
+import { engineStepPrompt, isMakerEngine, isStudioRecipeEngine, legacyPromptText, MAX_RECIPE_STEPS, parseRecipe, SELFIE_SLOT, type Recipe } from '@/lib/recipes/schema';
 import type { StorageDriver } from '@/lib/storage';
 import { promptStagingKey, publishPromptMedia, sha256Hex } from './media';
 import { insertPrompt, slugExists } from './repo';
-import { PROMPT_GALLERY_MAX, PROMPT_TEXT_MAX, PROMPT_TEXT_MIN, PROMPT_TITLE_MAX, SlugSchema } from './schemas';
+import { PROMPT_GALLERY_MAX, PROMPT_TEXT_MAX, PROMPT_TEXT_MIN, PROMPT_TITLE_MAX, setPromptIssue, SlugSchema } from './schemas';
 
 /**
  * A studio IMAGE SET from a production manifest (Video-Creator's `twings_templates_manifest.json`;
@@ -25,9 +25,10 @@ import { PROMPT_GALLERY_MAX, PROMPT_TEXT_MAX, PROMPT_TEXT_MIN, PROMPT_TITLE_MAX,
  *             featured — and price 0, not for sale until the founder prices it in `/admin`
  *             (AGENTS.md §5).
  *
- * The `/admin` form can do none of this: it derives the slug from the EN title, takes one prompt,
- * and trims what it is given. Recipe steps are never shown publicly (`loadPublicRecipe` answers only
- * for an accepted maker format).
+ * Two doors, one writer: this script path, and `/admin/prompts/new/set` (`prompt.createSet`,
+ * 2026-11-01), which an operator can use without a manifest or database access. The one-prompt
+ * `/admin` form cannot make a set. Recipe steps are never shown publicly (`loadPublicRecipe` answers
+ * only for an accepted maker format).
  */
 
 /**
@@ -37,6 +38,7 @@ import { PROMPT_GALLERY_MAX, PROMPT_TEXT_MAX, PROMPT_TEXT_MIN, PROMPT_TITLE_MAX,
  */
 export const MANIFEST_MODEL_ENGINES: Readonly<Record<string, { engine: ImageEngineId; resolution: string }>> = {
   seedream_v5_pro: { engine: 'seedream-5.0-pro', resolution: '2k' },
+  nano_banana_pro: { engine: 'nano-banana-pro', resolution: '2k' },
 };
 
 export const ImageTemplateManifestEntrySchema = z.object({
@@ -135,9 +137,8 @@ export interface ImageTemplateSet {
 
 export type SetBuild = { ok: true; set: ImageTemplateSet } | { ok: false; errors: string[] };
 
-/** The manifest's own name for the buyer's photo, and any other reference it might name. */
+/** The manifest's own name for the buyer's photo. */
 const PHOTO = /\bImage 1\b/g;
-const OTHER_REFERENCE = /\b(?:Image [2-9]\d*|Image 1\d+|Video \d+|Audio \d+)\b/;
 const MAX_SET_FRAMES = Math.min(MAX_RECIPE_STEPS, PROMPT_GALLERY_MAX);
 
 export function buildImageTemplateSet(rawDescriptor: unknown, frames: readonly ImageFrameSpec[]): SetBuild {
@@ -152,11 +153,12 @@ export function buildImageTemplateSet(rawDescriptor: unknown, frames: readonly I
   const first = frames[0];
   if (first && frames.some((frame) => frame.engine !== first.engine)) errors.push('every frame must render on the same engine');
   if (first && frames.some((frame) => frame.aspect !== first.aspect)) errors.push('every frame must share one aspect');
-  if (first && !isMakerEngine(first.engine)) errors.push(`${first.engine} cannot run a recipe step`);
+  if (first && !isMakerEngine(first.engine) && !isStudioRecipeEngine(first.engine)) errors.push(`${first.engine} cannot run a recipe step`);
   for (const frame of frames) {
-    if (!frame.promptText.match(PHOTO)) errors.push(`${frame.key}: the prompt never names the photo as "Image 1"`);
-    if (OTHER_REFERENCE.test(frame.promptText)) errors.push(`${frame.key}: the prompt names a reference a set does not carry`);
-    if (/\{\{|\}\}/.test(frame.promptText)) errors.push(`${frame.key}: the prompt contains "{{" or "}}"`);
+    const issue = setPromptIssue(frame.promptText);
+    if (issue === 'no_photo') errors.push(`${frame.key}: the prompt never names the photo as "Image 1"`);
+    if (issue === 'other_reference') errors.push(`${frame.key}: the prompt names a reference a set does not carry`);
+    if (issue === 'braces') errors.push(`${frame.key}: the prompt contains "{{" or "}}"`);
   }
   if (errors.length > 0 || !first) return { ok: false, errors };
 
@@ -173,7 +175,7 @@ export function buildImageTemplateSet(rawDescriptor: unknown, frames: readonly I
     })),
     output: { frames: frames.map((_, index) => `shot${index + 1}`) },
   };
-  const checked = parseRecipe(raw);
+  const checked = parseRecipe(raw, { studio: true });
   if (!checked.ok) return { ok: false, errors: checked.issues.map((issue) => `recipe ${issue.code}${issue.step ? ` (${issue.step})` : ''}`) };
   if (checked.medium !== 'carousel') return { ok: false, errors: ['the recipe is not a carousel'] };
 
@@ -210,7 +212,6 @@ export async function registerImageTemplateSet(
   imageFor: (fileName: string) => PosterImage,
 ): Promise<RegisterOutcome> {
   if (await slugExists(deps.sql, set.slug)) return { slug: set.slug, status: 'exists' };
-  if (!(await recipeSchemaReady(deps.sql))) throw new Error('recipe tables are missing (migration 0059): a set cannot render without them');
 
   const id = randomUUID();
   const staged = new Map<string, AssetRef>();
@@ -220,6 +221,23 @@ export async function registerImageTemplateSet(
     await deps.storage.putStaging(key, image.bytes, image.mime);
     staged.set(fileName, AssetRefSchema.parse({ staging_key: key, sha256: sha256Hex(image.bytes), mime: image.mime, w: image.w, h: image.h }));
   }
+  await writeImageTemplateSet(deps, id, set, staged);
+  return { slug: set.slug, status: 'created', id };
+}
+
+/**
+ * The staged images published, the row and its recipe written in one transaction, then read back.
+ * `staged` holds one ref per file name in the set. Price 0: the set is not for sale until someone
+ * prices it in `/admin` (AGENTS.md §5).
+ */
+export async function writeImageTemplateSet(
+  deps: { sql: SqlRunner; storage: StorageDriver },
+  id: string,
+  set: ImageTemplateSet,
+  staged: ReadonlyMap<string, AssetRef>,
+  extra: { useCase?: string[] } = {},
+): Promise<void> {
+  if (!(await recipeSchemaReady(deps.sql))) throw new Error('recipe tables are missing (migration 0059): a set cannot render without them');
   const { media } = await publishPromptMedia(deps.storage, {
     poster: staged.get(set.thumbnail)!,
     gallery: set.frames.map((frame) => staged.get(frame.fileName)!),
@@ -240,7 +258,7 @@ export async function registerImageTemplateSet(
       promptText: legacyPromptText(set.recipe),
       textVisibility: 'pro',
       media,
-      useCase: [],
+      useCase: extra.useCase ?? [],
       featured: false,
       medium: 'image',
       priceCents: 0,
@@ -257,5 +275,4 @@ export async function registerImageTemplateSet(
   if (!stored || JSON.stringify(stored.steps.map((step) => step.prompt)) !== JSON.stringify(set.recipe.steps.map((step) => step.prompt))) {
     throw new Error(`${set.slug}: the stored recipe differs from the manifest`);
   }
-  return { slug: set.slug, status: 'created', id };
 }

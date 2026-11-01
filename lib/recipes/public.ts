@@ -54,7 +54,7 @@ export async function loadPublicRecipe(sql: SqlRunner, templateId: string, label
     limit 1`, [templateId]);
   const row = rows[0];
   if (!row) return null;
-  const checked = parseRecipe(row.recipe);
+  const checked = parseRecipe(row.recipe, { studio: !row.maker });
   if (!checked.ok) return null;
   const disclosure = parseDisclosure(row.disclosure);
   if (!row.maker && !disclosure.prompts) return null;

@@ -142,11 +142,13 @@ function CostFloorNote({ row, dict }: { row: PromptRow | null; dict: Dict }) {
   if (row.medium === 'image') {
     const engine = resolveEngine(row.engine, 'image');
     if (!isImageEngine(engine)) return null;
-    const floor = imageCostFloor({ engine, referenceImages: 1 });
-    const below = row.priceKrw > 0 && row.priceKrw < floor.proposedKrw;
+    // A set renders every frame on one order, so its floor is one image's floor per frame.
+    const frames = parsePromptMedia(row.media).gallery?.length ?? 1;
+    const proposed = imageCostFloor({ engine, referenceImages: 1 }).proposedKrw * frames;
+    const below = row.priceKrw > 0 && row.priceKrw < proposed;
     return (
-      <p data-cost-floor={String(floor.proposedKrw)} data-cost-floor-engine={engine} className="font-mono text-[0.72rem] opacity-70">
-        {interpolate(a.templateImageCostFloor, { engine: IMAGE_ENGINES[engine].label, price: formatKrw(floor.proposedKrw) })}
+      <p data-cost-floor={String(proposed)} data-cost-floor-engine={engine} className="font-mono text-[0.72rem] opacity-70">
+        {interpolate(a.templateImageCostFloor, { engine: IMAGE_ENGINES[engine].label, price: formatKrw(proposed) })}
         {below ? ` ${a.templateBelowFloor}` : ''}
       </p>
     );
