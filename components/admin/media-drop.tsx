@@ -8,6 +8,13 @@ import {
   type UploadFailure,
   type UploadFailureLabels,
 } from '@/lib/admin/direct-upload';
+import {
+  POSTER_FOCUS_CENTER,
+  dragPosterFocus,
+  formatPosterFocus,
+  posterObjectPosition,
+  type PosterFocus,
+} from '@/lib/prompts/poster-focus';
 
 /**
  * Founder direction (2026-08-13) — the admin media fields grow hands.
@@ -38,6 +45,9 @@ export interface MediaDropLabels extends UploadFailureLabels {
   posterZone: string;
   posterPicked: string;
   posterHint: string;
+  cropHeading: string;
+  cropHint: string;
+  cropPosition: string;
   audioHeading: string;
   audioZone: string;
   audioSaved: string;
@@ -140,6 +150,7 @@ export function MediaDrop({
   audioName,
   existingVideoSrc,
   existingPosterSrc,
+  existingPosterFocus,
   existingAudioSrc,
 }: {
   labels: MediaDropLabels;
@@ -156,6 +167,8 @@ export function MediaDrop({
   existingVideoSrc?: string;
   /** The poster this row already has — shown so the panel says what it is about to replace. */
   existingPosterSrc?: string;
+  /** Where that poster's 1:1 list thumbnail is cropped (staff report, 2026-11-02). */
+  existingPosterFocus?: PosterFocus;
   /** The audio this row already has, so a save can be checked by ear (staff report, 2026-11-02). */
   existingAudioSrc?: string;
 }) {
@@ -171,6 +184,9 @@ export function MediaDrop({
   const [frameState, setFrameState] = useState<'loading' | 'ready' | 'unavailable'>('loading');
   const [posterUrl, setPosterUrl] = useState<string | null>(null);
   const [posterLabel, setPosterLabel] = useState<string | null>(null);
+  const [posterFocus, setPosterFocus] = useState<PosterFocus>(existingPosterFocus ?? POSTER_FOCUS_CENTER);
+  const [posterSize, setPosterSize] = useState<{ w: number; h: number } | null>(null);
+  const cropDrag = useRef<{ pointerId: number; x: number; y: number; focus: PosterFocus } | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [audioLabel, setAudioLabel] = useState<string | null>(null);
   const [existingAudioUrl, setExistingAudioUrl] = useState<string | null>(null);
@@ -377,6 +393,8 @@ export function MediaDrop({
     setReceipts((current) => ({ ...current, poster: '' }));
     setPosterLabel(label);
     setPosterUrl(URL.createObjectURL(file));
+    setPosterFocus(POSTER_FOCUS_CENTER);
+    setPosterSize(null);
     void upload('poster', file, posterInputRef.current);
   };
 
@@ -563,6 +581,59 @@ export function MediaDrop({
         />
         <input type="hidden" name={`${posterName}Ref`} value={receipts.poster} readOnly />
         {progress('poster')}
+
+        {/* The wall's 1:1 thumbnail, dragged into place. No bytes change: the form saves a position. */}
+        <input type="hidden" name={`${posterName}Focus`} value={formatPosterFocus(posterFocus)} readOnly />
+        {enhanced && (posterUrl ?? existingPosterSrc) && (
+          <div data-poster-crop className="mt-3 border border-hairline p-3">
+            <p className="font-label text-eyebrow uppercase opacity-60">{labels.cropHeading}</p>
+            <div
+              className="mt-2 aspect-square w-full max-w-60 cursor-grab touch-none overflow-hidden bg-black active:cursor-grabbing"
+              onPointerDown={(e) => {
+                e.preventDefault();
+                e.currentTarget.setPointerCapture(e.pointerId);
+                cropDrag.current = { pointerId: e.pointerId, x: e.clientX, y: e.clientY, focus: posterFocus };
+              }}
+              onPointerMove={(e) => {
+                const drag = cropDrag.current;
+                if (!drag || drag.pointerId !== e.pointerId || !posterSize) return;
+                setPosterFocus(dragPosterFocus(drag.focus, e.clientX - drag.x, e.clientY - drag.y, posterSize, e.currentTarget.clientWidth));
+              }}
+              onPointerUp={() => { cropDrag.current = null; }}
+              onPointerCancel={() => { cropDrag.current = null; }}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element -- blob preview / admin object */}
+              <img
+                src={posterUrl ?? existingPosterSrc}
+                alt=""
+                draggable={false}
+                className="h-full w-full select-none object-cover"
+                style={{ objectPosition: posterObjectPosition(posterFocus) }}
+                onLoad={(e) => setPosterSize({ w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight })}
+              />
+            </div>
+            {/* The same control for a keyboard. A square poster has nothing to move. */}
+            {posterSize && posterSize.w !== posterSize.h && (
+              <label className="mt-2 flex max-w-60 items-center gap-2 font-mono text-[0.7rem] opacity-70">
+                {labels.cropPosition}
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  step={1}
+                  value={posterSize.w > posterSize.h ? posterFocus.x : posterFocus.y}
+                  className="min-w-0 flex-1"
+                  style={{ accentColor: 'var(--accent)' }}
+                  onChange={(e) => {
+                    const value = Number(e.currentTarget.value);
+                    setPosterFocus((focus) => (posterSize.w > posterSize.h ? { ...focus, x: value } : { ...focus, y: value }));
+                  }}
+                />
+              </label>
+            )}
+            <p className="mt-2 font-mono text-[0.68rem] opacity-50">{labels.cropHint}</p>
+          </div>
+        )}
       </div>
 
       {/* --- the audio result (optional slot) ------------------------------ */}

@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { checkUpload, publishPromptMedia, stagePromptUpload } from '@/lib/prompts/media';
+import { parsePosterFocus } from '@/lib/prompts/poster-focus';
 import { AssetRefSchema, type AssetRef } from '@/lib/content/schemas';
 import { STAGING_BUCKET } from '@/lib/storage';
 import {
@@ -199,6 +200,10 @@ async function applyUploads(
     if (!staged.ok) return { ok: false, detail: `${kind}: ${staged.reason}` };
     next[kind] = staged.value.ref;
   }
+  // A new poster does not inherit the old crop unless the form sent one for it.
+  const focus = parsePosterFocus(f.str(form, 'posterFocus'));
+  if (focus) next.posterFocus = focus;
+  else if (next.poster !== existing.poster) delete next.posterFocus;
   return { ok: true, value: next };
 }
 

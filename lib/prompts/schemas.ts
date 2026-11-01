@@ -258,6 +258,8 @@ export function setPromptIssue(prompt: string): SetPromptIssue | null {
 export const PromptMediaSchema = z.object({
   video: AssetRefSchema.optional(),
   poster: AssetRefSchema.optional(),
+  /** The admin wall's 1:1 crop. `catch`: a bad value must not fail the parse and lose the media. */
+  posterFocus: z.object({ x: z.number().min(0).max(100), y: z.number().min(0).max(100) }).optional().catch(undefined),
   audio: AssetRefSchema.optional(),
   gallery: z.array(AssetRefSchema).min(1).max(PROMPT_GALLERY_MAX).optional(),
 });

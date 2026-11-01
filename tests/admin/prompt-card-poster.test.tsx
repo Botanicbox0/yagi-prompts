@@ -5,14 +5,13 @@ import { getDictionary } from '@/lib/i18n/dictionaries';
 import type { PromptRow } from '@/lib/prompts/repo';
 
 /**
- * Staff report (2026-11-02): a landscape thumbnail showed black lines on the admin wall. The wall
- * letterboxed every poster into a black 16:9 box, so anything but exactly 16:9 had bars. A poster now
- * fills a 16:9 or a 9:16 frame, whichever matches its shape, the way the staff member asked.
+ * Staff report (2026-11-02): a 16:9 and 9:16 mix made the admin wall uneven. Every card now shows a
+ * 1:1 thumbnail, cropped at the position staff chose in the editor, or at the centre by default.
  */
 describe('admin wall poster', () => {
   const dict = getDictionary('ko');
 
-  function card(poster: { w?: number; h?: number } | null, aspectDefault: string | null = null) {
+  function card(poster: { w?: number; h?: number } | null, posterFocus?: { x: number; y: number }) {
     const row = {
       id: '00000000-0000-4000-8000-000000000001',
       slug: 'a-template',
@@ -22,36 +21,33 @@ describe('admin wall poster', () => {
       titleKo: null,
       textVisibility: 'public',
       featured: false,
-      aspectDefault,
+      aspectDefault: null,
       createdAt: null,
       publishedAt: null,
-      media: poster === null ? {} : { poster: { staging_key: 'k', sha256: 'a'.repeat(64), mime: 'image/png', ...poster } },
+      media: poster === null ? {} : { poster: { staging_key: 'k', sha256: 'a'.repeat(64), mime: 'image/png', ...poster }, ...(posterFocus ? { posterFocus } : {}) },
     } as unknown as PromptRow;
     return renderToStaticMarkup(<PromptCard row={row} dict={dict} href="/admin/prompts/x" locale="ko" />);
   }
 
-  it('fills the frame instead of letterboxing', () => {
-    const html = card({ w: 1600, h: 1200 });
-    expect(html).toContain('object-cover');
-    expect(html).not.toContain('object-contain');
+  it('shows a landscape and a portrait poster in the same 1:1 frame', () => {
+    for (const html of [card({ w: 1600, h: 900 }), card({ w: 1080, h: 1920 }), card({})]) {
+      expect(html).toContain('data-poster-frame="square"');
+      expect(html).toContain('aspect-square');
+      expect(html).toContain('object-cover');
+      expect(html).not.toContain('aspect-video');
+      expect(html).not.toContain('aspect-[9/16]');
+    }
   });
 
-  it('uses 16:9 for a landscape poster and 9:16 for a portrait one', () => {
-    expect(card({ w: 1600, h: 1200 })).toContain('data-poster-frame="landscape"');
-    expect(card({ w: 1600, h: 1200 })).toContain('aspect-video');
-    expect(card({ w: 1080, h: 1350 })).toContain('data-poster-frame="portrait"');
-    expect(card({ w: 1080, h: 1350 })).toContain('aspect-[9/16]');
+  it('crops at the saved position, and at the centre without one', () => {
+    expect(card({ w: 1600, h: 900 }, { x: 20, y: 50 })).toContain('object-position:20% 50%');
+    expect(card({ w: 1600, h: 900 })).toContain('object-position:50% 50%');
   });
 
-  it("falls back on the template's aspect when the upload was not measured", () => {
-    expect(card({}, '9:16')).toContain('data-poster-frame="portrait"');
-    expect(card({}, '4:3')).toContain('data-poster-frame="landscape"');
-    expect(card({})).toContain('data-poster-frame="landscape"');
-  });
-
-  it('keeps the slug placeholder when there is no poster', () => {
+  it('keeps the slug placeholder in the same 1:1 frame when there is no poster', () => {
     const html = card(null);
     expect(html).toContain('a-template');
+    expect(html).toContain('aspect-square');
     expect(html).not.toContain('<img');
   });
 });

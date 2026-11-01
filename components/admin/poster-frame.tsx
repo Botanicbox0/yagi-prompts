@@ -1,43 +1,14 @@
-'use client';
-
-import { useEffect, useRef, useState } from 'react';
-
-type PosterShape = 'landscape' | 'portrait';
-
-function shapeOf(w: number, h: number): PosterShape {
-  return w >= h ? 'landscape' : 'portrait';
-}
-
-/** What is known before the image loads: its measured size, then the template's opening aspect. */
-function initialShape(w: number | undefined, h: number | undefined, aspect: string | null): PosterShape {
-  if (w && h) return shapeOf(w, h);
-  const match = aspect ? /^(\d+):(\d+)$/.exec(aspect) : null;
-  return match ? shapeOf(Number(match[1]), Number(match[2])) : 'landscape';
-}
+import { posterObjectPosition, type PosterFocus } from '@/lib/prompts/poster-focus';
 
 /**
- * Staff report (2026-11-02): the admin wall letterboxed every poster into a black 16:9 box. A poster
- * now fills a 16:9 or a 9:16 frame, whichever matches its shape. Most single uploads carry no measured
- * size and a template's aspect can differ from its poster, so the loaded image has the last word.
+ * Staff report (2026-11-02): a mix of 16:9 and 9:16 cards made the admin wall uneven. Every poster now
+ * fills the same 1:1 frame, at the position chosen in the editor's crop panel.
  */
-export function AdminPosterFrame({ src, w, h, aspect }: { src: string; w?: number; h?: number; aspect: string | null }) {
-  const imageRef = useRef<HTMLImageElement>(null);
-  const [shape, setShape] = useState<PosterShape>(() => initialShape(w, h, aspect));
-
-  const measure = () => {
-    const image = imageRef.current;
-    if (image?.naturalWidth && image.naturalHeight) setShape(shapeOf(image.naturalWidth, image.naturalHeight));
-  };
-
-  // A cached image can finish loading before hydration, when `onLoad` is not listening yet.
-  useEffect(() => {
-    if (imageRef.current?.complete) measure();
-  }, []);
-
+export function AdminPosterFrame({ src, focus }: { src: string; focus?: PosterFocus | undefined }) {
   return (
-    <div data-poster-frame={shape} className={`overflow-hidden ${shape === 'landscape' ? 'aspect-video' : 'aspect-[9/16]'}`}>
+    <div data-poster-frame="square" className="aspect-square overflow-hidden">
       {/* eslint-disable-next-line @next/next/no-img-element -- staging object behind the gate */}
-      <img ref={imageRef} src={src} alt="" onLoad={measure} className="h-full w-full object-cover" />
+      <img src={src} alt="" className="h-full w-full object-cover" style={{ objectPosition: posterObjectPosition(focus) }} />
     </div>
   );
 }
