@@ -3113,6 +3113,20 @@ button.bw-wizard-step:hover { border-color:var(--ys-ink); }
 .bw-shortlist-bulk-faces .bw-shortlist-avatar { margin-left:-8px; font-size:11px; box-shadow:0 0 0 2px rgb(18,18,22); }
 .bw-shortlist-bulk-faces .bw-shortlist-avatar:first-child { margin-left:0; }
 .bw-shortlist-bulk-hint { font-size:12.5px; color:rgba(255,255,255,0.78); }
+/* The list menu: in the toolbar it opens down, in the selection bar it opens up. */
+.bw-shortlist-menu { position:relative; }
+.bw-shortlist-menu-open { height:42px; padding:0 16px; border:0; border-radius:999px; background:var(--ys-raised); box-shadow:inset 0 0 0 1px var(--ys-hairline); color:var(--ys-ink); font:inherit; font-size:13px; font-weight:600; cursor:pointer; }
+.bw-shortlist-menu-open:hover, .bw-shortlist-menu-open[aria-expanded='true'] { background:var(--ys-hover); }
+.bw-shortlist-menu-pop { position:absolute; top:calc(100% + 6px); right:0; z-index:45; display:grid; min-width:188px; padding:6px; border-radius:14px; background:var(--ys-surface); box-shadow:0 18px 40px rgba(0,0,0,0.16), 0 0 0 1px var(--ys-hairline); color:var(--ys-ink); }
+.bw-shortlist-menu[data-up] .bw-shortlist-menu-pop { top:auto; bottom:calc(100% + 10px); }
+.bw-shortlist-menu-pop p { margin:0; padding:6px 10px; font-size:12px; color:var(--ys-ink-muted); font-variant-numeric:tabular-nums; }
+.bw-shortlist-menu-pop button { min-height:40px; padding:0 10px; border:0; border-radius:10px; background:none; color:var(--ys-ink); font:inherit; font-size:13.5px; text-align:left; cursor:pointer; }
+.bw-shortlist-menu-pop button:hover, .bw-shortlist-menu-pop button:focus-visible { background:var(--ys-raised); }
+.bw-shortlist-send { width:min(520px, 100%); }
+.bw-shortlist-send-lead { display:grid; gap:6px; font-size:12.5px; color:var(--ys-ink-secondary); }
+.bw-shortlist-send-lead textarea { width:100%; padding:10px 12px; border:0; border-radius:12px; background:var(--ys-input-bg); box-shadow:inset 0 0 0 1px var(--ys-line); color:var(--ys-ink); font:inherit; font-size:14px; resize:vertical; }
+.bw-shortlist-send-lead textarea:focus-visible { outline:2px solid var(--ys-focus); outline-offset:1px; }
+.bw-shortlist-send .bw-triage-faces .bw-shortlist-avatar { font-size:10px; }
 .bw-shortlist-list-open { flex:none; padding:0; border:0; border-radius:999px; background:none; cursor:pointer; }
 @media (max-width: 720px) {
   .bw-shortlist-sheet { max-height:92vh; display:flex; flex-direction:column; overflow:auto; overscroll-behavior:contain; }
