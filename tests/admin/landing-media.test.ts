@@ -18,22 +18,22 @@ afterEach(async () => { await harness.close(); });
 
 describe('landingMedia.replace', () => {
   it('re-encodes the upload to WebP at the slot width, stores it publicly and refreshes the landings', async () => {
-    const outcome = expectOk(await harness.run('landingMedia.replace', { slot: 'landing/cut-flower', file: await png(2400, 3000) }));
-    expect(outcome.detail).toBe('landing/cut-flower');
+    const outcome = expectOk(await harness.run('landingMedia.replace', { slot: 'landing/look-street', file: await png(2400, 3000) }));
+    expect(outcome.detail).toBe('landing/look-street');
     expect(harness.landingMediaRevalidated).toBe(1);
 
     const [row] = await loadLandingMediaRows(runner(harness.db));
-    expect(row).toMatchObject({ slot: 'landing/cut-flower', mime: 'image/webp', width: 1000, height: 1250, originalName: 'campaign shot.png' });
+    expect(row).toMatchObject({ slot: 'landing/look-street', mime: 'image/webp', width: 1000, height: 1250, originalName: 'campaign shot.png' });
     expect(row!.objectKey).toMatch(/^[0-9a-f]{64}\.webp$/);
     const stored = await harness.storage.read('public-content', row!.objectKey);
     expect((await sharp(stored).metadata()).format).toBe('webp');
 
     // The page resolves the slot to the override; local mode serves it from the same-origin route.
     const media = landingMediaMap([row!], '');
-    expect(mediaSrc(media, 'landing/cut-flower')).toBe(`/api/landing-media/landing/cut-flower?v=${row!.objectKey.slice(0, 12)}`);
-    expect(mediaSrc(media, 'landing/cut-gel')).toBe('/reel/landing/cut-gel.webp');
+    expect(mediaSrc(media, 'landing/look-street')).toBe(`/api/landing-media/landing/look-street?v=${row!.objectKey.slice(0, 12)}`);
+    expect(mediaSrc(media, 'landing/cut-mark')).toBe('/reel/landing/cut-mark.webp');
     // On a Supabase project the page links the public bucket directly.
-    expect(landingMediaMap([row!], 'https://abc.supabase.co')['landing/cut-flower']).toBe(`https://abc.supabase.co/storage/v1/object/public/public-content/${row!.objectKey}`);
+    expect(landingMediaMap([row!], 'https://abc.supabase.co')['landing/look-street']).toBe(`https://abc.supabase.co/storage/v1/object/public/public-content/${row!.objectKey}`);
   });
 
   it('never enlarges, keeps transparency and replaces an earlier override in place', async () => {

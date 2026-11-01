@@ -20,8 +20,8 @@ describe('brand login experience', () => {
     expect(html).toContain('next=%2Fbrand');
     expect(html).toContain('https://twings.app/ko/legal/terms');
     // Public media of the landing's demo brand, from the host that serves it; playback starts in the island.
-    expect(html).toContain('https://twings.app/reel/landing/cut-flower.webp');
-    expect(html).toContain('https://twings.app/reel/landing/v7/dir-clip.mp4');
+    expect(html).toContain('https://twings.app/reel/landing/cut-beads.webp');
+    expect(html).toContain('https://twings.app/reel/landing/v7/feed-blue.mp4');
     expect(html).not.toContain('autoPlay=');
     // Clearly a demo brand, not a client: the kit carries the example label.
     expect(html).toContain('data-brand-auth-kit');

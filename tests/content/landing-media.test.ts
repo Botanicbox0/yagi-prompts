@@ -31,8 +31,8 @@ describe('landing media slots', () => {
   });
 
   it('resolves an override, else the file, and refuses names it does not know', () => {
-    const media = { 'landing/cut-gel': 'https://cdn.example/gel.webp' };
-    expect(mediaSrc(media, 'landing/cut-gel')).toBe('https://cdn.example/gel.webp');
+    const media = { 'landing/cut-mark': 'https://cdn.example/mark.webp' };
+    expect(mediaSrc(media, 'landing/cut-mark')).toBe('https://cdn.example/mark.webp');
     expect(landingSrc(media, 'look-feather')).toBe('/reel/landing/look-feather.webp');
     expect(studioSrc(NO_LANDING_MEDIA, 'vto-garment')).toBe('/reel/studio/vto-garment.webp');
     // Retired files are not slots any more: the orbit bottles, the old mood library and the warm product set.

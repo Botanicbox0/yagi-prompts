@@ -68,7 +68,7 @@ export default async function BrandsPage({ params }: Props) {
             </div>
           }
         />
-        <V7Closing copy={c} locale={locale}>
+        <V7Closing copy={c} locale={locale} media={media}>
           <BrandInquiryDialog endpoint={BRAND_INQUIRY_ENDPOINT} locale={locale} labels={dict.campaigns.brands} privacy={{ href: legalHref(locale, 'privacy'), label: legalDocument('privacy', locale).title }} title={t.inquiryDialogTitle} body={t.inquiryBody} close={t.inquiryClose} />
         </V7Closing>
         <FaqSection dict={dict} locale={locale} placement="brand" path={brandsHref(locale)} />

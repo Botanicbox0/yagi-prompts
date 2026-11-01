@@ -81,6 +81,9 @@ describe('the brand page shows the service before asking visitors to enquire', (
     // Local fixes: three real before/after pairs in a wipe compare.
     // A local fix shows the whole shot, the box on it, and what was asked.
     expect(html).toContain('/reel/landing/c-wide.webp');
+    // 2026-11-01: only the frames the founder passed; the old cuts and short films are gone.
+    for (const cut of ['cheek', 'hands', 'scent', 'pump', 'beads', 'mark']) expect(html).toContain(`/reel/landing/cut-${cut}.webp`);
+    for (const gone of ['cut-flower', 'cut-sphere', 'cut-gel', 'v7/dir-clip', 'v7/closing']) expect(html).not.toContain(gone);
     expect(html).toContain('data-fix-box="logo"');
     expect(html).toContain('/brand/yagi-mark-black.png');
     expect(html.match(/data-contrast-pair=/g)).toHaveLength(3);

@@ -8,8 +8,8 @@ const PALETTE = ['#f3f7fa', '#d0dbe7', '#3875c5', '#2e5f9f', '#16233f'] as const
 const WALL = [
   { image: 'look-feather.webp' },
   { image: 'v7/feed-blue.jpg', film: 'v7/feed-blue.mp4' },
-  { image: 'cut-flower.webp' },
-  { image: 'v7/dir-clip.jpg', film: 'v7/dir-clip.mp4' },
+  { image: 'cut-beads.webp' },
+  { image: 'cut-pump.webp' },
 ] as const;
 
 /**
@@ -71,7 +71,7 @@ export function FilmPauseButton({ playing, playLabel, pauseLabel, onToggle, mark
   );
 }
 
-/** What a brand gets, beside the sign-in door. Auth stays server-rendered; this island only plays the two short films. */
+/** What a brand gets, beside the sign-in door. Auth stays server-rendered; this island only plays the short film. */
 export function BrandEntryStage({ title, exampleLabel, playLabel, pauseLabel, assetOrigin, compact }: {
   title: string;
   exampleLabel: string;

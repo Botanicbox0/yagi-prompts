@@ -217,8 +217,8 @@
 .fixAttachments li { display: grid; justify-items: end; gap: 5px; }
 .fixAttachments img { width: clamp(72px, 7vw, 92px); aspect-ratio: 1; object-fit: contain; border: 1px solid var(--id-line); border-radius: 12px; background: var(--id-paper); }
 .fixAttachments span { color: var(--id-muted); font-family: var(--id-mono); font-size: 11px; }
-/* Same height side by side: 3:4 beside 1:1 at 3fr and 4fr. */
-.fixStage { position: relative; display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 4fr); gap: clamp(10px, 1.2vw, 16px); min-width: 0; align-self: center; }
+/* Same height side by side: 4:3 beside 1:1 at 4fr and 3fr. */
+.fixStage { position: relative; display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 3fr); gap: clamp(10px, 1.2vw, 16px); min-width: 0; align-self: center; }
 .fixWide { position: relative; overflow: hidden; border-radius: var(--id-radius-card); background: var(--id-sky); }
 .fixWide img { display: block; width: 100%; height: auto; }
 .fixBox {
@@ -268,7 +268,7 @@
 @media (max-width: 639px) {
   .fix > .fixStage { order: -1; }
   .fixStage { display: block; }
-  .fixWide { position: absolute; z-index: 1; left: 10px; bottom: 10px; width: 30%; border: 2px solid #ffffff; border-radius: 12px; pointer-events: none; }
+  .fixWide { position: absolute; z-index: 1; left: 10px; bottom: 10px; width: 38%; border: 2px solid #ffffff; border-radius: 12px; pointer-events: none; }
   .fixWide .tag { display: none; }
 }
 @media (min-width: 640px) and (max-width: 959px) { .fix > .fixStage { order: -1; } }
@@ -432,7 +432,7 @@
 .closingCopy .cta { color: var(--id-accent-text); background: #ffffff; }
 .closingCopy .cta:hover { background: var(--id-accent-tint); }
 .closingMedia { position: relative; overflow: hidden; aspect-ratio: 3 / 4; max-height: 76svh; justify-self: end; width: min(100%, 440px); border-radius: var(--id-radius-media); box-shadow: 0 40px 90px -40px rgb(10 24 48 / 0.6); }
-.closingMedia video { width: 100%; height: 100%; object-fit: cover; }
+.closingMedia img { width: 100%; height: 100%; object-fit: cover; }
 
 /* ---------- Floating demo pill ---------- */
 .dock {
@@ -603,7 +603,7 @@
 .looks::-webkit-scrollbar, .cuts::-webkit-scrollbar { display: none; }
 .looks li, .cuts li { flex: 0 0 clamp(236px, 27vw, 430px); overflow: hidden; border-radius: var(--id-radius-media); background: var(--id-sky); scroll-snap-align: start; }
 .looks li { aspect-ratio: 2 / 3; }
-.cuts li { aspect-ratio: 3 / 4; }
+.cuts li { flex-basis: clamp(300px, 46vw, 760px); aspect-ratio: 16 / 9; }
 .looks img, .cuts img { width: 100%; height: 100%; object-fit: cover; }
 @media (prefers-reduced-motion: reduce) {
   .heroSpec span, .composerSend[data-busy] { animation: none; }

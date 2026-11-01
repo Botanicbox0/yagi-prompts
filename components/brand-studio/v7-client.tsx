@@ -115,7 +115,7 @@ export function Compare({ wide, pairs, labels }: {
       </div>
       <div className={styles.fixStage}>
         <figure className={styles.fixWide}>
-          <img src={wide} alt={labels.wideAlt} width={1000} height={1332} loading="lazy" decoding="async" />
+          <img src={wide} alt={labels.wideAlt} width={1200} height={900} loading="lazy" decoding="async" />
           <span data-fix-box={pair.id} className={styles.fixBox} style={box} aria-hidden="true" />
           <figcaption className={styles.tag}>{labels.wide}</figcaption>
         </figure>
