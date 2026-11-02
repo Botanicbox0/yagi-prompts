@@ -23,6 +23,20 @@
 
 플랜 카드와 템플릿 오류 점검 문구(1차 B·C, 2차 R2·R3)는 그 화면을 만들 때 쓴다. 2차에서 고친 것: 49,000원 소개 "제한 없이 마음껏 창작하고 싶을 때"(월 한도가 있어 거짓) → "가장 많은 크레딧으로 넉넉하게 만들고 싶을 때", 브랜드·유명인 경고 "검수에서 반려"(스튜디오 검수는 없음) → "AI 정책에 따라 결과가 나오지 않을 수 있어요".
 
-## 3차 (스튜디오 보조·관리자)
+## 3차 (스튜디오 보조·관리자, 2026-11-03 받음)
 
-`priceBase`, `priceTooHigh`, `publishHint`, 관리자 `templateCostFloor`·`templateImageCostFloor`·`templateBelowFloor`, 검수 `priceHint`, 정산 방식 `payout*`. 결과는 아래에 붙인다.
+ComfyUI가 GPU를 쓰는 동안 #174는 임시 문구로 나갔고, 답을 받은 뒤 바꿨다.
+
+| 키 | 문구 | 출처 |
+| --- | --- | --- |
+| `makerRecipe.priceBase` | 기본 {amount} | G1 |
+| `makerRecipe.priceTooHigh` | {amount}까지만 설정할 수 있어요. | G2 |
+| `makerRecipe.earningRaise` | 가격을 높이면 만드는 분이 내는 금액과 수익이 함께 늘어나요. | G3 (2차 R1 기반 문구를 대체) |
+| `makerRecipe.publishHint` | 레시피 검사, 예시 파일, 내 사진으로 한 테스트 렌더 1회 성공이 모두 필요해요. 가격은 기본값부터 정할 수 있으며, 규칙에 어긋나면 공개가 제한될 수 있어요. | G4 + "내 사진으로 한 … 1회 성공" 복원 (best가 "테스트 렌더링"으로 줄여 조건이 빠짐) |
+| `makerRecipe.review.priceHint` / `royalty` | 기본 {floor} + 추가 {royalty} = 합계 {proposed} / 추가 | G5 |
+| `admin.templateCostFloor` | 기본가는 720p {p720}, 1080p {p1080}이며 마진 6% 기준이에요. 5~7% 범위를 권장하며, 최종 가격은 대표 승인이 필요합니다. (환율·부가세·수수료 가정 괄호로) | G6 + 가정 괄호 (best가 가정을 뺌) |
+| `admin.templateImageCostFloor` | {engine} 모델 {frames}장 기준 기본가는 {price}이며, 원가에 12%를 더한 값이에요. … | G7 |
+| `admin.templateBelowFloor` | 권장 가격보다 낮아요. | G8 |
+| `community.payout*` | 정산 방식 / 회사 홍보 계정 / 외부 크리에이티브 (80% 정산) / 직접 등록한 계정은 회사 계정, 승인된 계정은 외부 크리에이티브로 설정돼요. | G9, G10 대안(best "회사 귀속"은 금지어), G11 대안(외부임이 드러나게), G12 |
+
+영어는 Gemma `en`을 쓰되 "CEO approval"은 기존 용어 "founder approval"로 맞췄다.
