@@ -9,7 +9,8 @@ import type { PromptLabels } from './labels';
  * Founder 2026-10-31: justified rows (`.film-rows`). Each card keeps its film's own ratio, every
  * card in a row is one height, and visual order stays the same as catalog and keyboard order.
  *
- * The order is `railOrder`: NEW first, then featured → newest, originals and AI creatives mixed (§7.5).
+ * The order is `railOrder`: recommended first, unranked NEW templates after the lead, originals and
+ * AI creatives mixed (§7.5).
  */
 export function PromptRail({
   id,
