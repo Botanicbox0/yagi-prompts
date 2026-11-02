@@ -44,8 +44,9 @@ export async function POST(request: Request) {
         locale: typeof v.locale === "string" ? v.locale : null,
       },
     );
+    // A closed feature answers like a missing page: the brand host never confirms what it hides.
     if (!result.ok)
-      return json(result, result.code === "not_found" ? 404 : 409);
+      return json(result, result.code === "not_found" || result.code === "feature_unavailable" ? 404 : 409);
     after(async () => {
       try {
         await runLiveRenderPass(sql, { jobId: result.id, limit: 1 });

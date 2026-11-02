@@ -30,6 +30,9 @@ describe('migrations apply on a fresh database (PLAN §6)', () => {
       'brand_content_versions',
       'brand_contract_documents',
       'brand_contract_sharing_events',
+      // 2026-11-03 — per-brand feature policy (deny-list; no row = everything open) and its history.
+      'brand_feature_policies',
+      'brand_feature_policy_events',
       // 2026-09-11 — the brand enquiry form on the campaigns page: one row per enquiry, studio-only.
       'brand_inquiries',
       'brand_inquiry_deliveries',
@@ -39,6 +42,9 @@ describe('migrations apply on a fresh database (PLAN §6)', () => {
       // 2026-09-23 — a brand's own logo history; the organization points at the current one.
       'brand_organization_logos',
       'brand_organizations',
+      // 2026-11-03 — the brand's B2B plan (390k/690k/990k KRW per month) and its history.
+      'brand_plan_assignments',
+      'brand_plan_events',
       // 2026-09-22 — one ledger row per studio collection-console save (idempotency + batch time).
       'brand_post_collection_batches',
       'brand_post_measurements',

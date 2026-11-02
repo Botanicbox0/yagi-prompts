@@ -1,4 +1,5 @@
 import type { BrandRole } from './types';
+import { featureDenied, type BrandFeature } from '../features';
 
 /**
  * Which brand the workspace is showing, decided from the URL alone.
@@ -23,6 +24,11 @@ export interface BrandWorkspaceChoice {
   role: BrandChoiceRole;
   /** Private, re-authorized route; null means the default avatar. */
   logoUrl: string | null;
+  /**
+   * Features this organization's policy closes (lib/brands/entitlements.ts). Absent or empty means
+   * everything is open, which is the default for every brand.
+   */
+  denied?: readonly BrandFeature[];
 }
 export interface BrandWorkspaceScope {
   /**
@@ -91,9 +97,11 @@ export interface SectionVisibility { studio: boolean; settings: boolean; members
  * No brand yet keeps the studio open (it doubles as the setup path) and hides brand-only sections.
  * The TWINGS team sees every section of a brand it browses, each rendered read-only.
  */
-export function sectionVisibility(choice: Pick<BrandWorkspaceChoice, 'role'> | null): SectionVisibility {
+export function sectionVisibility(choice: Pick<BrandWorkspaceChoice, 'role' | 'denied'> | null): SectionVisibility {
   if (!choice) return { studio: true, settings: false, members: false };
-  return { studio: choice.role !== 'guest', settings: choice.role !== 'guest', members: choice.role === 'owner' || choice.role === 'studio' };
+  // The studio is generative media: a brand whose policy closes it gets no door, whatever the role.
+  const studio = choice.role !== 'guest' && !featureDenied(choice.denied, 'generative_media');
+  return { studio, settings: choice.role !== 'guest', members: choice.role === 'owner' || choice.role === 'studio' };
 }
 
 /** The creator pool (docs/PLATFORM-2.0.md §17.3) is for the brand's owners and editors only. */
