@@ -247,6 +247,15 @@ export const IMAGE_SET_FRAMES_MAX = PROMPT_GALLERY_MAX;
 const SET_PHOTO = /\bImage 1\b/;
 const SET_OTHER_REFERENCE = /\b(?:Image [2-9]\d*|Image 1\d+|Video \d+|Audio \d+)\b/;
 export type SetPromptIssue = 'no_photo' | 'other_reference' | 'braces';
+/**
+ * The admin form's prompts come from tools that write the photo `@image1`; the set's own word is
+ * "Image 1". Handles of other references become words too, so the check below refuses them by name.
+ */
+export function normalizeSetPrompt(prompt: string): string {
+  return prompt
+    .replace(/@(image|video|audio)[ _]?(\d+)\b/gi, (_, kind: string, n: string) => `${kind[0]!.toUpperCase()}${kind.slice(1).toLowerCase()} ${n}`)
+    .replace(/\bimage[ _]?1\b/gi, 'Image 1');
+}
 /** What a set frame's prompt may say about references: the buyer's photo as "Image 1", nothing else. */
 export function setPromptIssue(prompt: string): SetPromptIssue | null {
   if (!SET_PHOTO.test(prompt)) return 'no_photo';
