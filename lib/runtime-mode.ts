@@ -121,6 +121,17 @@ export function publicStorageBaseUrl(env: EnvLike = process.env): string | undef
   return trimmed(env.NEXT_PUBLIC_SUPABASE_URL);
 }
 
+/**
+ * The R2 host for copied `public-content` objects (`media.twings.app`), or `undefined` to stay on
+ * Supabase. Unset is the rollback. Local mode ignores it for the same reason as above. A value that
+ * is not https is refused: it would put mixed-content media on every public page.
+ */
+export function publicMediaBaseUrl(env: EnvLike = process.env): string | undefined {
+  if (resolveRuntimeMode(env) === 'local') return undefined;
+  const value = trimmed(env.PUBLIC_MEDIA_BASE_URL);
+  return value?.startsWith('https://') ? value : undefined;
+}
+
 // ---------------------------------------------------------------------------
 
 const warned = new Set<string>();
