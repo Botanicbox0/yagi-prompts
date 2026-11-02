@@ -86,14 +86,14 @@ We build the first scene for your brand. Each creator brings their own face and 
 
 순서:
 
-1. 대표: twings.app이 있는 Cloudflare 계정에서 R2를 켜고 버킷 `twings-public-media`(Standard)를 만든다. 버킷 Settings → Custom Domains에 `media.twings.app`을 연결한다. r2.dev 공개 주소는 켜지 않는다.
+1. 대표: twings.app이 있는 Cloudflare 계정에서 R2를 켜고 버킷 `twings-media-apac`(Standard, Location = Asia-Pacific)을 만든다. 버킷 Settings → Custom Domains에 `media.twings.app`을 연결한다. r2.dev 공개 주소는 켜지 않는다.
 2. 대표: 이 버킷만 Object Read & Write로 쓸 수 있는 R2 API 토큰을 만들어 `D:\dev\twings\.env.local`에 넣는다. 값은 채팅에 옮기지 않는다.
 
    ```
    R2_ACCOUNT_ID=
    R2_ACCESS_KEY_ID=
    R2_SECRET_ACCESS_KEY=
-   R2_PUBLIC_BUCKET=twings-public-media
+   R2_PUBLIC_BUCKET=twings-media-apac
    PUBLIC_MEDIA_BASE_URL=https://media.twings.app
    ```
 

@@ -51,7 +51,7 @@ export const BUSINESS = {
   phone: '010-6599-4020',
   phoneEn: '+82 10-6599-4020',
   email: 'hello@yagiworkshop.xyz',
-  host: 'Vercel Inc. · Supabase Inc.',
+  host: 'Vercel Inc. · Supabase Inc. · Cloudflare, Inc.',
 } as const;
 
 /** True once the founder has replaced the placeholder with the number on the 신고증. */
@@ -85,7 +85,7 @@ export function isLegalDoc(value: string): value is LegalDoc {
 }
 
 /** The effective date printed on every document. Bump it whenever the text below changes. */
-export const LEGAL_EFFECTIVE = '2026-10-16';
+export const LEGAL_EFFECTIVE = '2026-11-02';
 
 /** Stated once, used by the terms, the refund policy and the privacy policy alike. */
 const SHARE_LINK_DAYS = 3;
@@ -417,6 +417,7 @@ const PRIVACY_KO = `## 1. 수집하는 개인정보
 | OpenAI, L.L.C. (미국) | 이미지 생성(GPT Image) | 얼굴 사진 |
 | Supabase Inc. (미국) | 데이터베이스·인증·파일 저장 | 회원 정보, 사진, 결과물 |
 | Vercel Inc. (미국) | 웹 호스팅 | 접속 기록 |
+| Cloudflare, Inc. (미국) | 공개 미디어 전송 | 접속 기록 |
 | Google LLC (미국) / Kakao Corp. (한국) | 로그인 인증 | 이메일, 프로필 이름 |
 | Resend, Inc. (미국) | 이메일 발송 | 이메일 주소 |
 | 결제대행사 (토스페이먼츠, 연동 시 상호 명시) | 결제 처리 | 결제 정보 |
@@ -490,6 +491,7 @@ Rendering and verification are performed by the providers below, outside Korea. 
 | OpenAI, L.L.C. (United States) | Image generation (GPT Image) | Face photo |
 | Supabase Inc. (United States) | Database, authentication, file storage | Account data, photos, results |
 | Vercel Inc. (United States) | Web hosting | Access logs |
+| Cloudflare, Inc. (United States) | Public media delivery | Access logs |
 | Google LLC (United States) / Kakao Corp. (Korea) | Sign-in | Email, profile name |
 | Resend, Inc. (United States) | Email delivery | Email address |
 | Payment provider (Toss Payments, named here once connected) | Payment processing | Payment data |
