@@ -23,7 +23,9 @@ describe('maker recipe migrations (0059 core, 0142 glue)', () => {
       // A draft needs no example and no royalty; a submitted v2 recipe needs a royalty.
       await db.query(`update platform_formats set recipe_v2='{"version":2}'::jsonb where id=$1`, [format]);
       expect(await expectReject(() => db.query("update platform_formats set status='submitted' where id=$1", [format]))).toMatch(/platform_formats_v2_complete/);
-      expect(await expectReject(() => db.query('update platform_formats set royalty_krw=400 where id=$1', [format]))).toMatch(/check/);
+      // 0073: the raise may be 0 (sell at the base price), never negative.
+      await db.query('update platform_formats set royalty_krw=0 where id=$1', [format]);
+      expect(await expectReject(() => db.query('update platform_formats set royalty_krw=-100 where id=$1', [format]))).toMatch(/check/);
       expect(await expectReject(() => db.query('update platform_formats set royalty_krw=5100 where id=$1', [format]))).toMatch(/check/);
       expect(await expectReject(() => db.query('update platform_formats set test_renders_used=4 where id=$1', [format]))).toMatch(/check/);
       expect(await expectReject(() => db.query(`update platform_formats set recipe_v2='{"version":1}'::jsonb where id=$1`, [format]))).toMatch(/check/);

@@ -148,16 +148,21 @@ describe('recipe v2 helpers', () => {
   });
 });
 
-describe('maker price proposal (§8.3)', () => {
-  it('adds the royalty to the cost floor of every step, frames at the image minimum', () => {
-    expect(isRoyalty(ROYALTY_DEFAULT_KRW)).toBe(true);
-    for (const bad of [400, 5100, 1550, 1500.5]) expect(isRoyalty(bad)).toBe(false);
+describe('maker price (§19.2, founder 2026-11-02)', () => {
+  it('adds the creative’s raise to the base price of everything the recipe renders', () => {
+    expect(ROYALTY_DEFAULT_KRW).toBe(0);
+    for (const ok of [0, 400, 5000]) expect(isRoyalty(ok)).toBe(true);
+    for (const bad of [-100, 5100, 1550, 1500.5]) expect(isRoyalty(bad)).toBe(false);
     const film = quoteRecipe((parseRecipe(filmRecipe()) as { ok: true; recipe: Recipe }).recipe, 1500);
     expect(film.steps.map((s) => s.step)).toEqual(['sheet', 'shot1']);
+    expect(film.medium).toBe('video');
     expect(film.floorKrw % 100).toBe(0);
     expect(film.proposedKrw).toBe(film.floorKrw + 1500);
-    const three = quoteRecipe((parseRecipe(carousel(3)) as { ok: true; recipe: Recipe }).recipe, 500);
-    expect(three.floorKrw).toBeGreaterThanOrEqual(3 * 200);
+    // A carousel is one order: priced on all its frames together, not three 200원 minimums.
+    const three = quoteRecipe((parseRecipe(carousel(3)) as { ok: true; recipe: Recipe }).recipe, 0);
+    expect(three.medium).toBe('image');
+    expect(three.floorKrw).toBe(three.proposedKrw);
+    expect(three.baseCredits * 10).toBeGreaterThanOrEqual(three.providerKrw * 1.12);
     expect(three.proposedCents).toBe(Math.ceil(three.proposedKrw / 1400 * 100));
   });
 });

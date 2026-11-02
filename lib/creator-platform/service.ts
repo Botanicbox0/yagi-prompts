@@ -25,6 +25,10 @@ export async function audit(sql:SqlRunner,actorId:string,entityId:string,action:
 export async function approvedCreator(sql:SqlRunner,userId:string) {
   return (await sql.query('select user_id from platform_creators where user_id=$1 and active',[userId])).rows.length>0;
 }
+/** A studio-owned profile (0073 `payout`): its margin is the company's. Through to_jsonb so pre-0073 reads 'external'. */
+export async function companyCreator(sql:SqlRunner,userId:string) {
+  return (await sql.query("select 1 from platform_creators c where c.user_id=$1 and to_jsonb(c)->>'payout'='company'",[userId])).rows.length>0;
+}
 async function quota(sql:SqlRunner,userId:string) {
   const {rows}=await sql.query<{n:number}>(`select count(*)::int n from platform_messages where actor_id=$1 and created_at>now()-interval '1 hour'`,[userId]);
   demand(rows[0]!.n<20,'rate_limited');

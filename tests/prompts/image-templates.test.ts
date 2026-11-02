@@ -1,5 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { estimateImageUsd } from '@/lib/images/engines';
 import { loadPromptCatalog } from '@/lib/prompts/catalog';
+import { baseKrw } from '@/lib/twings/template-price';
 import {
   buildImageTemplateSet,
   parseImageTemplateManifest,
@@ -136,7 +138,7 @@ describe('registering an image set', () => {
   });
   afterAll(async () => harness.close());
 
-  it('publishes ONE template under the set slug, with its recipe, not for sale', async () => {
+  it('publishes ONE template under the set slug, with its recipe, at the base price of all its frames', async () => {
     const outcome = await registerImageTemplateSet(harness, set, image);
     expect(outcome.status).toBe('created');
 
@@ -150,11 +152,12 @@ describe('registering an image set', () => {
       engine: 'seedream-5.0-pro',
       aspectDefault: '3:4',
       models: ['seedream-5.0-pro'],
-      priceCents: 0,
-      priceKrw: 0,
       textVisibility: 'pro',
       featured: false,
     });
+    // Founder rule 2026-11-02: cost × 1.12 over every frame, in won by card (lib/twings/template-price.ts).
+    expect(row!.priceKrw).toBe(baseKrw({ medium: 'image', providerUsd: estimateImageUsd('seedream-5.0-pro', 1) * MANIFEST.length }));
+    expect(row!.priceCents).toBeGreaterThan(0);
     const recipe = await loadTemplateRecipe(harness.sql, row!.id);
     expect(recipe?.steps.map((step) => engineStepPrompt(recipe, step).split('\n\n')[0])).toEqual(MANIFEST.map((item) => item.prompt));
   });

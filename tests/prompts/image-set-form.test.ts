@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { estimateImageUsd } from '@/lib/images/engines';
 import { createGeminiImageClient } from '@/lib/images/gemini';
+import { baseKrw } from '@/lib/twings/template-price';
 import { loadPromptBySlug } from '@/lib/prompts/repo';
 import { normalizeSetPrompt, parsePromptMedia, setPromptIssue } from '@/lib/prompts/schemas';
 import { loadTemplateRecipe } from '@/lib/recipes/repo';
@@ -37,12 +39,15 @@ describe('prompt.createSet', () => {
   });
   afterEach(async () => harness.db.close());
 
-  it('publishes one unpriced template with one recipe step and one example per frame', async () => {
+  it('publishes one template at its base price with one recipe step and one example per frame', async () => {
     const outcome = await harness.run('prompt.createSet', fields());
     expect(outcome).toMatchObject({ ok: true, code: 'published', detail: 'three-quiet-portraits' });
 
     const row = (await loadPromptBySlug(sql(), 'three-quiet-portraits'))!;
-    expect(row).toMatchObject({ status: 'published', medium: 'image', engine: 'nano-banana-pro', aspectDefault: '4:5', priceKrw: 0, models: ['nano-banana-pro'] });
+    expect(row).toMatchObject({ status: 'published', medium: 'image', engine: 'nano-banana-pro', aspectDefault: '4:5', models: ['nano-banana-pro'] });
+    // Three Nano Banana Pro frames: 571원 of provider cost × 1.12 = 64 credits = 800원 by card.
+    expect(row.priceKrw).toBe(baseKrw({ medium: 'image', providerUsd: estimateImageUsd('nano-banana-pro', 1) * 3 }));
+    expect(row.priceKrw).toBe(800);
     expect(outcome.ok && outcome.to).toBe(`/admin/prompts/${row.id}`);
 
     const media = parsePromptMedia(row.media);

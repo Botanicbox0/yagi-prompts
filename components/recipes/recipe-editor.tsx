@@ -2,7 +2,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
 import type { Dictionary } from '@/messages/en';
 import { interpolate } from '@/lib/i18n/format';
-import { isRoyalty, quoteRecipe, ROYALTY_MAX_KRW, ROYALTY_MIN_KRW, ROYALTY_STEP_KRW } from '@/lib/recipes/pricing';
+import { isRoyalty, quoteRecipe, ROYALTY_DEFAULT_KRW, ROYALTY_MAX_KRW, ROYALTY_STEP_KRW } from '@/lib/recipes/pricing';
+import { makeEarning } from '@/lib/twings/template-price';
 import { exportRecipe, INTRO_MAX, MAX_RECIPE_STEPS, MAX_STEP_PROMPT_CHARS, NOTE_MAX, OUTRO_MAX, parseRecipe, recipeMedium, SELFIE_SLOT, type Recipe, type RecipeIssue } from '@/lib/recipes/schema';
 import { BUTTON, BUTTON_OUTLINE, FIELD, HINT, PANEL } from '@/components/creators/styles';
 
@@ -32,11 +33,13 @@ const ACTIONS = '/api/makers/formats';
 const PENDING = new Set(['held', 'queued', 'running']);
 const escape = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-export function RecipeEditor({ copy, formatId, draft, engines, aspects, hasSelfie, selfieHref, workspaceHref, testLimit, revisionOf, locale, selfPublish = false }: {
+export function RecipeEditor({ copy, formatId, draft, engines, aspects, hasSelfie, selfieHref, workspaceHref, testLimit, revisionOf, locale, selfPublish = false, company = false }: {
   copy: Copy; formatId: string; draft: EditorDraft | null; engines: EngineOption[]; aspects: { image: string[]; video: string[] };
   hasSelfie: boolean; selfieHref: string; workspaceHref: string; testLimit: number; revisionOf?: string; locale: string;
   /** docs/PLATFORM-2.0.md §20.6 — the creative publishes it themself (no studio review in between). */
   selfPublish?: boolean;
+  /** A studio-owned profile (`platform_creators.payout = 'company'`): its margin is the company's, so no earnings line. */
+  company?: boolean;
 }) {
   const imageEngines = engines.filter((e) => e.kind === 'image'), videoEngines = engines.filter((e) => e.kind === 'video');
   const label = useMemo(() => ({
@@ -63,7 +66,9 @@ export function RecipeEditor({ copy, formatId, draft, engines, aspects, hasSelfi
   const [example, setExample] = useState(draft?.exampleUrl ?? '');
   const [disclosure, setDisclosure] = useState(draft?.disclosure ?? { prompts: false, assets: false });
   const [presentation, setPresentation] = useState<'make-first' | 'story-first'>(draft?.presentation ?? 'make-first');
-  const [royalty, setRoyalty] = useState(draft?.royaltyKrw ?? 1500);
+  // The raise over the base price (stored as `royalty_krw`); the creative types the whole price.
+  const [royalty, setRoyalty] = useState(draft?.royaltyKrw ?? ROYALTY_DEFAULT_KRW);
+  const [priceText, setPriceText] = useState<string | null>(null);
   const [rights, setRights] = useState(false);
   const [status, setStatus] = useState<EditorDraft['status'] | null>(draft?.status ?? null);
   const [tests, setTests] = useState<EditorTest[]>(draft?.tests ?? []);
@@ -79,6 +84,19 @@ export function RecipeEditor({ copy, formatId, draft, engines, aspects, hasSelfi
   const checked = useMemo(() => parseRecipe(recipe), [recipe]);
   const quote = checked.ok && isRoyalty(royalty) ? quoteRecipe(checked.recipe, royalty) : null;
   const won = (n: number) => interpolate(copy.royaltyValue, { amount: n.toLocaleString(locale === 'ko' ? 'ko-KR' : 'en-US') });
+  // While typing, the field holds the text; a whole price inside [base, base + max] becomes the raise.
+  const typed = priceText === null ? null : Number(priceText);
+  const priceIssue = quote && typed !== null
+    ? typed < quote.floorKrw ? interpolate(copy.priceTooLow, { amount: won(quote.floorKrw) })
+      : typed > quote.floorKrw + ROYALTY_MAX_KRW ? interpolate(copy.priceTooHigh, { amount: won(quote.floorKrw + ROYALTY_MAX_KRW) })
+      : typed % ROYALTY_STEP_KRW ? copy.priceStep : null
+    : null;
+  const earning = quote ? makeEarning({ medium: quote.medium, providerUsd: quote.providerUsd, priceKrw: quote.proposedKrw, company }) : null;
+  function changePrice(text: string) {
+    setPriceText(text);
+    const value = Number(text);
+    if (quote && text.trim() && isRoyalty(value - quote.floorKrw)) setRoyalty(value - quote.floorKrw);
+  }
 
   const errorText = (code: unknown) => copy.errors[(typeof code === 'string' ? code : 'unavailable') as keyof Copy['errors']] ?? copy.errors.unavailable;
   async function post(body: Record<string, unknown>): Promise<Record<string, unknown> | null> {
@@ -93,6 +111,7 @@ export function RecipeEditor({ copy, formatId, draft, engines, aspects, hasSelfi
   async function save(quiet = false): Promise<boolean> {
     if (!editable) return true;
     if (title.trim().length < 3) { setNotice({ tone: 'error', text: copy.errors.title_required }); return false; }
+    if (priceIssue) { setNotice({ tone: 'error', text: priceIssue }); return false; }
     const ok = await post({ action: 'save', id: formatId, title: title.trim(), titleKo: titleKo.trim(), recipe, example: example.trim(), disclosure, presentation, royalty, ...(revisionOf ?? draft?.revisionOf ? { revisionOf: revisionOf ?? draft?.revisionOf } : {}) });
     if (!ok) return false;
     setStatus('draft');
@@ -309,11 +328,26 @@ export function RecipeEditor({ copy, formatId, draft, engines, aspects, hasSelfi
           <fieldset className="space-y-2"><legend className="text-sm">{copy.presentation}</legend>
             {(['make-first', 'story-first'] as const).map((p) => <label key={p} className="flex items-center gap-3 text-sm"><input type="radio" name="presentation" checked={presentation === p} onChange={() => setPresentation(p)} />{p === 'make-first' ? copy.makeFirst : copy.storyFirst}</label>)}
           </fieldset>
-          <label className="block text-sm" data-recipe-royalty>{copy.royalty} <strong className="ml-2 tabular-nums">{won(royalty)}</strong>
-            <input type="range" min={ROYALTY_MIN_KRW} max={ROYALTY_MAX_KRW} step={ROYALTY_STEP_KRW} value={royalty} onChange={(e) => setRoyalty(Number(e.target.value))} className="mt-3 w-full accent-[var(--color-accent)]" />
-            <span className={HINT}>{copy.royaltyHint}</span>
-          </label>
-          <p data-recipe-price className="text-sm tabular-nums">{quote ? interpolate(copy.priceLine, { price: won(quote.proposedKrw), floor: won(quote.floorKrw), royalty: won(royalty) }) : copy.priceUnknown}</p>
+        </section>
+
+        <section data-recipe-price className={PANEL}>
+          {quote ? <>
+            <label className="block text-sm">{copy.priceLabel}
+              <input type="number" inputMode="numeric" data-recipe-price-input min={quote.floorKrw} max={quote.floorKrw + ROYALTY_MAX_KRW} step={ROYALTY_STEP_KRW}
+                value={priceText ?? String(quote.proposedKrw)} onChange={(e) => changePrice(e.target.value)} onBlur={() => { if (!priceIssue) setPriceText(null); }}
+                aria-invalid={priceIssue ? true : undefined} className={`${FIELD} tabular-nums`} />
+            </label>
+            <p className={HINT}><span data-recipe-price-base={quote.floorKrw} className="tabular-nums">{interpolate(copy.priceBase, { amount: won(quote.floorKrw) })}</span> · {copy.priceBaseHint}</p>
+            {priceIssue ? <p role="alert" className="text-sm text-accent">{priceIssue}</p> : null}
+            {company
+              ? <p data-recipe-earning="company" className="text-sm">{copy.earningCompany}</p>
+              : earning ? <div data-recipe-earning={earning.creator} className="space-y-1 border-t border-hairline pt-4">
+                <p className="font-display text-[1.6rem] leading-none font-black tabular-nums">{interpolate(copy.earningOne, { amount: won(earning.creator) })}</p>
+                <p className="text-sm tabular-nums opacity-80">{interpolate(copy.earningMany, { n: (100).toLocaleString(locale === 'ko' ? 'ko-KR' : 'en-US'), amount: won(earning.creator * 100) })}</p>
+                <p className={HINT}>{copy.earningRaise}</p>
+                <p className={HINT}>{copy.earningRule} {copy.earningEstimate} {copy.earningSettle}</p>
+              </div> : null}
+          </> : <p className="text-sm">{copy.priceUnknown}</p>}
         </section>
       </fieldset>
 

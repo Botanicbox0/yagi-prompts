@@ -24,8 +24,8 @@ import { legacyPromptText, primaryStep, type Recipe } from './schema';
  *   · at least one of the creative's own TEST RENDERS succeeded: the recipe has run end to end on
  *     a real face through the real pipeline (provider moderation included) before anyone pays.
  *
- * The price is never the creative's to type: it is the floor (the 5% rule) plus their royalty,
- * the same `quoteRecipe` proposal the studio used to start from. The template goes live published,
+ * The price is the base price (lib/twings/template-price.ts) plus the creative's raise — the price
+ * they typed in the studio, never below the base — through the same `quoteRecipe` the studio uses. The template goes live published,
  * credited `by @handle`, and the studio's archive control takes it down after the fact.
  * `TWINGS_MAKER_SELF_PUBLISH=off` restores review-only (the `submit` path), without a deploy of code.
  */

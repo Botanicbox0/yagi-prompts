@@ -2,7 +2,9 @@ import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import type { SqlRunner } from '@/lib/db/sql-runner';
 import { AssetRefSchema, type AssetRef } from '@/lib/content/schemas';
-import { IMAGE_ENGINES, isImageAspect, type ImageAspect, type ImageEngineId } from '@/lib/images/engines';
+import { estimateImageUsd, IMAGE_ENGINES, isImageAspect, type ImageAspect, type ImageEngineId } from '@/lib/images/engines';
+import { centsForKrw } from '@/lib/recipes/pricing';
+import { baseKrw } from '@/lib/twings/template-price';
 import { loadTemplateRecipe, recipeSchemaReady } from '@/lib/recipes/repo';
 import { engineStepPrompt, isMakerEngine, isStudioRecipeEngine, legacyPromptText, MAX_RECIPE_STEPS, parseRecipe, SELFIE_SLOT, type Recipe } from '@/lib/recipes/schema';
 import type { StorageDriver } from '@/lib/storage';
@@ -227,8 +229,8 @@ export async function registerImageTemplateSet(
 
 /**
  * The staged images published, the row and its recipe written in one transaction, then read back.
- * `staged` holds one ref per file name in the set. Price 0: the set is not for sale until someone
- * prices it in `/admin` (AGENTS.md §5).
+ * `staged` holds one ref per file name in the set. The price starts at the base price of all its
+ * frames (lib/twings/template-price.ts, founder rule 2026-11-02); `/admin` can still change it.
  */
 export async function writeImageTemplateSet(
   deps: { sql: SqlRunner; storage: StorageDriver },
@@ -242,6 +244,7 @@ export async function writeImageTemplateSet(
     poster: staged.get(set.thumbnail)!,
     gallery: set.frames.map((frame) => staged.get(frame.fileName)!),
   });
+  const priceKrw = baseKrw({ medium: 'image', providerUsd: set.frames.reduce((sum, frame) => sum + estimateImageUsd(frame.engine, 1), 0) });
 
   await deps.sql.transaction(async (tx) => {
     await insertPrompt(tx, {
@@ -261,8 +264,8 @@ export async function writeImageTemplateSet(
       useCase: extra.useCase ?? [],
       featured: false,
       medium: 'image',
-      priceCents: 0,
-      priceKrw: 0,
+      priceCents: centsForKrw(priceKrw),
+      priceKrw,
       runtimeSeconds: null,
       engine: set.engine,
       aspectDefault: set.aspect,

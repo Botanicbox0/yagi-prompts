@@ -73,6 +73,9 @@ describe('private creator platform against PostgreSQL',()=>{
   await h.sql.query('update render_jobs set attempts=2 where id=$1',[renderId]);
   await expect(administerPlatform(h.sql,ADMIN_VIEWER,settlement)).rejects.toThrow('cost_pending');
   await h.sql.query('update render_jobs set attempts=1 where id=$1',[renderId]);
+  // The 7-day defect window after delivery has to pass first.
+  await expect(administerPlatform(h.sql,ADMIN_VIEWER,settlement)).rejects.toThrow('settle_too_early');
+  await h.sql.query("update render_jobs set finished_at=now()-interval '8 days' where id=$1",[renderId]);
   await administerPlatform(h.sql,ADMIN_VIEWER,settlement);
   await administerPlatform(h.sql,ADMIN_VIEWER,{action:'policy',version:'test-v1',costPerCredit:1000,cap:100,termsVersion:'test-terms',reason:'Test only approved terms'});
   await administerPlatform(h.sql,ADMIN_VIEWER,approval);await administerPlatform(h.sql,ADMIN_VIEWER,approval);
@@ -102,6 +105,27 @@ describe('private creator platform against PostgreSQL',()=>{
   await reconcileRewards(h.sql);await reconcileRewards(h.sql);
   expect((await platformHome(h.sql,user)).balance).toBe(0);
   await expect(h.sql.query('update platform_credit_ledger set delta=999')).rejects.toThrow('immutable');
+ });
+ it('keeps a company creative’s whole margin and splits an external one 80/20',async()=>{
+  const formatTemplate=(await h.sql.query<{template_id:string}>("select template_id from platform_formats where user_id=$1 and status='accepted'",[user.userId])).rows[0]!.template_id;
+  async function settleSale() {
+   const id=await render(formatTemplate,'image'),paymentId=randomUUID();
+   await h.sql.query("update render_jobs set finished_at=now()-interval '8 days' where id=$1",[id]);
+   await h.sql.query(`insert into billing_payments(id,user_id,environment,amount_krw,status,payment_key,template_id,template_slug,order_name,aspect,locale,render_ref,input_key,input_mime,render_id,consent_at,approved_at,expires_at)
+    values($1,$2,'live',10000,'paid',$3,$4,'neon-alley-dolly','test','9:16','ko',$5,'private/input.jpg','image/jpeg',$5,now(),now(),now()+interval '1 day')`,[paymentId,other.userId,`test-payment-${paymentId}`,formatTemplate,id]);
+   await administerPlatform(h.sql,ADMIN_VIEWER,{action:'settle',id,tax:909,fees:340,fx:1000,reason:'Actual provider invoice and PG fee evidence'});
+   return (await h.sql.query<{creator_due:number;platform_margin:number;margin:number}>('select creator_due,platform_margin,margin from platform_settlements where render_id=$1',[id])).rows[0]!;
+  }
+  await administerPlatform(h.sql,ADMIN_VIEWER,{action:'creator',id:user.userId,active:true,contract:'studio-v1',payout:'company',reason:'Studio-owned promotional profile'});
+  const company=await settleSale();
+  expect(company.margin).toBeGreaterThan(0);
+  expect(company).toMatchObject({creator_due:0,platform_margin:company.margin});
+  await administerPlatform(h.sql,ADMIN_VIEWER,{action:'creator',id:user.userId,active:true,contract:'pilot-v1',payout:'external',reason:'Outside creative under contract'});
+  const external=await settleSale();
+  expect(external.creator_due).toBe(Math.floor(external.margin*0.8));
+  // Leaving payout out keeps whatever was set.
+  await administerPlatform(h.sql,ADMIN_VIEWER,{action:'creator',id:user.userId,active:false,contract:'pilot-v1',reason:'Permission revoked'});
+  expect((await h.sql.query<{payout:string}>('select payout from platform_creators where user_id=$1',[user.userId])).rows[0]!.payout).toBe('external');
  });
  it('rejects non-admin mutations even if domain service called directly',async()=>{
   await expect(administerPlatform(h.sql,user,{action:'quality',id:templateId,score:5,reason:'Fake'})).rejects.toThrow('forbidden');

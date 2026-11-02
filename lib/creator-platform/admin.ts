@@ -15,7 +15,8 @@ const reason=z.string().trim().min(3).max(2000), money=z.number().int().min(0).m
 // Creator-facing text. Empty form fields arrive as '' and mean "no note".
 const note=z.string().trim().max(1000).optional();
 export const PlatformAdminInput=z.discriminatedUnion('action',[
- z.object({action:z.literal('creator'),id:z.uuid(),active:z.boolean(),contract:z.string().trim().min(1).max(120),reason}).strict(),
+ // payout (0073): 'company' for the studio's own profiles (their margin stays the company's); an applicant approved below stays 'external'.
+ z.object({action:z.literal('creator'),id:z.uuid(),active:z.boolean(),contract:z.string().trim().min(1).max(120),payout:z.enum(['company','external']).optional(),reason}).strict(),
  z.object({action:z.literal('reply'),id:z.uuid(),message:z.string().trim().min(1).max(2000),requestId:z.uuid(),reason}).strict(),
  // priceKrw: a recipe (v2) acceptance names the final won price; the floor + royalty is only the proposal.
  z.object({action:z.literal('format'),id:z.uuid(),accept:z.boolean(),note,priceKrw:z.number().int().min(100).max(1_000_000).optional(),reason}).strict(),
@@ -37,6 +38,7 @@ export async function administerPlatform(sql:SqlRunner,viewer:Viewer,raw:unknown
    await lockUser(tx,input.id);
    await tx.query(`insert into platform_creators(user_id,active,approved_by,contract_version) values($1,$2,$3,$4)
     on conflict(user_id) do update set active=excluded.active,approved_by=excluded.approved_by,contract_version=excluded.contract_version`,[input.id,input.active,viewer.userId,input.contract]);
+   if(input.payout)await tx.query('update platform_creators set payout=$2 where user_id=$1',[input.id,input.payout]);
   } else if(input.action==='reply') {
    demand((await tx.query('select id from platform_threads where id=$1',[input.id])).rows.length,'not_found');
    const old=await tx.query<{thread_id:string}>('select thread_id from platform_messages where id=$1',[input.requestId]);
@@ -81,16 +83,22 @@ export async function administerPlatform(sql:SqlRunner,viewer:Viewer,raw:unknown
    await tx.query('insert into platform_quality(template_id,score) values($1,$2) on conflict(template_id) do update set score=excluded.score,updated_at=now()',[input.id,input.score]);
   } else if(input.action==='settle') {
    // Current paid provider is KRW-only. Global currencies need their own verified order adapters.
-   const {rows}=await tx.query<{payment_id:string;amount_krw:number;cost_usd:string|null;cost_source:string|null;attempts:number;creator_id:string|null}>(`select p.id payment_id,p.amount_krw,j.cost_usd,j.cost_source,j.attempts,f.user_id creator_id from render_jobs j
+   // payout through to_jsonb: before 0073 every creative is 'external', exactly as before.
+   const {rows}=await tx.query<{payment_id:string;amount_krw:number;cost_usd:string|null;cost_source:string|null;attempts:number;creator_id:string|null;payout:string|null;held:boolean}>(`select p.id payment_id,p.amount_krw,j.cost_usd,j.cost_source,j.attempts,f.user_id creator_id,to_jsonb(c)->>'payout' payout,
+    (j.finished_at is null or j.finished_at>now()-interval '7 days') held from render_jobs j
     join billing_payments p on p.render_id=j.id left join platform_formats f on f.template_id=j.template_id and f.status='accepted'
+    left join platform_creators c on c.user_id=f.user_id
     where j.id=$1 and j.status='succeeded' and p.status='paid' and p.environment='live' and p.payment_type='NORMAL' for update of p`,[input.id]);
    demand(rows.length,'not_eligible');const row=rows[0]!;demand(row.cost_source==='provider_usage'&&row.cost_usd!==null&&Number.isFinite(Number(row.cost_usd)),'cost_pending');
    // The render row records the final result's cost, not every possibly billable retry.
    // Keep retry jobs pending until a complete per-attempt invoice adapter exists.
    demand(row.attempts===1,'cost_pending');
+   // Founder 2026-11-02: a sale settles once the 7-day defect window after delivery has passed; a refund
+   // in that window moves the payment out of 'paid', so it never settles.
+   demand(!row.held,'settle_too_early');
    const existing=await tx.query('select render_id from platform_settlements where render_id=$1',[input.id]);demand(!existing.rows.length,'already_settled');
    demand(input.tax+input.fees<=row.amount_krw);
-   const cost=Math.ceil(Number(row.cost_usd)*input.fx),split=marginSplit({revenue:row.amount_krw,tax:input.tax,fees:input.fees,providerCost:cost,creator:!!row.creator_id});
+   const cost=Math.ceil(Number(row.cost_usd)*input.fx),split=marginSplit({revenue:row.amount_krw,tax:input.tax,fees:input.fees,providerCost:cost,creator:!!row.creator_id&&row.payout!=='company'});
    await tx.query(`insert into platform_settlements(render_id,payment_id,creator_id,currency,revenue,tax,fees,provider_cost,fx,margin,creator_due,platform_margin,evidence)
     values($1,$2,$3,'KRW',$4,$5,$6,$7,$8,$9,$10,$11,$12)`,[input.id,row.payment_id,row.creator_id,row.amount_krw,input.tax,input.fees,cost,input.fx,split.margin,split.creator,split.platform,input.reason]);
   } else if(input.action==='policy') {
