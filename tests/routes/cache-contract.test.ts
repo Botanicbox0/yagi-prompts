@@ -196,6 +196,7 @@ describe('route cache modes (§3.4 / §4)', () => {
       ['app', 'api', 'renders', 'tick', 'route.ts'],
       ['app', 'api', 'renders', 'callback', 'route.ts'],
       ['app', 'api', 'renders', 'media', '[id]', 'route.ts'],
+      ['app', 'api', 'public-media', 'tick', 'route.ts'],
       // docs/TEMPLATES-IA.md §8.2 — the face check and the bank's callback.
       ['app', '(app)', 'identity', 'verify', 'page.tsx'],
       ['app', 'api', 'identity', 'callback', 'route.ts'],
@@ -728,6 +729,7 @@ describe('render queue (docs/TEMPLATES-IA.md §8)', () => {
     expect(vercel.crons).toEqual([
       { path: '/api/renders/tick', schedule: expect.stringMatching(/^\d+ \d+ \* \* \*$/) },
       { path: '/api/brands/inquiries/tick', schedule: expect.stringMatching(/^\d+ \d+ \* \* \*$/) },
+      { path: '/api/public-media/tick', schedule: expect.stringMatching(/^\d+ \d+ \* \* \*$/) },
     ]);
   });
 

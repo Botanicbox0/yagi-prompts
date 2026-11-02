@@ -6,10 +6,13 @@ import { resolveRuntimeMode } from '@/lib/runtime-mode';
 import { publicMediaCacheKey } from './asset-url';
 import { NO_LANDING_MEDIA, type LandingMedia } from './landing-media';
 import { landingMediaMap, loadLandingMediaRows } from './landing-media-repo';
+import { refreshPublicMediaKeys } from './public-media-registry';
 
 async function readLandingMedia(): Promise<LandingMedia> {
   const sql = await getSqlRunner();
   if (sql === null) return NO_LANDING_MEDIA;
+  // This document stores media addresses for up to an hour, so it asks which keys are on R2 right now.
+  await refreshPublicMediaKeys(sql, { force: true });
   return landingMediaMap(await loadLandingMediaRows(sql));
 }
 

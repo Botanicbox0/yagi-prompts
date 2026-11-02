@@ -132,6 +132,29 @@ export function publicMediaBaseUrl(env: EnvLike = process.env): string | undefin
   return value?.startsWith('https://') ? value : undefined;
 }
 
+export interface PublicMediaR2Config {
+  accountId: string;
+  accessKeyId: string;
+  secretAccessKey: string;
+  bucket: string;
+  mediaBaseUrl: string;
+}
+
+/**
+ * What copying new public files to R2 needs (docs/BRAND-MOAT-AND-STORAGE.md), or `null` with any value
+ * missing. `null` switches the whole feature off: nothing is copied, the verified-key table is not read
+ * and only the keys in `lib/content/public-media-keys.ts` go to the media host.
+ */
+export function publicMediaR2Config(env: EnvLike = process.env): PublicMediaR2Config | null {
+  const mediaBaseUrl = publicMediaBaseUrl(env);
+  const accountId = trimmed(env.R2_ACCOUNT_ID);
+  const accessKeyId = trimmed(env.R2_ACCESS_KEY_ID);
+  const secretAccessKey = trimmed(env.R2_SECRET_ACCESS_KEY);
+  const bucket = trimmed(env.R2_PUBLIC_BUCKET);
+  if (!mediaBaseUrl || !accountId || !accessKeyId || !secretAccessKey || !bucket) return null;
+  return { accountId, accessKeyId, secretAccessKey, bucket, mediaBaseUrl };
+}
+
 // ---------------------------------------------------------------------------
 
 const warned = new Set<string>();
