@@ -13,8 +13,8 @@ import { shapePrompt, type ShapedPrompt } from './shape';
  *
  * Split from the façade for the reason M2 established: `getSqlRunner`/`getViewer` carry the
  * `server-only` guard and cannot be imported into vitest, so everything that DECIDES lives here
- * with its two dependencies injected, and `lib/prompts/facade.ts` is the four-line wrapper that
- * resolves them.
+ * with its two dependencies injected. (The public detail-route wrapper that resolved them was
+ * retired with the prompt detail page.)
  *
  * Two rules, and the difference between them is the whole §13 gating doctrine:
  *
@@ -55,8 +55,8 @@ export type PromptDetailResult = PromptDetailOk | { status: 'not_found' };
 export const PROMPT_NOT_FOUND = { status: 'not_found' } as const;
 
 /** A published item is visible to everyone; everything else does not exist on the public surface. */
-export function isPubliclyVisible(row: Pick<PromptRow, 'status'>): boolean {
-  return row.status === 'published';
+export function isPubliclyVisible(row: Pick<PromptRow, 'status' | 'audience'>): boolean {
+  return row.status === 'published' && row.audience !== 'brand';
 }
 
 function toRowInput(row: PromptRow) {

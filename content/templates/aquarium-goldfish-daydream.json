@@ -1,0 +1,16 @@
+{
+  "slug": "aquarium-goldfish-daydream",
+  "title_en": "Aquarium Goldfish Daydream",
+  "title_ko": "어항 속 금붕어 백일몽",
+  "handle": "yunseolfromseoul",
+  "engine": "seedance-2.5",
+  "aspect": "4:3",
+  "duration": 10,
+  "resolution": "720p",
+  "price_krw": 4100,
+  "royalty_krw": 1500,
+  "use_case": ["cinematic", "mv"],
+  "presentation": "story-first",
+  "disclosure": { "prompts": true, "assets": false },
+  "example_url": "https://www.instagram.com/yunseolfromseoul/"
+}

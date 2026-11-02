@@ -1,12 +1,10 @@
 import { Reveal, ScrubY } from '@/components/motion/reveal';
 import { TextSwap } from '@/components/ui/text-swap';
 import { Marquee } from '@/components/ui/marquee';
-import { PlanCards } from '@/components/pricing/plan-cards';
 import { PromptCardView } from '@/components/prompts/prompt-card';
 import { promptLabels, useCaseLabel } from '@/components/prompts/labels';
-import { formatCount, interpolate } from '@/lib/i18n/format';
 import type { PromptCard, PromptTotals } from '@/lib/prompts/catalog';
-import { promptsHref, PROMPT_SUBMIT_PATH } from '@/lib/prompts/links';
+import { templatesHref } from '@/lib/prompts/links';
 import { USE_CASES } from '@/lib/prompts/schemas';
 import { signInHref } from '@/lib/billing/links';
 import type { Dictionary } from '@/lib/i18n/dictionaries';
@@ -23,7 +21,7 @@ import type { Locale } from '@/lib/i18n/config';
 
 /** §13.2 — the nav pivot moved the default destination from the library to the gallery. */
 function startHref(locale: Locale): string {
-  return signInHref(promptsHref(locale), locale);
+  return signInHref(templatesHref(locale, 'video'), locale);
 }
 
 // ---------------------------------------------------------------------------
@@ -41,7 +39,11 @@ function startHref(locale: Locale): string {
  * screen shows zero cards is not gallery-first. The two reappear in `HeroLede`, after the first
  * rail. Same type, same copy; only where they live changes.
  */
-export function Hero({ locale, dict }: { locale: Locale; dict: Dictionary }) {
+/**
+ * `showImage` — the second door exists only once there is an image template behind it (founder,
+ * 2026-09-11): a hero button that lands on "preparing" is a dead end dressed as a choice.
+ */
+export function Hero({ locale, dict, showImage = false }: { locale: Locale; dict: Dictionary; showImage?: boolean }) {
   return (
     <section data-section data-theme="light" className="section overflow-hidden">
       <div className="mx-auto max-w-shell px-gutter pt-24 pb-8 lg:pt-36 lg:pb-20">
@@ -63,24 +65,21 @@ export function Hero({ locale, dict }: { locale: Locale; dict: Dictionary }) {
              * link keeps its outline and stays beside it as the evidence you can read first.
              */}
             <a
-              href={`/${locale}/studio`}
-              data-hero-studio
+              href={templatesHref(locale, 'video')}
+              data-hero-video
               className="inline-block bg-accent px-6 py-3 font-label text-label text-white uppercase"
             >
-              <TextSwap>{dict.studio.heroCta} →</TextSwap>
+              <TextSwap>{dict.templates.ctaVideo} →</TextSwap>
             </a>
-            <a
-              href="#gallery"
-              className="inline-block border border-current px-6 py-3 font-label text-label uppercase"
-            >
-              <TextSwap>{dict.nav.prompts} ↓</TextSwap>
-            </a>
-            <a
-              href={PROMPT_SUBMIT_PATH}
-              className="text-accent hidden font-label text-label uppercase lg:inline-block"
-            >
-              <TextSwap>{dict.prompts.submitCta} →</TextSwap>
-            </a>
+            {showImage && (
+              <a
+                href={templatesHref(locale, 'image')}
+                data-hero-image
+                className="inline-block border border-current px-6 py-3 font-label text-label uppercase"
+              >
+                <TextSwap>{dict.templates.ctaImage} →</TextSwap>
+              </a>
+            )}
           </div>
         </div>
       </div>
@@ -97,12 +96,6 @@ export function HeroLede({ dict }: { dict: Dictionary }) {
   return (
     <div data-hero-lede className="mt-12 border-t border-hairline pt-6 lg:hidden">
       <p className="max-w-detail text-body opacity-70">{dict.hero.lede}</p>
-      <a
-        href={PROMPT_SUBMIT_PATH}
-        className="text-accent mt-5 inline-block font-label text-label uppercase"
-      >
-        <TextSwap>{dict.prompts.submitCta} →</TextSwap>
-      </a>
     </div>
   );
 }
@@ -186,7 +179,7 @@ export function Featured({
   // The landing is STATIC, so the copy button's refusal branches are pre-addressed exactly as
   // they are on the gallery; the server decides which one a given reader actually lands on.
   // §15: the 403 branch is per-card — each card's own page carries the cookie funnel.
-  const signin = signInHref(promptsHref(locale), locale);
+  const signin = signInHref(templatesHref(locale, 'video'), locale);
 
   return (
     <section data-section data-theme="dark" className="section">
@@ -215,10 +208,10 @@ export function Featured({
             </p>
             <p className="mt-5 max-w-detail text-body opacity-70">{dict.featured.emptyBody}</p>
             <a
-              href={PROMPT_SUBMIT_PATH}
+              href={templatesHref(locale, 'video')}
               className="text-accent mt-8 inline-block font-label text-label uppercase"
             >
-              <TextSwap>{dict.prompts.submitCta} →</TextSwap>
+              <TextSwap>{dict.templates.ctaVideo} →</TextSwap>
             </a>
           </div>
         ) : (
@@ -236,106 +229,13 @@ export function Featured({
               ))}
             </ul>
             <a
-              href={promptsHref(locale)}
+              href={templatesHref(locale, 'video')}
               className="text-accent mt-12 inline-block font-label text-label uppercase"
             >
-              <TextSwap>{dict.prompts.backToGallery} →</TextSwap>
+              <TextSwap>{dict.templates.allVideo} →</TextSwap>
             </a>
           </>
         )}
-      </div>
-    </section>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Pricing summary
-// ---------------------------------------------------------------------------
-
-export function planFeatures(dict: Dictionary): { free: string[]; pro: string[] } {
-  return {
-    free: [dict.pricing.featureStructure, dict.pricing.featureAssets, dict.pricing.featureBilingual],
-    pro: [
-      dict.pricing.featurePrompts,
-      dict.pricing.featureParams,
-      dict.pricing.featureCopy,
-      dict.pricing.featureWorkflow,
-      dict.pricing.featureNotifications,
-    ],
-  };
-}
-
-export function planCopy(dict: Dictionary) {
-  return {
-    free: dict.plan.free,
-    pro: dict.plan.pro,
-    freePrice: dict.pricing.freePrice,
-    proPrice: dict.pricing.proPrice,
-    perMonth: dict.pricing.perMonth,
-    freeTagline: dict.pricing.freeTagline,
-    proTagline: dict.pricing.proTagline,
-    cancelNote: dict.pricing.cancelNote,
-    startWithGoogle: dict.auth.startWithGoogle,
-  };
-}
-
-/**
- * §13.2 — the counts line, now over the two rails.
- *
- * M1 counted "N prompts across M playbooks" from the playbook catalog; the pivot makes the two
- * rails the honest headline number, and it comes from the SAME cached projection the gallery reads
- * so the two can never disagree.
- */
-export function countsLine(dict: Dictionary, locale: Locale, totals: PromptTotals): string {
-  if (totals.published === 0) return dict.pricing.countsEmpty;
-  return interpolate(dict.pricing.countsLine, {
-    yagi: formatCount(totals.yagi, locale),
-    community: formatCount(totals.community, locale),
-  });
-}
-
-export function PricingSummary({
-  locale,
-  dict,
-  totals,
-}: {
-  locale: Locale;
-  dict: Dictionary;
-  totals: PromptTotals;
-}) {
-  const features = planFeatures(dict);
-
-  return (
-    <section data-section data-theme="light" className="section">
-      <div className="band py-24 lg:py-32">
-        <p className="text-accent font-label text-eyebrow uppercase">{dict.pricing.eyebrow}</p>
-
-        <ScrubY className="mt-8">
-          <Reveal
-            as="h2"
-            lines={[dict.pricing.line1, dict.pricing.line2]}
-            className="font-display text-title font-black uppercase"
-          />
-        </ScrubY>
-
-        <p className="mt-8 max-w-detail text-body opacity-70">{dict.pricing.lede}</p>
-        <p className="mt-3 font-mono text-code opacity-60">{countsLine(dict, locale, totals)}</p>
-
-        <div className="mt-12">
-          <PlanCards
-            locale={locale}
-            copy={planCopy(dict)}
-            freeFeatures={features.free}
-            proFeatures={features.pro}
-          />
-        </div>
-
-        <a
-          href={`/${locale}/pricing`}
-          className="text-accent mt-10 inline-block font-label text-label uppercase"
-        >
-          <TextSwap>{dict.pricing.compare} →</TextSwap>
-        </a>
       </div>
     </section>
   );

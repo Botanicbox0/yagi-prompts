@@ -1,5 +1,6 @@
 import type { Locale } from '@/lib/i18n/config';
 import type { Tier } from '@/lib/content/visibility';
+import { safeReturnPath } from '@/lib/auth/return-path';
 
 /**
  * PLAN §3.4 — where the money CTAs point, as one pure module.
@@ -14,6 +15,11 @@ import type { Tier } from '@/lib/content/visibility';
  * Everything here is pure and string-in/string-out so both can use it and both are tested.
  */
 
+/**
+ * The subscription checkout route. Retired with the $9/month plan (audit P1-4): it now answers 410
+ * `subscription_retired`, and nothing in the product posts to it. Kept as a named constant because
+ * the Stripe modules and their tests still describe the dormant flow.
+ */
 export const CHECKOUT_ACTION = '/api/billing/checkout';
 export const PORTAL_ACTION = '/api/billing/portal';
 export const UPGRADE_PATH = '/billing/upgrade';
@@ -28,6 +34,11 @@ export function sanitizeSlug(raw: unknown): string | null {
   return SLUG_PATTERN.test(value) ? value : null;
 }
 
+/** The localized pricing page — where every retired subscription entry now lands. */
+export function pricingHref(locale: Locale): string {
+  return `/${locale}/pricing`;
+}
+
 /** Where a completed (or abandoned) checkout should put the reader back. */
 export function originPath(origin: { slug: string | null; locale: Locale }): string {
   return origin.slug === null ? `/${origin.locale}/prompts` : `/${origin.locale}/p/${origin.slug}`;
@@ -35,9 +46,7 @@ export function originPath(origin: { slug: string | null; locale: Locale }): str
 
 /** Same-origin relative paths only — never let a query parameter become an open redirect. */
 export function safeInternalPath(raw: unknown, fallback: string): string {
-  if (typeof raw !== 'string') return fallback;
-  if (!raw.startsWith('/') || raw.startsWith('//')) return fallback;
-  return raw;
+  return safeReturnPath(raw, fallback);
 }
 
 export function signInHref(next: string, locale: Locale): string {
@@ -69,14 +78,9 @@ export function upgradeIntent(args: {
 }): UpgradeIntent {
   const returnTo = originPath({ slug: args.slug, locale: args.locale });
   if (args.tier === 'anon') return { kind: 'signin', href: signInHref(returnTo, args.locale) };
-  if (!args.billingConfigured) return { kind: 'unavailable', href: `/${args.locale}/pricing` };
-  return {
-    kind: 'checkout',
-    action: CHECKOUT_ACTION,
-    slug: args.slug,
-    locale: args.locale,
-    returnTo,
-  };
+  // The $9/month subscription is retired (audit P1-4): a signed-in reader is never sent to a
+  // subscription checkout, configured or not — the pricing page says how billing works now.
+  return { kind: 'unavailable', href: pricingHref(args.locale) };
 }
 
 // ---------------------------------------------------------------------------

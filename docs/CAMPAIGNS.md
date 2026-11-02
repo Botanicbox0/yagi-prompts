@@ -1,0 +1,164 @@
+# CAMPAIGNS — 유가 캠페인 설계 (v1, 2026-09-03)
+
+> 대표 지시: "정해진 영상 포맷을 우리가 만들어놓으면 크리에이터들이 지원하고, 포스팅하고 링크를 올리면
+> 수익을 가져간다. 수익은 7일 후 조회수 기반 혹은 포스팅 완료 7일 이후 취득." 참고: Brandazine
+> 셀프 캠페인(MORPHIC 워크스페이스에서 실제 운영한 두 캠페인 — 프롬퀸 13명 선정/12편, 90년대 인터뷰 14편,
+> 중위 조회 7,811).
+
+## 0. 한 문장
+
+**캠페인 = 클라이언트가 의뢰한 하나의 영상 포맷(템플릿)을, 선정된 크리에이터들이 자기 얼굴로 만들어
+SNS에 올리고, 링크를 제출하면 검수 → 7일 홀드 → 정산되는 상품.** 콘테스트(다수 경쟁·소수 수상)의
+사촌이지만 돈의 방향이 다르다: 콘테스트는 상금 소수, 캠페인은 선정된 모두에게 원고료.
+
+## 1. Brandazine에서 배운 것 / 우리가 더 잘하는 것
+
+| Brandazine (관찰) | TWINGS 캠페인 |
+|---|---|
+| 단계: 캠페인 시작 → 크리에이터 선정 → 진행(발송) → 콘텐츠 → 진단 | 동일한 5단계를 **상태 머신으로 코드에** 둔다(테스트 있음) |
+| "업로드 지연" 배지, 크리에이터 699명 조회 | 지원자 수 · 선정 · 게시 · 검수 · 정산 카운터 + 업로드 D-day 지연 상태 |
+| 콘텐츠별 조회/참여율/저장율, 중위값 | 7일차 조회수 스냅샷을 **정산의 입력값**으로 저장(v1 자진신고+관리자 확인, v2 API) |
+| 원고료 미지급(아이템 협찬만) | **정산 규칙 3종**: 고정 / 조회수 기반 / 혼합, 상·하한, 7일 홀드 — 상세 페이지에 숫자로 명시 |
+| 2차 활용 라이선스 협의 | 캠페인 옵션(`license`: 없음/포함/협의) — v2 |
+| 포맷은 브리프 텍스트 | **포맷 = 스튜디오 스타일(프롬프트)**: 크리에이터가 사진 1장으로 우리 파이프라인에서 생성 → 포맷 통일, 업로드 지연 구조적 감소 |
+| 광고 표기 안내 없음 | 요구사항에 `#광고` 표기 필수 옵션(표시·광고법) + 해시태그/멘션 목록 |
+
+## 2. 역할과 흐름
+
+```
+[클라이언트] 메일/미팅 → 관리자가 캠페인 초안 작성(어드민) → 공개(모집)
+[크리에이터] 캠페인 목록 → 상세(브리프·포맷 예시 영상·정산 규칙·일정) → 로그인 → 지원(한 줄 어필 + SNS + 팔로워 수)
+[관리자]    지원자 큐 → 선정/거절 (슬롯 수만큼)
+[크리에이터] 선정 알림 → (스튜디오에서 사진으로 영상 생성) → SNS 게시 → 링크 제출
+[관리자]    게시물 검수: 링크 열림·플랫폼 일치·요구사항(해시태그/#광고) → 승인(verified, hold_until=+7일) / 반려(재제출 가능)
+[시스템]    홀드 종료 → 정산 대기 큐 (조회수 기반이면 7일차 조회수 입력 → 금액 계산)
+[관리자]    지급 처리 → paid (지급 참조번호 기록) → 크리에이터 알림
+[클라이언트] 캠페인 종료 리포트(게시 수·중위 조회·총 정산) — v2
+```
+
+## 3. 상태 머신
+
+**Campaign**: `draft → recruiting → selecting → running → closed → archived` (draft→archived 가능).
+- recruiting: 지원 접수 중(`applications_close_at` 전) · selecting: 접수 마감, 선정 중 · running: 게시 기간(`post_deadline_at` 전) · closed: 마감 후, 정산 진행/완료.
+
+**Application**: `applied → selected | declined | withdrawn` · `selected → posted | withdrawn | expired(마감 미게시)` ·
+`posted → verified | rejected` · `rejected → posted(재제출)` · `verified → paid`.
+- `hold_until = verified_at + hold_days(기본 7)`. 홀드 종료 전 지급 불가(코드로 금지).
+
+## 4. 정산 규칙 (payout rule) — 캠페인마다 하나
+
+```
+model: 'flat' | 'per_view' | 'hybrid'
+flat_cents            고정 원고료 (flat/hybrid)
+per_1k_views_cents    조회 1,000회당 단가 (per_view/hybrid)
+min_cents / max_cents 하한/상한 (per_view/hybrid; 상한 null = 없음)
+currency              'KRW' (v1 고정; 정수 원 단위 저장)
+hold_days             7
+metrics_at            'verified+hold' — 조회수 스냅샷 시점 = 홀드 종료일
+```
+계산은 `lib/campaigns/payout.ts`의 순수 함수 하나. 상세 페이지의 문장은 이 규칙에서 생성한다("고정 30,000원, 검수 후 7일 뒤 지급" / "1,000회당 500원, 최소 10,000원 · 최대 100,000원").
+
+## 5. 데이터 (마이그레이션 0013 + RLS 0106)
+
+- `campaigns`: id, slug, status, title/summary{en,ko}, brief(markdown{en,ko}), host_name/kind/url(콘테스트와 동일 어휘), media(poster), **style_slug**(스튜디오 스타일=프롬프트 slug, nullable), platforms text[] (instagram/tiktok/youtube), deliverable text, slots int, applications_close_at, post_deadline_at, payout jsonb(§4), requirements jsonb {hashtags[], mentions[], disclosure bool, notes{en,ko}}, budget_cents(클라이언트 예산, 내부용), created/published/updated_at.
+- `campaign_applications`: id, campaign_id, creator_id→profiles, status, pitch, sns_url, follower_count, selected_at, post_url, post_platform, posted_at, verified_at, hold_until, views_snapshot int, metrics_source('self'|'admin'|'api'), payout_cents, paid_at, payout_ref, reject_reason, created/updated_at(version 토큰 — 콘테스트 엔트리와 동일 방식). **UNIQUE(campaign_id, creator_id)**.
+- `campaign_application_writes`: 지원 남용 방지(콘테스트 `contest_entry_writes`와 동일, 하루 10회).
+- RLS: deny-all + 서비스 롤(콘테스트 0104 동일). 공개 읽기는 캐시된 프로젝션(`campaigns` 태그)으로만.
+
+## 6. 화면
+
+- **공개** `/[locale]/campaigns`(모집 중 우선, 카드: 포스터·원고료·슬롯·마감 D-day), `/[locale]/campaigns/[slug]`(브리프, 포맷 예시 영상=스타일의 결과물, 정산 규칙 문장, 요구사항, 타임라인, 지원 버튼). 네비에 "캠페인" 추가(콘테스트 옆).
+- **크리에이터** `/campaigns/[slug]/apply`(로그인 게이트, 콘테스트 submit과 같은 JS-free POST), `/campaigns/mine`(내 지원 현황: 상태 스텝바, 링크 제출 폼, 홀드 카운트다운, 정산 상태).
+- **어드민** `/admin/campaigns`(카드 보드: 지원/선정/게시/검수/정산 카운터), `/admin/campaigns/new`, `/admin/campaigns/[id]`(빌더 + 큐 3개: 지원자·게시물 검수·정산 대기). 모두 `/admin/do` 오퍼레이션(`campaign.*`, `campaignApplication.*`).
+- **알림**(§3.5 outbox 재사용): 선정, 검수 승인/반려, 지급 완료, 게시 마감 D-1.
+
+## 7. 대표 결정 필요 (기본값으로 v1 진행, 바꾸면 규칙만 수정)
+
+1. **정산 모델 기본값**: hybrid(기본료 + 1,000회당 단가, 상한) 추천 — 크리에이터는 최소 보장, 클라이언트는 성과 연동.
+2. **원천징수/지급 방식**: v1은 **수동 정산**(관리자가 계좌이체 후 `paid`+참조번호 기록, 시스템은 명세·합계 관리). 3.3% 사업소득 원천징수와 주민번호·계좌 수집은 지급대행(v2)으로 — 민감정보를 우리 DB에 두지 않기 위함.
+3. **조회수 소스**: v1 크리에이터 자진신고(7일차 숫자+캡처) + 관리자 확인. v2 YouTube Data API(공개), Instagram은 크리에이터 비즈니스 계정 연동이 필요해 후순위.
+4. **클라이언트 과금**: v1 오프라인 계약(세금계산서), 시스템은 예산·집행 추적만. 플랫폼 수수료율은 캠페인 필드(내부용).
+5. **광고 표기 필수** 기본 ON(`#광고`) — 표시·광고법 위반은 브랜드·크리에이터 모두의 리스크.
+
+## 8. 단계
+
+- **v1 (지금)**: 도메인(§3·§4, 테스트) → 0013/0106 → 리포지토리 → 어드민 빌더·큐 → 공개 목록/상세 → 지원/링크 제출/내 현황 → 사전(ko/en) → 스윕.
+- **v2**: 스튜디오 생성 연동(실인물 자산), 지급대행, 조회수 API, 클라이언트 리포트, 라이선스 협의, 진단.
+
+### v1 구현 상태 (2026-09-05)
+
+| 조각 | 위치 | 상태 |
+| --- | --- | --- |
+| 도메인·상태기계·정산 계산 | `lib/campaigns/{schemas,state,copy}.ts` | 완료 (테스트 `tests/campaigns/state.test.ts`) |
+| DB | `0013_core_campaigns`, `0014_core_campaigns_format_is_style`, `0106_glue_campaigns_rls` | 클라우드·PGlite 적용 |
+| 어드민 오퍼레이션 | `lib/admin/campaign-operations.ts` (`campaign.*`, `campaignApplication.*`) | 완료 (`tests/campaigns/operations.test.ts`) |
+| 공개 목록/상세 | `app/(marketing)/[locale]/campaigns/…` | 완료, 캐시 태그 `campaigns` |
+| 크리에이터 지원/링크/조회수 | `lib/campaigns/service.ts`, `app/(app)/campaigns/[slug]/apply`, `app/(app)/campaigns/mine` | 완료 (`tests/campaigns/service.test.ts`) — 엣지 게이트 `isCampaignAppPath` |
+| 어드민 보드/빌더/큐 | `app/(admin)/admin/campaigns/{page,new,[id]}` + `components/admin/campaign-fields.tsx` | 완료 — 정산 대기열은 보드 맨 위 |
+| 알림(선정·검수·지급·D-1) | §3.5 outbox | **미구현** — v1.1 |
+| 조회수 API 수집 | `metrics_source='api'` 자리만 | v2 |
+
+운영 순서(어드민): 새 캠페인(초안) → 원고료·두 마감일·인원 채우고 **모집 중**으로 → 지원자 큐에서 선정/미선정 → **선정 중**(이때부터 크리에이터가 링크 제출 가능) → 검수 대기 큐에서 검수 통과/반려 → 홀드 종료 후 보드 상단 정산 대기열에서 이체 참조 기록 → **종료**.
+
+## 11. 브랜드 의뢰 폼 (2026-09-11)
+
+브랜드가 캠페인을 "만드는" 곳은 아직 어드민뿐이지만, **의뢰를 넣는 곳**은 이제 공개 페이지에 있다. 캠페인 목록 하단 `#brands` 섹션(`components/campaigns/brand-section.tsx`): 브랜드라면 / 포맷 하나로 채널 여러 개 / 3단계(포맷 → 브리프·예산 → 운영) / 의뢰 폼. 빈 상태의 "브랜드 의뢰하기", 하우스 광고, 푸터 "캠페인·광고 문의"가 모두 여기로 온다.
+
+| 조각 | 위치 | 비고 |
+| --- | --- | --- |
+| 스키마 | `lib/brands/schemas.ts` | 예산대 5구간(`under_3m`…`undecided`), 희망 포맷 = 공개 템플릿 슬러그 또는 `new`/`undecided`, 동의 `literal(true)`, 허니팟 `website` |
+| DB | `0021_core_brand_inquiries`, `0109_glue_brand_inquiries_rls` | 클라우드·PGlite 적용. deny-all RLS |
+| 서비스 | `lib/brands/service.ts` | `submitBrandInquiry`(검증·저장, 이메일당 하루 3건) / `notifyBrandInquiry`(스튜디오 알림 + 브랜드 접수 메일, 각자 idempotency 키) — `tests/brands/inquiries.test.ts` |
+| API | `POST /api/brands/inquiries` | JSON → JSON 답. 폼 인코딩(하이드레이션 전 제출) → 303 `/{locale}/campaigns?inquiry=sent#brands`; 섬이 마운트 시 읽고 주소에서 지운다 |
+| 폼 | `components/campaigns/brand-form.tsx` | 클라이언트 섬, 페이지는 정적 유지. 필드 오류는 `aria-invalid` |
+| 어드민 | `/admin/campaigns` 상단 "브랜드 의뢰" 패널, `brandInquiry.status`(`lib/admin/brand-operations.ts`) | 새 의뢰 → 연락함(`contacted_at` 스탬프) → 종료. 대시보드 `/admin`에 새 의뢰 수 |
+
+메일 발신은 `getMailer()`(Resend, `NOTIFY_FROM_EMAIL`)이며 스튜디오 수신 주소는 `BUSINESS.email`. 브랜드 셀프서브(예산 결제·브리프 편집)는 v2.
+
+2026-10-07: `/[locale]/brands` 폼에 문의 종류·활용 방식과 재요청 식별자를 추가한다. DB 접수와 함께 Slack 발송 대기 기록을 원자적으로 저장하며, 서버 환경에서 명시적으로 켠 경우에만 지정 private 채널로 문의 UUID·종류·관리자 링크를 보낸다. 회사명·연락처·본문은 Slack에 보내지 않는다. 중복 방지·불명 발송 처리·0041/0125/0126 클라우드 적용 및 활성화 절차는 [브랜드 문의 알림 운영](BRAND-INQUIRY-DELIVERY.md)을 따른다.
+
+## 12. 캠페인 알림 메일 (2026-09-13)
+
+§3.5의 "미구현" 칸을 채웠다. 큐 없이, 관리자 오퍼레이션이 커밋한 뒤 `ctx.defer`(라우트에서는 `after()`, 테스트에서는 인라인)로 보낸다. `lib/campaigns/notify.ts`.
+
+| 사건 | 받는 사람 | 게이트 | idempotency 키 |
+| --- | --- | --- | --- |
+| `campaign.status` → `recruiting` | "캠페인 알림"(`notif_updates`) 켠 계정 전원 | 토글 + 본인 서명 원클릭 해제 링크 | `campaign:{id}:recruiting:{userId}` |
+| `campaignApplication.select / decline / verify / reject / pay` | 그 지원자 1명 | 없음(거래 메일), 안내는 계정 페이지 | `application:{id}:{status}:{version}` |
+
+브로드캐스트 엔진은 `lib/notify/broadcast.ts`(구독자 조회, 동시성 2, 사람마다 `unsubscribePath` 서명). 같은 엔진으로 **주간 드롭 알림** `prompt.announce`(템플릿 편집기 "구독자에게 알리기", `prompt_items.announced_at`이 원샷 가드, 0023)가 "새 템플릿 알림"(`notif_new_playbook`) 구독자에게 나간다. 메일 본문은 공용 시트 `lib/notify/sheet.ts`. 테스트 `tests/campaigns/notify.test.ts`, `tests/prompts/announce.test.ts`. 구독자가 수천 명을 넘거나 Resend 분당 한도에 닿으면 이 함수 자리에 아웃박스를 넣는다.
+
+## 13. 브랜드 랜딩 재편 (2026-09-14)
+
+> 아래는 2026-09-14의 기존 구성 기록이다. 2026-10-07에는 공개 브랜드 서비스와 크리에이터 참여를 분리했다. 현재 구현은 `/[locale]/brands`의 브랜드 설명·쇼릴·활용 유형·사례·공개 상담 폼과 `/[locale]/campaigns`의 참여 안내다. 기존 도메인·인증 경계는 유지한다. [현재 정보구조와 검증 기록](AUDIENCE-RENOVATION.md)을 따른다.
+
+> **2026-10-08 대표 승인 예외:** 일반적인 고객사 실명 비공개 원칙은 유지하되, 공개 사례 두 건에는 **Morphic** 이름을 사용한다. 2026년 8월 90년대 인터뷰 사례에는 승인된 집계값 `9편 · 200만 뷰+ · 파생 오가닉 300건+`만 연결한다. 9편은 정확값이고 나머지 둘은 하한이다. Instagram을 포함한 오가닉 확산과 Morphic 공식 포맷 가이드 링크를 보여 주되 개별 게시자의 신원을 사례 문안이나 자산 경로에 넣지 않는다. 2026년 9월 한국·일본 후속 사례에는 새 성과 숫자를 붙이지 않고 실제 캠페인 영상 두 편과 운영 범위만 공개한다. 후속 진행을 소비자 전환율이나 매출 귀속으로 바꾸어 쓰지 않는다.
+
+대표: "캠페인 페이지는 브랜드가 보고 캠페인 의뢰하는 랜딩페이지. 원리를 잘 설명하면 된다. moat = 실제 인물의 초상권 라이선스 + 고품질 콘텐츠 포맷 제작 + 실제 인플루언서를 통한 spread. 개별 광고 프로덕션도 함." `/[locale]/campaigns`의 읽는 순서를 브랜드 → 크리에이터로 뒤집었다. 캐시 모드(정적 + `campaigns` 태그 + 1h)는 그대로.
+
+| 순서 | 섹션 | 컴포넌트 | 마커 |
+| --- | --- | --- | --- |
+| 1 | 히어로 "광고 한 편이 / 수십 개의 얼굴로 / 퍼집니다." + 두 문(의뢰 `#brands` / 크리에이터 `#creators`) | `components/campaigns/brand-landing.tsx` `CampaignHero` | `data-campaign-hero` |
+| 2 | 인터랙티브 포맷 스터디 3편 — 시티 패션 4:3, Y2K 제품 9:16, 에디토리얼 4:3 | `BrandFormatExplorer` | `data-campaign-reel`, `data-format-select` ×3 |
+| 3 | 참여 원리 3단계 — 장면 선제작 / 크리에이터 버전 / 통합 운영 | 브랜드 페이지 서버 섹션 | `data-campaign-principles` |
+| 4 | Morphic 90년대 인터뷰 사례: 9편 · 200만 뷰+ · 파생 오가닉 300건+ | 사례 매니페스트 + 서버 렌더 | `data-case-study="morphic-90s-interview"` |
+| 5 | Morphic 9월 한국·일본 후속 사례: 실제 캠페인 영상 2편, 포맷 제작부터 결과 정리까지 | `MorphicFilmPair` | `data-case-study="morphic-september-kr-jp"`, `data-case-film` ×2 |
+| 6 | 활용 방식 탭 5개 — 모든 본문은 초기 HTML에 유지 | `BrandUseCaseExplorer` | `data-use-case-select` ×5, `data-use-case-panel` ×5 |
+| 7 | 운영 과정 → 의뢰 폼 → 개별 프로덕션 → FAQ → 크리에이터 진입 | 브랜드 페이지 서버 섹션 + 기존 폼 | `data-campaign-process`, `data-brands` |
+
+브랜드 영상은 `public/reel/brands/*.mp4|jpg`에 둔다. 포맷 스터디와 실제 Morphic 사례 자산을 이름·매니페스트·화면 섹션에서 분리한다. 모두 H.264 fast-start, 별도 포스터이며 `preload="none"`을 쓴다. 포맷 스터디는 화면에 들어왔을 때만 자동 재생하고 `prefers-reduced-motion`, Save-Data, 2G 연결에서는 사용자가 재생하기 전까지 포스터를 유지한다. 세로 영상은 잘라내지 않고 흐린 포스터 배경 위에 전체 프레임을 보여 준다. 실제 사례 원본 파일명과 크리에이터 핸들은 공개 경로에 쓰지 않는다. 사례 영상은 한 번에 한 편만 재생하며 화면이나 탭을 벗어나면 정지한다.
+
+문구 원칙: Morphic 외 고객사 실명은 쓰지 않으며, 숫자는 대표가 정한 것만 공개한다. 초상권 설명은 약관 §5.3과 같은 절차(계정당 자산 그룹 1개 + 제공사 자동 검수 + 필요 시 카메라 인증)를 유지한다. 테스트와 스윕은 두 사례의 지표 격리, 실제 파일 존재, 로컬라이즈된 본문, 크리에이터 식별자 부재를 확인한다.
+
+
+### 2026-10-08 후속 대표 요청
+
+초록색을 크리에이터 블루와 접근성용 연한 블루로 통일했다. 히어로 링크는 "성공 사례 보기". 8월 실제 게시 영상 두 편과 원문 링크를 추가하고 인터뷰 오디오를 보존했다. 기본 음소거이며 네이티브 컨트롤로 소리를 켠다. 활용 유형은 용어표 대신 영상 예시와 제작·게시 설명을 보여준다.
+
+문의 CTA는 네이티브 dialog를 열며 회사·이름·선택 직위·이메일·선택 전화번호·요청 내용을 받는다. 직위는 서버 검증 후 기존 문의 본문에 붙이므로 DB 마이그레이션은 없다. 예산은 undecided, 유형은 선택한 CTA에서 전달한다. JavaScript가 없으면 같은 폼을 본문에 표시하고 기존 303 접수 화면을 사용한다. 접수번호·중복 방지·Slack outbox를 유지했다. 프로덕션은 대표가 제공한 Pitch 소개서의 파리 영상과 공개 소개서 링크로 연결한다. 개인정보 수집 항목에 요청한 직위·문의 내용을 두 언어로 명시했다.
+
+### 2026-10-12 사례 원문 링크 갱신
+
+대표가 브랜드 공간과 최신 `[D2] YAGI WORKSHOP_Introduction`의 게시물을 참고하도록 요청했다. 브랜드 랜딩의 사례 링크는 실제 Instagram 게시물과 TWINGS의 사례 상세로 연결한다. Morphic의 일반 제작 가이드는 제거한다. 제작 포맷 참고 링크는 사례 상세에만 보조로 두고, 대표가 지정한 [YAGI 제작 포맷](https://morphic.com/en/workflows/019feecc-c7ec-77bd-bc3a-2ddc1f680105/90s-korean-street-interview)을 사용한다.
+
+9월 사례에는 브랜드 공간과 D2 소개서에서 함께 확인한 한국·일본 게시물을 두 개씩 추가한다. 기존 제작 영상 두 편과 게시물 네 개는 서로 같은 영상이라고 단정하지 않는다. 8월 집계와 9월 사례를 구분하고 새 성과 수치를 추가하지 않는다. 원문 주소, Opus 4.6 문안 검토와 검증 기록은 [사례 링크 QA](qa/audience-renovation/morphic-post-links.md)를 따른다.

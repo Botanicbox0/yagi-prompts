@@ -1,182 +1,78 @@
 import type { Metadata } from 'next';
 import { DEFAULT_LOCALE, isLocale, type Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/dictionaries';
-import { getPublicCatalog } from '@/lib/content/public-catalog';
 import { getPromptCatalog } from '@/lib/prompts/public-catalog';
+import { getCampaignCatalog } from '@/lib/campaigns/public-catalog';
 import { USE_CASES } from '@/lib/prompts/schemas';
-import { marqueeItems } from '@/lib/marquee';
-import { signInHref } from '@/lib/billing/links';
+import { templatesHref } from '@/lib/prompts/links';
+import { campaignsHref } from '@/lib/campaigns/links';
 import { promptLabels, presentUseCases, useCaseLabel } from '@/components/prompts/labels';
-import { SITE_OG_IMAGE, SITE_TWITTER_CARD } from '@/lib/seo/og';
-import { MarketingFooter, MarketingNav, adLabels } from '@/components/marketing/chrome';
-import { Hero, HeroLede, MarqueeStrip, Premise } from '@/components/landing/sections';
-import { CircleWipe } from '@/components/landing/circle-wipe';
-import { Faq } from '@/components/landing/faq';
+import { campaignLabels } from '@/components/campaigns/labels';
+import { SITE_TWITTER_CARD, siteOgImage } from '@/lib/seo/og';
+import { MarketingFooter, MarketingNav } from '@/components/marketing/chrome';
+import { FaqSection } from '@/lib/seo/faq-section';
 import { PromptRail } from '@/components/prompts/rails';
 import { UseCaseFilter } from '@/components/prompts/filter-chips';
-import { SubmitStrip } from '@/components/prompts/detail';
-import { AdRail } from '@/components/ad/ad-rail';
-import { AdBanner, AdCard } from '@/components/ad/ad-card';
-
-/**
- * Landing — PLAN §3.1, in the §5 register.
- *
- * Cache mode per §3.1/§4: STATIC + tag `catalog` + a 1h TTL floor. No `headers()`, no `cookies()`,
- * no session read anywhere on this page or the mode silently degrades to dynamic — which is why
- * the nav's "Sign in" is an unconditional link rather than authed chrome.
- *
- * Section rhythm (§5.1, hard inversions): hero dark · premise light · marquee dark ·
- * how-it-reads light · [circle wipe] · featured dark · pricing light · FAQ dark · footer dark.
- */
-/** Must stay equal to CATALOG_TTL_SECONDS — Next requires a literal here (tests pin the pair). */
+import { CampaignRail } from '@/components/campaigns/rails';
+import { CreatorHero, CreatorHowItWorks, CreatorCampaignDoor, BrandDoor } from '@/components/audience/creator-home';
+import { cachedSubscriptionAvailability } from '@/lib/creator-subscriptions/cached-availability';
+import { SubscriptionAvailabilityProvider } from '@/components/twings/subscription-availability';
+import { DEFAULT_HERO_EVIDENCE, heroEvidence } from '@/lib/content/slots';
+import { evidenceWithMedia } from '@/lib/content/landing-media';
+import { getLandingMedia } from '@/lib/content/landing-media-server';
 export const revalidate = 3600;
-
-export async function generateMetadata({
-  params,
-}: {
-  params: Promise<{ locale: string }>;
-}): Promise<Metadata> {
+const FILTER_MIN_TEMPLATES = 6;
+export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
   const { locale: raw } = await params;
   const locale: Locale = isLocale(raw) ? raw : DEFAULT_LOCALE;
   const dict = getDictionary(locale);
   return {
-    title: dict.meta.siteName,
-    description: dict.meta.landingDescription,
+    title: dict.meta.siteName, description: dict.meta.landingDescription,
     alternates: { canonical: `/${locale}`, languages: { en: '/en', ko: '/ko', 'x-default': '/en' } },
-    openGraph: {
-      type: 'website',
-      locale: locale === 'ko' ? 'ko_KR' : 'en_US',
-      url: `/${locale}`,
-      title: `${dict.meta.siteName} — ${dict.meta.tagline}`,
-      description: dict.meta.landingDescription,
-      siteName: dict.meta.siteName,
-      images: [SITE_OG_IMAGE],
-    },
+    openGraph: { type: 'website', locale: locale === 'ko' ? 'ko_KR' : 'en_US', url: `/${locale}`,
+      title: `${dict.meta.siteName} — ${dict.meta.tagline}`, description: dict.meta.landingDescription,
+      siteName: dict.meta.siteName, images: [siteOgImage(locale)] },
     twitter: { card: SITE_TWITTER_CARD },
   };
 }
-
 export default async function LandingPage({ params }: { params: Promise<{ locale: string }> }) {
   const { locale: raw } = await params;
   const locale: Locale = isLocale(raw) ? raw : DEFAULT_LOCALE;
-  const dict = getDictionary(locale);
-
-  // Two tagged projections, two invalidation events (§13.2): `prompts` moves whenever a prompt is
-  // published or approved, `catalog` whenever a playbook is. The landing reads both, so either one
-  // refreshes it.
-  const [catalog, prompts] = await Promise.all([getPublicCatalog(), getPromptCatalog()]);
-  // §13.2: "marquee items can include SEEDANCE 2.5 + use-case vocab". The model leads, the
-  // use cases follow, and the studio's real tool list from the playbook catalog tops it up.
-  const ticker = marqueeItems({
-    models: [prompts.totals.modelLabel, ...catalog.totals.models],
-    tools: [...USE_CASES.map((value) => useCaseLabel(dict, value)), ...catalog.totals.tools],
-  });
-  const ads = adLabels(dict);
-
-  // Founder pass (2026-08-13): gallery-first. The landing carries the FULL rails one scroll under
-  // the hero — the reference form — so it shares the gallery's static-safe plumbing verbatim.
+  const dict = getDictionary(locale), t = dict.templates;
+  const [templates, campaigns, availability, media] = await Promise.all([getPromptCatalog(), getCampaignCatalog(), cachedSubscriptionAvailability(), getLandingMedia()]);
   const labels = promptLabels(dict);
-  const useCaseLabels = Object.fromEntries(
-    USE_CASES.map((value) => [value, useCaseLabel(dict, value)]),
-  );
-  const filterOptions = presentUseCases(prompts.totals.useCases).map(
-    (value) => [value, useCaseLabels[value]!] as [string, string],
-  );
-  const signin = signInHref(`/${locale}`, locale);
-
-  return (
-    <>
-      <MarketingNav locale={locale} dict={dict} rest="/" initialTheme="light" />
-
-      <main id="main">
-        <Hero locale={locale} dict={dict} />
-
-        {/* §3.6: the rail runs from below the hero to the end of the content. */}
-        <div id="rail-anchor" className="relative">
-          <AdRail anchorId="rail-anchor">
-            <AdCard labels={ads} />
-          </AdRail>
-
-          {/* The gallery, immediately — cards and result clips are the first scroll. F3 tightens
-              the mobile top rhythm (filter padding, first-rail margin) so the first poster's top
-              lands inside a 375×667 viewport; ≥lg keeps the M1 spacing. */}
-          <section id="gallery" data-section data-theme="light" className="section">
-            <div className="band pb-24">
-              <div className="border-t border-hairline pt-3 lg:pt-6">
-                <UseCaseFilter
-                  options={filterOptions}
-                  labels={{ heading: dict.prompts.filterHeading, all: dict.prompts.filterAll }}
-                />
-              </div>
-
-              <PromptRail
-                id="yagi"
-                heading={dict.prompts.railYagi}
-                lede={dict.prompts.railYagiLede}
-                cards={prompts.yagi}
-                locale={locale}
-                labels={labels}
-                useCaseLabels={useCaseLabels}
-                emptyLabel={dict.prompts.emptyYagi}
-                filteredEmptyLabel={dict.prompts.filterEmpty}
-                topClassName="mt-4 first:mt-0 lg:mt-24"
-              />
-
-              {/* F3 — the hero's lede + submit link, re-homed below lg after the first rail. */}
-              <HeroLede dict={dict} />
-
-              <PromptRail
-                id="community"
-                heading={dict.prompts.railCommunity}
-                lede={dict.prompts.railCommunityLede}
-                cards={prompts.community}
-                locale={locale}
-                labels={labels}
-                useCaseLabels={useCaseLabels}
-                emptyLabel={dict.prompts.emptyCommunity}
-                filteredEmptyLabel={dict.prompts.filterEmpty}
-              />
-
-              <SubmitStrip
-                title={dict.prompts.submitStripTitle}
-                body={dict.prompts.submitStripBody}
-                cta={dict.prompts.submitCta}
-              />
-            </div>
-          </section>
-
-          <MarqueeStrip dict={dict} items={ticker} />
-
-          <Premise dict={dict} totals={prompts.totals} />
-
-          {/* §3.6: below 1440 this is the single ad; the rail owns the tier above it. */}
-          <section data-section data-theme="light" className="section rail:hidden">
-            <div className="band pb-24">
-              <AdBanner labels={ads} />
-            </div>
-          </section>
-
-          {/* §5.3-2: the page's one circular wipe, on its one true inversion (light → dark). */}
-          <CircleWipe />
-
-          <section data-section data-theme="dark" className="section">
-            <Faq
-              eyebrow={dict.faq.eyebrow}
-              title={dict.faq.title}
-              items={[
-                { q: dict.faq.q1, a: dict.faq.a1 },
-                { q: dict.faq.q2, a: dict.faq.a2 },
-                { q: dict.faq.q3, a: dict.faq.a3 },
-                { q: dict.faq.q4, a: dict.faq.a4 },
-                { q: dict.faq.q5, a: dict.faq.a5 },
-                { q: dict.faq.q6, a: dict.faq.a6 },
-              ]}
-            />
-          </section>
+  const useCaseLabels = Object.fromEntries(USE_CASES.map(value => [value, useCaseLabel(dict, value)]));
+  const filterOptions = presentUseCases([...new Set(templates.video.flatMap(card => card.useCase))].sort()).map(value => [value, useCaseLabels[value]!] as [string, string]);
+  const recruiting = campaigns.campaigns.filter(campaign => campaign.status === 'recruiting');
+  const styles = new Map([...templates.video, ...templates.image].map(card => [card.slug, card]));
+  // §7.5 (founder 2026-10-30): one feed per medium — originals and AI creatives' templates mixed by `railOrder`.
+  // The hero stays a studio original (the founder's pick).
+  const studioVideo = templates.video.filter(card => card.origin !== 'maker');
+  const featured = studioVideo.find(card => card.slug === 'you-are-a-prom-queen') ?? studioVideo.find(card => card.video && card.poster) ?? studioVideo[0] ?? templates.video[0];
+  return <>
+    <MarketingNav locale={locale} dict={dict} rest="/" />
+    <SubscriptionAvailabilityProvider initialAvailability={availability}>
+    <main id="main" data-creator-home>
+      <CreatorHero locale={locale} dict={dict} featured={featured} evidence={evidenceWithMedia({ ...DEFAULT_HERO_EVIDENCE, ...heroEvidence() }, media)} />
+      <section id="gallery" data-section data-theme="light" className="section">
+        <div className="audience-shell pb-16 lg:pb-24">
+          <div className="mb-8 border-t border-hairline pt-8">
+            <h2 className="audience-heading">{dict.creatorJourney.libraryHeading}</h2>
+            <p className="mt-4 max-w-xl text-sm leading-relaxed opacity-60">{dict.creatorJourney.libraryBody}</p>
+            {filterOptions.length > 0 && templates.video.length >= FILTER_MIN_TEMPLATES && <div className="mt-6"><UseCaseFilter options={filterOptions} labels={{ heading: dict.prompts.filterHeading, all: dict.prompts.filterAll, count: dict.prompts.filterCount, reset: dict.prompts.filterReset }} /></div>}
+          </div>
+          <PromptRail id="video" heading={t.video.rail} lede={t.video.railLede} cards={templates.video} locale={locale} labels={labels} useCaseLabels={useCaseLabels} emptyLabel={t.video.emptyTitle} filteredEmptyLabel={dict.prompts.filterEmpty} topClassName="mt-0" />
+          <a href={templatesHref(locale,'video')} data-all-video className="mt-8 inline-flex min-h-11 items-center text-sm font-medium underline underline-offset-4">{t.allVideo} ↗</a>
+          {templates.image.length > 0 ? <PromptRail id="image" heading={t.image.rail} lede={t.image.railLede} cards={templates.image} locale={locale} labels={labels} useCaseLabels={useCaseLabels} emptyLabel={t.image.emptyTitle} filteredEmptyLabel={dict.prompts.filterEmpty} />
+            : <aside data-image-soon className="mt-10 flex flex-wrap items-center justify-between gap-4 border-t border-hairline pt-6"><p className="max-w-xl text-sm opacity-55">{t.imageSoonTitle}</p><a href={templatesHref(locale,'image')} className="text-sm underline underline-offset-4">{t.ctaImage} ↗</a></aside>}
         </div>
-      </main>
-
-      <MarketingFooter locale={locale} dict={dict} />
-    </>
-  );
+      </section>
+      <CreatorHowItWorks dict={dict} />
+      {recruiting.length > 0 ? <section data-section data-theme="light" className="section"><div className="audience-shell py-16"><CampaignRail id="campaigns" heading={dict.campaigns.railRecruiting} lede={dict.campaigns.railRecruitingLede} cards={recruiting} styles={styles} locale={locale} labels={campaignLabels(dict)} now={Date.now()} /><a href={campaignsHref(locale)} className="mt-8 inline-flex min-h-11 items-center text-sm underline underline-offset-4">{dict.creatorJourney.campaignCta} ↗</a></div></section> : <CreatorCampaignDoor dict={dict} locale={locale} />}
+      <FaqSection dict={dict} locale={locale} placement="landing" path={`/${locale}`} availability={availability} />
+      <BrandDoor dict={dict} locale={locale} />
+    </main>
+    </SubscriptionAvailabilityProvider>
+    <MarketingFooter locale={locale} dict={dict} />
+  </>;
 }

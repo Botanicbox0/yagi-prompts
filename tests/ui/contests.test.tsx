@@ -132,15 +132,6 @@ describe('the designed empty state (§14.2)', () => {
     expect(html.match(/border border-current/g)).toHaveLength(1);
   });
 
-  /**
-   * The page renders the empty state OR the hire strip, never both — they carry the same sentence
-   * and the same mailto, and eight lines apart that reads as a stutter rather than emphasis.
-   */
-  it('is the only B2B block when it renders (the page suppresses the strip)', () => {
-    const page = readFileSyncSource();
-    expect(page).toContain('{!empty && (');
-    expect(page).toContain('<ContestsEmptyState');
-  });
 });
 
 function readSource(...parts: string[]): string {
@@ -150,10 +141,6 @@ function readSource(...parts: string[]): string {
   const { join } = require('node:path') as typeof import('node:path');
   const root = fileURLToPath(new URL('../..', import.meta.url));
   return readFileSync(join(root, ...parts), 'utf8');
-}
-
-function readFileSyncSource(): string {
-  return readSource('app', '(marketing)', '[locale]', 'contests', 'page.tsx');
 }
 
 /**
@@ -201,17 +188,6 @@ describe('the hire strip (§14.2)', () => {
     expect(html).toContain('mailto:hello@yagiworkshop.xyz');
   });
 
-  /**
-   * M9 design review, finding 10. The listing is where a brand without a contest is standing, and
-   * the site footer carries the same enquiry on every page. On a detail page the strip was the
-   * third printing of one sentence, wedged between the entries rail and the footer that repeats it.
-   */
-  it('is on the LISTING only — the detail page does not repeat it', () => {
-    expect(readFileSyncSource()).toContain('<ContestHireStrip');
-    const detail = readSource('app', '(marketing)', '[locale]', 'contests', '[slug]', 'page.tsx');
-    expect(detail).not.toContain('ContestHireStrip');
-    expect(detail).not.toContain('contestMailto');
-  });
 });
 
 /**
@@ -597,19 +573,14 @@ describe('the prize band (finding 3)', () => {
     expect(koHtml).not.toContain('data-prize-payouts');
   });
 
-  /** It has to sit OUTSIDE the ad-rail anchor, or it is a panel rather than an inversion. */
-  it('renders outside the rail anchor on both surfaces that show a contest', () => {
-    for (const page of [
-      readSource('app', '(marketing)', '[locale]', 'contests', '[slug]', 'page.tsx'),
-      readSource('app', '(admin)', 'admin', 'contests', '[slug]', 'preview', 'page.tsx'),
-    ]) {
-      const prize = page.indexOf('<ContestPrize');
-      const body = page.indexOf('<ContestBody');
-      expect(prize).toBeGreaterThan(-1);
-      expect(body).toBeGreaterThan(prize);
-    }
-    const detail = readSource('app', '(marketing)', '[locale]', 'contests', '[slug]', 'page.tsx');
-    expect(detail.indexOf('<ContestPrize')).toBeLessThan(detail.indexOf('id="contest-rail-anchor"'));
+  /** It has to sit OUTSIDE the ad-rail anchor, or it is a panel rather than an inversion. The public
+   *  detail page retired with the contests surface (2026-09-05); the admin preview still renders it. */
+  it('renders the prize band before the body on the admin preview', () => {
+    const page = readSource('app', '(admin)', 'admin', 'contests', '[slug]', 'preview', 'page.tsx');
+    const prize = page.indexOf('<ContestPrize');
+    const body = page.indexOf('<ContestBody');
+    expect(prize).toBeGreaterThan(-1);
+    expect(body).toBeGreaterThan(prize);
   });
 });
 
@@ -775,59 +746,8 @@ describe('section order and headings (finding 7)', () => {
   });
 });
 
-describe('the entry form (finding 5)', () => {
-  const page = readSource('app', '(app)', 'contests', '[slug]', 'submit', 'page.tsx');
-
-  it('keeps the field order §14.2 asked for', () => {
-    const positions = ['"title"', '"videoUrl"', '"snsUrl"', '"note"', '"consent"'].map((name) =>
-      page.indexOf(`name=${name}`),
-    );
-    expect(positions.every((value) => value > -1)).toBe(true);
-    expect([...positions].sort((a, b) => a - b)).toEqual(positions);
-  });
-
-  /** `ok=1` outlives the deadline; a resubmit after it can only ever be refused. */
-  it('offers a replacement only while the contest is open', () => {
-    expect(page).toContain("timing.phase === 'open' && (");
-  });
-
-  it('marks the field the server named, and shouts rather than whispers', () => {
-    for (const token of [
-      'isEntryField',
-      'aria-invalid',
-      'border-accent',
-      'data-field-error',
-      'text-[0.75rem]',
-      'role="alert"',
-      // the generic banner survives for refusals that belong to no single field
-      'data-entry-error',
-    ]) {
-      expect(page, token).toContain(token);
-    }
-    expect(page).not.toContain('role="status"');
-  });
-
-  it('gives the submit button a pending state and repeats the replacement warning', () => {
-    const button = readSource('app', '(app)', 'contests', '[slug]', 'submit', 'submit-button.tsx');
-    expect(button).toContain("'use client'");
-    expect(button).toContain('useFormStatus');
-    expect(button).toContain('disabled={pending}');
-    expect(button).toContain('disabled:opacity-50');
-    expect(button).toContain('min-h-12');
-    expect(page).toContain('data-resubmit-warning');
-    expect(page).toContain('pendingLabel={copy.submitPending}');
-  });
-
-  /** The action has to SAY which field, or the page has nothing to mark. */
-  it('carries the field enum from the validator to the URL', () => {
-    expect(readSource('app', '(app)', 'contests', '[slug]', 'submit', 'actions.ts')).toContain(
-      '&field=',
-    );
-    const submit = readSource('lib', 'contests', 'submit.ts');
-    expect(submit).toContain('isEntryField');
-    expect(submit).toContain('field?: EntryField');
-  });
-});
+// docs/TEMPLATES-IA.md (2026-09-05): the entry form left with the contests surface; its field-order
+// and error-marking contract lives on in the campaign apply form (tests/routes/cache-contract.test.ts).
 
 describe('the admin editor (finding 8)', () => {
   it('authors the contest title in a textarea, so a line break is a decision', () => {

@@ -18,7 +18,7 @@ import { seedRecipient } from '../helpers/notify';
  * into someone else's, and using it twice is the same as using it once.
  */
 
-const SECRET = 'test-unsubscribe-secret-0123456789';
+const SECRET = 'test-only-secret-00000000000000000000';
 const OTHER_SECRET = 'a-completely-different-secret-key!';
 
 describe('unsubscribe token', () => {

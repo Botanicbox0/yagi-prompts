@@ -2,9 +2,9 @@
 
 import { redirect } from 'next/navigation';
 import { getViewer } from '@/lib/auth/viewer';
-import { loadSubscription } from '@/lib/billing/reconcile';
 import { getSqlRunner } from '@/lib/db/connect';
 import { savePreferences } from '@/lib/notify/preferences';
+import { saveCreatorDisplayName } from '@/lib/creators/profile';
 
 /**
  * PLAN §3.5 — the two `/account` toggles, as one server action.
@@ -16,8 +16,7 @@ import { savePreferences } from '@/lib/notify/preferences';
  * Three things it will not do:
  *   · it never trusts the form for identity — the user id comes from `getViewer()`, which resolves
  *     a server-verified session;
- *   · it never grants a preference to a reader who is not entitled. Notifications are Pro (§3.5),
- *     and the entitlement rule is the §3.4 one, re-derived here rather than passed in from a page;
+ *   · signed-in free creators can save the same switches the account page offers them;
  *   · it never creates a profile. `savePreferences` updates or does nothing.
  *
  * A missing checkbox is `false`, not "unchanged" — that is how an HTML checkbox works with no
@@ -27,19 +26,25 @@ export async function saveNotificationPreferences(form: FormData): Promise<void>
   const viewer = await getViewer();
   if (viewer.userId === null) redirect('/account');
 
-  const sql = await getSqlRunner();
-  if (sql === null) redirect('/account?notif=err');
+  let saved = false;
+  try {
+    const sql = await getSqlRunner();
+    if (sql) saved = await savePreferences(sql, viewer.userId, {
+      newPlaybook: form.get('notifNewPlaybook') !== null,
+      updates: form.get('notifUpdates') !== null,
+    });
+  } catch { /* Keep the error visible without logging notification or account data. */ }
+  redirect(saved ? '/account?notif=saved' : '/account?notif=err');
+}
 
-  const subscription = await loadSubscription(sql, viewer.userId);
-  const entitled = subscription?.entitled === true || viewer.tier === 'pro';
-  // Not an error the UI needs to explain: a free reader is never shown this form, so reaching here
-  // means a hand-crafted POST. Bounce it silently rather than reporting on the gate.
-  if (!entitled) redirect('/account');
-
-  const saved = await savePreferences(sql, viewer.userId, {
-    newPlaybook: form.get('notifNewPlaybook') !== null,
-    updates: form.get('notifUpdates') !== null,
-  });
-
-  redirect(saved ? '/account?notif=saved' : '/account');
+/** Name only. SNS is confirmed with campaign participation; identity and roles are never form inputs. */
+export async function saveCreatorProfile(form: FormData): Promise<void> {
+  const viewer = await getViewer();
+  if (!viewer.userId) redirect('/account');
+  let saved = false;
+  try {
+    const sql = await getSqlRunner();
+    saved = sql ? await saveCreatorDisplayName(sql, viewer.userId, form.get('displayName')) : false;
+  } catch { /* Keep the failure visible without logging personal form values. */ }
+  redirect(saved ? '/account?profile=saved' : '/account?profile=err');
 }

@@ -25,9 +25,9 @@ export async function updateSession(
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !anonKey) {
-    // Placeholder-env development (no Supabase project yet, PLAN §11): treat everyone as anon
-    // rather than crashing every request.
+  if (!url || !anonKey || request.cookies.getAll().length === 0) {
+    // Placeholder-env development (no Supabase project yet, PLAN §11) or anonymous request with
+    // zero cookies: treat as anon without round-tripping to the auth server on every public page.
     return { response, user: null };
   }
 
@@ -36,14 +36,19 @@ export async function updateSession(
       getAll() {
         return request.cookies.getAll();
       },
-      setAll(cookiesToSet) {
+      setAll(cookiesToSet, cacheHeaders) {
         for (const { name, value } of cookiesToSet) {
           request.cookies.set(name, value);
         }
+        // middleware passes a cloned header set to the render. Mirror the refreshed Cookie
+        // header there too, otherwise Server Components read the expired token in this request.
+        if (requestHeaders) requestHeaders.set('cookie', request.headers.get('cookie') ?? '');
         response = forward();
         for (const { name, value, options } of cookiesToSet) {
           response.cookies.set(name, value, options);
         }
+        for (const [name, value] of Object.entries(cacheHeaders ?? {})) response.headers.set(name, value);
+        if (cookiesToSet.length) response.headers.set('Cache-Control', 'private, no-store');
       },
     },
   });
@@ -59,6 +64,10 @@ export async function updateSession(
 export function withCookies(target: NextResponse, source: NextResponse): NextResponse {
   for (const cookie of source.cookies.getAll()) {
     target.cookies.set(cookie);
+  }
+  for (const name of ['Cache-Control', 'Pragma', 'Expires']) {
+    const value = source.headers.get(name);
+    if (value && !target.headers.has(name)) target.headers.set(name, value);
   }
   return target;
 }

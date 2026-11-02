@@ -1,38 +1,33 @@
 import type { Metadata } from 'next';
 import { DEFAULT_LOCALE, isLocale, type Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/dictionaries';
-import { TWINGS_STYLES, formatPrice } from '@/lib/twings/products';
+import { interpolate } from '@/lib/i18n/format';
 import { getPromptCatalog } from '@/lib/prompts/public-catalog';
-import { promptsHref } from '@/lib/prompts/links';
-import { SITE_OG_IMAGE, SITE_TWITTER_CARD } from '@/lib/seo/og';
-import { isCookiePackPurchasable } from '@/lib/cookies/purchase';
+import { templateHref, templatesHref } from '@/lib/prompts/links';
+import { SITE_TWITTER_CARD, siteOgImage } from '@/lib/seo/og';
 import { MarketingFooter, MarketingNav } from '@/components/marketing/chrome';
-import { countsLine } from '@/components/landing/sections';
-import { CookieTable } from '@/components/pricing/cookie-table';
-import { PlanTable } from '@/components/pricing/plan-table';
-import { Faq } from '@/components/landing/faq';
-import { Reveal } from '@/components/motion/reveal';
-import { TextSwap } from '@/components/ui/text-swap';
-import { formatCount, interpolate } from '@/lib/i18n/format';
+import { FaqSection } from '@/lib/seo/faq-section';
+import { CREATOR_PLANS, quoteSubscriptionVideo, type CreatorPlanId } from '@/lib/twings/subscription-plan';
+import { SubscriptionPlanComparison, SubscriptionPricingText, SubscriptionEditingPreview, type PublicCreatorPlan } from '@/components/twings/subscription-plan-comparison';
+import { SubscriptionAvailabilityProvider } from '@/components/twings/subscription-availability';
+import { CreatorPreview } from '@/components/audience/creator-preview';
+import { formatKrw } from '@/lib/twings/products';
+import { cachedSubscriptionAvailability } from '@/lib/creator-subscriptions/cached-availability';
+import { storefrontOpen } from '@/lib/auth/purchase-gate';
 
 /**
- * Pricing — PLAN §15.3: the cookie model (가입 3 · 주 1 · $4/5), with the §3.1 counts line from
- * the same cached prompt projection the landing reads. Static, like landing — nothing here may
- * know the viewer, which is exactly why the page can present the model but never a balance.
+ * Single purchases plus the upcoming Creator and Premium subscription designs.
+ * No enrollment or billing authorization until the separate launch requirements are met.
  *
- * The $9 plan cards are gone from this surface: the subscription is de-emphasized, not sold
- * (§15). The `pro` tier survives only in access logic, where it keeps old entitlements honest.
- *
- * No ad rail here: §3.6 lists the rail on landing, `/library` and playbook detail only.
+ * Static, like the landing. What is actually sold comes first (docs/PLATFORM-2.0.md §15.3-3): single
+ * films while `storefrontOpen()`, with the monthly plans below as a "준비 중" teaser — and the monthly
+ * comparison first only when it is the one that is open. Individual prices stay on the template pages.
+ * The comparison receives display counts only, never an account allowance.
  */
 /** Must stay equal to CATALOG_TTL_SECONDS — Next requires a literal here (tests pin the pair). */
 export const revalidate = 3600;
 
-export async function generateMetadata({
-  params,
-}: {
-  params: Promise<{ locale: string }>;
-}): Promise<Metadata> {
+export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
   const { locale: raw } = await params;
   const locale: Locale = isLocale(raw) ? raw : DEFAULT_LOCALE;
   const dict = getDictionary(locale);
@@ -50,7 +45,7 @@ export async function generateMetadata({
       title: `${dict.meta.pricingTitle} — ${dict.meta.siteName}`,
       description: dict.meta.pricingDescription,
       siteName: dict.meta.siteName,
-      images: [SITE_OG_IMAGE],
+      images: [siteOgImage(locale)],
     },
     twitter: { card: SITE_TWITTER_CARD },
   };
@@ -60,148 +55,104 @@ export default async function PricingPage({ params }: { params: Promise<{ locale
   const { locale: raw } = await params;
   const locale: Locale = isLocale(raw) ? raw : DEFAULT_LOCALE;
   const dict = getDictionary(locale);
+  const p = dict.pricing;
 
-  // §13.2 — the pricing page counts PROMPTS now, from the tagged prompt projection.
-  const catalog = await getPromptCatalog();
-  // Only the COOKIE ones: a free-gated prompt costs nothing and does not belong in a price count.
-  const lockedYagi = catalog.yagi.filter((card) => card.lock === 'cookie').length;
-
-  // §15.3 — the three ways cookies arrive. Figures in display type; sentences do the explaining.
-  // F5: while no MoR gateway is connected (`isCookiePackPurchasable`, env-derived and
-  // static-safe — no session), the pack cell wears its status instead of implying a checkout
-  // that does not exist yet.
-  const cells = [
-    {
-      title: dict.pricing.cookieSignupTitle,
-      value: dict.pricing.cookieSignupValue,
-      note: dict.pricing.cookieSignupNote,
+  const [catalog, availability] = await Promise.all([getPromptCatalog(), cachedSubscriptionAvailability()]);
+  const plans: PublicCreatorPlan[] = (Object.keys(CREATOR_PLANS) as CreatorPlanId[]).map(id => ({
+    id,
+    price: locale === 'ko' ? formatKrw(CREATOR_PLANS[id].priceKrw) : `₩${CREATOR_PLANS[id].priceKrw.toLocaleString('en-US')}`,
+    filmCounts: {
+      10: quoteSubscriptionVideo({ seconds: 10, resolution: '720p', aspect: '9:16' }, id)!.maxPerMonth,
+      15: quoteSubscriptionVideo({ seconds: 15, resolution: '720p', aspect: '9:16' }, id)!.maxPerMonth,
+      30: quoteSubscriptionVideo({ seconds: 30, resolution: '720p', aspect: '9:16' }, id)!.maxPerMonth,
     },
-    {
-      title: dict.pricing.cookieWeeklyTitle,
-      value: dict.pricing.cookieWeeklyValue,
-      note: dict.pricing.cookieWeeklyNote,
-    },
-    {
-      title: dict.pricing.cookiePackTitle,
-      value: dict.pricing.cookiePackValue,
-      note: dict.pricing.cookiePackNote,
-      ...(isCookiePackPurchasable() ? {} : { chip: dict.pricing.cookiePackStatus }),
-    },
-  ];
+  }));
+  const examples = catalog.video.filter(card => card.poster && card.video).slice(0, 3);
+  // Deliberately exclude legacy dictionary entries from the public client payload.
+  const comparisonCopy = {
+    subscriptionDurationLabel: p.subscriptionDurationLabel, subscriptionDuration: p.subscriptionDuration,
+    subscriptionPlans: p.subscriptionPlans, subscriptionPeriod: p.subscriptionPeriod,
+    subscriptionTax: p.subscriptionTax, subscriptionFilmCount: p.subscriptionFilmCount,
+    subscriptionFilmLength: p.subscriptionFilmLength, subscriptionEditingTitle: p.subscriptionEditingTitle,
+    subscriptionEditingStatus: p.subscriptionEditingStatus, subscriptionMore: p.subscriptionMore,
+    subscriptionBrowse: p.subscriptionBrowse, subscriptionCountBasis: p.subscriptionCountBasis,
+    subscriptionTitle: p.subscriptionTitle, subscriptionStatus: p.subscriptionStatus,
+    subscriptionUnavailable: p.subscriptionUnavailable, subscriptionUnavailableSingleOpen: p.subscriptionUnavailableSingleOpen, subscriptionOpenTitle: p.subscriptionOpenTitle,
+    subscriptionOpenStatus: p.subscriptionOpenStatus, subscriptionOpenBody: p.subscriptionOpenBody,
+    subscriptionPausedStatus: p.subscriptionPausedStatus, subscriptionPausedBody: p.subscriptionPausedBody,
+    subscriptionStart: p.subscriptionStart, subscriptionEditingOpenStatus: p.subscriptionEditingOpenStatus,
+    subscriptionEditRequestLimit: p.subscriptionEditRequestLimit, subscriptionEditCountNotice: p.subscriptionEditCountNotice,
+  };
+  const textCopy = { lede: p.lede, subscriptionOpenLede: p.subscriptionOpenLede, singleLede: p.singleLede, filmsBody: p.filmsBody, filmsOpenBody: p.filmsOpenBody, singleOpenBody: p.singleOpenBody };
+  const shopOpen = storefrontOpen();
+  const singleFirst = shopOpen || availability.status !== 'open';
+  const editingCopy = { subscriptionEditingStatus: p.subscriptionEditingStatus, subscriptionEditingOpenStatus: p.subscriptionEditingOpenStatus, subscriptionEditingTitle: p.subscriptionEditingTitle, subscriptionPromptEditingSoon: p.subscriptionPromptEditingSoon, subscriptionEditingOpenBody: p.subscriptionEditingOpenBody, subscriptionEditingExample: p.subscriptionEditingExample, subscriptionEditingBoundary: p.subscriptionEditingBoundary };
 
-  // The studio's films, priced per scene (2026-09-03). Min–max, because the number a visitor
-  // wants is "how much is a film", not a table.
-  const filmCents = TWINGS_STYLES.map((style) => style.priceCents);
-  const filmRange = { min: formatPrice(Math.min(...filmCents)), max: formatPrice(Math.max(...filmCents)) };
-
-  // What is free stays the whole §13 doctrine; what a cookie opens is one row of it.
-  const rows = [
-    { label: dict.pricing.featureStructure, free: true, pro: true },
-    { label: dict.pricing.featureAssets, free: true, pro: true },
-    { label: dict.pricing.featureBilingual, free: true, pro: true },
-    { label: dict.pricing.featurePrompts, free: false, pro: true },
-    { label: dict.pricing.featureCopy, free: false, pro: true },
-  ];
+  // Single films: what a reader can buy today when the storefront is open — a card on top, then.
+  const singleBlock = (
+    <aside data-pricing-films data-pricing-films-open={shopOpen ? 'true' : 'false'} className={singleFirst ? 'rounded-2xl border border-hairline p-6 sm:p-8' : 'mt-9 flex flex-wrap items-center justify-between gap-5'}>
+      <div className="max-w-2xl">
+        <h2 className={singleFirst ? 'text-xl font-semibold sm:text-2xl' : 'text-lg font-semibold'}>{singleFirst ? p.singleTitle : p.filmsTitle}</h2>
+        <p className="mt-2 text-sm leading-relaxed text-black/65"><SubscriptionPricingText copy={textCopy} field="single" oneTimeAvailable={shopOpen} /></p>
+        {singleFirst && shopOpen && <p data-pricing-refund className="mt-2 text-sm leading-relaxed text-black/65">{dict.renders.notCharged}</p>}
+      </div>
+      <a href={templatesHref(locale)} className={singleFirst ? 'mt-5 inline-flex min-h-12 items-center gap-3 rounded-full bg-black px-6 text-sm font-semibold text-white focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent' : 'inline-flex min-h-12 items-center gap-3 text-sm font-medium underline underline-offset-4'}>{p.filmsCta}<span aria-hidden="true">↗</span></a>
+    </aside>
+  );
+  // Monthly plans: below as a "준비 중" teaser while preparing; first only when they are the open offer.
+  const monthlyBlock = (
+    <section id="monthly" className={`${singleFirst ? 'mt-10' : ''} scroll-mt-24`}>
+      <SubscriptionPlanComparison plans={plans} copy={comparisonCopy} browseHref={templatesHref(locale)} oneTimeAvailable={shopOpen} />
+      <div className="mt-6 flex flex-wrap items-center gap-x-6 gap-y-3 text-sm">
+        <p className="font-semibold">{p.subscriptionShared}</p>
+        {[p.subscriptionFeatureFace, p.subscriptionFeatureVideo].map(feature => <p key={feature}><span aria-hidden="true" className="mr-2 text-accent">✓</span>{feature}</p>)}
+      </div>
+      <details className="group mt-6 border-y border-hairline py-1">
+        <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-4 text-sm font-medium [&::-webkit-details-marker]:hidden">{p.subscriptionMixedLabel}<span aria-hidden="true" className="text-accent group-open:hidden">+</span><span aria-hidden="true" className="hidden text-accent group-open:block">−</span></summary>
+        <p className="max-w-3xl pb-5 text-sm leading-relaxed text-black/65">{p.subscriptionMixed}</p>
+      </details>
+    </section>
+  );
 
   return (
     <>
       <MarketingNav locale={locale} dict={dict} rest="/pricing" initialTheme="light" />
 
-      <main id="main">
+      <SubscriptionAvailabilityProvider initialAvailability={availability}>
+      <main id="main" data-creator-pricing>
         <section data-section data-theme="light" className="section">
-          <div className="band pt-30 pb-20 lg:pt-40 lg:pb-24">
-            <p className="text-accent font-label text-eyebrow uppercase">{dict.pricing.eyebrow}</p>
-
-            <Reveal
-              immediate
-              delay={0.05}
-              as="h1"
-              lines={[dict.pricing.line1, dict.pricing.line2]}
-              className="mt-7 font-display text-title font-black uppercase"
-            />
-
-            <p className="mt-8 max-w-detail text-body opacity-70">{dict.pricing.lede}</p>
-
-            {/* Nav order is Studio → Prompts → Contests → Pricing, so the price page answers the
-                studio's question before the cookie one. */}
-            <div
-              data-pricing-films
-              className="mt-10 flex flex-wrap items-end justify-between gap-6 border border-hairline p-6"
-            >
-              <div>
-                <p className="font-label text-label uppercase">{dict.pricing.filmsTitle}</p>
-                <p className="mt-2 max-w-detail text-body opacity-70">
-                  {interpolate(dict.pricing.filmsBody, filmRange)}
-                </p>
-              </div>
-              <a
-                href={`/${locale}/studio`}
-                className="inline-block bg-accent px-6 py-3 font-label text-label text-white uppercase"
-              >
-                <TextSwap>{dict.pricing.filmsCta} →</TextSwap>
-              </a>
+          <div className="audience-shell pt-24 pb-14 lg:pt-28 lg:pb-20">
+            <header className="max-w-3xl">
+              <p className="audience-eyebrow">{p.eyebrow}</p>
+              <h1 className="mt-4 font-display text-[clamp(2rem,3.5vw,3rem)] leading-[1.12] font-bold tracking-tight">{p.line1}<br />{shopOpen && availability.status !== 'open' ? p.singleLine2 : p.line2}</h1>
+              <p data-service-definition className="mt-3 max-w-2xl text-sm leading-relaxed text-black/65"><SubscriptionPricingText copy={textCopy} field="lede" oneTimeAvailable={shopOpen} /></p>
+            </header>
+            {/* Reading order is selling order: what can be bought first (docs/PLATFORM-2.0.md §15.3-3). */}
+            <div data-pricing-order={singleFirst ? 'single-first' : 'monthly-first'} className="mt-6">
+              {singleFirst ? <>{singleBlock}{monthlyBlock}</> : <>{monthlyBlock}{singleBlock}</>}
             </div>
-            {/* The accent carries its own alpha: nesting it inside `opacity-60` multiplies the
-                two and drops #0000EE on white to 4.38:1, just under AA. */}
-            <p className="mt-3 font-mono text-code">
-              <span className="opacity-60">{countsLine(dict, locale, catalog.totals)}</span>
-              {lockedYagi > 0 && (
-                <>
-                  <span aria-hidden className="px-2 opacity-40">
-                    ·
-                  </span>
-                  <span className="text-accent">
-                    {interpolate(dict.pricing.proBlocksLocked, { count: formatCount(lockedYagi, locale) })}
-                  </span>
-                </>
-              )}
-            </p>
-
-            <div className="mt-12">
-              <CookieTable cells={cells} rule={dict.pricing.cookieRule} />
-            </div>
-            <p className="mt-6 font-mono text-code opacity-60">{dict.pricing.cancelNote}</p>
           </div>
         </section>
 
-        <section data-section data-theme="dark" className="section">
-          <div className="band py-24 lg:py-28">
-            <h2 className="font-display text-[clamp(2rem,4vw,3rem)] leading-[0.95] font-black uppercase">
-              {dict.pricing.featureHeading}
-            </h2>
-            <div className="mt-12">
-              <PlanTable
-                heading={dict.pricing.featureHeading}
-                columnFeature={dict.pricing.columnFeature}
-                freeLabel={dict.plan.free}
-                proLabel={dict.pricing.cookieColumn}
-                includedLabel={dict.pricing.included}
-                notIncludedLabel={dict.pricing.notIncluded}
-                rows={rows}
-              />
-            </div>
-            <a
-              href={promptsHref(locale)}
-              className="mt-12 inline-block border border-current px-6 py-3 font-label text-label uppercase"
-            >
-              <TextSwap>{dict.nav.prompts} →</TextSwap>
-            </a>
+        <SubscriptionEditingPreview copy={editingCopy} />
+
+        <section data-section data-theme="light" data-pricing-examples className="section">
+          <div className="audience-shell py-14 lg:py-20">
+            <div className="flex flex-wrap items-end justify-between gap-5"><div><h2 className="text-2xl leading-snug font-semibold tracking-tight sm:text-3xl">{p.examplesTitle}</h2><p className="mt-3 text-sm leading-relaxed text-black/65">{p.examplesBody}</p></div><a href={templatesHref(locale)} className="inline-flex min-h-11 items-center gap-3 text-sm underline underline-offset-4">{p.filmsCta}<span aria-hidden="true">↗</span></a></div>
+            {examples.length ? <div className="mt-7 grid gap-6 sm:grid-cols-3">{examples.map(card => {
+              const title = locale === 'ko' ? card.titleKo || card.title : card.title;
+              return <article key={card.slug} data-pricing-example={card.slug} className="min-w-0">
+                <CreatorPreview poster={card.poster} video={card.video} title={title} href={templateHref(locale, card.slug)} ratio="4 / 3" priority={false} fallback={null} labels={{ play: dict.creatorJourney.playPreview, pause: dict.creatorJourney.pausePreview }} />
+                <div className="mt-3 flex items-start justify-between gap-4"><a href={templateHref(locale, card.slug)} className="min-w-0 text-sm leading-relaxed font-medium">{title} ↗</a>{card.runtimeSeconds && <span className="shrink-0 text-xs leading-6 text-black/60">{interpolate(dict.studio.runtimeLabel, { seconds: String(card.runtimeSeconds) })}</span>}</div>
+              </article>;
+            })}</div> : <p className="mt-7 text-sm text-black/65">{p.examplesEmpty}</p>}
+            <aside data-pricing-photo-guide className="mt-10 border-t border-hairline pt-6"><h3 className="text-base font-semibold">{p.photoTitle}</h3><p className="mt-2 max-w-3xl text-sm leading-relaxed text-black/65">{p.photoBody}</p></aside>
           </div>
         </section>
 
-        <section data-section data-theme="light" className="section">
-          <Faq
-            eyebrow={dict.faq.eyebrow}
-            title={dict.faq.title}
-            items={[
-              { q: dict.faq.q2, a: dict.faq.a2 },
-              { q: dict.faq.q3, a: dict.faq.a3 },
-              { q: dict.faq.q1, a: dict.faq.a1 },
-              { q: dict.faq.q5, a: dict.faq.a5 },
-            ]}
-          />
-        </section>
+        <FaqSection dict={dict} locale={locale} placement="pricing" path={`/${locale}/pricing`} availability={availability} />
       </main>
+      </SubscriptionAvailabilityProvider>
 
       <MarketingFooter locale={locale} dict={dict} />
     </>

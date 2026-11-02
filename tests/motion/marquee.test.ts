@@ -7,10 +7,14 @@ import {
 } from '@/lib/marquee';
 
 describe('marquee strip (§5.3-5)', () => {
-  it('loops in 40s and names the models §5.3 names', () => {
+  it('loops in 40s and names only what the studio actually runs (founder, 2026-09-11)', () => {
     expect(MARQUEE_DURATION_SECONDS).toBe(40);
-    for (const name of ['KLING', 'VEO', 'COMFYUI', 'ELEVENLABS']) {
+    for (const name of ['SEEDANCE 2.5', 'SEEDREAM 5.0', 'GPT IMAGE 2']) {
       expect(HOUSE_MARQUEE_ITEMS).toContain(name);
+    }
+    // Tools the front door used to advertise and TWINGS never ran.
+    for (const name of ['KLING', 'VEO', 'COMFYUI', 'ELEVENLABS', 'RUNWAY', 'HIGGSFIELD']) {
+      expect(HOUSE_MARQUEE_ITEMS).not.toContain(name);
     }
   });
 
@@ -28,7 +32,7 @@ describe('marquee strip (§5.3-5)', () => {
     const items = marqueeItems({ models: ['Kling 3.0'], tools: [] });
     expect(items).toHaveLength(MARQUEE_MAX_ITEMS);
     expect(items[0]).toBe('KLING 3.0');
-    expect(items).toContain('COMFYUI');
+    expect(items).toContain('REELS');
   });
 
   it('still renders a full strip with an empty catalog', () => {

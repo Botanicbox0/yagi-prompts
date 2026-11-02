@@ -1,9 +1,31 @@
 name: CI
 
 on:
+  # Feature branches are checked through their PR, not once for push and again for the PR.
+  #
+  # Docs-only changes skip CI (2026-10-21: the month's 2,000 free Actions minutes ran out, and five
+  # of that day's PRs were documentation running all eight jobs). Order matters — a later pattern
+  # wins: everything, minus `docs/**` and any `*.md`, plus `docs/product/prompts/**` back in, because
+  # tests/identity/portrait-provider.test.ts reads those prompt files and pins them to the code.
+  # security.yml (secret scan) still runs on every change: a key can leak into a doc too.
   push:
-    branches: ['**']
+    branches: [main]
+    paths:
+      - '**'
+      - '!docs/**'
+      - '!**/*.md'
+      - 'docs/product/prompts/**'
   pull_request:
+    paths:
+      - '**'
+      - '!docs/**'
+      - '!**/*.md'
+      - 'docs/product/prompts/**'
+  # A branch without a PR can still be checked explicitly from the Actions page.
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -16,9 +38,14 @@ env:
   PLAYBOOK_MODE: local
 
 jobs:
-  check:
-    name: typecheck + tests
+  test_shards:
+    name: tests (${{ matrix.shard }}/4)
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
     steps:
       - uses: actions/checkout@v4
 
@@ -30,13 +57,27 @@ jobs:
       - name: Install (exact pins, lockfile authoritative)
         run: npm ci
 
-      # Same command a developer runs locally: npm run check
-      - name: Typecheck + vitest
-        run: npm run check
+      - name: Typecheck
+        run: npm run typecheck
 
-      # The migrations/RPC/trigger suites run on PGlite — no Docker, no Supabase project needed.
-      - name: Build
-        run: npm run build
+      # Every file is assigned exactly once; all shards feed the existing required check below.
+      - name: Vitest shard
+        run: npx vitest run --shard=${{ matrix.shard }}/4
+
+      - name: Private client import boundaries
+        run: npm run security:client
+
+  check:
+    name: typecheck + tests
+    needs: test_shards
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require every shard to pass
+        env:
+          SHARD_RESULT: ${{ needs.test_shards.result }}
+        run: test "$SHARD_RESULT" = success
 
   # PLAN §8 M2 — "Playwright authz sweep: zero gated bytes or storage keys for anon".
   # Implemented as a fetch-level sweep against a real `next start` (scripts/sweep-anon.ts): no
@@ -45,6 +86,7 @@ jobs:
   sweep:
     name: anon authz sweep
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
@@ -64,6 +106,9 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Public bundle recipe and source-map check
+        run: npm run security:built
+
       # No wait-on / start-server-and-test: a curl loop needs no dependency the repo does not pin.
       - name: Start the server
         run: |
@@ -82,4 +127,7 @@ jobs:
 
       - name: Stop the server
         if: always()
-        run: kill "$(cat .server.pid)" || true
+        run: |
+          if [ -f .server.pid ]; then
+            kill "$(cat .server.pid)" || true
+          fi

@@ -1,85 +1,257 @@
 'use client';
 
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { observeCardArming } from '@/lib/media/card-arming';
+
+export interface DetailMediaSource {
+  src: string;
+  mime: string;
+  w?: number;
+  h?: number;
+}
+
+/** The four words the controls say, from the dictionary — never written here. */
+export interface DetailMediaControls {
+  play: string;
+  pause: string;
+  unmute: string;
+  mute: string;
+}
 
 /**
- * PLAN §13.2 detail — "big media (video w/ poster, plays on view)".
+ * Hero media for a template detail page (`/[locale]/t/[slug]`) and the prompt detail header.
  *
- * Unlike the card, the clip here is the point of the page, so the element exists from the first
- * render with its poster attached — but `preload="none"` keeps the bytes off the wire until the
- * reader has actually reached it, and an IntersectionObserver starts it then. Leaving the viewport
- * pauses it: an offscreen video decoding in a background tab is a battery bug, not a feature.
- *
- * `prefers-reduced-motion` gets controls and no autoplay — a paused first frame with a play button
- * is the honest version of "the result is right here" for a reader who asked not to be moved.
+ * - SSR renders `preload="none"`, `muted`, `loop`, `playsInline` and the poster, with no native
+ *   browser `controls`: the result is the picture, not a player.
+ * - Plays through the shared `observeCardArming` pool (at most four on screen), muted.
+ * - Two small controls: play/pause and sound. A looping clip up to 30 seconds long must be
+ *   stoppable (WCAG 2.2.2), and `prefers-reduced-motion` does not autoplay but keeps the play
+ *   button, so the example stays one tap away instead of out of reach.
+ * - Portrait clips (`9:16`, `4:5`, `3:4`) stand whole on a sky-toned stage at every width, never
+ *   cropped; landscape clips keep their own ratio. The card crops, the template page does not.
  */
+
+function isPortraitAspect(aspect?: string | null): boolean {
+  return aspect === '9:16' || aspect === '4:5' || aspect === '3:4';
+}
+
+function frameAspectClass(aspect?: string | null): string {
+  switch (aspect) {
+    case '9:16':
+      return 'aspect-[9/16]';
+    case '3:4':
+      return 'aspect-[3/4]';
+    case '4:5':
+      return 'aspect-[4/5]';
+    case '4:3':
+      return 'aspect-[4/3]';
+    case '1:1':
+      return 'aspect-square';
+    default:
+      return 'aspect-video';
+  }
+}
+
+/** `auto` follows the arming pool; `paused`/`playing` are the reader's own choice and win. */
+type PlaybackIntent = 'auto' | 'paused' | 'playing';
+
+const CONTROL =
+  'inline-flex min-h-9 items-center gap-1.5 rounded-full bg-black/45 px-3 py-1.5 text-xs font-medium text-white backdrop-blur-md transition-colors hover:bg-black/60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white';
+
 export function PromptDetailMedia({
   poster,
   video,
-  fallback,
   alt,
   ratio,
+  fallback,
+  aspect,
+  controls,
 }: {
-  poster: { src: string } | null;
-  video: { src: string; mime: string } | null;
-  fallback: ReactNode;
+  poster: DetailMediaSource | null;
+  video: DetailMediaSource | null;
   alt: string;
-  ratio: string;
+  ratio?: string;
+  fallback: ReactNode;
+  aspect?: string | null;
+  controls: DetailMediaControls;
 }) {
-  const ref = useRef<HTMLVideoElement>(null);
+  const [videoFailed, setVideoFailed] = useState(false);
+  const [posterFailed, setPosterFailed] = useState(false);
+  const [armed, setArmed] = useState(false);
+  const [muted, setMuted] = useState(true);
+  const [playing, setPlaying] = useState(false);
+  const [intent, setIntent] = useState<PlaybackIntent>('auto');
+  const [reducedMotion, setReducedMotion] = useState(false);
+  const hostRef = useRef<HTMLDivElement | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const mutedRef = useRef(true);
+  const intentRef = useRef<PlaybackIntent>('auto');
+  mutedRef.current = muted;
+  intentRef.current = intent;
+
+  const hasPoster = poster !== null && !posterFailed;
+  const hasVideo = video !== null && !videoFailed;
 
   useEffect(() => {
-    const element = ref.current;
-    if (!element) return;
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    setVideoFailed(false);
+    setPosterFailed(false);
+    setMuted(true);
+    setIntent('auto');
+  }, [video?.src, poster?.src]);
 
-    const observer = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          if (entry.isIntersecting) void element.play().catch(() => {});
-          else element.pause();
-        }
-      },
-      { threshold: 0.35 },
-    );
-    observer.observe(element);
-    return () => observer.disconnect();
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
+    const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const sync = () => setReducedMotion(mq.matches);
+    sync();
+    mq.addEventListener?.('change', sync);
+    return () => mq.removeEventListener?.('change', sync);
   }, []);
 
-  /**
-   * Founder direction (2026-08-14): the detail media was rendering at the SOURCE's ratio and full
-   * column width, so a portrait result became a wall of video — "너무 과도하게 크게". It is now
-   * the same fixed 16:9 window the cards use, on black, with the media CONTAINED: a landscape clip
-   * fills it, a 9:16 clip is letterboxed whole, and nothing is cropped or oversized. `ratio` is
-   * still honoured for the typographic fallback, which has no intrinsic size to preserve.
-   */
-  if (video === null) {
-    return poster ? (
-      <div className="flex items-center justify-center border border-hairline bg-black aspect-16/9">
-        {/* eslint-disable-next-line @next/next/no-img-element -- public bucket object, no loader */}
-        <img src={poster.src} alt={alt} className="h-full w-full object-contain" />
-      </div>
-    ) : (
-      <div className="border border-hairline" style={{ aspectRatio: ratio }}>
-        {fallback}
-      </div>
-    );
+  useEffect(() => {
+    const el = hostRef.current;
+    if (!el || !hasVideo) return;
+    if (typeof IntersectionObserver === 'undefined') {
+      setArmed(true);
+      return;
+    }
+    // A clip the reader turned on (sound or play) keeps its slot in the pool.
+    return observeCardArming(el, setArmed, { pinned: () => !mutedRef.current || intentRef.current === 'playing' });
+  }, [hasVideo, video?.src]);
+
+  useEffect(() => {
+    const el = videoRef.current;
+    if (!el || !hasVideo) return;
+    const shouldPlay = intent === 'playing' ? armed : intent === 'auto' ? armed && !reducedMotion : false;
+    if (shouldPlay) {
+      el.muted = mutedRef.current;
+      el.play()?.catch?.(() => {
+        // Autoplay refused or decode failed: the poster stays underneath, the play button stays.
+      });
+    } else {
+      el.pause();
+    }
+  }, [armed, reducedMotion, intent, hasVideo, video?.src]);
+
+  if (!hasPoster && !hasVideo) {
+    return <>{fallback}</>;
   }
 
+  const portrait = isPortraitAspect(aspect);
+  const ratioClass = frameAspectClass(aspect);
+  // Portrait: a stage as tall as the screen allows, the clip centred in it at its own ratio — the
+  // same stage the picture gallery uses, so films and pictures read as one family.
+  const outerClass = portrait
+    ? 'flex h-[min(calc(100svh-7rem),40rem)] w-full items-center justify-center bg-sky p-4 sm:rounded-[18px] sm:p-6 lg:h-[min(calc(100svh-9rem),46rem)] lg:p-8'
+    : 'w-full';
+  const stageClass = portrait
+    ? `relative h-full w-auto max-w-full overflow-hidden rounded-[18px] bg-sky ${ratioClass}`
+    : `relative w-full overflow-hidden bg-sky sm:rounded-[18px] ${ratioClass}`;
+
+  // Both handlers touch the element inside the tap itself: iOS only lets a gesture start sound.
+  const togglePlayback = () => {
+    const el = videoRef.current;
+    if (playing) {
+      setIntent('paused');
+      el?.pause();
+      return;
+    }
+    setIntent('playing');
+    if (el) {
+      el.muted = mutedRef.current;
+      el.play()?.catch?.(() => {});
+    }
+  };
+
+  const toggleSound = () => {
+    const nextMuted = !muted;
+    setMuted(nextMuted);
+    const el = videoRef.current;
+    if (!el) return;
+    el.muted = nextMuted;
+    if (!nextMuted && el.paused) {
+      setIntent('playing');
+      el.play()?.catch?.(() => {});
+    }
+  };
+
   return (
-    <video
-      ref={ref}
-      data-detail-media
-      className="w-full border border-hairline bg-black object-contain aspect-16/9"
-      muted
-      loop
-      playsInline
-      controls
-      preload="none"
-      aria-label={alt}
-      {...(poster ? { poster: poster.src } : {})}
-    >
-      <source src={video.src} type={video.mime} />
-    </video>
+    <div ref={hostRef} data-media-host className={outerClass} style={!aspect && ratio ? { aspectRatio: ratio } : undefined}>
+      <div className={stageClass}>
+        {hasPoster && (
+          // eslint-disable-next-line @next/next/no-img-element -- gateway URL with auth headers on private tiers; next/image cannot proxy
+          <img
+            src={poster.src}
+            alt={alt}
+            {...(poster.w ? { width: poster.w } : {})}
+            {...(poster.h ? { height: poster.h } : {})}
+            fetchPriority="high"
+            decoding="async"
+            onError={() => setPosterFailed(true)}
+            className="absolute inset-0 h-full w-full object-cover"
+          />
+        )}
+        {hasVideo && (
+          <>
+            <video
+              ref={videoRef}
+              key={video.src}
+              src={video.src}
+              poster={hasPoster ? poster.src : undefined}
+              preload="none"
+              playsInline
+              muted={muted}
+              loop
+              aria-label={alt}
+              onPlay={() => setPlaying(true)}
+              onPause={() => setPlaying(false)}
+              onError={() => setVideoFailed(true)}
+              className="relative h-full w-full object-cover"
+            />
+            <div className="absolute inset-x-3 bottom-3 z-10 flex items-center justify-between gap-2">
+              <button
+                type="button"
+                data-detail-playback={playing ? 'playing' : 'paused'}
+                aria-label={playing ? controls.pause : controls.play}
+                onClick={togglePlayback}
+                className={`${CONTROL} min-w-9 justify-center px-0`}
+              >
+                {playing ? (
+                  <svg aria-hidden="true" viewBox="0 0 16 16" className="h-3.5 w-3.5 shrink-0" fill="currentColor">
+                    <rect x="4" y="3" width="3" height="10" rx="0.75" />
+                    <rect x="9" y="3" width="3" height="10" rx="0.75" />
+                  </svg>
+                ) : (
+                  <svg aria-hidden="true" viewBox="0 0 16 16" className="h-3.5 w-3.5 shrink-0" fill="currentColor">
+                    <path d="M5 3.2v9.6a.6.6 0 0 0 .9.5l7.6-4.8a.6.6 0 0 0 0-1L5.9 2.7a.6.6 0 0 0-.9.5Z" />
+                  </svg>
+                )}
+              </button>
+              <button
+                type="button"
+                data-detail-sound={muted ? 'muted' : 'unmuted'}
+                aria-pressed={!muted}
+                aria-label={muted ? controls.unmute : controls.mute}
+                onClick={toggleSound}
+                className={CONTROL}
+              >
+                {muted ? (
+                  <svg aria-hidden="true" viewBox="0 0 16 16" className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5">
+                    <path d="M2.5 6.2h2.6L8.8 3v10L5.1 9.8H2.5V6.2Z" fill="currentColor" stroke="none" />
+                    <path d="m11 6 3 4m0-4-3 4" strokeLinecap="round" />
+                  </svg>
+                ) : (
+                  <svg aria-hidden="true" viewBox="0 0 16 16" className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5">
+                    <path d="M2.5 6.2h2.6L8.8 3v10L5.1 9.8H2.5V6.2Z" fill="currentColor" stroke="none" />
+                    <path d="M11.2 5.5a3.5 3.5 0 0 1 0 5M13 3.8a6 6 0 0 1 0 8.4" strokeLinecap="round" />
+                  </svg>
+                )}
+                <span>{muted ? controls.unmute : controls.mute}</span>
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
   );
 }

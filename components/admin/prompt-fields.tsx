@@ -1,18 +1,28 @@
-import { formatDate } from '@/lib/i18n/format';
-import { PROMPT_TEXT_MAX, PROMPT_TEXT_MIN } from '@/lib/prompts/schemas';
+import { PublicLink } from '@/components/admin/public-link';
+import { IMAGE_ASPECTS, IMAGE_ENGINES, IMAGE_ENGINE_IDS, VIDEO_ASPECTS, VIDEO_ENGINE_IDS, isImageEngine, resolveEngine } from '@/lib/images/engines';
+import { formatDate, interpolate } from '@/lib/i18n/format';
+import { formatKrw, suggestedKrw } from '@/lib/twings/products';
+import { costFloor, imageCostFloor } from '@/lib/twings/cost-model';
+import { videoModelForEngine } from '@/lib/video/models';
+import { PROMPT_TEXT_MAX, PROMPT_TEXT_MIN, TEMPLATE_MEDIA } from '@/lib/prompts/schemas';
 import { promptHref } from '@/lib/prompts/links';
 import { visibilityLabel, visibilityOptions } from '@/components/admin/labels';
 import type { Dictionary } from '@/lib/i18n/dictionaries';
 import type { PromptRow } from '@/lib/prompts/repo';
 import { adminMediaPath, promptAdminRef } from '@/lib/media/admin-authorize';
 import {
+  AUDIO_MAX_BYTES,
   DEFAULT_PROMPT_MODEL,
+  VIDEO_MAX_BYTES,
   PROMPT_MODELS,
   USE_CASES,
+  USE_CASE_MAX,
+  USE_CASE_MIN,
   parsePromptMedia,
 } from '@/lib/prompts/schemas';
 import { Field, INPUT, LABEL, OpForm } from '@/components/admin/chrome';
 import { MediaDrop, type MediaDropLabels } from '@/components/admin/media-drop';
+import { AdminPosterFrame } from '@/components/admin/poster-frame';
 import { useCaseLabel } from '@/components/prompts/labels';
 
 /**
@@ -37,14 +47,28 @@ export function mediaDropLabels(a: Dictionary['admin']): MediaDropLabels {
     frameScrub: a.mediaFrameScrub,
     framePick: a.mediaFramePick,
     framePicked: a.mediaFramePicked,
+    frameLoading: a.mediaFrameLoading,
+    frameUnavailable: a.mediaFrameUnavailable,
     posterZone: a.mediaPosterZone,
     posterPicked: a.mediaPosterPicked,
     posterHint: a.mediaPosterHint,
+    cropHeading: a.mediaCropHeading,
+    cropHint: a.mediaCropHint,
+    cropPosition: a.mediaCropPosition,
     audioHeading: a.fieldPromptAudio,
     audioZone: a.mediaAudioZone,
+    audioSaved: a.mediaAudioSaved,
+    audioLoading: a.mediaAudioLoading,
+    audioUnavailable: a.mediaAudioUnavailable,
     uploading: a.mediaUploading,
     uploaded: a.mediaUploaded,
     uploadFailed: a.mediaUploadFailed,
+    // The same caps the signing route enforces, so the refusal names the real limit.
+    uploadTooLarge: a.mediaUploadTooLarge
+      .replace('{videoMb}', String(VIDEO_MAX_BYTES / (1024 * 1024)))
+      .replace('{audioMb}', String(AUDIO_MAX_BYTES / (1024 * 1024))),
+    uploadBadType: a.mediaUploadBadType,
+    uploadSession: a.mediaUploadSession,
     blockedUploading: a.mediaBlockedUploading,
     blockedFailed: a.mediaBlockedFailed,
   };
@@ -78,7 +102,7 @@ export function UseCaseChecks({ dict, selected }: { dict: Dict; selected: readon
 export function StagedMedia({ row, dict }: { row: PromptRow; dict: Dict }) {
   const media = parsePromptMedia(row.media);
   const a = dict.admin;
-  if (!media.poster && !media.video) {
+  if (!media.poster && !media.video && !media.audio) {
     return <p className="font-mono text-[0.72rem] opacity-50">{a.noMedia}</p>;
   }
   return (
@@ -103,6 +127,15 @@ export function StagedMedia({ row, dict }: { row: PromptRow; dict: Dict }) {
           className="w-full max-w-sm border border-hairline"
         />
       )}
+      {media.audio && (
+        // `none`: the path redirects to a 60-second URL, so it is only asked for on play.
+        <audio
+          src={adminMediaPath(promptAdminRef(row.id, 'audio'))}
+          controls
+          preload="none"
+          className="w-full max-w-sm"
+        />
+      )}
     </div>
   );
 }
@@ -115,9 +148,50 @@ export function StagedMedia({ row, dict }: { row: PromptRow; dict: Dict }) {
  * title. Nothing is conditionally hidden — a field that exists when editing and not when creating is
  * a field the author discovers only after publishing.
  */
+/**
+ * The cost floor under this template's prices (lib/twings/cost-model.ts), shown next to the price
+ * fields so a price is never set blind. A proposal only: it writes nothing and blocks nothing.
+ */
+function CostFloorNote({ row, dict }: { row: PromptRow | null; dict: Dict }) {
+  if (!row) return null;
+  const a = dict.admin;
+  // An image's cost is its ENGINE's, not a duration: each model has its own official per-image
+  // price (lib/images/engines.ts), so the floor follows whichever engine this template renders on.
+  if (row.medium === 'image') {
+    const engine = resolveEngine(row.engine, 'image');
+    if (!isImageEngine(engine)) return null;
+    // A set renders every frame on one order, so its floor is one image's floor per frame.
+    const frames = parsePromptMedia(row.media).gallery?.length ?? 1;
+    const proposed = imageCostFloor({ engine, referenceImages: 1 }).proposedKrw * frames;
+    const below = row.priceKrw > 0 && row.priceKrw < proposed;
+    return (
+      <p data-cost-floor={String(proposed)} data-cost-floor-engine={engine} className="font-mono text-[0.72rem] opacity-70">
+        {interpolate(a.templateImageCostFloor, { engine: IMAGE_ENGINES[engine].label, price: formatKrw(proposed) })}
+        {below ? ` ${a.templateBelowFloor}` : ''}
+      </p>
+    );
+  }
+  if (row.medium !== 'video' || !row.runtimeSeconds) return null;
+  const { model, seconds } = videoModelForEngine(row.engine, row.runtimeSeconds);
+  const p720 = costFloor({ model, resolution: '720p', seconds, aspect: row.aspectDefault ?? '9:16' });
+  const p1080 = costFloor({ model, resolution: '1080p', seconds, aspect: row.aspectDefault ?? '9:16' });
+  if (!p720 || !p1080) return null;
+  const below = (row.priceKrw > 0 && row.priceKrw < p720.proposedKrw) || (row.price1080Krw > 0 && row.price1080Krw < p1080.proposedKrw);
+  return (
+    <p data-cost-floor={`${p720.proposedKrw}/${p1080.proposedKrw}`} className="font-mono text-[0.72rem] opacity-70">
+      {interpolate(a.templateCostFloor, { p720: formatKrw(p720.proposedKrw), p1080: formatKrw(p1080.proposedKrw) })}
+      {below ? ` ${a.templateBelowFloor}` : ''}
+    </p>
+  );
+}
+
 export function PromptFields({ row, dict }: { row: PromptRow | null; dict: Dict }) {
   const a = dict.admin;
   const existing = row === null ? {} : parsePromptMedia(row.media);
+  const creating = row === null;
+  // Create-only: the two things `prompt.create` refuses without (a use case, a poster) say so up front.
+  const labels = mediaDropLabels(a);
+  if (creating) labels.posterHeading = `${a.fieldPromptPoster} · ${a.requiredMark}`;
   return (
     <>
       <div className="grid gap-3 sm:grid-cols-2">
@@ -127,7 +201,7 @@ export function PromptFields({ row, dict }: { row: PromptRow | null; dict: Dict 
         <Field label={a.fieldPromptTitleKo}>
           <input type="text" name="titleKo" required minLength={1} defaultValue={row?.titleKo ?? ''} className={INPUT} />
         </Field>
-        <Field label={a.fieldPromptSlug} hint={a.promptSlugAutoHint}>
+        {row && <Field label={a.fieldPromptSlug} hint={a.promptSlugAutoHint}>
           <input
             type="text"
             name="slug"
@@ -135,16 +209,18 @@ export function PromptFields({ row, dict }: { row: PromptRow | null; dict: Dict 
             placeholder="auto"
             className={INPUT}
           />
-        </Field>
-        <Field label={a.fieldPromptHandle}>
+        </Field>}
+        {row && <Field label={a.fieldPromptHandle}>
           <input
             type="text"
             name="handle"
             defaultValue={row?.authorHandle ?? ''}
             className={INPUT}
           />
-        </Field>
+        </Field>}
       </div>
+
+      {!row && <p className="font-mono text-[0.72rem] opacity-60">{a.promptAddressAutomatic}</p>}
 
       {/* Models, as CHECKBOXES (founder, 2026-08-15: "seedance2.5랑 seedance2.0 둘 다 체크하고
           싶으면 어떻게 해?"). A free-text field could hold one answer and invited a typo into a
@@ -184,6 +260,9 @@ export function PromptFields({ row, dict }: { row: PromptRow | null; dict: Dict 
         />
       </Field>
 
+      <details open={row !== null} className="border border-hairline p-3">
+        <summary className="cursor-pointer font-label text-eyebrow">{a.promptOptionalDetails}</summary>
+        <div className="mt-3 flex flex-col gap-3">
       <Field label={a.fieldSourceUrl} hint={a.sourceUrlHint}>
         <input
           type="url"
@@ -215,11 +294,86 @@ export function PromptFields({ row, dict }: { row: PromptRow | null; dict: Dict 
         </Field>
       </div>
 
-      <div>
-        <span className={LABEL}>{a.colUseCase}</span>
+        </div>
+      </details>
+
+      <div {...(creating ? { 'data-required-field': 'useCase' } : {})}>
+        <span className={LABEL}>
+          {a.colUseCase}
+          {creating && ` · ${a.requiredMark}`}
+        </span>
+        {creating && (
+          <p className="mt-1 font-mono text-[0.72rem] opacity-50">
+            {interpolate(a.useCaseRequiredHint, { min: USE_CASE_MIN, max: USE_CASE_MAX })}
+          </p>
+        )}
         <div className="mt-1.5">
           <UseCaseChecks dict={dict} selected={row?.useCase ?? []} />
         </div>
+      </div>
+
+      {/* docs/TEMPLATES-IA.md — what this template produces and what one render costs. */}
+      <div className="grid gap-3 sm:grid-cols-4">
+        <Field label={a.fieldTemplateMedium}>
+          <select name="medium" defaultValue={row?.medium ?? 'video'} className={INPUT}>
+            {TEMPLATE_MEDIA.map((medium) => (
+              <option key={medium} value={medium}>
+                {a.templateMedia[medium]}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label={a.fieldTemplatePrice} hint={a.templatePriceHint}>
+          <input type="number" name="priceCents" min={0} step={1} defaultValue={row?.priceCents ?? 0} className={INPUT} />
+        </Field>
+        {/* The won price a Korean page shows (0018). Empty/0 = the x,900 suggestion, offered as the placeholder. */}
+        <Field label={a.fieldTemplatePriceKrw} hint={a.templatePriceKrwHint}>
+          <input type="number" name="priceKrw" min={0} step={100} defaultValue={row?.priceKrw ?? 0} placeholder={String(suggestedKrw(row?.priceCents ?? 0))} className={INPUT} />
+        </Field>
+        <Field label={a.fieldTemplateRuntime} hint={a.templateRuntimeHint}>
+          <input type="number" name="runtimeSeconds" min={1} step={1} defaultValue={row?.runtimeSeconds ?? ''} className={INPUT} />
+        </Field>
+      </div>
+
+      {/* Creator resolution (0039): 720p is the default; 1080p sells only with its own price in both currencies. */}
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field label={a.fieldTemplatePrice1080} hint={a.templatePrice1080Hint}>
+          <input type="number" name="price1080Cents" min={0} step={1} defaultValue={row?.price1080Cents ?? 0} className={INPUT} />
+        </Field>
+        <Field label={a.fieldTemplatePrice1080Krw}>
+          <input type="number" name="price1080Krw" min={0} step={100} defaultValue={row?.price1080Krw ?? 0} className={INPUT} />
+        </Field>
+      </div>
+      <CostFloorNote row={row} dict={dict} />
+
+      {/* docs/TEMPLATES-IA.md §7 — the engine and the aspect the make step opens in. Both lists are
+          the union across media; the operation refuses a pairing that does not match the output. */}
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field label={a.fieldTemplateEngine} hint={a.templateEngineHint}>
+          <select name="engine" defaultValue={row?.engine ?? ''} className={INPUT}>
+            <option value="">{a.templateEngineDefault}</option>
+            {VIDEO_ENGINE_IDS.map((id) => (
+              <option key={id} value={id}>
+                {a.templateMedia.video} · {id}
+              </option>
+            ))}
+            {IMAGE_ENGINE_IDS.map((id) => (
+              <option key={id} value={id}>
+                {a.templateMedia.image} · {IMAGE_ENGINES[id].label}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label={a.fieldTemplateAspect} hint={a.templateAspectHint}>
+          <select name="aspectDefault" defaultValue={row?.aspectDefault ?? ''} className={INPUT}>
+            <option value="">{a.templateAspectDefault}</option>
+            {[...new Set([...IMAGE_ASPECTS, ...VIDEO_ASPECTS])].map((aspect) => (
+              <option key={aspect} value={aspect}>
+                {dict.templates.aspects[aspect as keyof typeof dict.templates.aspects] ?? aspect}
+              </option>
+            ))}
+          </select>
+        </Field>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2">
@@ -253,17 +407,21 @@ export function PromptFields({ row, dict }: { row: PromptRow | null; dict: Dict 
 
       {/* Founder question (2026-08-14): re-picking a thumbnail frame must not require re-uploading
           the clip — the panel loads what this row already has. */}
-      <Field label={a.fieldPromptVideo} hint={a.promptMediaHint}>
+      <Field label={a.fieldPromptVideo} hint={creating ? a.mediaCreateHint : a.promptMediaHint}>
         <MediaDrop
           videoName="video"
           posterName="poster"
           audioName="audio"
-          labels={mediaDropLabels(a)}
+          labels={labels}
           {...(row && existing.video
             ? { existingVideoSrc: adminMediaPath(promptAdminRef(row.id, 'video')) }
             : {})}
           {...(row && existing.poster
             ? { existingPosterSrc: adminMediaPath(promptAdminRef(row.id, 'poster')) }
+            : {})}
+          {...(row && existing.posterFocus ? { existingPosterFocus: existing.posterFocus } : {})}
+          {...(row && existing.audio
+            ? { existingAudioSrc: adminMediaPath(promptAdminRef(row.id, 'audio')) }
             : {})}
         />
       </Field>
@@ -306,16 +464,15 @@ export function PromptCard({
       className="flex flex-col border border-hairline"
     >
       <a href={href} className="block border-b border-hairline bg-black" aria-hidden={poster === null}>
-        <div className="flex aspect-video items-center justify-center overflow-hidden">
-          {poster ? (
-            // eslint-disable-next-line @next/next/no-img-element -- staging object behind the gate
-            <img src={poster} alt="" className="h-full w-full object-contain" />
-          ) : (
+        {poster ? (
+          <AdminPosterFrame src={poster} focus={media.posterFocus} />
+        ) : (
+          <div className="flex aspect-square items-center justify-center overflow-hidden">
             <span className="px-4 text-center font-mono text-[0.7rem] break-all text-white/45">
               {row.slug || row.id.slice(0, 8)}
             </span>
-          )}
-        </div>
+          </div>
+        )}
       </a>
 
       <div className="flex flex-1 flex-col gap-2 p-3">
@@ -344,9 +501,9 @@ export function PromptCard({
             anchor inside an anchor is not. */}
         {row.status === 'published' && (
           <div className="flex items-center justify-between gap-2 border-t border-hairline pt-2 font-label text-[0.6rem] tracking-[0.1em] uppercase">
-            <a href={promptHref(locale, row.slug)} className="opacity-60 hover:opacity-100" data-card-live={row.slug}>
+            <PublicLink href={promptHref(locale, row.slug)} className="opacity-60 hover:opacity-100" data-card-live={row.slug}>
               {a.viewLive} →
-            </a>
+            </PublicLink>
             <OpForm op="prompt.feature" back="/admin/prompts">
               <input type="hidden" name="id" value={row.id} />
               <input type="hidden" name="featured" value={row.featured ? 'false' : 'true'} />

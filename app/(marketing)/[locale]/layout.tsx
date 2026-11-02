@@ -4,10 +4,14 @@ import type { ReactNode } from 'react';
 import { fontVariables } from '@/app/fonts';
 import { ScrollProvider } from '@/components/motion/scroll-provider';
 import { Notice } from '@/components/marketing/notice';
+import { RegisterServiceWorker } from '@/components/pwa/register-sw';
+import { BottomTabs } from '@/components/app/bottom-tabs';
 import { noticeLabels } from '@/components/marketing/notice-codes';
 import { LOCALES, isLocale, DEFAULT_LOCALE, type Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/dictionaries';
 import { siteUrl } from '@/lib/seo/site-url';
+import { JsonLd } from '@/lib/seo/json-ld';
+import { siteStructuredData } from '@/lib/seo/structured-data';
 
 /**
  * Root layout for the PUBLIC, locale-prefixed surface (§3.9 / §4).
@@ -22,8 +26,12 @@ export function generateStaticParams(): Array<{ locale: Locale }> {
   return LOCALES.map((locale) => ({ locale }));
 }
 
-/** F6 — the browser chrome color. White: §5.1's base surface, and what the nav sits on. */
-export const viewport: Viewport = { themeColor: '#ffffff' };
+/**
+ * F6 — the browser chrome color. White: §5.1's base surface, and what the nav sits on — in a tab and
+ * in the installed app alike. `viewport-fit: cover` (docs/PLATFORM-2.0.md §5.2) hands the installed
+ * app the whole screen; app/globals.css pads the page by the safe areas.
+ */
+export const viewport: Viewport = { themeColor: '#ffffff', viewportFit: 'cover' };
 
 /** Anything that is not `en` or `ko` is a 404, not a dynamic render. */
 export const dynamicParams = false;
@@ -49,6 +57,8 @@ export async function generateMetadata({
     metadataBase: new URL(appUrl),
     title: { default: dict.meta.siteName, template: `%s · ${dict.meta.siteName}` },
     description: dict.meta.tagline,
+    // docs/TEMPLATES-IA.md §5 — installable (PWA first); the manifest is served from app/manifest.ts.
+    appleWebApp: { capable: true, title: dict.meta.siteName, statusBarStyle: 'default' },
     alternates: {
       canonical: `/${locale}`,
       languages: {
@@ -82,12 +92,16 @@ export default async function MarketingRootLayout({
         <link rel="stylesheet" href="/fonts/pretendard/pretendard-hangul-mono.css" />
       </head>
       <body>
+        <JsonLd id="site-structured-data" data={siteStructuredData(appUrl)} />
         <ScrollProvider>
           {/* F2 — the auth redirects' `?error=…` / `?signin=1` outcomes, rendered instead of
               silent. Client-only read of location.search, so the tree stays static (§3.1). */}
           <Notice labels={noticeLabels(dict)} locale={locale} />
           {children}
         </ScrollProvider>
+        <RegisterServiceWorker />
+        {/* Standalone only — renders nothing in a browser tab or in this static HTML. */}
+        <BottomTabs locale={locale} labels={dict.appShell.tabs} />
       </body>
     </html>
   );

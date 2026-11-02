@@ -1,16 +1,10 @@
-# Setup — manual steps remaining after M0
+# TWINGS 환경 설정
 
-M0 ships everything that can be built without external accounts. What follows needs a human with
-console access. Each step is independent unless noted.
+기본 작업 경로는 `D:\dev\twings`입니다. 작업용 worktree와 보관 폴더 구분은 [WORKSPACE.md](WORKSPACE.md)를 확인하세요.
 
-Local development works today with no external service:
-`npm install && npm run check && npm run db:local && npm run dev`.
+로컬 개발은 외부 서비스 없이 `npm install`, `npm run check`, `npm run db:local`, `npm run dev`로 시작할 수 있습니다. 실제 연결 검증은 별도입니다.
 
-> **Naming (M7).** The product is **YAGI PROMPTS**. The repo directory, the npm package `name`, the
-> `PLAYBOOK_*` environment variables, the `playbook` database tables and every other internal
-> identifier keep the `playbook` codename deliberately — renaming them would churn the whole tree
-> and every migration for no user-visible gain. If a string is read by a user, it says YAGI PROMPTS;
-> if it is read by a machine, it still says playbook.
+제품명은 **TWINGS**입니다. 기존 npm 패키지명, `PLAYBOOK_*` 환경변수, DB 테이블 식별자는 호환성을 위해 유지합니다. 아래 M0~M7 표기는 초기 구축 기록이므로 현재 연결·배포 상태는 실제 환경에서 다시 확인합니다.
 
 ---
 
@@ -138,11 +132,32 @@ The follow-up above still needs real sessions.
 
 ## 4. Promote an admin
 
-`is_admin` is never derived from the email domain at runtime (§3.7 — "seeded manually"). Run:
+Team accounts need nothing (2026-09-24, 대표 결정). `0038_core_staff_admin.sql` makes every account
+whose `auth.users` email the auth server confirmed on exactly `@yagiworkshop.xyz` an admin, at the
+first profile insert, at email confirmation and at an email change, and revokes that grant when the
+email leaves the domain. Unconfirmed addresses, subdomains, suffixes, look-alike characters and
+`profiles.email` never count. `profiles.admin_source` records why: `staff_email` or `manual`.
+
+Anyone else is promoted by hand, which records `manual` and is never revoked automatically:
 
 ```sql
-update profiles set is_admin = true where email = 'yagi@yagiworkshop.xyz';
+update profiles set is_admin = true where id = '<auth user id>';
 ```
+
+An automatic grant already reads `is_admin = true`, so to pin it as manual set
+`admin_source = 'manual'` explicitly.
+
+Offboarding a team member: ban the auth user (Dashboard → Authentication → Ban), delete it, or change
+its email off the domain. A ban or email change revokes a `staff_email` grant in the same auth write;
+deletion removes the profile through its foreign key. A `manual` grant survives a ban or email change:
+also run `update profiles set is_admin = false where id = '<auth user id>';`.
+Google/Kakao report an address as verified once proven, so a former member's personal account still
+carrying the work address qualifies until one of these steps is taken.
+
+To find an account that should have been promoted but was not, compare `auth.users` with
+`is_twings_staff_email(email) and email_confirmed_at is not null` (not deleted, not banned). A team admin is still never a
+buyer: quote acceptance and payment stay with the brand's own owner or recorded buyer
+(`lib/brands/usage/core.ts isBuyer`).
 
 ## 5. Storage buckets
 
@@ -236,6 +251,8 @@ to the browser):
 | `SUPABASE_SERVICE_ROLE_KEY` | server | the data client and the storage driver |
 | `DATABASE_URL` | server | Supabase → Database → Connection string (URI). Use the **pooled** connection for serverless. |
 | `NEXT_PUBLIC_APP_URL` | all | the real origin, no trailing slash. Sitemap, robots, `metadataBase`/OG and every email link resolve against it. |
+| `PUBLIC_MEDIA_BASE_URL` | server | optional. R2 host for copied public files; unset stays on Supabase and is the rollback. `docs/BRAND-MOAT-AND-STORAGE.md` |
+| `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_PUBLIC_BUCKET` | server | optional, Production only. All four switch on copying new public files to R2 after a publish and daily at `/api/public-media/tick`. Apply 0073/0149 first. Missing any → nothing is copied and the behaviour is unchanged. |
 | `MEDIA_TOKEN_SECRET` | server | ≤60s media capabilities; must be stable across restarts |
 | `NOTIFY_TOKEN_SECRET` | server | signs unsubscribe links that live in inboxes for months — **never rotate casually** |
 | `STRIPE_SECRET_KEY` | server | all three Stripe vars are required together, or billing renders its "not connected" panel |
@@ -243,6 +260,15 @@ to the browser):
 | `STRIPE_PRICE_PRO` | server | the $9/month price id |
 | `RESEND_API_KEY` | server | with `NOTIFY_FROM_EMAIL`, or the worker sends nothing |
 | `NOTIFY_FROM_EMAIL` | server | e.g. `YAGI PROMPTS <prompts@your-domain>` |
+| `OPENAI_API_KEY` / `ARK_API_KEY` | server | the render engines (docs/TEMPLATES-IA.md §7–8); a missing key fails a job with `no_engine_key`, never a 500 |
+| `KLING_API_KEY` | server | Kling official API key (console → API Keys), sent as `Authorization: Bearer`. Missing → a `kling-omni` job fails `no_engine_key`. Check it with `npm run kling:smoke -- --dry` (prints presence as a boolean, never the value). |
+| `KLING_VIDEO_MODEL` | server | optional. Which Kling model `kling-omni` renders on: `kling-3.0-omni` (default, open today) or `kling-4.0` (opens 2026-10-28). Switching needs no code change (lib/kling/models.ts). |
+| `KLING_VIDEO_MODEL_ID` | server | optional. Overrides the create endpoint's path segment (`/omni-video/{id}`) if the 4.0 string published on release differs from the preview docs. |
+| `KLING_BASE_URL` | server | optional; default `https://api-singapore.klingai.com` |
+| `GEMINI_API_KEY` | server | Google AI Studio key for the Nano Banana image engine (`x-goog-api-key`). Missing → a `nano-banana-2.1` job fails `no_engine_key`. Check with `npm run gemini:smoke -- --dry`. |
+| `GEMINI_IMAGE_MODEL` | server | optional. Overrides the wire model id (default `gemini-nano-banana-2.1`) for a newer Nano Banana release. |
+| `GEMINI_BASE_URL` | server | optional; default `https://generativelanguage.googleapis.com/v1beta` (the Interactions API) |
+| `CRON_SECRET` | server | optional; any long random string. Vercel sends it as the bearer token on `/api/renders/tick`; without it the tick is open but idempotent. `/api/brands/inquiries/tick` and `/api/public-media/tick` refuse to run without it |
 
 Do **not** set `STORAGE_DRIVER`, `PLAYBOOK_LOCAL_DB`, `PLAYBOOK_LOCAL_DB_DIR` or
 `PLAYBOOK_DEV_IDENTITY` in Vercel. The first would override the mode; the middle two are PGlite
@@ -477,6 +503,39 @@ $env:PLAYBOOK_LOCAL_DB_DIR = ".pglite/dev"
 `lib/db/connect.ts` prefers it over the snapshot when the variable is set, and falls back if the
 directory cannot be opened. **One process at a time** — PGlite takes an exclusive lock on a data
 directory, so stop `next dev` before running the worker against the same folder.
+
+## CI within the free Actions allowance
+
+`.github/workflows/ci.yml` runs for pull requests, pushes to `main`, and manual
+`workflow_dispatch`. Feature-branch pushes do not start a second run alongside the PR run.
+For a branch without a PR, use **Actions → CI → Run workflow** after this workflow is on `main`.
+
+Both check names are preserved: `typecheck + tests` runs the typecheck and full test suite;
+`anon authz sweep` creates the local catalog, builds once, starts that build and checks anonymous
+access. A successful typecheck job alone does not mean the build or sweep passed. The two jobs
+remain independently visible; neither uses a paid larger runner or live credentials. Superseded
+runs on the same ref are cancelled, and each job has a 30-minute timeout.
+
+If the account's included Actions allowance is exhausted with a zero paid budget, keep that
+budget unchanged and use the full local AGENTS §3 loop for each release:
+
+```powershell
+npx tsc --noEmit
+npx vitest run
+npm run build:local
+npm run start:local             # separate terminal, localhost:3000
+npm run sweep:anon
+```
+
+Record the exact commit and results on the PR, and check the Vercel preview before an authorized
+merge. Keep required-check rules unchanged: if they block the merge, wait for allowance renewal
+or a maintainer decision rather than bypassing them. Do not mark a blocked Actions run as passed.
+When the allowance renews, re-run the relevant failed workflow or dispatch CI for the current
+branch. Removing duplicate work prevents future waste; it does not restore already-used minutes.
+
+References: [workflow events](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows),
+[concurrency](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency),
+[Actions billing](https://docs.github.com/en/billing/concepts/product-billing/github-actions).
 
 ## Running the notification worker offline (M5)
 

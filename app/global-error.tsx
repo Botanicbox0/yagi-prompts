@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
+import { STATIC_ERROR_COPY } from '@/components/app/static-error-copy';
 
 /**
  * The last-resort boundary — and, in practice, the DEPLOYMENT-SKEW healer.
@@ -14,7 +15,8 @@ import { useEffect } from 'react';
  * A skew failure is not an application bug and is fully cured by one reload against the current
  * deployment, so that is literally what this does: detected chunk/module-load failures reload
  * ONCE (a sessionStorage latch stops a broken deploy from looping). Anything else renders a
- * designed panel instead of the browser-grey default. Styles are inline because this boundary
+ * designed panel instead of the browser-grey default, in a short static ko + en pair (the
+ * dictionary and the locale resolver live in the layout this replaces). Styles are inline because this boundary
  * replaces the ROOT layout — when it renders, the stylesheet pipeline may be part of the wreck.
  *
  * (The real fix at the platform level is Vercel's skew protection, which the Hobby plan does not
@@ -54,8 +56,9 @@ export default function GlobalError({
     }
   }, [error]);
 
+  const { ko, en } = STATIC_ERROR_COPY;
   return (
-    <html lang="en">
+    <html lang="ko">
       <body
         style={{
           margin: 0,
@@ -68,7 +71,7 @@ export default function GlobalError({
           justifyContent: 'center',
         }}
       >
-        <div style={{ maxWidth: 460, padding: '0 24px' }}>
+        <div data-global-error style={{ maxWidth: 460, padding: '0 24px' }}>
           <p
             style={{
               fontSize: 12,
@@ -80,21 +83,12 @@ export default function GlobalError({
           >
             TWINGS
           </p>
-          <h1
-            style={{
-              fontSize: 34,
-              lineHeight: 1.05,
-              fontWeight: 900,
-              textTransform: 'uppercase',
-              margin: '14px 0 0',
-            }}
-          >
-            Something broke on the way here.
-          </h1>
-          <p style={{ fontSize: 15, lineHeight: 1.6, opacity: 0.7, margin: '14px 0 0' }}>
-            새로고침 한 번이면 대부분 해결됩니다. If it keeps happening, the button below is the
-            same thing, done politely.
-          </p>
+          <h1 style={{ fontSize: 28, lineHeight: 1.2, fontWeight: 900, margin: '14px 0 0' }}>{ko.title}</h1>
+          <p style={{ fontSize: 15, lineHeight: 1.6, opacity: 0.75, margin: '10px 0 0' }}>{ko.body}</p>
+          <div lang="en">
+            <p style={{ fontSize: 17, lineHeight: 1.3, fontWeight: 700, margin: '20px 0 0' }}>{en.title}</p>
+            <p style={{ fontSize: 14, lineHeight: 1.6, opacity: 0.75, margin: '6px 0 0' }}>{en.body}</p>
+          </div>
           <button
             type="button"
             onClick={() => window.location.reload()}
@@ -109,7 +103,7 @@ export default function GlobalError({
               cursor: 'pointer',
             }}
           >
-            Reload
+            {ko.reload} · {en.reload}
           </button>
           <button
             type="button"
@@ -126,7 +120,7 @@ export default function GlobalError({
               cursor: 'pointer',
             }}
           >
-            Try again
+            {ko.retry} · {en.retry}
           </button>
           {error.digest && (
             <p style={{ fontFamily: 'ui-monospace, monospace', fontSize: 11, opacity: 0.4, marginTop: 18 }}>

@@ -1,42 +1,43 @@
 import { getViewer } from '@/lib/auth/viewer';
-import { loadSubscription, type SubscriptionRecord } from '@/lib/billing/reconcile';
-import { isBillingConfigured } from '@/lib/billing/stripe-gateway';
-import { PORTAL_ACTION } from '@/lib/billing/links';
 import { getSqlRunner } from '@/lib/db/connect';
 import { getLocaleFromHeaders } from '@/lib/i18n/server';
 import { getDictionary } from '@/lib/i18n/dictionaries';
-import { formatDate, interpolate } from '@/lib/i18n/format';
 import { LocaleToggle } from '@/components/locale-toggle';
-import { siteLinks } from '@/components/marketing/chrome';
-import { TwingsWordmark } from '@/components/brand/twings-wordmark';
+import { AppHeader } from '@/components/app/app-header';
+import { selfieLibrary, selfieLimit, type SelfieLibrary } from '@/lib/identity/selfie-service';
+import { IDENTITY_SELFIE_PATH } from '@/lib/identity/links';
+import { SelfieLibraryPanel } from '@/components/identity/selfie-grid';
 import { TextSwap } from '@/components/ui/text-swap';
-import { BillingUnavailable } from '@/components/billing/upgrade-cta';
+import { deletionMailto } from '@/components/app/deletion-mailto';
 import {
   loadPreferences,
   PREFERENCES_OFF,
   type NotificationPreferences,
 } from '@/lib/notify/preferences';
-import { getWallet, listRecentUnlocks, type UnlockHistoryRow, type Wallet } from '@/lib/cookies/repo';
-import { PACK_COOKIES, PACK_PRICE_USD, SIGNUP_COOKIES, WEEKLY_COOKIES } from '@/lib/cookies/wallet';
-import { loadSubmissionsByAuthor, type PromptRow } from '@/lib/prompts/repo';
-import { promptHref, PROMPT_SUBMIT_PATH } from '@/lib/prompts/links';
+import { campaignsHref, MY_CAMPAIGNS_PATH } from '@/lib/campaigns/links';
+import { templatesHref } from '@/lib/prompts/links';
+import { listMyRenders, type RenderView } from '@/lib/renders/service';
+import { RENDERS_PATH } from '@/lib/renders/share';
+import { RenderList } from '@/components/renders/render-list';
+import { CreatorProfileCard } from '@/components/app/creator-profile';
+import { loadCreatorProfile, type CreatorProfile } from '@/lib/creators/profile';
 import { saveNotificationPreferences } from './actions';
+import { CREATOR_WORKSPACE_PATH, creatorProgramOpen } from '@/lib/creator-platform/links';
+import { SubscriptionStatus } from '@/components/billing/subscription-status';
+import { getSubscriptionSummary } from '@/lib/creator-subscriptions/service';
+import type { SubscriptionSummary } from '@/lib/creator-subscriptions/types';
+import { NotifyChoice } from '@/components/notify/notify-choice';
+import { influencersOpen, isInfluencer } from '@/lib/influencers/rules';
+import { listSocialAccounts, type SocialAccountView } from '@/lib/influencers/service';
+import { SocialAccountCard } from '@/components/identity/social-teaser';
 
 /**
- * `/account` — PLAN §3.7 + §3.5.
+ * `/account` — private creator profile, activity and email preferences.
  *
- * Contents, exactly: plan status, the Stripe portal link, the **notification toggles** (M5), the
- * locale preference, sign out, and the deletion request.
+ * Profile name and existing campaign SNS, notification toggles, locale, activity, sign out and
+ * deletion request. No public projection contains this page's email or social profile.
  *
- * Plan status is shown from the stored row but DERIVED from the entitlement rule (§3.4): the copy
- * reads `subscriptions.status` through `isEntitled`, never `profiles.plan`, which is a mirror.
- * `cancel_at_period_end` is deliberately NOT a separate plan state — it is a note on an active
- * subscription ("access runs until … then stops"), because Stripe keeps the status `active` until
- * the period actually closes and the UI must not claim otherwise.
- *
- * The toggles follow the same rule: they exist for an entitled reader and are replaced by the pitch
- * line for everyone else (§3.5 "Toggles on /account (Pro)"). A disabled checkbox would be a control
- * that lies about being available; a sentence explaining what Pro is for does not.
+ * Any signed-in creator can save notifications. The old Pro-only restriction is retired.
  */
 export const dynamic = 'force-dynamic';
 
@@ -83,19 +84,6 @@ function Toggle({
   );
 }
 
-const DELETION_MAILTO = (email: string | null) => {
-  const subject = encodeURIComponent('TWINGS — account deletion request');
-  const body = encodeURIComponent(
-    [
-      'Please delete my TWINGS account.',
-      '',
-      `Account: ${email ?? '(the address I am signed in with)'}`,
-      '',
-      'I understand this cancels my subscription and removes my profile.',
-    ].join('\n'),
-  );
-  return `mailto:hello@yagiworkshop.xyz?subject=${subject}&body=${body}`;
-};
 
 export default async function AccountPage({
   searchParams,
@@ -108,168 +96,122 @@ export default async function AccountPage({
   const params = (await searchParams) ?? {};
 
   let viewer = null as Awaited<ReturnType<typeof getViewer>> | null;
-  let subscription: SubscriptionRecord | null = null;
   let preferences: NotificationPreferences = PREFERENCES_OFF;
-  let submissions: PromptRow[] = [];
-  let wallet: Wallet | null = null;
-  let unlockHistory: UnlockHistoryRow[] = [];
+  let renders: RenderView[] = [];
+  let profile: CreatorProfile | null = null;
+  let subscription: SubscriptionSummary | null = null;
+  let subscriptionLoaded = false;
+  let selfies: SelfieLibrary | null = null;
+  const socialOpen = influencersOpen();
+  let social: { influencer: boolean; items: SocialAccountView[] } | null = null;
   try {
     viewer = await getViewer();
     if (viewer.userId !== null) {
       const sql = await getSqlRunner();
       if (sql !== null) {
-        subscription = await loadSubscription(sql, viewer.userId);
-        preferences = (await loadPreferences(sql, viewer.userId)) ?? PREFERENCES_OFF;
-        // §13.1/E — "your submissions" list (slug, status, reject_reason when rejected).
-        submissions = await loadSubmissionsByAuthor(sql, viewer.userId);
-        // §15.1-3 — the account page is a wallet READ point: the lazy weekly grant fires here,
-        // inside getWallet's own transaction, before the number below is printed.
-        wallet = await getWallet(sql, viewer.userId);
-        unlockHistory = await listRecentUnlocks(sql, viewer.userId);
+        const [prefs, works, creator, monthly, face] = await Promise.allSettled([
+          loadPreferences(sql, viewer.userId), listMyRenders(sql, viewer.userId, 3), loadCreatorProfile(sql, viewer.userId),
+          getSubscriptionSummary(sql, viewer.userId, { environment: 'live' }), selfieLibrary(sql, viewer.userId, selfieLimit()),
+        ]);
+        if (prefs.status === 'fulfilled') preferences = prefs.value ?? PREFERENCES_OFF;
+        if (works.status === 'fulfilled') renders = works.value;
+        if (creator.status === 'fulfilled') profile = creator.value;
+        if (monthly.status === 'fulfilled') { subscription = monthly.value; subscriptionLoaded = true; }
+        if (face.status === 'fulfilled') selfies = face.value;
+        // docs/PLATFORM-2.0.md §17.1 — the SNS card, only while TWINGS_INFLUENCERS is on.
+        if (socialOpen) {
+          const userId = viewer.userId;
+          social = await Promise.all([listSocialAccounts(sql, userId), isInfluencer(sql, userId)])
+            .then(([items, influencer]) => ({ influencer, items }))
+            .catch(() => ({ influencer: false, items: [] }));
+        }
       }
     }
   } catch {
     // Placeholder env (§11) — render the shell honestly rather than a 500.
   }
 
-  const entitled = subscription?.entitled === true || viewer?.tier === 'pro';
-  const billingReady = isBillingConfigured();
-
-  const statusLine = (() => {
-    if (subscription === null) return null;
-    switch (subscription.status) {
-      case 'active':
-        return copy.statusActive;
-      case 'past_due':
-        return copy.statusPastDue;
-      case 'canceled':
-        return copy.statusCanceled;
-      default:
-        return interpolate(copy.statusOther, { status: subscription.status });
-    }
-  })();
-
-  const periodDate = formatDate(subscription?.currentPeriodEnd ?? null, locale);
-  const periodLine =
-    periodDate === null
-      ? null
-      : subscription?.cancelAtPeriodEnd === true
-        ? interpolate(copy.endsOn, { date: periodDate })
-        : interpolate(copy.renewsOn, { date: periodDate });
-
   return (
     <div data-section data-theme="light" className="section min-h-screen">
-      <header className="border-b border-hairline">
-        <div className="mx-auto flex max-w-shell items-center justify-between px-gutter py-5">
-          <a href={`/${locale}`} className="flex items-center gap-2.5">
-            <TwingsWordmark className="h-[18px] w-auto" />
-          </a>
-          <div className="flex items-center gap-6">
-            {siteLinks(locale, dict).map((link, index) => (
-              <a
-                key={link.href}
-                href={link.href}
-                className={[index === 0 ? '' : 'hidden sm:inline', 'font-label text-eyebrow uppercase'].join(' ')}
-              >
-                {link.label}
-              </a>
-            ))}
-            <LocaleToggle current={locale} rest="/account" prefixed={false} />
-          </div>
-        </div>
-      </header>
+      <AppHeader locale={locale} dict={dict} rest="/account" />
 
       <main id="main" className="band py-16 lg:py-20">
         <p className="text-accent font-label text-eyebrow uppercase">{copy.eyebrow}</p>
         <h1 className="mt-6 max-w-detail font-display text-title font-black uppercase">
-          {copy.title}
+          {dict.creatorProfile.title}
         </h1>
 
-        <div className="mt-14 max-w-detail">
-          <dl>
-            <Row term={copy.emailLabel}>{viewer?.email ?? copy.notSignedIn}</Row>
-
-            <Row term={copy.planHeading}>
-              <span className="font-mono text-code">
-                {entitled ? copy.planPro : copy.planFree}
-              </span>
-              {subscription?.cancelAtPeriodEnd === true && (
-                <span className="text-accent ml-3 font-label text-eyebrow uppercase">
-                  {copy.cancelScheduled}
-                </span>
+        {viewer?.userId && <CreatorProfileCard profile={profile} email={viewer.email} dict={dict} locale={locale} feedback={params.profile} />}
+        {/* The saved photos (docs/IDENTITY-SELFIE.md): the first thing a creator needs, so the first card after the name. */}
+        {viewer?.userId && (
+          <section data-selfie-account data-selfie-present={selfies?.items.length ? 'true' : 'false'} aria-labelledby="account-selfie-title" className="mt-6 max-w-detail rounded-3xl border border-hairline bg-white p-5 sm:p-6">
+            <h2 id="account-selfie-title" className="text-base font-semibold">{dict.selfie.panelTitle}</h2>
+            <div className="mt-4">
+              {/* Before the cloud migration the card still invites the first upload; the selfie page then says it is unavailable. */}
+              <SelfieLibraryPanel
+                copy={dict.selfie}
+                locale={locale}
+                variant="account"
+                initial={selfies ?? { limit: selfieLimit(), defaultId: null, items: [] }}
+                manageHref={IDENTITY_SELFIE_PATH}
+                signinHref={`/auth/signin?next=${encodeURIComponent('/account')}&locale=${locale}`}
+              />
+            </div>
+          </section>
+        )}
+        {viewer?.userId && socialOpen && <SocialAccountCard copy={dict.social} influencer={social?.influencer ?? false} items={social?.items ?? []} />}
+        {viewer?.userId && (
+          <section
+            data-creator-campaign-hub
+            aria-labelledby="account-campaign-hub-title"
+            className="mt-6 max-w-detail rounded-3xl border border-hairline bg-white p-5 sm:p-6"
+          >
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <h2 id="account-campaign-hub-title" className="text-base font-semibold">
+                {dict.campaigns.myCampaigns}
+              </h2>
+              <span className="font-mono text-xs opacity-60">{dict.nav.campaigns}</span>
+            </div>
+            <p className="mt-2 text-sm leading-relaxed opacity-75">
+              {dict.creatorJourney.campaignBody}
+            </p>
+            <div className="mt-4 flex flex-wrap items-center gap-3">
+              <a
+                href={MY_CAMPAIGNS_PATH}
+                className="inline-flex min-h-11 items-center rounded-full bg-on-surface px-5 py-2.5 text-sm font-semibold text-surface"
+              >
+                {dict.campaigns.myCampaigns} →
+              </a>
+              <a
+                href="/campaigns/open"
+                className="inline-flex min-h-11 items-center rounded-full border border-hairline px-5 py-2.5 text-sm font-medium"
+              >
+                {dict.campaigns.railRecruiting}
+              </a>
+              <a
+                href={campaignsHref(locale)}
+                className="inline-flex min-h-11 items-center px-2 text-sm underline underline-offset-4 opacity-80"
+              >
+                {dict.creatorJourney.campaignCta} ↗
+              </a>
+              {creatorProgramOpen() && (
+                <a
+                  href={CREATOR_WORKSPACE_PATH}
+                  className="inline-flex min-h-11 items-center rounded-full border border-hairline px-5 py-2.5 text-sm font-medium"
+                >
+                  {dict.creatorProgram.workspaceTitle} →
+                </a>
               )}
-            </Row>
-
-            {statusLine !== null && (
-              <Row term={copy.statusHeading}>
-                <span>{statusLine}</span>
-                {periodLine !== null && (
-                  <span className="mt-2 block font-mono text-code opacity-60">{periodLine}</span>
-                )}
-              </Row>
-            )}
-
-            {/* §15.3 — the wallet: the balance, what a cookie does, and the weekly line. */}
-            {wallet !== null && (
-              <Row term={dict.cookies.balanceHeading}>
-                <span data-cookie-balance className="font-mono text-code">
-                  {wallet.balance}
-                </span>
-                <span className="mt-2 block text-[0.9375rem] opacity-70">
-                  {dict.cookies.balanceHint}
-                </span>
-                <span className="mt-1 block font-mono text-code opacity-60">
-                  {dict.cookies.weeklyLine}
-                </span>
-              </Row>
-            )}
-
+            </div>
+          </section>
+        )}
+        {viewer?.userId && <SubscriptionStatus initial={subscription} copy={dict.creatorSubscription} locale={locale} unavailable={!subscriptionLoaded} />}
+        <div className="mt-8 max-w-detail">
+          <dl>
             <Row term={copy.languageHeading}>
               <LocaleToggle current={locale} rest="/account" prefixed={false} />
             </Row>
           </dl>
-        </div>
-
-        {/* --- billing -------------------------------------------------- */}
-        <div className="mt-14 max-w-detail">
-          {!billingReady ? (
-            <BillingUnavailable
-              title={dict.billing.unavailableTitle}
-              body={dict.billing.unavailableBody}
-            />
-          ) : entitled ? (
-            <div className="border border-hairline p-6 sm:p-8">
-              <form method="post" action={`${PORTAL_ACTION}?locale=${locale}`}>
-                <button
-                  type="submit"
-                  className="inline-block border border-current px-6 py-3 font-label text-label uppercase"
-                >
-                  <TextSwap>{copy.manageBilling} →</TextSwap>
-                </button>
-              </form>
-              <p className="mt-4 font-mono text-code opacity-60">{copy.manageBillingHint}</p>
-            </div>
-          ) : (
-            <aside data-account-cookies className="border border-accent p-6 sm:p-8">
-              <p className="font-display text-[clamp(1.35rem,2.2vw,1.75rem)] leading-[1] font-black uppercase">
-                {copy.cookiesHeading}
-              </p>
-              <p className="mt-4 text-body opacity-70">
-                {interpolate(copy.cookiesBody, {
-                  signup: String(SIGNUP_COOKIES),
-                  weekly: String(WEEKLY_COOKIES),
-                  pack: String(PACK_COOKIES),
-                  price: `$${PACK_PRICE_USD}`,
-                })}
-              </p>
-              <a
-                href={`/${locale}/pricing`}
-                className="text-accent mt-6 inline-block font-label text-label uppercase"
-              >
-                <TextSwap>{copy.cookiesCta} →</TextSwap>
-              </a>
-            </aside>
-          )}
         </div>
 
         {/* --- notifications (§3.5) -------------------------------------- */}
@@ -301,113 +243,35 @@ export default async function AccountPage({
               {params.notif === 'saved' && (
                 <p className="text-accent mt-4 font-mono text-code">{copy.notifSaved}</p>
               )}
+              {params.notif === 'err' && <p role="alert" className="mt-4 text-sm text-accent">{dict.creatorProfile.notificationError}</p>}
             </form>
           ) : (
             <p className="mt-4 max-w-detail text-[0.9375rem] opacity-70">{copy.notifProOnly}</p>
           )}
+          {/* docs/PLATFORM-2.0.md §5.3 — the completion push for this device, and the install card. */}
+          {viewer?.userId && <NotifyChoice dict={dict} context="account" />}
         </div>
 
-        {/* --- §15.3 prompts you opened --------------------------------- */}
-        {viewer?.userId !== null && viewer !== null && (
-          <div className="mt-14 max-w-detail border-t border-hairline pt-10">
-            <p className="font-label text-eyebrow uppercase opacity-60">
-              {dict.cookies.recentHeading}
-            </p>
-
-            {unlockHistory.length === 0 ? (
-              <p className="mt-4 text-[0.9375rem] opacity-70">{dict.cookies.recentEmpty}</p>
-            ) : (
-              <ul className="mt-6 flex flex-col gap-4">
-                {unlockHistory.map((row) => (
-                  <li
-                    key={row.promptId}
-                    data-unlocked-prompt={row.slug}
-                    className="border border-hairline p-4"
-                  >
-                    <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-                      <span className="font-mono text-code">
-                        {locale === 'ko' && row.titleKo ? row.titleKo : row.title}
-                      </span>
-                      <span className="font-label text-eyebrow uppercase opacity-60">
-                        {interpolate(dict.cookies.openedOn, {
-                          date: formatDate(row.createdAt, locale) ?? '',
-                        })}
-                      </span>
-                    </div>
-                    {/* An unlock outlives the row's public life; only a published one links. */}
-                    {row.status === 'published' && (
-                      <a
-                        href={promptHref(locale, row.slug)}
-                        className="text-accent mt-3 inline-block font-label text-eyebrow uppercase"
-                      >
-                        <TextSwap>{dict.prompts.openLabel} →</TextSwap>
-                      </a>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        )}
-
-        {/* --- §13.1/E your submissions --------------------------------- */}
+        {/* --- activity: the two loops (docs/TEMPLATES-IA.md) ------------------------------- */}
         <div className="mt-14 max-w-detail border-t border-hairline pt-10">
-          <div className="flex flex-wrap items-baseline justify-between gap-4">
-            <p className="font-label text-eyebrow uppercase opacity-60">
-              {dict.submit.mySubmissions}
-            </p>
-            <a
-              href={PROMPT_SUBMIT_PATH}
-              className="text-accent font-label text-eyebrow uppercase"
-            >
-              <TextSwap>{dict.prompts.submitCta} →</TextSwap>
+          <p className="font-label text-eyebrow uppercase opacity-60">{copy.activityHeading}</p>
+          <p className="mt-2 text-[0.9375rem] opacity-70">{copy.activityBody}</p>
+          {renders.length > 0 && (
+            <div className="mt-6">
+              <RenderList items={renders} locale={locale} dict={dict} />
+            </div>
+          )}
+          <div className="mt-5 flex flex-wrap items-center gap-x-6 gap-y-3">
+            <a href={RENDERS_PATH} data-my-renders className="text-accent font-label text-eyebrow uppercase">
+              <TextSwap>{dict.renders.title} →</TextSwap>
+            </a>
+            <a href={MY_CAMPAIGNS_PATH} data-my-campaigns className="text-accent font-label text-eyebrow uppercase">
+              <TextSwap>{dict.campaigns.myCampaigns} →</TextSwap>
+            </a>
+            <a href={templatesHref(locale, 'video')} className="text-accent font-label text-eyebrow uppercase">
+              <TextSwap>{dict.templates.ctaVideo} →</TextSwap>
             </a>
           </div>
-
-          {submissions.length === 0 ? (
-            <p className="mt-4 text-[0.9375rem] opacity-70">{dict.submit.mySubmissionsEmpty}</p>
-          ) : (
-            <ul className="mt-6 flex flex-col gap-4">
-              {submissions.map((row) => (
-                <li
-                  key={row.id}
-                  data-submission={row.slug}
-                  data-status={row.status}
-                  className="border border-hairline p-4"
-                >
-                  <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-                    <span className="font-mono text-code">{row.title}</span>
-                    <span className="font-label text-eyebrow uppercase opacity-60">
-                      {row.status === 'published'
-                        ? dict.submit.statusPublished
-                        : row.status === 'rejected'
-                          ? dict.submit.statusRejected
-                          : row.status === 'archived'
-                            ? dict.submit.statusArchived
-                            : dict.submit.statusPending}
-                    </span>
-                  </div>
-                  <p className="mt-1 font-mono text-[0.72rem] opacity-45">{row.slug}</p>
-                  {row.status === 'published' && (
-                    <a
-                      href={promptHref(locale, row.slug)}
-                      className="text-accent mt-3 inline-block font-label text-eyebrow uppercase"
-                    >
-                      <TextSwap>{dict.prompts.openLabel} →</TextSwap>
-                    </a>
-                  )}
-                  {row.status === 'rejected' && row.rejectReason && (
-                    <p className="mt-3 border-t border-hairline pt-3 text-[0.9375rem] opacity-70">
-                      <span className="font-label text-eyebrow uppercase opacity-60">
-                        {dict.submit.rejectReasonLabel}
-                      </span>
-                      <span className="mt-1 block">{row.rejectReason}</span>
-                    </p>
-                  )}
-                </li>
-              ))}
-            </ul>
-          )}
         </div>
 
         {/* --- account actions ------------------------------------------ */}
@@ -423,13 +287,15 @@ export default async function AccountPage({
             <p className="font-label text-eyebrow uppercase opacity-60">{copy.deletionHeading}</p>
             <p className="mt-2 text-[0.9375rem] opacity-70">{copy.deletionBody}</p>
             <a
-              href={DELETION_MAILTO(viewer?.email ?? null)}
+              href={deletionMailto(copy, viewer?.email ?? null)}
               className="text-accent mt-3 inline-block font-label text-eyebrow uppercase"
             >
               <TextSwap>{copy.deletionCta} →</TextSwap>
             </a>
           </div>
         </div>
+        {process.env.TWINGS_COMMUNITY==='on'||process.env.TWINGS_FORMAT_CREATORS==='on'||process.env.TWINGS_IMAGE_REWARDS==='on'?<a href="/community" className="mt-8 mr-3 inline-flex min-h-12 items-center rounded-full border border-current px-6 py-3 text-sm">{dict.community.title}</a>:null}
+        {viewer?.userId && creatorProgramOpen() ? <a href={CREATOR_WORKSPACE_PATH} data-creator-workspace-link className="mt-8 mr-3 inline-flex min-h-12 items-center rounded-full border border-current px-6 py-3 text-sm">{dict.creatorProgram.workspaceTitle}</a> : null}
       </main>
     </div>
   );

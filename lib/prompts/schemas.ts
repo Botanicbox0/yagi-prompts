@@ -44,8 +44,10 @@ export const PROMPT_MODELS = [
   { id: 'sora-2', label: 'SORA 2' },
   { id: 'veo-3', label: 'VEO 3' },
   { id: 'higgsfield', label: 'HIGGSFIELD' },
+  { id: 'nano-banana-pro', label: 'NANO BANANA PRO' },
   { id: 'nano-banana-2', label: 'NANO BANANA 2' },
   { id: 'gpt-image-2', label: 'GPT IMAGE 2' },
+  { id: 'seedream-5.0-pro', label: 'SEEDREAM 5.0 PRO' },
 ] as const;
 
 export type PromptModelId = (typeof PROMPT_MODELS)[number]['id'];
@@ -101,6 +103,13 @@ export type UseCase = (typeof USE_CASES)[number];
 export function isUseCase(value: unknown): value is UseCase {
   return typeof value === 'string' && (USE_CASES as readonly string[]).includes(value);
 }
+
+/**
+ * docs/TEMPLATES-IA.md — what a template PRODUCES. The catalogue's first split (VIDEO · IMAGE), the
+ * two nav tabs, and the one field that decides whether a runtime makes sense.
+ */
+export const TEMPLATE_MEDIA = ['video', 'image'] as const;
+export type TemplateMedium = (typeof TEMPLATE_MEDIA)[number];
 
 export const PROMPT_SOURCES = ['yagi', 'community'] as const;
 export type PromptSource = (typeof PROMPT_SOURCES)[number];
@@ -224,11 +233,44 @@ export const USE_CASE_MAX = 3;
  * belongs (it is an editorial standard, not a data-integrity one). `audio` (founder direction,
  * 2026-08-13) is the result of a music/voice prompt — public like the poster and the clip, and
  * additionally offered as a plain DOWNLOAD on the detail page.
+ *
+ * `gallery` (2026-10-27, the five-shot bridal set): a SET template's example frames, one per frame it
+ * makes, in set order. Public like the poster, shown on the template page only — never on a card,
+ * and never a form field: it arrives with the set (lib/prompts/image-templates.ts) and every later
+ * `/admin` edit carries it through `publishPromptMedia` unchanged.
  */
+export const PROMPT_GALLERY_MAX = 10;
+
+/** A set's frames: a recipe caps at ten steps, the gallery at ten images. */
+export const IMAGE_SET_FRAMES_MIN = 2;
+export const IMAGE_SET_FRAMES_MAX = PROMPT_GALLERY_MAX;
+const SET_PHOTO = /\bImage 1\b/;
+const SET_OTHER_REFERENCE = /\b(?:Image [2-9]\d*|Image 1\d+|Video \d+|Audio \d+)\b/;
+export type SetPromptIssue = 'no_photo' | 'other_reference' | 'braces';
+/**
+ * The admin form's prompts come from tools that write the photo `@image1`; the set's own word is
+ * "Image 1". Handles of other references become words too, so the check below refuses them by name.
+ */
+export function normalizeSetPrompt(prompt: string): string {
+  return prompt
+    .replace(/@(image|video|audio)[ _]?(\d+)\b/gi, (_, kind: string, n: string) => `${kind[0]!.toUpperCase()}${kind.slice(1).toLowerCase()} ${n}`)
+    .replace(/\bimage[ _]?1\b/gi, 'Image 1');
+}
+/** What a set frame's prompt may say about references: the buyer's photo as "Image 1", nothing else. */
+export function setPromptIssue(prompt: string): SetPromptIssue | null {
+  if (!SET_PHOTO.test(prompt)) return 'no_photo';
+  if (SET_OTHER_REFERENCE.test(prompt)) return 'other_reference';
+  if (/\{\{|\}\}/.test(prompt)) return 'braces';
+  return null;
+}
+
 export const PromptMediaSchema = z.object({
   video: AssetRefSchema.optional(),
   poster: AssetRefSchema.optional(),
+  /** The admin wall's 1:1 crop. `catch`: a bad value must not fail the parse and lose the media. */
+  posterFocus: z.object({ x: z.number().min(0).max(100), y: z.number().min(0).max(100) }).optional().catch(undefined),
   audio: AssetRefSchema.optional(),
+  gallery: z.array(AssetRefSchema).min(1).max(PROMPT_GALLERY_MAX).optional(),
 });
 export type PromptMedia = z.infer<typeof PromptMediaSchema>;
 

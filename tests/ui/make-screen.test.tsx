@@ -1,0 +1,207 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { getDictionary } from '@/lib/i18n/dictionaries';
+import type { PublicSubscriptionAvailability } from '@/components/twings/subscription-availability';
+
+/**
+ * The decision screen (docs/PLATFORM-2.0.md §15.3-1·3): the template page is where money changes
+ * hands, so it says ONE thing with ONE button — and the three public sentences about whether a film
+ * can be bought (home hero, template, pricing) all come from the same `storefrontOpen()`.
+ */
+
+const state = vi.hoisted(() => ({
+  mode: 'off' as 'off' | 'review' | 'on',
+  availability: null as unknown as PublicSubscriptionAvailability,
+}));
+const film = vi.hoisted(() => ({
+  id: 'film', slug: 'supported-film', title: 'Film', titleKo: '영상', medium: 'video', engine: 'seedance-2.5', runtimeSeconds: 15,
+  aspectDefault: '9:16', priceCents: 400, priceKrw: 6900, price1080Cents: 0, price1080Krw: 0,
+  source: 'yagi', authorHandle: null, models: [], modelLabels: ['Seedance 2.5'], useCase: [], poster: null, video: null, lock: null, featured: false, publishedAt: null,
+}));
+vi.mock('server-only', () => ({}));
+vi.mock('@/lib/flags', () => ({
+  get RENDER_PIPELINE_MODE() { return state.mode; },
+  get RENDER_PIPELINE_PUBLIC() { return state.mode === 'on'; },
+}));
+vi.mock('@/lib/creator-subscriptions/cached-availability', () => ({ cachedSubscriptionAvailability: vi.fn(async () => state.availability) }));
+vi.mock('@/lib/prompts/public-catalog', () => ({ getPromptCatalog: async () => ({ video: [film], image: [] }) }));
+vi.mock('@/lib/campaigns/public-catalog', () => ({ getCampaignCatalog: async () => ({ campaigns: [] }) }));
+vi.mock('@/components/marketing/chrome', () => ({ MarketingNav: () => null, MarketingFooter: () => null }));
+vi.mock('@/components/prompts/rails', () => ({ PromptRail: () => null }));
+vi.mock('@/components/prompts/detail', () => ({ RelatedPrompts: () => null }));
+vi.mock('@/components/prompts/detail-media', () => ({ PromptDetailMedia: () => null }));
+vi.mock('@/components/prompts/poster', () => ({ TypographicPoster: () => null, posterRatio: () => '16 / 9' }));
+vi.mock('@/components/ui/text-swap', () => ({ TextSwap: ({ children }: { children: React.ReactNode }) => <>{children}</> }));
+vi.mock('@/lib/db/connect', () => ({ getSqlRunner: async () => null }));
+
+import LandingPage from '@/app/(marketing)/[locale]/page';
+import TemplatePage from '@/app/(marketing)/[locale]/t/[slug]/page';
+import PricingPage from '@/app/(marketing)/[locale]/pricing/page';
+
+const prose = (html: string) => html.replaceAll('&#x27;', "'").replaceAll('&quot;', '"').replaceAll('&amp;', '&');
+/** What a reader sees: the document minus its JSON-LD (the structured data may name the engine). */
+const visible = (html: string) => prose(html.replace(/<script[^>]*application\/ld\+json[^>]*>[\s\S]*?<\/script>/g, ''));
+const count = (html: string, needle: string) => html.split(needle).length - 1;
+
+async function pages(locale: 'ko' | 'en') {
+  const landing = renderToStaticMarkup(await LandingPage({ params: Promise.resolve({ locale }) }));
+  const template = renderToStaticMarkup(await TemplatePage({ params: Promise.resolve({ locale, slug: film.slug }) }));
+  const pricing = renderToStaticMarkup(await PricingPage({ params: Promise.resolve({ locale }) }));
+  return { landing, template, pricing };
+}
+
+beforeEach(() => {
+  state.mode = 'off';
+  state.availability = { status: 'preparing', version: 'verified', plans: { creator: { status: 'preparing' }, premium: { status: 'preparing' } }, editing: 'preparing', premiumEditRequestsPerPeriod: null };
+});
+
+describe('the template page as a decision screen', () => {
+  it('goes back to credits and "subscribe" with no won price once subscriptions open', async () => {
+    state.mode = 'review';
+    state.availability = { ...state.availability, status: 'open', plans: { creator: { status: 'open' }, premium: { status: 'open' } } };
+    const dict = getDictionary('ko');
+    const html = renderToStaticMarkup(await TemplatePage({ params: Promise.resolve({ locale: 'ko', slug: film.slug }) }));
+    expect(html).not.toContain('data-template-price');
+    expect(visible(html)).toContain(dict.templates.subscribeCta);
+    expect(visible(html)).toContain(dict.meta.templateDescription);
+  });
+
+  for (const locale of ['ko', 'en'] as const) {
+    const dict = getDictionary(locale);
+
+    it(`has one make card, in the sheet, and only the launcher's CTA on the page (${locale})`, async () => {
+      state.mode = 'review';
+      const html = renderToStaticMarkup(await TemplatePage({ params: Promise.resolve({ locale, slug: film.slug }) }));
+      const text = visible(html);
+      expect(html).not.toContain('data-template-make-cta');
+      expect(text).not.toContain(locale === 'ko' ? '이 장면을 내 얼굴로 만들어보세요' : 'Make this scene your own');
+      expect(count(html, 'id="make"')).toBe(1);
+      // The make card lives in the sheet (founder 2026-10-29), so the right column stays short.
+      expect(html).toMatch(/<dialog[^>]*data-make-sheet[\s\S]*id="make"/);
+      // Before anyone knows who reads: the launcher and its phone bar, both the plain make CTA while subscriptions are closed.
+      expect(count(html, 'data-make-cta=')).toBe(2);
+      expect(count(text, dict.templates.subscribeCta)).toBe(0);
+      expect(html).not.toContain('data-template-credits');
+    });
+
+    it(`shows the single-purchase price the terms promise, and keeps the facts in the launcher and the notes in the sheet (${locale})`, async () => {
+      state.mode = 'review';
+      const html = renderToStaticMarkup(await TemplatePage({ params: Promise.resolve({ locale, slug: film.slug }) }));
+      const text = visible(html);
+      expect(text).toContain(locale === 'ko' ? '6,900원' : '$4');
+      expect(html).toContain('data-template-price');
+      expect(html).not.toContain('priceCurrency');
+      const launcher = visible(html.slice(html.indexOf('data-template-make-launcher'), html.indexOf('data-make-sheet')));
+      expect(launcher).toContain(dict.studio.runtimeLabel.replace('{seconds}', '15'));
+      expect(launcher).toContain('9:16');
+      expect(launcher).toContain('720p');
+      expect(launcher).toContain(dict.templates.waitValue.replace('{minutes}', '5'));
+      const sheet = visible(html.slice(html.indexOf('data-make-sheet'), html.indexOf('data-template-description')));
+      expect(sheet).toContain(dict.templates.aiLimit);
+      expect(sheet).toContain(dict.renders.notCharged);
+      expect(html.indexOf('data-template-description')).toBeGreaterThan(html.indexOf('id="make"'));
+    });
+
+    it(`draws a neutral skeleton first, never the closed panel (${locale})`, async () => {
+      state.mode = 'review';
+      const html = renderToStaticMarkup(await TemplatePage({ params: Promise.resolve({ locale, slug: film.slug }) }));
+      expect(html).toContain('data-phase="pending"');
+      expect(html).toContain('data-studio-pending');
+      expect(html).not.toContain('data-studio-closed');
+      expect(html).not.toContain('data-studio-signed-out');
+    });
+
+    it(`puts a safe-area sticky bar (one CTA, no price) on phones that hides the app tabs (${locale})`, async () => {
+      state.mode = 'review';
+      const html = renderToStaticMarkup(await TemplatePage({ params: Promise.resolve({ locale, slug: film.slug }) }));
+      const bar = html.match(/<div[^>]*data-make-sticky[^>]*>[\s\S]*?<\/a><\/div><\/div><\/div>/)?.[0] ?? '';
+      expect(bar).toContain('data-hide-tabs');
+      expect(bar).toContain('md:hidden');
+      expect(bar).toContain('pb-safe');
+      expect(bar).toContain('data-make-cta="sticky"');
+      expect(prose(bar)).not.toContain(dict.templates.subscribeCta);
+      expect(prose(bar)).toContain(locale === 'ko' ? '6,900원' : '$4');
+    });
+
+    it(`keeps the engine name off the consumer page (${locale})`, async () => {
+      state.mode = 'review';
+      const html = renderToStaticMarkup(await TemplatePage({ params: Promise.resolve({ locale, slug: film.slug }) }));
+      expect(html).not.toContain('data-engine-chip');
+      expect(visible(html).toLowerCase()).not.toContain('seedance');
+      const pricing = renderToStaticMarkup(await PricingPage({ params: Promise.resolve({ locale }) }));
+      expect(visible(pricing).toLowerCase()).not.toContain('seedance');
+    });
+
+    it(`moves the selfie guide and core promise outside the price box (${locale})`, async () => {
+      state.mode = 'review';
+      const html = renderToStaticMarkup(await TemplatePage({ params: Promise.resolve({ locale, slug: film.slug }) }));
+      const card = html.slice(html.indexOf('id="make"'), html.indexOf('data-template-sale-state'));
+      expect(card).not.toContain('data-studio-photo-examples');
+      expect(html.indexOf('data-template-photo-guide')).toBeGreaterThan(html.indexOf('data-template-sale-state'));
+      expect(html).toContain('data-studio-photo-examples');
+      // The core promise sits under the stage: my selfie → this scene, the selfie tile leading to the make card.
+      const strip = html.slice(html.indexOf('data-template-transform'));
+      expect(visible(strip)).toContain(dict.templates.gallery.transformVideo);
+      expect(visible(strip)).toContain(dict.creatorJourney.evidenceSelfie);
+      expect(strip).toContain('data-selfie-tile="empty"');
+      expect(strip).toContain('href="#make"');
+      expect(html.indexOf('data-template-transform')).toBeLessThan(html.indexOf('id="make"'));
+    });
+
+    it(`keeps the definition paragraph in the page HTML, after the make card (${locale})`, async () => {
+      // AGENTS.md §7 GEO: the "what this is" sentence is real text under the first screen.
+      state.mode = 'review';
+      const html = renderToStaticMarkup(await TemplatePage({ params: Promise.resolve({ locale, slug: film.slug }) }));
+      expect(visible(html)).toContain(dict.meta.templateDescriptionSingle);
+      expect(html.indexOf('data-template-description')).toBeGreaterThan(html.indexOf('data-template-photo-guide'));
+    });
+  }
+});
+
+describe('one sale-state source: storefrontOpen() decides all three sentences', () => {
+  for (const locale of ['ko', 'en'] as const) {
+    const dict = getDictionary(locale);
+
+    it(`says "closed" in the hero, on the template and on pricing together (${locale})`, async () => {
+      state.mode = 'off';
+      const { landing, template, pricing } = await pages(locale);
+      expect(visible(landing)).toContain(dict.creatorJourney.preparing);
+      expect(visible(landing)).not.toContain(dict.creatorJourney.ready);
+      expect(visible(template)).toContain(dict.templates.makeBodyClosed);
+      expect(visible(template)).not.toContain(dict.templates.makeBody);
+      expect(visible(template.slice(template.indexOf('data-make-sticky')))).not.toContain(dict.templates.subscribeCta);
+      expect(visible(pricing)).toContain(dict.pricing.filmsBody);
+      expect(visible(pricing)).toContain(dict.pricing.subscriptionUnavailable);
+      expect(visible(pricing)).not.toContain(dict.pricing.singleOpenBody);
+    });
+
+    for (const mode of ['review', 'on'] as const) {
+      it(`says "one film at a time, now" in all three when the storefront is open (${mode}, ${locale})`, async () => {
+        state.mode = mode;
+        const { landing, template, pricing } = await pages(locale);
+        expect(visible(landing)).toContain(dict.creatorJourney.ready);
+        expect(visible(landing)).not.toContain(dict.creatorJourney.preparing);
+        expect(visible(template)).toContain(dict.templates.makeBody);
+        expect(visible(template)).not.toContain(dict.templates.makeBodyClosed);
+        expect(visible(pricing)).toContain(dict.pricing.singleOpenBody);
+        expect(visible(pricing)).toContain(dict.pricing.subscriptionUnavailableSingleOpen);
+        expect(visible(pricing)).not.toContain(dict.pricing.filmsBody);
+        expect(visible(pricing)).not.toContain(dict.pricing.subscriptionUnavailable);
+      });
+    }
+
+    it(`puts what is actually sold first on pricing: single films above the monthly teaser (${locale})`, async () => {
+      state.mode = 'review';
+      const open = renderToStaticMarkup(await PricingPage({ params: Promise.resolve({ locale }) }));
+      expect(open.indexOf('data-pricing-films')).toBeGreaterThan(-1);
+      expect(open.indexOf('data-pricing-films')).toBeLessThan(open.indexOf('data-subscription-preview'));
+      expect(open).toContain('data-pricing-order="single-first"');
+      // A monthly plan that is really open, with single films closed, leads instead.
+      state.mode = 'off';
+      state.availability = { ...state.availability, status: 'open', plans: { creator: { status: 'open' }, premium: { status: 'preparing' } } };
+      const monthly = renderToStaticMarkup(await PricingPage({ params: Promise.resolve({ locale }) }));
+      expect(monthly).toContain('data-pricing-order="monthly-first"');
+      expect(monthly.indexOf('data-subscription-preview')).toBeLessThan(monthly.indexOf('data-pricing-films'));
+    });
+  }
+});

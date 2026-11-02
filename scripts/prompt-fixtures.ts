@@ -1,5 +1,5 @@
 import type { Visibility } from '@/lib/content/visibility';
-import type { PromptSource, PromptStatus, UseCase } from '@/lib/prompts/schemas';
+import type { PromptSource, PromptStatus, TemplateMedium, UseCase } from '@/lib/prompts/schemas';
 import type { AssetSpec } from './fixtures';
 
 /**
@@ -44,9 +44,22 @@ export interface PromptFixture {
   video?: AssetSpec;
   /** The audio result (founder 2026-08-13) — public and downloadable on the detail page. */
   audio?: AssetSpec;
+  /** A set template's example frames (2026-10-27) — the template page's set section. */
+  gallery?: AssetSpec[];
   rejectReason?: string;
   /** Published items are ordered by this offset (days ago) so NEW badges are deterministic. */
   publishedDaysAgo?: number;
+  /** docs/TEMPLATES-IA.md — default video / not for sale; the priced ones exercise the studio. */
+  medium?: TemplateMedium;
+  priceCents?: number;
+  /** The fixed won price (0018); the one fixture that sets it proves the override beats the suggestion. */
+  priceKrw?: number;
+  /** The 1080p price (0039); the one fixture that sets it shows the resolution choice locally. */
+  price1080Cents?: number;
+  price1080Krw?: number;
+  runtimeSeconds?: number;
+  engine?: string;
+  aspectDefault?: string;
 }
 
 const png = (label: string, w: number, h: number): AssetSpec => ({
@@ -81,6 +94,13 @@ const YAGI: PromptFixture[] = [
   {
     id: '9a000000-0000-4000-8000-000000000001',
     slug: 'neon-alley-dolly',
+    priceCents: 400,
+    // Seedance 2.0 · 15s · 1080p: the cost floor (lib/twings/cost-model.ts) is 11,900원.
+    price1080Cents: 900,
+    price1080Krw: 11900,
+    runtimeSeconds: 15,
+    engine: 'seedance-2.0',
+    aspectDefault: '16:9',
     source: 'yagi',
     status: 'published',
     title: 'Neon alley dolly',
@@ -97,6 +117,8 @@ const YAGI: PromptFixture[] = [
   {
     id: '9a000000-0000-4000-8000-000000000002',
     slug: 'handheld-market-run',
+    priceCents: 700,
+    runtimeSeconds: 30,
     source: 'yagi',
     status: 'published',
     title: 'Handheld market run',
@@ -176,6 +198,11 @@ const YAGI: PromptFixture[] = [
   {
     id: '9a000000-0000-4000-8000-000000000007',
     slug: 'static-portrait-window-light',
+    medium: 'image',
+    priceCents: 200,
+    priceKrw: 2500,
+    engine: 'gpt-image-2',
+    aspectDefault: '4:5',
     source: 'yagi',
     status: 'published',
     title: 'Static portrait, window light',
@@ -186,6 +213,8 @@ const YAGI: PromptFixture[] = [
     useCase: ['cinematic'],
     featured: false,
     poster: png('prompt-window-portrait', 1080, 1350),
+    // The one fixture shaped like a set, so the sweep reads the set section against a real server.
+    gallery: [png('prompt-window-portrait-frame-1', 1080, 1350), png('prompt-window-portrait-frame-2', 1080, 1350)],
     publishedDaysAgo: 15,
   },
   {

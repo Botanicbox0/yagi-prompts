@@ -10,10 +10,8 @@ import { getLocaleFromHeaders } from '@/lib/i18n/server';
 import { getDictionary } from '@/lib/i18n/dictionaries';
 import { formatCount, interpolate } from '@/lib/i18n/format';
 import { LocaleToggle } from '@/components/locale-toggle';
-import { TwingsWordmark } from '@/components/brand/twings-wordmark';
-import { AdRail } from '@/components/ad/ad-rail';
-import { AdBanner, AdCard } from '@/components/ad/ad-card';
-import { adLabels, siteLinks } from '@/components/marketing/chrome';
+import { TwingsLogo } from '@/components/brand/twings-mark';
+import { siteLinks } from '@/components/marketing/chrome';
 import { FilterBar } from '@/components/library/filter-bar';
 import { LibraryEmpty, LibraryGrid, type GridLabels } from '@/components/library/grid';
 
@@ -63,7 +61,6 @@ export default async function LibraryPage({
     clear: dict.library.clear,
   };
 
-  const ads = adLabels(dict);
   const filtered = isFiltered(query);
 
   return (
@@ -71,7 +68,7 @@ export default async function LibraryPage({
       <header className="border-b border-hairline">
         <div className="mx-auto flex max-w-shell items-center justify-between px-gutter py-5">
           <a href={`/${locale}`} className="flex items-center gap-2.5">
-            <TwingsWordmark className="h-[18px] w-auto" />
+            <TwingsLogo size={18} />
           </a>
           <div className="flex items-center gap-6">
             {siteLinks(locale, dict).map((link, index) => (
@@ -89,67 +86,56 @@ export default async function LibraryPage({
       </header>
 
       <main id="main" className="py-16 lg:py-20">
-        <div id="library-rail-anchor" className="relative">
-          <AdRail anchorId="library-rail-anchor">
-            <AdCard labels={ads} />
-          </AdRail>
+        <div className="band">
+          <p className="text-accent font-label text-eyebrow uppercase">{dict.library.eyebrow}</p>
+          <h1 className="mt-6 font-display text-title font-black uppercase">
+            {dict.library.title}
+          </h1>
+          <p className="mt-6 max-w-detail text-body opacity-70">{dict.library.lede}</p>
 
-          <div className="band">
-            <p className="text-accent font-label text-eyebrow uppercase">{dict.library.eyebrow}</p>
-            <h1 className="mt-6 font-display text-title font-black uppercase">
-              {dict.library.title}
-            </h1>
-            <p className="mt-6 max-w-detail text-body opacity-70">{dict.library.lede}</p>
+          <div className="mt-12">
+            <FilterBar
+              query={query}
+              facets={data.facets}
+              filtered={filtered}
+              labels={{
+                search: dict.library.search,
+                searchPlaceholder: dict.library.searchPlaceholder,
+                category: dict.library.filterCategory,
+                difficulty: dict.library.filterDifficulty,
+                tag: dict.library.filterTag,
+                all: dict.library.filterAll,
+                apply: dict.library.apply,
+                clear: dict.library.clear,
+                sortNewest: dict.library.sortNewest,
+                categoryLabel,
+                difficultyLabel,
+              }}
+            />
+          </div>
 
-            <div className="mt-12">
-              <FilterBar
-                query={query}
-                facets={data.facets}
-                filtered={filtered}
-                labels={{
-                  search: dict.library.search,
-                  searchPlaceholder: dict.library.searchPlaceholder,
-                  category: dict.library.filterCategory,
-                  difficulty: dict.library.filterDifficulty,
-                  tag: dict.library.filterTag,
-                  all: dict.library.filterAll,
-                  apply: dict.library.apply,
-                  clear: dict.library.clear,
-                  sortNewest: dict.library.sortNewest,
-                  categoryLabel,
-                  difficultyLabel,
-                }}
+          <div className="mt-6 flex flex-wrap items-center justify-between gap-4 font-mono text-code opacity-60">
+            <span>
+              {interpolate(dict.library.resultCount, {
+                shown: formatCount(data.visible.length, locale),
+                total: formatCount(data.all.length, locale),
+              })}
+            </span>
+            <span>{dict.library.sortNewest}</span>
+          </div>
+
+          <div className="mt-10">
+            {data.visible.length === 0 ? (
+              <LibraryEmpty filtered={filtered} labels={gridLabels} />
+            ) : (
+              <LibraryGrid
+                cards={data.visible}
+                locale={locale}
+                labels={gridLabels}
+                categoryLabel={categoryLabel}
+                difficultyLabel={difficultyLabel}
               />
-            </div>
-
-            <div className="mt-6 flex flex-wrap items-center justify-between gap-4 font-mono text-code opacity-60">
-              <span>
-                {interpolate(dict.library.resultCount, {
-                  shown: formatCount(data.visible.length, locale),
-                  total: formatCount(data.all.length, locale),
-                })}
-              </span>
-              <span>{dict.library.sortNewest}</span>
-            </div>
-
-            <div className="mt-10">
-              {data.visible.length === 0 ? (
-                <LibraryEmpty filtered={filtered} labels={gridLabels} />
-              ) : (
-                <LibraryGrid
-                  cards={data.visible}
-                  locale={locale}
-                  labels={gridLabels}
-                  categoryLabel={categoryLabel}
-                  difficultyLabel={difficultyLabel}
-                />
-              )}
-            </div>
-
-            {/* §3.6: one ad per viewport — the banner is hidden at the rail tier by its own CSS. */}
-            <div className="mt-16">
-              <AdBanner labels={ads} />
-            </div>
+            )}
           </div>
         </div>
       </main>

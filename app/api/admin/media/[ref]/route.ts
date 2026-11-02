@@ -74,6 +74,21 @@ async function deliverWithToken(ref: string, token: string): Promise<NextRespons
   }
   // Staging objects only: a token naming any other bucket did not come from this route.
   if (verified.claims.bucket !== STAGING_BUCKET) return refuse(403, 'token_invalid');
+  // Vercel refuses a function response over ~4.5MB, so a real clip can never stream through here.
+  // Named files keep streaming: their attachment name is a header this route has to set itself.
+  if (!verified.claims.filename) {
+    const storage = await getStorage();
+    if (storage.servesSignedUrls) {
+      try {
+        const signed = await storage.signedStagingUrl?.(verified.claims.key, 60);
+        if (signed) return redirect(signed);
+      } catch (err) {
+        if (err instanceof StorageObjectNotFound) return refuse(404, 'not_found');
+        console.error('[admin-media] signing failed', err);
+        return refuse(500, 'storage_error');
+      }
+    }
+  }
   return stream(verified.claims.key, {
     ...(verified.claims.mime === undefined ? {} : { mime: verified.claims.mime }),
     ...(verified.claims.filename === undefined ? {} : { filename: verified.claims.filename }),

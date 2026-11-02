@@ -15,6 +15,14 @@ export interface PromptLabels {
   lockChip: string;
   /** The card's one control: go to the page where the prompt lives (2026-08-15). */
   cardDetail: string;
+  /** §15.3-4 (2026-10-23) — the card's length chip, its creator credit and its play/stop control. */
+  cardSeconds: string;
+  cardAuthor: string;
+  cardAuthorAnonymous: string;
+  /** The card's "the prompt is public" pill (`PromptCard.recipeOpen`). */
+  cardRecipe: string;
+  cardPlay: string;
+  cardPause: string;
   /** The Higgsfield handoff (2026-08-15) — copy the prompt, open the tool. */
   runCta: string;
   runCopied: string;
@@ -34,6 +42,8 @@ export interface PromptLabels {
   backToGallery: string;
   submitCta: string;
   resultLabel: string;
+  /** The hero video's play/pause and sound controls (the reel's approved words). */
+  mediaControls: { play: string; pause: string; unmute: string; mute: string };
   posterAlt: string;
   playHint: string;
   audioLabel: string;
@@ -68,6 +78,13 @@ export function promptLabels(dict: Dictionary): PromptLabels {
     byAnonymous: dict.prompts.byAnonymous,
     lockChip: dict.prompts.lockChip,
     cardDetail: dict.prompts.cardDetail,
+    cardSeconds: dict.prompts.cardSeconds,
+    cardAuthor: dict.prompts.cardAuthor,
+    cardAuthorAnonymous: dict.prompts.cardAuthorAnonymous,
+    cardRecipe: dict.prompts.cardRecipe,
+    // The same words the landing's preview control uses — one name for one action.
+    cardPlay: dict.creatorJourney.playPreview,
+    cardPause: dict.creatorJourney.pausePreview,
     runCta: dict.prompts.runCta,
     runCopied: dict.prompts.runCopied,
     runFailed: dict.prompts.runFailed,
@@ -84,6 +101,12 @@ export function promptLabels(dict: Dictionary): PromptLabels {
     backToGallery: dict.prompts.backToGallery,
     submitCta: dict.prompts.submitCta,
     resultLabel: dict.prompts.resultLabel,
+    mediaControls: {
+      play: dict.campaigns.landing.reelPlay,
+      pause: dict.campaigns.landing.reelPause,
+      unmute: dict.campaigns.landing.reelUnmute,
+      mute: dict.campaigns.landing.reelMute,
+    },
     posterAlt: dict.prompts.posterAlt,
     playHint: dict.prompts.playHint,
     audioLabel: dict.prompts.audioLabel,

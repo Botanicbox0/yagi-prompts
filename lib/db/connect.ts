@@ -5,7 +5,7 @@ import {
   type PoolLike,
   type SqlRunner,
 } from './sql-runner';
-import { LOCAL_DB_DIR_ENV } from './connect-shared';
+import { LOCAL_DB_DIR_ENV, pgPoolSettings } from './connect-shared';
 import { RUNTIME_MODE_ENV, selectDbDriver } from '@/lib/runtime-mode';
 
 /**
@@ -52,7 +52,7 @@ async function connectPostgres(connectionString: string): Promise<SqlRunner | nu
   try {
     const pg = await import('pg');
     const Pool = (pg as unknown as { default?: { Pool: typeof pg.Pool } }).default?.Pool ?? pg.Pool;
-    const pool = new Pool({ connectionString, max: 4 });
+    const pool = new Pool({ connectionString, ...pgPoolSettings(process.env) });
     // One shared implementation of the pinned-connection transaction (lib/db/sql-runner.ts).
     return makePooledRunner(pool as unknown as PoolLike);
   } catch (err) {
@@ -136,7 +136,11 @@ async function connect(): Promise<SqlRunner | null> {
 
 /** Memoised per server process; both drivers are expensive to open and safe to share. */
 export function getSqlRunner(): Promise<SqlRunner | null> {
-  cache.promise ??= connect();
+  cache.promise ??= connect().catch((err) => {
+    cache.promise = null;
+    console.warn(`[db] unexpected connect rejection: ${String(err)}`);
+    return null;
+  });
   return cache.promise;
 }
 

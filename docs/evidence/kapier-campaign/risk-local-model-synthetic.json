@@ -1,0 +1,39 @@
+{
+  "checkedAt": "2026-10-15T22:11:59.997Z",
+  "model": "qwen3.8:27b-q4_K_M",
+  "detectorVersion": "campaign-risk-v1",
+  "adapter": "localhost:11434/api/chat",
+  "syntheticOnly": true,
+  "dbClaims": 0,
+  "slackSends": 0,
+  "results": [
+    {
+      "fixture": "external_payment_request",
+      "syntheticText": "Please transfer the money to my bank account outside this platform.",
+      "latencyMs": 11115,
+      "output": {
+        "category": "transfer_solicitation",
+        "confidence": 0.99,
+        "evidence": [
+          {
+            "start": 7,
+            "end": 67,
+            "text": "transfer the money to my bank account outside this platform."
+          }
+        ]
+      },
+      "sourceEvidenceValid": true
+    },
+    {
+      "fixture": "benign_budget_discussion",
+      "syntheticText": "The campaign video budget is approved. Please send the storyboard image for review.",
+      "latencyMs": 407,
+      "output": {
+        "category": "none",
+        "confidence": 0.99,
+        "evidence": []
+      },
+      "sourceEvidenceValid": true
+    }
+  ]
+}

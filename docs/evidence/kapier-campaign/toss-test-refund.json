@@ -1,0 +1,19 @@
+{
+  "orderId": "e5d73c04-1300-47c8-9d50-8c8b675c048e",
+  "db": {
+    "status": "refunded",
+    "environment": "test",
+    "amountKrw": 1000,
+    "refundedAt": "2026-10-15T22:12:43.918Z"
+  },
+  "provider": {
+    "httpStatus": 200,
+    "orderMatches": true,
+    "status": "CANCELED",
+    "currency": "KRW",
+    "totalAmount": 1000,
+    "balanceAmount": 0,
+    "cancelCount": 1
+  },
+  "testOnly": true
+}

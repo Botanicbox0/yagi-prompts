@@ -1,3 +1,5 @@
+import type { CSSProperties } from 'react';
+import { cardRatio } from './card-frame';
 import { SIGNUP_COOKIES } from '@/lib/cookies/wallet';
 import type { PromptCard } from '@/lib/prompts/catalog';
 import type { ShapedPrompt } from '@/lib/prompts/shape';
@@ -89,6 +91,7 @@ export function PromptHeader({
         video={prompt.video}
         alt={labels.resultLabel}
         ratio={ratio}
+        controls={labels.mediaControls}
         fallback={
           <TypographicPoster
             title={prompt.title}
@@ -464,9 +467,11 @@ export function RelatedPrompts({
       <h2 className="font-display text-[clamp(1.4rem,2.6vw,2rem)] leading-[0.95] font-black uppercase">
         {labels.relatedHeading}
       </h2>
-      <ul className="mt-8 grid gap-6 sm:grid-cols-2">
+      {/* The catalogue's own grid (rails.tsx): two 4:5 cards a row on a phone, four on a desktop.
+          No three-column step — the related list is four cards, and 3 + 1 leaves an orphan. */}
+      <ul data-related-grid className="mt-8 film-rows">
         {cards.map((card) => (
-          <li key={card.slug}>
+          <li key={card.slug} data-related-item style={{ '--r': cardRatio(card) } as CSSProperties}>
             <PromptCardView
               card={card}
               locale={locale}

@@ -56,6 +56,18 @@ export function createSupabaseStorageDriver(client?: SupabaseClient): StorageDri
     name: 'supabase',
     servesSignedUrls: true,
 
+    async signedStagingUrl(key, expiresInSeconds) {
+      const expiresIn = Number.isFinite(expiresInSeconds) ? Math.max(1, Math.min(Math.floor(expiresInSeconds), 60)) : 60;
+      // Redirect response headers do not follow the browser to storage. Sign the download
+      // disposition at the final byte response, so untrusted uploads cannot become documents.
+      const { data, error } = await db().storage.from(STAGING_BUCKET).createSignedUrl(key, expiresIn, { download: true });
+      if (error || !data) {
+        if (!error || isMissing(error)) throw new StorageObjectNotFound(STAGING_BUCKET, key);
+        throw new Error('private attachment signing failed');
+      }
+      return data.signedUrl;
+    },
+
     async putStaging(key, bytes, contentType) {
       const { error } = await db()
         .storage.from(STAGING_BUCKET)

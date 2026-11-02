@@ -6,13 +6,58 @@ placeholder. Filling one is a config or CMS change, never a code change.
 
 ---
 
+## 0. Landing images — `/admin/landing-media` (2026-10-29)
+
+**Where** `lib/content/landing-media.ts` (slot registry) → `lib/content/landing-media-server.ts`
+(`getLandingMedia()`, cached with tag `landing-media`, 1h TTL) → the brand landing v6
+(`components/brand-studio/landing-sections.tsx`: the three comparison pairs, the eight packshots and
+eight scenes; the hero is a film now, and films are not slots; `studio-vto.tsx`: the try-on cuts) and the home hero's selfie → scene pair
+(`evidenceWithMedia`). 33 slots on 2026-10-29 (v6: the five hero stills went into the hero film).
+
+**Replace** open `admin.twings.app/admin/landing-media` (nav: 콘텐츠 관리 → 랜딩 이미지). Tiles follow
+the landing's order. Drop an image on a tile or click it: the browser scales it to the slot's width,
+`landingMedia.replace` re-encodes it to WebP (oriented, never enlarged, cut-outs keep transparency),
+stores it content-addressed in `public-content`, upserts `landing_media` and refreshes `/`, `/brands`
+and the tag. **기본으로** (`landingMedia.reset`) deletes the row; the file in `public/` shows again.
+
+**Rules**
+- One slot is one file wherever it appears.
+- Videos and their posters are not slots: a new poster over an old film would show one thing and
+  play another. Replacing the home hero's scene still drops its film for the same reason.
+- A still that sits next to a film and shows its product is not a slot either (`FILM_BOUND_STILLS`).
+  Today those are `landing/highteen-product` (the heart perfume next to the 20-second perfume ad)
+  and `landing/beauty-ad-product` (the lip gloss next to the 15-second ad).
+- A new landing image is a new registry line, and `tests/content/landing-media.test.ts` fails until
+  every `public/reel/landing/*.webp` and `public/reel/studio/*.webp` has a slot.
+- Before migrations 0067/0147 reach a database, the landings read "no overrides" and the admin
+  says so instead of saving.
+
+---
+
+## Template registration
+
+Use `/admin/prompts/new`. New template addresses are derived from the English title; operators do
+not enter a slug. Existing addresses receive a numeric suffix on collision. Older open forms may
+still submit a slug, but creation ignores it. Editing a published template keeps its current URL.
+
+Source and making-of notes are optional and collapsed on creation. With JavaScript enabled,
+validation errors stay on the current form, preserving its text, selected files and completed
+upload receipts. Nothing is saved to browser storage, so this is not a draft or reload recovery.
+An uncertain network response must be checked against the template list before retrying.
+
+---
+
 ## 1. Hero reel — `HERO_REEL`
 
-**Where** `lib/content/slots.ts` → consumed by `components/landing/hero-media.tsx`.
+**Where** `lib/content/slots.ts` → read only by `components/landing/hero-media.tsx`.
 
-**Now** `src` is `null`, so `<HeroMedia>` renders `components/landing/reel-poster.tsx`: an in-code,
-localised, typography-led composition in the two-inks-plus-blue language. No video is generated or
-downloaded at build time.
+**Now — not rendered.** The landing page (`app/(marketing)/[locale]/page.tsx`) renders `Hero` from
+`components/landing/sections.tsx`: a compact type band with the template CTAs and no media panel
+(founder pass, 2026-08-13). No page imports `<HeroMedia>`, so this slot and its poster fallback
+`components/landing/reel-poster.tsx` are currently unreachable, and setting the variables below
+changes nothing on the site. The components are kept pending an owner decision; the steps below
+apply only if `<HeroMedia>` is wired back into a page. When it was rendered, a `null` `src` showed
+the in-code poster composition; no video is generated or downloaded at build time.
 
 **Swap**
 
@@ -33,6 +78,29 @@ scale/parallax scrub applies to whichever of the two is rendered.
 
 **Poster is not optional in spirit.** If you ship `SRC` without `POSTER`, the first frame is blank
 until the video decodes, which costs LCP on the landing page.
+
+---
+
+## 1b. Hero evidence — `heroEvidence()` (셀카 → 장면)
+
+**Where** `lib/content/slots.ts` → `components/audience/hero-evidence.tsx`, rendered by the home hero
+(`components/audience/creator-home.tsx`). docs/PLATFORM-2.0.md §15.3-2.
+
+**Now — not rendered in production.** Two pictures make the proof: a front-facing selfie and a still
+of the scene that same face went into. Both are required; with either one unset the hero keeps its
+earlier shape exactly (no empty frame, no layout shift). Which person may appear is a founder decision
+(PLATFORM-2.0 §15.5-16: the founder or an internal model with cleared rights).
+
+**Swap** upload the two images (4:5 crops read best; any public URL or a `public/` path) and set:
+
+```
+NEXT_PUBLIC_HERO_EVIDENCE_BEFORE=https://…/selfie.jpg
+NEXT_PUBLIC_HERO_EVIDENCE_AFTER=https://…/scene-still.jpg
+```
+
+then redeploy (the landing is static). Local QA fills the pair with the public AI-generated photo
+guide image and an existing template poster (`docs/qa/onboarding-make/README.md`) — a placeholder for
+the layout, not a real selfie → scene pair.
 
 ---
 

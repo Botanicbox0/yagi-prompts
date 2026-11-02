@@ -1,8 +1,12 @@
 import type { Metadata } from 'next';
-import { GoatMark } from '@/components/nav/goat-mark';
+import { TwingsLogo, TwingsMark } from '@/components/brand/twings-mark';
 import { absoluteUrl } from '@/lib/seo/site-url';
 import { DEFAULT_LOCALE, isLocale, type Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/dictionaries';
+import { authReturnPath, isBrandPath } from '@/lib/routing/surfaces';
+import { requestSurface } from '@/lib/routing/request-surface';
+import { BrowserAddress } from '@/components/brand-workspace/browser-address';
+import styles from '@/components/auth/brand-entry.module.css';
 
 /**
  * `/auth/open-in-browser?next=…&locale=…` — design review F1.
@@ -15,10 +19,11 @@ import { getDictionary } from '@/lib/i18n/dictionaries';
  *
  * A page route rather than HTML written by the signin handler, so the heading is set in the §5
  * display faces through the (app) root layout instead of a system stack. That layout also
- * supplies `noindex` and force-dynamic; middleware never runs under `/auth/*`, which is why the
+ * supplies `noindex` and force-dynamic; auth skips middleware session refresh, which is why the
  * signin redirect writes the locale cookie the layout resolves `<html lang>` from.
  *
- * No JavaScript on purpose: a WebView that blocks OAuth is not a place to depend on anything.
+ * The generic destination is server-rendered. An invitation can additionally restore its
+ * fragment from this browser's sessionStorage, never from an OAuth/server query parameter.
  */
 export const dynamic = 'force-dynamic';
 
@@ -30,16 +35,14 @@ function first(value: string | string[] | undefined): string | null {
   return typeof value === 'string' ? value : (value?.[0] ?? null);
 }
 
-/** Same rule as `/auth/signin`: same-origin relative paths only. */
-function safeNext(raw: string | null): string {
-  return raw !== null && raw.startsWith('/') && !raw.startsWith('//') ? raw : '/';
-}
-
 async function resolve(props: RouteProps) {
   const params = await props.searchParams;
   const rawLocale = first(params.locale);
   const locale: Locale = isLocale(rawLocale) ? rawLocale : DEFAULT_LOCALE;
-  return { dict: getDictionary(locale), next: safeNext(first(params.next)) };
+  const { admin, brand, origin } = await requestSurface();
+  const next = authReturnPath(first(params.next), admin ? 'admin.twings.app' : brand ? 'brand.twings.app' : '', '/');
+  const brandEntry = !admin && (brand || isBrandPath(new URL(next, 'https://path.invalid').pathname));
+  return { dict: getDictionary(locale), next, origin, brandEntry };
 }
 
 export async function generateMetadata(props: RouteProps): Promise<Metadata> {
@@ -48,7 +51,24 @@ export async function generateMetadata(props: RouteProps): Promise<Metadata> {
 }
 
 export default async function OpenInBrowserPage(props: RouteProps) {
-  const { dict, next } = await resolve(props);
+  const { dict, next, origin, brandEntry } = await resolve(props);
+  const target = origin ? new URL(next, origin).href : absoluteUrl(next);
+
+  if (brandEntry) {
+    return (
+      <main data-webview-interstitial data-brand-auth className={styles.page}>
+        <div className={styles.webview}>
+          <TwingsLogo size={22} />
+          <p className={styles.webviewEyebrow}>{dict.auth.webviewEyebrow}</p>
+          <h1>{dict.auth.webviewTitle}</h1>
+          <p className={styles.webviewBody}>{dict.auth.webviewBody}</p>
+          <p className={styles.webviewLabel}>{dict.auth.webviewUrlLabel}</p>
+          <div className={styles.address}><BrowserAddress target={target} /></div>
+          <p className={styles.webviewHint}>{dict.auth.webviewMenuHint}</p>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main
@@ -56,7 +76,7 @@ export default async function OpenInBrowserPage(props: RouteProps) {
       className="mx-auto flex min-h-svh w-full max-w-detail flex-col justify-center px-gutter py-16"
     >
       <p className="flex items-center gap-2.5">
-        <GoatMark className="h-6 w-6" />
+        <TwingsMark className="h-7" />
         <span className="font-display text-[1.05rem] leading-none font-black tracking-[0.02em] uppercase">
           {dict.meta.siteName}
         </span>
@@ -74,12 +94,7 @@ export default async function OpenInBrowserPage(props: RouteProps) {
         {dict.auth.webviewUrlLabel}
       </p>
       {/* `select-all`: one long-press selects the WHOLE address — the copy this page exists for. */}
-      <p
-        data-webview-next
-        className="mt-3 border border-hairline p-4 font-mono text-code break-all select-all"
-      >
-        {absoluteUrl(next)}
-      </p>
+      <BrowserAddress target={target} />
 
       <p className="mt-6 font-mono text-[0.72rem] leading-relaxed opacity-45">
         {dict.auth.webviewMenuHint}

@@ -1,0 +1,57 @@
+{
+  "project": "nhokkikjkzjalxqsbzuk",
+  "mode": "applied",
+  "results": [
+    {
+      "file": "0029_core_portrait_comparison.sql",
+      "state": "applied",
+      "sha256": "4d2fd2b5516021c2c0a08e4c6a7eda4afeee13cd29618e76c0f4c0f8ef3cbb58"
+    },
+    {
+      "file": "0030_core_brand_post_collection.sql",
+      "state": "applied",
+      "sha256": "8997ecde46fa5b42ea4241ed27d7b93828911959f28893678616e12e613c405e"
+    },
+    {
+      "file": "0031_core_brand_managed_workspace.sql",
+      "state": "applied",
+      "sha256": "7ffae62abcbd50ad99c9a49d7d970ae3f3466b68a9c0a9f40795804a2f720186"
+    },
+    {
+      "file": "0032_core_brand_profile_support.sql",
+      "state": "applied",
+      "sha256": "e9881fc8998551294e468da38a7359f9fcb295ad41bdb42a6182c71c3fec4a7a"
+    },
+    {
+      "file": "0033_core_brand_production.sql",
+      "state": "applied",
+      "sha256": "4b5c11c0ca35119fb82a029bee85f61a14942b59a32c560ced58d7fe74513700"
+    },
+    {
+      "file": "0115_glue_portrait_comparison.sql",
+      "state": "applied",
+      "sha256": "0cc4fccf8232746dbf69ca7cc89f7283bf1db4f7e481e8560d02b79a148022e0"
+    },
+    {
+      "file": "0116_glue_brand_post_collection.sql",
+      "state": "applied",
+      "sha256": "39f5aff8379c6112c57ad496d7a3eb940133f07a51f368ecb4ced0c35e06fee5"
+    },
+    {
+      "file": "0117_glue_brand_managed_workspace.sql",
+      "state": "applied",
+      "sha256": "abc3d8dfd676e0337f8a2b94ef740bb407ec51d5df643474d17ae2589c493114"
+    },
+    {
+      "file": "0118_glue_brand_profile_support.sql",
+      "state": "applied",
+      "sha256": "a6b610573b3c2f2b40a1843561a7caaed2143ed6c3771f658473d9342d06ab6d"
+    },
+    {
+      "file": "0119_glue_brand_production.sql",
+      "state": "applied",
+      "sha256": "63d2a7075eeab68883ba918c136bfb196f5d6f44fb71c7104d688604b97c7643"
+    }
+  ],
+  "rlsTables": 8
+}

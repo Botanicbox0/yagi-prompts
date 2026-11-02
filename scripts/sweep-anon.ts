@@ -1,15 +1,15 @@
+import { createECDH, randomBytes } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
+import { request as httpRequest } from 'node:http';
 import { resolve } from 'node:path';
 import { PGlite } from '@electric-sql/pglite';
 import { DEFAULT_LOCAL_SNAPSHOT } from '@/lib/db/connect-shared';
 import { FIXTURE_SENTINELS } from './fixtures';
 import { HIDDEN_PROMPT_SLUGS, PROMPT_SENTINELS } from './prompt-fixtures';
-import {
-  CONTEST_ENTRY_SENTINELS,
-  HIDDEN_CONTEST_SLUGS,
-  PUBLISHED_CONTEST_SLUG,
-} from './contest-fixtures';
+import { LOCAL_MAKER, LOCAL_RECIPE_CANARY, LOCAL_RECIPE_SLUG } from './maker-fixtures';
 import { RUNTIME_MODE_ENV } from '@/lib/runtime-mode';
+import { KO_TERMS } from '@/messages/ko';
+import { EN_TERMS } from '@/messages/en';
 
 /**
  * M7: the sweep's oracle is the LOCAL snapshot (it opens `.pglite/catalog.tar.gz` directly), so the
@@ -90,13 +90,46 @@ interface Fetched {
   location: string | null;
   cacheControl: string | null;
   contentType: string | null;
+  robotsTag: string | null;
   /** For the `?download=1` probes — the header that makes a browser SAVE instead of play. */
   contentDisposition: string | null;
+  /** The workspace pages' nonce policy (lib/security/workspace-csp.ts). */
+  csp: string | null;
   body: string;
   bytes: Uint8Array;
 }
 
 async function request(path: string, init?: RequestInit): Promise<Fetched> {
+  // Undici intentionally replaces Host; use the native transport for local workspace probes.
+  const headers = new Headers(init?.headers);
+  if (headers.has('host') && new URL(BASE).protocol === 'http:') {
+    return new Promise<Fetched>((resolveResponse, reject) => {
+      const probe = httpRequest(new URL(`${BASE}${path}`), {
+        method: init?.method ?? 'GET', headers: Object.fromEntries(headers),
+      }, (response) => {
+        const chunks: Buffer[] = [];
+        response.on('data', (chunk: Buffer) => chunks.push(chunk));
+        response.on('error', reject);
+        response.on('end', () => {
+          const bytes = Buffer.concat(chunks);
+          const header = (name: string) => {
+            const value = response.headers[name];
+            return Array.isArray(value) ? value.join(', ') : value ?? null;
+          };
+          resolveResponse({
+            status: response.statusCode ?? 0, location: header('location'),
+            cacheControl: header('cache-control'), contentType: header('content-type'),
+            robotsTag: header('x-robots-tag'), contentDisposition: header('content-disposition'),
+            csp: header('content-security-policy'),
+            body: bytes.toString('utf8'), bytes,
+          });
+        });
+      });
+      probe.setTimeout(30_000, () => probe.destroy(new Error('Host probe timed out')));
+      probe.on('error', reject);
+      probe.end();
+    });
+  }
   const response = await fetch(`${BASE}${path}`, { redirect: 'manual', ...init });
   const bytes = new Uint8Array(await response.arrayBuffer());
   return {
@@ -104,7 +137,9 @@ async function request(path: string, init?: RequestInit): Promise<Fetched> {
     location: response.headers.get('location'),
     cacheControl: response.headers.get('cache-control'),
     contentType: response.headers.get('content-type'),
+    robotsTag: response.headers.get('x-robots-tag'),
     contentDisposition: response.headers.get('content-disposition'),
+    csp: response.headers.get('content-security-policy'),
     body: new TextDecoder().decode(bytes),
     bytes,
   };
@@ -135,18 +170,13 @@ async function postJson(path: string, body: unknown): Promise<Fetched> {
 // ---------------------------------------------------------------------------
 
 interface PromptProbe {
+  audience: string;
   id: string;
   slug: string;
   status: string;
   source: string;
   visibility: string;
   featured: boolean;
-}
-
-interface ContestProbe {
-  id: string;
-  slug: string;
-  status: string;
 }
 
 interface AssetBlockRow {
@@ -157,6 +187,14 @@ interface AssetBlockRow {
   state: string;
   is_current: boolean;
   status: string;
+}
+
+interface BrandWorkspaceProbe {
+  id: string;
+  title: string;
+  organization_name: string;
+  attachment_id: string;
+  storage_key: string;
 }
 
 async function readSnapshot() {
@@ -181,14 +219,17 @@ async function readSnapshot() {
 
   // §13 — the prompts surface needs ids (the copy endpoint is keyed on them) and statuses.
   const prompts = await db.query<PromptProbe>(
-    `select id, slug, status, source, text_visibility::text as visibility, featured
+    `select id, slug, audience, status, source, text_visibility::text as visibility, featured
        from prompt_items order by slug`,
   );
-
-  // §14 — the contests surface. The demo contest is a DRAFT by design, so the ids are what let the
-  // sweep prove that its poster and its entries are unreachable rather than merely absent.
-  const contests = await db.query<ContestProbe>(
-    'select id, slug, status from contests order by slug',
+  const brandWorkspace = await db.query<BrandWorkspaceProbe>(
+    `select p.id, p.title, o.name as organization_name,
+            a.id as attachment_id, a.storage_key
+       from brand_projects p
+       join brand_organizations o on o.id = p.organization_id
+       join brand_attachments a on a.project_id = p.id and a.status = 'ready'
+      where p.title like '[Local fixture]%' and o.name like '[Local fixture]%'
+      order by p.id, a.id`,
   );
 
   await db.close();
@@ -196,7 +237,7 @@ async function readSnapshot() {
     assets: assets.rows,
     privateKeys: privateKeys.rows.map((r) => r.target_key),
     prompts: prompts.rows,
-    contests: contests.rows,
+    brandWorkspace: brandWorkspace.rows,
   };
 }
 
@@ -265,11 +306,97 @@ async function sweepRedirects(): Promise<void> {
   else fail('/library redirect target', `unexpected location ${library.location}`);
 }
 
-async function sweepNotFound(): Promise<void> {
+async function sweepMonthlyLegal(): Promise<void> {
+  console.log('\nmonthly legal information — published, launch unapproved');
+  for (const locale of ['ko', 'en']) {
+    for (const doc of ['terms', 'refund']) {
+      const page = await get(`/${locale}/legal/${doc}`);
+      expectEqual(`${locale} ${doc}: public HTTP 200`, page.status, 200);
+      expectPresent(`${locale} ${doc}: preparing disclosure`, page.body, 'data-subscription-legal-status="preparing"');
+      expectAbsent(`${locale} ${doc}: publication does not claim approval`, page.body, 'data-subscription-legal-version');
+      expectPresent(`${locale} ${doc}: launch notice is server-rendered`, page.body, locale === 'ko' ? '월 구독은 현재 준비 중' : 'Monthly subscriptions are being prepared');
+      expectPresent(`${locale} ${doc}: monthly content is server-rendered`, page.body, locale === 'ko' ? '월 구독' : 'Monthly subscription');
+      if (doc === 'refund') {
+        expectPresent(`${locale}: unused current-period refund`, page.body, locale === 'ko' ? '현재 결제 기간의 제작량을 사용하지 않았고' : 'none of its video-making capacity has been used');
+        expectPresent(`${locale}: failed creation restores capacity`, page.body, locale === 'ko' ? '해당 작업에 사용한 제작량' : 'unused capacity for that job');
+        expectPresent(`${locale}: one-time refunds retain separate scope`, page.body, locale === 'ko' ? '템플릿 단건 구매의 환불' : 'One-time template purchase refunds');
+      }
+    }
+    const privacy = await get(`/${locale}/legal/privacy`);
+    expectEqual(`${locale} privacy: public HTTP 200`, privacy.status, 200);
+    // Flight serializes an undefined prop name; only a rendered HTML attribute signals activation.
+    expectAbsent(`${locale} privacy: unapproved processing is not activated by publication`, privacy.body, 'data-subscription-legal-status=');
+  }
+}
+
+async function sweepNotFound(privateKeys: string[], brandWorkspace: BrandWorkspaceProbe[]): Promise<void> {
   console.log('\n404s — draft, archived, unknown');
   expectEqual('archived playbook 404s', (await get(`/en/p/${ARCHIVED}`)).status, 404);
   expectEqual('draft playbook 404s', (await get('/en/p/insta-toon-pipeline')).status, 404);
   expectEqual('unknown slug 404s', (await get('/en/p/no-such-playbook')).status, 404);
+
+  // Unknown routes must reach the branded boundary, not Next's generic English dead end.
+  // Inspect the complete HTML/Flight response without ever logging fixture values on failure.
+  const forbidden = [
+    ...FIXTURE_SENTINELS.filter((sentinel) => sentinel.visibility !== 'public').map((sentinel) => sentinel.token),
+    ...PROMPT_SENTINELS.map((sentinel) => sentinel.token),
+    ...privateKeys,
+    ...brandWorkspace.flatMap((fixture) => [fixture.title, fixture.organization_name, fixture.storage_key]),
+    'content/rev/', 'content-published', 'artifacts-published',
+  ];
+  for (const locale of ['ko', 'en']) {
+    for (const suffix of ['qa-page-that-does-not-exist', 'qa-page-that-does-not-exist/nested']) {
+      const path = `/${locale}/${suffix}`;
+      const page = await get(path);
+      expectEqual(`${path}: HTTP 404`, page.status, 404);
+      expectPresent(`${path}: static bilingual document`, page.body, '<html lang="en"');
+      const head = await request(path, { method: 'HEAD' });
+      expectEqual(`${path}: HEAD 404`, head.status, 404);
+      expectEqual(`${path}: HEAD has no body`, head.bytes.length, 0);
+      for (const panelLocale of ['ko', 'en']) {
+        expectPresent(`${path}: ${panelLocale} branded panel`, page.body, `data-not-found="${panelLocale}"`);
+        expectPresent(`${path}: ${panelLocale} video return`, page.body, `href="/${panelLocale}/video"`);
+        expectPresent(`${path}: ${panelLocale} campaign return`, page.body, `href="/${panelLocale}/campaigns"`);
+      }
+      expectEqual(`${path}: no private content or storage keys`, forbidden.some((value) => value.length > 0 && page.body.includes(value)), false);
+    }
+  }
+  for (const path of ['/api/qa-route-that-does-not-exist', '/auth/qa-route-that-does-not-exist']) {
+    const page = await get(path);
+    expectEqual(`${path}: HTTP 404`, page.status, 404);
+    expectPresent(`${path}: remains no-store`, page.cacheControl ?? '', 'no-store');
+    expectPresent(`${path}: default document locale`, page.body, '<html lang="en"');
+    expectEqual(`${path}: no private content or storage keys`, forbidden.some((value) => value.length > 0 && page.body.includes(value)), false);
+  }
+  // Local Host overrides exercise the actual workspace middleware before global 404 routing.
+  // On a deployed preview the proxy owns Host, so these checks belong to the local server sweep.
+  if (['localhost', '127.0.0.1', '[::1]'].includes(new URL(BASE).hostname)) {
+    for (const host of ['admin.twings.app', 'brand.twings.app', 'brands.twings.app']) {
+      const path = '/ko/qa-page-that-does-not-exist/nested';
+      const page = await request(path, { headers: { host } });
+      expectEqual(`${host}${path}: host boundary 404`, page.status, 404);
+      expectPresent(`${host}${path}: private`, page.cacheControl ?? '', 'private');
+      expectPresent(`${host}${path}: no-store`, page.cacheControl ?? '', 'no-store');
+      expectEqual(`${host}${path}: noindex`, page.robotsTag, 'noindex, nofollow');
+      expectEqual(`${host}${path}: no public fallback or private payload`, page.bytes.length, 0);
+      expectEqual(`${host}${path}: no private content or storage keys`, forbidden.some((value) => value.length > 0 && page.body.includes(value)), false);
+    }
+    // The campaign wizard and the pages absorbed into the campaign tabs (docs/PLATFORM-2.0.md §16.6)
+    // stay on the brand host: an anonymous visitor is asked to sign in and comes back to the same path.
+    const project = '00000000-0000-4000-8000-000000000000';
+    for (const path of ['/brand/projects/new', `/brand/projects/${project}`, `/brand/projects/${project}/participants`, `/brand/projects/${project}/funding`, '/brand/creators']) {
+      const page = await request(path, { headers: { host: 'brand.twings.app' } });
+      const next = page.location ? new URL(page.location, BASE).searchParams.get('next') : null;
+      expectEqual(`brand.twings.app${path}: asks to sign in and returns here`, page.status >= 300 && page.status < 400 && next === path, true);
+      expectEqual(`brand.twings.app${path}: no private content or storage keys`, forbidden.some((value) => value.length > 0 && page.body.includes(value)), false);
+    }
+    // docs/PLATFORM-2.0.md §17.3 — the pool's invite API stays on the brand host and refuses strangers.
+    const poolInvite = await request('/api/brand-creators', { method: 'POST', headers: { host: 'brand.twings.app', 'content-type': 'application/json' } });
+    expectOneOf('brand.twings.app /api/brand-creators: refuses anonymous (closed or sign-in)', poolInvite.status, [401, 404]);
+    expectPresent('brand.twings.app /api/brand-creators: private', poolInvite.cacheControl ?? '', 'no-store');
+    const poolRead = await request('/api/brand-creators', { headers: { host: 'brand.twings.app' } });
+    expectEqual('brand.twings.app /api/brand-creators: no reads', poolRead.status, 404);
+  }
 }
 
 async function sweepGateway(assets: AssetBlockRow[]): Promise<void> {
@@ -353,17 +480,80 @@ async function sweepGateway(assets: AssetBlockRow[]): Promise<void> {
 async function sweepMoney(): Promise<void> {
   console.log('\n/api/billing + /api/events — anon, production build (M3)');
 
+  // Toss: no anonymous order creation/approval, order reads, or private widget HTML.
+  for (const path of ['/api/billing/toss/orders', '/api/billing/toss/confirm']) {
+    const response = await request(path, { method: 'POST', headers: { Origin: BASE } });
+    expectEqual(`${path} refuses anonymous payment entry`, response.status, 401);
+    expectEqual(`${path} is never cached`, response.cacheControl, 'private, no-store');
+  }
+  const tossOrderId = '00000000-0000-4000-8000-000000000000';
+  expectEqual('Toss order API refuses anon', (await get(`/api/billing/toss/orders/${tossOrderId}`)).status, 401);
+  const tossPage = await get(`/billing/toss/${tossOrderId}`);
+  expectOneOf('Toss checkout page redirects anon', tossPage.status, [302, 307, 308]);
+  expectAbsent('Toss checkout HTML stays behind sign-in', tossPage.body, 'data-toss-checkout');
+
+  // docs/PLATFORM-2.0.md §2.2: 다시 결제하기 is the owner's alone; the webhook is a hint, never an oracle;
+  // a return from the provider with no session keeps its approval parameters through sign-in.
+  const retry = await request(`/api/billing/toss/orders/${tossOrderId}/retry`, { method: 'POST', headers: { Origin: BASE } });
+  expectEqual('Toss retry refuses anonymous re-ordering', retry.status, 401);
+  expectEqual('Toss retry is never cached', retry.cacheControl, 'private, no-store');
+  const hint = await postJson('/api/billing/toss/webhook', {
+    eventType: 'PAYMENT_STATUS_CHANGED',
+    data: { orderId: tossOrderId, paymentKey: 'sweep_probe', status: 'CANCELED' },
+  });
+  expectEqual('Toss webhook answers an unknown order with 200', hint.status, 200);
+  expectEqual('…and an empty body', hint.body, '');
+  expectEqual('Toss webhook is never cached', hint.cacheControl, 'private, no-store');
+  const malformed = await request('/api/billing/toss/webhook', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{' });
+  expectEqual('Toss webhook answers a malformed body with 200', malformed.status, 200);
+  expectEqual('…and an empty body', malformed.body, '');
+  expectEqual('GET on the Toss webhook is 405', (await get('/api/billing/toss/webhook')).status, 405);
+  const back = await get(`/billing/toss/return?locale=ko&paymentKey=sweep_probe&orderId=${tossOrderId}&amount=1000`);
+  expectOneOf('Toss return without a session goes to sign-in', back.status, [302, 307, 308]);
+  const resume = new URL(back.location ?? '/', BASE).searchParams.get('next') ?? '';
+  expectPresent('…keeping the approval parameters in next', resume, `/billing/toss/return?`);
+  expectPresent('…the payment key included', resume, 'paymentKey=sweep_probe');
+  expectPresent('…and the order', resume, `orderId=${tossOrderId}`);
+
+  // New recurring entry points do not inherit the legacy anonymous or retired paths.
+  for (const path of ['/api/creator-subscriptions', '/api/creator-subscriptions/confirm', '/api/creator-subscriptions/renders',
+    `/api/creator-subscriptions/${tossOrderId}/cancel`, `/api/creator-subscriptions/${tossOrderId}/refund`]) {
+    const response = await request(path, { method: 'POST', headers: { Origin: BASE } });
+    expectEqual(`${path} refuses anonymous subscription entry`, response.status, 401);
+    expectEqual(`${path} remains private and uncached`, response.cacheControl, 'private, no-store');
+    expectAbsent(`${path} never reveals a billing key`, response.body, 'billingKey');
+  }
+  expectEqual('Subscription order lookup refuses anon', (await get(`/api/creator-subscriptions/${tossOrderId}`)).status, 401);
+  expectEqual('Subscription worker refuses missing private authorization', (await request('/api/creator-subscriptions/tick', { method: 'POST' })).status, 401);
+  const availability = await get('/api/creator-subscriptions/availability');
+  expectEqual('Anonymous subscription availability is public', availability.status, 200);
+  expectPresent('Offline availability stays preparing', availability.body, '"status":"preparing"');
+  for (const field of ['billingKey', 'customerKey', 'monthlyUnits', 'implementationSha', 'evidenceDigest', 'configurationDigest'])
+    expectAbsent(`Public availability excludes ${field}`, availability.body, field);
+  // lib/content/landing-media.ts — the replace screen is admin-only, and the image route answers only
+  // for a slot that really has an override (none in the snapshot), never for a path it was handed.
+  {
+    const editor = await get('/admin/landing-media');
+    expectOneOf('/admin/landing-media requires sign-in', editor.status, [302, 307, 308, 404]);
+    expectAbsent('/admin/landing-media shows no tiles anonymously', editor.body, 'data-landing-slot');
+    for (const path of ['/api/landing-media/studio/p-amber-1', '/api/landing-media/studio/nope', '/api/landing-media/..%2F.env']) {
+      const media = await get(path);
+      expectEqual(`${path} is a 404 without an override`, media.status, 404);
+    }
+  }
+  for (const path of ['/billing/subscription', '/admin/subscriptions']) {
+    const page = await get(path);
+    expectOneOf(`${path} requires sign-in`, page.status, [302, 307, 308]);
+    expectAbsent(`${path} has no anonymous enrollment controls`, page.body, 'data-subscription-enroll');
+  }
+
   const checkout = await postForm('/api/billing/checkout', {
     locale: 'en',
     slug: SHOWCASE,
   });
-  expectEqual('checkout POST bounces anon with 303', checkout.status, 303);
-  if (checkout.location?.includes('/auth/signin')) {
-    ok('…to sign-in with a return-to', checkout.location);
-    if (checkout.location.includes(encodeURIComponent(`/en/p/${SHOWCASE}`)))
-      ok('…carrying the origin playbook');
-    else fail('checkout return-to', `origin missing from ${checkout.location}`);
-  } else fail('checkout redirect target', `expected /auth/signin, got ${checkout.location}`);
+  // Audit P1-4: the $9/month subscription checkout is retired — 410 with a code, for everyone.
+  expectEqual('retired subscription checkout answers 410', checkout.status, 410);
+  expectPresent('…with the retired code', checkout.body, 'subscription_retired');
   expectEqual('checkout is never cached', checkout.cacheControl, 'private, no-store');
 
   const portal = await postForm('/api/billing/portal', {});
@@ -398,8 +588,12 @@ async function sweepMoney(): Promise<void> {
   );
   expectEqual('a non-json body is rejected', (await postJson('/api/events', 'nope')).status, 400);
 
-  const upgrade = await get('/billing/upgrade');
-  expectOneOf('/billing/upgrade redirects anon', upgrade.status, [302, 307, 308]);
+  // Audit P1-4: the retired subscription pages 308 to the localized pricing page, not to sign-in.
+  for (const page of ['upgrade', 'success', 'cancelled']) {
+    const retired = await get(`/billing/${page}?locale=ko`);
+    expectEqual(`/billing/${page} is retired with a 308`, retired.status, 308);
+    expectEqual(`…to the Korean pricing page`, new URL(retired.location ?? '/', BASE).pathname, '/ko/pricing');
+  }
   const account = await get('/account');
   expectOneOf('/account redirects anon', account.status, [302, 307, 308]);
 }
@@ -452,6 +646,63 @@ async function sweepSeo(): Promise<void> {
   }
   expectPresent('allows the public surface', robots.body, 'Allow: /');
   expectPresent('points at the sitemap', robots.body, 'Sitemap: http');
+}
+
+/** AGENTS §7: assert the actual server HTML, not just metadata builders. */
+async function sweepStructuredData(): Promise<void> {
+  console.log('\nSEO/GEO — JSON-LD, shared FAQ, locale URLs and reading aids');
+  for (const locale of ['en', 'ko']) {
+    const routes = [
+      { rest: '', placement: 'landing' },
+      { rest: '/faq', placement: 'all' },
+      { rest: '/campaigns', placement: 'campaign' },
+      { rest: '/brands', placement: 'brand' },
+      { rest: `/t/${GATED_PROMPT}`, placement: 'template' },
+    ];
+    for (const { rest, placement } of routes) {
+      const path = `/${locale}${rest}`;
+      const page = await get(path);
+      expectEqual(`${path} SEO page renders`, page.status, 200);
+      expectPresent(`${path} shared FAQ marker`, page.body, `data-faq-catalog="${placement}"`);
+      expectPresent(`${path} self-canonical`, page.body, `rel="canonical" href="${BASE}${path}"`);
+      for (const tag of ['en', 'ko', 'x-default']) {
+        expectPresent(`${path} alternate ${tag}`, page.body, `hrefLang="${tag}" href="${BASE}/${tag === 'x-default' ? 'en' : tag}${rest}"`);
+      }
+      const nodes: Record<string, unknown>[] = [];
+      const scripts = [...page.body.matchAll(/<script\b[^>]*type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/g)];
+      for (const script of scripts) {
+        try {
+          const data = JSON.parse(script[1]!);
+          nodes.push(...(Array.isArray(data['@graph']) ? data['@graph'] : [data]));
+        } catch {
+          fail(`${path} parseable JSON-LD`, 'invalid JSON');
+        }
+      }
+      for (const type of ['Organization', 'WebSite', 'FAQPage']) {
+        expectEqual(`${path} contains ${type}`, nodes.some((node) => node['@type'] === type), true);
+      }
+      if (rest === '/brands') expectEqual(`${path} contains Service`, nodes.some((node) => node['@type'] === 'Service'), true);
+      if (rest.startsWith('/t/')) {
+        expectEqual(`${path} no offer during closed generation rollout`, nodes.some((node) => node['@type'] === 'Product'), false);
+      }
+      const faq = nodes.find((node) => node['@type'] === 'FAQPage');
+      expectEqual(`${path} nonempty FAQ answers`, Array.isArray(faq?.mainEntity) && faq.mainEntity.length > 0 && faq.mainEntity.every((item: { acceptedAnswer?: { text?: string } }) => Boolean(item.acceptedAnswer?.text?.trim())), true);
+      if (rest === '/brands') {
+        expectPresent(`${path} simultaneous market service`, page.body, 'data-brand-markets');
+        expectPresent(`${path} simultaneous offer copy`, page.body, locale === 'ko' ? '동시에' : 'simultaneously');
+        expectEqual(`${path} eight buyer FAQ answers`, Array.isArray(faq?.mainEntity) ? faq.mainEntity.length : 0, 8);
+        expectPresent(`${path} AI safety answer in server HTML`, page.body, locale === 'ko' ? '국외 이전' : 'overseas processing');
+      }
+    }
+  }
+  const sitemap = await get('/sitemap.xml');
+  for (const locale of ['ko', 'en']) expectPresent(`sitemap includes ${locale} FAQ`, sitemap.body, `<loc>${BASE}/${locale}/faq</loc>`);
+  for (const path of ['/llms.txt', '/llms-full.txt']) {
+    const page = await get(path);
+    expectEqual(`${path} public reader aid`, page.status, 200);
+    expectPresent(`${path} names operator`, page.body, 'YAGI WORKSHOP');
+    expectPresent(`${path} links FAQ source`, page.body, 'https://twings.app/ko/faq');
+  }
 }
 
 /** M5 — canonical / hreflang / og:image, on the HTML a crawler is served. */
@@ -542,8 +793,55 @@ const CHROME_UA =
  */
 async function sweepWebViewSignin(): Promise<void> {
   console.log('\n/auth/signin — the embedded-WebView gate (F1)');
+  for (const locale of ['ko', 'en']) {
+    const review = await request(`/auth/review?locale=${locale}`);
+    expectEqual(`${locale}: review login is reachable`, review.status, 200);
+    expectPresent(`${locale}: review login form`, review.body, 'data-review-login');
+    expectPresent(`${locale}: review login is not indexed`, review.body, 'noindex');
+    expectPresent(`${locale}: review credentials are not cached`, review.cacheControl ?? '', 'no-store');
+    expectPresent(`${locale}: review password uses POST`, review.body, 'action="/auth/review/login"');
+  }
 
-  const entry = '/auth/signin?next=%2Fen%2Fprompts&locale=en';
+  // docs/TEMPLATES-IA.md §8 — no provider named: the chooser, in the reader's language, with both doors.
+  const bare = await request('/auth/signin?next=%2Fen%2Fvideo&locale=en', { headers: { 'user-agent': CHROME_UA } });
+  expectOneOf('an unnamed provider is sent to the chooser', bare.status, [302, 303, 307]);
+  const bareTarget = bare.location ? new URL(bare.location, BASE) : null;
+  if (bareTarget?.pathname === '/auth/choose') ok('…at /auth/choose', `${bareTarget.pathname}${bareTarget.search}`);
+  else fail('bare signin redirect target', `expected /auth/choose, got ${bare.location}`);
+  const chooser = await request('/auth/choose?next=%2Fko%2Fvideo&locale=ko', { headers: { 'user-agent': CHROME_UA } });
+  expectEqual('the chooser renders 200', chooser.status, 200);
+  expectPresent('…as the designed page', chooser.body, 'data-auth-choose');
+  expectPresent('…beside the personal stage', chooser.body, 'data-personal-auth-stage');
+  expectPresent('…with the three leads', chooser.body, '/reel/landing/entry-lead.mp4');
+  expectPresent('…with manual language choice', chooser.body, 'data-auth-language');
+  expectPresent('…with the Kakao door', chooser.body, 'data-auth-provider="kakao"');
+  expectPresent('…and the Google door', chooser.body, 'data-auth-provider="google"');
+  expectPresent('…in Korean', chooser.body, '카카오로 계속하기');
+  expectPresent('…with Google in mixed case (brand rule, never "GOOGLE")', chooser.body, 'Google로 계속하기');
+  expectPresent('…the act, not a pitch', chooser.body, '로그인 또는 회원가입');
+  expectPresent('…the consent line linking the terms', chooser.body, 'href="/ko/legal/terms"');
+  expectPresent('…and the privacy policy', chooser.body, 'href="/ko/legal/privacy"');
+  if (chooser.body.indexOf('data-auth-provider="google"') < chooser.body.indexOf('data-auth-provider="kakao"')) ok('…Google listed first');
+  else fail('chooser order', 'Google should come before Kakao (founder, 2026-09-06)');
+  expectPresent('…with the Google mark', chooser.body, 'fill="#4285F4"');
+  expectPresent('…and the Kakao symbol', chooser.body, 'fill="#000000" fill-opacity="0.85"');
+  expectPresent('…carrying the return path', chooser.body, 'next=%2Fko%2Fvideo');
+  expectPresent('…and noindex', chooser.body, 'noindex');
+  for (const locale of ['ko', 'en']) {
+    const brandChooser = await request(`/auth/choose?next=%2Fbrand&locale=${locale}`);
+    expectEqual(`brand chooser ${locale} renders`, brandChooser.status, 200);
+    expectPresent(`brand chooser ${locale} explains the service`, brandChooser.body, 'data-brand-auth');
+    expectPresent(`brand chooser ${locale} shows the brand world`, brandChooser.body, 'data-brand-auth-stage');
+    expectPresent(`brand chooser ${locale} keeps login`, brandChooser.body, 'data-auth-provider="google"');
+    expectPresent(`brand chooser ${locale} keeps consent`, brandChooser.body, 'data-auth-legal');
+  }
+  // Kakao is exempt from the WebView interstitial — KakaoTalk's browser can complete it.
+  const kakaoHop = await request('/auth/signin?provider=kakao&next=%2Fko%2Fvideo&locale=ko', { headers: { 'user-agent': KAKAOTALK_UA } });
+  expectOneOf('a Kakao sign-in from KakaoTalk redirects', kakaoHop.status, [302, 303, 307]);
+  if (kakaoHop.location && !kakaoHop.location.includes('/auth/open-in-browser')) ok('…without the interstitial', kakaoHop.location);
+  else fail('kakao webview handling', `expected no interstitial, got ${kakaoHop.location}`);
+
+  const entry = '/auth/signin?provider=google&next=%2Fen%2Fvideo&locale=en';
   const webview = await request(entry, { headers: { 'user-agent': INSTAGRAM_UA } });
   expectOneOf('an Instagram UA is redirected', webview.status, [302, 303, 307]);
   const target = webview.location ? new URL(webview.location, BASE) : null;
@@ -562,13 +860,13 @@ async function sweepWebViewSignin(): Promise<void> {
   expectPresent('…with the display heading', page.body, 'OPEN IN YOUR BROWSER.');
   expectPresent('…and the copyable absolute target', page.body, 'data-webview-next');
   expectPresent('…which is absolute', page.body, 'http');
-  expectPresent('…and points at the next target', page.body, '/en/prompts');
+  expectPresent('…and points at the next target', page.body, '/en/video');
   if (page.cacheControl?.includes('no-store')) ok('…never cached', page.cacheControl);
   else fail('interstitial cache-control', `expected no-store, got ${page.cacheControl}`);
   expectPresent('…and noindex', page.body, 'noindex');
 
   // The KO surface, through the KakaoTalk UA the founder's traffic actually carries.
-  const koEntry = '/auth/signin?next=%2Fko%2Fprompts&locale=ko';
+  const koEntry = '/auth/signin?provider=google&next=%2Fko%2Fvideo&locale=ko';
   const koHop = await request(koEntry, { headers: { 'user-agent': KAKAOTALK_UA } });
   const koTarget = koHop.location ? new URL(koHop.location, BASE) : null;
   if (koTarget?.pathname === '/auth/open-in-browser') {
@@ -604,135 +902,8 @@ const promptToken = (slug: string) => PROMPT_SENTINELS.find((s) => s.slug === sl
 /** Every sentinel an anonymous reader must NEVER meet: gated YAGI text + both moderation states. */
 const FORBIDDEN_PROMPT_SENTINELS = PROMPT_SENTINELS.filter((s) => !s.publicToAnon);
 
-/**
- * The gallery is STATIC and cached, so it is served byte-identically to every tier. That makes it
- * the highest-value sweep target on the site: if a single gated character can reach this document,
- * it reaches everyone at once and stays in a CDN.
- */
-async function sweepPromptGallery(locale: string): Promise<void> {
-  const path = `/${locale}/prompts`;
-  console.log(`\n${path} — the gallery, anonymous`);
-  const page = await get(path);
 
-  expectEqual('renders 200', page.status, 200);
 
-  // Positive controls first: without these, every absence below would pass on an empty page.
-  expectPresent('YAGI rail header', page.body, locale === 'ko' ? 'YAGI 오리지널' : 'ORIGINAL PROMPTS BY YAGI');
-  expectPresent('community rail header', page.body, locale === 'ko' ? '커뮤니티 프롬프트' : 'FROM THE COMMUNITY');
-  expectPresent('the model chip', page.body, 'SEEDANCE 2.5');
-  expectPresent('lock chips on gated cards', page.body, 'data-lock-chip');
-  expectPresent('cards are addressable', page.body, `data-prompt-card="${GATED_PROMPT}"`);
-  expectPresent('community credit', page.body, '@hana');
-  expectPresent('the use-case filter', page.body, 'data-use-case-filter');
-  expectPresent('the submit CTA', page.body, '/prompts/submit');
-
-  // The property that matters: no prompt text of ANY kind reaches a card.
-  for (const sentinel of PROMPT_SENTINELS) {
-    expectAbsent(`NO ${sentinel.status}/${sentinel.visibility} text on a card (${sentinel.token})`, page.body, sentinel.token);
-  }
-  for (const slug of HIDDEN_PROMPT_SLUGS) {
-    expectAbsent(`no ${slug} card at all`, page.body, `data-prompt-card="${slug}"`);
-  }
-  expectAbsent('no staging keys in the gallery', page.body, 'content/prompt/');
-  // §15 — the gallery is static and shared; a balance is per-viewer and must never reach it.
-  expectAbsent('no cookie balance in the gallery', page.body, 'data-cookie-balance');
-}
-
-async function sweepPromptDetails(locale: string, prompts: PromptProbe[]): Promise<void> {
-  console.log(`\n/${locale}/prompts/[slug] — details, anonymous`);
-  const gatedRow = prompts.find((p) => p.slug === GATED_PROMPT)!;
-
-  const gated = await get(`/${locale}/prompts/${GATED_PROMPT}`);
-  expectEqual('a Pro-gated prompt still renders 200', gated.status, 200);
-  expectEqual('…and is never cached (§3.4)', gated.cacheControl, 'private, no-store');
-  expectPresent('…with the §5.5 lock panel', gated.body, 'data-lock-panel');
-  expectPresent('…and the card surface anyone may see', gated.body, 'data-model-chip');
-  expectAbsent('…and NONE of its text', gated.body, promptToken(GATED_PROMPT));
-  // Its OWN copy button is gone. The related cards keep theirs — they are a different prompt each,
-  // and the endpoint decides per id, so a copy control there is not a claim about this one.
-  expectAbsent('…and no copy button for itself', gated.body, `data-copy-prompt="${gatedRow.id}"`);
-
-  // §15.3 — the funnel, from outside: an anonymous reader is offered SIGN-IN and nothing else.
-  // The literal string is the positive control that the panel really rendered (keep it in step
-  // with messages/*.ts `cookies.signinCta`); the absences are the §15 posture — no spend form a
-  // stranger could POST, no wallet panel, and no balance figure anywhere anonymous.
-  expectPresent('…and the §15.3 sign-in funnel', gated.body, 'data-unlock-cta="signin"');
-  expectPresent(
-    '…in the dictionary words',
-    gated.body,
-    locale === 'ko' ? '로그인하고 프롬프트 확인하기' : 'Sign in to read the prompt',
-  );
-  expectPresent('…returning to this prompt', gated.body, encodeURIComponent(`/${locale}/prompts/${GATED_PROMPT}`));
-  expectAbsent('…never the spend CTA', gated.body, 'data-unlock-cta="spend"');
-  expectAbsent('…never the wallet panel', gated.body, 'data-unlock-cta="empty"');
-  expectAbsent('…and no cookie balance', gated.body, 'data-cookie-balance');
-
-  const teaser = await get(`/${locale}/prompts/${TEASER_PROMPT}`);
-  expectEqual('a public teaser renders 200', teaser.status, 200);
-  expectPresent('…with its text (positive control)', teaser.body, promptToken(TEASER_PROMPT));
-  expectPresent('…in the monospace block', teaser.body, 'data-prompt-text');
-  expectAbsent('…and no lock panel', teaser.body, 'data-lock-panel');
-
-  const community = await get(`/${locale}/prompts/${COMMUNITY_PROMPT}`);
-  expectEqual('a community prompt renders 200', community.status, 200);
-  expectPresent('…with its text, free to everyone (§13.3-1)', community.body, promptToken(COMMUNITY_PROMPT));
-
-  for (const slug of HIDDEN_PROMPT_SLUGS) {
-    expectEqual(`${slug} 404s`, (await get(`/${locale}/prompts/${slug}`)).status, 404);
-  }
-  expectEqual('an unknown slug 404s', (await get(`/${locale}/prompts/no-such-prompt`)).status, 404);
-
-  // Whatever the page did, the two moderation sentinels are nowhere on the public surface.
-  for (const path of [`/${locale}/prompts`, `/${locale}/prompts/${GATED_PROMPT}`, '/sitemap.xml']) {
-    const response = await get(path);
-    for (const sentinel of FORBIDDEN_PROMPT_SENTINELS) {
-      expectAbsent(`${path}: no ${sentinel.token}`, response.body, sentinel.token);
-    }
-  }
-}
-
-/** §13.3-5 — the gate that lets a static gallery offer copy at all. */
-async function sweepPromptCopy(prompts: PromptProbe[]): Promise<void> {
-  console.log('\n/api/prompts/copy — entitlement, anonymous');
-
-  const bySlug = (slug: string) => prompts.find((p) => p.slug === slug);
-  const community = bySlug(COMMUNITY_PROMPT);
-  const teaser = bySlug(TEASER_PROMPT);
-  const gated = bySlug(GATED_PROMPT);
-  const pending = prompts.find((p) => p.status === 'pending');
-  const rejected = prompts.find((p) => p.status === 'rejected');
-
-  if (!community || !teaser || !gated || !pending || !rejected) {
-    fail('prompt fixture discovery', 'the local snapshot is missing a prompt — re-run npm run db:local');
-    return;
-  }
-
-  const copy = (id: string) => postJson(`/api/prompts/copy/${id}`, {});
-
-  const open = await copy(community.id);
-  expectEqual('a community prompt copies for anon', open.status, 200);
-  expectPresent('…and the answer is the real text', open.body, promptToken(COMMUNITY_PROMPT));
-  expectEqual('…and is never cached', open.cacheControl, 'private, no-store');
-
-  const teaserCopy = await copy(teaser.id);
-  expectEqual('a public YAGI teaser copies for anon', teaserCopy.status, 200);
-
-  const refused = await copy(gated.id);
-  expectOneOf('a Pro prompt refuses anon', refused.status, [401, 403]);
-  expectAbsent('…with no text in the refusal', refused.body, promptToken(GATED_PROMPT));
-  expectPresent('…and a way forward', refused.body, 'sign_in_required');
-  expectEqual('…never cached either', refused.cacheControl, 'private, no-store');
-
-  expectEqual('a pending submission 404s', (await copy(pending.id)).status, 404);
-  expectEqual('a rejected submission 404s', (await copy(rejected.id)).status, 404);
-  expectEqual(
-    'an unknown id 404s',
-    (await copy('11111111-2222-4333-8444-555555555555')).status,
-    404,
-  );
-  expectEqual('a malformed id 404s rather than 500s', (await copy('not-a-uuid')).status, 404);
-  expectEqual('GET is not the copy verb', (await get(`/api/prompts/copy/${community.id}`)).status, 405);
-}
 
 /** §13.1 — poster/clip bytes are public marketing surface for PUBLISHED items and nothing else. */
 async function sweepPromptMedia(prompts: PromptProbe[]): Promise<void> {
@@ -783,350 +954,870 @@ async function sweepPromptMedia(prompts: PromptProbe[]): Promise<void> {
     fail('audio download disposition', `got ${download.contentDisposition}`);
   }
 
-  const detail = await get(`/en/prompts/${AUDIO_PROMPT}`);
-  expectPresent('the detail page carries the audio row', detail.body, 'data-prompt-audio');
-  expectPresent('…with the one-press download', detail.body, 'data-audio-download');
-  expectPresent('…that asks for the attachment', detail.body, 'download=1');
-  // Negative control: an item with no audio renders no empty audio chrome.
-  const noAudio = await get(`/en/prompts/${GATED_PROMPT}`);
-  expectAbsent('no audio row where there is no audio', noAudio.body, 'data-prompt-audio');
 }
 
-/** §13.2 — the gated halves of the prompts surface, from outside. */
-async function sweepPromptGates(): Promise<void> {
-  console.log('\n/prompts/submit + /admin/prompts — anonymous');
 
-  const submit = await get('/prompts/submit');
-  expectOneOf('/prompts/submit redirects anon', submit.status, [302, 307, 308]);
-  if (submit.location && !submit.location.includes('/prompts/submit')) {
-    ok('…away from the form', submit.location);
-  } else fail('/prompts/submit redirect target', `unexpected location ${submit.location}`);
 
-  const admin = await get('/admin/prompts');
-  expectOneOf('/admin/prompts refuses anon', admin.status, [302, 307, 308, 404]);
-  expectAbsent('…and leaks no queue', admin.body, 'data-prompt-queue');
 
-  // The gallery is public and must NOT be caught by the app-path gate.
-  expectEqual('/en/prompts stays public', (await get('/en/prompts')).status, 200);
-  const unprefixed = await get('/prompts');
-  expectOneOf('unprefixed /prompts 308s into a locale', unprefixed.status, [307, 308]);
-  if (unprefixed.location?.includes('/prompts')) ok('…keeping the path', unprefixed.location);
-  else fail('/prompts redirect target', `unexpected location ${unprefixed.location}`);
-}
 
-/** §13.2 SEO: the gallery and every published prompt are indexed; moderation states are not. */
-async function sweepPromptSeo(): Promise<void> {
-  console.log('\nsitemap + <head> — the prompts surface');
 
+
+
+
+
+// ---------------------------------------------------------------------------
+// docs/TEMPLATES-IA.md — the template surface (2026-09-05)
+// ---------------------------------------------------------------------------
+
+/** A template not yet for sale in the fixtures (price 0): the page says so instead of selling. */
+const CLOSED_TEMPLATE = 'mv-strobe-corridor';
+/** The one image template in the fixtures. */
+const IMAGE_TEMPLATE = TEASER_PROMPT;
+
+/**
+ * The two tabs and the template page, anonymous. The disclosure property is simpler than the
+ * prompt era's and stricter: NO prompt text of any kind reaches any public page any more — not on a
+ * card, not on the template page, not in a lock panel, because there is no lock panel.
+ */
+async function sweepTemplates(): Promise<void> {
+  for (const locale of ['en', 'ko'] as const) {
+    const path = `/${locale}/video`;
+    console.log(`\n${path} — the VIDEO tab, anonymous`);
+    const page = await get(path);
+    expectEqual('renders 200', page.status, 200);
+    expectPresent('is the video tab', page.body, 'data-templates="video"');
+    expectPresent('shows the tabs', page.body, 'data-medium-tab="image"');
+    expectPresent('cards are addressable', page.body, `data-prompt-card="${GATED_PROMPT}"`);
+    // Founder, 2026-09-07: no price on a card — it lives on the template page, in the reader's currency.
+    expectAbsent('cards wear no price', page.body, 'data-price-chip');
+    // `>$4<` — the price as rendered text; a bare `$4` also matches React Flight's `"$4:props…"` references.
+    expectAbsent('…not even the number', page.body, locale === 'ko' ? '5,900원' : '>$4<');
+    expectPresent('cards link to template pages', page.body, `href="/${locale}/t/${GATED_PROMPT}"`);
+    // PLATFORM-2.0 §15.3-4 (founder 2026-10-23): portrait templates are 4:5 cards, 16:9 is for
+    // landscape ones; the card names length and shape, never the engine, and is one link.
+    expectPresent('portrait templates sit in 4:5 cards', page.body, 'data-frame="portrait"');
+    expectPresent('…landscape ones keep 16:9', page.body, 'data-frame="landscape"');
+    expectPresent('…with a length chip', page.body, 'data-card-duration');
+    expectPresent('…and a ratio chip', page.body, 'data-card-aspect');
+    expectAbsent('…and no engine chip', page.body, 'data-model-chip');
+    expectAbsent('…and no "view template" button', page.body, 'data-card-detail');
+    expectPresent('the use-case filter', page.body, 'data-use-case-filter');
+    // §15.3-5: the GEO definition is still in the HTML, under the grid rather than above it.
+    {
+      const definition = page.body.indexOf('data-service-definition');
+      const lastCard = page.body.lastIndexOf('data-prompt-card=');
+      if (definition > lastCard && lastCard > -1) ok('the service definition follows the grid', `${definition} > ${lastCard}`);
+      else fail('the service definition follows the grid', `definition at ${definition}, last card at ${lastCard}`);
+    }
+    expectAbsent('no lock chips anywhere', page.body, 'data-lock-chip');
+    expectAbsent('no image template on the video tab', page.body, `data-prompt-card="${IMAGE_TEMPLATE}"`);
+    expectAbsent('no prompt submission door', page.body, '/prompts/submit');
+    // docs/PLATFORM-2.0.md §3.2-1: the first-run sheet is a client island — nothing of it in static HTML.
+    expectAbsent('the first-run sheet never reaches the static page', page.body, 'data-onboarding-sheet');
+    for (const sentinel of PROMPT_SENTINELS) {
+      expectAbsent(`NO prompt text on a card (${sentinel.token})`, page.body, sentinel.token);
+    }
+    for (const slug of HIDDEN_PROMPT_SLUGS) {
+      expectAbsent(`no ${slug} card at all`, page.body, `data-prompt-card="${slug}"`);
+    }
+    expectAbsent('no staging keys', page.body, 'content/prompt/');
+  }
+
+  console.log('\n/en/image — the IMAGE tab, anonymous');
+  const image = await get('/en/image');
+  expectEqual('renders 200', image.status, 200);
+  expectPresent('is the image tab', image.body, 'data-templates="image"');
+  expectPresent('shows the image template', image.body, `data-prompt-card="${IMAGE_TEMPLATE}"`);
+  expectAbsent('and no video template', image.body, `data-prompt-card="${GATED_PROMPT}"`);
+
+  console.log('\n/en/t/[slug] — template pages, anonymous');
+  const detail = await get(`/en/t/${GATED_PROMPT}`);
+  expectEqual('a priced template renders 200', detail.status, 200);
+  if (detail.cacheControl !== 'private, no-store') ok('…and is cacheable — nothing on it is gated', detail.cacheControl ?? '(none)');
+  else fail('template detail cache mode', 'must not be private, no-store: the page has no per-viewer half');
+  expectPresent('…names itself', detail.body, `data-template="${GATED_PROMPT}"`);
+  expectPresent('…with the make section', detail.body, 'data-template-make');
+  expectPresent('…and the one-style studio', detail.body, 'data-single="true"');
+  // Founder, 2026-09-11: no demo. PLATFORM-2.0 §3.2-2: the static page no longer paints "closed" and
+  // flips — it draws a neutral skeleton, and the per-viewer access call settles it in the browser.
+  expectPresent('…and the studio starts as a neutral skeleton', detail.body, 'data-studio-pending');
+  expectAbsent('…not painted closed before the access call', detail.body, 'data-studio-closed');
+  // §15.3-1, revised 2026-10-29 (founder): a short make box on the page, the make card in a sheet.
+  expectPresent('…a make box on the page', detail.body, 'data-template-make-launcher');
+  expectPresent('…the make card in a sheet', detail.body, 'data-make-sheet');
+  expectAbsent('…no price box', detail.body, 'data-template-price-box');
+  expectAbsent('…no link button above the card', detail.body, 'data-template-make-cta');
+  expectPresent('…its facts', detail.body, 'data-template-fact');
+  expectPresent('…the AI limit inside the card', detail.body, 'data-studio-ai-note');
+  expectPresent('…the refund sentence inside the card', detail.body, 'data-template-refund');
+  expectAbsent('…no engine chip on the decision screen', detail.body, 'data-engine-chip');
+  expectPresent('…a phone sticky bar', detail.body, 'data-make-sticky');
+  if (/<div[^>]*data-make-sticky[^>]*data-hide-tabs/.test(detail.body)) ok('…that hides the installed app tabs', 'data-hide-tabs');
+  else fail('…sticky bar hides the app tabs', 'data-make-sticky must carry data-hide-tabs');
+  expectPresent('…and the selfie strip still opens the make card', detail.body, 'href="#make"');
+  expectAbsent('…no demo badge anywhere', detail.body, 'data-demo-badge');
+  expectAbsent('…no placeholder ad', detail.body, 'YOUR AD HERE');
+  expectAbsent('…no house ad rail', detail.body, 'data-house-ad');
+  // The terms promise the single-purchase price on the template page (while the shop is open: tests/ui/make-screen);
+  // credits and "subscribe" wait for subscriptions (§19.2).
+  const shown = (html: string) => html.replace(/<script[\s\S]*?<\/script>/g, '');
+  expectAbsent('…no "Subscribe to make it here" while subscriptions are closed', detail.body, 'Subscribe to make it here');
+  expectAbsent('…and no credits', shown(detail.body), 'data-template-credits');
+  expectAbsent('…no Offer price in the structured data', detail.body, 'priceCurrency');
+  // The related list uses the same justified film rows as the catalogue.
+  if (/<ul[^>]*data-related-grid[^>]*class="[^"]*\bfilm-rows\b/.test(detail.body)) ok('…related templates in film rows', 'data-related-grid');
+  else fail('…related templates grid', 'expected data-related-grid with film-rows');
+  expectPresent('…whose items are cards', detail.body, 'data-related-item');
+  const detailKo = await get(`/ko/t/${GATED_PROMPT}`);
+  expectEqual('the Korean template page renders 200', detailKo.status, 200);
+  expectAbsent('…no "구독하고 여기서 만들기" while subscriptions are closed', detailKo.body, '구독하고 여기서 만들기');
+  if (/완성까지<\/dt><dd[^>]*>보통 \d+분/.test(detailKo.body)) ok('…with the typical wait in minutes', '보통 N분');
+  else fail('…typical wait', 'expected "완성까지 · 보통 N분" in the make card');
+  expectAbsent('…and never a dollar', detailKo.body, '>$4<');
+  expectAbsent('…and NONE of its prompt text', detail.body, promptToken(GATED_PROMPT));
+  expectAbsent('…no prompt block', detail.body, 'data-prompt-text');
+  expectAbsent('…no lock panel', detail.body, 'data-lock-panel');
+  expectAbsent('…no copy button', detail.body, 'data-copy-prompt');
+  expectAbsent('…no cookie balance', detail.body, 'data-cookie-balance');
+  for (const sentinel of PROMPT_SENTINELS) {
+    expectAbsent(`…no prompt text of any kind (${sentinel.token})`, detail.body, sentinel.token);
+  }
+
+  const closed = await get(`/en/t/${CLOSED_TEMPLATE}`);
+  expectEqual('a not-yet-for-sale template renders 200', closed.status, 200);
+  expectPresent('…and says so', closed.body, 'data-template-closed');
+  expectAbsent('…without a studio', closed.body, 'data-twings-studio');
+  // (Related cards below it may well carry price chips — the assertion is on ITS facts, not the page.)
+  expectPresent('…and no price in its facts', closed.body, 'data-template-closed');
+
+  const imageDetail = await get(`/en/t/${IMAGE_TEMPLATE}`);
+  expectEqual('an image template renders 200', imageDetail.status, 200);
+  expectPresent('…as an image', imageDetail.body, 'data-medium="image"');
+  // A set template (2026-10-27): every frame one order makes, on the page and never on the card.
+  expectPresent('…a set shows all its frames', imageDetail.body, 'data-template-gallery="2"');
+  expectPresent('…the last of them included', imageDetail.body, 'data-template-gallery-frame="2"');
+  expectPresent('…and says how many images it makes', imageDetail.body, '2 images');
+  expectAbsent('…the image tab carries no set frames', image.body, 'data-template-gallery');
+  expectAbsent('…a single template has no set section', detail.body, 'data-template-gallery');
+
+  for (const slug of HIDDEN_PROMPT_SLUGS) {
+    expectEqual(`${slug} 404s`, (await get(`/en/t/${slug}`)).status, 404);
+  }
+  expectEqual('an unknown slug 404s', (await get('/en/t/no-such-template')).status, 404);
+
+  // Whatever the pages did, the moderation sentinels are nowhere on the public surface.
+  for (const path of ['/en/video', '/en/image', `/en/t/${GATED_PROMPT}`, '/sitemap.xml']) {
+    const response = await get(path);
+    for (const sentinel of FORBIDDEN_PROMPT_SENTINELS) {
+      expectAbsent(`${path}: no ${sentinel.token}`, response.body, sentinel.token);
+    }
+  }
+
+  console.log('\nsitemap + robots + <head> — the template surface');
   const sitemap = await get('/sitemap.xml');
-  expectPresent('lists the gallery (en)', sitemap.body, '/en/prompts<');
-  expectPresent('lists the gallery (ko)', sitemap.body, '/ko/prompts<');
+  for (const rest of ['/en/video<', '/ko/video<', '/en/image<', '/ko/image<']) {
+    expectPresent(`lists ${rest.slice(0, -1)}`, sitemap.body, rest);
+  }
   for (const slug of [GATED_PROMPT, TEASER_PROMPT, COMMUNITY_PROMPT]) {
-    expectPresent(`lists /en/prompts/${slug}`, sitemap.body, `/en/prompts/${slug}`);
-    expectPresent(`lists /ko/prompts/${slug}`, sitemap.body, `/ko/prompts/${slug}`);
+    expectPresent(`lists /en/t/${slug}`, sitemap.body, `/en/t/${slug}`);
+    expectPresent(`lists /ko/t/${slug}`, sitemap.body, `/ko/t/${slug}`);
   }
   for (const slug of HIDDEN_PROMPT_SLUGS) {
     expectAbsent(`never lists ${slug}`, sitemap.body, slug);
   }
-  expectAbsent('never lists the submission form', sitemap.body, '/prompts/submit');
-
+  for (const gone of ['/prompts', '/contests', '/studio']) {
+    expectAbsent(`never lists the retired ${gone}`, sitemap.body, `${gone}<`);
+    expectAbsent(`never lists ${gone}/`, sitemap.body, `${gone}/`);
+  }
   const robots = await get('/robots.txt');
-  expectPresent('robots disallows the submission form', robots.body, 'Disallow: /prompts/submit');
+  expectAbsent('robots no longer names the retired forms', robots.body, '/prompts/submit');
+  expectAbsent('…nor the contest entry', robots.body, '/contests/*/submit');
+  expectPresent('self-canonical', detail.body, `rel="canonical" href="${BASE}/en/t/${GATED_PROMPT}"`);
+  expectPresent('hreflang ko', detail.body, `hrefLang="ko" href="${BASE}/ko/t/${GATED_PROMPT}"`);
+  expectAbsent('a template is NOT deindexed', detail.body, 'name="robots" content="noindex');
+  expectPresent('og:site_name on the template', detail.body, 'property="og:site_name" content="TWINGS"');
+  const video = await get('/en/video');
+  expectPresent('the video tab self-canonicals', video.body, `rel="canonical" href="${BASE}/en/video"`);
+  expectPresent('og:site_name on the tab', video.body, 'property="og:site_name" content="TWINGS"');
 
-  const detail = await get(`/en/prompts/${GATED_PROMPT}`);
-  expectPresent('self-canonical', detail.body, `rel="canonical" href="${BASE}/en/prompts/${GATED_PROMPT}"`);
-  expectPresent('hreflang ko', detail.body, `hrefLang="ko" href="${BASE}/ko/prompts/${GATED_PROMPT}"`);
-  expectPresent('hreflang x-default', detail.body, 'hrefLang="x-default"');
-  // A gated prompt page is still a public page — only the text is gated.
-  expectAbsent('a Pro-gated prompt is NOT deindexed', detail.body, 'name="robots" content="noindex');
-  // F6 — the share card names the site, because it is read where the site is not.
-  expectPresent('og:site_name on the detail', detail.body, 'property="og:site_name" content="TWINGS"');
-
-  const gallery = await get('/en/prompts');
-  expectPresent('the gallery self-canonicals', gallery.body, `rel="canonical" href="${BASE}/en/prompts"`);
-  expectAbsent('the gallery is indexed', gallery.body, 'name="robots" content="noindex');
-  expectPresent('og:site_name on the gallery', gallery.body, 'property="og:site_name" content="TWINGS"');
+  console.log('\n/manifest.webmanifest + /sw.js — the PWA files, unprefixed');
+  const manifest = await get('/manifest.webmanifest');
+  expectEqual('the manifest is served at the root', manifest.status, 200);
+  expectPresent('…and names the app', manifest.body, '"TWINGS"');
+  expectPresent('…in standalone display', manifest.body, '"standalone"');
+  // docs/PLATFORM-2.0.md §5.2 — the installed app's manifest, in the site's own white.
+  expectPresent('…splash and status bar in the site’s white', manifest.body, '"theme_color":"#ffffff"');
+  expectPresent('…white background', manifest.body, '"background_color":"#ffffff"');
+  expectPresent('…starting on the formats in the reader’s locale', manifest.body, '"start_url":"/video?source=pwa"');
+  expectPresent('…with the fixed app id', manifest.body, '"id":"/"');
+  expectPresent('…maskable icons', manifest.body, '"purpose":"maskable"');
+  expectPresent('…and the two shortcuts', manifest.body, '"shortcuts"');
+  for (const icon of ['/icons/icon-192.png', '/icons/icon-512.png', '/icons/maskable-192.png', '/icons/maskable-512.png', '/icons/badge-96.png']) {
+    const served = await get(icon);
+    expectEqual(`${icon} is served`, served.status, 200);
+    expectPresent(`${icon} is a PNG`, served.contentType ?? '', 'image/png');
+  }
+  const worker = await get('/sw.js');
+  expectEqual('the service worker is served at the root', worker.status, 200);
+  expectPresent('…and shows the completion push', worker.body, "self.addEventListener('push'");
+  expectPresent('…and opens its link on a tap', worker.body, "self.addEventListener('notificationclick'");
+  expectPresent('…keeping navigations network first', worker.body, "if (request.mode !== 'navigate') return;");
+  expectEqual('the offline page is served at the root', (await get('/offline.html')).status, 200);
+  const landing = await get('/en');
+  expectPresent('the landing declares the manifest', landing.body, 'rel="manifest"');
+  expectPresent('…runs edge to edge (safe areas padded in CSS)', landing.body, 'viewport-fit=cover');
+  // A white page under the iOS `default` bar (dark text on white); black-translucent would hide it.
+  expectPresent('…under the default iOS status bar', landing.body, 'name="apple-mobile-web-app-status-bar-style" content="default"');
+  expectPresent('…with the white browser chrome', landing.body, 'name="theme-color" content="#ffffff"');
+  // 2026-10-07: no bottom-fixed UI in the mobile browser — the tabs exist only after the page
+  // finds itself installed, never in server HTML.
+  expectAbsent('…and never ships the bottom tabs in its HTML', landing.body, 'data-bottom-tabs');
 }
 
-/** §13.2 — the landing pivot: prompts in the nav, prompt cards in the featured strip. */
-async function sweepLandingPivot(): Promise<void> {
-  console.log('\n/en — the landing after the pivot');
-  const page = await get('/en');
+/** The prompt site's URLs 308 onto the template site's; the copy door answers 410. */
+async function sweepTemplateRedirects(prompts: PromptProbe[]): Promise<void> {
+  console.log('\nredirects — the prompt site → the template site');
+  const cases: Array<[string, string]> = [
+    ['/en/studio', '/en/video'],
+    ['/ko/studio', '/ko/video'],
+    ['/en/prompts', '/en/video'],
+    [`/en/prompts/${GATED_PROMPT}`, `/en/t/${GATED_PROMPT}`],
+    ['/ko/contests', '/ko/campaigns'],
+    ['/en/contests/some-contest', '/en/campaigns'],
+    ['/prompts/submit', '/en/video'],
+    ['/contests/some-contest/submit', '/en/campaigns'],
+  ];
+  for (const [from, to] of cases) {
+    const response = await get(from);
+    expectEqual(`${from} redirects permanently`, response.status, 308);
+    if (response.location?.endsWith(to)) ok(`…to ${to}`);
+    else fail(`${from} redirect target`, `expected ${to}, got ${response.location}`);
+  }
+  // …while the unprefixed public forms still 308 into a locale like every public page.
+  const unprefixed = await get('/video');
+  expectOneOf('unprefixed /video 308s into a locale', unprefixed.status, [307, 308]);
+  if (unprefixed.location?.includes('/video')) ok('…keeping the path', unprefixed.location);
+  else fail('/video redirect target', `unexpected location ${unprefixed.location}`);
+  expectOneOf('/admin/prompts refuses anon', (await get('/admin/prompts')).status, [302, 307, 308, 404]);
 
+  console.log('\n/api/prompts/copy — closed (410)');
+  const community = prompts.find((p) => p.slug === COMMUNITY_PROMPT)!;
+  const gone = await postJson(`/api/prompts/copy/${community.id}`, {});
+  expectEqual('a community prompt no longer copies for anyone', gone.status, 410);
+  expectAbsent('…and no text in the answer', gone.body, promptToken(COMMUNITY_PROMPT));
+  expectEqual('…never cached', gone.cacheControl, 'private, no-store');
+  expectEqual('an unknown id is 410 too — there is nothing to look up', (await postJson('/api/prompts/copy/11111111-2222-4333-8444-555555555555', {})).status, 410);
+  expectEqual('GET is not the copy verb', (await get(`/api/prompts/copy/${community.id}`)).status, 405);
+}
+
+/** The landing after the template pivot: the two doors, the video rail, no prompt text. */
+async function sweepLandingTemplates(): Promise<void> {
+  console.log('\n/en — the landing as a template site');
+  const page = await get('/en');
   expectEqual('renders 200', page.status, 200);
-  expectPresent('nav points at the gallery', page.body, 'href="/en/prompts"');
-  expectPresent('featured strip is prompt cards', page.body, 'data-prompt-card=');
-  expectPresent('the model is on the page', page.body, 'SEEDANCE 2.5');
-  // PLAYBOOKS_IN_NAV=false: the library keeps working but is not linked from the marketing chrome.
+  expectPresent('nav points at the video tab', page.body, 'href="/en/video"');
+  expectPresent('nav points at the image tab', page.body, 'href="/en/image"');
+  expectPresent('nav points at campaigns', page.body, 'href="/en/campaigns"');
+  expectAbsent('nav no longer points at prompts', page.body, 'href="/en/prompts"');
+  expectAbsent('nav no longer points at the studio', page.body, 'href="/en/studio"');
+  expectAbsent('nav no longer points at contests', page.body, 'href="/en/contests"');
+  expectPresent('the hero opens on the video door', page.body, 'data-hero-video');
+  // §15.3-2: the founder-approved default selfie → scene pair renders on the landing.
+  expectPresent('the selfie → scene evidence pair is on the landing', page.body, 'data-hero-evidence');
+  expectPresent('the hero sale-state line', page.body, 'data-creator-availability');
+  expectAbsent('no placeholder ad on the landing', page.body, 'YOUR AD HERE');
+  expectPresent('the creator home has a separate brand entry', page.body, 'data-brand-door');
+  expectPresent('the brand entry leads to public services', page.body, 'href="/en/brands"');
+  expectPresent('the video rail is template cards', page.body, 'data-prompt-card=');
+  expectAbsent('no engine name on the landing (IDENTITY §7)', page.body, 'SEEDANCE 2.5');
   expectAbsent('the library is denavigated', page.body, 'href="/library"');
   for (const sentinel of PROMPT_SENTINELS) {
     expectAbsent(`no prompt text on the landing (${sentinel.token})`, page.body, sentinel.token);
   }
-  // §15 — same rule as the gallery: static page, shared by every tier, no balance on it.
   expectAbsent('no cookie balance on the landing', page.body, 'data-cookie-balance');
-  // F6 — the landing's share card names the site.
   expectPresent('og:site_name on the landing', page.body, 'property="og:site_name" content="TWINGS"');
-
   expectEqual('/library still works for anyone who has the URL', (await get('/library')).status, 307);
 }
 
-// ---------------------------------------------------------------------------
-// §15 — the cookies surface (M10)
-// ---------------------------------------------------------------------------
-
 /**
- * The pricing page presents the MODEL (가입 3 · 주 1 · $4/5) and never a wallet: it is static by
- * contract (§3.1), so anything per-viewer on it would be one reader's balance in everyone's CDN
- * copy. The literals below are kept in step with messages/*.ts `pricing.cookie*`.
+ * docs/PLATFORM-2.0.md §7.5·§14.1 — the header names (개인 | 브랜드), the two origin rails and the
+ * public maker page. The local snapshot carries published community fixtures (maker origin) and one
+ * maker who opted in (`scripts/maker-fixtures.ts`, `@jun`), so here both rails exist; production
+ * has no maker template yet, and the unit tests pin that the second rail and the chips then vanish.
  */
-async function sweepPricingCookies(): Promise<void> {
-  console.log('\n/en/pricing + /ko/pricing — the cookie model, anonymous');
+async function sweepMakers(): Promise<void> {
+  console.log('\n§14.1 names — the header audience switch');
+  for (const [locale, personal, brand] of [['ko', KO_TERMS.personal, '브랜드'], ['en', EN_TERMS.personal, 'Brands']] as const) {
+    const page = await get(`/${locale}`);
+    const side = (id: string) => new RegExp(`data-audience="${id}"[^>]*>([^<]*)</a>`).exec(page.body)?.[1] ?? null;
+    expectEqual(`${locale}: the switch's consumer side reads "${personal}"`, side('creator'), personal);
+    expectEqual(`${locale}: …and its brand side "${brand}"`, side('brand'), brand);
+  }
+
+  // §7.5 (founder 2026-10-30): one feed — originals and AI creatives mixed, no origin rails or chips.
+  console.log(`\n/ko/video — ${KO_TERMS.studioCollection} and ${KO_TERMS.maker} templates in one grid`);
+  const video = await get('/ko/video');
+  expectEqual('one grid on the listing', video.body.split('data-rail="').length - 1, 1);
+  expectAbsent('…no origin rails', video.body, 'data-rail-origin');
+  expectAbsent('…no origin chips', video.body, 'data-origin-filter');
+  expectAbsent('…no collection headings', video.body, `>${KO_TERMS.makerCollection}</h2>`);
+  const origins = [...video.body.matchAll(/data-card-origin="(studio|maker)"/g)].map((match) => match[1]!);
+  expectEqual('both origins in that grid', [...new Set(origins)].sort().join(','), 'maker,studio');
+  // While both still have cards, one origin never holds more than three places in a row.
+  const mixedUntil = Math.min(origins.lastIndexOf('studio'), origins.lastIndexOf('maker'));
+  let longest = 0;
+  for (let i = 0, run = 0; i <= mixedUntil; i++) { run = i > 0 && origins[i] === origins[i - 1] ? run + 1 : 1; longest = Math.max(longest, run); }
+  if (longest <= 3) ok('…mixed, never more than three of one origin in a row', origins.join(' '));
+  else fail('…mixed, never more than three of one origin in a row', origins.join(' '));
+  expectPresent('a public creative is credited by handle', video.body, `${KO_TERMS.creditPrefix} @jun`);
+  expectAbsent('no "작가" anywhere on the catalogue', video.body, '작가');
+  expectAbsent('no author account id reaches the page', video.body, 'f0000000-0000-4000-8000-000000000002');
+  const home = await get('/ko');
+  expectAbsent('the home page has no separate creatives rail', home.body, 'data-rail="makers"');
+  const homeVideo = home.body.slice(home.body.indexOf('data-rail="video"'), home.body.indexOf('data-all-video'));
+  expectPresent('…its video rail carries the creatives\' templates', homeVideo, 'data-card-origin="maker"');
+
+  console.log('\n/ko/t/[slug] — one creator line, only where the creative opted in');
+  const makerTemplate = await get('/ko/t/cafe-window-timelapse');
+  expectEqual('renders 200', makerTemplate.status, 200);
+  expectPresent('the creator line', makerTemplate.body, 'data-template-maker="jun"');
+  expectEqual('…once', makerTemplate.body.split('data-template-maker=').length - 1, 1);
+  const line = makerTemplate.body.indexOf('data-template-maker="jun"');
+  if (line > makerTemplate.body.indexOf('<h1') && line < makerTemplate.body.indexOf('data-template-description')) ok('…right under the title');
+  else fail('…right under the title', `line at ${line}`);
+  expectPresent('…linking to the creative\'s profile', makerTemplate.body, 'href="/ko/makers/jun"');
+  expectPresent('the verified mark', makerTemplate.body, 'data-template-verified');
+  // 2026-10-29: the copy-or-make fork and the recipe pill follow a public prompt, never the credit.
+  expectAbsent('no copy-or-make fork without a public prompt', makerTemplate.body, 'data-template-recipe-actions');
+  // Locally one card has a public prompt: the studio recipe the maker fixtures disclose (LOCAL_RECIPE_SLUG).
+  expectEqual('…and the catalogue\'s recipe pill only on that one card', video.body.split('data-card-recipe="true"').length - 1, 1);
+  const legacy = await get('/ko/t/skate-park-golden-hour');
+  expectPresent('a handle without a maker page is a plain credit', legacy.body, `${KO_TERMS.creditPrefix} @hana`);
+  expectAbsent('…with no maker block', legacy.body, 'data-template-maker');
+  const studio = await get(`/ko/t/${GATED_PROMPT}`);
+  expectPresent('a studio template names the studio collection', studio.body, KO_TERMS.studioCollection);
+  expectAbsent('…and has no maker block', studio.body, 'data-template-maker');
+
+  console.log('\n/{locale}/makers/[handle] — a public maker page');
+  for (const locale of ['ko', 'en'] as const) {
+    const page = await get(`/${locale}/makers/jun`);
+    expectEqual(`${locale}: renders 200`, page.status, 200);
+    expectPresent(`${locale}: is the maker page`, page.body, 'data-maker-profile="jun"');
+    expectPresent(`${locale}: shows the maker's template`, page.body, 'data-prompt-card="cafe-window-timelapse"');
+    expectAbsent(`${locale}: and nobody else's`, page.body, 'data-prompt-card="skate-park-golden-hour"');
+    expectPresent(`${locale}: canonical`, page.body, `rel="canonical" href="http`);
+    expectPresent(`${locale}: hreflang`, page.body, 'hrefLang="ko"');
+    expectAbsent(`${locale}: indexable`, page.body, 'noindex');
+    expectAbsent(`${locale}: no account id`, page.body, 'f0000000-0000-4000-8000-000000000002');
+    expectAbsent(`${locale}: no email`, page.body, 'pro@playbook.test');
+    expectAbsent(`${locale}: no recipe claim without an open recipe`, page.body, 'data-maker-recipe-hub');
+  }
+  expectPresent('ko: the count line', (await get('/ko/makers/jun')).body, '템플릿 1편');
+
+  // §20 — the creative's identity, works and doors (local fixture `@jun`, every value marked TEST).
+  console.log('\n/{locale}/makers/jun — the AI creative page (§20)');
+  const creative = await get('/ko/makers/jun');
+  expectPresent('the creative name', creative.body, LOCAL_MAKER.displayName);
+  expectPresent('the headline', creative.body, 'data-creative-headline');
+  expectPresent('where they work', creative.body, 'data-creative-place');
+  expectPresent('…in Korean', creative.body, '대한민국');
+  expectPresent('open to brand work', creative.body, 'data-creative-open');
+  expectPresent('their tools', creative.body, 'data-creative-tools');
+  expectPresent('their links', creative.body, 'data-creative-link="website"');
+  expectPresent('their works', creative.body, 'data-creative-works="3"');
+  expectPresent('…served from the cacheable media path', creative.body, '/creative-media/wrk_');
+  expectPresent('an avatar', creative.body, '/creative-media/avatar-jun-');
+  expectPresent('a cover banner (0071)', creative.body, 'data-creative-cover="photo"');
+  const coverPath = /\/creative-media\/cover-jun-[0-9a-f]{16,32}\.jpg/.exec(creative.body)?.[0];
+  const cover = coverPath ? await get(coverPath) : null;
+  expectEqual('…which streams', cover?.status, 200);
+  expectEqual('…as an image', cover?.contentType, 'image/jpeg');
+  expectPresent('…publicly cacheable', cover?.cacheControl ?? '', 'public');
+  expectEqual('no "my cover" for an anonymous reader', (await get('/api/makers/media/cover-me')).status, 404);
+  expectPresent('the email sits behind a button', creative.body, 'data-creative-email="hidden"');
+  expectAbsent('…and never as text', creative.body, LOCAL_MAKER.publicEmail);
+  expectAbsent('…or as a mailto', creative.body, `mailto:${LOCAL_MAKER.publicEmail}`);
+  expectPresent('ProfilePage structured data', creative.body, '"@type":"ProfilePage"');
+  expectPresent('the share button', creative.body, 'data-creative-share');
+  const workPath = /\/creative-media\/wrk_[0-9a-f]{32}\.jpg/.exec(creative.body)?.[0];
+  const work = workPath ? await get(workPath) : null;
+  expectEqual('a public work streams', work?.status, 200);
+  expectEqual('…as an image', work?.contentType, 'image/jpeg');
+  expectPresent('…publicly cacheable', work?.cacheControl ?? '', 'public');
+  expectEqual('an unknown work is a 404', (await get(`/creative-media/wrk_${'0'.repeat(32)}.jpg`)).status, 404);
+  expectEqual('a malformed media name is a 404', (await get('/creative-media/..%2F..%2Fsecret.jpg')).status, 404);
+  expectEqual('the studio preview path stays private', (await get(`/api/makers/media/wrk_${'0'.repeat(32)}`)).status, 404);
+  expectEqual('no "my avatar" for an anonymous reader', (await get('/api/makers/media/avatar-me')).status, 404);
+
+  console.log('\n/@handle — the short link');
+  const short = await request('/@jun', { headers: { 'accept-language': 'en-US,en;q=0.9' } });
+  expectEqual('/@jun redirects', short.status, 307);
+  expectEqual('…to the creative page', short.location?.replace(/^https?:\/\/[^/]+/, ''), '/en/makers/jun');
+  const shortKo = await request('/ko/@jun');
+  expectEqual('/ko/@jun keeps the language', shortKo.location?.replace(/^https?:\/\/[^/]+/, ''), '/ko/makers/jun');
+
+  console.log('\n/{locale}/t/[slug] — the recipe opens for members only (§20.3)');
+  const recipePage = await get(`/en/t/${LOCAL_RECIPE_SLUG}`);
+  expectEqual('renders 200', recipePage.status, 200);
+  expectPresent('the recipe section', recipePage.body, 'data-recipe-how');
+  expectPresent('…with the creative\'s intro', recipePage.body, 'data-recipe-intro');
+  expectPresent('…behind the members\' gate', recipePage.body, 'data-recipe-gate');
+  expectPresent('…with the opening of step 1', recipePage.body, 'TEST ONLY · the person in');
+  expectAbsent('…and never the rest of the prompt', recipePage.body, LOCAL_RECIPE_CANARY);
+  expectAbsent('…nor a step tip', recipePage.body, 'TEST tip:');
+  expectAbsent('…nor the closing line', recipePage.body, '태그해 주세요');
+  const anonRecipe = await get(`/api/renders/access?template=${LOCAL_RECIPE_SLUG}&locale=en`);
+  expectEqual('the access answer renders 200', anonRecipe.status, 200);
+  expectPresent('…with no recipe for a visitor', anonRecipe.body, '"recipe":null');
+  expectAbsent('…and no prompt', anonRecipe.body, LOCAL_RECIPE_CANARY);
+  expectPresent('…never cached publicly', anonRecipe.cacheControl ?? '', 'no-store');
+
+  console.log('\n/api/mcp — the creative agent door');
+  const mcp = await request('/api/mcp', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', params: {} }) });
+  expectEqual('needs a creative token', mcp.status, 401);
+  const forged = await request('/api/mcp', { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer twk_${'a'.repeat(40)}` }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }) });
+  expectEqual('…and refuses an unknown one', forged.status, 401);
+  expectEqual('GET is not a session stream', (await get('/api/mcp')).status, 405);
+  expectEqual('a handle with no maker page is a 404', (await get('/ko/makers/hana')).status, 404);
+  expectEqual('an unknown handle is a 404', (await get('/en/makers/nobody_here')).status, 404);
+  const sitemap = await get('/sitemap.xml');
+  expectPresent('the maker page is in the sitemap', sitemap.body, '/ko/makers/jun</loc>');
+  expectAbsent('…a handle without one is not', sitemap.body, '/makers/hana');
+}
+
+/** Public monthly outcomes, no per-template price table or account data. */
+async function sweepPricingTemplates(): Promise<void> {
+  console.log('\n/en/pricing + /ko/pricing — monthly plan comparison, anonymous');
   for (const locale of ['en', 'ko']) {
     const page = await get(`/${locale}/pricing`);
     expectEqual(`/${locale}/pricing renders 200`, page.status, 200);
-    expectPresent('…with the cookie table', page.body, 'data-cookie-table');
-    expectPresent('…and the $4 = 5 pack cell', page.body, '$4 = 5');
-    // F5 — no MoR gateway is connected, so the pack cell states its status instead of
-    // implying a purchasable checkout. (Kept in step with messages/*.ts `pricing.cookiePackStatus`.)
-    expectPresent('…wearing the not-purchasable-yet chip', page.body, 'data-pack-status');
-    expectPresent(
-      '…in the dictionary words',
-      page.body,
-      locale === 'ko' ? '결제 오픈 예정' : 'CHECKOUT OPENING SOON',
-    );
-    expectPresent(
-      '…and the one-cookie rule',
-      page.body,
-      locale === 'ko' ? '쿠키 1개로 YAGI 오리지널 1개가' : 'One cookie opens one YAGI original',
-    );
-    expectAbsent('…and no balance figure', page.body, 'data-cookie-balance');
+    expectPresent('…with the upcoming monthly plan', page.body, 'data-pricing-subscription="preparing"');
+    // §15.3-3: what is sold comes first — single films over the monthly teaser while monthly is preparing.
+    expectPresent('…single films first', page.body, 'data-pricing-order="single-first"');
+    expectAbsent('…no engine name on the price page', page.body, 'Seedance');
+    expectAbsent('…no engine label either', page.body, 'SEEDANCE');
+    expectPresent('…with its Creator monthly won price', page.body, '24,900');
+    expectPresent('…with its Premium monthly won price', page.body, '49,000');
+    expectPresent('…with prompt editing honestly marked as planned', page.body, 'data-prompt-editing="planned"');
+    expectPresent('…with a usage preview', page.body, 'data-subscription-preview');
+    expectPresent('…with enrollment explicitly closed', page.body, 'data-subscription-unavailable');
+    expectAbsent('…without a subscription checkout endpoint', page.body, '/api/billing/subscription');
+    expectPresent('…with Creator output counts', page.body, 'data-plan-film-count="creator"');
+    expectPresent('…with Premium output counts', page.body, 'data-plan-film-count="premium"');
+    expectPresent('…with pricing-specific FAQs', page.body, 'data-faq-catalog="pricing"');
+    expectPresent('…with the front-facing photo guide', page.body, 'data-pricing-photo-guide');
+    expectAbsent('…without a template price table', page.body, 'data-pricing-table');
+    expectAbsent('…without technical dropdowns', page.body, '<select');
+    expectAbsent('…no cookie table', page.body, 'data-cookie-table');
+    expectAbsent('…no balance figure', page.body, 'data-cookie-balance');
   }
-  // §15 — the subscription is de-emphasized, not sold: the $9 hero is off this surface.
   const en = await get('/en/pricing');
-  expectAbsent('…and the $9 headline is gone', en.body, 'OUR ORIGINALS ARE $9');
-  // F6 — pricing's share card names the site too.
   expectPresent('og:site_name on pricing', en.body, 'property="og:site_name" content="TWINGS"');
 }
 
 // ---------------------------------------------------------------------------
-// §14 — the contests surface (M9)
+// docs/CAMPAIGNS.md — the campaigns surface (2026-09-05)
 // ---------------------------------------------------------------------------
 
-/** Every entry sentinel an anonymous reader must NEVER meet. */
-const FORBIDDEN_ENTRY_SENTINELS = CONTEST_ENTRY_SENTINELS.filter((s) => !s.publicToAnon);
-
 /**
- * The one sentinel that MUST be reachable: an approved entry of the published fixture contest.
- *
- * Without it every absence assertion below would pass on a page that renders no entries at all —
- * the vacuity the M9 review called out. This is the positive control that makes them mean something.
+ * The local snapshot seeds no campaign, so this sweep proves the SHAPE from outside: the listing is
+ * public in both locales and reachable from the nav, the two unprefixed leaves are gated at the
+ * edge (the 2026-09-05 bug: they built fine and 308'd into `/ko/campaigns/…` → 404), the admin
+ * board refuses anon, and robots agrees with the middleware about what is app surface.
  */
-const LIVE_ENTRY_SENTINEL = CONTEST_ENTRY_SENTINELS.find((s) => s.publicToAnon)!;
+async function sweepCampaigns(): Promise<void> {
+  console.log('\n/campaigns — listing, gates, robots, anonymous');
 
-async function sweepContestsListing(locale: string, contests: ContestProbe[]): Promise<void> {
-  const path = `/${locale}/contests`;
-  console.log(`\n${path} — the listing, anonymous`);
-  const page = await get(path);
-
-  expectEqual('renders 200', page.status, 200);
-
-  // Positive controls: the page is a real page, not an error dressed as one.
-  // M9 design review, finding 8: the KO hero is broken where the SENTENCE breaks, not where the
-  // English one does. (Copy naturalized in the 2026-08-13 founder pass.)
-  expectPresent(
-    'the display headline',
-    page.body,
-    locale === 'ko' ? '필름 콘테스트' : 'SET THE BRIEF.',
-  );
-  expectPresent('the OPEN rail', page.body, 'data-contest-rail="open"');
-  expectPresent(
-    'the published contest card',
-    page.body,
-    `data-contest-card="${PUBLISHED_CONTEST_SLUG}"`,
-  );
-  expectPresent('…with its phase chip', page.body, 'data-phase-chip="open"');
-  expectPresent('…and a server-rendered D-day', page.body, 'data-dday');
-
-  // §14.2 — "Listing carries the B2B CTA ('Run a contest with the studio →' mailto)".
-  expectPresent('the B2B CTA strip', page.body, 'data-contest-hire');
-  expectPresent('…as a real mailto', page.body, 'mailto:hello@yagiworkshop.xyz');
-  expectPresent(
-    '…with the studio wording',
-    page.body,
-    locale === 'ko' ? '콘테스트 개최 문의' : 'Run a contest with the studio',
-  );
-  expectPresent('nav points at the tab', page.body, `href="/${locale}/contests"`);
-
-  // The property that matters: a DRAFT contest is nowhere on the public listing.
-  for (const contest of contests) {
-    if (contest.status === 'published') continue;
-    expectAbsent(`no ${contest.slug} card`, page.body, `data-contest-card="${contest.slug}"`);
-    expectAbsent(`…and no ${contest.slug} link`, page.body, `/contests/${contest.slug}`);
-  }
-  // No entry text of ANY status reaches a listing card — the card carries a COUNT, never a row.
-  for (const sentinel of CONTEST_ENTRY_SENTINELS) {
-    expectAbsent(`no ${sentinel.status} entry text (${sentinel.token})`, page.body, sentinel.token);
-  }
-  expectAbsent('no staging keys in the listing', page.body, 'content/contest/');
-}
-
-/** §14.2 — "published only; draft = admin preview path", checked from outside. */
-async function sweepContestDetails(locale: string, contests: ContestProbe[]): Promise<void> {
-  console.log(`\n/${locale}/contests/[slug] — details, anonymous`);
-
-  // --- the PUBLISHED contest: the positive control the review asked for ----
-  const live = await get(`/${locale}/contests/${PUBLISHED_CONTEST_SLUG}`);
-  expectEqual('a published contest renders 200', live.status, 200);
-  expectEqual('…and is never cached (§14.2)', live.cacheControl, 'private, no-store');
-  expectPresent('…with its prize in display type', live.body, 'data-contest-prize');
-  expectPresent('…the phase-aware CTA', live.body, 'data-contest-cta="enter"');
-  expectPresent('…and the entries rail', live.body, 'data-contest-entries');
-  // The measurement: an APPROVED entry is here…
-  expectPresent(
-    `…carrying the approved entry (${LIVE_ENTRY_SENTINEL.token})`,
-    live.body,
-    LIVE_ENTRY_SENTINEL.token,
-  );
-  expectPresent('…as an addressable card', live.body, 'data-entry-card=');
-  expectPresent('…with its SNS credit chip', live.body, 'data-entry-sns=');
-  // …and every other moderation state is not, on the very page that proves the rail works.
-  for (const sentinel of FORBIDDEN_ENTRY_SENTINELS) {
-    expectAbsent(
-      `…and NO ${sentinel.status} entry (${sentinel.token})`,
-      live.body,
-      sentinel.token,
-    );
-  }
-  expectAbsent('…and no staging keys', live.body, 'content/contest/');
-
-  for (const slug of HIDDEN_CONTEST_SLUGS) {
-    expectEqual(`draft ${slug} 404s`, (await get(`/${locale}/contests/${slug}`)).status, 404);
-  }
-  expectEqual(
-    'an unknown slug 404s',
-    (await get(`/${locale}/contests/no-such-contest`)).status,
-    404,
-  );
-
-  // The admin preview path is admin surface, so it must refuse an anonymous reader outright.
-  for (const slug of HIDDEN_CONTEST_SLUGS) {
-    const preview = await get(`/admin/contests/${slug}/preview`);
-    expectOneOf(`preview of ${slug} refuses anon`, preview.status, [302, 307, 308, 404]);
-    for (const sentinel of FORBIDDEN_ENTRY_SENTINELS) {
-      expectAbsent(`…and leaks no entry (${sentinel.token})`, preview.body, sentinel.token);
+  for (const locale of ['en', 'ko'] as const) {
+    const listing = await get(`/${locale}/campaigns`);
+    expectEqual(`/${locale}/campaigns renders 200`, listing.status, 200);
+    expectPresent(`/${locale}/campaigns has the campaigns section`, listing.body, 'data-campaigns');
+    expectPresent(`/${locale}/campaigns has creator opportunities`, listing.body, 'data-creators');
+    expectPresent(`/${locale}/campaigns preserves old brand bookmarks`, listing.body, 'data-legacy-brand-entry');
+    const brand = await get(`/${locale}/brands`);
+    expectEqual(`/${locale}/brands renders 200`, brand.status, 200);
+    for (const marker of ['data-campaign-hero', 'data-campaign-proof', 'data-brands', 'data-morphic-card', 'data-audience-switch']) {
+      expectPresent(`/${locale}/brands carries ${marker}`, brand.body, marker);
     }
+    // 2026-10-30 landing: the brand's own AI media engine. Hero film, learns your brand (three chapters), remix,
+    // the work, local fixes, creator campaign, production + what comes next, blue closing.
+    for (const marker of ['data-v7-hero', 'data-hero-film', 'data-hero-doors', 'data-v7-first', 'data-v7-remix', 'data-remix', 'data-v7-work', 'data-v7-finish', 'data-studio-assets', 'data-studio-vto', 'data-v7-campaign', 'data-campaign-scale', 'data-studio-feed', 'data-v7-production', 'data-production-service', 'data-v7-next', 'data-v7-closing']) {
+      expectPresent(`/${locale}/brands carries ${marker}`, brand.body, marker);
+    }
+    expectPresent(`/${locale}/brands hero plays the blue-world film`, brand.body, '/reel/landing/v7/hero.mp4');
+    expectEqual(`/${locale}/brands hero opens three doors`, (brand.body.match(/data-hero-door=/g) ?? []).length, 3);
+    expectPresent(`/${locale}/brands shows the wide shot behind the local fixes`, brand.body, '/reel/landing/c-logo-wide.webp');
+    expectPresent(`/${locale}/brands boxes the region it fixes`, brand.body, 'data-fix-box=');
+    expectPresent(`/${locale}/brands closes beside nine images`, brand.body, 'data-closing-grid');
+    expectPresent(`/${locale}/brands gives phones the 9:16 hero`, brand.body, '/reel/landing/v7/hero-phone.mp4');
+    expectEqual(`/${locale}/brands shows three real local fixes`, (brand.body.match(/data-contrast-pair=/g) ?? []).length, 3);
+    expectEqual(`/${locale}/brands offers two remix formats`, (brand.body.match(/data-remix-format=/g) ?? []).length, 2);
+    expectEqual(`/${locale}/brands shows the runway's four real edits`, (brand.body.match(/data-remix-edit=/g) ?? []).length, 4);
+    expectPresent(`/${locale}/brands remix starts from an attached look`, brand.body, '/reel/landing/v7/rx-attach-look.webp');
+    expectEqual(`/${locale}/brands shows nine fashion looks`, (brand.body.match(/data-asset-look=/g) ?? []).length, 9);
+    expectEqual(`/${locale}/brands shows six beauty shots`, (brand.body.match(/data-asset-cut=/g) ?? []).length, 6);
+    expectEqual(`/${locale}/brands ships every ad in the HTML`, (brand.body.match(/data-asset-clip=/g) ?? []).length, 2);
+    expectEqual(`/${locale}/brands pairs each ad with what it features`, (brand.body.match(/data-asset-ad-still=/g) ?? []).length, 2);
+    expectPresent(`/${locale}/brands ships the perfume ad's product shot`, brand.body, '/reel/landing/highteen-product.webp');
+    expectPresent(`/${locale}/brands ships the fashion film's outfit detail`, brand.body, '/reel/landing/ad-denim.webp');
+    expectPresent(`/${locale}/brands offers the 4K hero to large screens`, brand.body, '/reel/landing/v7/hero-2160.mp4');
+    for (const gone of ['data-v7-problem', 'data-v7-engine', 'data-v7-workflow']) expectAbsent(`/${locale}/brands retired ${gone}`, brand.body, gone);
+    expectAbsent(`/${locale}/brands links no price estimate`, brand.body, 'pricing.yagiworkshop.xyz');
+    expectAbsent(`/${locale}/brands makes no data-destruction promise`, brand.body, locale === 'ko' ? '즉시 파기' : 'deleted right after');
+    for (const gone of ['data-studio-orbit', 'data-mood-tile', 'data-format-select', 'data-service-example']) {
+      expectAbsent(`/${locale}/brands retired ${gone}`, brand.body, gone);
+    }
+    expectEqual(`/${locale}/brands never shows the retired client-packaging frames`, (brand.body.match(/reel\/studio\/[a-z]+-yagi/g) ?? []).length, 0);
+    expectEqual(`/${locale}/brands uses no YAGI red`, (brand.body.match(/ed1e1e/gi) ?? []).length, 0);
+    // Landing media slots: with no override every image is its own file under /reel/.
+    expectEqual(`/${locale}/brands shows its own files when nothing is replaced`, (brand.body.match(/\/api\/landing-media\//g) ?? []).length, 0);
+    expectAbsent(`/${locale}/brands has no hidden service tabs`, brand.body, 'data-use-case-select');
+    expectAbsent(`/${locale}/brands has no misplaced workspace card`, brand.body, 'data-brand-workspace-entry');
+    // 2026-10-30: the Morphic case is one compact card on the landing; the full story lives on its own page.
+    expectAbsent(`/${locale}/brands no longer embeds the customer story`, brand.body, 'data-customer-story=');
+    expectPresent(`/${locale}/brands names the founder-approved client`, brand.body, 'Morphic');
+    expectPresent(`/${locale}/brands links the Morphic story page`, brand.body, `href="/${locale}/brands/stories/morphic"`);
+    expectPresent(`/${locale}/brands keeps video poster-first`, brand.body, 'preload="none"');
+    expectAbsent(`/${locale}/brands exposes no creator handle in campaign media URLs`, brand.body.toLowerCase(), '/reel/brands/@');
+    if (locale === 'ko') {
+      expectPresent('/ko/brands carries the approved view floor', brand.body, '200만+');
+      expectPresent('/ko/brands carries the approved organic floor', brand.body, '300건+');
+    } else {
+      expectPresent('/en/brands carries the approved view floor', brand.body, '2M+');
+      expectPresent('/en/brands carries the approved organic floor', brand.body, '300+');
+    }
+    expectPresent(`/${locale}/brands progressive inquiry form`, brand.body, 'data-brand-inquiry="form"');
+    expectPresent(`/${locale}/brands accessible inquiry dialog`, brand.body, 'data-brand-inquiry-dialog');
+    expectPresent(`/${locale}/brands role field`, brand.body, 'name="contactRole"');
+    expectAbsent(`/${locale}/brands does not send case visitors to Morphic`, brand.body, 'href="https://morphic.com/');
+    expectAbsent(`/${locale}/brands removes the generic Morphic guide`, brand.body, 'make-90s-street-style-interview-video');
+    expectPresent(`/${locale}/brands shows the production film`, brand.body, 'data-production-films');
+    expectPresent(`/${locale}/brands links the production portfolio`, brand.body, 'https://pitch.com/v/yagi-production-wokrs-vsrgfd');
+    expectAbsent(`/${locale}/brands uses no green brand accent`, brand.body, 'brand-lime');
+    expectPresent(`/${locale}/brands self-canonicals`, brand.body, `rel="canonical" href="${BASE}/${locale}/brands"`);
+    const storyIndex = await get(`/${locale}/brands/stories`);
+    expectEqual(`/${locale}/brands/stories renders 200`, storyIndex.status, 200);
+    expectPresent(`/${locale}/brands/stories links the customer detail`, storyIndex.body, `href="/${locale}/brands/stories/morphic"`);
+    const story = await get(`/${locale}/brands/stories/morphic`);
+    expectEqual(`/${locale}/brands/stories/morphic renders 200`, story.status, 200);
+    expectEqual(`/${locale}/brands/stories/morphic keeps both campaigns`, (story.body.match(/data-case-study=/g) ?? []).length, 2);
+    expectEqual(`/${locale}/brands/stories/morphic shows real August film links`, (story.body.match(/href="https:\/\/www.instagram.com\/p\/(?:DcXjygPg8fE|DcShoikJklw)\/"/g) ?? []).length >= 2, true);
+    for (const code of ['DdqhUUvRUik', 'DdqirU_yjr-', 'Dd1CiCDSlix', 'Dd0VQJaz8h-']) {
+      expectPresent(`/${locale}/brands/stories/morphic links the published September original ${code}`, story.body, `href="https://www.instagram.com/p/${code}/"`);
+    }
+    expectPresent(`/${locale}/brands/stories/morphic self-canonicals`, story.body, `rel="canonical" href="${BASE}/${locale}/brands/stories/morphic"`);
+    // Founder, 2026-10-28: the old caveat sentence stays out (05bab0d); the totals still say what they count.
+    expectPresent(`/${locale}/brands/stories/morphic says what the totals count`, story.body, locale === 'ko' ? '2026년 8월 캠페인 누적 공개 집계입니다.' : 'Public campaign totals from August 2026.');
+    expectPresent(`/${locale}/brands/stories/morphic offers only the founder's own format`, story.body, 'href="https://morphic.com/en/workflows/019feecc-c7ec-77bd-bc3a-2ddc1f680105/90s-korean-street-interview"');
+    expectAbsent(`/${locale}/brands/stories/morphic removes the generic guide`, story.body, 'make-90s-street-style-interview-video');
+    expectEqual(`/${locale}/brands/stories/morphic keeps four published September originals`, (story.body.match(/data-case-post="/g) ?? []).length, 4);
+    expectEqual(`/${locale}/brands rejects unknown customer stories`, (await get(`/${locale}/brands/stories/unapproved`)).status, 404);
+    expectPresent(`/${locale}/brands carries buyer FAQ questions`, brand.body, locale === 'ko' ? '캠페인 성과는 어떻게 확인하나요?' : 'How do you report campaign results?');
+    expectAbsent(`/${locale}/brands has no redundant order warning`, brand.body, locale === 'ko' ? '문의 제출만으로 주문' : 'Submitting an enquiry does not place an order');
+    expectPresent(`/${locale}/campaigns self-canonicals`, listing.body, `rel="canonical" href="${BASE}/${locale}/campaigns"`);
+    const landing = await get(`/${locale}`);
+    expectPresent(`/${locale} nav links the campaigns tab`, landing.body, `href="/${locale}/campaigns"`);
   }
+  expectEqual('an unknown campaign 404s', (await get('/en/campaigns/no-such-campaign')).status, 404);
 
-  // A draft's poster exists on disk (staged) and has no published key, so the public media route
-  // must refuse it — that is the disclosure doctrine holding for an unannounced prize.
-  const draft = contests.find((c) => c.status !== 'published');
-  if (draft) {
-    expectEqual(
-      'a DRAFT contest’s poster is unreachable',
-      (await get(`/api/contests/media/${encodeURIComponent(`${draft.id}:poster`)}`)).status,
-      404,
-    );
+  // Private participation leaves stay behind login, including sponsored creation.
+  for (const path of ['/campaigns/mine', '/campaigns/no-such-campaign/apply', '/campaigns/no-such-campaign/make']) {
+    const gated = await get(path);
+    expectOneOf(`${path} redirects anon`, gated.status, [302, 307, 308]);
+    if (gated.location && gated.location.includes('signin=1')) ok('…to sign-in', gated.location);
+    else fail(`${path} redirect target`, `expected the sign-in redirect, got ${gated.location}`);
   }
+  // …while the listing itself still 308s into a locale like every public page.
+  const unprefixed = await get('/campaigns');
+  expectOneOf('unprefixed /campaigns 308s into a locale', unprefixed.status, [307, 308]);
+  if (unprefixed.location?.includes('/campaigns')) ok('…keeping the path', unprefixed.location);
+  else fail('/campaigns redirect target', `unexpected location ${unprefixed.location}`);
 
-  const published = contests.find((c) => c.status === 'published');
-  if (published) {
-    const poster = await get(`/api/contests/media/${encodeURIComponent(`${published.id}:poster`)}`);
-    expectEqual('a PUBLISHED contest’s poster is served', poster.status, 200);
-    expectEqual('…as the declared type', poster.contentType, 'image/png');
-    const isPng = poster.bytes[0] === 0x89 && poster.bytes[1] === 0x50 && poster.bytes[2] === 0x4e;
-    if (isPng) ok('…and the bytes are the real object');
-    else fail('poster bytes', 'response is not a PNG');
-    /**
-     * M9 review, finding 3 — the `{id}:{kind}` alias is a MUTABLE pointer, so it must never be
-     * cached immutably: unpublishing a contest has to stop serving its poster immediately rather
-     * than a day later. The immutable thing is the content-addressed object it points at.
-     */
-    if (poster.cacheControl?.includes('immutable')) {
-      fail('alias cache', `mutable alias served as immutable: ${poster.cacheControl}`);
-    } else ok('…and the mutable alias is not cached immutably', poster.cacheControl ?? '(none)');
+  for (const path of ['/admin/campaigns', '/admin/campaigns/new']) {
+    const admin = await get(path);
+    expectOneOf(`${path} refuses anon`, admin.status, [302, 307, 308, 404]);
+    expectAbsent('…and leaks no board', admin.body, 'data-admin-campaign=');
+    expectAbsent('…and no payout queue', admin.body, 'data-payout-queue');
   }
-  expectEqual(
-    'an unknown media ref 404s',
-    (await get('/api/contests/media/11111111-2222-4333-8444-555555555555%3Aposter')).status,
-    404,
-  );
-  expectEqual('a malformed media ref 404s', (await get('/api/contests/media/nonsense')).status, 404);
-}
-
-/** §14.2 — the gated halves of the contests surface, from outside. */
-async function sweepContestGates(contests: ContestProbe[]): Promise<void> {
-  console.log('\n/contests/[slug]/submit + /admin/contests — anonymous');
-
-  // The PUBLISHED contest, so the redirect proves the login gate rather than a 404.
-  const slug = PUBLISHED_CONTEST_SLUG;
-  const submit = await get(`/contests/${slug}/submit`);
-  expectOneOf('the entry form redirects anon', submit.status, [302, 307, 308]);
-  if (submit.location && !submit.location.startsWith(`/contests/${slug}/submit`)) {
-    ok('…away from the form', submit.location);
-  } else fail('entry form redirect target', `unexpected location ${submit.location}`);
-
-  const admin = await get('/admin/contests');
-  expectOneOf('/admin/contests refuses anon', admin.status, [302, 307, 308, 404]);
-  expectAbsent('…and leaks no queue', admin.body, 'data-contest-entry=');
-  for (const sentinel of FORBIDDEN_ENTRY_SENTINELS) {
-    expectAbsent(`…and no entry text (${sentinel.token})`, admin.body, sentinel.token);
-  }
-  for (const contest of contests) {
-    expectAbsent(`…and no ${contest.slug} editor`, admin.body, `data-admin-contest="${contest.slug}"`);
-  }
-
-  // The listing is public and must NOT be caught by the app-path gate.
-  expectEqual('/en/contests stays public', (await get('/en/contests')).status, 200);
-  const unprefixed = await get('/contests');
-  expectOneOf('unprefixed /contests 308s into a locale', unprefixed.status, [307, 308]);
-  if (unprefixed.location?.includes('/contests')) ok('…keeping the path', unprefixed.location);
-  else fail('/contests redirect target', `unexpected location ${unprefixed.location}`);
-}
-
-/** §14.2 SEO: the listing is indexed; a draft contest and the entry form are not. */
-async function sweepContestSeo(): Promise<void> {
-  console.log('\nsitemap + <head> — the contests surface');
-
-  const sitemap = await get('/sitemap.xml');
-  expectPresent('lists the listing (en)', sitemap.body, '/en/contests<');
-  expectPresent('lists the listing (ko)', sitemap.body, '/ko/contests<');
-  expectPresent(
-    'lists the published contest (en)',
-    sitemap.body,
-    `/en/contests/${PUBLISHED_CONTEST_SLUG}`,
-  );
-  expectPresent(
-    'lists the published contest (ko)',
-    sitemap.body,
-    `/ko/contests/${PUBLISHED_CONTEST_SLUG}`,
-  );
-  for (const slug of HIDDEN_CONTEST_SLUGS) {
-    expectAbsent(`never lists the draft ${slug}`, sitemap.body, slug);
-  }
-  expectAbsent('never lists an entry form', sitemap.body, '/submit');
 
   const robots = await get('/robots.txt');
-  expectPresent('robots disallows the entry form', robots.body, 'Disallow: /contests/*/submit');
-  expectAbsent('…without disallowing the listing itself', robots.body, 'Disallow: /contests\n');
-
-  const listing = await get('/en/contests');
-  expectPresent('the listing self-canonicals', listing.body, `rel="canonical" href="${BASE}/en/contests"`);
-  expectPresent('hreflang ko', listing.body, `hrefLang="ko" href="${BASE}/ko/contests"`);
-  expectPresent('hreflang x-default', listing.body, 'hrefLang="x-default"');
-  expectAbsent('the listing is indexed', listing.body, 'name="robots" content="noindex');
-  // F6 — the listing's share card names the site.
-  expectPresent('og:site_name on the listing', listing.body, 'property="og:site_name" content="TWINGS"');
+  expectPresent('robots disallows the apply form', robots.body, 'Disallow: /campaigns/*/apply');
+  expectPresent('robots disallows campaign production', robots.body, 'Disallow: /campaigns/*/make');
+  expectPresent('robots disallows my campaigns', robots.body, 'Disallow: /campaigns/mine');
+  expectAbsent('…without disallowing the listing itself', robots.body, 'Disallow: /campaigns\n');
+  const sitemap = await get('/sitemap.xml');
+  expectPresent('sitemap lists the listing (en)', sitemap.body, '/en/campaigns<');
+  expectPresent('sitemap lists the listing (ko)', sitemap.body, '/ko/campaigns<');
 }
 
-/** §14.2 — Contests joins the nav between Prompts and Pricing, on every marketing page. */
-async function sweepContestNav(): Promise<void> {
-  console.log('\nnav — Prompts · Contests · Pricing');
-  for (const path of ['/en', '/en/prompts', '/en/pricing']) {
-    const page = await get(path);
-    expectPresent(`${path} links the contests tab`, page.body, 'href="/en/contests"');
+/** Actual HTTP boundaries with nonempty private fixtures; no browser identity or cookies. */
+async function sweepBrandWorkspace(fixtures: BrandWorkspaceProbe[]): Promise<void> {
+  console.log('\n/brand — private workspace fixtures, anonymous');
+  const fixture = fixtures[0];
+  if (!fixture) {
+    fail('brand workspace fixture discovery', 'missing ready private attachment/project — re-run npm run db:local');
+    return;
   }
-  const ko = await get('/ko');
-  expectPresent('/ko links the ko tab', ko.body, 'href="/ko/contests"');
+  ok('brand workspace has a real project and ready attachment to protect');
+  const noPrivateBytes = (label: string, response: Fetched) => {
+    // Never print private fixture values or storage keys, including on failure.
+    const leaked = fixtures.some(row => [row.title, row.organization_name, row.storage_key].some(value => response.body.includes(value)));
+    expectEqual(`${label}: no fixture content or private storage key`, leaked, false);
+  };
+  // Authorization must run before looking up either existing or guessed report IDs.
+  for (const path of ['/brand', `/brand/projects/${fixture.id}`, `/admin/brand-workspace/${fixture.id}`,
+    `/brand/projects/${fixture.id}/reports/${fixture.id}`,
+    `/admin/brand-workspace/${fixture.id}/reports/${fixture.id}`,
+    // Secondary usage (docs/SECONDARY-USAGE.md): the pay page, the provider return page and the studio queue.
+    `/brand/projects/${fixture.id}/usage/${fixture.id}/pay`, '/brand/usage/return', '/admin/brand-workspace/usage']) {
+    const page = await get(path);
+    const label = path.replace(fixture.id, '{fixture}');
+    expectEqual(`${label}: redirects anonymous access`, page.status, 307);
+    const target = new URL(page.location ?? '/', BASE);
+    expectEqual(`${label}: redirects only to same-origin sign-in`,
+      target.origin === new URL(BASE).origin && (target.pathname === '/auth/choose' || target.searchParams.get('signin') === '1'), true);
+    expectEqual(`${label}: private no-store`, page.cacheControl, 'private, no-store');
+    expectEqual(`${label}: noindex`, page.robotsTag, 'noindex, nofollow');
+    noPrivateBytes(label, page);
+  }
+  const attachment = await get(`/api/brand-workspace/attachments/${fixture.attachment_id}`);
+  expectEqual('brand attachment hides its existence from anonymous readers', attachment.status, 404);
+  expectEqual('brand attachment refusal contains no file bytes', attachment.bytes.length, 0);
+  expectEqual('brand attachment issues no signed download URL', attachment.location, null);
+  expectEqual('brand attachment refusal is private no-store', attachment.cacheControl, 'private, no-store');
+  noPrivateBytes('brand attachment', attachment);
+  const usageStatus = await get(`/api/brand-workspace/usage?orderId=${fixture.id}`);
+  expectEqual('brand usage payment status refuses anonymous readers', usageStatus.status, 401);
+  expectEqual('brand usage payment status is private no-store', usageStatus.cacheControl, 'private, no-store');
+  noPrivateBytes('brand usage payment status', usageStatus);
+
+  // Preview sweeps remain read-only for this feature. Even locally this malformed input could
+  // not create a message if authentication regressed; the expected 401 must precede validation.
+  const base = new URL(BASE);
+  if (!['localhost', '127.0.0.1', '[::1]'].includes(base.hostname)) {
+    console.log('  SKIP  brand message POST — loopback targets only');
+    return;
+  }
+  const message = await request('/api/brand-workspace', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', origin: base.origin },
+    body: JSON.stringify({ operation: 'message.send', input: { projectId: fixture.id, body: '', requestId: 'invalid-sweep-probe' } }),
+  });
+  expectEqual('brand message refuses anonymous access before validation', message.status, 401);
+  expectEqual('brand message returns only the sign-in error', message.body, JSON.stringify({ ok: false, code: 'sign_in_required' }));
+  expectEqual('brand message refusal is private no-store', message.cacheControl, 'private, no-store');
+  noPrivateBytes('brand message', message);
+  const usageOrder = await request('/api/brand-workspace/usage', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', origin: base.origin },
+    body: JSON.stringify({ operation: 'order.create', input: { caseId: fixture.id, requestId: 'invalid-sweep-probe', consent: true } }),
+  });
+  expectEqual('brand usage order refuses anonymous access before validation', usageOrder.status, 401);
+  expectEqual('brand usage order refusal is private no-store', usageOrder.cacheControl, 'private, no-store');
+  noPrivateBytes('brand usage order', usageOrder);
+  // The studio's campaign preparation door (docs/BRAND-STAFF-ACCESS.md): admins only, and it does not confirm it exists.
+  const studioForm = new FormData();
+  studioForm.set('_op', 'brandWorkspace.createProject');
+  const studioPrep = await request('/api/brand-workspace/studio', { method: 'POST', headers: { origin: base.origin }, body: studioForm });
+  expectEqual('brand studio door answers anonymous posts with a bare 404', studioPrep.status, 404);
+  expectEqual('brand studio door 404 has no body', studioPrep.body, '');
+  expectEqual('brand studio door refusal is private no-store', studioPrep.cacheControl, 'private, no-store');
+  // The workspace pages' nonce CSP, end to end: the page that opens without a session must carry the
+  // policy, and Next.js must have stamped its nonce on every script it rendered.
+  const invite = await get('/brand/invite');
+  expectEqual('/brand/invite renders for anonymous visitors', invite.status, 200);
+  const nonce = invite.csp?.match(/'nonce-([A-Za-z0-9+/=]+)'/)?.[1];
+  const policy = invite.csp ?? '';
+  if (nonce && policy.includes("'strict-dynamic'") && policy.includes("object-src 'none'") && policy.includes("base-uri 'none'")
+    && policy.includes("frame-ancestors 'none'") && policy.includes("form-action 'self'") && !policy.includes('unsafe-eval'))
+    ok('workspace page sends the strict nonce CSP');
+  else fail('workspace page sends the strict nonce CSP', policy || 'no Content-Security-Policy header');
+  const scripts = [...invite.body.matchAll(/<script\b[^>]*>/g)].map((m) => m[0]);
+  expectEqual('workspace page has scripts to stamp', scripts.length > 0, true);
+  expectEqual('every script on a workspace page carries the nonce', scripts.filter((tag) => !nonce || !tag.includes(`nonce="${nonce}"`)).length, 0);
+}
+
+/** docs/TEMPLATES-IA.md §8 — the render queue: gated where it must be, open where the token says. */
+async function sweepRenders(): Promise<void> {
+  console.log('\n/renders — the render queue, anonymous');
+  const ID = '00000000-0000-4000-8000-000000000000';
+  const TOKEN = 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
+
+  const mine = await request('/renders', { headers: { 'user-agent': CHROME_UA } });
+  expectOneOf('/renders redirects anon', mine.status, [302, 303, 307]);
+  if (mine.location?.includes('signin=1')) ok('…to sign-in', mine.location);
+  else fail('/renders redirect target', `expected the sign-in redirect, got ${mine.location}`);
+  const detail = await request(`/renders/${ID}`, { headers: { 'user-agent': CHROME_UA } });
+  expectOneOf('/renders/{id} redirects anon', detail.status, [302, 303, 307]);
+
+  const share = await request(`/r/${ID}/${TOKEN}`, { headers: { 'user-agent': CHROME_UA } });
+  expectEqual('an unknown 3-day link 404s', share.status, 404);
+  expectAbsent('…with no locale redirect in the way', String(share.location ?? ''), '/en/r/');
+  // Audit P1-3: a mistyped share link is the viral entry point — the branded (app) 404, not Next's default.
+  const badShare = await request(`/r/${ID}/bad`, { headers: { 'user-agent': CHROME_UA } });
+  expectEqual('a malformed share link 404s', badShare.status, 404);
+  expectPresent('…with the branded app 404', badShare.body, 'data-app-not-found');
+
+  const media = await request(`/api/renders/media/${ID}`);
+  expectEqual('the render gateway refuses anon', media.status, 401);
+  expectPresent('…no-store', media.cacheControl ?? '', 'no-store');
+  const mediaShare = await request(`/api/renders/media/${ID}?s=${TOKEN}`);
+  expectEqual('…and an unknown token', mediaShare.status, 404);
+
+  const access = await request('/api/renders/access');
+  expectEqual('access answers anon', access.status, 200);
+  expectPresent('…with live:false', access.body, '"live":false');
+
+  const enqueue = await fetch(`${BASE}/api/renders`, { method: 'POST', redirect: 'manual' });
+  expectEqual('enqueue refuses anon', enqueue.status, 401);
+  // docs/PLATFORM-2.0.md §5.3 — a device's push subscription needs a session, even from our own page.
+  // A well-formed body, so the 401 shows the session check comes first. The browser keys are made
+  // here, never written as literals (the secret scan reads long base64url strings as leaked keys).
+  const browserKey = createECDH('prime256v1');
+  browserKey.generateKeys();
+  const subscription = { endpoint: 'https://fcm.googleapis.com/fcm/send/sweep', keys: { p256dh: browserKey.getPublicKey().toString('base64url'), auth: randomBytes(16).toString('base64url') } };
+  const pushOn = await request('/api/notify/push', { method: 'POST', headers: { Origin: BASE, 'Content-Type': 'application/json' }, body: JSON.stringify(subscription) });
+  expectEqual('push subscription refuses anon', pushOn.status, 401);
+  expectPresent('…privately', pushOn.cacheControl ?? '', 'no-store');
+  const pushOff = await request('/api/notify/push', { method: 'DELETE', headers: { Origin: BASE, 'Content-Type': 'application/json' }, body: JSON.stringify({ endpoint: subscription.endpoint }) });
+  expectEqual('push unsubscribe refuses anon', pushOff.status, 401);
+  const campaignEnqueue = await fetch(`${BASE}/api/campaign-production`, { method: 'POST', redirect: 'manual', headers: { Origin: BASE } });
+  expectEqual('campaign production refuses anon', campaignEnqueue.status, 401);
+  expectPresent('campaign production refusal is private', campaignEnqueue.headers.get('cache-control') ?? '', 'no-store');
+  const collaboration = await request('/api/campaign-collaboration', { method: 'POST', headers: { Origin: BASE, 'Content-Type': 'application/json' }, body: '{}' });
+  expectEqual('campaign collaboration refuses anonymous writes', collaboration.status, 401);
+  expectPresent('campaign collaboration refusal is private', collaboration.cacheControl ?? '', 'no-store');
+  const funding = await request('/api/campaign-funding', { method: 'POST', headers: { Origin: BASE, 'Content-Type': 'application/json' }, body: '{}' });
+  expectEqual('campaign funding refuses anonymous writes', funding.status, 401);
+  expectPresent('campaign funding refusal is private', funding.cacheControl ?? '', 'no-store');
+  const fundingStatus = await request('/api/campaign-funding');
+  expectEqual('campaign funding conceals order status from anonymous', fundingStatus.status, 401);
+  expectPresent('campaign funding status is private', fundingStatus.cacheControl ?? '', 'no-store');
+  const participantFile = await request(`/api/campaign-collaboration/files/${ID}`);
+  expectEqual('participant file conceals existence from anonymous', participantFile.status, 404);
+  expectEqual('participant file returns no bytes to anonymous', participantFile.bytes.length, 0);
+  expectPresent('participant file refusal is private', participantFile.cacheControl ?? '', 'no-store');
+  for (const path of [`/campaigns/participations/${ID}`]) {
+    const participantPage = await request(path, { headers: { 'user-agent': CHROME_UA } });
+    expectOneOf(`${path} redirects anonymous`, participantPage.status, [302, 303, 307]);
+    expectPresent(`${path} redirects to sign-in`, participantPage.location ?? '', 'signin=1');
+  }
+  const invitationLanding = await request('/campaigns/fixture-campaign/join', { headers: { 'user-agent': CHROME_UA } });
+  expectEqual('campaign invitation landing can preserve a fragment before sign-in', invitationLanding.status, 200);
+  expectPresent('campaign invitation landing is private and uncached', invitationLanding.cacheControl ?? '', 'no-store');
+  expectPresent('campaign invitation landing is not indexed', invitationLanding.robotsTag ?? '', 'noindex');
+  for (const action of ['claim', 'complete', 'heartbeat', 'slack']) {
+    const worker = await request(`/api/campaign-risk-worker/${action}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+    expectEqual(`campaign risk ${action} rejects unsigned requests`, worker.status, 404);
+    expectPresent(`campaign risk ${action} refusal is private`, worker.cacheControl ?? '', 'no-store');
+  }
+  for (const leaf of ['media', 'preview']) {
+    const output = await request(`/api/campaign-production/${ID}/${leaf}`);
+    expectEqual(`campaign ${leaf} refuses anon`, output.status, 404);
+    expectPresent(`campaign ${leaf} response is private`, output.cacheControl ?? '', 'no-store');
+  }
+
+  // docs/TEMPLATES-IA.md §8.2 — the face check is app surface; the bank's callback is public but inert without a token.
+  const verify = await request('/identity/verify', { headers: { 'user-agent': CHROME_UA } });
+  expectOneOf('/identity/verify redirects anon', verify.status, [302, 303, 307]);
+  if (verify.location?.includes('signin=1')) ok('…to sign-in', verify.location);
+  else fail('/identity/verify redirect target', `expected the sign-in redirect, got ${verify.location}`);
+  const callback = await request('/api/identity/callback');
+  // docs/IDENTITY-SELFIE.md — the one photo is app surface; its bytes and state are owner-only.
+  const selfiePage = await request('/identity/selfie', { headers: { 'user-agent': CHROME_UA } });
+  expectOneOf('selfie page redirects anonymous', selfiePage.status, [302,303,307]);
+  expectPresent('selfie page redirects to sign-in', selfiePage.location ?? '', 'signin=1');
+  const selfieState = await request('/api/identity/selfie');
+  expectEqual('selfie state refuses anonymous', selfieState.status, 401);
+  expectPresent('selfie response is private', selfieState.cacheControl ?? '', 'no-store');
+  const selfieImage = await request('/api/identity/selfie/00000000-0000-4000-8000-000000000000/image');
+  expectEqual('selfie image refuses anonymous', selfieImage.status, 401);
+  expectPresent('selfie image response is private', selfieImage.cacheControl ?? '', 'no-store');
+  const selfieCreate = await fetch(`${BASE}/api/identity/selfie`, {method:'POST',headers:{origin:BASE}});
+  expectEqual('selfie upload refuses anonymous', selfieCreate.status, 401);
+  const selfieCross = await fetch(`${BASE}/api/identity/selfie`, {method:'POST',headers:{origin:'https://evil.example'}});
+  expectEqual('selfie upload refuses cross-origin', selfieCross.status, 403);
+  // docs/IDENTITY-SELFIE.md §4 — "make default", the note and soft delete are owner-only, same-origin writes.
+  for (const method of ['PATCH', 'DELETE'] as const) {
+    const body = JSON.stringify(method === 'PATCH' ? {id:'00000000-0000-4000-8000-000000000000',isDefault:true} : {id:'00000000-0000-4000-8000-000000000000'});
+    const anonymous = await request('/api/identity/selfie', {method,headers:{origin:BASE,'content-type':'application/json'},body});
+    expectEqual(`selfie ${method} refuses anonymous`, anonymous.status, 401);
+    expectPresent(`selfie ${method} response is private`, anonymous.cacheControl ?? '', 'no-store');
+    const cross = await request('/api/identity/selfie', {method,headers:{origin:'https://evil.example','content-type':'application/json'},body});
+    expectEqual(`selfie ${method} refuses cross-origin`, cross.status, 403);
+    expectPresent(`selfie ${method} cross-origin response is private`, cross.cacheControl ?? '', 'no-store');
+  }
+  // docs/PLATFORM-2.0.md §17 — linked SNS accounts: app surface, owner-only screenshots, a worker door shut without its secret.
+  const socialPage = await request('/identity/social', { headers: { 'user-agent': CHROME_UA } });
+  expectOneOf('SNS page redirects anonymous', socialPage.status, [302,303,307]);
+  expectPresent('SNS page redirects to sign-in', socialPage.location ?? '', 'signin=1');
+  const socialState = await request('/api/identity/social');
+  expectOneOf('SNS state refuses anonymous (closed or sign-in)', socialState.status, [401,404]);
+  expectPresent('SNS state response is private', socialState.cacheControl ?? '', 'no-store');
+  const socialCross = await fetch(`${BASE}/api/identity/social`, {method:'POST',headers:{origin:'https://evil.example'}});
+  expectOneOf('SNS submit refuses cross-origin (closed or forbidden)', socialCross.status, [403,404]);
+  const socialShot = await request('/api/identity/social/00000000-0000-4000-8000-000000000000/evidence');
+  expectEqual('SNS screenshot refuses anonymous', socialShot.status, 401);
+  expectPresent('SNS screenshot response is private', socialShot.cacheControl ?? '', 'no-store');
+  const socialAdminShot = await request('/api/admin/social/00000000-0000-4000-8000-000000000000/evidence');
+  expectEqual('SNS review screenshot hides from anonymous', socialAdminShot.status, 404);
+  for (const action of ['claim', 'complete', 'heartbeat', 'evidence']) {
+    const worker = await request(`/api/social-verify-worker/${action}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
+    expectEqual(`SNS worker ${action} rejects unsigned requests`, worker.status, 404);
+    expectPresent(`SNS worker ${action} refusal is private`, worker.cacheControl ?? '', 'no-store');
+  }
+  const poolInvite = await request('/api/brand-creators', { method: 'POST', headers: { Origin: BASE, 'Content-Type': 'application/json' }, body: '{}' });
+  expectOneOf('creator pool invite refuses anonymous (closed or sign-in)', poolInvite.status, [401, 404]);
+  expectPresent('creator pool invite refusal is private', poolInvite.cacheControl ?? '', 'no-store');
+  const openCampaigns = await request('/campaigns/open', { headers: { 'user-agent': CHROME_UA } });
+  expectOneOf('signed-in campaign list redirects anonymous', openCampaigns.status, [302,303,307]);
+  expectPresent('signed-in campaign list redirects to sign-in', openCampaigns.location ?? '', 'signin=1');
+  const selfieOrder = await fetch(`${BASE}/api/billing/toss/orders`, {method:'POST',headers:{origin:BASE},body:new FormData()});
+  expectEqual('toss order without a session refuses', selfieOrder.status, 401);
+  expectEqual('the identity callback answers a bare hit with a redirect', callback.status, 303);
+  expectPresent('…to the verify page, result unknown', callback.location ?? '', '/identity/verify?result=unknown');
+
+  const community = await request('/community', { headers: { 'user-agent': CHROME_UA } });
+  expectOneOf('private content conversations redirect anonymous', community.status, [302,303,307]);
+  const communityState = await request('/api/community');
+  expectEqual('community state refuses anonymous', communityState.status, 401);
+  expectPresent('community response is private', communityState.cacheControl ?? '', 'no-store');
+  const communityCreate = await fetch(`${BASE}/api/community`, {method:'POST',headers:{origin:BASE,'content-type':'application/json'},body:'{}'});
+  expectEqual('community mutation refuses anonymous', communityCreate.status, 401);
+  // docs/CREATOR-PLATFORM.md — the format creator program. The two leaves are login-gated app
+  // surface; the public page exists only while BOTH gates were on at build (same shell as start:local).
+  for (const leaf of ['/creators/apply', '/creators/workspace']) {
+    const gated = await request(leaf, { headers: { 'user-agent': CHROME_UA } });
+    expectOneOf(`${leaf} redirects anonymous`, gated.status, [302, 303, 307]);
+    expectPresent(`${leaf} → sign-in`, gated.location ?? '', 'signin=1');
+    expectPresent(`${leaf} refusal is private`, gated.cacheControl ?? '', 'no-store');
+    expectPresent(`${leaf} refusal is noindex`, gated.robotsTag ?? '', 'noindex');
+  }
+  const programBare = await request('/creators', { headers: { 'accept-language': 'ko' } });
+  expectEqual('/creators is a public page: 308 to its locale', programBare.status, 308);
+  expectPresent('…to /ko/creators', programBare.location ?? '', '/ko/creators');
+  const programOpen = process.env.TWINGS_FORMAT_CREATORS === 'on' && process.env.TWINGS_CREATOR_APPLICATIONS === 'on';
+  console.log(`  (format creator program gate in this shell: ${programOpen ? 'open' : 'closed'})`);
+  for (const locale of ['ko', 'en']) {
+    const program = await request(`/${locale}/creators`);
+    if (!programOpen) { expectEqual(`/${locale}/creators is absent while intake is closed`, program.status, 404); continue; }
+    expectEqual(`/${locale}/creators renders`, program.status, 200);
+    expectPresent(`/${locale}/creators program marker`, program.body, 'data-creator-program');
+    expectPresent(`/${locale}/creators steps marker`, program.body, 'data-creator-steps');
+    expectAbsent(`/${locale}/creators carries no recipe canary`, program.body, 'PRIVATE_RECIPE');
+    for (const sentinel of PROMPT_SENTINELS.filter((s) => !s.publicToAnon)) expectAbsent(`/${locale}/creators omits ${sentinel.slug} prompt`, program.body, sentinel.token);
+  }
+  const revision = await fetch(`${BASE}/api/community`, {method:'POST',headers:{origin:BASE,'content-type':'application/json'},body:JSON.stringify({action:'format',requestId:ID,revisionOf:ID})});
+  expectEqual('format revision refuses anonymous', revision.status, 401);
+
+  const evidence = await request(`/api/admin/community/${ID}/media`);
+  expectEqual('reward evidence conceals existence from anonymous', evidence.status, 404);
+  expectPresent('reward evidence response is private', evidence.cacheControl ?? '', 'no-store');
+
+  const tick = await request('/api/renders/tick');
+  expectEqual('the tick runs (no secret locally)', tick.status, 200);
+  expectPresent('…and reports a pass', tick.body, '"summary"');
+  expectPresent('…no-store', tick.cacheControl ?? '', 'no-store');
 }
 
 async function main(): Promise<void> {
@@ -1139,42 +1830,59 @@ async function main(): Promise<void> {
     return;
   }
 
-  const { assets, privateKeys, prompts, contests } = await readSnapshot();
+  const { assets, privateKeys, prompts, brandWorkspace } = await readSnapshot();
 
   await sweepShowcasePage('en', privateKeys);
   await sweepShowcasePage('ko', privateKeys);
   await sweepRedirects();
-  await sweepNotFound();
+  await sweepMonthlyLegal();
+  await sweepNotFound(privateKeys, brandWorkspace);
   await sweepGateway(assets);
   await sweepConversionCta();
   await sweepMoney();
   await sweepSeo();
+  await sweepStructuredData();
   await sweepDetailMetadata();
   await sweepUnsubscribe();
+  const creatorSession = await get('/api/account/session');
+  expectEqual('creator session endpoint is reachable anonymously', creatorSession.status, 200);
+  expectEqual('creator session reveals no identity to an anonymous visitor', creatorSession.body, '{"signedIn":false}');
+  expectEqual('creator session is never cached', creatorSession.cacheControl, 'private, no-store');
+  expectEqual('creator session is never indexed', creatorSession.robotsTag, 'noindex, nofollow');
 
   // --- F1: the OAuth entry's WebView gate -----------------------------------
   await sweepWebViewSignin();
 
   // --- M6 §13: the prompts surface ----------------------------------------
-  await sweepPromptGallery('en');
-  await sweepPromptGallery('ko');
-  await sweepPromptDetails('en', prompts);
-  await sweepPromptCopy(prompts);
+  await sweepTemplates();
+  await sweepTemplateRedirects(prompts);
   await sweepPromptMedia(prompts);
-  await sweepPromptGates();
-  await sweepPromptSeo();
-  await sweepLandingPivot();
+  await sweepLandingTemplates();
+  await sweepPricingTemplates();
+  await sweepMakers();
 
-  // --- M10 §15: the cookies surface ---------------------------------------
-  await sweepPricingCookies();
 
-  // --- M9 §14: the contests surface ---------------------------------------
-  await sweepContestsListing('en', contests);
-  await sweepContestsListing('ko', contests);
-  await sweepContestDetails('en', contests);
-  await sweepContestGates(contests);
-  await sweepContestSeo();
-  await sweepContestNav();
+  // --- docs/CAMPAIGNS.md: the campaigns surface --------------------------
+  await sweepCampaigns();
+  await sweepBrandWorkspace(brandWorkspace);
+  // Contract-only production must not become a consumer catalogue or media surface.
+  const brandTemplate = prompts.find(p => p.audience === 'brand');
+  if (!brandTemplate) fail('private production fixture', 'missing brand template; rebuild local snapshot');
+  else {
+    for (const locale of ['ko', 'en']) {
+      expectEqual(`${locale}: private brand template detail is 404`, (await get(`/${locale}/t/${brandTemplate.slug}`)).status, 404);
+      expectAbsent(`${locale}: private brand template absent from catalogue`, (await get(`/${locale}/video`)).body, brandTemplate.slug);
+    }
+    expectEqual('private template media is 404', (await get(`/api/prompts/media/${brandTemplate.id}:poster`)).status, 404);
+    expectAbsent('private template absent from sitemap', (await get('/sitemap.xml')).body, brandTemplate.slug);
+  }
+  expectOneOf('brand studio requires login', (await get('/brand/studio')).status, [302,303,307,308]);
+  expectEqual('brand production refuses anonymous creation', (await postJson('/api/brand-production', {})).status, 401);
+  expectEqual('brand production refuses anonymous status', (await get('/api/brand-production/00000000-0000-4000-8000-000000000000')).status, 404);
+  expectEqual('brand production refuses anonymous output', (await get('/api/brand-production/00000000-0000-4000-8000-000000000000/media')).status, 404);
+
+  // --- docs/TEMPLATES-IA.md §8: the render queue --------------------------
+  await sweepRenders();
 
   console.log(
     `\n${failures === 0 ? 'SWEEP PASSED' : 'SWEEP FAILED'} — ${checks - failures}/${checks} checks passed`,

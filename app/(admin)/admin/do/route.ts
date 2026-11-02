@@ -1,11 +1,14 @@
-import { NextResponse, type NextRequest } from 'next/server';
+import { after, NextResponse, type NextRequest } from 'next/server';
 import { requireAdmin } from '@/lib/auth/viewer';
-import { revalidateCatalog, revalidateContests, revalidatePrompts } from '@/lib/cache';
+import { revalidateCampaigns, revalidateCatalog, revalidateContests, revalidateLandingMedia, revalidatePrompts } from '@/lib/cache';
 import { getSqlRunner } from '@/lib/db/connect';
 import { getStorage } from '@/lib/storage';
+import { getMailer } from '@/lib/notify/service';
+import { siteUrl } from '@/lib/seo/site-url';
 import { fail, type AdminOutcome } from '@/lib/admin/context';
 import { dispatchAdmin, outcomeUrl } from '@/lib/admin/dispatch';
 import { BACK_FIELD, OP_FIELD, str } from '@/lib/admin/form';
+import { resolveRequestUrl } from '@/lib/routing/surfaces';
 
 /**
  * `POST /admin/do` — the one admin mutation door, as a ROUTE rather than a server action.
@@ -27,6 +30,8 @@ import { BACK_FIELD, OP_FIELD, str } from '@/lib/admin/form';
  * 403 (§3.7 — the admin surface does not confirm its own existence).
  */
 export const dynamic = 'force-dynamic';
+/** A broadcast to every subscriber runs in `after()` inside this invocation; give it the full budget. */
+export const maxDuration = 300;
 
 const NO_STORE = { 'Cache-Control': 'private, no-store' } as const;
 
@@ -60,14 +65,31 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return notFound();
   }
   if (!sameOrigin(request)) return notFound();
+  const requestUrl = resolveRequestUrl(new URL(request.url), request.headers);
+  if (requestUrl === null) return notFound();
 
   const form = await request.formData();
   const name = str(form, OP_FIELD);
   const back = str(form, BACK_FIELD) || '/admin';
 
   const outcome = await execute(name, form);
+  // Keep refused new-template forms mounted; still use the guarded operation above.
+  if (name === 'prompt.create' && request.headers.get('accept') === 'application/vnd.twings.admin-form+json') {
+    const field = outcome.ok ? undefined : outcome.detail?.split(':')[0];
+    return NextResponse.json(outcome.ok
+      ? { ok: true, to: outcomeUrl(back, outcome) }
+      : { ok: false, code: outcome.code, field: ['useCase', 'poster'].includes(field ?? '') ? field : undefined },
+    { status: outcome.ok ? 200 : 400, headers: NO_STORE });
+  }
+  if (name === 'prompt.createSet' && request.headers.get('accept') === 'application/vnd.twings.admin-form+json') {
+    return NextResponse.json(outcome.ok
+      ? { ok: true, to: outcomeUrl(back, outcome) }
+      : { ok: false, code: outcome.code, detail: outcome.detail },
+    { status: outcome.ok ? 200 : 400, headers: NO_STORE });
+  }
+  if(request.headers.get('accept')==='application/json') return NextResponse.json(outcome.ok ? {ok:true,to:outcome.to,...(outcome.invitationToken?{invitationToken:outcome.invitationToken}:{})} : {ok:false,code:outcome.code}, {status:outcome.ok?200:400,headers:NO_STORE});
   // 303: the POST becomes a GET on the way back, so a refresh never re-submits the operation.
-  return NextResponse.redirect(new URL(outcomeUrl(back, outcome), request.nextUrl.origin), {
+  return NextResponse.redirect(new URL(outcomeUrl(back, outcome), requestUrl.origin), {
     status: 303,
     headers: NO_STORE,
   });
@@ -87,5 +109,17 @@ async function execute(name: string, form: FormData): Promise<AdminOutcome> {
     revalidate: revalidateCatalog,
     revalidatePrompts,
     revalidateContests,
+    revalidateCampaigns,
+    revalidateLandingMedia,
+    mail: { mailer: getMailer(), siteUrl: siteUrl() },
+    // After the redirect, never on the request path; a failure is logged, never a 500 for the operator.
+    defer: (task) =>
+      after(async () => {
+        try {
+          await task();
+        } catch (error) {
+          console.error('[admin] deferred task failed', error);
+        }
+      }),
   });
 }

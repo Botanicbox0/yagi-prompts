@@ -1,0 +1,178 @@
+import { access, mkdir, readFile, writeFile, unlink } from 'node:fs/promises';
+import { constants } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
+import type { SupabaseClient } from '@supabase/supabase-js';
+import { selectStorageDriver } from '@/lib/runtime-mode';
+
+/**
+ * Where a render's bytes live — the visitor's photo going in, the finished object coming out.
+ *
+ * A separate, smaller interface than `lib/storage` on purpose. That one is the PUBLISH pipeline
+ * (staging → content-addressed, write-once, no delete, ≤60s capabilities) and its shape encodes
+ * doctrine that does not apply here: a render is owned by one person, is retried in place, and
+ * is viewed through a link that lives three days. So:
+ *
+ *   · one private bucket, `renders`, keyed `{jobId}/input.{ext}` and `{jobId}/result.{ext}`;
+ *   · `put` upserts, because a retried job rewrites its own key and nothing else's;
+ *   · `url()` mints a signed URL for MINUTES (the share page plays a film; a 60s URL would die
+ *     mid-seek) — or returns null on the local driver, where the gateway streams the bytes itself.
+ *
+ * Same mode switch as everything else (`lib/runtime-mode.ts`): local mode writes under
+ * `.storage/renders/`, cloud mode talks to the project's bucket with the service-role key.
+ */
+
+export const RENDERS_BUCKET = 'renders';
+
+export interface RenderStore {
+  readonly name: 'local' | 'supabase';
+  put(key: string, bytes: Uint8Array, contentType: string): Promise<void>;
+  read(key: string): Promise<Uint8Array>;
+  /** Optional for test stores; runtime drivers delete expired private edit references. */
+  delete?(key: string): Promise<void>;
+  /**
+   * An absolute URL an outside host will honour for `ttlSeconds`, or `null` when nothing serves
+   * the object over HTTP (local driver) and the gateway must stream it.
+   */
+  url(key: string, ttlSeconds: number, options?: { download?: string }): Promise<string | null>;
+}
+
+export class RenderObjectNotFound extends Error {
+  constructor(key: string) {
+    super(`render object not found: ${RENDERS_BUCKET}/${key}`);
+    this.name = 'RenderObjectNotFound';
+  }
+}
+
+/**
+ * Keys are `{uuid}/{name}.{ext}` by construction — or `social/{uuid}/evidence.jpg`, a follower
+ * screenshot (docs/PLATFORM-2.0.md §17.1); anything else is refused before it touches a path.
+ * A name may carry digits, `-` and `_` after its first letter: a recipe step (`step-sheet`), a carousel
+ * frame (`result-2`) or a maker file (`ast_<hex>`) — still no dot, slash or traversal.
+ */
+export function assertRenderKey(key: string): void {
+  if (!/^(?:social\/)?[0-9a-f-]{36}\/[a-z][a-z0-9_-]{0,47}\.[a-z0-9]{2,5}$/i.test(key)) throw new Error(`illegal render key: ${key}`);
+}
+
+async function fileExists(path: string): Promise<boolean> {
+  try {
+    await access(path, constants.F_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function createLocalRenderStore(rootDir?: string): RenderStore {
+  const root = resolve(rootDir ?? process.env.STORAGE_LOCAL_ROOT ?? '.storage', RENDERS_BUCKET);
+  const pathOf = (key: string) => {
+    assertRenderKey(key);
+    return join(root, key);
+  };
+  return {
+    name: 'local',
+    async put(key, bytes) {
+      const path = pathOf(key);
+      await mkdir(dirname(path), { recursive: true });
+      await writeFile(path, bytes);
+    },
+    async read(key) {
+      const path = pathOf(key);
+      if (!(await fileExists(path))) throw new RenderObjectNotFound(key);
+      return new Uint8Array(await readFile(path));
+    },
+    async delete(key) {
+      const path = pathOf(key);
+      try { await unlink(path); } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
+    },
+    async url() {
+      return null;
+    },
+  };
+}
+
+function isMissing(error: { message?: string; statusCode?: string; status?: number }): boolean {
+  const status = String(error.statusCode ?? error.status ?? '');
+  if (status === '404') return true;
+  const message = (error.message ?? '').toLowerCase();
+  return message.includes('not found') || message.includes('does not exist');
+}
+
+export function createSupabaseRenderStore(client?: SupabaseClient): RenderStore {
+  let memo: SupabaseClient | null = client ?? null;
+  const db = async (): Promise<SupabaseClient> => {
+    if (memo === null) {
+      const { createServiceClient } = await import('@/lib/supabase/service-client');
+      memo = createServiceClient();
+    }
+    return memo;
+  };
+  return {
+    name: 'supabase',
+    async put(key, bytes, contentType) {
+      assertRenderKey(key);
+      const { error } = await (await db()).storage
+        .from(RENDERS_BUCKET)
+        .upload(key, new Blob([new Uint8Array(bytes)], { type: contentType }), { contentType, upsert: true });
+      if (error) throw new Error(`render upload failed: ${key} — ${error.message}`);
+    },
+    async read(key) {
+      assertRenderKey(key);
+      const { data, error } = await (await db()).storage.from(RENDERS_BUCKET).download(key);
+      if (error || !data) {
+        if (!error || isMissing(error)) throw new RenderObjectNotFound(key);
+        throw new Error(`render download failed: ${key} — ${error.message}`);
+      }
+      return new Uint8Array(await data.arrayBuffer());
+    },
+    async delete(key) {
+      assertRenderKey(key);
+      const { error } = await (await db()).storage.from(RENDERS_BUCKET).remove([key]);
+      if (error && !isMissing(error)) throw new Error('private edit reference deletion failed');
+    },
+    async url(key, ttlSeconds, options = {}) {
+      assertRenderKey(key);
+      const expiresIn = Math.max(1, Math.floor(ttlSeconds));
+      const { data, error } = await (await db()).storage
+        .from(RENDERS_BUCKET)
+        .createSignedUrl(key, expiresIn, options.download ? { download: options.download } : undefined);
+      if (error || !data) {
+        if (!error || isMissing(error)) throw new RenderObjectNotFound(key);
+        throw new Error(`render sign failed: ${key} — ${error.message}`);
+      }
+      return data.signedUrl;
+    },
+  };
+}
+
+/** Memoised per process, like the other resolvers (`lib/db/connect.ts`). */
+const cache = ((globalThis as Record<string, unknown>).__playbookRenderStore ??= { store: null as RenderStore | null }) as {
+  store: RenderStore | null;
+};
+
+export async function getRenderStore(): Promise<RenderStore> {
+  if (cache.store !== null) return cache.store;
+  cache.store = selectStorageDriver(process.env) === 'supabase' ? createSupabaseRenderStore() : createLocalRenderStore();
+  return cache.store;
+}
+
+/** Test seam. */
+export function resetRenderStore(): void {
+  cache.store = null;
+}
+
+export function extensionFor(mime: string): string {
+  switch (mime) {
+    case 'image/png':
+      return 'png';
+    case 'image/webp':
+      return 'webp';
+    case 'image/jpeg':
+      return 'jpg';
+    case 'video/mp4':
+      return 'mp4';
+    case 'video/quicktime':
+      return 'mov';
+    default:
+      return 'bin';
+  }
+}

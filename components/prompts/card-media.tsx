@@ -1,34 +1,37 @@
 'use client';
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { observeCardArming, rebalanceCardArming } from '@/lib/media/card-arming';
 
 /**
- * PLAN §13.2 — "hover video autoplay muted (video only loads on hover/intersection — perf)".
+ * PLAN §13.2, revised by docs/PLATFORM-2.0.md §15.2 — "뷰포트 진입 자동재생" with a visible stop.
  *
  * The `<video>` element is not in the tree until the card is ARMED, and the `src` is not set until
- * then either, so a gallery of forty cards downloads forty posters and zero videos. Arming happens
- * on the gesture that matches the device:
+ * then either, so a gallery of forty cards downloads forty posters and only the clips on screen.
  *
- *   · pointer:fine (mouse/trackpad) → `pointerenter`, and it pauses + rewinds on leave, so a
- *     40-card wall never has more than one clip decoding;
- *   · no hover (touch) → IntersectionObserver at 60%, because there is no hover to wait for and a
- *     card the reader has deliberately scrolled to is the closest thing to intent;
- *   · `prefers-reduced-motion` → never. §5.3's reduced-motion rule is a kill switch, not a
- *     softening, and an autoplaying clip is exactly what it exists to stop.
+ *   · Every device arms on real visibility (IntersectionObserver at 60%) and releases on the way
+ *     out (`lib/media/card-arming.ts`): iPhone Safari caps concurrent media decoders, and a rail
+ *     that only ever arms starves the cards further down. Keyboard focus anywhere on the card arms
+ *     it too — a focused card is on screen.
+ *   · However many cards fit on the screen, at most two clips play: the ones nearest its centre.
+ *     A card the reader pressed play on, or is pointing at, takes a slot first.
+ *   · `prefers-reduced-motion` → never on its own. §5.3's reduced-motion rule is a kill switch, not
+ *     a softening. The play button still works: pressing it is the reader's choice, not motion.
+ *   · The stop button wins: a clip the reader stopped stays stopped, through scrolling away and
+ *     back, until they press play.
  *
  * The poster stays mounted underneath at all times: it is the LCP candidate, it is what a browser
  * with no JS shows, and it is what fills the frame while the first video frame decodes.
  *
- * Where the hover is listened for matters (founder report, 2026-08-15 — "썸네일 호버하면 영상 자동
- * 재생되게"): the card is a STRETCHED LINK, so `a::after` covers the whole card and the pointer
- * hit-tests to the anchor, never to this element. Enter/leave do not bubble, and the anchor is a
- * sibling branch — so handlers on this div were never reached and no clip ever played. The
- * listeners therefore live on the card (`HOVER_HOST`, an ancestor of both), which is entered no
- * matter which descendant is topmost, and keyboard focus anywhere on the card arms it too.
+ * The card is a STRETCHED LINK, so `a::after` covers the whole card and the pointer hit-tests to
+ * the anchor, never to this element. Focus is therefore listened for on the card (`HOVER_HOST`, an
+ * ancestor of both), and the control is rendered as a SIBLING of `.card__media`, because the hover
+ * zoom transforms that layer's children and a transformed ancestor would trap the button's z-index
+ * underneath the overlay.
  */
 
-/** The arming host: an ANCESTOR of this element, so the overlay link cannot mask the gesture. */
-export const HOVER_HOST = '[data-prompt-card]';
+/** The arming host is an ancestor of media AND its link. Hero previews opt in without counting as catalog cards. */
+export const HOVER_HOST = '[data-prompt-card], [data-media-host]';
 
 export interface CardMediaSource {
   src: string;
@@ -37,12 +40,52 @@ export interface CardMediaSource {
   h?: number;
 }
 
+/** What the reader last asked for. `auto` = they have not touched the control. */
+export type PlaybackIntent = 'auto' | 'play' | 'pause';
+
+/** The whole arming rule in one place, so it can be read (and tested) without a browser. */
+export function shouldMountClip({ inView, intent, autoplay }: { inView: boolean; intent: PlaybackIntent; autoplay: boolean }): boolean {
+  if (!inView || intent === 'pause') return false;
+  return intent === 'play' || autoplay;
+}
+
+/** The visible play/stop control: a 44px target on a dark disc, labelled with what it will do. */
+export function CardPlaybackControl({
+  playing,
+  labels,
+  onToggle,
+}: {
+  playing: boolean;
+  labels: { play: string; pause: string };
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      data-card-control={playing ? 'pause' : 'play'}
+      aria-label={playing ? labels.pause : labels.play}
+      onClick={onToggle}
+      className="absolute right-1 bottom-1 z-10 inline-flex min-h-11 min-w-11 items-center justify-center rounded-full transition-opacity duration-200 group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:hover)]:opacity-0"
+    >
+      <span aria-hidden className="flex h-7 w-7 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur-md">
+        {playing ? (
+          <svg viewBox="0 0 12 12" className="h-3 w-3" fill="currentColor"><rect x="2" y="1.5" width="3" height="9" rx="0.5" /><rect x="7" y="1.5" width="3" height="9" rx="0.5" /></svg>
+        ) : (
+          <svg viewBox="0 0 12 12" className="ml-0.5 h-3 w-3" fill="currentColor"><path d="M3 1.6v8.8a.5.5 0 0 0 .76.43l7.04-4.4a.5.5 0 0 0 0-.86L3.76 1.17A.5.5 0 0 0 3 1.6Z" /></svg>
+        )}
+      </span>
+    </button>
+  );
+}
+
 export function PromptCardMedia({
   poster,
   video,
   fallback,
   alt,
   ratio,
+  fit = 'contain',
+  controlLabels,
   className,
 }: {
   poster: CardMediaSource | null;
@@ -51,116 +94,130 @@ export function PromptCardMedia({
   fallback: ReactNode;
   alt: string;
   ratio: string;
+  /** `cover` crops to fill (the 4:5 portrait card); `contain` letterboxes (the 16:9 card). */
+  fit?: 'cover' | 'contain';
+  /** Without labels there is no control — the clip is decoration only. */
+  controlLabels?: { play: string; pause: string };
   className?: string;
 }) {
   const rootRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
-  const [armed, setArmed] = useState(false);
+  const [inView, setInView] = useState(false);
+  const [intent, setIntent] = useState<PlaybackIntent>('auto');
+  const intentRef = useRef<PlaybackIntent>('auto');
+  intentRef.current = intent;
+  const pointingRef = useRef(false);
+  const [autoplay, setAutoplay] = useState(false);
+  const [hydrated, setHydrated] = useState(false);
+  const [playing, setPlaying] = useState(false);
+  const armed = video !== null && shouldMountClip({ inView, intent, autoplay });
 
-  // Touch tier: arm on real visibility. Set up once, and only when there is a clip to arm.
+  useEffect(() => {
+    setHydrated(true);
+    setAutoplay(true);
+  }, []);
+
+  // Arm on real visibility and release on the way out, so the page never holds more decoders
+  // than the pool's four slots. The observer stays live for the session.
   useEffect(() => {
     const root = rootRef.current;
-    if (!root || video === null || armed) return;
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-    if (window.matchMedia('(hover: hover) and (pointer: fine)').matches) return;
+    if (!root || video === null || typeof IntersectionObserver === 'undefined') return;
+    return observeCardArming(root, setInView, { pinned: () => intentRef.current === 'play' || pointingRef.current });
+  }, [video]);
 
-    const observer = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          if (entry.isIntersecting) {
-            setArmed(true);
-            observer.disconnect();
-          }
-        }
-      },
-      { threshold: 0.6 },
-    );
-    observer.observe(root);
-    return () => observer.disconnect();
-  }, [video, armed]);
-
-  // Pointer tier: arm on hover of the CARD, not of this element (see the note above).
+  // Keyboard focus anywhere on the card counts as being on screen.
   useEffect(() => {
     const root = rootRef.current;
     if (!root || video === null) return;
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-    if (!window.matchMedia('(hover: hover) and (pointer: fine)').matches) return;
-
     const host = root.closest<HTMLElement>(HOVER_HOST) ?? root;
-
-    const arm = () => {
-      setArmed(true);
-      // Already mounted from a previous hover — just resume.
-      void videoRef.current?.play().catch(() => {});
+    const focus = () => setInView(true);
+    // A mouse pointing at a card is asking for that clip, so it takes a slot from the pool.
+    const point = (on: boolean) => (event: PointerEvent) => {
+      if (event.pointerType !== 'mouse') return;
+      pointingRef.current = on;
+      rebalanceCardArming();
     };
-    const disarm = () => {
-      const element = videoRef.current;
-      if (!element) return;
-      element.pause();
-      element.currentTime = 0;
-    };
-    // Tabbing between the title and the copy button stays inside the card — that is not a leave.
-    const blur = (event: FocusEvent) => {
-      const next = event.relatedTarget;
-      if (next instanceof Node && host.contains(next)) return;
-      disarm();
-    };
-
-    host.addEventListener('pointerenter', arm);
-    host.addEventListener('pointerleave', disarm);
-    host.addEventListener('focusin', arm);
-    host.addEventListener('focusout', blur);
-    // The page can finish hydrating with the cursor already resting on a card; that reader made
-    // the gesture before we were listening for it.
-    if (host.matches(':hover')) arm();
-
+    const enter = point(true), leave = point(false);
+    host.addEventListener('focusin', focus);
+    host.addEventListener('pointerenter', enter);
+    host.addEventListener('pointerleave', leave);
     return () => {
-      host.removeEventListener('pointerenter', arm);
-      host.removeEventListener('pointerleave', disarm);
-      host.removeEventListener('focusin', arm);
-      host.removeEventListener('focusout', blur);
+      host.removeEventListener('focusin', focus);
+      host.removeEventListener('pointerenter', enter);
+      host.removeEventListener('pointerleave', leave);
     };
   }, [video]);
 
-  return (
-    <div
-      ref={rootRef}
-      data-armed={armed ? 'true' : 'false'}
-      /* Black ground: the card is a fixed 16:9 window (founder 2026-08-14) and a portrait result
-         is letterboxed into it, so the bars are part of the design rather than a gap. */
-      className={['card__media relative overflow-hidden bg-black', className].filter(Boolean).join(' ')}
-      style={{ aspectRatio: ratio }}
-    >
-      {poster ? (
-        // eslint-disable-next-line @next/next/no-img-element -- public bucket object, no loader
-        <img
-          src={poster.src}
-          alt={alt}
-          {...(poster.w ? { width: poster.w } : {})}
-          {...(poster.h ? { height: poster.h } : {})}
-          loading="lazy"
-          decoding="async"
-          className="h-full w-full object-contain"
-        />
-      ) : (
-        fallback
-      )}
+  useEffect(() => {
+    if (!armed) {
+      setPlaying(false);
+      return;
+    }
+    const el = videoRef.current;
+    if (el) {
+      el.defaultMuted = true;
+      el.muted = true;
+      void el.play().catch(() => {});
+    }
+  }, [armed]);
 
-      {armed && video !== null && (
-        <video
-          ref={videoRef}
-          className="absolute inset-0 h-full w-full object-contain"
-          autoPlay
-          muted
-          loop
-          playsInline
-          preload="none"
-          aria-hidden
-          tabIndex={-1}
-        >
-          <source src={video.src} type={video.mime} />
-        </video>
+  const toggle = () => {
+    if (playing) {
+      videoRef.current?.pause();
+      setIntent('pause');
+      return;
+    }
+    setIntent('play');
+    setInView(true);
+    void videoRef.current?.play().catch(() => {});
+  };
+
+  return (
+    <>
+      <div
+        ref={rootRef}
+        data-armed={armed ? 'true' : 'false'}
+        className={['card__media relative overflow-hidden bg-sky', className].filter(Boolean).join(' ')}
+        style={{ aspectRatio: ratio }}
+      >
+        {poster ? (
+          // eslint-disable-next-line @next/next/no-img-element -- public bucket object, no loader
+          <img
+            src={poster.src}
+            alt={alt}
+            {...(poster.w ? { width: poster.w } : {})}
+            {...(poster.h ? { height: poster.h } : {})}
+            loading="lazy"
+            decoding="async"
+            className={`h-full w-full ${fit === 'cover' ? 'object-cover' : 'object-contain'}`}
+          />
+        ) : (
+          fallback
+        )}
+
+        {armed && (
+          <video
+            ref={videoRef}
+            // The clip fades up over its poster once a frame exists, so a card never blinks.
+            className={`absolute inset-0 h-full w-full ${fit === 'cover' ? 'object-cover' : 'object-contain'}`}
+            style={{ opacity: playing ? 1 : 0, transition: 'opacity 520ms var(--ease-out-quint), transform var(--duration-hover) var(--ease-out-quint)' }}
+            autoPlay
+            muted
+            loop
+            playsInline
+            preload="none"
+            aria-hidden
+            tabIndex={-1}
+            onPlaying={() => setPlaying(true)}
+            onPause={() => setPlaying(false)}
+          >
+            <source src={video.src} type={video.mime} />
+          </video>
+        )}
+      </div>
+      {hydrated && video !== null && controlLabels && (
+        <CardPlaybackControl playing={playing} labels={controlLabels} onToggle={toggle} />
       )}
-    </div>
+    </>
   );
 }

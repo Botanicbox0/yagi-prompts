@@ -1,3 +1,10 @@
+import { BRAND_PRODUCTION_OPERATIONS } from './brand-production-operations';
+import { PLATFORM_OPERATIONS } from './platform-operations';
+import { CAMPAIGN_RISK_OPERATIONS } from './campaign-risk-operations';
+import { SOCIAL_OPERATIONS } from './social-operations';
+import { LANDING_MEDIA_OPERATIONS } from './landing-media-operations';
+import { CAMPAIGN_COLLABORATION_OPERATIONS } from './campaign-collaboration-operations';
+import { CAMPAIGN_FUNDING_OPERATIONS } from './campaign-funding-operations';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import {
@@ -20,6 +27,11 @@ import { notifyKindFor } from '@/lib/notify/kinds';
 import { fail, ok, type AdminContext, type AdminOutcome } from './context';
 import { PROMPT_OPERATIONS } from './prompt-operations';
 import { CONTEST_OPERATIONS } from './contest-operations';
+import { CAMPAIGN_OPERATIONS } from './campaign-operations';
+import { CAMPAIGN_PRODUCTION_OPERATIONS } from './campaign-production-operations';
+import { BRAND_OPERATIONS } from './brand-operations';
+import { BRAND_WORKSPACE_OPERATIONS } from './brand-workspace-operations';
+import { BRAND_USAGE_OPERATIONS } from './brand-usage-operations';
 import { stageUpload } from './assets';
 import { ensureDraftRevision } from './clone';
 import * as f from './form';
@@ -284,7 +296,10 @@ const refreshCaches: AdminOperation<Record<string, never>> = {
   async run(ctx) {
     // §3.1 "An idempotent 'Refresh caches' button exists in /admin" — the same call the publish
     // flow makes, for when an invalidation was lost and the hourly TTL floor has not run yet.
+    // The template catalogue too (2026-10-29): a template written by a script (`templates:import`,
+    // `templates:film`) otherwise waits out the hour, and the plan has no tag purge.
     ctx.revalidate?.();
+    ctx.revalidatePrompts?.();
     return ok('cachesRefreshed');
   },
 };
@@ -725,6 +740,22 @@ export const ADMIN_OPERATIONS = {
   ...PROMPT_OPERATIONS,
   // §14 — and so does the contests surface, for the same reason and at the same cost: one line.
   ...CONTEST_OPERATIONS,
+  // docs/CAMPAIGNS.md — and the campaigns surface.
+  ...CAMPAIGN_OPERATIONS,
+  ...CAMPAIGN_PRODUCTION_OPERATIONS,
+  // 2026-09-11 — the brand enquiries that arrive through the campaigns page.
+  ...BRAND_OPERATIONS,
+  ...BRAND_WORKSPACE_OPERATIONS,
+  ...BRAND_USAGE_OPERATIONS,
+  ...BRAND_PRODUCTION_OPERATIONS,
+  ...PLATFORM_OPERATIONS,
+  ...CAMPAIGN_RISK_OPERATIONS,
+  ...CAMPAIGN_COLLABORATION_OPERATIONS,
+  ...CAMPAIGN_FUNDING_OPERATIONS,
+  // docs/PLATFORM-2.0.md §17.1 — the influencer SNS check.
+  ...SOCIAL_OPERATIONS,
+  // lib/content/landing-media.ts — replace a landing image or put the default back.
+  ...LANDING_MEDIA_OPERATIONS,
 };
 
 export type AdminOperationName = keyof typeof ADMIN_OPERATIONS;

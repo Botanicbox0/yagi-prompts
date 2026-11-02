@@ -1,0 +1,27 @@
+{
+  "identity_matches": true,
+  "json_post_info": {
+    "ok": false,
+    "error": "invalid_arguments",
+    "channel_id": null,
+    "is_private": null,
+    "is_member": null,
+    "is_member_present": false,
+    "is_archived": null
+  },
+  "get_info": {
+    "ok": true,
+    "error": null,
+    "channel_id": "C0C9DRS4DT7",
+    "is_private": true,
+    "is_member": true,
+    "is_member_present": true,
+    "is_archived": false
+  },
+  "membership": {
+    "ok": true,
+    "error": null,
+    "dedicated_bot_present": true,
+    "has_next_cursor": false
+  }
+}

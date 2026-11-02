@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { checkUpload, publishPromptMedia, stagePromptUpload } from '@/lib/prompts/media';
-import { AssetRefSchema } from '@/lib/content/schemas';
+import { parsePosterFocus } from '@/lib/prompts/poster-focus';
+import { AssetRefSchema, type AssetRef } from '@/lib/content/schemas';
 import { STAGING_BUCKET } from '@/lib/storage';
 import {
   approvePrompt,
@@ -19,17 +20,27 @@ import {
   AuthoringSchema,
   DEFAULT_PROMPT_MODEL,
   EditSchema,
+  IMAGE_SET_FRAMES_MAX,
+  IMAGE_SET_FRAMES_MIN,
   MEDIA_KINDS,
+  PROMPT_TEXT_MIN,
+  PROMPT_TITLE_MAX,
   RejectionSchema,
+  TEMPLATE_MEDIA,
   USE_CASES,
+  USE_CASE_MAX,
   effectiveTextVisibility,
   normalizeHandle,
+  normalizeSetPrompt,
   parsePromptMedia,
   parseStagedUpload,
   slugify,
   type PromptMedia,
 } from '@/lib/prompts/schemas';
-import { ADMIN_PROMPTS_PATH } from '@/lib/prompts/links';
+import { ADMIN_PROMPTS_PATH, adminPromptPath } from '@/lib/prompts/links';
+import { announceTemplate, markPromptAnnounced } from '@/lib/prompts/announce';
+import { buildImageTemplateSet, writeImageTemplateSet } from '@/lib/prompts/image-templates';
+import { aspectsForMedium, enginesForMedium, imageFitsAspect, isImageAspect, isImageEngine, type ImageAspect, type ImageEngineId } from '@/lib/images/engines';
 import { fail, ok, type AdminContext, type AdminOutcome } from './context';
 import * as f from './form';
 import type { AdminOperation, ParseResult } from './operations';
@@ -84,6 +95,60 @@ function chips(form: FormData, name: string): string[] {
     .filter((value) => allowed.has(value));
 }
 
+/**
+ * docs/TEMPLATES-IA.md — the three fields that make a prompt item a sellable template. Parsed on
+ * their own so the authoring and edit schemas stay what §13 pinned; whole USD cents, and a runtime
+ * only for a film (the 0015 CHECK refuses one on an image, so it is dropped here rather than sent).
+ */
+const TemplateFields = z
+  .object({
+    medium: z.enum(TEMPLATE_MEDIA),
+    priceCents: z.number().int().min(0).max(1_000_000),
+    /** The fixed won price (0018); 0 = suggested from the dollar price. */
+    priceKrw: z.number().int().min(0).max(100_000_000),
+    /** The 1080p price (0039), films only; 0 = 1080p not offered. Both currencies or neither. */
+    price1080Cents: z.number().int().min(0).max(1_000_000),
+    price1080Krw: z.number().int().min(0).max(100_000_000),
+    runtimeSeconds: z.number().int().positive().max(600).nullable(),
+    /** docs/TEMPLATES-IA.md §7 — null = the medium's default; a named engine must be one of its medium's. */
+    engine: z.string().nullable(),
+    aspectDefault: z.string().nullable(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.engine !== null && !(enginesForMedium(value.medium) as readonly string[]).includes(value.engine)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['engine'], message: `not a ${value.medium} engine` });
+    }
+    if (value.aspectDefault !== null && !(aspectsForMedium(value.medium) as readonly string[]).includes(value.aspectDefault)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['aspectDefault'], message: `not a ${value.medium} aspect` });
+    }
+    const hd = value.price1080Cents > 0 || value.price1080Krw > 0;
+    if (hd && value.medium !== 'video') {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['price1080Cents'], message: 'a 1080p price is for films only' });
+    }
+    if (hd && (value.price1080Cents <= 0 || value.price1080Krw <= 0)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['price1080Krw'], message: 'set the 1080p price in both currencies, or neither' });
+    }
+    // 1080p costs the provider ~2.5× what 720p does; it can never sell for less than the default.
+    if (hd && (value.price1080Cents < value.priceCents || (value.priceKrw > 0 && value.price1080Krw < value.priceKrw))) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['price1080Krw'], message: 'the 1080p price must be at least the base price' });
+    }
+  });
+
+function templateFields(form: FormData): ParseResult<z.infer<typeof TemplateFields>> {
+  const medium = f.str(form, 'medium') || 'video';
+  const runtime = f.optionalInt(form, 'runtimeSeconds');
+  return parsed(TemplateFields, {
+    medium,
+    priceCents: f.optionalInt(form, 'priceCents') ?? 0,
+    priceKrw: f.optionalInt(form, 'priceKrw') ?? 0,
+    price1080Cents: medium === 'image' ? 0 : (f.optionalInt(form, 'price1080Cents') ?? 0),
+    price1080Krw: medium === 'image' ? 0 : (f.optionalInt(form, 'price1080Krw') ?? 0),
+    runtimeSeconds: medium === 'image' ? null : (runtime ?? null),
+    engine: f.str(form, 'engine') || null,
+    aspectDefault: f.str(form, 'aspectDefault') || null,
+  });
+}
+
 const Uuid = z.string().uuid();
 const NOT_FOUND_DETAIL = 'the prompt this form points at no longer exists';
 
@@ -136,6 +201,10 @@ async function applyUploads(
     if (!staged.ok) return { ok: false, detail: `${kind}: ${staged.reason}` };
     next[kind] = staged.value.ref;
   }
+  // A new poster does not inherit the old crop unless the form sent one for it.
+  const focus = parsePosterFocus(f.str(form, 'posterFocus'));
+  if (focus) next.posterFocus = focus;
+  else if (next.poster !== existing.poster) delete next.posterFocus;
   return { ok: true, value: next };
 }
 
@@ -146,7 +215,8 @@ async function applyUploads(
 const createPrompt: AdminOperation<{ input: z.infer<typeof AuthoringSchema>; form: FormData }> = {
   parse(form) {
     const base = parsed(AuthoringSchema, {
-      slug: f.str(form, 'slug'),
+      // Creation owns the URL. Ignore stale/manual slug inputs from older open tabs.
+      slug: '',
       title: f.str(form, 'title'),
       titleKo: f.str(form, 'titleKo'),
       promptText: f.text(form, 'promptText'),
@@ -162,6 +232,8 @@ const createPrompt: AdminOperation<{ input: z.infer<typeof AuthoringSchema>; for
     return { ok: true, value: { input: base.value, form } };
   },
   async run(ctx, { input, form }) {
+    const template = templateFields(form);
+    if (!template.ok) return fail('invalid', template.detail);
     const id = randomUUID();
     const staged = await applyUploads(ctx, id, form, {});
     if (!staged.ok) return fail('upload', staged.detail);
@@ -171,12 +243,12 @@ const createPrompt: AdminOperation<{ input: z.infer<typeof AuthoringSchema>; for
       return fail('invalid', 'poster: a YAGI prompt needs a poster image');
     }
 
-    // Founder direction (2026-08-14): a blank slug FOLLOWS THE EN TITLE. Collisions get a short
+    // Founder direction (2026-09-26): creation always derives the URL from the EN title.
+    // Existing addresses stay unchanged on edit. Collisions get a short
     // numeric suffix instead of a refusal — the founder is publishing, not naming database rows.
     // (Single-admin surface: the read-then-insert window is acceptable, and the unique index is
     // still the backstop underneath.)
-    const slug =
-      input.slug ?? (await freeSlug(ctx.sql, slugify(input.title, `prompt-${id.slice(0, 8)}`)));
+    const slug = await freeSlug(ctx.sql, slugify(input.title, `prompt-${id.slice(0, 8)}`));
 
     const { media } = await publishPromptMedia(ctx.storage, staged.value);
 
@@ -198,11 +270,96 @@ const createPrompt: AdminOperation<{ input: z.infer<typeof AuthoringSchema>; for
       media,
       useCase: input.useCase,
       featured: input.featured,
+      ...template.value,
       publishedAt: 'now',
     });
 
     ctx.revalidatePrompts?.();
     return ok('published', { detail: slug, to: BACK });
+  },
+};
+
+// ---------------------------------------------------------------------------
+// a studio image set (2026-11-01): the form version of `npm run templates:import`
+// ---------------------------------------------------------------------------
+
+const ImageSetForm = z.object({
+  title: z.string().min(3).max(PROMPT_TITLE_MAX),
+  titleKo: z.string().min(1).max(PROMPT_TITLE_MAX),
+  engine: z.string().refine(isImageEngine, 'not an image engine'),
+  aspect: z.string().refine(isImageAspect, 'not an image aspect'),
+  prompts: z.array(z.string().min(PROMPT_TEXT_MIN)).min(IMAGE_SET_FRAMES_MIN).max(IMAGE_SET_FRAMES_MAX),
+  thumbnail: z.number().int().min(0),
+  useCase: z.array(z.string()).max(USE_CASE_MAX),
+});
+
+/** `frame{i}Size` is `WIDTHxHEIGHT`, measured in the browser when it encoded the image. */
+function frameSize(form: FormData, index: number): { w: number; h: number } | null {
+  const match = /^(\d{1,5})x(\d{1,5})$/.exec(f.str(form, `frame${index}Size`));
+  return match ? { w: Number(match[1]), h: Number(match[2]) } : null;
+}
+
+/** One frame's image: a direct-upload receipt, or the file itself where there is no signing service. */
+async function stageFrame(ctx: AdminContext, id: string, form: FormData, index: number): Promise<{ ok: true; ref: AssetRef } | { ok: false; detail: string }> {
+  const label = `frame ${index + 1}`;
+  const size = frameSize(form, index);
+  if (size === null) return { ok: false, detail: `${label}: no image` };
+  const receipt = parseStagedUpload(f.str(form, `frame${index}Ref`));
+  if (receipt !== null) {
+    if (!(await ctx.storage.exists(STAGING_BUCKET, receipt.key))) return { ok: false, detail: `${label}: upload_missing` };
+    const rejection = checkUpload({ kind: 'poster', mime: receipt.mime, sizeBytes: receipt.size, durationSeconds: null });
+    if (rejection !== null) return { ok: false, detail: `${label}: ${rejection}` };
+    return { ok: true, ref: AssetRefSchema.parse({ staging_key: receipt.key, sha256: receipt.sha256, mime: receipt.mime, ...size }) };
+  }
+  const file = f.file(form, `frame${index}`);
+  if (file === null) return { ok: false, detail: `${label}: no image` };
+  const staged = await stagePromptUpload(ctx.storage, id, 'poster', file);
+  if (!staged.ok) return { ok: false, detail: `${label}: ${staged.reason}` };
+  return { ok: true, ref: { ...staged.value.ref, ...size } };
+}
+
+const createImageSet: AdminOperation<{ input: z.infer<typeof ImageSetForm>; form: FormData }> = {
+  parse(form) {
+    const count = f.optionalInt(form, 'frameCount') ?? 0;
+    const base = parsed(ImageSetForm, {
+      title: f.str(form, 'title'),
+      titleKo: f.str(form, 'titleKo'),
+      engine: f.str(form, 'engine'),
+      aspect: f.str(form, 'aspect'),
+      // Capped before the loop: the schema refuses too many, this only stops a silly form early.
+      prompts: Array.from({ length: Math.min(Math.max(count, 0), IMAGE_SET_FRAMES_MAX + 1) }, (_, index) => f.text(form, `frame${index}Prompt`)),
+      thumbnail: f.optionalInt(form, 'thumbnail') ?? 0,
+      useCase: chips(form, 'useCase'),
+    });
+    if (!base.ok) return base;
+    return { ok: true, value: { input: base.value, form } };
+  },
+  async run(ctx, { input, form }) {
+    const engine = input.engine as ImageEngineId;
+    const aspect = input.aspect as ImageAspect;
+    if (input.thumbnail >= input.prompts.length) return fail('invalid', 'thumbnail: not one of the frames');
+    const fileName = (index: number) => `frame-${index}`;
+    const frames = input.prompts.map((promptText, index) => ({
+      key: `shot${index + 1}`, title: input.title, titleKo: input.titleKo, promptText: normalizeSetPrompt(promptText), engine, aspect, fileName: fileName(index),
+    }));
+    const slug = await freeSlug(ctx.sql, slugify(input.title, `set-${randomUUID().slice(0, 8)}`));
+    const built = buildImageTemplateSet({ slug, title_en: input.title, title_ko: input.titleKo, thumbnail: fileName(input.thumbnail) }, frames);
+    if (!built.ok) return fail('invalid', built.errors.slice(0, 4).join('; '));
+
+    const id = randomUUID();
+    const staged = new Map<string, AssetRef>();
+    for (let index = 0; index < frames.length; index += 1) {
+      const size = frameSize(form, index);
+      if (size !== null && !imageFitsAspect(size.w, size.h, aspect)) return fail('invalid', `frame ${index + 1}: ${size.w}x${size.h} is not ${aspect}`);
+      const frame = await stageFrame(ctx, id, form, index);
+      if (!frame.ok) return fail('upload', frame.detail);
+      staged.set(fileName(index), frame.ref);
+    }
+
+    await writeImageTemplateSet({ sql: ctx.sql, storage: ctx.storage }, id, built.set, staged, { useCase: input.useCase });
+    ctx.revalidatePrompts?.();
+    // The template page's price fields are the next stop: a set is not for sale until priced.
+    return ok('published', { detail: slug, to: adminPromptPath(id) });
   },
 };
 
@@ -236,7 +393,7 @@ const approve: AdminOperation<z.infer<typeof ApprovalSchema>> = {
     }),
   async run(ctx, input) {
     const row = await loadPromptById(ctx.sql, input.id);
-    if (row === null) return fail('notFound', NOT_FOUND_DETAIL);
+    if (row === null || row.audience === 'brand') return fail('notFound', NOT_FOUND_DETAIL);
 
     // §13.1 lifecycle: the copy to public keys happens at APPROVAL, which is the first moment the
     // bytes become marketing surface. Before that they sit in private staging, visible to admin
@@ -295,7 +452,9 @@ const editPrompt: AdminOperation<{ input: z.infer<typeof EditSchema>; form: Form
   },
   async run(ctx, { input, form }) {
     const row = await loadPromptById(ctx.sql, input.id);
-    if (row === null) return fail('notFound', NOT_FOUND_DETAIL);
+    if (row === null || row.audience === 'brand') return fail('notFound', NOT_FOUND_DETAIL);
+    const template = templateFields(form);
+    if (!template.ok) return fail('invalid', template.detail);
 
     const staged = await applyUploads(ctx, input.id, form, parsePromptMedia(row.media));
     if (!staged.ok) return fail('upload', staged.detail);
@@ -317,11 +476,14 @@ const editPrompt: AdminOperation<{ input: z.infer<typeof EditSchema>; form: Form
       // The community rule is applied to the payload here and enforced by the CHECK underneath.
       textVisibility: effectiveTextVisibility(row.source, input.textVisibility),
       featured: input.featured,
+      ...template.value,
     });
     if (!saved) return fail('notFound', NOT_FOUND_DETAIL);
 
     ctx.revalidatePrompts?.();
-    return ok('saved', { detail: input.slug, to: BACK });
+    // No `to` (P2-8): update, feature and visibility are in-place edits, so the form's own `_back`
+    // (the prompt page, or the list with its ?tab=) is where the operator should land.
+    return ok('saved', { detail: input.slug });
   },
 };
 
@@ -333,7 +495,7 @@ const feature: AdminOperation<z.infer<typeof Feature>> = {
     const changed = await setPromptFeatured(ctx.sql, input.id, input.featured);
     if (!changed) return fail('notFound', NOT_FOUND_DETAIL);
     ctx.revalidatePrompts?.();
-    return ok('saved', { to: BACK });
+    return ok('saved');
   },
 };
 
@@ -351,7 +513,7 @@ const visibility: AdminOperation<z.infer<typeof Visibility>> = {
     const changed = await setPromptTextVisibility(ctx.sql, input.id, input.textVisibility);
     if (!changed) return fail('notFound', NOT_FOUND_DETAIL);
     ctx.revalidatePrompts?.();
-    return ok('saved', { to: BACK });
+    return ok('saved');
   },
 };
 
@@ -367,12 +529,41 @@ const archive: AdminOperation<z.infer<typeof Archive>> = {
   },
 };
 
+const Announce = z.object({ id: Uuid });
+
+/**
+ * The weekly drop's mail (founder, 2026-09-13). The stamp goes first and is the guard: a second
+ * press, a retried request or a second operator finds `announced_at` set and is refused before a
+ * single message leaves. The broadcast itself runs after the redirect.
+ */
+const announce: AdminOperation<z.infer<typeof Announce>> = {
+  parse: (form) => parsed(Announce, { id: f.str(form, 'id') }),
+  async run(ctx, input) {
+    const row = await loadPromptById(ctx.sql, input.id);
+    if (row === null || row.audience === 'brand') return fail('notFound', NOT_FOUND_DETAIL);
+    if (row.status !== 'published') return fail('badTransition', `${row.status}: only a published template can be announced`);
+    if (row.announcedAt !== null) return fail('badTransition', `already announced ${row.announcedAt}`);
+    const stamped = await markPromptAnnounced(ctx.sql, input.id);
+    if (!stamped) return fail('badTransition', 'already announced');
+    const mail = ctx.mail;
+    if (mail && ctx.defer) {
+      ctx.defer(async () => {
+        const result = await announceTemplate({ sql: ctx.sql, mailer: mail.mailer, siteUrl: mail.siteUrl }, row);
+        console.info(`[prompts] announce ${row.slug}: recipients=${result.recipients} sent=${result.sent} failed=${result.failed}${result.skipped ? ` skipped=${result.skipped}` : ''}`);
+      });
+    }
+    return ok('announced', { detail: row.slug, to: `${ADMIN_PROMPTS_PATH}/${row.id}` });
+  },
+};
+
 // ---------------------------------------------------------------------------
 // registry fragment
 // ---------------------------------------------------------------------------
 
 export const PROMPT_OPERATIONS = {
+  'prompt.announce': announce,
   'prompt.create': createPrompt,
+  'prompt.createSet': createImageSet,
   'prompt.approve': approve,
   'prompt.reject': reject,
   'prompt.update': editPrompt,

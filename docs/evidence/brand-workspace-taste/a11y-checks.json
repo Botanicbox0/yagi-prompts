@@ -1,0 +1,48 @@
+{
+ "contrast": {
+  "darkGlassChip_whiteText_overWhite": 5.81,
+  "mediaKindChip_whiteText_overWhite": 5.23,
+  "milkyGlass_inkText_overBlack": 10.25,
+  "supportPanel_inkText_overBlack": 13.61,
+  "bulkIsland_whiteText_overWhite": 11.69,
+  "inkMuted_onWhite": 5.04,
+  "inkMuted_onAlabaster": 4.78,
+  "accent_fill_whiteText": 4.65,
+  "accentText_onWhite": 6.05,
+  "accentText_onAlabaster": 5.74,
+  "accentText_onAccentSoft": 5.53,
+  "accentRing_onWhite": 4.65,
+  "danger_onWhite": 6.6,
+  "gold_onGoldSoft": 4.59,
+  "emerald_onEmeraldSoft": 5.22
+ },
+ "reducedMotion": {
+  "buttonTransition": "1e-05s",
+  "cardTransition": "1e-05s",
+  "spotlightPseudo": "none",
+  "viewTransitionCalls": 0
+ },
+ "motion": {
+  "viewTransitionCalls": 1,
+  "indicatorIn": "#review",
+  "spotlight": {
+   "x": "60px",
+   "y": "336px",
+   "opacity": "1"
+  }
+ },
+ "keyboard": [
+  "a.bw-skip-link solid rgb(56, 117, 197) 2px",
+  "a.bw-lockup solid color(srgb 0.186667 0.39 0.656667) 2px",
+  "a solid color(srgb 0.186667 0.39 0.656667) 2px",
+  "a solid color(srgb 0.186667 0.39 0.656667) 2px",
+  "a solid color(srgb 0.186667 0.39 0.656667) 2px",
+  "a solid color(srgb 0.186667 0.39 0.656667) 2px"
+ ],
+ "blur": {
+  "home": 5,
+  "shortlistWithTray": 7,
+  "homePhone": 2
+ },
+ "trayVisible": true
+}

@@ -23,5 +23,10 @@ export const SITE_OG_IMAGE = {
   alt: "TWINGS — one photo, one film, you're in it.",
 };
 
+/** Audit P2-17: the card's alt text in the page's language (Korean pages carried the English line). */
+export function siteOgImage(locale: string): typeof SITE_OG_IMAGE & { alt: string } {
+  return { ...SITE_OG_IMAGE, alt: locale === 'ko' ? 'TWINGS — 내 얼굴로 트렌드 포맷의 주인공이 되는 곳' : SITE_OG_IMAGE.alt };
+}
+
 /** `summary_large_image` is what turns the card from a text row into the full-width preview. */
 export const SITE_TWITTER_CARD = 'summary_large_image' as const;

@@ -1,4 +1,20 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "regions": ["icn1"]
+  "regions": [
+    "icn1"
+  ],
+  "crons": [
+    {
+      "path": "/api/renders/tick",
+      "schedule": "0 18 * * *"
+    },
+    {
+      "path": "/api/brands/inquiries/tick",
+      "schedule": "0 19 * * *"
+    },
+    {
+      "path": "/api/public-media/tick",
+      "schedule": "0 20 * * *"
+    }
+  ]
 }

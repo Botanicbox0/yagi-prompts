@@ -13,9 +13,22 @@
   /* --- §5.1 palette ------------------------------------------------------ */
   --color-black: #000000;
   --color-white: #ffffff;
-  --color-blue: #0000ee;
+  --color-blue: #3875c5; /* COLOUR.accent, lib/design/identity.ts */
+  --color-sky: #e8eff7; /* COLOUR.sky: the quiet ground behind media */
+  --color-workspace-canvas: #f7f7f8;
+  --color-workspace-paper: #ffffff;
+  --color-workspace-ink: #202126;
+  --color-workspace-muted: #6b6d75;
+  --color-workspace-line: #e8e8eb;
   --color-line-light: rgba(0, 0, 0, 0.12);
   --color-line-dark: rgba(255, 255, 255, 0.16);
+  /* Brand audience experience. Page and component styles reference these tokens only. */
+  --color-brand-night: #080808;
+  --color-brand-ink: #111111;
+  --color-brand-charcoal: #121212;
+  --color-brand-blue-light: #a5b4ff;
+  --color-brand-pink: #ff8cc6;
+  --color-brand-violet: #5c36ff;
 
   /* Section-state driven surfaces (§4: IntersectionObserver flips data-theme). */
   --color-surface: var(--surface);
@@ -58,6 +71,9 @@
   --spacing-rail-gap: 2.5rem; /* the 40px column between content and rail */
 
   --container-shell: 90rem; /* 1440 */
+  --container-audience: 120rem; /* founder 2026-10-31: the personal side fills the screen like the brand side */
+  --text-audience-title: clamp(2.5rem, 5.2vw, 4.8rem);
+  --text-audience-heading: clamp(1.8rem, 3vw, 3rem);
   --container-content: 62.5rem; /* 1000 — landing/library content column */
   --container-detail: 45rem; /* 720  — playbook detail body */
   --container-stepindex: 13.75rem; /* 220  — sticky step index */
@@ -85,8 +101,8 @@
    =========================================================================== */
 
 :root {
-  --stack-display: var(--font-big-shoulders), 'Arial Narrow', 'Helvetica Neue', Arial, sans-serif;
-  --stack-label: var(--font-anton-sc), 'Arial Narrow', Impact, sans-serif;
+  --stack-display: 'Pretendard Variable', Pretendard, 'Apple SD Gothic Neo', 'Malgun Gothic', system-ui, sans-serif;
+  --stack-label: 'Pretendard Variable', Pretendard, 'Apple SD Gothic Neo', 'Malgun Gothic', system-ui, sans-serif;
   /* Satoshi landed 2026-08-13 (founder-supplied Fontshare files, ITF-FFL in LICENSES). */
   --stack-body: var(--font-satoshi), 'Pretendard Variable', ui-sans-serif, system-ui,
     -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
@@ -171,7 +187,33 @@ html:lang(ko) {
     outline: 2px solid var(--color-blue);
     outline-offset: 2px;
   }
+
+  [data-theme='dark'] :focus-visible {
+    outline-color: var(--color-brand-blue-light);
+  }
 }
+
+/* Audience pages use the full content width, with no advertising rail reservation. */
+.audience-shell { width: calc(100% - var(--spacing-gutter) * 2); max-width: var(--container-audience); margin-inline: auto; }
+/* Justified film rows: a card's width grows in proportion to its ratio, so a row shares one height
+   and fills the width without cropping anything. The filler stops the last row from stretching. */
+.film-rows { --film-row-h: clamp(9rem, 24vw, 30rem); display: flex; flex-wrap: wrap; align-items: flex-start; gap: 1.75rem 0.75rem; }
+.film-rows > li { flex: var(--r, 0.8) 1 calc(var(--r, 0.8) * var(--film-row-h)); min-width: 0; max-width: 100%; }
+.film-rows::after { content: ''; flex-grow: 9999; }
+/* A modal that reaches its end must not hand the scroll to the page behind it. */
+dialog, [role='dialog'] { overscroll-behavior: contain; }
+
+.audience-title { font-size: var(--text-audience-title); font-weight: 540; line-height: 1.02; letter-spacing: -0.052em; text-wrap: balance; }
+.audience-heading { font-size: var(--text-audience-heading); font-weight: 560; line-height: 1.06; letter-spacing: -0.045em; text-wrap: balance; }
+.audience-eyebrow { font-size: 0.72rem; font-weight: 500; letter-spacing: 0.04em; opacity: 0.55; }
+.audience-button { display: inline-flex; min-height: 3rem; align-items: center; justify-content: center; border-radius: 999px; background: var(--color-blue); color: var(--color-white); padding: 0.75rem 1.5rem; font-size: 0.875rem; font-weight: 500; transition: background-color 240ms var(--ease-out-quint); }
+.audience-button:hover { background: color-mix(in srgb, var(--color-blue) 82%, #000000); }
+
+/* docs/design/IDENTITY.md §3 on the personal side: the old poster display (900, uppercase) and label
+   (wide-tracked caps) slots now carry the identity's heading and a quiet label. The specificity beats
+   the `font-black`, `uppercase` and `tracking-*` utilities every call site still spells out. */
+html .font-display { font-weight: 560; letter-spacing: -0.045em; line-height: 1.06; text-transform: none; }
+html .font-label { font-weight: 560; letter-spacing: -0.01em; text-transform: none; }
 
 /* ===========================================================================
    M1 — the eight moves of §5.3, and the §4 layout band they live in.
@@ -375,12 +417,6 @@ html:lang(ko) {
     padding-inline: var(--spacing-gutter);
   }
 
-  /* Full-bleed strips (hero, marquee, wipe) still need page gutters. */
-  .bleed {
-    width: 100%;
-    padding-inline: var(--spacing-gutter);
-  }
-
   /* --- §4 playbook-detail band -------------------------------------------
      The verified sums, and nothing else:
        <1024   single column, 720 max, page gutters
@@ -571,11 +607,6 @@ html:lang(ko) {
     transition: transform var(--duration-hover) var(--ease-out-quint);
   }
 
-  .card:hover,
-  .card:focus-within {
-    transform: translate3d(0, -2px, 0);
-  }
-
   .card__media {
     overflow: hidden;
   }
@@ -586,7 +617,7 @@ html:lang(ko) {
 
   .card:hover .card__media > *,
   .card:focus-within .card__media > * {
-    transform: scale(1.03);
+    transform: scale(1.015);
   }
 
   /* --- §5.3-2 circular wipe ----------------------------------------------
@@ -625,35 +656,6 @@ html:lang(ko) {
     border-radius: 50%;
     transform: scale(0);
     will-change: transform;
-  }
-
-  /* --- §5.3-7 ad rail ----------------------------------------------------
-     The fixed variant is positioned by JS off the Lenis scroll value; this
-     rule only owns the geometry, which is the §4 band math:
-     the 1340 band is centred, so its right-hand 300 column starts at
-     50% + (1000 − 300)/2 + 40/2 = 50% + 370. */
-  /* Founder pass (2026-08-13): the rail is anchored toward the VIEWPORT EDGE, not the band. At the
-     1440 floor the two expressions agree (the band's rail column already ends a gutter from the
-     edge); on wider screens the right-hand term wins and the unit rides the margin — "more to the
-     side" — while max() guarantees it can never cross into the 1000px content column. */
-  .ad-rail-fixed {
-    position: fixed;
-    top: 0;
-    left: max(
-      calc(
-        50% + (var(--container-content) - var(--container-rail)) / 2 + var(--spacing-rail-gap) / 2
-      ),
-      calc(100% - var(--container-rail) - var(--spacing-gutter))
-    );
-    width: var(--container-rail);
-    z-index: 30;
-    will-change: transform;
-  }
-
-  .ad-rail-sticky {
-    position: sticky;
-    top: 6.5rem;
-    width: var(--container-rail);
   }
 
   /* --- §5.3-1 sticky scenes ----------------------------------------------
@@ -706,4 +708,108 @@ html:lang(ko) {
        this text — which is also what keeps its antialiasing identical to the labels around it. */
     transition: none !important;
   }
+}
+
+/* ===========================================================================
+   App shell — the installed app (docs/PLATFORM-2.0.md §5.2, 2026-10-22).
+
+   `viewport-fit: cover` (both root layouts) hands the page the whole screen; these rules give the
+   notch, the status bar and the home indicator their room back. `--is-standalone` is 1 only in
+   the installed app — the display-mode query, or `html[data-standalone]`, which
+   components/pwa/display-mode.ts sets for iOS's legacy `navigator.standalone` and the QA flag. In a
+   browser tab the standalone rules collapse to zero, and the 2026-10-07 decision (no bottom-fixed
+   UI in the mobile browser) holds. Unlayered on purpose: they must beat the `top-0` utility on the
+   fixed nav and anything else in a layer. Colours are the site's own (surface, hairline, ink,
+   accent): the installed app is the same product, not a second skin.
+   =========================================================================== */
+:root {
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --is-standalone: 0;
+  /* One 56px row of tabs. */
+  --app-tabs-height: 3.5rem;
+}
+
+@media (display-mode: standalone) {
+  :root {
+    --is-standalone: 1;
+  }
+}
+
+html[data-standalone] {
+  --is-standalone: 1;
+}
+
+/* Sideways: keep text clear of the notch in landscape (0 everywhere else). */
+body {
+  padding-left: var(--safe-left);
+  padding-right: var(--safe-right);
+  /* Where the installed app runs under the status bar (Android edge to edge; iOS keeps its own white
+     `default` bar, so the inset is 0 there): everything in flow starts below it. */
+  padding-top: calc(var(--is-standalone) * var(--safe-top));
+}
+
+/* …and the strip it floats over is the page's own surface, so scrolling content never runs behind
+   the status bar's dark icons. */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0 0 auto;
+  z-index: 70;
+  height: calc(var(--is-standalone) * var(--safe-top));
+  background: var(--surface);
+  pointer-events: none;
+}
+
+/* The fixed public nav (components/nav/site-nav.tsx) sits under the strip, not behind it — and so
+   does its full-screen mobile menu, whose close button lives in its first 64px. */
+[data-audience-nav] {
+  top: calc(var(--is-standalone) * var(--safe-top));
+  padding-left: var(--safe-left);
+  padding-right: var(--safe-right);
+}
+
+#nav-overlay {
+  padding: calc(var(--is-standalone) * var(--safe-top)) var(--safe-right) var(--safe-bottom) var(--safe-left);
+}
+
+/* Bottom tabs (components/app/bottom-tabs.tsx): never outside standalone, never over a page that
+   declares `data-hide-tabs` (its own bottom-fixed bar), always clear of the home indicator. */
+[data-bottom-tabs] {
+  display: none;
+}
+
+@media (display-mode: standalone) {
+  [data-bottom-tabs] {
+    display: block;
+  }
+}
+
+html[data-standalone] [data-bottom-tabs] {
+  display: block;
+}
+
+body:has([data-hide-tabs]) [data-bottom-tabs] {
+  display: none;
+}
+
+nav[data-bottom-tabs] {
+  padding: 0 var(--safe-right) var(--safe-bottom) var(--safe-left);
+}
+
+/* Reserve the bar's height so the end of every page can scroll clear of it. */
+html[data-app-tabs] body {
+  padding-bottom: calc(var(--app-tabs-height) + var(--safe-bottom));
+}
+
+html[data-app-tabs] body:has([data-hide-tabs]) {
+  padding-bottom: 0;
+}
+
+/* A bottom-fixed CTA (the template make screen) pads itself clear of the home indicator:
+   `class="fixed inset-x-0 bottom-0 pb-safe" data-hide-tabs`. */
+@utility pb-safe {
+  padding-bottom: max(1rem, var(--safe-bottom));
 }

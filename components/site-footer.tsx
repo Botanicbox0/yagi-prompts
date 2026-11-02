@@ -1,28 +1,29 @@
 import { TextSwap } from '@/components/ui/text-swap';
-import { TwingsWordmark } from '@/components/brand/twings-wordmark';
+import { TwingsLogo } from '@/components/brand/twings-mark';
 import { HireClickBeacon } from '@/components/analytics/beacon';
 
-/**
- * PLAN §3.1 — "Footer carries the B2B lead CTA: 'Work with the studio →' (+ `hire_click` event).
- * The same strip appears at the bottom of playbook detail pages."
- *
- * Founder direction (2026-08-13): the big CTA opens the studio's Pitch deck in a new tab — a
- * deck sells the studio better than an empty compose window. The CONTACT email below stays a
- * mailto: the deck is the pitch, the address is the reply channel. `hire_click` beacons both.
- */
-
-/** The studio intro deck the hire CTA opens. */
-const HIRE_DECK_URL = 'https://pitch.com/v/yagi-workshop-intro-9nbwak';
 export interface FooterLabels {
   hireCta: string;
   hireLede: string;
+  primaryHref: string;
+  crossDoor: { href: string; label: string };
   advertise: string;
   rights: string;
   builtIn: string;
   navHeading: string;
   contactHeading: string;
+  /** The contact mailto's subject line, in the page's language (audit P2-17). */
+  mailSubject: string;
   brand: string;
-  adContact: string;
+  /** The house ad and the footer send brands to the same place: the enquiry form. */
+  adHref: string;
+  /** 전자상거래법 §21 — the seller identification lines, on every page (2026-09-11). */
+  business: string[];
+  /**
+   * Audit P2-9: the way back to /account (내 작품, deletion) from every page. Static-safe — it goes
+   * through `/auth/signin?next=/account`, which is a plain redirect for a signed-in reader.
+   */
+  account?: { href: string; label: string };
 }
 
 export interface FooterLink {
@@ -51,26 +52,24 @@ export function SiteFooter({
 
   return (
     <footer data-section data-theme="dark" className="section border-t border-hairline">
-      <div className="band py-20 lg:py-24">
+      <div className="audience-shell py-16 lg:py-20">
         <div className="max-w-detail">
-          <HireClickBeacon>
             <a
-              href={HIRE_DECK_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="font-display text-title font-black uppercase"
+              href={labels.primaryHref}
+              data-footer-primary
+              className="audience-heading inline-block underline-offset-8 hover:underline"
             >
               {/* Non-breaking space: at display size the arrow must not wrap onto a line of its own. */}
               <TextSwap>{labels.hireCta}&nbsp;→</TextSwap>
             </a>
-          </HireClickBeacon>
           <p className="mt-6 text-body opacity-70">{labels.hireLede}</p>
+          <a href={labels.crossDoor.href} className="mt-6 inline-flex min-h-11 items-center text-sm underline underline-offset-4 opacity-70 hover:opacity-100">{labels.crossDoor.label} →</a>
         </div>
 
         <div className="mt-20 grid gap-10 border-t border-hairline pt-10 sm:grid-cols-2 lg:grid-cols-[1fr_auto_auto]">
           <div>
             {/* The wordmark IS the brand name (2026-08-16); the text beside it said the same word twice. */}
-            <TwingsWordmark className="h-[16px] w-auto" />
+            <TwingsLogo size={16} />
             <p className="mt-3 font-mono text-code opacity-60">
               © {year} {labels.rights} · {labels.builtIn}
             </p>
@@ -83,20 +82,25 @@ export function SiteFooter({
                 <TextSwap>{link.label}</TextSwap>
               </a>
             ))}
+            {labels.account && (
+              <a href={labels.account.href} data-footer-account className="font-label text-eyebrow uppercase">
+                <TextSwap>{labels.account.label}</TextSwap>
+              </a>
+            )}
           </nav>
 
           <div className="flex flex-col gap-3">
             <p className="font-label text-eyebrow uppercase opacity-60">{labels.contactHeading}</p>
             <HireClickBeacon>
               <a
-                href="mailto:hello@yagiworkshop.xyz?subject=TWINGS%20%E2%80%94%20studio%20enquiry"
+                href={`mailto:hello@yagiworkshop.xyz?subject=${encodeURIComponent(labels.mailSubject)}`}
                 className="font-mono text-code"
               >
                 hello@yagiworkshop.xyz
               </a>
             </HireClickBeacon>
-            <a href={`mailto:${labels.adContact}`} className="text-accent font-mono text-code">
-              {labels.advertise} · {labels.adContact}
+            <a href={labels.adHref} data-footer-brands className="text-accent font-label text-eyebrow uppercase">
+              <TextSwap>{labels.advertise} →</TextSwap>
             </a>
           </div>
         </div>
@@ -117,6 +121,15 @@ export function SiteFooter({
               </a>
             ))}
           </nav>
+        )}
+
+        {/* 전자상거래법 §21: who sells this, on the page where it is sold — not only behind a policy link. */}
+        {labels.business.length > 0 && (
+          <address data-business-info className="mt-5 flex flex-col gap-1 font-mono text-[0.68rem] leading-relaxed not-italic opacity-50">
+            {labels.business.map((line) => (
+              <span key={line}>{line}</span>
+            ))}
+          </address>
         )}
       </div>
     </footer>

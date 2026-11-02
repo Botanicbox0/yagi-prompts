@@ -1,6 +1,20 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import {
+  directUploadFailure,
+  uploadFailureText,
+  uploadMime,
+  type UploadFailure,
+  type UploadFailureLabels,
+} from '@/lib/admin/direct-upload';
+import {
+  POSTER_FOCUS_CENTER,
+  dragPosterFocus,
+  formatPosterFocus,
+  posterObjectPosition,
+  type PosterFocus,
+} from '@/lib/prompts/poster-focus';
 
 /**
  * Founder direction (2026-08-13) — the admin media fields grow hands.
@@ -19,18 +33,26 @@ import { useEffect, useRef, useState } from 'react';
  * input. Nothing uploads until the form submits — the founder can change their mind for free.
  */
 
-export interface MediaDropLabels {
+export interface MediaDropLabels extends UploadFailureLabels {
   videoZone: string;
   videoReplace: string;
   posterHeading: string;
   frameScrub: string;
   framePick: string;
   framePicked: string;
+  frameLoading: string;
+  frameUnavailable: string;
   posterZone: string;
   posterPicked: string;
   posterHint: string;
+  cropHeading: string;
+  cropHint: string;
+  cropPosition: string;
   audioHeading: string;
   audioZone: string;
+  audioSaved: string;
+  audioLoading: string;
+  audioUnavailable: string;
   /** Direct-upload status (2026-08-15). `{percent}` is interpolated. */
   uploading: string;
   uploaded: string;
@@ -49,7 +71,7 @@ function assign(input: HTMLInputElement | null, file: File | null): void {
 function firstFile(items: DataTransfer | null, kind: 'video' | 'image' | 'audio'): File | null {
   if (!items) return null;
   for (const file of Array.from(items.files)) {
-    if (file.type.startsWith(`${kind}/`)) return file;
+    if (uploadMime(file.name, file.type).startsWith(`${kind}/`)) return file;
   }
   return null;
 }
@@ -67,7 +89,7 @@ function firstFile(items: DataTransfer | null, kind: 'video' | 'image' | 'audio'
  * no signing service (the local driver) → the file posts inline, upload fails → the file is left in
  * the input and the operation refuses it the way it always did.
  */
-const STAGING_URL_PATH = '/api/admin/staging-url';
+export const STAGING_URL_PATH = '/api/admin/staging-url';
 
 /**
  * The gateway's own ceiling, minus headroom for the rest of the form.
@@ -84,9 +106,16 @@ type UploadState =
   | { phase: 'idle' }
   | { phase: 'uploading'; percent: number }
   | { phase: 'done'; sizeBytes: number }
-  | { phase: 'failed'; reason: string };
+  | { phase: 'failed'; reason: UploadFailure };
 
-async function sha256Hex(file: File): Promise<string> {
+/** A failure whose reason is already known, as opposed to anything else that throws. */
+export class UploadRefused extends Error {
+  constructor(readonly reason: UploadFailure) {
+    super(`upload_${reason}`);
+  }
+}
+
+export async function sha256Hex(file: File): Promise<string> {
   const digest = await crypto.subtle.digest('SHA-256', await file.arrayBuffer());
   return Array.from(new Uint8Array(digest))
     .map((byte) => byte.toString(16).padStart(2, '0'))
@@ -94,18 +123,19 @@ async function sha256Hex(file: File): Promise<string> {
 }
 
 /** XHR rather than fetch: only XHR reports upload progress, and a 57MB PUT needs a number. */
-function put(url: string, file: File, onProgress: (percent: number) => void): Promise<void> {
+export function put(url: string, file: File, mime: string, onProgress: (percent: number) => void): Promise<void> {
   return new Promise((resolve, reject) => {
     const request = new XMLHttpRequest();
     request.open('PUT', url);
-    request.setRequestHeader('content-type', file.type || 'application/octet-stream');
+    request.setRequestHeader('content-type', mime);
     request.upload.addEventListener('progress', (event) => {
       if (event.lengthComputable) onProgress(Math.round((event.loaded / event.total) * 100));
     });
     request.addEventListener('load', () =>
       request.status >= 200 && request.status < 300
         ? resolve()
-        : reject(new Error(`upload_failed_${request.status}`)),
+        // 413 is the storage side's own size ceiling: the same fix as our cap, a smaller file.
+        : reject(new UploadRefused(request.status === 413 ? 'too_large' : 'failed')),
     );
     request.addEventListener('error', () => reject(new Error('upload_failed')));
     request.addEventListener('abort', () => reject(new Error('upload_aborted')));
@@ -120,6 +150,8 @@ export function MediaDrop({
   audioName,
   existingVideoSrc,
   existingPosterSrc,
+  existingPosterFocus,
+  existingAudioSrc,
 }: {
   labels: MediaDropLabels;
   videoName: string;
@@ -135,6 +167,10 @@ export function MediaDrop({
   existingVideoSrc?: string;
   /** The poster this row already has — shown so the panel says what it is about to replace. */
   existingPosterSrc?: string;
+  /** Where that poster's 1:1 list thumbnail is cropped (staff report, 2026-11-02). */
+  existingPosterFocus?: PosterFocus;
+  /** The audio this row already has, so a save can be checked by ear (staff report, 2026-11-02). */
+  existingAudioSrc?: string;
 }) {
   const videoInputRef = useRef<HTMLInputElement>(null);
   const posterInputRef = useRef<HTMLInputElement>(null);
@@ -144,10 +180,17 @@ export function MediaDrop({
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [videoLabel, setVideoLabel] = useState<string | null>(null);
   const [duration, setDuration] = useState(0);
+  const [existingVideoUrl, setExistingVideoUrl] = useState<string | null>(null);
+  const [frameState, setFrameState] = useState<'loading' | 'ready' | 'unavailable'>('loading');
   const [posterUrl, setPosterUrl] = useState<string | null>(null);
   const [posterLabel, setPosterLabel] = useState<string | null>(null);
+  const [posterFocus, setPosterFocus] = useState<PosterFocus>(existingPosterFocus ?? POSTER_FOCUS_CENTER);
+  const [posterSize, setPosterSize] = useState<{ w: number; h: number } | null>(null);
+  const cropDrag = useRef<{ pointerId: number; x: number; y: number; focus: PosterFocus } | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [audioLabel, setAudioLabel] = useState<string | null>(null);
+  const [existingAudioUrl, setExistingAudioUrl] = useState<string | null>(null);
+  const [existingAudioFailed, setExistingAudioFailed] = useState(false);
   const [dragging, setDragging] = useState<'video' | 'poster' | 'audio' | null>(null);
 
   /** Per-slot upload progress, and the receipt each finished upload leaves in the form. */
@@ -205,6 +248,56 @@ export function MediaDrop({
     return () => form.removeEventListener('submit', onSubmit);
   }, [labels.blockedUploading, labels.blockedFailed]);
 
+  /**
+   * The row's clip is held as a blob while the panel is open (staff report, 2026-11-01: the frame
+   * picker did nothing). The signed storage URL behind the admin media route lives 60 seconds, so a
+   * scrub after that had nothing to seek on, and a canvas drawn from another origin cannot be read.
+   */
+  useEffect(() => {
+    if (!existingVideoSrc) return;
+    const abort = new AbortController();
+    let url: string | null = null;
+    void fetch(existingVideoSrc, { signal: abort.signal })
+      .then((response) => {
+        if (!response.ok) throw new Error(`clip_${response.status}`);
+        return response.blob();
+      })
+      .then((blob) => {
+        url = URL.createObjectURL(blob);
+        setExistingVideoUrl(url);
+      })
+      .catch(() => {
+        if (!abort.signal.aborted) setFrameState('unavailable');
+      });
+    return () => {
+      abort.abort();
+      if (url) URL.revokeObjectURL(url);
+    };
+  }, [existingVideoSrc]);
+
+  /** The row's audio, held as a blob for the same reason: pressing play can come after the 60 seconds. */
+  useEffect(() => {
+    if (!existingAudioSrc) return;
+    const abort = new AbortController();
+    let url: string | null = null;
+    void fetch(existingAudioSrc, { signal: abort.signal })
+      .then((response) => {
+        if (!response.ok) throw new Error(`audio_${response.status}`);
+        return response.blob();
+      })
+      .then((blob) => {
+        url = URL.createObjectURL(blob);
+        setExistingAudioUrl(url);
+      })
+      .catch(() => {
+        if (!abort.signal.aborted) setExistingAudioFailed(true);
+      });
+    return () => {
+      abort.abort();
+      if (url) URL.revokeObjectURL(url);
+    };
+  }, [existingAudioSrc]);
+
   const PLAIN_INPUT =
     'w-full border border-hairline bg-transparent px-2.5 py-1.5 font-mono text-code outline-none focus:border-accent';
 
@@ -226,6 +319,7 @@ export function MediaDrop({
     input: HTMLInputElement | null,
   ) => {
     setUploads((current) => ({ ...current, [kind]: { phase: 'uploading', percent: 0 } }));
+    const mime = uploadMime(file.name, file.type);
     try {
       const minted = await fetch(STAGING_URL_PATH, {
         method: 'POST',
@@ -233,29 +327,33 @@ export function MediaDrop({
         body: JSON.stringify({
           kind,
           filename: file.name,
-          mime: file.type || 'application/octet-stream',
+          mime,
           size: file.size,
         }),
       });
-      if (!minted.ok) throw new Error(`sign_failed_${minted.status}`);
+      if (!minted.ok) {
+        // The refusal code (`too_large`/`bad_type`) is in the body; a guard 404 has none.
+        const body: unknown = await minted.json().catch(() => null);
+        throw new UploadRefused(directUploadFailure(minted.status, body));
+      }
       const grant = (await minted.json()) as { direct?: boolean; key?: string; url?: string };
       if (grant.direct !== true || !grant.key || !grant.url) {
         // No signing service on this deployment. Inline is correct for a SMALL file and impossible
         // for a large one, so the large case is a failure the founder can read, not a silent retry
         // of the thing that already 413'd.
-        if (file.size > INLINE_MAX_BYTES) throw new Error('no_direct_upload');
+        if (file.size > INLINE_MAX_BYTES) throw new UploadRefused('failed');
         setUploads((current) => ({ ...current, [kind]: { phase: 'idle' } }));
         return;
       }
 
-      await put(grant.url, file, (percent) =>
+      await put(grant.url, file, mime, (percent) =>
         setUploads((current) => ({ ...current, [kind]: { phase: 'uploading', percent } })),
       );
 
       const receipt = JSON.stringify({
         key: grant.key,
         sha256: await sha256Hex(file),
-        mime: file.type || 'application/octet-stream',
+        mime,
         size: file.size,
       });
       setReceipts((current) => ({ ...current, [kind]: receipt }));
@@ -264,7 +362,7 @@ export function MediaDrop({
     } catch (error) {
       setUploads((current) => ({
         ...current,
-        [kind]: { phase: 'failed', reason: error instanceof Error ? error.message : 'upload_failed' },
+        [kind]: { phase: 'failed', reason: error instanceof UploadRefused ? error.reason : 'failed' },
       }));
     }
   };
@@ -285,6 +383,7 @@ export function MediaDrop({
     setVideoLabel(`${file.name} · ${(file.size / (1024 * 1024)).toFixed(1)}MB`);
     setVideoUrl(URL.createObjectURL(file));
     setDuration(0);
+    setFrameState('loading');
     void upload('video', file, videoInputRef.current);
   };
 
@@ -294,6 +393,8 @@ export function MediaDrop({
     setReceipts((current) => ({ ...current, poster: '' }));
     setPosterLabel(label);
     setPosterUrl(URL.createObjectURL(file));
+    setPosterFocus(POSTER_FOCUS_CENTER);
+    setPosterSize(null);
     void upload('poster', file, posterInputRef.current);
   };
 
@@ -306,7 +407,7 @@ export function MediaDrop({
         ? labels.uploading.replace('{percent}', String(state.percent))
         : state.phase === 'done'
           ? labels.uploaded
-          : labels.uploadFailed;
+          : uploadFailureText(state.reason, labels);
     return (
       <p
         data-upload-state={`${kind}:${state.phase}`}
@@ -341,6 +442,8 @@ export function MediaDrop({
       'flex min-h-24 cursor-pointer flex-col items-center justify-center gap-1 border border-dashed px-4 py-5 text-center transition-colors',
       active ? 'border-accent text-accent' : 'border-hairline opacity-70 hover:opacity-100',
     ].join(' ');
+
+  const previewSrc = videoUrl ?? existingVideoUrl;
 
   return (
     <div ref={rootRef} data-media-drop className="flex flex-col gap-4">
@@ -388,18 +491,28 @@ export function MediaDrop({
         <div className="border border-hairline p-3">
           <video
             ref={previewRef}
-            src={videoUrl ?? existingVideoSrc}
+            {...(previewSrc ? { src: previewSrc } : {})}
             muted
             playsInline
-            preload="metadata"
+            preload="auto"
             className="max-h-64 w-full bg-black object-contain"
             onLoadedMetadata={(e) => setDuration(e.currentTarget.duration || 0)}
+            onLoadedData={() => setFrameState('ready')}
+            // A codec this browser cannot decode (HEVC .mov on Windows) has no frame to pick.
+            onError={() => setFrameState('unavailable')}
           />
+          {frameState !== 'ready' && (
+            <p data-frame-state={frameState} className="mt-2 font-mono text-[0.68rem] opacity-70">
+              {frameState === 'loading' ? labels.frameLoading : labels.frameUnavailable}
+            </p>
+          )}
           <div className="mt-3 flex flex-wrap items-center gap-3">
             <label className="flex flex-1 items-center gap-2 font-mono text-[0.7rem] opacity-70">
               {labels.frameScrub}
               <input
+                key={previewSrc}
                 type="range"
+                disabled={frameState !== 'ready'}
                 min={0}
                 max={Math.max(duration, 0.01)}
                 step={0.04}
@@ -414,8 +527,9 @@ export function MediaDrop({
             </label>
             <button
               type="button"
+              disabled={frameState !== 'ready'}
               onClick={captureFrame}
-              className="border border-current px-3 py-1.5 font-label text-[0.68rem] tracking-[0.1em] uppercase"
+              className="border border-current px-3 py-1.5 font-label text-[0.68rem] tracking-[0.1em] uppercase disabled:opacity-40"
             >
               {labels.framePick}
             </button>
@@ -467,12 +581,81 @@ export function MediaDrop({
         />
         <input type="hidden" name={`${posterName}Ref`} value={receipts.poster} readOnly />
         {progress('poster')}
+
+        {/* The wall's 1:1 thumbnail, dragged into place. No bytes change: the form saves a position. */}
+        <input type="hidden" name={`${posterName}Focus`} value={formatPosterFocus(posterFocus)} readOnly />
+        {enhanced && (posterUrl ?? existingPosterSrc) && (
+          <div data-poster-crop className="mt-3 border border-hairline p-3">
+            <p className="font-label text-eyebrow uppercase opacity-60">{labels.cropHeading}</p>
+            <div
+              className="mt-2 aspect-square w-full max-w-60 cursor-grab touch-none overflow-hidden bg-black active:cursor-grabbing"
+              onPointerDown={(e) => {
+                e.preventDefault();
+                e.currentTarget.setPointerCapture(e.pointerId);
+                cropDrag.current = { pointerId: e.pointerId, x: e.clientX, y: e.clientY, focus: posterFocus };
+              }}
+              onPointerMove={(e) => {
+                const drag = cropDrag.current;
+                if (!drag || drag.pointerId !== e.pointerId || !posterSize) return;
+                setPosterFocus(dragPosterFocus(drag.focus, e.clientX - drag.x, e.clientY - drag.y, posterSize, e.currentTarget.clientWidth));
+              }}
+              onPointerUp={() => { cropDrag.current = null; }}
+              onPointerCancel={() => { cropDrag.current = null; }}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element -- blob preview / admin object */}
+              <img
+                src={posterUrl ?? existingPosterSrc}
+                alt=""
+                draggable={false}
+                className="h-full w-full select-none object-cover"
+                style={{ objectPosition: posterObjectPosition(posterFocus) }}
+                onLoad={(e) => setPosterSize({ w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight })}
+              />
+            </div>
+            {/* The same control for a keyboard. A square poster has nothing to move. */}
+            {posterSize && posterSize.w !== posterSize.h && (
+              <label className="mt-2 flex max-w-60 items-center gap-2 font-mono text-[0.7rem] opacity-70">
+                {labels.cropPosition}
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  step={1}
+                  value={posterSize.w > posterSize.h ? posterFocus.x : posterFocus.y}
+                  className="min-w-0 flex-1"
+                  style={{ accentColor: 'var(--accent)' }}
+                  onChange={(e) => {
+                    const value = Number(e.currentTarget.value);
+                    setPosterFocus((focus) => (posterSize.w > posterSize.h ? { ...focus, x: value } : { ...focus, y: value }));
+                  }}
+                />
+              </label>
+            )}
+            <p className="mt-2 font-mono text-[0.68rem] opacity-50">{labels.cropHint}</p>
+          </div>
+        )}
       </div>
 
       {/* --- the audio result (optional slot) ------------------------------ */}
       {audioName && (
         <div>
           <p className="font-label text-eyebrow uppercase opacity-60">{labels.audioHeading}</p>
+          {/* What the row has now. A newly picked file takes over, with its own player in the zone. */}
+          {existingAudioSrc && !audioUrl && (
+            <div
+              data-audio-existing={existingAudioUrl ? 'ready' : existingAudioFailed ? 'unavailable' : 'loading'}
+              className="mt-1.5 border border-hairline p-3"
+            >
+              <p className="font-mono text-[0.72rem]">{labels.audioSaved}</p>
+              {existingAudioUrl ? (
+                <audio controls preload="metadata" src={existingAudioUrl} className="mt-2 w-full max-w-80" />
+              ) : (
+                <p className="mt-2 font-mono text-[0.68rem] opacity-70">
+                  {existingAudioFailed ? labels.audioUnavailable : labels.audioLoading}
+                </p>
+              )}
+            </div>
+          )}
           {enhanced && (
             <div
               className={`mt-1.5 ${zone(dragging === 'audio')}`}

@@ -1,5 +1,7 @@
 import 'server-only';
 import { unstable_cache } from 'next/cache';
+import { publicMediaCacheKey } from '@/lib/content/asset-url';
+import { refreshPublicMediaKeys } from '@/lib/content/public-media-registry';
 import { resolveRuntimeMode } from '@/lib/runtime-mode';
 import { CATALOG_TTL_SECONDS, PROMPTS_TAG } from '@/lib/cache';
 import { getSqlRunner } from '@/lib/db/connect';
@@ -20,7 +22,10 @@ import { EMPTY_PROMPT_CATALOG, loadPromptCatalog, type PromptCatalog } from './c
  */
 
 async function readPromptCatalog(): Promise<PromptCatalog> {
-  return readPublicProjection(await getSqlRunner(), EMPTY_PROMPT_CATALOG, loadPromptCatalog);
+  const sql = await getSqlRunner();
+  // This document stores media addresses for up to an hour, so it asks which keys are on R2 right now.
+  await refreshPublicMediaKeys(sql, { force: true });
+  return readPublicProjection(sql, EMPTY_PROMPT_CATALOG, loadPromptCatalog);
 }
 
 /**
@@ -41,9 +46,22 @@ async function readPromptCatalog(): Promise<PromptCatalog> {
  * outlives a deploy also outlives a type. **Bump this string in the same commit as any change to
  * `PromptCard`.**
  */
+/**
+ * 2026-10-21 (`v4-price-5pct`): prices changed in the database, not in `PromptCard`'s shape, and the
+ * Vercel data cache carried the old catalog straight into the next deployment — the template pages
+ * kept showing 8,900원 while checkout charged the new server price, the one mismatch a PG review
+ * rejects outright ("상품 금액과 결제 금액이 상이"). The edge-cache purge API is not available on
+ * this plan, and the admin "Refresh caches" button revalidates `catalog`, not `prompts`. A bulk
+ * price change made outside the admin form needs this bump too.
+ */
+/** 2026-10-26 (`v8-prom-queen-hero-restored`): `you-are-a-prom-queen` 16:9 featured hero & `city-fashion-montage` 4:3 dimensions. */
+/** 2026-10-27 (`v9-set-gallery`): `PromptCard.gallery`, a set template's example frames. */
+/** 2026-10-29 (`v10-fashion-show-arrival`): `@yunseolfromseoul` maker profile & `fashion-show-arrival` template. */
+/** 2026-10-29 (`v11-recipe-hub`): `PromptCard.recipeOpen`, `PublicMaker.bioEn`/`openRecipeCount`. */
+/** 2026-10-29 (`v12-creative-cover`): `PublicMaker` carries the 0065 profile (name, place, links, avatar…) and the 0071 cover; both addresses are `/creative-media/…`. */
 export const getPromptCatalog = unstable_cache(
   readPromptCatalog,
-  ['prompt-catalog', 'v3-lock', resolveRuntimeMode()],
+  ['prompt-catalog', 'v12-creative-cover', resolveRuntimeMode(), publicMediaCacheKey()],
   {
     tags: [PROMPTS_TAG],
     revalidate: CATALOG_TTL_SECONDS,

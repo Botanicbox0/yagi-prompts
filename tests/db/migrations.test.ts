@@ -4,6 +4,11 @@ import { describe, expect, it } from 'vitest';
 import { MIGRATIONS_DIR, coreMigrationFiles, freshDb, glueMigrationFiles } from '../helpers/pglite';
 
 describe('migrations apply on a fresh database (PLAN §6)', () => {
+  it('has a unique migration version for cloud application', () => {
+    const versions = [...coreMigrationFiles(), ...glueMigrationFiles()].map(file => file.split('_')[0]);
+    expect(new Set(versions).size).toBe(versions.length);
+  });
+
   it('splits into core (PGlite-testable) and supabase-glue files', () => {
     expect(coreMigrationFiles().length).toBeGreaterThan(0);
     expect(glueMigrationFiles().length).toBeGreaterThan(0);
@@ -18,7 +23,75 @@ describe('migrations apply on a fresh database (PLAN §6)', () => {
         where table_schema = 'public' and table_type = 'BASE TABLE' order by table_name`,
     );
     expect(rows.map((r) => r.table_name)).toEqual([
+      'billing_payments',
       'blocks',
+      'brand_attachments',
+      'brand_content_decisions',
+      'brand_content_versions',
+      'brand_contract_documents',
+      'brand_contract_sharing_events',
+      // 2026-09-11 — the brand enquiry form on the campaigns page: one row per enquiry, studio-only.
+      'brand_inquiries',
+      'brand_inquiry_deliveries',
+      'brand_invites',
+      'brand_memberships',
+      'brand_messages',
+      // 2026-09-23 — a brand's own logo history; the organization points at the current one.
+      'brand_organization_logos',
+      'brand_organizations',
+      // 2026-09-22 — one ledger row per studio collection-console save (idempotency + batch time).
+      'brand_post_collection_batches',
+      'brand_post_measurements',
+      'brand_posts',
+      'brand_production_contracts',
+      'brand_production_reservations',
+      'brand_production_templates',
+      'brand_project_members',
+      'brand_projects',
+      'brand_reports',
+      'brand_shortlist_candidates',
+      'brand_support_messages',
+      // 2026-09-23 — secondary usage (docs/SECONDARY-USAGE.md): inquiry case → studio scope, creator
+      // compensation and consent (studio-only) → brand quote → payment → grants, plus history/outcomes.
+      'brand_usage_buyers',
+      'brand_usage_case_items',
+      'brand_usage_cases',
+      'brand_usage_compensations',
+      'brand_usage_consents',
+      'brand_usage_events',
+      'brand_usage_grant_events',
+      'brand_usage_grants',
+      'brand_usage_messages',
+      'brand_usage_outcomes',
+      'brand_usage_payments',
+      'brand_usage_quotes',
+      'brand_usage_scope_revisions',
+      'brand_workspace_events',
+      // docs/CAMPAIGNS.md (2026-09-03) — the paid cousin of contests: the campaign, one application per
+      // creator walked through the state machine, and the same append-only write ledger the contest
+      // entries use for the daily cap.
+      'campaign_application_writes',
+      'campaign_applications',
+      'campaign_collaboration_links',
+      'campaign_funding_cases',
+      'campaign_funding_events',
+      'campaign_funding_payments',
+      'campaign_funding_quotes',
+      'campaign_funding_reward_proposals',
+      'campaign_participant_access_audit',
+      'campaign_participant_files',
+      'campaign_participant_invites',
+      'campaign_participant_messages',
+      'campaign_productions',
+      'campaign_render_jobs',
+      'campaign_risk_access',
+      'campaign_risk_flags',
+      'campaign_risk_jobs',
+      'campaign_risk_reviews',
+      'campaign_risk_slack_outbox',
+      'campaign_risk_workers',
+      'campaign_targets',
+      'campaigns',
       // §14.1 (M9) — the contests pivot's three new tables. Atomic like `prompt_items`: no
       // revisions, no manifest, no constraint triggers. `contest_entry_writes` is the append-only
       // rate-limit ledger, because "≤10 entry writes/day/user" counts WRITES and an upserted entry
@@ -33,10 +106,44 @@ describe('migrations apply on a fresh database (PLAN §6)', () => {
       // one $4 pack twice (M10 review R1, finding 2).
       'cookie_ledger',
       'cookie_purchase_events',
+      'creator_subscription_key_cleanup',
+      'creator_subscription_launch_evidence',
+      'creator_subscription_periods',
+      'creator_subscription_renders',
+      'creator_subscription_usage',
+      'creator_subscriptions',
       'default_policy',
       'events',
+      // docs/TEMPLATES-IA.md §8.2 (2026-09-10) — the real-person identity: one group per person, one asset per photo.
+      'identity_assets',
+      'identity_groups',
+      // docs/IDENTITY-SELFIE.md (2026-10-22) — the generated-portrait tables stay for paid lineage; `identity_selfies` is the one photo.
+      'identity_portrait_attempts',
+      'identity_portrait_selections',
+      'identity_selfies',
+      // 2026-10-29 — replaced landing images (lib/content/landing-media.ts), one row per slot.
+      'landing_media',
+      // docs/PLATFORM-2.0.md §20 (2026-10-28) — an AI creative's agent tokens and representative works.
+      'maker_tokens',
+      'maker_works',
       'notification_deliveries',
       'notification_jobs',
+      'platform_audit',
+      'platform_claims',
+      'platform_creator_applications',
+      'platform_creators',
+      'platform_credit_ledger',
+      'platform_format_assets',
+      'platform_formats',
+      'platform_image_offers',
+      'platform_messages',
+      'platform_quality',
+      'platform_rate_limits',
+      'platform_ratings',
+      'platform_redemptions',
+      'platform_reward_policy',
+      'platform_settlements',
+      'platform_threads',
       'playbook_revisions',
       'playbooks',
       'profiles',
@@ -44,7 +151,23 @@ describe('migrations apply on a fresh database (PLAN §6)', () => {
       // manifest, no constraint triggers; the machinery above still guards playbooks only.
       'prompt_items',
       'prompt_unlocks',
+      // docs/BRAND-MOAT-AND-STORAGE.md (2026-11-02) — public files the app copied to R2 and read back.
+      'public_media_copies',
       'publish_assets',
+      // docs/PLATFORM-2.0.md §5.3 (2026-10-22) — one row per device that said yes to the completion push.
+      'push_subscriptions',
+      // §20.3 — one row per (template, member) who opened a full recipe.
+      'recipe_unlocks',
+      // 2026-09-11 — the owner's complaint about a result, one per render, worked from the admin inbox.
+      'render_feedback',
+      // docs/TEMPLATES-IA.md §8 (2026-09-06) — the render queue: one row per make, from photo to link.
+      'render_job_outputs',
+      'render_job_recipes',
+      'render_jobs',
+      // docs/PLATFORM-2.0.md §17.1 (2026-10-23) — linked SNS accounts, their write ledger, the local worker's heartbeat.
+      'social_account_writes',
+      'social_accounts',
+      'social_verify_workers',
       'steps',
       'stripe_events',
       'subscriptions',

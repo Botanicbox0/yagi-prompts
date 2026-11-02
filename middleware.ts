@@ -1,24 +1,38 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { updateSession, withCookies } from '@/lib/supabase/middleware';
 import { devIdentityUserId } from '@/lib/auth/dev-identity';
+import { chooseProviderHref } from '@/lib/auth/providers';
+import {
+  adminRouteAllowed,
+  brandRouteAllowed,
+  bypassConsumerLocale,
+  isAdminPath,
+  isBrandPath,
+  REQUEST_ORIGIN_HEADER,
+  resolveRequestUrl,
+  resolveSurface,
+  sameOriginMutation,
+  SURFACE_HEADER,
+} from '@/lib/routing/surfaces';
 import {
   LOCALE_COOKIE,
   LOCALE_COOKIE_MAX_AGE,
   LOCALE_HEADER,
   isAppPath,
-  isContestDetailPath,
+  isLocale,
   isPlaybookDetailPath,
-  isPromptDetailPath,
   localizedPath,
   resolveLocale,
   splitLocale,
 } from '@/lib/i18n/config';
+import { createNonce, needsWorkspaceCsp, NONCE_HEADER, workspaceCsp } from '@/lib/security/workspace-csp';
 
 /**
- * Edge middleware does three jobs, in this order (PLAN §7):
+ * Edge middleware first checks the host/path boundary, including API/auth/static requests.
+ * Routes that need the locale/session pipeline then follow the existing PLAN §7 contract:
  *   1. resolve the locale and publish it to the render as `x-playbook-locale`
  *   2. refresh the Supabase session (@supabase/ssr contract, lib/supabase/middleware.ts)
- *   3. hard-gate the app surface on the presence of a session; 308-redirect unprefixed PUBLIC urls
+ *   3. hard-gate the app surface on session presence; 308-redirect unprefixed PUBLIC urls
  *
  * Two deliberate omissions, both logged for the Director:
  *   · `profile.locale` is not consulted HERE. RLS is deny-all, so the edge would need a
@@ -32,21 +46,88 @@ const NO_STORE = 'private, no-store';
 
 export async function middleware(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
+  const requestUrl = resolveRequestUrl(new URL(request.url), request.headers);
+  const surface = resolveSurface(new URL(request.url), request.headers);
+  const privateHeaders = { 'Cache-Control': NO_STORE, 'X-Robots-Tag': 'noindex, nofollow' };
+  if (surface === 'unknown' || requestUrl === null) return new NextResponse(null, { status: 404, headers: privateHeaders });
+  if (['admin', 'brand', 'brands'].includes(surface) && pathname === '/robots.txt' && ['GET', 'HEAD'].includes(request.method)) {
+    return new NextResponse(request.method === 'HEAD' ? null : 'User-agent: *\nDisallow: /\n', {
+      headers: { ...privateHeaders, 'Content-Type': 'text/plain; charset=utf-8' },
+    });
+  }
+  // The historical plural host only redirects navigation. Never carry OAuth codes or POSTs.
+  if (surface === 'brands') {
+    if (!['GET', 'HEAD'].includes(request.method) || (pathname !== '/' && !isBrandPath(pathname))) return new NextResponse(null, { status: 404, headers: privateHeaders });
+    const target = new URL('https://brand.twings.app');
+    target.pathname = pathname === '/' ? '/brand' : pathname;
+    if (pathname !== '/') target.search = search;
+    return NextResponse.redirect(target, { status: 308, headers: privateHeaders });
+  }
+  if (surface === 'brand') {
+    if (pathname === '/' && ['GET', 'HEAD'].includes(request.method)) {
+      return NextResponse.redirect(new URL('/brand', requestUrl), { status: 307, headers: privateHeaders });
+    }
+    if (!brandRouteAllowed(pathname, request.method) || (!['GET', 'HEAD'].includes(request.method) && !sameOriginMutation(requestUrl, request.headers))) return new NextResponse(null, { status: 404, headers: privateHeaders });
+  }
+  if (surface === 'admin') {
+    if (pathname === '/' && ['GET', 'HEAD'].includes(request.method)) {
+      const target = new URL(requestUrl); target.pathname = '/admin'; target.search = '';
+      return NextResponse.redirect(target, { status: 307, headers: privateHeaders });
+    }
+    if (!adminRouteAllowed(pathname, request.method) ||
+      (!['GET', 'HEAD'].includes(request.method) && !sameOriginMutation(requestUrl, request.headers))) {
+      return new NextResponse(null, { status: 404, headers: privateHeaders });
+    }
+  }
   const { locale: urlLocale, rest } = splitLocale(pathname);
   const cookieLocale = request.cookies.get(LOCALE_COOKIE)?.value ?? null;
+  const authEntry = ['/auth/choose', '/auth/signin', '/auth/open-in-browser'].includes(pathname);
+  const explicitLocale = authEntry ? request.nextUrl.searchParams.get('locale') : null;
+  const brandEntry = surface === 'brand' || isBrandPath(pathname) || (authEntry && isBrandPath(request.nextUrl.searchParams.get('next') ?? ''));
   const locale = resolveLocale({
-    urlLocale,
+    urlLocale: isLocale(explicitLocale) ? explicitLocale : urlLocale,
     cookieLocale,
+    countryCode: brandEntry ? request.headers.get('x-vercel-ip-country') : null,
     acceptLanguage: request.headers.get('accept-language'),
   });
 
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set(LOCALE_HEADER, locale);
+  // Overwrite client-supplied context. Server components may use these for same-host auth links.
+  requestHeaders.set(SURFACE_HEADER, surface);
+  requestHeaders.set(REQUEST_ORIGIN_HEADER, requestUrl.origin);
+  // Workspace pages get a strict nonce CSP (lib/security/workspace-csp.ts). Next.js reads the nonce
+  // from the request's CSP header, so one the browser sent is never passed through.
+  requestHeaders.delete('content-security-policy');
+  requestHeaders.delete('content-security-policy-report-only');
+  requestHeaders.delete(NONCE_HEADER);
+  const nonce = needsWorkspaceCsp(surface, pathname) ? createNonce() : null;
+  const csp = nonce ? workspaceCsp(nonce) : null;
+  if (nonce && csp) {
+    requestHeaders.set('content-security-policy', csp);
+    requestHeaders.set(NONCE_HEADER, nonce);
+  }
+  const secured = <T extends NextResponse>(response: T): T => {
+    if (csp) response.headers.set('Content-Security-Policy', csp);
+    return response;
+  };
+
+  // No locale/session work for OAuth exchanges, APIs, public render tokens or asset bytes.
+  // Unlike the old matcher exclusion, this cannot bypass the workspace host policy above.
+  if (bypassConsumerLocale(pathname) || (surface === 'admin' && !isAdminPath(pathname))) {
+    const response = NextResponse.next({ request: { headers: requestHeaders } });
+    // Remember the chooser URL's locale; never persist the raw country or IP address.
+    if (pathname === '/auth/choose' && isLocale(explicitLocale)) {
+      response.cookies.set(LOCALE_COOKIE, explicitLocale, { path: '/', maxAge: LOCALE_COOKIE_MAX_AGE, sameSite: 'lax' });
+    }
+    if (surface === 'admin' || surface === 'brand') for (const [key, value] of Object.entries(privateHeaders)) response.headers.set(key, value);
+    return secured(response);
+  }
 
   const { response, user } = await updateSession(request, requestHeaders);
 
   // --- app surface: session required, never cached, never indexed ---------
-  if (isAppPath(pathname)) {
+  if (isAppPath(pathname) || isBrandPath(pathname)) {
     response.headers.set('Cache-Control', NO_STORE);
     response.headers.set('X-Robots-Tag', 'noindex, nofollow');
 
@@ -54,29 +135,47 @@ export async function middleware(request: NextRequest) {
     // identity has to be honoured here too, or `/account` and `/billing/*` would bounce during a
     // local render-verify even though every component below would resolve the right viewer. Same
     // fences as everywhere else: dead code under NODE_ENV=production, explicit env otherwise.
-    if (!user && devIdentityUserId() === null) {
-      const target = request.nextUrl.clone();
+    // Invitation landings expose only public campaign terms or no organization data. Their
+    // clients must capture the fragment before OAuth; acceptance still requires an authenticated API.
+    const invitationLanding = (pathname === '/brand/invite' || /^\/campaigns\/[^/]+\/join\/?$/.test(pathname))
+      && ['GET', 'HEAD'].includes(request.method);
+    if (!invitationLanding && !user && devIdentityUserId() === null) {
+      const target = new URL(requestUrl);
+      if (surface === 'admin' || surface === 'brand' || isBrandPath(pathname)) {
+        if (!['GET', 'HEAD'].includes(request.method)) return withCookies(new NextResponse(null, { status: 404, headers: privateHeaders }), response);
+        const chooser = new URL(chooseProviderHref(`${pathname}${search}`, locale), target.origin);
+        return withCookies(NextResponse.redirect(chooser, { headers: privateHeaders }), response);
+      }
       target.pathname = localizedPath(locale, '/');
       target.search = '';
       target.searchParams.set('signin', '1');
       target.searchParams.set('next', `${pathname}${search}`);
-      return withCookies(NextResponse.redirect(target), response);
+      return withCookies(NextResponse.redirect(target, { headers: privateHeaders }), response);
     }
-    return response;
+    return secured(response);
+  }
+
+  // docs/PLATFORM-2.0.md §20 — `twings.app/@handle` (a bio link, a DM) opens the creative's page in
+  // the reader's language. Temporary on purpose: the language is the reader's, not the address's.
+  const short = /^\/(?:@|%40)([A-Za-z0-9_]{3,20})\/?$/.exec(rest);
+  if (short && ['GET', 'HEAD'].includes(request.method)) {
+    const target = new URL(requestUrl);
+    target.pathname = localizedPath(locale, `/makers/${short[1]!.toLowerCase()}`);
+    return withCookies(NextResponse.redirect(target, 307), response);
   }
 
   // --- public surface: locale-prefixed, 308 on the unprefixed form --------
   if (urlLocale === null) {
-    const target = request.nextUrl.clone();
+    const target = new URL(requestUrl);
     target.pathname = localizedPath(locale, rest);
     // 308: permanent + method-preserving, so the canonical URL is unambiguous for crawlers.
     return withCookies(NextResponse.redirect(target, 308), response);
   }
 
-  // §3.4: the public routes that are shaped per viewer — or, for contests (§14.2), per clock —
-  // never enter a cache. Indexable, but never stored: the two are independent properties and
-  // §3.3/§3.9/§14.2 all ask for both.
-  if (isPlaybookDetailPath(rest) || isPromptDetailPath(rest) || isContestDetailPath(rest)) {
+  // §3.4: the one public route still shaped per viewer never enters a cache. Indexable, but
+  // never stored: the two are independent properties and §3.3/§3.9 ask for both. (The prompt and
+  // contest details that shared this branch left with the prompt site, 2026-09-05.)
+  if (isPlaybookDetailPath(rest)) {
     response.headers.set('Cache-Control', NO_STORE);
   }
 
@@ -93,18 +192,6 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: [
-    /*
-     * Everything except:
-     *   _next/static, _next/image, favicon, /fonts, /.storage (local storage driver in dev)
-     *   /api/*   — route handlers set their own no-store headers and are not locale-prefixed
-     *   /auth/*  — the OAuth callback must not be redirected mid-exchange
-     *   sitemap.xml, robots.txt (M5) — crawler endpoints live at the ROOT by specification. They
-     *     are unprefixed public URLs, which is exactly what the 308 below rewrites, so without
-     *     this exclusion `/sitemap.xml` answers 308 → `/en/sitemap.xml` → 404 and the site has no
-     *     sitemap at all. (Found by the M5 sweep, not by a unit test — which is why the sweep runs
-     *     against a real server.)
-     */
-    '/((?!_next/static|_next/image|favicon.ico|sitemap\\.xml|robots\\.txt|fonts/|\\.storage/|api/|auth/|.*\\.(?:svg|png|jpg|jpeg|gif|webp|mp4|webm|woff2?)$).*)',
-  ],
+  // Every request must pass the host boundary; the old exclusions live in bypassConsumerLocale.
+  matcher: ['/:path*'],
 };

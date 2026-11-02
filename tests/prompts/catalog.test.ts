@@ -27,14 +27,30 @@ describe('prompt catalog projection (§13.2)', () => {
   it('exposes exactly the §13.2 card fields — and `text` is not one of them', () => {
     const card = catalog.yagi[0]!;
     expect(Object.keys(card).sort()).toEqual([
+      'aspectDefault',
       'authorHandle',
+      'engine',
       'featured',
+      // A set template's public example frames (2026-10-27); [] for every other card.
+      'gallery',
       'id',
       'lock',
+      // docs/PLATFORM-2.0.md §7.5: whether a maker page exists — never the author's id.
+      'makerProfile',
+      'medium',
       'modelLabels',
       'models',
+      'origin',
       'poster',
+      // The 1080p price (0039) is public pricing, like the base price; 0 = not offered.
+      'price1080Cents',
+      'price1080Krw',
+      'priceCents',
+      'priceKrw',
       'publishedAt',
+      // 2026-10-29: whether the page shows the recipe's prompt — a flag, never the text.
+      'recipeOpen',
+      'runtimeSeconds',
       'slug',
       'source',
       'title',
@@ -53,6 +69,20 @@ describe('prompt catalog projection (§13.2)', () => {
     for (const sentinel of PROMPT_SENTINELS) {
       expect(serialised.includes(sentinel.token), sentinel.token).toBe(false);
     }
+  });
+
+  /** docs/TEMPLATES-IA.md — the two tabs: every published card lands in exactly one of them. */
+  it('splits published templates by medium, with the priced ones carrying their numbers', () => {
+    const all = [...catalog.yagi, ...catalog.community];
+    expect(catalog.video.length + catalog.image.length).toBe(all.length);
+    expect(catalog.video.every((card) => card.medium === 'video')).toBe(true);
+    expect(catalog.image.every((card) => card.medium === 'image' && card.runtimeSeconds === null)).toBe(true);
+    expect(catalog.image.map((card) => card.slug)).toEqual(['static-portrait-window-light']);
+    const priced = all.find((card) => card.slug === 'neon-alley-dolly')!;
+    expect(priced).toMatchObject({ medium: 'video', priceCents: 400, priceKrw: 0, price1080Cents: 900, price1080Krw: 11900, runtimeSeconds: 15 });
+    // The one fixture with its own won price carries it through the projection (0018).
+    expect(all.find((card) => card.slug === 'static-portrait-window-light')).toMatchObject({ priceCents: 200, priceKrw: 2500 });
+    expect(all.filter((card) => card.priceCents === 0).length).toBeGreaterThan(0);
   });
 
   it('splits the two rails and counts them (§13.2)', () => {

@@ -1,5 +1,6 @@
+import { PublicLink } from '@/components/admin/public-link';
 import { getSqlRunner } from '@/lib/db/connect';
-import { getDictionary } from '@/lib/i18n/dictionaries';
+import { getDictionary, type Dictionary } from '@/lib/i18n/dictionaries';
 import { getLocaleFromHeaders } from '@/lib/i18n/server';
 import { formatDate, interpolate } from '@/lib/i18n/format';
 import {
@@ -392,7 +393,7 @@ function ContestEditor({
 
   return (
     <Panel
-      title={`${row.slug} · ${row.status}`}
+      title={`${row.slug} · ${contestStatusLabel(a, row.status)}`}
       action={
         <span className="font-label text-[0.62rem] tracking-[0.1em] uppercase opacity-55">
           {a.contestPhaseLabel}: {phaseWord}
@@ -406,9 +407,9 @@ function ContestEditor({
             {a.previewContest}
           </a>
           {row.status === 'published' && (
-            <a href={contestHref(locale, row.slug)} className={BUTTON}>
+            <PublicLink href={contestHref(locale, row.slug)} className={BUTTON}>
               {a.open}
-            </a>
+            </PublicLink>
           )}
           {row.status !== 'published' ? (
             <OpForm op="contest.publish" back={ADMIN_CONTESTS_PATH}>
@@ -540,7 +541,7 @@ export default async function AdminContestsPage({
               className="mt-6 border border-hairline"
             >
               <summary className="cursor-pointer px-4 py-3 font-label text-eyebrow uppercase">
-                {row.slug} · {row.status}
+                {row.slug} · {contestStatusLabel(a, row.status)}
                 {pending > 0 && (
                   <span className="text-accent"> · {interpolate(a.contestFoldPending, { count: String(pending) })}</span>
                 )}
@@ -566,4 +567,9 @@ export default async function AdminContestsPage({
       </Panel>
     </AdminShell>
   );
+}
+
+/** Contest rows use the same three words as playbooks (draft / published / archived), from the dictionary. */
+function contestStatusLabel(a: Dictionary['admin'], status: string): string {
+  return status === 'published' ? a.statusPublished : status === 'archived' ? a.statusArchived : a.statusDraft;
 }

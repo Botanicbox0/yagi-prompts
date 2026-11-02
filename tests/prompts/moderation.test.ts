@@ -88,6 +88,7 @@ describe('prompt moderation operations (§13.2/F)', () => {
     const created = await harness.run('prompt.create', {
       ...authoring,
       slug: 'two-models',
+      title: 'Two models',
       models: ['seedance-2.5', 'seedance-2.0'],
       poster: upload('poster.png', 'POSTER-BYTES', 'image/png'),
     });
@@ -120,6 +121,7 @@ describe('prompt moderation operations (§13.2/F)', () => {
     const outcome = await harness.run('prompt.create', {
       ...authoring,
       slug: 'no-model-checked',
+      title: 'No model checked',
       models: [],
       poster: upload('poster.png', 'POSTER-BYTES', 'image/png'),
     });
@@ -176,6 +178,27 @@ describe('prompt moderation operations (§13.2/F)', () => {
     models: ['seedance-2.5'],
   };
 
+  it('publishes from the title even when an older tab submits an invalid slug', async () => {
+    for (const slug of ['Y2K 셀카', 'Y2K Selfie!!', 'y2k--selfie', '']) {
+      const outcome = await harness.run('prompt.create', {
+        ...authoring, title: 'Y2K Selfie!', slug,
+        poster: upload('poster.png', 'POSTER-BYTES', 'image/png'),
+      });
+      expect(outcome).toMatchObject({ ok: true, code: 'published' });
+    }
+    for (const slug of ['y2k-selfie', 'y2k-selfie-2', 'y2k-selfie-3', 'y2k-selfie-4']) {
+      expect(await loadPromptBySlug(sql(), slug)).not.toBeNull();
+    }
+  });
+
+  it('generates a valid unique address when the title has no Latin characters', async () => {
+    const outcome = await harness.run('prompt.create', {
+      ...authoring, title: '기억 속 영화', slug: '한글 주소',
+      poster: upload('poster.png', 'POSTER-BYTES', 'image/png'),
+    });
+    expect(outcome).toMatchObject({ ok: true, detail: expect.stringMatching(/^prompt-[a-z0-9]+$/) });
+  });
+
   it('authors a YAGI prompt, published immediately, with its media already public', async () => {
     const outcome = await harness.run('prompt.create', {
       ...authoring,
@@ -217,13 +240,13 @@ describe('prompt moderation operations (§13.2/F)', () => {
     });
     expect(second).toMatchObject({ ok: true, detail: 'golden-hour-rooftop-sprint-2' });
 
-    // A TYPED slug still validates — the founder can be deliberate when they want to be.
+    // Older tabs may still send an arbitrary slug; creation derives the address anyway.
     const typed = await harness.run('prompt.create', {
       ...authoring,
       slug: 'NOT A SLUG',
       poster: upload('poster.png', 'POSTER-BYTES', 'image/png'),
     });
-    expect(typed).toMatchObject({ ok: false, code: 'invalid' });
+    expect(typed).toMatchObject({ ok: true, detail: 'studio-locked-off' });
   });
 
   it('refuses a YAGI prompt with no poster (§13.3-4 media required)', async () => {
@@ -241,13 +264,14 @@ describe('prompt moderation operations (§13.2/F)', () => {
     expect(outcome).toMatchObject({ ok: false, code: 'invalid' });
   });
 
-  it('refuses a duplicate slug at the database, not in a second copy of the rule', async () => {
+  it('assigns a free address when the title matches an existing template', async () => {
     const outcome = await harness.run('prompt.create', {
       ...authoring,
       slug: 'neon-alley-dolly',
+      title: 'Neon alley dolly',
       poster: upload('poster.png', 'POSTER-BYTES', 'image/png'),
     });
-    expect(outcome).toMatchObject({ ok: false, code: 'duplicateSlug' });
+    expect(outcome).toMatchObject({ ok: true, detail: 'neon-alley-dolly-2' });
   });
 
   /**
@@ -370,6 +394,27 @@ describe('prompt moderation operations (§13.2/F)', () => {
     expect(after.textVisibility).toBe('public');
     expect(after.featured).toBe(true);
     expect(harness.promptsRevalidated).toBe(1);
+  });
+
+  it('saves a 1080p price only for a film, in both currencies, and never below the base price', async () => {
+    const live = (await loadPromptBySlug(sql(), 'kitchen-tutorial-overhead'))!;
+    const form = (extra: Record<string, string>) => ({
+      id: live.id, slug: live.slug, title: live.title, titleKo: live.titleKo ?? '', promptText: live.promptText,
+      useCase: live.useCase, handle: '', textVisibility: 'public',
+      medium: 'video', priceCents: '400', priceKrw: '5900', runtimeSeconds: '15', ...extra,
+    });
+    expect(await harness.run('prompt.update', form({ price1080Cents: '900', price1080Krw: '11900' }))).toMatchObject({ ok: true });
+    expect(await loadPromptById(sql(), live.id)).toMatchObject({ price1080Cents: 900, price1080Krw: 11900 });
+    for (const bad of [
+      { price1080Cents: '900', price1080Krw: '0' },
+      { price1080Cents: '300', price1080Krw: '11900' },
+      { price1080Cents: '900', price1080Krw: '4900' },
+    ]) {
+      expect(await harness.run('prompt.update', form(bad)), JSON.stringify(bad)).toMatchObject({ ok: false });
+    }
+    // An image carries no resolution: whatever the form posts, nothing is stored.
+    expect(await harness.run('prompt.update', form({ medium: 'image', runtimeSeconds: '', price1080Cents: '900', price1080Krw: '11900' }))).toMatchObject({ ok: true });
+    expect(await loadPromptById(sql(), live.id)).toMatchObject({ medium: 'image', price1080Cents: 0, price1080Krw: 0 });
   });
 
   /**
@@ -506,7 +551,8 @@ describe('admin prompts screen contract (§3.8 / §13.2)', () => {
   const create = read('app', '(admin)', 'admin', 'prompts', 'new', 'page.tsx');
   const item = read('app', '(admin)', 'admin', 'prompts', '[id]', 'page.tsx');
   const fields = read('components', 'admin', 'prompt-fields.tsx');
-  const screens = { board, create, item };
+  const createSet = read('app', '(admin)', 'admin', 'prompts', 'new', 'set', 'page.tsx');
+  const screens = { board, create, createSet, item };
   const surface = Object.values(screens).join('\n');
 
   it('is dynamic and posts through OpForm only', () => {

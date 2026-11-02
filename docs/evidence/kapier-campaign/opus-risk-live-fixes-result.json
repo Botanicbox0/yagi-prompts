@@ -1,0 +1,99 @@
+{
+  "duration_api_ms": 66652,
+  "stop_reason": "end_turn",
+  "session_id": "77c1f73a-e513-49ee-9d54-0c35eb3dd166",
+  "total_cost_usd": 0.2517472,
+  "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 21256,
+    "cache_read_input_tokens": 2356,
+    "output_tokens": 4061,
+    "output_tokens_details": {
+      "thinking_tokens": 2462
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 21256,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "global",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 4061,
+        "cache_read_input_tokens": 2356,
+        "cache_creation_input_tokens": 21256,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 21256
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard",
+    "fallback_credit": null
+  },
+  "modelUsage": {
+    "claude-opus-5-5": {
+      "inputTokens": 2,
+      "outputTokens": 4061,
+      "cacheReadInputTokens": 2356,
+      "cacheCreationInputTokens": 21256,
+      "webSearchRequests": 0,
+      "costUSD": 0.2517472,
+      "contextWindow": 1000000,
+      "maxOutputTokens": 128000,
+      "thinkingTokens": 2462,
+      "canonicalModel": "claude-opus-5-5",
+      "provider": "firstParty",
+      "costBasis": "list"
+    }
+  },
+  "permission_denials": [],
+  "terminal_reason": "completed",
+  "fast_mode_state": "off",
+  "fast_mode_disabled_reason": "sdk_opt_in_required",
+  "subagent_stats": {
+    "spawned": 0,
+    "requested": {
+      "background": 0,
+      "foreground": 0,
+      "unset": 0
+    },
+    "started_in_background": 0,
+    "max_depth": 0,
+    "spawned_by_subagents": 0,
+    "completed": 0,
+    "failed": 0,
+    "killed": {
+      "parent": 0,
+      "user": 0,
+      "system": 0
+    },
+    "refused": {
+      "depth_limit": 0,
+      "concurrency_limit": 0,
+      "budget": 0
+    },
+    "by_type": {}
+  },
+  "safety_stops": 0,
+  "is_error": false,
+  "num_turns": 1,
+  "subtype": "success",
+  "api_error_status": null,
+  "result": "```json\n{\n  \"verdict\": \"approve_source: no P1/P2 found in the 4 frozen files and diff. Merge readiness still depends on the parent full-check run and the post-deploy and native verifications listed below, which this source review cannot replace.\",\n  \"findings\": [],\n  \"remaining_verification\": [\n    \"SOURCE CONFIDENCE (Slack, lib/campaigns/risk/slack.ts:38-52): high. conversations.info is now GET to https://slack.com/api/conversations.info?channel=C0C9DRS4DT7. The token is only in the Authorization Bearer header. There is no token in the URL, no request body and no Content-Type. redirect:'error' and the shared abort signal are kept. auth.test and chat.postMessage still use POST with a JSON body and Content-Type. The chat.postMessage payload is unchanged, and the existing body assertions at calls[2][1].body still hold. The 429 retry-after clamp [60,86400], the !r.ok throw, the 65536-byte bounded read, and timeout and transport handling are unchanged. Because sending=true is only set after the channel checks pass, a GET timeout or transport error is 'failed', and a postMessage timeout or error is 'uncertain'. The new test at transports.test.ts:89-103 asserts this split, and the existing test at :104-131 still covers the uncertain path.\",\n    \"SOURCE CONFIDENCE (Slack test seam, transports.test.ts:12-43): meaningful. The fake returns invalid_arguments for any non-GET conversations.info, which reproduces the probe's json_post_info result. Against the original code this produces state 'failed' instead of 'sent', so the regression is genuine. It also asserts the token is absent from the href, there is no token query parameter, the only query key is 'channel', the body is undefined, the Bearer header is present on all 3 calls, and auth.test and postMessage use POST. The added C_OTHER and is_archived channel cases close previously untested branches of the gate at slack.ts:62-68.\",\n    \"SOURCE CONFIDENCE (Windows, campaign-risk-background.py:190-193): high. findtext('t:Settings/t:Enabled', default='true') resolves only the direct Task/Settings/Enabled child, so Triggers/TimeTrigger/Enabled cannot match. An omitted element now maps to the schema default true, and an explicit 'false' maps to False. install_task (:221-235) still writes trigger Enabled=true and the separate Settings/Enabled=false. settingsType is xs:all, so element order in Settings does not matter. Non-blocking edge: an element present but empty yields '' and therefore False. That is the safe direction and is not schema-valid output anyway.\",\n    \"OPTIONAL TEST HARDENING (not blocking, campaign-risk-background.test.py:21-32): add two subtests to prove Settings and Trigger are distinct. (a) <Triggers><TimeTrigger><Enabled>true</Enabled></TimeTrigger></Triggers><Settings><Enabled>false</Enabled></Settings> should give False. (b) <Triggers><TimeTrigger><Enabled>false</Enabled></TimeTrigger></Triggers><Settings/> should give True. The current code passes both; they would only guard against a future path regression.\",\n    \"POST-DEPLOY SLACK DIAGNOSTIC (not verifiable from source): after deploy, run the explicit admin connection test (createRiskSlackConnectionTestSender) only, with no fake risk event and no outbox drain. Confirm conversations.info GET returns ok, is_private=true, is_member=true, is_archived=false for C0C9DRS4DT7, and that postMessage is acknowledged. The sanitized probe already shows GET succeeds with this bot identity, but it does not cover the deployed code path.\",\n    \"NATIVE WINDOWS XML READBACK (not verifiable from source): the Python tests feed synthetic XML strings without the UTF-16 declaration or BOM that real schtasks /Query /XML output carries. On the target host, run in order: install-disabled, then status (expect task.enabled=false, read back from an explicit Settings/Enabled=false), then enable --server-ready (expect enabled=true, read back with Settings/Enabled omitted), then disable (expect false). install_task currently returns a hard-coded {'enabled': False} instead of reading the task back, so only the status call proves the registered state.\",\n    \"PARENT CHECKS: the focused results (12 TS, 5 Python, tsc) were reported by the source owner and not re-run by this reviewer. The full parent suite result and confirmation that the regressions fail on b8aa62df before the fix are still needed before merge.\"\n  ]\n}\n```",
+  "ttft_ms": 43975,
+  "type": "result",
+  "duration_ms": 67007,
+  "uuid": "1c949ef2-7d48-4eaf-943a-e6417185f6ec",
+  "ttft_stream_ms": 4864,
+  "time_to_request_ms": 358,
+  "first_content_frame_ms": 4865,
+  "queued_turn_count": 0,
+  "result_index": 0
+}

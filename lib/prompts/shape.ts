@@ -1,7 +1,7 @@
 import type { AssetRef } from '@/lib/content/schemas';
 import { canView, type Tier, type Visibility } from '@/lib/content/visibility';
-import { promptMediaPath, promptMediaRef } from './links';
-import { parsePromptMedia, type MediaKind, type PromptSource } from './schemas';
+import { promptGalleryRef, promptMediaPath, promptMediaRef } from './links';
+import { parsePromptMedia, type MediaKind, type PromptSource, type TemplateMedium } from './schemas';
 
 /**
  * PLAN §13.1 — "Gating doctrine unchanged: `pro` prompt text never enters any payload for
@@ -33,6 +33,15 @@ export interface PromptRowInput {
   title: string;
   titleKo: string | null;
   promptText: string;
+  /** docs/TEMPLATES-IA.md — optional here so a row shaped before 0015 still reads as a video not for sale. */
+  medium?: TemplateMedium;
+  priceCents?: number;
+  priceKrw?: number;
+  price1080Cents?: number;
+  price1080Krw?: number;
+  runtimeSeconds?: number | null;
+  engine?: string | null;
+  aspectDefault?: string | null;
   /** The "how it was made" markdown, per locale (2026-08-14). */
   processMd?: string | null;
   processMdKo?: string | null;
@@ -70,6 +79,15 @@ interface ShapedPromptBase {
   titleKo: string | null;
   useCase: string[];
   featured: boolean;
+  /** docs/TEMPLATES-IA.md — what it produces, what one render costs (0 = not for sale), how long. */
+  medium: TemplateMedium;
+  priceCents: number;
+  priceKrw: number;
+  price1080Cents: number;
+  price1080Krw: number;
+  runtimeSeconds: number | null;
+  engine: string | null;
+  aspectDefault: string | null;
   publishedAt: string | null;
   poster: ShapedPromptMedia | null;
   video: ShapedPromptMedia | null;
@@ -150,6 +168,7 @@ export function shapePromptMedia(
   poster: ShapedPromptMedia | null;
   video: ShapedPromptMedia | null;
   audio: ShapedPromptMedia | null;
+  gallery: ShapedPromptMedia[];
 } {
   const opts: MediaUrlOptions = {
     publicUrl: options.publicUrl ?? (() => null),
@@ -158,10 +177,14 @@ export function shapePromptMedia(
   const parsed = parsePromptMedia(media);
   const shape = (kind: MediaKind, ref: AssetRef | undefined) =>
     ref === undefined ? null : shapeAsset(ref, promptMediaRef(id, kind), opts);
+  const gallery = (parsed.gallery ?? [])
+    .map((ref, index) => shapeAsset(ref, promptGalleryRef(id, index + 1), opts))
+    .filter((frame): frame is ShapedPromptMedia => frame !== null);
   return {
     poster: shape('poster', parsed.poster),
     video: shape('video', parsed.video),
     audio: shape('audio', parsed.audio),
+    gallery,
   };
 }
 
@@ -188,6 +211,14 @@ export function shapePrompt(
     titleKo: row.titleKo,
     useCase: row.useCase,
     featured: row.featured,
+    medium: row.medium ?? 'video',
+    priceCents: row.priceCents ?? 0,
+    priceKrw: row.priceKrw ?? 0,
+    price1080Cents: row.price1080Cents ?? 0,
+    price1080Krw: row.price1080Krw ?? 0,
+    runtimeSeconds: row.runtimeSeconds ?? null,
+    engine: row.engine ?? null,
+    aspectDefault: row.aspectDefault ?? null,
     publishedAt: row.publishedAt,
     poster,
     video,

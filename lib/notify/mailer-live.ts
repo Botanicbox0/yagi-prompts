@@ -72,7 +72,9 @@ export function createLiveMailer(config: MailerConfig): Mailer {
               'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
             },
           },
-          { idempotencyKey: message.idempotencyKey },
+          // resend@6 spreads request options into its `fetch` call, so the signal really aborts the
+          // HTTP request even though its `PostOptions` type does not list it.
+          { idempotencyKey: message.idempotencyKey, ...(message.signal ? { signal: message.signal } : {}) } as { idempotencyKey: string },
         );
 
         if (error) return classify(error as ResendErrorLike);

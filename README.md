@@ -1,21 +1,20 @@
-# YAGI PROMPTS
+# TWINGS
 
-Original Seedance 2.5 prompts, written and tested in-house - bilingual (ko/en), plus a credited
-community rail. The playbook machinery (bilingual step-by-step AI-media workflows) stays built and
-tested behind `PLAYBOOKS_IN_NAV`.
+내 얼굴로 영상·이미지 템플릿의 주인공이 되는 서비스와, 스튜디오가 운영하는 브랜드·크리에이터 캠페인 공간입니다.
 
-> The product name is **YAGI PROMPTS**; the repo, the npm package and every internal identifier
-> keep the `playbook` codename on purpose - renaming them would churn the whole tree for nothing.
+- 기본 작업 폴더: `D:\dev\twings`
+- 에이전트 규칙: [AGENTS.md](AGENTS.md)
+- 작업 폴더·브랜치 구분: [docs/WORKSPACE.md](docs/WORKSPACE.md)
+- 제품 결정: [docs/TEMPLATES-IA.md](docs/TEMPLATES-IA.md), [docs/CAMPAIGNS.md](docs/CAMPAIGNS.md), 브랜드 2차 활용 [docs/SECONDARY-USAGE.md](docs/SECONDARY-USAGE.md)
+- YAGI-SERVER 개발 이관: [docs/SERVER-HANDOFF.md](docs/SERVER-HANDOFF.md)
+- 배포: `twings.app` · `brand.twings.app` · `admin.twings.app`
+- 공개 이용자 동선: [브랜드·크리에이터 진입 분리](docs/AUDIENCE-RENOVATION.md), [브랜드 문의 Slack 운영](docs/BRAND-INQUIRY-DELIVERY.md)
 
-Execution contract: [PLAYBOOK-PLAN.md](./PLAYBOOK-PLAN.md) (v1.4, cross-validated READY).
-Milestones: M0-M5 per plan section 8. Director: Claude (Fable). Executor: Opus.
+기존 npm 패키지명과 `PLAYBOOK_*` 환경변수, DB 식별자는 호환성을 위해 유지합니다. `PLAYBOOK-PLAN.md`는 초기 구현 기록이며 현재 제품 정책은 AGENTS와 제품 결정 문서를 따릅니다.
 
 ## Status
 
-**M0 Foundation** — scaffold, tokens + fonts, motion shell, locale routing, route skeletons,
-the full section 6 schema with the two-phase publish RPCs, and fixtures published through the real
-prepare -> copy -> publish flow. No landing scenes (M1), no renderers (M2), no Stripe (M3),
-no admin editor (M4), no notifications (M5).
+브랜드 의뢰·승인·리포트와 토스 단건 결제가 구현되어 있습니다. 공개 생성 플래그는 닫혀 있으며, 얼굴 사진은 2026-10-22부터 정면 셀카 한 장 업로드로 단순화됐습니다(`docs/IDENTITY-SELFIE.md`). 상태 판단은 해당 PR·배포 기록과 함께 확인합니다.
 
 ## Run it
 
@@ -33,6 +32,7 @@ PGlite in-process, and storage uses the local filesystem driver under `.storage/
 | Path | What |
 |---|---|
 | `app/(marketing)/[locale]/` | public, locale-prefixed, static + `catalog` tag + 1h TTL |
+| `app/(marketing)/[locale]/brands/` | brand campaign services and public enquiry; `/campaigns` is creator discovery |
 | `app/(app)/`, `app/(admin)/` | authenticated surfaces, `force-dynamic` + `private, no-store` |
 | `app/globals.css` | the single design-token source (Tailwind v4 CSS-first, section 5.1/5.2) |
 | `lib/content/` | zod block contracts, the shared visibility resolver, the pure `shapeRevision` |
@@ -41,4 +41,4 @@ PGlite in-process, and storage uses the local filesystem driver under `.storage/
 | `supabase/migrations/` | core (PGlite-testable) + supabase-glue split — see `supabase/README.md` |
 | `scripts/seed.ts` | 2 fixture playbooks, every block kind x visibility, published for real |
 | `docs/` | `VERSIONS.md` (why each pin), `SETUP.md` (manual steps remaining) |
-| `video/` | Remotion workspace for the 3 s "Produced by YAGI WORKSHOP" end card + the monogram — own `package.json`, excluded from the root typecheck |
+| `video/` | Remotion workspace for the "Produced by YAGI WORKSHOP" end cards (3 s + three 10 s cuts) and the constructed wordmark — own `package.json`, excluded from the root typecheck |

@@ -1,6 +1,8 @@
 import { fail, type AdminContext, type AdminOutcome } from './context';
 import { classifyDbError, shortMessage } from './errors';
 import { ADMIN_OPERATIONS, isAdminOperationName, type AdminOperation } from './operations';
+import { normalizeReturnPath, safeReturnPath } from '@/lib/auth/return-path';
+import { isAdminPath } from '@/lib/routing/surfaces';
 
 /**
  * The one guarded entry point for every admin mutation (§3.8 "All mutations = server actions:
@@ -49,13 +51,22 @@ export function outcomeUrl(back: string, outcome: AdminOutcome): string {
   // Never an open redirect: anything that is not an admin path collapses to the list. `to` is
   // constructed by the operations themselves and is checked by the same rule.
   const to = outcome.ok ? outcome.to : undefined;
-  const requested = to ?? back;
-  const safe = requested.startsWith('/admin') ? requested : '/admin';
+  const requested = safeReturnPath(to ?? back, '/admin');
+  const safe = isAdminPath(new URL(requested, 'https://path.invalid').pathname) ? requested : '/admin';
 
-  const [path = '/admin', existing = ''] = safe.split('?');
+  const target = new URL(safe, 'https://path.invalid');
   // A redirect to a DIFFERENT page drops the old page's query state; returning to the same page
   // keeps it (the block-editor `?add=` affordance, for one).
-  const params = new URLSearchParams(to === undefined ? existing : '');
+  const params = new URLSearchParams(to === undefined ? target.search : '');
+  // A campaign action may explicitly return to its current detail. Carry only its validated
+  // list navigation context; new campaigns and other destination pages keep their old redirect.
+  if (to !== undefined && /^\/admin\/brand-workspace\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(target.pathname)) {
+    const previous = new URL(safeReturnPath(back, '/admin'), 'https://path.invalid');
+    const values = previous.searchParams.getAll('returnTo');
+    const list = values.length === 1 ? normalizeReturnPath(values[0]) : null;
+    if (previous.pathname === target.pathname && list && new URL(list, 'https://path.invalid').pathname === '/admin/brand-workspace') params.set('returnTo', list);
+  }
+
   params.delete('ok');
   params.delete('err');
   params.delete('detail');
@@ -64,5 +75,5 @@ export function outcomeUrl(back: string, outcome: AdminOutcome): string {
   if (outcome.detail) params.set('detail', outcome.detail.slice(0, 200));
 
   const query = params.toString();
-  return query.length > 0 ? `${path}?${query}` : path;
+  return `${target.pathname}${query.length > 0 ? `?${query}` : ''}${target.hash}`;
 }

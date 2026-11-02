@@ -1,0 +1,59 @@
+import type { SupabaseClient } from '@supabase/supabase-js';
+import { AwsClient } from 'aws4fetch';
+import type { PublicMediaR2Config } from '@/lib/runtime-mode';
+import type { PublicMediaObject, PublicMediaRead, PublicMediaSyncDeps } from './public-media-sync';
+import { createSupabaseStorageDriver } from './supabase-driver';
+
+const PAGE = 500;
+
+/**
+ * The real network for `lib/storage/public-media-sync.ts`: Supabase as the source, the R2 S3 endpoint
+ * for the write, and the public media host for the read back. The read back goes through the same
+ * address a visitor uses, because that is the address being vouched for.
+ */
+export function createR2PublicMediaDeps(config: PublicMediaR2Config, client: SupabaseClient): PublicMediaSyncDeps {
+  const driver = createSupabaseStorageDriver(client);
+  const objectUrl = (key: string) => `https://${config.accountId}.r2.cloudflarestorage.com/${config.bucket}/${key}`;
+  const mediaBase = config.mediaBaseUrl.replace(/\/$/, '');
+  const r2 = new AwsClient({ accessKeyId: config.accessKeyId, secretAccessKey: config.secretAccessKey, service: 's3', region: 'auto' });
+
+  return {
+    async list() {
+      const objects: PublicMediaObject[] = [];
+      for (let offset = 0; ; offset += PAGE) {
+        const { data, error } = await client.storage.from('public-content').list('', { limit: PAGE, offset, sortBy: { column: 'name', order: 'asc' } });
+        if (error) throw new Error(`list failed: ${error.message}`);
+        for (const item of data) {
+          // A folder has no id and no metadata. It is reported by name and never copied.
+          objects.push({ key: item.name, size: Number(item.metadata?.size ?? 0), mime: String(item.metadata?.mimetype ?? 'application/octet-stream') });
+        }
+        if (data.length < PAGE) return objects;
+      }
+    },
+
+    read: (key) => driver.read('public-content', key),
+
+    async put(key, bytes, meta) {
+      const response = await r2.fetch(objectUrl(key), {
+        method: 'PUT',
+        body: Buffer.from(bytes),
+        headers: { 'Content-Type': meta.mime, 'Cache-Control': meta.cacheControl },
+      });
+      if (!response.ok) throw new Error(`put ${response.status}`);
+    },
+
+    async publicGet(key, range): Promise<PublicMediaRead> {
+      const response = await fetch(`${mediaBase}/${key}`, {
+        cache: 'no-store',
+        ...(range ? { headers: { Range: `bytes=${range.start}-${range.end}` } } : {}),
+      });
+      return {
+        status: response.status,
+        contentType: response.headers.get('content-type'),
+        contentRange: response.headers.get('content-range'),
+        cacheControl: response.headers.get('cache-control'),
+        bytes: new Uint8Array(await response.arrayBuffer()),
+      };
+    },
+  };
+}

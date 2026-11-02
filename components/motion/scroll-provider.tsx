@@ -27,10 +27,6 @@ export function useScroll(): ScrollContextValue {
   return useContext(ScrollContext);
 }
 
-export function usePrefersReducedMotion(): boolean {
-  return useScroll().reducedMotion;
-}
-
 export function ScrollProvider({ children }: { children: ReactNode }) {
   const lenisRef = useRef<Lenis | null>(null);
   const [value, setValue] = useState<ScrollContextValue>({ lenis: null, reducedMotion: false });
@@ -66,6 +62,8 @@ export function ScrollProvider({ children }: { children: ReactNode }) {
         duration: 1.05,
         smoothWheel: true,
         syncTouch: false,
+        // A modal scrolls itself. Founder 2026-10-31: the make sheet stayed put while the page moved.
+        prevent: (node) => node.closest('dialog, [role="dialog"]') !== null,
       });
       lenisRef.current = lenis;
 

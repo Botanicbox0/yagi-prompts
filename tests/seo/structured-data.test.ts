@@ -1,0 +1,150 @@
+import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { getDictionary } from '@/lib/i18n/dictionaries';
+import { FAQ_CATALOG, FAQ_CATEGORIES, faqItems } from '@/lib/faq/catalog';
+import type { PromptCard } from '@/lib/prompts/catalog';
+import { brandCaseStudiesStructuredData, campaignServiceStructuredData, faqStructuredData, siteStructuredData, templateStructuredData } from '@/lib/seo/structured-data';
+import { serializeJsonLd } from '@/lib/seo/json-ld';
+
+const origin = 'https://twings.example';
+const card: PromptCard = {
+  id: 'template', slug: 'portrait', source: 'yagi', title: 'Portrait', titleKo: '인물 영상',
+  authorHandle: null, origin: 'studio', makerProfile: false, models: [], modelLabels: [], useCase: [], medium: 'video',
+  priceCents: 400, priceKrw: 5900, price1080Cents: 0, price1080Krw: 0, runtimeSeconds: 15, engine: null, aspectDefault: null,
+  poster: { source: 'public', src: '/poster.jpg', mime: 'image/jpeg' },
+  video: { source: 'public', src: '/example.mp4', mime: 'video/mp4', duration_s: 8.5 },
+  lock: null, featured: false, publishedAt: '2026-09-01T09:00:00+09:00',
+};
+const template = (overrides: Partial<PromptCard> = {}, publicSalesEnabled = false, locale: 'ko' | 'en' = 'ko') => templateStructuredData({
+  origin, locale, card: { ...card, ...overrides }, description: 'The visible description.', publicSalesEnabled,
+});
+const graph = (value: ReturnType<typeof template>) => (value?.['@graph'] ?? []) as Record<string, unknown>[];
+
+describe('public structured data', () => {
+  it('links the real operator and bilingual website without inventing social identities', () => {
+    const data = siteStructuredData(origin)['@graph'] as Record<string, unknown>[];
+    expect(data.map((item) => item['@type'])).toEqual(['Organization', 'WebSite']);
+    expect(data[0]).toMatchObject({ legalName: '야기워크숍 주식회사', url: `${origin}/`, logo: `${origin}/brand/twings-mark-black.png` });
+    expect(data[0]).not.toHaveProperty('sameAs');
+    expect(data[1]).toMatchObject({ publisher: { '@id': `${origin}/#organization` }, inLanguage: ['ko', 'en'] });
+  });
+
+  it('publishes only real video fields and uses clip duration rather than purchased output duration', () => {
+    expect(graph(template())[0]).toMatchObject({ '@type': 'VideoObject', name: '인물 영상', duration: 'PT8.5S', uploadDate: '2026-09-01T00:00:00.000Z', thumbnailUrl: [`${origin}/poster.jpg`], contentUrl: `${origin}/example.mp4` });
+    expect(graph(template({ video: { ...card.video!, duration_s: undefined } }))[0]).not.toHaveProperty('duration');
+  });
+
+  it.each([
+    { video: null }, { poster: null }, { publishedAt: null }, { publishedAt: 'invalid' },
+    { medium: 'image' as const }, { video: { ...card.video!, src: 'javascript:alert(1)' } },
+    { video: { ...card.video!, source: 'route' as const, src: '/api/prompts/media/example%3Avideo' } },
+    { poster: { ...card.poster!, src: 'https://user:password@cdn.example/file.jpg' } },
+  ])('omits incomplete or unsafe video metadata: %j', (overrides) => {
+    expect(graph(template(overrides))).toEqual([]);
+  });
+
+  it('publishes no purchase offer while generation is closed', () => {
+    expect(graph(template()).some((item) => item['@type'] === 'Product')).toBe(false);
+  });
+
+  it('publishes a stored KRW one-time offer only for an actually purchasable Korean template', () => {
+    const product = graph(template({}, true)).find((item) => item['@type'] === 'Product');
+    expect(product).toMatchObject({ name: '인물 영상', offers: { '@type': 'Offer', price: 5900, priceCurrency: 'KRW', url: `${origin}/ko/t/portrait` } });
+    for (const input of [{ priceCents: 0 }, { priceKrw: 0 }, { priceKrw: -1 }, { priceKrw: Number.NaN }]) {
+      expect(graph(template(input, true)).some((item) => item['@type'] === 'Product')).toBe(false);
+    }
+    // No converted fallback or hidden KRW offer beneath a visible USD price.
+    expect(graph(template({}, true, 'en')).some((item) => item['@type'] === 'Product')).toBe(false);
+  });
+
+  it('describes campaign service without an Event, creator fee, rating or invented reach', () => {
+    const data = campaignServiceStructuredData({ origin, path: '/ko/campaigns/example', locale: 'ko', name: 'Visible campaign', description: 'Visible brief', serviceType: 'Brand campaigns', offer: true });
+    expect(data).toMatchObject({ '@type': 'Service', offers: { '@type': 'Offer', offeredBy: { '@id': `${origin}/#organization` } } });
+    expect(JSON.stringify(data)).not.toMatch(/Event|price|rating|payout|viewCount/);
+    expect(campaignServiceStructuredData({ origin, path: '/en/campaigns', locale: 'en', name: 'Campaigns', description: 'Brief', serviceType: 'Campaigns' })).not.toHaveProperty('offers');
+  });
+
+  it('describes the two public Morphic cases without inventing exact counters or conversions', () => {
+    const data = brandCaseStudiesStructuredData({ origin, locale: 'ko', cases: [
+      { id: 'morphic-90s-interview', name: 'Morphic · 90년대 인터뷰', description: '9편, 200만+ 조회수, 파생 오가닉 콘텐츠 300건+.' },
+      { id: 'morphic-september-kr-jp', name: 'Morphic · 9월 후속', description: '한국과 일본에서 진행한 후속 캠페인.' },
+    ] });
+    expect(data).toMatchObject({ '@type': 'ItemList', numberOfItems: 2, inLanguage: 'ko' });
+    const items = data.itemListElement as { item: Record<string, unknown> }[];
+    expect(items.map(({ item }) => item['@type'])).toEqual(['CreativeWork', 'CreativeWork']);
+    expect(items[0]?.item).toMatchObject({ url: `${origin}/ko/brands#morphic-90s-interview`, publisher: { '@id': `${origin}/#organization` } });
+    expect(items[0]?.item).not.toHaveProperty('citation');
+    expect(items[1]?.item).not.toHaveProperty('citation');
+    expect(JSON.stringify(data)).not.toMatch(/Event|AggregateRating|price|payout|conversion|userInteractionCount/);
+  });
+
+  it('escapes script breakouts without changing the parsed content', () => {
+    const data = { text: '</script><script>alert("x")</script>&\u2028\u2029' };
+    const text = serializeJsonLd(data);
+    expect(text).not.toMatch(/[<>&\u2028\u2029]/);
+    expect(JSON.parse(text)).toEqual(data);
+  });
+});
+
+describe('single FAQ catalog', () => {
+  it('states the closed public generation status in the visible and structured answers', () => {
+    const dict = getDictionary('ko');
+    const closed = faqItems(dict, 'template', false);
+    expect(closed.find(item => item.id === 'browsing')?.a).toContain(dict.seo.generationClosed);
+    expect(faqItems(dict, 'landing', false).find(item => item.id === 'pricing')?.a).toContain(dict.seo.generationClosed);
+    // A template page names no won or dollar price (founder, 2026-10-29), so its FAQ has no pricing answer.
+    expect(closed.find(item => item.id === 'pricing')).toBeUndefined();
+    expect(faqItems(dict, 'template', true).find(item => item.id === 'browsing')?.a).not.toContain(dict.seo.generationClosed);
+  });
+  it('has unique identities, all required categories, and matching localized content', () => {
+    expect(new Set(FAQ_CATALOG.map((item) => item.id)).size).toBe(FAQ_CATALOG.length);
+    expect(new Set(FAQ_CATALOG.map((item) => item.category))).toEqual(new Set(FAQ_CATEGORIES));
+    for (const locale of ['ko', 'en'] as const) {
+      const dict = getDictionary(locale);
+      const all = faqItems(dict);
+      expect(all).toHaveLength(22);
+      expect(new Set(all.map((item) => item.q.trim().toLowerCase())).size).toBe(all.length);
+      for (const item of all) {
+        expect(item.q.trim().length).toBeGreaterThan(0);
+        expect(item.a.trim().length).toBeGreaterThan(0);
+      }
+      for (const placement of ['landing', 'template', 'campaign', 'brand', 'pricing'] as const) {
+        const visible = faqItems(dict, placement);
+        const data = faqStructuredData(origin, `/${locale}/faq`, locale, visible);
+        expect(data.mainEntity).toEqual(visible.map((item) => ({ '@type': 'Question', name: item.q, acceptedAnswer: { '@type': 'Answer', text: item.a } })));
+        for (const item of visible) expect(all).toContainEqual(item);
+      }
+    }
+  });
+
+  it('answers brand AI safety and cross-market questions in both the page catalog and JSON-LD', () => {
+    for (const locale of ['ko', 'en'] as const) {
+      const items = faqItems(getDictionary(locale), 'brand');
+      expect(items).toHaveLength(8);
+      const safety = items.find(item => item.id === 'ai-campaign-safety');
+      const markets = items.find(item => item.id === 'korea-japan-campaigns');
+      expect(safety?.a).toContain(locale === 'ko' ? '본인 얼굴' : 'own likeness');
+      expect(safety?.a).toContain(locale === 'ko' ? '국외 이전' : 'overseas processing');
+      expect(safety?.a).toContain(locale === 'ko' ? '24시간' : '24 hours');
+      expect(markets?.a).toContain(locale === 'ko' ? '동시에' : 'simultaneously');
+      expect(markets?.a).not.toMatch(/200만|2M\+|300건|300\+/);
+      const data = faqStructuredData(origin, `/${locale}/brands`, locale, items);
+      expect(data.mainEntity).toContainEqual({ '@type': 'Question', name: safety?.q, acceptedAnswer: { '@type': 'Answer', text: safety?.a } });
+    }
+  });
+
+  it('does not publish private routes or planned subscription prices in LLM reading aids', () => {
+    for (const path of ['public/llms.txt', 'public/llms-full.txt']) {
+      const content = readFileSync(path, 'utf8');
+      expect(content).toContain('https://twings.app/en/faq');
+      expect(content).toContain('https://twings.app/ko/faq');
+      expect(content).not.toMatch(/https:\/\/[^\s]*(?:\/admin|\/account|\/api|\/billing|\/renders)|19,000|39,000|TOSS_SECRET_KEY|SUPABASE_SERVICE_ROLE_KEY/);
+    }
+    const full = readFileSync('public/llms-full.txt', 'utf8');
+    expect(full).toContain('Morphic');
+    expect(full).toMatch(/9 (?:commissioned |campaign )?films|9편/);
+    expect(full).toMatch(/2M\+|200만\+/);
+    expect(full).toMatch(/300\+/);
+    expect(full).toContain('not an individual creator result or an attributed conversion rate');
+  });
+});

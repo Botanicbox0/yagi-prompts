@@ -1,3 +1,4 @@
+import { PublicLink } from '@/components/admin/public-link';
 import { notFound } from 'next/navigation';
 import { getSqlRunner } from '@/lib/db/connect';
 import { getDictionary } from '@/lib/i18n/dictionaries';
@@ -75,19 +76,19 @@ export default async function AdminEditorPage({
   return (
     <AdminShell dict={a} locale={locale} active="playbooks">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <a href="/admin" className="font-label text-eyebrow uppercase text-accent">
+        <a href="/admin/playbooks" className="font-label text-eyebrow uppercase text-accent">
           ← {a.editorBack}
         </a>
-        <a href={`/${locale}/p/${editor.playbook.slug}`} className={BUTTON}>
+        <PublicLink href={`/${locale}/p/${editor.playbook.slug}`} className={BUTTON}>
           {a.navSite}
-        </a>
+        </PublicLink>
       </div>
 
       <h1 className="mt-4 font-display text-[clamp(1.75rem,3.5vw,2.75rem)] leading-[0.95] font-black uppercase">
         {title || editor.playbook.slug}
       </h1>
       <p className="mt-2 font-mono text-code opacity-60">
-        {editor.playbook.slug} · {editor.playbook.status}
+        {editor.playbook.slug} · {editor.playbook.status === 'published' ? a.statusPublished : editor.playbook.status === 'archived' ? a.statusArchived : a.statusDraft}
       </p>
 
       <OutcomeBanner

@@ -2,12 +2,12 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { createAuthServerClient } from '@/lib/supabase/auth-client';
 import { getSqlRunner } from '@/lib/db/connect';
 import { SIGNUP_COOKIES } from '@/lib/cookies/wallet';
+import { authFailurePath, authReturnPath, resolveRequestUrl } from '@/lib/routing/surfaces';
 import {
   DEFAULT_LOCALE,
   LOCALE_COOKIE,
   LOCALE_COOKIE_MAX_AGE,
   isLocale,
-  localizedPath,
   type Locale,
 } from '@/lib/i18n/config';
 
@@ -20,7 +20,9 @@ import {
  *      chain without a service-role round trip on every request (see middleware.ts);
  *   4. land on the originating page.
  *
- * `is_admin` is never derived here. Admins are seeded manually (§3.7, docs/SETUP.md).
+ * `is_admin` is never derived here. The DB sets it from `auth.users` alone: a confirmed exact
+ * @yagiworkshop.xyz email (0038_core_staff_admin.sql, also on this insert), otherwise a manual grant
+ * (docs/SETUP.md §4). Nothing from the OAuth payload's metadata decides it.
  *
  * §15.1-2 — the signup grant arrives through the COLUMN DEFAULT (`cookie_balance` defaults 3;
  * the insert below deliberately does not name it), so this route cannot get the number wrong.
@@ -35,21 +37,23 @@ import {
  * transaction rolls both back so the next login simply retries the branch.
  */
 export async function GET(request: NextRequest): Promise<NextResponse> {
-  const url = new URL(request.url);
+  const url = resolveRequestUrl(new URL(request.url), request.headers);
+  if (url === null) return new NextResponse(null, { status: 404 });
   const code = url.searchParams.get('code');
-  const requested = url.searchParams.get('next') ?? '/library';
-  const next = requested.startsWith('/') && !requested.startsWith('//') ? requested : '/library';
   const uiLocaleRaw = url.searchParams.get('locale');
   const uiLocale: Locale = isLocale(uiLocaleRaw) ? uiLocaleRaw : DEFAULT_LOCALE;
+  // A return trip with nowhere to go lands where `/auth/signin` would have sent it: the video
+  // templates (docs/TEMPLATES-IA.md). It used to be the denavigated `/library` (audit P1-4).
+  const next = authReturnPath(url.searchParams.get('next'), url.hostname, `/${uiLocale}/video`);
 
   if (!code) {
-    return NextResponse.redirect(new URL(`${localizedPath(uiLocale, '/')}?error=oauth`, url.origin));
+    return NextResponse.redirect(new URL(authFailurePath(url.hostname, uiLocale, 'oauth', next), url.origin));
   }
 
   const supabase = await createAuthServerClient();
   const { data, error } = await supabase.auth.exchangeCodeForSession(code);
   if (error || !data.user) {
-    return NextResponse.redirect(new URL(`${localizedPath(uiLocale, '/')}?error=oauth`, url.origin));
+    return NextResponse.redirect(new URL(authFailurePath(url.hostname, uiLocale, 'oauth', next), url.origin));
   }
 
   let profileLocale: Locale = uiLocale;
@@ -74,7 +78,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
              returning id`,
             [
               data.user.id,
-              data.user.email ?? '',
+              // A Kakao account that did not share an email has none: NULL, never '' (0053).
+              data.user.email?.trim() || null,
               (data.user.user_metadata?.['full_name'] as string | undefined) ?? null,
               uiLocale,
             ],

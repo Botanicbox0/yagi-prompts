@@ -6,6 +6,7 @@ import type { PromptCard } from '@/lib/prompts/catalog';
 import { PROMPT_MODEL_LABEL, USE_CASES } from '@/lib/prompts/schemas';
 import { PromptCardView } from '@/components/prompts/prompt-card';
 import { HOVER_HOST } from '@/components/prompts/card-media';
+import { CreatorHero } from '@/components/audience/creator-home';
 import { PromptRail } from '@/components/prompts/rails';
 import { TypographicPoster, POSTER_RATIOS, posterRatio } from '@/components/prompts/poster';
 import { PromptBody, PromptHeader, SubmitStrip } from '@/components/prompts/detail';
@@ -33,10 +34,20 @@ function card(overrides: Partial<PromptCard> = {}): PromptCard {
     title: 'Neon alley dolly',
     titleKo: '네온 골목 달리',
     authorHandle: null,
+    origin: 'studio',
+    makerProfile: false,
     source: 'yagi',
     models: ['seedance-2.5'],
     modelLabels: [PROMPT_MODEL_LABEL],
     useCase: ['cinematic'],
+    medium: 'video',
+    priceCents: 400,
+    priceKrw: 0,
+    price1080Cents: 0,
+    price1080Krw: 0,
+    runtimeSeconds: 15,
+    engine: null,
+    aspectDefault: null,
     poster: { source: 'route', src: '/api/prompts/media/x%3Aposter', mime: 'image/png', w: 1280, h: 1600 },
     video: { source: 'route', src: '/api/prompts/media/x%3Avideo', mime: 'video/mp4' },
     lock: 'cookie' as const,
@@ -60,12 +71,14 @@ const cardMarkup = (data: PromptCard, locale = 'en') =>
   );
 
 describe('prompt card (§13.2)', () => {
-  it('renders media, credit, model chip and title — and no prompt text of any kind', () => {
+  // PLATFORM-2.0 §15.3-4 (2026-10-23): the engine chip and the studio byline left the card;
+  // tests/ui/catalog-cards.test.tsx owns what the card carries now.
+  it('renders media and title — and no prompt text of any kind', () => {
     const html = cardMarkup(card());
     expect(html).toContain('data-prompt-card="neon-alley-dolly"');
-    expect(html).toContain(PROMPT_MODEL_LABEL);
+    expect(html).not.toContain(PROMPT_MODEL_LABEL);
     expect(html).toContain('Neon alley dolly');
-    expect(html).toContain(labels.byYagi);
+    expect(html).not.toContain(labels.byYagi);
     expect(html).not.toContain(SENTINEL);
     // There is no field the card could even read it from.
     expect(Object.hasOwn(card(), 'text')).toBe(false);
@@ -76,24 +89,22 @@ describe('prompt card (§13.2)', () => {
    * to COOKIE for anything not public, so a free-gated prompt quoted a price the server refuses to
    * charge — `unlockPrompt` will not spend a cookie on one. The chip now names the ACTION.
    */
-  it('names the action the gate actually asks for', () => {
-    const cookie = cardMarkup(card({ lock: 'cookie' }));
-    expect(cookie).toContain('data-lock-chip="cookie"');
-    expect(cookie).toContain(dict.prompts.lockChip);
-
-    const signin = cardMarkup(card({ lock: 'signin' }));
-    expect(signin).toContain('data-lock-chip="signin"');
-    expect(signin).toContain(dict.prompts.lockChipSignin);
-    // …and never the word that means money on a prompt that costs none.
-    expect(signin).not.toContain(dict.prompts.lockChip);
-
-    expect(cardMarkup(card({ lock: null }))).not.toContain('data-lock-chip');
+  /** Founder, 2026-09-07: a price on the card dulls the wish to buy — it lives on the template page. */
+  it('wears no price and no lock chip; the template page names the price', () => {
+    const priced = cardMarkup(card({ priceCents: 400 }));
+    expect(priced).not.toContain('data-price-chip');
+    expect(priced).not.toContain('$4');
+    expect(priced).not.toContain('data-price=');
+    expect(priced).not.toContain('data-lock-chip');
+    const closed = cardMarkup(card({ priceCents: 0 }));
+    expect(closed).not.toContain('data-price-chip');
+    expect(closed).not.toContain('data-lock-chip');
   });
 
-  it('credits a community submitter by @handle, and falls back honestly', () => {
-    expect(cardMarkup(card({ source: 'community', authorHandle: 'hana' }))).toContain('by @hana');
-    expect(cardMarkup(card({ source: 'community', authorHandle: null }))).toContain(
-      labels.byAnonymous,
+  it('credits a maker template by @handle, and falls back honestly', () => {
+    expect(cardMarkup(card({ origin: 'maker', source: 'community', authorHandle: 'hana' }))).toContain('by @hana');
+    expect(cardMarkup(card({ origin: 'maker', source: 'community', authorHandle: null }))).toContain(
+      labels.cardAuthorAnonymous,
     );
   });
 
@@ -112,20 +123,22 @@ describe('prompt card (§13.2)', () => {
   /**
    * The card's one control is "자세히 보기" (founder direction, 2026-08-15): copy left the card, so
    * the only way to obtain a prompt is the page that explains, funds and hands it off. The card
-   * therefore carries NO prompt-bearing control at all, and its second anchor must sit above the
-   * title's stretched `::after` rather than nested inside it.
+   * therefore carries NO prompt-bearing control at all. (2026-10-23: the button itself went too;
+   * the title's stretched `::after` makes the whole card the one link.)
    */
   it('sends the reader to the page instead of handing over the prompt', () => {
     const html = cardMarkup(card());
     expect(html).toContain('<article');
     expect(html).toContain('after:absolute');
-    expect(html).toContain('data-card-detail="neon-alley-dolly"');
-    expect(html).toContain(dict.prompts.cardDetail);
+    // Since 2026-10-23 (PLATFORM-2.0 §15.3-4) the "자세히 보기" button is gone: the whole card is the link.
+    expect(html).not.toContain('data-card-detail');
+    expect(html).toContain('href="/en/t/neon-alley-dolly"');
+    expect(html).not.toContain(dict.prompts.cardDetail);
     // The copy endpoint is not reachable from the wall any more.
     expect(html).not.toContain('data-copy-prompt=');
-    // A nested anchor would be invalid; the detail link is a SIBLING lifted by z-index.
+    // A nested anchor would be invalid, and there is only the one.
     expect(html).not.toMatch(/<a[^>]*>(?:(?!<\/a>)[\s\S])*<a/);
-    expect(html).toContain('relative z-10');
+    expect(html.match(/<a\s/g)).toHaveLength(1);
   });
 
   it('carries no media element when there is nothing published to show', () => {
@@ -141,13 +154,51 @@ describe('prompt card (§13.2)', () => {
    * one thing the client effect assumes: `HOVER_HOST` resolves, and it WRAPS the media.
    */
   it('hangs the hover host above the media, where the overlay link cannot mask it', () => {
-    expect(HOVER_HOST).toBe('[data-prompt-card]');
+    expect(HOVER_HOST.split(',').map(selector => selector.trim())).toContain('[data-prompt-card]');
     const html = cardMarkup(card());
     const host = html.indexOf('data-prompt-card=');
     const media = html.indexOf('class="card__media');
     expect(host).toBeGreaterThanOrEqual(0);
     expect(media).toBeGreaterThan(host);
     expect(html.slice(host).indexOf('</article>')).toBeGreaterThan(html.slice(host).indexOf('card__media'));
+  });
+});
+
+describe('the creator hero uses the uploaded example', () => {
+  it('keeps unknown media at 16:9 instead of borrowing generation settings and wraps its focusable link in a preview host', () => {
+    const html = renderToStaticMarkup(<CreatorHero dict={dict} locale="en" featured={card({
+      aspectDefault: '9:16',
+      poster: { source: 'public', src: 'https://media.example.test/poster.jpg', mime: 'image/jpeg' },
+      video: { source: 'public', src: 'https://media.example.test/film.mp4', mime: 'video/mp4' },
+    })} />);
+    expect(html).toContain('aspect-ratio:16 / 9');
+    expect(HOVER_HOST.split(',').map(selector => selector.trim())).toContain('[data-media-host]');
+    expect(html).toContain('data-creator-preview');
+    expect(html).toContain('href="/en/t/neon-alley-dolly"');
+    expect(html).toContain('preload="none"');
+    expect(html).toContain('playsInline=""');
+    expect(html).not.toContain('data-prompt-card=');
+  });
+
+  it('uses measured portrait media dimensions even when the generation default is wide', () => {
+    const html = renderToStaticMarkup(<CreatorHero dict={dict} locale="en" featured={card({
+      aspectDefault: '16:9',
+      video: { source: 'public', src: 'https://media.example.test/portrait.mp4', mime: 'video/mp4', w: 1080, h: 1920 },
+    })} />);
+    expect(html).toContain('aspect-ratio:1080 / 1920');
+  });
+
+  it('uses a complete measured pair rather than mixing partial video and poster dimensions', () => {
+    const html = renderToStaticMarkup(<CreatorHero dict={dict} locale="en" featured={card({
+      poster: { source: 'public', src: 'https://media.example.test/poster.jpg', mime: 'image/jpeg', w: 1920, h: 1080 },
+      video: { source: 'public', src: 'https://media.example.test/film.mp4', mime: 'video/mp4', w: 1080 },
+    })} />);
+    expect(html).toContain('aspect-ratio:1920 / 1080');
+    const unknown = renderToStaticMarkup(<CreatorHero dict={dict} locale="en" featured={card({
+      poster: null,
+      video: { source: 'public', src: 'https://media.example.test/film.mp4', mime: 'video/mp4', w: 0, h: 1920 },
+    })} />);
+    expect(unknown).toContain('aspect-ratio:16 / 9');
   });
 });
 
@@ -189,7 +240,8 @@ describe('rails (§13.2)', () => {
     expect(html).toContain('data-rail="yagi"');
     expect(html).toContain('data-use-case="cinematic"');
     expect(html).toContain('data-use-case="mv vlog"');
-    expect(html).toContain('break-inside-avoid');
+    // Filtering and keyboard navigation use the same order as the visible grid.
+    expect(html.indexOf('data-prompt-card="neon-alley-dolly"')).toBeLessThan(html.indexOf('data-prompt-card="second"'));
   });
 
   it('says so when a rail is empty rather than leaving a headline over a void', () => {
@@ -219,6 +271,14 @@ describe('prompt detail (§13.2 / §5.5 / §15.3)', () => {
     titleKo: '네온 골목 달리',
     useCase: ['cinematic'],
     featured: true,
+    medium: 'video' as const,
+    priceCents: 400,
+    priceKrw: 0,
+    price1080Cents: 0,
+    price1080Krw: 0,
+    runtimeSeconds: 15,
+    engine: null,
+    aspectDefault: null,
     publishedAt: '2026-08-12T00:00:00.000Z',
     poster: null,
     video: null,

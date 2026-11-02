@@ -58,6 +58,16 @@ export async function savePreferences(
   return rows.length > 0;
 }
 
+/**
+ * The studio's "tell me when it opens" (2026-09-11): the one write that can only ever ADD a
+ * subscription, behind a verified session. Idempotent like `disableToggle`; false = no profile.
+ */
+export async function enableToggle(sql: SqlRunner, userId: string, toggle: NotifyToggle): Promise<boolean> {
+  const column = toggle === 'notif_new_playbook' ? 'notif_new_playbook' : 'notif_updates';
+  const { rows } = await sql.query<{ id: string }>(`update profiles set ${column} = true where id = $1 returning id`, [userId]);
+  return rows.length > 0;
+}
+
 export interface DisableResult {
   ok: boolean;
   /** The profile's own locale, so the confirmation page answers in the language of the email. */

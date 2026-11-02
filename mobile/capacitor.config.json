@@ -1,0 +1,43 @@
+{
+  "appId": "app.twings.client",
+  "appName": "TWINGS",
+  "webDir": "public",
+  "server": {
+    "url": "https://twings.app/ko/video?source=pwa",
+    "cleartext": false,
+    "allowNavigation": [
+      "twings.app",
+      "*.twings.app",
+      "*.supabase.co",
+      "accounts.google.com",
+      "kauth.kakao.com",
+      "logins.daum.net"
+    ]
+  },
+  "ios": {
+    "appendUserAgent": "TwingsIOS/1.0",
+    "contentInset": "automatic",
+    "backgroundColor": "#ffffff",
+    "preferredContentMode": "mobile"
+  },
+  "android": {
+    "appendUserAgent": "TwingsAndroid/1.0",
+    "backgroundColor": "#ffffff",
+    "allowMixedContent": false
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 1200,
+      "launchAutoHide": true,
+      "backgroundColor": "#ffffff",
+      "showSpinner": false
+    },
+    "PushNotifications": {
+      "presentationOptions": ["badge", "sound", "alert"]
+    },
+    "StatusBar": {
+      "style": "LIGHT",
+      "backgroundColor": "#ffffff"
+    }
+  }
+}

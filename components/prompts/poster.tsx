@@ -16,6 +16,17 @@ import { posterHash, posterRatio, posterWords, POSTER_RATIOS } from '@/component
 
 export { POSTER_RATIOS, posterRatio };
 
+/**
+ * Type size in container widths, so a word never breaks however narrow the card is (a 9:16 card in a
+ * film row can be under 100px wide). The longest word sets it, measured with Hangul at 1em and Latin
+ * at about 0.62em, and the line count keeps a wide card's words inside its height.
+ */
+export function posterFontSize(words: readonly string[]): string {
+  const widest = Math.max(1, ...words.map((word) => [...word].reduce((sum, char) => sum + (/[\u3131-\uD79D]/.test(char) ? 1 : 0.62), 0)));
+  const cqw = Math.min(64 / widest, 40 / Math.max(words.length, 1));
+  return `min(${cqw.toFixed(2)}cqw, 3.25rem)`;
+}
+
 export function TypographicPoster({
   title,
   slug,
@@ -32,11 +43,12 @@ export function TypographicPoster({
   const seed = posterHash(slug);
   // Which word gets the outline treatment, and where the accent block sits: both from the hash.
   const outlined = seed % Math.max(words.length, 1);
+  const fontSize = posterFontSize(words);
 
   return (
     <div
       data-poster="typographic"
-      className="relative flex h-full w-full flex-col justify-between overflow-hidden bg-black p-4 text-white sm:p-5"
+      className="relative flex h-full w-full flex-col justify-between overflow-hidden bg-black p-3 text-white [container-type:inline-size]"
       style={{ aspectRatio: ratio ?? posterRatio(slug) }}
     >
       <span aria-hidden className="absolute inset-y-0 left-1/3 w-px bg-line-dark" />
@@ -53,13 +65,13 @@ export function TypographicPoster({
         {words.map((word, index) => (
           <span
             key={`${index}-${word}`}
-            className="font-display text-[clamp(1.75rem,7vw,3.25rem)] leading-[0.86] font-black tracking-tight uppercase"
+            className="font-display whitespace-nowrap"
             // Explicit ink rather than `currentColor` — the poster is always black, and
             // `currentColor` on a transparent fill resolves to transparent (see reel-poster.tsx).
             style={
               index === outlined
-                ? { WebkitTextStroke: '1px #ffffff', color: 'transparent' }
-                : undefined
+                ? { fontSize, WebkitTextStroke: '1px #ffffff', color: 'transparent' }
+                : { fontSize }
             }
           >
             {word}

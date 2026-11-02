@@ -47,6 +47,16 @@ export function revalidatePrompts(): void {
 }
 
 /**
+ * docs/PLATFORM-2.0.md §7.5 — a maker turned their profile on or off, or changed handle. The credit
+ * on every card and template page moves with tag `prompts`; the maker's own page (old and new
+ * address) is named too so a turned-off profile stops answering at once.
+ */
+export function revalidateMakerProfile(handles: readonly string[]): void {
+  revalidatePrompts();
+  revalidateStaticSurfaces(['/video', '/image', ...handles.map((handle) => `/makers/${handle}`)]);
+}
+
+/**
  * PLAN §14.2 — the contests listing is `[static + tag 'contests']`.
  *
  * A third tag on the same reasoning as the second: publishing a contest, approving an entry and
@@ -59,4 +69,49 @@ export const CONTESTS_TAG = 'contests';
 export function revalidateContests(): void {
   revalidateTag(CONTESTS_TAG);
   revalidateStaticSurfaces(['/contests']);
+}
+
+/**
+ * docs/CAMPAIGNS.md — the campaigns listing is `[static + tag 'campaigns']`, on the same reasoning
+ * as contests: selecting a creator or verifying a post moves the listing's counters and nothing
+ * else on the marketing tree.
+ */
+export const CAMPAIGNS_TAG = 'campaigns';
+
+export function revalidateCampaigns(): void {
+  revalidateTag(CAMPAIGNS_TAG);
+  revalidateStaticSurfaces(['/campaigns']);
+}
+
+/**
+ * Landing media slots (lib/content/landing-media.ts, `/admin/landing-media`): a replaced or reset
+ * image refreshes the two landings that render slots, on the same tag-and-path terms as the others.
+ */
+export const LANDING_MEDIA_TAG = 'landing-media';
+
+export function revalidateLandingMedia(): void {
+  revalidateTag(LANDING_MEDIA_TAG);
+  revalidateStaticSurfaces(['', '/brands']);
+}
+
+/**
+ * docs/BRAND-MOAT-AND-STORAGE.md — a public file was verified on the media host. The documents and pages
+ * that hold its address move to the new one now, not at the TTL, because a new template gets its first
+ * visitors right after it is published.
+ */
+export function revalidatePublicMedia(): void {
+  revalidateCatalog();
+  revalidatePrompts();
+  revalidateContests();
+  revalidateLandingMedia();
+  revalidateStaticSurfaces(['/video', '/image']);
+  revalidatePath('/[locale]/t/[slug]', 'page');
+}
+
+export function revalidateSubscriptions(): void {
+  revalidateTag('creator-subscription-status');
+  revalidateStaticSurfaces(['', '/pricing', '/faq', '/legal/terms', '/legal/refund', '/legal/privacy']);
+  revalidatePath('/[locale]/t/[slug]', 'page');
+  revalidatePath('/llms.txt');
+  revalidatePath('/llms-full.txt');
 }

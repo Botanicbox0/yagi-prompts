@@ -1,20 +1,15 @@
+import type { CSSProperties } from 'react';
 import type { PromptCard } from '@/lib/prompts/catalog';
 import { PromptCardView } from './prompt-card';
 import { RevealGrid } from '@/components/motion/reveal-grid';
+import { cardRatio, railOrder } from './card-frame';
 import type { PromptLabels } from './labels';
 
 /**
- * PLAN §13.2 — the two rails, and the masonry wall each of them holds.
+ * Founder 2026-10-31: justified rows (`.film-rows`). Each card keeps its film's own ratio, every
+ * card in a row is one height, and visual order stays the same as catalog and keyboard order.
  *
- * **Masonry with CSS columns, not a row-span grid.** The choice is about the hover state: a
- * row-span grid needs every card to declare a row count, which means quantising heights, which
- * means either cropping posters or leaving gaps — and `scale(1.03)` inside a grid item that has
- * been given an explicit row span clips against its own track. Columns let each card keep its
- * media's intrinsic ratio, so the zoom happens inside a box that already fits it, at 375, 768,
- * 1024 and 1440 alike. `break-inside: avoid` is what makes a card indivisible.
- *
- * The trade — column-major reading order — is the right one here: this is a gallery to browse, not
- * a sequence to read, and every card is an independent link with its own accessible name.
+ * The order is `railOrder`: NEW first, then featured → newest, originals and AI creatives mixed (§7.5).
  */
 export function PromptRail({
   id,
@@ -28,6 +23,7 @@ export function PromptRail({
   filteredEmptyLabel,
   now,
   topClassName = 'mt-16 first:mt-0 lg:mt-24',
+  hideHeading = false,
 }: {
   id: string;
   heading: string;
@@ -46,10 +42,12 @@ export function PromptRail({
    * resolve by stylesheet order, not by intent.
    */
   topClassName?: string;
+  /** The catalog already has a visible page title and introduction. Keep its rail label accessible. */
+  hideHeading?: boolean;
 }) {
   return (
     <section data-rail={id} className={topClassName}>
-      <div className="flex flex-wrap items-baseline justify-between gap-x-8 gap-y-2 border-b border-hairline pb-4">
+      <div className={hideHeading ? 'sr-only' : 'flex flex-wrap items-baseline justify-between gap-x-8 gap-y-2 border-b border-hairline pb-4'}>
         {/* §5.2: rail headers are DISPLAY type, and the KO variant is a different string rather
             than the same one at a smaller size (globals.css does the 0.85× on top). */}
         <h2
@@ -65,13 +63,13 @@ export function PromptRail({
         <p className="mt-8 font-mono text-code opacity-60">{emptyLabel}</p>
       ) : (
         <>
-          <RevealGrid className="mt-8 gap-6 [column-fill:balance] sm:columns-2 lg:columns-3">
-            {cards.map((card) => (
+          <RevealGrid className={`${hideHeading ? '' : 'mt-8 '}film-rows`}>
+            {railOrder(cards, now).map((card) => (
               <li
                 key={card.slug}
                 data-prompt-item
                 data-use-case={card.useCase.join(' ')}
-                className="mb-6 break-inside-avoid"
+                style={{ '--r': cardRatio(card) } as CSSProperties}
               >
                 <PromptCardView
                   card={card}

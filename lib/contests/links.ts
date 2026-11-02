@@ -54,23 +54,6 @@ export function contestMediaRef(id: string, kind: ContestMediaKind): string {
   return `${id}:${kind}`;
 }
 
-export interface ParsedContestMediaRef {
-  id: string;
-  kind: ContestMediaKind;
-}
-
-/** `null` for anything malformed — the caller answers 404, never a guess. */
-export function parseContestMediaRef(raw: string): ParsedContestMediaRef | null {
-  const ref = raw.trim();
-  const at = ref.lastIndexOf(':');
-  if (at <= 0) return null;
-  const id = ref.slice(0, at);
-  const kind = ref.slice(at + 1);
-  if (id.length === 0 || id.includes('/') || id.includes(':')) return null;
-  if (!(CONTEST_MEDIA_KINDS as readonly string[]).includes(kind)) return null;
-  return { id, kind: kind as ContestMediaKind };
-}
-
 export function contestMediaPath(ref: string): string {
   return `/api/contests/media/${encodeURIComponent(ref)}`;
 }

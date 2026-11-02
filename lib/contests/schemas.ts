@@ -27,10 +27,6 @@ export type EntryStatus = (typeof ENTRY_STATUSES)[number];
 export const PLACEMENTS = [1, 2, 3] as const;
 export type Placement = (typeof PLACEMENTS)[number];
 
-export function isPlacement(value: unknown): value is Placement {
-  return value === 1 || value === 2 || value === 3;
-}
-
 /**
  * WHO may open a contest (founder direction, 2026-08-15 — "brand뿐만 아니라 higgsfield나 플랫폼이나
  * 다 관계없이"). Five kinds, fixed and translated at the UI layer.

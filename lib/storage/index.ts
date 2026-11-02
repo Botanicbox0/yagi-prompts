@@ -57,6 +57,11 @@ export interface StorageDriver {
    * client falls back to posting the file inline, which is what it has always done.
    */
   signedUploadUrl(key: string, contentType: string): Promise<string | null>;
+  /** Private workspace attachments only, after current membership authorization. Never public.
+   * Cloud callers redirect to this <=60s capability to keep videos outside Vercel response limits.
+   * Optional for existing driver doubles; local returns null and the authenticated route streams.
+   */
+  signedStagingUrl?(key: string, expiresInSeconds: number): Promise<string | null>;
   exists(bucket: Bucket, key: string): Promise<boolean>;
   read(bucket: Bucket, key: string): Promise<Uint8Array>;
   /** Phase B of publication. Idempotent: identical key already present => 'exists'. */
@@ -85,7 +90,8 @@ export class StorageObjectNotFound extends Error {
 export async function getStorage(): Promise<StorageDriver> {
   if (selectStorageDriver(process.env) === 'supabase') {
     const { createSupabaseStorageDriver } = await import('./supabase-driver');
-    return createSupabaseStorageDriver();
+    const { withPublicMediaSync } = await import('./public-media-kick');
+    return withPublicMediaSync(createSupabaseStorageDriver());
   }
   const { createLocalStorageDriver } = await import('./local-driver');
   return createLocalStorageDriver();

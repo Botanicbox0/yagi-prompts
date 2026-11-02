@@ -1,0 +1,64 @@
+# TWINGS 사용 흐름 개선 — 2026-10-09
+
+## 적용 범위
+
+요금 페이지 개편(PR #47) 이후, 실제 탐색과 운영 중 맥락이 끊기는 구간을 개선한다. 공개 페이지는 정적 HTML과 기존 캐시 계약을 유지하고, 브랜드·관리자 화면은 기존 권한 검사와 서버 폼을 유지한다.
+
+### 크리에이터
+
+- 영상·이미지 목록의 중복 제목과 큰 여백을 줄여 템플릿을 먼저 보여준다. 서비스 정의 문단과 의미 있는 제목 구조는 유지한다.
+- 용도 필터를 URL에 저장한다. 새로고침과 브라우저 복귀 시 필터를 복원하고, 표시 개수와 초기화를 제공한다. JavaScript가 없으면 모든 템플릿을 보여준다.
+- 상단·모바일 메뉴에서 현재 페이지와 섹션을 표시한다.
+- 브랜드 문의는 기존 직접 링크와 캠페인 유형 링크에서도 팝업으로 열린다. 닫으면 초점과 스크롤 상태를 복원한다. JavaScript가 없으면 서버 폼을 사용할 수 있다.
+- 등록되지 않은 한·영 주소도 기존 TWINGS 이중언어 404 화면과 언어별 복귀 링크로 연결한다. 정적 루트와 권한 게이트는 유지하며 실제 HTTP 404·비공개 내용 부재를 익명 스윕에서 확인한다.
+
+### 브랜드
+
+- 진행 중인 고객에게는 서비스 소개보다 확인할 제작물을 먼저 보여준다. 서비스 안내는 접어서 아래에 둔다. 첫 고객에게는 기존 안내를 유지한다.
+- 캠페인 검색·진행 상태를 URL에 저장하고, 상세에서 목록으로 돌아올 때 유지한다. 복귀 URL은 해당 화면과 동일 브랜드의 목록으로 제한한다.
+- 콘텐츠 확인 탭에는 최신 버전 기준 실제 미처리 건수를 표시한다. 코멘트 숫자는 읽지 않은 메시지 수가 아닌 전체 메시지 수다.
+- 모바일에서 선택한 캠페인 메뉴를 보이게 한다. 정상 진행 상태는 중립색, 승인 상태는 파란색으로 구분하고 오류·주의 의미는 유지한다.
+
+### 관리자
+
+- 공통 좌측 메뉴와 상단 언어 메뉴를 적용한다. 모바일은 가로 메뉴이며 활성 항목만 가로로 보정한다. 화면 세로 위치와 문의 앵커는 바꾸지 않는다.
+- 문의함을 유형·상태·검색으로 좁히고 개수·초기화·검색 범위를 표시한다. 검색 범위는 로드한 최근 문의에 한정되며 전체 이력 검색으로 표현하지 않는다.
+- 문의 처리 후 필터와 결과 위치를 유지한다. 기존 Slack 링크가 처리된 문의도 열 수 있도록 기본 목록은 모든 상태다.
+- 기존 등록된 관리자 오퍼레이션과 확인 절차를 유지한다. 보고서 인쇄에는 관리 메뉴가 나타나지 않는다.
+
+## 문안 검토 자료
+
+[이번 변경 문안 비교표](site-experience-copy-2026-10-09.csv)는 한·영 원문/수정안, 노출 문맥, 명확성·구체성·자연스러움 점수와 이유를 담는다. 기존 `scripts/dump-copy.mjs`의 정적 참조 수집기를 재사용했다. 기존 리더가 지원하지 않는 사례 영상 배열은 추출 단계에서 인덱스별 문자열로 읽었다.
+
+점수는 Codex의 문맥별 편집 판단이며 사람의 승인이나 객관적 성능 측정이 아니다. Claude 검토의 범위는 제공한 공개·공개 예정 문안과 일반적인 동선이다. 이 비교표는 이번에 바꾼 키만 포함하며 사이트 전체 문안의 검수 완료를 뜻하지 않는다. 정적 소스 후보도 실제 렌더 노출 증거와 구분한다. 법률 본문과 동의 문구는 변경하지 않았다.
+
+## 검토 기준
+
+공식 서비스의 제품 전개를 참고하되 새 상태·권한·통계를 만들지 않는다.
+
+- [Higgsfield Flow](https://higgsfield.ai/flow): 설명 앞에 실제 결과물과 탐색 동선을 둔다.
+- [Linear filters](https://linear.app/docs/filters), [custom views](https://linear.app/docs/custom-views), [triage](https://linear.app/docs/triage): 현재 상태와 처리할 항목을 구분하고 목록 맥락을 유지한다.
+- [Modash influencer management](https://www.modash.io/features/influencer-management): 캠페인 운영에서 필요한 확인 작업과 콘텐츠 상태를 먼저 보여준다.
+
+Claude Opus 4.6은 공개 또는 공개 예정 문안과 일반적인 사용 흐름을 검토했다. 비밀값·실제 고객 자료·제작 프롬프트·내부 원가·소스 코드는 전달하지 않았다. 소스 회귀 검토와 실제 브라우저 검증은 Codex/Astra가 별도로 수행한다.
+
+## 배포 경계
+
+이번 변경은 UI와 탐색 개선이다. DB 마이그레이션, 운영 가격 저장, 결제 개방, 계정 권한 변경은 포함하지 않는다. 월 구독은 준비 중이며 결제 준비 판정기의 명세가 실제 구현 완료를 의미하지 않는다. 가격과 제공량은 PR #47의 확정 값을 그대로 사용한다.
+
+운영 확인에는 실제 고객의 승인·게시·계약·결제 작업을 실행하지 않는다. 로컬 테스트 계정과 PGlite 스냅샷으로 운영 화면을 검증하고, 프리뷰·실제 도메인에서 공개 화면과 접근 경계를 확인한다. 필수 검증 결과와 커밋 SHA는 PR에 기록한다.
+
+## 404 implementation and regression coverage
+
+Unmatched URLs use the installed Next.js 15.5.27 `global-not-found` convention with
+`experimental.globalNotFound`. It handles this application's multiple root layouts without
+relaxing the public locale root's `dynamicParams=false` or reading sessions in static pages.
+The document has static English chrome and separate Korean/English panels with native return
+links, self-hosted fonts, 404 metadata and no canonical URL. Existing route-level recovery
+screens remain in place. This experimental option should be rechecked on a Next.js upgrade.
+
+Reference: [Next 15 not-found conventions](https://nextjs.org/docs/15/app/api-reference/file-conventions/not-found).
+HTTP regression coverage includes GET/HEAD 404, empty HEAD responses, both panel languages and
+return links, private-data absence, API/auth no-store, and fail-closed workspace hosts.
+Local Host probes use `node:http.request`: this installed Node runtime's fetch transport
+replaces an overridden Host header with the connection authority.

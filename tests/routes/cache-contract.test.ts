@@ -1,15 +1,9 @@
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { CATALOG_TAG, CATALOG_TTL_SECONDS } from '@/lib/cache';
-import {
-  isAppPath,
-  isContestDetailPath,
-  isContestSubmitPath,
-  isPlaybookDetailPath,
-  isPromptDetailPath,
-} from '@/lib/i18n/config';
+import { isAppPath, isCampaignAppPath, isCreatorProgramAppPath, isPlaybookDetailPath } from '@/lib/i18n/config';
 
 const ROOT = fileURLToPath(new URL('../..', import.meta.url));
 const read = (...parts: string[]) => readFileSync(join(ROOT, ...parts), 'utf8');
@@ -24,7 +18,8 @@ function sourcesUnder(...parts: string[]): string[] {
       else if (/\.tsx?$/.test(entry)) out.push(full);
     }
   };
-  walk(base);
+  // A folder git does not carry (an emptied `components/ad`) is absent in a fresh checkout: nothing to scan.
+  if (existsSync(base)) walk(base);
   return out;
 }
 
@@ -40,13 +35,15 @@ describe('route cache modes (§3.4 / §4)', () => {
     for (const file of [
       ['app', '(marketing)', '[locale]', 'page.tsx'],
       ['app', '(marketing)', '[locale]', 'pricing', 'page.tsx'],
-      // §13.2 — the prompts gallery joins them: static, tagged, TTL-floored. It can only be
-      // static because its card projection carries zero gated bytes.
-      ['app', '(marketing)', '[locale]', 'prompts', 'page.tsx'],
-      // §14.2 — and the contests listing, for a related but distinct reason: nothing on it varies
-      // by reader at all, and the one thing that varies (the phase) is derived at RENDER time from
-      // a projection that stores dates, so an ISR regeneration re-derives it.
-      ['app', '(marketing)', '[locale]', 'contests', 'page.tsx'],
+      ['app', '(marketing)', '[locale]', 'brands', 'page.tsx'],
+      // docs/TEMPLATES-IA.md — the two tabs and the template detail: static, tagged, TTL-floored.
+      // The detail can only be static because nothing on it is gated any more (the prompt text is
+      // the studio's private recipe and never rendered).
+      ['app', '(marketing)', '[locale]', 'video', 'page.tsx'],
+      ['app', '(marketing)', '[locale]', 'image', 'page.tsx'],
+      ['app', '(marketing)', '[locale]', 't', '[slug]', 'page.tsx'],
+      // docs/PLATFORM-2.0.md §7.5 — a public maker page reads the same tagged catalogue.
+      ['app', '(marketing)', '[locale]', 'makers', '[handle]', 'page.tsx'],
     ]) {
       const source = read(...file);
       expect(source, file.join('/')).toContain(`export const revalidate = ${CATALOG_TTL_SECONDS}`);
@@ -67,19 +64,27 @@ describe('route cache modes (§3.4 / §4)', () => {
     const expected: Array<[string[], string[]]> = [
       [
         ['app', '(marketing)', '[locale]', 'page.tsx'],
-        ["from '@/lib/content/public-catalog'", "from '@/lib/prompts/public-catalog'"],
+        ["from '@/lib/prompts/public-catalog'", "from '@/lib/campaigns/public-catalog'"],
       ],
       [
         ['app', '(marketing)', '[locale]', 'pricing', 'page.tsx'],
         ["from '@/lib/prompts/public-catalog'"],
       ],
       [
-        ['app', '(marketing)', '[locale]', 'prompts', 'page.tsx'],
+        ['app', '(marketing)', '[locale]', 'video', 'page.tsx'],
         ["from '@/lib/prompts/public-catalog'"],
       ],
       [
-        ['app', '(marketing)', '[locale]', 'contests', 'page.tsx'],
-        ["from '@/lib/contests/public-catalog'"],
+        ['app', '(marketing)', '[locale]', 'image', 'page.tsx'],
+        ["from '@/lib/prompts/public-catalog'"],
+      ],
+      [
+        ['app', '(marketing)', '[locale]', 't', '[slug]', 'page.tsx'],
+        ["from '@/lib/prompts/public-catalog'", "from '@/lib/campaigns/public-catalog'"],
+      ],
+      [
+        ['app', '(marketing)', '[locale]', 'makers', '[handle]', 'page.tsx'],
+        ["from '@/lib/prompts/public-catalog'"],
       ],
     ];
     for (const [file, imports] of expected) {
@@ -91,7 +96,6 @@ describe('route cache modes (§3.4 / §4)', () => {
     for (const [projection, tag] of [
       [read('lib', 'content', 'public-catalog.ts'), 'tags: [CATALOG_TAG]'],
       [read('lib', 'prompts', 'public-catalog.ts'), 'tags: [PROMPTS_TAG]'],
-      [read('lib', 'contests', 'public-catalog.ts'), 'tags: [CONTESTS_TAG]'],
     ]) {
       expect(projection).toContain('unstable_cache');
       expect(projection).toContain(tag!);
@@ -106,10 +110,7 @@ describe('route cache modes (§3.4 / §4)', () => {
    * catalog any more — a swallowed outage was being ISR-cached for an hour as intentional design.
    */
   it('lets a prompts/contests catalog outage throw instead of caching as designed-empty', () => {
-    for (const file of [
-      read('lib', 'prompts', 'public-catalog.ts'),
-      read('lib', 'contests', 'public-catalog.ts'),
-    ]) {
+    for (const file of [read('lib', 'prompts', 'public-catalog.ts')]) {
       expect(file).toContain('readPublicProjection');
       expect(file).not.toContain('catch');
       expect(file).not.toContain('console.warn');
@@ -134,7 +135,6 @@ describe('route cache modes (§3.4 / §4)', () => {
       ...sourcesUnder('components', 'landing'),
       ...sourcesUnder('components', 'nav'),
       ...sourcesUnder('components', 'ad'),
-      ...sourcesUnder('components', 'pricing'),
       ...sourcesUnder('components', 'ui'),
       ...sourcesUnder('components', 'marketing'),
       ...sourcesUnder('components', 'motion'),
@@ -174,22 +174,40 @@ describe('route cache modes (§3.4 / §4)', () => {
       ['app', 'api', 'admin', 'media', '[ref]', 'route.ts'],
       ['app', 'api', 'media', '[blockId]', 'route.ts'],
       ['app', 'api', 'stripe', 'webhook', 'route.ts'],
-      // M6 §13.2: the prompt detail is shaped per viewer, the copy endpoint IS the per-viewer
-      // decision, the submission form is login-gated, and the moderation queue is admin surface.
-      ['app', '(marketing)', '[locale]', 'prompts', '[slug]', 'page.tsx'],
+      // M6 §13.2: the copy endpoint (410 since 2026-09-05, still never cached) and the moderation queue.
       ['app', 'api', 'prompts', 'copy', '[id]', 'route.ts'],
       ['app', 'api', 'prompts', 'media', '[ref]', 'route.ts'],
-      ['app', '(app)', 'prompts', 'submit', 'page.tsx'],
       ['app', '(admin)', 'admin', 'prompts', 'page.tsx'],
-      // M9 §14.2: the contest detail is shaped per CLOCK, the entry form is login-gated, the media
-      // route reads a row per request, and both admin screens are admin surface.
-      ['app', '(marketing)', '[locale]', 'contests', '[slug]', 'page.tsx'],
-      ['app', '(app)', 'contests', '[slug]', 'submit', 'page.tsx'],
-      ['app', 'api', 'contests', 'media', '[ref]', 'route.ts'],
+      // M9 §14.2 (retired 2026-09-05): the admin screens stay for the data.
       ['app', '(admin)', 'admin', 'contests', 'page.tsx'],
       ['app', '(admin)', 'admin', 'contests', '[slug]', 'preview', 'page.tsx'],
+      // docs/CAMPAIGNS.md §6: the apply form and "my campaigns" are login-gated and read the
+      // viewer's own rows; the three admin screens are admin surface.
+      ['app', '(app)', 'campaigns', '[slug]', 'apply', 'page.tsx'],
+      ['app', '(app)', 'campaigns', 'mine', 'page.tsx'],
+      // docs/TEMPLATES-IA.md §8 — the sign-in door, under the (app) root like the WebView interstitial.
+      ['app', '(app)', 'auth', 'choose', 'page.tsx'],
+      // docs/TEMPLATES-IA.md §8 — the render queue: the owner's pages, the 3-day link, its routes.
+      ['app', '(app)', 'renders', 'page.tsx'],
+      ['app', '(app)', 'renders', '[id]', 'page.tsx'],
+      ['app', '(app)', 'r', '[id]', '[token]', 'page.tsx'],
+      ['app', 'api', 'renders', 'route.ts'],
+      ['app', 'api', 'renders', 'access', 'route.ts'],
+      ['app', 'api', 'renders', 'tick', 'route.ts'],
+      ['app', 'api', 'renders', 'callback', 'route.ts'],
+      ['app', 'api', 'renders', 'media', '[id]', 'route.ts'],
+      ['app', 'api', 'public-media', 'tick', 'route.ts'],
+      // docs/TEMPLATES-IA.md §8.2 — the face check and the bank's callback.
+      ['app', '(app)', 'identity', 'verify', 'page.tsx'],
+      ['app', 'api', 'identity', 'callback', 'route.ts'],
+      ['app', '(admin)', 'admin', 'campaigns', 'page.tsx'],
+      ['app', '(admin)', 'admin', 'campaigns', 'new', 'page.tsx'],
+      ['app', '(admin)', 'admin', 'campaigns', '[id]', 'page.tsx'],
+      // lib/content/landing-media.ts — the replace screen and the local-mode image route.
+      ['app', '(admin)', 'admin', 'landing-media', 'page.tsx'],
+      ['app', 'api', 'landing-media', '[...slot]', 'route.ts'],
     ]) {
-      expect(read(...file), file.join('/')).toContain("export const dynamic = 'force-dynamic'");
+      expect(read(...file), file.join('/')).toMatch(/export const dynamic\s*=\s*(['"])force-dynamic\1/);
     }
   });
 
@@ -216,12 +234,10 @@ describe('route cache modes (§3.4 / §4)', () => {
   it('stamps no-store on the public detail routes without deindexing them', () => {
     const middleware = read('middleware.ts');
     expect(middleware).toContain('isPlaybookDetailPath(rest)');
-    // M6 §13.2: the prompt detail is the SECOND viewer-shaped public route and joins the same
-    // branch. The gallery is deliberately not in it — it is static and identical for every tier.
-    expect(middleware).toContain('isPromptDetailPath(rest)');
-    // M9 §14.2: the contest detail is the third, and the only one whose HTML varies by CLOCK
-    // rather than by reader. The listing is deliberately not in it.
-    expect(middleware).toContain('isContestDetailPath(rest)');
+    // docs/TEMPLATES-IA.md: the prompt and contest details that used to share this branch are
+    // gone; the template detail is static because nothing on it is gated.
+    expect(middleware).not.toContain('isPromptDetailPath');
+    expect(middleware).not.toContain('isContestDetailPath');
     const detailBranch = middleware.slice(middleware.indexOf('isPlaybookDetailPath(rest)'));
     const branchBody = detailBranch.slice(0, detailBranch.indexOf('\n  }'));
     expect(branchBody).toContain("'Cache-Control', NO_STORE");
@@ -377,22 +393,14 @@ describe('prompts API contract (§13.2)', () => {
   const copy = read('app', 'api', 'prompts', 'copy', '[id]', 'route.ts');
   const media = read('app', 'api', 'prompts', 'media', '[ref]', 'route.ts');
 
-  it('never lets a copy response — refusals included — enter a cache', () => {
+  it('answers 410 for every copy request — the text no longer leaves the server (2026-09-05)', () => {
+    expect(copy).toContain('status: 410');
     expect(copy).toContain("'Cache-Control': 'private, no-store'");
     expect(copy).toContain("'X-Robots-Tag': 'noindex, nofollow'");
-  });
-
-  it('exposes copy as POST only: it has a side effect and must not be prefetchable', () => {
+    expect(copy).not.toContain('authorizePromptCopy');
+    expect(copy).not.toContain('getSqlRunner');
     expect(copy).toContain('export async function POST');
     expect(copy).not.toContain('export async function GET');
-  });
-
-  it('speaks the full §13.3-5 refusal vocabulary and logs the conversion signal', () => {
-    for (const marker of ["'not_found' }, 404", "'sign_in_required'", "'pro_required'"]) {
-      expect(copy, marker).toContain(marker);
-    }
-    expect(copy).toContain('authorizePromptCopy');
-    expect(copy).toContain("type: 'copy_prompt'");
   });
 
   it('serves prompt media from the PUBLIC bucket only, for published rows only', () => {
@@ -408,263 +416,106 @@ describe('prompts API contract (§13.2)', () => {
     expect(media).toContain('immutable');
   });
 
-  /**
-   * The no-store branch must catch the per-viewer DETAIL and miss the static GALLERY. Getting this
-   * backwards either leaks one reader's unlocked render into a shared cache, or throws away the
-   * cache mode the whole §13.2 gallery design is built on.
-   */
-  it('matches the prompt detail path and not the gallery', () => {
-    expect(isPromptDetailPath('/prompts/neon-alley-dolly')).toBe(true);
-    expect(isPromptDetailPath('/prompts')).toBe(false);
-    expect(isPromptDetailPath('/p/character-sheet-generation')).toBe(false);
-    expect(isPlaybookDetailPath('/prompts/neon-alley-dolly')).toBe(false);
-  });
 });
 
-/**
- * M6 §13.2 — the submission surface. Login-gated at the EDGE (unprefixed app path) and served by
- * one guarded server action, exactly like the admin CMS.
- */
-describe('prompt submission contract (§13.1/E)', () => {
-  it('gates /prompts/submit at the edge without catching the public gallery', () => {
-    const config = read('lib', 'i18n', 'config.ts');
-    expect(config).toContain("'/prompts/submit'");
-    // `/prompts` itself must stay a locale-prefixed PUBLIC path.
-    expect(config).not.toMatch(/APP_PREFIXES[\s\S]*'\/prompts'[,\s]/);
-  });
 
-  it('routes the submission through one server action that never trusts the form', () => {
-    const action = read('app', '(app)', 'prompts', 'submit', 'actions.ts');
-    expect(action).toContain("'use server'");
-    expect(action).toContain('getViewer');
-    expect(action).toContain('submitPrompt');
-    expect(action.match(/export async function/g)).toHaveLength(1);
-    /**
-     * The action reads EXACTLY the fields a submitter is allowed to choose. Author id, status,
-     * source, featured and text visibility are supplied by `lib/prompts/submit.ts` and appear
-     * nowhere in what is read from the request, so there is no field a caller could add to
-     * publish their own row.
-     */
-    const readFields = [...action.matchAll(/(?:str|text|bool|file)\(form, '([^']+)'\)/g)].map(
-      (match) => match[1]!,
-    );
-    expect([...new Set(readFields)].sort()).toEqual([
-      'audio',
-      'consent',
-      'handle',
-      'poster',
-      'processMd',
-      'promptText',
-      'sourceUrl',
-      'title',
-      'video',
-    ]);
-    for (const forbidden of ['status', 'source', 'authorId', 'userId', 'textVisibility', 'featured']) {
-      expect(action.includes(`form, '${forbidden}'`), forbidden).toBe(false);
-      expect(action.includes(`form.get('${forbidden}')`), forbidden).toBe(false);
-    }
-  });
-});
+
 
 /**
- * M10 §15 — the cookies surface's route contract.
- *
- * The unlock is a server action ON the (already-dynamic) detail page; the static surfaces gained
- * nothing session-shaped — the marketing-tree scan above keeps proving that, and the assertions
- * here pin the action to the same one-guarded-entry shape every other mutation has.
+ * docs/CAMPAIGNS.md §6 — the campaigns surface's route contract, the contests one with a second
+ * unprefixed leaf: the apply form (slug in the middle) and the creator's own `/campaigns/mine`.
+ * Found the hard way on 2026-09-05: both pages built and both 308'd into `/ko/campaigns/…` → 404
+ * until the edge learned them, which is what this block pins.
  */
-describe('cookie unlock contract (§15.3)', () => {
-  it('keeps the pricing page static and session-free after the rewrite', () => {
-    const pricing = read('app', '(marketing)', '[locale]', 'pricing', 'page.tsx');
-    // The §15 model is presented, never a balance: a static page cannot know the viewer.
-    expect(pricing).toContain('CookieTable');
-    expect(pricing).not.toContain('getWallet');
-    expect(pricing).not.toContain('getViewer');
-    const table = read('components', 'pricing', 'cookie-table.tsx');
-    for (const needle of ['next/headers', 'getViewer', 'getWallet', 'auth-client']) {
-      expect(table.includes(needle), `cookie-table must not use ${needle}`).toBe(false);
+describe('campaigns route contract (docs/CAMPAIGNS.md §6)', () => {
+  it('gates exactly /campaigns/{slug}/apply and /campaigns/mine at the edge', () => {
+    for (const path of ['/campaigns/seoul-94-reel/apply', '/campaigns/seoul-94-reel/apply/', '/campaigns/mine', '/campaigns/open']) {
+      expect(isCampaignAppPath(path), path).toBe(true);
+      expect(isAppPath(path), path).toBe(true);
     }
-  });
-
-  it('routes the unlock through one server action that never trusts the form', () => {
-    const action = read('app', '(marketing)', '[locale]', 'prompts', '[slug]', 'actions.ts');
-    expect(action).toContain("'use server'");
-    expect(action).toContain('getViewer');
-    expect(action).toContain('unlockPrompt');
-    expect(action.match(/export async function/g)).toHaveLength(1);
-
-    /**
-     * The action reads EXACTLY the two fields the form may choose: the prompt id (the OBJECT of
-     * the action, re-verified against the row inside the spending transaction) and the locale
-     * (redirect cosmetics). Identity, balance and price appear nowhere in what is read from the
-     * request — there is no field a caller could add to spend someone else's cookie or to set
-     * the cost of their own.
-     */
-    const readFields = [...action.matchAll(/form\.get\('([^']+)'\)/g)].map((match) => match[1]!);
-    expect([...new Set(readFields)].sort()).toEqual(['id', 'locale']);
-    for (const forbidden of ['userId', 'profileId', 'balance', 'delta', 'cost']) {
-      expect(action.includes(`form.get('${forbidden}')`), forbidden).toBe(false);
-    }
-  });
-
-  it('spends only inside the repo transaction — the action carries no SQL of its own', () => {
-    const action = read('app', '(marketing)', '[locale]', 'prompts', '[slug]', 'actions.ts');
-    // Every wallet rule lives in lib/cookies/repo.ts (§15.1-6); an inline statement here would be
-    // a second place to get the lock order wrong.
-    expect(action).not.toContain('cookie_balance');
-    expect(action).not.toContain('insert into');
-  });
-
-  /**
-   * §15.1-5 — the purchase seam. The action exists ahead of the gateway that will make it
-   * reachable, so its trust posture is pinned NOW: the request may name a prompt to return to and
-   * a locale, and nothing else — the price and the count live in lib/cookies, and the credit
-   * (`creditCookiePack`) always books the pack size, never a caller-supplied number.
-   */
-  it('keeps the pack purchase behind the same one-action discipline, price never in the form', () => {
-    const action = read('app', '(marketing)', '[locale]', 'prompts', '[slug]', 'purchase-action.ts');
-    expect(action).toContain("'use server'");
-    expect(action).toContain('getViewer');
-    expect(action).toContain('startCookiePackPurchase');
-    expect(action.match(/export async function/g)).toHaveLength(1);
-
-    const readFields = [...action.matchAll(/form\.get\('([^']+)'\)/g)].map((match) => match[1]!);
-    expect([...new Set(readFields)].sort()).toEqual(['id', 'locale']);
-    for (const forbidden of ['cookies', 'count', 'price', 'amount', 'userId', 'profileId']) {
-      expect(action.includes(`form.get('${forbidden}')`), forbidden).toBe(false);
-    }
-
-    // The webhook-side credit is pinned to the pack AND to the provider's event id (M10 review
-    // R1, finding 2): no count parameter reaches grantPurchase, and no credit lands without the
-    // idempotency key that makes a redelivered webhook a 'duplicate'.
-    const seam = read('lib', 'cookies', 'purchase.ts');
-    expect(seam).toContain('grantPurchase(sql, profileId, PACK_COOKIES, providerEventId)');
-  });
-});
-
-/**
- * M9 §14.2 — the contests surface's route contract.
- *
- * Three properties, and each of them is a different kind of decision:
- *   `/[locale]/contests`             static + tag, because nothing on it varies by reader
- *   `/[locale]/contests/[slug]`      no-store, because it varies by CLOCK
- *   `/api/contests/media/[ref]`      cacheable, because the bytes are public and content-addressed
- */
-describe('contests route + API contract (§14.2)', () => {
-  const media = read('app', 'api', 'contests', 'media', '[ref]', 'route.ts');
-
-  it('serves contest media from the PUBLIC bucket only, for published rows only', () => {
-    expect(media).toContain("asset.bucket !== 'public-content'");
-    expect(media).toContain("row.status !== 'published'");
-    // The key is read from the ROW, never from the request — there is no key parameter at all.
-    expect(media).toContain('loadContestById');
-    expect(media).not.toContain("searchParams.get('key')");
-  });
-
-  /**
-   * M9 review, finding 3 — the `{contestId}:{kind}` ref is a MUTABLE ALIAS, not an object.
-   *
-   * Unpublishing a contest, archiving it or replacing its poster all change what the ref resolves
-   * to. The first version of this route answered `immutable, s-maxage=86400`, so a withdrawn poster
-   * kept being served from a CDN for a day — the §6 disclosure doctrine's failure mode, arrived at
-   * from the caching side. The alias must therefore be re-checked on every request; the immutable
-   * thing is the content-addressed `{sha256}.{ext}` object it redirects to.
-   */
-  it('never caches the mutable alias immutably', () => {
-    // Header VALUES only — the file's own comment uses the word to explain the split, and that
-    // sentence is the reason the code is right rather than something to grep away.
-    const headerValues = [...media.matchAll(/'Cache-Control':\s*'([^']*)'/g)].map((m) => m[1]!);
-    expect(headerValues.length).toBeGreaterThan(0);
-    for (const value of headerValues) {
-      expect(value, `Cache-Control: ${value}`).not.toContain('immutable');
-    }
-    expect(media).toContain("'Cache-Control': 'no-store'");
-    expect(media).toContain("'Cache-Control': 'public, max-age=0, must-revalidate'");
-    // The redirect target is the content-addressed URL, which IS safe to keep forever.
-    expect(media).toContain('publicContentUrl(asset.published_key)');
-    expect(media).toContain('status: 302');
-    // The streamed fallback offers a validator so a revalidation is cheap.
-    expect(media).toContain('ETag');
-  });
-
-  /**
-   * The no-store branch must catch the per-clock DETAIL and miss the static LISTING. Getting this
-   * backwards either serves a stale countdown from a CDN, or throws away the cache mode the whole
-   * §14.2 listing design is built on.
-   */
-  it('matches the contest detail path and not the listing', () => {
-    expect(isContestDetailPath('/contests/launch-film-contest')).toBe(true);
-    expect(isContestDetailPath('/contests')).toBe(false);
-    expect(isPromptDetailPath('/contests/launch-film-contest')).toBe(false);
-    expect(isPlaybookDetailPath('/contests/launch-film-contest')).toBe(false);
-  });
-
-  /**
-   * §14.2's entry form is the one app path whose slug sits in the MIDDLE, so it cannot be a prefix.
-   * The gate must catch exactly the leaf and nothing around it.
-   */
-  it('gates only /contests/{slug}/submit at the edge', () => {
-    expect(isContestSubmitPath('/contests/launch-film-contest/submit')).toBe(true);
-    expect(isAppPath('/contests/launch-film-contest/submit')).toBe(true);
-
     for (const path of [
-      '/contests',
-      '/contests/launch-film-contest',
-      '/contests/launch-film-contest/submit/extra',
-      '/en/contests',
-      '/en/contests/launch-film-contest',
+      '/campaigns',
+      '/campaigns/seoul-94-reel',
+      '/campaigns/seoul-94-reel/apply/extra',
+      '/campaigns/mine/extra',
+      '/campaigns/open/extra',
+      '/ko/campaigns/open',
+      '/en/campaigns',
+      '/en/campaigns/seoul-94-reel',
+      '/ko/campaigns/mine',
     ]) {
-      expect(isContestSubmitPath(path), path).toBe(false);
+      expect(isCampaignAppPath(path), path).toBe(false);
       expect(isAppPath(path), path).toBe(false);
     }
   });
 
-  it('routes the entry through one server action that never trusts the form', () => {
-    const action = read('app', '(app)', 'contests', '[slug]', 'submit', 'actions.ts');
+  it('routes the application through one server action that never trusts the form', () => {
+    const action = read('app', '(app)', 'campaigns', '[slug]', 'apply', 'actions.ts');
     expect(action).toContain("'use server'");
     expect(action).toContain('getViewer');
-    expect(action).toContain('submitEntry');
+    expect(action).toContain('applyToCampaign');
     expect(action.match(/export async function/g)).toHaveLength(1);
 
-    /**
-     * The action reads EXACTLY the fields an entrant is allowed to choose (plus the slug, which
-     * grants no authority — the server re-resolves the contest from it and refuses anything
-     * unpublished). Author id, status, placement and reject reason are supplied or cleared by
-     * `lib/contests/submit.ts` and appear nowhere in what is read from the request.
-     */
-    const readFields = [...action.matchAll(/(?:str|text|bool|file)\(form, '([^']+)'\)/g)].map(
-      (match) => match[1]!,
-    );
-    expect([...new Set(readFields)].sort()).toEqual([
-      'consent',
-      'note',
-      'slug',
-      'snsUrl',
-      'title',
-      'videoUrl',
-    ]);
-    for (const forbidden of ['status', 'authorId', 'userId', 'placement', 'rejectReason', 'contestId']) {
+    // Exactly the fields a creator owns (plus the slug, which grants nothing — the service
+    // re-resolves the campaign and refuses anything not public). Status, creator id, selection,
+    // payout and reject reason are supplied by `lib/campaigns/service.ts` and the admin operations.
+    const readFields = [...action.matchAll(/(?:str|text|bool|file)\(form, '([^']+)'\)/g)].map((match) => match[1]!);
+    expect([...new Set(readFields)].sort()).toEqual(['consent', 'followerCount', 'pitch', 'rememberSns', 'slug', 'snsUrl']);
+    for (const forbidden of ['status', 'creatorId', 'userId', 'payoutCents', 'rejectReason', 'campaignId', 'version']) {
       expect(action.includes(`form, '${forbidden}'`), forbidden).toBe(false);
       expect(action.includes(`form.get('${forbidden}')`), forbidden).toBe(false);
     }
   });
 
-  /**
-   * §14.2: "draft = admin preview path". The public route must have no admin branch at all — the
-   * moment it grows one, a draft prize is one crafted URL away from being public.
-   */
-  it('keeps the draft preview OUT of the public detail route', () => {
-    const page = read('app', '(marketing)', '[locale]', 'contests', '[slug]', 'page.tsx');
-    expect(page).toContain('getShapedContest');
-    expect(page).not.toContain('getContestPreview');
-    // Import-level, not text-level: the file's own comment names `requireAdmin()` when explaining
-    // where drafts DO render, and that sentence should stay.
-    expect(page).not.toMatch(/^import .*requireAdmin/m);
-    expect(page).not.toMatch(/^import .*getViewer/m);
+  it('lets the creator name only the post link and the view count on their own rows', () => {
+    const actions = read('app', '(app)', 'campaigns', 'mine', 'actions.ts');
+    expect(actions).toContain("'use server'");
+    expect(actions).toContain('submitCampaignPost');
+    expect(actions).toContain('reportCampaignViews');
+    const readFields = [...actions.matchAll(/(?:str|text|bool|file)\(form, '([^']+)'\)/g)].map((match) => match[1]!);
+    expect([...new Set(readFields)].sort()).toEqual(['id', 'postUrl', 'views']);
+    // Ownership is decided in the service by creator id, never by a field.
+    expect(actions.includes("form, 'creatorId'")).toBe(false);
+    expect(actions.includes("form, 'status'")).toBe(false);
+  });
+});
 
-    // …and the preview lives inside the (admin) group, whose layout is the gate.
-    const preview = read('app', '(admin)', 'admin', 'contests', '[slug]', 'preview', 'page.tsx');
-    expect(preview).toContain('getContestPreview');
+/**
+ * docs/CREATOR-PLATFORM.md — the format creator program: a public `/{locale}/creators` page and two
+ * unprefixed login-gated leaves. Without the edge pattern both leaves would 308 into a locale 404.
+ */
+describe('format creator program route contract', () => {
+  it('gates exactly /creators/apply and /creators/workspace at the edge', () => {
+    for (const path of ['/creators/apply', '/creators/apply/', '/creators/workspace', '/creators/workspace/', '/creators/workspace/formats/new', '/creators/workspace/formats/11111111-1111-4111-8111-111111111111']) {
+      expect(isCreatorProgramAppPath(path), path).toBe(true);
+      expect(isAppPath(path), path).toBe(true);
+    }
+    for (const path of ['/creators', '/creators/', '/ko/creators', '/en/creators/apply', '/creators/workspace/extra', '/creators/applyx', '/creators/workspace/formats/other', '/creators/workspace/formats/']) {
+      expect(isCreatorProgramAppPath(path), path).toBe(false);
+      expect(isAppPath(path), path).toBe(false);
+    }
+  });
+
+  it('routes an application through one server action that resolves the viewer and its own gates', () => {
+    const action = read('app', '(app)', 'creators', 'apply', 'actions.ts');
+    expect(action).toContain("'use server'");
+    expect(action).toContain('getViewer');
+    expect(action).toContain('platformAccess');
+    expect(action).toContain('submitCreatorApplication');
+    // One boundary, two entry points: the hydrated call and the native POST before hydration/without JS.
+    expect(action.match(/export async function \w+/g)).toEqual(['export async function submitApplicationAction', 'export async function submitApplicationForm']);
+    expect(action.match(/submitCreatorApplication\(/g)).toHaveLength(1);
+    for (const forbidden of ['userId:', 'status:', 'isAdmin:', 'decision']) expect(action.includes(forbidden), forbidden).toBe(false);
+  });
+
+  it('keeps the application and workspace private and dynamic, the program page static', () => {
+    for (const leaf of ['apply', 'workspace']) {
+      expect(read('app', '(app)', 'creators', leaf, 'page.tsx')).toContain("export const dynamic = 'force-dynamic'");
+    }
+    const program = read('app', '(marketing)', '[locale]', 'creators', 'page.tsx');
+    expect(program).toContain('export const revalidate = 3600');
+    expect(program).toContain('creatorProgramOpen');
+    expect(program).toContain('notFound');
   });
 });
 
@@ -699,7 +550,9 @@ describe('notification surface (§3.5, M5)', () => {
     expect(action).toContain('getViewer');
     // Identity from the session, never from the form.
     expect(action).not.toContain("form.get('userId')");
-    expect(action.match(/export async function/g)).toHaveLength(1);
+    expect(action).toContain('export async function saveNotificationPreferences');
+    expect(action).toContain('export async function saveCreatorProfile');
+    expect(action.match(/export async function/g)).toHaveLength(2);
   });
 
   it('gives the admin publish form a notify checkbox but never a kind picker', () => {
@@ -748,8 +601,166 @@ describe('sitemap + robots (§8 M5)', () => {
    * exclusion, `/sitemap.xml` answered 308 → `/en/sitemap.xml` → 404, and the site had no sitemap.
    */
   it('exempts the crawler endpoints from the locale redirect', () => {
-    const matcher = read('middleware.ts');
-    expect(matcher).toContain('sitemap\\\\.xml');
-    expect(matcher).toContain('robots\\\\.txt');
+    const policy = read('lib', 'routing', 'surfaces.ts');
+    expect(policy).toContain('sitemap\\.xml');
+    expect(policy).toContain('robots\\.txt');
+  });
+});
+
+/**
+ * docs/TEMPLATES-IA.md (2026-09-05) — the template surface's route contract, and the prompt site's
+ * retirement pinned so it cannot creep back: the old paths redirect, the old leaves are not gated
+ * any more (there is nothing behind them), and the pricing page never learned the viewer.
+ */
+describe('templates route contract (docs/TEMPLATES-IA.md)', () => {
+  it('redirects every prompt-site URL onto the template site, permanently', () => {
+    const config = read('next.config.ts');
+    for (const [source, destination] of [
+      ['/:locale(en|ko)/studio', '/:locale/video'],
+      ['/:locale(en|ko)/prompts', '/:locale/video'],
+      ['/:locale(en|ko)/prompts/:slug', '/:locale/t/:slug'],
+      ['/:locale(en|ko)/contests', '/:locale/campaigns'],
+      ['/:locale(en|ko)/contests/:slug', '/:locale/campaigns'],
+      ['/prompts/submit', '/en/video'],
+      ['/contests/:slug/submit', '/en/campaigns'],
+    ]) {
+      expect(config, source).toContain(`{ source: '${source}', destination: '${destination}', permanent: true }`);
+    }
+  });
+
+  it('no longer gates the retired leaves at the edge — they are redirects now', () => {
+    for (const path of ['/prompts/submit', '/contests/launch-film-contest/submit']) {
+      expect(isAppPath(path), path).toBe(false);
+    }
+    // …while the surfaces that are still app surface are still gated.
+    for (const path of ['/account', '/library', '/admin/prompts', '/campaigns/mine']) {
+      expect(isAppPath(path), path).toBe(true);
+    }
+  });
+
+  it('keeps pricing static and session-free, with public examples and authoritative plan quotes', () => {
+    const pricing = read('app', '(marketing)', '[locale]', 'pricing', 'page.tsx');
+    expect(pricing).toContain("from '@/lib/prompts/public-catalog'");
+    expect(pricing).toContain("from '@/lib/twings/subscription-plan'");
+    expect(pricing).toMatch(/\bquoteSubscriptionVideo\(/);
+    expect(pricing).not.toMatch(/\bpriceRangeFor\(/);
+    for (const needle of ['getWallet', 'getViewer', 'CookieTable', 'next/headers']) {
+      expect(pricing.includes(needle), `pricing must not use ${needle}`).toBe(false);
+    }
+  });
+
+  it('never renders the prompt text on the template page', () => {
+    const page = read('app', '(marketing)', '[locale]', 't', '[slug]', 'page.tsx');
+    for (const needle of ['promptText', 'getShapedPrompt', 'PromptBody', 'unlockPromptAction', 'PromptCopyButton']) {
+      expect(page.includes(needle), `template page must not use ${needle}`).toBe(false);
+    }
+    // The card projection is the only source, and it has no text field (tests/prompts/catalog.test.ts).
+    expect(page).toContain('getPromptCatalog');
+  });
+
+  it('gates nothing new: the nav offers only the template tabs, campaigns and pricing', () => {
+    const chrome = read('components', 'marketing', 'chrome.tsx');
+    expect(chrome).toContain("templatesHref(locale, 'video')");
+    expect(chrome).toContain("templatesHref(locale, 'image')");
+    expect(chrome).toContain('campaignsHref(locale)');
+    for (const needle of ['/studio', 'contestsHref', 'promptsHref(locale)']) {
+      expect(chrome.includes(needle), `nav must not offer ${needle}`).toBe(false);
+    }
+  });
+});
+
+/**
+ * docs/TEMPLATES-IA.md §8 — two OAuth doors. The sign-in handler never trusts the provider string:
+ * anything outside the vocabulary lands on the chooser, and only Google is routed through the
+ * embedded-WebView interstitial (Kakao's login works inside KakaoTalk's own browser).
+ */
+describe('sign-in doors (Google + Kakao)', () => {
+  it('routes an unnamed or unknown provider to the chooser and the named ones to Supabase', () => {
+    const route = read('app', 'auth', 'signin', 'route.ts');
+    expect(route).toContain('isAuthProvider(rawProvider)');
+    expect(route).toContain('chooseProviderHref(next, locale)');
+    expect(route).toContain('needsRealBrowser(provider) && isEmbeddedWebView');
+    expect(route).toMatch(/signInWithOAuth\(\{\s*provider,/); // CRLF-safe: the shape, not the line ending
+    expect(route).not.toContain("provider: 'google'");
+  });
+
+  it('lists Google first, Kakao second, in both languages (founder, 2026-09-06)', async () => {
+    const { providersForLocale, isAuthProvider, needsRealBrowser } = await import('@/lib/auth/providers');
+    expect(providersForLocale('ko')).toEqual(['google', 'kakao']);
+    expect(providersForLocale('en')).toEqual(['google', 'kakao']);
+    expect(isAuthProvider('naver')).toBe(false);
+    expect(needsRealBrowser('kakao')).toBe(false);
+    expect(needsRealBrowser('google')).toBe(true);
+  });
+
+  it('shapes the chooser as a door, not a landing: continue-with labels and the consent line with both legal links', () => {
+    const page = read('app', '(app)', 'auth', 'choose', 'page.tsx');
+    expect(page).toContain('dict.auth.continueWithGoogle');
+    expect(page).toContain('dict.auth.continueWithKakao');
+    expect(page).toContain("legalHref(locale, 'terms')");
+    expect(page).toContain("legalHref(locale, 'privacy')");
+    expect(page).not.toContain('startWithKakao');
+    expect(page).not.toContain('chooseBody');
+  });
+});
+
+/**
+ * docs/TEMPLATES-IA.md §8 — the render queue. The owner's pages sit behind the session gate, the
+ * 3-day link is public by token and never enters middleware (no locale redirect, no gate), every
+ * route is `private, no-store`, and the enqueue request runs the pass AFTER its response.
+ */
+describe('render queue (docs/TEMPLATES-IA.md §8)', () => {
+  it('gates the owner pages at the edge and keeps the 3-day link outside middleware', () => {
+    expect(isAppPath('/renders')).toBe(true);
+    expect(isAppPath('/renders/11111111-1111-4111-8111-111111111111')).toBe(true);
+    expect(isAppPath('/r/11111111-1111-4111-8111-111111111111/token')).toBe(false);
+    expect(isAppPath('/identity/verify')).toBe(true);
+    // Host checks now cover every request. Token links still skip locale/session work only
+    // after that boundary; excluding them in the matcher would expose them on brand/admin hosts.
+    expect(read('middleware.ts')).toContain('bypassConsumerLocale(pathname)');
+    expect(read('lib', 'routing', 'surfaces.ts')).toContain('auth\\/|r\\/');
+  });
+
+  it('keeps every render surface out of the index and on the daily tick', () => {
+    const sitemap = read('lib', 'seo', 'sitemap.ts');
+    expect(sitemap).toContain("'/renders'");
+    expect(sitemap).toContain("'/r/'");
+    const vercel = JSON.parse(read('vercel.json')) as { crons?: Array<{ path: string; schedule: string }> };
+    expect(vercel.crons).toEqual([
+      { path: '/api/renders/tick', schedule: expect.stringMatching(/^\d+ \d+ \* \* \*$/) },
+      { path: '/api/brands/inquiries/tick', schedule: expect.stringMatching(/^\d+ \d+ \* \* \*$/) },
+      { path: '/api/public-media/tick', schedule: expect.stringMatching(/^\d+ \d+ \* \* \*$/) },
+    ]);
+  });
+
+  it('never lets a render response enter a cache, refusals included', () => {
+    for (const file of [
+      ['app', 'api', 'renders', 'route.ts'],
+      ['app', 'api', 'renders', 'access', 'route.ts'],
+      ['app', 'api', 'renders', 'tick', 'route.ts'],
+      ['app', 'api', 'renders', 'callback', 'route.ts'],
+      ['app', 'api', 'renders', 'media', '[id]', 'route.ts'],
+      ['app', 'api', 'identity', 'callback', 'route.ts'],
+    ]) {
+      const source = read(...file);
+      expect(source, file.join('/')).toContain("'Cache-Control': 'private, no-store'");
+      expect(source, file.join('/')).toContain("'X-Robots-Tag': 'noindex, nofollow'");
+    }
+  });
+
+  it('runs the pass after the enqueue response, inside the function budget, and gates the tick on the cron secret', () => {
+    const enqueue = read('app', 'api', 'renders', 'route.ts');
+    expect(enqueue).toContain('export const maxDuration = 300');
+    expect(enqueue).toMatch(/after\(async \(\) => \{/);
+    expect(enqueue).toContain("json({ ok: true, id: outcome.id, href: renderHref(outcome.id), held: false }, 201)");
+    // Held behind the face check: the answer names the door and no pass runs (docs §8.2, 0020).
+    expect(enqueue).toContain('if (outcome.held) {');
+    expect(enqueue).toContain('verifyHref: identityVerifyHref(renderHref(outcome.id))');
+    const tick = read('app', 'api', 'renders', 'tick', 'route.ts');
+    expect(tick).toContain('export const maxDuration = 300');
+    expect(tick).toContain('process.env.CRON_SECRET');
+    // The gate lives in the service, and the UI only asks about it.
+    expect(read('lib', 'renders', 'service.ts')).toContain('RENDER_PIPELINE_PUBLIC');
+    expect(read('components', 'twings', 'studio.tsx')).not.toContain('RENDER_PIPELINE_PUBLIC');
   });
 });

@@ -33,6 +33,11 @@ export interface EmailMessage {
    * Gmail/Apple render their own unsubscribe control (§3.5 "one-click unsubscribe").
    */
   unsubscribeUrl: string;
+  /**
+   * Optional deadline for a send that someone is waiting on (the brand enquiry receipt). The live
+   * mailer hands it to the HTTP request, so an aborted send never reports success.
+   */
+  signal?: AbortSignal;
 }
 
 export type SendOutcome =

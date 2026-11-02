@@ -52,9 +52,12 @@ describe('sitemap (§8 M5)', () => {
     expect(urls).toContain(`${ORIGIN}/ko`);
     expect(urls).toContain(`${ORIGIN}/en/pricing`);
     expect(urls).toContain(`${ORIGIN}/ko/pricing`);
-    // The studio is the front door (2026-09-03) — a front door a crawler cannot find is not one.
-    expect(urls).toContain(`${ORIGIN}/en/studio`);
-    expect(urls).toContain(`${ORIGIN}/ko/studio`);
+    // The two template tabs are the front doors (docs/TEMPLATES-IA.md) — a front door a crawler
+    // cannot find is not one.
+    for (const rest of ['/video', '/image', '/campaigns', '/brands', '/brands/stories', '/brands/stories/morphic', '/faq']) {
+      expect(urls).toContain(`${ORIGIN}/en${rest}`);
+      expect(urls).toContain(`${ORIGIN}/ko${rest}`);
+    }
   });
 
   it('lists showcase playbook details only', () => {
@@ -98,13 +101,44 @@ describe('sitemap (§8 M5)', () => {
 
   it('degrades to an empty catalog without producing a broken sitemap', () => {
     const empty = buildSitemap({ origin: ORIGIN, cards: [] });
-    // Eight marketing pages × two locales: landing, the studio (2026-09-03), the §13.2 gallery, the §14.2 contests listing,
-    // pricing, and the three legal documents (2026-08-14 — a payment provider's merchant review
-    // and 전자상거래법 §21 expect them publicly reachable). The contests listing is in the sitemap
-    // even with no contest published — it is a real page with a designed empty state (§14.2), not
-    // a page that only exists when it has rows.
-    expect(empty).toHaveLength(16);
+    // Ten marketing pages × two locales: landing, the two template tabs (docs/TEMPLATES-IA.md),
+    // the campaigns listing, pricing, FAQ, and the three legal documents (2026-08-14 — a payment
+    // provider's merchant review and 전자상거래법 §21 expect them publicly reachable). The listings
+    // are in the sitemap even with no rows — each is a real page with a designed empty state.
+    expect(empty).toHaveLength(24);
     expect(empty.every((entry) => entry.url.startsWith(ORIGIN))).toBe(true);
+  });
+
+  it('lists the format creator program only while its public intake gate is open', () => {
+    expect(urls.some((url) => url.includes('/creators'))).toBe(false);
+    const open = buildSitemap({ origin: ORIGIN, cards: [], includeCreatorProgram: true }).map((entry) => entry.url);
+    expect(open).toContain(`${ORIGIN}/en/creators`);
+    expect(open).toContain(`${ORIGIN}/ko/creators`);
+    expect(open.some((url) => url.includes('/creators/'))).toBe(false);
+  });
+
+  it('lists public maker pages with reciprocal hreflang, once each maker has a published template (§7.5)', () => {
+    const makers = [
+      { handle: 'jun_01', bio: null, displayName: null, headline: null, country: null, city: null, links: [], publicEmail: null, tools: [], openToBrands: false, avatar: null, cover: null, templateCount: 2, latestPublishedAt: '2026-10-20T00:00:00Z' },
+      { handle: 'quiet_maker', bio: 'bio', displayName: null, headline: null, country: null, city: null, links: [], publicEmail: null, tools: [], openToBrands: false, avatar: null, cover: null, templateCount: 0, latestPublishedAt: null },
+    ];
+    const built = buildSitemap({ origin: ORIGIN, cards: [], makers });
+    const entry = built.find((item) => item.url === `${ORIGIN}/ko/makers/jun_01`);
+    expect(entry).toBeDefined();
+    expect(entry?.lastModified).toEqual(new Date('2026-10-20T00:00:00Z'));
+    expect(entry?.alternates?.languages).toEqual({ en: `${ORIGIN}/en/makers/jun_01`, ko: `${ORIGIN}/ko/makers/jun_01`, 'x-default': `${ORIGIN}/en/makers/jun_01` });
+    expect(built.some((item) => item.url === `${ORIGIN}/en/makers/jun_01`)).toBe(true);
+    expect(built.some((item) => item.url.includes('quiet_maker'))).toBe(false);
+    expect(urls.some((url) => url.includes('/makers/'))).toBe(false);
+  });
+
+  it('never invents modification dates from the time of sitemap generation', () => {
+    expect(entries.find((entry) => entry.url === `${ORIGIN}/en`)).not.toHaveProperty('lastModified');
+    expect(entries.find((entry) => entry.url.endsWith('/en/p/voice-identity-setup'))).not.toHaveProperty('lastModified');
+    const changed = buildSitemap({ origin: ORIGIN, cards: [card({ updatedAt: '2026-09-20T10:00:00Z' })], pageModifiedAt: { '/faq': '2026-09-19T00:00:00Z', '/pricing': 'invalid' } });
+    expect(changed.find((entry) => entry.url.endsWith('/en/p/a-playbook'))?.lastModified).toEqual(new Date('2026-09-20T10:00:00Z'));
+    expect(changed.find((entry) => entry.url.endsWith('/en/faq'))?.lastModified).toEqual(new Date('2026-09-19T00:00:00Z'));
+    expect(changed.find((entry) => entry.url.endsWith('/en/pricing'))).not.toHaveProperty('lastModified');
   });
 });
 
@@ -121,12 +155,25 @@ describe('robots (§8 M5)', () => {
     // prefix would take the listing and every contest page down with it.
     expect(rule.disallow).toEqual([
       '/admin',
+      '/brand$',
+      '/brand/projects',
+      '/brand/members',
+      '/brand/invite',
       '/library',
       '/account',
       '/billing',
       '/api',
-      '/prompts/submit',
-      '/contests/*/submit',
+      '/campaigns/*/apply',
+      '/campaigns/*/make',
+      '/campaigns/mine',
+      '/campaigns/open',
+      // docs/TEMPLATES-IA.md §8 — the owner's renders and the 3-day links.
+      '/renders',
+      '/r/',
+      '/identity',
+      // The format creator application and workspace; the program page stays public.
+      '/creators/apply',
+      '/creators/workspace',
     ]);
   });
 

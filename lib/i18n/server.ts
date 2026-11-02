@@ -19,7 +19,9 @@ export async function getRequestLocale(profileLocale?: string | null): Promise<L
   const [headerList, cookieStore] = await Promise.all([headers(), cookies()]);
   const fromMiddleware = headerList.get(LOCALE_HEADER);
 
-  // A URL prefix or an explicit cookie always wins; middleware has already applied both.
+  // Middleware overwrites this header and has already applied explicit auth URL choices too.
+  // Prefer it on the current render; the response cookie is only visible on the next request.
+  if (isLocale(fromMiddleware)) return fromMiddleware;
   const cookieLocale = cookieStore.get(LOCALE_COOKIE)?.value ?? null;
   if (isLocale(cookieLocale)) return cookieLocale;
 

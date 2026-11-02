@@ -1,13 +1,13 @@
 import type { MetadataRoute } from 'next';
 import type { CatalogCard } from '@/lib/content/catalog';
-import type { PromptCard } from '@/lib/prompts/catalog';
-import type { ContestCard } from '@/lib/contests/catalog';
-import { promptRest } from '@/lib/prompts/links';
-import { contestRest } from '@/lib/contests/links';
+import type { PromptCard, PublicMaker } from '@/lib/prompts/catalog';
+import { makerRest } from '@/lib/makers/links';
+import { TEMPLATE_LISTING_REST, templateRest } from '@/lib/prompts/links';
 import { LEGAL_DOCS } from '@/lib/legal/documents';
 import { legalRest } from '@/lib/legal/links';
 import { LOCALES, type Locale } from '@/lib/i18n/config';
 import { localeAlternates } from './playbook-metadata';
+import { BRAND_STORIES } from '@/lib/campaigns/brand-stories';
 
 /**
  * PLAN §8 M5 — "sitemap + locale alternates", built as a pure function of (catalog, origin).
@@ -34,27 +34,21 @@ export interface SitemapInput {
   origin: string;
   cards: CatalogCard[];
   /**
-   * §13.2 — "published prompt details join the sitemap with locale alternates; gallery indexed;
-   * submit/admin noindex."
-   *
-   * Note the difference from playbooks: there is NO showcase filter here, and there should not be.
-   * A Pro-gated prompt is still a fully public page — poster, clip, title, credit and model chip
-   * are all public marketing surface (§13.1) and only the text is gated. The catalog projection
-   * itself is the filter: it only ever contains `published` rows, so pending, rejected and
-   * archived items cannot reach the sitemap by construction.
+   * docs/TEMPLATES-IA.md — every published template, with locale alternates. No showcase filter:
+   * a template page has no gated half at all. The catalogue projection is itself the filter — it
+   * only ever contains `published` rows, so pending, rejected and archived items cannot reach the
+   * sitemap by construction.
    */
-  prompts?: PromptCard[];
+  templates?: PromptCard[];
+  /** The template maker program page exists only while its public intake gate is open. */
+  includeCreatorProgram?: boolean;
   /**
-   * §14.2 — published contests, with locale alternates.
-   *
-   * Like prompts and unlike playbooks there is no showcase filter, and for a stronger reason: a
-   * contest page has no gated half at all. The catalog projection is itself the filter — it only
-   * ever contains `published` rows, so a draft cannot reach the sitemap by construction, which is
-   * the property that matters (an unannounced prize must not be discoverable).
+   * docs/PLATFORM-2.0.md §7.5 — public maker pages. Only makers who opted in are in the catalogue at
+   * all; a page with no published template yet is thin, so it waits until there is one.
    */
-  contests?: ContestCard[];
-  /** Falls back to the card's own publish time; only used when that is missing. */
-  now?: Date;
+  makers?: PublicMaker[];
+  /** Real editorial dates only, keyed by locale-independent path. Omit when unknown. */
+  pageModifiedAt?: Partial<Record<string, string>>;
 }
 
 function absolute(origin: string, path: string): string {
@@ -69,7 +63,7 @@ function absoluteAlternates(origin: string, rest: string): Record<string, string
 }
 
 export function buildSitemap(input: SitemapInput): MetadataRoute.Sitemap {
-  const { origin, cards, prompts = [], contests = [], now = new Date() } = input;
+  const { origin, cards, templates = [], pageModifiedAt = {}, includeCreatorProgram = false, makers = [] } = input;
   const entries: MetadataRoute.Sitemap = [];
 
   const marketing: Array<{
@@ -78,16 +72,18 @@ export function buildSitemap(input: SitemapInput): MetadataRoute.Sitemap {
     changeFrequency: 'daily' | 'weekly' | 'yearly';
   }> = [
     { rest: '/', priority: 1, changeFrequency: 'daily' },
-    // The studio is the product's front door (2026-09-03); weekly, because a style is added
-    // about as often as a contest, not as often as a prompt.
-    { rest: '/studio', priority: 0.9, changeFrequency: 'weekly' },
-    // §13.2 — the gallery is the v1.5 front door and is indexed; it changes as often as the studio
-    // publishes, which is the same cadence as the landing it now leads.
-    { rest: '/prompts', priority: 0.9, changeFrequency: 'daily' },
-    // §14.2 — the contests listing. Weekly rather than daily: a contest is a month-long object, and
-    // claiming daily change on a page that gains a row every few weeks is noise for a crawler.
-    { rest: '/contests', priority: 0.8, changeFrequency: 'weekly' },
+    // docs/TEMPLATES-IA.md — the two tabs are the front doors; daily, because a template is
+    // published about as often as the landing changes.
+    { rest: TEMPLATE_LISTING_REST.video, priority: 0.9, changeFrequency: 'daily' },
+    { rest: TEMPLATE_LISTING_REST.image, priority: 0.9, changeFrequency: 'daily' },
+    // docs/CAMPAIGNS.md — the campaigns listing. Weekly: a campaign is a month-long object.
+    { rest: '/campaigns', priority: 0.8, changeFrequency: 'weekly' },
+    { rest: '/brands', priority: 0.8, changeFrequency: 'weekly' },
+    { rest: '/brands/stories', priority: 0.7, changeFrequency: 'weekly' },
+    ...BRAND_STORIES.map(story => ({ rest: `/brands/stories/${story.slug}`, priority: 0.7, changeFrequency: 'weekly' as const })),
     { rest: '/pricing', priority: 0.8, changeFrequency: 'weekly' },
+    { rest: '/faq', priority: 0.6, changeFrequency: 'weekly' },
+    ...(includeCreatorProgram ? [{ rest: '/creators', priority: 0.6, changeFrequency: 'weekly' as const }] : []),
     // The legal surface. Low priority — nobody searches for it — but LISTED, because a payment
     // provider's merchant review and 전자상거래법 §21 both expect these to be publicly reachable,
     // and a crawler that has them indexed is the cheapest evidence that they are.
@@ -102,7 +98,7 @@ export function buildSitemap(input: SitemapInput): MetadataRoute.Sitemap {
     for (const locale of LOCALES) {
       entries.push({
         url: absolute(origin, `/${locale}${page.rest === '/' ? '' : page.rest}`),
-        lastModified: now,
+        ...modifiedDate(pageModifiedAt[page.rest]),
         changeFrequency: page.changeFrequency,
         priority: page.priority,
         alternates: { languages: absoluteAlternates(origin, page.rest) },
@@ -110,13 +106,13 @@ export function buildSitemap(input: SitemapInput): MetadataRoute.Sitemap {
     }
   }
 
-  // §13.2 — every published prompt, both rails, with reciprocal alternates.
-  for (const prompt of prompts) {
-    const rest = promptRest(prompt.slug);
+  // docs/TEMPLATES-IA.md — every published template, both tabs, with reciprocal alternates.
+  for (const template of templates) {
+    const rest = templateRest(template.slug);
     for (const locale of LOCALES as readonly Locale[]) {
       entries.push({
         url: absolute(origin, `/${locale}${rest}`),
-        lastModified: prompt.publishedAt ? new Date(prompt.publishedAt) : now,
+        ...modifiedDate(template.publishedAt),
         changeFrequency: 'monthly',
         priority: 0.7,
         alternates: { languages: absoluteAlternates(origin, rest) },
@@ -124,15 +120,15 @@ export function buildSitemap(input: SitemapInput): MetadataRoute.Sitemap {
     }
   }
 
-  // §14.2 — every published contest, both locales, with reciprocal alternates.
-  for (const contest of contests) {
-    const rest = contestRest(contest.slug);
+  for (const maker of makers) {
+    if (maker.templateCount === 0) continue;
+    const rest = makerRest(maker.handle);
     for (const locale of LOCALES as readonly Locale[]) {
       entries.push({
         url: absolute(origin, `/${locale}${rest}`),
-        lastModified: contest.publishedAt ? new Date(contest.publishedAt) : now,
+        ...modifiedDate(maker.latestPublishedAt),
         changeFrequency: 'weekly',
-        priority: 0.7,
+        priority: 0.5,
         alternates: { languages: absoluteAlternates(origin, rest) },
       });
     }
@@ -145,7 +141,7 @@ export function buildSitemap(input: SitemapInput): MetadataRoute.Sitemap {
     for (const locale of LOCALES as readonly Locale[]) {
       entries.push({
         url: absolute(origin, `/${locale}${rest}`),
-        lastModified: card.publishedAt ? new Date(card.publishedAt) : now,
+        ...modifiedDate(card.updatedAt ?? card.publishedAt),
         changeFrequency: 'monthly',
         priority: 0.7,
         alternates: { languages: absoluteAlternates(origin, rest) },
@@ -154,6 +150,11 @@ export function buildSitemap(input: SitemapInput): MetadataRoute.Sitemap {
   }
 
   return entries;
+}
+
+/** Rendering a sitemap is not a content update. Unknown/invalid timestamps stay absent. */
+function modifiedDate(value: string | null | undefined): { lastModified?: Date } {
+  return value && Number.isFinite(Date.parse(value)) ? { lastModified: new Date(value) } : {};
 }
 
 /**
@@ -165,21 +166,29 @@ export function buildSitemap(input: SitemapInput): MetadataRoute.Sitemap {
  */
 export const DISALLOWED_PATHS = [
   '/admin',
+  // Exact root plus private workspace leaves: `/brand/` also contains public logo assets.
+  '/brand$',
+  '/brand/projects',
+  '/brand/members',
+  '/brand/invite',
   '/library',
   '/account',
   '/billing',
   '/api',
-  // §13.2 — the submission form is login-gated app surface. `/prompts` itself is locale-prefixed
-  // and indexed, so this entry cannot catch the gallery.
-  '/prompts/submit',
-  /**
-   * §14.2 — the entry form, whose slug sits in the MIDDLE of the path.
-   *
-   * A prefix rule cannot express that, so this is the one wildcard in the file (`*` is supported by
-   * every major crawler). `Disallow: /contests` would take the listing and every contest page down
-   * with it, which is the opposite of what we want.
-   */
-  '/contests/*/submit',
+  // docs/CAMPAIGNS.md §6 — the same shape again: the apply form (slug in the middle) and the
+  // creator's own standing page are noindex app surface; `/campaigns` and every campaign page stay.
+  '/campaigns/*/apply',
+  '/campaigns/*/make',
+  '/campaigns/mine',
+  // docs/PLATFORM-2.0.md §17.2 — the signed-in, per-viewer campaign list.
+  '/campaigns/open',
+  // docs/TEMPLATES-IA.md §8 — the owner's renders and the 3-day links: never indexable.
+  '/renders',
+  '/r/',
+  '/identity',
+  // The format creator application and workspace; `/{locale}/creators` itself stays public.
+  '/creators/apply',
+  '/creators/workspace',
 ] as const;
 
 export function buildRobots(origin: string): MetadataRoute.Robots {

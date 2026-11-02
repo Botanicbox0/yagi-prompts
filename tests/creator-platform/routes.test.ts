@@ -1,0 +1,25 @@
+import { beforeEach,describe,expect,it,vi } from 'vitest';
+const mock=vi.hoisted(()=>({viewer:vi.fn(),sql:vi.fn(),access:vi.fn(),submit:vi.fn(),home:vi.fn(),create:vi.fn(),store:vi.fn()}));
+vi.mock('@/lib/auth/viewer',()=>({getViewer:mock.viewer}));
+vi.mock('@/lib/db/connect',()=>({getSqlRunner:mock.sql}));
+vi.mock('@/lib/creator-platform/runtime',()=>({platformAccess:mock.access}));
+vi.mock('@/lib/creator-platform/service',()=>({submitPlatform:mock.submit,platformHome:mock.home}));
+vi.mock('@/lib/renders/service',()=>({createRewardImageJob:mock.create}));
+vi.mock('@/lib/renders/store',()=>({getRenderStore:mock.store}));
+vi.mock('@/lib/renders/runtime',()=>({runLiveRenderPass:vi.fn()}));
+vi.mock('@/lib/billing/toss-runtime',()=>({isSameOrigin:(r:Request)=>r.headers.get('origin')===new URL(r.url).origin}));
+vi.mock('@/lib/creator-subscriptions/runtime',()=>({SUBSCRIPTION_HEADERS:{}}));
+vi.mock('next/cache',()=>({revalidateTag:vi.fn()}));
+import { GET,POST } from '@/app/api/community/route';
+const origin='https://twings.app';
+const request=(body:string,from=origin)=>new Request(origin+'/api/community',{method:'POST',headers:{origin:from,'Content-Type':'application/json'},body});
+beforeEach(()=>{vi.clearAllMocks();mock.viewer.mockResolvedValue({userId:'f0000000-0000-4000-8000-000000000001',isAdmin:false});mock.sql.mockResolvedValue({});mock.access.mockResolvedValue({ready:true,community:true,creators:false,rewards:false});});
+describe('authenticated bounded same-origin API',()=>{
+ it('refuses cross-origin before resolving a session',async()=>{expect((await POST(request('{}','https://evil.test'))).status).toBe(403);expect(mock.viewer).not.toHaveBeenCalled();});
+ it('refuses anonymous reads and writes',async()=>{mock.viewer.mockResolvedValue({userId:null});expect((await GET()).status).toBe(401);expect((await POST(request('{}'))).status).toBe(401);expect(mock.sql).not.toHaveBeenCalled();});
+ it('bounds real body bytes with no content-length',async()=>{expect((await POST(request('a'.repeat(28001)))).status).toBe(413);expect(mock.submit).not.toHaveBeenCalled();});
+ it('rejects malformed JSON without logging or echoing its content',async()=>{const r=await POST(request('PRIVATE_RECIPE'));expect(r.status).toBe(400);expect(await r.text()).not.toContain('PRIVATE_RECIPE');});
+ it('cannot redeem through the community feature flag',async()=>{const r=await POST(request(JSON.stringify({action:'image',requestId:'f0000000-0000-4000-8000-000000000001',offerId:'f0000000-0000-4000-8000-000000000002',selfieId:'f0000000-0000-4000-8000-000000000003'})));expect(r.status).toBe(403);expect(mock.create).not.toHaveBeenCalled();});
+ it('passes a revision link to the domain unchanged; the domain decides ownership and schema',async()=>{mock.access.mockResolvedValue({ready:true,community:false,creators:true,rewards:false});mock.submit.mockResolvedValue({id:'f0000000-0000-4000-8000-000000000009'});const body={action:'format',requestId:'f0000000-0000-4000-8000-000000000009',title:'Format',recipe:'r'.repeat(20),example:'https://instagram.com/reel/abc/',medium:'video',rights:true,revisionOf:'f0000000-0000-4000-8000-000000000008'};const r=await POST(request(JSON.stringify(body)));expect(r.status).toBe(200);expect(mock.submit.mock.calls[0]![2]).toEqual(body);expect(await r.text()).not.toContain('rrrrrrrrrrrrrrrrrrrr');});
+ it('fails closed when schema is absent and sets private cache headers',async()=>{mock.access.mockResolvedValue({ready:false});const r=await POST(request('{}'));expect(r.status).toBe(403);expect(r.headers.get('Cache-Control')).toBe('private, no-store');});
+});

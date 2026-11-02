@@ -21,5 +21,8 @@ next-env.d.ts
 coverage/
 .agents/
 
+# Generated pinned MediaPipe runtime (prepared before build/dev)
+/public/vendor/face-1.1.0/
+
 # Remotion alpha renders are 50MB+ ProRes; keep them local (video/README.md: npm run render:alpha)
 video/renders/*.mov

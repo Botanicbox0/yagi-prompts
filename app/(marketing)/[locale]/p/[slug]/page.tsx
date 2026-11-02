@@ -8,9 +8,7 @@ import {
   playbookMetadata,
   unresolvedPlaybookMetadata,
 } from '@/lib/seo/playbook-metadata';
-import { MarketingFooter, MarketingNav, adLabels } from '@/components/marketing/chrome';
-import { AdRail, DETAIL_RAIL_LEFT } from '@/components/ad/ad-rail';
-import { AdBanner, AdCard } from '@/components/ad/ad-card';
+import { MarketingFooter, MarketingNav } from '@/components/marketing/chrome';
 import {
   DetailHeader,
   NeighbourNav,
@@ -89,7 +87,6 @@ export default async function PlaybookDetailPage({ params }: RouteParams) {
 
   const { playbook, neighbours, preview } = result;
   const labels = playbookLabels(dict);
-  const ads = adLabels(dict);
 
   // §3.4 funnel. Fire-and-forget: an analytics insert may never sit on this page's critical path,
   // and may never be able to fail it (lib/events/server.ts swallows everything).
@@ -151,13 +148,6 @@ export default async function PlaybookDetailPage({ params }: RouteParams) {
               upgrade={upgrade}
             />
 
-            {/* §3.6: below the rail tier this is the page's single ad slot ("after step 2" is the
-                plan's landing wording; on detail the honest place is after the reading, not inside
-                a step, so it sits with the conversion strip). */}
-            <div className="mt-16">
-              <AdBanner labels={ads} />
-            </div>
-
             <ProCta
               lockedCount={playbook.lockedCount}
               locale={locale}
@@ -175,13 +165,6 @@ export default async function PlaybookDetailPage({ params }: RouteParams) {
                 ← {labels.allPlaybooks}
               </a>
             </p>
-          </div>
-
-          {/* §3.6 ad rail: ≥1440 only, and on the DETAIL band math (§4). */}
-          <div className="detail__rail hidden rail:block">
-            <AdRail anchorId="detail-rail-anchor" left={DETAIL_RAIL_LEFT}>
-              <AdCard labels={ads} />
-            </AdRail>
           </div>
         </div>
       </main>

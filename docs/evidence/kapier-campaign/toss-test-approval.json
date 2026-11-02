@@ -1,0 +1,19 @@
+{
+  "orderId": "e5d73c04-1300-47c8-9d50-8c8b675c048e",
+  "db": {
+    "status": "paid",
+    "environment": "test",
+    "amountKrw": 1000,
+    "approvedAt": "2026-10-15T22:09:41.861Z"
+  },
+  "provider": {
+    "httpStatus": 200,
+    "orderMatches": true,
+    "status": "DONE",
+    "currency": "KRW",
+    "totalAmount": 1000,
+    "balanceAmount": 1000,
+    "approvedAt": "2026-10-16T07:09:37+09:00"
+  },
+  "testOnly": true
+}

@@ -77,19 +77,14 @@ describe('CTA routing (§3.4 conversion path)', () => {
     expect(intent.href).toContain('locale=ko');
   });
 
-  it('sends every signed-in tier straight to checkout', () => {
+  it('never sends a signed-in tier to the retired subscription checkout (audit P1-4)', () => {
     for (const tier of TIER_ORDER.filter((t) => t !== 'anon')) {
-      const intent = upgradeIntent({
-        tier,
-        slug: 'talking-character-clip',
-        locale: 'en',
-        billingConfigured: true,
-      });
-      expect(intent.kind, tier).toBe('checkout');
-      if (intent.kind !== 'checkout') continue;
-      expect(intent.action).toBe('/api/billing/checkout');
-      expect(intent.slug).toBe('talking-character-clip');
-      expect(intent.returnTo).toBe('/en/p/talking-character-clip');
+      for (const billingConfigured of [true, false]) {
+        const intent = upgradeIntent({ tier, slug: 'talking-character-clip', locale: 'en', billingConfigured });
+        expect(intent.kind, tier).toBe('unavailable');
+        if (intent.kind !== 'unavailable') continue;
+        expect(intent.href).toBe('/en/pricing');
+      }
     }
   });
 

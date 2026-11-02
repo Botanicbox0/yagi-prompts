@@ -1,9 +1,15 @@
 import '@/app/globals.css';
+import '@/app/(admin)/workspace.css';
 import type { Metadata, Viewport } from 'next';
 import type { ReactNode } from 'react';
 import { fontVariables } from '@/app/fonts';
 import { getDictionary } from '@/lib/i18n/dictionaries';
 import { getRequestLocale } from '@/lib/i18n/server';
+import { RegisterServiceWorker } from '@/components/pwa/register-sw';
+import { requestSurface } from '@/lib/routing/request-surface';
+import { templatesHref } from '@/lib/prompts/links';
+import { AppErrorCopyProvider } from '@/components/app/error-copy';
+import { BottomTabs } from '@/components/app/bottom-tabs';
 
 /**
  * Root layout for the authenticated app surface (§4: `/library`, `/account`, `/billing/*`).
@@ -12,8 +18,12 @@ import { getRequestLocale } from '@/lib/i18n/server';
  */
 export const dynamic = 'force-dynamic';
 
-/** F6 — same browser-chrome color as the marketing tree: separate root, same product. */
-export const viewport: Viewport = { themeColor: '#ffffff' };
+/**
+ * F6 — same browser-chrome color as the marketing tree: separate root, same product. `viewport-fit:
+ * cover` (docs/PLATFORM-2.0.md §5.2) hands the installed app the whole screen; app/globals.css pads
+ * the page by the safe areas.
+ */
+export const viewport: Viewport = { themeColor: '#ffffff', viewportFit: 'cover' };
 
 /**
  * A separate root layout means nothing is inherited from the marketing group — including the
@@ -25,24 +35,34 @@ export async function generateMetadata(): Promise<Metadata> {
   return {
     title: { default: dict.meta.siteName, template: `%s · ${dict.meta.siteName}` },
     robots: { index: false, follow: false },
+    appleWebApp: { capable: true, title: dict.meta.siteName, statusBarStyle: 'default' },
   };
 }
 
 /**
  * `getRequestLocale`, not `getLocaleFromHeaders`: the header exists only where middleware ran,
- * and `/auth/open-in-browser` (F1) lives under the matcher's `/auth/*` exclusion. The full
+ * and `/auth/open-in-browser` (F1) skips middleware session refresh after its host check. The full
  * chain reads the same cookie middleware would have — identical answers on every middleware-
  * covered route, and the right `<html lang>` on the one that is not.
  */
 export default async function AppRootLayout({ children }: { children: ReactNode }) {
   const locale = await getRequestLocale();
+  const { workspace } = await requestSurface();
+  const { appError, appShell } = getDictionary(locale);
   return (
-    <html lang={locale} className={fontVariables}>
+    <html lang={locale} className={fontVariables} data-workspace-admin={workspace || undefined}>
       <head>
+        {workspace && <link rel="stylesheet" href="/fonts/helvetica-neue/helvetica-neue.css" />}
         <link rel="stylesheet" href="/fonts/pretendard/pretendard-dynamic-subset.css" />
         <link rel="stylesheet" href="/fonts/pretendard/pretendard-hangul-mono.css" />
       </head>
-      <body>{children}</body>
+      <body>
+        <AppErrorCopyProvider copy={{ locale, ...appError, homeHref: templatesHref(locale, 'video') }}>
+          {children}
+        </AppErrorCopyProvider>
+        {!workspace && <RegisterServiceWorker />}
+        {!workspace && <BottomTabs locale={locale} labels={appShell.tabs} />}
+      </body>
     </html>
   );
 }

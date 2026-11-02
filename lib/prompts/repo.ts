@@ -1,6 +1,6 @@
 import type { SqlRunner } from '@/lib/db/sql-runner';
 import type { Visibility } from '@/lib/content/visibility';
-import type { PromptSource, PromptStatus } from './schemas';
+import type { PromptSource, PromptStatus, TemplateMedium } from './schemas';
 
 /**
  * PLAN §13 — every `prompt_items` query, in one driver-agnostic module.
@@ -15,6 +15,7 @@ import type { PromptSource, PromptStatus } from './schemas';
  */
 
 export interface PromptRow {
+  audience?: 'public' | 'brand';
   id: string;
   slug: string;
   source: PromptSource;
@@ -34,12 +35,30 @@ export interface PromptRow {
   media: unknown;
   useCase: string[];
   featured: boolean;
+  /** docs/TEMPLATES-IA.md — what this template produces; the catalogue's first split. */
+  medium: TemplateMedium;
+  /** One render, in USD cents. 0 = not for sale yet (the detail page says so, no button). */
+  priceCents: number;
+  /** The fixed won price a Korean page shows (0018, founder 2026-09-07); 0 = the x,900 suggestion from the dollar price. */
+  priceKrw: number;
+  /** The 1080p price (0039), same two currencies; 0 = 1080p not offered (lib/twings/resolution.ts). */
+  price1080Cents: number;
+  price1080Krw: number;
+  /** Films only; null for an image template (CHECK in 0015). */
+  runtimeSeconds: number | null;
+  /** docs/TEMPLATES-IA.md §7 — the render engine (lib/images/engines.ts ids); null = the medium's default. */
+  engine: string | null;
+  /** The aspect the make step opens in ('4:5', '9:16', …); null = the medium's default. */
+  aspectDefault: string | null;
   rejectReason: string | null;
+  /** When the weekly-drop alert went out for this template (0023); null = never. One shot. */
+  announcedAt: string | null;
   createdAt: string | null;
   publishedAt: string | null;
 }
 
 interface RawRow {
+  audience: 'public' | 'brand';
   id: string;
   slug: string;
   source: PromptSource;
@@ -57,15 +76,34 @@ interface RawRow {
   media: unknown;
   use_case: string[] | null;
   featured: boolean;
+  medium: TemplateMedium;
+  price_cents: number;
+  price_krw: number | null;
+  price_1080_cents?: number | null;
+  price_1080_krw?: number | null;
+  runtime_seconds: number | null;
+  engine: string | null;
+  aspect_default: string | null;
   reject_reason: string | null;
+  announced_at?: Date | string | null;
   created_at: Date | string | null;
   published_at: Date | string | null;
 }
 
-const COLUMNS = `id, slug, source, author_id, author_handle, status, models, title, title_ko,
+/**
+ * The 1080p price (0039) read through the row's JSON, so a database that has not had 0039 applied
+ * yet (the cloud, between merge and migration) still serves every template page — as 720p-only.
+ * Writes name the columns directly: they need the migration, and fail loudly without it.
+ */
+const PRICE_1080_COLUMNS = `coalesce((to_jsonb(prompt_items.*)->>'price_1080_cents')::int, 0) as price_1080_cents,
+                 coalesce((to_jsonb(prompt_items.*)->>'price_1080_krw')::int, 0) as price_1080_krw`;
+
+const COLUMNS = `id, audience, slug, source, author_id, author_handle, status, models, title, title_ko,
                  prompt_text, process_md, process_md_ko, source_url,
                  text_visibility::text as text_visibility, media, use_case, featured,
-                 reject_reason, created_at, published_at`;
+                 medium, price_cents, price_krw, runtime_seconds, engine, aspect_default,
+                 ${PRICE_1080_COLUMNS},
+                 reject_reason, created_at, published_at, announced_at`;
 
 /** §13.2 — the one ordering, so the gallery, the admin list and the sitemap never disagree. */
 const RAIL_ORDER = 'featured desc, published_at desc nulls last, created_at desc, slug asc';
@@ -77,6 +115,7 @@ function toIso(value: Date | string | null): string | null {
 
 function toRow(raw: RawRow): PromptRow {
   return {
+    audience: raw.audience,
     id: raw.id,
     slug: raw.slug,
     source: raw.source,
@@ -94,7 +133,16 @@ function toRow(raw: RawRow): PromptRow {
     media: raw.media,
     useCase: raw.use_case ?? [],
     featured: raw.featured,
+    medium: raw.medium,
+    priceCents: raw.price_cents,
+    priceKrw: raw.price_krw ?? 0,
+    price1080Cents: raw.price_1080_cents ?? 0,
+    price1080Krw: raw.price_1080_krw ?? 0,
+    runtimeSeconds: raw.runtime_seconds,
+    engine: raw.engine,
+    aspectDefault: raw.aspect_default,
     rejectReason: raw.reject_reason,
+    announcedAt: toIso(raw.announced_at ?? null),
     createdAt: toIso(raw.created_at),
     publishedAt: toIso(raw.published_at),
   };
@@ -107,7 +155,7 @@ function toRow(raw: RawRow): PromptRow {
 /** Every PUBLISHED item, both rails, in rail order. The gallery's single query. */
 export async function loadPublishedPrompts(sql: SqlRunner): Promise<PromptRow[]> {
   const { rows } = await sql.query<RawRow>(
-    `select ${COLUMNS} from prompt_items where status = 'published' order by ${RAIL_ORDER}`,
+    `select ${COLUMNS} from prompt_items where status = 'published' and audience = 'public' order by ${RAIL_ORDER}`,
   );
   return rows.map(toRow);
 }
@@ -157,7 +205,7 @@ export async function loadRelatedPrompts(
   const { rows } = await sql.query<RawRow & { shared: boolean }>(
     `select ${COLUMNS}, (use_case && $2::text[]) as shared
        from prompt_items
-      where status = 'published' and id <> $1
+      where status = 'published' and audience = 'public' and id <> $1
       order by (use_case && $2::text[]) desc,
                (source = $3) desc,
                published_at desc nulls last,
@@ -184,7 +232,7 @@ export async function loadPromptsByStatus(
 ): Promise<PromptRow[]> {
   const order = status === 'pending' ? 'created_at asc' : RAIL_ORDER;
   const { rows } = await sql.query<RawRow>(
-    `select ${COLUMNS} from prompt_items where status = $1 order by ${order}`,
+    `select ${COLUMNS} from prompt_items where status = $1 and audience = 'public' order by ${order}`,
     [status],
   );
   return rows.map(toRow);
@@ -192,7 +240,7 @@ export async function loadPromptsByStatus(
 
 export async function loadAllPrompts(sql: SqlRunner): Promise<PromptRow[]> {
   const { rows } = await sql.query<RawRow>(
-    `select ${COLUMNS} from prompt_items
+    `select ${COLUMNS} from prompt_items where audience = 'public'
       order by (status = 'pending') desc, ${RAIL_ORDER}`,
   );
   return rows.map(toRow);
@@ -251,6 +299,15 @@ export interface InsertPromptArgs {
   media: unknown;
   useCase: string[];
   featured: boolean;
+  /** docs/TEMPLATES-IA.md — default 'video' / 0 / null: a row born before templates is a video not yet for sale. */
+  medium?: TemplateMedium;
+  priceCents?: number;
+  priceKrw?: number;
+  price1080Cents?: number;
+  price1080Krw?: number;
+  runtimeSeconds?: number | null;
+  engine?: string | null;
+  aspectDefault?: string | null;
   /**
    * Written in the SAME statement as the status, never after it: the
    * `prompt_items_reject_reason_present` CHECK fires at INSERT, so a two-step "insert rejected,
@@ -266,10 +323,13 @@ export async function insertPrompt(sql: SqlRunner, args: InsertPromptArgs): Prom
     `insert into prompt_items
        (id, slug, source, author_id, author_handle, status, models, title, title_ko,
         prompt_text, process_md, process_md_ko, source_url,
-        text_visibility, media, use_case, featured, reject_reason, published_at)
+        text_visibility, media, use_case, featured, reject_reason, published_at,
+        medium, price_cents, price_krw, runtime_seconds, engine, aspect_default,
+        price_1080_cents, price_1080_krw)
      values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
              $14::visibility, $15::jsonb, $16, $17, $18,
-             case when $19::boolean then now() else null end)`,
+             case when $19::boolean then now() else null end,
+             $20, $21, $22, $23, $24, $25, $26, $27)`,
     [
       args.id,
       args.slug,
@@ -290,6 +350,14 @@ export async function insertPrompt(sql: SqlRunner, args: InsertPromptArgs): Prom
       args.featured,
       args.rejectReason ?? null,
       args.publishedAt === 'now',
+      args.medium ?? 'video',
+      args.priceCents ?? 0,
+      args.priceKrw ?? 0,
+      args.runtimeSeconds ?? null,
+      args.engine ?? null,
+      args.aspectDefault ?? null,
+      args.price1080Cents ?? 0,
+      args.price1080Krw ?? 0,
     ],
   );
 }
@@ -320,6 +388,15 @@ export interface UpdatePromptArgs {
   textVisibility: Visibility;
   featured: boolean;
   models: string[];
+  /** Omitted ⇒ unchanged (a form that predates templates keeps what the row had). */
+  medium?: TemplateMedium;
+  priceCents?: number;
+  priceKrw?: number;
+  price1080Cents?: number;
+  price1080Krw?: number;
+  runtimeSeconds?: number | null;
+  engine?: string | null;
+  aspectDefault?: string | null;
 }
 
 export async function updatePrompt(sql: SqlRunner, args: UpdatePromptArgs): Promise<boolean> {
@@ -327,7 +404,15 @@ export async function updatePrompt(sql: SqlRunner, args: UpdatePromptArgs): Prom
     `update prompt_items
         set slug = $2, title = $3, title_ko = $4, prompt_text = $5, use_case = $6,
             author_handle = $7, text_visibility = $8::visibility, featured = $9,
-            process_md = $10, process_md_ko = $11, source_url = $12, models = $13
+            process_md = $10, process_md_ko = $11, source_url = $12, models = $13,
+            medium = coalesce($14, medium),
+            price_cents = coalesce($15::int, price_cents),
+            price_krw = coalesce($22::int, price_krw),
+            price_1080_cents = coalesce($23::int, price_1080_cents),
+            price_1080_krw = coalesce($24::int, price_1080_krw),
+            runtime_seconds = case when $16::boolean then $17::int else runtime_seconds end,
+            engine = case when $18::boolean then $19::text else engine end,
+            aspect_default = case when $20::boolean then $21::text else aspect_default end
       where id = $1
       returning id`,
     [
@@ -344,6 +429,17 @@ export async function updatePrompt(sql: SqlRunner, args: UpdatePromptArgs): Prom
       args.processMdKo ?? null,
       args.sourceUrl ?? null,
       args.models,
+      args.medium ?? null,
+      args.priceCents ?? null,
+      args.runtimeSeconds !== undefined,
+      args.runtimeSeconds ?? null,
+      args.engine !== undefined,
+      args.engine ?? null,
+      args.aspectDefault !== undefined,
+      args.aspectDefault ?? null,
+      args.priceKrw ?? null,
+      args.price1080Cents ?? null,
+      args.price1080Krw ?? null,
     ],
   );
   return rows.length > 0;

@@ -1,4 +1,4 @@
-import { createBrowserClient, createServerClient } from '@supabase/ssr';
+import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 
 /**
@@ -45,11 +45,6 @@ export function supabaseAnonKey(): string {
   return requireEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY');
 }
 
-/** Browser/client-components. Auth only. */
-export function createAuthBrowserClient() {
-  return createBrowserClient(supabaseUrl(), supabaseAnonKey());
-}
-
 /**
  * Server components, route handlers and server actions.
  * `cookies()` is async in Next 15 — that contract is why the version is pinned (docs/VERSIONS.md).
@@ -87,6 +82,8 @@ export async function createAuthServerClient() {
 export async function getSessionUser() {
   if (!isAuthConfigured()) return null;
   try {
+    const cookieStore = await cookies();
+    if (cookieStore.getAll().length === 0) return null;
     const supabase = await createAuthServerClient();
     const {
       data: { user },
