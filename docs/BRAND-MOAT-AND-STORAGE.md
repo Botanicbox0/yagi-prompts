@@ -73,6 +73,39 @@ We build the first scene for your brand. Each creator brings their own face and 
 
 읽기 우회는 검증된 레거시 객체에만 허용한다. 서버/API 키, 서명 URL과 얼굴 파일 경로는 로그·채팅·커밋에 남기지 않는다. 브라우저 PUT은 권한을 확인한 서버가 객체 하나에 발급하고, 업로드 완료 시 크기·MIME·소유권을 검증한다. 게시물의 덮어쓰기 금지와 개인 작업 재시도는 서로 다른 계약으로 유지한다.
 
+## 공개 파일 R2 이전 1단계 런북 (2026-11-02 대표 승인)
+
+범위는 `public-content`의 콘텐츠 주소 파일뿐이다. 비공개 파일과 얼굴 사진은 2단계이고, 개인정보처리방침의 위탁사 변경이 먼저다. Supabase 원본은 지우지 않는다. 삭제는 대표에게 따로 확인을 받는다.
+
+코드에서 달라진 것:
+
+- `publicContentUrl()`은 `lib/content/public-media-keys.ts`에 있는 키만 `PUBLIC_MEDIA_BASE_URL`로 보낸다. 나머지 키와 변수가 없는 경우는 지금처럼 Supabase다. 이 변수가 없으면 배포해도 동작이 같다.
+- URL을 저장하는 캐시(`prompt-catalog`, `landing-media`)의 키에 호스트와 파일 수를 넣었다. 전환과 되돌리기 모두 옛 주소를 들고 있지 않는다.
+- `shape.ts`의 `defaultPublicUrl`은 테스트용 기본값이고, 운영 경로는 모두 `publicContentUrl`을 넘기므로 고치지 않았다.
+- `<img>`·`<video>`만 쓰고 공개 파일을 스크립트로 읽지 않으므로 R2 CORS 설정은 필요 없다. CSP에도 이미지·미디어 허용 목록이 없다.
+
+순서:
+
+1. 대표: twings.app이 있는 Cloudflare 계정에서 R2를 켜고 버킷 `twings-public-media`(Standard)를 만든다. 버킷 Settings → Custom Domains에 `media.twings.app`을 연결한다. r2.dev 공개 주소는 켜지 않는다.
+2. 대표: 이 버킷만 Object Read & Write로 쓸 수 있는 R2 API 토큰을 만들어 `D:\dev\twings\.env.local`에 넣는다. 값은 채팅에 옮기지 않는다.
+
+   ```
+   R2_ACCOUNT_ID=
+   R2_ACCESS_KEY_ID=
+   R2_SECRET_ACCESS_KEY=
+   R2_PUBLIC_BUCKET=twings-public-media
+   PUBLIC_MEDIA_BASE_URL=https://media.twings.app
+   ```
+
+3. 복사와 검증: `npm run r2:sync-public`. 파일마다 바이트, 형식, 캐시 헤더, 영상·음성의 구간 요청을 공개 주소로 다시 읽어 확인하고 통과한 키만 `public-media-keys.ts`에 쓴다. `temp-dm/`, `ig-masters-*/`는 복사하지 않고 `LEFT`로 보고한다.
+4. 바뀐 `public-media-keys.ts`를 PR로 올린다. 병합만으로는 주소가 바뀌지 않는다.
+5. 대표 승인 뒤 Vercel Production에 `PUBLIC_MEDIA_BASE_URL=https://media.twings.app`만 넣고 재배포한다. R2 키는 Vercel에 넣지 않는다.
+6. 확인: 템플릿과 랜딩의 이미지·영상이 `media.twings.app`에서 재생되는지, 토스 심사 항목, `/auth/v1/health`, Supabase 로그의 공개 파일 요청 감소.
+
+되돌리기: Vercel에서 `PUBLIC_MEDIA_BASE_URL`을 지우고 재배포한다.
+
+새로 게시한 템플릿은 다음 동기화 전까지 Supabase에서 나간다. 3~4번을 다시 하면 옮겨진다. 게시할 때 R2에 함께 쓰는 일은 Vercel에 R2 키가 필요하므로 별도 작업이다.
+
 ## 무료 유지와 비용
 
 2026-10-08 공식 문서 기준:

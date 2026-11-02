@@ -251,6 +251,7 @@ to the browser):
 | `SUPABASE_SERVICE_ROLE_KEY` | server | the data client and the storage driver |
 | `DATABASE_URL` | server | Supabase → Database → Connection string (URI). Use the **pooled** connection for serverless. |
 | `NEXT_PUBLIC_APP_URL` | all | the real origin, no trailing slash. Sitemap, robots, `metadataBase`/OG and every email link resolve against it. |
+| `PUBLIC_MEDIA_BASE_URL` | server | optional. R2 host for copied public files; unset stays on Supabase and is the rollback. `docs/BRAND-MOAT-AND-STORAGE.md` |
 | `MEDIA_TOKEN_SECRET` | server | ≤60s media capabilities; must be stable across restarts |
 | `NOTIFY_TOKEN_SECRET` | server | signs unsubscribe links that live in inboxes for months — **never rotate casually** |
 | `STRIPE_SECRET_KEY` | server | all three Stripe vars are required together, or billing renders its "not connected" panel |

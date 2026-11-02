@@ -1,4 +1,5 @@
-import { publicStorageBaseUrl } from '@/lib/runtime-mode';
+import { publicMediaBaseUrl, publicStorageBaseUrl } from '@/lib/runtime-mode';
+import { PUBLIC_MEDIA_KEYS } from './public-media-keys';
 
 /**
  * Public-bucket object → servable URL.
@@ -28,7 +29,31 @@ export function isSupabaseConfigured(baseUrl = publicStorageBaseUrl()): boolean 
   return Boolean(baseUrl && baseUrl.startsWith('http') && !baseUrl.includes(PLACEHOLDER_HOST));
 }
 
-export function publicContentUrl(key: string, baseUrl = publicStorageBaseUrl()): string | null {
+/**
+ * docs/BRAND-MOAT-AND-STORAGE.md — a key listed in `PUBLIC_MEDIA_KEYS` was copied to R2 and read back
+ * byte for byte, so it is served from the media host. Every other key, such as a template published
+ * after the last sync, stays on Supabase. The Supabase original is kept, so unsetting
+ * `PUBLIC_MEDIA_BASE_URL` and redeploying is the whole rollback.
+ */
+export function publicContentUrl(
+  key: string,
+  baseUrl = publicStorageBaseUrl(),
+  mediaBaseUrl = publicMediaBaseUrl(),
+  copiedKeys: ReadonlySet<string> = PUBLIC_MEDIA_KEYS,
+): string | null {
   if (!isSupabaseConfigured(baseUrl)) return null;
+  if (mediaBaseUrl && copiedKeys.has(key)) return `${mediaBaseUrl.replace(/\/$/, '')}/${key}`;
   return `${baseUrl!.replace(/\/$/, '')}/storage/v1/object/public/public-content/${key}`;
+}
+
+/**
+ * Part of the key of every `unstable_cache` document that stores a `publicContentUrl` result. Those
+ * documents survive deploys, so without this a switch of host would keep serving the old addresses
+ * until the TTL or a tag revalidation.
+ */
+export function publicMediaCacheKey(
+  mediaBaseUrl = publicMediaBaseUrl(),
+  copiedKeys: ReadonlySet<string> = PUBLIC_MEDIA_KEYS,
+): string {
+  return mediaBaseUrl ? `media:${mediaBaseUrl}:${copiedKeys.size}` : 'media:supabase';
 }

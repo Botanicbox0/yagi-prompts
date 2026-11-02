@@ -1,5 +1,6 @@
 import 'server-only';
 import { unstable_cache } from 'next/cache';
+import { publicMediaCacheKey } from '@/lib/content/asset-url';
 import { resolveRuntimeMode } from '@/lib/runtime-mode';
 import { CATALOG_TTL_SECONDS, PROMPTS_TAG } from '@/lib/cache';
 import { getSqlRunner } from '@/lib/db/connect';
@@ -56,7 +57,7 @@ async function readPromptCatalog(): Promise<PromptCatalog> {
 /** 2026-10-29 (`v12-creative-cover`): `PublicMaker` carries the 0065 profile (name, place, links, avatar…) and the 0071 cover; both addresses are `/creative-media/…`. */
 export const getPromptCatalog = unstable_cache(
   readPromptCatalog,
-  ['prompt-catalog', 'v12-creative-cover', resolveRuntimeMode()],
+  ['prompt-catalog', 'v12-creative-cover', resolveRuntimeMode(), publicMediaCacheKey()],
   {
     tags: [PROMPTS_TAG],
     revalidate: CATALOG_TTL_SECONDS,
