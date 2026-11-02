@@ -1,9 +1,10 @@
 import { createHash } from 'node:crypto';
 
 /**
- * docs/BRAND-MOAT-AND-STORAGE.md — copies `public-content` to the R2 public bucket and decides which
- * keys the site may serve from there. A key counts only after the public host returned the same
- * bytes, the same type and, for video and audio, a working range request.
+ * docs/BRAND-MOAT-AND-STORAGE.md — the by-hand run that moves what is in the Supabase `public-content`
+ * bucket to R2. A key counts only after the public host returned the same bytes, the same type and, for
+ * video and audio, a working range request. New files do not come through here once the R2 keys are on
+ * Vercel: they are written straight to R2 (`lib/storage/public-media-direct.ts`).
  *
  * Only content-addressed keys are copied. Their bytes never change, so they can be cached forever,
  * and they are what published templates and landing slots point at. Folders such as `temp-dm/` hold
@@ -73,14 +74,6 @@ async function copyAndVerify(deps: PublicMediaSyncDeps, object: PublicMediaObjec
   return null;
 }
 
-async function attemptCopy(deps: PublicMediaSyncDeps, object: PublicMediaObject): Promise<PublicMediaFailure | null> {
-  try {
-    return await copyAndVerify(deps, object);
-  } catch {
-    return 'copy_error';
-  }
-}
-
 export async function syncPublicMedia(deps: PublicMediaSyncDeps): Promise<PublicMediaSyncReport> {
   const report: PublicMediaSyncReport = { verified: [], failed: [], skipped: [] };
   for (const object of await deps.list()) {
@@ -88,62 +81,14 @@ export async function syncPublicMedia(deps: PublicMediaSyncDeps): Promise<Public
       report.skipped.push(object.key);
       continue;
     }
-    const reason = await attemptCopy(deps, object);
+    let reason: PublicMediaFailure | null;
+    try {
+      reason = await copyAndVerify(deps, object);
+    } catch {
+      reason = 'copy_error';
+    }
     if (reason) report.failed.push({ key: object.key, reason });
     else report.verified.push(object.key);
-  }
-  return report;
-}
-
-/** Where the app records what it has copied. `lib/storage/public-media-ledger.ts` is the real one. */
-export interface PublicMediaLedger {
-  verifiedKeys(): Promise<ReadonlySet<string>>;
-  /** `false` while another run holds the key or it is still backing off. */
-  claim(object: PublicMediaObject): Promise<boolean>;
-  markVerified(key: string): Promise<void>;
-  markFailed(key: string, reason: PublicMediaFailure): Promise<void>;
-}
-
-export interface NewPublicMediaReport {
-  verified: string[];
-  failed: { key: string; reason: PublicMediaFailure }[];
-  /** Held by another run or backing off. */
-  waiting: string[];
-  /** Not started because the budget ran out. The next run takes them. */
-  deferred: string[];
-}
-
-/**
- * The automatic run: only keys nobody has verified yet, so a run with nothing new reads no file from
- * Supabase. A key becomes verified after `copyAndVerify` passes and not before, which is the whole
- * promise the media host address rests on.
- */
-export async function syncNewPublicMedia(
-  deps: PublicMediaSyncDeps,
-  ledger: PublicMediaLedger,
-  options: { stopAt: number; now?: () => number },
-): Promise<NewPublicMediaReport> {
-  const now = options.now ?? Date.now;
-  const report: NewPublicMediaReport = { verified: [], failed: [], waiting: [], deferred: [] };
-  const known = await ledger.verifiedKeys();
-  for (const object of await deps.list()) {
-    if (!PUBLIC_MEDIA_KEY_PATTERN.test(object.key) || known.has(object.key)) continue;
-    if (now() >= options.stopAt) {
-      report.deferred.push(object.key);
-      continue;
-    }
-    if (!(await ledger.claim(object))) {
-      report.waiting.push(object.key);
-      continue;
-    }
-    const reason = await attemptCopy(deps, object);
-    if (reason) {
-      await ledger.markFailed(object.key, reason);
-      report.failed.push({ key: object.key, reason });
-    } else {
-      await ledger.markVerified(object.key);
-      report.verified.push(object.key);
-    }
   }
   return report;
 }

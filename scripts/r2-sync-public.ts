@@ -12,8 +12,9 @@ import { createServiceClient } from '@/lib/supabase/service-client';
  * when its Supabase original is gone. It never deletes anything, on either side. Prints key names and
  * reasons, never a credential.
  *
- * New files no longer need this: the app copies them itself (docs/BRAND-MOAT-AND-STORAGE.md). This run
- * reads every file from Supabase, so it costs the whole bucket in egress.
+ * With the R2 keys on Vercel new files go straight to R2 (docs/BRAND-MOAT-AND-STORAGE.md), so this only
+ * moves what was published to Supabase before that. Run it right before the keys take effect and once
+ * after. It reads every file left in the Supabase bucket, so it costs that bucket in egress.
  *
  * `R2_ENV_FILE` points at another env file, for running from a worktree.
  */
