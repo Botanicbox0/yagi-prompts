@@ -31,8 +31,26 @@ describe('recipe editor', () => {
     const html = renderToString(<RecipeEditor copy={ko.makerRecipe} formatId="11111111-1111-4111-8111-111111111111" draft={null}
       engines={[{ id: 'gpt-image-2', label: 'GPT IMAGE 2', kind: 'image' }, { id: 'seedance-2.5', label: 'SEEDANCE 2.5', kind: 'video', minDuration: 4, maxDuration: 30, resolutions: ['720p', '1080p'] }]}
       aspects={{ image: ['4:5'], video: ['9:16'] }} hasSelfie={false} selfieHref="/identity/selfie" workspaceHref="/creators/workspace" testLimit={3} locale="ko" />);
-    for (const marker of ['data-recipe-editor', 'data-recipe-step="step1"', 'data-recipe-files', 'data-recipe-preview', 'data-recipe-test', 'data-recipe-issues', 'data-recipe-royalty']) expect(html).toContain(marker);
+    for (const marker of ['data-recipe-editor', 'data-recipe-step="step1"', 'data-recipe-files', 'data-recipe-preview', 'data-recipe-test', 'data-recipe-issues', 'data-recipe-price']) expect(html).toContain(marker);
     expect(html).toContain(ko.makerRecipe.testNeedsSelfie);
     expect(html).toContain('[내 사진]');
+  });
+
+  it('shows the price from the base up and what one make earns, except on a company account', () => {
+    const recipe = toRecipe([{ kind: 'image', engine: 'seedream-5.0-pro', text: '[내 사진]의 인물이 창가에 앉은 조용한 초상.', aspect: '4:5', duration: 10, resolution: '720p' }], 'image', [], label);
+    const draft = { status: 'draft' as const, title: 'Window', titleKo: null, recipe, exampleUrl: null, disclosure: { prompts: false, assets: false }, presentation: 'make-first' as const, royaltyKrw: 300, testRendersUsed: 0, files: [], tests: [], revisionOf: null };
+    const render = (company: boolean) => renderToString(<RecipeEditor copy={ko.makerRecipe} formatId="11111111-1111-4111-8111-111111111111" draft={draft}
+      engines={[{ id: 'seedream-5.0-pro', label: 'SEEDREAM 5.0 PRO', kind: 'image' }, { id: 'seedance-2.5', label: 'SEEDANCE 2.5', kind: 'video', minDuration: 4, maxDuration: 30, resolutions: ['720p'] }]}
+      aspects={{ image: ['4:5'], video: ['9:16'] }} hasSelfie testLimit={3} selfieHref="/identity/selfie" workspaceHref="/creators/workspace" locale="ko" company={company} />);
+    const outside = render(false);
+    // One Seedream Pro picture: base 200원 (15 credits, the image minimum), raised by 300원 → 500원.
+    expect(outside).toContain('data-recipe-price-base="200"');
+    expect(outside).toMatch(/value="500"/);
+    expect(outside).toMatch(/data-recipe-earning="\d+"/);
+    expect(outside).toContain('한 번 만들 때');
+    const company = render(true);
+    expect(company).toContain('data-recipe-earning="company"');
+    expect(company).toContain(ko.makerRecipe.earningCompany);
+    expect(company).not.toContain('한 번 만들 때');
   });
 });

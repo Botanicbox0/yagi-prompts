@@ -1,8 +1,9 @@
 import { PublicLink } from '@/components/admin/public-link';
-import { IMAGE_ASPECTS, IMAGE_ENGINES, IMAGE_ENGINE_IDS, VIDEO_ASPECTS, VIDEO_ENGINE_IDS, isImageEngine, resolveEngine } from '@/lib/images/engines';
+import { IMAGE_ASPECTS, IMAGE_ENGINES, IMAGE_ENGINE_IDS, VIDEO_ASPECTS, VIDEO_ENGINE_IDS, estimateImageUsd, isImageEngine, resolveEngine } from '@/lib/images/engines';
 import { formatDate, interpolate } from '@/lib/i18n/format';
 import { formatKrw, suggestedKrw } from '@/lib/twings/products';
-import { costFloor, imageCostFloor } from '@/lib/twings/cost-model';
+import { costFloor } from '@/lib/twings/cost-model';
+import { baseKrw } from '@/lib/twings/template-price';
 import { videoModelForEngine } from '@/lib/video/models';
 import { PROMPT_TEXT_MAX, PROMPT_TEXT_MIN, TEMPLATE_MEDIA } from '@/lib/prompts/schemas';
 import { promptHref } from '@/lib/prompts/links';
@@ -149,37 +150,41 @@ export function StagedMedia({ row, dict }: { row: PromptRow; dict: Dict }) {
  * a field the author discovers only after publishing.
  */
 /**
- * The cost floor under this template's prices (lib/twings/cost-model.ts), shown next to the price
- * fields so a price is never set blind. A proposal only: it writes nothing and blocks nothing.
+ * The base price of this template (lib/twings/template-price.ts, founder rule 2026-11-02), shown next
+ * to the price fields so a price is never set blind. A proposal only: it writes nothing and blocks
+ * nothing; the warning fires below the band's lower edge (images cost × 1.10, films a 5% margin).
  */
 function CostFloorNote({ row, dict }: { row: PromptRow | null; dict: Dict }) {
   if (!row) return null;
   const a = dict.admin;
   // An image's cost is its ENGINE's, not a duration: each model has its own official per-image
-  // price (lib/images/engines.ts), so the floor follows whichever engine this template renders on.
+  // price (lib/images/engines.ts), so the base follows whichever engine this template renders on.
   if (row.medium === 'image') {
     const engine = resolveEngine(row.engine, 'image');
     if (!isImageEngine(engine)) return null;
-    // A set renders every frame on one order, so its floor is one image's floor per frame.
-    const frames = parsePromptMedia(row.media).gallery?.length ?? 1;
-    const proposed = imageCostFloor({ engine, referenceImages: 1 }).proposedKrw * frames;
-    const below = row.priceKrw > 0 && row.priceKrw < proposed;
+    // A set renders every frame on one order, so it is priced on all its frames together.
+    const frames = Math.max(1, parsePromptMedia(row.media).gallery?.length ?? 1);
+    const cost = { medium: 'image' as const, providerUsd: estimateImageUsd(engine, 1) * frames };
+    const proposed = baseKrw(cost);
+    const below = row.priceKrw > 0 && row.priceKrw < baseKrw(cost, 'min');
     return (
       <p data-cost-floor={String(proposed)} data-cost-floor-engine={engine} className="font-mono text-[0.72rem] opacity-70">
-        {interpolate(a.templateImageCostFloor, { engine: IMAGE_ENGINES[engine].label, price: formatKrw(proposed) })}
+        {interpolate(a.templateImageCostFloor, { engine: IMAGE_ENGINES[engine].label, frames: String(frames), price: formatKrw(proposed) })}
         {below ? ` ${a.templateBelowFloor}` : ''}
       </p>
     );
   }
   if (row.medium !== 'video' || !row.runtimeSeconds) return null;
   const { model, seconds } = videoModelForEngine(row.engine, row.runtimeSeconds);
-  const p720 = costFloor({ model, resolution: '720p', seconds, aspect: row.aspectDefault ?? '9:16' });
-  const p1080 = costFloor({ model, resolution: '1080p', seconds, aspect: row.aspectDefault ?? '9:16' });
-  if (!p720 || !p1080) return null;
-  const below = (row.priceKrw > 0 && row.priceKrw < p720.proposedKrw) || (row.price1080Krw > 0 && row.price1080Krw < p1080.proposedKrw);
+  const q720 = costFloor({ model, resolution: '720p', seconds, aspect: row.aspectDefault ?? '9:16' });
+  const q1080 = costFloor({ model, resolution: '1080p', seconds, aspect: row.aspectDefault ?? '9:16' });
+  if (!q720 || !q1080) return null;
+  const film = (providerUsd: number, level?: 'min') => baseKrw({ medium: 'video', providerUsd }, level);
+  const p720 = film(q720.providerUsd), p1080 = film(q1080.providerUsd);
+  const below = (row.priceKrw > 0 && row.priceKrw < film(q720.providerUsd, 'min')) || (row.price1080Krw > 0 && row.price1080Krw < film(q1080.providerUsd, 'min'));
   return (
-    <p data-cost-floor={`${p720.proposedKrw}/${p1080.proposedKrw}`} className="font-mono text-[0.72rem] opacity-70">
-      {interpolate(a.templateCostFloor, { p720: formatKrw(p720.proposedKrw), p1080: formatKrw(p1080.proposedKrw) })}
+    <p data-cost-floor={`${p720}/${p1080}`} className="font-mono text-[0.72rem] opacity-70">
+      {interpolate(a.templateCostFloor, { p720: formatKrw(p720), p1080: formatKrw(p1080) })}
       {below ? ` ${a.templateBelowFloor}` : ''}
     </p>
   );

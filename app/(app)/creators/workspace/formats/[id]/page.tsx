@@ -11,7 +11,7 @@ import { currentSelfie } from '@/lib/identity/selfie-service';
 import { engineLabel, IMAGE_ASPECTS, isVideoEngine, VIDEO_ASPECTS } from '@/lib/images/engines';
 import { videoEngineSpec } from '@/lib/video/models';
 import { platformAccess } from '@/lib/creator-platform/runtime';
-import { approvedCreator } from '@/lib/creator-platform/service';
+import { approvedCreator, companyCreator } from '@/lib/creator-platform/service';
 import { CREATOR_WORKSPACE_PATH } from '@/lib/creator-platform/links';
 import { loadMakerDraft, MAKER_TEST_RENDERS } from '@/lib/recipes/maker';
 import { recipeSchemaReady } from '@/lib/recipes/repo';
@@ -59,7 +59,7 @@ export default async function RecipeEditorPage({ params, searchParams }: { param
   const engines: EngineOption[] = MAKER_ENGINE_IDS.map((engine) => isVideoEngine(engine)
     ? (({ minDurationSeconds, maxDurationSeconds, resolutions }) => ({ id: engine, label: engineLabel(engine), kind: 'video' as const, minDuration: minDurationSeconds, maxDuration: maxDurationSeconds, resolutions: resolutions.filter((r): r is '720p' | '1080p' => r === '720p' || r === '1080p') }))(videoEngineSpec(engine))
     : { id: engine, label: engineLabel(engine), kind: 'image' });
-  const hasSelfie = !!await currentSelfie(sql, viewer.userId);
+  const [hasSelfie, company] = await Promise.all([currentSelfie(sql, viewer.userId).then(Boolean), companyCreator(sql, viewer.userId)]);
   return shell(draft?.status ?? 'new', <RecipeEditor
     copy={t}
     formatId={formatId}
@@ -71,6 +71,7 @@ export default async function RecipeEditorPage({ params, searchParams }: { param
     workspaceHref={CREATOR_WORKSPACE_PATH}
     testLimit={MAKER_TEST_RENDERS}
     selfPublish={selfPublishOpen()}
+    company={company}
     revisionOf={revisionOf}
     locale={locale}
   />);

@@ -1,42 +1,43 @@
 import { estimateImageUsd, isImageEngine, isVideoEngine } from '@/lib/images/engines';
 import { quoteVideo, videoModelForEngine } from '@/lib/video/models';
-import { COST_ASSUMPTIONS, IMAGE_MIN_PRICE_KRW, roundUpToHundred } from '@/lib/twings/cost-model';
-import { outputSteps, type Recipe } from './schema';
+import { COST_ASSUMPTIONS } from '@/lib/twings/cost-model';
+import { baseCredits, baseKrw, isRaise, RAISE_MAX_KRW, RAISE_STEP_KRW, type PriceMedium } from '@/lib/twings/template-price';
+import type { Recipe } from './schema';
 
 /**
- * The price proposal for a maker template (docs/PLATFORM-2.0.md §8.3, §18): the cost floor of every
- * step at the template target margin (lib/twings/cost-model.ts, 5%) plus the maker's royalty R.
- * Settlement is untouched — marginSplit still gives 80% of the margin to the maker, so R's 80% is
- * theirs. A PROPOSAL only: the studio confirms the price at review (AGENTS.md §5).
+ * The price of a maker template (docs/PLATFORM-2.0.md §19.2, founder decision 2026-11-02): the base
+ * price of everything the recipe renders (lib/twings/template-price.ts — images at cost × 1.12, films
+ * at a 6% margin) plus the creative's raise R. The base is the floor: a creative may only go up.
+ * Settlement is untouched — marginSplit gives 80% of the whole margin to the creative.
  *
- * A carousel frame is priced like an image template (at least 200원 a frame); an intermediate step
- * (a character sheet) adds its provider cost to the step that uses it rather than its own minimum.
+ * A carousel is priced on all its frames together (one order), not frame by frame, so a five-frame set
+ * lands in the founder's 10~15% band instead of five 200원 minimums; an intermediate step (a character
+ * sheet) adds its provider cost like any other step.
  */
 
-export const ROYALTY_MIN_KRW = 500;
-export const ROYALTY_MAX_KRW = 5000;
-export const ROYALTY_DEFAULT_KRW = 1500;
-export const ROYALTY_STEP_KRW = 100;
+/** The raise R, in won. Kept under its old name: `royalty_krw` stores it (0059, widened to 0 by 0073). */
+export const ROYALTY_MIN_KRW = 0;
+export const ROYALTY_MAX_KRW = RAISE_MAX_KRW;
+export const ROYALTY_DEFAULT_KRW = 0;
+export const ROYALTY_STEP_KRW = RAISE_STEP_KRW;
 
 export function isRoyalty(value: unknown): value is number {
-  return typeof value === 'number' && Number.isInteger(value) && value >= ROYALTY_MIN_KRW && value <= ROYALTY_MAX_KRW && value % ROYALTY_STEP_KRW === 0;
+  return isRaise(value);
 }
 
 export interface StepCost { step: string; providerUsd: number }
 export interface RecipeQuote {
   steps: StepCost[];
+  medium: PriceMedium;
   providerUsd: number;
   providerKrw: number;
-  /** Lowest VAT-inclusive price meeting the target margin, rounded up to 100원 (per frame minimum applied). */
+  /** Credits for one make at the base (shown once subscriptions open). */
+  baseCredits: number;
+  /** The base won price, rounded up to 100원 — the lowest the template sells at. */
   floorKrw: number;
   royaltyKrw: number;
   proposedKrw: number;
   proposedCents: number;
-}
-
-function floorFor(usd: number): number {
-  const { krwPerUsd, vatRate, pgFeeRate, targetMargin } = COST_ASSUMPTIONS;
-  return usd * krwPerUsd / ((1 - targetMargin) / (1 + vatRate) - pgFeeRate);
 }
 
 export function stepCosts(recipe: Recipe): StepCost[] {
@@ -54,22 +55,15 @@ export function stepCosts(recipe: Recipe): StepCost[] {
 export function quoteRecipe(recipe: Recipe, royaltyKrw: number): RecipeQuote {
   const steps = stepCosts(recipe);
   const providerUsd = Math.round(steps.reduce((sum, step) => sum + step.providerUsd, 0) * 10000) / 10000;
-  const shown = new Set(outputSteps(recipe));
-  const carousel = 'frames' in recipe.output;
-  // A carousel: each frame at least the image minimum; hidden steps ride on the first frame.
-  const floorKrw = carousel
-    ? steps.filter((step) => shown.has(step.step)).reduce((sum, step, index) => {
-        const extra = index === 0 ? steps.filter((s) => !shown.has(s.step)).reduce((acc, s) => acc + s.providerUsd, 0) : 0;
-        return sum + Math.max(IMAGE_MIN_PRICE_KRW, roundUpToHundred(floorFor(step.providerUsd + extra)));
-      }, 0)
-    : recipe.steps.some((step) => step.kind === 'video')
-      ? roundUpToHundred(floorFor(providerUsd))
-      : Math.max(IMAGE_MIN_PRICE_KRW, roundUpToHundred(floorFor(providerUsd)));
+  const medium: PriceMedium = recipe.steps.some((step) => step.kind === 'video') ? 'video' : 'image';
+  const floorKrw = baseKrw({ medium, providerUsd });
   const proposedKrw = floorKrw + royaltyKrw;
   return {
     steps,
+    medium,
     providerUsd,
     providerKrw: Math.round(providerUsd * COST_ASSUMPTIONS.krwPerUsd),
+    baseCredits: baseCredits({ medium, providerUsd }),
     floorKrw,
     royaltyKrw,
     proposedKrw,
