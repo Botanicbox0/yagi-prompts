@@ -2,6 +2,7 @@ import type { PromptCard } from '@/lib/prompts/catalog';
 import { badgeFor } from '@/lib/content/badges';
 import { DEFAULT_IMAGE_ASPECT, DEFAULT_VIDEO_ASPECT } from '@/lib/images/engines';
 import { makerRest } from '@/lib/makers/links';
+import { RECOMMENDED_LEAD, recommendedRank } from '@/lib/prompts/recommended';
 
 /**
  * Founder decision 2026-10-23 (docs/PLATFORM-2.0.md §15.5-15): a portrait template is a **4:5
@@ -74,14 +75,25 @@ export function makerProfileRest(card: Pick<PromptCard, 'origin' | 'authorHandle
 export const ORIGIN_RUN_MAX = 3;
 
 /**
- * One ranking for the whole feed: NEW first, then the catalog's own order (featured → newest,
- * `lib/prompts/repo.ts`), then the origin rule above. The merge always takes the better-ranked of
- * the two origins' next cards unless that origin has just had ORIGIN_RUN_MAX places, so each origin
- * keeps its own order and a list from one origin comes out exactly as ranked.
+ * One ranking for the whole feed: the recommended lead (`lib/prompts/recommended.ts`), then templates
+ * nobody has ranked yet that are still NEW, then the rest of the recommended order, then everything
+ * else in the catalog's own order (featured → newest, `lib/prompts/repo.ts`). The origin rule above
+ * applies on top. The merge always takes the better-ranked of the two origins' next cards unless that
+ * origin has just had ORIGIN_RUN_MAX places, so each origin keeps its own order and a list from one
+ * origin comes out exactly as ranked.
  */
-export function railOrder<T extends Pick<PromptCard, 'publishedAt'> & Partial<Pick<PromptCard, 'origin'>>>(cards: readonly T[], now?: Date | number): T[] {
+export function railOrder<T extends Pick<PromptCard, 'publishedAt' | 'slug'> & Partial<Pick<PromptCard, 'origin'>>>(cards: readonly T[], now?: Date | number): T[] {
   const isNew = (card: T) => badgeFor({ firstPublishedAt: card.publishedAt, updatedAt: null, ...(now === undefined ? {} : { now }) }) === 'new';
-  const ranked = [...cards.filter(isNew), ...cards.filter((card) => !isNew(card))];
+  const recommended = cards
+    .filter((card) => recommendedRank(card.slug) !== null)
+    .sort((a, b) => recommendedRank(a.slug)! - recommendedRank(b.slug)!);
+  const unranked = cards.filter((card) => recommendedRank(card.slug) === null);
+  const ranked = [
+    ...recommended.filter((card) => recommendedRank(card.slug)! < RECOMMENDED_LEAD),
+    ...unranked.filter(isNew),
+    ...recommended.filter((card) => recommendedRank(card.slug)! >= RECOMMENDED_LEAD),
+    ...unranked.filter((card) => !isNew(card)),
+  ];
   // Ranks ride along so the merge compares places, not dates again.
   const queues: [Array<[T, number]>, Array<[T, number]>] = [[], []];
   ranked.forEach((card, index) => queues[card.origin === 'maker' ? 1 : 0].push([card, index]));
