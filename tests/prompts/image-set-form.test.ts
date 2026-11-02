@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createGeminiImageClient } from '@/lib/images/gemini';
 import { loadPromptBySlug } from '@/lib/prompts/repo';
-import { parsePromptMedia, setPromptIssue } from '@/lib/prompts/schemas';
+import { normalizeSetPrompt, parsePromptMedia, setPromptIssue } from '@/lib/prompts/schemas';
 import { loadTemplateRecipe } from '@/lib/recipes/repo';
 import { parseRecipe } from '@/lib/recipes/schema';
 import { adminHarness, upload, type AdminHarness } from '../helpers/admin';
@@ -72,6 +72,21 @@ describe('prompt.createSet', () => {
     expect(await loadPromptBySlug(sql(), 'three-quiet-portraits')).toBeNull();
   });
 
+  // Slack 2026-11-02: "@image1 프롬프트 이미 작성되어있는데 없다고 안넘어감".
+  it('accepts the photo written @image1 and stores it as the set\'s Image 1', async () => {
+    const outcome = await harness.run('prompt.createSet', fields({ frame0Prompt: '@image1 is the person. Keep their face. A quiet studio portrait.' }));
+    expect(outcome).toMatchObject({ ok: true, detail: 'three-quiet-portraits' });
+    const row = (await loadPromptBySlug(sql(), 'three-quiet-portraits'))!;
+    const recipe = (await loadTemplateRecipe(sql(), row.id))!;
+    expect(recipe.steps[0]!.prompt).toBe('{{selfie}} is the person. Keep their face. A quiet studio portrait.');
+  });
+
+  it('still refuses another reference written as a handle', async () => {
+    const outcome = await harness.run('prompt.createSet', fields({ frame1Prompt: '@image1 stands beside the dress in @image2, quietly.' }));
+    expect(outcome.ok).toBe(false);
+    expect(await loadPromptBySlug(sql(), 'three-quiet-portraits')).toBeNull();
+  });
+
   it('refuses a frame with no image', async () => {
     const outcome = await harness.run('prompt.createSet', fields({ frame2: undefined }));
     expect(outcome).toMatchObject({ ok: false, code: 'upload', detail: 'frame 3: no image' });
@@ -118,4 +133,22 @@ describe('setPromptIssue', () => {
     ['Image 1 holds the bag from Image 2.', 'other_reference'],
     ['Image 1 and {{selfie}}.', 'braces'],
   ])('%s → %s', (text, issue) => expect(setPromptIssue(text)).toBe(issue));
+});
+
+describe('normalizeSetPrompt', () => {
+  it.each([
+    ['@image1 smiles.', 'Image 1 smiles.'],
+    ['@Image 1 smiles.', 'Image 1 smiles.'],
+    ['@image_1 smiles.', 'Image 1 smiles.'],
+    ['image1 smiles.', 'Image 1 smiles.'],
+    ['the person in image 1 smiles.', 'the person in Image 1 smiles.'],
+    ['Image 1 smiles.', 'Image 1 smiles.'],
+    ['@image2 and @Video 1 and @audio1.', 'Image 2 and Video 1 and Audio 1.'],
+    ['image 12 and myimage1 stay.', 'image 12 and myimage1 stay.'],
+  ])('%s → %s', (text, normal) => expect(normalizeSetPrompt(text)).toBe(normal));
+
+  it('turns a handle into the words the check reads', () => {
+    expect(setPromptIssue(normalizeSetPrompt('@image1 smiles at the camera.'))).toBeNull();
+    expect(setPromptIssue(normalizeSetPrompt('@image1 holds the bag from @image2.'))).toBe('other_reference');
+  });
 });

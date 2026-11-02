@@ -31,6 +31,7 @@ import {
   USE_CASE_MAX,
   effectiveTextVisibility,
   normalizeHandle,
+  normalizeSetPrompt,
   parsePromptMedia,
   parseStagedUpload,
   slugify,
@@ -339,7 +340,7 @@ const createImageSet: AdminOperation<{ input: z.infer<typeof ImageSetForm>; form
     if (input.thumbnail >= input.prompts.length) return fail('invalid', 'thumbnail: not one of the frames');
     const fileName = (index: number) => `frame-${index}`;
     const frames = input.prompts.map((promptText, index) => ({
-      key: `shot${index + 1}`, title: input.title, titleKo: input.titleKo, promptText, engine, aspect, fileName: fileName(index),
+      key: `shot${index + 1}`, title: input.title, titleKo: input.titleKo, promptText: normalizeSetPrompt(promptText), engine, aspect, fileName: fileName(index),
     }));
     const slug = await freeSlug(ctx.sql, slugify(input.title, `set-${randomUUID().slice(0, 8)}`));
     const built = buildImageTemplateSet({ slug, title_en: input.title, title_ko: input.titleKo, thumbnail: fileName(input.thumbnail) }, frames);

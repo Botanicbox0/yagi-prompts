@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, type DragEvent } from 'react';
 import { directUploadFailure, uploadMime } from '@/lib/admin/direct-upload';
 import { imageFitsAspect, type ImageAspect } from '@/lib/images/engines';
-import { IMAGE_SET_FRAMES_MAX, IMAGE_SET_FRAMES_MIN, PROMPT_TEXT_MIN, setPromptIssue } from '@/lib/prompts/schemas';
+import { IMAGE_SET_FRAMES_MAX, IMAGE_SET_FRAMES_MIN, normalizeSetPrompt, PROMPT_TEXT_MIN, setPromptIssue } from '@/lib/prompts/schemas';
 import { interpolate } from '@/lib/i18n/format';
 
 import { put, sha256Hex, STAGING_URL_PATH, UploadRefused } from '@/components/admin/media-drop';
@@ -194,7 +194,7 @@ export function ImageSetFields({
       if (!imageFitsAspect(frame.width, frame.height, aspect)) return interpolate(labels.errAspect, { ...vars, aspect });
       const prompt = frame.prompt.trim();
       if (prompt.length < PROMPT_TEXT_MIN) return interpolate(labels.errPromptShort, vars);
-      const issue = setPromptIssue(prompt);
+      const issue = setPromptIssue(normalizeSetPrompt(prompt));
       if (issue === 'no_photo') return interpolate(labels.errNoPhoto, vars);
       if (issue === 'other_reference') return interpolate(labels.errOtherReference, vars);
       if (issue === 'braces') return interpolate(labels.errBraces, vars);
