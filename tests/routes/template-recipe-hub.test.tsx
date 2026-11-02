@@ -86,6 +86,26 @@ describe('a story-first template with a public recipe', () => {
     expect(await page('ko')).toContain(ko.makerRecipe.how.gateCta);
   });
 
+  // Founder 2026-11-02: an original shows the handle an admin typed — plain text, no title, no link.
+  it('credits an original with "by @handle" as plain text, and keeps "TWINGS Original" without a handle', async () => {
+    const saved = { origin: film.origin, makerProfile: film.makerProfile, authorHandle: film.authorHandle };
+    try {
+      Object.assign(film, { origin: 'studio', makerProfile: false, authorHandle: 'dana.original' });
+      for (const [locale, dict] of [['en', en], ['ko', ko]] as const) {
+        const html = await page(locale);
+        expect(html).toMatch(/data-template-credit[^>]*>by @dana\.original</);
+        expect(html).not.toContain('data-template-maker');
+        expect(html).not.toContain('/makers/dana.original');
+        expect(html).not.toContain('instagram.com');
+        expect(html).not.toContain(dict.prompts.byYagi);
+      }
+      Object.assign(film, { authorHandle: null });
+      expect(await page('ko')).toContain(ko.prompts.byYagi);
+    } finally {
+      Object.assign(film, saved);
+    }
+  });
+
   it("keeps the members' prompt out of the page: only the gate's teaser is in the HTML", async () => {
     const html = await page('en');
     expect(html).not.toContain('MEMBERS_ONLY_TAIL');

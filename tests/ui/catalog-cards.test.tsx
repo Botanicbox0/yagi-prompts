@@ -149,7 +149,17 @@ describe('maker credit (PLATFORM-2.0 §7.5·§14.1: only maker templates say who
     // A maker template is a `source='yagi'` row with an author (0046): origin decides, not source.
     expect(markup(card({ origin: 'maker', source: 'yagi', authorHandle: null }), 'ko')).toContain(dicts.ko.prompts.cardAuthorAnonymous);
     expect(dicts.ko.prompts.cardAuthorAnonymous).toContain(KO_TERMS.maker);
-    expect(markup(card({ origin: 'studio', authorHandle: 'hana' }))).not.toContain('data-card-author');
+  });
+
+  // Founder 2026-11-02: an original shows the handle an admin typed — plain text, no title, no link.
+  it('credits "by @handle" as plain text on an original whose handle an admin filled in', () => {
+    const original = card({ origin: 'studio', authorHandle: 'hana' });
+    expect(cardAuthor(original)).toEqual({ handle: 'hana' });
+    const html = markup(original, 'ko');
+    expect(html).toContain(`>by @hana<`);
+    expect(html.match(/<a\s/g)).toHaveLength(1);
+    expect(html).not.toContain('/makers/hana');
+    expect(html).not.toContain(dicts.ko.prompts.cardAuthorAnonymous);
   });
 
   it('links a profile only for a maker who opted in', () => {
