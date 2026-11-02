@@ -58,7 +58,7 @@ We build the first scene for your brand. Each creator brings their own face and 
 | 개인 얼굴 사진·생성 결과물·비공개 캠페인 첨부 | 별도 비공개 R2 버킷 | TWINGS 서버에서 현재 사용자 권한 확인 → 짧은 S3 서명 URL |
 | 웹사이트·문의·비즈니스 로직 | Vercel | 미디어 bytes를 프록시하지 않고 직접 업로드/다운로드 URL 발급 |
 
-공개 도메인 후보는 `media.twings.app`이다. 아직 생성하거나 연결하지 않았다. 공개 CDN과 개인 파일은 버킷부터 분리하며, 얼굴 사진을 공개 도메인 아래에 두지 않는다. 모바일 앱도 같은 인증 API와 미디어 계약을 사용한다.
+공개 도메인은 `media.twings.app`이다(버킷 `twings-media-apac`). 공개 CDN과 개인 파일은 버킷부터 분리하며, 얼굴 사진을 공개 도메인 아래에 두지 않는다. 모바일 앱도 같은 인증 API와 미디어 계약을 사용한다.
 
 초기에는 Workers나 Stream을 추가하지 않는다. R2는 객체 저장소이며 자동 인코딩/적응형 스트리밍 서비스가 아니다. 현재 짧은 MP4는 포스터, fast-start, 적절한 해상도, Range 요청과 클릭 재생으로 제공한다. 긴 영상의 품질 전환이 실제 요구사항이 될 때 별도 검토한다.
 
@@ -79,8 +79,8 @@ We build the first scene for your brand. Each creator brings their own face and 
 
 코드에서 달라진 것:
 
-- `publicContentUrl()`은 R2 복사가 확인된 키만 `PUBLIC_MEDIA_BASE_URL`로 보낸다(`lib/content/public-media-keys.ts`, 자동 복사를 켠 뒤에는 `public_media_copies`까지). 나머지 키와 변수가 없는 경우는 지금처럼 Supabase다. 이 변수가 없으면 배포해도 동작이 같다.
-- URL을 저장하는 캐시(`prompt-catalog`, `landing-media`)의 키에 호스트와 파일 수를 넣었다. 전환과 되돌리기 모두 옛 주소를 들고 있지 않는다.
+- `publicContentUrl()`은 R2 복사가 확인된 키만 `PUBLIC_MEDIA_BASE_URL`로 보낸다(`lib/content/public-media-keys.ts`). 나머지 키와 변수가 없는 경우는 Supabase다. 아래 직접 저장을 켜면 모든 키가 이 주소로 나간다.
+- URL을 저장하는 캐시(`prompt-catalog`, `landing-media`)의 키에 호스트와 파일 수, 직접 저장 여부를 넣었다. 전환과 되돌리기 모두 옛 주소를 들고 있지 않는다.
 - `shape.ts`의 `defaultPublicUrl`은 테스트용 기본값이고, 운영 경로는 모두 `publicContentUrl`을 넘기므로 고치지 않았다.
 - `<img>`·`<video>`만 쓰고 공개 파일을 스크립트로 읽지 않으므로 R2 CORS 설정은 필요 없다. CSP에도 이미지·미디어 허용 목록이 없다.
 
@@ -102,79 +102,52 @@ We build the first scene for your brand. Each creator brings their own face and 
 5. 대표 승인 뒤 Vercel Production에 `PUBLIC_MEDIA_BASE_URL=https://media.twings.app`만 넣고 재배포한다.
 6. 확인: 템플릿과 랜딩의 이미지·영상이 `media.twings.app`에서 재생되는지, 토스 심사 항목, `/auth/v1/health`, Supabase 로그의 공개 파일 요청 감소.
 
-되돌리기: Vercel에서 `PUBLIC_MEDIA_BASE_URL`을 지우고 재배포한다. Supabase 원본이 남아 있을 때만 쓸 수 있다.
+이 런북으로 공개 파일 96개를 옮겼고, 대표가 Supabase 원본을 지웠다(아래 "원본 삭제 기록"). **이제 `PUBLIC_MEDIA_BASE_URL`을 지우면 공개 파일이 전부 404가 된다.** Production, Preview, 로컬 cloud 모드에 계속 두어야 한다.
 
-새로 게시한 파일은 아래 자동 복사를 켜기 전까지 Supabase에서 나간다.
+## 새 공개 파일은 R2에 바로 저장 (2026-11-02 대표 결정)
 
-## 새 공개 파일 자동 복사 (2026-11-02)
-
-지금은 `public-media-keys.ts`에 적힌 96개만 R2에서 나간다. 이 목록을 바꾸려면 스크립트를 손으로 돌리고 PR을 병합해 배포해야 한다. 그 사이 새 파일은 Supabase 전송량을 쓴다.
-
-### 고른 방식
-
-| | 게시 직후 복사 + 매일 대조, 검증 키는 DB (채택) | 예약 작업 + 키 목록 PR |
-| --- | --- | --- |
-| 새 파일이 R2로 옮겨지는 시점 | 게시 응답 직후. 놓치면 다음 날 대조 | 예약 주기마다 |
-| 주소가 바뀌는 시점 | 검증 직후, 배포 없이 | PR 병합과 배포 뒤 |
-| 사람 손 | 없음 | 병합은 대표 또는 Director(AGENTS §3) |
-| 실패 위험 | 복사 실패는 게시에 영향 없음, 다음에 재시도 | 빌드 실패 이력이 있는 프로덕션 빌드를 파일이 늘 때마다 거침 |
-| 실행 장소 | Vercel | GitHub Actions(무료 한도로 멈춘 이력) 또는 상시 켜진 PC |
-| 필요한 것 | Vercel에 R2 키 4개(대표 승인), 마이그레이션 | GitHub에 R2·Supabase 키, 자동 병합 정책 변경 |
-
-Cloudflare Worker로 복사하는 안은 R2 키를 Vercel에 두지 않아도 되지만, Supabase 서비스 키를 Cloudflare로 옮기게 되고 위 "초기에는 Workers를 추가하지 않는다"를 뒤집으므로 고르지 않았다.
-
-R2 키를 Vercel에 두는 위험은 키가 새면 공개 버킷의 파일을 덮어쓸 수 있다는 것이다. 토큰을 `twings-media-apac` 한 버킷의 Object Read & Write로 제한했으므로 다른 자원에는 닿지 않는다. 비공개 파일과 얼굴 사진은 이 버킷에 없다.
+Supabase 공개 버킷이 비었으므로 Supabase에 저장한 뒤 복사할 이유가 없어졌다. 그래서 게시 후 복사, 매일 대조, `public_media_copies` 표로 만든 자동 복사(#168)를 걷어내고 직접 저장으로 바꿨다. 0073/0149는 클라우드에 적용된 적이 없어 파일째 지웠다.
 
 ### 동작
 
-1. 게시 경로는 모두 `StorageDriver.copy()`를 지난다. `public-content`의 콘텐츠 주소 키가 처음 보이면 `after()`로 복사 한 번을 예약한다. 게시 응답을 기다리게 하지 않고, 복사가 실패해도 게시는 그대로 성공한다.
-2. 복사는 `public-content` 목록에서 아직 검증되지 않은 키만 고른다. 키마다 Supabase에서 읽어 이름과 해시를 맞추고 R2에 쓴 뒤, `media.twings.app`으로 다시 읽어 바이트, 형식, 캐시 헤더, 영상·음성의 구간 요청을 확인한다. 검증이 끝난 파일은 다시 읽지 않으므로 Supabase 전송량은 파일당 한 번이다.
-3. 전부 통과한 키만 `public_media_copies.verified_at`이 채워진다. 그 전까지 `publicContentUrl()`은 Supabase 주소를 낸다. 실패한 키도 Supabase 주소 그대로라 화면은 깨지지 않는다.
-4. 검증되면 캐시 문서와 정적 페이지를 바로 갱신해 새 주소로 바꾼다. 갱신을 놓쳐도 1시간 TTL 안에 바뀐다.
-5. `/api/public-media/tick`이 매일 05:00(KST) 같은 복사를 돌려 놓친 파일을 잡는다.
-
-안전 장치:
-
-- 같은 파일을 두 실행이 동시에 읽지 않는다. 키를 잡을 때 15분 임대를 건다.
-- 실패한 파일은 1시간, 2시간, 4시간 식으로 간격을 늘려 최대 3일마다 다시 시도한다. 이름과 바이트가 다른 파일은 고쳐질 수 없으므로 다시 읽지 않는다.
-- 코드 목록은 그대로 둔다. DB를 읽지 못해도 96개는 R2에서 나가고, 나머지는 Supabase로 나간다.
-- `next build` 중에는 DB를 읽지 않는다. 실패한 조회가 연결을 버리는 문제가 빌드 실패의 원인이었다(`lib/db/connect-shared.ts`).
-- R2 키가 없으면 아무것도 읽거나 쓰지 않는다. 코드만 배포해도 지금과 같다.
+1. R2 키 4개와 `PUBLIC_MEDIA_BASE_URL`이 모두 있으면 직접 저장이다(`publicMediaR2Config()`).
+2. 게시 경로는 모두 `StorageDriver.copy()`를 지난다. `public-content`로 가는 copy는 업로드 원본을 읽어 이름과 SHA-256을 맞추고 R2에 쓴 뒤, `media.twings.app`에 첫 1KB를 요청해 206, 전체 크기, 형식, 캐시 헤더, 바이트를 확인한다(`lib/storage/public-media-direct.ts`). 큰 영상을 게시해도 다시 받지 않는다.
+3. 어느 단계든 실패하면 게시가 오류로 끝난다. 없는 파일을 가리키는 페이지가 생기지 않는다. 같은 파일을 다시 게시하면 R2를 확인하고 `exists`로 끝난다.
+4. 직접 저장이면 모든 키가 `media.twings.app`으로 나간다. 표, 목록 조회, 예약 작업이 없다.
+5. 키가 하나라도 없으면 지금까지와 같다. 게시는 Supabase로 가고 `public-media-keys.ts`의 키만 R2에서 나간다. 그래서 코드를 먼저 배포해도 게시가 끊기지 않는다.
 
 ### 켜는 순서
 
-1. 대표 또는 Director: 마이그레이션 `0073_core_public_media_copies`, `0149_glue_public_media_copies`를 적용한다.
-2. 대표: Vercel Production에만 `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_PUBLIC_BUCKET`을 넣고 재배포한다. 값은 `D:\dev\twings\.env.local`과 같다. Preview에는 넣지 않는다.
-3. 확인: 템플릿을 하나 게시하고 몇 분 뒤 `select key, attempts, last_failure, verified_at from public_media_copies order by created_at desc`로 검증을 본다. 그 템플릿 페이지의 영상 주소가 `media.twings.app`인지, 재생과 탐색이 되는지 확인한다.
+1. 대표: Vercel Production과 Preview에 `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_PUBLIC_BUCKET`을 넣는다. 값은 `D:\dev\twings\.env.local`과 같다. 환경변수는 다음 배포부터 적용된다.
+2. 키를 넣기 전 Supabase에 게시된 파일을 옮긴다: `R2_ENV_FILE=D:/dev/twings/.env.local npm run r2:sync-public`. 직접 저장으로 바뀌면 모든 키가 R2 주소로 나가므로 먼저 해야 한다. 바뀐 `public-media-keys.ts`는 PR로 올린다.
+3. 재배포한다.
+4. 2와 3 사이에 게시된 파일을 잡기 위해 동기화를 한 번 더 돌린다.
+5. 확인: 템플릿 하나를 게시해 페이지 주소가 `media.twings.app`인지, 재생과 탐색이 되는지 본다. `select count(*) from storage.objects where bucket_id = 'public-content' and name <> '.emptyFolderPlaceholder'`가 늘지 않아야 한다.
 
-`CRON_SECRET`은 이미 Production에 있다(`docs/BRAND-INQUIRY-DELIVERY.md`). 없으면 매일 대조만 503으로 멈추고 게시 직후 복사는 돈다.
+Cloudflare는 없는 파일의 404를 몇 분간 캐시할 수 있다. 2를 건너뛰어 잠시 404가 나왔다면 복사 뒤에도 몇 분간 404일 수 있고, 동기화의 공개 주소 확인도 그동안 실패할 수 있다. 몇 분 뒤 다시 돌리면 된다.
 
-되돌리기:
+### R2 키를 Vercel에 두는 위험
 
-- 자동 복사만: Vercel에서 R2 키 4개를 지우고 재배포한다. 코드 목록의 키만 R2에서 나가고, `public_media_copies`에만 있던 키는 Supabase로 돌아간다.
-- 파일 하나: `public_media_copies`에서 그 행을 지운다. 1시간 안에 Supabase 주소로 돌아가고, 다음 복사 때 다시 복사·검증해 통과하면 R2로 돌아온다.
-- 전체: 위처럼 `PUBLIC_MEDIA_BASE_URL`을 지운다. 원본을 지운 뒤에는 쓸 수 없다(아래 "원본을 지우기 전에").
+키가 새면 공개 버킷의 파일을 덮어쓸 수 있다. 토큰을 `twings-media-apac` 한 버킷의 Object Read & Write로 제한했으므로 다른 자원에는 닿지 않고, 비공개 파일과 얼굴 사진은 이 버킷에 없다. Preview에도 키를 두는 이유는, 없으면 직접 저장된 파일이 Preview에서 Supabase 주소로 나가 404가 되기 때문이다. Preview에서 게시해도 같은 버킷에 쓰지만, 이름이 내용의 해시라 다른 파일을 덮어쓰지 않는다.
+
+### 되돌리기
+
+R2 키 4개를 지우고 재배포하면 게시가 Supabase로 돌아간다. 다만 그 전에 직접 저장된 파일은 목록에 없어 Supabase 주소로 나가므로 404가 된다. 키를 지우기 전에 R2 버킷의 파일 이름으로 `public-media-keys.ts`를 채워 배포한다. 동기화 스크립트는 Supabase에 있는 파일만 보므로 이 목록을 채우지 못한다.
 
 ### 범위 밖
 
-- Supabase 원본은 지우지 않는다. 그래서 Supabase 저장 용량 1 GB 한도는 이 작업으로 줄지 않는다. 삭제는 대표 확인을 받아 따로 한다.
-- 비공개 파일과 얼굴 사진.
-- `temp-dm/`, `ig-masters-*/`처럼 콘텐츠 주소가 아닌 파일.
-- 렌더 결과물은 `public-content`에 없다. 공개 파일의 주소만 다룬다.
+- **업로드 원본:** 게시할 때 올린 파일은 `content` 버킷에 남는다. 그래서 Supabase 저장 용량은 공개 파일을 옮겨도 게시할수록 늘어난다(2026-11-02 기준 0.73 GB, Free 한도 1 GB).
+- **비공개 파일과 얼굴 사진:** 개인정보처리방침의 위탁사 변경이 먼저다.
+- 앱에는 파일을 지우는 코드가 없다. R2에도 Supabase에도 삭제 경로를 만들지 않았다.
 
-`npm run r2:sync-public`은 전체 재검증 도구로 남긴다. 버킷 전체를 Supabase에서 읽으므로 평소에는 돌리지 않는다.
+### 원본 삭제 기록
 
-### 원본을 지우기 전에 (대표가 대시보드에서 직접)
+2026-11-02 대표가 대시보드에서 직접 지웠다.
 
-앱에는 삭제 코드가 없다. 지울 수 있는 파일과 조건은 아래와 같다.
+- `public-media-keys.ts`의 96개. 삭제 직후 96개 모두 `media.twings.app`에서 206으로 확인했다.
+- `temp-dm/`(9개), `ig-masters-20261031/`(4개). R2에는 없고, 백업은 `D:\dev\_backups\supabase-public-content-2026-11-02`에 `manifest.csv`와 함께 있다.
 
-- **`lib/content/public-media-keys.ts`에 있는 키의 원본만 지운다.** 이 목록은 DB나 환경과 무관하게 코드에 들어 있어서, 어떤 상황에서도 R2 주소로 나간다.
-- **`public_media_copies`에만 있는 키의 원본은 지우지 않는다.** 그 표를 아직 읽지 않은 프로세스, 빌드 중에 만들어진 페이지, DB 장애 상황에서는 Supabase 주소로 나가고, 원본이 없으면 404가 된다. 지우려면 먼저 `npm run r2:sync-public`으로 목록에 넣고 PR을 병합·배포한다.
-- `temp-dm/`, `ig-masters-*/`는 R2에 없다. 쓰는 곳을 따로 확인하기 전에는 지우지 않는다.
-
-목록은 늘어나기만 한다. 원본을 지운 뒤 재검증을 돌려도 키는 빠지지 않고, 스크립트는 그런 키의 수를 `kept without a Supabase original`로 보고한다. 자동 복사도 검증된 행을 지우지 않는다. 다운로드(`/api/prompts/media/[ref]?download=1`)도 R2에 있는 키는 공개 주소에서 읽는다.
-
-원본을 지운 뒤에는 되돌리는 방법이 달라진다. **`PUBLIC_MEDIA_BASE_URL`을 지우면 지운 키가 전부 404가 된다.** R2 키 4개를 지우는 것은 괜찮다. `public_media_copies`의 행을 지워 파일 하나를 Supabase로 돌리는 것도 원본이 있는 파일에만 쓴다. Preview와 로컬 cloud 모드에도 `PUBLIC_MEDIA_BASE_URL`이 있어야 한다.
+목록은 늘어나기만 한다. 동기화 스크립트는 원본이 없는 키를 빼지 않고 `kept without a Supabase original`로 보고한다. 다운로드(`/api/prompts/media/[ref]?download=1`)도 R2에 있는 키는 공개 주소에서 읽는다.
 
 ## 무료 유지와 비용
 

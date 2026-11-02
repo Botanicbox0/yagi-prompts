@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
-import { PUBLIC_MEDIA_CACHE_CONTROL, renderPublicMediaKeys, syncNewPublicMedia, syncPublicMedia, type PublicMediaFailure, type PublicMediaLedger, type PublicMediaSyncDeps } from '@/lib/storage/public-media-sync';
+import { PUBLIC_MEDIA_CACHE_CONTROL, renderPublicMediaKeys, syncPublicMedia, type PublicMediaSyncDeps } from '@/lib/storage/public-media-sync';
 
 const bytesOf = (text: string) => new TextEncoder().encode(text);
 const keyFor = (bytes: Uint8Array, ext = 'mp4') => `${createHash('sha256').update(bytes).digest('hex')}.${ext}`;
@@ -99,96 +99,6 @@ describe('syncPublicMedia', () => {
     const report = await syncPublicMedia(deps);
     expect(report.verified).toEqual([otherKey]);
     expect(report.failed).toEqual([{ key: KEY, reason: 'copy_error' }]);
-  });
-});
-
-function ledger(verified: readonly string[] = [], busy: readonly string[] = []) {
-  const events: string[] = [];
-  const failures = new Map<string, PublicMediaFailure>();
-  const value: PublicMediaLedger = {
-    verifiedKeys: async () => new Set(verified),
-    claim: async (object) => { events.push(`claim ${object.key}`); return !busy.includes(object.key); },
-    markVerified: async (key) => { events.push(`verified ${key}`); },
-    markFailed: async (key, reason) => { failures.set(key, reason); },
-  };
-  return { value, events, failures };
-}
-
-describe('syncNewPublicMedia', () => {
-  const LATER = Number.MAX_SAFE_INTEGER;
-
-  it('marks a key verified only after the public read matches', async () => {
-    const { deps, stored } = harness();
-    const seen: string[] = [];
-    const { value, events } = ledger();
-    const report = await syncNewPublicMedia({ ...deps, publicGet: async (key, range) => { seen.push(`read ${events.length}`); return deps.publicGet(key, range); } }, value, { stopAt: LATER });
-    expect(report.verified).toEqual([KEY]);
-    expect(stored.has(KEY)).toBe(true);
-    // Both public reads happened before anything but the claim was written.
-    expect(seen).toEqual(['read 1', 'read 1']);
-    expect(events).toEqual([`claim ${KEY}`, `verified ${KEY}`]);
-  });
-
-  it('never marks a key verified when the public host returns other bytes', async () => {
-    const { deps } = harness({
-      publicGet: async () => ({ status: 200, contentType: 'video/mp4', contentRange: null, cacheControl: PUBLIC_MEDIA_CACHE_CONTROL, bytes: bytesOf('other') }),
-    });
-    const { value, events, failures } = ledger();
-    const report = await syncNewPublicMedia(deps, value, { stopAt: LATER });
-    expect(report.verified).toEqual([]);
-    expect(report.failed).toEqual([{ key: KEY, reason: 'public_bytes_mismatch' }]);
-    expect(failures.get(KEY)).toBe('public_bytes_mismatch');
-    expect(events).not.toContain(`verified ${KEY}`);
-  });
-
-  it('does not read or write a key that is already verified, which is what keeps Supabase egress flat', async () => {
-    let reads = 0;
-    const { deps, stored } = harness({ read: async () => { reads += 1; return BODY; } });
-    const { value, events } = ledger([KEY]);
-    const report = await syncNewPublicMedia(deps, value, { stopAt: LATER });
-    expect(report).toEqual({ verified: [], failed: [], waiting: [], deferred: [] });
-    expect(reads).toBe(0);
-    expect(stored.size).toBe(0);
-    expect(events).toEqual([]);
-  });
-
-  it('leaves temporary folders alone without claiming them', async () => {
-    const { deps, stored } = harness({ list: async () => [{ key: 'temp-dm/clip.mp4', size: 10, mime: 'video/mp4' }] });
-    const { value, events } = ledger();
-    await syncNewPublicMedia(deps, value, { stopAt: LATER });
-    expect(events).toEqual([]);
-    expect(stored.size).toBe(0);
-  });
-
-  it('skips a key another run holds, or one still backing off, without reading it', async () => {
-    let reads = 0;
-    const { deps } = harness({ read: async () => { reads += 1; return BODY; } });
-    const report = await syncNewPublicMedia(deps, ledger([], [KEY]).value, { stopAt: LATER });
-    expect(report.waiting).toEqual([KEY]);
-    expect(reads).toBe(0);
-  });
-
-  it('starts nothing after the budget and reports what it left for the next run', async () => {
-    let reads = 0;
-    const { deps } = harness({ read: async () => { reads += 1; return BODY; } });
-    const { value, events } = ledger();
-    const report = await syncNewPublicMedia(deps, value, { stopAt: 1000, now: () => 1000 });
-    expect(report.deferred).toEqual([KEY]);
-    expect(reads).toBe(0);
-    expect(events).toEqual([]);
-  });
-
-  it('records a failed read and keeps going', async () => {
-    const other = bytesOf('y'.repeat(2048));
-    const otherKey = keyFor(other, 'jpg');
-    const { deps } = harness({
-      list: async () => [{ key: KEY, size: BODY.length, mime: 'video/mp4' }, { key: otherKey, size: other.length, mime: 'image/jpeg' }],
-      read: async (key) => { if (key === KEY) throw new Error('down'); return other; },
-    });
-    const { value, failures } = ledger();
-    const report = await syncNewPublicMedia(deps, value, { stopAt: LATER });
-    expect(report.verified).toEqual([otherKey]);
-    expect(failures.get(KEY)).toBe('copy_error');
   });
 });
 

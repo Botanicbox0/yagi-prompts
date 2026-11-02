@@ -94,6 +94,18 @@ describe('prompt media route', () => {
     expect(response.headers.get('content-disposition')).toBe('attachment; filename="prom-queen.mp4"');
   });
 
+  it('reads the media host on ?download=1 for any key once files are written straight to R2', async () => {
+    vi.stubEnv('R2_ACCOUNT_ID', 'account');
+    vi.stubEnv('R2_ACCESS_KEY_ID', 'access');
+    vi.stubEnv('R2_SECRET_ACCESS_KEY', 'secret');
+    vi.stubEnv('R2_PUBLIC_BUCKET', 'twings-media-apac');
+    published(NEW_KEY);
+    const response = await get('?download=1');
+    expect(response.status).toBe(200);
+    expect(String(fetchMock.mock.calls[0]?.[0])).toBe(`${MEDIA}/${NEW_KEY}`);
+    expect(mocks.read).not.toHaveBeenCalled();
+  });
+
   it('reads Supabase on ?download=1 with no media host configured', async () => {
     vi.stubEnv('PUBLIC_MEDIA_BASE_URL', '');
     published(COPIED_KEY);

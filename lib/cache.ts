@@ -94,20 +94,6 @@ export function revalidateLandingMedia(): void {
   revalidateStaticSurfaces(['', '/brands']);
 }
 
-/**
- * docs/BRAND-MOAT-AND-STORAGE.md — a public file was verified on the media host. The documents and pages
- * that hold its address move to the new one now, not at the TTL, because a new template gets its first
- * visitors right after it is published.
- */
-export function revalidatePublicMedia(): void {
-  revalidateCatalog();
-  revalidatePrompts();
-  revalidateContests();
-  revalidateLandingMedia();
-  revalidateStaticSurfaces(['/video', '/image']);
-  revalidatePath('/[locale]/t/[slug]', 'page');
-}
-
 export function revalidateSubscriptions(): void {
   revalidateTag('creator-subscription-status');
   revalidateStaticSurfaces(['', '/pricing', '/faq', '/legal/terms', '/legal/refund', '/legal/privacy']);

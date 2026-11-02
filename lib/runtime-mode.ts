@@ -141,9 +141,9 @@ export interface PublicMediaR2Config {
 }
 
 /**
- * What copying new public files to R2 needs (docs/BRAND-MOAT-AND-STORAGE.md), or `null` with any value
- * missing. `null` switches the whole feature off: nothing is copied, the verified-key table is not read
- * and only the keys in `lib/content/public-media-keys.ts` go to the media host.
+ * What writing public files straight to R2 needs (docs/BRAND-MOAT-AND-STORAGE.md), or `null` with any
+ * value missing. `null` keeps publishing to Supabase, and only the keys in
+ * `lib/content/public-media-keys.ts` go to the media host.
  */
 export function publicMediaR2Config(env: EnvLike = process.env): PublicMediaR2Config | null {
   const mediaBaseUrl = publicMediaBaseUrl(env);
