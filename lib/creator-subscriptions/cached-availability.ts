@@ -1,7 +1,8 @@
 import 'server-only';
 import { unstable_cache } from 'next/cache';
 import { getSqlRunner } from '@/lib/db/connect';
-import { cacheableSubscriptionAvailability, SUBSCRIPTION_RELEASE_VERSION } from './availability';
+import type { SqlRunner } from '@/lib/db/sql-runner';
+import { cacheableSubscriptionAvailability, type PublicSubscriptionAvailability, SUBSCRIPTION_RELEASE_VERSION } from './availability';
 import { currentImplementationSha, launchConfigurationDigest, premiumConfigurationDigest } from './evidence';
 import { subscriptionTermsApproved } from './evidence';
 
@@ -31,3 +32,16 @@ export const cachedSubscriptionTermsApproved = unstable_cache(
   ['creator-subscription-terms-approved', ...identity],
   { tags: [SUBSCRIPTION_AVAILABILITY_TAG], revalidate: 3600 },
 );
+
+/** Everything the pages under SUBSCRIPTION_AVAILABILITY_TAG say about subscriptions, as one comparable value. */
+export type PublicSubscriptionAnswer = [availability: PublicSubscriptionAvailability, termsApproved: boolean];
+
+/** The answer public pages were built from. */
+export async function cachedPublicSubscriptionAnswer(): Promise<PublicSubscriptionAnswer> {
+  return [await cachedSubscriptionAvailability(), await cachedSubscriptionTermsApproved()];
+}
+
+/** The answer a page built now would get, past the cache. Rejects on an outage, as the cached reads do. */
+export async function freshPublicSubscriptionAnswer(sql: SqlRunner): Promise<PublicSubscriptionAnswer> {
+  return [await cacheableSubscriptionAvailability(sql), await subscriptionTermsApproved(sql)];
+}

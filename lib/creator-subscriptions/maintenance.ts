@@ -48,3 +48,20 @@ export async function runSubscriptionMaintenance(deps:SubscriptionDeps,env:Recor
       currentImplementationSha(env),launchConfigurationDigest(env)]);
   return {ok:true,...report,heartbeatRecorded:heartbeat.rows.length===1};
 }
+
+/**
+ * Most ticks leave the public answer as it was. Purging pages anyway throws away the last good copy
+ * that ISR serves through a database outage (lib/db/read-policy.ts), so a tick purges only when the
+ * answer pages were built from differs from the answer they would get now: the heartbeat that ends a
+ * lapse, or a lapse that began since the pages were built.
+ * A read that fails gave no answer, and a purge during an outage leaves visitors a render that
+ * throws. So that is no change; the next tick, or the pages' hourly revalidation, catches up.
+ */
+export async function publicAnswerChanged(shown:()=>Promise<unknown>,current:()=>Promise<unknown>):Promise<boolean> {
+  try {
+    // Compared as JSON, the form the cache stores: a field left undefined is absent on both sides.
+    return JSON.stringify(await shown())!==JSON.stringify(await current());
+  } catch {
+    return false;
+  }
+}
