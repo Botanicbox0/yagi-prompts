@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } f
 import type { Dictionary } from '@/messages/en';
 import { interpolate } from '@/lib/i18n/format';
 import { isRoyalty, quoteRecipe, ROYALTY_MAX_KRW, ROYALTY_MIN_KRW, ROYALTY_STEP_KRW } from '@/lib/recipes/pricing';
-import { exportRecipe, INTRO_MAX, MAX_STEP_PROMPT_CHARS, NOTE_MAX, OUTRO_MAX, parseRecipe, recipeMedium, SELFIE_SLOT, type Recipe, type RecipeIssue } from '@/lib/recipes/schema';
+import { exportRecipe, INTRO_MAX, MAX_RECIPE_STEPS, MAX_STEP_PROMPT_CHARS, NOTE_MAX, OUTRO_MAX, parseRecipe, recipeMedium, SELFIE_SLOT, type Recipe, type RecipeIssue } from '@/lib/recipes/schema';
 import { BUTTON, BUTTON_OUTLINE, FIELD, HINT, PANEL } from '@/components/creators/styles';
 
 /**
@@ -281,7 +281,7 @@ export function RecipeEditor({ copy, formatId, draft, engines, aspects, hasSelfi
             </div>;
           })}
           {medium === 'video' && !steps.some((s) => s.kind === 'image') ? <button type="button" onClick={() => setSteps((current) => [newStep('image'), ...current])} className={BUTTON_OUTLINE}>{copy.addImageStep}</button> : null}
-          {medium === 'carousel' && steps.length < 6 ? <button type="button" onClick={() => setSteps((current) => [...current, newStep('image')])} className={BUTTON_OUTLINE}>{copy.addFrame}</button> : null}
+          {medium === 'carousel' && steps.length < MAX_RECIPE_STEPS ? <button type="button" onClick={() => setSteps((current) => [...current, newStep('image')])} className={BUTTON_OUTLINE}>{copy.addFrame}</button> : null}
         </section>
 
         <section className={PANEL}>

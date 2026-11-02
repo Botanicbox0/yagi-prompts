@@ -299,6 +299,7 @@ export async function publishPromptMedia(
     for (const ref of media.gallery) gallery.push(await publish(ref));
     next.gallery = gallery;
   }
+  if (media.posterFocus) next.posterFocus = media.posterFocus;
 
   return { media: next, report };
 }

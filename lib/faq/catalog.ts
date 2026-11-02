@@ -55,7 +55,9 @@ export function faqItems(dict: Dictionary, placement?: FaqPlacement, publicGener
     id: entry.id,
     category: entry.category,
     q: dict.faq[`q${entry.number}`],
-    a: !publicGeneration && [1, 2].includes(entry.number)
+    a: !publicGeneration && entry.number === 17
+      ? dict.faq.a17Closed
+      : !publicGeneration && [1, 2].includes(entry.number)
       ? `${dict.seo.generationClosed} ${dict.faq[`a${entry.number}`]}`
       : dict.faq[`a${entry.number}`],
   }));

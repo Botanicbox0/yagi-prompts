@@ -53,8 +53,9 @@ describe('maker recipe migrations (0059 core, 0142 glue)', () => {
       expect(await expectReject(() => db.query(`insert into render_job_recipes(render_id,purpose,recipe) values($1,'maker_test','{"version":2}'::jsonb)`, [job]))).toMatch(/check/);
       expect(await expectReject(() => db.query(`insert into render_job_recipes(render_id,purpose,format_id,recipe) values($1,'customer',$2,'{"version":2}'::jsonb)`, [job, format]))).toMatch(/check/);
       await db.query(`insert into render_job_recipes(render_id,purpose,format_id,recipe) values($1,'maker_test',$2,'{"version":2}'::jsonb)`, [job, format]);
-      expect(await expectReject(() => db.query("insert into render_job_outputs(render_id,position,step_id,storage_key,mime,bytes) values($1,6,'f7','k','image/jpeg',1)", [job]))).toMatch(/check/);
+      expect(await expectReject(() => db.query("insert into render_job_outputs(render_id,position,step_id,storage_key,mime,bytes) values($1,10,'f11','k','image/jpeg',1)", [job]))).toMatch(/check/);
       await db.query("insert into render_job_outputs(render_id,position,step_id,storage_key,mime,bytes) values($1,0,'f1','k','image/jpeg',1)", [job]);
+      await db.query("insert into render_job_outputs(render_id,position,step_id,storage_key,mime,bytes) values($1,9,'f10','k','image/jpeg',1)", [job]);
       // Deleting the job removes its recipe snapshot and outputs with it.
       await db.query('delete from render_jobs where id=$1', [job]);
       expect((await db.query<{ n: number }>('select (select count(*) from render_job_recipes)::int + (select count(*) from render_job_outputs)::int n')).rows[0]!.n).toBe(0);

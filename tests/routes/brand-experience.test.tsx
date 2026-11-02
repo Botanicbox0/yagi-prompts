@@ -93,6 +93,8 @@ describe('the brand page shows the service before asking visitors to enquire', (
     expect(html).toContain('/brand/yagi-mark-black.png');
     expect(html.match(/data-contrast-pair=/g)).toHaveLength(3);
     expect(html.match(/data-contrast-source=/g)).toHaveLength(3);
+    // Each fix starts from two pictures: the broken shot and the brand's own original.
+    expect(html).toContain('브랜드에 등록된 원본');
     // Creator campaign: the feed, the consent line, then the Morphic case.
     expect(html.match(/data-feed-post=/g)).toHaveLength(4);
     expect(html).toContain('본인 얼굴 사용에 동의한 뒤 참여합니다');

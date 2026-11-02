@@ -12,8 +12,14 @@ import { buildSitemap } from '@/lib/seo/sitemap';
  * trace of the retired stored-value item survives.
  */
 describe('legal documents', () => {
+  it('names Cloudflare as the host and processor for public media delivery', () => {
+    expect(businessRows('ko').flat()).toContain('Vercel Inc. · Supabase Inc. · Cloudflare, Inc.');
+    expect(legalDocument('privacy', 'ko').body).toContain('| Cloudflare, Inc. (미국) | 공개 미디어 전송 | 접속 기록 |');
+    expect(legalDocument('privacy', 'en').body).toContain('| Cloudflare, Inc. (United States) | Public media delivery | Access logs |');
+  });
+
   it('states the owner-approved campaign service receipt and quote policy separately from template rendering',()=>{
-    expect(LEGAL_EFFECTIVE).toBe('2026-10-16');
+    expect(LEGAL_EFFECTIVE).toBe('2026-11-02');
     const ko=legalDocument('terms','ko').body,en=legalDocument('terms','en').body;
     expect(ko).toContain('TWINGS 자체 서비스 대금');expect(ko).toContain('총액, 세금 기준, 제공 범위, 시작 조건과 환불 조건');expect(ko).toContain('입금 확인');expect(ko).toContain('자동 실행하지 않습니다');
     expect(en).toContain("TWINGS's own service fees");expect(en).toContain('total, tax basis, scope, start conditions and refund conditions');expect(en).toContain('does not automatically');

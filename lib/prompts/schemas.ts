@@ -239,14 +239,23 @@ export const USE_CASE_MAX = 3;
  * and never a form field: it arrives with the set (lib/prompts/image-templates.ts) and every later
  * `/admin` edit carries it through `publishPromptMedia` unchanged.
  */
-export const PROMPT_GALLERY_MAX = 6;
+export const PROMPT_GALLERY_MAX = 10;
 
-/** A set's frames: a recipe caps at six steps, the gallery at six images. */
+/** A set's frames: a recipe caps at ten steps, the gallery at ten images. */
 export const IMAGE_SET_FRAMES_MIN = 2;
 export const IMAGE_SET_FRAMES_MAX = PROMPT_GALLERY_MAX;
 const SET_PHOTO = /\bImage 1\b/;
 const SET_OTHER_REFERENCE = /\b(?:Image [2-9]\d*|Image 1\d+|Video \d+|Audio \d+)\b/;
 export type SetPromptIssue = 'no_photo' | 'other_reference' | 'braces';
+/**
+ * The admin form's prompts come from tools that write the photo `@image1`; the set's own word is
+ * "Image 1". Handles of other references become words too, so the check below refuses them by name.
+ */
+export function normalizeSetPrompt(prompt: string): string {
+  return prompt
+    .replace(/@(image|video|audio)[ _]?(\d+)\b/gi, (_, kind: string, n: string) => `${kind[0]!.toUpperCase()}${kind.slice(1).toLowerCase()} ${n}`)
+    .replace(/\bimage[ _]?1\b/gi, 'Image 1');
+}
 /** What a set frame's prompt may say about references: the buyer's photo as "Image 1", nothing else. */
 export function setPromptIssue(prompt: string): SetPromptIssue | null {
   if (!SET_PHOTO.test(prompt)) return 'no_photo';
@@ -258,6 +267,8 @@ export function setPromptIssue(prompt: string): SetPromptIssue | null {
 export const PromptMediaSchema = z.object({
   video: AssetRefSchema.optional(),
   poster: AssetRefSchema.optional(),
+  /** The admin wall's 1:1 crop. `catch`: a bad value must not fail the parse and lose the media. */
+  posterFocus: z.object({ x: z.number().min(0).max(100), y: z.number().min(0).max(100) }).optional().catch(undefined),
   audio: AssetRefSchema.optional(),
   gallery: z.array(AssetRefSchema).min(1).max(PROMPT_GALLERY_MAX).optional(),
 });

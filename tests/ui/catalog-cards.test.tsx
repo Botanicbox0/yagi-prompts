@@ -4,6 +4,7 @@ import { getDictionary } from '@/lib/i18n/dictionaries';
 import { KO_TERMS } from '@/messages/ko';
 import { EN_TERMS } from '@/messages/en';
 import type { PromptCard } from '@/lib/prompts/catalog';
+import { RECOMMENDED_IMAGE_ORDER, RECOMMENDED_LEAD, RECOMMENDED_VIDEO_ORDER } from '@/lib/prompts/recommended';
 import { PROMPT_MODEL_LABEL, USE_CASES } from '@/lib/prompts/schemas';
 import { PromptCardView } from '@/components/prompts/prompt-card';
 import { CardPlaybackControl, shouldMountClip } from '@/components/prompts/card-media';
@@ -149,7 +150,17 @@ describe('maker credit (PLATFORM-2.0 §7.5·§14.1: only maker templates say who
     // A maker template is a `source='yagi'` row with an author (0046): origin decides, not source.
     expect(markup(card({ origin: 'maker', source: 'yagi', authorHandle: null }), 'ko')).toContain(dicts.ko.prompts.cardAuthorAnonymous);
     expect(dicts.ko.prompts.cardAuthorAnonymous).toContain(KO_TERMS.maker);
-    expect(markup(card({ origin: 'studio', authorHandle: 'hana' }))).not.toContain('data-card-author');
+  });
+
+  // Founder 2026-11-02: an original shows the handle an admin typed — plain text, no title, no link.
+  it('credits "by @handle" as plain text on an original whose handle an admin filled in', () => {
+    const original = card({ origin: 'studio', authorHandle: 'hana' });
+    expect(cardAuthor(original)).toEqual({ handle: 'hana' });
+    const html = markup(original, 'ko');
+    expect(html).toContain(`>by @hana<`);
+    expect(html.match(/<a\s/g)).toHaveLength(1);
+    expect(html).not.toContain('/makers/hana');
+    expect(html).not.toContain(dicts.ko.prompts.cardAuthorAnonymous);
   });
 
   it('links a profile only for a maker who opted in', () => {
@@ -215,6 +226,55 @@ describe('rails: NEW first, two columns on a phone', () => {
   });
 });
 
+/**
+ * Founder 2026-11-02: the best-looking templates come first, in a hand-kept order, until likes or a
+ * recommender can rank them. A new template still gets seen: it follows the lead instead of the end.
+ */
+describe('recommended order (founder 2026-11-02)', () => {
+  const OLD = '2026-01-01T00:00:00.000Z';
+  const NEW = '2026-10-20T00:00:00.000Z';
+  const old = (slug: string) => card({ slug, publishedAt: OLD, featured: false });
+  const slugs = (cards: PromptCard[]) => railOrder(cards, NOW).map((c) => c.slug);
+
+  it('puts recommended templates in their set order, whatever the catalog order is', () => {
+    const [first, second, third] = RECOMMENDED_VIDEO_ORDER;
+    expect(slugs([old(third!), old('plain'), old(first!), old(second!)])).toEqual([first, second, third, 'plain']);
+  });
+
+  it('beats the NEW rule for a template that was already ranked lower', () => {
+    const last = RECOMMENDED_VIDEO_ORDER[RECOMMENDED_VIDEO_ORDER.length - 1]!;
+    const first = RECOMMENDED_VIDEO_ORDER[0]!;
+    expect(slugs([card({ slug: last, publishedAt: NEW }), old(first)])).toEqual([first, last]);
+  });
+
+  it('shows an unranked NEW template right after the lead, ahead of the other recommended ones', () => {
+    const lead = RECOMMENDED_VIDEO_ORDER[RECOMMENDED_LEAD - 1]!;
+    const after = RECOMMENDED_VIDEO_ORDER[RECOMMENDED_LEAD]!;
+    expect(slugs([old(after), card({ slug: 'brand-new', publishedAt: NEW }), old(lead)])).toEqual([lead, 'brand-new', after]);
+  });
+
+  it('keeps unranked older templates last, in catalog order', () => {
+    const after = RECOMMENDED_VIDEO_ORDER[RECOMMENDED_LEAD]!;
+    expect(slugs([old('plain-a'), old(after), old('plain-b')])).toEqual([after, 'plain-a', 'plain-b']);
+  });
+
+  it('ranks the image feed by its own list', () => {
+    const [first, second] = RECOMMENDED_IMAGE_ORDER;
+    expect(slugs([old(second!), old('plain'), old(first!)])).toEqual([first, second, 'plain']);
+  });
+
+  it('lists every slug once', () => {
+    const all = [...RECOMMENDED_VIDEO_ORDER, ...RECOMMENDED_IMAGE_ORDER];
+    expect(new Set(all).size).toBe(all.length);
+  });
+
+  it('still breaks a run of one origin inside the recommended order', () => {
+    const [a, b, c, d] = RECOMMENDED_VIDEO_ORDER;
+    const maker = card({ slug: RECOMMENDED_VIDEO_ORDER[4]!, publishedAt: OLD, featured: false, origin: 'maker', source: 'yagi', authorHandle: 'hana', makerProfile: true });
+    expect(slugs([old(a!), old(b!), old(c!), old(d!), maker])).toEqual([a, b, c, maker.slug, d]);
+  });
+});
+
 describe('catalog first screen (§15.3-5)', () => {
   const listing = (cards: PromptCard[]) =>
     renderToStaticMarkup(<TemplatesListing locale="ko" dict={dicts.ko} medium="video" cards={cards} />);
@@ -260,7 +320,7 @@ describe('catalog first screen (§15.3-5)', () => {
 
 /**
  * Founder 2026-10-30 (PLATFORM-2.0 §7.5): originals and AI creatives' templates in ONE feed. One
- * ranking (NEW → featured → newest); inside it, never more than ORIGIN_RUN_MAX cards of one origin
+ * ranking (these unranked slugs: NEW → featured → newest); inside it, never more than ORIGIN_RUN_MAX cards of one origin
  * in a row while the other origin still has cards. A creative's card says whose it is — nothing else.
  */
 describe('one mixed feed (founder 2026-10-30)', () => {

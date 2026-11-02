@@ -8,6 +8,13 @@ import {
   type UploadFailure,
   type UploadFailureLabels,
 } from '@/lib/admin/direct-upload';
+import {
+  POSTER_FOCUS_CENTER,
+  dragPosterFocus,
+  formatPosterFocus,
+  posterObjectPosition,
+  type PosterFocus,
+} from '@/lib/prompts/poster-focus';
 
 /**
  * Founder direction (2026-08-13) — the admin media fields grow hands.
@@ -38,8 +45,14 @@ export interface MediaDropLabels extends UploadFailureLabels {
   posterZone: string;
   posterPicked: string;
   posterHint: string;
+  cropHeading: string;
+  cropHint: string;
+  cropPosition: string;
   audioHeading: string;
   audioZone: string;
+  audioSaved: string;
+  audioLoading: string;
+  audioUnavailable: string;
   /** Direct-upload status (2026-08-15). `{percent}` is interpolated. */
   uploading: string;
   uploaded: string;
@@ -137,6 +150,8 @@ export function MediaDrop({
   audioName,
   existingVideoSrc,
   existingPosterSrc,
+  existingPosterFocus,
+  existingAudioSrc,
 }: {
   labels: MediaDropLabels;
   videoName: string;
@@ -152,6 +167,10 @@ export function MediaDrop({
   existingVideoSrc?: string;
   /** The poster this row already has — shown so the panel says what it is about to replace. */
   existingPosterSrc?: string;
+  /** Where that poster's 1:1 list thumbnail is cropped (staff report, 2026-11-02). */
+  existingPosterFocus?: PosterFocus;
+  /** The audio this row already has, so a save can be checked by ear (staff report, 2026-11-02). */
+  existingAudioSrc?: string;
 }) {
   const videoInputRef = useRef<HTMLInputElement>(null);
   const posterInputRef = useRef<HTMLInputElement>(null);
@@ -165,8 +184,13 @@ export function MediaDrop({
   const [frameState, setFrameState] = useState<'loading' | 'ready' | 'unavailable'>('loading');
   const [posterUrl, setPosterUrl] = useState<string | null>(null);
   const [posterLabel, setPosterLabel] = useState<string | null>(null);
+  const [posterFocus, setPosterFocus] = useState<PosterFocus>(existingPosterFocus ?? POSTER_FOCUS_CENTER);
+  const [posterSize, setPosterSize] = useState<{ w: number; h: number } | null>(null);
+  const cropDrag = useRef<{ pointerId: number; x: number; y: number; focus: PosterFocus } | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [audioLabel, setAudioLabel] = useState<string | null>(null);
+  const [existingAudioUrl, setExistingAudioUrl] = useState<string | null>(null);
+  const [existingAudioFailed, setExistingAudioFailed] = useState(false);
   const [dragging, setDragging] = useState<'video' | 'poster' | 'audio' | null>(null);
 
   /** Per-slot upload progress, and the receipt each finished upload leaves in the form. */
@@ -250,6 +274,29 @@ export function MediaDrop({
       if (url) URL.revokeObjectURL(url);
     };
   }, [existingVideoSrc]);
+
+  /** The row's audio, held as a blob for the same reason: pressing play can come after the 60 seconds. */
+  useEffect(() => {
+    if (!existingAudioSrc) return;
+    const abort = new AbortController();
+    let url: string | null = null;
+    void fetch(existingAudioSrc, { signal: abort.signal })
+      .then((response) => {
+        if (!response.ok) throw new Error(`audio_${response.status}`);
+        return response.blob();
+      })
+      .then((blob) => {
+        url = URL.createObjectURL(blob);
+        setExistingAudioUrl(url);
+      })
+      .catch(() => {
+        if (!abort.signal.aborted) setExistingAudioFailed(true);
+      });
+    return () => {
+      abort.abort();
+      if (url) URL.revokeObjectURL(url);
+    };
+  }, [existingAudioSrc]);
 
   const PLAIN_INPUT =
     'w-full border border-hairline bg-transparent px-2.5 py-1.5 font-mono text-code outline-none focus:border-accent';
@@ -346,6 +393,8 @@ export function MediaDrop({
     setReceipts((current) => ({ ...current, poster: '' }));
     setPosterLabel(label);
     setPosterUrl(URL.createObjectURL(file));
+    setPosterFocus(POSTER_FOCUS_CENTER);
+    setPosterSize(null);
     void upload('poster', file, posterInputRef.current);
   };
 
@@ -532,12 +581,81 @@ export function MediaDrop({
         />
         <input type="hidden" name={`${posterName}Ref`} value={receipts.poster} readOnly />
         {progress('poster')}
+
+        {/* The wall's 1:1 thumbnail, dragged into place. No bytes change: the form saves a position. */}
+        <input type="hidden" name={`${posterName}Focus`} value={formatPosterFocus(posterFocus)} readOnly />
+        {enhanced && (posterUrl ?? existingPosterSrc) && (
+          <div data-poster-crop className="mt-3 border border-hairline p-3">
+            <p className="font-label text-eyebrow uppercase opacity-60">{labels.cropHeading}</p>
+            <div
+              className="mt-2 aspect-square w-full max-w-60 cursor-grab touch-none overflow-hidden bg-black active:cursor-grabbing"
+              onPointerDown={(e) => {
+                e.preventDefault();
+                e.currentTarget.setPointerCapture(e.pointerId);
+                cropDrag.current = { pointerId: e.pointerId, x: e.clientX, y: e.clientY, focus: posterFocus };
+              }}
+              onPointerMove={(e) => {
+                const drag = cropDrag.current;
+                if (!drag || drag.pointerId !== e.pointerId || !posterSize) return;
+                setPosterFocus(dragPosterFocus(drag.focus, e.clientX - drag.x, e.clientY - drag.y, posterSize, e.currentTarget.clientWidth));
+              }}
+              onPointerUp={() => { cropDrag.current = null; }}
+              onPointerCancel={() => { cropDrag.current = null; }}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element -- blob preview / admin object */}
+              <img
+                src={posterUrl ?? existingPosterSrc}
+                alt=""
+                draggable={false}
+                className="h-full w-full select-none object-cover"
+                style={{ objectPosition: posterObjectPosition(posterFocus) }}
+                onLoad={(e) => setPosterSize({ w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight })}
+              />
+            </div>
+            {/* The same control for a keyboard. A square poster has nothing to move. */}
+            {posterSize && posterSize.w !== posterSize.h && (
+              <label className="mt-2 flex max-w-60 items-center gap-2 font-mono text-[0.7rem] opacity-70">
+                {labels.cropPosition}
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  step={1}
+                  value={posterSize.w > posterSize.h ? posterFocus.x : posterFocus.y}
+                  className="min-w-0 flex-1"
+                  style={{ accentColor: 'var(--accent)' }}
+                  onChange={(e) => {
+                    const value = Number(e.currentTarget.value);
+                    setPosterFocus((focus) => (posterSize.w > posterSize.h ? { ...focus, x: value } : { ...focus, y: value }));
+                  }}
+                />
+              </label>
+            )}
+            <p className="mt-2 font-mono text-[0.68rem] opacity-50">{labels.cropHint}</p>
+          </div>
+        )}
       </div>
 
       {/* --- the audio result (optional slot) ------------------------------ */}
       {audioName && (
         <div>
           <p className="font-label text-eyebrow uppercase opacity-60">{labels.audioHeading}</p>
+          {/* What the row has now. A newly picked file takes over, with its own player in the zone. */}
+          {existingAudioSrc && !audioUrl && (
+            <div
+              data-audio-existing={existingAudioUrl ? 'ready' : existingAudioFailed ? 'unavailable' : 'loading'}
+              className="mt-1.5 border border-hairline p-3"
+            >
+              <p className="font-mono text-[0.72rem]">{labels.audioSaved}</p>
+              {existingAudioUrl ? (
+                <audio controls preload="metadata" src={existingAudioUrl} className="mt-2 w-full max-w-80" />
+              ) : (
+                <p className="mt-2 font-mono text-[0.68rem] opacity-70">
+                  {existingAudioFailed ? labels.audioUnavailable : labels.audioLoading}
+                </p>
+              )}
+            </div>
+          )}
           {enhanced && (
             <div
               className={`mt-1.5 ${zone(dragging === 'audio')}`}

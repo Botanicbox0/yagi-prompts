@@ -9,7 +9,7 @@ import { OpenAiImageError, type GptImageResult, type OpenAiImageClient } from '@
 import { SeedreamError, type SeedreamClient, type SeedreamGenerateInput } from '@/lib/images/seedream';
 import { insertPrompt } from '@/lib/prompts/repo';
 import { loadRenderJob } from '@/lib/renders/repo';
-import { createRecipeSandboxRender, createRenderJob, failureReason, listMyRenders, loadSharedRender, runRenderPass, type RenderPassDeps } from '@/lib/renders/service';
+import { createRecipeSandboxRender, createRenderJob, failureReason, listMyRenders, loadSharedRender, RECIPE_PASS_BUDGET_MS, runRenderPass, type RenderPassDeps } from '@/lib/renders/service';
 import { createLocalRenderStore, type RenderStore } from '@/lib/renders/store';
 import type { RenderEngineDeps } from '@/lib/renders/engines';
 import { listJobOutputs, loadJobRecipe } from '@/lib/recipes/repo';
@@ -226,6 +226,24 @@ describe('recipe v2 in the render pass', () => {
     expect((await runRenderPass(deps({ openai }), { jobId: created.id })).succeeded).toBe(1);
     // f1 once, f2 twice (the refused call and the retry) — the finished step was not paid for again.
     expect(log.map((l) => l.prompt.split('\n')[0]!.slice(0, 7))).toEqual(['Frame 1', 'Frame 2', 'Frame 2']);
+  });
+
+  it('makes a ten-frame set across passes: no step repeated, no attempt spent, ten results in order', async () => {
+    const { slug } = await recipeTemplate(carousel(10));
+    const created = await createRenderJob({ sql: h.sql, store, mode: 'virtual' }, ADMIN_VIEWER, { templateSlug: slug, aspect: '4:5', photo: PHOTO, locale: 'ko' });
+    if (!created.ok) throw new Error(created.code);
+    const log: Array<{ prompt: string; references: number }> = [];
+    // Every step looks like it takes the whole budget, so each pass stops after one step.
+    let t = 0;
+    const clock = () => { t += RECIPE_PASS_BUDGET_MS; return t; };
+    for (let pass = 1; pass <= 9; pass += 1) {
+      expect(await runRenderPass(deps({ openai: fakeOpenAi(log) }, { clock }), { jobId: created.id })).toMatchObject({ yielded: 1, succeeded: 0, failed: 0 });
+      expect(await loadRenderJob(h.sql, created.id)).toMatchObject({ status: 'queued', attempts: 0, errorCode: null });
+      expect(log).toHaveLength(pass);
+    }
+    expect(await runRenderPass(deps({ openai: fakeOpenAi(log) }, { clock }), { jobId: created.id })).toMatchObject({ yielded: 0, succeeded: 1 });
+    expect(log.map((l) => l.prompt.split(' of ')[0])).toEqual(Array.from({ length: 10 }, (_, i) => `Frame ${i + 1}`));
+    expect((await listJobOutputs(h.sql, created.id)).map((o) => o.stepId)).toEqual(Array.from({ length: 10 }, (_, i) => `f${i + 1}`));
   });
 
   it('leaves a studio original on the single-prompt path, with no recipe rows', async () => {

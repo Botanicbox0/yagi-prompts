@@ -1,4 +1,5 @@
-import { publicStorageBaseUrl } from '@/lib/runtime-mode';
+import { publicMediaBaseUrl, publicMediaR2Config, publicStorageBaseUrl } from '@/lib/runtime-mode';
+import { PUBLIC_MEDIA_KEYS } from './public-media-keys';
 
 /**
  * Public-bucket object → servable URL.
@@ -28,7 +29,46 @@ export function isSupabaseConfigured(baseUrl = publicStorageBaseUrl()): boolean 
   return Boolean(baseUrl && baseUrl.startsWith('http') && !baseUrl.includes(PLACEHOLDER_HOST));
 }
 
-export function publicContentUrl(key: string, baseUrl = publicStorageBaseUrl()): string | null {
+/** With the R2 keys set, new public files are written straight to R2, so every key lives there. */
+const writesStraightToR2 = () => publicMediaR2Config() !== null;
+
+/**
+ * docs/BRAND-MOAT-AND-STORAGE.md — once public files are written straight to R2, every key is served
+ * from the media host. Until then only a key in `PUBLIC_MEDIA_KEYS` is, because it was copied there and
+ * read back byte for byte; any other key was published to Supabase and stays there. Listed keys have no
+ * Supabase original any more, so `PUBLIC_MEDIA_BASE_URL` must stay set.
+ */
+export function publicContentUrl(
+  key: string,
+  baseUrl = publicStorageBaseUrl(),
+  mediaBaseUrl = publicMediaBaseUrl(),
+  copiedKeys: ReadonlySet<string> = PUBLIC_MEDIA_KEYS,
+  direct = writesStraightToR2(),
+): string | null {
   if (!isSupabaseConfigured(baseUrl)) return null;
-  return `${baseUrl!.replace(/\/$/, '')}/storage/v1/object/public/public-content/${key}`;
+  return copiedPublicMediaUrl(key, mediaBaseUrl, copiedKeys, direct) ?? `${baseUrl!.replace(/\/$/, '')}/storage/v1/object/public/public-content/${key}`;
+}
+
+/** The media-host address of a key on R2, or `null` when the key is still served from Supabase. */
+export function copiedPublicMediaUrl(
+  key: string,
+  mediaBaseUrl = publicMediaBaseUrl(),
+  copiedKeys: ReadonlySet<string> = PUBLIC_MEDIA_KEYS,
+  direct = writesStraightToR2(),
+): string | null {
+  return mediaBaseUrl && (direct || copiedKeys.has(key)) ? `${mediaBaseUrl.replace(/\/$/, '')}/${key}` : null;
+}
+
+/**
+ * Part of the key of every `unstable_cache` document that stores a `publicContentUrl` result. Those
+ * documents survive deploys, so without this a switch of host would keep serving the old addresses
+ * until the TTL or a tag revalidation.
+ */
+export function publicMediaCacheKey(
+  mediaBaseUrl = publicMediaBaseUrl(),
+  copiedKeys: ReadonlySet<string> = PUBLIC_MEDIA_KEYS,
+  direct = writesStraightToR2(),
+): string {
+  if (!mediaBaseUrl) return 'media:supabase';
+  return `media:${mediaBaseUrl}:${direct ? 'direct' : copiedKeys.size}`;
 }

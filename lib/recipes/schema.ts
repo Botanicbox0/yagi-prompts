@@ -7,7 +7,7 @@ import { videoEngineSpec } from '@/lib/video/models';
  *
  *   slots   `selfie` is the ONE thing a customer gives (always `source: 'user'`); every other slot
  *           is a maker file (`source: 'creator'`, an `ast_…` handle into platform_format_assets).
- *   steps   at most two — an image then a film — or one to six images (a carousel). Each step names
+ *   steps   at most two — an image then a film — or one to ten images (a carousel). Each step names
  *           an engine from the registry, the slots or EARLIER steps it reads (`inputs`), a prompt
  *           that refers to them only as `{{name}}`, and the engine's own parameters.
  *   output  `{ from }` one result, or `{ frames }` a carousel.
@@ -17,9 +17,11 @@ import { videoEngineSpec } from '@/lib/video/models';
  */
 
 export const RECIPE_VERSION = 2;
-export const MAX_RECIPE_STEPS = 6;
+/** Ten since 2026-11-02 (founder): render_job_outputs must accept it first (0072). */
+export const MAX_RECIPE_STEPS = 10;
 export const MAX_STEP_INPUTS = 6;
-export const MAX_RECIPE_BYTES = 24_000;
+/** 4,000 bytes a frame, the room six frames had in 24,000. */
+export const MAX_RECIPE_BYTES = 40_000;
 /**
  * One step's prompt. 8,000 characters since 2026-10-29: a creative's published Seedance 2.5 film
  * prompt runs ~7,900 (timed shots, look, audio, exclusions), and the recipe page promises the exact
@@ -222,7 +224,7 @@ export function parseRecipe(raw: unknown, options: { studio?: boolean } = {}): R
   });
   for (const [name] of slots) if (!used.has(name)) issues.push(name === SELFIE_SLOT ? { code: 'no_identity' } : { code: 'unused_slot', slot: name });
 
-  // Layout: one image, one film, an image then a film — or a carousel of one to six images.
+  // Layout: one image, one film, an image then a film — or a carousel of one to ten images.
   const kinds = recipe.steps.map((step) => step.kind);
   if ('from' in recipe.output) {
     const layout = kinds.join(',');

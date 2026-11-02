@@ -3,6 +3,7 @@ import { unstable_cache } from 'next/cache';
 import { CATALOG_TTL_SECONDS, LANDING_MEDIA_TAG } from '@/lib/cache';
 import { getSqlRunner } from '@/lib/db/connect';
 import { resolveRuntimeMode } from '@/lib/runtime-mode';
+import { publicMediaCacheKey } from './asset-url';
 import { NO_LANDING_MEDIA, type LandingMedia } from './landing-media';
 import { landingMediaMap, loadLandingMediaRows } from './landing-media-repo';
 
@@ -13,7 +14,7 @@ async function readLandingMedia(): Promise<LandingMedia> {
 }
 
 /** Same posture as the other public projections: one cached document, tag + 1h TTL. */
-const cached = unstable_cache(readLandingMedia, ['landing-media', 'v1', resolveRuntimeMode()], {
+const cached = unstable_cache(readLandingMedia, ['landing-media', 'v1', resolveRuntimeMode(), publicMediaCacheKey()], {
   tags: [LANDING_MEDIA_TAG],
   revalidate: CATALOG_TTL_SECONDS,
 });

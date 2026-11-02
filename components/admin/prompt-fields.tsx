@@ -22,6 +22,7 @@ import {
 } from '@/lib/prompts/schemas';
 import { Field, INPUT, LABEL, OpForm } from '@/components/admin/chrome';
 import { MediaDrop, type MediaDropLabels } from '@/components/admin/media-drop';
+import { AdminPosterFrame } from '@/components/admin/poster-frame';
 import { useCaseLabel } from '@/components/prompts/labels';
 
 /**
@@ -51,8 +52,14 @@ export function mediaDropLabels(a: Dictionary['admin']): MediaDropLabels {
     posterZone: a.mediaPosterZone,
     posterPicked: a.mediaPosterPicked,
     posterHint: a.mediaPosterHint,
+    cropHeading: a.mediaCropHeading,
+    cropHint: a.mediaCropHint,
+    cropPosition: a.mediaCropPosition,
     audioHeading: a.fieldPromptAudio,
     audioZone: a.mediaAudioZone,
+    audioSaved: a.mediaAudioSaved,
+    audioLoading: a.mediaAudioLoading,
+    audioUnavailable: a.mediaAudioUnavailable,
     uploading: a.mediaUploading,
     uploaded: a.mediaUploaded,
     uploadFailed: a.mediaUploadFailed,
@@ -95,7 +102,7 @@ export function UseCaseChecks({ dict, selected }: { dict: Dict; selected: readon
 export function StagedMedia({ row, dict }: { row: PromptRow; dict: Dict }) {
   const media = parsePromptMedia(row.media);
   const a = dict.admin;
-  if (!media.poster && !media.video) {
+  if (!media.poster && !media.video && !media.audio) {
     return <p className="font-mono text-[0.72rem] opacity-50">{a.noMedia}</p>;
   }
   return (
@@ -118,6 +125,15 @@ export function StagedMedia({ row, dict }: { row: PromptRow; dict: Dict }) {
           src={adminMediaPath(promptAdminRef(row.id, 'poster'))}
           alt=""
           className="w-full max-w-sm border border-hairline"
+        />
+      )}
+      {media.audio && (
+        // `none`: the path redirects to a 60-second URL, so it is only asked for on play.
+        <audio
+          src={adminMediaPath(promptAdminRef(row.id, 'audio'))}
+          controls
+          preload="none"
+          className="w-full max-w-sm"
         />
       )}
     </div>
@@ -403,6 +419,10 @@ export function PromptFields({ row, dict }: { row: PromptRow | null; dict: Dict 
           {...(row && existing.poster
             ? { existingPosterSrc: adminMediaPath(promptAdminRef(row.id, 'poster')) }
             : {})}
+          {...(row && existing.posterFocus ? { existingPosterFocus: existing.posterFocus } : {})}
+          {...(row && existing.audio
+            ? { existingAudioSrc: adminMediaPath(promptAdminRef(row.id, 'audio')) }
+            : {})}
         />
       </Field>
     </>
@@ -444,16 +464,15 @@ export function PromptCard({
       className="flex flex-col border border-hairline"
     >
       <a href={href} className="block border-b border-hairline bg-black" aria-hidden={poster === null}>
-        <div className="flex aspect-video items-center justify-center overflow-hidden">
-          {poster ? (
-            // eslint-disable-next-line @next/next/no-img-element -- staging object behind the gate
-            <img src={poster} alt="" className="h-full w-full object-contain" />
-          ) : (
+        {poster ? (
+          <AdminPosterFrame src={poster} focus={media.posterFocus} />
+        ) : (
+          <div className="flex aspect-square items-center justify-center overflow-hidden">
             <span className="px-4 text-center font-mono text-[0.7rem] break-all text-white/45">
               {row.slug || row.id.slice(0, 8)}
             </span>
-          )}
-        </div>
+          </div>
+        )}
       </a>
 
       <div className="flex flex-1 flex-col gap-2 p-3">

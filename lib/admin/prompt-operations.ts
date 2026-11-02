@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { checkUpload, publishPromptMedia, stagePromptUpload } from '@/lib/prompts/media';
+import { parsePosterFocus } from '@/lib/prompts/poster-focus';
 import { AssetRefSchema, type AssetRef } from '@/lib/content/schemas';
 import { STAGING_BUCKET } from '@/lib/storage';
 import {
@@ -30,6 +31,7 @@ import {
   USE_CASE_MAX,
   effectiveTextVisibility,
   normalizeHandle,
+  normalizeSetPrompt,
   parsePromptMedia,
   parseStagedUpload,
   slugify,
@@ -199,6 +201,10 @@ async function applyUploads(
     if (!staged.ok) return { ok: false, detail: `${kind}: ${staged.reason}` };
     next[kind] = staged.value.ref;
   }
+  // A new poster does not inherit the old crop unless the form sent one for it.
+  const focus = parsePosterFocus(f.str(form, 'posterFocus'));
+  if (focus) next.posterFocus = focus;
+  else if (next.poster !== existing.poster) delete next.posterFocus;
   return { ok: true, value: next };
 }
 
@@ -334,7 +340,7 @@ const createImageSet: AdminOperation<{ input: z.infer<typeof ImageSetForm>; form
     if (input.thumbnail >= input.prompts.length) return fail('invalid', 'thumbnail: not one of the frames');
     const fileName = (index: number) => `frame-${index}`;
     const frames = input.prompts.map((promptText, index) => ({
-      key: `shot${index + 1}`, title: input.title, titleKo: input.titleKo, promptText, engine, aspect, fileName: fileName(index),
+      key: `shot${index + 1}`, title: input.title, titleKo: input.titleKo, promptText: normalizeSetPrompt(promptText), engine, aspect, fileName: fileName(index),
     }));
     const slug = await freeSlug(ctx.sql, slugify(input.title, `set-${randomUUID().slice(0, 8)}`));
     const built = buildImageTemplateSet({ slug, title_en: input.title, title_ko: input.titleKo, thumbnail: fileName(input.thumbnail) }, frames);

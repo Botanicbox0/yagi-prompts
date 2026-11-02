@@ -121,6 +121,40 @@ export function publicStorageBaseUrl(env: EnvLike = process.env): string | undef
   return trimmed(env.NEXT_PUBLIC_SUPABASE_URL);
 }
 
+/**
+ * The R2 host for copied `public-content` objects (`media.twings.app`), or `undefined` to stay on
+ * Supabase. Unset is the rollback. Local mode ignores it for the same reason as above. A value that
+ * is not https is refused: it would put mixed-content media on every public page.
+ */
+export function publicMediaBaseUrl(env: EnvLike = process.env): string | undefined {
+  if (resolveRuntimeMode(env) === 'local') return undefined;
+  const value = trimmed(env.PUBLIC_MEDIA_BASE_URL);
+  return value?.startsWith('https://') ? value : undefined;
+}
+
+export interface PublicMediaR2Config {
+  accountId: string;
+  accessKeyId: string;
+  secretAccessKey: string;
+  bucket: string;
+  mediaBaseUrl: string;
+}
+
+/**
+ * What writing public files straight to R2 needs (docs/BRAND-MOAT-AND-STORAGE.md), or `null` with any
+ * value missing. `null` keeps publishing to Supabase, and only the keys in
+ * `lib/content/public-media-keys.ts` go to the media host.
+ */
+export function publicMediaR2Config(env: EnvLike = process.env): PublicMediaR2Config | null {
+  const mediaBaseUrl = publicMediaBaseUrl(env);
+  const accountId = trimmed(env.R2_ACCOUNT_ID);
+  const accessKeyId = trimmed(env.R2_ACCESS_KEY_ID);
+  const secretAccessKey = trimmed(env.R2_SECRET_ACCESS_KEY);
+  const bucket = trimmed(env.R2_PUBLIC_BUCKET);
+  if (!mediaBaseUrl || !accountId || !accessKeyId || !secretAccessKey || !bucket) return null;
+  return { accountId, accessKeyId, secretAccessKey, bucket, mediaBaseUrl };
+}
+
 // ---------------------------------------------------------------------------
 
 const warned = new Set<string>();

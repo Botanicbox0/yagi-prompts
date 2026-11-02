@@ -1,5 +1,5 @@
 import type { PublishedBucket } from '@/lib/content/schemas';
-import { selectStorageDriver } from '@/lib/runtime-mode';
+import { publicMediaR2Config, selectStorageDriver } from '@/lib/runtime-mode';
 
 /**
  * PLAN §6 — asset lifecycle behind one interface.
@@ -86,11 +86,19 @@ export class StorageObjectNotFound extends Error {
  * key. `PLAYBOOK_MODE` decides, `STORAGE_DRIVER` overrides it if you really mean to mix (cloud DB +
  * local bytes, or the reverse). Both drivers are imported lazily so a local process never loads the
  * Supabase SDK and a cloud process never loads `node:fs` paths it will not use.
+ *
+ * With the R2 keys set, public files go straight to R2 (docs/BRAND-MOAT-AND-STORAGE.md). Without them
+ * publishing works as it always has, so the code can ship before the keys do.
  */
 export async function getStorage(): Promise<StorageDriver> {
   if (selectStorageDriver(process.env) === 'supabase') {
     const { createSupabaseStorageDriver } = await import('./supabase-driver');
-    return createSupabaseStorageDriver();
+    const driver = createSupabaseStorageDriver();
+    const r2 = publicMediaR2Config();
+    if (r2 === null) return driver;
+    const { createR2PublicMediaStore } = await import('./r2-public');
+    const { withPublicMediaDirect } = await import('./public-media-direct');
+    return withPublicMediaDirect(driver, createR2PublicMediaStore(r2));
   }
   const { createLocalStorageDriver } = await import('./local-driver');
   return createLocalStorageDriver();

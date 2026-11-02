@@ -123,8 +123,8 @@ describe('a set render through the gateway', () => {
   it('reads ?frame= strictly', () => {
     expect(renderFrameParam(null)).toBeNull();
     expect(renderFrameParam('1')).toBe(1);
-    expect(renderFrameParam('6')).toBe(6);
-    for (const bad of ['0', '7', '01', '2.0', '', 'x', '-1']) expect(renderFrameParam(bad), bad).toBe('invalid');
+    expect(renderFrameParam('10')).toBe(10);
+    for (const bad of ['0', '11', '01', '2.0', '', 'x', '-1']) expect(renderFrameParam(bad), bad).toBe('invalid');
     expect(renderMediaHref('r', { share: 't', frame: 2, download: true })).toBe('/api/renders/media/r?s=t&frame=2&download=1');
     expect(renderMediaHref('r')).toBe('/api/renders/media/r');
   });

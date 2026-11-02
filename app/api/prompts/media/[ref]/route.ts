@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getSqlRunner } from '@/lib/db/connect';
-import { publicContentUrl } from '@/lib/content/asset-url';
+import { copiedPublicMediaUrl, publicContentUrl } from '@/lib/content/asset-url';
 import { loadPromptById } from '@/lib/prompts/repo';
 import { parsePromptMediaRef } from '@/lib/prompts/links';
 import { parsePromptMedia } from '@/lib/prompts/schemas';
@@ -73,19 +73,37 @@ export async function GET(
     return new NextResponse(null, { status: 302, headers: { ...HEADERS, Location: cdn } });
   }
 
+  const ext = /\.[A-Za-z0-9]+$/.exec(asset.published_key)?.[0] ?? '';
+  const disposition: Record<string, string> = download ? { 'Content-Disposition': `attachment; filename="${row.slug}${ext}"` } : {};
+
+  // The key's Supabase original may be gone once it is on R2, so a download reads the media host too.
+  const copied = download ? copiedPublicMediaUrl(asset.published_key) : null;
+  if (copied) {
+    try {
+      const upstream = await fetch(copied, { cache: 'no-store' });
+      if (upstream.status === 404) return refuse(404, 'not_found');
+      if (!upstream.ok) return refuse(500, 'storage_error');
+      const length = upstream.headers.get('content-length');
+      return new NextResponse(upstream.body, {
+        status: 200,
+        headers: { ...HEADERS, 'Content-Type': asset.mime, ...(length ? { 'Content-Length': length } : {}), ...disposition },
+      });
+    } catch {
+      console.error('[prompt-media] media host read failed');
+      return refuse(500, 'storage_error');
+    }
+  }
+
   try {
     const storage = await getStorage();
     const bytes = await storage.read('public-content', asset.published_key);
-    const ext = /\.[A-Za-z0-9]+$/.exec(asset.published_key)?.[0] ?? '';
     return new NextResponse(new Uint8Array(bytes), {
       status: 200,
       headers: {
         ...HEADERS,
         'Content-Type': asset.mime,
         'Content-Length': String(bytes.byteLength),
-        ...(download
-          ? { 'Content-Disposition': `attachment; filename="${row.slug}${ext}"` }
-          : {}),
+        ...disposition,
       },
     });
   } catch (err) {

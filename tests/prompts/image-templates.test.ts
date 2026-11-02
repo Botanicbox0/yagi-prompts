@@ -113,7 +113,7 @@ describe('an image set', () => {
       [SET, [entry(1), entry(2, { prompt: `${prompt('x')} Match the veil in Image 2.` })], 'does not carry'],
       [SET, [entry(1), entry(2, { prompt: `${prompt('x')} {{veil}}` })], '"{{"'],
       [SET, [entry(1), entry(2, { aspect_ratio: '4:5' })], 'one aspect'],
-      [SET, [entry(2)], '2 to 6 frames'],
+      [SET, [entry(2)], '2 to 10 frames'],
     ];
     for (const [descriptor, manifest, message] of cases) {
       const built = buildImageTemplateSet(descriptor, frames(manifest));
@@ -179,7 +179,8 @@ describe('registering an image set', () => {
       [1, 2, 3, 4, 5].map((n) => promptMediaPath(promptGalleryRef(card.id, n))),
     );
     expect(parsePromptMediaRef(`${card.id}:gallery-5`)).toEqual({ id: card.id, kind: 'gallery', frame: 5 });
-    for (const bad of ['gallery-0', 'gallery-7', 'gallery-01', 'gallery', 'gallery-x']) {
+    expect(parsePromptMediaRef(`${card.id}:gallery-10`)).toEqual({ id: card.id, kind: 'gallery', frame: 10 });
+    for (const bad of ['gallery-0', 'gallery-11', 'gallery-01', 'gallery', 'gallery-x']) {
       expect(parsePromptMediaRef(`${card.id}:${bad}`), bad).toBeNull();
     }
   });
