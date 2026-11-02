@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { needsIdentity } from '@/lib/identity/service';
 import {
-  MAKER_ENGINE_IDS, displayStepPrompt, engineStepPrompt, exportRecipe, identityPath, legacyPromptText, parseRecipe,
+  MAKER_ENGINE_IDS, MAX_STEP_PROMPT_CHARS, displayStepPrompt, engineStepPrompt, exportRecipe, identityPath, legacyPromptText, parseRecipe,
   personInputs, primaryStep, promptTokens, recipeAssets, recipeMedium, recipeNeedsIdentity, type Recipe, type RecipeIssueCode,
 } from '@/lib/recipes/schema';
 import { isRoyalty, quoteRecipe, ROYALTY_DEFAULT_KRW } from '@/lib/recipes/pricing';
@@ -107,6 +107,27 @@ describe('recipe v2 schema — refused', () => {
     ['too large', JSON.stringify(mutate(single('image'), (r) => { r.steps[0].prompt = `{{selfie}} ${'x'.repeat(50_000)}`; })), 'too_large'],
   ])('%s', (_name, raw, code) => {
     expect(codes(raw)).toContain(code);
+  });
+});
+
+describe('recipe size', () => {
+  const big = () => mutate(carousel(10), (r) => { for (const step of r.steps) step.prompt = `{{selfie}} ${'가'.repeat(2000)}`; });
+
+  it('keeps the maker limit', () => {
+    expect(codes(big())).toContain('too_large');
+    expect(codes(JSON.stringify(big()))).toContain('too_large');
+  });
+
+  it('gives the studio room for every frame its prompt limit allows', () => {
+    expect(parseRecipe(big(), { studio: true }).ok).toBe(true);
+    expect(parseRecipe(JSON.stringify(big()), { studio: true }).ok).toBe(true);
+    const longest = mutate(carousel(10), (r) => { for (const step of r.steps) step.prompt = `{{selfie}} ${'가'.repeat(MAX_STEP_PROMPT_CHARS - 11)}`; });
+    expect(parseRecipe(longest, { studio: true }).ok).toBe(true);
+  });
+
+  it('still bounds the studio', () => {
+    const huge = mutate(single('image'), (r) => { r.steps[0].prompt = `{{selfie}} ${'가'.repeat(100_000)}`; });
+    expect((parseRecipe(huge, { studio: true }) as { ok: false; issues: Array<{ code: string }> }).issues.map((issue) => issue.code)).toContain('too_large');
   });
 });
 

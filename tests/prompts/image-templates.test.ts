@@ -13,7 +13,7 @@ import { publishPromptMedia } from '@/lib/prompts/media';
 import { loadPromptBySlug } from '@/lib/prompts/repo';
 import { parsePromptMedia } from '@/lib/prompts/schemas';
 import { loadTemplateRecipe } from '@/lib/recipes/repo';
-import { engineStepPrompt, outputSteps } from '@/lib/recipes/schema';
+import { engineStepPrompt, MAX_STEP_PROMPT_CHARS, outputSteps, parseRecipe, setPromptTooLong } from '@/lib/recipes/schema';
 import { emptyPromptHarness, type PromptHarness } from '../helpers/prompts';
 
 /**
@@ -103,6 +103,34 @@ describe('an image set', () => {
       expect(engineText.startsWith(`${MANIFEST[index]!.prompt}\n\n`)).toBe(true);
       expect(engineText).not.toContain('porcelain');
     });
+  });
+
+  // Slack 1793592561.362499: every frame was within its own limit, yet publishing answered
+  // "recipe too_large", because the whole recipe had a smaller limit than its frames added up to.
+  it('takes ten frames at the longest prompt a frame may have, in Korean', () => {
+    const longest = (n: number) => {
+      const start = `Image 1 컷 ${n} `;
+      return `${start}${'가'.repeat(MAX_STEP_PROMPT_CHARS - '{{selfie}} 컷 10 '.length)}`.trim();
+    };
+    const built = buildImageTemplateSet(SET, frames(Array.from({ length: 10 }, (_, i) => entry(i + 1, {
+      file_name: i === 1 ? SET.thumbnail : `shot_${i + 1}.png`,
+      template_slug: `long-shot-${i + 1}`,
+      prompt: longest(i + 1),
+    }))));
+    expect(built.ok && built.set.recipe.steps.length).toBe(10);
+    if (built.ok) expect(parseRecipe(JSON.parse(JSON.stringify(built.set.recipe)), { studio: true }).ok).toBe(true);
+  });
+
+  it('names the frame whose prompt is over the limit', () => {
+    const over = `Image 1 ${'가'.repeat(MAX_STEP_PROMPT_CHARS)}`;
+    const built = buildImageTemplateSet(SET, frames([entry(1), entry(2, { prompt: over })]));
+    expect(built.ok).toBe(false);
+    if (!built.ok) expect(built.errors.join('\n')).toContain(`bridal-02-shot: the prompt is over ${MAX_STEP_PROMPT_CHARS} characters`);
+  });
+
+  it('counts a frame the way the recipe stores it, with the photo as its token', () => {
+    expect(setPromptTooLong(`Image 1 ${'x'.repeat(MAX_STEP_PROMPT_CHARS - '{{selfie}} '.length)}`)).toBe(false);
+    expect(setPromptTooLong(`Image 1 ${'x'.repeat(MAX_STEP_PROMPT_CHARS - '{{selfie}} '.length + 1)}`)).toBe(true);
   });
 
   it('refuses a set it could not make faithfully', () => {

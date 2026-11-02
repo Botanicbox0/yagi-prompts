@@ -4736,6 +4736,7 @@ export const ko: Dictionary = {
     setErrImage: '{n}번 컷에 이미지가 없거나 아직 올라가는 중입니다.',
     setErrAspect: '{n}번 컷 이미지가 {aspect} 비율이 아닙니다. 화면비를 바꾸거나 다른 이미지를 넣어 주세요.',
     setErrPromptShort: '{n}번 컷의 프롬프트가 너무 짧습니다.',
+    setErrPromptLong: '{n}번 컷의 프롬프트가 너무 깁니다. {max}자 이내로 줄여 주세요.',
     setErrNoPhoto: '{n}번 컷 프롬프트에 고객 사진을 뜻하는 Image 1(또는 @image1)이 없습니다.',
     setErrOtherReference: '{n}번 컷 프롬프트가 세트에 없는 참조(Image 2 등)를 가리킵니다.',
     setErrBraces: '{n}번 컷 프롬프트에서 {{ }} 표기를 빼 주세요.',

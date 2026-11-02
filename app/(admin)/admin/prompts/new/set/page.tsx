@@ -62,7 +62,7 @@ export default async function AdminImageSetNewPage() {
               engine: a.setEngine, aspect: a.setAspect, frames: a.setFramesHeading, dropZone: a.setDropZone, promptHint: a.setPromptHint,
               frameLabel: a.setFrameLabel, thumbnail: a.setThumbnail, moveUp: a.setMoveUp, moveDown: a.setMoveDown, remove: a.setRemove,
               promptLabel: a.setPromptLabel, publish: a.setPublish, errCount: a.setErrCount, errTitles: a.setErrTitles, errImage: a.setErrImage,
-              errAspect: a.setErrAspect, errPromptShort: a.setErrPromptShort, errNoPhoto: a.setErrNoPhoto, errOtherReference: a.setErrOtherReference,
+              errAspect: a.setErrAspect, errPromptShort: a.setErrPromptShort, errPromptLong: a.setErrPromptLong, errNoPhoto: a.setErrNoPhoto, errOtherReference: a.setErrOtherReference,
               errBraces: a.setErrBraces, errManifest: a.setErrManifest, errFile: a.setErrFile, uploading: a.setFrameUploading, done: a.setFrameDone,
               failed: a.setFrameFailed, invalid: a.errInvalid, upload: a.mediaUploadFailed, session: a.mediaUploadSession,
               uncertain: a.promptPublishUncertain, retained: a.promptInputsRetained, publishing: a.promptPublishing,
