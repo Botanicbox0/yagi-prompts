@@ -22,7 +22,6 @@ export const RECOMMENDED_VIDEO_ORDER = [
   '80s-roller-disco',
   'japanese-teen-star-in-the-1980s',
   'the-signature-piece',
-  'aquarium-goldfish-daydream',
   '90s-seoul-interview',
   'the-three-princes',
   'tokyo-s-new-teen-star-86',
