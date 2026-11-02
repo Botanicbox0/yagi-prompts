@@ -259,6 +259,14 @@ export async function requeueRenderJob(sql: SqlRunner, id: string, args: { code:
 }
 
 /**
+ * A recipe job that stopped between two steps because the invocation was running out: back to the
+ * queue with its claim's attempt returned. Nothing failed, so a long set does not spend the retry budget.
+ */
+export async function yieldRenderJob(sql: SqlRunner, id: string): Promise<void> {
+  await sql.query(`update render_jobs set status = 'queued', claimed_at = null, attempts = greatest(attempts - 1, 0) where id = $1 and status = 'running'`, [id]);
+}
+
+/**
  * A job claimed for a synchronous engine that never finished (the process died mid-render):
  * back to the queue, or failed once the attempt budget is spent. Film jobs waiting on a provider
  * task are not stale — the poll owns them.

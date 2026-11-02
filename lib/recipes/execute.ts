@@ -44,13 +44,17 @@ export interface RecipeRunContext {
   person(photo: { bytes: Uint8Array; key: string }): Promise<PersonReference>;
   saveStep(stepId: string, record: StepRecord): Promise<void>;
   callbackUrl?: string;
+  /** True once this invocation has too little time left to start another step (a large set outlives one). */
+  outOfTime?(): boolean;
 }
 
 export interface RecipeResult { step: string; key: string; mime: string; bytes: number }
 export type RecipeRun =
   | { kind: 'done'; results: RecipeResult[]; usd: number | null; assets: string[] }
   | { kind: 'handed'; step: string; taskId: string; provider: RenderProvider; seconds: number; usd: number | null; assets: string[] }
-  | { kind: 'wait'; assetId: string };
+  | { kind: 'wait'; assetId: string }
+  /** Stopped between two steps, done steps recorded; the next claim resumes after them. */
+  | { kind: 'yield' };
 
 const FILE_URL_TTL_SECONDS = 30 * 60;
 
@@ -81,9 +85,13 @@ export async function runRecipe(ctx: RecipeRunContext): Promise<RecipeRun> {
   const records: Record<string, StepRecord> = { ...(ctx.state.steps ?? {}) };
   const assets: string[] = [];
   let usd = recordedUsd(ctx.state);
+  let ranOne = false;
 
   for (const step of recipe.steps) {
     if (records[step.id]) continue;
+    // Never before the first step of a pass, so every pass moves the job forward.
+    if (ranOne && ctx.outOfTime?.()) return { kind: 'yield' };
+    ranOne = true;
     try {
       if (!isMakerEngine(step.engine) && !isStudioRecipeEngine(step.engine)) throw new RenderFailure('engine_error', `engine ${step.engine} is not a recipe engine`, false);
       const inputs = await gather(ctx, step, records);

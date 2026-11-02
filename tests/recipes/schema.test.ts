@@ -54,7 +54,7 @@ describe('recipe v2 schema — accepted', () => {
     ['one image', single('image'), 'image'],
     ['one film', single('video'), 'video'],
     ['a one-frame carousel', carousel(1), 'carousel'],
-    ['a six-frame carousel', carousel(6), 'carousel'],
+    ['a ten-frame carousel', carousel(10), 'carousel'],
     ['a film reading a maker video', mutate(single('video'), (r) => { r.slots.move = { kind: 'video', source: 'creator', asset: V1 }; r.steps[0].inputs = ['selfie', 'move']; r.steps[0].prompt = '{{selfie}} copies the dance in {{move}}.'; }), 'video'],
     ['a carousel whose second frame reads the first', mutate(carousel(2), (r) => { r.steps[1].inputs = ['f1']; r.steps[1].prompt = 'Same person as {{f1}}, now at night.'; }), 'carousel'],
     ['a JSON string', JSON.stringify(filmRecipe()), 'video'],
@@ -89,7 +89,7 @@ describe('recipe v2 schema — refused', () => {
     ['a film fed into a film', mutate(filmRecipe(), (r) => { r.steps[0] = { ...r.steps[1], id: 'first', inputs: ['selfie'], prompt: 'Clip of {{selfie}}.' }; r.steps[1].inputs = ['first', 'scene']; r.steps[1].prompt = '{{first}} in {{scene}}.'; }), 'step_layout'],
     ['two films', mutate(single('video'), (r) => { r.steps.push({ ...r.steps[0], id: 'clip2' }); r.output = { from: 'clip2' }; }), 'step_layout'],
     ['a film first, image last', mutate(filmRecipe(), (r) => { r.steps.reverse(); }), 'forward_input'],
-    ['a seven-frame carousel', carousel(7), 'shape'],
+    ['an eleven-frame carousel', carousel(11), 'shape'],
     ['a carousel with a film', mutate(carousel(2), (r) => { r.steps[1] = { id: 'f2', kind: 'video', engine: 'seedance-2.0', inputs: ['selfie'], prompt: 'Clip of {{selfie}}.', params: { aspect: '9:16', duration: 5, resolution: '720p' } }; }), 'step_layout'],
     ['an output that is not the last step', mutate(filmRecipe(), (r) => { r.output = { from: 'sheet' }; }), 'output'],
     ['a frame that is no step', mutate(carousel(2), (r) => { r.output.frames = ['f1', 'nope']; }), 'output'],
@@ -104,7 +104,7 @@ describe('recipe v2 schema — refused', () => {
     ['version 1', mutate(single('image'), (r) => { r.version = 1; }), 'shape'],
     ['an image aspect a film uses', mutate(single('image'), (r) => { r.steps[0].params.aspect = '4:3'; }), 'shape'],
     ['not JSON', '{"version":2,', 'shape'],
-    ['too large', JSON.stringify(mutate(single('image'), (r) => { r.steps[0].prompt = `{{selfie}} ${'x'.repeat(30_000)}`; })), 'too_large'],
+    ['too large', JSON.stringify(mutate(single('image'), (r) => { r.steps[0].prompt = `{{selfie}} ${'x'.repeat(50_000)}`; })), 'too_large'],
   ])('%s', (_name, raw, code) => {
     expect(codes(raw)).toContain(code);
   });
