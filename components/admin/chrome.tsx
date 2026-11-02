@@ -1,10 +1,12 @@
 import {
   ADMIN_NAV_GROUPS,
   ADMIN_NAV_PATHS,
-  type AdminNavKey,
+  adminNavGroupOf,
+  type AdminShellKey,
 } from "@/lib/admin/workflow";
 import { WorkspaceLanguage } from "@/components/brand-workspace/language";
 import { PublicLink } from "@/components/admin/public-link";
+import { NavIcon } from "@/components/admin/icons";
 import type { ReactNode } from "react";
 import { TwingsLogo } from "@/components/brand/twings-mark";
 import type { Dictionary } from "@/lib/i18n/dictionaries";
@@ -317,6 +319,17 @@ export function AdminSignOut({
   );
 }
 
+const LEGACY_PATHS = { playbooks: "/admin/playbooks", policy: "/admin/policy" } as const;
+
+/**
+ * Every admin page sits in this frame (docs/ADMIN.md §5): a quiet grouped rail on the canvas, one
+ * white work surface with the location and the language switch, then the page. On a phone the rail
+ * folds behind a "Menu" control — a checkbox and its label, so it opens with scripts disabled — and
+ * the page starts on the first screen instead of under twelve menu entries (audit §3.1).
+ *
+ * `active` may be a legacy key (the playbook editor and its policy): those pages keep their routes
+ * but no menu entry, so nothing in the rail is marked current for them.
+ */
 export function AdminShell({
   dict,
   locale,
@@ -325,59 +338,19 @@ export function AdminShell({
 }: {
   dict: AdminDict;
   locale: string;
-  active: AdminNavKey | "contests";
+  active: AdminShellKey;
   children: ReactNode;
 }) {
-  // "Refresh caches" used to send every page back to /admin; it returns to where it was pressed.
-  const refreshBack =
-    active === "funding"
-      ? "/admin/funding"
-      : active === "risk"
-        ? "/admin/risk"
-        : active === "community"
-          ? "/admin/community"
-          : active === "landingMedia"
-            ? "/admin/landing-media"
-          : active === "subscriptions"
-            ? "/admin/subscriptions"
-            : active === "brandWorkspace"
-              ? "/admin/brand-workspace"
-              : active === "prompts"
-                ? "/admin/prompts"
-                : active === "contests"
-                  ? "/admin/contests"
-                  : active === "campaigns"
-                    ? "/admin/campaigns"
-                    : active === "inquiries"
-                      ? "/admin/inquiries"
-                      : active === "policy"
-                        ? "/admin/policy"
-                        : active === "playbooks"
-                          ? "/admin/playbooks"
-                          : "/admin";
   const dictionary = getDictionary(isLocale(locale) ? locale : "en");
   const workflow = dictionary.adminWorkflow;
-  const entries = [
-    ["home", "/admin", dict.navHome],
-    ["risk", "/admin/risk", workflow.riskNav],
-    ["funding", "/admin/funding", workflow.fundingNav],
-    [
-      "brandWorkspace",
-      "/admin/brand-workspace",
-      dictionary.brandWorkspace.studioQueue,
-    ],
-    ["prompts", "/admin/prompts", dict.navPrompts],
-    ["campaigns", "/admin/campaigns", dict.navCampaigns],
-    ["inquiries", "/admin/inquiries", dict.navInquiries],
-    ["community", "/admin/community", dictionary.community.adminTitle],
-    ["landingMedia", "/admin/landing-media", dictionary.landingMedia.nav],
-    ["subscriptions", "/admin/subscriptions", dictionary.creatorLaunch.nav],
-    ["playbooks", "/admin/playbooks", dict.navPlaybooks],
-    ["policy", "/admin/policy", dict.navPolicy],
-  ] as const;
+  const c = dictionary.adminConsole;
+  const group = adminNavGroupOf(active);
+  // "Refresh caches" returns to where it was pressed.
+  const here =
+    active === "playbooks" || active === "policy" ? LEGACY_PATHS[active] : ADMIN_NAV_PATHS[active];
   return (
     <div
-      className="admin-workspace"
+      className="admin-console"
       data-admin-active={active}
       data-section
       data-theme="light"
@@ -385,46 +358,65 @@ export function AdminShell({
       <a href="#main" className="admin-skip-link">
         {workflow.skip}
       </a>
-      <aside className="admin-sidebar">
-        <AdminBrand dict={dict} />
-        <nav data-admin-navigation aria-label={workflow.navigation}>
-          {ADMIN_NAV_GROUPS.map((group) => (
-            <section
-              key={group.key}
-              className="admin-nav-group"
-              aria-labelledby={`admin-nav-${group.key}`}
-            >
-              <h2 id={`admin-nav-${group.key}`}>
-                {workflow.groups[group.key]}
-              </h2>
-              {group.items.map((key) => (
-                <a
-                  key={key}
-                  href={ADMIN_NAV_PATHS[key]}
-                  aria-current={active === key ? "page" : undefined}
-                >
-                  <span>{entries.find(([entry]) => entry === key)?.[2]}</span>
-                  <span className="admin-nav-description">
-                    {workflow.descriptions[key]}
-                  </span>
-                </a>
-              ))}
-            </section>
-          ))}
-        </nav>
-        <div className="admin-utilities">
-          <PublicLink href={`/${locale}`}>{dict.navSite} ↗</PublicLink>
-          <OpForm op="caches.refresh" back={refreshBack}>
-            <button type="submit">{dict.refreshCaches}</button>
-          </OpForm>
-          <AdminSignOut dict={dict} />
+      <aside className="admin-rail">
+        <div className="admin-rail-head">
+          <AdminBrand dict={dict} />
+          <input
+            type="checkbox"
+            id="admin-menu-toggle"
+            className="admin-menu-toggle"
+            aria-controls="admin-navigation"
+          />
+          <label htmlFor="admin-menu-toggle" className="admin-menu-button">
+            <span>{c.menu}</span>
+            <span className="admin-menu-here">{c.nav[active]}</span>
+          </label>
+          <nav
+            id="admin-navigation"
+            data-admin-navigation
+            aria-label={workflow.navigation}
+            className="admin-nav"
+          >
+            {ADMIN_NAV_GROUPS.map((navGroup) => (
+              <section
+                key={navGroup.key}
+                className="admin-nav-group"
+                aria-labelledby={`admin-nav-${navGroup.key}`}
+              >
+                <h2 id={`admin-nav-${navGroup.key}`}>{c.groups[navGroup.key]}</h2>
+                <ul>
+                  {navGroup.items.map((key) => (
+                    <li key={key}>
+                      <a
+                        href={ADMIN_NAV_PATHS[key]}
+                        data-admin-nav={key}
+                        aria-current={active === key ? "page" : undefined}
+                      >
+                        <NavIcon name={key} />
+                        <span>{c.nav[key]}</span>
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ))}
+            <div className="admin-rail-foot">
+              <PublicLink href={`/${locale}`}>{dict.navSite} ↗</PublicLink>
+              <OpForm op="caches.refresh" back={here}>
+                <button type="submit">{dict.refreshCaches}</button>
+              </OpForm>
+              <AdminSignOut dict={dict} />
+            </div>
+          </nav>
         </div>
       </aside>
-      <div className="admin-body">
+      <div className="admin-stage">
         <header className="admin-topbar">
-          <span>
-            {entries.find(([key]) => key === active)?.[2] ?? dict.brand}
-          </span>
+          <p className="admin-crumbs" aria-label={c.location}>
+            <span>{group ? c.groups[group] : c.legacy}</span>
+            <span aria-hidden="true">›</span>
+            <span className="admin-crumbs-here">{c.nav[active]}</span>
+          </p>
           <WorkspaceLanguage
             locale={locale}
             label={dictionary.nav.localeToggle}

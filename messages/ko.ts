@@ -1,5 +1,6 @@
 import type { Dictionary } from './en';
 import { adminWorkflowKo } from './admin-workflow';
+import { adminConsoleKo } from './admin-console';
 
 /**
  * PLAN §3.9 — manual bilingual authoring in v1; the type keeps the two dictionaries in step.
@@ -42,6 +43,7 @@ const T = KO_TERMS;
 
 export const ko: Dictionary = {
   adminWorkflow: adminWorkflowKo,
+  adminConsole: adminConsoleKo,
   landingMedia: {
     nav: '랜딩 이미지',
     heading: '랜딩 이미지',
@@ -126,7 +128,7 @@ export const ko: Dictionary = {
   "formatNeedsScript": "포맷을 제출하려면 JavaScript가 필요해요. 켜고 이 페이지를 새로고침해 주세요.",
   "royalty": `누적 ${T.maker} 배분액`,
   "royaltyHint": `세금·결제 수수료·실제 제작 원가를 뺀 배분 대상 이익의 80%가 ${T.maker} 몫입니다. 아래 금액은 정산 검토 대상이며, 실제 송금 완료 금액은 아닙니다.`,
-  "adminTitle": "제작 요청과 포맷 파트너",
+  "adminTitle": "AI 크리에이티브",
   "adminHint": `요청, ${T.maker} 권한, 후기와 게시 증빙을 검토합니다. 운영 결정은 이력으로 남습니다.`,
   "reason": "처리 사유 / 증빙 위치",
   "userId": "계정 식별자",
