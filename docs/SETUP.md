@@ -252,6 +252,7 @@ to the browser):
 | `DATABASE_URL` | server | Supabase → Database → Connection string (URI). Use the **pooled** connection for serverless. |
 | `NEXT_PUBLIC_APP_URL` | all | the real origin, no trailing slash. Sitemap, robots, `metadataBase`/OG and every email link resolve against it. |
 | `PUBLIC_MEDIA_BASE_URL` | server | optional. R2 host for copied public files; unset stays on Supabase and is the rollback. `docs/BRAND-MOAT-AND-STORAGE.md` |
+| `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_PUBLIC_BUCKET` | server | optional, Production only. All four switch on copying new public files to R2 after a publish and daily at `/api/public-media/tick`. Apply 0073/0149 first. Missing any → nothing is copied and the behaviour is unchanged. |
 | `MEDIA_TOKEN_SECRET` | server | ≤60s media capabilities; must be stable across restarts |
 | `NOTIFY_TOKEN_SECRET` | server | signs unsubscribe links that live in inboxes for months — **never rotate casually** |
 | `STRIPE_SECRET_KEY` | server | all three Stripe vars are required together, or billing renders its "not connected" panel |
@@ -267,7 +268,7 @@ to the browser):
 | `GEMINI_API_KEY` | server | Google AI Studio key for the Nano Banana image engine (`x-goog-api-key`). Missing → a `nano-banana-2.1` job fails `no_engine_key`. Check with `npm run gemini:smoke -- --dry`. |
 | `GEMINI_IMAGE_MODEL` | server | optional. Overrides the wire model id (default `gemini-nano-banana-2.1`) for a newer Nano Banana release. |
 | `GEMINI_BASE_URL` | server | optional; default `https://generativelanguage.googleapis.com/v1beta` (the Interactions API) |
-| `CRON_SECRET` | server | optional; any long random string. Vercel sends it as the bearer token on `/api/renders/tick`; without it the tick is open but idempotent |
+| `CRON_SECRET` | server | optional; any long random string. Vercel sends it as the bearer token on `/api/renders/tick`; without it the tick is open but idempotent. `/api/brands/inquiries/tick` and `/api/public-media/tick` refuse to run without it |
 
 Do **not** set `STORAGE_DRIVER`, `PLAYBOOK_LOCAL_DB`, `PLAYBOOK_LOCAL_DB_DIR` or
 `PLAYBOOK_DEV_IDENTITY` in Vercel. The first would override the mode; the middle two are PGlite

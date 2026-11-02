@@ -151,6 +151,8 @@ describe('migrations apply on a fresh database (PLAN §6)', () => {
       // manifest, no constraint triggers; the machinery above still guards playbooks only.
       'prompt_items',
       'prompt_unlocks',
+      // docs/BRAND-MOAT-AND-STORAGE.md (2026-11-02) — public files the app copied to R2 and read back.
+      'public_media_copies',
       'publish_assets',
       // docs/PLATFORM-2.0.md §5.3 (2026-10-22) — one row per device that said yes to the completion push.
       'push_subscriptions',

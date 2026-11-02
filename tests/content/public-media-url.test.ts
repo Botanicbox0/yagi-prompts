@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { publicContentUrl, publicMediaCacheKey } from '@/lib/content/asset-url';
+import { copiedPublicMediaUrl, publicContentUrl, publicMediaCacheKey } from '@/lib/content/asset-url';
 import { publicMediaBaseUrl } from '@/lib/runtime-mode';
 
 const SUPABASE = 'https://proj.supabase.co';
@@ -27,6 +27,18 @@ describe('publicContentUrl with the R2 media host', () => {
 
   it('tolerates a trailing slash on the media host', () => {
     expect(publicContentUrl(COPIED, SUPABASE, `${MEDIA}/`, COPIED_KEYS)).toBe(`${MEDIA}/${COPIED}`);
+  });
+});
+
+describe('copiedPublicMediaUrl', () => {
+  it('answers with the media address only for a copied key', () => {
+    expect(copiedPublicMediaUrl(COPIED, MEDIA, COPIED_KEYS)).toBe(`${MEDIA}/${COPIED}`);
+    expect(copiedPublicMediaUrl(COPIED, `${MEDIA}/`, COPIED_KEYS)).toBe(`${MEDIA}/${COPIED}`);
+    expect(copiedPublicMediaUrl(NEW_UPLOAD, MEDIA, COPIED_KEYS)).toBeNull();
+  });
+
+  it('answers null with no media host', () => {
+    expect(copiedPublicMediaUrl(COPIED, undefined, COPIED_KEYS)).toBeNull();
   });
 });
 

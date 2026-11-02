@@ -90,7 +90,8 @@ export class StorageObjectNotFound extends Error {
 export async function getStorage(): Promise<StorageDriver> {
   if (selectStorageDriver(process.env) === 'supabase') {
     const { createSupabaseStorageDriver } = await import('./supabase-driver');
-    return createSupabaseStorageDriver();
+    const { withPublicMediaSync } = await import('./public-media-kick');
+    return withPublicMediaSync(createSupabaseStorageDriver());
   }
   const { createLocalStorageDriver } = await import('./local-driver');
   return createLocalStorageDriver();

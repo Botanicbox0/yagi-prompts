@@ -1,5 +1,6 @@
 import { publicMediaBaseUrl, publicStorageBaseUrl } from '@/lib/runtime-mode';
 import { PUBLIC_MEDIA_KEYS } from './public-media-keys';
+import { copiedPublicMediaKeys } from './public-media-registry';
 
 /**
  * Public-bucket object → servable URL.
@@ -30,26 +31,36 @@ export function isSupabaseConfigured(baseUrl = publicStorageBaseUrl()): boolean 
 }
 
 /**
- * docs/BRAND-MOAT-AND-STORAGE.md — a key listed in `PUBLIC_MEDIA_KEYS` was copied to R2 and read back
- * byte for byte, so it is served from the media host. Every other key, such as a template published
- * after the last sync, stays on Supabase. The Supabase original is kept, so unsetting
- * `PUBLIC_MEDIA_BASE_URL` and redeploying is the whole rollback.
+ * docs/BRAND-MOAT-AND-STORAGE.md — a key in `copiedPublicMediaKeys()` was copied to R2 and read back
+ * byte for byte, so it is served from the media host. Every other key, such as a file published a
+ * moment ago, stays on Supabase. While the Supabase originals exist, unsetting `PUBLIC_MEDIA_BASE_URL`
+ * and redeploying is the whole rollback.
  */
 export function publicContentUrl(
   key: string,
   baseUrl = publicStorageBaseUrl(),
   mediaBaseUrl = publicMediaBaseUrl(),
-  copiedKeys: ReadonlySet<string> = PUBLIC_MEDIA_KEYS,
+  copiedKeys: ReadonlySet<string> = copiedPublicMediaKeys(),
 ): string | null {
   if (!isSupabaseConfigured(baseUrl)) return null;
-  if (mediaBaseUrl && copiedKeys.has(key)) return `${mediaBaseUrl.replace(/\/$/, '')}/${key}`;
-  return `${baseUrl!.replace(/\/$/, '')}/storage/v1/object/public/public-content/${key}`;
+  return copiedPublicMediaUrl(key, mediaBaseUrl, copiedKeys) ?? `${baseUrl!.replace(/\/$/, '')}/storage/v1/object/public/public-content/${key}`;
+}
+
+/** The media-host address of a key on R2, or `null` when the key is still served from Supabase. */
+export function copiedPublicMediaUrl(
+  key: string,
+  mediaBaseUrl = publicMediaBaseUrl(),
+  copiedKeys: ReadonlySet<string> = copiedPublicMediaKeys(),
+): string | null {
+  return mediaBaseUrl && copiedKeys.has(key) ? `${mediaBaseUrl.replace(/\/$/, '')}/${key}` : null;
 }
 
 /**
  * Part of the key of every `unstable_cache` document that stores a `publicContentUrl` result. Those
  * documents survive deploys, so without this a switch of host would keep serving the old addresses
- * until the TTL or a tag revalidation.
+ * until the TTL or a tag revalidation. It counts the code list, never the live keys: a cache key that
+ * moved with them would differ between processes. A newly verified key refreshes the documents through
+ * their tags instead (`revalidatePublicMedia`).
  */
 export function publicMediaCacheKey(
   mediaBaseUrl = publicMediaBaseUrl(),

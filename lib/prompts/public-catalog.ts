@@ -1,6 +1,7 @@
 import 'server-only';
 import { unstable_cache } from 'next/cache';
 import { publicMediaCacheKey } from '@/lib/content/asset-url';
+import { refreshPublicMediaKeys } from '@/lib/content/public-media-registry';
 import { resolveRuntimeMode } from '@/lib/runtime-mode';
 import { CATALOG_TTL_SECONDS, PROMPTS_TAG } from '@/lib/cache';
 import { getSqlRunner } from '@/lib/db/connect';
@@ -21,7 +22,10 @@ import { EMPTY_PROMPT_CATALOG, loadPromptCatalog, type PromptCatalog } from './c
  */
 
 async function readPromptCatalog(): Promise<PromptCatalog> {
-  return readPublicProjection(await getSqlRunner(), EMPTY_PROMPT_CATALOG, loadPromptCatalog);
+  const sql = await getSqlRunner();
+  // This document stores media addresses for up to an hour, so it asks which keys are on R2 right now.
+  await refreshPublicMediaKeys(sql, { force: true });
+  return readPublicProjection(sql, EMPTY_PROMPT_CATALOG, loadPromptCatalog);
 }
 
 /**
