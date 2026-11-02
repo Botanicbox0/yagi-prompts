@@ -140,8 +140,8 @@ export default async function TemplatePage({ params }: RouteParams) {
   const subscriptionQuote = isForSale(card) ? templateSubscriptionQuote(card) : null;
   const makeAvailabilityCopy = { makeCta: t.makeCta, makeCtaClosed: t.makeCtaClosed, makeBody: t.makeBody, makeBodyClosed: t.makeBodyClosed, makeBodySubscription: t.makeBodySubscription, makeBodySubscriptionPaused: t.makeBodySubscriptionPaused };
   const ratio = card.poster?.w && card.poster.h ? `${card.poster.w} / ${card.poster.h}` : posterRatio(card.slug);
-  // §7.5·§14.1: origin decides the credit (a maker's template is a `source='yagi'` row too).
-  const credit = card.origin !== 'maker' ? labels.byYagi : card.authorHandle ? labels.byAuthor.replace('{handle}', card.authorHandle) : labels.byAnonymous;
+  // §7.5·§14.1: origin decides the fallback (a maker's template is a `source='yagi'` row too); a typed handle wins on both.
+  const credit = card.authorHandle ? labels.byAuthor.replace('{handle}', card.authorHandle) : card.origin !== 'maker' ? labels.byYagi : labels.byAnonymous;
   const makerRest = makerProfileRest(card);
   const maker = makerRest ? makers.find((item) => item.handle === card.authorHandle) ?? null : null;
   // §20: the creative's other templates — their catalogue, one click from the one being read.

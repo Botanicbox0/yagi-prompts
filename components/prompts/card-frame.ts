@@ -53,11 +53,11 @@ export function cardRatio(card: Pick<PromptCard, 'poster' | 'video' | 'aspectDef
 
 /**
  * docs/PLATFORM-2.0.md §7.5·§14.1 — a studio template carries no byline (every one of them said
- * "YAGI 제작", which is no information); a maker's template names its maker, or says "메이커 템플릿"
- * while the maker keeps their profile private.
+ * "YAGI 제작", which is no information) unless an admin typed a handle for it (founder 2026-11-02);
+ * a maker's template names its maker, or says "메이커 템플릿" while the maker keeps their profile private.
  */
 export function cardAuthor(card: Pick<PromptCard, 'origin' | 'authorHandle'>): { handle: string | null } | null {
-  if (card.origin !== 'maker') return null;
+  if (card.origin !== 'maker' && !card.authorHandle) return null;
   return { handle: card.authorHandle };
 }
 
