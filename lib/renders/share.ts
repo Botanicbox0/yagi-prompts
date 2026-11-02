@@ -72,12 +72,12 @@ export function renderMediaHref(id: string, options: { share?: string; download?
 }
 
 /**
- * `?frame=` read back: absent = the result (null), 1–6 = that picture of a set (a recipe makes at most
- * six, lib/recipes/schema.ts), anything else = refused (`'invalid'`) before a row is read.
+ * `?frame=` read back: absent = the result (null), 1–10 = that picture of a set (a recipe makes at most
+ * ten, lib/recipes/schema.ts), anything else = refused (`'invalid'`) before a row is read.
  */
 export function renderFrameParam(value: string | null): number | null | 'invalid' {
   if (value === null) return null;
-  return /^[1-6]$/.test(value) ? Number(value) : 'invalid';
+  return /^([1-9]|10)$/.test(value) ? Number(value) : 'invalid';
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

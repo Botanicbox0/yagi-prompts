@@ -57,6 +57,7 @@ import {
   recoverStaleRenderJobs,
   releaseHeldRenderJobs,
   requeueRenderJob,
+  yieldRenderJob,
   type RenderJob,
 } from './repo';
 import { markRenderFinishing } from './extras';
@@ -85,6 +86,11 @@ export const MAX_PHOTO_BYTES = 8 * 1024 * 1024;
 export const MAX_ATTEMPTS = 3;
 /** A synchronous render claimed this long ago and still `running` was orphaned by a dead process. */
 export const LEASE_MINUTES = 20;
+/**
+ * No new recipe step starts after this long in one job's pass. The functions stop at 300 s, and a
+ * step killed mid-call is paid for and lost; this leaves room for one slow image and the final copy.
+ */
+export const RECIPE_PASS_BUDGET_MS = 150_000;
 export const NOTIFY_MAX_ATTEMPTS = 3;
 export const PHOTO_MIMES = ['image/jpeg', 'image/png', 'image/webp'] as const;
 export type PhotoMime = (typeof PHOTO_MIMES)[number];
@@ -434,6 +440,8 @@ export interface RenderPassDeps extends RenderServiceDeps {
   assets?: ArkAssetsClient | null;
   /** Pinned by tests; production reads `releaseAfterUseEnabled()` (lib/flags.ts ASSET_RELEASE_AFTER_USE). */
   releaseAfterUse?: boolean;
+  /** Real elapsed time for the recipe budget; `now` is pinned to the pass's start. Pinned by tests. */
+  clock?: () => number;
 }
 
 export interface RenderPassReport {
@@ -442,6 +450,8 @@ export interface RenderPassReport {
   succeeded: number;
   failed: number;
   requeued: number;
+  /** Recipe jobs that stopped between steps for lack of time; queued to continue (not a failure). */
+  yielded: number;
   /** Film jobs handed to the provider (or still with it) at the end of the pass. */
   waiting: number;
   notified: number;
@@ -475,6 +485,7 @@ export async function runRenderPass(deps: RenderPassDeps, options: RenderPassOpt
     succeeded: 0,
     failed: 0,
     requeued: 0,
+    yielded: 0,
     waiting: 0,
     notified: 0,
     notifyFailed: 0,
@@ -770,6 +781,7 @@ async function jobRecipeFor(deps: RenderPassDeps, job: RenderJob): Promise<JobRe
 }
 
 async function renderRecipe(deps: RenderPassDeps, job: RenderJob, recipe: JobRecipe, now: Date, report: RenderPassReport, handedOff: Set<string>): Promise<void> {
+  const startedAt = (deps.clock ?? Date.now)();
   const photo = await readPhoto(deps.store, job);
   const run = await runRecipe({
     jobId: job.id,
@@ -787,8 +799,14 @@ async function renderRecipe(deps: RenderPassDeps, job: RenderJob, recipe: JobRec
       return reference;
     },
     saveStep: (stepId, record) => saveStepRecord(deps.sql, job.id, stepId, record),
+    outOfTime: () => (deps.clock ?? Date.now)() - startedAt >= RECIPE_PASS_BUDGET_MS,
     ...(deps.callbackUrl ? { callbackUrl: deps.callbackUrl } : {}),
   });
+  if (run.kind === 'yield') {
+    await yieldRenderJob(deps.sql, job.id);
+    report.yielded += 1;
+    return;
+  }
   if (run.kind === 'wait') {
     await markRenderWaitingForAsset(deps.sql, job.id, run.assetId);
     handedOff.add(job.id);

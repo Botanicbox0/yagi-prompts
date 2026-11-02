@@ -239,9 +239,9 @@ export const USE_CASE_MAX = 3;
  * and never a form field: it arrives with the set (lib/prompts/image-templates.ts) and every later
  * `/admin` edit carries it through `publishPromptMedia` unchanged.
  */
-export const PROMPT_GALLERY_MAX = 6;
+export const PROMPT_GALLERY_MAX = 10;
 
-/** A set's frames: a recipe caps at six steps, the gallery at six images. */
+/** A set's frames: a recipe caps at ten steps, the gallery at ten images. */
 export const IMAGE_SET_FRAMES_MIN = 2;
 export const IMAGE_SET_FRAMES_MAX = PROMPT_GALLERY_MAX;
 const SET_PHOTO = /\bImage 1\b/;

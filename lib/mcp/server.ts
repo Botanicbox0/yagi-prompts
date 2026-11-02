@@ -96,7 +96,7 @@ class ToolFailure extends Error {
 function guide() {
   return {
     summary: 'A recipe turns ONE customer selfie into a finished result. Slot "selfie" is always the customer photo; every other slot is a file YOU upload (upload_file → ast_ id). Steps run in order; a prompt refers to slots and earlier steps only as {{name}}.',
-    limits: { steps: 'image then video (max 2), or 1–6 images (a carousel)', prompt: '10–4000 characters', note: `${NOTE_MAX} characters a step`, intro: INTRO_MAX, outro: OUTRO_MAX, files: '6 references + 1 example, 4 MB each, 20 MB a template', royaltyKrw: [ROYALTY_MIN_KRW, ROYALTY_MAX_KRW], royaltyDefaultKrw: ROYALTY_DEFAULT_KRW },
+    limits: { steps: 'image then video (max 2), or 1–10 images (a carousel)', prompt: '10–4000 characters', note: `${NOTE_MAX} characters a step`, intro: INTRO_MAX, outro: OUTRO_MAX, files: '6 references + 1 example, 4 MB each, 20 MB a template', royaltyKrw: [ROYALTY_MIN_KRW, ROYALTY_MAX_KRW], royaltyDefaultKrw: ROYALTY_DEFAULT_KRW },
     engines: MAKER_ENGINE_IDS.map((id) => (isVideoEngine(id)
       ? { id, kind: 'video', aspects: VIDEO_ASPECTS, durationSeconds: [videoEngineSpec(id).minDurationSeconds, videoEngineSpec(id).maxDurationSeconds], resolutions: videoEngineSpec(id).resolutions }
       : { id, kind: 'image', aspects: IMAGE_ASPECTS })),
