@@ -28,6 +28,12 @@ export const MAX_RECIPE_BYTES = 40_000;
  * prompt behind the post — a shortened copy would not be that.
  */
 export const MAX_STEP_PROMPT_CHARS = 8000;
+/**
+ * The studio's own recipes (the image-set form, the import script): room for every step at its
+ * prompt limit in Korean, 3 bytes a character, plus the recipe's structure. Slack 1793592561.362499:
+ * a set whose frames were each within their limit was refused whole at the maker's 40,000.
+ */
+export const MAX_STUDIO_RECIPE_BYTES = 256_000;
 export const SELFIE_SLOT = 'selfie';
 
 const NAME = /^[a-z][a-z0-9_]{0,23}$/;
@@ -163,11 +169,21 @@ export function recipeNeedsIdentity(recipe: Recipe): boolean {
   return recipe.steps.some((step) => isMakerEngine(step.engine) && identityPath(step.engine) === 'asset' && step.inputs.some((input) => person.has(input)));
 }
 
+/** A set frame's words the way the recipe stores them: the buyer's photo, "Image 1", as its token. */
+export function setFrameStepPrompt(prompt: string): string {
+  return prompt.replace(/\bImage 1\b/g, `{{${SELFIE_SLOT}}}`);
+}
+
+export function setPromptTooLong(prompt: string): boolean {
+  return setFrameStepPrompt(prompt).trim().length > MAX_STEP_PROMPT_CHARS;
+}
+
 export function parseRecipe(raw: unknown, options: { studio?: boolean } = {}): RecipeCheck {
+  const maxBytes = options.studio ? MAX_STUDIO_RECIPE_BYTES : MAX_RECIPE_BYTES;
   if (typeof raw === 'string') {
-    if (Buffer.byteLength(raw, 'utf8') > MAX_RECIPE_BYTES) return { ok: false, issues: [{ code: 'too_large' }] };
+    if (Buffer.byteLength(raw, 'utf8') > maxBytes) return { ok: false, issues: [{ code: 'too_large' }] };
     try { raw = JSON.parse(raw); } catch { return { ok: false, issues: [{ code: 'shape' }] }; }
-  } else if (Buffer.byteLength(JSON.stringify(raw ?? null), 'utf8') > MAX_RECIPE_BYTES) return { ok: false, issues: [{ code: 'too_large' }] };
+  } else if (Buffer.byteLength(JSON.stringify(raw ?? null), 'utf8') > maxBytes) return { ok: false, issues: [{ code: 'too_large' }] };
   const parsed = RecipeShape.safeParse(raw);
   if (!parsed.success) return { ok: false, issues: [{ code: 'shape' }] };
   const recipe = parsed.data;

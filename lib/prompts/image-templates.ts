@@ -6,7 +6,7 @@ import { estimateImageUsd, IMAGE_ENGINES, isImageAspect, type ImageAspect, type 
 import { centsForKrw } from '@/lib/recipes/pricing';
 import { baseKrw } from '@/lib/twings/template-price';
 import { loadTemplateRecipe, recipeSchemaReady } from '@/lib/recipes/repo';
-import { engineStepPrompt, isMakerEngine, isStudioRecipeEngine, legacyPromptText, MAX_RECIPE_STEPS, parseRecipe, SELFIE_SLOT, type Recipe } from '@/lib/recipes/schema';
+import { engineStepPrompt, isMakerEngine, isStudioRecipeEngine, legacyPromptText, MAX_RECIPE_STEPS, MAX_STEP_PROMPT_CHARS, parseRecipe, SELFIE_SLOT, setFrameStepPrompt, setPromptTooLong, type Recipe } from '@/lib/recipes/schema';
 import type { StorageDriver } from '@/lib/storage';
 import { promptStagingKey, publishPromptMedia, sha256Hex } from './media';
 import { insertPrompt, slugExists } from './repo';
@@ -139,8 +139,6 @@ export interface ImageTemplateSet {
 
 export type SetBuild = { ok: true; set: ImageTemplateSet } | { ok: false; errors: string[] };
 
-/** The manifest's own name for the buyer's photo. */
-const PHOTO = /\bImage 1\b/g;
 const MAX_SET_FRAMES = Math.min(MAX_RECIPE_STEPS, PROMPT_GALLERY_MAX);
 
 export function buildImageTemplateSet(rawDescriptor: unknown, frames: readonly ImageFrameSpec[]): SetBuild {
@@ -161,6 +159,7 @@ export function buildImageTemplateSet(rawDescriptor: unknown, frames: readonly I
     if (issue === 'no_photo') errors.push(`${frame.key}: the prompt never names the photo as "Image 1"`);
     if (issue === 'other_reference') errors.push(`${frame.key}: the prompt names a reference a set does not carry`);
     if (issue === 'braces') errors.push(`${frame.key}: the prompt contains "{{" or "}}"`);
+    if (setPromptTooLong(frame.promptText)) errors.push(`${frame.key}: the prompt is over ${MAX_STEP_PROMPT_CHARS} characters`);
   }
   if (errors.length > 0 || !first) return { ok: false, errors };
 
@@ -172,7 +171,7 @@ export function buildImageTemplateSet(rawDescriptor: unknown, frames: readonly I
       kind: 'image' as const,
       engine: frame.engine,
       inputs: [SELFIE_SLOT],
-      prompt: frame.promptText.replace(PHOTO, `{{${SELFIE_SLOT}}}`),
+      prompt: setFrameStepPrompt(frame.promptText),
       params: { aspect: frame.aspect },
     })),
     output: { frames: frames.map((_, index) => `shot${index + 1}`) },

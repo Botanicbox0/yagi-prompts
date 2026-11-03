@@ -4787,6 +4787,7 @@ export const en = {
     setErrImage: 'Frame {n} has no image, or it is still uploading.',
     setErrAspect: 'The image for frame {n} is not {aspect}. Change the aspect or use another image.',
     setErrPromptShort: 'The prompt for frame {n} is too short.',
+    setErrPromptLong: 'The prompt for frame {n} is too long. Keep it to {max} characters.',
     setErrNoPhoto: 'The prompt for frame {n} never names the customer’s photo as Image 1 or @image1.',
     setErrOtherReference: 'The prompt for frame {n} points at a reference the set does not have (Image 2, for example).',
     setErrBraces: 'Remove the {{ }} from the prompt for frame {n}.',
