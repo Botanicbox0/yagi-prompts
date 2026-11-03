@@ -46,6 +46,7 @@ import { MakeLauncher } from '@/components/templates/make-launcher';
 import { MakeSheet } from '@/components/templates/make-sheet';
 import { templateCredits } from '@/lib/twings/credits';
 import { CreativeAvatar } from '@/components/makers/identity';
+import { PersonalIdentity } from '@/components/audience/personal-identity';
 
 /**
  * `/[locale]/t/[slug]` — one template, which is also where it is made (docs/TEMPLATES-IA.md §2).
@@ -195,7 +196,7 @@ export default async function TemplatePage({ params }: RouteParams) {
   ];
 
   return (
-    <>
+    <PersonalIdentity>
       <MarketingNav locale={locale} dict={dict} rest={`/t/${slug}`} initialTheme="light" />
       {/* No Offer: a template page names no won or dollar price (founder, 2026-10-29 — credits). */}
       <JsonLd id="template-structured-data" data={templateStructuredData({ origin: siteUrl(), locale, card, description, publicSalesEnabled: false })} />
@@ -313,7 +314,7 @@ export default async function TemplatePage({ params }: RouteParams) {
 
                 {style === null ? (
                   <>
-                    <section data-template-closed className="mt-6 rounded-2xl border border-hairline p-5 sm:p-6">
+                    <section data-template-closed className="mt-6 rounded-3xl border border-hairline bg-white p-5 sm:p-6">
                       <p className="font-display text-[1.5rem] leading-none font-black">{t.notForSale}</p>
                       <dl data-template-facts className="mt-2.5 flex flex-wrap items-center gap-y-1 text-xs text-black/65">
                         {facts.filter(([label]) => label !== t.waitLabel).map(([label, value], idx) => (
@@ -426,7 +427,7 @@ export default async function TemplatePage({ params }: RouteParams) {
                         <p data-template-sale-state className="mt-3 text-xs leading-relaxed text-black/60">
                           <TemplateMakeAvailability copy={makeAvailabilityCopy} oneTimeAvailable={shopOpen} subscriptionEligible={subscriptionQuote !== null} field="body" />
                         </p>
-                        <section data-template-photo-guide className="mt-5 rounded-2xl border border-hairline bg-surface p-4 sm:p-5">
+                        <section data-template-photo-guide className="mt-5 rounded-3xl border border-hairline bg-white p-4 sm:p-5">
                           <h2 className="text-xs font-semibold text-black/85">{dict.selfie.goodExamples}</h2>
                           <p className="mt-2 text-xs leading-relaxed text-black/70">{dict.studio.signedOutBody}</p>
                           <ul data-studio-photo-examples className="mt-3 grid grid-cols-3 gap-2.5">
@@ -512,6 +513,6 @@ export default async function TemplatePage({ params }: RouteParams) {
       <MarketingFooter locale={locale} dict={dict} />
       {/* Room for the phone's sticky make bar, so it never sits on the footer's last line. */}
       {style !== null && <div aria-hidden="true" className="h-24 md:hidden" />}
-    </>
+    </PersonalIdentity>
   );
 }

@@ -14,7 +14,7 @@
   1. AGENTS.md (특히 §3 검증 루프, §5 문안·브랜드 규칙, §11)
   2. docs/design/TASTE.md — 대표가 좋다·싫다고 한 것. 반드시 지킨다.
   3. docs/design/TOOLBOX.md §0, §1-1 — 화면마다 기법 3~4개만. 빨강 금지. 블루 하나.
-  4. docs/design/IDENTITY.md — 고정된 디자인 아이덴티티(색, 사진·영상 만드는 법, 모델 역할). 값은 lib/design/identity.ts가 원본이다. 색·서체·모션·이미지 색 대역·하드라인. 값을 바꾸면 components/brand-studio/v7.module.css의 .identity도 같이 바꾸고 tests/design/identity.test.ts가 통과해야 한다.
+  4. docs/design/IDENTITY.md — 고정된 디자인 아이덴티티(색, 사진·영상 만드는 법, 모델 역할). 값은 lib/design/identity.ts가 원본이다. 색·서체·모션·이미지 색 대역·하드라인. 값을 바꾸면 components/design/identity.module.css의 .identity도 같이 바꾸고 tests/design/identity.test.ts가 통과해야 한다.
   5. docs/BRAND-ENGINE.md — 이 페이지가 파는 것(브랜드만의 AI 미디어 엔진: 고정 층 + 바뀌는 것).
   6. docs/research/brand-landing-2026-10-30/reference-teardown.md — daylightcomputer.com 등 레퍼런스 해부(스크린샷 경로 포함).
   7. docs/wording/brand-landing-2026-10-29.md, docs/wording/brand-landing-2026-10-30.md — 문구 원칙과 검토 기록.

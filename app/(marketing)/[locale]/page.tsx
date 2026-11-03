@@ -10,6 +10,7 @@ import { promptLabels, presentUseCases, useCaseLabel } from '@/components/prompt
 import { campaignLabels } from '@/components/campaigns/labels';
 import { SITE_TWITTER_CARD, siteOgImage } from '@/lib/seo/og';
 import { MarketingFooter, MarketingNav } from '@/components/marketing/chrome';
+import { PersonalIdentity } from '@/components/audience/personal-identity';
 import { FaqSection } from '@/lib/seo/faq-section';
 import { PromptRail } from '@/components/prompts/rails';
 import { UseCaseFilter } from '@/components/prompts/filter-chips';
@@ -49,7 +50,7 @@ export default async function LandingPage({ params }: { params: Promise<{ locale
   // The hero stays a studio original (the founder's pick).
   const studioVideo = templates.video.filter(card => card.origin !== 'maker');
   const featured = studioVideo.find(card => card.slug === 'you-are-a-prom-queen') ?? studioVideo.find(card => card.video && card.poster) ?? studioVideo[0] ?? templates.video[0];
-  return <>
+  return <PersonalIdentity>
     <MarketingNav locale={locale} dict={dict} rest="/" />
     <SubscriptionAvailabilityProvider initialAvailability={availability}>
     <main id="main" data-creator-home>
@@ -74,5 +75,5 @@ export default async function LandingPage({ params }: { params: Promise<{ locale
     </main>
     </SubscriptionAvailabilityProvider>
     <MarketingFooter locale={locale} dict={dict} />
-  </>;
+  </PersonalIdentity>;
 }
