@@ -46,6 +46,7 @@ describe('design tokens (§5.1/§5.2/§4)', () => {
     expect(globals).toContain('--color-white: #ffffff');
     expect(globals).toContain(`--color-blue: ${COLOUR.accent}`);
     expect(globals).toContain(`--color-sky: ${COLOUR.sky}`);
+    expect(globals).toContain(`--color-muted: ${COLOUR.muted}`);
     expect(globals).toContain('--color-line-light: rgba(0, 0, 0, 0.12)');
     expect(globals).toContain('--color-line-dark: rgba(255, 255, 255, 0.16)');
     // anti-slop: no gradients, no glass, no coloured shadows

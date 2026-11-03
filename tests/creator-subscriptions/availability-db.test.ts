@@ -2,7 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 import { PGlite } from '@electric-sql/pglite';
 import { readFileSync } from 'node:fs';
 import type { SqlRunner } from '@/lib/db/sql-runner';
-import { getCreatorSubscriptionAvailability, SUBSCRIPTION_RELEASE_VERSION, SUBSCRIPTION_REQUIRED_STEPS } from '@/lib/creator-subscriptions/availability';
+import { cacheableSubscriptionAvailability, getCreatorSubscriptionAvailability, PREPARING_SUBSCRIPTION_AVAILABILITY, SUBSCRIPTION_RELEASE_VERSION, SUBSCRIPTION_REQUIRED_STEPS } from '@/lib/creator-subscriptions/availability';
 import { SUBSCRIPTION_PLAN_VERSION } from '@/lib/creator-subscriptions/plans';
 import { SUBSCRIPTION_TERMS_VERSION } from '@/lib/creator-subscriptions/legal';
 import { launchConfigurationDigest, premiumConfigurationDigest, subscriptionTermsApproved, subscriptionTermsDigest } from '@/lib/creator-subscriptions/evidence';
@@ -50,8 +50,37 @@ describe('public availability through real Postgres schemas, roles and evidence'
   afterAll(async()=>{vi.restoreAllMocks();await db.close();});
   async function availability(config=env){
     await db.exec('set role service_role');
-    try{return await getCreatorSubscriptionAvailability(sql,config);}finally{await db.exec('reset role');}
+    try{
+      const fresh=await getCreatorSubscriptionAvailability(sql,config);
+      // Every scenario below also proves the cached read gives the same answer when the database answers.
+      expect(await cacheableSubscriptionAvailability(sql,config)).toEqual(fresh);
+      return fresh;
+    }finally{await db.exec('reset role');}
   }
+  it('treats a failure at any statement of the read as an outage, and class 42 at any statement as an answer',async()=>{
+    const failingAt=(index:number,failure:unknown):SqlRunner=>{
+      let seen=0;
+      return {query:async<T>(text:string,params?:unknown[])=>{if(seen++===index)throw failure;return sql.query<T>(text,params);},transaction:sql.transaction};
+    };
+    let statements=0;
+    const counting:SqlRunner={query:async<T>(text:string,params?:unknown[])=>{statements+=1;return sql.query<T>(text,params);},transaction:sql.transaction};
+    await db.exec('set role service_role');
+    try{
+      expect((await cacheableSubscriptionAvailability(counting,env)).status).toBe('open');
+      expect(statements).toBeGreaterThanOrEqual(6);
+      for(let index=0;index<statements;index+=1){
+        const outage=new Error('timeout exceeded when trying to connect');
+        await expect(cacheableSubscriptionAvailability(failingAt(index,outage),env)).rejects.toBe(outage);
+        expect(await getCreatorSubscriptionAvailability(failingAt(index,outage),env)).toBe(PREPARING_SUBSCRIPTION_AVAILABILITY);
+        const schema=Object.assign(new Error('missing'),{code:'42703'});
+        expect((await cacheableSubscriptionAvailability(failingAt(index,schema),env)).status).toBe('preparing');
+      }
+    }finally{await db.exec('reset role');}
+  });
+  it('stays preparing when billing configuration throws before any statement runs',async()=>{
+    const bad={...env,TOSS_BILLING_SECRET_KEY:'test_sk_fixture'};
+    expect(await availability(bad)).toBe(PREPARING_SUBSCRIPTION_AVAILABILITY);
+  });
   it('opens both plans only with actual query-compatible schema and complete matching proof',async()=>{
     expect(await availability()).toMatchObject({status:'open',plans:{creator:{status:'open'},premium:{status:'open'}},editing:'open',premiumEditRequestsPerPeriod:30});
   });

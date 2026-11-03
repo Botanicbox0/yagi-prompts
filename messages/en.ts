@@ -1,5 +1,6 @@
 /** PLAN §3.9 — UI strings as dictionary modules. `en` is the shape; `ko` must match it. */
 import { adminWorkflowEn } from './admin-workflow';
+import { adminConsoleEn } from './admin-console';
 /**
  * docs/PLATFORM-2.0.md §14.1 — the names live in this one object (founder decision 2026-10-24). Every
  * other string is composed from it, so a rename edits these values only. Users get no role name:
@@ -33,6 +34,7 @@ const T = EN_TERMS;
 
 export const en = {
   adminWorkflow: adminWorkflowEn,
+  adminConsole: adminConsoleEn,
   landingMedia: {
     nav: 'Landing images',
     heading: 'Landing images',
@@ -117,7 +119,7 @@ export const en = {
   "formatNeedsScript": "Submitting a format needs JavaScript. Turn it on and reload this page.",
   "royalty": `Accrued ${T.maker} share`,
   "royaltyHint": `${cap(T.makers)} receive 80% of distributable margin after tax, payment fees and actual generation cost. These amounts await settlement review; they are not completed payouts.`,
-  "adminTitle": "Requests and format partners",
+  "adminTitle": "AI creatives",
   "adminHint": `Review requests, ${T.maker} access, ratings and posting evidence. Every administrative decision is recorded.`,
   "reason": "Decision reason / evidence reference",
   "userId": "Account ID",
@@ -175,9 +177,9 @@ export const en = {
   "approveContractHint": `Approval needs the agreement version the ${T.maker} accepted.`,
   "inviteTitle": "Invite by account ID",
   "payout": "Payout",
-  "payoutCompany": "Company account (all earnings to the company)",
-  "payoutExternal": "Outside creative (80% of profit paid out)",
-  "payoutHint": "Accounts added here default to company. Accounts approved from an application are outside creatives.",
+  "payoutCompany": "Company promotional account",
+  "payoutExternal": "Outside creative (80% payout)",
+  "payoutHint": "Directly registered accounts are company accounts; approved applicants are outside creatives.",
   "formatNote": `Note shown to the ${T.maker}`,
   "formatNoteHint": `Required when rejecting. The ${T.maker} sees this note; internal reasons go in the field below.`,
   "templateStatus": "Template status",
@@ -1211,15 +1213,15 @@ export const en = {
     storyFirst: 'How it’s made → Example → Make',
     royaltyValue: '₩{amount}',
     priceLabel: 'Price',
-    priceBase: 'Base price {amount}',
+    priceBase: 'Default {amount}',
     priceBaseHint: 'Default set based on model and length.',
     priceTooLow: 'Cannot be lower than {amount}.',
-    priceTooHigh: 'Cannot be higher than {amount}.',
+    priceTooHigh: 'You can set it up to {amount}.',
     priceStep: 'Enter the price in steps of ₩100.',
     priceUnknown: 'The estimate appears once the recipe passes every check.',
     earningOne: 'Estimated {amount} per creation',
     earningMany: 'Earn {amount} if {n} people create it.',
-    earningRaise: 'A higher price means people pay more, and your earnings rise with it.',
+    earningRaise: 'A higher price increases both what people pay and your earnings.',
     earningRule: 'You get 80% of the profit after taxes, fees, and costs.',
     earningEstimate: 'Actual payout may vary based on costs and exchange rates.',
     earningSettle: 'Only sales from 7 days after delivery are eligible for settlement, excluding refunds.',
@@ -1263,7 +1265,7 @@ export const en = {
     submitting: 'Sending…',
     publish: 'Publish now',
     publishing: 'Publishing…',
-    publishHint: 'Publishing needs a passing recipe, an uploaded example file and one successful test render with your own photo. You set the price, starting from the base price. The studio can take a template down if it breaks the rules.',
+    publishHint: 'A passing recipe check, an example file and one successful test render with your own photo are all required. Prices start from the default, and templates that break the rules may be taken down.',
     readOnly: 'A template sent for review can no longer be edited. If it is not accepted, you can revise it and send it again.',
     errors: {
       invalid: 'Some fields need another look.',
@@ -1352,8 +1354,8 @@ export const en = {
       renders: 'Review renders',
       none: 'No review renders yet.',
       price: 'Final price (₩)',
-      priceHint: 'Base price {floor} + raise {royalty} = {proposed}',
-      royalty: 'Raise',
+      priceHint: 'Base {floor} + Extra {royalty} = Total {proposed}',
+      royalty: 'Extra',
       disclosure: 'Shown',
       presentation: 'Order',
       testsUsed: `${cap(T.maker)} test renders {n}/3`,
@@ -4816,6 +4818,7 @@ export const en = {
     setErrImage: 'Frame {n} has no image, or it is still uploading.',
     setErrAspect: 'The image for frame {n} is not {aspect}. Change the aspect or use another image.',
     setErrPromptShort: 'The prompt for frame {n} is too short.',
+    setErrPromptLong: 'The prompt for frame {n} is too long. Keep it to {max} characters.',
     setErrNoPhoto: 'The prompt for frame {n} never names the customer’s photo as Image 1 or @image1.',
     setErrOtherReference: 'The prompt for frame {n} points at a reference the set does not have (Image 2, for example).',
     setErrBraces: 'Remove the {{ }} from the prompt for frame {n}.',
@@ -4861,9 +4864,9 @@ export const en = {
     fieldTemplatePrice1080: '1080p price (USD cents)',
     fieldTemplatePrice1080Krw: '1080p price (KRW)',
     templatePrice1080Hint: 'Films only. Both fields above zero offer 1080p as a choice. The default stays 720p.',
-    templateCostFloor: 'Base price (6% margin): 720p {p720} · 1080p {p1080}. A 5–7% margin is recommended. Based on 1,400 KRW/USD, 10% VAT and a 3.4% card fee. Final prices need founder approval.',
-    templateImageCostFloor: 'Base price for {frames} images on {engine}: {price}. It is the cost plus 12%, so changing the model changes it. Final prices need founder approval.',
-    templateBelowFloor: 'Below the recommended range.',
+    templateCostFloor: 'Base prices are {p720} for 720p and {p1080} for 1080p (6% margin). 5–7% is recommended. Final prices need founder approval. (1,400 KRW/USD, 10% VAT, 3.4% card fee)',
+    templateImageCostFloor: 'The base price for {frames} images on the {engine} model is {price} (cost + 12%). Changing the model updates the base price. Final prices need founder approval.',
+    templateBelowFloor: 'Below the recommended price.',
     fieldTemplateRuntime: 'Runtime (seconds)',
     templateRuntimeHint: 'Films only. Leave empty for an image.',
     fieldTemplateEngine: 'Render engine',

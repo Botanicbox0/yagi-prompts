@@ -1,0 +1,51 @@
+/*
+ * TWINGS design identity tokens (docs/design/IDENTITY.md). Values copy lib/design/identity.ts;
+ * tests/design/identity.test.ts keeps them equal. The brand landing (`/brands`) and the personal
+ * marketing pages both wrap themselves in `.identity`, so the two sides read one set of variables.
+ */
+
+/* ---------- Identity: the only place the hex values live ---------- */
+.identity {
+  display: contents;
+  --id-paper: #ffffff;
+  --id-canvas: #f6f7f9;
+  --id-sky: #e8eff7;
+  --id-ink: #0e1013;
+  --id-body: #41444d;
+  --id-muted: #676b75;
+  --id-line: #e4e6ea;
+  --id-line-strong: #c7ccd3;
+  --id-accent: #3875c5;
+  --id-accent-text: color-mix(in srgb, var(--id-accent) 85%, #000000);
+  --id-accent-hover: color-mix(in srgb, var(--id-accent) 82%, #000000);
+  --id-accent-pressed: color-mix(in srgb, var(--id-accent) 66%, #000000);
+  --id-accent-tint: color-mix(in srgb, var(--id-accent) 9%, #ffffff);
+  --id-spring: linear(0, 0.009, 0.035 2.1%, 0.141, 0.281 6.7%, 0.723 12.9%, 0.938 16.7%, 1.017, 1.077, 1.121, 1.149 24.3%, 1.159, 1.163, 1.161, 1.154 29.9%, 1.129 32.8%, 1.051 39.6%, 1.017 43.1%, 0.991, 0.977 51%, 0.974 53.8%, 0.975 57.1%, 0.997 69.8%, 1.003 76.9%, 1);
+  --id-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --id-quick: 240ms;
+  --id-base: 520ms;
+  --id-slow: 900ms;
+  --id-radius-media: 18px;
+  --id-radius-card: 24px;
+  --id-sans: 'Pretendard Variable', Pretendard, 'Apple SD Gothic Neo', 'Malgun Gothic', system-ui, sans-serif;
+  --id-mono: var(--font-geist-mono), 'Pretendard Variable', Pretendard, ui-monospace, SFMono-Regular, Menlo, monospace;
+  /* The shared nav, enquiry form and FAQ read the site tokens; on this page they follow the identity. */
+  --color-blue: var(--id-accent);
+  --accent: var(--id-accent-text);
+}
+.identity :global([data-theme='light']) { --accent: var(--id-accent-text); }
+
+/*
+ * The personal side (twings.app home, /video, /image, template pages, pricing) on top of `.identity`.
+ * Its components still speak the site tokens (`text-black/65`, `bg-black`, `border-hairline`), so the
+ * scope points those at the identity roles instead of rewriting every call site: the site's black is the
+ * identity ink, light sections sit on the canvas, and hairlines are the identity line. White stays paper,
+ * so cards, sheets and the nav still lift off the ground.
+ */
+.personal { --color-black: var(--id-ink); }
+.personal :global([data-theme='light']) { --hairline: var(--id-line); }
+.personal main,
+.personal :global(.section[data-theme='light']) { background-color: var(--id-canvas); }
+/* A last child's margin (the home's brand door) would collapse through main and show the white body; blocks
+   that sit in main outside a section would take the body's black. */
+.personal main { display: flow-root; color: var(--id-ink); }

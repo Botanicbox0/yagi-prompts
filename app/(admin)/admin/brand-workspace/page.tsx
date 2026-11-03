@@ -6,10 +6,14 @@ import { getLocaleFromHeaders } from "@/lib/i18n/server";
 import { getDictionary } from "@/lib/i18n/dictionaries";
 import { loadStudioWorkspace } from "@/lib/brands/workspace/service";
 import { AdminShell } from "@/components/admin/chrome";
+import { AdminPageHeader } from "@/components/admin/patterns";
+import { formatCount } from "@/lib/admin/format";
 import { CampaignList } from "@/components/brand-workspace/campaign-list";
 import { loadStudioInbox } from "@/lib/brands/workspace/inbox";
 import { StudioInboxPanel } from "@/components/admin/studio-inbox";
+
 export const dynamic = "force-dynamic";
+
 export default async function StudioBrands() {
   const [viewer, sql, locale] = await Promise.all([
     requireAdmin(),
@@ -22,10 +26,16 @@ export default async function StudioBrands() {
   return (
     <AdminShell dict={dict.admin} locale={locale} active="brandWorkspace">
       <div data-studio-brand-queue>
-        <div className="bw-heading">
-          <div><h1>{b.dashboard.studioTitle}</h1><p>{b.dashboard.studioSubtitle}</p></div>
-          <a className="bw-button" href="/admin/brand-workspace/usage" data-usage-queue-link>{b.secondaryUsage.admin.openQueue} →</a>
-        </div>
+        <AdminPageHeader
+          title={b.dashboard.studioTitle}
+          {...(workspace ? { count: formatCount(workspace.projects.length, locale) } : {})}
+          lede={b.dashboard.studioSubtitle}
+          actions={
+            <a className="admin-btn" href="/admin/brand-workspace/usage" data-usage-queue-link>
+              {b.secondaryUsage.admin.openQueue} →
+            </a>
+          }
+        />
         {/* The language switcher lives once, in the shell's top bar (AdminShell). */}
         {inbox && <StudioInboxPanel entries={inbox} admin={dict.admin} locale={locale} />}
         {workspace&&<section className="bw-panel" data-managed-brands><div className="bw-section-heading"><h2>{b.managed.manageTitle}</h2></div><p className="bw-muted">{b.managed.manageHint}</p><div className="bw-grid">

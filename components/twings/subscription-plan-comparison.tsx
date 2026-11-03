@@ -44,7 +44,7 @@ export function SubscriptionPlanComparison({ plans, copy, browseHref, initialAva
     <fieldset className="mb-5 flex min-w-0 flex-wrap items-center justify-between gap-4">
       <legend className="sr-only">{copy.subscriptionDurationLabel}</legend>
       <p aria-hidden="true" className="text-sm font-medium">{copy.subscriptionDurationLabel}</p>
-      <div className="inline-flex max-w-full rounded-full border border-hairline p-1">
+      <div className="inline-flex max-w-full rounded-full border border-hairline bg-white p-1">
         {COMPARISON_LENGTHS.map(length => <label key={length} className="relative cursor-pointer">
           <input type="radio" name="subscription-length" value={length} checked={seconds === length} onChange={() => setSeconds(length)} className="peer sr-only" />
           <span className="flex min-h-11 min-w-19 items-center justify-center rounded-full px-4 text-sm font-medium transition-colors peer-checked:bg-black peer-checked:text-white peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-accent motion-reduce:transition-none">
@@ -59,8 +59,8 @@ export function SubscriptionPlanComparison({ plans, copy, browseHref, initialAva
         const premium = plan.id === 'premium';
         const t = copy.subscriptionPlans[plan.id];
         const planOpen = open && availability.plans[plan.id].status === 'open' && (!premium || availability.editing === 'open');
-        return <article key={plan.id} data-subscription-plan={plan.id} data-subscription-plan-status={planOpen ? 'open' : availability.plans[plan.id].status === 'paused' ? 'paused' : 'preparing'} className={`flex min-w-0 flex-col rounded-2xl border p-6 sm:p-8 ${premium ? 'border-accent' : 'border-hairline'}`}>
-          <h3 className={`text-lg font-semibold ${premium ? 'text-accent' : ''}`}>{t.name}</h3>
+        return <article key={plan.id} data-subscription-plan={plan.id} data-subscription-plan-status={planOpen ? 'open' : availability.plans[plan.id].status === 'paused' ? 'paused' : 'preparing'} className={`flex min-w-0 flex-col rounded-3xl border bg-white p-6 sm:p-8 ${premium ? 'border-accent' : 'border-hairline'}`}>
+          <h3 className={`audience-subheading text-lg ${premium ? 'text-accent' : ''}`}>{t.name}</h3>
           <p className="mt-2 min-h-10 text-sm leading-relaxed text-black/65">{t.headline}</p>
           <p data-subscription-price className="mt-5 font-display text-[clamp(2rem,4.5vw,3.5rem)] leading-tight font-bold tracking-tight">{plan.price}<span className="ml-2 text-sm font-normal tracking-normal text-black/60">{copy.subscriptionPeriod}</span></p>
           <p className="mt-1 text-xs text-black/60">{copy.subscriptionTax}</p>
@@ -77,7 +77,7 @@ export function SubscriptionPlanComparison({ plans, copy, browseHref, initialAva
           </div>}
           {premium && <a href="#customization" className="mt-1 inline-flex min-h-11 items-center self-start text-sm underline underline-offset-4">{copy.subscriptionMore}</a>}
           <div className="mt-auto pt-7">
-            <a href={planOpen ? `/billing/subscription?plan=${plan.id}` : browseHref} className={`flex min-h-12 w-full items-center justify-center gap-3 rounded-full px-5 text-sm font-semibold focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent ${premium ? 'bg-accent text-white' : 'bg-black text-white'}`}>{planOpen ? interpolate(copy.subscriptionStart, { plan: t.name }) : copy.subscriptionBrowse}<span aria-hidden="true">↗</span></a>
+            <a href={planOpen ? `/billing/subscription?plan=${plan.id}` : browseHref} className={`${premium ? 'audience-button' : 'audience-button-quiet'} w-full`}>{planOpen ? interpolate(copy.subscriptionStart, { plan: t.name }) : copy.subscriptionBrowse}<span aria-hidden="true">↗</span></a>
           </div>
         </article>;
       })}
