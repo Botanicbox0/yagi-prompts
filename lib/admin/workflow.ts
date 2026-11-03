@@ -10,7 +10,7 @@ export const ADMIN_NAV_GROUPS = [
   { key: "templates", items: ["prompts", "community", "contests"] },
   { key: "brands", items: ["brandWorkspace", "campaigns", "inquiries", "funding"] },
   { key: "money", items: ["payments", "subscriptions"] },
-  { key: "people", items: ["risk"] },
+  { key: "people", items: ["users", "risk"] },
   { key: "settings", items: ["landingMedia"] },
 ] as const;
 
@@ -26,6 +26,7 @@ export const ADMIN_NAV_PATHS = {
   funding: "/admin/funding",
   payments: "/admin/payments",
   subscriptions: "/admin/subscriptions",
+  users: "/admin/users",
   risk: "/admin/risk",
   landingMedia: "/admin/landing-media",
 } as const;
