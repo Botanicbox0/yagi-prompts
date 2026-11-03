@@ -5,7 +5,6 @@ import {
   bindCollaboration,
   sendParticipantMessage,
   storeParticipantFile,
-  revokeInvitation,
   type Outcome,
 } from "@/lib/campaigns/collaboration/service";
 const outcome = (r: Outcome) =>
@@ -86,17 +85,8 @@ const file: AdminOperation<{
       }),
     ),
 };
-const revoke: AdminOperation<{ invitationId: string }> = {
-  parse: (form) => ({
-    ok: true,
-    value: { invitationId: f.str(form, "invitationId") },
-  }),
-  run: async (ctx, input) =>
-    outcome(await revokeInvitation(ctx, ctx.viewer, input)),
-};
 export const CAMPAIGN_COLLABORATION_OPERATIONS = {
   "campaignCollaboration.bind": bind,
   "campaignCollaboration.message": message,
   "campaignCollaboration.file": file,
-  "campaignCollaboration.revoke": revoke,
 } as const;

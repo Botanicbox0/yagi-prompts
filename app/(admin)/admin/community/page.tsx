@@ -139,8 +139,21 @@ export default async function PlatformAdminPage({
       {label}
     </label>
   );
-  const form = (action: string, children: ReactNode, id?: string) => (
-    <OpForm op="platform.manage" back="/admin/community" className="space-y-3 rounded-xl border border-hairline p-4">
+  const PLATFORM_OP_BY_ACTION = {
+    creator: 'creative.grant',
+    application: 'creative.application',
+    format: 'creative.format',
+    settle: 'creative.settle',
+    reply: 'community.reply',
+    moderate: 'community.moderate',
+    quality: 'community.quality',
+    claim: 'community.claim',
+    policy: 'community.policy',
+    offer: 'community.offer',
+    offerDisable: 'community.offerDisable',
+  } as const;
+  const form = (action: keyof typeof PLATFORM_OP_BY_ACTION, children: ReactNode, id?: string) => (
+    <OpForm op={PLATFORM_OP_BY_ACTION[action]} back="/admin/community" className="space-y-3 rounded-xl border border-hairline p-4">
       {hidden('action', action)}
       {id ? hidden('id', id) : null}
       {children}
