@@ -86,7 +86,7 @@ export type RecipeSlotRole = (typeof RECIPE_SLOT_ROLES)[number];
 
 const Name = z.string().regex(NAME);
 const SlotRole = z.enum(RECIPE_SLOT_ROLES).optional();
-const UserSlot = z.object({ kind: z.literal('image'), source: z.literal('user'), required: z.literal(true), role: SlotRole }).strict();
+const UserSlot = z.object({ kind: z.literal('image'), source: z.literal('user'), required: z.boolean(), role: SlotRole }).strict();
 const CreatorSlot = z.object({ kind: z.enum(['image', 'video']), source: z.literal('creator'), asset: z.string().regex(ASSET_HANDLE), role: SlotRole }).strict();
 const Slot = z.discriminatedUnion('source', [UserSlot, CreatorSlot]);
 const Prompt = z.string().trim().min(10).max(MAX_STEP_PROMPT_CHARS);
@@ -211,6 +211,11 @@ export interface ParseRecipeOptions {
    * slot IS present, all identity/consent/output rules remain strictly enforced.
    */
   allowFaceless?: boolean;
+  /**
+   * Personal customizable templates: keeps `selfie` mandatory (`required: true, role: 'person'`),
+   * and allows up to two additional non-person user reference slots (`look | product | scene`).
+   */
+  allowUserReferenceSlots?: boolean;
 }
 
 export function parseRecipe(raw: unknown, options: ParseRecipeOptions = {}): RecipeCheck {
@@ -229,15 +234,23 @@ export function parseRecipe(raw: unknown, options: ParseRecipeOptions = {}): Rec
   // when no person is in the shot, while any `selfie` or `person` slot keeps the full identity rules.
   const selfie = recipe.slots[SELFIE_SLOT];
   if (selfie) {
-    if (selfie.source !== 'user' || (selfie.role !== undefined && selfie.role !== 'person')) {
+    if (selfie.source !== 'user' || selfie.required !== true || (selfie.role !== undefined && selfie.role !== 'person')) {
       issues.push({ code: 'selfie_missing' });
     }
   } else if (!options.allowFaceless) {
     issues.push({ code: 'selfie_missing' });
   }
+  let extraUserSlots = 0;
   for (const [name, slot] of slots) {
     if (slot.source === 'user' && name !== SELFIE_SLOT) {
-      if (!options.allowFaceless || !slot.role || slot.role === 'person') {
+      extraUserSlots += 1;
+      const validExtraRole = slot.role && slot.role !== 'person';
+      const allowedByFaceless = options.allowFaceless && slot.required === true && validExtraRole;
+      const allowedByPersonalCustom =
+        options.allowUserReferenceSlots &&
+        extraUserSlots <= 2 &&
+        (slot.role === 'look' || slot.role === 'product' || slot.role === 'scene');
+      if (!allowedByFaceless && !allowedByPersonalCustom) {
         issues.push({ code: 'user_slot', slot: name });
       }
     }
@@ -316,6 +329,11 @@ export function parseRecipe(raw: unknown, options: ParseRecipeOptions = {}): Rec
 /** Convenience wrapper for brand/studio recipes that may be faceless (product, scene, look, mask). */
 export function parseBrandRecipe(raw: unknown): RecipeCheck {
   return parseRecipe(raw, { studio: true, allowFaceless: true });
+}
+
+/** Convenience wrapper for personal customizable templates (requires `selfie`, allows up to 2 extra user reference slots `look | product | scene`). */
+export function parsePersonalCustomizableRecipe(raw: unknown): RecipeCheck {
+  return parseRecipe(raw, { studio: true, allowUserReferenceSlots: true });
 }
 
 /** Creator asset handles a recipe points at (the submission checks each belongs to the format). */
