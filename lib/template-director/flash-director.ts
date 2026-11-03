@@ -83,7 +83,10 @@ const OCCLUSION_ISSUES: ReadonlySet<PhotoIssueCode> = new Set([
   'hand_occlusion',
   'prop_occlusion',
   'hair_occlusion',
-  'tight_crop'
+  'tight_crop',
+  'wide_crop',
+  'asymmetrical_shoulders',
+  'bare_shoulder_id_crop'
 ]);
 
 const RETOUCH_ISSUES: ReadonlySet<PhotoIssueCode> = new Set([
@@ -94,28 +97,44 @@ const RETOUCH_ISSUES: ReadonlySet<PhotoIssueCode> = new Set([
 const DETAIL_ISSUES: ReadonlySet<PhotoIssueCode> = new Set(['low_resolution', 'motion_blur']);
 
 export const ANATOMICAL_DE_FILTER_CONTRACT =
-  'Keep the person in Image 1 100% recognizable in core facial identity, eye shape, nasal bridge, hairstyle, and natural charm, while normalizing 2D beauty-app liquify distortions (artificially pinched V-line jawline, over-inflated or over-lined lips, and plastic poreless skin blur) back to anatomically natural 3D camera lens proportions (85mm portrait perspective) with natural matte skin micro-texture and visible pores.';
+  'Keep the person in Image 1 100% recognizable in core facial identity, eye shape, nasal bridge, exact hairstyle (preserve original part and bangs without replacing with generic 5:5 curtain bangs), and natural charm, while normalizing 2D beauty-app liquify distortions (artificially pinched V-line jawline, over-inflated or over-lined lips, and plastic poreless skin blur) back to anatomically natural 3D camera lens proportions (85mm f/2.0 portrait perspective, soft oval-egg contour) wearing a clean minimalist matte black crew-neck top (never bare passport-photo shoulders) with natural matte skin micro-texture and visible pores.';
+
+function sanitizeCleanupPrompt(raw: string | null, includeRetouchNormalization: boolean): string {
+  const base = (
+    raw ??
+    'Keep the person in Image 1 100% identical in facial identity, eyes, nose, lips, skin tone, and hairstyle. Remove only the occluding hand or handheld object near the face and restore a clean natural neckline and symmetrical shoulders wearing a minimalist matte black crew-neck top.'
+  )
+    .replace(/\bbare\s+shoulders\b/gi, 'symmetrical shoulders in a minimalist matte black crew-neck top')
+    .replace(/\bstrapless\s+(?:black\s+)?top\b/gi, 'minimalist matte black crew-neck top')
+    .trim();
+
+  if (includeRetouchNormalization && !base.includes('normalizing 2D beauty-app liquify distortions')) {
+    return `${base} ${ANATOMICAL_DE_FILTER_CONTRACT}`;
+  }
+  return base;
+}
 
 export function routePhotoCleanup(
   issues: readonly PhotoIssueCode[],
   cleanupPromptEn: string | null
 ): RecommendedPhotoCleanup {
-  if (issues.some((code) => OCCLUSION_ISSUES.has(code))) {
+  const hasOcclusion = issues.some((code) => OCCLUSION_ISSUES.has(code));
+  const hasRetouch = issues.some((code) => RETOUCH_ISSUES.has(code));
+
+  if (hasOcclusion) {
     return {
       mode: 'inpaint_occlusion',
       engine: 'nano-banana-2.1',
       fallbackEngine: 'seedream-5.0-pro',
-      editPromptEn:
-        cleanupPromptEn ??
-        'Keep the person in Image 1 100% identical in facial identity, eyes, nose, lips, skin tone, and hairstyle. Remove only the occluding hand or handheld object near the face and restore a clean natural neckline and symmetrical shoulders.'
+      editPromptEn: sanitizeCleanupPrompt(cleanupPromptEn, hasRetouch)
     };
   }
-  if (issues.some((code) => RETOUCH_ISSUES.has(code))) {
+  if (hasRetouch) {
     return {
       mode: 'normalize_retouch',
       engine: 'nano-banana-2.1',
       fallbackEngine: 'seedream-5.0-pro',
-      editPromptEn: cleanupPromptEn ?? ANATOMICAL_DE_FILTER_CONTRACT
+      editPromptEn: sanitizeCleanupPrompt(cleanupPromptEn ?? ANATOMICAL_DE_FILTER_CONTRACT, true)
     };
   }
   if (issues.some((code) => DETAIL_ISSUES.has(code))) {
@@ -238,7 +257,10 @@ async function callGeminiStructuredJson<T>(
       ],
       generationConfig: {
         temperature: 0.2,
-        responseMimeType: 'application/json'
+        responseMimeType: 'application/json',
+        thinkingConfig: {
+          thinkingLevel: 'LOW'
+        }
       }
     })
   });
@@ -247,7 +269,8 @@ async function callGeminiStructuredJson<T>(
     throw new Error(`gemini_director_http_${response.status}`);
   }
   const body = (await response.json()) as GeminiCandidateResponse;
-  const text = body.candidates?.[0]?.content?.parts?.[0]?.text;
+  const partsList = body.candidates?.[0]?.content?.parts ?? [];
+  const text = partsList[partsList.length - 1]?.text;
   if (!text) {
     throw new Error('gemini_director_empty_response');
   }

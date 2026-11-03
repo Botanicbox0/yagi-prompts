@@ -9,6 +9,9 @@ export const PHOTO_ISSUE_CODES = [
   'prop_occlusion',
   'hair_occlusion',
   'tight_crop',
+  'wide_crop',
+  'asymmetrical_shoulders',
+  'bare_shoulder_id_crop',
   'wide_angle_distortion',
   'low_resolution',
   'motion_blur',
@@ -168,14 +171,23 @@ export interface DirectorRewriteResult {
   preservedIdentityStrictLock: boolean;
 }
 
+const KNOWN_PHOTO_ISSUE_SET: ReadonlySet<string> = new Set(PHOTO_ISSUE_CODES);
+
 export const rawPhotoInspectionSchema = z.object({
   status: z.enum(['ready', 'needs_cleanup', 'needs_retake']),
-  issues: z.array(z.enum(PHOTO_ISSUE_CODES)).max(6),
+  issues: z
+    .preprocess(
+      (val) =>
+        Array.isArray(val)
+          ? val.filter((item): item is string => typeof item === 'string' && KNOWN_PHOTO_ISSUE_SET.has(item))
+          : [],
+      z.array(z.enum(PHOTO_ISSUE_CODES)).max(8)
+    ),
   faceWidthRatio: z.number().min(0).max(1),
   extractedHairDescription: z.string().trim().max(400).nullable(),
-  userMessageKo: z.string().trim().min(2).max(400),
-  userMessageEn: z.string().trim().min(2).max(400),
-  cleanupPromptEn: z.string().trim().max(800).nullable()
+  userMessageKo: z.string().trim().min(2).max(500),
+  userMessageEn: z.string().trim().min(2).max(500),
+  cleanupPromptEn: z.string().trim().max(1000).nullable()
 });
 
 export const rawStage1ChatSchema = z.object({

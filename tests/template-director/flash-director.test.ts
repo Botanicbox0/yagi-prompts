@@ -150,6 +150,41 @@ describe('Step 0: Photo Inspection & Cleanup Model Routing (Gemini 3.8 Flash)', 
     expect(verdict.recommendedCleanup.editPromptEn).toContain('visible pores');
   });
 
+  it('combines occlusion cleanup with anatomical de-filter and strips bare-shoulder passport directives when both issues co-occur (real influencer selfie case)', async () => {
+    const fetchMock = vi.fn(async (_url: RequestInfo | URL) =>
+      geminiJsonResponse({
+        status: 'needs_cleanup',
+        issues: ['prop_occlusion', 'hair_occlusion', 'asymmetrical_shoulders', 'over_retouched_contour', 'unknown_future_issue'],
+        faceWidthRatio: 0.33,
+        extractedHairDescription: 'glossy jet-black chin-length blunt bob tucked slightly behind the right ear',
+        userMessageKo:
+          '얼굴 앞쪽으로 종이컵 소품과 흩날리는 앞머리 가닥이 있어 움직임 생성 시 부자연스러울 수 있습니다. 또한 뷰티 필터로 강조된 턱선과 입술 볼륨은 3D 모션에서 왜곡될 수 있어 정제 과정을 권장합니다.',
+        userMessageEn:
+          'Foreground paper cups and beauty filter contouring may distort in 3D motion.',
+        cleanupPromptEn:
+          'Bust-up portrait of the same East Asian young woman. Balanced symmetrical bare shoulders wearing a simple strapless black top. Both hands and paper cups completely removed.'
+      })
+    );
+
+    const director = createFlashTemplateDirector(
+      { apiKey: 'fake-gemini-key', baseUrl: 'https://generativelanguage.googleapis.com/v1beta', model: 'gemini-3.8-flash' },
+      { fetch: fetchMock }
+    );
+
+    const verdict = await director.inspectPhoto(samplePhoto);
+    expect(verdict.issues).toEqual([
+      'prop_occlusion',
+      'hair_occlusion',
+      'asymmetrical_shoulders',
+      'over_retouched_contour'
+    ]);
+    expect(verdict.recommendedCleanup.mode).toBe('inpaint_occlusion');
+    expect(verdict.recommendedCleanup.editPromptEn).not.toContain('bare shoulders');
+    expect(verdict.recommendedCleanup.editPromptEn).not.toContain('strapless');
+    expect(verdict.recommendedCleanup.editPromptEn).toContain('minimalist matte black crew-neck top');
+    expect(verdict.recommendedCleanup.editPromptEn).toContain('normalizing 2D beauty-app liquify distortions');
+  });
+
   it('routes low-resolution or blurry photos to local SeedVR2 (0-cost optical restoration) instead of generative hallucination', async () => {
     const fetchMock = vi.fn(async (_url: RequestInfo | URL) =>
       geminiJsonResponse({
