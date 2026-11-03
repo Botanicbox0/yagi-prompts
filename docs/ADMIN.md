@@ -152,7 +152,7 @@
 | (b) | 렌더 보드 + 상세, 결제 확인, 홈에 결제·렌더 대기열, 목록·상세 패턴(`FilterPills`·`AdminTable`·`Pager`·`FactList`·`Timeline`) | PR((a) 위에 쌓음) |
 | (c) | 사용자 보기(`/admin/users`, PII 최소 기본안) | PR |
 | (d) | 기존 화면을 패턴으로: 브랜드 작업공간 → 캠페인 → 템플릿 순. AI 크리에이티브 화면 분리(SNS 확인·지원서·포맷·보상), 화면 안 SQL을 `lib/`로 | PR |
-| (e) | 잔재 정리: 플레이북 오퍼레이션 파일 분리, `platform.manage` 분해, 참조 없는 오퍼레이션 삭제, 옛 화면(§10-1 결정대로) | 다음 |
+| (e) | 잔재 정리: 플레이북 오퍼레이션 파일 분리, `platform.manage` 분해, 참조 없는 오퍼레이션 삭제, 옛 화면(§10-1 결정대로) | PR |
 
 ### 9.1 메인 세션과의 경계
 - 브랜드 조직 화면(`/admin/brand-workspace/organizations/[id]`)에는 메인 세션이 **"기능 정책"·"플랜" 섹션 두 개**를 더한다(`lib/brands/entitlements.ts`, `lib/brands/plans.ts`, 오퍼레이션은 `lib/admin/brand-engine-operations.ts`). 관리자 쪽은 이 화면을 (d)에서 패턴으로 옮길 때 섹션 단위로만 손대서 두 섹션이 그대로 들어오게 한다.
