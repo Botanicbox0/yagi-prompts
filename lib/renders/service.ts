@@ -512,13 +512,17 @@ export async function runRenderPass(deps: RenderPassDeps, options: RenderPassOpt
       logBilling('error', 'toss_reconcile_failed', { code: billingErrorCode(error) });
     }
   };
+  const isTargetedPoll = Boolean(options.pollJobId) && limit === 0 && !options.jobId;
   // Recover approved orders before claiming, and refunds before sending the failure notice.
-  await settlePayments();
-  // 1 — orphaned synchronous renders back to the queue (or failed once the budget is spent).
-  report.recovered = await recoverStaleRenderJobs(deps.sql, { now, leaseMinutes: LEASE_MINUTES, maxAttempts: MAX_ATTEMPTS });
-  if (deps.subscriptionSchemaReady) {
-    report.failed += await expireUnpreparedSubscriptionRenders(deps.sql, now);
-    await reconcileFinishedSubscriptionRenders(deps.sql);
+  // Skip global table-wide sweeps on a targeted single-job page refresh unless that job transitions.
+  if (!isTargetedPoll) {
+    await settlePayments();
+    // 1 — orphaned synchronous renders back to the queue (or failed once the budget is spent).
+    report.recovered = await recoverStaleRenderJobs(deps.sql, { now, leaseMinutes: LEASE_MINUTES, maxAttempts: MAX_ATTEMPTS });
+    if (deps.subscriptionSchemaReady) {
+      report.failed += await expireUnpreparedSubscriptionRenders(deps.sql, now);
+      await reconcileFinishedSubscriptionRenders(deps.sql);
+    }
   }
 
   // 2 — claim and run.
@@ -549,25 +553,28 @@ export async function runRenderPass(deps: RenderPassDeps, options: RenderPassOpt
     await pollAwaiting(deps, job, now, report);
   }
 
-  // 3b — the free tier's face slots: whoever has nothing in flight is released at the bank.
-  if (deps.releaseAfterUse ?? releaseAfterUseEnabled()) {
-    try {
-      const released = await releaseAfterUse(identityDeps(deps));
-      report.released = released.released;
-      if (released.failed > 0) report.errors.push(`release: the bank refused a delete; left for the next pass`);
-    } catch (error) {
-      report.errors.push(`release: ${error instanceof Error ? error.message : String(error)}`);
+  const targetedJobSettled = report.succeeded > 0 || report.failed > 0;
+  if (!isTargetedPoll || targetedJobSettled) {
+    // 3b — the free tier's face slots: whoever has nothing in flight is released at the bank.
+    if (deps.releaseAfterUse ?? releaseAfterUseEnabled()) {
+      try {
+        const released = await releaseAfterUse(identityDeps(deps));
+        report.released = released.released;
+        if (released.failed > 0) report.errors.push(`release: the bank refused a delete; left for the next pass`);
+      } catch (error) {
+        report.errors.push(`release: ${error instanceof Error ? error.message : String(error)}`);
+      }
     }
-  }
 
-  await settlePayments();
-  if (deps.subscriptionSchemaReady) {
-    await reconcileFinishedSubscriptionRenders(deps.sql);
-    await deleteExpiredEditReferences(deps.sql, deps.store, now);
+    await settlePayments();
+    if (deps.subscriptionSchemaReady) {
+      await reconcileFinishedSubscriptionRenders(deps.sql);
+      if (!isTargetedPoll) await deleteExpiredEditReferences(deps.sql, deps.store, now);
+    }
+    // 4 — say so.
+    if (!isTargetedPoll) await reconcileRewards(deps.sql);
+    await notifyFinished(deps, now, report);
   }
-  // 4 — say so.
-  await reconcileRewards(deps.sql);
-  await notifyFinished(deps, now, report);
   return report;
 }
 
