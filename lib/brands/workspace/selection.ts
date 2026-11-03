@@ -99,9 +99,12 @@ export interface SectionVisibility { studio: boolean; identity: boolean; setting
  */
 export function sectionVisibility(choice: Pick<BrandWorkspaceChoice, 'role' | 'denied'> | null): SectionVisibility {
   if (!choice) return { studio: true, identity: false, settings: false, members: false };
-  // The studio is generative media: a brand whose policy closes it gets no door, whatever the role.
+  // The studio and the fixed generative identity layer are hidden whenever generative_media is denied.
   const studio = choice.role !== 'guest' && !featureDenied(choice.denied, 'generative_media');
-  const identity = choice.role !== 'guest' && !featureDenied(choice.denied, 'brand_learning');
+  const identity =
+    choice.role !== 'guest' &&
+    !featureDenied(choice.denied, 'brand_learning') &&
+    !featureDenied(choice.denied, 'generative_media');
   return { studio, identity, settings: choice.role !== 'guest', members: choice.role === 'owner' || choice.role === 'studio' };
 }
 
