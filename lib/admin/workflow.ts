@@ -1,59 +1,47 @@
 import type { CampaignCounts } from "@/lib/campaigns/repo";
 
+/**
+ * The admin menu (docs/ADMIN.md §2.1). Groups follow the operator's day: operations first, then the
+ * work people wait on, then settings. An entry carries no description — the page header says what a
+ * screen is for, and a two-line menu no longer fits a laptop screen (audit 2026-11-03 §3.1).
+ */
 export const ADMIN_NAV_GROUPS = [
-  { key: "operations", items: ["home", "inquiries", "risk"] },
-  { key: "campaigns", items: ["brandWorkspace", "campaigns", "funding"] },
-  { key: "content", items: ["prompts", "community", "landingMedia"] },
-  { key: "system", items: ["subscriptions", "playbooks", "policy"] },
+  { key: "operations", items: ["home"] },
+  { key: "templates", items: ["prompts", "community", "contests"] },
+  { key: "brands", items: ["brandWorkspace", "campaigns", "inquiries", "funding"] },
+  { key: "money", items: ["subscriptions"] },
+  { key: "people", items: ["risk"] },
+  { key: "settings", items: ["landingMedia"] },
 ] as const;
 
 export const ADMIN_NAV_PATHS = {
   home: "/admin",
-  inquiries: "/admin/inquiries",
-  risk: "/admin/risk",
-  funding: "/admin/funding",
-  brandWorkspace: "/admin/brand-workspace",
-  campaigns: "/admin/campaigns",
   prompts: "/admin/prompts",
   community: "/admin/community",
-  landingMedia: "/admin/landing-media",
+  contests: "/admin/contests",
+  brandWorkspace: "/admin/brand-workspace",
+  campaigns: "/admin/campaigns",
+  inquiries: "/admin/inquiries",
+  funding: "/admin/funding",
   subscriptions: "/admin/subscriptions",
-  playbooks: "/admin/playbooks",
-  policy: "/admin/policy",
+  risk: "/admin/risk",
+  landingMedia: "/admin/landing-media",
 } as const;
 export type AdminNavKey = keyof typeof ADMIN_NAV_PATHS;
+export type AdminNavGroupKey = (typeof ADMIN_NAV_GROUPS)[number]["key"];
 
-export interface AdminQueueCounts {
-  posts: number;
-  applicants: number;
-  payouts: number;
-  studio: number;
-  inquiries: number;
-  feedback: number;
-  templates: number;
-  risk?: number;
-  creatorApplications?: number;
-  socialAccounts?: number;
-}
-export type AdminTaskKey = keyof AdminQueueCounts;
-const QUEUES: Array<{ key: AdminTaskKey; href: string }> = [
-  { key: "risk", href: "/admin/risk" },
-  { key: "posts", href: "/admin/campaigns" },
-  { key: "applicants", href: "/admin/campaigns" },
-  { key: "payouts", href: "/admin/campaigns#payout-queue" },
-  { key: "studio", href: "/admin/brand-workspace#studio-inbox" },
-  { key: "inquiries", href: "/admin/inquiries?kind=brand&status=new" },
-  { key: "feedback", href: "/admin/inquiries?kind=feedback&status=new" },
-  { key: "templates", href: "/admin/prompts?tab=pending" },
-  { key: "creatorApplications", href: "/admin/community#applications" },
-  { key: "socialAccounts", href: "/admin/community#social" },
-];
+/**
+ * Screens from the product TWINGS used to be (the playbook editor and its block policy). They keep
+ * their routes until the founder decides their removal (docs/ADMIN.md §10-1), but no menu entry.
+ */
+export const ADMIN_LEGACY_KEYS = ["playbooks", "policy"] as const;
+export type AdminShellKey = AdminNavKey | (typeof ADMIN_LEGACY_KEYS)[number];
 
-/** Read-only links: no mutation, inferred approval, or invented zero for unavailable data. */
-export function adminNextActions(counts: AdminQueueCounts) {
-  return QUEUES.filter((queue) => (counts[queue.key] ?? 0) > 0).map(
-    (queue) => ({ ...queue, count: counts[queue.key] ?? 0 }),
-  );
+export function adminNavGroupOf(key: AdminShellKey): AdminNavGroupKey | null {
+  for (const group of ADMIN_NAV_GROUPS) {
+    if ((group.items as readonly string[]).includes(key)) return group.key;
+  }
+  return null;
 }
 
 export function campaignWorkCounts(counts: Iterable<CampaignCounts>) {
