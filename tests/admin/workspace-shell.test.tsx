@@ -6,7 +6,7 @@ import { AdminShell } from '@/components/admin/chrome';
 import { getDictionary } from '@/lib/i18n/dictionaries';
 async function html(node: ReactNode) { const { prelude } = await prerender(node); return new Response(prelude).text(); }
 describe('one admin workspace shell', () => {
-  it.each(['home', 'prompts', 'campaigns', 'inquiries', 'brandWorkspace', 'contests', 'community'] as const)('keeps the same navigation and language controls on %s', async active => {
+  it.each(['home', 'renders', 'prompts', 'campaigns', 'inquiries', 'brandWorkspace', 'contests', 'community', 'payments', 'users'] as const)('keeps the same navigation and language controls on %s', async active => {
     const markup = await html(<AdminShell dict={getDictionary('ko').admin} locale="ko" active={active}><p>Content</p></AdminShell>);
     expect(markup).toContain('data-admin-navigation');
     expect(markup).toContain('data-admin-active="' + active + '"');
