@@ -71,12 +71,12 @@ export function MakeLauncherView({ credits, price = null, signinHref, labels, ch
 
   return (
     <>
-      <section ref={boxRef} data-template-make-launcher data-viewer={access === null ? 'unknown' : signedIn ? 'member' : 'visitor'} className="mt-6 rounded-3xl border border-hairline bg-white p-5 sm:p-6">
+      <section ref={boxRef} data-template-make-launcher data-viewer={access === null ? 'unknown' : signedIn ? 'member' : 'visitor'} className="mt-6 rounded-[24px] border border-hairline bg-white p-5 shadow-[0_14px_34px_-24px_rgba(12,15,20,0.14)] sm:p-6">
         {lead && <div data-make-lead className="mb-5">{lead}</div>}
-        {cost && <p data-template-credits className="font-display text-[2rem] leading-none font-black">{cost}</p>}
+        {cost && <p data-template-credits className="font-display text-[2rem] leading-none font-black tabular-nums">{cost}</p>}
         {price && (
           <div className="flex flex-wrap items-center gap-2.5">
-            <p data-template-price className="font-display text-[2rem] leading-none font-black">{price.value}</p>
+            <p data-template-price className="font-display text-[2rem] leading-none font-black tabular-nums">{price.value}</p>
             <span className="rounded-full bg-surface px-2.5 py-1 text-xs font-medium text-black/75">{price.label}</span>
           </div>
         )}
@@ -96,8 +96,8 @@ export function MakeLauncherView({ credits, price = null, signinHref, labels, ch
         ].join(' ')}
       >
         <div className="mx-auto flex max-w-xl items-center gap-4">
-          {cost && <p data-make-sticky-credits className="shrink-0 font-display text-[1.2rem] leading-none font-black">{cost}</p>}
-          {price && <p data-make-sticky-price className="shrink-0 font-display text-[1.2rem] leading-none font-black">{price.value}</p>}
+          {cost && <p data-make-sticky-credits className="shrink-0 font-display text-[1.2rem] leading-none font-black tabular-nums">{cost}</p>}
+          {price && <p data-make-sticky-price className="shrink-0 font-display text-[1.2rem] leading-none font-black tabular-nums">{price.value}</p>}
           <div className="flex-1">{cta('sticky')}</div>
         </div>
       </div>

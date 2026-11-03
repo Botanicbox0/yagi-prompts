@@ -85,10 +85,13 @@ describe('how it was made, in the column', () => {
 });
 
 describe('the make sheet', () => {
-  it('is a closed dialog holding its content, with a close button', () => {
+  it('is a closed dialog holding its content, with a close button, overscroll containment, and 24px card radius', () => {
     const html = renderToStaticMarkup(<MakeSheet title="Goldfish" closeLabel="Close"><section id="make">studio</section></MakeSheet>);
     expect(html).toMatch(/^<dialog[^>]*data-make-sheet/);
     expect(html).not.toMatch(/<dialog[^>]*\sopen/);
+    expect(html).toContain('overscroll-contain');
+    expect(html).toContain('rounded-t-[24px]');
+    expect(html).toContain('data-make-sheet-handle');
     expect(html).toContain('id="make"');
     expect(html).toContain('data-make-sheet-close');
   });

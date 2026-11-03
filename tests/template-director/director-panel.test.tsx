@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import {
   TemplateDirectorPanel,
+  formatReferenceFileSpec,
   upsertSummaryChips
 } from '@/components/twings/template-director-panel';
 import type { PhotoInspectionVerdict } from '@/lib/template-director/schema';
@@ -121,10 +122,15 @@ describe('TemplateDirectorPanel UI/UX (4-Pass SOTA Verification)', () => {
       />
     );
 
-    // Template Baseline Disclosure Card
+    // Template Baseline Disclosure Card + Live Customized vs Default State Diff (Pass 2)
     expect(html).toContain('data-template-baseline-card="90s-apgujeong-interview"');
     expect(html).toContain('90년대 압구정 인터뷰 템플릿 · 기본 설정 안내');
     expect(html).toContain('data-baseline-slot="outfit"');
+    expect(html).toContain('data-baseline-slot-state="customized"');
+    expect(html).toContain('data-baseline-customized-badge="outfit"');
+    expect(html).toContain('data-baseline-active-override="outfit"');
+    expect(html).toContain('→ 크림 트위드 자켓');
+    expect(html).toContain('data-baseline-revert="outfit"');
     expect(html).toContain('data-baseline-slot="makeup"');
     expect(html).toContain('data-baseline-slot="hair"');
     expect(html).toContain('data-baseline-slot="shot_action"');
@@ -171,14 +177,36 @@ describe('TemplateDirectorPanel UI/UX (4-Pass SOTA Verification)', () => {
     ]);
   });
 
-  it('renders over-retouched beauty-filter normalization advisory (normalize_retouch) with Dual-Candidate Likeness Picker while keeping user choice advisory', () => {
+  it('renders over-retouched beauty-filter normalization advisory (normalize_retouch) with Dual-Candidate Likeness Picker, radiogroup semantics, best-match badge, and original comparison toggle', () => {
     const html = renderToStaticMarkup(
-      <TemplateDirectorPanel locale="ko" photoInspection={sampleRetouchVerdict} />
+      <TemplateDirectorPanel
+        locale="ko"
+        photoInspection={sampleRetouchVerdict}
+        originalPhotoUrl="/selfie-original.jpg"
+        candidatesLoading={true}
+        identityCandidates={[
+          { engine: 'seedream-5.0-pro', titleKo: 'A', titleEn: 'A', subtitleKo: '', subtitleEn: '', previewUrl: null, similarityScore: 0.96 },
+          { engine: 'nano-banana-2.1', titleKo: 'B', titleEn: 'B', subtitleKo: '', subtitleEn: '', previewUrl: null, similarityScore: 0.91 }
+        ]}
+      />
     );
 
     expect(html).toContain('data-photo-cleanup-mode="normalize_retouch"');
     expect(html).toContain('data-photo-dual-candidates');
+    expect(html).toContain('role="radiogroup"');
+    expect(html).toContain('data-candidate-compare-toggle');
+    expect(html).toContain('원본 셀카 대조하기');
+    expect(html).toContain('data-candidate-recommended="true"');
+    expect(html).toContain('가장 닮은 추천');
+    expect(html).toContain('data-candidate-skeleton="seedream-5.0-pro"');
     expect(html).toContain('TWINGS가 자연스러운 카메라 비율·피부 결로 정돈해서 진행 (+2 크레딧)');
     expect(html).toContain('원본 사진 그대로 쓰기');
+  });
+
+  it('Pass 3: formats reference file size and MIME extension into tabular spec strings', () => {
+    const kbFile = new File([new Uint8Array(145408)], 'look.png', { type: 'image/png' });
+    const mbFile = new File([new Uint8Array(1572864)], 'jacket.jpeg', { type: 'image/jpeg' });
+    expect(formatReferenceFileSpec(kbFile)).toBe('142 KB · PNG');
+    expect(formatReferenceFileSpec(mbFile)).toBe('1.5 MB · JPG');
   });
 });

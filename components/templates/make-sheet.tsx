@@ -56,11 +56,14 @@ export function MakeSheet({ title, closeLabel, children }: { title: string; clos
       aria-label={title}
       onClose={onClose}
       onClick={(event) => { if (event.target === event.currentTarget) ref.current?.close(); }}
-      className="fixed inset-x-0 bottom-0 m-0 mt-auto max-h-[92dvh] w-full max-w-none overflow-y-auto rounded-t-2xl bg-white p-0 text-black backdrop:bg-black/55 md:inset-0 md:m-auto md:max-h-[88vh] md:max-w-lg md:rounded-2xl"
+      className="fixed inset-x-0 bottom-0 m-0 mt-auto max-h-[92dvh] w-full max-w-none overflow-y-auto overscroll-contain rounded-t-[24px] bg-white p-0 text-black shadow-[0_24px_60px_-24px_rgba(12,15,20,0.22),0_0_0_1px_rgba(12,15,20,0.08)] backdrop:bg-black/55 md:inset-0 md:m-auto md:max-h-[88vh] md:max-w-lg md:rounded-[24px]"
     >
-      <div className="sticky top-0 z-10 flex items-center justify-between gap-4 border-b border-hairline bg-white/95 px-5 py-3 backdrop-blur">
-        <p className="truncate text-sm font-semibold">{title}</p>
-        <button type="button" data-make-sheet-close onClick={() => ref.current?.close()} className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-full text-xl leading-none" aria-label={closeLabel}>×</button>
+      <div className="sticky top-0 z-10 border-b border-hairline bg-white/95 px-5 pt-2.5 pb-3 backdrop-blur">
+        <div data-make-sheet-handle aria-hidden="true" className="mx-auto mb-2 h-1.5 w-10 rounded-full bg-black/15 md:hidden" />
+        <div className="flex items-center justify-between gap-4">
+          <p className="truncate text-sm font-semibold">{title}</p>
+          <button type="button" data-make-sheet-close onClick={() => ref.current?.close()} className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-full text-xl leading-none text-black/75 transition-colors hover:bg-black/[0.05] hover:text-black focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#3875C5]" aria-label={closeLabel}>×</button>
+        </div>
       </div>
       <div className="px-5 pt-4 pb-[max(1.5rem,env(safe-area-inset-bottom))]">{children}</div>
     </dialog>

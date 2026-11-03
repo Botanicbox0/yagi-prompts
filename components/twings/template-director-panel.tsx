@@ -52,6 +52,11 @@ export interface TemplateDirectorCopy {
   dualCandidateNanoBananaDesc: string;
   dualCandidatePickButton: string;
   dualCandidateSelectedBadge: string;
+  dualCandidateRecommendedBadge?: string;
+  dualCandidateCompareOriginal?: string;
+  dualCandidateCompareHide?: string;
+  dualCandidateOriginalLabel?: string;
+  dualCandidateGenerating?: string;
   baselineLockedLabel: string;
   baselineCustomizeButton: string;
   predictivePresetsLabel: string;
@@ -97,6 +102,11 @@ export const DEFAULT_TEMPLATE_DIRECTOR_COPY_KO: TemplateDirectorCopy = {
   dualCandidateNanoBananaDesc: '손·소품 제거와 또렷한 눈코입·턱선 정리에 강합니다',
   dualCandidatePickButton: '이 버전이 더 닮았어요',
   dualCandidateSelectedBadge: '선택됨',
+  dualCandidateRecommendedBadge: '가장 닮은 추천',
+  dualCandidateCompareOriginal: '원본 셀카 대조하기',
+  dualCandidateCompareHide: '원본 대조 닫기',
+  dualCandidateOriginalLabel: '내 원본 셀카',
+  dualCandidateGenerating: '두 가지 맞춤형 얼굴 후보를 생성하고 있어요…',
   baselineLockedLabel: '템플릿 고정 (변경 불가)',
   baselineCustomizeButton: '이 항목 바꾸기',
   predictivePresetsLabel: '가장 많이 요청하는 맞춤 변경 (원클릭 적용)',
@@ -164,6 +174,11 @@ export const DEFAULT_TEMPLATE_DIRECTOR_COPY_EN: TemplateDirectorCopy = {
   dualCandidateNanoBananaDesc: 'Excels at removing hands/props and sharpening feature lines',
   dualCandidatePickButton: 'Looks most like me',
   dualCandidateSelectedBadge: 'Selected',
+  dualCandidateRecommendedBadge: 'Best match',
+  dualCandidateCompareOriginal: 'Compare original selfie',
+  dualCandidateCompareHide: 'Hide original selfie',
+  dualCandidateOriginalLabel: 'Original selfie',
+  dualCandidateGenerating: 'Generating both facial likeness candidates…',
   baselineLockedLabel: 'Locked by template',
   baselineCustomizeButton: 'Customize',
   predictivePresetsLabel: 'Most requested customizations (1-tap)',
@@ -202,6 +217,20 @@ const MAX_DIRECTOR_INPUT_CHARS = 320;
 const ALLOWED_REFERENCE_MIMES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 
 /**
+ * Formats an attached reference image's byte size and MIME subtype as a crisp mono spec string
+ * (e.g. `184 KB · PNG`, `1.4 MB · JPG`) for `tabular-nums` display inside tactile wells.
+ */
+export function formatReferenceFileSpec(file: { size: number; type: string }): string {
+  const subtype =
+    file.type === 'image/png' ? 'PNG' : file.type === 'image/webp' ? 'WEBP' : 'JPG';
+  if (file.size >= 1024 * 1024) {
+    return `${(file.size / (1024 * 1024)).toFixed(1)} MB · ${subtype}`;
+  }
+  const kb = Math.max(1, Math.round(file.size / 1024));
+  return `${kb} KB · ${subtype}`;
+}
+
+/**
  * Upserts summary chips by slot so applying a new `outfit`, `prop`, `hair`, or `lighting_mood`
  * cleanly replaces the previous chip for that slot instead of accumulating duplicates.
  */
@@ -231,6 +260,10 @@ export interface TemplateDirectorPanelProps {
   photoInspection?: PhotoInspectionVerdict | null;
   /** Optional generated candidate previews for Seedream 5.0 Pro & Nano Banana 2.1 when dual-candidate selection is active. */
   identityCandidates?: readonly IdentityCandidatePreview[];
+  /** Optional original uploaded selfie URL so the user can compare Candidate A/B directly against their original photo. */
+  originalPhotoUrl?: string | null;
+  /** True while the dual candidates are being generated in the background; renders a 3:4 frosted skeleton. */
+  candidatesLoading?: boolean;
   initialSelectedCandidate?: IdentityCandidateChoiceId | null;
   initialExpanded?: boolean;
   initialChips?: DirectorSummaryChip[];
@@ -259,6 +292,8 @@ export function TemplateDirectorPanel({
   templateBaseline,
   photoInspection = null,
   identityCandidates = [],
+  originalPhotoUrl = null,
+  candidatesLoading = false,
   initialSelectedCandidate = null,
   initialExpanded = false,
   initialChips = [],
@@ -283,6 +318,11 @@ export function TemplateDirectorPanel({
   const [selectedCandidate, setSelectedCandidate] = useState<IdentityCandidateChoiceId | null>(
     initialSelectedCandidate
   );
+  const [compareOriginalOpen, setCompareOriginalOpen] = useState(false);
+  const candidateButtonRefs = useRef<Record<DualIdentityCandidateEngine, HTMLButtonElement | null>>({
+    'seedream-5.0-pro': null,
+    'nano-banana-2.1': null
+  });
   const [userMessage, setUserMessage] = useState('');
   const [chips, setChips] = useState<DirectorSummaryChip[]>(initialChips);
   const [assistantMessage, setAssistantMessage] = useState<string | null>(initialAssistantMessage);
@@ -294,6 +334,7 @@ export function TemplateDirectorPanel({
 
   const [outfitSlot, setOutfitSlot] = useState<DirectorReferenceSlotValue | null>(null);
   const [propSlot, setPropSlot] = useState<DirectorReferenceSlotValue | null>(null);
+  const [pasteNotice, setPasteNotice] = useState<string | null>(null);
 
   const outfitInputRef = useRef<HTMLInputElement>(null);
   const propInputRef = useRef<HTMLInputElement>(null);
@@ -369,6 +410,43 @@ export function TemplateDirectorPanel({
     });
   };
 
+  const revertSlotToDefault = (slot: DirectorEditableSlot) => {
+    if (slot === 'outfit') {
+      clearReferenceSlot('outfit');
+    } else if (slot === 'prop') {
+      clearReferenceSlot('prop');
+    }
+    startTransition(() => {
+      const next = chips.filter((chip) => chip.slot !== slot);
+      setChips(next);
+      onChipsChange?.(next);
+    });
+  };
+
+  const handleClipboardPaste = (event: React.ClipboardEvent<HTMLElement>) => {
+    if (disabled || submitting) return;
+    const items = event.clipboardData?.items;
+    if (!items) return;
+    for (let i = 0; i < items.length; i += 1) {
+      const item = items[i];
+      if (item && item.kind === 'file' && ALLOWED_REFERENCE_MIMES.has(item.type)) {
+        const pastedFile = item.getAsFile();
+        if (pastedFile) {
+          event.preventDefault();
+          const targetSlot: 'outfit' | 'prop' = outfitSlot === null ? 'outfit' : 'prop';
+          const targetRole: 'look' | 'product' = targetSlot === 'outfit' ? 'look' : 'product';
+          assignReferenceSlot(targetSlot, targetRole, pastedFile);
+          setPasteNotice(
+            locale === 'en'
+              ? `Pasted image into ${targetSlot === 'outfit' ? '@Image 2 (Outfit)' : '@Image 3 (Prop)'}`
+              : `클립보드 사진을 ${targetSlot === 'outfit' ? '@Image 2 (의상 레퍼런스)' : '@Image 3 (소품 레퍼런스)'}에 첨부했어요`
+          );
+          return;
+        }
+      }
+    }
+  };
+
   const resetAll = () => {
     requestEpochRef.current += 1;
     setSubmitting(false);
@@ -376,6 +454,7 @@ export function TemplateDirectorPanel({
     clearReferenceSlot('prop');
     setUserMessage('');
     setFileError(null);
+    setPasteNotice(null);
     setAssistantMessage(null);
     setTurnAccepted(true);
     startTransition(() => {
@@ -471,12 +550,24 @@ export function TemplateDirectorPanel({
         ? copy.cleanupAcceptRetouch
         : copy.cleanupAcceptDetail;
 
+  const seedreamScore =
+    identityCandidates.find((c) => c.engine === 'seedream-5.0-pro')?.similarityScore ?? null;
+  const nanoBananaScore =
+    identityCandidates.find((c) => c.engine === 'nano-banana-2.1')?.similarityScore ?? null;
+  const recommendedEngine: DualIdentityCandidateEngine | null =
+    seedreamScore !== null && nanoBananaScore !== null
+      ? seedreamScore >= nanoBananaScore
+        ? 'seedream-5.0-pro'
+        : 'nano-banana-2.1'
+      : null;
+
   const candidateCards: ReadonlyArray<{
     engine: DualIdentityCandidateEngine;
     title: string;
     desc: string;
     previewUrl: string | null;
     similarityScore: number | null;
+    isRecommended: boolean;
   }> = [
     {
       engine: 'seedream-5.0-pro',
@@ -484,8 +575,8 @@ export function TemplateDirectorPanel({
       desc: copy.dualCandidateSeedreamDesc,
       previewUrl:
         identityCandidates.find((c) => c.engine === 'seedream-5.0-pro')?.previewUrl ?? null,
-      similarityScore:
-        identityCandidates.find((c) => c.engine === 'seedream-5.0-pro')?.similarityScore ?? null
+      similarityScore: seedreamScore,
+      isRecommended: recommendedEngine === 'seedream-5.0-pro'
     },
     {
       engine: 'nano-banana-2.1',
@@ -493,10 +584,32 @@ export function TemplateDirectorPanel({
       desc: copy.dualCandidateNanoBananaDesc,
       previewUrl:
         identityCandidates.find((c) => c.engine === 'nano-banana-2.1')?.previewUrl ?? null,
-      similarityScore:
-        identityCandidates.find((c) => c.engine === 'nano-banana-2.1')?.similarityScore ?? null
+      similarityScore: nanoBananaScore,
+      isRecommended: recommendedEngine === 'nano-banana-2.1'
     }
   ];
+
+  const handleCandidateArrowKey = (
+    currentEngine: DualIdentityCandidateEngine,
+    event: React.KeyboardEvent<HTMLButtonElement>
+  ) => {
+    if (
+      event.key !== 'ArrowRight' &&
+      event.key !== 'ArrowLeft' &&
+      event.key !== 'ArrowDown' &&
+      event.key !== 'ArrowUp'
+    ) {
+      return;
+    }
+    event.preventDefault();
+    const nextEngine: DualIdentityCandidateEngine =
+      currentEngine === 'seedream-5.0-pro' ? 'nano-banana-2.1' : 'seedream-5.0-pro';
+    setSelectedCandidate(nextEngine);
+    setCleanupChoice('accepted');
+    onSelectIdentityCandidate?.(nextEngine);
+    onCleanupChoice?.('accept');
+    candidateButtonRefs.current[nextEngine]?.focus();
+  };
 
   return (
     <div
@@ -548,18 +661,87 @@ export function TemplateDirectorPanel({
 
           {/* Dual-Candidate Likeness Picker (Seedream 5.0 Pro vs Nano Banana 2.1) */}
           {photoInspection.status === 'needs_cleanup' && showDualCandidates && (
-            <div data-photo-dual-candidates className="mt-3 rounded-[18px] border border-[#E4E6EA] bg-white p-3">
-              <p className="text-xs font-medium text-[#41444D]">{copy.dualCandidateHeading}</p>
+            <div
+              data-photo-dual-candidates
+              role="radiogroup"
+              aria-label={copy.dualCandidateHeading}
+              className="mt-3 rounded-[18px] border border-[#E4E6EA] bg-white p-3 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.9)]"
+            >
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-xs font-medium text-[#41444D]">{copy.dualCandidateHeading}</p>
+                {originalPhotoUrl && (
+                  <button
+                    type="button"
+                    data-candidate-compare-toggle
+                    aria-pressed={compareOriginalOpen}
+                    disabled={disabled}
+                    onClick={() => setCompareOriginalOpen((prev) => !prev)}
+                    className={`inline-flex min-h-8 items-center rounded-full border border-[#E4E6EA] bg-[#F3F7FA] px-2.5 py-1 text-[0.7rem] font-medium text-[#3063A7] transition-colors hover:border-[#3875C5] hover:bg-[#E8EFF7] ${FOCUS_RING}`}
+                  >
+                    {compareOriginalOpen
+                      ? (copy.dualCandidateCompareHide ?? '원본 대조 닫기')
+                      : (copy.dualCandidateCompareOriginal ?? '원본 셀카 대조하기')}
+                  </button>
+                )}
+              </div>
+
+              {originalPhotoUrl && compareOriginalOpen && (
+                <div
+                  data-candidate-original-preview
+                  className="mt-2.5 flex items-center gap-3 rounded-[14px] border border-[#E4E6EA] bg-[#F6F7F9] p-2.5"
+                >
+                  <div className="aspect-[3/4] w-16 shrink-0 overflow-hidden rounded-xl border border-[#C7CCD3] bg-white">
+                    {/* eslint-disable-next-line @next/next/no-img-element -- original selfie preview */}
+                    <img
+                      src={originalPhotoUrl}
+                      alt={copy.dualCandidateOriginalLabel ?? '내 원본 셀카'}
+                      className="h-full w-full object-cover"
+                    />
+                  </div>
+                  <div className="min-w-0">
+                    <span className="inline-block rounded-full bg-white px-2 py-0.5 font-mono text-[0.65rem] font-semibold text-[#41444D] uppercase">
+                      ORIGINAL
+                    </span>
+                    <p className="mt-1 text-xs font-semibold text-[#0E1013]">
+                      {copy.dualCandidateOriginalLabel ?? '내 원본 셀카'}
+                    </p>
+                    <p className="mt-0.5 text-[0.72rem] leading-[1.45] text-[#676B75]">
+                      {locale === 'en'
+                        ? 'Compare eye shape, nose contour, and natural expression with Candidates A and B below.'
+                        : '눈매·코 라인·자연스러운 인상이 아래 후보 A·B 중 어느 쪽과 더 가까운지 비교해 보세요.'}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {candidatesLoading && (
+                <p
+                  data-candidates-loading-status
+                  role="status"
+                  aria-live="polite"
+                  className="mt-2 font-mono text-[0.7rem] font-medium text-[#3063A7]"
+                >
+                  {copy.dualCandidateGenerating ?? '두 가지 맞춤형 얼굴 후보를 생성하고 있어요…'}
+                </p>
+              )}
+
               <div className="mt-2.5 grid grid-cols-1 gap-2 sm:grid-cols-2">
                 {candidateCards.map((card) => {
                   const isSelected = selectedCandidate === card.engine;
                   return (
                     <button
                       key={card.engine}
+                      ref={(el) => {
+                        candidateButtonRefs.current[card.engine] = el;
+                      }}
                       type="button"
+                      role="radio"
+                      aria-checked={isSelected}
                       data-identity-candidate={card.engine}
                       data-candidate-selected={isSelected ? 'true' : 'false'}
+                      data-candidate-recommended={card.isRecommended ? 'true' : 'false'}
                       disabled={disabled}
+                      onKeyDown={(e) => handleCandidateArrowKey(card.engine, e)}
                       onClick={() => {
                         setSelectedCandidate(card.engine);
                         setCleanupChoice('accepted');
@@ -576,7 +758,17 @@ export function TemplateDirectorPanel({
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div>
-                          <p className="text-xs font-semibold text-[#0E1013]">{card.title}</p>
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <p className="text-xs font-semibold text-[#0E1013]">{card.title}</p>
+                            {card.isRecommended && (
+                              <span
+                                data-candidate-recommended-badge
+                                className="rounded-full bg-[#3875C5] px-2 py-0.5 font-mono text-[0.62rem] font-semibold text-white"
+                              >
+                                {copy.dualCandidateRecommendedBadge ?? '가장 닮은 추천'}
+                              </span>
+                            )}
+                          </div>
                           <p className="mt-0.5 text-[0.75rem] leading-[1.45] text-[#41444D]">
                             {card.desc}
                           </p>
@@ -588,7 +780,7 @@ export function TemplateDirectorPanel({
                         )}
                       </div>
 
-                      {card.previewUrl && (
+                      {card.previewUrl ? (
                         <div className="aspect-[3/4] w-full overflow-hidden rounded-xl border border-[#E4E6EA] bg-white">
                           {/* eslint-disable-next-line @next/next/no-img-element -- candidate preview */}
                           <img
@@ -597,7 +789,13 @@ export function TemplateDirectorPanel({
                             className="h-full w-full object-cover"
                           />
                         </div>
-                      )}
+                      ) : candidatesLoading ? (
+                        <div
+                          data-candidate-skeleton={card.engine}
+                          aria-hidden="true"
+                          className="aspect-[3/4] w-full animate-pulse rounded-xl border border-[#E4E6EA] bg-[#E8EFF7]/65 motion-reduce:animate-none"
+                        />
+                      ) : null}
 
                       <span
                         className={[
@@ -732,6 +930,7 @@ export function TemplateDirectorPanel({
         id={drawerId}
         hidden={!expanded}
         data-director-island
+        onPaste={handleClipboardPaste}
         className="rounded-[24px] border border-[#E4E6EA] bg-white p-4 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.9),0_4px_16px_rgba(14,16,19,0.04)] transition-all duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none"
       >
         <p className="text-xs leading-[1.6] text-[#676B75]">{copy.subtitle}</p>
@@ -764,43 +963,98 @@ export function TemplateDirectorPanel({
               const matchingPreset = resolvedBaseline.predictivePresets.find(
                 (p) => p.slot === slotSpec.slot
               );
+              const activeChipForSlot = chips.find((c) => c.slot === slotSpec.slot) ?? null;
+              const attachedSlotFile =
+                slotSpec.slot === 'outfit'
+                  ? outfitSlot?.file ?? null
+                  : slotSpec.slot === 'prop'
+                    ? propSlot?.file ?? null
+                    : null;
+              const isSlotCustomized = activeChipForSlot !== null || attachedSlotFile !== null;
+              const activeOverrideSummary =
+                activeChipForSlot?.summaryKo ??
+                (attachedSlotFile ? `@Image · ${attachedSlotFile.name}` : null);
 
               return (
                 <div
                   key={slotSpec.slot}
                   data-baseline-slot={slotSpec.slot}
-                  className="flex flex-col justify-between gap-1.5 rounded-[14px] border border-[#E4E6EA] bg-white p-2.5"
+                  data-baseline-slot-state={isSlotCustomized ? 'customized' : 'default'}
+                  className={[
+                    'flex flex-col justify-between gap-1.5 rounded-[14px] border p-2.5 transition-colors',
+                    isSlotCustomized
+                      ? 'border-[#3875C5] bg-[#E8EFF7]/55'
+                      : 'border-[#E4E6EA] bg-white'
+                  ].join(' ')}
                 >
                   <div>
-                    <div className="flex items-center justify-between gap-1.5">
-                      <span className="font-mono text-[0.68rem] font-semibold text-[#3063A7] uppercase">
-                        {slotLabel}
-                      </span>
-                      <button
-                        type="button"
-                        data-baseline-customize={slotSpec.slot}
-                        disabled={disabled || submitting}
-                        onClick={() => {
-                          if (slotSpec.acceptsReferenceImage === 'outfit') {
-                            outfitInputRef.current?.click();
-                          } else if (slotSpec.acceptsReferenceImage === 'prop') {
-                            propInputRef.current?.click();
-                          }
-                          if (matchingPreset) {
-                            setUserMessage(
-                              locale === 'en'
-                                ? matchingPreset.samplePromptEn
-                                : matchingPreset.samplePromptKo
-                            );
-                          }
-                          textInputRef.current?.focus();
-                        }}
-                        className={`rounded-full border border-[#E4E6EA] bg-[#F3F7FA] px-2.5 py-0.5 text-[0.68rem] font-medium text-[#3063A7] hover:border-[#3875C5] hover:bg-[#E8EFF7] ${FOCUS_RING}`}
-                      >
-                        {copy.baselineCustomizeButton}
-                      </button>
+                    <div className="flex flex-wrap items-center justify-between gap-1.5">
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-mono text-[0.68rem] font-semibold text-[#3063A7] uppercase">
+                          {slotLabel}
+                        </span>
+                        {isSlotCustomized && (
+                          <span
+                            data-baseline-customized-badge={slotSpec.slot}
+                            className="rounded-full bg-[#3875C5] px-2 py-0.5 font-mono text-[0.6rem] font-semibold text-white uppercase"
+                          >
+                            {locale === 'en' ? 'CUSTOMIZED' : '맞춤 적용됨'}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1">
+                        {isSlotCustomized && (
+                          <button
+                            type="button"
+                            data-baseline-revert={slotSpec.slot}
+                            disabled={disabled || submitting}
+                            onClick={() => revertSlotToDefault(slotSpec.slot)}
+                            className={`rounded-full border border-[#C7CCD3] bg-white px-2 py-0.5 text-[0.66rem] font-medium text-[#41444D] hover:border-[#0E1013] hover:text-[#0E1013] ${FOCUS_RING}`}
+                          >
+                            {locale === 'en' ? 'Revert' : '기본값 복원'}
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          data-baseline-customize={slotSpec.slot}
+                          disabled={disabled || submitting}
+                          onClick={() => {
+                            if (slotSpec.acceptsReferenceImage === 'outfit') {
+                              outfitInputRef.current?.click();
+                            } else if (slotSpec.acceptsReferenceImage === 'prop') {
+                              propInputRef.current?.click();
+                            }
+                            if (matchingPreset) {
+                              setUserMessage(
+                                locale === 'en'
+                                  ? matchingPreset.samplePromptEn
+                                  : matchingPreset.samplePromptKo
+                              );
+                            }
+                            textInputRef.current?.focus();
+                          }}
+                          className={`rounded-full border border-[#E4E6EA] bg-[#F3F7FA] px-2.5 py-0.5 text-[0.68rem] font-medium text-[#3063A7] hover:border-[#3875C5] hover:bg-[#E8EFF7] ${FOCUS_RING}`}
+                        >
+                          {copy.baselineCustomizeButton}
+                        </button>
+                      </div>
                     </div>
-                    <p className="mt-1 text-xs font-medium text-[#0E1013]">{defaultSetting}</p>
+                    <p
+                      className={[
+                        'mt-1 text-xs font-medium',
+                        isSlotCustomized ? 'text-[#676B75] line-through' : 'text-[#0E1013]'
+                      ].join(' ')}
+                    >
+                      {defaultSetting}
+                    </p>
+                    {isSlotCustomized && activeOverrideSummary && (
+                      <p
+                        data-baseline-active-override={slotSpec.slot}
+                        className="mt-0.5 text-xs font-semibold text-[#3063A7]"
+                      >
+                        → {activeOverrideSummary}
+                      </p>
+                    )}
                     <p className="mt-0.5 text-[0.72rem] leading-[1.45] text-[#676B75]">{hint}</p>
                   </div>
                 </div>
@@ -835,52 +1089,80 @@ export function TemplateDirectorPanel({
             {copy.predictivePresetsLabel}
           </p>
           <div className="mt-1.5 flex flex-wrap gap-1.5">
-            {resolvedBaseline.predictivePresets.map((preset) => (
-              <button
-                key={preset.id}
-                type="button"
-                data-predictive-preset={preset.id}
-                data-predictive-slot={preset.slot}
-                disabled={disabled || submitting}
-                onClick={() => {
-                  setUserMessage(
-                    locale === 'en' ? preset.samplePromptEn : preset.samplePromptKo
-                  );
-                  if (preset.opensReferenceSlot === 'outfit') {
-                    outfitInputRef.current?.click();
-                  } else if (preset.opensReferenceSlot === 'prop') {
-                    propInputRef.current?.click();
-                  }
-                  textInputRef.current?.focus();
-                }}
-                className={`inline-flex min-h-9 items-center gap-1.5 rounded-full border border-[#E4E6EA] bg-[#F3F7F9] px-3 py-1 text-xs text-[#0E1013] transition-colors hover:border-[#3875C5] hover:bg-[#E8EFF7] hover:text-[#3063A7] disabled:opacity-40 ${FOCUS_RING}`}
-              >
-                <span className="rounded-full bg-[#E8EFF7] px-1.5 py-0.5 font-mono text-[0.62rem] font-semibold text-[#3063A7]">
-                  {locale === 'en' ? preset.reasonBadgeEn : preset.reasonBadgeKo}
-                </span>
-                <span>{locale === 'en' ? preset.labelEn : preset.labelKo}</span>
-              </button>
-            ))}
+            {resolvedBaseline.predictivePresets.map((preset) => {
+              const targetSample =
+                locale === 'en' ? preset.samplePromptEn : preset.samplePromptKo;
+              const isPresetActive =
+                userMessage.trim() === targetSample.trim() ||
+                chips.some((c) => c.slot === preset.slot);
+              return (
+                <button
+                  key={preset.id}
+                  type="button"
+                  data-predictive-preset={preset.id}
+                  data-predictive-slot={preset.slot}
+                  data-preset-active={isPresetActive ? 'true' : 'false'}
+                  aria-pressed={isPresetActive}
+                  disabled={disabled || submitting}
+                  onClick={() => {
+                    setUserMessage(targetSample);
+                    if (preset.opensReferenceSlot === 'outfit') {
+                      outfitInputRef.current?.click();
+                    } else if (preset.opensReferenceSlot === 'prop') {
+                      propInputRef.current?.click();
+                    }
+                    textInputRef.current?.focus();
+                  }}
+                  className={[
+                    'inline-flex min-h-9 items-center gap-1.5 rounded-full border px-3 py-1 text-xs transition-colors disabled:opacity-40',
+                    FOCUS_RING,
+                    isPresetActive
+                      ? 'border-[#3875C5] bg-[#E8EFF7] font-semibold text-[#3063A7]'
+                      : 'border-[#E4E6EA] bg-[#F3F7F9] text-[#0E1013] hover:border-[#3875C5] hover:bg-[#E8EFF7] hover:text-[#3063A7]'
+                  ].join(' ')}
+                >
+                  <span
+                    className={[
+                      'rounded-full px-1.5 py-0.5 font-mono text-[0.62rem] font-semibold',
+                      isPresetActive ? 'bg-[#3875C5] text-white' : 'bg-[#E8EFF7] text-[#3063A7]'
+                    ].join(' ')}
+                  >
+                    {locale === 'en' ? preset.reasonBadgeEn : preset.reasonBadgeKo}
+                  </span>
+                  <span>{locale === 'en' ? preset.labelEn : preset.labelKo}</span>
+                </button>
+              );
+            })}
           </div>
         </div>
 
         {/* Quick 1-Tap Category Pills */}
         <div data-director-presets className="mt-2.5 flex flex-wrap gap-1.5">
-          {copy.quickPresets.map((preset) => (
-            <button
-              key={preset.slot}
-              type="button"
-              data-director-preset={preset.slot}
-              disabled={disabled || submitting}
-              onClick={() => {
-                setUserMessage(preset.samplePrompt);
-                textInputRef.current?.focus();
-              }}
-              className={`inline-flex min-h-9 items-center rounded-full border border-[#E4E6EA] bg-[#F6F7F9] px-3 py-1 text-xs text-[#41444D] transition-colors hover:border-[#3875C5] hover:bg-[#E8EFF7] hover:text-[#3063A7] disabled:opacity-40 ${FOCUS_RING}`}
-            >
-              {preset.label}
-            </button>
-          ))}
+          {copy.quickPresets.map((preset) => {
+            const isQuickActive = userMessage.trim() === preset.samplePrompt.trim();
+            return (
+              <button
+                key={preset.slot}
+                type="button"
+                data-director-preset={preset.slot}
+                aria-pressed={isQuickActive}
+                disabled={disabled || submitting}
+                onClick={() => {
+                  setUserMessage(preset.samplePrompt);
+                  textInputRef.current?.focus();
+                }}
+                className={[
+                  'inline-flex min-h-9 items-center rounded-full border px-3 py-1 text-xs transition-colors disabled:opacity-40',
+                  FOCUS_RING,
+                  isQuickActive
+                    ? 'border-[#3875C5] bg-[#E8EFF7] font-semibold text-[#3063A7]'
+                    : 'border-[#E4E6EA] bg-[#F6F7F9] text-[#41444D] hover:border-[#3875C5] hover:bg-[#E8EFF7] hover:text-[#3063A7]'
+                ].join(' ')}
+              >
+                {preset.label}
+              </button>
+            );
+          })}
         </div>
 
         {/* Recessed Tactile Wells for Optional User Reference Images (@Image 2 Look, @Image 3 Prop) */}
@@ -926,7 +1208,9 @@ export function TemplateDirectorPanel({
               'flex items-center justify-between gap-3 rounded-[18px] border p-3 shadow-[inset_0_1px_2px_rgba(14,16,19,0.04)] transition-colors',
               draggingSlot === 'outfit'
                 ? 'border-[#3875C5] bg-[#E8EFF7]'
-                : 'border-[#E4E6EA] bg-[#F6F7F9]'
+                : outfitSlot
+                  ? 'border-[#3875C5] bg-[#F3F7FA]'
+                  : 'border-[#E4E6EA] bg-[#F6F7F9]'
             ].join(' ')}
           >
             {outfitSlot ? (
@@ -945,7 +1229,10 @@ export function TemplateDirectorPanel({
                       {outfitSlot.file.name}
                     </p>
                     <p className="font-mono text-[0.68rem] text-[#3063A7] tabular-nums">
-                      {copy.outfitSlotHint}
+                      {copy.outfitSlotHint} ·{' '}
+                      <span data-slot-file-spec="outfit">
+                        {formatReferenceFileSpec(outfitSlot.file)}
+                      </span>
                     </p>
                   </div>
                 </div>
@@ -1000,7 +1287,9 @@ export function TemplateDirectorPanel({
               'flex items-center justify-between gap-3 rounded-[18px] border p-3 shadow-[inset_0_1px_2px_rgba(14,16,19,0.04)] transition-colors',
               draggingSlot === 'prop'
                 ? 'border-[#3875C5] bg-[#E8EFF7]'
-                : 'border-[#E4E6EA] bg-[#F6F7F9]'
+                : propSlot
+                  ? 'border-[#3875C5] bg-[#F3F7FA]'
+                  : 'border-[#E4E6EA] bg-[#F6F7F9]'
             ].join(' ')}
           >
             {propSlot ? (
@@ -1019,7 +1308,10 @@ export function TemplateDirectorPanel({
                       {propSlot.file.name}
                     </p>
                     <p className="font-mono text-[0.68rem] text-[#3063A7] tabular-nums">
-                      {copy.propSlotHint}
+                      {copy.propSlotHint} ·{' '}
+                      <span data-slot-file-spec="prop">
+                        {formatReferenceFileSpec(propSlot.file)}
+                      </span>
                     </p>
                   </div>
                 </div>
@@ -1054,6 +1346,17 @@ export function TemplateDirectorPanel({
             )}
           </div>
         </div>
+
+        {(outfitSlot !== null || propSlot !== null) && !userMessage.trim() && (
+          <p
+            data-director-reference-ready
+            className="mt-2 rounded-xl bg-[#E8EFF7] px-3 py-1.5 text-[0.72rem] font-medium text-[#3063A7]"
+          >
+            {locale === 'en'
+              ? 'Reference photo attached — you can press Apply directly even without typing a note.'
+              : '레퍼런스 사진이 준비되었어요 · 한 줄 설명 없이 바로 [장면에 반영]을 눌러도 적용됩니다.'}
+          </p>
+        )}
 
         {/* Recessed Tactile Text Input + Apply Pill CTA */}
         <div className="mt-3.5">
@@ -1105,6 +1408,11 @@ export function TemplateDirectorPanel({
 
         {/* Live Region for Director Feedback & File Validation Errors */}
         <div id={statusId} role="status" aria-live="polite" className="mt-2">
+          {pasteNotice && (
+            <p data-director-paste-notice className="text-xs font-medium text-[#3063A7]">
+              {pasteNotice}
+            </p>
+          )}
           {fileError && (
             <p data-director-file-error className="text-xs font-medium text-[#3063A7]">
               {fileError}

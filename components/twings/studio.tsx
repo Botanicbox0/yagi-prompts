@@ -211,12 +211,12 @@ export function ResolutionPicker({
             aria-pressed={option.id === current}
             onClick={() => onSelect(option.id)}
             className={[
-              'flex min-h-11 items-center gap-2 border px-3 font-label text-[0.72rem] tracking-[0.12em] uppercase transition-colors',
-              option.id === current ? 'border-accent text-accent' : 'border-hairline text-black/70 hover:text-black',
+              'flex min-h-11 items-center gap-2 rounded-full border px-3.5 font-label text-[0.72rem] tracking-[0.12em] uppercase transition-colors',
+              option.id === current ? 'border-accent bg-accent/[0.06] text-accent' : 'border-hairline text-black/70 hover:text-black',
             ].join(' ')}
           >
             <span>{index === 0 && labels.resolutionDefault ? `${option.id} · ${labels.resolutionDefault}` : option.id}</span>
-            <span className="font-mono normal-case tracking-normal">{option.price}</span>
+            <span className="font-mono normal-case tracking-normal tabular-nums">{option.price}</span>
           </button>
         ))}
       </div>
@@ -660,7 +660,7 @@ export function TwingsStudio({
           data-make-cta="card"
           disabled={!live || interest || interestBusy}
           onClick={() => void registerInterest()}
-          className="mt-4 flex min-h-12 w-full items-center justify-center border border-current px-5 font-label text-[0.85rem] tracking-[0.1em] uppercase transition-opacity hover:opacity-70 disabled:opacity-60"
+          className="mt-4 flex min-h-12 w-full items-center justify-center rounded-full border border-current px-5 font-label text-[0.85rem] tracking-[0.1em] uppercase transition-opacity hover:opacity-70 disabled:opacity-60"
         >
           {interest ? labels.closedDone : labels.closedCta}
         </button>
@@ -684,7 +684,7 @@ export function TwingsStudio({
       {/* The one honest label the whole screen hangs on: where the result goes, and whether a payment is taken. */}
       <p
         data-live-badge
-        className="inline-block border border-accent px-3 py-1.5 font-label text-[0.68rem] tracking-[0.12em] text-accent uppercase"
+        className="inline-block rounded-full border border-accent bg-accent/[0.06] px-3.5 py-1.5 font-label text-[0.68rem] tracking-[0.12em] text-accent uppercase"
       >
         {monthly && subscriptionCopy ? subscriptionCopy.studioBadge : charge ? live.labels.badge : live.labels.operatorBadge}
       </p>
@@ -805,8 +805,8 @@ export function TwingsStudio({
                         aria-pressed={option.id === aspect}
                         onClick={() => setAspect(option.id)}
                         className={[
-                          'inline-flex min-h-11 items-center border px-3 font-label text-[0.72rem] tracking-[0.12em] uppercase transition-colors',
-                          option.id === aspect ? 'border-accent text-accent' : 'border-hairline text-black/70 hover:text-black',
+                          'inline-flex min-h-11 items-center rounded-full border px-3.5 font-label text-[0.72rem] tracking-[0.12em] uppercase transition-colors',
+                          option.id === aspect ? 'border-accent bg-accent/[0.06] text-accent' : 'border-hairline text-black/70 hover:text-black',
                         ].join(' ')}
                       >
                         {option.label}
@@ -952,7 +952,7 @@ function MakeStickyBar({ price, label, studioRef, phaseKey }: { price: string | 
       ].join(' ')}
     >
       <div className="mx-auto flex max-w-xl items-center gap-4">
-        {price && <p data-make-sticky-price className="shrink-0 font-display text-[1.35rem] leading-none font-black">{price}</p>}
+        {price && <p data-make-sticky-price className="shrink-0 font-display text-[1.35rem] leading-none font-black tabular-nums">{price}</p>}
         <a href="#make" data-make-cta="sticky" onClick={go} className="flex min-h-12 flex-1 items-center justify-center rounded-full bg-accent px-4 font-label text-[0.85rem] tracking-[0.1em] text-white uppercase transition-opacity hover:opacity-85">{label}</a>
       </div>
     </div>
