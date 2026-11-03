@@ -69,7 +69,7 @@ describe('counting the queues against the real schema', () => {
 
   it('counts every source without throwing, and an empty studio reads as zero, not as unknown', async () => {
     const loaded = await loadAdminQueues(runner(db), ADMIN_VIEWER, new Date('2026-11-03T00:00:00Z'));
-    for (const key of ['feedback', 'studio', 'inquiries', 'posts', 'applicants', 'payouts', 'templates'] as const) {
+    for (const key of ['paymentsManual', 'renderFailures', 'feedback', 'studio', 'inquiries', 'posts', 'applicants', 'payouts', 'templates'] as const) {
       expect(loaded.counts[key], key).toBe(0);
     }
     for (const queue of ADMIN_QUEUES) {

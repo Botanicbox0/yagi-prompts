@@ -11,6 +11,16 @@ export const adminWorkflowEn = {
     "The local analysis worker has no recent heartbeat. Check the analysis queue.",
   riskDead: "{count} conversations could not be analysed after retries.",
   tasks: {
+    paymentsManual: {
+      title: "Handle stuck payments",
+      hint: "Automatic refund or fulfilment reached its ten-try cap. Handle the payment in the Toss console.",
+      action: "Open payment checks",
+    },
+    renderFailures: {
+      title: "Look at failed renders",
+      hint: "Failures from the last seven days. Read the reason and the payment before a customer asks.",
+      action: "Open render board",
+    },
     risk: {
       title: "Review conversation signals",
       hint: "Read the evidence and record a human review. Signals do not impose sanctions.",
@@ -149,6 +159,16 @@ export const adminWorkflowKo: typeof adminWorkflowEn = {
     "로컬 분석 워커의 최근 접속 신호가 없습니다. 분석 대기 목록을 확인하세요.",
   riskDead: "재시도 후에도 분석하지 못한 대화가 {count}건 있습니다.",
   tasks: {
+    paymentsManual: {
+      title: "멈춘 결제를 처리하세요",
+      hint: "자동 환불이나 이행이 10번 시도 상한에 닿았습니다. 토스 콘솔에서 결제를 처리합니다.",
+      action: "결제 확인 열기",
+    },
+    renderFailures: {
+      title: "실패한 렌더를 확인하세요",
+      hint: "최근 7일 동안 실패한 렌더입니다. 고객이 묻기 전에 실패 사유와 결제 상태를 봅니다.",
+      action: "렌더 보드 열기",
+    },
     risk: {
       title: "대화의 위험 신호를 검토하세요",
       hint: "근거를 읽고 사람이 검토 결과를 기록합니다. 신호만으로 제재하지 않습니다.",

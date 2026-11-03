@@ -6,16 +6,17 @@ import type { CampaignCounts } from "@/lib/campaigns/repo";
  * screen is for, and a two-line menu no longer fits a laptop screen (audit 2026-11-03 §3.1).
  */
 export const ADMIN_NAV_GROUPS = [
-  { key: "operations", items: ["home"] },
+  { key: "operations", items: ["home", "renders"] },
   { key: "templates", items: ["prompts", "community", "contests"] },
   { key: "brands", items: ["brandWorkspace", "campaigns", "inquiries", "funding"] },
-  { key: "money", items: ["subscriptions"] },
+  { key: "money", items: ["payments", "subscriptions"] },
   { key: "people", items: ["risk"] },
   { key: "settings", items: ["landingMedia"] },
 ] as const;
 
 export const ADMIN_NAV_PATHS = {
   home: "/admin",
+  renders: "/admin/renders",
   prompts: "/admin/prompts",
   community: "/admin/community",
   contests: "/admin/contests",
@@ -23,6 +24,7 @@ export const ADMIN_NAV_PATHS = {
   campaigns: "/admin/campaigns",
   inquiries: "/admin/inquiries",
   funding: "/admin/funding",
+  payments: "/admin/payments",
   subscriptions: "/admin/subscriptions",
   risk: "/admin/risk",
   landingMedia: "/admin/landing-media",
