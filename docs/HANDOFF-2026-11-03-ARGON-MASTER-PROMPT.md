@@ -39,7 +39,7 @@
 ## 2. 지금까지 된 것 (2026-11-03 09:00 KST 사실)
 - PR #176 claude/brand-entitlements (HEAD 1b5f86fe, base main, 체크 8개 전부 초록, mergeable clean): 조직별 기능 정책(lib/brands/features.ts·entitlements.ts, brand_feature_policies 차단 목록, 기본 전체 허용), B2B 플랜 기록(lib/brands/plans.ts, b2b_39·b2b_69·b2b_99), 관리자 조직 페이지 "기능 정책"·"플랜" 패널(lib/admin/brand-engine-operations.ts), 마이그레이션 0074 core + 0150 glue(클라우드 미적용), docs/BRAND-PRODUCT.md, 조사 10편, ARCHITECTURE.md + 폴더 README, AGENTS §1·§3·§6 갱신. 검증: tsc·vitest 370/3,600·build·sweep 1303/1303 통과.
 - PR #177 claude/admin-overhaul-28f6ca (HEAD 1f2710f, base main, 체크 전부 초록): 관리자 감사(스크린샷 54장)·docs/ADMIN.md·슬라이스 (a) 대기열 홈·그룹 내비 셸·빨강 제거. 다른 세션(ADMIN 전면 개선)이 만들었다.
-- PR #178 (HEAD c1535d7, base claude/admin-overhaul-28f6ca, 체크 진행 중): 슬라이스 (b) 읽기 전용 렌더 보드·상세, 결제 확인 목록, 홈 상단 결제·렌더 실패 대기열. 로컬 검증 3,616 테스트·build·sweep 1319/1319 통과. 같은 세션이 만들었고 (c) 사용자 보기, (d) 공통 패턴 이전, (e) 잔재 정리는 아직이다.
+- PR #178 (브랜치 claude/admin-render-board, HEAD c1535d7, base claude/admin-overhaul-28f6ca, 체크 진행 중): 슬라이스 (b) 읽기 전용 렌더 보드·상세, 결제 확인 목록, 홈 상단 결제·렌더 실패 대기열. 로컬 검증 3,616 테스트·build·sweep 1319/1319 통과. 같은 세션이 만들었고 (c) 사용자 보기, (d) 공통 패턴 이전, (e) 잔재 정리는 아직이다.
 - 그 ADMIN 세션은 대표 결정(2026-11-03)으로 **멈췄다**. 병합·retarget과 남은 슬라이스 (c) 사용자 보기, (d) 기존 화면의 공통 패턴 이전, (e) 잔재 정리는 전부 네 몫이다(§5-G). 관리자 설계의 단일 원본은 브랜치 claude/admin-overhaul-28f6ca의 docs/ADMIN.md이고 감사 결과는 같은 브랜치의 docs/reviews/ADMIN-AUDIT-2026-11-03.md(스크린샷 54장)다. 시작 전 git fetch로 그 브랜치의 마지막 커밋(1f2710f 또는 그 뒤 WIP)을 확인하고, (c)(d)(e)는 #178이 main에 들어간 뒤 main에서 새 worktree(codex/admin-overhaul-c 등)로 한다.
 - 운영 DB(nhokkikjkzjalxqsbzuk) 브랜드 조직 3개: YAGI WORKSHOP TEST, Morphic(id deb648e9-c2df-43d4-b2a7-7f9eff8180d9, studio_managed, 캠페인 6건, 생산 계약 0건), KAIPER. Morphic 차단 정책 행은 아직 없다.
 - 병합 런북(대표가 "병합해"라고 한 뒤, 하나씩):
