@@ -358,7 +358,7 @@ const createImageSet: AdminOperation<{ input: z.infer<typeof ImageSetForm>; form
 
     await writeImageTemplateSet({ sql: ctx.sql, storage: ctx.storage }, id, built.set, staged, { useCase: input.useCase });
     ctx.revalidatePrompts?.();
-    // The template page's price fields are the next stop: a set is not for sale until priced.
+    // The set starts at its base price; the template page's price fields are the next stop.
     return ok('published', { detail: slug, to: adminPromptPath(id) });
   },
 };

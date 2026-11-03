@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { needsIdentity } from '@/lib/identity/service';
 import {
-  MAKER_ENGINE_IDS, displayStepPrompt, engineStepPrompt, exportRecipe, identityPath, legacyPromptText, parseRecipe,
+  MAKER_ENGINE_IDS, MAX_STEP_PROMPT_CHARS, displayStepPrompt, engineStepPrompt, exportRecipe, identityPath, legacyPromptText, parseRecipe,
   personInputs, primaryStep, promptTokens, recipeAssets, recipeMedium, recipeNeedsIdentity, type Recipe, type RecipeIssueCode,
 } from '@/lib/recipes/schema';
 import { isRoyalty, quoteRecipe, ROYALTY_DEFAULT_KRW } from '@/lib/recipes/pricing';
@@ -110,6 +110,27 @@ describe('recipe v2 schema — refused', () => {
   });
 });
 
+describe('recipe size', () => {
+  const big = () => mutate(carousel(10), (r) => { for (const step of r.steps) step.prompt = `{{selfie}} ${'가'.repeat(2000)}`; });
+
+  it('keeps the maker limit', () => {
+    expect(codes(big())).toContain('too_large');
+    expect(codes(JSON.stringify(big()))).toContain('too_large');
+  });
+
+  it('gives the studio room for every frame its prompt limit allows', () => {
+    expect(parseRecipe(big(), { studio: true }).ok).toBe(true);
+    expect(parseRecipe(JSON.stringify(big()), { studio: true }).ok).toBe(true);
+    const longest = mutate(carousel(10), (r) => { for (const step of r.steps) step.prompt = `{{selfie}} ${'가'.repeat(MAX_STEP_PROMPT_CHARS - 11)}`; });
+    expect(parseRecipe(longest, { studio: true }).ok).toBe(true);
+  });
+
+  it('still bounds the studio', () => {
+    const huge = mutate(single('image'), (r) => { r.steps[0].prompt = `{{selfie}} ${'가'.repeat(100_000)}`; });
+    expect((parseRecipe(huge, { studio: true }) as { ok: false; issues: Array<{ code: string }> }).issues.map((issue) => issue.code)).toContain('too_large');
+  });
+});
+
 describe('recipe v2 helpers', () => {
   const recipe = (parseRecipe(filmRecipe()) as { ok: true; recipe: Recipe }).recipe;
 
@@ -148,16 +169,21 @@ describe('recipe v2 helpers', () => {
   });
 });
 
-describe('maker price proposal (§8.3)', () => {
-  it('adds the royalty to the cost floor of every step, frames at the image minimum', () => {
-    expect(isRoyalty(ROYALTY_DEFAULT_KRW)).toBe(true);
-    for (const bad of [400, 5100, 1550, 1500.5]) expect(isRoyalty(bad)).toBe(false);
+describe('maker price (§19.2, founder 2026-11-02)', () => {
+  it('adds the creative’s raise to the base price of everything the recipe renders', () => {
+    expect(ROYALTY_DEFAULT_KRW).toBe(0);
+    for (const ok of [0, 400, 5000]) expect(isRoyalty(ok)).toBe(true);
+    for (const bad of [-100, 5100, 1550, 1500.5]) expect(isRoyalty(bad)).toBe(false);
     const film = quoteRecipe((parseRecipe(filmRecipe()) as { ok: true; recipe: Recipe }).recipe, 1500);
     expect(film.steps.map((s) => s.step)).toEqual(['sheet', 'shot1']);
+    expect(film.medium).toBe('video');
     expect(film.floorKrw % 100).toBe(0);
     expect(film.proposedKrw).toBe(film.floorKrw + 1500);
-    const three = quoteRecipe((parseRecipe(carousel(3)) as { ok: true; recipe: Recipe }).recipe, 500);
-    expect(three.floorKrw).toBeGreaterThanOrEqual(3 * 200);
+    // A carousel is one order: priced on all its frames together, not three 200원 minimums.
+    const three = quoteRecipe((parseRecipe(carousel(3)) as { ok: true; recipe: Recipe }).recipe, 0);
+    expect(three.medium).toBe('image');
+    expect(three.floorKrw).toBe(three.proposedKrw);
+    expect(three.baseCredits * 10).toBeGreaterThanOrEqual(three.providerKrw * 1.12);
     expect(three.proposedCents).toBe(Math.ceil(three.proposedKrw / 1400 * 100));
   });
 });

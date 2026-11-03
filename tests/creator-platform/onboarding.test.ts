@@ -134,7 +134,7 @@ describe('creator onboarding against PostgreSQL',()=>{
   const order=async(environment='live',paymentType='NORMAL')=>{
    const renderId=randomUUID(),paymentId=randomUUID();
    await insertRenderJob(h.sql,{id:renderId,userId:other.userId!,templateId,templateSlug:'rain-alley-walk',medium:'video',engine:'seedance-2.0',aspect:'9:16',locale:'ko',inputKey:null,inputMime:null});
-   await h.sql.query("update render_jobs set status='succeeded',attempts=1,cost_usd=1,cost_source='provider_usage',result_key='test/r.mp4',result_mime='video/mp4',share_token=id::text,share_expires_at=now()+interval '1 day',finished_at=now() where id=$1",[renderId]);
+   await h.sql.query("update render_jobs set status='succeeded',attempts=1,cost_usd=1,cost_source='provider_usage',result_key='test/r.mp4',result_mime='video/mp4',share_token=id::text,share_expires_at=now()+interval '1 day',finished_at=now()-interval '8 days' where id=$1",[renderId]);
    await h.sql.query(`insert into billing_payments(id,user_id,environment,payment_type,amount_krw,status,payment_key,template_id,template_slug,order_name,aspect,locale,render_ref,input_key,input_mime,render_id,consent_at,approved_at,expires_at)
     values($1,$2,$3,$4,10000,'paid',$5,$6,'rain-alley-walk','test','9:16','ko',$7,'private/input.jpg','image/jpeg',$7,now(),now(),now()+interval '1 day')`,[paymentId,other.userId,environment,paymentType,`test-${paymentId}`,templateId,renderId]);
    return {renderId,paymentId};

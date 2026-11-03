@@ -1,39 +1,8 @@
 export const adminWorkflowEn = {
   navigation: "Administration tasks",
   skip: "Skip to content",
-  riskNav: "Risk review",
-  fundingNav: "Quotes & receipts",
-  groups: {
-    operations: "Daily operations",
-    campaigns: "Brands & campaigns",
-    content: "Content",
-    system: "System",
-  },
-  descriptions: {
-    home: "See waiting work and choose the next action.",
-    brandWorkspace:
-      "Reply to brands; manage projects and production contracts.",
-    campaigns:
-      "Set up campaigns, select participants, review posts and record payments.",
-    inquiries: "Review new brand requests and generation feedback.",
-    prompts: "Register templates and manage their publication.",
-    community: "Review creator posts and reports.",
-    landingMedia: "Replace landing images in place, or put the originals back.",
-    subscriptions: "Manage creator launch notifications.",
-    playbooks: "Manage existing editorial collections.",
-    policy: "Inspect access and publication rules.",
-    risk: "Review signals in conversations. Signals do not impose sanctions.",
-    funding: "Issue exact quotes, reconcile receipts and review full refunds.",
-  },
-  nextHeading: "What needs your attention",
-  nextHint:
-    "Open each queue to review the details before taking action. These counts do not execute approvals or payments.",
-  empty:
-    "No work is waiting in the queues below. Start with a brand project or a campaign.",
   unavailable:
     "The database is unavailable. Queue counts could not be loaded; open a section after the connection is restored.",
-  queueCount: "{count} waiting",
-  openQueue: "Open queue",
   riskDisabled:
     "Conversation risk analysis is disabled. Open risk review to check its setup.",
   riskUnavailable:
@@ -42,6 +11,16 @@ export const adminWorkflowEn = {
     "The local analysis worker has no recent heartbeat. Check the analysis queue.",
   riskDead: "{count} conversations could not be analysed after retries.",
   tasks: {
+    paymentsManual: {
+      title: "Handle stuck payments",
+      hint: "Automatic refund or fulfilment reached its ten-try cap. Handle the payment in the Toss console.",
+      action: "Open payment checks",
+    },
+    renderFailures: {
+      title: "Look at failed renders",
+      hint: "Failures from the last seven days. Read the reason and the payment before a customer asks.",
+      action: "Open render board",
+    },
     risk: {
       title: "Review conversation signals",
       hint: "Read the evidence and record a human review. Signals do not impose sanctions.",
@@ -87,6 +66,11 @@ export const adminWorkflowEn = {
       hint: "Check the portfolio and example posts, then approve or decline. Approval does not publish any template.",
       action: "Review applications",
     },
+    formats: {
+      title: "Review submitted formats",
+      hint: "Read the recipe and the example an AI creative submitted, then accept or reject it.",
+      action: "Review formats",
+    },
     templates: {
       title: "Review submitted templates",
       hint: "Check content and publication requirements.",
@@ -113,7 +97,6 @@ export const adminWorkflowEn = {
       action: "Manage participants",
     },
   },
-  overview: "Other activity",
   workflowHeading: "Campaign workflow",
   workflowHint:
     "These are separate checks, not a completion percentage. A configured reward rule does not prove a payment.",
@@ -166,38 +149,8 @@ export const adminWorkflowEn = {
 export const adminWorkflowKo: typeof adminWorkflowEn = {
   navigation: "관리자 업무",
   skip: "본문으로 건너뛰기",
-  riskNav: "위험 신호 검토",
-  fundingNav: "견적·입금 기록",
-  groups: {
-    operations: "오늘의 운영",
-    campaigns: "브랜드·캠페인",
-    content: "콘텐츠 관리",
-    system: "시스템",
-  },
-  descriptions: {
-    home: "대기 중인 업무를 확인하고 다음 행동을 고릅니다.",
-    brandWorkspace: "브랜드에 답변하고 프로젝트와 제작 계약을 관리합니다.",
-    campaigns:
-      "캠페인 설정부터 참여자 선정, 게시 검수, 지급 기록까지 관리합니다.",
-    inquiries: "새 브랜드 의뢰와 생성 결과 문의를 확인합니다.",
-    prompts: "템플릿을 등록하고 게시 상태를 관리합니다.",
-    community: "크리에이터 게시물과 신고를 검토합니다.",
-    landingMedia: "랜딩 이미지를 그 자리에서 바꾸거나 원래대로 되돌립니다.",
-    subscriptions: "크리에이터 출시 알림 신청을 관리합니다.",
-    playbooks: "기존 에디토리얼 모음을 관리합니다.",
-    policy: "접근 권한과 게시 규칙을 확인합니다.",
-    risk: "대화의 위험 신호를 검토합니다. 신호만으로 제재하지 않습니다.",
-    funding: "합의된 견적을 발행하고 입금 기록과 전액 환불을 확인합니다.",
-  },
-  nextHeading: "지금 확인할 일",
-  nextHint:
-    "각 목록에서 내용을 확인한 뒤 처리하세요. 건수 표시만으로 승인이나 지급이 실행되지는 않습니다.",
-  empty:
-    "아래 목록에 대기 중인 업무가 없습니다. 새 업무는 브랜드 프로젝트나 캠페인에서 시작하세요.",
   unavailable:
     "데이터베이스에 연결되지 않아 대기 건수를 불러오지 못했습니다. 연결을 복구한 뒤 각 메뉴에서 확인하세요.",
-  queueCount: "{count}건 대기",
-  openQueue: "대기 목록 열기",
   riskDisabled:
     "대화 위험 분석이 꺼져 있습니다. 위험 검토에서 설정을 확인하세요.",
   riskUnavailable:
@@ -206,6 +159,16 @@ export const adminWorkflowKo: typeof adminWorkflowEn = {
     "로컬 분석 워커의 최근 접속 신호가 없습니다. 분석 대기 목록을 확인하세요.",
   riskDead: "재시도 후에도 분석하지 못한 대화가 {count}건 있습니다.",
   tasks: {
+    paymentsManual: {
+      title: "멈춘 결제를 처리하세요",
+      hint: "자동 환불이나 이행이 10번 시도 상한에 닿았습니다. 토스 콘솔에서 결제를 처리합니다.",
+      action: "결제 확인 열기",
+    },
+    renderFailures: {
+      title: "실패한 렌더를 확인하세요",
+      hint: "최근 7일 동안 실패한 렌더입니다. 고객이 묻기 전에 실패 사유와 결제 상태를 봅니다.",
+      action: "렌더 보드 열기",
+    },
     risk: {
       title: "대화의 위험 신호를 검토하세요",
       hint: "근거를 읽고 사람이 검토 결과를 기록합니다. 신호만으로 제재하지 않습니다.",
@@ -251,6 +214,11 @@ export const adminWorkflowKo: typeof adminWorkflowEn = {
       hint: "포트폴리오와 예시 게시물을 확인한 뒤 승인 또는 반려합니다. 승인만으로 템플릿이 공개되지는 않습니다.",
       action: "지원서 검토하기",
     },
+    formats: {
+      title: "제출된 포맷을 검수하세요",
+      hint: "AI 크리에이티브가 보낸 레시피와 예시를 보고 수락하거나 반려합니다.",
+      action: "포맷 검수하기",
+    },
     templates: {
       title: "제출된 템플릿을 검토하세요",
       hint: "콘텐츠와 게시에 필요한 항목을 확인합니다.",
@@ -277,7 +245,6 @@ export const adminWorkflowKo: typeof adminWorkflowEn = {
       action: "참여자 관리하기",
     },
   },
-  overview: "다른 활동 현황",
   workflowHeading: "캠페인 진행 확인",
   workflowHint:
     "각 항목은 별도의 확인 사항이며 완료율이 아닙니다. 보상 규칙 저장과 실제 지급은 구분합니다.",

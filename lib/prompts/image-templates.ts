@@ -2,9 +2,11 @@ import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import type { SqlRunner } from '@/lib/db/sql-runner';
 import { AssetRefSchema, type AssetRef } from '@/lib/content/schemas';
-import { IMAGE_ENGINES, isImageAspect, type ImageAspect, type ImageEngineId } from '@/lib/images/engines';
+import { estimateImageUsd, IMAGE_ENGINES, isImageAspect, type ImageAspect, type ImageEngineId } from '@/lib/images/engines';
+import { centsForKrw } from '@/lib/recipes/pricing';
+import { baseKrw } from '@/lib/twings/template-price';
 import { loadTemplateRecipe, recipeSchemaReady } from '@/lib/recipes/repo';
-import { engineStepPrompt, isMakerEngine, isStudioRecipeEngine, legacyPromptText, MAX_RECIPE_STEPS, parseRecipe, SELFIE_SLOT, type Recipe } from '@/lib/recipes/schema';
+import { engineStepPrompt, isMakerEngine, isStudioRecipeEngine, legacyPromptText, MAX_RECIPE_STEPS, MAX_STEP_PROMPT_CHARS, parseRecipe, SELFIE_SLOT, setFrameStepPrompt, setPromptTooLong, type Recipe } from '@/lib/recipes/schema';
 import type { StorageDriver } from '@/lib/storage';
 import { promptStagingKey, publishPromptMedia, sha256Hex } from './media';
 import { insertPrompt, slugExists } from './repo';
@@ -137,8 +139,6 @@ export interface ImageTemplateSet {
 
 export type SetBuild = { ok: true; set: ImageTemplateSet } | { ok: false; errors: string[] };
 
-/** The manifest's own name for the buyer's photo. */
-const PHOTO = /\bImage 1\b/g;
 const MAX_SET_FRAMES = Math.min(MAX_RECIPE_STEPS, PROMPT_GALLERY_MAX);
 
 export function buildImageTemplateSet(rawDescriptor: unknown, frames: readonly ImageFrameSpec[]): SetBuild {
@@ -159,6 +159,7 @@ export function buildImageTemplateSet(rawDescriptor: unknown, frames: readonly I
     if (issue === 'no_photo') errors.push(`${frame.key}: the prompt never names the photo as "Image 1"`);
     if (issue === 'other_reference') errors.push(`${frame.key}: the prompt names a reference a set does not carry`);
     if (issue === 'braces') errors.push(`${frame.key}: the prompt contains "{{" or "}}"`);
+    if (setPromptTooLong(frame.promptText)) errors.push(`${frame.key}: the prompt is over ${MAX_STEP_PROMPT_CHARS} characters`);
   }
   if (errors.length > 0 || !first) return { ok: false, errors };
 
@@ -170,7 +171,7 @@ export function buildImageTemplateSet(rawDescriptor: unknown, frames: readonly I
       kind: 'image' as const,
       engine: frame.engine,
       inputs: [SELFIE_SLOT],
-      prompt: frame.promptText.replace(PHOTO, `{{${SELFIE_SLOT}}}`),
+      prompt: setFrameStepPrompt(frame.promptText),
       params: { aspect: frame.aspect },
     })),
     output: { frames: frames.map((_, index) => `shot${index + 1}`) },
@@ -227,8 +228,8 @@ export async function registerImageTemplateSet(
 
 /**
  * The staged images published, the row and its recipe written in one transaction, then read back.
- * `staged` holds one ref per file name in the set. Price 0: the set is not for sale until someone
- * prices it in `/admin` (AGENTS.md §5).
+ * `staged` holds one ref per file name in the set. The price starts at the base price of all its
+ * frames (lib/twings/template-price.ts, founder rule 2026-11-02); `/admin` can still change it.
  */
 export async function writeImageTemplateSet(
   deps: { sql: SqlRunner; storage: StorageDriver },
@@ -242,6 +243,7 @@ export async function writeImageTemplateSet(
     poster: staged.get(set.thumbnail)!,
     gallery: set.frames.map((frame) => staged.get(frame.fileName)!),
   });
+  const priceKrw = baseKrw({ medium: 'image', providerUsd: set.frames.reduce((sum, frame) => sum + estimateImageUsd(frame.engine, 1), 0) });
 
   await deps.sql.transaction(async (tx) => {
     await insertPrompt(tx, {
@@ -261,8 +263,8 @@ export async function writeImageTemplateSet(
       useCase: extra.useCase ?? [],
       featured: false,
       medium: 'image',
-      priceCents: 0,
-      priceKrw: 0,
+      priceCents: centsForKrw(priceKrw),
+      priceKrw,
       runtimeSeconds: null,
       engine: set.engine,
       aspectDefault: set.aspect,

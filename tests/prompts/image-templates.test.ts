@@ -1,5 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { estimateImageUsd } from '@/lib/images/engines';
 import { loadPromptCatalog } from '@/lib/prompts/catalog';
+import { baseKrw } from '@/lib/twings/template-price';
 import {
   buildImageTemplateSet,
   parseImageTemplateManifest,
@@ -13,7 +15,7 @@ import { publishPromptMedia } from '@/lib/prompts/media';
 import { loadPromptBySlug } from '@/lib/prompts/repo';
 import { parsePromptMedia } from '@/lib/prompts/schemas';
 import { loadTemplateRecipe } from '@/lib/recipes/repo';
-import { engineStepPrompt, outputSteps } from '@/lib/recipes/schema';
+import { engineStepPrompt, MAX_STEP_PROMPT_CHARS, outputSteps, parseRecipe, setPromptTooLong } from '@/lib/recipes/schema';
 import { emptyPromptHarness, type PromptHarness } from '../helpers/prompts';
 
 /**
@@ -105,6 +107,34 @@ describe('an image set', () => {
     });
   });
 
+  // Slack 1793592561.362499: every frame was within its own limit, yet publishing answered
+  // "recipe too_large", because the whole recipe had a smaller limit than its frames added up to.
+  it('takes ten frames at the longest prompt a frame may have, in Korean', () => {
+    const longest = (n: number) => {
+      const start = `Image 1 컷 ${n} `;
+      return `${start}${'가'.repeat(MAX_STEP_PROMPT_CHARS - '{{selfie}} 컷 10 '.length)}`.trim();
+    };
+    const built = buildImageTemplateSet(SET, frames(Array.from({ length: 10 }, (_, i) => entry(i + 1, {
+      file_name: i === 1 ? SET.thumbnail : `shot_${i + 1}.png`,
+      template_slug: `long-shot-${i + 1}`,
+      prompt: longest(i + 1),
+    }))));
+    expect(built.ok && built.set.recipe.steps.length).toBe(10);
+    if (built.ok) expect(parseRecipe(JSON.parse(JSON.stringify(built.set.recipe)), { studio: true }).ok).toBe(true);
+  });
+
+  it('names the frame whose prompt is over the limit', () => {
+    const over = `Image 1 ${'가'.repeat(MAX_STEP_PROMPT_CHARS)}`;
+    const built = buildImageTemplateSet(SET, frames([entry(1), entry(2, { prompt: over })]));
+    expect(built.ok).toBe(false);
+    if (!built.ok) expect(built.errors.join('\n')).toContain(`bridal-02-shot: the prompt is over ${MAX_STEP_PROMPT_CHARS} characters`);
+  });
+
+  it('counts a frame the way the recipe stores it, with the photo as its token', () => {
+    expect(setPromptTooLong(`Image 1 ${'x'.repeat(MAX_STEP_PROMPT_CHARS - '{{selfie}} '.length)}`)).toBe(false);
+    expect(setPromptTooLong(`Image 1 ${'x'.repeat(MAX_STEP_PROMPT_CHARS - '{{selfie}} '.length + 1)}`)).toBe(true);
+  });
+
   it('refuses a set it could not make faithfully', () => {
     const cases: Array<[unknown, unknown[], string]> = [
       [{ ...SET, thumbnail: '09_missing.png' }, MANIFEST, 'not one of the manifest'],
@@ -136,7 +166,7 @@ describe('registering an image set', () => {
   });
   afterAll(async () => harness.close());
 
-  it('publishes ONE template under the set slug, with its recipe, not for sale', async () => {
+  it('publishes ONE template under the set slug, with its recipe, at the base price of all its frames', async () => {
     const outcome = await registerImageTemplateSet(harness, set, image);
     expect(outcome.status).toBe('created');
 
@@ -150,11 +180,12 @@ describe('registering an image set', () => {
       engine: 'seedream-5.0-pro',
       aspectDefault: '3:4',
       models: ['seedream-5.0-pro'],
-      priceCents: 0,
-      priceKrw: 0,
       textVisibility: 'pro',
       featured: false,
     });
+    // Founder rule 2026-11-02: cost × 1.12 over every frame, in won by card (lib/twings/template-price.ts).
+    expect(row!.priceKrw).toBe(baseKrw({ medium: 'image', providerUsd: estimateImageUsd('seedream-5.0-pro', 1) * MANIFEST.length }));
+    expect(row!.priceCents).toBeGreaterThan(0);
     const recipe = await loadTemplateRecipe(harness.sql, row!.id);
     expect(recipe?.steps.map((step) => engineStepPrompt(recipe, step).split('\n\n')[0])).toEqual(MANIFEST.map((item) => item.prompt));
   });

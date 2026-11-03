@@ -11,7 +11,7 @@ const operation:AdminOperation={
   const numbers=new Set(['score','tax','fees','fx','costPerCredit','cap','credits','maxCost','priceKrw']);
   const booleans=new Set(['active','accept','excluded','ownership','content','disclosure']);
   // An empty optional price (a rejection, or a v1 format) is absent, not 0.
-  for(const [key,value] of form)if(!key.startsWith('_')&&!(key==='priceKrw'&&value===''))input[key]=numbers.has(key)?Number(value):booleans.has(key)?value==='true':value;
+  for(const [key,value] of form)if(!key.startsWith('_')&&!(key==='priceKrw'&&value==='')&&!(key==='payout'&&value===''))input[key]=numbers.has(key)?Number(value):booleans.has(key)?value==='true':value;
   const parsed=PlatformAdminInput.safeParse(input);
   return parsed.success?{ok:true,value:parsed.data}:{ok:false,detail:'invalid platform input'};
  },
