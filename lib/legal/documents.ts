@@ -28,16 +28,17 @@ import type { Locale } from '@/lib/i18n/config';
  * 전자상거래법 §21 표시사항.
  *
  * 상호 · 대표자 · 본점 주소 are transcribed from the corporate registry certificate
- * (등기사항전부증명서, 등기번호 0940868 / 법인등록번호 110111-0940868, 발급 2026-05-11): the head
- * office moved to 구로구 on 2026-04-21 and was registered on 2026-05-06, so the 양천구 line struck
- * through on that certificate is the OLD one and must never appear here. Nothing else from the
- * registry is copied — a director's resident number and home address are on that document and have
- * no business on a public page.
+ * (등기사항전부증명서, 등기번호 0940868 / 법인등록번호 110111-0940868, 발급 2026-11-03): the head
+ * office moved to 영등포구 on 2026-10-29 and was registered the same day. Every earlier line on that
+ * certificate (양천구 → 구로구 → 양천구) is struck through and must never appear here. Nothing else
+ * from the registry is copied — a director's resident number and home address are on that document
+ * and have no business on a public page.
  *
  * `mailOrderNumber` comes from the 통신판매업신고증 (구로구청, 2026-09-10; nothing else on that
- * certificate — the representative's birth date is on it — belongs on a public page). Should it
- * ever be blanked to a `TODO` again, the legal pages show the placeholder and the footer drops the
- * line (`businessFooterLines`, `hasMailOrderNumber`).
+ * certificate — the representative's birth date is on it — belongs on a public page). The move to
+ * 영등포구 needs a 변경신고 there, which may issue a new number; replace it only from the new 신고증.
+ * Should it ever be blanked to a `TODO` again, the legal pages show the placeholder and the footer
+ * drops the line (`businessFooterLines`, `hasMailOrderNumber`).
  */
 export const BUSINESS = {
   name: 'YAGI WORKSHOP Inc.',
@@ -46,8 +47,8 @@ export const BUSINESS = {
   registrationNumber: '519-81-04213',
   /** 통신판매업신고증 제 2026-서울구로-1618 호 (구로구청, 신고 2026-09-10). */
   mailOrderNumber: '2026-서울구로-1618',
-  address: '서울특별시 구로구 디지털로34길 55, 비201-아이3 (구로동, 코오롱싸이언스밸리2차)',
-  addressEn: '55 Digital-ro 34-gil, Guro-gu, Seoul, Republic of Korea',
+  address: '서울특별시 영등포구 양평로 110, 5층 씨06호 (양평동4가)',
+  addressEn: '110 Yangpyeong-ro, Yeongdeungpo-gu, Seoul, Republic of Korea',
   phone: '010-6599-4020',
   phoneEn: '+82 10-6599-4020',
   email: 'hello@yagiworkshop.xyz',
