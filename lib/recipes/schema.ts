@@ -75,9 +75,13 @@ export function maxImageInputs(engine: EngineId): number {
   return Math.min(MAX_STEP_INPUTS, videoEngineSpec(engine).maxReferenceImages);
 }
 
+export const RECIPE_SLOT_ROLES = ['person', 'product', 'scene', 'look', 'mask'] as const;
+export type RecipeSlotRole = (typeof RECIPE_SLOT_ROLES)[number];
+
 const Name = z.string().regex(NAME);
-const UserSlot = z.object({ kind: z.literal('image'), source: z.literal('user'), required: z.literal(true) }).strict();
-const CreatorSlot = z.object({ kind: z.enum(['image', 'video']), source: z.literal('creator'), asset: z.string().regex(ASSET_HANDLE) }).strict();
+const SlotRole = z.enum(RECIPE_SLOT_ROLES).optional();
+const UserSlot = z.object({ kind: z.literal('image'), source: z.literal('user'), required: z.literal(true), role: SlotRole }).strict();
+const CreatorSlot = z.object({ kind: z.enum(['image', 'video']), source: z.literal('creator'), asset: z.string().regex(ASSET_HANDLE), role: SlotRole }).strict();
 const Slot = z.discriminatedUnion('source', [UserSlot, CreatorSlot]);
 const Prompt = z.string().trim().min(10).max(MAX_STEP_PROMPT_CHARS);
 /**
@@ -150,20 +154,51 @@ export function primaryStep(recipe: Recipe): RecipeStep {
   return recipe.steps.find((step) => step.id === outputSteps(recipe)[0])!;
 }
 
-/** Inputs that carry the customer's face: the selfie, or a step that (transitively) read it. */
+/** Semantic role of a recipe slot (consumer `selfie` is always `'person'`). */
+export function slotRole(name: string, slot: RecipeSlot): RecipeSlotRole {
+  if (name === SELFIE_SLOT) return 'person';
+  return slot.role ?? 'scene';
+}
+
+/** Slot names that carry a real person's face (`selfie` or any slot with `role: 'person'`). */
+export function personSlots(recipe: Pick<Recipe, 'slots'>): Set<string> {
+  const person = new Set<string>();
+  for (const [name, slot] of Object.entries(recipe.slots)) {
+    if (name === SELFIE_SLOT || slot.role === 'person') person.add(name);
+  }
+  return person;
+}
+
+/** True when the recipe includes any person slot (so face consent & identity checks apply). */
+export function recipeHasPerson(recipe: Pick<Recipe, 'slots'>): boolean {
+  return personSlots(recipe).size > 0;
+}
+
+/** Inputs that carry a person's face: a person slot (`selfie` or `role: 'person'`), or a step that (transitively) read it. */
 export function personInputs(recipe: Recipe): Set<string> {
-  const person = new Set<string>([SELFIE_SLOT]);
+  const person = personSlots(recipe);
   for (const step of recipe.steps) if (step.inputs.some((input) => person.has(input))) person.add(step.id);
   return person;
 }
 
-/** Does any step send the customer's face to a ModelArk engine (so the verified library is needed)? */
+/** Does any step send a person's face to a ModelArk engine (so the verified library is needed)? */
 export function recipeNeedsIdentity(recipe: Recipe): boolean {
   const person = personInputs(recipe);
-  return recipe.steps.some((step) => isMakerEngine(step.engine) && identityPath(step.engine) === 'asset' && step.inputs.some((input) => person.has(input)));
+  if (person.size === 0) return false;
+  return recipe.steps.some((step) => (isMakerEngine(step.engine) || isStudioRecipeEngine(step.engine)) && identityPath(step.engine) === 'asset' && step.inputs.some((input) => person.has(input)));
 }
 
-export function parseRecipe(raw: unknown, options: { studio?: boolean } = {}): RecipeCheck {
+export interface ParseRecipeOptions {
+  studio?: boolean;
+  /**
+   * Brand/studio faceless recipes (BRAND-PRODUCT §8·§9): allows recipes whose slots are only
+   * `product | scene | look | mask` without a `selfie` slot. Whenever a `selfie` or `role: 'person'`
+   * slot IS present, all identity/consent/output rules remain strictly enforced.
+   */
+  allowFaceless?: boolean;
+}
+
+export function parseRecipe(raw: unknown, options: ParseRecipeOptions = {}): RecipeCheck {
   if (typeof raw === 'string') {
     if (Buffer.byteLength(raw, 'utf8') > MAX_RECIPE_BYTES) return { ok: false, issues: [{ code: 'too_large' }] };
     try { raw = JSON.parse(raw); } catch { return { ok: false, issues: [{ code: 'shape' }] }; }
@@ -174,10 +209,23 @@ export function parseRecipe(raw: unknown, options: { studio?: boolean } = {}): R
   const issues: RecipeIssue[] = [];
   const slots = Object.entries(recipe.slots);
 
-  // Slots: the selfie is the one user input; every other slot is a maker file.
+  // Slots: in consumer/maker mode `selfie` is the one user input; in faceless brand mode, `selfie` is optional
+  // when no person is in the shot, while any `selfie` or `person` slot keeps the full identity rules.
   const selfie = recipe.slots[SELFIE_SLOT];
-  if (!selfie || selfie.source !== 'user') issues.push({ code: 'selfie_missing' });
-  for (const [name, slot] of slots) if (slot.source === 'user' && name !== SELFIE_SLOT) issues.push({ code: 'user_slot', slot: name });
+  if (selfie) {
+    if (selfie.source !== 'user' || (selfie.role !== undefined && selfie.role !== 'person')) {
+      issues.push({ code: 'selfie_missing' });
+    }
+  } else if (!options.allowFaceless) {
+    issues.push({ code: 'selfie_missing' });
+  }
+  for (const [name, slot] of slots) {
+    if (slot.source === 'user' && name !== SELFIE_SLOT) {
+      if (!options.allowFaceless || !slot.role || slot.role === 'person') {
+        issues.push({ code: 'user_slot', slot: name });
+      }
+    }
+  }
 
   const seen = new Map<string, RecipeStep>();
   const used = new Set<string>();
@@ -222,7 +270,8 @@ export function parseRecipe(raw: unknown, options: { studio?: boolean } = {}): R
     }
     seen.set(step.id, step);
   });
-  for (const [name] of slots) if (!used.has(name)) issues.push(name === SELFIE_SLOT ? { code: 'no_identity' } : { code: 'unused_slot', slot: name });
+  const personSlotSet = personSlots(recipe);
+  for (const [name] of slots) if (!used.has(name)) issues.push(personSlotSet.has(name) ? { code: 'no_identity' } : { code: 'unused_slot', slot: name });
 
   // Layout: one image, one film, an image then a film — or a carousel of one to ten images.
   const kinds = recipe.steps.map((step) => step.kind);
@@ -239,11 +288,18 @@ export function parseRecipe(raw: unknown, options: { studio?: boolean } = {}): R
     for (const step of recipe.steps) if (!frames.includes(step.id) && !read.has(step.id)) issues.push({ code: 'output', step: step.id });
   }
 
-  // Every result must be the customer: it reads the selfie, directly or through an earlier step.
+  // Whenever a person slot is present (or in consumer mode), every result must feature the person.
   const person = personInputs(recipe);
-  for (const id of outputSteps(recipe)) if (seen.has(id) && !person.has(id)) issues.push({ code: 'no_identity', step: id });
+  if (personSlotSet.size > 0 || !options.allowFaceless) {
+    for (const id of outputSteps(recipe)) if (seen.has(id) && !person.has(id)) issues.push({ code: 'no_identity', step: id });
+  }
 
   return issues.length ? { ok: false, issues } : { ok: true, recipe, medium: recipeMedium(recipe) };
+}
+
+/** Convenience wrapper for brand/studio recipes that may be faceless (product, scene, look, mask). */
+export function parseBrandRecipe(raw: unknown): RecipeCheck {
+  return parseRecipe(raw, { studio: true, allowFaceless: true });
 }
 
 /** Creator asset handles a recipe points at (the submission checks each belongs to the format). */
