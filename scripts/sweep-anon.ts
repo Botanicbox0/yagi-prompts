@@ -1540,6 +1540,20 @@ async function sweepCampaigns(): Promise<void> {
     expectAbsent('…and no payout queue', admin.body, 'data-payout-queue');
   }
 
+  // docs/ADMIN.md §7.1–7.2 — the render board, one render and the payment check are admin-only.
+  for (const path of [
+    '/admin/renders',
+    '/admin/renders?status=failed',
+    '/admin/renders/00000000-0000-4000-8000-000000000000',
+    '/admin/payments',
+  ]) {
+    const admin = await get(path);
+    expectOneOf(`${path} refuses anon`, admin.status, [302, 307, 308, 404]);
+    expectAbsent('…and leaks no render board', admin.body, 'data-admin-render-board');
+    expectAbsent('…and no render detail', admin.body, 'data-admin-render-detail');
+    expectAbsent('…and no payment check', admin.body, 'data-admin-payments');
+  }
+
   const robots = await get('/robots.txt');
   expectPresent('robots disallows the apply form', robots.body, 'Disallow: /campaigns/*/apply');
   expectPresent('robots disallows campaign production', robots.body, 'Disallow: /campaigns/*/make');
