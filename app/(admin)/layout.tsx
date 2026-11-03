@@ -51,7 +51,9 @@ export default async function AdminRootLayout({ children }: { children: ReactNod
 
   const locale = await getLocaleFromHeaders();
   return (
-    <html lang={locale} className={fontVariables} data-workspace-admin>
+    // `data-admin-console` scopes the console's own styles (docs/ADMIN.md §5): the creator
+    // workspace in `app/(app)` also sets `data-workspace-admin`, and must not inherit them.
+    <html lang={locale} className={fontVariables} data-workspace-admin data-admin-console>
       <head>
         <link rel="stylesheet" href="/fonts/helvetica-neue/helvetica-neue.css" />
         <link rel="stylesheet" href="/fonts/pretendard/pretendard-dynamic-subset.css" />

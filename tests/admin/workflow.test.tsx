@@ -1,11 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 import { prerender } from "react-dom/static";
 import {
-  adminNextActions,
   campaignWorkCounts,
   ADMIN_NAV_GROUPS,
   ADMIN_NAV_PATHS,
 } from "@/lib/admin/workflow";
+import { adminNextActions } from "@/lib/admin/queues";
 import { campaignWorkflow } from "@/lib/admin/campaign-workflow";
 import type { ApplicationRow, CampaignRow } from "@/lib/campaigns/repo";
 import type { CampaignProductionAdmin } from "@/lib/campaigns/production-admin";
@@ -96,10 +96,11 @@ describe("admin task queues", () => {
       feedback: 0,
       templates: 0,
     });
+    // docs/ADMIN.md §2.2: a brand waiting on a reply ranks above the campaign checks.
     expect(actions.map((a) => [a.key, a.count])).toEqual([
+      ["studio", 1],
       ["posts", 4],
       ["applicants", 2],
-      ["studio", 1],
     ]);
     expect(actions.every((a) => a.href.startsWith("/admin/"))).toBe(true);
   });
@@ -117,7 +118,7 @@ describe("admin task queues", () => {
     ).toEqual([]);
   });
   it.each(["ko", "en"] as const)(
-    "exposes every retained navigation route with an explanation in %s",
+    "exposes every menu route once, with its name and group, in %s",
     async (locale) => {
       const dict = getDictionary(locale);
       const { prelude } = await prerender(
@@ -130,11 +131,16 @@ describe("admin task queues", () => {
       expect(new Set(keys).size).toBe(Object.keys(ADMIN_NAV_PATHS).length);
       for (const key of keys) {
         expect(html).toContain(`href="${ADMIN_NAV_PATHS[key]}"`);
-        // React escapes ampersands in English descriptions.
-        expect(html).toContain(
-          dict.adminWorkflow.descriptions[key].replaceAll("&", "&amp;"),
-        );
+        // React escapes ampersands in English names.
+        expect(html).toContain(dict.adminConsole.nav[key].replaceAll("&", "&amp;"));
       }
+      for (const group of ADMIN_NAV_GROUPS) {
+        expect(html).toContain(dict.adminConsole.groups[group.key].replaceAll("&", "&amp;"));
+      }
+      // Contests is reachable from the menu now; the old product's screens are not (docs/ADMIN.md §2.1).
+      expect(html).toContain('href="/admin/contests"');
+      expect(html).not.toContain('href="/admin/playbooks"');
+      expect(html).not.toContain('href="/admin/policy"');
       expect(html).toContain(`href="#main"`);
       expect(html.match(/aria-current="page"/g)).toHaveLength(1);
     },

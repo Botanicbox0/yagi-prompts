@@ -1,5 +1,6 @@
 /** PLAN §3.9 — UI strings as dictionary modules. `en` is the shape; `ko` must match it. */
 import { adminWorkflowEn } from './admin-workflow';
+import { adminConsoleEn } from './admin-console';
 /**
  * docs/PLATFORM-2.0.md §14.1 — the names live in this one object (founder decision 2026-10-24). Every
  * other string is composed from it, so a rename edits these values only. Users get no role name:
@@ -33,6 +34,7 @@ const T = EN_TERMS;
 
 export const en = {
   adminWorkflow: adminWorkflowEn,
+  adminConsole: adminConsoleEn,
   landingMedia: {
     nav: 'Landing images',
     heading: 'Landing images',
@@ -117,7 +119,7 @@ export const en = {
   "formatNeedsScript": "Submitting a format needs JavaScript. Turn it on and reload this page.",
   "royalty": `Accrued ${T.maker} share`,
   "royaltyHint": `${cap(T.makers)} receive 80% of distributable margin after tax, payment fees and actual generation cost. These amounts await settlement review; they are not completed payouts.`,
-  "adminTitle": "Requests and format partners",
+  "adminTitle": "AI creatives",
   "adminHint": `Review requests, ${T.maker} access, ratings and posting evidence. Every administrative decision is recorded.`,
   "reason": "Decision reason / evidence reference",
   "userId": "Account ID",
@@ -4785,6 +4787,7 @@ export const en = {
     setErrImage: 'Frame {n} has no image, or it is still uploading.',
     setErrAspect: 'The image for frame {n} is not {aspect}. Change the aspect or use another image.',
     setErrPromptShort: 'The prompt for frame {n} is too short.',
+    setErrPromptLong: 'The prompt for frame {n} is too long. Keep it to {max} characters.',
     setErrNoPhoto: 'The prompt for frame {n} never names the customer’s photo as Image 1 or @image1.',
     setErrOtherReference: 'The prompt for frame {n} points at a reference the set does not have (Image 2, for example).',
     setErrBraces: 'Remove the {{ }} from the prompt for frame {n}.',

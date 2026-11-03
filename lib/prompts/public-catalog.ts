@@ -55,9 +55,10 @@ async function readPromptCatalog(): Promise<PromptCatalog> {
 /** 2026-10-29 (`v10-fashion-show-arrival`): `@yunseolfromseoul` maker profile & `fashion-show-arrival` template. */
 /** 2026-10-29 (`v11-recipe-hub`): `PromptCard.recipeOpen`, `PublicMaker.bioEn`/`openRecipeCount`. */
 /** 2026-10-29 (`v12-creative-cover`): `PublicMaker` carries the 0065 profile (name, place, links, avatar…) and the 0071 cover; both addresses are `/creative-media/…`. */
+/** 2026-11-02 (`v13-remove-goldfish-daydream`): drop duplicate `aquarium-goldfish-daydream` from the catalog cache. */
 export const getPromptCatalog = unstable_cache(
   readPromptCatalog,
-  ['prompt-catalog', 'v12-creative-cover', resolveRuntimeMode(), publicMediaCacheKey()],
+  ['prompt-catalog', 'v13-remove-goldfish-daydream', resolveRuntimeMode(), publicMediaCacheKey()],
   {
     tags: [PROMPTS_TAG],
     revalidate: CATALOG_TTL_SECONDS,

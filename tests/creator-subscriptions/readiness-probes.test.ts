@@ -2,7 +2,8 @@ import { EventEmitter } from 'node:events';
 import { PGlite } from '@electric-sql/pglite';
 import pg from 'pg';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { getCreatorSubscriptionAvailability, PREPARING_SUBSCRIPTION_AVAILABILITY } from '@/lib/creator-subscriptions/availability';
+import { workAsyncStorage } from 'next/dist/server/app-render/work-async-storage.external';
+import { cacheableSubscriptionAvailability, getCreatorSubscriptionAvailability, PREPARING_SUBSCRIPTION_AVAILABILITY, type PublicSubscriptionAvailability } from '@/lib/creator-subscriptions/availability';
 import { subscriptionTermsApproved, subscriptionTermsDigest } from '@/lib/creator-subscriptions/evidence';
 import { SUBSCRIPTION_TERMS_VERSION } from '@/lib/creator-subscriptions/legal';
 import { SUBSCRIPTION_PLAN_VERSION } from '@/lib/creator-subscriptions/plans';
@@ -17,7 +18,9 @@ const connection = vi.hoisted(() => ({ runner: null as unknown }));
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/db/connect', () => ({ getSqlRunner: async () => connection.runner }));
 
-import { cachedSubscriptionTermsApproved } from '@/lib/creator-subscriptions/cached-availability';
+import { GET as availabilityRoute } from '@/app/api/creator-subscriptions/availability/route';
+import FaqPage from '@/app/(marketing)/[locale]/faq/page';
+import { cachedSubscriptionAvailability, cachedSubscriptionTermsApproved, publicSubscriptionAvailability } from '@/lib/creator-subscriptions/cached-availability';
 import { getSubscriptionContext, premiumEditingOperational } from '@/lib/creator-subscriptions/runtime';
 
 /**
@@ -252,6 +255,19 @@ describe('creator subscription readiness probes', () => {
       await expect(getCreatorSubscriptionAvailability(tablesPresentThen(failure), PROD_ENV)).resolves.toBe(PREPARING_SUBSCRIPTION_AVAILABILITY);
     });
 
+    it.each(FAILURES)('the cacheable read rejects with the failure itself: %s', async (_name, failure) => {
+      await expect(cacheableSubscriptionAvailability(tablesPresentThen(failure), PROD_ENV)).rejects.toBe(failure);
+    });
+
+    it('the cacheable read rejects on a queue timeout from the real pool', async () => {
+      await withExhaustedPool(sql => expect(cacheableSubscriptionAvailability(sql, PROD_ENV)).rejects.toThrow(QUEUE_TIMEOUT));
+    });
+
+    it.each(['42P01', '42703', '42501'])('the cacheable read keeps SQLSTATE %s as an answer: this schema cannot serve it', async (code) => {
+      const failure = Object.assign(new Error('schema'), { code });
+      await expect(cacheableSubscriptionAvailability(tablesPresentThen(failure), PROD_ENV)).resolves.toBe(PREPARING_SUBSCRIPTION_AVAILABILITY);
+    });
+
     it.each(FAILURES)('getSubscriptionContext stays null, as it always has: %s', async (_name, failure) => {
       vi.stubEnv('TOSS_BILLING_CLIENT_KEY', 'test_ck_fixture');
       vi.stubEnv('TOSS_BILLING_SECRET_KEY', 'test_sk_fixture');
@@ -261,22 +277,142 @@ describe('creator subscription readiness probes', () => {
     });
   });
 
-  describe('cachedSubscriptionTermsApproved, through the real unstable_cache', () => {
+  describe('cached reads, through the real unstable_cache', () => {
     let stored: Map<string, unknown>;
+    let stale: boolean;
     const globals = globalThis as { __incrementalCache?: unknown };
 
     beforeEach(() => {
       stored = new Map();
+      stale = false;
       globals.__incrementalCache = {
         isOnDemandRevalidate: false,
         generateSimpleCacheKey: async (key: string) => key,
-        get: async (key: string) => (stored.has(key) ? { isStale: false, value: stored.get(key) } : null),
+        get: async (key: string) => (stored.has(key) ? { isStale: stale, value: stored.get(key) } : null),
         set: async (key: string, value: unknown) => void stored.set(key, value),
       };
     });
     afterEach(() => {
       delete globals.__incrementalCache;
       connection.runner = null;
+    });
+
+    const READS: [string, () => Promise<PublicSubscriptionAvailability>][] = [
+      ['cachedSubscriptionAvailability', cachedSubscriptionAvailability],
+      ['publicSubscriptionAvailability', publicSubscriptionAvailability],
+    ];
+    const OUTAGE: SqlRunner = { query: () => Promise.reject(new Error(QUEUE_TIMEOUT)), transaction: () => Promise.reject(new Error('unused')) };
+    const TABLES_MISSING = { ...PREPARING_SUBSCRIPTION_AVAILABILITY, premiumEditRequestsPerPeriod: null };
+    const OPEN = { ...TABLES_MISSING, status: 'open', plans: { creator: { status: 'open' }, premium: { status: 'open' } }, editing: 'open' };
+
+    /** A render in progress: only there does unstable_cache serve a stale entry instead of asking again. */
+    async function inRender<T>(isRevalidate: boolean, read: () => Promise<T>): Promise<T> {
+      const store = { route: '/ko/faq', isRevalidate, incrementalCache: globals.__incrementalCache } as unknown as { pendingRevalidates?: Record<string, Promise<unknown>> };
+      const result = await workAsyncStorage.run(store as never, read);
+      await Promise.all(Object.values(store.pendingRevalidates ?? {}));
+      return result;
+    }
+
+    /** A good answer sits in the cache, past its revalidate time, and the database has just gone away. */
+    async function staleOpenEntryThenOutage(read: () => Promise<PublicSubscriptionAvailability>) {
+      const { pool, sql } = poolOver(db);
+      connection.runner = sql;
+      await read();
+      await pool.end();
+      const [[key, entry]] = [...stored] as [[string, { data: Record<string, unknown> }]];
+      const good = { ...entry, data: { ...entry.data, body: JSON.stringify(OPEN) } };
+      stored.set(key, good);
+      stale = true;
+      connection.runner = OUTAGE;
+      return { key, good };
+    }
+
+    it.each(READS)('%s stores nothing on a pool timeout, so the next read asks the database again', async (_name, read) => {
+      connection.runner = OUTAGE;
+      await expect(read()).rejects.toThrow(QUEUE_TIMEOUT);
+      expect(stored.size).toBe(0);
+
+      const { pool, seen, sql } = poolOver(db);
+      connection.runner = sql;
+      expect(await read()).toEqual(TABLES_MISSING);
+      expect(seen.connections).toBe(1);
+      expect(stored.size).toBe(1);
+      await pool.end();
+    });
+
+    it.each(READS)('%s does store the real answer that the tables are missing', async (_name, read) => {
+      const { pool, seen, sql } = poolOver(db);
+      connection.runner = sql;
+      expect(await read()).toEqual(TABLES_MISSING);
+      expect(stored.size).toBe(1);
+      connection.runner = OUTAGE;
+      expect(await read()).toEqual(TABLES_MISSING);
+      expect(seen.failed).toEqual([]);
+      await pool.end();
+    });
+
+    it.each(READS)('%s does store the designed answer of a runtime with no database', async (_name, read) => {
+      connection.runner = null;
+      expect(await read()).toEqual(PREPARING_SUBSCRIPTION_AVAILABILITY);
+      expect(stored.size).toBe(1);
+    });
+
+    it.each(READS)('%s keeps a paused deployment paused with no database', async (_name, read) => {
+      vi.stubEnv('CREATOR_SUBSCRIPTION_PUBLIC', 'paused');
+      connection.runner = null;
+      expect((await read()).status).toBe('paused');
+    });
+
+    it.each([
+      ['a noncanonical encryption key', { TOSS_BILLING_ENCRYPTION_KEY: 'not-canonical' }],
+      ['a billing secret of the wrong kind', { TOSS_BILLING_CLIENT_KEY: 'live_ck_fixture', TOSS_BILLING_SECRET_KEY: 'test_sk_fixture' }],
+    ])('stores preparing for %s: a thrown configuration error is an answer, not an outage', async (_name, vars) => {
+      for (const [name, value] of Object.entries(vars)) vi.stubEnv(name, value);
+      const { pool, sql } = poolOver(db);
+      connection.runner = sql;
+      // No premiumEditRequestsPerPeriod: this answer came from the catch, not from the evaluation.
+      expect(await cachedSubscriptionAvailability()).toEqual(PREPARING_SUBSCRIPTION_AVAILABILITY);
+      expect(stored.size).toBe(1);
+      await pool.end();
+    });
+
+    describe.each(READS)('%s past its revalidate time', (_name, read) => {
+      it.each([['an ISR revalidation', true], ['a request', false]] as const)('keeps the last good answer when the database fails during %s', async (_during, isRevalidate) => {
+        vi.spyOn(console, 'error').mockImplementationOnce(() => {});
+        const { key, good } = await staleOpenEntryThenOutage(read);
+        expect(await inRender(isRevalidate, read)).toEqual(OPEN);
+        expect(stored.get(key)).toBe(good);
+      });
+    });
+
+    it('the availability route still answers JSON during an outage, without caching it', async () => {
+      connection.runner = OUTAGE;
+      const response = await availabilityRoute();
+      expect(response.status).toBe(200);
+      expect(response.headers.get('content-type')).toContain('application/json');
+      expect(response.headers.get('cache-control')).toBe('no-store');
+      expect(await response.json()).toEqual(PREPARING_SUBSCRIPTION_AVAILABILITY);
+      expect(stored.size).toBe(0);
+    });
+
+    it('the availability route serves the last good answer through an outage', async () => {
+      vi.spyOn(console, 'error').mockImplementationOnce(() => {});
+      await staleOpenEntryThenOutage(publicSubscriptionAvailability);
+      const response = await inRender(false, availabilityRoute);
+      expect(await response.json()).toEqual(OPEN);
+    });
+
+    const FAQ_PARAMS = { params: Promise.resolve({ locale: 'ko' }) };
+
+    it('/faq throws during an outage, so an ISR revalidation keeps the last good page (F4)', async () => {
+      connection.runner = OUTAGE;
+      await expect(FaqPage(FAQ_PARAMS)).rejects.toThrow(QUEUE_TIMEOUT);
+      expect(stored.size).toBe(0);
+    });
+
+    it('/faq still renders with no database, as a bare build needs', async () => {
+      connection.runner = null;
+      await expect(FaqPage(FAQ_PARAMS)).resolves.toBeTruthy();
     });
 
     it('stores nothing on a pool timeout, so the next read asks the database again', async () => {
