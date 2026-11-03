@@ -100,6 +100,9 @@ export const PRESET_BRAND_LOOK_IDS = [
 
 export type PresetBrandLookId = (typeof PRESET_BRAND_LOOK_IDS)[number];
 
+export const BRAND_LOOK_PRESET_IDS = PRESET_BRAND_LOOK_IDS;
+export type BrandLookPresetId = PresetBrandLookId;
+
 export interface PresetBrandLookSpec {
   id: PresetBrandLookId;
   titleKo: string;
@@ -203,6 +206,8 @@ export const PRESET_BRAND_LOOKS: Record<PresetBrandLookId, PresetBrandLookSpec> 
     skinProtectDefault: true
   }
 };
+
+export const BRAND_LOOK_PRESETS = PRESET_BRAND_LOOKS;
 
 export interface LookDistanceMetrics {
   deltaLumaP50: number;

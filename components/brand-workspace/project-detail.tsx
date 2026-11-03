@@ -331,6 +331,35 @@ export function ProjectDetail({
                   locale={locale}
                 />
                 <AestheticEngine locale={locale} referenceLinks={p.referenceLinks} />
+                {!studio && (
+                  <div
+                    className="bw-note bw-row"
+                    data-project-direction-card
+                    data-project-id={p.id}
+                  >
+                    <div>
+                      <strong>
+                        {locale === "en"
+                          ? "2-Tier Direction Override (Base Brand DNA ⊕ Project Override)"
+                          : "2단계 연출 상속 · 프로젝트 전용 연출 오버라이드"}
+                      </strong>
+                      <p className="bw-muted">
+                        {locale === "en"
+                          ? "Keep Brand Base DNA hard locks (consented faces, logo geometry, taboos, skin protection) while overriding look, lens, lighting, space, and memory isolation for this project."
+                          : "브랜드 Base DNA 안전 불변층(동의 인물·로고 원형·절대 금기·피부 보호)은 고정한 채, 이 프로젝트 전용 룩·렌즈·조명·공간·메모리 격리 규칙만 별도로 오버라이드해 스튜디오 지시서를 조립합니다."}
+                      </p>
+                    </div>
+                    <a
+                      className="bw-button"
+                      data-project-direction-studio-link
+                      href={`/brand/studio?organizationId=${encodeURIComponent(p.organizationId)}&projectId=${encodeURIComponent(p.id)}`}
+                    >
+                      {locale === "en"
+                        ? "Open Project Direction in Studio →"
+                        : "이 프로젝트 전용 연출로 스튜디오 열기 →"}
+                    </a>
+                  </div>
+                )}
               </>
             )}
           </section>

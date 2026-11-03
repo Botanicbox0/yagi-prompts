@@ -30,12 +30,16 @@ const REQUEST_TITLES = [getDictionary("ko"), getDictionary("en")].map((d) => d.b
 export default async function BrandStudio({
   searchParams,
 }: {
-  searchParams: Promise<{ organizationId?: string | string[] }>;
+  searchParams: Promise<{
+    organizationId?: string | string[];
+    projectId?: string | string[];
+  }>;
 }) {
-  const [{ organizationId }, { sql, viewer, verifiedEmail, brandHost, b, locale }] = await Promise.all([
-    searchParams,
-    brandContext(),
-  ]);
+  const [
+    { organizationId, projectId },
+    { sql, viewer, verifiedEmail, brandHost, b, locale },
+  ] = await Promise.all([searchParams, brandContext()]);
+  const initialProjectId = Array.isArray(projectId) ? projectId[0] : projectId;
   if (!sql) return <p role="alert">{b.unavailable}</p>;
   const { selection, choice, projectOrganizations } = await brandScope({ sql, verifiedEmail }, viewer, organizationId);
   if (selection.state === "unavailable") return <BrandUnavailable b={b} />;
@@ -172,6 +176,7 @@ export default async function BrandStudio({
               ? scopedHref("/brand/identity", choice)
               : undefined
           }
+          initialProjectId={initialProjectId}
         />
       )}
       {production && contracts.length > 0 && (
