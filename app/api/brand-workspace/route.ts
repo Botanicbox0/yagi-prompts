@@ -42,6 +42,7 @@ import {
   promoteBrandBrief,
   reviseBrandBrief,
 } from "@/lib/brands/briefs/service";
+import { planBrandMicroRoiRepair } from "@/lib/brands/finish";
 import {
   notifySlackBrandConcierge,
   syncSlackConciergeReplies,
@@ -226,6 +227,18 @@ export async function POST(request: NextRequest) {
         break;
       case "brief.promoteFinal":
         result = await promoteBrandBrief({ sql }, viewer, input);
+        break;
+      case "microRoi.plan":
+        result = await planBrandMicroRoiRepair({ sql }, viewer, {
+          ...input,
+          enqueueWorkstationJob: false,
+        });
+        break;
+      case "microRoi.queue":
+        result = await planBrandMicroRoiRepair({ sql }, viewer, {
+          ...input,
+          enqueueWorkstationJob: true,
+        });
         break;
       case "attachment.reserve": {
         const reserved = await reserveBrandAttachment({ sql }, viewer, input);
