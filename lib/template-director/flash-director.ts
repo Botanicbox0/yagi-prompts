@@ -4,8 +4,11 @@ import {
   SKIN_MATTE_CONTRACT_A10
 } from '@/lib/brands/briefs/compiler';
 import {
+  DEFAULT_EDITORIAL_TEMPLATE_BASELINE,
+  DUAL_IDENTITY_CANDIDATE_ENGINES,
   GEMINI_DIRECTOR_DEFAULT_BASE_URL,
   GEMINI_DIRECTOR_DEFAULT_MODEL,
+  TEMPLATE_BASELINE_PRESETS,
   rawIdentitySimilaritySchema,
   rawOpticalIdentityMasterSchema,
   rawPhotoInspectionSchema,
@@ -28,7 +31,8 @@ import {
   type PhotoIssueCode,
   type PhotoPrecheckInput,
   type PhotoPrecheckResult,
-  type RecommendedPhotoCleanup
+  type RecommendedPhotoCleanup,
+  type TemplateBaselineSpec
 } from './schema';
 
 const SERVER_ONLY_PROMPT_VAULT = new WeakMap<OpaqueCompiledPrompt, string>();
@@ -185,27 +189,59 @@ function sanitizeCleanupPrompt(raw: string | null, includeRetouchNormalization: 
   return base;
 }
 
+export function resolveTemplateBaseline(templateIdOrArchetype?: string | null): TemplateBaselineSpec {
+  const key = (templateIdOrArchetype ?? '').trim().toLowerCase();
+  const direct = key ? TEMPLATE_BASELINE_PRESETS[key] : undefined;
+  if (direct) {
+    return direct;
+  }
+  if (key.includes('90s') || key.includes('interview') || key.includes('apgujeong') || key.includes('jilju')) {
+    return TEMPLATE_BASELINE_PRESETS['90s-apgujeong-interview'] ?? DEFAULT_EDITORIAL_TEMPLATE_BASELINE;
+  }
+  if (
+    key.includes('red-carpet') ||
+    key.includes('red_carpet') ||
+    key.includes('press') ||
+    key.includes('paparazzi') ||
+    key.includes('01a195e5')
+  ) {
+    return TEMPLATE_BASELINE_PRESETS['red-carpet-arrival'] ?? DEFAULT_EDITORIAL_TEMPLATE_BASELINE;
+  }
+  return DEFAULT_EDITORIAL_TEMPLATE_BASELINE;
+}
+
 export function routePhotoCleanup(
   issues: readonly PhotoIssueCode[],
-  cleanupPromptEn: string | null
+  cleanupPromptEn: string | null,
+  extractedHairDescription: string | null = null
 ): RecommendedPhotoCleanup {
   const hasOcclusion = issues.some((code) => OCCLUSION_ISSUES.has(code));
   const hasRetouch = issues.some((code) => RETOUCH_ISSUES.has(code));
 
-  if (hasOcclusion) {
-    return {
-      mode: 'inpaint_occlusion',
-      engine: 'nano-banana-2.1',
-      fallbackEngine: 'seedream-5.0-pro',
-      editPromptEn: sanitizeCleanupPrompt(cleanupPromptEn, hasRetouch)
+  if (hasOcclusion || hasRetouch) {
+    const mode = hasOcclusion ? 'inpaint_occlusion' : 'normalize_retouch';
+    const rawSurgicalPromptEn = sanitizeCleanupPrompt(
+      cleanupPromptEn ?? (hasRetouch ? ANATOMICAL_DE_FILTER_CONTRACT : null),
+      hasRetouch
+    );
+    const spec = {
+      extractedIdentityLockEn:
+        'exact eye shape, double-eyelid crease, inter-canthal distance, nose bridge and tip width, philtrum length, and natural lip contour from Reference Image 1',
+      extractedHairLockEn:
+        extractedHairDescription?.trim() || 'exact hairstyle, parting, and bangs from Reference Image 1',
+      rawSurgicalPromptEn
     };
-  }
-  if (hasRetouch) {
     return {
-      mode: 'normalize_retouch',
+      mode,
       engine: 'nano-banana-2.1',
       fallbackEngine: 'seedream-5.0-pro',
-      editPromptEn: sanitizeCleanupPrompt(cleanupPromptEn ?? ANATOMICAL_DE_FILTER_CONTRACT, true)
+      editPromptEn: rawSurgicalPromptEn,
+      requiresDualCandidateSelection: true,
+      candidateEngines: DUAL_IDENTITY_CANDIDATE_ENGINES,
+      candidatePromptsEn: {
+        'seedream-5.0-pro': compileModelSpecificIdentityPrompt('seedream-5.0-pro', spec),
+        'nano-banana-2.1': compileModelSpecificIdentityPrompt('nano-banana-2.1', spec)
+      }
     };
   }
   if (issues.some((code) => DETAIL_ISSUES.has(code))) {
@@ -213,14 +249,20 @@ export function routePhotoCleanup(
       mode: 'restore_detail',
       engine: 'seedvr2-local',
       fallbackEngine: null,
-      editPromptEn: null
+      editPromptEn: null,
+      requiresDualCandidateSelection: false,
+      candidateEngines: null,
+      candidatePromptsEn: null
     };
   }
   return {
     mode: 'none',
     engine: null,
     fallbackEngine: null,
-    editPromptEn: null
+    editPromptEn: null,
+    requiresDualCandidateSelection: false,
+    candidateEngines: null,
+    candidatePromptsEn: null
   };
 }
 
@@ -286,12 +328,13 @@ export function verifyRewrittenPrompt(
  */
 const STAGE2_VIDEO_CREATOR_DOCTRINE = [
   'You are the internal Stage 2 Seedance 2.5 Film Director Rewriter.',
-  'Apply the structuredIntent edits onto the basePrompt while strictly preserving:',
-  '1. Reference Authority & Strict Lock: @Image 1 supplies ONLY facial identity and the target hairstyle. Ignore original background, casual top, handheld objects, cups, bottles, angel wings, or props from @Image 1.',
+  'Apply the structuredIntent edits (outfitOverrideEn, makeupOverrideEn, hairOverrideEn, propOverrideEn, shotEdits, strictExclusionsEn) onto the basePrompt while strictly preserving:',
+  '1. Reference Authority & Strict Lock: @Image 1 supplies ONLY facial identity and the target hairstyle. Ignore original background, casual top, handheld objects, cups, bottles, angel wings, eyeglasses/sunglasses on head, or props from @Image 1.',
   '2. Additional Reference Binding: When @Image 2 (outfit/look) or @Image 3 (prop/product) is present in referenceSlots, bind it explicitly in Reference authority and across every Timeline shot, forbidding floating clothing cutouts or white studio backdrops.',
-  '3. Candid Micro-Acting & Lower-Face Lock: Keep lip motion calm and understated; forbid wide toothy grins, shouting, or stiff passport-photo staring straight into the camera lens. Every shot transition must remain an instantaneous editorial hard cut.',
-  `4. SKIN_MATTE_CONTRACT: Preserve "${SKIN_MATTE_CONTRACT_A10}".`,
-  '5. Preserve the original camera focal length, chiaroscuro shadow floor, and unbroken single-bed audio rules.'
+  '3. Makeup & Complexion Override: When makeupOverrideEn is present (e.g. keeping the user photo natural daily makeup instead of heavy 1990s retro smoky/plum makeup), replace the basePrompt makeup instructions accordingly while keeping skin warm and natural (zero pink blush/pink eyeshadow per TWINGS IDENTITY.md).',
+  '4. Candid Micro-Acting & Lower-Face Lock: Keep lip motion calm and understated; forbid wide toothy grins, shouting, or stiff passport-photo staring straight into the camera lens. Every shot transition must remain an instantaneous editorial hard cut.',
+  `5. SKIN_MATTE_CONTRACT: Preserve "${SKIN_MATTE_CONTRACT_A10}".`,
+  '6. Preserve the original camera focal length, chiaroscuro shadow floor, and unbroken single-bed audio rules.'
 ].join('\n');
 
 interface GeminiCandidateResponse {
@@ -398,7 +441,11 @@ export function createFlashTemplateDirector(
         extractedHairDescription: raw.extractedHairDescription,
         userMessageKo: raw.userMessageKo,
         userMessageEn: raw.userMessageEn,
-        recommendedCleanup: routePhotoCleanup(raw.issues, raw.cleanupPromptEn)
+        recommendedCleanup: routePhotoCleanup(
+          raw.issues,
+          raw.cleanupPromptEn,
+          raw.extractedHairDescription
+        )
       };
     },
 
@@ -572,6 +619,22 @@ export function createFlashTemplateDirector(
         extractedHairLockEn: raw.extractedHairLockEn,
         rawSurgicalPromptEn: raw.opticalMasterPromptEn
       });
+      const compiledSeedreamPrompt =
+        primaryEngine === 'seedream-5.0-pro'
+          ? compiledPrimaryPrompt
+          : compileModelSpecificIdentityPrompt('seedream-5.0-pro', {
+              extractedIdentityLockEn: raw.extractedIdentityLockEn,
+              extractedHairLockEn: raw.extractedHairLockEn,
+              rawSurgicalPromptEn: raw.opticalMasterPromptEn
+            });
+      const compiledNanoBananaPrompt =
+        primaryEngine === 'nano-banana-2.1'
+          ? compiledPrimaryPrompt
+          : compileModelSpecificIdentityPrompt('nano-banana-2.1', {
+              extractedIdentityLockEn: raw.extractedIdentityLockEn,
+              extractedHairLockEn: raw.extractedHairLockEn,
+              rawSurgicalPromptEn: raw.opticalMasterPromptEn
+            });
 
       return {
         strategy,
@@ -585,7 +648,11 @@ export function createFlashTemplateDirector(
         extractedIdentityLockEn: raw.extractedIdentityLockEn,
         extractedHairLockEn: raw.extractedHairLockEn,
         opticalMasterPromptEn: sealServerOnlyPrompt(compiledPrimaryPrompt),
-        fallbackMasterPromptEn: sealServerOnlyPrompt(compiledFallbackPrompt)
+        fallbackMasterPromptEn: sealServerOnlyPrompt(compiledFallbackPrompt),
+        dualCandidatePromptsEn: {
+          'seedream-5.0-pro': sealServerOnlyPrompt(compiledSeedreamPrompt),
+          'nano-banana-2.1': sealServerOnlyPrompt(compiledNanoBananaPrompt)
+        }
       };
     },
 

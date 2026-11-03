@@ -2,9 +2,12 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   compileModelSpecificIdentityPrompt,
   createFlashTemplateDirector,
+  DIRECTOR_EDITABLE_SLOTS,
   directorConfigFromEnv,
+  DUAL_IDENTITY_CANDIDATE_ENGINES,
   GEMINI_DIRECTOR_DEFAULT_MODEL,
   inspectPhotoPrecheck,
+  resolveTemplateBaseline,
   toClientDirectorTurnResponse,
   unwrapServerOnlyPrompt,
   verifyRewrittenPrompt,
@@ -113,12 +116,18 @@ describe('Step 0: Photo Inspection & Cleanup Model Routing (Gemini 3.8 Flash)', 
       mode: 'inpaint_occlusion',
       engine: 'nano-banana-2.1',
       fallbackEngine: 'seedream-5.0-pro',
+      requiresDualCandidateSelection: true,
+      candidateEngines: ['seedream-5.0-pro', 'nano-banana-2.1'],
+      candidatePromptsEn: {
+        'seedream-5.0-pro': expect.stringContaining('Reference Image 1 provides the young Korean female subject'),
+        'nano-banana-2.1': expect.stringContaining('SURGICAL IN-PLACE IDENTITY LOCK')
+      },
       editPromptEn: expect.stringContaining('Keep the person in Image 1 100% identical')
     });
     expect(verdict.userMessageKo).toContain('TWINGS가 자연스럽게 정리해서 진행할까요?');
   });
 
-  it('routes over-retouched beauty-app contour/lip photos (over_retouched_contour) to Nano Banana 2.1 anatomical de-filter normalization', async () => {
+  it('routes over-retouched beauty-app contour/lip photos (over_retouched_contour) to Dual-Candidate (Seedream 5.0 Pro + Nano Banana 2.1) anatomical de-filter normalization', async () => {
     const fetchMock = vi.fn(async (_url: RequestInfo | URL) =>
       geminiJsonResponse({
         status: 'needs_cleanup',
@@ -146,6 +155,12 @@ describe('Step 0: Photo Inspection & Cleanup Model Routing (Gemini 3.8 Flash)', 
       mode: 'normalize_retouch',
       engine: 'nano-banana-2.1',
       fallbackEngine: 'seedream-5.0-pro',
+      requiresDualCandidateSelection: true,
+      candidateEngines: DUAL_IDENTITY_CANDIDATE_ENGINES,
+      candidatePromptsEn: {
+        'seedream-5.0-pro': expect.stringContaining('very low specular-to-diffuse ratio'),
+        'nano-banana-2.1': expect.stringContaining('IDENTITY LOCK:')
+      },
       editPromptEn: expect.stringContaining('normalizing any 2D beauty-app liquify distortions')
     });
     expect(verdict.recommendedCleanup.editPromptEn).toContain('SURGICAL IN-PLACE IDENTITY LOCK');
@@ -266,6 +281,8 @@ describe('Step 0: Photo Inspection & Cleanup Model Routing (Gemini 3.8 Flash)', 
     // Must be sealed so accidental JSON serialization never leaks the optical master prompt
     expect(JSON.stringify(plan.opticalMasterPromptEn)).toBe('"[REDACTED_SERVER_ONLY_PROMPT]"');
     expect(JSON.stringify(plan.fallbackMasterPromptEn)).toBe('"[REDACTED_SERVER_ONLY_PROMPT]"');
+    expect(JSON.stringify(plan.dualCandidatePromptsEn['seedream-5.0-pro'])).toBe('"[REDACTED_SERVER_ONLY_PROMPT]"');
+    expect(JSON.stringify(plan.dualCandidatePromptsEn['nano-banana-2.1'])).toBe('"[REDACTED_SERVER_ONLY_PROMPT]"');
 
     const unwrappedSeedream = unwrapServerOnlyPrompt(plan.opticalMasterPromptEn);
     expect(unwrappedSeedream).not.toContain('bare shoulders');
@@ -277,6 +294,7 @@ describe('Step 0: Photo Inspection & Cleanup Model Routing (Gemini 3.8 Flash)', 
     expect(unwrappedNanoFallback).toContain('IDENTITY LOCK:');
     expect(unwrappedNanoFallback).toContain('COMPOSITION LOCK:');
     expect(unwrappedNanoFallback).toContain('SURGICAL IN-PLACE IDENTITY LOCK');
+    expect(unwrapServerOnlyPrompt(plan.dualCandidatePromptsEn['nano-banana-2.1'])).toBe(unwrappedNanoFallback);
 
     const gptBrief = compileModelSpecificIdentityPrompt('gpt-image-2.5-sunburst', {
       extractedIdentityLockEn: 'almond eyes with porcelain skin',
@@ -500,6 +518,31 @@ No background music, no sunglasses, no original casual outfit, handheld objects,
     expect(unwrapped).toContain('sleek chin-length dark-brown bob hairstyle with soft bangs');
     expect(unwrapped).toContain('Natural matte skin texture with visible pores');
     expect(verifyRewrittenPrompt(unwrapped).ok).toBe(true);
+  });
+});
+
+describe('Template Baseline Disclosure & Predictive Creator Revision Taxonomy', () => {
+  it('includes makeup alongside outfit, hair, prop, shot_action, and lighting_mood in DIRECTOR_EDITABLE_SLOTS', () => {
+    expect(DIRECTOR_EDITABLE_SLOTS).toContain('outfit');
+    expect(DIRECTOR_EDITABLE_SLOTS).toContain('makeup');
+    expect(DIRECTOR_EDITABLE_SLOTS).toContain('hair');
+    expect(DIRECTOR_EDITABLE_SLOTS).toContain('prop');
+    expect(DIRECTOR_EDITABLE_SLOTS).toContain('shot_action');
+  });
+
+  it('resolves template-specific baseline defaults and predictive revision presets from real campaign archetypes', () => {
+    const nineties = resolveTemplateBaseline('2026-11-01-90s-interview-batch');
+    expect(nineties.templateArchetypeId).toBe('90s-apgujeong-interview');
+    expect(nineties.baselineSlots.map((s) => s.slot)).toEqual(['outfit', 'makeup', 'hair', 'shot_action']);
+    expect(nineties.predictivePresets.some((p) => p.slot === 'makeup')).toBe(true);
+
+    const redCarpet = resolveTemplateBaseline('01a195e5-0613-7055-be3d-b5819473596f');
+    expect(redCarpet.templateArchetypeId).toBe('red-carpet-arrival');
+    expect(redCarpet.baselineSlots.find((s) => s.slot === 'outfit')?.defaultSettingKo).toContain('스웨이드 코르셋');
+
+    const fallback = resolveTemplateBaseline('unknown-future-template-id');
+    expect(fallback.templateArchetypeId).toBe('default-editorial');
+    expect(fallback.lockedElementsKo.length).toBeGreaterThanOrEqual(3);
   });
 });
 

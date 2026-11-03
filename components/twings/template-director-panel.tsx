@@ -1,10 +1,16 @@
 'use client';
 
 import { useEffect, useId, useRef, useState, useTransition } from 'react';
-import type {
-  DirectorEditableSlot,
-  DirectorSummaryChip,
-  PhotoInspectionVerdict
+import { resolveTemplateBaseline } from '@/lib/template-director/flash-director';
+import {
+  DEFAULT_EDITORIAL_TEMPLATE_BASELINE,
+  type DirectorEditableSlot,
+  type DirectorSummaryChip,
+  type DualIdentityCandidateEngine,
+  type IdentityCandidateChoiceId,
+  type IdentityCandidatePreview,
+  type PhotoInspectionVerdict,
+  type TemplateBaselineSpec
 } from '@/lib/template-director/schema';
 
 export interface DirectorReferenceSlotValue {
@@ -39,6 +45,16 @@ export interface TemplateDirectorCopy {
   cleanupSkippedBadge: string;
   cleanupChangeButton: string;
   retakeRecommendedBadge: string;
+  dualCandidateHeading: string;
+  dualCandidateSeedreamTitle: string;
+  dualCandidateSeedreamDesc: string;
+  dualCandidateNanoBananaTitle: string;
+  dualCandidateNanoBananaDesc: string;
+  dualCandidatePickButton: string;
+  dualCandidateSelectedBadge: string;
+  baselineLockedLabel: string;
+  baselineCustomizeButton: string;
+  predictivePresetsLabel: string;
   fileInvalidError: string;
   quickPresets: ReadonlyArray<{
     slot: DirectorEditableSlot;
@@ -48,9 +64,10 @@ export interface TemplateDirectorCopy {
 }
 
 export const DEFAULT_TEMPLATE_DIRECTOR_COPY_KO: TemplateDirectorCopy = {
-  toggleOpen: '+ 의상 · 소품 · 장면 조금 바꾸기',
+  toggleOpen: '+ 의상 · 메이크업 · 장면 조금 바꾸기',
   toggleClose: '장면 바꾸기 접기',
-  subtitle: '원본 템플릿의 카메라 구도와 색감은 그대로 두고, 내 옷·소품 사진이나 원하는 표정을 자연스럽게 반영합니다.',
+  subtitle:
+    '템플릿에 고정된 기본 스타일을 확인하고, 내 취향에 맞지 않는 의상·메이크업·헤어·표정을 사진이나 한 줄 요청으로 자연스럽게 바꿔보세요.',
   outfitSlotLabel: '입힐 의상 사진',
   outfitSlotHint: '@Image 2 · 룩 레퍼런스',
   propSlotLabel: '들려줄 소품 · 제품',
@@ -72,12 +89,28 @@ export const DEFAULT_TEMPLATE_DIRECTOR_COPY_KO: TemplateDirectorCopy = {
   cleanupSkippedBadge: '원본 사진 그대로 진행',
   cleanupChangeButton: '다시 선택',
   retakeRecommendedBadge: '정면 독사진 권장',
+  dualCandidateHeading:
+    '사진에 가림·보정이 있어 영상에서 얼굴이 달라 보일 수 있어요. 두 가지 엔진 버전 중 내 실물과 더 닮은 쪽을 골라주세요.',
+  dualCandidateSeedreamTitle: '후보 A · 부드러운 자연 인상 (Seedream 5.0 Pro)',
+  dualCandidateSeedreamDesc: '이목구비 조화와 맑고 자연스러운 피부 톤을 부드럽게 살립니다',
+  dualCandidateNanoBananaTitle: '후보 B · 선명한 윤곽 · 가림 정돈 (Nano Banana 2.1)',
+  dualCandidateNanoBananaDesc: '손·소품 제거와 또렷한 눈코입·턱선 정리에 강합니다',
+  dualCandidatePickButton: '이 버전이 더 닮았어요',
+  dualCandidateSelectedBadge: '선택됨',
+  baselineLockedLabel: '템플릿 고정 (변경 불가)',
+  baselineCustomizeButton: '이 항목 바꾸기',
+  predictivePresetsLabel: '가장 많이 요청하는 맞춤 변경 (원클릭 적용)',
   fileInvalidError: 'JPG, PNG, WEBP 사진(5MB 이하)만 첨부할 수 있습니다.',
   quickPresets: [
     {
       slot: 'outfit',
       label: '의상 바꾸기',
       samplePrompt: '첨부한 의상 사진 스타일로 자연스럽게 갈아입혀 줘'
+    },
+    {
+      slot: 'makeup',
+      label: '내 평소 메이크업 유지',
+      samplePrompt: '템플릿의 진한 화장 대신 내 사진 속 평소 데일리 메이크업과 맑은 피부 톤을 그대로 유지해 줘'
     },
     {
       slot: 'prop',
@@ -98,9 +131,10 @@ export const DEFAULT_TEMPLATE_DIRECTOR_COPY_KO: TemplateDirectorCopy = {
 };
 
 export const DEFAULT_TEMPLATE_DIRECTOR_COPY_EN: TemplateDirectorCopy = {
-  toggleOpen: '+ Customize outfit, prop, or scene',
+  toggleOpen: '+ Customize outfit, makeup, or scene',
   toggleClose: 'Hide customization',
-  subtitle: 'Keep the template camera work and colour world while swapping in your look, prop, or micro-acting.',
+  subtitle:
+    'Review the template defaults below and override any outfit, makeup, hair, or expression via reference photo or text.',
   outfitSlotLabel: 'Outfit reference',
   outfitSlotHint: '@Image 2 · Look authority',
   propSlotLabel: 'Prop or product',
@@ -122,12 +156,28 @@ export const DEFAULT_TEMPLATE_DIRECTOR_COPY_EN: TemplateDirectorCopy = {
   cleanupSkippedBadge: 'Using original photo as-is',
   cleanupChangeButton: 'Change choice',
   retakeRecommendedBadge: 'Front solo photo recommended',
+  dualCandidateHeading:
+    'To prevent facial drift from occlusion or retouching, compare both engine masters and pick the one that looks most like you.',
+  dualCandidateSeedreamTitle: 'Candidate A · Soft Natural Likeness (Seedream 5.0 Pro)',
+  dualCandidateSeedreamDesc: 'Preserves soft facial harmony and natural warm skin tone',
+  dualCandidateNanoBananaTitle: 'Candidate B · Crisp Contour & Cleanup (Nano Banana 2.1)',
+  dualCandidateNanoBananaDesc: 'Excels at removing hands/props and sharpening feature lines',
+  dualCandidatePickButton: 'Looks most like me',
+  dualCandidateSelectedBadge: 'Selected',
+  baselineLockedLabel: 'Locked by template',
+  baselineCustomizeButton: 'Customize',
+  predictivePresetsLabel: 'Most requested customizations (1-tap)',
   fileInvalidError: 'Please attach a JPG, PNG, or WEBP image under 5 MB.',
   quickPresets: [
     {
       slot: 'outfit',
       label: 'Swap outfit',
       samplePrompt: 'Dress me in the attached outfit reference while keeping the scene lighting'
+    },
+    {
+      slot: 'makeup',
+      label: 'Keep my daily makeup',
+      samplePrompt: 'Keep my natural daily makeup and clean complexion from my photo instead of heavy template makeup'
     },
     {
       slot: 'prop',
@@ -174,12 +224,20 @@ export function upsertSummaryChips(
 export interface TemplateDirectorPanelProps {
   locale?: string;
   copy?: TemplateDirectorCopy;
+  /** Optional template ID or archetype ('90s-apgujeong-interview', 'red-carpet-arrival', 'default-editorial') to auto-resolve baseline defaults. */
+  templateId?: string | null;
+  /** Explicit template baseline specification overriding `templateId` resolution. */
+  templateBaseline?: TemplateBaselineSpec;
   photoInspection?: PhotoInspectionVerdict | null;
+  /** Optional generated candidate previews for Seedream 5.0 Pro & Nano Banana 2.1 when dual-candidate selection is active. */
+  identityCandidates?: readonly IdentityCandidatePreview[];
+  initialSelectedCandidate?: IdentityCandidateChoiceId | null;
   initialExpanded?: boolean;
   initialChips?: DirectorSummaryChip[];
   initialAssistantMessage?: string | null;
   disabled?: boolean;
   onCleanupChoice?: (choice: 'accept' | 'skip' | 'pending') => void;
+  onSelectIdentityCandidate?: (choice: IdentityCandidateChoiceId) => void;
   onSubmitTurn?: (input: {
     userMessage: string;
     references: ReadonlyArray<{ slotName: 'outfit' | 'prop'; role: 'look' | 'product'; file: File }>;
@@ -197,12 +255,17 @@ const FOCUS_RING =
 export function TemplateDirectorPanel({
   locale = 'ko',
   copy = locale === 'en' ? DEFAULT_TEMPLATE_DIRECTOR_COPY_EN : DEFAULT_TEMPLATE_DIRECTOR_COPY_KO,
+  templateId = null,
+  templateBaseline,
   photoInspection = null,
+  identityCandidates = [],
+  initialSelectedCandidate = null,
   initialExpanded = false,
   initialChips = [],
   initialAssistantMessage = null,
   disabled = false,
   onCleanupChoice,
+  onSelectIdentityCandidate,
   onSubmitTurn,
   onChipsChange
 }: TemplateDirectorPanelProps) {
@@ -211,8 +274,15 @@ export function TemplateDirectorPanel({
   const inputId = `${baseId}-input`;
   const statusId = `${baseId}-status`;
 
+  const resolvedBaseline: TemplateBaselineSpec =
+    templateBaseline ??
+    (templateId ? resolveTemplateBaseline(templateId) : DEFAULT_EDITORIAL_TEMPLATE_BASELINE);
+
   const [expanded, setExpanded] = useState(initialExpanded || initialChips.length > 0);
   const [cleanupChoice, setCleanupChoice] = useState<'pending' | 'accepted' | 'skipped'>('pending');
+  const [selectedCandidate, setSelectedCandidate] = useState<IdentityCandidateChoiceId | null>(
+    initialSelectedCandidate
+  );
   const [userMessage, setUserMessage] = useState('');
   const [chips, setChips] = useState<DirectorSummaryChip[]>(initialChips);
   const [assistantMessage, setAssistantMessage] = useState<string | null>(initialAssistantMessage);
@@ -389,6 +459,11 @@ export function TemplateDirectorPanel({
         : photoInspection.userMessageKo;
 
   const cleanupMode = photoInspection?.recommendedCleanup.mode ?? 'none';
+  const showDualCandidates =
+    cleanupMode === 'inpaint_occlusion' ||
+    cleanupMode === 'normalize_retouch' ||
+    Boolean(photoInspection?.recommendedCleanup.requiresDualCandidateSelection);
+
   const cleanupAcceptLabel =
     cleanupMode === 'inpaint_occlusion'
       ? copy.cleanupAcceptOcclusion
@@ -396,18 +471,47 @@ export function TemplateDirectorPanel({
         ? copy.cleanupAcceptRetouch
         : copy.cleanupAcceptDetail;
 
+  const candidateCards: ReadonlyArray<{
+    engine: DualIdentityCandidateEngine;
+    title: string;
+    desc: string;
+    previewUrl: string | null;
+    similarityScore: number | null;
+  }> = [
+    {
+      engine: 'seedream-5.0-pro',
+      title: copy.dualCandidateSeedreamTitle,
+      desc: copy.dualCandidateSeedreamDesc,
+      previewUrl:
+        identityCandidates.find((c) => c.engine === 'seedream-5.0-pro')?.previewUrl ?? null,
+      similarityScore:
+        identityCandidates.find((c) => c.engine === 'seedream-5.0-pro')?.similarityScore ?? null
+    },
+    {
+      engine: 'nano-banana-2.1',
+      title: copy.dualCandidateNanoBananaTitle,
+      desc: copy.dualCandidateNanoBananaDesc,
+      previewUrl:
+        identityCandidates.find((c) => c.engine === 'nano-banana-2.1')?.previewUrl ?? null,
+      similarityScore:
+        identityCandidates.find((c) => c.engine === 'nano-banana-2.1')?.similarityScore ?? null
+    }
+  ];
+
   return (
     <div
       data-template-director-panel
       data-director-expanded={expanded ? 'true' : 'false'}
+      data-template-archetype={resolvedBaseline.templateArchetypeId}
       className="mt-4 flex flex-col gap-3 text-[#0E1013]"
     >
-      {/* Step 0: Uploaded Photo Inspection & Auto-Cleanup Advisory Banner (Sky Tint + Double-Ring Specular Border) */}
+      {/* Step 0: Uploaded Photo Inspection & Dual-Candidate Selection Banner (Sky Tint + Double-Ring Specular Border) */}
       {showInspectionCard && photoInspection && (
         <aside
           data-photo-inspection-banner={photoInspection.status}
           data-photo-cleanup-mode={photoInspection.recommendedCleanup.mode}
           data-photo-cleanup-choice={cleanupChoice}
+          data-photo-selected-candidate={selectedCandidate ?? 'none'}
           aria-label="사진 자동 검수 안내"
           className="rounded-[20px] border border-[#E4E6EA] bg-[#F3F7FA] p-4 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.9),0_2px_8px_rgba(14,16,19,0.03)]"
         >
@@ -430,6 +534,7 @@ export function TemplateDirectorPanel({
                 disabled={disabled}
                 onClick={() => {
                   setCleanupChoice('pending');
+                  setSelectedCandidate(null);
                   onCleanupChoice?.('pending');
                 }}
                 className={`inline-flex min-h-9 items-center rounded-full px-2.5 text-xs font-medium text-[#3063A7] underline underline-offset-4 hover:text-[#0E1013] ${FOCUS_RING}`}
@@ -441,6 +546,76 @@ export function TemplateDirectorPanel({
 
           <p className="mt-2.5 text-[0.9rem] leading-[1.58] text-[#0E1013]">{inspectionMessage}</p>
 
+          {/* Dual-Candidate Likeness Picker (Seedream 5.0 Pro vs Nano Banana 2.1) */}
+          {photoInspection.status === 'needs_cleanup' && showDualCandidates && (
+            <div data-photo-dual-candidates className="mt-3 rounded-[18px] border border-[#E4E6EA] bg-white p-3">
+              <p className="text-xs font-medium text-[#41444D]">{copy.dualCandidateHeading}</p>
+              <div className="mt-2.5 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                {candidateCards.map((card) => {
+                  const isSelected = selectedCandidate === card.engine;
+                  return (
+                    <button
+                      key={card.engine}
+                      type="button"
+                      data-identity-candidate={card.engine}
+                      data-candidate-selected={isSelected ? 'true' : 'false'}
+                      disabled={disabled}
+                      onClick={() => {
+                        setSelectedCandidate(card.engine);
+                        setCleanupChoice('accepted');
+                        onSelectIdentityCandidate?.(card.engine);
+                        onCleanupChoice?.('accept');
+                      }}
+                      className={[
+                        'flex flex-col justify-between gap-2 rounded-[16px] border p-3 text-left transition-colors',
+                        FOCUS_RING,
+                        isSelected
+                          ? 'border-[#3875C5] bg-[#E8EFF7]'
+                          : 'border-[#E4E6EA] bg-[#F6F7F9] hover:border-[#C7CCD3] hover:bg-white'
+                      ].join(' ')}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <p className="text-xs font-semibold text-[#0E1013]">{card.title}</p>
+                          <p className="mt-0.5 text-[0.75rem] leading-[1.45] text-[#41444D]">
+                            {card.desc}
+                          </p>
+                        </div>
+                        {card.similarityScore !== null && (
+                          <span className="shrink-0 rounded-full bg-white px-2 py-0.5 font-mono text-[0.65rem] font-semibold text-[#3063A7] tabular-nums">
+                            {Math.round(card.similarityScore * 100)}%
+                          </span>
+                        )}
+                      </div>
+
+                      {card.previewUrl && (
+                        <div className="aspect-[3/4] w-full overflow-hidden rounded-xl border border-[#E4E6EA] bg-white">
+                          {/* eslint-disable-next-line @next/next/no-img-element -- candidate preview */}
+                          <img
+                            src={card.previewUrl}
+                            alt={card.title}
+                            className="h-full w-full object-cover"
+                          />
+                        </div>
+                      )}
+
+                      <span
+                        className={[
+                          'inline-flex min-h-8 w-full items-center justify-center rounded-full px-3 py-1 text-[0.72rem] font-semibold',
+                          isSelected
+                            ? 'bg-[#3875C5] text-white'
+                            : 'border border-[#C7CCD3] bg-white text-[#3063A7]'
+                        ].join(' ')}
+                      >
+                        {isSelected ? copy.dualCandidateSelectedBadge : copy.dualCandidatePickButton}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {photoInspection.status === 'needs_cleanup' && cleanupChoice === 'pending' && (
             <div className="mt-3.5 flex flex-col gap-2 sm:flex-row">
               <button
@@ -448,7 +623,12 @@ export function TemplateDirectorPanel({
                 data-photo-cleanup-accept
                 disabled={disabled}
                 onClick={() => {
+                  const chosen = selectedCandidate ?? 'seedream-5.0-pro';
+                  setSelectedCandidate(chosen);
                   setCleanupChoice('accepted');
+                  if (showDualCandidates) {
+                    onSelectIdentityCandidate?.(chosen);
+                  }
                   onCleanupChoice?.('accept');
                 }}
                 className={`inline-flex min-h-11 flex-1 items-center justify-center rounded-full bg-[#3875C5] px-4 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-40 ${FOCUS_RING}`}
@@ -460,7 +640,9 @@ export function TemplateDirectorPanel({
                 data-photo-cleanup-skip
                 disabled={disabled}
                 onClick={() => {
+                  setSelectedCandidate('original');
                   setCleanupChoice('skipped');
+                  onSelectIdentityCandidate?.('original');
                   onCleanupChoice?.('skip');
                 }}
                 className={`inline-flex min-h-11 items-center justify-center rounded-full border border-[#C7CCD3] bg-white px-4 py-2 text-xs font-medium text-[#41444D] transition-colors hover:border-[#0E1013] hover:text-[#0E1013] disabled:opacity-40 ${FOCUS_RING}`}
@@ -554,8 +736,136 @@ export function TemplateDirectorPanel({
       >
         <p className="text-xs leading-[1.6] text-[#676B75]">{copy.subtitle}</p>
 
-        {/* Quick 1-Tap Preset Pills */}
-        <div data-director-presets className="mt-3 flex flex-wrap gap-1.5">
+        {/* Template Baseline Disclosure Card: Shows what is fixed vs what defaults are baked into this template */}
+        <section
+          data-template-baseline-card={resolvedBaseline.templateArchetypeId}
+          aria-label={locale === 'en' ? resolvedBaseline.titleEn : resolvedBaseline.titleKo}
+          className="mt-3 rounded-[18px] border border-[#E4E6EA] bg-[#F6F7F9] p-3.5"
+        >
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h3
+              data-template-baseline-title
+              className="text-xs font-semibold tracking-tight text-[#0E1013]"
+            >
+              {locale === 'en' ? resolvedBaseline.titleEn : resolvedBaseline.titleKo}
+            </h3>
+            <span className="rounded-full bg-[#E8EFF7] px-2.5 py-0.5 font-mono text-[0.65rem] font-medium text-[#3063A7]">
+              BASELINE SPEC
+            </span>
+          </div>
+
+          <div className="mt-2.5 grid grid-cols-1 gap-2 sm:grid-cols-2">
+            {resolvedBaseline.baselineSlots.map((slotSpec) => {
+              const slotLabel = locale === 'en' ? slotSpec.labelEn : slotSpec.labelKo;
+              const defaultSetting =
+                locale === 'en' ? slotSpec.defaultSettingEn : slotSpec.defaultSettingKo;
+              const hint =
+                locale === 'en' ? slotSpec.customizableHintEn : slotSpec.customizableHintKo;
+              const matchingPreset = resolvedBaseline.predictivePresets.find(
+                (p) => p.slot === slotSpec.slot
+              );
+
+              return (
+                <div
+                  key={slotSpec.slot}
+                  data-baseline-slot={slotSpec.slot}
+                  className="flex flex-col justify-between gap-1.5 rounded-[14px] border border-[#E4E6EA] bg-white p-2.5"
+                >
+                  <div>
+                    <div className="flex items-center justify-between gap-1.5">
+                      <span className="font-mono text-[0.68rem] font-semibold text-[#3063A7] uppercase">
+                        {slotLabel}
+                      </span>
+                      <button
+                        type="button"
+                        data-baseline-customize={slotSpec.slot}
+                        disabled={disabled || submitting}
+                        onClick={() => {
+                          if (slotSpec.acceptsReferenceImage === 'outfit') {
+                            outfitInputRef.current?.click();
+                          } else if (slotSpec.acceptsReferenceImage === 'prop') {
+                            propInputRef.current?.click();
+                          }
+                          if (matchingPreset) {
+                            setUserMessage(
+                              locale === 'en'
+                                ? matchingPreset.samplePromptEn
+                                : matchingPreset.samplePromptKo
+                            );
+                          }
+                          textInputRef.current?.focus();
+                        }}
+                        className={`rounded-full border border-[#E4E6EA] bg-[#F3F7FA] px-2.5 py-0.5 text-[0.68rem] font-medium text-[#3063A7] hover:border-[#3875C5] hover:bg-[#E8EFF7] ${FOCUS_RING}`}
+                      >
+                        {copy.baselineCustomizeButton}
+                      </button>
+                    </div>
+                    <p className="mt-1 text-xs font-medium text-[#0E1013]">{defaultSetting}</p>
+                    <p className="mt-0.5 text-[0.72rem] leading-[1.45] text-[#676B75]">{hint}</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div
+            data-template-locked-elements
+            className="mt-2.5 flex flex-wrap items-center gap-1.5 border-t border-[#E4E6EA] pt-2.5"
+          >
+            <span className="font-mono text-[0.66rem] font-semibold text-[#676B75] uppercase">
+              {copy.baselineLockedLabel}:
+            </span>
+            {(locale === 'en'
+              ? resolvedBaseline.lockedElementsEn
+              : resolvedBaseline.lockedElementsKo
+            ).map((lockedItem) => (
+              <span
+                key={lockedItem}
+                className="inline-flex items-center rounded-full border border-[#E4E6EA] bg-white px-2.5 py-0.5 text-[0.7rem] text-[#676B75]"
+              >
+                {lockedItem}
+              </span>
+            ))}
+          </div>
+        </section>
+
+        {/* Predictive 1-Tap Revision Presets (Grounded in Real Campaign Revision Data) */}
+        <div data-director-predictive-presets className="mt-3.5">
+          <p className="text-[0.72rem] font-semibold text-[#41444D]">
+            {copy.predictivePresetsLabel}
+          </p>
+          <div className="mt-1.5 flex flex-wrap gap-1.5">
+            {resolvedBaseline.predictivePresets.map((preset) => (
+              <button
+                key={preset.id}
+                type="button"
+                data-predictive-preset={preset.id}
+                data-predictive-slot={preset.slot}
+                disabled={disabled || submitting}
+                onClick={() => {
+                  setUserMessage(
+                    locale === 'en' ? preset.samplePromptEn : preset.samplePromptKo
+                  );
+                  if (preset.opensReferenceSlot === 'outfit') {
+                    outfitInputRef.current?.click();
+                  } else if (preset.opensReferenceSlot === 'prop') {
+                    propInputRef.current?.click();
+                  }
+                  textInputRef.current?.focus();
+                }}
+                className={`inline-flex min-h-9 items-center gap-1.5 rounded-full border border-[#E4E6EA] bg-[#F3F7F9] px-3 py-1 text-xs text-[#0E1013] transition-colors hover:border-[#3875C5] hover:bg-[#E8EFF7] hover:text-[#3063A7] disabled:opacity-40 ${FOCUS_RING}`}
+              >
+                <span className="rounded-full bg-[#E8EFF7] px-1.5 py-0.5 font-mono text-[0.62rem] font-semibold text-[#3063A7]">
+                  {locale === 'en' ? preset.reasonBadgeEn : preset.reasonBadgeKo}
+                </span>
+                <span>{locale === 'en' ? preset.labelEn : preset.labelKo}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Quick 1-Tap Category Pills */}
+        <div data-director-presets className="mt-2.5 flex flex-wrap gap-1.5">
           {copy.quickPresets.map((preset) => (
             <button
               key={preset.slot}
