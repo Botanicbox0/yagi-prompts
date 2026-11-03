@@ -44,6 +44,11 @@ import {
   OutcomeBanner,
   Panel,
 } from "@/components/admin/chrome";
+import {
+  AdminPageHeader,
+  SectionJumpBar,
+  StatusPill,
+} from "@/components/admin/patterns";
 import { CampaignFields } from "@/components/admin/campaign-fields";
 import { campaignLabels } from "@/components/campaigns/labels";
 
@@ -389,35 +394,62 @@ export default async function AdminCampaignPage({
 
   return (
     <AdminShell dict={a} locale={locale} active="campaigns">
-      <a
-        href={ADMIN_CAMPAIGNS_PATH}
-        className="font-label text-eyebrow uppercase opacity-60"
-      >
-        ← {a.backToCampaigns}
-      </a>
-      <div className="mt-3 flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="break-words text-3xl font-semibold leading-tight">
-            {localize(row.title, locale)}
-          </h1>
-          <p className="mt-2 font-mono text-[0.78rem] opacity-60">
-            {row.slug} · {row.hostName} ·{" "}
+      <AdminPageHeader
+        back={{ href: ADMIN_CAMPAIGNS_PATH, label: a.backToCampaigns }}
+        title={localize(row.title, locale)}
+        status={
+          <StatusPill
+            tone={
+              row.status === "running" || row.status === "selecting"
+                ? "action"
+                : row.status === "draft"
+                  ? "progress"
+                  : "done"
+            }
+          >
             <span data-campaign-status={row.status}>
               {a.campaignStatuses[row.status]}
-            </span>{" "}
-            ·{" "}
-            {interpolate(c.slotsLine, {
-              left: String(slotsLeft),
-              slots: String(row.slots),
-            })}
-          </p>
-        </div>
-        {row.status !== "draft" && row.status !== "archived" && (
-          <PublicLink href={campaignHref(locale, row.slug)} className={BUTTON}>
-            {a.open}
-          </PublicLink>
-        )}
-      </div>
+            </span>
+          </StatusPill>
+        }
+        lede={`${row.slug} · ${row.hostName} · ${interpolate(c.slotsLine, {
+          left: String(slotsLeft),
+          slots: String(row.slots),
+        })}`}
+        actions={
+          row.status !== "draft" && row.status !== "archived" ? (
+            <PublicLink href={campaignHref(locale, row.slug)} className={BUTTON}>
+              {a.open}
+            </PublicLink>
+          ) : undefined
+        }
+      />
+
+      <SectionJumpBar
+        label={dict.adminConsole.location}
+        items={[
+          { id: "campaign-production", label: c.production.title },
+          {
+            id: "campaign-applicants",
+            label: a.queueApplicants,
+            count: applicants.length,
+            tone: applicants.length > 0 ? "action" : "done",
+          },
+          {
+            id: "campaign-posts",
+            label: a.queuePosts,
+            count: posts.length,
+            tone: posts.length > 0 ? "action" : "done",
+          },
+          {
+            id: "campaign-payments",
+            label: a.queueHold,
+            count: holds.length,
+            tone: holds.length > 0 ? "action" : "done",
+          },
+          { id: "campaign-editor", label: a.editorHeading },
+        ]}
+      />
 
       <OutcomeBanner
         dict={a}

@@ -11,6 +11,8 @@ import { listRenderFeedback, type RenderFeedbackRow } from '@/lib/renders/feedba
 import { inboxFilters, inboxHref, matchesInboxItem, type InboxFilters } from '@/lib/admin/inbox-filters';
 import { ADMIN_INQUIRIES_PATH } from '@/lib/campaigns/links';
 import { AdminShell, BUTTON, BUTTON_PRIMARY, OpForm, OutcomeBanner, Panel } from '@/components/admin/chrome';
+import { AdminPageHeader } from '@/components/admin/patterns';
+import { formatCount } from '@/lib/admin/format';
 
 /**
  * `/admin/inquiries` — the brand inbox (founder, 2026-09-11: "의뢰나 캠페인이 구분이 안 되어서").
@@ -125,10 +127,14 @@ export default async function AdminInquiriesPage({ searchParams }: { searchParam
               {f.email}
             </a>
           ) : (
-            <span title={f.userId}>{interpolate(a.feedbackUser, { id: shortId(f.userId) })}</span>
+            <a href={`/admin/users?q=${shortId(f.userId)}`} className="text-accent underline" title={f.userId}>
+              {interpolate(a.feedbackUser, { id: shortId(f.userId) })}
+            </a>
           )}
           {' · '}
-          <span title={f.renderId}>{a.feedbackRender} {shortId(f.renderId)}</span>
+          <a href={`/admin/renders/${f.renderId}`} className="text-accent underline" title={f.renderId}>
+            {a.feedbackRender} {shortId(f.renderId)}
+          </a>
           {' · '}
           {formatDate(f.updatedAt, locale)}
         </p>
@@ -157,9 +163,13 @@ export default async function AdminInquiriesPage({ searchParams }: { searchParam
 
   return (
     <AdminShell dict={a} locale={locale} active="inquiries">
-      <p className="text-accent font-label text-eyebrow uppercase">{a.navInquiries}</p>
-      <h1 className="mt-3 font-display text-[clamp(2rem,4vw,3rem)] leading-[0.95] font-black uppercase">{a.inquiriesHeading}</h1>
-      <p className="mt-3 max-w-detail text-body opacity-60">{a.inquiriesLede}</p>
+      <AdminPageHeader
+        eyebrow={a.navInquiries}
+        title={a.inquiriesHeading}
+        count={formatCount(shown, locale)}
+        countLabel={interpolate(t.resultCount, { count: shown })}
+        lede={a.inquiriesLede}
+      />
 
       <section className="admin-inbox-filters" aria-label={a.navInquiries} data-inbox-filters>
         <nav className="admin-filter-links" aria-label={t.kindLabel}>

@@ -290,3 +290,75 @@ export function QueueCard({
     </section>
   );
 }
+
+// ---------------------------------------------------------------------------
+// operate v2: sticky section jump bar & tabular metric strip
+// ---------------------------------------------------------------------------
+
+export interface SectionJumpItem {
+  id: string;
+  label: string;
+  count?: string | number;
+  tone?: AdminTone;
+}
+
+/** Sticky in-page section jump bar for multi-section detail & workspace screens. */
+export function SectionJumpBar({
+  label,
+  items,
+}: {
+  label: string;
+  items: SectionJumpItem[];
+}) {
+  if (items.length === 0) return null;
+  return (
+    <nav className="admin-jump-bar" aria-label={label} data-admin-jump-bar>
+      <ul>
+        {items.map((item) => (
+          <li key={item.id}>
+            <a href={`#${item.id}`} data-jump-target={item.id}>
+              <span>{item.label}</span>
+              {item.count !== undefined ? (
+                <span className="admin-jump-count" data-tone={item.tone}>
+                  {item.count}
+                </span>
+              ) : null}
+            </a>
+          </li>
+        ))}
+      </ul>
+    </nav>
+  );
+}
+
+export interface MetricStripItem {
+  key: string;
+  label: string;
+  value: ReactNode;
+  sub?: ReactNode;
+  tone?: AdminTone;
+}
+
+/** Compact scannable KPI / specification strip with tabular numerals. */
+export function MetricStrip({
+  label,
+  items,
+}: {
+  label: string;
+  items: MetricStripItem[];
+}) {
+  if (items.length === 0) return null;
+  return (
+    <section className="admin-metric-strip" aria-label={label} data-admin-metric-strip>
+      <dl>
+        {items.map((item) => (
+          <div key={item.key} data-metric={item.key} data-tone={item.tone}>
+            <dt>{item.label}</dt>
+            <dd>{item.value}</dd>
+            {item.sub ? <p className="admin-metric-sub">{item.sub}</p> : null}
+          </div>
+        ))}
+      </dl>
+    </section>
+  );
+}

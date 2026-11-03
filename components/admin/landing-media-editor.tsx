@@ -151,7 +151,7 @@ function Tile({ slot, copy, disabled, onChange }: { slot: EditorSlot; copy: Copy
           {replaced ? copy.replaced : copy.original}
         </span>
       </button>
-      <input ref={input} type="file" accept={ACCEPT} className="sr-only" tabIndex={-1} aria-hidden="true" onChange={(event) => void replace(event.target.files?.[0])} />
+      <input ref={input} type="file" accept={ACCEPT} aria-label={`${copy.replace}: ${slot.name}`} className="sr-only" tabIndex={-1} aria-hidden="true" onChange={(event) => void replace(event.target.files?.[0])} />
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="truncate font-mono text-[0.7rem]">{slot.name}</p>
@@ -203,10 +203,10 @@ export function LandingMediaEditor({ pages, copy, disabled }: { pages: EditorPag
           {candidate.groups.map((group) => {
             const count = group.slots.filter((slot) => replaced.has(slot.key)).length;
             return (
-              <section key={group.id} data-landing-media-group={group.id} className="mt-8 border border-hairline">
-                <header className="flex flex-wrap items-center justify-between gap-3 border-b border-hairline px-4 py-2.5">
+              <section key={group.id} data-landing-media-group={group.id} className="admin-panel mt-6 p-0 overflow-hidden">
+                <header className="flex flex-wrap items-center justify-between gap-3 border-b border-hairline px-4 py-3">
                   <h2 className="font-label text-eyebrow uppercase">{group.title}</h2>
-                  <span className="font-mono text-code opacity-60">{count}/{group.slots.length} {copy.replacedCount}</span>
+                  <span className="font-mono text-code opacity-60 tabular-nums">{count}/{group.slots.length} {copy.replacedCount}</span>
                 </header>
                 <ul className="grid grid-cols-2 gap-4 p-4 sm:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8">
                   {group.slots.map((slot) => <Tile key={slot.key} slot={slot} copy={copy} disabled={disabled} onChange={onChange} />)}

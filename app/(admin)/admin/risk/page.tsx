@@ -5,6 +5,7 @@ import { getSqlRunner } from '@/lib/db/connect';
 import { getLocaleFromHeaders } from '@/lib/i18n/server';
 import { getDictionary } from '@/lib/i18n/dictionaries';
 import { AdminShell, Panel, OpForm, INPUT, BUTTON } from '@/components/admin/chrome';
+import { AdminPageHeader } from '@/components/admin/patterns';
 import { loadRiskInbox } from '@/lib/campaigns/risk/admin';
 import { campaignRiskMessages } from '@/messages/campaign-risk';
 import { RiskSlackConnectionForm } from './connection-test-form';
@@ -46,8 +47,7 @@ export default async function RiskPage({
   return (
     <AdminShell dict={getDictionary(locale).admin} locale={locale} active="risk">
       <div data-risk-inbox>
-        <h1 className="font-display text-3xl">{t.title}</h1>
-        <p className="my-4">{t.lede}</p>
+        <AdminPageHeader title={t.title} lede={t.lede} />
         {connectionResult && (
           <p role="status" className="my-4 border border-hairline p-3">
             {connectionResult}

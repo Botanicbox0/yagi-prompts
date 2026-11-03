@@ -79,6 +79,57 @@ export default async function AdminHomePage() {
         }
       />
 
+      <section
+        className="admin-quick-search"
+        data-admin-quick-search
+        aria-label={c.home.quickSearchHeading}
+      >
+        <form method="get" action="/admin/renders" role="search">
+          <input
+            type="search"
+            name="q"
+            placeholder={c.home.quickSearchRenders}
+            aria-label={c.home.quickSearchRenders}
+          />
+          <button type="submit" className="admin-btn">
+            {c.nav.renders}
+          </button>
+        </form>
+        <form method="get" action="/admin/users" role="search">
+          <input
+            type="search"
+            name="q"
+            placeholder={c.home.quickSearchUsers}
+            aria-label={c.home.quickSearchUsers}
+          />
+          <button type="submit" className="admin-btn">
+            {c.nav.users}
+          </button>
+        </form>
+        <form method="get" action={ADMIN_PROMPTS_PATH} role="search">
+          <input
+            type="search"
+            name="q"
+            placeholder={c.home.quickSearchPrompts}
+            aria-label={c.home.quickSearchPrompts}
+          />
+          <button type="submit" className="admin-btn">
+            {c.nav.prompts}
+          </button>
+        </form>
+        <form method="get" action="/admin/inquiries" role="search">
+          <input
+            type="search"
+            name="q"
+            placeholder={c.home.quickSearchInquiries}
+            aria-label={c.home.quickSearchInquiries}
+          />
+          <button type="submit" className="admin-btn">
+            {c.nav.inquiries}
+          </button>
+        </form>
+      </section>
+
       <section className="admin-section" data-admin-next-actions aria-labelledby="admin-next-heading">
         <h2 id="admin-next-heading">{c.home.nextHeading}</h2>
         {sql === null ? (

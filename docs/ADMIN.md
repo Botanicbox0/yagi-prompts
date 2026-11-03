@@ -74,6 +74,8 @@
 | 상세 | `AdminDetail`: 머리(제목·상태 pill) → 행동 바(그 상태에서 할 수 있는 일만) → 사실 표 → 타임라인 | 렌더 상세, 이후 캠페인·2차 활용 |
 | 대기열 카드 | `QueueCard`: 그룹 제목·합계 → 대기열 줄(이름·개수·열기) | 홈, 이후 각 그룹 화면 머리 |
 | 확인 | `ConfirmCheck`: 폼 안의 필수 체크박스. 되돌릴 수 없거나 밖으로 나가는 동작에만 | 지급, 공지 메일, 공개 등 기존 |
+| 섹션 이동 | `SectionJumpBar` (`data-admin-jump-bar`): 긴 관리 화면 상단 고정 앵커 탭 + 개수 칩 | 브랜드 조직 상세, 브랜드 캠페인 상세, 캠페인 운영 상세 |
+| 요약 지표 | `MetricStrip` (`data-admin-metric-strip`): 화면 상단 핵심 숫자 3~6칸(`tabular-nums`) | 렌더 보드, 브랜드 조직 상세 등 |
 
 - 관리자는 자바스크립트 없이 동작한다(`components/admin/chrome.tsx` 머리말). 필터·정렬·페이지는 링크와 GET 폼이고, 확인 대화상자는 체크박스다.
 - 목록의 숫자·금액·날짜·ID 열은 `tabular-nums`. ID는 앞 8자만 보이고 전체 값은 `title`에 둔다.
@@ -151,8 +153,22 @@
 | (a) | 셸·메뉴·홈 대기열, 공통 토큰(빨강 제거), 패턴 컴포넌트, 이 문서와 감사 | PR |
 | (b) | 렌더 보드 + 상세, 결제 확인, 홈에 결제·렌더 대기열, 목록·상세 패턴(`FilterPills`·`AdminTable`·`Pager`·`FactList`·`Timeline`) | PR((a) 위에 쌓음) |
 | (c) | 사용자 보기(`/admin/users`, PII 최소 기본안) | PR |
-| (d) | 기존 화면을 패턴으로: 브랜드 작업공간 → 캠페인 → 템플릿 순. AI 크리에이티브 화면 분리(SNS 확인·지원서·포맷·보상), 화면 안 SQL을 `lib/`로 | PR |
+| (d) | 기존 화면을 패턴으로: 브랜드 작업공간 → 캠페인 → 템플릿 순. AI 크리에이티브 화면 분리(SNS 확인·지원서·포맷·보상), 화면 안 SQL을 `lib/`로 | 완료(Operate v2, 5-Pass 고도화 반영) |
 | (e) | 잔재 정리: 플레이북 오퍼레이션 파일 분리, `platform.manage` 분해, 참조 없는 오퍼레이션 삭제, 옛 화면(§10-1 결정대로) | PR |
+
+### 9.2 Operate v2 (5-Pass 경험·설계 고도화, 2026-11-04)
+- **Pass 1 (Design System & Chrome 통합):** 전 화면(21개 라우트) 머리말을 `AdminPageHeader`로 통일하고 옛 브루탈리스트 대형 검은 제목·대문자 추적 라벨을 제거. `Panel`, `Field`, `LocalePair`, `OutcomeBanner`를 Operate v2 표면(`#FFFFFF` + `#E4E6EA` + 블루 `#3875C5`/`#3063A7`, 빨강 0건)으로 교체.
+- **Pass 2 (Brand Engine S1–S5 컨트롤 센터 정렬):**
+  - `/admin/brand-workspace`: **브랜드 조직 매트릭스(`data-brand-org-matrix`)** 신설 — 조직별 B2B 플랜(Starter/Growth/Studio), 차단된 기능 정책, Brand DNA 상태·리비전, 캠페인 수를 한 표에서 확인하고 바로 열기.
+  - `/admin/brand-workspace/organizations/[id]`: **Brand Engine & Identity DNA 인스펙터(`data-brand-identity-inspector`)** 신설 — 색상 월드 스와치(`data-dna-colour-world`), 브랜드 불변 규칙(`data-dna-hardlines`), 모델 라우팅 역할(`data-dna-model-roles`), S3~S5 파이프라인 준비도(Micro-ROI 6모드·Saved Looks·메모리 이벤트, `data-dna-pipeline-readiness`)를 한눈에 점검. 상단에 `SectionJumpBar` + `MetricStrip` 배치.
+  - `/admin/brand-workspace/[id]`: **2-Tier 캠페인 디렉션 캐스케이드 인스펙터(`data-project-direction-summary`)** 신설 — 브랜드 기본 DNA와 캠페인 오버라이드(`resolveEffectiveBrandDirection`)의 병합 결과를 상단에서 즉시 확인하고 6개 섹션 앵커(`#sharing-status` ~ `#metrics-report`)로 바로 이동.
+- **Pass 3 (Personal Template Director & Unit Economics 정렬):**
+  - `/admin/prompts`: 상태 탭 옆에 **매체 필터(`data-medium-filter`: 전체·영상·이미지)**와 **공급원 필터(`data-source-filter`: 전체·TWINGS 오리지널·AI 크리에이티브·추천)** pill 추가. 카드에 엔진·매체·원화 가격 배지 및 포스터 링크 `aria-label` 부여.
+  - `/admin/prompts/[id]`: **템플릿 규격·단가·Zero-Leak 디렉터 요약 카드(`data-template-spec-summary`)** 신설 — 매체·엔진·지속시간·해상도와 함께 720p/1080p 판매가 대비 제공사 원가(`baseKrw`)·순이익(`makeEarning`), 그리고 Gemini 3.8 Flash Zero-Leak 프롬프트 금고 보호 상태를 상단에 표시.
+- **Pass 4 (전 화면 1-Click 교차 탐색 & 접근성 완결):**
+  - `/admin` 홈 상단에 **빠른 조회 바(`data-admin-quick-search`)**를 두어 렌더 보드·사용자·템플릿·문의함을 즉시 검색.
+  - 렌더 상세(`/admin/renders/[id]`)·결제 확인(`/admin/payments`)·문의함(`/admin/inquiries`)·사용자(`/admin/users`) 사이를 UUID 복사 없이 1-Click으로 오가는 교차 링크 연결.
+  - 감사(§3.4)에서 지적된 `/admin/prompts` 포스터 링크, `/admin/landing-media` 파일 입력, `/admin/policy` 셀렉트 컨트롤의 접근성 라벨(`aria-label`) 전수 보강.
 
 ### 9.1 메인 세션과의 경계
 - 브랜드 조직 화면(`/admin/brand-workspace/organizations/[id]`)에는 메인 세션이 **"기능 정책"·"플랜" 섹션 두 개**를 더한다(`lib/brands/entitlements.ts`, `lib/brands/plans.ts`, 오퍼레이션은 `lib/admin/brand-engine-operations.ts`). 관리자 쪽은 이 화면을 (d)에서 패턴으로 옮길 때 섹션 단위로만 손대서 두 섹션이 그대로 들어오게 한다.

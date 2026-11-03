@@ -1,6 +1,6 @@
 import { ProductionAdmin } from '@/components/brand-workspace/production-admin';
-import {loadProductionWorkspace} from '@/lib/brands/production/service';
-import {loadStudioWorkspace} from '@/lib/brands/workspace/service';
+import { loadProductionWorkspace } from '@/lib/brands/production/service';
+import { loadStudioWorkspace } from '@/lib/brands/workspace/service';
 import "@/app/(brand)/workspace.css";
 import { notFound } from "next/navigation";
 import { requireAdmin } from "@/lib/auth/viewer";
@@ -12,15 +12,35 @@ import {
   loadBrandSupport,
 } from "@/lib/brands/workspace/service";
 import { AdminShell } from "@/components/admin/chrome";
+import {
+  AdminPageHeader,
+  MetricStrip,
+  SectionJumpBar,
+  StatusPill,
+} from "@/components/admin/patterns";
 import { ManagedForm } from "@/components/brand-workspace/managed-form";
 import { formatBrandTimestamp } from "@/components/brand-workspace/format";
 import { BrandAvatar } from "@/components/brand-workspace/brand-avatar";
 import { interpolate } from "@/lib/i18n/format";
 import { BRAND_FEATURES } from "@/lib/brands/features";
 import { loadFeaturePolicy } from "@/lib/brands/entitlements";
-import { loadBrandIdentity } from "@/lib/brands/identity/service";
-import { BRAND_BILLING_MODES, BRAND_PLAN_IDS, BRAND_PLANS, loadPlanAssignment } from "@/lib/brands/plans";
+import {
+  listLooks,
+  listMemory,
+  loadBrandIdentity,
+  twingsDefaultIdentity,
+} from "@/lib/brands/identity/service";
+import {
+  BRAND_BILLING_MODES,
+  BRAND_PLAN_IDS,
+  BRAND_PLANS,
+  loadPlanAssignment,
+} from "@/lib/brands/plans";
+import { MICRO_ROI_MODES } from "@/lib/brands/finish/micro-roi";
+import { BRAND_LOOK_PRESET_IDS } from "@/lib/brands/finish/color-grading";
+
 export const dynamic = "force-dynamic";
+
 export default async function StudioOrganization({
   params,
 }: {
@@ -34,31 +54,234 @@ export default async function StudioOrganization({
   ]);
   const dict = getDictionary(locale),
     b = dict.brandWorkspace,
-    c = b.managed;
+    c = b.managed,
+    be = dict.adminConsole.brandEngine;
   if (!sql) return <p role="alert">{b.unavailable}</p>;
   const org = await loadStudioBrandAccess({ sql }, viewer, id);
   if (!org) notFound();
   const messages = (await loadBrandSupport({ sql }, viewer, id, true)) ?? [];
-  const previews=(await sql.query<{id:string;project_id:string;name:string}>("select id,project_id,name from brand_attachments where organization_id=$1 and status='ready' and access_scope='workspace' and (mime like 'image/%' or mime like 'video/%')",[id])).rows;
-  const production=await loadProductionWorkspace({sql},viewer,id,true);
-  const projects=(await loadStudioWorkspace({sql},viewer)).projects.filter(p=>p.organizationId===id);
+  const previews = (
+    await sql.query<{ id: string; project_id: string; name: string }>(
+      "select id,project_id,name from brand_attachments where organization_id=$1 and status='ready' and access_scope='workspace' and (mime like 'image/%' or mime like 'video/%')",
+      [id]
+    )
+  ).rows;
+  const production = await loadProductionWorkspace({ sql }, viewer, id, true);
+  const projects = (await loadStudioWorkspace({ sql }, viewer)).projects.filter(
+    (p) => p.organizationId === id
+  );
   // docs/BRAND-PRODUCT.md — the brand engine's studio controls: the deny-list, the plan, and the identity layer.
-  const [policy, plan, brandIdentity] = await Promise.all([
+  const [policy, plan, brandIdentity, looks, memoryEvents] = await Promise.all([
     loadFeaturePolicy(sql, id),
     loadPlanAssignment(sql, id),
     loadBrandIdentity(sql, id),
+    listLooks(sql, id),
+    listMemory(sql, id, 12),
   ]);
+  const activeIdentity = brandIdentity?.identity ?? twingsDefaultIdentity();
   const krw = new Intl.NumberFormat("ko-KR");
   const today = new Date(Date.now() + 9 * 3_600_000).toISOString().slice(0, 10);
   return (
     <AdminShell dict={dict.admin} locale={locale} active="brandWorkspace">
-      <div className="bw-heading">
-        <div>
-          <a href="/admin/brand-workspace">← {b.back}</a>
-          <h1>{org.name}</h1>
-          <p>{c.access}</p>
+      <AdminPageHeader
+        back={{ href: "/admin/brand-workspace", label: b.back }}
+        title={org.name}
+        status={
+          <StatusPill
+            tone={
+              brandIdentity?.status === "confirmed"
+                ? "action"
+                : brandIdentity
+                  ? "progress"
+                  : "hold"
+            }
+          >
+            {brandIdentity
+              ? `${be.dnaStatus[brandIdentity.status]} · r${brandIdentity.revision}`
+              : be.dnaStatus.none}
+          </StatusPill>
+        }
+        lede={c.access}
+      />
+
+      <SectionJumpBar
+        label={dict.adminConsole.location}
+        items={[
+          { id: "brand-dna-inspector", label: be.sections.overview },
+          {
+            id: "brand-entitlements",
+            label: be.sections.entitlements,
+            count: policy.denied.length,
+            tone: policy.denied.length > 0 ? "hold" : "done",
+          },
+          { id: "brand-identity-editor", label: be.sections.identity },
+          {
+            id: "brand-members",
+            label: be.sections.members,
+            count: org.members.length + org.invitations.length,
+          },
+          {
+            id: "support",
+            label: c.supportTitle,
+            count: messages.length,
+          },
+        ]}
+      />
+
+      <MetricStrip
+        label={be.inspectorHeading}
+        items={[
+          {
+            key: "plan",
+            label: be.columns.plan,
+            value: plan ? b.planNames[plan.planId] : be.planUnassigned,
+            sub: plan
+              ? `₩${krw.format(BRAND_PLANS[plan.planId].monthlyKrw)} · ${b.billingModes[plan.billingMode]}`
+              : c.planNone,
+            tone: plan ? "action" : "hold",
+          },
+          {
+            key: "policy",
+            label: be.columns.blocked,
+            value:
+              policy.denied.length === 0
+                ? be.allOpen
+                : interpolate(be.blockedCount, {
+                    count: String(policy.denied.length),
+                  }),
+            sub:
+              policy.denied.length > 0
+                ? policy.denied.map((f) => b.features[f]).join(", ")
+                : c.featurePolicyOpen,
+          },
+          {
+            key: "identity",
+            label: be.columns.identity,
+            value: brandIdentity
+              ? be.dnaStatus[brandIdentity.status]
+              : be.dnaStatus.none,
+            sub: brandIdentity
+              ? `v${brandIdentity.version} · rev ${brandIdentity.revision}`
+              : c.identityNone,
+          },
+          {
+            key: "engine",
+            label: be.pipelineReadiness,
+            value: `${looks.length + BRAND_LOOK_PRESET_IDS.length} looks · ${MICRO_ROI_MODES.length} ROI modes`,
+            sub: `${memoryEvents.length} ${be.memoryEvents.toLowerCase()}`,
+          },
+        ]}
+      />
+
+      {/* S1–S5 Structured Brand Engine & Identity DNA Inspector */}
+      <section
+        id="brand-dna-inspector"
+        className="admin-spec-card"
+        data-brand-identity-inspector
+      >
+        <div className="admin-spec-head">
+          <div>
+            <h2>{be.inspectorHeading}</h2>
+            <p className="admin-field-hint mt-1">{be.inspectorLede}</p>
+          </div>
+          <StatusPill
+            tone={brandIdentity?.status === "confirmed" ? "action" : "progress"}
+          >
+            {brandIdentity
+              ? `${be.dnaStatus[brandIdentity.status]} (r${brandIdentity.revision})`
+              : `${be.dnaStatus.none} (TWINGS Default)`}
+          </StatusPill>
         </div>
-      </div>
+
+        <div className="admin-card-grid">
+          <div className="admin-subcard" data-dna-colour-world>
+            <h3>{be.colourWorld}</h3>
+            <div className="admin-swatch-row">
+              {(
+                [
+                  ["Paper", activeIdentity.colour.paper],
+                  ["Canvas", activeIdentity.colour.canvas],
+                  ["Ink", activeIdentity.colour.ink],
+                  ["Accent", activeIdentity.colour.accent],
+                ] as const
+              ).map(([name, hex]) => (
+                <span key={name} className="admin-swatch">
+                  <span
+                    className="admin-swatch-chip"
+                    style={{ backgroundColor: hex }}
+                    aria-hidden="true"
+                  />
+                  <span>
+                    {name} <code>{hex}</code>
+                  </span>
+                </span>
+              ))}
+            </div>
+            <p className="mt-2.5">
+              Hue {activeIdentity.world.ownedHue[0]}°–
+              {activeIdentity.world.ownedHue[1]}° · Warm max{" "}
+              {activeIdentity.world.warmPerScreen} · Skin lock{" "}
+              {String(activeIdentity.world.skinProtected)}
+            </p>
+          </div>
+
+          <div className="admin-subcard" data-dna-hardlines>
+            <h3>{be.hardlines}</h3>
+            <p>
+              <strong>{be.forbiddenWords}:</strong>{" "}
+              {activeIdentity.rules.forbiddenTerms.length > 0
+                ? activeIdentity.rules.forbiddenTerms.join(", ")
+                : "—"}
+            </p>
+            <p>
+              <strong>Never:</strong>{" "}
+              {activeIdentity.rules.never.length > 0
+                ? activeIdentity.rules.never.join(" · ")
+                : "—"}
+            </p>
+            <p>
+              <strong>Logo:</strong> min {activeIdentity.rules.logo.minSizePx}px
+              · clear {activeIdentity.rules.logo.clearSpace} · faces consented
+              only
+            </p>
+          </div>
+
+          <div className="admin-subcard" data-dna-model-roles>
+            <h3>{be.modelRouting}</h3>
+            <p>
+              <strong>Editorial:</strong> {activeIdentity.modelRoles.editorial}
+            </p>
+            <p>
+              <strong>Reference & Face:</strong>{" "}
+              {activeIdentity.modelRoles.referenceExact} /{" "}
+              {activeIdentity.modelRoles.faceAndEdit}
+            </p>
+            <p>
+              <strong>Film:</strong> {activeIdentity.modelRoles.film}
+            </p>
+            <p>
+              <strong>Swap:</strong> {activeIdentity.modelRoles.swap}
+            </p>
+          </div>
+
+          <div className="admin-subcard" data-dna-pipeline-readiness>
+            <h3>{be.pipelineReadiness}</h3>
+            <p>
+              <strong>{be.microRoiModes}:</strong> {MICRO_ROI_MODES.length}{" "}
+              modes ({MICRO_ROI_MODES.slice(0, 3).join(", ")}…)
+            </p>
+            <p>
+              <strong>{be.savedLooks}:</strong> {looks.length} custom +{" "}
+              {BRAND_LOOK_PRESET_IDS.length} presets
+            </p>
+            <p>
+              <strong>{be.memoryEvents}:</strong> {memoryEvents.length} recorded
+              {memoryEvents[0] ? ` (latest: ${memoryEvents[0].kind})` : ""}
+            </p>
+          </div>
+        </div>
+      </section>
+
       {/* The brand's own logo, before or without any campaign. Same inspected, private path as owners use. */}
       <section className="bw-panel bw-logo-section" data-brand-logo>
         <h2>{b.identity.logo}</h2>
@@ -88,7 +311,7 @@ export default async function StudioOrganization({
           </ManagedForm>
         )}
       </section>
-      <div className="bw-grid-wide">
+      <div id="brand-members" className="bw-grid-wide">
         <section className="bw-panel">
           <h2>{b.members}</h2>
           <ul className="bw-list">
@@ -173,7 +396,7 @@ export default async function StudioOrganization({
           </ManagedForm>
         </section>
       </div>
-      <div className="bw-grid-wide">
+      <div id="brand-entitlements" className="bw-grid-wide">
         <section className="bw-panel" data-brand-feature-policy>
           <h2>{c.featurePolicy}</h2>
           <p className="bw-muted">{c.featurePolicyHint}</p>
@@ -245,7 +468,7 @@ export default async function StudioOrganization({
           </ManagedForm>
         </section>
       </div>
-      <section className="bw-panel" data-brand-identity-admin>
+      <section id="brand-identity-editor" className="bw-panel" data-brand-identity-admin>
         <h2>{c.identityTitle}</h2>
         <p className="bw-muted">{c.identityHint}</p>
         <p data-brand-identity-state={brandIdentity?.status ?? "none"}>

@@ -21,6 +21,7 @@ import {
   BUTTON,
   BUTTON_PRIMARY,
 } from "@/components/admin/chrome";
+import { AdminPageHeader } from "@/components/admin/patterns";
 export const dynamic = "force-dynamic";
 export default async function FundingAdmin({
   searchParams,
@@ -43,8 +44,7 @@ export default async function FundingAdmin({
   return (
     <AdminShell dict={dict.admin} locale={locale} active="funding">
       <div data-campaign-funding>
-        <h1 className="text-3xl font-semibold">{t.adminTitle}</h1>
-        <p className="mt-4 max-w-prose text-sm leading-relaxed">{t.intro}</p>
+        <AdminPageHeader title={t.adminTitle} lede={t.intro} />
         <OutcomeBanner
           dict={dict.admin}
           ok={typeof query.ok === "string" ? query.ok : undefined}

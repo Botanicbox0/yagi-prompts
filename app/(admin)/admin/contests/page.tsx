@@ -37,6 +37,7 @@ import {
   OutcomeBanner,
   Panel,
 } from '@/components/admin/chrome';
+import { AdminPageHeader } from '@/components/admin/patterns';
 
 /**
  * `/admin/contests` — PLAN §14.2: CRUD, the entry moderation queue and the placements editor, in
@@ -509,11 +510,11 @@ export default async function AdminContestsPage({
 
   return (
     <AdminShell dict={a} locale={locale} active="contests">
-      <p className="text-accent font-label text-eyebrow uppercase">{a.navContests}</p>
-      <h1 className="mt-3 font-display text-[clamp(2rem,4vw,3rem)] leading-[0.95] font-black uppercase">
-        {a.contestsHeading}
-      </h1>
-      <p className="mt-3 max-w-detail text-body opacity-60">{a.contestsLede}</p>
+      <AdminPageHeader
+        eyebrow={a.navContests}
+        title={a.contestsHeading}
+        lede={a.contestsLede}
+      />
 
       <OutcomeBanner
         dict={a}
@@ -538,10 +539,12 @@ export default async function AdminContestsPage({
               key={row.id}
               open={pending > 0}
               data-contest-fold={row.slug}
-              className="mt-6 border border-hairline"
+              className="admin-collapsible mt-6"
             >
-              <summary className="cursor-pointer px-4 py-3 font-label text-eyebrow uppercase">
-                {row.slug} · {contestStatusLabel(a, row.status)}
+              <summary className="admin-collapsible-summary cursor-pointer px-4 py-3 font-label text-eyebrow uppercase">
+                <span>
+                  {row.slug} · {contestStatusLabel(a, row.status)}
+                </span>
                 {pending > 0 && (
                   <span className="text-accent"> · {interpolate(a.contestFoldPending, { count: String(pending) })}</span>
                 )}

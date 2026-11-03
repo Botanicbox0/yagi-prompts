@@ -5,6 +5,7 @@ import { loadPolicy } from '@/lib/admin/repo';
 import { BLOCK_KINDS } from '@/lib/content/schemas';
 import { DEFAULT_POLICY } from '@/lib/content/visibility';
 import { AdminShell, BUTTON_PRIMARY, INPUT, OpForm, OutcomeBanner, Panel } from '@/components/admin/chrome';
+import { AdminPageHeader } from '@/components/admin/patterns';
 import { kindLabel, visibilityOptions } from '@/components/admin/labels';
 
 /**
@@ -41,13 +42,13 @@ export default async function AdminPolicyPage({
 
   return (
     <AdminShell dict={a} locale={locale} active="policy">
-      <p className="text-accent font-label text-eyebrow uppercase">{a.navPolicy}</p>
-      <h1 className="mt-3 font-display text-[clamp(2rem,4vw,3rem)] leading-[0.95] font-black uppercase">
-        {a.policyHeading}
-      </h1>
-      <p className="mt-3 max-w-detail text-body opacity-60">{a.policyLede}</p>
+      <AdminPageHeader
+        eyebrow={a.navPolicy}
+        title={a.policyHeading}
+        lede={a.policyLede}
+      />
 
-      <p className="mt-6 border border-accent px-4 py-3 font-mono text-code text-accent">
+      <p className="admin-outcome mt-6 border border-accent px-4 py-3 font-mono text-code text-accent">
         {a.policyBanner}
       </p>
 
@@ -74,6 +75,7 @@ export default async function AdminPolicyPage({
                   <td className="border-b border-hairline py-2.5">
                     <select
                       name={`p:${kind}`}
+                      aria-label={kindLabel(dict, kind)}
                       defaultValue={policy[kind]}
                       className={`${INPUT} max-w-[14rem]`}
                     >

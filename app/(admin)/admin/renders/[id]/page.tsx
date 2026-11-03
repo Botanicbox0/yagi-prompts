@@ -67,7 +67,20 @@ export default async function RenderDetailPage({ params }: { params: Promise<{ i
           <FactList
             items={[
               { label: r.facts.id, value: mono(job.id), wide: true },
-              { label: r.facts.account, value: <span title={job.userId}>{shortId(job.userId)}</span> },
+              {
+                label: r.facts.account,
+                value: job.userId ? (
+                  <a
+                    href={`/admin/users?q=${shortId(job.userId)}`}
+                    className="admin-row-link"
+                    title={job.userId}
+                  >
+                    <span>{shortId(job.userId)}</span>
+                  </a>
+                ) : (
+                  <span title={job.userId ?? undefined}>{shortId(job.userId)}</span>
+                ),
+              },
               { label: r.facts.template, value: job.templateSlug },
               {
                 label: r.facts.spec,

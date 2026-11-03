@@ -77,12 +77,12 @@ export function ConfirmCheck({ label }: { label: string }) {
 }
 
 export const BUTTON =
-  "border border-hairline px-3 py-1.5 font-label text-eyebrow uppercase hover:border-accent hover:text-accent";
+  "admin-btn border border-hairline px-3.5 py-1.5 text-[13px] font-medium hover:border-accent hover:text-accent";
 export const BUTTON_PRIMARY =
-  "border border-accent bg-accent px-4 py-2 font-label text-eyebrow uppercase text-white";
+  "admin-btn admin-btn-primary border border-accent bg-accent px-4 py-2 text-[13px] font-medium text-white";
 export const INPUT =
-  "w-full border border-hairline bg-transparent px-2.5 py-1.5 font-mono text-code outline-none focus:border-accent";
-export const LABEL = "block font-label text-eyebrow uppercase opacity-60";
+  "admin-input w-full border border-hairline bg-transparent px-3 py-2 text-[13.5px] outline-none focus:border-accent";
+export const LABEL = "admin-field-label block text-[12px] font-semibold";
 
 export function Field({
   label,
@@ -94,11 +94,11 @@ export function Field({
   children: ReactNode;
 }) {
   return (
-    <label className="block">
+    <label className="admin-field block">
       <span className={LABEL}>{label}</span>
       <span className="mt-1.5 block">{children}</span>
       {hint && (
-        <span className="mt-1 block font-mono text-[0.72rem] opacity-50">
+        <span className="admin-field-hint mt-1 block text-[12px] opacity-65">
           {hint}
         </span>
       )}
@@ -127,7 +127,7 @@ export function LocalePair({
     const current = value?.[locale] ?? "";
     return (
       <label className="block">
-        <span className="font-label text-[0.68rem] uppercase tracking-[0.12em] opacity-45">
+        <span className="admin-locale-tag font-label text-[0.68rem] uppercase tracking-[0.08em]">
           {tag}
         </span>
         {multiline ? (
@@ -135,14 +135,14 @@ export function LocalePair({
             name={field}
             rows={rows}
             defaultValue={current}
-            className={`${INPUT} mt-1`}
+            className={`${INPUT} mt-1.5`}
           />
         ) : (
           <input
             type="text"
             name={field}
             defaultValue={current}
-            className={`${INPUT} mt-1`}
+            className={`${INPUT} mt-1.5`}
           />
         )}
       </label>
@@ -150,14 +150,14 @@ export function LocalePair({
   };
 
   return (
-    <div>
+    <div className="admin-locale-pair">
       <span className={LABEL}>{label}</span>
       <div className="mt-1.5 grid gap-3 sm:grid-cols-2">
         {cell("en", "EN")}
         {cell("ko", "KO")}
       </div>
       {hint && (
-        <p className="mt-1 font-mono text-[0.72rem] opacity-50">{hint}</p>
+        <p className="admin-field-hint mt-1 text-[12px] opacity-65">{hint}</p>
       )}
     </div>
   );
@@ -167,18 +167,20 @@ export function Panel({
   title,
   action,
   children,
+  id,
 }: {
   title: string;
   action?: ReactNode;
   children: ReactNode;
+  id?: string;
 }) {
   return (
-    <section className="mt-8 border border-hairline">
-      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-hairline px-4 py-2.5">
-        <h2 className="font-label text-eyebrow uppercase">{title}</h2>
+    <section id={id} className="admin-panel mt-7 border border-hairline">
+      <header className="admin-panel-head flex flex-wrap items-center justify-between gap-3 border-b border-hairline px-5 py-3">
+        <h2 className="admin-panel-title text-[14px] font-semibold">{title}</h2>
         {action}
       </header>
-      <div className="p-4">{children}</div>
+      <div className="admin-panel-body p-5">{children}</div>
     </section>
   );
 }
@@ -273,12 +275,12 @@ export function OutcomeBanner({
     <div
       role="status"
       data-outcome={failed ? "error" : "ok"}
-      className={`mt-6 border px-4 py-3 ${failed ? "border-accent" : "border-hairline"}`}
+      className={`admin-outcome mt-5 rounded-[14px] border px-4 py-3 text-[13.5px] ${failed ? "border-ink" : "border-hairline"}`}
     >
-      <p className="font-label text-eyebrow uppercase">{String(message)}</p>
+      <p className="admin-outcome-title font-medium">{String(message)}</p>
       {/* The database's sentence matters when something failed; a slug under "Created." is noise (2026-09-11). */}
       {failed && detail && (
-        <p className="mt-1.5 font-mono text-[0.75rem] break-words opacity-60">
+        <p className="admin-outcome-detail mt-1.5 font-mono text-[12px] break-words opacity-75">
           {dict.detailLabel}: {detail}
         </p>
       )}

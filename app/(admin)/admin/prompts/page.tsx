@@ -32,12 +32,36 @@ const one = (params: SearchParams, key: string): string | undefined => {
 const TABS = ['all', 'pending', 'published', 'archived', 'rejected'] as const;
 type Tab = (typeof TABS)[number];
 
+const MEDIA_FILTERS = ['all', 'video', 'image'] as const;
+type MediumFilter = (typeof MEDIA_FILTERS)[number];
+
+const SOURCE_FILTERS = ['all', 'yagi', 'community', 'featured'] as const;
+type SourceFilter = (typeof SOURCE_FILTERS)[number];
+
 function isTab(value: string | undefined): value is Tab {
   return value !== undefined && (TABS as readonly string[]).includes(value);
 }
 
+function isMediumFilter(value: string | undefined): value is MediumFilter {
+  return value !== undefined && (MEDIA_FILTERS as readonly string[]).includes(value);
+}
+
+function isSourceFilter(value: string | undefined): value is SourceFilter {
+  return value !== undefined && (SOURCE_FILTERS as readonly string[]).includes(value);
+}
+
 function inTab(row: PromptRow, tab: Tab): boolean {
   return tab === 'all' ? true : row.status === tab;
+}
+
+function inMedium(row: PromptRow, medium: MediumFilter): boolean {
+  return medium === 'all' ? true : row.medium === medium;
+}
+
+function inSource(row: PromptRow, source: SourceFilter): boolean {
+  if (source === 'all') return true;
+  if (source === 'featured') return row.featured;
+  return row.source === source;
 }
 
 /** Substring over the fields a moderator actually remembers: both titles, the slug, the handle. */
@@ -66,6 +90,10 @@ export default async function AdminPromptsPage({
 
   const rawTab = one(params, 'tab');
   const tab: Tab = isTab(rawTab) ? rawTab : 'all';
+  const rawMedium = one(params, 'medium');
+  const medium: MediumFilter = isMediumFilter(rawMedium) ? rawMedium : 'all';
+  const rawSource = one(params, 'source');
+  const source: SourceFilter = isSourceFilter(rawSource) ? rawSource : 'all';
   const query = (one(params, 'q') ?? '').trim().toLowerCase();
 
   const counts: Record<Tab, number> = {
@@ -75,11 +103,26 @@ export default async function AdminPromptsPage({
     archived: rows.filter((row) => row.status === 'archived').length,
     rejected: rows.filter((row) => row.status === 'rejected').length,
   };
-  const shown = rows.filter((row) => inTab(row, tab) && matches(row, query));
+  const shown = rows.filter(
+    (row) =>
+      inTab(row, tab) &&
+      inMedium(row, medium) &&
+      inSource(row, source) &&
+      matches(row, query)
+  );
 
-  const tabHref = (value: Tab) => {
+  const buildHref = (next: {
+    tab?: Tab;
+    medium?: MediumFilter;
+    source?: SourceFilter;
+  }) => {
+    const t = next.tab ?? tab;
+    const m = next.medium ?? medium;
+    const s = next.source ?? source;
     const search = new URLSearchParams();
-    if (value !== 'all') search.set('tab', value);
+    if (t !== 'all') search.set('tab', t);
+    if (m !== 'all') search.set('medium', m);
+    if (s !== 'all') search.set('source', s);
     if (query !== '') search.set('q', query);
     const rest = search.toString();
     return rest === '' ? ADMIN_PROMPTS_PATH : `${ADMIN_PROMPTS_PATH}?${rest}`;
@@ -113,7 +156,7 @@ export default async function AdminPromptsPage({
             {TABS.map((value) => (
               <li key={value}>
                 <a
-                  href={tabHref(value)}
+                  href={buildHref({ tab: value })}
                   data-tab={value}
                   data-filter={value}
                   aria-current={value === tab ? 'true' : undefined}
@@ -126,10 +169,44 @@ export default async function AdminPromptsPage({
           </ul>
         </nav>
 
+        <nav className="admin-filters" aria-label={c.prompts.mediumFilter}>
+          <ul>
+            {MEDIA_FILTERS.map((value) => (
+              <li key={value}>
+                <a
+                  href={buildHref({ medium: value })}
+                  data-medium-filter={value}
+                  aria-current={value === medium ? 'true' : undefined}
+                >
+                  {value === 'all' ? c.list.all : a.templateMedia[value]}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </nav>
+
+        <nav className="admin-filters" aria-label={c.prompts.sourceFilter}>
+          <ul>
+            {SOURCE_FILTERS.map((value) => (
+              <li key={value}>
+                <a
+                  href={buildHref({ source: value })}
+                  data-source-filter={value}
+                  aria-current={value === source ? 'true' : undefined}
+                >
+                  {c.prompts.sources[value]}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </nav>
+
         {/* A GET form: the query lands in the URL, which is what makes a filtered board shareable
             and survivable across the redirect every mutation performs. */}
         <form method="get" action={ADMIN_PROMPTS_PATH} className="admin-search" role="search">
           {tab !== 'all' && <input type="hidden" name="tab" value={tab} />}
+          {medium !== 'all' && <input type="hidden" name="medium" value={medium} />}
+          {source !== 'all' && <input type="hidden" name="source" value={source} />}
           <input
             type="search"
             name="q"

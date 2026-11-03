@@ -822,62 +822,382 @@ html[data-admin-console] .admin-timeline-at {
 }
 
 /* ==========================================================================
+   Operate v2: Panels, Form Inputs, Outcome Banner, Jump Bar, Metric Strip,
+   Brand DNA / Project Cascade / Template Spec Cards, Quick Lookup Bar.
+   ========================================================================== */
+html[data-admin-console] .admin-panel {
+  overflow: hidden;
+  border: 0;
+  border-radius: 14px;
+  background: var(--admin-paper);
+  box-shadow: var(--admin-ring);
+}
+html[data-admin-console] .admin-panel-head {
+  border-bottom: 1px solid var(--admin-line);
+  background: #fafbfc;
+}
+html[data-admin-console] .admin-panel-title {
+  color: var(--admin-ink);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  text-transform: none;
+}
+html[data-admin-console] .admin-field-label {
+  color: var(--admin-body);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  text-transform: none;
+  opacity: 1;
+}
+html[data-admin-console] .admin-field-hint {
+  color: var(--admin-muted);
+  font-size: 12px;
+  line-height: 1.5;
+  opacity: 1;
+}
+html[data-admin-console] .admin-locale-tag {
+  display: inline-flex;
+  height: 18px;
+  align-items: center;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: var(--admin-wash);
+  color: var(--admin-muted);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  opacity: 1;
+}
+html[data-admin-console] .admin-input {
+  min-height: 38px;
+  border: 1px solid var(--admin-line-strong);
+  border-radius: 10px;
+  background: var(--admin-paper);
+  color: var(--admin-ink);
+  font-size: 13.5px;
+  line-height: 1.45;
+  transition:
+    border-color 140ms var(--admin-ease),
+    box-shadow 140ms var(--admin-ease);
+}
+html[data-admin-console] .admin-input:focus {
+  border-color: var(--admin-accent);
+  box-shadow: 0 0 0 3px var(--admin-accent-tint);
+}
+html[data-admin-console] .admin-outcome {
+  border: 0;
+  border-radius: 14px;
+  padding: 12px 16px;
+}
+html[data-admin-console] .admin-outcome[data-outcome="ok"] {
+  background: var(--admin-accent-tint);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--admin-accent) 26%, transparent);
+  color: var(--admin-accent-text);
+}
+html[data-admin-console] .admin-outcome[data-outcome="error"] {
+  background: #fafbfc;
+  box-shadow: inset 0 0 0 1.5px var(--admin-ink);
+  color: var(--admin-ink);
+}
+html[data-admin-console] .admin-outcome-title {
+  font-size: 13.5px;
+  font-weight: 600;
+  text-transform: none;
+}
+html[data-admin-console] .admin-outcome-detail {
+  color: var(--admin-body);
+  font-size: 12px;
+  opacity: 1;
+}
+
+/* Sticky in-page section jump bar. */
+html[data-admin-console] .admin-jump-bar {
+  position: sticky;
+  top: 10px;
+  z-index: 20;
+  margin-top: 16px;
+  padding: 5px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(12px);
+  box-shadow: var(--admin-ring), 0 4px 14px rgba(14, 16, 19, 0.045);
+}
+html[data-admin-console] .admin-jump-bar ul {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+html[data-admin-console] .admin-jump-bar a {
+  display: inline-flex;
+  min-height: 30px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px;
+  border-radius: 999px;
+  color: var(--admin-body);
+  font-size: 12.5px;
+  font-weight: 500;
+  white-space: nowrap;
+  transition:
+    background-color 140ms var(--admin-ease),
+    color 140ms var(--admin-ease);
+}
+html[data-admin-console] .admin-jump-bar a:hover {
+  background: var(--admin-wash);
+  color: var(--admin-ink);
+}
+html[data-admin-console] .admin-jump-count {
+  display: inline-flex;
+  min-width: 18px;
+  height: 18px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--admin-wash);
+  color: var(--admin-muted);
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+html[data-admin-console] .admin-jump-count[data-tone="action"] {
+  background: var(--admin-accent-tint);
+  color: var(--admin-accent-text);
+}
+
+/* Tabular Metric Strip. */
+html[data-admin-console] .admin-metric-strip {
+  margin-top: 16px;
+}
+html[data-admin-console] .admin-metric-strip dl {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(168px, 1fr));
+  gap: 10px;
+}
+html[data-admin-console] .admin-metric-strip dl > div {
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--admin-paper);
+  box-shadow: var(--admin-ring);
+}
+html[data-admin-console] .admin-metric-strip dl > div[data-tone="action"] {
+  background: var(--admin-accent-tint);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--admin-accent) 22%, transparent);
+}
+html[data-admin-console] .admin-metric-strip dt {
+  color: var(--admin-muted);
+  font-size: 11.5px;
+  font-weight: 500;
+}
+html[data-admin-console] .admin-metric-strip dd {
+  margin-top: 4px;
+  color: var(--admin-ink);
+  font-size: 18px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.25;
+}
+html[data-admin-console] .admin-metric-strip dl > div[data-tone="action"] dd {
+  color: var(--admin-accent-text);
+}
+html[data-admin-console] .admin-metric-sub {
+  margin-top: 4px;
+  color: var(--admin-muted);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.4;
+}
+
+/* Quick Lookup Bar on /admin home. */
+html[data-admin-console] .admin-quick-search {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+  margin-top: 16px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: #fafbfc;
+  box-shadow: var(--admin-ring);
+}
+html[data-admin-console] .admin-quick-search form {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+html[data-admin-console] .admin-quick-search input[type="search"] {
+  min-width: 0;
+  flex: 1;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--admin-line-strong);
+  border-radius: 999px;
+  background: var(--admin-paper);
+  font-size: 12.5px;
+}
+
+/* Structured Inspector Cards (Brand DNA, Project Cascade, Template Spec). */
+html[data-admin-console] .admin-spec-card {
+  margin-top: 20px;
+  padding: 18px 20px;
+  border-radius: 14px;
+  background: var(--admin-paper);
+  box-shadow: var(--admin-ring);
+}
+html[data-admin-console] .admin-spec-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--admin-line);
+}
+html[data-admin-console] .admin-spec-head h2 {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+html[data-admin-console] .admin-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+html[data-admin-console] .admin-subcard {
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: #fafbfc;
+  box-shadow: inset 0 0 0 1px var(--admin-line);
+}
+html[data-admin-console] .admin-subcard h3 {
+  color: var(--admin-ink);
+  font-size: 13px;
+  font-weight: 600;
+}
+html[data-admin-console] .admin-subcard p {
+  margin-top: 4px;
+  color: var(--admin-body);
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+html[data-admin-console] .admin-swatch-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+html[data-admin-console] .admin-swatch {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px 4px 5px;
+  border-radius: 999px;
+  background: var(--admin-paper);
+  box-shadow: var(--admin-ring);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+html[data-admin-console] .admin-swatch-chip {
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  box-shadow: inset 0 0 0 1px rgba(14, 16, 19, 0.14);
+}
+html[data-admin-console] .admin-collapsible {
+  margin-top: 14px;
+  border-radius: 14px;
+  background: var(--admin-paper);
+  box-shadow: var(--admin-ring);
+  overflow: hidden;
+}
+html[data-admin-console] .admin-collapsible > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 13px 18px;
+  background: #fafbfc;
+  color: var(--admin-ink);
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+html[data-admin-console] .admin-collapsible[open] > summary {
+  border-bottom: 1px solid var(--admin-line);
+}
+html[data-admin-console] .admin-collapsible-body {
+  padding: 16px 18px;
+}
+
+/* ==========================================================================
    Pieces existing screens still use (inbox filters, campaign workflow).
    ========================================================================== */
 html[data-workspace-admin] .admin-inbox-filters {
   display: grid;
-  gap: 20px;
-  padding: 24px 0;
-  margin-top: 24px;
-  border-block: 1px solid #e7e7e7;
+  gap: 16px;
+  padding: 18px 0;
+  margin-top: 16px;
+  border-block: 1px solid var(--admin-line, #e4e6ea);
 }
 html[data-workspace-admin] .admin-filter-links {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 6px;
 }
 html[data-workspace-admin] .admin-filter-links a {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  min-height: 44px;
-  padding: 8px 14px;
-  border: 1px solid #ddd;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 13px;
+  border: 1px solid var(--admin-line-strong, #c7ccd3);
   border-radius: 999px;
-  font-size: 13px;
+  color: var(--admin-body, #41444d);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+html[data-workspace-admin] .admin-filter-links a:hover {
+  border-color: var(--admin-ink, #0e1013);
+  color: var(--admin-ink, #0e1013);
 }
 html[data-workspace-admin] .admin-filter-links a[aria-current] {
-  background: #151515;
-  border-color: #151515;
-  color: white;
+  background: var(--admin-ink, #0e1013);
+  border-color: var(--admin-ink, #0e1013);
+  color: #ffffff;
 }
 html[data-workspace-admin] .admin-filter-links span {
   font-variant-numeric: tabular-nums;
-  opacity: 0.65;
+  opacity: 0.7;
 }
 html[data-workspace-admin] .admin-inbox-search {
   display: flex;
   flex-wrap: wrap;
   align-items: end;
-  gap: 12px;
+  gap: 10px;
 }
 html[data-workspace-admin] .admin-inbox-search label {
   flex: 1;
   min-width: 180px;
-  max-width: 480px;
+  max-width: 440px;
   font-size: 12px;
+  font-weight: 500;
 }
 html[data-workspace-admin] .admin-inbox-search input[type="search"] {
   display: block;
   width: 100%;
-  min-height: 44px;
+  min-height: 38px;
   margin-top: 6px;
-  padding: 10px 12px;
-  border: 1px solid #ccc;
-  font-size: 14px;
+  padding: 8px 14px;
+  border: 1px solid var(--admin-line-strong, #c7ccd3);
+  border-radius: 999px;
+  background: var(--admin-paper, #ffffff);
+  font-size: 13px;
 }
 html[data-workspace-admin] .admin-inbox-search :is(button, a) {
-  min-height: 44px;
+  min-height: 38px;
   display: inline-flex;
   align-items: center;
 }

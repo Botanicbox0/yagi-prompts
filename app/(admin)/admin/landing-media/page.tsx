@@ -6,6 +6,7 @@ import { publicHref, requestSurface } from '@/lib/routing/request-surface';
 import { LANDING_MEDIA_SLOTS, type LandingMediaGroup, type LandingMediaPage } from '@/lib/content/landing-media';
 import { landingMediaMap, landingMediaTableExists, loadLandingMediaRows } from '@/lib/content/landing-media-repo';
 import { AdminShell } from '@/components/admin/chrome';
+import { AdminPageHeader } from '@/components/admin/patterns';
 import { LandingMediaEditor, type EditorPage } from '@/components/admin/landing-media-editor';
 
 /**
@@ -49,12 +50,14 @@ export default async function AdminLandingMediaPage() {
 
   return (
     <AdminShell dict={dict.admin} locale={locale} active="landingMedia">
-      <p className="text-accent font-label text-eyebrow uppercase">{copy.nav}</p>
-      <h1 className="mt-3 font-display text-[clamp(2rem,4vw,3rem)] leading-[0.95] font-black uppercase">{copy.heading}</h1>
-      <p className="mt-3 max-w-detail text-body opacity-60">{copy.lede}</p>
-      <p className="mt-2 max-w-detail font-mono text-code opacity-50">{copy.sizeNote}</p>
+      <AdminPageHeader
+        eyebrow={copy.nav}
+        title={copy.heading}
+        lede={copy.lede}
+      />
+      <p className="mt-2 max-w-detail font-mono text-code opacity-60">{copy.sizeNote}</p>
       {!ready && (
-        <p data-landing-media-unavailable className="mt-6 border border-accent px-4 py-3 font-mono text-code text-accent">
+        <p data-landing-media-unavailable className="admin-outcome mt-6 border border-accent px-4 py-3 font-mono text-code text-accent">
           {sql === null ? copy.noDatabase : copy.migration}
         </p>
       )}

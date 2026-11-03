@@ -178,7 +178,14 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: P
                   ),
                 selfies: formatCount(user.selfieCount, locale),
                 orders: formatCount(user.paidOrderCount, locale),
-                renders: formatCount(user.renderCount, locale),
+                renders:
+                  user.renderCount > 0 ? (
+                    <a href="/admin/renders" className="admin-row-link">
+                      <span>{formatCount(user.renderCount, locale)}</span>
+                    </a>
+                  ) : (
+                    formatCount(user.renderCount, locale)
+                  ),
                 lastActive: <span className="admin-nowrap">{formatAdminTime(user.lastActiveAt, locale)}</span>,
               },
             }))}

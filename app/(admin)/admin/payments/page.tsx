@@ -92,7 +92,17 @@ export default async function PaymentChecksPage() {
                   ) : (
                     p.noRender
                   ),
-                  account: <span title={row.userId ?? undefined}>{shortId(row.userId)}</span>,
+                  account: row.userId ? (
+                    <a
+                      href={`/admin/users?q=${shortId(row.userId)}`}
+                      className="admin-row-link"
+                      title={row.userId}
+                    >
+                      <span>{shortId(row.userId)}</span>
+                    </a>
+                  ) : (
+                    <span title={row.userId ?? undefined}>{shortId(row.userId)}</span>
+                  ),
                 },
               };
             })}
