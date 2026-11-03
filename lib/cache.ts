@@ -94,6 +94,10 @@ export function revalidateLandingMedia(): void {
   revalidateStaticSurfaces(['', '/brands']);
 }
 
+/**
+ * The public subscription answer changed (app/api/creator-subscriptions/tick). Only then: each call
+ * drops the last good copy of these pages that ISR keeps serving through a database outage.
+ */
 export function revalidateSubscriptions(): void {
   revalidateTag('creator-subscription-status');
   revalidateStaticSurfaces(['', '/pricing', '/faq', '/legal/terms', '/legal/refund', '/legal/privacy']);
