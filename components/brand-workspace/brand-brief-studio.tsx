@@ -28,7 +28,17 @@ import {
   PROJECT_DIRECTION_PRESETS,
   type ProjectDirectionPresetKey,
 } from "@/lib/brands/identity/project-direction";
-import { BrandMicroRoiPanel } from "./brand-micro-roi-panel";
+import {
+  BrandMicroRoiPanel,
+  type ExternalMicroRoiHandoff,
+} from "./brand-micro-roi-panel";
+import { BrandSpatialStagePanel } from "./brand-spatial-stage-panel";
+import {
+  BrandStudioTutorial,
+  type StudioFocusMode,
+} from "./brand-studio-tutorial";
+import { BrandVideoReversePanel } from "./brand-video-reverse-panel";
+import { ReviewStage } from "./review-stage";
 
 export interface BrandBriefStudioProps {
   organizationId: string;
@@ -126,6 +136,13 @@ export function BrandBriefStudio({
   const [busy, setBusy] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [statusMessage, setStatusMessage] = useState("");
+  const [studioFocusMode, setStudioFocusMode] =
+    useState<StudioFocusMode>("all");
+  const [externalMicroRoiHandoff, setExternalMicroRoiHandoff] =
+    useState<ExternalMicroRoiHandoff | null>(null);
+  const [externalMusicRevealSec, setExternalMusicRevealSec] = useState<
+    number | null
+  >(null);
 
   function handleCutKindChange(next: ShotCutKind) {
     setCutKind(next);
@@ -574,6 +591,12 @@ export function BrandBriefStudio({
           )}
         </div>
       </div>
+
+      <BrandStudioTutorial
+        locale={locale}
+        activeMode={studioFocusMode}
+        onSelectMode={setStudioFocusMode}
+      />
 
       <div
         className="bw-panel"
@@ -1253,16 +1276,138 @@ export function BrandBriefStudio({
 
       <hr className="bw-divider" />
 
-      <BrandMicroRoiPanel
-        organizationId={organizationId}
-        projectId={
-          directionMode === "project_override" && projectId.trim()
-            ? projectId.trim()
-            : undefined
-        }
-        locale={locale}
-        canWrite={canWrite}
-      />
+      {(studioFocusMode === "all" || studioFocusMode === "spatial_brief") && (
+        <>
+          <BrandSpatialStagePanel
+            organizationId={organizationId}
+            projectId={
+              directionMode === "project_override" && projectId.trim()
+                ? projectId.trim()
+                : undefined
+            }
+            locale={locale}
+            canWrite={canWrite}
+            onCompiledBrief={(compiledView) => setView(compiledView)}
+          />
+          <hr className="bw-divider" />
+        </>
+      )}
+
+      {(studioFocusMode === "all" ||
+        studioFocusMode === "video_reverse" ||
+        studioFocusMode === "sound_studio") && (
+        <>
+          <BrandVideoReversePanel
+            organizationId={organizationId}
+            projectId={
+              directionMode === "project_override" && projectId.trim()
+                ? projectId.trim()
+                : undefined
+            }
+            locale={locale}
+            canWrite={canWrite}
+            externalRevealSec={externalMusicRevealSec}
+            onCompiledBrief={(compiledView) => setView(compiledView)}
+          />
+          <hr className="bw-divider" />
+        </>
+      )}
+
+      {(studioFocusMode === "all" || studioFocusMode === "micro_roi") && (
+        <>
+          <BrandMicroRoiPanel
+            organizationId={organizationId}
+            projectId={
+              directionMode === "project_override" && projectId.trim()
+                ? projectId.trim()
+                : undefined
+            }
+            locale={locale}
+            canWrite={canWrite}
+            externalHandoff={externalMicroRoiHandoff}
+          />
+          <hr className="bw-divider" />
+        </>
+      )}
+
+      {(studioFocusMode === "all" || studioFocusMode === "frame_review") && (
+        <div className="bw-fields" data-studio-frame-review-section>
+          <div className="bw-row">
+            <div>
+              <p className="bw-kicker">
+                {isKo
+                  ? "FRAME.IO-GRADE SPATIAL PIN REVIEW & PIPELINE HANDOFF"
+                  : "FRAME.IO-GRADE SPATIAL PIN REVIEW & PIPELINE HANDOFF"}
+              </p>
+              <h3>
+                {isKo
+                  ? "프레임 단위 시사 · 화면 좌표(x%, y%) 핀 피드백 · 극소 부위 수선 & 0ms 음악 드롭 직결"
+                  : "Frame-Accurate Review · Spatial (x%, y%) Pinning · Direct Micro-ROI & Music Drop Handoff"}
+              </h3>
+            </div>
+          </div>
+          <ReviewStage
+            projectId={projectId.trim() || "studio-master-cut"}
+            contents={[
+              {
+                id: "studio-v2-master",
+                slotKey: "hero-reel",
+                version: 2,
+                title: isKo
+                  ? "1080p 마스터 컷 (OLED 에디토리얼 룩 + -14.0 LUFS)"
+                  : "1080p Master Cut (OLED Editorial + -14.0 LUFS)",
+                attachmentId: "att-v2",
+                mediaUrl: "/api/brand-workspace/attachments/studio-v2-master",
+                caption: "Stage 2 Master",
+                usageRights: "owned_organic",
+                reviewRevision: 2,
+                decision: "pending",
+                createdAt: "2026-11-04T00:00:00Z",
+              },
+              {
+                id: "studio-v1-draft",
+                slotKey: "hero-reel",
+                version: 1,
+                title: isKo
+                  ? "480p 고속 드래프트 컷 (구도·모션 검수본)"
+                  : "480p Fast Draft Cut (Composition Check)",
+                attachmentId: "att-v1",
+                mediaUrl: "/api/brand-workspace/attachments/studio-v1-draft",
+                caption: "Stage 1 Draft",
+                usageRights: "owned_organic",
+                reviewRevision: 1,
+                decision: "changes_requested",
+                createdAt: "2026-11-04T00:00:00Z",
+              },
+            ]}
+            messages={[]}
+            decisions={[]}
+            locale={locale}
+            deferVideoMount={true}
+            onSendPinToMicroRoi={(payload) => {
+              const modeMap: Record<
+                typeof payload.mode,
+                "logo_mark_lock" | "expression_au_retake" | "micro_patch_ecc" | "face_detail_refine"
+              > = {
+                brand_logo_packaging: "logo_mark_lock",
+                face_expression_retake: "expression_au_retake",
+                hand_artifact_repair: "micro_patch_ecc",
+                skin_hair_patch: "face_detail_refine",
+                garment_collar_seam: "micro_patch_ecc",
+              };
+              setExternalMicroRoiHandoff({
+                box: payload.box,
+                mode: modeMap[payload.mode],
+                note: payload.note,
+                timestampSec: payload.timestampSec,
+              });
+            }}
+            onSetMusicDropRevealSec={(revealSec) => {
+              setExternalMusicRevealSec(revealSec);
+            }}
+          />
+        </div>
+      )}
     </section>
   );
 }

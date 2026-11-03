@@ -39,10 +39,17 @@ import {
 import {
   approveBrandBrief,
   compileBrandBrief,
+  compileBrandSpatialStageBrief,
+  compileBrandVideoReverseBrief,
   promoteBrandBrief,
   reviseBrandBrief,
 } from "@/lib/brands/briefs/service";
 import { planBrandMicroRoiRepair } from "@/lib/brands/finish";
+import { planBrandSoundAndMusicStudio } from "@/lib/brands/sound";
+import {
+  createStakeholderReviewShare,
+  recordSpatialFramePin,
+} from "@/lib/brands/review";
 import {
   notifySlackBrandConcierge,
   syncSlackConciergeReplies,
@@ -227,6 +234,21 @@ export async function POST(request: NextRequest) {
         break;
       case "brief.promoteFinal":
         result = await promoteBrandBrief({ sql }, viewer, input);
+        break;
+      case "brief.videoReverse":
+        result = await compileBrandVideoReverseBrief({ sql }, viewer, input);
+        break;
+      case "brief.spatialStage":
+        result = await compileBrandSpatialStageBrief({ sql }, viewer, input);
+        break;
+      case "soundStudio.plan":
+        result = await planBrandSoundAndMusicStudio({ sql }, viewer, input);
+        break;
+      case "reviewShare.create":
+        result = await createStakeholderReviewShare({ sql }, viewer, input);
+        break;
+      case "reviewShare.pin":
+        result = await recordSpatialFramePin({ sql }, viewer, input);
         break;
       case "microRoi.plan":
         result = await planBrandMicroRoiRepair({ sql }, viewer, {

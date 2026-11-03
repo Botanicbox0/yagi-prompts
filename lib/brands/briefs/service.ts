@@ -59,6 +59,19 @@ import {
   type BriefDeltaAxis,
   type BriefTransitionErrorCode
 } from './state-machine';
+import {
+  PreserveChangeMatrixSchema,
+  VIDEO_REVERSE_PRESETS,
+  VideoReverseAnalysisSchema,
+  compileVideoReverseAdaptation,
+  type VideoReverseCompilationResult
+} from './video-reverse-engine';
+import {
+  SPATIAL_STAGE_PRESETS,
+  SpatialStageSpecSchema,
+  compileSpatialStageToShotSpec,
+  type SpatialStageCompileResult
+} from './spatial-stage';
 
 const uuid = z.string().uuid();
 
@@ -871,3 +884,169 @@ export async function promoteBrandBrief(
     throw error;
   }
 }
+
+const CompileVideoReverseOperationSchema = z.object({
+  organizationId: uuid,
+  projectId: z.string().trim().min(1).max(80).optional(),
+  presetId: z.string().trim().min(1).max(100).optional(),
+  analysis: VideoReverseAnalysisSchema.optional(),
+  matrix: PreserveChangeMatrixSchema.optional()
+});
+
+export interface BrandVideoReverseServiceResult extends BrandBriefServiceResult {
+  adaptation: VideoReverseCompilationResult;
+}
+
+/**
+ * Reverse-engineers a reference video telemetry analysis + Preserve/Change matrix into
+ * a Two-Stage (`480p Draft -> Picture Approval -> 1080p Master`) brand brief.
+ * Gated by `generative_media` and `owner | editor`.
+ */
+export async function compileBrandVideoReverseBrief(
+  deps: { sql: SqlRunner },
+  viewer: Viewer,
+  input: unknown
+): Promise<BrandOutcome<BrandVideoReverseServiceResult>> {
+  if (!uuid.safeParse(viewer.userId).success) {
+    return { ok: false, code: 'sign_in_required' };
+  }
+  const parsed = CompileVideoReverseOperationSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      code: 'invalid',
+      field: (parsed.error.issues[0]?.path ?? []).map(String).join('.') || 'analysis'
+    };
+  }
+  const { organizationId } = parsed.data;
+
+  try {
+    return await deps.sql.transaction(async (sql) => {
+      await authorizeBriefActor(sql, viewer.userId!, organizationId, [
+        'owner',
+        'editor'
+      ]);
+      await assertBrandFeature(sql, organizationId, 'generative_media');
+
+      const { identity, identitySource, memory, directionCascade } =
+        await resolveBrandIdentityAndMemory(
+          sql,
+          organizationId,
+          parsed.data.projectId ?? null
+        );
+
+      const baseAnalysis =
+        parsed.data.analysis ??
+        (parsed.data.presetId ? VIDEO_REVERSE_PRESETS[parsed.data.presetId] : undefined) ??
+        VIDEO_REVERSE_PRESETS.runway_flash_15s!;
+
+      const matrix = PreserveChangeMatrixSchema.parse(parsed.data.matrix ?? {});
+      const adaptation = compileVideoReverseAdaptation({
+        analysis: baseAnalysis,
+        matrix,
+        identity
+      });
+
+      const state = createDraftBrief({
+        organizationId,
+        spec: adaptation.spec,
+        identity,
+        memory
+      });
+
+      return {
+        ok: true as const,
+        id: state.id,
+        brief: state,
+        view: toCustomerBriefView(state, identitySource, directionCascade),
+        adaptation
+      };
+    });
+  } catch (error) {
+    if (error instanceof Denied) return { ok: false, code: error.code };
+    if (error instanceof BrandFeatureDenied) {
+      return { ok: false, code: 'feature_unavailable' };
+    }
+    throw error;
+  }
+}
+
+const CompileSpatialStageOperationSchema = z.object({
+  organizationId: uuid,
+  projectId: z.string().trim().min(1).max(80).optional(),
+  presetId: z.string().trim().min(1).max(64).optional(),
+  stage: SpatialStageSpecSchema.optional()
+});
+
+export interface BrandSpatialStageServiceResult extends BrandBriefServiceResult {
+  spatial: SpatialStageCompileResult;
+}
+
+/**
+ * Compiles an ArtCraft-inspired 2D Spatial Stage & Multi-Asset Reference Layer Stack
+ * into a deterministic `ShotSpec` and draft brief.
+ * Gated by `generative_media` and `owner | editor`.
+ */
+export async function compileBrandSpatialStageBrief(
+  deps: { sql: SqlRunner },
+  viewer: Viewer,
+  input: unknown
+): Promise<BrandOutcome<BrandSpatialStageServiceResult>> {
+  if (!uuid.safeParse(viewer.userId).success) {
+    return { ok: false, code: 'sign_in_required' };
+  }
+  const parsed = CompileSpatialStageOperationSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      code: 'invalid',
+      field: (parsed.error.issues[0]?.path ?? []).map(String).join('.') || 'stage'
+    };
+  }
+  const { organizationId } = parsed.data;
+
+  try {
+    return await deps.sql.transaction(async (sql) => {
+      await authorizeBriefActor(sql, viewer.userId!, organizationId, [
+        'owner',
+        'editor'
+      ]);
+      await assertBrandFeature(sql, organizationId, 'generative_media');
+
+      const { identity, identitySource, memory, directionCascade } =
+        await resolveBrandIdentityAndMemory(
+          sql,
+          organizationId,
+          parsed.data.projectId ?? null
+        );
+
+      const presetMatch = parsed.data.presetId
+        ? SPATIAL_STAGE_PRESETS.find((p) => p.id === parsed.data.presetId)?.spec
+        : undefined;
+      const stageSpec = parsed.data.stage ?? presetMatch ?? SPATIAL_STAGE_PRESETS[0]!.spec;
+      const spatial = compileSpatialStageToShotSpec(stageSpec);
+
+      const state = createDraftBrief({
+        organizationId,
+        spec: spatial.shotSpec,
+        identity,
+        memory
+      });
+
+      return {
+        ok: true as const,
+        id: state.id,
+        brief: state,
+        view: toCustomerBriefView(state, identitySource, directionCascade),
+        spatial
+      };
+    });
+  } catch (error) {
+    if (error instanceof Denied) return { ok: false, code: error.code };
+    if (error instanceof BrandFeatureDenied) {
+      return { ok: false, code: 'feature_unavailable' };
+    }
+    throw error;
+  }
+}
+
