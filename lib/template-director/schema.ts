@@ -92,18 +92,48 @@ export interface MultiPhotoIdentityInput {
   creatorNoteKo?: string | null;
 }
 
+export const OPTICAL_IDENTITY_STRATEGIES = [
+  'passthrough_crop',
+  'surgical_inplace_edit',
+  'fallback_to_passthrough_crop'
+] as const;
+export type OpticalIdentityStrategy = (typeof OPTICAL_IDENTITY_STRATEGIES)[number];
+
 export interface OpticalIdentityMasterPlan {
+  /**
+   * 'passthrough_crop' (default, 0% AI distortion, preserves 100% original pixels) when any clean photo exists;
+   * 'surgical_inplace_edit' ONLY when all photos have occlusions/liquify or explicit creatorNoteKo requests modification.
+   */
+  strategy: 'passthrough_crop' | 'surgical_inplace_edit';
   /** 0-based index of the photo that best represents preferred hairstyle, bangs, and facial charm. */
   styleAnchorIndex: number;
-  /** 0-based index of the photo that best represents true frontal bone symmetry, nose, and eye spacing. */
+  /** 0-based index of the photo that best represents true frontal bone symmetry, nose, and eye spacing (never a 24mm barrel-distorted closeup). */
   structureAnchorIndex: number;
+  /** Clockwise rotation needed if stripped-EXIF HEIC->JPG photo is sideways. */
+  styleAnchorRotationClockwiseDegrees: 0 | 90 | 180 | 270;
+  /** Normalized [ymin, xmin, ymax, xmax] (0..1000) for deterministic 3:4 bust-up optical crop. */
+  bustupCropBoxNormalized: readonly [number, number, number, number];
   detectedIssues: PhotoIssueCode[];
   requiresMasterSynthesis: boolean;
-  engine: 'nano-banana-2.1';
+  engine: 'nano-banana-2.1' | null;
   extractedIdentityLockEn: string;
   extractedHairLockEn: string;
-  /** Server-only prompt fed to Nano Banana 2.1 in the background to synthesize the 85mm optical master portrait. */
+  /** Server-only surgical in-place prompt fed to Nano Banana 2.1 when strategy === 'surgical_inplace_edit'. */
   opticalMasterPromptEn: OpaqueCompiledPrompt;
+}
+
+export interface IdentitySimilarityVerificationInput {
+  originalPhoto: { bytes: Uint8Array; mime: 'image/jpeg' | 'image/png' | 'image/webp' };
+  generatedPhoto: { bytes: Uint8Array; mime: 'image/jpeg' | 'image/png' | 'image/webp' };
+  creatorNoteKo?: string | null;
+}
+
+export interface IdentitySimilarityVerdict {
+  identitySimilarityScore: number;
+  agingOrDistortionDetected: boolean;
+  passedGate: boolean;
+  recommendedAction: 'keep_surgical_edit' | 'fallback_to_passthrough_crop';
+  reasonKo: string;
 }
 
 export interface DirectorSummaryChip {
@@ -255,8 +285,23 @@ export const rawStage2RewriteSchema = z.object({
 });
 
 export const rawOpticalIdentityMasterSchema = z.object({
+  strategy: z.enum(['passthrough_crop', 'surgical_inplace_edit']).default('passthrough_crop'),
   styleAnchorIndex: z.number().int().min(0).max(7),
   structureAnchorIndex: z.number().int().min(0).max(7),
+  styleAnchorRotationClockwiseDegrees: z
+    .preprocess(
+      (val) => (val === 90 || val === 180 || val === 270 ? val : 0),
+      z.union([z.literal(0), z.literal(90), z.literal(180), z.literal(270)])
+    )
+    .default(0),
+  bustupCropBoxNormalized: z
+    .tuple([
+      z.number().int().min(0).max(1000),
+      z.number().int().min(0).max(1000),
+      z.number().int().min(0).max(1000),
+      z.number().int().min(0).max(1000)
+    ])
+    .default([40, 100, 960, 900]),
   detectedIssues: z
     .preprocess(
       (val) =>
@@ -268,5 +313,12 @@ export const rawOpticalIdentityMasterSchema = z.object({
   requiresMasterSynthesis: z.boolean(),
   extractedIdentityLockEn: z.string().trim().min(10).max(600),
   extractedHairLockEn: z.string().trim().min(10).max(400),
-  opticalMasterPromptEn: z.string().trim().min(40).max(1600)
+  opticalMasterPromptEn: z.string().trim().min(10).max(1600)
+});
+
+export const rawIdentitySimilaritySchema = z.object({
+  identitySimilarityScore: z.number().min(0).max(1),
+  agingOrDistortionDetected: z.boolean(),
+  passedGate: z.boolean(),
+  reasonKo: z.string().trim().min(2).max(400)
 });

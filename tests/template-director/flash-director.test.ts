@@ -145,9 +145,10 @@ describe('Step 0: Photo Inspection & Cleanup Model Routing (Gemini 3.8 Flash)', 
       mode: 'normalize_retouch',
       engine: 'nano-banana-2.1',
       fallbackEngine: 'seedream-5.0-pro',
-      editPromptEn: expect.stringContaining('normalizing 2D beauty-app liquify distortions')
+      editPromptEn: expect.stringContaining('normalizing any 2D beauty-app liquify distortions')
     });
-    expect(verdict.recommendedCleanup.editPromptEn).toContain('visible pores');
+    expect(verdict.recommendedCleanup.editPromptEn).toContain('SURGICAL IN-PLACE IDENTITY LOCK');
+    expect(verdict.recommendedCleanup.editPromptEn).not.toContain('visible pores');
   });
 
   it('combines occlusion cleanup with anatomical de-filter and strips bare-shoulder passport directives when both issues co-occur (real influencer selfie case)', async () => {
@@ -182,14 +183,53 @@ describe('Step 0: Photo Inspection & Cleanup Model Routing (Gemini 3.8 Flash)', 
     expect(verdict.recommendedCleanup.editPromptEn).not.toContain('bare shoulders');
     expect(verdict.recommendedCleanup.editPromptEn).not.toContain('strapless');
     expect(verdict.recommendedCleanup.editPromptEn).toContain('minimalist matte black crew-neck top');
-    expect(verdict.recommendedCleanup.editPromptEn).toContain('normalizing 2D beauty-app liquify distortions');
+    expect(verdict.recommendedCleanup.editPromptEn).toContain('normalizing any 2D beauty-app liquify distortions');
   });
 
-  it('synthesizes a multi-photo Optical Identity Master plan (styleAnchor + structureAnchor) in the backend with zero prompt leakage', async () => {
+  it('defaults to passthrough_crop (0% AI distortion, engine=null) when at least one clean unoccluded photo exists', async () => {
     const fetchMock = vi.fn(async (_url: RequestInfo | URL) =>
       geminiJsonResponse({
+        strategy: 'passthrough_crop',
+        styleAnchorIndex: 1,
+        structureAnchorIndex: 1,
+        styleAnchorRotationClockwiseDegrees: 0,
+        bustupCropBoxNormalized: [40, 30, 950, 970],
+        detectedIssues: [],
+        requiresMasterSynthesis: false,
+        extractedIdentityLockEn:
+          'East Asian woman with soft double-lidded almond eyes, straight defined nose bridge, and smooth jawline.',
+        extractedHairLockEn:
+          'Long straight dark brown-black hair with side parting flowing over shoulders.',
+        opticalMasterPromptEn: 'Passthrough deterministic 3:4 bust-up optical crop of photo_02.'
+      })
+    );
+
+    const director = createFlashTemplateDirector(
+      { apiKey: 'fake-gemini-key', baseUrl: 'https://generativelanguage.googleapis.com/v1beta', model: 'gemini-3.8-flash' },
+      { fetch: fetchMock }
+    );
+
+    const photos = Array.from({ length: 5 }, (_, idx) => ({
+      bytes: new Uint8Array([255, 216, 255, idx]),
+      mime: 'image/jpeg' as const,
+      filename: `photo_0${idx + 1}.jpg`
+    }));
+
+    const plan = await director.synthesizeOpticalIdentityMaster({ photos });
+    expect(plan.strategy).toBe('passthrough_crop');
+    expect(plan.requiresMasterSynthesis).toBe(false);
+    expect(plan.engine).toBeNull();
+    expect(plan.bustupCropBoxNormalized).toEqual([40, 30, 950, 970]);
+  });
+
+  it('synthesizes a surgical_inplace_edit Optical Identity Master plan when explicit creatorNoteKo or occlusion requires it, and verifies similarity via Stage 3 Gate', async () => {
+    const fetchMock = vi.fn(async (_url: RequestInfo | URL) =>
+      geminiJsonResponse({
+        strategy: 'surgical_inplace_edit',
         styleAnchorIndex: 1,
         structureAnchorIndex: 7,
+        styleAnchorRotationClockwiseDegrees: 0,
+        bustupCropBoxNormalized: [50, 100, 950, 900],
         detectedIssues: ['over_retouched_contour', 'prop_occlusion'],
         requiresMasterSynthesis: true,
         extractedIdentityLockEn:
@@ -197,7 +237,7 @@ describe('Step 0: Photo Inspection & Cleanup Model Routing (Gemini 3.8 Flash)', 
         extractedHairLockEn:
           '6:4 side-parted sleek black chin-length straight tassel bob with delicate wispy side-swept forehead strands',
         opticalMasterPromptEn:
-          '85mm f/2.0 optical portrait lens master reference combining Image 2 frontal bone identity with Image 1 side-swept bangs, bare shoulders.'
+          '85mm f/2.0 optical portrait lens master reference combining Image 2 frontal bone identity with Image 1 side-swept bangs, bare shoulders, visible pores.'
       })
     );
 
@@ -217,6 +257,7 @@ describe('Step 0: Photo Inspection & Cleanup Model Routing (Gemini 3.8 Flash)', 
       creatorNoteKo: '이마 조금 더 줄여주시고 볼록하게, 턱선 각진 선을 둥글게 정리해 주세요'
     });
 
+    expect(plan.strategy).toBe('surgical_inplace_edit');
     expect(plan.styleAnchorIndex).toBe(1);
     expect(plan.structureAnchorIndex).toBe(7);
     expect(plan.engine).toBe('nano-banana-2.1');
@@ -226,8 +267,34 @@ describe('Step 0: Photo Inspection & Cleanup Model Routing (Gemini 3.8 Flash)', 
 
     const unwrapped = unwrapServerOnlyPrompt(plan.opticalMasterPromptEn);
     expect(unwrapped).not.toContain('bare shoulders');
+    expect(unwrapped).not.toContain('visible pores');
+    expect(unwrapped).toContain('SURGICAL IN-PLACE IDENTITY LOCK');
     expect(unwrapped).toContain('minimalist matte black crew-neck top');
-    expect(unwrapped).toContain('normalizing 2D beauty-app liquify distortions');
+  });
+
+  it('Stage 3 Identity Similarity Verification Gate rejects distorted/aged Nano Banana outputs and triggers fallback_to_passthrough_crop', async () => {
+    const fetchMock = vi.fn(async (_url: RequestInfo | URL) =>
+      geminiJsonResponse({
+        identitySimilarityScore: 0.62,
+        agingOrDistortionDetected: true,
+        passedGate: false,
+        reasonKo: '나노바나나 합성본에서 코끝이 넓어지고 피부 톤이 어두워져 원본 인물과 인상이 달라졌습니다.'
+      })
+    );
+
+    const director = createFlashTemplateDirector(
+      { apiKey: 'fake-gemini-key', baseUrl: 'https://generativelanguage.googleapis.com/v1beta', model: 'gemini-3.8-flash' },
+      { fetch: fetchMock }
+    );
+
+    const verdict = await director.verifyIdentitySimilarity({
+      originalPhoto: samplePhoto.photo,
+      generatedPhoto: samplePhoto.photo
+    });
+
+    expect(verdict.passedGate).toBe(false);
+    expect(verdict.agingOrDistortionDetected).toBe(true);
+    expect(verdict.recommendedAction).toBe('fallback_to_passthrough_crop');
   });
 
   it('routes low-resolution or blurry photos to local SeedVR2 (0-cost optical restoration) instead of generative hallucination', async () => {

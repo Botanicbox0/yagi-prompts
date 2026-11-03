@@ -6,6 +6,7 @@ import {
 import {
   GEMINI_DIRECTOR_DEFAULT_BASE_URL,
   GEMINI_DIRECTOR_DEFAULT_MODEL,
+  rawIdentitySimilaritySchema,
   rawOpticalIdentityMasterSchema,
   rawPhotoInspectionSchema,
   rawStage1ChatSchema,
@@ -16,6 +17,8 @@ import {
   type DirectorConfig,
   type DirectorRewriteInput,
   type DirectorRewriteResult,
+  type IdentitySimilarityVerdict,
+  type IdentitySimilarityVerificationInput,
   type MultiPhotoIdentityInput,
   type OpaqueCompiledPrompt,
   type OpticalIdentityMasterPlan,
@@ -99,8 +102,10 @@ const RETOUCH_ISSUES: ReadonlySet<PhotoIssueCode> = new Set([
 
 const DETAIL_ISSUES: ReadonlySet<PhotoIssueCode> = new Set(['low_resolution', 'motion_blur']);
 
+export const IDENTITY_SIMILARITY_THRESHOLD = 0.9 as const;
+
 export const ANATOMICAL_DE_FILTER_CONTRACT =
-  'Keep the person in Image 1 100% recognizable in core facial identity, eye shape, nasal bridge, exact hairstyle (preserve original part and bangs without replacing with generic 5:5 curtain bangs), and natural charm, while normalizing 2D beauty-app liquify distortions (artificially pinched V-line jawline, over-inflated or over-lined lips, and plastic poreless skin blur) back to anatomically natural 3D camera lens proportions (85mm f/2.0 portrait perspective, soft oval-egg contour) wearing a clean minimalist matte black crew-neck top (never bare passport-photo shoulders) with natural matte skin micro-texture and visible pores.';
+  'SURGICAL IN-PLACE IDENTITY LOCK: Edit the first attached image IN PLACE while keeping 98% of the person in Image 1 100% recognizable and untouched in core facial identity, exact eye shape, double-eyelid crease, inter-canthal distance, nasal bridge and tip width, philtrum length, mouth corners, exact hairstyle (preserve original part and bangs without replacing with generic 5:5 curtain bangs), and bright, clean, youthful Korean skin luminance (never age the skin, never add harsh pores or dark under-eye shadows, never re-render into a generic studio mugshot), while normalizing any 2D beauty-app liquify distortions (artificially pinched V-line jawline, over-inflated or over-lined lips) back to anatomically natural 3D camera lens proportions (85mm f/2.0 portrait perspective, soft oval-egg contour) wearing a clean minimalist matte black crew-neck top (never bare passport-photo shoulders).';
 
 function sanitizeCleanupPrompt(raw: string | null, includeRetouchNormalization: boolean): string {
   const base = (
@@ -109,9 +114,10 @@ function sanitizeCleanupPrompt(raw: string | null, includeRetouchNormalization: 
   )
     .replace(/\bbare\s+shoulders\b/gi, 'symmetrical shoulders in a minimalist matte black crew-neck top')
     .replace(/\bstrapless\s+(?:black\s+)?top\b/gi, 'minimalist matte black crew-neck top')
+    .replace(/\bvisible\s+pores\b/gi, 'clean, luminous, youthful skin tone')
     .trim();
 
-  if (includeRetouchNormalization && !base.includes('normalizing 2D beauty-app liquify distortions')) {
+  if (includeRetouchNormalization && !base.includes('normalizing any 2D beauty-app liquify distortions')) {
     return `${base} ${ANATOMICAL_DE_FILTER_CONTRACT}`;
   }
   return base;
@@ -445,12 +451,14 @@ export function createFlashTemplateDirector(
       }
 
       const systemInstruction = [
-        'You are the TWINGS Optical Identity Lock Engine (Backend Pre-Render Stage 0).',
-        'Analyze 1 to 8 uploaded photos of the same creator/user and select two anchors:',
-        '1. styleAnchorIndex: 0-based index of the photo showing the creator’s most flattering everyday hairstyle, bangs/parting, and natural facial vibe.',
-        '2. structureAnchorIndex: 0-based index of the photo showing the clearest frontal facial bone symmetry, eye shape, and nasal bridge.',
-        '3. Detect any 2D beauty-app liquify distortions (over_retouched_contour, heavy_filter), prop/hand occlusions, or bare-shoulder ID crops.',
-        '4. Compose opticalMasterPromptEn to synthesize a single 85mm f/2.0 optical portrait lens master reference combining the exact facial identity of structureAnchorIndex with the hairstyle/vibe of styleAnchorIndex, normalizing any 2D V-chin liquify into a soft oval-egg contour, wearing a minimalist matte black crew-neck top (never bare shoulders) with natural matte skin micro-texture.'
+        'You are the TWINGS Optical Identity Lock Engine v2 (3-Stage Zero-Distortion Identity-First Architecture).',
+        'Your #1 priority is 100% REAL FACIAL IDENTITY PRESERVATION. Generative re-synthesis (Nano Banana) can distort eye spacing, widen the nose, or age skin texture, so you MUST prefer `passthrough_crop` (keeping 100% original pixels) whenever at least ONE uploaded photo has a clean, unoccluded, flattering face and there is no explicit `creatorNoteKo` requesting contour/hairline modification.',
+        '1. strategy: return "passthrough_crop" if any photo has a clean unoccluded face and creatorNoteKo is empty; return "surgical_inplace_edit" ONLY when creatorNoteKo explicitly asks to modify forehead/jawline/lip contour OR when every single photo has physical hand/cup/prop occlusion or severe 2D beauty-app liquify.',
+        '2. styleAnchorIndex: 0-based index of the single most flattering, youthful, recognizable photo.',
+        '3. structureAnchorIndex: 0-based index of the photo with the most accurate natural facial proportions. NEVER select a 24mm ultra-close wide-angle unretouched selfie (<30cm from lens where barrel distortion enlarges the nose) as structureAnchorIndex.',
+        '4. styleAnchorRotationClockwiseDegrees: 0 | 90 | 180 | 270 clockwise rotation needed if the selected styleAnchor photo is lying sideways.',
+        '5. bustupCropBoxNormalized: [ymin, xmin, ymax, xmax] (0..1000) framing a clean 3:4 bust-up portrait on the upright styleAnchor photo.',
+        '6. Compose opticalMasterPromptEn for in-place surgical editing (when needed), preserving 98% of the original facial identity, eye shape, nose width, philtrum, and bright youthful Korean skin luminance without aging pores.'
       ].join('\n');
 
       const cappedPhotos = input.photos.slice(0, 8);
@@ -481,17 +489,79 @@ export function createFlashTemplateDirector(
       const maxIdx = cappedPhotos.length - 1;
       const styleAnchorIndex = Math.min(Math.max(raw.styleAnchorIndex, 0), maxIdx);
       const structureAnchorIndex = Math.min(Math.max(raw.structureAnchorIndex, 0), maxIdx);
+      const hasNote = Boolean(input.creatorNoteKo && input.creatorNoteKo.trim().length > 0);
+      const strategy: 'passthrough_crop' | 'surgical_inplace_edit' = hasNote
+        ? 'surgical_inplace_edit'
+        : raw.requiresMasterSynthesis
+          ? raw.strategy
+          : 'passthrough_crop';
+      const requiresMasterSynthesis = strategy === 'surgical_inplace_edit';
       const sanitizedMasterPrompt = sanitizeCleanupPrompt(raw.opticalMasterPromptEn, true);
 
       return {
+        strategy,
         styleAnchorIndex,
         structureAnchorIndex,
+        styleAnchorRotationClockwiseDegrees: raw.styleAnchorRotationClockwiseDegrees,
+        bustupCropBoxNormalized: raw.bustupCropBoxNormalized,
         detectedIssues: raw.detectedIssues,
-        requiresMasterSynthesis: raw.requiresMasterSynthesis,
-        engine: 'nano-banana-2.1',
+        requiresMasterSynthesis,
+        engine: requiresMasterSynthesis ? 'nano-banana-2.1' : null,
         extractedIdentityLockEn: raw.extractedIdentityLockEn,
         extractedHairLockEn: raw.extractedHairLockEn,
         opticalMasterPromptEn: sealServerOnlyPrompt(sanitizedMasterPrompt)
+      };
+    },
+
+    async verifyIdentitySimilarity(
+      input: IdentitySimilarityVerificationInput
+    ): Promise<IdentitySimilarityVerdict> {
+      const systemInstruction = [
+        'You are the TWINGS Stage 3 Facial Identity Similarity Verification Gate.',
+        'Compare Image 1 (Original Creator Photo) vs Image 2 (AI Edited Master) and return strict JSON:',
+        '- identitySimilarityScore (0.00..1.00): how closely Image 2 matches the exact eye shape, eyelid crease, nose bridge/tip width, philtrum length, mouth corners, and personal charm of Image 1.',
+        '- agingOrDistortionDetected (boolean): true if Image 2 makes the person look older, tired, wider-nosed, longer in the mid-face, harsher in skin texture, or like a different person.',
+        '- passedGate (boolean): true ONLY if identitySimilarityScore >= 0.90 AND agingOrDistortionDetected === false.',
+        '- reasonKo (string): concise 1-sentence Korean diagnosis.'
+      ].join('\n');
+
+      const parts: Array<Record<string, unknown>> = [
+        {
+          text: JSON.stringify({
+            creatorNoteKo: input.creatorNoteKo ?? null
+          })
+        },
+        {
+          inlineData: {
+            mimeType: input.originalPhoto.mime,
+            data: Buffer.from(input.originalPhoto.bytes).toString('base64')
+          }
+        },
+        {
+          inlineData: {
+            mimeType: input.generatedPhoto.mime,
+            data: Buffer.from(input.generatedPhoto.bytes).toString('base64')
+          }
+        }
+      ];
+
+      const raw = await callGeminiStructuredJson(
+        config,
+        fetchImpl,
+        systemInstruction,
+        parts,
+        (json) => rawIdentitySimilaritySchema.parse(json)
+      );
+
+      const passedGate =
+        raw.identitySimilarityScore >= IDENTITY_SIMILARITY_THRESHOLD && !raw.agingOrDistortionDetected;
+
+      return {
+        identitySimilarityScore: raw.identitySimilarityScore,
+        agingOrDistortionDetected: raw.agingOrDistortionDetected,
+        passedGate,
+        recommendedAction: passedGate ? 'keep_surgical_edit' : 'fallback_to_passthrough_crop',
+        reasonKo: raw.reasonKo
       };
     }
   };
