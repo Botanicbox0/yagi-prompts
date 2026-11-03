@@ -20,6 +20,14 @@ import type {
   BrandBriefState,
   BriefDeltaAxis,
 } from "@/lib/brands/briefs/state-machine";
+import {
+  BRAND_LOOK_PRESET_IDS,
+  type BrandLookPresetId,
+} from "@/lib/brands/finish/color-grading";
+import {
+  PROJECT_DIRECTION_PRESETS,
+  type ProjectDirectionPresetKey,
+} from "@/lib/brands/identity/project-direction";
 
 export interface BrandBriefStudioProps {
   organizationId: string;
@@ -28,6 +36,8 @@ export interface BrandBriefStudioProps {
   identityConfirmed: boolean;
   defaultChecklist?: readonly string[];
   identityHref?: string;
+  initialProjectId?: string;
+  initialProjectTitle?: string;
 }
 
 const EDITABLE_DELTA_AXES: ReadonlyArray<{
@@ -49,8 +59,38 @@ export function BrandBriefStudio({
   identityConfirmed,
   defaultChecklist = ["제품 실루엣과 라벨 비례 유지", "프렌치 블루 색 대역 유지"],
   identityHref,
+  initialProjectId,
+  initialProjectTitle,
 }: BrandBriefStudioProps) {
   const isKo = locale === "ko";
+
+  const [directionMode, setDirectionMode] = useState<
+    "base_inherited" | "project_override"
+  >(initialProjectId ? "project_override" : "base_inherited");
+  const [projectId, setProjectId] = useState(
+    initialProjectId ?? "kaiper-26ss-outdoor"
+  );
+  const [projectTitle, setProjectTitle] = useState(
+    initialProjectTitle ??
+      (isKo
+        ? "시즌 캠페인 · 야외 골든아워 필름"
+        : "Season Campaign · Outdoor Golden Hour")
+  );
+  const [lookPresetId, setLookPresetId] = useState<BrandLookPresetId>(
+    "kodak-2383-warm"
+  );
+  const [projectRulePrompt, setProjectRulePrompt] = useState(
+    isKo
+      ? "야외 자연광 역광 하이라이트와 부드러운 아날로그 필름 결 유지, 스튜디오 정물 배경 배제"
+      : "Maintain natural outdoor golden-hour rim light and analog film grain; avoid studio tabletop"
+  );
+  const [projectChecklistText, setProjectChecklistText] = useState(
+    isKo
+      ? "야외 역광에서도 의상/제품 본연의 색상과 로고 심볼 선명도 유지"
+      : "Preserve garment/product colour accuracy and logo clarity under outdoor backlight"
+  );
+  const [lightColourK, setLightColourK] = useState(5400);
+  const [isolateProjectMemory, setIsolateProjectMemory] = useState(true);
 
   const [briefText, setBriefText] = useState(
     isKo
@@ -161,11 +201,153 @@ export function BrandBriefStudio({
     }
   }
 
+  function applyProjectPreset(presetKey: ProjectDirectionPresetKey) {
+    const preset = PROJECT_DIRECTION_PRESETS[presetKey];
+    setDirectionMode("project_override");
+    setProjectId(`project-${presetKey.replace(/_/g, "-")}`);
+    setProjectTitle(preset.title);
+    setLookPresetId(preset.lookPresetId);
+    setCameraFocalMm(preset.cameraOverride.focalMm);
+    setLightModifier(preset.lightOverride.modifier);
+    setLightColourK(preset.lightOverride.colourK);
+    setSpaceBackground(preset.spaceOverride.background);
+    setSpaceSurface(preset.spaceOverride.surface);
+    setProjectRulePrompt(preset.projectRulePrompt);
+    setProjectChecklistText(preset.projectProductChecklist.join("\n"));
+  }
+
+  async function onSaveProjectOverride() {
+    if (!canWrite || busy) return;
+    setBusy(true);
+    setErrorMessage("");
+    setStatusMessage("");
+    try {
+      const response = await fetch("/api/brand-workspace", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          operation: "projectDirection.save",
+          input: {
+            organizationId,
+            projectId: projectId.trim() || "studio-project",
+            enabled: directionMode === "project_override",
+            title: projectTitle.trim() || "Project Override",
+            lookPresetId,
+            cameraOverride: { focalMm: cameraFocalMm },
+            lightOverride: { modifier: lightModifier, colourK: lightColourK },
+            spaceOverride: {
+              background: spaceBackground,
+              surface: spaceSurface,
+            },
+            projectRulePrompt: projectRulePrompt.trim() || undefined,
+            projectProductChecklist: projectChecklistText
+              .split(/\r?\n/)
+              .map((s) => s.trim())
+              .filter(Boolean),
+            isolateProjectMemory,
+          },
+        }),
+      });
+      const payload = await response.json();
+      if (!response.ok || !payload.ok) {
+        setErrorMessage(
+          typeof payload.message === "string" && payload.message
+            ? payload.message
+            : isKo
+              ? "프로젝트 전용 연출 설정을 저장하지 못했습니다."
+              : "Failed to save project direction override."
+        );
+        return;
+      }
+      setStatusMessage(
+        isKo
+          ? `프로젝트 전용 연출 오버라이드(${projectTitle})가 저장되었습니다. 브랜드 기본 DNA는 건드리지 않고 이 프로젝트에만 적용됩니다.`
+          : `Project direction override (${projectTitle}) saved without mutating Brand Base DNA.`
+      );
+    } catch {
+      setErrorMessage(
+        isKo
+          ? "네트워크 요청 중 오류가 발생했습니다."
+          : "Network error while saving project direction."
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onPromoteProjectToBase() {
+    if (!canWrite || busy) return;
+    setBusy(true);
+    setErrorMessage("");
+    setStatusMessage("");
+    try {
+      const response = await fetch("/api/brand-workspace", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          operation: "projectDirection.promoteToBase",
+          input: {
+            organizationId,
+            projectId: projectId.trim() || "studio-project",
+          },
+        }),
+      });
+      const payload = await response.json();
+      if (!response.ok || !payload.ok) {
+        setErrorMessage(
+          typeof payload.message === "string" && payload.message
+            ? payload.message
+            : isKo
+              ? "브랜드 기본 DNA 승격은 먼저 프로젝트 연출을 저장한 뒤 오너 권한으로 실행할 수 있습니다."
+              : "Save the project direction first; only brand owners can promote to Base DNA."
+        );
+        return;
+      }
+      setStatusMessage(
+        isKo
+          ? "이 프로젝트의 연출 규칙과 체크리스트가 조직 전체의 브랜드 기본 DNA 초안으로 승격되었습니다."
+          : "Promoted this project's direction rules into the organization's Brand Base DNA."
+      );
+    } catch {
+      setErrorMessage(
+        isKo
+          ? "네트워크 요청 중 오류가 발생했습니다."
+          : "Network error while promoting project direction."
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function onCompileSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!canWrite || busy) return;
+    const isOverride = directionMode === "project_override";
     const result = await callWorkspaceOperation("brief.compile", {
       organizationId,
+      ...(isOverride
+        ? {
+            projectId: projectId.trim() || "studio-project",
+            projectOverride: {
+              projectId: projectId.trim() || "studio-project",
+              enabled: true,
+              title: projectTitle.trim() || "Project Override",
+              lookPresetId,
+              cameraOverride: { focalMm: cameraFocalMm },
+              lightOverride: { modifier: lightModifier, colourK: lightColourK },
+              spaceOverride: {
+                background: spaceBackground,
+                surface: spaceSurface,
+              },
+              projectRulePrompt: projectRulePrompt.trim() || undefined,
+              projectProductChecklist: projectChecklistText
+                .split(/\r?\n/)
+                .map((s) => s.trim())
+                .filter(Boolean),
+              isolateProjectMemory,
+            },
+          }
+        : {}),
       quick: {
         brief: briefText,
         cutKind,
@@ -176,6 +358,7 @@ export function BrandBriefStudio({
         labelLock,
         cameraFocalMm,
         lightModifier,
+        lightColourK,
         spaceBackground,
         spaceSurface,
       },
@@ -185,9 +368,13 @@ export function BrandBriefStudio({
       setView(result.view);
       setAestheticGatePassed(false);
       setStatusMessage(
-        isKo
-          ? "촬영 지시서 초안(Round 1)이 컴파일되었습니다."
-          : "ShotSpec draft (Round 1) compiled."
+        isOverride
+          ? isKo
+            ? `[Brand Base DNA ⊕ ${projectTitle}] 2계층 합성 촬영 지시서 초안(Round 1)이 컴파일되었습니다.`
+            : `[Brand Base DNA ⊕ ${projectTitle}] 2-tier cascaded ShotSpec draft (Round 1) compiled.`
+          : isKo
+            ? "촬영 지시서 초안(Round 1)이 컴파일되었습니다."
+            : "ShotSpec draft (Round 1) compiled."
       );
     }
   }
@@ -290,6 +477,12 @@ export function BrandBriefStudio({
         updatedAt: briefState.updatedAt,
       },
       aestheticGatePassed,
+      projectId:
+        directionMode === "project_override" && projectId.trim()
+          ? projectId.trim()
+          : undefined,
+      isolateProjectMemory:
+        directionMode === "project_override" ? isolateProjectMemory : false,
     });
     if (result) {
       setBriefState(result.brief);
@@ -379,6 +572,265 @@ export function BrandBriefStudio({
             </a>
           )}
         </div>
+      </div>
+
+      <div
+        className="bw-panel"
+        data-project-direction-panel
+        data-direction-mode={directionMode}
+      >
+        <div className="bw-row">
+          <div>
+            <p className="bw-kicker">
+              {isKo
+                ? "2-TIER DIRECTION CASCADE · 브랜드 기본 DNA ⊕ 개별 프로젝트 연출"
+                : "2-TIER DIRECTION CASCADE · BRAND BASE DNA ⊕ PROJECT OVERRIDE"}
+            </p>
+            <h3>
+              {isKo
+                ? "연출 로직 선택: 브랜드 공통 기준선 상속 vs 개별 프로젝트 전용 오버라이드"
+                : "Direction Logic: Inherit Brand Base DNA vs Project-Specific Override"}
+            </h3>
+            <p className="bw-muted">
+              {isKo
+                ? "평소에는 브랜드 온보딩에서 확정한 기본 DNA를 그대로 상속하고, 시즌 캠페인·야외 촬영·콜라보처럼 다른 무드와 광학 로직이 필요한 프로젝트만 선택적으로 덮어씁니다."
+                : "Inherit your confirmed Brand Base DNA by default, or selectively override optics, lighting, space, and look for a specific campaign project."}
+            </p>
+          </div>
+          <div className="bw-row">
+            <button
+              type="button"
+              className={
+                directionMode === "base_inherited"
+                  ? "bw-button bw-primary"
+                  : "bw-button"
+              }
+              data-direction-mode-toggle="base_inherited"
+              onClick={() => setDirectionMode("base_inherited")}
+              disabled={busy}
+            >
+              {isKo
+                ? "① 브랜드 기본 DNA 상속"
+                : "1. Inherit Brand Base DNA"}
+            </button>
+            <button
+              type="button"
+              className={
+                directionMode === "project_override"
+                  ? "bw-button bw-primary"
+                  : "bw-button"
+              }
+              data-direction-mode-toggle="project_override"
+              onClick={() => setDirectionMode("project_override")}
+              disabled={busy}
+            >
+              {isKo
+                ? "② 개별 프로젝트 전용 오버라이드"
+                : "2. Project-Specific Override"}
+            </button>
+          </div>
+        </div>
+
+        {directionMode === "project_override" && (
+          <div className="bw-fields" data-project-override-editor>
+            <div className="bw-row">
+              <small className="bw-muted">
+                {isKo
+                  ? "프로젝트 연출 빠른 템플릿:"
+                  : "Quick Project Direction Presets:"}
+              </small>
+              <button
+                type="button"
+                className="bw-button"
+                data-project-preset="outdoor_golden_hour"
+                onClick={() => applyProjectPreset("outdoor_golden_hour")}
+                disabled={!canWrite || busy}
+              >
+                {isKo
+                  ? "시즌 야외 골든아워 (35mm · 3900K)"
+                  : "Outdoor Golden Hour (35mm · 3900K)"}
+              </button>
+              <button
+                type="button"
+                className="bw-button"
+                data-project-preset="night_neon_capsule"
+                onClick={() => applyProjectPreset("night_neon_capsule")}
+                disabled={!canWrite || busy}
+              >
+                {isKo
+                  ? "나이트 하이콘트라스트 (28mm · 6200K)"
+                  : "Night High-Contrast (28mm · 6200K)"}
+              </button>
+              <button
+                type="button"
+                className="bw-button"
+                data-project-preset="crisp_studio_drop"
+                onClick={() => applyProjectPreset("crisp_studio_drop")}
+                disabled={!canWrite || busy}
+              >
+                {isKo
+                  ? "신제품 매크로 스튜디오 (85mm · 5500K)"
+                  : "Macro Studio Drop (85mm · 5500K)"}
+              </button>
+            </div>
+
+            <div className="bw-grid-wide">
+              <label>
+                {isKo ? "프로젝트 식별키 (Scope ID)" : "Project Scope Key"}
+                <input
+                  name="projectId"
+                  value={projectId}
+                  onChange={(e) => setProjectId(e.target.value)}
+                  maxLength={80}
+                  disabled={!canWrite || busy}
+                />
+              </label>
+              <label>
+                {isKo ? "프로젝트 연출 이름" : "Project Direction Title"}
+                <input
+                  name="projectTitle"
+                  value={projectTitle}
+                  onChange={(e) => setProjectTitle(e.target.value)}
+                  maxLength={120}
+                  disabled={!canWrite || busy}
+                />
+              </label>
+              <label>
+                {isKo
+                  ? "이 프로젝트 전용 컬러 룩 (Look Override)"
+                  : "Project Look Preset Override"}
+                <select
+                  name="lookPresetId"
+                  value={lookPresetId}
+                  onChange={(e) =>
+                    setLookPresetId(e.target.value as BrandLookPresetId)
+                  }
+                  disabled={!canWrite || busy}
+                >
+                  {BRAND_LOOK_PRESET_IDS.map((preset) => (
+                    <option key={preset} value={preset}>
+                      {preset}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
+            <div className="bw-grid-wide">
+              <label>
+                {isKo
+                  ? "이 프로젝트 전용 추가 연출 규칙 (Prompt Rule Override)"
+                  : "Project-Specific Direction Rule"}
+                <input
+                  name="projectRulePrompt"
+                  value={projectRulePrompt}
+                  onChange={(e) => setProjectRulePrompt(e.target.value)}
+                  maxLength={300}
+                  disabled={!canWrite || busy}
+                />
+              </label>
+              <label>
+                {isKo
+                  ? "조명 색온도 오버라이드 (K)"
+                  : "Lighting Colour Temp Override (K)"}
+                <input
+                  type="number"
+                  min={2500}
+                  max={9000}
+                  name="lightColourK"
+                  value={lightColourK}
+                  onChange={(e) =>
+                    setLightColourK(Number(e.target.value) || 5400)
+                  }
+                  disabled={!canWrite || busy}
+                />
+              </label>
+            </div>
+
+            <label>
+              {isKo
+                ? "이 프로젝트 전용 추가 제품 체크리스트 (브랜드 기본 체크리스트에 병합됨)"
+                : "Project-Specific Product Checklist (merged with Base DNA)"}
+              <input
+                name="projectChecklistText"
+                value={projectChecklistText}
+                onChange={(e) => setProjectChecklistText(e.target.value)}
+                maxLength={300}
+                disabled={!canWrite || busy}
+              />
+            </label>
+
+            <label className="bw-check">
+              <input
+                type="checkbox"
+                checked={isolateProjectMemory}
+                onChange={(e) => setIsolateProjectMemory(e.target.checked)}
+                disabled={!canWrite || busy}
+              />
+              <span>
+                {isKo
+                  ? "프로젝트 메모리 격리 (이 프로젝트에서 실험·승인한 컷이 다른 프로젝트의 기본 연출을 오염시키지 않게 분리)"
+                  : "Isolate project memory (keep experimental cuts in this project separate from other projects)"}
+              </span>
+            </label>
+
+            <div className="bw-note" data-direction-cascade-summary>
+              <div className="bw-grid-wide">
+                <div>
+                  <strong>
+                    {isKo
+                      ? "🔒 Brand Base DNA 고정 (이 프로젝트에서도 절대 유지)"
+                      : "🔒 Locked from Brand Base DNA (Immutable)"}
+                  </strong>
+                  <p className="bw-muted">
+                    {isKo
+                      ? "사전 동의 인물 전용 · 브랜드 로고 원형/여백 고정 · 브랜드 절대 금기 3항목 · 피부 웜톤 보호"
+                      : "Consented talent only · Logo geometry & clearspace · 3 Base Brand Taboos · Skin protection"}
+                  </p>
+                </div>
+                <div>
+                  <strong>
+                    {isKo
+                      ? `⚡ ${projectTitle} 전용 오버라이드 적용 중`
+                      : `⚡ Overridden by ${projectTitle}`}
+                  </strong>
+                  <p className="bw-muted">
+                    {isKo
+                      ? `렌즈 ${cameraFocalMm}mm · 조명 ${lightColourK}K (${lightModifier}) · 룩 ${lookPresetId} · ${isolateProjectMemory ? "프로젝트 메모리 단독 격리" : "조직 공통 메모리 공유"}`
+                      : `Lens ${cameraFocalMm}mm · Light ${lightColourK}K · Look ${lookPresetId} · ${isolateProjectMemory ? "Isolated project memory" : "Shared memory"}`}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {canWrite && (
+              <div className="bw-row">
+                <button
+                  type="button"
+                  className="bw-button"
+                  data-project-direction-save
+                  onClick={() => void onSaveProjectOverride()}
+                  disabled={busy}
+                >
+                  {isKo
+                    ? "이 프로젝트 전용 연출 오버라이드 저장"
+                    : "Save Project Direction Override"}
+                </button>
+                <button
+                  type="button"
+                  className="bw-button"
+                  data-project-direction-promote
+                  onClick={() => void onPromoteProjectToBase()}
+                  disabled={busy}
+                >
+                  {isKo
+                    ? "성공한 프로젝트 규칙을 브랜드 Base DNA로 승격"
+                    : "Promote Project Rules to Brand Base DNA"}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <form onSubmit={onCompileSubmit} className="bw-fields" data-brief-compile-form>
@@ -606,6 +1058,29 @@ export function BrandBriefStudio({
                   : `${view.lint.filter((l) => l.severity === "error").length} Lint Error(s)`}
             </span>
           </div>
+
+          {view.directionCascade && (
+            <div
+              className="bw-row"
+              data-brief-cascade-badge
+              data-cascade-mode={view.directionCascade.mode}
+            >
+              <span className="bw-badge">
+                {view.directionCascade.mode === "project_override"
+                  ? isKo
+                    ? `연출 계층: Base DNA ⊕ ${view.directionCascade.projectTitle ?? view.directionCascade.projectId}`
+                    : `Cascade: Base DNA ⊕ ${view.directionCascade.projectTitle ?? view.directionCascade.projectId}`
+                  : isKo
+                    ? "연출 계층: Brand Base DNA 100% 상속"
+                    : "Cascade: 100% Brand Base DNA"}
+              </span>
+              {view.directionCascade.overriddenByProject.length > 0 && (
+                <small className="bw-muted">
+                  {view.directionCascade.overriddenByProject.join(" · ")}
+                </small>
+              )}
+            </div>
+          )}
 
           <label>
             {isKo ? "컴파일된 촬영 지시문" : "Compiled Direction Prompt"}

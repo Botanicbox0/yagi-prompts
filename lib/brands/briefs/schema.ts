@@ -365,4 +365,12 @@ export interface CustomerBriefView {
   approvedAt: string | null;
   finalizedAt: string | null;
   updatedAt: string;
+  directionCascade?: {
+    mode: 'base_inherited' | 'project_override';
+    projectId: string | null;
+    projectTitle: string | null;
+    lockedFromBase: string[];
+    overriddenByProject: string[];
+    isolateProjectMemory: boolean;
+  };
 }

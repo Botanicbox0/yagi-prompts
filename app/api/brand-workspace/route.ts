@@ -28,10 +28,13 @@ import {
   coerceIdentityPayload,
   confirmBrandIdentity,
   draftFromTwingsDefaults,
+  ingestBrandOnboarding,
   loadBrandIdentity,
+  promoteProjectDirectionToBase,
   recordMemory,
   saveBrandIdentity,
   saveLook,
+  saveProjectDirectionOverride,
 } from "@/lib/brands/identity/service";
 import {
   approveBrandBrief,
@@ -144,6 +147,15 @@ export async function POST(request: NextRequest) {
         break;
       case "identity.draftDefaults":
         result = await draftFromTwingsDefaults({ sql }, viewer, input);
+        break;
+      case "identity.ingest":
+        result = await ingestBrandOnboarding({ sql }, viewer, input);
+        break;
+      case "projectDirection.save":
+        result = await saveProjectDirectionOverride({ sql }, viewer, input);
+        break;
+      case "projectDirection.promoteToBase":
+        result = await promoteProjectDirectionToBase({ sql }, viewer, input);
         break;
       case "identity.save": {
         const existing =

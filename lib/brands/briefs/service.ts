@@ -7,11 +7,17 @@ import {
   isMissingTable
 } from '@/lib/brands/entitlements';
 import {
+  ProjectDirectionOverrideSchema,
   confirmedIdentityFor,
+  filterMemoryForProjectScope,
   listMemory,
+  loadProjectDirectionForProject,
   markConfirmedBrandIdentity,
+  resolveEffectiveBrandDirection,
   twingsDefaultIdentity,
-  type ConfirmedBrandIdentity
+  type ConfirmedBrandIdentity,
+  type DirectionCascadeSummary,
+  type ProjectDirectionOverride
 } from '@/lib/brands/identity/service';
 import type { BrandFailureCode, BrandOutcome, BrandRole } from '@/lib/brands/workspace/types';
 import type { BrandMemoryContext, CompilerGrammarId } from './compiler';
@@ -145,7 +151,8 @@ const GRAMMAR_VIEW_MAP: Record<
 
 export function toCustomerBriefView(
   state: BrandBriefState,
-  identitySource: 'confirmed' | 'default_fallback'
+  identitySource: 'confirmed' | 'default_fallback',
+  directionCascade?: DirectionCascadeSummary
 ): CustomerBriefView {
   const gInfo = GRAMMAR_VIEW_MAP[state.compiled.params.grammar];
   const cInfo = SHOT_CUT_KIND_LABELS[state.spec.cutKind];
@@ -180,7 +187,8 @@ export function toCustomerBriefView(
     lockedSpecHash: state.lockedSpecHash,
     approvedAt: state.approvedAt,
     finalizedAt: state.finalizedAt,
-    updatedAt: state.updatedAt
+    updatedAt: state.updatedAt,
+    ...(directionCascade ? { directionCascade } : {})
   };
 }
 
@@ -381,25 +389,43 @@ export function buildShotSpecFromQuickInput(
 
 async function resolveBrandIdentityAndMemory(
   sql: SqlRunner,
-  organizationId: string
+  organizationId: string,
+  projectId?: string | null,
+  inlineOverride?: ProjectDirectionOverride | null
 ): Promise<{
   identity: ConfirmedBrandIdentity;
   identitySource: 'confirmed' | 'default_fallback';
   memory: BrandMemoryContext;
+  directionCascade: DirectionCascadeSummary;
+  shotDefaults: ReturnType<typeof resolveEffectiveBrandDirection>['shotDefaults'];
 }> {
-  const [confirmed, memoryRows] = await Promise.all([
+  const [confirmed, memoryRows, storedOverride] = await Promise.all([
     confirmedIdentityFor(sql, organizationId),
-    listMemory(sql, organizationId, 50)
+    listMemory(sql, organizationId, 80),
+    !inlineOverride && projectId
+      ? loadProjectDirectionForProject(sql, organizationId, projectId)
+      : Promise.resolve(null)
   ]);
-  const identity =
+  const baseIdentity =
     confirmed ?? markConfirmedBrandIdentity(twingsDefaultIdentity());
   const identitySource = confirmed ? 'confirmed' : 'default_fallback';
+
+  const activeOverride = inlineOverride ?? storedOverride;
+  const resolvedDirection = resolveEffectiveBrandDirection(
+    baseIdentity,
+    activeOverride
+  );
+
+  const scopedRows = filterMemoryForProjectScope(
+    memoryRows,
+    activeOverride?.enabled ? activeOverride.projectId : projectId
+  );
 
   const approvedFrames: string[] = [];
   const bannedPhrases: string[] = [];
   const savedLooks: string[] = [];
 
-  for (const row of memoryRows) {
+  for (const row of scopedRows) {
     const summary =
       typeof row.payload.summary === 'string' ? row.payload.summary.trim() : '';
     if (!summary) continue;
@@ -409,14 +435,20 @@ async function resolveBrandIdentityAndMemory(
   }
 
   return {
-    identity,
+    identity: resolvedDirection.effectiveIdentity,
     identitySource,
-    memory: { approvedFrames, bannedPhrases, savedLooks }
+    memory: { approvedFrames, bannedPhrases, savedLooks },
+    directionCascade: resolvedDirection.cascade,
+    shotDefaults: resolvedDirection.shotDefaults
   };
 }
 
 const CompileBriefOperationSchema = z.object({
   organizationId: uuid,
+  projectId: z.string().trim().min(1).max(80).optional(),
+  projectOverride: ProjectDirectionOverrideSchema.omit({
+    organizationId: true
+  }).optional(),
   spec: ShotSpecSchema.optional(),
   quick: QuickBriefInputSchema.omit({ organizationId: true }).optional()
 });
@@ -457,16 +489,45 @@ export async function compileBrandBrief(
       ]);
       await assertBrandFeature(sql, organizationId, 'generative_media');
 
-      const { identity, identitySource, memory } =
-        await resolveBrandIdentityAndMemory(sql, organizationId);
+      const inlineOverride = parsed.data.projectOverride
+        ? ProjectDirectionOverrideSchema.parse({
+            ...parsed.data.projectOverride,
+            organizationId
+          })
+        : null;
+
+      const {
+        identity,
+        identitySource,
+        memory,
+        directionCascade,
+        shotDefaults
+      } = await resolveBrandIdentityAndMemory(
+        sql,
+        organizationId,
+        parsed.data.projectId ?? inlineOverride?.projectId ?? null,
+        inlineOverride
+      );
+
+      const quickWithProjectDefaults = parsed.data.quick
+        ? {
+            ...parsed.data.quick,
+            organizationId,
+            brief:
+              shotDefaults.projectRulePrompt &&
+              !parsed.data.quick.brief.includes(shotDefaults.projectRulePrompt)
+                ? `${parsed.data.quick.brief} (${shotDefaults.projectRulePrompt})`.slice(
+                    0,
+                    500
+                  )
+                : parsed.data.quick.brief
+          }
+        : null;
 
       const spec = parsed.data.spec
         ? parsed.data.spec
-        : parsed.data.quick
-          ? buildShotSpecFromQuickInput(
-              { ...parsed.data.quick, organizationId },
-              identity
-            )
+        : quickWithProjectDefaults
+          ? buildShotSpecFromQuickInput(quickWithProjectDefaults, identity)
           : null;
 
       if (!spec) {
@@ -484,7 +545,7 @@ export async function compileBrandBrief(
         ok: true as const,
         id: state.id,
         brief: state,
-        view: toCustomerBriefView(state, identitySource)
+        view: toCustomerBriefView(state, identitySource, directionCascade)
       };
     });
   } catch (error) {
@@ -612,6 +673,8 @@ export async function reviseBrandBrief(
 
 const ApproveBriefOperationSchema = z.object({
   organizationId: uuid,
+  projectId: z.string().trim().min(1).max(80).optional(),
+  isolateProjectMemory: z.boolean().optional(),
   current: BriefStateSnapshotSchema,
   aestheticGatePassed: z.boolean()
 });
@@ -688,7 +751,14 @@ export async function approveBrandBrief(
             organizationId,
             JSON.stringify({
               summary: `[${SHOT_CUT_KIND_LABELS[outcome.data.spec.cutKind].code}] ${outcome.data.spec.brief}`,
-              briefId: outcome.data.id
+              briefId: outcome.data.id,
+              ...(parsed.data.projectId
+                ? {
+                    projectId: parsed.data.projectId,
+                    isolateProjectMemory:
+                      parsed.data.isolateProjectMemory ?? true
+                  }
+                : {})
             }),
             viewer.userId
           ]

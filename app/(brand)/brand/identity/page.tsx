@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { ActionForm } from "@/components/brand-workspace/action-form";
+import { BrandOnboardingWizard } from "@/components/brand-workspace/brand-onboarding-wizard";
 import { BrandUnavailable } from "@/components/brand-workspace/brand-unavailable";
 import { brandContext } from "@/components/brand-workspace/context";
 import { formatBrandTimestamp } from "@/components/brand-workspace/format";
@@ -166,6 +167,16 @@ export default async function BrandIdentityPage({
           </div>
         </section>
       )}
+
+      <BrandOnboardingWizard
+        organizationId={choice.id}
+        organizationName={choice.name}
+        locale={locale}
+        isOwner={isOwner}
+        currentStatus={record?.status ?? "none"}
+        currentRevision={record?.revision ?? 0}
+        studioHref={scopedHref("/brand/studio", choice)}
+      />
 
       <section className="bw-panel" data-brand-identity-form>
         <ActionForm
