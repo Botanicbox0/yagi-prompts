@@ -139,6 +139,20 @@ describe("campaign page", () => {
     expect(guideHtml).toContain("data-track-cards");
     expect(guideHtml).toContain("YAGI PRODUCTION");
     expect(guideHtml).toContain("CREATOR CAMPAIGN");
+
+    // When generativeMediaAllowed is false (e.g. Morphic), no AI brief concierge, aesthetic engine, handoff, or studio track appears.
+    const deniedProjectHtml = renderToStaticMarkup(
+      <ProjectDetail
+        project={{ ...project, productionMode: "studio" }}
+        b={b}
+        locale="ko"
+        generativeMediaAllowed={false}
+      />
+    );
+    expect(deniedProjectHtml).not.toContain("data-aesthetic-engine");
+    expect(deniedProjectHtml).not.toContain("data-brief-intake");
+    expect(deniedProjectHtml).not.toContain("data-handoff");
+    expect(deniedProjectHtml).not.toContain("YAGI PRODUCTION");
   });
 });
 

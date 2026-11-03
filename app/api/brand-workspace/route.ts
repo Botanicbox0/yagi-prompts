@@ -34,6 +34,12 @@ import {
   saveLook,
 } from "@/lib/brands/identity/service";
 import {
+  approveBrandBrief,
+  compileBrandBrief,
+  promoteBrandBrief,
+  reviseBrandBrief,
+} from "@/lib/brands/briefs/service";
+import {
   notifySlackBrandConcierge,
   syncSlackConciergeReplies,
 } from "@/lib/brands/concierge-slack";
@@ -196,6 +202,18 @@ export async function POST(request: NextRequest) {
                 input.skinProtect === "true",
           source: input.source,
         });
+        break;
+      case "brief.compile":
+        result = await compileBrandBrief({ sql }, viewer, input);
+        break;
+      case "brief.revise":
+        result = await reviseBrandBrief({ sql }, viewer, input);
+        break;
+      case "brief.approve":
+        result = await approveBrandBrief({ sql }, viewer, input);
+        break;
+      case "brief.promoteFinal":
+        result = await promoteBrandBrief({ sql }, viewer, input);
         break;
       case "attachment.reserve": {
         const reserved = await reserveBrandAttachment({ sql }, viewer, input);

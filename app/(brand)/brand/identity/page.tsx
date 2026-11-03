@@ -46,7 +46,13 @@ export default async function BrandIdentityPage({
     organizationId
   );
   if (selection.state === "unavailable") return <BrandUnavailable b={b} />;
-  if (choice && featureDenied(choice.denied, "brand_learning")) notFound();
+  if (
+    choice &&
+    (featureDenied(choice.denied, "brand_learning") ||
+      featureDenied(choice.denied, "generative_media"))
+  ) {
+    notFound();
+  }
 
   const t = b.identityLayer;
 
@@ -487,6 +493,7 @@ export default async function BrandIdentityPage({
       </section>
 
       <div className="bw-grid-wide">
+        {!featureDenied(choice.denied, "color_grading") && (
         <section className="bw-panel" data-brand-looks>
           <h2>{t.looksSection}</h2>
           <p className="bw-muted">{t.looksHint}</p>
@@ -560,6 +567,7 @@ export default async function BrandIdentityPage({
             </ActionForm>
           )}
         </section>
+        )}
 
         <section className="bw-panel" data-brand-memory>
           <h2>{t.memorySection}</h2>

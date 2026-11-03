@@ -105,6 +105,7 @@ export function ProjectDetail({
   b,
   locale,
   studio = false,
+  generativeMediaAllowed = true,
   backHref,
   studioReply,
   staffManageHref = null,
@@ -120,6 +121,8 @@ export function ProjectDetail({
   b: BrandCopy;
   locale: string;
   studio?: boolean;
+  /** False when the organization's feature policy closes generative studio production (e.g. Morphic). */
+  generativeMediaAllowed?: boolean;
   /** Validated list context; checked again against the loaded project before rendering. */
   backHref?: string;
   /** The studio's own comment form, rendered where the conversation is instead of a separate panel. */
@@ -167,8 +170,8 @@ export function ProjectDetail({
           <a href={campaignListReturnPath(backHref, p.organizationId, studio)}>← {b.back}</a>
           <div className="ys-project-track-row">
             <p className="bw-kicker">{p.organizationName}</p>
-            <span className="ys-track-pill" data-track={p.productionMode}>
-              {p.productionMode === "studio"
+            <span className="ys-track-pill" data-track={generativeMediaAllowed ? p.productionMode : "creator"}>
+              {generativeMediaAllowed && p.productionMode === "studio"
                 ? locale === "en"
                   ? "YAGI PRODUCTION · Studio Film"
                   : "YAGI PRODUCTION · 스튜디오 제작"
@@ -198,12 +201,14 @@ export function ProjectDetail({
           {next.href && <a className="bw-button" href={next.href}>{next.label} →</a>}
         </div>
       )}
-      <HumanHandoff
-        organizationId={p.organizationId}
-        projectId={p.id}
-        locale={locale}
-        refCount={Math.max(p.referenceLinks.length, 3)}
-      />
+      {generativeMediaAllowed && (
+        <HumanHandoff
+          organizationId={p.organizationId}
+          projectId={p.id}
+          locale={locale}
+          refCount={Math.max(p.referenceLinks.length, 3)}
+        />
+      )}
       <ProjectTabs b={b} pendingReviews={p.status === "active" ? p.contents.filter(c => c.version === newest.get(c.slotKey) && c.decision === "pending").length : 0} comments={p.messages.length} usage={usage !== null} campaign={applicants !== null} shortlist={shortlist ? shortlistCount : 0}>
       <section id="performance" className="bw-panel">
         <CampaignTimelineView timeline={campaignTimeline(p)} b={b} />
@@ -315,15 +320,19 @@ export function ProjectDetail({
                 </ul>
               </>
             )}
-            <BriefConcierge
-              brandName={p.organizationName}
-              projectTitle={p.title}
-              objective={p.objective}
-              organizationId={p.organizationId}
-              projectId={p.id}
-              locale={locale}
-            />
-            <AestheticEngine locale={locale} referenceLinks={p.referenceLinks} />
+            {generativeMediaAllowed && (
+              <>
+                <BriefConcierge
+                  brandName={p.organizationName}
+                  projectTitle={p.title}
+                  objective={p.objective}
+                  organizationId={p.organizationId}
+                  projectId={p.id}
+                  locale={locale}
+                />
+                <AestheticEngine locale={locale} referenceLinks={p.referenceLinks} />
+              </>
+            )}
           </section>
           <section id="review" className="bw-panel">
             <h2>{b.review}</h2>

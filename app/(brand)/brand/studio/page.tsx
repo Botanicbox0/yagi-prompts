@@ -10,8 +10,10 @@ import {
 import { brandContext } from "@/components/brand-workspace/context";
 import { brandScope, membershipOf, selectedAccess } from "@/components/brand-workspace/scope";
 import { BrandUnavailable } from "@/components/brand-workspace/brand-unavailable";
-import { scopedHref } from "@/lib/brands/workspace/selection";
+import { scopedHref, sectionVisibility } from "@/lib/brands/workspace/selection";
 import { ProductionCreate } from "@/components/brand-workspace/production-create";
+import { BrandBriefStudio } from "@/components/brand-workspace/brand-brief-studio";
+import { confirmedIdentityFor } from "@/lib/brands/identity/service";
 import { loadProductionWorkspace } from "@/lib/brands/production/service";
 import { loadBrandSupport } from "@/lib/brands/workspace/service";
 import { studioRequestStatus, studioStage } from "@/lib/brands/production/stage";
@@ -78,6 +80,10 @@ export default async function BrandStudio({
   const canCreate = !access.staff && production?.role !== "viewer";
   // The face is asked for only once there is a template to use it with.
   const hasTemplates = contracts.some((c) => c.templates.length > 0);
+  const confirmedIdentity =
+    hasTemplates && historyOrg
+      ? await confirmedIdentityFor(sql, historyOrg).catch(() => null)
+      : null;
   const selfie = hasTemplates ? (await currentSelfie(sql, viewer.userId!))?.id ?? null : null;
   const mode = assetLibraryMode();
   const verifyRequired =
@@ -153,6 +159,20 @@ export default async function BrandStudio({
         <StudioIntro t={o} stage={stage} guide={guide} />
       ) : (
         <StudioHelp t={o} stage={stage} guide={guide} />
+      )}
+      {historyOrg && (
+        <BrandBriefStudio
+          organizationId={historyOrg}
+          locale={locale}
+          canWrite={canCreate}
+          identityConfirmed={Boolean(confirmedIdentity)}
+          defaultChecklist={confirmedIdentity?.productChecklist}
+          identityHref={
+            choice && sectionVisibility(choice).identity
+              ? scopedHref("/brand/identity", choice)
+              : undefined
+          }
+        />
       )}
       {production && contracts.length > 0 && (
         <>
