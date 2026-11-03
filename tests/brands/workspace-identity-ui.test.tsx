@@ -95,9 +95,9 @@ describe('selection rule', () => {
   });
 
   it('shows sections by the selected brand role and keeps the brand when switching', () => {
-    expect(sectionVisibility(choices[0]!)).toEqual({ studio: true, settings: true, members: true });
-    expect(sectionVisibility(choices[1]!)).toEqual({ studio: true, settings: true, members: false });
-    expect(sectionVisibility(choices[2]!)).toEqual({ studio: false, settings: false, members: false });
+    expect(sectionVisibility(choices[0]!)).toEqual({ studio: true, identity: true, settings: true, members: true });
+    expect(sectionVisibility(choices[1]!)).toEqual({ studio: true, identity: true, settings: true, members: false });
+    expect(sectionVisibility(choices[2]!)).toEqual({ studio: false, identity: false, settings: false, members: false });
     expect(switchHref('/brand/members', choices[1]!)).toBe(`/brand?organizationId=${B}`);
     expect(switchHref('/brand/settings', choices[1]!)).toBe(`/brand/settings?organizationId=${B}`);
     expect(switchHref('/brand/settings', choices[2]!)).toBe(`/brand?organizationId=${G}`);

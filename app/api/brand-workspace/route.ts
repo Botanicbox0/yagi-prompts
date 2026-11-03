@@ -25,6 +25,15 @@ import {
 import { usagePaymentsOpen } from "@/lib/brands/usage/runtime";
 import { chooseShortlistCandidates, pickShortlistCandidate } from "@/lib/brands/shortlist/service";
 import {
+  coerceIdentityPayload,
+  confirmBrandIdentity,
+  draftFromTwingsDefaults,
+  loadBrandIdentity,
+  recordMemory,
+  saveBrandIdentity,
+  saveLook,
+} from "@/lib/brands/identity/service";
+import {
   notifySlackBrandConcierge,
   syncSlackConciergeReplies,
 } from "@/lib/brands/concierge-slack";
@@ -126,6 +135,67 @@ export async function POST(request: NextRequest) {
         break;
       case "shortlist.choose":
         result = await chooseShortlistCandidates({ sql }, viewer, input);
+        break;
+      case "identity.draftDefaults":
+        result = await draftFromTwingsDefaults({ sql }, viewer, input);
+        break;
+      case "identity.save": {
+        const existing =
+          typeof input.organizationId === "string"
+            ? await loadBrandIdentity(sql, input.organizationId)
+            : null;
+        result = await saveBrandIdentity({ sql }, viewer, {
+          organizationId: input.organizationId,
+          expectedRevision:
+            typeof input.expectedRevision === "number"
+              ? input.expectedRevision
+              : Number(input.expectedRevision ?? 0),
+          identity: coerceIdentityPayload(input, existing?.identity),
+          status: "draft",
+        });
+        break;
+      }
+      case "identity.confirm":
+        result = await confirmBrandIdentity({ sql }, viewer, {
+          organizationId: input.organizationId,
+          expectedRevision:
+            typeof input.expectedRevision === "number"
+              ? input.expectedRevision
+              : Number(input.expectedRevision ?? 0),
+        });
+        break;
+      case "memory.record": {
+        const payload =
+          input.payload && typeof input.payload === "object"
+            ? input.payload
+            : {
+                summary:
+                  typeof input.summary === "string" ? input.summary.trim() : "",
+              };
+        result = await recordMemory({ sql }, viewer, {
+          organizationId: input.organizationId,
+          kind: input.kind,
+          payload,
+        });
+        break;
+      }
+      case "look.save":
+        result = await saveLook({ sql }, viewer, {
+          organizationId: input.organizationId,
+          title: input.title,
+          lutKey: input.lutKey,
+          intensity:
+            input.intensity !== undefined && input.intensity !== ""
+              ? Number(input.intensity)
+              : 1,
+          skinProtect:
+            input.skinProtect === undefined
+              ? true
+              : input.skinProtect === true ||
+                input.skinProtect === "on" ||
+                input.skinProtect === "true",
+          source: input.source,
+        });
         break;
       case "attachment.reserve": {
         const reserved = await reserveBrandAttachment({ sql }, viewer, input);

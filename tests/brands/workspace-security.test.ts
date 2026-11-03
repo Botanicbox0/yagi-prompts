@@ -84,9 +84,10 @@ describe('brand invitations, attachment bytes and database boundary', () => {
     await db.exec(readMigration('0121_glue_brand_organization_logo.sql'));
     await db.exec(readMigration('0146_glue_brand_shortlist.sql'));
     await db.exec(readMigration('0150_glue_brand_entitlements.sql'));
+    await db.exec(readMigration('0151_glue_brand_identity.sql'));
     const tables =(await sql.query<{ relname: string; relrowsecurity: boolean; relforcerowsecurity: boolean }>("select relname,relrowsecurity,relforcerowsecurity from pg_class where relkind='r' and relname like 'brand_%' and relname not in ('brand_inquiries', 'brand_inquiry_deliveries') and relname not like 'brand_usage_%'")).rows; // Inquiry delivery and brand_usage_* have their own RLS tests.
-    expect(tables.map(t=>t.relname)).toEqual(expect.arrayContaining(['brand_project_members','brand_contract_documents','brand_contract_sharing_events','brand_support_messages','brand_shortlist_candidates','brand_feature_policies','brand_feature_policy_events','brand_plan_assignments','brand_plan_events']));
-    expect(tables.length).toBe(26);
+    expect(tables.map(t=>t.relname)).toEqual(expect.arrayContaining(['brand_project_members','brand_contract_documents','brand_contract_sharing_events','brand_support_messages','brand_shortlist_candidates','brand_feature_policies','brand_feature_policy_events','brand_plan_assignments','brand_plan_events','brand_identities','brand_identity_events','brand_memory_events','brand_looks']));
+    expect(tables.length).toBe(30);
     for (const table of tables) {
       expect(table.relrowsecurity && table.relforcerowsecurity).toBe(true);
       for (const role of ['anon', 'authenticated']) {

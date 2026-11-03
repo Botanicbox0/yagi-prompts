@@ -1565,7 +1565,7 @@ async function sweepBrandWorkspace(fixtures: BrandWorkspaceProbe[]): Promise<voi
     expectEqual(`${label}: no fixture content or private storage key`, leaked, false);
   };
   // Authorization must run before looking up either existing or guessed report IDs.
-  for (const path of ['/brand', `/brand/projects/${fixture.id}`, `/admin/brand-workspace/${fixture.id}`,
+  for (const path of ['/brand', '/brand/identity', `/brand/projects/${fixture.id}`, `/admin/brand-workspace/${fixture.id}`,
     `/brand/projects/${fixture.id}/reports/${fixture.id}`,
     `/admin/brand-workspace/${fixture.id}/reports/${fixture.id}`,
     // Secondary usage (docs/SECONDARY-USAGE.md): the pay page, the provider return page and the studio queue.

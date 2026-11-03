@@ -22,6 +22,7 @@ export type WorkspaceAccess = ReturnType<typeof workspaceAccess>;
 
 export interface NavigationVisibility {
   studio: boolean;
+  identity?: boolean;
   settings: boolean;
   members: boolean;
 }
