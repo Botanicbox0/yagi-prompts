@@ -4,6 +4,7 @@ import { getDictionary } from '@/lib/i18n/dictionaries';
 import { getPromptCatalog } from '@/lib/prompts/public-catalog';
 import { templatesListingMetadata } from '@/lib/seo/template-metadata';
 import { MarketingFooter, MarketingNav } from '@/components/marketing/chrome';
+import { PersonalIdentity } from '@/components/audience/personal-identity';
 import { TemplatesListing } from '@/components/templates/listing';
 import { FaqSection } from '@/lib/seo/faq-section';
 
@@ -43,13 +44,13 @@ export default async function ImageTemplatesPage({ params }: RouteParams) {
   const catalog = await getPromptCatalog();
 
   return (
-    <>
+    <PersonalIdentity>
       <MarketingNav locale={locale} dict={dict} rest="/image" initialTheme="light" />
       <main id="main" data-templates="image" data-section data-theme="light" className="section">
         <TemplatesListing locale={locale} dict={dict} medium="image" cards={catalog.image} />
       </main>
       <FaqSection dict={dict} locale={locale} placement="template" path={`/${locale}/image`} />
       <MarketingFooter locale={locale} dict={dict} />
-    </>
+    </PersonalIdentity>
   );
 }

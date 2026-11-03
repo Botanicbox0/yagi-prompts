@@ -18,8 +18,8 @@ const FOLD_CHARS = 600;
 /** The two layouts: its own section under the stage, or the column beside it (story-first, 2026-10-29). */
 function layout(compact: boolean) {
   return compact
-    ? { section: 'mt-7 border-t border-hairline pt-6', heading: 'font-display text-[1.35rem] leading-none font-black uppercase', list: 'mt-4 space-y-4', step: 'rounded-2xl border border-hairline p-4', gate: 'mt-4 rounded-2xl border border-hairline bg-surface p-4', intro: 'text-sm', note: 'mt-3', outro: 'mt-4' }
-    : { section: 'mt-16 border-t border-hairline pt-10', heading: 'font-display text-[clamp(1.4rem,2.6vw,2rem)] leading-[0.95] font-black uppercase', list: 'mt-6 space-y-5', step: 'rounded-2xl border border-hairline p-5', gate: 'mt-6 rounded-2xl border border-hairline bg-surface p-5 sm:p-6', intro: 'text-[0.95rem]', note: 'mt-4', outro: 'mt-6' };
+    ? { section: 'mt-7 border-t border-hairline pt-6', heading: 'font-display text-[1.35rem] leading-none font-black uppercase', list: 'mt-4 space-y-4', step: 'rounded-3xl border border-hairline bg-white p-4', gate: 'mt-4 rounded-3xl border border-hairline bg-white p-4', intro: 'text-sm', note: 'mt-3', outro: 'mt-4' }
+    : { section: 'mt-16 border-t border-hairline pt-10', heading: 'font-display text-[clamp(1.4rem,2.6vw,2rem)] leading-[0.95] font-black uppercase', list: 'mt-6 space-y-5', step: 'rounded-3xl border border-hairline bg-white p-5', gate: 'mt-6 rounded-3xl border border-hairline bg-white p-5 sm:p-6', intro: 'text-[0.95rem]', note: 'mt-4', outro: 'mt-6' };
 }
 
 /** The creative's intro (§20.3, public) in place of the generic lede, when they wrote one. */
@@ -150,7 +150,7 @@ function GatedHowItWasMade({
           <a
             data-recipe-gate-cta
             href={gate.signinHref}
-            className="mt-4 inline-flex min-h-11 items-center rounded-full bg-black px-5 py-2.5 text-xs font-semibold tracking-wide text-white transition-opacity hover:opacity-85"
+            className="audience-button-quiet mt-4 min-h-11 text-sm"
           >
             {h.gateCta}
           </a>

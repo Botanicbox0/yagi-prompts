@@ -34,6 +34,7 @@ export default async function FaqPage({ params }: Props) {
   const locale = isLocale(raw) ? raw : DEFAULT_LOCALE;
   const dict = getDictionary(locale);
   const items = faqItems(dict);
+  // No catch: a rejected read is an outage, and throwing keeps the last good page (lib/db/read-policy.ts).
   const availability = await cachedSubscriptionAvailability();
   return (
     <>

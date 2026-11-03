@@ -1,5 +1,6 @@
 import type { Dictionary } from './en';
 import { adminWorkflowKo } from './admin-workflow';
+import { adminConsoleKo } from './admin-console';
 
 /**
  * PLAN §3.9 — manual bilingual authoring in v1; the type keeps the two dictionaries in step.
@@ -42,6 +43,7 @@ const T = KO_TERMS;
 
 export const ko: Dictionary = {
   adminWorkflow: adminWorkflowKo,
+  adminConsole: adminConsoleKo,
   landingMedia: {
     nav: '랜딩 이미지',
     heading: '랜딩 이미지',
@@ -126,7 +128,7 @@ export const ko: Dictionary = {
   "formatNeedsScript": "포맷을 제출하려면 JavaScript가 필요해요. 켜고 이 페이지를 새로고침해 주세요.",
   "royalty": `누적 ${T.maker} 배분액`,
   "royaltyHint": `세금·결제 수수료·실제 제작 원가를 뺀 배분 대상 이익의 80%가 ${T.maker} 몫입니다. 아래 금액은 정산 검토 대상이며, 실제 송금 완료 금액은 아닙니다.`,
-  "adminTitle": "제작 요청과 포맷 파트너",
+  "adminTitle": "AI 크리에이티브",
   "adminHint": `요청, ${T.maker} 권한, 후기와 게시 증빙을 검토합니다. 운영 결정은 이력으로 남습니다.`,
   "reason": "처리 사유 / 증빙 위치",
   "userId": "계정 식별자",
@@ -184,9 +186,9 @@ export const ko: Dictionary = {
   "approveContractHint": `승인하려면 ${T.maker}가 동의한 계약 버전을 적어야 해요.`,
   "inviteTitle": "초대 승인 (계정 ID 직접 입력)",
   "payout": "정산 방식",
-  "payoutCompany": "회사 계정 (수익 전부 회사)",
-  "payoutExternal": "외부 크리에이티브 (이익의 80% 정산)",
-  "payoutHint": "직접 등록하면 회사 계정이 기본이에요. 지원서 승인으로 들어온 계정은 외부 크리에이티브예요.",
+  "payoutCompany": "회사 홍보 계정",
+  "payoutExternal": "외부 크리에이티브 (80% 정산)",
+  "payoutHint": "직접 등록한 계정은 회사 계정, 승인된 계정은 외부 크리에이티브로 설정돼요.",
   "formatNote": `${T.maker}에게 보일 메모`,
   "formatNoteHint": `반려할 때는 꼭 적어 주세요. ${T.maker}가 읽는 글이므로, 내부 사유는 아래 칸에 적습니다.`,
   "templateStatus": "템플릿 상태",
@@ -1221,15 +1223,15 @@ export const ko: Dictionary = {
     // 2026-11-02 문구는 로컬 Gemma 추천(docs/wording/creative-pricing-2026-11-02-gemma.md)에서 골랐다.
     royaltyValue: '{amount}원',
     priceLabel: '판매 가격',
-    priceBase: '기본 가격 {amount}',
+    priceBase: '기본 {amount}',
     priceBaseHint: '모델과 분량에 맞춰 기본값이 설정됐어요.',
     priceTooLow: '{amount}보다 낮게 설정할 수 없어요.',
-    priceTooHigh: '{amount}보다 높게 설정할 수 없어요.',
+    priceTooHigh: '{amount}까지만 설정할 수 있어요.',
     priceStep: '100원 단위로 입력해 주세요.',
     priceUnknown: '레시피가 모든 확인을 통과하면 예상 가격이 나와요.',
     earningOne: '한 번 만들 때 {amount} 예상',
     earningMany: '{n}명이 만들면 {amount}이에요.',
-    earningRaise: '가격을 높이면 만드는 분이 내는 금액도 늘고, 수익도 함께 올라가요.',
+    earningRaise: '가격을 높이면 만드는 분이 내는 금액과 수익이 함께 늘어나요.',
     earningRule: '세금, 수수료, 제작 원가를 뺀 이익의 80%를 드려요.',
     earningEstimate: '원가와 환율에 따라 실제 정산액은 조금 달라질 수 있어요.',
     earningSettle: '결과물 전달 후 7일이 지난 건부터 정산 대상이에요. 환불된 건은 제외돼요.',
@@ -1273,7 +1275,7 @@ export const ko: Dictionary = {
     submitting: '보내는 중…',
     publish: '바로 공개하기',
     publishing: '공개하는 중…',
-    publishHint: '공개하려면 레시피 검사 통과, 예시 파일, 내 사진으로 한 테스트 렌더 1회 성공이 필요해요. 가격은 기본값부터 직접 정할 수 있어요. 규칙에 어긋나는 템플릿은 스튜디오가 내릴 수 있어요.',
+    publishHint: '레시피 검사, 예시 파일, 내 사진으로 한 테스트 렌더 1회 성공이 모두 필요해요. 가격은 기본값부터 정할 수 있으며, 규칙에 어긋나면 공개가 제한될 수 있어요.',
     readOnly: '검수에 보낸 템플릿은 고칠 수 없어요. 반려되면 고쳐서 다시 보낼 수 있습니다.',
     errors: {
       invalid: '다시 확인할 칸이 있어요.',
@@ -1362,8 +1364,8 @@ export const ko: Dictionary = {
       renders: '검수 렌더',
       none: '아직 검수 렌더가 없어요.',
       price: '최종 가격(원)',
-      priceHint: '기본 가격 {floor} + 올린 금액 {royalty} = {proposed}',
-      royalty: '올린 금액',
+      priceHint: '기본 {floor} + 추가 {royalty} = 합계 {proposed}',
+      royalty: '추가',
       disclosure: '공개',
       presentation: '순서',
       testsUsed: `${T.maker} 테스트 {n}/3`,
@@ -4883,6 +4885,7 @@ export const ko: Dictionary = {
     setErrImage: '{n}번 컷에 이미지가 없거나 아직 올라가는 중입니다.',
     setErrAspect: '{n}번 컷 이미지가 {aspect} 비율이 아닙니다. 화면비를 바꾸거나 다른 이미지를 넣어 주세요.',
     setErrPromptShort: '{n}번 컷의 프롬프트가 너무 짧습니다.',
+    setErrPromptLong: '{n}번 컷의 프롬프트가 너무 깁니다. {max}자 이내로 줄여 주세요.',
     setErrNoPhoto: '{n}번 컷 프롬프트에 고객 사진을 뜻하는 Image 1(또는 @image1)이 없습니다.',
     setErrOtherReference: '{n}번 컷 프롬프트가 세트에 없는 참조(Image 2 등)를 가리킵니다.',
     setErrBraces: '{n}번 컷 프롬프트에서 {{ }} 표기를 빼 주세요.',
@@ -4928,9 +4931,9 @@ export const ko: Dictionary = {
     fieldTemplatePrice1080: '1080p 가격 (USD 센트)',
     fieldTemplatePrice1080Krw: '1080p 가격 (원)',
     templatePrice1080Hint: '영상만. 두 칸 모두 0보다 커야 1080p를 선택지로 보여줍니다. 기본 화질은 720p입니다.',
-    templateCostFloor: '기본 가격(마진 6%): 720p {p720} · 1080p {p1080}. 마진 5~7% 범위를 권장해요. 환율 1,400원, 부가세 10%, 카드 수수료 3.4% 기준이에요. 가격 확정은 대표 승인 사항이에요.',
-    templateImageCostFloor: '{engine}로 {frames}장 만들 때 기본 가격은 {price}이에요. 원가에 12%를 더한 값이라 모델을 바꾸면 기본 가격도 바뀌어요. 가격 확정은 대표 승인 사항이에요.',
-    templateBelowFloor: '권장 범위보다 낮아요.',
+    templateCostFloor: '기본가는 720p {p720}, 1080p {p1080}이며 마진 6% 기준이에요. 5~7% 범위를 권장하며, 최종 가격은 대표 승인이 필요합니다. (환율 1,400원, 부가세 10%, 카드 수수료 3.4% 기준)',
+    templateImageCostFloor: '{engine} 모델 {frames}장 기준 기본가는 {price}이며, 원가에 12%를 더한 값이에요. 모델을 바꾸면 기본가도 바뀌며, 최종 가격은 대표 승인이 필요합니다.',
+    templateBelowFloor: '권장 가격보다 낮아요.',
     fieldTemplateRuntime: '길이 (초)',
     templateRuntimeHint: '영상만. 이미지는 비워둡니다.',
     fieldTemplateEngine: '생성 엔진',

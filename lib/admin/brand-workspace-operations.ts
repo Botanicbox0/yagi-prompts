@@ -1,5 +1,5 @@
 import {
-  sendBrandSupport, updateBrandSettings, revokeStudioInvitation, createStudioOrganization, createStudioProject, createStudioInvitation, setBrandProjectVisibility, revokeStudioAccess, addBrandContract, shareBrandContract,
+  sendBrandSupport, revokeStudioInvitation, createStudioOrganization, createStudioProject, createStudioInvitation, setBrandProjectVisibility, revokeStudioAccess, addBrandContract, shareBrandContract,
   activateBrandProject,
   addBrandContentVersion,
   sendBrandMessage,
@@ -325,7 +325,6 @@ export const BRAND_WORKSPACE_OPERATIONS = {
  'brandWorkspace.cover': managedOperation((ctx,v)=>setBrandProjectCover(ctx,ctx.viewer,v)),
   "brandWorkspace.externalPosts": externalPosts,
   "brandWorkspace.postPresentation": postPresentation,
- 'brandWorkspace.settings': managedOperation((ctx,v)=>updateBrandSettings(ctx,ctx.viewer,v),'home'),
  'brandWorkspace.support': managedOperation((ctx,v)=>sendBrandSupport(ctx,ctx.viewer,v,'studio'),'home'),
  'brandWorkspace.revokeInvite': managedOperation((ctx,v)=>revokeStudioInvitation(ctx,ctx.viewer,v),'home'),
  'brandWorkspace.organization': managedOperation((ctx,v)=>createStudioOrganization(ctx,ctx.viewer,v),'home'),

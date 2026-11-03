@@ -5,6 +5,7 @@ import { directUploadFailure, uploadMime } from '@/lib/admin/direct-upload';
 import { imageFitsAspect, type ImageAspect } from '@/lib/images/engines';
 import { IMAGE_SET_FRAMES_MAX, IMAGE_SET_FRAMES_MIN, normalizeSetPrompt, PROMPT_TEXT_MIN, setPromptIssue } from '@/lib/prompts/schemas';
 import { interpolate } from '@/lib/i18n/format';
+import { MAX_STEP_PROMPT_CHARS, setPromptTooLong } from '@/lib/recipes/schema';
 
 import { put, sha256Hex, STAGING_URL_PATH, UploadRefused } from '@/components/admin/media-drop';
 
@@ -20,7 +21,7 @@ import { put, sha256Hex, STAGING_URL_PATH, UploadRefused } from '@/components/ad
 
 export type ImageSetLabels = Record<
   | 'engine' | 'aspect' | 'frames' | 'dropZone' | 'promptHint' | 'frameLabel' | 'thumbnail' | 'moveUp' | 'moveDown' | 'remove' | 'promptLabel'
-  | 'publish' | 'errCount' | 'errTitles' | 'errImage' | 'errAspect' | 'errPromptShort' | 'errNoPhoto' | 'errOtherReference' | 'errBraces'
+  | 'publish' | 'errCount' | 'errTitles' | 'errImage' | 'errAspect' | 'errPromptShort' | 'errPromptLong' | 'errNoPhoto' | 'errOtherReference' | 'errBraces'
   | 'errManifest' | 'errFile' | 'uploading' | 'done' | 'failed' | 'invalid' | 'upload' | 'session' | 'uncertain' | 'retained' | 'publishing',
   string
 >;
@@ -194,7 +195,9 @@ export function ImageSetFields({
       if (!imageFitsAspect(frame.width, frame.height, aspect)) return interpolate(labels.errAspect, { ...vars, aspect });
       const prompt = frame.prompt.trim();
       if (prompt.length < PROMPT_TEXT_MIN) return interpolate(labels.errPromptShort, vars);
-      const issue = setPromptIssue(normalizeSetPrompt(prompt));
+      const normalized = normalizeSetPrompt(prompt);
+      if (setPromptTooLong(normalized)) return interpolate(labels.errPromptLong, { ...vars, max: MAX_STEP_PROMPT_CHARS });
+      const issue = setPromptIssue(normalized);
       if (issue === 'no_photo') return interpolate(labels.errNoPhoto, vars);
       if (issue === 'other_reference') return interpolate(labels.errOtherReference, vars);
       if (issue === 'braces') return interpolate(labels.errBraces, vars);

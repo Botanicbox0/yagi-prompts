@@ -1,6 +1,6 @@
 import type { SqlRunner } from '@/lib/db/sql-runner';
 import { billingConfigFromEnv } from './gateway';
-import { subscriptionSchemaReady } from './repo';
+import { isSubscriptionSchemaError, subscriptionSchemaReady } from './repo';
 import { SUBSCRIPTION_PLAN_VERSION } from './plans';
 import { SUBSCRIPTION_TERMS_VERSION } from './legal';
 import { subscriptionRenderSchemaReady } from '@/lib/premium-editing/repo';
@@ -83,4 +83,33 @@ export async function getCreatorSubscriptionAvailability(sql: SqlRunner | null, 
     // Older installations retain their one-time flow until every new migration has landed.
     return PREPARING_SUBSCRIPTION_AVAILABILITY;
   }
+}
+
+function recordingOutages(sql: SqlRunner, outages: unknown[]): SqlRunner {
+  return {
+    async query<T>(text: string, params?: unknown[]) {
+      try {
+        return await sql.query<T>(text, params);
+      } catch (err) {
+        if (!isSubscriptionSchemaError(err)) outages.push(err);
+        throw err;
+      }
+    },
+    transaction: fn => sql.transaction(tx => fn(recordingOutages(tx, outages))),
+  };
+}
+
+/**
+ * The fresh read above, for a result that will be cached. A database that failed to answer gave no
+ * answer, so this rejects and `unstable_cache` stores nothing (lib/db/read-policy.ts): the last good
+ * answer stays up, instead of an hour of "preparing" over an open launch.
+ *
+ * A pool timeout and a bad billing key are both plain Errors, and the bad key must stay `preparing`.
+ * So the runner records what the database did, rather than this reading messages after the catch.
+ */
+export async function cacheableSubscriptionAvailability(sql: SqlRunner | null, env: NodeJS.ProcessEnv = process.env): Promise<PublicSubscriptionAvailability> {
+  const outages: unknown[] = [];
+  const availability = await getCreatorSubscriptionAvailability(sql && recordingOutages(sql, outages), env);
+  if (outages.length > 0) throw outages[0];
+  return availability;
 }
