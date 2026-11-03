@@ -70,7 +70,7 @@
 - 대표 결정 항목(§8)은 임의로 정하지 않고 PR 본문 "대표 결정 필요"에 질문으로 남긴다.
 
 ## 5. 작업 순서 (하나씩, 각자 PR)
-A. 상태 확인: git fetch; node scripts/gh-pr.mjs checks 176·177·178; claude/admin-overhaul-28f6ca에 새 커밋이 붙는지. 대표가 병합·적용을 지시하면 §2 병합 런북 1~5를 그 순서대로 한다(한 번에 하나, 각 단계 결과를 보고). 지시가 없으면 병합하지 않고 B로 간다(B는 #176 위에서 시작할 수 있다).
+A. 상태 확인: git fetch; node scripts/gh-pr.mjs checks 176·177·178·180·179·157·173·172·169. 대표가 병합·적용을 지시하면 §2 병합 런북 1~5를 그 순서대로 한다(한 번에 하나, 각 단계 결과를 보고). 그다음 §9 표의 나머지 PR을 "처리" 칸대로 정리한다(병합·닫기는 모두 대표 확인 뒤). 지시가 없으면 병합하지 않고 B로 간다(B는 #176 위에서 시작할 수 있다).
 B. S2 고정 층 — BRAND-PRODUCT §5 그대로:
    - worktree는 #176 위에서: git worktree add D:\dev\.worktrees\twings\brand-identity -b codex/brand-identity-layer origin/claude/brand-entitlements (PR base도 claude/brand-entitlements; #176이 main에 병합되면 node scripts/gh-pr.mjs retarget <번호> main).
    - 마이그레이션 0075_core_brand_identity.sql + 0151_glue_brand_identity.sql(0150 모양: RLS 강제·서버 롤만): brand_identities(organization_id pk, version, identity jsonb, status draft|confirmed, revision≥1, updated_by, updated_at), brand_identity_events, brand_memory_events(kind approved_cut|fix|banned_phrase|saved_look|note, payload jsonb), brand_looks(title, lut_key, measurements jsonb, intensity, skin_protect, source preset|reference_match). tests/db/migrations.test.ts 표 목록과 tests/brands/workspace-security.test.ts(glue 적용·개수 26→30) 갱신.
@@ -105,4 +105,31 @@ git rev-parse HEAD · git diff --stat · 실행한 명령과 출력 요약(tsc /
 
 ## 8. 대표 결정 필요 (임의로 정하지 않는다 — BRAND-PRODUCT §13)
 1 세 금액의 부가세 별도/포함 · 2 플랜 이름·포함 내용·한도·좌석·PD 시간·이월·연간 할인 · 3 결제 경로 순서와 B2B 약관 별지 · 4 Argon 테스트 충전($5~10)과 디렉터 기본 모델, SFX·음악 엔진 계약 · 5 브랜드 레시피의 얼굴 없는 생성 허용, 동의 크리에이터 얼굴 계약 필드 · 6 GPU 마감 워커 운영 범위 · 7 팔레트 ΔE 임계값·검수 라운드 상한 · 8 프로토타입 레이어 철거 시점, 사이드바 "YAGI STUDIO" 표기 · 9 가격 공개 시점·셀프서브 조건 · 10 이름 유산 정리 시기, 레거시 playbook CMS·Stripe 잔재 제거 · 11 음악 라이선스 해결 방식.
+
+## 9. 다른 세션에서 넘어오는 것 — 열린 PR 19개와 세션 상태 (2026-11-03 09:30 KST 확인)
+다른 Claude 세션들이 남긴 작업이다. 병합·닫기는 대표 지시 뒤에만, 한 번에 하나씩. 각 PR은 병합 전에 origin/main을 머지해 체크를 다시 받는다(mergeable "unknown"은 GitHub가 아직 계산 안 한 것이다).
+
+| PR | 브랜치 → base | 체크 | 처리 |
+| --- | --- | --- | --- |
+| #176 | claude/brand-entitlements → main | 초록 clean | §2 런북 1 (0074/0150 선적용) |
+| #177 | claude/admin-overhaul-28f6ca → main | 초록 clean | 런북 2 |
+| #178 | claude/admin-render-board → #177 브랜치 | 진행 중 | 런북 3 (retarget main 뒤) |
+| #180 | claude/business-address → main | 초록 clean | **보류.** 본점 이전 등기(10-29, 서울 영등포구 양평로 110, 5층 씨06호)에 맞춰 약관·환불·개인정보·푸터·메일의 사업자 주소를 바꾼다. 10-22 토스 카드 심사에는 구로구 주소가 들어가 있어, 대표가 토스 가맹점 주소를 바꾸거나 심사가 끝난 뒤 병합한다. 통신판매업 신고번호(2026-서울구로-1618)는 영등포구청 새 신고증이 나오면 별도 PR. 대표가 직접 할 일 6개(홈택스 정정 → 영등포구청 통신판매업 변경신고 → KB에스크로 사업장 정보 → D&B(D-U-N-S 696472837) → Google Play·Apple 주소를 D&B와 동일하게 → 토스 가맹점 정보)의 진행을 물어보고 병합 시점을 잡는다. |
+| #179 | claude/personal-identity-v2 → main | 초록 clean | 개인 쪽 아이덴티티 2차(공용 .identity, canvas 바탕, 잉크 글자, 버튼 두 종류). **대표 시각 확인 뒤 병합**(랜딩 시각 변경은 항상 대표 확인). 그 세션은 대표의 "이 PR에 추가" 지시 직후 한도에 걸려 멈췄다 — 무엇을 추가하라는 것인지 대표에게 묻고 같은 PR에 넣는다. PR에 남긴 제안: 히어로 "내 셀카"가 분홍 메이크업 컷이라 IDENTITY §2에 어긋남 → 맨얼굴 셀카 + 블루 톤 장면 한 쌍으로 교체(대표 결정). 범위 밖으로 남긴 것: 공용 검정 푸터, FAQ 블록 폭(1920에서 왼쪽 선 어긋남). 전후 캡처는 그 worktree의 docs/qa/personal-identity-v2. |
+| #157 → #173 | claude/gifted-gates-d7dd93, claude/fervent-noyce-8129ec → main | 둘 다 초록 | 구독 공개 상태: DB 장애를 preparing으로 캐시하지 않기(#157) → 틱이 공개 답이 바뀔 때만 공개 페이지를 비우기(#173, #157 위에 쌓임). **#157 먼저** 병합, 그다음 #173. 결제 조건·가격·약관·환경변수는 안 바뀐다고 PR이 밝힌다. 핸드오버 노트: 공유 노트 폴더의 subscription-tick-purge.md. |
+| #172 | codex/remove-goldfish-daydream → main | 초록 | 중복 템플릿 aquarium-goldfish-daydream 제거. 운영 행은 대표가 11-02에 Antigravity로 이미 지웠다. 저장소 content·시드에서 중복만 지우는지 diff 확인 뒤 병합. |
+| #169 | codex/recipe-too-large → main | 초록 | 관리자 이미지세트가 전체 용량 때문에 막히지 않게. #178 병합 뒤 main에 리베이스해 충돌 없는지 보고 병합. |
+| #108 | codex/template-page-premium → main | 초록(62커밋 뒤) | 템플릿 상세 프리미엄 재구성. 템플릿 페이지는 #110(무대·갤러리·뷰어)로 이미 재구성됐다 → 대표 확인 뒤 **닫기** 권장(남길 조각이 있으면 새 PR). |
+| #142 | claude/sunra-provider-83e778 → main | 실패(76커밋 뒤) | Sunra AI 수동 백업 어댑터·가격 비교. 대표 결정: 유지면 리베이스·수정, 아니면 닫기. |
+| #133 | claude/member-notify-design-07c467 → main | 실패(89커밋 뒤) | 공용 메일 레이아웃·가입자 알림 설계. 대표 결정 뒤 리베이스; PLATFORM-2.0 §5(알림)·§10과 맞춘다. |
+| #136~#140 | codex/admin-audit-shell → admin-home-nav → admin-renders-users → admin-detail-decompose → admin-brand-design (a~e 스택) | 실패 | 10-30 Codex 관리자 작업. #177/#178이 대체했다. docs/ADMIN.md에 재사용한 조각이 있는지 확인하고 대표 확인 뒤 **닫기**(브랜치는 남긴다). |
+| #1 | claude/yagi-workshop-ending-video-at61z7 → main (draft) | 초록 | 2026-09-04 Remotion 엔드카드("Produced by YAGI WORKSHOP"). Video-Creator 성격이라 대표 결정: 닫거나 D:\dev\Video-Creator로 옮긴다. TWINGS 코드와 무관. |
+| #71 | codex/ci-dedup → main | 실패(289커밋 뒤) | 문서 전용 변경 CI 스킵·샤드 중복 제거. GitHub Actions 결제 한도 문제가 있으니 아이디어는 유효 — 현재 ci.yml 기준으로 새로 만들거나 닫는다. |
+
+세션 상태(코드가 없는 것·끝난 것):
+- "Toss 승인 및 구독 플랜 설정": 끝남 — PR #175(Gemma 3차 문구) 병합·배포, 토스 심사 항목 확인 완료. 남는 규칙 하나: 배포마다 토스 심사 항목(템플릿 가격 3,900원·결제 CTA·사업자 정보·환불·약관·심사 계정 로그인 200·크레딧 문구 없음)을 확인한다.
+- "brand.twings 블랙 아웃레이어 화이트로 변경"(여러 하위 세션의 부모): 끝남 — 480p 템플릿 10편을 SeedVR2 1080p로 교체하고 R2의 옛 파일 21개 삭제. 백업 D:\dev\_backups\twings-480p-templates-2026-11-02는 대표가 지울 때까지 둔다.
+- "후보 동기화 에이전트(브랜더진→TWINGS)": 저장소 밖 비공개 도구와 고객 메시지 초안 작업. Argon 범위 아님. 규칙: 브랜더진이라는 후보 출처와 수수료는 TWINGS UI·DB·문안에 절대 넣지 않는다.
+- "공개 파일 R2 직접 저장"(#170), "윤설 레시피 허브"(#125), "혼합 카탈로그"(#128), "크리에이티브 프로필"(#111): 병합·운영 반영 완료.
+- worktree: git worktree list에 70개 넘게 남아 있다(D:\dev\.worktrees\twings 59 + .claude\worktrees 12). 목록만 만들고, 삭제는 대표 결정(§8-10) 뒤에 한다.
 ```
