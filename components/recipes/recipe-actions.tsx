@@ -19,8 +19,9 @@ export interface RecipeActionsProps {
   signinHref: string;
 }
 
-const PRIMARY = 'inline-flex min-h-11 items-center justify-center rounded-full bg-black px-4 text-sm font-semibold text-white';
-const SECONDARY = 'inline-flex min-h-11 items-center justify-center rounded-full border border-black/80 px-4 text-sm font-semibold';
+// Both quiet: the page's one blue button is the make card's (docs/design/IDENTITY.md §4, TASTE rule 1).
+const PRIMARY = 'audience-button-quiet min-h-11 px-4 text-sm';
+const SECONDARY = PRIMARY;
 
 /**
  * The template page's first-screen fork for a template whose recipe is public (2026-10-29, founder):
@@ -32,7 +33,7 @@ const SECONDARY = 'inline-flex min-h-11 items-center justify-center rounded-full
 export function RecipeActionsView({ steps, labels: a, makeHref, shopOpen, signinHref, unlocked }: Omit<RecipeActionsProps, 'accessEndpoint'> & { unlocked: PublicRecipe | null }) {
   if (steps < 1) return null;
   const only = unlocked?.steps?.length === 1 ? unlocked.steps[0]! : null;
-  return <section data-template-recipe-actions data-recipe-unlocked={unlocked ? 'true' : undefined} aria-label={a.label} className="mt-5 rounded-2xl border border-hairline bg-surface p-4 sm:p-5">
+  return <section data-template-recipe-actions data-recipe-unlocked={unlocked ? 'true' : undefined} aria-label={a.label} className="mt-5 rounded-3xl border border-hairline bg-white p-4 sm:p-5">
     <p className="font-label text-eyebrow uppercase"><span className="text-accent">{a.label}</span></p>
     <p className="mt-2 text-sm leading-relaxed text-black/80">{makeHref && shopOpen ? a.body : a.bodyClosed}</p>
     <div className="mt-3.5 flex flex-wrap gap-2">

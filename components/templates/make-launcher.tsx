@@ -13,7 +13,7 @@ export interface MakeLauncherLabels {
   makeCtaClosed: string;
 }
 
-const CTA = 'flex min-h-12 w-full items-center justify-center rounded-full bg-accent px-5 font-label text-[0.85rem] tracking-[0.1em] text-white uppercase transition-opacity hover:opacity-85';
+const CTA = 'audience-button w-full';
 
 interface MakeLauncherProps {
   credits: number | null;
@@ -71,7 +71,7 @@ export function MakeLauncherView({ credits, price = null, signinHref, labels, ch
 
   return (
     <>
-      <section ref={boxRef} data-template-make-launcher data-viewer={access === null ? 'unknown' : signedIn ? 'member' : 'visitor'} className="mt-6 rounded-2xl border border-hairline p-5 sm:p-6">
+      <section ref={boxRef} data-template-make-launcher data-viewer={access === null ? 'unknown' : signedIn ? 'member' : 'visitor'} className="mt-6 rounded-3xl border border-hairline bg-white p-5 sm:p-6">
         {lead && <div data-make-lead className="mb-5">{lead}</div>}
         {cost && <p data-template-credits className="font-display text-[2rem] leading-none font-black">{cost}</p>}
         {price && (

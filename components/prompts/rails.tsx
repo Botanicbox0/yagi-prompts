@@ -57,11 +57,12 @@ export function PromptRail({
         >
           {heading}
         </h2>
-        <p className="font-mono text-[0.75rem] opacity-55">{lede}</p>
+        {/* Sentences are set in the body face; mono is for spec labels only (docs/design/IDENTITY.md §3). */}
+        <p className="text-sm text-muted">{lede}</p>
       </div>
 
       {cards.length === 0 ? (
-        <p className="mt-8 font-mono text-code opacity-60">{emptyLabel}</p>
+        <p className="mt-8 text-sm text-muted">{emptyLabel}</p>
       ) : (
         <>
           <RevealGrid className={`${hideHeading ? '' : 'mt-8 '}film-rows`}>
@@ -83,7 +84,7 @@ export function PromptRail({
             ))}
           </RevealGrid>
           {/* Shown by the client filter when it empties this rail; hidden in the static HTML. */}
-          <p data-rail-filtered-empty hidden className="mt-2 font-mono text-code opacity-60">
+          <p data-rail-filtered-empty hidden className="mt-2 text-sm text-muted">
             {filteredEmptyLabel}
           </p>
         </>

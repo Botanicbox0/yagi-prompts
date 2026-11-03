@@ -21,7 +21,7 @@ export function HeroEvidence({
     <figure data-hero-evidence className="mt-7 w-full max-w-[34rem]">
       <div className="grid grid-cols-[0.82fr_auto_1.18fr] items-center gap-2.5 sm:gap-3">
         <EvidenceFrame src={pair.before} alt={copy.evidenceSelfieAlt} label={copy.evidenceSelfie} />
-        <span aria-hidden="true" className="-mt-6 text-sm text-[#676b75]">→</span>
+        <span aria-hidden="true" className="-mt-6 text-sm text-muted">→</span>
         <EvidenceFrame src={pair.after} videoSrc={pair.afterVideo} alt={copy.evidenceSceneAlt} label={copy.evidenceScene} wide />
       </div>
       <figcaption className="mt-3 text-sm font-medium tracking-[-0.01em]">{copy.evidenceLine}</figcaption>
@@ -69,7 +69,7 @@ function EvidenceFrame({
           />
         )}
       </div>
-      <p className="mt-2 text-xs text-[#676b75]">{label}</p>
+      <p className="mt-2 text-xs text-muted">{label}</p>
     </div>
   );
 }

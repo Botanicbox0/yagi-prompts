@@ -7,6 +7,7 @@ import { V7BrandFirst, V7Campaign, V7Closing, V7Finish, V7Hero, V7Production, V7
 import { DemoDock } from '@/components/brand-studio/v7-client';
 import { getLandingMedia } from '@/lib/content/landing-media-server';
 import v7 from '@/components/brand-studio/v7.module.css';
+import identity from '@/components/design/identity.module.css';
 import { brandEnquiryHref, brandsHref, BRAND_INQUIRY_ENDPOINT } from '@/lib/campaigns/links';
 import { legalDocument } from '@/lib/legal/documents';
 import { legalHref } from '@/lib/legal/links';
@@ -45,7 +46,7 @@ export default async function BrandsPage({ params }: Props) {
   // Images the founder replaced in /admin/landing-media; every other slot shows its file.
   const media = await getLandingMedia();
   // The wrapper carries the identity (display: contents), so the nav, form and footer share the one blue.
-  return <div data-brand-accent className={v7.identity}>
+  return <div data-brand-accent className={identity.identity}>
     <MarketingNav locale={locale} dict={dict} rest="/brands" />
     <JsonLd id="campaign-service-structured-data" data={campaignServiceStructuredData({ origin: siteUrl(), path: brandsHref(locale), locale, name: c.metaTitle, description: c.metaDescription, serviceType: dict.seo.serviceType })} />
     <JsonLd id="brand-case-studies-structured-data" data={brandCaseStudiesStructuredData({ origin: siteUrl(), locale, cases: [{ id: 'morphic', name: t.stories.title, description: t.stories.summary, path: `/${locale}/brands/stories/morphic` }] })} />
