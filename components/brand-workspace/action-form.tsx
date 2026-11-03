@@ -132,6 +132,8 @@ export function ActionForm({
       delete input.subject;
     }
     if (operation === "usage.accept") input.confirmed = fields.get("confirmed") === "on";
+    if (operation === "identity.save") input.paletteOnly = fields.get("paletteOnly") === "on";
+    if (operation === "look.save") input.skinProtect = fields.get("skinProtect") === "on";
     const fingerprint = JSON.stringify(input);
     if (request.current?.fingerprint !== fingerprint)
       request.current = { fingerprint, id: crypto.randomUUID() };
@@ -207,7 +209,7 @@ export function ActionForm({
         location.assign(redirectTo);
         return;
       }
-      else if ((operation === "message.send" || operation === "support.send" || operation === "usage.message" || operation === "usage.inquire")) form.reset();
+      else if ((operation === "message.send" || operation === "support.send" || operation === "usage.message" || operation === "usage.inquire" || operation === "memory.record" || operation === "look.save")) form.reset();
       router.refresh();
     } catch {
       setFailed(true);

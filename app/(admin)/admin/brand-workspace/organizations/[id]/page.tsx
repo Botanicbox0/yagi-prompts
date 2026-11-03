@@ -18,6 +18,7 @@ import { BrandAvatar } from "@/components/brand-workspace/brand-avatar";
 import { interpolate } from "@/lib/i18n/format";
 import { BRAND_FEATURES } from "@/lib/brands/features";
 import { loadFeaturePolicy } from "@/lib/brands/entitlements";
+import { loadBrandIdentity } from "@/lib/brands/identity/service";
 import { BRAND_BILLING_MODES, BRAND_PLAN_IDS, BRAND_PLANS, loadPlanAssignment } from "@/lib/brands/plans";
 export const dynamic = "force-dynamic";
 export default async function StudioOrganization({
@@ -41,8 +42,12 @@ export default async function StudioOrganization({
   const previews=(await sql.query<{id:string;project_id:string;name:string}>("select id,project_id,name from brand_attachments where organization_id=$1 and status='ready' and access_scope='workspace' and (mime like 'image/%' or mime like 'video/%')",[id])).rows;
   const production=await loadProductionWorkspace({sql},viewer,id,true);
   const projects=(await loadStudioWorkspace({sql},viewer)).projects.filter(p=>p.organizationId===id);
-  // docs/BRAND-PRODUCT.md — the brand engine's two studio controls: the deny-list and the plan.
-  const [policy, plan] = await Promise.all([loadFeaturePolicy(sql, id), loadPlanAssignment(sql, id)]);
+  // docs/BRAND-PRODUCT.md — the brand engine's studio controls: the deny-list, the plan, and the identity layer.
+  const [policy, plan, brandIdentity] = await Promise.all([
+    loadFeaturePolicy(sql, id),
+    loadPlanAssignment(sql, id),
+    loadBrandIdentity(sql, id),
+  ]);
   const krw = new Intl.NumberFormat("ko-KR");
   const today = new Date(Date.now() + 9 * 3_600_000).toISOString().slice(0, 10);
   return (
@@ -240,6 +245,42 @@ export default async function StudioOrganization({
           </ManagedForm>
         </section>
       </div>
+      <section className="bw-panel" data-brand-identity-admin>
+        <h2>{c.identityTitle}</h2>
+        <p className="bw-muted">{c.identityHint}</p>
+        <p data-brand-identity-state={brandIdentity?.status ?? "none"}>
+          {brandIdentity
+            ? interpolate(c.identityCurrent, {
+                status:
+                  brandIdentity.status === "confirmed"
+                    ? b.identityLayer.statusConfirmed
+                    : b.identityLayer.statusDraft,
+                version: brandIdentity.version,
+                revision: String(brandIdentity.revision),
+              })
+            : c.identityNone}
+        </p>
+        {brandIdentity && (
+          <details className="bw-details">
+            <summary>{c.identityJsonSummary}</summary>
+            <pre className="bw-code">
+              {JSON.stringify(brandIdentity.identity, null, 2)}
+            </pre>
+          </details>
+        )}
+        <div className="bw-form-actions">
+          <ManagedForm op="brandEngine.identityDraft" b={b} submit={c.identityDraftCta}>
+            <input type="hidden" name="organizationId" value={id} />
+            <input type="hidden" name="expectedRevision" value={brandIdentity?.revision ?? 0} />
+          </ManagedForm>
+          {brandIdentity && brandIdentity.status !== "confirmed" && (
+            <ManagedForm op="brandEngine.identityConfirm" b={b} submit={c.identityConfirmCta}>
+              <input type="hidden" name="organizationId" value={id} />
+              <input type="hidden" name="expectedRevision" value={brandIdentity.revision} />
+            </ManagedForm>
+          )}
+        </div>
+      </section>
       <ProductionAdmin organizationId={id} projects={projects} previews={previews} workspace={production} b={b}/>
       <section className="bw-panel" id="support">
         <h2>{c.supportTitle}</h2>

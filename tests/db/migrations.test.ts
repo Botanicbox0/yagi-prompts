@@ -33,11 +33,16 @@ describe('migrations apply on a fresh database (PLAN §6)', () => {
       // 2026-11-03 — per-brand feature policy (deny-list; no row = everything open) and its history.
       'brand_feature_policies',
       'brand_feature_policy_events',
+      // 2026-11-03 — S2 fixed brand identity layer, memory events, and deterministic colour looks.
+      'brand_identities',
+      'brand_identity_events',
       // 2026-09-11 — the brand enquiry form on the campaigns page: one row per enquiry, studio-only.
       'brand_inquiries',
       'brand_inquiry_deliveries',
       'brand_invites',
+      'brand_looks',
       'brand_memberships',
+      'brand_memory_events',
       'brand_messages',
       // 2026-09-23 — a brand's own logo history; the organization points at the current one.
       'brand_organization_logos',

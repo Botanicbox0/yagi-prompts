@@ -1,4 +1,9 @@
 import { setFeaturePolicy } from '@/lib/brands/entitlements';
+import {
+  confirmBrandIdentity,
+  draftFromTwingsDefaults,
+  saveBrandIdentity,
+} from '@/lib/brands/identity/service';
 import { setPlanAssignment } from '@/lib/brands/plans';
 import type { AdminOperation } from './operations';
 import { ok, type AdminContext } from './context';
@@ -91,7 +96,84 @@ const plan: AdminOperation<PlanInput> = {
   },
 };
 
+interface IdentityDraftInput {
+  organizationId: string;
+  expectedRevision: number;
+  identity?: unknown;
+}
+
+const identityDraft: AdminOperation<IdentityDraftInput> = {
+  parse(form) {
+    const rawRev = f.str(form, 'expectedRevision');
+    const expectedRevision = rawRev === '' ? 0 : revisionOf(form);
+    if (Number.isNaN(expectedRevision)) {
+      return { ok: false, detail: 'expectedRevision must be a whole number' };
+    }
+    const rawJson = f.text(form, 'identityJson').trim();
+    let identity: unknown = undefined;
+    if (rawJson.length > 0) {
+      try {
+        identity = JSON.parse(rawJson);
+      } catch {
+        return { ok: false, detail: 'identityJson must be valid JSON' };
+      }
+    }
+    return {
+      ok: true,
+      value: {
+        organizationId: f.str(form, 'organizationId'),
+        expectedRevision,
+        ...(identity !== undefined ? { identity } : {}),
+      },
+    };
+  },
+  async run(ctx: AdminContext, input) {
+    const result =
+      input.identity !== undefined
+        ? await saveBrandIdentity({ sql: ctx.sql }, ctx.viewer, {
+            organizationId: input.organizationId,
+            expectedRevision: input.expectedRevision,
+            identity: input.identity,
+            status: 'draft',
+          })
+        : await draftFromTwingsDefaults({ sql: ctx.sql }, ctx.viewer, {
+            organizationId: input.organizationId,
+            expectedRevision: input.expectedRevision,
+          });
+    if (!result.ok) return brandFailure(result.code);
+    return ok('saved', { to: organizationPath(input.organizationId) });
+  },
+};
+
+interface IdentityConfirmInput {
+  organizationId: string;
+  expectedRevision: number;
+}
+
+const identityConfirm: AdminOperation<IdentityConfirmInput> = {
+  parse(form) {
+    const expectedRevision = revisionOf(form);
+    if (Number.isNaN(expectedRevision) || expectedRevision < 1) {
+      return { ok: false, detail: 'expectedRevision must be a positive integer' };
+    }
+    return {
+      ok: true,
+      value: {
+        organizationId: f.str(form, 'organizationId'),
+        expectedRevision,
+      },
+    };
+  },
+  async run(ctx: AdminContext, input) {
+    const result = await confirmBrandIdentity({ sql: ctx.sql }, ctx.viewer, input);
+    if (!result.ok) return brandFailure(result.code);
+    return ok('saved', { to: organizationPath(input.organizationId) });
+  },
+};
+
 export const BRAND_ENGINE_OPERATIONS = {
   'brandEngine.featurePolicy': featurePolicy,
   'brandEngine.plan': plan,
+  'brandEngine.identityDraft': identityDraft,
+  'brandEngine.identityConfirm': identityConfirm,
 };

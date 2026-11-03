@@ -91,17 +91,18 @@ export function scopedHref(path: string, choice: Pick<BrandWorkspaceChoice, 'id'
   return `${url.pathname}${url.search}${hash ? `#${hash}` : ''}`;
 }
 
-export interface SectionVisibility { studio: boolean; settings: boolean; members: boolean }
+export interface SectionVisibility { studio: boolean; identity: boolean; settings: boolean; members: boolean }
 /**
  * Role of the SELECTED brand only: owning brand A never shows owner controls while viewing brand B.
  * No brand yet keeps the studio open (it doubles as the setup path) and hides brand-only sections.
  * The TWINGS team sees every section of a brand it browses, each rendered read-only.
  */
 export function sectionVisibility(choice: Pick<BrandWorkspaceChoice, 'role' | 'denied'> | null): SectionVisibility {
-  if (!choice) return { studio: true, settings: false, members: false };
+  if (!choice) return { studio: true, identity: false, settings: false, members: false };
   // The studio is generative media: a brand whose policy closes it gets no door, whatever the role.
   const studio = choice.role !== 'guest' && !featureDenied(choice.denied, 'generative_media');
-  return { studio, settings: choice.role !== 'guest', members: choice.role === 'owner' || choice.role === 'studio' };
+  const identity = choice.role !== 'guest' && !featureDenied(choice.denied, 'brand_learning');
+  return { studio, identity, settings: choice.role !== 'guest', members: choice.role === 'owner' || choice.role === 'studio' };
 }
 
 /** The creator pool (docs/PLATFORM-2.0.md §17.3) is for the brand's owners and editors only. */
@@ -115,6 +116,7 @@ export function switchHref(pathname: string, choice: BrandWorkspaceChoice): stri
   const section =
     pathname === '/brand/library' ? '/brand/library'
     : pathname === '/brand/studio' && visible.studio ? '/brand/studio'
+    : pathname === '/brand/identity' && visible.identity ? '/brand/identity'
     : pathname === '/brand/settings' && visible.settings ? '/brand/settings'
     : pathname === '/brand/members' && visible.members ? '/brand/members'
     : pathname === '/brand/creators' && poolVisible(choice) ? '/brand/creators'

@@ -58,7 +58,8 @@ export function isAdminPath(pathname: string): boolean {
 export function isBrandPath(pathname: string): boolean {
   // `usage`: the payment provider's return page for secondary usage (docs/SECONDARY-USAGE.md).
   // `creators`: the creator pool (docs/PLATFORM-2.0.md §17.3).
-  return pathname === '/brand' || /^\/brand\/(?:projects|members|invite|settings|library|studio|usage|creators)(?:\/|$)/.test(pathname);
+  // `identity`: the fixed brand identity layer, memory, and looks (docs/BRAND-PRODUCT.md §5).
+  return pathname === '/brand' || /^\/brand\/(?:projects|members|invite|settings|library|studio|usage|creators|identity)(?:\/|$)/.test(pathname);
 }
 
 const AUTH_METHODS: Record<string, readonly string[]> = {
