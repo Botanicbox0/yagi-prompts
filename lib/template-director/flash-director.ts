@@ -86,7 +86,15 @@ const OCCLUSION_ISSUES: ReadonlySet<PhotoIssueCode> = new Set([
   'tight_crop'
 ]);
 
+const RETOUCH_ISSUES: ReadonlySet<PhotoIssueCode> = new Set([
+  'over_retouched_contour',
+  'heavy_filter'
+]);
+
 const DETAIL_ISSUES: ReadonlySet<PhotoIssueCode> = new Set(['low_resolution', 'motion_blur']);
+
+export const ANATOMICAL_DE_FILTER_CONTRACT =
+  'Keep the person in Image 1 100% recognizable in core facial identity, eye shape, nasal bridge, hairstyle, and natural charm, while normalizing 2D beauty-app liquify distortions (artificially pinched V-line jawline, over-inflated or over-lined lips, and plastic poreless skin blur) back to anatomically natural 3D camera lens proportions (85mm portrait perspective) with natural matte skin micro-texture and visible pores.';
 
 export function routePhotoCleanup(
   issues: readonly PhotoIssueCode[],
@@ -100,6 +108,14 @@ export function routePhotoCleanup(
       editPromptEn:
         cleanupPromptEn ??
         'Keep the person in Image 1 100% identical in facial identity, eyes, nose, lips, skin tone, and hairstyle. Remove only the occluding hand or handheld object near the face and restore a clean natural neckline and symmetrical shoulders.'
+    };
+  }
+  if (issues.some((code) => RETOUCH_ISSUES.has(code))) {
+    return {
+      mode: 'normalize_retouch',
+      engine: 'nano-banana-2.1',
+      fallbackEngine: 'seedream-5.0-pro',
+      editPromptEn: cleanupPromptEn ?? ANATOMICAL_DE_FILTER_CONTRACT
     };
   }
   if (issues.some((code) => DETAIL_ISSUES.has(code))) {
@@ -252,7 +268,8 @@ export function createFlashTemplateDirector(
       const systemInstruction = [
         'Inspect the uploaded reference photo for Seedance 2.5 / TWINGS video generation.',
         'Ideal Bust-Up framing has faceWidthRatio between 0.30 and 0.42 with visible neck and symmetrical shoulders.',
-        'Check for hand_occlusion, prop_occlusion (cups, bottles, phones, wings), hair_occlusion, tight_crop, low_resolution, or motion_blur.',
+        'Check for hand_occlusion, prop_occlusion (cups, bottles, phones, wings), hair_occlusion, tight_crop, over_retouched_contour (2D liquify pinched V-line jaw, artificially inflated lips, plastic poreless beauty-app blur), heavy_filter, low_resolution, or motion_blur.',
+        'When over_retouched_contour or heavy_filter is present, set status to needs_cleanup and gently explain that 2D beauty-app contour/lip retouching can look unnatural in 3D motion, offering natural optical camera proportion & skin texture normalization.',
         'Extract an accurate English hairstyle and facial structure description (extractedHairDescription) and provide polite Korean/English guidance.'
       ].join('\n');
 

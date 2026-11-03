@@ -36,6 +36,23 @@ const sampleLowResVerdict: PhotoInspectionVerdict = {
   }
 };
 
+const sampleRetouchVerdict: PhotoInspectionVerdict = {
+  status: 'needs_cleanup',
+  issues: ['over_retouched_contour', 'heavy_filter'],
+  faceWidthRatio: 0.37,
+  extractedHairDescription: 'long wavy dark-brown hair',
+  userMessageKo:
+    '사진에 뷰티 보정(턱선·입술·피부 블러)이 들어가 있어 영상에서 움직일 때 다소 인위적으로 보일 수 있어요. TWINGS가 자연스러운 카메라 렌즈 비율과 실제 피부 결로 정돈해서 제작할까요?',
+  userMessageEn:
+    'Heavy beauty-app retouching on the jawline or lips may look unnatural in motion. Normalize with TWINGS?',
+  recommendedCleanup: {
+    mode: 'normalize_retouch',
+    engine: 'nano-banana-2.1',
+    fallbackEngine: 'seedream-5.0-pro',
+    editPromptEn: 'Normalize 2D beauty-app liquify distortions back to natural 85mm camera lens anatomy.'
+  }
+};
+
 describe('TemplateDirectorPanel UI/UX (4-Pass SOTA Verification)', () => {
   it('Pass 1: renders collapsed progressive-disclosure toggle by default and shows occlusion cleanup advisory when needed', () => {
     const html = renderToStaticMarkup(
@@ -110,5 +127,15 @@ describe('TemplateDirectorPanel UI/UX (4-Pass SOTA Verification)', () => {
       { slot: 'shot_action', labelKo: '컷 1', summaryKo: '창밖 응시' },
       { slot: 'shot_action', labelKo: '컷 2', summaryKo: '카메라 보며 미소' }
     ]);
+  });
+
+  it('renders over-retouched beauty-filter normalization advisory (normalize_retouch) while keeping user choice advisory', () => {
+    const html = renderToStaticMarkup(
+      <TemplateDirectorPanel locale="ko" photoInspection={sampleRetouchVerdict} />
+    );
+
+    expect(html).toContain('data-photo-cleanup-mode="normalize_retouch"');
+    expect(html).toContain('TWINGS가 자연스러운 카메라 비율·피부 결로 정돈해서 진행 (+2 크레딧)');
+    expect(html).toContain('원본 사진 그대로 쓰기');
   });
 });

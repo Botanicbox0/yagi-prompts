@@ -117,6 +117,39 @@ describe('Step 0: Photo Inspection & Cleanup Model Routing (Gemini 3.8 Flash)', 
     expect(verdict.userMessageKo).toContain('TWINGS가 자연스럽게 정리해서 진행할까요?');
   });
 
+  it('routes over-retouched beauty-app contour/lip photos (over_retouched_contour) to Nano Banana 2.1 anatomical de-filter normalization', async () => {
+    const fetchMock = vi.fn(async (_url: RequestInfo | URL) =>
+      geminiJsonResponse({
+        status: 'needs_cleanup',
+        issues: ['over_retouched_contour', 'heavy_filter'],
+        faceWidthRatio: 0.37,
+        extractedHairDescription:
+          'natural Korean facial structure with long wavy dark-brown hair',
+        userMessageKo:
+          '사진에 뷰티 보정(턱선·입술·피부 블러)이 들어가 있어 영상에서 움직일 때 다소 인위적으로 보일 수 있어요. TWINGS가 자연스러운 카메라 렌즈 비율과 실제 피부 결로 정돈해서 제작할까요?',
+        userMessageEn:
+          'Heavy beauty-app retouching on the jawline, lips, or skin blur may look unnatural in 3D motion. Would you like TWINGS to normalize proportions and skin texture?',
+        cleanupPromptEn: null
+      })
+    );
+
+    const director = createFlashTemplateDirector(
+      { apiKey: 'fake-gemini-key', baseUrl: 'https://generativelanguage.googleapis.com/v1beta', model: 'gemini-3.8-flash' },
+      { fetch: fetchMock }
+    );
+
+    const verdict = await director.inspectPhoto(samplePhoto);
+    expect(verdict.status).toBe('needs_cleanup');
+    expect(verdict.issues).toEqual(['over_retouched_contour', 'heavy_filter']);
+    expect(verdict.recommendedCleanup).toEqual({
+      mode: 'normalize_retouch',
+      engine: 'nano-banana-2.1',
+      fallbackEngine: 'seedream-5.0-pro',
+      editPromptEn: expect.stringContaining('normalizing 2D beauty-app liquify distortions')
+    });
+    expect(verdict.recommendedCleanup.editPromptEn).toContain('visible pores');
+  });
+
   it('routes low-resolution or blurry photos to local SeedVR2 (0-cost optical restoration) instead of generative hallucination', async () => {
     const fetchMock = vi.fn(async (_url: RequestInfo | URL) =>
       geminiJsonResponse({

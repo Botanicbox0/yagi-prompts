@@ -14,6 +14,7 @@ export const PHOTO_ISSUE_CODES = [
   'motion_blur',
   'harsh_lighting',
   'heavy_filter',
+  'over_retouched_contour',
   'angle_extreme',
   'multiple_faces'
 ] as const;
@@ -22,7 +23,13 @@ export type PhotoIssueCode = (typeof PHOTO_ISSUE_CODES)[number];
 export const DIRECTOR_EDITABLE_SLOTS = ['hair', 'outfit', 'prop', 'shot_action', 'lighting_mood'] as const;
 export type DirectorEditableSlot = (typeof DIRECTOR_EDITABLE_SLOTS)[number];
 
-export const CLEANUP_MODES = ['none', 'inpaint_occlusion', 'restore_detail', 'prompt_strict_lock_only'] as const;
+export const CLEANUP_MODES = [
+  'none',
+  'inpaint_occlusion',
+  'normalize_retouch',
+  'restore_detail',
+  'prompt_strict_lock_only'
+] as const;
 export type CleanupMode = (typeof CLEANUP_MODES)[number];
 
 export const CLEANUP_ENGINES = ['nano-banana-2.1', 'seedream-5.0-pro', 'seedvr2-local'] as const;

@@ -32,6 +32,7 @@ export interface TemplateDirectorCopy {
   activeChipsLabel: string;
   removeChipLabel: string;
   cleanupAcceptOcclusion: string;
+  cleanupAcceptRetouch: string;
   cleanupAcceptDetail: string;
   cleanupAcceptedBadge: string;
   cleanupSkipButton: string;
@@ -64,6 +65,7 @@ export const DEFAULT_TEMPLATE_DIRECTOR_COPY_KO: TemplateDirectorCopy = {
   activeChipsLabel: '적용된 커스텀 설정',
   removeChipLabel: '설정 해제',
   cleanupAcceptOcclusion: 'TWINGS가 가려진 부분 정리해서 진행 (+2 크레딧)',
+  cleanupAcceptRetouch: 'TWINGS가 자연스러운 카메라 비율·피부 결로 정돈해서 진행 (+2 크레딧)',
   cleanupAcceptDetail: 'TWINGS 광학 선명도 복원 적용 (무료)',
   cleanupAcceptedBadge: '사진 자동 정리 적용됨',
   cleanupSkipButton: '원본 사진 그대로 쓰기',
@@ -113,6 +115,7 @@ export const DEFAULT_TEMPLATE_DIRECTOR_COPY_EN: TemplateDirectorCopy = {
   activeChipsLabel: 'Applied customizations',
   removeChipLabel: 'Remove customization',
   cleanupAcceptOcclusion: 'Clean up occlusion with TWINGS (+2 credits)',
+  cleanupAcceptRetouch: 'Normalize beauty-filter proportions with TWINGS (+2 credits)',
   cleanupAcceptDetail: 'Restore optical sharpness with TWINGS (Free)',
   cleanupAcceptedBadge: 'Auto photo cleanup active',
   cleanupSkipButton: 'Use original photo as-is',
@@ -385,8 +388,13 @@ export function TemplateDirectorPanel({
         ? photoInspection.userMessageEn
         : photoInspection.userMessageKo;
 
-  const isOcclusionCleanup =
-    photoInspection?.recommendedCleanup.mode === 'inpaint_occlusion';
+  const cleanupMode = photoInspection?.recommendedCleanup.mode ?? 'none';
+  const cleanupAcceptLabel =
+    cleanupMode === 'inpaint_occlusion'
+      ? copy.cleanupAcceptOcclusion
+      : cleanupMode === 'normalize_retouch'
+        ? copy.cleanupAcceptRetouch
+        : copy.cleanupAcceptDetail;
 
   return (
     <div
@@ -445,7 +453,7 @@ export function TemplateDirectorPanel({
                 }}
                 className={`inline-flex min-h-11 flex-1 items-center justify-center rounded-full bg-[#3875C5] px-4 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-40 ${FOCUS_RING}`}
               >
-                {isOcclusionCleanup ? copy.cleanupAcceptOcclusion : copy.cleanupAcceptDetail}
+                {cleanupAcceptLabel}
               </button>
               <button
                 type="button"
