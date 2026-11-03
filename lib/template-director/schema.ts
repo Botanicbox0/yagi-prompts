@@ -35,7 +35,12 @@ export const CLEANUP_MODES = [
 ] as const;
 export type CleanupMode = (typeof CLEANUP_MODES)[number];
 
-export const CLEANUP_ENGINES = ['nano-banana-2.1', 'seedream-5.0-pro', 'seedvr2-local'] as const;
+export const CLEANUP_ENGINES = [
+  'seedream-5.0-pro',
+  'nano-banana-2.1',
+  'gpt-image-2.5-sunburst',
+  'seedvr2-local'
+] as const;
 export type CleanupEngineId = (typeof CLEANUP_ENGINES)[number];
 
 export interface DirectorConfig {
@@ -82,6 +87,11 @@ export interface PhotoInspectionVerdict {
   recommendedCleanup: RecommendedPhotoCleanup;
 }
 
+export type ModelSpecificImageEngine =
+  | 'seedream-5.0-pro'
+  | 'nano-banana-2.1'
+  | 'gpt-image-2.5-sunburst';
+
 export interface MultiPhotoIdentityInput {
   photos: ReadonlyArray<{
     bytes: Uint8Array;
@@ -90,6 +100,8 @@ export interface MultiPhotoIdentityInput {
   }>;
   /** Optional creator or user feedback (e.g., "이마 조금 줄이고 턱선 둥글게"). */
   creatorNoteKo?: string | null;
+  /** Target synthesis engine for model-specific prompt optimization (defaults to 'seedream-5.0-pro' or 'nano-banana-2.1'). */
+  preferredEngine?: ModelSpecificImageEngine;
 }
 
 export const OPTICAL_IDENTITY_STRATEGIES = [
@@ -115,11 +127,13 @@ export interface OpticalIdentityMasterPlan {
   bustupCropBoxNormalized: readonly [number, number, number, number];
   detectedIssues: PhotoIssueCode[];
   requiresMasterSynthesis: boolean;
-  engine: 'nano-banana-2.1' | null;
+  engine: ModelSpecificImageEngine | null;
   extractedIdentityLockEn: string;
   extractedHairLockEn: string;
-  /** Server-only surgical in-place prompt fed to Nano Banana 2.1 when strategy === 'surgical_inplace_edit'. */
+  /** Server-only model-specific prompt fed to the selected engine when strategy === 'surgical_inplace_edit'. */
   opticalMasterPromptEn: OpaqueCompiledPrompt;
+  /** Server-only fallback prompt formatted specifically for the secondary engine (e.g. Seedream 5.0 Pro <-> Nano Banana 2.1). */
+  fallbackMasterPromptEn: OpaqueCompiledPrompt;
 }
 
 export interface IdentitySimilarityVerificationInput {

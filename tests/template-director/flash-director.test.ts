@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+  compileModelSpecificIdentityPrompt,
   createFlashTemplateDirector,
   directorConfigFromEnv,
   GEMINI_DIRECTOR_DEFAULT_MODEL,
@@ -260,16 +261,32 @@ describe('Step 0: Photo Inspection & Cleanup Model Routing (Gemini 3.8 Flash)', 
     expect(plan.strategy).toBe('surgical_inplace_edit');
     expect(plan.styleAnchorIndex).toBe(1);
     expect(plan.structureAnchorIndex).toBe(7);
-    expect(plan.engine).toBe('nano-banana-2.1');
+    expect(plan.engine).toBe('seedream-5.0-pro');
     expect(plan.requiresMasterSynthesis).toBe(true);
     // Must be sealed so accidental JSON serialization never leaks the optical master prompt
     expect(JSON.stringify(plan.opticalMasterPromptEn)).toBe('"[REDACTED_SERVER_ONLY_PROMPT]"');
+    expect(JSON.stringify(plan.fallbackMasterPromptEn)).toBe('"[REDACTED_SERVER_ONLY_PROMPT]"');
 
-    const unwrapped = unwrapServerOnlyPrompt(plan.opticalMasterPromptEn);
-    expect(unwrapped).not.toContain('bare shoulders');
-    expect(unwrapped).not.toContain('visible pores');
-    expect(unwrapped).toContain('SURGICAL IN-PLACE IDENTITY LOCK');
-    expect(unwrapped).toContain('minimalist matte black crew-neck top');
+    const unwrappedSeedream = unwrapServerOnlyPrompt(plan.opticalMasterPromptEn);
+    expect(unwrappedSeedream).not.toContain('bare shoulders');
+    expect(unwrappedSeedream).not.toContain('visible pores');
+    expect(unwrappedSeedream).toContain('Reference Image 1 provides the young Korean female subject');
+    expect(unwrappedSeedream).toContain('very low specular-to-diffuse ratio');
+
+    const unwrappedNanoFallback = unwrapServerOnlyPrompt(plan.fallbackMasterPromptEn);
+    expect(unwrappedNanoFallback).toContain('IDENTITY LOCK:');
+    expect(unwrappedNanoFallback).toContain('COMPOSITION LOCK:');
+    expect(unwrappedNanoFallback).toContain('SURGICAL IN-PLACE IDENTITY LOCK');
+
+    const gptBrief = compileModelSpecificIdentityPrompt('gpt-image-2.5-sunburst', {
+      extractedIdentityLockEn: 'almond eyes with porcelain skin',
+      extractedHairLockEn: 'straight black hair with full blunt bangs',
+      rawSurgicalPromptEn: 'remove earphone cord and soften dewy glow'
+    });
+    expect(gptBrief).toContain('1. Deliverable & Framing:');
+    expect(gptBrief).toContain('2. Reference Authority (Identity Lock):');
+    expect(gptBrief).not.toContain('porcelain skin');
+    expect(gptBrief).not.toContain('dewy glow');
   });
 
   it('Stage 3 Identity Similarity Verification Gate rejects distorted/aged Nano Banana outputs and triggers fallback_to_passthrough_crop', async () => {

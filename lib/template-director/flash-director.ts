@@ -19,6 +19,7 @@ import {
   type DirectorRewriteResult,
   type IdentitySimilarityVerdict,
   type IdentitySimilarityVerificationInput,
+  type ModelSpecificImageEngine,
   type MultiPhotoIdentityInput,
   type OpaqueCompiledPrompt,
   type OpticalIdentityMasterPlan,
@@ -104,8 +105,69 @@ const DETAIL_ISSUES: ReadonlySet<PhotoIssueCode> = new Set(['low_resolution', 'm
 
 export const IDENTITY_SIMILARITY_THRESHOLD = 0.9 as const;
 
+export const AMERICANO_SKIN_CONTRACT =
+  'Render a matte-to-natural living skin finish with a very low specular-to-diffuse ratio; skin highlights stay below clipping and never form glossy white bands or shiny hotspots on the forehead, nose bridge, or cheeks, showing locally varied living skin with subtle chromatic warmth shifts across cheeks and nose and restrained natural micro-relief without beauty-filter plastic blur, porcelain gradients, or harsh aging shadows.';
+
 export const ANATOMICAL_DE_FILTER_CONTRACT =
   'SURGICAL IN-PLACE IDENTITY LOCK: Edit the first attached image IN PLACE while keeping 98% of the person in Image 1 100% recognizable and untouched in core facial identity, exact eye shape, double-eyelid crease, inter-canthal distance, nasal bridge and tip width, philtrum length, mouth corners, exact hairstyle (preserve original part and bangs without replacing with generic 5:5 curtain bangs), and bright, clean, youthful Korean skin luminance (never age the skin, never add harsh pores or dark under-eye shadows, never re-render into a generic studio mugshot), while normalizing any 2D beauty-app liquify distortions (artificially pinched V-line jawline, over-inflated or over-lined lips) back to anatomically natural 3D camera lens proportions (85mm f/2.0 portrait perspective, soft oval-egg contour) wearing a clean minimalist matte black crew-neck top (never bare passport-photo shoulders).';
+
+function stripBannedPlasticTokens(text: string): string {
+  return text
+    .replace(
+      /\b(?:porcelain\s+skin|flawless\s+skin|smooth\s+skin|dewy\s+glow|visible\s+pores)\b/gi,
+      'matte-to-natural living skin finish'
+    )
+    .replace(/\bbare\s+shoulders\b/gi, 'symmetrical shoulders in a minimalist matte black crew-neck top')
+    .replace(/\bstrapless\s+(?:black\s+)?top\b/gi, 'minimalist matte black crew-neck top')
+    .trim();
+}
+
+export function compileModelSpecificIdentityPrompt(
+  engine: ModelSpecificImageEngine,
+  spec: {
+    extractedIdentityLockEn: string;
+    extractedHairLockEn: string;
+    rawSurgicalPromptEn: string;
+  }
+): string {
+  const identityLock = stripBannedPlasticTokens(spec.extractedIdentityLockEn);
+  const hairLock = stripBannedPlasticTokens(spec.extractedHairLockEn);
+  const surgicalDelta = stripBannedPlasticTokens(spec.rawSurgicalPromptEn);
+
+  if (engine === 'seedream-5.0-pro') {
+    // Official ByteDance Seedream 5.0 Pro Formula: 4-Part Cohesive Natural-Language Prose
+    const part1RefRole = `Reference Image 1 provides the young Korean female subject's exact facial identity, distinctive features (${identityLock}), exact hairstyle (${hairLock}), clothing, and ambient lighting—preserve 95% of Reference Image 1's real facial bone structure, eye spacing, nose bridge contour, lip shape, and personal charm so she remains 100% unmistakably the exact same person.`;
+    const part2SceneProse = `An in-place refined vertical 3:4 medium bust-up portrait of the exact same young Korean woman from Reference Image 1, keeping her original hairstyle (${hairLock}) and natural styling, while gently relaxing any harsh, tense, or intimidating facial tension into a calm, effortlessly chic, approachable expression with softly closed or naturally relaxed lips and removing any hand touching the cheek or dangling earphone wire. ${surgicalDelta}`;
+    const part3OpticsSkin = `Maintain the natural diffused daylight and soft tonal roll-off (#F4EFEA highlight roll-off, #262528 shadow floor) of an 85mm f/2.0 portrait lens. ${AMERICANO_SKIN_CONTRACT}`;
+    const part4CleanFrame =
+      'High-end editorial portrait master reference frame, completely clean composition with no earphone cords, no hands covering the jawline, no text, no logos, and no watermarks.';
+    return `${part1RefRole} ${part2SceneProse} ${part3OpticsSkin} ${part4CleanFrame}`;
+  }
+
+  if (engine === 'gpt-image-2.5-sunburst') {
+    // Official OpenAI GPT Image 2.5 Formula: 5-Tier Creative Brief Hierarchy
+    return [
+      '1. Deliverable & Framing: A high-end editorial bust-up portrait in vertical 3:4 format.',
+      `2. Reference Authority (Identity Lock): Use Reference Image 1 strictly for the female subject's facial identity (${identityLock}) and exact hairstyle (${hairLock}). Ignore any tilted selfie angle, hand on face, earphone cord, or cluttered background.`,
+      `3. Subject, Pose & Garment Construction: Eye-level frontal bust-up posture with calm, soft approachable eyes and relaxed closed lips, wearing a minimalist matte black crew-neck top. ${surgicalDelta}`,
+      '4. Environment & Spatial Planes: Softly out-of-focus neutral daylight architectural background with clean negative space around the crown and shoulders.',
+      `5. Lighting, Color Palette (#HEX) & Optical Rendering + Exclusions: Soft diffused daylight key (#F4EFEA highlights, #262528 shadow floor), 85mm f/2.0 optical compression. ${AMERICANO_SKIN_CONTRACT} No earphone cords, no hands near face, no text, no watermarks, no logos.`
+    ].join('\n');
+  }
+
+  // Official Google Gemini Nano Banana 2.1 Formula: ALL-CAPS Section-Label & LOCK Architecture
+  return [
+    'ULTRA HIGH-END EDITORIAL PORTRAIT — vertical 3:4.',
+    `IDENTITY LOCK: Keep the exact facial identity of the young Korean woman in Reference Image 1 (${identityLock}) and exact hairstyle (${hairLock}). ${ANATOMICAL_DE_FILTER_CONTRACT}`,
+    'COMPOSITION LOCK: Eye-level vertical 3:4 bust-up portrait framing full head, hair, and symmetrical upper shoulders.',
+    `POSE LOCK: Calm, relaxed, approachable eye-level gaze with gently closed lips (never fierce or tense). ${surgicalDelta}`,
+    'OUTFIT & PROPS: Clean minimalist matte black crew-neck top; zero handheld props, zero earphone cords, zero hands touching face.',
+    'SETTING: Softly out-of-focus neutral daylight architectural backdrop.',
+    'COLOR GRADE & LIGHT: Soft diffused natural daylight (#F4EFEA highlight roll-off, #262528 shadow floor).',
+    `CAMERA & OPTICS: 85mm f/2.0 portrait lens perspective. ${AMERICANO_SKIN_CONTRACT}`,
+    'NEGATIVE: no text, no watermark, no brand logo, no earphone cord, no hand on cheek, no harsh glare, no plastic skin retouching.'
+  ].join('\n');
+}
 
 function sanitizeCleanupPrompt(raw: string | null, includeRetouchNormalization: boolean): string {
   const base = (
@@ -496,7 +558,20 @@ export function createFlashTemplateDirector(
           ? raw.strategy
           : 'passthrough_crop';
       const requiresMasterSynthesis = strategy === 'surgical_inplace_edit';
-      const sanitizedMasterPrompt = sanitizeCleanupPrompt(raw.opticalMasterPromptEn, true);
+      const primaryEngine: ModelSpecificImageEngine = input.preferredEngine ?? 'seedream-5.0-pro';
+      const fallbackEngine: ModelSpecificImageEngine =
+        primaryEngine === 'seedream-5.0-pro' ? 'nano-banana-2.1' : 'seedream-5.0-pro';
+
+      const compiledPrimaryPrompt = compileModelSpecificIdentityPrompt(primaryEngine, {
+        extractedIdentityLockEn: raw.extractedIdentityLockEn,
+        extractedHairLockEn: raw.extractedHairLockEn,
+        rawSurgicalPromptEn: raw.opticalMasterPromptEn
+      });
+      const compiledFallbackPrompt = compileModelSpecificIdentityPrompt(fallbackEngine, {
+        extractedIdentityLockEn: raw.extractedIdentityLockEn,
+        extractedHairLockEn: raw.extractedHairLockEn,
+        rawSurgicalPromptEn: raw.opticalMasterPromptEn
+      });
 
       return {
         strategy,
@@ -506,10 +581,11 @@ export function createFlashTemplateDirector(
         bustupCropBoxNormalized: raw.bustupCropBoxNormalized,
         detectedIssues: raw.detectedIssues,
         requiresMasterSynthesis,
-        engine: requiresMasterSynthesis ? 'nano-banana-2.1' : null,
+        engine: requiresMasterSynthesis ? primaryEngine : null,
         extractedIdentityLockEn: raw.extractedIdentityLockEn,
         extractedHairLockEn: raw.extractedHairLockEn,
-        opticalMasterPromptEn: sealServerOnlyPrompt(sanitizedMasterPrompt)
+        opticalMasterPromptEn: sealServerOnlyPrompt(compiledPrimaryPrompt),
+        fallbackMasterPromptEn: sealServerOnlyPrompt(compiledFallbackPrompt)
       };
     },
 
