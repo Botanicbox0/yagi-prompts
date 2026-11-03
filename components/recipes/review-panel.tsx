@@ -47,7 +47,7 @@ export function RecipeReviewPanel({ entry, copy, mediums, reason, note, submitte
       </OpForm> : null}
     </section>
 
-    {submitted ? <OpForm op="platform.manage" back="/admin/community" className="space-y-3 rounded-xl border border-hairline p-4">
+    {submitted ? <OpForm op="creative.format" back="/admin/community" className="space-y-3 rounded-xl border border-hairline p-4">
       <input type="hidden" name="action" value="format" /><input type="hidden" name="id" value={entry.id} />
       <label className="block text-sm">{r.price}<input className={`${INPUT} mt-1 min-h-10`} name="priceKrw" type="number" step="100" min={entry.quote?.floorKrw ?? 100} defaultValue={entry.quote?.proposedKrw ?? ''} /></label>
       {entry.quote ? <p className="text-xs opacity-70">{interpolate(r.priceHint, { floor: won(entry.quote.floorKrw), royalty: won(entry.quote.royaltyKrw), proposed: won(entry.quote.proposedKrw) })}</p> : null}

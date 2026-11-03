@@ -1,40 +1,11 @@
 /*
- * Brand landing v7 (2026-10-30). Values copy lib/design/identity.ts; tests/design/identity.test.ts keeps
- * them equal. Techniques (docs/design/TOOLBOX.md §1-1, three to four per screen): inset full-bleed frames
+ * Brand landing v7 (2026-10-30). Colour, type and motion read the identity variables; no hex of its own
+ * (tests/design/identity.test.ts). Techniques (docs/design/TOOLBOX.md §1-1, three to four per screen): inset full-bleed frames
  * with hairlines and crosshairs, blur-to-sharp reveals, one stage that morphs through chapters, a pinned
  * horizontal track. No motion library; every motion stops under prefers-reduced-motion.
  */
 
-/* ---------- Identity: the only place the hex values live on this page ---------- */
-.identity {
-  display: contents;
-  --id-paper: #ffffff;
-  --id-canvas: #f6f7f9;
-  --id-sky: #e8eff7;
-  --id-ink: #0e1013;
-  --id-body: #41444d;
-  --id-muted: #676b75;
-  --id-line: #e4e6ea;
-  --id-line-strong: #c7ccd3;
-  --id-accent: #3875c5;
-  --id-accent-text: color-mix(in srgb, var(--id-accent) 85%, #000000);
-  --id-accent-hover: color-mix(in srgb, var(--id-accent) 82%, #000000);
-  --id-accent-pressed: color-mix(in srgb, var(--id-accent) 66%, #000000);
-  --id-accent-tint: color-mix(in srgb, var(--id-accent) 9%, #ffffff);
-  --id-spring: linear(0, 0.009, 0.035 2.1%, 0.141, 0.281 6.7%, 0.723 12.9%, 0.938 16.7%, 1.017, 1.077, 1.121, 1.149 24.3%, 1.159, 1.163, 1.161, 1.154 29.9%, 1.129 32.8%, 1.051 39.6%, 1.017 43.1%, 0.991, 0.977 51%, 0.974 53.8%, 0.975 57.1%, 0.997 69.8%, 1.003 76.9%, 1);
-  --id-ease: cubic-bezier(0.22, 1, 0.36, 1);
-  --id-quick: 240ms;
-  --id-base: 520ms;
-  --id-slow: 900ms;
-  --id-radius-media: 18px;
-  --id-radius-card: 24px;
-  --id-sans: 'Pretendard Variable', Pretendard, 'Apple SD Gothic Neo', 'Malgun Gothic', system-ui, sans-serif;
-  --id-mono: var(--font-geist-mono), 'Pretendard Variable', Pretendard, ui-monospace, SFMono-Regular, Menlo, monospace;
-  /* The shared nav, enquiry form and FAQ read the site tokens; on this page they follow the identity. */
-  --color-blue: var(--id-accent);
-  --accent: var(--id-accent-text);
-}
-.identity :global([data-theme='light']) { --accent: var(--id-accent-text); }
+/* The identity variables (--id-*) come from components/design/identity.module.css `.identity`, which the page wraps itself in. */
 
 .page {
   color: var(--id-ink);

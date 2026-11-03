@@ -1,7 +1,7 @@
 /**
  * TWINGS design identity as code (2026-10-30). This is the brand side's own "hardline" file: the same shape
  * a brand's identity takes in brand.twings.app (colour roles, type, motion, imagery, voice), written for
- * TWINGS itself. CSS copies these values into variables (components/brand-studio/v7.module.css `.identity`)
+ * TWINGS itself. CSS copies these values into variables (components/design/identity.module.css `.identity`)
  * and tests/design/identity.test.ts fails when the two drift, when a pair loses contrast, or when red comes
  * back. Change a value here first; the guard tells you which stylesheet to follow.
  *

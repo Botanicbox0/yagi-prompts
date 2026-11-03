@@ -44,7 +44,7 @@ export function CreatorHero({ dict, locale, featured, evidence = null }: { dict:
         <CreatorPreview poster={featured.poster} video={featured.video} title={title!} href={templateHref(locale, featured.slug)} ratio={ratio} labels={{ play: t.playPreview, pause: t.pausePreview }} fallback={<TypographicPoster title={title!} slug={featured.slug} kicker="" ratio={ratio} />} />
         <a href={templateHref(locale, featured.slug)} className="mt-3 flex items-baseline justify-between gap-3 text-sm font-medium tracking-[-0.01em]">
           <span>{title}</span>
-          <span aria-hidden="true" className="text-[#676b75]">↗</span>
+          <span aria-hidden="true" className="text-muted">↗</span>
         </a>
       </article>}
     </div>
@@ -58,21 +58,25 @@ export function CreatorHowItWorks({ dict }: { dict: Dictionary }) {
     <div className="audience-shell py-16 lg:py-24">
       <p className="audience-eyebrow">{t.how}</p>
       <h2 className="audience-heading mt-4 max-w-2xl">{t.stepsHeading}</h2>
-      <ol className="mt-10 grid gap-8 md:grid-cols-3">{steps.map(([title,body],index) => <li key={title} className="border-t border-hairline pt-5"><span className="text-xs opacity-40">0{index+1}</span><h3 className="mt-4 text-xl font-semibold tracking-tight">{title}</h3><p className="mt-3 text-sm leading-relaxed opacity-65">{body}</p></li>)}</ol>
+      {/* Step numbers are spec labels, the one place mono belongs (docs/design/IDENTITY.md §3). */}
+      <ol className="mt-10 grid gap-8 md:grid-cols-3">{steps.map(([title,body],index) => <li key={title} className="border-t border-hairline pt-5"><span className="font-mono text-xs tabular-nums text-muted">0{index+1}</span><h3 className="audience-subheading mt-4 text-xl">{title}</h3><p className="mt-3 text-sm leading-relaxed opacity-65">{body}</p></li>)}</ol>
     </div>
   </section>;
 }
 
+/** A white card on the canvas, like the brand side's blocks; the page keeps one blue button, so the door is quiet. */
 export function CreatorCampaignDoor({ dict, locale }: { dict: Dictionary; locale: Locale }) {
   const t = dict.creatorJourney;
-  return <section data-section data-theme="dark" data-creator-campaign-door className="section">
-    <div className="audience-shell flex flex-wrap items-end justify-between gap-8 py-16 lg:py-24">
-      <div className="max-w-2xl"><p className="audience-eyebrow">{dict.nav.campaigns}</p><h2 className="audience-heading mt-4">{t.campaignHeading}</h2><p className="mt-5 text-sm leading-relaxed opacity-65">{t.campaignBody}</p></div>
-      <a href={campaignsHref(locale)} className="inline-flex min-h-12 items-center rounded-full bg-white px-6 text-sm font-medium text-black">{t.campaignCta} ↗</a>
+  return <section data-section data-theme="light" data-creator-campaign-door className="section">
+    <div className="audience-shell py-12 lg:py-16">
+      <div className="flex flex-wrap items-end justify-between gap-8 rounded-3xl border border-hairline bg-white p-8 lg:p-12">
+        <div className="max-w-2xl"><p className="audience-eyebrow">{dict.nav.campaigns}</p><h2 className="audience-heading mt-4">{t.campaignHeading}</h2><p className="mt-5 text-sm leading-relaxed opacity-65">{t.campaignBody}</p></div>
+        <a href={campaignsHref(locale)} className="audience-button-quiet">{t.campaignCta} ↗</a>
+      </div>
     </div>
   </section>;
 }
 
 export function BrandDoor({ dict, locale }: { dict: Dictionary; locale: Locale }) {
-  return <aside data-brand-door className="audience-shell my-16 grid gap-6 border-t border-hairline pt-8 sm:grid-cols-[1fr_auto] sm:items-center"><div><h2 className="text-lg font-semibold">{dict.audience.brandDoor}</h2><p className="mt-2 max-w-xl text-sm opacity-60">{dict.audience.brandDoorBody}</p></div><a href={brandsHref(locale)} className="text-sm font-medium underline underline-offset-4">{dict.audience.brandDoorCta} ↗</a></aside>;
+  return <aside data-brand-door className="audience-shell my-16 grid gap-6 border-t border-hairline pt-8 sm:grid-cols-[1fr_auto] sm:items-center"><div><h2 className="audience-subheading text-lg">{dict.audience.brandDoor}</h2><p className="mt-2 max-w-xl text-sm opacity-60">{dict.audience.brandDoorBody}</p></div><a href={brandsHref(locale)} className="text-sm font-medium underline underline-offset-4">{dict.audience.brandDoorCta} ↗</a></aside>;
 }

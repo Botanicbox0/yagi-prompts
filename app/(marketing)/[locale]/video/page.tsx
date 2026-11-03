@@ -4,6 +4,7 @@ import { getDictionary } from '@/lib/i18n/dictionaries';
 import { getPromptCatalog } from '@/lib/prompts/public-catalog';
 import { templatesListingMetadata } from '@/lib/seo/template-metadata';
 import { MarketingFooter, MarketingNav } from '@/components/marketing/chrome';
+import { PersonalIdentity } from '@/components/audience/personal-identity';
 import { TemplatesListing } from '@/components/templates/listing';
 import { FaqSection } from '@/lib/seo/faq-section';
 import { FirstRunSheet } from '@/components/onboarding/first-run-sheet';
@@ -45,7 +46,7 @@ export default async function VideoTemplatesPage({ params }: RouteParams) {
   const catalog = await getPromptCatalog();
 
   return (
-    <>
+    <PersonalIdentity>
       <MarketingNav locale={locale} dict={dict} rest="/video" initialTheme="light" />
       <main id="main" data-templates="video" data-section data-theme="light" className="section">
         <TemplatesListing locale={locale} dict={dict} medium="video" cards={catalog.video} />
@@ -54,6 +55,6 @@ export default async function VideoTemplatesPage({ params }: RouteParams) {
       <MarketingFooter locale={locale} dict={dict} />
       {/* docs/PLATFORM-2.0.md §3.2-1 — once, for a new account; the server markup is empty. */}
       <FirstRunSheet copy={dict.firstRun} locale={locale} />
-    </>
+    </PersonalIdentity>
   );
 }
