@@ -6,6 +6,7 @@ import {
 import {
   GEMINI_DIRECTOR_DEFAULT_BASE_URL,
   GEMINI_DIRECTOR_DEFAULT_MODEL,
+  rawOpticalIdentityMasterSchema,
   rawPhotoInspectionSchema,
   rawStage1ChatSchema,
   rawStage2RewriteSchema,
@@ -15,7 +16,9 @@ import {
   type DirectorConfig,
   type DirectorRewriteInput,
   type DirectorRewriteResult,
+  type MultiPhotoIdentityInput,
   type OpaqueCompiledPrompt,
+  type OpticalIdentityMasterPlan,
   type PhotoInspectionInput,
   type PhotoInspectionVerdict,
   type PhotoIssueCode,
@@ -431,6 +434,64 @@ export function createFlashTemplateDirector(
         preservedCameraAndLighting: raw.preservedCameraAndLighting,
         preservedAudioRule: raw.preservedAudioRule,
         preservedIdentityStrictLock: raw.preservedIdentityStrictLock
+      };
+    },
+
+    async synthesizeOpticalIdentityMaster(
+      input: MultiPhotoIdentityInput
+    ): Promise<OpticalIdentityMasterPlan> {
+      if (input.photos.length === 0) {
+        throw new Error('optical_identity_master_no_photos');
+      }
+
+      const systemInstruction = [
+        'You are the TWINGS Optical Identity Lock Engine (Backend Pre-Render Stage 0).',
+        'Analyze 1 to 8 uploaded photos of the same creator/user and select two anchors:',
+        '1. styleAnchorIndex: 0-based index of the photo showing the creator’s most flattering everyday hairstyle, bangs/parting, and natural facial vibe.',
+        '2. structureAnchorIndex: 0-based index of the photo showing the clearest frontal facial bone symmetry, eye shape, and nasal bridge.',
+        '3. Detect any 2D beauty-app liquify distortions (over_retouched_contour, heavy_filter), prop/hand occlusions, or bare-shoulder ID crops.',
+        '4. Compose opticalMasterPromptEn to synthesize a single 85mm f/2.0 optical portrait lens master reference combining the exact facial identity of structureAnchorIndex with the hairstyle/vibe of styleAnchorIndex, normalizing any 2D V-chin liquify into a soft oval-egg contour, wearing a minimalist matte black crew-neck top (never bare shoulders) with natural matte skin micro-texture.'
+      ].join('\n');
+
+      const cappedPhotos = input.photos.slice(0, 8);
+      const parts: Array<Record<string, unknown>> = [
+        {
+          text: JSON.stringify({
+            photoCount: cappedPhotos.length,
+            creatorNoteKo: input.creatorNoteKo ?? null,
+            filenames: cappedPhotos.map((p, idx) => p.filename ?? `photo_${idx}`)
+          })
+        },
+        ...cappedPhotos.map((photo) => ({
+          inlineData: {
+            mimeType: photo.mime,
+            data: Buffer.from(photo.bytes).toString('base64')
+          }
+        }))
+      ];
+
+      const raw = await callGeminiStructuredJson(
+        config,
+        fetchImpl,
+        systemInstruction,
+        parts,
+        (json) => rawOpticalIdentityMasterSchema.parse(json)
+      );
+
+      const maxIdx = cappedPhotos.length - 1;
+      const styleAnchorIndex = Math.min(Math.max(raw.styleAnchorIndex, 0), maxIdx);
+      const structureAnchorIndex = Math.min(Math.max(raw.structureAnchorIndex, 0), maxIdx);
+      const sanitizedMasterPrompt = sanitizeCleanupPrompt(raw.opticalMasterPromptEn, true);
+
+      return {
+        styleAnchorIndex,
+        structureAnchorIndex,
+        detectedIssues: raw.detectedIssues,
+        requiresMasterSynthesis: raw.requiresMasterSynthesis,
+        engine: 'nano-banana-2.1',
+        extractedIdentityLockEn: raw.extractedIdentityLockEn,
+        extractedHairLockEn: raw.extractedHairLockEn,
+        opticalMasterPromptEn: sealServerOnlyPrompt(sanitizedMasterPrompt)
       };
     }
   };

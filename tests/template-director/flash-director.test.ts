@@ -185,6 +185,51 @@ describe('Step 0: Photo Inspection & Cleanup Model Routing (Gemini 3.8 Flash)', 
     expect(verdict.recommendedCleanup.editPromptEn).toContain('normalizing 2D beauty-app liquify distortions');
   });
 
+  it('synthesizes a multi-photo Optical Identity Master plan (styleAnchor + structureAnchor) in the backend with zero prompt leakage', async () => {
+    const fetchMock = vi.fn(async (_url: RequestInfo | URL) =>
+      geminiJsonResponse({
+        styleAnchorIndex: 1,
+        structureAnchorIndex: 7,
+        detectedIssues: ['over_retouched_contour', 'prop_occlusion'],
+        requiresMasterSynthesis: true,
+        extractedIdentityLockEn:
+          'upturned cat-like almond dark-brown eyes, softly rounded nasal tip, soft apple cheeks',
+        extractedHairLockEn:
+          '6:4 side-parted sleek black chin-length straight tassel bob with delicate wispy side-swept forehead strands',
+        opticalMasterPromptEn:
+          '85mm f/2.0 optical portrait lens master reference combining Image 2 frontal bone identity with Image 1 side-swept bangs, bare shoulders.'
+      })
+    );
+
+    const director = createFlashTemplateDirector(
+      { apiKey: 'fake-gemini-key', baseUrl: 'https://generativelanguage.googleapis.com/v1beta', model: 'gemini-3.8-flash' },
+      { fetch: fetchMock }
+    );
+
+    const photos = Array.from({ length: 8 }, (_, idx) => ({
+      bytes: new Uint8Array([255, 216, 255, idx]),
+      mime: 'image/jpeg' as const,
+      filename: `photo_0${idx + 1}.jpg`
+    }));
+
+    const plan = await director.synthesizeOpticalIdentityMaster({
+      photos,
+      creatorNoteKo: '이마 조금 더 줄여주시고 볼록하게, 턱선 각진 선을 둥글게 정리해 주세요'
+    });
+
+    expect(plan.styleAnchorIndex).toBe(1);
+    expect(plan.structureAnchorIndex).toBe(7);
+    expect(plan.engine).toBe('nano-banana-2.1');
+    expect(plan.requiresMasterSynthesis).toBe(true);
+    // Must be sealed so accidental JSON serialization never leaks the optical master prompt
+    expect(JSON.stringify(plan.opticalMasterPromptEn)).toBe('"[REDACTED_SERVER_ONLY_PROMPT]"');
+
+    const unwrapped = unwrapServerOnlyPrompt(plan.opticalMasterPromptEn);
+    expect(unwrapped).not.toContain('bare shoulders');
+    expect(unwrapped).toContain('minimalist matte black crew-neck top');
+    expect(unwrapped).toContain('normalizing 2D beauty-app liquify distortions');
+  });
+
   it('routes low-resolution or blurry photos to local SeedVR2 (0-cost optical restoration) instead of generative hallucination', async () => {
     const fetchMock = vi.fn(async (_url: RequestInfo | URL) =>
       geminiJsonResponse({

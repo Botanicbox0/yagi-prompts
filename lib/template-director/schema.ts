@@ -82,6 +82,30 @@ export interface PhotoInspectionVerdict {
   recommendedCleanup: RecommendedPhotoCleanup;
 }
 
+export interface MultiPhotoIdentityInput {
+  photos: ReadonlyArray<{
+    bytes: Uint8Array;
+    mime: 'image/jpeg' | 'image/png' | 'image/webp';
+    filename?: string;
+  }>;
+  /** Optional creator or user feedback (e.g., "이마 조금 줄이고 턱선 둥글게"). */
+  creatorNoteKo?: string | null;
+}
+
+export interface OpticalIdentityMasterPlan {
+  /** 0-based index of the photo that best represents preferred hairstyle, bangs, and facial charm. */
+  styleAnchorIndex: number;
+  /** 0-based index of the photo that best represents true frontal bone symmetry, nose, and eye spacing. */
+  structureAnchorIndex: number;
+  detectedIssues: PhotoIssueCode[];
+  requiresMasterSynthesis: boolean;
+  engine: 'nano-banana-2.1';
+  extractedIdentityLockEn: string;
+  extractedHairLockEn: string;
+  /** Server-only prompt fed to Nano Banana 2.1 in the background to synthesize the 85mm optical master portrait. */
+  opticalMasterPromptEn: OpaqueCompiledPrompt;
+}
+
 export interface DirectorSummaryChip {
   slot: DirectorEditableSlot;
   labelKo: string;
@@ -228,4 +252,21 @@ export const rawStage2RewriteSchema = z.object({
   preservedCameraAndLighting: z.boolean(),
   preservedAudioRule: z.boolean(),
   preservedIdentityStrictLock: z.boolean()
+});
+
+export const rawOpticalIdentityMasterSchema = z.object({
+  styleAnchorIndex: z.number().int().min(0).max(7),
+  structureAnchorIndex: z.number().int().min(0).max(7),
+  detectedIssues: z
+    .preprocess(
+      (val) =>
+        Array.isArray(val)
+          ? val.filter((item): item is string => typeof item === 'string' && KNOWN_PHOTO_ISSUE_SET.has(item))
+          : [],
+      z.array(z.enum(PHOTO_ISSUE_CODES)).max(8)
+    ),
+  requiresMasterSynthesis: z.boolean(),
+  extractedIdentityLockEn: z.string().trim().min(10).max(600),
+  extractedHairLockEn: z.string().trim().min(10).max(400),
+  opticalMasterPromptEn: z.string().trim().min(40).max(1600)
 });
