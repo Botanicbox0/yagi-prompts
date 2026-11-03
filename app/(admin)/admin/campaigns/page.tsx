@@ -16,6 +16,8 @@ import { CAMPAIGN_STATUSES, type CampaignStatus } from '@/lib/campaigns/schemas'
 import { computePayout, formatWon, needsMetrics } from '@/lib/campaigns/state';
 import { ADMIN_CAMPAIGNS_PATH, ADMIN_CAMPAIGN_NEW_PATH, adminCampaignPath, campaignHref } from '@/lib/campaigns/links';
 import { AdminShell, BUTTON, BUTTON_PRIMARY, ConfirmCheck, INPUT, OpForm, OutcomeBanner, Panel } from '@/components/admin/chrome';
+import { AdminPageHeader, StatusPill, type AdminTone } from '@/components/admin/patterns';
+import { formatCount } from '@/lib/admin/format';
 
 /**
  * `/admin/campaigns` — the board (docs/CAMPAIGNS.md §6): one row per campaign with the numbers
@@ -36,6 +38,21 @@ const ZERO: CampaignCounts = { applied: 0, selected: 0, posted: 0, verified: 0, 
 /** Live first, then drafts, then the closed and archived tail. */
 const ORDER: CampaignStatus[] = ['running', 'selecting', 'recruiting', 'draft', 'closed', 'archived'];
 
+function campaignTone(status: CampaignStatus): AdminTone {
+  switch (status) {
+    case 'running':
+      return 'done';
+    case 'selecting':
+      return 'action';
+    case 'recruiting':
+      return 'progress';
+    case 'draft':
+    case 'closed':
+    case 'archived':
+      return 'hold';
+  }
+}
+
 export default async function AdminCampaignsPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
   const [locale, params, sql] = await Promise.all([getLocaleFromHeaders(), searchParams, getSqlRunner()]);
   const dict = getDictionary(locale);
@@ -48,16 +65,17 @@ export default async function AdminCampaignsPage({ searchParams }: { searchParam
   const byId = new Map(rows.map((row) => [row.id, row]));
   return (
     <AdminShell dict={a} locale={locale} active="campaigns">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <p className="text-accent font-label text-eyebrow uppercase">{a.navCampaigns}</p>
-          <h1 className="mt-3 font-display text-[clamp(2rem,4vw,3rem)] leading-[0.95] font-black uppercase">{a.campaignsHeading}</h1>
-          <p className="mt-3 max-w-detail text-body opacity-60">{a.campaignsLede}</p>
-        </div>
-        <a href={ADMIN_CAMPAIGN_NEW_PATH} data-new-campaign className={BUTTON_PRIMARY}>
-          {a.newCampaign}
-        </a>
-      </div>
+      <AdminPageHeader
+        eyebrow={a.navCampaigns}
+        title={a.campaignsHeading}
+        count={formatCount(rows.length, locale)}
+        lede={a.campaignsLede}
+        actions={
+          <a href={ADMIN_CAMPAIGN_NEW_PATH} data-new-campaign className="admin-btn admin-btn-primary">
+            {a.newCampaign}
+          </a>
+        }
+      />
 
       <OutcomeBanner
         dict={a}
@@ -135,8 +153,8 @@ export default async function AdminCampaignsPage({ searchParams }: { searchParam
                   return (
                     <li key={row.id} data-admin-campaign={row.slug} className="flex flex-wrap items-center justify-between gap-3 py-3">
                       <div className="min-w-0">
-                        <span data-campaign-status-chip={row.status} className={`mr-3 inline-block border px-2 py-0.5 font-label text-[0.62rem] tracking-[0.1em] uppercase ${status === 'draft' ? 'border-hairline opacity-60' : 'border-accent text-accent'}`}>
-                          {a.campaignStatuses[row.status]}
+                        <span data-campaign-status-chip={row.status} className="mr-3 inline-block align-middle">
+                          <StatusPill tone={campaignTone(row.status)}>{a.campaignStatuses[row.status]}</StatusPill>
                         </span>
                         <a href={adminCampaignPath(row.id)} className="font-mono text-code text-accent">
                           {row.slug}

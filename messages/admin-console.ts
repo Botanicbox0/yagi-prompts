@@ -242,6 +242,30 @@ export const adminConsoleEn = {
     empty: "No account matches this filter.",
     emptyAll: "No account yet.",
   },
+  community: {
+    title: "AI creatives",
+    lede: "Supplier applications, submitted recipe formats, SNS follower checks, post claims, 1:1 threads, ratings and reward policy. Every action requires a reason and writes an audit row.",
+    count: "{count} waiting",
+    sectionFilter: "Section",
+    sections: {
+      all: "All sections",
+      intake: "Applications & formats",
+      social: "SNS & claims",
+      feedback: "Requests & ratings",
+      policy: "Settlement & policy",
+    },
+    anchors: {
+      social: "SNS checks",
+      applications: "Creative applications",
+      formats: "Format review",
+      threads: "1:1 requests",
+      claims: "Post claims",
+      ratings: "Customer ratings",
+    },
+    studioSender: "Studio",
+    memberSender: "Member",
+    unavailable: "Creator platform tables are not available in this database.",
+  },
 };
 
 export const adminConsoleKo: typeof adminConsoleEn = {
@@ -482,5 +506,29 @@ export const adminConsoleKo: typeof adminConsoleEn = {
     noSocial: "없음",
     empty: "이 조건에 맞는 계정이 없습니다.",
     emptyAll: "아직 가입한 계정이 없습니다.",
+  },
+  community: {
+    title: "AI 크리에이티브",
+    lede: "크리에이티브 지원서, 제출된 레시피 포맷, SNS 팔로워 확인, 게시물 클레임, 1:1 요청, 고객 평점, 정산·보상 정책을 관리합니다. 모든 조치는 사유와 함께 감사 로그에 기록됩니다.",
+    count: "{count}건 대기",
+    sectionFilter: "구분",
+    sections: {
+      all: "전체 보기",
+      intake: "지원·포맷",
+      social: "SNS·클레임",
+      feedback: "요청·평점",
+      policy: "정책·이력",
+    },
+    anchors: {
+      social: "SNS 확인",
+      applications: "크리에이티브 지원서",
+      formats: "포맷 검수",
+      threads: "1:1 요청",
+      claims: "게시물 클레임",
+      ratings: "고객 평점",
+    },
+    studioSender: "스튜디오",
+    memberSender: "회원",
+    unavailable: "이 데이터베이스에는 크리에이티브 플랫폼 테이블이 아직 준비되지 않았습니다.",
   },
 };
