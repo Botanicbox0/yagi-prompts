@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import type { SqlRunner } from '@/lib/db/sql-runner';
 import { BrandFeatureDenied, assertBrandFeature } from '@/lib/brands/entitlements';
@@ -117,7 +116,7 @@ export async function createWorkstationFinishTask(
     throw error;
   }
 
-  const id = v.id ?? randomUUID();
+  const id = v.id ?? globalThis.crypto.randomUUID();
   const gpuArbiterSlot =
     v.op === 'upscale' || v.op === 'inpaint' ? 'comfyui' : 'ffmpeg_cpu_gpu';
 

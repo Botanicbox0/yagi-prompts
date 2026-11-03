@@ -28,6 +28,7 @@ import {
   PROJECT_DIRECTION_PRESETS,
   type ProjectDirectionPresetKey,
 } from "@/lib/brands/identity/project-direction";
+import { BrandMicroRoiPanel } from "./brand-micro-roi-panel";
 
 export interface BrandBriefStudioProps {
   organizationId: string;
@@ -1249,6 +1250,19 @@ export function BrandBriefStudio({
           )}
         </div>
       )}
+
+      <hr className="bw-divider" />
+
+      <BrandMicroRoiPanel
+        organizationId={organizationId}
+        projectId={
+          directionMode === "project_override" && projectId.trim()
+            ? projectId.trim()
+            : undefined
+        }
+        locale={locale}
+        canWrite={canWrite}
+      />
     </section>
   );
 }
