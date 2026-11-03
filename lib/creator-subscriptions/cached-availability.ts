@@ -1,7 +1,7 @@
 import 'server-only';
 import { unstable_cache } from 'next/cache';
 import { getSqlRunner } from '@/lib/db/connect';
-import { getCreatorSubscriptionAvailability, SUBSCRIPTION_RELEASE_VERSION } from './availability';
+import { cacheableSubscriptionAvailability, SUBSCRIPTION_RELEASE_VERSION } from './availability';
 import { currentImplementationSha, launchConfigurationDigest, premiumConfigurationDigest } from './evidence';
 import { subscriptionTermsApproved } from './evidence';
 
@@ -11,14 +11,14 @@ const identity = [currentImplementationSha() ?? 'unidentified', launchConfigurat
   process.env.VERCEL_ENV ?? '', process.env.CREATOR_SUBSCRIPTION_PUBLIC ?? 'off'];
 /** Static marketing HTML and its structured answers share one versioned public projection. */
 export const cachedSubscriptionAvailability = unstable_cache(
-  async () => getCreatorSubscriptionAvailability(await getSqlRunner()),
+  async () => cacheableSubscriptionAvailability(await getSqlRunner()),
   ['creator-subscription-availability', SUBSCRIPTION_RELEASE_VERSION, ...identity],
   { tags: [SUBSCRIPTION_AVAILABILITY_TAG], revalidate: 3600 },
 );
 
 /** Browser reads share a short server cache; checkout always runs a fresh readiness check. */
 export const publicSubscriptionAvailability = unstable_cache(
-  async () => getCreatorSubscriptionAvailability(await getSqlRunner()),
+  async () => cacheableSubscriptionAvailability(await getSqlRunner()),
   ['creator-subscription-public-status', SUBSCRIPTION_RELEASE_VERSION, ...identity],
   { tags: [SUBSCRIPTION_AVAILABILITY_TAG], revalidate: 15 },
 );
