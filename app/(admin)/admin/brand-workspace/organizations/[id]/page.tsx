@@ -15,6 +15,10 @@ import { AdminShell } from "@/components/admin/chrome";
 import { ManagedForm } from "@/components/brand-workspace/managed-form";
 import { formatBrandTimestamp } from "@/components/brand-workspace/format";
 import { BrandAvatar } from "@/components/brand-workspace/brand-avatar";
+import { interpolate } from "@/lib/i18n/format";
+import { BRAND_FEATURES } from "@/lib/brands/features";
+import { loadFeaturePolicy } from "@/lib/brands/entitlements";
+import { BRAND_BILLING_MODES, BRAND_PLAN_IDS, BRAND_PLANS, loadPlanAssignment } from "@/lib/brands/plans";
 export const dynamic = "force-dynamic";
 export default async function StudioOrganization({
   params,
@@ -37,6 +41,10 @@ export default async function StudioOrganization({
   const previews=(await sql.query<{id:string;project_id:string;name:string}>("select id,project_id,name from brand_attachments where organization_id=$1 and status='ready' and access_scope='workspace' and (mime like 'image/%' or mime like 'video/%')",[id])).rows;
   const production=await loadProductionWorkspace({sql},viewer,id,true);
   const projects=(await loadStudioWorkspace({sql},viewer)).projects.filter(p=>p.organizationId===id);
+  // docs/BRAND-PRODUCT.md — the brand engine's two studio controls: the deny-list and the plan.
+  const [policy, plan] = await Promise.all([loadFeaturePolicy(sql, id), loadPlanAssignment(sql, id)]);
+  const krw = new Intl.NumberFormat("ko-KR");
+  const today = new Date(Date.now() + 9 * 3_600_000).toISOString().slice(0, 10);
   return (
     <AdminShell dict={dict.admin} locale={locale} active="brandWorkspace">
       <div className="bw-heading">
@@ -156,6 +164,78 @@ export default async function StudioOrganization({
                 <option value="viewer">{b.roles.viewer}</option>
               </select>
               <span className="bw-muted">{c.scopeBrand}</span>
+            </label>
+          </ManagedForm>
+        </section>
+      </div>
+      <div className="bw-grid-wide">
+        <section className="bw-panel" data-brand-feature-policy>
+          <h2>{c.featurePolicy}</h2>
+          <p className="bw-muted">{c.featurePolicyHint}</p>
+          <p data-brand-feature-policy-state={policy.denied.length}>
+            {policy.denied.length === 0 ? c.featurePolicyOpen : interpolate(c.featurePolicyClosed, { count: String(policy.denied.length) })}
+          </p>
+          <ManagedForm op="brandEngine.featurePolicy" b={b} submit={c.featurePolicySave}>
+            <input type="hidden" name="organizationId" value={id} />
+            <input type="hidden" name="expectedRevision" value={policy.revision} />
+            <fieldset className="bw-fields">
+              {BRAND_FEATURES.map((feature) => (
+                <label key={feature} className="bw-check">
+                  <input type="checkbox" name="denied" value={feature} defaultChecked={policy.denied.includes(feature)} />
+                  {b.features[feature]}
+                </label>
+              ))}
+            </fieldset>
+            <label>
+              {c.featurePolicyNote}
+              <input name="note" defaultValue={policy.note} maxLength={500} />
+            </label>
+          </ManagedForm>
+        </section>
+        <section className="bw-panel" data-brand-plan>
+          <h2>{c.plan}</h2>
+          <p className="bw-muted">{c.planHint}</p>
+          <p data-brand-plan-state={plan?.planId ?? "none"}>
+            {plan
+              ? `${interpolate(c.planCurrent, { plan: b.planNames[plan.planId], price: krw.format(BRAND_PLANS[plan.planId].monthlyKrw), billing: b.billingModes[plan.billingMode], from: plan.startedOn })}${plan.endsOn ? ` · ${interpolate(c.planUntil, { until: plan.endsOn })}` : ""}`
+              : c.planNone}
+          </p>
+          <ManagedForm op="brandEngine.plan" b={b} submit={c.planSave}>
+            <input type="hidden" name="organizationId" value={id} />
+            <input type="hidden" name="expectedRevision" value={plan?.revision ?? 0} />
+            <label>
+              {c.planId}
+              <select name="planId" defaultValue={plan?.planId ?? "b2b_39"}>
+                {BRAND_PLAN_IDS.map((planId) => (
+                  <option key={planId} value={planId}>
+                    {b.planNames[planId]} · {krw.format(BRAND_PLANS[planId].monthlyKrw)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              {c.billingMode}
+              <select name="billingMode" defaultValue={plan?.billingMode ?? "invoice"}>
+                {BRAND_BILLING_MODES.map((mode) => (
+                  <option key={mode} value={mode}>{b.billingModes[mode]}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              {c.startedOn}
+              <input name="startedOn" type="date" defaultValue={plan?.startedOn ?? today} required />
+            </label>
+            <label>
+              {c.endsOn}
+              <input name="endsOn" type="date" defaultValue={plan?.endsOn ?? ""} />
+            </label>
+            <label>
+              {c.seats}
+              <input name="seats" type="number" min={1} max={1000} defaultValue={plan?.seats ?? ""} />
+            </label>
+            <label>
+              {c.planNote}
+              <input name="note" defaultValue={plan?.note ?? ""} maxLength={500} />
             </label>
           </ManagedForm>
         </section>

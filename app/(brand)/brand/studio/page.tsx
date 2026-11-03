@@ -1,5 +1,7 @@
+import { notFound } from "next/navigation";
 import { StudioInquiry } from "@/components/brand-workspace/studio-inquiry";
 import { ServiceGuide } from "@/components/brand-workspace/service-guide";
+import { featureDenied } from "@/lib/brands/features";
 import {
   assetLibraryMode,
   identityStatusFor,
@@ -35,6 +37,8 @@ export default async function BrandStudio({
   if (!sql) return <p role="alert">{b.unavailable}</p>;
   const { selection, choice, projectOrganizations } = await brandScope({ sql, verifiedEmail }, viewer, organizationId);
   if (selection.state === "unavailable") return <BrandUnavailable b={b} />;
+  // A brand whose policy closes generative media has no studio: not a notice, no page at all.
+  if (choice && featureDenied(choice.denied, "generative_media")) notFound();
   // Role and requests follow the SELECTED brand only. A guest brand has no membership here.
   const organizations = membershipOf(choice),
     access = selectedAccess(choice, Object.values(projectOrganizations).filter((o) => o === choice?.id)),

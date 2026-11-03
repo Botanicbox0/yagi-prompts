@@ -1,0 +1,176 @@
+import { z } from 'zod';
+import type { Viewer } from '@/lib/auth/identity';
+import type { SqlRunner } from '@/lib/db/sql-runner';
+import type { BrandOutcome } from './workspace/types';
+import { BRAND_FEATURES, normalizeDenied, type BrandFeature } from './features';
+
+export { BRAND_FEATURES, featureDenied, isBrandFeature, normalizeDenied, type BrandFeature } from './features';
+
+/**
+ * Per-organization feature policy (docs/BRAND-PRODUCT.md §4): the deny-list behind "open to everyone,
+ * with named exceptions".
+ *
+ * Default open: a missing row means nothing is denied. Only the studio writes rows, through the admin
+ * registry (`brandEngine.featurePolicy`); nothing on the brand side can change them, and every save
+ * appends a `brand_feature_policy_events` row.
+ *
+ * Where a policy bites (every entry point, never only the menu):
+ *   - the sidebar: `sectionVisibility` (workspace/selection.ts) reads the choice's `denied`, which
+ *     `loadBrandWorkspaceScope` attaches from this module;
+ *   - the studio page: `notFound()` for a denied organization (app/(brand)/brand/studio/page.tsx);
+ *   - the reservation that starts a brand render: `reserveProduction` refuses with
+ *     `feature_unavailable` (lib/brands/production/service.ts).
+ * A new generative, sound or grading entry point must call `assertBrandFeature` (inside its own
+ * transaction) or check the choice's `denied` before doing anything. tests/brands/entitlements.test.ts
+ * pins each gate.
+ *
+ * Results already made stay readable: a policy closes doors, it does not take work back.
+ */
+export interface BrandFeaturePolicy {
+  organizationId: string;
+  denied: BrandFeature[];
+  note: string;
+  /** 0 = no row yet. Optimistic-concurrency token for the admin form. */
+  revision: number;
+  updatedAt: string | null;
+}
+
+const uuid = z.string().uuid();
+
+/** node-postgres and PGlite both hand `text[]` back as arrays; a literal is tolerated for safety. */
+function deniedOf(value: unknown): BrandFeature[] {
+  if (Array.isArray(value)) return normalizeDenied(value);
+  if (typeof value === 'string') {
+    const inner = value.replace(/^\{/, '').replace(/\}$/, '');
+    return normalizeDenied(inner.split(',').map((v) => v.trim().replace(/^"/, '').replace(/"$/, '')));
+  }
+  return [];
+}
+
+/** Code before migration 0074: no table means no exceptions, never a broken workspace. */
+export function isMissingTable(error: unknown): boolean {
+  return (error as { code?: string } | null)?.code === '42P01';
+}
+
+const stamp = (v: unknown): string | null => (v == null ? null : v instanceof Date ? v.toISOString() : String(v));
+
+/**
+ * Denied features per organization, for the organizations that have an exception only. Outside any
+ * transaction on purpose: a missing table is tolerated here, and inside a transaction it could not be.
+ */
+export async function loadFeaturePolicies(sql: SqlRunner, organizationIds: readonly string[]): Promise<Record<string, BrandFeature[]>> {
+  const ids = [...new Set(organizationIds.filter((id) => uuid.safeParse(id).success))];
+  if (ids.length === 0) return {};
+  let rows: Array<{ organization_id: string; denied_features: unknown }>;
+  try {
+    rows = (
+      await sql.query<{ organization_id: string; denied_features: unknown }>(
+        'select organization_id, denied_features from brand_feature_policies where organization_id = any($1::uuid[])',
+        [ids],
+      )
+    ).rows;
+  } catch (error) {
+    if (isMissingTable(error)) return {};
+    throw error;
+  }
+  const out: Record<string, BrandFeature[]> = {};
+  for (const row of rows) {
+    const denied = deniedOf(row.denied_features);
+    if (denied.length > 0) out[String(row.organization_id)] = denied;
+  }
+  return out;
+}
+
+/** The admin form's view of one organization's policy; the empty policy when there is no row. */
+export async function loadFeaturePolicy(sql: SqlRunner, organizationId: string): Promise<BrandFeaturePolicy> {
+  const empty: BrandFeaturePolicy = { organizationId, denied: [], note: '', revision: 0, updatedAt: null };
+  if (!uuid.safeParse(organizationId).success) return empty;
+  let row: { denied_features: unknown; note: string; revision: number; updated_at: unknown } | undefined;
+  try {
+    row = (
+      await sql.query<{ denied_features: unknown; note: string; revision: number; updated_at: unknown }>(
+        'select denied_features, note, revision, updated_at from brand_feature_policies where organization_id = $1',
+        [organizationId],
+      )
+    ).rows[0];
+  } catch (error) {
+    if (isMissingTable(error)) return empty;
+    throw error;
+  }
+  if (!row) return empty;
+  return {
+    organizationId,
+    denied: deniedOf(row.denied_features),
+    note: String(row.note ?? ''),
+    revision: Number(row.revision),
+    updatedAt: stamp(row.updated_at),
+  };
+}
+
+export class BrandFeatureDenied extends Error {
+  readonly code = 'feature_unavailable' as const;
+  constructor(readonly feature: BrandFeature) {
+    super(`feature_unavailable:${feature}`);
+  }
+}
+
+/**
+ * Throws `BrandFeatureDenied` when the organization's policy closes `feature`. Call it inside the
+ * transaction that would start the work, right after the membership check, so the refusal and the
+ * work share one view of the row.
+ */
+export async function assertBrandFeature(sql: SqlRunner, organizationId: string, feature: BrandFeature): Promise<void> {
+  const row = (
+    await sql.query<{ denied_features: unknown }>('select denied_features from brand_feature_policies where organization_id = $1', [organizationId])
+  ).rows[0];
+  if (row && deniedOf(row.denied_features).includes(feature)) throw new BrandFeatureDenied(feature);
+}
+
+const PolicyInput = z.object({
+  organizationId: uuid,
+  denied: z.array(z.enum(BRAND_FEATURES)).max(BRAND_FEATURES.length * 2),
+  note: z.string().trim().max(500).default(''),
+  expectedRevision: z.number().int().min(0),
+});
+
+/**
+ * Replace an organization's deny-list (admin only). `expectedRevision` must match the current row
+ * (0 when there is none), so two administrators cannot overwrite each other unseen.
+ */
+export async function setFeaturePolicy(
+  deps: { sql: SqlRunner },
+  viewer: Viewer,
+  input: unknown,
+): Promise<BrandOutcome<{ id: string; revision: number }>> {
+  if (!uuid.safeParse(viewer.userId).success) return { ok: false, code: 'sign_in_required' };
+  const parsed = PolicyInput.safeParse(input);
+  if (!parsed.success) return { ok: false, code: 'invalid', field: (parsed.error.issues[0]?.path ?? []).map(String).join('.') };
+  const v = parsed.data;
+  const denied = normalizeDenied(v.denied);
+  return deps.sql.transaction(async (sql) => {
+    const profile = (await sql.query<{ is_admin: boolean }>('select is_admin from profiles where id = $1 for share', [viewer.userId])).rows[0];
+    if (!profile) return { ok: false as const, code: 'sign_in_required' as const };
+    if (profile.is_admin !== true) return { ok: false as const, code: 'forbidden' as const };
+    if (!(await sql.query('select id from brand_organizations where id = $1 for update', [v.organizationId])).rows[0])
+      return { ok: false as const, code: 'not_found' as const };
+    const current = (
+      await sql.query<{ revision: number }>('select revision from brand_feature_policies where organization_id = $1 for update', [v.organizationId])
+    ).rows[0];
+    const revision = current ? Number(current.revision) : 0;
+    if (revision !== v.expectedRevision) return { ok: false as const, code: 'conflict' as const };
+    const next = revision + 1;
+    await sql.query(
+      `insert into brand_feature_policies (organization_id, denied_features, note, revision, updated_by, updated_at)
+         values ($1, $2::text[], $3, $4, $5, now())
+       on conflict (organization_id) do update
+         set denied_features = excluded.denied_features, note = excluded.note, revision = excluded.revision,
+             updated_by = excluded.updated_by, updated_at = now()`,
+      [v.organizationId, denied, v.note, next, viewer.userId],
+    );
+    await sql.query(
+      'insert into brand_feature_policy_events (organization_id, denied_features, note, actor_id) values ($1, $2::text[], $3, $4)',
+      [v.organizationId, denied, v.note, viewer.userId],
+    );
+    return { ok: true as const, id: v.organizationId, revision: next };
+  });
+}
