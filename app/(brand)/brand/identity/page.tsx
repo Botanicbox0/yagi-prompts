@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { ActionForm } from "@/components/brand-workspace/action-form";
+import { BrandOnboardingWizard } from "@/components/brand-workspace/brand-onboarding-wizard";
 import { BrandUnavailable } from "@/components/brand-workspace/brand-unavailable";
 import { brandContext } from "@/components/brand-workspace/context";
 import { formatBrandTimestamp } from "@/components/brand-workspace/format";
@@ -46,7 +47,13 @@ export default async function BrandIdentityPage({
     organizationId
   );
   if (selection.state === "unavailable") return <BrandUnavailable b={b} />;
-  if (choice && featureDenied(choice.denied, "brand_learning")) notFound();
+  if (
+    choice &&
+    (featureDenied(choice.denied, "brand_learning") ||
+      featureDenied(choice.denied, "generative_media"))
+  ) {
+    notFound();
+  }
 
   const t = b.identityLayer;
 
@@ -160,6 +167,16 @@ export default async function BrandIdentityPage({
           </div>
         </section>
       )}
+
+      <BrandOnboardingWizard
+        organizationId={choice.id}
+        organizationName={choice.name}
+        locale={locale}
+        isOwner={isOwner}
+        currentStatus={record?.status ?? "none"}
+        currentRevision={record?.revision ?? 0}
+        studioHref={scopedHref("/brand/studio", choice)}
+      />
 
       <section className="bw-panel" data-brand-identity-form>
         <ActionForm
@@ -487,6 +504,7 @@ export default async function BrandIdentityPage({
       </section>
 
       <div className="bw-grid-wide">
+        {!featureDenied(choice.denied, "color_grading") && (
         <section className="bw-panel" data-brand-looks>
           <h2>{t.looksSection}</h2>
           <p className="bw-muted">{t.looksHint}</p>
@@ -560,6 +578,7 @@ export default async function BrandIdentityPage({
             </ActionForm>
           )}
         </section>
+        )}
 
         <section className="bw-panel" data-brand-memory>
           <h2>{t.memorySection}</h2>

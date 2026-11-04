@@ -4,6 +4,7 @@ import { brandScope, membershipOf } from "@/components/brand-workspace/scope";
 import { BrandUnavailable } from "@/components/brand-workspace/brand-unavailable";
 import { scopedHref } from "@/lib/brands/workspace/selection";
 import { CampaignWizard, type WizardFormat } from "@/components/brand-workspace/campaign-wizard";
+import { featureDenied } from "@/lib/brands/features";
 import { loadPromptCatalog } from "@/lib/prompts/catalog";
 import { StudioPrep } from "@/components/brand-workspace/studio-prep";
 export default async function NewBrandProject({
@@ -25,8 +26,9 @@ export default async function NewBrandProject({
   // (hidden from the client), through the brand host's studio door. Team-domain readers stay read-only.
   const studioPrep = viewer.isAdmin && (choice?.role === "studio" || choices.length === 0);
   // Step ① shows the public video formats as the catalogue does (docs/PLATFORM-2.0.md §16.3): media and title only.
-  // A catalogue that cannot be read leaves the brand-only production request, never a broken page.
-  const formats: WizardFormat[] = organizations.length === 0 ? [] : (await loadPromptCatalog(sql).catch(() => ({ video: [] as Awaited<ReturnType<typeof loadPromptCatalog>>["video"] }))).video.map((card) => ({
+  // A catalogue that cannot be read, or a brand whose policy closes generative media, leaves the custom request only.
+  const generativeClosed = Boolean(choice && featureDenied(choice.denied, "generative_media"));
+  const formats: WizardFormat[] = organizations.length === 0 || generativeClosed ? [] : (await loadPromptCatalog(sql).catch(() => ({ video: [] as Awaited<ReturnType<typeof loadPromptCatalog>>["video"] }))).video.map((card) => ({
     slug: card.slug, title: locale === "ko" && card.titleKo ? card.titleKo : card.title, source: card.source,
     authorHandle: card.source === "community" ? card.authorHandle : null, poster: card.poster, video: card.video,
   }));

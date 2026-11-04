@@ -10,8 +10,10 @@ import {
 import { brandContext } from "@/components/brand-workspace/context";
 import { brandScope, membershipOf, selectedAccess } from "@/components/brand-workspace/scope";
 import { BrandUnavailable } from "@/components/brand-workspace/brand-unavailable";
-import { scopedHref } from "@/lib/brands/workspace/selection";
+import { scopedHref, sectionVisibility } from "@/lib/brands/workspace/selection";
 import { ProductionCreate } from "@/components/brand-workspace/production-create";
+import { BrandBriefStudio } from "@/components/brand-workspace/brand-brief-studio";
+import { confirmedIdentityFor } from "@/lib/brands/identity/service";
 import { loadProductionWorkspace } from "@/lib/brands/production/service";
 import { loadBrandSupport } from "@/lib/brands/workspace/service";
 import { studioRequestStatus, studioStage } from "@/lib/brands/production/stage";
@@ -28,12 +30,16 @@ const REQUEST_TITLES = [getDictionary("ko"), getDictionary("en")].map((d) => d.b
 export default async function BrandStudio({
   searchParams,
 }: {
-  searchParams: Promise<{ organizationId?: string | string[] }>;
+  searchParams: Promise<{
+    organizationId?: string | string[];
+    projectId?: string | string[];
+  }>;
 }) {
-  const [{ organizationId }, { sql, viewer, verifiedEmail, brandHost, b, locale }] = await Promise.all([
-    searchParams,
-    brandContext(),
-  ]);
+  const [
+    { organizationId, projectId },
+    { sql, viewer, verifiedEmail, brandHost, b, locale },
+  ] = await Promise.all([searchParams, brandContext()]);
+  const initialProjectId = Array.isArray(projectId) ? projectId[0] : projectId;
   if (!sql) return <p role="alert">{b.unavailable}</p>;
   const { selection, choice, projectOrganizations } = await brandScope({ sql, verifiedEmail }, viewer, organizationId);
   if (selection.state === "unavailable") return <BrandUnavailable b={b} />;
@@ -78,6 +84,10 @@ export default async function BrandStudio({
   const canCreate = !access.staff && production?.role !== "viewer";
   // The face is asked for only once there is a template to use it with.
   const hasTemplates = contracts.some((c) => c.templates.length > 0);
+  const confirmedIdentity =
+    hasTemplates && historyOrg
+      ? await confirmedIdentityFor(sql, historyOrg).catch(() => null)
+      : null;
   const selfie = hasTemplates ? (await currentSelfie(sql, viewer.userId!))?.id ?? null : null;
   const mode = assetLibraryMode();
   const verifyRequired =
@@ -153,6 +163,21 @@ export default async function BrandStudio({
         <StudioIntro t={o} stage={stage} guide={guide} />
       ) : (
         <StudioHelp t={o} stage={stage} guide={guide} />
+      )}
+      {historyOrg && (
+        <BrandBriefStudio
+          organizationId={historyOrg}
+          locale={locale}
+          canWrite={canCreate}
+          identityConfirmed={Boolean(confirmedIdentity)}
+          defaultChecklist={confirmedIdentity?.productChecklist}
+          identityHref={
+            choice && sectionVisibility(choice).identity
+              ? scopedHref("/brand/identity", choice)
+              : undefined
+          }
+          initialProjectId={initialProjectId}
+        />
       )}
       {production && contracts.length > 0 && (
         <>

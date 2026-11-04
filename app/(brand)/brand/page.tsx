@@ -5,7 +5,7 @@ import { countPendingSharedCampaigns, loadBrandWorkspace } from "@/lib/brands/wo
 import { CampaignList } from "@/components/brand-workspace/campaign-list";
 import { brandScope, selectedAccess } from "@/components/brand-workspace/scope";
 import { BrandUnavailable } from "@/components/brand-workspace/brand-unavailable";
-import { scopedHref } from "@/lib/brands/workspace/selection";
+import { scopedHref, sectionVisibility } from "@/lib/brands/workspace/selection";
 import { StaffNotice, adminOrganizationHref } from "@/components/brand-workspace/staff-notice";
 export default async function BrandHome({
   searchParams,
@@ -24,6 +24,7 @@ export default async function BrandHome({
   // Accepted campaign invitations the studio has not shared yet: honest waiting, never a "create a workspace" start.
   const pendingShares = access.staff ? 0 : await countPendingSharedCampaigns({ sql }, viewer);
   const newProject = scopedHref("/brand/projects/new", choice);
+  const studioOpen = !choice || sectionVisibility(choice).studio;
   return (
     <div data-brand-home>
       <div className="bw-heading">
@@ -39,7 +40,7 @@ export default async function BrandHome({
         {access.staff && viewer.isAdmin && <a href={newProject} className="bw-button bw-primary" data-studio-prep-link>{b.studioPrep.cta}</a>}
       </div>
       {access.staff && choice && <StaffNotice b={b} manageHref={viewer.isAdmin ? adminOrganizationHref(choice.id, brandHost) : null} />}
-      {workspace.projects.length === 0 && <ServiceGuide kind="campaign" b={b} showOther={!access.projectScopedOnly} organizationId={choice?.id} />}
+      {workspace.projects.length === 0 && <ServiceGuide kind="campaign" b={b} studioAllowed={studioOpen} showOther={!access.projectScopedOnly && studioOpen} organizationId={choice?.id} />}
       {pendingShares > 0 && (
         <section className={access.fresh ? "bw-empty" : "bw-note"} data-brand-pending-share={pendingShares}>
           <h2>{b.pendingShareTitle}</h2>
@@ -93,7 +94,7 @@ export default async function BrandHome({
           ) : (
             <CampaignList projects={workspace.projects} b={b} locale={locale}/>
           )}
-          {workspace.projects.length > 0 && <details className="bw-service-disclosure" data-brand-service-disclosure><summary>{b.dashboard.serviceGuideToggle}</summary><ServiceGuide kind="campaign" b={b} showOther={!access.projectScopedOnly} organizationId={choice?.id} /></details>}
+          {workspace.projects.length > 0 && <details className="bw-service-disclosure" data-brand-service-disclosure><summary>{b.dashboard.serviceGuideToggle}</summary><ServiceGuide kind="campaign" b={b} studioAllowed={studioOpen} showOther={!access.projectScopedOnly && studioOpen} organizationId={choice?.id} /></details>}
           {access.hasOrganization && workspace.organizations.length > 0 && (
             <section className="bw-team-footer">
               <h2>{b.organizations}</h2>

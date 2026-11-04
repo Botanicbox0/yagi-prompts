@@ -45,7 +45,8 @@ describe("brand studio page", () => {
     const html = await render();
     expect(html).toContain(`<p class="bw-kicker">${t.eyebrow}</p>`);
     expect(html).toContain(t.previewPending);
-    expect(html).not.toMatch(/seedance/i);
+    expect(html).toContain("data-brand-brief-studio");
+    expect(html).not.toMatch(/seedance|seedream|nano\s*banana|seedvr2|comfyui/i);
   });
 
   it("keeps the face setup link relative off the brand host, through sign-in with the workspace language", async () => {

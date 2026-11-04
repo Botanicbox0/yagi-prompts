@@ -237,4 +237,51 @@ describe('pages scoped to the selected brand', () => {
     expect(await html(NewBrandProject(search(B)))).toContain(b.access.viewerCannotRequest);
     expect(await html(NewBrandProject(search(G)))).toContain(b.access.sharedOnly);
   });
+
+  it('hides every trace of studio, identity, and generative video production for a brand with Morphic policy', async () => {
+    const M = 'deb648e9-c2df-43d4-b2a7-7f9eff8180d9';
+    const morphicChoice: BrandWorkspaceChoice = {
+      id: M,
+      name: 'Morphic fixture',
+      role: 'owner',
+      logoUrl: null,
+      denied: ['generative_media', 'sound', 'color_grading'],
+    };
+    state.scope = {
+      choices: [morphicChoice],
+      projectOrganizations: {},
+    };
+    state.projects = [];
+
+    expect(sectionVisibility(morphicChoice)).toEqual({
+      studio: false,
+      identity: false,
+      settings: true,
+      members: true,
+    });
+
+    const navHtml = renderToStaticMarkup(
+      <WorkspaceNavigation
+        home="Home"
+        members="Team"
+        settings="Settings"
+        library="Library"
+        studio="Studio"
+        identity="Brand"
+        scope={state.scope}
+      />
+    );
+    expect(navHtml).not.toContain('/brand/studio');
+    expect(navHtml).not.toContain('/brand/identity');
+
+    const homeHtml = await html(BrandHome(search(M)));
+    expect(homeHtml).not.toContain('data-track="studio"');
+    expect(homeHtml).not.toContain('/brand/studio');
+    expect(homeHtml).not.toContain('YAGI PRODUCTION');
+    expect(homeHtml).not.toContain('포맷 영상 생성');
+
+    const libHtml = await html(ContentLibrary(search(M)));
+    expect(libHtml).not.toContain('data-library-studio-link');
+    expect(libHtml).not.toContain('/brand/studio');
+  });
 });

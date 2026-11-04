@@ -28,11 +28,28 @@ import {
   coerceIdentityPayload,
   confirmBrandIdentity,
   draftFromTwingsDefaults,
+  ingestBrandOnboarding,
   loadBrandIdentity,
+  promoteProjectDirectionToBase,
   recordMemory,
   saveBrandIdentity,
   saveLook,
+  saveProjectDirectionOverride,
 } from "@/lib/brands/identity/service";
+import {
+  approveBrandBrief,
+  compileBrandBrief,
+  compileBrandSpatialStageBrief,
+  compileBrandVideoReverseBrief,
+  promoteBrandBrief,
+  reviseBrandBrief,
+} from "@/lib/brands/briefs/service";
+import { planBrandMicroRoiRepair } from "@/lib/brands/finish";
+import { planBrandSoundAndMusicStudio } from "@/lib/brands/sound";
+import {
+  createStakeholderReviewShare,
+  recordSpatialFramePin,
+} from "@/lib/brands/review";
 import {
   notifySlackBrandConcierge,
   syncSlackConciergeReplies,
@@ -139,6 +156,15 @@ export async function POST(request: NextRequest) {
       case "identity.draftDefaults":
         result = await draftFromTwingsDefaults({ sql }, viewer, input);
         break;
+      case "identity.ingest":
+        result = await ingestBrandOnboarding({ sql }, viewer, input);
+        break;
+      case "projectDirection.save":
+        result = await saveProjectDirectionOverride({ sql }, viewer, input);
+        break;
+      case "projectDirection.promoteToBase":
+        result = await promoteProjectDirectionToBase({ sql }, viewer, input);
+        break;
       case "identity.save": {
         const existing =
           typeof input.organizationId === "string"
@@ -195,6 +221,45 @@ export async function POST(request: NextRequest) {
                 input.skinProtect === "on" ||
                 input.skinProtect === "true",
           source: input.source,
+        });
+        break;
+      case "brief.compile":
+        result = await compileBrandBrief({ sql }, viewer, input);
+        break;
+      case "brief.revise":
+        result = await reviseBrandBrief({ sql }, viewer, input);
+        break;
+      case "brief.approve":
+        result = await approveBrandBrief({ sql }, viewer, input);
+        break;
+      case "brief.promoteFinal":
+        result = await promoteBrandBrief({ sql }, viewer, input);
+        break;
+      case "brief.videoReverse":
+        result = await compileBrandVideoReverseBrief({ sql }, viewer, input);
+        break;
+      case "brief.spatialStage":
+        result = await compileBrandSpatialStageBrief({ sql }, viewer, input);
+        break;
+      case "soundStudio.plan":
+        result = await planBrandSoundAndMusicStudio({ sql }, viewer, input);
+        break;
+      case "reviewShare.create":
+        result = await createStakeholderReviewShare({ sql }, viewer, input);
+        break;
+      case "reviewShare.pin":
+        result = await recordSpatialFramePin({ sql }, viewer, input);
+        break;
+      case "microRoi.plan":
+        result = await planBrandMicroRoiRepair({ sql }, viewer, {
+          ...input,
+          enqueueWorkstationJob: false,
+        });
+        break;
+      case "microRoi.queue":
+        result = await planBrandMicroRoiRepair({ sql }, viewer, {
+          ...input,
+          enqueueWorkstationJob: true,
         });
         break;
       case "attachment.reserve": {

@@ -88,12 +88,14 @@ describe('feature policy: a deny-list, open by default', () => {
     const open = scope.choices.find((c) => c.id === other)!;
     expect(denied.denied).toEqual(['generative_media']);
     expect(open.denied).toBeUndefined();
-    expect(sectionVisibility(denied)).toMatchObject({ studio: false, settings: true });
-    expect(sectionVisibility(open)).toMatchObject({ studio: true });
+    expect(sectionVisibility(denied)).toMatchObject({ studio: false, identity: false, settings: true });
+    expect(sectionVisibility(open)).toMatchObject({ studio: true, identity: true });
     expect(switchHref('/brand/studio', denied)).toBe(`/brand?organizationId=${orgId}`);
+    expect(switchHref('/brand/identity', denied)).toBe(`/brand?organizationId=${orgId}`);
     // The TWINGS team browsing the brand sees the same closed door.
     const staff = await loadBrandWorkspaceScope({ sql }, admin);
     expect(sectionVisibility(staff.choices.find((c) => c.id === orgId)!).studio).toBe(false);
+    expect(sectionVisibility(staff.choices.find((c) => c.id === orgId)!).identity).toBe(false);
   });
 
   it('refuses to start a brand render for a denied brand, like a missing template', async () => {

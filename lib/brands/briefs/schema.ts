@@ -227,3 +227,150 @@ export function shotHasPerson(spec: Pick<ShotSpec, 'subject' | 'references' | 'c
   if (spec.cutKind === 'person_portrait') return true;
   return false;
 }
+
+/**
+ * Customer-safe labels for `ShotCutKind` (never exposes internal model/engine IDs on customer surfaces).
+ */
+export const SHOT_CUT_KIND_LABELS: Record<
+  ShotCutKind,
+  { code: string; ko: string; en: string; roleKo: string; roleEn: string }
+> = {
+  editorial_full_body: {
+    code: 'editorial_full_body',
+    ko: '에디토리얼 전신·룩북',
+    en: 'Editorial Full-Body Look',
+    roleKo: '의상 비대칭 실루엣과 공간 무드 중심 에디토리얼 스틸',
+    roleEn: 'Garment silhouette and atmospheric editorial still'
+  },
+  reference_exact_product: {
+    code: 'reference_exact_product',
+    ko: '제품 정밀 보존 컷',
+    en: 'Reference-Exact Product Cut',
+    roleKo: '용기 기하·라벨·재질 굴절률 고정 제품 스틸',
+    roleEn: 'Vessel geometry, label lock, and material finish precision still'
+  },
+  logo_mark_preserve: {
+    code: 'logo_mark_preserve',
+    ko: '로고·마크 정밀 보존',
+    en: 'Logo & Mark Preservation',
+    roleKo: '원본 로고 철자와 그래픽 비례 고정',
+    roleEn: 'Preserves exact logo spelling and mark geometry'
+  },
+  person_portrait: {
+    code: 'person_portrait',
+    ko: '인물 포트레이트 (사전 동의)',
+    en: 'Consented Portrait Close-up',
+    roleKo: '사전 동의 인물 기준 매트 피부 질감·광원 보호',
+    roleEn: 'Matte skin reflectance and key light protected for consented talent'
+  },
+  typography_layout: {
+    code: 'typography_layout',
+    ko: '타이포그래피·레이아웃 카드',
+    en: 'Typography & Layout Card',
+    roleKo: '브랜드 서체 위계·지정 문구·여백 그리드 고정',
+    roleEn: 'Exact quoted typography, brand hex palette, and grid hierarchy'
+  },
+  seedance_start_frame: {
+    code: 'opening_keyframe',
+    ko: '필름 시작 프레임 (키프레임)',
+    en: 'Film Opening Keyframe',
+    roleKo: '숏필름 도입부 구도·색 대역·할레이션 고정 프레임',
+    roleEn: 'Opening composition, colour world, and halation keyframe'
+  },
+  short_film_clip: {
+    code: 'short_film_clip',
+    ko: '타임라인 숏필름 클립',
+    en: 'Timeline Short Film Clip',
+    roleKo: '샷 단위 타임라인 컷·카메라 궤적·제품 형태 유지',
+    roleEn: 'Timeline shot cuts, camera trajectory, and product lock'
+  },
+  video_object_replace: {
+    code: 'video_object_replace',
+    ko: '영상 오브젝트 교체',
+    en: 'Video Object Replacement',
+    roleKo: '기존 카메라 모션 유지 + 지정 제품·의상 교체',
+    roleEn: 'Motion-preserving video edit with product or wardrobe injection'
+  }
+};
+
+export const PUBLIC_CUT_KIND_CODES = [
+  'editorial_full_body',
+  'reference_exact_product',
+  'logo_mark_preserve',
+  'person_portrait',
+  'typography_layout',
+  'opening_keyframe',
+  'short_film_clip',
+  'video_object_replace'
+] as const;
+
+export type PublicCutKindCode = (typeof PUBLIC_CUT_KIND_CODES)[number];
+
+export function resolveInternalCutKind(
+  input: ShotCutKind | PublicCutKindCode
+): ShotCutKind {
+  return input === 'opening_keyframe' ? 'seedance_start_frame' : input;
+}
+
+export type CustomerGrammarCode =
+  | 'G1_structured_blocks'
+  | 'G2_identity_composition_lock'
+  | 'G3_reference_paragraphs'
+  | 'G4_camera_first_optics'
+  | 'G5_editorial_atmosphere'
+  | 'G6_typography_grid'
+  | 'G7_timeline_film';
+
+/**
+ * Customer-facing brief view stripped of raw internal engine/model identifiers.
+ */
+export interface CustomerBriefView {
+  id: string;
+  organizationId: string;
+  stage: 'draft' | 'approved' | 'final';
+  round: number;
+  maxRounds: number;
+  lastChangedAxis:
+    | 'light'
+    | 'camera'
+    | 'space'
+    | 'tone'
+    | 'palette'
+    | 'subject'
+    | 'product'
+    | 'wardrobe'
+    | 'references'
+    | 'deliverable'
+    | 'timeline'
+    | 'brief'
+    | 'exclusions'
+    | null;
+  identitySource: 'confirmed' | 'default_fallback';
+  cutKindCode: string;
+  cutKindLabel: { ko: string; en: string; roleKo: string; roleEn: string };
+  deliverable: ShotSpec['deliverable'];
+  grammarCode: CustomerGrammarCode;
+  grammarLabel: { ko: string; en: string };
+  prompt: string;
+  renderStage: 'draft' | 'approved' | 'final';
+  resolution: '480p' | '720p' | '1080p' | '2k' | '4k';
+  draftFlag: boolean;
+  bitrateMode: 'high' | 'standard';
+  lint: Array<{
+    rule: string;
+    severity: 'error' | 'warn';
+    text: string;
+  }>;
+  lockedSpecHash: string | null;
+  approvedAt: string | null;
+  finalizedAt: string | null;
+  updatedAt: string;
+  directionCascade?: {
+    mode: 'base_inherited' | 'project_override';
+    projectId: string | null;
+    projectTitle: string | null;
+    lockedFromBase: string[];
+    overriddenByProject: string[];
+    isolateProjectMemory: boolean;
+  };
+}

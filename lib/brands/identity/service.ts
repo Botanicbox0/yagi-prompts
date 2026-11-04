@@ -357,7 +357,12 @@ export async function confirmedIdentityFor(
 ): Promise<ConfirmedBrandIdentity | null> {
   if (!uuid.safeParse(organizationId).success) return null;
   const policy = await loadFeaturePolicy(sql, organizationId);
-  if (policy.denied.includes('brand_learning')) return null;
+  if (
+    policy.denied.includes('brand_learning') ||
+    policy.denied.includes('generative_media')
+  ) {
+    return null;
+  }
   const record = await loadBrandIdentity(sql, organizationId);
   if (!record || record.status !== 'confirmed') return null;
   return markConfirmedBrandIdentity(record.identity);
@@ -405,6 +410,7 @@ export async function saveBrandIdentity(
     return await deps.sql.transaction(async (sql) => {
       await authorizeBrandActor(sql, userId, v.organizationId, ['owner']);
       await assertBrandFeature(sql, v.organizationId, 'brand_learning');
+      await assertBrandFeature(sql, v.organizationId, 'generative_media');
 
       const existing = (
         await sql.query<{ revision: number }>(
@@ -496,6 +502,7 @@ export async function confirmBrandIdentity(
     return await deps.sql.transaction(async (sql) => {
       await authorizeBrandActor(sql, userId, v.organizationId, ['owner']);
       await assertBrandFeature(sql, v.organizationId, 'brand_learning');
+      await assertBrandFeature(sql, v.organizationId, 'generative_media');
 
       const existing = (
         await sql.query<{ identity: unknown; revision: number }>(
@@ -617,6 +624,7 @@ export async function recordMemory(
         'editor'
       ]);
       await assertBrandFeature(sql, v.organizationId, 'brand_learning');
+      await assertBrandFeature(sql, v.organizationId, 'generative_media');
 
       const row = (
         await sql.query<{
@@ -732,6 +740,8 @@ export async function saveLook(
         'editor'
       ]);
       await assertBrandFeature(sql, v.organizationId, 'brand_learning');
+      await assertBrandFeature(sql, v.organizationId, 'generative_media');
+      await assertBrandFeature(sql, v.organizationId, 'color_grading');
 
       const row = (
         await sql.query<{
@@ -853,3 +863,6 @@ export async function loadBrandIdentityWorkspace(
   ]);
   return { identity, looks, memory };
 }
+
+export * from './onboarding';
+export * from './project-direction';
