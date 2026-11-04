@@ -19,17 +19,23 @@ export function createR2PublicMediaStore(config: PublicMediaR2Config): PublicMed
 
   return {
     async has(key) {
-      const response = await r2.fetch(objectUrl(key), { method: 'HEAD' });
+      const response = await r2.fetch(objectUrl(key), { method: 'HEAD', cache: 'no-store' });
       if (response.status === 404) return false;
       if (!response.ok) throw new Error(`head ${response.status}`);
       return true;
     },
 
     async put(key, bytes, meta) {
+      const body = Buffer.from(bytes);
       const response = await r2.fetch(objectUrl(key), {
         method: 'PUT',
-        body: Buffer.from(bytes),
-        headers: { 'Content-Type': meta.mime, 'Cache-Control': meta.cacheControl },
+        body,
+        cache: 'no-store',
+        headers: {
+          'Content-Type': meta.mime,
+          'Cache-Control': meta.cacheControl,
+          'Content-Length': String(body.byteLength),
+        },
       });
       if (!response.ok) throw new Error(`put ${response.status}`);
     },

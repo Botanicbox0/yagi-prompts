@@ -239,4 +239,42 @@ describe('getStorage', () => {
     expect(copy).not.toHaveBeenCalled();
     expect(store.put).toHaveBeenCalledTimes(1);
   });
+
+  it('sends explicit Content-Length on R2 PUT so Next.js patched fetch never triggers 411 Length Required', async () => {
+    vi.resetModules();
+    vi.doUnmock('@/lib/storage/r2-public');
+    const { createR2PublicMediaStore } = await import('@/lib/storage/r2-public');
+    let capturedHeaders = new Headers();
+    const origFetch = globalThis.fetch;
+    vi.stubGlobal('fetch', async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (input instanceof Request) {
+        const rewrapped = new Request(input.url, {
+          method: input.method,
+          headers: input.headers,
+          body: input.body,
+          // @ts-expect-error Node RequestInit duplex
+          duplex: 'half',
+        });
+        capturedHeaders = rewrapped.headers;
+      } else {
+        capturedHeaders = new Headers(init?.headers);
+      }
+      return new Response('', { status: 200 });
+    });
+    try {
+      const r2Store = createR2PublicMediaStore({
+        accountId: 'account',
+        accessKeyId: 'access',
+        secretAccessKey: 'secret',
+        bucket: 'twings-media-apac',
+        mediaBaseUrl: 'https://media.twings.app',
+      });
+      await r2Store.put(KEY, BODY, { mime: 'image/webp', cacheControl: PUBLIC_MEDIA_CACHE_CONTROL });
+      expect(capturedHeaders.get('content-length')).toBe(String(BODY.byteLength));
+      expect(capturedHeaders.get('content-type')).toBe('image/webp');
+      expect(capturedHeaders.get('cache-control')).toBe(PUBLIC_MEDIA_CACHE_CONTROL);
+    } finally {
+      vi.stubGlobal('fetch', origFetch);
+    }
+  });
 });

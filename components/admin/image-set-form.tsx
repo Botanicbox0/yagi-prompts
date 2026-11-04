@@ -230,7 +230,7 @@ export function ImageSetFields({
         return;
       }
       if (result.ok === false) {
-        const lead = result.code === 'upload' ? labels.upload : result.code === 'invalid' ? labels.invalid : labels.uncertain;
+        const lead = result.code === 'upload' || result.code === 'storage' ? labels.upload : result.code === 'invalid' ? labels.invalid : labels.uncertain;
         showError(result.detail ? `${lead} (${result.detail})` : lead);
       } else showError(labels.uncertain);
     } catch {
