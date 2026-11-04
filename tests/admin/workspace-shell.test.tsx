@@ -94,7 +94,7 @@ describe('one admin workspace shell', () => {
       updatedAt: new Date(),
     } as unknown as PromptRow;
 
-    const markup = await html(<TemplateSpecSummaryCard row={mockRow} dict={getDictionary('ko')} locale="ko" />);
+    const markup = await html(<TemplateSpecSummaryCard row={mockRow} dict={getDictionary('ko')} />);
     expect(markup).toContain('data-template-spec-summary');
     expect(markup).toContain('seedance-2.0-pro');
     expect(markup).toContain('Gemini 3.8 Flash');

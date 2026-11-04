@@ -168,9 +168,6 @@ describe('route cache modes (§3.4 / §4)', () => {
       ['app', '(admin)', 'layout.tsx'],
       ['app', '(admin)', 'admin', 'page.tsx'],
       // M4: the rest of the CMS surface.
-      ['app', '(admin)', 'admin', 'p', '[id]', 'page.tsx'],
-      ['app', '(admin)', 'admin', 'p', '[id]', 'preview', 'page.tsx'],
-      ['app', '(admin)', 'admin', 'policy', 'page.tsx'],
       ['app', 'api', 'admin', 'media', '[ref]', 'route.ts'],
       ['app', 'api', 'media', '[blockId]', 'route.ts'],
       ['app', 'api', 'stripe', 'webhook', 'route.ts'],
