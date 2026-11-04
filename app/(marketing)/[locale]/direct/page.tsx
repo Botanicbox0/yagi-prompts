@@ -20,12 +20,12 @@ export async function generateMetadata({
   const dict = getDictionary(locale);
   const title =
     locale === 'en'
-      ? 'Direct Your Scene — Reference Film to Personal Template'
-      : '직접 연출 — 레퍼런스 영상으로 내 장면을 만들고 템플릿으로 등판하기';
+      ? 'Freestyle Yourself — Turn Any Reference Film Into Your Own Template'
+      : 'Freestyle Yourself · 나만의 템플릿 — 레퍼런스 영상으로 내 장면을 찍고 템플릿으로 등판하기';
   const description =
     locale === 'en'
-      ? 'Bring a reference video, cast your own face with a clean front photo, and publish your finished scene as a reusable TWINGS template.'
-      : '원하는 레퍼런스 영상과 내 정면 실사 사진으로 완성도 높은 장면을 제작하고, 완성된 결과물을 나만의 공식 템플릿으로 등록하는 가이드를 확인하세요.';
+      ? 'Bring a saved reference video, cast your own face with a clean front photo, and launch your finished scene as an official TWINGS template.'
+      : '저장해 둔 레퍼런스 영상과 내 정면 실사 사진으로 세상에 없던 장면을 연출하고, 완성된 결과물을 나만의 공식 템플릿으로 등판시키세요.';
   return {
     title,
     description,
@@ -64,18 +64,18 @@ export default async function DirectScenePage({
             <div className="max-w-3xl">
               <p className="font-mono text-xs font-semibold tracking-[0.08em] text-[#3063A7] uppercase tabular-nums">
                 {locale === 'en'
-                  ? 'DIRECT SCENE STUDIO · REFERENCE FILM TO TEMPLATE'
-                  : 'DIRECT SCENE STUDIO · 레퍼런스 영상 연출 & 템플릿 등판'}
+                  ? 'FREESTYLE YOURSELF · REFERENCE FILM TO OFFICIAL TEMPLATE'
+                  : 'FREESTYLE YOURSELF · 나만의 장면에서 나만의 템플릿까지'}
               </p>
               <h1 className="audience-title mt-3">
                 {locale === 'en'
-                  ? 'Bring a reference film.\nStar in it.\nPublish it as a template.'
-                  : '원하는 레퍼런스 영상으로\n내 장면을 연출하고,\n그대로 템플릿으로 등판시키세요'}
+                  ? 'Freestyle Yourself.\nDirect your scene,\nthen launch your template.'
+                  : '세상에 없던 내 장면을 찍고,\n그대로 나만의 템플릿으로\n등판시키세요'}
               </h1>
               <p className="mt-5 max-w-2xl text-base leading-relaxed text-black/65">
                 {locale === 'en'
-                  ? 'Learn how to submit a reference video and your front selfie for maximum facial likeness, and see how your finished scene locks its camera and lighting when promoted to an official template.'
-                  : '어떤 레퍼런스 영상과 사진을 넣어야 얼굴 왜곡 없이 가장 완성도 높은 영상이 나오는지 확인하고, 내 사진 기반으로 만든 결과물이 어떤 고정(Lock) 규칙을 거쳐 공식 템플릿으로 등록되는지 직접 설계해 보세요.'}
+                  ? 'Have a reference clip you love? Cast yourself in it with a single front selfie. When the film comes out right, lock its camera and lighting in one click so anyone on TWINGS can star in your scene.'
+                  : '평소 저장해 두었던 레퍼런스 영상에 내 정면 사진 한 장을 입혀 단 하나뿐인 장면을 완성해 보세요. 결과물이 마음에 들면 카메라와 조명을 그대로 잠가, 다른 사람들도 내 연출로 주인공이 되는 공식 템플릿으로 출시할 수 있습니다.'}
               </p>
             </div>
 

@@ -40,25 +40,42 @@ export interface TemplateSceneLockSpec {
  *   an official TWINGS template with clear lock rules.
  */
 export interface TabWordingCandidate {
-  id: 'direct-scene' | 'custom-scene' | 'freestyle-yourself';
+  id: 'freestyle-yourself' | 'direct-scene' | 'custom-scene';
   recommended: boolean;
   navKo: string;
   navEn: string;
   headlineKo: string;
   headlineEn: string;
+  subcopyKo: string;
+  subcopyEn: string;
   rationaleKo: string;
 }
 
 export const DIRECT_SCENE_WORDING_CANDIDATES: readonly TabWordingCandidate[] = [
   {
-    id: 'direct-scene',
+    id: 'freestyle-yourself',
     recommended: true,
+    navKo: '나만의 템플릿',
+    navEn: 'Freestyle Yourself',
+    headlineKo: '세상에 없던 내 장면을 직접 찍고, 그대로 내 템플릿으로 등판시키세요',
+    headlineEn: 'Freestyle Yourself — Turn any reference film into your scene, then launch it as your own template',
+    subcopyKo:
+      '저장해 둔 레퍼런스 영상에 내 정면 사진 한 장을 입혀 단 하나뿐인 장면을 완성하세요. 결과물이 마음에 들면 클릭 한 번으로 카메라와 조명을 잠가, 다른 사람들도 내 연출로 주인공이 되는 공식 템플릿으로 등록할 수 있습니다.',
+    subcopyEn:
+      'Bring a saved reference film and your front selfie to direct a one-of-a-kind scene. Love the result? Lock the camera and lighting in one click to publish it as an official TWINGS template.',
+    rationaleKo:
+      '단순 주문제작이 아니라 내 감각으로 고른 레퍼런스 영상을 내 얼굴로 먼저 완성해 보고, 그 결과물을 곧바로 ‘나만의 공식 템플릿’으로 등판시키는 크리에이티브 정체성을 가장 매력적으로 담아냅니다.'
+  },
+  {
+    id: 'direct-scene',
+    recommended: false,
     navKo: '직접 연출',
     navEn: 'Direct Scene',
-    headlineKo: '원하는 레퍼런스 영상에 내 얼굴을 넣고, 마음에 들면 내 템플릿으로 등판시키세요',
+    headlineKo: '원하는 레퍼런스 영상에 내 얼굴을 넣고 내 템플릿으로 등판시키세요',
     headlineEn: 'Bring a reference film, star in it with your photo, and publish it as your own template',
-    rationaleKo:
-      '‘프리스타일’처럼 막막한 빈칸 프롬프트 인상을 주지 않고, 레퍼런스 영상을 바탕으로 내가 주인공이 되는 장면을 연출한 뒤 공식 템플릿으로 등록하는 ‘감독/메이커’ 경험을 명확히 전달합니다.'
+    subcopyKo: '레퍼런스 영상을 바탕으로 내가 주인공이 되는 장면을 연출합니다.',
+    subcopyEn: 'Direct your own scene from a reference film.',
+    rationaleKo: '기능 설명은 명확하나 ‘Freestyle Yourself · 나만의 템플릿’ 대비 브랜드 매력이 평이합니다.'
   },
   {
     id: 'custom-scene',
@@ -67,18 +84,9 @@ export const DIRECT_SCENE_WORDING_CANDIDATES: readonly TabWordingCandidate[] = [
     navEn: 'Custom Scene',
     headlineKo: '레퍼런스 영상으로 만드는 나만의 맞춤 장면',
     headlineEn: 'Your custom scene from any reference film',
-    rationaleKo:
-      '직관적이지만 주문제작 의뢰 같은 인상을 줄 수 있어, 추후 템플릿으로 등판시키는 크리에이티브 확장성은 ‘직접 연출’보다 약합니다.'
-  },
-  {
-    id: 'freestyle-yourself',
-    recommended: false,
-    navKo: '프리스타일',
-    navEn: 'Freestyle Yourself',
-    headlineKo: '자유롭게 만드는 내 영상',
-    headlineEn: 'Freestyle your own scene',
-    rationaleKo:
-      '범용 AI 생성기처럼 보일 위험이 있고, 어떤 레퍼런스를 넣어야 고품질이 나오는지 가이드 없이 프롬프트만 치게 만들 우려가 있습니다.'
+    subcopyKo: '원하는 레퍼런스로 맞춤 장면을 제작합니다.',
+    subcopyEn: 'Create a custom scene from your reference.',
+    rationaleKo: '1회성 주문제작 인상을 주어 템플릿 등판 확장성이 약합니다.'
   }
 ] as const;
 

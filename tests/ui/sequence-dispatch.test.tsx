@@ -7,6 +7,7 @@ import {
   HERO_EDITORIAL_PRIORITY,
   SequenceDispatchSection,
   pickHeroFeaturedTemplate,
+  resolveDefaultMediumForPlan,
   resolveTemplateMoods
 } from '@/components/audience/sequence-dispatch';
 
@@ -108,6 +109,19 @@ describe('SequenceDispatchSection & personal home editorial curation (2026-11-04
     expect(htmlKo).toContain('data-dispatch-card="aquarium-goldfish"');
     expect(htmlKo).toContain('data-dispatch-card="city-fashion-montage"');
     expect(htmlKo).toContain('data-dispatch-card="fashion-show-arrival"');
+
+    // No redundant "01 · HOT FILM" label above cards, and videos render as playing <video> elements
+    expect(htmlKo).not.toContain('HOT FILM');
+    expect(htmlKo).toContain('data-dispatch-video="aquarium-goldfish"');
+    expect(htmlKo).toContain('data-dispatch-video="city-fashion-montage"');
+    expect(htmlKo).toContain('data-dispatch-video="fashion-show-arrival"');
+
+    // Instant medium switcher (Video ⇄ 5-Shot Photo Series) + Image-Only plan priority toggle
+    expect(htmlKo).toContain('data-gallery-medium-switcher');
+    expect(htmlKo).toContain('data-medium-tab="video"');
+    expect(htmlKo).toContain('data-medium-tab="image"');
+    expect(htmlKo).toContain('data-plan-tier-toggle="image_only"');
+
     expect(htmlKo).toContain('data-dispatch-image-spotlight');
     expect(htmlKo).toContain('data-dispatch-image-featured="bridal-editorial-5-shots"');
     expect(htmlKo).toContain('5장 에디토리얼 화보 세트');
@@ -123,5 +137,26 @@ describe('SequenceDispatchSection & personal home editorial curation (2026-11-04
     // TWINGS Identity compliance: no YAGI red (#ED1E1E), no internal engine names
     expect(htmlKo).not.toContain('#ED1E1E');
     expect(htmlKo).not.toContain(PROMPT_MODEL_LABEL);
+  });
+
+  it('prioritizes 5-shot photo series first when initialPlanTier is image_only (lowest subscription tier)', () => {
+    expect(resolveDefaultMediumForPlan('standard')).toBe('all');
+    expect(resolveDefaultMediumForPlan('image_only')).toBe('image');
+
+    const htmlImageOnly = renderToStaticMarkup(
+      <SequenceDispatchSection
+        locale="ko"
+        hotVideos={[makeCard({ slug: 'aquarium-goldfish' })]}
+        imageSeries={[makeCard({ slug: 'bridal-editorial-5-shots', medium: 'image' })]}
+        cardSecondsPattern="{seconds}초"
+        cardAuthorPattern="by @{handle}"
+        cardAuthorAnonymous="메이커 제작"
+        initialPlanTier="image_only"
+      />
+    );
+
+    expect(htmlImageOnly).toContain('data-plan-tier="image_only"');
+    expect(htmlImageOnly).toContain('data-image-priority="first"');
+    expect(htmlImageOnly).toContain('data-medium-tab="image" aria-selected="true"');
   });
 });

@@ -5,23 +5,29 @@ import type { PromptCard } from '@/lib/prompts/catalog';
 import { templateHref, templatesHref } from '@/lib/prompts/links';
 import type { Locale } from '@/lib/i18n/config';
 import { TypographicPoster } from '@/components/prompts/poster';
-import { cardAspect, cardAuthor, cardRatio } from '@/components/prompts/card-frame';
+import { cardAuthor, cardRatio } from '@/components/prompts/card-frame';
 import {
   EDITORIAL_MOOD_OPTIONS,
   HERO_EDITORIAL_PRIORITY,
   pickHeroFeaturedTemplate,
+  resolveDefaultMediumForPlan,
   resolveTemplateMoods,
   type EditorialMoodId,
   type EditorialMoodOption,
+  type GalleryMediumTab,
+  type ViewerPlanTier,
 } from '@/lib/prompts/sequence-curation';
 
 export {
   EDITORIAL_MOOD_OPTIONS,
   HERO_EDITORIAL_PRIORITY,
   pickHeroFeaturedTemplate,
+  resolveDefaultMediumForPlan,
   resolveTemplateMoods,
   type EditorialMoodId,
   type EditorialMoodOption,
+  type GalleryMediumTab,
+  type ViewerPlanTier,
 };
 
 export interface SequenceDispatchProps {
@@ -31,14 +37,16 @@ export interface SequenceDispatchProps {
   cardSecondsPattern: string;
   cardAuthorPattern: string;
   cardAuthorAnonymous: string;
+  initialPlanTier?: ViewerPlanTier;
 }
 
 /**
  * Cosmos Sequence (`cosmos.so/sequence`) inspired editorial curation & mood discovery for personal TWINGS:
- * 1. "THIS WEEK IN TWINGS" weekly dispatch strip highlighting top trending video formats alongside
- *    5-shot editorial photo series right at the top so image templates are never buried at the bottom.
- * 2. Meaningful Editorial Mood Curator replacing vague "Cinematic" genre labels with user-centric
- *    protagonist worlds (Runway & High Fashion, 80s–90s Retro, Dream & Fantasy, Celeb Spotlight, 5-Shot Photo Series).
+ * 1. "THIS WEEK IN TWINGS" weekly dispatch strip with auto-playing looping films (no redundant "01 HOT FILM" header text)
+ *    alongside the 5-shot editorial photo series spotlight.
+ * 2. Instant Medium Switcher (`전체` / `영상 템플릿` / `5장 이미지 화보`) + `Image-Only` plan priority mode so users can
+ *    flip directly to Image Templates at the top without scrolling past 22 video cards.
+ * 3. Meaningful Editorial Mood Curator + magnetic `Freestyle Yourself · 나만의 템플릿 만들기` entry door.
  */
 export function SequenceDispatchSection({
   locale,
@@ -46,16 +54,54 @@ export function SequenceDispatchSection({
   imageSeries,
   cardSecondsPattern,
   cardAuthorPattern,
-  cardAuthorAnonymous
+  cardAuthorAnonymous,
+  initialPlanTier = 'standard'
 }: SequenceDispatchProps) {
+  const [planTier, setPlanTier] = useState<ViewerPlanTier>(initialPlanTier);
+  const [activeMedium, setActiveMedium] = useState<GalleryMediumTab>(() =>
+    resolveDefaultMediumForPlan(initialPlanTier)
+  );
   const [activeMood, setActiveMood] = useState<EditorialMoodId>('all');
   const [visibleCount, setVisibleCount] = useState<number | null>(null);
+
+  const handleSelectMedium = (medium: GalleryMediumTab) => {
+    setActiveMedium(medium);
+    if (medium === 'image' && activeMood !== 'all') {
+      setActiveMood('photo-series');
+    } else if (medium === 'video' && activeMood === 'photo-series') {
+      setActiveMood('all');
+    } else if (medium === 'all' && activeMood === 'photo-series') {
+      setActiveMood('all');
+    }
+  };
+
+  const handleSelectMood = (mood: EditorialMoodId) => {
+    setActiveMood(mood);
+    if (mood === 'photo-series') {
+      setActiveMedium('image');
+    } else if (activeMedium === 'image' && mood !== 'all') {
+      setActiveMedium('all');
+    }
+  };
+
+  const handleToggleImageOnlyPlan = () => {
+    const nextTier: ViewerPlanTier = planTier === 'image_only' ? 'standard' : 'image_only';
+    setPlanTier(nextTier);
+    const defaultMed = resolveDefaultMediumForPlan(nextTier);
+    setActiveMedium(defaultMed);
+    if (nextTier === 'image_only') {
+      setActiveMood('all');
+    }
+  };
 
   useEffect(() => {
     const videoRail = document.querySelector<HTMLElement>('[data-rail="video"]');
     const imageRail = document.querySelector<HTMLElement>('[data-rail="image"]');
-    const allVideoLink = document.querySelector<HTMLElement>('[data-all-video]');
+    const allVideoLink = document.querySelector<HTMLElement>('[data-all-video]')?.parentElement ?? document.querySelector<HTMLElement>('[data-all-video]');
     const items = document.querySelectorAll<HTMLElement>('[data-prompt-item]');
+
+    const effectiveImageOnly = activeMedium === 'image' || activeMood === 'photo-series';
+    const effectiveVideoOnly = activeMedium === 'video';
 
     let matched = 0;
     for (const item of items) {
@@ -63,7 +109,18 @@ export function SequenceDispatchSection({
       const slug = cardEl?.dataset.promptCard ?? '';
       const medium = (cardEl?.dataset.medium === 'image' ? 'image' : 'video') as 'video' | 'image';
       const moods = resolveTemplateMoods(slug, medium);
-      const show = activeMood === 'all' || moods.includes(activeMood);
+
+      const mediumMatch =
+        (effectiveImageOnly && medium === 'image') ||
+        (effectiveVideoOnly && medium === 'video') ||
+        (!effectiveImageOnly && !effectiveVideoOnly);
+
+      const moodMatch =
+        activeMood === 'all' ||
+        activeMood === 'photo-series' ||
+        moods.includes(activeMood);
+
+      const show = mediumMatch && moodMatch;
       item.hidden = !show;
       if (show) matched += 1;
     }
@@ -71,8 +128,8 @@ export function SequenceDispatchSection({
     if (videoRail) {
       const videoMatches = videoRail.querySelectorAll<HTMLElement>('[data-prompt-item]:not([hidden])').length;
       const emptyLine = videoRail.querySelector<HTMLElement>('[data-rail-filtered-empty]');
-      if (emptyLine) emptyLine.hidden = videoMatches > 0 || activeMood === 'photo-series';
-      if (activeMood === 'photo-series') {
+      if (emptyLine) emptyLine.hidden = videoMatches > 0 || effectiveImageOnly;
+      if (effectiveImageOnly) {
         videoRail.style.display = 'none';
         if (allVideoLink) allVideoLink.style.display = 'none';
       } else {
@@ -84,26 +141,35 @@ export function SequenceDispatchSection({
     if (imageRail) {
       const imageMatches = imageRail.querySelectorAll<HTMLElement>('[data-prompt-item]:not([hidden])').length;
       const emptyLine = imageRail.querySelector<HTMLElement>('[data-rail-filtered-empty]');
-      if (emptyLine) emptyLine.hidden = imageMatches > 0;
+      if (emptyLine) emptyLine.hidden = imageMatches > 0 || effectiveVideoOnly;
+      if (effectiveVideoOnly) {
+        imageRail.style.display = 'none';
+      } else {
+        imageRail.style.display = '';
+      }
     }
 
-    setVisibleCount(activeMood === 'all' ? null : matched);
+    setVisibleCount(
+      activeMood === 'all' && activeMedium === 'all' ? null : matched
+    );
 
     return () => {
       for (const item of items) item.hidden = false;
       if (videoRail) videoRail.style.display = '';
+      if (imageRail) imageRail.style.display = '';
       if (allVideoLink) allVideoLink.style.display = '';
     };
-  }, [activeMood]);
+  }, [activeMood, activeMedium]);
 
   const topVideos = hotVideos.slice(0, 3);
   const featuredImageSet = imageSeries[0] ?? null;
   const activeMoodObj =
     EDITORIAL_MOOD_OPTIONS.find((opt) => opt.id === activeMood) ?? EDITORIAL_MOOD_OPTIONS[0]!;
+  const imageFirst = planTier === 'image_only' || activeMedium === 'image';
 
   return (
-    <div data-sequence-editorial className="mb-12 space-y-10">
-      {/* 1. THIS WEEK IN TWINGS — Cosmos Sequence Editorial Dispatch */}
+    <div data-sequence-editorial data-plan-tier={planTier} className="mb-10 space-y-8">
+      {/* 1. THIS WEEK IN TWINGS — Cosmos Sequence Editorial Dispatch (Auto-playing films, clean frameless top) */}
       <section
         data-weekly-dispatch
         aria-labelledby="weekly-dispatch-heading"
@@ -114,7 +180,7 @@ export function SequenceDispatchSection({
             <p className="font-mono text-[0.72rem] font-medium tracking-[0.08em] text-[#3063A7] uppercase tabular-nums">
               {locale === 'en'
                 ? 'THIS WEEK IN TWINGS · WEEKLY CURATED DISPATCH'
-                : 'THIS WEEK IN TWINGS · 이번 주 가장 핫한 에디토리얼 큐레이션'}
+                : 'THIS WEEK IN TWINGS · 이번 주 에디토리얼 큐레이션'}
             </p>
             <h2
               id="weekly-dispatch-heading"
@@ -132,11 +198,16 @@ export function SequenceDispatchSection({
           </p>
         </div>
 
-        {/* Asymmetric Sequence Magazine Spread: 3 Hot Video Dispatches + 1 Elevated 5-Shot Photo Series Spotlight */}
+        {/* Asymmetric Sequence Magazine Spread: 3 Auto-Playing Video Dispatches + 1 Elevated 5-Shot Photo Series Spotlight */}
         <div className="mt-6 grid gap-5 lg:grid-cols-12">
-          {/* Left 7 cols: Top 3 Hot Video Formats in an editorial numbered sequence */}
-          <div className="grid gap-4 sm:grid-cols-3 lg:col-span-7">
-            {topVideos.map((card, index) => {
+          {/* 3 Featured Video Formats — Clean top edge (no "01 HOT FILM" label) & auto-playing looping video */}
+          <div
+            className={[
+              'grid gap-4 sm:grid-cols-3 lg:col-span-7',
+              imageFirst ? 'lg:order-2' : 'lg:order-1'
+            ].join(' ')}
+          >
+            {topVideos.map((card) => {
               const title = locale === 'ko' && card.titleKo ? card.titleKo : card.title;
               const author = cardAuthor(card);
               const seconds =
@@ -148,15 +219,23 @@ export function SequenceDispatchSection({
                   key={card.slug}
                   data-dispatch-card={card.slug}
                   data-dispatch-kind="video"
-                  className="group relative flex flex-col justify-between rounded-[20px] border border-hairline bg-[#F6F7F9]/75 p-3 transition-colors hover:border-[#3875C5]/45 hover:bg-white"
+                  className="group relative flex flex-col justify-between rounded-[20px] border border-hairline bg-[#F6F7F9]/75 p-2.5 transition-colors hover:border-[#3875C5]/45 hover:bg-white"
                 >
                   <div>
-                    <div className="mb-2 flex items-center justify-between font-mono text-[0.68rem] text-black/55 tabular-nums">
-                      <span className="font-semibold text-[#3063A7]">0{index + 1} · HOT FILM</span>
-                      <span>{cardAspect(card)}</span>
-                    </div>
                     <div className="relative aspect-[4/5] w-full overflow-hidden rounded-[14px] bg-sky">
-                      {card.poster ? (
+                      {card.video ? (
+                        <video
+                          data-dispatch-video={card.slug}
+                          src={card.video.src}
+                          poster={card.poster?.src}
+                          autoPlay
+                          muted
+                          loop
+                          playsInline
+                          preload="metadata"
+                          className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+                        />
+                      ) : card.poster ? (
                         // eslint-disable-next-line @next/next/no-img-element -- public catalog poster
                         <img
                           src={card.poster.src}
@@ -175,7 +254,7 @@ export function SequenceDispatchSection({
                         />
                       )}
                     </div>
-                    <h3 className="mt-3 line-clamp-1 text-sm font-semibold tracking-[-0.01em] text-[#0E1013]">
+                    <h3 className="mt-2.5 line-clamp-1 px-0.5 text-sm font-semibold tracking-[-0.01em] text-[#0E1013]">
                       <a
                         href={templateHref(locale, card.slug)}
                         className="outline-none after:absolute after:inset-0 after:rounded-[20px] after:content-[''] focus-visible:after:outline-2 focus-visible:after:outline-offset-2 focus-visible:after:outline-[#3875C5]"
@@ -184,7 +263,7 @@ export function SequenceDispatchSection({
                       </a>
                     </h3>
                   </div>
-                  <p className="mt-1 flex flex-wrap items-center gap-x-1.5 font-mono text-[0.7rem] text-black/55 tabular-nums">
+                  <p className="mt-1 flex flex-wrap items-center gap-x-1.5 px-0.5 font-mono text-[0.7rem] text-black/55 tabular-nums">
                     {seconds !== null && (
                       <span>{cardSecondsPattern.replace('{seconds}', String(seconds))}</span>
                     )}
@@ -202,10 +281,14 @@ export function SequenceDispatchSection({
             })}
           </div>
 
-          {/* Right 5 cols: Elevated 5-Shot Photo Series Spotlight (Solves Image Templates Being Buried) */}
+          {/* 5-Shot Photo Series Spotlight (Moves to Left #1 position when Image-Only plan or Image tab is active) */}
           <div
             data-dispatch-image-spotlight
-            className="flex flex-col justify-between rounded-[20px] border border-[#3875C5]/25 bg-[#F3F7FA] p-4 sm:p-5 lg:col-span-5"
+            data-image-priority={imageFirst ? 'first' : 'second'}
+            className={[
+              'flex flex-col justify-between rounded-[20px] border border-[#3875C5]/25 bg-[#F3F7FA] p-4 sm:p-5 lg:col-span-5',
+              imageFirst ? 'lg:order-1' : 'lg:order-2'
+            ].join(' ')}
           >
             <div>
               <div className="flex flex-wrap items-center justify-between gap-2">
@@ -213,13 +296,14 @@ export function SequenceDispatchSection({
                   <span aria-hidden="true" className="size-1.5 rounded-full bg-[#3875C5]" />
                   {locale === 'en' ? '5-SHOT PHOTO SERIES' : '5장 에디토리얼 화보 세트'}
                 </span>
-                <a
-                  href={templatesHref(locale, 'image')}
-                  data-dispatch-image-all
-                  className="font-mono text-[0.7rem] font-medium text-[#3063A7] underline underline-offset-4 hover:text-[#0E1013]"
+                <button
+                  type="button"
+                  data-dispatch-image-switch
+                  onClick={() => handleSelectMedium('image')}
+                  className="font-mono text-[0.7rem] font-semibold text-[#3063A7] underline underline-offset-4 hover:text-[#0E1013]"
                 >
-                  {locale === 'en' ? 'All photo series ↗' : '화보 전체 보기 ↗'}
-                </a>
+                  {locale === 'en' ? 'Switch to all photo series ↓' : '화보 템플릿으로 바로 전환 ↓'}
+                </button>
               </div>
 
               {featuredImageSet ? (
@@ -315,12 +399,107 @@ export function SequenceDispatchSection({
         </div>
       </section>
 
-      {/* 2. Meaningful Editorial Mood Curator (Replaces meaningless "Cinematic / Short film" tags) */}
+      {/* 2. Instant Medium Switcher (Video ⇄ 5-Shot Photo Series + Image-Only Plan Priority) & Mood Curator */}
       <div
         data-editorial-mood-curator
         className="rounded-[24px] border border-hairline bg-white p-5 sm:p-6"
       >
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
+        {/* Top Row: Instant Medium Switcher so users never have to scroll past 22 videos to see images */}
+        <div
+          data-gallery-medium-switcher
+          className="flex flex-wrap items-center justify-between gap-3 border-b border-hairline pb-4"
+        >
+          <div className="flex flex-wrap items-center gap-2" role="tablist" aria-label={locale === 'en' ? 'Switch format medium' : '영상·화보 전환'}>
+            <button
+              type="button"
+              role="tab"
+              data-medium-tab="all"
+              aria-selected={activeMedium === 'all'}
+              onClick={() => handleSelectMedium('all')}
+              className={[
+                'inline-flex min-h-10 items-center gap-2 rounded-full border px-4 py-2 text-xs font-semibold transition-colors',
+                activeMedium === 'all'
+                  ? 'border-[#0E1013] bg-[#0E1013] text-white'
+                  : 'border-hairline bg-[#F6F7F9] text-[#0E1013] hover:border-[#3875C5]/45'
+              ].join(' ')}
+            >
+              <span>{locale === 'en' ? 'All Formats' : '전체 보기'}</span>
+              <span className="font-mono text-[0.68rem] opacity-75 tabular-nums">
+                {hotVideos.length + imageSeries.length}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              role="tab"
+              data-medium-tab="video"
+              aria-selected={activeMedium === 'video'}
+              onClick={() => handleSelectMedium('video')}
+              className={[
+                'inline-flex min-h-10 items-center gap-2 rounded-full border px-4 py-2 text-xs font-semibold transition-colors',
+                activeMedium === 'video'
+                  ? 'border-[#3875C5] bg-[#3875C5] text-white'
+                  : 'border-hairline bg-[#F6F7F9] text-[#0E1013] hover:border-[#3875C5]/45'
+              ].join(' ')}
+            >
+              <span>{locale === 'en' ? 'Video Films' : '영상 템플릿만 보기'}</span>
+              <span className="font-mono text-[0.68rem] opacity-75 tabular-nums">
+                {hotVideos.length}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              role="tab"
+              data-medium-tab="image"
+              aria-selected={activeMedium === 'image'}
+              onClick={() => handleSelectMedium('image')}
+              className={[
+                'inline-flex min-h-10 items-center gap-2 rounded-full border px-4 py-2 text-xs font-semibold transition-colors',
+                activeMedium === 'image'
+                  ? 'border-[#3875C5] bg-[#3875C5] text-white'
+                  : 'border-[#3875C5]/30 bg-[#F3F7FA] text-[#3063A7] hover:border-[#3875C5]'
+              ].join(' ')}
+            >
+              <span>{locale === 'en' ? '5-Shot Photo Series' : '5장 이미지 화보 바로 전환'}</span>
+              <span className="font-mono text-[0.68rem] opacity-85 tabular-nums">
+                {imageSeries.length}
+              </span>
+            </button>
+          </div>
+
+          {/* Image-Only Plan Priority Toggle (for Entry Plan subscribers where Image Templates must surface first) */}
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              data-plan-tier-toggle="image_only"
+              aria-pressed={planTier === 'image_only'}
+              onClick={handleToggleImageOnlyPlan}
+              className={[
+                'inline-flex min-h-9 items-center gap-1.5 rounded-full border px-3.5 py-1.5 font-mono text-[0.7rem] font-medium transition-colors',
+                planTier === 'image_only'
+                  ? 'border-[#3875C5] bg-[#E8EFF7] text-[#3063A7]'
+                  : 'border-hairline bg-white text-black/60 hover:border-[#3875C5]/40'
+              ].join(' ')}
+            >
+              <span
+                aria-hidden="true"
+                className={[
+                  'size-1.5 rounded-full',
+                  planTier === 'image_only' ? 'bg-[#3875C5]' : 'bg-black/30'
+                ].join(' ')}
+              />
+              <span>
+                {locale === 'en'
+                  ? 'Image-Only Plan View (Images First)'
+                  : 'Image-Only 플랜 기준 (화보 최우선 노출)'}
+              </span>
+            </button>
+          </div>
+        </div>
+
+        {/* Second Row: Meaningful Editorial Mood Curator */}
+        <div className="mt-4 flex flex-wrap items-baseline justify-between gap-2">
           <div>
             <p className="font-mono text-[0.68rem] font-medium tracking-[0.08em] text-[#3063A7] uppercase">
               {locale === 'en' ? 'CURATED BY MOOD & WORLD' : '분위기와 세계관으로 고르기'}
@@ -339,7 +518,11 @@ export function SequenceDispatchSection({
               <button
                 type="button"
                 data-mood-reset
-                onClick={() => setActiveMood('all')}
+                onClick={() => {
+                  setActiveMood('all');
+                  setActiveMedium('all');
+                  setPlanTier('standard');
+                }}
                 className="text-xs font-medium text-[#3063A7] underline underline-offset-4 hover:text-[#0E1013]"
               >
                 {locale === 'en' ? 'Show all' : '전체 보기'}
@@ -351,7 +534,7 @@ export function SequenceDispatchSection({
         <div
           role="group"
           aria-label={locale === 'en' ? 'Filter by editorial mood' : '분위기별 에디션 선택'}
-          className="mt-4 flex items-center gap-2 overflow-x-auto pb-1 lg:flex-wrap lg:overflow-x-visible"
+          className="mt-3.5 flex items-center gap-2 overflow-x-auto pb-1 lg:flex-wrap lg:overflow-x-visible"
         >
           {EDITORIAL_MOOD_OPTIONS.map((option) => {
             const isActive = activeMood === option.id;
@@ -361,7 +544,7 @@ export function SequenceDispatchSection({
                 type="button"
                 data-mood-pill={option.id}
                 aria-pressed={isActive}
-                onClick={() => setActiveMood(option.id)}
+                onClick={() => handleSelectMood(option.id)}
                 className={[
                   'inline-flex min-h-10 shrink-0 items-center gap-2 rounded-full border px-4 py-2 text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#3875C5]',
                   isActive
@@ -390,24 +573,29 @@ export function SequenceDispatchSection({
           {locale === 'en' ? activeMoodObj.descEn : activeMoodObj.descKo}
         </p>
 
+        {/* 3. Magnetic Freestyle Yourself — Create Your Scene & Launch Your Own Template Door */}
         <div
           data-direct-scene-door
-          className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-[16px] border border-[#3875C5]/20 bg-[#F3F7FA] px-4 py-3"
+          className="mt-5 flex flex-wrap items-center justify-between gap-4 rounded-[18px] border border-[#3875C5]/25 bg-[#F3F7FA] px-5 py-4"
         >
-          <p className="text-xs leading-relaxed text-[#0E1013]">
-            <span className="font-semibold text-[#3063A7]">
-              {locale === 'en' ? 'DIRECT SCENE · ' : '직접 연출 · '}
-            </span>
-            {locale === 'en'
-              ? 'Have your own reference video? Cast your face in it and publish the finished scene as your own template.'
-              : '따로 찍어보고 싶은 레퍼런스 영상이 있나요? 내 얼굴로 연출한 뒤 그대로 내 템플릿으로 등판시킬 수 있습니다.'}
-          </p>
+          <div className="max-w-2xl">
+            <p className="font-mono text-[0.68rem] font-bold tracking-[0.08em] text-[#3063A7] uppercase">
+              {locale === 'en'
+                ? 'FREESTYLE YOURSELF · CREATE & PUBLISH YOUR OWN TEMPLATE'
+                : 'FREESTYLE YOURSELF · 나만의 장면, 나만의 템플릿 만들기'}
+            </p>
+            <p className="mt-1 text-sm font-bold tracking-[-0.01em] text-[#0E1013]">
+              {locale === 'en'
+                ? 'Turn any saved reference video into your own scene — then launch it as an official TWINGS template.'
+                : '저장해 둔 레퍼런스 영상에 내 얼굴을 입혀 찍고, 마음에 들면 그대로 ‘나만의 공식 템플릿’으로 등판시키세요.'}
+            </p>
+          </div>
           <a
             href={`/${locale}/direct`}
             data-direct-scene-link
-            className="inline-flex min-h-9 shrink-0 items-center rounded-full bg-white px-3.5 py-1.5 text-xs font-semibold text-[#3063A7] shadow-xs transition-colors hover:bg-[#3875C5] hover:text-white"
+            className="inline-flex min-h-10 shrink-0 items-center rounded-full bg-[#3875C5] px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-[#3063A7]"
           >
-            {locale === 'en' ? 'Direct Your Scene →' : '직접 연출 & 템플릿 등판 보기 →'}
+            {locale === 'en' ? 'Freestyle Yourself →' : 'Freestyle · 나만의 템플릿 만들기 →'}
           </a>
         </div>
       </div>

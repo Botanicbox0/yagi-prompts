@@ -2935,7 +2935,7 @@ export const ko: Dictionary = {
   nav: {
     video: '비디오',
     image: '이미지',
-    direct: '직접 연출',
+    direct: '나만의 템플릿',
     studio: '영상 만들기',
     prompts: '프롬프트',
     contests: '콘테스트',

@@ -11,11 +11,12 @@ import { PROMPT_MODEL_LABEL } from '@/lib/prompts/schemas';
 import { DirectSceneStudio } from '@/components/audience/direct-scene-studio';
 
 describe('Direct Scene (Freestyle-to-Template) Engine & UI (2026-11-04)', () => {
-  it('recommends "직접 연출 (Direct Scene)" over "Freestyle Yourself" with clear positioning rationale', () => {
+  it('positions "Freestyle Yourself · 나만의 템플릿" with magnetic copy and 3 golden quality rules', () => {
     const recommended = DIRECT_SCENE_WORDING_CANDIDATES.find((c) => c.recommended);
-    expect(recommended?.id).toBe('direct-scene');
-    expect(recommended?.navKo).toBe('직접 연출');
-    expect(recommended?.navEn).toBe('Direct Scene');
+    expect(recommended?.id).toBe('freestyle-yourself');
+    expect(recommended?.navKo).toBe('나만의 템플릿');
+    expect(recommended?.navEn).toBe('Freestyle Yourself');
+    expect(recommended?.headlineKo).toContain('세상에 없던 내 장면을 직접 찍고');
     expect(HIGH_QUALITY_REQUEST_GUIDE).toHaveLength(3);
   });
 

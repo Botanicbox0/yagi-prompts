@@ -86,18 +86,18 @@ export function DirectSceneStudio({
 
   return (
     <div data-direct-scene-studio className="space-y-14">
-      {/* SECTION 0: Wording & Concept Positioning Banner */}
+      {/* SECTION 0: Magnetic Freestyle Yourself Value Proposition */}
       <section
         data-direct-wording-rationale
         className="rounded-[24px] border border-[#3875C5]/25 bg-[#F3F7FA] p-6 sm:p-8"
       >
-        <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="flex flex-wrap items-start justify-between gap-6">
           <div className="max-w-3xl">
             <span className="inline-flex items-center gap-1.5 rounded-full bg-[#E8EFF7] px-3 py-1 font-mono text-[0.7rem] font-semibold text-[#3063A7] uppercase tabular-nums">
               <span aria-hidden="true" className="size-1.5 rounded-full bg-[#3875C5]" />
               {locale === 'en'
-                ? 'RECOMMENDED TAB IDENTITY · DIRECT SCENE'
-                : '탭 워딩 & 포지셔닝 설계 · ‘프리스타일’ 대신 ‘직접 연출 (Direct Scene)’'}
+                ? 'FREESTYLE YOURSELF · DIRECT YOUR SCENE & LAUNCH YOUR TEMPLATE'
+                : 'FREESTYLE YOURSELF · 나만의 장면에서 나만의 공식 템플릿까지'}
             </span>
             <h2 className="mt-3 text-lg font-bold tracking-[-0.015em] text-[#0E1013] sm:text-xl">
               {locale === 'en'
@@ -105,25 +105,27 @@ export function DirectSceneStudio({
                 : recommendedWording.headlineKo}
             </h2>
             <p className="mt-2 text-xs leading-relaxed text-black/70 sm:text-sm">
-              {recommendedWording.rationaleKo}
+              {locale === 'en'
+                ? recommendedWording.subcopyEn
+                : recommendedWording.subcopyKo}
             </p>
           </div>
-          <div className="flex flex-wrap gap-2">
-            {DIRECT_SCENE_WORDING_CANDIDATES.map((item) => (
-              <div
-                key={item.id}
-                data-wording-option={item.id}
-                className={[
-                  'rounded-full border px-3.5 py-1.5 text-xs font-medium',
-                  item.recommended
-                    ? 'border-[#3875C5] bg-[#3875C5] text-white'
-                    : 'border-hairline bg-white text-black/60'
-                ].join(' ')}
-              >
-                {item.recommended ? '★ 추천: ' : '비교: '}
-                {item.navKo} ({item.navEn})
-              </div>
-            ))}
+          <div className="grid gap-2 sm:grid-cols-3">
+            <div className="rounded-[16px] border border-white bg-white px-4 py-3 text-xs">
+              <p className="font-mono text-[0.68rem] font-bold text-[#3063A7] tabular-nums">01 · DIRECT</p>
+              <p className="mt-1 font-semibold text-[#0E1013]">레퍼런스 영상 + 내 사진</p>
+              <p className="mt-0.5 text-[0.7rem] text-black/60">원하는 무드를 내 얼굴로 먼저 완성</p>
+            </div>
+            <div className="rounded-[16px] border border-white bg-white px-4 py-3 text-xs">
+              <p className="font-mono text-[0.68rem] font-bold text-[#3063A7] tabular-nums">02 · LOCK</p>
+              <p className="mt-1 font-semibold text-[#0E1013]">카메라·조명·의상 고정</p>
+              <p className="mt-0.5 text-[0.7rem] text-black/60">누가 찍어도 같은 미감이 나오게 잠금</p>
+            </div>
+            <div className="rounded-[16px] border border-white bg-white px-4 py-3 text-xs">
+              <p className="font-mono text-[0.68rem] font-bold text-[#3063A7] tabular-nums">03 · PUBLISH</p>
+              <p className="mt-1 font-semibold text-[#0E1013]">내 공식 템플릿 등판</p>
+              <p className="mt-0.5 text-[0.7rem] text-black/60">다음 유저는 셀카 1장으로 바로 참여</p>
+            </div>
           </div>
         </div>
       </section>

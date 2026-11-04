@@ -198,7 +198,7 @@ html:lang(ko) {
 .audience-shell { width: calc(100% - var(--spacing-gutter) * 2); max-width: var(--container-audience); margin-inline: auto; }
 /* Justified film rows: a card's width grows in proportion to its ratio, so a row shares one height
    and fills the width without cropping anything. The filler stops the last row from stretching. */
-.film-rows { --film-row-h: clamp(9rem, 24vw, 30rem); display: flex; flex-wrap: wrap; align-items: flex-start; gap: 1.75rem 0.75rem; }
+.film-rows { --film-row-h: clamp(8.5rem, 16vw, 19.5rem); display: flex; flex-wrap: wrap; align-items: flex-start; gap: 1.5rem 0.75rem; }
 .film-rows > li { flex: var(--r, 0.8) 1 calc(var(--r, 0.8) * var(--film-row-h)); min-width: 0; max-width: 100%; }
 .film-rows::after { content: ''; flex-grow: 9999; }
 /* A modal that reaches its end must not hand the scroll to the page behind it. */

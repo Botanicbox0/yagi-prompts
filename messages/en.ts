@@ -2924,7 +2924,7 @@ export const en = {
   nav: {
     video: 'Video',
     image: 'Image',
-    direct: 'Direct Scene',
+    direct: 'Freestyle Yourself',
     studio: 'Make a film',
     prompts: 'Prompts',
     contests: 'Contests',

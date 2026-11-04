@@ -8,6 +8,19 @@ export type EditorialMoodId =
   | 'celeb-spotlight'
   | 'photo-series';
 
+export type ViewerPlanTier = 'standard' | 'image_only' | 'creator' | 'premium';
+export type GalleryMediumTab = 'all' | 'video' | 'image';
+
+/**
+ * Determines which medium tab opens first based on the user's subscription plan tier.
+ * For the lowest-tier `image_only` plan, Image Templates (`'image'`) are prioritized and
+ * surfaced first so users never have to scroll past video-only templates.
+ */
+export function resolveDefaultMediumForPlan(planTier: ViewerPlanTier = 'standard'): GalleryMediumTab {
+  if (planTier === 'image_only') return 'image';
+  return 'all';
+}
+
 export interface EditorialMoodOption {
   id: EditorialMoodId;
   indexLabel: string;
