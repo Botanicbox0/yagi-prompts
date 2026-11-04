@@ -373,4 +373,9 @@ export interface CustomerBriefView {
     overriddenByProject: string[];
     isolateProjectMemory: boolean;
   };
+  principleAttachment?: {
+    mode: 'full_attach' | 'custom_partial' | 'unbound_free';
+    attachedKeys: string[];
+    detachedKeys: string[];
+  };
 }

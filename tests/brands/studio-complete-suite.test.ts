@@ -1,7 +1,13 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { randomUUID } from 'node:crypto';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }),
+  usePathname: () => '/brand/identity',
+  useSearchParams: () => new URLSearchParams(),
+}));
 import type { PGlite } from '@electric-sql/pglite';
 import { freshDb, runner } from '@/tests/helpers/pglite';
 import { seedProfile } from '@/tests/helpers/billing';
@@ -10,24 +16,34 @@ import type { SqlRunner } from '@/lib/db/sql-runner';
 import { createStudioOrganization } from '@/lib/brands/workspace/service';
 import { setFeaturePolicy } from '@/lib/brands/entitlements';
 import {
+  DESIGN_PRINCIPLE_CHIPS,
+  POMELLI_SHOT_TEMPLATES,
   PreserveChangeMatrixSchema,
   SPATIAL_STAGE_PRESETS,
+  VERTICAL_MARKETER_PLAYBOOKS,
   VIDEO_REVERSE_PRESETS,
+  compileBrandBrief,
   compileBrandSpatialStageBrief,
   compileBrandVideoReverseBrief,
   compileSpatialStageToShotSpec,
   compileVideoReverseAdaptation,
+  createAttachmentPreset,
+  listPlaybooksForVertical,
   sanitizeVideoReverseAnalysis,
+  summarizeDesignPrincipleAttachment,
 } from '@/lib/brands/briefs';
 import {
+  POMELLI_EXTRACTION_STEPS,
   analyzePinterestBoardFunnel,
   classifyOmniAssetDrop,
   ingestBrandOnboarding,
   kaiperOnboardingPreset,
   listLooks,
   markConfirmedBrandIdentity,
+  synthesizeBrandIdentityFromIngest,
   twingsDefaultIdentity,
 } from '@/lib/brands/identity/service';
+import { BrandOnboardingWizard } from '@/components/brand-workspace/brand-onboarding-wizard';
 import {
   BRAND_MUSIC_STUDIO_PRESETS,
   EIGHT_STAGE_BROADCAST_MASTERING_CHAIN,
@@ -42,6 +58,7 @@ import {
   spatialPinToMicroRoiBox,
 } from '@/lib/brands/review';
 import { BrandBriefStudio } from '@/components/brand-workspace/brand-brief-studio';
+import { CampaignMoatShowcase } from '@/components/brand-workspace/campaign-moat-showcase';
 
 const adminId = randomUUID();
 const ownerId = randomUUID();
@@ -465,5 +482,134 @@ describe('Brand Studio Complete Suite (Video Reverse, 2D Spatial Stage, 3-Track 
       presetId: 'french_house_runway_122',
     });
     expect(probeAttempt).toEqual({ ok: false, code: 'forbidden' });
+  });
+
+  it('verifies Pomelli Bento Business Profile, Design Principle Attachment Selector (Attach vs Unbound), and Fashion·Beauty·F&B Marketer Playbooks', async () => {
+    // 1. Pomelli 9-Stage URL Extraction & Bento Business Profile
+    expect(POMELLI_EXTRACTION_STEPS).toHaveLength(9);
+    const synthesized = synthesizeBrandIdentityFromIngest(
+      kaiperOnboardingPreset(kaiperOrgId)
+    );
+    expect(synthesized.bentoProfile.brandName).toBe('KAIPER');
+    expect(synthesized.bentoProfile.colorSwatches.length).toBeGreaterThanOrEqual(5);
+    expect(synthesized.bentoProfile.fontSpecimen.sampleGlyph).toBe('Aa');
+    expect(synthesized.bentoProfile.modelPreferences.enabledByDefault).toBe(true);
+    expect(synthesized.bentoProfile.completenessPct).toBe(100);
+
+    // 2. Design Principle Attachment presets & compileBrandBrief integration
+    expect(DESIGN_PRINCIPLE_CHIPS).toHaveLength(6);
+    const fullPreset = createAttachmentPreset('full_attach');
+    const fullSummary = summarizeDesignPrincipleAttachment(fullPreset);
+    expect(fullSummary.attachedKeys).toHaveLength(6);
+    expect(fullSummary.detachedKeys).toHaveLength(0);
+
+    const unboundPreset = createAttachmentPreset('unbound_free');
+    const unboundSummary = summarizeDesignPrincipleAttachment(unboundPreset);
+    expect(unboundSummary.attachment.colorPalette).toBe(false);
+    expect(unboundSummary.attachment.aestheticLine).toBe(false);
+
+    const compiledUnbound = await compileBrandBrief({ sql }, owner, {
+      organizationId: kaiperOrgId,
+      principleAttachment: unboundPreset,
+      quick: {
+        brief: '실험적인 네온 오렌지·바이올렛 조명 아래 시즌 캡슐 오브제 자유 탐색 컷',
+        cutKind: 'reference_exact_product',
+        aspect: '4:5',
+      },
+    });
+    expect(compiledUnbound.ok).toBe(true);
+    if (!compiledUnbound.ok) return;
+    expect(compiledUnbound.view.principleAttachment?.mode).toBe('unbound_free');
+    expect(compiledUnbound.view.principleAttachment?.detachedKeys).toContain(
+      'colorPalette'
+    );
+
+    // 3. Pomelli 4-Shot Templates & Fashion / Beauty / F&B Vertical Playbooks
+    expect(POMELLI_SHOT_TEMPLATES.map((t) => t.id)).toEqual([
+      'studio',
+      'ingredients',
+      'in_use',
+      'contextual',
+    ]);
+    expect(VERTICAL_MARKETER_PLAYBOOKS).toHaveLength(9);
+    expect(listPlaybooksForVertical('fashion_apparel')).toHaveLength(3);
+    expect(listPlaybooksForVertical('beauty_skincare')).toHaveLength(3);
+    expect(listPlaybooksForVertical('fnb_hospitality')).toHaveLength(3);
+
+    // 4. SSR verification of Onboarding Bento Profile & Studio Principle Attachment + Vertical Hub
+    const onboardingHtml = renderToStaticMarkup(
+      React.createElement(BrandOnboardingWizard, {
+        organizationId: kaiperOrgId,
+        organizationName: 'KAIPER',
+        locale: 'ko',
+        isOwner: true,
+        currentStatus: 'confirmed',
+        currentRevision: 1,
+        studioHref: '/brand/studio',
+      })
+    );
+    expect(onboardingHtml).toContain('data-pomelli-url-analyzer');
+    expect(onboardingHtml).toContain('data-pomelli-bento-profile');
+    expect(onboardingHtml).toContain('data-pomelli-model-preferences');
+    expect(onboardingHtml).toContain('data-pomelli-director-dock');
+    expect(onboardingHtml).toContain('data-pomelli-completion-bar');
+
+    const studioHtml = renderToStaticMarkup(
+      React.createElement(BrandBriefStudio, {
+        organizationId: kaiperOrgId,
+        locale: 'ko',
+        canWrite: true,
+        identityConfirmed: true,
+      })
+    );
+    expect(studioHtml).toContain('data-design-principle-attachment');
+    expect(studioHtml).toContain('data-attachment-mode-btn="full_attach"');
+    expect(studioHtml).toContain('data-attachment-mode-btn="unbound_free"');
+    expect(studioHtml).toContain('data-vertical-marketer-hub');
+    expect(studioHtml).toContain('data-pomelli-shot-templates');
+    expect(studioHtml).toContain('data-vertical-playbook-card="fashion-flatlay-to-lookbook"');
+
+    // Guard: no internal engine/model names leaked into either customer surface
+    for (const html of [onboardingHtml, studioHtml]) {
+      expect(html).not.toMatch(
+        /Seedance|Seedream|Nano Banana|SeedVR2|ComfyUI|YuE2|earshot|Argon|Gemini|Higgsfield/i
+      );
+    }
+
+    // 5. Campaign Moat Showcase & Tab Orientation Map (1080p Sound-On Logo-Free Masters + Morphic Isolation)
+    const moatFullHtml = renderToStaticMarkup(
+      React.createElement(CampaignMoatShowcase, {
+        locale: 'ko',
+        organizationId: kaiperOrgId,
+        studioOpen: true,
+      })
+    );
+    expect(moatFullHtml).toContain('data-brand-tab-map');
+    expect(moatFullHtml).toContain('data-campaign-moat-showcase');
+    expect(moatFullHtml).toContain('data-moat-proof-metrics');
+    expect(moatFullHtml).toContain('글로벌 AI 플랫폼');
+    expect(moatFullHtml).toContain('영상 9편');
+    expect(moatFullHtml).toContain('200만 뷰+');
+    expect(moatFullHtml).toContain('300건+');
+    expect(moatFullHtml).toContain('data-b2b-sound-master-reel');
+    expect(moatFullHtml).toContain('/reel/brands/seeding-redcarpet-01-1080p.mp4');
+    expect(moatFullHtml).toContain('/reel/brands/seeding-redcarpet-02-1080p.mp4');
+    expect(moatFullHtml).toContain('/reel/brands/studio-editorial-blue-1080p.mp4');
+    expect(moatFullHtml).not.toMatch(
+      /Morphic|Seedance|Seedream|Nano Banana|SeedVR2|ComfyUI|YuE2|earshot|Argon|Gemini|Higgsfield/i
+    );
+
+    const moatIsolatedHtml = renderToStaticMarkup(
+      React.createElement(CampaignMoatShowcase, {
+        locale: 'ko',
+        organizationId: morphicOrgId,
+        studioOpen: false,
+      })
+    );
+    expect(moatIsolatedHtml).toContain('data-brand-tab-map');
+    expect(moatIsolatedHtml).toContain('data-campaign-moat-showcase');
+    expect(moatIsolatedHtml).not.toContain('/brand/studio');
+    expect(moatIsolatedHtml).not.toContain('/brand/identity');
+    expect(moatIsolatedHtml).not.toContain('/reel/brands/studio-editorial-blue-1080p.mp4');
   });
 });

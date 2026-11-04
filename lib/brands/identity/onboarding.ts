@@ -119,6 +119,133 @@ export interface BrandAestheticLine {
   sourceChannelLabelEn: string;
 }
 
+export interface PomelliExtractionStep {
+  id: string;
+  stepNumber: number;
+  pillKo: string;
+  pillEn: string;
+  detailKo: string;
+  detailEn: string;
+}
+
+export const POMELLI_EXTRACTION_STEPS: readonly PomelliExtractionStep[] = [
+  {
+    id: 'analyze_website',
+    stepNumber: 1,
+    pillKo: '웹사이트 구조 분석 중 (Analyzing your website)',
+    pillEn: 'Analyzing your website',
+    detailKo: '공식 자사몰·캠페인 페이지의 레이아웃과 메타 구조를 스캔합니다.',
+    detailEn: 'Scanning official storefront layout and campaign metadata.'
+  },
+  {
+    id: 'pull_images',
+    stepNumber: 2,
+    pillKo: '웹·핀터레스트 화보 이미지 추출 중 (Pulling images)',
+    pillEn: 'Pulling images from your website & boards',
+    detailKo: '제품 팩샷·룩북·핀터레스트 보드(120장 캡 → 12 Medoid)를 수집합니다.',
+    detailEn: 'Extracting product packshots, lookbooks, and 12 Pinterest Medoids.'
+  },
+  {
+    id: 'find_logo',
+    stepNumber: 3,
+    pillKo: '공식 로고·심볼 탐색 중 (Finding your logo)',
+    pillEn: 'Finding your logo',
+    detailKo: '워드마크와 모노그램 심볼을 분리해 1:1 비율 잠금 금고에 격리합니다.',
+    detailEn: 'Isolating wordmark and symbol assets into the 1:1 Logo Vault.'
+  },
+  {
+    id: 'summarize_business',
+    stepNumber: 4,
+    pillKo: '비즈니스 포지셔닝 요약 중 (Summarizing your business)',
+    pillEn: 'Summarizing your business',
+    detailKo: '타겟 고객·카테고리·핵심 제품군을 한 문단 비즈니스 개요로 요약합니다.',
+    detailEn: 'Synthesizing category positioning and hero product architecture.'
+  },
+  {
+    id: 'learn_tone',
+    stepNumber: 5,
+    pillKo: '브랜드 톤앤매너 학습 중 (Learning your tone of voice)',
+    pillEn: 'Learning your tone of voice',
+    detailKo: '카피라이팅 어조와 금지 수식어를 분석해 보이스 태그를 구성합니다.',
+    detailEn: 'Extracting copywriting voice tags and forbidden buzzwords.'
+  },
+  {
+    id: 'write_tagline',
+    stepNumber: 6,
+    pillKo: '브랜드 태그라인 도출 중 (Writing your tagline)',
+    pillEn: 'Writing your tagline',
+    detailKo: '캠페인 카드와 배너에 즉시 쓸 수 있는 원라이너 슬로건을 도출합니다.',
+    detailEn: 'Drafting a campaign-ready one-liner tagline.'
+  },
+  {
+    id: 'gather_colors',
+    stepNumber: 7,
+    pillKo: '브랜드 컬러 팔레트 수집 중 (Gathering colors)',
+    pillEn: 'Gathering colors',
+    detailKo: '배경·보조·강조 HEX 스와치와 WCAG 4.5:1 명도 대비를 검증합니다.',
+    detailEn: 'Extracting HEX color swatches and verifying WCAG 4.5:1 contrast.'
+  },
+  {
+    id: 'study_values',
+    stepNumber: 8,
+    pillKo: '브랜드 핵심 가치 & 모델 페르소나 정의 (Studying brand values)',
+    pillEn: 'Studying your brand values & model traits',
+    detailKo: '브랜드 가치 키워드와 일관된 AI 모델 페르소나 특성을 정의합니다.',
+    detailEn: 'Defining core brand values and consistent model persona traits.'
+  },
+  {
+    id: 'determine_aesthetic_and_fonts',
+    stepNumber: 9,
+    pillKo: '다중 미감 기조(A/B/C) & 서체 매칭 완료 (Visual aesthetic & fonts)',
+    pillEn: 'Determining your visual aesthetic & picking brand fonts',
+    detailKo: '3가지 미감 기조(A/B/C)와 헤드라인·본문 서체 페어링을 완성합니다.',
+    detailEn: 'Finalizing Aesthetic Lines A/B/C and display/body font pairing.'
+  }
+] as const;
+
+export interface PomelliBentoBusinessProfile {
+  brandName: string;
+  primaryWebsiteUrl: string;
+  taglineKo: string;
+  taglineEn: string;
+  businessOverviewKo: string;
+  businessOverviewEn: string;
+  industryLabelKo: string;
+  industryLabelEn: string;
+  subcategoryLabelKo: string;
+  subcategoryLabelEn: string;
+  fontSpecimen: {
+    displayFont: string;
+    bodyFont: string;
+    monoFont: string;
+    sampleGlyph: string;
+  };
+  colorSwatches: Array<{
+    roleKo: string;
+    roleEn: string;
+    hex: `#${string}`;
+  }>;
+  brandValuesKo: string[];
+  brandValuesEn: string[];
+  aestheticTagsKo: string[];
+  aestheticTagsEn: string[];
+  toneOfVoiceTagsKo: string[];
+  toneOfVoiceTagsEn: string[];
+  modelPreferences: {
+    enabledByDefault: boolean;
+    summaryKo: string;
+    summaryEn: string;
+    traitsKo: string[];
+    traitsEn: string[];
+  };
+  ctaLinks: Array<{
+    labelKo: string;
+    labelEn: string;
+    url: string;
+  }>;
+  completenessPct: number;
+}
+
 const HttpsUrlSchema = z
   .string()
   .trim()
@@ -281,6 +408,7 @@ export interface BrandOnboardingIngestSummary {
   omniTriageCounts: Record<OmniTriageBucket, number>;
   pinterestFunnel: PinterestFunnelStageMetrics;
   aestheticLines: BrandAestheticLine[];
+  bentoProfile: PomelliBentoBusinessProfile;
   recommendedLookPresetId: BrandLookPresetId;
   synthesizedAt: string;
 }
@@ -289,6 +417,7 @@ export interface SynthesizedBrandOnboarding {
   identity: BrandIdentity;
   recommendedLookPresetId: BrandLookPresetId;
   aestheticLines: BrandAestheticLine[];
+  bentoProfile: PomelliBentoBusinessProfile;
   pinterestFunnel: PinterestFunnelStageMetrics;
   omniTriage: {
     totalDropped: number;
@@ -972,6 +1101,177 @@ export function synthesizeBrandIdentityFromIngest(
     )
   };
 
+  const categoryMeta: Record<
+    OnboardingCategory,
+    {
+      industryKo: string;
+      industryEn: string;
+      subKo: string;
+      subEn: string;
+      taglineKo: (name: string) => string;
+      taglineEn: (name: string) => string;
+      valuesKo: string[];
+      valuesEn: string[];
+      aestheticTagsKo: string[];
+      aestheticTagsEn: string[];
+      toneTagsKo: string[];
+      toneTagsEn: string[];
+      modelTraitsKo: string[];
+      modelTraitsEn: string[];
+    }
+  > = {
+    fashion_apparel: {
+      industryKo: '패션 · 어패럴 (Fashion & Apparel)',
+      industryEn: 'Fashion & Apparel',
+      subKo: '컨템포러리 · 테크니컬 웨어 & 에디토리얼 룩북',
+      subEn: 'Contemporary & Technical Wear',
+      taglineKo: (name) => `${name} — 건축적 실루엣과 정밀한 원단 밀도로 완성하는 모던 아우터웨어`,
+      taglineEn: (name) => `${name} — Architectural silhouettes and precision fabric engineering`,
+      valuesKo: ['구조적 미니멀리즘', '원단 밀도 보존', '절제된 기능성', '로고 1:1 정밀도'],
+      valuesEn: ['Architectural Minimalism', 'Fabric Density', 'Functional Precision', '1:1 Logo Fidelity'],
+      aestheticTagsKo: ['에디토리얼 미니멀', '성수 데이라이트', '골든아워 필름', '하이콘트라스트 스트리트'],
+      aestheticTagsEn: ['Editorial Minimal', 'Daylight Concrete', 'Golden Hour Film', 'High-Contrast Street'],
+      toneTagsKo: ['모던한 (Modern)', '절제된 (Refined)', '직관적인 (Direct)', '확신 있는 (Confident)'],
+      toneTagsEn: ['Modern', 'Refined', 'Direct', 'Confident'],
+      modelTraitsKo: ['20대 중후반 에디토리얼 핏', '뷰티 필터 없는 자연 매트 피부', '절제된 시선과 비대칭 포즈'],
+      modelTraitsEn: ['Mid-20s editorial fit', 'Filter-free natural matte skin', 'Composed gaze & asymmetrical posture']
+    },
+    beauty_skincare: {
+      industryKo: '뷰티 · 코스메틱 (Beauty & Skincare)',
+      industryEn: 'Beauty & Skincare',
+      subKo: '더마 · 클린 스킨케어 & 텍스처 스튜디오',
+      subEn: 'Derma & Clean Skincare',
+      taglineKo: (name) => `${name} — 과장 없는 성분주의와 실제 피부 결이 살아있는 클린 스킨케어`,
+      taglineEn: (name) => `${name} — Clinical clarity and authentic pore-level skin vitality`,
+      valuesKo: ['성분 투명성', '무보정 실제 피부 결', '보틀 기하 정밀도', '클린 보타니컬'],
+      valuesEn: ['Ingredient Transparency', 'True Skin Texture', 'Vessel Precision', 'Clean Botanical'],
+      aestheticTagsKo: ['크리스프 보틀 정물', '수분 제형 스미어', '모닝 데이라이트', '클린 라임스톤'],
+      aestheticTagsEn: ['Crisp Bottle Still', 'Hydro Texture Smear', 'Morning Daylight', 'Clean Limestone'],
+      toneTagsKo: ['신뢰감 있는 (Clinical)', '투명한 (Transparent)', '차분한 (Calm)', '명확한 (Clear)'],
+      toneTagsEn: ['Clinical', 'Transparent', 'Calm', 'Clear'],
+      modelTraitsKo: ['모공과 속광이 살아있는 실제 피부(a10)', '핑크 블러셔 배제', '클로즈업 소프트 자연광'],
+      modelTraitsEn: ['Authentic pore-level skin (a10)', 'Zero artificial pink blush', 'Soft window key light']
+    },
+    fnb_hospitality: {
+      industryKo: 'F&B · 다이닝 (Food, Beverage & Hospitality)',
+      industryEn: 'F&B & Hospitality',
+      subKo: '스페셜티 음료 · 다이닝 & 패키징 브랜딩',
+      subEn: 'Specialty Beverage & Dining',
+      taglineKo: (name) => `${name} — 원재료의 신선한 시즐과 공간의 온기를 전하는 미식 브랜드`,
+      taglineEn: (name) => `${name} — Fresh culinary sizzle and warm architectural dining`,
+      valuesKo: ['원재료 신선도', '패키지 라벨 정밀도', '시즐 물방울 디테일', '공간 다이닝 경험'],
+      valuesEn: ['Fresh Ingredients', 'Label Curvature Lock', 'Condensation Sizzle', 'Warm Dining Space'],
+      aestheticTagsKo: ['컨덴세이션 매크로', '테이블웨어 플랫레이', '골든아워 카페', '푸어링 시즐 모션'],
+      aestheticTagsEn: ['Condensation Macro', 'Tableware Flat-Lay', 'Golden Hour Cafe', 'Pouring Sizzle Motion'],
+      toneTagsKo: ['감각적인 (Sensory)', '따뜻한 (Warm)', '신선한 (Fresh)', '초대하는 (Inviting)'],
+      toneTagsEn: ['Sensory', 'Warm', 'Fresh', 'Inviting'],
+      modelTraitsKo: ['자연스러운 핸드모델 토스트·푸어링', '따뜻한 자연 피부 톤', '다이닝 라이프스타일 무드'],
+      modelTraitsEn: ['Natural hand-model pour & toast', 'Warm natural skin tone', 'Authentic dining atmosphere']
+    },
+    lifestyle_object: {
+      industryKo: '라이프스타일 · 리빙 오브제',
+      industryEn: 'Lifestyle & Living Object',
+      subKo: '홈 프래그런스 · 세라믹 & 인테리어 오브제',
+      subEn: 'Home Fragrance & Interior Objects',
+      taglineKo: (name) => `${name} — 일상의 공간에 조용한 밀도와 조형미를 더하는 오브제`,
+      taglineEn: (name) => `${name} — Sculptural objects bringing quiet density to everyday spaces`,
+      valuesKo: ['조형적 비례', '촉각적 소재감', '자연광 그림자', '지속 가능한 패키징'],
+      valuesEn: ['Sculptural Proportion', 'Tactile Materiality', 'Daylight Shadows', 'Sustainable Packaging'],
+      aestheticTagsKo: ['건축적 정물', '따뜻한 트래버틴', '선라이트 블라인드', '미니멀 북셸프'],
+      aestheticTagsEn: ['Architectural Still', 'Warm Travertine', 'Sunlight Blinds', 'Minimal Bookshelf'],
+      toneTagsKo: ['조용한 (Quiet)', '촉각적인 (Tactile)', '정제된 (Curated)', '사색적인 (Thoughtful)'],
+      toneTagsEn: ['Quiet', 'Tactile', 'Curated', 'Thoughtful'],
+      modelTraitsKo: ['오브제 중심 라이프스타일 손동작', '내추럴 린넨 스타일링', '차분한 실내 자연광'],
+      modelTraitsEn: ['Object-focused hand interaction', 'Natural linen styling', 'Calm indoor daylight']
+    },
+    tech_platform: {
+      industryKo: '테크 · 디지털 프로덕트',
+      industryEn: 'Tech & Digital Product',
+      subKo: 'AI · SaaS & 하드웨어 디자인 시스템',
+      subEn: 'AI, SaaS & Hardware Design Systems',
+      taglineKo: (name) => `${name} — 복잡한 워크플로를 가장 명쾌한 인터페이스로 통합하는 플랫폼`,
+      taglineEn: (name) => `${name} — Unifying complex creative workflows into a crisp interface`,
+      valuesKo: ['명확한 위계', '즉각적인 검증', 'WCAG 가독성', '시스템 일관성'],
+      valuesEn: ['Clear Hierarchy', 'Instant Verification', 'WCAG Legibility', 'System Consistency'],
+      aestheticTagsKo: ['크리스프 그리드', '프렌치 블루 포인트', '알라바스터 서피스', '키노트 타이포 카드'],
+      aestheticTagsEn: ['Crisp Grid', 'French Blue Accent', 'Alabaster Surface', 'Keynote Type Card'],
+      toneTagsKo: ['명확한 (Clear)', '정확한 (Precise)', '실용적인 (Pragmatic)', '직접적인 (Direct)'],
+      toneTagsEn: ['Clear', 'Precise', 'Pragmatic', 'Direct'],
+      modelTraitsKo: ['크리에이터·디렉터 실제 작업 포즈', '자연스러운 스튜디오 조명', '무보정 리얼 스킨'],
+      modelTraitsEn: ['Authentic creator/director studio posture', 'Natural studio key light', 'Real unretouched skin']
+    }
+  };
+
+  const cMeta = categoryMeta[parsed.category];
+  const primaryWebsiteUrl = parsed.websiteUrls[0] ?? 'https://twings.app';
+
+  const bentoProfile: PomelliBentoBusinessProfile = {
+    brandName: parsed.brandName,
+    primaryWebsiteUrl,
+    taglineKo: cMeta.taglineKo(parsed.brandName),
+    taglineEn: cMeta.taglineEn(parsed.brandName),
+    businessOverviewKo: `${parsed.brandName}는 ${cMeta.subKo} 영역에서 일관된 브랜드 스탠다드(로고 1:1 고정·제품 기하 보존·절대 금기 방어)와 3가지 다중 미감 기조(기조 A/B/C)를 결합해 제품 화보, 룩북, 숏필름, 멀티 비율 캠페인 에셋을 제작합니다.`,
+    businessOverviewEn: `${parsed.brandName} operates in ${cMeta.subEn}, combining locked brand standards (1:1 logo vault, product geometry checklist, and strict taboos) with 3 Multi-Aesthetic Lines (A/B/C) to produce product photoshoots, lookbooks, short films, and multi-ratio campaign packs.`,
+    industryLabelKo: cMeta.industryKo,
+    industryLabelEn: cMeta.industryEn,
+    subcategoryLabelKo: cMeta.subKo,
+    subcategoryLabelEn: cMeta.subEn,
+    fontSpecimen: {
+      displayFont: identity.type.sans,
+      bodyFont: identity.type.sans,
+      monoFont: identity.type.mono,
+      sampleGlyph: 'Aa'
+    },
+    colorSwatches: [
+      { roleKo: 'Paper (배경)', roleEn: 'Paper', hex: identity.colour.paper },
+      { roleKo: 'Canvas (서피스)', roleEn: 'Canvas', hex: identity.colour.canvas },
+      { roleKo: 'Sky (보조 틴트)', roleEn: 'Sky', hex: identity.colour.sky },
+      { roleKo: 'Accent (브랜드 포인트)', roleEn: 'Accent', hex: identity.colour.accent },
+      { roleKo: 'Ink (타이포)', roleEn: 'Ink', hex: identity.colour.ink }
+    ],
+    brandValuesKo: cMeta.valuesKo,
+    brandValuesEn: cMeta.valuesEn,
+    aestheticTagsKo: cMeta.aestheticTagsKo,
+    aestheticTagsEn: cMeta.aestheticTagsEn,
+    toneOfVoiceTagsKo: cMeta.toneTagsKo,
+    toneOfVoiceTagsEn: cMeta.toneTagsEn,
+    modelPreferences: {
+      enabledByDefault: true,
+      summaryKo:
+        '모든 생성 이미지·영상에서 브랜드 모델의 피부 질감(a10 매트 스킨)과 스타일링 톤을 일관되게 유지합니다.',
+      summaryEn:
+        'Define consistent traits for your brand models across all generated photoshoots and films.',
+      traitsKo: cMeta.modelTraitsKo,
+      traitsEn: cMeta.modelTraitsEn
+    },
+    ctaLinks: [
+      {
+        labelKo: '공식 브랜드 스토어',
+        labelEn: 'Official Storefront',
+        url: primaryWebsiteUrl
+      },
+      ...(parsed.instagramHandle
+        ? [
+            {
+              labelKo: `인스타그램 (${parsed.instagramHandle})`,
+              labelEn: `Instagram (${parsed.instagramHandle})`,
+              url: `https://www.instagram.com/${parsed.instagramHandle.replace(/^@/, '')}/`
+            }
+          ]
+        : []),
+      ...(parsed.pinterestBoardUrls[0]
+        ? [
+            {
+              labelKo: '핀터레스트 무드보드',
+              labelEn: 'Pinterest Moodboard',
+              url: parsed.pinterestBoardUrls[0]
+            }
+          ]
+        : [])
+    ],
+    completenessPct: 100
+  };
+
   const summary: BrandOnboardingIngestSummary = {
     brandName: parsed.brandName,
     category: parsed.category,
@@ -989,6 +1289,7 @@ export function synthesizeBrandIdentityFromIngest(
     omniTriageCounts,
     pinterestFunnel,
     aestheticLines,
+    bentoProfile,
     recommendedLookPresetId: vibeSpec.lookPresetId,
     synthesizedAt: new Date().toISOString()
   };
@@ -997,6 +1298,7 @@ export function synthesizeBrandIdentityFromIngest(
     identity,
     recommendedLookPresetId: vibeSpec.lookPresetId,
     aestheticLines,
+    bentoProfile,
     pinterestFunnel,
     omniTriage: {
       totalDropped: parsed.rawAssetDrop.length,

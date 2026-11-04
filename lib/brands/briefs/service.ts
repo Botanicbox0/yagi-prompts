@@ -72,6 +72,44 @@ import {
   compileSpatialStageToShotSpec,
   type SpatialStageCompileResult
 } from './spatial-stage';
+import {
+  DESIGN_PRINCIPLE_ATTACHMENT_MODES,
+  DESIGN_PRINCIPLE_CHIPS,
+  DESIGN_PRINCIPLE_KEYS,
+  DesignPrincipleAttachmentSchema,
+  POMELLI_SHOT_TEMPLATES,
+  POMELLI_SHOT_TEMPLATE_IDS,
+  VERTICAL_MARKETER_PLAYBOOKS,
+  createAttachmentPreset,
+  listPlaybooksForVertical,
+  summarizeDesignPrincipleAttachment,
+  type CoreBrandVertical,
+  type DesignPrincipleAttachment,
+  type DesignPrincipleAttachmentMode,
+  type DesignPrincipleKey,
+  type PomelliShotTemplate,
+  type PomelliShotTemplateId,
+  type VerticalMarketerPlaybook
+} from './vertical-playbooks';
+export {
+  DESIGN_PRINCIPLE_ATTACHMENT_MODES,
+  DESIGN_PRINCIPLE_CHIPS,
+  DESIGN_PRINCIPLE_KEYS,
+  DesignPrincipleAttachmentSchema,
+  POMELLI_SHOT_TEMPLATES,
+  POMELLI_SHOT_TEMPLATE_IDS,
+  VERTICAL_MARKETER_PLAYBOOKS,
+  createAttachmentPreset,
+  listPlaybooksForVertical,
+  summarizeDesignPrincipleAttachment,
+  type CoreBrandVertical,
+  type DesignPrincipleAttachment,
+  type DesignPrincipleAttachmentMode,
+  type DesignPrincipleKey,
+  type PomelliShotTemplate,
+  type PomelliShotTemplateId,
+  type VerticalMarketerPlaybook
+};
 
 const uuid = z.string().uuid();
 
@@ -165,7 +203,8 @@ const GRAMMAR_VIEW_MAP: Record<
 export function toCustomerBriefView(
   state: BrandBriefState,
   identitySource: 'confirmed' | 'default_fallback',
-  directionCascade?: DirectionCascadeSummary
+  directionCascade?: DirectionCascadeSummary,
+  principleAttachment?: CustomerBriefView['principleAttachment']
 ): CustomerBriefView {
   const gInfo = GRAMMAR_VIEW_MAP[state.compiled.params.grammar];
   const cInfo = SHOT_CUT_KIND_LABELS[state.spec.cutKind];
@@ -201,7 +240,8 @@ export function toCustomerBriefView(
     approvedAt: state.approvedAt,
     finalizedAt: state.finalizedAt,
     updatedAt: state.updatedAt,
-    ...(directionCascade ? { directionCascade } : {})
+    ...(directionCascade ? { directionCascade } : {}),
+    ...(principleAttachment ? { principleAttachment } : {})
   };
 }
 
@@ -462,6 +502,7 @@ const CompileBriefOperationSchema = z.object({
   projectOverride: ProjectDirectionOverrideSchema.omit({
     organizationId: true
   }).optional(),
+  principleAttachment: DesignPrincipleAttachmentSchema.optional(),
   spec: ShotSpecSchema.optional(),
   quick: QuickBriefInputSchema.omit({ organizationId: true }).optional()
 });
@@ -510,7 +551,7 @@ export async function compileBrandBrief(
         : null;
 
       const {
-        identity,
+        identity: rawIdentity,
         identitySource,
         memory,
         directionCascade,
@@ -522,12 +563,38 @@ export async function compileBrandBrief(
         inlineOverride
       );
 
+      const attachmentSummary = parsed.data.principleAttachment
+        ? summarizeDesignPrincipleAttachment(parsed.data.principleAttachment)
+        : null;
+
+      // Apply Design Principle Attachment rules while keeping consent/skin safety locks immutable
+      const identity: ConfirmedBrandIdentity = attachmentSummary
+        ? markConfirmedBrandIdentity({
+            ...rawIdentity,
+            rules: {
+              ...rawIdentity.rules,
+              consentedFacesOnly: true,
+              paletteOnly: attachmentSummary.attachment.colorPalette
+                ? rawIdentity.rules.paletteOnly
+                : false,
+              never: attachmentSummary.attachment.brandTaboos
+                ? rawIdentity.rules.never
+                : rawIdentity.rules.never.slice(0, 1)
+            },
+            world: {
+              ...rawIdentity.world,
+              skinProtected: true
+            }
+          })
+        : rawIdentity;
+
       const quickWithProjectDefaults = parsed.data.quick
         ? {
             ...parsed.data.quick,
             organizationId,
             brief:
               shotDefaults.projectRulePrompt &&
+              (!attachmentSummary || attachmentSummary.attachment.aestheticLine) &&
               !parsed.data.quick.brief.includes(shotDefaults.projectRulePrompt)
                 ? `${parsed.data.quick.brief} (${shotDefaults.projectRulePrompt})`.slice(
                     0,
@@ -537,15 +604,27 @@ export async function compileBrandBrief(
           }
         : null;
 
-      const spec = parsed.data.spec
+      const baseSpec = parsed.data.spec
         ? parsed.data.spec
         : quickWithProjectDefaults
           ? buildShotSpecFromQuickInput(quickWithProjectDefaults, identity)
           : null;
 
-      if (!spec) {
+      if (!baseSpec) {
         return { ok: false as const, code: 'invalid' as const, field: 'brief' };
       }
+
+      const spec: ShotSpec = attachmentSummary
+        ? {
+            ...baseSpec,
+            camera: {
+              ...baseSpec.camera,
+              margin_pct: attachmentSummary.attachment.typographyGrid
+                ? baseSpec.camera.margin_pct
+                : Math.min(baseSpec.camera.margin_pct, 8)
+            }
+          }
+        : baseSpec;
 
       const state = createDraftBrief({
         organizationId,
@@ -558,7 +637,18 @@ export async function compileBrandBrief(
         ok: true as const,
         id: state.id,
         brief: state,
-        view: toCustomerBriefView(state, identitySource, directionCascade)
+        view: toCustomerBriefView(
+          state,
+          identitySource,
+          directionCascade,
+          attachmentSummary
+            ? {
+                mode: attachmentSummary.attachment.mode,
+                attachedKeys: attachmentSummary.attachedKeys,
+                detachedKeys: attachmentSummary.detachedKeys
+              }
+            : undefined
+        )
       };
     });
   } catch (error) {

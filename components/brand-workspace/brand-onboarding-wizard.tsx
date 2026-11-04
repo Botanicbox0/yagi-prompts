@@ -4,6 +4,7 @@ import { useState, type ChangeEvent, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import {
   ONBOARDING_LIMITS,
+  POMELLI_EXTRACTION_STEPS,
   synthesizeBrandIdentityFromIngest,
   type BrandOnboardingAsset,
   type OmniTriageBucket,
@@ -177,6 +178,30 @@ const BEAUTY_SAMPLE_ASSETS: BrandOnboardingAsset[] = [
   },
 ];
 
+const FNB_SAMPLE_ASSETS: BrandOnboardingAsset[] = [
+  {
+    slot: "logo",
+    label: "MAISON ROAST 엠보싱 워드마크 & 크레스트",
+    urlOrKey: "brand-assets/fnb/logo-crest.svg",
+    dominantHex: "#141c28",
+    preserveNote: "컵 슬리브 및 패키지 상단 엠보싱 로고 비율 1:1 고정 (mark_only)",
+  },
+  {
+    slot: "product",
+    label: "시그니처 콜드브루 보틀 & 세라믹 라떼 잔",
+    urlOrKey: "brand-assets/fnb/coldbrew-bottle.jpg",
+    dominantHex: "#243040",
+    preserveNote: "원통형 보틀 라벨 곡률과 세라믹 잔 유약 질감 보존",
+  },
+  {
+    slot: "mood",
+    label: "성수 로스터리 바 골든아워 다이닝 무드",
+    urlOrKey: "brand-assets/fnb/mood-roastery.jpg",
+    dominantHex: "#3063a7",
+    preserveNote: "오후 자연광 결로 하이라이트와 따뜻한 오크·스틸 카운터 무드 차용",
+  },
+];
+
 function parseRawDropLines(text: string): RawOmniDropItem[] {
   return text
     .split(/\r?\n/)
@@ -242,6 +267,11 @@ export function BrandOnboardingWizard({
   const [busy, setBusy] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [statusMessage, setStatusMessage] = useState("");
+  const [bentoTab, setBentoTab] = useState<"overview" | "details">("overview");
+  const [activeExtractionStepIndex, setActiveExtractionStepIndex] = useState(
+    POMELLI_EXTRACTION_STEPS.length - 1
+  );
+  const [modelPersonaEnabled, setModelPersonaEnabled] = useState(true);
 
   const websiteUrls = websiteUrlsText
     .split(/\r?\n/)
@@ -338,9 +368,10 @@ export function BrandOnboardingWizard({
     );
   }
 
-  function applyPreset(kind: "kaiper" | "beauty" | "blank") {
+  function applyPreset(kind: "kaiper" | "beauty" | "fnb" | "blank") {
     setErrorMessage("");
     setStatusMessage("");
+    setActiveExtractionStepIndex(POMELLI_EXTRACTION_STEPS.length - 1);
     if (kind === "kaiper") {
       setBrandName("KAIPER");
       setCategory("fashion_apparel");
@@ -384,6 +415,30 @@ export function BrandOnboardingWizard({
       setAssets(BEAUTY_SAMPLE_ASSETS);
       setBrandGuideNote(
         "용기 기하 변형 금지. 전면 라벨 타이포그래피 왜곡 금지. 과도한 웜톤 색번짐 금지."
+      );
+    } else if (kind === "fnb") {
+      setBrandName("MAISON ROAST");
+      setCategory("fnb_hospitality");
+      setPreferredVibe("warm_film");
+      setWebsiteUrlsText("https://maisonroast.kr");
+      setInstagramHandle("@maisonroast.seoul");
+      setInstagramPostUrlsText("https://www.instagram.com/p/C9MaisonPour01/");
+      setPinterestBoardUrlsText(
+        "https://www.pinterest.com/maisonroast/dining-sizzle-archive/"
+      );
+      setPinterestPinCountHint(760);
+      setRawDropText(
+        [
+          "maisonroast-crest-logo.svg | 컵 슬리브 및 패키지 상단 로고 1:1 고정 (mark_only)",
+          "maisonroast-coldbrew-bottle-packshot.jpg | 원통형 보틀 라벨 곡률 및 결로 물방울 보존",
+          "maisonroast-brand-standard.pdf | 식기 색감 왜곡 금지, 인공적인 연기 합성 금지",
+          "maisonroast-morning-espresso-bar-01.jpg | 50mm 따뜻한 오크 테이블과 오전 창문광",
+          "maisonroast-condensation-macro-04.jpg | 85mm 얼음 잔 결로 하이라이트",
+        ].join("\n")
+      );
+      setAssets(FNB_SAMPLE_ASSETS);
+      setBrandGuideNote(
+        "패키지 로고 곡률 왜곡 금지. 식재료 색감 과포화 금지. 인위적인 그래픽 연기 합성 금지."
       );
     } else {
       setBrandName(organizationName || "Brand");
@@ -583,6 +638,15 @@ export function BrandOnboardingWizard({
           <button
             type="button"
             className="bw-button"
+            data-onboarding-preset="fnb"
+            onClick={() => applyPreset("fnb")}
+            disabled={busy}
+          >
+            {isKo ? "F&B·다이닝 샘플" : "F&B Sample"}
+          </button>
+          <button
+            type="button"
+            className="bw-button"
             data-onboarding-preset="blank"
             onClick={() => applyPreset("blank")}
             disabled={busy}
@@ -590,6 +654,98 @@ export function BrandOnboardingWizard({
             {isKo ? "빈 양식" : "Clear"}
           </button>
         </div>
+      </div>
+
+      {/* Pomelli-Inspired 1-URL Live Business Profile Analyzer */}
+      <div
+        className="bw-card bw-fields"
+        data-pomelli-url-analyzer
+        style={{
+          margin: "0 0 16px",
+          padding: 18,
+          background: "#FFFFFF",
+          borderRadius: 22,
+          border: "1px solid rgba(56, 117, 197, 0.22)",
+        }}
+      >
+        <div className="bw-row">
+          <div>
+            <p className="bw-kicker">
+              {isKo
+                ? "QUICK URL SCANNER · 웹사이트 URL 하나로 비즈니스 프로필 9단계 자동 추출"
+                : "QUICK URL SCANNER · 9-STEP AUTO BUSINESS PROFILE EXTRACTION"}
+            </p>
+            <h3 style={{ margin: "4px 0" }}>
+              {isKo
+                ? "웹사이트 URL을 입력하면 로고·서체·컬러 스와치·톤앤매너·다중 미감 기조(A/B/C)를 순차 추출합니다"
+                : "Enter your website URL to auto-extract logo, fonts, color swatches, tone of voice & Aesthetic Lines (A/B/C)"}
+            </h3>
+          </div>
+          <div className="bw-row">
+            <button
+              type="button"
+              className="bw-button"
+              data-pomelli-step-cycle
+              onClick={() =>
+                setActiveExtractionStepIndex(
+                  (prev) => (prev + 1) % POMELLI_EXTRACTION_STEPS.length
+                )
+              }
+              disabled={busy}
+            >
+              {isKo
+                ? `추출 단계 보기 (${activeExtractionStepIndex + 1}/${POMELLI_EXTRACTION_STEPS.length})`
+                : `Cycle Scan Step (${activeExtractionStepIndex + 1}/${POMELLI_EXTRACTION_STEPS.length})`}
+            </button>
+          </div>
+        </div>
+
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            gap: 8,
+            alignItems: "center",
+          }}
+          data-pomelli-extraction-pills
+        >
+          {POMELLI_EXTRACTION_STEPS.map((step, idx) => {
+            const isCurrent = idx === activeExtractionStepIndex;
+            const isDone = idx <= activeExtractionStepIndex;
+            return (
+              <button
+                key={step.id}
+                type="button"
+                data-pomelli-step-pill={step.id}
+                aria-pressed={isCurrent}
+                onClick={() => setActiveExtractionStepIndex(idx)}
+                style={{
+                  padding: "6px 12px",
+                  borderRadius: 999,
+                  fontSize: 12,
+                  fontWeight: isCurrent ? 700 : 600,
+                  border: isCurrent
+                    ? "1.5px solid #3875C5"
+                    : "1px solid rgba(15, 23, 42, 0.12)",
+                  background: isCurrent
+                    ? "rgba(56, 117, 197, 0.12)"
+                    : isDone
+                      ? "#F6F7F9"
+                      : "#FFFFFF",
+                  color: isCurrent ? "#3063A7" : "#0B0D12",
+                  cursor: "pointer",
+                }}
+              >
+                ✦ {step.stepNumber}. {isKo ? step.pillKo : step.pillEn}
+              </button>
+            );
+          })}
+        </div>
+        <small className="bw-muted" data-pomelli-active-step-detail>
+          {isKo
+            ? POMELLI_EXTRACTION_STEPS[activeExtractionStepIndex]?.detailKo
+            : POMELLI_EXTRACTION_STEPS[activeExtractionStepIndex]?.detailEn}
+        </small>
       </div>
 
       <form onSubmit={onFormSubmit} className="bw-fields" data-onboarding-form>
@@ -1003,6 +1159,670 @@ export function BrandOnboardingWizard({
                   </div>
                 </div>
               ))}
+            </div>
+          </div>
+        )}
+
+        {/* 4. Pomelli-Style Bento Business Profile + Right-Side Creative Director Co-Pilot Dock */}
+        {preview && (
+          <div
+            className="bw-card bw-fields"
+            data-pomelli-bento-profile
+            data-bento-active-tab={bentoTab}
+            style={{
+              margin: 0,
+              padding: 20,
+              background: "#FFFFFF",
+              borderRadius: 24,
+              border: "1px solid rgba(15, 23, 42, 0.08)",
+            }}
+          >
+            <div className="bw-row">
+              <div>
+                <p className="bw-kicker">
+                  {isKo
+                    ? "YOUR BUSINESS PROFILE · 벤토 그리드 비즈니스 프로필 & 디렉터 코파일럿"
+                    : "YOUR BUSINESS PROFILE · BENTO BRAND OVERVIEW & DIRECTOR CO-PILOT"}
+                </p>
+                <h3 style={{ margin: "4px 0" }}>
+                  {isKo
+                    ? `${preview.bentoProfile.brandName} 비즈니스 프로필 — 로고·서체·컬러 스와치·모델 페르소나·톤앤매너 한눈에 보기`
+                    : `${preview.bentoProfile.brandName} Business Profile — Logo, Fonts, Color Swatches, Model Persona & Voice`}
+                </h3>
+              </div>
+
+              {/* Segmented Tab Switch: Brand overview | Business details */}
+              <div
+                className="bw-row"
+                role="tablist"
+                data-pomelli-bento-tabs
+                style={{
+                  background: "#F6F7F9",
+                  padding: 4,
+                  borderRadius: 999,
+                  gap: 4,
+                }}
+              >
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={bentoTab === "overview"}
+                  data-pomelli-tab="overview"
+                  onClick={() => setBentoTab("overview")}
+                  className={
+                    bentoTab === "overview"
+                      ? "bw-button bw-primary"
+                      : "bw-button"
+                  }
+                  style={{ borderRadius: 999, padding: "6px 14px" }}
+                >
+                  {isKo
+                    ? "Brand overview (브랜드 비주얼 프로필)"
+                    : "Brand overview"}
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={bentoTab === "details"}
+                  data-pomelli-tab="details"
+                  onClick={() => setBentoTab("details")}
+                  className={
+                    bentoTab === "details"
+                      ? "bw-button bw-primary"
+                      : "bw-button"
+                  }
+                  style={{ borderRadius: 999, padding: "6px 14px" }}
+                >
+                  {isKo
+                    ? "Business details (업종 · 채널 · CTA)"
+                    : "Business details"}
+                </button>
+              </div>
+            </div>
+
+            <div
+              className="bw-grid-wide"
+              style={{
+                gridTemplateColumns: "minmax(0, 2fr) minmax(280px, 1fr)",
+                alignItems: "start",
+                gap: 16,
+              }}
+            >
+              {/* Left 2/3: Bento Cards */}
+              <div className="bw-fields" style={{ margin: 0, gap: 12 }}>
+                {/* Model Preferences Banner (Pomelli screenshot 193013 / 193035) */}
+                <div
+                  className="bw-card"
+                  data-pomelli-model-preferences
+                  data-model-persona-enabled={modelPersonaEnabled}
+                  style={{
+                    margin: 0,
+                    padding: 14,
+                    borderRadius: 18,
+                    background: modelPersonaEnabled
+                      ? "rgba(56, 117, 197, 0.06)"
+                      : "#F6F7F9",
+                    border: modelPersonaEnabled
+                      ? "1.5px solid #3875C5"
+                      : "1px solid rgba(15, 23, 42, 0.08)",
+                  }}
+                >
+                  <div className="bw-row">
+                    <div>
+                      <strong style={{ fontSize: 14 }}>
+                        {isKo
+                          ? "AI 모델 페르소나 & 실제 피부 결 일관성 고정 (Model Preferences)"
+                          : "Choose Model Preferences (Consistent AI Model Traits)"}
+                      </strong>
+                      <p
+                        className="bw-muted"
+                        style={{ margin: "4px 0 0", fontSize: 12 }}
+                      >
+                        {isKo
+                          ? preview.bentoProfile.modelPreferences.summaryKo
+                          : preview.bentoProfile.modelPreferences.summaryEn}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      className={
+                        modelPersonaEnabled
+                          ? "bw-button bw-primary"
+                          : "bw-button"
+                      }
+                      data-pomelli-model-toggle
+                      onClick={() =>
+                        setModelPersonaEnabled((prev) => !prev)
+                      }
+                    >
+                      {modelPersonaEnabled
+                        ? isKo
+                          ? "✓ 일관성 켜짐 (Enabled)"
+                          : "✓ Enabled"
+                        : isKo
+                          ? "켜기 (Enable)"
+                          : "Enable"}
+                    </button>
+                  </div>
+                  <div
+                    style={{
+                      display: "flex",
+                      flexWrap: "wrap",
+                      gap: 6,
+                      marginTop: 8,
+                    }}
+                  >
+                    {(isKo
+                      ? preview.bentoProfile.modelPreferences.traitsKo
+                      : preview.bentoProfile.modelPreferences.traitsEn
+                    ).map((trait) => (
+                      <span
+                        key={trait}
+                        className="bw-badge"
+                        style={{
+                          background: "#FFFFFF",
+                          border: "1px solid rgba(15, 23, 42, 0.1)",
+                        }}
+                      >
+                        {trait}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+
+                {bentoTab === "overview" ? (
+                  <>
+                    {/* Row 1: Logo Box + Fonts (Aa) Box + Brand Header */}
+                    <div className="bw-grid-wide" style={{ gap: 12 }}>
+                      <div
+                        className="bw-card"
+                        data-bento-card="logo"
+                        style={{
+                          margin: 0,
+                          padding: 16,
+                          borderRadius: 18,
+                          background: "#F6F7F9",
+                          display: "flex",
+                          flexDirection: "column",
+                          justifyContent: "space-between",
+                        }}
+                      >
+                        <small className="bw-muted">
+                          {isKo ? "Logo (1:1 비율 잠금)" : "Logo (1:1 Lock)"}
+                        </small>
+                        <div
+                          style={{
+                            margin: "12px 0",
+                            padding: "16px 12px",
+                            borderRadius: 14,
+                            background: "#FFFFFF",
+                            border: "1px solid rgba(15, 23, 42, 0.08)",
+                            textAlign: "center",
+                            fontSize: 22,
+                            fontWeight: 800,
+                            letterSpacing: "-0.03em",
+                            color: "#0B0D12",
+                          }}
+                        >
+                          {preview.bentoProfile.brandName}
+                        </div>
+                        <small className="bw-muted">
+                          🔗 {preview.bentoProfile.primaryWebsiteUrl}
+                        </small>
+                      </div>
+
+                      <div
+                        className="bw-card"
+                        data-bento-card="fonts"
+                        style={{
+                          margin: 0,
+                          padding: 16,
+                          borderRadius: 18,
+                          background: "#F6F7F9",
+                          display: "flex",
+                          flexDirection: "column",
+                          justifyContent: "space-between",
+                        }}
+                      >
+                        <small className="bw-muted">
+                          {isKo ? "Fonts (지정 서체)" : "Fonts"}
+                        </small>
+                        <div style={{ textAlign: "center", margin: "8px 0" }}>
+                          <div
+                            style={{
+                              fontSize: 36,
+                              fontWeight: 700,
+                              color: "#3875C5",
+                              lineHeight: 1.1,
+                            }}
+                          >
+                            {preview.bentoProfile.fontSpecimen.sampleGlyph}
+                          </div>
+                          <strong style={{ fontSize: 13 }}>
+                            {preview.bentoProfile.fontSpecimen.displayFont}
+                          </strong>
+                        </div>
+                        <small className="bw-muted">
+                          Mono: {preview.bentoProfile.fontSpecimen.monoFont}
+                        </small>
+                      </div>
+
+                      <div
+                        className="bw-card"
+                        data-bento-card="colors"
+                        style={{
+                          margin: 0,
+                          padding: 16,
+                          borderRadius: 18,
+                          background: "#F6F7F9",
+                          display: "flex",
+                          flexDirection: "column",
+                          justifyContent: "space-between",
+                        }}
+                      >
+                        <small className="bw-muted">
+                          {isKo
+                            ? "Colors (브랜드 컬러 스와치)"
+                            : "Colors (Brand Swatches)"}
+                        </small>
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 10,
+                            margin: "12px 0",
+                            flexWrap: "wrap",
+                          }}
+                        >
+                          {preview.bentoProfile.colorSwatches.map((swatch) => (
+                            <div
+                              key={`${swatch.roleEn}-${swatch.hex}`}
+                              title={`${isKo ? swatch.roleKo : swatch.roleEn}: ${swatch.hex}`}
+                              style={{
+                                display: "flex",
+                                flexDirection: "column",
+                                alignItems: "center",
+                                gap: 4,
+                              }}
+                            >
+                              <span
+                                style={{
+                                  width: 28,
+                                  height: 28,
+                                  borderRadius: "50%",
+                                  background: swatch.hex,
+                                  border: "1.5px solid rgba(15, 23, 42, 0.16)",
+                                  display: "inline-block",
+                                }}
+                              />
+                              <code style={{ fontSize: 10 }}>{swatch.hex}</code>
+                            </div>
+                          ))}
+                        </div>
+                        <small className="bw-muted">
+                          {isKo
+                            ? "WCAG 4.5:1 명도 대비 자동 검증됨"
+                            : "WCAG 4.5:1 contrast verified"}
+                        </small>
+                      </div>
+                    </div>
+
+                    {/* Row 2: Tagline (One-liner) + Brand Values */}
+                    <div className="bw-grid-wide" style={{ gap: 12 }}>
+                      <div
+                        className="bw-card"
+                        data-bento-card="tagline"
+                        style={{
+                          margin: 0,
+                          padding: 14,
+                          borderRadius: 18,
+                          background: "#F6F7F9",
+                        }}
+                      >
+                        <small className="bw-muted">
+                          {isKo ? "Tagline (원라이너 슬로건)" : "One-liner Tagline"}
+                        </small>
+                        <p
+                          style={{
+                            margin: "8px 0 0",
+                            fontSize: 14,
+                            fontWeight: 600,
+                            color: "#0B0D12",
+                          }}
+                        >
+                          {isKo
+                            ? preview.bentoProfile.taglineKo
+                            : preview.bentoProfile.taglineEn}
+                        </p>
+                      </div>
+
+                      <div
+                        className="bw-card"
+                        data-bento-card="values"
+                        style={{
+                          margin: 0,
+                          padding: 14,
+                          borderRadius: 18,
+                          background: "#F6F7F9",
+                        }}
+                      >
+                        <small className="bw-muted">
+                          {isKo ? "Brand values (핵심 가치)" : "Brand values"}
+                        </small>
+                        <div
+                          style={{
+                            display: "flex",
+                            flexWrap: "wrap",
+                            gap: 6,
+                            marginTop: 8,
+                          }}
+                        >
+                          {(isKo
+                            ? preview.bentoProfile.brandValuesKo
+                            : preview.bentoProfile.brandValuesEn
+                          ).map((val) => (
+                            <span
+                              key={val}
+                              className="bw-badge"
+                              style={{ background: "#FFFFFF" }}
+                            >
+                              {val}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Row 3: Brand Aesthetic Chips + Brand Tone of Voice Chips (Pomelli 193028) */}
+                    <div className="bw-grid-wide" style={{ gap: 12 }}>
+                      <div
+                        className="bw-card"
+                        data-bento-card="aesthetic-tags"
+                        style={{
+                          margin: 0,
+                          padding: 14,
+                          borderRadius: 18,
+                          background: "#F6F7F9",
+                        }}
+                      >
+                        <small className="bw-muted">
+                          {isKo
+                            ? "Brand aesthetic (시각 미감 키워드)"
+                            : "Brand aesthetic"}
+                        </small>
+                        <div
+                          style={{
+                            display: "flex",
+                            flexWrap: "wrap",
+                            gap: 6,
+                            marginTop: 8,
+                          }}
+                        >
+                          {(isKo
+                            ? preview.bentoProfile.aestheticTagsKo
+                            : preview.bentoProfile.aestheticTagsEn
+                          ).map((tag) => (
+                            <span
+                              key={tag}
+                              className="bw-badge"
+                              style={{
+                                background: "rgba(56, 117, 197, 0.1)",
+                                color: "#3063A7",
+                              }}
+                            >
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div
+                        className="bw-card"
+                        data-bento-card="tone-of-voice"
+                        style={{
+                          margin: 0,
+                          padding: 14,
+                          borderRadius: 18,
+                          background: "#F6F7F9",
+                        }}
+                      >
+                        <small className="bw-muted">
+                          {isKo
+                            ? "Brand tone of voice (브랜드 어조)"
+                            : "Brand tone of voice"}
+                        </small>
+                        <div
+                          style={{
+                            display: "flex",
+                            flexWrap: "wrap",
+                            gap: 6,
+                            marginTop: 8,
+                          }}
+                        >
+                          {(isKo
+                            ? preview.bentoProfile.toneOfVoiceTagsKo
+                            : preview.bentoProfile.toneOfVoiceTagsEn
+                          ).map((tag) => (
+                            <span
+                              key={tag}
+                              className="bw-badge"
+                              style={{ background: "#FFFFFF" }}
+                            >
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Row 4: Business Overview Summary */}
+                    <div
+                      className="bw-card"
+                      data-bento-card="business-overview"
+                      style={{
+                        margin: 0,
+                        padding: 14,
+                        borderRadius: 18,
+                        background: "#F6F7F9",
+                      }}
+                    >
+                      <small className="bw-muted">
+                        {isKo
+                          ? "Business overview (비즈니스 요약)"
+                          : "Business overview"}
+                      </small>
+                      <p
+                        className="bw-muted"
+                        style={{
+                          margin: "6px 0 0",
+                          fontSize: 13,
+                          color: "#0B0D12",
+                        }}
+                      >
+                        {isKo
+                          ? preview.bentoProfile.businessOverviewKo
+                          : preview.bentoProfile.businessOverviewEn}
+                      </p>
+                    </div>
+                  </>
+                ) : (
+                  /* Business details tab (Pomelli 193035 / 193041) */
+                  <div className="bw-fields" style={{ margin: 0, gap: 12 }}>
+                    <div className="bw-grid-wide" style={{ gap: 12 }}>
+                      <div
+                        className="bw-card"
+                        data-bento-card="industry-subcategory"
+                        style={{
+                          margin: 0,
+                          padding: 14,
+                          borderRadius: 18,
+                          background: "#F6F7F9",
+                        }}
+                      >
+                        <small className="bw-muted">
+                          {isKo
+                            ? "Industry / Subcategory (업종 · 세부 버티컬)"
+                            : "Industry / Subcategory"}
+                        </small>
+                        <p style={{ margin: "6px 0 2px", fontWeight: 700 }}>
+                          {isKo
+                            ? preview.bentoProfile.industryLabelKo
+                            : preview.bentoProfile.industryLabelEn}
+                        </p>
+                        <small className="bw-muted">
+                          {isKo
+                            ? preview.bentoProfile.subcategoryLabelKo
+                            : preview.bentoProfile.subcategoryLabelEn}
+                        </small>
+                      </div>
+
+                      <div
+                        className="bw-card"
+                        data-bento-card="cta-links"
+                        style={{
+                          margin: 0,
+                          padding: 14,
+                          borderRadius: 18,
+                          background: "#F6F7F9",
+                        }}
+                      >
+                        <small className="bw-muted">
+                          {isKo
+                            ? "Social media & Call To Action Links"
+                            : "Social media & Call To Action Links"}
+                        </small>
+                        <ul className="bw-list" style={{ marginTop: 8 }}>
+                          {preview.bentoProfile.ctaLinks.map((cta) => (
+                            <li key={cta.url} style={{ fontSize: 12 }}>
+                              <strong>
+                                {isKo ? cta.labelKo : cta.labelEn}:
+                              </strong>{" "}
+                              <span className="bw-muted">{cta.url}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Right 1/3: Director Co-Pilot Quick-Start Dock (Pomelli right sidecar) */}
+              <aside
+                className="bw-card bw-fields"
+                data-pomelli-director-dock
+                style={{
+                  margin: 0,
+                  padding: 18,
+                  borderRadius: 20,
+                  background: "#F6F7F9",
+                  border: "1px solid rgba(56, 117, 197, 0.24)",
+                }}
+              >
+                <p className="bw-kicker">
+                  {isKo ? "CREATIVE DIRECTOR CO-PILOT" : "CREATIVE DIRECTOR CO-PILOT"}
+                </p>
+                <strong style={{ fontSize: 15 }}>
+                  {isKo
+                    ? "비즈니스 프로필과 미감 기조(A/B/C) 분석이 끝났습니다"
+                    : "Your Business Profile & Aesthetic Lines (A/B/C) are ready"}
+                </strong>
+                <p className="bw-muted" style={{ margin: 0, fontSize: 12.5 }}>
+                  {isKo
+                    ? "추출된 로고·컬러·서체·미감 기조를 확인하셨다면, 아래 워크플로 중 하나로 바로 제작을 시작해 보세요."
+                    : "Review your extracted profile on the left, then jump straight into one of these studio workflows."}
+                </p>
+
+                <div className="bw-fields" style={{ margin: "6px 0 0", gap: 8 }}>
+                  <a
+                    href={studioHref || "/brand/studio"}
+                    className="bw-button bw-primary"
+                    data-director-dock-action="photoshoot"
+                    style={{ justifyContent: "space-between", width: "100%" }}
+                  >
+                    <span>
+                      {isKo
+                        ? "↗ 제품 화보 촬영 (Studio · 원료 · 착장 · 공간)"
+                        : "↗ Create Product Photoshoot"}
+                    </span>
+                  </a>
+                  <a
+                    href={studioHref || "/brand/studio"}
+                    className="bw-button"
+                    data-director-dock-action="campaigns"
+                    style={{ justifyContent: "space-between", width: "100%" }}
+                  >
+                    <span>
+                      {isKo
+                        ? "↗ 패션·뷰티·F&B 멀티 비율 캠페인 팩"
+                        : "↗ Create Multi-Ratio Campaign Pack"}
+                    </span>
+                  </a>
+                  {isOwner && (
+                    <button
+                      type="button"
+                      className="bw-button"
+                      data-director-dock-action="confirm-brandbook"
+                      onClick={() => void submitIngest(true)}
+                      disabled={busy}
+                      style={{ justifyContent: "space-between", width: "100%" }}
+                    >
+                      <span>
+                        {isKo
+                          ? "↗ 브랜드북 & 다중 미감(A/B/C) 확정 저장"
+                          : "↗ Confirm Brand Book & Aesthetic Lines"}
+                      </span>
+                    </button>
+                  )}
+                </div>
+
+                {/* Bottom 100% Complete Indicator */}
+                <div
+                  data-pomelli-completion-bar
+                  style={{
+                    marginTop: 8,
+                    paddingTop: 10,
+                    borderTop: "1px solid rgba(15, 23, 42, 0.08)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 8,
+                  }}
+                >
+                  <div>
+                    <small style={{ fontWeight: 700, color: "#3063A7" }}>
+                      {isKo
+                        ? `${preview.bentoProfile.completenessPct}% 프로필 준비 완료`
+                        : `${preview.bentoProfile.completenessPct}% complete`}
+                    </small>
+                    <div
+                      style={{
+                        width: 110,
+                        height: 6,
+                        borderRadius: 999,
+                        background: "rgba(56, 117, 197, 0.18)",
+                        marginTop: 4,
+                        overflow: "hidden",
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: `${preview.bentoProfile.completenessPct}%`,
+                          height: "100%",
+                          background: "#3875C5",
+                        }}
+                      />
+                    </div>
+                  </div>
+                  <a
+                    href={studioHref || "/brand/studio"}
+                    className="bw-button bw-primary"
+                    data-pomelli-lets-go
+                  >
+                    {isKo ? "Let's go →" : "Let's go →"}
+                  </a>
+                </div>
+              </aside>
             </div>
           </div>
         )}

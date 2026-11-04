@@ -269,6 +269,29 @@ html[data-workspace-admin] {
   color: var(--ys-ink-secondary);
   transition: background-color 0.15s, color 0.15s;
 }
+.bw-sidebar nav a .bw-nav-item-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  line-height: 1.25;
+}
+.bw-sidebar nav a .bw-nav-item-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: inherit;
+}
+.bw-sidebar nav a .bw-nav-item-sub {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--ys-ink-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.bw-sidebar nav a[aria-current="page"] .bw-nav-item-sub {
+  color: var(--ys-ink-secondary);
+}
 .bw-sidebar nav a:hover {
   background: var(--ys-raised);
   color: var(--ys-ink);

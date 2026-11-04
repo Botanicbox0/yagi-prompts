@@ -1,4 +1,5 @@
 import { ServiceGuide } from "@/components/brand-workspace/service-guide";
+import { CampaignMoatShowcase } from "@/components/brand-workspace/campaign-moat-showcase";
 import { brandContext } from "@/components/brand-workspace/context";
 import { ActionForm } from "@/components/brand-workspace/action-form";
 import { countPendingSharedCampaigns, loadBrandWorkspace } from "@/lib/brands/workspace/service";
@@ -40,6 +41,15 @@ export default async function BrandHome({
         {access.staff && viewer.isAdmin && <a href={newProject} className="bw-button bw-primary" data-studio-prep-link>{b.studioPrep.cta}</a>}
       </div>
       {access.staff && choice && <StaffNotice b={b} manageHref={viewer.isAdmin ? adminOrganizationHref(choice.id, brandHost) : null} />}
+      {choice && (
+        <CampaignMoatShowcase
+          locale={locale === "en" ? "en" : "ko"}
+          organizationId={choice.id}
+          studioOpen={studioOpen}
+          membersOpen={sectionVisibility(choice).members}
+          settingsOpen={sectionVisibility(choice).settings}
+        />
+      )}
       {studioOpen && choice && (
         <section
           className="bw-panel"

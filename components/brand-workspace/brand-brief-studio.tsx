@@ -33,6 +33,21 @@ import {
   type BrandAestheticLine,
 } from "@/lib/brands/identity/onboarding";
 import {
+  DESIGN_PRINCIPLE_CHIPS,
+  DESIGN_PRINCIPLE_KEYS,
+  POMELLI_SHOT_TEMPLATES,
+  createAttachmentPreset,
+  listPlaybooksForVertical,
+  summarizeDesignPrincipleAttachment,
+  type CoreBrandVertical,
+  type DesignPrincipleAttachment,
+  type DesignPrincipleAttachmentMode,
+  type DesignPrincipleKey,
+  type PomelliShotTemplate,
+  type PomelliShotTemplateId,
+  type VerticalMarketerPlaybook,
+} from "@/lib/brands/briefs/vertical-playbooks";
+import {
   BrandMicroRoiPanel,
   type ExternalMicroRoiHandoff,
 } from "./brand-micro-roi-panel";
@@ -145,6 +160,17 @@ export function BrandBriefStudio({
   const [activeAestheticLineCode, setActiveAestheticLineCode] = useState<
     "A" | "B" | "C"
   >("A");
+  const [principleAttachment, setPrincipleAttachment] =
+    useState<DesignPrincipleAttachment>(() =>
+      createAttachmentPreset("full_attach")
+    );
+  const [activeVertical, setActiveVertical] =
+    useState<CoreBrandVertical>("fashion_apparel");
+  const [activeShotTemplateId, setActiveShotTemplateId] =
+    useState<PomelliShotTemplateId>("studio");
+  const [activePlaybookId, setActivePlaybookId] = useState<string>(
+    "fashion-flatlay-to-lookbook"
+  );
   const [externalMicroRoiHandoff, setExternalMicroRoiHandoff] =
     useState<ExternalMicroRoiHandoff | null>(null);
   const [externalMusicRevealSec, setExternalMusicRevealSec] = useState<
@@ -153,10 +179,93 @@ export function BrandBriefStudio({
 
   const aestheticLines = synthesizeMultiAestheticLines({
     brandName: "KAIPER",
-    category: "fashion_apparel",
+    category: activeVertical,
     preferredVibe: "minimal_editorial",
     hasPinterestBoards: true,
   });
+
+  const attachmentSummary =
+    summarizeDesignPrincipleAttachment(principleAttachment);
+  const activeVerticalPlaybooks = listPlaybooksForVertical(activeVertical);
+
+  function handleSelectAttachmentMode(mode: DesignPrincipleAttachmentMode) {
+    const next = createAttachmentPreset(mode);
+    setPrincipleAttachment(next);
+    setStatusMessage(
+      mode === "unbound_free"
+        ? isKo
+          ? "디자인 원칙 미적용 · 자유 탐색 모드: 기존 브랜드 컬러·미감 기조 잠금을 해제하고 자유롭게 새 컨셉을 실험합니다."
+          : "Unbound Free Exploration Mode: detached brand palette and aesthetic locks for open concept exploration."
+        : mode === "custom_partial"
+          ? isKo
+            ? "선택적 디자인 원칙 연결 모드: 로고·제품 1:1 고정은 유지하고 시즌 컬러·배경 기조는 자유롭게 탐색합니다."
+            : "Custom Partial Attach Mode: locked logo & product while unlocking seasonal colors and mood."
+          : isKo
+            ? "브랜드 디자인 원칙 전체 연결: 로고·컬러 팔레트·타이포 여백·미감 기조·모델 페르소나·금기어가 모두 연결되었습니다."
+            : "Full Brand DNA Attached: all 6 brand design principles are locked."
+    );
+  }
+
+  function handleTogglePrincipleChip(key: DesignPrincipleKey) {
+    setPrincipleAttachment((prev) => {
+      const nextVal = !prev[key];
+      const updated = { ...prev, [key]: nextVal };
+      const attachedCount = DESIGN_PRINCIPLE_KEYS.filter(
+        (k) => updated[k]
+      ).length;
+      const nextMode: DesignPrincipleAttachmentMode =
+        attachedCount === DESIGN_PRINCIPLE_KEYS.length
+          ? "full_attach"
+          : attachedCount <= 1
+            ? "unbound_free"
+            : "custom_partial";
+      return { ...updated, mode: nextMode };
+    });
+  }
+
+  function handleSelectPomelliShotTemplate(template: PomelliShotTemplate) {
+    setActiveShotTemplateId(template.id);
+    setCutKind(template.cutKind);
+    setMedium(template.medium);
+    setAspect(template.defaultAspect);
+    setUse(template.defaultUse);
+    setCameraFocalMm(template.focalMm);
+    setLightColourK(template.lightColourK);
+    setLightModifier(template.lightModifier);
+    setSpaceBackground(template.spaceBackground);
+    setSpaceSurface(template.spaceSurface);
+    setStatusMessage(
+      isKo
+        ? `[${template.titleKo}] 화보 템플릿이 적용되었습니다 (${template.focalMm}mm · ${template.lightColourK}K · ${template.defaultAspect}).`
+        : `Applied [${template.titleEn}] shot template (${template.focalMm}mm · ${template.lightColourK}K · ${template.defaultAspect}).`
+    );
+  }
+
+  function handleSelectVerticalPlaybook(playbook: VerticalMarketerPlaybook) {
+    setActivePlaybookId(playbook.id);
+    setActiveVertical(playbook.vertical);
+    setActiveShotTemplateId(playbook.shotTemplateId);
+    setCutKind(playbook.cutKind);
+    setMedium(playbook.medium);
+    setAspect(playbook.defaultAspect);
+    setUse(playbook.defaultUse);
+    setCameraFocalMm(playbook.focalMm);
+    setLightColourK(playbook.lightColourK);
+    setLightModifier(playbook.lightModifier);
+    setSpaceBackground(playbook.spaceBackground);
+    setSpaceSurface(playbook.spaceSurface);
+    setProductName(isKo ? playbook.productNameKo : playbook.productNameEn);
+    setLabelLock(isKo ? playbook.labelLockKo : playbook.labelLockEn);
+    setBriefText(isKo ? playbook.briefKo : playbook.briefEn);
+    setPrincipleAttachment(
+      createAttachmentPreset(playbook.recommendedAttachmentMode)
+    );
+    setStatusMessage(
+      isKo
+        ? `[${playbook.targetPersonaKo} · ${playbook.titleKo}] 맞춤 브리프와 광학·비율·디자인 원칙 연결이 자동 세팅되었습니다.`
+        : `Loaded [${playbook.targetPersonaEn} · ${playbook.titleEn}] brief, optics, ratio pack, and principle attachment.`
+    );
+  }
 
   function applyAestheticLine(line: BrandAestheticLine) {
     setActiveAestheticLineCode(line.code);
@@ -376,6 +485,7 @@ export function BrandBriefStudio({
     const isOverride = directionMode === "project_override";
     const result = await callWorkspaceOperation("brief.compile", {
       organizationId,
+      principleAttachment,
       ...(isOverride
         ? {
             projectId: projectId.trim() || "studio-project",
@@ -746,6 +856,485 @@ export function BrandBriefStudio({
                   </p>
                 </div>
               </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* STEP 2 · Design Principle Attachment Selector (+ Elements / Brand DNA On vs Off) */}
+      <div
+        className="bw-card bw-fields"
+        data-design-principle-attachment
+        data-attachment-mode={principleAttachment.mode}
+        style={{
+          margin: 0,
+          padding: 18,
+          background: "#FFFFFF",
+          borderRadius: 22,
+          border:
+            principleAttachment.mode === "unbound_free"
+              ? "1.5px dashed rgba(15, 23, 42, 0.25)"
+              : "1px solid rgba(56, 117, 197, 0.22)",
+        }}
+      >
+        <div className="bw-row">
+          <div>
+            <p className="bw-kicker">
+              {isKo
+                ? "STEP 2 · 디자인 원칙 연결 선택 (+ Elements · Brand DNA Attachment Control)"
+                : "STEP 2 · DESIGN PRINCIPLE ATTACHMENT (+ Elements · Attach vs Free Exploration)"}
+            </p>
+            <h3 style={{ margin: "4px 0" }}>
+              {isKo
+                ? "이미지를 만들 때 정해진 브랜드 디자인 원칙을 연결(Attach)할지, 제약 없이 자유 탐색할지 선택하세요"
+                : "Choose whether to attach your Brand Design Principles or detach them for free exploration"}
+            </h3>
+            <p className="bw-muted" style={{ margin: 0, fontSize: 12.5 }}>
+              {isKo
+                ? "상세페이지·정규 캠페인 컷은 [원칙 전체 연결]로 일관성을 지키고, 시즌 콜라보·신규 컬러 테스트는 [선택적 연결]이나 [원칙 미적용 · 자유 탐색]으로 기존 팔레트·미감 잠금을 해제할 수 있습니다."
+                : "Keep [Full Brand DNA Attach] for consistent PDP & campaign cuts, or switch to [Custom Partial] / [Unbound Free Exploration] when testing bold new seasonal concepts."}
+            </p>
+          </div>
+          <span
+            className="bw-badge"
+            data-attachment-summary-badge
+            style={{
+              background:
+                principleAttachment.mode === "unbound_free"
+                  ? "#F6F7F9"
+                  : "rgba(56, 117, 197, 0.12)",
+              color:
+                principleAttachment.mode === "unbound_free"
+                  ? "#0B0D12"
+                  : "#3063A7",
+            }}
+          >
+            {isKo
+              ? `연결됨 ${attachmentSummary.attachedKeys.length}/${DESIGN_PRINCIPLE_KEYS.length} · 자유 해제 ${attachmentSummary.detachedKeys.length}`
+              : `Attached ${attachmentSummary.attachedKeys.length}/${DESIGN_PRINCIPLE_KEYS.length} · Unbound ${attachmentSummary.detachedKeys.length}`}
+          </span>
+        </div>
+
+        {/* 3-Mode Attachment Switch */}
+        <div
+          className="bw-row"
+          data-attachment-mode-bar
+          style={{ gap: 8, flexWrap: "wrap" }}
+        >
+          <button
+            type="button"
+            className={
+              principleAttachment.mode === "full_attach"
+                ? "bw-button bw-primary"
+                : "bw-button"
+            }
+            data-attachment-mode-btn="full_attach"
+            aria-pressed={principleAttachment.mode === "full_attach"}
+            onClick={() => handleSelectAttachmentMode("full_attach")}
+            disabled={busy}
+          >
+            {isKo
+              ? "🔗 디자인 원칙 전체 연결 (Full Brand DNA Attach · 권장)"
+              : "🔗 Attach All Brand DNA (Recommended)"}
+          </button>
+          <button
+            type="button"
+            className={
+              principleAttachment.mode === "custom_partial"
+                ? "bw-button bw-primary"
+                : "bw-button"
+            }
+            data-attachment-mode-btn="custom_partial"
+            aria-pressed={principleAttachment.mode === "custom_partial"}
+            onClick={() => handleSelectAttachmentMode("custom_partial")}
+            disabled={busy}
+          >
+            {isKo
+              ? "🎛️ 원칙 개별 선택 연결 (로고만 고정 · 시즌 컬러 자유)"
+              : "🎛️ Custom Partial Attach (Lock Logo · Free Palette)"}
+          </button>
+          <button
+            type="button"
+            className={
+              principleAttachment.mode === "unbound_free"
+                ? "bw-button bw-primary"
+                : "bw-button"
+            }
+            data-attachment-mode-btn="unbound_free"
+            aria-pressed={principleAttachment.mode === "unbound_free"}
+            onClick={() => handleSelectAttachmentMode("unbound_free")}
+            disabled={busy}
+          >
+            {isKo
+              ? "🔓 원칙 미적용 · 자유 탐색 (Unbound Free Exploration)"
+              : "🔓 Detach Principles · Free Exploration"}
+          </button>
+        </div>
+
+        {/* 6 Granular Principle Toggle Chips */}
+        <div
+          className="bw-grid-wide"
+          data-attachment-chip-grid
+          style={{ gap: 10 }}
+        >
+          {DESIGN_PRINCIPLE_CHIPS.map((chip) => {
+            const attached = principleAttachment[chip.key];
+            return (
+              <button
+                key={chip.key}
+                type="button"
+                data-principle-chip={chip.key}
+                data-principle-attached={attached}
+                aria-pressed={attached}
+                onClick={() => handleTogglePrincipleChip(chip.key)}
+                disabled={busy}
+                style={{
+                  textAlign: "left",
+                  padding: "10px 12px",
+                  borderRadius: 14,
+                  background: attached
+                    ? "rgba(56, 117, 197, 0.06)"
+                    : "#F6F7F9",
+                  border: attached
+                    ? "1.5px solid #3875C5"
+                    : "1px dashed rgba(15, 23, 42, 0.18)",
+                  cursor: busy ? "default" : "pointer",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 4,
+                }}
+              >
+                <div className="bw-row">
+                  <strong
+                    style={{
+                      fontSize: 12.5,
+                      color: attached ? "#3063A7" : "#475569",
+                    }}
+                  >
+                    {attached ? "✓ " : "○ "}
+                    {isKo ? chip.labelKo : chip.labelEn}
+                  </strong>
+                  <span
+                    className="bw-badge"
+                    style={{
+                      fontSize: 10.5,
+                      background: attached ? "#3875C5" : "#E2E8F0",
+                      color: attached ? "#FFFFFF" : "#475569",
+                    }}
+                  >
+                    {attached
+                      ? isKo
+                        ? "Attach"
+                        : "Attached"
+                      : isKo
+                        ? "해제됨"
+                        : "Detached"}
+                  </span>
+                </div>
+                <small className="bw-muted" style={{ fontSize: 11.5 }}>
+                  {attached
+                    ? isKo
+                      ? chip.attachedDescKo
+                      : chip.attachedDescEn
+                    : isKo
+                      ? chip.detachedDescKo
+                      : chip.detachedDescEn}
+                </small>
+              </button>
+            );
+          })}
+        </div>
+
+        <small className="bw-muted" data-attachment-directive-preview>
+          {isKo
+            ? attachmentSummary.directiveSuffixKo
+            : attachmentSummary.directiveSuffixEn}
+        </small>
+      </div>
+
+      {/* STEP 3 · Fashion · Beauty · F&B Marketer / PM / Director Tailored Playbooks & Pomelli 4-Shot Templates */}
+      <div
+        className="bw-card bw-fields"
+        data-vertical-marketer-hub
+        data-active-vertical={activeVertical}
+        style={{
+          margin: 0,
+          padding: 18,
+          background: "#FFFFFF",
+          borderRadius: 22,
+          border: "1px solid rgba(15, 23, 42, 0.08)",
+        }}
+      >
+        <div className="bw-row">
+          <div>
+            <p className="bw-kicker">
+              {isKo
+                ? "STEP 3 · 패션 · 뷰티 · F&B 마케터·PM·디렉터 맞춤 화보 템플릿 & 플레이북"
+                : "STEP 3 · FASHION · BEAUTY · F&B MARKETER, PM & DIRECTOR PLAYBOOKS"}
+            </p>
+            <h3 style={{ margin: "4px 0" }}>
+              {isKo
+                ? "화보 촬영 4대 구도(Studio · 원료/제형 · 착장/사용 · 공간)와 업종별 실무 플레이북을 원클릭으로 불러오세요"
+                : "Pick a 4-Shot Photoshoot Template (Studio / Ingredients / In-Use / Contextual) or a Vertical Marketer Playbook"}
+            </h3>
+          </div>
+
+          {/* Industry Vertical Selector Tabs */}
+          <div
+            className="bw-row"
+            role="tablist"
+            data-vertical-tabs
+            style={{
+              background: "#F6F7F9",
+              padding: 4,
+              borderRadius: 999,
+              gap: 4,
+            }}
+          >
+            {(
+              [
+                {
+                  id: "fashion_apparel" as const,
+                  ko: "패션 · 어패럴 (MD/디렉터)",
+                  en: "Fashion & Apparel",
+                },
+                {
+                  id: "beauty_skincare" as const,
+                  ko: "뷰티 · 스킨케어 (BM/마케터)",
+                  en: "Beauty & Skincare",
+                },
+                {
+                  id: "fnb_hospitality" as const,
+                  ko: "F&B · 다이닝 (브랜드 PM)",
+                  en: "F&B & Hospitality",
+                },
+              ] as const
+            ).map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                role="tab"
+                aria-selected={activeVertical === tab.id}
+                data-vertical-tab={tab.id}
+                onClick={() => {
+                  setActiveVertical(tab.id);
+                  const first = listPlaybooksForVertical(tab.id)[0];
+                  if (first) handleSelectVerticalPlaybook(first);
+                }}
+                className={
+                  activeVertical === tab.id
+                    ? "bw-button bw-primary"
+                    : "bw-button"
+                }
+                style={{ borderRadius: 999, padding: "6px 14px" }}
+              >
+                {isKo ? tab.ko : tab.en}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Part A: Pomelli 4-Shot Product Photoshoot Template Matrix (Studio / Ingredients / In-Use / Contextual) */}
+        <div
+          className="bw-grid-wide"
+          data-pomelli-shot-templates
+          style={{ gap: 10 }}
+        >
+          {POMELLI_SHOT_TEMPLATES.map((tpl) => {
+            const selected = activeShotTemplateId === tpl.id;
+            return (
+              <button
+                key={tpl.id}
+                type="button"
+                data-pomelli-shot-template={tpl.id}
+                aria-pressed={selected}
+                onClick={() => handleSelectPomelliShotTemplate(tpl)}
+                disabled={busy}
+                style={{
+                  textAlign: "left",
+                  padding: 12,
+                  borderRadius: 16,
+                  background: selected
+                    ? "rgba(56, 117, 197, 0.06)"
+                    : "#F6F7F9",
+                  border: selected
+                    ? "2px solid #3875C5"
+                    : "1px solid rgba(15, 23, 42, 0.08)",
+                  cursor: busy ? "default" : "pointer",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 6,
+                }}
+              >
+                <div className="bw-row">
+                  <span
+                    className="bw-badge"
+                    style={{
+                      fontSize: 10.5,
+                      background: selected ? "#3875C5" : "#FFFFFF",
+                      color: selected ? "#FFFFFF" : "#3063A7",
+                    }}
+                  >
+                    {isKo ? tpl.badgeKo : tpl.badgeEn}
+                  </span>
+                  <small className="bw-muted">
+                    {tpl.focalMm}mm · {tpl.defaultAspect}
+                  </small>
+                </div>
+                <strong style={{ fontSize: 13, color: "#0B0D12" }}>
+                  {isKo ? tpl.titleKo : tpl.titleEn}
+                </strong>
+                <small className="bw-muted" style={{ fontSize: 11.5 }}>
+                  {isKo ? tpl.subtitleKo : tpl.subtitleEn}
+                </small>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Part B: 3 Tailored Marketer / PM / Creative Director Playbook Cards for the Active Vertical */}
+        <div
+          className="bw-grid-wide"
+          data-vertical-playbook-grid
+          style={{ gap: 12 }}
+        >
+          {activeVerticalPlaybooks.map((pb) => {
+            const isSelected = activePlaybookId === pb.id;
+            return (
+              <div
+                key={pb.id}
+                className="bw-card bw-fields"
+                data-vertical-playbook-card={pb.id}
+                style={{
+                  margin: 0,
+                  padding: 14,
+                  borderRadius: 18,
+                  background: isSelected
+                    ? "rgba(56, 117, 197, 0.05)"
+                    : "#F6F7F9",
+                  border: isSelected
+                    ? "2px solid #3875C5"
+                    : "1px solid rgba(15, 23, 42, 0.08)",
+                  display: "flex",
+                  flexDirection: "column",
+                  justifyContent: "space-between",
+                  gap: 10,
+                }}
+              >
+                <div className="bw-fields" style={{ margin: 0, gap: 8 }}>
+                  <div
+                    style={{
+                      height: 112,
+                      borderRadius: 12,
+                      backgroundImage: `linear-gradient(180deg, rgba(15,23,42,0.14) 0%, rgba(15,23,42,0.58) 100%), url(${pb.previewImageUrl})`,
+                      backgroundSize: "cover",
+                      backgroundPosition: "center",
+                      padding: 8,
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "flex-start",
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontSize: 11,
+                        fontWeight: 700,
+                        color: "#FFFFFF",
+                        background: "#3875C5",
+                        padding: "2px 8px",
+                        borderRadius: 999,
+                      }}
+                    >
+                      {isKo ? pb.targetPersonaKo : pb.targetPersonaEn}
+                    </span>
+                    <span
+                      style={{
+                        fontSize: 11,
+                        fontWeight: 600,
+                        color: "#F8FAFC",
+                        background: "rgba(15, 23, 42, 0.72)",
+                        padding: "2px 8px",
+                        borderRadius: 999,
+                      }}
+                    >
+                      {isKo
+                        ? pb.startupPatternBadgeKo
+                        : pb.startupPatternBadgeEn}
+                    </span>
+                  </div>
+
+                  <div>
+                    <strong style={{ fontSize: 14, color: "#0B0D12" }}>
+                      {isKo ? pb.titleKo : pb.titleEn}
+                    </strong>
+                    <p
+                      className="bw-muted"
+                      style={{ margin: "4px 0 0", fontSize: 12 }}
+                    >
+                      {isKo ? pb.painSolvedKo : pb.painSolvedEn}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="bw-fields" style={{ margin: 0, gap: 8 }}>
+                  {/* + Sizes Multi-Ratio Quick Selector Pills */}
+                  <div
+                    className="bw-row"
+                    style={{ gap: 6, flexWrap: "wrap" }}
+                  >
+                    <small className="bw-muted" style={{ fontSize: 11 }}>
+                      {isKo ? "+ 규격(Sizes):" : "+ Sizes:"}
+                    </small>
+                    {pb.recommendedRatios.map((r) => (
+                      <button
+                        key={`${pb.id}-${r}`}
+                        type="button"
+                        onClick={() => {
+                          handleSelectVerticalPlaybook(pb);
+                          setAspect(r);
+                        }}
+                        style={{
+                          padding: "2px 8px",
+                          borderRadius: 999,
+                          fontSize: 11,
+                          fontWeight: 600,
+                          border:
+                            isSelected && aspect === r
+                              ? "1.5px solid #3875C5"
+                              : "1px solid rgba(15,23,42,0.14)",
+                          background:
+                            isSelected && aspect === r
+                              ? "rgba(56,117,197,0.14)"
+                              : "#FFFFFF",
+                          color: "#0B0D12",
+                          cursor: "pointer",
+                        }}
+                      >
+                        {r}
+                      </button>
+                    ))}
+                  </div>
+
+                  <button
+                    type="button"
+                    className={
+                      isSelected ? "bw-button bw-primary" : "bw-button"
+                    }
+                    data-apply-vertical-playbook={pb.id}
+                    onClick={() => handleSelectVerticalPlaybook(pb)}
+                    disabled={busy}
+                    style={{ width: "100%", justifyContent: "center" }}
+                  >
+                    {isSelected
+                      ? isKo
+                        ? "✓ 현재 브리프에 적용됨 (다시 채우기)"
+                        : "✓ Applied to Studio Brief"
+                      : isKo
+                        ? "이 실무 플레이북으로 브리프·광학 세팅 채우기"
+                        : "Load Playbook into Studio Brief"}
+                  </button>
+                </div>
+              </div>
             );
           })}
         </div>
@@ -1274,6 +1863,28 @@ export function BrandBriefStudio({
             </div>
           )}
 
+          {view.principleAttachment && (
+            <div
+              className="bw-row"
+              data-brief-principle-attachment-badge
+              data-principle-attachment-mode={view.principleAttachment.mode}
+            >
+              <span className="bw-badge">
+                {view.principleAttachment.mode === "unbound_free"
+                  ? isKo
+                    ? "디자인 원칙: 미적용 · 자유 탐색 (Unbound)"
+                    : "Design Principles: Unbound Free Exploration"
+                  : view.principleAttachment.mode === "custom_partial"
+                    ? isKo
+                      ? `디자인 원칙: 선택 연결 (${view.principleAttachment.attachedKeys.length}개 고정 · ${view.principleAttachment.detachedKeys.length}개 자유)`
+                      : `Design Principles: Partial Attach (${view.principleAttachment.attachedKeys.length} locked)`
+                    : isKo
+                      ? "디자인 원칙: Brand DNA 전체 연결됨 (Full Attach)"
+                      : "Design Principles: Full Brand DNA Attached"}
+              </span>
+            </div>
+          )}
+
           <label>
             {isKo ? "컴파일된 촬영 지시문" : "Compiled Direction Prompt"}
             <textarea
@@ -1525,7 +2136,7 @@ export function BrandBriefStudio({
                   ? "1080p 마스터 컷 (OLED 에디토리얼 룩 + -14.0 LUFS)"
                   : "1080p Master Cut (OLED Editorial + -14.0 LUFS)",
                 attachmentId: "att-v2",
-                mediaUrl: "/api/brand-workspace/attachments/studio-v2-master",
+                mediaUrl: "/reel/brands/seeding-redcarpet-01-1080p.mp4",
                 caption: "Stage 2 Master",
                 usageRights: "owned_organic",
                 reviewRevision: 2,
@@ -1537,10 +2148,10 @@ export function BrandBriefStudio({
                 slotKey: "hero-reel",
                 version: 1,
                 title: isKo
-                  ? "480p 고속 드래프트 컷 (구도·모션 검수본)"
-                  : "480p Fast Draft Cut (Composition Check)",
+                  ? "1080p 스튜디오 룩북 컷 (프렌치 블루 에디토리얼 + -14.0 LUFS)"
+                  : "1080p Studio Lookbook Cut (French Blue Editorial + -14.0 LUFS)",
                 attachmentId: "att-v1",
-                mediaUrl: "/api/brand-workspace/attachments/studio-v1-draft",
+                mediaUrl: "/reel/brands/studio-editorial-blue-1080p.mp4",
                 caption: "Stage 1 Draft",
                 usageRights: "owned_organic",
                 reviewRevision: 1,
