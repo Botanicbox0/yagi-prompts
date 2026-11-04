@@ -667,3 +667,24 @@ export const TEMPLATE_BASELINE_PRESETS: Readonly<Record<string, TemplateBaseline
     ]
   }
 };
+
+export function resolveTemplateBaseline(templateIdOrArchetype?: string | null): TemplateBaselineSpec {
+  const key = (templateIdOrArchetype ?? '').trim().toLowerCase();
+  const direct = key ? TEMPLATE_BASELINE_PRESETS[key] : undefined;
+  if (direct) {
+    return direct;
+  }
+  if (key.includes('90s') || key.includes('interview') || key.includes('apgujeong') || key.includes('jilju')) {
+    return TEMPLATE_BASELINE_PRESETS['90s-apgujeong-interview'] ?? DEFAULT_EDITORIAL_TEMPLATE_BASELINE;
+  }
+  if (
+    key.includes('red-carpet') ||
+    key.includes('red_carpet') ||
+    key.includes('press') ||
+    key.includes('paparazzi') ||
+    key.includes('01a195e5')
+  ) {
+    return TEMPLATE_BASELINE_PRESETS['red-carpet-arrival'] ?? DEFAULT_EDITORIAL_TEMPLATE_BASELINE;
+  }
+  return DEFAULT_EDITORIAL_TEMPLATE_BASELINE;
+}

@@ -1,9 +1,9 @@
 'use client';
 
 import { useEffect, useId, useRef, useState, useTransition } from 'react';
-import { resolveTemplateBaseline } from '@/lib/template-director/flash-director';
 import {
   DEFAULT_EDITORIAL_TEMPLATE_BASELINE,
+  resolveTemplateBaseline,
   type DirectorEditableSlot,
   type DirectorSummaryChip,
   type DualIdentityCandidateEngine,
