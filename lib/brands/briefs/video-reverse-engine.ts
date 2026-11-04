@@ -813,6 +813,18 @@ function buildMeasuredCameraDescription(
   );
 }
 
+function isMacroProductOnlyShot(shot: VideoReverseShot): boolean {
+  if (shot.camera_analysis.angle === 'tactile_macro_insert') return true;
+  const text = shot.action_mechanism.toLowerCase();
+  const hasProductMacroCue =
+    /\b(bottle|atomizer|plinth|logo|macro|packaging|flacon|cap|label)\b/.test(text);
+  const hasHumanSubjectCue =
+    /\b(subject|model|person|woman|man|face|gaze|eyeline|walk|stride|coat|torso|chin)\b/.test(
+      text
+    );
+  return hasProductMacroCue && !hasHumanSubjectCue;
+}
+
 /**
  * Compiles `VideoReverseAnalysis` (`extract_video.py` + `earshot` telemetry) + `PreserveChangeMatrix`
  * + `ConfirmedBrandIdentity` into a gap-free sub-second `ShotSpec` with `Two-Stage 480p Draft -> Master` gate.
@@ -830,20 +842,29 @@ export function compileVideoReverseAdaptation(input: {
   let angleAlternationFixes = 0;
   let subsecondPushInFixes = 0;
   let prevAngle: CameraAngleClass | null = null;
+  let primarySubjectDirectiveInjected = false;
 
   const durationS = sanitized.pacing_summary.duration_s;
   const rawShots = [...sanitized.shots].sort((a, b) => a.start_s - b.start_s);
+  const shotCount = rawShots.length;
+  const minShotDur = 0.2;
 
-  // Normalize timeline boundaries so start=0, end=durationS, zero gaps/overlaps
+  // Normalize timeline boundaries with reserved tail budget so start < end strictly holds for every shot
+  let cursorStart = 0;
   const timeline: TimelineShot[] = rawShots.map((s, idx) => {
-    const start = idx === 0 ? 0 : Math.round(rawShots[idx - 1]!.end_s * 10) / 10;
+    const remainingShotsAfter = Math.max(0, shotCount - 1 - idx);
+    const maxAllowedEnd = Number(
+      Math.max(cursorStart + minShotDur, durationS - remainingShotsAfter * minShotDur).toFixed(1)
+    );
+    const start = idx === 0 ? 0 : cursorStart;
+    const rawEndRounded = Math.round(s.end_s * 10) / 10;
     const end =
-      idx === rawShots.length - 1
+      idx === shotCount - 1
         ? durationS
-        : Math.max(
-            Math.round((start + 0.2) * 10) / 10,
-            Math.min(durationS - 0.2, Math.round(s.end_s * 10) / 10)
+        : Number(
+            Math.max(start + minShotDur, Math.min(maxAllowedEnd, rawEndRounded)).toFixed(1)
           );
+    cursorStart = end;
     const dur = Math.max(0.1, Math.round((end - start) * 10) / 10);
 
     const { next: resolvedAngle, changed: angleFixed } = alternateAngleIfDuplicate(
@@ -860,20 +881,34 @@ export function compileVideoReverseAdaptation(input: {
       matrix.preserve.cameraChoreography
     );
 
-    // Guard against Seedance sub-second continuous push-in bug (stretches <1.0s shot to 3-4s)
+    // Guard against sub-second continuous push-in bug (stretches <1.0s shot to 3-4s)
     if (dur < 1.0 && edit === 'continuous' && /push-in|push in/i.test(cameraStr)) {
       edit = 'hard cut';
-      cameraStr = cameraStr.replace(/deliberate optical push-in \([^)]+\)/gi, 'instant optical snap framing');
+      cameraStr = cameraStr.replace(
+        /deliberate optical push-in \([^)]+\)/gi,
+        'instant optical snap framing'
+      );
       subsecondPushInFixes += 1;
     }
 
-    const microActingClause =
-      matrix.change.subjectMode !== 'faceless_product_only' &&
-      matrix.change.enforceAntiPlasticAndAntiComposite
-        ? ' Subject keeps softly closed lips (1-2mm part), calm off-axis eyeline, unretouched matte-satin skin with fine stray flyaway hair catching rim light, and ambient shadow floor matching the room.'
-        : '';
+    const macroOnly =
+      matrix.change.subjectMode === 'faceless_product_only' || isMacroProductOnlyShot(s);
 
-    const actionText = `${s.action_mechanism} featuring ${matrix.change.brandProductName}.${microActingClause}`.slice(
+    let directiveClause = '';
+    if (macroOnly) {
+      directiveClause =
+        ' Product-only optical lock: 50mL palm-scale geometry, unwarped front label, zero human face intrusion.';
+    } else if (matrix.change.enforceAntiPlasticAndAntiComposite) {
+      if (!primarySubjectDirectiveInjected) {
+        directiveClause =
+          ' Subject keeps softly closed lips (1-2mm part), calm off-axis eyeline, unretouched matte-satin skin with rim-lit flyaways, and room-matched shadow floor.';
+        primarySubjectDirectiveInjected = true;
+      } else {
+        directiveClause = ' Continuity lock: 1-2mm parted lips, off-axis eyeline, matte skin.';
+      }
+    }
+
+    const actionText = `${s.action_mechanism} featuring ${matrix.change.brandProductName}.${directiveClause}`.slice(
       0,
       320
     );
@@ -892,18 +927,6 @@ export function compileVideoReverseAdaptation(input: {
       }
     };
   });
-
-  // Ensure exact continuity across normalized shots
-  for (let i = 1; i < timeline.length; i += 1) {
-    timeline[i]!.start = timeline[i - 1]!.end;
-    if (timeline[i]!.end <= timeline[i]!.start) {
-      timeline[i]!.end = Math.min(durationS, Number((timeline[i]!.start + 0.4).toFixed(1)));
-    }
-  }
-  if (timeline.length > 0) {
-    timeline[0]!.start = 0;
-    timeline[timeline.length - 1]!.end = durationS;
-  }
 
   const references: ShotReference[] = [];
   if (matrix.change.subjectMode === 'consented_cast') {

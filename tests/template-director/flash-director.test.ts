@@ -1,9 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+  compileModelSpecificIdentityPrompt,
   createFlashTemplateDirector,
+  DIRECTOR_EDITABLE_SLOTS,
   directorConfigFromEnv,
+  DUAL_IDENTITY_CANDIDATE_ENGINES,
   GEMINI_DIRECTOR_DEFAULT_MODEL,
   inspectPhotoPrecheck,
+  resolveTemplateBaseline,
   toClientDirectorTurnResponse,
   unwrapServerOnlyPrompt,
   verifyRewrittenPrompt,
@@ -112,9 +116,220 @@ describe('Step 0: Photo Inspection & Cleanup Model Routing (Gemini 3.8 Flash)', 
       mode: 'inpaint_occlusion',
       engine: 'nano-banana-2.1',
       fallbackEngine: 'seedream-5.0-pro',
+      requiresDualCandidateSelection: true,
+      candidateEngines: ['seedream-5.0-pro', 'nano-banana-2.1'],
+      candidatePromptsEn: {
+        'seedream-5.0-pro': expect.stringContaining('Reference Image 1 provides the young Korean female subject'),
+        'nano-banana-2.1': expect.stringContaining('SURGICAL IN-PLACE IDENTITY LOCK')
+      },
       editPromptEn: expect.stringContaining('Keep the person in Image 1 100% identical')
     });
     expect(verdict.userMessageKo).toContain('TWINGS가 자연스럽게 정리해서 진행할까요?');
+  });
+
+  it('routes over-retouched beauty-app contour/lip photos (over_retouched_contour) to Dual-Candidate (Seedream 5.0 Pro + Nano Banana 2.1) anatomical de-filter normalization', async () => {
+    const fetchMock = vi.fn(async (_url: RequestInfo | URL) =>
+      geminiJsonResponse({
+        status: 'needs_cleanup',
+        issues: ['over_retouched_contour', 'heavy_filter'],
+        faceWidthRatio: 0.37,
+        extractedHairDescription:
+          'natural Korean facial structure with long wavy dark-brown hair',
+        userMessageKo:
+          '사진에 뷰티 보정(턱선·입술·피부 블러)이 들어가 있어 영상에서 움직일 때 다소 인위적으로 보일 수 있어요. TWINGS가 자연스러운 카메라 렌즈 비율과 실제 피부 결로 정돈해서 제작할까요?',
+        userMessageEn:
+          'Heavy beauty-app retouching on the jawline, lips, or skin blur may look unnatural in 3D motion. Would you like TWINGS to normalize proportions and skin texture?',
+        cleanupPromptEn: null
+      })
+    );
+
+    const director = createFlashTemplateDirector(
+      { apiKey: 'fake-gemini-key', baseUrl: 'https://generativelanguage.googleapis.com/v1beta', model: 'gemini-3.8-flash' },
+      { fetch: fetchMock }
+    );
+
+    const verdict = await director.inspectPhoto(samplePhoto);
+    expect(verdict.status).toBe('needs_cleanup');
+    expect(verdict.issues).toEqual(['over_retouched_contour', 'heavy_filter']);
+    expect(verdict.recommendedCleanup).toEqual({
+      mode: 'normalize_retouch',
+      engine: 'nano-banana-2.1',
+      fallbackEngine: 'seedream-5.0-pro',
+      requiresDualCandidateSelection: true,
+      candidateEngines: DUAL_IDENTITY_CANDIDATE_ENGINES,
+      candidatePromptsEn: {
+        'seedream-5.0-pro': expect.stringContaining('very low specular-to-diffuse ratio'),
+        'nano-banana-2.1': expect.stringContaining('IDENTITY LOCK:')
+      },
+      editPromptEn: expect.stringContaining('normalizing any 2D beauty-app liquify distortions')
+    });
+    expect(verdict.recommendedCleanup.editPromptEn).toContain('SURGICAL IN-PLACE IDENTITY LOCK');
+    expect(verdict.recommendedCleanup.editPromptEn).not.toContain('visible pores');
+  });
+
+  it('combines occlusion cleanup with anatomical de-filter and strips bare-shoulder passport directives when both issues co-occur (real influencer selfie case)', async () => {
+    const fetchMock = vi.fn(async (_url: RequestInfo | URL) =>
+      geminiJsonResponse({
+        status: 'needs_cleanup',
+        issues: ['prop_occlusion', 'hair_occlusion', 'asymmetrical_shoulders', 'over_retouched_contour', 'unknown_future_issue'],
+        faceWidthRatio: 0.33,
+        extractedHairDescription: 'glossy jet-black chin-length blunt bob tucked slightly behind the right ear',
+        userMessageKo:
+          '얼굴 앞쪽으로 종이컵 소품과 흩날리는 앞머리 가닥이 있어 움직임 생성 시 부자연스러울 수 있습니다. 또한 뷰티 필터로 강조된 턱선과 입술 볼륨은 3D 모션에서 왜곡될 수 있어 정제 과정을 권장합니다.',
+        userMessageEn:
+          'Foreground paper cups and beauty filter contouring may distort in 3D motion.',
+        cleanupPromptEn:
+          'Bust-up portrait of the same East Asian young woman. Balanced symmetrical bare shoulders wearing a simple strapless black top. Both hands and paper cups completely removed.'
+      })
+    );
+
+    const director = createFlashTemplateDirector(
+      { apiKey: 'fake-gemini-key', baseUrl: 'https://generativelanguage.googleapis.com/v1beta', model: 'gemini-3.8-flash' },
+      { fetch: fetchMock }
+    );
+
+    const verdict = await director.inspectPhoto(samplePhoto);
+    expect(verdict.issues).toEqual([
+      'prop_occlusion',
+      'hair_occlusion',
+      'asymmetrical_shoulders',
+      'over_retouched_contour'
+    ]);
+    expect(verdict.recommendedCleanup.mode).toBe('inpaint_occlusion');
+    expect(verdict.recommendedCleanup.editPromptEn).not.toContain('bare shoulders');
+    expect(verdict.recommendedCleanup.editPromptEn).not.toContain('strapless');
+    expect(verdict.recommendedCleanup.editPromptEn).toContain('minimalist matte black crew-neck top');
+    expect(verdict.recommendedCleanup.editPromptEn).toContain('normalizing any 2D beauty-app liquify distortions');
+  });
+
+  it('defaults to passthrough_crop (0% AI distortion, engine=null) when at least one clean unoccluded photo exists', async () => {
+    const fetchMock = vi.fn(async (_url: RequestInfo | URL) =>
+      geminiJsonResponse({
+        strategy: 'passthrough_crop',
+        styleAnchorIndex: 1,
+        structureAnchorIndex: 1,
+        styleAnchorRotationClockwiseDegrees: 0,
+        bustupCropBoxNormalized: [40, 30, 950, 970],
+        detectedIssues: [],
+        requiresMasterSynthesis: false,
+        extractedIdentityLockEn:
+          'East Asian woman with soft double-lidded almond eyes, straight defined nose bridge, and smooth jawline.',
+        extractedHairLockEn:
+          'Long straight dark brown-black hair with side parting flowing over shoulders.',
+        opticalMasterPromptEn: 'Passthrough deterministic 3:4 bust-up optical crop of photo_02.'
+      })
+    );
+
+    const director = createFlashTemplateDirector(
+      { apiKey: 'fake-gemini-key', baseUrl: 'https://generativelanguage.googleapis.com/v1beta', model: 'gemini-3.8-flash' },
+      { fetch: fetchMock }
+    );
+
+    const photos = Array.from({ length: 5 }, (_, idx) => ({
+      bytes: new Uint8Array([255, 216, 255, idx]),
+      mime: 'image/jpeg' as const,
+      filename: `photo_0${idx + 1}.jpg`
+    }));
+
+    const plan = await director.synthesizeOpticalIdentityMaster({ photos });
+    expect(plan.strategy).toBe('passthrough_crop');
+    expect(plan.requiresMasterSynthesis).toBe(false);
+    expect(plan.engine).toBeNull();
+    expect(plan.bustupCropBoxNormalized).toEqual([40, 30, 950, 970]);
+  });
+
+  it('synthesizes a surgical_inplace_edit Optical Identity Master plan when explicit creatorNoteKo or occlusion requires it, and verifies similarity via Stage 3 Gate', async () => {
+    const fetchMock = vi.fn(async (_url: RequestInfo | URL) =>
+      geminiJsonResponse({
+        strategy: 'surgical_inplace_edit',
+        styleAnchorIndex: 1,
+        structureAnchorIndex: 7,
+        styleAnchorRotationClockwiseDegrees: 0,
+        bustupCropBoxNormalized: [50, 100, 950, 900],
+        detectedIssues: ['over_retouched_contour', 'prop_occlusion'],
+        requiresMasterSynthesis: true,
+        extractedIdentityLockEn:
+          'upturned cat-like almond dark-brown eyes, softly rounded nasal tip, soft apple cheeks',
+        extractedHairLockEn:
+          '6:4 side-parted sleek black chin-length straight tassel bob with delicate wispy side-swept forehead strands',
+        opticalMasterPromptEn:
+          '85mm f/2.0 optical portrait lens master reference combining Image 2 frontal bone identity with Image 1 side-swept bangs, bare shoulders, visible pores.'
+      })
+    );
+
+    const director = createFlashTemplateDirector(
+      { apiKey: 'fake-gemini-key', baseUrl: 'https://generativelanguage.googleapis.com/v1beta', model: 'gemini-3.8-flash' },
+      { fetch: fetchMock }
+    );
+
+    const photos = Array.from({ length: 8 }, (_, idx) => ({
+      bytes: new Uint8Array([255, 216, 255, idx]),
+      mime: 'image/jpeg' as const,
+      filename: `photo_0${idx + 1}.jpg`
+    }));
+
+    const plan = await director.synthesizeOpticalIdentityMaster({
+      photos,
+      creatorNoteKo: '이마 조금 더 줄여주시고 볼록하게, 턱선 각진 선을 둥글게 정리해 주세요'
+    });
+
+    expect(plan.strategy).toBe('surgical_inplace_edit');
+    expect(plan.styleAnchorIndex).toBe(1);
+    expect(plan.structureAnchorIndex).toBe(7);
+    expect(plan.engine).toBe('seedream-5.0-pro');
+    expect(plan.requiresMasterSynthesis).toBe(true);
+    // Must be sealed so accidental JSON serialization never leaks the optical master prompt
+    expect(JSON.stringify(plan.opticalMasterPromptEn)).toBe('"[REDACTED_SERVER_ONLY_PROMPT]"');
+    expect(JSON.stringify(plan.fallbackMasterPromptEn)).toBe('"[REDACTED_SERVER_ONLY_PROMPT]"');
+    expect(JSON.stringify(plan.dualCandidatePromptsEn['seedream-5.0-pro'])).toBe('"[REDACTED_SERVER_ONLY_PROMPT]"');
+    expect(JSON.stringify(plan.dualCandidatePromptsEn['nano-banana-2.1'])).toBe('"[REDACTED_SERVER_ONLY_PROMPT]"');
+
+    const unwrappedSeedream = unwrapServerOnlyPrompt(plan.opticalMasterPromptEn);
+    expect(unwrappedSeedream).not.toContain('bare shoulders');
+    expect(unwrappedSeedream).not.toContain('visible pores');
+    expect(unwrappedSeedream).toContain('Reference Image 1 provides the young Korean female subject');
+    expect(unwrappedSeedream).toContain('very low specular-to-diffuse ratio');
+
+    const unwrappedNanoFallback = unwrapServerOnlyPrompt(plan.fallbackMasterPromptEn);
+    expect(unwrappedNanoFallback).toContain('IDENTITY LOCK:');
+    expect(unwrappedNanoFallback).toContain('COMPOSITION LOCK:');
+    expect(unwrappedNanoFallback).toContain('SURGICAL IN-PLACE IDENTITY LOCK');
+    expect(unwrapServerOnlyPrompt(plan.dualCandidatePromptsEn['nano-banana-2.1'])).toBe(unwrappedNanoFallback);
+
+    const gptBrief = compileModelSpecificIdentityPrompt('gpt-image-2.5-sunburst', {
+      extractedIdentityLockEn: 'almond eyes with porcelain skin',
+      extractedHairLockEn: 'straight black hair with full blunt bangs',
+      rawSurgicalPromptEn: 'remove earphone cord and soften dewy glow'
+    });
+    expect(gptBrief).toContain('1. Deliverable & Framing:');
+    expect(gptBrief).toContain('2. Reference Authority (Identity Lock):');
+    expect(gptBrief).not.toContain('porcelain skin');
+    expect(gptBrief).not.toContain('dewy glow');
+  });
+
+  it('Stage 3 Identity Similarity Verification Gate rejects distorted/aged Nano Banana outputs and triggers fallback_to_passthrough_crop', async () => {
+    const fetchMock = vi.fn(async (_url: RequestInfo | URL) =>
+      geminiJsonResponse({
+        identitySimilarityScore: 0.62,
+        agingOrDistortionDetected: true,
+        passedGate: false,
+        reasonKo: '나노바나나 합성본에서 코끝이 넓어지고 피부 톤이 어두워져 원본 인물과 인상이 달라졌습니다.'
+      })
+    );
+
+    const director = createFlashTemplateDirector(
+      { apiKey: 'fake-gemini-key', baseUrl: 'https://generativelanguage.googleapis.com/v1beta', model: 'gemini-3.8-flash' },
+      { fetch: fetchMock }
+    );
+
+    const verdict = await director.verifyIdentitySimilarity({
+      originalPhoto: samplePhoto.photo,
+      generatedPhoto: samplePhoto.photo
+    });
+
+    expect(verdict.passedGate).toBe(false);
+    expect(verdict.agingOrDistortionDetected).toBe(true);
+    expect(verdict.recommendedAction).toBe('fallback_to_passthrough_crop');
   });
 
   it('routes low-resolution or blurry photos to local SeedVR2 (0-cost optical restoration) instead of generative hallucination', async () => {
@@ -303,6 +518,31 @@ No background music, no sunglasses, no original casual outfit, handheld objects,
     expect(unwrapped).toContain('sleek chin-length dark-brown bob hairstyle with soft bangs');
     expect(unwrapped).toContain('Natural matte skin texture with visible pores');
     expect(verifyRewrittenPrompt(unwrapped).ok).toBe(true);
+  });
+});
+
+describe('Template Baseline Disclosure & Predictive Creator Revision Taxonomy', () => {
+  it('includes makeup alongside outfit, hair, prop, shot_action, and lighting_mood in DIRECTOR_EDITABLE_SLOTS', () => {
+    expect(DIRECTOR_EDITABLE_SLOTS).toContain('outfit');
+    expect(DIRECTOR_EDITABLE_SLOTS).toContain('makeup');
+    expect(DIRECTOR_EDITABLE_SLOTS).toContain('hair');
+    expect(DIRECTOR_EDITABLE_SLOTS).toContain('prop');
+    expect(DIRECTOR_EDITABLE_SLOTS).toContain('shot_action');
+  });
+
+  it('resolves template-specific baseline defaults and predictive revision presets from real campaign archetypes', () => {
+    const nineties = resolveTemplateBaseline('2026-11-01-90s-interview-batch');
+    expect(nineties.templateArchetypeId).toBe('90s-apgujeong-interview');
+    expect(nineties.baselineSlots.map((s) => s.slot)).toEqual(['outfit', 'makeup', 'hair', 'shot_action']);
+    expect(nineties.predictivePresets.some((p) => p.slot === 'makeup')).toBe(true);
+
+    const redCarpet = resolveTemplateBaseline('01a195e5-0613-7055-be3d-b5819473596f');
+    expect(redCarpet.templateArchetypeId).toBe('red-carpet-arrival');
+    expect(redCarpet.baselineSlots.find((s) => s.slot === 'outfit')?.defaultSettingKo).toContain('스웨이드 코르셋');
+
+    const fallback = resolveTemplateBaseline('unknown-future-template-id');
+    expect(fallback.templateArchetypeId).toBe('default-editorial');
+    expect(fallback.lockedElementsKo.length).toBeGreaterThanOrEqual(3);
   });
 });
 

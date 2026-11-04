@@ -12,11 +12,13 @@ export function usePhotoLight(file:File|null):LightAdvice|'checking' {
   if(!file)return;
   let active=true;
   (async()=>{
+   let bitmap:ImageBitmap|null=null;
    try{
-    const bitmap=await createImageBitmap(file,{imageOrientation:'from-image'} as ImageBitmapOptions);
+    bitmap=await createImageBitmap(file,{imageOrientation:'from-image'} as ImageBitmapOptions);
+    if(!active)return;
     const size=64,canvas=document.createElement('canvas');canvas.width=size;canvas.height=size;
     const context=canvas.getContext('2d',{willReadFrequently:true});if(!context)throw Error('canvas');
-    context.drawImage(bitmap,0,0,size,size);bitmap.close();
+    context.drawImage(bitmap,0,0,size,size);
     const {data}=context.getImageData(0,0,size,size);
     let sum=0,high=0,low=0;const n=size*size;
     for(let i=0;i<data.length;i+=4){
@@ -25,6 +27,7 @@ export function usePhotoLight(file:File|null):LightAdvice|'checking' {
     }
     if(active)setResult({file,advice:assessPhotoLight({mean:sum/n,clippedHigh:high/n,clippedLow:low/n})});
    }catch{if(active)setResult({file,advice:'unavailable'});}
+   finally{bitmap?.close();}
   })();
   return()=>{active=false;};
  },[file]);

@@ -19,6 +19,7 @@ export interface BrandStudioTutorialProps {
 const STUDIO_PLAYBOOK_STEPS: ReadonlyArray<{
   stepNumber: number;
   mode: StudioFocusMode;
+  previewImg: string;
   titleKo: string;
   titleEn: string;
   summaryKo: string;
@@ -29,68 +30,73 @@ const STUDIO_PLAYBOOK_STEPS: ReadonlyArray<{
 }> = [
   {
     stepNumber: 1,
-    mode: "spatial_brief",
-    titleKo: "① 2D 공간 블로킹 & 7종 문법 촬영 지시서",
-    titleEn: "① 2D Spatial Blocking & 7-Grammar Shooting Brief",
+    mode: "video_reverse",
+    previewImg: "/reel/landing/v7/rx-runway-duo.jpg",
+    titleKo: "레퍼런스 영상 리믹스",
+    titleEn: "Remix a Reference Film",
     summaryKo:
-      "렌더링 전에 인물(35~50% 미드와이드 안전 비율)·제품(50mL 손바닥 실측 잠금)·전경 보케의 좌표(x%, y%)와 단일 광원 각도를 배치하고 480p 초안 지시서를 생성합니다.",
+      "마음에 드는 캠페인 영상의 카메라 무빙과 컷 리듬은 그대로 두고, 제품과 색감만 우리 브랜드로 바꿉니다.",
     summaryEn:
-      "Block subject, palm-scaled product, and unified key-light angle on a 2D stage before compiling a 480p draft brief.",
-    badgeKo: "ArtCraft식 공간 블로킹",
-    actionLabelKo: "① 공간 블로킹·지시서 열기",
-    actionLabelEn: "Open Spatial Stage",
+      "Keep the camera movement and cut rhythm of a reference film while swapping in your product and palette.",
+    badgeKo: "가장 많이 쓰는 시작점",
+    actionLabelKo: "레퍼런스 리믹스 시작하기",
+    actionLabelEn: "Start Film Remix",
   },
   {
     stepNumber: 2,
-    mode: "video_reverse",
-    titleKo: "② 레퍼런스 영상 0.1초 역설계 & 브랜드 치환",
-    titleEn: "② Reference Video Reverse-Engineering & Brand Swap",
+    mode: "spatial_brief",
+    previewImg: "/reel/landing/look-sculpt.webp",
+    titleKo: "구도 잡아서 새 화보·필름 찍기",
+    titleEn: "Compose a New Look or Still",
     summaryKo:
-      "검증된 바이럴·런웨이 레퍼런스의 카메라 옵티컬 플로우와 서브초(0.7~0.9s) 컷 리듬만 보존하고, 제품·의상·색채는 브랜드 고유 자산으로 치환합니다.",
+      "화면 위에서 모델과 향수병·제품의 위치만 마우스로 놓으면, 비율과 조명을 맞춰 초안을 뽑아줍니다.",
     summaryEn:
-      "Preserve reference camera choreography and sub-second cut beats while swapping in your brand product and palette.",
-    badgeKo: "다각도 교차 · 2단계 마스터",
-    actionLabelKo: "② 레퍼런스 영상 역설계 열기",
-    actionLabelEn: "Open Video Reverse Engine",
+      "Place your subject and palm-sized product on the 2D stage to generate a balanced draft.",
+    badgeKo: "2D 구도 배치",
+    actionLabelKo: "구도 잡기 시작하기",
+    actionLabelEn: "Open 2D Stage",
   },
   {
     stepNumber: 3,
     mode: "micro_roi",
-    titleKo: "③ 극소 부위(Micro-ROI) 5단계 무손실 복원",
-    titleEn: "③ 5-Step Micro-ROI Zero-Leak Precision Repair",
+    previewImg: "/reel/landing/c-logo-ours.webp",
+    titleKo: "흐린 로고·제품·피부만 부분 복원",
+    titleEn: "Fix Logo, Bottle, or Skin Detail",
     summaryKo:
-      "전체 재합성으로 얼굴이나 조명이 왜곡되는 것을 막기 위해 고칠 부위(로고·손가락·표정 1~2mm)만 1440px로 확대 복원한 뒤 ECC/랜드마크 정렬과 주파수 분리로 주변 픽셀 변화 0(outside_pixels_changed === 0)을 보장합니다.",
+      "전체 사진을 다시 뽑지 않고, 네모로 찍은 로고·병 모양·피부 질감만 원본 그대로 선명하게 고칩니다.",
     summaryEn:
-      "Crop only the target 180-400px patch to 1440px, align subpixel via ECC/MediaPipe, lock low-frequency tone, and composite with zero outside pixel drift.",
-    badgeKo: "outside_pixels_changed === 0",
-    actionLabelKo: "③ 극소 부위 5단계 수선 열기",
-    actionLabelEn: "Open Micro-ROI Repair",
+      "Repair only the selected box—logo, bottle, or skin—without changing a single pixel outside.",
+    badgeKo: "주변 픽셀 변화 0%",
+    actionLabelKo: "부분 복원 열기",
+    actionLabelEn: "Open Detail Repair",
   },
   {
     stepNumber: 4,
     mode: "sound_studio",
-    titleKo: "④ 3트랙 사운드·BGM 마스터 & 0ms 드롭 동기화",
-    titleEn: "④ 3-Track Sound & BGM Master & 0ms Drop Sync",
+    previewImg: "/reel/landing/v7/rx-beauty-product.jpg",
+    titleKo: "클라이맥스 사운드 & BGM 맞추기",
+    titleEn: "Sync Climax Sound & BGM",
     summaryKo:
-      "5.5kHz 이상 디지털 노이즈를 제거하고, 리드 악기가 지정된 상업용 인스트루멘탈 스코어를 영상 클라이맥스(T_reveal)에 0ms 오차로 맞춘 뒤 -14.0 LUFS / -1.0 dBTP로 마스터링합니다.",
+      "제품이 클로즈업되는 순간에 딱 맞춰 음악 하이라이트와 실사 효과음이 터지도록 마스터링합니다.",
     summaryEn:
-      "Align commercial-safe instrumental BGM drop to T_reveal with 0ms offset and master through an 8-stage EBU R128 chain (-14.0 LUFS).",
-    badgeKo: "0ms 드롭 · -14.0 LUFS",
-    actionLabelKo: "④ 사운드·BGM 마스터 열기",
-    actionLabelEn: "Open Sound & BGM Studio",
+      "Align commercial BGM and live Foley to the exact product reveal moment.",
+    badgeKo: "0ms 드롭 싱크",
+    actionLabelKo: "사운드 맞추기",
+    actionLabelEn: "Open Sound Studio",
   },
   {
     stepNumber: 5,
     mode: "frame_review",
-    titleKo: "⑤ Frame.io급 공간 핀(x%, y%) 시사 & 원클릭 핸드오프",
-    titleEn: "⑤ Frame.io-Grade Spatial Frame Pin Review & Handoff",
+    previewImg: "/reel/landing/v7/rx-beauty-world.jpg",
+    titleKo: "프레임 핀 피드백 & 팀 공유",
+    titleEn: "Frame Pin Review & Team Share",
     summaryKo:
-      "영상 위 원하는 위치를 클릭해 @MM:SS.FF · (x%, y%) 핀을 찍고, 버튼 하나로 해당 좌표를 극소 부위 5단계 수선 박스로 넘기거나 0ms 음악 드롭 기준점으로 즉시 지정합니다.",
+      "영상 위 고칠 곳을 콕 찍어 메모를 남기거나, 로그인 없는 시사 링크로 팀·클라이언트 승인을 받습니다.",
     summaryEn:
-      "Click any video frame to drop a spatial pin and hand off coordinates directly to Micro-ROI repair or 0ms Music Drop sync.",
-    badgeKo: "무로그인 임원 공유 · 파이프라인 직결",
-    actionLabelKo: "⑤ 공간 핀 시사 스테이지 열기",
-    actionLabelEn: "Open Frame Review Stage",
+      "Click any frame to pin feedback or share a zero-login review link with your team.",
+    badgeKo: "링크 하나로 시사 공유",
+    actionLabelKo: "시사·공유 열기",
+    actionLabelEn: "Open Review Stage",
   },
 ];
 
@@ -115,73 +121,73 @@ export function BrandStudioTutorial({
       className="bw-card bw-fields"
       data-brand-studio-tutorial
       style={{
-        background:
-          "linear-gradient(180deg, #FFFFFF 0%, #F7F9FC 100%)",
-        border: "1px solid rgba(56, 117, 197, 0.24)",
+        padding: "24px",
+        borderRadius: "24px",
+        background: "#FFFFFF",
+        border: "1px solid rgba(0, 0, 0, 0.06)",
+        boxShadow: "var(--ys-card)",
       }}
     >
-      <div className="bw-row">
+      <div className="bw-row" style={{ alignItems: "flex-start" }}>
         <div>
-          <p className="bw-kicker">
-            {isKo
-              ? "60-SECOND INTERACTIVE PLAYBOOK · 프로그레시브 스튜디오 가이드"
-              : "60-SECOND INTERACTIVE PLAYBOOK · PROGRESSIVE STUDIO GUIDE"}
+          <p className="bw-kicker" style={{ marginBottom: 4 }}>
+            {isKo ? "STUDIO WORKFLOW · 오늘 무엇을 만들까요?" : "STUDIO WORKFLOW · WHAT ARE WE MAKING TODAY?"}
           </p>
-          <h2 style={{ margin: "2px 0 4px" }}>
+          <h2 style={{ margin: "0 0 6px", fontSize: 22, fontWeight: 600, letterSpacing: "-0.03em" }}>
             {isKo
-              ? "처음 오셨나요? 5단계 프로덕션 워크플로우 중 필요한 도구만 골라 바로 실행하세요"
-              : "5-Step Brand Production Workflow — Choose a focused tool or view all"}
+              ? "원하는 작업 카드 하나를 고르면 그 작업에 필요한 화면만 깔끔하게 열립니다"
+              : "Pick one visual workflow below—only the tools you need for that step will open"}
           </h2>
-          <p className="bw-muted" style={{ margin: 0 }}>
+          <p className="bw-muted" style={{ margin: 0, fontSize: 14 }}>
             {isKo
-              ? "기능이 많아도 복잡하지 않습니다. 상단 모드 탭을 누르면 해당 작업 화면만 집중해서 볼 수 있고, 시사 스테이지에서 찍은 핀 좌표는 극소 부위 수선과 사운드 드롭으로 자동 연결됩니다."
-              : "Switch between focused studio modes or run the full integrated pipeline."}
+              ? "복잡한 카메라 수치나 프롬프트 문법은 몰라도 됩니다. 예시 화면을 보고 고르면 브랜드 색감과 제품 규칙은 스튜디오가 자동으로 맞춥니다."
+              : "No need to configure camera numbers or prompt syntax. Pick a card and let your brand memory handle the rules."}
           </p>
         </div>
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        <div style={{ display: "flex", gap: 8, alignItems: "center", flexShrink: 0 }}>
           <span className="bw-badge" data-tutorial-progress-badge>
-            {isKo
-              ? `가이드 탐색 ${completedSteps.length}/5 완료`
-              : `${completedSteps.length}/5 Explored`}
+            {isKo ? `${completedSteps.length}/5 단계 체험` : `${completedSteps.length}/5 Explored`}
           </span>
           <button
             type="button"
             className="bw-button"
             onClick={() => setExpanded((prev) => !prev)}
             data-tutorial-collapse-toggle
+            style={{ borderRadius: 999 }}
           >
             {expanded
               ? isKo
-                ? "가이드 카드 접기 ▲"
-                : "Hide Playbook ▲"
+                ? "카드 접기"
+                : "Hide Cards"
               : isKo
-                ? "5단계 플레이북 펼치기 ▼"
-                : "Show Playbook ▼"}
+                ? "작업 카드 보기"
+                : "Show Cards"}
           </button>
         </div>
       </div>
 
-      {/* Progressive Studio Mode Switcher Bar */}
+      {/* Clean Pill Mode Bar */}
       <div
         className="bw-row"
         role="tablist"
         aria-label={isKo ? "스튜디오 작업 모드 전환" : "Studio focus mode switcher"}
         data-studio-mode-tabs
         style={{
-          padding: "8px 10px",
-          borderRadius: 12,
-          background: "#EEF3F9",
+          padding: "6px",
+          borderRadius: 999,
+          background: "#F3F4F6",
           gap: 6,
+          overflowX: "auto",
         }}
       >
         {(
           [
-            { id: "all", ko: "전체 통합 스튜디오 (All-in-One)", en: "All-in-One Studio" },
-            { id: "spatial_brief", ko: "① 2D 공간 블로킹·지시서", en: "① 2D Spatial Stage & Brief" },
-            { id: "video_reverse", ko: "② 레퍼런스 영상 역설계", en: "② Video Reverse Engine" },
-            { id: "micro_roi", ko: "③ 극소 부위 5단계 수선", en: "③ 5-Step Micro-ROI Repair" },
-            { id: "sound_studio", ko: "④ 사운드·BGM 마스터", en: "④ Sound & BGM Master" },
-            { id: "frame_review", ko: "⑤ Frame.io급 공간 핀 시사", en: "⑤ Frame Review & Share" },
+            { id: "video_reverse", ko: "① 레퍼런스 영상 리믹스", en: "① Film Remix" },
+            { id: "spatial_brief", ko: "② 2D 구도·새 화보", en: "② 2D Stage & Look" },
+            { id: "micro_roi", ko: "③ 로고·제품·피부 부분 복원", en: "③ Detail Repair" },
+            { id: "sound_studio", ko: "④ 사운드·BGM 맞추기", en: "④ Sound & BGM" },
+            { id: "frame_review", ko: "⑤ 프레임 핀 시사·공유", en: "⑤ Frame Review" },
+            { id: "all", ko: "전체 도구 한눈에 보기", en: "All Tools" },
           ] as const
         ).map((tab) => (
           <button
@@ -194,62 +200,99 @@ export function BrandStudioTutorial({
             }
             data-studio-mode-tab={tab.id}
             onClick={() => onSelectMode(tab.id)}
+            style={{ borderRadius: 999, fontSize: 13 }}
           >
             {isKo ? tab.ko : tab.en}
           </button>
         ))}
       </div>
 
-      {/* Collapsible 5-Step Interactive Playbook Cards */}
+      {/* Visual Media Cards */}
       {expanded && (
         <div
           data-studio-playbook-cards
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-            gap: 10,
+            gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))",
+            gap: 14,
           }}
         >
           {STUDIO_PLAYBOOK_STEPS.map((item) => {
-            const isDone = completedSteps.includes(item.stepNumber);
             const isCurrent = activeMode === item.mode;
             return (
               <div
                 key={item.stepNumber}
                 data-playbook-step={item.stepNumber}
+                onClick={() => handleStepJump(item.stepNumber, item.mode)}
                 style={{
                   padding: 12,
-                  borderRadius: 12,
-                  background: isCurrent ? "#EBF3FC" : "#FFFFFF",
+                  borderRadius: 20,
+                  background: isCurrent ? "#F4F8FD" : "#F8F9FA",
                   border: isCurrent
                     ? "1.5px solid #3875C5"
-                    : "1px solid rgba(15, 23, 42, 0.1)",
+                    : "1px solid rgba(0, 0, 0, 0.06)",
                   display: "flex",
                   flexDirection: "column",
                   justifyContent: "space-between",
-                  gap: 8,
+                  gap: 10,
+                  cursor: "pointer",
+                  transition: "border-color 180ms ease, transform 180ms ease",
                 }}
               >
                 <div>
-                  <div className="bw-row">
-                    <span className="bw-badge">
-                      {isDone ? "✓ " : ""}
+                  <div
+                    style={{
+                      height: 118,
+                      borderRadius: 14,
+                      overflow: "hidden",
+                      background: "#E8EFF7",
+                      position: "relative",
+                      marginBottom: 10,
+                    }}
+                  >
+                    <img
+                      src={item.previewImg}
+                      alt=""
+                      loading="lazy"
+                      style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                    />
+                    <span
+                      style={{
+                        position: "absolute",
+                        left: 8,
+                        top: 8,
+                        padding: "3px 9px",
+                        borderRadius: 999,
+                        background: isCurrent ? "#3875C5" : "rgba(18, 18, 22, 0.68)",
+                        color: "#FFFFFF",
+                        fontSize: 11,
+                        fontWeight: 600,
+                      }}
+                    >
                       {item.badgeKo}
                     </span>
                   </div>
-                  <strong style={{ display: "block", marginTop: 6, fontSize: 13 }}>
+                  <strong style={{ display: "block", fontSize: 14, letterSpacing: "-0.02em" }}>
                     {isKo ? item.titleKo : item.titleEn}
                   </strong>
-                  <p className="bw-muted" style={{ margin: "4px 0 0", fontSize: 11.5 }}>
+                  <p className="bw-muted" style={{ margin: "4px 0 0", fontSize: 12.5, lineHeight: 1.5 }}>
                     {isKo ? item.summaryKo : item.summaryEn}
                   </p>
                 </div>
                 <button
                   type="button"
-                  className="bw-button"
+                  className={isCurrent ? "bw-button bw-primary" : "bw-button"}
                   data-playbook-try-btn={item.mode}
-                  onClick={() => handleStepJump(item.stepNumber, item.mode)}
-                  style={{ width: "100%", justifyContent: "center", fontSize: 12 }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleStepJump(item.stepNumber, item.mode);
+                  }}
+                  style={{
+                    width: "100%",
+                    justifyContent: "center",
+                    fontSize: 12.5,
+                    borderRadius: 999,
+                  }}
                 >
                   {isKo ? item.actionLabelKo : item.actionLabelEn}
                 </button>

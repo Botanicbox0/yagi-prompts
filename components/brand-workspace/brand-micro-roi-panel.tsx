@@ -25,6 +25,42 @@ export interface BrandMicroRoiPanelProps {
   externalHandoff?: ExternalMicroRoiHandoff | null;
 }
 
+const ROI_VISUAL_MEDIA: Record<
+  MicroRoiMode,
+  { wide: string; before: string; after: string }
+> = {
+  logo_mark_lock: {
+    wide: "/reel/landing/c-logo-wide.webp",
+    before: "/reel/landing/c-logo-raw.webp",
+    after: "/reel/landing/c-logo-ours.webp",
+  },
+  product_geometry_lock: {
+    wide: "/reel/landing/c-logo-wide.webp",
+    before: "/reel/landing/c-logo-raw.webp",
+    after: "/reel/landing/c-logo-ours.webp",
+  },
+  micro_patch_ecc: {
+    wide: "/reel/landing/c-garment-wide.webp",
+    before: "/reel/landing/c-garment-raw.webp",
+    after: "/reel/landing/c-garment-ours.webp",
+  },
+  face_detail_refine: {
+    wide: "/reel/landing/c-skin-wide.webp",
+    before: "/reel/landing/c-skin-raw.webp",
+    after: "/reel/landing/c-skin-ours.webp",
+  },
+  face_identity_inward: {
+    wide: "/reel/landing/c-skin-wide.webp",
+    before: "/reel/landing/c-skin-raw.webp",
+    after: "/reel/landing/c-skin-ours.webp",
+  },
+  expression_au_retake: {
+    wide: "/reel/landing/c-skin-wide.webp",
+    before: "/reel/landing/c-skin-raw.webp",
+    after: "/reel/landing/c-skin-ours.webp",
+  },
+};
+
 const QUICK_ROI_PRESETS: Record<
   string,
   {
@@ -40,8 +76,8 @@ const QUICK_ROI_PRESETS: Record<
   }
 > = {
   logo_chest: {
-    labelKo: "① 브랜드 로고·심볼 정밀 복원 (1440px ECC + 스케일 잠금)",
-    labelEn: "① Brand Logo & Mark Lock (1440px ECC + Scale Lock)",
+    labelKo: "① 브랜드 로고·라벨 각인 복원",
+    labelEn: "① Brand Logo & Label Lock",
     shortKo: "로고·라벨 각인",
     mode: "logo_mark_lock",
     box: { x0: 680, y0: 510, x1: 960, y1: 790 },
@@ -51,8 +87,8 @@ const QUICK_ROI_PRESETS: Record<
     seamNoteKo: "보틀 유리 숄더·라벨 외곽선 밖 평탄면 36px 여유 확보됨",
   },
   hand_skin_patch: {
-    labelKo: "② 극소 부위 패치 (볼의 손 제거 · 의류 주름 · 피부 패치)",
-    labelEn: "② Micro-ROI Patch (Hand Removal / Garment / Skin Patch)",
+    labelKo: "② 손·의류 주름·작은 흠집 정리",
+    labelEn: "② Hand / Garment / Blemish Patch",
     shortKo: "손·피부 패치",
     mode: "micro_patch_ecc",
     box: { x0: 880, y0: 180, x1: 1280, y1: 580 },
@@ -62,8 +98,8 @@ const QUICK_ROI_PRESETS: Record<
     seamNoteKo: "턱선·옷깃 경계선 회피 완료 · 볼 평탄 피부 영역 내부에서 알파 0.0 소멸",
   },
   full_body_face: {
-    labelKo: "③ 전신 샷 얼굴 디테일 복원 (1400px 비균일 피부결·홍채)",
-    labelEn: "③ Full-Body Face Detail Refine (1400px Pores & Iris)",
+    labelKo: "③ 전신 화보 얼굴·피부결 선명화",
+    labelEn: "③ Full-Body Face & Skin Detail",
     shortKo: "전신 얼굴·홍채",
     mode: "face_detail_refine",
     box: { x0: 758, y0: 38, x1: 1290, y1: 563 },
@@ -73,8 +109,8 @@ const QUICK_ROI_PRESETS: Record<
     seamNoteKo: "헤어라인·목선 여유 포함 532×525px 안전 박스 확보됨",
   },
   expression_retake: {
-    labelKo: "④ MediaPipe 478점 국소 표정 리테이크 (눈·눈썹·입매 전용)",
-    labelEn: "④ MediaPipe 478-Point Expression Retake (Eyes / Brows / Mouth)",
+    labelKo: "④ 눈빛·입꼬리 미세 리테이크",
+    labelEn: "④ Subtle Eye Gaze & Smile Retake",
     shortKo: "1~2mm 표정 리테이크",
     mode: "expression_au_retake",
     box: { x0: 573, y0: 40, x1: 1474, y1: 768 },
@@ -274,6 +310,7 @@ export function BrandMicroRoiPanel({
   }
 
   const activeSpec = MICRO_ROI_MODE_SPECS[mode];
+  const activeVisual = ROI_VISUAL_MEDIA[mode];
   const cropW = Math.max(1, x1 - x0);
   const cropH = Math.max(1, y1 - y0);
   const upscaleFactor = (activeSpec.defaultCanvasPx / Math.max(cropW, cropH)).toFixed(2);
@@ -295,18 +332,18 @@ export function BrandMicroRoiPanel({
         <div>
           <p className="bw-kicker">
             {isKo
-              ? "MICRO-ROI 5-STEP HARNESS · 극소 부위 무손실 부분 복원"
-              : "MICRO-ROI 5-STEP HARNESS · ZERO-LEAK LOCAL COMPOSITE"}
+              ? "MICRO-ROI · 부분 디테일 수선"
+              : "MICRO-ROI · LOCAL DETAIL REPAIR"}
           </p>
           <h3>
             {isKo
-              ? "전체 캔버스 재합성 왜곡 차단 · 극소 부위 Crop → 2K 확대 → 서브픽셀 정렬 → 주파수 분리 톤 잠금 → 무손실 합성"
-              : "Zero Full-Canvas Drift · Box & 2K Upscale → Subpixel Align → Tone Lock → Zero-Leak Feather"}
+              ? "원본 화보는 그대로 두고, 로고·피부·표정 극소 부위만 또렷하게 고칩니다"
+              : "Keep the full shot untouched and repair only the logo, skin, or expression"}
           </h3>
           <p className="bw-muted">
             {isKo
-              ? "전체 사진을 재합성하면 눈·코·인중 비율이 5~15% 변형되고 조명이 뜹니다. 고칠 부위(180~400px)만 잘라 1400~1600px로 확대한 뒤, 로컬 OpenCV 서브픽셀 역정렬(ECC / 5-Point / MediaPipe 478점)과 주파수 분리(keep_tone)를 거쳐 마스크 바깥 단 1픽셀도 바꾸지 않고(outside_pixels_changed === 0) 합성합니다."
-              : "Prevents full-canvas facial/lighting drift by cropping only the target ROI to 1400-1600px, applying subpixel CV alignment and frequency-separated tone lock, and guaranteeing outside_pixels_changed === 0."}
+              ? "전체 사진을 다시 합성하면 얼굴 인상과 조명이 달라집니다. 수선할 부위만 잘라 고해상도로 복원한 뒤, 서브픽셀 정렬과 주파수 분리(keep_tone)로 경계 자국 없이 합칩니다 (outside_pixels_changed === 0)."
+              : "Full-canvas re-renders distort faces and lighting. We crop only the target region, restore it at 1400-1600px, align subpixels, and lock the surrounding pixels untouched (outside_pixels_changed === 0)."}
           </p>
         </div>
         <span className="bw-badge" data-micro-roi-badge>
@@ -314,7 +351,7 @@ export function BrandMicroRoiPanel({
         </span>
       </div>
 
-      {/* Dynamic Contextual Island + Quick Hotspot Presets */}
+      {/* Quick Hotspot Presets */}
       <div className="bw-row" data-micro-roi-presets>
         {Object.entries(QUICK_ROI_PRESETS).map(([key, preset]) => (
           <button
@@ -336,13 +373,13 @@ export function BrandMicroRoiPanel({
         <div
           className="bw-card bw-fields"
           data-micro-roi-visual-stage
-          style={{ margin: 0, padding: 14, background: "#F7F8FA" }}
+          style={{ margin: 0, padding: 16, background: "#FFFFFF", borderRadius: 20 }}
         >
           <div className="bw-row">
             <strong>
               {isKo
-                ? "① 2K 원본 캔버스 ROI 선택기 (클릭하여 크롭 이동)"
-                : "① 2K Source Canvas ROI Selector (Click to move)"}
+                ? "① 원본 화보 수선 위치 선택 (화면을 클릭해 이동)"
+                : "① Select Repair Area on Source Photo (Click to move)"}
             </strong>
             <span className="bw-badge">
               {cropW}×{cropH}px → {activeSpec.defaultCanvasPx}px ({upscaleFactor}×)
@@ -354,48 +391,43 @@ export function BrandMicroRoiPanel({
             role="presentation"
             style={{
               position: "relative",
-              height: 250,
-              borderRadius: 12,
-              background:
-                "linear-gradient(155deg, #EEF2F7 0%, #DCE6F2 48%, #C6D6EA 100%)",
-              border: "1px solid rgba(15, 23, 42, 0.14)",
+              height: 280,
+              borderRadius: 18,
+              backgroundImage: `url(${activeVisual.wide})`,
+              backgroundSize: "cover",
+              backgroundPosition: "center",
+              backgroundColor: "#EEF0F4",
+              border: "1px solid rgba(15, 23, 42, 0.08)",
               overflow: "hidden",
               cursor: canWrite ? "crosshair" : "default",
             }}
           >
-            {/* Architectural grid lines */}
+            {/* Subtle vignette so ROI frame pops */}
             <div
               style={{
                 position: "absolute",
                 inset: 0,
-                backgroundImage:
-                  "linear-gradient(to right, rgba(56,117,197,0.08) 1px, transparent 1px), linear-gradient(to bottom, rgba(56,117,197,0.08) 1px, transparent 1px)",
-                backgroundSize: "25% 25%",
+                background:
+                  "linear-gradient(180deg, rgba(15,23,42,0.22) 0%, rgba(15,23,42,0.04) 50%, rgba(15,23,42,0.28) 100%)",
               }}
             />
 
-            {/* Silhouette & Bottle Guides */}
-            <div
+            <span
               style={{
                 position: "absolute",
-                left: "36%",
-                top: "12%",
-                width: "28%",
-                height: "74%",
-                borderRadius: "999px 999px 24px 24px",
-                background: "rgba(22, 35, 63, 0.12)",
-                border: "1px dashed rgba(22, 35, 63, 0.28)",
-                display: "flex",
-                alignItems: "flex-start",
-                justifyContent: "center",
-                paddingTop: 10,
+                left: 12,
+                top: 12,
                 fontSize: 11,
-                color: "#1E293B",
                 fontWeight: 600,
+                color: "#FFFFFF",
+                background: "rgba(15, 23, 42, 0.65)",
+                backdropFilter: "blur(8px)",
+                borderRadius: 999,
+                padding: "4px 10px",
               }}
             >
-              {isKo ? "인물·의상 원본 보존 구역 (100% 불변)" : "100% Untouched Subject Zone"}
-            </div>
+              {isKo ? "박스 바깥 원본 픽셀 100% 보존" : "100% Untouched Outside Box"}
+            </span>
 
             {/* Active Micro-ROI Crop Box */}
             <div
@@ -404,12 +436,12 @@ export function BrandMicroRoiPanel({
                 position: "absolute",
                 left: `${Math.max(4, Math.min(82, (x0 / imageWidth) * 100))}%`,
                 top: `${Math.max(4, Math.min(78, (y0 / imageHeight) * 100))}%`,
-                width: `${Math.max(14, Math.min(48, (cropW / imageWidth) * 100))}%`,
-                height: `${Math.max(16, Math.min(48, (cropH / imageHeight) * 100))}%`,
+                width: `${Math.max(18, Math.min(48, (cropW / imageWidth) * 100))}%`,
+                height: `${Math.max(20, Math.min(48, (cropH / imageHeight) * 100))}%`,
                 border: "2px solid #3875C5",
-                borderRadius: 10,
-                background: "rgba(56, 117, 197, 0.16)",
-                boxShadow: "0 0 0 3px rgba(255,255,255,0.85)",
+                borderRadius: 12,
+                background: "rgba(56, 117, 197, 0.14)",
+                boxShadow: "0 0 0 3px rgba(255,255,255,0.92), 0 12px 28px rgba(15,23,42,0.28)",
                 display: "flex",
                 flexDirection: "column",
                 justifyContent: "space-between",
@@ -423,8 +455,8 @@ export function BrandMicroRoiPanel({
                   fontWeight: 700,
                   color: "#FFFFFF",
                   background: "#3875C5",
-                  borderRadius: 4,
-                  padding: "1px 5px",
+                  borderRadius: 999,
+                  padding: "2px 7px",
                   alignSelf: "flex-start",
                 }}
               >
@@ -433,14 +465,15 @@ export function BrandMicroRoiPanel({
               <span
                 style={{
                   fontSize: 10,
+                  fontWeight: 600,
                   color: "#0F172A",
-                  background: "rgba(255,255,255,0.9)",
-                  borderRadius: 4,
-                  padding: "1px 5px",
+                  background: "rgba(255,255,255,0.92)",
+                  borderRadius: 999,
+                  padding: "2px 7px",
                   alignSelf: "flex-end",
                 }}
               >
-                alpha &lt; 0.012 → 0px leak
+                0px leak
               </span>
             </div>
           </div>
@@ -454,13 +487,13 @@ export function BrandMicroRoiPanel({
               alignItems: "center",
               justifyContent: "space-between",
               gap: 8,
-              padding: "8px 10px",
-              borderRadius: 8,
+              padding: "8px 12px",
+              borderRadius: 12,
               background: seamPaddingSafe
                 ? "rgba(56, 117, 197, 0.08)"
                 : "rgba(217, 119, 6, 0.12)",
               border: seamPaddingSafe
-                ? "1px solid rgba(56, 117, 197, 0.25)"
+                ? "1px solid rgba(56, 117, 197, 0.22)"
                 : "1px solid rgba(217, 119, 6, 0.35)",
               fontSize: 12,
             }}
@@ -468,11 +501,11 @@ export function BrandMicroRoiPanel({
             <span>
               {seamPaddingSafe
                 ? isKo
-                  ? "✓ 구조선 안전 레이더 통과: 턱선·옷깃·보틀 숄더 경계 밖 평탄면 여유 확보됨"
-                  : "✓ Seam-Safety Radar Passed: flat margin secured outside structural seams"
+                  ? "✓ 경계 여백 충분: 주변 피부·배경과 티 나지 않게 자연스럽게 이어집니다"
+                  : "✓ Seam-Safety Passed: smooth feather margin secured"
                 : isKo
-                  ? "⚠ 크롭 박스가 좁거나 경계에 가깝습니다. 페더링 경계가 묻히도록 안전 여백 확장을 권장합니다."
-                  : "⚠ Crop box is tight; expand flat padding so feathering drops to 0.0 cleanly."}
+                  ? "⚠ 수선 박스가 경계에 가깝습니다. 자동 여백 보정을 눌러 경계 자국을 예방하세요."
+                  : "⚠ Box is tight; click Auto-Snap Padding for a seamless blend."}
             </span>
             <button
               type="button"
@@ -482,57 +515,58 @@ export function BrandMicroRoiPanel({
               disabled={!canWrite || busy}
               style={{ padding: "4px 10px", fontSize: 12 }}
             >
-              {isKo ? "구조선 회피 안전 여백 자동 보정" : "Auto-Snap Seam Padding"}
+              {isKo ? "안전 여백 자동 보정" : "Auto-Snap Seam Padding"}
             </button>
           </div>
         </div>
 
-        {/* Right: 1440px Magnified Loupe Before/After Compare + @Image 2 Original Asset Lock */}
+        {/* Right: 1440px Magnified Loupe Before/After Compare */}
         <div
           className="bw-card bw-fields"
           data-micro-roi-loupe
-          style={{ margin: 0, padding: 14, background: "#F7F8FA" }}
+          style={{ margin: 0, padding: 16, background: "#FFFFFF", borderRadius: 20 }}
         >
           <div className="bw-row">
             <strong>
               {isKo
-                ? `② ${activeSpec.defaultCanvasPx}px 확대 루페 · 수정 전 ↔ 수정 후 비교`
-                : `② ${activeSpec.defaultCanvasPx}px Magnified Loupe · Before ↔ After`}
+                ? `② ${activeSpec.defaultCanvasPx}px 확대 루페 · 수선 후 ↔ 수선 전 비교`
+                : `② ${activeSpec.defaultCanvasPx}px Magnified Loupe · After ↔ Before`}
             </strong>
             <span className="bw-badge" data-micro-roi-image2-lock>
               {referenceKind === "mark_only"
                 ? isKo
-                  ? "@Image 2 브랜드 원본 로고 1:1 고정"
-                  : "@Image 2 Brand Mark 1:1 Lock"
+                  ? "브랜드 원본 로고 1:1 고정"
+                  : "Brand Mark 1:1 Lock"
                 : referenceKind === "consented_identity"
                   ? isKo
-                    ? "@Image 2 사전 동의 인물 골격·피부결 고정"
-                    : "@Image 2 Consented Identity Lock"
+                    ? "사전 동의 인물 골격·피부결 고정"
+                    : "Consented Identity Lock"
                   : isKo
-                    ? "주파수 분리(keep_tone) 원본 조명 잠금"
-                    : "Frequency-Separated Tone Lock"}
+                    ? "원본 조명·색온도 잠금"
+                    : "Original Tone Lock"}
             </span>
           </div>
 
           <div
             style={{
               position: "relative",
-              height: 196,
-              borderRadius: 12,
+              height: 280,
+              borderRadius: 18,
               overflow: "hidden",
-              border: "1px solid rgba(15, 23, 42, 0.14)",
+              border: "1px solid rgba(15, 23, 42, 0.08)",
               background: "#0F172A",
               color: "#F8FAFC",
               display: "grid",
               gridTemplateColumns: `${loupeComparePct}% ${100 - loupeComparePct}%`,
             }}
           >
-            {/* After (Right / Primary restored layer) */}
+            {/* After (Left / Primary restored layer with real photo) */}
             <div
               style={{
                 padding: 12,
-                background:
-                  "linear-gradient(135deg, #16233F 0%, #244B82 55%, #3875C5 100%)",
+                backgroundImage: `linear-gradient(180deg, rgba(15,23,42,0.45) 0%, rgba(15,23,42,0.08) 45%, rgba(15,23,42,0.68) 100%), url(${activeVisual.after})`,
+                backgroundSize: "cover",
+                backgroundPosition: "center",
                 borderRight: "2px solid #FFFFFF",
                 display: "flex",
                 flexDirection: "column",
@@ -544,67 +578,67 @@ export function BrandMicroRoiPanel({
                 style={{
                   fontSize: 11,
                   fontWeight: 700,
-                  background: "rgba(255,255,255,0.18)",
-                  padding: "2px 8px",
+                  background: "#3875C5",
+                  color: "#FFFFFF",
+                  padding: "3px 10px",
                   borderRadius: 999,
                   alignSelf: "flex-start",
                 }}
               >
                 {isKo
-                  ? `수정 후 (${activeSpec.defaultCanvasPx}px 패치 + ${activeSpec.alignmentMethod})`
-                  : `After (${activeSpec.defaultCanvasPx}px Patch + ${activeSpec.alignmentMethod})`}
+                  ? `수선 후 (${activeSpec.defaultCanvasPx}px 정밀 복원)`
+                  : `After (${activeSpec.defaultCanvasPx}px Restored)`}
               </span>
               <div style={{ fontSize: 12, lineHeight: 1.45 }}>
-                <strong>
+                <strong style={{ color: "#FFFFFF" }}>
                   {isKo
-                    ? "서브픽셀 정합 완료 · 저주파 조명 원본 100% 일치 · 고주파 디테일 복원"
-                    : "Subpixel aligned · Original low-freq light locked · Crisp high-freq detail"}
+                    ? "주변 조명·인상 100% 유지 · 디테일 선명 복원"
+                    : "Original lighting & identity locked · Crisp detail"}
                 </strong>
-                <p style={{ margin: "4px 0 0", fontSize: 11, opacity: 0.9 }}>
+                <p style={{ margin: "3px 0 0", fontSize: 11, color: "#E2E8F0" }}>
                   {targetDescription}
                 </p>
               </div>
-              <code style={{ fontSize: 11, color: "#DBEAFE" }}>
-                outside_pixels_changed === 0 · RMS ≤ 0.10 IOD
-              </code>
             </div>
 
-            {/* Before (Left / Raw unrefined crop) */}
+            {/* Before (Right / Raw unrefined crop with real photo) */}
             <div
               style={{
                 padding: 12,
-                background: "#1E293B",
+                backgroundImage: `linear-gradient(180deg, rgba(15,23,42,0.48) 0%, rgba(15,23,42,0.12) 45%, rgba(15,23,42,0.68) 100%), url(${activeVisual.before})`,
+                backgroundSize: "cover",
+                backgroundPosition: "center",
                 display: "flex",
                 flexDirection: "column",
                 justifyContent: "space-between",
                 overflow: "hidden",
-                opacity: 0.85,
               }}
             >
               <span
                 style={{
                   fontSize: 11,
                   fontWeight: 600,
-                  background: "rgba(255,255,255,0.1)",
-                  padding: "2px 8px",
+                  background: "rgba(15, 23, 42, 0.72)",
+                  color: "#F8FAFC",
+                  padding: "3px 10px",
                   borderRadius: 999,
                   alignSelf: "flex-start",
                 }}
               >
-                {isKo ? `수정 전 (${cropW}×${cropH}px 원본)` : `Before (${cropW}×${cropH}px)`}
+                {isKo ? "수선 전 (원본 확대)" : "Before (Raw Crop)"}
               </span>
-              <p style={{ margin: 0, fontSize: 11, color: "#CBD5E1" }}>
+              <p style={{ margin: 0, fontSize: 11, color: "#E2E8F0" }}>
                 {isKo
-                  ? "전체 캔버스 재합성 시 주변 얼굴 비율 5~15% 왜곡 및 세리프 획 뭉개짐 발생 구간"
-                  : "Low-res local region prone to 5-15% facial/stroke drift under full-canvas re-render"}
+                  ? "획 뭉개짐·미세 아티팩트 구간"
+                  : "Unrefined detail region"}
               </p>
             </div>
           </div>
 
           <label style={{ fontSize: 12 }}>
             {isKo
-              ? `수정 전 ↔ 수정 후 루페 비교 슬라이더 (${loupeComparePct}%)`
-              : `Before ↔ After Loupe Wipe (${loupeComparePct}%)`}
+              ? `수선 후 ↔ 수선 전 비교 슬라이더 (${loupeComparePct}%)`
+              : `After ↔ Before Loupe Wipe (${loupeComparePct}%)`}
             <input
               type="range"
               min={15}
@@ -618,9 +652,23 @@ export function BrandMicroRoiPanel({
       </div>
 
       <form onSubmit={onFormSubmit} className="bw-fields" data-micro-roi-form>
+        <label>
+          {isKo
+            ? "어떻게 고칠까요? (수선할 부위와 원하는 결과를 적어 주세요)"
+            : "What should we fix in this area?"}
+          <input
+            name="targetDescription"
+            value={targetDescription}
+            onChange={(e) => setTargetDescription(e.target.value)}
+            maxLength={400}
+            required
+            disabled={!canWrite || busy}
+          />
+        </label>
+
         <div className="bw-grid-wide">
           <label>
-            {isKo ? "복원 모드 (5단계 CV 파이프라인)" : "Micro-ROI Repair Mode"}
+            {isKo ? "수선 대상 종류" : "Repair Target Mode"}
             <select
               name="microRoiMode"
               value={mode}
@@ -641,7 +689,7 @@ export function BrandMicroRoiPanel({
           </label>
 
           <label>
-            {isKo ? "레퍼런스 역할 잠금 (Reference Role)" : "Reference Role Lock"}
+            {isKo ? "고정할 기준 에셋" : "Reference Asset Lock"}
             <select
               name="referenceKind"
               value={referenceKind}
@@ -652,119 +700,104 @@ export function BrandMicroRoiPanel({
             >
               <option value="mark_only">
                 {isKo
-                  ? "mark_only · 단독 로고/심볼 마크 전용 (전체 제품 사진 금지)"
-                  : "mark_only · Isolated logo/mark only"}
+                  ? "브랜드 원본 로고/심볼 마크 고정 (mark_only)"
+                  : "Isolated brand logo/mark lock (mark_only)"}
               </option>
               <option value="consented_identity">
                 {isKo
-                  ? "consented_identity · 사전 동의 인물 정체성/피부결 앵커"
-                  : "consented_identity · Pre-consented identity anchor"}
+                  ? "사전 동의 모델 얼굴·피부결 고정 (consented_identity)"
+                  : "Pre-consented identity lock (consented_identity)"}
               </option>
               <option value="material_swatch">
                 {isKo
-                  ? "material_swatch · 원단/표면 재질 스와치"
-                  : "material_swatch · Surface material swatch"}
+                  ? "원단·표면 재질 스와치 고정 (material_swatch)"
+                  : "Surface material swatch (material_swatch)"}
               </option>
               <option value="none">
                 {isKo
-                  ? "none · 원본 크롭 단독 복원 (손/아티팩트 제거)"
-                  : "none · Crop-only repair"}
+                  ? "주변 피부·배경 결로 자연 복원 (none)"
+                  : "Surrounding texture repair (none)"}
               </option>
             </select>
           </label>
         </div>
 
-        <div className="bw-grid-wide">
-          <label>
-            {isKo ? "Box x0 (px)" : "Box x0 (px)"}
-            <input
-              type="number"
-              min={0}
-              max={imageWidth - 16}
-              value={x0}
-              onChange={(e) => setX0(Number(e.target.value) || 0)}
-              disabled={!canWrite || busy}
-            />
-          </label>
-          <label>
-            {isKo ? "Box y0 (px)" : "Box y0 (px)"}
-            <input
-              type="number"
-              min={0}
-              max={imageHeight - 16}
-              value={y0}
-              onChange={(e) => setY0(Number(e.target.value) || 0)}
-              disabled={!canWrite || busy}
-            />
-          </label>
-          <label>
-            {isKo ? "Box x1 (px)" : "Box x1 (px)"}
-            <input
-              type="number"
-              min={16}
-              max={imageWidth}
-              value={x1}
-              onChange={(e) => setX1(Number(e.target.value) || 200)}
-              disabled={!canWrite || busy}
-            />
-          </label>
-          <label>
-            {isKo ? "Box y1 (px)" : "Box y1 (px)"}
-            <input
-              type="number"
-              min={16}
-              max={imageHeight}
-              value={y1}
-              onChange={(e) => setY1(Number(e.target.value) || 200)}
-              disabled={!canWrite || busy}
-            />
-          </label>
-        </div>
+        <details className="bw-service-disclosure">
+          <summary>
+            {isKo
+              ? `고급 픽셀 좌표 & 주파수 분리 설정 (${cropW}×${cropH}px → ${activeSpec.defaultCanvasPx}px)`
+              : `Advanced Pixel Coordinates & Tone-Lock Settings (${cropW}×${cropH}px → ${activeSpec.defaultCanvasPx}px)`}
+          </summary>
+          <div className="bw-fields" style={{ marginTop: 12 }}>
+            <div className="bw-grid-wide">
+              <label>
+                {isKo ? "Box x0 (px)" : "Box x0 (px)"}
+                <input
+                  type="number"
+                  min={0}
+                  max={imageWidth - 16}
+                  value={x0}
+                  onChange={(e) => setX0(Number(e.target.value) || 0)}
+                  disabled={!canWrite || busy}
+                />
+              </label>
+              <label>
+                {isKo ? "Box y0 (px)" : "Box y0 (px)"}
+                <input
+                  type="number"
+                  min={0}
+                  max={imageHeight - 16}
+                  value={y0}
+                  onChange={(e) => setY0(Number(e.target.value) || 0)}
+                  disabled={!canWrite || busy}
+                />
+              </label>
+              <label>
+                {isKo ? "Box x1 (px)" : "Box x1 (px)"}
+                <input
+                  type="number"
+                  min={16}
+                  max={imageWidth}
+                  value={x1}
+                  onChange={(e) => setX1(Number(e.target.value) || 200)}
+                  disabled={!canWrite || busy}
+                />
+              </label>
+              <label>
+                {isKo ? "Box y1 (px)" : "Box y1 (px)"}
+                <input
+                  type="number"
+                  min={16}
+                  max={imageHeight}
+                  value={y1}
+                  onChange={(e) => setY1(Number(e.target.value) || 200)}
+                  disabled={!canWrite || busy}
+                />
+              </label>
+            </div>
 
-        <p className="bw-muted" data-micro-roi-scale-preview>
-          {isKo
-            ? `Step 1 크롭 크기: ${cropW}×${cropH}px → LANCZOS4 업스케일 작업 캔버스: ${activeSpec.defaultCanvasPx}px (확대 배율 ${upscaleFactor}×) · 정렬: ${activeSpec.alignmentMethod} · 톤 잠금: ${activeSpec.toneLockMethod}`
-            : `Step 1 Crop: ${cropW}×${cropH}px → LANCZOS4 Canvas: ${activeSpec.defaultCanvasPx}px (${upscaleFactor}×) · Align: ${activeSpec.alignmentMethod}`}
-        </p>
+            <p className="bw-muted" data-micro-roi-scale-preview>
+              {isKo
+                ? `Step 1 크롭 크기: ${cropW}×${cropH}px → LANCZOS4 업스케일 작업 캔버스: ${activeSpec.defaultCanvasPx}px (확대 배율 ${upscaleFactor}×) · 정렬: ${activeSpec.alignmentMethod} · 톤 잠금: ${activeSpec.toneLockMethod}`
+                : `Step 1 Crop: ${cropW}×${cropH}px → LANCZOS4 Canvas: ${activeSpec.defaultCanvasPx}px (${upscaleFactor}×) · Align: ${activeSpec.alignmentMethod}`}
+            </p>
 
-        <label>
-          {isKo
-            ? "Step 2 픽셀 고정 부분 복원 지시문 (수정할 극소 부위만 기술)"
-            : "Step 2 Pixel-Locked Target Repair Instruction"}
-          <input
-            name="targetDescription"
-            value={targetDescription}
-            onChange={(e) => setTargetDescription(e.target.value)}
-            maxLength={400}
-            required
-            disabled={!canWrite || busy}
-          />
-        </label>
-
-        <label className="bw-check">
-          <input
-            type="checkbox"
-            checked={shapeChanged}
-            onChange={(e) => setShapeChanged(e.target.checked)}
-            disabled={!canWrite || busy}
-          />
-          {isKo
-            ? "외곽 실루엣/옷깃 형태 변경 포함 (Step 4 주파수 분리 가우시안 시그마 σ ≥ 200px 강제)"
-            : "Includes silhouette/shape change (Enforce Step 4 keep_tone Gaussian sigma ≥ 200px)"}
-        </label>
+            <label className="bw-check">
+              <input
+                type="checkbox"
+                checked={shapeChanged}
+                onChange={(e) => setShapeChanged(e.target.checked)}
+                disabled={!canWrite || busy}
+              />
+              {isKo
+                ? "외곽 실루엣/옷깃 형태 변경 포함 (Step 4 주파수 분리 가우시안 시그마 σ ≥ 200px 강제)"
+                : "Includes silhouette/shape change (Enforce Step 4 keep_tone Gaussian sigma ≥ 200px)"}
+            </label>
+          </div>
+        </details>
 
         {canWrite && (
           <div className="bw-row">
-            <button
-              type="submit"
-              className="bw-button"
-              disabled={busy}
-              data-micro-roi-plan-submit
-            >
-              {isKo
-                ? "5단계 Micro-ROI 복원 명세 시뮬레이션"
-                : "Simulate 5-Step Micro-ROI Plan"}
-            </button>
             <button
               type="button"
               className="bw-button bw-primary"
@@ -773,8 +806,18 @@ export function BrandMicroRoiPanel({
               onClick={() => void submitMicroRoi("microRoi.queue")}
             >
               {isKo
-                ? "로컬 CV 하네스 부분 복원 작업 실행 (Queue)"
-                : "Queue Local CV Micro-ROI Repair"}
+                ? "선택한 부위 정밀 수선 실행"
+                : "Run Precision Local Repair"}
+            </button>
+            <button
+              type="submit"
+              className="bw-button"
+              disabled={busy}
+              data-micro-roi-plan-submit
+            >
+              {isKo
+                ? "5단계 복원 명세 미리보기"
+                : "Preview 5-Step Repair Spec"}
             </button>
           </div>
         )}

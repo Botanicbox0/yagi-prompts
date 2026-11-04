@@ -4,24 +4,36 @@ import {
   SKIN_MATTE_CONTRACT_A10
 } from '@/lib/brands/briefs/compiler';
 import {
+  DEFAULT_EDITORIAL_TEMPLATE_BASELINE,
+  DUAL_IDENTITY_CANDIDATE_ENGINES,
   GEMINI_DIRECTOR_DEFAULT_BASE_URL,
   GEMINI_DIRECTOR_DEFAULT_MODEL,
+  TEMPLATE_BASELINE_PRESETS,
+  rawIdentitySimilaritySchema,
+  rawOpticalIdentityMasterSchema,
   rawPhotoInspectionSchema,
   rawStage1ChatSchema,
   rawStage2RewriteSchema,
+  resolveTemplateBaseline,
   type ClientDirectorTurnResponse,
   type DirectorChatTurnInput,
   type DirectorChatTurnResult,
   type DirectorConfig,
   type DirectorRewriteInput,
   type DirectorRewriteResult,
+  type IdentitySimilarityVerdict,
+  type IdentitySimilarityVerificationInput,
+  type ModelSpecificImageEngine,
+  type MultiPhotoIdentityInput,
   type OpaqueCompiledPrompt,
+  type OpticalIdentityMasterPlan,
   type PhotoInspectionInput,
   type PhotoInspectionVerdict,
   type PhotoIssueCode,
   type PhotoPrecheckInput,
   type PhotoPrecheckResult,
-  type RecommendedPhotoCleanup
+  type RecommendedPhotoCleanup,
+  type TemplateBaselineSpec
 } from './schema';
 
 const SERVER_ONLY_PROMPT_VAULT = new WeakMap<OpaqueCompiledPrompt, string>();
@@ -83,23 +95,135 @@ const OCCLUSION_ISSUES: ReadonlySet<PhotoIssueCode> = new Set([
   'hand_occlusion',
   'prop_occlusion',
   'hair_occlusion',
-  'tight_crop'
+  'tight_crop',
+  'wide_crop',
+  'asymmetrical_shoulders',
+  'bare_shoulder_id_crop'
+]);
+
+const RETOUCH_ISSUES: ReadonlySet<PhotoIssueCode> = new Set([
+  'over_retouched_contour',
+  'heavy_filter'
 ]);
 
 const DETAIL_ISSUES: ReadonlySet<PhotoIssueCode> = new Set(['low_resolution', 'motion_blur']);
 
+export const IDENTITY_SIMILARITY_THRESHOLD = 0.9 as const;
+
+export const AMERICANO_SKIN_CONTRACT =
+  'Render a matte-to-natural living skin finish with a very low specular-to-diffuse ratio; skin highlights stay below clipping and never form glossy white bands or shiny hotspots on the forehead, nose bridge, or cheeks, showing locally varied living skin with subtle chromatic warmth shifts across cheeks and nose and restrained natural micro-relief without beauty-filter plastic blur, porcelain gradients, or harsh aging shadows.';
+
+export const ANATOMICAL_DE_FILTER_CONTRACT =
+  'SURGICAL IN-PLACE IDENTITY LOCK: Edit the first attached image IN PLACE while keeping 98% of the person in Image 1 100% recognizable and untouched in core facial identity, exact eye shape, double-eyelid crease, inter-canthal distance, nasal bridge and tip width, philtrum length, mouth corners, exact hairstyle (preserve original part and bangs without replacing with generic 5:5 curtain bangs), and bright, clean, youthful Korean skin luminance (never age the skin, never add harsh pores or dark under-eye shadows, never re-render into a generic studio mugshot), while normalizing any 2D beauty-app liquify distortions (artificially pinched V-line jawline, over-inflated or over-lined lips) back to anatomically natural 3D camera lens proportions (85mm f/2.0 portrait perspective, soft oval-egg contour) wearing a clean minimalist matte black crew-neck top (never bare passport-photo shoulders).';
+
+function stripBannedPlasticTokens(text: string): string {
+  return text
+    .replace(
+      /\b(?:porcelain\s+skin|flawless\s+skin|smooth\s+skin|dewy\s+glow|visible\s+pores)\b/gi,
+      'matte-to-natural living skin finish'
+    )
+    .replace(/\bbare\s+shoulders\b/gi, 'symmetrical shoulders in a minimalist matte black crew-neck top')
+    .replace(/\bstrapless\s+(?:black\s+)?top\b/gi, 'minimalist matte black crew-neck top')
+    .trim();
+}
+
+export function compileModelSpecificIdentityPrompt(
+  engine: ModelSpecificImageEngine,
+  spec: {
+    extractedIdentityLockEn: string;
+    extractedHairLockEn: string;
+    rawSurgicalPromptEn: string;
+  }
+): string {
+  const identityLock = stripBannedPlasticTokens(spec.extractedIdentityLockEn);
+  const hairLock = stripBannedPlasticTokens(spec.extractedHairLockEn);
+  const surgicalDelta = stripBannedPlasticTokens(spec.rawSurgicalPromptEn);
+
+  if (engine === 'seedream-5.0-pro') {
+    // Official ByteDance Seedream 5.0 Pro Formula: 4-Part Cohesive Natural-Language Prose
+    const part1RefRole = `Reference Image 1 provides the young Korean female subject's exact facial identity, distinctive features (${identityLock}), exact hairstyle (${hairLock}), clothing, and ambient lighting—preserve 95% of Reference Image 1's real facial bone structure, eye spacing, nose bridge contour, lip shape, and personal charm so she remains 100% unmistakably the exact same person.`;
+    const part2SceneProse = `An in-place refined vertical 3:4 medium bust-up portrait of the exact same young Korean woman from Reference Image 1, keeping her original hairstyle (${hairLock}) and natural styling, while gently relaxing any harsh, tense, or intimidating facial tension into a calm, effortlessly chic, approachable expression with softly closed or naturally relaxed lips and removing any hand touching the cheek or dangling earphone wire. ${surgicalDelta}`;
+    const part3OpticsSkin = `Maintain the natural diffused daylight and soft tonal roll-off (#F4EFEA highlight roll-off, #262528 shadow floor) of an 85mm f/2.0 portrait lens. ${AMERICANO_SKIN_CONTRACT}`;
+    const part4CleanFrame =
+      'High-end editorial portrait master reference frame, completely clean composition with no earphone cords, no hands covering the jawline, no text, no logos, and no watermarks.';
+    return `${part1RefRole} ${part2SceneProse} ${part3OpticsSkin} ${part4CleanFrame}`;
+  }
+
+  if (engine === 'gpt-image-2.5-sunburst') {
+    // Official OpenAI GPT Image 2.5 Formula: 5-Tier Creative Brief Hierarchy
+    return [
+      '1. Deliverable & Framing: A high-end editorial bust-up portrait in vertical 3:4 format.',
+      `2. Reference Authority (Identity Lock): Use Reference Image 1 strictly for the female subject's facial identity (${identityLock}) and exact hairstyle (${hairLock}). Ignore any tilted selfie angle, hand on face, earphone cord, or cluttered background.`,
+      `3. Subject, Pose & Garment Construction: Eye-level frontal bust-up posture with calm, soft approachable eyes and relaxed closed lips, wearing a minimalist matte black crew-neck top. ${surgicalDelta}`,
+      '4. Environment & Spatial Planes: Softly out-of-focus neutral daylight architectural background with clean negative space around the crown and shoulders.',
+      `5. Lighting, Color Palette (#HEX) & Optical Rendering + Exclusions: Soft diffused daylight key (#F4EFEA highlights, #262528 shadow floor), 85mm f/2.0 optical compression. ${AMERICANO_SKIN_CONTRACT} No earphone cords, no hands near face, no text, no watermarks, no logos.`
+    ].join('\n');
+  }
+
+  // Official Google Gemini Nano Banana 2.1 Formula: ALL-CAPS Section-Label & LOCK Architecture
+  return [
+    'ULTRA HIGH-END EDITORIAL PORTRAIT — vertical 3:4.',
+    `IDENTITY LOCK: Keep the exact facial identity of the young Korean woman in Reference Image 1 (${identityLock}) and exact hairstyle (${hairLock}). ${ANATOMICAL_DE_FILTER_CONTRACT}`,
+    'COMPOSITION LOCK: Eye-level vertical 3:4 bust-up portrait framing full head, hair, and symmetrical upper shoulders.',
+    `POSE LOCK: Calm, relaxed, approachable eye-level gaze with gently closed lips (never fierce or tense). ${surgicalDelta}`,
+    'OUTFIT & PROPS: Clean minimalist matte black crew-neck top; zero handheld props, zero earphone cords, zero hands touching face.',
+    'SETTING: Softly out-of-focus neutral daylight architectural backdrop.',
+    'COLOR GRADE & LIGHT: Soft diffused natural daylight (#F4EFEA highlight roll-off, #262528 shadow floor).',
+    `CAMERA & OPTICS: 85mm f/2.0 portrait lens perspective. ${AMERICANO_SKIN_CONTRACT}`,
+    'NEGATIVE: no text, no watermark, no brand logo, no earphone cord, no hand on cheek, no harsh glare, no plastic skin retouching.'
+  ].join('\n');
+}
+
+function sanitizeCleanupPrompt(raw: string | null, includeRetouchNormalization: boolean): string {
+  const base = (
+    raw ??
+    'Keep the person in Image 1 100% identical in facial identity, eyes, nose, lips, skin tone, and hairstyle. Remove only the occluding hand or handheld object near the face and restore a clean natural neckline and symmetrical shoulders wearing a minimalist matte black crew-neck top.'
+  )
+    .replace(/\bbare\s+shoulders\b/gi, 'symmetrical shoulders in a minimalist matte black crew-neck top')
+    .replace(/\bstrapless\s+(?:black\s+)?top\b/gi, 'minimalist matte black crew-neck top')
+    .replace(/\bvisible\s+pores\b/gi, 'clean, luminous, youthful skin tone')
+    .trim();
+
+  if (includeRetouchNormalization && !base.includes('normalizing any 2D beauty-app liquify distortions')) {
+    return `${base} ${ANATOMICAL_DE_FILTER_CONTRACT}`;
+  }
+  return base;
+}
+
+export { resolveTemplateBaseline };
+
 export function routePhotoCleanup(
   issues: readonly PhotoIssueCode[],
-  cleanupPromptEn: string | null
+  cleanupPromptEn: string | null,
+  extractedHairDescription: string | null = null
 ): RecommendedPhotoCleanup {
-  if (issues.some((code) => OCCLUSION_ISSUES.has(code))) {
+  const hasOcclusion = issues.some((code) => OCCLUSION_ISSUES.has(code));
+  const hasRetouch = issues.some((code) => RETOUCH_ISSUES.has(code));
+
+  if (hasOcclusion || hasRetouch) {
+    const mode = hasOcclusion ? 'inpaint_occlusion' : 'normalize_retouch';
+    const rawSurgicalPromptEn = sanitizeCleanupPrompt(
+      cleanupPromptEn ?? (hasRetouch ? ANATOMICAL_DE_FILTER_CONTRACT : null),
+      hasRetouch
+    );
+    const spec = {
+      extractedIdentityLockEn:
+        'exact eye shape, double-eyelid crease, inter-canthal distance, nose bridge and tip width, philtrum length, and natural lip contour from Reference Image 1',
+      extractedHairLockEn:
+        extractedHairDescription?.trim() || 'exact hairstyle, parting, and bangs from Reference Image 1',
+      rawSurgicalPromptEn
+    };
     return {
-      mode: 'inpaint_occlusion',
+      mode,
       engine: 'nano-banana-2.1',
       fallbackEngine: 'seedream-5.0-pro',
-      editPromptEn:
-        cleanupPromptEn ??
-        'Keep the person in Image 1 100% identical in facial identity, eyes, nose, lips, skin tone, and hairstyle. Remove only the occluding hand or handheld object near the face and restore a clean natural neckline and symmetrical shoulders.'
+      editPromptEn: rawSurgicalPromptEn,
+      requiresDualCandidateSelection: true,
+      candidateEngines: DUAL_IDENTITY_CANDIDATE_ENGINES,
+      candidatePromptsEn: {
+        'seedream-5.0-pro': compileModelSpecificIdentityPrompt('seedream-5.0-pro', spec),
+        'nano-banana-2.1': compileModelSpecificIdentityPrompt('nano-banana-2.1', spec)
+      }
     };
   }
   if (issues.some((code) => DETAIL_ISSUES.has(code))) {
@@ -107,14 +231,20 @@ export function routePhotoCleanup(
       mode: 'restore_detail',
       engine: 'seedvr2-local',
       fallbackEngine: null,
-      editPromptEn: null
+      editPromptEn: null,
+      requiresDualCandidateSelection: false,
+      candidateEngines: null,
+      candidatePromptsEn: null
     };
   }
   return {
     mode: 'none',
     engine: null,
     fallbackEngine: null,
-    editPromptEn: null
+    editPromptEn: null,
+    requiresDualCandidateSelection: false,
+    candidateEngines: null,
+    candidatePromptsEn: null
   };
 }
 
@@ -180,12 +310,13 @@ export function verifyRewrittenPrompt(
  */
 const STAGE2_VIDEO_CREATOR_DOCTRINE = [
   'You are the internal Stage 2 Seedance 2.5 Film Director Rewriter.',
-  'Apply the structuredIntent edits onto the basePrompt while strictly preserving:',
-  '1. Reference Authority & Strict Lock: @Image 1 supplies ONLY facial identity and the target hairstyle. Ignore original background, casual top, handheld objects, cups, bottles, angel wings, or props from @Image 1.',
+  'Apply the structuredIntent edits (outfitOverrideEn, makeupOverrideEn, hairOverrideEn, propOverrideEn, shotEdits, strictExclusionsEn) onto the basePrompt while strictly preserving:',
+  '1. Reference Authority & Strict Lock: @Image 1 supplies ONLY facial identity and the target hairstyle. Ignore original background, casual top, handheld objects, cups, bottles, angel wings, eyeglasses/sunglasses on head, or props from @Image 1.',
   '2. Additional Reference Binding: When @Image 2 (outfit/look) or @Image 3 (prop/product) is present in referenceSlots, bind it explicitly in Reference authority and across every Timeline shot, forbidding floating clothing cutouts or white studio backdrops.',
-  '3. Candid Micro-Acting & Lower-Face Lock: Keep lip motion calm and understated; forbid wide toothy grins, shouting, or stiff passport-photo staring straight into the camera lens. Every shot transition must remain an instantaneous editorial hard cut.',
-  `4. SKIN_MATTE_CONTRACT: Preserve "${SKIN_MATTE_CONTRACT_A10}".`,
-  '5. Preserve the original camera focal length, chiaroscuro shadow floor, and unbroken single-bed audio rules.'
+  '3. Makeup & Complexion Override: When makeupOverrideEn is present (e.g. keeping the user photo natural daily makeup instead of heavy 1990s retro smoky/plum makeup), replace the basePrompt makeup instructions accordingly while keeping skin warm and natural (zero pink blush/pink eyeshadow per TWINGS IDENTITY.md).',
+  '4. Candid Micro-Acting & Lower-Face Lock: Keep lip motion calm and understated; forbid wide toothy grins, shouting, or stiff passport-photo staring straight into the camera lens. Every shot transition must remain an instantaneous editorial hard cut.',
+  `5. SKIN_MATTE_CONTRACT: Preserve "${SKIN_MATTE_CONTRACT_A10}".`,
+  '6. Preserve the original camera focal length, chiaroscuro shadow floor, and unbroken single-bed audio rules.'
 ].join('\n');
 
 interface GeminiCandidateResponse {
@@ -222,7 +353,10 @@ async function callGeminiStructuredJson<T>(
       ],
       generationConfig: {
         temperature: 0.2,
-        responseMimeType: 'application/json'
+        responseMimeType: 'application/json',
+        thinkingConfig: {
+          thinkingLevel: 'LOW'
+        }
       }
     })
   });
@@ -231,7 +365,8 @@ async function callGeminiStructuredJson<T>(
     throw new Error(`gemini_director_http_${response.status}`);
   }
   const body = (await response.json()) as GeminiCandidateResponse;
-  const text = body.candidates?.[0]?.content?.parts?.[0]?.text;
+  const partsList = body.candidates?.[0]?.content?.parts ?? [];
+  const text = partsList[partsList.length - 1]?.text;
   if (!text) {
     throw new Error('gemini_director_empty_response');
   }
@@ -252,7 +387,8 @@ export function createFlashTemplateDirector(
       const systemInstruction = [
         'Inspect the uploaded reference photo for Seedance 2.5 / TWINGS video generation.',
         'Ideal Bust-Up framing has faceWidthRatio between 0.30 and 0.42 with visible neck and symmetrical shoulders.',
-        'Check for hand_occlusion, prop_occlusion (cups, bottles, phones, wings), hair_occlusion, tight_crop, low_resolution, or motion_blur.',
+        'Check for hand_occlusion, prop_occlusion (cups, bottles, phones, wings), hair_occlusion, tight_crop, over_retouched_contour (2D liquify pinched V-line jaw, artificially inflated lips, plastic poreless beauty-app blur), heavy_filter, low_resolution, or motion_blur.',
+        'When over_retouched_contour or heavy_filter is present, set status to needs_cleanup and gently explain that 2D beauty-app contour/lip retouching can look unnatural in 3D motion, offering natural optical camera proportion & skin texture normalization.',
         'Extract an accurate English hairstyle and facial structure description (extractedHairDescription) and provide polite Korean/English guidance.'
       ].join('\n');
 
@@ -287,7 +423,11 @@ export function createFlashTemplateDirector(
         extractedHairDescription: raw.extractedHairDescription,
         userMessageKo: raw.userMessageKo,
         userMessageEn: raw.userMessageEn,
-        recommendedCleanup: routePhotoCleanup(raw.issues, raw.cleanupPromptEn)
+        recommendedCleanup: routePhotoCleanup(
+          raw.issues,
+          raw.cleanupPromptEn,
+          raw.extractedHairDescription
+        )
       };
     },
 
@@ -391,6 +531,162 @@ export function createFlashTemplateDirector(
         preservedCameraAndLighting: raw.preservedCameraAndLighting,
         preservedAudioRule: raw.preservedAudioRule,
         preservedIdentityStrictLock: raw.preservedIdentityStrictLock
+      };
+    },
+
+    async synthesizeOpticalIdentityMaster(
+      input: MultiPhotoIdentityInput
+    ): Promise<OpticalIdentityMasterPlan> {
+      if (input.photos.length === 0) {
+        throw new Error('optical_identity_master_no_photos');
+      }
+
+      const systemInstruction = [
+        'You are the TWINGS Optical Identity Lock Engine v2 (3-Stage Zero-Distortion Identity-First Architecture).',
+        'Your #1 priority is 100% REAL FACIAL IDENTITY PRESERVATION. Generative re-synthesis (Nano Banana) can distort eye spacing, widen the nose, or age skin texture, so you MUST prefer `passthrough_crop` (keeping 100% original pixels) whenever at least ONE uploaded photo has a clean, unoccluded, flattering face and there is no explicit `creatorNoteKo` requesting contour/hairline modification.',
+        '1. strategy: return "passthrough_crop" if any photo has a clean unoccluded face and creatorNoteKo is empty; return "surgical_inplace_edit" ONLY when creatorNoteKo explicitly asks to modify forehead/jawline/lip contour OR when every single photo has physical hand/cup/prop occlusion or severe 2D beauty-app liquify.',
+        '2. styleAnchorIndex: 0-based index of the single most flattering, youthful, recognizable photo.',
+        '3. structureAnchorIndex: 0-based index of the photo with the most accurate natural facial proportions. NEVER select a 24mm ultra-close wide-angle unretouched selfie (<30cm from lens where barrel distortion enlarges the nose) as structureAnchorIndex.',
+        '4. styleAnchorRotationClockwiseDegrees: 0 | 90 | 180 | 270 clockwise rotation needed if the selected styleAnchor photo is lying sideways.',
+        '5. bustupCropBoxNormalized: [ymin, xmin, ymax, xmax] (0..1000) framing a clean 3:4 bust-up portrait on the upright styleAnchor photo.',
+        '6. Compose opticalMasterPromptEn for in-place surgical editing (when needed), preserving 98% of the original facial identity, eye shape, nose width, philtrum, and bright youthful Korean skin luminance without aging pores.'
+      ].join('\n');
+
+      const cappedPhotos = input.photos.slice(0, 8);
+      const parts: Array<Record<string, unknown>> = [
+        {
+          text: JSON.stringify({
+            photoCount: cappedPhotos.length,
+            creatorNoteKo: input.creatorNoteKo ?? null,
+            filenames: cappedPhotos.map((p, idx) => p.filename ?? `photo_${idx}`)
+          })
+        },
+        ...cappedPhotos.map((photo) => ({
+          inlineData: {
+            mimeType: photo.mime,
+            data: Buffer.from(photo.bytes).toString('base64')
+          }
+        }))
+      ];
+
+      const raw = await callGeminiStructuredJson(
+        config,
+        fetchImpl,
+        systemInstruction,
+        parts,
+        (json) => rawOpticalIdentityMasterSchema.parse(json)
+      );
+
+      const maxIdx = cappedPhotos.length - 1;
+      const styleAnchorIndex = Math.min(Math.max(raw.styleAnchorIndex, 0), maxIdx);
+      const structureAnchorIndex = Math.min(Math.max(raw.structureAnchorIndex, 0), maxIdx);
+      const hasNote = Boolean(input.creatorNoteKo && input.creatorNoteKo.trim().length > 0);
+      const strategy: 'passthrough_crop' | 'surgical_inplace_edit' = hasNote
+        ? 'surgical_inplace_edit'
+        : raw.requiresMasterSynthesis
+          ? raw.strategy
+          : 'passthrough_crop';
+      const requiresMasterSynthesis = strategy === 'surgical_inplace_edit';
+      const primaryEngine: ModelSpecificImageEngine = input.preferredEngine ?? 'seedream-5.0-pro';
+      const fallbackEngine: ModelSpecificImageEngine =
+        primaryEngine === 'seedream-5.0-pro' ? 'nano-banana-2.1' : 'seedream-5.0-pro';
+
+      const compiledPrimaryPrompt = compileModelSpecificIdentityPrompt(primaryEngine, {
+        extractedIdentityLockEn: raw.extractedIdentityLockEn,
+        extractedHairLockEn: raw.extractedHairLockEn,
+        rawSurgicalPromptEn: raw.opticalMasterPromptEn
+      });
+      const compiledFallbackPrompt = compileModelSpecificIdentityPrompt(fallbackEngine, {
+        extractedIdentityLockEn: raw.extractedIdentityLockEn,
+        extractedHairLockEn: raw.extractedHairLockEn,
+        rawSurgicalPromptEn: raw.opticalMasterPromptEn
+      });
+      const compiledSeedreamPrompt =
+        primaryEngine === 'seedream-5.0-pro'
+          ? compiledPrimaryPrompt
+          : compileModelSpecificIdentityPrompt('seedream-5.0-pro', {
+              extractedIdentityLockEn: raw.extractedIdentityLockEn,
+              extractedHairLockEn: raw.extractedHairLockEn,
+              rawSurgicalPromptEn: raw.opticalMasterPromptEn
+            });
+      const compiledNanoBananaPrompt =
+        primaryEngine === 'nano-banana-2.1'
+          ? compiledPrimaryPrompt
+          : compileModelSpecificIdentityPrompt('nano-banana-2.1', {
+              extractedIdentityLockEn: raw.extractedIdentityLockEn,
+              extractedHairLockEn: raw.extractedHairLockEn,
+              rawSurgicalPromptEn: raw.opticalMasterPromptEn
+            });
+
+      return {
+        strategy,
+        styleAnchorIndex,
+        structureAnchorIndex,
+        styleAnchorRotationClockwiseDegrees: raw.styleAnchorRotationClockwiseDegrees,
+        bustupCropBoxNormalized: raw.bustupCropBoxNormalized,
+        detectedIssues: raw.detectedIssues,
+        requiresMasterSynthesis,
+        engine: requiresMasterSynthesis ? primaryEngine : null,
+        extractedIdentityLockEn: raw.extractedIdentityLockEn,
+        extractedHairLockEn: raw.extractedHairLockEn,
+        opticalMasterPromptEn: sealServerOnlyPrompt(compiledPrimaryPrompt),
+        fallbackMasterPromptEn: sealServerOnlyPrompt(compiledFallbackPrompt),
+        dualCandidatePromptsEn: {
+          'seedream-5.0-pro': sealServerOnlyPrompt(compiledSeedreamPrompt),
+          'nano-banana-2.1': sealServerOnlyPrompt(compiledNanoBananaPrompt)
+        }
+      };
+    },
+
+    async verifyIdentitySimilarity(
+      input: IdentitySimilarityVerificationInput
+    ): Promise<IdentitySimilarityVerdict> {
+      const systemInstruction = [
+        'You are the TWINGS Stage 3 Facial Identity Similarity Verification Gate.',
+        'Compare Image 1 (Original Creator Photo) vs Image 2 (AI Edited Master) and return strict JSON:',
+        '- identitySimilarityScore (0.00..1.00): how closely Image 2 matches the exact eye shape, eyelid crease, nose bridge/tip width, philtrum length, mouth corners, and personal charm of Image 1.',
+        '- agingOrDistortionDetected (boolean): true if Image 2 makes the person look older, tired, wider-nosed, longer in the mid-face, harsher in skin texture, or like a different person.',
+        '- passedGate (boolean): true ONLY if identitySimilarityScore >= 0.90 AND agingOrDistortionDetected === false.',
+        '- reasonKo (string): concise 1-sentence Korean diagnosis.'
+      ].join('\n');
+
+      const parts: Array<Record<string, unknown>> = [
+        {
+          text: JSON.stringify({
+            creatorNoteKo: input.creatorNoteKo ?? null
+          })
+        },
+        {
+          inlineData: {
+            mimeType: input.originalPhoto.mime,
+            data: Buffer.from(input.originalPhoto.bytes).toString('base64')
+          }
+        },
+        {
+          inlineData: {
+            mimeType: input.generatedPhoto.mime,
+            data: Buffer.from(input.generatedPhoto.bytes).toString('base64')
+          }
+        }
+      ];
+
+      const raw = await callGeminiStructuredJson(
+        config,
+        fetchImpl,
+        systemInstruction,
+        parts,
+        (json) => rawIdentitySimilaritySchema.parse(json)
+      );
+
+      const passedGate =
+        raw.identitySimilarityScore >= IDENTITY_SIMILARITY_THRESHOLD && !raw.agingOrDistortionDetected;
+
+      return {
+        identitySimilarityScore: raw.identitySimilarityScore,
+        agingOrDistortionDetected: raw.agingOrDistortionDetected,
+        passedGate,
+        recommendedAction: passedGate ? 'keep_surgical_edit' : 'fallback_to_passthrough_crop',
+        reasonKo: raw.reasonKo
       };
     }
   };

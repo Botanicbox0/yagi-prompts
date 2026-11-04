@@ -127,18 +127,39 @@ export function buildValidatedDualVoiceAbcScore(input: {
   const voice1UnitsPerBar: number[] = [];
   const voice2UnitsPerBar: number[] = [];
 
-  const motifPatternsV1 = [
-    'd8 f8 a8 d\'8',
-    'e8 g8 a8 c\'8',
-    'f8 a8 c\'8 e\'8',
-    'd16 a8 f8',
-  ];
-  const motifPatternsV2 = [
-    '[D,8A,8] [F,8C8] [G,8D8] [A,8E8]',
-    '[C,8G,8] [E,8B,8] [A,8E8] [G,8D8]',
-    '[B,,8F,8] [D,8A,8] [G,8D8] [A,8E8]',
-    '[D,16A,16] [A,,16E,16]',
-  ];
+  const keyMotifs: Record<string, { v1: readonly string[]; v2: readonly string[] }> = {
+    Dm: {
+      v1: ["d8 f8 a8 d'8", "e8 g8 a8 c'8", "f8 a8 c'8 e'8", 'd16 a8 f8'],
+      v2: [
+        '[D,8A,8] [F,8C8] [G,8D8] [A,8E8]',
+        '[C,8G,8] [E,8B,8] [A,8E8] [G,8D8]',
+        '[B,,8F,8] [D,8A,8] [G,8D8] [A,8E8]',
+        '[D,16A,16] [A,,16E,16]',
+      ],
+    },
+    Am: {
+      v1: ["A8 c8 e8 a8", "B8 d8 e8 g8", "c8 e8 g8 b8", 'A16 e8 c8'],
+      v2: [
+        '[A,,8E,8] [C,8G,8] [D,8A,8] [E,8B,8]',
+        '[G,,8D,8] [B,,8F,8] [E,8B,8] [D,8A,8]',
+        '[F,,8C,8] [A,,8E,8] [D,8A,8] [E,8B,8]',
+        '[A,,16E,16] [E,,16B,,16]',
+      ],
+    },
+    Em: {
+      v1: ["e8 g8 b8 e'8", "f8 a8 b8 d'8", "g8 b8 d'8 f'8", 'e16 b8 g8'],
+      v2: [
+        '[E,8B,8] [G,8D8] [A,8E8] [B,8F8]',
+        '[D,8A,8] [F,8C8] [B,8F8] [A,8E8]',
+        '[C,8G,8] [E,8B,8] [A,8E8] [B,8F8]',
+        '[E,16B,16] [B,,16F,16]',
+      ],
+    },
+  };
+
+  const selectedMotif = keyMotifs[input.keySignature] ?? keyMotifs.Dm!;
+  const motifPatternsV1 = selectedMotif.v1;
+  const motifPatternsV2 = selectedMotif.v2;
 
   for (let i = 0; i < barCount; i += 1) {
     v1Bars.push(motifPatternsV1[i % motifPatternsV1.length]!);
@@ -146,6 +167,14 @@ export function buildValidatedDualVoiceAbcScore(input: {
     voice1UnitsPerBar.push(32);
     voice2UnitsPerBar.push(32);
   }
+
+  const chunkBarsIntoLines = (bars: readonly string[], perLine = 4): string[] => {
+    const lines: string[] = [];
+    for (let idx = 0; idx < bars.length; idx += perLine) {
+      lines.push(`| ${bars.slice(idx, idx + perLine).join(' | ')} |`);
+    }
+    return lines;
+  };
 
   const abcLines = [
     'X:1',
@@ -155,13 +184,11 @@ export function buildValidatedDualVoiceAbcScore(input: {
     `Q:1/4=${input.bpm}`,
     `K:${input.keySignature}`,
     'V:1 name="Vocal"',
-    `%%MIDI program 4`,
-    `| ${v1Bars.slice(0, 4).join(' | ')} |`,
-    ...(barCount > 4 ? [`| ${v1Bars.slice(4).join(' | ')} |`] : []),
+    '%%MIDI program 4',
+    ...chunkBarsIntoLines(v1Bars, 4),
     'V:2 name="Ins"',
-    `%%MIDI program 38`,
-    `| ${v2Bars.slice(0, 4).join(' | ')} |`,
-    ...(barCount > 4 ? [`| ${v2Bars.slice(4).join(' | ')} |`] : []),
+    '%%MIDI program 38',
+    ...chunkBarsIntoLines(v2Bars, 4),
   ];
 
   return {
@@ -495,7 +522,7 @@ export function buildBrandSoundAndMusicStudioPlan(input: {
       },
       {
         id: 'act2:hero_reveal_drop:1',
-        t_hint: `00:0${Math.max(1, Math.min(9, Math.round(videoRevealSec)))}`,
+        t_hint: `00:${String(Math.max(1, Math.min(59, Math.round(videoRevealSec)))).padStart(2, '0')}`,
         category: 'foley',
         description: '클라이맥스 아토마이저 분사 트랜지언트 & BGM 드롭 0ms 합치',
         level_db: -9,
@@ -603,9 +630,32 @@ const PlanSoundStudioOperationSchema = z.object({
   videoRevealSec: z.number().min(0.2).max(29.5).optional(),
 });
 
+async function verifySoundStudioWriteActor(
+  sql: SqlRunner,
+  userId: string,
+  organizationId: string
+): Promise<boolean> {
+  const profile = (
+    await sql.query<{ is_admin: boolean }>(
+      'select is_admin from profiles where id = $1 for share',
+      [userId]
+    )
+  ).rows[0];
+  if (!profile) return false;
+  if (profile.is_admin) return true;
+
+  const membership = (
+    await sql.query<{ role: string }>(
+      "select role from brand_memberships where organization_id = $1 and user_id = $2 and status = 'active' for share",
+      [organizationId, userId]
+    )
+  ).rows[0];
+  return membership?.role === 'owner' || membership?.role === 'editor';
+}
+
 /**
  * Authorized S5 Sound & Music Studio operation for `/api/brand-workspace` (`soundStudio.plan`).
- * Enforces `sound` feature policy (returns `feature_unavailable` for Morphic).
+ * Enforces `owner | editor` membership BEFORE `sound` feature policy (returns `feature_unavailable` for Morphic).
  */
 export async function planBrandSoundAndMusicStudio(
   deps: { sql: SqlRunner },
@@ -622,6 +672,15 @@ export async function planBrandSoundAndMusicStudio(
       code: 'invalid',
       field: (parsed.error.issues[0]?.path ?? []).map(String).join('.') || 'score',
     };
+  }
+
+  const authorized = await verifySoundStudioWriteActor(
+    deps.sql,
+    viewer.userId,
+    parsed.data.organizationId
+  );
+  if (!authorized) {
+    return { ok: false, code: 'forbidden' };
   }
 
   try {

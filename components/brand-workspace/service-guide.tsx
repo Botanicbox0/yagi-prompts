@@ -17,7 +17,7 @@ export function ServiceGuide({
   organizationId?: string;
 }) {
   const t = b.serviceGuide[kind];
-  const isEn = b.serviceGuide.label === "Which service is this?";
+  const isEn = !/[가-힣]/.test(b.serviceGuide.label);
   return (
     <section className="bw-service-guide ys-service-guide" aria-label={b.serviceGuide.label} data-brand-service={kind}>
       <div className="ys-track-split" data-track-cards>
@@ -36,7 +36,7 @@ export function ServiceGuide({
             </strong>
             <p>
               {isEn
-                ? "Drop messy PPTs, Figma links, or chat memos. Argon & Fable structure the brief, and YAGI delivers the final master cut."
+                ? "Drop PPTs, Figma links, or chat memos. We structure the shooting brief and deliver the final master cut."
                 : "정리 안 된 PPT·피그마·카톡 메모를 그대로 올리면 AI가 명세서로 정리하고, YAGI 디렉터가 마스터 필름을 납품합니다."}
             </p>
           </div>

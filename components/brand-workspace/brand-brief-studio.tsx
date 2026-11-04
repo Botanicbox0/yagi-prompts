@@ -29,6 +29,10 @@ import {
   type ProjectDirectionPresetKey,
 } from "@/lib/brands/identity/project-direction";
 import {
+  synthesizeMultiAestheticLines,
+  type BrandAestheticLine,
+} from "@/lib/brands/identity/onboarding";
+import {
   BrandMicroRoiPanel,
   type ExternalMicroRoiHandoff,
 } from "./brand-micro-roi-panel";
@@ -138,11 +142,40 @@ export function BrandBriefStudio({
   const [statusMessage, setStatusMessage] = useState("");
   const [studioFocusMode, setStudioFocusMode] =
     useState<StudioFocusMode>("all");
+  const [activeAestheticLineCode, setActiveAestheticLineCode] = useState<
+    "A" | "B" | "C"
+  >("A");
   const [externalMicroRoiHandoff, setExternalMicroRoiHandoff] =
     useState<ExternalMicroRoiHandoff | null>(null);
   const [externalMusicRevealSec, setExternalMusicRevealSec] = useState<
     number | null
   >(null);
+
+  const aestheticLines = synthesizeMultiAestheticLines({
+    brandName: "KAIPER",
+    category: "fashion_apparel",
+    preferredVibe: "minimal_editorial",
+    hasPinterestBoards: true,
+  });
+
+  function applyAestheticLine(line: BrandAestheticLine) {
+    setActiveAestheticLineCode(line.code);
+    setDirectionMode("project_override");
+    setProjectId(line.id);
+    setProjectTitle(isKo ? line.titleKo : line.titleEn);
+    setLookPresetId(line.lookPresetId);
+    setCameraFocalMm(line.focalMm);
+    setLightModifier(line.lightModifier);
+    setLightColourK(line.lightColourK);
+    setSpaceBackground(line.spaceBackground);
+    setSpaceSurface(line.spaceSurface);
+    setProjectRulePrompt(isKo ? line.rulePromptKo : line.rulePromptEn);
+    setStatusMessage(
+      isKo
+        ? `[${line.titleKo}] 미감 기조가 스튜디오 전체에 적용되었습니다 (${line.focalMm}mm · ${line.lightColourK}K · 로고 금고 1:1 고정 유지).`
+        : `Applied [${line.titleEn}] across the studio (${line.focalMm}mm · ${line.lightColourK}K · Logo Vault locked).`
+    );
+  }
 
   function handleCutKindChange(next: ShotCutKind) {
     setCutKind(next);
@@ -561,17 +594,17 @@ export function BrandBriefStudio({
       <div className="bw-row">
         <div>
           <p className="bw-kicker">
-            {isKo ? "SHOTSPEC · 촬영 지시서 컴파일러" : "SHOTSPEC · BRIEF COMPILER"}
+            {isKo ? "STUDIO · 브랜드 에셋 제작 스튜디오" : "STUDIO · BRAND ASSET WORKSPACE"}
           </p>
           <h2>
             {isKo
-              ? "한 줄 브리프 → 촬영 지시서 → 480p 초안 → 마스터 승격"
-              : "1-Line Brief → ShotSpec → 480p Draft → Master Promotion"}
+              ? "원하는 작업을 카드에서 고르면, 브랜드 톤과 로고 규칙을 맞춰 바로 제작합니다"
+              : "Pick a workflow card below to produce on-brand photos, films, and local repairs"}
           </h2>
           <p className="bw-muted">
             {isKo
-              ? "제품·참조 역할을 지정하면 브랜드 아이덴티티 고정 층을 결합해 촬영 지시서를 조립합니다. 초안 수정은 라운드당 1개 축만 변경해 흔들림을 막습니다."
-              : "Combines your confirmed brand identity with a structured ShotSpec. Revisions change one axis per round to prevent drift."}
+              ? "복잡한 프롬프트나 카메라 수치를 직접 입력할 필요가 없습니다. 작업 카드를 고르고 한 줄로 지시하면 브랜드 기본 DNA가 자동으로 결합됩니다."
+              : "No complex prompts or camera numbers needed. Select a card and write one line; your Brand Base DNA is applied automatically."}
           </p>
         </div>
         <div className="bw-row">
@@ -592,12 +625,145 @@ export function BrandBriefStudio({
         </div>
       </div>
 
+      {/* Multi-Aesthetic Line Selector (A / B / C) + Locked Brand Logo/Standard Vault */}
+      <div
+        className="bw-card bw-fields"
+        data-studio-aesthetic-bar
+        data-active-aesthetic-line={activeAestheticLineCode}
+        style={{
+          margin: 0,
+          padding: 18,
+          background: "#FFFFFF",
+          borderRadius: 22,
+          border: "1px solid rgba(15, 23, 42, 0.08)",
+        }}
+      >
+        <div className="bw-row">
+          <div>
+            <p className="bw-kicker">
+              {isKo
+                ? "STEP 1 · 브랜드 미감 기조 선택 (고정 로고·스탠다드 + 다중 미감 A / B / C)"
+                : "STEP 1 · PICK YOUR BRAND AESTHETIC LINE (LOCKED LOGO VAULT + LINE A / B / C)"}
+            </p>
+            <h3 style={{ margin: "4px 0" }}>
+              {isKo
+                ? "로고(1:1 비율)·제품·금기 규칙은 자동 잠금되어 있습니다. 오늘 제작할 미감 기조 하나만 골라 주세요"
+                : "Logos, products, and taboos stay locked. Pick one Aesthetic Line below for today's shoot"}
+            </h3>
+          </div>
+          <span
+            className="bw-badge"
+            data-studio-locked-vault-badge
+            style={{ background: "rgba(56, 117, 197, 0.12)", color: "#3063A7" }}
+          >
+            {isKo
+              ? "🔒 고정됨: 로고 금고(mark_only) · 제품 마스터 · 절대 금기 3항목"
+              : "🔒 Locked: Logo Vault (1:1) · Product Master · 3 Brand Taboos"}
+          </span>
+        </div>
+
+        <div className="bw-grid-wide" style={{ gap: 12 }}>
+          {aestheticLines.map((line) => {
+            const selected = activeAestheticLineCode === line.code;
+            return (
+              <button
+                key={line.id}
+                type="button"
+                data-studio-aesthetic-card={line.code}
+                aria-pressed={selected}
+                onClick={() => applyAestheticLine(line)}
+                disabled={busy}
+                style={{
+                  textAlign: "left",
+                  padding: 12,
+                  borderRadius: 18,
+                  background: selected
+                    ? "rgba(56, 117, 197, 0.06)"
+                    : "#F6F7F9",
+                  border: selected
+                    ? "2px solid #3875C5"
+                    : "1px solid rgba(15, 23, 42, 0.08)",
+                  cursor: busy ? "default" : "pointer",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 10,
+                }}
+              >
+                <div
+                  style={{
+                    width: "100%",
+                    height: 104,
+                    borderRadius: 12,
+                    backgroundImage: `linear-gradient(180deg, rgba(15,23,42,0.12) 0%, rgba(15,23,42,0.52) 100%), url(${line.previewImageUrl})`,
+                    backgroundSize: "cover",
+                    backgroundPosition: "center",
+                    padding: 8,
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "flex-start",
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: 11,
+                      fontWeight: 700,
+                      color: "#FFFFFF",
+                      background: selected ? "#3875C5" : "rgba(15,23,42,0.72)",
+                      padding: "2px 8px",
+                      borderRadius: 999,
+                    }}
+                  >
+                    {selected
+                      ? isKo
+                        ? `✓ 기조 ${line.code} 적용 중`
+                        : `✓ Line ${line.code} Active`
+                      : isKo
+                        ? `기조 ${line.code} (${line.sharePct}%)`
+                        : `Line ${line.code} (${line.sharePct}%)`}
+                  </span>
+                  <span
+                    style={{
+                      fontSize: 11,
+                      fontWeight: 600,
+                      color: "#F8FAFC",
+                      background: "rgba(15,23,42,0.68)",
+                      padding: "2px 8px",
+                      borderRadius: 999,
+                    }}
+                  >
+                    {line.focalMm}mm · {line.lightColourK}K
+                  </span>
+                </div>
+                <div>
+                  <strong style={{ fontSize: 13, color: "#0B0D12" }}>
+                    {isKo ? line.titleKo : line.titleEn}
+                  </strong>
+                  <p
+                    className="bw-muted"
+                    style={{ margin: "3px 0 0", fontSize: 12 }}
+                  >
+                    {isKo ? line.subtitleKo : line.subtitleEn}
+                  </p>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
       <BrandStudioTutorial
         locale={locale}
         activeMode={studioFocusMode}
         onSelectMode={setStudioFocusMode}
       />
 
+      <details className="bw-service-disclosure">
+        <summary>
+          {isKo
+            ? "고급 연출 설정 · 프로젝트별 광학 오버라이드 & 수동 촬영 지시서 열기"
+            : "Advanced Direction · Project Optics Override & Manual ShotSpec Compiler"}
+        </summary>
+        <div className="bw-fields" style={{ marginTop: 14 }}>
       <div
         className="bw-panel"
         data-project-direction-panel
@@ -1041,6 +1207,8 @@ export function BrandBriefStudio({
           </div>
         )}
       </form>
+        </div>
+      </details>
 
       {errorMessage && (
         <p role="alert" className="bw-error" data-brief-error>
@@ -1401,9 +1569,15 @@ export function BrandBriefStudio({
                 note: payload.note,
                 timestampSec: payload.timestampSec,
               });
+              if (studioFocusMode === "frame_review") {
+                setStudioFocusMode("micro_roi");
+              }
             }}
             onSetMusicDropRevealSec={(revealSec) => {
               setExternalMusicRevealSec(revealSec);
+              if (studioFocusMode === "frame_review") {
+                setStudioFocusMode("sound_studio");
+              }
             }}
           />
         </div>

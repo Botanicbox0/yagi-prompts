@@ -1,14 +1,16 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useState, type ChangeEvent, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import {
   ONBOARDING_LIMITS,
   synthesizeBrandIdentityFromIngest,
   type BrandOnboardingAsset,
+  type OmniTriageBucket,
   type OnboardingAssetSlot,
   type OnboardingCategory,
   type OnboardingVibe,
+  type RawOmniDropItem,
   type SynthesizedBrandOnboarding,
 } from "@/lib/brands/identity/onboarding";
 
@@ -72,6 +74,47 @@ const SLOT_LABELS: Record<OnboardingAssetSlot, { ko: string; en: string }> = {
   mood: { ko: "선호 무드·화보 (최대 6)", en: "Mood Reference (max 6)" },
 };
 
+const BUCKET_META: Record<
+  OmniTriageBucket,
+  { badgeKo: string; badgeEn: string; descKo: string; descEn: string }
+> = {
+  logo_vault: {
+    badgeKo: "① 로고 · 심볼 금고 (1:1 비율 잠금)",
+    badgeEn: "1. Logo & Symbol Vault (1:1 Lock)",
+    descKo: "워드마크·심볼·라벨 원본을 분리해 생성 및 부분 수선 시 1:1 고정",
+    descEn: "Isolates wordmarks & symbols for 1:1 lock during generation & repair",
+  },
+  product_vault: {
+    badgeKo: "② 제품 · 패키지 마스터",
+    badgeEn: "2. Product & Swatch Master",
+    descKo: "주력 제품 실루엣·지퍼·보틀·원단 스와치 보존 체크리스트 자동 생성",
+    descEn: "Builds geometry, label, and material preservation checklists",
+  },
+  brand_standard: {
+    badgeKo: "③ 브랜드 스탠다드 & 절대 금기",
+    badgeEn: "3. Brand Standard & Hard Taboos",
+    descKo: "어떤 미감 기조에서도 공통으로 지켜야 할 컬러·서체·절대 금지 3항목",
+    descEn: "Invariant colour, typography, and 3 strict taboos across all moods",
+  },
+  aesthetic_mood_pool: {
+    badgeKo: "④ 다중 미감 풀 (기조 A / B / C 군집화)",
+    badgeEn: "4. Multi-Aesthetic Pool (Cluster A / B / C)",
+    descKo: "화보·핀터레스트 핀에서 조명·색온도·렌즈감만 추출해 3개 기조로 분류",
+    descEn: "Clusters lookbook & Pinterest pins into 3 distinct optical/colour lines",
+  },
+};
+
+const DEFAULT_OMNI_DROP_TEXT = [
+  "kaiper-master-wordmark-vector.svg | 워드마크 자간과 심볼 직선 비례 100% 고정 (mark_only)",
+  "kaiper-symbol-monogram-white.png | 다크 배경용 화이트 반전 심볼 마크 고정",
+  "kaiper-26ss-technical-jacket-packshot.jpg | 비대칭 지퍼 라인, 칼라 구조, 나일론 매트 텍스처 보존",
+  "kaiper-wide-cargo-pocket-swatch.jpg | 사이드 포켓 입체 주름과 무광 스냅 버튼 위치 유지",
+  "kaiper-brand-standard-guideline-v4.pdf | 과도한 네온 사이버펑크 조명 금지. 뷰티 필터 플라스틱 피부 금지.",
+  "seongsu-daylight-campaign-01.jpg | 50mm 클린 콘크리트 여백과 5400K 확산 자연광 무드",
+  "golden-hour-courtyard-lookbook-08.jpg | 35mm 야외 골든아워 역광과 아날로그 필름 그레인",
+  "night-concrete-flash-editorial-14.jpg | 28mm 하이콘트라스트 나이트 키라이트와 깊은 그림자 대비",
+].join("\n");
+
 const KAIPER_SAMPLE_ASSETS: BrandOnboardingAsset[] = [
   {
     slot: "logo",
@@ -134,6 +177,24 @@ const BEAUTY_SAMPLE_ASSETS: BrandOnboardingAsset[] = [
   },
 ];
 
+function parseRawDropLines(text: string): RawOmniDropItem[] {
+  return text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .slice(0, ONBOARDING_LIMITS.maxRawDropItems)
+    .map((line) => {
+      const [first, ...rest] = line.split("|");
+      const nameOrUrl = (first ?? "").trim();
+      const note = rest.join("|").trim();
+      return {
+        nameOrUrl,
+        ...(note ? { note } : {}),
+      };
+    })
+    .filter((item) => item.nameOrUrl.length > 0);
+}
+
 export function BrandOnboardingWizard({
   organizationId,
   organizationName,
@@ -162,6 +223,11 @@ export function BrandOnboardingWizard({
   const [instagramPostUrlsText, setInstagramPostUrlsText] = useState(
     "https://www.instagram.com/p/C9KaiperLook01/\nhttps://www.instagram.com/p/C9KaiperLook02/"
   );
+  const [pinterestBoardUrlsText, setPinterestBoardUrlsText] = useState(
+    "https://www.pinterest.com/kaiper_official/26ss-editorial-mood/"
+  );
+  const [pinterestPinCountHint, setPinterestPinCountHint] = useState(1240);
+  const [rawDropText, setRawDropText] = useState(DEFAULT_OMNI_DROP_TEXT);
   const [assets, setAssets] =
     useState<BrandOnboardingAsset[]>(KAIPER_SAMPLE_ASSETS);
   const [brandGuideNote, setBrandGuideNote] = useState(
@@ -189,6 +255,14 @@ export function BrandOnboardingWizard({
     .filter(Boolean)
     .slice(0, ONBOARDING_LIMITS.maxInstagramPostUrls);
 
+  const pinterestBoardUrls = pinterestBoardUrlsText
+    .split(/\r?\n/)
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .slice(0, ONBOARDING_LIMITS.maxPinterestBoardUrls);
+
+  const rawAssetDrop = parseRawDropLines(rawDropText);
+
   const logoCount = assets.filter((a) => a.slot === "logo").length;
   const productCount = assets.filter((a) => a.slot === "product").length;
   const moodCount = assets.filter((a) => a.slot === "mood").length;
@@ -203,11 +277,65 @@ export function BrandOnboardingWizard({
       websiteUrls,
       instagramHandle: instagramHandle.trim() || undefined,
       instagramPostUrls,
+      pinterestBoardUrls,
+      pinterestBoardTotalPinCountHint: pinterestPinCountHint,
+      rawAssetDrop,
       assets,
       brandGuideNote,
     });
   } catch {
     preview = null;
+  }
+
+  function handleFileDropInput(e: ChangeEvent<HTMLInputElement>) {
+    const fileList = e.target.files;
+    if (!fileList || fileList.length === 0) return;
+    const addedLines: string[] = [];
+    for (let i = 0; i < fileList.length; i += 1) {
+      const file = fileList[i];
+      if (!file) continue;
+      addedLines.push(`${file.name} | 업로드 파일 (${file.type || "asset"})`);
+    }
+    setRawDropText((prev) =>
+      [prev.trim(), ...addedLines].filter(Boolean).join("\n")
+    );
+    setStatusMessage(
+      isKo
+        ? `파일 ${addedLines.length}개가 무제한 인테이크 큐에 추가되어 4개 바구니(로고·제품·스탠다드·다중 미감)로 자동 분류되었습니다.`
+        : `Added ${addedLines.length} files to the Omni-Intake queue and auto-sorted into 4 buckets.`
+    );
+  }
+
+  function simulateBulk48AssetDrop() {
+    const bulkLines: string[] = [
+      "kaiper-primary-logo-lockup.svg | 메인 워드마크 원본 비율 1:1 고정 (mark_only)",
+      "kaiper-CareLabel-woven-mark.png | 내부 직조 라벨 타이포그래피 고정 (mark_only)",
+      "kaiper-brandbook-2026-standard.pdf | 로고 최소 크기 28px, 주변 여백 1.5x, 과장된 네온 조명 금지",
+    ];
+    for (let i = 1; i <= 10; i += 1) {
+      bulkLines.push(
+        `kaiper-26ss-product-packshot-${String(i).padStart(2, "0")}.jpg | 제품 실루엣·지퍼·원단 매트 질감 보존`
+      );
+    }
+    for (let i = 1; i <= 35; i += 1) {
+      const moodKind =
+        i % 3 === 0
+          ? "night-concrete-flash"
+          : i % 2 === 0
+            ? "golden-hour-outdoor"
+            : "clean-studio-daylight";
+      bulkLines.push(`kaiper-lookbook-${moodKind}-${String(i).padStart(2, "0")}.webp`);
+    }
+    setRawDropText(bulkLines.join("\n"));
+    setPinterestBoardUrlsText(
+      "https://www.pinterest.com/kaiper_official/26ss-editorial-mood/\nhttps://www.pinterest.com/kaiper_official/studio-object-archive/"
+    );
+    setPinterestPinCountHint(1480);
+    setStatusMessage(
+      isKo
+        ? "에셋 48개 + 핀터레스트 1,480핀 보드 일괄 투입 시뮬레이션 완료: 로고 금고·제품 마스터·브랜드 스탠다드·다중 미감 기조(A/B/C)로 자동 분류되었습니다."
+        : "Simulated 48 dropped assets + 1,480 Pinterest pins: auto-sorted into Logo Vault, Product Master, Brand Standard, and 3 Aesthetic Lines (A/B/C)."
+    );
   }
 
   function applyPreset(kind: "kaiper" | "beauty" | "blank") {
@@ -224,6 +352,11 @@ export function BrandOnboardingWizard({
       setInstagramPostUrlsText(
         "https://www.instagram.com/p/C9KaiperLook01/\nhttps://www.instagram.com/p/C9KaiperLook02/"
       );
+      setPinterestBoardUrlsText(
+        "https://www.pinterest.com/kaiper_official/26ss-editorial-mood/"
+      );
+      setPinterestPinCountHint(1240);
+      setRawDropText(DEFAULT_OMNI_DROP_TEXT);
       setAssets(KAIPER_SAMPLE_ASSETS);
       setBrandGuideNote(
         "과도한 네온 사이버펑크 조명 금지. 뷰티 필터로 뭉개진 플라스틱 피부 표현 금지. 의상 로고 철자 변형 절대 금지."
@@ -235,6 +368,19 @@ export function BrandOnboardingWizard({
       setWebsiteUrlsText("https://auralab.kr");
       setInstagramHandle("@auralab.official");
       setInstagramPostUrlsText("https://www.instagram.com/p/C9AuraSerum01/");
+      setPinterestBoardUrlsText(
+        "https://www.pinterest.com/auralab/skincare-still-life/"
+      );
+      setPinterestPinCountHint(920);
+      setRawDropText(
+        [
+          "auralab-monogram-mark.svg | 보틀 전면 세리프 로고 1:1 고정 (mark_only)",
+          "auralab-serum-50ml-packshot.jpg | 프로스티드 유리 굴절률과 스포이드 캡 비례 유지",
+          "auralab-brand-standard.pdf | 용기 기하 변형 금지, 전면 라벨 왜곡 금지",
+          "auralab-limestone-daylight-01.jpg | 50mm 클린 스튜디오 석재 여백",
+          "auralab-warm-botanical-sunlight-02.jpg | 35mm 골든아워 자연광 그림자",
+        ].join("\n")
+      );
       setAssets(BEAUTY_SAMPLE_ASSETS);
       setBrandGuideNote(
         "용기 기하 변형 금지. 전면 라벨 타이포그래피 왜곡 금지. 과도한 웜톤 색번짐 금지."
@@ -244,6 +390,8 @@ export function BrandOnboardingWizard({
       setWebsiteUrlsText("");
       setInstagramHandle("");
       setInstagramPostUrlsText("");
+      setPinterestBoardUrlsText("");
+      setRawDropText("");
       setAssets([]);
       setBrandGuideNote("");
     }
@@ -331,6 +479,9 @@ export function BrandOnboardingWizard({
             websiteUrls,
             instagramHandle: instagramHandle.trim() || undefined,
             instagramPostUrls,
+            pinterestBoardUrls,
+            pinterestBoardTotalPinCountHint: pinterestPinCountHint,
+            rawAssetDrop,
             assets,
             brandGuideNote,
             autoConfirm,
@@ -352,11 +503,11 @@ export function BrandOnboardingWizard({
       setStatusMessage(
         autoConfirm
           ? isKo
-            ? "브랜드 온보딩 에셋·채널 분석 및 기준선 확정(Confirmed)이 완료되었습니다. 이제 스튜디오와 개별 프로젝트에서 이 기준선을 상속합니다."
-            : "Brand onboarding ingested and confirmed as Base DNA."
+            ? "브랜드 로고 금고 · 스탠다드 · 다중 미감 기조(A/B/C) 3종이 확정(Confirmed)되어 스튜디오에 즉시 연동되었습니다."
+            : "Brand Logo Vault, Standard, and 3 Multi-Aesthetic Lines (A/B/C) confirmed and synced to Studio."
           : isKo
-            ? "브랜드 온보딩 초안(Draft)이 생성되었습니다. 아래 규칙을 검토한 뒤 확정할 수 있습니다."
-            : "Brand onboarding draft synthesized."
+            ? "브랜드 에셋 자동 분류 및 다중 미감(A/B/C) 초안(Draft)이 저장되었습니다."
+            : "Brand asset triage and Multi-Aesthetic draft saved."
       );
       router.refresh();
     } catch {
@@ -385,18 +536,18 @@ export function BrandOnboardingWizard({
         <div>
           <p className="bw-kicker">
             {isKo
-              ? "STEP 1 · 멀티채널 브랜드 온보딩 인제스트 (BASE DNA)"
-              : "STEP 1 · MULTI-CHANNEL BRAND ONBOARDING INGEST"}
+              ? "STEP 1 · 무제한 브랜드 에셋 인테이크 & 다중 미감(A/B/C) 자동 분류"
+              : "STEP 1 · OMNI-ASSET INTAKE & MULTI-AESTHETIC (A/B/C) AUTO-TRIAGE"}
           </p>
           <h2>
             {isKo
-              ? "웹사이트 · 인스타그램 · 핵심 에셋으로 브랜드 기준선(Base DNA) 자동 조립"
-              : "Synthesize Brand Base DNA from Website, Instagram & Core Visual Assets"}
+              ? "브랜드 에셋·로고·핀터레스트 보드를 제한 없이 넣으면, 고정 스탠다드와 다중 미감 기조(A/B/C)로 자동 분류합니다"
+              : "Drop all brand assets, logos & Pinterest boards—auto-sorted into Locked Standards and Multi-Aesthetic Lines (A/B/C)"}
           </h2>
           <p className="bw-muted">
             {isKo
-              ? "수동으로 컬러코드와 수치를 입력할 필요 없이, 공식 웹사이트(최대 2개)·인스타그램(최대 6개)·시각 에셋(최대 14장: 로고 2 / 제품 6 / 무드 6)을 넣으면 브랜드 기본 규칙을 자동 추출합니다. 개별 프로젝트마다 다른 연출이 필요할 때는 스튜디오/프로젝트에서 오버라이드(Override)할 수 있습니다."
-              : "Supply up to 2 website URLs, Instagram links, and up to 14 visual assets (2 logo, 6 product, 6 mood) to automatically synthesize your Brand Base DNA."}
+              ? "브랜드 미감은 단 하나로 떨어지지 않습니다. 로고(1:1 비율 잠금)·제품·절대 금기는 공통 스탠다드로 묶어 두고, 화보와 핀터레스트 보드(1,000장이 넘어도 최신 120장 스캔 → 대표 Medoid 12장 압축)는 3가지 미감 기조(기조 A / B / C)로 분리해 스튜디오에서 원클릭으로 골라 씁니다."
+              : "Brands rarely have just one mood. We lock your logos, products, and taboos as an invariant standard, while clustering lookbooks and giant Pinterest boards (1,000+ pins -> 120 latest -> 12 Medoids) into 3 ready-to-use Aesthetic Lines (A/B/C)."}
           </p>
         </div>
         <div className="bw-row">
@@ -407,7 +558,18 @@ export function BrandOnboardingWizard({
             onClick={() => applyPreset("kaiper")}
             disabled={busy}
           >
-            {isKo ? "KAIPER 온보딩 프리셋 채우기" : "Load KAIPER Preset"}
+            {isKo ? "KAIPER 프리셋 채우기" : "Load KAIPER Preset"}
+          </button>
+          <button
+            type="button"
+            className="bw-button"
+            data-onboarding-bulk-sim
+            onClick={simulateBulk48AssetDrop}
+            disabled={busy}
+          >
+            {isKo
+              ? "에셋 48개 + 핀터레스트 1,480핀 일괄 분류 테스트"
+              : "Simulate 48 Assets + 1,480 Pins"}
           </button>
           <button
             type="button"
@@ -461,7 +623,7 @@ export function BrandOnboardingWizard({
             </select>
           </label>
           <label>
-            {isKo ? "기본 비주얼 무드 (Base Vibe)" : "Base Visual Vibe"}
+            {isKo ? "대표 기본 기조 (Primary Vibe)" : "Primary Visual Vibe"}
             <select
               name="preferredVibe"
               value={preferredVibe}
@@ -479,164 +641,376 @@ export function BrandOnboardingWizard({
           </label>
         </div>
 
-        <div className="bw-grid-wide">
-          <label>
-            {isKo
-              ? `공식 웹사이트 · 대표 상품 URL (최대 ${ONBOARDING_LIMITS.maxWebsiteUrls}개, 줄바꿈)`
-              : `Website URLs (max ${ONBOARDING_LIMITS.maxWebsiteUrls}, one per line)`}
-            <textarea
-              name="websiteUrls"
-              rows={2}
-              value={websiteUrlsText}
-              onChange={(e) => setWebsiteUrlsText(e.target.value)}
-              placeholder="https://kaiper.kr"
-              disabled={!isOwner || busy}
-            />
-          </label>
-          <label>
-            {isKo ? "인스타그램 공식 계정 (@handle)" : "Instagram Handle"}
-            <input
-              name="instagramHandle"
-              value={instagramHandle}
-              onChange={(e) => setInstagramHandle(e.target.value)}
-              placeholder="@kaiper.official"
-              maxLength={40}
-              disabled={!isOwner || busy}
-            />
-          </label>
-          <label>
-            {isKo
-              ? `인스타그램 대표 게시물·릴스 링크 (최대 ${ONBOARDING_LIMITS.maxInstagramPostUrls}개)`
-              : `Instagram Post Links (max ${ONBOARDING_LIMITS.maxInstagramPostUrls})`}
-            <textarea
-              name="instagramPostUrls"
-              rows={2}
-              value={instagramPostUrlsText}
-              onChange={(e) => setInstagramPostUrlsText(e.target.value)}
-              placeholder="https://www.instagram.com/p/..."
-              disabled={!isOwner || busy}
-            />
-          </label>
-        </div>
-
-        <div className="bw-panel" data-onboarding-asset-slots>
-          <div className="bw-row">
-            <div>
-              <h3>
+        {/* 1. Omni-Asset Unlimited Drop + Pinterest 3-Stage Funnel */}
+        <div
+          className="bw-grid-wide"
+          data-onboarding-omni-intake
+          style={{ alignItems: "stretch", gap: 16 }}
+        >
+          {/* Left: Unlimited Omni-Asset Dropzone */}
+          <div
+            className="bw-card bw-fields"
+            style={{
+              margin: 0,
+              padding: 16,
+              background: "#FFFFFF",
+              borderRadius: 20,
+            }}
+          >
+            <div className="bw-row">
+              <strong>
                 {isKo
-                  ? "핵심 시각 에셋 슬롯 (로고 · 주력 제품 · 선호 무드)"
-                  : "Core Visual Reference Assets (Logo · Product · Mood)"}
-              </h3>
-              <p className="bw-muted">
+                  ? "① 무제한 에셋 드롭박스 (로고·제품·가이드 PDF·화보 폴더 일괄 투입)"
+                  : "① Unlimited Omni-Asset Drop (Logos, Products, PDF Guides & Lookbooks)"}
+              </strong>
+              <span className="bw-badge" data-onboarding-raw-drop-count>
                 {isKo
-                  ? "시스템 수용 한도에 맞춰 총 14장 이내로 고정합니다. 로고는 원형 보존(mark_only), 제품은 기하·라벨 체크리스트, 무드는 색감·조명 참조로 자동 분리됩니다."
-                  : "Bounded to 14 assets total: logos lock geometry, products build the preservation checklist, and mood images set lighting & palette."}
-              </p>
+                  ? `${rawAssetDrop.length}개 에셋 감지됨`
+                  : `${rawAssetDrop.length} assets queued`}
+              </span>
             </div>
-            <span className="bw-badge" data-onboarding-asset-counter>
+            <p className="bw-muted" style={{ margin: 0 }}>
               {isKo
-                ? `총 ${assets.length}/${ONBOARDING_LIMITS.maxTotalAssets}장 (로고 ${logoCount}/${ONBOARDING_LIMITS.maxLogoAssets} · 제품 ${productCount}/${ONBOARDING_LIMITS.maxProductAssets} · 무드 ${moodCount}/${ONBOARDING_LIMITS.maxMoodAssets})`
-                : `${assets.length}/${ONBOARDING_LIMITS.maxTotalAssets} assets (Logo ${logoCount}/${ONBOARDING_LIMITS.maxLogoAssets} · Product ${productCount}/${ONBOARDING_LIMITS.maxProductAssets} · Mood ${moodCount}/${ONBOARDING_LIMITS.maxMoodAssets})`}
-            </span>
+                ? "사용자가 일일이 로고·제품·무드를 구분할 필요가 없습니다. 파일들을 한꺼번에 선택하거나 아래 목록에 붙여넣으면 디렉터 AI가 4개 바구니로 자동 분류합니다."
+                : "No need to pre-sort files. Select multiple files at once or paste filenames/URLs below; the Director engine auto-sorts them into 4 buckets."}
+            </p>
+            <label
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                padding: "10px 14px",
+                borderRadius: 14,
+                border: "1px dashed rgba(56, 117, 197, 0.45)",
+                background: "rgba(56, 117, 197, 0.05)",
+                cursor: isOwner && !busy ? "pointer" : "default",
+                fontSize: 13,
+              }}
+            >
+              <span>
+                {isKo
+                  ? "폴더/파일 제한 없이 한 번에 선택 (SVG, PNG, JPG, WEBP, PDF)"
+                  : "Select unlimited brand files at once (SVG, PNG, JPG, WEBP, PDF)"}
+              </span>
+              <input
+                type="file"
+                multiple
+                accept=".svg,.png,.jpg,.jpeg,.webp,.pdf"
+                onChange={handleFileDropInput}
+                disabled={!isOwner || busy}
+                style={{ maxWidth: 210, fontSize: 12 }}
+              />
+            </label>
+            <label>
+              {isKo
+                ? "일괄 투입된 에셋 목록 (파일명 또는 URL | 메모 — 최대 200개 동시 분류)"
+                : "Batch Dropped Assets (filename or URL | note — up to 200 items)"}
+              <textarea
+                rows={4}
+                value={rawDropText}
+                onChange={(e) => setRawDropText(e.target.value)}
+                disabled={!isOwner || busy}
+                data-onboarding-raw-drop-textarea
+              />
+            </label>
           </div>
 
-          <ul className="bw-list" data-onboarding-asset-list>
-            {assets.map((asset, idx) => (
-              <li
-                key={`${asset.slot}-${asset.label}-${idx}`}
-                className="bw-row"
-                data-onboarding-asset-item={asset.slot}
-              >
-                <div>
-                  <span className="bw-badge">
-                    {isKo
-                      ? SLOT_LABELS[asset.slot].ko
-                      : SLOT_LABELS[asset.slot].en}
-                  </span>{" "}
-                  <strong>{asset.label}</strong>
-                  {asset.urlOrKey && (
-                    <small className="bw-muted"> · {asset.urlOrKey}</small>
-                  )}
-                  <p className="bw-muted">{asset.preserveNote}</p>
-                </div>
-                {isOwner && (
-                  <button
-                    type="button"
-                    className="bw-button"
-                    onClick={() => handleRemoveAsset(idx)}
-                    disabled={busy}
-                  >
-                    {isKo ? "제거" : "Remove"}
-                  </button>
-                )}
-              </li>
-            ))}
-          </ul>
+          {/* Right: Pinterest Public Board 3-Stage Funnel */}
+          <div
+            className="bw-card bw-fields"
+            data-onboarding-pinterest-funnel
+            style={{
+              margin: 0,
+              padding: 16,
+              background: "#FFFFFF",
+              borderRadius: 20,
+            }}
+          >
+            <div className="bw-row">
+              <strong>
+                {isKo
+                  ? "② 핀터레스트 공개 보드 · 웹사이트 · 인스타그램 인테이크"
+                  : "② Public Pinterest Board, Website & Instagram Intake"}
+              </strong>
+              {preview && (
+                <span className="bw-badge" data-pinterest-token-savings>
+                  {isKo
+                    ? `토큰 ${preview.pinterestFunnel.estimatedTokenSavingsPct}% 절감 · Medoid ${preview.pinterestFunnel.stage2MedoidsSelected}장 압축`
+                    : `${preview.pinterestFunnel.estimatedTokenSavingsPct}% Token Saved · ${preview.pinterestFunnel.stage2MedoidsSelected} Medoids`}
+                </span>
+              )}
+            </div>
 
-          {isOwner && assets.length < ONBOARDING_LIMITS.maxTotalAssets && (
-            <div className="bw-grid-wide" data-onboarding-add-asset>
+            <div className="bw-grid-wide">
               <label>
-                {isKo ? "슬롯 종류" : "Asset Slot"}
-                <select
-                  value={newSlot}
+                {isKo
+                  ? "핀터레스트 공개 보드/섹션 URL (최대 3개, 줄바꿈)"
+                  : "Public Pinterest Board URLs (max 3)"}
+                <textarea
+                  name="pinterestBoardUrls"
+                  rows={2}
+                  value={pinterestBoardUrlsText}
+                  onChange={(e) => setPinterestBoardUrlsText(e.target.value)}
+                  placeholder="https://www.pinterest.com/brand/board-name/"
+                  disabled={!isOwner || busy}
+                  data-onboarding-pinterest-input
+                />
+              </label>
+              <label>
+                {isKo
+                  ? "보드 내 전체 핀 수 (대형 보드 깔때기 압축 계산용)"
+                  : "Total Pins in Board (Funnel Compression)"}
+                <input
+                  type="number"
+                  min={12}
+                  max={50000}
+                  value={pinterestPinCountHint}
                   onChange={(e) =>
-                    setNewSlot(e.target.value as OnboardingAssetSlot)
+                    setPinterestPinCountHint(Number(e.target.value) || 120)
                   }
-                  disabled={busy}
-                >
-                  <option value="logo">
-                    {isKo ? SLOT_LABELS.logo.ko : SLOT_LABELS.logo.en}
-                  </option>
-                  <option value="product">
-                    {isKo ? SLOT_LABELS.product.ko : SLOT_LABELS.product.en}
-                  </option>
-                  <option value="mood">
-                    {isKo ? SLOT_LABELS.mood.ko : SLOT_LABELS.mood.en}
-                  </option>
-                </select>
+                  disabled={!isOwner || busy}
+                  data-onboarding-pinterest-count
+                />
+                <small className="bw-muted">
+                  {isKo
+                    ? "1,000장이 넘어도 최신 120장만 경량 스캔 후 대표 12장으로 자동 압축합니다."
+                    : "Caps scan at latest 120 pins and compresses to 12 cluster Medoids."}
+                </small>
               </label>
+            </div>
+
+            <div className="bw-grid-wide">
               <label>
-                {isKo ? "에셋 이름 (예: 시그니처 아우터 정면)" : "Asset Label"}
-                <input
-                  value={newLabel}
-                  onChange={(e) => setNewLabel(e.target.value)}
-                  maxLength={120}
-                  disabled={busy}
+                {isKo
+                  ? `공식 웹사이트 URL (최대 ${ONBOARDING_LIMITS.maxWebsiteUrls}개)`
+                  : `Website URLs (max ${ONBOARDING_LIMITS.maxWebsiteUrls})`}
+                <textarea
+                  name="websiteUrls"
+                  rows={2}
+                  value={websiteUrlsText}
+                  onChange={(e) => setWebsiteUrlsText(e.target.value)}
+                  placeholder="https://kaiper.kr"
+                  disabled={!isOwner || busy}
                 />
               </label>
               <label>
-                {isKo ? "보존·차용 핵심 지침" : "Preservation / Reference Rule"}
+                {isKo ? "인스타그램 공식 계정 (@handle)" : "Instagram Handle"}
                 <input
-                  value={newPreserveNote}
-                  onChange={(e) => setNewPreserveNote(e.target.value)}
-                  placeholder={
-                    isKo
-                      ? "예: 지퍼 비대칭 라인과 매트 나일론 질감 고정"
-                      : "e.g. Lock zipper line and matte nylon finish"
-                  }
-                  maxLength={240}
-                  disabled={busy}
+                  name="instagramHandle"
+                  value={instagramHandle}
+                  onChange={(e) => setInstagramHandle(e.target.value)}
+                  placeholder="@kaiper.official"
+                  maxLength={40}
+                  disabled={!isOwner || busy}
                 />
               </label>
-              <div className="bw-row">
-                <button
-                  type="button"
-                  className="bw-button"
-                  onClick={handleAddAsset}
-                  disabled={busy}
-                  data-onboarding-add-asset-btn
-                >
-                  {isKo ? "+ 에셋 슬롯 추가" : "+ Add Asset Slot"}
-                </button>
+            </div>
+
+            {preview && (
+              <div
+                style={{
+                  padding: "10px 12px",
+                  borderRadius: 12,
+                  background: "rgba(56, 117, 197, 0.07)",
+                  border: "1px solid rgba(56, 117, 197, 0.22)",
+                  fontSize: 12,
+                  lineHeight: 1.5,
+                }}
+                data-pinterest-funnel-summary
+              >
+                <strong>
+                  {isKo
+                    ? "핀터레스트 3단계 깔때기(Funnel) 작동 상태:"
+                    : "Pinterest 3-Stage Funnel Status:"}
+                </strong>
+                <div>
+                  {isKo
+                    ? `• Stage 1 (경량 노이즈 제거): 총 ${preview.pinterestFunnel.totalBoardPinsDetected.toLocaleString()}핀 감지 → 최신 ${preview.pinterestFunnel.stage1LatestScannedCap}핀 스캔 → 중복(${preview.pinterestFunnel.pHashDuplicatesRemoved})·밈/텍스트(${preview.pinterestFunnel.textMemeOutliersRemoved})·저화질(${preview.pinterestFunnel.lowResRemoved}) 제거 후 유효 화보 ${preview.pinterestFunnel.stage1CleanCandidates}장 통과 (AI 토큰 0원)`
+                    : `• Stage 1: ${preview.pinterestFunnel.totalBoardPinsDetected} pins -> latest ${preview.pinterestFunnel.stage1LatestScannedCap} scanned -> ${preview.pinterestFunnel.stage1CleanCandidates} clean photos (0 AI tokens)`}
+                </div>
+                <div>
+                  {isKo
+                    ? `• Stage 2 & 3 (클러스터 압축 & 정밀 해독): 로컬 색채·조명 군집화로 ${preview.pinterestFunnel.stage2ClustersFormed}개 미감 클러스터의 정중앙 대표컷(Medoid) ${preview.pinterestFunnel.stage2MedoidsSelected}장만 추출해 미감 기조 A/B/C 생성 (핀터레스트 이미지는 오직 조명·색감 기조 추출에만 쓰이며 자사 로고·제품 금고와 100% 분리됨)`
+                    : `• Stage 2 & 3: Compressed to ${preview.pinterestFunnel.stage2MedoidsSelected} Medoid pins across ${preview.pinterestFunnel.stage2ClustersFormed} clusters (strictly isolated from Logo & Product vaults)`}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* 2. 4-Bucket Auto-Triage Summary */}
+        {preview && (
+          <div
+            className="bw-card bw-fields"
+            data-onboarding-auto-triage
+            style={{
+              margin: 0,
+              padding: 16,
+              background: "#FFFFFF",
+              borderRadius: 20,
+            }}
+          >
+            <div className="bw-row">
+              <div>
+                <p className="bw-kicker">
+                  {isKo
+                    ? "AUTO-TRIAGE · 4대 브랜드 자산 바구니 자동 분류 결과"
+                    : "AUTO-TRIAGE · 4-BUCKET BRAND ASSET CLASSIFICATION"}
+                </p>
+                <h3>
+                  {isKo
+                    ? "투입된 에셋이 역할에 따라 로고 금고 · 제품 마스터 · 브랜드 스탠다드 · 다중 미감 풀로 분류되었습니다"
+                    : "Dropped assets automatically sorted into Logo Vault, Product Master, Brand Standard & Multi-Aesthetic Pool"}
+                </h3>
               </div>
             </div>
-          )}
-        </div>
+            <div className="bw-grid-wide">
+              {(Object.keys(BUCKET_META) as OmniTriageBucket[]).map((bucket) => {
+                const meta = BUCKET_META[bucket];
+                const count = preview.omniTriage.counts[bucket];
+                return (
+                  <div
+                    key={bucket}
+                    className="bw-card"
+                    data-triage-bucket={bucket}
+                    style={{
+                      margin: 0,
+                      padding: 14,
+                      borderRadius: 16,
+                      background: "#F6F7F9",
+                    }}
+                  >
+                    <div className="bw-row">
+                      <strong style={{ fontSize: 13 }}>
+                        {isKo ? meta.badgeKo : meta.badgeEn}
+                      </strong>
+                      <span className="bw-badge">
+                        {isKo ? `${count}건` : `${count}`}
+                      </span>
+                    </div>
+                    <p
+                      className="bw-muted"
+                      style={{ margin: "6px 0 0", fontSize: 12 }}
+                    >
+                      {isKo ? meta.descKo : meta.descEn}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* 3. Multi-Aesthetic Lines (A / B / C) Visual Cards */}
+        {preview && (
+          <div
+            className="bw-card bw-fields"
+            data-onboarding-aesthetic-lines
+            style={{
+              margin: 0,
+              padding: 18,
+              background: "#FFFFFF",
+              borderRadius: 22,
+            }}
+          >
+            <div className="bw-row">
+              <div>
+                <p className="bw-kicker">
+                  {isKo
+                    ? "MULTI-AESTHETIC LINES · 추출된 브랜드 다중 미감 기조 (A / B / C)"
+                    : "MULTI-AESTHETIC LINES · EXTRACTED BRAND MOOD CLUSTERS (A / B / C)"}
+                </p>
+                <h3>
+                  {isKo
+                    ? "하나로 뭉뚱그리지 않고 3가지 미감 기조로 분리했습니다 — 스튜디오에서 언제든 골라 쓸 수 있습니다"
+                    : "Clustered into 3 distinct Aesthetic Lines ready for 1-click selection in Studio"}
+                </h3>
+              </div>
+              <span className="bw-badge" data-onboarding-recommended-look>
+                {isKo
+                  ? `대표 컬러 룩: ${preview.recommendedLookPresetId}`
+                  : `Primary Look: ${preview.recommendedLookPresetId}`}
+              </span>
+            </div>
+
+            <div className="bw-grid-wide" style={{ gap: 14 }}>
+              {preview.aestheticLines.map((line) => (
+                <div
+                  key={line.id}
+                  className="bw-card bw-fields"
+                  data-aesthetic-line-card={line.code}
+                  style={{
+                    margin: 0,
+                    padding: 14,
+                    borderRadius: 18,
+                    background: "#F6F7F9",
+                    border: "1px solid rgba(15, 23, 42, 0.08)",
+                  }}
+                >
+                  <div
+                    style={{
+                      height: 128,
+                      borderRadius: 14,
+                      backgroundImage: `linear-gradient(180deg, rgba(15,23,42,0.12) 0%, rgba(15,23,42,0.52) 100%), url(${line.previewImageUrl})`,
+                      backgroundSize: "cover",
+                      backgroundPosition: "center",
+                      padding: 10,
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "flex-start",
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontSize: 11,
+                        fontWeight: 700,
+                        color: "#FFFFFF",
+                        background: "#3875C5",
+                        padding: "3px 9px",
+                        borderRadius: 999,
+                      }}
+                    >
+                      {isKo
+                        ? `기조 ${line.code} · 비중 ${line.sharePct}%`
+                        : `Line ${line.code} · ${line.sharePct}%`}
+                    </span>
+                    <span
+                      style={{
+                        fontSize: 11,
+                        fontWeight: 600,
+                        color: "#F8FAFC",
+                        background: "rgba(15, 23, 42, 0.68)",
+                        padding: "3px 8px",
+                        borderRadius: 999,
+                      }}
+                    >
+                      {line.focalMm}mm · {line.lightColourK}K
+                    </span>
+                  </div>
+                  <div>
+                    <strong style={{ fontSize: 14 }}>
+                      {isKo ? line.titleKo : line.titleEn}
+                    </strong>
+                    <p
+                      className="bw-muted"
+                      style={{ margin: "4px 0 6px", fontSize: 12 }}
+                    >
+                      {isKo ? line.subtitleKo : line.subtitleEn}
+                    </p>
+                    <small className="bw-muted" style={{ display: "block" }}>
+                      {isKo ? line.rulePromptKo : line.rulePromptEn}
+                    </small>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         <label>
           {isKo
-            ? "브랜드 가이드 핵심 메모 · 절대 금기사항 (최대 3가지 자동 추출)"
-            : "Brand Guide Notes & Strict Taboos (up to 3 extracted)"}
+            ? "브랜드 스탠다드 핵심 메모 · 절대 금기사항 (모든 미감 기조 A/B/C에 공통 잠금)"
+            : "Brand Standard Notes & Strict Taboos (Hard-locked across all Aesthetic Lines A/B/C)"}
           <textarea
             name="brandGuideNote"
             rows={2}
@@ -647,19 +1021,158 @@ export function BrandOnboardingWizard({
           />
         </label>
 
+        {/* Progressive disclosure for manual slot editing & Instagram post URLs */}
+        <details className="bw-service-disclosure">
+          <summary>
+            {isKo
+              ? `개별 고정 슬롯 상세 관리 (로고 ${logoCount}/${ONBOARDING_LIMITS.maxLogoAssets} · 제품 ${productCount}/${ONBOARDING_LIMITS.maxProductAssets} · 무드 ${moodCount}/${ONBOARDING_LIMITS.maxMoodAssets})`
+              : `Manage Individual Slot Assets (Logo ${logoCount}/${ONBOARDING_LIMITS.maxLogoAssets} · Product ${productCount}/${ONBOARDING_LIMITS.maxProductAssets} · Mood ${moodCount}/${ONBOARDING_LIMITS.maxMoodAssets})`}
+          </summary>
+          <div
+            className="bw-panel"
+            data-onboarding-asset-slots
+            style={{ marginTop: 12 }}
+          >
+            <div className="bw-row">
+              <div>
+                <h3>
+                  {isKo
+                    ? "핵심 시각 에셋 슬롯 (로고 · 주력 제품 · 선호 무드)"
+                    : "Core Visual Reference Assets (Logo · Product · Mood)"}
+                </h3>
+                <p className="bw-muted">
+                  {isKo
+                    ? "로고는 원형 보존(mark_only), 제품은 기하·라벨 체크리스트, 무드는 색감·조명 참조로 자동 분리됩니다."
+                    : "Logos lock geometry, products build the preservation checklist, and mood images set lighting & palette."}
+                </p>
+              </div>
+              <span className="bw-badge" data-onboarding-asset-counter>
+                {isKo
+                  ? `총 ${assets.length}/${ONBOARDING_LIMITS.maxTotalAssets}장 (로고 ${logoCount}/${ONBOARDING_LIMITS.maxLogoAssets} · 제품 ${productCount}/${ONBOARDING_LIMITS.maxProductAssets} · 무드 ${moodCount}/${ONBOARDING_LIMITS.maxMoodAssets})`
+                  : `${assets.length}/${ONBOARDING_LIMITS.maxTotalAssets} assets (Logo ${logoCount}/${ONBOARDING_LIMITS.maxLogoAssets} · Product ${productCount}/${ONBOARDING_LIMITS.maxProductAssets} · Mood ${moodCount}/${ONBOARDING_LIMITS.maxMoodAssets})`}
+              </span>
+            </div>
+
+            <label>
+              {isKo
+                ? `인스타그램 대표 게시물·릴스 링크 (최대 ${ONBOARDING_LIMITS.maxInstagramPostUrls}개)`
+                : `Instagram Post Links (max ${ONBOARDING_LIMITS.maxInstagramPostUrls})`}
+              <textarea
+                name="instagramPostUrls"
+                rows={2}
+                value={instagramPostUrlsText}
+                onChange={(e) => setInstagramPostUrlsText(e.target.value)}
+                placeholder="https://www.instagram.com/p/..."
+                disabled={!isOwner || busy}
+              />
+            </label>
+
+            <ul className="bw-list" data-onboarding-asset-list>
+              {assets.map((asset, idx) => (
+                <li
+                  key={`${asset.slot}-${asset.label}-${idx}`}
+                  className="bw-row"
+                  data-onboarding-asset-item={asset.slot}
+                >
+                  <div>
+                    <span className="bw-badge">
+                      {isKo
+                        ? SLOT_LABELS[asset.slot].ko
+                        : SLOT_LABELS[asset.slot].en}
+                    </span>{" "}
+                    <strong>{asset.label}</strong>
+                    {asset.urlOrKey && (
+                      <small className="bw-muted"> · {asset.urlOrKey}</small>
+                    )}
+                    <p className="bw-muted">{asset.preserveNote}</p>
+                  </div>
+                  {isOwner && (
+                    <button
+                      type="button"
+                      className="bw-button"
+                      onClick={() => handleRemoveAsset(idx)}
+                      disabled={busy}
+                    >
+                      {isKo ? "제거" : "Remove"}
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ul>
+
+            {isOwner && assets.length < ONBOARDING_LIMITS.maxTotalAssets && (
+              <div className="bw-grid-wide" data-onboarding-add-asset>
+                <label>
+                  {isKo ? "슬롯 종류" : "Asset Slot"}
+                  <select
+                    value={newSlot}
+                    onChange={(e) =>
+                      setNewSlot(e.target.value as OnboardingAssetSlot)
+                    }
+                    disabled={busy}
+                  >
+                    <option value="logo">
+                      {isKo ? SLOT_LABELS.logo.ko : SLOT_LABELS.logo.en}
+                    </option>
+                    <option value="product">
+                      {isKo ? SLOT_LABELS.product.ko : SLOT_LABELS.product.en}
+                    </option>
+                    <option value="mood">
+                      {isKo ? SLOT_LABELS.mood.ko : SLOT_LABELS.mood.en}
+                    </option>
+                  </select>
+                </label>
+                <label>
+                  {isKo
+                    ? "에셋 이름 (예: 시그니처 아우터 정면)"
+                    : "Asset Label"}
+                  <input
+                    value={newLabel}
+                    onChange={(e) => setNewLabel(e.target.value)}
+                    maxLength={120}
+                    disabled={busy}
+                  />
+                </label>
+                <label>
+                  {isKo
+                    ? "보존·차용 핵심 지침"
+                    : "Preservation / Reference Rule"}
+                  <input
+                    value={newPreserveNote}
+                    onChange={(e) => setNewPreserveNote(e.target.value)}
+                    placeholder={
+                      isKo
+                        ? "예: 지퍼 비대칭 라인과 매트 나일론 질감 고정"
+                        : "e.g. Lock zipper line and matte nylon finish"
+                    }
+                    maxLength={240}
+                    disabled={busy}
+                  />
+                </label>
+                <div className="bw-row">
+                  <button
+                    type="button"
+                    className="bw-button"
+                    onClick={handleAddAsset}
+                    disabled={busy}
+                    data-onboarding-add-asset-btn
+                  >
+                    {isKo ? "+ 에셋 슬롯 추가" : "+ Add Asset Slot"}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </details>
+
         {preview && (
           <div className="bw-note" data-onboarding-preview>
             <div className="bw-row">
               <strong>
                 {isKo
-                  ? `추출된 ${preview.summary.brandName} 기본 DNA 미리보기`
-                  : `Synthesized ${preview.summary.brandName} Base DNA Preview`}
+                  ? `고정된 ${preview.summary.brandName} 스탠다드 & 로고·제품 체크리스트 요약`
+                  : `Locked ${preview.summary.brandName} Standard & Logo/Product Checklist`}
               </strong>
-              <span className="bw-badge" data-onboarding-recommended-look>
-                {isKo
-                  ? `추천 컬러 룩: ${preview.recommendedLookPresetId}`
-                  : `Recommended Look: ${preview.recommendedLookPresetId}`}
-              </span>
             </div>
             <p className="bw-muted">{preview.identity.voice.tone}</p>
             <div className="bw-grid-wide">
@@ -678,8 +1191,8 @@ export function BrandOnboardingWizard({
               <div>
                 <small className="bw-muted">
                   {isKo
-                    ? "모든 프로젝트에 공통 잠금되는 절대 금기(Hard Lock)"
-                    : "Hard-locked Brand Taboos across all projects"}
+                    ? "모든 미감 기조에 공통 잠금되는 절대 금기(Hard Lock)"
+                    : "Hard-locked Brand Taboos across all Aesthetic Lines"}
                 </small>
                 <ul className="bw-list">
                   {preview.identity.rules.never.map((item) => (
@@ -705,16 +1218,6 @@ export function BrandOnboardingWizard({
         {isOwner && (
           <div className="bw-row">
             <button
-              type="submit"
-              className="bw-button"
-              disabled={busy}
-              data-onboarding-draft-submit
-            >
-              {isKo
-                ? "에셋·채널 분석해 초안(Draft) 저장"
-                : "Synthesize & Save Draft"}
-            </button>
-            <button
               type="button"
               className="bw-button bw-primary"
               onClick={() => void submitIngest(true)}
@@ -722,14 +1225,24 @@ export function BrandOnboardingWizard({
               data-onboarding-confirm-submit
             >
               {isKo
-                ? "이 기준선으로 브랜드 Base DNA 즉시 확정"
-                : "Synthesize & Confirm Base DNA (1-Click)"}
+                ? "로고 금고 · 스탠다드 · 다중 미감(A/B/C) 즉시 확정 및 스튜디오 연동"
+                : "Confirm Logo Vault, Standard & Aesthetic Lines (A/B/C)"}
+            </button>
+            <button
+              type="submit"
+              className="bw-button"
+              disabled={busy}
+              data-onboarding-draft-submit
+            >
+              {isKo
+                ? "분류 초안(Draft)으로 저장"
+                : "Save Triage Draft"}
             </button>
             {studioHref && (
               <a className="bw-button" href={studioHref}>
                 {isKo
-                  ? "스튜디오에서 컷·프로젝트별 연출 시작 →"
-                  : "Open Studio with Base DNA →"}
+                  ? "스튜디오에서 기조 A/B/C 골라 바로 제작하기 →"
+                  : "Open Studio & Pick Line A/B/C →"}
               </a>
             )}
           </div>

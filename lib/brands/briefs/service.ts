@@ -1024,7 +1024,7 @@ export async function compileBrandSpatialStageBrief(
         ? SPATIAL_STAGE_PRESETS.find((p) => p.id === parsed.data.presetId)?.spec
         : undefined;
       const stageSpec = parsed.data.stage ?? presetMatch ?? SPATIAL_STAGE_PRESETS[0]!.spec;
-      const spatial = compileSpatialStageToShotSpec(stageSpec);
+      const spatial = compileSpatialStageToShotSpec(stageSpec, identity);
 
       const state = createDraftBrief({
         organizationId,
