@@ -51,6 +51,8 @@ describe("admin users screen", () => {
       /data-admin-nav="users"[^>]*aria-current="page"|aria-current="page"[^>]*data-admin-nav="users"/,
     );
     expect(markup).toContain(`data-user-row="${FIXTURE_USERS.free.id.slice(0, 8)}"`);
+    expect(markup).toContain("data-user-masked-email");
+    expect(markup).toContain("***@");
     expect(markup).toContain(`href="/admin/users?role=admin"`);
     expect(markup).toContain(`href="/admin/users?role=creative"`);
     expect(markup).not.toContain(FIXTURE_USERS.free.email);

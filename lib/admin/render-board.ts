@@ -386,6 +386,47 @@ export function renderTone(status: RenderStatus): "fail" | "hold" | "progress" |
 
 const MANUAL = new Set(["refund_manual", "partial_balance", "fulfil_manual"]);
 
+/**
+ * Error codes that must never be retried automatically or by an operator (docs/ADMIN.md §8 & §10-4,
+ * AGENTS.md §4: face check, liveness, moderation, and safety rejections are final).
+ */
+export const NON_RETRYABLE_RENDER_ERRORS = new Set([
+  "face_check_failed",
+  "face_rejected",
+  "liveness_required",
+  "moderation_blocked",
+  "safety_rejected",
+  "policy_violation",
+  "content_policy_violation",
+  "provider_moderation",
+]);
+
+/**
+ * Whether an operator may re-queue a failed render (docs/ADMIN.md §8, founder decision 2026-11-04):
+ * - Only `failed` renders with transient provider errors (`provider_timeout`, `engine_error`, `stalled`, 5xx, etc.).
+ * - Never face/liveness/moderation rejections.
+ * - If a payment is linked, its status must be `paid` (never `refund_pending` or `refunded`).
+ */
+export function canRetryRender(input: {
+  status: RenderStatus;
+  errorCode: string | null;
+  paymentStatus: string | null;
+}): boolean {
+  if (input.status !== "failed") return false;
+  if (input.errorCode && NON_RETRYABLE_RENDER_ERRORS.has(input.errorCode.trim().toLowerCase())) {
+    return false;
+  }
+  if (input.paymentStatus !== null && input.paymentStatus !== "paid") {
+    return false;
+  }
+  return true;
+}
+
+/** Whether an operator may re-send the completion notice for a finished render. */
+export function canResendRenderNotice(input: { status: RenderStatus }): boolean {
+  return input.status === "succeeded";
+}
+
 /** A payment an operator must handle reads as "to do"; settled ones are quiet. */
 export function paymentTone(status: string, failureCode: string | null): "action" | "fail" | "progress" | "done" {
   if (failureCode !== null && MANUAL.has(failureCode)) return "action";

@@ -37,6 +37,7 @@ const PATHS: Record<string, ReactNode> = {
       <path d="M2 6.6h12M4.5 10h2.6" />
     </>
   ),
+  payouts: <path d="M3 12.5h10M8 2.5v7M5.2 6.8L8 9.6l2.8-2.8" />,
   subscriptions: <path d="M3 7.2a5 5 0 0 1 8.6-3.4L13 5.2M13 2.6v2.6h-2.6M13 8.8a5 5 0 0 1-8.6 3.4L3 10.8M3 13.4v-2.6h2.6" />,
   users: (
     <>

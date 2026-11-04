@@ -262,3 +262,14 @@ export function twingsDefaultIdentity(): BrandIdentity {
     }
   });
 }
+
+export const ONBOARDING_VIBES = [
+  'minimal_editorial',
+  'warm_film',
+  'crisp_commercial',
+  'high_contrast_street',
+  'natural_daylight'
+] as const;
+
+export type OnboardingVibe = (typeof ONBOARDING_VIBES)[number];
+

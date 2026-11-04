@@ -3,9 +3,15 @@ import { getSqlRunner } from "@/lib/db/connect";
 import { getDictionary } from "@/lib/i18n/dictionaries";
 import { getLocaleFromHeaders } from "@/lib/i18n/server";
 import { interpolate } from "@/lib/i18n/format";
-import { AdminShell } from "@/components/admin/chrome";
+import { AdminShell, BUTTON, BUTTON_PRIMARY, ConfirmCheck, Field, INPUT, OpForm } from "@/components/admin/chrome";
 import { AdminPageHeader, FactList, StatusPill, Timeline } from "@/components/admin/patterns";
-import { loadRenderDetail, paymentTone, renderTone } from "@/lib/admin/render-board";
+import {
+  canResendRenderNotice,
+  canRetryRender,
+  loadRenderDetail,
+  paymentTone,
+  renderTone,
+} from "@/lib/admin/render-board";
 import { formatAdminTime, formatKrw, formatUsd, shortId } from "@/lib/admin/format";
 
 /**
@@ -28,6 +34,12 @@ export default async function RenderDetailPage({ params }: { params: Promise<{ i
   const title = (locale === "ko" ? job.templateTitleKo : null) ?? job.templateTitle ?? job.templateSlug;
   const when = (value: string | null) => (value ? formatAdminTime(value, locale) : null);
   const manual = job.payment?.failureCode && ["refund_manual", "partial_balance", "fulfil_manual"].includes(job.payment.failureCode);
+  const canRetry = canRetryRender({
+    status: job.status,
+    errorCode: job.errorCode,
+    paymentStatus: job.payment?.status ?? null,
+  });
+  const canResend = canResendRenderNotice({ status: job.status });
   const feedbackReasons = dict.renders.feedback.reasons as Record<string, string>;
   const mono = (value: string) => <code className="admin-id">{value}</code>;
 
@@ -57,9 +69,60 @@ export default async function RenderDetailPage({ params }: { params: Promise<{ i
         }
       />
 
-      <p className="admin-notice" data-admin-read-only>
-        {r.readOnly}
-      </p>
+      {canRetry ? (
+        <section className="admin-section" data-admin-render-retry aria-labelledby="render-retry-heading">
+          <h2 id="render-retry-heading">{r.operations.retryHeading}</h2>
+          <p className="admin-lede">{r.operations.retryHint}</p>
+          <OpForm op="render.retry" back={`/admin/renders/${job.id}`} className="mt-3 space-y-3">
+            <input type="hidden" name="id" value={job.id} />
+            <Field label={r.operations.retryReasonLabel}>
+              <input
+                type="text"
+                name="reason"
+                required
+                minLength={3}
+                maxLength={500}
+                placeholder={r.operations.retryReasonPlaceholder}
+                className={INPUT}
+              />
+            </Field>
+            <ConfirmCheck label={r.operations.retryConfirm} />
+            <button type="submit" className={BUTTON_PRIMARY}>
+              {r.operations.retrySubmit}
+            </button>
+          </OpForm>
+        </section>
+      ) : null}
+
+      {canResend ? (
+        <section className="admin-section" data-admin-render-resend aria-labelledby="render-resend-heading">
+          <h2 id="render-resend-heading">{r.operations.resendHeading}</h2>
+          <p className="admin-lede">{r.operations.resendHint}</p>
+          <OpForm op="render.resendNotice" back={`/admin/renders/${job.id}`} className="mt-3 space-y-3">
+            <input type="hidden" name="id" value={job.id} />
+            <Field label={r.operations.resendReasonLabel}>
+              <input
+                type="text"
+                name="reason"
+                defaultValue="operator resend notice"
+                minLength={3}
+                maxLength={500}
+                className={INPUT}
+              />
+            </Field>
+            <ConfirmCheck label={r.operations.resendConfirm} />
+            <button type="submit" className={BUTTON}>
+              {r.operations.resendSubmit}
+            </button>
+          </OpForm>
+        </section>
+      ) : null}
+
+      {!canRetry && !canResend ? (
+        <p className="admin-notice" data-admin-read-only>
+          {r.readOnly}
+        </p>
+      ) : null}
 
       <div className="admin-detail-grid" data-admin-render-detail={job.id}>
         <section className="admin-section" aria-labelledby="render-facts">

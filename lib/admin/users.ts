@@ -36,6 +36,7 @@ export interface UserFilter {
 
 export interface AdminUserRow {
   id: string;
+  maskedEmail: string | null;
   createdAt: string;
   lastActiveAt: string;
   roles: UserRole[];
@@ -44,6 +45,22 @@ export interface AdminUserRow {
   selfieCount: number;
   paidOrderCount: number;
   renderCount: number;
+}
+
+/**
+ * Masks an e-mail address for operator support (docs/ADMIN.md §7.3, §10-2: founder decision 2026-11-04).
+ * Never returns the raw e-mail string (`dana@gmail.com` -> `da***@gmail.com`, `ab@x.com` -> `a***@x.com`).
+ */
+export function maskEmail(raw: string | null | undefined): string | null {
+  if (!raw || typeof raw !== "string") return null;
+  const trimmed = raw.trim();
+  const at = trimmed.indexOf("@");
+  if (at <= 0 || at === trimmed.length - 1) return null;
+  const local = trimmed.slice(0, at);
+  const domain = trimmed.slice(at + 1);
+  if (!local || !domain) return null;
+  const prefix = local.length <= 2 ? local.slice(0, 1) : local.slice(0, 2);
+  return `${prefix}***@${domain}`;
 }
 
 export interface AdminUserDirectory {
@@ -201,6 +218,7 @@ function buildWhere(
 
 type RawUserRow = {
   id: string;
+  email: string | null;
   is_admin: boolean;
   created_at: unknown;
   updated_at: unknown;
@@ -262,6 +280,7 @@ export async function loadAdminUsers(sql: SqlRunner, filter: UserFilter): Promis
     sql.query<RawUserRow>(
       `select
          p.id,
+         p.email,
          p.is_admin,
          p.created_at,
          p.updated_at,
@@ -340,6 +359,7 @@ export async function loadAdminUsers(sql: SqlRunner, filter: UserFilter): Promis
 
     return {
       id,
+      maskedEmail: maskEmail(raw.email ? String(raw.email) : null),
       createdAt,
       lastActiveAt,
       roles,

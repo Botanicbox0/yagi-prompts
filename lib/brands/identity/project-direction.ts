@@ -12,14 +12,15 @@ import {
   type BrandLookPresetId
 } from '../finish/color-grading';
 import type { BrandOutcome } from '../workspace/types';
-import { ONBOARDING_VIBES, type OnboardingVibe } from './onboarding';
 import {
   BrandIdentitySchema,
   BrandReferenceRuleSchema,
+  ONBOARDING_VIBES,
   markConfirmedBrandIdentity,
   twingsDefaultIdentity,
   type BrandIdentity,
-  type ConfirmedBrandIdentity
+  type ConfirmedBrandIdentity,
+  type OnboardingVibe
 } from './schema';
 import {
   listMemory,

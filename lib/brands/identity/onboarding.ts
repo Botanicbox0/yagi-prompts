@@ -6,8 +6,10 @@ import { BRAND_LOOK_PRESETS, type BrandLookPresetId } from '../finish/color-grad
 import type { BrandFailureCode, BrandOutcome } from '../workspace/types';
 import {
   BrandIdentitySchema,
+  ONBOARDING_VIBES,
   twingsDefaultIdentity,
   type BrandIdentity,
+  type OnboardingVibe,
   type ReferenceRole
 } from './schema';
 import {
@@ -36,15 +38,7 @@ export const ONBOARDING_CATEGORIES = [
 
 export type OnboardingCategory = (typeof ONBOARDING_CATEGORIES)[number];
 
-export const ONBOARDING_VIBES = [
-  'minimal_editorial',
-  'warm_film',
-  'crisp_commercial',
-  'high_contrast_street',
-  'natural_daylight'
-] as const;
-
-export type OnboardingVibe = (typeof ONBOARDING_VIBES)[number];
+export { ONBOARDING_VIBES, type OnboardingVibe };
 
 export const ONBOARDING_ASSET_SLOTS = ['logo', 'product', 'mood'] as const;
 export type OnboardingAssetSlot = (typeof ONBOARDING_ASSET_SLOTS)[number];

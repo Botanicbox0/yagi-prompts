@@ -3,7 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { insertRenderJob } from "@/lib/renders/repo";
 import { FIXTURE_USERS } from "@/scripts/fixtures";
 import { promptHarness, type PromptHarness } from "@/tests/helpers/prompts";
-import { loadAdminUsers, socialTone, userFilter, userHref } from "@/lib/admin/users";
+import { loadAdminUsers, maskEmail, socialTone, userFilter, userHref } from "@/lib/admin/users";
 
 /**
  * docs/ADMIN.md §7.3 — `/admin/users` reads roles, verified social follower counts, active selfie
@@ -86,6 +86,8 @@ describe("admin user directory read model", () => {
 
     const freeUser = dir.rows.find((row) => row.id === FIXTURE_USERS.free.id);
     expect(freeUser).toBeDefined();
+    expect(freeUser!.maskedEmail).toBe(maskEmail(FIXTURE_USERS.free.email));
+    expect(freeUser!.maskedEmail).toContain("***@");
     expect(freeUser!.selfieCount).toBe(1);
     expect(freeUser!.paidOrderCount).toBe(1);
     expect(freeUser!.renderCount).toBeGreaterThanOrEqual(1);

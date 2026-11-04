@@ -139,6 +139,11 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: P
                 account: (
                   <div>
                     <code title={user.id}>{shortId(user.id)}</code>
+                    {user.maskedEmail ? (
+                      <span className="admin-cell-sub" data-user-masked-email>
+                        {user.maskedEmail}
+                      </span>
+                    ) : null}
                     {user.creativeHandle ? (
                       <span className="admin-cell-sub">@{user.creativeHandle}</span>
                     ) : null}
