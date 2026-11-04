@@ -4,20 +4,30 @@ import {
   compileReferenceToTemplatePromotion,
   DIRECT_SCENE_WORDING_CANDIDATES,
   HIGH_QUALITY_REQUEST_GUIDE,
+  MAKER_DB_ARCHITECTURE_READINESS,
   PRESET_REFERENCE_SCENARIOS
 } from '@/lib/template-director/freestyle-to-template';
 import { parsePersonalCustomizableRecipe, parseRecipe } from '@/lib/recipes/schema';
 import { PROMPT_MODEL_LABEL } from '@/lib/prompts/schemas';
 import { DirectSceneStudio } from '@/components/audience/direct-scene-studio';
+import { TemplateDirectorPanel } from '@/components/twings/template-director-panel';
+import { CreatorCampaignHub } from '@/components/campaigns/creator-campaign-hub';
 
-describe('Direct Scene (Freestyle-to-Template) Engine & UI (2026-11-04)', () => {
-  it('positions "Freestyle Yourself · 나만의 템플릿" with magnetic copy and 3 golden quality rules', () => {
+describe('Make Your Own Video & Maker 80% Revenue Engine + Selective Frame Picker + Creator Campaign Hub (2026-11-04)', () => {
+  it('positions "나만의 영상 제작하기 · Make Your Own Video" with consumer-friendly copy and Maker 80% revenue share', () => {
     const recommended = DIRECT_SCENE_WORDING_CANDIDATES.find((c) => c.recommended);
     expect(recommended?.id).toBe('freestyle-yourself');
-    expect(recommended?.navKo).toBe('나만의 템플릿');
-    expect(recommended?.navEn).toBe('Freestyle Yourself');
-    expect(recommended?.headlineKo).toContain('세상에 없던 내 장면을 직접 찍고');
+    expect(recommended?.navKo).toBe('나만의 영상 제작하기');
+    expect(recommended?.navEn).toBe('Make Your Own Video');
+    expect(recommended?.headlineKo).toContain('저장해 둔 영상으로 내 장면을 만들고');
     expect(HIGH_QUALITY_REQUEST_GUIDE).toHaveLength(3);
+    expect(MAKER_DB_ARCHITECTURE_READINESS.map((t) => t.table)).toEqual([
+      'platform_creators',
+      'platform_formats',
+      'prompt_items',
+      'render_job_recipes',
+      'platform_settlements'
+    ]);
   });
 
   it('compiles a locked signature reference scene into a strict Recipe v2 and TemplateSceneLockSpec', () => {
@@ -79,7 +89,7 @@ describe('Direct Scene (Freestyle-to-Template) Engine & UI (2026-11-04)', () => 
     expect(backdropFreeze?.status).toBe('open_user_reference');
   });
 
-  it('renders DirectSceneStudio with the 3 Golden Rules, 3-Stage Simulator, and Freeze Matrix without exposing engine names', () => {
+  it('renders DirectSceneStudio with the Maker 80% Revenue Calculator, friendly 3 tips, and 3-step simulator without tech jargon', () => {
     const html = renderToStaticMarkup(
       <DirectSceneStudio
         locale="ko"
@@ -89,6 +99,9 @@ describe('Direct Scene (Freestyle-to-Template) Engine & UI (2026-11-04)', () => 
     );
 
     expect(html).toContain('data-direct-scene-studio');
+    expect(html).toContain('data-maker-revenue-calculator');
+    expect(html).toContain('data-maker-earning-per-make');
+    expect(html).toContain('data-maker-db-pipeline');
     expect(html).toContain('data-high-quality-guide');
     expect(html).toContain('data-quality-rule="01"');
     expect(html).toContain('data-quality-rule="02"');
@@ -100,8 +113,54 @@ describe('Direct Scene (Freestyle-to-Template) Engine & UI (2026-11-04)', () => 
     expect(html).toContain('data-template-freeze-matrix');
     expect(html).toContain('data-buyer-preview-card');
 
-    // TWINGS Identity compliance
+    // No raw compiler/developer jargon on screen
+    expect(html).not.toContain('RECIPE V2 자동 컴파일');
+    expect(html).not.toContain('{{selfie}}');
+    expect(html).not.toContain('5200K');
     expect(html).not.toContain('#ED1E1E');
     expect(html).not.toContain(PROMPT_MODEL_LABEL);
+  });
+
+  it('renders Selective Frame Picker inside TemplateDirectorPanel for 5-shot image templates with dynamic credit savings', () => {
+    const html = renderToStaticMarkup(
+      <TemplateDirectorPanel
+        locale="ko"
+        templateId="bridal-editorial-5-shots"
+        imageSetSpec={{
+          totalFrames: 5,
+          perFrameProviderUsd: 0.09,
+          royaltyKrw: 0
+        }}
+        initialSelectedFrames={[0, 2]}
+      />
+    );
+
+    expect(html).toContain('data-selective-frame-picker');
+    expect(html).toContain('data-selected-frame-count="2"');
+    expect(html).toContain('data-total-frame-count="5"');
+    expect(html).toContain('data-selective-credits="29"');
+    expect(html).toContain('data-selective-krw="400"');
+    expect(html).toContain('data-selective-saved-badge');
+    expect(html).toContain('42 크레딧');
+  });
+
+  it('renders CreatorCampaignHub with 2 monetization tracks (Official Format vs Guided Custom Video) and 3-point payout checklist', () => {
+    const html = renderToStaticMarkup(
+      <CreatorCampaignHub
+        locale="ko"
+        featuredFormats={[]}
+        myCampaignsHref="/campaigns/mine"
+        directVideoHref="/ko/direct"
+      />
+    );
+
+    expect(html).toContain('data-creator-campaign-hub');
+    expect(html).toContain('data-campaign-monetization-tracks');
+    expect(html).toContain('data-campaign-track="format"');
+    expect(html).toContain('data-campaign-track="guided-custom"');
+    expect(html).toContain('data-campaign-guide-simulator');
+    expect(html).toContain('data-campaign-payout-checklist');
+    expect(html).toContain('200만 뷰+');
+    expect(html).not.toContain('#ED1E1E');
   });
 });

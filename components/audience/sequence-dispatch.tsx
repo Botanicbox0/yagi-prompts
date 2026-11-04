@@ -573,21 +573,21 @@ export function SequenceDispatchSection({
           {locale === 'en' ? activeMoodObj.descEn : activeMoodObj.descKo}
         </p>
 
-        {/* 3. Magnetic Freestyle Yourself — Create Your Scene & Launch Your Own Template Door */}
+        {/* 3. Make Your Own Video & Earn 80% as a Template Maker Door */}
         <div
           data-direct-scene-door
           className="mt-5 flex flex-wrap items-center justify-between gap-4 rounded-[18px] border border-[#3875C5]/25 bg-[#F3F7FA] px-5 py-4"
         >
           <div className="max-w-2xl">
-            <p className="font-mono text-[0.68rem] font-bold tracking-[0.08em] text-[#3063A7] uppercase">
+            <p className="text-xs font-semibold text-[#3063A7]">
               {locale === 'en'
-                ? 'FREESTYLE YOURSELF · CREATE & PUBLISH YOUR OWN TEMPLATE'
-                : 'FREESTYLE YOURSELF · 나만의 장면, 나만의 템플릿 만들기'}
+                ? 'MAKE YOUR OWN VIDEO & EARN 80% PROFIT SHARE'
+                : '나만의 영상 제작하기 · 누군가 내 템플릿으로 만들 때마다 순수익 80% 정산'}
             </p>
             <p className="mt-1 text-sm font-bold tracking-[-0.01em] text-[#0E1013]">
               {locale === 'en'
-                ? 'Turn any saved reference video into your own scene — then launch it as an official TWINGS template.'
-                : '저장해 둔 레퍼런스 영상에 내 얼굴을 입혀 찍고, 마음에 들면 그대로 ‘나만의 공식 템플릿’으로 등판시키세요.'}
+                ? 'Upload any reference video to make your own scene — then publish it as a template and earn 80% every time someone uses it.'
+                : '저장해 둔 영상에 내 사진을 넣어 나만의 영상을 만들고, 템플릿으로 올려 다른 사람이 만들 때마다 80% 수익을 받아보세요.'}
             </p>
           </div>
           <a
@@ -595,7 +595,7 @@ export function SequenceDispatchSection({
             data-direct-scene-link
             className="inline-flex min-h-10 shrink-0 items-center rounded-full bg-[#3875C5] px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-[#3063A7]"
           >
-            {locale === 'en' ? 'Freestyle Yourself →' : 'Freestyle · 나만의 템플릿 만들기 →'}
+            {locale === 'en' ? 'Make My Own Video & Earn →' : '나만의 영상 제작 & 수익 보기 →'}
           </a>
         </div>
       </div>

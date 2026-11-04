@@ -55,16 +55,16 @@ export const DIRECT_SCENE_WORDING_CANDIDATES: readonly TabWordingCandidate[] = [
   {
     id: 'freestyle-yourself',
     recommended: true,
-    navKo: '나만의 템플릿',
-    navEn: 'Freestyle Yourself',
-    headlineKo: '세상에 없던 내 장면을 직접 찍고, 그대로 내 템플릿으로 등판시키세요',
-    headlineEn: 'Freestyle Yourself — Turn any reference film into your scene, then launch it as your own template',
+    navKo: '나만의 영상 제작하기',
+    navEn: 'Make Your Own Video',
+    headlineKo: '저장해 둔 영상으로 내 장면을 만들고, 템플릿으로 올려 80% 수익도 받으세요',
+    headlineEn: 'Make Your Own Video — Turn any reference clip into your scene, then earn 80% when others use your template',
     subcopyKo:
-      '저장해 둔 레퍼런스 영상에 내 정면 사진 한 장을 입혀 단 하나뿐인 장면을 완성하세요. 결과물이 마음에 들면 클릭 한 번으로 카메라와 조명을 잠가, 다른 사람들도 내 연출로 주인공이 되는 공식 템플릿으로 등록할 수 있습니다.',
+      '평소 저장해 둔 멋진 영상에 내 정면 사진 한 장을 올려 내가 주인공인 영상을 완성해 보세요. 완성된 영상이 마음에 들면 템플릿으로 공개할 수 있고, 다른 사람이 내 템플릿으로 만들 때마다 순이익의 80%가 내 수익으로 정산됩니다.',
     subcopyEn:
-      'Bring a saved reference film and your front selfie to direct a one-of-a-kind scene. Love the result? Lock the camera and lighting in one click to publish it as an official TWINGS template.',
+      'Upload a reference video you love and one front selfie to star in your own scene. Publish the finished video as a template and earn 80% of the net margin every time someone makes it.',
     rationaleKo:
-      '단순 주문제작이 아니라 내 감각으로 고른 레퍼런스 영상을 내 얼굴로 먼저 완성해 보고, 그 결과물을 곧바로 ‘나만의 공식 템플릿’으로 등판시키는 크리에이티브 정체성을 가장 매력적으로 담아냅니다.'
+      '어려운 기술 용어 없이 누구나 원하는 레퍼런스 영상으로 자기 영상을 만들고, 그대로 템플릿으로 등록해 수익(순마진 80%)까지 얻을 수 있다는 가치를 직관적으로 전달합니다.'
   },
   {
     id: 'direct-scene',
@@ -75,7 +75,7 @@ export const DIRECT_SCENE_WORDING_CANDIDATES: readonly TabWordingCandidate[] = [
     headlineEn: 'Bring a reference film, star in it with your photo, and publish it as your own template',
     subcopyKo: '레퍼런스 영상을 바탕으로 내가 주인공이 되는 장면을 연출합니다.',
     subcopyEn: 'Direct your own scene from a reference film.',
-    rationaleKo: '기능 설명은 명확하나 ‘Freestyle Yourself · 나만의 템플릿’ 대비 브랜드 매력이 평이합니다.'
+    rationaleKo: '연출이라는 표현이 일반 유저에게는 다소 어렵게 느껴질 수 있습니다.'
   },
   {
     id: 'custom-scene',
@@ -86,7 +86,7 @@ export const DIRECT_SCENE_WORDING_CANDIDATES: readonly TabWordingCandidate[] = [
     headlineEn: 'Your custom scene from any reference film',
     subcopyKo: '원하는 레퍼런스로 맞춤 장면을 제작합니다.',
     subcopyEn: 'Create a custom scene from your reference.',
-    rationaleKo: '1회성 주문제작 인상을 주어 템플릿 등판 확장성이 약합니다.'
+    rationaleKo: '1회성 주문제작 인상을 주어 템플릿 수익화 연결성이 약합니다.'
   }
 ] as const;
 
@@ -101,61 +101,60 @@ export interface RequestQualityRule {
 }
 
 /**
- * Explains to the user exactly how to submit a custom reference production request so that
- * facial likeness and cinematic quality come out at the highest level.
+ * Consumer-friendly guide explaining how to get the most natural, high-quality video from a reference clip.
  */
 export const HIGH_QUALITY_REQUEST_GUIDE: readonly RequestQualityRule[] = [
   {
     stepNumber: '01',
-    titleKo: '레퍼런스 영상 선택 공식 — 카메라 호흡과 얼굴 각도가 선명한 4~10초 단일 씬',
-    titleEn: 'Reference Film Rule — Clear 4–10s single sequence with readable lighting',
+    titleKo: '어떤 영상을 올리면 가장 예쁘게 나오나요?',
+    titleEn: 'What kind of reference video works best?',
     summaryKo:
-      '레퍼런스 영상은 결과물의 카메라 무빙·조명·컷 호흡을 결정하는 설계도입니다. 주인공 1인의 동선이 또렷한 영상일수록 완성도가 급격히 올라갑니다.',
+      '한 사람이 주인공으로 나오고 얼굴에 빛이 잘 들어오는 4~10초 영상을 올리면, 영상 속 카메라 움직임과 분위기 그대로 내가 주인공이 됩니다.',
     summaryEn:
-      'Your reference video defines the camera movement, lighting, and pacing. Single-protagonist shots with clear lighting yield the highest realism.',
+      'Pick a 4–10 second clip with one clear protagonist and good lighting.',
     goodExamplesKo: [
-      '1인 주인공 중심으로 카메라가 부드럽게 트래킹·줌인하는 4~10초 영상',
-      '얼굴에 정면 또는 45도 자연광·스튜디오 조명이 또렷하게 들어오는 장면',
-      '런웨이 워킹, 길거리 인터뷰, 카페 시선 처리처럼 행동 1개가 명확한 시퀀스'
+      '한 사람이 걷거나 돌아보는 4~10초 분량의 자연스러운 영상',
+      '얼굴이 너무 작지 않고 정면이나 반측면이 잘 보이는 영상',
+      '길거리 인터뷰, 런웨이, 카페 일상처럼 분위기가 뚜렷한 영상'
     ],
     avoidExamplesKo: [
-      '0.5초마다 화면이 바뀌는 빠른 교차편집(매드무비)이나 격렬한 카메라 흔들림',
-      '손·선글라스·마스크·머리카락이 얼굴 절반 이상을 계속 가리는 영상',
-      '3명 이상이 동시에 얽혀 누가 주인공인지 구분하기 어려운 군무 영상'
+      '1초마다 화면이 휙휙 바뀌거나 카메라가 심하게 흔들리는 영상',
+      '선글라스·마스크·손으로 얼굴을 계속 가리고 있는 영상',
+      '여러 명이 동시에 섞여 누가 주인공인지 알기 어려운 영상'
     ]
   },
   {
     stepNumber: '02',
-    titleKo: '이미지 직접 매칭 공식 — AI 임의 변형 대신 실사 셀카 1장 + 의상·소품 원본 사진 첨부',
-    titleEn: 'Direct Photo Rule — Unfiltered front selfie + direct outfit/prop reference image',
+    titleKo: '내 사진과 옷 사진은 어떻게 올리나요?',
+    titleEn: 'How should I upload my photo and outfit?',
     summaryKo:
-      '긴 글로 설명하는 것보다 실제 사진을 직접 넣을 때 AI 왜곡이 사라집니다. 조명이 까다로운 장면은 Seedream 5.0 Pro와 Nano Banana 2.1 키프레임 2종 중 더 닮은 내 얼굴을 먼저 고른 뒤 영상으로 만듭니다.',
+      '어플 보정이 없는 밝은 정면 사진 1장이면 충분합니다. 입고 싶은 옷이나 들고 싶은 소품이 있다면 글로 길게 설명하는 대신 옷 사진을 직접 한 장 올려주세요.',
     summaryEn:
-      'Direct image uploads beat long text descriptions. For tricky lighting, pick your best facial likeness between Seedream 5.0 Pro and Nano Banana 2.1 before animating.',
+      'Use one unfiltered front selfie. Want a different outfit? Upload a photo of the outfit directly.',
     goodExamplesKo: [
-      '내 얼굴: 뷰티 필터·보정 앱을 쓰지 않은 밝은 정면 실사 사진 1장 (부적합 시 AI 변형 대신 다른 사진 직접 재업로드 권장)',
-      '의상·소품 변경 시: “예쁜 검정 자켓” 텍스트 대신 실제로 입히고 싶은 자켓·가방 사진 1장을 직접 업로드',
-      '어두운 네온·역광 레퍼런스: 1단계에서 생성된 두 모델(Seedream 5.0 Pro vs Nano Banana 2.1) 중 내 눈매와 더 닮은 키프레임 선택'
+      '내 얼굴: 기본 카메라로 찍은 밝고 선명한 정면 사진 1장',
+      '입고 싶은 옷이 있을 때: 쇼핑몰 캡처나 옷 사진을 그대로 함께 첨부',
+      '조명이 어두운 영상일 때: 먼저 만들어드리는 2가지 얼굴 시안 중 더 나다운 사진을 선택'
     ],
     avoidExamplesKo: [
-      '이미 보정 앱으로 턱선·눈 크기가 변형된 셀카나 어두운 클럽 조명 사진',
-      '의상·배경·조명·카메라를 한꺼번에 글로만 길게 나열하는 요청'
+      '눈 크기나 턱선을 보정 앱으로 많이 바꾼 셀카',
+      '사진 첨부 없이 글로만 옷 모양과 색깔을 길게 설명하는 요청'
     ]
   },
   {
     stepNumber: '03',
-    titleKo: '한 줄 디렉팅 공식 — “유지할 것(Keep)”과 “바꿀 것(Change)”만 명확히 분리',
-    titleEn: 'One-Line Direction Rule — Separate what to KEEP from what to CHANGE',
+    titleKo: '요청사항은 딱 한 줄이면 충분해요',
+    titleEn: 'One simple sentence is all you need',
     summaryKo:
-      '레퍼런스 영상이 이미 카메라 워크와 분위기를 책임지므로, 요청사항에는 레퍼런스에서 그대로 가져갈 요소와 내 이미지로 교체할 요소만 1~2문장으로 적어 주세요.',
+      '올리신 영상이 이미 분위기와 카메라 구도를 잡아주니까, 그대로 둘 것과 바꿀 것만 편하게 한 줄로 적어 주세요.',
     summaryEn:
-      'Since the reference film already carries the camera and mood, simply state what to keep from the reference and what to swap with your uploaded image.',
+      'Your video already sets the mood — just write one line on what to keep or swap.',
     goodExamplesKo: [
-      '“레퍼런스 영상의 카메라 무빙과 밤거리 조명은 그대로 유지하고, 주인공 얼굴을 내 사진으로, 의상만 첨부한 가죽 자켓 사진으로 바꿔주세요.”',
-      '“원본 영상의 시선 처리와 바람 부는 연출은 유지하고, 배경 색감만 조금 더 따뜻한 오후 햇살 톤으로 맞춰주세요.”'
+      '“영상 속 밤거리 분위기는 그대로 두고, 내 사진 속 얼굴과 첨부한 검정 코트로만 바꿔주세요.”',
+      '“원래 영상처럼 자연스럽게 웃는 표정으로 해주고, 배경만 조금 더 따뜻한 햇살 느낌으로 해주세요.”'
     ],
     avoidExamplesKo: [
-      '“알아서 더 멋있고 영화처럼 시네마틱하게 해주세요” (기준이 모호해 원본 레퍼런스의 매력이 흐려짐)'
+      '“알아서 더 멋있고 영화처럼 해주세요”처럼 무엇을 바꿀지 모호한 요청'
     ]
   }
 ] as const;
@@ -397,76 +396,76 @@ export function compileReferenceToTemplatePromotion(
     {
       key: 'buyer_selfie',
       status: 'buyer_selfie_slot',
-      badgeKo: '구매자 사진 자동 치환 ({{selfie}})',
-      badgeEn: 'Auto-Swapped Buyer Selfie ({{selfie}})',
-      labelKo: '주인공 얼굴 슬롯',
-      labelEn: 'Protagonist Face Slot',
+      badgeKo: '내 원본 사진 비공개 · 다음 사람 사진으로 자동 전환',
+      badgeEn: 'Original Selfie Protected · Auto-Swapped for Buyers',
+      labelKo: '주인공 얼굴 사진',
+      labelEn: 'Protagonist Face Photo',
       detailKo:
-        '내가 넣었던 내 얼굴 사진은 레시피에서 빠져나가고 [구매자 본인 사진] 슬롯으로 자동 변환됩니다. 내가 만든 완성 영상만 템플릿 예시 영상으로 노출됩니다.',
+        '내가 올렸던 원본 셀카 사진은 템플릿에 절대 남지 않고, 다음 제작자의 사진이 들어가는 빈자리로 바뀝니다. 내가 완성한 영상만 예시 영상으로 공개됩니다.',
       detailEn:
-        'Your personal photo is replaced by the buyer selfie slot ({{selfie}}). Only your finished film is shown as the public preview.'
+        'Your original selfie is never shared; only your finished video is shown as the public preview.'
     },
     {
       key: 'camera_and_motion',
       status: 'locked_signature',
-      badgeKo: '템플릿 고정 (LOCKED)',
-      badgeEn: 'Locked by Template',
-      labelKo: '카메라 무빙 · 컷 호흡 · 화면 비율',
-      labelEn: 'Camera Movement, Pacing & Aspect Ratio',
-      detailKo: `${input.cameraMotionPrompt} (${input.aspect}, ${input.durationSeconds}초) — 다음 유저가 제작할 때도 흔들림 없이 동일한 구도로 고정됩니다.`,
-      detailEn: `${input.cameraMotionPrompt} (${input.aspect}, ${input.durationSeconds}s) — Frozen so every buyer gets the exact same cinematic framing.`
+      badgeKo: '영상 구도 · 무빙 고정',
+      badgeEn: 'Camera & Motion Locked',
+      labelKo: '카메라 움직임과 화면 비율',
+      labelEn: 'Camera Movement & Aspect Ratio',
+      detailKo: `다른 사람이 내 템플릿으로 만들 때도 내가 만든 영상과 똑같은 구도와 길이(${input.aspect}, ${input.durationSeconds}초)로 자연스럽게 완성됩니다.`,
+      detailEn: `Every buyer gets the exact same camera movement and ${input.durationSeconds}s pacing (${input.aspect}).`
     },
     {
       key: 'lighting_and_grade',
       status: 'locked_signature',
-      badgeKo: '템플릿 고정 (LOCKED)',
-      badgeEn: 'Locked by Template',
-      labelKo: '조명 무드 · 필름 색감',
-      labelEn: 'Lighting Mood & Film Color Grade',
-      detailKo: `${input.lightingAndGradePrompt} — 이 장면의 핵심 미감을 만드는 조명과 색온도가 고정됩니다.`,
-      detailEn: `${input.lightingAndGradePrompt} — Preserves the signature atmosphere of your scene.`
+      badgeKo: '조명 · 색감 분위기 고정',
+      badgeEn: 'Lighting & Mood Locked',
+      labelKo: '영상 조명과 색감 분위기',
+      labelEn: 'Lighting & Color Mood',
+      detailKo: '이 영상만의 매력적인 조명과 색감 톤이 흔들리지 않도록 그대로 유지됩니다.',
+      detailEn: 'Preserves the signature lighting and color atmosphere of your video.'
     },
     {
       key: 'identity_anchor_pipeline',
       status: 'locked_signature',
-      badgeKo: '품질 보호 고정 (LOCKED)',
-      badgeEn: 'Quality Guard Locked',
-      labelKo: '2단계 닮음새 보호 엔진 파이프라인',
-      labelEn: '2-Step Facial Likeness Protection Pipeline',
+      badgeKo: '얼굴 닮음새 보호 자동 적용',
+      badgeEn: 'Likeness Protection Active',
+      labelKo: '얼굴 닮음새 보호 과정',
+      labelEn: 'Facial Likeness Protection',
       detailKo: input.lightingRiskForFace
-        ? '조명 대비가 강한 장면이므로 다음 구매자에게도 [Seedream 5.0 Pro vs Nano Banana 2.1] A/B 닮음새 선택 후 영상화하는 안전장치가 자동 적용됩니다.'
-        : '1단계 실사 키프레임 고정 후 2단계 영상으로 이어지는 얼굴 왜곡 방지 파이프라인이 그대로 고정됩니다.',
+        ? '조명이 강한 장면이라 다른 사람이 만들 때도 2가지 얼굴 시안 중 더 닮은 쪽을 먼저 고른 뒤 영상을 완성하도록 자동 보호됩니다.'
+        : '첫 장면에서 내 얼굴을 자연스럽게 먼저 잡은 뒤 영상으로 이어지는 과정이 그대로 적용됩니다.',
       detailEn: input.lightingRiskForFace
-        ? 'Automatically enables Dual A/B Identity Anchor selection (Seedream 5.0 Pro vs Nano Banana 2.1) for future buyers.'
-        : 'Locks the 2-step keyframe-to-video pipeline so facial likeness stays sharp.'
+        ? 'Automatically lets future buyers pick between two facial likeness previews before animating.'
+        : 'Locks the two-step likeness protection process for future buyers.'
     },
     {
       key: 'styling_outfit',
       status: input.lockOutfitAsSignature ? 'locked_signature' : 'open_user_reference',
-      badgeKo: input.lockOutfitAsSignature ? '시그니처 고정 (LOCKED)' : '구매자 이미지 첨부 허용 (OPEN)',
-      badgeEn: input.lockOutfitAsSignature ? 'Locked Signature' : 'Open for Buyer Image',
-      labelKo: '의상 · 헤어 · 스타일링',
-      labelEn: 'Outfit, Hair & Styling',
+      badgeKo: input.lockOutfitAsSignature ? '내 의상 스타일로 고정' : '다른 사람 옷 사진 첨부 허용',
+      badgeEn: input.lockOutfitAsSignature ? 'Keep My Outfit Style' : 'Allow Buyer Outfit Photo',
+      labelKo: '의상 · 헤어 스타일',
+      labelEn: 'Outfit & Hair Style',
       detailKo: input.lockOutfitAsSignature
-        ? `${input.stylingPrompt} — 구매자가 셀카 1장만 올리면 내가 연출한 이 의상 그대로 입고 등장합니다.`
-        : `${input.stylingPrompt} (기본값) — 구매자가 원할 경우 본인 의상 참조 사진(look_ref)을 직접 업로드해 갈아입을 수 있게 열어 둡니다.`,
+        ? '다른 사람이 정면 사진 1장만 올리면 내가 완성한 이 의상 스타일 그대로 입고 주인공이 됩니다.'
+        : '기본은 내 의상 스타일로 나오지만, 다른 사람이 원하면 자기 옷 사진을 올려 갈아입힐 수 있게 열어 둡니다.',
       detailEn: input.lockOutfitAsSignature
-        ? `${input.stylingPrompt} — Buyers step right into your curated outfit with just one selfie.`
-        : `${input.stylingPrompt} (Default) — Buyers may upload their own outfit reference image (look_ref).`
+        ? 'Buyers wear your exact curated outfit style with just one selfie.'
+        : 'Buyers can either use your default outfit or upload their own outfit photo.'
     },
     {
       key: 'scene_backdrop',
       status: input.lockBackdropAsSignature ? 'locked_signature' : 'open_user_reference',
-      badgeKo: input.lockBackdropAsSignature ? '시그니처 고정 (LOCKED)' : '구매자 이미지 첨부 허용 (OPEN)',
-      badgeEn: input.lockBackdropAsSignature ? 'Locked Signature' : 'Open for Buyer Image',
-      labelKo: '배경 공간 · 소품 연출',
-      labelEn: 'Scene Backdrop & Props',
+      badgeKo: input.lockBackdropAsSignature ? '내 배경 공간으로 고정' : '다른 사람 배경·소품 변경 허용',
+      badgeEn: input.lockBackdropAsSignature ? 'Keep My Backdrop' : 'Allow Buyer Backdrop Photo',
+      labelKo: '배경 공간 · 소품 분위기',
+      labelEn: 'Backdrop & Props',
       detailKo: input.lockBackdropAsSignature
-        ? `${input.sceneBackdropPrompt} — 배경 공간과 오브제가 템플릿의 고정 세계관으로 유지됩니다.`
-        : `${input.sceneBackdropPrompt} (기본값) — 구매자가 원하는 배경·소품 이미지(scene_ref)를 직접 첨부할 수 있게 열어 둡니다.`,
+        ? '영상 속 배경 공간과 분위기가 그대로 유지되어 누구나 같은 장소에서 찍은 것처럼 나옵니다.'
+        : '다른 사람이 원하면 배경이나 손에 든 소품 사진을 첨부해 바꿀 수 있게 열어 둡니다.',
       detailEn: input.lockBackdropAsSignature
-        ? `${input.sceneBackdropPrompt} — Keeps the environment fixed as part of the template world.`
-        : `${input.sceneBackdropPrompt} (Default) — Buyers may upload their own backdrop/prop reference image.`
+        ? 'Keeps the backdrop and setting fixed for all buyers.'
+        : 'Allows buyers to attach their own backdrop or prop reference image.'
     }
   ];
 
@@ -478,12 +477,12 @@ export function compileReferenceToTemplatePromotion(
     freezeMatrix,
     personalToTemplateSummary: {
       personalRenderRoleKo:
-        '1단계에서 내 사진과 레퍼런스 영상으로 완성한 결과물은 내 소장용 원본 영상이 되며, 템플릿 등판 시에는 이 템플릿의 공식 샘플 영상(Preview Film)으로 등록됩니다.',
+        '먼저 내 사진과 레퍼런스 영상으로 완성한 결과물은 내 소장용 영상이 되며, 템플릿으로 등록하면 다른 사람들에게 보여주는 대표 예시 영상으로 쓰입니다.',
       templateBuyerExperienceKo: input.lockOutfitAsSignature && input.lockBackdropAsSignature
-        ? '다음 유저는 복잡한 프롬프트 입력 없이 정면 셀카 1장만 올리면 내가 세팅한 카메라·조명·의상 그대로 주인공이 됩니다.'
-        : '다음 유저는 정면 셀카 1장으로 바로 만들거나, 내가 열어 둔 의상·배경 슬롯에 자기 레퍼런스 이미지를 직접 첨부해 맞춤 제작할 수 있습니다.',
+        ? '다른 사람은 복잡한 설명 없이 정면 사진 1장만 올리면 내가 만든 분위기·의상 그대로 주인공이 됩니다.'
+        : '다른 사람은 정면 사진 1장으로 바로 만들거나, 내가 열어 둔 의상·배경 칸에 자기 사진을 올려 맞춤 제작할 수 있습니다.',
       privacyGuaranteeKo:
-        '내 원본 셀카 파일은 레시피에 절대 포함되지 않으며, 레시피 내부의 얼굴 슬롯은 {{selfie}}(구매자 본인 사진)로 100% 치환되어 저장됩니다.'
+        '내가 올린 원본 셀카 사진은 템플릿에 절대 남지 않으며, 완성된 영상만 예시로 보여집니다.'
     }
   };
 }
@@ -492,14 +491,24 @@ export interface PresetReferenceScenario {
   id: 'seoul-night-runway' | 'vintage-camcorder-interview' | 'luxury-beauty-closeup';
   badgeKo: string;
   badgeEn: string;
+  cameraSummaryKo: string;
+  lightingSummaryKo: string;
+  stylingSummaryKo: string;
+  backdropSummaryKo: string;
+  providerUsd: number;
   input: ReferenceSceneInput;
 }
 
 export const PRESET_REFERENCE_SCENARIOS: readonly PresetReferenceScenario[] = [
   {
     id: 'seoul-night-runway',
-    badgeKo: '예시 01 · 도심 야간 플래시 런웨이',
-    badgeEn: 'Preset 01 · Night Flash Street Runway',
+    badgeKo: '밤거리 플래시 런웨이 (10초)',
+    badgeEn: 'Night Flash Street Runway (10s)',
+    cameraSummaryKo: '걸어 나오는 주인공을 따라가다 카메라 플래시가 터지며 클로즈업되는 구도',
+    lightingSummaryKo: '밤거리 조명과 카메라 플래시가 어우러진 선명하고 힙한 색감',
+    stylingSummaryKo: '시크한 블랙 롱코트와 실버 이어커프 스타일',
+    backdropSummaryKo: '비에 젖은 도심 밤거리 골목과 플래시 불빛',
+    providerUsd: 2.31,
     input: {
       slugCandidate: 'seoul-night-flash-runway',
       titleKo: '서울 야간 플래시 스트릿 런웨이',
@@ -521,8 +530,13 @@ export const PRESET_REFERENCE_SCENARIOS: readonly PresetReferenceScenario[] = [
   },
   {
     id: 'vintage-camcorder-interview',
-    badgeKo: '예시 02 · 90년대 캠코더 길거리 인터뷰',
-    badgeEn: 'Preset 02 · 90s Camcorder Street Interview',
+    badgeKo: '90년대 캠코더 인터뷰 (8초)',
+    badgeEn: '90s Camcorder Street Interview (8s)',
+    cameraSummaryKo: '눈높이에서 마이크를 건네며 자연스럽게 줌인되는 레트로 캠코더 구도',
+    lightingSummaryKo: '따뜻한 오후 햇살과 90년대 아날로그 필름 색감',
+    stylingSummaryKo: '빈티지 데님 자켓과 화이트 티셔츠, 레트로 헤드폰',
+    backdropSummaryKo: '따스한 햇살이 비치는 레코드샵 앞 거리',
+    providerUsd: 1.85,
     input: {
       slugCandidate: '90s-camcorder-youth-interview',
       titleKo: '90년대 압구정 캠코더 인터뷰',
@@ -544,8 +558,13 @@ export const PRESET_REFERENCE_SCENARIOS: readonly PresetReferenceScenario[] = [
   },
   {
     id: 'luxury-beauty-closeup',
-    badgeKo: '예시 03 · 하이엔드 뷰티 스튜디오 필름',
-    badgeEn: 'Preset 03 · High-End Beauty Studio Film',
+    badgeKo: '햇살 스튜디오 클로즈업 (6초)',
+    badgeEn: 'Sunlight Beauty Studio Close-Up (6s)',
+    cameraSummaryKo: '머릿결이 살랑이며 카메라를 향해 부드럽게 미소 짓는 인물 클로즈업',
+    lightingSummaryKo: '피부결이 가장 맑고 깨끗하게 나오는 스튜디오 자연광 조명',
+    stylingSummaryKo: '아이보리 실크 탑과 맑고 투명한 데일리 메이크업',
+    backdropSummaryKo: '은은한 햇살 그림자가 비치는 화이트 스튜디오',
+    providerUsd: 1.39,
     input: {
       slugCandidate: 'luminous-studio-beauty-portrait',
       titleKo: '루미너스 뷰티 스튜디오 클로즈업',
@@ -564,5 +583,48 @@ export const PRESET_REFERENCE_SCENARIOS: readonly PresetReferenceScenario[] = [
       lockOutfitAsSignature: false,
       lockBackdropAsSignature: false
     }
+  }
+] as const;
+
+export interface MakerDbTableLinkage {
+  table: 'platform_creators' | 'platform_formats' | 'prompt_items' | 'render_job_recipes' | 'platform_settlements';
+  migration: string;
+  roleKo: string;
+  keyColumns: readonly string[];
+}
+
+/**
+ * Documents and verifies how the "나만의 영상 제작하기 -> 템플릿 수익화" flow connects to the live Supabase schema.
+ */
+export const MAKER_DB_ARCHITECTURE_READINESS: readonly MakerDbTableLinkage[] = [
+  {
+    table: 'platform_creators',
+    migration: '0046_core_creator_platform.sql + 0073_core_maker_payout.sql',
+    roleKo: '메이커(AI 크리에이티브) 프로필·핸들(@handle) 및 80% 정산 자격(`payout: external | company`) 관리',
+    keyColumns: ['user_id', 'active', 'handle', 'display_name', 'public_profile', 'payout']
+  },
+  {
+    table: 'platform_formats',
+    migration: '0046 + 0059_core_maker_recipes.sql + 0073',
+    roleKo: '유저가 완성한 레퍼런스 기반 레시피(`recipe_v2`), 희망 추가 수익금(`royalty_krw` 0~5,000원), 공개 범위(`disclosure`), 카탈로그 연결(`template_id`) 저장',
+    keyColumns: ['id', 'user_id', 'recipe_v2', 'royalty_krw', 'disclosure', 'presentation', 'template_id', 'status']
+  },
+  {
+    table: 'prompt_items',
+    migration: '0015 + 0018 + 0059 + 0060',
+    roleKo: '공개된 템플릿 카드(`price_krw = floorKrw + royalty_krw`, `author_handle`, 예시 영상 `media`) 노출',
+    keyColumns: ['id', 'slug', 'price_krw', 'price_cents', 'author_handle', 'maker_profile', 'media']
+  },
+  {
+    table: 'render_job_recipes',
+    migration: '0059_core_maker_recipes.sql',
+    roleKo: '다른 유저가 이 템플릿으로 제작할 때 그 시점의 레시피 스냅샷을 고정해 안전하게 실행',
+    keyColumns: ['render_id', 'format_id', 'recipe_v2']
+  },
+  {
+    table: 'platform_settlements',
+    migration: '0046_core_creator_platform.sql',
+    roleKo: '누군가 내 템플릿으로 결제·제작을 완료할 때마다 순이익(매출 - 부가세 - PG수수료 - 실측 원가)의 80%를 `creator_due`로 자동 원장 기록 (`creator_due + platform_margin = margin`)',
+    keyColumns: ['render_id', 'payment_id', 'creator_id', 'revenue', 'tax', 'fees', 'provider_cost', 'margin', 'creator_due', 'platform_margin']
   }
 ] as const;

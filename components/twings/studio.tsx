@@ -8,7 +8,7 @@ import { SelfieUploader } from '@/components/identity/selfie-uploader';
 import { SelfieSheet, type SheetChoice } from '@/components/identity/selfie-sheet';
 import type { SelfieLibrary, SelfieView } from '@/lib/identity/selfie-service';
 import { PremiumEditor } from './premium-editor';
-import { TemplateDirectorPanel } from './template-director-panel';
+import { TemplateDirectorPanel, type DirectorImageSetSpec } from './template-director-panel';
 import { shrinkPhoto } from '@/lib/images/client-photo';
 export { shrinkPhoto } from '@/lib/images/client-photo';
 import type { EditScope } from '@/lib/premium-editing/contract';
@@ -48,6 +48,8 @@ export interface StudioStyle {
    * The price here is display only — the server prices the order from the row, not from this.
    */
   resolutions?: Array<{ id: string; price: string }>;
+  /** Optional multi-shot image set specification (e.g., 5-shot series) so the user can pick 1..N frames. */
+  imageSetSpec?: DirectorImageSetSpec | null;
 }
 
 export interface StudioLabels {
@@ -298,6 +300,8 @@ export function TwingsStudio({
   const [edit, setEdit] = useState({ editText: '', references: [] as File[], referencesConsent: false });
   const [paymentMode, setPaymentMode] = useState<'monthly' | 'single'>('monthly');
   const [usageExhausted, setUsageExhausted] = useState(false);
+  const [selectedFrames, setSelectedFrames] = useState<number[] | null>(null);
+  const [selectivePriceOverride, setSelectivePriceOverride] = useState<string | null>(null);
   const payRef = useRef<HTMLButtonElement>(null);
   const selfiePanelRef = useRef<HTMLDivElement>(null);
   const studioRef = useRef<HTMLElement>(null);
@@ -309,9 +313,9 @@ export function TwingsStudio({
   const [selfieEpoch, setSelfieEpoch] = useState(0);
 
   const chosen = styles.find((item) => item.id === styleId) ?? styles[0] ?? null;
-  // The price the button names: the chosen resolution's, else the style's base price.
+  // The price the button names: the chosen resolution's, else a selective frame override, else the style's base price.
   const chosenResolution = chosen?.resolutions?.find((option) => option.id === resolution) ?? chosen?.resolutions?.[0] ?? null;
-  const chosenPrice = chosenResolution?.price ?? chosen?.price ?? '';
+  const chosenPrice = selectivePriceOverride ?? chosenResolution?.price ?? chosen?.price ?? '';
   const subscriptionAvailable = Boolean(live?.subscription && subscription?.hasAccess && subscriptionEligible);
   const monthly = subscriptionAvailable && paymentMode === 'monthly';
   const subscriptionCopy = live?.subscription?.copy;
@@ -479,6 +483,9 @@ export function TwingsStudio({
         form.set('template', live.template);
         form.set('aspect', aspect);
         if (chosenResolution) form.set('resolution', chosenResolution.id);
+        if (selectedFrames && selectedFrames.length > 0) {
+          form.set('selectedFrames', selectedFrames.join(','));
+        }
         form.set('locale', live.locale);
         form.set('selfieId', chosenSelfie.id);
       }
@@ -857,6 +864,19 @@ export function TwingsStudio({
                 <TemplateDirectorPanel
                   locale={live.locale}
                   templateId={chosen?.id ?? live.template}
+                  imageSetSpec={chosen?.imageSetSpec ?? null}
+                  onSelectedFramesChange={(indices, quote) => {
+                    setSelectedFrames(indices);
+                    if (quote.isPartialSelection) {
+                      setSelectivePriceOverride(
+                        live.locale === 'ko'
+                          ? `${quote.totalKrw.toLocaleString('ko-KR')}원`
+                          : `$${(Math.ceil((quote.totalKrw / 1400) * 100) / 100).toFixed(2)}`
+                      );
+                    } else {
+                      setSelectivePriceOverride(null);
+                    }
+                  }}
                   disabled={submitting}
                 />
               )}

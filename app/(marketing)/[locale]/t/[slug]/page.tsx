@@ -13,7 +13,7 @@ import { getCampaignCatalog } from '@/lib/campaigns/public-catalog';
 import { campaignHref } from '@/lib/campaigns/links';
 import { isCampaignPublic } from '@/lib/campaigns/state';
 import { formatTemplatePrice, isForSale } from '@/lib/twings/products';
-import { aspectsForMedium, defaultAspect, resolveEngine } from '@/lib/images/engines';
+import { aspectsForMedium, defaultAspect, estimateImageUsd, isImageEngine, resolveEngine } from '@/lib/images/engines';
 import { signInHref } from '@/lib/billing/links';
 import { identityVerifyHref } from '@/lib/identity/links';
 import { templateMetadata, unresolvedTemplateMetadata } from '@/lib/seo/template-metadata';
@@ -167,6 +167,7 @@ export default async function TemplatePage({ params }: RouteParams) {
   const campaigns = campaignCatalog.campaigns.filter((c) => c.styleSlug === card.slug && isCampaignPublic(c.status));
   const cLabels = campaignLabels(dict);
 
+  const resolvedEngine = resolveEngine(card.engine, card.medium);
   const style: StudioStyle | null = isForSale(card)
     ? {
         id: card.slug,
@@ -180,6 +181,16 @@ export default async function TemplatePage({ params }: RouteParams) {
         aspects: aspectsForMedium(card.medium).map((id) => ({ id, label: t.aspects[id as keyof typeof t.aspects] ?? id })),
         defaultAspect: card.aspectDefault ?? defaultAspect(card.medium),
         resolutions: offeredResolutions(card).map((id) => ({ id, price: formatResolutionPrice(card, id, locale) })),
+        imageSetSpec:
+          card.medium === 'image' && setSize
+            ? {
+                totalFrames: setSize,
+                perFrameProviderUsd: isImageEngine(resolvedEngine)
+                  ? estimateImageUsd(resolvedEngine, 1)
+                  : 0.09,
+                frameThumbnails: gallery.map((f) => f.src),
+              }
+            : null,
       }
     : null;
 

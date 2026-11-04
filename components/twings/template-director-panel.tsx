@@ -13,6 +13,20 @@ import {
   type PhotoInspectionVerdict,
   type TemplateBaselineSpec
 } from '@/lib/template-director/schema';
+import {
+  quoteSelectiveImageSet,
+  type SelectiveImageSetQuote
+} from '@/lib/twings/template-price';
+
+export interface DirectorImageSetSpec {
+  totalFrames: number;
+  /** Per-frame provider USD (defaults to 0.09 for Seedream 5.0 Pro if omitted) */
+  perFrameProviderUsd?: number;
+  /** Optional maker raise on the full set (`royalty_krw`, 0..5000) */
+  royaltyKrw?: number;
+  /** Optional thumbnail URLs for each frame */
+  frameThumbnails?: readonly string[];
+}
 
 export interface DirectorReferenceSlotValue {
   slotName: 'outfit' | 'prop';
@@ -269,6 +283,10 @@ export interface TemplateDirectorPanelProps {
   initialExpanded?: boolean;
   initialChips?: DirectorSummaryChip[];
   initialAssistantMessage?: string | null;
+  /** Optional multi-shot image set specification (e.g., 5-shot series) so the user can pick 1..N frames with dynamic credit & KRW pricing. */
+  imageSetSpec?: DirectorImageSetSpec | null;
+  initialSelectedFrames?: readonly number[];
+  onSelectedFramesChange?: (selectedFrameIndices: number[], quote: SelectiveImageSetQuote) => void;
   disabled?: boolean;
   onCleanupChoice?: (choice: 'accept' | 'skip' | 'pending') => void;
   onSelectIdentityCandidate?: (choice: IdentityCandidateChoiceId) => void;
@@ -301,6 +319,9 @@ export function TemplateDirectorPanel({
   initialExpanded = false,
   initialChips = [],
   initialAssistantMessage = null,
+  imageSetSpec = null,
+  initialSelectedFrames,
+  onSelectedFramesChange,
   disabled = false,
   onCleanupChoice,
   onSelectIdentityCandidate,
@@ -316,6 +337,52 @@ export function TemplateDirectorPanel({
   const resolvedBaseline: TemplateBaselineSpec =
     templateBaseline ??
     (templateId ? resolveTemplateBaseline(templateId) : DEFAULT_EDITORIAL_TEMPLATE_BASELINE);
+
+  const totalSetFrames =
+    imageSetSpec && imageSetSpec.totalFrames > 1
+      ? Math.min(10, Math.floor(imageSetSpec.totalFrames))
+      : 0;
+
+  const [selectedFrames, setSelectedFrames] = useState<number[]>(() => {
+    if (totalSetFrames <= 1) return [0];
+    if (initialSelectedFrames && initialSelectedFrames.length > 0) {
+      const valid = Array.from(
+        new Set(
+          initialSelectedFrames
+            .map((i) => Math.floor(i))
+            .filter((i) => i >= 0 && i < totalSetFrames)
+        )
+      ).sort((a, b) => a - b);
+      if (valid.length > 0) return valid;
+    }
+    return Array.from({ length: totalSetFrames }, (_, idx) => idx);
+  });
+
+  const selectiveQuote: SelectiveImageSetQuote | null =
+    totalSetFrames > 1 && imageSetSpec
+      ? quoteSelectiveImageSet({
+          perFrameProviderUsd: imageSetSpec.perFrameProviderUsd ?? 0.09,
+          totalFrames: totalSetFrames,
+          selectedFrameIndices: selectedFrames,
+          royaltyKrw: imageSetSpec.royaltyKrw ?? 0
+        })
+      : null;
+
+  const updateSelectedFrames = (nextIndices: number[]) => {
+    if (totalSetFrames <= 1 || !imageSetSpec) return;
+    const valid = Array.from(
+      new Set(nextIndices.filter((i) => i >= 0 && i < totalSetFrames))
+    ).sort((a, b) => a - b);
+    if (valid.length === 0) return;
+    setSelectedFrames(valid);
+    const nextQuote = quoteSelectiveImageSet({
+      perFrameProviderUsd: imageSetSpec.perFrameProviderUsd ?? 0.09,
+      totalFrames: totalSetFrames,
+      selectedFrameIndices: valid,
+      royaltyKrw: imageSetSpec.royaltyKrw ?? 0
+    });
+    onSelectedFramesChange?.(valid, nextQuote);
+  };
 
   const [expanded, setExpanded] = useState(initialExpanded || initialChips.length > 0);
   const [cleanupChoice, setCleanupChoice] = useState<'pending' | 'accepted' | 'skipped'>('pending');
@@ -906,6 +973,156 @@ export function TemplateDirectorPanel({
             </div>
           )}
         </aside>
+      )}
+
+      {/* Multi-Shot Image Template Selective Frame Picker (Pick 1..N shots out of 5 with dynamic credits & KRW) */}
+      {selectiveQuote && (
+        <section
+          data-selective-frame-picker
+          data-selected-frame-count={selectiveQuote.selectedCount}
+          data-total-frame-count={selectiveQuote.totalFrames}
+          data-selective-credits={selectiveQuote.totalCredits}
+          data-selective-krw={selectiveQuote.totalKrw}
+          aria-label={
+            locale === 'en'
+              ? 'Select which shots to generate'
+              : '화보 세트 중 원하는 컷 골라서 제작하기'
+          }
+          className="rounded-[20px] border border-[#E4E6EA] bg-[#F3F7FA] p-4 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.9)]"
+        >
+          <input
+            type="hidden"
+            name="selectedFrames"
+            data-selective-frames-input
+            value={selectiveQuote.selectedFrameIndices.join(',')}
+          />
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <div>
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-[#E8EFF7] px-2.5 py-0.5 font-mono text-[0.68rem] font-semibold text-[#3063A7] tabular-nums">
+                <span aria-hidden="true" className="size-1.5 rounded-full bg-[#3875C5]" />
+                {locale === 'en'
+                  ? `SELECT SHOTS (${selectiveQuote.selectedCount}/${selectiveQuote.totalFrames})`
+                  : `원하는 화보 컷만 골라서 제작 (${selectiveQuote.selectedCount}/${selectiveQuote.totalFrames}컷 선택됨)`}
+              </span>
+              <p className="mt-1.5 text-xs leading-relaxed text-[#41444D]">
+                {locale === 'en'
+                  ? `Pick all ${selectiveQuote.totalFrames} shots or choose only the frames you want — credits scale automatically.`
+                  : `전체 ${selectiveQuote.totalFrames}장을 다 뽑거나, 마음에 드는 구도만 골라서 제작할 수 있어요. 선택한 장수에 맞춰 크레딧이 자동 계산됩니다.`}
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-1.5">
+              <button
+                type="button"
+                data-selective-pick-all
+                disabled={disabled || submitting || !selectiveQuote.isPartialSelection}
+                onClick={() =>
+                  updateSelectedFrames(
+                    Array.from({ length: selectiveQuote.totalFrames }, (_, idx) => idx)
+                  )
+                }
+                className={`rounded-full border border-[#C7CCD3] bg-white px-2.5 py-1 text-[0.7rem] font-medium text-[#0E1013] hover:border-[#3875C5] disabled:opacity-45 ${FOCUS_RING}`}
+              >
+                {locale === 'en' ? `All ${selectiveQuote.totalFrames} shots` : `전체 ${selectiveQuote.totalFrames}컷 선택`}
+              </button>
+              <button
+                type="button"
+                data-selective-pick-first
+                disabled={
+                  disabled ||
+                  submitting ||
+                  (selectiveQuote.selectedCount === 1 &&
+                    selectiveQuote.selectedFrameIndices[0] === 0)
+                }
+                onClick={() => updateSelectedFrames([0])}
+                className={`rounded-full border border-[#C7CCD3] bg-white px-2.5 py-1 text-[0.7rem] font-medium text-[#3063A7] hover:border-[#3875C5] disabled:opacity-45 ${FOCUS_RING}`}
+              >
+                {locale === 'en' ? '1st shot only' : '1번 컷만 선택'}
+              </button>
+            </div>
+          </div>
+
+          <div className="mt-3 grid grid-cols-5 gap-2">
+            {Array.from({ length: selectiveQuote.totalFrames }, (_, idx) => {
+              const isSelected = selectiveQuote.selectedFrameIndices.includes(idx);
+              const thumb = imageSetSpec?.frameThumbnails?.[idx] ?? null;
+              const isLastRemaining = isSelected && selectiveQuote.selectedCount === 1;
+              return (
+                <button
+                  key={idx}
+                  type="button"
+                  data-selective-frame-button={idx}
+                  aria-pressed={isSelected}
+                  disabled={disabled || submitting}
+                  onClick={() => {
+                    if (isSelected) {
+                      if (isLastRemaining) return;
+                      updateSelectedFrames(
+                        selectiveQuote.selectedFrameIndices.filter((item) => item !== idx)
+                      );
+                    } else {
+                      updateSelectedFrames([...selectiveQuote.selectedFrameIndices, idx]);
+                    }
+                  }}
+                  className={[
+                    'flex flex-col items-center justify-between gap-1.5 rounded-[14px] border p-2 text-center transition-colors',
+                    FOCUS_RING,
+                    isSelected
+                      ? 'border-[#3875C5] bg-white shadow-sm'
+                      : 'border-[#E4E6EA] bg-[#F6F7F9]/75 opacity-65 hover:opacity-100'
+                  ].join(' ')}
+                >
+                  {thumb ? (
+                    <div className="aspect-[4/5] w-full overflow-hidden rounded-[8px] bg-[#E8EFF7]">
+                      {/* eslint-disable-next-line @next/next/no-img-element -- frame thumbnail */}
+                      <img src={thumb} alt="" className="h-full w-full object-cover" />
+                    </div>
+                  ) : (
+                    <div className="flex aspect-[4/5] w-full items-center justify-center rounded-[8px] bg-[#E8EFF7] font-mono text-xs font-bold text-[#3063A7] tabular-nums">
+                      0{idx + 1}
+                    </div>
+                  )}
+                  <span
+                    className={[
+                      'inline-flex w-full items-center justify-center rounded-full px-1.5 py-0.5 font-mono text-[0.65rem] font-semibold tabular-nums',
+                      isSelected ? 'bg-[#3875C5] text-white' : 'bg-[#E4E6EA] text-[#41444D]'
+                    ].join(' ')}
+                  >
+                    {locale === 'en' ? `Shot ${idx + 1}` : `${idx + 1}컷`} {isSelected ? '✓' : ''}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          <div
+            data-selective-frame-quote
+            className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-[14px] border border-[#E4E6EA] bg-white px-3.5 py-2.5 text-xs"
+          >
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-semibold text-[#0E1013]">
+                {locale === 'en'
+                  ? `${selectiveQuote.selectedCount} of ${selectiveQuote.totalFrames} shots selected`
+                  : `총 ${selectiveQuote.totalFrames}컷 중 ${selectiveQuote.selectedCount}컷 제작`}
+              </span>
+              {selectiveQuote.savedCredits > 0 && (
+                <span
+                  data-selective-saved-badge
+                  className="rounded-full bg-[#E8EFF7] px-2.5 py-0.5 font-mono text-[0.68rem] font-semibold text-[#3063A7] tabular-nums"
+                >
+                  {locale === 'en'
+                    ? `Saves ${selectiveQuote.savedCredits} credits`
+                    : `전체 대비 ${selectiveQuote.savedCredits} 크레딧 (${selectiveQuote.savedKrw.toLocaleString('ko-KR')}원) 절약`}
+                </span>
+              )}
+            </div>
+            <div className="font-mono text-xs font-bold text-[#3063A7] tabular-nums">
+              {locale === 'en'
+                ? `${selectiveQuote.totalCredits} credits (₩${selectiveQuote.totalKrw.toLocaleString('en-US')})`
+                : `${selectiveQuote.totalCredits} 크레딧 · 단건 ${selectiveQuote.totalKrw.toLocaleString('ko-KR')}원`}
+            </div>
+          </div>
+        </section>
       )}
 
       {/* Progressive Disclosure Trigger Pill + Active Chip Count Badge */}

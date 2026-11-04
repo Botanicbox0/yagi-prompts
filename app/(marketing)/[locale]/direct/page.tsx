@@ -20,12 +20,12 @@ export async function generateMetadata({
   const dict = getDictionary(locale);
   const title =
     locale === 'en'
-      ? 'Freestyle Yourself — Turn Any Reference Film Into Your Own Template'
-      : 'Freestyle Yourself · 나만의 템플릿 — 레퍼런스 영상으로 내 장면을 찍고 템플릿으로 등판하기';
+      ? 'Make Your Own Video & Earn 80% as a Template Maker'
+      : '나만의 영상 제작하기 — 내 영상을 만들고 템플릿으로 올려 80% 수익 받기';
   const description =
     locale === 'en'
-      ? 'Bring a saved reference video, cast your own face with a clean front photo, and launch your finished scene as an official TWINGS template.'
-      : '저장해 둔 레퍼런스 영상과 내 정면 실사 사진으로 세상에 없던 장면을 연출하고, 완성된 결과물을 나만의 공식 템플릿으로 등판시키세요.';
+      ? 'Upload a saved reference video and your front selfie to make your own video. Publish it as a template and earn 80% of the net profit every time someone makes it.'
+      : '저장해 둔 영상과 내 정면 사진으로 나만의 영상을 만들고, 그대로 템플릿으로 등록해 누군가 만들 때마다 순이익의 80%를 수익으로 정산받으세요.';
   return {
     title,
     description,
@@ -62,20 +62,20 @@ export default async function DirectScenePage({
         <section data-section data-theme="light" className="section">
           <div className="audience-shell pt-28 pb-16 lg:pt-36 lg:pb-24">
             <div className="max-w-3xl">
-              <p className="font-mono text-xs font-semibold tracking-[0.08em] text-[#3063A7] uppercase tabular-nums">
+              <p className="text-xs font-semibold text-[#3063A7]">
                 {locale === 'en'
-                  ? 'FREESTYLE YOURSELF · REFERENCE FILM TO OFFICIAL TEMPLATE'
-                  : 'FREESTYLE YOURSELF · 나만의 장면에서 나만의 템플릿까지'}
+                  ? 'MAKE YOUR OWN VIDEO · EARN 80% WHEN OTHERS USE YOUR TEMPLATE'
+                  : '나만의 영상 제작하기 · 내 영상을 템플릿으로 올리고 수익까지'}
               </p>
               <h1 className="audience-title mt-3">
                 {locale === 'en'
-                  ? 'Freestyle Yourself.\nDirect your scene,\nthen launch your template.'
-                  : '세상에 없던 내 장면을 찍고,\n그대로 나만의 템플릿으로\n등판시키세요'}
+                  ? 'Make your own video,\npublish it as a template,\nand earn 80% every make.'
+                  : '저장해 둔 영상으로 내 장면을 만들고,\n템플릿으로 올려\n수익도 받으세요'}
               </h1>
               <p className="mt-5 max-w-2xl text-base leading-relaxed text-black/65">
                 {locale === 'en'
-                  ? 'Have a reference clip you love? Cast yourself in it with a single front selfie. When the film comes out right, lock its camera and lighting in one click so anyone on TWINGS can star in your scene.'
-                  : '평소 저장해 두었던 레퍼런스 영상에 내 정면 사진 한 장을 입혀 단 하나뿐인 장면을 완성해 보세요. 결과물이 마음에 들면 카메라와 조명을 그대로 잠가, 다른 사람들도 내 연출로 주인공이 되는 공식 템플릿으로 출시할 수 있습니다.'}
+                  ? 'Have a video clip you saved on Instagram or TikTok? Upload it with one front selfie to star in your own video. Love how it turned out? Publish it as a template — whenever someone makes a video with your template, 80% of the net profit goes to you.'
+                  : '인스타그램이나 틱톡에서 저장해 둔 멋진 영상이 있나요? 내 정면 사진 한 장만 올리면 내가 주인공인 영상이 완성됩니다. 완성된 영상이 마음에 들면 템플릿으로 올려보세요 — 누군가 내 템플릿으로 만들 때마다 순이익의 80%가 내 수익으로 쌓입니다.'}
               </p>
             </div>
 
