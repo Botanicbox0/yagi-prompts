@@ -87,10 +87,18 @@ export function spatialPinToMicroRoiBox(input: {
   yPct: number;
   canvasWidth?: number;
   canvasHeight?: number;
+  aspectRatio?: '9:16' | '4:5' | '1:1' | '16:9';
   mode?: MicroRoiTargetMode;
 }): MicroRoiBox {
-  const width = Math.max(512, Math.min(4096, Math.trunc(input.canvasWidth ?? 2048)));
-  const height = Math.max(512, Math.min(4096, Math.trunc(input.canvasHeight ?? 2048)));
+  const aspectDimensions: Record<'9:16' | '4:5' | '1:1' | '16:9', { w: number; h: number }> = {
+    '9:16': { w: 1152, h: 2048 },
+    '4:5': { w: 1638, h: 2048 },
+    '1:1': { w: 2048, h: 2048 },
+    '16:9': { w: 2048, h: 1152 },
+  };
+  const fallbackDim = input.aspectRatio ? aspectDimensions[input.aspectRatio] : aspectDimensions['1:1'];
+  const width = Math.max(512, Math.min(4096, Math.trunc(input.canvasWidth ?? fallbackDim.w)));
+  const height = Math.max(512, Math.min(4096, Math.trunc(input.canvasHeight ?? fallbackDim.h)));
   const mode = input.mode ?? 'brand_logo_packaging';
 
   const patchSizeByMode: Record<MicroRoiTargetMode, { w: number; h: number }> = {
@@ -267,7 +275,10 @@ export async function createStakeholderReviewShare(
     viewer.userId,
     parsed.data.organizationId
   );
-  if (!role) {
+  if (!role || (role !== 'owner' && role !== 'editor' && role !== 'admin')) {
+    return { ok: false, code: 'forbidden' };
+  }
+  if (parsed.data.scope === 'allow_approve' && role !== 'owner' && role !== 'admin') {
     return { ok: false, code: 'forbidden' };
   }
 
@@ -325,7 +336,7 @@ export async function recordSpatialFramePin(
     viewer.userId,
     parsed.data.organizationId
   );
-  if (!role) {
+  if (!role || (role !== 'owner' && role !== 'editor' && role !== 'admin')) {
     return { ok: false, code: 'forbidden' };
   }
 

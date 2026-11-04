@@ -1401,9 +1401,15 @@ export function BrandBriefStudio({
                 note: payload.note,
                 timestampSec: payload.timestampSec,
               });
+              if (studioFocusMode === "frame_review") {
+                setStudioFocusMode("micro_roi");
+              }
             }}
             onSetMusicDropRevealSec={(revealSec) => {
               setExternalMusicRevealSec(revealSec);
+              if (studioFocusMode === "frame_review") {
+                setStudioFocusMode("sound_studio");
+              }
             }}
           />
         </div>

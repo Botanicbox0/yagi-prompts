@@ -328,4 +328,64 @@ describe('Brand Studio Complete Suite (Video Reverse, 2D Spatial Stage, 3-Track 
       /seedance|seedream|nano\s*banana|seedvr2|comfyui|yue2|earshot|argon|higgsfield/i,
     );
   });
+
+  it('guards Pre-mortem edge cases: empty spatial stage recovery, macro-cut subject disambiguation, aspect-aware ROI, and cross-org probing block', async () => {
+    // 1. Empty stage (both subject & product disabled) auto-recovers instead of throwing ZodError
+    const emptyStageSpec = {
+      ...SPATIAL_STAGE_PRESETS[0]!.spec,
+      subject: { ...SPATIAL_STAGE_PRESETS[0]!.spec.subject, enabled: false },
+      product: { ...SPATIAL_STAGE_PRESETS[0]!.spec.product, enabled: false },
+    };
+    const recoveredSpatial = compileSpatialStageToShotSpec(emptyStageSpec);
+    expect(recoveredSpatial.normalizedSpec.product.enabled).toBe(true);
+    expect(recoveredSpatial.shotSpec.product).not.toBeNull();
+    expect(recoveredSpatial.diagnostics.warnings.length).toBeGreaterThan(0);
+
+    // 2. Macro product cuts in video reverse never inject human lip/eyeline directives (preventing face hallucination)
+    const identity = markConfirmedBrandIdentity(twingsDefaultIdentity());
+    const compiledVideo = compileVideoReverseAdaptation({
+      analysis: VIDEO_REVERSE_PRESETS.runway_flash_15s!,
+      matrix: PreserveChangeMatrixSchema.parse({}),
+      identity,
+    });
+    const macroShot = compiledVideo.spec.timeline?.find((s) => s.shot === 2);
+    expect(macroShot?.action).toContain('Product-only optical lock');
+    expect(macroShot?.action).not.toContain('softly closed lips');
+
+    // Subsequent subject shots use compact continuity token instead of repeating 195-char paragraph
+    const firstSubjectShot = compiledVideo.spec.timeline?.find((s) => s.shot === 1);
+    const secondSubjectShot = compiledVideo.spec.timeline?.find((s) => s.shot === 3);
+    expect(firstSubjectShot?.action).toContain('softly closed lips');
+    expect(secondSubjectShot?.action).toContain('Continuity lock:');
+
+    // 3. Aspect-ratio-aware spatial pin to Micro-ROI box (9:16 vertical reel 1152x2048 vs 1:1 2048x2048)
+    const box9x16 = spatialPinToMicroRoiBox({
+      xPct: 50,
+      yPct: 50,
+      aspectRatio: '9:16',
+      mode: 'brand_logo_packaging',
+    });
+    const box1x1 = spatialPinToMicroRoiBox({
+      xPct: 50,
+      yPct: 50,
+      aspectRatio: '1:1',
+      mode: 'brand_logo_packaging',
+    });
+    expect(box9x16.x0).toBeLessThan(box1x1.x0);
+    expect(box9x16.y0).toBe(box1x1.y0);
+
+    // 4. Outsider cannot probe Morphic feature policy via soundStudio.plan (returns 'forbidden', not 'feature_unavailable')
+    const outsiderId = randomUUID();
+    await seedProfile(sql, {
+      id: outsiderId,
+      isAdmin: false,
+      email: 'outsider@example.test',
+    });
+    const outsider = makeViewer(outsiderId, false);
+    const probeAttempt = await planBrandSoundAndMusicStudio({ sql }, outsider, {
+      organizationId: morphicOrgId,
+      presetId: 'french_house_runway_122',
+    });
+    expect(probeAttempt).toEqual({ ok: false, code: 'forbidden' });
+  });
 });

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { ConfirmedBrandIdentity } from '@/lib/brands/identity/schema';
 import {
   SHOT_ASPECTS,
   SHOT_REFERENCE_ROLES,
@@ -321,9 +322,21 @@ function quadrantDescriptionKo(xPct: number, yPct: number): string {
  * Normalizes and compiles a 2D Spatial Stage specification into a deterministic `ShotSpec`
  * and bilingual spatial blocking prompts while enforcing TWINGS physical & composition guards.
  */
-export function compileSpatialStageToShotSpec(input: SpatialStageSpec): SpatialStageCompileResult {
+export function compileSpatialStageToShotSpec(
+  input: SpatialStageSpec,
+  identity?: ConfirmedBrandIdentity
+): SpatialStageCompileResult {
   const parsed = SpatialStageSpecSchema.parse(input);
   const warnings: string[] = [];
+
+  // 0. Prevent empty stage crash: if both subject and product are disabled, re-enable hero product
+  const ensureProductEnabled =
+    !parsed.subject.enabled && !parsed.product.enabled ? true : parsed.product.enabled;
+  if (!parsed.subject.enabled && !parsed.product.enabled) {
+    warnings.push(
+      '인물과 제품 레이어가 모두 비활성화되어 최소 피사체 보장을 위해 히어로 제품 레이어를 자동 활성화했습니다.',
+    );
+  }
 
   // 1. Dynamic scene Mid-Wide height guard (35..50%)
   let safeHeightPct = parsed.subject.frameHeightPct;
@@ -369,6 +382,10 @@ export function compileSpatialStageToShotSpec(input: SpatialStageSpec): SpatialS
       ...parsed.subject,
       frameHeightPct: safeHeightPct,
       torsoAngleDeg: safeTorsoDeg,
+    },
+    product: {
+      ...parsed.product,
+      enabled: ensureProductEnabled,
     },
     camera: {
       ...parsed.camera,
@@ -533,10 +550,10 @@ export function compileSpatialStageToShotSpec(input: SpatialStageSpec): SpatialS
     },
     tone: {
       key_classification: 'balanced',
-      lifted_black_hex: '#14171c',
-      shadow_hex: '#16233f',
-      mid_hex: '#3875c5',
-      highlight_hex: '#f3f7fa',
+      lifted_black_hex: identity?.colour.ink ?? '#14171c',
+      shadow_hex: identity?.colour.body ?? '#16233f',
+      mid_hex: identity?.colour.accent ?? '#3875c5',
+      highlight_hex: identity?.colour.paper ?? '#f3f7fa',
       saturation_pct: 24,
       shadow_share_pct: 34,
       halation: 0.14,
@@ -544,7 +561,14 @@ export function compileSpatialStageToShotSpec(input: SpatialStageSpec): SpatialS
     },
     palette: {
       world: 'blue',
-      hex_values: ['#f3f7fa', '#d0dbe7', '#3875c5', '#16233f'],
+      hex_values: identity
+        ? [
+            identity.colour.paper,
+            identity.colour.canvas,
+            identity.colour.accent,
+            identity.colour.ink,
+          ]
+        : ['#f3f7fa', '#d0dbe7', '#3875c5', '#16233f'],
       warm_notes: ['skin', 'lips'],
     },
     skin_contract: true,
