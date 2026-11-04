@@ -546,6 +546,27 @@ export function SequenceDispatchSection({
         >
           {locale === 'en' ? activeMoodObj.descEn : activeMoodObj.descKo}
         </p>
+
+        <div
+          data-direct-scene-door
+          className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-[16px] border border-[#3875C5]/20 bg-[#F3F7FA] px-4 py-3"
+        >
+          <p className="text-xs leading-relaxed text-[#0E1013]">
+            <span className="font-semibold text-[#3063A7]">
+              {locale === 'en' ? 'DIRECT SCENE · ' : '직접 연출 · '}
+            </span>
+            {locale === 'en'
+              ? 'Have your own reference video? Cast your face in it and publish the finished scene as your own template.'
+              : '따로 찍어보고 싶은 레퍼런스 영상이 있나요? 내 얼굴로 연출한 뒤 그대로 내 템플릿으로 등판시킬 수 있습니다.'}
+          </p>
+          <a
+            href={`/${locale}/direct`}
+            data-direct-scene-link
+            className="inline-flex min-h-9 shrink-0 items-center rounded-full bg-white px-3.5 py-1.5 text-xs font-semibold text-[#3063A7] shadow-xs transition-colors hover:bg-[#3875C5] hover:text-white"
+          >
+            {locale === 'en' ? 'Direct Your Scene →' : '직접 연출 & 템플릿 등판 보기 →'}
+          </a>
+        </div>
       </div>
     </div>
   );
