@@ -352,7 +352,7 @@ describe('Brand Studio Complete Suite (Video Reverse, 2D Spatial Stage, 3-Track 
     expect(morphicSound).toEqual({ ok: false, code: 'feature_unavailable' });
   });
 
-  it('renders BrandBriefStudio with all 5 integrated modules and zero forbidden internal engine names in customer HTML', () => {
+  it('renders BrandBriefStudio as a minimalist composer that compiles all SOTA systems under the hood with zero backend jargon in customer HTML', () => {
     const html = renderToStaticMarkup(
       React.createElement(BrandBriefStudio, {
         organizationId: kaiperOrgId,
@@ -362,21 +362,19 @@ describe('Brand Studio Complete Suite (Video Reverse, 2D Spatial Stage, 3-Track 
       }),
     );
 
-    expect(html).toContain('data-brand-studio-tutorial');
+    expect(html).toContain('data-brand-brief-studio');
+    expect(html).toContain('data-pomelli-shot-templates');
     expect(html).toContain('data-studio-aesthetic-bar');
     expect(html).toContain('data-studio-aesthetic-card="A"');
     expect(html).toContain('data-studio-aesthetic-card="B"');
     expect(html).toContain('data-studio-aesthetic-card="C"');
-    expect(html).toContain('data-studio-locked-vault-badge');
-    expect(html).toContain('data-brand-spatial-stage-panel');
-    expect(html).toContain('data-brand-video-reverse-panel');
-    expect(html).toContain('data-brand-music-studio-panel');
-    expect(html).toContain('data-brand-micro-roi-panel');
-    expect(html).toContain('data-review-stage');
+    expect(html).toContain('data-design-principle-attachment');
+    expect(html).toContain('data-brief-compile-form');
+    expect(html).toContain('data-brief-compile-submit');
 
-    // Never expose internal engine/model names in customer HTML
+    // Never expose internal engine/model names or backend architecture lectures in customer HTML
     expect(html).not.toMatch(
-      /seedance|seedream|nano\s*banana|seedvr2|comfyui|yue2|earshot|argon|higgsfield/i,
+      /seedance|seedream|nano\s*banana|seedvr2|comfyui|yue2|earshot|argon|higgsfield|mark_only|BRAND DNA ATTACHMENT CONTROL|2-TIER DIRECTION CASCADE/i,
     );
   });
 
@@ -589,9 +587,8 @@ describe('Brand Studio Complete Suite (Video Reverse, 2D Spatial Stage, 3-Track 
     expect(studioHtml).toContain('data-design-principle-attachment');
     expect(studioHtml).toContain('data-attachment-mode-btn="full_attach"');
     expect(studioHtml).toContain('data-attachment-mode-btn="unbound_free"');
-    expect(studioHtml).toContain('data-vertical-marketer-hub');
     expect(studioHtml).toContain('data-pomelli-shot-templates');
-    expect(studioHtml).toContain('data-vertical-playbook-card="fashion-flatlay-to-lookbook"');
+    expect(studioHtml).not.toContain('BRAND DNA ATTACHMENT CONTROL');
 
     // Guard: no internal engine/model names leaked into either customer surface
     for (const html of [onboardingHtml, studioHtml]) {
@@ -914,10 +911,11 @@ describe('Brand Studio Complete Suite (Video Reverse, 2D Spatial Stage, 3-Track 
         identityConfirmed: true,
       })
     );
-    expect(studioHtml).toContain('data-studio-optical-identity-panel');
-    expect(studioHtml).toContain('data-optical-head-width-select');
+    expect(studioHtml).toContain('data-studio-optical-stage="stage1_passthrough_crop"');
+    expect(studioHtml).toContain('data-studio-oled-look="oled-editorial-punch"');
+    expect(studioHtml).toContain('data-studio-continuity="passed"');
 
-    // Strictly zero internal vendor/engine jargon in customer-facing HTML
+    // Strictly zero internal vendor/engine jargon or backend system dumps in customer-facing HTML
     const forbiddenJargon = [
       'Seedance',
       'Seedream',
@@ -928,6 +926,9 @@ describe('Brand Studio Complete Suite (Video Reverse, 2D Spatial Stage, 3-Track 
       'Higgsfield',
       'Slack',
       'RECIPE V2',
+      'BRAND DNA ATTACHMENT CONTROL',
+      '2-TIER DIRECTION CASCADE',
+      'mark_only',
     ];
     for (const token of forbiddenJargon) {
       expect(reviewHtml).not.toContain(token);

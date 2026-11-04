@@ -103,10 +103,10 @@ describe('Bounded Multi-Channel Brand Onboarding Ingest', () => {
     expect(result.summary.websiteUrls).toHaveLength(2);
     expect(result.summary.instagramPostUrls).toHaveLength(3);
     expect(result.summary.assetCounts).toEqual({
-      logo: 1,
-      product: 2,
-      mood: 2,
-      total: 5
+      logo: 2,
+      product: 4,
+      mood: 5,
+      total: 11
     });
     expect(result.identity.rules.consentedFacesOnly).toBe(true);
     expect(result.identity.world.skinProtected).toBe(true);
@@ -381,9 +381,9 @@ describe('2-Tier Brand Inheritance & Project-Specific Direction Override', () =>
         initialProjectId: 'kaiper-26ss-outdoor'
       })
     );
-    expect(studioHtml).toContain('data-project-direction-panel');
-    expect(studioHtml).toContain('data-direction-cascade-summary');
-    expect(studioHtml).toContain('data-project-direction-save');
-    expect(studioHtml).toContain('data-project-direction-promote');
+    expect(studioHtml).toContain('data-brand-brief-studio');
+    expect(studioHtml).toContain('data-brief-compile-form');
+    expect(studioHtml).toContain('data-brief-compile-submit');
+    expect(studioHtml).not.toContain('2-TIER DIRECTION CASCADE');
   });
 });

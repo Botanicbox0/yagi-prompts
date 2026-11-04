@@ -378,21 +378,20 @@ function ExpressCommissionBrief({
   const [channelOrLock, setChannelOrLock] = useState(
     isTemplateBuild
       ? isEn
-        ? "Product packshot + Brand logo endcard + Skin texture lock"
-        : "제품 패키지 원형 + 브랜드 로고 엔드카드 + 피부 톤 고정"
+        ? "Product packshot + Brand logo endcard"
+        : "제품 패키지 원형 + 브랜드 로고 엔드카드"
       : isEn
-        ? "Instagram Reels · YouTube Shorts · Paid Ad Clean Master (-14 LUFS)"
-        : "공식 인스타그램 릴스 · 유튜브 숏츠 · 2차 광고 집행용 클린 마스터 (-14 LUFS)"
+        ? "Instagram Reels · YouTube Shorts · Paid Ad Master"
+        : "공식 인스타그램 릴스 · 유튜브 숏츠 · 광고 집행용 마스터"
   );
   const [concept, setConcept] = useState("");
   const [endsOn, setEndsOn] = useState("");
-  const [oledLookId, setOledLookId] = useState<OledCinemaLookId>("oled-editorial-punch");
-  const [deliveryMode, setDeliveryMode] = useState<"dual_stem_default" | "ad_master_only">(
-    "dual_stem_default",
-  );
 
-  const oledLooks = getOledCinemaLookCatalog(locale);
-  const activeOledPlan = compileOledCinemaColorGradePlan({ lookId: oledLookId, locale });
+  // Under-the-hood SOTA pipeline synthesis (compiled into project spec without exposing backend jargon to customer UI)
+  const activeOledPlan = compileOledCinemaColorGradePlan({
+    lookId: "oled-editorial-punch",
+    locale,
+  });
   const opticalGuide = evaluateOpticalIdentityLockV2({
     focalLengthMm: 50,
     headWidthRatioPct: 42,
@@ -404,8 +403,8 @@ function ExpressCommissionBrief({
   const structuredObjective = [
     `[${isTemplateBuild ? "TRACK: CUSTOM STUDIO TEMPLATE BUILD" : "TRACK: MASTER VIDEO PRODUCTION ONLY"}]`,
     `Aspect Ratio: ${aspect} | Spec: ${specOption}`,
-    `OLED Color Look: ${oledLookId} | Stems: ${deliveryMode}`,
-    `Workflow Gate: Stage 1 (480p Framing/Motion Speed Check) -> Stage 2 (1080p Optical + -14 LUFS Master)`,
+    `OLED Color Look: ${activeOledPlan.preset.id} | Identity Guard: ${opticalGuide.selectedStage}`,
+    `Workflow Gate: Stage 1 (480p Framing/Motion Speed Check) -> Stage 2 (1080p Optical + Dual Stem Master)`,
     `${isTemplateBuild ? "Locked Brand Elements" : "Target Channels & Sound"}: ${channelOrLock}`,
     concept.trim(),
   ]
@@ -649,70 +648,12 @@ function ExpressCommissionBrief({
           </label>
         </div>
 
-        <div className="bw-grid" data-customer-utility-presets>
-          <label>
-            {isEn
-              ? "Smartphone OLED Cinema Color Look"
-              : "스마트폰 OLED 시네마 컬러 룩 (암부 들뜸 방지 & 피부톤 보호)"}
-            <select
-              name="oledLookId"
-              value={oledLookId}
-              onChange={(e) => setOledLookId(e.target.value as OledCinemaLookId)}
-            >
-              {oledLooks.map((look) => (
-                <option key={look.id} value={look.id}>
-                  {look.title} — {look.subtitle}
-                </option>
-              ))}
-            </select>
-            <small className="bw-muted">{activeOledPlan.customerBenefit}</small>
-          </label>
-
-          <label>
-            {isEn
-              ? "2-Stage Review & Audio Stem Package"
-              : "2단계 스피드 검수 & 오디오 스템 납품 구성"}
-            <select
-              name="deliveryMode"
-              value={deliveryMode}
-              onChange={(e) =>
-                setDeliveryMode(e.target.value as "dual_stem_default" | "ad_master_only")
-              }
-            >
-              <option value="dual_stem_default">
-                {isEn
-                  ? "480p Speed Check → 1080p Ad Master (-14 LUFS) + Reels No-BGM Clean Foley (Recommended)"
-                  : "480p 1차 스피드 시사 → 1080p 광고 마스터(-14 LUFS) + 릴스 트렌딩 음원용 No-BGM 클린 폴리 동시 납품 (권장)"}
-              </option>
-              <option value="ad_master_only">
-                {isEn
-                  ? "480p Speed Check → 1080p Broadcast Sound Master (-14 LUFS) Only"
-                  : "480p 1차 스피드 시사 → 1080p 사운드 통합 광고 마스터(-14 LUFS) 단독 납품"}
-              </option>
-            </select>
-            <small className="bw-muted">
-              {isEn
-                ? "Approve camera motion & framing in 480p first, then receive both BGM-synced and No-BGM clean Foley 1080p masters."
-                : "480p 무음원 시안으로 구도·모션을 먼저 빠르게 컨펌한 뒤, 광고용 BGM 통합본과 릴스 앱 내 인기음원 삽입용 클린 폴리본을 함께 받습니다."}
-            </small>
-          </label>
-        </div>
-
-        <div
-          className="ys-express-handoff-note"
-          data-optical-identity-guide
-          style={{ marginTop: 4 }}
-        >
-          <strong>👤 {opticalGuide.customerTitle}</strong>
-          <p>{opticalGuide.actionableAdvice}</p>
-        </div>
-
         <div className="ys-express-handoff-note">
           <strong>{track.deliverableDestination.badge}</strong>
           <p>
             {isEn
-              ? "As soon as you submit, your dedicated Project Room opens where you can drag-and-drop high-res product/logo files into Collage Folders, review v1→v2 cuts with frame-accurate pins, and share custom stakeholder links."
-              : "의뢰서를 제출하면 즉시 전용 프로젝트 룸이 생성됩니다. 프로젝트 룸의 [콜라주 에셋 폴더]에 고해상도 제품·로고 원본을 업로드하고, Frame.io 타임코드·화면 핀으로 v1→v2 컷을 시사·공유할 수 있습니다."}
+              ? "As soon as you submit, your dedicated Project Room opens where you can upload product/logo files, review cuts, and share preview links."
+              : "의뢰서를 제출하면 즉시 전용 프로젝트 룸이 열리며, 제품·로고 원본 전달과 시사본 확인·공유를 한곳에서 진행할 수 있습니다."}
           </p>
         </div>
       </ActionForm>

@@ -106,14 +106,14 @@ const BUCKET_META: Record<
 };
 
 const DEFAULT_OMNI_DROP_TEXT = [
-  "kaiper-master-wordmark-vector.svg | 워드마크 자간과 심볼 직선 비례 100% 고정 (mark_only)",
+  "kaiper-master-wordmark-vector.svg | 워드마크 자간과 심볼 직선 비례 100% 고정",
   "kaiper-symbol-monogram-white.png | 다크 배경용 화이트 반전 심볼 마크 고정",
   "kaiper-26ss-technical-jacket-packshot.jpg | 비대칭 지퍼 라인, 칼라 구조, 나일론 매트 텍스처 보존",
   "kaiper-wide-cargo-pocket-swatch.jpg | 사이드 포켓 입체 주름과 무광 스냅 버튼 위치 유지",
   "kaiper-brand-standard-guideline-v4.pdf | 과도한 네온 사이버펑크 조명 금지. 뷰티 필터 플라스틱 피부 금지.",
-  "seongsu-daylight-campaign-01.jpg | 50mm 클린 콘크리트 여백과 5400K 확산 자연광 무드",
-  "golden-hour-courtyard-lookbook-08.jpg | 35mm 야외 골든아워 역광과 아날로그 필름 그레인",
-  "night-concrete-flash-editorial-14.jpg | 28mm 하이콘트라스트 나이트 키라이트와 깊은 그림자 대비",
+  "seongsu-daylight-campaign-01.jpg | 차분한 콘크리트 여백과 확산 자연광 무드",
+  "golden-hour-courtyard-lookbook-08.jpg | 야외 골든아워 역광과 아날로그 필름 질감",
+  "night-concrete-flash-editorial-14.jpg | 하이콘트라스트 나이트 조명과 깊은 그림자 대비",
 ].join("\n");
 
 const KAIPER_SAMPLE_ASSETS: BrandOnboardingAsset[] = [
@@ -122,7 +122,7 @@ const KAIPER_SAMPLE_ASSETS: BrandOnboardingAsset[] = [
     label: "KAIPER 워드마크 & 심볼 (SVG/PNG)",
     urlOrKey: "brand-assets/kaiper/logo-wordmark.png",
     dominantHex: "#0c1320",
-    preserveNote: "워드마크 자간과 심볼 직선 비례 100% 고정 (mark_only)",
+    preserveNote: "워드마크 자간과 심볼 직선 비례 100% 고정",
   },
   {
     slot: "product",
@@ -143,14 +143,14 @@ const KAIPER_SAMPLE_ASSETS: BrandOnboardingAsset[] = [
     label: "서울 성수 콘크리트 데이라이트 룩북",
     urlOrKey: "brand-assets/kaiper/mood-seongsu-daylight.jpg",
     dominantHex: "#3063a7",
-    preserveNote: "차가운 건축 콘크리트 여백과 5400K 확산 자연광 무드만 차용",
+    preserveNote: "차가운 건축 콘크리트 여백과 확산 자연광 무드만 차용",
   },
   {
     slot: "mood",
     label: "에디토리얼 로우 앵글 전신 구도",
     urlOrKey: "brand-assets/kaiper/mood-low-angle.jpg",
     dominantHex: "#dce4ef",
-    preserveNote: "35mm–50mm 전신 프레이밍과 절제된 그림자 대비 차용",
+    preserveNote: "전신 프레이밍과 절제된 그림자 대비 차용",
   },
 ];
 
@@ -184,7 +184,7 @@ const FNB_SAMPLE_ASSETS: BrandOnboardingAsset[] = [
     label: "MAISON ROAST 엠보싱 워드마크 & 크레스트",
     urlOrKey: "brand-assets/fnb/logo-crest.svg",
     dominantHex: "#141c28",
-    preserveNote: "컵 슬리브 및 패키지 상단 엠보싱 로고 비율 1:1 고정 (mark_only)",
+    preserveNote: "컵 슬리브 및 패키지 상단 엠보싱 로고 비율 1:1 고정",
   },
   {
     slot: "product",
@@ -338,8 +338,8 @@ export function BrandOnboardingWizard({
 
   function simulateBulk48AssetDrop() {
     const bulkLines: string[] = [
-      "kaiper-primary-logo-lockup.svg | 메인 워드마크 원본 비율 1:1 고정 (mark_only)",
-      "kaiper-CareLabel-woven-mark.png | 내부 직조 라벨 타이포그래피 고정 (mark_only)",
+      "kaiper-primary-logo-lockup.svg | 메인 워드마크 원본 비율 1:1 고정",
+      "kaiper-CareLabel-woven-mark.png | 내부 직조 라벨 타이포그래피 고정",
       "kaiper-brandbook-2026-standard.pdf | 로고 최소 크기 28px, 주변 여백 1.5x, 과장된 네온 조명 금지",
     ];
     for (let i = 1; i <= 10; i += 1) {
@@ -363,8 +363,8 @@ export function BrandOnboardingWizard({
     setPinterestPinCountHint(1480);
     setStatusMessage(
       isKo
-        ? "에셋 48개 + 핀터레스트 1,480핀 보드 일괄 투입 시뮬레이션 완료: 로고 금고·제품 마스터·브랜드 스탠다드·다중 미감 기조(A/B/C)로 자동 분류되었습니다."
-        : "Simulated 48 dropped assets + 1,480 Pinterest pins: auto-sorted into Logo Vault, Product Master, Brand Standard, and 3 Aesthetic Lines (A/B/C)."
+        ? "브랜드 에셋과 핀터레스트 보드 자동 분류가 완료되었습니다."
+        : "Brand assets and Pinterest boards have been auto-sorted."
     );
   }
 
@@ -405,11 +405,11 @@ export function BrandOnboardingWizard({
       setPinterestPinCountHint(920);
       setRawDropText(
         [
-          "auralab-monogram-mark.svg | 보틀 전면 세리프 로고 1:1 고정 (mark_only)",
+          "auralab-monogram-mark.svg | 보틀 전면 세리프 로고 1:1 고정",
           "auralab-serum-50ml-packshot.jpg | 프로스티드 유리 굴절률과 스포이드 캡 비례 유지",
           "auralab-brand-standard.pdf | 용기 기하 변형 금지, 전면 라벨 왜곡 금지",
-          "auralab-limestone-daylight-01.jpg | 50mm 클린 스튜디오 석재 여백",
-          "auralab-warm-botanical-sunlight-02.jpg | 35mm 골든아워 자연광 그림자",
+          "auralab-limestone-daylight-01.jpg | 클린 스튜디오 석재 여백",
+          "auralab-warm-botanical-sunlight-02.jpg | 골든아워 자연광 그림자",
         ].join("\n")
       );
       setAssets(BEAUTY_SAMPLE_ASSETS);
@@ -429,11 +429,11 @@ export function BrandOnboardingWizard({
       setPinterestPinCountHint(760);
       setRawDropText(
         [
-          "maisonroast-crest-logo.svg | 컵 슬리브 및 패키지 상단 로고 1:1 고정 (mark_only)",
+          "maisonroast-crest-logo.svg | 컵 슬리브 및 패키지 상단 로고 1:1 고정",
           "maisonroast-coldbrew-bottle-packshot.jpg | 원통형 보틀 라벨 곡률 및 결로 물방울 보존",
           "maisonroast-brand-standard.pdf | 식기 색감 왜곡 금지, 인공적인 연기 합성 금지",
-          "maisonroast-morning-espresso-bar-01.jpg | 50mm 따뜻한 오크 테이블과 오전 창문광",
-          "maisonroast-condensation-macro-04.jpg | 85mm 얼음 잔 결로 하이라이트",
+          "maisonroast-morning-espresso-bar-01.jpg | 따뜻한 오크 테이블과 오전 창문광",
+          "maisonroast-condensation-macro-04.jpg | 얼음 잔 결로 하이라이트",
         ].join("\n")
       );
       setAssets(FNB_SAMPLE_ASSETS);
@@ -590,19 +590,17 @@ export function BrandOnboardingWizard({
       <div className="bw-row">
         <div>
           <p className="bw-kicker">
-            {isKo
-              ? "STEP 1 · 무제한 브랜드 에셋 인테이크 & 다중 미감(A/B/C) 자동 분류"
-              : "STEP 1 · OMNI-ASSET INTAKE & MULTI-AESTHETIC (A/B/C) AUTO-TRIAGE"}
+            {isKo ? "브랜드 프로필 설정" : "BRAND PROFILE SETUP"}
           </p>
           <h2>
             {isKo
-              ? "브랜드 에셋·로고·핀터레스트 보드를 제한 없이 넣으면, 고정 스탠다드와 다중 미감 기조(A/B/C)로 자동 분류합니다"
-              : "Drop all brand assets, logos & Pinterest boards—auto-sorted into Locked Standards and Multi-Aesthetic Lines (A/B/C)"}
+              ? "브랜드 에셋과 웹사이트·핀터레스트 링크를 넣으면 브랜드 톤을 자동으로 정리합니다"
+              : "Add your brand assets, website & Pinterest links to organize your brand tone automatically"}
           </h2>
           <p className="bw-muted">
             {isKo
-              ? "브랜드 미감은 단 하나로 떨어지지 않습니다. 로고(1:1 비율 잠금)·제품·절대 금기는 공통 스탠다드로 묶어 두고, 화보와 핀터레스트 보드(1,000장이 넘어도 최신 120장 스캔 → 대표 Medoid 12장 압축)는 3가지 미감 기조(기조 A / B / C)로 분리해 스튜디오에서 원클릭으로 골라 씁니다."
-              : "Brands rarely have just one mood. We lock your logos, products, and taboos as an invariant standard, while clustering lookbooks and giant Pinterest boards (1,000+ pins -> 120 latest -> 12 Medoids) into 3 ready-to-use Aesthetic Lines (A/B/C)."}
+              ? "로고와 제품은 흔들리지 않게 고정하고, 화보와 레퍼런스 보드는 3가지 무드(A / B / C)로 정리해 스튜디오에서 바로 쓸 수 있게 준비합니다."
+              : "We keep your logos and products consistent while organizing your lookbooks and reference boards into 3 ready-to-use moods (A / B / C)."}
           </p>
         </div>
         <div className="bw-row">
@@ -613,7 +611,7 @@ export function BrandOnboardingWizard({
             onClick={() => applyPreset("kaiper")}
             disabled={busy}
           >
-            {isKo ? "KAIPER 프리셋 채우기" : "Load KAIPER Preset"}
+            {isKo ? "패션 샘플" : "Fashion Sample"}
           </button>
           <button
             type="button"
@@ -622,9 +620,7 @@ export function BrandOnboardingWizard({
             onClick={simulateBulk48AssetDrop}
             disabled={busy}
           >
-            {isKo
-              ? "에셋 48개 + 핀터레스트 1,480핀 일괄 분류 테스트"
-              : "Simulate 48 Assets + 1,480 Pins"}
+            {isKo ? "대량 에셋 샘플 불러오기" : "Load Bulk Sample"}
           </button>
           <button
             type="button"
@@ -633,7 +629,7 @@ export function BrandOnboardingWizard({
             onClick={() => applyPreset("beauty")}
             disabled={busy}
           >
-            {isKo ? "뷰티·보틀 샘플" : "Beauty Sample"}
+            {isKo ? "뷰티 샘플" : "Beauty Sample"}
           </button>
           <button
             type="button"
@@ -642,7 +638,7 @@ export function BrandOnboardingWizard({
             onClick={() => applyPreset("fnb")}
             disabled={busy}
           >
-            {isKo ? "F&B·다이닝 샘플" : "F&B Sample"}
+            {isKo ? "F&B 샘플" : "F&B Sample"}
           </button>
           <button
             type="button"
@@ -651,7 +647,7 @@ export function BrandOnboardingWizard({
             onClick={() => applyPreset("blank")}
             disabled={busy}
           >
-            {isKo ? "빈 양식" : "Clear"}
+            {isKo ? "초기화" : "Clear"}
           </button>
         </div>
       </div>
@@ -891,8 +887,8 @@ export function BrandOnboardingWizard({
               {preview && (
                 <span className="bw-badge" data-pinterest-token-savings>
                   {isKo
-                    ? `토큰 ${preview.pinterestFunnel.estimatedTokenSavingsPct}% 절감 · Medoid ${preview.pinterestFunnel.stage2MedoidsSelected}장 압축`
-                    : `${preview.pinterestFunnel.estimatedTokenSavingsPct}% Token Saved · ${preview.pinterestFunnel.stage2MedoidsSelected} Medoids`}
+                    ? `대표 레퍼런스 ${preview.pinterestFunnel.stage2MedoidsSelected}장 자동 선별`
+                    : `${preview.pinterestFunnel.stage2MedoidsSelected} key references selected`}
                 </span>
               )}
             </div>
@@ -914,8 +910,8 @@ export function BrandOnboardingWizard({
               </label>
               <label>
                 {isKo
-                  ? "보드 내 전체 핀 수 (대형 보드 깔때기 압축 계산용)"
-                  : "Total Pins in Board (Funnel Compression)"}
+                  ? "보드 내 대략적인 핀 수"
+                  : "Approximate Pins in Board"}
                 <input
                   type="number"
                   min={12}
@@ -929,8 +925,8 @@ export function BrandOnboardingWizard({
                 />
                 <small className="bw-muted">
                   {isKo
-                    ? "1,000장이 넘어도 최신 120장만 경량 스캔 후 대표 12장으로 자동 압축합니다."
-                    : "Caps scan at latest 120 pins and compresses to 12 cluster Medoids."}
+                    ? "1,000장이 넘는 대형 보드도 핵심 화보만 자동으로 추려냅니다."
+                    : "Large boards are automatically distilled to core lookbook references."}
                 </small>
               </label>
             </div>
@@ -976,18 +972,18 @@ export function BrandOnboardingWizard({
               >
                 <strong>
                   {isKo
-                    ? "핀터레스트 3단계 깔때기(Funnel) 작동 상태:"
-                    : "Pinterest 3-Stage Funnel Status:"}
+                    ? "핀터레스트 보드 자동 정리 요약:"
+                    : "Pinterest Board Summary:"}
                 </strong>
                 <div>
                   {isKo
-                    ? `• Stage 1 (경량 노이즈 제거): 총 ${preview.pinterestFunnel.totalBoardPinsDetected.toLocaleString()}핀 감지 → 최신 ${preview.pinterestFunnel.stage1LatestScannedCap}핀 스캔 → 중복(${preview.pinterestFunnel.pHashDuplicatesRemoved})·밈/텍스트(${preview.pinterestFunnel.textMemeOutliersRemoved})·저화질(${preview.pinterestFunnel.lowResRemoved}) 제거 후 유효 화보 ${preview.pinterestFunnel.stage1CleanCandidates}장 통과 (AI 토큰 0원)`
-                    : `• Stage 1: ${preview.pinterestFunnel.totalBoardPinsDetected} pins -> latest ${preview.pinterestFunnel.stage1LatestScannedCap} scanned -> ${preview.pinterestFunnel.stage1CleanCandidates} clean photos (0 AI tokens)`}
+                    ? `• 총 ${preview.pinterestFunnel.totalBoardPinsDetected.toLocaleString()}개 핀 중 중복·텍스트·저화질 이미지를 걸러내고 유효 화보 ${preview.pinterestFunnel.stage1CleanCandidates}장을 선별했습니다.`
+                    : `• Filtered ${preview.pinterestFunnel.totalBoardPinsDetected} pins down to ${preview.pinterestFunnel.stage1CleanCandidates} clean photos.`}
                 </div>
                 <div>
                   {isKo
-                    ? `• Stage 2 & 3 (클러스터 압축 & 정밀 해독): 로컬 색채·조명 군집화로 ${preview.pinterestFunnel.stage2ClustersFormed}개 미감 클러스터의 정중앙 대표컷(Medoid) ${preview.pinterestFunnel.stage2MedoidsSelected}장만 추출해 미감 기조 A/B/C 생성 (핀터레스트 이미지는 오직 조명·색감 기조 추출에만 쓰이며 자사 로고·제품 금고와 100% 분리됨)`
-                    : `• Stage 2 & 3: Compressed to ${preview.pinterestFunnel.stage2MedoidsSelected} Medoid pins across ${preview.pinterestFunnel.stage2ClustersFormed} clusters (strictly isolated from Logo & Product vaults)`}
+                    ? `• 대표 레퍼런스 ${preview.pinterestFunnel.stage2MedoidsSelected}장을 바탕으로 3가지 무드(A/B/C)를 구성했습니다.`
+                    : `• Organized ${preview.pinterestFunnel.stage2MedoidsSelected} key references into 3 mood lines (A/B/C).`}
                 </div>
               </div>
             )}
@@ -1140,7 +1136,7 @@ export function BrandOnboardingWizard({
                         borderRadius: 999,
                       }}
                     >
-                      {line.focalMm}mm · {line.lightColourK}K
+                      {isKo ? `무드 ${line.code}` : `Mood ${line.code}`}
                     </span>
                   </div>
                   <div>
@@ -1862,7 +1858,7 @@ export function BrandOnboardingWizard({
                 </h3>
                 <p className="bw-muted">
                   {isKo
-                    ? "로고는 원형 보존(mark_only), 제품은 기하·라벨 체크리스트, 무드는 색감·조명 참조로 자동 분리됩니다."
+                    ? "로고는 비율 1:1 고정, 제품은 형태·라벨 유지, 무드는 색감·조명 참조로 자동 분리됩니다."
                     : "Logos lock geometry, products build the preservation checklist, and mood images set lighting & palette."}
                 </p>
               </div>
