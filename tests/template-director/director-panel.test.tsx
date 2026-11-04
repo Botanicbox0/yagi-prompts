@@ -5,7 +5,10 @@ import {
   formatReferenceFileSpec,
   upsertSummaryChips
 } from '@/components/twings/template-director-panel';
-import type { PhotoInspectionVerdict } from '@/lib/template-director/schema';
+import {
+  diagnosePhotoSuitability,
+  type PhotoInspectionVerdict
+} from '@/lib/template-director/schema';
 
 const sampleOcclusionVerdict: PhotoInspectionVerdict = {
   status: 'needs_cleanup',
@@ -141,7 +144,11 @@ describe('TemplateDirectorPanel UI/UX (4-Pass SOTA Verification)', () => {
     expect(html).toContain('data-director-predictive-presets');
     expect(html).toContain('data-predictive-preset="makeup-daily-clean"');
     expect(html).toContain('진한 화장 빼고 내 평소 데일리 메이크업 유지');
+    expect(html).toContain('data-predictive-preset="makeup-no-pink-blush"');
     expect(html).toContain('data-predictive-preset="outfit-actress-black-dress"');
+    expect(html).toContain('data-predictive-preset="framing-bust-breathing-room"');
+    expect(html).toContain('data-direct-upload-mode="true"');
+    expect(html).toContain('직접 이미지 업로드 · AI가 임의로 변형하지 않고');
 
     // Reference wells & active summary chips
     expect(html).toContain('data-director-slot="outfit"');
@@ -192,6 +199,10 @@ describe('TemplateDirectorPanel UI/UX (4-Pass SOTA Verification)', () => {
     );
 
     expect(html).toContain('data-photo-cleanup-mode="normalize_retouch"');
+    expect(html).toContain('data-photo-reupload-recommendation="beauty_retouch"');
+    expect(html).toContain('data-prefer-direct-upload="true"');
+    expect(html).toContain('data-photo-reupload-cta');
+    expect(html).toContain('다른 정면 사진 직접 다시 올리기 (추천 · AI 얼굴 변형 없음)');
     expect(html).toContain('data-photo-dual-candidates');
     expect(html).toContain('role="radiogroup"');
     expect(html).toContain('data-candidate-compare-toggle');
@@ -208,5 +219,27 @@ describe('TemplateDirectorPanel UI/UX (4-Pass SOTA Verification)', () => {
     const mbFile = new File([new Uint8Array(1572864)], 'jacket.jpeg', { type: 'image/jpeg' });
     expect(formatReferenceFileSpec(kbFile)).toBe('142 KB · PNG');
     expect(formatReferenceFileSpec(mbFile)).toBe('1.5 MB · JPG');
+  });
+
+  it('diagnoses photo suitability and always recommends direct photo re-upload over AI face transformation', () => {
+    const clean = diagnosePhotoSuitability([], 0.36);
+    expect(clean.isSuitable).toBe(true);
+    expect(clean.recommendDirectReupload).toBe(false);
+    expect(clean.aiFaceTransformRecommendedByDefault).toBe(false);
+
+    const occluded = diagnosePhotoSuitability(['hand_occlusion'], 0.36);
+    expect(occluded.isSuitable).toBe(false);
+    expect(occluded.recommendDirectReupload).toBe(true);
+    expect(occluded.aiFaceTransformRecommendedByDefault).toBe(false);
+    expect(occluded.issueCategory).toBe('occlusion');
+    expect(occluded.whyUnsuitableKo).toContain('가림이 감지되었어요');
+
+    const retouched = diagnosePhotoSuitability(['over_retouched_contour'], 0.36);
+    expect(retouched.recommendDirectReupload).toBe(true);
+    expect(retouched.issueCategory).toBe('beauty_retouch');
+
+    const badFraming = diagnosePhotoSuitability([], 0.16);
+    expect(badFraming.recommendDirectReupload).toBe(true);
+    expect(badFraming.issueCategory).toBe('angle_or_framing');
   });
 });

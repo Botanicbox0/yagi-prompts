@@ -138,13 +138,37 @@ export interface RecommendedPhotoCleanup {
   fallbackEngine: CleanupEngineId | null;
   editPromptEn: string | null;
   /**
+   * Always true when any photo issue is detected: TWINGS recommends uploading another clean
+   * front-facing photo first rather than relying on AI face transformation, which can subtly
+   * alter facial likeness.
+   */
+  preferDirectReupload?: boolean;
+  /**
    * When true (occlusion or heavy beauty-app retouching detected), TWINGS generates two parallel
    * identity candidates (Seedream 5.0 Pro + Nano Banana 2.1) and lets the user pick the one that
-   * looks most like their real face.
+   * looks most like their real face if they cannot upload another photo.
    */
   requiresDualCandidateSelection?: boolean;
   candidateEngines?: readonly DualIdentityCandidateEngine[] | null;
   candidatePromptsEn?: Record<DualIdentityCandidateEngine, string> | null;
+}
+
+export interface PhotoSuitabilityDiagnosis {
+  isSuitable: boolean;
+  /** True whenever any issue is present: direct re-upload of a clean photo is always preferred over AI face transformation. */
+  recommendDirectReupload: boolean;
+  /** Always false: TWINGS never forces or defaults to AI face transformation on user selfies. */
+  aiFaceTransformRecommendedByDefault: false;
+  issueCategory:
+    | 'none'
+    | 'occlusion'
+    | 'beauty_retouch'
+    | 'angle_or_framing'
+    | 'quality_or_lighting';
+  whyUnsuitableKo: string | null;
+  whyUnsuitableEn: string | null;
+  reuploadTipKo: string | null;
+  reuploadTipEn: string | null;
 }
 
 export interface PhotoInspectionVerdict {
@@ -488,6 +512,18 @@ export const DEFAULT_EDITORIAL_TEMPLATE_BASELINE: TemplateBaselineSpec = {
         'Keep my natural daily eye/brow makeup and clean bright complexion from my photo instead of heavy template makeup'
     },
     {
+      id: 'makeup-no-pink-blush',
+      slot: 'makeup',
+      labelKo: '핑크 블러셔·립 빼고 창백하지 않은 피부 톤',
+      labelEn: 'No pink blush · warm matte complexion',
+      reasonBadgeKo: '플래시 핑크기 차단',
+      reasonBadgeEn: 'Flash tone lock',
+      samplePromptKo:
+        '볼터치나 입술에 인위적인 핑크기가 돌지 않게 하고, 플래시 조명에서도 하얗게 뜨지 않는 차분한 웜 매트 피부결과 자연스러운 입술 톤으로 맞춰 줘',
+      samplePromptEn:
+        'Remove any pink blush or pink lip tint and keep a warm matte-satin complexion with natural muted lip colour under flash lighting'
+    },
+    {
       id: 'outfit-actress-black-dress',
       slot: 'outfit',
       labelKo: '여배우 블랙 새틴 드레스로 변경',
@@ -504,8 +540,8 @@ export const DEFAULT_EDITORIAL_TEMPLATE_BASELINE: TemplateBaselineSpec = {
       slot: 'outfit',
       labelKo: '내가 올린 옷 사진(@Image 2) 그대로 입히기',
       labelEn: 'Wear my uploaded outfit (@Image 2)',
-      reasonBadgeKo: '착장 사진 연동',
-      reasonBadgeEn: 'Photo reference',
+      reasonBadgeKo: '직접 이미지 업로드',
+      reasonBadgeEn: 'Direct photo upload',
       samplePromptKo: '기본 착장 대신 첨부한 의상 사진(@Image 2)의 옷 실루엣과 컬러로 전 컷 동일하게 갈아입혀 줘',
       samplePromptEn: 'Dress me in the exact garment silhouette and colour from attached @Image 2 across every shot',
       opensReferenceSlot: 'outfit'
@@ -535,12 +571,24 @@ export const DEFAULT_EDITORIAL_TEMPLATE_BASELINE: TemplateBaselineSpec = {
         'Soften any fierce expression into a warm, relaxed half-smile and keep lip movements small and understated'
     },
     {
+      id: 'framing-bust-breathing-room',
+      slot: 'shot_action',
+      labelKo: '얼굴 클로즈업 부담 완화 · 여유 있는 상반신 구도',
+      labelEn: 'Balanced bust-up framing without tight closeup',
+      reasonBadgeKo: '얼빡 부담 완화',
+      reasonBadgeEn: 'Breathing room',
+      samplePromptKo:
+        '얼굴이 화면에 너무 꽉 차게 클로즈업되지 않도록 어깨선과 상반신 여유 공간이 자연스럽게 보이는 바스트샷 거리감을 유지해 줘',
+      samplePromptEn:
+        'Avoid overly tight extreme face closeups and maintain comfortable bust-up framing with natural shoulder and headroom'
+    },
+    {
       id: 'prop-user-product-ref',
       slot: 'prop',
       labelKo: '내 제품·소품 사진(@Image 3) 자연스럽게 들려주기',
       labelEn: 'Hold my uploaded product (@Image 3)',
-      reasonBadgeKo: '소품 교체',
-      reasonBadgeEn: 'Prop reference',
+      reasonBadgeKo: '직접 이미지 업로드',
+      reasonBadgeEn: 'Direct photo upload',
       samplePromptKo: '기존 소품은 빼고 첨부한 제품 사진(@Image 3)을 실제 손 크기에 맞춰 자연스럽게 들려줘',
       samplePromptEn: 'Remove the default prop and hold the attached product (@Image 3) at true hand scale',
       opensReferenceSlot: 'prop'
@@ -687,4 +735,116 @@ export function resolveTemplateBaseline(templateIdOrArchetype?: string | null): 
     return TEMPLATE_BASELINE_PRESETS['red-carpet-arrival'] ?? DEFAULT_EDITORIAL_TEMPLATE_BASELINE;
   }
   return DEFAULT_EDITORIAL_TEMPLATE_BASELINE;
+}
+
+/**
+ * Deterministic self-inspection diagnosis explaining why an uploaded selfie is unsuitable
+ * and recommending a direct photo re-upload FIRST (avoiding AI face transformation by default).
+ */
+export function diagnosePhotoSuitability(
+  issues: readonly PhotoIssueCode[],
+  faceWidthRatio = 0.35
+): PhotoSuitabilityDiagnosis {
+  const hasOcclusion = issues.some(
+    (code) => code === 'hand_occlusion' || code === 'prop_occlusion' || code === 'hair_occlusion'
+  );
+  const hasRetouch = issues.some(
+    (code) => code === 'over_retouched_contour' || code === 'heavy_filter'
+  );
+  const hasAngleOrFraming =
+    issues.some(
+      (code) =>
+        code === 'angle_extreme' ||
+        code === 'multiple_faces' ||
+        code === 'tight_crop' ||
+        code === 'wide_crop' ||
+        code === 'wide_angle_distortion' ||
+        code === 'asymmetrical_shoulders' ||
+        code === 'bare_shoulder_id_crop'
+    ) ||
+    faceWidthRatio < 0.22 ||
+    faceWidthRatio > 0.54;
+
+  const hasQualityOrLight = issues.some(
+    (code) => code === 'low_resolution' || code === 'motion_blur' || code === 'harsh_lighting'
+  );
+
+  if (!hasOcclusion && !hasRetouch && !hasAngleOrFraming && !hasQualityOrLight) {
+    return {
+      isSuitable: true,
+      recommendDirectReupload: false,
+      aiFaceTransformRecommendedByDefault: false,
+      issueCategory: 'none',
+      whyUnsuitableKo: null,
+      whyUnsuitableEn: null,
+      reuploadTipKo: null,
+      reuploadTipEn: null
+    };
+  }
+
+  if (hasOcclusion) {
+    return {
+      isSuitable: false,
+      recommendDirectReupload: true,
+      aiFaceTransformRecommendedByDefault: false,
+      issueCategory: 'occlusion',
+      whyUnsuitableKo:
+        '얼굴이나 턱선 주변에 손·소품·머리카락 가림이 감지되었어요. 가려진 부위를 AI 이미지 변형으로 채우면 내 원래 인상과 미묘하게 달라질 수 있어요.',
+      whyUnsuitableEn:
+        'A hand, object, or hair partially covers the face or jawline. AI-reconstructing hidden facial features can subtly alter your likeness.',
+      reuploadTipKo:
+        'AI 얼굴 변형 없이 100% 내 실물 그대로 가장 잘 나오도록, 손이나 물건이 얼굴을 가리지 않은 정면 사진을 직접 다시 업로드하는 것을 추천드려요.',
+      reuploadTipEn:
+        'For 100% authentic likeness without AI face modification, we strongly recommend uploading another clear front-facing photo.'
+    };
+  }
+
+  if (hasRetouch) {
+    return {
+      isSuitable: false,
+      recommendDirectReupload: true,
+      aiFaceTransformRecommendedByDefault: false,
+      issueCategory: 'beauty_retouch',
+      whyUnsuitableKo:
+        '뷰티앱 윤곽 보정(턱선·입술) 또는 강한 필터가 감지되었어요. 3D 영상에서 말을 하거나 고개를 돌릴 때 보정된 부위가 어색해 보이거나 AI 보정 시 인상이 달라질 수 있어요.',
+      whyUnsuitableEn:
+        'Heavy beauty-app contour/lip retouching or filter detected. In 3D motion, heavy 2D retouching or AI re-generation can look unnatural.',
+      reuploadTipKo:
+        'AI 얼굴 변형을 거치지 않고 가장 자연스럽게 제작되도록, 뷰티 필터가 적은 기본 카메라 정면 사진을 직접 다시 업로드하는 것을 추천드려요.',
+      reuploadTipEn:
+        'To avoid AI face transformation and get the most natural motion, we recommend uploading an unretouched standard-camera front photo.'
+    };
+  }
+
+  if (hasAngleOrFraming) {
+    return {
+      isSuitable: false,
+      recommendDirectReupload: true,
+      aiFaceTransformRecommendedByDefault: false,
+      issueCategory: 'angle_or_framing',
+      whyUnsuitableKo:
+        '고개가 측면으로 많이 돌아가 있거나 얼굴이 화면에 너무 가깝거나(광각 왜곡) 작게 찍혀 있어, 반대쪽 이목구비를 AI가 추측하면 안 닮게 나올 수 있어요.',
+      whyUnsuitableEn:
+        'Extreme head angle or close/distant framing detected. Guessing unseen facial angles can reduce likeness.',
+      reuploadTipKo:
+        '카메라를 정면으로 바라보고 어깨선이 자연스럽게 나오는 상반신 독사진으로 다시 업로드하는 것을 추천드려요.',
+      reuploadTipEn:
+        'We recommend uploading a front-facing bust-up solo photo with both eyes and shoulders clearly visible.'
+    };
+  }
+
+  return {
+    isSuitable: false,
+    recommendDirectReupload: true,
+    aiFaceTransformRecommendedByDefault: false,
+    issueCategory: 'quality_or_lighting',
+    whyUnsuitableKo:
+      '사진 해상도가 낮거나 흔들림·강한 역광이 있어 영상에서 눈매와 피부 결이 흐릿하거나 다르게 표현될 수 있어요.',
+    whyUnsuitableEn:
+      'Low resolution, motion blur, or harsh lighting may cause facial details to look soft or altered in video.',
+    reuploadTipKo:
+      '밝은 실내나 자연광에서 찍은 선명한 정면 사진을 직접 다시 업로드하시면 훨씬 또렷하고 나답게 완성돼요.',
+    reuploadTipEn:
+      'Uploading a sharp, evenly lit front-facing photo will preserve your exact features much more clearly.'
+  };
 }

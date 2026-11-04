@@ -3,6 +3,7 @@
 import { useEffect, useId, useRef, useState, useTransition } from 'react';
 import {
   DEFAULT_EDITORIAL_TEMPLATE_BASELINE,
+  diagnosePhotoSuitability,
   resolveTemplateBaseline,
   type DirectorEditableSlot,
   type DirectorSummaryChip,
@@ -271,6 +272,8 @@ export interface TemplateDirectorPanelProps {
   disabled?: boolean;
   onCleanupChoice?: (choice: 'accept' | 'skip' | 'pending') => void;
   onSelectIdentityCandidate?: (choice: IdentityCandidateChoiceId) => void;
+  /** Triggered when the user clicks the primary "Upload another front photo directly (Recommended)" button. */
+  onRequestReupload?: () => void;
   onSubmitTurn?: (input: {
     userMessage: string;
     references: ReadonlyArray<{ slotName: 'outfit' | 'prop'; role: 'look' | 'product'; file: File }>;
@@ -301,6 +304,7 @@ export function TemplateDirectorPanel({
   disabled = false,
   onCleanupChoice,
   onSelectIdentityCandidate,
+  onRequestReupload,
   onSubmitTurn,
   onChipsChange
 }: TemplateDirectorPanelProps) {
@@ -530,6 +534,22 @@ export function TemplateDirectorPanel({
     photoInspection !== null &&
     (photoInspection.status === 'needs_cleanup' || photoInspection.status === 'needs_retake');
 
+  const suitability =
+    photoInspection !== null
+      ? diagnosePhotoSuitability(photoInspection.issues, photoInspection.faceWidthRatio)
+      : null;
+
+  const handleTriggerReupload = () => {
+    onRequestReupload?.();
+    if (typeof document !== 'undefined') {
+      const uploaderBtn = document.querySelector<HTMLElement>(
+        '[data-selfie-change], [data-selfie-another], [data-selfie-choose]'
+      );
+      uploaderBtn?.click();
+      uploaderBtn?.focus();
+    }
+  };
+
   const inspectionMessage =
     photoInspection === null
       ? null
@@ -658,6 +678,42 @@ export function TemplateDirectorPanel({
           </div>
 
           <p className="mt-2.5 text-[0.9rem] leading-[1.58] text-[#0E1013]">{inspectionMessage}</p>
+
+          {/* Direct Re-Upload Recommendation Box (No-AI-Face-Transform Default Policy) */}
+          {suitability && suitability.recommendDirectReupload && (
+            <div
+              data-photo-reupload-recommendation={suitability.issueCategory}
+              data-prefer-direct-upload="true"
+              className="mt-3 rounded-[16px] border border-[#3875C5]/35 bg-white p-3.5 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.9)]"
+            >
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-[#3875C5] px-2.5 py-0.5 font-mono text-[0.65rem] font-semibold text-white">
+                  {locale === 'en'
+                    ? 'RECOMMENDED · DIRECT PHOTO UPLOAD (NO AI FACE CHANGE)'
+                    : '가장 나답게 나오는 방법 · 다른 정면 사진 직접 업로드 권장'}
+                </span>
+              </div>
+              <p className="mt-2 text-xs leading-[1.55] text-[#41444D]">
+                {locale === 'en' ? suitability.whyUnsuitableEn : suitability.whyUnsuitableKo}
+              </p>
+              <p className="mt-1 text-xs font-medium leading-[1.55] text-[#0E1013]">
+                {locale === 'en' ? suitability.reuploadTipEn : suitability.reuploadTipKo}
+              </p>
+              <div className="mt-2.5">
+                <button
+                  type="button"
+                  data-photo-reupload-cta
+                  disabled={disabled}
+                  onClick={handleTriggerReupload}
+                  className={`inline-flex min-h-10 w-full items-center justify-center rounded-full bg-[#0E1013] px-4 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-40 sm:w-auto ${FOCUS_RING}`}
+                >
+                  {locale === 'en'
+                    ? 'Upload another front-facing photo directly (Recommended)'
+                    : '다른 정면 사진 직접 다시 올리기 (추천 · AI 얼굴 변형 없음)'}
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Dual-Candidate Likeness Picker (Seedream 5.0 Pro vs Nano Banana 2.1) */}
           {photoInspection.status === 'needs_cleanup' && showDualCandidates && (
@@ -1166,7 +1222,17 @@ export function TemplateDirectorPanel({
         </div>
 
         {/* Recessed Tactile Wells for Optional User Reference Images (@Image 2 Look, @Image 3 Prop) */}
-        <div className="mt-3.5 grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+        <div
+          data-direct-upload-mode="true"
+          className="mt-3.5 rounded-[16px] border border-[#E4E6EA] bg-[#F3F7FA]/75 px-3.5 py-2.5"
+        >
+          <p className="text-[0.75rem] font-medium leading-[1.45] text-[#3063A7]">
+            {locale === 'en'
+              ? 'Direct Reference Image Upload · Attach your exact outfit (@Image 2) or product (@Image 3) photo to apply it directly without arbitrary AI distortion.'
+              : '직접 이미지 업로드 · AI가 임의로 변형하지 않고, 직접 올리신 사진 속 의상(@Image 2)·소품(@Image 3) 디자인 그대로 장면에 반영합니다.'}
+          </p>
+        </div>
+        <div className="mt-2.5 grid grid-cols-1 gap-2.5 sm:grid-cols-2">
           <input
             ref={outfitInputRef}
             type="file"
