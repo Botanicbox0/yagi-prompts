@@ -181,7 +181,17 @@ export default async function BrandIdentityPage({
         studioHref={scopedHref("/brand/studio", choice)}
       />
 
-      <section className="bw-panel" data-brand-identity-form>
+      <details className="bw-service-disclosure">
+        <summary>
+          {locale === "ko"
+            ? "고급 스탠다드 상세 편집 · 컬러 HEX · 타이포그래피 · 금칙어 수동 조정 열기"
+            : "Advanced Standard Editor · Manual Colour HEX, Typography & Rules"}
+        </summary>
+        <section
+          className="bw-panel"
+          data-brand-identity-form
+          style={{ marginTop: 12 }}
+        >
         <ActionForm
           operation="identity.save"
           fixed={{
@@ -504,7 +514,8 @@ export default async function BrandIdentityPage({
             </div>
           </div>
         </ActionForm>
-      </section>
+        </section>
+      </details>
 
       <div className="bw-grid-wide">
         {!featureDenied(choice.denied, "color_grading") && (

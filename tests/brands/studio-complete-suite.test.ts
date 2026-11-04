@@ -20,6 +20,11 @@ import {
   sanitizeVideoReverseAnalysis,
 } from '@/lib/brands/briefs';
 import {
+  analyzePinterestBoardFunnel,
+  classifyOmniAssetDrop,
+  ingestBrandOnboarding,
+  kaiperOnboardingPreset,
+  listLooks,
   markConfirmedBrandIdentity,
   twingsDefaultIdentity,
 } from '@/lib/brands/identity/service';
@@ -317,6 +322,11 @@ describe('Brand Studio Complete Suite (Video Reverse, 2D Spatial Stage, 3-Track 
     );
 
     expect(html).toContain('data-brand-studio-tutorial');
+    expect(html).toContain('data-studio-aesthetic-bar');
+    expect(html).toContain('data-studio-aesthetic-card="A"');
+    expect(html).toContain('data-studio-aesthetic-card="B"');
+    expect(html).toContain('data-studio-aesthetic-card="C"');
+    expect(html).toContain('data-studio-locked-vault-badge');
     expect(html).toContain('data-brand-spatial-stage-panel');
     expect(html).toContain('data-brand-video-reverse-panel');
     expect(html).toContain('data-brand-music-studio-panel');
@@ -327,6 +337,74 @@ describe('Brand Studio Complete Suite (Video Reverse, 2D Spatial Stage, 3-Track 
     expect(html).not.toMatch(
       /seedance|seedream|nano\s*banana|seedvr2|comfyui|yue2|earshot|argon|higgsfield/i,
     );
+  });
+
+  it('triages unlimited Omni-Asset drops into 4 buckets, compresses 1,240-pin Pinterest boards via 3-stage funnel, and persists 3 Multi-Aesthetic Lines (A/B/C)', async () => {
+    const bulkRawItems = Array.from({ length: 48 }, (_, idx) => {
+      if (idx < 2) {
+        return {
+          nameOrUrl: `kaiper-logo-${idx + 1}.svg`,
+          note: '워드마크 1:1 고정',
+        };
+      }
+      if (idx === 2) {
+        return {
+          nameOrUrl: 'kaiper-brandbook-standard.pdf',
+          note: '네온 조명 금지. 뷰티 필터 금지.',
+        };
+      }
+      if (idx < 13) {
+        return {
+          nameOrUrl: `kaiper-product-packshot-${idx}.jpg`,
+          note: '실루엣 보존',
+        };
+      }
+      return {
+        nameOrUrl: `kaiper-lookbook-editorial-${idx}.webp`,
+      };
+    });
+
+    const triaged = classifyOmniAssetDrop(bulkRawItems);
+    expect(triaged.totalDropped).toBe(48);
+    expect(triaged.counts.logo_vault).toBe(2);
+    expect(triaged.counts.brand_standard).toBe(1);
+    expect(triaged.counts.product_vault).toBe(10);
+    expect(triaged.counts.aesthetic_mood_pool).toBe(35);
+    expect(triaged.promotedSlotAssets.length).toBeLessThanOrEqual(14);
+
+    const funnel = analyzePinterestBoardFunnel({
+      pinterestBoardUrls: [
+        'https://www.pinterest.com/kaiper_official/26ss-editorial-mood/',
+      ],
+      totalPinCountHint: 1240,
+      moodAssetCount: 35,
+    });
+    expect(funnel.totalBoardPinsDetected).toBe(1240);
+    expect(funnel.stage1LatestScannedCap).toBe(120);
+    expect(funnel.stage2ClustersFormed).toBe(3);
+    expect(funnel.stage2MedoidsSelected).toBe(12);
+    expect(funnel.estimatedTokenSavingsPct).toBeGreaterThanOrEqual(95);
+    expect(funnel.routingSafetyLock).toBe('mood_only_never_logo_or_product');
+
+    const preset = kaiperOnboardingPreset(kaiperOrgId);
+    const ingested = await ingestBrandOnboarding({ sql }, owner, {
+      ...preset,
+      autoConfirm: true,
+    });
+    expect(ingested.ok).toBe(true);
+    if (!ingested.ok) return;
+
+    expect(ingested.status).toBe('confirmed');
+    expect(ingested.summary.aestheticLines).toHaveLength(3);
+    expect(ingested.summary.aestheticLines.map((l) => l.code)).toEqual([
+      'A',
+      'B',
+      'C',
+    ]);
+    expect(ingested.summary.pinterestFunnel.stage2MedoidsSelected).toBe(12);
+
+    const looks = await listLooks(sql, kaiperOrgId);
+    expect(looks.length).toBeGreaterThanOrEqual(3);
   });
 
   it('guards Pre-mortem edge cases: empty spatial stage recovery, macro-cut subject disambiguation, aspect-aware ROI, and cross-org probing block', async () => {
