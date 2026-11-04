@@ -82,8 +82,11 @@ export default async function BrandIdentityPage({
     choice.id
   );
   const current = record?.identity ?? twingsDefaultIdentity();
-  const isOwner = choice.role === "owner";
-  const canEditMemory = choice.role === "owner" || choice.role === "editor";
+  const isOwner = choice.role === "owner" || Boolean(viewer.isAdmin);
+  const canEditMemory =
+    choice.role === "owner" ||
+    choice.role === "editor" ||
+    Boolean(viewer.isAdmin);
   const accentContrast = contrast("#ffffff", current.colour.accent).toFixed(2);
   const statusLabel = record
     ? record.status === "confirmed"

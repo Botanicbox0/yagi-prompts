@@ -40,6 +40,50 @@ export default async function BrandHome({
         {access.staff && viewer.isAdmin && <a href={newProject} className="bw-button bw-primary" data-studio-prep-link>{b.studioPrep.cta}</a>}
       </div>
       {access.staff && choice && <StaffNotice b={b} manageHref={viewer.isAdmin ? adminOrganizationHref(choice.id, brandHost) : null} />}
+      {studioOpen && choice && (
+        <section
+          className="bw-panel"
+          data-brand-home-studio-shortcuts
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: "12px",
+            marginBottom: "16px",
+            borderLeft: "4px solid #3875C5",
+          }}
+        >
+          <div>
+            <strong>
+              {locale === "ko"
+                ? `${choice.name} · 올인원 브랜드 에셋 & 프로덕션 스튜디오`
+                : `${choice.name} · All-in-One Brand Asset & Production Studio`}
+            </strong>
+            <p className="bw-muted" style={{ marginTop: "4px" }}>
+              {locale === "ko"
+                ? "6단계 브랜드 온보딩(웹사이트·SNS·제품·룩북 인제스트)과 5대 프로덕션 스튜디오(2D 공간 블로킹 · 레퍼런스 영상 역설계 · 극소 부위 5단계 수선 · 3-Track 사운드 마스터 · Frame.io 시사)를 바로 실행하세요."
+                : "Launch the 6-step Brand Memory Onboarding and 5-Module Production Studio (2D Spatial Stage, Video Reverse, 5-Step Micro-ROI, 3-Track Sound, Frame Review)."}
+            </p>
+          </div>
+          <div className="bw-row" style={{ gap: "8px" }}>
+            <a
+              href={scopedHref("/brand/identity", choice)}
+              className="bw-button"
+              data-home-onboarding-cta
+            >
+              {locale === "ko" ? "① 브랜드 온보딩 · 메모리 설정 →" : "① Brand Onboarding & Memory →"}
+            </a>
+            <a
+              href={scopedHref("/brand/studio", choice)}
+              className="bw-button bw-primary"
+              data-home-studio-cta
+            >
+              {locale === "ko" ? "② 통합 프로덕션 스튜디오 열기 →" : "② Open Production Studio →"}
+            </a>
+          </div>
+        </section>
+      )}
       {workspace.projects.length === 0 && <ServiceGuide kind="campaign" b={b} studioAllowed={studioOpen} showOther={!access.projectScopedOnly && studioOpen} organizationId={choice?.id} />}
       {pendingShares > 0 && (
         <section className={access.fresh ? "bw-empty" : "bw-note"} data-brand-pending-share={pendingShares}>

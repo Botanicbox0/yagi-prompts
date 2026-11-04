@@ -168,7 +168,7 @@ export default async function BrandStudio({
         <BrandBriefStudio
           organizationId={historyOrg}
           locale={locale}
-          canWrite={canCreate}
+          canWrite={canCreate || Boolean(viewer.isAdmin)}
           identityConfirmed={Boolean(confirmedIdentity)}
           defaultChecklist={confirmedIdentity?.productChecklist}
           identityHref={
