@@ -594,7 +594,8 @@ describe('Brand Studio Complete Suite (Video Reverse, 2D Spatial Stage, 3-Track 
     expect(moatFullHtml).toContain('data-b2b-sound-master-reel');
     expect(moatFullHtml).toContain('/reel/brands/seeding-redcarpet-01-1080p.mp4');
     expect(moatFullHtml).toContain('/reel/brands/seeding-redcarpet-02-1080p.mp4');
-    expect(moatFullHtml).toContain('/reel/brands/studio-editorial-blue-1080p.mp4');
+    expect(moatFullHtml).toContain('/reel/brands/seeding-redcarpet-03-1080p.mp4');
+    expect(moatFullHtml).toContain('data-home-studio-cta');
     expect(moatFullHtml).not.toMatch(
       /Morphic|Seedance|Seedream|Nano Banana|SeedVR2|ComfyUI|YuE2|earshot|Argon|Gemini|Higgsfield/i
     );
@@ -610,6 +611,6 @@ describe('Brand Studio Complete Suite (Video Reverse, 2D Spatial Stage, 3-Track 
     expect(moatIsolatedHtml).toContain('data-campaign-moat-showcase');
     expect(moatIsolatedHtml).not.toContain('/brand/studio');
     expect(moatIsolatedHtml).not.toContain('/brand/identity');
-    expect(moatIsolatedHtml).not.toContain('/reel/brands/studio-editorial-blue-1080p.mp4');
+    expect(moatIsolatedHtml).not.toContain('data-home-studio-cta');
   });
 });
