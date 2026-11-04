@@ -10,6 +10,7 @@ import { requestSurface } from '@/lib/routing/request-surface';
 import { templatesHref } from '@/lib/prompts/links';
 import { AppErrorCopyProvider } from '@/components/app/error-copy';
 import { BottomTabs } from '@/components/app/bottom-tabs';
+import { TwingsAiConcierge } from '@/components/support/twings-ai-concierge';
 
 /**
  * Root layout for the authenticated app surface (§4: `/library`, `/account`, `/billing/*`).
@@ -61,6 +62,7 @@ export default async function AppRootLayout({ children }: { children: ReactNode 
           {children}
         </AppErrorCopyProvider>
         {!workspace && <RegisterServiceWorker />}
+        {!workspace && <TwingsAiConcierge locale={locale} />}
         {!workspace && <BottomTabs locale={locale} labels={appShell.tabs} />}
       </body>
     </html>
