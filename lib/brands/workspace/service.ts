@@ -7,7 +7,7 @@ import type { SqlRunner } from '@/lib/db/sql-runner';
 import { STAGING_BUCKET, type StorageDriver } from '@/lib/storage';
 import type { BrandWorkspaceChoice, BrandWorkspaceScope } from './selection';
 import { hasStaffReadAccess } from './staff';
-import { loadFeaturePolicies } from '../entitlements';
+import { DEFAULT_SANDBOX_DENIED, isSandboxedClientOrganization, loadFeaturePolicies, normalizeDenied } from '../entitlements';
 import { UNKNOWN_POST_PRESENTATION } from './performance';
 import {
   BrandHttpsUrlSchema, BrandOrganizationSchema, BrandProjectSchema, BrandProjectStatusSchema, BrandContentSchema,
@@ -270,7 +270,11 @@ async function withFeaturePolicies(sql: SqlRunner, scope: BrandWorkspaceScope): 
   const policies = await loadFeaturePolicies(sql, scope.choices.map((c) => c.id));
   for (const choice of scope.choices) {
     const denied = policies[choice.id];
-    if (denied && denied.length > 0) choice.denied = denied;
+    if (isSandboxedClientOrganization(choice)) {
+      choice.denied = normalizeDenied([...(denied ?? []), ...DEFAULT_SANDBOX_DENIED]);
+    } else if (denied && denied.length > 0) {
+      choice.denied = denied;
+    }
   }
   return scope;
 }

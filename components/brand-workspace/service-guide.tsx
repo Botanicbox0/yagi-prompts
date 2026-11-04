@@ -49,9 +49,13 @@ export function ServiceGuide({
             <span className="ys-track-ratio">4:5 · 9:16 Reels · TikTok</span>
           </div>
           <strong>
-            {isEn
-              ? "Creators publish in their own likeness on their channels"
-              : "인플루언서가 자기 얼굴로 본인 계정에 올립니다"}
+            {studioAllowed
+              ? isEn
+                ? "Creators publish in their own likeness on their channels"
+                : "인플루언서가 자기 얼굴로 본인 계정에 올립니다"
+              : isEn
+                ? "Verified creators publish campaign content on their channels"
+                : "검증된 크리에이터가 본인 계정에 캠페인 콘텐츠를 게시합니다"}
           </strong>
           <p>
             {studioAllowed

@@ -2136,7 +2136,7 @@ export function BrandBriefStudio({
                   ? "1080p 마스터 컷 (OLED 에디토리얼 룩 + -14.0 LUFS)"
                   : "1080p Master Cut (OLED Editorial + -14.0 LUFS)",
                 attachmentId: "att-v2",
-                mediaUrl: "/reel/brands/seeding-redcarpet-01-1080p.mp4",
+                mediaUrl: "/reel/brands/house-runway-1080p.mp4",
                 caption: "Stage 2 Master",
                 usageRights: "owned_organic",
                 reviewRevision: 2,

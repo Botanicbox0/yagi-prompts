@@ -22,7 +22,7 @@ import { OutcomeBanner } from "@/components/admin/chrome";
 import { BrandStatusForms } from "@/components/admin/brand-status";
 import { StudioCoverForm } from "@/components/brand-workspace/studio-cover-forms";
 import { loadFeaturePolicy } from "@/lib/brands/entitlements";
-import { featureDenied } from "@/lib/brands/features";
+import { featureDenied, isSandboxedClientOrganization } from "@/lib/brands/features";
 export default async function BrandProject({
   params,
   searchParams,
@@ -52,7 +52,9 @@ export default async function BrandProject({
     studioTools ? loadStudioShortlist({ sql }, viewer, id) : Promise.resolve(null),
     loadFeaturePolicy(sql, project.organizationId).catch(() => ({ denied: [] as const })),
   ]);
-  const generativeMediaAllowed = !featureDenied(policy.denied, "generative_media");
+  const generativeMediaAllowed =
+    !isSandboxedClientOrganization({ id: project.organizationId, name: project.organizationName }) &&
+    !featureDenied(policy.denied, "generative_media");
   const deps = member ? fundingDeps(sql) : null;
   const requested = project.campaignTerms?.format.kind === "template" ? await loadPromptBySlug(sql, project.campaignTerms.format.slug).catch(() => null) : null;
   const formatTitle = requested ? (locale === "ko" && requested.titleKo ? requested.titleKo : requested.title) : null;

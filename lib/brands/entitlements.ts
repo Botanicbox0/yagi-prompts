@@ -2,9 +2,24 @@ import { z } from 'zod';
 import type { Viewer } from '@/lib/auth/identity';
 import type { SqlRunner } from '@/lib/db/sql-runner';
 import type { BrandOutcome } from './workspace/types';
-import { BRAND_FEATURES, normalizeDenied, type BrandFeature } from './features';
+import {
+  BRAND_FEATURES,
+  DEFAULT_SANDBOX_DENIED,
+  SANDBOXED_CLIENT_ORG_IDS,
+  normalizeDenied,
+  type BrandFeature,
+} from './features';
 
-export { BRAND_FEATURES, featureDenied, isBrandFeature, normalizeDenied, type BrandFeature } from './features';
+export {
+  BRAND_FEATURES,
+  DEFAULT_SANDBOX_DENIED,
+  SANDBOXED_CLIENT_ORG_IDS,
+  featureDenied,
+  isBrandFeature,
+  isSandboxedClientOrganization,
+  normalizeDenied,
+  type BrandFeature,
+} from './features';
 
 /**
  * Per-organization feature policy (docs/BRAND-PRODUCT.md §4): the deny-list behind "open to everyone,
@@ -61,6 +76,12 @@ const stamp = (v: unknown): string | null => (v == null ? null : v instanceof Da
 export async function loadFeaturePolicies(sql: SqlRunner, organizationIds: readonly string[]): Promise<Record<string, BrandFeature[]>> {
   const ids = [...new Set(organizationIds.filter((id) => uuid.safeParse(id).success))];
   if (ids.length === 0) return {};
+  const out: Record<string, BrandFeature[]> = {};
+  for (const id of ids) {
+    if (SANDBOXED_CLIENT_ORG_IDS.has(id.toLowerCase())) {
+      out[id] = [...DEFAULT_SANDBOX_DENIED];
+    }
+  }
   let rows: Array<{ organization_id: string; denied_features: unknown }>;
   try {
     rows = (
@@ -70,21 +91,31 @@ export async function loadFeaturePolicies(sql: SqlRunner, organizationIds: reado
       )
     ).rows;
   } catch (error) {
-    if (isMissingTable(error)) return {};
+    if (isMissingTable(error)) return out;
     throw error;
   }
-  const out: Record<string, BrandFeature[]> = {};
   for (const row of rows) {
-    const denied = deniedOf(row.denied_features);
-    if (denied.length > 0) out[String(row.organization_id)] = denied;
+    const orgId = String(row.organization_id);
+    const dbDenied = deniedOf(row.denied_features);
+    const merged = SANDBOXED_CLIENT_ORG_IDS.has(orgId.toLowerCase())
+      ? normalizeDenied([...DEFAULT_SANDBOX_DENIED, ...dbDenied])
+      : dbDenied;
+    if (merged.length > 0) out[orgId] = merged;
   }
   return out;
 }
 
 /** The admin form's view of one organization's policy; the empty policy when there is no row. */
 export async function loadFeaturePolicy(sql: SqlRunner, organizationId: string): Promise<BrandFeaturePolicy> {
-  const empty: BrandFeaturePolicy = { organizationId, denied: [], note: '', revision: 0, updatedAt: null };
-  if (!uuid.safeParse(organizationId).success) return empty;
+  const isSandboxed = SANDBOXED_CLIENT_ORG_IDS.has(organizationId.toLowerCase());
+  const empty: BrandFeaturePolicy = {
+    organizationId,
+    denied: isSandboxed ? [...DEFAULT_SANDBOX_DENIED] : [],
+    note: '',
+    revision: 0,
+    updatedAt: null,
+  };
+  if (!uuid.safeParse(organizationId).success) return { organizationId, denied: [], note: '', revision: 0, updatedAt: null };
   let row: { denied_features: unknown; note: string; revision: number; updated_at: unknown } | undefined;
   try {
     row = (
@@ -98,9 +129,10 @@ export async function loadFeaturePolicy(sql: SqlRunner, organizationId: string):
     throw error;
   }
   if (!row) return empty;
+  const dbDenied = deniedOf(row.denied_features);
   return {
     organizationId,
-    denied: deniedOf(row.denied_features),
+    denied: isSandboxed ? normalizeDenied([...DEFAULT_SANDBOX_DENIED, ...dbDenied]) : dbDenied,
     note: String(row.note ?? ''),
     revision: Number(row.revision),
     updatedAt: stamp(row.updated_at),
@@ -120,6 +152,9 @@ export class BrandFeatureDenied extends Error {
  * work share one view of the row.
  */
 export async function assertBrandFeature(sql: SqlRunner, organizationId: string, feature: BrandFeature): Promise<void> {
+  if (SANDBOXED_CLIENT_ORG_IDS.has(organizationId.toLowerCase()) && DEFAULT_SANDBOX_DENIED.includes(feature)) {
+    throw new BrandFeatureDenied(feature);
+  }
   const row = (
     await sql.query<{ denied_features: unknown }>('select denied_features from brand_feature_policies where organization_id = $1', [organizationId])
   ).rows[0];

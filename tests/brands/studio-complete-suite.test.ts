@@ -14,7 +14,16 @@ import { seedProfile } from '@/tests/helpers/billing';
 import type { Viewer } from '@/lib/auth/identity';
 import type { SqlRunner } from '@/lib/db/sql-runner';
 import { createStudioOrganization } from '@/lib/brands/workspace/service';
-import { setFeaturePolicy } from '@/lib/brands/entitlements';
+import {
+  SANDBOXED_CLIENT_ORG_IDS,
+  isSandboxedClientOrganization,
+  loadFeaturePolicies,
+  loadFeaturePolicy,
+  setFeaturePolicy,
+} from '@/lib/brands/entitlements';
+import { sectionVisibility } from '@/lib/brands/workspace/selection';
+import { ServiceGuide } from '@/components/brand-workspace/service-guide';
+import { getDictionary } from '@/lib/i18n/dictionaries';
 import {
   DESIGN_PRINCIPLE_CHIPS,
   POMELLI_SHOT_TEMPLATES,
@@ -576,7 +585,7 @@ describe('Brand Studio Complete Suite (Video Reverse, 2D Spatial Stage, 3-Track 
       );
     }
 
-    // 5. Campaign Moat Showcase & Tab Orientation Map (1080p Sound-On Logo-Free Masters + Morphic Isolation)
+    // 5. Campaign Moat Showcase & Tab Orientation Map (1080p In-House Masters + Strict Morphic Sandbox Isolation)
     const moatFullHtml = renderToStaticMarkup(
       React.createElement(CampaignMoatShowcase, {
         locale: 'ko',
@@ -586,20 +595,23 @@ describe('Brand Studio Complete Suite (Video Reverse, 2D Spatial Stage, 3-Track 
     );
     expect(moatFullHtml).toContain('data-brand-tab-map');
     expect(moatFullHtml).toContain('data-campaign-moat-showcase');
-    expect(moatFullHtml).toContain('data-moat-proof-metrics');
-    expect(moatFullHtml).toContain('글로벌 AI 플랫폼');
-    expect(moatFullHtml).toContain('영상 9편');
-    expect(moatFullHtml).toContain('200만 뷰+');
-    expect(moatFullHtml).toContain('300건+');
     expect(moatFullHtml).toContain('data-b2b-sound-master-reel');
-    expect(moatFullHtml).toContain('/reel/brands/seeding-redcarpet-01-1080p.mp4');
-    expect(moatFullHtml).toContain('/reel/brands/seeding-redcarpet-02-1080p.mp4');
-    expect(moatFullHtml).toContain('/reel/brands/seeding-redcarpet-03-1080p.mp4');
+    expect(moatFullHtml).toContain('/reel/brands/house-runway-1080p.mp4');
+    expect(moatFullHtml).toContain('/reel/brands/studio-editorial-blue-1080p.mp4');
+    expect(moatFullHtml).toContain('/reel/brands/house-french-blue-hero-1080p.mp4');
+    expect(moatFullHtml).toContain('/reel/brands/studio-rain-editorial-1080p.mp4');
     expect(moatFullHtml).toContain('data-home-studio-cta');
+    // Never showcase Morphic campaign stats or Morphic creator videos on B2B workspace
+    expect(moatFullHtml).not.toContain('seeding-redcarpet');
+    expect(moatFullHtml).not.toContain('글로벌 AI 플랫폼');
+    expect(moatFullHtml).not.toContain('영상 9편');
+    expect(moatFullHtml).not.toContain('200만 뷰+');
+    expect(moatFullHtml).not.toContain('300건+');
     expect(moatFullHtml).not.toMatch(
       /Morphic|Seedance|Seedream|Nano Banana|SeedVR2|ComfyUI|YuE2|earshot|Argon|Gemini|Higgsfield/i
     );
 
+    // Sandboxed client (Morphic or studioOpen=false) renders NOTHING from CampaignMoatShowcase
     const moatIsolatedHtml = renderToStaticMarkup(
       React.createElement(CampaignMoatShowcase, {
         locale: 'ko',
@@ -607,10 +619,65 @@ describe('Brand Studio Complete Suite (Video Reverse, 2D Spatial Stage, 3-Track 
         studioOpen: false,
       })
     );
-    expect(moatIsolatedHtml).toContain('data-brand-tab-map');
-    expect(moatIsolatedHtml).toContain('data-campaign-moat-showcase');
-    expect(moatIsolatedHtml).not.toContain('/brand/studio');
-    expect(moatIsolatedHtml).not.toContain('/brand/identity');
-    expect(moatIsolatedHtml).not.toContain('data-home-studio-cta');
+    expect(moatIsolatedHtml).toBe('');
+
+    const moatMorphicProdIdHtml = renderToStaticMarkup(
+      React.createElement(CampaignMoatShowcase, {
+        locale: 'ko',
+        organizationId: 'd425c3b1-4066-4970-8a3b-93c52b3eef70',
+        studioOpen: true,
+      })
+    );
+    expect(moatMorphicProdIdHtml).toBe('');
+
+    // Hardline sandboxed client organization checks (Morphic production ID + local ID + name match)
+    expect(SANDBOXED_CLIENT_ORG_IDS.has('d425c3b1-4066-4970-8a3b-93c52b3eef70')).toBe(true);
+    expect(SANDBOXED_CLIENT_ORG_IDS.has('deb648e9-c2df-43d4-b2a7-7f9eff8180d9')).toBe(true);
+    expect(isSandboxedClientOrganization({ id: 'd425c3b1-4066-4970-8a3b-93c52b3eef70' })).toBe(true);
+    expect(isSandboxedClientOrganization({ name: 'Morphic' })).toBe(true);
+    expect(isSandboxedClientOrganization({ id: kaiperOrgId, name: 'KAIPER' })).toBe(false);
+
+    // Even without a DB row, Morphic's production organization ID is denied self-serve AI features
+    const morphicProdPolicy = await loadFeaturePolicy(sql, 'd425c3b1-4066-4970-8a3b-93c52b3eef70');
+    expect(morphicProdPolicy.denied).toEqual([
+      'generative_media',
+      'sound',
+      'color_grading',
+      'brand_learning',
+    ]);
+    const morphicProdPolicies = await loadFeaturePolicies(sql, ['d425c3b1-4066-4970-8a3b-93c52b3eef70']);
+    expect(morphicProdPolicies['d425c3b1-4066-4970-8a3b-93c52b3eef70']).toEqual([
+      'generative_media',
+      'sound',
+      'color_grading',
+      'brand_learning',
+    ]);
+    expect(
+      sectionVisibility({
+        id: 'd425c3b1-4066-4970-8a3b-93c52b3eef70',
+        name: 'Morphic',
+        role: 'owner',
+      })
+    ).toEqual({
+      studio: false,
+      identity: false,
+      settings: true,
+      members: true,
+    });
+
+    // ServiceGuide for sandboxed client hides studio track and AI likeness wording
+    const bKo = getDictionary('ko').brandWorkspace;
+    const guideSandboxedHtml = renderToStaticMarkup(
+      React.createElement(ServiceGuide, {
+        kind: 'campaign',
+        b: bKo,
+        studioAllowed: false,
+        showOther: false,
+      })
+    );
+    expect(guideSandboxedHtml).not.toContain('data-track="studio"');
+    expect(guideSandboxedHtml).not.toContain('자기 얼굴로');
+    expect(guideSandboxedHtml).not.toContain('/brand/studio');
+    expect(guideSandboxedHtml).toContain('검증된 크리에이터가 본인 계정에 캠페인 콘텐츠를 게시합니다');
   });
 });

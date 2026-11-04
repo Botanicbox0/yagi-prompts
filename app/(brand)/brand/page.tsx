@@ -41,7 +41,7 @@ export default async function BrandHome({
         {access.staff && viewer.isAdmin && <a href={newProject} className="bw-button bw-primary" data-studio-prep-link>{b.studioPrep.cta}</a>}
       </div>
       {access.staff && choice && <StaffNotice b={b} manageHref={viewer.isAdmin ? adminOrganizationHref(choice.id, brandHost) : null} />}
-      {choice && (
+      {choice && studioOpen && (
         <CampaignMoatShowcase
           locale={locale === "en" ? "en" : "ko"}
           organizationId={choice.id}

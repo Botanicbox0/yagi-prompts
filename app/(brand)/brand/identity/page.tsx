@@ -9,7 +9,7 @@ import {
   StaffNotice,
   adminOrganizationHref,
 } from "@/components/brand-workspace/staff-notice";
-import { featureDenied } from "@/lib/brands/features";
+import { featureDenied, isSandboxedClientOrganization } from "@/lib/brands/features";
 import {
   BRAND_LOOK_SOURCES,
   BRAND_MEMORY_KINDS,
@@ -49,7 +49,8 @@ export default async function BrandIdentityPage({
   if (selection.state === "unavailable") return <BrandUnavailable b={b} />;
   if (
     choice &&
-    (featureDenied(choice.denied, "brand_learning") ||
+    (isSandboxedClientOrganization(choice) ||
+      featureDenied(choice.denied, "brand_learning") ||
       featureDenied(choice.denied, "generative_media"))
   ) {
     notFound();

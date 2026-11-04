@@ -1,5 +1,5 @@
 import type { BrandRole } from './types';
-import { featureDenied, type BrandFeature } from '../features';
+import { featureDenied, isSandboxedClientOrganization, type BrandFeature } from '../features';
 
 /**
  * Which brand the workspace is showing, decided from the URL alone.
@@ -97,11 +97,15 @@ export interface SectionVisibility { studio: boolean; identity: boolean; setting
  * No brand yet keeps the studio open (it doubles as the setup path) and hides brand-only sections.
  * The TWINGS team sees every section of a brand it browses, each rendered read-only.
  */
-export function sectionVisibility(choice: Pick<BrandWorkspaceChoice, 'role' | 'denied'> | null): SectionVisibility {
+export function sectionVisibility(
+  choice: (Pick<BrandWorkspaceChoice, 'role' | 'denied'> & { id?: string; name?: string }) | null,
+): SectionVisibility {
   if (!choice) return { studio: true, identity: false, settings: false, members: false };
-  // The studio and the fixed generative identity layer are hidden whenever generative_media is denied.
-  const studio = choice.role !== 'guest' && !featureDenied(choice.denied, 'generative_media');
+  const sandboxed = isSandboxedClientOrganization(choice);
+  // The studio and the fixed generative identity layer are hidden whenever generative_media is denied or the client is sandboxed.
+  const studio = !sandboxed && choice.role !== 'guest' && !featureDenied(choice.denied, 'generative_media');
   const identity =
+    !sandboxed &&
     choice.role !== 'guest' &&
     !featureDenied(choice.denied, 'brand_learning') &&
     !featureDenied(choice.denied, 'generative_media');
