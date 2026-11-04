@@ -4,6 +4,11 @@ import {
   SKIN_MATTE_CONTRACT_A10
 } from '@/lib/brands/briefs/compiler';
 import {
+  GEMINI_DIRECTOR_THINKING_LEVEL,
+  PERSONAL_NO_BGM_AUDIO_CONTRACT_EN,
+  enforcePersonalMorphicGuardrails
+} from './morphic-production-playbook';
+import {
   DEFAULT_EDITORIAL_TEMPLATE_BASELINE,
   DUAL_IDENTITY_CANDIDATE_ENGINES,
   GEMINI_DIRECTOR_DEFAULT_BASE_URL,
@@ -98,7 +103,8 @@ const OCCLUSION_ISSUES: ReadonlySet<PhotoIssueCode> = new Set([
   'tight_crop',
   'wide_crop',
   'asymmetrical_shoulders',
-  'bare_shoulder_id_crop'
+  'bare_shoulder_id_crop',
+  'wide_sleeve_silhouette_risk'
 ]);
 
 const RETOUCH_ISSUES: ReadonlySet<PhotoIssueCode> = new Set([
@@ -281,7 +287,7 @@ export function sanitizeRewrittenPrompt(rawPrompt: string, hasPersonSlot: boolea
   if (hasPersonSlot && !cleaned.includes('Natural matte skin texture with visible pores')) {
     cleaned = `${cleaned}\n\n${SKIN_MATTE_CONTRACT_A10}`;
   }
-  return cleaned;
+  return enforcePersonalMorphicGuardrails(cleaned, { hasPersonSlot });
 }
 
 export function verifyRewrittenPrompt(
@@ -311,12 +317,14 @@ export function verifyRewrittenPrompt(
 const STAGE2_VIDEO_CREATOR_DOCTRINE = [
   'You are the internal Stage 2 Seedance 2.5 Film Director Rewriter.',
   'Apply the structuredIntent edits (outfitOverrideEn, makeupOverrideEn, hairOverrideEn, propOverrideEn, shotEdits, strictExclusionsEn) onto the basePrompt while strictly preserving:',
-  '1. Reference Authority & Strict Lock: @Image 1 supplies ONLY facial identity and the target hairstyle. Ignore original background, casual top, handheld objects, cups, bottles, angel wings, eyeglasses/sunglasses on head, or props from @Image 1.',
-  '2. Additional Reference Binding: When @Image 2 (outfit/look) or @Image 3 (prop/product) is present in referenceSlots, bind it explicitly in Reference authority and across every Timeline shot, forbidding floating clothing cutouts or white studio backdrops.',
-  '3. Makeup & Complexion Override: When makeupOverrideEn is present (e.g. keeping the user photo natural daily makeup instead of heavy 1990s retro smoky/plum makeup), replace the basePrompt makeup instructions accordingly while keeping skin warm and natural (zero pink blush/pink eyeshadow per TWINGS IDENTITY.md).',
-  '4. Candid Micro-Acting & Lower-Face Lock: Keep lip motion calm and understated; forbid wide toothy grins, shouting, or stiff passport-photo staring straight into the camera lens. Every shot transition must remain an instantaneous editorial hard cut.',
-  `5. SKIN_MATTE_CONTRACT: Preserve "${SKIN_MATTE_CONTRACT_A10}".`,
-  '6. Preserve the original camera focal length, chiaroscuro shadow floor, and unbroken single-bed audio rules.'
+  '1. Reference Authority & Strict Lock: @Image 1 supplies ONLY facial identity and the target hairstyle. Ignore original background, casual top, wide blouse/puff sleeves, handheld objects, cups, bottles, angel wings, eyeglasses/sunglasses on head, or props from @Image 1. Keep naturally slender shoulders, collarbones, and slim upper arms.',
+  '2. Additional Reference Binding (Neck-Down Isolation): When @Image 2 (outfit/look) or @Image 3 (prop/product) is present in referenceSlots, bind it explicitly in Reference authority and across every Timeline shot. @Image 2 supplies ONLY the neck-down garment, silhouette, and footwear (NEVER copy face, hairstyle, skin tone, or background from @Image 2; forbid floating clothing cutouts or white studio backdrops).',
+  '3. Makeup & Complexion Override: When makeupOverrideEn is present (e.g. keeping the user photo natural daily makeup instead of heavy 1990s retro smoky/plum makeup), replace the basePrompt makeup instructions accordingly while keeping skin warm and natural (zero pink blush/pink eyeshadow, zero random moles, beauty marks, or blemishes on face/neck per TWINGS IDENTITY.md).',
+  '4. Dynamic Multi-Shot Hairstyle Synchronization: Synchronize the target hairstyle (whether sleek tied low-bun, chin-length bob, or long straight hair with bangs) across ALL timeline shots so tied hair never unties mid-video.',
+  '5. Candid Micro-Acting & Lower-Face Lock: Keep lip motion calm and understated; forbid wide toothy grins, shouting, or stiff passport-photo staring straight into the camera lens. Every shot transition must remain an instantaneous editorial hard cut.',
+  `6. SKIN_MATTE_CONTRACT: Preserve "${SKIN_MATTE_CONTRACT_A10}".`,
+  `7. STRICT PERSONAL NO-BGM AUDIO CONTRACT: ${PERSONAL_NO_BGM_AUDIO_CONTRACT_EN}`,
+  '8. Preserve the original camera focal length, chiaroscuro shadow floor, and unbroken single-bed audio rules.'
 ].join('\n');
 
 interface GeminiCandidateResponse {
@@ -355,7 +363,7 @@ async function callGeminiStructuredJson<T>(
         temperature: 0.2,
         responseMimeType: 'application/json',
         thinkingConfig: {
-          thinkingLevel: 'LOW'
+          thinkingLevel: GEMINI_DIRECTOR_THINKING_LEVEL
         }
       }
     })
@@ -387,7 +395,7 @@ export function createFlashTemplateDirector(
       const systemInstruction = [
         'Inspect the uploaded reference photo for Seedance 2.5 / TWINGS video generation.',
         'Ideal Bust-Up framing has faceWidthRatio between 0.30 and 0.42 with visible neck and symmetrical shoulders.',
-        'Check for hand_occlusion, prop_occlusion (cups, bottles, phones, wings), hair_occlusion, tight_crop, over_retouched_contour (2D liquify pinched V-line jaw, artificially inflated lips, plastic poreless beauty-app blur), heavy_filter, low_resolution, or motion_blur.',
+        'Check for hand_occlusion, prop_occlusion (cups, bottles, phones, wings), hair_occlusion, tight_crop, wide_sleeve_silhouette_risk (wide puff/blouse sleeves that could make upper arms look thick in sleeveless dresses), wide_angle_distortion (<30cm 24mm barrel distortion), over_retouched_contour (2D liquify pinched V-line jaw, artificially inflated lips, plastic poreless beauty-app blur), heavy_filter, low_resolution, or motion_blur.',
         'When over_retouched_contour or heavy_filter is present, set status to needs_cleanup and gently explain that 2D beauty-app contour/lip retouching can look unnatural in 3D motion, offering natural optical camera proportion & skin texture normalization.',
         'Extract an accurate English hairstyle and facial structure description (extractedHairDescription) and provide polite Korean/English guidance.'
       ].join('\n');

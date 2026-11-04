@@ -10,8 +10,10 @@ import {
   makeEarning,
   NET_SHARE,
   quoteSelectiveImageSet,
+  quoteVideoResolutionTiers,
   simulateMakerTemplateRevenue,
 } from '@/lib/twings/template-price';
+import { templateCreditsByResolution } from '@/lib/twings/credits';
 import { quoteSelectiveRecipe, sliceImageSetRecipe } from '@/lib/recipes/pricing';
 import { parseRecipe } from '@/lib/recipes/schema';
 
@@ -153,5 +155,54 @@ describe('template price', () => {
     expect(sim.milestones.find((m) => m.makes === 100)?.creatorTotalKrw).toBe(
       sim.perMake.creator * 100
     );
+  });
+
+  it('quotes 3-tier personal video resolutions (480p Draft · 720p Standard · 1080p Masterpiece) with 55% Draft credit savings', () => {
+    const multi = quoteVideoResolutionTiers({ seconds: 10, aspect: '9:16' });
+
+    // 480p Draft: $1.03 provider cost -> 154 credits (1,800 KRW) -> saves 191 credits (55%) vs 720p
+    expect(multi.tiers['480p'].tierRole).toBe('draft_preview');
+    expect(multi.tiers['480p'].providerUsd).toBeCloseTo(1.03, 2);
+    expect(multi.tiers['480p'].baseCredits).toBe(154);
+    expect(multi.tiers['480p'].totalKrw).toBe(1800);
+
+    // 720p Standard High-Quality: $2.31 provider cost -> 345 credits (4,000 KRW)
+    expect(multi.tiers['720p'].tierRole).toBe('standard_high');
+    expect(multi.tiers['720p'].providerUsd).toBeCloseTo(2.31, 2);
+    expect(multi.tiers['720p'].baseCredits).toBe(345);
+    expect(multi.tiers['720p'].totalKrw).toBe(4000);
+    expect(multi.tiers['720p'].recommendedDefault).toBe(true);
+
+    // 1080p Masterpiece Flagship: $5.6862 provider cost -> 847 credits (9,700 KRW)
+    expect(multi.tiers['1080p'].tierRole).toBe('masterpiece_max');
+    expect(multi.tiers['1080p'].providerUsd).toBeCloseTo(5.6862, 4);
+    expect(multi.tiers['1080p'].baseCredits).toBe(847);
+    expect(multi.tiers['1080p'].totalKrw).toBe(9700);
+
+    expect(multi.draftWorkflow.draftSavedCreditsVs720p).toBe(191);
+    expect(multi.draftWorkflow.draftSavedPercentVs720p).toBe(55);
+    expect(multi.draftWorkflow.draftSavedCreditsVs1080p).toBe(693);
+    expect(multi.draftWorkflow.draftThen720pTotalCredits).toBe(499);
+
+    expect(FOUNDER_CREDIT_PLANS.creator.maxDrafts10s480p).toBe(12);
+    expect(FOUNDER_CREDIT_PLANS.creator.maxFilms10s720p).toBe(5);
+    expect(FOUNDER_CREDIT_PLANS.creator.maxFilms10s1080p).toBe(2);
+
+    expect(FOUNDER_CREDIT_PLANS.premium.maxDrafts10s480p).toBe(24);
+    expect(FOUNDER_CREDIT_PLANS.premium.maxFilms10s720p).toBe(10);
+    expect(FOUNDER_CREDIT_PLANS.premium.maxFilms10s1080p).toBe(4);
+
+    const cardByRes = templateCreditsByResolution({
+      engine: 'seedance-2.5',
+      medium: 'video',
+      aspectDefault: '9:16',
+      runtimeSeconds: 10,
+      gallery: [],
+    });
+    expect(cardByRes).toEqual({
+      '480p': 154,
+      '720p': 345,
+      '1080p': 847,
+    });
   });
 });

@@ -76,7 +76,7 @@ export function videoResolutions(model: VideoModelKey): VideoResolution[] {
 
 export interface VideoQuoteInput {
   model: VideoModelKey;
-  resolution: '720p' | '1080p';
+  resolution: '480p' | '720p' | '1080p';
   seconds: number;
   aspect: string;
 }
@@ -87,6 +87,7 @@ export interface VideoQuoteInput {
  */
 export function quoteVideo(input: VideoQuoteInput): { providerUsd: number; providerTokens: number | null } | null {
   if (isKlingModel(input.model)) {
+    if (input.resolution === '480p') return null;
     const usd = estimateKlingUsd({ model: input.model, resolution: input.resolution, seconds: input.seconds });
     return usd === null ? null : { providerUsd: usd, providerTokens: null };
   }

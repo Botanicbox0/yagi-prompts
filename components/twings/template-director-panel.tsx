@@ -15,8 +15,25 @@ import {
 } from '@/lib/template-director/schema';
 import {
   quoteSelectiveImageSet,
-  type SelectiveImageSetQuote
+  quoteVideoResolutionTiers,
+  type PersonalVideoResolution,
+  type SelectiveImageSetQuote,
+  type VideoResolutionMultiTierQuote,
+  type VideoResolutionTierQuote
 } from '@/lib/twings/template-price';
+import {
+  PERSONAL_NO_BGM_AUDIO_NOTICE_EN,
+  PERSONAL_NO_BGM_AUDIO_NOTICE_KO
+} from '@/lib/template-director/morphic-production-playbook';
+
+export interface DirectorVideoResolutionSpec {
+  /** Video duration in seconds (4..15, defaults to 10s) */
+  runtimeSeconds?: number;
+  /** Video aspect ratio ('9:16' | '16:9' | '4:3' | '3:4' | '1:1' | '21:9', defaults to '9:16') */
+  aspect?: string;
+  /** Optional maker raise (`royalty_krw`, 0..5000) */
+  royaltyKrw?: number;
+}
 
 export interface DirectorImageSetSpec {
   totalFrames: number;
@@ -287,6 +304,13 @@ export interface TemplateDirectorPanelProps {
   imageSetSpec?: DirectorImageSetSpec | null;
   initialSelectedFrames?: readonly number[];
   onSelectedFramesChange?: (selectedFrameIndices: number[], quote: SelectiveImageSetQuote) => void;
+  /** Optional video resolution tier specification (480p Draft, 720p Standard, 1080p Masterpiece). Rendered automatically on video templates. */
+  videoResolutionSpec?: DirectorVideoResolutionSpec | null;
+  initialResolution?: PersonalVideoResolution;
+  onResolutionChange?: (
+    resolution: PersonalVideoResolution,
+    quote: VideoResolutionTierQuote
+  ) => void;
   disabled?: boolean;
   onCleanupChoice?: (choice: 'accept' | 'skip' | 'pending') => void;
   onSelectIdentityCandidate?: (choice: IdentityCandidateChoiceId) => void;
@@ -322,6 +346,9 @@ export function TemplateDirectorPanel({
   imageSetSpec = null,
   initialSelectedFrames,
   onSelectedFramesChange,
+  videoResolutionSpec = null,
+  initialResolution = '720p',
+  onResolutionChange,
   disabled = false,
   onCleanupChoice,
   onSelectIdentityCandidate,
@@ -382,6 +409,31 @@ export function TemplateDirectorPanel({
       royaltyKrw: imageSetSpec.royaltyKrw ?? 0
     });
     onSelectedFramesChange?.(valid, nextQuote);
+  };
+
+  const [selectedResolution, setSelectedResolution] = useState<PersonalVideoResolution>(
+    initialResolution
+  );
+
+  const videoResolutionMultiQuote: VideoResolutionMultiTierQuote | null =
+    totalSetFrames === 0
+      ? quoteVideoResolutionTiers({
+          seconds: videoResolutionSpec?.runtimeSeconds ?? 10,
+          aspect: videoResolutionSpec?.aspect ?? '9:16',
+          royaltyKrw: videoResolutionSpec?.royaltyKrw ?? 0
+        })
+      : null;
+
+  const activeResolutionQuote: VideoResolutionTierQuote | null =
+    videoResolutionMultiQuote !== null
+      ? videoResolutionMultiQuote.tiers[selectedResolution]
+      : null;
+
+  const handleSelectResolution = (nextRes: PersonalVideoResolution) => {
+    setSelectedResolution(nextRes);
+    if (videoResolutionMultiQuote) {
+      onResolutionChange?.(nextRes, videoResolutionMultiQuote.tiers[nextRes]);
+    }
   };
 
   const [expanded, setExpanded] = useState(initialExpanded || initialChips.length > 0);
@@ -1121,6 +1173,134 @@ export function TemplateDirectorPanel({
                 ? `${selectiveQuote.totalCredits} credits (₩${selectiveQuote.totalKrw.toLocaleString('en-US')})`
                 : `${selectiveQuote.totalCredits} 크레딧 · 단건 ${selectiveQuote.totalKrw.toLocaleString('ko-KR')}원`}
             </div>
+          </div>
+        </section>
+      )}
+
+      {/* 3-Tier Video Resolution & Credit Mode Picker (480p Draft · 720p Standard · 1080p Masterpiece) + No-BGM Audio Notice */}
+      {videoResolutionMultiQuote && activeResolutionQuote && (
+        <section
+          data-video-resolution-tiers
+          data-selected-resolution={selectedResolution}
+          data-selected-resolution-credits={activeResolutionQuote.totalCredits}
+          data-selected-resolution-krw={activeResolutionQuote.totalKrw}
+          aria-label={
+            locale === 'en'
+              ? 'Select video resolution and credit mode'
+              : '영상 화질 및 크레딧 모드 선택 (480p Draft · 720p · 1080p)'
+          }
+          className="rounded-[20px] border border-[#E4E6EA] bg-[#F3F7FA] p-4 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.9)]"
+        >
+          <input
+            type="hidden"
+            name="videoResolution"
+            data-video-resolution-input
+            value={selectedResolution}
+          />
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <div>
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-[#E8EFF7] px-2.5 py-0.5 font-mono text-[0.68rem] font-semibold text-[#3063A7] tabular-nums">
+                <span aria-hidden="true" className="size-1.5 rounded-full bg-[#3875C5]" />
+                {locale === 'en'
+                  ? `RESOLUTION & CREDIT MODE · ${selectedResolution}`
+                  : `화질 · 크레딧 모드 선택 (${selectedResolution} 선택됨)`}
+              </span>
+              <p className="mt-1.5 text-xs leading-relaxed text-[#41444D]">
+                {locale === 'en'
+                  ? 'Test likeness and edits with 480p Draft first, share in crisp 720p Standard, or render in flagship 1080p Masterpiece.'
+                  : '의상·연출 변경이나 얼굴 닮음새가 궁금할 땐 가벼운 480p Draft로 먼저 확인하고, 일상 업로드는 선명한 720p, 최고 소장본은 1080p로 선택하세요.'}
+              </p>
+            </div>
+            <span
+              data-draft-savings-pill
+              className="rounded-full border border-[#3875C5]/30 bg-white px-2.5 py-1 font-mono text-[0.68rem] font-semibold text-[#3063A7] tabular-nums"
+            >
+              {locale === 'en'
+                ? `480p Draft saves ${videoResolutionMultiQuote.draftWorkflow.draftSavedCreditsVs720p} cr (${videoResolutionMultiQuote.draftWorkflow.draftSavedPercentVs720p}%)`
+                : `480p Draft · 본 영상 대비 ${videoResolutionMultiQuote.draftWorkflow.draftSavedCreditsVs720p} 크레딧(${videoResolutionMultiQuote.draftWorkflow.draftSavedPercentVs720p}%) 절약`}
+            </span>
+          </div>
+
+          <div
+            role="radiogroup"
+            aria-label={locale === 'en' ? 'Video resolution tiers' : '영상 화질 등급'}
+            className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3"
+          >
+            {(['480p', '720p', '1080p'] as const).map((res) => {
+              const tier = videoResolutionMultiQuote.tiers[res];
+              const isSelected = selectedResolution === res;
+              return (
+                <button
+                  key={res}
+                  type="button"
+                  role="radio"
+                  aria-checked={isSelected}
+                  data-resolution-tier-option={res}
+                  data-resolution-tier-credits={tier.totalCredits}
+                  data-resolution-tier-selected={isSelected ? 'true' : 'false'}
+                  disabled={disabled || submitting}
+                  onClick={() => handleSelectResolution(res)}
+                  className={[
+                    'flex flex-col justify-between gap-2 rounded-[16px] border p-3 text-left transition-colors',
+                    FOCUS_RING,
+                    isSelected
+                      ? 'border-[#3875C5] bg-white shadow-sm'
+                      : 'border-[#E4E6EA] bg-[#F6F7F9]/85 hover:border-[#C7CCD3] hover:bg-white'
+                  ].join(' ')}
+                >
+                  <div>
+                    <div className="flex flex-wrap items-center justify-between gap-1.5">
+                      <span className="font-mono text-xs font-bold text-[#0E1013] tabular-nums">
+                        {res}
+                      </span>
+                      <span
+                        className={[
+                          'rounded-full px-2 py-0.5 font-mono text-[0.62rem] font-semibold',
+                          isSelected
+                            ? 'bg-[#3875C5] text-white'
+                            : 'bg-[#E8EFF7] text-[#3063A7]'
+                        ].join(' ')}
+                      >
+                        {locale === 'en' ? tier.badgeEn : tier.badgeKo}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-xs font-semibold text-[#0E1013]">
+                      {locale === 'en' ? tier.titleEn : tier.titleKo}
+                    </p>
+                    <p className="mt-0.5 text-[0.72rem] leading-[1.45] text-[#41444D]">
+                      {locale === 'en' ? tier.subtitleEn : tier.subtitleKo}
+                    </p>
+                  </div>
+
+                  <div className="flex items-baseline justify-between border-t border-[#E4E6EA] pt-2 font-mono tabular-nums">
+                    <span className="text-xs font-bold text-[#3063A7]">
+                      {locale === 'en'
+                        ? `${tier.totalCredits} cr`
+                        : `${tier.totalCredits} 크레딧`}
+                    </span>
+                    <span className="text-[0.68rem] text-[#676B75]">
+                      {locale === 'en'
+                        ? `₩${tier.totalKrw.toLocaleString('en-US')}`
+                        : `단건 ${tier.totalKrw.toLocaleString('ko-KR')}원`}
+                    </span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
+          <div
+            data-personal-no-bgm-notice
+            className="mt-3 flex items-start gap-2 rounded-[14px] border border-[#E4E6EA] bg-white px-3.5 py-2.5 text-xs text-[#41444D]"
+          >
+            <span className="mt-0.5 shrink-0 rounded-full bg-[#E8EFF7] px-2 py-0.5 font-mono text-[0.62rem] font-semibold text-[#3063A7]">
+              NO-BGM SFX
+            </span>
+            <p className="leading-[1.5]">
+              {locale === 'en'
+                ? PERSONAL_NO_BGM_AUDIO_NOTICE_EN
+                : PERSONAL_NO_BGM_AUDIO_NOTICE_KO}
+            </p>
           </div>
         </section>
       )}

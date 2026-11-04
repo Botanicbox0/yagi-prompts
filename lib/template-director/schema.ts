@@ -12,6 +12,7 @@ export const PHOTO_ISSUE_CODES = [
   'wide_crop',
   'asymmetrical_shoulders',
   'bare_shoulder_id_crop',
+  'wide_sleeve_silhouette_risk',
   'wide_angle_distortion',
   'low_resolution',
   'motion_blur',
@@ -592,12 +593,122 @@ export const DEFAULT_EDITORIAL_TEMPLATE_BASELINE: TemplateBaselineSpec = {
       samplePromptKo: '기존 소품은 빼고 첨부한 제품 사진(@Image 3)을 실제 손 크기에 맞춰 자연스럽게 들려줘',
       samplePromptEn: 'Remove the default prop and hold the attached product (@Image 3) at true hand scale',
       opensReferenceSlot: 'prop'
+    },
+    {
+      id: 'silhouette-slim-arms-collarbone',
+      slot: 'outfit',
+      labelKo: '셀카 속 넓은 소매 부피 무시 · 슬림한 팔·어깨 라인 고정',
+      labelEn: 'Ignore wide selfie sleeves · lock slender arm & collarbone silhouette',
+      reasonBadgeKo: '팔뚝 부피 왜곡 차단',
+      reasonBadgeEn: 'Slender arm lock',
+      samplePromptKo:
+        '셀카 사진 속 상의나 넓은 소매 부피는 완전히 무시하고, 원래 체형처럼 여리여리하고 슬림한 어깨·쇄골·팔 라인으로 착장이 자연스럽게 핏되게 해 줘',
+      samplePromptEn:
+        'Completely ignore any wide blouse sleeves or bulky top from my selfie and maintain naturally slender shoulders, collarbones, and slim arms'
+    },
+    {
+      id: 'hair-updo-lowbun-sync',
+      slot: 'hair',
+      labelKo: '묶은 머리(로우번)·단발 전 컷 풀림 방지 고정',
+      labelEn: 'Lock sleek low-bun / bob across every cut without untying',
+      reasonBadgeKo: '전 컷 헤어 고정',
+      reasonBadgeEn: 'Multi-shot hair lock',
+      samplePromptKo:
+        '내 사진 속 깔끔하게 묶은 로우번(또는 단발) 스타일이 중간 컷에서 긴 머리로 풀리지 않도록 첫 컷부터 마지막 컷까지 동일하게 고정해 줘',
+      samplePromptEn:
+        'Keep my sleek tied low-bun (or bob) hairstyle strictly locked across every shot without ever untying into loose long hair'
+    },
+    {
+      id: 'skin-zero-mole-matte',
+      slot: 'makeup',
+      labelKo: '번들거림·원치 않는 점 없는 맑은 매트 새틴 피부결',
+      labelEn: 'Matte-satin skin with zero artificial moles or oily glare',
+      reasonBadgeKo: '피부 잡티·광택 차단',
+      reasonBadgeEn: 'Clean skin lock',
+      samplePromptKo:
+        '피부가 기름지게 번들거리거나 얼굴·목에 원래 없는 점·잡티가 생기지 않도록 깨끗하고 맑은 매트 새틴 피부결로 유지해 줘',
+      samplePromptEn:
+        'Keep a clean matte-satin complexion with zero oily plastic shine and zero artificial moles, beauty marks, or blemishes on face or neck'
     }
   ]
 };
 
 export const TEMPLATE_BASELINE_PRESETS: Readonly<Record<string, TemplateBaselineSpec>> = {
   'default-editorial': DEFAULT_EDITORIAL_TEMPLATE_BASELINE,
+  'fashion-runway-walk': {
+    ...DEFAULT_EDITORIAL_TEMPLATE_BASELINE,
+    templateArchetypeId: 'fashion-runway-walk',
+    titleKo: '하이패션 런웨이 워킹 · 기본 설정 안내',
+    titleEn: 'High-Fashion Runway Walk · Baseline Guide',
+    lockedElementsKo: [
+      '85mm 망원 런웨이 트래킹 · 프론트 로우 플래시 세례',
+      '다크 스튜디오 바닥 반사광 & 모델 워킹 리듬',
+      '배경음악(BGM) 없는 실제 힐 구두 발걸음 · 카메라 셔터 현장음'
+    ],
+    lockedElementsEn: [
+      '85mm telephoto runway tracking & front-row flashes',
+      'Dark studio floor reflections & runway stride rhythm',
+      'Strict No-BGM live heel footsteps & press shutter acoustics'
+    ],
+    baselineSlots: [
+      {
+        slot: 'outfit',
+        labelKo: '기본 착장 · 체형 핏',
+        labelEn: 'Default Outfit & Silhouette Fit',
+        defaultSettingKo: '시그니처 런웨이 드레스 (셀카 소매 부피 무시 · 슬림한 팔·쇄골 핏 자동 보정)',
+        defaultSettingEn: 'Signature runway look (wide selfie sleeves ignored · slender arm fit locked)',
+        customizableHintKo: '내 전신 의상 사진(@Image 2)을 올리면 목선 아래 의상과 신발만 1:1로 갈아입혀요',
+        customizableHintEn: 'Attach @Image 2 for a strict neck-down 1:1 outfit swap while keeping your face',
+        acceptsReferenceImage: 'outfit'
+      },
+      {
+        slot: 'makeup',
+        labelKo: '기본 메이크업 · 피부결',
+        labelEn: 'Default Makeup & Skin',
+        defaultSettingKo: '번들거림 없는 매트 새틴 피부결 · 얼굴/목 임의 점 생성 차단',
+        defaultSettingEn: 'Matte-satin skin texture with zero random moles or oily glare',
+        customizableHintKo: '내 평소 데일리 메이크업과 자연스러운 입술 컬러로 유지할 수 있어요',
+        customizableHintEn: 'Keep your natural daily makeup and lip tone',
+        acceptsReferenceImage: null
+      },
+      {
+        slot: 'hair',
+        labelKo: '기본 헤어 · 전 컷 동기화',
+        labelEn: 'Default Hair & Multi-Shot Sync',
+        defaultSettingKo: '내 사진 속 헤어스타일(로우번/단발/생머리) 전 컷 풀림 없이 동기화',
+        defaultSettingEn: 'Your selfie hairstyle synchronized across all cuts without untying',
+        customizableHintKo: '묶은 머리 고정이나 잔머리·앞머리 디테일 유지를 지정할 수 있어요',
+        customizableHintEn: 'Lock your low-bun, bob, or bangs across every runway cut',
+        acceptsReferenceImage: null
+      },
+      {
+        slot: 'shot_action',
+        labelKo: '기본 시선 · 워킹 표정',
+        labelEn: 'Default Gaze & Runway Poise',
+        defaultSettingKo: '입을 다문 당당한 런웨이 포커페이스 · 흔들림 없는 정면 시선',
+        defaultSettingEn: 'Composed closed-lip runway poise & steady forward gaze',
+        customizableHintKo: '여유로운 반미소나 부드러운 눈빛으로 인상을 완화할 수 있어요',
+        customizableHintEn: 'Soften into a relaxed half-smile at the runway turn',
+        acceptsReferenceImage: null
+      }
+    ]
+  },
+  'beauty-grwm-skincare': {
+    ...DEFAULT_EDITORIAL_TEMPLATE_BASELINE,
+    templateArchetypeId: 'beauty-grwm-skincare',
+    titleKo: '뷰티 스킨케어 · 겟레디윗미(GRWM) 기본 설정 안내',
+    titleEn: 'Beauty Skincare & GRWM · Baseline Guide',
+    lockedElementsKo: [
+      '자연광 뷰티 룸 조명 · 매크로 피부 디테일 컷 전환',
+      '제품 클로즈업 → 볼 밀착 → 거울 미소 5컷 리듬',
+      '배경음악(BGM) 없는 실제 제형 터치음 · 수분 밀착 현장 사운드'
+    ],
+    lockedElementsEn: [
+      'Soft daylight beauty lighting & macro skin cut rhythm',
+      '5-cut product macro -> cheek application -> mirror smile flow',
+      'Strict No-BGM tactile skincare application & room foley'
+    ]
+  },
   '90s-apgujeong-interview': {
     ...DEFAULT_EDITORIAL_TEMPLATE_BASELINE,
     templateArchetypeId: '90s-apgujeong-interview',
@@ -734,6 +845,12 @@ export function resolveTemplateBaseline(templateIdOrArchetype?: string | null): 
   ) {
     return TEMPLATE_BASELINE_PRESETS['red-carpet-arrival'] ?? DEFAULT_EDITORIAL_TEMPLATE_BASELINE;
   }
+  if (key.includes('runway') || key.includes('catwalk') || key.includes('fashion-walk')) {
+    return TEMPLATE_BASELINE_PRESETS['fashion-runway-walk'] ?? DEFAULT_EDITORIAL_TEMPLATE_BASELINE;
+  }
+  if (key.includes('grwm') || key.includes('collagen') || key.includes('skincare') || key.includes('beauty')) {
+    return TEMPLATE_BASELINE_PRESETS['beauty-grwm-skincare'] ?? DEFAULT_EDITORIAL_TEMPLATE_BASELINE;
+  }
   return DEFAULT_EDITORIAL_TEMPLATE_BASELINE;
 }
 
@@ -751,7 +868,9 @@ export function diagnosePhotoSuitability(
   const hasRetouch = issues.some(
     (code) => code === 'over_retouched_contour' || code === 'heavy_filter'
   );
+  const hasWideSleeveSilhouetteRisk = issues.includes('wide_sleeve_silhouette_risk');
   const hasAngleOrFraming =
+    hasWideSleeveSilhouetteRisk ||
     issues.some(
       (code) =>
         code === 'angle_extreme' ||
@@ -817,6 +936,22 @@ export function diagnosePhotoSuitability(
   }
 
   if (hasAngleOrFraming) {
+    if (hasWideSleeveSilhouetteRisk) {
+      return {
+        isSuitable: false,
+        recommendDirectReupload: true,
+        aiFaceTransformRecommendedByDefault: false,
+        issueCategory: 'angle_or_framing',
+        whyUnsuitableKo:
+          '상의의 넓은 퍼프·벌룬 소매가 어깨선까지 크게 찍혀 있어, 드레스나 민소매 착장 영상에서 팔뚝 부피가 실제보다 두껍게 해석될 수 있어요.',
+        whyUnsuitableEn:
+          'Wide blouse or puff sleeves in the selfie may cause sleeveless or fitted outfits to render with thicker upper arms.',
+        reuploadTipKo:
+          '어깨선이 깔끔하게 드러나는 상반신 사진을 다시 올리시거나, 그대로 진행하시면 TWINGS가 얼굴·목선 위주로 크롭하고 슬림한 팔 라인 고정 규칙을 자동으로 적용해 드려요.',
+        reuploadTipEn:
+          'Upload a photo with clean shoulder lines, or proceed and TWINGS will automatically apply a head-and-neck crop and slender arm lock.'
+      };
+    }
     return {
       isSuitable: false,
       recommendDirectReupload: true,

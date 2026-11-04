@@ -3,10 +3,16 @@ import {
   compileModelSpecificIdentityPrompt,
   createFlashTemplateDirector,
   DIRECTOR_EDITABLE_SLOTS,
+  DIRECTOR_MODEL_ARCHITECTURE_DECISION,
   directorConfigFromEnv,
   DUAL_IDENTITY_CANDIDATE_ENGINES,
+  enforcePersonalMorphicGuardrails,
   GEMINI_DIRECTOR_DEFAULT_MODEL,
+  GEMINI_DIRECTOR_THINKING_LEVEL,
   inspectPhotoPrecheck,
+  MORPHIC_APPROVED_VIDEO_LAWS,
+  MORPHIC_MODIFICATION_PLAYBOOK,
+  PERSONAL_NO_BGM_AUDIO_CONTRACT_EN,
   resolveTemplateBaseline,
   toClientDirectorTurnResponse,
   unwrapServerOnlyPrompt,
@@ -469,6 +475,7 @@ No background music, no sunglasses, no original casual outfit, handheld objects,
       expect(bodyText).toContain('Extreme Low-Key Night Chiaroscuro');
       expect(bodyText).toContain('Strict No-BGM Audio Rule');
       expect(bodyText).toContain('SKIN_MATTE_CONTRACT');
+      expect(bodyText).toContain(`"thinkingLevel":"${GEMINI_DIRECTOR_THINKING_LEVEL}"`);
 
       return geminiJsonResponse({
         rewrittenPrompt: rewrittenMaster,
@@ -543,6 +550,31 @@ describe('Template Baseline Disclosure & Predictive Creator Revision Taxonomy', 
     const fallback = resolveTemplateBaseline('unknown-future-template-id');
     expect(fallback.templateArchetypeId).toBe('default-editorial');
     expect(fallback.lockedElementsKo.length).toBeGreaterThanOrEqual(3);
+
+    const runway = resolveTemplateBaseline('2026-10-29-fashion-runway-template');
+    expect(runway.templateArchetypeId).toBe('fashion-runway-walk');
+
+    const skincare = resolveTemplateBaseline('2026-11-05-twings-collagen-sheet');
+    expect(skincare.templateArchetypeId).toBe('beauty-grwm-skincare');
+  });
+
+  it('codifies Morphic Production Laws, Gemini 3.8 Flash HIGH vs Argon decision, and Strict No-BGM Audio Contract', () => {
+    expect(GEMINI_DIRECTOR_THINKING_LEVEL).toBe('HIGH');
+    expect(DIRECTOR_MODEL_ARCHITECTURE_DECISION.personalTemplateDirector.model).toBe('gemini-3.8-flash');
+    expect(DIRECTOR_MODEL_ARCHITECTURE_DECISION.personalTemplateDirector.thinkingLevel).toBe('HIGH');
+    expect(DIRECTOR_MODEL_ARCHITECTURE_DECISION.b2bBrandDirector.model).toBe('argon');
+    expect(MORPHIC_APPROVED_VIDEO_LAWS).toHaveLength(6);
+    expect(MORPHIC_MODIFICATION_PLAYBOOK).toHaveLength(5);
+
+    const guarded = enforcePersonalMorphicGuardrails(
+      'A woman walks down a runway with background music and upbeat soundtrack.',
+      { hasPersonSlot: true, hasLookReferenceSlot: true, hasSlenderArmLock: true }
+    );
+    expect(guarded.toLowerCase()).not.toContain('upbeat soundtrack');
+    expect(guarded).toContain(PERSONAL_NO_BGM_AUDIO_CONTRACT_EN);
+    expect(guarded).toContain('NECK-DOWN GARMENT LOCK');
+    expect(guarded).toContain('SLENDER SILHOUETTE LOCK');
+    expect(guarded).toContain('no random moles');
   });
 });
 

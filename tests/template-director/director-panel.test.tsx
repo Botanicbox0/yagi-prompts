@@ -241,5 +241,34 @@ describe('TemplateDirectorPanel UI/UX (4-Pass SOTA Verification)', () => {
     const badFraming = diagnosePhotoSuitability([], 0.16);
     expect(badFraming.recommendDirectReupload).toBe(true);
     expect(badFraming.issueCategory).toBe('angle_or_framing');
+
+    const wideSleeve = diagnosePhotoSuitability(['wide_sleeve_silhouette_risk'], 0.36);
+    expect(wideSleeve.recommendDirectReupload).toBe(true);
+    expect(wideSleeve.issueCategory).toBe('angle_or_framing');
+    expect(wideSleeve.whyUnsuitableKo).toContain('소매');
+  });
+
+  it('renders 3-tier video resolution selector (480p Draft · 720p Standard · 1080p Masterpiece) and No-BGM natural SFX notice on video templates', () => {
+    const html = renderToStaticMarkup(
+      <TemplateDirectorPanel
+        locale="ko"
+        templateId="01a195e5-0613-7055-be3d-b5819473596f"
+        videoResolutionSpec={{ runtimeSeconds: 10, aspect: '9:16' }}
+        initialResolution="480p"
+        initialExpanded={true}
+      />
+    );
+
+    expect(html).toContain('data-video-resolution-tiers');
+    expect(html).toContain('data-selected-resolution="480p"');
+    expect(html).toContain('data-selected-resolution-credits="154"');
+    expect(html).toContain('data-resolution-tier-option="480p"');
+    expect(html).toContain('data-resolution-tier-option="720p"');
+    expect(html).toContain('data-resolution-tier-option="1080p"');
+    expect(html).toContain('data-personal-no-bgm-notice');
+    expect(html).toContain('배경음악(BGM) 없이 현장 효과음과 자연스러운 사운드만 담아 제작됩니다.');
+    expect(html).toContain('data-predictive-preset="silhouette-slim-arms-collarbone"');
+    expect(html).toContain('data-predictive-preset="hair-updo-lowbun-sync"');
+    expect(html).toContain('data-predictive-preset="skin-zero-mole-matte"');
   });
 });

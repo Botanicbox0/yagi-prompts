@@ -5,6 +5,12 @@ import {
   SELFIE_SLOT,
   type Recipe
 } from '@/lib/recipes/schema';
+import {
+  quoteVideoResolutionTiers,
+  type PersonalVideoResolution,
+  type VideoResolutionMultiTierQuote
+} from '@/lib/twings/template-price';
+import { PERSONAL_NO_BGM_AUDIO_CONTRACT_EN } from './morphic-production-playbook';
 
 export interface TemplateLockedElement {
   category: 'camera-composition' | 'lighting-color' | 'styling-outfit' | 'scene-backdrop';
@@ -168,7 +174,7 @@ export const ReferenceSceneInputSchema = z.object({
   titleEn: z.string().trim().min(2).max(120),
   aspect: z.enum(['9:16', '16:9', '4:3', '3:4', '1:1']),
   durationSeconds: z.number().int().min(4).max(15),
-  resolution: z.enum(['720p', '1080p']).default('720p'),
+  resolution: z.enum(['480p', '720p', '1080p']).default('720p'),
   cameraMotionPrompt: z.string().trim().min(10).max(1200),
   lightingAndGradePrompt: z.string().trim().min(10).max(1200),
   stylingPrompt: z.string().trim().min(5).max(1200),
@@ -204,6 +210,10 @@ export interface TemplateFreezeItem {
 export interface TemplatePromotionResult {
   ok: true;
   slug: string;
+  /** User's chosen render resolution tier ('480p' draft, '720p' standard, or '1080p' masterpiece) */
+  selectedResolution: PersonalVideoResolution;
+  /** Real-time 3-tier credit & KRW quote for 480p Draft, 720p Standard, and 1080p Masterpiece */
+  resolutionTiers: VideoResolutionMultiTierQuote;
   /** Validated Recipe v2 ready to save into `prompt_items.recipe` and `platform_formats.recipe_v2` */
   recipe: Recipe;
   /** Scene lock specification automatically wired into `TemplateDirectorPanel` for future buyers */
@@ -273,8 +283,12 @@ export function compileReferenceToTemplatePromotion(
   const filmPrompt = [
     `Animate the protagonist from {{keyframe}} with exact facial identity continuity.`,
     `Locked Reference Camera & Motion Beat: ${input.cameraMotionPrompt}.`,
-    `Locked Lighting & Atmosphere: ${input.lightingAndGradePrompt}.`
+    `Locked Lighting & Atmosphere: ${input.lightingAndGradePrompt}.`,
+    PERSONAL_NO_BGM_AUDIO_CONTRACT_EN
   ].join(' ');
+
+  const recipePublishedResolution: '720p' | '1080p' =
+    input.resolution === '1080p' ? '1080p' : '720p';
 
   const rawRecipe = {
     version: 2 as const,
@@ -297,7 +311,7 @@ export function compileReferenceToTemplatePromotion(
         params: {
           aspect: input.aspect,
           duration: input.durationSeconds,
-          resolution: input.resolution
+          resolution: recipePublishedResolution
         }
       }
     ],
@@ -469,9 +483,16 @@ export function compileReferenceToTemplatePromotion(
     }
   ];
 
+  const resolutionTiers = quoteVideoResolutionTiers({
+    seconds: input.durationSeconds,
+    aspect: input.aspect
+  });
+
   return {
     ok: true,
     slug: input.slugCandidate,
+    selectedResolution: input.resolution,
+    resolutionTiers,
     recipe: checked.recipe,
     sceneLockSpec,
     freezeMatrix,

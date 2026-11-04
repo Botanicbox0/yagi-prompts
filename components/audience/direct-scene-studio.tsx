@@ -6,12 +6,18 @@ import {
   compileReferenceToTemplatePromotion,
   DIRECT_SCENE_WORDING_CANDIDATES,
   HIGH_QUALITY_REQUEST_GUIDE,
-  MAKER_DB_ARCHITECTURE_READINESS,
   PRESET_REFERENCE_SCENARIOS,
   type PresetReferenceScenario
 } from '@/lib/template-director/freestyle-to-template';
+import {
+  PERSONAL_NO_BGM_AUDIO_NOTICE_EN,
+  PERSONAL_NO_BGM_AUDIO_NOTICE_KO
+} from '@/lib/template-director/morphic-production-playbook';
 import { diagnosePhotoSuitability } from '@/lib/template-director/schema';
-import { simulateMakerTemplateRevenue } from '@/lib/twings/template-price';
+import {
+  simulateMakerTemplateRevenue,
+  type PersonalVideoResolution
+} from '@/lib/twings/template-price';
 
 export interface DirectSceneStudioProps {
   locale: Locale;
@@ -62,31 +68,37 @@ export function DirectSceneStudio({
   const [selectedLikenessCandidate, setSelectedLikenessCandidate] = useState<'candidate-a' | 'candidate-b'>(
     'candidate-a'
   );
+  const [selectedResolution, setSelectedResolution] =
+    useState<PersonalVideoResolution>('720p');
 
   const handleSelectPreset = (preset: PresetReferenceScenario) => {
     setSelectedPresetId(preset.id);
     setLockOutfit(preset.input.lockOutfitAsSignature);
     setLockBackdrop(preset.input.lockBackdropAsSignature);
+    setSelectedResolution(preset.input.resolution ?? '720p');
   };
 
   const compiled = useMemo(
     () =>
       compileReferenceToTemplatePromotion({
         ...activePreset.input,
+        resolution: selectedResolution,
         lockOutfitAsSignature: lockOutfit,
         lockBackdropAsSignature: lockBackdrop
       }),
-    [activePreset, lockOutfit, lockBackdrop]
+    [activePreset, selectedResolution, lockOutfit, lockBackdrop]
   );
+
+  const activeTierQuote = compiled.resolutionTiers.tiers[selectedResolution];
 
   const revenueSim = useMemo(
     () =>
       simulateMakerTemplateRevenue({
         medium: 'video',
-        providerUsd: activePreset.providerUsd,
+        providerUsd: activeTierQuote.providerUsd,
         royaltyKrw
       }),
-    [activePreset.providerUsd, royaltyKrw]
+    [activeTierQuote.providerUsd, royaltyKrw]
   );
 
   const suitability = useMemo(
@@ -277,7 +289,7 @@ export function DirectSceneStudio({
               </div>
             </div>
 
-            {/* DB & Maker Account Connection Assurance */}
+            {/* Maker Account Connection Assurance */}
             <div
               data-maker-db-pipeline
               className="mt-4 rounded-[14px] border border-white bg-white px-4 py-3 text-xs leading-relaxed text-black/70"
@@ -289,7 +301,7 @@ export function DirectSceneStudio({
               </span>
               {locale === 'en'
                 ? 'Every time a buyer renders your template, 80% of the net profit is automatically recorded in your settlement ledger.'
-                : `템플릿이 공개되면 카드에 내 @핸들이 함께 표시되고(${MAKER_DB_ARCHITECTURE_READINESS[0]!.table} · ${MAKER_DB_ARCHITECTURE_READINESS[1]!.table}), 결제가 일어날 때마다 80% 정산 원장(${MAKER_DB_ARCHITECTURE_READINESS[4]!.table})에 내 수익이 투명하게 자동 기록됩니다.`}
+                : '템플릿이 공개되면 카드에 내 @핸들이 함께 표시되고, 다른 사람이 내 템플릿으로 제작할 때마다 순이익의 80%가 내 정산 내역에 투명하게 자동 적립됩니다.'}
             </div>
           </div>
         </div>
@@ -637,7 +649,77 @@ export function DirectSceneStudio({
                 </div>
               </div>
 
-              {/* Step 2B: Privacy Guarantee */}
+              {/* Step 2B: 3-Tier Video Resolution & Credit Mode Switcher (480p Draft · 720p Standard · 1080p Masterpiece) */}
+              <div
+                data-direct-resolution-tiers
+                data-direct-selected-resolution={selectedResolution}
+                className="space-y-2.5 rounded-[16px] border border-hairline bg-white p-4 text-xs"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-1.5">
+                  <p className="font-semibold text-[#3063A7]">
+                    {locale === 'en'
+                      ? 'Choose Video Resolution & Credit Mode'
+                      : '화질 · 크레딧 모드 선택 (480p Draft · 720p · 1080p)'}
+                  </p>
+                  <span className="rounded-full bg-[#E8EFF7] px-2 py-0.5 font-mono text-[0.65rem] font-semibold text-[#3063A7] tabular-nums">
+                    {locale === 'en'
+                      ? `480p saves ${compiled.resolutionTiers.draftWorkflow.draftSavedPercentVs720p}%`
+                      : `480p Draft · ${compiled.resolutionTiers.draftWorkflow.draftSavedPercentVs720p}% 크레딧 절약`}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2">
+                  {(['480p', '720p', '1080p'] as const).map((res) => {
+                    const tier = compiled.resolutionTiers.tiers[res];
+                    const active = selectedResolution === res;
+                    return (
+                      <button
+                        key={res}
+                        type="button"
+                        data-direct-resolution-option={res}
+                        aria-pressed={active}
+                        onClick={() => setSelectedResolution(res)}
+                        className={[
+                          'flex flex-col justify-between rounded-[12px] border p-2.5 text-left transition-colors',
+                          active
+                            ? 'border-[#3875C5] bg-[#F3F7FA]'
+                            : 'border-hairline bg-[#F6F7F9]'
+                        ].join(' ')}
+                      >
+                        <div>
+                          <div className="flex items-center justify-between gap-1">
+                            <span className="font-mono text-xs font-bold text-[#0E1013] tabular-nums">
+                              {res}
+                            </span>
+                            <span className="rounded-full bg-white px-1.5 py-0.5 font-mono text-[0.58rem] font-semibold text-[#3063A7]">
+                              {res === '480p' ? 'DRAFT' : res === '720p' ? 'STD' : 'MAX'}
+                            </span>
+                          </div>
+                          <p className="mt-1 text-[0.7rem] font-semibold text-[#0E1013]">
+                            {res === '480p'
+                              ? '사전 테스트'
+                              : res === '720p'
+                                ? '스탠다드 고화질'
+                                : '최고 화질'}
+                          </p>
+                        </div>
+                        <p className="mt-2 font-mono text-[0.72rem] font-bold text-[#3063A7] tabular-nums">
+                          {tier.totalCredits} cr
+                        </p>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <p
+                  data-direct-no-bgm-rule
+                  className="rounded-[12px] bg-[#F3F7FA] p-2.5 text-[0.71rem] leading-relaxed text-[#41444D]"
+                >
+                  🔊 {locale === 'en' ? PERSONAL_NO_BGM_AUDIO_NOTICE_EN : PERSONAL_NO_BGM_AUDIO_NOTICE_KO}
+                </p>
+              </div>
+
+              {/* Step 2C: Privacy Guarantee */}
               <div className="space-y-2 rounded-[16px] border border-hairline bg-white p-4 text-xs">
                 <p className="font-semibold text-[#3063A7]">
                   완성된 영상은 소장하거나 템플릿으로 올릴 수 있어요

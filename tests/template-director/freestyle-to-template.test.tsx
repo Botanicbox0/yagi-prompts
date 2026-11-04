@@ -112,12 +112,20 @@ describe('Make Your Own Video & Maker 80% Revenue Engine + Selective Frame Picke
     expect(html).toContain('data-stage="template-promotion"');
     expect(html).toContain('data-template-freeze-matrix');
     expect(html).toContain('data-buyer-preview-card');
+    expect(html).toContain('data-direct-resolution-tiers');
+    expect(html).toContain('data-direct-resolution-option="480p"');
+    expect(html).toContain('data-direct-resolution-option="720p"');
+    expect(html).toContain('data-direct-resolution-option="1080p"');
+    expect(html).toContain('data-direct-no-bgm-rule');
 
-    // No raw compiler/developer jargon on screen
+    // No raw compiler/developer/DB jargon on screen
     expect(html).not.toContain('RECIPE V2 자동 컴파일');
     expect(html).not.toContain('{{selfie}}');
     expect(html).not.toContain('5200K');
     expect(html).not.toContain('#ED1E1E');
+    expect(html).not.toContain('platform_creators');
+    expect(html).not.toContain('platform_formats');
+    expect(html).not.toContain('platform_settlements');
     expect(html).not.toContain(PROMPT_MODEL_LABEL);
   });
 

@@ -1,4 +1,5 @@
 import { marginSplit } from '@/lib/creator-platform/economics';
+import { quoteArkVideo } from '@/lib/ark/pricing';
 import { COST_ASSUMPTIONS, IMAGE_MIN_PRICE_KRW, roundUpToHundred } from './cost-model';
 
 /**
@@ -103,8 +104,12 @@ export interface FounderCreditPlanSpec {
   /** Max individual images (1 shot) on Nano Banana 2.1 (9 cr) vs Seedream 5.0 Pro (15 cr) */
   maxSingleImagesNanoBanana: number;
   maxSingleImagesSeedream: number;
-  /** Max 10s 720p films (345 cr/film) */
+  /** Max 10s 480p Draft preview films (154 cr/film) */
+  maxDrafts10s480p: number;
+  /** Max 10s 720p Standard high-quality films (345 cr/film) */
   maxFilms10s720p: number;
+  /** Max 10s 1080p Masterpiece flagship films (847 cr/film) */
+  maxFilms10s1080p: number;
 }
 
 export const FOUNDER_CREDIT_PLANS: Record<FounderCreditPlanSpec['id'], FounderCreditPlanSpec> = {
@@ -120,7 +125,9 @@ export const FOUNDER_CREDIT_PLANS: Record<FounderCreditPlanSpec['id'], FounderCr
     maxImageSetsSeedream: Math.floor(370 / 71), // 5 sets (25 shots)
     maxSingleImagesNanoBanana: Math.floor(370 / 9), // 41 single shots
     maxSingleImagesSeedream: Math.floor(370 / 15), // 24 single shots
+    maxDrafts10s480p: 0,
     maxFilms10s720p: 0,
+    maxFilms10s1080p: 0,
   },
   creator: {
     id: 'creator',
@@ -134,7 +141,9 @@ export const FOUNDER_CREDIT_PLANS: Record<FounderCreditPlanSpec['id'], FounderCr
     maxImageSetsSeedream: Math.floor(1890 / 71), // 26 sets (130 shots)
     maxSingleImagesNanoBanana: Math.floor(1890 / 9), // 210 single shots
     maxSingleImagesSeedream: Math.floor(1890 / 15), // 126 single shots
-    maxFilms10s720p: Math.floor(1890 / 345), // 5 films
+    maxDrafts10s480p: Math.floor(1890 / 154), // 12 draft previews (10s 480p)
+    maxFilms10s720p: Math.floor(1890 / 345), // 5 standard high-quality films (10s 720p)
+    maxFilms10s1080p: Math.floor(1890 / 847), // 2 masterpiece films (10s 1080p)
   },
   premium: {
     id: 'premium',
@@ -148,7 +157,9 @@ export const FOUNDER_CREDIT_PLANS: Record<FounderCreditPlanSpec['id'], FounderCr
     maxImageSetsSeedream: Math.floor(3720 / 71), // 52 sets (260 shots)
     maxSingleImagesNanoBanana: Math.floor(3720 / 9), // 413 single shots
     maxSingleImagesSeedream: Math.floor(3720 / 15), // 248 single shots
-    maxFilms10s720p: Math.floor(3720 / 345), // 10 films
+    maxDrafts10s480p: Math.floor(3720 / 154), // 24 draft previews (10s 480p)
+    maxFilms10s720p: Math.floor(3720 / 345), // 10 standard high-quality films (10s 720p)
+    maxFilms10s1080p: Math.floor(3720 / 847), // 4 masterpiece films (10s 1080p)
   },
 } as const;
 
@@ -323,5 +334,216 @@ export function simulateMakerTemplateRevenue(input: {
       creatorTotalKrw: perMake.creator * makes,
       platformTotalKrw: perMake.platform * makes,
     })),
+  };
+}
+
+/**
+ * 3-Tier Personal Video Resolution System (Founder Decision, 2026-11-05):
+ * - `480p` (Draft 프리뷰 모드): Fast, low-credit test mode to verify facial likeness, outfit swap, and camera motion before committing to 720p or 1080p.
+ * - `720p` (스탠다드 고화질): Sufficiently crisp, high-quality standard for Instagram Reels / TikTok / everyday social sharing.
+ * - `1080p` (마스터피스 최고 화질): Expensive flagship master quality with maximum skin, fabric, and lighting detail.
+ */
+export const PERSONAL_VIDEO_RESOLUTIONS = ['480p', '720p', '1080p'] as const;
+export type PersonalVideoResolution = (typeof PERSONAL_VIDEO_RESOLUTIONS)[number];
+
+export interface VideoResolutionTierPositioning {
+  resolution: PersonalVideoResolution;
+  tierRole: 'draft_preview' | 'standard_high' | 'masterpiece_max';
+  recommendedDefault: boolean;
+  badgeKo: string;
+  badgeEn: string;
+  titleKo: string;
+  titleEn: string;
+  summaryKo: string;
+  summaryEn: string;
+  subtitleKo: string;
+  subtitleEn: string;
+}
+
+export const VIDEO_RESOLUTION_TIER_SPECS: Readonly<
+  Record<PersonalVideoResolution, VideoResolutionTierPositioning>
+> = {
+  '480p': {
+    resolution: '480p',
+    tierRole: 'draft_preview',
+    recommendedDefault: false,
+    badgeKo: 'Draft 모드 · 720p/1080p 전 가벼운 테스트',
+    badgeEn: 'Draft Mode · Low-Credit Test Before 720p/1080p',
+    titleKo: '480p Draft (사전 테스트)',
+    titleEn: '480p Draft (Preview)',
+    summaryKo:
+      '본 720p나 1080p 제작에 앞서 내 얼굴 닮음새와 의상·연출 변경이 마음에 들게 나오는지 적은 크레딧(55% 절약)으로 먼저 확인하는 Draft 모드입니다.',
+    summaryEn:
+      'Test your facial likeness, outfit swap, and motion at 55% fewer credits before committing to 720p or 1080p.',
+    subtitleKo: '본 영상 전 얼굴 닮음새·의상 변경 가볍게 확인 (55% 절약)',
+    subtitleEn: 'Fast, low-credit likeness & edit preview (55% savings)'
+  },
+  '720p': {
+    resolution: '720p',
+    tierRole: 'standard_high',
+    recommendedDefault: true,
+    badgeKo: '기본 추천 · 충분히 좋은 영상 퀄리티',
+    badgeEn: 'Recommended · Great High Quality',
+    titleKo: '720p 고화질 (스탠다드 본편)',
+    titleEn: '720p High Quality (Standard)',
+    summaryKo:
+      '인스타그램 릴스·틱톡 업로드와 소장용으로 충분히 선명하고 자연스러운 표준 고화질입니다.',
+    summaryEn:
+      'Crisp, natural high-definition quality ideal for Instagram Reels, TikTok, and personal sharing.',
+    subtitleKo: '릴스·틱톡 업로드에 충분히 선명한 표준 고화질',
+    subtitleEn: 'Crisp high quality for Reels, TikTok & everyday sharing'
+  },
+  '1080p': {
+    resolution: '1080p',
+    tierRole: 'masterpiece_max',
+    recommendedDefault: false,
+    badgeKo: '최고 퀄리티 마스터 · 하이엔드',
+    badgeEn: 'Masterpiece · Highest Flagship Quality',
+    titleKo: '1080p 마스터 (최고 화질)',
+    titleEn: '1080p Masterpiece (Max Quality)',
+    summaryKo:
+      '크레딧 소모는 크지만 피부결·의상 직물·조명 디테일까지 가장 또렷하게 뽑아내는 최고 퀄리티 마스터 모드입니다.',
+    summaryEn:
+      'Premium credit tier delivering maximum sharpness across skin texture, fabric weave, and lighting.',
+    subtitleKo: '피부결·패브릭 디테일까지 극대화한 플래그십 최고 화질',
+    subtitleEn: 'Maximum skin & fabric detail flagship master quality'
+  }
+} as const;
+
+export interface VideoResolutionTierQuote extends VideoResolutionTierPositioning {
+  seconds: number;
+  aspect: string;
+  providerTokens: number;
+  providerUsd: number;
+  baseCredits: number;
+  raiseCredits: number;
+  totalCredits: number;
+  floorKrw: number;
+  totalKrw: number;
+  /** Credits saved by choosing this tier instead of 720p (positive for 480p Draft). */
+  savedCreditsVs720p: number;
+  /** Credits saved by choosing this tier instead of 1080p. */
+  savedCreditsVs1080p: number;
+}
+
+export interface VideoResolutionTiersSummary {
+  model: 'seedance-2.5' | 'seedance-2.0';
+  seconds: number;
+  aspect: string;
+  royaltyKrw: number;
+  tiers: Record<PersonalVideoResolution, VideoResolutionTierQuote>;
+  draftWorkflow: {
+    /** Credits saved by running 480p Draft instead of 720p Standard */
+    draftSavedCreditsVs720p: number;
+    /** Percentage of credits saved by 480p Draft vs 720p Standard */
+    draftSavedPercentVs720p: number;
+    /** Credits saved by running 480p Draft instead of 1080p Masterpiece */
+    draftSavedCreditsVs1080p: number;
+    /** Credits for 1x 480p Draft test + 1x 720p Standard final */
+    draft480pPlus720pCredits: number;
+    /** Alias for draft480pPlus720pCredits */
+    draftThen720pTotalCredits: number;
+    /** Credits for 1x 480p Draft test + 1x 1080p Masterpiece final */
+    draft480pPlus1080pCredits: number;
+    /** Credits saved by catching an edit issue in 480p Draft instead of wasting one 1080p render */
+    savedByDraftVsBlind1080pRetryCredits: number;
+  };
+}
+
+export type VideoResolutionMultiTierQuote = VideoResolutionTiersSummary;
+
+/**
+ * Quotes all 3 personal video resolutions (`480p Draft`, `720p Standard`, `1080p Masterpiece`)
+ * in credits and KRW for a given duration and aspect ratio.
+ */
+export function quoteVideoResolutionTiers(input: {
+  model?: 'seedance-2.5' | 'seedance-2.0';
+  seconds: number;
+  aspect?: string;
+  royaltyKrw?: number;
+}): VideoResolutionTiersSummary {
+  const model = input.model ?? 'seedance-2.5';
+  const maxSec = model === 'seedance-2.0' ? 15 : 30;
+  const seconds = Math.max(4, Math.min(maxSec, Math.round(input.seconds)));
+  const aspect = input.aspect ?? '9:16';
+  const royaltyKrw = isRaise(input.royaltyKrw) ? input.royaltyKrw : 0;
+  const raiseCredits =
+    royaltyKrw > 0
+      ? Math.ceil((royaltyKrw * NET_SHARE) / CREDIT_NET_KRW - 1e-9)
+      : 0;
+
+  const rawQuotes = Object.fromEntries(
+    PERSONAL_VIDEO_RESOLUTIONS.map((res) => {
+      const arkQuote =
+        quoteArkVideo({ model, resolution: res, seconds, aspect }) ??
+        quoteArkVideo({ model, resolution: res, seconds, aspect: '9:16' })!;
+      const bCredits = baseCredits({ medium: 'video', providerUsd: arkQuote.providerUsd });
+      const fKrw = baseKrw({ medium: 'video', providerUsd: arkQuote.providerUsd });
+      return [
+        res,
+        {
+          providerTokens: arkQuote.providerTokens,
+          providerUsd: arkQuote.providerUsd,
+          baseCredits: bCredits,
+          raiseCredits,
+          totalCredits: bCredits + raiseCredits,
+          floorKrw: fKrw,
+          totalKrw: fKrw + royaltyKrw
+        }
+      ];
+    })
+  ) as Record<
+    PersonalVideoResolution,
+    {
+      providerTokens: number;
+      providerUsd: number;
+      baseCredits: number;
+      raiseCredits: number;
+      totalCredits: number;
+      floorKrw: number;
+      totalKrw: number;
+    }
+  >;
+
+  const credits720 = rawQuotes['720p'].totalCredits;
+  const credits1080 = rawQuotes['1080p'].totalCredits;
+
+  const tiers = Object.fromEntries(
+    PERSONAL_VIDEO_RESOLUTIONS.map((res) => {
+      const q = rawQuotes[res];
+      const spec = VIDEO_RESOLUTION_TIER_SPECS[res];
+      const tierQuote: VideoResolutionTierQuote = {
+        ...spec,
+        seconds,
+        aspect,
+        ...q,
+        savedCreditsVs720p: Math.max(0, credits720 - q.totalCredits),
+        savedCreditsVs1080p: Math.max(0, credits1080 - q.totalCredits)
+      };
+      return [res, tierQuote];
+    })
+  ) as Record<PersonalVideoResolution, VideoResolutionTierQuote>;
+
+  const draftSavedCreditsVs720p = Math.max(0, credits720 - tiers['480p'].totalCredits);
+  const draftSavedPercentVs720p =
+    credits720 > 0 ? Math.round((draftSavedCreditsVs720p / credits720) * 100) : 0;
+  const draftSavedCreditsVs1080p = Math.max(0, credits1080 - tiers['480p'].totalCredits);
+  const draft480pPlus720pCredits = tiers['480p'].totalCredits + tiers['720p'].totalCredits;
+
+  return {
+    model,
+    seconds,
+    aspect,
+    royaltyKrw,
+    tiers,
+    draftWorkflow: {
+      draftSavedCreditsVs720p,
+      draftSavedPercentVs720p,
+      draftSavedCreditsVs1080p,
+      draft480pPlus720pCredits,
+      draftThen720pTotalCredits: draft480pPlus720pCredits,
+      draft480pPlus1080pCredits: tiers['480p'].totalCredits + tiers['1080p'].totalCredits,
+      savedByDraftVsBlind1080pRetryCredits: draftSavedCreditsVs1080p
+    }
   };
 }
