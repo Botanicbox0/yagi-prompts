@@ -209,6 +209,36 @@ export function ProjectDetail({
           refCount={Math.max(p.referenceLinks.length, 3)}
         />
       )}
+      {generativeMediaAllowed && p.productionMode === "studio" && (
+        <div
+          className="bw-note bw-row bw-no-print"
+          data-studio-commission-handoff
+        >
+          <div>
+            <strong>
+              {locale === "en"
+                ? "YAGI Studio Production & Custom Template Room"
+                : "전용 템플릿 · 마스터 영상 시사 및 셀프 스튜디오 연동 룸"}
+            </strong>
+            <p className="bw-muted">
+              {locale === "en"
+                ? "Exchange source assets and review v1→v2 cuts with frame-accurate pins in the Review tab. Approved custom templates mount automatically to Self Studio (/brand/studio), and approved 1080p master films archive in Content Library (/brand/library)."
+                : "[시사] 탭에서 원본 에셋 전달과 v1→v2 프레임 핀 검수를 진행하세요. 최종 승인된 전용 템플릿은 [셀프 스튜디오]에 자동 장착되며, 완성된 1080p 마스터 영상은 [콘텐츠 보관함]에 영구 보관됩니다."}
+            </p>
+          </div>
+          <div className="bw-row">
+            <a className="bw-button" href="#review">
+              {locale === "en" ? "Open Frame.io Review Room →" : "시사 · 에셋 룸 열기 →"}
+            </a>
+            <a
+              className="bw-button bw-primary"
+              href={`/brand/studio?organizationId=${encodeURIComponent(p.organizationId)}`}
+            >
+              {locale === "en" ? "⚡ Self Studio →" : "⚡ 셀프 스튜디오 →"}
+            </a>
+          </div>
+        </div>
+      )}
       <ProjectTabs b={b} pendingReviews={p.status === "active" ? p.contents.filter(c => c.version === newest.get(c.slotKey) && c.decision === "pending").length : 0} comments={p.messages.length} usage={usage !== null} campaign={applicants !== null} shortlist={shortlist ? shortlistCount : 0}>
       <section id="performance" className="bw-panel">
         <CampaignTimelineView timeline={campaignTimeline(p)} b={b} />
@@ -372,6 +402,8 @@ export function ProjectDetail({
               messages={p.messages}
               decisions={p.decisions}
               locale={locale}
+              generativeMediaAllowed={generativeMediaAllowed}
+              productionMode={p.productionMode}
             />
             {p.contents.length === 0 ? (
               <p className="bw-note">{b.noContent}</p>

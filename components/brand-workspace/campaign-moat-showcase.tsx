@@ -60,12 +60,14 @@ export function CampaignMoatShowcase({
   locale,
   organizationId,
   studioOpen,
+  canRequest = true,
   membersOpen = true,
   settingsOpen = true,
 }: {
   locale: "ko" | "en";
   organizationId?: string | null;
   studioOpen: boolean;
+  canRequest?: boolean;
   membersOpen?: boolean;
   settingsOpen?: boolean;
 }) {
@@ -350,6 +352,109 @@ export function CampaignMoatShowcase({
             );
           })}
         </div>
+
+        {/* 3. 1 Self Studio + 3 Commission Tracks Quick Launch Strip (only for owners/editors who can request) */}
+        {canRequest && (
+        <div
+          data-commission-quick-launch
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))",
+            gap: "10px",
+            marginTop: "14px",
+            paddingTop: "14px",
+            borderTop: "1px solid rgba(0, 0, 0, 0.06)",
+          }}
+        >
+          <a
+            href={scopedHref("/brand/studio", choice)}
+            data-quick-track="self_studio"
+            style={{
+              display: "grid",
+              gap: "3px",
+              padding: "11px 14px",
+              borderRadius: "14px",
+              background: "#F6F7F9",
+              border: "1px solid rgba(0, 0, 0, 0.08)",
+              textDecoration: "none",
+              color: "#0E1013",
+            }}
+          >
+            <strong style={{ fontSize: "13px", fontWeight: 600 }}>
+              {isKo ? "⚡ 셀프 스튜디오 (자체 생성)" : "⚡ Self Studio (Direct AI)"}
+            </strong>
+            <span style={{ fontSize: "12px", color: "#676B75" }}>
+              {isKo ? "장착된 템플릿으로 화보·영상 직접 생성" : "Generate assets & videos directly"}
+            </span>
+          </a>
+
+          <a
+            href={`${scopedHref("/brand/projects/new", choice)}${choice ? "&" : "?"}track=template_build`}
+            data-quick-track="template_build"
+            style={{
+              display: "grid",
+              gap: "3px",
+              padding: "11px 14px",
+              borderRadius: "14px",
+              background: "#F6F7F9",
+              border: "1px solid rgba(0, 0, 0, 0.08)",
+              textDecoration: "none",
+              color: "#0E1013",
+            }}
+          >
+            <strong style={{ fontSize: "13px", fontWeight: 600 }}>
+              {isKo ? "① 전용 템플릿 생성만 의뢰" : "① Custom Template Build Only"}
+            </strong>
+            <span style={{ fontSize: "12px", color: "#676B75" }}>
+              {isKo ? "YAGI 제작 → 시사 승인 후 스튜디오 장착" : "Review sample -> mounts to Self Studio"}
+            </span>
+          </a>
+
+          <a
+            href={`${scopedHref("/brand/projects/new", choice)}${choice ? "&" : "?"}track=creator_campaign`}
+            data-quick-track="creator_campaign"
+            style={{
+              display: "grid",
+              gap: "3px",
+              padding: "11px 14px",
+              borderRadius: "14px",
+              background: "rgba(56, 117, 197, 0.08)",
+              border: "1px solid rgba(56, 117, 197, 0.24)",
+              textDecoration: "none",
+              color: "#0E1013",
+            }}
+          >
+            <strong style={{ fontSize: "13px", fontWeight: 600, color: "#3063A7" }}>
+              {isKo ? "② 템플릿 + 인플루언서 발행 의뢰" : "② Template + Creator Seeding"}
+            </strong>
+            <span style={{ fontSize: "12px", color: "#676B75" }}>
+              {isKo ? "포맷 설계 + 인플루언서 섭외·릴스 동시 게시" : "Format lock + creator wave & live ROI"}
+            </span>
+          </a>
+
+          <a
+            href={`${scopedHref("/brand/projects/new", choice)}${choice ? "&" : "?"}track=studio_film`}
+            data-quick-track="studio_film"
+            style={{
+              display: "grid",
+              gap: "3px",
+              padding: "11px 14px",
+              borderRadius: "14px",
+              background: "#F6F7F9",
+              border: "1px solid rgba(0, 0, 0, 0.08)",
+              textDecoration: "none",
+              color: "#0E1013",
+            }}
+          >
+            <strong style={{ fontSize: "13px", fontWeight: 600 }}>
+              {isKo ? "③ 마스터 영상 제작만 의뢰" : "③ Master Video Production Only"}
+            </strong>
+            <span style={{ fontSize: "12px", color: "#676B75" }}>
+              {isKo ? "인플루언서 없이 1080p 완제품 필름 납품" : "1080p commercial film delivery only"}
+            </span>
+          </a>
+        </div>
+        )}
       </section>
     </div>
   );

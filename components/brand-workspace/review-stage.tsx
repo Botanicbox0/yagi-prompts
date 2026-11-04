@@ -12,6 +12,17 @@ import type {
   BrandDecision,
   BrandMessage,
 } from "@/lib/brands/workspace/types";
+import {
+  DEFAULT_SHARE_LINK_CONFIG,
+  buildCollageFolders,
+  buildSharePreviewUrl,
+  getBrandWorkspaceTourSteps,
+  type DeliverableApprovalStatus,
+  type ReleasePlatformId,
+  type ShareLayoutMode,
+  type ShareLinkConfig,
+  type SmartCollectionId,
+} from "@/lib/brands/workspace/commission-tracks";
 
 type TimecodePin = {
   id: string;
@@ -25,7 +36,19 @@ type TimecodePin = {
   microRoiMode?: MicroRoiTargetMode;
 };
 
-function formatTimecode(sec: number): string {
+interface DeliverableCardItem {
+  id: string;
+  title: string;
+  version: number;
+  duration: string;
+  aspect: string;
+  updatedAt: string;
+  status: DeliverableApprovalStatus;
+  platform: ReleasePlatformId;
+  mediaUrl: string;
+}
+
+export function formatTimecode(sec: number): string {
   if (!Number.isFinite(sec) || sec < 0) return "00:00.00";
   const mins = Math.floor(sec / 60);
   const secs = Math.floor(sec % 60);
@@ -124,6 +147,8 @@ export function ReviewStage({
   messages,
   decisions,
   locale,
+  generativeMediaAllowed = true,
+  productionMode = "creator",
   deferVideoMount = false,
   onSendPinToMicroRoi,
   onSetMusicDropRevealSec,
@@ -133,6 +158,8 @@ export function ReviewStage({
   messages: readonly BrandMessage[];
   decisions: readonly BrandDecision[];
   locale: string;
+  generativeMediaAllowed?: boolean;
+  productionMode?: "creator" | "studio";
   deferVideoMount?: boolean;
   onSendPinToMicroRoi?: (payload: {
     box: MicroRoiBox;
@@ -145,6 +172,7 @@ export function ReviewStage({
   onSetMusicDropRevealSec?: (revealSec: number) => void;
 }) {
   const isKo = locale === "ko";
+  const isEn = !isKo;
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const stageOverlayRef = useRef<HTMLDivElement | null>(null);
 
@@ -168,6 +196,85 @@ export function ReviewStage({
   const [shareCopied, setShareCopied] = useState<boolean>(false);
   const [stampedNotice, setStampedNotice] = useState<string | null>(null);
 
+  // Frame.io V4 Interactive Guided Tour state
+  const tourSteps = getBrandWorkspaceTourSteps({
+    generativeClosed: !generativeMediaAllowed,
+    locale,
+  });
+  const [tourOpen, setTourOpen] = useState<boolean>(false);
+  const [tourIndex, setTourIndex] = useState<number>(0);
+  const activeTourStep = tourSteps[tourIndex] ?? tourSteps[0]!;
+
+  // Playbook + Frame.io V4 Smart Collection & Collage Folders state
+  const [activeCollection, setActiveCollection] = useState<SmartCollectionId>("all");
+  const [activeFolderId, setActiveFolderId] = useState<string>("review_cuts");
+  const collageFolders = buildCollageFolders({
+    projectId,
+    locale,
+    contents: sorted,
+  });
+
+  // Frame.io V4 Deliverable Status & Release Platform metadata cards
+  const initialDeliverables: DeliverableCardItem[] =
+    sorted.length > 0
+      ? sorted.map((c, idx) => ({
+          id: c.id,
+          title: `${c.title}_v${c.version}.mp4`,
+          version: c.version,
+          duration: "00:15",
+          aspect: idx % 2 === 0 ? "9:16" : "4:5",
+          updatedAt: isEn ? "Updated today" : "오늘 업데이트",
+          status:
+            c.decision === "approved"
+              ? "ready_for_release"
+              : c.decision === "changes_requested"
+                ? "needs_revision"
+                : "awaiting_approval",
+          platform: idx === 0 ? "instagram_reels" : "tiktok",
+          mediaUrl: c.mediaUrl,
+        }))
+      : [
+          {
+            id: "deliv-9x16-v2",
+            title: "MASTER_CUT_15S_FINAL_9x16.mp4",
+            version: 2,
+            duration: "00:15",
+            aspect: "9:16",
+            updatedAt: isEn ? "Updated 18m ago" : "18분 전 업데이트",
+            status: "awaiting_approval",
+            platform: "instagram_reels",
+            mediaUrl: "/reel/showcase/brand-showcase-01.mp4",
+          },
+          {
+            id: "deliv-4x5-v2",
+            title: "MASTER_CUT_15S_FEED_4x5.mp4",
+            version: 2,
+            duration: "00:15",
+            aspect: "4:5",
+            updatedAt: isEn ? "Updated 1h ago" : "1시간 전 업데이트",
+            status: "ready_for_release",
+            platform: "tiktok",
+            mediaUrl: "/reel/showcase/brand-showcase-02.mp4",
+          },
+          {
+            id: "deliv-16x9-v1",
+            title: "FIRST_CUT_15S_WIDE_16x9.mp4",
+            version: 1,
+            duration: "00:15",
+            aspect: "16:9",
+            updatedAt: isEn ? "Yesterday" : "어제 업데이트",
+            status: "needs_revision",
+            platform: "youtube_shorts",
+            mediaUrl: "/reel/showcase/brand-showcase-03.mp4",
+          },
+        ];
+
+  const [deliverables, setDeliverables] = useState<DeliverableCardItem[]>(initialDeliverables);
+
+  // Frame.io V4 Share Link Builder state
+  const [shareConfig, setShareConfig] = useState<ShareLinkConfig>(DEFAULT_SHARE_LINK_CONFIG);
+  const [shareBuilderOpen, setShareBuilderOpen] = useState<boolean>(false);
+
   // Spatial Frame Pinning state
   const [spatialPinMode, setSpatialPinMode] = useState<boolean>(true);
   const [cursorCoords, setCursorCoords] = useState<{ xPct: number; yPct: number }>({
@@ -188,6 +295,9 @@ export function ReviewStage({
 
   const basePins = extractTimecodePins(messages, decisions);
   const pins = [...customPins, ...basePins];
+
+  const activeVersionNumber = activeContent?.version ?? 2;
+  const shareUrl = buildSharePreviewUrl(projectId, activeVersionNumber, shareConfig);
 
   const togglePlay = () => {
     if (!videoMounted) {
@@ -348,17 +458,40 @@ export function ReviewStage({
   };
 
   const copyShareLink = () => {
-    const origin =
-      typeof window !== "undefined" ? window.location.origin : "https://brand.twings.app";
-    const url = `${origin}/brand/projects/${projectId}?share=stakeholder&mode=${shareScope}${pinProtected ? "&pin=required" : ""}#review`;
     if (typeof navigator !== "undefined" && navigator.clipboard) {
-      navigator.clipboard.writeText(url).catch(() => {});
+      navigator.clipboard.writeText(shareUrl).catch(() => {});
     }
     setShareCopied(true);
     setTimeout(() => setShareCopied(false), 2600);
   };
 
-  const activeMediaUrl = activeContent?.mediaUrl ?? "/reel/brands/production-paris.mp4";
+  function updateDeliverableStatus(id: string, status: DeliverableApprovalStatus) {
+    setDeliverables((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, status } : item)),
+    );
+  }
+
+  function updateDeliverablePlatform(id: string, platform: ReleasePlatformId) {
+    setDeliverables((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, platform } : item)),
+    );
+  }
+
+  const filteredDeliverables = deliverables.filter((d) => {
+    if (activeCollection === "all" || activeCollection === "source_assets") return true;
+    if (activeCollection === "awaiting_approval") return d.status === "awaiting_approval";
+    if (activeCollection === "needs_revision") return d.status === "needs_revision";
+    if (activeCollection === "final_deliverables") return d.status === "ready_for_release";
+    return true;
+  });
+
+  const statusCounts = {
+    awaiting_approval: deliverables.filter((d) => d.status === "awaiting_approval").length,
+    needs_revision: deliverables.filter((d) => d.status === "needs_revision").length,
+    ready_for_release: deliverables.filter((d) => d.status === "ready_for_release").length,
+  };
+
+  const activeMediaUrl = activeContent?.mediaUrl ?? "/reel/brands/house-runway-1080p.mp4";
   const computedRoiBox = spatialPinToMicroRoiBox({
     xPct: cursorCoords.xPct,
     yPct: cursorCoords.yPct,
@@ -369,74 +502,613 @@ export function ReviewStage({
 
   return (
     <div className="ys-review-stage" data-review-stage>
-      {/* Zero-Login Stakeholder Share Bar */}
-      <div className="ys-share-bar" data-stakeholder-share-bar>
-        <div className="ys-share-bar-info">
+      {/* 1. Top Guided Tour Bar & Track Handoff Banner */}
+      <div className="ys-tour-Banner" data-frameio-guided-tour>
+        <div className="ys-tour-banner-left">
           <span className="ys-share-badge">
-            <span className="ys-brand-live-dot" aria-hidden="true" />
-            {isKo ? "임원·팀원 무로그인 시사 링크 (Frame.io급 공간 핀 리뷰)" : "Zero-Login Stakeholder Review Link"}
+            {isEn ? "FRAME.IO × PLAYBOOK ROOM" : "통합 에셋 폴더 · 프레임 시사 · 공유 룸"}
           </span>
-          <p>
-            {isKo
-              ? "링크를 받은 팀원이나 대표님은 로그인 없이 영상을 재생하고 화면 위 원하는 위치(x%, y%)를 클릭해 핀 피드백을 남기거나 극소 부위 수선·0ms 음악 드롭으로 즉시 넘길 수 있습니다 (14일 유효)."
-              : "Share with executives or teammates to leave frame-accurate spatial pins without signing in (valid for 14 days)."}
-          </p>
+          <strong>
+            {generativeMediaAllowed && productionMode === "studio"
+              ? isEn
+                ? "Approved templates mount directly to Self Studio (/brand/studio); master films archive in Content Library."
+                : "최종 승인된 전용 템플릿은 [셀프 스튜디오]로 즉시 장착되며, 마스터 영상은 [콘텐츠 보관함]에 1080p 원본으로 납품됩니다."
+              : isEn
+                ? "Manage source assets in collage folders, drop frame-accurate spatial pins, and build custom stakeholder share links."
+                : "폴더별 원본·시사 에셋 확인부터 1프레임 단위 화면 핀 피드백, 임원진 맞춤 공유 링크 생성까지 한곳에서 진행하세요."}
+          </strong>
         </div>
-        <div className="ys-share-controls">
-          <select
-            className="ys-share-select"
-            aria-label={isKo ? "공유 링크 권한 설정" : "Share link permission"}
-            value={shareScope}
-            onChange={(e) =>
-              setShareScope(e.currentTarget.value as "comment_only" | "allow_approve")
-            }
-          >
-            <option value="comment_only">
-              {isKo ? "시사·코멘트만 허용 (최종 승인은 담당자만)" : "View & comment only (recommended)"}
-            </option>
-            <option value="allow_approve">
-              {isKo ? "링크 보유자 최종 승인까지 허용" : "Allow final approval via link"}
-            </option>
-          </select>
+        <div className="ys-tour-banner-actions">
+          {generativeMediaAllowed && (
+            <a
+              href="/brand/studio"
+              className="bw-button"
+              data-studio-handoff-link
+            >
+              {isEn ? "⚡ Open Self Studio →" : "⚡ 셀프 스튜디오 열기 →"}
+            </a>
+          )}
           <button
             type="button"
-            className="ys-pin-toggle"
-            aria-pressed={pinProtected}
-            onClick={() => setPinProtected((prev) => !prev)}
+            className="bw-button bw-primary"
+            data-tour-trigger
+            aria-expanded={tourOpen}
+            onClick={() => {
+              setTourOpen((prev) => !prev);
+              setTourIndex(0);
+            }}
           >
-            {pinProtected
-              ? isKo
-                ? "🔒 4자리 PIN 보호 켜짐"
-                : "🔒 4-digit PIN ON"
-              : isKo
-                ? "🔓 PIN 없이 열람"
-                : "🔓 No PIN"}
-          </button>
-          <button
-            type="button"
-            className="bw-button bw-primary ys-share-copy-btn"
-            onClick={copyShareLink}
-          >
-            {shareCopied
-              ? isKo
-                ? "✓ 시사 링크가 복사되었습니다"
-                : "✓ Review link copied"
-              : isKo
-                ? "공유용 시사 링크 복사"
-                : "Copy Stakeholder Link"}
+            {tourOpen
+              ? isEn
+                ? "Close Interactive Tour"
+                : "가이드 투어 닫기"
+              : isEn
+                ? "✨ 1-Min Interactive Feature Tour"
+                : "✨ 1분 인터랙티브 기능 투어"}
           </button>
         </div>
       </div>
 
-      {/* Cinema Video Stage (#050505) */}
-      <div className="ys-cinema-theater">
+      {/* Frame.io 2026 Walnut-style Floating Guided Tour Card */}
+      {tourOpen && (
+        <aside
+          className="ys-walnut-tour-card"
+          data-tour-step-card={activeTourStep.id}
+          data-tour-type={activeTourStep.type}
+          data-tour-anchor={activeTourStep.anchor}
+          aria-live="polite"
+        >
+          <div className="ys-walnut-tour-header">
+            <div className="ys-walnut-brand-badge" aria-hidden="true">
+              <span>Y</span>
+            </div>
+            <div className="ys-walnut-step-meta">
+              <span className="ys-walnut-kicker">{activeTourStep.kicker}</span>
+              <span className="ys-walnut-counter">
+                {activeTourStep.stepNumber} / {activeTourStep.totalSteps}
+              </span>
+            </div>
+            <button
+              type="button"
+              className="ys-walnut-close"
+              onClick={() => setTourOpen(false)}
+              aria-label={isEn ? "Close tour" : "투어 닫기"}
+            >
+              ✕
+            </button>
+          </div>
+          <h4 className="ys-walnut-title">{activeTourStep.title}</h4>
+          <p className="ys-walnut-body">{activeTourStep.body}</p>
+          <div className="ys-walnut-pills">
+            {activeTourStep.highlightPills.map((pill) => (
+              <span key={pill} className="ys-walnut-pill">
+                {pill}
+              </span>
+            ))}
+          </div>
+          <div className="ys-walnut-footer">
+            <div className="ys-walnut-dots" role="tablist" aria-label="Tour steps">
+              {tourSteps.map((step, idx) => (
+                <button
+                  key={step.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={idx === tourIndex}
+                  className={`ys-walnut-dot ${idx === tourIndex ? "ys-walnut-dot-active" : ""}`}
+                  onClick={() => setTourIndex(idx)}
+                  title={step.title}
+                >
+                  {idx + 1}
+                </button>
+              ))}
+            </div>
+            <div className="ys-walnut-nav">
+              <button
+                type="button"
+                className="bw-button"
+                disabled={tourIndex === 0}
+                onClick={() => setTourIndex((i) => Math.max(0, i - 1))}
+              >
+                {isEn ? "← Back" : "← 이전"}
+              </button>
+              {tourIndex < tourSteps.length - 1 ? (
+                <button
+                  type="button"
+                  className="bw-button bw-primary"
+                  data-tour-next
+                  onClick={() => setTourIndex((i) => Math.min(tourSteps.length - 1, i + 1))}
+                >
+                  {isEn ? "Next →" : "다음 단계 →"}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="bw-button bw-primary"
+                  onClick={() => setTourOpen(false)}
+                >
+                  {isEn ? "Done" : "투어 완료"}
+                </button>
+              )}
+            </div>
+          </div>
+        </aside>
+      )}
+
+      {/* 2. Playbook + Frame.io V4 Smart Collections & 3 Collage Folder Cards */}
+      <section className="ys-playbook-section" id="tour-collections" data-collage-folders>
+        <div className="ys-playbook-header">
+          <div>
+            <span className="ys-kicker-badge">
+              {isEn ? "ASSETS & COLLECTIONS" : "프로젝트 에셋 폴더 · 상태별 컬렉션"}
+            </span>
+            <h4>
+              {isEn
+                ? "Source Assets, Review Cuts & 1080p Deliverable Folders"
+                : "브랜드 전달 에셋부터 버전별 시사 컷·최종 마스터까지 폴더별로 깔끔하게 공유됩니다"}
+            </h4>
+          </div>
+          <div className="ys-smart-collections" data-smart-collections role="tablist">
+            {(
+              [
+                {
+                  id: "all" as const,
+                  label: isEn ? `All (${deliverables.length})` : `전체 (${deliverables.length})`,
+                },
+                {
+                  id: "awaiting_approval" as const,
+                  label: isEn
+                    ? `⏳ Awaiting Approval (${statusCounts.awaiting_approval})`
+                    : `⏳ 검수 대기 (${statusCounts.awaiting_approval})`,
+                },
+                {
+                  id: "needs_revision" as const,
+                  label: isEn
+                    ? `🛠 Needs Revision (${statusCounts.needs_revision})`
+                    : `🛠 수정 요청 (${statusCounts.needs_revision})`,
+                },
+                {
+                  id: "final_deliverables" as const,
+                  label: isEn
+                    ? `✅ Ready for Release (${statusCounts.ready_for_release})`
+                    : `✅ 최종 승인 (${statusCounts.ready_for_release})`,
+                },
+              ] as const
+            ).map((col) => (
+              <button
+                key={col.id}
+                type="button"
+                role="tab"
+                aria-selected={activeCollection === col.id}
+                data-collection-tab={col.id}
+                className={`ys-collection-pill ${
+                  activeCollection === col.id ? "ys-collection-pill-active" : ""
+                }`}
+                onClick={() => setActiveCollection(col.id)}
+              >
+                {col.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* 3 Visual Collage Folder Cards (Playbook.com + Frame.io V4 style) */}
+        <div className="ys-collage-folder-grid">
+          {collageFolders.map((folder) => {
+            const isSelected = activeFolderId === folder.id;
+            return (
+              <article
+                key={folder.id}
+                className={`ys-collage-folder-card ${
+                  isSelected ? "ys-collage-folder-card-active" : ""
+                }`}
+                data-collage-folder={folder.id}
+                onClick={() => setActiveFolderId(folder.id)}
+              >
+                <div className="ys-collage-bento" aria-hidden="true">
+                  {folder.items.slice(0, 3).map((item, idx) => (
+                    <div
+                      key={item.id}
+                      className={`ys-collage-cell ys-collage-cell-${idx + 1}`}
+                      style={{ background: item.previewTone }}
+                    >
+                      <span className="ys-collage-cell-badge">{item.badge}</span>
+                      <strong className="ys-collage-cell-title">{item.title}</strong>
+                      <small className="ys-collage-cell-meta">{item.meta}</small>
+                    </div>
+                  ))}
+                </div>
+                <div className="ys-collage-folder-meta">
+                  <div className="ys-collage-folder-title-row">
+                    <h5>
+                      <span aria-hidden="true">📁 </span>
+                      {folder.title}
+                    </h5>
+                    <span className="ys-collage-count">
+                      {folder.itemCount} {isEn ? "Items" : "개 파일"}
+                    </span>
+                  </div>
+                  <p>{folder.subtitle}</p>
+                  <div className="ys-collage-folder-footer">
+                    <span className="ys-collage-updated">{folder.updatedLabel}</span>
+                    <a href="#files" className="ys-collage-action">
+                      {isEn ? "Manage files →" : "파일 열기 · 업로드 →"}
+                    </a>
+                  </div>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+
+        {/* Frame.io V4 Deliverable Cards with Status & Release Platform Metadata */}
+        <div className="ys-deliverable-grid" data-deliverable-status-grid>
+          {filteredDeliverables.map((item) => (
+            <article
+              key={item.id}
+              className="ys-deliverable-card"
+              data-deliverable-card={item.id}
+              data-deliverable-status={item.status}
+            >
+              <div
+                className="ys-deliverable-thumb"
+                onClick={() => {
+                  if (sorted.some((v) => v.id === item.id)) {
+                    setSelectedVersionId(item.id);
+                  }
+                }}
+              >
+                <span className="ys-deliverable-aspect">{item.aspect}</span>
+                <span className="ys-deliverable-version">v{item.version}</span>
+                <span className="ys-deliverable-duration">{item.duration}</span>
+                <div className="ys-deliverable-play-hint">
+                  {isEn ? "▶ Load in Cinema Player" : "▶ 시사 플레이어로 열기"}
+                </div>
+              </div>
+              <div className="ys-deliverable-info">
+                <strong className="ys-deliverable-filename">{item.title}</strong>
+                <span className="ys-deliverable-date">{item.updatedAt}</span>
+              </div>
+              <div className="ys-deliverable-metadata">
+                <label className="ys-meta-row">
+                  <span className="ys-meta-label">{isEn ? "Status" : "승인 상태"}</span>
+                  <select
+                    aria-label={`${item.title} status`}
+                    data-deliverable-status-select={item.id}
+                    className={`ys-status-pill-select ys-status-${item.status}`}
+                    value={item.status}
+                    onChange={(e) =>
+                      updateDeliverableStatus(
+                        item.id,
+                        e.target.value as DeliverableApprovalStatus,
+                      )
+                    }
+                  >
+                    <option value="awaiting_approval">
+                      {isEn ? "⏳ Awaiting Approval" : "⏳ 검수 대기"}
+                    </option>
+                    <option value="needs_revision">
+                      {isEn ? "🛠 Needs Revision" : "🛠 수정 요청"}
+                    </option>
+                    <option value="ready_for_release">
+                      {isEn ? "✅ Ready for Release" : "✅ 최종 승인"}
+                    </option>
+                  </select>
+                </label>
+                <label className="ys-meta-row">
+                  <span className="ys-meta-label">{isEn ? "Release Platform" : "배포 매체"}</span>
+                  <select
+                    aria-label={`${item.title} platform`}
+                    data-deliverable-platform-select={item.id}
+                    className="ys-platform-pill-select"
+                    value={item.platform}
+                    onChange={(e) =>
+                      updateDeliverablePlatform(item.id, e.target.value as ReleasePlatformId)
+                    }
+                  >
+                    <option value="instagram_reels">Instagram Reels</option>
+                    <option value="tiktok">TikTok</option>
+                    <option value="youtube_shorts">YouTube</option>
+                    <option value="owned_web">
+                      {isEn ? "Owned Web / PDP" : "자사몰 · 공식 채널"}
+                    </option>
+                    {generativeMediaAllowed && (
+                      <option value="self_studio">
+                        {isEn ? "Self Studio Template" : "셀프 스튜디오 템플릿"}
+                      </option>
+                    )}
+                  </select>
+                </label>
+              </div>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      {/* 3. Frame.io V4 Share Link Builder + Stakeholder Share Bar */}
+      <section
+        className="ys-share-builder-card"
+        id="tour-share"
+        data-frameio-share-builder
+        data-stakeholder-share-bar
+      >
+        <div className="ys-share-builder-top">
+          <div className="ys-share-builder-heading">
+            <span className="ys-share-badge">
+              <span className="ys-brand-live-dot" aria-hidden="true" />
+              {isKo
+                ? "임원·팀원 무로그인 시사 링크 · Frame.io V4 공유 빌더"
+                : "Zero-Login Stakeholder Review Link & Share Builder"}
+            </span>
+            <div className="ys-share-title-row">
+              <input
+                type="text"
+                aria-label={isEn ? "Share link title" : "공유 링크 제목"}
+                className="ys-share-title-input"
+                value={shareConfig.title}
+                onChange={(e) =>
+                  setShareConfig((prev) => ({ ...prev, title: e.target.value }))
+                }
+              />
+              <span className="ys-share-url-chip" data-share-preview-url>
+                {shareUrl}
+              </span>
+            </div>
+            <p className="ys-share-subtitle">
+              {isKo
+                ? "링크를 받은 팀원이나 대표님은 로그인 없이 원하는 레이아웃(Grid · Reel · Player)으로 영상을 재생하고 화면 위 위치(x%, y%)에 핀 피드백을 남길 수 있습니다."
+                : "Share a clean review page with executives or teammates—choose Grid, Reel, or Cinema Player layout and control download/passphrase permissions."}
+            </p>
+          </div>
+          <div className="ys-share-controls">
+            <select
+              className="ys-share-select"
+              aria-label={isKo ? "공유 링크 권한 설정" : "Share link permission"}
+              value={shareScope}
+              onChange={(e) => {
+                const next = e.currentTarget.value as "comment_only" | "allow_approve";
+                setShareScope(next);
+                setShareConfig((prev) => ({
+                  ...prev,
+                  allowApprovals: next === "allow_approve",
+                }));
+              }}
+            >
+              <option value="comment_only">
+                {isKo ? "시사·코멘트만 허용 (최종 승인은 담당자만)" : "View & comment only (recommended)"}
+              </option>
+              <option value="allow_approve">
+                {isKo ? "링크 보유자 최종 승인까지 허용" : "Allow final approval via link"}
+              </option>
+            </select>
+            <button
+              type="button"
+              className="ys-pin-toggle"
+              aria-pressed={pinProtected}
+              onClick={() => {
+                setPinProtected((prev) => {
+                  const next = !prev;
+                  setShareConfig((cfg) => ({ ...cfg, passphraseEnabled: next }));
+                  return next;
+                });
+              }}
+            >
+              {pinProtected
+                ? isKo
+                  ? "🔒 4자리 PIN 보호 켜짐"
+                  : "🔒 4-digit PIN ON"
+                : isKo
+                  ? "🔓 PIN 없이 열람"
+                  : "🔓 No PIN"}
+            </button>
+            <button
+              type="button"
+              className="bw-button"
+              data-share-settings-toggle
+              aria-expanded={shareBuilderOpen}
+              onClick={() => setShareBuilderOpen((prev) => !prev)}
+            >
+              {shareBuilderOpen
+                ? isEn
+                  ? "Close Share Options"
+                  : "공유 설정 접기"
+                : isEn
+                  ? "⚙ Layout & Security Settings"
+                  : "⚙ 레이아웃 · 보안 상세 설정"}
+            </button>
+            <button
+              type="button"
+              className="bw-button bw-primary ys-share-copy-btn"
+              data-copy-share-link
+              onClick={copyShareLink}
+            >
+              {shareCopied
+                ? isKo
+                  ? "✓ 시사 링크가 복사되었습니다"
+                  : "✓ Review link copied"
+                : isKo
+                  ? "공유용 시사 링크 복사"
+                  : "Copy Stakeholder Link"}
+            </button>
+          </div>
+        </div>
+
+        {shareBuilderOpen && (
+          <div className="ys-share-builder-drawer" data-share-settings-panel>
+            <div className="ys-share-settings-col">
+              <div className="ys-share-setting-group">
+                <span className="ys-share-setting-label">
+                  {isEn ? "Presentation Layout" : "공유 화면 레이아웃 (Layout)"}
+                </span>
+                <div
+                  className="ys-share-layout-picker"
+                  data-share-layout-picker
+                  role="radiogroup"
+                  aria-label={isEn ? "Presentation Layout" : "공유 화면 레이아웃"}
+                >
+                  {(
+                    [
+                      { id: "grid" as const, label: isEn ? "⊞ Grid" : "⊞ 그리드(Grid)" },
+                      { id: "list" as const, label: isEn ? "☰ List" : "☰ 리스트(List)" },
+                      { id: "reel" as const, label: isEn ? "📱 Reel" : "📱 릴스(Reel)" },
+                      { id: "player" as const, label: isEn ? "🎬 Player" : "🎬 플레이어(Player)" },
+                    ] as const
+                  ).map((mode) => (
+                    <button
+                      key={mode.id}
+                      type="button"
+                      role="radio"
+                      aria-checked={shareConfig.layout === mode.id}
+                      data-share-layout={mode.id}
+                      className={`ys-layout-btn ${
+                        shareConfig.layout === mode.id ? "ys-layout-btn-active" : ""
+                      }`}
+                      onClick={() =>
+                        setShareConfig((prev) => ({
+                          ...prev,
+                          layout: mode.id as ShareLayoutMode,
+                        }))
+                      }
+                    >
+                      {mode.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="ys-share-toggles-list">
+                <label className="ys-share-toggle-row">
+                  <div>
+                    <strong>
+                      {isEn ? "Allow timecode & pin comments" : "타임코드 · 화면 핀 코멘트 허용"}
+                    </strong>
+                    <small>
+                      {isEn
+                        ? "Reviewers can leave frame-accurate notes without signing in"
+                        : "공유 링크 열람자가 프레임 단위 수정 코멘트를 남길 수 있습니다"}
+                    </small>
+                  </div>
+                  <input
+                    type="checkbox"
+                    data-share-toggle="allowComments"
+                    checked={shareConfig.allowComments}
+                    onChange={(e) =>
+                      setShareConfig((prev) => ({
+                        ...prev,
+                        allowComments: e.target.checked,
+                      }))
+                    }
+                  />
+                </label>
+
+                <label className="ys-share-toggle-row">
+                  <div>
+                    <strong>
+                      {isEn ? "Allow 1080p MP4 downloads" : "1080p 원본 MP4 다운로드 허용"}
+                    </strong>
+                    <small>
+                      {isEn
+                        ? "Enable direct download of clean 1080p deliverables and audio stems"
+                        : "시사 완료 후 공유 페이지에서 무로고 1080p 원본 파일 다운로드를 허용합니다"}
+                    </small>
+                  </div>
+                  <input
+                    type="checkbox"
+                    data-share-toggle="allowDownloads"
+                    checked={shareConfig.allowDownloads}
+                    onChange={(e) =>
+                      setShareConfig((prev) => ({
+                        ...prev,
+                        allowDownloads: e.target.checked,
+                      }))
+                    }
+                  />
+                </label>
+
+                <label className="ys-share-toggle-row">
+                  <div>
+                    <strong>{isEn ? "Preview watermark" : "시사용 보호 워터마크 표시"}</strong>
+                    <small>
+                      {isEn
+                        ? "Overlay reviewer timestamp watermark prior to final sign-off"
+                        : "최종 승인 전 외부 유출 방지를 위해 시사용 타임스탬프 워터마크를 표시합니다"}
+                    </small>
+                  </div>
+                  <input
+                    type="checkbox"
+                    data-share-toggle="watermark"
+                    checked={shareConfig.watermark}
+                    onChange={(e) =>
+                      setShareConfig((prev) => ({
+                        ...prev,
+                        watermark: e.target.checked,
+                      }))
+                    }
+                  />
+                </label>
+              </div>
+            </div>
+
+            <div
+              className="ys-share-preview-col"
+              data-share-live-preview={shareConfig.layout}
+            >
+              <div className="ys-share-preview-header">
+                <strong>{shareConfig.title}</strong>
+                <div className="ys-share-preview-badges">
+                  <span>{shareConfig.layout.toUpperCase()} VIEW</span>
+                  {shareConfig.passphraseEnabled && <span>🔒 PIN</span>}
+                  {shareConfig.watermark && <span>💧 WATERMARK</span>}
+                </div>
+              </div>
+              <div className={`ys-share-preview-canvas ys-preview-${shareConfig.layout}`}>
+                {deliverables.slice(0, shareConfig.layout === "player" ? 1 : 2).map((d) => (
+                  <div key={d.id} className="ys-share-preview-item">
+                    <div className="ys-share-preview-thumb">
+                      <span>{d.aspect} · 1080p</span>
+                      {shareConfig.watermark && (
+                        <em className="ys-watermark-chip">PREVIEW ONLY</em>
+                      )}
+                    </div>
+                    <div className="ys-share-preview-caption">
+                      <strong>{d.title}</strong>
+                      <span>
+                        {d.status === "ready_for_release"
+                          ? "✅ Ready for Release"
+                          : d.status === "needs_revision"
+                            ? "🛠 Needs Revision"
+                            : "⏳ Awaiting Approval"}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="ys-share-preview-footer">
+                <span>
+                  {shareConfig.allowComments ? "💬 Comments ON" : "💬 Comments OFF"} ·{" "}
+                  {shareConfig.allowApprovals ? "✅ Approvals ON" : "✅ Approvals OFF"} ·{" "}
+                  {shareConfig.allowDownloads ? "⬇ Downloads ON" : "⬇ Downloads Locked"}
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
+      </section>
+
+      {/* 4. Cinema Video Stage (#050505) */}
+      <div className="ys-cinema-theater" id="tour-player">
         <div className="ys-cinema-topbar">
-          <div className="ys-version-pills" role="group" aria-label={isKo ? "버전 및 오디오 스템 선택" : "Version & audio stem switcher"}>
+          <div
+            className="ys-version-pills"
+            data-version-switcher
+            role="group"
+            aria-label={isKo ? "버전 및 오디오 스템 선택" : "Version & audio stem switcher"}
+          >
             {sorted.length > 0 ? (
               sorted.map((c) => (
                 <button
                   key={c.id}
                   type="button"
+                  data-version={c.version}
                   className={
                     c.id === activeContent?.id
                       ? "ys-version-pill ys-version-pill-active"
@@ -448,7 +1120,7 @@ export function ReviewStage({
                 </button>
               ))
             ) : (
-              <span className="ys-version-pill ys-version-pill-active">
+              <span className="ys-version-pill ys-version-pill-active" data-version="1">
                 {isKo ? "컷 v1 · 마스터 시사 스테이지" : "Cut v1 · Master Review Stage"}
               </span>
             )}
@@ -508,7 +1180,7 @@ export function ReviewStage({
               </button>
             )}
           </div>
-          <div className="ys-timecode-readout" aria-live="polite">
+          <div className="ys-timecode-readout" data-timecode aria-live="polite">
             <span className="ys-tc-label">TC</span>
             <code>{formatTimecode(currentTime)}</code>
             <span className="ys-tc-sep">/</span>
@@ -849,6 +1521,7 @@ export function ReviewStage({
             <button
               key={pin.id}
               type="button"
+              data-pin-chip={pin.label}
               className="ys-pin-chip"
               onClick={() => seekTo(pin.seconds, { xPct: pin.xPct, yPct: pin.yPct })}
             >

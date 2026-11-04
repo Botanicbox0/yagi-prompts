@@ -68,6 +68,14 @@ import {
 } from '@/lib/brands/review';
 import { BrandBriefStudio } from '@/components/brand-workspace/brand-brief-studio';
 import { CampaignMoatShowcase } from '@/components/brand-workspace/campaign-moat-showcase';
+import { ReviewStage } from '@/components/brand-workspace/review-stage';
+import { CampaignWizard } from '@/components/brand-workspace/campaign-wizard';
+import {
+  buildCollageFolders,
+  buildSharePreviewUrl,
+  getAvailableCommissionTracks,
+  getBrandWorkspaceTourSteps,
+} from '@/lib/brands/workspace/commission-tracks';
 
 const adminId = randomUUID();
 const ownerId = randomUUID();
@@ -679,5 +687,119 @@ describe('Brand Studio Complete Suite (Video Reverse, 2D Spatial Stage, 3-Track 
     expect(guideSandboxedHtml).not.toContain('자기 얼굴로');
     expect(guideSandboxedHtml).not.toContain('/brand/studio');
     expect(guideSandboxedHtml).toContain('검증된 크리에이터가 본인 계정에 캠페인 콘텐츠를 게시합니다');
+  });
+
+  it('implements 3-Track Commission Architecture, 1-Page Express Briefs, Frame.io V4 Guided Tour, Playbook Collage Folders, and Share Builder while enforcing Morphic sandbox', () => {
+    const bKo = getDictionary('ko').brandWorkspace;
+
+    // 1. 3-Track Commission Architecture (Standard Brand vs Sandboxed Morphic)
+    const fullTracks = getAvailableCommissionTracks({ generativeClosed: false, locale: 'ko' });
+    expect(fullTracks.map((t) => t.id)).toEqual([
+      'creator_campaign',
+      'template_build',
+      'studio_film',
+    ]);
+    expect(fullTracks.find((t) => t.id === 'template_build')?.deliverableDestination.targetPath).toBe(
+      '/brand/studio'
+    );
+    expect(fullTracks.find((t) => t.id === 'template_build')?.requiresInfluencerSteps).toBe(false);
+    expect(fullTracks.find((t) => t.id === 'studio_film')?.requiresInfluencerSteps).toBe(false);
+
+    // Morphic sandbox (`generativeClosed: true`) strictly hides `template_build` (Self-Studio template track)
+    const sandboxedTracks = getAvailableCommissionTracks({ generativeClosed: true, locale: 'ko' });
+    expect(sandboxedTracks.map((t) => t.id)).toEqual(['creator_campaign', 'studio_film']);
+    expect(sandboxedTracks.some((t) => t.id === 'template_build')).toBe(false);
+
+    // 2. Frame.io V4 Interactive Guided Tour Steps
+    const tourSteps = getBrandWorkspaceTourSteps({ generativeClosed: false, locale: 'ko' });
+    expect(tourSteps).toHaveLength(5);
+    expect(tourSteps[0]?.type).toBe('MODAL');
+    expect(tourSteps.slice(1).every((s) => s.type === 'POINT')).toBe(true);
+
+    const sandboxedTourSteps = getBrandWorkspaceTourSteps({ generativeClosed: true, locale: 'ko' });
+    expect(JSON.stringify(sandboxedTourSteps)).not.toContain('셀프 스튜디오');
+
+    // 3. Playbook Collage Folders & Frame.io V4 Share Preview URL Builder
+    const folders = buildCollageFolders({
+      projectId: 'proj-1234567890',
+      locale: 'ko',
+      contents: [],
+    });
+    expect(folders.map((f) => f.id)).toEqual(['brand_source', 'review_cuts', 'master_stems']);
+    expect(folders.every((f) => f.items.length === 3)).toBe(true);
+
+    const shareUrl = buildSharePreviewUrl('proj-1234567890', 2, {
+      layout: 'reel',
+      access: 'restricted',
+      expirationDays: 14,
+      watermark: true,
+    });
+    expect(shareUrl).toBe(
+      'https://brand.twings.app/s/proj-1234567?v=2&view=reel&access=restricted&exp=14d&wm=1'
+    );
+
+    // 4. ReviewStage SSR: Guided Tour trigger, Collage Folders, Deliverable Status Grid, and Share Builder
+    const reviewHtml = renderToStaticMarkup(
+      React.createElement(ReviewStage, {
+        projectId: 'proj-1234567890',
+        contents: [],
+        messages: [],
+        decisions: [],
+        locale: 'ko',
+        generativeMediaAllowed: true,
+        productionMode: 'studio',
+      })
+    );
+    expect(reviewHtml).toContain('data-frameio-guided-tour');
+    expect(reviewHtml).toContain('data-tour-trigger');
+    expect(reviewHtml).toContain('data-collage-folders');
+    expect(reviewHtml).toContain('data-deliverable-status-grid');
+    expect(reviewHtml).toContain('data-frameio-share-builder');
+    expect(reviewHtml).toContain('data-share-settings-toggle');
+    expect(reviewHtml).toContain('data-studio-handoff-link');
+
+    // ReviewStage for Morphic (`generativeMediaAllowed: false`) hides Self Studio handoff link & platform option
+    const reviewSandboxedHtml = renderToStaticMarkup(
+      React.createElement(ReviewStage, {
+        projectId: 'proj-morphic',
+        contents: [],
+        messages: [],
+        decisions: [],
+        locale: 'ko',
+        generativeMediaAllowed: false,
+        productionMode: 'creator',
+      })
+    );
+    expect(reviewSandboxedHtml).not.toContain('data-studio-handoff-link');
+    expect(reviewSandboxedHtml).not.toContain('value="self_studio"');
+
+    // 5. CampaignWizard SSR: 3-Track Selector & 1-Page Express Brief for `template_build` and `studio_film`
+    const wizardTemplateHtml = renderToStaticMarkup(
+      React.createElement(CampaignWizard, {
+        b: bKo,
+        locale: 'ko',
+        organizations: [{ id: kaiperOrgId, name: 'KAIPER' }],
+        formats: [],
+        generativeClosed: false,
+        initialTrack: 'template_build',
+      })
+    );
+    expect(wizardTemplateHtml).toContain('data-commission-track-selector');
+    expect(wizardTemplateHtml).toContain('data-commission-track="template_build"');
+    expect(wizardTemplateHtml).toContain('data-express-commission-form="template_build"');
+    expect(wizardTemplateHtml).toContain('전용 템플릿 의뢰 및 Frame.io 시사 룸 열기');
+
+    const wizardSandboxedHtml = renderToStaticMarkup(
+      React.createElement(CampaignWizard, {
+        b: bKo,
+        locale: 'ko',
+        organizations: [{ id: morphicOrgId, name: 'Morphic' }],
+        formats: [],
+        generativeClosed: true,
+        initialTrack: 'template_build', // falls back to creator_campaign when generativeClosed
+      })
+    );
+    expect(wizardSandboxedHtml).not.toContain('data-commission-track="template_build"');
+    expect(wizardSandboxedHtml).not.toContain('data-self-studio-shortcut');
   });
 });

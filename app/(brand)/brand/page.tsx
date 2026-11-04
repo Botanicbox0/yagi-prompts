@@ -46,6 +46,7 @@ export default async function BrandHome({
           locale={locale === "en" ? "en" : "ko"}
           organizationId={choice.id}
           studioOpen={studioOpen}
+          canRequest={access.canRequest}
           membersOpen={sectionVisibility(choice).members}
           settingsOpen={sectionVisibility(choice).settings}
         />

@@ -10,9 +10,9 @@ import { StudioPrep } from "@/components/brand-workspace/studio-prep";
 export default async function NewBrandProject({
   searchParams,
 }: {
-  searchParams: Promise<{ organizationId?: string | string[] }>;
+  searchParams: Promise<{ organizationId?: string | string[]; track?: string | string[] }>;
 }) {
-  const [{ organizationId }, { sql, viewer, verifiedEmail, b, locale }] = await Promise.all([searchParams, brandContext()]);
+  const [{ organizationId, track }, { sql, viewer, verifiedEmail, b, locale }] = await Promise.all([searchParams, brandContext()]);
   if (!sql) return <p role="alert">{b.unavailable}</p>;
   const { selection, choice, choices } = await brandScope({ sql, verifiedEmail }, viewer, organizationId);
   if (selection.state === "unavailable") return <BrandUnavailable b={b} />;
@@ -71,7 +71,14 @@ export default async function NewBrandProject({
           </a>
         </section>
       ) : (
-        <CampaignWizard b={b} locale={locale} organizations={organizations.map(({ id, name }) => ({ id, name }))} formats={formats} />
+        <CampaignWizard
+          b={b}
+          locale={locale}
+          organizations={organizations.map(({ id, name }) => ({ id, name }))}
+          formats={formats}
+          generativeClosed={generativeClosed}
+          initialTrack={typeof track === "string" ? track : undefined}
+        />
       )}
     </div>
   );
