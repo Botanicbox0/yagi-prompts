@@ -325,8 +325,8 @@ export function answerPersonalConciergeQuery(input: {
       needsHumanEscalation: true,
       escalationReason: 'user_requested_human',
       reply: isKo
-        ? '담당 팀원(사람)과 실시간 슬랙 상담으로 바로 연결해 드릴게요. 계정 확인과 실시간 답변 수신을 위해 로그인 후 메시지를 남겨주시면 담당자가 즉시 확인합니다.'
-        : 'I will connect you directly with a human specialist on our Slack support channel. Please sign in so we can verify your account and deliver live replies right here.',
+        ? '담당 상담원과 1:1 실시간 상담으로 바로 연결해 드릴게요. 계정 확인과 실시간 답변 수신을 위해 로그인 후 메시지를 남겨주시면 담당자가 즉시 확인합니다.'
+        : 'I will connect you directly with a support specialist. Please sign in so we can verify your account and deliver live replies right here.',
     };
   }
 
@@ -337,8 +337,8 @@ export function answerPersonalConciergeQuery(input: {
       needsHumanEscalation: true,
       escalationReason: 'account_or_billing_check',
       reply: isKo
-        ? '결제·환불 확인이나 계정별 생성 오류는 담당 팀원이 회원님의 작업 로그를 직접 확인해 처리해 드리고 있습니다. 아래 상담원 실시간 연결을 통해 바로 전달해 주세요.'
-        : 'Billing checks, refund requests, and account-specific generation issues require a team member to inspect your job logs directly. Please send this to our live Slack team below.',
+        ? '결제·환불 확인이나 계정별 생성 오류는 담당 팀원이 회원님의 작업 내역을 직접 확인해 처리해 드리고 있습니다. 아래 상담원 1:1 연결을 통해 바로 전달해 주세요.'
+        : 'Billing checks, refund requests, and account-specific generation issues require a specialist to inspect your job history directly. Please connect with a specialist below.',
     };
   }
 
@@ -377,8 +377,8 @@ export function answerPersonalConciergeQuery(input: {
     needsHumanEscalation: true,
     escalationReason: 'ai_unanswered',
     reply: isKo
-      ? '이 질문은 AI가 추측해서 답변하기보다 TWINGS 담당 팀원이 직접 확인해 안내해 드리는 것이 정확합니다. 아래에서 상담원과 실시간 슬랙으로 연결해 보세요.'
-      : 'To give you an accurate answer rather than a guess, our TWINGS team should check this directly. Connect with a human specialist via Slack below.',
+      ? '이 질문은 AI가 추측해서 답변하기보다 TWINGS 담당 상담원이 직접 확인해 안내해 드리는 것이 정확합니다. 아래에서 상담원과 1:1로 연결해 보세요.'
+      : 'To give you an accurate answer rather than a guess, our TWINGS support specialist should check this directly. Connect with a specialist below.',
   };
 }
 
@@ -713,7 +713,7 @@ export async function fetchSlackPersonalConciergeReplies(
           id: `slack-${msg.ts}`,
           body: directBody,
           createdAt: new Date(Number(msg.ts.split('.')[0]) * 1000).toISOString(),
-          authorLabel: 'TWINGS 담당자 (Slack)',
+          authorLabel: 'TWINGS 담당 상담원',
         });
       }
     }
@@ -758,7 +758,7 @@ export async function fetchSlackPersonalConciergeReplies(
             id: `slack-${reply.ts}`,
             body: parsedBody,
             createdAt: new Date(Number(reply.ts.split('.')[0]) * 1000).toISOString(),
-            authorLabel: 'TWINGS 담당자 (Slack)',
+            authorLabel: 'TWINGS 담당 상담원',
           });
         }
       }

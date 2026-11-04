@@ -33,6 +33,7 @@ describe('TWINGS Personal AI Concierge & Slack Human Escalation', () => {
     expect(html).toContain('data-concierge-faq-item="maker-revenue"');
     expect(html).toContain('data-concierge-faq-item="campaign-reward"');
     expect(html).toContain('data-concierge-request-human');
+    expect(html).not.toMatch(/Slack|슬랙/i);
   });
 
   it('answers known TWINGS FAQ questions directly without escalating', () => {

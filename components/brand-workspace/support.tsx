@@ -244,13 +244,13 @@ export function SupportDrawer({
               <div className="bw-concierge-title-row">
                 <strong id={titleId}>{b.managed.support}</strong>
                 <span className="bw-concierge-slack-pill">
-                  Slack · {brandHandle}
+                  1:1 · {brandHandle}
                 </span>
               </div>
               <p>
                 {isKo
-                  ? "담당 PD 슬랙 채널과 실시간 연동됩니다"
-                  : "Connected live with your YAGI PD on Slack"}
+                  ? "전담 프로듀서와 1:1 실시간 연동됩니다"
+                  : "Connected live with your dedicated YAGI PD"}
               </p>
             </div>
           </div>
@@ -315,8 +315,8 @@ export function SupportDrawer({
             </div>
             <p>
               {isKo
-                ? `${currentOrg?.name ?? "고객사"} 전용 실시간 문의창입니다. 메시지를 남기시면 담당 프로듀서 Slack으로 즉시 전달되며, 답변도 이곳으로 바로 도착합니다.`
-                : `Direct line for ${currentOrg?.name ?? "your team"}. Messages go straight to our producers on Slack and replies appear here live.`}
+                ? `${currentOrg?.name ?? "고객사"} 전용 실시간 문의창입니다. 메시지를 남기시면 전담 프로듀서에게 즉시 전달되며, 답변도 이곳으로 바로 도착합니다.`
+                : `Direct line for ${currentOrg?.name ?? "your team"}. Messages go straight to our producers and replies appear here live.`}
             </p>
           </div>
 
@@ -342,7 +342,7 @@ export function SupportDrawer({
               <div className="bw-support-bubble-meta">
                 <strong>
                   {m.authorRole === "studio"
-                    ? `${b.dashboard.studio} · Slack`
+                    ? b.dashboard.studio
                     : currentOrg?.name}
                 </strong>
                 <time>{formatBrandTimestamp(m.createdAt, locale)}</time>

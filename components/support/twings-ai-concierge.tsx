@@ -269,10 +269,10 @@ export function TwingsAiConcierge({
         {
           id: `sys-slack-${Date.now() + 1}`,
           role: 'human_agent',
-          authorLabel: isKo ? 'Slack 실시간 상담 연결 완료' : 'Connected to Slack Support',
+          authorLabel: isKo ? '1:1 상담원 연결 완료' : 'Connected to Support Specialist',
           text: isKo
-            ? `TWINGS 담당 팀원의 슬랙 채널(${payload.handle ?? '@member'})로 메시지가 전달되었습니다. 담당자가 스레드로 답장하면 이 채팅창에 실시간으로 표시됩니다.`
-            : `Your message has been delivered to our team's Slack channel (${payload.handle ?? '@member'}). Replies will appear live right here.`,
+            ? '담당 상담원에게 문의가 접수되었습니다. 상담원이 답변을 작성하면 이 채팅창에 실시간으로 표시됩니다.'
+            : 'Your message has been delivered to our support specialist. Replies will appear live right here.',
           createdAt: nowIso,
         },
       ]);
@@ -332,8 +332,8 @@ export function TwingsAiConcierge({
                 </div>
                 <p className="mt-0.5 text-[0.75rem] text-[#5B606B]">
                   {isKo
-                    ? 'AI 즉시 답변 · 미해결 시 담당자 Slack 실시간 연결'
-                    : 'Instant AI answers · Live Slack handoff to our team'}
+                    ? 'AI 즉시 답변 · 미해결 시 담당 상담원 1:1 연결'
+                    : 'Instant AI answers · 1:1 specialist handoff'}
                 </p>
               </div>
             </div>
@@ -365,8 +365,8 @@ export function TwingsAiConcierge({
               </div>
               <p className="mt-2 text-xs leading-relaxed text-[#5B606B]">
                 {isKo
-                  ? '자주 묻는 질문을 눌러 바로 확인하거나 궁금한 점을 입력해 보세요. AI가 답변하기 어려운 문의나 상담원 대화가 필요하시면 우리 팀 Slack 채널로 즉시 연결해 드립니다.'
-                  : 'Tap a frequently asked question below or ask anything. If AI cannot resolve your issue or you prefer a human, we connect you straight to our team on Slack.'}
+                  ? '자주 묻는 질문을 눌러 바로 확인하거나 궁금한 점을 입력해 보세요. AI가 답변하기 어려운 문의나 사람과의 대화가 필요하시면 담당 상담원에게 바로 연결해 드립니다.'
+                  : 'Tap a frequently asked question below or ask anything. If AI cannot resolve your issue or you prefer a human, we connect you straight to a support specialist.'}
               </p>
             </div>
 
@@ -471,7 +471,7 @@ export function TwingsAiConcierge({
               >
                 <div className="flex items-center justify-between gap-2">
                   <span className="font-mono text-[0.6875rem] font-semibold uppercase tracking-wider text-[#3063A7]">
-                    {isKo ? 'SLACK 담당자 실시간 연결' : 'LIVE SLACK HUMAN HANDOFF'}
+                    {isKo ? '1:1 담당 상담원 연결' : 'LIVE SPECIALIST HANDOFF'}
                   </span>
                   <span className="rounded-full bg-white px-2 py-0.5 text-[0.6875rem] font-semibold text-[#0B0D12]">
                     {signedIn
@@ -485,12 +485,12 @@ export function TwingsAiConcierge({
                 </div>
 
                 {!signedIn ? (
-                  /* Login Gate: Require sign-in before connecting to a human on Slack */
+                  /* Login Gate: Require sign-in before connecting to a human specialist */
                   <div data-concierge-login-gate className="mt-2.5 space-y-2.5">
                     <p className="text-xs leading-relaxed text-[#0B0D12]">
                       {isKo
-                        ? '상담원(사람)과 실시간으로 대화하려면 로그인이 필요합니다. 로그인하시면 회원님의 계정·제작 내역을 확인하고 우리 팀 Slack 상담 채널로 즉시 연결해 드립니다.'
-                        : 'Please sign in to talk with a human specialist. Once signed in, we verify your account and connect your chat straight to our team on Slack.'}
+                        ? '상담원(사람)과 실시간으로 대화하려면 로그인이 필요합니다. 로그인하시면 회원님의 계정·제작 내역을 확인하고 담당 상담원과 바로 연결해 드립니다.'
+                        : 'Please sign in to talk with a human specialist. Once signed in, we verify your account and connect you straight to our support team.'}
                     </p>
                     <a
                       href={signInHref}
@@ -501,7 +501,7 @@ export function TwingsAiConcierge({
                     </a>
                   </div>
                 ) : (
-                  /* Signed-in Slack Escalation Form */
+                  /* Signed-in Human Escalation Form */
                   <form
                     onSubmit={handleSendToSlack}
                     data-concierge-slack-form
@@ -509,8 +509,8 @@ export function TwingsAiConcierge({
                   >
                     <p className="text-xs leading-relaxed text-[#5B606B]">
                       {isKo
-                        ? `${displayName ?? '회원'}님 계정으로 담당자 Slack 채널에 즉시 알림을 보냅니다. 문의 내용을 남겨주시면 이곳으로 바로 답변이 도착합니다.`
-                        : `Connected as ${displayName ?? 'Member'}. Send your message below to alert our team on Slack and receive replies right here.`}
+                        ? `${displayName ?? '회원'}님 계정으로 담당 상담원에게 문의를 접수합니다. 내용을 남겨주시면 이 채팅창으로 바로 답변이 도착합니다.`
+                        : `Connected as ${displayName ?? 'Member'}. Send your message below and our specialist will reply right here.`}
                     </p>
                     <textarea
                       rows={2}
@@ -518,7 +518,7 @@ export function TwingsAiConcierge({
                       onChange={(e) => setHumanMessageDraft(e.target.value)}
                       placeholder={
                         isKo
-                          ? '담당자에게 전달할 문의 내용을 입력해 주세요...'
+                          ? '상담원에게 전달할 문의 내용을 입력해 주세요...'
                           : 'Describe what you need help with for our team...'
                       }
                       className="w-full rounded-[12px] border border-[rgba(11,13,18,0.12)] bg-white px-3 py-2 text-xs text-[#0B0D12] placeholder:text-[#5B606B]/60 focus:border-[#3875C5] focus:outline-none"
@@ -536,11 +536,11 @@ export function TwingsAiConcierge({
                     >
                       {sendingSlack
                         ? isKo
-                          ? 'Slack 채널로 전송 중...'
-                          : 'Sending to Slack...'
+                          ? '상담원에게 전송 중...'
+                          : 'Sending to specialist...'
                         : isKo
-                          ? '담당자 Slack으로 바로 보내기 →'
-                          : 'Send to Human Team on Slack →'}
+                          ? '담당 상담원에게 바로 보내기 →'
+                          : 'Send to Support Specialist →'}
                     </button>
                   </form>
                 )}
@@ -558,7 +558,7 @@ export function TwingsAiConcierge({
                 className="inline-flex items-center gap-1.5 rounded-full border border-[rgba(11,13,18,0.1)] bg-[#F6F7F9] px-3 py-1 text-[0.6875rem] font-semibold text-[#0B0D12] transition-colors hover:border-[#3875C5] hover:text-[#3063A7]"
               >
                 <span aria-hidden="true" className="size-1.5 rounded-full bg-[#3875C5]" />
-                {isKo ? '사람(상담원)과 대화하기 · Slack 연결' : 'Talk to a human · Connect Slack'}
+                {isKo ? '사람(상담원)과 1:1 대화하기' : 'Talk to a human specialist'}
               </button>
               <a
                 href={`/${resolvedLocale}/faq`}
