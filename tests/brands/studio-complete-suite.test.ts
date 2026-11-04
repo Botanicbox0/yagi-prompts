@@ -76,6 +76,13 @@ import {
   getAvailableCommissionTracks,
   getBrandWorkspaceTourSteps,
 } from '@/lib/brands/workspace/commission-tracks';
+import {
+  auditMultiShotContinuity,
+  buildTwoStageApprovalAndReelsMasterPlan,
+  compileOledCinemaColorGradePlan,
+  evaluateOpticalIdentityLockV2,
+  getOledCinemaLookCatalog,
+} from '@/lib/brands/production-pipeline/video-creator-techniques';
 
 const adminId = randomUUID();
 const ownerId = randomUUID();
@@ -801,5 +808,130 @@ describe('Brand Studio Complete Suite (Video Reverse, 2D Spatial Stage, 3-Track 
     );
     expect(wizardSandboxedHtml).not.toContain('data-commission-track="template_build"');
     expect(wizardSandboxedHtml).not.toContain('data-self-studio-shortcut');
+  });
+
+  it('integrates the 6 latest Video-Creator SOTA techniques as customer-facing utilities with zero internal jargon', () => {
+    // 1. Optical Identity Lock™ v2 (3-Stage Zero-Distortion Face & Bust-Up Proportion Guard)
+    const stage1Report = evaluateOpticalIdentityLockV2({
+      focalLengthMm: 50,
+      headWidthRatioPct: 42,
+      hasFaceOcclusion: false,
+      locale: 'ko',
+    });
+    expect(stage1Report.selectedStage).toBe('stage1_passthrough_crop');
+    expect(stage1Report.facePixelPreservationPct).toBe(100);
+    expect(stage1Report.wideAngleRejected).toBe(false);
+    expect(stage1Report.framingVerdict).toBe('optimal_bust_up');
+
+    const wideAngleTightReport = evaluateOpticalIdentityLockV2({
+      focalLengthMm: 24,
+      headWidthRatioPct: 80,
+      hasFaceOcclusion: true,
+      measuredIdentitySimilarity: 0.84, // below 0.90 -> auto-rollback to stage 1!
+      locale: 'ko',
+    });
+    expect(wideAngleTightReport.wideAngleRejected).toBe(true);
+    expect(wideAngleTightReport.selectedStage).toBe('stage3_rollback_to_stage1');
+    expect(wideAngleTightReport.facePixelPreservationPct).toBe(100);
+    expect(wideAngleTightReport.framingVerdict).toBe('tight_face_crop_warning');
+
+    const baggyTopReport = evaluateOpticalIdentityLockV2({
+      focalLengthMm: 50,
+      headWidthRatioPct: 45,
+      baggyCasualTopDetected: true,
+      locale: 'ko',
+    });
+    expect(baggyTopReport.framingVerdict).toBe('headneck_runway_override');
+
+    // 2. OLED Cinema Color Grading & Reference Look Match
+    const lookCatalog = getOledCinemaLookCatalog('ko');
+    expect(lookCatalog.map((l) => l.id)).toEqual([
+      'oled-editorial-punch',
+      'kodak-2383-campaign',
+      'dreamcore-pastel-bloom',
+      'dark-fairy-cinema',
+      'reference-match',
+    ]);
+    const oledPlan = compileOledCinemaColorGradePlan({
+      lookId: 'reference-match',
+      referenceAssetTitle: '26SS Editorial Lookbook',
+      locale: 'ko',
+    });
+    expect(oledPlan.preset.targetBlackFloorIre).toBe(0.008);
+    expect(oledPlan.preset.skinToneProtectedHueDeg).toEqual([15, 40]);
+    expect(oledPlan.customerBenefit).toContain('26SS Editorial Lookbook');
+
+    // 3. Multi-Shot Continuity Inspector
+    const continuity = auditMultiShotContinuity({ clipCount: 4, locale: 'ko' });
+    expect(continuity.status).toBe('passed');
+    expect(continuity.maxChromaDriftDeltaAB).toBeLessThan(continuity.chromaDriftLimit);
+    expect(continuity.maxLumaDriftDeltaL).toBeLessThan(continuity.lumaDriftLimit);
+    expect(continuity.maxGrainFftJumpPct).toBeLessThan(continuity.grainFftLimitPct);
+
+    // 4. Two-Stage Approval Gate + Dual Audio Stems + Instagram Edits Checklist
+    const twoStagePlan = buildTwoStageApprovalAndReelsMasterPlan({
+      gateStatus: 'stage2_1080p_master',
+      revealTimestampSec: 3.8,
+      locale: 'ko',
+    });
+    expect(twoStagePlan.stage1Spec.resolution).toBe('480p');
+    expect(twoStagePlan.stage2Spec.unlocked).toBe(true);
+    expect(twoStagePlan.stage2Spec.integratedLufs).toBe(-14.0);
+    expect(twoStagePlan.deliverableStems.map((s) => s.id)).toEqual([
+      'reels_trending_clean_foley',
+      'ad_master_with_bgm',
+      'clean_cover_frame',
+    ]);
+    expect(twoStagePlan.igEditsExportChecklist).toHaveLength(3);
+
+    // 5. Verify SSR of Customer Utilities in ReviewStage & BrandBriefStudio + Zero Internal Jargon
+    const reviewHtml = renderToStaticMarkup(
+      React.createElement(ReviewStage, {
+        projectId: 'proj-utility-check',
+        contents: [],
+        messages: [],
+        decisions: [],
+        locale: 'ko',
+        generativeMediaAllowed: true,
+        productionMode: 'studio',
+      })
+    );
+    expect(reviewHtml).toContain('data-two-stage-gate-bar');
+    expect(reviewHtml).toContain('data-approve-stage1-to-stage2');
+    expect(reviewHtml).toContain('data-safe-zone-toggle');
+    expect(reviewHtml).toContain('data-quality-assurance-bar');
+    expect(reviewHtml).toContain('data-oled-look-selector');
+    expect(reviewHtml).toContain('data-continuity-audit-badge');
+    expect(reviewHtml).toContain('data-optical-identity-badge');
+    expect(reviewHtml).toContain('data-platform-delivery-utility');
+    expect(reviewHtml).toContain('data-ig-edits-checklist');
+
+    const studioHtml = renderToStaticMarkup(
+      React.createElement(BrandBriefStudio, {
+        organizationId: 'org-kaiper',
+        locale: 'ko',
+        canWrite: true,
+        identityConfirmed: true,
+      })
+    );
+    expect(studioHtml).toContain('data-studio-optical-identity-panel');
+    expect(studioHtml).toContain('data-optical-head-width-select');
+
+    // Strictly zero internal vendor/engine jargon in customer-facing HTML
+    const forbiddenJargon = [
+      'Seedance',
+      'Seedream',
+      'Nano Banana',
+      'SeedVR2',
+      'ComfyUI',
+      'Demucs',
+      'Higgsfield',
+      'Slack',
+      'RECIPE V2',
+    ];
+    for (const token of forbiddenJargon) {
+      expect(reviewHtml).not.toContain(token);
+      expect(studioHtml).not.toContain(token);
+    }
   });
 });

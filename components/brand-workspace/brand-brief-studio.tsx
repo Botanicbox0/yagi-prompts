@@ -58,6 +58,7 @@ import {
 } from "./brand-studio-tutorial";
 import { BrandVideoReversePanel } from "./brand-video-reverse-panel";
 import { ReviewStage } from "./review-stage";
+import { evaluateOpticalIdentityLockV2 } from "@/lib/brands/production-pipeline/video-creator-techniques";
 
 export interface BrandBriefStudioProps {
   organizationId: string;
@@ -176,6 +177,18 @@ export function BrandBriefStudio({
   const [externalMusicRevealSec, setExternalMusicRevealSec] = useState<
     number | null
   >(null);
+
+  // Interactive Optical Identity Lock™ v2 Diagnostic state in Self Studio
+  const [portraitHeadWidthPct, setPortraitHeadWidthPct] = useState<number>(42);
+  const [portraitHasOcclusion, setPortraitHasOcclusion] = useState<boolean>(false);
+  const [portraitBaggyTop, setPortraitBaggyTop] = useState<boolean>(false);
+  const studioOpticalReport = evaluateOpticalIdentityLockV2({
+    focalLengthMm: cameraFocalMm,
+    headWidthRatioPct: portraitHeadWidthPct,
+    hasFaceOcclusion: portraitHasOcclusion,
+    baggyCasualTopDetected: portraitBaggyTop,
+    locale,
+  });
 
   const aestheticLines = synthesizeMultiAestheticLines({
     brandName: "KAIPER",
@@ -2108,6 +2121,102 @@ export function BrandBriefStudio({
           <hr className="bw-divider" />
         </>
       )}
+
+      {/* Customer Utility: Optical Identity Lock™ v2 & Bust-Up Proportion Guard */}
+      <div className="bw-card bw-fields" data-studio-optical-identity-panel>
+        <div className="bw-row">
+          <div>
+            <p className="bw-kicker">
+              {isKo
+                ? "OPTICAL IDENTITY LOCK™ V2 · 모델 얼굴 원형 100% 보존 & 바스트업 8등신 비율 가드"
+                : "OPTICAL IDENTITY LOCK™ V2 · ZERO-DISTORTION FACE & BUST-UP PROPORTION GUARD"}
+            </p>
+            <h3>{studioOpticalReport.customerTitle}</h3>
+            <p className="bw-muted">{studioOpticalReport.customerSummary}</p>
+          </div>
+          <span className="bw-badge" data-optical-stage-badge={studioOpticalReport.selectedStage}>
+            {studioOpticalReport.facePixelPreservationPct}% ORIGINAL FACE PIXELS
+          </span>
+        </div>
+
+        <div className="bw-grid">
+          <label>
+            {isKo
+              ? "인물 참조 사진 구도 (프레임 대비 머리 폭 비중)"
+              : "Portrait Framing (Head Width % of Frame)"}
+            <select
+              value={portraitHeadWidthPct}
+              onChange={(e) => setPortraitHeadWidthPct(Number(e.target.value))}
+              data-optical-head-width-select
+            >
+              <option value={42}>
+                {isKo
+                  ? "42% — 권장 바스트업 (목·쇄골·양쪽 어깨 포함 · 8등신 비율 유지)"
+                  : "42% — Optimal Bust-Up (Neck, Collarbone & Both Shoulders Visible)"}
+              </option>
+              <option value={78}>
+                {isKo
+                  ? "78% — 얼굴 꽉 찬 클로즈업 (전신 생성 시 대두·좁은 어깨 위험 경고)"
+                  : "78% — Tight Face Crop (Warning: Risks Narrow Shoulders in Full-Body)"}
+              </option>
+            </select>
+          </label>
+
+          <label>
+            {isKo ? "얼굴 앞 손·컵·소품 가림 여부" : "Face Occlusion (Hand / Cup / Prop)"}
+            <select
+              value={portraitHasOcclusion ? "occluded" : "clean"}
+              onChange={(e) => setPortraitHasOcclusion(e.target.value === "occluded")}
+              data-optical-occlusion-select
+            >
+              <option value="clean">
+                {isKo
+                  ? "가림 없음 → Stage 1 원본 얼굴 픽셀 100% 그대로 보존 (기본)"
+                  : "Unoccluded → Stage 1 Passthrough Smart Crop (100% Original Pixels)"}
+              </option>
+              <option value="occluded">
+                {isKo
+                  ? "손·소품 가림 있음 → Stage 2 국소 수선 (닮음도 90% 미달 시 즉시 롤백)"
+                  : "Occluded → Stage 2 Surgical Edit (Auto-Rollback if <90% Match)"}
+              </option>
+            </select>
+          </label>
+
+          <label>
+            {isKo ? "참조 사진 상의 핏 (어깨선 판별)" : "Reference Top Silhouette"}
+            <select
+              value={portraitBaggyTop ? "baggy" : "fitted"}
+              onChange={(e) => setPortraitBaggyTop(e.target.value === "baggy")}
+              data-optical-baggy-select
+            >
+              <option value="fitted">
+                {isKo
+                  ? "어깨선이 보이는 일반 상의 (바스트업 3:4 크롭 참조)"
+                  : "Clear Shoulder Line (Standard 3:4 Bust-Up Reference)"}
+              </option>
+              <option value="baggy">
+                {isKo
+                  ? "박시한 후드·오버핏 가디건 (헤드·넥만 분리 + 슬렌더 런웨이 체형 가드)"
+                  : "Baggy Hoodie/Cardigan (Head-Neck Crop + Slender Runway Physique)"}
+              </option>
+            </select>
+          </label>
+        </div>
+
+        <p className="bw-note" data-optical-actionable-advice>
+          {studioOpticalReport.actionableAdvice}
+        </p>
+
+        <div className="bw-row" style={{ flexWrap: "wrap", gap: 8 }}>
+          {studioOpticalReport.guardrailBadges.map((badge) => (
+            <span key={badge} className="bw-badge">
+              ✓ {badge}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      <hr className="bw-divider" />
 
       {(studioFocusMode === "all" || studioFocusMode === "frame_review") && (
         <div className="bw-fields" data-studio-frame-review-section>

@@ -18,6 +18,12 @@ import {
   type CommissionTrackId,
   type CommissionTrackSpec,
 } from "@/lib/brands/workspace/commission-tracks";
+import {
+  compileOledCinemaColorGradePlan,
+  evaluateOpticalIdentityLockV2,
+  getOledCinemaLookCatalog,
+  type OledCinemaLookId,
+} from "@/lib/brands/production-pipeline/video-creator-techniques";
 
 /** A public format the brand may pick: the catalogue card's own media, nothing about its prompt. */
 export interface WizardFormat {
@@ -380,11 +386,26 @@ function ExpressCommissionBrief({
   );
   const [concept, setConcept] = useState("");
   const [endsOn, setEndsOn] = useState("");
+  const [oledLookId, setOledLookId] = useState<OledCinemaLookId>("oled-editorial-punch");
+  const [deliveryMode, setDeliveryMode] = useState<"dual_stem_default" | "ad_master_only">(
+    "dual_stem_default",
+  );
+
+  const oledLooks = getOledCinemaLookCatalog(locale);
+  const activeOledPlan = compileOledCinemaColorGradePlan({ lookId: oledLookId, locale });
+  const opticalGuide = evaluateOpticalIdentityLockV2({
+    focalLengthMm: 50,
+    headWidthRatioPct: 42,
+    hasFaceOcclusion: false,
+    locale,
+  });
 
   // Compose structured objective string so the project detail room & YAGI team see the exact track & specs.
   const structuredObjective = [
     `[${isTemplateBuild ? "TRACK: CUSTOM STUDIO TEMPLATE BUILD" : "TRACK: MASTER VIDEO PRODUCTION ONLY"}]`,
     `Aspect Ratio: ${aspect} | Spec: ${specOption}`,
+    `OLED Color Look: ${oledLookId} | Stems: ${deliveryMode}`,
+    `Workflow Gate: Stage 1 (480p Framing/Motion Speed Check) -> Stage 2 (1080p Optical + -14 LUFS Master)`,
     `${isTemplateBuild ? "Locked Brand Elements" : "Target Channels & Sound"}: ${channelOrLock}`,
     concept.trim(),
   ]
@@ -626,6 +647,64 @@ function ExpressCommissionBrief({
               }
             />
           </label>
+        </div>
+
+        <div className="bw-grid" data-customer-utility-presets>
+          <label>
+            {isEn
+              ? "Smartphone OLED Cinema Color Look"
+              : "스마트폰 OLED 시네마 컬러 룩 (암부 들뜸 방지 & 피부톤 보호)"}
+            <select
+              name="oledLookId"
+              value={oledLookId}
+              onChange={(e) => setOledLookId(e.target.value as OledCinemaLookId)}
+            >
+              {oledLooks.map((look) => (
+                <option key={look.id} value={look.id}>
+                  {look.title} — {look.subtitle}
+                </option>
+              ))}
+            </select>
+            <small className="bw-muted">{activeOledPlan.customerBenefit}</small>
+          </label>
+
+          <label>
+            {isEn
+              ? "2-Stage Review & Audio Stem Package"
+              : "2단계 스피드 검수 & 오디오 스템 납품 구성"}
+            <select
+              name="deliveryMode"
+              value={deliveryMode}
+              onChange={(e) =>
+                setDeliveryMode(e.target.value as "dual_stem_default" | "ad_master_only")
+              }
+            >
+              <option value="dual_stem_default">
+                {isEn
+                  ? "480p Speed Check → 1080p Ad Master (-14 LUFS) + Reels No-BGM Clean Foley (Recommended)"
+                  : "480p 1차 스피드 시사 → 1080p 광고 마스터(-14 LUFS) + 릴스 트렌딩 음원용 No-BGM 클린 폴리 동시 납품 (권장)"}
+              </option>
+              <option value="ad_master_only">
+                {isEn
+                  ? "480p Speed Check → 1080p Broadcast Sound Master (-14 LUFS) Only"
+                  : "480p 1차 스피드 시사 → 1080p 사운드 통합 광고 마스터(-14 LUFS) 단독 납품"}
+              </option>
+            </select>
+            <small className="bw-muted">
+              {isEn
+                ? "Approve camera motion & framing in 480p first, then receive both BGM-synced and No-BGM clean Foley 1080p masters."
+                : "480p 무음원 시안으로 구도·모션을 먼저 빠르게 컨펌한 뒤, 광고용 BGM 통합본과 릴스 앱 내 인기음원 삽입용 클린 폴리본을 함께 받습니다."}
+            </small>
+          </label>
+        </div>
+
+        <div
+          className="ys-express-handoff-note"
+          data-optical-identity-guide
+          style={{ marginTop: 4 }}
+        >
+          <strong>👤 {opticalGuide.customerTitle}</strong>
+          <p>{opticalGuide.actionableAdvice}</p>
         </div>
 
         <div className="ys-express-handoff-note">
