@@ -561,17 +561,17 @@ export function BrandBriefStudio({
       <div className="bw-row">
         <div>
           <p className="bw-kicker">
-            {isKo ? "SHOTSPEC · 촬영 지시서 컴파일러" : "SHOTSPEC · BRIEF COMPILER"}
+            {isKo ? "STUDIO · 브랜드 에셋 제작 스튜디오" : "STUDIO · BRAND ASSET WORKSPACE"}
           </p>
           <h2>
             {isKo
-              ? "한 줄 브리프 → 촬영 지시서 → 480p 초안 → 마스터 승격"
-              : "1-Line Brief → ShotSpec → 480p Draft → Master Promotion"}
+              ? "원하는 작업을 카드에서 고르면, 브랜드 톤과 로고 규칙을 맞춰 바로 제작합니다"
+              : "Pick a workflow card below to produce on-brand photos, films, and local repairs"}
           </h2>
           <p className="bw-muted">
             {isKo
-              ? "제품·참조 역할을 지정하면 브랜드 아이덴티티 고정 층을 결합해 촬영 지시서를 조립합니다. 초안 수정은 라운드당 1개 축만 변경해 흔들림을 막습니다."
-              : "Combines your confirmed brand identity with a structured ShotSpec. Revisions change one axis per round to prevent drift."}
+              ? "복잡한 프롬프트나 카메라 수치를 직접 입력할 필요가 없습니다. 작업 카드를 고르고 한 줄로 지시하면 브랜드 기본 DNA가 자동으로 결합됩니다."
+              : "No complex prompts or camera numbers needed. Select a card and write one line; your Brand Base DNA is applied automatically."}
           </p>
         </div>
         <div className="bw-row">
@@ -598,6 +598,13 @@ export function BrandBriefStudio({
         onSelectMode={setStudioFocusMode}
       />
 
+      <details className="bw-service-disclosure">
+        <summary>
+          {isKo
+            ? "고급 연출 설정 · 프로젝트별 광학 오버라이드 & 수동 촬영 지시서 열기"
+            : "Advanced Direction · Project Optics Override & Manual ShotSpec Compiler"}
+        </summary>
+        <div className="bw-fields" style={{ marginTop: 14 }}>
       <div
         className="bw-panel"
         data-project-direction-panel
@@ -1041,6 +1048,8 @@ export function BrandBriefStudio({
           </div>
         )}
       </form>
+        </div>
+      </details>
 
       {errorMessage && (
         <p role="alert" className="bw-error" data-brief-error>
