@@ -54,6 +54,15 @@ import {
 } from '@/lib/brands/identity/service';
 import { BrandOnboardingWizard } from '@/components/brand-workspace/brand-onboarding-wizard';
 import {
+  BRAND_CLIENT_CATEGORIES,
+  inferBrandCategoryFromName,
+  listCategoryExperienceProfiles,
+  resolveCategoryExperienceProfile,
+} from '@/lib/brands/category-experience';
+import { BriefConcierge } from '@/components/brand-workspace/brief-concierge';
+import { AestheticEngine } from '@/components/brand-workspace/aesthetic-engine';
+import { BrandMicroRoiPanel } from '@/components/brand-workspace/brand-micro-roi-panel';
+import {
   BRAND_MUSIC_STUDIO_PRESETS,
   EIGHT_STAGE_BROADCAST_MASTERING_CHAIN,
   buildBrandSoundAndMusicStudioPlan,
@@ -791,7 +800,8 @@ describe('Brand Studio Complete Suite (Video Reverse, 2D Spatial Stage, 3-Track 
     expect(wizardTemplateHtml).toContain('data-commission-track-selector');
     expect(wizardTemplateHtml).toContain('data-commission-track="template_build"');
     expect(wizardTemplateHtml).toContain('data-express-commission-form="template_build"');
-    expect(wizardTemplateHtml).toContain('전용 템플릿 의뢰 및 Frame.io 시사 룸 열기');
+    expect(wizardTemplateHtml).toContain('data-campaign-category-starters');
+    expect(wizardTemplateHtml).toContain('전용 템플릿 의뢰 및 시사 룸 열기');
 
     const wizardSandboxedHtml = renderToStaticMarkup(
       React.createElement(CampaignWizard, {
@@ -933,6 +943,69 @@ describe('Brand Studio Complete Suite (Video Reverse, 2D Spatial Stage, 3-Track 
     for (const token of forbiddenJargon) {
       expect(reviewHtml).not.toContain(token);
       expect(studioHtml).not.toContain(token);
+    }
+  });
+
+  it('adapts customer Studio scenes, quick prompts, and compiler guardrails by client category and enforces zero red/jargon across all customer components', () => {
+    const profiles = listCategoryExperienceProfiles();
+    expect(profiles).toHaveLength(BRAND_CLIENT_CATEGORIES.length);
+
+    expect(inferBrandCategoryFromName('DANYAD Fashion Studio')).toBe('fashion_apparel');
+    expect(inferBrandCategoryFromName('GlowLab Skincare & Beauty')).toBe('beauty_skincare');
+    expect(inferBrandCategoryFromName('Matcha Coffee Roasters')).toBe('fnb_hospitality');
+    expect(inferBrandCategoryFromName('KAIPER Fragrance Atelier')).toBe('lifestyle_object');
+    expect(inferBrandCategoryFromName('Cloud AI SaaS Platform')).toBe('tech_platform');
+
+    for (const categoryId of BRAND_CLIENT_CATEGORIES) {
+      const profile = resolveCategoryExperienceProfile({ category: categoryId });
+      expect(profile.scenes).toHaveLength(4);
+      expect(profile.campaignStarters.length).toBeGreaterThanOrEqual(1);
+      expect(profile.compiler.defaultProductChecklist.geometry.length).toBeGreaterThanOrEqual(10);
+      expect(profile.compiler.negativeGuardrails.length).toBeGreaterThanOrEqual(3);
+    }
+
+    const beautyStudioHtml = renderToStaticMarkup(
+      React.createElement(BrandBriefStudio, {
+        organizationId: 'org-beauty',
+        organizationName: 'GlowLab Skincare',
+        locale: 'ko',
+        canWrite: true,
+        identityConfirmed: true,
+      })
+    );
+    expect(beautyStudioHtml).toContain('data-active-studio-category="beauty_skincare"');
+    expect(beautyStudioHtml).toContain('data-studio-category-switcher');
+    expect(beautyStudioHtml).toContain('data-studio-quick-prompts');
+    expect(beautyStudioHtml).toContain('제형 · 수분 텍스처');
+
+    const conciergeHtml = renderToStaticMarkup(
+      React.createElement(BriefConcierge, {
+        brandName: 'KAIPER',
+        projectTitle: '26SS Launch',
+        objective: 'Hero Film',
+        locale: 'ko',
+      })
+    );
+    const aestheticHtml = renderToStaticMarkup(
+      React.createElement(AestheticEngine, {
+        locale: 'ko',
+        referenceLinks: [],
+      })
+    );
+    const microRoiHtml = renderToStaticMarkup(
+      React.createElement(BrandMicroRoiPanel, {
+        organizationId: 'org-kaiper',
+        locale: 'ko',
+        canWrite: true,
+      })
+    );
+
+    for (const html of [beautyStudioHtml, conciergeHtml, aestheticHtml, microRoiHtml]) {
+      expect(html).not.toContain('#ED1E1E');
+      expect(html).not.toContain('Slack');
+      expect(html).not.toContain('슬랙');
+      expect(html).not.toContain('(mark_only)');
+      expect(html).not.toContain('outside_pixels_changed === 0');
     }
   });
 });

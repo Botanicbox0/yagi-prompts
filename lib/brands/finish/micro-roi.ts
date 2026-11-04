@@ -142,9 +142,9 @@ export const MICRO_ROI_MODE_SPECS: Record<MicroRoiMode, MicroRoiModeSpec> = {
     titleKo: '극소 부위 패치 복원 (손·의류·피부·배경)',
     titleEn: 'Micro-ROI Patch Repair (Hand / Garment / Skin / Artifact)',
     summaryKo:
-      '180~400px 국소 영역을 1440px로 확대 편집한 뒤 ECC 서브픽셀 아핀 역정렬과 주파수 분리(keep_tone)로 합성합니다.',
+      '180~400px 국소 영역을 1440px로 확대 편집한 뒤 정밀 정렬과 주변 톤 맞춤으로 티 나지 않게 합성합니다.',
     summaryEn:
-      'Upscales a 180-400px local crop to 1440px, then composites via ECC affine registration and frequency-separated tone lock.',
+      'Upscales a 180-400px local crop to 1440px, then composites via precision alignment and seamless tone matching.',
     defaultCanvasPx: 1440,
     defaultTemperature: 0.25,
     alignmentMethod: 'ecc_affine',
@@ -160,9 +160,9 @@ export const MICRO_ROI_MODE_SPECS: Record<MicroRoiMode, MicroRoiModeSpec> = {
     titleKo: '브랜드 로고·심볼·라벨 정밀 복원',
     titleEn: 'Brand Logo, Mark & Typography Lock',
     summaryKo:
-      '단독 로고 마크(mark_only)만 참조해 1440px에서 선명하게 다시 그린 뒤, ECC 정렬 및 원본 마크 높이/중심 리사이즈(resize_mark)로 끼워 넣습니다.',
+      '단독 로고 원본만 참조해 1440px에서 선명하게 다시 그린 뒤, 원본 로고 크기와 중심 위치에 정확히 맞춰 합성합니다.',
     summaryEn:
-      'Re-renders the mark at 1440px using an isolated mark reference, aligns via ECC, and locks exact original mark height and centre.',
+      'Re-renders the mark at 1440px using an isolated logo reference and locks exact original mark height and centre.',
     defaultCanvasPx: 1440,
     defaultTemperature: 0.2,
     alignmentMethod: 'ecc_affine',

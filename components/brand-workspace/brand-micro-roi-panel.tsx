@@ -278,8 +278,8 @@ export function BrandMicroRoiPanel({
       if (!response.ok || !data.ok || !data.plan) {
         setErrorMessage(
           isKo
-            ? `극소 부위 합성 명세 생성 실패 (${data.code ?? "invalid"}${data.field ? `: ${data.field}` : ""}). 로고 복원은 mark_only, 인물 복원은 consented_identity가 필요합니다.`
-            : `Failed to build Micro-ROI plan (${data.code ?? "invalid"}).`
+            ? `부분 보정 요청을 처리하지 못했습니다 (${data.code ?? "invalid"}${data.field ? `: ${data.field}` : ""}). 로고나 인물 기준 에셋을 확인해 주세요.`
+            : `Failed to build region repair plan (${data.code ?? "invalid"}).`
         );
         return;
       }
@@ -287,11 +287,11 @@ export function BrandMicroRoiPanel({
       setStatusMessage(
         operation === "microRoi.queue"
           ? isKo
-            ? `5단계 극소 부위(Micro-ROI) 로컬 CV 합성 작업이 큐에 등록되었습니다 (outside_pixels_changed === 0 보장).`
-            : `5-step Micro-ROI CV composite task queued (outside_pixels_changed === 0 guaranteed).`
+            ? `지정한 영역만 정밀 보정하는 작업이 등록되었습니다 (지정 영역 바깥 픽셀 100% 보존).`
+            : `Region repair task queued (surrounding pixels 100% preserved).`
           : isKo
-            ? `5단계 극소 부위(Micro-ROI) 크롭·정렬·톤 잠금·합성 명세가 생성되었습니다.`
-            : `5-step Micro-ROI crop, alignment, tone-lock, and composite plan generated.`
+            ? `선택 영역 정밀 보정 계획이 준비되었습니다.`
+            : `Region repair plan generated.`
       );
     } catch {
       setErrorMessage(
@@ -332,8 +332,8 @@ export function BrandMicroRoiPanel({
         <div>
           <p className="bw-kicker">
             {isKo
-              ? "MICRO-ROI · 부분 디테일 수선"
-              : "MICRO-ROI · LOCAL DETAIL REPAIR"}
+              ? "부분 디테일 정밀 보정"
+              : "PRECISION DETAIL REPAIR"}
           </p>
           <h3>
             {isKo
@@ -342,8 +342,8 @@ export function BrandMicroRoiPanel({
           </h3>
           <p className="bw-muted">
             {isKo
-              ? "전체 사진을 다시 합성하면 얼굴 인상과 조명이 달라집니다. 수선할 부위만 잘라 고해상도로 복원한 뒤, 서브픽셀 정렬과 주파수 분리(keep_tone)로 경계 자국 없이 합칩니다 (outside_pixels_changed === 0)."
-              : "Full-canvas re-renders distort faces and lighting. We crop only the target region, restore it at 1400-1600px, align subpixels, and lock the surrounding pixels untouched (outside_pixels_changed === 0)."}
+              ? "전체 사진을 다시 합성하면 얼굴 인상과 조명이 달라집니다. 수선할 부위만 잘라 고해상도로 복원한 뒤, 주변 피부·조명 톤을 맞춰 경계 자국 없이 합칩니다."
+              : "Full-canvas re-renders distort faces and lighting. We crop only the target region, restore it at high resolution, and keep surrounding pixels 100% untouched."}
           </p>
         </div>
         <span className="bw-badge" data-micro-roi-badge>
@@ -700,23 +700,23 @@ export function BrandMicroRoiPanel({
             >
               <option value="mark_only">
                 {isKo
-                  ? "브랜드 원본 로고/심볼 마크 고정 (mark_only)"
-                  : "Isolated brand logo/mark lock (mark_only)"}
+                  ? "브랜드 원본 로고 · 심볼 마크 고정"
+                  : "Original brand logo / symbol mark"}
               </option>
               <option value="consented_identity">
                 {isKo
-                  ? "사전 동의 모델 얼굴·피부결 고정 (consented_identity)"
-                  : "Pre-consented identity lock (consented_identity)"}
+                  ? "사전 동의 모델 얼굴 · 피부결 고정"
+                  : "Pre-consented model identity"}
               </option>
               <option value="material_swatch">
                 {isKo
-                  ? "원단·표면 재질 스와치 고정 (material_swatch)"
-                  : "Surface material swatch (material_swatch)"}
+                  ? "원단 · 표면 재질 스와치 고정"
+                  : "Surface material swatch"}
               </option>
               <option value="none">
                 {isKo
-                  ? "주변 피부·배경 결로 자연 복원 (none)"
-                  : "Surrounding texture repair (none)"}
+                  ? "주변 피부 · 배경 결로 자연 복원"
+                  : "Natural surrounding texture repair"}
               </option>
             </select>
           </label>
@@ -778,8 +778,8 @@ export function BrandMicroRoiPanel({
 
             <p className="bw-muted" data-micro-roi-scale-preview>
               {isKo
-                ? `Step 1 크롭 크기: ${cropW}×${cropH}px → LANCZOS4 업스케일 작업 캔버스: ${activeSpec.defaultCanvasPx}px (확대 배율 ${upscaleFactor}×) · 정렬: ${activeSpec.alignmentMethod} · 톤 잠금: ${activeSpec.toneLockMethod}`
-                : `Step 1 Crop: ${cropW}×${cropH}px → LANCZOS4 Canvas: ${activeSpec.defaultCanvasPx}px (${upscaleFactor}×) · Align: ${activeSpec.alignmentMethod}`}
+                ? `선택 영역 크기: ${cropW}×${cropH}px → 고해상도 작업 캔버스: ${activeSpec.defaultCanvasPx}px (확대 배율 ${upscaleFactor}×)`
+                : `Selected Crop: ${cropW}×${cropH}px → High-Res Canvas: ${activeSpec.defaultCanvasPx}px (${upscaleFactor}×)`}
             </p>
 
             <label className="bw-check">
@@ -790,8 +790,8 @@ export function BrandMicroRoiPanel({
                 disabled={!canWrite || busy}
               />
               {isKo
-                ? "외곽 실루엣/옷깃 형태 변경 포함 (Step 4 주파수 분리 가우시안 시그마 σ ≥ 200px 강제)"
-                : "Includes silhouette/shape change (Enforce Step 4 keep_tone Gaussian sigma ≥ 200px)"}
+                ? "외곽 실루엣/옷깃 형태 변경 포함 (넓은 주변 톤 자연 블렌딩 적용)"
+                : "Includes silhouette/shape change (apply wide natural tone blending)"}
             </label>
           </div>
         </details>

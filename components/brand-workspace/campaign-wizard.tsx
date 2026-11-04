@@ -21,9 +21,8 @@ import {
 import {
   compileOledCinemaColorGradePlan,
   evaluateOpticalIdentityLockV2,
-  getOledCinemaLookCatalog,
-  type OledCinemaLookId,
 } from "@/lib/brands/production-pipeline/video-creator-techniques";
+import { resolveCategoryExperienceProfile } from "@/lib/brands/category-experience";
 
 /** A public format the brand may pick: the catalogue card's own media, nothing about its prompt. */
 export interface WizardFormat {
@@ -203,7 +202,7 @@ export function CampaignWizard({
         <div className="ys-commission-track-header">
           <div>
             <span className="ys-kicker-badge">
-              {isEn ? "SELECT COMMISSION TRACK" : "STEP 0 · 의뢰 목적 및 제작 트랙 선택"}
+              {isEn ? "SELECT COMMISSION TRACK" : "제작 및 캠페인 의뢰"}
             </span>
             <h2>
               {isEn
@@ -212,7 +211,7 @@ export function CampaignWizard({
             </h2>
             <p className="bw-muted">
               {isEn
-                ? "Every track opens a Frame.io × Playbook Project Room for asset sharing, frame-accurate pin feedback, and stakeholder review links."
+                ? "Every track opens a dedicated Project Room for asset sharing, frame-accurate feedback, and stakeholder review links."
                 : "선택한 트랙에 맞춰 꼭 필요한 항목만 입력합니다. 의뢰 즉시 에셋 폴더 공유·타임코드 시사·외부 공유 링크 기능이 갖춰진 전용 프로젝트 룸이 열립니다."}
             </p>
           </div>
@@ -319,7 +318,7 @@ export function CampaignWizard({
             ) : (
               <form className="bw-form" onSubmit={advance} noValidate>
                 <fieldset disabled={!ready}>
-                  {step === "format" && <FormatStep t={t} draft={draft} errors={errors} update={update} part={part("format")} patch={(p) => patchPart("format", p)} formats={formats} organizations={organizations} organizationId={organizationId} setOrganizationId={setOrganizationId} />}
+                  {step === "format" && <FormatStep t={t} locale={locale} draft={draft} errors={errors} update={update} part={part("format")} patch={(p) => patchPart("format", p)} formats={formats} organizations={organizations} organizationId={organizationId} setOrganizationId={setOrganizationId} />}
                   {step === "reward" && <RewardStep t={t} locale={locale} errors={errors} part={part("reward")} patch={(p) => patchPart("reward", p)} />}
                   {step === "audience" && <AudienceStep t={t} errors={errors} part={part("audience")} set={(p) => update({ audience: p })} patch={(p) => patchPart("audience", p)} />}
                   {step === "schedule" && <ScheduleStep t={t} errors={errors} part={part("schedule")} patch={(p) => patchPart("schedule", p)} />}
@@ -388,8 +387,10 @@ function ExpressCommissionBrief({
   const [endsOn, setEndsOn] = useState("");
 
   // Under-the-hood SOTA pipeline synthesis (compiled into project spec without exposing backend jargon to customer UI)
+  const activeOrgName = organizations.find((o) => o.id === organizationId)?.name ?? "";
+  const categoryProfile = resolveCategoryExperienceProfile({ organizationName: activeOrgName });
   const activeOledPlan = compileOledCinemaColorGradePlan({
-    lookId: "oled-editorial-punch",
+    lookId: categoryProfile.compiler.defaultOledLookId,
     locale,
   });
   const opticalGuide = evaluateOpticalIdentityLockV2({
@@ -402,8 +403,9 @@ function ExpressCommissionBrief({
   // Compose structured objective string so the project detail room & YAGI team see the exact track & specs.
   const structuredObjective = [
     `[${isTemplateBuild ? "TRACK: CUSTOM STUDIO TEMPLATE BUILD" : "TRACK: MASTER VIDEO PRODUCTION ONLY"}]`,
-    `Aspect Ratio: ${aspect} | Spec: ${specOption}`,
+    `Category Profile: ${categoryProfile.category} | Aspect Ratio: ${aspect} | Spec: ${specOption}`,
     `OLED Color Look: ${activeOledPlan.preset.id} | Identity Guard: ${opticalGuide.selectedStage}`,
+    `Guardrail: ${categoryProfile.compiler.scaleAndGeometryLockEn}`,
     `Workflow Gate: Stage 1 (480p Framing/Motion Speed Check) -> Stage 2 (1080p Optical + Dual Stem Master)`,
     `${isTemplateBuild ? "Locked Brand Elements" : "Target Channels & Sound"}: ${channelOrLock}`,
     concept.trim(),
@@ -438,10 +440,10 @@ function ExpressCommissionBrief({
           isTemplateBuild
             ? isEn
               ? "Commission Custom Template & Open Review Room →"
-              : "전용 템플릿 의뢰 및 Frame.io 시사 룸 열기 →"
+              : "전용 템플릿 의뢰 및 시사 룸 열기 →"
             : isEn
               ? "Commission Master Video & Open Review Room →"
-              : "마스터 영상 제작 의뢰 및 Frame.io 시사 룸 열기 →"
+              : "마스터 영상 제작 의뢰 및 시사 룸 열기 →"
         }
         fixed={{
           organizationId,
@@ -470,6 +472,32 @@ function ExpressCommissionBrief({
             </select>
           </label>
         )}
+
+        <div
+          className="bw-row bw-row-wrap"
+          data-campaign-category-starters={categoryProfile.category}
+          style={{ gap: 8, marginBottom: 8 }}
+        >
+          <span className="bw-muted" style={{ fontSize: 12 }}>
+            {isEn
+              ? `${categoryProfile.labelEn} quick starter:`
+              : `${categoryProfile.labelKo} 빠른 시작 예시:`}
+          </span>
+          {categoryProfile.campaignStarters.map((starter) => (
+            <button
+              key={starter.id}
+              type="button"
+              className="bw-button"
+              data-campaign-starter-pill={starter.id}
+              onClick={() => {
+                setTitle(isEn ? starter.titleEn : starter.titleKo);
+                setConcept(isEn ? starter.objectiveEn : starter.objectiveKo);
+              }}
+            >
+              {isEn ? starter.titleEn : starter.titleKo}
+            </button>
+          ))}
+        </div>
 
         <label>
           {isTemplateBuild
@@ -541,7 +569,7 @@ function ExpressCommissionBrief({
               ) : (
                 <>
                   <option value="15s_master">
-                    {isEn ? "15s Hero Cut (1080p + -14 LUFS Sound)" : "15초 메인 릴스·숏폼 마스터 (1080p + 사운드)"}
+                    {isEn ? "15s Hero Cut (1080p + Sound)" : "15초 메인 릴스·숏폼 마스터 (1080p + 사운드)"}
                   </option>
                   <option value="6s_bumper">
                     {isEn ? "6s High-Impact Ad Bumper" : "6초 퍼포먼스 광고 범퍼 컷"}
@@ -594,7 +622,7 @@ function ExpressCommissionBrief({
                   : "예: 카메라 무빙과 림라이트 조명, 엔드카드 로고는 고정하고, 셀프 스튜디오에서 당사 마케터가 시즌별 제품 컬러와 배경 무드만 바꿔가며 즉시 생성할 수 있도록 설계 요청합니다."
                 : isEn
                   ? "Describe the opening 2-second hook, product texture close-up, and sound drop timing."
-                  : "예: 첫 2초 물방울 매크로 클로즈업으로 시작해 -14 LUFS 사운드 드롭과 함께 제품 패키지가 등장하는 1080p 무로고 마스터 영상을 의뢰합니다."
+                  : "예: 첫 2초 물방울 클로즈업으로 시작해 사운드 드롭과 함께 제품 패키지가 등장하는 1080p 마스터 영상을 의뢰합니다."
             }
           />
         </label>
@@ -674,10 +702,13 @@ function Field({ name, label, hint, error, children }: { name: string; label: st
   );
 }
 
-function FormatStep({ t, draft, errors, update, part, patch, formats, organizations, organizationId, setOrganizationId }: {
-  t: Copy; draft: WizardDraft; errors: Errors; update: (p: Partial<WizardDraft>) => void; part: Rec; patch: (p: Rec) => void;
+function FormatStep({ t, locale, draft, errors, update, part, patch, formats, organizations, organizationId, setOrganizationId }: {
+  t: Copy; locale: string; draft: WizardDraft; errors: Errors; update: (p: Partial<WizardDraft>) => void; part: Rec; patch: (p: Rec) => void;
   formats: WizardFormat[]; organizations: Array<{ id: string; name: string }>; organizationId: string; setOrganizationId: (id: string) => void;
 }) {
+  const isEn = locale === "en";
+  const activeOrgName = organizations.find((o) => o.id === organizationId)?.name ?? "";
+  const categoryProfile = resolveCategoryExperienceProfile({ organizationName: activeOrgName });
   const groups = [
     { key: "yagi", label: t.format.originals, items: formats.filter((f) => f.source === "yagi") },
     { key: "community", label: t.format.creators, items: formats.filter((f) => f.source === "community") },
@@ -690,6 +721,33 @@ function FormatStep({ t, draft, errors, update, part, patch, formats, organizati
           {(p) => <select {...p} value={organizationId} onChange={(e) => setOrganizationId(e.target.value)}>{organizations.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}</select>}
         </Field>
       )}
+      <div
+        className="bw-row bw-row-wrap"
+        data-campaign-category-starters={categoryProfile.category}
+        style={{ gap: 8, marginBottom: 8 }}
+      >
+        <span className="bw-muted" style={{ fontSize: 12 }}>
+          {isEn
+            ? `${categoryProfile.labelEn} quick starter:`
+            : `${categoryProfile.labelKo} 빠른 시작 예시:`}
+        </span>
+        {categoryProfile.campaignStarters.map((starter) => (
+          <button
+            key={starter.id}
+            type="button"
+            className="bw-button"
+            data-campaign-starter-pill={starter.id}
+            onClick={() =>
+              update({
+                title: isEn ? starter.titleEn : starter.titleKo,
+                objective: isEn ? starter.objectiveEn : starter.objectiveKo,
+              })
+            }
+          >
+            {isEn ? starter.titleEn : starter.titleKo}
+          </button>
+        ))}
+      </div>
       <Field name="title" label={t.format.name} error={errors.title}>
         {(p) => <input {...p} value={draft.title ?? ""} maxLength={120} required onChange={(e) => update({ title: e.target.value })} />}
       </Field>

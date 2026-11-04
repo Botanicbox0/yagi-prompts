@@ -159,14 +159,10 @@ export default async function BrandStudio({
           <p>{canRequest ? o.usedUpBody : o.usedUpReadOnly}</p>
         </section>
       )}
-      {explaining ? (
-        <StudioIntro t={o} stage={stage} guide={guide} />
-      ) : (
-        <StudioHelp t={o} stage={stage} guide={guide} />
-      )}
       {historyOrg && (
         <BrandBriefStudio
           organizationId={historyOrg}
+          organizationName={choice?.name}
           locale={locale}
           canWrite={canCreate || Boolean(viewer.isAdmin)}
           identityConfirmed={Boolean(confirmedIdentity)}
@@ -178,6 +174,11 @@ export default async function BrandStudio({
           }
           initialProjectId={initialProjectId}
         />
+      )}
+      {explaining ? (
+        <StudioIntro t={o} stage={stage} guide={guide} />
+      ) : (
+        <StudioHelp t={o} stage={stage} guide={guide} />
       )}
       {production && contracts.length > 0 && (
         <>

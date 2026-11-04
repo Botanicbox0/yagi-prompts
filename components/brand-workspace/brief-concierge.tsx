@@ -142,15 +142,15 @@ type AnswerRecord = {
   customText: string;
 };
 
-const SAMPLE_CHAOS_MEMO_KO = `[카톡/슬랙 전달 메모]
+const SAMPLE_CHAOS_MEMO_KO = `[팀 회의 메모]
 이번 AW 시즌 신제품 세럼 + 브랜드 필름 건입니다!
 - 첨부 1: 2026_AW_브랜드캠페인_기획안_초안_v4.pptx (34장)
 - 피그마 보드: https://www.figma.com/file/yagi-aw-moodboard (Hero 프레임 참고)
-- 카톡 메모: "기존 화장품 광고처럼 뻔하게 모델이 웃으면서 바르는 거 말고, 파리 아틀리에 아침 채광 느낌으로 감도 있게 뽑고 싶어요. 릴스 부스팅 광고도 돌릴 거라 초반 2초에 무조건 시선 잡혀야 함! 경쟁사 쿨블루 톤은 절대 피해주세요. 나레이션 넣을지 말지는 아직 내부에서 반반인데 YAGI 디렉터님이 보시기에 더 감도 높은 쪽으로 추천 부탁드려요."`;
+- 팀 메모: "기존 화장품 광고처럼 뻔하게 모델이 웃으면서 바르는 거 말고, 파리 아틀리에 아침 채광 느낌으로 감도 있게 뽑고 싶어요. 릴스 부스팅 광고도 돌릴 거라 초반 2초에 무조건 시선 잡혀야 함! 경쟁사 쿨블루 톤은 절대 피해주세요. 나레이션 넣을지 말지는 아직 내부에서 반반인데 디렉터님이 보시기에 더 감도 높은 쪽으로 추천 부탁드려요."`;
 
-const SAMPLE_CHAOS_MEMO_EN = `[Raw Slack / Deck Dump]
+const SAMPLE_CHAOS_MEMO_EN = `[Team Meeting Notes]
 Attaching our AW serum launch deck (34 slides) + Figma moodboard (https://www.figma.com/file/yagi-aw-moodboard).
-Notes from CMO: "Avoid cliché smiling beauty ads. We want warm Paris atelier morning light with a scroll-stopping 2-second hook for Reels boosting. Avoid cool-blue competitor tones. Still undecided on voiceover—open to YAGI Director's recommendation."`;
+Notes from CMO: "Avoid cliché smiling beauty ads. We want warm Paris atelier morning light with a scroll-stopping 2-second hook for Reels boosting. Avoid cool-blue competitor tones. Still undecided on voiceover—open to the Director's recommendation."`;
 
 export function BriefConcierge({
   brandName,
@@ -383,8 +383,8 @@ export function BriefConcierge({
             <span className="ys-kicker-badge ys-badge-gold">
               {isKo ? "YAGI PRODUCTION · AI 크리에이티브 프로듀서" : "YAGI PRODUCTION · AI Creative Producer"}
             </span>
-            <span className="ys-engine-chip" title="Gemini Pro Multimodal + Claude Fable 5.1">
-              {isKo ? "Argon 멀티모달 분석 × Fable 디렉터 대화" : "Argon Multimodal × Fable Director"}
+            <span className="ys-engine-chip">
+              {isKo ? "자동 브리프 정리 · 전담 디렉터 검토" : "Smart Brief Intake · Director Review"}
             </span>
           </div>
           <h3>
@@ -394,8 +394,8 @@ export function BriefConcierge({
           </h3>
           <p className="bw-muted">
             {isKo
-              ? "PPT, PDF, 피그마 링크, 두서없는 카톡·슬랙 메모까지 그대로 넣어주세요. Argon(Gemini)이 시각 무드와 기획 의도를 추출하고, 비어 있는 핵심 항목만 골라 여쭤본 뒤 버전별 제작 명세서(Spec Sheet)로 기록합니다."
-              : "Drop slides, Figma links, or messy Slack notes. Argon extracts visual mood and intent, Fable asks only for the missing pieces, and everything is saved as a versioned Production Spec Sheet."}
+              ? "PPT, PDF, 피그마 링크, 정리되지 않은 회의 메모까지 그대로 넣어주세요. 시각 무드와 기획 의도를 자동으로 정리하고, 비어 있는 핵심 항목만 골라 여쭤본 뒤 버전별 제작 명세서로 기록합니다."
+              : "Drop slides, Figma links, or raw meeting notes. We extract visual mood and intent, ask only for the missing pieces, and save everything as a versioned Production Spec Sheet."}
           </p>
         </div>
 
@@ -519,13 +519,13 @@ export function BriefConcierge({
             <div className="ys-intake-box">
               <strong>
                 {isKo
-                  ? "② 두서없는 카톡·슬랙 메모 그대로 붙여넣기"
-                  : "② Paste raw Slack / KakaoTalk notes as-is"}
+                  ? "② 정리되지 않은 회의·팀 메모 그대로 붙여넣기"
+                  : "② Paste raw team or meeting notes as-is"}
               </strong>
               <p className="bw-muted">
                 {isKo
-                  ? "팀원들과 주고받은 말뭉치나 회의 메모를 그대로 붙여 넣으시면 AI가 목표·타깃·금지사항으로 자동 분류합니다."
-                  : "Paste raw chat threads or meeting notes; Argon automatically separates goals, tone, and guardrails."}
+                  ? "팀원들과 주고받은 말뭉치나 회의 메모를 그대로 붙여 넣으시면 목표·타깃·주의사항으로 자동 분류합니다."
+                  : "Paste raw chat threads or meeting notes; we automatically separate goals, tone, and guardrails."}
               </p>
               <textarea
                 rows={5}

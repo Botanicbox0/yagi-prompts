@@ -118,7 +118,7 @@ function extractTimecodePins(
         seconds: 1.8,
         label: "00:01.80",
         author: "studio",
-        body: "초반 훅(Hook) 시선 고정 프레임 포인트 · 18° 오프축 앵글",
+        body: "초반 2초 훅 — 메인 시선 집중 구간",
         xPct: 42,
         yPct: 44,
         handoffKind: "general_comment",
@@ -128,7 +128,7 @@ function extractTimecodePins(
         seconds: 3.8,
         label: "00:03.80",
         author: "studio",
-        body: "클라이맥스 제품 리빌(T_reveal) · 보틀 라벨 및 아토마이저 림라이트 구간",
+        body: "메인 제품 클로즈업 — 전면 라벨 및 용기 디테일",
         xPct: 58,
         yPct: 62,
         handoffKind: "send_to_micro_roi",
@@ -139,7 +139,7 @@ function extractTimecodePins(
         seconds: 12.0,
         label: "00:12.00",
         author: "studio",
-        body: "트래버틴 단상 보틀 안착 및 엔딩 로고 락업 구간",
+        body: "엔딩 컷 — 단상 제품 안착 및 브랜드 로고",
         xPct: 52,
         yPct: 66,
         handoffKind: "general_comment",
@@ -292,7 +292,7 @@ export function ReviewStage({
   });
   const [customPins, setCustomPins] = useState<TimecodePin[]>([]);
   const [pinNoteDraft, setPinNoteDraft] = useState<string>(
-    "보틀 전면 라벨 세리프 획 선명도 및 황동 넥 반사 하이라이트 극소 부위 수선",
+    "제품 전면 라벨 글자 선명도 및 용기 반사광 다듬기",
   );
   const [pinRoiMode, setPinRoiMode] = useState<MicroRoiTargetMode>("brand_logo_packaging");
   const [handoffBanner, setHandoffBanner] = useState<string | null>(null);

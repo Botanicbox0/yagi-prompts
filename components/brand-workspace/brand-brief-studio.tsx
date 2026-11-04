@@ -29,9 +29,16 @@ import {
   compileOledCinemaColorGradePlan,
   evaluateOpticalIdentityLockV2,
 } from "@/lib/brands/production-pipeline/video-creator-techniques";
+import {
+  listCategoryExperienceProfiles,
+  resolveCategoryExperienceProfile,
+  type BrandClientCategory,
+} from "@/lib/brands/category-experience";
 
 export interface BrandBriefStudioProps {
   organizationId: string;
+  organizationName?: string;
+  initialCategory?: BrandClientCategory;
   locale: "ko" | "en";
   canWrite: boolean;
   identityConfirmed: boolean;
@@ -42,31 +49,49 @@ export interface BrandBriefStudioProps {
 }
 
 /**
- * Clean, Minimalist Customer Studio Composer (`/brand/studio`).
+ * Clean, Minimalist & Category-Adaptive Customer Studio Composer (`/brand/studio`).
  *
  * Design Rule:
- * - Surface UI is ultra-simple: pick a scene type, type 1 line, choose mood/aspect/brand-style toggle, and click [만들기].
+ * - Surface UI is ultra-simple: category pill bar + 4 category-tailored scene cards + 1-line prompt with 1-click examples + mood/aspect/brand-style pill bar + [만들기].
  * - All complex optical, color-grading (OLED 33³ LUT), identity-lock (Stage 1 passthrough / 35–55% bust-up guard),
- *   multi-shot continuity, and 2-stage mastering parameters are automatically compiled under the hood.
+ *   category scale/geometry locks, multi-shot continuity, and 2-stage mastering parameters are automatically compiled under the hood.
  */
 export function BrandBriefStudio({
   organizationId,
+  organizationName,
+  initialCategory,
   locale,
   canWrite,
   identityConfirmed,
-  defaultChecklist = ["제품 실루엣과 라벨 비례 유지", "브랜드 고유 색감 유지"],
+  defaultChecklist,
   identityHref,
   initialProjectId,
   initialProjectTitle,
 }: BrandBriefStudioProps) {
   const isKo = locale === "ko";
+  const allCategories = listCategoryExperienceProfiles();
+  const initialProfile = resolveCategoryExperienceProfile(
+    initialCategory,
+    organizationName,
+  );
+
+  // Category-adaptive state
+  const [activeCategory, setActiveCategory] = useState<BrandClientCategory>(
+    initialProfile.category,
+  );
+  const categoryProfile = resolveCategoryExperienceProfile(
+    activeCategory,
+    organizationName,
+  );
 
   // Simple customer-facing state
   const [activeShotTemplateId, setActiveShotTemplateId] =
     useState<PomelliShotTemplateId>("studio");
   const [medium, setMedium] = useState<DeliverableMedium>("product still");
   const [cutKind, setCutKind] = useState<ShotCutKind>("reference_exact_product");
-  const [aspect, setAspect] = useState<ShotAspect>("4:5");
+  const [aspect, setAspect] = useState<ShotAspect>(
+    initialProfile.compiler.defaultAspect,
+  );
   const [use, setUse] = useState<DeliverableUse>("feed");
   const [briefText, setBriefText] = useState("");
   const [activeAestheticLineCode, setActiveAestheticLineCode] = useState<
@@ -81,7 +106,9 @@ export function BrandBriefStudio({
   const [lookPresetId, setLookPresetId] =
     useState<BrandLookPresetId>("kodak-2383-warm");
   const [cameraFocalMm, setCameraFocalMm] = useState(85);
-  const [lightColourK, setLightColourK] = useState(5500);
+  const [lightColourK, setLightColourK] = useState(
+    initialProfile.compiler.defaultLightColourK,
+  );
   const [lightModifier, setLightModifier] = useState(
     "large diffused window softbox",
   );
@@ -97,8 +124,8 @@ export function BrandBriefStudio({
   const [statusMessage, setStatusMessage] = useState("");
 
   const aestheticLines = synthesizeMultiAestheticLines({
-    brandName: "BRAND",
-    category: "fashion_apparel",
+    brandName: organizationName || "BRAND",
+    category: activeCategory,
     preferredVibe: "minimal_editorial",
     hasPinterestBoards: true,
   });
@@ -116,7 +143,7 @@ export function BrandBriefStudio({
         ? "kodak-2383-campaign"
         : activeAestheticLineCode === "C"
           ? "dark-fairy-cinema"
-          : "oled-editorial-punch",
+          : categoryProfile.compiler.defaultOledLookId,
     locale,
   });
   const silentContinuity = auditMultiShotContinuity({ clipCount: 4, locale });
@@ -124,6 +151,27 @@ export function BrandBriefStudio({
     gateStatus: "stage2_1080p_master",
     locale,
   });
+
+  const resolvedChecklist =
+    defaultChecklist && defaultChecklist.length > 0
+      ? defaultChecklist
+      : [
+          categoryProfile.compiler.defaultProductChecklist.geometry,
+          categoryProfile.compiler.defaultProductChecklist.label,
+          categoryProfile.compiler.defaultProductChecklist.material,
+        ];
+
+  function handleSelectCategory(nextCategory: BrandClientCategory) {
+    const nextProfile = resolveCategoryExperienceProfile(
+      nextCategory,
+      organizationName,
+    );
+    setActiveCategory(nextCategory);
+    setLightColourK(nextProfile.compiler.defaultLightColourK);
+    if (medium !== "short film") {
+      setAspect(nextProfile.compiler.defaultAspect);
+    }
+  }
 
   function handleSelectSceneType(
     template: PomelliShotTemplate | "short_video",
@@ -133,7 +181,7 @@ export function BrandBriefStudio({
       setCutKind("short_film_clip");
       setAspect("9:16");
       setUse("reel");
-      setCameraFocalMm(50);
+      setCameraFocalMm(categoryProfile.scenes[3].focalMm);
       return;
     }
     setActiveShotTemplateId(template.id);
@@ -169,11 +217,19 @@ export function BrandBriefStudio({
     setErrorMessage("");
     setStatusMessage("");
 
+    const activeSceneIndex =
+      medium === "short film"
+        ? 3
+        : activeShotTemplateId === "ingredients"
+          ? 1
+          : activeShotTemplateId === "in_use"
+            ? 2
+            : 0;
+    const activeScene = categoryProfile.scenes[activeSceneIndex]!;
+
     const promptToUse =
       briefText.trim() ||
-      (isKo
-        ? "자연광이 부드럽게 들어오는 테이블 위 제품 중심 연출"
-        : "Clean tabletop product scene with soft natural daylight");
+      (isKo ? activeScene.quickPromptsKo[0] : activeScene.quickPromptsEn[0]);
 
     try {
       const response = await fetch("/api/brand-workspace", {
@@ -201,7 +257,7 @@ export function BrandBriefStudio({
                       background: spaceBackground,
                       surface: spaceSurface,
                     },
-                    projectProductChecklist: [...defaultChecklist],
+                    projectProductChecklist: [...resolvedChecklist],
                     isolateProjectMemory: true,
                   },
                 }
@@ -213,7 +269,7 @@ export function BrandBriefStudio({
               aspect,
               use,
               labelLock:
-                defaultChecklist[0] ??
+                resolvedChecklist[0] ??
                 "front label centered with crisp brand typography",
               cameraFocalMm,
               lightModifier,
@@ -239,8 +295,8 @@ export function BrandBriefStudio({
       setView(payload.view as CustomerBriefView);
       setStatusMessage(
         isKo
-          ? "브랜드 스타일과 최적 촬영 세팅이 자동으로 적용되어 장면이 준비되었습니다."
-          : "Scene prepared with your brand style and optimal studio settings.",
+          ? "브랜드 스타일과 업종별 촬영 세팅이 자동으로 적용되어 장면이 준비되었습니다."
+          : "Scene prepared with your brand style and category settings.",
       );
     } catch {
       setErrorMessage(
@@ -301,42 +357,69 @@ export function BrandBriefStudio({
     labelEn: string;
     descKo: string;
     descEn: string;
+    placeholderKo: string;
+    placeholderEn: string;
+    quickPromptsKo: readonly [string, string, string];
+    quickPromptsEn: readonly [string, string, string];
     isVideo?: boolean;
     template?: PomelliShotTemplate;
   }> = [
     {
       id: "studio",
-      labelKo: "제품 단독 컷",
-      labelEn: "Product Cut",
-      descKo: "단상·배경 위 깔끔한 제품 촬영",
-      descEn: "Clean tabletop product shot",
+      labelKo: categoryProfile.scenes[0].titleKo,
+      labelEn: categoryProfile.scenes[0].titleEn,
+      descKo: categoryProfile.scenes[0].descKo,
+      descEn: categoryProfile.scenes[0].descEn,
+      placeholderKo: categoryProfile.scenes[0].placeholderKo,
+      placeholderEn: categoryProfile.scenes[0].placeholderEn,
+      quickPromptsKo: categoryProfile.scenes[0].quickPromptsKo,
+      quickPromptsEn: categoryProfile.scenes[0].quickPromptsEn,
       template: POMELLI_SHOT_TEMPLATES[0],
     },
     {
       id: "ingredients",
-      labelKo: "제형 · 디테일",
-      labelEn: "Texture & Detail",
-      descKo: "원단 질감·제형 클로즈업",
-      descEn: "Macro texture & material close-up",
+      labelKo: categoryProfile.scenes[1].titleKo,
+      labelEn: categoryProfile.scenes[1].titleEn,
+      descKo: categoryProfile.scenes[1].descKo,
+      descEn: categoryProfile.scenes[1].descEn,
+      placeholderKo: categoryProfile.scenes[1].placeholderKo,
+      placeholderEn: categoryProfile.scenes[1].placeholderEn,
+      quickPromptsKo: categoryProfile.scenes[1].quickPromptsKo,
+      quickPromptsEn: categoryProfile.scenes[1].quickPromptsEn,
       template: POMELLI_SHOT_TEMPLATES[1],
     },
     {
       id: "in_use",
-      labelKo: "착용 · 사용 컷",
-      labelEn: "Model & In-Use",
-      descKo: "모델 착용 및 실제 사용 장면",
-      descEn: "Natural model & in-use scene",
+      labelKo: categoryProfile.scenes[2].titleKo,
+      labelEn: categoryProfile.scenes[2].titleEn,
+      descKo: categoryProfile.scenes[2].descKo,
+      descEn: categoryProfile.scenes[2].descEn,
+      placeholderKo: categoryProfile.scenes[2].placeholderKo,
+      placeholderEn: categoryProfile.scenes[2].placeholderEn,
+      quickPromptsKo: categoryProfile.scenes[2].quickPromptsKo,
+      quickPromptsEn: categoryProfile.scenes[2].quickPromptsEn,
       template: POMELLI_SHOT_TEMPLATES[2],
     },
     {
       id: "short_video",
-      labelKo: "숏폼 영상",
-      labelEn: "Short Video",
-      descKo: "릴스·숏츠용 고화질 모션 영상",
-      descEn: "Vertical motion video for Reels",
+      labelKo: categoryProfile.scenes[3].titleKo,
+      labelEn: categoryProfile.scenes[3].titleEn,
+      descKo: categoryProfile.scenes[3].descKo,
+      descEn: categoryProfile.scenes[3].descEn,
+      placeholderKo: categoryProfile.scenes[3].placeholderKo,
+      placeholderEn: categoryProfile.scenes[3].placeholderEn,
+      quickPromptsKo: categoryProfile.scenes[3].quickPromptsKo,
+      quickPromptsEn: categoryProfile.scenes[3].quickPromptsEn,
       isVideo: true,
     },
   ];
+
+  const activeSceneButton =
+    simpleSceneButtons.find((item) =>
+      item.isVideo
+        ? medium === "short film"
+        : medium !== "short film" && activeShotTemplateId === item.id,
+    ) ?? simpleSceneButtons[0]!;
 
   return (
     <section
@@ -347,6 +430,7 @@ export function BrandBriefStudio({
       data-brief-identity-source={
         identityConfirmed ? "confirmed" : "default_fallback"
       }
+      data-active-studio-category={activeCategory}
       data-studio-optical-stage={silentOpticalGuard.selectedStage}
       data-studio-oled-look={silentOledPlan.preset.id}
       data-studio-continuity={silentContinuity.status}
@@ -358,29 +442,76 @@ export function BrandBriefStudio({
         border: "1px solid rgba(15, 23, 42, 0.08)",
       }}
     >
-      {/* Clean Header */}
+      {/* Clean Header + Category-Adaptive Pill Bar */}
       <div
         className="bw-row"
-        style={{ marginBottom: "18px", alignItems: "center" }}
+        style={{ marginBottom: "14px", alignItems: "flex-start", gap: "12px" }}
       >
         <div>
           <h2 style={{ margin: "0 0 4px", fontSize: "20px", fontWeight: 600 }}>
             {isKo ? "어떤 콘텐츠를 만들까요?" : "What would you like to create?"}
           </h2>
           <p className="bw-muted" style={{ margin: 0, fontSize: "13.5px" }}>
-            {isKo
-              ? "원하는 구도를 고르고 한 줄로 적어주시면, 등록된 브랜드 로고·색감·고화질 마감 기준에 맞춰 바로 제작합니다."
-              : "Pick a shot type and describe your scene in one line. Your brand style and master quality rules are applied automatically."}
+            {isKo ? categoryProfile.headlineKo : categoryProfile.headlineEn}
           </p>
         </div>
-        {identityHref && (
-          <a className="bw-button" href={identityHref}>
-            {isKo ? "브랜드 스타일 관리" : "Brand Style"}
-          </a>
-        )}
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            alignItems: "center",
+            gap: "6px",
+          }}
+        >
+          <div
+            data-studio-category-switcher
+            role="group"
+            aria-label={isKo ? "업종 맞춤 전환" : "Select brand category"}
+            style={{
+              display: "inline-flex",
+              flexWrap: "wrap",
+              background: "#F6F7F9",
+              padding: "3px",
+              borderRadius: "999px",
+              border: "1px solid rgba(15, 23, 42, 0.08)",
+              gap: "2px",
+            }}
+          >
+            {allCategories.map((cat) => {
+              const selected = cat.category === activeCategory;
+              return (
+                <button
+                  key={cat.category}
+                  type="button"
+                  data-studio-category-pill={cat.category}
+                  aria-pressed={selected}
+                  onClick={() => handleSelectCategory(cat.category)}
+                  disabled={busy}
+                  style={{
+                    padding: "5px 11px",
+                    borderRadius: "999px",
+                    border: "none",
+                    fontSize: "12px",
+                    fontWeight: selected ? 600 : 500,
+                    background: selected ? "#3875C5" : "transparent",
+                    color: selected ? "#FFFFFF" : "#41444D",
+                    cursor: busy ? "default" : "pointer",
+                  }}
+                >
+                  {isKo ? cat.labelKo : cat.labelEn}
+                </button>
+              );
+            })}
+          </div>
+          {identityHref && (
+            <a className="bw-button" href={identityHref}>
+              {isKo ? "브랜드 스타일 관리" : "Brand Style"}
+            </a>
+          )}
+        </div>
       </div>
 
-      {/* 1. Simple 4-Card Scene Type Picker (No mm/Kelvin/jargon) */}
+      {/* 1. Category-Tailored 4-Card Scene Type Picker (Zero technical jargon) */}
       <div
         className="bw-grid-wide"
         data-pomelli-shot-templates
@@ -416,10 +547,10 @@ export function BrandBriefStudio({
                 gap: "4px",
               }}
             >
-              <strong style={{ fontSize: "14px", color: "#0F172A" }}>
+              <strong style={{ fontSize: "14px", color: "#0E1013" }}>
                 {isKo ? item.labelKo : item.labelEn}
               </strong>
-              <span style={{ fontSize: "12px", color: "#64748B" }}>
+              <span style={{ fontSize: "12px", color: "#676B75" }}>
                 {isKo ? item.descKo : item.descEn}
               </span>
             </button>
@@ -427,7 +558,7 @@ export function BrandBriefStudio({
         })}
       </div>
 
-      {/* 2. Unified One-Box Composer (Prompt + Compact Pill Toolbar) */}
+      {/* 2. Unified One-Box Composer (Prompt + 1-Click Quick Examples + Compact Pill Toolbar) */}
       <form
         onSubmit={onCompileSubmit}
         data-brief-compile-form
@@ -437,7 +568,7 @@ export function BrandBriefStudio({
           background: "#F8FAFC",
           border: "1px solid rgba(15, 23, 42, 0.1)",
           display: "grid",
-          gap: "14px",
+          gap: "12px",
         }}
       >
         <textarea
@@ -448,9 +579,7 @@ export function BrandBriefStudio({
           maxLength={500}
           disabled={!canWrite || busy}
           placeholder={
-            isKo
-              ? "원하는 장면을 편하게 적어주세요 (예: 아침 햇살이 들어오는 대리석 테이블 위 세럼 보틀과 물방울)"
-              : "Describe your scene in one line (e.g., Serum bottle on a sunlit marble table with water droplets)"
+            isKo ? activeSceneButton.placeholderKo : activeSceneButton.placeholderEn
           }
           style={{
             width: "100%",
@@ -458,11 +587,46 @@ export function BrandBriefStudio({
             background: "transparent",
             fontSize: "15px",
             lineHeight: 1.5,
-            color: "#0F172A",
+            color: "#0E1013",
             resize: "none",
             outline: "none",
           }}
         />
+
+        {/* 1-Click Category Quick Prompt Chips */}
+        <div
+          data-studio-quick-prompts
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            alignItems: "center",
+            gap: "6px",
+          }}
+        >
+          {(isKo
+            ? activeSceneButton.quickPromptsKo
+            : activeSceneButton.quickPromptsEn
+          ).map((sample, idx) => (
+            <button
+              key={sample}
+              type="button"
+              data-studio-quick-prompt={idx}
+              onClick={() => setBriefText(sample)}
+              disabled={!canWrite || busy}
+              style={{
+                padding: "4px 10px",
+                borderRadius: "999px",
+                border: "1px solid rgba(15, 23, 42, 0.08)",
+                background: "#FFFFFF",
+                color: "#41444D",
+                fontSize: "11.5px",
+                cursor: canWrite && !busy ? "pointer" : "default",
+              }}
+            >
+              + {sample}
+            </button>
+          ))}
+        </div>
 
         {/* Compact Bottom Pill Bar */}
         <div
@@ -515,7 +679,7 @@ export function BrandBriefStudio({
                       fontSize: "12px",
                       fontWeight: selected ? 600 : 500,
                       background: selected ? "#3875C5" : "transparent",
-                      color: selected ? "#FFFFFF" : "#475569",
+                      color: selected ? "#FFFFFF" : "#41444D",
                       cursor: "pointer",
                     }}
                   >
@@ -551,7 +715,7 @@ export function BrandBriefStudio({
                     fontWeight: aspect === r ? 600 : 500,
                     background:
                       aspect === r ? "rgba(56, 117, 197, 0.14)" : "transparent",
-                    color: aspect === r ? "#3063A7" : "#475569",
+                    color: aspect === r ? "#3063A7" : "#41444D",
                     cursor: "pointer",
                   }}
                 >
@@ -593,7 +757,7 @@ export function BrandBriefStudio({
                   color:
                     principleAttachment.mode === "full_attach"
                       ? "#3063A7"
-                      : "#475569",
+                      : "#41444D",
                   cursor: "pointer",
                 }}
               >
@@ -616,7 +780,7 @@ export function BrandBriefStudio({
                     principleAttachment.mode === "unbound_free"
                       ? "rgba(15, 23, 42, 0.08)"
                       : "transparent",
-                  color: "#475569",
+                  color: "#41444D",
                   cursor: "pointer",
                 }}
               >
@@ -689,7 +853,7 @@ export function BrandBriefStudio({
           }}
         >
           <div>
-            <strong style={{ fontSize: "15px", color: "#0F172A" }}>
+            <strong style={{ fontSize: "15px", color: "#0E1013" }}>
               {isKo ? view.cutKindLabel.ko : view.cutKindLabel.en} ·{" "}
               {view.deliverable.aspect} ({view.resolution})
             </strong>

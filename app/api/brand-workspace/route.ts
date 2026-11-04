@@ -315,9 +315,12 @@ export async function GET(request:NextRequest) {
  const [viewer,sql]=await Promise.all([getViewer(),getSqlRunner()]);
  if(!sql||!viewer.userId)return json({ok:false},404);
  const organizationId = request.nextUrl.searchParams.get('organizationId') ?? '';
+ const verifiedEmail = await getVerifiedEmail(viewer.userId);
+ const initialMessages=await loadBrandSupport({sql,verifiedEmail},viewer,organizationId);
+ if(!initialMessages)return json({ok:false},404);
  if (organizationId) {
   await syncSlackConciergeReplies(sql, organizationId);
  }
- const messages=await loadBrandSupport({sql,verifiedEmail:await getVerifiedEmail(viewer.userId)},viewer,organizationId);
+ const messages=await loadBrandSupport({sql,verifiedEmail},viewer,organizationId);
  return messages?json({ok:true,messages}):json({ok:false},404);
 }

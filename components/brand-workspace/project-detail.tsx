@@ -370,13 +370,13 @@ export function ProjectDetail({
                     <div>
                       <strong>
                         {locale === "en"
-                          ? "2-Tier Direction Override (Base Brand DNA ⊕ Project Override)"
-                          : "2단계 연출 상속 · 프로젝트 전용 연출 오버라이드"}
+                          ? "Project-Specific Mood & Direction"
+                          : "이 프로젝트 전용 무드 · 스튜디오 연동"}
                       </strong>
                       <p className="bw-muted">
                         {locale === "en"
-                          ? "Keep Brand Base DNA hard locks (consented faces, logo geometry, taboos, skin protection) while overriding look, lens, lighting, space, and memory isolation for this project."
-                          : "브랜드 Base DNA 안전 불변층(동의 인물·로고 원형·절대 금기·피부 보호)은 고정한 채, 이 프로젝트 전용 룩·렌즈·조명·공간·메모리 격리 규칙만 별도로 오버라이드해 스튜디오 지시서를 조립합니다."}
+                          ? "Keep your brand essentials (logos, products, and guidelines) while tailoring the lighting, framing, and mood specifically for this project."
+                          : "브랜드 로고·제품·핵심 원칙은 유지하면서, 이번 프로젝트에 맞는 조명·구도·분위기만 골라 스튜디오에서 바로 제작합니다."}
                       </p>
                     </div>
                     <a

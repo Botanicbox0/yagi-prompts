@@ -38,6 +38,7 @@ import {
 } from "@/lib/brands/plans";
 import { MICRO_ROI_MODES } from "@/lib/brands/finish/micro-roi";
 import { BRAND_LOOK_PRESET_IDS } from "@/lib/brands/finish/color-grading";
+import { resolveCategoryExperienceProfile } from "@/lib/brands/category-experience";
 
 export const dynamic = "force-dynamic";
 
@@ -79,6 +80,7 @@ export default async function StudioOrganization({
     listMemory(sql, id, 12),
   ]);
   const activeIdentity = brandIdentity?.identity ?? twingsDefaultIdentity();
+  const categoryProfile = resolveCategoryExperienceProfile({ organizationName: org.name });
   const krw = new Intl.NumberFormat("ko-KR");
   const today = new Date(Date.now() + 9 * 3_600_000).toISOString().slice(0, 10);
   return (
@@ -248,6 +250,9 @@ export default async function StudioOrganization({
 
           <div className="admin-subcard" data-dna-model-roles>
             <h3>{be.modelRouting}</h3>
+            <p>
+              <strong>Category Profile:</strong> {categoryProfile.labelKo} ({categoryProfile.category}) · {categoryProfile.compiler.defaultOledLookId} ({categoryProfile.compiler.defaultLightColourK}K)
+            </p>
             <p>
               <strong>Editorial:</strong> {activeIdentity.modelRoles.editorial}
             </p>
