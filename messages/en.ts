@@ -2948,6 +2948,7 @@ export const en = {
       title: 'Payment service review sign-in',
       description: 'Sign in with your assigned review account. The same service conditions apply as for ordinary members.',
       email: 'Review account email', password: 'Password', submit: 'Sign in',
+      submitSubscription: 'Sign in to monthly subscription billing',
       invalid: 'Check your sign-in details. If the issue continues, contact the TWINGS team.',
       customerLogin: 'Return to member sign-in',
     },

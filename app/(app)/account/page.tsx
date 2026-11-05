@@ -24,6 +24,8 @@ import { loadCreatorProfile, type CreatorProfile } from '@/lib/creators/profile'
 import { saveNotificationPreferences } from './actions';
 import { CREATOR_WORKSPACE_PATH, creatorProgramOpen } from '@/lib/creator-platform/links';
 import { SubscriptionStatus } from '@/components/billing/subscription-status';
+import { subscriptionQaAllowed } from '@/lib/creator-subscriptions/access';
+import { billingConfigFromEnv } from '@/lib/creator-subscriptions/gateway';
 import { getSubscriptionSummary } from '@/lib/creator-subscriptions/service';
 import type { SubscriptionSummary } from '@/lib/creator-subscriptions/types';
 import { NotifyChoice } from '@/components/notify/notify-choice';
@@ -109,9 +111,10 @@ export default async function AccountPage({
     if (viewer.userId !== null) {
       const sql = await getSqlRunner();
       if (sql !== null) {
+        const subEnv = billingConfigFromEnv()?.kind === 'test' && subscriptionQaAllowed(viewer) ? 'test' : 'live';
         const [prefs, works, creator, monthly, face] = await Promise.allSettled([
           loadPreferences(sql, viewer.userId), listMyRenders(sql, viewer.userId, 3), loadCreatorProfile(sql, viewer.userId),
-          getSubscriptionSummary(sql, viewer.userId, { environment: 'live' }), selfieLibrary(sql, viewer.userId, selfieLimit()),
+          getSubscriptionSummary(sql, viewer.userId, { environment: subEnv }), selfieLibrary(sql, viewer.userId, selfieLimit()),
         ]);
         if (prefs.status === 'fulfilled') preferences = prefs.value ?? PREFERENCES_OFF;
         if (works.status === 'fulfilled') renders = works.value;

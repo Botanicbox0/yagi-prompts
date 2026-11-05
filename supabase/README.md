@@ -86,5 +86,6 @@ operation for a superuser, and it is not something app code can do — that is t
 | 2026-10-30 | `0067_core_landing_media` · `0147_glue_landing_media` | 0067 + 0147 (`landing_media` 랜딩 미디어 슬롯, RLS 강제, anon·authenticated 권한 없음, 서버 롤만 쓰기) | #116 |
 | 2026-11-03 | `0074_core_brand_entitlements` · `0150_glue_brand_entitlements` | 0074 + 0150 (`brand_feature_policies`·`brand_feature_policy_events`·`brand_plan_assignments`·`brand_plan_events`, RLS 강제, 서버 롤 전용). 적용 직후 Morphic(`deb648e9-…`) 차단 정책(`generative_media`·`sound`·`color_grading`) 반영 | #176 |
 | 2026-11-03 | `0075_core_brand_identity` · `0151_glue_brand_identity` | 0075 + 0151 (`brand_identities`·`brand_identity_events`·`brand_memory_events`·`brand_looks`, RLS 강제, 서버 롤 전용) | #181 |
+| 2026-11-06 | `0042`~`0044` · `0127`~`0129` | 0042~0044 + 0127~0129 (월 구독·프리미엄 수정·출시 증빙 테이블, RLS 강제, 서버 롤 전용) | 정기결제(`bill_twinglnyl`) 심사 반영 |
 
-미적용: 0042~0044(월 구독·Premium 수정, 미출시), 0029/0115(옛 portrait 비교, 폐지 경로). 0063(prom-queen 비율)은 원장에 없지만 운영 데이터에는 이미 반영돼 있다. 0064·0144는 열린 브랜치가 쓰는 번호. 0074·0075와 0150·0151은 브랜드 제품화 브랜치(docs/BRAND-PRODUCT.md)가 쓴다. 다음 번호: core 0076, glue 0152.
+미적용: 0029/0115(옛 portrait 비교, 폐지 경로). 0063(prom-queen 비율)은 원장에 없지만 운영 데이터에는 이미 반영돼 있다. 0064·0144는 열린 브랜치가 쓰는 번호. 0074·0075와 0150·0151은 브랜드 제품화 브랜치(docs/BRAND-PRODUCT.md)가 쓴다. 다음 번호: core 0076, glue 0152.
