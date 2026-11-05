@@ -49,8 +49,9 @@ export default async function LandingPage({ params }: { params: Promise<{ locale
   // §7.5 (founder 2026-10-30 & 2026-11-04): one feed per medium — originals and AI creatives' templates mixed by `railOrder`.
   // The hero showcases the top editorial studio original (`city-fashion-montage` / `aquarium-goldfish` / `fashion-show-arrival`).
   const featured = pickHeroFeaturedTemplate(templates.video);
-  const orderedVideos = railOrder(templates.video);
-  const orderedImages = railOrder(templates.image);
+  const clientSafeCard = (card: (typeof templates.video)[number]) => ({ ...card, models: [], modelLabels: [] });
+  const orderedVideos = railOrder(templates.video).map(clientSafeCard);
+  const orderedImages = railOrder(templates.image).map(clientSafeCard);
   return <PersonalIdentity>
     <MarketingNav locale={locale} dict={dict} rest="/" />
     <SubscriptionAvailabilityProvider initialAvailability={availability}>
