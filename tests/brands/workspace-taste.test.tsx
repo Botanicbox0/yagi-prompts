@@ -14,6 +14,10 @@ import {
   quoteBrandVideoMatrix,
   quoteBrandVideoRender,
 } from "@/lib/brands/production/pricing";
+import {
+  BRAND_STUDIO_IMAGE_MODELS,
+  resolveCategoryReferenceWorkflows,
+} from "@/lib/brands/production/reference-studio";
 import { getDictionary } from "@/lib/i18n/dictionaries";
 
 /**
@@ -192,13 +196,27 @@ describe("brand workspace taste", () => {
     expect(html).toContain('data-studio-medium-tab="image"');
     expect(html).toContain('data-studio-medium-tab="video"');
     expect(html).toContain("data-studio-asset-upload");
+    expect(html).toContain('data-ref-slot="1"');
+    expect(html).toContain('data-ref-slot="2"');
+    expect(html).toContain('data-ref-slot="3"');
+    expect(html).toContain('data-ref-slot="4"');
     expect(html).toContain('data-upload-slot="product"');
     expect(html).toContain('data-upload-slot="reference"');
+    expect(html).toContain("data-studio-image-model-picker");
+    expect(html).toContain("data-studio-active-model-detail");
+    expect(html).toContain("data-studio-ref-token-bar");
     expect(html).toContain('class="bw-scene-thumb"');
     expect(html).toContain("data-studio-live-canvas");
     expect(html).toContain("data-studio-canvas-takes");
     expect(html).toContain("data-studio-canvas-actions");
     expect(html).not.toMatch(/seedance|seedream|nano\s*banana|seedvr2|comfyui/i);
     expect(html).not.toContain(".mp4");
+
+    expect(BRAND_STUDIO_IMAGE_MODELS).toHaveLength(4);
+    const workflows = resolveCategoryReferenceWorkflows("fashion_apparel");
+    expect(workflows.lookbook_composite.slots).toHaveLength(4);
+    expect(workflows.product_swap.slots).toHaveLength(4);
+    expect(workflows.lookbook_composite.defaultPromptKo).toContain("1번 이미지");
+    expect(workflows.product_swap.defaultPromptKo).toContain("1번 이미지");
   });
 });

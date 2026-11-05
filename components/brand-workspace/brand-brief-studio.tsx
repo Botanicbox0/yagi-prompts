@@ -36,12 +36,18 @@ import {
   type BrandClientCategory,
 } from "@/lib/brands/category-experience";
 import {
-  quoteBrandImageSet,
   quoteBrandTwoStageGate,
   quoteBrandVideoRender,
   type BrandStandardDurationSeconds,
   type BrandVideoResolution,
 } from "@/lib/brands/production/pricing";
+import {
+  BRAND_STUDIO_IMAGE_MODELS,
+  resolveCategoryReferenceWorkflows,
+  type BrandStudioImageModelId,
+  type StudioReferenceSlotNumber,
+  type StudioReferenceWorkflowId,
+} from "@/lib/brands/production/reference-studio";
 
 export interface BrandBriefStudioProps {
   organizationId: string;
@@ -57,12 +63,6 @@ export interface BrandBriefStudioProps {
 }
 
 interface CategoryVisualAssets {
-  productThumb: string;
-  productLabelKo: string;
-  productLabelEn: string;
-  referenceThumb: string;
-  referenceLabelKo: string;
-  referenceLabelEn: string;
   sceneThumbs: readonly [string, string, string, string];
   takes: ReadonlyArray<{
     id: string;
@@ -77,12 +77,6 @@ const CATEGORY_STUDIO_VISUALS: Record<
   CategoryVisualAssets
 > = {
   fashion_apparel: {
-    productThumb: "/reel/studio/vto-garment.webp",
-    productLabelKo: "26SS 시그니처 테일러드 코트 · 제품 원판",
-    productLabelEn: "26SS Signature Tailored Coat · Product Packshot",
-    referenceThumb: "/reel/studio/vto-look-front.webp",
-    referenceLabelKo: "성수 에디토리얼 룩북 · 모델 포즈 레퍼런스",
-    referenceLabelEn: "Editorial Lookbook · Model Pose Reference",
     sceneThumbs: [
       "/reel/studio/vto-garment.webp",
       "/reel/landing/c-garment-ours.webp",
@@ -111,12 +105,6 @@ const CATEGORY_STUDIO_VISUALS: Record<
     ],
   },
   beauty_skincare: {
-    productThumb: "/reel/landing/v7/rx-beauty-product.jpg",
-    productLabelKo: "배리어 리페어 앰플 50ml · 용기 정면",
-    productLabelEn: "Barrier Repair Ampoule 50ml · Bottle Front",
-    referenceThumb: "/reel/landing/v7/rx-beauty-orig.jpg",
-    referenceLabelKo: "글래스 스킨 광채 · 뷰티 무드 레퍼런스",
-    referenceLabelEn: "Glass-Skin Glow · Beauty Mood Reference",
     sceneThumbs: [
       "/reel/landing/v7/rx-beauty-product.jpg",
       "/reel/landing/cut-pump.webp",
@@ -145,12 +133,6 @@ const CATEGORY_STUDIO_VISUALS: Record<
     ],
   },
   fnb_hospitality: {
-    productThumb: "/reel/brands/tea-editorial.jpg",
-    productLabelKo: "시그니처 콜드브루 보틀 · 패키지 정면",
-    productLabelEn: "Signature Cold Brew Bottle · Front Package",
-    referenceThumb: "/reel/landing/v7/film-tea.jpg",
-    referenceLabelKo: "우드 테이블 채광 · 다이닝 무드 레퍼런스",
-    referenceLabelEn: "Wood Table Daylight · Dining Mood Reference",
     sceneThumbs: [
       "/reel/brands/tea-editorial.jpg",
       "/reel/landing/cut-scent.webp",
@@ -179,12 +161,6 @@ const CATEGORY_STUDIO_VISUALS: Record<
     ],
   },
   lifestyle_object: {
-    productThumb: "/reel/studio/vto-free-amber.webp",
-    productLabelKo: "세라믹 디퓨저 오브제 · 정면 원판",
-    productLabelEn: "Ceramic Diffuser Objet · Front Still",
-    referenceThumb: "/reel/studio/vto-free-sofa.webp",
-    referenceLabelKo: "모던 리빙 라운지 · 공간 배치 레퍼런스",
-    referenceLabelEn: "Modern Living Lounge · Spatial Reference",
     sceneThumbs: [
       "/reel/studio/vto-free-amber.webp",
       "/reel/landing/cut-beads.webp",
@@ -213,12 +189,6 @@ const CATEGORY_STUDIO_VISUALS: Record<
     ],
   },
   tech_platform: {
-    productThumb: "/reel/brands/y2k-flip-phone.jpg",
-    productLabelKo: "플래그십 디바이스 · 알루미늄 바디 원판",
-    productLabelEn: "Flagship Device · Anodized Body Still",
-    referenceThumb: "/reel/campaigns/retro-phone-01.jpg",
-    referenceLabelKo: "데스크 셋업 & 핸즈온 · 테크 레퍼런스",
-    referenceLabelEn: "Desk Setup & Hands-On · Tech Reference",
     sceneThumbs: [
       "/reel/brands/y2k-flip-phone.jpg",
       "/reel/landing/cut-mark.webp",
@@ -258,18 +228,14 @@ const CSS_ASPECT_MAP: Record<ShotAspect, string> = {
 };
 
 /**
- * Split-Stage Visual Image & Video Creation Studio (`/brand/studio`).
+ * Sunra / AMERICANO / Oplux-inspired Multi-Reference & Model-Guided Studio Workbench (`/brand/studio`).
  *
- * Left Column:
- *   1. Medium Mode Switch (`이미지 화보 만들기` vs `숏폼 · 마스터 영상 만들기`)
- *   2. Product & Reference Photo Upload Bar (`data-studio-asset-upload`)
- *   3. 4-Column Visual Scene Cards with Thumbnails (`.bw-scene-grid`)
- *   4. Recessed Composer Well with Video Resolution (`480p` / `720p` / `1080p`),
- *      Duration (`5초` / `10초` / `15초`), and Live B2B Credit/KRW Pricing.
- *
- * Right Column (`data-studio-live-canvas`):
- *   - Always-on dark passepartout visual canvas previewing the active frame,
- *     3-take contact strip, and instant download / retouch / master upgrade actions.
+ * Features:
+ *   1. Numbered 1–4 Reference Image Deck (`1번 이미지`, `2번 이미지`, `3번 이미지`, `4번 이미지`) with two explicit workflows:
+ *      - `인물 · 배경 · 감도 · 색감 조합`: 1번 인물 + 2번 배경 + 3번 이미지 감도 + 4번 색감
+ *      - `제품 교체 · 팩샷 리슈팅`: 1번 베이스 장면의 제품을 2번 우리 제품으로 교체 (+ 3번 디테일 + 4번 색감)
+ *   2. Image Model Selector with 1-line trait badges + detailed deliverable suitability guide.
+ *   3. Always-On Live Studio Canvas with 3-Take Contact Strip & B2B 10–12% Margin Video Pricing.
  */
 export function BrandBriefStudio({
   organizationId,
@@ -291,6 +257,7 @@ export function BrandBriefStudio({
   });
   const activeCategory = categoryProfile.category;
   const studioVisuals = CATEGORY_STUDIO_VISUALS[activeCategory];
+  const referenceWorkflows = resolveCategoryReferenceWorkflows(activeCategory);
 
   const [activeShotTemplateId, setActiveShotTemplateId] =
     useState<PomelliShotTemplateId>("studio");
@@ -309,26 +276,33 @@ export function BrandBriefStudio({
       createAttachmentPreset("full_attach"),
     );
 
+  // Multi-Reference Workflow Mode (Lookbook 1-4 Composite vs Product 1->2 Swap)
+  const [refWorkflowId, setRefWorkflowId] =
+    useState<StudioReferenceWorkflowId>("lookbook_composite");
+  const activeRefWorkflow = referenceWorkflows[refWorkflowId];
+
+  // Custom uploaded thumbnails & names for Slots 1..4
+  const [customSlotThumbs, setCustomSlotThumbs] = useState<
+    Partial<Record<StudioReferenceSlotNumber, string>>
+  >({});
+  const [customSlotNames, setCustomSlotNames] = useState<
+    Partial<Record<StudioReferenceSlotNumber, string>>
+  >({});
+
+  // Image Model Selection & Full Comparison Guide Toggle
+  const [selectedImageModelId, setSelectedImageModelId] =
+    useState<BrandStudioImageModelId>("portrait_lookbook_pro");
+  const [showFullModelGuide, setShowFullModelGuide] = useState<boolean>(false);
+  const activeImageModel =
+    BRAND_STUDIO_IMAGE_MODELS.find((m) => m.id === selectedImageModelId) ??
+    BRAND_STUDIO_IMAGE_MODELS[0]!;
+
   // Video production controls (Resolution + Duration + 2-Stage Approval Gate)
   const [videoResolution, setVideoResolution] =
     useState<BrandVideoResolution>("720p");
   const [videoSeconds, setVideoSeconds] =
     useState<BrandStandardDurationSeconds>(10);
   const [useTwoStageGate, setUseTwoStageGate] = useState<boolean>(true);
-
-  // Uploaded product & reference image state (pre-populated with category default so 1-click works)
-  const [uploadedProductThumb, setUploadedProductThumb] = useState<string>(
-    studioVisuals.productThumb,
-  );
-  const [uploadedProductName, setUploadedProductName] = useState<string>(
-    isKo ? studioVisuals.productLabelKo : studioVisuals.productLabelEn,
-  );
-  const [uploadedRefThumb, setUploadedRefThumb] = useState<string>(
-    studioVisuals.referenceThumb,
-  );
-  const [uploadedRefName, setUploadedRefName] = useState<string>(
-    isKo ? studioVisuals.referenceLabelKo : studioVisuals.referenceLabelEn,
-  );
 
   // Active take on the right-hand live studio canvas
   const [activeTakeIndex, setActiveTakeIndex] = useState<number>(0);
@@ -382,8 +356,7 @@ export function BrandBriefStudio({
     locale,
   });
 
-  // Live B2B Pricing Quotes (10~12% target net margin)
-  const imageSetQuote = quoteBrandImageSet({ shotCount: 5 });
+  // Live B2B Video Pricing Quotes (10~12% target net margin)
   const activeVideoQuote =
     quoteBrandVideoRender({
       model: "seedance-2.5",
@@ -429,6 +402,49 @@ export function BrandBriefStudio({
       setUse(tpl.defaultUse);
       setCameraFocalMm(tpl.focalMm);
     }
+  }
+
+  function handleSelectWorkflowMode(mode: StudioReferenceWorkflowId) {
+    setRefWorkflowId(mode);
+    const wf = referenceWorkflows[mode];
+    setBriefText(isKo ? wf.defaultPromptKo : wf.defaultPromptEn);
+    if (mode === "product_swap") {
+      setSelectedImageModelId("multi_ref_standard");
+    } else {
+      setSelectedImageModelId("portrait_lookbook_pro");
+    }
+  }
+
+  function handleSelectImageModel(modelId: BrandStudioImageModelId) {
+    setSelectedImageModelId(modelId);
+  }
+
+  function handleSlotFileUpload(
+    slotNumber: StudioReferenceSlotNumber,
+    e: ChangeEvent<HTMLInputElement>,
+  ) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const objectUrl = URL.createObjectURL(file);
+    setCustomSlotThumbs((prev) => ({ ...prev, [slotNumber]: objectUrl }));
+    setCustomSlotNames((prev) => ({ ...prev, [slotNumber]: file.name }));
+    setStatusMessage(
+      isKo
+        ? `${slotNumber}번 이미지(${file.name})가 레퍼런스 슬롯에 연결되었습니다.`
+        : `Image ${slotNumber} (${file.name}) attached to reference slot ${slotNumber}.`,
+    );
+  }
+
+  function handleInsertSlotReferenceIntoPrompt(
+    slotNumber: StudioReferenceSlotNumber,
+    roleTitle: string,
+  ) {
+    const token = isKo
+      ? `${slotNumber}번 이미지(${roleTitle})`
+      : `Image ${slotNumber} (${roleTitle})`;
+    setBriefText((prev) =>
+      prev.trim().length > 0 ? `${prev.trim()} · ${token}` : token,
+    );
   }
 
   function handleSelectSceneType(
@@ -478,32 +494,6 @@ export function BrandBriefStudio({
     }));
   }
 
-  function handleProductFileChange(e: ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const objectUrl = URL.createObjectURL(file);
-    setUploadedProductThumb(objectUrl);
-    setUploadedProductName(file.name);
-    setStatusMessage(
-      isKo
-        ? `제품 사진(${file.name})이 스튜디오에 연결되었습니다.`
-        : `Product photo (${file.name}) attached to the studio.`,
-    );
-  }
-
-  function handleRefFileChange(e: ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const objectUrl = URL.createObjectURL(file);
-    setUploadedRefThumb(objectUrl);
-    setUploadedRefName(file.name);
-    setStatusMessage(
-      isKo
-        ? `레퍼런스 이미지(${file.name})가 스튜디오에 연결되었습니다.`
-        : `Reference image (${file.name}) attached to the studio.`,
-    );
-  }
-
   async function onCompileSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!canWrite || busy) return;
@@ -511,19 +501,11 @@ export function BrandBriefStudio({
     setErrorMessage("");
     setStatusMessage("");
 
-    const activeSceneIndex =
-      medium === "short film"
-        ? 3
-        : activeShotTemplateId === "ingredients"
-          ? 1
-          : activeShotTemplateId === "in_use"
-            ? 2
-            : 0;
-    const activeScene = categoryProfile.scenes[activeSceneIndex]!;
-
     const promptToUse =
       briefText.trim() ||
-      (isKo ? activeScene.quickPromptsKo[0] : activeScene.quickPromptsEn[0]);
+      (isKo
+        ? activeRefWorkflow.defaultPromptKo
+        : activeRefWorkflow.defaultPromptEn);
 
     try {
       const response = await fetch("/api/brand-workspace", {
@@ -590,11 +572,11 @@ export function BrandBriefStudio({
       setStatusMessage(
         medium === "short film"
           ? isKo
-            ? `${videoSeconds}초 ${videoResolution} 마스터 영상 장면이 브랜드 톤에 맞춰 생성되었습니다.`
-            : `${videoSeconds}s ${videoResolution} video scene generated with your brand style.`
+            ? `${videoSeconds}초 ${videoResolution} 마스터 영상 장면이 1~4번 레퍼런스 설정에 맞춰 생성되었습니다.`
+            : `${videoSeconds}s ${videoResolution} video scene generated with your 1–4 reference locks.`
           : isKo
-            ? "2K 고해상도 화보 5장 세트가 브랜드 스타일에 맞춰 준비되었습니다."
-            : "2K 5-shot editorial still set prepared with your brand style.",
+            ? `[${activeImageModel.nameKo}] 모델로 1~4번 레퍼런스가 반영된 2K 화보 5장 세트가 준비되었습니다.`
+            : `2K 5-shot set prepared with [${activeImageModel.nameEn}] and your 1–4 reference slots.`,
       );
     } catch {
       setErrorMessage(
@@ -764,8 +746,8 @@ export function BrandBriefStudio({
         <div>
           <h2 style={{ margin: "0 0 4px" }}>
             {isKo
-              ? "화보 · 영상 제작 워크벤치"
-              : "Image & Video Creation Workbench"}
+              ? "멀티 레퍼런스 화보 · 영상 워크벤치"
+              : "Multi-Reference Image & Video Workbench"}
           </h2>
           <p className="bw-muted" style={{ margin: 0, fontSize: "13px" }}>
             {isKo ? categoryProfile.headlineKo : categoryProfile.headlineEn}
@@ -830,122 +812,436 @@ export function BrandBriefStudio({
 
       {/* 2-Column Split Studio Workbench: Left = Creation Controls, Right = Always-On Live Visual Canvas */}
       <div className="bw-studio-workbench">
-        {/* LEFT COLUMN: Asset Upload + Visual Scene Cards + Prompt Composer */}
+        {/* LEFT COLUMN: 1-4 Reference Deck + Image Model Selector + Scene Cards + Prompt Composer */}
         <div>
-          {/* Step 1: Product Photo & Reference Mood Upload Bar */}
-          <div className="bw-studio-upload-bar" data-studio-asset-upload>
-            <div className="bw-studio-upload-slot" data-upload-slot="product">
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "10px",
-                  minWidth: 0,
-                }}
+          {/* STEP 1: Numbered 1-4 Reference Image Slots (Sunra / AMERICANO / Oplux Style) */}
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: "10px",
+              marginBottom: "10px",
+            }}
+          >
+            <div>
+              <strong style={{ fontSize: "13.5px", color: "var(--ys-ink)" }}>
+                {isKo
+                  ? "1~4번 레퍼런스 이미지 배치"
+                  : "1–4 Numbered Reference Slots"}
+              </strong>
+              <span
+                className="bw-muted"
+                style={{ marginLeft: "8px", fontSize: "12px" }}
               >
-                <img
-                  src={uploadedProductThumb}
-                  alt={uploadedProductName}
-                  className="bw-studio-upload-thumb"
-                />
-                <div style={{ minWidth: 0 }}>
-                  <span
-                    style={{
-                      display: "block",
-                      fontSize: "11px",
-                      fontWeight: 600,
-                      color: "var(--ys-ink-muted)",
-                    }}
-                  >
-                    {isKo ? "제품 원판 사진" : "Product Source Photo"}
-                  </span>
-                  <strong
-                    style={{
-                      display: "block",
-                      fontSize: "12.5px",
-                      color: "var(--ys-ink)",
-                      whiteSpace: "nowrap",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                    }}
-                  >
-                    {uploadedProductName}
-                  </strong>
-                </div>
-              </div>
-              <label
-                className="bw-quick-chip"
-                style={{ flexShrink: 0, fontWeight: 600 }}
-              >
-                {isKo ? "사진 올리기" : "Upload Photo"}
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={handleProductFileChange}
-                  disabled={!canWrite || busy}
-                  style={{ display: "none" }}
-                  data-studio-product-file-input
-                />
-              </label>
+                {isKo
+                  ? activeRefWorkflow.summaryKo
+                  : activeRefWorkflow.summaryEn}
+              </span>
             </div>
 
-            <div className="bw-studio-upload-slot" data-upload-slot="reference">
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "10px",
-                  minWidth: 0,
-                }}
+            {/* Workflow Preset Toggle: 1-4 Lookbook Composite vs 1->2 Product Swap */}
+            <div
+              className="bw-seg-track"
+              data-studio-reference-workflow={refWorkflowId}
+            >
+              <button
+                type="button"
+                className="bw-seg-btn"
+                data-workflow-mode-btn="lookbook_composite"
+                aria-pressed={refWorkflowId === "lookbook_composite"}
+                onClick={() => handleSelectWorkflowMode("lookbook_composite")}
+                disabled={busy}
               >
-                <img
-                  src={uploadedRefThumb}
-                  alt={uploadedRefName}
-                  className="bw-studio-upload-thumb"
-                />
-                <div style={{ minWidth: 0 }}>
-                  <span
-                    style={{
-                      display: "block",
-                      fontSize: "11px",
-                      fontWeight: 600,
-                      color: "var(--ys-ink-muted)",
-                    }}
-                  >
-                    {isKo ? "구도 · 모델 레퍼런스" : "Pose & Mood Reference"}
-                  </span>
-                  <strong
-                    style={{
-                      display: "block",
-                      fontSize: "12.5px",
-                      color: "var(--ys-ink)",
-                      whiteSpace: "nowrap",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                    }}
-                  >
-                    {uploadedRefName}
-                  </strong>
-                </div>
-              </div>
-              <label
-                className="bw-quick-chip"
-                style={{ flexShrink: 0, fontWeight: 600 }}
+                {isKo
+                  ? "인물 · 배경 · 감도 · 색감 조합"
+                  : "1 Person + 2 BG + 3 Vibe + 4 Color"}
+              </button>
+              <button
+                type="button"
+                className="bw-seg-btn"
+                data-workflow-mode-btn="product_swap"
+                aria-pressed={refWorkflowId === "product_swap"}
+                onClick={() => handleSelectWorkflowMode("product_swap")}
+                disabled={busy}
               >
-                {isKo ? "레퍼런스 변경" : "Change Ref"}
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={handleRefFileChange}
-                  disabled={!canWrite || busy}
-                  style={{ display: "none" }}
-                  data-studio-reference-file-input
-                />
-              </label>
+                {isKo
+                  ? "1번 장면 → 2번 제품 교체"
+                  : "Swap Image 1 → Image 2 Product"}
+              </button>
             </div>
           </div>
 
-          {/* Step 2: Equal 4-Column Visual Scene Picker (.bw-scene-grid) with Thumbnails */}
+          <div className="bw-ref-slot-grid" data-studio-asset-upload>
+            {activeRefWorkflow.slots.map((slot) => {
+              const thumbSrc =
+                customSlotThumbs[slot.slotNumber] ?? slot.defaultThumb;
+              const assetName =
+                customSlotNames[slot.slotNumber] ??
+                (isKo ? slot.defaultAssetNameKo : slot.defaultAssetNameEn);
+              const roleTitle = isKo ? slot.roleTitleKo : slot.roleTitleEn;
+              const compatSlotAttr =
+                slot.slotNumber === 1
+                  ? "reference"
+                  : slot.slotNumber === 2
+                    ? "product"
+                    : `slot-${slot.slotNumber}`;
+
+              return (
+                <div
+                  key={slot.slotNumber}
+                  className="bw-ref-slot-card"
+                  data-ref-slot={slot.slotNumber}
+                  data-upload-slot={compatSlotAttr}
+                >
+                  <div className="bw-ref-slot-media">
+                    <img src={thumbSrc} alt={assetName} loading="lazy" />
+                    <span className="bw-ref-num-badge">
+                      {isKo ? slot.tagKo : slot.tagEn}
+                    </span>
+                  </div>
+
+                  <div style={{ minWidth: 0 }}>
+                    <strong
+                      style={{
+                        display: "block",
+                        fontSize: "12.5px",
+                        color: "var(--ys-ink)",
+                        whiteSpace: "nowrap",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                      }}
+                    >
+                      {roleTitle}
+                    </strong>
+                    <span
+                      style={{
+                        display: "block",
+                        fontSize: "11px",
+                        color: "var(--ys-ink-secondary)",
+                        marginTop: "2px",
+                      }}
+                    >
+                      {isKo ? slot.lockRuleKo : slot.lockRuleEn}
+                    </span>
+                  </div>
+
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: "6px",
+                      marginTop: "auto",
+                      paddingTop: "4px",
+                    }}
+                  >
+                    <label
+                      className="bw-quick-chip"
+                      style={{ fontWeight: 600, padding: "4px 9px" }}
+                    >
+                      {isKo ? "사진 넣기" : "Upload"}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) =>
+                          handleSlotFileUpload(slot.slotNumber, e)
+                        }
+                        disabled={!canWrite || busy}
+                        style={{ display: "none" }}
+                        data-studio-slot-file-input={slot.slotNumber}
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      className="bw-quick-chip"
+                      style={{ padding: "4px 9px" }}
+                      onClick={() =>
+                        handleInsertSlotReferenceIntoPrompt(
+                          slot.slotNumber,
+                          roleTitle,
+                        )
+                      }
+                      disabled={!canWrite || busy}
+                    >
+                      {isKo
+                        ? `+ ${slot.slotNumber}번 지시`
+                        : `+ Cite #${slot.slotNumber}`}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* STEP 2: Image Model Selector + Quick Characteristics + Detailed Suitability Guide */}
+          {!isVideoMode && (
+            <div data-studio-image-model-section>
+              <div
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: "8px",
+                  marginBottom: "8px",
+                }}
+              >
+                <div>
+                  <strong style={{ fontSize: "13.5px", color: "var(--ys-ink)" }}>
+                    {isKo
+                      ? "이미지 생성 모델 선택"
+                      : "Select Image Generation Model"}
+                  </strong>
+                  <span
+                    className="bw-muted"
+                    style={{ marginLeft: "8px", fontSize: "12px" }}
+                  >
+                    {isKo
+                      ? "만들려는 결과물(제품 교체 vs 인물 룩북 vs 라벨 마크로 vs 의류 착장)에 맞춰 모델을 고르세요"
+                      : "Pick the model tailored to your target deliverable"}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  className="bw-quick-chip"
+                  data-studio-model-guide-toggle
+                  aria-expanded={showFullModelGuide}
+                  onClick={() => setShowFullModelGuide((prev) => !prev)}
+                  style={{ fontWeight: 600 }}
+                >
+                  {showFullModelGuide
+                    ? isKo
+                      ? "모델 비교 가이드 접기"
+                      : "Hide Model Guide"
+                    : isKo
+                      ? "어떤 결과물에 어떤 모델이 적합한가요? (상세 가이드)"
+                      : "Which model fits my deliverable? (Full Guide)"}
+                </button>
+              </div>
+
+              {/* 4 Image Model Cards with 1-Line Traits & Strength Pills */}
+              <div
+                className="bw-model-picker-grid"
+                data-studio-image-model-picker
+                data-selected-image-model={selectedImageModelId}
+              >
+                {BRAND_STUDIO_IMAGE_MODELS.map((model) => {
+                  const selected = selectedImageModelId === model.id;
+                  return (
+                    <button
+                      key={model.id}
+                      type="button"
+                      className="bw-model-card"
+                      data-studio-image-model-card={model.id}
+                      aria-pressed={selected}
+                      onClick={() => handleSelectImageModel(model.id)}
+                      disabled={busy}
+                    >
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          gap: "8px",
+                          width: "100%",
+                        }}
+                      >
+                        <strong style={{ fontSize: "13.5px" }}>
+                          {isKo ? model.nameKo : model.nameEn}
+                        </strong>
+                        <span
+                          className="bw-scene-spec"
+                          style={{ fontWeight: 600 }}
+                        >
+                          {model.creditsPer5Set} cr ·{" "}
+                          {isKo
+                            ? `${model.priceKrwPer5Set.toLocaleString("ko-KR")}원`
+                            : `KRW ${model.priceKrwPer5Set}`}
+                        </span>
+                      </div>
+
+                      <span
+                        style={{
+                          fontSize: "12px",
+                          lineHeight: 1.45,
+                          color: "var(--ys-ink-secondary)",
+                        }}
+                      >
+                        {isKo ? model.shortTraitKo : model.shortTraitEn}
+                      </span>
+
+                      <div
+                        style={{
+                          display: "flex",
+                          flexWrap: "wrap",
+                          gap: "5px",
+                          marginTop: "2px",
+                        }}
+                      >
+                        {(isKo ? model.strengthsKo : model.strengthsEn).map(
+                          (tag) => (
+                            <span
+                              key={tag}
+                              style={{
+                                fontSize: "10.5px",
+                                padding: "2px 7px",
+                                borderRadius: "999px",
+                                background: "var(--ys-raised)",
+                                color: "var(--ys-ink-secondary)",
+                                fontWeight: 500,
+                              }}
+                            >
+                              {tag}
+                            </span>
+                          ),
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Active Model Detail & Deliverable Recommendation Box */}
+              <div
+                className="bw-model-guide-panel"
+                data-studio-active-model-detail={activeImageModel.id}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    flexWrap: "wrap",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: "8px",
+                  }}
+                >
+                  <strong style={{ fontSize: "13px", color: "var(--ys-ink)" }}>
+                    {isKo
+                      ? `${activeImageModel.nameKo} — 상세 특징 & 추천 결과물`
+                      : `${activeImageModel.nameEn} — Detailed Characteristics & Best Use Cases`}
+                  </strong>
+                  <span
+                    className="bw-badge"
+                    style={{ fontSize: "11px", fontWeight: 600 }}
+                  >
+                    {isKo
+                      ? `권장 슬롯 공식: ${activeImageModel.recommendedSlotFormulaKo}`
+                      : `Slot Formula: ${activeImageModel.recommendedSlotFormulaEn}`}
+                  </span>
+                </div>
+
+                <p
+                  style={{
+                    margin: 0,
+                    fontSize: "12.5px",
+                    lineHeight: 1.55,
+                    color: "var(--ys-ink-secondary)",
+                  }}
+                >
+                  {isKo
+                    ? activeImageModel.detailDescriptionKo
+                    : activeImageModel.detailDescriptionEn}
+                </p>
+
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))",
+                    gap: "8px",
+                  }}
+                >
+                  {(isKo
+                    ? activeImageModel.bestForDeliverablesKo
+                    : activeImageModel.bestForDeliverablesEn
+                  ).map((useCase, idx) => (
+                    <div
+                      key={useCase}
+                      style={{
+                        padding: "8px 10px",
+                        borderRadius: "10px",
+                        background: "var(--ys-surface)",
+                        boxShadow: "var(--ys-ring)",
+                        fontSize: "11.5px",
+                        lineHeight: 1.45,
+                        color: "var(--ys-ink)",
+                      }}
+                    >
+                      <strong
+                        style={{
+                          display: "block",
+                          fontSize: "10.5px",
+                          color: "var(--ys-ink-muted)",
+                          marginBottom: "2px",
+                        }}
+                      >
+                        {isKo ? `추천 결과물 0${idx + 1}` : `Best Fit 0${idx + 1}`}
+                      </strong>
+                      {useCase}
+                    </div>
+                  ))}
+                </div>
+
+                {/* Full 4-Model Comparison Matrix when toggled open */}
+                {showFullModelGuide && (
+                  <div
+                    data-studio-model-comparison-matrix
+                    style={{
+                      paddingTop: "10px",
+                      borderTop: "1px solid var(--ys-hairline)",
+                      display: "grid",
+                      gap: "8px",
+                    }}
+                  >
+                    <strong style={{ fontSize: "12px", color: "var(--ys-ink)" }}>
+                      {isKo
+                        ? "상황별 이미지 모델 한눈에 비교하기"
+                        : "Model Suitability Comparison by Deliverable"}
+                    </strong>
+                    {BRAND_STUDIO_IMAGE_MODELS.map((m) => (
+                      <div
+                        key={m.id}
+                        style={{
+                          display: "flex",
+                          flexWrap: "wrap",
+                          alignItems: "baseline",
+                          justifyContent: "space-between",
+                          gap: "8px",
+                          padding: "8px 10px",
+                          borderRadius: "9px",
+                          background: "var(--ys-surface)",
+                          fontSize: "12px",
+                        }}
+                      >
+                        <div>
+                          <strong style={{ color: "var(--ys-ink)" }}>
+                            {isKo ? m.nameKo : m.nameEn}
+                          </strong>{" "}
+                          <span style={{ color: "var(--ys-ink-secondary)" }}>
+                            — {isKo ? m.shortTraitKo : m.shortTraitEn}
+                          </span>
+                        </div>
+                        <span
+                          style={{
+                            fontFamily: "var(--ys-mono)",
+                            fontSize: "11px",
+                            color: "var(--ys-ink-muted)",
+                          }}
+                        >
+                          {isKo
+                            ? m.recommendedSlotFormulaKo
+                            : m.recommendedSlotFormulaEn}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* STEP 3: Equal 4-Column Visual Scene Picker (.bw-scene-grid) with Thumbnails */}
           <div className="bw-scene-grid" data-pomelli-shot-templates>
             {simpleSceneButtons.map((item, idx) => {
               const isSelected = item.isVideo
@@ -980,12 +1276,85 @@ export function BrandBriefStudio({
             })}
           </div>
 
-          {/* Step 3: Recessed Composer Well (.bw-composer-well) */}
+          {/* STEP 4: Recessed Composer Well (.bw-composer-well) with 1-4 Slot Recipe Builder */}
           <form
             onSubmit={onCompileSubmit}
             className="bw-composer-well"
             data-brief-compile-form
           >
+            {/* Numbered Reference Quick-Cite Bar */}
+            <div
+              data-studio-ref-token-bar
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: "6px",
+                paddingBottom: "8px",
+                borderBottom: "1px solid var(--ys-hairline)",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  alignItems: "center",
+                  gap: "5px",
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: "11px",
+                    fontWeight: 600,
+                    color: "var(--ys-ink-muted)",
+                    marginRight: "4px",
+                  }}
+                >
+                  {isKo ? "슬롯 번호 바로 부르기:" : "Cite slot in prompt:"}
+                </span>
+                {activeRefWorkflow.slots.map((s) => (
+                  <button
+                    key={s.slotNumber}
+                    type="button"
+                    className="bw-quick-chip"
+                    data-cite-ref-slot={s.slotNumber}
+                    onClick={() =>
+                      handleInsertSlotReferenceIntoPrompt(
+                        s.slotNumber,
+                        isKo ? s.roleTitleKo : s.roleTitleEn,
+                      )
+                    }
+                    disabled={!canWrite || busy}
+                    style={{ padding: "3px 9px", fontSize: "11px" }}
+                  >
+                    {isKo
+                      ? `+ ${s.slotNumber}번 (${s.roleTitleKo.split("·")[0]?.trim()})`
+                      : `+ Image ${s.slotNumber}`}
+                  </button>
+                ))}
+              </div>
+
+              <button
+                type="button"
+                className="bw-quick-chip"
+                data-fill-reference-formula
+                onClick={() =>
+                  setBriefText(
+                    isKo
+                      ? activeRefWorkflow.defaultPromptKo
+                      : activeRefWorkflow.defaultPromptEn,
+                  )
+                }
+                disabled={!canWrite || busy}
+                style={{ fontWeight: 600, padding: "3px 10px" }}
+              >
+                {isKo
+                  ? `공식 자동 입력 (${activeRefWorkflow.formulaBadgeKo})`
+                  : `Auto-Fill (${activeRefWorkflow.formulaBadgeEn})`}
+              </button>
+            </div>
+
             <textarea
               name="brief"
               className="bw-composer-textarea"
@@ -996,12 +1365,12 @@ export function BrandBriefStudio({
               disabled={!canWrite || busy}
               placeholder={
                 isKo
-                  ? activeSceneButton.placeholderKo
-                  : activeSceneButton.placeholderEn
+                  ? activeRefWorkflow.defaultPromptKo
+                  : activeRefWorkflow.defaultPromptEn
               }
             />
 
-            {/* 1-Click Quick Prompt Chips */}
+            {/* 1-Click Multi-Reference Recipe Chips (1번 인물 + 2번 배경 + 3번 감도 + 4번 색감 / 1번->2번 제품 교체) */}
             <div
               data-studio-quick-prompts
               style={{
@@ -1012,8 +1381,8 @@ export function BrandBriefStudio({
               }}
             >
               {(isKo
-                ? activeSceneButton.quickPromptsKo
-                : activeSceneButton.quickPromptsEn
+                ? activeRefWorkflow.quickRecipesKo
+                : activeRefWorkflow.quickRecipesEn
               ).map((sample, idx) => (
                 <button
                   key={sample}
@@ -1258,8 +1627,8 @@ export function BrandBriefStudio({
                         ? `${videoSeconds}초 ${videoResolution} 영상 생성하기`
                         : `Generate ${videoSeconds}s ${videoResolution} Video`
                       : isKo
-                        ? `화보 5장 생성하기 (${imageSetQuote.credits} cr)`
-                        : `Generate 5 Stills (${imageSetQuote.credits} cr)`}
+                        ? `화보 5장 생성하기 (${activeImageModel.creditsPer5Set} cr)`
+                        : `Generate 5 Stills (${activeImageModel.creditsPer5Set} cr)`}
                 </button>
               )}
             </div>
@@ -1369,8 +1738,8 @@ export function BrandBriefStudio({
                     ? `${videoResolution} 영상 캔버스 · ${videoSeconds}초`
                     : `${videoResolution} Video Canvas · ${videoSeconds}s`
                   : isKo
-                    ? "2K 화보 스튜디오 캔버스"
-                    : "2K Editorial Still Canvas"}
+                    ? activeImageModel.nameKo
+                    : activeImageModel.nameEn}
               </span>
               <span
                 style={{
@@ -1383,8 +1752,8 @@ export function BrandBriefStudio({
             </div>
             <span style={{ color: "rgba(255, 255, 255, 0.68)" }}>
               {isKo
-                ? moodLabels[activeAestheticLineCode].ko
-                : moodLabels[activeAestheticLineCode].en}
+                ? activeRefWorkflow.formulaBadgeKo
+                : activeRefWorkflow.formulaBadgeEn}
             </span>
           </div>
 
@@ -1493,8 +1862,8 @@ export function BrandBriefStudio({
                 onClick={() =>
                   setBriefText(
                     isKo
-                      ? `${activeTake.labelKo} 구도를 유지하면서 제품 로고 선명도와 조명 대비를 한 단계 높여 주세요.`
-                      : `Keep the ${activeTake.labelEn} framing and sharpen the product label and studio key light contrast.`,
+                      ? `${activeTake.labelKo} 구도를 유지하면서 2번 이미지 제품의 로고 선명도와 4번 이미지의 조명 대비를 한 단계 높여 줘.`
+                      : `Keep the ${activeTake.labelEn} framing while sharpening the product label from Image 2 and enhancing the lighting contrast from Image 4.`,
                   )
                 }
                 style={{
@@ -1594,8 +1963,8 @@ export function BrandBriefStudio({
                 style={{ margin: "4px 0 0", fontSize: "13px" }}
               >
                 {isKo
-                  ? "브랜드 로고·색감·화질 보정이 모두 반영되었습니다."
-                  : "Your brand logo, color tone, and quality mastering have been applied."}
+                  ? "1~4번 레퍼런스 역할 잠금과 브랜드 색감·화질 보정이 모두 반영되었습니다."
+                  : "Your 1–4 reference locks, brand color tone, and quality mastering have been applied."}
               </p>
             </div>
           </div>

@@ -5065,3 +5065,111 @@ html[data-brand-workspace]::view-transition-group(bw-tab-indicator) { animation-
   object-position: 50% 18%;
   border-radius: 6px;
 }
+
+/* Numbered 1-4 Reference Image Slots (Sunra / AMERICANO / Oplux Style) */
+:where([data-brand-workspace]) .bw-ref-slot-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+@media (max-width: 960px) {
+  :where([data-brand-workspace]) .bw-ref-slot-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 520px) {
+  :where([data-brand-workspace]) .bw-ref-slot-grid {
+    grid-template-columns: 1fr;
+  }
+}
+:where([data-brand-workspace]) .bw-ref-slot-card {
+  border-radius: 13px;
+  background: var(--ys-subtle-bg);
+  box-shadow: var(--ys-ring);
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 0;
+  transition: background-color var(--ys-dur) var(--ys-ease), box-shadow var(--ys-dur) var(--ys-ease);
+}
+:where([data-brand-workspace]) .bw-ref-slot-card:hover {
+  background: var(--ys-surface);
+  box-shadow: var(--ys-card-hover);
+}
+:where([data-brand-workspace]) .bw-ref-slot-media {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  border-radius: 9px;
+  overflow: hidden;
+  background: var(--ys-raised);
+  box-shadow: inset 0 0 0 1px var(--ys-hairline);
+}
+:where([data-brand-workspace]) .bw-ref-slot-media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 50% 18%;
+  display: block;
+}
+:where([data-brand-workspace]) .bw-ref-num-badge {
+  position: absolute;
+  top: 7px;
+  left: 7px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: rgba(17, 18, 20, 0.86);
+  backdrop-filter: blur(6px);
+  color: #ffffff;
+  font-family: var(--ys-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+/* Image Model Selector Grid + Suitability Guide */
+:where([data-brand-workspace]) .bw-model-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+@media (max-width: 720px) {
+  :where([data-brand-workspace]) .bw-model-picker-grid {
+    grid-template-columns: 1fr;
+  }
+}
+:where([data-brand-workspace]) .bw-model-card {
+  text-align: left;
+  border: 0;
+  border-radius: 13px;
+  background: var(--ys-subtle-bg);
+  box-shadow: var(--ys-ring);
+  padding: 12px 14px;
+  color: var(--ys-ink);
+  font: inherit;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  transition: background-color var(--ys-dur) var(--ys-ease), box-shadow var(--ys-dur) var(--ys-ease);
+}
+:where([data-brand-workspace]) .bw-model-card:hover:not(:disabled) {
+  background: var(--ys-surface);
+  box-shadow: var(--ys-card-hover);
+}
+:where([data-brand-workspace]) .bw-model-card[aria-pressed='true'] {
+  background: var(--ys-surface);
+  box-shadow: 0 0 0 1.5px var(--ys-ink), var(--ys-shadow-1);
+}
+:where([data-brand-workspace]) .bw-model-guide-panel {
+  border-radius: 14px;
+  background: var(--ys-subtle-bg);
+  box-shadow: inset 0 0 0 1px var(--ys-hairline);
+  padding: 14px 16px;
+  margin-bottom: 16px;
+  display: grid;
+  gap: 12px;
+}
