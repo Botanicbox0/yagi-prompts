@@ -101,14 +101,45 @@ export function HumanHandoff({
   };
 
   return (
-    <div className="ys-handoff-wrap" data-handoff data-handoff-state={status}>
-      <div className="ys-handoff-bar">
-        <div className="ys-handoff-bar-copy">
-          <span className="ys-handoff-pill">
+    <div className="ys-handoff-wrapper ys-handoff-wrap" data-handoff data-handoff-state={status}>
+      <div
+        className="ys-handoff-bar"
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 16,
+          flexWrap: "wrap",
+        }}
+      >
+        <div
+          className="ys-handoff-bar-copy"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            flexWrap: "wrap",
+          }}
+        >
+          <span
+            className="ys-handoff-pill"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              padding: "4px 10px",
+              borderRadius: 999,
+              fontSize: 11,
+              fontWeight: 700,
+              letterSpacing: "0.02em",
+              background: "rgba(56, 117, 197, 0.12)",
+              color: "#3063A7",
+            }}
+          >
             <span className="ys-brand-live-dot" aria-hidden="true" />
             {isKo ? "HUMAN PD · ASAP 직통 연결" : "HUMAN PD · ASAP Direct Escalation"}
           </span>
-          <strong>
+          <strong style={{ fontSize: 13.5, color: "#0E1013" }}>
             {status === "requested"
               ? isKo
                 ? "전담 PD를 불렀어요 — 정리된 명세서와 레퍼런스를 함께 전달했습니다"

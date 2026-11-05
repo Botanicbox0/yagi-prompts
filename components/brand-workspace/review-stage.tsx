@@ -252,7 +252,7 @@ export function ReviewStage({
             updatedAt: isEn ? "Updated 18m ago" : "18분 전 업데이트",
             status: "awaiting_approval",
             platform: "instagram_reels",
-            mediaUrl: "/reel/showcase/brand-showcase-01.mp4",
+            mediaUrl: "/reel/brands/house-runway-1080p.mp4",
           },
           {
             id: "deliv-4x5-v2",
@@ -263,7 +263,7 @@ export function ReviewStage({
             updatedAt: isEn ? "Updated 1h ago" : "1시간 전 업데이트",
             status: "ready_for_release",
             platform: "tiktok",
-            mediaUrl: "/reel/showcase/brand-showcase-02.mp4",
+            mediaUrl: "/reel/brands/studio-editorial-blue-1080p.mp4",
           },
           {
             id: "deliv-16x9-v1",
@@ -274,7 +274,7 @@ export function ReviewStage({
             updatedAt: isEn ? "Yesterday" : "어제 업데이트",
             status: "needs_revision",
             platform: "youtube_shorts",
-            mediaUrl: "/reel/showcase/brand-showcase-03.mp4",
+            mediaUrl: "/reel/brands/house-french-blue-hero-1080p.mp4",
           },
         ];
 
@@ -542,7 +542,7 @@ export function ReviewStage({
       <div className="ys-tour-Banner" data-frameio-guided-tour>
         <div className="ys-tour-banner-left">
           <span className="ys-share-badge">
-            {isEn ? "FRAME.IO × PLAYBOOK ROOM" : "통합 에셋 폴더 · 프레임 시사 · 공유 룸"}
+            {isEn ? "INTEGRATED ASSET FOLDERS & FRAME REVIEW" : "통합 에셋 폴더 · 프레임 시사 · 공유 룸"}
           </span>
           <strong>
             {generativeMediaAllowed && productionMode === "studio"
@@ -787,6 +787,15 @@ export function ReviewStage({
             >
               <div
                 className="ys-deliverable-thumb"
+                style={{
+                  backgroundImage: `linear-gradient(180deg, rgba(15, 23, 42, 0.25) 0%, rgba(15, 23, 42, 0.72) 100%), url(${
+                    item.version >= 2
+                      ? "/reel/brands/house-french-blue-hero-1080p.jpg"
+                      : "/reel/brands/studio-editorial-blue-1080p.jpg"
+                  })`,
+                  backgroundSize: "cover",
+                  backgroundPosition: "center",
+                }}
                 onClick={() => {
                   if (sorted.some((v) => v.id === item.id)) {
                     setSelectedVersionId(item.id);
@@ -872,7 +881,7 @@ export function ReviewStage({
             <span className="ys-share-badge">
               <span className="ys-brand-live-dot" aria-hidden="true" />
               {isKo
-                ? "임원·팀원 무로그인 시사 링크 · Frame.io V4 공유 빌더"
+                ? "임원·팀원 무로그인 시사 링크 · 맞춤 공유 설정"
                 : "Zero-Login Stakeholder Review Link & Share Builder"}
             </span>
             <div className="ys-share-title-row">
@@ -1257,9 +1266,10 @@ export function ReviewStage({
             {videoMounted ? (
               <video
                 ref={videoRef}
-                src={activeMediaUrl}
+                src={activeMediaUrl.includes("#") ? activeMediaUrl : `${activeMediaUrl}#t=0.1`}
+                poster="/reel/brands/house-french-blue-hero-1080p.jpg"
                 playsInline
-                preload="none"
+                preload="metadata"
                 onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
                 onLoadedMetadata={(e) => {
                   if (Number.isFinite(e.currentTarget.duration) && e.currentTarget.duration > 0) {

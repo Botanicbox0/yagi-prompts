@@ -135,22 +135,6 @@ export default async function BrandIdentityPage({
         )
       )}
 
-      {!record && (
-        <section className="bw-panel" data-brand-identity-empty>
-          <h2>{t.emptyTitle}</h2>
-          <p className="bw-muted">{t.emptyLead}</p>
-          {isOwner && (
-            <ActionForm
-              operation="identity.draftDefaults"
-              fixed={{ organizationId: choice.id, expectedRevision: 0 }}
-              b={b}
-              submit={t.startDraftCta}
-              successNotice={t.savedNotice}
-            />
-          )}
-        </section>
-      )}
-
       {record && record.status === "draft" && isOwner && (
         <section className="bw-panel" data-brand-identity-confirm-bar>
           <div className="bw-row">
@@ -516,9 +500,8 @@ export default async function BrandIdentityPage({
           </div>
         </ActionForm>
         </section>
-      </details>
 
-      <div className="bw-grid-wide">
+      <div className="bw-grid-wide" style={{ marginTop: 12 }}>
         {!featureDenied(choice.denied, "color_grading") && (
         <section className="bw-panel" data-brand-looks>
           <h2>{t.looksSection}</h2>
@@ -649,6 +632,7 @@ export default async function BrandIdentityPage({
           )}
         </section>
       </div>
+      </details>
     </div>
   );
 }

@@ -1149,8 +1149,8 @@ export function synthesizeBrandIdentityFromIngest(
       aestheticTagsEn: ['Crisp Bottle Still', 'Hydro Texture Smear', 'Morning Daylight', 'Clean Limestone'],
       toneTagsKo: ['신뢰감 있는 (Clinical)', '투명한 (Transparent)', '차분한 (Calm)', '명확한 (Clear)'],
       toneTagsEn: ['Clinical', 'Transparent', 'Calm', 'Clear'],
-      modelTraitsKo: ['모공과 속광이 살아있는 실제 피부(a10)', '핑크 블러셔 배제', '클로즈업 소프트 자연광'],
-      modelTraitsEn: ['Authentic pore-level skin (a10)', 'Zero artificial pink blush', 'Soft window key light']
+      modelTraitsKo: ['모공과 속광이 살아있는 실제 피부', '핑크 블러셔 배제', '클로즈업 소프트 자연광'],
+      modelTraitsEn: ['Authentic pore-level skin', 'Zero artificial pink blush', 'Soft window key light']
     },
     fnb_hospitality: {
       industryKo: 'F&B · 다이닝 (Food, Beverage & Hospitality)',
@@ -1217,9 +1217,9 @@ export function synthesizeBrandIdentityFromIngest(
     subcategoryLabelKo: cMeta.subKo,
     subcategoryLabelEn: cMeta.subEn,
     fontSpecimen: {
-      displayFont: identity.type.sans,
-      bodyFont: identity.type.sans,
-      monoFont: identity.type.mono,
+      displayFont: 'Pretendard Variable',
+      bodyFont: 'Pretendard Variable',
+      monoFont: 'Geist Mono',
       sampleGlyph: 'Aa'
     },
     colorSwatches: [
@@ -1238,7 +1238,7 @@ export function synthesizeBrandIdentityFromIngest(
     modelPreferences: {
       enabledByDefault: true,
       summaryKo:
-        '모든 생성 이미지·영상에서 브랜드 모델의 피부 질감(a10 매트 스킨)과 스타일링 톤을 일관되게 유지합니다.',
+        '모든 생성 이미지·영상에서 브랜드 모델의 자연스러운 피부 질감과 스타일링 톤을 일관되게 유지합니다.',
       summaryEn:
         'Define consistent traits for your brand models across all generated photoshoots and films.',
       traitsKo: cMeta.modelTraitsKo,

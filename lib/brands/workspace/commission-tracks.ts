@@ -360,46 +360,48 @@ export function buildCollageFolders(options: {
   }[];
 }): CollageFolderSummary[] {
   const isEn = options.locale === "en";
-  const cutItems: CollageFolderItem[] =
-    options.contents.length > 0
-      ? options.contents.slice(0, 3).map((c) => ({
-          id: c.id,
-          title: `${c.title} (v${c.version})`,
-          kind: "video" as const,
-          meta: "1080p · 24fps",
-          badge: `v${c.version}`,
-          previewTone: "linear-gradient(135deg, #172554 0%, #1e3a8a 100%)",
-          mediaUrl: c.mediaUrl,
-        }))
-      : [
-          {
-            id: "cut-v2",
-            title: "MASTER_CUT_9x16_v2.mp4",
-            kind: "video",
-            meta: "00:15 · 1080p",
-            badge: "v2",
-            previewTone: "linear-gradient(135deg, #0f172a 0%, #1e3a8a 100%)",
-            mediaUrl: "/reel/showcase/brand-showcase-01.mp4",
-          },
-          {
-            id: "cut-v1",
-            title: "FIRST_CUT_9x16_v1.mp4",
-            kind: "video",
-            meta: "00:15 · 1080p",
-            badge: "v1",
-            previewTone: "linear-gradient(135deg, #1e293b 0%, #334155 100%)",
-            mediaUrl: "/reel/showcase/brand-showcase-02.mp4",
-          },
-          {
-            id: "cut-feed",
-            title: "FEED_CUT_4x5_v2.mp4",
-            kind: "video",
-            meta: "00:15 · 4:5",
-            badge: "4:5",
-            previewTone: "linear-gradient(135deg, #172554 0%, #3875c5 100%)",
-            mediaUrl: "/reel/showcase/brand-showcase-03.mp4",
-          },
-        ];
+  const defaultCutItems: CollageFolderItem[] = [
+    {
+      id: "cut-v2",
+      title: "MASTER_CUT_9x16_v2.mp4",
+      kind: "video",
+      meta: "00:15 · 1080p",
+      badge: "v2",
+      previewTone: "linear-gradient(135deg, #0f172a 0%, #1e3a8a 100%)",
+      mediaUrl: "/reel/brands/house-runway-1080p.mp4",
+    },
+    {
+      id: "cut-v1",
+      title: "FIRST_CUT_9x16_v1.mp4",
+      kind: "video",
+      meta: "00:15 · 1080p",
+      badge: "v1",
+      previewTone: "linear-gradient(135deg, #1e293b 0%, #334155 100%)",
+      mediaUrl: "/reel/brands/studio-editorial-blue-1080p.mp4",
+    },
+    {
+      id: "cut-feed",
+      title: "FEED_CUT_4x5_v2.mp4",
+      kind: "video",
+      meta: "00:15 · 4:5",
+      badge: "4:5",
+      previewTone: "linear-gradient(135deg, #172554 0%, #3875c5 100%)",
+      mediaUrl: "/reel/brands/house-french-blue-hero-1080p.mp4",
+    },
+  ];
+  const mappedCuts: CollageFolderItem[] = options.contents.slice(0, 3).map((c) => ({
+    id: c.id,
+    title: `${c.title} (v${c.version})`,
+    kind: "video" as const,
+    meta: "1080p · 24fps",
+    badge: `v${c.version}`,
+    previewTone: "linear-gradient(135deg, #172554 0%, #1e3a8a 100%)",
+    mediaUrl: c.mediaUrl,
+  }));
+  const cutItems: CollageFolderItem[] = [
+    ...mappedCuts,
+    ...defaultCutItems.slice(mappedCuts.length),
+  ].slice(0, 3);
 
   return [
     {
@@ -415,7 +417,7 @@ export function buildCollageFolders(options: {
           kind: "image",
           meta: "4096×4096 · PNG",
           badge: "PACKSHOT",
-          previewTone: "linear-gradient(135deg, #dbeafe 0%, #eff6ff 100%)",
+          previewTone: "linear-gradient(135deg, #1e3a8a 0%, #3063a7 100%)",
         },
         {
           id: "src-logo",
@@ -423,7 +425,7 @@ export function buildCollageFolders(options: {
           kind: "image",
           meta: "Vector · SVG",
           badge: "LOGO",
-          previewTone: "linear-gradient(135deg, #e0e7ff 0%, #f8fafc 100%)",
+          previewTone: "linear-gradient(135deg, #0f172a 0%, #1e293b 100%)",
         },
         {
           id: "src-mood",
@@ -431,7 +433,7 @@ export function buildCollageFolders(options: {
           kind: "brief",
           meta: "12 Pages · PDF",
           badge: "MOOD",
-          previewTone: "linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%)",
+          previewTone: "linear-gradient(135deg, #1e293b 0%, #334155 100%)",
         },
       ],
     },

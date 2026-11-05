@@ -96,87 +96,16 @@ export function CampaignMoatShowcase({
     }
   }
 
-  const tabs = [
-    {
-      key: "campaigns",
-      href: scopedHref("/brand", choice),
-      label: isKo ? "위탁 캠페인 · 인플루언서 시딩" : "Managed Campaigns · Creator Seeding",
-      active: true,
-      shown: true,
-    },
-    {
-      key: "studio",
-      href: scopedHref("/brand/studio", choice),
-      label: isKo ? "제작 스튜디오 · 화보·영상 제작" : "Self-Serve Studio · Direct Creation",
-      active: false,
-      shown: studioOpen,
-    },
-    {
-      key: "identity",
-      href: scopedHref("/brand/identity", choice),
-      label: isKo ? "브랜드 · 로고·미감 등록" : "Brand · Logos & Aesthetics",
-      active: false,
-      shown: studioOpen,
-    },
-    {
-      key: "library",
-      href: scopedHref("/brand/library", choice),
-      label: isKo ? "콘텐츠 보관함" : "Content Library",
-      active: false,
-      shown: true,
-    },
-    {
-      key: "governance",
-      href: scopedHref("/brand/settings", choice),
-      label: isKo ? "설정 · 팀" : "Settings & Team",
-      active: false,
-      shown: settingsOpen || membersOpen,
-    },
-  ].filter((t) => t.shown);
-
   return (
-    <div style={{ display: "grid", gap: "14px", marginBottom: "24px" }}>
-      {/* 1. Calm 1-Line Quick Orientation Bar */}
-      <nav
-        aria-label={isKo ? "워크스페이스 빠른 이동" : "Workspace quick navigation"}
-        data-brand-tab-map
-        style={{
-          display: "flex",
-          flexWrap: "wrap",
-          alignItems: "center",
-          gap: "8px",
-        }}
-      >
-        {tabs.map((tab) => (
-          <a
-            key={tab.key}
-            href={tab.href}
-            data-tab-guide-card={tab.key}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              padding: "7px 14px",
-              borderRadius: "999px",
-              background: tab.active ? "#3875C5" : "#FFFFFF",
-              color: tab.active ? "#FFFFFF" : "#41444D",
-              border: tab.active ? "1px solid #3875C5" : "1px solid rgba(0, 0, 0, 0.09)",
-              fontSize: "13px",
-              fontWeight: tab.active ? 600 : 500,
-              textDecoration: "none",
-            }}
-          >
-            {tab.label}
-          </a>
-        ))}
-      </nav>
-
-      {/* 2. Quiet Media-First 1080p In-House Master Strip */}
+    <div style={{ display: "grid", gap: "12px", marginBottom: "20px" }}>
+      {/* Quiet Media-First 1080p In-House Master Strip + Quick Launch */}
       <section
         className="bw-panel"
         data-campaign-moat-showcase
+        data-brand-tab-map
         style={{
-          padding: "20px",
-          borderRadius: "24px",
+          padding: "18px 20px",
+          borderRadius: "20px",
           background: "#FFFFFF",
           border: "1px solid rgba(0, 0, 0, 0.08)",
           boxShadow: "var(--ys-card)",
@@ -190,11 +119,11 @@ export function CampaignMoatShowcase({
             alignItems: "center",
             justifyContent: "space-between",
             gap: "12px",
-            marginBottom: "14px",
+            marginBottom: "12px",
           }}
         >
           <div>
-            <h2 style={{ fontSize: "18px", fontWeight: 600, letterSpacing: "-0.03em", margin: "0 0 4px", color: "#0E1013" }}>
+            <h2 style={{ fontSize: "16px", fontWeight: 600, letterSpacing: "-0.02em", margin: "0 0 3px", color: "#0E1013" }}>
               {isKo
                 ? "1080p 사운드 마스터 포맷 설계부터 인플루언서 동시 시딩까지 한곳에서 진행합니다"
                 : "Design 1080p sound-on master formats and scale creator seeding in one workspace"}
@@ -203,7 +132,7 @@ export function CampaignMoatShowcase({
               data-moat-pipeline
               style={{
                 margin: 0,
-                fontSize: "13px",
+                fontSize: "12.5px",
                 color: "#676B75",
               }}
             >
@@ -217,15 +146,16 @@ export function CampaignMoatShowcase({
             <a
               href={scopedHref("/brand/identity", choice)}
               data-home-onboarding-cta
+              data-tab-guide-card="identity"
               style={{
                 display: "inline-flex",
                 alignItems: "center",
-                padding: "8px 14px",
+                padding: "7px 13px",
                 borderRadius: "999px",
                 background: "#F6F7F9",
                 border: "1px solid rgba(0, 0, 0, 0.1)",
                 color: "#0E1013",
-                fontSize: "13px",
+                fontSize: "12.5px",
                 fontWeight: 600,
                 textDecoration: "none",
               }}
@@ -235,14 +165,15 @@ export function CampaignMoatShowcase({
             <a
               href={scopedHref("/brand/studio", choice)}
               data-home-studio-cta
+              data-tab-guide-card="studio"
               style={{
                 display: "inline-flex",
                 alignItems: "center",
-                padding: "8px 16px",
+                padding: "7px 15px",
                 borderRadius: "999px",
                 background: "#3875C5",
                 color: "#FFFFFF",
-                fontSize: "13px",
+                fontSize: "12.5px",
                 fontWeight: 600,
                 textDecoration: "none",
               }}
@@ -252,13 +183,13 @@ export function CampaignMoatShowcase({
           </div>
         </div>
 
-        {/* 4-Up 1080p In-House Video Strip */}
+        {/* Compact 4-Up 1080p In-House Video Strip (200px height so page content stays above the fold) */}
         <div
           data-b2b-sound-master-reel
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-            gap: "12px",
+            gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+            gap: "10px",
           }}
         >
           {B2B_SOUND_MASTER_CLIPS.map((clip) => {
@@ -269,9 +200,9 @@ export function CampaignMoatShowcase({
                 data-b2b-master-card={clip.id}
                 style={{
                   position: "relative",
-                  borderRadius: "18px",
+                  borderRadius: "14px",
                   overflow: "hidden",
-                  aspectRatio: "9 / 16",
+                  height: "200px",
                   background: "#111114",
                   border: soundOn ? "2px solid #3875C5" : "1px solid rgba(0, 0, 0, 0.08)",
                 }}

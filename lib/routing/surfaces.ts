@@ -107,12 +107,43 @@ export function adminRouteAllowed(pathname: string, method: string): boolean {
 }
 
 /**
- * Public example media shown in the brand self-serve studio (components/brand-workspace/studio-showcase.tsx).
+ * Public example media shown in the brand self-serve studio and workspace showcases.
  * Exact file names only: no other /reel path, extension or directory opens on the brand host.
  */
-const STUDIO_DEMO_FILES = new Set(
-  ['designed-format.jpg', 'designed-format.mp4', 'different-person.jpg', 'different-person.mp4', 'reference-selfie.jpeg'].map((f) => `/reel/studio-demo/${f}`),
-);
+const STUDIO_DEMO_FILES = new Set([
+  ...['designed-format.jpg', 'designed-format.mp4', 'different-person.jpg', 'different-person.mp4', 'reference-selfie.jpeg'].map((f) => `/reel/studio-demo/${f}`),
+  ...[
+    'house-runway-1080p.mp4',
+    'house-runway-1080p.jpg',
+    'studio-editorial-blue-1080p.mp4',
+    'studio-editorial-blue-1080p.jpg',
+    'house-french-blue-hero-1080p.mp4',
+    'house-french-blue-hero-1080p.jpg',
+    'studio-rain-editorial-1080p.mp4',
+    'studio-rain-editorial-1080p.jpg',
+    'production-paris.mp4',
+    'production-paris.jpg',
+    'city-fashion.mp4',
+    'city-fashion.jpg',
+    'tea-editorial.mp4',
+    'tea-editorial.jpg',
+  ].map((f) => `/reel/brands/${f}`),
+  '/reel/campaigns/beauty-rose.mp4',
+  '/reel/campaigns/beauty-rose.jpg',
+  ...[
+    'c-logo-wide.webp',
+    'c-logo-raw.webp',
+    'c-logo-ours.webp',
+    'c-garment-wide.webp',
+    'c-garment-raw.webp',
+    'c-garment-ours.webp',
+    'c-skin-wide.webp',
+    'c-skin-raw.webp',
+    'c-skin-ours.webp',
+    'look-feather.webp',
+    'v7/rx-runway-duo.jpg',
+  ].map((f) => `/reel/landing/${f}`),
+]);
 
 export function brandRouteAllowed(pathname: string, method: string): boolean {
   const read = method === 'GET' || method === 'HEAD';

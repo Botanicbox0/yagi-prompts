@@ -1756,8 +1756,8 @@ export const en = {
   "title": "Self-serve studio",
   "subtitle": "Choose a template made for your brand and create videos with your own front-facing photo.",
   "onboarding": {
-    "lead": "TWINGS designs a video format for your brand. You then make as many videos in that format as your contract allows.",
-    "next": "Start by telling us what you want to make. The first step is a custom template request.",
+    "lead": "Create product stills and short films immediately below, or request a custom brand video format for talent-led variations.",
+    "next": "Start creating right away below, or request a custom template for your brand.",
     "noCommitment": "Sending a request does not create a contract or a payment.",
     "processTitle": "How it works",
     "stepDone": "Done",

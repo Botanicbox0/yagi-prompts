@@ -176,7 +176,10 @@ export default async function BrandStudio({
         />
       )}
       {explaining ? (
-        <StudioIntro t={o} stage={stage} guide={guide} />
+        <details className="bw-service-disclosure">
+          <summary>{o.helpSummary}</summary>
+          <StudioIntro t={o} stage={stage} guide={guide} />
+        </details>
       ) : (
         <StudioHelp t={o} stage={stage} guide={guide} />
       )}
@@ -240,7 +243,7 @@ export default async function BrandStudio({
                       <div className="bw-production-preview">
                         {v.previewMime?.startsWith("video/") ? (
                           <video
-                            src={v.previewUrl}
+                            src={v.previewUrl.includes("#") ? v.previewUrl : `${v.previewUrl}#t=0.1`}
                             controls
                             playsInline
                             preload="metadata"
