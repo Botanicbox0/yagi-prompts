@@ -94,7 +94,12 @@ export interface FounderCreditPlanSpec {
   id: 'image_only' | 'creator' | 'premium';
   nameKo: string;
   nameEn: string;
+  /** Korean storefront price in KRW (VAT 10% included) */
   priceKrw: number;
+  /** Global storefront base price in USD (tax-exclusive; local VAT/GST auto-added by App Store / Google Play / Stripe Tax) */
+  priceUsd: number;
+  /** Net USD received after 15% App Store / Play Store Small Business fee */
+  netStoreRevenueUsd: number;
   monthlyCredits: number;
   allowsVideo: boolean;
   upscaleIncluded: boolean;
@@ -118,6 +123,8 @@ export const FOUNDER_CREDIT_PLANS: Record<FounderCreditPlanSpec['id'], FounderCr
     nameKo: 'Image-Only (스타터)',
     nameEn: 'Image-Only (Starter)',
     priceKrw: 4900,
+    priceUsd: 4.99,
+    netStoreRevenueUsd: 4.24,
     monthlyCredits: 370,
     allowsVideo: false,
     upscaleIncluded: false,
@@ -134,6 +141,8 @@ export const FOUNDER_CREDIT_PLANS: Record<FounderCreditPlanSpec['id'], FounderCr
     nameKo: 'Creator (크리에이터)',
     nameEn: 'Creator',
     priceKrw: 24900,
+    priceUsd: 19.99,
+    netStoreRevenueUsd: 16.99,
     monthlyCredits: 1890,
     allowsVideo: true,
     upscaleIncluded: false,
@@ -150,6 +159,8 @@ export const FOUNDER_CREDIT_PLANS: Record<FounderCreditPlanSpec['id'], FounderCr
     nameKo: 'Premium (프리미엄)',
     nameEn: 'Premium',
     priceKrw: 49000,
+    priceUsd: 39.99,
+    netStoreRevenueUsd: 33.99,
     monthlyCredits: 3720,
     allowsVideo: true,
     upscaleIncluded: true,
@@ -547,3 +558,80 @@ export function quoteVideoResolutionTiers(input: {
     }
   };
 }
+
+/**
+ * Global Subscription & Anti-Abuse Architecture (Founder Decision, 2026-11-05):
+ * Pre-baked into the pricing & credit engine so expanding to global App Store / Play Store / Stripe
+ * requires zero database schema migrations and zero negative-margin surprises.
+ */
+export const GLOBAL_SUBSCRIPTION_GUARDRAILS = {
+  /** Single worldwide credit ledger: 370 / 1,890 / 3,720 credits & template credit costs are identical across all countries. */
+  unifiedGlobalCreditLedger: true,
+  /** Global base pricing is Tax-Exclusive USD ($4.99 / $19.99 / $39.99) so EU/UK 20-25% VAT is added on top by the store rather than eating our margin. */
+  globalPricingTaxMode: 'tax_exclusive_usd_base',
+  /** Require 3D Secure 2 (3DS2) on all global web Stripe card checkouts to shift fraud liability and block stolen-card bots. */
+  require3DSecureOnStripe: true,
+  /** Maximum 1080p Masterpiece renders allowed within the first 24 hours of a new web card subscription (480p Draft & 720p Standard remain unrestricted). */
+  max1080pRendersFirst24h: 2,
+  /** First-payment cooling window in hours for high-cost 1080p velocity limiting. */
+  firstPaymentVelocityWindowHours: 24,
+  /** Minimum cash payout threshold in USD for overseas Makers (via Stripe Connect with W-8BEN). */
+  globalMakerMinWithdrawalUsd: 50,
+  /** Bonus multiplier when a Maker converts settlement earnings directly into TWINGS generation credits (zero wire fee / zero withholding friction). */
+  makerCreditConversionBonusMultiplier: 1.1
+} as const;
+
+export interface GlobalRenderVelocityCheckInput {
+  resolution: PersonalVideoResolution;
+  channel: 'app_store' | 'play_store' | 'toss_kr' | 'stripe_global';
+  hoursSinceFirstPayment: number;
+  completed1080pCountInWindow: number;
+}
+
+export interface GlobalRenderVelocityCheckResult {
+  allowed: boolean;
+  reasonCode: 'ok' | 'first_24h_1080p_velocity_cap';
+  recommendedFallbackResolution: '720p' | null;
+}
+
+/**
+ * Protects against stolen-card chargeback bots on global web (`stripe_global`) that attempt to drain
+ * an entire 3,720-credit plan on expensive 1080p renders within minutes of signup.
+ * Native App Store / Play Store and Korean Toss payments are exempt, and 480p/720p are always allowed.
+ */
+export function evaluateGlobalRenderVelocityGuard(
+  input: GlobalRenderVelocityCheckInput
+): GlobalRenderVelocityCheckResult {
+  if (
+    input.channel === 'stripe_global' &&
+    input.resolution === '1080p' &&
+    input.hoursSinceFirstPayment < GLOBAL_SUBSCRIPTION_GUARDRAILS.firstPaymentVelocityWindowHours &&
+    input.completed1080pCountInWindow >= GLOBAL_SUBSCRIPTION_GUARDRAILS.max1080pRendersFirst24h
+  ) {
+    return {
+      allowed: false,
+      reasonCode: 'first_24h_1080p_velocity_cap',
+      recommendedFallbackResolution: '720p'
+    };
+  }
+  return {
+    allowed: true,
+    reasonCode: 'ok',
+    recommendedFallbackResolution: null
+  };
+}
+
+/**
+ * Prevents disposable VoIP/SMS bot farming of the 1 free onboarding image on global web.
+ * Granted ONLY when Korean carrier identity verification (CI/DI) OR native mobile hardware attestation
+ * (Apple App Attest / Google Play Integrity) is verified.
+ */
+export function canClaimFreeOnboardingImage(input: {
+  krCarrierIdentityVerified: boolean;
+  mobileHardwareAttested: boolean;
+  alreadyClaimedCount: number;
+}): boolean {
+  if (input.alreadyClaimedCount > 0) return false;
+  return input.krCarrierIdentityVerified || input.mobileHardwareAttested;
+}
+

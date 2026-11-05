@@ -4,8 +4,11 @@ import { quoteVideo } from '@/lib/video/models';
 import {
   baseCredits,
   baseKrw,
+  canClaimFreeOnboardingImage,
   creditsToKrw,
+  evaluateGlobalRenderVelocityGuard,
   FOUNDER_CREDIT_PLANS,
+  GLOBAL_SUBSCRIPTION_GUARDRAILS,
   isRaise,
   makeEarning,
   NET_SHARE,
@@ -204,5 +207,71 @@ describe('template price', () => {
       '720p': 345,
       '1080p': 847,
     });
+  });
+
+  it('locks in Global USD Subscription Pricing ($4.99 / $19.99 / $39.99 tax-exclusive) and anti-abuse velocity/trial guardrails', () => {
+    expect(FOUNDER_CREDIT_PLANS.image_only.priceUsd).toBe(4.99);
+    expect(FOUNDER_CREDIT_PLANS.image_only.netStoreRevenueUsd).toBe(4.24);
+    expect(FOUNDER_CREDIT_PLANS.creator.priceUsd).toBe(19.99);
+    expect(FOUNDER_CREDIT_PLANS.creator.netStoreRevenueUsd).toBe(16.99);
+    expect(FOUNDER_CREDIT_PLANS.premium.priceUsd).toBe(39.99);
+    expect(FOUNDER_CREDIT_PLANS.premium.netStoreRevenueUsd).toBe(33.99);
+
+    expect(GLOBAL_SUBSCRIPTION_GUARDRAILS.unifiedGlobalCreditLedger).toBe(true);
+    expect(GLOBAL_SUBSCRIPTION_GUARDRAILS.globalPricingTaxMode).toBe('tax_exclusive_usd_base');
+    expect(GLOBAL_SUBSCRIPTION_GUARDRAILS.require3DSecureOnStripe).toBe(true);
+    expect(GLOBAL_SUBSCRIPTION_GUARDRAILS.max1080pRendersFirst24h).toBe(2);
+
+    // Velocity guard: blocks 3rd 1080p render within first 24h on stripe_global, recommends 720p
+    const blocked1080 = evaluateGlobalRenderVelocityGuard({
+      resolution: '1080p',
+      channel: 'stripe_global',
+      hoursSinceFirstPayment: 2,
+      completed1080pCountInWindow: 2,
+    });
+    expect(blocked1080.allowed).toBe(false);
+    expect(blocked1080.reasonCode).toBe('first_24h_1080p_velocity_cap');
+    expect(blocked1080.recommendedFallbackResolution).toBe('720p');
+
+    // Velocity guard: always allows 720p/480p or native App Store / Toss KR
+    expect(
+      evaluateGlobalRenderVelocityGuard({
+        resolution: '720p',
+        channel: 'stripe_global',
+        hoursSinceFirstPayment: 2,
+        completed1080pCountInWindow: 5,
+      }).allowed
+    ).toBe(true);
+    expect(
+      evaluateGlobalRenderVelocityGuard({
+        resolution: '1080p',
+        channel: 'app_store',
+        hoursSinceFirstPayment: 1,
+        completed1080pCountInWindow: 3,
+      }).allowed
+    ).toBe(true);
+
+    // Free onboarding image gate: blocks unverified global web signups, allows KR carrier or mobile hardware attestation once
+    expect(
+      canClaimFreeOnboardingImage({
+        krCarrierIdentityVerified: false,
+        mobileHardwareAttested: false,
+        alreadyClaimedCount: 0,
+      })
+    ).toBe(false);
+    expect(
+      canClaimFreeOnboardingImage({
+        krCarrierIdentityVerified: false,
+        mobileHardwareAttested: true,
+        alreadyClaimedCount: 0,
+      })
+    ).toBe(true);
+    expect(
+      canClaimFreeOnboardingImage({
+        krCarrierIdentityVerified: true,
+        mobileHardwareAttested: true,
+        alreadyClaimedCount: 1,
+      })
+    ).toBe(false);
   });
 });
