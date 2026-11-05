@@ -64,6 +64,7 @@ export function mediaDropLabels(a: Dictionary['admin']): MediaDropLabels {
     audioUnavailable: a.mediaAudioUnavailable,
     uploading: a.mediaUploading,
     uploaded: a.mediaUploaded,
+    uploadedRetained: a.mediaUploadedRetained,
     uploadFailed: a.mediaUploadFailed,
     // The same caps the signing route enforces, so the refusal names the real limit.
     uploadTooLarge: a.mediaUploadTooLarge

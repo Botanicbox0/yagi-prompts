@@ -201,6 +201,17 @@ export function ImageSetFields({
   framesRef.current = frames;
   useEffect(() => () => framesRef.current.forEach((frame) => URL.revokeObjectURL(frame.preview)), []);
 
+  useEffect(() => {
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (frames.length > 0) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, [frames.length]);
+
   const caps = { min: IMAGE_SET_FRAMES_MIN, max: IMAGE_SET_FRAMES_MAX };
   const patch = (id: string, change: Partial<Frame>) => setFrames((list) => list.map((frame) => (frame.id === id ? { ...frame, ...change } : frame)));
 

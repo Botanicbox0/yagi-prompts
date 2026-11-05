@@ -8,6 +8,7 @@ import {
   type UploadFailure,
   type UploadFailureLabels,
 } from '@/lib/admin/direct-upload';
+import { loadPromptDraft, savePromptDraft } from '@/lib/admin/prompt-draft';
 import {
   POSTER_FOCUS_CENTER,
   dragPosterFocus,
@@ -56,9 +57,20 @@ export interface MediaDropLabels extends UploadFailureLabels {
   /** Direct-upload status (2026-08-15). `{percent}` is interpolated. */
   uploading: string;
   uploaded: string;
+  uploadedRetained?: string;
   uploadFailed: string;
   blockedUploading: string;
   blockedFailed: string;
+}
+
+function receiptSize(receiptStr?: string): number {
+  if (!receiptStr) return 0;
+  try {
+    const parsed = JSON.parse(receiptStr);
+    return typeof parsed?.size === 'number' ? parsed.size : 0;
+  } catch {
+    return 0;
+  }
 }
 
 function assign(input: HTMLInputElement | null, file: File | null): void {
@@ -210,6 +222,52 @@ export function MediaDrop({
   const [enhanced, setEnhanced] = useState(false);
   useEffect(() => setEnhanced(true), []);
 
+  // Restore media receipts from draft on mount if not editing an existing row
+  useEffect(() => {
+    if (existingVideoSrc || existingPosterSrc || existingAudioSrc) return;
+    try {
+      const draft = loadPromptDraft(window.localStorage);
+      if (!draft) return;
+      const retainedLabel = labels.uploadedRetained ?? '업로드 완료 (임시저장 복원)';
+      if (draft.videoRef) {
+        setReceipts((c) => ({ ...c, video: draft.videoRef! }));
+        setVideoLabel(draft.videoLabel ?? retainedLabel);
+        setUploads((c) => ({ ...c, video: { phase: 'done', sizeBytes: receiptSize(draft.videoRef) } }));
+      }
+      if (draft.posterRef) {
+        setReceipts((c) => ({ ...c, poster: draft.posterRef! }));
+        setPosterLabel(draft.posterLabel ?? retainedLabel);
+        setUploads((c) => ({ ...c, poster: { phase: 'done', sizeBytes: receiptSize(draft.posterRef) } }));
+      }
+      if (draft.audioRef) {
+        setReceipts((c) => ({ ...c, audio: draft.audioRef! }));
+        setAudioLabel(draft.audioLabel ?? retainedLabel);
+        setUploads((c) => ({ ...c, audio: { phase: 'done', sizeBytes: receiptSize(draft.audioRef) } }));
+      }
+    } catch {
+      // ignore
+    }
+  }, [existingVideoSrc, existingPosterSrc, existingAudioSrc, labels.uploadedRetained]);
+
+  // Reset media when draft is discarded
+  useEffect(() => {
+    const onDraftClear = () => {
+      setReceipts({ video: '', poster: '', audio: '' });
+      setVideoUrl(null);
+      setVideoLabel(null);
+      setPosterUrl(null);
+      setPosterLabel(null);
+      setAudioUrl(null);
+      setAudioLabel(null);
+      setUploads({ video: { phase: 'idle' }, poster: { phase: 'idle' }, audio: { phase: 'idle' } });
+      assign(videoInputRef.current, null);
+      assign(posterInputRef.current, null);
+      assign(audioInputRef.current, null);
+    };
+    window.addEventListener('twings:prompt-draft-clear', onDraftClear);
+    return () => window.removeEventListener('twings:prompt-draft-clear', onDraftClear);
+  }, []);
+
   const rootRef = useRef<HTMLDivElement>(null);
   const uploadsRef = useRef(uploads);
   uploadsRef.current = uploads;
@@ -359,6 +417,36 @@ export function MediaDrop({
       setReceipts((current) => ({ ...current, [kind]: receipt }));
       assign(input, null);
       setUploads((current) => ({ ...current, [kind]: { phase: 'done', sizeBytes: file.size } }));
+
+      try {
+        const currentDraft = loadPromptDraft(window.localStorage) ?? {
+          version: 1,
+          savedAt: new Date().toISOString(),
+          title: '',
+          titleKo: '',
+          promptText: '',
+          models: [],
+          useCase: [],
+          sourceUrl: '',
+          processMd: '',
+          processMdKo: '',
+        };
+        const label = `${file.name} · ${(file.size / (1024 * 1024)).toFixed(1)}MB`;
+        if (kind === 'video') {
+          currentDraft.videoRef = receipt;
+          currentDraft.videoLabel = label;
+        } else if (kind === 'poster') {
+          currentDraft.posterRef = receipt;
+          currentDraft.posterLabel = label;
+        } else if (kind === 'audio') {
+          currentDraft.audioRef = receipt;
+          currentDraft.audioLabel = label;
+        }
+        currentDraft.savedAt = new Date().toISOString();
+        savePromptDraft(window.localStorage, currentDraft);
+      } catch {
+        // ignore
+      }
     } catch (error) {
       setUploads((current) => ({
         ...current,
