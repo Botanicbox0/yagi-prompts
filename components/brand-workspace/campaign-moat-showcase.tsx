@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { isSandboxedClientOrganization } from "@/lib/brands/features";
+import { BRAND_CORE_DELIVERABLE_TRACKS } from "@/lib/brands/production/reference-studio";
 import { scopedHref } from "@/lib/brands/workspace/selection";
 
 export interface B2BSoundMasterClip {
@@ -298,6 +299,125 @@ export function CampaignMoatShowcase({
             {isKo ? "영상 스튜디오 바로 열기 →" : "Open Video Studio →"}
           </span>
         </a>
+      </div>
+
+      {/* 5 Core Deliverable Tracks Showcase (Image · Video · Creator Campaign Format [Self/Commission] · Creator Campaign + Distribution · Audio) */}
+      <div
+        data-brand-five-deliverables
+        style={{
+          marginTop: "14px",
+          marginBottom: "14px",
+          padding: "14px",
+          borderRadius: "14px",
+          background: "var(--ys-surface)",
+          boxShadow: "var(--ys-ring)",
+          display: "flex",
+          flexDirection: "column",
+          gap: "10px",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: "8px",
+          }}
+        >
+          <div>
+            <strong style={{ fontSize: "13.5px", color: "var(--ys-ink)" }}>
+              {isKo
+                ? "우리 브랜드가 바로 만들고 유통할 수 있는 5대 핵심 결과물"
+                : "5 Core Deliverables Ready for Instant Brand Production & Distribution"}
+            </strong>
+            <span
+              className="bw-muted"
+              style={{ marginLeft: "8px", fontSize: "12px" }}
+            >
+              {isKo
+                ? "이미지 · 영상 · 크리에이터 캠페인 영상(셀프/의뢰) · 크리에이터 캠페인+유통 · 오디오"
+                : "Image · Video · Creator Campaign Format (Self/Commission) · Campaign + Distribution · Audio"}
+            </span>
+          </div>
+        </div>
+
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(205px, 1fr))",
+            gap: "10px",
+          }}
+        >
+          {BRAND_CORE_DELIVERABLE_TRACKS.map((track) => {
+            const targetHref =
+              track.id === "creator_distribution"
+                ? scopedHref("/brand/campaigns", choice)
+                : scopedHref("/brand/studio", choice);
+            return (
+              <a
+                key={track.id}
+                href={targetHref}
+                data-five-deliverable-card={track.id}
+                style={{
+                  textDecoration: "none",
+                  color: "inherit",
+                  padding: "10px 12px",
+                  borderRadius: "12px",
+                  background: "var(--ys-subtle-bg)",
+                  border: "1px solid var(--ys-border)",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "6px",
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: "8px",
+                  }}
+                >
+                  <strong style={{ fontSize: "13px", color: "var(--ys-ink)" }}>
+                    {isKo ? track.shortLabelKo : track.shortLabelEn}
+                  </strong>
+                  <span
+                    style={{
+                      fontSize: "10.5px",
+                      fontWeight: 700,
+                      color: "var(--ys-brand-text)",
+                    }}
+                  >
+                    {isKo ? track.badgeKo : track.badgeEn}
+                  </span>
+                </div>
+                <p
+                  className="bw-muted"
+                  style={{
+                    margin: 0,
+                    fontSize: "11.5px",
+                    lineHeight: 1.45,
+                  }}
+                >
+                  {isKo ? track.summaryKo : track.summaryEn}
+                </p>
+                <div
+                  style={{
+                    marginTop: "auto",
+                    paddingTop: "6px",
+                    borderTop: "1px solid var(--ys-hairline)",
+                    fontSize: "11px",
+                    fontWeight: 600,
+                    color: "var(--ys-brand-text)",
+                  }}
+                >
+                  {isKo ? track.priceGuideKo : track.priceGuideEn}
+                </div>
+              </a>
+            );
+          })}
+        </div>
       </div>
 
       {/* 4-Up Portrait (4:5) Passepartout Video Gallery — Zero cropped heads, zero chip clutter over footage */}

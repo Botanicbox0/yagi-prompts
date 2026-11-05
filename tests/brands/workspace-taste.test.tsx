@@ -227,10 +227,25 @@ describe("brand workspace taste", () => {
     expect(html).toContain("data-studio-layers-panel");
     expect(html).toContain("data-studio-canvas-takes");
     expect(html).toContain("data-studio-canvas-actions");
-    expect(html).not.toMatch(/seedance|seedream|nano\s*banana|seedvr2|comfyui/i);
+    expect(html).toContain("data-studio-core-tracks");
+    expect(html).toContain('data-core-track-tab="image"');
+    expect(html).toContain('data-core-track-tab="video"');
+    expect(html).toContain('data-core-track-tab="creator_format"');
+    expect(html).toContain('data-core-track-tab="creator_distribution"');
+    expect(html).toContain('data-core-track-tab="audio"');
+    expect(html).toContain("data-studio-5track-workbench");
+    expect(html).toContain("data-studio-creator-format-panel");
+    expect(html).toContain("data-studio-creator-distribution-panel");
+    expect(html).toContain("data-studio-audio-panel");
+    expect(html).toContain("GPT Image 2.6");
+    expect(html).toContain("Nano Banana Pro");
+    expect(html).toContain("Nano Banana 2.1");
+    expect(html).toContain("Nano Banana 2.0");
+    expect(html).toContain("Seedream 5.0 Pro");
+    expect(html).not.toMatch(/seedance|seedvr2|comfyui|higgsfield/i);
     expect(html).not.toContain(".mp4");
 
-    expect(BRAND_STUDIO_IMAGE_MODELS).toHaveLength(4);
+    expect(BRAND_STUDIO_IMAGE_MODELS).toHaveLength(5);
     const workflows = resolveCategoryReferenceWorkflows("fashion_apparel");
     expect(workflows.lookbook_composite.slots).toHaveLength(4);
     expect(workflows.product_swap.slots).toHaveLength(4);

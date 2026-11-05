@@ -47,6 +47,10 @@ import {
   type BrandVideoResolution,
 } from "@/lib/brands/production/pricing";
 import {
+  BRAND_AUDIO_STUDIO_PRESETS,
+  BRAND_CORE_DELIVERABLE_TRACKS,
+  BRAND_CREATOR_DISTRIBUTION_TIERS,
+  BRAND_CREATOR_FORMAT_MODES,
   BRAND_STUDIO_IMAGE_MODELS,
   BRAND_STUDIO_MICRO_EDIT_MODELS,
   FIRST_CREATION_GOALS,
@@ -56,8 +60,12 @@ import {
   extractBrandKitFromDomain,
   findClosestSupportedAspectRatio,
   resolveCategoryReferenceWorkflows,
+  type BrandAudioPresetId,
+  type BrandCoreDeliverableTrackId,
   type BrandStudioImageModelId,
   type BrandStudioMicroEditModelId,
+  type CreatorCampaignFormatModeId,
+  type CreatorDistributionTierId,
   type FirstCreationGoalCard,
   type FirstCreationGoalId,
   type MicroEditQualityTier,
@@ -97,9 +105,9 @@ const CATEGORY_STUDIO_VISUALS: Record<
 > = {
   fashion_apparel: {
     sceneThumbs: [
-      "/reel/studio/vto-garment.webp",
-      "/reel/landing/c-garment-ours.webp",
-      "/reel/studio/vto-look-front.webp",
+      "/reel/brands/slot-1-subject-editorial.jpg",
+      "/reel/brands/slot-2-space-concrete-blue.jpg",
+      "/reel/brands/slot-3-pose-lowangle-lookbook.jpg",
       "/reel/brands/house-runway-1080p.jpg",
     ],
     takes: [
@@ -107,19 +115,19 @@ const CATEGORY_STUDIO_VISUALS: Record<
         id: "take-1",
         labelKo: "컷 01 · 정면 히어로",
         labelEn: "Cut 01 · Front Hero",
-        src: "/reel/studio/vto-look-front.webp",
+        src: "/reel/brands/slot-1-subject-editorial.jpg",
       },
       {
         id: "take-2",
         labelKo: "컷 02 · 측면 실루엣",
         labelEn: "Cut 02 · Side Profile",
-        src: "/reel/studio/vto-look-side.webp",
+        src: "/reel/brands/slot-3-pose-lowangle-lookbook.jpg",
       },
       {
         id: "take-3",
         labelKo: "컷 03 · 상반신 디테일",
         labelEn: "Cut 03 · Upper Detail",
-        src: "/reel/studio/vto-look-upper.webp",
+        src: "/reel/brands/slot-2-space-concrete-blue.jpg",
       },
     ],
   },
@@ -390,9 +398,33 @@ export function BrandBriefStudio({
     selectionRect.hPct * 25.6,
   );
 
-  // Image Model Selection & Full Comparison Guide Toggle
+  // 5 Core Deliverable Track State (Image / Video / Creator Format / Creator Distribution / Audio)
+  const [activeCoreTrack, setActiveCoreTrack] =
+    useState<BrandCoreDeliverableTrackId>("image");
+  const [creatorFormatMode, setCreatorFormatMode] =
+    useState<CreatorCampaignFormatModeId>("self_build");
+  const [distributionTierId, setDistributionTierId] =
+    useState<CreatorDistributionTierId>("growth_30");
+  const [audioPresetId, setAudioPresetId] = useState<BrandAudioPresetId>(
+    "runway_french_house",
+  );
+  const [audioAutoDucking, setAudioAutoDucking] = useState<boolean>(true);
+  const [audioCommercialMaster, setAudioCommercialMaster] =
+    useState<boolean>(true);
+
+  const activeCreatorFormatSpec =
+    BRAND_CREATOR_FORMAT_MODES.find((m) => m.id === creatorFormatMode) ??
+    BRAND_CREATOR_FORMAT_MODES[0]!;
+  const activeDistributionTier =
+    BRAND_CREATOR_DISTRIBUTION_TIERS.find((t) => t.id === distributionTierId) ??
+    BRAND_CREATOR_DISTRIBUTION_TIERS[1]!;
+  const activeAudioPreset =
+    BRAND_AUDIO_STUDIO_PRESETS.find((a) => a.id === audioPresetId) ??
+    BRAND_AUDIO_STUDIO_PRESETS[0]!;
+
+  // Image Model Selection & Full Comparison Guide Toggle (5 Models: GPT Image 2.6, Nano Banana Pro, 2.1, 2.0, Seedream 5.0 Pro)
   const [selectedImageModelId, setSelectedImageModelId] =
-    useState<BrandStudioImageModelId>("portrait_lookbook_pro");
+    useState<BrandStudioImageModelId>("nano_banana_pro");
   const [showFullModelGuide, setShowFullModelGuide] = useState<boolean>(false);
   const activeImageModel =
     BRAND_STUDIO_IMAGE_MODELS.find((m) => m.id === selectedImageModelId) ??
@@ -525,8 +557,18 @@ export function BrandBriefStudio({
     );
   }
 
+  function handleSelectCoreTrack(trackId: BrandCoreDeliverableTrackId) {
+    setActiveCoreTrack(trackId);
+    if (trackId === "image") {
+      handleSwitchMediumMode("image");
+    } else {
+      handleSwitchMediumMode("video");
+    }
+  }
+
   function handleSelectFirstCreationGoal(goal: FirstCreationGoalCard) {
     setSelectedFirstGoalId(goal.id);
+    setActiveCoreTrack(goal.targetTrack);
     if (goal.targetMedium === "video") {
       handleSwitchMediumMode("video");
     } else {
@@ -566,12 +608,16 @@ export function BrandBriefStudio({
 
   function handleSwitchMediumMode(targetMode: "image" | "video") {
     if (targetMode === "video") {
+      if (activeCoreTrack === "image") {
+        setActiveCoreTrack("video");
+      }
       setMedium("short film");
       setCutKind("short_film_clip");
       setAspect("9:16");
       setUse("reel");
       setCameraFocalMm(categoryProfile.scenes[3].focalMm);
     } else {
+      setActiveCoreTrack("image");
       const tpl =
         POMELLI_SHOT_TEMPLATES.find((t) => t.id === activeShotTemplateId) ??
         POMELLI_SHOT_TEMPLATES[0]!;
@@ -588,9 +634,9 @@ export function BrandBriefStudio({
     const wf = referenceWorkflows[mode];
     setBriefText(isKo ? wf.defaultPromptKo : wf.defaultPromptEn);
     if (mode === "product_swap") {
-      setSelectedImageModelId("multi_ref_standard");
+      setSelectedImageModelId("nano_banana_2_1");
     } else {
-      setSelectedImageModelId("portrait_lookbook_pro");
+      setSelectedImageModelId("nano_banana_pro");
     }
   }
 
@@ -1170,6 +1216,138 @@ export function BrandBriefStudio({
               {isKo ? "브랜드 스타일" : "Brand Style"}
             </a>
           )}
+        </div>
+      </div>
+
+      {/* 5 Core Deliverable Track Switcher (01 이미지 · 02 영상 · 03 크리에이터 캠페인 영상(셀프·의뢰) · 04 크리에이터 캠페인 영상+유통 · 05 오디오) */}
+      <div
+        data-studio-core-tracks
+        data-active-core-track={activeCoreTrack}
+        style={{
+          marginBottom: "16px",
+          padding: "12px 14px",
+          borderRadius: "14px",
+          background: "var(--ys-surface)",
+          boxShadow: "var(--ys-ring)",
+          display: "flex",
+          flexDirection: "column",
+          gap: "10px",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: "8px",
+          }}
+        >
+          <div>
+            <strong style={{ fontSize: "13px", color: "var(--ys-ink)" }}>
+              {isKo
+                ? "우리 브랜드 5대 핵심 제작 · 유통 트랙"
+                : "5 Core Brand Production & Distribution Tracks"}
+            </strong>
+            <span
+              className="bw-muted"
+              style={{ marginLeft: "8px", fontSize: "12px" }}
+            >
+              {isKo
+                ? "이미지 · 영상 · 크리에이터 캠페인 영상(셀프/의뢰) · 캠페인+유통 · 오디오를 한 워크스페이스에서 이어 만듭니다"
+                : "Image, Video, Creator Campaign Format (Self/Commission), Campaign + Distribution, and Audio in one studio"}
+            </span>
+          </div>
+          <span
+            className="bw-chip"
+            style={{
+              background: "var(--ys-brand-tint)",
+              color: "var(--ys-brand-text)",
+              fontWeight: 700,
+              fontSize: "11px",
+            }}
+          >
+            {isKo
+              ? "동일 브랜드 아이덴티티 · 색감/질감 핀 100% 연동"
+              : "100% Shared Brand Identity & Pinned Style Locks"}
+          </span>
+        </div>
+
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(185px, 1fr))",
+            gap: "8px",
+          }}
+        >
+          {BRAND_CORE_DELIVERABLE_TRACKS.map((track) => {
+            const selected = activeCoreTrack === track.id;
+            return (
+              <button
+                key={track.id}
+                type="button"
+                data-core-track-tab={track.id}
+                aria-pressed={selected}
+                onClick={() => handleSelectCoreTrack(track.id)}
+                disabled={busy}
+                style={{
+                  textAlign: "left",
+                  padding: "10px 12px",
+                  borderRadius: "11px",
+                  border: selected
+                    ? "1.5px solid var(--ys-brand)"
+                    : "1px solid var(--ys-border)",
+                  background: selected
+                    ? "var(--ys-brand-tint)"
+                    : "var(--ys-subtle-bg)",
+                  cursor: "pointer",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "4px",
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: "6px",
+                  }}
+                >
+                  <strong
+                    style={{
+                      fontSize: "12.5px",
+                      color: selected
+                        ? "var(--ys-brand-text)"
+                        : "var(--ys-ink)",
+                    }}
+                  >
+                    {isKo ? track.shortLabelKo : track.shortLabelEn}
+                  </strong>
+                  <span
+                    style={{
+                      fontSize: "10.5px",
+                      fontWeight: 600,
+                      color: selected
+                        ? "var(--ys-brand-text)"
+                        : "var(--ys-ink-muted)",
+                    }}
+                  >
+                    {isKo ? track.badgeKo : track.badgeEn}
+                  </span>
+                </div>
+                <span
+                  style={{
+                    fontSize: "11px",
+                    lineHeight: 1.4,
+                    color: "var(--ys-ink-secondary)",
+                  }}
+                >
+                  {isKo ? track.priceGuideKo : track.priceGuideEn}
+                </span>
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -2691,7 +2869,7 @@ export function BrandBriefStudio({
                 </button>
               </div>
 
-              {/* 4 Image Model Cards with 1-Line Traits & Strength Pills */}
+              {/* 5 Image Model Cards (GPT Image 2.6 · Nano Banana Pro · Nano Banana 2.1 · Nano Banana 2.0 · Seedream 5.0 Pro) */}
               <div
                 className="bw-model-picker-grid"
                 data-studio-image-model-picker
@@ -2731,6 +2909,18 @@ export function BrandBriefStudio({
                             : `KRW ${model.priceKrwPer5Set}`}
                         </span>
                       </div>
+
+                      <span
+                        style={{
+                          fontSize: "10.5px",
+                          fontWeight: 700,
+                          color: selected
+                            ? "var(--ys-brand-text)"
+                            : "var(--ys-ink-secondary)",
+                        }}
+                      >
+                        {isKo ? model.tierBadgeKo : model.tierBadgeEn}
+                      </span>
 
                       <span
                         style={{
@@ -2792,14 +2982,36 @@ export function BrandBriefStudio({
                       ? `${activeImageModel.nameKo} — 상세 특징 & 추천 결과물`
                       : `${activeImageModel.nameEn} — Detailed Characteristics & Best Use Cases`}
                   </strong>
-                  <span
-                    className="bw-badge"
-                    style={{ fontSize: "11px", fontWeight: 600 }}
+                  <div
+                    style={{
+                      display: "flex",
+                      flexWrap: "wrap",
+                      alignItems: "center",
+                      gap: "6px",
+                    }}
                   >
-                    {isKo
-                      ? `권장 슬롯 공식: ${activeImageModel.recommendedSlotFormulaKo}`
-                      : `Slot Formula: ${activeImageModel.recommendedSlotFormulaEn}`}
-                  </span>
+                    <span
+                      className="bw-chip"
+                      style={{
+                        fontSize: "10.5px",
+                        fontWeight: 600,
+                        background: "var(--ys-brand-tint)",
+                        color: "var(--ys-brand-text)",
+                      }}
+                    >
+                      {isKo
+                        ? activeImageModel.promptFormulaBadgeKo
+                        : activeImageModel.promptFormulaBadgeEn}
+                    </span>
+                    <span
+                      className="bw-badge"
+                      style={{ fontSize: "11px", fontWeight: 600 }}
+                    >
+                      {isKo
+                        ? `권장 슬롯 공식: ${activeImageModel.recommendedSlotFormulaKo}`
+                        : `Slot Formula: ${activeImageModel.recommendedSlotFormulaEn}`}
+                    </span>
+                  </div>
                 </div>
 
                 <p
@@ -2853,7 +3065,7 @@ export function BrandBriefStudio({
                   ))}
                 </div>
 
-                {/* Full 4-Model Comparison Matrix when toggled open */}
+                {/* Full 5-Model Comparison Matrix when toggled open */}
                 {showFullModelGuide && (
                   <div
                     data-studio-model-comparison-matrix
@@ -2866,8 +3078,8 @@ export function BrandBriefStudio({
                   >
                     <strong style={{ fontSize: "12px", color: "var(--ys-ink)" }}>
                       {isKo
-                        ? "상황별 이미지 모델 한눈에 비교하기"
-                        : "Model Suitability Comparison by Deliverable"}
+                        ? "상황별 5종 이미지 모델 한눈에 비교하기"
+                        : "5-Model Suitability Comparison by Deliverable"}
                     </strong>
                     {BRAND_STUDIO_IMAGE_MODELS.map((m) => (
                       <div
@@ -2910,6 +3122,398 @@ export function BrandBriefStudio({
               </div>
             </div>
           )}
+
+          {/* TRACK 03 · 04 · 05 Specialized Workbenches: Creator Campaign Format (Self/Commission), Creator Distribution, and Audio Studio */}
+          <div
+            data-studio-5track-workbench
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+              gap: "12px",
+            }}
+          >
+            {/* Track 03: Creator Campaign Format (Self-Serve vs Studio Commission) */}
+            <div
+              data-studio-creator-format-panel
+              data-creator-format-mode={creatorFormatMode}
+              style={{
+                padding: "12px 14px",
+                borderRadius: "13px",
+                background:
+                  activeCoreTrack === "creator_format"
+                    ? "var(--ys-brand-tint)"
+                    : "var(--ys-surface)",
+                border:
+                  activeCoreTrack === "creator_format"
+                    ? "1.5px solid var(--ys-brand)"
+                    : "1px solid var(--ys-border)",
+                display: "flex",
+                flexDirection: "column",
+                gap: "8px",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: "6px",
+                }}
+              >
+                <strong style={{ fontSize: "12.5px", color: "var(--ys-ink)" }}>
+                  {isKo
+                    ? "크리에이터 캠페인용 영상 (셀프 · 의뢰)"
+                    : "Creator Campaign Format (Self · Commission)"}
+                </strong>
+                <div className="bw-seg-track">
+                  {BRAND_CREATOR_FORMAT_MODES.map((fm) => (
+                    <button
+                      key={fm.id}
+                      type="button"
+                      className="bw-seg-btn"
+                      data-creator-format-mode-btn={fm.id}
+                      aria-pressed={creatorFormatMode === fm.id}
+                      onClick={() => {
+                        setCreatorFormatMode(fm.id);
+                        setActiveCoreTrack("creator_format");
+                      }}
+                    >
+                      {fm.id === "self_build"
+                        ? isKo
+                          ? "셀프 포맷 빌더"
+                          : "Self-Build"
+                        : isKo
+                          ? "D+3 스튜디오 의뢰"
+                          : "D+3 Commission"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <p
+                style={{
+                  margin: 0,
+                  fontSize: "11.5px",
+                  lineHeight: 1.45,
+                  color: "var(--ys-ink-secondary)",
+                }}
+              >
+                {isKo
+                  ? activeCreatorFormatSpec.summaryKo
+                  : activeCreatorFormatSpec.summaryEn}
+              </p>
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "4px",
+                  fontSize: "11px",
+                  color: "var(--ys-ink)",
+                }}
+              >
+                {(isKo
+                  ? activeCreatorFormatSpec.lockedElementsKo
+                  : activeCreatorFormatSpec.lockedElementsEn
+                ).map((item) => (
+                  <span key={item}>• {item}</span>
+                ))}
+              </div>
+              <div
+                style={{
+                  marginTop: "auto",
+                  paddingTop: "6px",
+                  borderTop: "1px solid var(--ys-hairline)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: "8px",
+                  fontSize: "11px",
+                }}
+              >
+                <span style={{ color: "var(--ys-ink-muted)" }}>
+                  {isKo
+                    ? activeCreatorFormatSpec.turnaroundKo
+                    : activeCreatorFormatSpec.turnaroundEn}
+                </span>
+                <button
+                  type="button"
+                  className="bw-quick-chip"
+                  data-creator-format-action-btn
+                  onClick={() => {
+                    setActiveCoreTrack("creator_format");
+                    setStatusMessage(
+                      isKo
+                        ? `${activeCreatorFormatSpec.titleKo} 모드가 활성화되었습니다.`
+                        : `${activeCreatorFormatSpec.titleEn} activated.`,
+                    );
+                  }}
+                  style={{ fontWeight: 700, color: "var(--ys-brand-text)" }}
+                >
+                  {isKo
+                    ? activeCreatorFormatSpec.ctaLabelKo
+                    : activeCreatorFormatSpec.ctaLabelEn}
+                </button>
+              </div>
+            </div>
+
+            {/* Track 04: Creator Campaign Video + End-to-End Distribution */}
+            <div
+              data-studio-creator-distribution-panel
+              data-distribution-tier={distributionTierId}
+              style={{
+                padding: "12px 14px",
+                borderRadius: "13px",
+                background:
+                  activeCoreTrack === "creator_distribution"
+                    ? "var(--ys-brand-tint)"
+                    : "var(--ys-surface)",
+                border:
+                  activeCoreTrack === "creator_distribution"
+                    ? "1.5px solid var(--ys-brand)"
+                    : "1px solid var(--ys-border)",
+                display: "flex",
+                flexDirection: "column",
+                gap: "8px",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: "6px",
+                }}
+              >
+                <strong style={{ fontSize: "12.5px", color: "var(--ys-ink)" }}>
+                  {isKo
+                    ? "크리에이터 캠페인 영상 + 유통까지"
+                    : "Creator Campaign + Seeding Distribution"}
+                </strong>
+                <div className="bw-seg-track">
+                  {BRAND_CREATOR_DISTRIBUTION_TIERS.map((tier) => (
+                    <button
+                      key={tier.id}
+                      type="button"
+                      className="bw-seg-btn"
+                      data-distribution-tier-btn={tier.id}
+                      aria-pressed={distributionTierId === tier.id}
+                      onClick={() => {
+                        setDistributionTierId(tier.id);
+                        setActiveCoreTrack("creator_distribution");
+                      }}
+                    >
+                      {tier.id === "seed_10"
+                        ? isKo
+                          ? "10인 시드"
+                          : "10 Seed"
+                        : tier.id === "growth_30"
+                          ? isKo
+                            ? "30인 그로스"
+                            : "30 Growth"
+                          : isKo
+                            ? "50인+ 메가"
+                            : "50+ Mega"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: "6px",
+                  fontSize: "11.5px",
+                }}
+              >
+                <strong style={{ color: "var(--ys-brand-text)" }}>
+                  {isKo
+                    ? activeDistributionTier.creatorCountLabelKo
+                    : activeDistributionTier.creatorCountLabelEn}
+                </strong>
+                <span className="bw-scene-spec">
+                  {isKo
+                    ? activeDistributionTier.estimatedViewsKo
+                    : activeDistributionTier.estimatedViewsEn}
+                </span>
+              </div>
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "4px",
+                  fontSize: "11px",
+                  color: "var(--ys-ink)",
+                }}
+              >
+                {(isKo
+                  ? activeDistributionTier.includesKo
+                  : activeDistributionTier.includesEn
+                ).map((inc) => (
+                  <span key={inc}>• {inc}</span>
+                ))}
+              </div>
+              <div
+                style={{
+                  marginTop: "auto",
+                  paddingTop: "6px",
+                  borderTop: "1px solid var(--ys-hairline)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: "8px",
+                  fontSize: "11px",
+                }}
+              >
+                <span style={{ color: "var(--ys-ink-muted)" }}>
+                  {isKo
+                    ? activeDistributionTier.timelineSummaryKo
+                    : activeDistributionTier.timelineSummaryEn}
+                </span>
+                <a
+                  href={`/brand/campaigns?organizationId=${encodeURIComponent(organizationId)}`}
+                  className="bw-quick-chip"
+                  data-distribution-launch-link
+                  style={{
+                    fontWeight: 700,
+                    color: "var(--ys-brand-text)",
+                    textDecoration: "none",
+                  }}
+                >
+                  {isKo ? "유통 캠페인 시작 →" : "Launch Seeding →"}
+                </a>
+              </div>
+            </div>
+
+            {/* Track 05: Audio Studio (Signature BGM · Tactile Foley · Act 1 -3 dB Ducking · -14 LUFS Master) */}
+            <div
+              data-studio-audio-panel
+              data-active-audio-preset={audioPresetId}
+              style={{
+                padding: "12px 14px",
+                borderRadius: "13px",
+                background:
+                  activeCoreTrack === "audio"
+                    ? "var(--ys-brand-tint)"
+                    : "var(--ys-surface)",
+                border:
+                  activeCoreTrack === "audio"
+                    ? "1.5px solid var(--ys-brand)"
+                    : "1px solid var(--ys-border)",
+                display: "flex",
+                flexDirection: "column",
+                gap: "8px",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: "6px",
+                }}
+              >
+                <strong style={{ fontSize: "12.5px", color: "var(--ys-ink)" }}>
+                  {isKo
+                    ? "오디오 스튜디오 (시그니처 BGM · 폴리 · 마스터링)"
+                    : "Audio Studio (BGM · Foley · -14 LUFS Master)"}
+                </strong>
+                <span className="bw-scene-spec" style={{ fontWeight: 600 }}>
+                  {activeAudioPreset.creditsPerTrack} cr ·{" "}
+                  {isKo
+                    ? `${activeAudioPreset.priceKrwPerTrack}원`
+                    : `KRW ${activeAudioPreset.priceKrwPerTrack}`}
+                </span>
+              </div>
+              <div
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: "5px",
+                }}
+              >
+                {BRAND_AUDIO_STUDIO_PRESETS.map((preset) => {
+                  const selected = audioPresetId === preset.id;
+                  return (
+                    <button
+                      key={preset.id}
+                      type="button"
+                      className="bw-quick-chip"
+                      data-audio-preset-btn={preset.id}
+                      aria-pressed={selected}
+                      onClick={() => {
+                        setAudioPresetId(preset.id);
+                        setActiveCoreTrack("audio");
+                      }}
+                      style={{
+                        fontSize: "11px",
+                        fontWeight: selected ? 700 : 500,
+                        background: selected
+                          ? "var(--ys-brand-tint)"
+                          : "var(--ys-subtle-bg)",
+                        color: selected
+                          ? "var(--ys-brand-text)"
+                          : "var(--ys-ink)",
+                      }}
+                    >
+                      {isKo ? preset.titleKo.split("&")[0]?.trim() : preset.titleEn.split("&")[0]?.trim()}
+                    </button>
+                  );
+                })}
+              </div>
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "3px",
+                  fontSize: "11px",
+                  color: "var(--ys-ink)",
+                }}
+              >
+                {(isKo
+                  ? activeAudioPreset.foleyLayersKo
+                  : activeAudioPreset.foleyLayersEn
+                ).map((layer) => (
+                  <span key={layer}>• {layer}</span>
+                ))}
+              </div>
+              <div
+                style={{
+                  marginTop: "auto",
+                  paddingTop: "6px",
+                  borderTop: "1px solid var(--ys-hairline)",
+                  display: "flex",
+                  flexWrap: "wrap",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: "6px",
+                  fontSize: "11px",
+                }}
+              >
+                <div style={{ display: "flex", gap: "5px" }}>
+                  <button
+                    type="button"
+                    className="bw-quick-chip"
+                    data-audio-ducking-toggle
+                    aria-pressed={audioAutoDucking}
+                    onClick={() => setAudioAutoDucking((p) => !p)}
+                    style={{ fontSize: "10.5px" }}
+                  >
+                    {isKo ? "Act 1 -3 dB 자동 더킹" : "Act 1 -3 dB Ducking"}
+                  </button>
+                  <button
+                    type="button"
+                    className="bw-quick-chip"
+                    data-audio-lufs-toggle
+                    aria-pressed={audioCommercialMaster}
+                    onClick={() => setAudioCommercialMaster((p) => !p)}
+                    style={{ fontSize: "10.5px" }}
+                  >
+                    {activeAudioPreset.loudnessSpec.split("(")[0]?.trim()}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
 
           {/* STEP 3: Equal 4-Column Visual Scene Picker (.bw-scene-grid) with Thumbnails */}
           <div className="bw-scene-grid" data-pomelli-shot-templates>

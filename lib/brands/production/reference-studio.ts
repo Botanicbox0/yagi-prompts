@@ -1,16 +1,198 @@
 import type { BrandClientCategory } from "@/lib/brands/category-experience";
 
 /**
- * Multi-Reference Slot Composer & Image Model Suitability Guide (`brand.twings.app/brand/studio`).
+ * Multi-Reference Slot Composer, 5 Core Deliverable Tracks & 5-Model Image Suite (`brand.twings.app/brand/studio`).
  *
- * Inspired by real production workflows on Sunra Dashboard, Oplux, and AMERICANO:
- *   1. Role-Locked Numbered Reference Slots (`1번 이미지` ~ `4번 이미지`):
- *      - Lookbook / Editorial Composite Mode:
- *        [1번 이미지: 인물] + [2번 이미지: 배경] + [3번 이미지: 구도·감도] + [4번 이미지: 색감·조명]
- *      - Product Swap / Packshot Reshoot Mode:
- *        [1번 이미지: 베이스 장면·구도] + [2번 이미지: 교체할 우리 제품] + [3번 이미지: 측면·디테일] + [4번 이미지: 조명·색감]
- *   2. Image Model Selector with Quick Characteristics & Detailed Use-Case Recommendations.
+ * Core Service Pillars (5 Core Deliverable Tracks):
+ *   1. `image` — 이미지 (1~4번 멀티 레퍼런스 생성 + 극소 부위 정밀 수정 + 색감/질감 상시 고정)
+ *   2. `video` — 영상 (화보 시작 프레임 고정 + 720p 동선 검수 → 1080p 사운드 마스터)
+ *   3. `creator_format` — 크리에이터 캠페인용 영상 (셀프 포맷 빌더 / 스튜디오 전담 제작 의뢰)
+ *   4. `creator_distribution` — 크리에이터 캠페인용 영상 + 유통까지 (포맷 제작 + 3,000+ 팔로워 크리에이터 다중 시딩 + IG/TikTok/Shorts 유통 + D+21 ROI 리포트 & 2차 광고 활용권)
+ *   5. `audio` — 오디오 (시그니처 BGM + 현장 폴리/공간음 + Act 1 -3 dB 자동 더킹 + -14 LUFS 상업 마스터링)
+ *
+ * Image Model Lineup (5 Models):
+ *   - `gpt_image_2_6` (`GPT Image 2.6`)
+ *   - `nano_banana_pro` (`Nano Banana Pro`)
+ *   - `nano_banana_2_1` (`Nano Banana 2.1`)
+ *   - `nano_banana_2_0` (`Nano Banana 2.0`)
+ *   - `seedream_5_0_pro` (`Seedream 5.0 Pro`)
  */
+
+export type BrandCoreDeliverableTrackId =
+  | "image"
+  | "video"
+  | "creator_format"
+  | "creator_distribution"
+  | "audio";
+
+export interface BrandCoreDeliverableTrackSpec {
+  id: BrandCoreDeliverableTrackId;
+  orderNumber: string;
+  shortLabelKo: string;
+  shortLabelEn: string;
+  titleKo: string;
+  titleEn: string;
+  badgeKo: string;
+  badgeEn: string;
+  summaryKo: string;
+  summaryEn: string;
+  deliverablesKo: readonly [string, string, string];
+  deliverablesEn: readonly [string, string, string];
+  turnaroundKo: string;
+  turnaroundEn: string;
+  priceGuideKo: string;
+  priceGuideEn: string;
+  previewImage: string;
+}
+
+export const BRAND_CORE_DELIVERABLE_TRACKS: readonly BrandCoreDeliverableTrackSpec[] =
+  [
+    {
+      id: "image",
+      orderNumber: "01",
+      shortLabelKo: "이미지",
+      shortLabelEn: "Image",
+      titleKo: "이미지 스튜디오 (멀티 레퍼런스 생성 · 극소 부위 수정)",
+      titleEn: "Image Studio (1–4 Ref Composite & Micro-Region Edit)",
+      badgeKo: "화보 생성 · 제품 교체 · 부분 리터칭",
+      badgeEn: "Lookbook · Product Swap · Smart Mask Edit",
+      summaryKo:
+        "1~4번 역할별 레퍼런스(인물·배경·감도·색감) 조합 생성과 캔버스 드래그 극소 부위 정밀 수정, 색감·질감 핀 고정을 한 화면에서 처리합니다.",
+      summaryEn:
+        "Combine 1–4 role-locked references, run surgical micro-region Smart Mask edits, and pin brand color & texture references in one studio.",
+      deliverablesKo: [
+        "1~4번 레퍼런스 조합 캠페인 화보 · 전신 룩북 (2K/4K)",
+        "1번 장면 유지 → 2번 우리 제품 정밀 교체 이커머스 팩샷",
+        "캔버스 드래그 영역만 고치는 스마트 레이어 마스크 부분 수정",
+      ],
+      deliverablesEn: [
+        "1–4 slot multi-reference editorial lookbook & campaign stills (2K/4K)",
+        "Slot 1 scene preservation -> Slot 2 exact SKU product swap packshots",
+        "Non-destructive Smart Layer Mask micro-region retouching",
+      ],
+      turnaroundKo: "즉시 생성 (컷당 15~35초)",
+      turnaroundEn: "Instant (15–35s per cut)",
+      priceGuideKo: "5장 세트 400원~1,100원 (34~95 cr)",
+      priceGuideEn: "₩400–₩1,100 per 5-cut set (34–95 cr)",
+      previewImage: "/reel/brands/slot-1-subject-editorial.jpg",
+    },
+    {
+      id: "video",
+      orderNumber: "02",
+      shortLabelKo: "영상",
+      shortLabelEn: "Video",
+      titleKo: "영상 스튜디오 (첫 프레임 고정 · 720p 검수 → 1080p 마스터)",
+      titleEn: "Video Studio (Start-Frame Lock · 720p Check -> 1080p Master)",
+      badgeKo: "2단계 검수 · 1080p 브랜드 필름",
+      badgeEn: "2-Stage Gate · 1080p Brand Film",
+      summaryKo:
+        "이미지 스튜디오에서 확정한 화보를 시작 프레임으로 잠그고, 720p 프리뷰로 카메라 동선·표정을 먼저 검수한 뒤 통과한 컷만 1080p 마스터 영상으로 마감합니다.",
+      summaryEn:
+        "Lock your approved key visual as Frame 1, verify camera blocking in 720p first, and finish only approved takes into 1080p master films.",
+      deliverablesKo: [
+        "화보 시작 프레임 100% 고정 9:16 릴스 · 16:9 캠페인 필름",
+        "Stage 1 (720p 동선·물리 검수) → Stage 2 (1080p 그레인·색보정 마감)",
+        "카메라 무빙(돌리 인·패닝·원테이크) 및 컷 전환 타이밍 제어",
+      ],
+      deliverablesEn: [
+        "Start-frame locked 9:16 Reels & 16:9 widescreen campaign films",
+        "Stage 1 (720p motion check) -> Stage 2 (1080p optical & grain master)",
+        "Camera blocking (dolly-in, pan, one-take) & beat-synced cut control",
+      ],
+      turnaroundKo: "720p 프리뷰 약 60초 · 1080p 마감 약 90초",
+      turnaroundEn: "~60s for 720p preview · ~90s for 1080p master",
+      priceGuideKo: "720p 검수 1,800원 (145 cr) · 1080p 마감 5,500원 (440 cr)",
+      priceGuideEn: "720p check ₩1,800 (145 cr) · 1080p master ₩5,500 (440 cr)",
+      previewImage: "/reel/brands/house-french-blue-hero-1080p.jpg",
+    },
+    {
+      id: "creator_format",
+      orderNumber: "03",
+      shortLabelKo: "크리에이터 캠페인 영상 (셀프 · 의뢰)",
+      shortLabelEn: "Creator Campaign Video (Self · Commission)",
+      titleKo: "크리에이터 캠페인용 영상 제작 (셀프 포맷 빌더 · 스튜디오 의뢰)",
+      titleEn: "Creator Campaign Format Studio (Self-Build or Studio Commission)",
+      badgeKo: "셀프 제작 또는 D+3 전담 의뢰",
+      badgeEn: "Self-Serve Builder or D+3 Custom Commission",
+      summaryKo:
+        "크리에이터가 정면 셀카 1장만 넣으면 우리 브랜드 제품·착장·배경·색감이 그대로 입혀진 주인공 영상이 나오는 캠페인 전용 포맷을 직접 만들거나 전담 디렉터에게 의뢰합니다.",
+      summaryEn:
+        "Build a reusable campaign video format where any creator drops 1 front selfie to star in your locked product, outfit, set, and color grade—or commission our directors.",
+      deliverablesKo: [
+        "셀프 빌더: [크리에이터 얼굴 슬롯] + [우리 제품·배경·색감 고정] 포맷 즉시 생성",
+        "스튜디오 의뢰: 제품 사진만 전달하면 D+3일 내 맞춤 캠페인 포맷 설계·검수 납품",
+        "크리에이터 1인당 셀카 1장으로 동일 브랜드 퀄리티 영상 무제한 파생",
+      ],
+      deliverablesEn: [
+        "Self-Builder: Lock [Creator Selfie Slot] + [Brand Product, Set & Color] in minutes",
+        "Commissioned: Send product photos and receive a custom format within D+3 days",
+        "Every creator generates consistent brand-grade videos from 1 front selfie",
+      ],
+      turnaroundKo: "셀프 즉시 생성 · 스튜디오 의뢰 D+3 확정",
+      turnaroundEn: "Instant (Self) · D+3 confirmed (Commissioned)",
+      priceGuideKo: "셀프 포맷 테스트 1,800원~ · 전담 포맷 제작 의뢰 맞춤 견적",
+      priceGuideEn: "Self format test from ₩1,800 · Custom format commission on brief",
+      previewImage: "/reel/brands/slot-3-pose-lowangle-lookbook.jpg",
+    },
+    {
+      id: "creator_distribution",
+      orderNumber: "04",
+      shortLabelKo: "크리에이터 캠페인 영상 + 유통",
+      shortLabelEn: "Creator Campaign + Distribution",
+      titleKo: "크리에이터 캠페인 영상 제작 + 다중 시딩 유통 · 성과 리포트",
+      titleEn: "Creator Campaign Format + Multi-Creator Seeding & ROI Distribution",
+      badgeKo: "영상 제작 + 크리에이터 시딩 + 2차 활용권",
+      badgeEn: "Format + Creator Seeding + Ad Usage Rights",
+      summaryKo:
+        "캠페인 영상 포맷 제작에서 끝나지 않고, 팔로워 3,000+ 검증 크리에이터 모집·동시 게시(IG 릴스·틱톡·쇼츠)·실시간 조회수 리포트·2차 광고 활용권(Usage Rights)까지 원스톱으로 유통합니다.",
+      summaryEn:
+        "End-to-end execution from custom campaign format creation to 3,000+ follower creator matching, simultaneous seeding (IG Reels, TikTok, Shorts), live ROI reporting, and 2nd-use paid ad rights.",
+      deliverablesKo: [
+        "팔로워 3,000+ 카테고리 매칭 크리에이터 10명 / 30명 / 50명+ 동시 시딩 유통",
+        "표준 타임라인: 의뢰 → D+3 포맷 확정 → D+7 모집 → D+14 동시 게시 → D+21 성과 리포트",
+        "게시 완료 영상 원본 클린본 다운로드 및 메타/틱톡 2차 퍼포먼스 광고 활용권",
+      ],
+      deliverablesEn: [
+        "Matched 3,000+ follower creators (10 / 30 / 50+ cohort seeding across IG, TikTok, Shorts)",
+        "Timeline: Brief -> D+3 Format Lock -> D+7 Cohort Match -> D+14 Post -> D+21 ROI Report",
+        "Clean 1080p master downloads + cleared 2nd-use paid ad rights (Meta / TikTok Spark Ads)",
+      ],
+      turnaroundKo: "D+3 포맷 확정 · D+14 크리에이터 일괄 게시 · D+21 리포트",
+      turnaroundEn: "D+3 Format · D+14 Cohort Post · D+21 Final Report",
+      priceGuideKo: "10인 시드 팩 · 30인 그로스 팩 · 50인+ 메가 런칭 패키지",
+      priceGuideEn: "10-Creator Seed · 30-Creator Growth · 50+ Mega Launch Packages",
+      previewImage: "/reel/brands/studio-editorial-blue-1080p.jpg",
+    },
+    {
+      id: "audio",
+      orderNumber: "05",
+      shortLabelKo: "오디오",
+      shortLabelEn: "Audio",
+      titleKo: "오디오 스튜디오 (시그니처 BGM · 폴리 공간음 · 상업 마스터링)",
+      titleEn: "Audio Studio (Signature BGM · Foley Spatial Sound · -14 LUFS Master)",
+      badgeKo: "BGM · 폴리 · -14 LUFS 상업 음원",
+      badgeEn: "BGM · Foley · -14 LUFS Commercial Master",
+      summaryKo:
+        "브랜드 무드에 맞춘 시그니처 BGM 생성부터 원단 스침·유리 결로·발걸음 등 리얼 폴리(Foley) 사운드, 대사 구간 자동 더킹(Act 1 -3 dB), -14 LUFS 상업 음원 마스터링까지 완성합니다.",
+      summaryEn:
+        "Compose brand-tailored BGM, tactile Foley & room tone, automatic voiceover ducking (Act 1 -3 dB), and -14 LUFS / -1 dBTP commercial loudness mastering.",
+      deliverablesKo: [
+        "브랜드 카테고리별 시그니처 BGM & 비트 드롭 싱크 오디오 트랙",
+        "현장 폴리(Foley: 구두 발걸음·실크 스침·보틀 결로·셔터음) + 무BGM 현장음 전용 믹스",
+        "나레이션/대사 구간 Act 1 -3 dB 자동 더킹 & -14 LUFS / -1 dBTP 라우드니스 마스터",
+      ],
+      deliverablesEn: [
+        "Category-tailored signature BGM with frame-accurate beat-drop sync",
+        "Tactile Foley stems (heels, silk rustle, glass clink, shutter) + No-BGM live ambient mix",
+        "Automatic Act 1 -3 dB dialogue ducking & -14 LUFS / -1 dBTP broadcast master",
+      ],
+      turnaroundKo: "즉시 생성 및 영상 프레임 자동 싱크 (약 25초)",
+      turnaroundEn: "Instant generation & frame-accurate sync (~25s)",
+      priceGuideKo: "트랙당 900원 (75 cr) · 상업 광고 음원 라이선스 포함",
+      priceGuideEn: "₩900 per track (75 cr) · Commercial ad sync license included",
+      previewImage: "/reel/brands/slot-4-color-french-cobalt.jpg",
+    },
+  ];
 
 export type StudioReferenceWorkflowId =
   | "lookbook_composite"
@@ -52,11 +234,20 @@ export interface StudioReferenceWorkflowPreset {
   ];
 }
 
+/**
+ * Founder-specified 5 Image Models for Brand Studio:
+ *   1. `gpt_image_2_6` (`GPT Image 2.6`)
+ *   2. `nano_banana_pro` (`Nano Banana Pro`)
+ *   3. `nano_banana_2_1` (`Nano Banana 2.1`)
+ *   4. `nano_banana_2_0` (`Nano Banana 2.0`)
+ *   5. `seedream_5_0_pro` (`Seedream 5.0 Pro`)
+ */
 export type BrandStudioImageModelId =
-  | "multi_ref_standard"
-  | "portrait_lookbook_pro"
-  | "ultra_detail_label"
-  | "vto_garment_lock";
+  | "gpt_image_2_6"
+  | "nano_banana_pro"
+  | "nano_banana_2_1"
+  | "nano_banana_2_0"
+  | "seedream_5_0_pro";
 
 export interface BrandStudioImageModelSpec {
   id: BrandStudioImageModelId;
@@ -64,6 +255,8 @@ export interface BrandStudioImageModelSpec {
   nameEn: string;
   tierBadgeKo: string;
   tierBadgeEn: string;
+  promptFormulaBadgeKo: string;
+  promptFormulaBadgeEn: string;
   /** Short 1-line summary shown right inside the model selection card */
   shortTraitKo: string;
   shortTraitEn: string;
@@ -87,154 +280,200 @@ export interface BrandStudioImageModelSpec {
   priceKrwPer5Set: number;
   /** B2B credits for 1 single 2K image */
   creditsPerSingle: number;
-  supportedResolutions: readonly ("2K" | "4K")[];
+  supportedResolutions: readonly ("1K" | "2K" | "4K")[];
 }
 
 export const BRAND_STUDIO_IMAGE_MODELS: ReadonlyArray<BrandStudioImageModelSpec> =
   [
     {
-      id: "multi_ref_standard",
-      nameKo: "멀티 레퍼런스 합성 · 스탠다드 2K",
-      nameEn: "Multi-Reference Composite · Standard 2K",
-      tierBadgeKo: "제품 교체 · 빠른 합성 추천",
-      tierBadgeEn: "Best for Product Swap & Fast Mix",
+      id: "gpt_image_2_6",
+      nameKo: "GPT Image 2.6",
+      nameEn: "GPT Image 2.6",
+      tierBadgeKo: "복합 지시문 · 라벨 타이포 · 정밀 수정 플래그십",
+      tierBadgeEn: "Flagship · Complex Briefs & Exact Typography",
+      promptFormulaBadgeKo: "5단계 디렉터 브리프 (구도 → 레퍼런스 권한 → 착장/포즈 → 공간 → #HEX 조명)",
+      promptFormulaBadgeEn: "5-Tier Director Brief (Crop -> Ref Authority -> Pose/Garment -> Space -> #HEX Light)",
       shortTraitKo:
-        "1~4번 레퍼런스 동시 조합 · 제품 교체 · 손/소품 가림 정리에 가장 빠르고 정확합니다",
+        "까다로운 다중 조건 지시문 이행, 패키지·라벨 영문/한글 로고 철자 보존, 극소 부위 정밀 수정에 가장 강력한 플래그십 모델입니다",
       shortTraitEn:
-        "Fastest and sharpest at combining 1–4 references, swapping products, and cleaning occlusions",
-      strengthsKo: ["1→2번 제품 교체 특화", "빠른 시안 생성", "소품·배경 자연 합성"],
-      strengthsEn: ["1→2 Product Swap", "Fast Iterations", "Clean Prop Composite"],
+        "Flagship precision for complex multi-constraint briefs, exact package label typography, and surgical micro-region edits",
+      strengthsKo: ["라벨·로고 철자 무결성", "복합 디렉팅 100% 이행", "극소 부위 스마트 편집"],
+      strengthsEn: ["Exact Label Typography", "Complex Brief Fidelity", "Surgical Region Edit"],
       detailDescriptionKo:
-        "베이스 이미지(1번)의 조명·그림자·원근감을 그대로 읽어들여 지정한 영역만 우리 제품(2번)으로 감쪽같이 교체하거나, 최대 4장의 레퍼런스 이미지를 위화감 없이 한 장의 장면으로 합성합니다.",
+        "5단계 크리에이티브 디렉터 브리프 구조를 정밀하게 해석하여, 1번 레퍼런스에서는 얼굴만 가져오고 기존 배경·소품은 완전히 배제하는 등 까다로운 조건 분리와 제품 전면 로고·타이포그래피 보존을 동시에 달성합니다.",
       detailDescriptionEn:
-        "Reads the base image's (Slot 1) lighting, contact shadows, and perspective to seamlessly swap in your product (Slot 2) or blend up to 4 reference images into one coherent frame.",
+        "Parses 5-tier creative director briefs with strict reference authority isolation—locking facial identity or bottle geometry from Slot 1 while cleanly discarding unwanted source props and preserving crisp label lettering.",
       bestForDeliverablesKo: [
-        "1번 이미지 속 기존 제품을 2번 이미지의 우리 제품으로 교체할 때",
-        "모델 손에 들린 컵·가방·화장품을 우리 브랜드 제품으로 바꿀 때",
-        "여러 레퍼런스(배경+제품+색감)를 조합해 빠르게 시안 5장 세트를 뽑을 때",
+        "제품 전면 라벨 글자와 심볼 로고가 1mm도 틀어지면 안 되는 메인 히어로 키비주얼",
+        "1번 인물 얼굴만 유지하고 기존 의상·배경·소품은 완전히 새로 구성하는 하이엔드 화보",
+        "캔버스 드래그 영역 안의 손 모양·소품·로고만 정밀 교정하는 부분 리터칭",
       ],
       bestForDeliverablesEn: [
-        "Replacing a product in Image 1 with your own product from Image 2",
-        "Swapping held props (bottles, bags, cosmetics) in a model's hand",
-        "Rapidly testing 5-shot variations across multiple mood & background references",
+        "Hero key visuals where front package typography and brand marks must remain razor-sharp",
+        "Editorial portraits isolating facial likeness from Slot 1 while building a brand-new set and outfit",
+        "Targeted micro-region corrections on hands, held props, and engraved hardware",
       ],
       recommendedSlotFormulaKo:
-        "1번(베이스 장면) + 2번(교체할 우리 제품 정면) + 3번(제품 측면·질감) + 4번(색감 레퍼런스)",
+        "1번(인물 또는 베이스 단상) + 2번(우리 제품 정면 마스터) + 3번(라벨·소재 클로즈업) + 4번(#HEX 조명·색감)",
       recommendedSlotFormulaEn:
-        "Slot 1 (Base Scene) + Slot 2 (Target Product) + Slot 3 (Side Detail) + Slot 4 (Color Ref)",
-      preferredWorkflow: "product_swap",
-      creditsPer5Set: 41,
-      priceKrwPer5Set: 500,
-      creditsPerSingle: 9,
-      supportedResolutions: ["2K", "4K"],
-    },
-    {
-      id: "portrait_lookbook_pro",
-      nameKo: "인물 화보 · 전신 룩북 마스터 2K",
-      nameEn: "Portrait & Full-Body Lookbook Master 2K",
-      tierBadgeKo: "인물 · 패션 · 뷰티 화보 추천",
-      tierBadgeEn: "Best for Models & Editorial Lookbooks",
-      shortTraitKo:
-        "인물 이목구비 일관성 · 전신 8등신 비율 · 매트하고 자연스러운 피부 결 표현에 가장 뛰어납니다",
-      shortTraitEn:
-        "Superior facial likeness lock, full-body proportions, and natural matte skin texture",
-      strengthsKo: ["인물 얼굴·비율 고정", "매트한 실사 피부 결", "배경·색감 무드 흡수"],
-      strengthsEn: ["Facial Likeness Lock", "Matte Real Skin", "Mood & Color Transfer"],
-      detailDescriptionKo:
-        "1번 이미지의 인물 마스크와 피부 톤을 흔들림 없이 유지하면서, 2번 이미지의 배경 공간과 3번 이미지의 포즈·사진 감도, 4번 이미지의 색감을 영화 스틸컷처럼 결합합니다. 전신 컷에서도 모델 키와 비율이 안정적입니다.",
-      detailDescriptionEn:
-        "Locks the subject's facial identity and complexion from Image 1 while weaving in the location of Image 2, the pose/editorial sensitivity of Image 3, and the color grading of Image 4 with stable full-body proportions.",
-      bestForDeliverablesKo: [
-        "1번 인물이 2번 배경에서 3번 이미지 감도와 4번 색감으로 서 있는 캠페인 화보",
-        "뷰티 브랜드의 피부 광채·립·아이 메이크업 클로즈업 뷰티 화보",
-        "동일 모델로 정면·측면·워킹 전신 컷을 일관된 비율로 촬영할 때",
-      ],
-      bestForDeliverablesEn: [
-        "Editorial campaigns combining Person (1) + Location (2) + Vibe (3) + Color Grade (4)",
-        "Beauty & skincare close-ups requiring authentic skin pores and zero plastic sheen",
-        "Full-body lookbook series keeping consistent model height and proportions",
-      ],
-      recommendedSlotFormulaKo:
-        "1번(인물 얼굴·체형) + 2번(배경 공간) + 3번(포즈·사진 감도) + 4번(조명·색감 무드)",
-      recommendedSlotFormulaEn:
-        "Slot 1 (Model Identity) + Slot 2 (Background) + Slot 3 (Pose & Vibe) + Slot 4 (Color Grade)",
-      preferredWorkflow: "lookbook_composite",
-      creditsPer5Set: 71,
-      priceKrwPer5Set: 900,
-      creditsPerSingle: 15,
-      supportedResolutions: ["2K", "4K"],
-    },
-    {
-      id: "ultra_detail_label",
-      nameKo: "하이엔드 디테일 · 타이포 마스터",
-      nameEn: "Ultra-Detail & Typography Master",
-      tierBadgeKo: "라벨 · 패키지 · 마크로 추천",
-      tierBadgeEn: "Best for Labels & Macro Texture",
-      shortTraitKo:
-        "제품 라벨 글자 보존 · 유리 굴절/금속 헤어라인/원단 직조 등 초근접 디테일 묘사에 특화되었습니다",
-      shortTraitEn:
-        "Preserves fine package typography and renders glass refraction, brushed metal, and fabric weave",
-      strengthsKo: ["라벨·로고 글자 보존", "초근접 제형·소재 질감", "복합 지시문 정밀 이행"],
-      strengthsEn: ["Exact Label Typography", "Macro Material Realism", "Complex Prompt Fidelity"],
-      detailDescriptionKo:
-        "화장품 용기·음료 보틀·패키지 박스의 작은 영문/한글 로고 철자와 위치까지 정밀하게 보존하며, 물방울 결로·크림 제형 스미어·금속 각인 등 초근접(Macro) 스튜디오 디테일을 선명하게 구현합니다.",
-      detailDescriptionEn:
-        "Preserves small brand typography on bottles, jars, and boxes while rendering hyper-detailed macro textures such as condensation droplets, cream smears, and metallic engravings.",
-      bestForDeliverablesKo: [
-        "제품 전면 라벨 글자와 심볼 로고가 1mm도 틀어지면 안 되는 메인 히어로 팩샷",
-        "스킨케어 제형 드롭·식음료 얼음 결로·주얼리 세공 등 100mm 마크로 클로즈업",
-        "1~4번 레퍼런스의 세부 조건을 까다롭게 모두 지켜야 하는 광고 키비주얼",
-      ],
-      bestForDeliverablesEn: [
-        "Hero packshots where front label lettering and brand symbols must stay razor-sharp",
-        "100mm macro shots of skincare serum drops, beverage condensation, or fine jewelry",
-        "Main campaign key visuals with strict multi-reference art direction constraints",
-      ],
-      recommendedSlotFormulaKo:
-        "1번(구도·단상 베이스) + 2번(제품 정면 원판) + 3번(로고·라벨 클로즈업) + 4번(조명·반사광)",
-      recommendedSlotFormulaEn:
-        "Slot 1 (Plinth Base) + Slot 2 (Product Front) + Slot 3 (Label Close-Up) + Slot 4 (Specular Light)",
+        "Slot 1 (Subject/Base) + Slot 2 (Product Master) + Slot 3 (Label Close-Up) + Slot 4 (#HEX Light Ref)",
       preferredWorkflow: "product_swap",
       creditsPer5Set: 95,
       priceKrwPer5Set: 1100,
       creditsPerSingle: 20,
-      supportedResolutions: ["2K", "4K"],
+      supportedResolutions: ["1K", "2K", "4K"],
     },
     {
-      id: "vto_garment_lock",
-      nameKo: "가상 착장 · 의류 핏 고정 마스터",
-      nameEn: "Virtual Try-On · Garment Fit-Lock Master",
-      tierBadgeKo: "의류 · 가방 · 모자 착장 추천",
-      tierBadgeEn: "Best for Apparel & Bag Try-On",
+      id: "nano_banana_pro",
+      nameKo: "Nano Banana Pro",
+      nameEn: "Nano Banana Pro",
+      tierBadgeKo: "1~4번 멀티 레퍼런스 · 캠페인 화보 마스터",
+      tierBadgeEn: "Master · 1–4 Slot Multi-Ref & 4K Lookbook",
+      promptFormulaBadgeKo: "ALL-CAPS 섹션 잠금 (IDENTITY LOCK · COMPOSITION LOCK · POSE LOCK · COLOR GRADE)",
+      promptFormulaBadgeEn: "ALL-CAPS Lock Blocks (IDENTITY LOCK · COMPOSITION LOCK · POSE LOCK · COLOR GRADE)",
       shortTraitKo:
-        "의류 원판의 기장·봉제선·프린트 패턴을 왜곡 없이 모델에게 그대로 입혀 상세페이지 컷을 만듭니다",
+        "1번 인물 + 2번 배경 + 3번 포즈 감도 + 4번 색감을 동시에 잠가 최대 4K 하이엔드 화보로 합성하는 멀티 레퍼런스 마스터입니다",
       shortTraitEn:
-        "Dresses the model in your exact garment flat-lay without altering seam lines, length, or print",
-      strengthsKo: ["의류 핏·기장 100% 보존", "프린트·패턴 왜곡 방지", "정면·측면·후면 동시 생성"],
-      strengthsEn: ["100% Garment Fit Lock", "Zero Print Distortion", "Multi-Angle PDP Cuts"],
+        "Master of locking Slot 1 (Person) + Slot 2 (Space) + Slot 3 (Pose Vibe) + Slot 4 (Color Grade) into 2K/4K editorial frames",
+      strengthsKo: ["1~4번 슬롯 동시 잠금", "네이티브 2K·4K 화보", "조명·색온도 완벽 흡수"],
+      strengthsEn: ["4-Slot Simultaneous Lock", "Native 2K/4K Output", "Seamless Color Transfer"],
       detailDescriptionKo:
-        "행거나 바닥에 놓고 찍은 의류·가방·모자 제품 사진(2번)의 스티치, 단추 개수, 로고 위치, 원단 드레이프를 그대로 고정한 채 지정한 모델(1번)에게 자연스럽게 입혀 쇼핑몰 상세페이지(PDP) 컷을 완성합니다.",
+        "IDENTITY LOCK·COMPOSITION LOCK·COLOR GRADE 블록 구조를 통해 1번 이미지의 이목구비, 2번 이미지의 건축 공간, 3번 이미지의 카메라 앵글, 4번 이미지의 프렌치 코발트/필름 톤을 구도 무너짐 없이 한 장의 4K급 화보로 결합합니다.",
       detailDescriptionEn:
-        "Preserves stitch lines, button count, logo placement, and fabric drape from a flat-lay or hanger photo (Slot 2) while dressing the target model (Slot 1) for e-commerce PDP shoots.",
+        "Uses explicit IDENTITY LOCK, COMPOSITION LOCK, and COLOR GRADE compartments to fuse up to 4 references with zero composition drift and rich optical halation up to 4K.",
       bestForDeliverablesKo: [
-        "바닥컷·행거컷 의류 사진만 가지고 모델 착장 룩북(정면·측면·상반신)을 만들 때",
-        "한 명의 브랜드 전속 모델에게 신상 의류 10~20벌을 일관된 톤으로 갈아입힐 때",
-        "그래픽 티셔츠·스트라이프·체크 패턴 등 무늬가 복잡한 의류의 착장 컷",
+        "1번 인물이 2번 배경에서 3번 이미지 감도와 4번 색감으로 서 있는 메인 캠페인 화보",
+        "화보 확정 후 영상 스튜디오의 첫 프레임(Start Frame)으로 바로 넘길 고밀도 키프레임",
+        "고정된 브랜드 색감 핀(Color Pin)과 질감 핀(Texture Pin)을 100% 반영한 시즌 룩북",
       ],
       bestForDeliverablesEn: [
-        "Turning hanger or flat-lay garment photos into full-body model lookbook cuts",
-        "Dressing one house model across 10–20 new-season SKUs with identical studio lighting",
-        "Apparel with graphic prints, stripes, or woven patterns that cannot be altered",
+        "Main campaign lookbooks combining Person (1) + Space (2) + Pose Vibe (3) + Color Grade (4)",
+        "High-density 2K/4K keyframes ready to lock as Frame 1 in the Video Studio",
+        "Season lookbooks enforcing pinned brand color temperature and 35mm grain",
       ],
       recommendedSlotFormulaKo:
-        "1번(착장할 모델) + 2번(의류 정면 원판) + 3번(의류 후면·원단 디테일) + 4번(스튜디오 배경·색감)",
+        "1번(인물 마스터) + 2번(배경 공간) + 3번(포즈·사진 감도) + 4번(색감·조명 레퍼런스)",
       recommendedSlotFormulaEn:
-        "Slot 1 (Model) + Slot 2 (Garment Front) + Slot 3 (Garment Back/Detail) + Slot 4 (Studio Tone)",
+        "Slot 1 (Model Identity) + Slot 2 (Space) + Slot 3 (Pose/Vibe) + Slot 4 (Color Grade Ref)",
+      preferredWorkflow: "lookbook_composite",
+      creditsPer5Set: 71,
+      priceKrwPer5Set: 900,
+      creditsPerSingle: 15,
+      supportedResolutions: ["1K", "2K", "4K"],
+    },
+    {
+      id: "nano_banana_2_1",
+      nameKo: "Nano Banana 2.1",
+      nameEn: "Nano Banana 2.1",
+      tierBadgeKo: "1번 장면 → 2번 우리 제품 교체 · 프로덕션 표준",
+      tierBadgeEn: "Production Standard · 1->2 Product Swap",
+      promptFormulaBadgeKo: "고추론(High-Thinking) 장면 보존 + 타깃 제품 1:1 교체 프로토콜",
+      promptFormulaBadgeEn: "High-Thinking Scene Lock + Target SKU 1:1 Swap Protocol",
+      shortTraitKo:
+        "1번 이미지의 조명·손 모양·접촉 그림자는 그대로 두고 제품만 2번 우리 제품으로 감쪽같이 교체하는 실무 표준 모델입니다",
+      shortTraitEn:
+        "High-thinking production workhorse for keeping Image 1's lighting, hands, and shadows while swapping in your SKU from Image 2",
+      strengthsKo: ["1→2번 제품 정밀 교체", "손·접촉 그림자 보존", "높은 가성비·안정성"],
+      strengthsEn: ["1->2 SKU Product Swap", "Hand & Contact Shadow Lock", "Fast Production ROI"],
+      detailDescriptionKo:
+        "고추론(Thinking High) 멀티모달 공간 인식을 바탕으로, 1번 베이스 장면의 원근감·테이블 반사광·모델 손가락 그립을 유지한 채 지정된 제품만 2번 레퍼런스 제품으로 위화감 없이 교체합니다.",
+      detailDescriptionEn:
+        "Leverages high-thinking spatial reasoning to preserve perspective, surface reflections, and finger occlusion in Image 1 while seamlessly swapping in your product from Image 2.",
+      bestForDeliverablesKo: [
+        "1번 이미지 속 기존 화장품·음료·오브제를 2번 이미지의 우리 제품으로 교체할 때",
+        "모델 손에 들린 보틀·가방·패키지를 우리 브랜드 신제품으로 빠르게 바꿀 때",
+        "상세페이지(PDP)용 다각도 제품 연출컷 5장 세트를 합리적인 비용으로 제작할 때",
+      ],
+      bestForDeliverablesEn: [
+        "Replacing an existing bottle, jar, or object in Image 1 with your own product in Image 2",
+        "Swapping held props (cosmetics, beverages, bags) in a model's hand without finger distortion",
+        "Producing 5-cut e-commerce PDP product sets with consistent studio lighting",
+      ],
+      recommendedSlotFormulaKo:
+        "1번(베이스 장면·손 구도) + 2번(교체할 우리 제품 정면) + 3번(제품 측면·질감) + 4번(색감 레퍼런스)",
+      recommendedSlotFormulaEn:
+        "Slot 1 (Base Scene/Hand) + Slot 2 (Target SKU Front) + Slot 3 (SKU Side Detail) + Slot 4 (Color Ref)",
+      preferredWorkflow: "product_swap",
+      creditsPer5Set: 48,
+      priceKrwPer5Set: 600,
+      creditsPerSingle: 10,
+      supportedResolutions: ["1K", "2K", "4K"],
+    },
+    {
+      id: "nano_banana_2_0",
+      nameKo: "Nano Banana 2.0",
+      nameEn: "Nano Banana 2.0",
+      tierBadgeKo: "초고속 시안 탐색 · 구도/무드 스케치",
+      tierBadgeEn: "Ultra-Fast Drafts · Angle & Mood Exploration",
+      promptFormulaBadgeKo: "경량 멀티 레퍼런스 빠른 구도·비율·컬러 배리에이션",
+      promptFormulaBadgeEn: "Lightweight Multi-Ref Fast Framing & Color Variation",
+      shortTraitKo:
+        "본 촬영 전 다양한 카메라 앵글·배경 무드·SNS 썸네일 구도를 가장 빠르고 경제적으로 대량 테스트할 때 적합합니다",
+      shortTraitEn:
+        "Fastest and most economical engine for exploring camera angles, moodboards, and 9:16 social thumbnail variations",
+      strengthsKo: ["초고속 5컷 동시 시안", "최저 크레딧 비용", "다양한 앵글 빠른 비교"],
+      strengthsEn: ["Ultra-Fast 5-Cut Drafts", "Lowest Credit Cost", "Rapid Angle Exploration"],
+      detailDescriptionKo:
+        "1~4번 레퍼런스의 핵심 구도와 색감 무드를 빠르게 결합해 10초대에 5장 시안 세트를 생성합니다. Nano Banana Pro나 GPT Image 2.6으로 최종 4K 마스터를 뽑기 전에 구도와 톤앤매너를 확정하는 용도로 이상적입니다.",
+      detailDescriptionEn:
+        "Generates 5-shot multi-reference concept sets in seconds at minimal credit cost—ideal for locking framing and lighting before final 2K/4K mastering in Nano Banana Pro or GPT Image 2.6.",
+      bestForDeliverablesKo: [
+        "캠페인 기획 단계에서 10~20가지 배경·앵글 조합을 빠르게 눈으로 비교할 때",
+        "인스타그램 릴스·틱톡·쇼츠용 9:16 세로형 커버 썸네일 시안을 다량 제작할 때",
+        "크리에이터 캠페인 포맷의 기본 무드보드와 스토리보드 프레임을 스케치할 때",
+      ],
+      bestForDeliverablesEn: [
+        "Comparing 10–20 background and camera angle combinations during campaign pre-production",
+        "Batch-creating 9:16 vertical cover thumbnails for Instagram Reels, TikTok, and Shorts",
+        "Sketching storyboard frames for creator campaign formats before final lock",
+      ],
+      recommendedSlotFormulaKo:
+        "1번(주제/인물) + 2번(배경 무드) + 3번(앵글 참고) + 4번(컬러 팔레트)",
+      recommendedSlotFormulaEn:
+        "Slot 1 (Subject) + Slot 2 (Mood Space) + Slot 3 (Angle Ref) + Slot 4 (Color Palette)",
+      preferredWorkflow: "lookbook_composite",
+      creditsPer5Set: 34,
+      priceKrwPer5Set: 400,
+      creditsPerSingle: 7,
+      supportedResolutions: ["1K", "2K"],
+    },
+    {
+      id: "seedream_5_0_pro",
+      nameKo: "Seedream 5.0 Pro",
+      nameEn: "Seedream 5.0 Pro",
+      tierBadgeKo: "리얼 매트 피부결 · 전신 8등신 · 의류 착장 마스터",
+      tierBadgeEn: "Master · Real Matte Skin, 8-Head Lookbook & VTO",
+      promptFormulaBadgeKo: "AMERICANO 리빙 스킨 규약 (플라스틱 광택 차단 · 매트 모공 · 의류 원판 핏 고정)",
+      promptFormulaBadgeEn: "AMERICANO Living Skin Contract (Zero Plastic Sheen · Matte Pores · Garment Fit Lock)",
+      shortTraitKo:
+        "인위적인 AI 플라스틱 윤기를 원천 차단한 매트 실사 피부결, 자연스러운 8등신 전신 비율, 의류 원판 핏 고정 착장에 독보적입니다",
+      shortTraitEn:
+        "Unmatched for authentic matte skin pores (zero plastic sheen), natural full-body lookbook proportions, and exact garment virtual try-on",
+      strengthsKo: ["매트 실사 피부·모공 결", "의류 핏·기장·스티치 고정", "전신 8등신 모델 비율"],
+      strengthsEn: ["Matte Real Skin Pores", "100% Garment Fit Lock", "Natural Full-Body Proportions"],
+      detailDescriptionKo:
+        "AMERICANO 리빙 스킨 규약(낮은 반사광 대비, 미세 피부 요철 보존, 뷰티 필터 광택 차단)과 의류 원판 불변 규칙(MODEL AND PHOTOGRAPH INVARIANTS)이 적용되어, 패션 룩북과 뷰티 클로즈업에서 실제 매거진 필름으로 촬영한 듯한 질감을 구현합니다.",
+      detailDescriptionEn:
+        "Applies the AMERICANO Living Skin Contract (low specular-to-diffuse ratio, authentic micro-relief, zero porcelain/plastic shader) and strict garment construction invariants for fashion lookbooks and beauty editorials.",
+      bestForDeliverablesKo: [
+        "바닥컷·행거컷 의류(2번)의 기장·봉제선·패턴을 왜곡 없이 모델(1번)에게 입히는 가상 착장(VTO)",
+        "AI 특유의 매끈한 마네킹 피부 느낌 없이 실제 모공과 솜털이 살아있는 뷰티·패션 화보",
+        "동일 전속 모델로 정면·측면·후면 전신 룩북을 흔들림 없는 비율로 연속 촬영할 때",
+      ],
+      bestForDeliverablesEn: [
+        "Virtual Try-On (VTO) dressing Slot 1's model in Slot 2's flat-lay garment with zero seam or print drift",
+        "Beauty & fashion editorials requiring real matte skin pores with zero synthetic waxy highlights",
+        "Full-body front/side/back agency digitals and lookbooks with consistent model proportions",
+      ],
+      recommendedSlotFormulaKo:
+        "1번(착장할 모델 마스터) + 2번(의류/제품 정면 원판) + 3번(착장 핏·후면 디테일) + 4번(매트 필름 색감)",
+      recommendedSlotFormulaEn:
+        "Slot 1 (Model Master) + Slot 2 (Garment/SKU Packshot) + Slot 3 (Worn Fit/Back Ref) + Slot 4 (Matte Film Grade)",
       preferredWorkflow: "lookbook_composite",
       creditsPer5Set: 65,
       priceKrwPer5Set: 800,
       creditsPerSingle: 13,
-      supportedResolutions: ["2K", "4K"],
+      supportedResolutions: ["1K", "2K"],
     },
   ];
 
@@ -246,18 +485,18 @@ export function resolveCategoryReferenceWorkflows(
 
   const defaultModelThumb = isBeauty
     ? "/reel/landing/v7/rx-beauty-orig.jpg"
-    : "/reel/studio/vto-look-front.webp";
+    : "/reel/brands/slot-1-subject-editorial.jpg";
   const defaultBgThumb = isBeauty
     ? "/reel/landing/v7/rx-beauty-world.jpg"
     : isFnb
       ? "/reel/landing/v7/film-tea.jpg"
-      : "/reel/studio/vto-free-alley.webp";
+      : "/reel/brands/slot-2-space-concrete-blue.jpg";
   const defaultVibeThumb = isBeauty
     ? "/reel/landing/cut-cheek.webp"
-    : "/reel/studio/vto-look-side.webp";
+    : "/reel/brands/slot-3-pose-lowangle-lookbook.jpg";
   const defaultColorThumb = isBeauty
     ? "/reel/campaigns/beauty-rose.jpg"
-    : "/reel/brands/studio-editorial-blue-1080p.jpg";
+    : "/reel/brands/slot-4-color-french-cobalt.jpg";
 
   const defaultBaseSceneThumb = isBeauty
     ? "/reel/landing/cut-pump.webp"
@@ -265,7 +504,7 @@ export function resolveCategoryReferenceWorkflows(
       ? "/reel/landing/v7/film-tea.jpg"
       : "/reel/studio/vto-set-front.webp";
   const defaultProductThumb = isBeauty
-    ? "/reel/landing/v7/rx-beauty-product.jpg"
+    ? "/reel/brands/swap-product-luxury-bottle.jpg"
     : isFnb
       ? "/reel/brands/tea-editorial.jpg"
       : "/reel/studio/vto-garment.webp";
@@ -273,7 +512,7 @@ export function resolveCategoryReferenceWorkflows(
     ? "/reel/landing/cut-hands.webp"
     : isFnb
       ? "/reel/landing/cut-scent.webp"
-      : "/reel/landing/c-garment-ours.webp";
+      : "/reel/brands/pin-texture-35mm-grain-weave.jpg";
 
   return {
     lookbook_composite: {
@@ -465,7 +704,7 @@ export const PINNED_COLOR_REFERENCES: ReadonlyArray<PinnedStyleReferencePreset> 
       ruleKo: "5400K 쿨 데이라이트 · 딥 네이비 섀도우 · 중채도 피부톤 고정",
       ruleEn: "5400K cool daylight · deep navy shadows · balanced skin saturation",
       swatchHex: "#3875C5",
-      thumb: "/reel/brands/studio-editorial-blue-1080p.jpg",
+      thumb: "/reel/brands/slot-4-color-french-cobalt.jpg",
       promptTokenKo: "[고정 색감 레퍼런스: 5400K 프렌치 코발트 에디토리얼 색온도 및 섀도우 커브 유지]",
       promptTokenEn: "[Pinned Color Ref: 5400K French cobalt editorial color temperature and shadow curve]",
     },
@@ -505,7 +744,7 @@ export const PINNED_TEXTURE_REFERENCES: ReadonlyArray<PinnedStyleReferencePreset
       ruleKo: "AI 플라스틱 광택 제거 · 실제 피부 모공과 미세 아날로그 입자 고정",
       ruleEn: "Eliminates AI plastic sheen · locks authentic pores & 35mm fine grain",
       swatchHex: "#475569",
-      thumb: "/reel/landing/cut-cheek.webp",
+      thumb: "/reel/brands/slot-1-subject-editorial.jpg",
       promptTokenKo: "[고정 질감 레퍼런스: 35mm 아날로그 파인 그레인 및 매트한 실사 피부 모공 질감 고정]",
       promptTokenEn: "[Pinned Texture Ref: 35mm analog fine grain and authentic matte skin pore texture]",
     },
@@ -517,7 +756,7 @@ export const PINNED_TEXTURE_REFERENCES: ReadonlyArray<PinnedStyleReferencePreset
       ruleKo: "울·데님 직조 결, 봉제 실땀, 브러시드 메탈 헤어라인 선명도 고정",
       ruleEn: "Locks wool/denim weave, stitch thread detail, and brushed metal grain",
       swatchHex: "#334155",
-      thumb: "/reel/landing/c-garment-ours.webp",
+      thumb: "/reel/brands/pin-texture-35mm-grain-weave.jpg",
       promptTokenKo: "[고정 질감 레퍼런스: 초근접 원단 직조 결·봉제 스티치·금속 표면 마이크로 질감 고정]",
       promptTokenEn: "[Pinned Texture Ref: hyper-sharp fabric weave, seam stitching, and surface micro-texture]",
     },
@@ -529,7 +768,7 @@ export const PINNED_TEXTURE_REFERENCES: ReadonlyArray<PinnedStyleReferencePreset
       ruleKo: "투명 용기 굴절, 미세 물방울 결로, 스킨케어 제형 스미어 질감 고정",
       ruleEn: "Locks glass bottle refraction, fine condensation droplets, and serum smear",
       swatchHex: "#0EA5E9",
-      thumb: "/reel/landing/cut-pump.webp",
+      thumb: "/reel/brands/swap-product-luxury-bottle.jpg",
       promptTokenKo: "[고정 질감 레퍼런스: 투명 유리 굴절·미세 결로 물방울·수분 제형 하이라이트 질감 고정]",
       promptTokenEn: "[Pinned Texture Ref: crisp glass refraction, micro condensation droplets, and serum texture]",
     },
@@ -661,8 +900,8 @@ export const BRAND_STUDIO_MICRO_EDIT_MODELS: ReadonlyArray<BrandStudioMicroEditM
   [
     {
       id: "precision_region_editor",
-      nameKo: "정밀 부위 리터칭 · 라벨/소품/손 교정 에디터",
-      nameEn: "Precision Region Editor · Label / Prop / Hand",
+      nameKo: "GPT Image 2.6 · 정밀 부위 리터칭 & 라벨/소품 교정",
+      nameEn: "GPT Image 2.6 · Precision Region & Label Editor",
       badgeKo: "극소 부위 수정 · 제품/라벨 교정 1순위",
       badgeEn: "Best for Micro-Region Product & Label Edit",
       shortTraitKo:
@@ -691,8 +930,8 @@ export const BRAND_STUDIO_MICRO_EDIT_MODELS: ReadonlyArray<BrandStudioMicroEditM
     },
     {
       id: "seamless_edge_inpaint",
-      nameKo: "심리스 인페인팅 · 조명/피부/배경 경계 블렌딩 에디터",
-      nameEn: "Seamless Edge Inpaint · Light / Skin / BG Blend",
+      nameKo: "Nano Banana 2.1 · 심리스 경계 블렌딩 에디터",
+      nameEn: "Nano Banana 2.1 · Seamless Edge & Lighting Blend",
       badgeKo: "경계선 티 안 나는 자연 합성 추천",
       badgeEn: "Best for Zero-Seam Edge & Lighting Blend",
       shortTraitKo:
@@ -721,8 +960,8 @@ export const BRAND_STUDIO_MICRO_EDIT_MODELS: ReadonlyArray<BrandStudioMicroEditM
     },
     {
       id: "texture_fit_reshape",
-      nameKo: "고해상도 질감 · 의류 핏/주름 부분 리셰이핑 에디터",
-      nameEn: "High-Res Texture & Garment Fit Reshape Editor",
+      nameKo: "Nano Banana Pro · 4K 질감 & 의류 핏 부분 리셰이핑",
+      nameEn: "Nano Banana Pro · 4K Texture & Garment Fit Reshape",
       badgeKo: "원단 주름 · 핏 · 4K 디테일 보정",
       badgeEn: "Best for Fabric Drape & 4K Detail",
       shortTraitKo:
@@ -751,8 +990,8 @@ export const BRAND_STUDIO_MICRO_EDIT_MODELS: ReadonlyArray<BrandStudioMicroEditM
     },
     {
       id: "film_grain_skin_enhancer",
-      nameKo: "리얼 매트 스킨 & 35mm 물리 필름 그레인 마감",
-      nameEn: "Real Matte Skin & 35mm Physical Film Grain Finish",
+      nameKo: "Seedream 5.0 Pro · 리얼 매트 스킨 & 35mm 필름 마감",
+      nameEn: "Seedream 5.0 Pro · Real Matte Skin & 35mm Grain Finish",
       badgeKo: "AI 플라스틱 느낌 제거 · 최종 마감",
       badgeEn: "Removes AI Plastic Look · Final Finish",
       shortTraitKo:
@@ -814,13 +1053,335 @@ export function findClosestSupportedAspectRatio(
   return best.label;
 }
 
+/**
+ * Track 3 (`creator_format`) & Track 4 (`creator_distribution`) Presets:
+ * - Self-Serve Format Builder vs Studio Commissioned Format
+ * - End-to-End Creator Seeding Distribution Cohorts (10 / 30 / 50+ Creators)
+ */
+export type CreatorCampaignFormatModeId = "self_build" | "studio_commission";
+
+export interface CreatorCampaignFormatModeSpec {
+  id: CreatorCampaignFormatModeId;
+  badgeKo: string;
+  badgeEn: string;
+  titleKo: string;
+  titleEn: string;
+  summaryKo: string;
+  summaryEn: string;
+  lockedElementsKo: readonly [string, string, string];
+  lockedElementsEn: readonly [string, string, string];
+  creatorInputKo: string;
+  creatorInputEn: string;
+  turnaroundKo: string;
+  turnaroundEn: string;
+  ctaLabelKo: string;
+  ctaLabelEn: string;
+}
+
+export const BRAND_CREATOR_FORMAT_MODES: readonly CreatorCampaignFormatModeSpec[] =
+  [
+    {
+      id: "self_build",
+      badgeKo: "MODE A · 셀프 스튜디오에서 직접 포맷 빌드",
+      badgeEn: "MODE A · Self-Serve Format Builder",
+      titleKo: "셀프 캠페인 포맷 빌더 (브랜드가 직접 슬롯 잠금 & 즉시 테스트)",
+      titleEn: "Self-Serve Campaign Format Builder (Instant Lock & Test)",
+      summaryKo:
+        "스튜디오에서 확정한 우리 브랜드 화보·제품·배경·색감을 고정 슬롯으로 잠그고, [크리에이터 정면 셀카 1장]만 바뀌는 캠페인 영상 포맷을 즉시 생성합니다.",
+      summaryEn:
+        "Lock your approved brand scene, product, outfit, and color grade as immutable slots while exposing a single [Creator Front Selfie] slot for instant campaign generation.",
+      lockedElementsKo: [
+        "우리 브랜드 제품 패키지 · 착장 핏 · 로고 위치 100% 고정",
+        "브랜드 지정 배경 공간 · 카메라 동선(720p/1080p) · 조명 색온도 고정",
+        "참여 크리에이터가 바꿀 수 없는 브랜드 세이프티 가드레일 자동 적용",
+      ],
+      lockedElementsEn: [
+        "100% lock on brand product geometry, outfit fit, and logo placement",
+        "Immutable studio set, camera blocking (720p/1080p), and color grade",
+        "Automatic brand safety guardrails across every creator render",
+      ],
+      creatorInputKo: "참여 크리에이터 입력: 정면 셀카 1장 (본인 얼굴 사용 동의 + 자동 검수)",
+      creatorInputEn: "Creator Input: 1 Front Selfie (consent + automated safety check)",
+      turnaroundKo: "지금 바로 포맷 생성 및 샘플 크리에이터 3인 프리뷰 확인 (약 60초)",
+      turnaroundEn: "Build format & preview across 3 sample creators immediately (~60s)",
+      ctaLabelKo: "셀프 캠페인 포맷 즉시 생성 및 테스트",
+      ctaLabelEn: "Build & Test Self-Serve Campaign Format",
+    },
+    {
+      id: "studio_commission",
+      badgeKo: "MODE B · 전담 디렉터에게 맞춤 포맷 제작 의뢰",
+      badgeEn: "MODE B · Commission Custom Format to Studio",
+      titleKo: "스튜디오 전담 캠페인 포맷 제작 의뢰 (D+3 맞춤 포맷 설계·납품)",
+      titleEn: "Commissioned Studio Format Production (D+3 Custom Delivery)",
+      summaryKo:
+        "제품 실물 사진과 캠페인 목적(신제품 론칭·뷰티 룩·시즌 프로모션)만 전달하면, TWINGS 전담 필름 디렉터가 D+3일 내에 바이럴 훅이 검증된 전용 캠페인 포맷을 제작해 납품합니다.",
+      summaryEn:
+        "Send your product photos and campaign goal—our film directors design, test, and deliver a custom high-converting creator format within D+3 days.",
+      lockedElementsKo: [
+        "전담 디렉터의 맞춤형 12초 원테이크/비트싱크 카메라 연출 설계",
+        "제품 제형·라벨·착장 디테일 98%+ 보존 정밀 검수 완료",
+        "납품 후 브랜드 전용 링크 발급 → 내부 임직원·앰배서더·크리에이터 즉시 사용",
+      ],
+      lockedElementsEn: [
+        "Director-crafted 12s one-take or beat-synced camera choreography",
+        "98%+ product texture, label, and garment detail QA before delivery",
+        "Dedicated brand format link ready for ambassadors and creators",
+      ],
+      creatorInputKo: "브랜드 전달 사항: 제품 원판 사진 2~4장 + 원하는 캠페인 무드 1줄",
+      creatorInputEn: "Brand Handoff: 2–4 product photos + 1-line campaign mood brief",
+      turnaroundKo: "의뢰 접수 후 D+3일 내 전용 포맷 확정 및 테스트 영상 3편 납품",
+      turnaroundEn: "Custom format locked & 3 test videos delivered within D+3 days",
+      ctaLabelKo: "D+3 전담 캠페인 포맷 제작 의뢰하기",
+      ctaLabelEn: "Commission D+3 Custom Campaign Format",
+    },
+  ];
+
+export type CreatorDistributionTierId = "seed_10" | "growth_30" | "mega_50_plus";
+
+export interface CreatorDistributionTierSpec {
+  id: CreatorDistributionTierId;
+  badgeKo: string;
+  badgeEn: string;
+  titleKo: string;
+  titleEn: string;
+  creatorCountLabelKo: string;
+  creatorCountLabelEn: string;
+  channelsKo: string;
+  channelsEn: string;
+  estimatedViewsKo: string;
+  estimatedViewsEn: string;
+  includesKo: readonly [string, string, string];
+  includesEn: readonly [string, string, string];
+  timelineSummaryKo: string;
+  timelineSummaryEn: string;
+}
+
+export const BRAND_CREATOR_DISTRIBUTION_TIERS: readonly CreatorDistributionTierSpec[] =
+  [
+    {
+      id: "seed_10",
+      badgeKo: "SEED COHORT · 초기 반응 검증",
+      badgeEn: "SEED COHORT · Market Validation",
+      titleKo: "10인 크리에이터 시드 유통 팩",
+      titleEn: "10-Creator Seed Distribution Pack",
+      creatorCountLabelKo: "팔로워 3,000+ 검증 크리에이터 10명 동시 게시",
+      creatorCountLabelEn: "10 verified creators (3,000+ followers) simultaneous post",
+      channelsKo: "Instagram Reels · TikTok · YouTube Shorts",
+      channelsEn: "Instagram Reels · TikTok · YouTube Shorts",
+      estimatedViewsKo: "예상 오가닉 조회수 15만~40만 뷰+",
+      estimatedViewsEn: "Est. 150K–400K+ organic views",
+      includesKo: [
+        "브랜드 전용 캠페인 영상 포맷 1종 제작 포함",
+        "카테고리(뷰티·패션·라이프) 맞춤 크리에이터 10인 섭외 및 1080p 영상 납품",
+        "D+21 조회수·도달·저장 성과 리포트 + 상위 3편 2차 광고 활용권(Usage Rights)",
+      ],
+      includesEn: [
+        "Includes 1 custom brand campaign video format",
+        "10 category-matched creators recruited & 1080p masters delivered",
+        "D+21 performance report + cleared 2nd-use ad rights for top 3 videos",
+      ],
+      timelineSummaryKo: "D+3 포맷 확정 → D+7 10인 매칭 → D+14 일괄 게시 → D+21 리포트",
+      timelineSummaryEn: "D+3 Format -> D+7 10 Creators -> D+14 Live Post -> D+21 Report",
+    },
+    {
+      id: "growth_30",
+      badgeKo: "GROWTH COHORT · 신제품 론칭 표준 (가장 많이 선택)",
+      badgeEn: "GROWTH COHORT · Standard Product Launch (Most Popular)",
+      titleKo: "30인 크리에이터 그로스 유통 팩",
+      titleEn: "30-Creator Growth Distribution Pack",
+      creatorCountLabelKo: "팔로워 3,000+ 검증 크리에이터 30명 멀티 시딩",
+      creatorCountLabelEn: "30 verified creators (3,000+ followers) multi-wave seeding",
+      channelsKo: "Instagram Reels · TikTok · YouTube Shorts 동시 확산",
+      channelsEn: "Simultaneous wave across IG Reels, TikTok & Shorts",
+      estimatedViewsKo: "예상 오가닉 조회수 50만~120만 뷰+",
+      estimatedViewsEn: "Est. 500K–1.2M+ organic views",
+      includesKo: [
+        "브랜드 전용 캠페인 영상 포맷 2종(A/B 훅 비교) 제작 포함",
+        "크리에이터 30인 후보 리스트 사전 공유 및 브랜드 원클릭 승인",
+        "전 편 1080p 클린 마스터 제공 + 상위 10편 메타/틱톡 2차 퍼포먼스 광고 활용권",
+      ],
+      includesEn: [
+        "Includes 2 custom campaign video formats (A/B hook testing)",
+        "Pre-launch creator shortlist sharing & 1-click brand approval",
+        "All 30 clean 1080p masters + 2nd-use paid ad rights on top 10 assets",
+      ],
+      timelineSummaryKo: "D+3 포맷 2종 확정 → D+7 30인 확정 → D+14 동시 게시 → D+21 ROI 리포트",
+      timelineSummaryEn: "D+3 2 Formats -> D+7 30 Creators -> D+14 Wave Post -> D+21 ROI Report",
+    },
+    {
+      id: "mega_50_plus",
+      badgeKo: "MEGA CAMPAIGN · 카테고리 장악 & 파생 확산",
+      badgeEn: "MEGA CAMPAIGN · Category Takeover",
+      titleKo: "50인+ 메가 캠페인 & 오가닉 파생 유통 팩",
+      titleEn: "50+ Creator Mega Seeding & Organic Takeover",
+      creatorCountLabelKo: "팔로워 3,000~10만+ 크리에이터 50명 이상 대규모 시딩",
+      creatorCountLabelEn: "50+ creators (3K to 100K+ followers) full-funnel wave",
+      channelsKo: "IG Reels · TikTok · Shorts + 댓글 자동 DM 레시피 연동",
+      channelsEn: "IG Reels · TikTok · Shorts + Comment-to-DM Viral Loop",
+      estimatedViewsKo: "실적 기준: 200만 뷰+ · 파생 오가닉 콘텐츠 300건+ 달성 구조",
+      estimatedViewsEn: "Proven track record: 2M+ views & 300+ derivative organic posts",
+      includesKo: [
+        "브랜드 전용 멀티 포맷 3종 + 전담 사운드/컬러 그레이딩 마스터링",
+        "50인+ 시딩 유통 + 일반 유저 참여형 오가닉 챌린지 확산 구조 설계",
+        "전체 산출물 무제한 2차 광고 활용권 및 주간 실시간 대시보드 리포트",
+      ],
+      includesEn: [
+        "3 custom formats + dedicated sound & color grading master",
+        "50+ seeded creators + public organic challenge participation loop",
+        "Full 2nd-use paid ad rights + weekly live dashboard reporting",
+      ],
+      timelineSummaryKo: "D+3 포맷 확정 → D+7 50인+ 섭외 → D+14 메가 시딩 → D+21 종합 리포트",
+      timelineSummaryEn: "D+3 Formats -> D+7 50+ Cohort -> D+14 Mega Wave -> D+21 Full Report",
+    },
+  ];
+
+/**
+ * Track 5 (`audio`) Audio Studio Presets:
+ * - Signature BGM + Tactile Foley + Act 1 -3 dB Voiceover Ducking + -14 LUFS / -1 dBTP Mastering
+ */
+export type BrandAudioPresetId =
+  | "runway_french_house"
+  | "clinical_minimal_pulse"
+  | "warm_acoustic_lounge"
+  | "no_bgm_live_foley";
+
+export interface BrandAudioPresetSpec {
+  id: BrandAudioPresetId;
+  badgeKo: string;
+  badgeEn: string;
+  titleKo: string;
+  titleEn: string;
+  bpmLabel: string;
+  loudnessSpec: string;
+  duckingRuleKo: string;
+  duckingRuleEn: string;
+  foleyLayersKo: readonly [string, string, string];
+  foleyLayersEn: readonly [string, string, string];
+  summaryKo: string;
+  summaryEn: string;
+  creditsPerTrack: number;
+  priceKrwPerTrack: number;
+}
+
+export const BRAND_AUDIO_STUDIO_PRESETS: readonly BrandAudioPresetSpec[] = [
+  {
+    id: "runway_french_house",
+    badgeKo: "패션 · 룩북 · 런웨이 1순위",
+    badgeEn: "Best for Fashion & Lookbook Reels",
+    titleKo: "프렌치 런웨이 하우스 & 카메라 셔터 폴리",
+    titleEn: "French Runway House & Press Shutter Foley",
+    bpmLabel: "122 BPM · Beat-Drop Sync @ 2.3s",
+    loudnessSpec: "-14.0 LUFS / -1.0 dBTP (IG Reels · TikTok 표준)",
+    duckingRuleKo: "Act 1 도입부 및 브랜드 보이스오버 구간 자동 -3 dB 더킹",
+    duckingRuleEn: "Automatic Act 1 & voiceover -3 dB sidechain ducking",
+    foleyLayersKo: [
+      "대리석 위 가죽 구두 힐 탭(Heel Tap) 현장음",
+      "울 코트·실크 트렌치 원단 스침(Fabric Rustle) 마이크로 폴리",
+      "프레스 라인 플래시 카메라 셔터 & 공간 잔향(Room Tone)",
+    ],
+    foleyLayersEn: [
+      "Crisp leather heel taps on limestone runway",
+      "Tactile wool coat & silk trench fabric rustle",
+      "Press-line camera shutter clicks & gallery room tone",
+    ],
+    summaryKo:
+      "2.3초 비트 드롭에 맞춰 워킹 컷 전환이 딱 떨어지는 프렌치 일렉트로닉 BGM과 런웨이 현장 폴리 사운드를 결합합니다.",
+    summaryEn:
+      "Combines a 122 BPM French house groove (2.3s beat-drop lock) with tactile runway heel taps and fabric rustle.",
+    creditsPerTrack: 75,
+    priceKrwPerTrack: 900,
+  },
+  {
+    id: "clinical_minimal_pulse",
+    badgeKo: "뷰티 · 스킨케어 · 디바이스 추천",
+    badgeEn: "Best for Beauty & Skincare Films",
+    titleKo: "클리니컬 미니멀 앰비언트 & 수분 제형 ASMR 폴리",
+    titleEn: "Clinical Minimal Pulse & Hydro Texture ASMR Foley",
+    bpmLabel: "96 BPM · Soft Sub-Pulse",
+    loudnessSpec: "-14.0 LUFS / -1.0 dBTP (클린 고역 보존)",
+    duckingRuleKo: "성분 내레이션 및 제품 클로즈업 구간 자동 -3 dB 더킹",
+    duckingRuleEn: "Automatic -3 dB ducking during INCI narration & macro shots",
+    foleyLayersKo: [
+      "스포이드 유리 보틀 클릭 & 세럼 물방울 드롭(Drop) 클로즈업 사운드",
+      "수분 크림·콜라겐 시트 밀착 스미어(Smear) 마이크로 ASMR",
+      "깨끗한 스튜디오 에어 룸톤(Clean Air Room Tone)",
+    ],
+    foleyLayersEn: [
+      "Glass dropper click & close-mic serum droplet sound",
+      "Hydrating cream & sheet mask tactile ASMR smear",
+      "Pure studio air room tone with zero harsh sibilance",
+    ],
+    summaryKo:
+      "피부 과학·클린 뷰티 브랜드의 신뢰감을 높이는 투명한 미니멀 신스 펄스와 초근접 제형 ASMR 폴리를 마스터링합니다.",
+    summaryEn:
+      "Pairs crystalline minimal synth pulses with close-mic glass dropper and skincare texture ASMR Foley.",
+    creditsPerTrack: 75,
+    priceKrwPerTrack: 900,
+  },
+  {
+    id: "warm_acoustic_lounge",
+    badgeKo: "F&B · 라이프스타일 · 공간 추천",
+    badgeEn: "Best for F&B & Hospitality",
+    titleKo: "웜 아날로그 라운지 & 에스프레소/아이스 폴리",
+    titleEn: "Warm Analog Lounge & Ice / Espresso Foley",
+    bpmLabel: "108 BPM · Warm Tape Groove",
+    loudnessSpec: "-14.0 LUFS / -1.0 dBTP (아날로그 테이프 세츄레이션)",
+    duckingRuleKo: "잔 따르는 소리·얼음 부딪힘 하이라이트 구간 BGM -3 dB 자동 더킹",
+    duckingRuleEn: "Auto -3 dB BGM ducking during pour and ice-clink highlights",
+    foleyLayersKo: [
+      "크리스탈 잔 속 얼음 부딪힘(Ice Clink) & 탄산 기포 사운드",
+      "에스프레소 추출 및 세라믹 컵 플레이팅 현장 폴리",
+      "성수·한남 라운지 특유의 따뜻한 우드 공간 잔향",
+    ],
+    foleyLayersEn: [
+      "Crystal glass ice clink & fine carbonation fizz",
+      "Espresso extraction & ceramic cup plating Foley",
+      "Warm timber & concrete cafe ambient room tone",
+    ],
+    summaryKo:
+      "식음료·호텔·라이프스타일 영상의 미각과 공간감을 깨우는 아날로그 라운지 비트와 생생한 식음 폴리를 조화시킵니다.",
+    summaryEn:
+      "Blends warm tape-saturated lounge beats with crisp ice clinks, beverage pours, and inviting spatial ambiance.",
+    creditsPerTrack: 75,
+    priceKrwPerTrack: 900,
+  },
+  {
+    id: "no_bgm_live_foley",
+    badgeKo: "크리에이터 릴스 · 오가닉 바이럴 특화",
+    badgeEn: "Best for Organic Creator Reels (No-BGM)",
+    titleKo: "무BGM 순수 현장 폴리 & 공간음 마스터 (No-BGM Live Ambience)",
+    titleEn: "Pure On-Site Foley & Spatial Room Tone Master (No-BGM)",
+    bpmLabel: "Natural Live Sync · Zero Artificial BGM",
+    loudnessSpec: "-15.5 LUFS / -1.2 dBTP (다이내믹 레인지 보존)",
+    duckingRuleKo: "인물 대사·인터뷰 음성이 또렷이 들리도록 주변 공간음 밸런스 자동 조절",
+    duckingRuleEn: "Balances ambient room tone around natural spoken dialogue",
+    foleyLayersKo: [
+      "배경 음악(BGM) 100% 배제 — 실제 카메라 마이크가 수음한 듯한 현장 공기감",
+      "인물 동선에 정확히 맞물리는 발걸음·옷자락·소품 접촉음 동기화",
+      "인스타그램·틱톡 인앱 트렌드 음원을 위에 얹기 가장 좋은 클린 현장음 트랙",
+    ],
+    foleyLayersEn: [
+      "100% No-BGM — authentic on-camera microphone spatial presence",
+      "Frame-accurate footsteps, garment movement, and prop handling",
+      "Clean ambient bed ready for native IG/TikTok trending audio overlays",
+    ],
+    summaryKo:
+      "광고 티가 나는 인위적 BGM을 빼고 실제 현장에서 찍은 듯한 생생한 공간음과 폴리만 남겨 오가닉 릴스 체류 시간을 극대화합니다.",
+    summaryEn:
+      "Strips away artificial background music and masters pure on-set Foley and room tone for maximum organic Reel retention.",
+    creditsPerTrack: 60,
+    priceKrwPerTrack: 700,
+  },
+];
+
 export type FirstCreationGoalId =
   | "fashion_lookbook"
   | "product_ecommerce"
-  | "campaign_key_visual"
   | "micro_retouch_edit"
-  | "social_reels_thumb"
-  | "video_storyboard_motion";
+  | "video_storyboard_motion"
+  | "creator_campaign_format"
+  | "creator_seeding_distribution"
+  | "brand_signature_audio";
 
 export interface FirstCreationGoalCard {
   id: FirstCreationGoalId;
@@ -828,6 +1389,7 @@ export interface FirstCreationGoalCard {
   titleEn: string;
   subtitleKo: string;
   subtitleEn: string;
+  targetTrack: BrandCoreDeliverableTrackId;
   targetMedium: "image" | "video";
   targetSubMode: StudioImageSubMode;
   targetWorkflowMode: StudioReferenceWorkflowId;
@@ -836,80 +1398,99 @@ export interface FirstCreationGoalCard {
 }
 
 /**
- * Onboarding "What are you here to make first?" goal cards (Krea / Flora / Hatch style).
- * Selecting a goal automatically configures the studio's medium, sub-mode, reference workflow, model, and aspect ratio.
+ * Onboarding "What are you here to make first?" goal cards covering all 5 Core Deliverables.
+ * Selecting a goal automatically configures the studio's track, sub-mode, reference workflow, model, and aspect ratio.
  */
 export const FIRST_CREATION_GOALS: readonly FirstCreationGoalCard[] = [
   {
     id: "fashion_lookbook",
-    titleKo: "패션 · 에디토리얼 룩북",
-    titleEn: "Fashion & Editorial Concepts",
-    subtitleKo: "1번 인물 + 2번 배경 + 3번 감도 + 4번 색감 조합 화보",
-    subtitleEn: "4-slot subject, space, pose, and color lookbook",
+    titleKo: "이미지 · 멀티 레퍼런스 화보",
+    titleEn: "Image · Multi-Ref Lookbook",
+    subtitleKo: "Nano Banana Pro / Seedream 5.0 Pro · 1~4번 레퍼런스 조합 화보",
+    subtitleEn: "Nano Banana Pro / Seedream 5.0 Pro · 4-slot lookbook composite",
+    targetTrack: "image",
     targetMedium: "image",
     targetSubMode: "multi_ref_generate",
     targetWorkflowMode: "lookbook_composite",
-    targetImageModelId: "portrait_lookbook_pro",
+    targetImageModelId: "nano_banana_pro",
     targetAspect: "4:5",
   },
   {
     id: "product_ecommerce",
-    titleKo: "제품 · 이커머스 단독 컷",
-    titleEn: "Product Imagery & E-Commerce",
-    subtitleKo: "1번 베이스 장면의 제품을 2번 우리 제품으로 정밀 교체",
-    subtitleEn: "Swap scene product with your SKU while locking lighting",
+    titleKo: "이미지 · 제품 교체 & 이커머스",
+    titleEn: "Image · Product Swap & SKU",
+    subtitleKo: "Nano Banana 2.1 / GPT Image 2.6 · 1번 장면 → 2번 우리 제품 교체",
+    subtitleEn: "Nano Banana 2.1 / GPT Image 2.6 · Swap scene product with your SKU",
+    targetTrack: "image",
     targetMedium: "image",
     targetSubMode: "multi_ref_generate",
     targetWorkflowMode: "product_swap",
-    targetImageModelId: "multi_ref_standard",
+    targetImageModelId: "nano_banana_2_1",
     targetAspect: "1:1",
   },
   {
-    id: "campaign_key_visual",
-    titleKo: "캠페인 키비주얼 · 포스터",
-    titleEn: "Campaign Key Visuals",
-    subtitleKo: "패키지 로고·라벨 타이포그래피가 선명한 4K급 히어로 컷",
-    subtitleEn: "Zero-spelling-drift hero poster with crisp typography",
-    targetMedium: "image",
-    targetSubMode: "multi_ref_generate",
-    targetWorkflowMode: "product_swap",
-    targetImageModelId: "ultra_detail_label",
-    targetAspect: "4:5",
-  },
-  {
     id: "micro_retouch_edit",
-    titleKo: "극소 부위 · 라벨 정밀 수정",
-    titleEn: "Micro-Region Image Editing",
-    subtitleKo: "캔버스 드래그 영역만 스마트 마스크로 부분 수정",
-    subtitleEn: "Drag a selection box to edit only that region via Smart Mask",
+    titleKo: "이미지 · 극소 부위 정밀 수정",
+    titleEn: "Image · Micro-Region Edit",
+    subtitleKo: "GPT Image 2.6 · 캔버스 드래그 영역만 스마트 마스크로 부분 교정",
+    subtitleEn: "GPT Image 2.6 · Drag selection box to edit only that region",
+    targetTrack: "image",
     targetMedium: "image",
     targetSubMode: "micro_region_edit",
     targetWorkflowMode: "lookbook_composite",
-    targetImageModelId: "ultra_detail_label",
+    targetImageModelId: "gpt_image_2_6",
     targetAspect: "4:5",
   },
   {
-    id: "social_reels_thumb",
-    titleKo: "SNS 콘텐츠 · 릴스 썸네일",
-    titleEn: "Social Content & Thumbnails",
-    subtitleKo: "9:16 세로형 착장·피드 썸네일 및 바이럴 스틸",
-    subtitleEn: "9:16 vertical social feed & reel cover stills",
-    targetMedium: "image",
-    targetSubMode: "multi_ref_generate",
-    targetWorkflowMode: "lookbook_composite",
-    targetImageModelId: "vto_garment_lock",
-    targetAspect: "9:16",
-  },
-  {
     id: "video_storyboard_motion",
-    titleKo: "1080p 브랜드 필름 · 모션",
-    titleEn: "Video Concepts & 1080p Motion",
-    subtitleKo: "화보 첫 프레임 고정 → 720p 검수 → 1080p 사운드 영상",
-    subtitleEn: "Start-frame lock -> 720p check -> 1080p sound master",
+    titleKo: "영상 · 1080p 브랜드 필름",
+    titleEn: "Video · 1080p Brand Film",
+    subtitleKo: "화보 첫 프레임 고정 → 720p 동선 검수 → 1080p 마스터 영상",
+    subtitleEn: "Start-frame lock -> 720p motion check -> 1080p master film",
+    targetTrack: "video",
     targetMedium: "video",
     targetSubMode: "multi_ref_generate",
     targetWorkflowMode: "lookbook_composite",
-    targetImageModelId: "portrait_lookbook_pro",
+    targetImageModelId: "nano_banana_pro",
+    targetAspect: "9:16",
+  },
+  {
+    id: "creator_campaign_format",
+    titleKo: "크리에이터 캠페인 영상 (셀프 · 의뢰)",
+    titleEn: "Creator Campaign Format (Self · Commission)",
+    subtitleKo: "셀카 1장으로 우리 제품 영상이 나오는 포맷 셀프 빌드 또는 D+3 의뢰",
+    subtitleEn: "Self-build or commission a 1-selfie creator campaign video format",
+    targetTrack: "creator_format",
+    targetMedium: "video",
+    targetSubMode: "multi_ref_generate",
+    targetWorkflowMode: "lookbook_composite",
+    targetImageModelId: "seedream_5_0_pro",
+    targetAspect: "9:16",
+  },
+  {
+    id: "creator_seeding_distribution",
+    titleKo: "크리에이터 캠페인 영상 + 유통까지",
+    titleEn: "Creator Campaign + Seeding Distribution",
+    subtitleKo: "포맷 제작 + 팔로워 3,000+ 크리에이터 10~50인+ 동시 시딩 & ROI 리포트",
+    subtitleEn: "Format + 10–50+ verified creators seeding across IG/TikTok/Shorts",
+    targetTrack: "creator_distribution",
+    targetMedium: "video",
+    targetSubMode: "multi_ref_generate",
+    targetWorkflowMode: "lookbook_composite",
+    targetImageModelId: "seedream_5_0_pro",
+    targetAspect: "9:16",
+  },
+  {
+    id: "brand_signature_audio",
+    titleKo: "오디오 · 시그니처 BGM & 폴리",
+    titleEn: "Audio · Signature BGM & Foley",
+    subtitleKo: "브랜드 전용 BGM · 현장 폴리 공간음 · Act 1 -3 dB 더킹 · -14 LUFS 마스터",
+    subtitleEn: "Custom BGM, tactile Foley, Act 1 -3 dB ducking & -14 LUFS master",
+    targetTrack: "audio",
+    targetMedium: "video",
+    targetSubMode: "multi_ref_generate",
+    targetWorkflowMode: "lookbook_composite",
+    targetImageModelId: "nano_banana_2_0",
     targetAspect: "9:16",
   },
 ];
@@ -970,8 +1551,8 @@ export function extractBrandKitFromDomain(
         `Preserve ${baseName} front label typography and volume markings`,
         "Maintain clean glass refraction and hydrated semi-matte skin texture",
       ],
-      recommendedPinnedColorId: "pin-color-studio-crisp",
-      recommendedPinnedTextureId: "pin-tex-crystal-macro",
+      recommendedPinnedColorId: "color_crisp_studio_neutral",
+      recommendedPinnedTextureId: "texture_dewy_glass_smear",
     };
   }
 
@@ -1000,8 +1581,8 @@ export function extractBrandKitFromDomain(
         `Keep curved ${baseName} label typography sharp without warping`,
         "Preserve natural cold condensation droplets and fresh ingredient texture",
       ],
-      recommendedPinnedColorId: "pin-color-warm-daylight",
-      recommendedPinnedTextureId: "pin-tex-crystal-macro",
+      recommendedPinnedColorId: "color_warm_film_2383",
+      recommendedPinnedTextureId: "texture_dewy_glass_smear",
     };
   }
 
@@ -1029,8 +1610,7 @@ export function extractBrandKitFromDomain(
       `Preserve 100% spelling integrity on ${baseName} woven labels and hardware`,
       "Maintain 35mm analog film grain and matte skin/fabric micro-texture",
     ],
-    recommendedPinnedColorId: "pin-color-french-blue",
-    recommendedPinnedTextureId: "pin-tex-35mm-grain",
+    recommendedPinnedColorId: "color_editorial_cobalt",
+    recommendedPinnedTextureId: "texture_matte_skin_35mm",
   };
 }
-

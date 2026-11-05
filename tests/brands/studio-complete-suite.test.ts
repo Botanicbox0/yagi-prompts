@@ -381,9 +381,9 @@ describe('Brand Studio Complete Suite (Video Reverse, 2D Spatial Stage, 3-Track 
     expect(html).toContain('data-brief-compile-form');
     expect(html).toContain('data-brief-compile-submit');
 
-    // Never expose internal engine/model names or backend architecture lectures in customer HTML
+    // Never expose internal video/upscale/backend architecture lectures in customer HTML
     expect(html).not.toMatch(
-      /seedance|seedream|nano\s*banana|seedvr2|comfyui|yue2|earshot|argon|higgsfield|mark_only|BRAND DNA ATTACHMENT CONTROL|2-TIER DIRECTION CASCADE/i,
+      /seedance|seedvr2|comfyui|yue2|earshot|argon|higgsfield|mark_only|BRAND DNA ATTACHMENT CONTROL|2-TIER DIRECTION CASCADE/i,
     );
   });
 
@@ -599,10 +599,10 @@ describe('Brand Studio Complete Suite (Video Reverse, 2D Spatial Stage, 3-Track 
     expect(studioHtml).toContain('data-pomelli-shot-templates');
     expect(studioHtml).not.toContain('BRAND DNA ATTACHMENT CONTROL');
 
-    // Guard: no internal engine/model names leaked into either customer surface
+    // Guard: no internal video/upscale/backend names leaked into either customer surface
     for (const html of [onboardingHtml, studioHtml]) {
       expect(html).not.toMatch(
-        /Seedance|Seedream|Nano Banana|SeedVR2|ComfyUI|YuE2|earshot|Argon|Gemini|Higgsfield/i
+        /Seedance|SeedVR2|ComfyUI|YuE2|earshot|Argon|Gemini|Higgsfield/i
       );
     }
 
@@ -928,8 +928,6 @@ describe('Brand Studio Complete Suite (Video Reverse, 2D Spatial Stage, 3-Track 
     // Strictly zero internal vendor/engine jargon or backend system dumps in customer-facing HTML
     const forbiddenJargon = [
       'Seedance',
-      'Seedream',
-      'Nano Banana',
       'SeedVR2',
       'ComfyUI',
       'Demucs',
