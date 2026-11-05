@@ -5,14 +5,14 @@ import { brandScope } from "@/components/brand-workspace/scope";
 import { BrandUnavailable } from "@/components/brand-workspace/brand-unavailable";
 import { LogoControl } from "@/components/brand-workspace/logo-control";
 import { BrandAvatar } from "@/components/brand-workspace/brand-avatar";
-import { scopedHref } from "@/lib/brands/workspace/selection";
+import { scopedHref, sectionVisibility } from "@/lib/brands/workspace/selection";
 import { StaffNotice, adminOrganizationHref } from "@/components/brand-workspace/staff-notice";
 export default async function BrandSettings({
   searchParams,
 }: {
   searchParams: Promise<{ organizationId?: string | string[] }>;
 }) {
-  const [{ organizationId }, { sql, viewer, verifiedEmail, brandHost, b }] = await Promise.all([
+  const [{ organizationId }, { sql, viewer, verifiedEmail, brandHost, b, locale }] = await Promise.all([
     searchParams,
     brandContext(),
   ]);
@@ -22,7 +22,8 @@ export default async function BrandSettings({
   // Brand settings are for members of the selected brand; a campaign-only guest has none to open.
   // The TWINGS team reads them here; edits stay with owners and the admin console.
   const org = choice && choice.role !== "guest" ? await loadBrandSettings({ sql, verifiedEmail }, viewer, choice.id) : null,
-    c = b.managed;
+    c = b.managed,
+    showIdentityBridge = Boolean(choice && sectionVisibility(choice).identity);
   return (
     <div data-brand-settings>
       <div className="bw-heading">
@@ -30,7 +31,39 @@ export default async function BrandSettings({
           <h1>{c.settings}</h1>
           <p>{c.profileHint}</p>
         </div>
+        {showIdentityBridge && (
+          <a
+            href={scopedHref("/brand/identity", choice)}
+            className="bw-button"
+            data-settings-identity-bridge
+          >
+            {locale === "en" ? "Brand DNA & AI Style Guide →" : "브랜드 미감 · AI 스타일 설정 →"}
+          </a>
+        )}
       </div>
+      {showIdentityBridge && (
+        <aside
+          className="bw-note bw-row"
+          data-settings-identity-callout
+          style={{ marginBottom: "16px", padding: "12px 16px" }}
+        >
+          <div>
+            <strong style={{ fontSize: "13.5px" }}>
+              {locale === "en"
+                ? "Organization Profile vs. AI Brand Style Guide"
+                : "조직 기본 프로필과 AI 브랜드 스타일 가이드가 분리되어 있습니다"}
+            </strong>
+            <p className="bw-muted" style={{ margin: "2px 0 0", fontSize: "12.5px" }}>
+              {locale === "en"
+                ? "Manage your official organization name, website, contact email, and primary logo here. To configure AI studio colors, fonts, and Moods A/B/C, open the Brand tab."
+                : "이 화면에서는 조직명·웹사이트·담당자 이메일·대표 로고를 관리합니다. 셀프 스튜디오에 적용할 컬러 팔레트·서체·미감 기조(A/B/C)는 [브랜드] 탭에서 설정하세요."}
+            </p>
+          </div>
+          <a href={scopedHref("/brand/identity", choice)} className="bw-button">
+            {locale === "en" ? "Open Brand Style →" : "브랜드 탭 열기 →"}
+          </a>
+        </aside>
+      )}
       {!org ? (
         <section className="bw-empty" data-brand-settings-unavailable>
           <p>{!choice || choice.role === "guest" ? b.access.sharedOnly : b.denied}</p>

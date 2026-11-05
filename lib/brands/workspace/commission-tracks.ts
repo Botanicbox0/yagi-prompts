@@ -144,7 +144,7 @@ export function getAvailableCommissionTracks(options?: {
       ? ["✨ 5-Step Campaign Brief", "⊞ Creator Shortlist & Approvals", "📁 3 Asset & Cut Folders"]
       : ["✨ 5단계 캠페인 조건 설계", "⊞ 인플루언서 후보 비교 · 컨펌", "📁 3개 시사 · 납품 폴더"],
     workflowSteps: isEn
-      ? ["1. Format & Brief", "2. Creator Shortlist", "3. Frame.io Cut Review", "4. Live Viral Report"]
+      ? ["1. Format & Brief", "2. Creator Shortlist", "3. Master Cut Review", "4. Live Viral Report"]
       : ["1. 포맷 · 조건 확정", "2. 인플루언서 후보 컨펌", "3. 마스터 컷 프레임 검수", "4. 릴스·틱톡 게시 & 실시간 리포트"],
     deliverableDestination: {
       badge: isEn ? "Creator Wave + Live ROI" : "인플루언서 동시 게시 + 성과 리포트",
@@ -162,10 +162,10 @@ export function getAvailableCommissionTracks(options?: {
       ? "Custom Brand Template Build Only"
       : "YAGI에 브랜드 전용 템플릿 생성만 의뢰 (셀프 스튜디오 장착용)",
     subtitle: isEn
-      ? "1-page brief -> Frame.io sample review -> mounts directly into your Self Studio"
+      ? "1-page brief -> sample cut review -> mounts directly into your Self Studio"
       : "인플루언서 섭외 없이 브랜드 맞춤형 워크플로·카메라·조명·제품 고정 템플릿만 의뢰",
     summary: isEn
-      ? "Drop your product photos, logo, and reference mood. YAGI engineers a locked brand template, reviews sample cuts with you in the Frame.io Room, and mounts the approved template directly into your Self Studio."
+      ? "Drop your product photos, logo, and reference mood. YAGI engineers a locked brand template, reviews sample cuts with you in the Review Room, and mounts the approved template directly into your Self Studio."
       : "제품 사진·로고·레퍼런스만 전달하면 YAGI 전담 디렉터가 브랜드 전용 템플릿을 설계합니다. 프로젝트 룸에서 샘플 영상을 프레임 단위로 시사·승인하면 곧바로 [셀프 스튜디오]에 전용 템플릿으로 장착되어 브랜드가 직접 무제한 변주 생성할 수 있습니다.",
     productionMode: "studio",
     requiresInfluencerSteps: false,
@@ -198,11 +198,11 @@ export function getAvailableCommissionTracks(options?: {
       ? "Master Commercial Video Production Only"
       : "YAGI에 마스터 영상 제작만 의뢰 (단품 · 캠페인 필름 납품)",
     subtitle: isEn
-      ? "1-page brief -> Frame.io v1/v2 timecode review -> 1080p clean master delivery"
+      ? "1-page brief -> v1/v2 timecode & spatial pin review -> 1080p clean master delivery"
       : "인플루언서 시딩 없이 브랜드 공식 계정·광고 집행용 1080p 완제품 영상 제작만 단독 의뢰",
     summary: isEn
       ? "Need a hero launch film, lookbook reel, or paid-ad video without influencer seeding? Submit a 1-page brief, exchange assets and frame-accurate notes in the Review Room, and download the 1080p master."
-      : "인플루언서 섭외나 템플릿 구축 없이, 브랜드 공식 인스타그램·유튜브·자사몰·퍼포먼스 광고에 즉시 집행할 고감도 1080p 사운드 마스터 영상을 의뢰합니다. Frame.io 방식의 타임코드·화면 핀 피드백으로 v1→v2 수정 후 최종 MP4를 납품받습니다.",
+      : "인플루언서 섭외나 템플릿 구축 없이, 브랜드 공식 인스타그램·유튜브·자사몰·퍼포먼스 광고에 즉시 집행할 고감도 1080p 사운드 마스터 영상을 의뢰합니다. 타임코드·화면 위치 핀 피드백으로 v1→v2 수정 후 최종 MP4를 납품받습니다.",
     productionMode: "studio",
     requiresInfluencerSteps: false,
     defaultAspect: "16:9",
@@ -253,7 +253,7 @@ export function getBrandWorkspaceTourSteps(options?: {
         : "에셋 전달부터 프레임 단위 시사, 커스텀 공유 링크까지 한 화면에서",
       body: isEn
         ? "Explore how your brand exchanges source files with YAGI, reviews 1080p cuts with spatial pins, tracks approval states, and shares custom review links with stakeholders."
-        : "복잡한 이메일·메신저 파일 주고받기 없이, 브랜드 에셋 폴더 정리(Playbook 스타일)부터 프레임 단위 타임코드·화면 핀 피드백, 임원진 맞춤 공유 링크 설정(Frame.io V4 스타일)까지 핵심 기능을 5단계로 안내합니다.",
+        : "복잡한 이메일·메신저 파일 주고받기 없이, 브랜드 에셋 폴더 정리부터 프레임 단위 타임코드·화면 핀 피드백, 임원진 맞춤 공유 링크 설정까지 핵심 기능을 5단계로 안내합니다.",
       highlightPills: isEn
         ? ["📁 Collage Asset Folders", "🎯 Frame & Spatial Pin QA", "🔗 Custom Share Builder"]
         : ["📁 비주얼 콜라주 에셋 폴더", "🎯 프레임 · 화면 좌표 핀 시사", "🔗 레이아웃 · 보안 공유 빌더"],
@@ -295,7 +295,7 @@ export function getBrandWorkspaceTourSteps(options?: {
       type: "POINT",
       anchor: "TOP",
       targetSection: "tour-collections",
-      kicker: isEn ? "STEP 3 · PLAYBOOK COLLAGE FOLDERS & STATUS" : "STEP 3 · 비주얼 콜라주 폴더 & 승인 상태 메타데이터",
+      kicker: isEn ? "STEP 3 · COLLAGE ASSET FOLDERS & STATUS" : "STEP 3 · 비주얼 콜라주 폴더 & 승인 상태 메타데이터",
       title: isEn
         ? "Visual Collage Folders & Instant Approval Status Pills"
         : "제품·로고 원본부터 v1→v2 시사 컷까지 한눈에 보이는 콜라주 폴더",
@@ -331,7 +331,7 @@ export function getBrandWorkspaceTourSteps(options?: {
       type: "POINT",
       anchor: "LEFT",
       targetSection: "tour-share",
-      kicker: isEn ? "STEP 5 · FRAME.IO V4 SHARE LINK BUILDER" : "STEP 5 · 맞춤형 공유 링크 빌더 (레이아웃 · 보안 설정)",
+      kicker: isEn ? "STEP 5 · CUSTOM SHARE LINK BUILDER" : "STEP 5 · 맞춤형 공유 링크 빌더 (레이아웃 · 보안 설정)",
       title: isEn
         ? "Customize Presentation Layout (Grid · Reel · Player) & Security Controls"
         : "공유 대상에 맞춰 레이아웃(Grid · Reel · Player)과 다운로드·비밀번호 권한을 제어하세요",

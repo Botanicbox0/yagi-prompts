@@ -298,7 +298,7 @@ export function BriefConcierge({
               : "[Brand Confirmed]"
             : isKo
               ? "[기획서 자동 추출]"
-              : "[Argon Extracted]";
+              : "[Auto-Extracted]";
       return `- ${isKo ? q.sectionKo : q.sectionEn}: ${resolveAnswerText(q)} ${tag}`;
     });
 
@@ -488,8 +488,8 @@ export function BriefConcierge({
               <div className="ys-asset-pills">
                 {droppedFiles.map((file) => (
                   <span key={file} className="ys-asset-pill">
-                    📄 {file}
-                    <small>{isKo ? "Argon 파싱 완료" : "Parsed"}</small>
+                    <span>📄 {file}</span>
+                    <small style={{ marginLeft: 6, opacity: 0.75 }}>{isKo ? "· 분석 완료" : "· Parsed"}</small>
                   </span>
                 ))}
                 {links.map((url) => (
@@ -555,11 +555,11 @@ export function BriefConcierge({
             >
               {analyzing
                 ? isKo
-                  ? "Argon이 기획서·피그마를 읽고 빈칸을 찾는 중…"
-                  : "Argon is analyzing slides & finding gaps…"
+                  ? "기획서·피그마를 읽고 빈칸을 찾는 중…"
+                  : "Analyzing slides & finding gaps…"
                 : isKo
                   ? "디렉터에게 읽히고 빈칸 질문 확인하기 →"
-                  : "Analyze with Argon & Check Missing Gaps →"}
+                  : "Analyze Brief & Check Missing Gaps →"}
             </button>
           </div>
         </div>
@@ -615,8 +615,8 @@ export function BriefConcierge({
                             ? "★ 디렉터 추천 위임"
                             : "★ Director Recommended"
                           : isKo
-                            ? "Argon 추정값"
-                            : "Argon Inferred"}
+                            ? "기획서 자동 추출"
+                            : "Auto-Extracted"}
                     </span>
                   </div>
 
@@ -705,13 +705,13 @@ export function BriefConcierge({
               </span>
               <p className="bw-muted">
                 {isKo
-                  ? `분석 자료 ${droppedFiles.length + links.length}건 · Argon 자동 추출 ${argonCount}개 · 브랜드 직접 확정 ${confirmedCount}개 · 디렉터 추천 위임 ${deferredCount}개`
-                  : `Assets: ${droppedFiles.length + links.length} · Argon Extracted: ${argonCount} · Brand Confirmed: ${confirmedCount} · Director Recommended: ${deferredCount}`}
+                  ? `분석 자료 ${droppedFiles.length + links.length}건 · 기획서 자동 추출 ${argonCount}개 · 브랜드 직접 확정 ${confirmedCount}개 · 디렉터 추천 위임 ${deferredCount}개`
+                  : `Assets: ${droppedFiles.length + links.length} · Auto-Extracted: ${argonCount} · Brand Confirmed: ${confirmedCount} · Director Recommended: ${deferredCount}`}
               </p>
             </div>
             <div className="ys-spec-legend">
               <span className="ys-source-tag ys-source-argon">
-                {isKo ? "기획서에서 읽음 (Argon)" : "Read from Deck (Argon)"}
+                {isKo ? "기획서에서 읽음" : "Read from Deck"}
               </span>
               <span className="ys-source-tag ys-source-user">
                 {isKo ? "직접 답함" : "Brand Confirmed"}
@@ -781,7 +781,7 @@ export function BriefConcierge({
                           : "Brand Answered"
                         : isKo
                           ? "기획서에서 읽음"
-                          : "Argon Read"}
+                          : "Read from Deck"}
                   </span>
                 </div>
               );

@@ -173,11 +173,11 @@ export function ProjectDetail({
             <span className="ys-track-pill" data-track={generativeMediaAllowed ? p.productionMode : "creator"}>
               {generativeMediaAllowed && p.productionMode === "studio"
                 ? locale === "en"
-                  ? "YAGI PRODUCTION · Studio Film"
-                  : "YAGI PRODUCTION · 스튜디오 제작"
+                  ? "Studio Film Production"
+                  : "스튜디오 영상 제작"
                 : locale === "en"
-                  ? "CREATOR CAMPAIGN · Creator Seeding"
-                  : "CREATOR CAMPAIGN · 인플루언서 게시"}
+                  ? "Creator Seeding Campaign"
+                  : "크리에이터 캠페인"}
             </span>
           </div>
           <h1>{p.title}</h1>
@@ -198,37 +198,34 @@ export function ProjectDetail({
       {next && (
         <div className="bw-note bw-row bw-no-print bw-tab-next" data-project-next-action={next.kind}>
           <div><strong>{b.performance.nextAction}</strong><p>{next.text}</p></div>
-          {next.href && <a className="bw-button" href={next.href}>{next.label} →</a>}
+          <div className="bw-row">
+            {next.href && <a className="bw-button" href={next.href}>{next.label} →</a>}
+            {generativeMediaAllowed && p.productionMode === "studio" && (
+              <a
+                className="bw-button bw-primary"
+                href={`/brand/studio?organizationId=${encodeURIComponent(p.organizationId)}`}
+                data-studio-commission-handoff
+              >
+                {locale === "en" ? "⚡ Self Studio →" : "⚡ 셀프 스튜디오 →"}
+              </a>
+            )}
+          </div>
         </div>
       )}
-      {generativeMediaAllowed && (
-        <HumanHandoff
-          organizationId={p.organizationId}
-          projectId={p.id}
-          locale={locale}
-          refCount={Math.max(p.referenceLinks.length, 3)}
-        />
-      )}
-      {generativeMediaAllowed && p.productionMode === "studio" && (
+      {generativeMediaAllowed && !next && p.productionMode === "studio" && (
         <div
           className="bw-note bw-row bw-no-print"
           data-studio-commission-handoff
+          style={{ padding: "10px 16px" }}
         >
-          <div>
-            <strong>
-              {locale === "en"
-                ? "YAGI Studio Production & Custom Template Room"
-                : "전용 템플릿 · 마스터 영상 시사 및 셀프 스튜디오 연동 룸"}
-            </strong>
-            <p className="bw-muted">
-              {locale === "en"
-                ? "Exchange source assets and review v1→v2 cuts with frame-accurate pins in the Review tab. Approved custom templates mount automatically to Self Studio (/brand/studio), and approved 1080p master films archive in Content Library (/brand/library)."
-                : "[시사] 탭에서 원본 에셋 전달과 v1→v2 프레임 핀 검수를 진행하세요. 최종 승인된 전용 템플릿은 [셀프 스튜디오]에 자동 장착되며, 완성된 1080p 마스터 영상은 [콘텐츠 보관함]에 영구 보관됩니다."}
-            </p>
-          </div>
+          <span style={{ fontSize: "13.5px", fontWeight: 600 }}>
+            {locale === "en"
+              ? "Review cuts in the Review tab or open Self Studio."
+              : "콘텐츠 확인 탭에서 시사본을 검수하거나 셀프 스튜디오에서 직접 제작할 수 있습니다."}
+          </span>
           <div className="bw-row">
             <a className="bw-button" href="#review">
-              {locale === "en" ? "Open Frame.io Review Room →" : "시사 · 에셋 룸 열기 →"}
+              {locale === "en" ? "Open Review Room →" : "시사 룸 열기 →"}
             </a>
             <a
               className="bw-button bw-primary"
@@ -238,6 +235,14 @@ export function ProjectDetail({
             </a>
           </div>
         </div>
+      )}
+      {generativeMediaAllowed && (
+        <HumanHandoff
+          organizationId={p.organizationId}
+          projectId={p.id}
+          locale={locale}
+          refCount={Math.max(p.referenceLinks.length, 3)}
+        />
       )}
       <ProjectTabs b={b} pendingReviews={p.status === "active" ? p.contents.filter(c => c.version === newest.get(c.slotKey) && c.decision === "pending").length : 0} comments={p.messages.length} usage={usage !== null} campaign={applicants !== null} shortlist={shortlist ? shortlistCount : 0}>
       <section id="performance" className="bw-panel">

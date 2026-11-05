@@ -110,6 +110,7 @@ export function PromptCardMedia({
   const [autoplay, setAutoplay] = useState(false);
   const [hydrated, setHydrated] = useState(false);
   const [playing, setPlaying] = useState(false);
+  const [posterFailed, setPosterFailed] = useState(false);
   const armed = video !== null && shouldMountClip({ inView, intent, autoplay });
 
   useEffect(() => {
@@ -180,15 +181,16 @@ export function PromptCardMedia({
         className={['card__media relative overflow-hidden bg-sky', className].filter(Boolean).join(' ')}
         style={{ aspectRatio: ratio }}
       >
-        {poster ? (
+        {poster && !posterFailed ? (
           // eslint-disable-next-line @next/next/no-img-element -- public bucket object, no loader
           <img
             src={poster.src}
             alt={alt}
             {...(poster.w ? { width: poster.w } : {})}
             {...(poster.h ? { height: poster.h } : {})}
-            loading="lazy"
-            decoding="async"
+            loading="eager"
+            decoding="sync"
+            onError={() => setPosterFailed(true)}
             className={`h-full w-full ${fit === 'cover' ? 'object-cover' : 'object-contain'}`}
           />
         ) : (

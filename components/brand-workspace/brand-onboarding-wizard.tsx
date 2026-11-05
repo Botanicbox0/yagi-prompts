@@ -233,28 +233,48 @@ export function BrandOnboardingWizard({
   const router = useRouter();
 
   const defaultIsKaiper = organizationName.toUpperCase().includes("KAIPER");
+  const initialBrandTitle = defaultIsKaiper
+    ? "KAIPER"
+    : organizationName || "KAIPER";
+  const initialSlug = defaultIsKaiper
+    ? "kaiper"
+    : (organizationName || "brand")
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "")
+        .slice(0, 18) || "brand";
 
-  const [brandName, setBrandName] = useState(
-    defaultIsKaiper ? "KAIPER" : organizationName || "KAIPER"
-  );
+  const [brandName, setBrandName] = useState(initialBrandTitle);
   const [category, setCategory] =
     useState<OnboardingCategory>("fashion_apparel");
   const [preferredVibe, setPreferredVibe] =
     useState<OnboardingVibe>("minimal_editorial");
   const [websiteUrlsText, setWebsiteUrlsText] = useState(
-    "https://kaiper.kr\nhttps://kaiper.kr/collections/signature"
+    `https://${initialSlug}.kr\nhttps://${initialSlug}.kr/collections/signature`
   );
-  const [instagramHandle, setInstagramHandle] = useState("@kaiper.official");
+  const [instagramHandle, setInstagramHandle] = useState(
+    `@${initialSlug}.official`
+  );
   const [instagramPostUrlsText, setInstagramPostUrlsText] = useState(
-    "https://www.instagram.com/p/C9KaiperLook01/\nhttps://www.instagram.com/p/C9KaiperLook02/"
+    `https://www.instagram.com/p/C9Look01/\nhttps://www.instagram.com/p/C9Look02/`
   );
   const [pinterestBoardUrlsText, setPinterestBoardUrlsText] = useState(
-    "https://www.pinterest.com/kaiper_official/26ss-editorial-mood/"
+    `https://www.pinterest.com/${initialSlug}_official/26ss-editorial-mood/`
   );
   const [pinterestPinCountHint, setPinterestPinCountHint] = useState(1240);
-  const [rawDropText, setRawDropText] = useState(DEFAULT_OMNI_DROP_TEXT);
-  const [assets, setAssets] =
-    useState<BrandOnboardingAsset[]>(KAIPER_SAMPLE_ASSETS);
+  const [rawDropText, setRawDropText] = useState(() =>
+    defaultIsKaiper
+      ? DEFAULT_OMNI_DROP_TEXT
+      : DEFAULT_OMNI_DROP_TEXT.replace(/kaiper/gi, initialSlug)
+  );
+  const [assets, setAssets] = useState<BrandOnboardingAsset[]>(() =>
+    defaultIsKaiper
+      ? KAIPER_SAMPLE_ASSETS
+      : KAIPER_SAMPLE_ASSETS.map((a) => ({
+          ...a,
+          label: a.label.replace(/KAIPER/g, initialBrandTitle),
+          urlOrKey: a.urlOrKey?.replace(/kaiper/g, initialSlug),
+        }))
+  );
   const [brandGuideNote, setBrandGuideNote] = useState(
     "과도한 네온 사이버펑크 조명 금지. 뷰티 필터로 뭉개진 플라스틱 피부 표현 금지. 의상 로고 철자 변형 절대 금지."
   );
@@ -705,6 +725,111 @@ export function BrandOnboardingWizard({
               ))}
             </select>
           </label>
+        </div>
+
+        {/* Above-the-Fold 0: 1-Line Pomelli Website URL & Instagram Onboarding Scanner Bar */}
+        <div
+          className="bw-card"
+          data-onboarding-url-scanner
+          style={{
+            margin: 0,
+            padding: "14px 18px",
+            borderRadius: 18,
+            background: "rgba(56, 117, 197, 0.06)",
+            border: "1px solid rgba(56, 117, 197, 0.24)",
+            display: "grid",
+            gap: 10,
+          }}
+        >
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "minmax(220px, 1.6fr) minmax(160px, 1fr) auto",
+              gap: 10,
+              alignItems: "end",
+            }}
+          >
+            <label style={{ margin: 0 }}>
+              <span style={{ fontSize: 12, fontWeight: 600 }}>
+                {isKo
+                  ? "① 공식 웹사이트 URL (입력 시 로고·서체·컬러·톤앤매너 자동 추출)"
+                  : "① Official Website URL (Auto-extracts logo, fonts, colors & tone)"}
+              </span>
+              <input
+                type="url"
+                value={websiteUrls[0] ?? ""}
+                onChange={(e) => {
+                  const rest = websiteUrls.slice(1);
+                  setWebsiteUrlsText([e.target.value, ...rest].filter(Boolean).join("\n"));
+                }}
+                placeholder="https://yourbrand.kr"
+                disabled={!isOwner || busy}
+              />
+            </label>
+            <label style={{ margin: 0 }}>
+              <span style={{ fontSize: 12, fontWeight: 600 }}>
+                {isKo
+                  ? "② 공식 인스타그램 (@handle)"
+                  : "② Instagram (@handle)"}
+              </span>
+              <input
+                type="text"
+                value={instagramHandle}
+                onChange={(e) => setInstagramHandle(e.target.value)}
+                placeholder="@brand.official"
+                disabled={!isOwner || busy}
+              />
+            </label>
+            <button
+              type="button"
+              className="bw-button bw-primary"
+              data-onboarding-quick-scan-btn
+              disabled={busy}
+              onClick={() => {
+                setActiveExtractionStepIndex(
+                  (prev) => (prev + 1) % POMELLI_EXTRACTION_STEPS.length
+                );
+                setStatusMessage(
+                  isKo
+                    ? `✓ ${brandName} 웹사이트(${websiteUrls[0] || "https://"}) 및 채널 분석 완료 — 비즈니스 프로필과 3대 미감 기조(A/B/C)가 최신 상태로 갱신되었습니다.`
+                    : `✓ Analyzed ${brandName} website & channels — Business Profile and 3 Aesthetic Lines (A/B/C) updated.`
+                );
+              }}
+              style={{ minHeight: 44, whiteSpace: "nowrap" }}
+            >
+              {isKo
+                ? "✦ 웹사이트 분석 · 브랜드 DNA 자동 완성"
+                : "✦ Analyze URL & Auto-Build DNA"}
+            </button>
+          </div>
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 8,
+              fontSize: 12,
+            }}
+          >
+            <span style={{ color: "#3063A7", fontWeight: 600 }}>
+              ✦ {activeExtractionStepIndex + 1}/{POMELLI_EXTRACTION_STEPS.length}단계:{" "}
+              {isKo
+                ? POMELLI_EXTRACTION_STEPS[activeExtractionStepIndex]?.pillKo
+                : POMELLI_EXTRACTION_STEPS[activeExtractionStepIndex]?.pillEn}{" "}
+              —{" "}
+              <span className="bw-muted" style={{ fontWeight: 400 }}>
+                {isKo
+                  ? POMELLI_EXTRACTION_STEPS[activeExtractionStepIndex]?.detailKo
+                  : POMELLI_EXTRACTION_STEPS[activeExtractionStepIndex]?.detailEn}
+              </span>
+            </span>
+            <small className="bw-muted">
+              {isKo
+                ? `감지된 에셋 ${rawAssetDrop.length}개 · 핀터레스트 대표 레퍼런스 ${preview?.pinterestFunnel.stage2MedoidsSelected ?? 12}장 선별됨`
+                : `${rawAssetDrop.length} assets · ${preview?.pinterestFunnel.stage2MedoidsSelected ?? 12} reference pins selected`}
+            </small>
+          </div>
         </div>
 
         {/* Above-the-Fold 1: Pomelli-Style Bento Business Profile + Right-Side Creative Director Co-Pilot Dock */}
@@ -1420,8 +1545,16 @@ export function BrandOnboardingWizard({
               </div>
               <span className="bw-badge" data-onboarding-recommended-look>
                 {isKo
-                  ? `대표 컬러 룩: ${preview.recommendedLookPresetId}`
-                  : `Primary Look: ${preview.recommendedLookPresetId}`}
+                  ? `대표 컬러 룩: ${
+                      preview.recommendedLookPresetId === "twings-french-blue"
+                        ? "프렌치 블루 에디토리얼"
+                        : preview.recommendedLookPresetId
+                    }`
+                  : `Primary Look: ${
+                      preview.recommendedLookPresetId === "twings-french-blue"
+                        ? "French Blue Editorial"
+                        : preview.recommendedLookPresetId
+                    }`}
               </span>
             </div>
 

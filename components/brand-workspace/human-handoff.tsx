@@ -137,7 +137,7 @@ export function HumanHandoff({
             }}
           >
             <span className="ys-brand-live-dot" aria-hidden="true" />
-            {isKo ? "HUMAN PD · ASAP 직통 연결" : "HUMAN PD · ASAP Direct Escalation"}
+            {isKo ? "전담 PD 직통 연결" : "Direct PD Escalation"}
           </span>
           <strong style={{ fontSize: 13.5, color: "#0E1013" }}>
             {status === "requested"

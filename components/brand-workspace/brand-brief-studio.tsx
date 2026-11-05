@@ -16,10 +16,12 @@ import {
   type BrandAestheticLine,
 } from "@/lib/brands/identity/onboarding";
 import {
+  DESIGN_PRINCIPLE_CHIPS,
   POMELLI_SHOT_TEMPLATES,
   createAttachmentPreset,
   type DesignPrincipleAttachment,
   type DesignPrincipleAttachmentMode,
+  type DesignPrincipleKey,
   type PomelliShotTemplate,
   type PomelliShotTemplateId,
 } from "@/lib/brands/briefs/vertical-playbooks";
@@ -208,6 +210,14 @@ export function BrandBriefStudio({
 
   function toggleBrandStyleMode(mode: DesignPrincipleAttachmentMode) {
     setPrincipleAttachment(createAttachmentPreset(mode));
+  }
+
+  function togglePrincipleKey(key: DesignPrincipleKey) {
+    setPrincipleAttachment((prev) => ({
+      ...prev,
+      mode: "custom_partial",
+      [key]: !prev[key],
+    }));
   }
 
   async function onCompileSubmit(e: FormEvent<HTMLFormElement>) {
@@ -724,7 +734,7 @@ export function BrandBriefStudio({
               ))}
             </div>
 
-            {/* Simple Brand Style Switch (On vs Free Exploration) */}
+            {/* Brand Style Attachment Switch (Full ON vs Custom Principles vs Free Exploration) */}
             <div
               data-design-principle-attachment
               data-attachment-mode={principleAttachment.mode}
@@ -762,6 +772,32 @@ export function BrandBriefStudio({
                 }}
               >
                 {isKo ? "🔒 브랜드 톤 유지" : "🔒 Brand Style ON"}
+              </button>
+              <button
+                type="button"
+                data-attachment-mode-btn="custom_partial"
+                aria-pressed={principleAttachment.mode === "custom_partial"}
+                onClick={() => toggleBrandStyleMode("custom_partial")}
+                disabled={busy}
+                style={{
+                  padding: "5px 11px",
+                  borderRadius: "999px",
+                  border: "none",
+                  fontSize: "12px",
+                  fontWeight:
+                    principleAttachment.mode === "custom_partial" ? 600 : 500,
+                  background:
+                    principleAttachment.mode === "custom_partial"
+                      ? "rgba(56, 117, 197, 0.14)"
+                      : "transparent",
+                  color:
+                    principleAttachment.mode === "custom_partial"
+                      ? "#3063A7"
+                      : "#41444D",
+                  cursor: "pointer",
+                }}
+              >
+                {isKo ? "🎛 원칙 선택" : "🎛 Custom Rules"}
               </button>
               <button
                 type="button"
@@ -811,6 +847,71 @@ export function BrandBriefStudio({
             </button>
           )}
         </div>
+
+        {/* Interactive Brand DNA Chip Row when '🎛 원칙 선택' is active */}
+        {principleAttachment.mode === "custom_partial" && (
+          <div
+            data-design-principle-chips
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              alignItems: "center",
+              gap: "6px",
+              paddingTop: "8px",
+              borderTop: "1px dashed rgba(15, 23, 42, 0.1)",
+            }}
+          >
+            <span
+              style={{
+                fontSize: "11.5px",
+                fontWeight: 600,
+                color: "#676B75",
+                marginRight: "4px",
+              }}
+            >
+              {isKo ? "적용할 브랜드 원칙:" : "Attached Brand Rules:"}
+            </span>
+            {DESIGN_PRINCIPLE_CHIPS.map((chip) => {
+              const active = Boolean(principleAttachment[chip.key]);
+              return (
+                <button
+                  key={chip.key}
+                  type="button"
+                  data-design-principle-chip={chip.key}
+                  aria-pressed={active}
+                  onClick={() => togglePrincipleKey(chip.key)}
+                  disabled={busy}
+                  title={
+                    active
+                      ? isKo
+                        ? chip.attachedDescKo
+                        : chip.attachedDescEn
+                      : isKo
+                        ? chip.detachedDescKo
+                        : chip.detachedDescEn
+                  }
+                  style={{
+                    padding: "4px 10px",
+                    borderRadius: "999px",
+                    fontSize: "11.5px",
+                    fontWeight: active ? 600 : 500,
+                    border: active
+                      ? "1px solid rgba(56, 117, 197, 0.35)"
+                      : "1px solid rgba(15, 23, 42, 0.1)",
+                    background: active
+                      ? "rgba(56, 117, 197, 0.1)"
+                      : "#FFFFFF",
+                    color: active ? "#3063A7" : "#676B75",
+                    cursor: busy ? "default" : "pointer",
+                  }}
+                >
+                  {active ? "✓ " : "+ "}
+                  {isKo ? chip.labelKo : chip.labelEn}
+                </button>
+              );
+            })}
+          </div>
+        )}
       </form>
 
       {errorMessage && (
@@ -849,19 +950,46 @@ export function BrandBriefStudio({
             flexWrap: "wrap",
             alignItems: "center",
             justifyContent: "space-between",
-            gap: "12px",
+            gap: "16px",
           }}
         >
-          <div>
-            <strong style={{ fontSize: "15px", color: "#0E1013" }}>
-              {isKo ? view.cutKindLabel.ko : view.cutKindLabel.en} ·{" "}
-              {view.deliverable.aspect} ({view.resolution})
-            </strong>
-            <p className="bw-muted" style={{ margin: "4px 0 0", fontSize: "13px" }}>
-              {isKo
-                ? "브랜드 로고·색감·화질 보정이 모두 반영되었습니다."
-                : "Your brand logo, color tone, and quality mastering have been applied."}
-            </p>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "14px",
+              flex: "1 1 320px",
+            }}
+          >
+            <img
+              src={
+                activeCategory === "beauty_skincare"
+                  ? "/reel/campaigns/beauty-rose.jpg"
+                  : activeCategory === "fnb_hospitality"
+                    ? "/reel/brands/tea-editorial.jpg"
+                    : "/reel/brands/production-paris.jpg"
+              }
+              alt={isKo ? view.cutKindLabel.ko : view.cutKindLabel.en}
+              style={{
+                width: "72px",
+                height: "90px",
+                objectFit: "cover",
+                borderRadius: "12px",
+                border: "1px solid rgba(15, 23, 42, 0.08)",
+                flexShrink: 0,
+              }}
+            />
+            <div>
+              <strong style={{ fontSize: "15px", color: "#0E1013" }}>
+                {isKo ? view.cutKindLabel.ko : view.cutKindLabel.en} ·{" "}
+                {view.deliverable.aspect} ({view.resolution})
+              </strong>
+              <p className="bw-muted" style={{ margin: "4px 0 0", fontSize: "13px" }}>
+                {isKo
+                  ? "브랜드 로고·색감·화질 보정이 모두 반영되었습니다."
+                  : "Your brand logo, color tone, and quality mastering have been applied."}
+              </p>
+            </div>
           </div>
           {canWrite && view.stage !== "approved" && (
             <button
