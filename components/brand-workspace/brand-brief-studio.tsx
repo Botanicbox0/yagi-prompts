@@ -49,13 +49,17 @@ import {
 import {
   BRAND_STUDIO_IMAGE_MODELS,
   BRAND_STUDIO_MICRO_EDIT_MODELS,
+  FIRST_CREATION_GOALS,
   MICRO_REGION_SELECTION_PRESETS,
   PINNED_COLOR_REFERENCES,
   PINNED_TEXTURE_REFERENCES,
+  extractBrandKitFromDomain,
   findClosestSupportedAspectRatio,
   resolveCategoryReferenceWorkflows,
   type BrandStudioImageModelId,
   type BrandStudioMicroEditModelId,
+  type FirstCreationGoalCard,
+  type FirstCreationGoalId,
   type MicroEditQualityTier,
   type MicroEditResolutionTier,
   type StudioCanvasToolId,
@@ -493,6 +497,46 @@ export function BrandBriefStudio({
     resolvedDefaultChecklist[2]!,
   ]);
   const resolvedChecklist = editableRules;
+
+  // Website URL Brand Kit Auto-Builder (Logo · Colors · Type) & First Creation Goal State
+  const defaultDomain = organizationName
+    ? `${organizationName.toLowerCase().replace(/[^a-z0-9]+/g, "") || "brand"}.com`
+    : "twings.app";
+  const [brandDomainInput, setBrandDomainInput] =
+    useState<string>(defaultDomain);
+  const [selectedFirstGoalId, setSelectedFirstGoalId] =
+    useState<FirstCreationGoalId>("fashion_lookbook");
+  const extractedBrandKit = extractBrandKitFromDomain(
+    brandDomainInput,
+    activeCategory,
+  );
+
+  function handleAutoExtractBrandKit() {
+    const kit = extractBrandKitFromDomain(brandDomainInput, activeCategory);
+    setEditableRules(isKo ? kit.rulesKo : kit.rulesEn);
+    setPinnedColorRefId(kit.recommendedPinnedColorId);
+    setPinnedTextureRefId(kit.recommendedPinnedTextureId);
+    setIsColorRefPinned(true);
+    setIsTextureRefPinned(true);
+    setStatusMessage(
+      isKo
+        ? `${kit.domain} 웹사이트 기준으로 브랜드 킷(Logo · Colors · Type)과 3대 아이덴티티 규칙, 고정 색감·질감 핀이 자동 설정되었습니다.`
+        : `Brand Kit (Logo · Colors · Type), 3 identity rules, and Pinned Color/Texture locks extracted from ${kit.domain}.`,
+    );
+  }
+
+  function handleSelectFirstCreationGoal(goal: FirstCreationGoalCard) {
+    setSelectedFirstGoalId(goal.id);
+    if (goal.targetMedium === "video") {
+      handleSwitchMediumMode("video");
+    } else {
+      handleSwitchMediumMode("image");
+      setImageSubMode(goal.targetSubMode);
+      setRefWorkflowId(goal.targetWorkflowMode);
+      setSelectedImageModelId(goal.targetImageModelId);
+      setAspect(goal.targetAspect);
+    }
+  }
 
   async function handleConfirmBrandIdentity() {
     setIsIdentityConfirmedLocal(true);
@@ -1188,6 +1232,335 @@ export function BrandBriefStudio({
                   : "Full Brand Book & Logo Setup →"}
               </a>
             )}
+          </div>
+
+          {/* Website URL Brand Kit Auto-Builder ("Building your brand kit · Logo · Colors · Type") */}
+          <div
+            data-studio-brand-kit-extractor
+            style={{
+              marginTop: "12px",
+              padding: "12px 14px",
+              borderRadius: "12px",
+              background: "#FFFFFF",
+              border: "1px solid var(--ys-border)",
+              display: "flex",
+              flexDirection: "column",
+              gap: "10px",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: "8px",
+              }}
+            >
+              <div>
+                <strong style={{ fontSize: "12.5px", color: "var(--ys-ink)" }}>
+                  {isKo
+                    ? "웹사이트 URL로 브랜드 킷 자동 추출 (Logo · Colors · Type)"
+                    : "Auto-Build Brand Kit from Website URL (Logo · Colors · Type)"}
+                </strong>
+                <span
+                  className="bw-muted"
+                  style={{ marginLeft: "8px", fontSize: "11.5px" }}
+                >
+                  {isKo
+                    ? "도메인을 입력하면 로고 모노그램, 브랜드 컬러 팔레트, 서체 조합과 3대 규칙을 자동으로 채웁니다"
+                    : "Enter your domain to auto-extract Logo, Colors, Typography, and 3 Brand Rules"}
+                </span>
+              </div>
+
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  flexWrap: "wrap",
+                }}
+              >
+                <input
+                  type="text"
+                  className="bw-input"
+                  value={brandDomainInput}
+                  onChange={(e) => setBrandDomainInput(e.target.value)}
+                  placeholder="twings.app"
+                  data-brand-kit-domain-input
+                  style={{
+                    width: "200px",
+                    padding: "5px 10px",
+                    fontSize: "12px",
+                  }}
+                />
+                <button
+                  type="button"
+                  className="bw-quick-chip"
+                  onClick={handleAutoExtractBrandKit}
+                  data-brand-kit-extract-btn
+                  style={{
+                    background: "var(--ys-brand-tint)",
+                    color: "var(--ys-brand-text)",
+                    fontWeight: 700,
+                  }}
+                >
+                  {isKo
+                    ? "URL로 브랜드 킷 자동 추출"
+                    : "Extract Brand Kit"}
+                </button>
+              </div>
+            </div>
+
+            {/* 3 Extracted Brand Kit Cards: Logo | Colors | Type */}
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "110px minmax(0, 1fr) 180px",
+                gap: "10px",
+              }}
+            >
+              <div
+                data-brand-kit-card="logo"
+                style={{
+                  padding: "8px 10px",
+                  borderRadius: "10px",
+                  background: "var(--ys-subtle-bg)",
+                  boxShadow: "var(--ys-ring)",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                }}
+              >
+                <span
+                  style={{
+                    width: "32px",
+                    height: "32px",
+                    borderRadius: "8px",
+                    background: "var(--ys-ink)",
+                    color: "#FFFFFF",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: "12px",
+                    fontWeight: 700,
+                    flexShrink: 0,
+                  }}
+                >
+                  {extractedBrandKit.monogram}
+                </span>
+                <div style={{ minWidth: 0 }}>
+                  <div
+                    style={{
+                      fontSize: "10.5px",
+                      fontWeight: 700,
+                      color: "var(--ys-ink-secondary)",
+                    }}
+                  >
+                    Logo
+                  </div>
+                  <div
+                    style={{
+                      fontSize: "11.5px",
+                      fontWeight: 600,
+                      color: "var(--ys-ink)",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {extractedBrandKit.domain}
+                  </div>
+                </div>
+              </div>
+
+              <div
+                data-brand-kit-card="colors"
+                style={{
+                  padding: "8px 12px",
+                  borderRadius: "10px",
+                  background: "var(--ys-subtle-bg)",
+                  boxShadow: "var(--ys-ring)",
+                  display: "flex",
+                  flexDirection: "column",
+                  justifyContent: "center",
+                  gap: "5px",
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    fontSize: "10.5px",
+                    fontWeight: 700,
+                    color: "var(--ys-ink-secondary)",
+                  }}
+                >
+                  <span>Colors</span>
+                  <span>
+                    {extractedBrandKit.colors
+                      .map((c) => (isKo ? c.labelKo : c.labelEn))
+                      .slice(0, 3)
+                      .join(" · ")}
+                  </span>
+                </div>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
+                    height: "18px",
+                    borderRadius: "6px",
+                    overflow: "hidden",
+                    boxShadow: "0 0 0 1px rgba(0,0,0,0.08)",
+                  }}
+                >
+                  {extractedBrandKit.colors.map((swatch) => (
+                    <span
+                      key={swatch.hex}
+                      title={`${isKo ? swatch.labelKo : swatch.labelEn} (${swatch.hex})`}
+                      style={{ background: swatch.hex }}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              <div
+                data-brand-kit-card="type"
+                style={{
+                  padding: "8px 10px",
+                  borderRadius: "10px",
+                  background: "var(--ys-subtle-bg)",
+                  boxShadow: "var(--ys-ring)",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                }}
+              >
+                <span
+                  style={{
+                    width: "32px",
+                    height: "32px",
+                    borderRadius: "8px",
+                    background: "#FFFFFF",
+                    boxShadow: "var(--ys-ring)",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: "13px",
+                    fontWeight: 700,
+                    color: "var(--ys-ink)",
+                    flexShrink: 0,
+                  }}
+                >
+                  Aa
+                </span>
+                <div style={{ minWidth: 0 }}>
+                  <div
+                    style={{
+                      fontSize: "10.5px",
+                      fontWeight: 700,
+                      color: "var(--ys-ink-secondary)",
+                    }}
+                  >
+                    Type
+                  </div>
+                  <div
+                    style={{
+                      fontSize: "11px",
+                      fontWeight: 600,
+                      color: "var(--ys-ink)",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {extractedBrandKit.displayFont}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Krea-inspired "What are you here to make first?" First Creation Goal Selector */}
+          <div
+            data-studio-first-goal-picker
+            style={{
+              marginTop: "10px",
+              display: "flex",
+              flexDirection: "column",
+              gap: "6px",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                fontSize: "12px",
+              }}
+            >
+              <strong style={{ color: "var(--ys-ink)" }}>
+                {isKo
+                  ? "오늘 가장 먼저 어떤 결과물을 만들까요? (선택 시 작업 모드·모델·비율 자동 세팅)"
+                  : "What are you here to make first? (Auto-configures mode, model & aspect ratio)"}
+              </strong>
+            </div>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(175px, 1fr))",
+                gap: "7px",
+              }}
+            >
+              {FIRST_CREATION_GOALS.map((goal) => {
+                const selected = selectedFirstGoalId === goal.id;
+                return (
+                  <button
+                    key={goal.id}
+                    type="button"
+                    data-first-goal-card={goal.id}
+                    aria-pressed={selected}
+                    onClick={() => handleSelectFirstCreationGoal(goal)}
+                    style={{
+                      textAlign: "left",
+                      padding: "8px 10px",
+                      borderRadius: "10px",
+                      border: selected
+                        ? "1.5px solid var(--ys-brand)"
+                        : "1px solid var(--ys-border)",
+                      background: selected
+                        ? "var(--ys-brand-tint)"
+                        : "#FFFFFF",
+                      cursor: "pointer",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "2px",
+                    }}
+                  >
+                    <strong
+                      style={{
+                        fontSize: "12px",
+                        color: selected
+                          ? "var(--ys-brand-text)"
+                          : "var(--ys-ink)",
+                      }}
+                    >
+                      {isKo ? goal.titleKo : goal.titleEn}
+                    </strong>
+                    <span
+                      style={{
+                        fontSize: "11px",
+                        color: "var(--ys-ink-secondary)",
+                        lineHeight: 1.35,
+                      }}
+                    >
+                      {isKo ? goal.subtitleKo : goal.subtitleEn}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           <div

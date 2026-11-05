@@ -121,6 +121,7 @@ describe("brand workspace taste", () => {
         canRequest={true}
       />,
     );
+    expect(html).toContain("data-brand-quick-dock");
     expect(html).toContain("data-brand-studio-launcher");
     expect(html).toContain('data-studio-launcher-step="identity"');
     expect(html).toContain('data-studio-launcher-step="image"');
@@ -250,6 +251,11 @@ describe("brand workspace taste", () => {
       />,
     );
     expect(unconfirmedHtml).toContain('data-studio-identity-gate="open"');
+    expect(unconfirmedHtml).toContain("data-studio-brand-kit-extractor");
+    expect(unconfirmedHtml).toContain('data-brand-kit-card="logo"');
+    expect(unconfirmedHtml).toContain('data-brand-kit-card="colors"');
+    expect(unconfirmedHtml).toContain('data-brand-kit-card="type"');
+    expect(unconfirmedHtml).toContain("data-studio-first-goal-picker");
     expect(unconfirmedHtml).toContain("data-studio-identity-confirm-btn");
     expect(unconfirmedHtml).toContain("STEP 01 · 브랜드 아이덴티티 먼저 등록");
     expect(unconfirmedHtml).toContain("STEP 02 · 1~4번 레퍼런스 이미지 배치");

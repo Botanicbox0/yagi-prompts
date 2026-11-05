@@ -814,3 +814,223 @@ export function findClosestSupportedAspectRatio(
   return best.label;
 }
 
+export type FirstCreationGoalId =
+  | "fashion_lookbook"
+  | "product_ecommerce"
+  | "campaign_key_visual"
+  | "micro_retouch_edit"
+  | "social_reels_thumb"
+  | "video_storyboard_motion";
+
+export interface FirstCreationGoalCard {
+  id: FirstCreationGoalId;
+  titleKo: string;
+  titleEn: string;
+  subtitleKo: string;
+  subtitleEn: string;
+  targetMedium: "image" | "video";
+  targetSubMode: StudioImageSubMode;
+  targetWorkflowMode: StudioReferenceWorkflowId;
+  targetImageModelId: BrandStudioImageModelId;
+  targetAspect: "1:1" | "4:5" | "3:4" | "16:9" | "9:16";
+}
+
+/**
+ * Onboarding "What are you here to make first?" goal cards (Krea / Flora / Hatch style).
+ * Selecting a goal automatically configures the studio's medium, sub-mode, reference workflow, model, and aspect ratio.
+ */
+export const FIRST_CREATION_GOALS: readonly FirstCreationGoalCard[] = [
+  {
+    id: "fashion_lookbook",
+    titleKo: "패션 · 에디토리얼 룩북",
+    titleEn: "Fashion & Editorial Concepts",
+    subtitleKo: "1번 인물 + 2번 배경 + 3번 감도 + 4번 색감 조합 화보",
+    subtitleEn: "4-slot subject, space, pose, and color lookbook",
+    targetMedium: "image",
+    targetSubMode: "multi_ref_generate",
+    targetWorkflowMode: "lookbook_composite",
+    targetImageModelId: "portrait_lookbook_pro",
+    targetAspect: "4:5",
+  },
+  {
+    id: "product_ecommerce",
+    titleKo: "제품 · 이커머스 단독 컷",
+    titleEn: "Product Imagery & E-Commerce",
+    subtitleKo: "1번 베이스 장면의 제품을 2번 우리 제품으로 정밀 교체",
+    subtitleEn: "Swap scene product with your SKU while locking lighting",
+    targetMedium: "image",
+    targetSubMode: "multi_ref_generate",
+    targetWorkflowMode: "product_swap",
+    targetImageModelId: "multi_ref_standard",
+    targetAspect: "1:1",
+  },
+  {
+    id: "campaign_key_visual",
+    titleKo: "캠페인 키비주얼 · 포스터",
+    titleEn: "Campaign Key Visuals",
+    subtitleKo: "패키지 로고·라벨 타이포그래피가 선명한 4K급 히어로 컷",
+    subtitleEn: "Zero-spelling-drift hero poster with crisp typography",
+    targetMedium: "image",
+    targetSubMode: "multi_ref_generate",
+    targetWorkflowMode: "product_swap",
+    targetImageModelId: "ultra_detail_label",
+    targetAspect: "4:5",
+  },
+  {
+    id: "micro_retouch_edit",
+    titleKo: "극소 부위 · 라벨 정밀 수정",
+    titleEn: "Micro-Region Image Editing",
+    subtitleKo: "캔버스 드래그 영역만 스마트 마스크로 부분 수정",
+    subtitleEn: "Drag a selection box to edit only that region via Smart Mask",
+    targetMedium: "image",
+    targetSubMode: "micro_region_edit",
+    targetWorkflowMode: "lookbook_composite",
+    targetImageModelId: "ultra_detail_label",
+    targetAspect: "4:5",
+  },
+  {
+    id: "social_reels_thumb",
+    titleKo: "SNS 콘텐츠 · 릴스 썸네일",
+    titleEn: "Social Content & Thumbnails",
+    subtitleKo: "9:16 세로형 착장·피드 썸네일 및 바이럴 스틸",
+    subtitleEn: "9:16 vertical social feed & reel cover stills",
+    targetMedium: "image",
+    targetSubMode: "multi_ref_generate",
+    targetWorkflowMode: "lookbook_composite",
+    targetImageModelId: "vto_garment_lock",
+    targetAspect: "9:16",
+  },
+  {
+    id: "video_storyboard_motion",
+    titleKo: "1080p 브랜드 필름 · 모션",
+    titleEn: "Video Concepts & 1080p Motion",
+    subtitleKo: "화보 첫 프레임 고정 → 720p 검수 → 1080p 사운드 영상",
+    subtitleEn: "Start-frame lock -> 720p check -> 1080p sound master",
+    targetMedium: "video",
+    targetSubMode: "multi_ref_generate",
+    targetWorkflowMode: "lookbook_composite",
+    targetImageModelId: "portrait_lookbook_pro",
+    targetAspect: "9:16",
+  },
+];
+
+export interface ExtractedBrandKit {
+  domain: string;
+  monogram: string;
+  colors: ReadonlyArray<{ hex: string; labelKo: string; labelEn: string }>;
+  displayFont: string;
+  bodyFont: string;
+  pairingSummaryKo: string;
+  pairingSummaryEn: string;
+  rulesKo: [string, string, string];
+  rulesEn: [string, string, string];
+  recommendedPinnedColorId: string;
+  recommendedPinnedTextureId: string;
+}
+
+/**
+ * Mirrors the "Building your brand kit (Logo · Colors · Type)" auto-extractor modal:
+ * Given a brand website domain or handle, synthesizes a structured Brand Kit (Logo monogram,
+ * 5-color palette, Display/Body typography specimen, and 3 core brand identity rules).
+ */
+export function extractBrandKitFromDomain(
+  rawInput: string,
+  category: BrandClientCategory,
+): ExtractedBrandKit {
+  const cleaned = rawInput
+    .trim()
+    .replace(/^https?:\/\//i, "")
+    .replace(/^www\./i, "")
+    .split("/")[0] || "twings.app";
+  const baseName = (cleaned.split(".")[0] || "BRAND").toUpperCase();
+  const monogram = baseName.slice(0, 2);
+
+  if (category === "beauty_skincare") {
+    return {
+      domain: cleaned,
+      monogram,
+      colors: [
+        { hex: "#F7F4EF", labelKo: "보타니컬 아이보리", labelEn: "Botanical Ivory" },
+        { hex: "#DCE7F3", labelKo: "세럼 하이드로 블루", labelEn: "Hydro Blue" },
+        { hex: "#2A5C9A", labelKo: "클리니컬 코발트", labelEn: "Clinical Cobalt" },
+        { hex: "#C8B6A6", labelKo: "누드 베이지", labelEn: "Nude Beige" },
+        { hex: "#141619", labelKo: "딥 잉크", labelEn: "Deep Ink" },
+      ],
+      displayFont: "Editorial Serif",
+      bodyFont: "Pretendard Variable",
+      pairingSummaryKo: "클리니컬 세리프 헤드라인 + 고밀도 산세리프 성분 표기",
+      pairingSummaryEn: "Clinical Serif Display + Clean Sans-Serif INCI Body",
+      rulesKo: [
+        `${baseName} 보틀 숄더 곡률과 스포이드·펌프 비율 1:1 고정`,
+        `전면 ${baseName} 로고 타이포그래피 철자 및 용량 표기 왜곡 금지`,
+        "투명 유리의 자연 굴절광과 수분감 있는 세미매트 피부결 유지",
+      ],
+      rulesEn: [
+        `Lock ${baseName} bottle shoulder curvature and dropper proportions 1:1`,
+        `Preserve ${baseName} front label typography and volume markings`,
+        "Maintain clean glass refraction and hydrated semi-matte skin texture",
+      ],
+      recommendedPinnedColorId: "pin-color-studio-crisp",
+      recommendedPinnedTextureId: "pin-tex-crystal-macro",
+    };
+  }
+
+  if (category === "fnb_hospitality") {
+    return {
+      domain: cleaned,
+      monogram,
+      colors: [
+        { hex: "#F4EFE6", labelKo: "웜 오트밀", labelEn: "Warm Oatmeal" },
+        { hex: "#D9A464", labelKo: "로스티드 앰버", labelEn: "Roasted Amber" },
+        { hex: "#2B5B9E", labelKo: "시그니처 블루", labelEn: "Signature Blue" },
+        { hex: "#4A3525", labelKo: "에스프레소 브라운", labelEn: "Espresso Brown" },
+        { hex: "#181512", labelKo: "차콜 로스트", labelEn: "Charcoal Roast" },
+      ],
+      displayFont: "Grotesk Display",
+      bodyFont: "Pretendard Variable",
+      pairingSummaryKo: "볼드 패키지 그로테스크 + 메뉴 에디토리얼 본문",
+      pairingSummaryEn: "Bold Packaging Grotesk + Warm Editorial Menu Body",
+      rulesKo: [
+        `${baseName} 캔·보틀·컵 슬리브 원통 곡률 및 리드 형태 고정`,
+        `곡면 라벨 위 ${baseName} 로고와 플레이버 텍스트 선명도 유지`,
+        "차가운 표면의 자연 결로 물방울과 신선한 원재료 텍스처 보존",
+      ],
+      rulesEn: [
+        `Lock ${baseName} can/bottle cylinder curvature and lid geometry`,
+        `Keep curved ${baseName} label typography sharp without warping`,
+        "Preserve natural cold condensation droplets and fresh ingredient texture",
+      ],
+      recommendedPinnedColorId: "pin-color-warm-daylight",
+      recommendedPinnedTextureId: "pin-tex-crystal-macro",
+    };
+  }
+
+  return {
+    domain: cleaned,
+    monogram,
+    colors: [
+      { hex: "#1E4E8C", labelKo: "프렌치 코발트", labelEn: "French Cobalt" },
+      { hex: "#DCE7F7", labelKo: "아이스 스카이", labelEn: "Ice Sky" },
+      { hex: "#F5F4F0", labelKo: "알라바스터 화이트", labelEn: "Alabaster White" },
+      { hex: "#8C96A6", labelKo: "콘크리트 그레이", labelEn: "Concrete Slate" },
+      { hex: "#0F1115", labelKo: "오닉스 블랙", labelEn: "Onyx Ink" },
+    ],
+    displayFont: "Editorial Display",
+    bodyFont: "Pretendard Variable",
+    pairingSummaryKo: "모던 에디토리얼 디스플레이 + Pretendard 정밀 캡션",
+    pairingSummaryEn: "Modern Editorial Display + Pretendard Precision Caption",
+    rulesKo: [
+      `${baseName} 시그니처 아우터·오브제 실루엣 및 테일러드 어깨선 고정`,
+      `직조 라벨·금속 각인 위 ${baseName} 철자 100% 무결성 유지`,
+      "35mm 아날로그 필름 그레인과 매트한 실제 피부·원단 직조 결 보존",
+    ],
+    rulesEn: [
+      `Lock ${baseName} signature silhouette and tailored shoulder line`,
+      `Preserve 100% spelling integrity on ${baseName} woven labels and hardware`,
+      "Maintain 35mm analog film grain and matte skin/fabric micro-texture",
+    ],
+    recommendedPinnedColorId: "pin-color-french-blue",
+    recommendedPinnedTextureId: "pin-tex-35mm-grain",
+  };
+}
+

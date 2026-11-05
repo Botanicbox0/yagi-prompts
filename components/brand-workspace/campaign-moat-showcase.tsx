@@ -135,6 +135,69 @@ export function CampaignMoatShowcase({
         </div>
       </div>
 
+      {/* Quick Capability Dock (Hatch / Krea style one-click tool pills) */}
+      <div
+        data-brand-quick-dock
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          alignItems: "center",
+          gap: "8px",
+          marginBottom: "12px",
+        }}
+      >
+        {(
+          [
+            {
+              id: "brand_kit",
+              href: scopedHref("/brand/identity", choice),
+              labelKo: "Brand Kit · URL로 로고·컬러·서체 자동 추출",
+              labelEn: "Brand Kit · Auto-Extract Logo, Colors & Type",
+            },
+            {
+              id: "style_pin",
+              href: scopedHref("/brand/studio", choice),
+              labelKo: "Style Pin · 색감·질감 레퍼런스 상시 고정",
+              labelEn: "Style Pin · Lock Color & Texture Reference",
+            },
+            {
+              id: "image_gen",
+              href: scopedHref("/brand/studio", choice),
+              labelKo: "Image · 1~4번 멀티 레퍼런스 화보 생성",
+              labelEn: "Image · 1–4 Multi-Reference Generation",
+            },
+            {
+              id: "micro_edit",
+              href: scopedHref("/brand/studio", choice),
+              labelKo: "Edit · 캔버스 드래그 극소 부위 스마트 마스크 수정",
+              labelEn: "Edit · Smart Mask Micro-Region Editing",
+            },
+            {
+              id: "video_master",
+              href: scopedHref("/brand/studio", choice),
+              labelKo: "Video · 1080p 사운드 마스터 영상",
+              labelEn: "Video · 1080p Sound Master Film",
+            },
+            {
+              id: "assets",
+              href: scopedHref("/brand/library", choice),
+              labelKo: "Assets · 콘텐츠 보관함",
+              labelEn: "Assets · Content Library",
+            },
+          ] as const
+        ).map((item) => (
+          <a
+            key={item.id}
+            href={item.href}
+            className="bw-quick-chip"
+            data-quick-dock-item={item.id}
+            style={{ textDecoration: "none" }}
+          >
+            {isKo ? item.labelKo : item.labelEn}
+          </a>
+        ))}
+      </div>
+
       {/* 3-Step Studio Creation Workflow Launcher (Identity Lock -> Image Generation & Micro-Edit -> 1080p Master Video) */}
       <div className="bw-launcher-grid" data-brand-studio-launcher>
         <a
