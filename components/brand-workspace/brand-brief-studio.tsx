@@ -376,14 +376,52 @@ export function BrandBriefStudio({
     aspect,
   });
 
-  const resolvedChecklist =
-    defaultChecklist && defaultChecklist.length > 0
-      ? defaultChecklist
+  const resolvedDefaultChecklist =
+    defaultChecklist && defaultChecklist.length >= 3
+      ? [defaultChecklist[0]!, defaultChecklist[1]!, defaultChecklist[2]!]
       : [
           categoryProfile.compiler.defaultProductChecklist.geometry,
           categoryProfile.compiler.defaultProductChecklist.label,
           categoryProfile.compiler.defaultProductChecklist.material,
         ];
+
+  const [isIdentityConfirmedLocal, setIsIdentityConfirmedLocal] =
+    useState<boolean>(identityConfirmed);
+  const [isEditingIdentity, setIsEditingIdentity] = useState<boolean>(
+    !identityConfirmed,
+  );
+  const [editableRules, setEditableRules] = useState<[string, string, string]>([
+    resolvedDefaultChecklist[0]!,
+    resolvedDefaultChecklist[1]!,
+    resolvedDefaultChecklist[2]!,
+  ]);
+  const resolvedChecklist = editableRules;
+
+  async function handleConfirmBrandIdentity() {
+    setIsIdentityConfirmedLocal(true);
+    setIsEditingIdentity(false);
+    setStatusMessage(
+      isKo
+        ? "1단계 완료: 브랜드 아이덴티티(제품·로고·질감 원칙 및 대표 무드)가 스튜디오에 등록되었습니다. 이제 아래 1~4번 레퍼런스를 배치해 화보·영상을 제작하세요."
+        : "Step 1 complete: Brand Identity rules and default mood are now active in the studio.",
+    );
+    try {
+      await fetch("/api/brand-workspace", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          operation: "identity.confirm",
+          input: {
+            organizationId,
+            productChecklist: editableRules,
+            lookPresetId,
+          },
+        }),
+      });
+    } catch {
+      // Local studio state remains confirmed even if offline/fixture
+    }
+  }
 
   function handleSwitchMediumMode(targetMode: "image" | "video") {
     if (targetMode === "video") {
@@ -810,11 +848,261 @@ export function BrandBriefStudio({
         </div>
       </div>
 
+      {/* STEP 01: Brand Identity First Registration Gate (Must register/confirm Brand Identity before Studio creation) */}
+      {isEditingIdentity || !isIdentityConfirmedLocal ? (
+        <div
+          className="bw-identity-first-card"
+          data-studio-identity-gate="open"
+        >
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              alignItems: "flex-start",
+              justifyContent: "space-between",
+              gap: "12px",
+            }}
+          >
+            <div>
+              <span
+                className="bw-chip"
+                style={{
+                  background: "var(--ys-brand-tint)",
+                  color: "var(--ys-brand-text)",
+                  fontWeight: 700,
+                  marginBottom: "6px",
+                }}
+              >
+                {isKo
+                  ? "STEP 01 · 브랜드 아이덴티티 먼저 등록"
+                  : "STEP 01 · Register Brand Identity First"}
+              </span>
+              <h4
+                style={{
+                  margin: "4px 0",
+                  fontSize: "15px",
+                  fontWeight: 700,
+                  color: "var(--ys-ink)",
+                }}
+              >
+                {isKo
+                  ? "화보·영상을 만들기 전에 우리 브랜드의 아이덴티티부터 등록해 주세요"
+                  : "Register your brand identity before generating lookbooks or videos"}
+              </h4>
+              <p className="bw-muted" style={{ margin: 0, fontSize: "12.5px" }}>
+                {isKo
+                  ? "브랜드의 제품 실루엣·로고 철자·소재 질감 기준과 기본 무드를 먼저 확정하면, 아래 1~4번 레퍼런스 합성과 모든 생성 모델에 자동으로 고정 적용됩니다."
+                  : "Confirming your product silhouette, logo spelling, texture rules, and default mood locks them across all 1–4 reference slots and generation models."}
+              </p>
+            </div>
+
+            {identityHref && (
+              <a
+                className="bw-button"
+                href={identityHref}
+                data-studio-identity-page-link
+              >
+                {isKo
+                  ? "브랜드북 · 로고 파일 상세 등록 →"
+                  : "Full Brand Book & Logo Setup →"}
+              </a>
+            )}
+          </div>
+
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+              gap: "10px",
+              marginTop: "12px",
+            }}
+          >
+            {(
+              [
+                {
+                  idx: 0,
+                  labelKo: "1. 제품 형태 · 실루엣 기준",
+                  labelEn: "1. Product Silhouette Rule",
+                },
+                {
+                  idx: 1,
+                  labelKo: "2. 로고 · 라벨 철자 보존 기준",
+                  labelEn: "2. Logo & Label Spelling Rule",
+                },
+                {
+                  idx: 2,
+                  labelKo: "3. 소재 · 피부 · 텍스처 기준",
+                  labelEn: "3. Material & Texture Rule",
+                },
+              ] as const
+            ).map((field) => (
+              <label
+                key={field.idx}
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "5px",
+                  padding: "10px 12px",
+                  borderRadius: "10px",
+                  background: "#FFFFFF",
+                  border: "1px solid var(--ys-border)",
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: "11.5px",
+                    fontWeight: 700,
+                    color: "var(--ys-brand-text)",
+                  }}
+                >
+                  {isKo ? field.labelKo : field.labelEn}
+                </span>
+                <input
+                  type="text"
+                  className="bw-input"
+                  value={editableRules[field.idx] ?? ""}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setEditableRules((prev) => {
+                      const next: [string, string, string] = [
+                        prev[0],
+                        prev[1],
+                        prev[2],
+                      ];
+                      next[field.idx] = val;
+                      return next;
+                    });
+                  }}
+                  style={{
+                    padding: "6px 10px",
+                    fontSize: "12.5px",
+                  }}
+                  data-studio-identity-rule-input={field.idx}
+                />
+              </label>
+            ))}
+          </div>
+
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: "10px",
+              marginTop: "12px",
+              paddingTop: "10px",
+              borderTop: "1px solid var(--ys-border-subtle)",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                alignItems: "center",
+                gap: "8px",
+              }}
+            >
+              <span
+                style={{
+                  fontSize: "12px",
+                  fontWeight: 600,
+                  color: "var(--ys-ink-secondary)",
+                }}
+              >
+                {isKo ? "브랜드 기본 조명·색감 톤" : "Default Brand Tone"}
+              </span>
+              <div className="bw-seg-track">
+                {aestheticLines.map((line) => {
+                  const isSelected = activeAestheticLineCode === line.code;
+                  const label = moodLabels[line.code];
+                  return (
+                    <button
+                      key={line.id}
+                      type="button"
+                      className="bw-seg-btn"
+                      aria-pressed={isSelected}
+                      onClick={() => applyMood(line)}
+                      disabled={busy}
+                    >
+                      {isKo ? label.ko : label.en}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <button
+              type="button"
+              className="bw-button bw-button-primary"
+              onClick={handleConfirmBrandIdentity}
+              disabled={busy}
+              data-studio-identity-confirm-btn
+            >
+              {isKo
+                ? "1단계 완료: 브랜드 아이덴티티 확정하고 스튜디오 시작하기"
+                : "Complete Step 1: Confirm Brand Identity & Start Studio"}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div
+          className="bw-identity-confirmed-bar"
+          data-studio-identity-gate="confirmed"
+        >
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              alignItems: "center",
+              gap: "8px",
+              minWidth: 0,
+            }}
+          >
+            <span
+              className="bw-chip"
+              style={{
+                background: "var(--ys-brand-tint)",
+                color: "var(--ys-brand-text)",
+                fontWeight: 700,
+              }}
+            >
+              {isKo ? "STEP 01 완료 · 브랜드 아이덴티티 적용 중" : "STEP 01 · Brand Identity Locked"}
+            </span>
+            <span
+              style={{
+                fontSize: "12.5px",
+                color: "var(--ys-ink)",
+                fontWeight: 600,
+              }}
+            >
+              {editableRules.filter(Boolean).join(" · ")}
+            </span>
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <button
+              type="button"
+              className="bw-quick-chip"
+              onClick={() => setIsEditingIdentity(true)}
+              data-studio-identity-edit-btn
+            >
+              {isKo ? "브랜드 아이덴티티 수정" : "Edit Brand Identity"}
+            </button>
+            {identityHref && (
+              <a className="bw-quick-chip" href={identityHref}>
+                {isKo ? "브랜드북 상세" : "Brand Book"}
+              </a>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* 2-Column Split Studio Workbench: Left = Creation Controls, Right = Always-On Live Visual Canvas */}
       <div className="bw-studio-workbench">
         {/* LEFT COLUMN: 1-4 Reference Deck + Image Model Selector + Scene Cards + Prompt Composer */}
         <div>
-          {/* STEP 1: Numbered 1-4 Reference Image Slots (Sunra / AMERICANO / Oplux Style) */}
+          {/* STEP 2: Numbered 1-4 Reference Image Slots (Sunra / AMERICANO / Oplux Style) */}
           <div
             style={{
               display: "flex",
@@ -828,8 +1116,8 @@ export function BrandBriefStudio({
             <div>
               <strong style={{ fontSize: "13.5px", color: "var(--ys-ink)" }}>
                 {isKo
-                  ? "1~4번 레퍼런스 이미지 배치"
-                  : "1–4 Numbered Reference Slots"}
+                  ? "STEP 02 · 1~4번 레퍼런스 이미지 배치"
+                  : "STEP 02 · 1–4 Numbered Reference Slots"}
               </strong>
               <span
                 className="bw-muted"
@@ -895,11 +1183,21 @@ export function BrandBriefStudio({
                   data-ref-slot={slot.slotNumber}
                   data-upload-slot={compatSlotAttr}
                 >
-                  <div className="bw-ref-slot-media">
-                    <img src={thumbSrc} alt={assetName} loading="lazy" />
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: "4px",
+                    }}
+                  >
                     <span className="bw-ref-num-badge">
                       {isKo ? slot.tagKo : slot.tagEn}
                     </span>
+                  </div>
+
+                  <div className="bw-ref-slot-media">
+                    <img src={thumbSrc} alt={assetName} loading="lazy" />
                   </div>
 
                   <div style={{ minWidth: 0 }}>
@@ -975,7 +1273,7 @@ export function BrandBriefStudio({
             })}
           </div>
 
-          {/* STEP 2: Image Model Selector + Quick Characteristics + Detailed Suitability Guide */}
+          {/* STEP 3: Image Model Selector + Quick Characteristics + Detailed Suitability Guide */}
           {!isVideoMode && (
             <div data-studio-image-model-section>
               <div
@@ -991,8 +1289,8 @@ export function BrandBriefStudio({
                 <div>
                   <strong style={{ fontSize: "13.5px", color: "var(--ys-ink)" }}>
                     {isKo
-                      ? "이미지 생성 모델 선택"
-                      : "Select Image Generation Model"}
+                      ? "STEP 03 · 이미지 생성 모델 선택"
+                      : "STEP 03 · Select Image Generation Model"}
                   </strong>
                   <span
                     className="bw-muted"

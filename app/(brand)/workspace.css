@@ -5111,22 +5111,44 @@ html[data-brand-workspace]::view-transition-group(bw-tab-indicator) { animation-
   width: 100%;
   height: 100%;
   object-fit: cover;
-  object-position: 50% 18%;
+  object-position: 50% 16%;
   display: block;
 }
 :where([data-brand-workspace]) .bw-ref-num-badge {
-  position: absolute;
-  top: 7px;
-  left: 7px;
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
   padding: 3px 8px;
   border-radius: 6px;
-  background: rgba(17, 18, 20, 0.86);
-  backdrop-filter: blur(6px);
-  color: #ffffff;
+  background: var(--ys-ink);
+  color: var(--ys-surface);
   font-family: var(--ys-mono);
   font-size: 10.5px;
   font-weight: 600;
   letter-spacing: -0.01em;
+}
+
+/* Step 01 Brand Identity Registration Gate Card */
+:where([data-brand-workspace]) .bw-identity-first-card {
+  border-radius: 16px;
+  background: var(--ys-subtle-bg);
+  box-shadow: 0 0 0 1.5px var(--ys-ink), var(--ys-shadow-1);
+  padding: 18px 20px;
+  margin-bottom: 20px;
+  display: grid;
+  gap: 14px;
+}
+:where([data-brand-workspace]) .bw-identity-confirmed-bar {
+  border-radius: 13px;
+  background: var(--ys-subtle-bg);
+  box-shadow: var(--ys-ring);
+  padding: 11px 16px;
+  margin-bottom: 18px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
 }
 
 /* Image Model Selector Grid + Suitability Guide */

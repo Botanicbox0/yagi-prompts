@@ -18,6 +18,7 @@ import {
   BRAND_STUDIO_IMAGE_MODELS,
   resolveCategoryReferenceWorkflows,
 } from "@/lib/brands/production/reference-studio";
+import { brandRouteAllowed } from "@/lib/routing/surfaces";
 import { getDictionary } from "@/lib/i18n/dictionaries";
 
 /**
@@ -218,5 +219,74 @@ describe("brand workspace taste", () => {
     expect(workflows.product_swap.slots).toHaveLength(4);
     expect(workflows.lookbook_composite.defaultPromptKo).toContain("1번 이미지");
     expect(workflows.product_swap.defaultPromptKo).toContain("1번 이미지");
+  });
+
+  it("renders Step 01 Brand Identity registration gate first and ensures every studio /reel/ asset passes brandRouteAllowed on brand.twings.app", () => {
+    const unconfirmedHtml = renderToStaticMarkup(
+      <BrandBriefStudio
+        organizationId="org-1"
+        organizationName="DANAYAD"
+        initialCategory="fashion_apparel"
+        locale="ko"
+        canWrite={true}
+        identityConfirmed={false}
+        identityHref="/brand/identity?organizationId=org-1"
+      />,
+    );
+    expect(unconfirmedHtml).toContain('data-studio-identity-gate="open"');
+    expect(unconfirmedHtml).toContain("data-studio-identity-confirm-btn");
+    expect(unconfirmedHtml).toContain("STEP 01 · 브랜드 아이덴티티 먼저 등록");
+    expect(unconfirmedHtml).toContain("STEP 02 · 1~4번 레퍼런스 이미지 배치");
+    expect(unconfirmedHtml).toContain("STEP 03 · 이미지 생성 모델 선택");
+
+    const confirmedHtml = renderToStaticMarkup(
+      <BrandBriefStudio
+        organizationId="org-1"
+        organizationName="DANAYAD"
+        initialCategory="fashion_apparel"
+        locale="ko"
+        canWrite={true}
+        identityConfirmed={true}
+        identityHref="/brand/identity?organizationId=org-1"
+      />,
+    );
+    expect(confirmedHtml).toContain('data-studio-identity-gate="confirmed"');
+    expect(confirmedHtml).toContain("STEP 01 완료 · 브랜드 아이덴티티 적용 중");
+
+    const categories = [
+      "fashion_apparel",
+      "beauty_skincare",
+      "fnb_hospitality",
+      "lifestyle_object",
+      "tech_platform",
+    ] as const;
+
+    for (const cat of categories) {
+      const catHtml = renderToStaticMarkup(
+        <BrandBriefStudio
+          organizationId="org-1"
+          initialCategory={cat}
+          locale="ko"
+          canWrite={true}
+          identityConfirmed={true}
+        />,
+      );
+      const imgSrcs = Array.from(
+        catHtml.matchAll(/<img[^>]+src="([^"]+)"/g),
+        (m) => m[1] ?? "",
+      );
+      expect(imgSrcs.length).toBeGreaterThanOrEqual(8);
+      for (const src of imgSrcs) {
+        expect(brandRouteAllowed(src, "GET")).toBe(true);
+      }
+
+      const wf = resolveCategoryReferenceWorkflows(cat);
+      for (const slot of [
+        ...wf.lookbook_composite.slots,
+        ...wf.product_swap.slots,
+      ]) {
+        expect(brandRouteAllowed(slot.defaultThumb, "GET")).toBe(true);
+      }
+    }
   });
 });
