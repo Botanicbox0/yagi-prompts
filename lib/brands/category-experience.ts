@@ -879,6 +879,71 @@ export function inferBrandCategoryFromName(name?: string | null): BrandClientCat
   return "fashion_apparel";
 }
 
+export function inferBrandCategoryFromWorkspace(input: {
+  category?: BrandClientCategory | string | null;
+  organizationName?: string | null;
+  checklist?: readonly string[] | null;
+  memoryPayloads?: ReadonlyArray<Record<string, unknown>> | null;
+}): BrandClientCategory {
+  if (
+    input.category &&
+    (BRAND_CLIENT_CATEGORIES as readonly string[]).includes(input.category)
+  ) {
+    return input.category as BrandClientCategory;
+  }
+  if (input.memoryPayloads) {
+    for (const payload of input.memoryPayloads) {
+      const memCat =
+        typeof payload?.category === "string" ? payload.category : null;
+      if (
+        memCat &&
+        (BRAND_CLIENT_CATEGORIES as readonly string[]).includes(memCat)
+      ) {
+        return memCat as BrandClientCategory;
+      }
+    }
+  }
+  if (input.checklist && input.checklist.length > 0) {
+    const joined = input.checklist.join(" ").toLowerCase();
+    if (
+      /세럼|스포이드|프로스티드|유리 굴절|수분|코스메틱|앰플|크림|serum|dropper|frosted|cosmetic|skincare/.test(
+        joined
+      )
+    ) {
+      return "beauty_skincare";
+    }
+    if (
+      /콜드브루|슬리브|결로|식재료|로스터|다이닝|유약|커피|라떼|coldbrew|roast|condensation|ceramic|dining/.test(
+        joined
+      )
+    ) {
+      return "fnb_hospitality";
+    }
+    if (
+      /디바이스|베젤|강화유리|알루미늄 바디|앱 아이콘|화면 직각|device|bezel|screen|saas/.test(
+        joined
+      )
+    ) {
+      return "tech_platform";
+    }
+    if (
+      /오브제|가구|도자기|조명 기구|디퓨저|향수|furniture|ceramic|fragrance|object/.test(
+        joined
+      )
+    ) {
+      return "lifestyle_object";
+    }
+    if (
+      /지퍼|재킷|팬츠|나일론|원단|스냅 버튼|직조 라벨|칼라 구조|jacket|zipper|nylon|garment|cargo/.test(
+        joined
+      )
+    ) {
+      return "fashion_apparel";
+    }
+  }
+  return inferBrandCategoryFromName(input.organizationName);
+}
+
 export function resolveCategoryExperienceProfile(
   categoryOrInput?:
     | BrandClientCategory
@@ -887,24 +952,21 @@ export function resolveCategoryExperienceProfile(
     | {
         category?: BrandClientCategory | string | null;
         organizationName?: string | null;
+        checklist?: readonly string[] | null;
+        memoryPayloads?: ReadonlyArray<Record<string, unknown>> | null;
       },
   fallbackOrgName?: string | null
 ): CategoryExperienceProfile {
-  const category =
-    typeof categoryOrInput === "object" && categoryOrInput !== null
-      ? categoryOrInput.category
-      : categoryOrInput;
-  const orgName =
-    typeof categoryOrInput === "object" && categoryOrInput !== null
-      ? categoryOrInput.organizationName
-      : fallbackOrgName;
-  if (
-    category &&
-    (BRAND_CLIENT_CATEGORIES as readonly string[]).includes(category)
-  ) {
-    return PROFILES[category as BrandClientCategory];
+  if (typeof categoryOrInput === "object" && categoryOrInput !== null) {
+    return PROFILES[inferBrandCategoryFromWorkspace(categoryOrInput)];
   }
-  return PROFILES[inferBrandCategoryFromName(orgName)];
+  if (
+    categoryOrInput &&
+    (BRAND_CLIENT_CATEGORIES as readonly string[]).includes(categoryOrInput)
+  ) {
+    return PROFILES[categoryOrInput as BrandClientCategory];
+  }
+  return PROFILES[inferBrandCategoryFromName(fallbackOrgName)];
 }
 
 export function listCategoryExperienceProfiles(): readonly CategoryExperienceProfile[] {

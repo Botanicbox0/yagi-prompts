@@ -222,8 +222,8 @@ export function CampaignWizard({
               data-self-studio-shortcut
             >
               {isEn
-                ? "⚡ Direct Generation in Self Studio →"
-                : "⚡ 셀프 스튜디오에서 직접 생성하기 →"}
+                ? "Direct Generation in Self Studio →"
+                : "셀프 스튜디오에서 직접 생성하기 →"}
             </a>
           )}
         </div>
@@ -925,7 +925,7 @@ function ScheduleStep({ t, errors, part, patch }: { t: Copy; errors: Errors; par
   );
 }
 
-/** Step ⑤: everything on one screen, each part with its own "change" link back to its step. */
+/** Step 05. : everything on one screen, each part with its own "change" link back to its step. */
 function Review({ t, b, locale, draft, terms, formatTitle, organizationName, onEdit, children }: {
   t: Copy; b: BrandCopy; locale: string; draft: WizardDraft; terms: CampaignTerms | null; formatTitle: string | null; organizationName: string; onEdit: (s: WizardStep) => void; children: ReactNode;
 }) {

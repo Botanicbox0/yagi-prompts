@@ -80,7 +80,7 @@ export function StudioInquiry({ organizations, organizationId, b, allowSetup = f
             href={`/brand/projects/new?track=template_build${organizationId ? `&organizationId=${encodeURIComponent(organizationId)}` : ""}`}
             data-template-track-shortcut
           >
-            📁 에셋 폴더 · Frame.io 타임코드 시사 룸과 함께 전용 템플릿 의뢰하기 →
+            에셋 폴더 · Frame.io 타임코드 시사 룸과 함께 전용 템플릿 의뢰하기 →
           </a>
         </p>
         <form className="bw-form" onSubmit={send} aria-busy={busy}>

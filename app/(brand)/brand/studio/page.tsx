@@ -13,7 +13,11 @@ import { BrandUnavailable } from "@/components/brand-workspace/brand-unavailable
 import { scopedHref, sectionVisibility } from "@/lib/brands/workspace/selection";
 import { ProductionCreate } from "@/components/brand-workspace/production-create";
 import { BrandBriefStudio } from "@/components/brand-workspace/brand-brief-studio";
-import { confirmedIdentityFor } from "@/lib/brands/identity/service";
+import { inferBrandCategoryFromWorkspace } from "@/lib/brands/category-experience";
+import {
+  confirmedIdentityFor,
+  loadBrandIdentityWorkspace,
+} from "@/lib/brands/identity/service";
 import { loadProductionWorkspace } from "@/lib/brands/production/service";
 import { loadBrandSupport } from "@/lib/brands/workspace/service";
 import { studioRequestStatus, studioStage } from "@/lib/brands/production/stage";
@@ -84,10 +88,21 @@ export default async function BrandStudio({
   const canCreate = !access.staff && production?.role !== "viewer";
   // The face is asked for only once there is a template to use it with.
   const hasTemplates = contracts.some((c) => c.templates.length > 0);
-  const confirmedIdentity =
+  const [confirmedIdentity, identityWorkspace] = await Promise.all([
     hasTemplates && historyOrg
-      ? await confirmedIdentityFor(sql, historyOrg).catch(() => null)
-      : null;
+      ? confirmedIdentityFor(sql, historyOrg).catch(() => null)
+      : Promise.resolve(null),
+    historyOrg
+      ? loadBrandIdentityWorkspace(sql, historyOrg).catch(() => null)
+      : Promise.resolve(null),
+  ]);
+  const activeIdentity =
+    confirmedIdentity ?? identityWorkspace?.identity?.identity ?? null;
+  const brandCategory = inferBrandCategoryFromWorkspace({
+    organizationName: choice?.name,
+    checklist: activeIdentity?.productChecklist,
+    memoryPayloads: identityWorkspace?.memory.map((m) => m.payload),
+  });
   const selfie = hasTemplates ? (await currentSelfie(sql, viewer.userId!))?.id ?? null : null;
   const mode = assetLibraryMode();
   const verifyRequired =
@@ -163,10 +178,14 @@ export default async function BrandStudio({
         <BrandBriefStudio
           organizationId={historyOrg}
           organizationName={choice?.name}
+          initialCategory={brandCategory}
           locale={locale}
           canWrite={canCreate || Boolean(viewer.isAdmin)}
-          identityConfirmed={Boolean(confirmedIdentity)}
-          defaultChecklist={confirmedIdentity?.productChecklist}
+          identityConfirmed={Boolean(
+            confirmedIdentity ||
+              identityWorkspace?.identity?.status === "confirmed",
+          )}
+          defaultChecklist={activeIdentity?.productChecklist}
           identityHref={
             choice && sectionVisibility(choice).identity
               ? scopedHref("/brand/identity", choice)

@@ -206,7 +206,7 @@ export function ProjectDetail({
                 href={`/brand/studio?organizationId=${encodeURIComponent(p.organizationId)}`}
                 data-studio-commission-handoff
               >
-                {locale === "en" ? "⚡ Self Studio →" : "⚡ 셀프 스튜디오 →"}
+                {locale === "en" ? "Self Studio →" : "셀프 스튜디오 →"}
               </a>
             )}
           </div>
@@ -231,7 +231,7 @@ export function ProjectDetail({
               className="bw-button bw-primary"
               href={`/brand/studio?organizationId=${encodeURIComponent(p.organizationId)}`}
             >
-              {locale === "en" ? "⚡ Self Studio →" : "⚡ 셀프 스튜디오 →"}
+              {locale === "en" ? "Self Studio →" : "셀프 스튜디오 →"}
             </a>
           </div>
         </div>

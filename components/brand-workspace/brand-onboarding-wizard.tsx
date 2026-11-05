@@ -18,6 +18,7 @@ import {
 export interface BrandOnboardingWizardProps {
   organizationId: string;
   organizationName: string;
+  initialCategory?: OnboardingCategory;
   locale: "ko" | "en";
   isOwner: boolean;
   currentStatus: "none" | "draft" | "confirmed";
@@ -80,27 +81,27 @@ const BUCKET_META: Record<
   { badgeKo: string; badgeEn: string; descKo: string; descEn: string }
 > = {
   logo_vault: {
-    badgeKo: "① 로고 · 심볼 금고 (1:1 비율 잠금)",
-    badgeEn: "1. Logo & Symbol Vault (1:1 Lock)",
+    badgeKo: "01. 로고 · 심볼 (1:1 고정)",
+    badgeEn: "01. Logo & Symbol (1:1 Lock)",
     descKo: "워드마크·심볼·라벨 원본을 분리해 생성 및 부분 수선 시 1:1 고정",
     descEn: "Isolates wordmarks & symbols for 1:1 lock during generation & repair",
   },
   product_vault: {
-    badgeKo: "② 제품 · 패키지 마스터",
-    badgeEn: "2. Product & Swatch Master",
+    badgeKo: "02. 제품 · 패키지 마스터",
+    badgeEn: "02. Product & Swatch Master",
     descKo: "주력 제품 실루엣·지퍼·보틀·원단 스와치 보존 체크리스트 자동 생성",
     descEn: "Builds geometry, label, and material preservation checklists",
   },
   brand_standard: {
-    badgeKo: "③ 브랜드 스탠다드 & 절대 금기",
-    badgeEn: "3. Brand Standard & Hard Taboos",
-    descKo: "어떤 미감 기조에서도 공통으로 지켜야 할 컬러·서체·절대 금지 3항목",
+    badgeKo: "03. 브랜드 기준 · 금지 항목",
+    badgeEn: "03. Brand Standard & Taboos",
+    descKo: "어떤 무드에서도 공통으로 지켜야 할 컬러·서체·금지 표현 3항목",
     descEn: "Invariant colour, typography, and 3 strict taboos across all moods",
   },
   aesthetic_mood_pool: {
-    badgeKo: "④ 다중 미감 풀 (기조 A / B / C 군집화)",
-    badgeEn: "4. Multi-Aesthetic Pool (Cluster A / B / C)",
-    descKo: "화보·핀터레스트 핀에서 조명·색온도·렌즈감만 추출해 3개 기조로 분류",
+    badgeKo: "04. 무드 클러스터 (A / B / C)",
+    badgeEn: "04. Mood Clusters (A / B / C)",
+    descKo: "화보·핀터레스트 핀에서 조명·색온도·렌즈감만 추출해 3개 무드로 분류",
     descEn: "Clusters lookbook & Pinterest pins into 3 distinct optical/colour lines",
   },
 };
@@ -223,6 +224,7 @@ function parseRawDropLines(text: string): RawOmniDropItem[] {
 export function BrandOnboardingWizard({
   organizationId,
   organizationName,
+  initialCategory,
   locale,
   isOwner,
   currentStatus,
@@ -245,9 +247,15 @@ export function BrandOnboardingWizard({
 
   const [brandName, setBrandName] = useState(initialBrandTitle);
   const [category, setCategory] =
-    useState<OnboardingCategory>("fashion_apparel");
+    useState<OnboardingCategory>(initialCategory ?? "fashion_apparel");
   const [preferredVibe, setPreferredVibe] =
-    useState<OnboardingVibe>("minimal_editorial");
+    useState<OnboardingVibe>(
+      initialCategory === "beauty_skincare"
+        ? "crisp_commercial"
+        : initialCategory === "fnb_hospitality"
+          ? "warm_film"
+          : "minimal_editorial",
+    );
   const [websiteUrlsText, setWebsiteUrlsText] = useState(
     `https://${initialSlug}.kr\nhttps://${initialSlug}.kr/collections/signature`
   );
@@ -266,15 +274,17 @@ export function BrandOnboardingWizard({
       ? DEFAULT_OMNI_DROP_TEXT
       : DEFAULT_OMNI_DROP_TEXT.replace(/kaiper/gi, initialSlug)
   );
-  const [assets, setAssets] = useState<BrandOnboardingAsset[]>(() =>
-    defaultIsKaiper
+  const [assets, setAssets] = useState<BrandOnboardingAsset[]>(() => {
+    if (initialCategory === "beauty_skincare") return BEAUTY_SAMPLE_ASSETS;
+    if (initialCategory === "fnb_hospitality") return FNB_SAMPLE_ASSETS;
+    return defaultIsKaiper
       ? KAIPER_SAMPLE_ASSETS
       : KAIPER_SAMPLE_ASSETS.map((a) => ({
           ...a,
           label: a.label.replace(/KAIPER/g, initialBrandTitle),
           urlOrKey: a.urlOrKey?.replace(/kaiper/g, initialSlug),
-        }))
-  );
+        }));
+  });
   const [brandGuideNote, setBrandGuideNote] = useState(
     "과도한 네온 사이버펑크 조명 금지. 뷰티 필터로 뭉개진 플라스틱 피부 표현 금지. 의상 로고 철자 변형 절대 금지."
   );
@@ -623,53 +633,14 @@ export function BrandOnboardingWizard({
               : "We keep your logos and products consistent while organizing your lookbooks and reference boards into 3 ready-to-use moods (A / B / C)."}
           </p>
         </div>
-        <div className="bw-row">
-          <button
-            type="button"
-            className="bw-button"
-            data-onboarding-preset="kaiper"
-            onClick={() => applyPreset("kaiper")}
-            disabled={busy}
-          >
-            {isKo ? "패션 샘플" : "Fashion Sample"}
-          </button>
-          <button
-            type="button"
-            className="bw-button"
-            data-onboarding-bulk-sim
-            onClick={simulateBulk48AssetDrop}
-            disabled={busy}
-          >
-            {isKo ? "대량 에셋 샘플 불러오기" : "Load Bulk Sample"}
-          </button>
-          <button
-            type="button"
-            className="bw-button"
-            data-onboarding-preset="beauty"
-            onClick={() => applyPreset("beauty")}
-            disabled={busy}
-          >
-            {isKo ? "뷰티 샘플" : "Beauty Sample"}
-          </button>
-          <button
-            type="button"
-            className="bw-button"
-            data-onboarding-preset="fnb"
-            onClick={() => applyPreset("fnb")}
-            disabled={busy}
-          >
-            {isKo ? "F&B 샘플" : "F&B Sample"}
-          </button>
-          <button
-            type="button"
-            className="bw-button"
-            data-onboarding-preset="blank"
-            onClick={() => applyPreset("blank")}
-            disabled={busy}
-          >
-            {isKo ? "초기화" : "Clear"}
-          </button>
-        </div>
+        <span className="bw-badge">
+          {
+            (
+              CATEGORY_OPTIONS.find((opt) => opt.value === category) ??
+              CATEGORY_OPTIONS[0]!
+            )[isKo ? "ko" : "en"]
+          }
+        </span>
       </div>
 
       <form onSubmit={onFormSubmit} className="bw-form bw-fields" data-onboarding-form>
@@ -752,8 +723,8 @@ export function BrandOnboardingWizard({
             <label style={{ margin: 0 }}>
               <span style={{ fontSize: 12, fontWeight: 600 }}>
                 {isKo
-                  ? "① 공식 웹사이트 URL (입력 시 로고·서체·컬러·톤앤매너 자동 추출)"
-                  : "① Official Website URL (Auto-extracts logo, fonts, colors & tone)"}
+                  ? "공식 웹사이트 URL (로고·서체·컬러 자동 추출)"
+                  : "Official Website URL (Auto-extracts logo, fonts & colors)"}
               </span>
               <input
                 type="url"
@@ -769,8 +740,8 @@ export function BrandOnboardingWizard({
             <label style={{ margin: 0 }}>
               <span style={{ fontSize: 12, fontWeight: 600 }}>
                 {isKo
-                  ? "② 공식 인스타그램 (@handle)"
-                  : "② Instagram (@handle)"}
+                  ? "공식 인스타그램 (@handle)"
+                  : "Instagram (@handle)"}
               </span>
               <input
                 type="text"
@@ -791,15 +762,15 @@ export function BrandOnboardingWizard({
                 );
                 setStatusMessage(
                   isKo
-                    ? `✓ ${brandName} 웹사이트(${websiteUrls[0] || "https://"}) 및 채널 분석 완료 — 비즈니스 프로필과 3대 미감 기조(A/B/C)가 최신 상태로 갱신되었습니다.`
-                    : `✓ Analyzed ${brandName} website & channels — Business Profile and 3 Aesthetic Lines (A/B/C) updated.`
+                    ? `${brandName} 웹사이트(${websiteUrls[0] || "https://"}) 및 채널 분석 완료 — 프로필과 3가지 무드(A/B/C)가 갱신되었습니다.`
+                    : `Analyzed ${brandName} website & channels — Profile and 3 Mood Lines (A/B/C) updated.`
                 );
               }}
               style={{ minHeight: 44, whiteSpace: "nowrap" }}
             >
               {isKo
-                ? "✦ 웹사이트 분석 · 브랜드 DNA 자동 완성"
-                : "✦ Analyze URL & Auto-Build DNA"}
+                ? "웹사이트 분석하기"
+                : "Analyze Website"}
             </button>
           </div>
           <div
@@ -812,8 +783,8 @@ export function BrandOnboardingWizard({
               fontSize: 12,
             }}
           >
-            <span style={{ color: "#3063A7", fontWeight: 600 }}>
-              ✦ {activeExtractionStepIndex + 1}/{POMELLI_EXTRACTION_STEPS.length}단계:{" "}
+            <span style={{ color: "var(--ys-ink)", fontWeight: 600 }}>
+              {activeExtractionStepIndex + 1}/{POMELLI_EXTRACTION_STEPS.length}단계:{" "}
               {isKo
                 ? POMELLI_EXTRACTION_STEPS[activeExtractionStepIndex]?.pillKo
                 : POMELLI_EXTRACTION_STEPS[activeExtractionStepIndex]?.pillEn}{" "}
@@ -826,13 +797,13 @@ export function BrandOnboardingWizard({
             </span>
             <small className="bw-muted">
               {isKo
-                ? `감지된 에셋 ${rawAssetDrop.length}개 · 핀터레스트 대표 레퍼런스 ${preview?.pinterestFunnel.stage2MedoidsSelected ?? 12}장 선별됨`
-                : `${rawAssetDrop.length} assets · ${preview?.pinterestFunnel.stage2MedoidsSelected ?? 12} reference pins selected`}
+                ? `에셋 ${rawAssetDrop.length}개 · 대표 레퍼런스 ${preview?.pinterestFunnel.stage2MedoidsSelected ?? 12}장`
+                : `${rawAssetDrop.length} assets · ${preview?.pinterestFunnel.stage2MedoidsSelected ?? 12} reference pins`}
             </small>
           </div>
         </div>
 
-        {/* Above-the-Fold 1: Pomelli-Style Bento Business Profile + Right-Side Creative Director Co-Pilot Dock */}
+        {/* Above-the-Fold 1: Bento Business Profile + Right-Side Quick-Start Dock */}
         {preview && (
           <div
             className="bw-card bw-fields"
@@ -842,69 +813,51 @@ export function BrandOnboardingWizard({
               margin: 0,
               padding: 20,
               background: "#FFFFFF",
-              borderRadius: 24,
-              border: "1px solid rgba(15, 23, 42, 0.08)",
+              borderRadius: 20,
+              border: "1px solid var(--ys-line)",
             }}
           >
             <div className="bw-row">
               <div>
                 <p className="bw-kicker">
                   {isKo
-                    ? "YOUR BUSINESS PROFILE · 벤토 그리드 비즈니스 프로필 & 디렉터 코파일럿"
-                    : "YOUR BUSINESS PROFILE · BENTO BRAND OVERVIEW & DIRECTOR CO-PILOT"}
+                    ? "브랜드 비주얼 프로필"
+                    : "BRAND VISUAL PROFILE"}
                 </p>
                 <h3 style={{ margin: "4px 0" }}>
                   {isKo
-                    ? `${preview.bentoProfile.brandName} 비즈니스 프로필 — 로고·서체·컬러 스와치·모델 페르소나·톤앤매너 한눈에 보기`
-                    : `${preview.bentoProfile.brandName} Business Profile — Logo, Fonts, Color Swatches, Model Persona & Voice`}
+                    ? `${preview.bentoProfile.brandName} 프로필 — 로고 · 서체 · 컬러 · 모델 톤`
+                    : `${preview.bentoProfile.brandName} Profile — Logo, Fonts, Colors & Model Tone`}
                 </h3>
               </div>
 
-              {/* Segmented Tab Switch: Brand overview | Business details */}
+              {/* Segmented Tab Switch */}
               <div
-                className="bw-row"
+                className="bw-seg-track"
                 role="tablist"
                 data-pomelli-bento-tabs
-                style={{
-                  background: "#F6F7F9",
-                  padding: 4,
-                  borderRadius: 999,
-                  gap: 4,
-                }}
               >
                 <button
                   type="button"
                   role="tab"
                   aria-selected={bentoTab === "overview"}
+                  aria-pressed={bentoTab === "overview"}
                   data-pomelli-tab="overview"
                   onClick={() => setBentoTab("overview")}
-                  className={
-                    bentoTab === "overview"
-                      ? "bw-button bw-primary"
-                      : "bw-button"
-                  }
-                  style={{ borderRadius: 999, padding: "6px 14px" }}
+                  className="bw-seg-btn"
                 >
-                  {isKo
-                    ? "Brand overview (브랜드 비주얼 프로필)"
-                    : "Brand overview"}
+                  {isKo ? "비주얼 프로필" : "Visual overview"}
                 </button>
                 <button
                   type="button"
                   role="tab"
                   aria-selected={bentoTab === "details"}
+                  aria-pressed={bentoTab === "details"}
                   data-pomelli-tab="details"
                   onClick={() => setBentoTab("details")}
-                  className={
-                    bentoTab === "details"
-                      ? "bw-button bw-primary"
-                      : "bw-button"
-                  }
-                  style={{ borderRadius: 999, padding: "6px 14px" }}
+                  className="bw-seg-btn"
                 >
-                  {isKo
-                    ? "Business details (업종 · 채널 · CTA)"
-                    : "Business details"}
+                  {isKo ? "채널 · 상세 정보" : "Channels & details"}
                 </button>
               </div>
             </div>
@@ -926,21 +879,17 @@ export function BrandOnboardingWizard({
                   style={{
                     margin: 0,
                     padding: 14,
-                    borderRadius: 18,
-                    background: modelPersonaEnabled
-                      ? "rgba(56, 117, 197, 0.06)"
-                      : "#F6F7F9",
-                    border: modelPersonaEnabled
-                      ? "1.5px solid #3875C5"
-                      : "1px solid rgba(15, 23, 42, 0.08)",
+                    borderRadius: 16,
+                    background: "var(--ys-paper-2)",
+                    border: "1px solid var(--ys-line)",
                   }}
                 >
                   <div className="bw-row">
                     <div>
                       <strong style={{ fontSize: 14 }}>
                         {isKo
-                          ? "AI 모델 페르소나 & 실제 피부 결 일관성 고정 (Model Preferences)"
-                          : "Choose Model Preferences (Consistent AI Model Traits)"}
+                          ? "모델 분위기 · 피부 결 일관성 유지"
+                          : "Consistent Model Persona & Natural Skin"}
                       </strong>
                       <p
                         className="bw-muted"
@@ -965,10 +914,10 @@ export function BrandOnboardingWizard({
                     >
                       {modelPersonaEnabled
                         ? isKo
-                          ? "✓ 일관성 켜짐 (Enabled)"
-                          : "✓ Enabled"
+                          ? "켜짐"
+                          : "Enabled"
                         : isKo
-                          ? "켜기 (Enable)"
+                          ? "켜기"
                           : "Enable"}
                     </button>
                   </div>
@@ -1014,23 +963,23 @@ export function BrandOnboardingWizard({
                         style={{
                           margin: 0,
                           padding: 16,
-                          borderRadius: 18,
-                          background: "#F6F7F9",
+                          borderRadius: 16,
+                          background: "var(--ys-paper-2)",
                           display: "flex",
                           flexDirection: "column",
                           justifyContent: "space-between",
                         }}
                       >
                         <small className="bw-muted">
-                          {isKo ? "Logo (1:1 비율 잠금)" : "Logo (1:1 Lock)"}
+                          {isKo ? "로고 (1:1 비율 고정)" : "Logo (1:1 Lock)"}
                         </small>
                         <div
                           style={{
                             margin: "12px 0",
                             padding: "16px 12px",
-                            borderRadius: 14,
+                            borderRadius: 12,
                             background: "#FFFFFF",
-                            border: "1px solid rgba(15, 23, 42, 0.08)",
+                            border: "1px solid var(--ys-line)",
                             textAlign: "center",
                             fontSize: 20,
                             fontWeight: 800,
@@ -1041,7 +990,7 @@ export function BrandOnboardingWizard({
                           {preview.bentoProfile.brandName}
                         </div>
                         <small className="bw-muted">
-                          🔗 {preview.bentoProfile.primaryWebsiteUrl}
+                          {preview.bentoProfile.primaryWebsiteUrl}
                         </small>
                       </div>
 
@@ -1510,7 +1459,7 @@ export function BrandOnboardingWizard({
                     className="bw-button bw-primary"
                     data-pomelli-lets-go
                   >
-                    {isKo ? "Let's go →" : "Let's go →"}
+                    {isKo ? "스튜디오 열기 →" : "Open Studio →"}
                   </a>
                 </div>
               </aside>
@@ -1527,20 +1476,21 @@ export function BrandOnboardingWizard({
               margin: 0,
               padding: 18,
               background: "#FFFFFF",
-              borderRadius: 22,
+              borderRadius: 20,
+              border: "1px solid var(--ys-line)",
             }}
           >
             <div className="bw-row">
               <div>
                 <p className="bw-kicker">
                   {isKo
-                    ? "MULTI-AESTHETIC LINES · 추출된 브랜드 다중 미감 기조 (A / B / C)"
-                    : "MULTI-AESTHETIC LINES · EXTRACTED BRAND MOOD CLUSTERS (A / B / C)"}
+                    ? "추출된 브랜드 무드 (A / B / C)"
+                    : "EXTRACTED BRAND MOOD CLUSTERS (A / B / C)"}
                 </p>
                 <h3>
                   {isKo
-                    ? "하나로 뭉뚱그리지 않고 3가지 미감 기조로 분리했습니다 — 스튜디오에서 언제든 골라 쓸 수 있습니다"
-                    : "Clustered into 3 distinct Aesthetic Lines ready for 1-click selection in Studio"}
+                    ? "3가지 무드로 분리해 스튜디오에서 언제든 골라 쓸 수 있습니다"
+                    : "Clustered into 3 distinct Mood Lines ready for 1-click selection in Studio"}
                 </h3>
               </div>
               <span className="bw-badge" data-onboarding-recommended-look>
@@ -1566,73 +1516,74 @@ export function BrandOnboardingWizard({
               }}
             >
               {preview.aestheticLines.map((line) => (
-                <div
+                <figure
                   key={line.id}
                   className="bw-card bw-fields"
                   data-aesthetic-line-card={line.code}
                   style={{
                     margin: 0,
-                    padding: 14,
-                    borderRadius: 18,
-                    background: "#F6F7F9",
-                    border: "1px solid rgba(15, 23, 42, 0.08)",
+                    padding: 10,
+                    borderRadius: 16,
+                    background: "var(--ys-paper-2)",
+                    border: "1px solid var(--ys-line)",
                   }}
                 >
                   <div
                     style={{
-                      height: 128,
-                      borderRadius: 14,
-                      backgroundImage: `linear-gradient(180deg, rgba(15,23,42,0.12) 0%, rgba(15,23,42,0.52) 100%), url(${line.previewImageUrl})`,
-                      backgroundSize: "cover",
-                      backgroundPosition: "center",
-                      padding: 10,
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "flex-start",
+                      borderRadius: 12,
+                      overflow: "hidden",
+                      aspectRatio: "16 / 10",
+                      background: "var(--ys-raised)",
                     }}
                   >
-                    <span
+                    <img
+                      src={line.previewImageUrl}
+                      alt={isKo ? line.titleKo : line.titleEn}
                       style={{
-                        fontSize: 11,
-                        fontWeight: 700,
-                        color: "#FFFFFF",
-                        background: "#3875C5",
-                        padding: "3px 9px",
-                        borderRadius: 999,
+                        width: "100%",
+                        height: "100%",
+                        objectFit: "cover",
+                        objectPosition: "50% 18%",
+                        display: "block",
                       }}
-                    >
-                      {isKo
-                        ? `기조 ${line.code} · 비중 ${line.sharePct}%`
-                        : `Line ${line.code} · ${line.sharePct}%`}
-                    </span>
-                    <span
-                      style={{
-                        fontSize: 11,
-                        fontWeight: 600,
-                        color: "#F8FAFC",
-                        background: "rgba(15, 23, 42, 0.68)",
-                        padding: "3px 8px",
-                        borderRadius: 999,
-                      }}
-                    >
-                      {isKo ? `무드 ${line.code}` : `Mood ${line.code}`}
-                    </span>
+                    />
                   </div>
-                  <div>
-                    <strong style={{ fontSize: 14 }}>
-                      {isKo ? line.titleKo : line.titleEn}
-                    </strong>
+                  <figcaption style={{ padding: "4px 4px 2px" }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        gap: 8,
+                        marginBottom: 4,
+                      }}
+                    >
+                      <strong style={{ fontSize: 14 }}>
+                        {isKo ? line.titleKo : line.titleEn}
+                      </strong>
+                      <span
+                        style={{
+                          fontFamily: "var(--font-mono)",
+                          fontSize: 11,
+                          color: "var(--ys-muted)",
+                        }}
+                      >
+                        {isKo
+                          ? `무드 ${line.code} · ${line.sharePct}%`
+                          : `Mood ${line.code} · ${line.sharePct}%`}
+                      </span>
+                    </div>
                     <p
                       className="bw-muted"
-                      style={{ margin: "4px 0 6px", fontSize: 12 }}
+                      style={{ margin: "2px 0 6px", fontSize: 12 }}
                     >
                       {isKo ? line.subtitleKo : line.subtitleEn}
                     </p>
                     <small className="bw-muted" style={{ display: "block" }}>
                       {isKo ? line.rulePromptKo : line.rulePromptEn}
                     </small>
-                  </div>
-                </div>
+                  </figcaption>
+                </figure>
               ))}
             </div>
           </div>
@@ -1646,7 +1597,7 @@ export function BrandOnboardingWizard({
               : `Edit Website, Pinterest Boards & Raw Asset Drop (${rawAssetDrop.length} assets)`}
           </summary>
           <div className="bw-fields" style={{ marginTop: 12 }}>
-            {/* Pomelli-Inspired 1-URL Live Business Profile Analyzer */}
+            {/* 1-URL Live Business Profile Analyzer */}
             <div
               className="bw-card bw-fields"
               data-pomelli-url-analyzer
@@ -1654,21 +1605,21 @@ export function BrandOnboardingWizard({
                 margin: 0,
                 padding: 18,
                 background: "#FFFFFF",
-                borderRadius: 22,
-                border: "1px solid rgba(56, 117, 197, 0.22)",
+                borderRadius: 20,
+                border: "1px solid var(--ys-line)",
               }}
             >
               <div className="bw-row">
                 <div>
                   <p className="bw-kicker">
                     {isKo
-                      ? "QUICK URL SCANNER · 웹사이트 URL 하나로 비즈니스 프로필 9단계 자동 추출"
-                      : "QUICK URL SCANNER · 9-STEP AUTO BUSINESS PROFILE EXTRACTION"}
+                      ? "웹사이트 URL 추출 단계"
+                      : "WEBSITE EXTRACTION STEPS"}
                   </p>
                   <h3 style={{ margin: "4px 0" }}>
                     {isKo
-                      ? "웹사이트 URL을 입력하면 로고·서체·컬러 스와치·톤앤매너·다중 미감 기조(A/B/C)를 순차 추출합니다"
-                      : "Enter your website URL to auto-extract logo, fonts, color swatches, tone of voice & Aesthetic Lines (A/B/C)"}
+                      ? "웹사이트 URL에서 로고·서체·컬러 스와치·톤앤매너·무드(A/B/C)를 순차 추출합니다"
+                      : "Extracts logo, fonts, color swatches, tone of voice & Mood Lines (A/B/C)"}
                   </h3>
                 </div>
                 <div className="bw-row">
@@ -1686,6 +1637,33 @@ export function BrandOnboardingWizard({
                     {isKo
                       ? `추출 단계 보기 (${activeExtractionStepIndex + 1}/${POMELLI_EXTRACTION_STEPS.length})`
                       : `Cycle Scan Step (${activeExtractionStepIndex + 1}/${POMELLI_EXTRACTION_STEPS.length})`}
+                  </button>
+                  <button
+                    type="button"
+                    className="bw-button"
+                    data-onboarding-preset="kaiper"
+                    onClick={() => applyPreset("kaiper")}
+                    disabled={busy}
+                  >
+                    {isKo ? "샘플 데이터 복원" : "Restore Sample"}
+                  </button>
+                  <button
+                    type="button"
+                    className="bw-button"
+                    data-onboarding-bulk-sim
+                    onClick={simulateBulk48AssetDrop}
+                    disabled={busy}
+                  >
+                    {isKo ? "대량 에셋 테스트" : "Test Bulk Drop"}
+                  </button>
+                  <button
+                    type="button"
+                    className="bw-button"
+                    data-onboarding-preset="blank"
+                    onClick={() => applyPreset("blank")}
+                    disabled={busy}
+                  >
+                    {isKo ? "입력 비우기" : "Clear"}
                   </button>
                 </div>
               </div>
@@ -1715,18 +1693,18 @@ export function BrandOnboardingWizard({
                         fontSize: 12,
                         fontWeight: isCurrent ? 700 : 600,
                         border: isCurrent
-                          ? "1.5px solid #3875C5"
-                          : "1px solid rgba(15, 23, 42, 0.12)",
+                          ? "1.5px solid var(--ys-ink)"
+                          : "1px solid var(--ys-line)",
                         background: isCurrent
-                          ? "rgba(56, 117, 197, 0.12)"
+                          ? "#FFFFFF"
                           : isDone
-                            ? "#F6F7F9"
+                            ? "var(--ys-paper-2)"
                             : "#FFFFFF",
-                        color: isCurrent ? "#3063A7" : "#0B0D12",
+                        color: "var(--ys-ink)",
                         cursor: "pointer",
                       }}
                     >
-                      ✦ {step.stepNumber}. {isKo ? step.pillKo : step.pillEn}
+                      {step.stepNumber}. {isKo ? step.pillKo : step.pillEn}
                     </button>
                   );
                 })}
@@ -1761,8 +1739,8 @@ export function BrandOnboardingWizard({
                 <div className="bw-row">
                   <strong>
                     {isKo
-                      ? "① 무제한 에셋 드롭박스 (로고·제품·가이드 PDF·화보 폴더 일괄 투입)"
-                      : "① Unlimited Omni-Asset Drop (Logos, Products, PDF Guides & Lookbooks)"}
+                      ? "01. 에셋 드롭박스 (로고·제품·가이드 PDF·화보 일괄 등록)"
+                      : "01. Asset Drop (Logos, Products, PDF Guides & Lookbooks)"}
                   </strong>
                   <span className="bw-badge" data-onboarding-raw-drop-count>
                     {isKo
@@ -1772,8 +1750,8 @@ export function BrandOnboardingWizard({
                 </div>
                 <p className="bw-muted" style={{ margin: 0 }}>
                   {isKo
-                    ? "사용자가 일일이 로고·제품·무드를 구분할 필요가 없습니다. 파일들을 한꺼번에 선택하거나 아래 목록에 붙여넣으면 디렉터 AI가 4개 바구니로 자동 분류합니다."
-                    : "No need to pre-sort files. Select multiple files at once or paste filenames/URLs below; the Director engine auto-sorts them into 4 buckets."}
+                    ? "파일들을 한꺼번에 선택하거나 아래 목록에 붙여넣으면 4개 바구니로 자동 분류합니다."
+                    : "Select multiple files at once or paste filenames/URLs below; auto-sorted into 4 buckets."}
                 </p>
                 <label
                   style={{
@@ -1782,16 +1760,16 @@ export function BrandOnboardingWizard({
                     justifyContent: "space-between",
                     padding: "10px 14px",
                     borderRadius: 14,
-                    border: "1px dashed rgba(56, 117, 197, 0.45)",
-                    background: "rgba(56, 117, 197, 0.05)",
+                    border: "1px dashed var(--ys-line-strong)",
+                    background: "var(--ys-paper-2)",
                     cursor: isOwner && !busy ? "pointer" : "default",
                     fontSize: 13,
                   }}
                 >
                   <span>
                     {isKo
-                      ? "폴더/파일 제한 없이 한 번에 선택 (SVG, PNG, JPG, WEBP, PDF)"
-                      : "Select unlimited brand files at once (SVG, PNG, JPG, WEBP, PDF)"}
+                      ? "폴더/파일 한 번에 선택 (SVG, PNG, JPG, WEBP, PDF)"
+                      : "Select brand files at once (SVG, PNG, JPG, WEBP, PDF)"}
                   </span>
                   <input
                     type="file"
@@ -1804,7 +1782,7 @@ export function BrandOnboardingWizard({
                 </label>
                 <label>
                   {isKo
-                    ? "일괄 투입된 에셋 목록 (파일명 또는 URL | 메모 — 최대 200개 동시 분류)"
+                    ? "일괄 등록된 에셋 목록 (파일명 또는 URL | 메모 — 최대 200개)"
                     : "Batch Dropped Assets (filename or URL | note — up to 200 items)"}
                   <textarea
                     rows={4}
@@ -1830,8 +1808,8 @@ export function BrandOnboardingWizard({
                 <div className="bw-row">
                   <strong>
                     {isKo
-                      ? "② 핀터레스트 공개 보드 · 웹사이트 · 인스타그램 인테이크"
-                      : "② Public Pinterest Board, Website & Instagram Intake"}
+                      ? "02. 핀터레스트 보드 · 웹사이트 · 인스타그램 연결"
+                      : "02. Pinterest Board, Website & Instagram Intake"}
                   </strong>
                   {preview && (
                     <span className="bw-badge" data-pinterest-token-savings>
@@ -2116,7 +2094,15 @@ export function BrandOnboardingWizard({
             </ul>
 
             {isOwner && assets.length < ONBOARDING_LIMITS.maxTotalAssets && (
-              <div className="bw-grid-wide" data-onboarding-add-asset>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+                  gap: 12,
+                  alignItems: "end",
+                }}
+                data-onboarding-add-asset
+              >
                 <label>
                   {isKo ? "슬롯 종류" : "Asset Slot"}
                   <select
@@ -2190,7 +2176,7 @@ export function BrandOnboardingWizard({
               </strong>
             </div>
             <p className="bw-muted">{preview.identity.voice.tone}</p>
-            <div className="bw-grid-wide">
+            <div className="bw-grid">
               <div>
                 <small className="bw-muted">
                   {isKo

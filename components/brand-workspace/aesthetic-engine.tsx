@@ -440,7 +440,7 @@ export function AestheticEngine({
         <div className="ys-dna-card" data-mood-dna={preset.id}>
           <div className="ys-dna-palette-col">
             <span className="ys-dna-label">
-              {isKo ? "① 5색 브랜드 컬러 팔레트" : "① 5-Color Brand Palette"}
+              {isKo ? "01. 5색 브랜드 컬러 팔레트" : "01. 5-Color Brand Palette"}
             </span>
             <div className="ys-dna-swatches">
               {preset.palette.map((hex) => (
@@ -453,19 +453,19 @@ export function AestheticEngine({
           </div>
           <dl className="ys-dna-specs">
             <div>
-              <dt>{isKo ? "② 조명 설계 (Lighting)" : "② Lighting Setup"}</dt>
+              <dt>{isKo ? "02. 조명 설계 (Lighting)" : "02. Lighting Setup"}</dt>
               <dd>{isKo ? preset.lightingKo : preset.lightingEn}</dd>
             </div>
             <div>
-              <dt>{isKo ? "③ 카메라·렌즈 (Camera & Lens)" : "③ Camera & Lens"}</dt>
+              <dt>{isKo ? "03. 카메라·렌즈 (Camera & Lens)" : "03. Camera & Lens"}</dt>
               <dd>{isKo ? preset.cameraKo : preset.cameraEn}</dd>
             </div>
             <div>
-              <dt>{isKo ? "④ 편집 호흡 (Cut Rhythm)" : "④ Editing Rhythm"}</dt>
+              <dt>{isKo ? "04. 편집 호흡 (Cut Rhythm)" : "04. Editing Rhythm"}</dt>
               <dd>{isKo ? preset.pacingKo : preset.pacingEn}</dd>
             </div>
             <div>
-              <dt>{isKo ? "⑤ 질감·그레인 (Texture)" : "⑤ Texture & Grain"}</dt>
+              <dt>{isKo ? "05. 질감·그레인 (Texture)" : "05. Texture & Grain"}</dt>
               <dd>{isKo ? preset.textureKo : preset.textureEn}</dd>
             </div>
           </dl>

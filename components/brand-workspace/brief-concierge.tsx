@@ -303,7 +303,7 @@ export function BriefConcierge({
     });
 
     const payload = [
-      `[📋 YAGI PRODUCTION 제작 명세서 v${specVersion} 확정]`,
+      `[YAGI PRODUCTION 제작 명세서 v${specVersion} 확정]`,
       `구분: ${deliverableKind === "film" ? "캠페인 필름" : deliverableKind === "product" ? "제품 영상" : deliverableKind === "template" ? "전용 템플릿" : "맞춤 제작"}`,
       `분석 자료: 파일 ${droppedFiles.length}개 · 링크 ${links.length}개`,
       ...lines,
@@ -447,10 +447,10 @@ export function BriefConcierge({
             <div className="ys-kind-pills" role="group" aria-label={isKo ? "이번 건의 종류" : "Deliverable type"}>
               {(
                 [
-                  ["film", isKo ? "🎬 브랜드·캠페인 필름" : "🎬 Brand & Campaign Film"],
-                  ["product", isKo ? "✨ 제품 히어로 영상" : "✨ Product Hero Spot"],
-                  ["template", isKo ? "🔁 반복 제작용 전용 템플릿" : "🔁 Repeatable Brand Template"],
-                  ["unknown", isKo ? "🤔 아직 모름 (디렉터 추천)" : "🤔 Not sure yet"],
+                  ["film", isKo ? "브랜드·캠페인 필름" : "Brand & Campaign Film"],
+                  ["product", isKo ? "제품 히어로 영상" : "Product Hero Spot"],
+                  ["template", isKo ? "반복 제작용 전용 템플릿" : "Repeatable Brand Template"],
+                  ["unknown", isKo ? "아직 모름 (디렉터 추천)" : "Not sure yet"],
                 ] as const
               ).map(([id, label]) => (
                 <button
@@ -469,7 +469,7 @@ export function BriefConcierge({
               className="ys-sample-fill-btn"
               onClick={loadSampleChaos}
             >
-              {isKo ? "✨ 예시 기획서·카톡 메모 넣기" : "✨ Load sample messy deck & memo"}
+              {isKo ? "예시 기획서·카톡 메모 넣기" : "Load sample messy deck & memo"}
             </button>
           </div>
 
@@ -477,8 +477,8 @@ export function BriefConcierge({
             <div className="ys-intake-box">
               <strong>
                 {isKo
-                  ? "① 기획서·피그마·레퍼런스 링크 & 파일"
-                  : "① Slides (PPT/PDF), Figma & Reference Links"}
+                  ? "01. 기획서·피그마·레퍼런스 링크 & 파일"
+                  : "01. Slides (PPT/PDF), Figma & Reference Links"}
               </strong>
               <p className="bw-muted">
                 {isKo
@@ -488,13 +488,13 @@ export function BriefConcierge({
               <div className="ys-asset-pills">
                 {droppedFiles.map((file) => (
                   <span key={file} className="ys-asset-pill">
-                    <span>📄 {file}</span>
+                    <span>{file}</span>
                     <small style={{ marginLeft: 6, opacity: 0.75 }}>{isKo ? "· 분석 완료" : "· Parsed"}</small>
                   </span>
                 ))}
                 {links.map((url) => (
                   <span key={url} className="ys-asset-pill ys-asset-pill-link">
-                    🔗 {url}
+                    {url}
                   </span>
                 ))}
               </div>
@@ -519,8 +519,8 @@ export function BriefConcierge({
             <div className="ys-intake-box">
               <strong>
                 {isKo
-                  ? "② 정리되지 않은 회의·팀 메모 그대로 붙여넣기"
-                  : "② Paste raw team or meeting notes as-is"}
+                  ? "02. 정리되지 않은 회의·팀 메모 그대로 붙여넣기"
+                  : "02. Paste raw team or meeting notes as-is"}
               </strong>
               <p className="bw-muted">
                 {isKo
@@ -636,7 +636,7 @@ export function BriefConcierge({
                   )}
 
                   <p className="ys-evidence-line">
-                    💡 {isKo ? q.argonEvidenceKo : q.argonEvidenceEn}
+                    {isKo ? q.argonEvidenceKo : q.argonEvidenceEn}
                   </p>
 
                   <div className="ys-qoptions">
@@ -791,8 +791,8 @@ export function BriefConcierge({
               <div className="ys-spec-label">{isKo ? "09 · 예산 및 계약 조건" : "09 · Budget & Terms"}</div>
               <div className="ys-spec-val">
                 {isKo
-                  ? "🔒 비공개 보관 (PD와 브랜드 관리자만 열람 · 외부 공유 카드에서 자동 제외)"
-                  : "🔒 Confidential (Visible only to PD & Brand Owner; excluded from share cards)"}
+                  ? "비공개 보관 (PD와 브랜드 관리자만 열람 · 외부 공유 카드에서 자동 제외)"
+                  : "Confidential (Visible only to PD & Brand Owner; excluded from share cards)"}
               </div>
               <span className="ys-source-tag ys-source-user">
                 {isKo ? "보안 격리됨" : "Isolated"}
@@ -883,7 +883,7 @@ export function BriefConcierge({
             <div className="ys-viral-card-top">
               <span className="ys-viral-eyebrow">YAGI PRODUCTION · PREVIEW</span>
               <span className="ys-viral-blind-badge">
-                {isKo ? "🔒 예산·계약·내부 조건 비노출" : "🔒 Budget & Terms Redacted"}
+                {isKo ? "예산·계약·내부 조건 비노출" : "Budget & Terms Redacted"}
               </span>
             </div>
             <h3>

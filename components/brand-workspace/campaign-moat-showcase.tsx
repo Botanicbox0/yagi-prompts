@@ -20,37 +20,37 @@ export interface B2BSoundMasterClip {
 export const B2B_SOUND_MASTER_CLIPS: readonly B2BSoundMasterClip[] = [
   {
     id: "house-runway",
-    badgeKo: "포맷 시딩 · 런웨이",
-    badgeEn: "Format Seeding · Runway",
-    titleKo: "인하우스 패션 런웨이 1080p",
-    titleEn: "In-House Runway Master 1080p",
+    badgeKo: "런웨이 포맷",
+    badgeEn: "Runway Format",
+    titleKo: "인하우스 패션 런웨이",
+    titleEn: "In-House Runway Master",
     videoUrl: "/reel/brands/house-runway-1080p.mp4",
     posterUrl: "/reel/brands/house-runway-1080p.jpg",
   },
   {
     id: "studio-editorial-blue",
-    badgeKo: "포맷 시딩 · 룩북",
-    badgeEn: "Format Seeding · Lookbook",
-    titleKo: "프렌치 블루 릴스 1080p",
-    titleEn: "French Blue Reels 1080p",
+    badgeKo: "룩북 포맷",
+    badgeEn: "Lookbook Format",
+    titleKo: "프렌치 블루 릴스",
+    titleEn: "French Blue Reels",
     videoUrl: "/reel/brands/studio-editorial-blue-1080p.mp4",
     posterUrl: "/reel/brands/studio-editorial-blue-1080p.jpg",
   },
   {
     id: "house-french-blue-hero",
-    badgeKo: "스튜디오 · 히어로",
-    badgeEn: "Studio · Hero",
-    titleKo: "프렌치 블루 오브제 1080p",
-    titleEn: "French Blue Hero 1080p",
+    badgeKo: "제품 히어로",
+    badgeEn: "Product Hero",
+    titleKo: "프렌치 블루 오브제",
+    titleEn: "French Blue Object",
     videoUrl: "/reel/brands/house-french-blue-hero-1080p.mp4",
     posterUrl: "/reel/brands/house-french-blue-hero-1080p.jpg",
   },
   {
     id: "studio-rain-editorial",
-    badgeKo: "스튜디오 · 브랜드 필름",
-    badgeEn: "Studio · Brand Film",
-    titleKo: "레인 에디토리얼 1080p",
-    titleEn: "Rain Editorial 1080p",
+    badgeKo: "브랜드 필름",
+    badgeEn: "Brand Film",
+    titleKo: "레인 에디토리얼",
+    titleEn: "Rain Editorial",
     videoUrl: "/reel/brands/studio-rain-editorial-1080p.mp4",
     posterUrl: "/reel/brands/studio-rain-editorial-1080p.jpg",
   },
@@ -61,8 +61,6 @@ export function CampaignMoatShowcase({
   organizationId,
   studioOpen,
   canRequest = true,
-  membersOpen = true,
-  settingsOpen = true,
 }: {
   locale: "ko" | "en";
   organizationId?: string | null;
@@ -97,116 +95,58 @@ export function CampaignMoatShowcase({
   }
 
   return (
-    <div style={{ display: "grid", gap: "12px", marginBottom: "20px" }}>
-      {/* Quiet Media-First 1080p In-House Master Strip + Quick Launch */}
-      <section
-        className="bw-panel"
-        data-campaign-moat-showcase
-        data-brand-tab-map
-        style={{
-          padding: "18px 20px",
-          borderRadius: "20px",
-          background: "#FFFFFF",
-          border: "1px solid rgba(0, 0, 0, 0.08)",
-          boxShadow: "var(--ys-card)",
-          marginBottom: 0,
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            flexWrap: "wrap",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: "12px",
-            marginBottom: "12px",
-          }}
-        >
-          <div>
-            <h2 style={{ fontSize: "16px", fontWeight: 600, letterSpacing: "-0.02em", margin: "0 0 3px", color: "#0E1013" }}>
-              {isKo
-                ? "1080p 사운드 마스터 포맷 설계부터 인플루언서 동시 시딩까지 한곳에서 진행합니다"
-                : "Design 1080p sound-on master formats and scale creator seeding in one workspace"}
-            </h2>
-            <p
-              data-moat-pipeline
-              style={{
-                margin: 0,
-                fontSize: "12.5px",
-                color: "#676B75",
-              }}
-            >
-              {isKo
-                ? "① 브랜드 로고·미감 등록 → ② 1080p 화보·영상 스튜디오 제작 → ③ 인플루언서 대거 시딩 & 성과 집계"
-                : "① Register Brand DNA → ② Produce 1080p Studio Assets → ③ Creator Seeding & Live ROI"}
-            </p>
-          </div>
-
-          <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
-            <a
-              href={scopedHref("/brand/identity", choice)}
-              data-home-onboarding-cta
-              data-tab-guide-card="identity"
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                padding: "7px 13px",
-                borderRadius: "999px",
-                background: "#F6F7F9",
-                border: "1px solid rgba(0, 0, 0, 0.1)",
-                color: "#0E1013",
-                fontSize: "12.5px",
-                fontWeight: 600,
-                textDecoration: "none",
-              }}
-            >
-              {isKo ? "1단계: 브랜드 등록 →" : "Step 1: Brand Setup →"}
-            </a>
-            <a
-              href={scopedHref("/brand/studio", choice)}
-              data-home-studio-cta
-              data-tab-guide-card="studio"
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                padding: "7px 15px",
-                borderRadius: "999px",
-                background: "#3875C5",
-                color: "#FFFFFF",
-                fontSize: "12.5px",
-                fontWeight: 600,
-                textDecoration: "none",
-              }}
-            >
-              {isKo ? "2단계: 스튜디오 열기 →" : "Step 2: Open Studio →"}
-            </a>
-          </div>
+    <section
+      className="bw-showcase-panel"
+      data-campaign-moat-showcase
+      data-brand-tab-map
+      aria-label={isKo ? "스튜디오 레퍼런스 및 제작 방식" : "Studio reference and production modes"}
+    >
+      <div className="bw-showcase-head">
+        <div>
+          <h2>
+            {isKo
+              ? "스튜디오 레퍼런스 · 1080p 마스터 포맷"
+              : "Studio Reference · 1080p Master Formats"}
+          </h2>
+          <p data-moat-pipeline>
+            {isKo
+              ? "브랜드 스타일을 등록한 뒤 셀프 스튜디오에서 직접 만들거나, 전용 템플릿·인플루언서 캠페인·마스터 영상을 의뢰하세요."
+              : "Register your brand style to create directly in Self Studio, or commission custom templates, creator campaigns, and master films."}
+          </p>
         </div>
 
-        {/* Compact 4-Up 1080p In-House Video Strip (200px height so page content stays above the fold) */}
-        <div
-          data-b2b-sound-master-reel
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
-            gap: "10px",
-          }}
-        >
-          {B2B_SOUND_MASTER_CLIPS.map((clip) => {
-            const soundOn = activeSoundId === clip.id;
-            return (
-              <article
-                key={clip.id}
-                data-b2b-master-card={clip.id}
-                style={{
-                  position: "relative",
-                  borderRadius: "14px",
-                  overflow: "hidden",
-                  height: "200px",
-                  background: "#111114",
-                  border: soundOn ? "2px solid #3875C5" : "1px solid rgba(0, 0, 0, 0.08)",
-                }}
-              >
+        <div className="bw-showcase-actions">
+          <a
+            href={scopedHref("/brand/identity", choice)}
+            className="bw-button"
+            data-home-onboarding-cta
+            data-tab-guide-card="identity"
+          >
+            {isKo ? "브랜드 스타일 등록" : "Brand Style"}
+          </a>
+          <a
+            href={scopedHref("/brand/studio", choice)}
+            className="bw-button bw-primary"
+            data-home-studio-cta
+            data-tab-guide-card="studio"
+          >
+            {isKo ? "셀프 스튜디오 열기" : "Open Self Studio"}
+          </a>
+        </div>
+      </div>
+
+      {/* 4-Up Portrait (4:5) Passepartout Video Gallery — Zero cropped heads, zero chip clutter over footage */}
+      <div className="bw-showcase-reel" data-b2b-sound-master-reel>
+        {B2B_SOUND_MASTER_CLIPS.map((clip) => {
+          const soundOn = activeSoundId === clip.id;
+          return (
+            <figure
+              key={clip.id}
+              className="bw-showcase-card"
+              data-b2b-master-card={clip.id}
+              data-sound-active={soundOn ? "true" : undefined}
+            >
+              <div className="bw-showcase-media">
                 <video
                   ref={(el) => {
                     videoRefs.current[clip.id] = el;
@@ -218,175 +158,113 @@ export function CampaignMoatShowcase({
                   loop
                   playsInline
                   preload="metadata"
-                  style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
                 />
-                <span
-                  style={{
-                    position: "absolute",
-                    top: "10px",
-                    left: "10px",
-                    padding: "4px 10px",
-                    borderRadius: "999px",
-                    background: "rgba(17, 17, 20, 0.68)",
-                    backdropFilter: "blur(8px)",
-                    color: "#FFFFFF",
-                    fontSize: "11px",
-                    fontWeight: 600,
-                  }}
+                <button
+                  type="button"
+                  className="bw-showcase-sound"
+                  data-reel-sound-toggle={clip.id}
+                  aria-pressed={soundOn}
+                  onClick={() => toggleSound(clip.id)}
                 >
-                  {isKo ? clip.badgeKo : clip.badgeEn}
-                </span>
-                <div
-                  style={{
-                    position: "absolute",
-                    left: "10px",
-                    right: "10px",
-                    bottom: "10px",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    gap: "6px",
-                  }}
-                >
-                  <span
-                    style={{
-                      padding: "4px 9px",
-                      borderRadius: "999px",
-                      background: "rgba(17, 17, 20, 0.65)",
-                      color: "#FFFFFF",
-                      fontSize: "11px",
-                      fontWeight: 600,
-                    }}
-                  >
-                    {isKo ? clip.titleKo : clip.titleEn}
+                  {soundOn ? (
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M11 5L6 9H2v6h4l5 4V5z" />
+                      <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+                      <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+                    </svg>
+                  ) : (
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M11 5L6 9H2v6h4l5 4V5z" />
+                      <line x1="23" y1="9" x2="17" y2="15" />
+                      <line x1="17" y1="9" x2="23" y2="15" />
+                    </svg>
+                  )}
+                  <span>
+                    {soundOn
+                      ? isKo
+                        ? "소리 켜짐"
+                        : "Sound On"
+                      : isKo
+                        ? "소리 켜기"
+                        : "Sound"}
                   </span>
-                  <button
-                    type="button"
-                    data-reel-sound-toggle={clip.id}
-                    aria-pressed={soundOn}
-                    onClick={() => toggleSound(clip.id)}
-                    style={{
-                      padding: "5px 10px",
-                      borderRadius: "999px",
-                      border: "1px solid rgba(255,255,255,0.28)",
-                      background: soundOn ? "#3875C5" : "rgba(17, 17, 20, 0.76)",
-                      color: "#FFFFFF",
-                      fontSize: "11px",
-                      fontWeight: 600,
-                      cursor: "pointer",
-                    }}
-                  >
-                    {soundOn ? (isKo ? "🔊 켜짐" : "🔊 On") : isKo ? "🔇 소리" : "🔇 Sound"}
-                  </button>
-                </div>
-              </article>
-            );
-          })}
-        </div>
+                </button>
+              </div>
+              <figcaption className="bw-showcase-caption">
+                <strong>{isKo ? clip.titleKo : clip.titleEn}</strong>
+                <span>{isKo ? clip.badgeKo : clip.badgeEn} · 1080p</span>
+              </figcaption>
+            </figure>
+          );
+        })}
+      </div>
 
-        {/* 3. 1 Self Studio + 3 Commission Tracks Quick Launch Strip (only for owners/editors who can request) */}
-        {canRequest && (
-        <div
-          data-commission-quick-launch
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))",
-            gap: "10px",
-            marginTop: "14px",
-            paddingTop: "14px",
-            borderTop: "1px solid rgba(0, 0, 0, 0.06)",
-          }}
-        >
+      {/* Editorial Top-Rule 4-Track Bar (Matches .bw-studio-process grammar, zero nested boxes or emojis) */}
+      {canRequest && (
+        <div className="bw-showcase-tracks" data-commission-quick-launch>
           <a
             href={scopedHref("/brand/studio", choice)}
+            className="bw-showcase-track"
             data-quick-track="self_studio"
-            style={{
-              display: "grid",
-              gap: "3px",
-              padding: "11px 14px",
-              borderRadius: "14px",
-              background: "#F6F7F9",
-              border: "1px solid rgba(0, 0, 0, 0.08)",
-              textDecoration: "none",
-              color: "#0E1013",
-            }}
           >
-            <strong style={{ fontSize: "13px", fontWeight: 600 }}>
-              {isKo ? "⚡ 셀프 스튜디오 (자체 생성)" : "⚡ Self Studio (Direct AI)"}
-            </strong>
-            <span style={{ fontSize: "12px", color: "#676B75" }}>
-              {isKo ? "장착된 템플릿으로 화보·영상 직접 생성" : "Generate assets & videos directly"}
+            <span className="bw-showcase-track-num" aria-hidden="true">01</span>
+            <strong>{isKo ? "셀프 스튜디오" : "Self Studio"}</strong>
+            <span>
+              {isKo
+                ? "장착된 템플릿으로 화보·영상을 직접 생성합니다"
+                : "Generate brand stills and videos directly"}
             </span>
           </a>
 
           <a
             href={`${scopedHref("/brand/projects/new", choice)}${choice ? "&" : "?"}track=template_build`}
+            className="bw-showcase-track"
             data-quick-track="template_build"
-            style={{
-              display: "grid",
-              gap: "3px",
-              padding: "11px 14px",
-              borderRadius: "14px",
-              background: "#F6F7F9",
-              border: "1px solid rgba(0, 0, 0, 0.08)",
-              textDecoration: "none",
-              color: "#0E1013",
-            }}
           >
-            <strong style={{ fontSize: "13px", fontWeight: 600 }}>
-              {isKo ? "① 전용 템플릿 생성만 의뢰" : "① Custom Template Build Only"}
+            <span className="bw-showcase-track-num" aria-hidden="true">02</span>
+            <strong>
+              {isKo ? "전용 템플릿 제작 의뢰" : "Custom Template Build"}
             </strong>
-            <span style={{ fontSize: "12px", color: "#676B75" }}>
-              {isKo ? "YAGI 제작 → 시사 승인 후 스튜디오 장착" : "Review sample -> mounts to Self Studio"}
+            <span>
+              {isKo
+                ? "시사 승인 후 셀프 스튜디오에 즉시 장착됩니다"
+                : "Review sample cut and mount to Self Studio"}
             </span>
           </a>
 
           <a
             href={`${scopedHref("/brand/projects/new", choice)}${choice ? "&" : "?"}track=creator_campaign`}
+            className="bw-showcase-track"
             data-quick-track="creator_campaign"
-            style={{
-              display: "grid",
-              gap: "3px",
-              padding: "11px 14px",
-              borderRadius: "14px",
-              background: "rgba(56, 117, 197, 0.08)",
-              border: "1px solid rgba(56, 117, 197, 0.24)",
-              textDecoration: "none",
-              color: "#0E1013",
-            }}
           >
-            <strong style={{ fontSize: "13px", fontWeight: 600, color: "#3063A7" }}>
-              {isKo ? "② 템플릿 + 인플루언서 발행 의뢰" : "② Template + Creator Seeding"}
+            <span className="bw-showcase-track-num" aria-hidden="true">03</span>
+            <strong>
+              {isKo ? "인플루언서 시딩 캠페인" : "Creator Seeding Campaign"}
             </strong>
-            <span style={{ fontSize: "12px", color: "#676B75" }}>
-              {isKo ? "포맷 설계 + 인플루언서 섭외·릴스 동시 게시" : "Format lock + creator wave & live ROI"}
+            <span>
+              {isKo
+                ? "포맷 설계부터 크리에이터 섭외·동시 게시까지 진행합니다"
+                : "Format design, creator casting, and live ROI"}
             </span>
           </a>
 
           <a
             href={`${scopedHref("/brand/projects/new", choice)}${choice ? "&" : "?"}track=studio_film`}
+            className="bw-showcase-track"
             data-quick-track="studio_film"
-            style={{
-              display: "grid",
-              gap: "3px",
-              padding: "11px 14px",
-              borderRadius: "14px",
-              background: "#F6F7F9",
-              border: "1px solid rgba(0, 0, 0, 0.08)",
-              textDecoration: "none",
-              color: "#0E1013",
-            }}
           >
-            <strong style={{ fontSize: "13px", fontWeight: 600 }}>
-              {isKo ? "③ 마스터 영상 제작만 의뢰" : "③ Master Video Production Only"}
+            <span className="bw-showcase-track-num" aria-hidden="true">04</span>
+            <strong>
+              {isKo ? "마스터 영상 제작 의뢰" : "Master Film Production"}
             </strong>
-            <span style={{ fontSize: "12px", color: "#676B75" }}>
-              {isKo ? "인플루언서 없이 1080p 완제품 필름 납품" : "1080p commercial film delivery only"}
+            <span>
+              {isKo
+                ? "인플루언서 없이 1080p 완제품 필름을 납품합니다"
+                : "1080p commercial film delivery without seeding"}
             </span>
           </a>
         </div>
-        )}
-      </section>
-    </div>
+      )}
+    </section>
   );
 }

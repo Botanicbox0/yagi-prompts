@@ -76,8 +76,8 @@ const QUICK_ROI_PRESETS: Record<
   }
 > = {
   logo_chest: {
-    labelKo: "① 브랜드 로고·라벨 각인 복원",
-    labelEn: "① Brand Logo & Label Lock",
+    labelKo: "01. 브랜드 로고·라벨 각인 복원",
+    labelEn: "01. Brand Logo & Label Lock",
     shortKo: "로고·라벨 각인",
     mode: "logo_mark_lock",
     box: { x0: 680, y0: 510, x1: 960, y1: 790 },
@@ -87,8 +87,8 @@ const QUICK_ROI_PRESETS: Record<
     seamNoteKo: "보틀 유리 숄더·라벨 외곽선 밖 평탄면 36px 여유 확보됨",
   },
   hand_skin_patch: {
-    labelKo: "② 손·의류 주름·작은 흠집 정리",
-    labelEn: "② Hand / Garment / Blemish Patch",
+    labelKo: "02. 손·의류 주름·작은 흠집 정리",
+    labelEn: "02. Hand / Garment / Blemish Patch",
     shortKo: "손·피부 패치",
     mode: "micro_patch_ecc",
     box: { x0: 880, y0: 180, x1: 1280, y1: 580 },
@@ -98,8 +98,8 @@ const QUICK_ROI_PRESETS: Record<
     seamNoteKo: "턱선·옷깃 경계선 회피 완료 · 볼 평탄 피부 영역 내부에서 알파 0.0 소멸",
   },
   full_body_face: {
-    labelKo: "③ 전신 화보 얼굴·피부결 선명화",
-    labelEn: "③ Full-Body Face & Skin Detail",
+    labelKo: "03. 전신 화보 얼굴·피부결 선명화",
+    labelEn: "03. Full-Body Face & Skin Detail",
     shortKo: "전신 얼굴·홍채",
     mode: "face_detail_refine",
     box: { x0: 758, y0: 38, x1: 1290, y1: 563 },
@@ -109,8 +109,8 @@ const QUICK_ROI_PRESETS: Record<
     seamNoteKo: "헤어라인·목선 여유 포함 532×525px 안전 박스 확보됨",
   },
   expression_retake: {
-    labelKo: "④ 눈빛·입꼬리 미세 리테이크",
-    labelEn: "④ Subtle Eye Gaze & Smile Retake",
+    labelKo: "04. 눈빛·입꼬리 미세 리테이크",
+    labelEn: "04. Subtle Eye Gaze & Smile Retake",
     shortKo: "1~2mm 표정 리테이크",
     mode: "expression_au_retake",
     box: { x0: 573, y0: 40, x1: 1474, y1: 768 },
@@ -368,7 +368,7 @@ export function BrandMicroRoiPanel({
       </div>
 
       {/* Interactive 2-Column Visual Stage: Left = 2K Canvas ROI Selector + Seam Radar, Right = 1440px Loupe Before/After Scrub */}
-      <div className="bw-grid-wide" style={{ alignItems: "stretch", gap: 16 }}>
+      <div className="bw-grid" style={{ alignItems: "stretch", gap: 16 }}>
         {/* Left: Visual 2K Canvas & Seam-Safety Radar */}
         <div
           className="bw-card bw-fields"
@@ -378,8 +378,8 @@ export function BrandMicroRoiPanel({
           <div className="bw-row">
             <strong>
               {isKo
-                ? "① 원본 화보 수선 위치 선택 (화면을 클릭해 이동)"
-                : "① Select Repair Area on Source Photo (Click to move)"}
+                ? "01. 원본 화보 수선 위치 선택 (화면을 클릭해 이동)"
+                : "01. Select Repair Area on Source Photo (Click to move)"}
             </strong>
             <span className="bw-badge">
               {cropW}×{cropH}px → {activeSpec.defaultCanvasPx}px ({upscaleFactor}×)
@@ -504,8 +504,8 @@ export function BrandMicroRoiPanel({
                   ? "✓ 경계 여백 충분: 주변 피부·배경과 티 나지 않게 자연스럽게 이어집니다"
                   : "✓ Seam-Safety Passed: smooth feather margin secured"
                 : isKo
-                  ? "⚠ 수선 박스가 경계에 가깝습니다. 자동 여백 보정을 눌러 경계 자국을 예방하세요."
-                  : "⚠ Box is tight; click Auto-Snap Padding for a seamless blend."}
+                  ? "수선 박스가 경계에 가깝습니다. 자동 여백 보정을 눌러 경계 자국을 예방하세요."
+                  : "Box is tight; click Auto-Snap Padding for a seamless blend."}
             </span>
             <button
               type="button"
@@ -529,8 +529,8 @@ export function BrandMicroRoiPanel({
           <div className="bw-row">
             <strong>
               {isKo
-                ? `② ${activeSpec.defaultCanvasPx}px 확대 루페 · 수선 후 ↔ 수선 전 비교`
-                : `② ${activeSpec.defaultCanvasPx}px Magnified Loupe · After ↔ Before`}
+                ? `02. ${activeSpec.defaultCanvasPx}px 확대 루페 · 수선 후 ↔ 수선 전 비교`
+                : `02. ${activeSpec.defaultCanvasPx}px Magnified Loupe · After ↔ Before`}
             </strong>
             <span className="bw-badge" data-micro-roi-image2-lock>
               {referenceKind === "mark_only"
@@ -666,7 +666,7 @@ export function BrandMicroRoiPanel({
           />
         </label>
 
-        <div className="bw-grid-wide">
+        <div className="bw-grid">
           <label>
             {isKo ? "수선 대상 종류" : "Repair Target Mode"}
             <select
@@ -729,7 +729,7 @@ export function BrandMicroRoiPanel({
               : `Advanced Pixel Coordinates & Tone-Lock Settings (${cropW}×${cropH}px → ${activeSpec.defaultCanvasPx}px)`}
           </summary>
           <div className="bw-fields" style={{ marginTop: 12 }}>
-            <div className="bw-grid-wide">
+            <div className="bw-grid">
               <label>
                 {isKo ? "Box x0 (px)" : "Box x0 (px)"}
                 <input

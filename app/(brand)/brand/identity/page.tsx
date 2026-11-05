@@ -10,6 +10,7 @@ import {
   adminOrganizationHref,
 } from "@/components/brand-workspace/staff-notice";
 import { featureDenied, isSandboxedClientOrganization } from "@/lib/brands/features";
+import { inferBrandCategoryFromWorkspace } from "@/lib/brands/category-experience";
 import {
   BRAND_LOOK_SOURCES,
   BRAND_MEMORY_KINDS,
@@ -159,6 +160,11 @@ export default async function BrandIdentityPage({
       <BrandOnboardingWizard
         organizationId={choice.id}
         organizationName={choice.name}
+        initialCategory={inferBrandCategoryFromWorkspace({
+          organizationName: choice.name,
+          checklist: current.productChecklist,
+          memoryPayloads: memory.map((m) => m.payload),
+        })}
         locale={locale}
         isOwner={isOwner}
         currentStatus={record?.status ?? "none"}
@@ -196,7 +202,7 @@ export default async function BrandIdentityPage({
                 {interpolate(t.contrastLabel, { ratio: accentContrast })}
               </strong>
             </p>
-            <div className="bw-grid-wide">
+            <div className="bw-grid">
               {COLOUR_KEYS.map(([key, fieldName]) => (
                 <label key={key}>
                   <span>
@@ -228,7 +234,7 @@ export default async function BrandIdentityPage({
 
             <h2>{t.typeSection}</h2>
             <p className="bw-muted">{t.typeHint}</p>
-            <div className="bw-grid-wide">
+            <div className="bw-grid">
               <label>
                 {t.typeSans}
                 <input
@@ -248,7 +254,7 @@ export default async function BrandIdentityPage({
                 />
               </label>
             </div>
-            <div className="bw-grid-wide">
+            <div className="bw-grid">
               <label>
                 {t.displayScale}
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8 }}>
@@ -337,7 +343,7 @@ export default async function BrandIdentityPage({
 
             <h2>{t.worldSection}</h2>
             <p className="bw-muted">{t.worldHint}</p>
-            <div className="bw-grid-wide">
+            <div className="bw-grid">
               <label>
                 {t.ownedHueMin}
                 <input
@@ -376,7 +382,7 @@ export default async function BrandIdentityPage({
 
             <h2>{t.rulesSection}</h2>
             <p className="bw-muted">{t.rulesHint}</p>
-            <div className="bw-grid-wide">
+            <div className="bw-grid">
               <label>
                 {t.logoMinSize}
                 <input
@@ -415,7 +421,7 @@ export default async function BrandIdentityPage({
               {t.paletteOnly}
             </label>
             <p className="bw-muted">{t.consentedFacesOnly}</p>
-            <div className="bw-grid-wide">
+            <div className="bw-grid">
               <label>
                 {t.forbiddenTerms}
                 <textarea
@@ -477,7 +483,7 @@ export default async function BrandIdentityPage({
             </label>
 
             <h2>{t.voiceSection}</h2>
-            <div className="bw-grid-wide">
+            <div className="bw-grid">
               <label>
                 {t.voiceTone}
                 <textarea
@@ -501,7 +507,7 @@ export default async function BrandIdentityPage({
         </ActionForm>
         </section>
 
-      <div className="bw-grid-wide" style={{ marginTop: 12 }}>
+      <div className="bw-grid" style={{ marginTop: 12 }}>
         {!featureDenied(choice.denied, "color_grading") && (
         <section className="bw-panel" data-brand-looks>
           <h2>{t.looksSection}</h2>
@@ -540,7 +546,7 @@ export default async function BrandIdentityPage({
                   {t.lookTitle}
                   <input name="title" maxLength={120} required />
                 </label>
-                <div className="bw-grid-wide">
+                <div className="bw-grid">
                   <label>
                     {t.lookSource}
                     <select name="source" defaultValue="preset">

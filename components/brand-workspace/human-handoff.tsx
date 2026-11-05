@@ -48,7 +48,7 @@ export function HumanHandoff({
             : "Skip AI questions & hand off directly to PD";
 
     const messageBody = [
-      `[⚡ YAGI STUDIO · 전담 PD 직통 호출 (${channelLabel})]`,
+      `[YAGI STUDIO · 전담 PD 직통 호출 (${channelLabel})]`,
       `첨부 상태: 제작 명세서 v${specVersion} · 레퍼런스 ${refCount}건 · 미확정 항목 ${openQuestions}건`,
       phone.trim() ? `연락처: ${phone.trim()}` : null,
       preferredTime.trim() ? `희망 통화 시간: ${preferredTime.trim()}` : null,
@@ -160,8 +160,8 @@ export function HumanHandoff({
               ? "✓ PD 호출 완료 · 상세 보기"
               : "✓ PD Alerted · View status"
             : isKo
-              ? "⚡ 사람과 바로 얘기하기"
-              : "⚡ Talk to Human PD Now"}
+              ? "사람과 바로 얘기하기"
+              : "Talk to Human PD Now"}
         </button>
       </div>
 
@@ -209,7 +209,7 @@ export function HumanHandoff({
             <div className="ys-handoff-options">
               <div className="ys-handoff-card">
                 <div>
-                  <strong>{isKo ? "① 지금 바로 전화 주세요 (ASAP 콜백)" : "① Call me right now (ASAP Callback)"}</strong>
+                  <strong>{isKo ? "01. 지금 바로 전화 주세요 (ASAP 콜백)" : "01. Call me right now (ASAP Callback)"}</strong>
                   <p>{isKo ? "영업시간 기준 가장 빠르게 전담 PD가 전화를 드립니다." : "Our executive PD will call your number right away during studio hours."}</p>
                 </div>
                 <div className="ys-handoff-inline-inputs">
@@ -233,7 +233,7 @@ export function HumanHandoff({
 
               <div className="ys-handoff-card">
                 <div>
-                  <strong>{isKo ? "② 시간 정해서 15분 퀵 콜 / 구글 밋" : "② Schedule a 15-min Quick Call / Meet"}</strong>
+                  <strong>{isKo ? "02. 시간 정해서 15분 퀵 콜 / 구글 밋" : "02. Schedule a 15-min Quick Call / Meet"}</strong>
                   <p>{isKo ? "편한 시간대를 적어주시면 PD 일정에 바로 잡아둡니다." : "Pick a convenient window and we will lock it into the PD schedule."}</p>
                 </div>
                 <div className="ys-handoff-inline-inputs">
@@ -257,7 +257,7 @@ export function HumanHandoff({
 
               <div className="ys-handoff-card ys-handoff-skip-card">
                 <div>
-                  <strong>{isKo ? "③ 질문은 건너뛰고 PD에게 통째로 넘길게요" : "③ Skip remaining questions & hand off to PD"}</strong>
+                  <strong>{isKo ? "03. 질문은 건너뛰고 PD에게 통째로 넘길게요" : "03. Skip remaining questions & hand off to PD"}</strong>
                   <p>{isKo ? "지금까지 올린 자료와 읽은 내용만으로 PD가 알아서 명세서 빈칸을 채워 제안합니다." : "Hand over everything uploaded so far; our PD will fill in the remaining gaps for you."}</p>
                   <input
                     type="text"

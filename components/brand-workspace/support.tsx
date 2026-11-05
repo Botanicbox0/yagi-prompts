@@ -25,17 +25,17 @@ function toSlackHandle(name: string): string {
 }
 
 const QUICK_TOPICS_KO = [
-  { label: "📅 일정·납기 문의", text: "안녕하세요, 이번 캠페인 첫 시안(v1) 및 최종 납기 일정이 궁금합니다." },
-  { label: "🎬 크리에이터 리스트", text: "캠페인에 매칭 가능한 추천 크리에이터 리스트를 받아볼 수 있을까요?" },
-  { label: "💳 견적·예산 상담", text: "예산 범위에 따른 제작 편수 및 시딩 구성을 상담하고 싶습니다." },
-  { label: "✨ 시안 수정 피드백", text: "전달주신 시안 관련하여 추가 연출 피드백 드립니다: " },
+  { label: "일정·납기 문의", text: "안녕하세요, 이번 캠페인 첫 시안(v1) 및 최종 납기 일정이 궁금합니다." },
+  { label: "크리에이터 리스트", text: "캠페인에 매칭 가능한 추천 크리에이터 리스트를 받아볼 수 있을까요?" },
+  { label: "견적·예산 상담", text: "예산 범위에 따른 제작 편수 및 시딩 구성을 상담하고 싶습니다." },
+  { label: "시안 수정 피드백", text: "전달주신 시안 관련하여 추가 연출 피드백 드립니다: " },
 ] as const;
 
 const QUICK_TOPICS_EN = [
-  { label: "📅 Timeline & Delivery", text: "Hi, could we check the schedule for Cut v1 and final delivery?" },
-  { label: "🎬 Creator Lineup", text: "Could you share the recommended creator list for our campaign?" },
-  { label: "💳 Quote & Scope", text: "We'd like to discuss production volume and seeding options for our budget." },
-  { label: "✨ Cut Feedback", text: "Sharing additional direction feedback on the latest cut: " },
+  { label: "Timeline & Delivery", text: "Hi, could we check the schedule for Cut v1 and final delivery?" },
+  { label: "Creator Lineup", text: "Could you share the recommended creator list for our campaign?" },
+  { label: "Quote & Scope", text: "We'd like to discuss production volume and seeding options for our budget." },
+  { label: "Cut Feedback", text: "Sharing additional direction feedback on the latest cut: " },
 ] as const;
 
 export function SupportDrawer({

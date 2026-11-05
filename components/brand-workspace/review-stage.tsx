@@ -561,7 +561,7 @@ export function ReviewStage({
               className="bw-button"
               data-studio-handoff-link
             >
-              {isEn ? "⚡ Open Self Studio →" : "⚡ 셀프 스튜디오 열기 →"}
+              {isEn ? "Open Self Studio →" : "셀프 스튜디오 열기 →"}
             </a>
           )}
           <button
@@ -579,8 +579,8 @@ export function ReviewStage({
                 ? "Close Interactive Tour"
                 : "가이드 투어 닫기"
               : isEn
-                ? "✨ 1-Min Interactive Feature Tour"
-                : "✨ 1분 인터랙티브 기능 투어"}
+                ? "1-Min Interactive Feature Tour"
+                : "1분 인터랙티브 기능 투어"}
           </button>
         </div>
       </div>
@@ -699,14 +699,14 @@ export function ReviewStage({
                 {
                   id: "needs_revision" as const,
                   label: isEn
-                    ? `🛠 Needs Revision (${statusCounts.needs_revision})`
-                    : `🛠 수정 요청 (${statusCounts.needs_revision})`,
+                    ? `Needs Revision (${statusCounts.needs_revision})`
+                    : `수정 요청 (${statusCounts.needs_revision})`,
                 },
                 {
                   id: "final_deliverables" as const,
                   label: isEn
-                    ? `✅ Ready for Release (${statusCounts.ready_for_release})`
-                    : `✅ 최종 승인 (${statusCounts.ready_for_release})`,
+                    ? `Ready for Release (${statusCounts.ready_for_release})`
+                    : `최종 승인 (${statusCounts.ready_for_release})`,
                 },
               ] as const
             ).map((col) => (
@@ -756,7 +756,7 @@ export function ReviewStage({
                 <div className="ys-collage-folder-meta">
                   <div className="ys-collage-folder-title-row">
                     <h5>
-                      <span aria-hidden="true">📁 </span>
+                      
                       {folder.title}
                     </h5>
                     <span className="ys-collage-count">
@@ -832,10 +832,10 @@ export function ReviewStage({
                       {isEn ? "⏳ Awaiting Approval" : "⏳ 검수 대기"}
                     </option>
                     <option value="needs_revision">
-                      {isEn ? "🛠 Needs Revision" : "🛠 수정 요청"}
+                      {isEn ? "Needs Revision" : "수정 요청"}
                     </option>
                     <option value="ready_for_release">
-                      {isEn ? "✅ Ready for Release" : "✅ 최종 승인"}
+                      {isEn ? "Ready for Release" : "최종 승인"}
                     </option>
                   </select>
                 </label>
@@ -939,11 +939,11 @@ export function ReviewStage({
             >
               {pinProtected
                 ? isKo
-                  ? "🔒 4자리 PIN 보호 켜짐"
-                  : "🔒 4-digit PIN ON"
+                  ? "4자리 PIN 보호 켜짐"
+                  : "4-digit PIN ON"
                 : isKo
-                  ? "🔓 PIN 없이 열람"
-                  : "🔓 No PIN"}
+                  ? "PIN 없이 열람"
+                  : "No PIN"}
             </button>
             <button
               type="button"
@@ -957,8 +957,8 @@ export function ReviewStage({
                   ? "Close Share Options"
                   : "공유 설정 접기"
                 : isEn
-                  ? "⚙ Layout & Security Settings"
-                  : "⚙ 레이아웃 · 보안 상세 설정"}
+                  ? "Layout & Security Settings"
+                  : "레이아웃 · 보안 상세 설정"}
             </button>
             <button
               type="button"
@@ -993,9 +993,9 @@ export function ReviewStage({
                   {(
                     [
                       { id: "grid" as const, label: isEn ? "⊞ Grid" : "⊞ 그리드(Grid)" },
-                      { id: "list" as const, label: isEn ? "☰ List" : "☰ 리스트(List)" },
-                      { id: "reel" as const, label: isEn ? "📱 Reel" : "📱 릴스(Reel)" },
-                      { id: "player" as const, label: isEn ? "🎬 Player" : "🎬 플레이어(Player)" },
+                      { id: "list" as const, label: isEn ? "List" : "리스트(List)" },
+                      { id: "reel" as const, label: isEn ? "Reel" : "릴스(Reel)" },
+                      { id: "player" as const, label: isEn ? "Player" : "플레이어(Player)" },
                     ] as const
                   ).map((mode) => (
                     <button
@@ -1101,8 +1101,8 @@ export function ReviewStage({
                 <strong>{shareConfig.title}</strong>
                 <div className="ys-share-preview-badges">
                   <span>{shareConfig.layout.toUpperCase()} VIEW</span>
-                  {shareConfig.passphraseEnabled && <span>🔒 PIN</span>}
-                  {shareConfig.watermark && <span>💧 WATERMARK</span>}
+                  {shareConfig.passphraseEnabled && <span>PIN</span>}
+                  {shareConfig.watermark && <span>WATERMARK</span>}
                 </div>
               </div>
               <div className={`ys-share-preview-canvas ys-preview-${shareConfig.layout}`}>
@@ -1118,9 +1118,9 @@ export function ReviewStage({
                       <strong>{d.title}</strong>
                       <span>
                         {d.status === "ready_for_release"
-                          ? "✅ Ready for Release"
+                          ? "Ready for Release"
                           : d.status === "needs_revision"
-                            ? "🛠 Needs Revision"
+                            ? "Needs Revision"
                             : "⏳ Awaiting Approval"}
                       </span>
                     </div>
@@ -1129,8 +1129,8 @@ export function ReviewStage({
               </div>
               <div className="ys-share-preview-footer">
                 <span>
-                  {shareConfig.allowComments ? "💬 Comments ON" : "💬 Comments OFF"} ·{" "}
-                  {shareConfig.allowApprovals ? "✅ Approvals ON" : "✅ Approvals OFF"} ·{" "}
+                  {shareConfig.allowComments ? "Comments ON" : "Comments OFF"} ·{" "}
+                  {shareConfig.allowApprovals ? "Approvals ON" : "Approvals OFF"} ·{" "}
                   {shareConfig.allowDownloads ? "⬇ Downloads ON" : "⬇ Downloads Locked"}
                 </span>
               </div>
@@ -1191,11 +1191,11 @@ export function ReviewStage({
             >
               {spatialPinMode
                 ? isKo
-                  ? "📍 화면 클릭 메모 켜짐"
-                  : "📍 Pin Mode ON"
+                  ? "화면 클릭 메모 켜짐"
+                  : "Pin Mode ON"
                 : isKo
-                  ? "📍 화면 클릭 메모"
-                  : "📍 Pin Mode"}
+                  ? "화면 클릭 메모"
+                  : "Pin Mode"}
             </button>
             <button
               type="button"
@@ -1213,11 +1213,11 @@ export function ReviewStage({
             >
               {audioStemMode === "master_with_bgm"
                 ? isKo
-                  ? "🔊 음악 포함"
-                  : "🔊 With Music"
+                  ? "음악 포함"
+                  : "With Music"
                 : isKo
-                  ? "🎙️ 현장음만 (릴스 음원용)"
-                  : "🎙️ Clean Sound Only"}
+                  ? "현장음만 (릴스 음원용)"
+                  : "Clean Sound Only"}
             </button>
             <button
               type="button"
@@ -1230,7 +1230,7 @@ export function ReviewStage({
               onClick={() => setSafeZoneOverlayOn((prev) => !prev)}
               data-safe-zone-toggle
             >
-              {isKo ? "📱 화면 가림 가이드" : "📱 Safe-Zone Guide"}
+              {isKo ? "화면 가림 가이드" : "Safe-Zone Guide"}
             </button>
             {sorted.length > 1 && (
               <button
@@ -1336,7 +1336,7 @@ export function ReviewStage({
                     fontWeight: 700,
                   }}
                 >
-                  📍
+                  +
                 </div>
                 <span
                   style={{
@@ -1384,8 +1384,8 @@ export function ReviewStage({
                   }}
                 >
                   {isEn
-                    ? "⚠️ Top 12% Reels/TikTok Status & Header Dead Zone (Keep Logos Below)"
-                    : "⚠️ 상단 12% 릴스·틱톡 상단바 가림 주의 구역 (로고·핵심 텍스트 배치 금지)"}
+                    ? "Top 12% Reels/TikTok Status & Header Dead Zone (Keep Logos Below)"
+                    : "상단 12% 릴스·틱톡 상단바 가림 주의 구역 (로고·핵심 텍스트 배치 금지)"}
                 </div>
                 <div
                   style={{
@@ -1408,8 +1408,8 @@ export function ReviewStage({
                     }}
                   >
                     {isEn
-                      ? "⚠️ Bottom 22% Caption, Account Handle & Audio Marquee Dead Zone"
-                      : "⚠️ 하단 22% 계정명·캡션·음원 바 가림 구역 (제품·자막은 중앙 안전 영역에 배치됨)"}
+                      ? "Bottom 22% Caption, Account Handle & Audio Marquee Dead Zone"
+                      : "하단 22% 계정명·캡션·음원 바 가림 구역 (제품·자막은 중앙 안전 영역에 배치됨)"}
                   </div>
                   <div
                     style={{
@@ -1526,8 +1526,8 @@ export function ReviewStage({
                     ? `✓ [${stampedNotice}] 프레임 핀이 기록됨`
                     : `✓ Stamped [${stampedNotice}]`
                   : isKo
-                    ? `📌 현재 프레임(${formatTimecode(currentTime)} · ${cursorCoords.xPct}%, ${cursorCoords.yPct}%) 핀 찍기`
-                    : `📌 Stamp [${formatTimecode(currentTime)}] & write comment`}
+                    ? `현재 프레임(${formatTimecode(currentTime)} · ${cursorCoords.xPct}%, ${cursorCoords.yPct}%) 핀 찍기`
+                    : `Stamp [${formatTimecode(currentTime)}] & write comment`}
               </button>
             </div>
           </div>
@@ -1550,8 +1550,8 @@ export function ReviewStage({
             <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
               <span style={{ fontSize: 12, fontWeight: 600, color: "#E2E8F0" }}>
                 {isKo
-                  ? `⚡ 공간 핀 파이프라인 직결 — @${formatTimecode(currentTime)} · 좌표 (${cursorCoords.xPct}%, ${cursorCoords.yPct}%) → 2K ROI (${computedRoiBox.x0}, ${computedRoiBox.y0})~(${computedRoiBox.x1}, ${computedRoiBox.y1})`
-                  : `⚡ Spatial Pin Pipeline — @${formatTimecode(currentTime)} (${cursorCoords.xPct}%, ${cursorCoords.yPct}%)`}
+                  ? `공간 핀 파이프라인 직결 — @${formatTimecode(currentTime)} · 좌표 (${cursorCoords.xPct}%, ${cursorCoords.yPct}%) → 2K ROI (${computedRoiBox.x0}, ${computedRoiBox.y0})~(${computedRoiBox.x1}, ${computedRoiBox.y1})`
+                  : `Spatial Pin Pipeline — @${formatTimecode(currentTime)} (${cursorCoords.xPct}%, ${cursorCoords.yPct}%)`}
               </span>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                 <select
@@ -1596,8 +1596,8 @@ export function ReviewStage({
                   }}
                 >
                   {isKo
-                    ? "🔬 이 핀 좌표를 극소 부위 5단계 수선으로 전달"
-                    : "🔬 Send Pin to 5-Step Micro-ROI Repair"}
+                    ? "이 핀 좌표를 극소 부위 5단계 수선으로 전달"
+                    : "Send Pin to 5-Step Micro-ROI Repair"}
                 </button>
                 <button
                   type="button"
@@ -1615,8 +1615,8 @@ export function ReviewStage({
                   }}
                 >
                   {isKo
-                    ? `🎵 현재 프레임(${formatTimecode(currentTime)})을 0ms 음악 드롭(T_reveal)으로 지정`
-                    : `🎵 Set ${formatTimecode(currentTime)} as 0ms Music Drop`}
+                    ? `현재 프레임(${formatTimecode(currentTime)})을 0ms 음악 드롭(T_reveal)으로 지정`
+                    : `Set ${formatTimecode(currentTime)} as 0ms Music Drop`}
                 </button>
               </div>
             </div>

@@ -32,7 +32,6 @@ import {
   evaluateOpticalIdentityLockV2,
 } from "@/lib/brands/production-pipeline/video-creator-techniques";
 import {
-  listCategoryExperienceProfiles,
   resolveCategoryExperienceProfile,
   type BrandClientCategory,
 } from "@/lib/brands/category-experience";
@@ -53,10 +52,11 @@ export interface BrandBriefStudioProps {
 /**
  * Clean, Minimalist & Category-Adaptive Customer Studio Composer (`/brand/studio`).
  *
- * Design Rule:
- * - Surface UI is ultra-simple: category pill bar + 4 category-tailored scene cards + 1-line prompt with 1-click examples + mood/aspect/brand-style pill bar + [만들기].
- * - All complex optical, color-grading (OLED 33³ LUT), identity-lock (Stage 1 passthrough / 35–55% bust-up guard),
- *   category scale/geometry locks, multi-shot continuity, and 2-stage mastering parameters are automatically compiled under the hood.
+ * Follows docs/design/IDENTITY.md, TASTE.md, and TOOLBOX.md:
+ * - Equal 4-column scene picker (.bw-scene-grid) with 1.5px ink selection ring.
+ * - Recessed segmented tracks (.bw-seg-track) with lifted white pills (never competing blue fills).
+ * - Recessed composer well (.bw-composer-well) with French Blue focus ring on :focus-within.
+ * - Zero emojis, zero backend/engine jargon.
  */
 export function BrandBriefStudio({
   organizationId,
@@ -71,28 +71,19 @@ export function BrandBriefStudio({
   initialProjectTitle,
 }: BrandBriefStudioProps) {
   const isKo = locale === "ko";
-  const allCategories = listCategoryExperienceProfiles();
-  const initialProfile = resolveCategoryExperienceProfile(
-    initialCategory,
+  const categoryProfile = resolveCategoryExperienceProfile({
+    category: initialCategory,
     organizationName,
-  );
+    checklist: defaultChecklist,
+  });
+  const activeCategory = categoryProfile.category;
 
-  // Category-adaptive state
-  const [activeCategory, setActiveCategory] = useState<BrandClientCategory>(
-    initialProfile.category,
-  );
-  const categoryProfile = resolveCategoryExperienceProfile(
-    activeCategory,
-    organizationName,
-  );
-
-  // Simple customer-facing state
   const [activeShotTemplateId, setActiveShotTemplateId] =
     useState<PomelliShotTemplateId>("studio");
   const [medium, setMedium] = useState<DeliverableMedium>("product still");
   const [cutKind, setCutKind] = useState<ShotCutKind>("reference_exact_product");
   const [aspect, setAspect] = useState<ShotAspect>(
-    initialProfile.compiler.defaultAspect,
+    categoryProfile.compiler.defaultAspect,
   );
   const [use, setUse] = useState<DeliverableUse>("feed");
   const [briefText, setBriefText] = useState("");
@@ -104,12 +95,12 @@ export function BrandBriefStudio({
       createAttachmentPreset("full_attach"),
     );
 
-  // Under-the-hood compiled system state (never dumped as raw jargon on the screen)
+  // Under-the-hood compiled system state
   const [lookPresetId, setLookPresetId] =
     useState<BrandLookPresetId>("kodak-2383-warm");
   const [cameraFocalMm, setCameraFocalMm] = useState(85);
   const [lightColourK, setLightColourK] = useState(
-    initialProfile.compiler.defaultLightColourK,
+    categoryProfile.compiler.defaultLightColourK,
   );
   const [lightModifier, setLightModifier] = useState(
     "large diffused window softbox",
@@ -132,7 +123,6 @@ export function BrandBriefStudio({
     hasPinterestBoards: true,
   });
 
-  // Under-the-hood SOTA pipeline synthesis (computed silently for the compiler)
   const silentOpticalGuard = evaluateOpticalIdentityLockV2({
     focalLengthMm: cameraFocalMm,
     headWidthRatioPct: 42,
@@ -162,18 +152,6 @@ export function BrandBriefStudio({
           categoryProfile.compiler.defaultProductChecklist.label,
           categoryProfile.compiler.defaultProductChecklist.material,
         ];
-
-  function handleSelectCategory(nextCategory: BrandClientCategory) {
-    const nextProfile = resolveCategoryExperienceProfile(
-      nextCategory,
-      organizationName,
-    );
-    setActiveCategory(nextCategory);
-    setLightColourK(nextProfile.compiler.defaultLightColourK);
-    if (medium !== "short film") {
-      setAspect(nextProfile.compiler.defaultAspect);
-    }
-  }
 
   function handleSelectSceneType(
     template: PomelliShotTemplate | "short_video",
@@ -363,6 +341,7 @@ export function BrandBriefStudio({
 
   const simpleSceneButtons: ReadonlyArray<{
     id: string;
+    specLabel: string;
     labelKo: string;
     labelEn: string;
     descKo: string;
@@ -376,6 +355,7 @@ export function BrandBriefStudio({
   }> = [
     {
       id: "studio",
+      specLabel: `${categoryProfile.scenes[0].focalMm}mm · ${categoryProfile.scenes[0].defaultAspect}`,
       labelKo: categoryProfile.scenes[0].titleKo,
       labelEn: categoryProfile.scenes[0].titleEn,
       descKo: categoryProfile.scenes[0].descKo,
@@ -388,6 +368,7 @@ export function BrandBriefStudio({
     },
     {
       id: "ingredients",
+      specLabel: `${categoryProfile.scenes[1].focalMm}mm · ${categoryProfile.scenes[1].defaultAspect}`,
       labelKo: categoryProfile.scenes[1].titleKo,
       labelEn: categoryProfile.scenes[1].titleEn,
       descKo: categoryProfile.scenes[1].descKo,
@@ -400,6 +381,7 @@ export function BrandBriefStudio({
     },
     {
       id: "in_use",
+      specLabel: `${categoryProfile.scenes[2].focalMm}mm · ${categoryProfile.scenes[2].defaultAspect}`,
       labelKo: categoryProfile.scenes[2].titleKo,
       labelEn: categoryProfile.scenes[2].titleEn,
       descKo: categoryProfile.scenes[2].descKo,
@@ -412,6 +394,7 @@ export function BrandBriefStudio({
     },
     {
       id: "short_video",
+      specLabel: `${categoryProfile.scenes[3].focalMm}mm · 9:16 15s`,
       labelKo: categoryProfile.scenes[3].titleKo,
       labelEn: categoryProfile.scenes[3].titleEn,
       descKo: categoryProfile.scenes[3].descKo,
@@ -445,88 +428,35 @@ export function BrandBriefStudio({
       data-studio-oled-look={silentOledPlan.preset.id}
       data-studio-continuity={silentContinuity.status}
       data-studio-master-gate={silentMasterPlan.gateStatus}
-      style={{
-        padding: "24px",
-        borderRadius: "24px",
-        background: "#FFFFFF",
-        border: "1px solid rgba(15, 23, 42, 0.08)",
-      }}
     >
-      {/* Clean Header + Category-Adaptive Pill Bar */}
-      <div
-        className="bw-row"
-        style={{ marginBottom: "14px", alignItems: "flex-start", gap: "12px" }}
-      >
+      {/* Header + Pre-configured Brand Category Badge */}
+      <div className="bw-row" style={{ marginBottom: "18px", alignItems: "flex-end", gap: "16px" }}>
         <div>
-          <h2 style={{ margin: "0 0 4px", fontSize: "20px", fontWeight: 600 }}>
-            {isKo ? "어떤 콘텐츠를 만들까요?" : "What would you like to create?"}
+          <h2 style={{ margin: "0 0 4px" }}>
+            {isKo ? "장면 만들기" : "Create a Scene"}
           </h2>
-          <p className="bw-muted" style={{ margin: 0, fontSize: "13.5px" }}>
+          <p className="bw-muted" style={{ margin: 0, fontSize: "13px" }}>
             {isKo ? categoryProfile.headlineKo : categoryProfile.headlineEn}
           </p>
         </div>
-        <div
-          style={{
-            display: "flex",
-            flexWrap: "wrap",
-            alignItems: "center",
-            gap: "6px",
-          }}
-        >
-          <div
+        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "8px" }}>
+          <span
+            className="bw-badge"
             data-studio-category-switcher
-            role="group"
-            aria-label={isKo ? "업종 맞춤 전환" : "Select brand category"}
-            style={{
-              display: "inline-flex",
-              flexWrap: "wrap",
-              background: "#F6F7F9",
-              padding: "3px",
-              borderRadius: "999px",
-              border: "1px solid rgba(15, 23, 42, 0.08)",
-              gap: "2px",
-            }}
+            data-studio-category-pill={activeCategory}
           >
-            {allCategories.map((cat) => {
-              const selected = cat.category === activeCategory;
-              return (
-                <button
-                  key={cat.category}
-                  type="button"
-                  data-studio-category-pill={cat.category}
-                  aria-pressed={selected}
-                  onClick={() => handleSelectCategory(cat.category)}
-                  disabled={busy}
-                  style={{
-                    padding: "5px 11px",
-                    borderRadius: "999px",
-                    border: "none",
-                    fontSize: "12px",
-                    fontWeight: selected ? 600 : 500,
-                    background: selected ? "#3875C5" : "transparent",
-                    color: selected ? "#FFFFFF" : "#41444D",
-                    cursor: busy ? "default" : "pointer",
-                  }}
-                >
-                  {isKo ? cat.labelKo : cat.labelEn}
-                </button>
-              );
-            })}
-          </div>
+            {isKo ? categoryProfile.labelKo : categoryProfile.labelEn}
+          </span>
           {identityHref && (
             <a className="bw-button" href={identityHref}>
-              {isKo ? "브랜드 스타일 관리" : "Brand Style"}
+              {isKo ? "브랜드 스타일" : "Brand Style"}
             </a>
           )}
         </div>
       </div>
 
-      {/* 1. Category-Tailored 4-Card Scene Type Picker (Zero technical jargon) */}
-      <div
-        className="bw-grid-wide"
-        data-pomelli-shot-templates
-        style={{ gap: "10px", marginBottom: "16px" }}
-      >
+      {/* Equal 4-Column Scene Type Picker (.bw-scene-grid) */}
+      <div className="bw-scene-grid" data-pomelli-shot-templates>
         {simpleSceneButtons.map((item) => {
           const isSelected = item.isVideo
             ? medium === "short film"
@@ -535,6 +465,7 @@ export function BrandBriefStudio({
             <button
               key={item.id}
               type="button"
+              className="bw-scene-card"
               data-pomelli-shot-template={item.id}
               aria-pressed={isSelected}
               onClick={() =>
@@ -543,46 +474,24 @@ export function BrandBriefStudio({
                 )
               }
               disabled={busy}
-              style={{
-                textAlign: "left",
-                padding: "14px 16px",
-                borderRadius: "16px",
-                background: isSelected ? "rgba(56, 117, 197, 0.06)" : "#F8FAFC",
-                border: isSelected
-                  ? "2px solid #3875C5"
-                  : "1px solid rgba(15, 23, 42, 0.08)",
-                cursor: busy ? "default" : "pointer",
-                display: "flex",
-                flexDirection: "column",
-                gap: "4px",
-              }}
             >
-              <strong style={{ fontSize: "14px", color: "#0E1013" }}>
-                {isKo ? item.labelKo : item.labelEn}
-              </strong>
-              <span style={{ fontSize: "12px", color: "#676B75" }}>
-                {isKo ? item.descKo : item.descEn}
-              </span>
+              <span className="bw-scene-spec">{item.specLabel}</span>
+              <strong>{isKo ? item.labelKo : item.labelEn}</strong>
+              <span>{isKo ? item.descKo : item.descEn}</span>
             </button>
           );
         })}
       </div>
 
-      {/* 2. Unified One-Box Composer (Prompt + 1-Click Quick Examples + Compact Pill Toolbar) */}
+      {/* Recessed Composer Well (.bw-composer-well) */}
       <form
         onSubmit={onCompileSubmit}
+        className="bw-composer-well"
         data-brief-compile-form
-        style={{
-          padding: "16px",
-          borderRadius: "20px",
-          background: "#F8FAFC",
-          border: "1px solid rgba(15, 23, 42, 0.1)",
-          display: "grid",
-          gap: "12px",
-        }}
       >
         <textarea
           name="brief"
+          className="bw-composer-textarea"
           rows={2}
           value={briefText}
           onChange={(e) => setBriefText(e.target.value)}
@@ -591,19 +500,9 @@ export function BrandBriefStudio({
           placeholder={
             isKo ? activeSceneButton.placeholderKo : activeSceneButton.placeholderEn
           }
-          style={{
-            width: "100%",
-            border: "none",
-            background: "transparent",
-            fontSize: "15px",
-            lineHeight: 1.5,
-            color: "#0E1013",
-            resize: "none",
-            outline: "none",
-          }}
         />
 
-        {/* 1-Click Category Quick Prompt Chips */}
+        {/* 1-Click Quick Prompt Chips */}
         <div
           data-studio-quick-prompts
           style={{
@@ -620,25 +519,17 @@ export function BrandBriefStudio({
             <button
               key={sample}
               type="button"
+              className="bw-quick-chip"
               data-studio-quick-prompt={idx}
               onClick={() => setBriefText(sample)}
               disabled={!canWrite || busy}
-              style={{
-                padding: "4px 10px",
-                borderRadius: "999px",
-                border: "1px solid rgba(15, 23, 42, 0.08)",
-                background: "#FFFFFF",
-                color: "#41444D",
-                fontSize: "11.5px",
-                cursor: canWrite && !busy ? "pointer" : "default",
-              }}
             >
               + {sample}
             </button>
           ))}
         </div>
 
-        {/* Compact Bottom Pill Bar */}
+        {/* Bottom Segmented Toolbar — Quiet Lifted White Pills, Single Ink Primary CTA */}
         <div
           style={{
             display: "flex",
@@ -646,8 +537,8 @@ export function BrandBriefStudio({
             alignItems: "center",
             justifyContent: "space-between",
             gap: "10px",
-            paddingTop: "10px",
-            borderTop: "1px solid rgba(15, 23, 42, 0.08)",
+            paddingTop: "12px",
+            borderTop: "1px solid var(--ys-hairline)",
           }}
         >
           <div
@@ -660,16 +551,9 @@ export function BrandBriefStudio({
           >
             {/* Mood Pills */}
             <div
+              className="bw-seg-track"
               data-studio-aesthetic-bar
               data-active-aesthetic-line={activeAestheticLineCode}
-              style={{
-                display: "inline-flex",
-                background: "#FFFFFF",
-                padding: "3px",
-                borderRadius: "999px",
-                border: "1px solid rgba(15, 23, 42, 0.09)",
-                gap: "2px",
-              }}
             >
               {aestheticLines.map((line) => {
                 const selected = activeAestheticLineCode === line.code;
@@ -678,20 +562,11 @@ export function BrandBriefStudio({
                   <button
                     key={line.id}
                     type="button"
+                    className="bw-seg-btn"
                     data-studio-aesthetic-card={line.code}
                     aria-pressed={selected}
                     onClick={() => applyMood(line)}
                     disabled={busy}
-                    style={{
-                      padding: "5px 11px",
-                      borderRadius: "999px",
-                      border: "none",
-                      fontSize: "12px",
-                      fontWeight: selected ? 600 : 500,
-                      background: selected ? "#3875C5" : "transparent",
-                      color: selected ? "#FFFFFF" : "#41444D",
-                      cursor: "pointer",
-                    }}
                   >
                     {isKo ? label.ko : label.en}
                   </button>
@@ -700,127 +575,56 @@ export function BrandBriefStudio({
             </div>
 
             {/* Aspect Ratio Pills */}
-            <div
-              style={{
-                display: "inline-flex",
-                background: "#FFFFFF",
-                padding: "3px",
-                borderRadius: "999px",
-                border: "1px solid rgba(15, 23, 42, 0.09)",
-                gap: "2px",
-              }}
-            >
+            <div className="bw-seg-track">
               {SHOT_ASPECTS.map((r) => (
                 <button
                   key={r}
                   type="button"
+                  className="bw-seg-btn"
                   aria-pressed={aspect === r}
                   onClick={() => setAspect(r)}
                   disabled={busy}
-                  style={{
-                    padding: "5px 10px",
-                    borderRadius: "999px",
-                    border: "none",
-                    fontSize: "12px",
-                    fontWeight: aspect === r ? 600 : 500,
-                    background:
-                      aspect === r ? "rgba(56, 117, 197, 0.14)" : "transparent",
-                    color: aspect === r ? "#3063A7" : "#41444D",
-                    cursor: "pointer",
-                  }}
                 >
                   {r}
                 </button>
               ))}
             </div>
 
-            {/* Brand Style Attachment Switch (Full ON vs Custom Principles vs Free Exploration) */}
+            {/* Brand Style Attachment Switch — Zero emojis */}
             <div
+              className="bw-seg-track"
               data-design-principle-attachment
               data-attachment-mode={principleAttachment.mode}
-              style={{
-                display: "inline-flex",
-                background: "#FFFFFF",
-                padding: "3px",
-                borderRadius: "999px",
-                border: "1px solid rgba(15, 23, 42, 0.09)",
-                gap: "2px",
-              }}
             >
               <button
                 type="button"
+                className="bw-seg-btn"
                 data-attachment-mode-btn="full_attach"
                 aria-pressed={principleAttachment.mode === "full_attach"}
                 onClick={() => toggleBrandStyleMode("full_attach")}
                 disabled={busy}
-                style={{
-                  padding: "5px 11px",
-                  borderRadius: "999px",
-                  border: "none",
-                  fontSize: "12px",
-                  fontWeight:
-                    principleAttachment.mode === "full_attach" ? 600 : 500,
-                  background:
-                    principleAttachment.mode === "full_attach"
-                      ? "rgba(56, 117, 197, 0.14)"
-                      : "transparent",
-                  color:
-                    principleAttachment.mode === "full_attach"
-                      ? "#3063A7"
-                      : "#41444D",
-                  cursor: "pointer",
-                }}
               >
-                {isKo ? "🔒 브랜드 톤 유지" : "🔒 Brand Style ON"}
+                {isKo ? "브랜드 톤 유지" : "Brand Style ON"}
               </button>
               <button
                 type="button"
+                className="bw-seg-btn"
                 data-attachment-mode-btn="custom_partial"
                 aria-pressed={principleAttachment.mode === "custom_partial"}
                 onClick={() => toggleBrandStyleMode("custom_partial")}
                 disabled={busy}
-                style={{
-                  padding: "5px 11px",
-                  borderRadius: "999px",
-                  border: "none",
-                  fontSize: "12px",
-                  fontWeight:
-                    principleAttachment.mode === "custom_partial" ? 600 : 500,
-                  background:
-                    principleAttachment.mode === "custom_partial"
-                      ? "rgba(56, 117, 197, 0.14)"
-                      : "transparent",
-                  color:
-                    principleAttachment.mode === "custom_partial"
-                      ? "#3063A7"
-                      : "#41444D",
-                  cursor: "pointer",
-                }}
               >
-                {isKo ? "🎛 원칙 선택" : "🎛 Custom Rules"}
+                {isKo ? "원칙 선택" : "Custom Rules"}
               </button>
               <button
                 type="button"
+                className="bw-seg-btn"
                 data-attachment-mode-btn="unbound_free"
                 aria-pressed={principleAttachment.mode === "unbound_free"}
                 onClick={() => toggleBrandStyleMode("unbound_free")}
                 disabled={busy}
-                style={{
-                  padding: "5px 11px",
-                  borderRadius: "999px",
-                  border: "none",
-                  fontSize: "12px",
-                  fontWeight:
-                    principleAttachment.mode === "unbound_free" ? 600 : 500,
-                  background:
-                    principleAttachment.mode === "unbound_free"
-                      ? "rgba(15, 23, 42, 0.08)"
-                      : "transparent",
-                  color: "#41444D",
-                  cursor: "pointer",
-                }}
               >
-                {isKo ? "🔓 자유 탐색" : "🔓 Free Style"}
+                {isKo ? "자유 탐색" : "Free Style"}
               </button>
             </div>
           </div>
@@ -831,24 +635,19 @@ export function BrandBriefStudio({
               className="bw-button bw-primary"
               disabled={busy}
               data-brief-compile-submit
-              style={{
-                padding: "9px 20px",
-                borderRadius: "999px",
-                fontWeight: 600,
-              }}
             >
               {busy
                 ? isKo
                   ? "만드는 중..."
                   : "Creating..."
                 : isKo
-                  ? "만들기 →"
-                  : "Create →"}
+                  ? "만들기"
+                  : "Create"}
             </button>
           )}
         </div>
 
-        {/* Interactive Brand DNA Chip Row when '🎛 원칙 선택' is active */}
+        {/* Interactive Brand Rule Chip Row when '원칙 선택' is active */}
         {principleAttachment.mode === "custom_partial" && (
           <div
             data-design-principle-chips
@@ -857,19 +656,19 @@ export function BrandBriefStudio({
               flexWrap: "wrap",
               alignItems: "center",
               gap: "6px",
-              paddingTop: "8px",
-              borderTop: "1px dashed rgba(15, 23, 42, 0.1)",
+              paddingTop: "10px",
+              borderTop: "1px solid var(--ys-hairline)",
             }}
           >
             <span
               style={{
                 fontSize: "11.5px",
                 fontWeight: 600,
-                color: "#676B75",
+                color: "var(--ys-ink-secondary)",
                 marginRight: "4px",
               }}
             >
-              {isKo ? "적용할 브랜드 원칙:" : "Attached Brand Rules:"}
+              {isKo ? "적용할 원칙:" : "Active rules:"}
             </span>
             {DESIGN_PRINCIPLE_CHIPS.map((chip) => {
               const active = Boolean(principleAttachment[chip.key]);
@@ -877,35 +676,19 @@ export function BrandBriefStudio({
                 <button
                   key={chip.key}
                   type="button"
+                  className="bw-quick-chip"
                   data-design-principle-chip={chip.key}
                   aria-pressed={active}
                   onClick={() => togglePrincipleKey(chip.key)}
                   disabled={busy}
-                  title={
-                    active
-                      ? isKo
-                        ? chip.attachedDescKo
-                        : chip.attachedDescEn
-                      : isKo
-                        ? chip.detachedDescKo
-                        : chip.detachedDescEn
-                  }
                   style={{
-                    padding: "4px 10px",
-                    borderRadius: "999px",
-                    fontSize: "11.5px",
-                    fontWeight: active ? 600 : 500,
-                    border: active
-                      ? "1px solid rgba(56, 117, 197, 0.35)"
-                      : "1px solid rgba(15, 23, 42, 0.1)",
-                    background: active
-                      ? "rgba(56, 117, 197, 0.1)"
-                      : "#FFFFFF",
-                    color: active ? "#3063A7" : "#676B75",
-                    cursor: busy ? "default" : "pointer",
+                    fontWeight: active ? 600 : 400,
+                    color: active ? "var(--ys-ink)" : "var(--ys-ink-secondary)",
+                    boxShadow: active
+                      ? "0 0 0 1.5px var(--ys-ink)"
+                      : "var(--ys-ring)",
                   }}
                 >
-                  {active ? "✓ " : "+ "}
                   {isKo ? chip.labelKo : chip.labelEn}
                 </button>
               );
@@ -935,17 +718,16 @@ export function BrandBriefStudio({
         </p>
       )}
 
-      {/* Clean Customer Output Card (Never exposes raw prompt/hash/lint dumps) */}
+      {/* Clean Customer Output Card — True 4:5 Portrait Thumbnail, Zero Cropped Heads */}
       {view && (
         <div
-          className="bw-card"
           data-brief-preview
           style={{
-            marginTop: "16px",
-            padding: "18px",
-            borderRadius: "18px",
-            background: "#F8FAFC",
-            border: "1px solid rgba(56, 117, 197, 0.22)",
+            marginTop: "18px",
+            padding: "14px 18px",
+            borderRadius: "var(--ys-r-card)",
+            background: "var(--ys-subtle-bg)",
+            boxShadow: "inset 0 0 0 1px var(--ys-hairline)",
             display: "flex",
             flexWrap: "wrap",
             alignItems: "center",
@@ -971,16 +753,17 @@ export function BrandBriefStudio({
               }
               alt={isKo ? view.cutKindLabel.ko : view.cutKindLabel.en}
               style={{
-                width: "72px",
-                height: "90px",
+                width: "76px",
+                aspectRatio: "4 / 5",
                 objectFit: "cover",
-                borderRadius: "12px",
-                border: "1px solid rgba(15, 23, 42, 0.08)",
+                objectPosition: "50% 16%",
+                borderRadius: "var(--ys-r-media)",
+                boxShadow: "var(--ys-ring)",
                 flexShrink: 0,
               }}
             />
             <div>
-              <strong style={{ fontSize: "15px", color: "#0E1013" }}>
+              <strong style={{ fontSize: "14.5px", color: "var(--ys-ink)" }}>
                 {isKo ? view.cutKindLabel.ko : view.cutKindLabel.en} ·{" "}
                 {view.deliverable.aspect} ({view.resolution})
               </strong>

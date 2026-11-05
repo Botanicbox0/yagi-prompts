@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { renderToStaticMarkup } from "react-dom/server";
-import { YagiStudioLockup } from "@/components/brand/yagi-mark";
+import { TwingsStudioLockup } from "@/components/brand/twings-mark";
+import { YagiLogo, YagiStudioLockup } from "@/components/brand/yagi-mark";
+import { BrandBriefStudio } from "@/components/brand-workspace/brand-brief-studio";
+import { CampaignMoatShowcase } from "@/components/brand-workspace/campaign-moat-showcase";
 import { ProjectTabs } from "@/components/brand-workspace/project-tabs";
 import { getDictionary } from "@/lib/i18n/dictionaries";
 
@@ -49,15 +52,67 @@ describe("brand workspace taste", () => {
     expect(css).toContain("[data-project-tab='brief'] #conversation { display: none; }");
   });
 
-  it("draws the YAGI STUDIO lockup without the red live dot", () => {
-    const lockup = renderToStaticMarkup(<YagiStudioLockup size={22} />);
-    expect(lockup).toContain("data-yagi-studio-lockup");
-    expect(lockup).not.toContain("ys-brand-live-dot");
+  it("draws the TWINGS STUDIO header lockup and Powered by YAGI footer mark without the red live dot", () => {
+    const twingsStudio = renderToStaticMarkup(<TwingsStudioLockup size={22} />);
+    expect(twingsStudio).toContain("data-twings-studio-lockup");
+    expect(twingsStudio).toContain("data-twings-logo");
+    expect(twingsStudio).toContain("STUDIO");
+    expect(twingsStudio).not.toContain("ys-brand-live-dot");
+
+    const yagiPowered = renderToStaticMarkup(<YagiLogo size={16} />);
+    expect(yagiPowered).toContain("data-yagi-logo");
+    expect(yagiPowered).toContain("YAGI");
+
+    const legacyLockup = renderToStaticMarkup(<YagiStudioLockup size={22} />);
+    expect(legacyLockup).toContain("data-yagi-studio-lockup");
+    expect(legacyLockup).not.toContain("ys-brand-live-dot");
+  });
+
+  it("tailors the studio to the brand's pre-selected category without a 5-industry tab bar", () => {
+    const html = renderToStaticMarkup(
+      <BrandBriefStudio
+        organizationId="org-beauty"
+        organizationName="GlowLab Skincare"
+        locale="ko"
+        canWrite={true}
+        identityConfirmed={true}
+      />,
+    );
+    expect(html).toContain('data-active-studio-category="beauty_skincare"');
+    expect(html).toContain('data-studio-category-pill="beauty_skincare"');
+    expect(html).not.toContain('data-studio-category-pill="fashion_apparel"');
+    expect(html).not.toContain('data-studio-category-pill="fnb_hospitality"');
   });
 
   it("gives only the open campaign tab the gliding pill", () => {
     const html = renderToStaticMarkup(<ProjectTabs b={getDictionary("ko").brandWorkspace}><div /></ProjectTabs>);
     expect(html.match(/bw-tab-indicator/g)).toHaveLength(1);
     expect(html).toMatch(/aria-current="page"><span class="bw-tab-indicator" aria-hidden="true"><\/span>/);
+  });
+
+  it("keeps decorative emojis and circled numbers out of every brand-workspace component", () => {
+    const dir = join(process.cwd(), "components", "brand-workspace");
+    const banned = /[⚡🔇🔊🔒🎛🔓✦🔗📋🎬✨🔁🤔📄💡🛠✅📁⚙📱💧💬📍🎙⚠📌🔬🎵📅💳☰①②③④⑤]/u;
+    for (const file of readdirSync(dir)) {
+      if (!file.endsWith(".tsx")) continue;
+      const source = readFileSync(join(dir, file), "utf8");
+      expect(source, file).not.toMatch(banned);
+    }
+  });
+
+  it("renders the campaign showcase reel with uncropped 4:5 passepartout cards and captions below media", () => {
+    const html = renderToStaticMarkup(
+      <CampaignMoatShowcase
+        locale="ko"
+        organizationId="f5a6993b-1951-497e-a4da-3f221892f85e"
+        studioOpen={true}
+        canRequest={true}
+      />,
+    );
+    expect(html).toContain('class="bw-showcase-reel"');
+    expect(html).toContain('class="bw-showcase-card"');
+    expect(html).toContain('class="bw-showcase-caption"');
+    expect(html).toContain('class="bw-showcase-tracks"');
+    expect(html).not.toContain("height:200px");
   });
 });
