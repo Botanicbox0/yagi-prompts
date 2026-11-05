@@ -436,3 +436,381 @@ export function resolveCategoryReferenceWorkflows(
     },
   };
 }
+
+/**
+ * Pinned Color Reference & Pinned Texture Reference Presets.
+ * When pinned (locked), these references persist across all image generation,
+ * product swaps, and micro-region edits so every cut keeps identical brand tone & surface grain.
+ */
+export interface PinnedStyleReferencePreset {
+  id: string;
+  kind: "color" | "texture";
+  titleKo: string;
+  titleEn: string;
+  ruleKo: string;
+  ruleEn: string;
+  swatchHex: string;
+  thumb: string;
+  promptTokenKo: string;
+  promptTokenEn: string;
+}
+
+export const PINNED_COLOR_REFERENCES: ReadonlyArray<PinnedStyleReferencePreset> =
+  [
+    {
+      id: "color_editorial_cobalt",
+      kind: "color",
+      titleKo: "프렌치 코발트 에디토리얼 톤",
+      titleEn: "French Cobalt Editorial Tone",
+      ruleKo: "5400K 쿨 데이라이트 · 딥 네이비 섀도우 · 중채도 피부톤 고정",
+      ruleEn: "5400K cool daylight · deep navy shadows · balanced skin saturation",
+      swatchHex: "#3875C5",
+      thumb: "/reel/brands/studio-editorial-blue-1080p.jpg",
+      promptTokenKo: "[고정 색감 레퍼런스: 5400K 프렌치 코발트 에디토리얼 색온도 및 섀도우 커브 유지]",
+      promptTokenEn: "[Pinned Color Ref: 5400K French cobalt editorial color temperature and shadow curve]",
+    },
+    {
+      id: "color_warm_film_2383",
+      kind: "color",
+      titleKo: "웜 데이라이트 필름 2383 톤",
+      titleEn: "Warm Daylight 2383 Film Grade",
+      ruleKo: "4800K 자연 채광 · 소프트 골든 하이라이트 · 따뜻한 필름 계조 고정",
+      ruleEn: "4800K warm daylight · soft golden highlights · analog film roll-off",
+      swatchHex: "#C89B6E",
+      thumb: "/reel/campaigns/beauty-rose.jpg",
+      promptTokenKo: "[고정 색감 레퍼런스: 4800K 웜 데이라이트 필름 2383 색감 및 소프트 하이라이트 유지]",
+      promptTokenEn: "[Pinned Color Ref: 4800K warm daylight 2383 film grade and soft highlight roll-off]",
+    },
+    {
+      id: "color_crisp_studio_neutral",
+      kind: "color",
+      titleKo: "선명한 뉴트럴 화이트 스튜디오",
+      titleEn: "Crisp Neutral White Studio",
+      ruleKo: "5800K 정밀 색재현 · 왜곡 없는 제품 고유 컬러 100% 유지",
+      ruleEn: "5800K true-to-life color accuracy · zero color cast on product",
+      swatchHex: "#64748B",
+      thumb: "/reel/studio/vto-set-front.webp",
+      promptTokenKo: "[고정 색감 레퍼런스: 5800K 무왜곡 뉴트럴 스튜디오 화이트밸런스 및 제품 고유 색상 고정]",
+      promptTokenEn: "[Pinned Color Ref: 5800K neutral studio white balance with true product color lock]",
+    },
+  ];
+
+export const PINNED_TEXTURE_REFERENCES: ReadonlyArray<PinnedStyleReferencePreset> =
+  [
+    {
+      id: "texture_matte_skin_35mm",
+      kind: "texture",
+      titleKo: "35mm 파인 그레인 & 리얼 매트 피부결",
+      titleEn: "35mm Fine Grain & Real Matte Skin",
+      ruleKo: "AI 플라스틱 광택 제거 · 실제 피부 모공과 미세 아날로그 입자 고정",
+      ruleEn: "Eliminates AI plastic sheen · locks authentic pores & 35mm fine grain",
+      swatchHex: "#475569",
+      thumb: "/reel/landing/cut-cheek.webp",
+      promptTokenKo: "[고정 질감 레퍼런스: 35mm 아날로그 파인 그레인 및 매트한 실사 피부 모공 질감 고정]",
+      promptTokenEn: "[Pinned Texture Ref: 35mm analog fine grain and authentic matte skin pore texture]",
+    },
+    {
+      id: "texture_macro_fabric_weave",
+      kind: "texture",
+      titleKo: "원단 직조 · 스티치 · 메탈 마이크로 질감",
+      titleEn: "Macro Fabric Weave & Brushed Metal",
+      ruleKo: "울·데님 직조 결, 봉제 실땀, 브러시드 메탈 헤어라인 선명도 고정",
+      ruleEn: "Locks wool/denim weave, stitch thread detail, and brushed metal grain",
+      swatchHex: "#334155",
+      thumb: "/reel/landing/c-garment-ours.webp",
+      promptTokenKo: "[고정 질감 레퍼런스: 초근접 원단 직조 결·봉제 스티치·금속 표면 마이크로 질감 고정]",
+      promptTokenEn: "[Pinned Texture Ref: hyper-sharp fabric weave, seam stitching, and surface micro-texture]",
+    },
+    {
+      id: "texture_dewy_glass_smear",
+      kind: "texture",
+      titleKo: "유리 굴절 · 결로 · 수분 제형 클린 질감",
+      titleEn: "Glass Refraction & Dewy Serum Texture",
+      ruleKo: "투명 용기 굴절, 미세 물방울 결로, 스킨케어 제형 스미어 질감 고정",
+      ruleEn: "Locks glass bottle refraction, fine condensation droplets, and serum smear",
+      swatchHex: "#0EA5E9",
+      thumb: "/reel/landing/cut-pump.webp",
+      promptTokenKo: "[고정 질감 레퍼런스: 투명 유리 굴절·미세 결로 물방울·수분 제형 하이라이트 질감 고정]",
+      promptTokenEn: "[Pinned Texture Ref: crisp glass refraction, micro condensation droplets, and serum texture]",
+    },
+  ];
+
+/**
+ * Oplux (`oplux-plugin.ccx` + `app.oplux.ai`) & Morphic Canvas-inspired
+ * Micro-Region Image Editing (극소 부위 정밀 수정) Architecture.
+ */
+export type StudioImageSubMode =
+  | "multi_ref_generate"
+  | "micro_region_edit"
+  | "canvas_drag_ref";
+
+export type StudioCanvasToolId =
+  | "pointer"
+  | "marquee_select"
+  | "brush_mask"
+  | "crop_ratio";
+
+export type MicroEditQualityTier = "Low" | "Medium" | "High";
+export type MicroEditResolutionTier = "1K" | "2K" | "4K";
+
+export interface MicroRegionSelectionPreset {
+  id: string;
+  labelKo: string;
+  labelEn: string;
+  targetPartKo: string;
+  targetPartEn: string;
+  /** Normalized selection bounds (0..100%) on the studio canvas */
+  xPct: number;
+  yPct: number;
+  wPct: number;
+  hPct: number;
+  defaultEditPromptKo: string;
+  defaultEditPromptEn: string;
+}
+
+export const MICRO_REGION_SELECTION_PRESETS: ReadonlyArray<MicroRegionSelectionPreset> =
+  [
+    {
+      id: "region_product_label",
+      labelKo: "제품 · 전면 라벨 극소 부위",
+      labelEn: "Product & Front Label Micro-Region",
+      targetPartKo: "제품 용기 · 로고 각인 · 전면 라벨 영역",
+      targetPartEn: "Product container · logo engraving · front label",
+      xPct: 30,
+      yPct: 36,
+      wPct: 40,
+      hPct: 34,
+      defaultEditPromptKo:
+        "드래그한 선택 영역 안의 제품만 2번 레퍼런스 제품으로 교체하고, 전면 로고 철자와 표면 반사광을 선명하게 교정해 줘 (선택 영역 밖 배경·인물은 100% 원본 유지).",
+      defaultEditPromptEn:
+        "Replace only the product inside the selected region with Reference #2, keeping crisp front logo lettering and specular highlights (preserve 100% of pixels outside the selection).",
+    },
+    {
+      id: "region_hand_grip",
+      labelKo: "손 모양 · 소품 그립 극소 부위",
+      labelEn: "Hand Grip & Held Prop Micro-Region",
+      targetPartKo: "손가락 마디 · 그립 각도 · 접촉 그림자 영역",
+      targetPartEn: "Finger joints · grip angle · contact shadow",
+      xPct: 24,
+      yPct: 48,
+      wPct: 36,
+      hPct: 28,
+      defaultEditPromptKo:
+        "선택한 손 부위가 제품을 자연스럽게 감싸 쥐도록 손가락 형태와 접촉 그림자만 정밀 교정해 줘 (의류 소매와 배경은 원본 그대로 보존).",
+      defaultEditPromptEn:
+        "Refine only the selected hand grip and contact shadow so the fingers hold the product naturally (keep sleeve and background untouched).",
+    },
+    {
+      id: "region_face_expression",
+      labelKo: "얼굴 표정 · 시선 · 잔머리 부위",
+      labelEn: "Facial Expression · Gaze · Hairline",
+      targetPartKo: "눈매 · 입꼬리 표정 · 헤어라인 · 피부결 영역",
+      targetPartEn: "Eye gaze · subtle expression · hairline · skin pores",
+      xPct: 32,
+      yPct: 10,
+      wPct: 36,
+      hPct: 26,
+      defaultEditPromptKo:
+        "선택 영역 안의 인물 시선을 정면 카메라로 맞추고, 잔머리와 매트한 피부 모공 질감을 자연스럽게 다듬어 줘.",
+      defaultEditPromptEn:
+        "Adjust the gaze inside the selected region toward the camera and refine flyaway hair and natural matte skin pores.",
+    },
+    {
+      id: "region_collar_stitch",
+      labelKo: "옷깃 · 단추 · 소매 핏 극소 부위",
+      labelEn: "Collar · Buttons · Sleeve Fit Region",
+      targetPartKo: "라펠 대칭 · 단추 여밈 · 원단 주름 영역",
+      targetPartEn: "Lapel symmetry · button closure · fabric fold",
+      xPct: 26,
+      yPct: 28,
+      wPct: 48,
+      hPct: 38,
+      defaultEditPromptKo:
+        "선택한 의류 부위의 옷깃 대칭과 봉제 스티치 선을 깔끔하게 정돈하고, 고정된 질감 레퍼런스의 원단 결을 적용해 줘.",
+      defaultEditPromptEn:
+        "Clean up the collar symmetry and stitch lines inside the selected garment region, applying the pinned fabric weave texture.",
+    },
+  ];
+
+export type BrandStudioMicroEditModelId =
+  | "precision_region_editor"
+  | "seamless_edge_inpaint"
+  | "texture_fit_reshape"
+  | "film_grain_skin_enhancer";
+
+export interface BrandStudioMicroEditModelSpec {
+  id: BrandStudioMicroEditModelId;
+  nameKo: string;
+  nameEn: string;
+  badgeKo: string;
+  badgeEn: string;
+  shortTraitKo: string;
+  shortTraitEn: string;
+  howItWorksKo: string;
+  howItWorksEn: string;
+  bestWhenKo: readonly [string, string, string];
+  bestWhenEn: readonly [string, string, string];
+  supportsQualityTier: boolean;
+  supportedResolutions: readonly MicroEditResolutionTier[];
+  smartMaskLock: boolean;
+  creditsPerEdit: number;
+  priceKrwPerEdit: number;
+}
+
+export const BRAND_STUDIO_MICRO_EDIT_MODELS: ReadonlyArray<BrandStudioMicroEditModelSpec> =
+  [
+    {
+      id: "precision_region_editor",
+      nameKo: "정밀 부위 리터칭 · 라벨/소품/손 교정 에디터",
+      nameEn: "Precision Region Editor · Label / Prop / Hand",
+      badgeKo: "극소 부위 수정 · 제품/라벨 교정 1순위",
+      badgeEn: "Best for Micro-Region Product & Label Edit",
+      shortTraitKo:
+        "드래그한 선택 영역(Input Preview)과 레퍼런스 사진을 함께 읽어, 선택 부위 내부만 스마트 레이어 마스크로 정밀 교체·수정합니다",
+      shortTraitEn:
+        "Reads the cropped selection patch + reference images and replaces only the masked region via a non-destructive Smart Layer Mask",
+      howItWorksKo:
+        "캔버스에서 사각형이나 브러시로 지정한 영역만 가장 가까운 표준 비율(1:1, 4:5, 3:4 등)로 자동 크롭·패딩해 수정한 뒤, 그레이스케일 레이어 마스크(Layer Mask)를 씌워 새 레이어로 얹습니다. 선택 영역 바깥의 원본 픽셀은 1픽셀도 변하지 않습니다.",
+      howItWorksEn:
+        "Crops and pads only the selected bounds to the closest supported aspect ratio, runs multi-image region editing, and places the result as a masked layer so pixels outside the selection remain 100% untouched.",
+      bestWhenKo: [
+        "화보 컷에서 다른 부분은 다 마음에 드는데 제품 라벨 글자나 로고만 살짝 깨졌을 때",
+        "모델 손에 들린 소품이나 손가락 그립 모양만 어색해서 그 부위만 다시 고치고 싶을 때",
+        "특정 영역에 2번 레퍼런스 제품(화장품·음료·가방·시계)을 정확히 합성해 넣을 때",
+      ],
+      bestWhenEn: [
+        "When the whole shot is great except a slightly distorted logo or package label",
+        "When only a model's hand grip or held prop needs targeted correction",
+        "When inserting Reference #2 (bottle, bag, watch) into a specific selected area",
+      ],
+      supportsQualityTier: true,
+      supportedResolutions: ["1K", "2K"],
+      smartMaskLock: true,
+      creditsPerEdit: 11,
+      priceKrwPerEdit: 140,
+    },
+    {
+      id: "seamless_edge_inpaint",
+      nameKo: "심리스 인페인팅 · 조명/피부/배경 경계 블렌딩 에디터",
+      nameEn: "Seamless Edge Inpaint · Light / Skin / BG Blend",
+      badgeKo: "경계선 티 안 나는 자연 합성 추천",
+      badgeEn: "Best for Zero-Seam Edge & Lighting Blend",
+      shortTraitKo:
+        "선택 영역과 주변 원본 픽셀 사이의 조명·그림자·피부 톤을 자동으로 맞춰 수정 자국이 전혀 남지 않게 블렌딩합니다",
+      shortTraitEn:
+        "Automatically matches surrounding lighting, shadows, and skin tone across selection edges with zero visible seams",
+      howItWorksKo:
+        "선택된 영역의 경계면(Edge) 주변 문맥과 색온도를 함께 분석하여, 표정 수정·헤어라인 정리·불필요한 배경 사물 제거·부분 조명 수정 시 경계선 이질감 없이 매끄럽게 이어 붙입니다.",
+      howItWorksEn:
+        "Analyzes surrounding context and color temperature around the selection mask so expression tweaks, hairline cleanup, and object removal blend invisibly.",
+      bestWhenKo: [
+        "모델의 시선 방향, 미소 등 표정 일부나 잔머리·헤어라인만 자연스럽게 고칠 때",
+        "배경에 걸린 불필요한 소품·전선·그림자를 지우고 주변 공간 질감으로 메울 때",
+        "제품 바닥면의 접촉 그림자(Contact Shadow)나 반사광을 주변 채광에 맞게 다듬을 때",
+      ],
+      bestWhenEn: [
+        "Refining gaze direction, subtle facial expressions, or flyaway hairlines",
+        "Removing unwanted background objects or wires and filling with matching set texture",
+        "Polishing contact shadows and reflections beneath a product",
+      ],
+      supportsQualityTier: false,
+      supportedResolutions: ["1K", "2K", "4K"],
+      smartMaskLock: true,
+      creditsPerEdit: 14,
+      priceKrwPerEdit: 180,
+    },
+    {
+      id: "texture_fit_reshape",
+      nameKo: "고해상도 질감 · 의류 핏/주름 부분 리셰이핑 에디터",
+      nameEn: "High-Res Texture & Garment Fit Reshape Editor",
+      badgeKo: "원단 주름 · 핏 · 4K 디테일 보정",
+      badgeEn: "Best for Fabric Drape & 4K Detail",
+      shortTraitKo:
+        "선택한 의류·가방·제품 부위의 실루엣 핏과 2K/4K 초고해상도 표면 질감을 복원하고 정돈합니다",
+      shortTraitEn:
+        "Restores 2K/4K surface micro-textures and refines garment silhouette or drape within the selected region",
+      howItWorksKo:
+        "고정해 둔 질감 참고 레퍼런스(원단 직조·가죽 결·금속 헤어라인)를 선택 영역에 집중 주입하여, 뭉개진 옷 주름이나 흐릿한 디테일을 최대 4K 해상도로 선명하게 되살립니다.",
+      howItWorksEn:
+        "Injects your pinned texture reference directly into the selected bounds to sharpen fabric folds, leather grain, or metallic edges up to 4K.",
+      bestWhenKo: [
+        "아우터 옷깃·소매 기장·바지 밑단 주름 등 의류 핏 일부만 깔끔하게 잡을 때",
+        "확대했을 때 흐릿해 보이는 원단 직조 결이나 금속 버클 디테일을 4K급으로 살릴 때",
+        "뷰티 제형 스미어나 식음료 얼음/결로 부위의 디테일 밀도를 높일 때",
+      ],
+      bestWhenEn: [
+        "Tailoring jacket lapels, sleeve lengths, or trouser hems in a lookbook cut",
+        "Restoring 4K fabric weave or metallic hardware sharpness on zoomed-in regions",
+        "Boosting macro detail on cosmetic smears or beverage ice condensation",
+      ],
+      supportsQualityTier: false,
+      supportedResolutions: ["2K", "4K"],
+      smartMaskLock: true,
+      creditsPerEdit: 16,
+      priceKrwPerEdit: 200,
+    },
+    {
+      id: "film_grain_skin_enhancer",
+      nameKo: "리얼 매트 스킨 & 35mm 물리 필름 그레인 마감",
+      nameEn: "Real Matte Skin & 35mm Physical Film Grain Finish",
+      badgeKo: "AI 플라스틱 느낌 제거 · 최종 마감",
+      badgeEn: "Removes AI Plastic Look · Final Finish",
+      shortTraitKo:
+        "부분 수정 후 생기기 쉬운 매끈한 AI 피부 광택을 걷어내고, 실제 카메라 필름 입자와 모공 질감으로 톤을 통일합니다",
+      shortTraitEn:
+        "Eliminates synthetic AI smoothness by blending physical RGB/Mono film grain and matte skin pore micro-contrast",
+      howItWorksKo:
+        "영역별 밝기 보정(Brightness Correction)을 유지한 채 물리 노이즈 패치(RGB 컬러 그레인 또는 모노 그레인)와 피부결 인핸서를 레이어로 블렌딩해, 수정 부위와 원본 부위가 실제 스튜디오 카메라로 한 번에 찍은 것처럼 일체화됩니다.",
+      howItWorksEn:
+        "Blends brightness-compensated physical grain patches and skin pore micro-contrast so edited patches and original pixels share one cohesive camera sensor look.",
+      bestWhenKo: [
+        "극소 부위 수정 후 수정된 부위와 주변 영역의 입자감(Grain)을 완벽히 하나로 맞출 때",
+        "인물 피부에서 인위적인 AI 윤기를 빼고 매거진 화보 같은 매트 피부결을 만들 때",
+        "최종 화보 컷을 영상 제작(첫 프레임)으로 넘기기 전에 필름 룩 마감을 입힐 때",
+      ],
+      bestWhenEn: [
+        "Unifying sensor grain between an edited micro-region and the rest of the frame",
+        "Removing synthetic sheen from model skin for an authentic magazine finish",
+        "Applying final film texture before sending the cut to Video Studio as Frame 1",
+      ],
+      supportsQualityTier: false,
+      supportedResolutions: ["2K", "4K"],
+      smartMaskLock: true,
+      creditsPerEdit: 8,
+      priceKrwPerEdit: 100,
+    },
+  ];
+
+const SUPPORTED_EDIT_RATIOS: ReadonlyArray<{ label: string; value: number }> = [
+  { label: "1:1", value: 1 },
+  { label: "16:9", value: 16 / 9 },
+  { label: "9:16", value: 9 / 16 },
+  { label: "4:3", value: 4 / 3 },
+  { label: "3:4", value: 3 / 4 },
+  { label: "5:4", value: 5 / 4 },
+  { label: "4:5", value: 0.8 },
+];
+
+/**
+ * Mirrors `findClosestAspectRatio` from `oplux-plugin.ccx`:
+ * Given a selection width & height, returns the closest supported aspect ratio label
+ * so the cropped patch can be padded cleanly without geometric distortion.
+ */
+export function findClosestSupportedAspectRatio(
+  width: number,
+  height: number,
+): string {
+  if (height <= 0 || width <= 0) return "1:1";
+  const ratio = width / height;
+  let best = SUPPORTED_EDIT_RATIOS[0]!;
+  let minDiff = Infinity;
+  for (const candidate of SUPPORTED_EDIT_RATIOS) {
+    const diff = Math.abs(ratio - candidate.value);
+    if (diff < minDiff) {
+      minDiff = diff;
+      best = candidate;
+    }
+  }
+  return best.label;
+}
+

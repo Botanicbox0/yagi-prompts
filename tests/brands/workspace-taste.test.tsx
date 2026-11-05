@@ -121,6 +121,10 @@ describe("brand workspace taste", () => {
         canRequest={true}
       />,
     );
+    expect(html).toContain("data-brand-studio-launcher");
+    expect(html).toContain('data-studio-launcher-step="identity"');
+    expect(html).toContain('data-studio-launcher-step="image"');
+    expect(html).toContain('data-studio-launcher-step="video"');
     expect(html).toContain('class="bw-showcase-reel"');
     expect(html).toContain('class="bw-showcase-card"');
     expect(html).toContain('class="bw-showcase-caption"');
@@ -196,6 +200,13 @@ describe("brand workspace taste", () => {
     expect(html).toContain("data-studio-medium-tabs");
     expect(html).toContain('data-studio-medium-tab="image"');
     expect(html).toContain('data-studio-medium-tab="video"');
+    expect(html).toContain("data-studio-image-submode");
+    expect(html).toContain('data-image-submode-btn="multi_ref_generate"');
+    expect(html).toContain('data-image-submode-btn="micro_region_edit"');
+    expect(html).toContain('data-image-submode-btn="canvas_drag_ref"');
+    expect(html).toContain("data-studio-pinned-style-refs");
+    expect(html).toContain("data-pinned-color-card");
+    expect(html).toContain("data-pinned-texture-card");
     expect(html).toContain("data-studio-asset-upload");
     expect(html).toContain('data-ref-slot="1"');
     expect(html).toContain('data-ref-slot="2"');
@@ -208,6 +219,11 @@ describe("brand workspace taste", () => {
     expect(html).toContain("data-studio-ref-token-bar");
     expect(html).toContain('class="bw-scene-thumb"');
     expect(html).toContain("data-studio-live-canvas");
+    expect(html).toContain("data-studio-canvas-toolbar");
+    expect(html).toContain("data-studio-canvas-marquee");
+    expect(html).toContain("data-studio-input-preview");
+    expect(html).toContain("data-studio-morphic-attach-dock");
+    expect(html).toContain("data-studio-layers-panel");
     expect(html).toContain("data-studio-canvas-takes");
     expect(html).toContain("data-studio-canvas-actions");
     expect(html).not.toMatch(/seedance|seedream|nano\s*banana|seedvr2|comfyui/i);

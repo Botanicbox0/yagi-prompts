@@ -105,13 +105,13 @@ export function CampaignMoatShowcase({
         <div>
           <h2>
             {isKo
-              ? "스튜디오 레퍼런스 · 1080p 마스터 포맷"
-              : "Studio Reference · 1080p Master Formats"}
+              ? "올인원 브랜드 미디어 스튜디오 · 이미지 생성 · 극소 부위 수정 · 1080p 영상"
+              : "All-in-One Brand Media Studio · Image Generation · Micro-Editing · 1080p Film"}
           </h2>
           <p data-moat-pipeline>
             {isKo
-              ? "브랜드 스타일을 등록한 뒤 셀프 스튜디오에서 직접 만들거나, 전용 템플릿·인플루언서 캠페인·마스터 영상을 의뢰하세요."
-              : "Register your brand style to create directly in Self Studio, or commission custom templates, creator campaigns, and master films."}
+              ? "STEP 01 브랜드 아이덴티티와 색감·질감을 먼저 고정한 뒤, STEP 02에서 1~4번 멀티 레퍼런스 조합 생성 및 드래그 부위 정밀 수정을 거치고, STEP 03에서 1080p 사운드 영상과 캠페인으로 확장하세요."
+              : "Lock Brand Identity & Pinned Color/Texture in Step 01, generate & micro-edit images in Step 02, and scale into 1080p sound masters & creator campaigns in Step 03."}
           </p>
         </div>
 
@@ -122,7 +122,7 @@ export function CampaignMoatShowcase({
             data-home-onboarding-cta
             data-tab-guide-card="identity"
           >
-            {isKo ? "브랜드 스타일 등록" : "Brand Style"}
+            {isKo ? "STEP 01 · 브랜드 아이덴티티 등록" : "Step 01 · Brand Identity"}
           </a>
           <a
             href={scopedHref("/brand/studio", choice)}
@@ -130,9 +130,111 @@ export function CampaignMoatShowcase({
             data-home-studio-cta
             data-tab-guide-card="studio"
           >
-            {isKo ? "셀프 스튜디오 열기" : "Open Self Studio"}
+            {isKo ? "STEP 02~03 · 셀프 스튜디오 열기" : "Open Self Studio"}
           </a>
         </div>
+      </div>
+
+      {/* 3-Step Studio Creation Workflow Launcher (Identity Lock -> Image Generation & Micro-Edit -> 1080p Master Video) */}
+      <div className="bw-launcher-grid" data-brand-studio-launcher>
+        <a
+          href={scopedHref("/brand/identity", choice)}
+          className="bw-launcher-card"
+          data-studio-launcher-step="identity"
+        >
+          <div>
+            <span
+              className="bw-chip"
+              style={{
+                background: "var(--ys-brand-tint)",
+                color: "var(--ys-brand-text)",
+                fontWeight: 700,
+                marginBottom: "6px",
+              }}
+            >
+              {isKo ? "STEP 01 · 브랜드 & 색감·질감 고정" : "STEP 01 · Identity & Style Pin"}
+            </span>
+            <strong style={{ display: "block", fontSize: "14px", marginTop: "4px" }}>
+              {isKo
+                ? "브랜드 핵심 원칙 3가지 & 색감·질감 레퍼런스 상시 잠금"
+                : "Lock 3 Brand Rules & Pinned Color/Texture References"}
+            </strong>
+            <p className="bw-muted" style={{ fontSize: "12px", marginTop: "4px", lineHeight: 1.45 }}>
+              {isKo
+                ? "제품 실루엣·로고 철자·소재 기준과 고정 색감(Color Pin)·고정 질감(Texture Pin)을 먼저 등록해 모든 작업에 일관되게 유지합니다."
+                : "Pin your brand identity, color grade reference, and film texture reference across every studio run."}
+            </p>
+          </div>
+          <span style={{ fontSize: "12px", fontWeight: 700, color: "var(--ys-brand-text)" }}>
+            {isKo ? "브랜드 아이덴티티 설정하기 →" : "Configure Brand Identity →"}
+          </span>
+        </a>
+
+        <a
+          href={scopedHref("/brand/studio", choice)}
+          className="bw-launcher-card"
+          data-studio-launcher-step="image"
+        >
+          <div>
+            <span
+              className="bw-chip"
+              style={{
+                background: "var(--ys-brand-tint)",
+                color: "var(--ys-brand-text)",
+                fontWeight: 700,
+                marginBottom: "6px",
+              }}
+            >
+              {isKo ? "STEP 02 · 이미지 생성 & 극소 부위 수정" : "STEP 02 · Image Gen & Micro-Edit"}
+            </span>
+            <strong style={{ display: "block", fontSize: "14px", marginTop: "4px" }}>
+              {isKo
+                ? "1~4번 멀티 레퍼런스 화보 생성 & 캔버스 드래그 부분 수정"
+                : "1–4 Multi-Ref Generation & Smart Mask Micro-Region Editing"}
+            </strong>
+            <p className="bw-muted" style={{ fontSize: "12px", marginTop: "4px", lineHeight: 1.45 }}>
+              {isKo
+                ? "1번 인물·2번 배경·3번 감도·4번 색감을 조합하거나, 캔버스에서 라벨·손·표정만 드래그해 비파괴 스마트 마스크로 정밀 교정합니다."
+                : "Combine 1–4 role-locked references or drag a selection marquee on the canvas to edit micro-regions via a Smart Layer Mask."}
+            </p>
+          </div>
+          <span style={{ fontSize: "12px", fontWeight: 700, color: "var(--ys-brand-text)" }}>
+            {isKo ? "이미지 스튜디오 바로 열기 →" : "Open Image Studio →"}
+          </span>
+        </a>
+
+        <a
+          href={scopedHref("/brand/studio", choice)}
+          className="bw-launcher-card"
+          data-studio-launcher-step="video"
+        >
+          <div>
+            <span
+              className="bw-chip"
+              style={{
+                background: "var(--ys-brand-tint)",
+                color: "var(--ys-brand-text)",
+                fontWeight: 700,
+                marginBottom: "6px",
+              }}
+            >
+              {isKo ? "STEP 03 · 1080p 영상 & 시딩 캠페인" : "STEP 03 · 1080p Video & Seeding"}
+            </span>
+            <strong style={{ display: "block", fontSize: "14px", marginTop: "4px" }}>
+              {isKo
+                ? "완성된 화보 컷을 시작 프레임으로 1080p 사운드 영상 제작"
+                : "Animate Approved Still into 1080p Sound Master Film"}
+            </strong>
+            <p className="bw-muted" style={{ fontSize: "12px", marginTop: "4px", lineHeight: 1.45 }}>
+              {isKo
+                ? "승인된 이미지 컷을 첫 프레임으로 잠가 720p 동선 검수 후 1080p 납품본을 뽑거나, 인플루언서 시딩 캠페인으로 즉시 연결합니다."
+                : "Lock your approved still as the start frame, preview motion at 720p, and render the 1080p master film."}
+            </p>
+          </div>
+          <span style={{ fontSize: "12px", fontWeight: 700, color: "var(--ys-brand-text)" }}>
+            {isKo ? "영상 스튜디오 바로 열기 →" : "Open Video Studio →"}
+          </span>
+        </a>
       </div>
 
       {/* 4-Up Portrait (4:5) Passepartout Video Gallery — Zero cropped heads, zero chip clutter over footage */}

@@ -1,6 +1,11 @@
 "use client";
 
-import { useState, type ChangeEvent, type FormEvent } from "react";
+import {
+  useState,
+  type ChangeEvent,
+  type FormEvent,
+  type MouseEvent,
+} from "react";
 import {
   SHOT_ASPECTS,
   type CustomerBriefView,
@@ -43,8 +48,18 @@ import {
 } from "@/lib/brands/production/pricing";
 import {
   BRAND_STUDIO_IMAGE_MODELS,
+  BRAND_STUDIO_MICRO_EDIT_MODELS,
+  MICRO_REGION_SELECTION_PRESETS,
+  PINNED_COLOR_REFERENCES,
+  PINNED_TEXTURE_REFERENCES,
+  findClosestSupportedAspectRatio,
   resolveCategoryReferenceWorkflows,
   type BrandStudioImageModelId,
+  type BrandStudioMicroEditModelId,
+  type MicroEditQualityTier,
+  type MicroEditResolutionTier,
+  type StudioCanvasToolId,
+  type StudioImageSubMode,
   type StudioReferenceSlotNumber,
   type StudioReferenceWorkflowId,
 } from "@/lib/brands/production/reference-studio";
@@ -289,6 +304,88 @@ export function BrandBriefStudio({
     Partial<Record<StudioReferenceSlotNumber, string>>
   >({});
 
+  // Image Studio Sub-Mode: Multi-Ref Generation vs Micro-Region Editing vs Canvas Drag-to-Reference
+  const [imageSubMode, setImageSubMode] =
+    useState<StudioImageSubMode>("multi_ref_generate");
+
+  // Pinned Color Reference & Pinned Texture Reference (Persists across all workflows & edits)
+  const [isColorRefPinned, setIsColorRefPinned] = useState<boolean>(true);
+  const [pinnedColorRefId, setPinnedColorRefId] = useState<string>(
+    PINNED_COLOR_REFERENCES[0]!.id,
+  );
+  const [customPinnedColorThumb, setCustomPinnedColorThumb] =
+    useState<string>("");
+  const [customPinnedColorName, setCustomPinnedColorName] =
+    useState<string>("");
+
+  const [isTextureRefPinned, setIsTextureRefPinned] = useState<boolean>(true);
+  const [pinnedTextureRefId, setPinnedTextureRefId] = useState<string>(
+    PINNED_TEXTURE_REFERENCES[0]!.id,
+  );
+  const [customPinnedTextureThumb, setCustomPinnedTextureThumb] =
+    useState<string>("");
+  const [customPinnedTextureName, setCustomPinnedTextureName] =
+    useState<string>("");
+
+  const activePinnedColor =
+    PINNED_COLOR_REFERENCES.find((c) => c.id === pinnedColorRefId) ??
+    PINNED_COLOR_REFERENCES[0]!;
+  const activePinnedTexture =
+    PINNED_TEXTURE_REFERENCES.find((t) => t.id === pinnedTextureRefId) ??
+    PINNED_TEXTURE_REFERENCES[0]!;
+
+  // Oplux + Morphic Canvas Selection Tools & Micro-Region Editing State
+  const [activeCanvasTool, setActiveCanvasTool] =
+    useState<StudioCanvasToolId>("marquee_select");
+  const [activeRegionPresetId, setActiveRegionPresetId] = useState<string>(
+    MICRO_REGION_SELECTION_PRESETS[0]!.id,
+  );
+  const [selectionRect, setSelectionRect] = useState<{
+    xPct: number;
+    yPct: number;
+    wPct: number;
+    hPct: number;
+  }>({
+    xPct: MICRO_REGION_SELECTION_PRESETS[0]!.xPct,
+    yPct: MICRO_REGION_SELECTION_PRESETS[0]!.yPct,
+    wPct: MICRO_REGION_SELECTION_PRESETS[0]!.wPct,
+    hPct: MICRO_REGION_SELECTION_PRESETS[0]!.hPct,
+  });
+  const [isDraggingMarquee, setIsDraggingMarquee] = useState<boolean>(false);
+  const [dragStartPct, setDragStartPct] = useState<{
+    x: number;
+    y: number;
+  } | null>(null);
+
+  const [selectedMicroEditModelId, setSelectedMicroEditModelId] =
+    useState<BrandStudioMicroEditModelId>("precision_region_editor");
+  const [microEditQuality, setMicroEditQuality] =
+    useState<MicroEditQualityTier>("High");
+  const [microEditResolution, setMicroEditResolution] =
+    useState<MicroEditResolutionTier>("2K");
+  const [microEditBatchSize, setMicroEditBatchSize] = useState<1 | 2 | 4>(2);
+  const [layerVisibility, setLayerVisibility] = useState<{
+    regionMask: boolean;
+    pinnedStyle: boolean;
+    baseImage: boolean;
+  }>({
+    regionMask: true,
+    pinnedStyle: true,
+    baseImage: true,
+  });
+
+  const activeMicroEditModel =
+    BRAND_STUDIO_MICRO_EDIT_MODELS.find(
+      (m) => m.id === selectedMicroEditModelId,
+    ) ?? BRAND_STUDIO_MICRO_EDIT_MODELS[0]!;
+  const activeRegionPreset =
+    MICRO_REGION_SELECTION_PRESETS.find((r) => r.id === activeRegionPresetId) ??
+    MICRO_REGION_SELECTION_PRESETS[0]!;
+  const matchedSelectionRatio = findClosestSupportedAspectRatio(
+    selectionRect.wPct * 20.48,
+    selectionRect.hPct * 25.6,
+  );
+
   // Image Model Selection & Full Comparison Guide Toggle
   const [selectedImageModelId, setSelectedImageModelId] =
     useState<BrandStudioImageModelId>("portrait_lookbook_pro");
@@ -485,6 +582,164 @@ export function BrandBriefStudio({
     );
   }
 
+  function handleSwitchImageSubMode(nextMode: StudioImageSubMode) {
+    setImageSubMode(nextMode);
+    if (nextMode === "micro_region_edit") {
+      setActiveCanvasTool("marquee_select");
+      setBriefText(
+        isKo
+          ? activeRegionPreset.defaultEditPromptKo
+          : activeRegionPreset.defaultEditPromptEn,
+      );
+    } else if (nextMode === "canvas_drag_ref") {
+      setActiveCanvasTool("marquee_select");
+      setBriefText(
+        isKo
+          ? "[캔버스 드래그 선택: 1번 인물 컷 + 2번 장면 레퍼런스 첨부됨] 드래그해 묶은 두 레퍼런스의 인물과 공간·조명 감도를 결합해 새 화보 컷을 생성해 줘."
+          : "[Canvas Drag Selection: Subject Cut + Scene Reference Attached] Combine the subject and spatial lighting sensitivity from the dragged canvas selection.",
+      );
+    } else {
+      setBriefText(
+        isKo
+          ? activeRefWorkflow.defaultPromptKo
+          : activeRefWorkflow.defaultPromptEn,
+      );
+    }
+  }
+
+  function handleSelectRegionPreset(presetId: string) {
+    const found =
+      MICRO_REGION_SELECTION_PRESETS.find((p) => p.id === presetId) ??
+      MICRO_REGION_SELECTION_PRESETS[0]!;
+    setActiveRegionPresetId(found.id);
+    setSelectionRect({
+      xPct: found.xPct,
+      yPct: found.yPct,
+      wPct: found.wPct,
+      hPct: found.hPct,
+    });
+    setImageSubMode("micro_region_edit");
+    setActiveCanvasTool("marquee_select");
+    setBriefText(
+      isKo ? found.defaultEditPromptKo : found.defaultEditPromptEn,
+    );
+  }
+
+  function handleCanvasMouseDown(e: MouseEvent<HTMLDivElement>) {
+    if (isVideoMode || activeCanvasTool === "pointer") return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return;
+    const x = Math.max(
+      0,
+      Math.min(100, ((e.clientX - rect.left) / rect.width) * 100),
+    );
+    const y = Math.max(
+      0,
+      Math.min(100, ((e.clientY - rect.top) / rect.height) * 100),
+    );
+    setIsDraggingMarquee(true);
+    setDragStartPct({ x, y });
+    setSelectionRect({
+      xPct: Math.round(x),
+      yPct: Math.round(y),
+      wPct: 14,
+      hPct: 14,
+    });
+  }
+
+  function handleCanvasMouseMove(e: MouseEvent<HTMLDivElement>) {
+    if (!isDraggingMarquee || !dragStartPct) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return;
+    const curX = Math.max(
+      0,
+      Math.min(100, ((e.clientX - rect.left) / rect.width) * 100),
+    );
+    const curY = Math.max(
+      0,
+      Math.min(100, ((e.clientY - rect.top) / rect.height) * 100),
+    );
+    const left = Math.min(dragStartPct.x, curX);
+    const top = Math.min(dragStartPct.y, curY);
+    const width = Math.max(12, Math.abs(curX - dragStartPct.x));
+    const height = Math.max(12, Math.abs(curY - dragStartPct.y));
+    setSelectionRect({
+      xPct: Math.round(left),
+      yPct: Math.round(top),
+      wPct: Math.round(Math.min(100 - left, width)),
+      hPct: Math.round(Math.min(100 - top, height)),
+    });
+  }
+
+  function handleCanvasMouseUp() {
+    if (!isDraggingMarquee) return;
+    setIsDraggingMarquee(false);
+    setDragStartPct(null);
+  }
+
+  function handleAttachCanvasSelection() {
+    const boundsLabel = `${selectionRect.xPct}%,${selectionRect.yPct}% (${selectionRect.wPct}×${selectionRect.hPct}% · ${matchedSelectionRatio})`;
+    if (imageSubMode === "micro_region_edit") {
+      const token = isKo
+        ? `[선택 부위 패치 첨부됨: ${activeRegionPreset.labelKo} ${boundsLabel} · 영역 외 픽셀 100% 마스크 보존]`
+        : `[Selected Patch Attached: ${activeRegionPreset.labelEn} ${boundsLabel} · Smart Mask Lock ON]`;
+      setBriefText((prev) =>
+        prev.includes(boundsLabel)
+          ? prev
+          : `${token} ${prev || (isKo ? activeRegionPreset.defaultEditPromptKo : activeRegionPreset.defaultEditPromptEn)}`.trim(),
+      );
+      setStatusMessage(
+        isKo
+          ? `드래그한 선택 영역(${boundsLabel})이 Input Preview 및 스마트 레이어 마스크 편집 대상으로 첨부되었습니다.`
+          : `Dragged selection (${boundsLabel}) attached to Input Preview with Smart Layer Mask lock.`,
+      );
+    } else {
+      const token = isKo
+        ? `[캔버스 드래그 레퍼런스 첨부됨: ${activeTake.labelKo} ${boundsLabel}]`
+        : `[Canvas Drag Reference Attached: ${activeTake.labelEn} ${boundsLabel}]`;
+      setBriefText((prev) =>
+        prev.includes(boundsLabel) ? prev : `${token} ${prev}`.trim(),
+      );
+      setStatusMessage(
+        isKo
+          ? `캔버스에서 드래그한 영역(${boundsLabel})이 레퍼런스로 첨부되었습니다.`
+          : `Dragged canvas selection (${boundsLabel}) attached as reference.`,
+      );
+    }
+  }
+
+  function handlePinnedColorFileUpload(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const objectUrl = URL.createObjectURL(file);
+    setCustomPinnedColorThumb(objectUrl);
+    setCustomPinnedColorName(file.name);
+    setIsColorRefPinned(true);
+    setCustomSlotThumbs((prev) => ({ ...prev, 4: objectUrl }));
+    setCustomSlotNames((prev) => ({ ...prev, 4: file.name }));
+    setStatusMessage(
+      isKo
+        ? `색감 참고용 레퍼런스(${file.name})가 상시 고정(Pin)되었습니다. 다른 슬롯을 바꿔도 이 색감이 계속 유지됩니다.`
+        : `Color reference (${file.name}) pinned across all studio runs.`,
+    );
+  }
+
+  function handlePinnedTextureFileUpload(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const objectUrl = URL.createObjectURL(file);
+    setCustomPinnedTextureThumb(objectUrl);
+    setCustomPinnedTextureName(file.name);
+    setIsTextureRefPinned(true);
+    setCustomSlotThumbs((prev) => ({ ...prev, 3: objectUrl }));
+    setCustomSlotNames((prev) => ({ ...prev, 3: file.name }));
+    setStatusMessage(
+      isKo
+        ? `이미지 질감 참고용 레퍼런스(${file.name})가 상시 고정(Pin)되었습니다. 생성과 부분 수정 모두에 동일 질감이 적용됩니다.`
+        : `Texture reference (${file.name}) pinned across all studio runs.`,
+    );
+  }
+
   function handleSelectSceneType(
     template: PomelliShotTemplate | "short_video",
     sceneIndex: number,
@@ -539,11 +794,37 @@ export function BrandBriefStudio({
     setErrorMessage("");
     setStatusMessage("");
 
-    const promptToUse =
+    const basePrompt =
       briefText.trim() ||
-      (isKo
-        ? activeRefWorkflow.defaultPromptKo
-        : activeRefWorkflow.defaultPromptEn);
+      (imageSubMode === "micro_region_edit"
+        ? isKo
+          ? activeRegionPreset.defaultEditPromptKo
+          : activeRegionPreset.defaultEditPromptEn
+        : isKo
+          ? activeRefWorkflow.defaultPromptKo
+          : activeRefWorkflow.defaultPromptEn);
+
+    const pinnedParts: string[] = [];
+    if (isColorRefPinned) {
+      pinnedParts.push(
+        isKo ? activePinnedColor.promptTokenKo : activePinnedColor.promptTokenEn,
+      );
+    }
+    if (isTextureRefPinned) {
+      pinnedParts.push(
+        isKo
+          ? activePinnedTexture.promptTokenKo
+          : activePinnedTexture.promptTokenEn,
+      );
+    }
+    if (!isVideoMode && imageSubMode === "micro_region_edit") {
+      pinnedParts.push(
+        isKo
+          ? `[스마트 레이어 마스크 편집 영역: x=${selectionRect.xPct}%, y=${selectionRect.yPct}%, w=${selectionRect.wPct}%, h=${selectionRect.hPct}% (${matchedSelectionRatio}) · 해상도=${microEditResolution} · 품질=${microEditQuality}]`
+          : `[Smart Layer Mask Bounds: x=${selectionRect.xPct}%, y=${selectionRect.yPct}%, w=${selectionRect.wPct}%, h=${selectionRect.hPct}% (${matchedSelectionRatio}) · Res=${microEditResolution} · Quality=${microEditQuality}]`,
+      );
+    }
+    const promptToUse = [...pinnedParts, basePrompt].join(" ").trim();
 
     try {
       const response = await fetch("/api/brand-workspace", {
@@ -1100,8 +1381,430 @@ export function BrandBriefStudio({
 
       {/* 2-Column Split Studio Workbench: Left = Creation Controls, Right = Always-On Live Visual Canvas */}
       <div className="bw-studio-workbench">
-        {/* LEFT COLUMN: 1-4 Reference Deck + Image Model Selector + Scene Cards + Prompt Composer */}
+        {/* LEFT COLUMN: Image Sub-Mode + Pinned Color/Texture Locks + 1-4 Reference Deck + Model Selector / Micro-Editing + Composer */}
         <div>
+          {/* Image Studio Sub-Mode Switcher: Multi-Ref Generation vs Micro-Region Editing vs Canvas Drag-to-Reference */}
+          {!isVideoMode && (
+            <div
+              data-studio-image-submode={imageSubMode}
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: "10px",
+                marginBottom: "14px",
+                padding: "10px 12px",
+                borderRadius: "13px",
+                background: "var(--ys-subtle-bg)",
+                boxShadow: "var(--ys-ring)",
+              }}
+            >
+              <div>
+                <strong style={{ fontSize: "13px", color: "var(--ys-ink)" }}>
+                  {isKo
+                    ? "이미지 스튜디오 작업 모드"
+                    : "Image Studio Workflow Mode"}
+                </strong>
+                <span
+                  className="bw-muted"
+                  style={{ marginLeft: "8px", fontSize: "12px" }}
+                >
+                  {imageSubMode === "micro_region_edit"
+                    ? isKo
+                      ? "캔버스에서 수정할 부위만 드래그해 스마트 레이어 마스크로 부분 교정합니다"
+                      : "Drag a micro-region on the canvas to edit only that area via a Smart Layer Mask"
+                    : imageSubMode === "canvas_drag_ref"
+                      ? isKo
+                        ? "캔버스 위 여러 에셋을 드래그해 레퍼런스로 한 번에 묶어 합성합니다"
+                        : "Drag across canvas assets to attach them as a multi-reference bundle"
+                      : isKo
+                        ? "1~4번 역할별 레퍼런스와 고정된 색감·질감으로 화보를 생성합니다"
+                        : "Generate lookbooks from 1–4 role-locked references and pinned style locks"}
+                </span>
+              </div>
+
+              <div className="bw-seg-track">
+                <button
+                  type="button"
+                  className="bw-seg-btn"
+                  data-image-submode-btn="multi_ref_generate"
+                  aria-pressed={imageSubMode === "multi_ref_generate"}
+                  onClick={() => handleSwitchImageSubMode("multi_ref_generate")}
+                  disabled={busy}
+                >
+                  {isKo
+                    ? "멀티 레퍼런스 생성"
+                    : "Multi-Ref Generation"}
+                </button>
+                <button
+                  type="button"
+                  className="bw-seg-btn"
+                  data-image-submode-btn="micro_region_edit"
+                  aria-pressed={imageSubMode === "micro_region_edit"}
+                  onClick={() => handleSwitchImageSubMode("micro_region_edit")}
+                  disabled={busy}
+                >
+                  {isKo
+                    ? "극소 부위 정밀 수정 (Image Editing)"
+                    : "Micro-Region Image Editing"}
+                </button>
+                <button
+                  type="button"
+                  className="bw-seg-btn"
+                  data-image-submode-btn="canvas_drag_ref"
+                  aria-pressed={imageSubMode === "canvas_drag_ref"}
+                  onClick={() => handleSwitchImageSubMode("canvas_drag_ref")}
+                  disabled={busy}
+                >
+                  {isKo
+                    ? "캔버스 드래그 레퍼런스"
+                    : "Canvas Drag Reference"}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Pinned Color Reference & Pinned Texture Reference Lock Bar */}
+          <div
+            className="bw-pinned-ref-bar"
+            data-studio-pinned-style-refs
+            data-color-pinned={String(isColorRefPinned)}
+            data-texture-pinned={String(isTextureRefPinned)}
+          >
+            {/* Card 1: Pinned Color Reference (색감 참고용 고정) */}
+            <div
+              className="bw-pinned-ref-card"
+              data-pinned={String(isColorRefPinned)}
+              data-pinned-color-card
+            >
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: "8px",
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "7px",
+                    minWidth: 0,
+                  }}
+                >
+                  <span
+                    style={{
+                      width: "12px",
+                      height: "12px",
+                      borderRadius: "999px",
+                      background: activePinnedColor.swatchHex,
+                      flexShrink: 0,
+                      boxShadow: "0 0 0 1px rgba(0,0,0,0.12)",
+                    }}
+                  />
+                  <strong
+                    style={{
+                      fontSize: "12.5px",
+                      color: "var(--ys-ink)",
+                    }}
+                  >
+                    {isKo
+                      ? "색감 참고용 레퍼런스 고정"
+                      : "Pin Color Grade Reference"}
+                  </strong>
+                </div>
+
+                <button
+                  type="button"
+                  className="bw-pin-toggle"
+                  aria-pressed={isColorRefPinned}
+                  onClick={() => setIsColorRefPinned((prev) => !prev)}
+                  data-pin-color-toggle
+                >
+                  {isColorRefPinned
+                    ? isKo
+                      ? "색감 고정됨 · 모든 생성에 유지"
+                      : "Color Pinned ON"
+                    : isKo
+                      ? "색감 고정 해제됨"
+                      : "Pin Color"}
+                </button>
+              </div>
+
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "10px",
+                }}
+              >
+                <img
+                  src={customPinnedColorThumb || activePinnedColor.thumb}
+                  alt={
+                    customPinnedColorName ||
+                    (isKo
+                      ? activePinnedColor.titleKo
+                      : activePinnedColor.titleEn)
+                  }
+                  style={{
+                    width: "44px",
+                    height: "44px",
+                    borderRadius: "8px",
+                    objectFit: "cover",
+                    flexShrink: 0,
+                    boxShadow: "var(--ys-ring)",
+                  }}
+                />
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <div
+                    style={{
+                      fontSize: "12px",
+                      fontWeight: 600,
+                      color: "var(--ys-ink)",
+                    }}
+                  >
+                    {customPinnedColorName ||
+                      (isKo
+                        ? activePinnedColor.titleKo
+                        : activePinnedColor.titleEn)}
+                  </div>
+                  <div
+                    style={{
+                      fontSize: "11px",
+                      color: "var(--ys-ink-secondary)",
+                      marginTop: "2px",
+                    }}
+                  >
+                    {isKo
+                      ? activePinnedColor.ruleKo
+                      : activePinnedColor.ruleEn}
+                  </div>
+                </div>
+              </div>
+
+              <div
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  alignItems: "center",
+                  gap: "5px",
+                }}
+              >
+                {PINNED_COLOR_REFERENCES.map((preset) => {
+                  const selected =
+                    !customPinnedColorName && pinnedColorRefId === preset.id;
+                  return (
+                    <button
+                      key={preset.id}
+                      type="button"
+                      className="bw-quick-chip"
+                      aria-pressed={selected}
+                      onClick={() => {
+                        setPinnedColorRefId(preset.id);
+                        setCustomPinnedColorName("");
+                        setCustomPinnedColorThumb("");
+                        setIsColorRefPinned(true);
+                      }}
+                      style={{
+                        padding: "3px 8px",
+                        fontSize: "11px",
+                        fontWeight: selected ? 700 : 500,
+                      }}
+                    >
+                      {isKo ? preset.titleKo : preset.titleEn}
+                    </button>
+                  );
+                })}
+                <label
+                  className="bw-quick-chip"
+                  style={{
+                    padding: "3px 8px",
+                    fontSize: "11px",
+                    fontWeight: 600,
+                    color: "var(--ys-brand-text)",
+                  }}
+                >
+                  {isKo ? "+ 내 색감 사진 고정" : "+ Upload Color Ref"}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handlePinnedColorFileUpload}
+                    style={{ display: "none" }}
+                    data-pin-color-file-input
+                  />
+                </label>
+              </div>
+            </div>
+
+            {/* Card 2: Pinned Texture Reference (이미지 질감 참고용 고정) */}
+            <div
+              className="bw-pinned-ref-card"
+              data-pinned={String(isTextureRefPinned)}
+              data-pinned-texture-card
+            >
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: "8px",
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "7px",
+                    minWidth: 0,
+                  }}
+                >
+                  <span
+                    style={{
+                      width: "12px",
+                      height: "12px",
+                      borderRadius: "999px",
+                      background: activePinnedTexture.swatchHex,
+                      flexShrink: 0,
+                      boxShadow: "0 0 0 1px rgba(0,0,0,0.12)",
+                    }}
+                  />
+                  <strong
+                    style={{
+                      fontSize: "12.5px",
+                      color: "var(--ys-ink)",
+                    }}
+                  >
+                    {isKo
+                      ? "이미지 질감 참고용 레퍼런스 고정"
+                      : "Pin Surface Texture Reference"}
+                  </strong>
+                </div>
+
+                <button
+                  type="button"
+                  className="bw-pin-toggle"
+                  aria-pressed={isTextureRefPinned}
+                  onClick={() => setIsTextureRefPinned((prev) => !prev)}
+                  data-pin-texture-toggle
+                >
+                  {isTextureRefPinned
+                    ? isKo
+                      ? "질감 고정됨 · 모든 생성에 유지"
+                      : "Texture Pinned ON"
+                    : isKo
+                      ? "질감 고정 해제됨"
+                      : "Pin Texture"}
+                </button>
+              </div>
+
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "10px",
+                }}
+              >
+                <img
+                  src={customPinnedTextureThumb || activePinnedTexture.thumb}
+                  alt={
+                    customPinnedTextureName ||
+                    (isKo
+                      ? activePinnedTexture.titleKo
+                      : activePinnedTexture.titleEn)
+                  }
+                  style={{
+                    width: "44px",
+                    height: "44px",
+                    borderRadius: "8px",
+                    objectFit: "cover",
+                    flexShrink: 0,
+                    boxShadow: "var(--ys-ring)",
+                  }}
+                />
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <div
+                    style={{
+                      fontSize: "12px",
+                      fontWeight: 600,
+                      color: "var(--ys-ink)",
+                    }}
+                  >
+                    {customPinnedTextureName ||
+                      (isKo
+                        ? activePinnedTexture.titleKo
+                        : activePinnedTexture.titleEn)}
+                  </div>
+                  <div
+                    style={{
+                      fontSize: "11px",
+                      color: "var(--ys-ink-secondary)",
+                      marginTop: "2px",
+                    }}
+                  >
+                    {isKo
+                      ? activePinnedTexture.ruleKo
+                      : activePinnedTexture.ruleEn}
+                  </div>
+                </div>
+              </div>
+
+              <div
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  alignItems: "center",
+                  gap: "5px",
+                }}
+              >
+                {PINNED_TEXTURE_REFERENCES.map((preset) => {
+                  const selected =
+                    !customPinnedTextureName && pinnedTextureRefId === preset.id;
+                  return (
+                    <button
+                      key={preset.id}
+                      type="button"
+                      className="bw-quick-chip"
+                      aria-pressed={selected}
+                      onClick={() => {
+                        setPinnedTextureRefId(preset.id);
+                        setCustomPinnedTextureName("");
+                        setCustomPinnedTextureThumb("");
+                        setIsTextureRefPinned(true);
+                      }}
+                      style={{
+                        padding: "3px 8px",
+                        fontSize: "11px",
+                        fontWeight: selected ? 700 : 500,
+                      }}
+                    >
+                      {isKo ? preset.titleKo : preset.titleEn}
+                    </button>
+                  );
+                })}
+                <label
+                  className="bw-quick-chip"
+                  style={{
+                    padding: "3px 8px",
+                    fontSize: "11px",
+                    fontWeight: 600,
+                    color: "var(--ys-brand-text)",
+                  }}
+                >
+                  {isKo ? "+ 내 질감 사진 고정" : "+ Upload Texture Ref"}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handlePinnedTextureFileUpload}
+                    style={{ display: "none" }}
+                    data-pin-texture-file-input
+                  />
+                </label>
+              </div>
+            </div>
+          </div>
+
           {/* STEP 2: Numbered 1-4 Reference Image Slots (Sunra / AMERICANO / Oplux Style) */}
           <div
             style={{
@@ -1164,7 +1867,12 @@ export function BrandBriefStudio({
           <div className="bw-ref-slot-grid" data-studio-asset-upload>
             {activeRefWorkflow.slots.map((slot) => {
               const thumbSrc =
-                customSlotThumbs[slot.slotNumber] ?? slot.defaultThumb;
+                customSlotThumbs[slot.slotNumber] ??
+                (slot.slotNumber === 3 && customPinnedTextureThumb
+                  ? customPinnedTextureThumb
+                  : slot.slotNumber === 4 && customPinnedColorThumb
+                    ? customPinnedColorThumb
+                    : slot.defaultThumb);
               const assetName =
                 customSlotNames[slot.slotNumber] ??
                 (isKo ? slot.defaultAssetNameKo : slot.defaultAssetNameEn);
@@ -1175,6 +1883,12 @@ export function BrandBriefStudio({
                   : slot.slotNumber === 2
                     ? "product"
                     : `slot-${slot.slotNumber}`;
+              const isSlotPinned =
+                slot.slotNumber === 3
+                  ? isTextureRefPinned
+                  : slot.slotNumber === 4
+                    ? isColorRefPinned
+                    : false;
 
               return (
                 <div
@@ -1182,6 +1896,14 @@ export function BrandBriefStudio({
                   className="bw-ref-slot-card"
                   data-ref-slot={slot.slotNumber}
                   data-upload-slot={compatSlotAttr}
+                  style={
+                    isSlotPinned
+                      ? {
+                          boxShadow:
+                            "0 0 0 1.5px var(--ys-brand), var(--ys-shadow-1)",
+                        }
+                      : undefined
+                  }
                 >
                   <div
                     style={{
@@ -1194,6 +1916,31 @@ export function BrandBriefStudio({
                     <span className="bw-ref-num-badge">
                       {isKo ? slot.tagKo : slot.tagEn}
                     </span>
+
+                    {(slot.slotNumber === 3 || slot.slotNumber === 4) && (
+                      <button
+                        type="button"
+                        className="bw-pin-toggle"
+                        aria-pressed={isSlotPinned}
+                        onClick={() => {
+                          if (slot.slotNumber === 3) {
+                            setIsTextureRefPinned((p) => !p);
+                          } else {
+                            setIsColorRefPinned((p) => !p);
+                          }
+                        }}
+                        style={{ padding: "2px 7px", fontSize: "10px" }}
+                        data-slot-pin-btn={slot.slotNumber}
+                      >
+                        {isSlotPinned
+                          ? isKo
+                            ? "고정됨"
+                            : "Pinned"
+                          : isKo
+                            ? "고정"
+                            : "Pin"}
+                      </button>
+                    )}
                   </div>
 
                   <div className="bw-ref-slot-media">
@@ -1272,6 +2019,258 @@ export function BrandBriefStudio({
               );
             })}
           </div>
+
+          {/* Oplux-Style Micro-Region Image Editing Section (극소 부위 정밀 수정 · 스마트 레이어 마스크) */}
+          {!isVideoMode && (
+            <div
+              data-studio-micro-edit-section
+              style={{
+                borderRadius: "14px",
+                padding: "14px 16px",
+                marginBottom: "16px",
+                background:
+                  imageSubMode === "micro_region_edit"
+                    ? "linear-gradient(180deg, rgba(56, 117, 197, 0.08) 0%, #FFFFFF 100%)"
+                    : "var(--ys-subtle-bg)",
+                boxShadow:
+                  imageSubMode === "micro_region_edit"
+                    ? "0 0 0 1.5px var(--ys-brand), var(--ys-shadow-1)"
+                    : "var(--ys-ring)",
+                display: "grid",
+                gap: "12px",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: "8px",
+                }}
+              >
+                <div>
+                  <span
+                    className="bw-chip"
+                    style={{
+                      background: "var(--ys-brand-tint)",
+                      color: "var(--ys-brand-text)",
+                      fontWeight: 700,
+                      marginRight: "8px",
+                    }}
+                  >
+                    {isKo
+                      ? "극소 부위 정밀 수정 (Micro-Region Image Editing)"
+                      : "Micro-Region Image Editing"}
+                  </span>
+                  <strong style={{ fontSize: "13.5px", color: "var(--ys-ink)" }}>
+                    {isKo
+                      ? "원하는 부위만 드래그해 수정하고 선택 영역 밖 원본 픽셀은 100% 그대로 보존합니다"
+                      : "Drag any micro-region to edit while locking 100% of pixels outside the selection"}
+                  </strong>
+                </div>
+
+                <span
+                  className="bw-badge"
+                  data-studio-mask-bounds-badge
+                  style={{ fontFamily: "var(--ys-mono)", fontSize: "11px" }}
+                >
+                  {isKo
+                    ? `선택 영역: ${selectionRect.xPct}%,${selectionRect.yPct}% (${selectionRect.wPct}×${selectionRect.hPct}% · ${matchedSelectionRatio}) · 스마트 마스크 ON`
+                    : `Bounds: ${selectionRect.xPct}%,${selectionRect.yPct}% (${selectionRect.wPct}×${selectionRect.hPct}% · ${matchedSelectionRatio}) · Mask ON`}
+                </span>
+              </div>
+
+              {/* 4 Quick Micro-Region Target Presets */}
+              <div
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  alignItems: "center",
+                  gap: "6px",
+                }}
+                data-studio-micro-region-presets
+              >
+                <span
+                  style={{
+                    fontSize: "11.5px",
+                    fontWeight: 600,
+                    color: "var(--ys-ink-secondary)",
+                  }}
+                >
+                  {isKo ? "수정할 부위 빠른 지정:" : "Quick target region:"}
+                </span>
+                {MICRO_REGION_SELECTION_PRESETS.map((preset) => {
+                  const selected =
+                    imageSubMode === "micro_region_edit" &&
+                    activeRegionPresetId === preset.id;
+                  return (
+                    <button
+                      key={preset.id}
+                      type="button"
+                      className="bw-quick-chip"
+                      data-micro-region-preset={preset.id}
+                      aria-pressed={selected}
+                      onClick={() => handleSelectRegionPreset(preset.id)}
+                      disabled={busy}
+                      style={{
+                        fontWeight: selected ? 700 : 500,
+                        boxShadow: selected
+                          ? "0 0 0 1.5px var(--ys-brand)"
+                          : undefined,
+                      }}
+                    >
+                      {isKo ? preset.labelKo : preset.labelEn}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* 4 Dedicated Micro-Edit Models (Precision Region Editor / Seamless Edge Inpaint / Texture Fit Reshape / Film Grain & Skin Finish) */}
+              <div
+                className="bw-model-picker-grid"
+                style={{ marginBottom: 0 }}
+                data-studio-micro-edit-model-picker
+              >
+                {BRAND_STUDIO_MICRO_EDIT_MODELS.map((editModel) => {
+                  const selected = selectedMicroEditModelId === editModel.id;
+                  return (
+                    <button
+                      key={editModel.id}
+                      type="button"
+                      className="bw-model-card"
+                      data-studio-micro-edit-model={editModel.id}
+                      aria-pressed={selected}
+                      onClick={() => {
+                        setSelectedMicroEditModelId(editModel.id);
+                        setImageSubMode("micro_region_edit");
+                      }}
+                      disabled={busy}
+                    >
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          gap: "6px",
+                          width: "100%",
+                        }}
+                      >
+                        <strong style={{ fontSize: "12.5px" }}>
+                          {isKo ? editModel.nameKo : editModel.nameEn}
+                        </strong>
+                        <span
+                          className="bw-scene-spec"
+                          style={{ fontWeight: 600 }}
+                        >
+                          {editModel.creditsPerEdit} cr ·{" "}
+                          {isKo
+                            ? `${editModel.priceKrwPerEdit}원`
+                            : `KRW ${editModel.priceKrwPerEdit}`}
+                        </span>
+                      </div>
+                      <span
+                        style={{
+                          fontSize: "11.5px",
+                          lineHeight: 1.4,
+                          color: "var(--ys-ink-secondary)",
+                        }}
+                      >
+                        {isKo ? editModel.shortTraitKo : editModel.shortTraitEn}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Oplux-style Parameter Pills: Resolution (1K/2K/4K), Quality (Low/Medium/High), Batch Size (1/2/4), Attach Selection */}
+              <div
+                data-studio-oplux-controls
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: "8px",
+                  paddingTop: "8px",
+                  borderTop: "1px solid var(--ys-hairline)",
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    flexWrap: "wrap",
+                    alignItems: "center",
+                    gap: "8px",
+                  }}
+                >
+                  {/* Resolution */}
+                  <div className="bw-seg-track">
+                    {activeMicroEditModel.supportedResolutions.map((res) => (
+                      <button
+                        key={res}
+                        type="button"
+                        className="bw-seg-btn"
+                        aria-pressed={microEditResolution === res}
+                        onClick={() => setMicroEditResolution(res)}
+                        disabled={busy}
+                      >
+                        {res}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Quality Tier (Low / Medium / High) */}
+                  <div className="bw-seg-track">
+                    {(["Low", "Medium", "High"] as const).map((q) => (
+                      <button
+                        key={q}
+                        type="button"
+                        className="bw-seg-btn"
+                        aria-pressed={microEditQuality === q}
+                        onClick={() => setMicroEditQuality(q)}
+                        disabled={busy}
+                      >
+                        {isKo ? `품질: ${q}` : `Quality: ${q}`}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Batch Size */}
+                  <div className="bw-seg-track">
+                    {([1, 2, 4] as const).map((cnt) => (
+                      <button
+                        key={cnt}
+                        type="button"
+                        className="bw-seg-btn"
+                        aria-pressed={microEditBatchSize === cnt}
+                        onClick={() => setMicroEditBatchSize(cnt)}
+                        disabled={busy}
+                      >
+                        {isKo ? `${cnt}장 비교` : `${cnt}x Batch`}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  className="bw-quick-chip"
+                  onClick={handleAttachCanvasSelection}
+                  data-studio-attach-selection-btn
+                  style={{
+                    fontWeight: 700,
+                    color: "var(--ys-brand-text)",
+                    background: "var(--ys-brand-tint)",
+                  }}
+                >
+                  {isKo
+                    ? "+ 드래그한 선택 영역을 지시문에 첨부"
+                    : "+ Attach Selected Region to Prompt"}
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* STEP 3: Image Model Selector + Quick Characteristics + Detailed Suitability Guide */}
           {!isVideoMode && (
@@ -1924,9 +2923,13 @@ export function BrandBriefStudio({
                       ? isKo
                         ? `${videoSeconds}초 ${videoResolution} 영상 생성하기`
                         : `Generate ${videoSeconds}s ${videoResolution} Video`
-                      : isKo
-                        ? `화보 5장 생성하기 (${activeImageModel.creditsPer5Set} cr)`
-                        : `Generate 5 Stills (${activeImageModel.creditsPer5Set} cr)`}
+                      : imageSubMode === "micro_region_edit"
+                        ? isKo
+                          ? `선택 부위 정밀 수정하기 (${activeMicroEditModel.creditsPerEdit} cr · 마스크 잠금)`
+                          : `Edit Selected Region (${activeMicroEditModel.creditsPerEdit} cr · Mask Lock)`
+                        : isKo
+                          ? `화보 5장 생성하기 (${activeImageModel.creditsPer5Set} cr)`
+                          : `Generate 5 Stills (${activeImageModel.creditsPer5Set} cr)`}
                 </button>
               )}
             </div>
@@ -2005,16 +3008,17 @@ export function BrandBriefStudio({
           )}
         </div>
 
-        {/* RIGHT COLUMN: Always-On Live Studio Canvas Stage */}
+        {/* RIGHT COLUMN: Always-On Live Studio Canvas Stage (Oplux + Morphic Hybrid Canvas) */}
         <aside
           className="bw-canvas-stage"
           data-studio-live-canvas
           aria-label={isKo ? "실시간 스튜디오 캔버스" : "Live Studio Canvas"}
         >
-          {/* Canvas Top Status Bar */}
+          {/* Canvas Top Status + Oplux Selection Toolbar */}
           <div
             style={{
               display: "flex",
+              flexWrap: "wrap",
               alignItems: "center",
               justifyContent: "space-between",
               gap: "8px",
@@ -2035,9 +3039,13 @@ export function BrandBriefStudio({
                   ? isKo
                     ? `${videoResolution} 영상 캔버스 · ${videoSeconds}초`
                     : `${videoResolution} Video Canvas · ${videoSeconds}s`
-                  : isKo
-                    ? activeImageModel.nameKo
-                    : activeImageModel.nameEn}
+                  : imageSubMode === "micro_region_edit"
+                    ? isKo
+                      ? activeMicroEditModel.nameKo
+                      : activeMicroEditModel.nameEn
+                    : isKo
+                      ? activeImageModel.nameKo
+                      : activeImageModel.nameEn}
               </span>
               <span
                 style={{
@@ -2048,15 +3056,75 @@ export function BrandBriefStudio({
                 {cameraFocalMm}mm · {aspect}
               </span>
             </div>
-            <span style={{ color: "rgba(255, 255, 255, 0.68)" }}>
-              {isKo
-                ? activeRefWorkflow.formulaBadgeKo
-                : activeRefWorkflow.formulaBadgeEn}
-            </span>
+
+            {/* Oplux-Style Top Selection Toolbar: Pointer | Marquee Drag | Brush Mask | Crop */}
+            {!isVideoMode && (
+              <div
+                className="bw-canvas-toolbar"
+                data-studio-canvas-toolbar={activeCanvasTool}
+              >
+                {(
+                  [
+                    {
+                      id: "pointer",
+                      ko: "이동",
+                      en: "Move",
+                    },
+                    {
+                      id: "marquee_select",
+                      ko: "사각형 드래그 선택",
+                      en: "Drag Select",
+                    },
+                    {
+                      id: "brush_mask",
+                      ko: "브러시 마스크",
+                      en: "Brush Mask",
+                    },
+                    {
+                      id: "crop_ratio",
+                      ko: "크롭 · 비율",
+                      en: "Crop",
+                    },
+                  ] as const
+                ).map((tool) => (
+                  <button
+                    key={tool.id}
+                    type="button"
+                    className="bw-canvas-tool-btn"
+                    data-canvas-tool-btn={tool.id}
+                    aria-pressed={activeCanvasTool === tool.id}
+                    onClick={() => {
+                      setActiveCanvasTool(tool.id);
+                      if (
+                        tool.id === "marquee_select" ||
+                        tool.id === "brush_mask"
+                      ) {
+                        setImageSubMode("micro_region_edit");
+                      }
+                    }}
+                  >
+                    {isKo ? tool.ko : tool.en}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
-          {/* Main Passepartout Viewport */}
-          <div className="bw-canvas-viewport">
+          {/* Main Interactive Passepartout Viewport (Drag to select region or reference) */}
+          <div
+            className="bw-canvas-viewport"
+            onMouseDown={handleCanvasMouseDown}
+            onMouseMove={handleCanvasMouseMove}
+            onMouseUp={handleCanvasMouseUp}
+            onMouseLeave={handleCanvasMouseUp}
+            style={{
+              cursor:
+                !isVideoMode && activeCanvasTool !== "pointer"
+                  ? "crosshair"
+                  : "default",
+              userSelect: "none",
+            }}
+          >
             <img
               src={activeCanvasImageSrc}
               alt={
@@ -2065,10 +3133,88 @@ export function BrandBriefStudio({
                   : `${activeSceneButton.labelEn} Preview`
               }
               className="bw-canvas-media"
+              draggable={false}
               style={{
                 aspectRatio: CSS_ASPECT_MAP[aspect] ?? "4 / 5",
               }}
             />
+
+            {/* Morphic + Oplux Interactive Blue Selection Marquee Box */}
+            {!isVideoMode &&
+              activeCanvasTool !== "pointer" &&
+              layerVisibility.regionMask && (
+                <div
+                  className="bw-canvas-marquee-box"
+                  data-studio-canvas-marquee
+                  style={{
+                    left: `${selectionRect.xPct}%`,
+                    top: `${selectionRect.yPct}%`,
+                    width: `${selectionRect.wPct}%`,
+                    height: `${selectionRect.hPct}%`,
+                  }}
+                >
+                  <span className="bw-canvas-marquee-label">
+                    {isKo
+                      ? `선택 영역 (${matchedSelectionRatio}) · 스마트 마스크`
+                      : `Selection (${matchedSelectionRatio}) · Smart Mask`}
+                  </span>
+                </div>
+              )}
+
+            {/* Oplux-Style Top-Right Floating Input Preview (Cropped Region + Mask Lock) */}
+            {!isVideoMode && (
+              <div
+                className="bw-canvas-input-preview"
+                data-studio-input-preview
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    fontSize: "9.5px",
+                    fontWeight: 700,
+                    color: "rgba(255, 255, 255, 0.85)",
+                  }}
+                >
+                  <span>Input Preview</span>
+                  <span style={{ color: "rgba(255, 255, 255, 0.92)" }}>
+                    {matchedSelectionRatio}
+                  </span>
+                </div>
+                <div
+                  style={{
+                    width: "100%",
+                    aspectRatio: "1 / 1",
+                    borderRadius: "6px",
+                    overflow: "hidden",
+                    position: "relative",
+                    border: "1px solid var(--ys-brand)",
+                  }}
+                >
+                  <img
+                    src={activeCanvasImageSrc}
+                    alt={isKo ? "선택 부위 입력 미리보기" : "Selected Region Input Preview"}
+                    style={{
+                      width: "180%",
+                      height: "180%",
+                      objectFit: "cover",
+                      objectPosition: `${Math.min(100, selectionRect.xPct + selectionRect.wPct / 2)}% ${Math.min(100, selectionRect.yPct + selectionRect.hPct / 2)}%`,
+                    }}
+                  />
+                </div>
+                <span
+                  style={{
+                    fontSize: "9.5px",
+                    color: "rgba(255, 255, 255, 0.7)",
+                    textAlign: "center",
+                  }}
+                >
+                  {isKo ? "외부 픽셀 100% 보존" : "Mask Lock ON"}
+                </span>
+              </div>
+            )}
+
             {isVideoMode && (
               <div
                 data-studio-video-hud
@@ -2102,6 +3248,130 @@ export function BrandBriefStudio({
             )}
           </div>
 
+          {/* Morphic Studio Canvas Style Floating Selection Attach Bar ("Press Enter to attach selection or click here") */}
+          {!isVideoMode && (
+            <div
+              className="bw-morphic-attach-bar"
+              data-studio-morphic-attach-dock
+            >
+              <div
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  alignItems: "center",
+                  gap: "5px",
+                }}
+              >
+                {(
+                  [
+                    {
+                      id: "multi_ref_generate",
+                      ko: "이미지 생성",
+                      en: "Create image",
+                    },
+                    {
+                      id: "micro_region_edit",
+                      ko: "극소 부위 수정",
+                      en: "Edit region",
+                    },
+                    {
+                      id: "canvas_drag_ref",
+                      ko: "레퍼런스 조합",
+                      en: "Create reference",
+                    },
+                  ] as const
+                ).map((pill) => (
+                  <button
+                    key={pill.id}
+                    type="button"
+                    className="bw-canvas-tool-btn"
+                    aria-pressed={imageSubMode === pill.id}
+                    onClick={() => handleSwitchImageSubMode(pill.id)}
+                    style={{
+                      borderRadius: "999px",
+                      padding: "4px 10px",
+                      background:
+                        imageSubMode === pill.id
+                          ? "rgba(255, 255, 255, 0.18)"
+                          : "rgba(255, 255, 255, 0.06)",
+                      color: "#FFFFFF",
+                    }}
+                  >
+                    {isKo ? pill.ko : pill.en}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  className="bw-canvas-tool-btn"
+                  onClick={() => handleSwitchMediumMode("video")}
+                  style={{
+                    borderRadius: "999px",
+                    padding: "4px 10px",
+                    background: "rgba(255, 255, 255, 0.06)",
+                    color: "rgba(255, 255, 255, 0.8)",
+                  }}
+                >
+                  {isKo ? "이 컷으로 영상 제작 →" : "Create video →"}
+                </button>
+              </div>
+
+              <button
+                type="button"
+                className="bw-morphic-attach-trigger"
+                onClick={handleAttachCanvasSelection}
+                data-studio-morphic-attach-btn
+              >
+                <span
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    position: "relative",
+                    width: "34px",
+                    height: "26px",
+                    flexShrink: 0,
+                  }}
+                >
+                  <img
+                    src={activeCanvasImageSrc}
+                    alt=""
+                    style={{
+                      width: "22px",
+                      height: "22px",
+                      borderRadius: "5px",
+                      objectFit: "cover",
+                      border: "1.5px solid #FFFFFF",
+                      transform: "rotate(-8deg)",
+                      position: "absolute",
+                      left: 0,
+                    }}
+                  />
+                  <img
+                    src={
+                      customSlotThumbs[2] ??
+                      activeRefWorkflow.slots[1].defaultThumb
+                    }
+                    alt=""
+                    style={{
+                      width: "22px",
+                      height: "22px",
+                      borderRadius: "5px",
+                      objectFit: "cover",
+                      border: "1.5px solid var(--ys-brand)",
+                      transform: "rotate(8deg)",
+                      position: "absolute",
+                      left: "11px",
+                    }}
+                  />
+                </span>
+                <span>
+                  {isKo
+                    ? "여기를 클릭하거나 드래그한 선택 영역을 수정·레퍼런스로 바로 첨부"
+                    : "Press Enter to attach selection or click here"}
+                </span>
+              </button>
+            </div>
+          )}
+
           {/* 3-Cut Contact Sheet Strip */}
           <div className="bw-canvas-strip" data-studio-canvas-takes>
             {studioVisuals.takes.map((take, idx) => {
@@ -2125,6 +3395,93 @@ export function BrandBriefStudio({
               );
             })}
           </div>
+
+          {/* Oplux-Style Non-Destructive Layers & Smart Mask Stack */}
+          {!isVideoMode && (
+            <div className="bw-layers-panel" data-studio-layers-panel>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  fontSize: "11px",
+                  fontWeight: 700,
+                  color: "rgba(255, 255, 255, 0.72)",
+                }}
+              >
+                <span>
+                  {isKo
+                    ? "Layers · 비파괴 스마트 마스크 레이어 스택"
+                    : "Layers · Non-Destructive Smart Mask Stack"}
+                </span>
+                <span style={{ color: "rgba(255, 255, 255, 0.92)" }}>
+                  {isKo ? "원본 훼손 없음" : "Smart Object"}
+                </span>
+              </div>
+
+              <div
+                className="bw-layer-row"
+                data-active={String(imageSubMode === "micro_region_edit")}
+              >
+                <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {isKo
+                    ? `Layer 03 · 부위 수정 마스크 (${activeRegionPreset.labelKo})`
+                    : `Layer 03 · Region Mask (${activeRegionPreset.labelEn})`}
+                </span>
+                <button
+                  type="button"
+                  className="bw-canvas-tool-btn"
+                  aria-pressed={layerVisibility.regionMask}
+                  onClick={() =>
+                    setLayerVisibility((prev) => ({
+                      ...prev,
+                      regionMask: !prev.regionMask,
+                    }))
+                  }
+                  style={{ padding: "2px 8px", fontSize: "10.5px" }}
+                >
+                  {layerVisibility.regionMask
+                    ? isKo
+                      ? "마스크 표시 ON"
+                      : "Mask ON"
+                    : isKo
+                      ? "숨김"
+                      : "Hidden"}
+                </button>
+              </div>
+
+              <div
+                className="bw-layer-row"
+                data-active={String(isColorRefPinned || isTextureRefPinned)}
+              >
+                <span>
+                  {isKo
+                    ? `Layer 02 · 고정 색감·질감 패스 (${isColorRefPinned ? "색감 ON" : "색감 OFF"} · ${isTextureRefPinned ? "질감 ON" : "질감 OFF"})`
+                    : `Layer 02 · Pinned Color & Texture Pass`}
+                </span>
+                <span
+                  style={{
+                    fontSize: "10.5px",
+                    color: "rgba(255, 255, 255, 0.9)",
+                    fontWeight: 600,
+                  }}
+                >
+                  {isKo ? "상시 잠금" : "Pinned"}
+                </span>
+              </div>
+
+              <div className="bw-layer-row" data-active="false">
+                <span>
+                  {isKo
+                    ? `Layer 01 · 베이스 원본 (${activeTake.labelKo})`
+                    : `Layer 01 · Base Original (${activeTake.labelEn})`}
+                </span>
+                <span style={{ fontSize: "10.5px", color: "rgba(255,255,255,0.6)" }}>
+                  100%
+                </span>
+              </div>
+            </div>
+          )}
 
           {/* Studio Output Action Bar */}
           <div
