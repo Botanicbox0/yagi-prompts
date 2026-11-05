@@ -24,6 +24,7 @@ export default async function ReviewLogin({ searchParams }: { searchParams: Prom
       <label className="flex flex-col gap-2 text-sm">{copy.email}<input name="email" type="email" autoComplete="username" maxLength={120} required className="rounded border px-3 py-3" /></label>
       <label className="flex flex-col gap-2 text-sm">{copy.password}<input name="password" type="password" autoComplete="current-password" maxLength={256} required className="rounded border px-3 py-3" /></label>
       <button type="submit" className="rounded-full bg-black px-6 py-3 text-white">{copy.submit}</button>
+      <button type="submit" name="next" value={`/billing/subscription?plan=creator&locale=${locale}`} data-review-subscription-submit className="rounded-full border border-black px-6 py-3 text-sm font-medium">{copy.submitSubscription}</button>
     </form>
     <a href={`/auth/choose?locale=${locale}`} className="mt-6 text-sm underline">{copy.customerLogin}</a>
   </main>;
