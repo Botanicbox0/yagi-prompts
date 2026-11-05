@@ -92,7 +92,7 @@ export default async function BrandStudio({
     hasTemplates && historyOrg
       ? confirmedIdentityFor(sql, historyOrg).catch(() => null)
       : Promise.resolve(null),
-    historyOrg
+    hasTemplates && historyOrg
       ? loadBrandIdentityWorkspace(sql, historyOrg).catch(() => null)
       : Promise.resolve(null),
   ]);

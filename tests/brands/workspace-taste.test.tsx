@@ -7,6 +7,13 @@ import { YagiLogo, YagiStudioLockup } from "@/components/brand/yagi-mark";
 import { BrandBriefStudio } from "@/components/brand-workspace/brand-brief-studio";
 import { CampaignMoatShowcase } from "@/components/brand-workspace/campaign-moat-showcase";
 import { ProjectTabs } from "@/components/brand-workspace/project-tabs";
+import {
+  BRAND_VIDEO_MARGIN,
+  quoteBrandImageSet,
+  quoteBrandTwoStageGate,
+  quoteBrandVideoMatrix,
+  quoteBrandVideoRender,
+} from "@/lib/brands/production/pricing";
 import { getDictionary } from "@/lib/i18n/dictionaries";
 
 /**
@@ -114,5 +121,84 @@ describe("brand workspace taste", () => {
     expect(html).toContain('class="bw-showcase-caption"');
     expect(html).toContain('class="bw-showcase-tracks"');
     expect(html).not.toContain("height:200px");
+  });
+
+  it("prices B2B Seedance 2.5 and 2.0 video renders inside the 10-12% net margin band after VAT and PG fees", () => {
+    expect(BRAND_VIDEO_MARGIN).toEqual({ min: 0.1, target: 0.11, max: 0.12 });
+
+    const matrix25 = quoteBrandVideoMatrix({
+      model: "seedance-2.5",
+      secondsList: [5, 10, 15],
+      aspect: "9:16",
+    });
+    expect(matrix25).toHaveLength(9);
+    for (const row of matrix25) {
+      expect(row.realizedMarginPct).toBeGreaterThanOrEqual(10.0);
+      expect(row.realizedMarginPct).toBeLessThanOrEqual(12.5);
+      expect(row.invoiceMarginPct).toBeGreaterThan(row.realizedMarginPct);
+    }
+
+    const matrix20 = quoteBrandVideoMatrix({
+      model: "seedance-2.0",
+      secondsList: [5, 10, 15],
+      aspect: "9:16",
+    });
+    expect(matrix20).toHaveLength(9);
+    for (const row of matrix20) {
+      expect(row.realizedMarginPct).toBeGreaterThanOrEqual(10.0);
+      expect(row.realizedMarginPct).toBeLessThanOrEqual(12.5);
+    }
+
+    const q10s720 = quoteBrandVideoRender({
+      model: "seedance-2.5",
+      resolution: "720p",
+      seconds: 10,
+      aspect: "9:16",
+    })!;
+    expect(q10s720.providerCostKrw).toBe(3236);
+    expect(q10s720.credits).toBe(364);
+    expect(q10s720.priceKrw).toBe(4200);
+    expect(q10s720.realizedMarginPct).toBe(11.1);
+    expect(q10s720.cardRealizedMarginPct).toBe(11.9);
+
+    const gate10s = quoteBrandTwoStageGate({
+      model: "seedance-2.5",
+      seconds: 10,
+      aspect: "9:16",
+    })!;
+    expect(gate10s.combinedPriceKrw).toBe(12200);
+    expect(gate10s.twoBlind1080pPriceKrw).toBe(20600);
+    expect(gate10s.savedKrwVsTwoMasters).toBe(8400);
+    expect(gate10s.savedPctVsTwoMasters).toBe(40.8);
+    expect(gate10s.combinedMarginPct).toBeGreaterThanOrEqual(10.0);
+    expect(gate10s.combinedMarginPct).toBeLessThanOrEqual(12.0);
+
+    const imagePack = quoteBrandImageSet({ shotCount: 5 });
+    expect(imagePack.credits).toBe(41);
+    expect(imagePack.priceKrw).toBe(500);
+  });
+
+  it("renders the split-stage visual studio workbench with medium tabs, product upload slots, scene thumbnails, and live canvas", () => {
+    const html = renderToStaticMarkup(
+      <BrandBriefStudio
+        organizationId="org-fashion"
+        organizationName="YAGI WORKSHOP TEST"
+        locale="ko"
+        canWrite={true}
+        identityConfirmed={true}
+      />,
+    );
+    expect(html).toContain("data-studio-medium-tabs");
+    expect(html).toContain('data-studio-medium-tab="image"');
+    expect(html).toContain('data-studio-medium-tab="video"');
+    expect(html).toContain("data-studio-asset-upload");
+    expect(html).toContain('data-upload-slot="product"');
+    expect(html).toContain('data-upload-slot="reference"');
+    expect(html).toContain('class="bw-scene-thumb"');
+    expect(html).toContain("data-studio-live-canvas");
+    expect(html).toContain("data-studio-canvas-takes");
+    expect(html).toContain("data-studio-canvas-actions");
+    expect(html).not.toMatch(/seedance|seedream|nano\s*banana|seedvr2|comfyui/i);
+    expect(html).not.toContain(".mp4");
   });
 });

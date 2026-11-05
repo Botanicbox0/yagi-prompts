@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useState, type ChangeEvent, type FormEvent } from "react";
 import {
   SHOT_ASPECTS,
   type CustomerBriefView,
@@ -35,6 +35,13 @@ import {
   resolveCategoryExperienceProfile,
   type BrandClientCategory,
 } from "@/lib/brands/category-experience";
+import {
+  quoteBrandImageSet,
+  quoteBrandTwoStageGate,
+  quoteBrandVideoRender,
+  type BrandStandardDurationSeconds,
+  type BrandVideoResolution,
+} from "@/lib/brands/production/pricing";
 
 export interface BrandBriefStudioProps {
   organizationId: string;
@@ -49,14 +56,220 @@ export interface BrandBriefStudioProps {
   initialProjectTitle?: string;
 }
 
+interface CategoryVisualAssets {
+  productThumb: string;
+  productLabelKo: string;
+  productLabelEn: string;
+  referenceThumb: string;
+  referenceLabelKo: string;
+  referenceLabelEn: string;
+  sceneThumbs: readonly [string, string, string, string];
+  takes: ReadonlyArray<{
+    id: string;
+    labelKo: string;
+    labelEn: string;
+    src: string;
+  }>;
+}
+
+const CATEGORY_STUDIO_VISUALS: Record<
+  BrandClientCategory,
+  CategoryVisualAssets
+> = {
+  fashion_apparel: {
+    productThumb: "/reel/studio/vto-garment.webp",
+    productLabelKo: "26SS 시그니처 테일러드 코트 · 제품 원판",
+    productLabelEn: "26SS Signature Tailored Coat · Product Packshot",
+    referenceThumb: "/reel/studio/vto-look-front.webp",
+    referenceLabelKo: "성수 에디토리얼 룩북 · 모델 포즈 레퍼런스",
+    referenceLabelEn: "Editorial Lookbook · Model Pose Reference",
+    sceneThumbs: [
+      "/reel/studio/vto-garment.webp",
+      "/reel/landing/c-garment-ours.webp",
+      "/reel/studio/vto-look-front.webp",
+      "/reel/brands/house-runway-1080p.jpg",
+    ],
+    takes: [
+      {
+        id: "take-1",
+        labelKo: "컷 01 · 정면 히어로",
+        labelEn: "Cut 01 · Front Hero",
+        src: "/reel/studio/vto-look-front.webp",
+      },
+      {
+        id: "take-2",
+        labelKo: "컷 02 · 측면 실루엣",
+        labelEn: "Cut 02 · Side Profile",
+        src: "/reel/studio/vto-look-side.webp",
+      },
+      {
+        id: "take-3",
+        labelKo: "컷 03 · 상반신 디테일",
+        labelEn: "Cut 03 · Upper Detail",
+        src: "/reel/studio/vto-look-upper.webp",
+      },
+    ],
+  },
+  beauty_skincare: {
+    productThumb: "/reel/landing/v7/rx-beauty-product.jpg",
+    productLabelKo: "배리어 리페어 앰플 50ml · 용기 정면",
+    productLabelEn: "Barrier Repair Ampoule 50ml · Bottle Front",
+    referenceThumb: "/reel/landing/v7/rx-beauty-orig.jpg",
+    referenceLabelKo: "글래스 스킨 광채 · 뷰티 무드 레퍼런스",
+    referenceLabelEn: "Glass-Skin Glow · Beauty Mood Reference",
+    sceneThumbs: [
+      "/reel/landing/v7/rx-beauty-product.jpg",
+      "/reel/landing/cut-pump.webp",
+      "/reel/landing/cut-cheek.webp",
+      "/reel/campaigns/beauty-rose.jpg",
+    ],
+    takes: [
+      {
+        id: "take-1",
+        labelKo: "컷 01 · 정면 보틀 히어로",
+        labelEn: "Cut 01 · Bottle Hero",
+        src: "/reel/landing/v7/rx-beauty-orig.jpg",
+      },
+      {
+        id: "take-2",
+        labelKo: "컷 02 · 텍스처 드롭",
+        labelEn: "Cut 02 · Texture Drop",
+        src: "/reel/landing/cut-pump.webp",
+      },
+      {
+        id: "take-3",
+        labelKo: "컷 03 · 피부 발림 무드",
+        labelEn: "Cut 03 · Skin Glow",
+        src: "/reel/landing/cut-cheek.webp",
+      },
+    ],
+  },
+  fnb_hospitality: {
+    productThumb: "/reel/brands/tea-editorial.jpg",
+    productLabelKo: "시그니처 콜드브루 보틀 · 패키지 정면",
+    productLabelEn: "Signature Cold Brew Bottle · Front Package",
+    referenceThumb: "/reel/landing/v7/film-tea.jpg",
+    referenceLabelKo: "우드 테이블 채광 · 다이닝 무드 레퍼런스",
+    referenceLabelEn: "Wood Table Daylight · Dining Mood Reference",
+    sceneThumbs: [
+      "/reel/brands/tea-editorial.jpg",
+      "/reel/landing/cut-scent.webp",
+      "/reel/landing/v7/film-tea.jpg",
+      "/reel/brands/production-paris.jpg",
+    ],
+    takes: [
+      {
+        id: "take-1",
+        labelKo: "컷 01 · 패키지 정물",
+        labelEn: "Cut 01 · Package Still",
+        src: "/reel/brands/tea-editorial.jpg",
+      },
+      {
+        id: "take-2",
+        labelKo: "컷 02 · 테이블 채광",
+        labelEn: "Cut 02 · Table Daylight",
+        src: "/reel/landing/v7/film-tea.jpg",
+      },
+      {
+        id: "take-3",
+        labelKo: "컷 03 · 결로 클로즈업",
+        labelEn: "Cut 03 · Dew Macro",
+        src: "/reel/landing/cut-scent.webp",
+      },
+    ],
+  },
+  lifestyle_object: {
+    productThumb: "/reel/studio/vto-free-amber.webp",
+    productLabelKo: "세라믹 디퓨저 오브제 · 정면 원판",
+    productLabelEn: "Ceramic Diffuser Objet · Front Still",
+    referenceThumb: "/reel/studio/vto-free-sofa.webp",
+    referenceLabelKo: "모던 리빙 라운지 · 공간 배치 레퍼런스",
+    referenceLabelEn: "Modern Living Lounge · Spatial Reference",
+    sceneThumbs: [
+      "/reel/studio/vto-free-amber.webp",
+      "/reel/landing/cut-beads.webp",
+      "/reel/studio/vto-free-sofa.webp",
+      "/reel/studio/vto-free-mirror.webp",
+    ],
+    takes: [
+      {
+        id: "take-1",
+        labelKo: "컷 01 · 오브제 정면",
+        labelEn: "Cut 01 · Objet Hero",
+        src: "/reel/studio/vto-free-amber.webp",
+      },
+      {
+        id: "take-2",
+        labelKo: "컷 02 · 리빙 공간 배치",
+        labelEn: "Cut 02 · Living Space",
+        src: "/reel/studio/vto-free-sofa.webp",
+      },
+      {
+        id: "take-3",
+        labelKo: "컷 03 · 소재 마크로",
+        labelEn: "Cut 03 · Material Macro",
+        src: "/reel/landing/cut-beads.webp",
+      },
+    ],
+  },
+  tech_platform: {
+    productThumb: "/reel/brands/y2k-flip-phone.jpg",
+    productLabelKo: "플래그십 디바이스 · 알루미늄 바디 원판",
+    productLabelEn: "Flagship Device · Anodized Body Still",
+    referenceThumb: "/reel/campaigns/retro-phone-01.jpg",
+    referenceLabelKo: "데스크 셋업 & 핸즈온 · 테크 레퍼런스",
+    referenceLabelEn: "Desk Setup & Hands-On · Tech Reference",
+    sceneThumbs: [
+      "/reel/brands/y2k-flip-phone.jpg",
+      "/reel/landing/cut-mark.webp",
+      "/reel/campaigns/retro-phone-01.jpg",
+      "/reel/campaigns/retro-phone-02.jpg",
+    ],
+    takes: [
+      {
+        id: "take-1",
+        labelKo: "컷 01 · 하드웨어 정면",
+        labelEn: "Cut 01 · Hardware Front",
+        src: "/reel/brands/y2k-flip-phone.jpg",
+      },
+      {
+        id: "take-2",
+        labelKo: "컷 02 · 핸즈온 그립",
+        labelEn: "Cut 02 · Hands-On Grip",
+        src: "/reel/campaigns/retro-phone-01.jpg",
+      },
+      {
+        id: "take-3",
+        labelKo: "컷 03 · 엣지 클로즈업",
+        labelEn: "Cut 03 · Bezel Detail",
+        src: "/reel/campaigns/retro-phone-02.jpg",
+      },
+    ],
+  },
+};
+
+const CSS_ASPECT_MAP: Record<ShotAspect, string> = {
+  "1:1": "1 / 1",
+  "4:5": "4 / 5",
+  "3:4": "3 / 4",
+  "16:9": "16 / 9",
+  "9:16": "9 / 16",
+  "21:9": "21 / 9",
+};
+
 /**
- * Clean, Minimalist & Category-Adaptive Customer Studio Composer (`/brand/studio`).
+ * Split-Stage Visual Image & Video Creation Studio (`/brand/studio`).
  *
- * Follows docs/design/IDENTITY.md, TASTE.md, and TOOLBOX.md:
- * - Equal 4-column scene picker (.bw-scene-grid) with 1.5px ink selection ring.
- * - Recessed segmented tracks (.bw-seg-track) with lifted white pills (never competing blue fills).
- * - Recessed composer well (.bw-composer-well) with French Blue focus ring on :focus-within.
- * - Zero emojis, zero backend/engine jargon.
+ * Left Column:
+ *   1. Medium Mode Switch (`이미지 화보 만들기` vs `숏폼 · 마스터 영상 만들기`)
+ *   2. Product & Reference Photo Upload Bar (`data-studio-asset-upload`)
+ *   3. 4-Column Visual Scene Cards with Thumbnails (`.bw-scene-grid`)
+ *   4. Recessed Composer Well with Video Resolution (`480p` / `720p` / `1080p`),
+ *      Duration (`5초` / `10초` / `15초`), and Live B2B Credit/KRW Pricing.
+ *
+ * Right Column (`data-studio-live-canvas`):
+ *   - Always-on dark passepartout visual canvas previewing the active frame,
+ *     3-take contact strip, and instant download / retouch / master upgrade actions.
  */
 export function BrandBriefStudio({
   organizationId,
@@ -77,6 +290,7 @@ export function BrandBriefStudio({
     checklist: defaultChecklist,
   });
   const activeCategory = categoryProfile.category;
+  const studioVisuals = CATEGORY_STUDIO_VISUALS[activeCategory];
 
   const [activeShotTemplateId, setActiveShotTemplateId] =
     useState<PomelliShotTemplateId>("studio");
@@ -94,6 +308,30 @@ export function BrandBriefStudio({
     useState<DesignPrincipleAttachment>(() =>
       createAttachmentPreset("full_attach"),
     );
+
+  // Video production controls (Resolution + Duration + 2-Stage Approval Gate)
+  const [videoResolution, setVideoResolution] =
+    useState<BrandVideoResolution>("720p");
+  const [videoSeconds, setVideoSeconds] =
+    useState<BrandStandardDurationSeconds>(10);
+  const [useTwoStageGate, setUseTwoStageGate] = useState<boolean>(true);
+
+  // Uploaded product & reference image state (pre-populated with category default so 1-click works)
+  const [uploadedProductThumb, setUploadedProductThumb] = useState<string>(
+    studioVisuals.productThumb,
+  );
+  const [uploadedProductName, setUploadedProductName] = useState<string>(
+    isKo ? studioVisuals.productLabelKo : studioVisuals.productLabelEn,
+  );
+  const [uploadedRefThumb, setUploadedRefThumb] = useState<string>(
+    studioVisuals.referenceThumb,
+  );
+  const [uploadedRefName, setUploadedRefName] = useState<string>(
+    isKo ? studioVisuals.referenceLabelKo : studioVisuals.referenceLabelEn,
+  );
+
+  // Active take on the right-hand live studio canvas
+  const [activeTakeIndex, setActiveTakeIndex] = useState<number>(0);
 
   // Under-the-hood compiled system state
   const [lookPresetId, setLookPresetId] =
@@ -144,6 +382,27 @@ export function BrandBriefStudio({
     locale,
   });
 
+  // Live B2B Pricing Quotes (10~12% target net margin)
+  const imageSetQuote = quoteBrandImageSet({ shotCount: 5 });
+  const activeVideoQuote =
+    quoteBrandVideoRender({
+      model: "seedance-2.5",
+      resolution: videoResolution,
+      seconds: videoSeconds,
+      aspect,
+    }) ??
+    quoteBrandVideoRender({
+      model: "seedance-2.5",
+      resolution: "720p",
+      seconds: 10,
+      aspect: "9:16",
+    })!;
+  const twoStageGateQuote = quoteBrandTwoStageGate({
+    model: "seedance-2.5",
+    seconds: videoSeconds,
+    aspect,
+  });
+
   const resolvedChecklist =
     defaultChecklist && defaultChecklist.length > 0
       ? defaultChecklist
@@ -153,9 +412,30 @@ export function BrandBriefStudio({
           categoryProfile.compiler.defaultProductChecklist.material,
         ];
 
+  function handleSwitchMediumMode(targetMode: "image" | "video") {
+    if (targetMode === "video") {
+      setMedium("short film");
+      setCutKind("short_film_clip");
+      setAspect("9:16");
+      setUse("reel");
+      setCameraFocalMm(categoryProfile.scenes[3].focalMm);
+    } else {
+      const tpl =
+        POMELLI_SHOT_TEMPLATES.find((t) => t.id === activeShotTemplateId) ??
+        POMELLI_SHOT_TEMPLATES[0]!;
+      setMedium(tpl.medium);
+      setCutKind(tpl.cutKind);
+      setAspect(tpl.defaultAspect);
+      setUse(tpl.defaultUse);
+      setCameraFocalMm(tpl.focalMm);
+    }
+  }
+
   function handleSelectSceneType(
     template: PomelliShotTemplate | "short_video",
+    sceneIndex: number,
   ) {
+    setActiveTakeIndex(sceneIndex % studioVisuals.takes.length);
     if (template === "short_video") {
       setMedium("short film");
       setCutKind("short_film_clip");
@@ -196,6 +476,32 @@ export function BrandBriefStudio({
       mode: "custom_partial",
       [key]: !prev[key],
     }));
+  }
+
+  function handleProductFileChange(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const objectUrl = URL.createObjectURL(file);
+    setUploadedProductThumb(objectUrl);
+    setUploadedProductName(file.name);
+    setStatusMessage(
+      isKo
+        ? `제품 사진(${file.name})이 스튜디오에 연결되었습니다.`
+        : `Product photo (${file.name}) attached to the studio.`,
+    );
+  }
+
+  function handleRefFileChange(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const objectUrl = URL.createObjectURL(file);
+    setUploadedRefThumb(objectUrl);
+    setUploadedRefName(file.name);
+    setStatusMessage(
+      isKo
+        ? `레퍼런스 이미지(${file.name})가 스튜디오에 연결되었습니다.`
+        : `Reference image (${file.name}) attached to the studio.`,
+    );
   }
 
   async function onCompileSubmit(e: FormEvent<HTMLFormElement>) {
@@ -282,9 +588,13 @@ export function BrandBriefStudio({
       setBriefState(payload.brief as BrandBriefState);
       setView(payload.view as CustomerBriefView);
       setStatusMessage(
-        isKo
-          ? "브랜드 스타일과 업종별 촬영 세팅이 자동으로 적용되어 장면이 준비되었습니다."
-          : "Scene prepared with your brand style and category settings.",
+        medium === "short film"
+          ? isKo
+            ? `${videoSeconds}초 ${videoResolution} 마스터 영상 장면이 브랜드 톤에 맞춰 생성되었습니다.`
+            : `${videoSeconds}s ${videoResolution} video scene generated with your brand style.`
+          : isKo
+            ? "2K 고해상도 화보 5장 세트가 브랜드 스타일에 맞춰 준비되었습니다."
+            : "2K 5-shot editorial still set prepared with your brand style.",
       );
     } catch {
       setErrorMessage(
@@ -350,6 +660,7 @@ export function BrandBriefStudio({
     placeholderEn: string;
     quickPromptsKo: readonly [string, string, string];
     quickPromptsEn: readonly [string, string, string];
+    thumbSrc: string;
     isVideo?: boolean;
     template?: PomelliShotTemplate;
   }> = [
@@ -364,6 +675,7 @@ export function BrandBriefStudio({
       placeholderEn: categoryProfile.scenes[0].placeholderEn,
       quickPromptsKo: categoryProfile.scenes[0].quickPromptsKo,
       quickPromptsEn: categoryProfile.scenes[0].quickPromptsEn,
+      thumbSrc: studioVisuals.sceneThumbs[0],
       template: POMELLI_SHOT_TEMPLATES[0],
     },
     {
@@ -377,6 +689,7 @@ export function BrandBriefStudio({
       placeholderEn: categoryProfile.scenes[1].placeholderEn,
       quickPromptsKo: categoryProfile.scenes[1].quickPromptsKo,
       quickPromptsEn: categoryProfile.scenes[1].quickPromptsEn,
+      thumbSrc: studioVisuals.sceneThumbs[1],
       template: POMELLI_SHOT_TEMPLATES[1],
     },
     {
@@ -390,11 +703,12 @@ export function BrandBriefStudio({
       placeholderEn: categoryProfile.scenes[2].placeholderEn,
       quickPromptsKo: categoryProfile.scenes[2].quickPromptsKo,
       quickPromptsEn: categoryProfile.scenes[2].quickPromptsEn,
+      thumbSrc: studioVisuals.sceneThumbs[2],
       template: POMELLI_SHOT_TEMPLATES[2],
     },
     {
       id: "short_video",
-      specLabel: `${categoryProfile.scenes[3].focalMm}mm · 9:16 15s`,
+      specLabel: `${categoryProfile.scenes[3].focalMm}mm · 9:16 ${videoSeconds}s`,
       labelKo: categoryProfile.scenes[3].titleKo,
       labelEn: categoryProfile.scenes[3].titleEn,
       descKo: categoryProfile.scenes[3].descKo,
@@ -403,16 +717,24 @@ export function BrandBriefStudio({
       placeholderEn: categoryProfile.scenes[3].placeholderEn,
       quickPromptsKo: categoryProfile.scenes[3].quickPromptsKo,
       quickPromptsEn: categoryProfile.scenes[3].quickPromptsEn,
+      thumbSrc: studioVisuals.sceneThumbs[3],
       isVideo: true,
     },
   ];
 
+  const isVideoMode = medium === "short film";
   const activeSceneButton =
     simpleSceneButtons.find((item) =>
       item.isVideo
-        ? medium === "short film"
-        : medium !== "short film" && activeShotTemplateId === item.id,
+        ? isVideoMode
+        : !isVideoMode && activeShotTemplateId === item.id,
     ) ?? simpleSceneButtons[0]!;
+
+  const activeTake =
+    studioVisuals.takes[activeTakeIndex] ?? studioVisuals.takes[0]!;
+  const activeCanvasImageSrc = isVideoMode
+    ? studioVisuals.sceneThumbs[3]
+    : activeTake.src;
 
   return (
     <section
@@ -429,17 +751,68 @@ export function BrandBriefStudio({
       data-studio-continuity={silentContinuity.status}
       data-studio-master-gate={silentMasterPlan.gateStatus}
     >
-      {/* Header + Pre-configured Brand Category Badge */}
-      <div className="bw-row" style={{ marginBottom: "18px", alignItems: "flex-end", gap: "16px" }}>
+      {/* Top Bar: Studio Header + Explicit Image vs Video Mode Switch + Brand Category Pill */}
+      <div
+        className="bw-row"
+        style={{
+          marginBottom: "18px",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: "14px",
+        }}
+      >
         <div>
           <h2 style={{ margin: "0 0 4px" }}>
-            {isKo ? "장면 만들기" : "Create a Scene"}
+            {isKo
+              ? "화보 · 영상 제작 워크벤치"
+              : "Image & Video Creation Workbench"}
           </h2>
           <p className="bw-muted" style={{ margin: 0, fontSize: "13px" }}>
             {isKo ? categoryProfile.headlineKo : categoryProfile.headlineEn}
           </p>
         </div>
-        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "8px" }}>
+
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            alignItems: "center",
+            gap: "8px",
+          }}
+        >
+          {/* Explicit Image Lookbook vs Video Creation Mode Switch */}
+          <div
+            className="bw-seg-track"
+            data-studio-medium-tabs
+            role="tablist"
+            aria-label={isKo ? "제작 유형 선택" : "Select creation mode"}
+          >
+            <button
+              type="button"
+              role="tab"
+              className="bw-seg-btn"
+              data-studio-medium-tab="image"
+              aria-selected={!isVideoMode}
+              aria-pressed={!isVideoMode}
+              onClick={() => handleSwitchMediumMode("image")}
+              disabled={busy}
+            >
+              {isKo ? "이미지 화보 만들기" : "Create Image Stills"}
+            </button>
+            <button
+              type="button"
+              role="tab"
+              className="bw-seg-btn"
+              data-studio-medium-tab="video"
+              aria-selected={isVideoMode}
+              aria-pressed={isVideoMode}
+              onClick={() => handleSwitchMediumMode("video")}
+              disabled={busy}
+            >
+              {isKo ? "숏폼 · 마스터 영상 만들기" : "Create Short-Form Video"}
+            </button>
+          </div>
+
           <span
             className="bw-badge"
             data-studio-category-switcher
@@ -455,270 +828,724 @@ export function BrandBriefStudio({
         </div>
       </div>
 
-      {/* Equal 4-Column Scene Type Picker (.bw-scene-grid) */}
-      <div className="bw-scene-grid" data-pomelli-shot-templates>
-        {simpleSceneButtons.map((item) => {
-          const isSelected = item.isVideo
-            ? medium === "short film"
-            : medium !== "short film" && activeShotTemplateId === item.id;
-          return (
-            <button
-              key={item.id}
-              type="button"
-              className="bw-scene-card"
-              data-pomelli-shot-template={item.id}
-              aria-pressed={isSelected}
-              onClick={() =>
-                handleSelectSceneType(
-                  item.isVideo ? "short_video" : item.template!,
-                )
-              }
-              disabled={busy}
-            >
-              <span className="bw-scene-spec">{item.specLabel}</span>
-              <strong>{isKo ? item.labelKo : item.labelEn}</strong>
-              <span>{isKo ? item.descKo : item.descEn}</span>
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Recessed Composer Well (.bw-composer-well) */}
-      <form
-        onSubmit={onCompileSubmit}
-        className="bw-composer-well"
-        data-brief-compile-form
-      >
-        <textarea
-          name="brief"
-          className="bw-composer-textarea"
-          rows={2}
-          value={briefText}
-          onChange={(e) => setBriefText(e.target.value)}
-          maxLength={500}
-          disabled={!canWrite || busy}
-          placeholder={
-            isKo ? activeSceneButton.placeholderKo : activeSceneButton.placeholderEn
-          }
-        />
-
-        {/* 1-Click Quick Prompt Chips */}
-        <div
-          data-studio-quick-prompts
-          style={{
-            display: "flex",
-            flexWrap: "wrap",
-            alignItems: "center",
-            gap: "6px",
-          }}
-        >
-          {(isKo
-            ? activeSceneButton.quickPromptsKo
-            : activeSceneButton.quickPromptsEn
-          ).map((sample, idx) => (
-            <button
-              key={sample}
-              type="button"
-              className="bw-quick-chip"
-              data-studio-quick-prompt={idx}
-              onClick={() => setBriefText(sample)}
-              disabled={!canWrite || busy}
-            >
-              + {sample}
-            </button>
-          ))}
-        </div>
-
-        {/* Bottom Segmented Toolbar — Quiet Lifted White Pills, Single Ink Primary CTA */}
-        <div
-          style={{
-            display: "flex",
-            flexWrap: "wrap",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: "10px",
-            paddingTop: "12px",
-            borderTop: "1px solid var(--ys-hairline)",
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              flexWrap: "wrap",
-              alignItems: "center",
-              gap: "8px",
-            }}
-          >
-            {/* Mood Pills */}
-            <div
-              className="bw-seg-track"
-              data-studio-aesthetic-bar
-              data-active-aesthetic-line={activeAestheticLineCode}
-            >
-              {aestheticLines.map((line) => {
-                const selected = activeAestheticLineCode === line.code;
-                const label = moodLabels[line.code];
-                return (
-                  <button
-                    key={line.id}
-                    type="button"
-                    className="bw-seg-btn"
-                    data-studio-aesthetic-card={line.code}
-                    aria-pressed={selected}
-                    onClick={() => applyMood(line)}
-                    disabled={busy}
+      {/* 2-Column Split Studio Workbench: Left = Creation Controls, Right = Always-On Live Visual Canvas */}
+      <div className="bw-studio-workbench">
+        {/* LEFT COLUMN: Asset Upload + Visual Scene Cards + Prompt Composer */}
+        <div>
+          {/* Step 1: Product Photo & Reference Mood Upload Bar */}
+          <div className="bw-studio-upload-bar" data-studio-asset-upload>
+            <div className="bw-studio-upload-slot" data-upload-slot="product">
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "10px",
+                  minWidth: 0,
+                }}
+              >
+                <img
+                  src={uploadedProductThumb}
+                  alt={uploadedProductName}
+                  className="bw-studio-upload-thumb"
+                />
+                <div style={{ minWidth: 0 }}>
+                  <span
+                    style={{
+                      display: "block",
+                      fontSize: "11px",
+                      fontWeight: 600,
+                      color: "var(--ys-ink-muted)",
+                    }}
                   >
-                    {isKo ? label.ko : label.en}
-                  </button>
-                );
-              })}
+                    {isKo ? "제품 원판 사진" : "Product Source Photo"}
+                  </span>
+                  <strong
+                    style={{
+                      display: "block",
+                      fontSize: "12.5px",
+                      color: "var(--ys-ink)",
+                      whiteSpace: "nowrap",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                    }}
+                  >
+                    {uploadedProductName}
+                  </strong>
+                </div>
+              </div>
+              <label
+                className="bw-quick-chip"
+                style={{ flexShrink: 0, fontWeight: 600 }}
+              >
+                {isKo ? "사진 올리기" : "Upload Photo"}
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleProductFileChange}
+                  disabled={!canWrite || busy}
+                  style={{ display: "none" }}
+                  data-studio-product-file-input
+                />
+              </label>
             </div>
 
-            {/* Aspect Ratio Pills */}
-            <div className="bw-seg-track">
-              {SHOT_ASPECTS.map((r) => (
-                <button
-                  key={r}
-                  type="button"
-                  className="bw-seg-btn"
-                  aria-pressed={aspect === r}
-                  onClick={() => setAspect(r)}
-                  disabled={busy}
-                >
-                  {r}
-                </button>
-              ))}
-            </div>
-
-            {/* Brand Style Attachment Switch — Zero emojis */}
-            <div
-              className="bw-seg-track"
-              data-design-principle-attachment
-              data-attachment-mode={principleAttachment.mode}
-            >
-              <button
-                type="button"
-                className="bw-seg-btn"
-                data-attachment-mode-btn="full_attach"
-                aria-pressed={principleAttachment.mode === "full_attach"}
-                onClick={() => toggleBrandStyleMode("full_attach")}
-                disabled={busy}
+            <div className="bw-studio-upload-slot" data-upload-slot="reference">
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "10px",
+                  minWidth: 0,
+                }}
               >
-                {isKo ? "브랜드 톤 유지" : "Brand Style ON"}
-              </button>
-              <button
-                type="button"
-                className="bw-seg-btn"
-                data-attachment-mode-btn="custom_partial"
-                aria-pressed={principleAttachment.mode === "custom_partial"}
-                onClick={() => toggleBrandStyleMode("custom_partial")}
-                disabled={busy}
+                <img
+                  src={uploadedRefThumb}
+                  alt={uploadedRefName}
+                  className="bw-studio-upload-thumb"
+                />
+                <div style={{ minWidth: 0 }}>
+                  <span
+                    style={{
+                      display: "block",
+                      fontSize: "11px",
+                      fontWeight: 600,
+                      color: "var(--ys-ink-muted)",
+                    }}
+                  >
+                    {isKo ? "구도 · 모델 레퍼런스" : "Pose & Mood Reference"}
+                  </span>
+                  <strong
+                    style={{
+                      display: "block",
+                      fontSize: "12.5px",
+                      color: "var(--ys-ink)",
+                      whiteSpace: "nowrap",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                    }}
+                  >
+                    {uploadedRefName}
+                  </strong>
+                </div>
+              </div>
+              <label
+                className="bw-quick-chip"
+                style={{ flexShrink: 0, fontWeight: 600 }}
               >
-                {isKo ? "원칙 선택" : "Custom Rules"}
-              </button>
-              <button
-                type="button"
-                className="bw-seg-btn"
-                data-attachment-mode-btn="unbound_free"
-                aria-pressed={principleAttachment.mode === "unbound_free"}
-                onClick={() => toggleBrandStyleMode("unbound_free")}
-                disabled={busy}
-              >
-                {isKo ? "자유 탐색" : "Free Style"}
-              </button>
+                {isKo ? "레퍼런스 변경" : "Change Ref"}
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleRefFileChange}
+                  disabled={!canWrite || busy}
+                  style={{ display: "none" }}
+                  data-studio-reference-file-input
+                />
+              </label>
             </div>
           </div>
 
-          {canWrite && (
-            <button
-              type="submit"
-              className="bw-button bw-primary"
-              disabled={busy}
-              data-brief-compile-submit
-            >
-              {busy
-                ? isKo
-                  ? "만드는 중..."
-                  : "Creating..."
-                : isKo
-                  ? "만들기"
-                  : "Create"}
-            </button>
-          )}
-        </div>
-
-        {/* Interactive Brand Rule Chip Row when '원칙 선택' is active */}
-        {principleAttachment.mode === "custom_partial" && (
-          <div
-            data-design-principle-chips
-            style={{
-              display: "flex",
-              flexWrap: "wrap",
-              alignItems: "center",
-              gap: "6px",
-              paddingTop: "10px",
-              borderTop: "1px solid var(--ys-hairline)",
-            }}
-          >
-            <span
-              style={{
-                fontSize: "11.5px",
-                fontWeight: 600,
-                color: "var(--ys-ink-secondary)",
-                marginRight: "4px",
-              }}
-            >
-              {isKo ? "적용할 원칙:" : "Active rules:"}
-            </span>
-            {DESIGN_PRINCIPLE_CHIPS.map((chip) => {
-              const active = Boolean(principleAttachment[chip.key]);
+          {/* Step 2: Equal 4-Column Visual Scene Picker (.bw-scene-grid) with Thumbnails */}
+          <div className="bw-scene-grid" data-pomelli-shot-templates>
+            {simpleSceneButtons.map((item, idx) => {
+              const isSelected = item.isVideo
+                ? isVideoMode
+                : !isVideoMode && activeShotTemplateId === item.id;
               return (
                 <button
-                  key={chip.key}
+                  key={item.id}
                   type="button"
-                  className="bw-quick-chip"
-                  data-design-principle-chip={chip.key}
-                  aria-pressed={active}
-                  onClick={() => togglePrincipleKey(chip.key)}
+                  className="bw-scene-card"
+                  data-pomelli-shot-template={item.id}
+                  aria-pressed={isSelected}
+                  onClick={() =>
+                    handleSelectSceneType(
+                      item.isVideo ? "short_video" : item.template!,
+                      idx,
+                    )
+                  }
                   disabled={busy}
-                  style={{
-                    fontWeight: active ? 600 : 400,
-                    color: active ? "var(--ys-ink)" : "var(--ys-ink-secondary)",
-                    boxShadow: active
-                      ? "0 0 0 1.5px var(--ys-ink)"
-                      : "var(--ys-ring)",
-                  }}
                 >
-                  {isKo ? chip.labelKo : chip.labelEn}
+                  <img
+                    src={item.thumbSrc}
+                    alt={isKo ? item.labelKo : item.labelEn}
+                    className="bw-scene-thumb"
+                    loading="lazy"
+                  />
+                  <span className="bw-scene-spec">{item.specLabel}</span>
+                  <strong>{isKo ? item.labelKo : item.labelEn}</strong>
+                  <span>{isKo ? item.descKo : item.descEn}</span>
                 </button>
               );
             })}
           </div>
-        )}
-      </form>
 
-      {errorMessage && (
-        <p
-          role="alert"
-          className="bw-error"
-          data-brief-error
-          style={{ marginTop: "12px" }}
-        >
-          {errorMessage}
-        </p>
-      )}
-      {statusMessage && (
-        <p
-          role="status"
-          className="bw-note"
-          data-brief-status
-          style={{ marginTop: "12px" }}
-        >
-          {statusMessage}
-        </p>
-      )}
+          {/* Step 3: Recessed Composer Well (.bw-composer-well) */}
+          <form
+            onSubmit={onCompileSubmit}
+            className="bw-composer-well"
+            data-brief-compile-form
+          >
+            <textarea
+              name="brief"
+              className="bw-composer-textarea"
+              rows={2}
+              value={briefText}
+              onChange={(e) => setBriefText(e.target.value)}
+              maxLength={500}
+              disabled={!canWrite || busy}
+              placeholder={
+                isKo
+                  ? activeSceneButton.placeholderKo
+                  : activeSceneButton.placeholderEn
+              }
+            />
 
-      {/* Clean Customer Output Card — True 4:5 Portrait Thumbnail, Zero Cropped Heads */}
+            {/* 1-Click Quick Prompt Chips */}
+            <div
+              data-studio-quick-prompts
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                alignItems: "center",
+                gap: "6px",
+              }}
+            >
+              {(isKo
+                ? activeSceneButton.quickPromptsKo
+                : activeSceneButton.quickPromptsEn
+              ).map((sample, idx) => (
+                <button
+                  key={sample}
+                  type="button"
+                  className="bw-quick-chip"
+                  data-studio-quick-prompt={idx}
+                  onClick={() => setBriefText(sample)}
+                  disabled={!canWrite || busy}
+                >
+                  + {sample}
+                </button>
+              ))}
+            </div>
+
+            {/* Video Mode Spec Bar: Resolution (480p / 720p / 1080p) + Duration (5s / 10s / 15s) + Live B2B Pricing */}
+            {isVideoMode && (
+              <div
+                data-studio-video-pricing-bar
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: "10px",
+                  padding: "10px 12px",
+                  borderRadius: "12px",
+                  background: "var(--ys-surface)",
+                  boxShadow: "var(--ys-ring)",
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    flexWrap: "wrap",
+                    alignItems: "center",
+                    gap: "8px",
+                  }}
+                >
+                  {/* Video Resolution Selector */}
+                  <div
+                    className="bw-seg-track"
+                    data-studio-video-resolution={videoResolution}
+                  >
+                    {(
+                      [
+                        {
+                          res: "480p",
+                          ko: "480p 구도 프리뷰",
+                          en: "480p Preview",
+                        },
+                        {
+                          res: "720p",
+                          ko: "720p 스탠다드",
+                          en: "720p Standard",
+                        },
+                        {
+                          res: "1080p",
+                          ko: "1080p 마스터",
+                          en: "1080p Master",
+                        },
+                      ] as const
+                    ).map((tier) => (
+                      <button
+                        key={tier.res}
+                        type="button"
+                        className="bw-seg-btn"
+                        aria-pressed={videoResolution === tier.res}
+                        onClick={() => setVideoResolution(tier.res)}
+                        disabled={busy}
+                      >
+                        {isKo ? tier.ko : tier.en}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Video Duration Selector */}
+                  <div
+                    className="bw-seg-track"
+                    data-studio-video-seconds={videoSeconds}
+                  >
+                    {([5, 10, 15] as const).map((sec) => (
+                      <button
+                        key={sec}
+                        type="button"
+                        className="bw-seg-btn"
+                        aria-pressed={videoSeconds === sec}
+                        onClick={() => setVideoSeconds(sec)}
+                        disabled={busy}
+                      >
+                        {isKo ? `${sec}초` : `${sec}s`}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* 2-Stage Approval Gate Toggle */}
+                  {twoStageGateQuote && (
+                    <button
+                      type="button"
+                      className="bw-quick-chip"
+                      aria-pressed={useTwoStageGate}
+                      onClick={() => setUseTwoStageGate((prev) => !prev)}
+                      style={{
+                        fontWeight: useTwoStageGate ? 600 : 400,
+                        color: useTwoStageGate
+                          ? "var(--ys-ink)"
+                          : "var(--ys-ink-secondary)",
+                      }}
+                    >
+                      {isKo
+                        ? `2단계 검수 (480p 확인 후 1080p · ${twoStageGateQuote.savedPctVsTwoMasters}% 절감)`
+                        : `2-Stage Gate (480p then 1080p · Save ${twoStageGateQuote.savedPctVsTwoMasters}%)`}
+                    </button>
+                  )}
+                </div>
+
+                {/* Live B2B Price Badge */}
+                <span
+                  className="bw-badge"
+                  data-studio-live-quote
+                  style={{ fontFamily: "var(--ys-mono)", fontWeight: 600 }}
+                >
+                  {isKo
+                    ? `${activeVideoQuote.credits.toLocaleString("ko-KR")} cr · ${activeVideoQuote.priceKrw.toLocaleString("ko-KR")}원`
+                    : `${activeVideoQuote.credits.toLocaleString("en-US")} cr · KRW ${activeVideoQuote.priceKrw.toLocaleString("en-US")}`}
+                </span>
+              </div>
+            )}
+
+            {/* Bottom Segmented Toolbar — Quiet Lifted White Pills, Single Ink Primary CTA */}
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: "10px",
+                paddingTop: "12px",
+                borderTop: "1px solid var(--ys-hairline)",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  alignItems: "center",
+                  gap: "8px",
+                }}
+              >
+                {/* Mood Pills */}
+                <div
+                  className="bw-seg-track"
+                  data-studio-aesthetic-bar
+                  data-active-aesthetic-line={activeAestheticLineCode}
+                >
+                  {aestheticLines.map((line) => {
+                    const selected = activeAestheticLineCode === line.code;
+                    const label = moodLabels[line.code];
+                    return (
+                      <button
+                        key={line.id}
+                        type="button"
+                        className="bw-seg-btn"
+                        data-studio-aesthetic-card={line.code}
+                        aria-pressed={selected}
+                        onClick={() => applyMood(line)}
+                        disabled={busy}
+                      >
+                        {isKo ? label.ko : label.en}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Aspect Ratio Pills */}
+                <div className="bw-seg-track">
+                  {SHOT_ASPECTS.map((r) => (
+                    <button
+                      key={r}
+                      type="button"
+                      className="bw-seg-btn"
+                      aria-pressed={aspect === r}
+                      onClick={() => setAspect(r)}
+                      disabled={busy}
+                    >
+                      {r}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Brand Style Attachment Switch — Zero emojis */}
+                <div
+                  className="bw-seg-track"
+                  data-design-principle-attachment
+                  data-attachment-mode={principleAttachment.mode}
+                >
+                  <button
+                    type="button"
+                    className="bw-seg-btn"
+                    data-attachment-mode-btn="full_attach"
+                    aria-pressed={principleAttachment.mode === "full_attach"}
+                    onClick={() => toggleBrandStyleMode("full_attach")}
+                    disabled={busy}
+                  >
+                    {isKo ? "브랜드 톤 유지" : "Brand Style ON"}
+                  </button>
+                  <button
+                    type="button"
+                    className="bw-seg-btn"
+                    data-attachment-mode-btn="custom_partial"
+                    aria-pressed={principleAttachment.mode === "custom_partial"}
+                    onClick={() => toggleBrandStyleMode("custom_partial")}
+                    disabled={busy}
+                  >
+                    {isKo ? "원칙 선택" : "Custom Rules"}
+                  </button>
+                  <button
+                    type="button"
+                    className="bw-seg-btn"
+                    data-attachment-mode-btn="unbound_free"
+                    aria-pressed={principleAttachment.mode === "unbound_free"}
+                    onClick={() => toggleBrandStyleMode("unbound_free")}
+                    disabled={busy}
+                  >
+                    {isKo ? "자유 탐색" : "Free Style"}
+                  </button>
+                </div>
+              </div>
+
+              {canWrite && (
+                <button
+                  type="submit"
+                  className="bw-button bw-primary"
+                  disabled={busy}
+                  data-brief-compile-submit
+                >
+                  {busy
+                    ? isKo
+                      ? "생성 중..."
+                      : "Generating..."
+                    : isVideoMode
+                      ? isKo
+                        ? `${videoSeconds}초 ${videoResolution} 영상 생성하기`
+                        : `Generate ${videoSeconds}s ${videoResolution} Video`
+                      : isKo
+                        ? `화보 5장 생성하기 (${imageSetQuote.credits} cr)`
+                        : `Generate 5 Stills (${imageSetQuote.credits} cr)`}
+                </button>
+              )}
+            </div>
+
+            {/* Interactive Brand Rule Chip Row when '원칙 선택' is active */}
+            {principleAttachment.mode === "custom_partial" && (
+              <div
+                data-design-principle-chips
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  alignItems: "center",
+                  gap: "6px",
+                  paddingTop: "10px",
+                  borderTop: "1px solid var(--ys-hairline)",
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: "11.5px",
+                    fontWeight: 600,
+                    color: "var(--ys-ink-secondary)",
+                    marginRight: "4px",
+                  }}
+                >
+                  {isKo ? "적용할 원칙:" : "Active rules:"}
+                </span>
+                {DESIGN_PRINCIPLE_CHIPS.map((chip) => {
+                  const active = Boolean(principleAttachment[chip.key]);
+                  return (
+                    <button
+                      key={chip.key}
+                      type="button"
+                      className="bw-quick-chip"
+                      data-design-principle-chip={chip.key}
+                      aria-pressed={active}
+                      onClick={() => togglePrincipleKey(chip.key)}
+                      disabled={busy}
+                      style={{
+                        fontWeight: active ? 600 : 400,
+                        color: active
+                          ? "var(--ys-ink)"
+                          : "var(--ys-ink-secondary)",
+                        boxShadow: active
+                          ? "0 0 0 1.5px var(--ys-ink)"
+                          : "var(--ys-ring)",
+                      }}
+                    >
+                      {isKo ? chip.labelKo : chip.labelEn}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </form>
+
+          {errorMessage && (
+            <p
+              role="alert"
+              className="bw-error"
+              data-brief-error
+              style={{ marginTop: "12px" }}
+            >
+              {errorMessage}
+            </p>
+          )}
+          {statusMessage && (
+            <p
+              role="status"
+              className="bw-note"
+              data-brief-status
+              style={{ marginTop: "12px" }}
+            >
+              {statusMessage}
+            </p>
+          )}
+        </div>
+
+        {/* RIGHT COLUMN: Always-On Live Studio Canvas Stage */}
+        <aside
+          className="bw-canvas-stage"
+          data-studio-live-canvas
+          aria-label={isKo ? "실시간 스튜디오 캔버스" : "Live Studio Canvas"}
+        >
+          {/* Canvas Top Status Bar */}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: "8px",
+              fontSize: "11.5px",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <span
+                style={{
+                  padding: "3px 9px",
+                  borderRadius: "999px",
+                  background: "rgba(255, 255, 255, 0.12)",
+                  color: "#ffffff",
+                  fontWeight: 600,
+                }}
+              >
+                {isVideoMode
+                  ? isKo
+                    ? `${videoResolution} 영상 캔버스 · ${videoSeconds}초`
+                    : `${videoResolution} Video Canvas · ${videoSeconds}s`
+                  : isKo
+                    ? "2K 화보 스튜디오 캔버스"
+                    : "2K Editorial Still Canvas"}
+              </span>
+              <span
+                style={{
+                  fontFamily: "var(--ys-mono)",
+                  color: "rgba(255, 255, 255, 0.65)",
+                }}
+              >
+                {cameraFocalMm}mm · {aspect}
+              </span>
+            </div>
+            <span style={{ color: "rgba(255, 255, 255, 0.68)" }}>
+              {isKo
+                ? moodLabels[activeAestheticLineCode].ko
+                : moodLabels[activeAestheticLineCode].en}
+            </span>
+          </div>
+
+          {/* Main Passepartout Viewport */}
+          <div className="bw-canvas-viewport">
+            <img
+              src={activeCanvasImageSrc}
+              alt={
+                isKo
+                  ? `${activeSceneButton.labelKo} 미리보기`
+                  : `${activeSceneButton.labelEn} Preview`
+              }
+              className="bw-canvas-media"
+              style={{
+                aspectRatio: CSS_ASPECT_MAP[aspect] ?? "4 / 5",
+              }}
+            />
+            {isVideoMode && (
+              <div
+                data-studio-video-hud
+                style={{
+                  position: "absolute",
+                  left: "14px",
+                  right: "14px",
+                  bottom: "12px",
+                  padding: "7px 11px",
+                  borderRadius: "9px",
+                  background: "rgba(10, 11, 13, 0.78)",
+                  backdropFilter: "blur(8px)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: "10px",
+                  fontSize: "11px",
+                  fontFamily: "var(--ys-mono)",
+                  color: "#f5f5f3",
+                }}
+              >
+                <span>
+                  00:00:00:00 / 00:00:
+                  {String(videoSeconds).padStart(2, "0")}:00
+                </span>
+                <span>
+                  24fps · {videoResolution} ·{" "}
+                  {isKo ? "사운드 포함" : "Audio Sync"}
+                </span>
+              </div>
+            )}
+          </div>
+
+          {/* 3-Cut Contact Sheet Strip */}
+          <div className="bw-canvas-strip" data-studio-canvas-takes>
+            {studioVisuals.takes.map((take, idx) => {
+              const selected = activeTakeIndex === idx;
+              return (
+                <button
+                  key={take.id}
+                  type="button"
+                  className="bw-canvas-take"
+                  data-studio-canvas-take={take.id}
+                  aria-pressed={selected}
+                  onClick={() => setActiveTakeIndex(idx)}
+                >
+                  <img
+                    src={take.src}
+                    alt={isKo ? take.labelKo : take.labelEn}
+                    loading="lazy"
+                  />
+                  <span>{isKo ? take.labelKo : take.labelEn}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Studio Output Action Bar */}
+          <div
+            data-studio-canvas-actions
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: "8px",
+              paddingTop: "6px",
+              borderTop: "1px solid rgba(255, 255, 255, 0.08)",
+            }}
+          >
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+              <a
+                href={activeCanvasImageSrc}
+                download
+                style={{
+                  padding: "6px 11px",
+                  borderRadius: "999px",
+                  background: "rgba(255, 255, 255, 0.12)",
+                  color: "#ffffff",
+                  fontSize: "11.5px",
+                  fontWeight: 600,
+                  textDecoration: "none",
+                }}
+              >
+                {isKo ? "원본 다운로드" : "Download Master"}
+              </a>
+              <button
+                type="button"
+                onClick={() =>
+                  setBriefText(
+                    isKo
+                      ? `${activeTake.labelKo} 구도를 유지하면서 제품 로고 선명도와 조명 대비를 한 단계 높여 주세요.`
+                      : `Keep the ${activeTake.labelEn} framing and sharpen the product label and studio key light contrast.`,
+                  )
+                }
+                style={{
+                  padding: "6px 11px",
+                  borderRadius: "999px",
+                  border: 0,
+                  background: "rgba(255, 255, 255, 0.07)",
+                  color: "rgba(255, 255, 255, 0.85)",
+                  font: "inherit",
+                  fontSize: "11.5px",
+                  cursor: "pointer",
+                }}
+              >
+                {isKo ? "부분 수선 · 리터치" : "Retouch Cut"}
+              </button>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                if (!isVideoMode) {
+                  handleSwitchMediumMode("video");
+                } else {
+                  setVideoResolution("1080p");
+                }
+              }}
+              style={{
+                padding: "6px 11px",
+                borderRadius: "999px",
+                border: 0,
+                background: "#ffffff",
+                color: "#111214",
+                font: "inherit",
+                fontSize: "11.5px",
+                fontWeight: 600,
+                cursor: "pointer",
+              }}
+            >
+              {isVideoMode
+                ? isKo
+                  ? "1080p 마스터로 전환"
+                  : "Switch to 1080p Master"
+                : isKo
+                  ? "이 컷으로 영상 만들기"
+                  : "Animate This Cut"}
+            </button>
+          </div>
+        </aside>
+      </div>
+
+      {/* Compiled Output Approval Bar */}
       {view && (
         <div
           data-brief-preview
@@ -744,13 +1571,7 @@ export function BrandBriefStudio({
             }}
           >
             <img
-              src={
-                activeCategory === "beauty_skincare"
-                  ? "/reel/campaigns/beauty-rose.jpg"
-                  : activeCategory === "fnb_hospitality"
-                    ? "/reel/brands/tea-editorial.jpg"
-                    : "/reel/brands/production-paris.jpg"
-              }
+              src={activeCanvasImageSrc}
               alt={isKo ? view.cutKindLabel.ko : view.cutKindLabel.en}
               style={{
                 width: "76px",
@@ -765,9 +1586,13 @@ export function BrandBriefStudio({
             <div>
               <strong style={{ fontSize: "14.5px", color: "var(--ys-ink)" }}>
                 {isKo ? view.cutKindLabel.ko : view.cutKindLabel.en} ·{" "}
-                {view.deliverable.aspect} ({view.resolution})
+                {view.deliverable.aspect} (
+                {isVideoMode ? videoResolution : view.resolution})
               </strong>
-              <p className="bw-muted" style={{ margin: "4px 0 0", fontSize: "13px" }}>
+              <p
+                className="bw-muted"
+                style={{ margin: "4px 0 0", fontSize: "13px" }}
+              >
                 {isKo
                   ? "브랜드 로고·색감·화질 보정이 모두 반영되었습니다."
                   : "Your brand logo, color tone, and quality mastering have been applied."}
