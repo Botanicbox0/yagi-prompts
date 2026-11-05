@@ -108,6 +108,7 @@ export default async function AdminPromptNewPage({ searchParams }: { searchParam
           useCase: interpolate(a.refusedUseCase, caps), poster: a.refusedPoster,
           invalid: a.errInvalid, upload: a.mediaUploadFailed, session: a.mediaUploadSession,
           uncertain: a.promptPublishUncertain, retained: a.promptInputsRetained, publishing: a.promptPublishing,
+          draftRestored: a.promptDraftRestored, draftDiscard: a.promptDraftDiscard, draftSavedAt: a.promptDraftSavedAt,
         }}>
         <OpForm op="prompt.create" back={ADMIN_PROMPT_NEW_PATH} className="flex flex-col gap-4">
           <PromptFields row={null} dict={dict} />
