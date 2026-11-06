@@ -23,6 +23,16 @@ function Links({ labels, visible, scope, pool, layoutMode = 'topbar' }: { labels
           {label}
         </a>
       ))}
+      {layoutMode === 'topbar' && visible.members && (
+        <a
+          href={`${scope('/brand/members')}#invite-composer`}
+          data-nav-invite-cta
+          title={labels.members}
+        >
+          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 4v12M4 10h12" /></svg>
+          Invite
+        </a>
+      )}
     </nav>
   );
 }

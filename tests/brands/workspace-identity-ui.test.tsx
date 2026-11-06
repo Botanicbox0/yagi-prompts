@@ -216,7 +216,11 @@ describe('pages scoped to the selected brand', () => {
   });
 
   it('team and settings follow the selected role, and back links keep the brand', async () => {
-    expect(await html(MembersPage(search(A)))).toContain(b.createInvite);
+    const ownerTeam = await html(MembersPage(search(A)));
+    expect(ownerTeam).toContain(b.createInvite);
+    expect(ownerTeam).toContain('data-team-summary-bar');
+    expect(ownerTeam).toContain('data-sota-invite-composer');
+    expect(ownerTeam).toContain('data-team-role-matrix');
     const viewerTeam = await html(MembersPage(search(B)));
     expect(viewerTeam).toContain(b.access.ownerOnlyTeam);
     expect(viewerTeam).toContain(`href="/brand?organizationId=${B}"`);

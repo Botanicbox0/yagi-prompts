@@ -1790,9 +1790,9 @@ export function BrandBriefStudio({
         data-studio-top-mode-bar
         data-active-surface-mode={studioSurfaceMode}
         style={{
-          marginBottom: "10px",
-          padding: "8px 12px",
-          borderRadius: "14px",
+          marginBottom: "8px",
+          padding: "5px 10px",
+          borderRadius: "12px",
           background: "#FFFFFF",
           border: "1px solid #E4E6EC",
           color: "#0E1013",
@@ -1800,8 +1800,8 @@ export function BrandBriefStudio({
           flexWrap: "wrap",
           alignItems: "center",
           justifyContent: "space-between",
-          gap: "8px",
-          boxShadow: "0 4px 16px rgba(15, 23, 42, 0.04)",
+          gap: "6px",
+          boxShadow: "0 2px 10px rgba(15, 23, 42, 0.03)",
         }}
       >
         <div
@@ -1809,14 +1809,14 @@ export function BrandBriefStudio({
             display: "flex",
             flexWrap: "wrap",
             alignItems: "center",
-            gap: "6px",
+            gap: "4px",
           }}
         >
           {(
             [
               {
                 id: "split_workbench",
-                labelKo: "◫ 듀얼 캔버스 (좌 이미지 ⇄ 우 영상)",
+                labelKo: "◫ 듀얼 캔버스 (이미지 ⇄ 영상)",
                 labelEn: "◫ Dual Canvas (Image ⇄ Video)",
                 subKo: "Video-Creator 표준 · 1클릭 브릿지",
                 subEn: "Video-Creator Dual Stage",
@@ -1835,8 +1835,8 @@ export function BrandBriefStudio({
               },
               {
                 id: "track_image",
-                labelKo: "01 · 이미지 단독 캔버스",
-                labelEn: "01 · Image Full Canvas",
+                labelKo: "01 · 이미지 캔버스",
+                labelEn: "01 · Image Canvas",
                 subKo: "5대 모델 · 1~4슬롯 · 1440px ROI",
                 subEn: "5 Models · 1–4 Slots · ROI",
                 onActivate: () => {
@@ -1847,8 +1847,8 @@ export function BrandBriefStudio({
               },
               {
                 id: "track_video_upscale",
-                labelKo: "02 · 영상 & 인스타 마스터링",
-                labelEn: "02 · Video & IG Mastering",
+                labelKo: "02 · 영상 & 1080p 마스터",
+                labelEn: "02 · Video & 1080p IG",
                 subKo: "Seedance 2.5 · 1080p/4K",
                 subEn: "Seedance 2.5 · 1080p/4K",
                 onActivate: () => {
@@ -1859,7 +1859,7 @@ export function BrandBriefStudio({
               },
               {
                 id: "track_creator_format",
-                labelKo: "03 · 캠페인 영상 (셀프·의뢰)",
+                labelKo: "03 · 캠페인 포맷",
                 labelEn: "03 · Creator Format",
                 subKo: "₩1,800 직접 제작 · D+3 의뢰",
                 subEn: "Self-Build · D+3 Studio",
@@ -1870,8 +1870,8 @@ export function BrandBriefStudio({
               },
               {
                 id: "track_creator_distribution",
-                labelKo: "04 · 캠페인 + 유통 패키지",
-                labelEn: "04 · Campaign + Seeding",
+                labelKo: "04 · 시딩 패키지",
+                labelEn: "04 · Seeding Package",
                 subKo: "10 · 30 · 50인+ 시딩 & ROI",
                 subEn: "10 / 30 / 50+ Creators",
                 onActivate: () => {
@@ -1881,7 +1881,7 @@ export function BrandBriefStudio({
               },
               {
                 id: "track_audio",
-                labelKo: "05 · 오디오 & 폴리 스튜디오",
+                labelKo: "05 · 오디오 · 폴리",
                 labelEn: "05 · Audio & Foley",
                 subKo: "BGM · 폴리 · -14 LUFS",
                 subEn: "BGM · Foley · -14 LUFS",
@@ -1899,61 +1899,49 @@ export function BrandBriefStudio({
                 type="button"
                 data-studio-surface-tab={modeTab.id}
                 aria-pressed={active}
+                title={isKo ? modeTab.subKo : modeTab.subEn}
                 onClick={modeTab.onActivate}
                 style={{
-                  padding: "6px 11px",
-                  borderRadius: "10px",
+                  height: "28px",
+                  padding: "0 10px",
+                  borderRadius: "999px",
                   border: active
-                    ? "1.5px solid #3875C5"
-                    : "1px solid #E4E6EC",
+                    ? "1px solid #3875C5"
+                    : "1px solid transparent",
                   background: active
-                    ? "rgba(56, 117, 197, 0.08)"
-                    : "#F8F9FB",
-                  color: active ? "#111114" : "#383B44",
-                  textAlign: "left",
+                    ? "rgba(56, 117, 197, 0.09)"
+                    : "#F6F7F9",
+                  color: active ? "#3063A7" : "#383B44",
+                  fontSize: "11.5px",
+                  fontWeight: active ? 700 : 600,
                   cursor: "pointer",
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "1px",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  whiteSpace: "nowrap",
                 }}
               >
-                <strong
-                  style={{
-                    fontSize: "12px",
-                    lineHeight: 1.2,
-                    color: active ? "#3063A7" : "#111114",
-                  }}
-                >
-                  {isKo ? modeTab.labelKo : modeTab.labelEn}
-                </strong>
-                <span
-                  style={{
-                    fontSize: "10.5px",
-                    color: active ? "#3063A7" : "#6B6F7B",
-                  }}
-                >
-                  {isKo ? modeTab.subKo : modeTab.subEn}
-                </span>
+                <span>{isKo ? modeTab.labelKo : modeTab.labelEn}</span>
               </button>
             );
           })}
         </div>
 
-        <div style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}>
+        <div style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
           <button
             type="button"
             data-top-bar-brand-kit-toggle
             aria-expanded={isEditingIdentity}
             onClick={() => setIsEditingIdentity((p) => !p)}
             style={{
-              padding: "5px 10px",
+              height: "26px",
+              padding: "0 9px",
               borderRadius: "999px",
               background: isEditingIdentity
                 ? "#3875C5"
-                : "rgba(56, 117, 197, 0.09)",
-              border: "1px solid rgba(56, 117, 197, 0.35)",
+                : "rgba(56, 117, 197, 0.08)",
+              border: "1px solid rgba(56, 117, 197, 0.3)",
               color: isEditingIdentity ? "#FFFFFF" : "#3063A7",
-              fontSize: "11px",
+              fontSize: "10.5px",
               fontWeight: 700,
               cursor: "pointer",
             }}
@@ -2054,27 +2042,27 @@ export function BrandBriefStudio({
           minHeight:
             studioSurfaceMode === "spatial_canvas" ||
             studioSurfaceMode === "split_workbench"
-              ? "calc(100svh - 76px)"
+              ? "calc(100svh - 86px)"
               : "auto",
-          borderRadius: "18px",
-          backgroundColor: "#F6F7F9",
+          borderRadius: "16px",
+          backgroundColor: "#FFFFFF",
           backgroundImage:
-            "radial-gradient(rgba(17, 17, 20, 0.08) 1px, transparent 1px)",
-          backgroundSize: "22px 22px",
+            "radial-gradient(rgba(15, 23, 42, 0.06) 1px, transparent 1px)",
+          backgroundSize: "20px 20px",
           border: "1px solid #E4E6EC",
           color: "#0E1013",
-          padding: "14px",
+          padding: "10px",
           display:
             studioSurfaceMode === "spatial_canvas" ||
             studioSurfaceMode === "split_workbench"
               ? "flex"
               : "none",
           flexDirection: "column",
-          gap: "12px",
+          gap: "8px",
           overflow: "hidden",
           userSelect: "none",
           outline: "none",
-          boxShadow: "0 12px 36px rgba(15, 23, 42, 0.05)",
+          boxShadow: "0 6px 24px rgba(15, 23, 42, 0.03)",
         }}
       >
         {/* 1. TOP DIRECTING & CHAT BAR (Sits at the TOP above the Dual White Canvases — Video-Creator Production Architecture) */}
@@ -2086,7 +2074,7 @@ export function BrandBriefStudio({
             width: "100%",
             zIndex: 30,
             display: "grid",
-            gap: "8px",
+            gap: "6px",
           }}
         >
           {/* Main Frosted White Directing & Prompt Console */}
@@ -2094,14 +2082,14 @@ export function BrandBriefStudio({
             data-spatial-video-node
             style={{
               position: "relative",
-              borderRadius: "16px",
-              padding: "12px 16px",
-              background: "rgba(255, 255, 255, 0.94)",
+              borderRadius: "13px",
+              padding: "8px 12px",
+              background: "rgba(255, 255, 255, 0.96)",
               backdropFilter: "blur(16px)",
               border: "1px solid #E4E6EC",
-              boxShadow: "0 8px 26px rgba(15, 23, 42, 0.06)",
+              boxShadow: "0 4px 16px rgba(15, 23, 42, 0.04)",
               display: "grid",
-              gap: "10px",
+              gap: "6px",
             }}
           >
             {/* Multi-selection attach overlay when nodes are marquee-selected on the unified board */}
@@ -2114,14 +2102,14 @@ export function BrandBriefStudio({
                   position: "absolute",
                   inset: 0,
                   border: 0,
-                  borderRadius: "16px",
+                  borderRadius: "13px",
                   background: "rgba(255, 255, 255, 0.94)",
                   backdropFilter: "blur(8px)",
                   color: "#111114",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  gap: "16px",
+                  gap: "12px",
                   cursor: "pointer",
                   zIndex: 10,
                 }}
@@ -2129,8 +2117,8 @@ export function BrandBriefStudio({
                 <span
                   style={{
                     position: "relative",
-                    width: "48px",
-                    height: "42px",
+                    width: "42px",
+                    height: "36px",
                     display: "inline-flex",
                     alignItems: "center",
                     justifyContent: "center",
@@ -2143,20 +2131,20 @@ export function BrandBriefStudio({
                       alt=""
                       style={{
                         position: "absolute",
-                        left: idx === 0 ? "0px" : "10px",
-                        top: idx === 0 ? "4px" : "0px",
-                        width: "36px",
-                        height: "36px",
-                        borderRadius: "8px",
+                        left: idx === 0 ? "0px" : "8px",
+                        top: idx === 0 ? "3px" : "0px",
+                        width: "30px",
+                        height: "30px",
+                        borderRadius: "6px",
                         objectFit: "cover",
-                        border: "2px solid #3875C5",
+                        border: "1.5px solid #3875C5",
                         transform: idx === 0 ? "rotate(-8deg)" : "rotate(7deg)",
-                        boxShadow: "0 4px 12px rgba(15, 23, 42, 0.14)",
+                        boxShadow: "0 4px 10px rgba(15, 23, 42, 0.12)",
                       }}
                     />
                   ))}
                 </span>
-                <span style={{ fontSize: "13.5px", fontWeight: 600, color: "#111114" }}>
+                <span style={{ fontSize: "12px", fontWeight: 600, color: "#111114" }}>
                   {isKo ? (
                     <>
                       <strong style={{ color: "#3063A7" }}>Enter</strong> 키를 누르거나 클릭해 선택한 노드({selectedCanvasItemIds.length}개)를 디렉팅 레퍼런스로 바로 연결
@@ -2177,33 +2165,33 @@ export function BrandBriefStudio({
                 flexWrap: "wrap",
                 alignItems: "center",
                 justifyContent: "space-between",
-                gap: "8px",
+                gap: "6px",
               }}
             >
-              <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "8px" }}>
+              <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "6px" }}>
                 {/* Asset Tray Drawer Toggle */}
                 <button
                   type="button"
                   onClick={() => setIsLeftRailCollapsed((p) => !p)}
                   title={isKo ? "브랜드 에셋 보관함 열기/닫기" : "Toggle Brand Asset Tray"}
                   style={{
-                    height: "32px",
-                    padding: "0 10px",
-                    borderRadius: "8px",
+                    height: "26px",
+                    padding: "0 8px",
+                    borderRadius: "7px",
                     border: "1px solid #E4E6EC",
                     background: !isLeftRailCollapsed
                       ? "rgba(56, 117, 197, 0.1)"
                       : "#F8F9FB",
                     color: !isLeftRailCollapsed ? "#3063A7" : "#383B44",
-                    fontSize: "12px",
+                    fontSize: "11px",
                     fontWeight: 600,
                     display: "inline-flex",
                     alignItems: "center",
-                    gap: "6px",
+                    gap: "5px",
                     cursor: "pointer",
                   }}
                 >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
                     <rect x="3" y="4" width="18" height="16" rx="2" />
                     <line x1="9" y1="4" x2="9" y2="20" />
                   </svg>
@@ -2216,7 +2204,7 @@ export function BrandBriefStudio({
                     display: "inline-flex",
                     alignItems: "center",
                     gap: "2px",
-                    padding: "3px",
+                    padding: "2px",
                     borderRadius: "999px",
                     background: "#F1F3F7",
                     border: "1px solid #E4E6EC",
@@ -2226,7 +2214,7 @@ export function BrandBriefStudio({
                     type="button"
                     onClick={() => handleSwitchMediumMode("image")}
                     style={{
-                      padding: "4px 12px",
+                      padding: "3px 9px",
                       borderRadius: "999px",
                       border: 0,
                       background:
@@ -2239,56 +2227,56 @@ export function BrandBriefStudio({
                           : "#6B6F7B",
                       boxShadow:
                         !isVideoMode && activeCoreTrack !== "audio"
-                          ? "0 1px 3px rgba(15, 23, 42, 0.08)"
+                          ? "0 1px 2px rgba(15, 23, 42, 0.08)"
                           : "none",
-                      fontSize: "12px",
+                      fontSize: "11px",
                       fontWeight: 700,
                       cursor: "pointer",
                     }}
                   >
-                    {isKo ? "이미지 디렉팅 (좌측)" : "Image Directing (Left)"}
+                    {isKo ? "이미지 (좌측)" : "Image (Left)"}
                   </button>
                   <button
                     type="button"
                     onClick={() => handleSwitchMediumMode("video")}
                     style={{
-                      padding: "4px 12px",
+                      padding: "3px 9px",
                       borderRadius: "999px",
                       border: 0,
                       background: isVideoMode ? "#FFFFFF" : "transparent",
                       color: isVideoMode ? "#3063A7" : "#6B6F7B",
                       boxShadow: isVideoMode
-                        ? "0 1px 3px rgba(15, 23, 42, 0.08)"
+                        ? "0 1px 2px rgba(15, 23, 42, 0.08)"
                         : "none",
-                      fontSize: "12px",
+                      fontSize: "11px",
                       fontWeight: 700,
                       cursor: "pointer",
                     }}
                   >
-                    {isKo ? "영상 디렉팅 (우측 Seedance 2.5)" : "Video Directing (Right)"}
+                    {isKo ? "영상 (우측 Seedance 2.5)" : "Video (Right)"}
                   </button>
                   <button
                     type="button"
                     onClick={() => handleSelectCoreTrack("audio")}
                     style={{
-                      padding: "4px 12px",
+                      padding: "3px 9px",
                       borderRadius: "999px",
                       border: 0,
                       background:
                         activeCoreTrack === "audio" ? "#FFFFFF" : "transparent",
                       color:
                         activeCoreTrack === "audio" ? "#111114" : "#6B6F7B",
-                      fontSize: "12px",
+                      fontSize: "11px",
                       fontWeight: 600,
                       cursor: "pointer",
                     }}
                   >
-                    {isKo ? "사운드 · BGM (-14 LUFS)" : "Audio (-14 LUFS)"}
+                    {isKo ? "사운드 (-14 LUFS)" : "Audio (-14 LUFS)"}
                   </button>
                 </div>
 
                 {/* Quick @Image 1~4 Citation Chips */}
-                <div style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                <div style={{ display: "inline-flex", alignItems: "center", gap: "3px" }}>
                   {activeRefWorkflow.slots.map((slot) => (
                     <button
                       key={slot.slotNumber}
@@ -2302,12 +2290,12 @@ export function BrandBriefStudio({
                         })
                       }
                       style={{
-                        padding: "3px 8px",
+                        padding: "2px 7px",
                         borderRadius: "999px",
                         border: "1px solid rgba(56, 117, 197, 0.25)",
                         background: "rgba(56, 117, 197, 0.07)",
                         color: "#3063A7",
-                        fontSize: "11px",
+                        fontSize: "10.5px",
                         fontWeight: 700,
                         cursor: "pointer",
                       }}
@@ -2324,8 +2312,8 @@ export function BrandBriefStudio({
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
-                  gap: "4px",
-                  padding: "3px",
+                  gap: "2px",
+                  padding: "2px",
                   borderRadius: "999px",
                   background: "#F1F3F7",
                   border: "1px solid #E4E6EC",
@@ -2335,7 +2323,7 @@ export function BrandBriefStudio({
                   [
                     {
                       id: "dual_split",
-                      labelKo: "◫ 듀얼 캔버스 (이미지 ⇄ 영상)",
+                      labelKo: "◫ 듀얼 (이미지 ⇄ 영상)",
                       labelEn: "◫ Dual (Image ⇄ Video)",
                       active:
                         studioSurfaceMode !== "spatial_canvas" &&
@@ -2387,12 +2375,12 @@ export function BrandBriefStudio({
                     aria-pressed={vMode.active}
                     onClick={vMode.onClick}
                     style={{
-                      padding: "4px 10px",
+                      padding: "3px 9px",
                       borderRadius: "999px",
                       border: 0,
                       background: vMode.active ? "#3875C5" : "transparent",
                       color: vMode.active ? "#FFFFFF" : "#383B44",
-                      fontSize: "11.5px",
+                      fontSize: "11px",
                       fontWeight: vMode.active ? 700 : 600,
                       cursor: "pointer",
                     }}
@@ -2408,9 +2396,9 @@ export function BrandBriefStudio({
               style={{
                 display: "flex",
                 alignItems: "center",
-                gap: "10px",
-                padding: "8px 12px",
-                borderRadius: "12px",
+                gap: "8px",
+                padding: "5px 10px",
+                borderRadius: "10px",
                 background: "#F8F9FB",
                 border: "1px solid #E4E6EC",
               }}
@@ -2430,7 +2418,7 @@ export function BrandBriefStudio({
                   border: 0,
                   background: "transparent",
                   color: "#0E1013",
-                  fontSize: "14px",
+                  fontSize: "12.5px",
                   fontWeight: 500,
                   outline: "none",
                 }}
@@ -2454,9 +2442,9 @@ export function BrandBriefStudio({
                         }
                         title={isKo ? "클릭해 첨부 해제" : "Click to detach"}
                         style={{
-                          width: "26px",
-                          height: "26px",
-                          borderRadius: "6px",
+                          width: "22px",
+                          height: "22px",
+                          borderRadius: "5px",
                           objectFit: "cover",
                           border: "1.5px solid #3875C5",
                           cursor: "pointer",
@@ -2472,16 +2460,17 @@ export function BrandBriefStudio({
                 type="button"
                 onClick={handleSpawnGeneratedItemOnCanvas}
                 style={{
-                  padding: "8px 16px",
+                  height: "28px",
+                  padding: "0 13px",
                   borderRadius: "999px",
                   border: 0,
                   background: "#3875C5",
                   color: "#FFFFFF",
-                  fontSize: "12.5px",
+                  fontSize: "11.5px",
                   fontWeight: 700,
                   display: "inline-flex",
                   alignItems: "center",
-                  gap: "6px",
+                  gap: "5px",
                   cursor: "pointer",
                   flexShrink: 0,
                 }}

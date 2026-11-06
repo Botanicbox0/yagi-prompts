@@ -62,6 +62,7 @@ export function CampaignMoatShowcase({
   organizationId,
   studioOpen,
   canRequest = true,
+  membersOpen = false,
 }: {
   locale: "ko" | "en";
   organizationId?: string | null;
@@ -95,458 +96,627 @@ export function CampaignMoatShowcase({
     }
   }
 
+  const studioHref = scopedHref("/brand/studio", choice);
+  const studioSep = studioHref.includes("?") ? "&" : "?";
+
   return (
     <section
       className="bw-showcase-panel"
       data-campaign-moat-showcase
       data-brand-tab-map
       aria-label={isKo ? "스튜디오 레퍼런스 및 제작 방식" : "Studio reference and production modes"}
+      style={{
+        padding: "20px 22px",
+        gap: "16px",
+        borderRadius: "16px",
+        background: "#FFFFFF",
+        border: "1px solid #E4E6EC",
+        boxShadow: "0 4px 20px rgba(15, 23, 42, 0.03)",
+        marginBottom: "16px",
+      }}
     >
-      {/* 2D INFINITE NODE CANVAS & 5-DELIVERABLE PIPELINE LAUNCHPAD STAGE ON /brand HOME */}
-      <a
-        href={scopedHref("/brand/studio", choice)}
-        data-home-studio-cta
-        data-tab-guide-card="studio"
+      {/* 1. MAGNIFIC + PLAYBOOK OPEN WHITE LAUNCHPAD STAGE (100% Zoom Spatial Breathing Room) */}
+      <div
         style={{
-          display: "block",
-          textDecoration: "none",
-          color: "#F3F4F6",
-          position: "relative",
-          height: "440px",
-          borderRadius: "16px",
-          backgroundColor: "#0B0C0E",
+          borderRadius: "14px",
+          backgroundColor: "#FFFFFF",
           backgroundImage:
-            "radial-gradient(rgba(255, 255, 255, 0.16) 1px, transparent 1px)",
-          backgroundSize: "24px 24px",
-          overflow: "hidden",
-          marginBottom: "16px",
-          boxShadow: "0 18px 44px rgba(0, 0, 0, 0.28)",
+            "radial-gradient(rgba(15, 23, 42, 0.055) 1px, transparent 1px)",
+          backgroundSize: "22px 22px",
+          border: "1px solid #E4E6EC",
+          padding: "22px 20px 18px",
+          display: "grid",
+          gap: "16px",
         }}
       >
+        {/* Top Utility & Status Row (Playbook / Magnific Header Strip) */}
         <div
           style={{
-            position: "absolute",
-            top: "14px",
-            left: "16px",
-            right: "16px",
             display: "flex",
             flexWrap: "wrap",
             alignItems: "center",
             justifyContent: "space-between",
             gap: "8px",
-            zIndex: 5,
           }}
         >
-          <span
-            data-moat-pipeline
+          <div style={{ display: "inline-flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+            <span
+              data-moat-pipeline
+              style={{
+                padding: "3px 9px",
+                borderRadius: "999px",
+                background: "rgba(56, 117, 197, 0.09)",
+                color: "#3063A7",
+                fontSize: "10.5px",
+                fontWeight: 700,
+                letterSpacing: "0.01em",
+              }}
+            >
+              {isKo
+                ? "WHITE DUAL CANVAS · 올인원 브랜드 미디어 스튜디오"
+                : "WHITE DUAL CANVAS · All-in-One Brand Media Studio"}
+            </span>
+            <span style={{ fontSize: "11.5px", color: "#6B6F7B" }}>
+              {isKo
+                ? "좌측 이미지 캔버스 ⇄ 우측 영상 캔버스 1클릭 브릿지 · 1080p 인스타 무열화 마스터"
+                : "Left Image Canvas ⇄ Right Video Canvas 1-Click Bridge · 1080p IG De-AI Master"}
+            </span>
+          </div>
+
+          <div style={{ display: "inline-flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+            {membersOpen && (
+              <a
+                href={`${scopedHref("/brand/members", choice)}#invite-composer`}
+                data-home-invite-cta
+                style={{
+                  height: "28px",
+                  padding: "0 10px",
+                  borderRadius: "999px",
+                  border: "1px solid #E4E6EC",
+                  background: "#FFFFFF",
+                  color: "#111114",
+                  fontSize: "11.5px",
+                  fontWeight: 600,
+                  textDecoration: "none",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "5px",
+                }}
+              >
+                <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8">
+                  <path d="M10 4v12M4 10h12" />
+                </svg>
+                <span>{isKo ? "팀원 초대 (Invite)" : "Invite Team"}</span>
+              </a>
+            )}
+            <a
+              href={scopedHref("/brand/identity", choice)}
+              data-home-onboarding-cta
+              data-tab-guide-card="identity"
+              style={{
+                height: "28px",
+                padding: "0 10px",
+                borderRadius: "999px",
+                border: "1px solid #E4E6EC",
+                background: "#F8F9FB",
+                color: "#383B44",
+                fontSize: "11.5px",
+                fontWeight: 600,
+                textDecoration: "none",
+                display: "inline-flex",
+                alignItems: "center",
+              }}
+            >
+              {isKo ? "브랜드 킷 고정" : "Brand Kit"}
+            </a>
+            <a
+              href={studioHref}
+              data-home-studio-cta
+              data-tab-guide-card="studio"
+              style={{
+                height: "28px",
+                padding: "0 12px",
+                borderRadius: "999px",
+                background: "#111114",
+                color: "#FFFFFF",
+                fontSize: "11.5px",
+                fontWeight: 650,
+                textDecoration: "none",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "5px",
+              }}
+            >
+              <span>+ {isKo ? "새 스튜디오 작업" : "New Studio Space"}</span>
+            </a>
+          </div>
+        </div>
+
+        {/* Centered Greeting + Search/Command Bar + 7 Compact Icon Tiles (Magnific Proportions) */}
+        <div
+          style={{
+            display: "grid",
+            justifyItems: "center",
+            textAlign: "center",
+            gap: "12px",
+            padding: "6px 0 4px",
+          }}
+        >
+          <h2
             style={{
-              fontSize: "12px",
-              color: "#93C5FD",
-              fontWeight: 700,
+              margin: 0,
+              fontSize: "18px",
+              fontWeight: 650,
+              letterSpacing: "-0.025em",
+              color: "#0E1013",
             }}
           >
             {isKo
-              ? "2D 무한 노드 캔버스 · 좌/우 분할 워크벤치 · 5대 제작/유통 스튜디오"
-              : "2D Infinite Node Canvas · Dual Split Workbench · 5 Deliverable Studios"}
-          </span>
+              ? "무엇을 만들까요? 화이트 듀얼 캔버스에서 바로 시작하세요"
+              : "Start creating on your White Dual Canvas"}
+          </h2>
 
-          <div
+          {/* Centered Command / Quick-Jump Bar */}
+          <a
+            href={studioHref}
             style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "4px",
-              padding: "4px",
+              width: "min(560px, 100%)",
+              height: "36px",
+              padding: "0 12px",
               borderRadius: "999px",
-              background: "#18191D",
-              border: "1px solid rgba(255, 255, 255, 0.08)",
-            }}
-          >
-            <span
-              style={{
-                padding: "4px 12px",
-                borderRadius: "999px",
-                background: "#3875C5",
-                color: "#FFFFFF",
-                fontSize: "11.5px",
-                fontWeight: 700,
-              }}
-            >
-              {isKo ? "00 · 2D 무한 캔버스" : "00 · 2D Canvas"}
-            </span>
-            <span
-              style={{
-                padding: "4px 12px",
-                color: "rgba(255, 255, 255, 0.72)",
-                fontSize: "11.5px",
-                fontWeight: 600,
-              }}
-            >
-              {isKo ? "좌·우 분할 (이미지↔영상)" : "Dual Split"}
-            </span>
-            <span
-              style={{
-                padding: "4px 12px",
-                color: "rgba(255, 255, 255, 0.72)",
-                fontSize: "11.5px",
-                fontWeight: 600,
-              }}
-            >
-              {isKo ? "1080p 인스타 업스케일" : "1080p IG Upscale"}
-            </span>
-          </div>
-
-          <span
-            style={{
-              padding: "6px 14px",
-              borderRadius: "999px",
-              background: "#3875C5",
-              color: "#FFFFFF",
+              background: "#F6F7F9",
+              border: "1px solid #E4E6EC",
+              color: "#6B6F7B",
               fontSize: "12px",
-              fontWeight: 700,
-            }}
-          >
-            {isKo ? "제작 스튜디오 열기 →" : "Open Production Studio →"}
-          </span>
-        </div>
-
-        {/* SVG Bezier Pipeline Wires Connecting the 3 Production Nodes */}
-        <svg
-          style={{
-            position: "absolute",
-            inset: 0,
-            width: "100%",
-            height: "100%",
-            pointerEvents: "none",
-            zIndex: 2,
-          }}
-        >
-          <path
-            d="M 204 162 C 254 162, 260 162, 304 162"
-            fill="none"
-            stroke="#3875C5"
-            strokeWidth="2.2"
-          />
-          <path
-            d="M 468 162 C 516 162, 524 162, 568 162"
-            fill="none"
-            stroke="#3875C5"
-            strokeWidth="2.2"
-          />
-          <circle cx="204" cy="162" r="4" fill="#3875C5" />
-          <circle cx="304" cy="162" r="4" fill="#93C5FD" />
-          <circle cx="468" cy="162" r="4" fill="#3875C5" />
-          <circle cx="568" cy="162" r="4" fill="#93C5FD" />
-        </svg>
-
-        {/* Production Node Cards inside Blue Selection Bounding Box (#1D7DFA) on Dotted Plane */}
-        <div
-          style={{
-            position: "absolute",
-            left: "44px",
-            top: "64px",
-            width: "736px",
-            height: "204px",
-            border: "2px solid #1D7DFA",
-            borderRadius: "14px",
-            zIndex: 3,
-          }}
-        >
-          {/* Node 1: @Image 1 + @Image 2 Reference */}
-          <div
-            style={{
-              position: "absolute",
-              left: "12px",
-              top: "12px",
-              width: "148px",
-              height: "178px",
-              borderRadius: "10px",
-              overflow: "hidden",
-              background: "#14161B",
-              border: "1px solid rgba(255,255,255,0.14)",
+              textDecoration: "none",
               display: "flex",
-              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: "8px",
+              boxShadow: "inset 0 1px 2px rgba(15, 23, 42, 0.03)",
             }}
           >
-            <div style={{ padding: "4px 7px", fontSize: "9.5px", fontWeight: 700, color: "#93C5FD", background: "#101217" }}>
-              {isKo ? "@Image 1·2 인물·제품 고정" : "@Image 1·2 Ref Lock"}
-            </div>
-            <img
-              src="/reel/brands/slot-1-subject-editorial.jpg"
-              alt=""
-              style={{ width: "100%", flex: 1, minHeight: 0, objectFit: "cover" }}
-            />
-            <div style={{ padding: "4px 7px", fontSize: "9.5px", color: "rgba(255,255,255,0.75)", background: "#101217" }}>
-              {isKo ? "로고·실루엣 무변형 락" : "Silhouette & Logo Lock"}
-            </div>
-          </div>
-
-          {/* Node 2: Generated 2K Lookbook Still */}
-          <div
-            style={{
-              position: "absolute",
-              left: "260px",
-              top: "12px",
-              width: "164px",
-              height: "178px",
-              borderRadius: "10px",
-              overflow: "hidden",
-              background: "#14161B",
-              border: "1px solid rgba(56,117,197,0.65)",
-              display: "flex",
-              flexDirection: "column",
-            }}
-          >
-            <div style={{ padding: "4px 7px", fontSize: "9.5px", fontWeight: 700, color: "#93C5FD", background: "#101217" }}>
-              {isKo ? "Nano Banana Pro · 2K 화보" : "Nano Banana Pro · 2K"}
-            </div>
-            <img
-              src="/reel/brands/studio-editorial-blue-1080p.jpg"
-              alt=""
-              style={{ width: "100%", flex: 1, minHeight: 0, objectFit: "cover" }}
-            />
-            <div style={{ padding: "4px 7px", fontSize: "9.5px", color: "rgba(255,255,255,0.8)", background: "#101217" }}>
-              {isKo ? "→ 우측 영상 시작 프레임" : "→ Bridge to Video"}
-            </div>
-          </div>
-
-          {/* Node 3: Seedance 2.5 720p -> 1080p IG Master */}
-          <div
-            style={{
-              position: "absolute",
-              left: "524px",
-              top: "12px",
-              width: "198px",
-              height: "178px",
-              borderRadius: "10px",
-              overflow: "hidden",
-              background: "#14161B",
-              border: "1px solid rgba(56,117,197,0.65)",
-              display: "flex",
-              flexDirection: "column",
-            }}
-          >
-            <div style={{ padding: "4px 7px", fontSize: "9.5px", fontWeight: 700, color: "#93C5FD", background: "#101217" }}>
-              {isKo ? "Seedance 2.5 · 1080p 인스타 마스터" : "Seedance 2.5 · 1080p IG"}
-            </div>
-            <div style={{ position: "relative", flex: 1, minHeight: 0 }}>
-              <img
-                src="/reel/brands/house-runway-1080p.jpg"
-                alt=""
-                style={{
-                  width: "100%",
-                  height: "100%",
-                  objectFit: "cover",
-                }}
-              />
-              <span
-                style={{
-                  position: "absolute",
-                  left: "50%",
-                  top: "50%",
-                  transform: "translate(-50%, -50%)",
-                  width: "30px",
-                  height: "30px",
-                  borderRadius: "999px",
-                  background: "rgba(0, 0, 0, 0.52)",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="#FFFFFF">
-                  <polygon points="7 4 20 12 7 20 7 4" />
-                </svg>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: "8px", minWidth: 0 }}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="11" cy="11" r="7" />
+                <line x1="20" y1="20" x2="16.5" y2="16.5" />
+              </svg>
+              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {isKo
+                  ? "화보 생성, Seedance 2.5 모션, 1080p 인스타 마스터링 또는 워크플로 바로 이동..."
+                  : "Ask Studio or jump to Dual Canvas, 5 Image Models, Seedance 2.5, 1080p IG..."}
               </span>
-            </div>
-            <div style={{ padding: "4px 7px", fontSize: "9.5px", color: "rgba(255,255,255,0.8)", background: "#101217" }}>
-              {isKo ? "Sunra 1080p 화질 방어 · -14 LUFS" : "Sunra 1080p IG · -14 LUFS"}
-            </div>
-          </div>
-        </div>
+            </span>
+            <span
+              style={{
+                padding: "2px 7px",
+                borderRadius: "6px",
+                background: "#FFFFFF",
+                border: "1px solid #E4E6EC",
+                color: "#383B44",
+                fontSize: "10px",
+                fontWeight: 600,
+                flexShrink: 0,
+              }}
+            >
+              Studio →
+            </span>
+          </a>
 
-        {/* Bottom Floating Dock Preview inside Canvas Hero (Founder-Tone Korean UX) */}
-        <div
-          style={{
-            position: "absolute",
-            bottom: "14px",
-            left: "50%",
-            transform: "translateX(-50%)",
-            width: "min(680px, calc(100% - 32px))",
-            display: "grid",
-            gap: "6px",
-            zIndex: 4,
-          }}
-        >
-          <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
-            {(isKo
-              ? [
-                  "01 · 5대 모델 화보 생성",
-                  "02 · Seedance 2.5 모션 확장",
-                  "720p→1080p 인스타 업스케일",
-                  "03 · 크리에이터 캠페인 포맷(셀프·의뢰)",
-                  "04 · 10·30·50인 유통 패키지",
-                  "05 · BGM·폴리 오디오(-14 LUFS)",
-                ]
-              : [
-                  "01 · 5-Model Image Studio",
-                  "02 · Seedance 2.5 Video",
-                  "1080p IG Upscale Studio",
-                  "03 · Creator Campaign Format",
-                  "04 · 10/30/50+ Seeding",
-                  "05 · BGM & Foley Audio",
-                ]
-            ).map((pill) => (
-              <span
-                key={pill}
-                style={{
-                  padding: "5px 11px",
-                  borderRadius: "999px",
-                  background: "#18191D",
-                  border: "1px solid rgba(255, 255, 255, 0.1)",
-                  color: "#F3F4F6",
-                  fontSize: "11px",
-                  fontWeight: 600,
-                }}
-              >
-                {pill}
-              </span>
-            ))}
-          </div>
+          {/* Magnific-Style Compact 42x42 Icon Tile Dock */}
           <div
             style={{
-              padding: "12px 16px",
-              borderRadius: "16px",
-              background: "#18191D",
-              border: "1px solid rgba(56, 117, 197, 0.45)",
               display: "flex",
+              flexWrap: "wrap",
               alignItems: "center",
               justifyContent: "center",
-              gap: "14px",
-              color: "rgba(255, 255, 255, 0.88)",
-              fontSize: "13px",
-              fontWeight: 600,
+              gap: "16px",
+              paddingTop: "4px",
             }}
           >
-            <span style={{ position: "relative", width: "44px", height: "34px", display: "inline-block", flexShrink: 0 }}>
-              <img
-                src="/reel/brands/slot-1-subject-editorial.jpg"
-                alt=""
+            {(
+              [
+                {
+                  id: "dual",
+                  href: studioHref,
+                  labelKo: "듀얼 캔버스",
+                  labelEn: "Dual Canvas",
+                  tint: "rgba(56, 117, 197, 0.1)",
+                  color: "#3063A7",
+                  svg: (
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                      <rect x="3" y="4" width="8" height="16" rx="2" />
+                      <rect x="13" y="4" width="8" height="16" rx="2" />
+                    </svg>
+                  ),
+                },
+                {
+                  id: "image",
+                  href: `${studioHref}${studioSep}track=image`,
+                  labelKo: "이미지 5모델",
+                  labelEn: "Image",
+                  tint: "rgba(37, 99, 235, 0.09)",
+                  color: "#1D4ED8",
+                  svg: (
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                      <rect x="3" y="3" width="18" height="18" rx="3" />
+                      <circle cx="8.5" cy="8.5" r="1.5" />
+                      <path d="M21 15l-5-5L5 21" />
+                    </svg>
+                  ),
+                },
+                {
+                  id: "video",
+                  href: `${studioHref}${studioSep}track=video`,
+                  labelKo: "Seedance 영상",
+                  labelEn: "Video",
+                  tint: "rgba(16, 185, 129, 0.1)",
+                  color: "#047857",
+                  svg: (
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                      <rect x="2" y="5" width="14" height="14" rx="2" />
+                      <path d="M16 10l6-3v10l-6-3z" />
+                    </svg>
+                  ),
+                },
+                {
+                  id: "upscale",
+                  href: `${studioHref}${studioSep}track=video`,
+                  labelKo: "1080p 마스터",
+                  labelEn: "1080p IG",
+                  tint: "rgba(124, 58, 237, 0.09)",
+                  color: "#6D28D9",
+                  svg: (
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                      <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />
+                    </svg>
+                  ),
+                },
+                {
+                  id: "format",
+                  href: `${studioHref}${studioSep}track=creator_format`,
+                  labelKo: "캠페인 포맷",
+                  labelEn: "Formats",
+                  tint: "rgba(234, 88, 12, 0.09)",
+                  color: "#C2410C",
+                  svg: (
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                      <rect x="6" y="3" width="12" height="18" rx="2" />
+                      <line x1="10" y1="17" x2="14" y2="17" />
+                    </svg>
+                  ),
+                },
+                {
+                  id: "seeding",
+                  href: `${studioHref}${studioSep}track=creator_distribution`,
+                  labelKo: "시딩 패키지",
+                  labelEn: "Seeding",
+                  tint: "rgba(14, 165, 233, 0.1)",
+                  color: "#0369A1",
+                  svg: (
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                      <circle cx="9" cy="7" r="3" />
+                      <path d="M3 19v-1a6 6 0 0 1 12 0v1" />
+                      <circle cx="17" cy="9" r="2.5" />
+                      <path d="M15 19v-1a4.5 4.5 0 0 1 6 0v1" />
+                    </svg>
+                  ),
+                },
+                {
+                  id: "audio",
+                  href: `${studioHref}${studioSep}track=audio`,
+                  labelKo: "오디오 · BGM",
+                  labelEn: "Audio",
+                  tint: "rgba(15, 23, 42, 0.06)",
+                  color: "#111114",
+                  svg: (
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                      <path d="M11 5L6 9H2v6h4l5 4V5z" />
+                      <path d="M15.5 8.5a5 5 0 0 1 0 7" />
+                    </svg>
+                  ),
+                },
+              ] as const
+            ).map((tile) => (
+              <a
+                key={tile.id}
+                href={tile.href}
                 style={{
-                  position: "absolute",
-                  left: 0,
-                  top: "2px",
-                  width: "30px",
-                  height: "30px",
-                  borderRadius: "6px",
-                  objectFit: "cover",
-                  border: "1.5px solid #FFFFFF",
-                  transform: "rotate(-8deg)",
+                  textDecoration: "none",
+                  color: "#111114",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  gap: "5px",
+                  minWidth: "62px",
                 }}
-              />
-              <img
-                src="/reel/brands/house-runway-1080p.jpg"
-                alt=""
-                style={{
-                  position: "absolute",
-                  left: "10px",
-                  top: 0,
-                  width: "30px",
-                  height: "30px",
-                  borderRadius: "6px",
-                  objectFit: "cover",
-                  border: "1.5px solid #FFFFFF",
-                  transform: "rotate(7deg)",
-                }}
-              />
-            </span>
-            <span>
-              {isKo ? (
-                <>
-                  캔버스 노드를 드래그해 묶은 뒤 <strong style={{ color: "#93C5FD" }}>Enter</strong>를 누르면 화보 → Seedance 2.5 영상 → 1080p 인스타 업스케일·캠페인으로 즉시 연결됩니다
-                </>
-              ) : (
-                <>
-                  Drag-select canvas nodes and press <strong style={{ color: "#93C5FD" }}>Enter</strong> to bridge Stills → Seedance 2.5 Video → 1080p IG Master
-                </>
-              )}
-            </span>
+              >
+                <span
+                  style={{
+                    width: "40px",
+                    height: "40px",
+                    borderRadius: "11px",
+                    background: tile.tint,
+                    color: tile.color,
+                    border: "1px solid rgba(15, 23, 42, 0.07)",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  {tile.svg}
+                </span>
+                <span style={{ fontSize: "11px", fontWeight: 600, color: "#383B44" }}>
+                  {isKo ? tile.labelKo : tile.labelEn}
+                </span>
+              </a>
+            ))}
           </div>
         </div>
-      </a>
 
-      {/* 4-Up Portrait (4:5) Passepartout Video Gallery — Zero cropped heads, zero chip clutter over footage */}
-      <div className="bw-showcase-reel" data-b2b-sound-master-reel>
-        {B2B_SOUND_MASTER_CLIPS.map((clip) => {
-          const soundOn = activeSoundId === clip.id;
-          return (
-            <figure
-              key={clip.id}
-              className="bw-showcase-card"
-              data-b2b-master-card={clip.id}
-              data-sound-active={soundOn ? "true" : undefined}
-            >
-              <div className="bw-showcase-media">
-                <video
-                  ref={(el) => {
-                    videoRefs.current[clip.id] = el;
+        {/* Magnific / Playbook Bottom 2-Column Split: [Left: Quick Workflow Shortcuts] + [Right: Create a Space / Dual White Canvas Preview] */}
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "minmax(220px, 0.85fr) minmax(0, 1.45fr)",
+            gap: "12px",
+            alignItems: "stretch",
+          }}
+        >
+          {/* Left Card: Quick Projects & Brand Setup */}
+          <div
+            style={{
+              padding: "12px 14px",
+              borderRadius: "12px",
+              background: "#F8F9FB",
+              border: "1px solid #E4E6EC",
+              display: "flex",
+              flexDirection: "column",
+              justifyContent: "space-between",
+              gap: "8px",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <strong style={{ fontSize: "12px", color: "#111114" }}>
+                {isKo ? "빠른 워크플로 시작" : "Quick Workflows"}
+              </strong>
+              <span style={{ fontSize: "10.5px", color: "#6B6F7B" }}>3 Steps</span>
+            </div>
+            <div style={{ display: "grid", gap: "5px" }}>
+              <a
+                href={scopedHref("/brand/identity", choice)}
+                style={{
+                  padding: "6px 9px",
+                  borderRadius: "8px",
+                  background: "#FFFFFF",
+                  border: "1px solid #E4E6EC",
+                  color: "#111114",
+                  fontSize: "11.5px",
+                  fontWeight: 600,
+                  textDecoration: "none",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                }}
+              >
+                <span>{isKo ? "1. 브랜드 킷 · 색감 고정" : "1. Brand Kit Lock"}</span>
+                <span style={{ fontSize: "10.5px", color: "#3063A7" }}>Setup →</span>
+              </a>
+              <a
+                href={studioHref}
+                style={{
+                  padding: "6px 9px",
+                  borderRadius: "8px",
+                  background: "#FFFFFF",
+                  border: "1px solid #E4E6EC",
+                  color: "#111114",
+                  fontSize: "11.5px",
+                  fontWeight: 600,
+                  textDecoration: "none",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                }}
+              >
+                <span>{isKo ? "2. 화이트 듀얼 캔버스 (이미지⇄영상)" : "2. White Dual Canvas"}</span>
+                <span style={{ fontSize: "10.5px", color: "#3063A7" }}>Open →</span>
+              </a>
+              <a
+                href={scopedHref("/brand/library", choice)}
+                style={{
+                  padding: "6px 9px",
+                  borderRadius: "8px",
+                  background: "#FFFFFF",
+                  border: "1px solid #E4E6EC",
+                  color: "#111114",
+                  fontSize: "11.5px",
+                  fontWeight: 600,
+                  textDecoration: "none",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                }}
+              >
+                <span>{isKo ? "3. 1080p 마스터 · 보관함" : "3. 1080p Library"}</span>
+                <span style={{ fontSize: "10.5px", color: "#6B6F7B" }}>Vault →</span>
+              </a>
+            </div>
+          </div>
+
+          {/* Right Card: Create a Space (Magnific-style White Infinite Canvas Card) */}
+          <a
+            href={studioHref}
+            style={{
+              padding: "14px 16px",
+              borderRadius: "12px",
+              background: "#F8F9FB",
+              border: "1px solid #E4E6EC",
+              textDecoration: "none",
+              color: "#111114",
+              display: "flex",
+              flexWrap: "wrap",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: "12px",
+            }}
+          >
+            <div style={{ display: "grid", gap: "4px", maxWidth: "360px" }}>
+              <span
+                style={{
+                  fontSize: "10.5px",
+                  fontWeight: 700,
+                  color: "#3063A7",
+                }}
+              >
+                {isKo ? "VIDEO-CREATOR DUAL STAGE" : "VIDEO-CREATOR DUAL STAGE"}
+              </span>
+              <strong style={{ fontSize: "13.5px", color: "#111114" }}>
+                {isKo
+                  ? "상단 디렉팅 바 + 하단 좌(이미지) ⇄ 우(영상) 화이트 캔버스"
+                  : "Top Directing Bar + Left Image ⇄ Right Video White Canvas"}
+              </strong>
+              <span style={{ fontSize: "11.5px", color: "#6B6F7B", lineHeight: 1.4 }}>
+                {isKo
+                  ? "좌측에서 생성한 화보를 클릭 한 번에 우측 Seedance 2.5 시작 프레임과 1080p 인스타 마스터로 연결합니다."
+                  : "Bridge generated lookbook cuts from the left image canvas directly to Seedance 2.5 and 1080p IG mastering on the right."}
+              </span>
+            </div>
+
+            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <div style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                <img
+                  src="/reel/brands/slot-1-subject-editorial.jpg"
+                  alt=""
+                  style={{
+                    width: "44px",
+                    height: "54px",
+                    borderRadius: "7px",
+                    objectFit: "cover",
+                    border: "1px solid #E4E6EC",
                   }}
-                  src={clip.videoUrl}
-                  poster={clip.posterUrl}
-                  muted={!soundOn}
-                  autoPlay
-                  loop
-                  playsInline
-                  preload="metadata"
                 />
-                <button
-                  type="button"
-                  className="bw-showcase-sound"
-                  data-reel-sound-toggle={clip.id}
-                  aria-pressed={soundOn}
-                  onClick={() => toggleSound(clip.id)}
-                >
-                  {soundOn ? (
-                    <svg viewBox="0 0 24 24" aria-hidden="true">
-                      <path d="M11 5L6 9H2v6h4l5 4V5z" />
-                      <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
-                      <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
-                    </svg>
-                  ) : (
-                    <svg viewBox="0 0 24 24" aria-hidden="true">
-                      <path d="M11 5L6 9H2v6h4l5 4V5z" />
-                      <line x1="23" y1="9" x2="17" y2="15" />
-                      <line x1="17" y1="9" x2="23" y2="15" />
-                    </svg>
-                  )}
-                  <span>
-                    {soundOn
-                      ? isKo
-                        ? "소리 켜짐"
-                        : "Sound On"
-                      : isKo
-                        ? "소리 켜기"
-                        : "Sound"}
-                  </span>
-                </button>
+                <span style={{ fontSize: "12px", color: "#3063A7", fontWeight: 700 }}>→</span>
+                <img
+                  src="/reel/brands/house-runway-1080p.jpg"
+                  alt=""
+                  style={{
+                    width: "54px",
+                    height: "54px",
+                    borderRadius: "7px",
+                    objectFit: "cover",
+                    border: "1.5px solid #3875C5",
+                  }}
+                />
               </div>
-              <figcaption className="bw-showcase-caption">
-                <strong>{isKo ? clip.titleKo : clip.titleEn}</strong>
-                <span>{isKo ? clip.badgeKo : clip.badgeEn} · 1080p</span>
-              </figcaption>
-            </figure>
-          );
-        })}
+              <span
+                style={{
+                  padding: "6px 12px",
+                  borderRadius: "999px",
+                  background: "#3875C5",
+                  color: "#FFFFFF",
+                  fontSize: "11.5px",
+                  fontWeight: 700,
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {isKo ? "캔버스 열기 +" : "Open Canvas +"}
+              </span>
+            </div>
+          </a>
+        </div>
       </div>
 
-      {/* 5 Visual Action Cards (Image · Video & Upscale · Creator Campaign Video · Campaign + Distribution · Audio) — Direct Deep-Link Launchpad */}
+      {/* 2. PLAYBOOK-STYLE COMPACT HORIZONTAL MEDIA PRODUCTION PIPELINE & 1080P MASTERS */}
+      <div style={{ display: "grid", gap: "8px" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px" }}>
+          <strong style={{ fontSize: "12.5px", color: "#111114" }}>
+            {isKo ? "하우스 1080p 사운드 마스터 레퍼런스 (Playbook 보드 뷰)" : "In-House 1080p Sound Masters"}
+          </strong>
+          <span style={{ fontSize: "11px", color: "#6B6F7B" }}>
+            {isKo ? "16:10 컴팩트 프리뷰 · 사운드 켜기 지원" : "Compact Board Preview · Sound On"}
+          </span>
+        </div>
+
+        <div
+          className="bw-showcase-reel"
+          data-b2b-sound-master-reel
+          style={{ gap: "10px" }}
+        >
+          {B2B_SOUND_MASTER_CLIPS.map((clip) => {
+            const soundOn = activeSoundId === clip.id;
+            return (
+              <figure
+                key={clip.id}
+                className="bw-showcase-card"
+                data-b2b-master-card={clip.id}
+                data-sound-active={soundOn ? "true" : undefined}
+                style={{ padding: "5px 5px 8px", gap: "6px" }}
+              >
+                <div
+                  className="bw-showcase-media"
+                  style={{ aspectRatio: "16 / 10", maxHeight: "148px" }}
+                >
+                  <video
+                    ref={(el) => {
+                      videoRefs.current[clip.id] = el;
+                    }}
+                    src={clip.videoUrl}
+                    poster={clip.posterUrl}
+                    muted={!soundOn}
+                    autoPlay
+                    loop
+                    playsInline
+                    preload="metadata"
+                  />
+                  <button
+                    type="button"
+                    className="bw-showcase-sound"
+                    data-reel-sound-toggle={clip.id}
+                    aria-pressed={soundOn}
+                    onClick={() => toggleSound(clip.id)}
+                    style={{ minHeight: "26px", padding: "3px 8px", fontSize: "10.5px" }}
+                  >
+                    {soundOn ? (
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M11 5L6 9H2v6h4l5 4V5z" />
+                        <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+                        <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+                      </svg>
+                    ) : (
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M11 5L6 9H2v6h4l5 4V5z" />
+                        <line x1="23" y1="9" x2="17" y2="15" />
+                        <line x1="17" y1="9" x2="23" y2="15" />
+                      </svg>
+                    )}
+                    <span>
+                      {soundOn
+                        ? isKo
+                          ? "소리 켜짐"
+                          : "Sound On"
+                        : isKo
+                          ? "소리"
+                          : "Sound"}
+                    </span>
+                  </button>
+                </div>
+                <figcaption className="bw-showcase-caption">
+                  <strong style={{ fontSize: "11.5px" }}>{isKo ? clip.titleKo : clip.titleEn}</strong>
+                  <span style={{ fontSize: "10px" }}>{isKo ? clip.badgeKo : clip.badgeEn} · 1080p</span>
+                </figcaption>
+              </figure>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* 3. COMPACT 5-DELIVERABLE TRACK CARDS (Playbook Mini-Board Strip) */}
       <div
         data-brand-five-deliverables
         style={{
-          marginTop: "14px",
-          marginBottom: "14px",
           display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(195px, 1fr))",
-          gap: "10px",
+          gridTemplateColumns: "repeat(auto-fit, minmax(175px, 1fr))",
+          gap: "8px",
         }}
       >
         {BRAND_CORE_DELIVERABLE_TRACKS.map((track) => {
@@ -562,21 +732,20 @@ export function CampaignMoatShowcase({
               style={{
                 textDecoration: "none",
                 color: "inherit",
-                padding: "10px",
-                borderRadius: "14px",
-                background: "var(--ys-surface)",
-                border: "1px solid var(--ys-border)",
-                boxShadow: "var(--ys-shadow-1)",
+                padding: "8px 10px",
+                borderRadius: "11px",
+                background: "#F8F9FB",
+                border: "1px solid #E4E6EC",
                 display: "flex",
                 flexDirection: "column",
-                gap: "8px",
+                gap: "6px",
               }}
             >
               <div
                 style={{
                   width: "100%",
-                  aspectRatio: "16 / 10",
-                  borderRadius: "9px",
+                  height: "76px",
+                  borderRadius: "7px",
                   overflow: "hidden",
                   background: "#111317",
                   position: "relative",
@@ -596,13 +765,13 @@ export function CampaignMoatShowcase({
                 <span
                   style={{
                     position: "absolute",
-                    left: "8px",
-                    top: "8px",
-                    padding: "2px 8px",
+                    left: "6px",
+                    top: "6px",
+                    padding: "2px 6px",
                     borderRadius: "999px",
                     background: "rgba(15, 17, 21, 0.82)",
                     color: "#FFFFFF",
-                    fontSize: "11px",
+                    fontSize: "10px",
                     fontWeight: 700,
                   }}
                 >
@@ -610,16 +779,20 @@ export function CampaignMoatShowcase({
                 </span>
               </div>
 
-              <div style={{ display: "grid", gap: "3px" }}>
-                <strong style={{ fontSize: "13px", color: "var(--ys-ink)" }}>
+              <div style={{ display: "grid", gap: "2px" }}>
+                <strong style={{ fontSize: "12px", color: "var(--ys-ink)" }}>
                   {isKo ? track.badgeKo : track.badgeEn}
                 </strong>
                 <p
                   className="bw-muted"
                   style={{
                     margin: 0,
-                    fontSize: "11.5px",
-                    lineHeight: 1.4,
+                    fontSize: "10.5px",
+                    lineHeight: 1.35,
+                    display: "-webkit-box",
+                    WebkitLineClamp: 2,
+                    WebkitBoxOrient: "vertical",
+                    overflow: "hidden",
                   }}
                 >
                   {isKo ? track.summaryKo : track.summaryEn}
@@ -629,18 +802,18 @@ export function CampaignMoatShowcase({
               <div
                 style={{
                   marginTop: "auto",
-                  paddingTop: "6px",
+                  paddingTop: "4px",
                   borderTop: "1px solid var(--ys-hairline)",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "space-between",
-                  fontSize: "11px",
+                  fontSize: "10.5px",
                   fontWeight: 700,
                   color: "var(--ys-brand-text)",
                 }}
               >
                 <span>{isKo ? track.priceGuideKo : track.priceGuideEn}</span>
-                <span>{isKo ? "스튜디오 열기 →" : "Open Studio →"}</span>
+                <span>→</span>
               </div>
             </a>
           );
