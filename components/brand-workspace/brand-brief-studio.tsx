@@ -1155,8 +1155,8 @@ export function BrandBriefStudio({
         <div>
           <h2 style={{ margin: "0 0 4px" }}>
             {isKo
-              ? "멀티 레퍼런스 화보 · 영상 워크벤치"
-              : "Multi-Reference Image & Video Workbench"}
+              ? "브랜드 이미지 · 영상 제작 스튜디오"
+              : "Brand Image & Video Production Studio"}
           </h2>
           <p className="bw-muted" style={{ margin: 0, fontSize: "13px" }}>
             {isKo ? categoryProfile.headlineKo : categoryProfile.headlineEn}
@@ -1438,7 +1438,7 @@ export function BrandBriefStudio({
               <div>
                 <strong style={{ fontSize: "12.5px", color: "var(--ys-ink)" }}>
                   {isKo
-                    ? "웹사이트 URL로 브랜드 킷 자동 추출 (Logo · Colors · Type)"
+                    ? "홈페이지 주소로 브랜드 킷 자동 불러오기 (로고 · 컬러 · 서체)"
                     : "Auto-Build Brand Kit from Website URL (Logo · Colors · Type)"}
                 </strong>
                 <span
@@ -1446,7 +1446,7 @@ export function BrandBriefStudio({
                   style={{ marginLeft: "8px", fontSize: "11.5px" }}
                 >
                   {isKo
-                    ? "도메인을 입력하면 로고 모노그램, 브랜드 컬러 팔레트, 서체 조합과 3대 규칙을 자동으로 채웁니다"
+                    ? "주소를 입력하면 로고 약자, 대표 컬러, 어울리는 서체와 3가지 기준을 자동으로 채워 줍니다"
                     : "Enter your domain to auto-extract Logo, Colors, Typography, and 3 Brand Rules"}
                 </span>
               </div>
@@ -1484,7 +1484,7 @@ export function BrandBriefStudio({
                   }}
                 >
                   {isKo
-                    ? "URL로 브랜드 킷 자동 추출"
+                    ? "홈페이지에서 자동 불러오기"
                     : "Extract Brand Kit"}
                 </button>
               </div>
@@ -1494,7 +1494,7 @@ export function BrandBriefStudio({
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "110px minmax(0, 1fr) 180px",
+                gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))",
                 gap: "10px",
               }}
             >
@@ -1535,7 +1535,7 @@ export function BrandBriefStudio({
                       color: "var(--ys-ink-secondary)",
                     }}
                   >
-                    Logo
+                    {isKo ? "로고 · 도메인" : "Logo"}
                   </div>
                   <div
                     style={{
@@ -1570,13 +1570,20 @@ export function BrandBriefStudio({
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "space-between",
+                    gap: "6px",
                     fontSize: "10.5px",
                     fontWeight: 700,
                     color: "var(--ys-ink-secondary)",
                   }}
                 >
-                  <span>Colors</span>
-                  <span>
+                  <span>{isKo ? "대표 컬러" : "Colors"}</span>
+                  <span
+                    style={{
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
                     {extractedBrandKit.colors
                       .map((c) => (isKo ? c.labelKo : c.labelEn))
                       .slice(0, 3)
@@ -1641,7 +1648,7 @@ export function BrandBriefStudio({
                       color: "var(--ys-ink-secondary)",
                     }}
                   >
-                    Type
+                    {isKo ? "대표 서체" : "Type"}
                   </div>
                   <div
                     style={{
@@ -1954,7 +1961,7 @@ export function BrandBriefStudio({
               <div>
                 <strong style={{ fontSize: "13px", color: "var(--ys-ink)" }}>
                   {isKo
-                    ? "이미지 스튜디오 작업 모드"
+                    ? "이미지 스튜디오 작업 방식"
                     : "Image Studio Workflow Mode"}
                 </strong>
                 <span
@@ -1963,14 +1970,14 @@ export function BrandBriefStudio({
                 >
                   {imageSubMode === "micro_region_edit"
                     ? isKo
-                      ? "캔버스에서 수정할 부위만 드래그해 스마트 레이어 마스크로 부분 교정합니다"
+                      ? "캔버스에서 고칠 부분만 드래그해 원본 훼손 없이 자연스럽게 수정합니다"
                       : "Drag a micro-region on the canvas to edit only that area via a Smart Layer Mask"
                     : imageSubMode === "canvas_drag_ref"
                       ? isKo
-                        ? "캔버스 위 여러 에셋을 드래그해 레퍼런스로 한 번에 묶어 합성합니다"
+                        ? "캔버스 위 여러 사진을 드래그해 참고 이미지로 한 번에 묶어 합성합니다"
                         : "Drag across canvas assets to attach them as a multi-reference bundle"
                       : isKo
-                        ? "1~4번 역할별 레퍼런스와 고정된 색감·질감으로 화보를 생성합니다"
+                        ? "1~4번 역할별 참고 사진과 고정된 색감·질감으로 화보를 만듭니다"
                         : "Generate lookbooks from 1–4 role-locked references and pinned style locks"}
                 </span>
               </div>
@@ -1985,7 +1992,7 @@ export function BrandBriefStudio({
                   disabled={busy}
                 >
                   {isKo
-                    ? "멀티 레퍼런스 생성"
+                    ? "1~4번 참고 사진으로 생성"
                     : "Multi-Ref Generation"}
                 </button>
                 <button
@@ -1997,7 +2004,7 @@ export function BrandBriefStudio({
                   disabled={busy}
                 >
                   {isKo
-                    ? "극소 부위 정밀 수정 (Image Editing)"
+                    ? "원하는 부위만 부분 수정"
                     : "Micro-Region Image Editing"}
                 </button>
                 <button
@@ -2009,7 +2016,7 @@ export function BrandBriefStudio({
                   disabled={busy}
                 >
                   {isKo
-                    ? "캔버스 드래그 레퍼런스"
+                    ? "캔버스에서 드래그해 조합"
                     : "Canvas Drag Reference"}
                 </button>
               </div>
@@ -2059,11 +2066,12 @@ export function BrandBriefStudio({
                     style={{
                       fontSize: "12.5px",
                       color: "var(--ys-ink)",
+                      whiteSpace: "nowrap",
                     }}
                   >
                     {isKo
-                      ? "색감 참고용 레퍼런스 고정"
-                      : "Pin Color Grade Reference"}
+                      ? "브랜드 색감 고정"
+                      : "Pin Color Grade"}
                   </strong>
                 </div>
 
@@ -2073,13 +2081,14 @@ export function BrandBriefStudio({
                   aria-pressed={isColorRefPinned}
                   onClick={() => setIsColorRefPinned((prev) => !prev)}
                   data-pin-color-toggle
+                  style={{ whiteSpace: "nowrap", flexShrink: 0 }}
                 >
                   {isColorRefPinned
                     ? isKo
-                      ? "색감 고정됨 · 모든 생성에 유지"
+                      ? "색감 고정 켜짐"
                       : "Color Pinned ON"
                     : isKo
-                      ? "색감 고정 해제됨"
+                      ? "색감 고정 해제"
                       : "Pin Color"}
                 </button>
               </div>
@@ -2225,11 +2234,12 @@ export function BrandBriefStudio({
                     style={{
                       fontSize: "12.5px",
                       color: "var(--ys-ink)",
+                      whiteSpace: "nowrap",
                     }}
                   >
                     {isKo
-                      ? "이미지 질감 참고용 레퍼런스 고정"
-                      : "Pin Surface Texture Reference"}
+                      ? "표면·피부 질감 고정"
+                      : "Pin Surface Texture"}
                   </strong>
                 </div>
 
@@ -2239,13 +2249,14 @@ export function BrandBriefStudio({
                   aria-pressed={isTextureRefPinned}
                   onClick={() => setIsTextureRefPinned((prev) => !prev)}
                   data-pin-texture-toggle
+                  style={{ whiteSpace: "nowrap", flexShrink: 0 }}
                 >
                   {isTextureRefPinned
                     ? isKo
-                      ? "질감 고정됨 · 모든 생성에 유지"
+                      ? "질감 고정 켜짐"
                       : "Texture Pinned ON"
                     : isKo
-                      ? "질감 고정 해제됨"
+                      ? "질감 고정 해제"
                       : "Pin Texture"}
                 </button>
               </div>
@@ -2528,16 +2539,21 @@ export function BrandBriefStudio({
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "space-between",
-                      gap: "6px",
+                      gap: "5px",
                       marginTop: "auto",
                       paddingTop: "4px",
                     }}
                   >
                     <label
                       className="bw-quick-chip"
-                      style={{ fontWeight: 600, padding: "4px 9px" }}
+                      style={{
+                        fontWeight: 600,
+                        padding: "3px 7px",
+                        fontSize: "11px",
+                        whiteSpace: "nowrap",
+                      }}
                     >
-                      {isKo ? "사진 넣기" : "Upload"}
+                      {isKo ? "사진 변경" : "Upload"}
                       <input
                         type="file"
                         accept="image/*"
@@ -2552,7 +2568,11 @@ export function BrandBriefStudio({
                     <button
                       type="button"
                       className="bw-quick-chip"
-                      style={{ padding: "4px 9px" }}
+                      style={{
+                        padding: "3px 7px",
+                        fontSize: "11px",
+                        whiteSpace: "nowrap",
+                      }}
                       onClick={() =>
                         handleInsertSlotReferenceIntoPrompt(
                           slot.slotNumber,
@@ -2562,7 +2582,7 @@ export function BrandBriefStudio({
                       disabled={!canWrite || busy}
                     >
                       {isKo
-                        ? `+ ${slot.slotNumber}번 지시`
+                        ? `+ ${slot.slotNumber}번 넣기`
                         : `+ Cite #${slot.slotNumber}`}
                     </button>
                   </div>
@@ -2611,25 +2631,53 @@ export function BrandBriefStudio({
                     }}
                   >
                     {isKo
-                      ? "극소 부위 정밀 수정 (Micro-Region Image Editing)"
+                      ? "원하는 부위만 부분 수정"
                       : "Micro-Region Image Editing"}
                   </span>
                   <strong style={{ fontSize: "13.5px", color: "var(--ys-ink)" }}>
                     {isKo
-                      ? "원하는 부위만 드래그해 수정하고 선택 영역 밖 원본 픽셀은 100% 그대로 보존합니다"
+                      ? "드래그한 부위 안쪽만 자연스럽게 고치고 나머지 원본 사진은 100% 그대로 보존합니다"
                       : "Drag any micro-region to edit while locking 100% of pixels outside the selection"}
                   </strong>
                 </div>
 
-                <span
-                  className="bw-badge"
-                  data-studio-mask-bounds-badge
-                  style={{ fontFamily: "var(--ys-mono)", fontSize: "11px" }}
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px",
+                  }}
                 >
-                  {isKo
-                    ? `선택 영역: ${selectionRect.xPct}%,${selectionRect.yPct}% (${selectionRect.wPct}×${selectionRect.hPct}% · ${matchedSelectionRatio}) · 스마트 마스크 ON`
-                    : `Bounds: ${selectionRect.xPct}%,${selectionRect.yPct}% (${selectionRect.wPct}×${selectionRect.hPct}% · ${matchedSelectionRatio}) · Mask ON`}
-                </span>
+                  <span
+                    className="bw-badge"
+                    data-studio-mask-bounds-badge
+                    style={{ fontFamily: "var(--ys-mono)", fontSize: "11px" }}
+                  >
+                    {isKo
+                      ? `선택 부위: ${selectionRect.xPct}%,${selectionRect.yPct}% (${matchedSelectionRatio}) · 원본 보존`
+                      : `Bounds: ${selectionRect.xPct}%,${selectionRect.yPct}% (${matchedSelectionRatio}) · Mask ON`}
+                  </span>
+                  <button
+                    type="button"
+                    className="bw-quick-chip"
+                    onClick={() =>
+                      setImageSubMode((prev) =>
+                        prev === "micro_region_edit"
+                          ? "multi_ref_generate"
+                          : "micro_region_edit",
+                      )
+                    }
+                    style={{ fontWeight: 600, fontSize: "11px" }}
+                  >
+                    {imageSubMode === "micro_region_edit"
+                      ? isKo
+                        ? "부분 수정 도구 접기"
+                        : "Collapse Editor"
+                      : isKo
+                        ? "부분 수정 도구 열기"
+                        : "Open Region Editor"}
+                  </button>
+                </div>
               </div>
 
               {/* 4 Quick Micro-Region Target Presets */}
@@ -2649,7 +2697,7 @@ export function BrandBriefStudio({
                     color: "var(--ys-ink-secondary)",
                   }}
                 >
-                  {isKo ? "수정할 부위 빠른 지정:" : "Quick target region:"}
+                  {isKo ? "수정할 부위 빠른 선택:" : "Quick target region:"}
                 </span>
                 {MICRO_REGION_SELECTION_PRESETS.map((preset) => {
                   const selected =
@@ -2677,149 +2725,164 @@ export function BrandBriefStudio({
                 })}
               </div>
 
-              {/* 4 Dedicated Micro-Edit Models (Precision Region Editor / Seamless Edge Inpaint / Texture Fit Reshape / Film Grain & Skin Finish) */}
-              <div
-                className="bw-model-picker-grid"
-                style={{ marginBottom: 0 }}
-                data-studio-micro-edit-model-picker
-              >
-                {BRAND_STUDIO_MICRO_EDIT_MODELS.map((editModel) => {
-                  const selected = selectedMicroEditModelId === editModel.id;
-                  return (
-                    <button
-                      key={editModel.id}
-                      type="button"
-                      className="bw-model-card"
-                      data-studio-micro-edit-model={editModel.id}
-                      aria-pressed={selected}
-                      onClick={() => {
-                        setSelectedMicroEditModelId(editModel.id);
-                        setImageSubMode("micro_region_edit");
-                      }}
-                      disabled={busy}
-                    >
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "space-between",
-                          gap: "6px",
-                          width: "100%",
-                        }}
-                      >
-                        <strong style={{ fontSize: "12.5px" }}>
-                          {isKo ? editModel.nameKo : editModel.nameEn}
-                        </strong>
-                        <span
-                          className="bw-scene-spec"
-                          style={{ fontWeight: 600 }}
+              {/* Expanded Micro-Edit Model & Resolution Controls when in micro_region_edit mode */}
+              {imageSubMode === "micro_region_edit" && (
+                <>
+                  <div
+                    className="bw-model-picker-grid"
+                    style={{ marginBottom: 0 }}
+                    data-studio-micro-edit-model-picker
+                  >
+                    {BRAND_STUDIO_MICRO_EDIT_MODELS.map((editModel) => {
+                      const selected =
+                        selectedMicroEditModelId === editModel.id;
+                      return (
+                        <button
+                          key={editModel.id}
+                          type="button"
+                          className="bw-model-card"
+                          data-studio-micro-edit-model={editModel.id}
+                          aria-pressed={selected}
+                          onClick={() => {
+                            setSelectedMicroEditModelId(editModel.id);
+                            setImageSubMode("micro_region_edit");
+                          }}
+                          disabled={busy}
                         >
-                          {editModel.creditsPerEdit} cr ·{" "}
-                          {isKo
-                            ? `${editModel.priceKrwPerEdit}원`
-                            : `KRW ${editModel.priceKrwPerEdit}`}
-                        </span>
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "space-between",
+                              gap: "6px",
+                              width: "100%",
+                            }}
+                          >
+                            <strong style={{ fontSize: "12.5px" }}>
+                              {isKo ? editModel.nameKo : editModel.nameEn}
+                            </strong>
+                            <span
+                              className="bw-scene-spec"
+                              style={{ fontWeight: 600 }}
+                            >
+                              {editModel.creditsPerEdit} cr ·{" "}
+                              {isKo
+                                ? `${editModel.priceKrwPerEdit}원`
+                                : `KRW ${editModel.priceKrwPerEdit}`}
+                            </span>
+                          </div>
+                          <span
+                            style={{
+                              fontSize: "11.5px",
+                              lineHeight: 1.4,
+                              color: "var(--ys-ink-secondary)",
+                            }}
+                          >
+                            {isKo
+                              ? editModel.shortTraitKo
+                              : editModel.shortTraitEn}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Oplux-style Parameter Pills: Resolution (1K/2K/4K), Quality (Low/Medium/High), Batch Size (1/2/4), Attach Selection */}
+                  <div
+                    data-studio-oplux-controls
+                    style={{
+                      display: "flex",
+                      flexWrap: "wrap",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: "8px",
+                      paddingTop: "8px",
+                      borderTop: "1px solid var(--ys-hairline)",
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: "flex",
+                        flexWrap: "wrap",
+                        alignItems: "center",
+                        gap: "8px",
+                      }}
+                    >
+                      {/* Resolution */}
+                      <div className="bw-seg-track">
+                        {activeMicroEditModel.supportedResolutions.map(
+                          (res) => (
+                            <button
+                              key={res}
+                              type="button"
+                              className="bw-seg-btn"
+                              aria-pressed={microEditResolution === res}
+                              onClick={() => setMicroEditResolution(res)}
+                              disabled={busy}
+                            >
+                              {res}
+                            </button>
+                          ),
+                        )}
                       </div>
-                      <span
-                        style={{
-                          fontSize: "11.5px",
-                          lineHeight: 1.4,
-                          color: "var(--ys-ink-secondary)",
-                        }}
-                      >
-                        {isKo ? editModel.shortTraitKo : editModel.shortTraitEn}
-                      </span>
+
+                      {/* Quality Tier (Low / Medium / High) */}
+                      <div className="bw-seg-track">
+                        {(["Low", "Medium", "High"] as const).map((q) => (
+                          <button
+                            key={q}
+                            type="button"
+                            className="bw-seg-btn"
+                            aria-pressed={microEditQuality === q}
+                            onClick={() => setMicroEditQuality(q)}
+                            disabled={busy}
+                          >
+                            {isKo
+                              ? q === "Low"
+                                ? "빠른 확인"
+                                : q === "Medium"
+                                  ? "표준 화질"
+                                  : "최고 화질"
+                              : `Quality: ${q}`}
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* Batch Size */}
+                      <div className="bw-seg-track">
+                        {([1, 2, 4] as const).map((cnt) => (
+                          <button
+                            key={cnt}
+                            type="button"
+                            className="bw-seg-btn"
+                            aria-pressed={microEditBatchSize === cnt}
+                            onClick={() => setMicroEditBatchSize(cnt)}
+                            disabled={busy}
+                          >
+                            {isKo ? `${cnt}장 비교` : `${cnt}x Batch`}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      className="bw-quick-chip"
+                      onClick={handleAttachCanvasSelection}
+                      data-studio-attach-selection-btn
+                      style={{
+                        fontWeight: 700,
+                        color: "var(--ys-brand-text)",
+                        background: "var(--ys-brand-tint)",
+                      }}
+                    >
+                      {isKo
+                        ? "+ 드래그한 선택 부위를 지시문에 넣기"
+                        : "+ Attach Selected Region to Prompt"}
                     </button>
-                  );
-                })}
-              </div>
-
-              {/* Oplux-style Parameter Pills: Resolution (1K/2K/4K), Quality (Low/Medium/High), Batch Size (1/2/4), Attach Selection */}
-              <div
-                data-studio-oplux-controls
-                style={{
-                  display: "flex",
-                  flexWrap: "wrap",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  gap: "8px",
-                  paddingTop: "8px",
-                  borderTop: "1px solid var(--ys-hairline)",
-                }}
-              >
-                <div
-                  style={{
-                    display: "flex",
-                    flexWrap: "wrap",
-                    alignItems: "center",
-                    gap: "8px",
-                  }}
-                >
-                  {/* Resolution */}
-                  <div className="bw-seg-track">
-                    {activeMicroEditModel.supportedResolutions.map((res) => (
-                      <button
-                        key={res}
-                        type="button"
-                        className="bw-seg-btn"
-                        aria-pressed={microEditResolution === res}
-                        onClick={() => setMicroEditResolution(res)}
-                        disabled={busy}
-                      >
-                        {res}
-                      </button>
-                    ))}
                   </div>
-
-                  {/* Quality Tier (Low / Medium / High) */}
-                  <div className="bw-seg-track">
-                    {(["Low", "Medium", "High"] as const).map((q) => (
-                      <button
-                        key={q}
-                        type="button"
-                        className="bw-seg-btn"
-                        aria-pressed={microEditQuality === q}
-                        onClick={() => setMicroEditQuality(q)}
-                        disabled={busy}
-                      >
-                        {isKo ? `품질: ${q}` : `Quality: ${q}`}
-                      </button>
-                    ))}
-                  </div>
-
-                  {/* Batch Size */}
-                  <div className="bw-seg-track">
-                    {([1, 2, 4] as const).map((cnt) => (
-                      <button
-                        key={cnt}
-                        type="button"
-                        className="bw-seg-btn"
-                        aria-pressed={microEditBatchSize === cnt}
-                        onClick={() => setMicroEditBatchSize(cnt)}
-                        disabled={busy}
-                      >
-                        {isKo ? `${cnt}장 비교` : `${cnt}x Batch`}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  className="bw-quick-chip"
-                  onClick={handleAttachCanvasSelection}
-                  data-studio-attach-selection-btn
-                  style={{
-                    fontWeight: 700,
-                    color: "var(--ys-brand-text)",
-                    background: "var(--ys-brand-tint)",
-                  }}
-                >
-                  {isKo
-                    ? "+ 드래그한 선택 영역을 지시문에 첨부"
-                    : "+ Attach Selected Region to Prompt"}
-                </button>
-              </div>
+                </>
+              )}
             </div>
           )}
 
@@ -2847,7 +2910,7 @@ export function BrandBriefStudio({
                     style={{ marginLeft: "8px", fontSize: "12px" }}
                   >
                     {isKo
-                      ? "만들려는 결과물(제품 교체 vs 인물 룩북 vs 라벨 마크로 vs 의류 착장)에 맞춰 모델을 고르세요"
+                      ? "만들려는 결과물(제품 교체 · 메인 화보 · 로고 선명도 · 의류 착장)에 맞춰 모델을 고르세요"
                       : "Pick the model tailored to your target deliverable"}
                   </span>
                 </div>
@@ -2875,8 +2938,11 @@ export function BrandBriefStudio({
                 data-studio-image-model-picker
                 data-selected-image-model={selectedImageModelId}
               >
-                {BRAND_STUDIO_IMAGE_MODELS.map((model) => {
+                {BRAND_STUDIO_IMAGE_MODELS.map((model, idx) => {
                   const selected = selectedImageModelId === model.id;
+                  const isFullSpanCard =
+                    idx === BRAND_STUDIO_IMAGE_MODELS.length - 1 &&
+                    BRAND_STUDIO_IMAGE_MODELS.length % 2 === 1;
                   return (
                     <button
                       key={model.id}
@@ -2886,6 +2952,9 @@ export function BrandBriefStudio({
                       aria-pressed={selected}
                       onClick={() => handleSelectImageModel(model.id)}
                       disabled={busy}
+                      style={
+                        isFullSpanCard ? { gridColumn: "1 / -1" } : undefined
+                      }
                     >
                       <div
                         style={{
@@ -3180,10 +3249,10 @@ export function BrandBriefStudio({
                     >
                       {fm.id === "self_build"
                         ? isKo
-                          ? "셀프 포맷 빌더"
+                          ? "직접 만들기"
                           : "Self-Build"
                         : isKo
-                          ? "D+3 스튜디오 의뢰"
+                          ? "3일 완성 의뢰"
                           : "D+3 Commission"}
                     </button>
                   ))}
@@ -3303,14 +3372,14 @@ export function BrandBriefStudio({
                     >
                       {tier.id === "seed_10"
                         ? isKo
-                          ? "10인 시드"
+                          ? "10명 초기"
                           : "10 Seed"
                         : tier.id === "growth_30"
                           ? isKo
-                            ? "30인 그로스"
+                            ? "30명 표준"
                             : "30 Growth"
                           : isKo
-                            ? "50인+ 메가"
+                            ? "50명+ 대규모"
                             : "50+ Mega"}
                     </button>
                   ))}
@@ -3414,7 +3483,7 @@ export function BrandBriefStudio({
               >
                 <strong style={{ fontSize: "12.5px", color: "var(--ys-ink)" }}>
                   {isKo
-                    ? "오디오 스튜디오 (시그니처 BGM · 폴리 · 마스터링)"
+                    ? "오디오 스튜디오 (맞춤 배경음악 · 현장 효과음 · 음량 보정)"
                     : "Audio Studio (BGM · Foley · -14 LUFS Master)"}
                 </strong>
                 <span className="bw-scene-spec" style={{ fontWeight: 600 }}>
@@ -3489,7 +3558,7 @@ export function BrandBriefStudio({
                   fontSize: "11px",
                 }}
               >
-                <div style={{ display: "flex", gap: "5px" }}>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "5px" }}>
                   <button
                     type="button"
                     className="bw-quick-chip"
@@ -3498,7 +3567,7 @@ export function BrandBriefStudio({
                     onClick={() => setAudioAutoDucking((p) => !p)}
                     style={{ fontSize: "10.5px" }}
                   >
-                    {isKo ? "Act 1 -3 dB 자동 더킹" : "Act 1 -3 dB Ducking"}
+                    {isKo ? "목소리 나올 때 배경음 자동 낮춤 (-3dB)" : "Act 1 -3 dB Ducking"}
                   </button>
                   <button
                     type="button"
@@ -3508,7 +3577,7 @@ export function BrandBriefStudio({
                     onClick={() => setAudioCommercialMaster((p) => !p)}
                     style={{ fontSize: "10.5px" }}
                   >
-                    {activeAudioPreset.loudnessSpec.split("(")[0]?.trim()}
+                    {isKo ? "인스타·틱톡 표준 음량 (-14 LUFS)" : activeAudioPreset.loudnessSpec.split("(")[0]?.trim()}
                   </button>
                 </div>
               </div>
@@ -4132,7 +4201,7 @@ export function BrandBriefStudio({
                 >
                   <span className="bw-canvas-marquee-label">
                     {isKo
-                      ? `선택 영역 (${matchedSelectionRatio}) · 스마트 마스크`
+                      ? `선택 부위 (${matchedSelectionRatio}) · 원본 보존`
                       : `Selection (${matchedSelectionRatio}) · Smart Mask`}
                   </span>
                 </div>
@@ -4154,7 +4223,7 @@ export function BrandBriefStudio({
                     color: "rgba(255, 255, 255, 0.85)",
                   }}
                 >
-                  <span>Input Preview</span>
+                  <span>{isKo ? "선택 부위" : "Input Preview"}</span>
                   <span style={{ color: "rgba(255, 255, 255, 0.92)" }}>
                     {matchedSelectionRatio}
                   </span>
@@ -4187,7 +4256,7 @@ export function BrandBriefStudio({
                     textAlign: "center",
                   }}
                 >
-                  {isKo ? "외부 픽셀 100% 보존" : "Mask Lock ON"}
+                  {isKo ? "나머지 원본 보존" : "Mask Lock ON"}
                 </span>
               </div>
             )}
@@ -4248,12 +4317,12 @@ export function BrandBriefStudio({
                     },
                     {
                       id: "micro_region_edit",
-                      ko: "극소 부위 수정",
+                      ko: "부분 수정",
                       en: "Edit region",
                     },
                     {
                       id: "canvas_drag_ref",
-                      ko: "레퍼런스 조합",
+                      ko: "참고 사진 조합",
                       en: "Create reference",
                     },
                   ] as const
@@ -4388,7 +4457,7 @@ export function BrandBriefStudio({
               >
                 <span>
                   {isKo
-                    ? "Layers · 비파괴 스마트 마스크 레이어 스택"
+                    ? "레이어 · 원본 보존 부분 수정 목록"
                     : "Layers · Non-Destructive Smart Mask Stack"}
                 </span>
                 <span style={{ color: "rgba(255, 255, 255, 0.92)" }}>
@@ -4402,7 +4471,7 @@ export function BrandBriefStudio({
               >
                 <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                   {isKo
-                    ? `Layer 03 · 부위 수정 마스크 (${activeRegionPreset.labelKo})`
+                    ? `3층 · 부분 수정 영역 (${activeRegionPreset.labelKo})`
                     : `Layer 03 · Region Mask (${activeRegionPreset.labelEn})`}
                 </span>
                 <button
@@ -4419,7 +4488,7 @@ export function BrandBriefStudio({
                 >
                   {layerVisibility.regionMask
                     ? isKo
-                      ? "마스크 표시 ON"
+                      ? "영역 표시 켜짐"
                       : "Mask ON"
                     : isKo
                       ? "숨김"
@@ -4433,7 +4502,7 @@ export function BrandBriefStudio({
               >
                 <span>
                   {isKo
-                    ? `Layer 02 · 고정 색감·질감 패스 (${isColorRefPinned ? "색감 ON" : "색감 OFF"} · ${isTextureRefPinned ? "질감 ON" : "질감 OFF"})`
+                    ? `2층 · 고정 색감·질감 (${isColorRefPinned ? "색감 고정" : "색감 해제"} · ${isTextureRefPinned ? "질감 고정" : "질감 해제"})`
                     : `Layer 02 · Pinned Color & Texture Pass`}
                 </span>
                 <span
@@ -4443,14 +4512,14 @@ export function BrandBriefStudio({
                     fontWeight: 600,
                   }}
                 >
-                  {isKo ? "상시 잠금" : "Pinned"}
+                  {isKo ? "상시 적용" : "Pinned"}
                 </span>
               </div>
 
               <div className="bw-layer-row" data-active="false">
                 <span>
                   {isKo
-                    ? `Layer 01 · 베이스 원본 (${activeTake.labelKo})`
+                    ? `1층 · 원본 이미지 (${activeTake.labelKo})`
                     : `Layer 01 · Base Original (${activeTake.labelEn})`}
                 </span>
                 <span style={{ fontSize: "10.5px", color: "rgba(255,255,255,0.6)" }}>
