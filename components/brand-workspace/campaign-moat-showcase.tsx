@@ -106,12 +106,12 @@ export function CampaignMoatShowcase({
         <div>
           <h2>
             {isKo
-              ? "올인원 브랜드 미디어 스튜디오 · 이미지 생성 · 극소 부위 수정 · 1080p 영상"
+              ? "올인원 브랜드 미디어 스튜디오 · 화보 생성 · 부분 수정 · 1080p 영상"
               : "All-in-One Brand Media Studio · Image Generation · Micro-Editing · 1080p Film"}
           </h2>
           <p data-moat-pipeline>
             {isKo
-              ? "STEP 01 브랜드 아이덴티티와 색감·질감을 먼저 고정한 뒤, STEP 02에서 1~4번 멀티 레퍼런스 조합 생성 및 드래그 부위 정밀 수정을 거치고, STEP 03에서 1080p 사운드 영상과 캠페인으로 확장하세요."
+              ? "1단계에서 우리 브랜드의 색감·질감을 먼저 고정한 뒤, 2단계에서 1~4번 참고 이미지 조합과 원하는 부위 부분 수정을 거치고, 3단계에서 1080p 영상과 크리에이터 캠페인으로 이어가세요."
               : "Lock Brand Identity & Pinned Color/Texture in Step 01, generate & micro-edit images in Step 02, and scale into 1080p sound masters & creator campaigns in Step 03."}
           </p>
         </div>
@@ -123,7 +123,7 @@ export function CampaignMoatShowcase({
             data-home-onboarding-cta
             data-tab-guide-card="identity"
           >
-            {isKo ? "STEP 01 · 브랜드 아이덴티티 등록" : "Step 01 · Brand Identity"}
+            {isKo ? "1단계 · 브랜드 아이덴티티 등록" : "Step 01 · Brand Identity"}
           </a>
           <a
             href={scopedHref("/brand/studio", choice)}
@@ -131,7 +131,7 @@ export function CampaignMoatShowcase({
             data-home-studio-cta
             data-tab-guide-card="studio"
           >
-            {isKo ? "STEP 02~03 · 셀프 스튜디오 열기" : "Open Self Studio"}
+            {isKo ? "2~3단계 · 제작 스튜디오 열기" : "Open Self Studio"}
           </a>
         </div>
       </div>
@@ -152,37 +152,37 @@ export function CampaignMoatShowcase({
             {
               id: "brand_kit",
               href: scopedHref("/brand/identity", choice),
-              labelKo: "Brand Kit · URL로 로고·컬러·서체 자동 추출",
+              labelKo: "홈페이지 주소로 로고·컬러·서체 자동 불러오기",
               labelEn: "Brand Kit · Auto-Extract Logo, Colors & Type",
             },
             {
               id: "style_pin",
               href: scopedHref("/brand/studio", choice),
-              labelKo: "Style Pin · 색감·질감 레퍼런스 상시 고정",
+              labelKo: "브랜드 색감·질감 항상 똑같이 고정",
               labelEn: "Style Pin · Lock Color & Texture Reference",
             },
             {
               id: "image_gen",
               href: scopedHref("/brand/studio", choice),
-              labelKo: "Image · 1~4번 멀티 레퍼런스 화보 생성",
+              labelKo: "1~4번 참고 사진으로 화보·상품컷 생성",
               labelEn: "Image · 1–4 Multi-Reference Generation",
             },
             {
               id: "micro_edit",
               href: scopedHref("/brand/studio", choice),
-              labelKo: "Edit · 캔버스 드래그 극소 부위 스마트 마스크 수정",
+              labelKo: "원하는 부위만 드래그해서 감쪽같이 수정",
               labelEn: "Edit · Smart Mask Micro-Region Editing",
             },
             {
               id: "video_master",
               href: scopedHref("/brand/studio", choice),
-              labelKo: "Video · 1080p 사운드 마스터 영상",
+              labelKo: "1080p 고화질 사운드 영상 제작",
               labelEn: "Video · 1080p Sound Master Film",
             },
             {
               id: "assets",
               href: scopedHref("/brand/library", choice),
-              labelKo: "Assets · 콘텐츠 보관함",
+              labelKo: "제작한 콘텐츠 보관함",
               labelEn: "Assets · Content Library",
             },
           ] as const
@@ -216,16 +216,16 @@ export function CampaignMoatShowcase({
                 marginBottom: "6px",
               }}
             >
-              {isKo ? "STEP 01 · 브랜드 & 색감·질감 고정" : "STEP 01 · Identity & Style Pin"}
+              {isKo ? "1단계 · 브랜드 & 색감·질감 고정" : "STEP 01 · Identity & Style Pin"}
             </span>
             <strong style={{ display: "block", fontSize: "14px", marginTop: "4px" }}>
               {isKo
-                ? "브랜드 핵심 원칙 3가지 & 색감·질감 레퍼런스 상시 잠금"
+                ? "우리 브랜드 핵심 기준 3가지 & 색감·질감 항상 똑같이 고정"
                 : "Lock 3 Brand Rules & Pinned Color/Texture References"}
             </strong>
             <p className="bw-muted" style={{ fontSize: "12px", marginTop: "4px", lineHeight: 1.45 }}>
               {isKo
-                ? "제품 실루엣·로고 철자·소재 기준과 고정 색감(Color Pin)·고정 질감(Texture Pin)을 먼저 등록해 모든 작업에 일관되게 유지합니다."
+                ? "제품 모양·로고 글자·소재 기준과 우리 브랜드만의 색감·질감 참고 사진을 먼저 등록해 모든 작업에 일관되게 유지합니다."
                 : "Pin your brand identity, color grade reference, and film texture reference across every studio run."}
             </p>
           </div>
@@ -249,16 +249,16 @@ export function CampaignMoatShowcase({
                 marginBottom: "6px",
               }}
             >
-              {isKo ? "STEP 02 · 이미지 생성 & 극소 부위 수정" : "STEP 02 · Image Gen & Micro-Edit"}
+              {isKo ? "2단계 · 화보 생성 & 원하는 부위 부분 수정" : "STEP 02 · Image Gen & Micro-Edit"}
             </span>
             <strong style={{ display: "block", fontSize: "14px", marginTop: "4px" }}>
               {isKo
-                ? "1~4번 멀티 레퍼런스 화보 생성 & 캔버스 드래그 부분 수정"
+                ? "1~4번 참고 이미지 조합 생성 & 드래그한 부분만 정밀 수정"
                 : "1–4 Multi-Ref Generation & Smart Mask Micro-Region Editing"}
             </strong>
             <p className="bw-muted" style={{ fontSize: "12px", marginTop: "4px", lineHeight: 1.45 }}>
               {isKo
-                ? "1번 인물·2번 배경·3번 감도·4번 색감을 조합하거나, 캔버스에서 라벨·손·표정만 드래그해 비파괴 스마트 마스크로 정밀 교정합니다."
+                ? "1번 인물·2번 배경·3번 포즈·4번 색감을 합치거나, 원본은 그대로 둔 채 로고·손 모양·표정만 드래그해 자연스럽게 고칩니다."
                 : "Combine 1–4 role-locked references or drag a selection marquee on the canvas to edit micro-regions via a Smart Layer Mask."}
             </p>
           </div>
@@ -282,16 +282,16 @@ export function CampaignMoatShowcase({
                 marginBottom: "6px",
               }}
             >
-              {isKo ? "STEP 03 · 1080p 영상 & 시딩 캠페인" : "STEP 03 · 1080p Video & Seeding"}
+              {isKo ? "3단계 · 1080p 영상 & 크리에이터 캠페인" : "STEP 03 · 1080p Video & Seeding"}
             </span>
             <strong style={{ display: "block", fontSize: "14px", marginTop: "4px" }}>
               {isKo
-                ? "완성된 화보 컷을 시작 프레임으로 1080p 사운드 영상 제작"
+                ? "완성된 화보 사진을 첫 장면으로 1080p 사운드 영상 제작"
                 : "Animate Approved Still into 1080p Sound Master Film"}
             </strong>
             <p className="bw-muted" style={{ fontSize: "12px", marginTop: "4px", lineHeight: 1.45 }}>
               {isKo
-                ? "승인된 이미지 컷을 첫 프레임으로 잠가 720p 동선 검수 후 1080p 납품본을 뽑거나, 인플루언서 시딩 캠페인으로 즉시 연결합니다."
+                ? "마음에 드는 화보를 첫 장면으로 고정해 720p로 움직임을 먼저 확인한 뒤 1080p 영상을 완성하거나, 크리에이터 캠페인으로 바로 연결합니다."
                 : "Lock your approved still as the start frame, preview motion at 720p, and render the 1080p master film."}
             </p>
           </div>

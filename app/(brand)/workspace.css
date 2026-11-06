@@ -96,6 +96,12 @@ html[data-brand-workspace] {
   --ys-dur-spring: 560ms;
 
   /* Legacy workspace variables follow the same white tokens */
+  --ys-brand: var(--ys-accent);
+  --ys-brand-tint: var(--ys-accent-soft);
+  --ys-brand-line: var(--ys-accent-line);
+  --ys-brand-text: var(--ys-accent-text);
+  --ys-border: var(--ys-line);
+  --ys-border-subtle: var(--ys-hairline);
   --color-workspace-canvas: var(--ys-bg);
   --color-workspace-paper: var(--ys-surface);
   --color-workspace-ink: var(--ys-ink);
@@ -153,6 +159,8 @@ html[data-workspace-admin] {
   font-family: var(--bw-font);
   font-size: 14px;
   line-height: 1.6;
+  word-break: keep-all;
+  overflow-wrap: break-word;
   background: var(--ys-grain), var(--ys-canvas);
   color: var(--ys-ink);
 }
