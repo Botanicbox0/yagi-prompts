@@ -102,147 +102,261 @@ export function CampaignMoatShowcase({
       data-brand-tab-map
       aria-label={isKo ? "스튜디오 레퍼런스 및 제작 방식" : "Studio reference and production modes"}
     >
-      <div className="bw-showcase-head" style={{ marginBottom: "14px" }}>
-        <div>
-          <h2 style={{ fontSize: "20px", margin: "0 0 4px" }}>
-            {isKo
-              ? "무엇을 만들까요? 원하는 작업을 바로 시작하세요"
-              : "What would you like to create today?"}
-          </h2>
-          <p data-moat-pipeline style={{ margin: 0, fontSize: "13px" }}>
-            {isKo
-              ? "이미지·영상·오디오는 멀티 에셋 캔버스에서 바로 만들고, 크리에이터 캠페인은 셀프 또는 전담 의뢰로 진행합니다."
-              : "Create images, videos, and audio on the multi-asset canvas, or launch creator campaigns."}
-          </p>
-        </div>
-
-        <div className="bw-showcase-actions">
-          <a
-            href={scopedHref("/brand/identity", choice)}
-            className="bw-button"
-            data-home-onboarding-cta
-            data-tab-guide-card="identity"
-          >
-            {isKo ? "브랜드 킷 설정" : "Brand Kit"}
-          </a>
-          <a
-            href={scopedHref("/brand/studio", choice)}
-            className="bw-button bw-primary"
-            data-home-studio-cta
-            data-tab-guide-card="studio"
-          >
-            {isKo ? "캔버스 스튜디오 열기 →" : "Open Canvas Studio →"}
-          </a>
-        </div>
-      </div>
-
-      {/* 5 Visual Action Cards (Image · Video & Upscale · Creator Campaign Video · Campaign + Distribution · Audio) */}
-      <div
-        data-brand-five-deliverables
+      {/* MORPHIC 2D INFINITE CANVAS LAUNCHPAD STAGE ON /brand HOME */}
+      <a
+        href={scopedHref("/brand/studio", choice)}
+        data-home-studio-cta
+        data-tab-guide-card="studio"
         style={{
-          marginBottom: "18px",
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(195px, 1fr))",
-          gap: "10px",
+          display: "block",
+          textDecoration: "none",
+          color: "#F3F4F6",
+          position: "relative",
+          height: "430px",
+          borderRadius: "16px",
+          backgroundColor: "#0B0C0E",
+          backgroundImage:
+            "radial-gradient(rgba(255, 255, 255, 0.16) 1px, transparent 1px)",
+          backgroundSize: "24px 24px",
+          overflow: "hidden",
+          marginBottom: "16px",
+          boxShadow: "0 18px 44px rgba(0, 0, 0, 0.28)",
         }}
       >
-        {BRAND_CORE_DELIVERABLE_TRACKS.map((track) => {
-          const targetHref =
-            track.id === "creator_distribution"
-              ? scopedHref("/brand/campaigns", choice)
-              : scopedHref("/brand/studio", choice);
-          return (
-            <a
-              key={track.id}
-              href={targetHref}
-              data-five-deliverable-card={track.id}
+        <div
+          style={{
+            position: "absolute",
+            top: "14px",
+            left: "16px",
+            right: "16px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+          }}
+        >
+          <span
+            data-moat-pipeline
+            style={{
+              fontSize: "12px",
+              color: "rgba(255, 255, 255, 0.72)",
+              fontWeight: 500,
+            }}
+          >
+            {isKo
+              ? "2D 무한 캔버스 스튜디오 · 에셋 드래그 다중 선택"
+              : "2D Infinite Canvas Studio · Drag & Attach Assets"}
+          </span>
+
+          <div
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "2px",
+              padding: "4px",
+              borderRadius: "999px",
+              background: "#18191D",
+              border: "1px solid rgba(255, 255, 255, 0.08)",
+            }}
+          >
+            <span
               style={{
-                textDecoration: "none",
-                color: "inherit",
-                padding: "10px",
-                borderRadius: "14px",
-                background: "var(--ys-surface)",
-                border: "1px solid var(--ys-border)",
-                boxShadow: "var(--ys-shadow-1)",
-                display: "flex",
-                flexDirection: "column",
-                gap: "8px",
+                padding: "4px 12px",
+                borderRadius: "999px",
+                background: "#2B2D33",
+                color: "#FFFFFF",
+                fontSize: "12px",
+                fontWeight: 600,
               }}
             >
-              <div
+              Canvas
+            </span>
+            <span
+              style={{
+                padding: "4px 12px",
+                color: "rgba(255, 255, 255, 0.55)",
+                fontSize: "12px",
+              }}
+            >
+              Copilot
+            </span>
+            <span
+              style={{
+                padding: "4px 12px",
+                color: "rgba(255, 255, 255, 0.55)",
+                fontSize: "12px",
+              }}
+            >
+              Compose
+            </span>
+          </div>
+
+          <span
+            style={{
+              padding: "5px 12px",
+              borderRadius: "999px",
+              background: "#3875C5",
+              color: "#FFFFFF",
+              fontSize: "12px",
+              fontWeight: 700,
+            }}
+          >
+            {isKo ? "캔버스 열기 →" : "Open Canvas →"}
+          </span>
+        </div>
+
+        {/* Raw Media Items inside Blue Selection Box (#1D7DFA) on Dotted Plane */}
+        <div
+          style={{
+            position: "absolute",
+            left: "56px",
+            top: "64px",
+            width: "390px",
+            height: "194px",
+            border: "2px solid #1D7DFA",
+          }}
+        >
+          <img
+            src="/reel/brands/slot-1-subject-editorial.jpg"
+            alt=""
+            style={{
+              position: "absolute",
+              left: "2px",
+              top: "18px",
+              width: "136px",
+              height: "172px",
+              objectFit: "cover",
+            }}
+          />
+          <div
+            style={{
+              position: "absolute",
+              right: "2px",
+              top: "2px",
+              width: "176px",
+              height: "98px",
+              overflow: "hidden",
+            }}
+          >
+            <img
+              src="/reel/brands/house-runway-1080p.jpg"
+              alt=""
+              style={{
+                width: "100%",
+                height: "100%",
+                objectFit: "cover",
+              }}
+            />
+            <span
+              style={{
+                position: "absolute",
+                left: "50%",
+                top: "50%",
+                transform: "translate(-50%, -50%)",
+                width: "30px",
+                height: "30px",
+                borderRadius: "999px",
+                background: "rgba(0, 0, 0, 0.45)",
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="#FFFFFF">
+                <polygon points="7 4 20 12 7 20 7 4" />
+              </svg>
+            </span>
+          </div>
+        </div>
+
+        {/* Bottom Floating Dock Preview inside Canvas Hero */}
+        <div
+          style={{
+            position: "absolute",
+            bottom: "16px",
+            left: "50%",
+            transform: "translateX(-50%)",
+            width: "min(620px, calc(100% - 32px))",
+            display: "grid",
+            gap: "6px",
+          }}
+        >
+          <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+            {[
+              "Chat",
+              "Create video",
+              "Create reference",
+              "Edit video",
+              "Motion transfer",
+              "Create image",
+            ].map((pill) => (
+              <span
+                key={pill}
                 style={{
-                  width: "100%",
-                  aspectRatio: "16 / 10",
-                  borderRadius: "9px",
-                  overflow: "hidden",
-                  background: "#111317",
-                  position: "relative",
+                  padding: "5px 12px",
+                  borderRadius: "999px",
+                  background: "#18191D",
+                  border: "1px solid rgba(255, 255, 255, 0.09)",
+                  color: "#F3F4F6",
+                  fontSize: "11.5px",
+                  fontWeight: 600,
                 }}
               >
-                <img
-                  src={track.previewImage}
-                  alt={isKo ? track.shortLabelKo : track.shortLabelEn}
-                  loading="lazy"
-                  style={{
-                    width: "100%",
-                    height: "100%",
-                    objectFit: "cover",
-                    objectPosition: "50% 22%",
-                  }}
-                />
-                <span
-                  style={{
-                    position: "absolute",
-                    left: "8px",
-                    top: "8px",
-                    padding: "2px 8px",
-                    borderRadius: "999px",
-                    background: "rgba(15, 17, 21, 0.82)",
-                    color: "#FFFFFF",
-                    fontSize: "11px",
-                    fontWeight: 700,
-                  }}
-                >
-                  {isKo ? track.shortLabelKo : track.shortLabelEn}
-                </span>
-              </div>
-
-              <div style={{ display: "grid", gap: "3px" }}>
-                <strong style={{ fontSize: "13px", color: "var(--ys-ink)" }}>
-                  {isKo ? track.badgeKo : track.badgeEn}
-                </strong>
-                <p
-                  className="bw-muted"
-                  style={{
-                    margin: 0,
-                    fontSize: "11.5px",
-                    lineHeight: 1.4,
-                  }}
-                >
-                  {isKo ? track.summaryKo : track.summaryEn}
-                </p>
-              </div>
-
-              <div
+                {pill}
+              </span>
+            ))}
+          </div>
+          <div
+            style={{
+              padding: "14px 18px",
+              borderRadius: "18px",
+              background: "#18191D",
+              border: "1px solid rgba(255, 255, 255, 0.09)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "14px",
+              color: "rgba(255, 255, 255, 0.78)",
+              fontSize: "13.5px",
+            }}
+          >
+            <span style={{ position: "relative", width: "44px", height: "34px", display: "inline-block" }}>
+              <img
+                src="/reel/brands/slot-1-subject-editorial.jpg"
+                alt=""
                 style={{
-                  marginTop: "auto",
-                  paddingTop: "6px",
-                  borderTop: "1px solid var(--ys-hairline)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  fontSize: "11px",
-                  fontWeight: 700,
-                  color: "var(--ys-brand-text)",
+                  position: "absolute",
+                  left: 0,
+                  top: "2px",
+                  width: "30px",
+                  height: "30px",
+                  borderRadius: "6px",
+                  objectFit: "cover",
+                  border: "1.5px solid #FFFFFF",
+                  transform: "rotate(-8deg)",
                 }}
-              >
-                <span>{isKo ? track.priceGuideKo : track.priceGuideEn}</span>
-                <span>{isKo ? "시작 →" : "Open →"}</span>
-              </div>
-            </a>
-          );
-        })}
-      </div>
+              />
+              <img
+                src="/reel/brands/house-runway-1080p.jpg"
+                alt=""
+                style={{
+                  position: "absolute",
+                  left: "10px",
+                  top: 0,
+                  width: "30px",
+                  height: "30px",
+                  borderRadius: "6px",
+                  objectFit: "cover",
+                  border: "1.5px solid #FFFFFF",
+                  transform: "rotate(7deg)",
+                }}
+              />
+            </span>
+            <span>
+              Press <strong style={{ color: "#FFFFFF" }}>Enter</strong> to attach selection or click here
+            </span>
+          </div>
+        </div>
+      </a>
 
       {/* 4-Up Portrait (4:5) Passepartout Video Gallery — Zero cropped heads, zero chip clutter over footage */}
       <div className="bw-showcase-reel" data-b2b-sound-master-reel>
@@ -320,9 +434,128 @@ export function CampaignMoatShowcase({
           }}
         >
           {isKo
-            ? "처음 이용하시나요? 1~3단계 작업 순서 및 의뢰 바로가기 펼치기"
-            : "Show 3-Step Workflow Guide & Commission Shortcuts"}
+            ? "5대 핵심 결과물 가이드 · 1~3단계 작업 순서 및 의뢰 바로가기 펼치기"
+            : "Show 5 Core Deliverables, 3-Step Guide & Commission Shortcuts"}
         </summary>
+
+        <div className="bw-showcase-actions" style={{ marginTop: "8px", marginBottom: "8px" }}>
+          <a
+            href={scopedHref("/brand/identity", choice)}
+            className="bw-button"
+            data-home-onboarding-cta
+            data-tab-guide-card="identity"
+          >
+            {isKo ? "브랜드 킷 설정" : "Brand Kit"}
+          </a>
+        </div>
+
+        {/* 5 Visual Action Cards (Image · Video & Upscale · Creator Campaign Video · Campaign + Distribution · Audio) */}
+        <div
+          data-brand-five-deliverables
+          style={{
+            marginBottom: "18px",
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(195px, 1fr))",
+            gap: "10px",
+          }}
+        >
+          {BRAND_CORE_DELIVERABLE_TRACKS.map((track) => {
+            const targetHref =
+              track.id === "creator_distribution"
+                ? scopedHref("/brand/campaigns", choice)
+                : scopedHref("/brand/studio", choice);
+            return (
+              <a
+                key={track.id}
+                href={targetHref}
+                data-five-deliverable-card={track.id}
+                style={{
+                  textDecoration: "none",
+                  color: "inherit",
+                  padding: "10px",
+                  borderRadius: "14px",
+                  background: "var(--ys-surface)",
+                  border: "1px solid var(--ys-border)",
+                  boxShadow: "var(--ys-shadow-1)",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "8px",
+                }}
+              >
+                <div
+                  style={{
+                    width: "100%",
+                    aspectRatio: "16 / 10",
+                    borderRadius: "9px",
+                    overflow: "hidden",
+                    background: "#111317",
+                    position: "relative",
+                  }}
+                >
+                  <img
+                    src={track.previewImage}
+                    alt={isKo ? track.shortLabelKo : track.shortLabelEn}
+                    loading="lazy"
+                    style={{
+                      width: "100%",
+                      height: "100%",
+                      objectFit: "cover",
+                      objectPosition: "50% 22%",
+                    }}
+                  />
+                  <span
+                    style={{
+                      position: "absolute",
+                      left: "8px",
+                      top: "8px",
+                      padding: "2px 8px",
+                      borderRadius: "999px",
+                      background: "rgba(15, 17, 21, 0.82)",
+                      color: "#FFFFFF",
+                      fontSize: "11px",
+                      fontWeight: 700,
+                    }}
+                  >
+                    {isKo ? track.shortLabelKo : track.shortLabelEn}
+                  </span>
+                </div>
+
+                <div style={{ display: "grid", gap: "3px" }}>
+                  <strong style={{ fontSize: "13px", color: "var(--ys-ink)" }}>
+                    {isKo ? track.badgeKo : track.badgeEn}
+                  </strong>
+                  <p
+                    className="bw-muted"
+                    style={{
+                      margin: 0,
+                      fontSize: "11.5px",
+                      lineHeight: 1.4,
+                    }}
+                  >
+                    {isKo ? track.summaryKo : track.summaryEn}
+                  </p>
+                </div>
+
+                <div
+                  style={{
+                    marginTop: "auto",
+                    paddingTop: "6px",
+                    borderTop: "1px solid var(--ys-hairline)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    fontSize: "11px",
+                    fontWeight: 700,
+                    color: "var(--ys-brand-text)",
+                  }}
+                >
+                  <span>{isKo ? track.priceGuideKo : track.priceGuideEn}</span>
+                  <span>{isKo ? "시작 →" : "Open →"}</span>
+                </div>
+              </a>
+            );
+          })}
+        </div>
 
         <div
           data-brand-quick-dock
