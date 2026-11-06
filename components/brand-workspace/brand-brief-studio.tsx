@@ -60,6 +60,9 @@ import {
   MICRO_REGION_SELECTION_PRESETS,
   PINNED_COLOR_REFERENCES,
   PINNED_TEXTURE_REFERENCES,
+  STUDIO_SPLIT_PANE_MODES,
+  VIDEO_REFERENCE_TARGET_SLOTS,
+  bridgeLeftImageToRightVideoReference,
   compileSunraVideoAndUpscalePlan,
   extractBrandKitFromDomain,
   findClosestSupportedAspectRatio,
@@ -70,6 +73,7 @@ import {
   type BrandStudioImageModelId,
   type BrandStudioMicroEditModelId,
   type BrandUpscalerEngineId,
+  type BridgedVideoReferenceItem,
   type CreatorCampaignFormatModeId,
   type CreatorDistributionTierId,
   type FirstCreationGoalCard,
@@ -81,7 +85,9 @@ import {
   type StudioImageSubMode,
   type StudioReferenceSlotNumber,
   type StudioReferenceWorkflowId,
+  type StudioSplitPaneMode,
   type UpscaleTargetResolution,
+  type VideoReferenceTargetSlot,
 } from "@/lib/brands/production/reference-studio";
 
 export interface BrandBriefStudioProps {
@@ -533,6 +539,85 @@ export function BrandBriefStudio({
 
   // Active take on the right-hand live studio canvas
   const [activeTakeIndex, setActiveTakeIndex] = useState<number>(0);
+
+  // Developer-IDE Inspired Collapsible Dual Split-Pane State (`dual_split` | `image_only` | `video_only`)
+  const [splitPaneMode, setSplitPaneMode] =
+    useState<StudioSplitPaneMode>("dual_split");
+  const [workbenchHeaderTab, setWorkbenchHeaderTab] = useState<
+    "canvas" | "copilot" | "compose"
+  >("canvas");
+  const [selectedBridgeSlot, setSelectedBridgeSlot] =
+    useState<VideoReferenceTargetSlot>("first_frame");
+  const [bridgedVideoRefs, setBridgedVideoRefs] = useState<
+    BridgedVideoReferenceItem[]
+  >(() => {
+    const defaultTake = studioVisuals.takes[0]!;
+    return [
+      {
+        slotId: "first_frame",
+        imageSrc: defaultTake.src,
+        imageLabelKo: defaultTake.labelKo,
+        imageLabelEn: defaultTake.labelEn,
+        sourceModelNameKo: "Nano Banana Pro",
+        sourceModelNameEn: "Nano Banana Pro",
+        citationKo: VIDEO_REFERENCE_TARGET_SLOTS[0]!.promptCitationKo,
+        citationEn: VIDEO_REFERENCE_TARGET_SLOTS[0]!.promptCitationEn,
+      },
+      {
+        slotId: "product_ref",
+        imageSrc: studioVisuals.sceneThumbs[1],
+        imageLabelKo: "2번 · 우리 제품 정면 마스터",
+        imageLabelEn: "Slot 2 · Product Front Master",
+        sourceModelNameKo: "Nano Banana 2.1",
+        sourceModelNameEn: "Nano Banana 2.1",
+        citationKo: VIDEO_REFERENCE_TARGET_SLOTS[2]!.promptCitationKo,
+        citationEn: VIDEO_REFERENCE_TARGET_SLOTS[2]!.promptCitationEn,
+      },
+    ];
+  });
+
+  function handleBridgeLeftImageToRightVideo(
+    targetSlot: VideoReferenceTargetSlot = selectedBridgeSlot,
+    customImage?: { src: string; labelKo: string; labelEn: string },
+  ) {
+    const currentTake =
+      studioVisuals.takes[activeTakeIndex] ?? studioVisuals.takes[0]!;
+    const imgSrc = customImage?.src ?? currentTake.src;
+    const labelKo = customImage?.labelKo ?? currentTake.labelKo;
+    const labelEn = customImage?.labelEn ?? currentTake.labelEn;
+    const slotSpec =
+      VIDEO_REFERENCE_TARGET_SLOTS.find((s) => s.id === targetSlot) ??
+      VIDEO_REFERENCE_TARGET_SLOTS[0]!;
+
+    setSelectedBridgeSlot(targetSlot);
+    setBridgedVideoRefs((prev) =>
+      bridgeLeftImageToRightVideoReference({
+        currentRefs: prev,
+        slotId: targetSlot,
+        imageSrc: imgSrc,
+        imageLabelKo: labelKo,
+        imageLabelEn: labelEn,
+        sourceModelNameKo: activeImageModel.nameKo,
+        sourceModelNameEn: activeImageModel.nameEn,
+      }),
+    );
+    if (splitPaneMode === "image_only") {
+      setSplitPaneMode("dual_split");
+    }
+    setBriefText((prev) => {
+      const token = isKo ? slotSpec.promptCitationKo : slotSpec.promptCitationEn;
+      return prev.includes(token) ? prev : `${token} ${prev}`.trim();
+    });
+    setStatusMessage(
+      isKo
+        ? `[좌측 이미지 → 우측 영상 연결 완료] '${labelKo}' (${activeImageModel.nameKo}) 컷이 우측 Seedance 2.5 영상 탭의 '${slotSpec.badgeKo}' 레퍼런스로 들어갔습니다.`
+        : `[Bridged to Video] '${labelEn}' (${activeImageModel.nameEn}) attached to Right Video Pane as '${slotSpec.badgeEn}'.`,
+    );
+  }
+
+  function handleRemoveBridgedVideoRef(slotId: VideoReferenceTargetSlot) {
+    setBridgedVideoRefs((prev) => prev.filter((item) => item.slotId !== slotId));
+  }
 
   // Under-the-hood compiled system state
   const [lookPresetId, setLookPresetId] =
@@ -2048,10 +2133,343 @@ export function BrandBriefStudio({
         </div>
       )}
 
-      {/* 2-Column Split Studio Workbench: Left = Creation Controls, Right = Always-On Live Visual Canvas */}
-      <div className="bw-studio-workbench">
-        {/* LEFT COLUMN: Image Sub-Mode + Pinned Color/Texture Locks + 1-4 Reference Deck + Model Selector / Micro-Editing + Composer */}
-        <div>
+      {/* Developer-IDE Inspired Collapsible Split-Pane Toolbar: [◫ Dual Split (Left Image ↔ Right Video) | ◧ Image Only | ◨ Video Only] + [Canvas | Copilot | Compose] + [1-Click Bridge to Right Video +References] */}
+      <div
+        data-studio-split-pane-toolbar
+        data-active-split-mode={splitPaneMode}
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: "10px",
+          padding: "10px 14px",
+          marginBottom: "14px",
+          borderRadius: "14px",
+          background: "#111317",
+          color: "#F3F4F6",
+          boxShadow: "0 10px 28px rgba(15, 23, 42, 0.14)",
+        }}
+      >
+        {/* Left: Split-Pane Toggle (Fold/Expand Left Image or Right Video like VS Code / Cursor Split Editor) */}
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            alignItems: "center",
+            gap: "6px",
+          }}
+          data-split-pane-mode-picker
+        >
+          <span
+            style={{
+              fontSize: "11px",
+              fontWeight: 700,
+              color: "rgba(255, 255, 255, 0.65)",
+              marginRight: "4px",
+            }}
+          >
+            {isKo ? "화면 분할:" : "Split View:"}
+          </span>
+          {STUDIO_SPLIT_PANE_MODES.map((modeSpec) => {
+            const active = splitPaneMode === modeSpec.id;
+            return (
+              <button
+                key={modeSpec.id}
+                type="button"
+                data-split-pane-mode-btn={modeSpec.id}
+                aria-pressed={active}
+                onClick={() => setSplitPaneMode(modeSpec.id)}
+                title={isKo ? modeSpec.shortDescKo : modeSpec.shortDescEn}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  padding: "6px 11px",
+                  borderRadius: "999px",
+                  border: active
+                    ? "1px solid rgba(56, 117, 197, 0.9)"
+                    : "1px solid rgba(255, 255, 255, 0.14)",
+                  background: active
+                    ? "rgba(56, 117, 197, 0.28)"
+                    : "rgba(255, 255, 255, 0.06)",
+                  color: "#FFFFFF",
+                  fontSize: "12px",
+                  fontWeight: active ? 700 : 500,
+                  cursor: "pointer",
+                }}
+              >
+                <span style={{ fontSize: "13px" }}>{modeSpec.iconGlyph}</span>
+                <span>{isKo ? modeSpec.labelKo : modeSpec.labelEn}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Center: Canvas | Copilot | Compose Top Pill Bar (Inspired by Reference UI) */}
+        <div
+          data-studio-top-workspace-pills
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "4px",
+            padding: "3px",
+            borderRadius: "999px",
+            background: "rgba(255, 255, 255, 0.08)",
+            border: "1px solid rgba(255, 255, 255, 0.1)",
+          }}
+        >
+          {(
+            [
+              {
+                id: "canvas",
+                ko: "Canvas · 듀얼 캔버스",
+                en: "Canvas",
+              },
+              {
+                id: "copilot",
+                ko: "Copilot · 디렉터 가이드",
+                en: "Copilot",
+              },
+              {
+                id: "compose",
+                ko: "Compose · 스토리보드",
+                en: "Compose",
+              },
+            ] as const
+          ).map((pill) => {
+            const active = workbenchHeaderTab === pill.id;
+            return (
+              <button
+                key={pill.id}
+                type="button"
+                data-workspace-top-pill={pill.id}
+                aria-pressed={active}
+                onClick={() => setWorkbenchHeaderTab(pill.id)}
+                style={{
+                  padding: "5px 12px",
+                  borderRadius: "999px",
+                  border: 0,
+                  background: active
+                    ? "rgba(255, 255, 255, 0.2)"
+                    : "transparent",
+                  color: active ? "#FFFFFF" : "rgba(255, 255, 255, 0.68)",
+                  fontSize: "12px",
+                  fontWeight: active ? 700 : 500,
+                  cursor: "pointer",
+                }}
+              >
+                {isKo ? pill.ko : pill.en}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Right: Direct 1-Click Bridge from Left Image Tab -> Right Video +References */}
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            alignItems: "center",
+            gap: "6px",
+          }}
+        >
+          <button
+            type="button"
+            data-bridge-left-image-to-video-cta
+            onClick={() => handleBridgeLeftImageToRightVideo(selectedBridgeSlot)}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "6px",
+              padding: "6px 12px",
+              borderRadius: "999px",
+              border: "1px solid rgba(56, 117, 197, 0.85)",
+              background: "#3875C5",
+              color: "#FFFFFF",
+              fontSize: "12px",
+              fontWeight: 700,
+              cursor: "pointer",
+            }}
+          >
+            <span>
+              {isKo
+                ? `좌측 이미지 → 우측 영상 +References 넣기 (${bridgedVideoRefs.length})`
+                : `Send Left Image → Right Video +References (${bridgedVideoRefs.length})`}
+            </span>
+            <span>→</span>
+          </button>
+        </div>
+      </div>
+
+      {/* 2-Column Collapsible Split Studio Workbench: Left = Image Studio Tab, Right = Video & Upscale Dotted Canvas Tab */}
+      <div
+        className="bw-studio-workbench"
+        data-studio-dual-split-workbench
+        data-split-pane-layout={splitPaneMode}
+        style={
+          splitPaneMode !== "dual_split"
+            ? { gridTemplateColumns: "1fr" }
+            : undefined
+        }
+      >
+        {/* LEFT PANE: Image Studio Tab (When collapsed in `video_only` mode, shows a sleek folded bar to re-expand) */}
+        <div
+          data-split-pane="left-image"
+          data-pane-collapsed={String(splitPaneMode === "video_only")}
+        >
+          {splitPaneMode === "video_only" && (
+            <div
+              data-left-image-pane-collapsed-bar
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: "10px",
+                padding: "10px 14px",
+                marginBottom: "12px",
+                borderRadius: "12px",
+                background: "var(--ys-subtle-bg)",
+                border: "1px solid var(--ys-border)",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <span className="bw-chip" style={{ fontWeight: 700 }}>
+                  {isKo ? "좌측 이미지 탭 접힘" : "Left Image Tab Folded"}
+                </span>
+                <span style={{ fontSize: "12.5px", color: "var(--ys-ink-secondary)" }}>
+                  {isKo
+                    ? `현재 우측 영상에 연결된 좌측 이미지 레퍼런스: ${bridgedVideoRefs.length}개 (${bridgedVideoRefs.map((r) => r.imageLabelKo).join(" · ")})`
+                    : `Bridged image references active in right video pane: ${bridgedVideoRefs.length}`}
+                </span>
+              </div>
+              <button
+                type="button"
+                className="bw-quick-chip"
+                onClick={() => setSplitPaneMode("dual_split")}
+                style={{ fontWeight: 700, color: "var(--ys-brand-text)" }}
+              >
+                {isKo
+                  ? "◫ 좌측 이미지 스튜디오 함께 펼치기"
+                  : "◫ Expand Left Image Tab"}
+              </button>
+            </div>
+          )}
+
+          {/* Left Pane Header + 1-Click "Send to Right Video +References" Bridge Strip */}
+          <div
+            data-left-image-pane-header
+            data-cross-pane-image-to-video-bridge
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: "8px",
+              padding: "10px 12px",
+              marginBottom: "12px",
+              borderRadius: "12px",
+              background:
+                "linear-gradient(90deg, rgba(56, 117, 197, 0.09) 0%, rgba(56, 117, 197, 0.02) 100%)",
+              border: "1px solid rgba(56, 117, 197, 0.28)",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                alignItems: "center",
+                gap: "8px",
+              }}
+            >
+              <span
+                className="bw-chip"
+                style={{
+                  background: "var(--ys-brand)",
+                  color: "#FFFFFF",
+                  fontWeight: 700,
+                }}
+              >
+                {isKo ? "LEFT TAB · 이미지 스튜디오" : "LEFT TAB · Image Studio"}
+              </span>
+              <strong style={{ fontSize: "12.5px", color: "var(--ys-ink)" }}>
+                {isKo
+                  ? "여기서 만든 이미지를 우측 영상 탭의 시작 프레임이나 +References로 바로 넘기세요:"
+                  : "Send your image from this left tab straight into the right video tab's +References:"}
+              </strong>
+            </div>
+
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                alignItems: "center",
+                gap: "5px",
+              }}
+            >
+              {VIDEO_REFERENCE_TARGET_SLOTS.map((slot) => {
+                const isSlotSelected = selectedBridgeSlot === slot.id;
+                const alreadyBridged = bridgedVideoRefs.some(
+                  (r) => r.slotId === slot.id,
+                );
+                return (
+                  <button
+                    key={slot.id}
+                    type="button"
+                    className="bw-quick-chip"
+                    data-bridge-slot-btn={slot.id}
+                    aria-pressed={isSlotSelected}
+                    onClick={() => handleBridgeLeftImageToRightVideo(slot.id)}
+                    title={isKo ? slot.roleKo : slot.roleEn}
+                    style={{
+                      padding: "4px 9px",
+                      fontSize: "11px",
+                      fontWeight: isSlotSelected || alreadyBridged ? 700 : 500,
+                      background: isSlotSelected
+                        ? "var(--ys-brand)"
+                        : alreadyBridged
+                          ? "var(--ys-brand-tint)"
+                          : "var(--ys-surface)",
+                      color: isSlotSelected
+                        ? "#FFFFFF"
+                        : alreadyBridged
+                          ? "var(--ys-brand-text)"
+                          : "var(--ys-ink)",
+                    }}
+                  >
+                    {alreadyBridged ? "✓ " : "→ "}
+                    {isKo ? slot.badgeKo : slot.badgeEn}
+                  </button>
+                );
+              })}
+
+              <button
+                type="button"
+                className="bw-quick-chip"
+                data-fold-right-pane-btn
+                onClick={() =>
+                  setSplitPaneMode((prev) =>
+                    prev === "image_only" ? "dual_split" : "image_only",
+                  )
+                }
+                style={{
+                  padding: "4px 9px",
+                  fontSize: "11px",
+                  fontWeight: 600,
+                }}
+              >
+                {splitPaneMode === "image_only"
+                  ? isKo
+                    ? "◫ 우측 영상 탭 펼치기"
+                    : "◫ Show Right Video Tab"
+                  : isKo
+                    ? "◧ 우측 접기"
+                    : "◧ Fold Right"}
+              </button>
+            </div>
+          </div>
+
           {/* Image Studio Sub-Mode Switcher: Multi-Ref Generation vs Micro-Region Editing vs Canvas Drag-to-Reference */}
           {!isVideoMode && (
             <div
@@ -4765,12 +5183,87 @@ export function BrandBriefStudio({
           )}
         </div>
 
-        {/* RIGHT COLUMN: Always-On Live Studio Canvas Stage (Oplux + Morphic Hybrid Canvas) */}
+        {/* RIGHT COLUMN: Collapsible Right Pane — Dotted Canvas + Bridged +References + Floating Video/Upscale Dock */}
         <aside
           className="bw-canvas-stage"
           data-studio-live-canvas
+          data-split-pane="right-video"
+          data-pane-collapsed={String(splitPaneMode === "image_only")}
           aria-label={isKo ? "실시간 스튜디오 캔버스" : "Live Studio Canvas"}
+          style={{
+            backgroundImage:
+              "radial-gradient(rgba(255, 255, 255, 0.14) 1px, transparent 1px)",
+            backgroundSize: "20px 20px",
+          }}
         >
+          {/* Right Pane Split-Tab Header: RIGHT TAB · 영상 · 업스케일 도트 캔버스 + Fold Left Toggle */}
+          <div
+            data-right-video-pane-header
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: "8px",
+              padding: "6px 10px",
+              borderRadius: "10px",
+              background: "rgba(255, 255, 255, 0.06)",
+              border: "1px solid rgba(255, 255, 255, 0.1)",
+              fontSize: "11.5px",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "7px" }}>
+              <span
+                style={{
+                  padding: "2px 8px",
+                  borderRadius: "999px",
+                  background: "rgba(56, 117, 197, 0.35)",
+                  border: "1px solid rgba(56, 117, 197, 0.85)",
+                  color: "#FFFFFF",
+                  fontSize: "10.5px",
+                  fontWeight: 700,
+                }}
+              >
+                {isKo
+                  ? "RIGHT TAB · 영상 · 도트 캔버스"
+                  : "RIGHT TAB · Video & Dotted Canvas"}
+              </span>
+              <span style={{ color: "rgba(255, 255, 255, 0.78)" }}>
+                {isKo
+                  ? `좌측 이미지 ${bridgedVideoRefs.length}개 연결됨`
+                  : `${bridgedVideoRefs.length} left images linked`}
+              </span>
+            </div>
+
+            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+              <button
+                type="button"
+                className="bw-canvas-tool-btn"
+                data-fold-left-pane-btn
+                onClick={() =>
+                  setSplitPaneMode((prev) =>
+                    prev === "video_only" ? "dual_split" : "video_only",
+                  )
+                }
+                style={{
+                  borderRadius: "999px",
+                  padding: "3px 9px",
+                  fontSize: "11px",
+                  background: "rgba(255, 255, 255, 0.1)",
+                  color: "#FFFFFF",
+                }}
+              >
+                {splitPaneMode === "video_only"
+                  ? isKo
+                    ? "◫ 좌측 이미지 탭 함께 보기"
+                    : "◫ Show Left Image Tab"
+                  : isKo
+                    ? "◨ 좌측 접기 (영상 집중)"
+                    : "◨ Fold Left"}
+              </button>
+            </div>
+          </div>
+
           {/* Canvas Top Status + Oplux Selection Toolbar */}
           <div
             style={{
@@ -5239,6 +5732,390 @@ export function BrandBriefStudio({
               </div>
             </div>
           )}
+
+          {/* Bridged Left-Image -> Right-Video `+ References` Tray */}
+          <div
+            data-video-bridged-references-tray
+            style={{
+              padding: "10px",
+              borderRadius: "12px",
+              background: "rgba(255, 255, 255, 0.05)",
+              border: "1px solid rgba(255, 255, 255, 0.1)",
+              display: "grid",
+              gap: "8px",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: "6px",
+                fontSize: "11px",
+              }}
+            >
+              <strong style={{ color: "rgba(255, 255, 255, 0.92)" }}>
+                {isKo
+                  ? `우측 영상 +References (좌측 이미지 탭에서 넘긴 레퍼런스 ${bridgedVideoRefs.length}개)`
+                  : `Right Video +References (${bridgedVideoRefs.length} bridged from Left Image Tab)`}
+              </strong>
+              <button
+                type="button"
+                onClick={() =>
+                  handleBridgeLeftImageToRightVideo("first_frame")
+                }
+                style={{
+                  padding: "3px 8px",
+                  borderRadius: "999px",
+                  border: "1px solid rgba(56, 117, 197, 0.75)",
+                  background: "rgba(56, 117, 197, 0.25)",
+                  color: "#FFFFFF",
+                  fontSize: "10.5px",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                }}
+              >
+                {isKo
+                  ? "+ 좌측 현재 이미지 컷 바로 꽂기"
+                  : "+ Attach Active Left Image"}
+              </button>
+            </div>
+
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
+                gap: "6px",
+              }}
+            >
+              {bridgedVideoRefs.map((refItem) => {
+                const slotSpec =
+                  VIDEO_REFERENCE_TARGET_SLOTS.find(
+                    (s) => s.id === refItem.slotId,
+                  ) ?? VIDEO_REFERENCE_TARGET_SLOTS[0]!;
+                return (
+                  <div
+                    key={refItem.slotId}
+                    data-bridged-video-ref-card={refItem.slotId}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "8px",
+                      padding: "6px 8px",
+                      borderRadius: "9px",
+                      background: "rgba(15, 17, 21, 0.72)",
+                      border: "1px solid rgba(255, 255, 255, 0.12)",
+                    }}
+                  >
+                    <img
+                      src={refItem.imageSrc}
+                      alt={
+                        isKo ? refItem.imageLabelKo : refItem.imageLabelEn
+                      }
+                      style={{
+                        width: "34px",
+                        height: "34px",
+                        borderRadius: "6px",
+                        objectFit: "cover",
+                        flexShrink: 0,
+                        border: "1px solid rgba(56, 117, 197, 0.8)",
+                      }}
+                    />
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <div
+                        style={{
+                          fontSize: "10px",
+                          fontWeight: 700,
+                          color: "#93C5FD",
+                          whiteSpace: "nowrap",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                        }}
+                      >
+                        {isKo ? slotSpec.badgeKo : slotSpec.badgeEn}
+                      </div>
+                      <div
+                        style={{
+                          fontSize: "11px",
+                          color: "#FFFFFF",
+                          fontWeight: 600,
+                          whiteSpace: "nowrap",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                        }}
+                      >
+                        {isKo ? refItem.imageLabelKo : refItem.imageLabelEn}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      aria-label={isKo ? "레퍼런스 제거" : "Remove reference"}
+                      onClick={() =>
+                        handleRemoveBridgedVideoRef(refItem.slotId)
+                      }
+                      style={{
+                        border: 0,
+                        background: "transparent",
+                        color: "rgba(255, 255, 255, 0.55)",
+                        fontSize: "12px",
+                        cursor: "pointer",
+                        padding: "2px 4px",
+                      }}
+                    >
+                      ×
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Reference-UI Inspired Floating Composer Dock (Workflows / Tools / Explore + [Image | Video | Audio] + [+ References] + Seedance 2.5 / Upscale) */}
+          <div
+            data-video-floating-composer-dock
+            style={{
+              display: "grid",
+              gap: "8px",
+              marginTop: "2px",
+            }}
+          >
+            {/* Floating Quick Pills: Workflows · Tools · Explore */}
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                alignItems: "center",
+                gap: "6px",
+              }}
+            >
+              <button
+                type="button"
+                className="bw-canvas-tool-btn"
+                onClick={() => {
+                  handleSelectSeedanceTier("seedance_2_5_720p_standard");
+                  setIsUpscaleStudioExpanded(true);
+                }}
+                style={{
+                  borderRadius: "999px",
+                  padding: "4px 10px",
+                  background: "rgba(255, 255, 255, 0.08)",
+                  border: "1px solid rgba(255, 255, 255, 0.12)",
+                  color: "#FFFFFF",
+                  fontSize: "11px",
+                  fontWeight: 600,
+                }}
+              >
+                {isKo
+                  ? "⇕ Workflows · 720p 생성 → 인스타 1080p 업스케일"
+                  : "⇕ Workflows · 720p → IG 1080p Upscale"}
+              </button>
+              <button
+                type="button"
+                className="bw-canvas-tool-btn"
+                onClick={() => setIsUpscaleStudioExpanded((p) => !p)}
+                style={{
+                  borderRadius: "999px",
+                  padding: "4px 10px",
+                  background: "rgba(255, 255, 255, 0.08)",
+                  border: "1px solid rgba(255, 255, 255, 0.12)",
+                  color: "#FFFFFF",
+                  fontSize: "11px",
+                  fontWeight: 600,
+                }}
+              >
+                {isKo
+                  ? "⇕ Tools · 업스케일러 3종 & 인스타 로직"
+                  : "⇕ Tools · 3 Upscalers & IG Logic"}
+              </button>
+            </div>
+
+            {/* Main Rounded Floating Composer Card */}
+            <div
+              style={{
+                padding: "10px 12px",
+                borderRadius: "16px",
+                background: "rgba(22, 24, 29, 0.95)",
+                border: "1px solid rgba(255, 255, 255, 0.14)",
+                boxShadow: "0 12px 32px rgba(0, 0, 0, 0.35)",
+                display: "grid",
+                gap: "8px",
+              }}
+            >
+              {/* Top Row inside Dock: [Image | Video | Audio] + [+ References] */}
+              <div
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: "6px",
+                }}
+              >
+                <div
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "3px",
+                    padding: "3px",
+                    borderRadius: "999px",
+                    background: "rgba(255, 255, 255, 0.06)",
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => handleSwitchMediumMode("image")}
+                    style={{
+                      padding: "4px 10px",
+                      borderRadius: "999px",
+                      border: 0,
+                      background: !isVideoMode
+                        ? "rgba(255, 255, 255, 0.2)"
+                        : "transparent",
+                      color: "#FFFFFF",
+                      fontSize: "11px",
+                      fontWeight: !isVideoMode ? 700 : 500,
+                      cursor: "pointer",
+                    }}
+                  >
+                    {isKo ? "Image (좌측)" : "Image"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSwitchMediumMode("video")}
+                    style={{
+                      padding: "4px 10px",
+                      borderRadius: "999px",
+                      border: 0,
+                      background: isVideoMode
+                        ? "rgba(255, 255, 255, 0.2)"
+                        : "transparent",
+                      color: "#FFFFFF",
+                      fontSize: "11px",
+                      fontWeight: isVideoMode ? 700 : 500,
+                      cursor: "pointer",
+                    }}
+                  >
+                    {isKo ? "Video (우측)" : "Video"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSelectCoreTrack("audio")}
+                    style={{
+                      padding: "4px 10px",
+                      borderRadius: "999px",
+                      border: 0,
+                      background:
+                        activeCoreTrack === "audio"
+                          ? "rgba(255, 255, 255, 0.2)"
+                          : "transparent",
+                      color: "#FFFFFF",
+                      fontSize: "11px",
+                      fontWeight: activeCoreTrack === "audio" ? 700 : 500,
+                      cursor: "pointer",
+                    }}
+                  >
+                    {isKo ? "Audio" : "Audio"}
+                  </button>
+                </div>
+
+                <button
+                  type="button"
+                  data-dock-add-reference-btn
+                  onClick={() =>
+                    handleBridgeLeftImageToRightVideo(selectedBridgeSlot)
+                  }
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "5px",
+                    padding: "4px 11px",
+                    borderRadius: "999px",
+                    border: "1px solid rgba(255, 255, 255, 0.18)",
+                    background: "rgba(255, 255, 255, 0.08)",
+                    color: "#FFFFFF",
+                    fontSize: "11px",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                  }}
+                >
+                  <span>+</span>
+                  <span>
+                    {isKo
+                      ? `References (${bridgedVideoRefs.length})`
+                      : `References (${bridgedVideoRefs.length})`}
+                  </span>
+                </button>
+              </div>
+
+              {/* Bottom Row inside Dock: Model Pill + Aspect/Duration + Credit Execute Badge */}
+              <div
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: "6px",
+                  paddingTop: "4px",
+                  borderTop: "1px solid rgba(255, 255, 255, 0.08)",
+                  fontSize: "11px",
+                  color: "rgba(255, 255, 255, 0.8)",
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    flexWrap: "wrap",
+                    alignItems: "center",
+                    gap: "8px",
+                  }}
+                >
+                  <span style={{ fontWeight: 700, color: "#FFFFFF" }}>
+                    {isVideoMode
+                      ? `Seedance 2.5 (${videoResolution})`
+                      : isKo
+                        ? activeImageModel.nameKo
+                        : activeImageModel.nameEn}
+                  </span>
+                  <span style={{ fontFamily: "var(--ys-mono)" }}>
+                    {aspect} · {isVideoMode ? `${videoSeconds}s` : "1x"}
+                  </span>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!isVideoMode) {
+                      handleBridgeLeftImageToRightVideo("first_frame");
+                      handleSwitchMediumMode("video");
+                    } else {
+                      handleRunUpscaleStudioJob();
+                    }
+                  }}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "4px",
+                    padding: "4px 10px",
+                    borderRadius: "999px",
+                    border: 0,
+                    background: "#3875C5",
+                    color: "#FFFFFF",
+                    fontSize: "11px",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                  }}
+                >
+                  <span>CR</span>
+                  <span>
+                    {isVideoMode
+                      ? activeVideoQuote.credits
+                      : activeImageModel.creditsPer5Set}
+                  </span>
+                </button>
+              </div>
+            </div>
+          </div>
 
           {/* Studio Output Action Bar */}
           <div
