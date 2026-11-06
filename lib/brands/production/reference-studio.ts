@@ -81,28 +81,28 @@ export const BRAND_CORE_DELIVERABLE_TRACKS: readonly BrandCoreDeliverableTrackSp
       orderNumber: "02",
       shortLabelKo: "영상",
       shortLabelEn: "Video",
-      titleKo: "영상 스튜디오 (첫 장면 고정 · 720p 확인 후 1080p 고화질 완성)",
-      titleEn: "Video Studio (Start-Frame Lock · 720p Check -> 1080p Master)",
-      badgeKo: "2단계 확인 · 1080p 브랜드 영상",
-      badgeEn: "2-Stage Gate · 1080p Brand Film",
+      titleKo: "영상 & 업스케일링 스튜디오 (480p 드래프트 · 720p 생성 → 1080p 인스타 최적화 · 4K 마감)",
+      titleEn: "Video & Upscaling Studio (480p Draft · 720p Base -> 1080p IG Optimized & 4K Master)",
+      badgeKo: "480p 드래프트 · 720p · 1080p/4K 업스케일",
+      badgeEn: "480p Draft · 720p · 1080p/4K Upscale Studio",
       summaryKo:
-        "마음에 드는 화보 컷을 영상의 첫 장면으로 고정하고, 720p로 움직임과 표정을 먼저 확인한 뒤 통과한 영상만 1080p 고화질로 완성해 비용을 아낍니다.",
+        "480p 드래프트나 720p로 움직임·표정을 먼저 빠르게 뽑고, 마음에 드는 영상만 전용 업스케일링 스튜디오로 보내 인스타 최적화 1080p 또는 4K 초고화질로 완성합니다.",
       summaryEn:
-        "Lock your approved key visual as Frame 1, verify camera blocking in 720p first, and finish only approved takes into 1080p master films.",
+        "Generate fast in 480p Draft or 720p Standard, then send winning takes to the dedicated Upscaling Studio for Instagram-optimized 1080p or 4K campaign masters.",
       deliverablesKo: [
-        "화보 첫 장면이 흔들리지 않는 9:16 릴스 · 16:9 가로형 브랜드 필름",
-        "1단계(720p 움직임 먼저 확인) → 2단계(1080p 고화질·색보정 최종 완성)",
-        "자연스러운 카메라 워킹과 음악 비트에 맞춘 컷 전환",
+        "480p(드래프트 모드) · 720p(표준) · 1080p(본편) 3단계 해상도 직접 선택 생성",
+        "전용 업스케일링 스튜디오: 720p 영상을 1080p(인스타 화질 저하 방지) 또는 4K로 업스케일",
+        "인스타 릴스·Edits 업로드 시 피부가 뭉개지지 않는 미세 필름 입자·선명도 최적화",
       ],
       deliverablesEn: [
-        "Start-frame locked 9:16 Reels & 16:9 widescreen campaign films",
-        "Stage 1 (720p motion check) -> Stage 2 (1080p optical & grain master)",
-        "Camera blocking (dolly-in, pan, one-take) & beat-synced cut control",
+        "3-tier generation: 480p (Draft Mode), 720p (Standard), and 1080p (Native Master)",
+        "Dedicated Upscaling Studio: 720p -> 1080p (Instagram De-AI Master) or 4K Ultra HD",
+        "Instagram Reels/Edits optimization (ISO 3200 luma grain, CAS 0.25, SDR BT.709, CRF 13)",
       ],
-      turnaroundKo: "720p 미리보기 약 60초 · 1080p 완성 약 90초",
-      turnaroundEn: "~60s for 720p preview · ~90s for 1080p master",
-      priceGuideKo: "720p 확인 1,800원 (145 cr) · 1080p 완성 5,500원 (440 cr)",
-      priceGuideEn: "720p check ₩1,800 (145 cr) · 1080p master ₩5,500 (440 cr)",
+      turnaroundKo: "480p 드래프트 약 35초 · 720p 약 60초 · 1080p/4K 업스케일 약 90초",
+      turnaroundEn: "~35s 480p Draft · ~60s 720p · ~90s 1080p/4K Upscale",
+      priceGuideKo: "480p 드래프트 800원~ · 720p 1,800원 · 1080p/4K 업스케일 마감",
+      priceGuideEn: "480p Draft from ₩800 · 720p ₩1,800 · 1080p/4K Upscale Master",
       previewImage: "/reel/brands/house-french-blue-hero-1080p.jpg",
     },
     {
@@ -1614,3 +1614,428 @@ export function extractBrandKitFromDomain(
     recommendedPinnedTextureId: "texture_matte_skin_35mm",
   };
 }
+
+/**
+ * Founder-specified Seedance 2.5 Video Generation Tiers (`480p Draft Mode`, `720p`, `1080p`):
+ * - `seedance_2_5_480p_draft`: `seedance-2.5` with `resolution: "480p"`, `draft: true`, `bitrate_mode: "high"`.
+ *   Supports Sunra `draft_source_task_id` 1-click promotion to a 1080p final!
+ * - `seedance_2_5_720p_standard`: `seedance-2.5` with `resolution: "720p"`, `draft: false`, `bitrate_mode: "high"`.
+ *   Optimal base video to send into the dedicated Upscaling Studio (720p -> 1080p IG Optimized or 4K).
+ * - `seedance_2_5_1080p_master`: `seedance-2.5` with `resolution: "1080p"`, `draft: false`, `bitrate_mode: "high"`.
+ */
+export type BrandSeedanceVideoTierId =
+  | "seedance_2_5_480p_draft"
+  | "seedance_2_5_720p_standard"
+  | "seedance_2_5_1080p_master";
+
+export interface BrandSeedanceVideoTierSpec {
+  id: BrandSeedanceVideoTierId;
+  modelId: "seedance-2.5";
+  resolution: "480p" | "720p" | "1080p";
+  draft: boolean;
+  bitrateMode: "high";
+  supportsDraftFinalizeTo1080p: boolean;
+  recommendedUpscaleTarget: "1080p_ig_master" | "4k_ultra_master";
+  nameKo: string;
+  nameEn: string;
+  badgeKo: string;
+  badgeEn: string;
+  summaryKo: string;
+  summaryEn: string;
+  bestWhenKo: string;
+  bestWhenEn: string;
+  turnaroundKo: string;
+  turnaroundEn: string;
+}
+
+export const BRAND_SEEDANCE_VIDEO_TIERS: readonly BrandSeedanceVideoTierSpec[] = [
+  {
+    id: "seedance_2_5_480p_draft",
+    modelId: "seedance-2.5",
+    resolution: "480p",
+    draft: true,
+    bitrateMode: "high",
+    supportsDraftFinalizeTo1080p: true,
+    recommendedUpscaleTarget: "1080p_ig_master",
+    nameKo: "Seedance 2.5 · 480p (Draft 모드)",
+    nameEn: "Seedance 2.5 · 480p (Draft Mode)",
+    badgeKo: "카메라 움직임 · 표정 4배 빠른 테스트",
+    badgeEn: "4x Faster Motion & Acting Draft",
+    summaryKo:
+      "가장 저렴하고 빠르게 카메라 움직임, 모델 표정, 손동작을 먼저 확인하는 드래프트 모드입니다. 마음에 들면 똑같은 움직임 그대로 Sunra 1080p 본편으로 바로 승격할 수 있습니다.",
+    summaryEn:
+      "Fastest Draft preview (--resolution 480p --draft true --bitrate_mode high). Once approved, promote the exact same take to a 1080p final via Sunra draft_source_task_id.",
+    bestWhenKo: "여러 가지 카메라 각도와 대사·표정 연기를 부담 없이 먼저 비교해 보고 싶을 때",
+    bestWhenEn: "Testing multiple camera angles and micro-acting takes before committing to 1080p",
+    turnaroundKo: "약 30~40초 생성 · 승인 시 1080p 즉시 승격",
+    turnaroundEn: "~30–40s draft · 1-click 1080p finalize",
+  },
+  {
+    id: "seedance_2_5_720p_standard",
+    modelId: "seedance-2.5",
+    resolution: "720p",
+    draft: false,
+    bitrateMode: "high",
+    supportsDraftFinalizeTo1080p: false,
+    recommendedUpscaleTarget: "1080p_ig_master",
+    nameKo: "Seedance 2.5 · 720p (표준 · 업스케일 베이스)",
+    nameEn: "Seedance 2.5 · 720p (Standard · Upscale Base)",
+    badgeKo: "실무 최다 활용 · 720p 생성 후 1080p/4K 업스케일 추천",
+    badgeEn: "Sweet Spot · Best Base for 1080p IG / 4K Upscaling",
+    summaryKo:
+      "속도와 화질의 균형이 가장 좋은 표준 모드입니다. 720p로 먼저 영상을 만든 뒤, 잘 나온 컷만 우측 '업스케일링 스튜디오'로 넘겨 인스타 최적화 1080p나 4K로 완성하는 방식이 가장 효율적입니다.",
+    summaryEn:
+      "Balanced 720p native generation (--resolution 720p --draft false --bitrate_mode high). Send winning 720p takes into the Upscaling Studio for 1080p IG optimization or 4K mastering.",
+    bestWhenKo: "720p로 빠르게 결과를 확인하고, 선택된 베스트 컷만 인스타 1080p 마스터나 4K로 업스케일할 때",
+    bestWhenEn: "Generating 720p takes and upscaling approved cuts to 1080p IG Master or 4K",
+    turnaroundKo: "약 60초 생성 · 업스케일링 스튜디오 1클릭 연동",
+    turnaroundEn: "~60s generation · 1-click handoff to Upscaling Studio",
+  },
+  {
+    id: "seedance_2_5_1080p_master",
+    modelId: "seedance-2.5",
+    resolution: "1080p",
+    draft: false,
+    bitrateMode: "high",
+    supportsDraftFinalizeTo1080p: false,
+    recommendedUpscaleTarget: "4k_ultra_master",
+    nameKo: "Seedance 2.5 · 1080p (네이티브 고화질 본편)",
+    nameEn: "Seedance 2.5 · 1080p (Native Master)",
+    badgeKo: "한 번에 1080p 본편 생성 · 인스타 최적화 후처리 연동",
+    badgeEn: "Direct 1080p Native Render + IG Optimization",
+    summaryKo:
+      "처음부터 Seedance 2.5 최고 해상도인 1080p로 바로 생성합니다. 생성 직후 인스타 화질 저하 방지 필터(미세 필름 입자·선명도 보정)를 입히거나 4K로 한 단계 더 업스케일할 수 있습니다.",
+    summaryEn:
+      "Direct 1080p native generation (--resolution 1080p --draft false --bitrate_mode high), ready for Instagram De-AI mastering or 4K upscaling.",
+    bestWhenKo: "이미 검증된 화보 첫 장면과 프롬프트로 지체 없이 1080p 납품용 본편을 바로 뽑을 때",
+    bestWhenEn: "Direct 1080p production when Frame 1 and motion brief are already locked",
+    turnaroundKo: "약 90초 생성 · 즉시 다운로드 및 인스타 최적화",
+    turnaroundEn: "~90s generation · Instant download & IG master",
+  },
+];
+
+/**
+ * Dedicated Upscaling Studio Engines (`BRAND_UPSCALING_STUDIO_ENGINES`):
+ * Answers: "어떤 upscaler를 줘야 하는가?" + "인스타 최적화 업스케일링 방식 우리가 쓰는 로직으로 1080p를 Sunra 업스케일러를 통해 만들 수 있게"
+ */
+export type BrandUpscalerEngineId =
+  | "sunra_ig_1080p_upscaler"
+  | "seedvr2_7b_optical_upscaler"
+  | "sunra_cloud_4k_upscaler";
+
+export type UpscaleTargetResolution = "1080p" | "2K" | "4K";
+
+export interface BrandUpscalerEngineSpec {
+  id: BrandUpscalerEngineId;
+  nameKo: string;
+  nameEn: string;
+  providerBadgeKo: string;
+  providerBadgeEn: string;
+  supportedInputs: readonly ("480p" | "720p" | "1080p")[];
+  supportedTargets: readonly UpscaleTargetResolution[];
+  defaultTarget: UpscaleTargetResolution;
+  includesIgDeAiLogic: boolean;
+  shortTraitKo: string;
+  shortTraitEn: string;
+  whyThisUpscalerKo: string;
+  whyThisUpscalerEn: string;
+  strengthsKo: readonly [string, string, string];
+  strengthsEn: readonly [string, string, string];
+  creditsPer10s: number;
+  priceKrwPer10s: number;
+}
+
+export const BRAND_UPSCALING_STUDIO_ENGINES: readonly BrandUpscalerEngineSpec[] = [
+  {
+    id: "sunra_ig_1080p_upscaler",
+    nameKo: "Sunra 1080p 업스케일러 + 인스타 릴스·Edits 최적화",
+    nameEn: "Sunra Cloud 1080p Upscaler + IG Reels De-AI Master",
+    providerBadgeKo: "인스타 · 릴스 · 틱톡 업로드 1순위 (추천)",
+    providerBadgeEn: "Best for Instagram Reels · Edits · TikTok (Recommended)",
+    supportedInputs: ["480p", "720p", "1080p"],
+    supportedTargets: ["1080p"],
+    defaultTarget: "1080p",
+    includesIgDeAiLogic: true,
+    shortTraitKo:
+      "Sunra 클라우드 업스케일러로 480p/720p 영상을 1080p로 올린 뒤, 인스타 업로드 시 피부와 배경이 플라스틱처럼 뭉개지지 않게 막아주는 인스타 전용 최적화 로직을 자동으로 입힙니다",
+    shortTraitEn:
+      "Upscales 480p/720p to 1080p via Sunra Cloud and applies our signature Instagram Reels anti-recompression & De-AI optical grain pipeline",
+    whyThisUpscalerKo:
+      "인스타그램·Edits 앱은 AI 특유의 매끈한 피부와 어두운 배경을 압축 과정에서 깍두기처럼 뭉개버립니다. Sunra 1080p 업스케일 위에 미세 필름 입자(ISO 3200 루미넌스 그레인), 속눈썹·원단 선명도 복원(CAS 0.25), OLED 블랙 보정, CRF 13 고화질 인코딩을 결합해 업로드 후에도 화질이 그대로 유지됩니다.",
+    whyThisUpscalerEn:
+      "Prevents Instagram's encoder from crushing smooth AI skin and dark shadows by combining Sunra 1080p cloud upscale with CAS 0.25 micro-contrast, ISO 3200 luminance-only grain, SDR BT.709 lock, and CRF 13 encoding.",
+    strengthsKo: [
+      "Sunra 클라우드 480p/720p → 1080p 고속 업스케일",
+      "인스타·Edits 재압축 화질 저하 방지 (ISO 3200 필름 입자)",
+      "릴스 인기 음원용 무음악(No-BGM) + 광고용(-14 LUFS) 동시 출력",
+    ],
+    strengthsEn: [
+      "Sunra Cloud 480p/720p -> 1080p Fast Upscale",
+      "IG Anti-Recompression (ISO 3200 Luma Grain + CAS 0.25)",
+      "Dual Stems (No-BGM Reels + -14 LUFS Ad Master)",
+    ],
+    creditsPer10s: 120,
+    priceKrwPer10s: 1500,
+  },
+  {
+    id: "seedvr2_7b_optical_upscaler",
+    nameKo: "SeedVR2 7B 광학 디테일 복원 업스케일러 (1080p · 4K)",
+    nameEn: "SeedVR2 7B Diffusion Optical Upscaler (1080p · 4K)",
+    providerBadgeKo: "인물 클로즈업 피부결 · 속눈썹 · 원단 직조 복원 1순위",
+    providerBadgeEn: "Best for Close-Up Skin Pores, Eyelashes & Fabric Weave",
+    supportedInputs: ["480p", "720p", "1080p"],
+    supportedTargets: ["1080p", "4K"],
+    defaultTarget: "1080p",
+    includesIgDeAiLogic: true,
+    shortTraitKo:
+      "720p 원본에 없던 속눈썹 한 올, 눈동자 반사광, 울·실크 원단 직조 결을 새로 그려 넣으면서도 얼굴 피부가 우글거리지 않게 잡아주는 정밀 광학 복원 엔진입니다",
+    shortTraitEn:
+      "Reconstructs optical micro-texture (eyelashes, catchlights, fabric weave) via SeedVR2 7B FP16 with 3-frame Seamless Skin Anti-Boil masking up to 1080p or 4K",
+    whyThisUpscalerKo:
+      "일반 샤프닝 업스케일러(Topaz 등)는 외곽선만 인위적으로 날카롭게 만들어 테두리가 하얗게 뜨지만, SeedVR2 7B는 실제 카메라 렌즈로 찍은 것 같은 속눈썹·원단 결을 복원(+170% 선명도)하고 피부 우글거림 방지 마스크로 자연스러운 피부톤을 지킵니다.",
+    whyThisUpscalerEn:
+      "Outperforms traditional deblur filters (e.g. Topaz Proteus) by synthesizing true optical detail (+170% sharpness) while locking facial skin stability over a 3-frame window.",
+    strengthsKo: [
+      "속눈썹·눈동자·원단 결 +170% 광학 복원",
+      "얼굴 피부 우글거림 원천 차단 마스킹 적용",
+      "1080p 인스타 마스터 및 4K(8초 컷 자동 분할) 지원",
+    ],
+    strengthsEn: [
+      "+170% Eyelash & Fabric Micro-Detail",
+      "3-Frame Skin Anti-Boil Masking",
+      "Supports 1080p IG Master & 4K (8s Cut Split)",
+    ],
+    creditsPer10s: 160,
+    priceKrwPer10s: 2000,
+  },
+  {
+    id: "sunra_cloud_4k_upscaler",
+    nameKo: "Sunra 클라우드 2K · 4K 초고화질 업스케일러",
+    nameEn: "Sunra Cloud 2K / 4K Ultra HD Upscaler",
+    providerBadgeKo: "웹사이트 메인 배너 · 유튜브 4K · 오프라인 매장 화면용",
+    providerBadgeEn: "Best for 4K Website Hero, YouTube 4K & Store Displays",
+    supportedInputs: ["720p", "1080p"],
+    supportedTargets: ["2K", "4K"],
+    defaultTarget: "4K",
+    includesIgDeAiLogic: false,
+    shortTraitKo:
+      "720p 또는 1080p로 완성된 영상을 브랜드 홈페이지 메인 배너, 유튜브 4K 캠페인 필름, 백화점·매장 대형 스크린용 2K/4K(2160p) 초고화질로 빠르게 업스케일합니다",
+    shortTraitEn:
+      "Cloud super-resolution upgrade from 720p/1080p to 2K (1440p) or 4K (2160p) with BT.709 color lock for large displays and web hero banners",
+    whyThisUpscalerKo:
+      "대형 모니터나 매장 스크린에서는 1080p 영상도 픽셀이 보일 수 있습니다. Sunra 클라우드 4K 업스케일러는 원본 색감(BT.709)과 프레임 흐름을 그대로 유지하면서 4K(3840×2160 / 2160×3840) 해상도로 깔끔하게 확장합니다. (단, 인스타그램 업로드용은 인스타 서버의 강제 축소 열화를 피하기 위해 1080p 인스타 최적화 모드를 권장합니다.)",
+    whyThisUpscalerEn:
+      "Delivers crisp 2K/4K masters on Sunra Cloud for widescreen web heroes and digital signage (while recommending 1080p SDR for Instagram uploads to avoid server downscale degradation).",
+    strengthsKo: [
+      "720p/1080p → 2K · 4K(2160p) 클라우드 업스케일",
+      "브랜드 홈페이지 히어로 · 매장 대형 스크린 최적",
+      "원본 색감(BT.709) 및 24fps 모션 프레임 유지",
+    ],
+    strengthsEn: [
+      "720p/1080p -> 2K & 4K (2160p) Cloud Upgrade",
+      "Ideal for Web Hero Banners & Retail Signage",
+      "Strict BT.709 Color & 24fps Cadence Lock",
+    ],
+    creditsPer10s: 210,
+    priceKrwPer10s: 2600,
+  },
+];
+
+export type IgUpscaleLogicModuleId =
+  | "cas_micro_edge"
+  | "iso3200_luma_grain"
+  | "skin_anti_boil_mask"
+  | "oled_shadow_curve_sdr"
+  | "cfr24_clean_metadata_zoom";
+
+export interface IgUpscaleLogicModuleSpec {
+  id: IgUpscaleLogicModuleId;
+  titleKo: string;
+  titleEn: string;
+  detailKo: string;
+  detailEn: string;
+  technicalParam: string;
+  defaultEnabled: boolean;
+}
+
+/**
+ * Our 5 Core Instagram Optimization Upscaling Logic Modules (`tools/ig_reels_master.py` & `lib/brands/finish/upscale-master.ts`):
+ */
+export const IG_OPTIMIZED_UPSCALE_LOGIC_MODULES: readonly IgUpscaleLogicModuleSpec[] = [
+  {
+    id: "cas_micro_edge",
+    titleKo: "속눈썹 · 원단 · 로고 미세 선명도 복원",
+    titleEn: "Optical Micro-Contrast & Edge Restoration",
+    detailKo: "단순 확대로 흐려진 눈동자 반사광, 속눈썹, 옷감 직조, 제품 로고 글자를 또렷하게 살립니다 (+170% 선명도 향상)",
+    detailEn: "Restores eyelashes, catchlights, fabric weave, and product typography (+170% sharpness)",
+    technicalParam: "scale=1080:1920:flags=lanczos,unsharp=3:3:0.55,cas=0.25",
+    defaultEnabled: true,
+  },
+  {
+    id: "iso3200_luma_grain",
+    titleKo: "인스타 재압축 방지 미세 필름 입자 (ISO 3200)",
+    titleEn: "ISO 3200 Luminance Sensor Grain (Anti-Compression)",
+    detailKo: "색노이즈 없이 미세한 밝기 입자만 얹어 인스타그램 서버가 피부와 어두운 배경 화질을 깎지 못하게 보호합니다",
+    detailEn: "Injects chroma-free luminance grain so Instagram's encoder allocates high bitrate to skin and shadows",
+    technicalParam: "noise=c0s=3.4:c0f=t+u (chroma_noise=0)",
+    defaultEnabled: true,
+  },
+  {
+    id: "skin_anti_boil_mask",
+    titleKo: "얼굴 피부 우글거림 방지 보호 마스크",
+    titleEn: "3-Frame Seamless Skin Anti-Boil Masking",
+    detailKo: "눈·아이라인·머리카락은 선명하게 올리고, 볼·이마 피부 영역은 3프레임 안정화로 인위적인 모공 들끓음을 막습니다",
+    detailEn: "Sharpens eyes/hairline while stabilizing cheek/forehead skin over 3 frames to prevent pore boiling",
+    technicalParam: "face_skin_mask=3f_temporal_stabilize + highlight_rolloff",
+    defaultEnabled: true,
+  },
+  {
+    id: "oled_shadow_curve_sdr",
+    titleKo: "아이폰·갤럭시 OLED 진한 블랙 & SDR 색감 고정",
+    titleEn: "OLED Shadow Anchor Curve & SDR BT.709 Lock",
+    detailKo: "스마트폰 화면에서 검은 배경이 뿌옇게 뜨는 현상을 막고, 피부 하이라이트가 날아가지 않게 SDR 색감을 고정합니다",
+    detailEn: "Anchors true OLED blacks and locks SDR BT.709 color so skin highlights never blow out in IG Edits",
+    technicalParam: "curves=m='0.005/0.015 0.06/0.05 0.50/0.50 0.94/0.955 0.995/0.985',bt709",
+    defaultEnabled: true,
+  },
+  {
+    id: "cfr24_clean_metadata_zoom",
+    titleKo: "24fps 고정 · CRF 13 고화질 · 클린 메타데이터 & 썸네일",
+    titleEn: "24fps CFR · CRF 13 High@L4.1 · Clean Metadata & Cover",
+    detailKo: "울렁이는 60fps 강제 보간 없이 자연스러운 24fps 시네마 모션을 유지하고, 불필요한 생성 메타데이터 제거 및 선명한 커버 사진을 함께 뽑아줍니다",
+    detailEn: "Keeps native 24fps cinema cadence, encodes at H.264 CRF 13, strips metadata, and extracts a clean cover JPG",
+    technicalParam: "libx264 -crf 13 -profile:v high -level 4.1 -r 24 -vsync cfr -map_metadata -1 (zoom=1.03)",
+    defaultEnabled: true,
+  },
+];
+
+export interface CompiledSunraVideoAndUpscalePlan {
+  seedanceGeneration: {
+    tierId: BrandSeedanceVideoTierId;
+    sunraTool: "create_video";
+    sunraArgs: {
+      model: "seedance-2.5";
+      resolution: "480p" | "720p" | "1080p";
+      draft: boolean;
+      duration: number;
+      aspect_ratio: string;
+      generate_audio: boolean;
+      parameters: {
+        bitrate_mode: "high";
+      };
+    };
+  };
+  upscaleStudio: {
+    engineId: BrandUpscalerEngineId;
+    sourceResolution: "480p" | "720p" | "1080p";
+    targetResolution: UpscaleTargetResolution;
+    sunraCloudStep: {
+      mode: "seedance_draft_finalize_1080p" | "sunra_cloud_super_resolution" | "seedvr2_hybrid_diffusion";
+      sunraModel: "seedance-2.5" | "pika-h3-flex" | "seedance-2.0";
+      targetResolutionParam: "1080p" | "2k" | "4k";
+    };
+    igOptimizationActive: boolean;
+    enabledLogicModules: readonly IgUpscaleLogicModuleId[];
+    ffmpegFilterChain: string;
+    igEditsExportRuleKo: string;
+    igEditsExportRuleEn: string;
+  };
+}
+
+/**
+ * Compiles the end-to-end execution plan for Seedance 2.5 (480p Draft / 720p / 1080p)
+ * and the attached Upscaling Studio (Sunra Cloud 1080p/4K + Instagram Reels De-AI Optimization).
+ */
+export function compileSunraVideoAndUpscalePlan(input: {
+  seedanceTierId: BrandSeedanceVideoTierId;
+  durationSec: number;
+  aspectRatio: string;
+  upscalerEngineId: BrandUpscalerEngineId;
+  targetResolution?: UpscaleTargetResolution;
+  enabledIgModules?: readonly IgUpscaleLogicModuleId[];
+}): CompiledSunraVideoAndUpscalePlan {
+  const tier =
+    BRAND_SEEDANCE_VIDEO_TIERS.find((t) => t.id === input.seedanceTierId) ??
+    BRAND_SEEDANCE_VIDEO_TIERS[1]!;
+  const engine =
+    BRAND_UPSCALING_STUDIO_ENGINES.find((e) => e.id === input.upscalerEngineId) ??
+    BRAND_UPSCALING_STUDIO_ENGINES[0]!;
+  const targetRes =
+    input.targetResolution && engine.supportedTargets.includes(input.targetResolution)
+      ? input.targetResolution
+      : engine.defaultTarget;
+
+  const activeModules =
+    input.enabledIgModules ??
+    IG_OPTIMIZED_UPSCALE_LOGIC_MODULES.filter((m) => m.defaultEnabled).map((m) => m.id);
+  const modSet = new Set(activeModules);
+
+  const filters: string[] = [];
+  if (modSet.has("cfr24_clean_metadata_zoom")) {
+    filters.push("crop=iw/1.03:ih/1.03");
+  }
+  filters.push(
+    targetRes === "4K"
+      ? "scale=2160:3840:flags=lanczos+accurate_rnd+full_chroma_int"
+      : targetRes === "2K"
+        ? "scale=1440:2560:flags=lanczos+accurate_rnd+full_chroma_int"
+        : "scale=1080:1920:flags=lanczos+accurate_rnd+full_chroma_int",
+  );
+  if (modSet.has("cas_micro_edge")) {
+    filters.push("unsharp=3:3:0.55:3:3:0.0", "cas=0.25");
+  }
+  if (modSet.has("oled_shadow_curve_sdr")) {
+    filters.push("curves=m='0.005/0.015 0.06/0.05 0.50/0.50 0.94/0.955 0.995/0.985'");
+  }
+  if (modSet.has("iso3200_luma_grain")) {
+    filters.push("noise=c0s=3.4:c0f=t+u");
+  }
+  filters.push("format=yuv420p");
+
+  const cloudMode =
+    tier.id === "seedance_2_5_480p_draft" && targetRes === "1080p"
+      ? "seedance_draft_finalize_1080p"
+      : engine.id === "seedvr2_7b_optical_upscaler"
+        ? "seedvr2_hybrid_diffusion"
+        : "sunra_cloud_super_resolution";
+
+  return {
+    seedanceGeneration: {
+      tierId: tier.id,
+      sunraTool: "create_video",
+      sunraArgs: {
+        model: "seedance-2.5",
+        resolution: tier.resolution,
+        draft: tier.draft,
+        duration: input.durationSec,
+        aspect_ratio: input.aspectRatio,
+        generate_audio: true,
+        parameters: {
+          bitrate_mode: "high",
+        },
+      },
+    },
+    upscaleStudio: {
+      engineId: engine.id,
+      sourceResolution: tier.resolution,
+      targetResolution: targetRes,
+      sunraCloudStep: {
+        mode: cloudMode,
+        sunraModel:
+          targetRes === "4K" || targetRes === "2K"
+            ? "pika-h3-flex"
+            : "seedance-2.5",
+        targetResolutionParam:
+          targetRes === "4K" ? "4k" : targetRes === "2K" ? "2k" : "1080p",
+      },
+      igOptimizationActive: engine.includesIgDeAiLogic && targetRes === "1080p",
+      enabledLogicModules: activeModules,
+      ffmpegFilterChain: filters.join(","),
+      igEditsExportRuleKo:
+        "인스타그램 · Edits 앱 내보내기 필수 설정: 해상도 HD(1080p) · 색상 SDR 유지(HDR 끄기) · 프레임 24fps 유지(60fps 끄기)",
+      igEditsExportRuleEn:
+        "Instagram / Edits Export Rule: Resolution HD (1080p) · Color SDR (Never HDR) · Frame Rate Native 24fps (Never 60fps)",
+    },
+  };
+}
+
