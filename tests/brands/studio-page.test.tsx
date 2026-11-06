@@ -52,7 +52,8 @@ describe("brand studio page", () => {
     expect(html).toContain("Nano Banana 2.1");
     expect(html).toContain("Nano Banana 2.0");
     expect(html).toContain("Seedream 5.0 Pro");
-    expect(html).not.toMatch(/seedance|seedvr2|comfyui|higgsfield/i);
+    expect(html).toContain("Seedance 2.5");
+    expect(html).not.toMatch(/comfyui|higgsfield/i);
   });
 
   it("keeps the face setup link relative off the brand host, through sign-in with the workspace language", async () => {

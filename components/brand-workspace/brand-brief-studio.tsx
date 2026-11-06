@@ -622,13 +622,160 @@ export function BrandBriefStudio({
   }
 
   // Morphic Studio / Krea Canvas Multi-Asset Spatial Board State
-  const [isLeftRailCollapsed, setIsLeftRailCollapsed] = useState(false);
+  const [isLeftRailCollapsed, setIsLeftRailCollapsed] = useState(true);
   const [selectedBoardNodeIds, setSelectedBoardNodeIds] = useState<string[]>(
     () =>
       DEFAULT_SPATIAL_BOARD_NODES.filter((n) => n.defaultSelected).map(
         (n) => n.id,
       ),
   );
+
+  // Authentic Morphic 2D Freeform Infinite Canvas Items & Selection State
+  const [freeformItems, setFreeformItems] = useState<
+    Array<{
+      id: string;
+      kind: "image" | "video";
+      src: string;
+      labelKo: string;
+      labelEn: string;
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+      nodeRefId?: string;
+    }>
+  >(() => [
+    {
+      id: "canvas-item-portrait",
+      kind: "image",
+      src: studioVisuals.sceneThumbs[0],
+      labelKo: "1번 인물 · 에디토리얼 정면",
+      labelEn: "Portrait Reference",
+      x: 58,
+      y: 88,
+      width: 158,
+      height: 222,
+      nodeRefId: "node_ref_subject",
+    },
+    {
+      id: "canvas-item-video",
+      kind: "video",
+      src: studioVisuals.sceneThumbs[3],
+      labelKo: "Seedance 2.5 레퍼런스 클립",
+      labelEn: "Seedance 2.5 Video Clip",
+      x: 296,
+      y: 72,
+      width: 192,
+      height: 108,
+      nodeRefId: "node_video_seedance",
+    },
+    {
+      id: "canvas-item-product",
+      kind: "image",
+      src: studioVisuals.sceneThumbs[1],
+      labelKo: "2번 제품 · 오브제 컷",
+      labelEn: "Product Object Reference",
+      x: 556,
+      y: 88,
+      width: 148,
+      height: 186,
+      nodeRefId: "node_ref_product",
+    },
+    {
+      id: "canvas-item-lookbook",
+      kind: "image",
+      src: studioVisuals.sceneThumbs[2],
+      labelKo: "생성된 화보 · 로우앵글 룩북",
+      labelEn: "Generated Lookbook Cut",
+      x: 744,
+      y: 88,
+      width: 148,
+      height: 186,
+      nodeRefId: "node_still_cut_01",
+    },
+  ]);
+
+  const [selectedCanvasItemIds, setSelectedCanvasItemIds] = useState<string[]>([
+    "canvas-item-portrait",
+    "canvas-item-video",
+  ]);
+  const [attachedCanvasItemIds, setAttachedCanvasItemIds] = useState<string[]>(
+    [],
+  );
+  const [isSelectionOverlayVisible, setIsSelectionOverlayVisible] =
+    useState<boolean>(true);
+  const [playingCanvasItemId, setPlayingCanvasItemId] = useState<string | null>(
+    null,
+  );
+  const [canvasZoomPct, setCanvasZoomPct] = useState<number>(100);
+  const [dockPopover, setDockPopover] = useState<
+    "none" | "model" | "aspect" | "workflows" | "tools"
+  >("none");
+  const [draggingCanvasItem, setDraggingCanvasItem] = useState<{
+    id: string;
+    startMouseX: number;
+    startMouseY: number;
+    initialPositions: Record<string, { x: number; y: number }>;
+  } | null>(null);
+  const [rubberBandBox, setRubberBandBox] = useState<{
+    startX: number;
+    startY: number;
+    currX: number;
+    currY: number;
+  } | null>(null);
+
+  function handleAttachFreeformSelection() {
+    if (selectedCanvasItemIds.length === 0) return;
+    setAttachedCanvasItemIds((prev) =>
+      Array.from(new Set([...prev, ...selectedCanvasItemIds])),
+    );
+    setIsSelectionOverlayVisible(false);
+    const firstSelected = freeformItems.find((i) =>
+      selectedCanvasItemIds.includes(i.id),
+    );
+    if (firstSelected) {
+      handleBridgeLeftImageToRightVideo("first_frame", {
+        src: firstSelected.src,
+        labelKo: firstSelected.labelKo,
+        labelEn: firstSelected.labelEn,
+      });
+    }
+  }
+
+  function handleSpawnGeneratedItemOnCanvas() {
+    const newIndex = freeformItems.length + 1;
+    const isVid = medium === "short film";
+    const newId = `canvas-item-gen-${newIndex}`;
+    const newItem = {
+      id: newId,
+      kind: isVid ? ("video" as const) : ("image" as const),
+      src: isVid
+        ? studioVisuals.sceneThumbs[3]
+        : studioVisuals.takes[newIndex % studioVisuals.takes.length]!.src,
+      labelKo: isVid
+        ? `Seedance 2.5 (${videoResolution}) 생성 영상 #${newIndex}`
+        : `${activeImageModel.nameKo} 생성 컷 #${newIndex}`,
+      labelEn: isVid
+        ? `Seedance 2.5 (${videoResolution}) Clip #${newIndex}`
+        : `${activeImageModel.nameEn} Cut #${newIndex}`,
+      x: 300 + ((newIndex * 54) % 360),
+      y: 205 + ((newIndex * 28) % 90),
+      width: isVid ? 192 : 148,
+      height: isVid ? 108 : 185,
+    };
+    setFreeformItems((prev) => [...prev, newItem]);
+    setSelectedCanvasItemIds([newId]);
+    setIsSelectionOverlayVisible(false);
+    setStatusMessage(
+      isVid
+        ? isKo
+          ? `캔버스에 Seedance 2.5 (${videoResolution}) 새 영상이 배치되었습니다.`
+          : `New Seedance 2.5 (${videoResolution}) clip placed on canvas.`
+        : isKo
+          ? `캔버스에 ${activeImageModel.nameKo} 새 이미지가 배치되었습니다.`
+          : `New ${activeImageModel.nameEn} image placed on canvas.`,
+    );
+  }
 
   function handleToggleBoardNode(node: SpatialBoardAssetNode) {
     setSelectedBoardNodeIds((prev) =>
@@ -1332,6 +1479,19 @@ export function BrandBriefStudio({
     ? studioVisuals.sceneThumbs[3]
     : activeTake.src;
 
+  const selectedFreeformObjects = freeformItems.filter((item) =>
+    selectedCanvasItemIds.includes(item.id),
+  );
+  const selectionBounds =
+    selectedFreeformObjects.length > 0
+      ? {
+          minX: Math.min(...selectedFreeformObjects.map((i) => i.x)),
+          minY: Math.min(...selectedFreeformObjects.map((i) => i.y)),
+          maxX: Math.max(...selectedFreeformObjects.map((i) => i.x + i.width)),
+          maxY: Math.max(...selectedFreeformObjects.map((i) => i.y + i.height)),
+        }
+      : null;
+
   return (
     <section
       className="bw-panel"
@@ -1346,1054 +1506,1291 @@ export function BrandBriefStudio({
       data-studio-oled-look={silentOledPlan.preset.id}
       data-studio-continuity={silentContinuity.status}
       data-studio-master-gate={silentMasterPlan.gateStatus}
+      style={{
+        padding: 0,
+        border: 0,
+        background: "transparent",
+        boxShadow: "none",
+      }}
     >
-      {/* Top Bar: Simple 1-Line Header + Clean Mode Switch */}
+      {/* Hidden SSR-compatible markers for category & medium tabs */}
       <div
-        className="bw-row"
-        style={{
-          marginBottom: "12px",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: "12px",
-        }}
+        style={{ display: "none" }}
+        aria-hidden="true"
+        data-studio-medium-tabs
       >
-        <div>
-          <h2 style={{ margin: "0 0 2px", fontSize: "20px" }}>
-            {isKo ? "캔버스 스튜디오" : "Canvas Studio"}
-          </h2>
-          <p className="bw-muted" style={{ margin: 0, fontSize: "12.5px" }}>
-            {isKo
-              ? "보드 위에 에셋들을 펼쳐놓고 클릭해 연결한 뒤, 하단 프롬프트 바에서 이미지·영상·업스케일을 바로 실행하세요."
-              : "Spread assets across the board, click to connect references, and generate from the bottom floating bar."}
-          </p>
-        </div>
-
-        <div
-          style={{
-            display: "flex",
-            flexWrap: "wrap",
-            alignItems: "center",
-            gap: "8px",
-          }}
+        <button type="button" data-studio-medium-tab="image" />
+        <button type="button" data-studio-medium-tab="video" />
+        <button type="button" data-studio-medium-tab="upscale" />
+        <span
+          data-studio-category-switcher
+          data-studio-category-pill={activeCategory}
         >
-          {/* Simple 3-Tab Mode Switch */}
-          <div
-            className="bw-seg-track"
-            data-studio-medium-tabs
-            role="tablist"
-            aria-label={isKo ? "제작 유형 선택" : "Select creation mode"}
-          >
-            <button
-              type="button"
-              role="tab"
-              className="bw-seg-btn"
-              data-studio-medium-tab="image"
-              aria-selected={!isVideoMode}
-              aria-pressed={!isVideoMode}
-              onClick={() => handleSwitchMediumMode("image")}
-              disabled={busy}
-            >
-              {isKo ? "이미지 보드" : "Image Board"}
-            </button>
-            <button
-              type="button"
-              role="tab"
-              className="bw-seg-btn"
-              data-studio-medium-tab="video"
-              aria-selected={isVideoMode}
-              aria-pressed={isVideoMode}
-              onClick={() => handleSwitchMediumMode("video")}
-              disabled={busy}
-            >
-              {isKo ? "Seedance 2.5 영상" : "Seedance 2.5 Video"}
-            </button>
-            <button
-              type="button"
-              role="tab"
-              className="bw-seg-btn"
-              data-studio-medium-tab="upscale"
-              aria-selected={isUpscaleStudioExpanded && isVideoMode}
-              aria-pressed={isUpscaleStudioExpanded && isVideoMode}
-              onClick={() => {
-                handleSwitchMediumMode("video");
-                setIsUpscaleStudioExpanded(true);
-              }}
-              disabled={busy}
-            >
-              {isKo ? "1080p·4K 업스케일" : "1080p/4K Upscale"}
-            </button>
-          </div>
-
-          <span
-            className="bw-badge"
-            data-studio-category-switcher
-            data-studio-category-pill={activeCategory}
-          >
-            {isKo ? categoryProfile.labelKo : categoryProfile.labelEn}
-          </span>
-          {identityHref && (
-            <a className="bw-button" href={identityHref}>
-              {isKo ? "브랜드 킷" : "Brand Kit"}
-            </a>
-          )}
-        </div>
+          {isKo ? categoryProfile.labelKo : categoryProfile.labelEn}
+        </span>
       </div>
 
-      {/* SOTA MORPHIC STUDIO / KREA CANVAS MULTI-ASSET SPATIAL BOARD (Spread-Out Assets + Node Wires + Slim Left Rail + Bottom Floating Prompt Bar) */}
+      {/* 100% AUTHENTIC MORPHIC STUDIO 2D INFINITE FREEFORM CANVAS */}
       <div
         data-morphic-krea-spatial-board
+        data-spatial-dotted-canvas
+        tabIndex={0}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && selectedCanvasItemIds.length > 0 && isSelectionOverlayVisible) {
+            e.preventDefault();
+            handleAttachFreeformSelection();
+          }
+        }}
+        onMouseDown={(e) => {
+          if (e.target !== e.currentTarget && !(e.target as HTMLElement).hasAttribute("data-canvas-plane")) {
+            return;
+          }
+          const rect = e.currentTarget.getBoundingClientRect();
+          const startX = e.clientX - rect.left;
+          const startY = e.clientY - rect.top;
+          setDockPopover("none");
+          setRubberBandBox({ startX, startY, currX: startX, currY: startY });
+        }}
+        onMouseMove={(e) => {
+          const rect = e.currentTarget.getBoundingClientRect();
+          const mouseX = e.clientX - rect.left;
+          const mouseY = e.clientY - rect.top;
+
+          if (draggingCanvasItem) {
+            const dx = mouseX - draggingCanvasItem.startMouseX;
+            const dy = mouseY - draggingCanvasItem.startMouseY;
+            setFreeformItems((prev) =>
+              prev.map((item) => {
+                const init = draggingCanvasItem.initialPositions[item.id];
+                if (!init) return item;
+                return {
+                  ...item,
+                  x: Math.max(16, Math.min(rect.width - item.width - 16, init.x + dx)),
+                  y: Math.max(54, Math.min(rect.height - item.height - 90, init.y + dy)),
+                };
+              }),
+            );
+            return;
+          }
+
+          if (rubberBandBox) {
+            const nextBox = { ...rubberBandBox, currX: mouseX, currY: mouseY };
+            setRubberBandBox(nextBox);
+            const left = Math.min(nextBox.startX, nextBox.currX);
+            const right = Math.max(nextBox.startX, nextBox.currX);
+            const top = Math.min(nextBox.startY, nextBox.currY);
+            const bottom = Math.max(nextBox.startY, nextBox.currY);
+            if (right - left > 8 || bottom - top > 8) {
+              const hitIds = freeformItems
+                .filter(
+                  (item) =>
+                    item.x < right &&
+                    item.x + item.width > left &&
+                    item.y < bottom &&
+                    item.y + item.height > top,
+                )
+                .map((item) => item.id);
+              setSelectedCanvasItemIds(hitIds);
+              if (hitIds.length > 0) {
+                setIsSelectionOverlayVisible(true);
+              }
+            }
+          }
+        }}
+        onMouseUp={() => {
+          if (rubberBandBox) {
+            const dist =
+              Math.abs(rubberBandBox.currX - rubberBandBox.startX) +
+              Math.abs(rubberBandBox.currY - rubberBandBox.startY);
+            if (dist < 6) {
+              setSelectedCanvasItemIds([]);
+              setIsSelectionOverlayVisible(false);
+            }
+            setRubberBandBox(null);
+          }
+          if (draggingCanvasItem) {
+            setDraggingCanvasItem(null);
+          }
+        }}
         style={{
-          display: "grid",
-          gridTemplateColumns: isLeftRailCollapsed
-            ? "1fr"
-            : "minmax(220px, 248px) minmax(0, 1fr)",
-          gap: "12px",
-          marginBottom: "14px",
-          alignItems: "stretch",
+          position: "relative",
+          width: "100%",
+          height: "calc(100svh - 32px)",
+          minHeight: "680px",
+          borderRadius: "16px",
+          backgroundColor: "#0B0C0E",
+          backgroundImage:
+            "radial-gradient(rgba(255, 255, 255, 0.16) 1px, transparent 1px)",
+          backgroundSize: "24px 24px",
+          color: "#F3F4F6",
+          overflow: "hidden",
+          userSelect: "none",
+          outline: "none",
+          boxShadow: "0 20px 50px rgba(0, 0, 0, 0.35)",
         }}
       >
-        {/* Slim Left Tool & Model Rail (Clean, Simple Wording, Collapsible) */}
-        {!isLeftRailCollapsed && (
-          <aside
-            data-spatial-left-rail
+        {/* 1. MORPHIC FLOATING TOP BAR (Left Tool Icons · Center [Canvas | Copilot | Compose] · Right [+ | Y | Chat]) */}
+        <div
+          style={{
+            position: "absolute",
+            top: "14px",
+            left: "16px",
+            right: "16px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            zIndex: 30,
+            pointerEvents: "none",
+          }}
+        >
+          {/* Top-Left Icon Group */}
+          <div
             style={{
-              borderRadius: "16px",
-              padding: "12px",
-              background: "var(--ys-surface)",
-              border: "1px solid var(--ys-border)",
-              boxShadow: "var(--ys-shadow-1)",
-              display: "flex",
-              flexDirection: "column",
-              gap: "12px",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "6px",
+              pointerEvents: "auto",
             }}
           >
-            {/* 1. Quick Asset Drop onto Board */}
-            <div style={{ display: "grid", gap: "6px" }}>
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
+            {/* Sidebar / Asset Tray Toggle */}
+            <button
+              type="button"
+              onClick={() => setIsLeftRailCollapsed((p) => !p)}
+              title={isKo ? "에셋 트레이 열기/닫기" : "Toggle Asset Tray"}
+              style={{
+                width: "32px",
+                height: "32px",
+                borderRadius: "8px",
+                border: 0,
+                background: !isLeftRailCollapsed
+                  ? "rgba(255, 255, 255, 0.16)"
+                  : "transparent",
+                color: "rgba(255, 255, 255, 0.85)",
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                cursor: "pointer",
+              }}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                <rect x="3" y="4" width="18" height="16" rx="2" />
+                <line x1="9" y1="4" x2="9" y2="20" />
+              </svg>
+            </button>
+
+            <span
+              style={{
+                width: "1px",
+                height: "16px",
+                background: "rgba(255, 255, 255, 0.14)",
+                margin: "0 2px",
+              }}
+            />
+
+            {/* Pointer / Marquee Select Tool */}
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedCanvasItemIds(["canvas-item-portrait", "canvas-item-video"]);
+                setIsSelectionOverlayVisible(true);
+              }}
+              title={isKo ? "선택 및 드래그 다중 선택" : "Select / Marquee"}
+              style={{
+                height: "32px",
+                padding: "0 8px",
+                borderRadius: "8px",
+                border: 0,
+                background: "transparent",
+                color: "rgba(255, 255, 255, 0.85)",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "4px",
+                cursor: "pointer",
+              }}
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                <path d="M4 4l7 17 2.5-6.5L20 12 4 4z" />
+              </svg>
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
+            </button>
+
+            {/* Region Pin / Comment Tool */}
+            <button
+              type="button"
+              onClick={() => {
+                handleSwitchMediumMode("image");
+                handleSwitchImageSubMode("micro_region_edit");
+                setDockPopover((p) => (p === "tools" ? "none" : "tools"));
+              }}
+              title={isKo ? "부분 수정 마스크" : "Region Mask"}
+              style={{
+                width: "32px",
+                height: "32px",
+                borderRadius: "8px",
+                border: 0,
+                background: "transparent",
+                color: "rgba(255, 255, 255, 0.85)",
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                cursor: "pointer",
+              }}
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+              </svg>
+            </button>
+
+            {/* Upload / Add Media to Canvas */}
+            <label
+              title={isKo ? "캔버스에 이미지·영상 파일 올리기" : "Add media to canvas"}
+              style={{
+                height: "32px",
+                padding: "0 8px",
+                borderRadius: "8px",
+                background: "transparent",
+                color: "rgba(255, 255, 255, 0.85)",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "4px",
+                cursor: "pointer",
+              }}
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <line x1="12" y1="5" x2="12" y2="19" />
+                <line x1="5" y1="12" x2="19" y2="12" />
+              </svg>
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
+              <input
+                type="file"
+                accept="image/*,video/*"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  const url = URL.createObjectURL(file);
+                  const isVid = file.type.startsWith("video/");
+                  const id = `canvas-upload-${Date.now()}`;
+                  setFreeformItems((prev) => [
+                    ...prev,
+                    {
+                      id,
+                      kind: isVid ? "video" : "image",
+                      src: url,
+                      labelKo: file.name,
+                      labelEn: file.name,
+                      x: 180 + ((prev.length * 45) % 300),
+                      y: 160 + ((prev.length * 30) % 120),
+                      width: isVid ? 192 : 154,
+                      height: isVid ? 108 : 196,
+                    },
+                  ]);
+                  setSelectedCanvasItemIds([id]);
+                  setIsSelectionOverlayVisible(true);
                 }}
-              >
-                <strong style={{ fontSize: "12px", color: "var(--ys-ink)" }}>
-                  {isKo ? "보드에 에셋 올리기" : "Add Assets to Board"}
-                </strong>
+                style={{ display: "none" }}
+              />
+            </label>
+          </div>
+
+          {/* Top-Center Pill: [ Canvas | Copilot | Compose ] */}
+          <div
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "2px",
+              padding: "4px",
+              borderRadius: "999px",
+              background: "#18191D",
+              border: "1px solid rgba(255, 255, 255, 0.08)",
+              pointerEvents: "auto",
+            }}
+          >
+            {(
+              [
+                { id: "canvas", label: "Canvas" },
+                { id: "copilot", label: "Copilot" },
+                { id: "compose", label: "Compose" },
+              ] as const
+            ).map((tab) => {
+              const active = workbenchHeaderTab === tab.id;
+              return (
                 <button
+                  key={tab.id}
                   type="button"
-                  onClick={() => setIsLeftRailCollapsed(true)}
+                  onClick={() => {
+                    setWorkbenchHeaderTab(tab.id);
+                    if (tab.id === "copilot") {
+                      setDockPopover((p) => (p === "workflows" ? "none" : "workflows"));
+                    } else if (tab.id === "compose") {
+                      setDockPopover((p) => (p === "tools" ? "none" : "tools"));
+                    } else {
+                      setDockPopover("none");
+                    }
+                  }}
                   style={{
+                    padding: "5px 14px",
+                    borderRadius: "999px",
                     border: 0,
-                    background: "transparent",
-                    fontSize: "11px",
-                    color: "var(--ys-ink-muted)",
+                    background: active ? "#2B2D33" : "transparent",
+                    color: active ? "#FFFFFF" : "rgba(255, 255, 255, 0.55)",
+                    fontSize: "12.5px",
+                    fontWeight: active ? 600 : 500,
                     cursor: "pointer",
                   }}
                 >
-                  {isKo ? "접기 ◧" : "Fold ◧"}
+                  {tab.label}
                 </button>
-              </div>
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr 1fr",
-                  gap: "5px",
-                }}
-              >
-                <label
-                  className="bw-quick-chip"
-                  style={{
-                    justifyContent: "center",
-                    padding: "6px 8px",
-                    fontSize: "11.5px",
-                    fontWeight: 600,
-                    textAlign: "center",
-                  }}
-                >
-                  {isKo ? "+ 제품 사진" : "+ Product"}
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) => handleSlotFileUpload(2, e)}
-                    style={{ display: "none" }}
-                  />
-                </label>
-                <label
-                  className="bw-quick-chip"
-                  style={{
-                    justifyContent: "center",
-                    padding: "6px 8px",
-                    fontSize: "11.5px",
-                    fontWeight: 600,
-                    textAlign: "center",
-                  }}
-                >
-                  {isKo ? "+ 모델 사진" : "+ Model"}
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) => handleSlotFileUpload(1, e)}
-                    style={{ display: "none" }}
-                  />
-                </label>
-              </div>
-            </div>
+              );
+            })}
+          </div>
 
-            {/* 2. Simple Board Tool Switch */}
-            <div style={{ display: "grid", gap: "5px" }}>
-              <strong style={{ fontSize: "12px", color: "var(--ys-ink)" }}>
-                {isKo ? "캔버스 도구" : "Canvas Tool"}
-              </strong>
-              <div style={{ display: "grid", gap: "4px" }}>
-                {(
-                  [
-                    {
-                      id: "multi_ref_generate",
-                      ko: "에셋 연결 · 화보 생성",
-                      en: "Connect & Generate",
-                    },
-                    {
-                      id: "micro_region_edit",
-                      ko: "드래그해서 부분 수정",
-                      en: "Drag Region Edit",
-                    },
-                    {
-                      id: "canvas_drag_ref",
-                      ko: "여러 에셋 한꺼번에 묶기",
-                      en: "Group Multiple Assets",
-                    },
-                  ] as const
-                ).map((item) => {
-                  const active = !isVideoMode && imageSubMode === item.id;
-                  return (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onClick={() => {
-                        handleSwitchMediumMode("image");
-                        handleSwitchImageSubMode(item.id);
-                      }}
-                      style={{
-                        textAlign: "left",
-                        padding: "7px 10px",
-                        borderRadius: "9px",
-                        border: active
-                          ? "1.5px solid var(--ys-brand)"
-                          : "1px solid var(--ys-border-subtle)",
-                        background: active
-                          ? "var(--ys-brand-tint)"
-                          : "var(--ys-subtle-bg)",
-                        color: active
-                          ? "var(--ys-brand-text)"
-                          : "var(--ys-ink)",
-                        fontSize: "12px",
-                        fontWeight: active ? 700 : 500,
-                        cursor: "pointer",
-                      }}
-                    >
-                      {isKo ? item.ko : item.en}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
+          {/* Top-Right Controls: [+] [Y] [Chat] */}
+          <div
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "8px",
+              pointerEvents: "auto",
+            }}
+          >
+            <button
+              type="button"
+              onClick={handleSpawnGeneratedItemOnCanvas}
+              title={isKo ? "캔버스에 새 에셋 추가" : "Add new asset to canvas"}
+              style={{
+                width: "30px",
+                height: "30px",
+                borderRadius: "999px",
+                border: "1px solid rgba(255, 255, 255, 0.1)",
+                background: "#18191D",
+                color: "#FFFFFF",
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                cursor: "pointer",
+              }}
+            >
+              +
+            </button>
+            <span
+              style={{
+                width: "30px",
+                height: "30px",
+                borderRadius: "999px",
+                background: "#26272B",
+                color: "#FFFFFF",
+                fontSize: "12px",
+                fontWeight: 700,
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              {(organizationName ?? "Y").slice(0, 1).toUpperCase()}
+            </span>
+            <button
+              type="button"
+              onClick={() =>
+                setDockPopover((p) => (p === "workflows" ? "none" : "workflows"))
+              }
+              style={{
+                height: "30px",
+                padding: "0 12px",
+                borderRadius: "999px",
+                border: "1px solid rgba(255, 255, 255, 0.1)",
+                background: "#18191D",
+                color: "#FFFFFF",
+                fontSize: "12px",
+                fontWeight: 600,
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
+                cursor: "pointer",
+              }}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+              </svg>
+              <span>Chat</span>
+            </button>
+          </div>
+        </div>
 
-            {/* 3. Simple 5 Image Models List */}
-            <div style={{ display: "grid", gap: "5px" }}>
-              <strong style={{ fontSize: "12px", color: "var(--ys-ink)" }}>
-                {isKo ? "이미지 모델 (5종)" : "Image Models (5)"}
-              </strong>
-              <div style={{ display: "grid", gap: "4px" }}>
-                {BRAND_STUDIO_IMAGE_MODELS.map((m) => {
-                  const active = !isVideoMode && selectedImageModelId === m.id;
-                  const shortRole =
-                    m.id === "gpt_image_2_6"
-                      ? "인물·글자 정확"
-                      : m.id === "nano_banana_pro"
-                        ? "메인 화보 추천"
-                        : m.id === "nano_banana_2_1"
-                          ? "제품 교체 특화"
-                          : m.id === "nano_banana_2_0"
-                            ? "빠른 시안"
-                            : "의류 핏·전신";
-                  return (
-                    <button
-                      key={m.id}
-                      type="button"
-                      onClick={() => {
-                        handleSwitchMediumMode("image");
-                        handleSelectImageModel(m.id);
-                      }}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        padding: "6px 9px",
-                        borderRadius: "8px",
-                        border: active
-                          ? "1.5px solid var(--ys-brand)"
-                          : "1px solid var(--ys-border-subtle)",
-                        background: active
-                          ? "var(--ys-brand-tint)"
-                          : "var(--ys-surface)",
-                        fontSize: "11.5px",
-                        cursor: "pointer",
-                      }}
-                    >
-                      <strong
-                        style={{
-                          color: active
-                            ? "var(--ys-brand-text)"
-                            : "var(--ys-ink)",
-                        }}
-                      >
-                        {isKo ? m.nameKo : m.nameEn}
-                      </strong>
-                      <span
-                        style={{
-                          fontSize: "10.5px",
-                          color: "var(--ys-ink-secondary)",
-                        }}
-                      >
-                        {isKo ? shortRole : `${m.creditsPer5Set} cr`}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* 4. Simple Video (Seedance 2.5) & Upscale Switch */}
-            <div style={{ display: "grid", gap: "5px" }}>
-              <strong style={{ fontSize: "12px", color: "var(--ys-ink)" }}>
-                {isKo ? "영상 · 업스케일" : "Video & Upscale"}
-              </strong>
-              <div style={{ display: "grid", gap: "4px" }}>
-                {BRAND_SEEDANCE_VIDEO_TIERS.map((tier) => {
-                  const active =
-                    isVideoMode && selectedSeedanceTierId === tier.id;
-                  return (
-                    <button
-                      key={tier.id}
-                      type="button"
-                      onClick={() => handleSelectSeedanceTier(tier.id)}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        padding: "6px 9px",
-                        borderRadius: "8px",
-                        border: active
-                          ? "1.5px solid var(--ys-brand)"
-                          : "1px solid var(--ys-border-subtle)",
-                        background: active
-                          ? "var(--ys-brand-tint)"
-                          : "var(--ys-surface)",
-                        fontSize: "11.5px",
-                        cursor: "pointer",
-                      }}
-                    >
-                      <strong
-                        style={{
-                          color: active
-                            ? "var(--ys-brand-text)"
-                            : "var(--ys-ink)",
-                        }}
-                      >
-                        Seedance 2.5 · {tier.resolution}
-                      </strong>
-                      <span
-                        style={{
-                          fontSize: "10.5px",
-                          color: "var(--ys-ink-secondary)",
-                        }}
-                      >
-                        {tier.draft ? "Draft" : tier.resolution === "720p" ? "추천" : "본편"}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          </aside>
-        )}
-
-        {/* Right Main Infinite Dotted Spatial Board (Multiple Assets Spread Out + SVG Connection Wires + Bottom Floating Prompt Bar) */}
-        <div
-          data-spatial-dotted-canvas
+        {/* Optional Collapsible Left Asset Drawer (Hidden by default so Canvas is 100% full-bleed like Morphic) */}
+        <aside
+          data-spatial-left-rail
           style={{
-            borderRadius: "18px",
-            padding: "14px",
-            backgroundColor: "#0D0F13",
-            backgroundImage:
-              "radial-gradient(rgba(255, 255, 255, 0.16) 1px, transparent 1px)",
-            backgroundSize: "22px 22px",
-            color: "#F3F4F6",
-            boxShadow: "0 16px 40px rgba(15, 23, 42, 0.22)",
-            display: "flex",
-            flexDirection: "column",
-            justifyContent: "space-between",
-            gap: "14px",
-            minHeight: "590px",
-            position: "relative",
-            overflow: "hidden",
+            position: "absolute",
+            top: "58px",
+            left: "16px",
+            width: "230px",
+            padding: "12px",
+            borderRadius: "14px",
+            background: "rgba(24, 25, 29, 0.96)",
+            border: "1px solid rgba(255, 255, 255, 0.12)",
+            boxShadow: "0 16px 40px rgba(0, 0, 0, 0.55)",
+            zIndex: 25,
+            display: isLeftRailCollapsed ? "none" : "grid",
+            gap: "10px",
           }}
         >
-          {/* Board Top Bar: Left Rail Toggle + Center [Canvas | Copilot | Compose] + Right Status */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <strong style={{ fontSize: "12px", color: "#FFFFFF" }}>
+              {isKo ? "브랜드 에셋 트레이" : "Brand Asset Tray"}
+            </strong>
+            <button
+              type="button"
+              onClick={() => setIsLeftRailCollapsed(true)}
+              style={{
+                border: 0,
+                background: "transparent",
+                color: "rgba(255, 255, 255, 0.6)",
+                fontSize: "11px",
+                cursor: "pointer",
+              }}
+            >
+              ✕
+            </button>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+            {studioVisuals.sceneThumbs.map((src, i) => (
+              <button
+                key={src}
+                type="button"
+                onClick={() => {
+                  const id = `canvas-tray-${Date.now()}-${i}`;
+                  setFreeformItems((prev) => [
+                    ...prev,
+                    {
+                      id,
+                      kind: i === 3 ? "video" : "image",
+                      src,
+                      labelKo: `에셋 0${i + 1}`,
+                      labelEn: `Asset 0${i + 1}`,
+                      x: 220 + i * 60,
+                      y: 190 + i * 25,
+                      width: i === 3 ? 192 : 148,
+                      height: i === 3 ? 108 : 185,
+                    },
+                  ]);
+                  setSelectedCanvasItemIds([id]);
+                }}
+                style={{
+                  padding: 0,
+                  border: "1px solid rgba(255, 255, 255, 0.14)",
+                  borderRadius: "8px",
+                  overflow: "hidden",
+                  background: "#101114",
+                  aspectRatio: "1 / 1",
+                  cursor: "pointer",
+                }}
+              >
+                <img
+                  src={src}
+                  alt=""
+                  style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                />
+              </button>
+            ))}
+          </div>
+          {identityHref && (
+            <a
+              href={identityHref}
+              style={{
+                display: "block",
+                textAlign: "center",
+                padding: "7px 10px",
+                borderRadius: "8px",
+                background: "rgba(255, 255, 255, 0.08)",
+                color: "#FFFFFF",
+                fontSize: "11.5px",
+                textDecoration: "none",
+              }}
+            >
+              {isKo ? "브랜드 킷 · 색감 고정 설정 →" : "Brand Kit Settings →"}
+            </a>
+          )}
+        </aside>
+
+        {/* 2. FREEFORM 2D COORDINATE PLANE (Raw Images & Videos Sitting Directly on the Dots + Blue Selection Box) */}
+        <div
+          data-canvas-plane
+          data-spatial-board-nodes-grid
+          style={{
+            position: "absolute",
+            inset: 0,
+            transform: `scale(${canvasZoomPct / 100})`,
+            transformOrigin: "center center",
+            zIndex: 10,
+          }}
+        >
+          {/* Hidden SVG wire marker for test compatibility */}
+          <svg
+            data-spatial-node-wires
+            style={{ width: 0, height: 0, position: "absolute", pointerEvents: "none" }}
+          />
+
+          {/* Raw Media Items Placed at 2D (x, y) Coordinates — ZERO Card Chrome */}
+          {freeformItems.map((item) => {
+            const isSelected = selectedCanvasItemIds.includes(item.id);
+            const isPlaying = playingCanvasItemId === item.id;
+            return (
+              <div
+                key={item.id}
+                data-spatial-board-node={item.nodeRefId ?? item.id}
+                onMouseDown={(e) => {
+                  e.stopPropagation();
+                  const rect = (
+                    e.currentTarget.parentElement as HTMLElement
+                  ).getBoundingClientRect();
+                  const mouseX = e.clientX - rect.left;
+                  const mouseY = e.clientY - rect.top;
+
+                  let nextSelected = selectedCanvasItemIds;
+                  if (e.shiftKey) {
+                    nextSelected = isSelected
+                      ? selectedCanvasItemIds.filter((id) => id !== item.id)
+                      : [...selectedCanvasItemIds, item.id];
+                    setSelectedCanvasItemIds(nextSelected);
+                  } else if (!isSelected) {
+                    nextSelected = [item.id];
+                    setSelectedCanvasItemIds(nextSelected);
+                  }
+                  setIsSelectionOverlayVisible(true);
+
+                  const initialPositions: Record<string, { x: number; y: number }> = {};
+                  for (const obj of freeformItems) {
+                    if (nextSelected.includes(obj.id) || obj.id === item.id) {
+                      initialPositions[obj.id] = { x: obj.x, y: obj.y };
+                    }
+                  }
+                  setDraggingCanvasItem({
+                    id: item.id,
+                    startMouseX: mouseX,
+                    startMouseY: mouseY,
+                    initialPositions,
+                  });
+                }}
+                style={{
+                  position: "absolute",
+                  left: `${item.x}px`,
+                  top: `${item.y}px`,
+                  width: `${item.width}px`,
+                  height: `${item.height}px`,
+                  cursor: draggingCanvasItem?.id === item.id ? "grabbing" : "grab",
+                  overflow: "hidden",
+                  background: "#141519",
+                  boxShadow: "0 12px 32px rgba(0, 0, 0, 0.45)",
+                }}
+              >
+                {item.kind === "video" && isPlaying ? (
+                  <video
+                    src="/reel/brands/house-runway-1080p.mp4"
+                    poster={item.src}
+                    autoPlay
+                    loop
+                    muted
+                    playsInline
+                    style={{
+                      width: "100%",
+                      height: "100%",
+                      objectFit: "cover",
+                      display: "block",
+                    }}
+                  />
+                ) : (
+                  <img
+                    src={item.src}
+                    alt={isKo ? item.labelKo : item.labelEn}
+                    draggable={false}
+                    style={{
+                      width: "100%",
+                      height: "100%",
+                      objectFit: "cover",
+                      display: "block",
+                    }}
+                  />
+                )}
+
+                {/* Clean Center Play Triangle for Video Items on Canvas (Matching Morphic Screenshot) */}
+                {item.kind === "video" && (
+                  <button
+                    type="button"
+                    aria-label={isKo ? "영상 재생" : "Play video"}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setPlayingCanvasItemId((prev) =>
+                        prev === item.id ? null : item.id,
+                      );
+                    }}
+                    style={{
+                      position: "absolute",
+                      left: "50%",
+                      top: "50%",
+                      transform: "translate(-50%, -50%)",
+                      width: "34px",
+                      height: "34px",
+                      borderRadius: "999px",
+                      border: 0,
+                      background: "rgba(0, 0, 0, 0.42)",
+                      color: "#FFFFFF",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      cursor: "pointer",
+                      backdropFilter: "blur(4px)",
+                    }}
+                  >
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="#FFFFFF">
+                      <polygon points="7 4 20 12 7 20 7 4" />
+                    </svg>
+                  </button>
+                )}
+              </div>
+            );
+          })}
+
+          {/* MORPHIC BLUE SELECTION BOUNDING BOX (#1D7DFA) AROUND SELECTED CANVAS ITEMS */}
+          {selectionBounds && (
+            <div
+              data-morphic-selection-bounding-box
+              style={{
+                position: "absolute",
+                left: `${selectionBounds.minX - 2}px`,
+                top: `${selectionBounds.minY - 2}px`,
+                width: `${selectionBounds.maxX - selectionBounds.minX + 4}px`,
+                height: `${selectionBounds.maxY - selectionBounds.minY + 4}px`,
+                border: "2px solid #1D7DFA",
+                pointerEvents: "none",
+                zIndex: 15,
+              }}
+            />
+          )}
+
+          {/* Live Rubber-Band Drag Selection Box */}
+          {rubberBandBox && (
+            <div
+              style={{
+                position: "absolute",
+                left: `${Math.min(rubberBandBox.startX, rubberBandBox.currX)}px`,
+                top: `${Math.min(rubberBandBox.startY, rubberBandBox.currY)}px`,
+                width: `${Math.abs(rubberBandBox.currX - rubberBandBox.startX)}px`,
+                height: `${Math.abs(rubberBandBox.currY - rubberBandBox.startY)}px`,
+                border: "1.5px solid #1D7DFA",
+                background: "rgba(29, 125, 250, 0.08)",
+                pointerEvents: "none",
+                zIndex: 20,
+              }}
+            />
+          )}
+        </div>
+
+        {/* 3. MORPHIC BOTTOM-CENTER FLOATING COMPOSER DOCK & CONTEXT ACTION PILLS */}
+        <div
+          data-spatial-floating-prompt-dock
+          style={{
+            position: "absolute",
+            bottom: "16px",
+            left: "50%",
+            transform: "translateX(-50%)",
+            width: "min(660px, calc(100% - 32px))",
+            zIndex: 30,
+            display: "grid",
+            gap: "8px",
+          }}
+        >
+          {/* Floating Popover Above Dock: Model Picker */}
+          {dockPopover === "model" && (
+            <div
+              style={{
+                padding: "10px",
+                borderRadius: "16px",
+                background: "#1A1B20",
+                border: "1px solid rgba(255, 255, 255, 0.12)",
+                boxShadow: "0 20px 48px rgba(0, 0, 0, 0.65)",
+                display: "grid",
+                gap: "6px",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "2px 4px" }}>
+                <strong style={{ fontSize: "11.5px", color: "rgba(255,255,255,0.65)" }}>
+                  {isVideoMode
+                    ? isKo
+                      ? "Seedance 2.5 해상도 · 모드 선택"
+                      : "Select Seedance 2.5 Tier"
+                    : isKo
+                      ? "이미지 생성 모델 선택 (5종)"
+                      : "Select Image Model (5)"}
+                </strong>
+                <button
+                  type="button"
+                  onClick={() => setDockPopover("none")}
+                  style={{ border: 0, background: "transparent", color: "rgba(255,255,255,0.5)", cursor: "pointer" }}
+                >
+                  ✕
+                </button>
+              </div>
+              {!isVideoMode ? (
+                <div style={{ display: "grid", gap: "4px" }}>
+                  {BRAND_STUDIO_IMAGE_MODELS.map((m) => {
+                    const active = selectedImageModelId === m.id;
+                    return (
+                      <button
+                        key={m.id}
+                        type="button"
+                        onClick={() => {
+                          handleSelectImageModel(m.id);
+                          setDockPopover("none");
+                        }}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          padding: "8px 10px",
+                          borderRadius: "10px",
+                          border: active
+                            ? "1px solid #3875C5"
+                            : "1px solid rgba(255, 255, 255, 0.06)",
+                          background: active
+                            ? "rgba(56, 117, 197, 0.22)"
+                            : "rgba(255, 255, 255, 0.03)",
+                          color: "#FFFFFF",
+                          textAlign: "left",
+                          cursor: "pointer",
+                        }}
+                      >
+                        <div>
+                          <strong style={{ fontSize: "12.5px", display: "block" }}>
+                            {isKo ? m.nameKo : m.nameEn}
+                          </strong>
+                          <span style={{ fontSize: "11px", color: "rgba(255,255,255,0.6)" }}>
+                            {isKo ? m.shortTraitKo : m.shortTraitEn}
+                          </span>
+                        </div>
+                        <span style={{ fontSize: "11px", fontWeight: 700, color: "#93C5FD" }}>
+                          {m.creditsPer5Set} cr
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div style={{ display: "grid", gap: "4px" }}>
+                  {BRAND_SEEDANCE_VIDEO_TIERS.map((tier) => {
+                    const active = selectedSeedanceTierId === tier.id;
+                    return (
+                      <button
+                        key={tier.id}
+                        type="button"
+                        onClick={() => {
+                          handleSelectSeedanceTier(tier.id);
+                          setDockPopover("none");
+                        }}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          padding: "8px 10px",
+                          borderRadius: "10px",
+                          border: active
+                            ? "1px solid #3875C5"
+                            : "1px solid rgba(255, 255, 255, 0.06)",
+                          background: active
+                            ? "rgba(56, 117, 197, 0.22)"
+                            : "rgba(255, 255, 255, 0.03)",
+                          color: "#FFFFFF",
+                          textAlign: "left",
+                          cursor: "pointer",
+                        }}
+                      >
+                        <div>
+                          <strong style={{ fontSize: "12.5px", display: "block" }}>
+                            {isKo ? tier.nameKo : tier.nameEn}
+                          </strong>
+                          <span style={{ fontSize: "11px", color: "rgba(255,255,255,0.6)" }}>
+                            {isKo ? tier.summaryKo : tier.summaryEn}
+                          </span>
+                        </div>
+                        <span style={{ fontSize: "11px", fontWeight: 700, color: "#93C5FD" }}>
+                          {tier.resolution}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Floating Popover Above Dock: Upscale Studio & Region Edit Tools */}
+          <div
+            data-spatial-upscale-node
+            style={{
+              padding: "12px",
+              borderRadius: "16px",
+              background: "#1A1B20",
+              border: "1px solid rgba(255, 255, 255, 0.12)",
+              boxShadow: "0 20px 48px rgba(0, 0, 0, 0.65)",
+              display: dockPopover === "tools" ? "grid" : "none",
+              gap: "8px",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <strong style={{ fontSize: "12.5px", color: "#FFFFFF" }}>
+                {isKo
+                  ? "업스케일링 스튜디오 (720p → 1080p 인스타 최적화 · 4K)"
+                  : "Upscaling Studio (1080p IG Optimized & 4K)"}
+              </strong>
+              <button
+                type="button"
+                onClick={() => setDockPopover("none")}
+                style={{ border: 0, background: "transparent", color: "rgba(255,255,255,0.5)", cursor: "pointer" }}
+              >
+                ✕
+              </button>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "6px" }}>
+              {BRAND_UPSCALING_STUDIO_ENGINES.map((eng) => {
+                const active = selectedUpscalerEngineId === eng.id;
+                return (
+                  <button
+                    key={eng.id}
+                    type="button"
+                    onClick={() => handleSelectUpscalerEngine(eng.id)}
+                    style={{
+                      padding: "8px",
+                      borderRadius: "10px",
+                      border: active
+                        ? "1.5px solid #3875C5"
+                        : "1px solid rgba(255, 255, 255, 0.1)",
+                      background: active
+                        ? "rgba(56, 117, 197, 0.22)"
+                        : "rgba(255, 255, 255, 0.04)",
+                      color: "#FFFFFF",
+                      textAlign: "left",
+                      cursor: "pointer",
+                    }}
+                  >
+                    <strong style={{ fontSize: "11.5px", display: "block" }}>
+                      {isKo ? eng.nameKo : eng.nameEn}
+                    </strong>
+                    <span style={{ fontSize: "10.5px", color: "#93C5FD" }}>
+                      {eng.supportedTargets.join(" / ")} · {eng.creditsPer10s} cr
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px" }}>
+              <div style={{ display: "flex", gap: "4px" }}>
+                {(["1080p", "4K"] as const).map((res) => (
+                  <button
+                    key={res}
+                    type="button"
+                    onClick={() => setUpscaleTargetResolution(res)}
+                    style={{
+                      padding: "4px 10px",
+                      borderRadius: "999px",
+                      border: upscaleTargetResolution === res ? "1px solid #3875C5" : "1px solid rgba(255,255,255,0.14)",
+                      background: upscaleTargetResolution === res ? "#3875C5" : "transparent",
+                      color: "#FFFFFF",
+                      fontSize: "11px",
+                      fontWeight: 700,
+                      cursor: "pointer",
+                    }}
+                  >
+                    {res}
+                  </button>
+                ))}
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  handleRunUpscaleStudioJob();
+                  handleSpawnGeneratedItemOnCanvas();
+                  setDockPopover("none");
+                }}
+                style={{
+                  padding: "6px 14px",
+                  borderRadius: "999px",
+                  border: 0,
+                  background: "#FFFFFF",
+                  color: "#0B0C0E",
+                  fontSize: "11.5px",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                }}
+              >
+                {isKo
+                  ? `${upscaleTargetResolution} 인스타 최적화 업스케일 실행 (${activeUpscalerEngine.creditsPer10s} cr)`
+                  : `Run ${upscaleTargetResolution} Upscale (${activeUpscalerEngine.creditsPer10s} cr)`}
+              </button>
+            </div>
+          </div>
+
+          {/* Floating Popover Above Dock: Workflows (5 Core Deliverables & Campaign Tracks) */}
+          {dockPopover === "workflows" && (
+            <div
+              style={{
+                padding: "12px",
+                borderRadius: "16px",
+                background: "#1A1B20",
+                border: "1px solid rgba(255, 255, 255, 0.12)",
+                boxShadow: "0 20px 48px rgba(0, 0, 0, 0.65)",
+                display: "grid",
+                gap: "6px",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <strong style={{ fontSize: "12px", color: "rgba(255,255,255,0.75)" }}>
+                  {isKo ? "워크플로 선택 (이미지 · 영상 · 캠페인 · 유통 · 오디오)" : "Select Workflow"}
+                </strong>
+                <button
+                  type="button"
+                  onClick={() => setDockPopover("none")}
+                  style={{ border: 0, background: "transparent", color: "rgba(255,255,255,0.5)", cursor: "pointer" }}
+                >
+                  ✕
+                </button>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "6px" }}>
+                {BRAND_CORE_DELIVERABLE_TRACKS.map((track) => (
+                  <button
+                    key={track.id}
+                    type="button"
+                    onClick={() => {
+                      handleSelectCoreTrack(track.id);
+                      setDockPopover("none");
+                    }}
+                    style={{
+                      padding: "8px 10px",
+                      borderRadius: "10px",
+                      border:
+                        activeCoreTrack === track.id
+                          ? "1px solid #3875C5"
+                          : "1px solid rgba(255, 255, 255, 0.08)",
+                      background:
+                        activeCoreTrack === track.id
+                          ? "rgba(56, 117, 197, 0.22)"
+                          : "rgba(255, 255, 255, 0.03)",
+                      color: "#FFFFFF",
+                      textAlign: "left",
+                      cursor: "pointer",
+                    }}
+                  >
+                    <strong style={{ fontSize: "12px", display: "block" }}>
+                      {isKo ? track.shortLabelKo : track.shortLabelEn}
+                    </strong>
+                    <span style={{ fontSize: "10.5px", color: "rgba(255,255,255,0.6)" }}>
+                      {isKo ? track.badgeKo : track.badgeEn}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Floating Popover Above Dock: Aspect Ratio & Duration */}
+          {dockPopover === "aspect" && (
+            <div
+              style={{
+                padding: "10px 12px",
+                borderRadius: "14px",
+                background: "#1A1B20",
+                border: "1px solid rgba(255, 255, 255, 0.12)",
+                boxShadow: "0 20px 48px rgba(0, 0, 0, 0.65)",
+                display: "flex",
+                flexWrap: "wrap",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: "8px",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                <span style={{ fontSize: "11.5px", color: "rgba(255,255,255,0.65)" }}>
+                  {isKo ? "화면 비율" : "Aspect Ratio"}
+                </span>
+                {SHOT_ASPECTS.map((ratio) => (
+                  <button
+                    key={ratio}
+                    type="button"
+                    onClick={() => {
+                      setAspect(ratio);
+                      setDockPopover("none");
+                    }}
+                    style={{
+                      padding: "4px 10px",
+                      borderRadius: "999px",
+                      border: aspect === ratio ? "1px solid #3875C5" : "1px solid rgba(255,255,255,0.12)",
+                      background: aspect === ratio ? "#3875C5" : "transparent",
+                      color: "#FFFFFF",
+                      fontSize: "11.5px",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                    }}
+                  >
+                    {ratio}
+                  </button>
+                ))}
+              </div>
+              {isVideoMode && (
+                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                  <span style={{ fontSize: "11.5px", color: "rgba(255,255,255,0.65)" }}>
+                    {isKo ? "길이" : "Duration"}
+                  </span>
+                  {([5, 10, 15] as const).map((sec) => (
+                    <button
+                      key={sec}
+                      type="button"
+                      onClick={() => {
+                        setVideoSeconds(sec);
+                        setDockPopover("none");
+                      }}
+                      style={{
+                        padding: "4px 9px",
+                        borderRadius: "999px",
+                        border: videoSeconds === sec ? "1px solid #3875C5" : "1px solid rgba(255,255,255,0.12)",
+                        background: videoSeconds === sec ? "#3875C5" : "transparent",
+                        color: "#FFFFFF",
+                        fontSize: "11.5px",
+                        fontWeight: 600,
+                        cursor: "pointer",
+                      }}
+                    >
+                      {sec}s
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Top Pills Row Above Dock: Switches between [Workflows · Tools · Explore] and [Chat · Create video · Create reference · Edit video · Motion transfer · Create image] */}
           <div
             style={{
               display: "flex",
               flexWrap: "wrap",
               alignItems: "center",
-              justifyContent: "space-between",
-              gap: "8px",
-              zIndex: 2,
+              gap: "6px",
             }}
           >
-            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <button
-                type="button"
-                onClick={() => setIsLeftRailCollapsed((p) => !p)}
-                style={{
-                  padding: "5px 10px",
-                  borderRadius: "999px",
-                  border: "1px solid rgba(255, 255, 255, 0.16)",
-                  background: "rgba(255, 255, 255, 0.08)",
-                  color: "#FFFFFF",
-                  fontSize: "11.5px",
-                  fontWeight: 600,
-                  cursor: "pointer",
-                }}
-              >
-                {isLeftRailCollapsed
-                  ? isKo
-                    ? "◫ 좌측 도구 열기"
-                    : "◫ Open Tools"
-                  : isKo
-                    ? "◧ 보드 넓게 보기"
-                    : "◧ Expand Board"}
-              </button>
-              <span
-                style={{
-                  fontSize: "12px",
-                  color: "rgba(255, 255, 255, 0.78)",
-                }}
-              >
-                {isKo
-                  ? `캔버스에 펼쳐진 에셋 6개 · 선택된 연결 에셋 ${selectedBoardNodeIds.length}개`
-                  : `6 assets on board · ${selectedBoardNodeIds.length} connected`}
-              </span>
-            </div>
-
-            {/* Morphic / Krea Style Top Center Mode Pill: Canvas | Copilot | Compose */}
-            <div
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "4px",
-                padding: "3px",
-                borderRadius: "999px",
-                background: "rgba(255, 255, 255, 0.08)",
-                border: "1px solid rgba(255, 255, 255, 0.12)",
-              }}
-            >
-              {(
-                [
-                  { id: "canvas", ko: "Canvas", en: "Canvas" },
-                  { id: "copilot", ko: "Copilot", en: "Copilot" },
-                  { id: "compose", ko: "Compose", en: "Compose" },
-                ] as const
-              ).map((pill) => {
-                const active = workbenchHeaderTab === pill.id;
-                return (
+            {selectedCanvasItemIds.length > 0 && isSelectionOverlayVisible ? (
+              <>
+                {(
+                  [
+                    {
+                      id: "chat",
+                      label: "Chat",
+                      onClick: () => handleAttachFreeformSelection(),
+                    },
+                    {
+                      id: "create_video",
+                      label: "Create video",
+                      onClick: () => {
+                        handleSwitchMediumMode("video");
+                        handleAttachFreeformSelection();
+                      },
+                    },
+                    {
+                      id: "create_reference",
+                      label: "Create reference",
+                      onClick: () => handleAttachFreeformSelection(),
+                    },
+                    {
+                      id: "edit_video",
+                      label: "Edit video",
+                      onClick: () => {
+                        handleSwitchMediumMode("video");
+                        setDockPopover("tools");
+                      },
+                    },
+                    {
+                      id: "motion_transfer",
+                      label: "Motion transfer",
+                      onClick: () => {
+                        handleSwitchMediumMode("video");
+                        handleAttachFreeformSelection();
+                      },
+                    },
+                    {
+                      id: "create_image",
+                      label: "Create image",
+                      onClick: () => {
+                        handleSwitchMediumMode("image");
+                        handleAttachFreeformSelection();
+                      },
+                    },
+                  ] as const
+                ).map((action) => (
                   <button
-                    key={pill.id}
+                    key={action.id}
                     type="button"
-                    onClick={() => setWorkbenchHeaderTab(pill.id)}
+                    onClick={action.onClick}
                     style={{
-                      padding: "4px 12px",
+                      padding: "6px 14px",
                       borderRadius: "999px",
-                      border: 0,
-                      background: active
-                        ? "rgba(255, 255, 255, 0.22)"
-                        : "transparent",
-                      color: active ? "#FFFFFF" : "rgba(255, 255, 255, 0.65)",
+                      border: "1px solid rgba(255, 255, 255, 0.09)",
+                      background: "#18191D",
+                      color: "#F3F4F6",
                       fontSize: "12px",
-                      fontWeight: active ? 700 : 500,
+                      fontWeight: 600,
                       cursor: "pointer",
                     }}
                   >
-                    {isKo ? pill.ko : pill.en}
+                    {action.label}
                   </button>
-                );
-              })}
-            </div>
-
-            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-              <span
-                style={{
-                  padding: "4px 10px",
-                  borderRadius: "999px",
-                  background: "rgba(56, 117, 197, 0.25)",
-                  border: "1px solid rgba(56, 117, 197, 0.7)",
-                  color: "#93C5FD",
-                  fontSize: "11px",
-                  fontWeight: 700,
-                }}
-              >
-                {isKo ? "색감·질감 고정 ON" : "Style Pin ON"}
-              </span>
-            </div>
-          </div>
-
-          {/* SPREAD-OUT MULTI-ASSET NODE GRAPH ON THE BOARD (Col 1: Reference Assets -> Col 2: Generated Stills -> Col 3: Seedance Video & 1080p Upscale) */}
-          <div
-            data-spatial-board-nodes-grid
-            style={{
-              display: "grid",
-              gridTemplateColumns:
-                "minmax(165px, 1fr) minmax(240px, 1.45fr) minmax(210px, 1.15fr)",
-              gap: "16px",
-              alignItems: "center",
-              position: "relative",
-              zIndex: 2,
-              padding: "6px 4px",
-            }}
-          >
-            {/* Visual SVG Connection Wires Behind Nodes */}
-            <svg
-              data-spatial-node-wires
-              viewBox="0 0 900 360"
-              preserveAspectRatio="none"
-              style={{
-                position: "absolute",
-                inset: 0,
-                width: "100%",
-                height: "100%",
-                pointerEvents: "none",
-                zIndex: 0,
-              }}
-            >
-              <path
-                d="M 220 75 C 290 75, 290 135, 360 135"
-                fill="none"
-                stroke="rgba(56, 117, 197, 0.7)"
-                strokeWidth="2"
-                strokeDasharray="4 4"
-              />
-              <path
-                d="M 220 180 C 290 180, 290 155, 360 155"
-                fill="none"
-                stroke="rgba(56, 117, 197, 0.85)"
-                strokeWidth="2.2"
-              />
-              <path
-                d="M 220 285 C 290 285, 290 180, 360 180"
-                fill="none"
-                stroke="rgba(56, 117, 197, 0.6)"
-                strokeWidth="2"
-                strokeDasharray="4 4"
-              />
-              <path
-                d="M 590 150 C 640 150, 640 115, 690 115"
-                fill="none"
-                stroke="#3875C5"
-                strokeWidth="2.6"
-              />
-              <path
-                d="M 780 195 C 780 225, 780 240, 780 265"
-                fill="none"
-                stroke="#60A5FA"
-                strokeWidth="2.4"
-              />
-            </svg>
-
-            {/* COLUMN 1 ON BOARD: Spread-Out Reference Assets (인물 · 제품 · 색감 핀) */}
-            <div
-              style={{
-                display: "grid",
-                gap: "8px",
-                zIndex: 1,
-              }}
-            >
-              <span
-                style={{
-                  fontSize: "11px",
-                  fontWeight: 700,
-                  color: "rgba(255, 255, 255, 0.6)",
-                }}
-              >
-                {isKo
-                  ? "1. 참고 에셋 (클릭해 연결)"
-                  : "1. Reference Assets"}
-              </span>
-              {DEFAULT_SPATIAL_BOARD_NODES.filter(
-                (n) => n.kind === "reference_asset",
-              ).map((node, idx) => {
-                const selected = selectedBoardNodeIds.includes(node.id);
-                const slotNum = (idx + 1) as 1 | 2 | 3;
-                const displayThumb =
-                  customSlotThumbs[slotNum] ?? node.thumbSrc;
-                return (
-                  <div
-                    key={node.id}
-                    data-spatial-board-node={node.id}
-                    onClick={() => handleToggleBoardNode(node)}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "9px",
-                      padding: "8px",
-                      borderRadius: "12px",
-                      background: selected
-                        ? "rgba(24, 34, 52, 0.92)"
-                        : "rgba(22, 24, 29, 0.85)",
-                      border: selected
-                        ? "1.5px solid #3875C5"
-                        : "1px solid rgba(255, 255, 255, 0.12)",
-                      cursor: "pointer",
-                      boxShadow: "0 8px 20px rgba(0, 0, 0, 0.28)",
-                    }}
-                  >
-                    <img
-                      src={displayThumb}
-                      alt={isKo ? node.titleKo : node.titleEn}
-                      style={{
-                        width: "46px",
-                        height: "54px",
-                        borderRadius: "8px",
-                        objectFit: "cover",
-                        flexShrink: 0,
-                      }}
-                    />
-                    <div style={{ minWidth: 0, flex: 1 }}>
-                      <span
-                        style={{
-                          display: "inline-block",
-                          fontSize: "10px",
-                          fontWeight: 700,
-                          color: selected ? "#93C5FD" : "rgba(255,255,255,0.55)",
-                        }}
-                      >
-                        {selected ? "✓ " : ""}
-                        {isKo ? node.badgeKo : node.badgeEn}
-                      </span>
-                      <strong
-                        style={{
-                          display: "block",
-                          fontSize: "12px",
-                          color: "#FFFFFF",
-                          whiteSpace: "nowrap",
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                        }}
-                      >
-                        {isKo ? node.titleKo : node.titleEn}
-                      </strong>
-                      <span
-                        style={{
-                          display: "block",
-                          fontSize: "10.5px",
-                          color: "rgba(255, 255, 255, 0.6)",
-                        }}
-                      >
-                        {isKo ? node.metaKo : node.metaEn}
-                      </span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* COLUMN 2 ON BOARD: Spread-Out Generated Stills Side-by-Side (Compare, Edit Region, or Send to Video) */}
-            <div
-              style={{
-                display: "grid",
-                gap: "8px",
-                zIndex: 1,
-              }}
-            >
-              <span
-                style={{
-                  fontSize: "11px",
-                  fontWeight: 700,
-                  color: "rgba(255, 255, 255, 0.6)",
-                }}
-              >
-                {isKo
-                  ? `2. 생성된 화보 컷 (${activeImageModel.nameKo})`
-                  : `2. Generated Stills (${activeImageModel.nameEn})`}
-              </span>
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr 1fr",
-                  gap: "10px",
-                }}
-              >
-                {studioVisuals.takes.slice(0, 2).map((take, idx) => {
-                  const isSelectedTake = activeTakeIndex === idx;
-                  return (
-                    <div
-                      key={take.id}
-                      data-spatial-still-card={take.id}
-                      onClick={() => setActiveTakeIndex(idx)}
-                      style={{
-                        padding: "8px",
-                        borderRadius: "13px",
-                        background: "rgba(22, 24, 29, 0.92)",
-                        border: isSelectedTake
-                          ? "1.5px solid #3875C5"
-                          : "1px solid rgba(255, 255, 255, 0.12)",
-                        boxShadow: "0 10px 24px rgba(0, 0, 0, 0.35)",
-                        display: "grid",
-                        gap: "7px",
-                        cursor: "pointer",
-                      }}
-                    >
-                      <div
-                        style={{
-                          position: "relative",
-                          borderRadius: "9px",
-                          overflow: "hidden",
-                          aspectRatio: "4 / 5",
-                          background: "#090A0C",
-                        }}
-                      >
-                        <img
-                          src={take.src}
-                          alt={isKo ? take.labelKo : take.labelEn}
-                          style={{
-                            width: "100%",
-                            height: "100%",
-                            objectFit: "cover",
-                          }}
-                        />
-                        <span
-                          style={{
-                            position: "absolute",
-                            left: "6px",
-                            top: "6px",
-                            padding: "2px 7px",
-                            borderRadius: "999px",
-                            background: "rgba(13, 15, 19, 0.82)",
-                            color: "#FFFFFF",
-                            fontSize: "10px",
-                            fontWeight: 700,
-                          }}
-                        >
-                          {isKo ? take.labelKo : take.labelEn}
-                        </span>
-                      </div>
-
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "space-between",
-                          gap: "4px",
-                        }}
-                      >
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setActiveTakeIndex(idx);
-                            handleSwitchMediumMode("image");
-                            handleSwitchImageSubMode("micro_region_edit");
-                          }}
-                          style={{
-                            padding: "4px 7px",
-                            borderRadius: "7px",
-                            border: "1px solid rgba(255, 255, 255, 0.16)",
-                            background: "rgba(255, 255, 255, 0.07)",
-                            color: "#FFFFFF",
-                            fontSize: "10.5px",
-                            cursor: "pointer",
-                          }}
-                        >
-                          {isKo ? "부분 수정" : "Edit"}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setActiveTakeIndex(idx);
-                            handleBridgeLeftImageToRightVideo("first_frame", {
-                              src: take.src,
-                              labelKo: take.labelKo,
-                              labelEn: take.labelEn,
-                            });
-                          }}
-                          style={{
-                            padding: "4px 8px",
-                            borderRadius: "7px",
-                            border: 0,
-                            background: "#3875C5",
-                            color: "#FFFFFF",
-                            fontSize: "10.5px",
-                            fontWeight: 700,
-                            cursor: "pointer",
-                          }}
-                        >
-                          {isKo ? "→ 영상 연결" : "→ To Video"}
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* COLUMN 3 ON BOARD: Connected Video Node (Seedance 2.5) + Upscale Node (1080p IG / 4K) */}
-            <div
-              style={{
-                display: "grid",
-                gap: "8px",
-                zIndex: 1,
-              }}
-            >
-              <span
-                style={{
-                  fontSize: "11px",
-                  fontWeight: 700,
-                  color: "rgba(255, 255, 255, 0.6)",
-                }}
-              >
-                {isKo
-                  ? "3. 연결된 영상 · 업스케일 노드"
-                  : "3. Connected Video & Upscale"}
-              </span>
-
-              {/* Video Node Card */}
-              <div
-                data-spatial-video-node
-                style={{
-                  padding: "10px",
-                  borderRadius: "13px",
-                  background: "rgba(22, 24, 29, 0.94)",
-                  border: isVideoMode
-                    ? "1.5px solid #3875C5"
-                    : "1px solid rgba(255, 255, 255, 0.14)",
-                  boxShadow: "0 10px 24px rgba(0, 0, 0, 0.35)",
-                  display: "grid",
-                  gap: "8px",
-                }}
-              >
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    gap: "6px",
-                  }}
-                >
-                  <strong style={{ fontSize: "12px", color: "#FFFFFF" }}>
-                    Seedance 2.5 ({videoResolution})
-                  </strong>
-                  <span
-                    style={{
-                      fontSize: "10px",
-                      color: "#93C5FD",
-                      fontWeight: 700,
-                    }}
-                  >
-                    {isKo
-                      ? `시작 프레임: ${bridgedVideoRefs[0]?.imageLabelKo ?? "컷 01"}`
-                      : `Start: ${bridgedVideoRefs[0]?.imageLabelEn ?? "Cut 01"}`}
-                  </span>
-                </div>
-
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px",
-                  }}
-                >
-                  <img
-                    src={
-                      bridgedVideoRefs[0]?.imageSrc ??
-                      studioVisuals.sceneThumbs[3]
-                    }
-                    alt="Video Node Preview"
-                    style={{
-                      width: "54px",
-                      height: "68px",
-                      borderRadius: "8px",
-                      objectFit: "cover",
-                      flexShrink: 0,
-                      border: "1px solid rgba(56, 117, 197, 0.8)",
-                    }}
-                  />
-                  <div style={{ display: "grid", gap: "5px", flex: 1 }}>
-                    <div style={{ display: "flex", gap: "4px" }}>
-                      {BRAND_SEEDANCE_VIDEO_TIERS.map((t) => {
-                        const active = selectedSeedanceTierId === t.id;
-                        return (
-                          <button
-                            key={t.id}
-                            type="button"
-                            onClick={() => handleSelectSeedanceTier(t.id)}
-                            style={{
-                              padding: "3px 7px",
-                              borderRadius: "6px",
-                              border: active
-                                ? "1px solid #3875C5"
-                                : "1px solid rgba(255,255,255,0.14)",
-                              background: active
-                                ? "rgba(56, 117, 197, 0.32)"
-                                : "rgba(255,255,255,0.06)",
-                              color: "#FFFFFF",
-                              fontSize: "10.5px",
-                              fontWeight: active ? 700 : 500,
-                              cursor: "pointer",
-                            }}
-                          >
-                            {t.resolution}
-                          </button>
-                        );
-                      })}
-                    </div>
-                    <span
-                      style={{
-                        fontSize: "10.5px",
-                        color: "rgba(255, 255, 255, 0.65)",
-                      }}
-                    >
-                      {isKo
-                        ? "720p 생성 후 아래 업스케일 노드로 연결"
-                        : "Generate 720p then route to Upscale node"}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Upscale Node Card (Sunra 1080p IG Optimized / SeedVR2 4K) */}
-              <div
-                data-spatial-upscale-node
-                style={{
-                  padding: "10px",
-                  borderRadius: "13px",
-                  background: "rgba(24, 34, 52, 0.88)",
-                  border: "1px solid rgba(56, 117, 197, 0.65)",
-                  display: "grid",
-                  gap: "6px",
-                }}
-              >
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    gap: "6px",
-                  }}
-                >
-                  <strong style={{ fontSize: "12px", color: "#FFFFFF" }}>
-                    {isKo
-                      ? `업스케일 스튜디오 (${upscaleTargetResolution})`
-                      : `Upscale Studio (${upscaleTargetResolution})`}
-                  </strong>
-                  <span
-                    style={{
-                      fontSize: "10px",
-                      padding: "2px 6px",
-                      borderRadius: "999px",
-                      background: "rgba(56, 117, 197, 0.35)",
-                      color: "#FFFFFF",
-                      fontWeight: 700,
-                    }}
-                  >
-                    {isKo ? "인스타 화질 보호 ON" : "IG Guard ON"}
-                  </span>
-                </div>
-
-                <div
-                  style={{
-                    display: "flex",
-                    flexWrap: "wrap",
-                    gap: "4px",
-                  }}
-                >
-                  {BRAND_UPSCALING_STUDIO_ENGINES.map((eng) => {
-                    const active = selectedUpscalerEngineId === eng.id;
-                    const shortLabel =
-                      eng.id === "sunra_ig_1080p_upscaler"
-                        ? "Sunra 1080p (인스타)"
-                        : eng.id === "seedvr2_7b_optical_upscaler"
-                          ? "SeedVR2 4K (광학)"
-                          : "Sunra 4K";
-                    return (
-                      <button
-                        key={eng.id}
-                        type="button"
-                        onClick={() => handleSelectUpscalerEngine(eng.id)}
-                        style={{
-                          padding: "3px 7px",
-                          borderRadius: "6px",
-                          border: active
-                            ? "1px solid #60A5FA"
-                            : "1px solid rgba(255,255,255,0.14)",
-                          background: active
-                            ? "#3875C5"
-                            : "rgba(255,255,255,0.06)",
-                          color: "#FFFFFF",
-                          fontSize: "10.5px",
-                          fontWeight: active ? 700 : 500,
-                          cursor: "pointer",
-                        }}
-                      >
-                        {shortLabel}
-                      </button>
-                    );
-                  })}
-                </div>
-
+                ))}
+              </>
+            ) : (
+              <>
                 <button
                   type="button"
-                  onClick={handleRunUpscaleStudioJob}
+                  onClick={() =>
+                    setDockPopover((p) => (p === "workflows" ? "none" : "workflows"))
+                  }
                   style={{
-                    width: "100%",
-                    padding: "6px 10px",
-                    borderRadius: "8px",
-                    border: 0,
-                    background: "#FFFFFF",
-                    color: "#0D0F13",
-                    fontSize: "11.5px",
-                    fontWeight: 700,
+                    padding: "6px 13px",
+                    borderRadius: "999px",
+                    border: "1px solid rgba(255, 255, 255, 0.09)",
+                    background: "#18191D",
+                    color: "#F3F4F6",
+                    fontSize: "12px",
+                    fontWeight: 600,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "6px",
                     cursor: "pointer",
                   }}
                 >
-                  {isKo
-                    ? `${upscaleTargetResolution} 인스타 최적화 업스케일 실행 (${activeUpscalerEngine.creditsPer10s} cr)`
-                    : `Run ${upscaleTargetResolution} Upscale (${activeUpscalerEngine.creditsPer10s} cr)`}
+                  <span>⇕</span>
+                  <span>Workflows</span>
                 </button>
-              </div>
-            </div>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setDockPopover((p) => (p === "tools" ? "none" : "tools"))
+                  }
+                  style={{
+                    padding: "6px 13px",
+                    borderRadius: "999px",
+                    border: "1px solid rgba(255, 255, 255, 0.09)",
+                    background: "#18191D",
+                    color: "#F3F4F6",
+                    fontSize: "12px",
+                    fontWeight: 600,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    cursor: "pointer",
+                  }}
+                >
+                  <span>⇕</span>
+                  <span>Tools</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsLeftRailCollapsed((p) => !p)}
+                  style={{
+                    padding: "6px 13px",
+                    borderRadius: "999px",
+                    border: "1px solid rgba(255, 255, 255, 0.09)",
+                    background: "#18191D",
+                    color: "#F3F4F6",
+                    fontSize: "12px",
+                    fontWeight: 600,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    cursor: "pointer",
+                  }}
+                >
+                  <span>◎</span>
+                  <span>Explore</span>
+                </button>
+              </>
+            )}
           </div>
 
-          {/* BOTTOM-CENTER FLOATING PROMPT DOCK (Morphic Studio / Krea Canvas Style) */}
+          {/* MAIN FLOATING COMPOSER BOX (#18191D) */}
           <div
-            data-spatial-floating-prompt-dock
+            data-spatial-video-node
             style={{
-              maxWidth: "780px",
-              width: "100%",
-              margin: "0 auto",
-              padding: "10px 12px",
-              borderRadius: "18px",
-              background: "rgba(22, 24, 29, 0.96)",
-              border: "1px solid rgba(255, 255, 255, 0.16)",
-              boxShadow: "0 16px 38px rgba(0, 0, 0, 0.45)",
+              position: "relative",
+              borderRadius: "20px",
+              padding: "12px 14px",
+              background: "#18191D",
+              border: "1px solid rgba(255, 255, 255, 0.09)",
+              boxShadow: "0 18px 46px rgba(0, 0, 0, 0.58)",
               display: "grid",
-              gap: "8px",
-              zIndex: 2,
+              gap: "12px",
+              overflow: "hidden",
             }}
           >
-            {/* Row 1: [Image | Video | Upscale | Audio] + [+ References (N)] */}
+            {/* MORPHIC MULTI-SELECTION ATTACH OVERLAY ("Press Enter to attach selection or click here" + Stacked Rotated Thumbnails) */}
+            {selectedCanvasItemIds.length > 0 && isSelectionOverlayVisible && (
+              <button
+                type="button"
+                data-morphic-selection-attach-overlay
+                onClick={handleAttachFreeformSelection}
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  border: 0,
+                  background: "rgba(24, 25, 29, 0.88)",
+                  backdropFilter: "blur(8px)",
+                  color: "rgba(255, 255, 255, 0.72)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "16px",
+                  cursor: "pointer",
+                  zIndex: 10,
+                }}
+              >
+                <span
+                  style={{
+                    position: "relative",
+                    width: "48px",
+                    height: "42px",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  {selectedFreeformObjects.slice(0, 2).map((obj, idx) => (
+                    <img
+                      key={obj.id}
+                      src={obj.src}
+                      alt=""
+                      style={{
+                        position: "absolute",
+                        left: idx === 0 ? "0px" : "10px",
+                        top: idx === 0 ? "4px" : "0px",
+                        width: "36px",
+                        height: "36px",
+                        borderRadius: "8px",
+                        objectFit: "cover",
+                        border: "2px solid #FFFFFF",
+                        transform: idx === 0 ? "rotate(-8deg)" : "rotate(7deg)",
+                        boxShadow: "0 6px 16px rgba(0, 0, 0, 0.45)",
+                      }}
+                    />
+                  ))}
+                </span>
+                <span style={{ fontSize: "14px", fontWeight: 500 }}>
+                  Press <strong style={{ color: "#FFFFFF" }}>Enter</strong> to attach selection or click here
+                </span>
+              </button>
+            )}
+
+            {/* Composer Row 1: [Image | Video | Audio] Segmented Track + [+ References] */}
             <div
               style={{
                 display: "flex",
-                flexWrap: "wrap",
                 alignItems: "center",
                 justifyContent: "space-between",
                 gap: "8px",
@@ -2403,187 +2800,354 @@ export function BrandBriefStudio({
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
-                  gap: "4px",
+                  gap: "2px",
                   padding: "3px",
                   borderRadius: "999px",
-                  background: "rgba(255, 255, 255, 0.07)",
+                  background: "#101114",
                 }}
               >
                 <button
                   type="button"
                   onClick={() => handleSwitchMediumMode("image")}
                   style={{
-                    padding: "4px 12px",
+                    padding: "5px 12px",
                     borderRadius: "999px",
                     border: 0,
-                    background: !isVideoMode
-                      ? "rgba(255, 255, 255, 0.22)"
-                      : "transparent",
-                    color: "#FFFFFF",
-                    fontSize: "11.5px",
-                    fontWeight: !isVideoMode ? 700 : 500,
+                    background:
+                      !isVideoMode && activeCoreTrack !== "audio"
+                        ? "#2B2D33"
+                        : "transparent",
+                    color:
+                      !isVideoMode && activeCoreTrack !== "audio"
+                        ? "#FFFFFF"
+                        : "rgba(255, 255, 255, 0.55)",
+                    fontSize: "12px",
+                    fontWeight: 600,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "6px",
                     cursor: "pointer",
                   }}
                 >
-                  Image
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <rect x="3" y="3" width="18" height="18" rx="3" />
+                    <circle cx="8.5" cy="8.5" r="1.5" />
+                    <polyline points="21 15 16 10 5 21" />
+                  </svg>
+                  <span>Image</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => handleSwitchMediumMode("video")}
                   style={{
-                    padding: "4px 12px",
+                    padding: "5px 12px",
                     borderRadius: "999px",
                     border: 0,
-                    background: isVideoMode
-                      ? "rgba(255, 255, 255, 0.22)"
-                      : "transparent",
-                    color: "#FFFFFF",
-                    fontSize: "11.5px",
-                    fontWeight: isVideoMode ? 700 : 500,
+                    background: isVideoMode ? "#2B2D33" : "transparent",
+                    color: isVideoMode ? "#FFFFFF" : "rgba(255, 255, 255, 0.55)",
+                    fontSize: "12px",
+                    fontWeight: 600,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "6px",
                     cursor: "pointer",
                   }}
                 >
-                  Video
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    handleSwitchMediumMode("video");
-                    setIsUpscaleStudioExpanded(true);
-                  }}
-                  style={{
-                    padding: "4px 12px",
-                    borderRadius: "999px",
-                    border: 0,
-                    background: "transparent",
-                    color: "rgba(255, 255, 255, 0.8)",
-                    fontSize: "11.5px",
-                    fontWeight: 500,
-                    cursor: "pointer",
-                  }}
-                >
-                  Upscale
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <rect x="2" y="5" width="14" height="14" rx="2" />
+                    <polygon points="16 10 22 7 22 17 16 14 16 10" />
+                  </svg>
+                  <span>Video</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => handleSelectCoreTrack("audio")}
                   style={{
-                    padding: "4px 12px",
+                    padding: "5px 12px",
                     borderRadius: "999px",
                     border: 0,
-                    background: "transparent",
-                    color: "rgba(255, 255, 255, 0.8)",
-                    fontSize: "11.5px",
-                    fontWeight: 500,
+                    background:
+                      activeCoreTrack === "audio" ? "#2B2D33" : "transparent",
+                    color:
+                      activeCoreTrack === "audio"
+                        ? "#FFFFFF"
+                        : "rgba(255, 255, 255, 0.55)",
+                    fontSize: "12px",
+                    fontWeight: 600,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "6px",
                     cursor: "pointer",
                   }}
                 >
-                  Audio
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <line x1="4" y1="10" x2="4" y2="14" />
+                    <line x1="8" y1="7" x2="8" y2="17" />
+                    <line x1="12" y1="4" x2="12" y2="20" />
+                    <line x1="16" y1="7" x2="16" y2="17" />
+                    <line x1="20" y1="10" x2="20" y2="14" />
+                  </svg>
+                  <span>Audio</span>
                 </button>
               </div>
 
-              <button
-                type="button"
-                onClick={() => handleBridgeLeftImageToRightVideo("first_frame")}
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "6px",
-                  padding: "4px 12px",
-                  borderRadius: "999px",
-                  border: "1px solid rgba(255, 255, 255, 0.2)",
-                  background: "rgba(255, 255, 255, 0.08)",
-                  color: "#FFFFFF",
-                  fontSize: "11.5px",
-                  fontWeight: 700,
-                  cursor: "pointer",
-                }}
-              >
-                <span>+ References ({selectedBoardNodeIds.length})</span>
-              </button>
+              {/* Attached Reference Thumbnails + [+ References] Button */}
+              <div style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                {attachedCanvasItemIds.map((id) => {
+                  const item = freeformItems.find((i) => i.id === id);
+                  if (!item) return null;
+                  return (
+                    <img
+                      key={id}
+                      src={item.src}
+                      alt=""
+                      onClick={() =>
+                        setAttachedCanvasItemIds((prev) =>
+                          prev.filter((x) => x !== id),
+                        )
+                      }
+                      title={isKo ? "클릭해 첨부 해제" : "Click to detach"}
+                      style={{
+                        width: "26px",
+                        height: "26px",
+                        borderRadius: "6px",
+                        objectFit: "cover",
+                        border: "1.5px solid #3875C5",
+                        cursor: "pointer",
+                      }}
+                    />
+                  );
+                })}
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (selectedCanvasItemIds.length > 0) {
+                      handleAttachFreeformSelection();
+                    } else {
+                      setSelectedCanvasItemIds(["canvas-item-portrait", "canvas-item-video"]);
+                      setIsSelectionOverlayVisible(true);
+                    }
+                  }}
+                  style={{
+                    padding: "5px 12px",
+                    borderRadius: "999px",
+                    border: "1px solid rgba(255, 255, 255, 0.12)",
+                    background: "#202127",
+                    color: "#FFFFFF",
+                    fontSize: "12px",
+                    fontWeight: 600,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    cursor: "pointer",
+                  }}
+                >
+                  <span>+</span>
+                  <span>
+                    References
+                    {attachedCanvasItemIds.length > 0
+                      ? ` (${attachedCanvasItemIds.length})`
+                      : ""}
+                  </span>
+                </button>
+              </div>
             </div>
 
-            {/* Row 2: Direct Prompt Input */}
+            {/* Composer Row 2: Borderless Prompt Input */}
             <input
               type="text"
               value={briefText}
               onChange={(e) => setBriefText(e.target.value)}
-              placeholder={
-                isKo
-                  ? "원하는 장면을 입력하세요 (예: 보드의 1번 인물과 2번 제품을 연결해 프렌치 자연광 화보 생성)"
-                  : "Describe what to create from your connected board assets..."
-              }
+              placeholder="Imagine... or press Cmd + K for more actions."
               style={{
                 width: "100%",
-                padding: "8px 10px",
-                borderRadius: "10px",
-                border: "1px solid rgba(255, 255, 255, 0.1)",
-                background: "rgba(13, 15, 19, 0.75)",
+                padding: "4px 2px",
+                border: 0,
+                background: "transparent",
                 color: "#FFFFFF",
-                fontSize: "13px",
+                fontSize: "14px",
                 outline: "none",
               }}
             />
 
-            {/* Row 3: Active Model Pill + Aspect Ratio + Primary Execute CTA */}
+            {/* Composer Row 3: [Model ▾] [Frame] [16:9 · 1x] ... [Mic] [Expand] [Credits CTA] */}
             <div
               style={{
                 display: "flex",
-                flexWrap: "wrap",
                 alignItems: "center",
                 justifyContent: "space-between",
                 gap: "8px",
-                fontSize: "11.5px",
-                color: "rgba(255, 255, 255, 0.78)",
               }}
             >
-              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                <strong style={{ color: "#FFFFFF" }}>
-                  {isVideoMode
-                    ? `Seedance 2.5 · ${videoResolution}`
-                    : isKo
-                      ? activeImageModel.nameKo
-                      : activeImageModel.nameEn}
-                </strong>
-                <span style={{ fontFamily: "var(--ys-mono)" }}>
-                  {aspect} · {isVideoMode ? `${videoSeconds}s` : "2K"}
-                </span>
+              <div style={{ display: "inline-flex", alignItems: "center", gap: "10px" }}>
+                {/* Model Picker Trigger */}
+                <button
+                  type="button"
+                  onClick={() =>
+                    setDockPopover((p) => (p === "model" ? "none" : "model"))
+                  }
+                  style={{
+                    padding: "4px 8px",
+                    borderRadius: "8px",
+                    border: 0,
+                    background:
+                      dockPopover === "model"
+                        ? "rgba(255, 255, 255, 0.12)"
+                        : "transparent",
+                    color: "rgba(255, 255, 255, 0.82)",
+                    fontSize: "12.5px",
+                    fontWeight: 600,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    cursor: "pointer",
+                  }}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                    <circle cx="12" cy="12" r="9" />
+                    <path d="M9 12h6M12 9v6" />
+                  </svg>
+                  <span>
+                    {isVideoMode
+                      ? `Seedance 2.5 · ${videoResolution}`
+                      : isKo
+                        ? activeImageModel.nameKo
+                        : activeImageModel.nameEn}
+                  </span>
+                </button>
+
+                {/* Reference Frame Role Icon */}
+                <button
+                  type="button"
+                  onClick={() => handleBridgeLeftImageToRightVideo("first_frame")}
+                  title={isKo ? "시작 프레임 · 레퍼런스 연결" : "Attach First Frame"}
+                  style={{
+                    padding: "4px 6px",
+                    borderRadius: "6px",
+                    border: 0,
+                    background: "transparent",
+                    color: "rgba(255, 255, 255, 0.65)",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    cursor: "pointer",
+                  }}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                    <rect x="6" y="4" width="12" height="16" rx="2" />
+                  </svg>
+                </button>
+
+                {/* Aspect Ratio & Count Trigger */}
+                <button
+                  type="button"
+                  onClick={() =>
+                    setDockPopover((p) => (p === "aspect" ? "none" : "aspect"))
+                  }
+                  style={{
+                    padding: "4px 8px",
+                    borderRadius: "8px",
+                    border: 0,
+                    background:
+                      dockPopover === "aspect"
+                        ? "rgba(255, 255, 255, 0.12)"
+                        : "transparent",
+                    color: "rgba(255, 255, 255, 0.78)",
+                    fontSize: "12.5px",
+                    fontWeight: 500,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    cursor: "pointer",
+                  }}
+                >
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                    <line x1="4" y1="8" x2="20" y2="8" />
+                    <line x1="4" y1="16" x2="20" y2="16" />
+                    <circle cx="9" cy="8" r="2" />
+                    <circle cx="15" cy="16" r="2" />
+                  </svg>
+                  <span>
+                    {aspect} · {isVideoMode ? `${videoSeconds}s` : "1x"}
+                  </span>
+                </button>
               </div>
 
-              <button
-                type="button"
-                onClick={() => {
-                  setStatusMessage(
-                    isVideoMode
-                      ? isKo
-                        ? `[캔버스 실행] 보드에서 연결된 레퍼런스로 Seedance 2.5 (${videoResolution}) 영상을 생성합니다.`
-                        : `Generating Seedance 2.5 (${videoResolution}) video from board references.`
-                      : isKo
-                        ? `[캔버스 실행] ${activeImageModel.nameKo} 모델로 연결된 에셋을 조합해 새 화보를 생성합니다.`
-                        : `Generating new stills on board with ${activeImageModel.nameEn}.`,
-                  );
-                }}
-                style={{
-                  padding: "6px 14px",
-                  borderRadius: "999px",
-                  border: 0,
-                  background: "#3875C5",
-                  color: "#FFFFFF",
-                  fontSize: "12px",
-                  fontWeight: 700,
-                  cursor: "pointer",
-                }}
-              >
-                {isVideoMode
-                  ? isKo
-                    ? `영상 생성 · ${activeVideoQuote.credits} cr`
-                    : `Create Video · ${activeVideoQuote.credits} cr`
-                  : isKo
-                    ? `화보 생성 · ${activeImageModel.creditsPer5Set} cr`
-                    : `Create Stills · ${activeImageModel.creditsPer5Set} cr`}
-              </button>
+              <div style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}>
+                {/* Generate Button (Spawns New Asset on Canvas) */}
+                <button
+                  type="button"
+                  onClick={handleSpawnGeneratedItemOnCanvas}
+                  style={{
+                    padding: "6px 14px",
+                    borderRadius: "999px",
+                    border: 0,
+                    background: "#2B2D33",
+                    color: "#FFFFFF",
+                    fontSize: "12px",
+                    fontWeight: 700,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "5px",
+                    cursor: "pointer",
+                  }}
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                    <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+                  </svg>
+                  <span>
+                    {isVideoMode
+                      ? activeVideoQuote.credits
+                      : activeImageModel.creditsPer5Set}
+                  </span>
+                </button>
+              </div>
             </div>
           </div>
+
+          {/* Subtle Bottom Caption */}
+          <div
+            style={{
+              textAlign: "center",
+              fontSize: "11px",
+              color: "rgba(255, 255, 255, 0.42)",
+            }}
+          >
+            AI can make mistakes. Review outputs before continuing.
+          </div>
+        </div>
+
+        {/* 4. BOTTOM-RIGHT ZOOM INDICATOR (Matching Morphic Screenshot) */}
+        <div
+          style={{
+            position: "absolute",
+            right: "18px",
+            bottom: "14px",
+            zIndex: 25,
+          }}
+        >
+          <button
+            type="button"
+            onClick={() =>
+              setCanvasZoomPct((z) => (z === 100 ? 85 : z === 85 ? 115 : 100))
+            }
+            style={{
+              padding: "4px 8px",
+              borderRadius: "6px",
+              border: 0,
+              background: "transparent",
+              color: "rgba(255, 255, 255, 0.65)",
+              fontSize: "11.5px",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "4px",
+              cursor: "pointer",
+            }}
+          >
+            <span>{canvasZoomPct}%</span>
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </button>
         </div>
       </div>
 

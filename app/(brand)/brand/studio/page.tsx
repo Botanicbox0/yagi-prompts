@@ -126,54 +126,6 @@ export default async function BrandStudio({
   const guide = <ServiceGuide kind="studio" b={b} showOther={access.canRequest || access.fresh} organizationId={choice?.id} />;
   return (
     <div data-brand-production data-studio-stage={stage}>
-      <div className={explaining ? "bw-heading bw-studio-hero" : "bw-heading"}>
-        <div>
-          <p className="bw-kicker">{t.eyebrow}</p>
-          <h1>{t.title}</h1>
-          {explaining ? (
-            <>
-              <p className="bw-studio-lead">{o.lead}</p>
-              {stage === "onboarding" && <p>{o.next}</p>}
-            </>
-          ) : (
-            <p>{t.subtitle}</p>
-          )}
-        </div>
-        {stage === "onboarding" ? (
-          <div className="bw-studio-hero-action" data-studio-onboarding>
-            {inquiry}
-            <p className="bw-muted">{o.noCommitment}</p>
-          </div>
-        ) : (
-          inquiry
-        )}
-      </div>
-      {access.staff && choice && <StaffNotice b={b} manageHref={viewer.isAdmin ? adminOrganizationHref(choice.id, brandHost) : null} />}
-      {stage === "requested" && request && (
-        <section className="bw-note bw-studio-status" data-studio-request={request.answered ? "answered" : "waiting"}>
-          <h2>{request.answered ? o.answeredTitle : o.requestedTitle}</h2>
-          <p>{request.answered ? o.answeredBody : o.requestedBody.replace("{date}", formatBrandTimestamp(request.sentAt, locale) ?? "")}</p>
-        </section>
-      )}
-      {stage === "read-only" && (
-        // The request invitation would point at a button a viewer does not have.
-        <section className="bw-note bw-studio-status" data-brand-studio-read-only>
-          <h2>{b.access.studioViewerTitle}</h2>
-          <p>{b.access.studioViewer}</p>
-        </section>
-      )}
-      {stage === "templates-pending" && (
-        <section className="bw-note bw-studio-status" data-studio-templates-pending>
-          <h2>{o.templatesPendingTitle}</h2>
-          <p>{o.templatesPendingBody}</p>
-        </section>
-      )}
-      {stage === "used-up" && (
-        <section className="bw-note bw-studio-status" data-studio-used-up>
-          <h2>{o.usedUpTitle}</h2>
-          <p>{canRequest ? o.usedUpBody : o.usedUpReadOnly}</p>
-        </section>
-      )}
       {historyOrg && (
         <BrandBriefStudio
           organizationId={historyOrg}
@@ -194,14 +146,71 @@ export default async function BrandStudio({
           initialProjectId={initialProjectId}
         />
       )}
-      {explaining ? (
-        <details className="bw-service-disclosure">
-          <summary>{o.helpSummary}</summary>
-          <StudioIntro t={o} stage={stage} guide={guide} />
-        </details>
-      ) : (
-        <StudioHelp t={o} stage={stage} guide={guide} />
-      )}
+      <details className="bw-service-disclosure" style={{ marginTop: "12px" }}>
+        <summary>
+          {locale === "ko"
+            ? "전용 인물 템플릿 의뢰 · 계약 제작 내역 열기"
+            : "Custom Portrait Templates & Contract History"}
+        </summary>
+        <div style={{ marginTop: "12px" }}>
+          <div className={explaining ? "bw-heading bw-studio-hero" : "bw-heading"}>
+            <div>
+              <p className="bw-kicker">{t.eyebrow}</p>
+              <h1>{t.title}</h1>
+              {explaining ? (
+                <>
+                  <p className="bw-studio-lead">{o.lead}</p>
+                  {stage === "onboarding" && <p>{o.next}</p>}
+                </>
+              ) : (
+                <p>{t.subtitle}</p>
+              )}
+            </div>
+            {stage === "onboarding" ? (
+              <div className="bw-studio-hero-action" data-studio-onboarding>
+                {inquiry}
+                <p className="bw-muted">{o.noCommitment}</p>
+              </div>
+            ) : (
+              inquiry
+            )}
+          </div>
+          {access.staff && choice && <StaffNotice b={b} manageHref={viewer.isAdmin ? adminOrganizationHref(choice.id, brandHost) : null} />}
+          {stage === "requested" && request && (
+            <section className="bw-note bw-studio-status" data-studio-request={request.answered ? "answered" : "waiting"}>
+              <h2>{request.answered ? o.answeredTitle : o.requestedTitle}</h2>
+              <p>{request.answered ? o.answeredBody : o.requestedBody.replace("{date}", formatBrandTimestamp(request.sentAt, locale) ?? "")}</p>
+            </section>
+          )}
+          {stage === "read-only" && (
+            // The request invitation would point at a button a viewer does not have.
+            <section className="bw-note bw-studio-status" data-brand-studio-read-only>
+              <h2>{b.access.studioViewerTitle}</h2>
+              <p>{b.access.studioViewer}</p>
+            </section>
+          )}
+          {stage === "templates-pending" && (
+            <section className="bw-note bw-studio-status" data-studio-templates-pending>
+              <h2>{o.templatesPendingTitle}</h2>
+              <p>{o.templatesPendingBody}</p>
+            </section>
+          )}
+          {stage === "used-up" && (
+            <section className="bw-note bw-studio-status" data-studio-used-up>
+              <h2>{o.usedUpTitle}</h2>
+              <p>{canRequest ? o.usedUpBody : o.usedUpReadOnly}</p>
+            </section>
+          )}
+          {explaining ? (
+            <details className="bw-service-disclosure">
+              <summary>{o.helpSummary}</summary>
+              <StudioIntro t={o} stage={stage} guide={guide} />
+            </details>
+          ) : (
+            <StudioHelp t={o} stage={stage} guide={guide} />
+          )}
+        </div>
+      </details>
       {production && contracts.length > 0 && (
         <>
           {stage === "ready" && canCreate && (

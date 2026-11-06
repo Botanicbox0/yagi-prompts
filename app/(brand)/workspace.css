@@ -331,6 +331,10 @@ html[data-workspace-admin] {
   padding: 32px 32px 80px;
   margin: auto;
 }
+.bw-main:has([data-brand-production]) {
+  max-width: none;
+  padding: 10px 12px 32px;
+}
 .bw-heading {
   display: flex;
   align-items: flex-start;
