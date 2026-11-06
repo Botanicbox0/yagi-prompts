@@ -2,6 +2,7 @@
 
 import {
   useEffect,
+  useRef,
   useState,
   type ChangeEvent,
   type FormEvent,
@@ -1251,13 +1252,51 @@ export function BrandBriefStudio({
     setSelectedImageModelId(modelId);
   }
 
+  const managedObjectUrlsRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    const urls = managedObjectUrlsRef.current;
+    return () => {
+      for (const u of urls) {
+        try {
+          URL.revokeObjectURL(u);
+        } catch {
+          // ignore
+        }
+      }
+      urls.clear();
+    };
+  }, []);
+
+  function createManagedObjectUrl(file: File, previousUrl?: string): string | null {
+    if (file.size > 100 * 1024 * 1024) {
+      setStatusMessage(
+        isKo
+          ? "파일 용량이 100MB를 초과합니다. 100MB 이하의 이미지·영상 파일을 선택해 주세요."
+          : "File exceeds 100MB limit. Please choose an image or video under 100MB.",
+      );
+      return null;
+    }
+    if (previousUrl && managedObjectUrlsRef.current.has(previousUrl)) {
+      try {
+        URL.revokeObjectURL(previousUrl);
+      } catch {
+        // ignore
+      }
+      managedObjectUrlsRef.current.delete(previousUrl);
+    }
+    const url = URL.createObjectURL(file);
+    managedObjectUrlsRef.current.add(url);
+    return url;
+  }
+
   function handleSlotFileUpload(
     slotNumber: StudioReferenceSlotNumber,
     e: ChangeEvent<HTMLInputElement>,
   ) {
     const file = e.target.files?.[0];
     if (!file) return;
-    const objectUrl = URL.createObjectURL(file);
+    const objectUrl = createManagedObjectUrl(file, customSlotThumbs[slotNumber]);
+    if (!objectUrl) return;
     setCustomSlotThumbs((prev) => ({ ...prev, [slotNumber]: objectUrl }));
     setCustomSlotNames((prev) => ({ ...prev, [slotNumber]: file.name }));
     setStatusMessage(
@@ -1408,7 +1447,8 @@ export function BrandBriefStudio({
   function handlePinnedColorFileUpload(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    const objectUrl = URL.createObjectURL(file);
+    const objectUrl = createManagedObjectUrl(file, customPinnedColorThumb);
+    if (!objectUrl) return;
     setCustomPinnedColorThumb(objectUrl);
     setCustomPinnedColorName(file.name);
     setIsColorRefPinned(true);
@@ -1424,7 +1464,8 @@ export function BrandBriefStudio({
   function handlePinnedTextureFileUpload(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    const objectUrl = URL.createObjectURL(file);
+    const objectUrl = createManagedObjectUrl(file, customPinnedTextureThumb);
+    if (!objectUrl) return;
     setCustomPinnedTextureThumb(objectUrl);
     setCustomPinnedTextureName(file.name);
     setIsTextureRefPinned(true);
@@ -2662,7 +2703,8 @@ export function BrandBriefStudio({
                     onChange={(e) => {
                       const file = e.target.files?.[0];
                       if (!file) return;
-                      const url = URL.createObjectURL(file);
+                      const url = createManagedObjectUrl(file);
+                      if (!url) return;
                       const isVid = file.type.startsWith("video/");
                       const id = `canvas-upload-${Date.now()}`;
                       setFreeformItems((prev) => [

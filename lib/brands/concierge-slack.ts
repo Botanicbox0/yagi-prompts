@@ -189,6 +189,7 @@ export async function resolveActiveConciergeChannel(
       'https://slack.com/api/conversations.list?types=public_channel,private_channel&exclude_archived=true&limit=200',
       {
         method: 'GET',
+        signal: AbortSignal.timeout(3500),
         headers: { Authorization: `Bearer ${config.token}` },
       },
     );
@@ -211,6 +212,7 @@ export async function resolveActiveConciergeChannel(
             try {
               const joinResp = await fetcher('https://slack.com/api/conversations.join', {
                 method: 'POST',
+                signal: AbortSignal.timeout(3500),
                 headers: {
                   Authorization: `Bearer ${config.token}`,
                   'Content-Type': 'application/json; charset=utf-8',
@@ -240,6 +242,7 @@ export async function resolveActiveConciergeChannel(
     // Attempt to create `#twings-brand-concierge` if the bot token has `channels:manage`
     const createResp = await fetcher('https://slack.com/api/conversations.create', {
       method: 'POST',
+      signal: AbortSignal.timeout(3500),
       headers: {
         Authorization: `Bearer ${config.token}`,
         'Content-Type': 'application/json; charset=utf-8',
@@ -403,6 +406,7 @@ export async function notifySlackBrandConcierge(
 }
 
 const lastSyncByChannel = new Map<string, number>();
+let cachedOrgs: { list: ConciergeOrganizationRef[]; fetchedAt: number } | null = null;
 
 /**
  * Pulls recent Slack messages and thread replies from the concierge channel and inserts
@@ -427,21 +431,31 @@ export async function syncSlackConciergeReplies(
 
     const now = Date.now();
     const last = lastSyncByChannel.get(activeChannelId) ?? 0;
-    if (!options?.force && now - last < 2500) {
+    if (!options?.force && now - last < 3500) {
       return 0;
     }
     lastSyncByChannel.set(activeChannelId, now);
 
-    const orgRows = (
-      await sql.query<{ id: string; name: string }>(
-        'select id, name from brand_organizations order by created_at asc',
-      )
-    ).rows;
-    if (orgRows.length === 0) return 0;
-    const organizations: ConciergeOrganizationRef[] = orgRows.map((row) => ({
-      id: String(row.id),
-      name: String(row.name),
-    }));
+    let organizations: ConciergeOrganizationRef[];
+    if (
+      cachedOrgs &&
+      now - cachedOrgs.fetchedAt < 30_000 &&
+      (!organizationId || cachedOrgs.list.some((o) => o.id === organizationId))
+    ) {
+      organizations = cachedOrgs.list;
+    } else {
+      const orgRows = (
+        await sql.query<{ id: string; name: string }>(
+          'select id, name from brand_organizations order by created_at asc',
+        )
+      ).rows;
+      if (orgRows.length === 0) return 0;
+      organizations = orgRows.map((row) => ({
+        id: String(row.id),
+        name: String(row.name),
+      }));
+      cachedOrgs = { list: organizations, fetchedAt: now };
+    }
 
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 4000);
@@ -510,6 +524,7 @@ export async function syncSlackConciergeReplies(
         )}&ts=${encodeURIComponent(parent.ts)}&limit=20`;
         const replyRes = await fetcher(repliesUrl, {
           method: 'GET',
+          signal: AbortSignal.timeout(3000),
           headers: { Authorization: `Bearer ${config.token}` },
         });
         if (!replyRes.ok) continue;

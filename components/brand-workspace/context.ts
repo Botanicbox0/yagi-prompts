@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 import { redirect } from "next/navigation";
 import { getViewer } from "@/lib/auth/viewer";
 import { getVerifiedEmail } from "@/lib/auth/verified-email";
@@ -7,7 +8,8 @@ import { getRequestLocale } from "@/lib/i18n/server";
 import { getDictionary } from "@/lib/i18n/dictionaries";
 import { requestSurface } from "@/lib/routing/request-surface";
 
-export async function brandContext() {
+/** Deduplicated per server render so layout and page share one viewer/session/DB lookup. */
+export const brandContext = cache(async () => {
   const [viewer, sql, locale, surface] = await Promise.all([
     getViewer(),
     getSqlRunner(),
@@ -19,4 +21,5 @@ export async function brandContext() {
   const verifiedEmail = await getVerifiedEmail(viewer.userId);
   const dict = getDictionary(locale);
   return { viewer, sql, verifiedEmail, brandHost: surface.brand, locale, dict, b: dict.brandWorkspace };
-}
+});
+

@@ -3,7 +3,7 @@ import { getViewer } from '@/lib/auth/viewer';
 import { influencersOpen } from '@/lib/influencers/rules';
 import { getVerifiedEmail } from '@/lib/auth/verified-email';
 import { getSqlRunner } from '@/lib/db/connect';
-import { loadBrandWorkspaceScope } from '@/lib/brands/workspace/service';
+import { loadCachedBrandWorkspaceScope } from '@/components/brand-workspace/scope';
 import "@/app/globals.css";
 import "./workspace.css";
 import { WorkspaceLanguage } from '@/components/brand-workspace/language';
@@ -41,8 +41,8 @@ export default async function BrandLayout({
   const b = d.brandWorkspace;
   const viewer=await getViewer();
   const sql=viewer.userId?await getSqlRunner():null;
-  // Choices only (ids, names, roles, logo routes): the page itself loads the selected brand's data.
-  const scope=sql?await loadBrandWorkspaceScope({sql,verifiedEmail:await getVerifiedEmail(viewer.userId)},viewer):null;
+  // Choices only (ids, names, roles, logo routes): deduplicated per server render with the child page.
+  const scope=sql?await loadCachedBrandWorkspaceScope(sql,await getVerifiedEmail(viewer.userId),viewer):null;
   return (
     <html lang={locale} className={fontVariables} data-brand-workspace>
       <head>

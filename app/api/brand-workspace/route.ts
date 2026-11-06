@@ -106,7 +106,7 @@ export async function POST(request: NextRequest) {
             userId: viewer.userId,
             body: input.body,
             messageId: String((result as { id?: string }).id ?? ""),
-          });
+          }).catch(() => ({ sent: false }));
         }
         break;
       case "organization.create":

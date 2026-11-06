@@ -70,70 +70,74 @@ export default async function BrandSettings({
           <a href={scopedHref("/brand", choice)} className="bw-button">{b.back}</a>
         </section>
       ) : (
-        <section className="bw-panel bw-settings-panel">
-          {org.role === "studio" ? (
-            <StaffNotice b={b} manageHref={viewer.isAdmin ? adminOrganizationHref(org.id, brandHost) : null} />
-          ) : org.role !== "owner" && <p className="bw-note" data-brand-settings-read-only>{b.access.ownerOnlySettings}</p>}
-          <ActionForm
-            operation="organization.update"
-            fixed={{ organizationId: org.id, expectedRevision: org.revision }}
-            b={b}
-            submit={b.save}
-            disabled={org.role !== "owner"}
-          >
-            <fieldset disabled={org.role !== "owner"} className="bw-fields">
-              <label>
-                {b.organization}
-                <input
-                  name="name"
-                  defaultValue={org.name}
-                  minLength={2}
-                  maxLength={100}
-                  required
-                />
-              </label>
-              <label>
-                {c.website}
-                <input
-                  name="website"
-                  type="url"
-                  defaultValue={org.website}
-                  maxLength={2048}
-                  placeholder="https://"
-                />
-              </label>
-              <label>
-                {c.description}
-                <textarea
-                  name="description"
-                  defaultValue={org.description}
-                  maxLength={2000}
-                  rows={4}
-                />
-              </label>
-              <label>
-                {c.contactEmail}
-                <input
-                  name="contactEmail"
-                  type="email"
-                  defaultValue={org.contactEmail}
-                  maxLength={254}
-                />
-              </label>
-            </fieldset>
-          </ActionForm>
-          <section className="bw-logo-section" aria-labelledby="brand-logo-heading" data-brand-logo>
-            <h2 id="brand-logo-heading">{b.identity.logo}</h2>
-            {org.role === "owner" ? (
-              <LogoControl organizationId={org.id} name={org.name} logoUrl={org.logoUrl} logoRevision={org.logoRevision} b={b} />
-            ) : (
-              <div className="bw-logo-current">
-                <BrandAvatar name={org.name} logoUrl={org.logoUrl} />
-                {!org.logoUrl && <p className="bw-muted">{b.identity.logoNone}</p>}
-              </div>
-            )}
+        <div className="bw-sota-settings-grid" data-settings-sota-grid>
+          <section className="bw-panel bw-settings-panel">
+            {org.role === "studio" ? (
+              <StaffNotice b={b} manageHref={viewer.isAdmin ? adminOrganizationHref(org.id, brandHost) : null} />
+            ) : org.role !== "owner" && <p className="bw-note" data-brand-settings-read-only>{b.access.ownerOnlySettings}</p>}
+            <ActionForm
+              operation="organization.update"
+              fixed={{ organizationId: org.id, expectedRevision: org.revision }}
+              b={b}
+              submit={b.save}
+              disabled={org.role !== "owner"}
+            >
+              <fieldset disabled={org.role !== "owner"} className="bw-fields">
+                <label>
+                  {b.organization}
+                  <input
+                    name="name"
+                    defaultValue={org.name}
+                    minLength={2}
+                    maxLength={100}
+                    required
+                  />
+                </label>
+                <label>
+                  {c.website}
+                  <input
+                    name="website"
+                    type="url"
+                    defaultValue={org.website}
+                    maxLength={2048}
+                    placeholder="https://"
+                  />
+                </label>
+                <label>
+                  {c.description}
+                  <textarea
+                    name="description"
+                    defaultValue={org.description}
+                    maxLength={2000}
+                    rows={4}
+                  />
+                </label>
+                <label>
+                  {c.contactEmail}
+                  <input
+                    name="contactEmail"
+                    type="email"
+                    defaultValue={org.contactEmail}
+                    maxLength={254}
+                  />
+                </label>
+              </fieldset>
+            </ActionForm>
           </section>
-        </section>
+          <aside className="bw-sota-settings-side">
+            <section className="bw-panel bw-logo-section" aria-labelledby="brand-logo-heading" data-brand-logo>
+              <h2 id="brand-logo-heading">{b.identity.logo}</h2>
+              {org.role === "owner" ? (
+                <LogoControl organizationId={org.id} name={org.name} logoUrl={org.logoUrl} logoRevision={org.logoRevision} b={b} />
+              ) : (
+                <div className="bw-logo-current">
+                  <BrandAvatar name={org.name} logoUrl={org.logoUrl} />
+                  {!org.logoUrl && <p className="bw-muted">{b.identity.logoNone}</p>}
+                </div>
+              )}
+            </section>
+          </aside>
+        </div>
       )}
     </div>
   );

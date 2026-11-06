@@ -102,13 +102,23 @@ export function SupportDrawer({
     [organizationId, isOpen],
   );
 
-  // Live poll every 4s while the ChannelTalk/Sendbird widget is open so Slack replies appear in real time
+  // Live poll every 4s while the ChannelTalk/Sendbird widget is open and tab is visible
   useEffect(() => {
     if (!isOpen || !organizationId) return;
     const timer = setInterval(() => {
+      if (typeof document !== "undefined" && document.hidden) return;
       void refresh(organizationId, true);
     }, 4000);
-    return () => clearInterval(timer);
+    const onVisible = () => {
+      if (typeof document !== "undefined" && !document.hidden) {
+        void refresh(organizationId, true);
+      }
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, [isOpen, organizationId, refresh]);
 
   if (!organizations.length) return null;

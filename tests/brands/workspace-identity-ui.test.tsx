@@ -186,8 +186,9 @@ describe('pages scoped to the selected brand', () => {
   });
 
   it('library loads the selected brand only, with all of its content', async () => {
-    await html(ContentLibrary(search(G)));
+    const page = await html(ContentLibrary(search(G)));
     expect(state.workspaceCalls).toEqual([{ includeAllContent: true, organizationId: G }]);
+    expect(page).toContain('data-library-summary-bar');
   });
 
   it('library points members and the TWINGS team at the selected brand\'s studio history, never campaign-only guests', async () => {
@@ -227,6 +228,7 @@ describe('pages scoped to the selected brand', () => {
     expect(await html(MembersPage(search(G)))).toContain(b.access.sharedOnly);
     const ownerSettings = await html(BrandSettings(search(A)));
     expect(ownerSettings).toContain('data-brand-logo-control');
+    expect(ownerSettings).toContain('data-settings-sota-grid');
     const viewerSettings = await html(BrandSettings(search(B)));
     expect(viewerSettings).toContain('data-brand-settings-read-only');
     expect(viewerSettings).not.toContain('data-brand-logo-control');
