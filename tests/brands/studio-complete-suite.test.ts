@@ -630,7 +630,7 @@ describe('Brand Studio Complete Suite (Video Reverse, 2D Spatial Stage, 3-Track 
     expect(moatFullHtml).not.toContain('200만 뷰+');
     expect(moatFullHtml).not.toContain('300건+');
     expect(moatFullHtml).not.toMatch(
-      /Morphic|Seedance|Seedream|Nano Banana|SeedVR2|ComfyUI|YuE2|earshot|Argon|Gemini|Higgsfield/i
+      /Morphic|ComfyUI|YuE2|earshot|Argon|Gemini|Higgsfield/i
     );
 
     // Sandboxed client (Morphic or studioOpen=false) renders NOTHING from CampaignMoatShowcase

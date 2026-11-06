@@ -14,7 +14,7 @@ export function usePhotoAdvice(file:File|null):PhotoAdvice {
    worker=new Worker('/workers/photo-advice-v1.js');
    worker.onmessage=event=>{
     const data=event.data;
-    finish(data?.ok===true?assessPhotoPose(data.faces,data.matrix):'unavailable');
+    finish(data?.ok===true?assessPhotoPose(data.faces,data.matrix,data.size):'unavailable');
    };
    worker.onerror=()=>finish('unavailable');
    worker.postMessage(file);

@@ -102,7 +102,7 @@ export function CampaignMoatShowcase({
       data-brand-tab-map
       aria-label={isKo ? "스튜디오 레퍼런스 및 제작 방식" : "Studio reference and production modes"}
     >
-      {/* MORPHIC 2D INFINITE CANVAS LAUNCHPAD STAGE ON /brand HOME */}
+      {/* 2D INFINITE NODE CANVAS & 5-DELIVERABLE PIPELINE LAUNCHPAD STAGE ON /brand HOME */}
       <a
         href={scopedHref("/brand/studio", choice)}
         data-home-studio-cta
@@ -112,7 +112,7 @@ export function CampaignMoatShowcase({
           textDecoration: "none",
           color: "#F3F4F6",
           position: "relative",
-          height: "430px",
+          height: "440px",
           borderRadius: "16px",
           backgroundColor: "#0B0C0E",
           backgroundImage:
@@ -130,28 +130,31 @@ export function CampaignMoatShowcase({
             left: "16px",
             right: "16px",
             display: "flex",
+            flexWrap: "wrap",
             alignItems: "center",
             justifyContent: "space-between",
+            gap: "8px",
+            zIndex: 5,
           }}
         >
           <span
             data-moat-pipeline
             style={{
               fontSize: "12px",
-              color: "rgba(255, 255, 255, 0.72)",
-              fontWeight: 500,
+              color: "#93C5FD",
+              fontWeight: 700,
             }}
           >
             {isKo
-              ? "2D 무한 캔버스 스튜디오 · 에셋 드래그 다중 선택"
-              : "2D Infinite Canvas Studio · Drag & Attach Assets"}
+              ? "2D 무한 노드 캔버스 · 좌/우 분할 워크벤치 · 5대 제작/유통 스튜디오"
+              : "2D Infinite Node Canvas · Dual Split Workbench · 5 Deliverable Studios"}
           </span>
 
           <div
             style={{
               display: "inline-flex",
               alignItems: "center",
-              gap: "2px",
+              gap: "4px",
               padding: "4px",
               borderRadius: "999px",
               background: "#18191D",
@@ -162,37 +165,39 @@ export function CampaignMoatShowcase({
               style={{
                 padding: "4px 12px",
                 borderRadius: "999px",
-                background: "#2B2D33",
+                background: "#3875C5",
                 color: "#FFFFFF",
-                fontSize: "12px",
+                fontSize: "11.5px",
+                fontWeight: 700,
+              }}
+            >
+              {isKo ? "00 · 2D 무한 캔버스" : "00 · 2D Canvas"}
+            </span>
+            <span
+              style={{
+                padding: "4px 12px",
+                color: "rgba(255, 255, 255, 0.72)",
+                fontSize: "11.5px",
                 fontWeight: 600,
               }}
             >
-              Canvas
+              {isKo ? "좌·우 분할 (이미지↔영상)" : "Dual Split"}
             </span>
             <span
               style={{
                 padding: "4px 12px",
-                color: "rgba(255, 255, 255, 0.55)",
-                fontSize: "12px",
+                color: "rgba(255, 255, 255, 0.72)",
+                fontSize: "11.5px",
+                fontWeight: 600,
               }}
             >
-              Copilot
-            </span>
-            <span
-              style={{
-                padding: "4px 12px",
-                color: "rgba(255, 255, 255, 0.55)",
-                fontSize: "12px",
-              }}
-            >
-              Compose
+              {isKo ? "1080p 인스타 업스케일" : "1080p IG Upscale"}
             </span>
           </div>
 
           <span
             style={{
-              padding: "5px 12px",
+              padding: "6px 14px",
               borderRadius: "999px",
               background: "#3875C5",
               color: "#FFFFFF",
@@ -200,104 +205,206 @@ export function CampaignMoatShowcase({
               fontWeight: 700,
             }}
           >
-            {isKo ? "캔버스 열기 →" : "Open Canvas →"}
+            {isKo ? "제작 스튜디오 열기 →" : "Open Production Studio →"}
           </span>
         </div>
 
-        {/* Raw Media Items inside Blue Selection Box (#1D7DFA) on Dotted Plane */}
+        {/* SVG Bezier Pipeline Wires Connecting the 3 Production Nodes */}
+        <svg
+          style={{
+            position: "absolute",
+            inset: 0,
+            width: "100%",
+            height: "100%",
+            pointerEvents: "none",
+            zIndex: 2,
+          }}
+        >
+          <path
+            d="M 204 162 C 254 162, 260 162, 304 162"
+            fill="none"
+            stroke="#3875C5"
+            strokeWidth="2.2"
+          />
+          <path
+            d="M 468 162 C 516 162, 524 162, 568 162"
+            fill="none"
+            stroke="#3875C5"
+            strokeWidth="2.2"
+          />
+          <circle cx="204" cy="162" r="4" fill="#3875C5" />
+          <circle cx="304" cy="162" r="4" fill="#93C5FD" />
+          <circle cx="468" cy="162" r="4" fill="#3875C5" />
+          <circle cx="568" cy="162" r="4" fill="#93C5FD" />
+        </svg>
+
+        {/* Production Node Cards inside Blue Selection Bounding Box (#1D7DFA) on Dotted Plane */}
         <div
           style={{
             position: "absolute",
-            left: "56px",
+            left: "44px",
             top: "64px",
-            width: "390px",
-            height: "194px",
+            width: "736px",
+            height: "204px",
             border: "2px solid #1D7DFA",
+            borderRadius: "14px",
+            zIndex: 3,
           }}
         >
-          <img
-            src="/reel/brands/slot-1-subject-editorial.jpg"
-            alt=""
-            style={{
-              position: "absolute",
-              left: "2px",
-              top: "18px",
-              width: "136px",
-              height: "172px",
-              objectFit: "cover",
-            }}
-          />
+          {/* Node 1: @Image 1 + @Image 2 Reference */}
           <div
             style={{
               position: "absolute",
-              right: "2px",
-              top: "2px",
-              width: "176px",
-              height: "98px",
+              left: "12px",
+              top: "12px",
+              width: "148px",
+              height: "178px",
+              borderRadius: "10px",
               overflow: "hidden",
+              background: "#14161B",
+              border: "1px solid rgba(255,255,255,0.14)",
+              display: "flex",
+              flexDirection: "column",
             }}
           >
+            <div style={{ padding: "4px 7px", fontSize: "9.5px", fontWeight: 700, color: "#93C5FD", background: "#101217" }}>
+              {isKo ? "@Image 1·2 인물·제품 고정" : "@Image 1·2 Ref Lock"}
+            </div>
             <img
-              src="/reel/brands/house-runway-1080p.jpg"
+              src="/reel/brands/slot-1-subject-editorial.jpg"
               alt=""
-              style={{
-                width: "100%",
-                height: "100%",
-                objectFit: "cover",
-              }}
+              style={{ width: "100%", flex: 1, minHeight: 0, objectFit: "cover" }}
             />
-            <span
-              style={{
-                position: "absolute",
-                left: "50%",
-                top: "50%",
-                transform: "translate(-50%, -50%)",
-                width: "30px",
-                height: "30px",
-                borderRadius: "999px",
-                background: "rgba(0, 0, 0, 0.45)",
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="#FFFFFF">
-                <polygon points="7 4 20 12 7 20 7 4" />
-              </svg>
-            </span>
+            <div style={{ padding: "4px 7px", fontSize: "9.5px", color: "rgba(255,255,255,0.75)", background: "#101217" }}>
+              {isKo ? "로고·실루엣 무변형 락" : "Silhouette & Logo Lock"}
+            </div>
+          </div>
+
+          {/* Node 2: Generated 2K Lookbook Still */}
+          <div
+            style={{
+              position: "absolute",
+              left: "260px",
+              top: "12px",
+              width: "164px",
+              height: "178px",
+              borderRadius: "10px",
+              overflow: "hidden",
+              background: "#14161B",
+              border: "1px solid rgba(56,117,197,0.65)",
+              display: "flex",
+              flexDirection: "column",
+            }}
+          >
+            <div style={{ padding: "4px 7px", fontSize: "9.5px", fontWeight: 700, color: "#93C5FD", background: "#101217" }}>
+              {isKo ? "Nano Banana Pro · 2K 화보" : "Nano Banana Pro · 2K"}
+            </div>
+            <img
+              src="/reel/brands/studio-editorial-blue-1080p.jpg"
+              alt=""
+              style={{ width: "100%", flex: 1, minHeight: 0, objectFit: "cover" }}
+            />
+            <div style={{ padding: "4px 7px", fontSize: "9.5px", color: "rgba(255,255,255,0.8)", background: "#101217" }}>
+              {isKo ? "→ 우측 영상 시작 프레임" : "→ Bridge to Video"}
+            </div>
+          </div>
+
+          {/* Node 3: Seedance 2.5 720p -> 1080p IG Master */}
+          <div
+            style={{
+              position: "absolute",
+              left: "524px",
+              top: "12px",
+              width: "198px",
+              height: "178px",
+              borderRadius: "10px",
+              overflow: "hidden",
+              background: "#14161B",
+              border: "1px solid rgba(56,117,197,0.65)",
+              display: "flex",
+              flexDirection: "column",
+            }}
+          >
+            <div style={{ padding: "4px 7px", fontSize: "9.5px", fontWeight: 700, color: "#93C5FD", background: "#101217" }}>
+              {isKo ? "Seedance 2.5 · 1080p 인스타 마스터" : "Seedance 2.5 · 1080p IG"}
+            </div>
+            <div style={{ position: "relative", flex: 1, minHeight: 0 }}>
+              <img
+                src="/reel/brands/house-runway-1080p.jpg"
+                alt=""
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  objectFit: "cover",
+                }}
+              />
+              <span
+                style={{
+                  position: "absolute",
+                  left: "50%",
+                  top: "50%",
+                  transform: "translate(-50%, -50%)",
+                  width: "30px",
+                  height: "30px",
+                  borderRadius: "999px",
+                  background: "rgba(0, 0, 0, 0.52)",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="#FFFFFF">
+                  <polygon points="7 4 20 12 7 20 7 4" />
+                </svg>
+              </span>
+            </div>
+            <div style={{ padding: "4px 7px", fontSize: "9.5px", color: "rgba(255,255,255,0.8)", background: "#101217" }}>
+              {isKo ? "Sunra 1080p 화질 방어 · -14 LUFS" : "Sunra 1080p IG · -14 LUFS"}
+            </div>
           </div>
         </div>
 
-        {/* Bottom Floating Dock Preview inside Canvas Hero */}
+        {/* Bottom Floating Dock Preview inside Canvas Hero (Founder-Tone Korean UX) */}
         <div
           style={{
             position: "absolute",
-            bottom: "16px",
+            bottom: "14px",
             left: "50%",
             transform: "translateX(-50%)",
-            width: "min(620px, calc(100% - 32px))",
+            width: "min(680px, calc(100% - 32px))",
             display: "grid",
             gap: "6px",
+            zIndex: 4,
           }}
         >
           <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
-            {[
-              "Chat",
-              "Create video",
-              "Create reference",
-              "Edit video",
-              "Motion transfer",
-              "Create image",
-            ].map((pill) => (
+            {(isKo
+              ? [
+                  "01 · 5대 모델 화보 생성",
+                  "02 · Seedance 2.5 모션 확장",
+                  "720p→1080p 인스타 업스케일",
+                  "03 · 크리에이터 캠페인 포맷(셀프·의뢰)",
+                  "04 · 10·30·50인 유통 패키지",
+                  "05 · BGM·폴리 오디오(-14 LUFS)",
+                ]
+              : [
+                  "01 · 5-Model Image Studio",
+                  "02 · Seedance 2.5 Video",
+                  "1080p IG Upscale Studio",
+                  "03 · Creator Campaign Format",
+                  "04 · 10/30/50+ Seeding",
+                  "05 · BGM & Foley Audio",
+                ]
+            ).map((pill) => (
               <span
                 key={pill}
                 style={{
-                  padding: "5px 12px",
+                  padding: "5px 11px",
                   borderRadius: "999px",
                   background: "#18191D",
-                  border: "1px solid rgba(255, 255, 255, 0.09)",
+                  border: "1px solid rgba(255, 255, 255, 0.1)",
                   color: "#F3F4F6",
-                  fontSize: "11.5px",
+                  fontSize: "11px",
                   fontWeight: 600,
                 }}
               >
@@ -307,19 +414,20 @@ export function CampaignMoatShowcase({
           </div>
           <div
             style={{
-              padding: "14px 18px",
-              borderRadius: "18px",
+              padding: "12px 16px",
+              borderRadius: "16px",
               background: "#18191D",
-              border: "1px solid rgba(255, 255, 255, 0.09)",
+              border: "1px solid rgba(56, 117, 197, 0.45)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
               gap: "14px",
-              color: "rgba(255, 255, 255, 0.78)",
-              fontSize: "13.5px",
+              color: "rgba(255, 255, 255, 0.88)",
+              fontSize: "13px",
+              fontWeight: 600,
             }}
           >
-            <span style={{ position: "relative", width: "44px", height: "34px", display: "inline-block" }}>
+            <span style={{ position: "relative", width: "44px", height: "34px", display: "inline-block", flexShrink: 0 }}>
               <img
                 src="/reel/brands/slot-1-subject-editorial.jpg"
                 alt=""
@@ -352,7 +460,15 @@ export function CampaignMoatShowcase({
               />
             </span>
             <span>
-              Press <strong style={{ color: "#FFFFFF" }}>Enter</strong> to attach selection or click here
+              {isKo ? (
+                <>
+                  캔버스 노드를 드래그해 묶은 뒤 <strong style={{ color: "#93C5FD" }}>Enter</strong>를 누르면 화보 → Seedance 2.5 영상 → 1080p 인스타 업스케일·캠페인으로 즉시 연결됩니다
+                </>
+              ) : (
+                <>
+                  Drag-select canvas nodes and press <strong style={{ color: "#93C5FD" }}>Enter</strong> to bridge Stills → Seedance 2.5 Video → 1080p IG Master
+                </>
+              )}
             </span>
           </div>
         </div>
@@ -422,8 +538,117 @@ export function CampaignMoatShowcase({
         })}
       </div>
 
+      {/* 5 Visual Action Cards (Image · Video & Upscale · Creator Campaign Video · Campaign + Distribution · Audio) — Direct Deep-Link Launchpad */}
+      <div
+        data-brand-five-deliverables
+        style={{
+          marginTop: "14px",
+          marginBottom: "14px",
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(195px, 1fr))",
+          gap: "10px",
+        }}
+      >
+        {BRAND_CORE_DELIVERABLE_TRACKS.map((track) => {
+          const studioBaseHref = scopedHref("/brand/studio", choice);
+          const sep = studioBaseHref.includes("?") ? "&" : "?";
+          const targetHref = `${studioBaseHref}${sep}track=${track.id}`;
+          return (
+            <a
+              key={track.id}
+              href={targetHref}
+              data-five-deliverable-card={track.id}
+              data-deliverable-card-studio-link={track.id}
+              style={{
+                textDecoration: "none",
+                color: "inherit",
+                padding: "10px",
+                borderRadius: "14px",
+                background: "var(--ys-surface)",
+                border: "1px solid var(--ys-border)",
+                boxShadow: "var(--ys-shadow-1)",
+                display: "flex",
+                flexDirection: "column",
+                gap: "8px",
+              }}
+            >
+              <div
+                style={{
+                  width: "100%",
+                  aspectRatio: "16 / 10",
+                  borderRadius: "9px",
+                  overflow: "hidden",
+                  background: "#111317",
+                  position: "relative",
+                }}
+              >
+                <img
+                  src={track.previewImage}
+                  alt={isKo ? track.shortLabelKo : track.shortLabelEn}
+                  loading="lazy"
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                    objectFit: "cover",
+                    objectPosition: "50% 22%",
+                  }}
+                />
+                <span
+                  style={{
+                    position: "absolute",
+                    left: "8px",
+                    top: "8px",
+                    padding: "2px 8px",
+                    borderRadius: "999px",
+                    background: "rgba(15, 17, 21, 0.82)",
+                    color: "#FFFFFF",
+                    fontSize: "11px",
+                    fontWeight: 700,
+                  }}
+                >
+                  {isKo ? track.shortLabelKo : track.shortLabelEn}
+                </span>
+              </div>
+
+              <div style={{ display: "grid", gap: "3px" }}>
+                <strong style={{ fontSize: "13px", color: "var(--ys-ink)" }}>
+                  {isKo ? track.badgeKo : track.badgeEn}
+                </strong>
+                <p
+                  className="bw-muted"
+                  style={{
+                    margin: 0,
+                    fontSize: "11.5px",
+                    lineHeight: 1.4,
+                  }}
+                >
+                  {isKo ? track.summaryKo : track.summaryEn}
+                </p>
+              </div>
+
+              <div
+                style={{
+                  marginTop: "auto",
+                  paddingTop: "6px",
+                  borderTop: "1px solid var(--ys-hairline)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  fontSize: "11px",
+                  fontWeight: 700,
+                  color: "var(--ys-brand-text)",
+                }}
+              >
+                <span>{isKo ? track.priceGuideKo : track.priceGuideEn}</span>
+                <span>{isKo ? "스튜디오 열기 →" : "Open Studio →"}</span>
+              </div>
+            </a>
+          );
+        })}
+      </div>
+
       {/* Collapsible Step-by-Step Guide & Quick Links (Keeps main screen 100% visual & uncluttered) */}
-      <details style={{ marginTop: "12px" }}>
+      <details style={{ marginTop: "8px" }}>
         <summary
           style={{
             cursor: "pointer",
@@ -434,8 +659,8 @@ export function CampaignMoatShowcase({
           }}
         >
           {isKo
-            ? "5대 핵심 결과물 가이드 · 1~3단계 작업 순서 및 의뢰 바로가기 펼치기"
-            : "Show 5 Core Deliverables, 3-Step Guide & Commission Shortcuts"}
+            ? "1~3단계 작업 순서 및 전담팀 제작 의뢰 바로가기 펼치기"
+            : "Show 3-Step Guide & Commission Shortcuts"}
         </summary>
 
         <div className="bw-showcase-actions" style={{ marginTop: "8px", marginBottom: "8px" }}>
@@ -447,114 +672,6 @@ export function CampaignMoatShowcase({
           >
             {isKo ? "브랜드 킷 설정" : "Brand Kit"}
           </a>
-        </div>
-
-        {/* 5 Visual Action Cards (Image · Video & Upscale · Creator Campaign Video · Campaign + Distribution · Audio) */}
-        <div
-          data-brand-five-deliverables
-          style={{
-            marginBottom: "18px",
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(195px, 1fr))",
-            gap: "10px",
-          }}
-        >
-          {BRAND_CORE_DELIVERABLE_TRACKS.map((track) => {
-            const targetHref =
-              track.id === "creator_distribution"
-                ? scopedHref("/brand/campaigns", choice)
-                : scopedHref("/brand/studio", choice);
-            return (
-              <a
-                key={track.id}
-                href={targetHref}
-                data-five-deliverable-card={track.id}
-                style={{
-                  textDecoration: "none",
-                  color: "inherit",
-                  padding: "10px",
-                  borderRadius: "14px",
-                  background: "var(--ys-surface)",
-                  border: "1px solid var(--ys-border)",
-                  boxShadow: "var(--ys-shadow-1)",
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "8px",
-                }}
-              >
-                <div
-                  style={{
-                    width: "100%",
-                    aspectRatio: "16 / 10",
-                    borderRadius: "9px",
-                    overflow: "hidden",
-                    background: "#111317",
-                    position: "relative",
-                  }}
-                >
-                  <img
-                    src={track.previewImage}
-                    alt={isKo ? track.shortLabelKo : track.shortLabelEn}
-                    loading="lazy"
-                    style={{
-                      width: "100%",
-                      height: "100%",
-                      objectFit: "cover",
-                      objectPosition: "50% 22%",
-                    }}
-                  />
-                  <span
-                    style={{
-                      position: "absolute",
-                      left: "8px",
-                      top: "8px",
-                      padding: "2px 8px",
-                      borderRadius: "999px",
-                      background: "rgba(15, 17, 21, 0.82)",
-                      color: "#FFFFFF",
-                      fontSize: "11px",
-                      fontWeight: 700,
-                    }}
-                  >
-                    {isKo ? track.shortLabelKo : track.shortLabelEn}
-                  </span>
-                </div>
-
-                <div style={{ display: "grid", gap: "3px" }}>
-                  <strong style={{ fontSize: "13px", color: "var(--ys-ink)" }}>
-                    {isKo ? track.badgeKo : track.badgeEn}
-                  </strong>
-                  <p
-                    className="bw-muted"
-                    style={{
-                      margin: 0,
-                      fontSize: "11.5px",
-                      lineHeight: 1.4,
-                    }}
-                  >
-                    {isKo ? track.summaryKo : track.summaryEn}
-                  </p>
-                </div>
-
-                <div
-                  style={{
-                    marginTop: "auto",
-                    paddingTop: "6px",
-                    borderTop: "1px solid var(--ys-hairline)",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    fontSize: "11px",
-                    fontWeight: 700,
-                    color: "var(--ys-brand-text)",
-                  }}
-                >
-                  <span>{isKo ? track.priceGuideKo : track.priceGuideEn}</span>
-                  <span>{isKo ? "시작 →" : "Open →"}</span>
-                </div>
-              </a>
-            );
-          })}
         </div>
 
         <div

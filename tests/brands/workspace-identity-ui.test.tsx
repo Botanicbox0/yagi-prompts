@@ -273,6 +273,31 @@ describe('pages scoped to the selected brand', () => {
     );
     expect(navHtml).not.toContain('/brand/studio');
     expect(navHtml).not.toContain('/brand/identity');
+    expect(navHtml).toContain('data-brand-layout-mode="sidebar"');
+
+    const standardNavHtml = renderToStaticMarkup(
+      <WorkspaceNavigation
+        home="Home"
+        members="Team"
+        settings="Settings"
+        library="Library"
+        studio="Studio"
+        identity="Brand"
+        scope={{
+          choices: [
+            {
+              id: A,
+              name: 'Alpha',
+              role: 'owner',
+              logoUrl: null,
+              denied: [],
+            },
+          ],
+          projectOrganizations: {},
+        }}
+      />
+    );
+    expect(standardNavHtml).toContain('data-brand-layout-mode="topbar"');
 
     const homeHtml = await html(BrandHome(search(M)));
     expect(homeHtml).not.toContain('data-track="studio"');

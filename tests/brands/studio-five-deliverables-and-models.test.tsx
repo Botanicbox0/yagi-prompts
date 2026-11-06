@@ -333,6 +333,13 @@ describe("Brand Studio 5 Core Deliverables & 5 Image Models (12-Round Verificati
       />,
     );
     expect(html).toContain("data-morphic-krea-spatial-board");
+    expect(html).toContain("data-white-dual-canvas-studio");
+    expect(html).toContain("data-studio-top-directing-bar");
+    expect(html).toContain("data-white-split-canvases-grid");
+    expect(html).toContain("data-studio-left-image-canvas");
+    expect(html).toContain("data-dual-canvas-center-bridge");
+    expect(html).toContain("data-studio-right-video-canvas");
+    expect(html).toContain("data-white-canvas-bridge-cta");
     expect(html).toContain("data-spatial-left-rail");
     expect(html).toContain("data-spatial-dotted-canvas");
     expect(html).toContain("data-spatial-board-nodes-grid");
@@ -341,5 +348,117 @@ describe("Brand Studio 5 Core Deliverables & 5 Image Models (12-Round Verificati
     expect(html).toContain("data-spatial-upscale-node");
     expect(html).toContain("data-spatial-floating-prompt-dock");
     expect(html).toContain("data-studio-advanced-drawer");
+  });
+
+  it("16. renders 5-Round Argon Builder x Argon Critic SOTA upgrades across all 5 Core Deliverables (Node Inspector 1-4 Slot Locks, IG Before/After Quality Defense Inspector, 480p->1080p Promotion Loop, Creator Selfie Simulator, B2B ROI Calculator & Gantt, and 3-Track Audio Console)", () => {
+    const html = renderToStaticMarkup(
+      <BrandBriefStudio
+        organizationId="org-yagi"
+        organizationName="YAGI"
+        locale="ko"
+        canWrite={true}
+        identityConfirmed={true}
+      />,
+    );
+
+    // 00 · 2D Canvas & Node Inspector 1-4 Slot Locks
+    expect(html).toContain("data-studio-top-mode-bar");
+    expect(html).toContain("data-canvas-bezier-wire");
+    expect(html).toContain("data-canvas-node-inspector");
+    expect(html).toContain('data-node-inspector-lock-slot="1"');
+    expect(html).toContain('data-node-inspector-lock-slot="4"');
+
+    // 01 · Image Studio Optimal Model Formula & Smart Mask Pixel Lock
+    expect(html).toContain("data-apply-model-optimal-prompt");
+    expect(html).toContain("data-smart-mask-pixel-lock-badge");
+
+    // 02 · Video & Instagram 1080p Anti-Compression Before/After Inspector + 480p->1080p Loop
+    expect(html).toContain("data-reels-oneclick-bundle-cta");
+    expect(html).toContain("data-draft-480p-promote-1080p-bar");
+    expect(html).toContain("data-draft-480p-promote-1080p-btn");
+    expect(html).toContain("data-upscale-before-after-inspector");
+    expect(html).toContain("data-upscale-compare-before");
+    expect(html).toContain("data-upscale-compare-after");
+    expect(html).toContain("data-seedvr2-antiboil-badge");
+
+    // 03 · Creator Campaign Format (Self vs D+3 Commission) Selfie Simulation
+    expect(html).toContain("data-creator-selfie-simulation");
+    expect(html).toContain('data-creator-sample-btn="0"');
+
+    // 04 · Creator Campaign + Distribution ROI Calculator & D+3~D+21 Timeline Gantt
+    expect(html).toContain("data-distribution-roi-calculator");
+    expect(html).toContain("data-distribution-timeline-gantt");
+
+    // 05 · Brand Audio 3-Track Console & -14 LUFS Meter
+    expect(html).toContain("data-audio-multitrack-console");
+    expect(html).toContain("data-audio-loudness-meter");
+  });
+
+  it("17. verifies 10-Round (Rounds 6–15) Single-Surface Isolation Architecture, 2D Node Quick-Spawn & In/Out Ports, Dual-Pane Transfer Banner, IG Bitrate Simulator, 3-Step Creator Recipe, Multi-Channel Distribution Filter, Audio Stem Mute & Foley Timeline, and /brand Deep-Link Cards", () => {
+    const html = renderToStaticMarkup(
+      <BrandBriefStudio
+        organizationId="org-yagi"
+        organizationName="YAGI"
+        locale="ko"
+        canWrite={true}
+        identityConfirmed={true}
+      />,
+    );
+
+    // Round 6: Single-Surface Isolation & Brand Kit Top Toggle
+    expect(html).toContain("data-top-bar-brand-kit-toggle");
+    expect(html).toContain('data-isolated-studio-header="split_workbench"');
+
+    // Round 7: 00 · 2D Unified Node Board Quick-Spawn, In/Out Ports & Fit View
+    expect(html).toContain("data-canvas-quick-spawn-bar");
+    expect(html).toContain('data-spawn-node-btn="image_ref"');
+    expect(html).toContain('data-spawn-node-btn="video_seedance"');
+    expect(html).toContain('data-spawn-node-btn="upscale_1080p"');
+    expect(html).toContain("data-connect-selected-nodes-btn");
+    expect(html).toContain('data-node-port="in"');
+    expect(html).toContain('data-node-port="out"');
+    expect(html).toContain("data-canvas-viewport-controls");
+    expect(html).toContain("data-canvas-fit-view-btn");
+
+    // Round 8: Dual Split-Pane Live Transfer Strip & Right Video Transfer Confirmation
+    expect(html).toContain("data-split-bridge-strip");
+    expect(html).toContain("data-right-video-transfer-confirmation");
+
+    // Round 10: Video & IG 1080p Bitrate Compression Simulator
+    expect(html).toContain("data-ig-bitrate-compression-simulator");
+
+    // Round 11: Creator Campaign 3-Step Format Recipe Builder
+    expect(html).toContain("data-creator-format-recipe-steps");
+    expect(html).toContain('data-recipe-step-btn="1"');
+    expect(html).toContain('data-recipe-step-btn="2"');
+    expect(html).toContain('data-recipe-step-btn="3"');
+
+    // Round 12: Creator Campaign + Distribution Platform Filter & Spark/Meta Ad Rights Preview
+    expect(html).toContain("data-distribution-platform-filter");
+    expect(html).toContain('data-seeding-channel-btn="instagram_reels"');
+    expect(html).toContain("data-distribution-ad-rights-preview");
+
+    // Round 13: Brand Audio Stem Mute/Solo & Foley Cue Timeline + 1080p Video Multiplex CTA
+    expect(html).toContain("data-audio-stem-controls");
+    expect(html).toContain('data-audio-stem-mute-btn="bgm"');
+    expect(html).toContain('data-audio-stem-mute-btn="foley"');
+    expect(html).toContain('data-audio-stem-mute-btn="voice"');
+    expect(html).toContain("data-audio-foley-cue-timeline");
+    expect(html).toContain("data-audio-mux-video-cta");
+
+    // Round 14: /brand Home Showcase Direct Deep-Link Cards (?track=...)
+    const showcaseHtml = renderToStaticMarkup(
+      <CampaignMoatShowcase
+        locale="ko"
+        organizationId="org-yagi"
+        studioOpen={true}
+      />,
+    );
+    for (const track of BRAND_CORE_DELIVERABLE_TRACKS) {
+      expect(showcaseHtml).toContain(
+        `data-deliverable-card-studio-link="${track.id}"`,
+      );
+      expect(showcaseHtml).toContain(`track=${track.id}`);
+    }
   });
 });

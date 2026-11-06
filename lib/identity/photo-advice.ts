@@ -1,14 +1,19 @@
-export type PhotoAdvice='checking'|'ready'|'angle'|'noFace'|'multipleFaces'|'unavailable';
+export type PhotoAdvice='checking'|'ready'|'angle'|'tooSmall'|'noFace'|'multipleFaces'|'unavailable';
 export type LightAdvice='ok'|'dark'|'bright'|'unavailable';
 
+/** Minimum normalized face bounding-box geometric mean (sqrt(width * height)) for a shoulder-up selfie. */
+export const MIN_FACE_SIZE=0.16;
+
 /** Broad quality hints, never an identity verdict or a calibrated pose measurement. */
-export function assessPhotoPose(faces:number,matrix?:readonly number[]):Exclude<PhotoAdvice,'checking'> {
+export function assessPhotoPose(faces:number,matrix?:readonly number[],faceSize?:number):Exclude<PhotoAdvice,'checking'> {
  if(faces===0)return 'noFace';
  if(faces>1)return 'multipleFaces';
  if(faces!==1||matrix?.length!==16||!matrix.every(Number.isFinite))return 'unavailable';
+ if(faceSize!==undefined&&(!Number.isFinite(faceSize)||faceSize<=0))return 'unavailable';
  // MediaPipe's column-major canonical-face transform. Remove scale through ratios.
  const [x,y,z]=[matrix[8]!,matrix[9]!,matrix[10]!];
  if(Math.hypot(x,y,z)<0.1||Math.hypot(matrix[0]!,matrix[1]!)<0.1)return 'unavailable';
+ if(faceSize!==undefined&&faceSize<MIN_FACE_SIZE)return 'tooSmall';
  const yaw=Math.atan2(x,z)*180/Math.PI;
  const pitch=Math.atan2(-y,Math.hypot(x,z))*180/Math.PI;
  const roll=Math.atan2(matrix[1]!,matrix[0]!)*180/Math.PI;

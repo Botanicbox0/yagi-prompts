@@ -27,8 +27,11 @@ describe('advisory selfie assessment',()=>{
   }
   expect(bypassConsumerLocale('/vendor/private.js')).toBe(false);
  });
- it('distinguishes one straight face, no face and multiple faces',()=>{
+ it('distinguishes one straight face, a distant small face, no face and multiple faces',()=>{
   expect(assessPhotoPose(1,identity)).toBe('ready');
+  expect(assessPhotoPose(1,identity,0.28)).toBe('ready');
+  expect(assessPhotoPose(1,identity,0.16)).toBe('ready');
+  expect(assessPhotoPose(1,identity,0.12)).toBe('tooSmall');
   expect(assessPhotoPose(0)).toBe('noFace');
   expect(assessPhotoPose(2,identity)).toBe('multipleFaces');
  });
@@ -36,10 +39,11 @@ describe('advisory selfie assessment',()=>{
   const yaw=[...identity];yaw[8]=0.5;yaw[10]=Math.sqrt(0.75);
   const pitch=[...identity];pitch[9]=0.5;pitch[10]=Math.sqrt(0.75);
   const roll=[...identity];roll[1]=0.5;roll[0]=Math.sqrt(0.75);
-  for(const matrix of [yaw,pitch,roll])expect(assessPhotoPose(1,matrix)).toBe('angle');
+  for(const matrix of [yaw,pitch,roll])expect(assessPhotoPose(1,matrix,0.25)).toBe('angle');
  });
  it('treats missing, invalid and degenerate output as unavailable',()=>{
   for(const matrix of [undefined,[],[NaN],new Array(16).fill(0)])expect(assessPhotoPose(1,matrix)).toBe('unavailable');
+  for(const size of [0,-0.2,NaN,Infinity])expect(assessPhotoPose(1,identity,size)).toBe('unavailable');
  });
  it('hints at dark and overexposed photos from the luma summary, and never fails closed',()=>{
   expect(assessPhotoLight({mean:120,clippedHigh:0.02,clippedLow:0.05})).toBe('ok');
@@ -51,7 +55,7 @@ describe('advisory selfie assessment',()=>{
   for(const light of ['ok','dark','bright','unavailable'] as const)expect(canSubmitSelfie({hasFile:true,consent:true,busy:false,advice:'ready',light})).toBe(true);
  });
  it('every assessment including pending is advisory; consent and file stay required',()=>{
-  for(const advice of ['checking','ready','angle','noFace','multipleFaces','unavailable'] as const){
+  for(const advice of ['checking','ready','angle','tooSmall','noFace','multipleFaces','unavailable'] as const){
    expect(canSubmitSelfie({hasFile:true,consent:true,busy:false,advice})).toBe(true);
    expect(canSubmitSelfie({hasFile:true,consent:false,busy:false,advice})).toBe(false);
    expect(canSubmitSelfie({hasFile:false,consent:true,busy:false,advice})).toBe(false);
