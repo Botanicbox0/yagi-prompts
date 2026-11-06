@@ -52,14 +52,14 @@ export const BRAND_CORE_DELIVERABLE_TRACKS: readonly BrandCoreDeliverableTrackSp
       orderNumber: "01",
       shortLabelKo: "이미지",
       shortLabelEn: "Image",
-      titleKo: "이미지 스튜디오 (1~4번 참고 이미지 생성 · 원하는 부위만 부분 수정)",
-      titleEn: "Image Studio (1–4 Ref Composite & Micro-Region Edit)",
-      badgeKo: "화보 생성 · 제품 교체 · 부분 수정",
-      badgeEn: "Lookbook · Product Swap · Smart Mask Edit",
+      titleKo: "이미지 캔버스 (화보 생성 · 제품 교체 · 부분 수정)",
+      titleEn: "Image Canvas (Lookbook · Product Swap · Region Edit)",
+      badgeKo: "화보 · 제품 교체 · 부분 수정",
+      badgeEn: "Lookbook · Swap · Edit",
       summaryKo:
-        "1~4번 역할별 참고 사진(인물·배경·포즈·색감)을 조합해 화보를 만들고, 어색한 부분만 드래그해 고치거나 브랜드 색감·질감을 항상 똑같이 고정합니다.",
+        "제품·모델·색감 사진을 캔버스에 펼쳐놓고 화보 생성과 부분 수정을 진행합니다.",
       summaryEn:
-        "Combine 1–4 role-locked references, run surgical micro-region Smart Mask edits, and pin brand color & texture references in one studio.",
+        "Spread product, model, and color references on the canvas to generate stills and edit regions.",
       deliverablesKo: [
         "1~4번 참고 사진 조합 캠페인 화보 · 전신 룩북 (2K/4K)",
         "1번 배경·손 모양 유지 → 2번 우리 제품으로 교체한 상세페이지 컷",
@@ -70,25 +70,25 @@ export const BRAND_CORE_DELIVERABLE_TRACKS: readonly BrandCoreDeliverableTrackSp
         "Slot 1 scene preservation -> Slot 2 exact SKU product swap packshots",
         "Non-destructive Smart Layer Mask micro-region retouching",
       ],
-      turnaroundKo: "즉시 생성 (컷당 15~35초)",
-      turnaroundEn: "Instant (15–35s per cut)",
-      priceGuideKo: "5장 세트 400원~1,100원 (34~95 cr)",
-      priceGuideEn: "₩400–₩1,100 per 5-cut set (34–95 cr)",
+      turnaroundKo: "즉시 생성 (15~35초)",
+      turnaroundEn: "Instant (15–35s)",
+      priceGuideKo: "5장 세트 400원~ (34 cr~)",
+      priceGuideEn: "From ₩400 / 5 cuts",
       previewImage: "/reel/brands/slot-1-subject-editorial.jpg",
     },
     {
       id: "video",
       orderNumber: "02",
-      shortLabelKo: "영상",
-      shortLabelEn: "Video",
-      titleKo: "영상 & 업스케일링 스튜디오 (480p 드래프트 · 720p 생성 → 1080p 인스타 최적화 · 4K 마감)",
-      titleEn: "Video & Upscaling Studio (480p Draft · 720p Base -> 1080p IG Optimized & 4K Master)",
-      badgeKo: "480p 드래프트 · 720p · 1080p/4K 업스케일",
-      badgeEn: "480p Draft · 720p · 1080p/4K Upscale Studio",
+      shortLabelKo: "영상 · 업스케일",
+      shortLabelEn: "Video & Upscale",
+      titleKo: "영상 & 업스케일 스튜디오 (480p · 720p → 1080p/4K)",
+      titleEn: "Video & Upscale Studio (480p · 720p -> 1080p/4K)",
+      badgeKo: "480p · 720p · 1080p/4K 업스케일",
+      badgeEn: "480p · 720p · 1080p/4K Upscale",
       summaryKo:
-        "480p 드래프트나 720p로 움직임·표정을 먼저 빠르게 뽑고, 마음에 드는 영상만 전용 업스케일링 스튜디오로 보내 인스타 최적화 1080p 또는 4K 초고화질로 완성합니다.",
+        "캔버스의 이미지를 시작 장면으로 연결해 영상을 만들고 1080p·4K로 업스케일합니다.",
       summaryEn:
-        "Generate fast in 480p Draft or 720p Standard, then send winning takes to the dedicated Upscaling Studio for Instagram-optimized 1080p or 4K campaign masters.",
+        "Connect any canvas image as the start frame, generate video, and upscale to 1080p or 4K.",
       deliverablesKo: [
         "480p(드래프트 모드) · 720p(표준) · 1080p(본편) 3단계 해상도 직접 선택 생성",
         "전용 업스케일링 스튜디오: 720p 영상을 1080p(인스타 화질 저하 방지) 또는 4K로 업스케일",
@@ -99,25 +99,25 @@ export const BRAND_CORE_DELIVERABLE_TRACKS: readonly BrandCoreDeliverableTrackSp
         "Dedicated Upscaling Studio: 720p -> 1080p (Instagram De-AI Master) or 4K Ultra HD",
         "Instagram Reels/Edits optimization (ISO 3200 luma grain, CAS 0.25, SDR BT.709, CRF 13)",
       ],
-      turnaroundKo: "480p 드래프트 약 35초 · 720p 약 60초 · 1080p/4K 업스케일 약 90초",
-      turnaroundEn: "~35s 480p Draft · ~60s 720p · ~90s 1080p/4K Upscale",
-      priceGuideKo: "480p 드래프트 800원~ · 720p 1,800원 · 1080p/4K 업스케일 마감",
-      priceGuideEn: "480p Draft from ₩800 · 720p ₩1,800 · 1080p/4K Upscale Master",
+      turnaroundKo: "약 35~90초",
+      turnaroundEn: "~35–90s",
+      priceGuideKo: "480p 800원~ · 720p 1,800원",
+      priceGuideEn: "From ₩800 (480p) · ₩1,800 (720p)",
       previewImage: "/reel/brands/house-french-blue-hero-1080p.jpg",
     },
     {
       id: "creator_format",
       orderNumber: "03",
-      shortLabelKo: "크리에이터 캠페인 영상 (셀프 · 의뢰)",
-      shortLabelEn: "Creator Campaign Video (Self · Commission)",
-      titleKo: "크리에이터 캠페인용 영상 제작 (직접 만들기 · 전담팀 의뢰)",
-      titleEn: "Creator Campaign Format Studio (Self-Build or Studio Commission)",
-      badgeKo: "직접 제작 또는 3일 내 전담 완성",
-      badgeEn: "Self-Serve Builder or D+3 Custom Commission",
+      shortLabelKo: "캠페인 영상 (셀프 · 의뢰)",
+      shortLabelEn: "Campaign Video (Self · Custom)",
+      titleKo: "크리에이터 캠페인용 영상 (직접 제작 · 전담팀 의뢰)",
+      titleEn: "Creator Campaign Video Format (Self-Build or Commission)",
+      badgeKo: "셀프 제작 · 3일 내 의뢰 완성",
+      badgeEn: "Self-Build · D+3 Custom",
       summaryKo:
-        "크리에이터가 정면 셀카 1장만 넣으면 우리 브랜드 제품·의상·배경·색감이 그대로 입혀진 주인공 영상이 나오는 캠페인 전용 템플릿을 직접 만들거나 전담팀에 의뢰합니다.",
+        "셀카 1장으로 우리 브랜드 제품·배경이 입혀진 영상이 나오는 포맷을 만들거나 의뢰합니다.",
       summaryEn:
-        "Build a reusable campaign video format where any creator drops 1 front selfie to star in your locked product, outfit, set, and color grade—or commission our directors.",
+        "Build or commission a campaign format where creators drop 1 selfie into your brand scene.",
       deliverablesKo: [
         "직접 만들기: [크리에이터 얼굴 칸] + [우리 제품·배경·색감 고정] 템플릿 즉시 생성",
         "전담팀 의뢰: 제품 사진만 전달하면 3일(D+3) 안에 맞춤 캠페인 템플릿 제작·납품",
@@ -128,25 +128,25 @@ export const BRAND_CORE_DELIVERABLE_TRACKS: readonly BrandCoreDeliverableTrackSp
         "Commissioned: Send product photos and receive a custom format within D+3 days",
         "Every creator generates consistent brand-grade videos from 1 front selfie",
       ],
-      turnaroundKo: "직접 제작 즉시 · 전담팀 의뢰 D+3일 확정",
-      turnaroundEn: "Instant (Self) · D+3 confirmed (Commissioned)",
-      priceGuideKo: "직접 테스트 1,800원~ · 전담팀 맞춤 제작 의뢰 별도 견적",
-      priceGuideEn: "Self format test from ₩1,800 · Custom format commission on brief",
+      turnaroundKo: "즉시 제작 · 의뢰 시 D+3일",
+      turnaroundEn: "Instant or D+3 Custom",
+      priceGuideKo: "셀프 1,800원~ · 맞춤 의뢰 가능",
+      priceGuideEn: "From ₩1,800 · Custom brief",
       previewImage: "/reel/brands/slot-3-pose-lowangle-lookbook.jpg",
     },
     {
       id: "creator_distribution",
       orderNumber: "04",
-      shortLabelKo: "크리에이터 캠페인 영상 + 유통",
-      shortLabelEn: "Creator Campaign + Distribution",
-      titleKo: "크리에이터 캠페인 영상 제작 + SNS 동시 게시 · 성과 리포트",
-      titleEn: "Creator Campaign Format + Multi-Creator Seeding & ROI Distribution",
-      badgeKo: "영상 제작 + 크리에이터 게시 + 광고 활용권",
-      badgeEn: "Format + Creator Seeding + Ad Usage Rights",
+      shortLabelKo: "캠페인 영상 + 유통",
+      shortLabelEn: "Campaign + Distribution",
+      titleKo: "크리에이터 캠페인 영상 + SNS 게시 · 리포트",
+      titleEn: "Creator Campaign + Seeding & ROI Report",
+      badgeKo: "영상 + 크리에이터 게시 + 리포트",
+      badgeEn: "Video + Creator Seeding + ROI",
       summaryKo:
-        "캠페인 영상 제작에서 끝나지 않고, 팔로워 3,000명 이상 검증된 크리에이터 섭외·인스타 릴스/틱톡/쇼츠 동시 게시·실시간 조회수 리포트·2차 광고 활용권까지 한 번에 진행합니다.",
+        "3,000+ 팔로워 크리에이터 섭외부터 릴스·틱톡 동시 게시와 성과 리포트까지 진행합니다.",
       summaryEn:
-        "End-to-end execution from custom campaign format creation to 3,000+ follower creator matching, simultaneous seeding (IG Reels, TikTok, Shorts), live ROI reporting, and 2nd-use paid ad rights.",
+        "Match 3,000+ follower creators for simultaneous IG/TikTok seeding and live ROI tracking.",
       deliverablesKo: [
         "팔로워 3,000+ 카테고리 맞춤 크리에이터 10명 / 30명 / 50명+ 동시 게시 유통",
         "진행 일정: 의뢰 → D+3 템플릿 확정 → D+7 섭외 → D+14 동시 게시 → D+21 성과 리포트",
@@ -157,10 +157,10 @@ export const BRAND_CORE_DELIVERABLE_TRACKS: readonly BrandCoreDeliverableTrackSp
         "Timeline: Brief -> D+3 Format Lock -> D+7 Cohort Match -> D+14 Post -> D+21 ROI Report",
         "Clean 1080p master downloads + cleared 2nd-use paid ad rights (Meta / TikTok Spark Ads)",
       ],
-      turnaroundKo: "D+3 템플릿 확정 · D+14 크리에이터 동시 게시 · D+21 리포트",
-      turnaroundEn: "D+3 Format · D+14 Cohort Post · D+21 Final Report",
-      priceGuideKo: "10인 초기 검증 · 30인 신제품 런칭 · 50인+ 대규모 확산 패키지",
-      priceGuideEn: "10-Creator Seed · 30-Creator Growth · 50+ Mega Launch Packages",
+      turnaroundKo: "D+3 포맷 · D+14 게시 · D+21 리포트",
+      turnaroundEn: "D+3 Format · D+14 Post · D+21 Report",
+      priceGuideKo: "10인 · 30인 · 50인+ 패키지",
+      priceGuideEn: "10 / 30 / 50+ Creator Cohorts",
       previewImage: "/reel/brands/studio-editorial-blue-1080p.jpg",
     },
     {
@@ -168,14 +168,14 @@ export const BRAND_CORE_DELIVERABLE_TRACKS: readonly BrandCoreDeliverableTrackSp
       orderNumber: "05",
       shortLabelKo: "오디오",
       shortLabelEn: "Audio",
-      titleKo: "오디오 스튜디오 (브랜드 맞춤 배경음악 · 생생한 현장음 · 음량 자동 보정)",
-      titleEn: "Audio Studio (Signature BGM · Foley Spatial Sound · -14 LUFS Master)",
-      badgeKo: "배경음악 · 현장 효과음 · 상업용 음원",
-      badgeEn: "BGM · Foley · -14 LUFS Commercial Master",
+      titleKo: "오디오 스튜디오 (배경음악 · 현장 효과음)",
+      titleEn: "Audio Studio (BGM · Foley · Loudness Master)",
+      badgeKo: "배경음악 · 현장음 · 상업 음원",
+      badgeEn: "BGM · Foley · Commercial Master",
       summaryKo:
-        "브랜드 분위기에 맞는 배경음악(BGM)부터 옷깃 스치는 소리·얼음 소리·발걸음 같은 현장 효과음, 목소리가 나올 때 배경음을 자연스럽게 줄여주는 기능까지 한 번에 완성합니다.",
+        "영상에 어울리는 배경음악(BGM)과 발걸음·얼음 소리 같은 현장 효과음을 입힙니다.",
       summaryEn:
-        "Compose brand-tailored BGM, tactile Foley & room tone, automatic voiceover ducking (Act 1 -3 dB), and -14 LUFS / -1 dBTP commercial loudness mastering.",
+        "Add brand-tailored BGM, tactile Foley sound effects, and -14 LUFS loudness mastering.",
       deliverablesKo: [
         "브랜드 카테고리별 맞춤 배경음악(BGM) & 화면 전환 타이밍 자동 맞춤",
         "생생한 현장 효과음(구두 발걸음·원단 스침·유리잔 얼음·카메라 셔터) + 무음악 현장음 버전",
@@ -186,10 +186,10 @@ export const BRAND_CORE_DELIVERABLE_TRACKS: readonly BrandCoreDeliverableTrackSp
         "Tactile Foley stems (heels, silk rustle, glass clink, shutter) + No-BGM live ambient mix",
         "Automatic Act 1 -3 dB dialogue ducking & -14 LUFS / -1 dBTP broadcast master",
       ],
-      turnaroundKo: "즉시 생성 및 영상 길이 자동 맞춤 (약 25초)",
-      turnaroundEn: "Instant generation & frame-accurate sync (~25s)",
-      priceGuideKo: "곡당 900원 (75 cr) · 상업 광고 음원 저작권 해결 포함",
-      priceGuideEn: "₩900 per track (75 cr) · Commercial ad sync license included",
+      turnaroundKo: "즉시 생성 (약 25초)",
+      turnaroundEn: "Instant (~25s)",
+      priceGuideKo: "곡당 900원 (75 cr · 저작권 포함)",
+      priceGuideEn: "₩900 / track (75 cr)",
       previewImage: "/reel/brands/slot-4-color-french-cobalt.jpg",
     },
   ];
@@ -2198,5 +2198,136 @@ export function bridgeLeftImageToRightVideoReference(input: {
   const filtered = input.currentRefs.filter((r) => r.slotId !== input.slotId);
   return [nextItem, ...filtered];
 }
+
+/**
+ * Morphic Studio / Krea Canvas / Flora Style Multi-Asset Spatial Board Nodes.
+ * Multiple assets (References, Generated Stills, Video Node, Upscale Node) are spread out
+ * across the 2D dotted board so users can see, select, drag, and wire them at a glance.
+ */
+export type SpatialBoardNodeKind =
+  | "reference_asset"
+  | "generated_still"
+  | "video_node"
+  | "upscale_node";
+
+export interface SpatialBoardAssetNode {
+  id: string;
+  kind: SpatialBoardNodeKind;
+  badgeKo: string;
+  badgeEn: string;
+  titleKo: string;
+  titleEn: string;
+  metaKo: string;
+  metaEn: string;
+  thumbSrc: string;
+  videoSrc?: string;
+  aspectRatio: string;
+  defaultSelected: boolean;
+  connectedToIds: readonly string[];
+}
+
+export const DEFAULT_SPATIAL_BOARD_NODES: readonly SpatialBoardAssetNode[] = [
+  {
+    id: "node-ref-model",
+    kind: "reference_asset",
+    badgeKo: "참고 1 · 인물",
+    badgeEn: "Ref 1 · Model",
+    titleKo: "모델 얼굴 · 착장",
+    titleEn: "Model & Outfit",
+    metaKo: "클릭해 참조 켜기/끄기",
+    metaEn: "Click to toggle ref",
+    thumbSrc: "/reel/brands/slot-1-subject-editorial.jpg",
+    aspectRatio: "4 / 5",
+    defaultSelected: true,
+    connectedToIds: ["node-still-01", "node-still-02"],
+  },
+  {
+    id: "node-ref-product",
+    kind: "reference_asset",
+    badgeKo: "참고 2 · 제품",
+    badgeEn: "Ref 2 · Product",
+    titleKo: "우리 브랜드 제품 원본",
+    titleEn: "Brand Product SKU",
+    metaKo: "로고 · 형태 98% 유지",
+    metaEn: "98% Label & Shape Lock",
+    thumbSrc: "/reel/brands/slot-2-space-concrete-blue.jpg",
+    aspectRatio: "4 / 5",
+    defaultSelected: true,
+    connectedToIds: ["node-still-01", "node-still-02"],
+  },
+  {
+    id: "node-ref-color",
+    kind: "reference_asset",
+    badgeKo: "참고 3 · 색감·질감 핀",
+    badgeEn: "Ref 3 · Style Pin",
+    titleKo: "프렌치 코발트 & 필름",
+    titleEn: "French Cobalt & Grain",
+    metaKo: "고정 켜짐 (Pin ON)",
+    metaEn: "Pinned Style ON",
+    thumbSrc: "/reel/brands/slot-4-color-french-cobalt.jpg",
+    aspectRatio: "1 / 1",
+    defaultSelected: true,
+    connectedToIds: ["node-still-01", "node-still-02", "node-video-seedance"],
+  },
+  {
+    id: "node-still-01",
+    kind: "generated_still",
+    badgeKo: "생성 화보 A · 선택됨",
+    badgeEn: "Generated Still A",
+    titleKo: "정면 히어로 컷 (2K)",
+    titleEn: "Front Hero Still (2K)",
+    metaKo: "Nano Banana Pro · 4:5",
+    metaEn: "Nano Banana Pro · 4:5",
+    thumbSrc: "/reel/brands/slot-1-subject-editorial.jpg",
+    aspectRatio: "4 / 5",
+    defaultSelected: true,
+    connectedToIds: ["node-video-seedance"],
+  },
+  {
+    id: "node-still-02",
+    kind: "generated_still",
+    badgeKo: "생성 화보 B",
+    badgeEn: "Generated Still B",
+    titleKo: "측면 로우앵글 룩북 (2K)",
+    titleEn: "Low-Angle Lookbook (2K)",
+    metaKo: "GPT Image 2.6 · 4:5",
+    metaEn: "GPT Image 2.6 · 4:5",
+    thumbSrc: "/reel/brands/slot-3-pose-lowangle-lookbook.jpg",
+    aspectRatio: "4 / 5",
+    defaultSelected: false,
+    connectedToIds: [],
+  },
+  {
+    id: "node-video-seedance",
+    kind: "video_node",
+    badgeKo: "영상 노드 · Seedance 2.5",
+    badgeEn: "Video · Seedance 2.5",
+    titleKo: "화보 A → 720p 모션 영상",
+    titleEn: "Still A -> 720p Motion",
+    metaKo: "480p Draft · 720p · 1080p",
+    metaEn: "480p Draft · 720p · 1080p",
+    thumbSrc: "/reel/brands/house-french-blue-hero-1080p.jpg",
+    videoSrc: "/reel/brands/house-french-blue-hero-1080p.mp4",
+    aspectRatio: "9 / 16",
+    defaultSelected: true,
+    connectedToIds: ["node-upscale-ig"],
+  },
+  {
+    id: "node-upscale-ig",
+    kind: "upscale_node",
+    badgeKo: "마감 노드 · 업스케일",
+    badgeEn: "Finish · Upscale Studio",
+    titleKo: "1080p 인스타 최적화 & 4K",
+    titleEn: "1080p IG Master & 4K",
+    metaKo: "Sunra 1080p + 화질 보호",
+    metaEn: "Sunra 1080p + IG Guard",
+    thumbSrc: "/reel/brands/studio-editorial-blue-1080p.jpg",
+    videoSrc: "/reel/brands/studio-editorial-blue-1080p.mp4",
+    aspectRatio: "9 / 16",
+    defaultSelected: false,
+    connectedToIds: [],
+  },
+];
+
 
 
