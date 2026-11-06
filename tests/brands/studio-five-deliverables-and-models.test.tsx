@@ -13,6 +13,7 @@ import {
   BRAND_SEEDANCE_VIDEO_TIERS,
   BRAND_STUDIO_IMAGE_MODELS,
   BRAND_UPSCALING_STUDIO_ENGINES,
+  DEFAULT_SPATIAL_BOARD_NODES,
   FIRST_CREATION_GOALS,
   IG_OPTIMIZED_UPSCALE_LOGIC_MODULES,
   MICRO_REGION_SELECTION_PRESETS,
@@ -317,5 +318,28 @@ describe("Brand Studio 5 Core Deliverables & 5 Image Models (12-Round Verificati
     expect(html).toContain('data-split-pane="right-video"');
     expect(html).toContain("data-video-bridged-references-tray");
     expect(html).toContain("data-video-floating-composer-dock");
+  });
+
+  it("15. renders Morphic Studio / Krea Canvas Multi-Asset Spatial Board above the fold with spread-out asset nodes, SVG wires, slim left rail, and bottom floating prompt dock", () => {
+    expect(DEFAULT_SPATIAL_BOARD_NODES).toHaveLength(7);
+
+    const html = renderToStaticMarkup(
+      <BrandBriefStudio
+        organizationId="org-yagi"
+        organizationName="YAGI"
+        locale="ko"
+        canWrite={true}
+        identityConfirmed={true}
+      />,
+    );
+    expect(html).toContain("data-morphic-krea-spatial-board");
+    expect(html).toContain("data-spatial-left-rail");
+    expect(html).toContain("data-spatial-dotted-canvas");
+    expect(html).toContain("data-spatial-board-nodes-grid");
+    expect(html).toContain("data-spatial-node-wires");
+    expect(html).toContain("data-spatial-video-node");
+    expect(html).toContain("data-spatial-upscale-node");
+    expect(html).toContain("data-spatial-floating-prompt-dock");
+    expect(html).toContain("data-studio-advanced-drawer");
   });
 });

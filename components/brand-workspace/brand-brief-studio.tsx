@@ -55,6 +55,7 @@ import {
   BRAND_STUDIO_IMAGE_MODELS,
   BRAND_STUDIO_MICRO_EDIT_MODELS,
   BRAND_UPSCALING_STUDIO_ENGINES,
+  DEFAULT_SPATIAL_BOARD_NODES,
   FIRST_CREATION_GOALS,
   IG_OPTIMIZED_UPSCALE_LOGIC_MODULES,
   MICRO_REGION_SELECTION_PRESETS,
@@ -81,6 +82,7 @@ import {
   type IgUpscaleLogicModuleId,
   type MicroEditQualityTier,
   type MicroEditResolutionTier,
+  type SpatialBoardAssetNode,
   type StudioCanvasToolId,
   type StudioImageSubMode,
   type StudioReferenceSlotNumber,
@@ -617,6 +619,30 @@ export function BrandBriefStudio({
 
   function handleRemoveBridgedVideoRef(slotId: VideoReferenceTargetSlot) {
     setBridgedVideoRefs((prev) => prev.filter((item) => item.slotId !== slotId));
+  }
+
+  // Morphic Studio / Krea Canvas Multi-Asset Spatial Board State
+  const [isLeftRailCollapsed, setIsLeftRailCollapsed] = useState(false);
+  const [selectedBoardNodeIds, setSelectedBoardNodeIds] = useState<string[]>(
+    () =>
+      DEFAULT_SPATIAL_BOARD_NODES.filter((n) => n.defaultSelected).map(
+        (n) => n.id,
+      ),
+  );
+
+  function handleToggleBoardNode(node: SpatialBoardAssetNode) {
+    setSelectedBoardNodeIds((prev) =>
+      prev.includes(node.id)
+        ? prev.filter((id) => id !== node.id)
+        : [...prev, node.id],
+    );
+    if (node.kind === "generated_still") {
+      handleBridgeLeftImageToRightVideo("first_frame", {
+        src: node.thumbSrc,
+        labelKo: node.titleKo,
+        labelEn: node.titleEn,
+      });
+    }
   }
 
   // Under-the-hood compiled system state
@@ -1321,24 +1347,24 @@ export function BrandBriefStudio({
       data-studio-continuity={silentContinuity.status}
       data-studio-master-gate={silentMasterPlan.gateStatus}
     >
-      {/* Top Bar: Studio Header + Explicit Image vs Video Mode Switch + Brand Category Pill */}
+      {/* Top Bar: Simple 1-Line Header + Clean Mode Switch */}
       <div
         className="bw-row"
         style={{
-          marginBottom: "18px",
+          marginBottom: "12px",
           alignItems: "center",
           justifyContent: "space-between",
-          gap: "14px",
+          gap: "12px",
         }}
       >
         <div>
-          <h2 style={{ margin: "0 0 4px" }}>
-            {isKo
-              ? "브랜드 이미지 · 영상 제작 스튜디오"
-              : "Brand Image & Video Production Studio"}
+          <h2 style={{ margin: "0 0 2px", fontSize: "20px" }}>
+            {isKo ? "캔버스 스튜디오" : "Canvas Studio"}
           </h2>
-          <p className="bw-muted" style={{ margin: 0, fontSize: "13px" }}>
-            {isKo ? categoryProfile.headlineKo : categoryProfile.headlineEn}
+          <p className="bw-muted" style={{ margin: 0, fontSize: "12.5px" }}>
+            {isKo
+              ? "보드 위에 에셋들을 펼쳐놓고 클릭해 연결한 뒤, 하단 프롬프트 바에서 이미지·영상·업스케일을 바로 실행하세요."
+              : "Spread assets across the board, click to connect references, and generate from the bottom floating bar."}
           </p>
         </div>
 
@@ -1350,7 +1376,7 @@ export function BrandBriefStudio({
             gap: "8px",
           }}
         >
-          {/* Explicit Image Lookbook vs Video Creation Mode Switch */}
+          {/* Simple 3-Tab Mode Switch */}
           <div
             className="bw-seg-track"
             data-studio-medium-tabs
@@ -1367,7 +1393,7 @@ export function BrandBriefStudio({
               onClick={() => handleSwitchMediumMode("image")}
               disabled={busy}
             >
-              {isKo ? "이미지 화보 만들기" : "Create Image Stills"}
+              {isKo ? "이미지 보드" : "Image Board"}
             </button>
             <button
               type="button"
@@ -1379,7 +1405,7 @@ export function BrandBriefStudio({
               onClick={() => handleSwitchMediumMode("video")}
               disabled={busy}
             >
-              {isKo ? "Seedance 2.5 영상 만들기" : "Seedance 2.5 Video"}
+              {isKo ? "Seedance 2.5 영상" : "Seedance 2.5 Video"}
             </button>
             <button
               type="button"
@@ -1394,9 +1420,7 @@ export function BrandBriefStudio({
               }}
               disabled={busy}
             >
-              {isKo
-                ? "업스케일링 · 인스타 1080p/4K 스튜디오"
-                : "Upscaling & IG 1080p/4K Studio"}
+              {isKo ? "1080p·4K 업스케일" : "1080p/4K Upscale"}
             </button>
           </div>
 
@@ -1409,11 +1433,1179 @@ export function BrandBriefStudio({
           </span>
           {identityHref && (
             <a className="bw-button" href={identityHref}>
-              {isKo ? "브랜드 스타일" : "Brand Style"}
+              {isKo ? "브랜드 킷" : "Brand Kit"}
             </a>
           )}
         </div>
       </div>
+
+      {/* SOTA MORPHIC STUDIO / KREA CANVAS MULTI-ASSET SPATIAL BOARD (Spread-Out Assets + Node Wires + Slim Left Rail + Bottom Floating Prompt Bar) */}
+      <div
+        data-morphic-krea-spatial-board
+        style={{
+          display: "grid",
+          gridTemplateColumns: isLeftRailCollapsed
+            ? "1fr"
+            : "minmax(220px, 248px) minmax(0, 1fr)",
+          gap: "12px",
+          marginBottom: "14px",
+          alignItems: "stretch",
+        }}
+      >
+        {/* Slim Left Tool & Model Rail (Clean, Simple Wording, Collapsible) */}
+        {!isLeftRailCollapsed && (
+          <aside
+            data-spatial-left-rail
+            style={{
+              borderRadius: "16px",
+              padding: "12px",
+              background: "var(--ys-surface)",
+              border: "1px solid var(--ys-border)",
+              boxShadow: "var(--ys-shadow-1)",
+              display: "flex",
+              flexDirection: "column",
+              gap: "12px",
+            }}
+          >
+            {/* 1. Quick Asset Drop onto Board */}
+            <div style={{ display: "grid", gap: "6px" }}>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                }}
+              >
+                <strong style={{ fontSize: "12px", color: "var(--ys-ink)" }}>
+                  {isKo ? "보드에 에셋 올리기" : "Add Assets to Board"}
+                </strong>
+                <button
+                  type="button"
+                  onClick={() => setIsLeftRailCollapsed(true)}
+                  style={{
+                    border: 0,
+                    background: "transparent",
+                    fontSize: "11px",
+                    color: "var(--ys-ink-muted)",
+                    cursor: "pointer",
+                  }}
+                >
+                  {isKo ? "접기 ◧" : "Fold ◧"}
+                </button>
+              </div>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: "5px",
+                }}
+              >
+                <label
+                  className="bw-quick-chip"
+                  style={{
+                    justifyContent: "center",
+                    padding: "6px 8px",
+                    fontSize: "11.5px",
+                    fontWeight: 600,
+                    textAlign: "center",
+                  }}
+                >
+                  {isKo ? "+ 제품 사진" : "+ Product"}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => handleSlotFileUpload(2, e)}
+                    style={{ display: "none" }}
+                  />
+                </label>
+                <label
+                  className="bw-quick-chip"
+                  style={{
+                    justifyContent: "center",
+                    padding: "6px 8px",
+                    fontSize: "11.5px",
+                    fontWeight: 600,
+                    textAlign: "center",
+                  }}
+                >
+                  {isKo ? "+ 모델 사진" : "+ Model"}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => handleSlotFileUpload(1, e)}
+                    style={{ display: "none" }}
+                  />
+                </label>
+              </div>
+            </div>
+
+            {/* 2. Simple Board Tool Switch */}
+            <div style={{ display: "grid", gap: "5px" }}>
+              <strong style={{ fontSize: "12px", color: "var(--ys-ink)" }}>
+                {isKo ? "캔버스 도구" : "Canvas Tool"}
+              </strong>
+              <div style={{ display: "grid", gap: "4px" }}>
+                {(
+                  [
+                    {
+                      id: "multi_ref_generate",
+                      ko: "에셋 연결 · 화보 생성",
+                      en: "Connect & Generate",
+                    },
+                    {
+                      id: "micro_region_edit",
+                      ko: "드래그해서 부분 수정",
+                      en: "Drag Region Edit",
+                    },
+                    {
+                      id: "canvas_drag_ref",
+                      ko: "여러 에셋 한꺼번에 묶기",
+                      en: "Group Multiple Assets",
+                    },
+                  ] as const
+                ).map((item) => {
+                  const active = !isVideoMode && imageSubMode === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => {
+                        handleSwitchMediumMode("image");
+                        handleSwitchImageSubMode(item.id);
+                      }}
+                      style={{
+                        textAlign: "left",
+                        padding: "7px 10px",
+                        borderRadius: "9px",
+                        border: active
+                          ? "1.5px solid var(--ys-brand)"
+                          : "1px solid var(--ys-border-subtle)",
+                        background: active
+                          ? "var(--ys-brand-tint)"
+                          : "var(--ys-subtle-bg)",
+                        color: active
+                          ? "var(--ys-brand-text)"
+                          : "var(--ys-ink)",
+                        fontSize: "12px",
+                        fontWeight: active ? 700 : 500,
+                        cursor: "pointer",
+                      }}
+                    >
+                      {isKo ? item.ko : item.en}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* 3. Simple 5 Image Models List */}
+            <div style={{ display: "grid", gap: "5px" }}>
+              <strong style={{ fontSize: "12px", color: "var(--ys-ink)" }}>
+                {isKo ? "이미지 모델 (5종)" : "Image Models (5)"}
+              </strong>
+              <div style={{ display: "grid", gap: "4px" }}>
+                {BRAND_STUDIO_IMAGE_MODELS.map((m) => {
+                  const active = !isVideoMode && selectedImageModelId === m.id;
+                  const shortRole =
+                    m.id === "gpt_image_2_6"
+                      ? "인물·글자 정확"
+                      : m.id === "nano_banana_pro"
+                        ? "메인 화보 추천"
+                        : m.id === "nano_banana_2_1"
+                          ? "제품 교체 특화"
+                          : m.id === "nano_banana_2_0"
+                            ? "빠른 시안"
+                            : "의류 핏·전신";
+                  return (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => {
+                        handleSwitchMediumMode("image");
+                        handleSelectImageModel(m.id);
+                      }}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        padding: "6px 9px",
+                        borderRadius: "8px",
+                        border: active
+                          ? "1.5px solid var(--ys-brand)"
+                          : "1px solid var(--ys-border-subtle)",
+                        background: active
+                          ? "var(--ys-brand-tint)"
+                          : "var(--ys-surface)",
+                        fontSize: "11.5px",
+                        cursor: "pointer",
+                      }}
+                    >
+                      <strong
+                        style={{
+                          color: active
+                            ? "var(--ys-brand-text)"
+                            : "var(--ys-ink)",
+                        }}
+                      >
+                        {isKo ? m.nameKo : m.nameEn}
+                      </strong>
+                      <span
+                        style={{
+                          fontSize: "10.5px",
+                          color: "var(--ys-ink-secondary)",
+                        }}
+                      >
+                        {isKo ? shortRole : `${m.creditsPer5Set} cr`}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* 4. Simple Video (Seedance 2.5) & Upscale Switch */}
+            <div style={{ display: "grid", gap: "5px" }}>
+              <strong style={{ fontSize: "12px", color: "var(--ys-ink)" }}>
+                {isKo ? "영상 · 업스케일" : "Video & Upscale"}
+              </strong>
+              <div style={{ display: "grid", gap: "4px" }}>
+                {BRAND_SEEDANCE_VIDEO_TIERS.map((tier) => {
+                  const active =
+                    isVideoMode && selectedSeedanceTierId === tier.id;
+                  return (
+                    <button
+                      key={tier.id}
+                      type="button"
+                      onClick={() => handleSelectSeedanceTier(tier.id)}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        padding: "6px 9px",
+                        borderRadius: "8px",
+                        border: active
+                          ? "1.5px solid var(--ys-brand)"
+                          : "1px solid var(--ys-border-subtle)",
+                        background: active
+                          ? "var(--ys-brand-tint)"
+                          : "var(--ys-surface)",
+                        fontSize: "11.5px",
+                        cursor: "pointer",
+                      }}
+                    >
+                      <strong
+                        style={{
+                          color: active
+                            ? "var(--ys-brand-text)"
+                            : "var(--ys-ink)",
+                        }}
+                      >
+                        Seedance 2.5 · {tier.resolution}
+                      </strong>
+                      <span
+                        style={{
+                          fontSize: "10.5px",
+                          color: "var(--ys-ink-secondary)",
+                        }}
+                      >
+                        {tier.draft ? "Draft" : tier.resolution === "720p" ? "추천" : "본편"}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </aside>
+        )}
+
+        {/* Right Main Infinite Dotted Spatial Board (Multiple Assets Spread Out + SVG Connection Wires + Bottom Floating Prompt Bar) */}
+        <div
+          data-spatial-dotted-canvas
+          style={{
+            borderRadius: "18px",
+            padding: "14px",
+            backgroundColor: "#0D0F13",
+            backgroundImage:
+              "radial-gradient(rgba(255, 255, 255, 0.16) 1px, transparent 1px)",
+            backgroundSize: "22px 22px",
+            color: "#F3F4F6",
+            boxShadow: "0 16px 40px rgba(15, 23, 42, 0.22)",
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "space-between",
+            gap: "14px",
+            minHeight: "590px",
+            position: "relative",
+            overflow: "hidden",
+          }}
+        >
+          {/* Board Top Bar: Left Rail Toggle + Center [Canvas | Copilot | Compose] + Right Status */}
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: "8px",
+              zIndex: 2,
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <button
+                type="button"
+                onClick={() => setIsLeftRailCollapsed((p) => !p)}
+                style={{
+                  padding: "5px 10px",
+                  borderRadius: "999px",
+                  border: "1px solid rgba(255, 255, 255, 0.16)",
+                  background: "rgba(255, 255, 255, 0.08)",
+                  color: "#FFFFFF",
+                  fontSize: "11.5px",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                {isLeftRailCollapsed
+                  ? isKo
+                    ? "◫ 좌측 도구 열기"
+                    : "◫ Open Tools"
+                  : isKo
+                    ? "◧ 보드 넓게 보기"
+                    : "◧ Expand Board"}
+              </button>
+              <span
+                style={{
+                  fontSize: "12px",
+                  color: "rgba(255, 255, 255, 0.78)",
+                }}
+              >
+                {isKo
+                  ? `캔버스에 펼쳐진 에셋 6개 · 선택된 연결 에셋 ${selectedBoardNodeIds.length}개`
+                  : `6 assets on board · ${selectedBoardNodeIds.length} connected`}
+              </span>
+            </div>
+
+            {/* Morphic / Krea Style Top Center Mode Pill: Canvas | Copilot | Compose */}
+            <div
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "4px",
+                padding: "3px",
+                borderRadius: "999px",
+                background: "rgba(255, 255, 255, 0.08)",
+                border: "1px solid rgba(255, 255, 255, 0.12)",
+              }}
+            >
+              {(
+                [
+                  { id: "canvas", ko: "Canvas", en: "Canvas" },
+                  { id: "copilot", ko: "Copilot", en: "Copilot" },
+                  { id: "compose", ko: "Compose", en: "Compose" },
+                ] as const
+              ).map((pill) => {
+                const active = workbenchHeaderTab === pill.id;
+                return (
+                  <button
+                    key={pill.id}
+                    type="button"
+                    onClick={() => setWorkbenchHeaderTab(pill.id)}
+                    style={{
+                      padding: "4px 12px",
+                      borderRadius: "999px",
+                      border: 0,
+                      background: active
+                        ? "rgba(255, 255, 255, 0.22)"
+                        : "transparent",
+                      color: active ? "#FFFFFF" : "rgba(255, 255, 255, 0.65)",
+                      fontSize: "12px",
+                      fontWeight: active ? 700 : 500,
+                      cursor: "pointer",
+                    }}
+                  >
+                    {isKo ? pill.ko : pill.en}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+              <span
+                style={{
+                  padding: "4px 10px",
+                  borderRadius: "999px",
+                  background: "rgba(56, 117, 197, 0.25)",
+                  border: "1px solid rgba(56, 117, 197, 0.7)",
+                  color: "#93C5FD",
+                  fontSize: "11px",
+                  fontWeight: 700,
+                }}
+              >
+                {isKo ? "색감·질감 고정 ON" : "Style Pin ON"}
+              </span>
+            </div>
+          </div>
+
+          {/* SPREAD-OUT MULTI-ASSET NODE GRAPH ON THE BOARD (Col 1: Reference Assets -> Col 2: Generated Stills -> Col 3: Seedance Video & 1080p Upscale) */}
+          <div
+            data-spatial-board-nodes-grid
+            style={{
+              display: "grid",
+              gridTemplateColumns:
+                "minmax(165px, 1fr) minmax(240px, 1.45fr) minmax(210px, 1.15fr)",
+              gap: "16px",
+              alignItems: "center",
+              position: "relative",
+              zIndex: 2,
+              padding: "6px 4px",
+            }}
+          >
+            {/* Visual SVG Connection Wires Behind Nodes */}
+            <svg
+              data-spatial-node-wires
+              viewBox="0 0 900 360"
+              preserveAspectRatio="none"
+              style={{
+                position: "absolute",
+                inset: 0,
+                width: "100%",
+                height: "100%",
+                pointerEvents: "none",
+                zIndex: 0,
+              }}
+            >
+              <path
+                d="M 220 75 C 290 75, 290 135, 360 135"
+                fill="none"
+                stroke="rgba(56, 117, 197, 0.7)"
+                strokeWidth="2"
+                strokeDasharray="4 4"
+              />
+              <path
+                d="M 220 180 C 290 180, 290 155, 360 155"
+                fill="none"
+                stroke="rgba(56, 117, 197, 0.85)"
+                strokeWidth="2.2"
+              />
+              <path
+                d="M 220 285 C 290 285, 290 180, 360 180"
+                fill="none"
+                stroke="rgba(56, 117, 197, 0.6)"
+                strokeWidth="2"
+                strokeDasharray="4 4"
+              />
+              <path
+                d="M 590 150 C 640 150, 640 115, 690 115"
+                fill="none"
+                stroke="#3875C5"
+                strokeWidth="2.6"
+              />
+              <path
+                d="M 780 195 C 780 225, 780 240, 780 265"
+                fill="none"
+                stroke="#60A5FA"
+                strokeWidth="2.4"
+              />
+            </svg>
+
+            {/* COLUMN 1 ON BOARD: Spread-Out Reference Assets (인물 · 제품 · 색감 핀) */}
+            <div
+              style={{
+                display: "grid",
+                gap: "8px",
+                zIndex: 1,
+              }}
+            >
+              <span
+                style={{
+                  fontSize: "11px",
+                  fontWeight: 700,
+                  color: "rgba(255, 255, 255, 0.6)",
+                }}
+              >
+                {isKo
+                  ? "1. 참고 에셋 (클릭해 연결)"
+                  : "1. Reference Assets"}
+              </span>
+              {DEFAULT_SPATIAL_BOARD_NODES.filter(
+                (n) => n.kind === "reference_asset",
+              ).map((node, idx) => {
+                const selected = selectedBoardNodeIds.includes(node.id);
+                const slotNum = (idx + 1) as 1 | 2 | 3;
+                const displayThumb =
+                  customSlotThumbs[slotNum] ?? node.thumbSrc;
+                return (
+                  <div
+                    key={node.id}
+                    data-spatial-board-node={node.id}
+                    onClick={() => handleToggleBoardNode(node)}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "9px",
+                      padding: "8px",
+                      borderRadius: "12px",
+                      background: selected
+                        ? "rgba(24, 34, 52, 0.92)"
+                        : "rgba(22, 24, 29, 0.85)",
+                      border: selected
+                        ? "1.5px solid #3875C5"
+                        : "1px solid rgba(255, 255, 255, 0.12)",
+                      cursor: "pointer",
+                      boxShadow: "0 8px 20px rgba(0, 0, 0, 0.28)",
+                    }}
+                  >
+                    <img
+                      src={displayThumb}
+                      alt={isKo ? node.titleKo : node.titleEn}
+                      style={{
+                        width: "46px",
+                        height: "54px",
+                        borderRadius: "8px",
+                        objectFit: "cover",
+                        flexShrink: 0,
+                      }}
+                    />
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <span
+                        style={{
+                          display: "inline-block",
+                          fontSize: "10px",
+                          fontWeight: 700,
+                          color: selected ? "#93C5FD" : "rgba(255,255,255,0.55)",
+                        }}
+                      >
+                        {selected ? "✓ " : ""}
+                        {isKo ? node.badgeKo : node.badgeEn}
+                      </span>
+                      <strong
+                        style={{
+                          display: "block",
+                          fontSize: "12px",
+                          color: "#FFFFFF",
+                          whiteSpace: "nowrap",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                        }}
+                      >
+                        {isKo ? node.titleKo : node.titleEn}
+                      </strong>
+                      <span
+                        style={{
+                          display: "block",
+                          fontSize: "10.5px",
+                          color: "rgba(255, 255, 255, 0.6)",
+                        }}
+                      >
+                        {isKo ? node.metaKo : node.metaEn}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* COLUMN 2 ON BOARD: Spread-Out Generated Stills Side-by-Side (Compare, Edit Region, or Send to Video) */}
+            <div
+              style={{
+                display: "grid",
+                gap: "8px",
+                zIndex: 1,
+              }}
+            >
+              <span
+                style={{
+                  fontSize: "11px",
+                  fontWeight: 700,
+                  color: "rgba(255, 255, 255, 0.6)",
+                }}
+              >
+                {isKo
+                  ? `2. 생성된 화보 컷 (${activeImageModel.nameKo})`
+                  : `2. Generated Stills (${activeImageModel.nameEn})`}
+              </span>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: "10px",
+                }}
+              >
+                {studioVisuals.takes.slice(0, 2).map((take, idx) => {
+                  const isSelectedTake = activeTakeIndex === idx;
+                  return (
+                    <div
+                      key={take.id}
+                      data-spatial-still-card={take.id}
+                      onClick={() => setActiveTakeIndex(idx)}
+                      style={{
+                        padding: "8px",
+                        borderRadius: "13px",
+                        background: "rgba(22, 24, 29, 0.92)",
+                        border: isSelectedTake
+                          ? "1.5px solid #3875C5"
+                          : "1px solid rgba(255, 255, 255, 0.12)",
+                        boxShadow: "0 10px 24px rgba(0, 0, 0, 0.35)",
+                        display: "grid",
+                        gap: "7px",
+                        cursor: "pointer",
+                      }}
+                    >
+                      <div
+                        style={{
+                          position: "relative",
+                          borderRadius: "9px",
+                          overflow: "hidden",
+                          aspectRatio: "4 / 5",
+                          background: "#090A0C",
+                        }}
+                      >
+                        <img
+                          src={take.src}
+                          alt={isKo ? take.labelKo : take.labelEn}
+                          style={{
+                            width: "100%",
+                            height: "100%",
+                            objectFit: "cover",
+                          }}
+                        />
+                        <span
+                          style={{
+                            position: "absolute",
+                            left: "6px",
+                            top: "6px",
+                            padding: "2px 7px",
+                            borderRadius: "999px",
+                            background: "rgba(13, 15, 19, 0.82)",
+                            color: "#FFFFFF",
+                            fontSize: "10px",
+                            fontWeight: 700,
+                          }}
+                        >
+                          {isKo ? take.labelKo : take.labelEn}
+                        </span>
+                      </div>
+
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          gap: "4px",
+                        }}
+                      >
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setActiveTakeIndex(idx);
+                            handleSwitchMediumMode("image");
+                            handleSwitchImageSubMode("micro_region_edit");
+                          }}
+                          style={{
+                            padding: "4px 7px",
+                            borderRadius: "7px",
+                            border: "1px solid rgba(255, 255, 255, 0.16)",
+                            background: "rgba(255, 255, 255, 0.07)",
+                            color: "#FFFFFF",
+                            fontSize: "10.5px",
+                            cursor: "pointer",
+                          }}
+                        >
+                          {isKo ? "부분 수정" : "Edit"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setActiveTakeIndex(idx);
+                            handleBridgeLeftImageToRightVideo("first_frame", {
+                              src: take.src,
+                              labelKo: take.labelKo,
+                              labelEn: take.labelEn,
+                            });
+                          }}
+                          style={{
+                            padding: "4px 8px",
+                            borderRadius: "7px",
+                            border: 0,
+                            background: "#3875C5",
+                            color: "#FFFFFF",
+                            fontSize: "10.5px",
+                            fontWeight: 700,
+                            cursor: "pointer",
+                          }}
+                        >
+                          {isKo ? "→ 영상 연결" : "→ To Video"}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* COLUMN 3 ON BOARD: Connected Video Node (Seedance 2.5) + Upscale Node (1080p IG / 4K) */}
+            <div
+              style={{
+                display: "grid",
+                gap: "8px",
+                zIndex: 1,
+              }}
+            >
+              <span
+                style={{
+                  fontSize: "11px",
+                  fontWeight: 700,
+                  color: "rgba(255, 255, 255, 0.6)",
+                }}
+              >
+                {isKo
+                  ? "3. 연결된 영상 · 업스케일 노드"
+                  : "3. Connected Video & Upscale"}
+              </span>
+
+              {/* Video Node Card */}
+              <div
+                data-spatial-video-node
+                style={{
+                  padding: "10px",
+                  borderRadius: "13px",
+                  background: "rgba(22, 24, 29, 0.94)",
+                  border: isVideoMode
+                    ? "1.5px solid #3875C5"
+                    : "1px solid rgba(255, 255, 255, 0.14)",
+                  boxShadow: "0 10px 24px rgba(0, 0, 0, 0.35)",
+                  display: "grid",
+                  gap: "8px",
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: "6px",
+                  }}
+                >
+                  <strong style={{ fontSize: "12px", color: "#FFFFFF" }}>
+                    Seedance 2.5 ({videoResolution})
+                  </strong>
+                  <span
+                    style={{
+                      fontSize: "10px",
+                      color: "#93C5FD",
+                      fontWeight: 700,
+                    }}
+                  >
+                    {isKo
+                      ? `시작 프레임: ${bridgedVideoRefs[0]?.imageLabelKo ?? "컷 01"}`
+                      : `Start: ${bridgedVideoRefs[0]?.imageLabelEn ?? "Cut 01"}`}
+                  </span>
+                </div>
+
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                  }}
+                >
+                  <img
+                    src={
+                      bridgedVideoRefs[0]?.imageSrc ??
+                      studioVisuals.sceneThumbs[3]
+                    }
+                    alt="Video Node Preview"
+                    style={{
+                      width: "54px",
+                      height: "68px",
+                      borderRadius: "8px",
+                      objectFit: "cover",
+                      flexShrink: 0,
+                      border: "1px solid rgba(56, 117, 197, 0.8)",
+                    }}
+                  />
+                  <div style={{ display: "grid", gap: "5px", flex: 1 }}>
+                    <div style={{ display: "flex", gap: "4px" }}>
+                      {BRAND_SEEDANCE_VIDEO_TIERS.map((t) => {
+                        const active = selectedSeedanceTierId === t.id;
+                        return (
+                          <button
+                            key={t.id}
+                            type="button"
+                            onClick={() => handleSelectSeedanceTier(t.id)}
+                            style={{
+                              padding: "3px 7px",
+                              borderRadius: "6px",
+                              border: active
+                                ? "1px solid #3875C5"
+                                : "1px solid rgba(255,255,255,0.14)",
+                              background: active
+                                ? "rgba(56, 117, 197, 0.32)"
+                                : "rgba(255,255,255,0.06)",
+                              color: "#FFFFFF",
+                              fontSize: "10.5px",
+                              fontWeight: active ? 700 : 500,
+                              cursor: "pointer",
+                            }}
+                          >
+                            {t.resolution}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <span
+                      style={{
+                        fontSize: "10.5px",
+                        color: "rgba(255, 255, 255, 0.65)",
+                      }}
+                    >
+                      {isKo
+                        ? "720p 생성 후 아래 업스케일 노드로 연결"
+                        : "Generate 720p then route to Upscale node"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Upscale Node Card (Sunra 1080p IG Optimized / SeedVR2 4K) */}
+              <div
+                data-spatial-upscale-node
+                style={{
+                  padding: "10px",
+                  borderRadius: "13px",
+                  background: "rgba(24, 34, 52, 0.88)",
+                  border: "1px solid rgba(56, 117, 197, 0.65)",
+                  display: "grid",
+                  gap: "6px",
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: "6px",
+                  }}
+                >
+                  <strong style={{ fontSize: "12px", color: "#FFFFFF" }}>
+                    {isKo
+                      ? `업스케일 스튜디오 (${upscaleTargetResolution})`
+                      : `Upscale Studio (${upscaleTargetResolution})`}
+                  </strong>
+                  <span
+                    style={{
+                      fontSize: "10px",
+                      padding: "2px 6px",
+                      borderRadius: "999px",
+                      background: "rgba(56, 117, 197, 0.35)",
+                      color: "#FFFFFF",
+                      fontWeight: 700,
+                    }}
+                  >
+                    {isKo ? "인스타 화질 보호 ON" : "IG Guard ON"}
+                  </span>
+                </div>
+
+                <div
+                  style={{
+                    display: "flex",
+                    flexWrap: "wrap",
+                    gap: "4px",
+                  }}
+                >
+                  {BRAND_UPSCALING_STUDIO_ENGINES.map((eng) => {
+                    const active = selectedUpscalerEngineId === eng.id;
+                    const shortLabel =
+                      eng.id === "sunra_ig_1080p_upscaler"
+                        ? "Sunra 1080p (인스타)"
+                        : eng.id === "seedvr2_7b_optical_upscaler"
+                          ? "SeedVR2 4K (광학)"
+                          : "Sunra 4K";
+                    return (
+                      <button
+                        key={eng.id}
+                        type="button"
+                        onClick={() => handleSelectUpscalerEngine(eng.id)}
+                        style={{
+                          padding: "3px 7px",
+                          borderRadius: "6px",
+                          border: active
+                            ? "1px solid #60A5FA"
+                            : "1px solid rgba(255,255,255,0.14)",
+                          background: active
+                            ? "#3875C5"
+                            : "rgba(255,255,255,0.06)",
+                          color: "#FFFFFF",
+                          fontSize: "10.5px",
+                          fontWeight: active ? 700 : 500,
+                          cursor: "pointer",
+                        }}
+                      >
+                        {shortLabel}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleRunUpscaleStudioJob}
+                  style={{
+                    width: "100%",
+                    padding: "6px 10px",
+                    borderRadius: "8px",
+                    border: 0,
+                    background: "#FFFFFF",
+                    color: "#0D0F13",
+                    fontSize: "11.5px",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                  }}
+                >
+                  {isKo
+                    ? `${upscaleTargetResolution} 인스타 최적화 업스케일 실행 (${activeUpscalerEngine.creditsPer10s} cr)`
+                    : `Run ${upscaleTargetResolution} Upscale (${activeUpscalerEngine.creditsPer10s} cr)`}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* BOTTOM-CENTER FLOATING PROMPT DOCK (Morphic Studio / Krea Canvas Style) */}
+          <div
+            data-spatial-floating-prompt-dock
+            style={{
+              maxWidth: "780px",
+              width: "100%",
+              margin: "0 auto",
+              padding: "10px 12px",
+              borderRadius: "18px",
+              background: "rgba(22, 24, 29, 0.96)",
+              border: "1px solid rgba(255, 255, 255, 0.16)",
+              boxShadow: "0 16px 38px rgba(0, 0, 0, 0.45)",
+              display: "grid",
+              gap: "8px",
+              zIndex: 2,
+            }}
+          >
+            {/* Row 1: [Image | Video | Upscale | Audio] + [+ References (N)] */}
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: "8px",
+              }}
+            >
+              <div
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "4px",
+                  padding: "3px",
+                  borderRadius: "999px",
+                  background: "rgba(255, 255, 255, 0.07)",
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={() => handleSwitchMediumMode("image")}
+                  style={{
+                    padding: "4px 12px",
+                    borderRadius: "999px",
+                    border: 0,
+                    background: !isVideoMode
+                      ? "rgba(255, 255, 255, 0.22)"
+                      : "transparent",
+                    color: "#FFFFFF",
+                    fontSize: "11.5px",
+                    fontWeight: !isVideoMode ? 700 : 500,
+                    cursor: "pointer",
+                  }}
+                >
+                  Image
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSwitchMediumMode("video")}
+                  style={{
+                    padding: "4px 12px",
+                    borderRadius: "999px",
+                    border: 0,
+                    background: isVideoMode
+                      ? "rgba(255, 255, 255, 0.22)"
+                      : "transparent",
+                    color: "#FFFFFF",
+                    fontSize: "11.5px",
+                    fontWeight: isVideoMode ? 700 : 500,
+                    cursor: "pointer",
+                  }}
+                >
+                  Video
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleSwitchMediumMode("video");
+                    setIsUpscaleStudioExpanded(true);
+                  }}
+                  style={{
+                    padding: "4px 12px",
+                    borderRadius: "999px",
+                    border: 0,
+                    background: "transparent",
+                    color: "rgba(255, 255, 255, 0.8)",
+                    fontSize: "11.5px",
+                    fontWeight: 500,
+                    cursor: "pointer",
+                  }}
+                >
+                  Upscale
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSelectCoreTrack("audio")}
+                  style={{
+                    padding: "4px 12px",
+                    borderRadius: "999px",
+                    border: 0,
+                    background: "transparent",
+                    color: "rgba(255, 255, 255, 0.8)",
+                    fontSize: "11.5px",
+                    fontWeight: 500,
+                    cursor: "pointer",
+                  }}
+                >
+                  Audio
+                </button>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => handleBridgeLeftImageToRightVideo("first_frame")}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  padding: "4px 12px",
+                  borderRadius: "999px",
+                  border: "1px solid rgba(255, 255, 255, 0.2)",
+                  background: "rgba(255, 255, 255, 0.08)",
+                  color: "#FFFFFF",
+                  fontSize: "11.5px",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                }}
+              >
+                <span>+ References ({selectedBoardNodeIds.length})</span>
+              </button>
+            </div>
+
+            {/* Row 2: Direct Prompt Input */}
+            <input
+              type="text"
+              value={briefText}
+              onChange={(e) => setBriefText(e.target.value)}
+              placeholder={
+                isKo
+                  ? "원하는 장면을 입력하세요 (예: 보드의 1번 인물과 2번 제품을 연결해 프렌치 자연광 화보 생성)"
+                  : "Describe what to create from your connected board assets..."
+              }
+              style={{
+                width: "100%",
+                padding: "8px 10px",
+                borderRadius: "10px",
+                border: "1px solid rgba(255, 255, 255, 0.1)",
+                background: "rgba(13, 15, 19, 0.75)",
+                color: "#FFFFFF",
+                fontSize: "13px",
+                outline: "none",
+              }}
+            />
+
+            {/* Row 3: Active Model Pill + Aspect Ratio + Primary Execute CTA */}
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: "8px",
+                fontSize: "11.5px",
+                color: "rgba(255, 255, 255, 0.78)",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <strong style={{ color: "#FFFFFF" }}>
+                  {isVideoMode
+                    ? `Seedance 2.5 · ${videoResolution}`
+                    : isKo
+                      ? activeImageModel.nameKo
+                      : activeImageModel.nameEn}
+                </strong>
+                <span style={{ fontFamily: "var(--ys-mono)" }}>
+                  {aspect} · {isVideoMode ? `${videoSeconds}s` : "2K"}
+                </span>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setStatusMessage(
+                    isVideoMode
+                      ? isKo
+                        ? `[캔버스 실행] 보드에서 연결된 레퍼런스로 Seedance 2.5 (${videoResolution}) 영상을 생성합니다.`
+                        : `Generating Seedance 2.5 (${videoResolution}) video from board references.`
+                      : isKo
+                        ? `[캔버스 실행] ${activeImageModel.nameKo} 모델로 연결된 에셋을 조합해 새 화보를 생성합니다.`
+                        : `Generating new stills on board with ${activeImageModel.nameEn}.`,
+                  );
+                }}
+                style={{
+                  padding: "6px 14px",
+                  borderRadius: "999px",
+                  border: 0,
+                  background: "#3875C5",
+                  color: "#FFFFFF",
+                  fontSize: "12px",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                }}
+              >
+                {isVideoMode
+                  ? isKo
+                    ? `영상 생성 · ${activeVideoQuote.credits} cr`
+                    : `Create Video · ${activeVideoQuote.credits} cr`
+                  : isKo
+                    ? `화보 생성 · ${activeImageModel.creditsPer5Set} cr`
+                    : `Create Stills · ${activeImageModel.creditsPer5Set} cr`}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Collapsible Advanced Inspector & Full Campaign Builder Drawer (Keeps main screen 100% clean while preserving all detailed controls & SSR test markers) */}
+      <details data-studio-advanced-drawer style={{ marginTop: "8px" }}>
+        <summary
+          style={{
+            cursor: "pointer",
+            padding: "10px 14px",
+            borderRadius: "12px",
+            background: "var(--ys-subtle-bg)",
+            border: "1px solid var(--ys-border)",
+            fontSize: "12.5px",
+            fontWeight: 700,
+            color: "var(--ys-ink)",
+            marginBottom: "12px",
+          }}
+        >
+          {isKo
+            ? "상세 설정 · 5대 트랙(크리에이터 캠페인·유통·오디오) · 모델 비교 가이드 펼치기"
+            : "Expand Advanced Inspector · 5 Deliverable Tracks · Model Comparison Guide"}
+        </summary>
 
       {/* 5 Core Deliverable Track Switcher (01 이미지 · 02 영상 · 03 크리에이터 캠페인 영상(셀프·의뢰) · 04 크리에이터 캠페인 영상+유통 · 05 오디오) */}
       <div
@@ -6202,6 +7394,7 @@ export function BrandBriefStudio({
           </div>
         </aside>
       </div>
+      </details>
 
       {/* Compiled Output Approval Bar */}
       {view && (
